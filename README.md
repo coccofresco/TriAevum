@@ -5,6 +5,50 @@ first title integration targets a user-provided copy of *The Legend of Zelda:
 Ocarina of Time 3D*, with native PICA rendering through NRI/Vulkan, audio,
 input, save states, widescreen presentation and optional visual extensions.
 
+**[Download the Windows alpha](https://github.com/coccofresco/TriAevum/releases/tag/v0.6.0-alpha.1)**
+and make the presentation your own with configurable graphics and texture packs.
+
+## In game
+
+These three unretouched 1280x720 framebuffer captures come from the public
+alpha with its default profile: toon shading and outlines, procedural grass,
+1.10x scene FOV, x2 visual interpolation and the TopScreen single-screen UI.
+The images show the current experimental build, not a promise of complete
+visual accuracy. No optional community HD texture pack is used.
+
+![Hyrule Field at night with the default grass and toon profile](docs/images/default-hyrule-night.png)
+*Hyrule Field during the opening sequence.*
+
+![Kokiri Forest gameplay with procedural grass and the TopScreen HUD](docs/images/default-kokiri-forest.png)
+*Kokiri Forest gameplay with the default single-screen HUD.*
+
+![The title sequence with Link and Epona in daylight](docs/images/default-title.png)
+*The title sequence as the lighting changes toward daylight.*
+
+## Graphics and customization
+
+TriAevum is also a platform for experimenting with the game's presentation.
+Open **F1** to configure the renderer and save named profiles:
+
+- **Toon shading and outlines:** adjust lighting bands and edge appearance.
+- **Procedural grass:** tune density, shape, distribution, distance detail and
+  wind, with game lighting, fog and actor interaction.
+- **Custom textures:** load and dump textures using the Azahar-compatible
+  texture-pack workflow. Additional community packs are user-provided.
+- **Optional effects:** explore ambient occlusion, reflections, additional
+  shadows and anti-aliasing. These are experimental and their GPU cost varies;
+  ambient occlusion, reflections and additional directional shadows are off
+  in the default profile shown above.
+- **Presentation:** adjust widescreen framing and FOV, or use x2/x3 visual
+  interpolation for 60/90 Hz presentation while retaining the game's native
+  30 Hz simulation and normal gameplay speed. Actual performance depends on
+  the scene, settings and hardware.
+- **Single-screen UI:** configure the integrated TopScreen HUD and menus.
+
+**F2** temporarily switches the main added effects off and back on without
+erasing your configuration. It is a quick comparison, not a switch to another
+game renderer. F1 starts hidden; existing user profiles are preserved.
+
 ## First public alpha
 
 **v0.6.0-alpha.1** targets Windows x64 with a Vulkan-capable GPU and current
@@ -108,7 +152,8 @@ The validated development path is documented in
 `docs/OOT3D_WHOLE_AOT_PRODUCT.md`. It consumes private local inputs and produces
 a development executable. Promote only individually verified title DLLs and
 their sources through the release allowlist; never upload a development folder,
-object cache, captures, ROM inputs or save states wholesale.
+object cache, private diagnostic captures, ROM inputs or save states wholesale.
+The three curated README screenshots are documentation media, not asset packs.
 
 ## Project status
 
@@ -117,10 +162,24 @@ dump-to-open-title vertical are implemented. A binary must still be produced
 by the audited release workflow; an arbitrary developer build must not be
 described as a public ROM-free release.
 
-## Attribution
+## Thanks
 
-This repository retains work and knowledge from Shipwright / Ship of
-Harkinian, libultraship, Azahar, NVIDIA NRI and the independently developed
-TopScreen modifications. Exact scope, revisions and licenses are recorded in
-`THIRD_PARTY_NOTICES.md`; renaming components never removes their history or
-license obligations.
+Special thanks to the two principal donor projects:
+
+- **[Ship of Harkinian / Shipwright](https://github.com/HarbourMasters/Shipwright)**
+  and its contributors, whose platform, resource and renderer foundations
+  helped make this project possible.
+- **[Azahar](https://github.com/azahar-emu/azahar)** and its contributors, for
+  their 3DS research and implementation work, including PICA rendering and
+  audio code and behavior used by this project.
+
+Thanks also to [libultraship](https://github.com/Kenix3/libultraship),
+[NVIDIA NRI](https://github.com/NVIDIA-RTX/NRI), and **M-1**, author of
+[TopScreen](https://gamebanana.com/mods/695893), for the mod's reverse
+engineering, programming and testing. The original game is the work of
+Nintendo and Grezzo; this independent project does not imply their endorsement
+or that of any donor.
+
+See [the full third-party notices](THIRD_PARTY_NOTICES.md) for contribution
+scope, additional credits and licenses. Renaming components never removes
+their history or attribution obligations.

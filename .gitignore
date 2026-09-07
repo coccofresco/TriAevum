@@ -416,6 +416,11 @@ ReleaseObj/*
 tags
 *.otr
 *.o2r
+
+# Curated public README screenshots only; diagnostic captures stay private.
+!/docs/images/default-hyrule-night.png
+!/docs/images/default-kokiri-forest.png
+!/docs/images/default-title.png
 *.sav
 shipofharkinian.ini
 shipofharkinian.json
