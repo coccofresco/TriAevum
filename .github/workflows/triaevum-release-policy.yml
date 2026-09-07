@@ -99,7 +99,11 @@ jobs:
       - name: Test Forge and release policy
         run: python -m unittest discover tools/triaevum_release -p "test_*.py" -v
       - name: Configure isolated module runtime
-        run: cmake -S runtime/triaevum_module -B build/triaevum-module -DCMAKE_BUILD_TYPE=Release
+        # Match the LLVM toolchain used by the shipped Windows runtime.
+        run: >-
+          cmake -S runtime/triaevum_module -B build/triaevum-module
+          -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang
+          -DCMAKE_CXX_COMPILER=clang++
       - name: Build isolated module tests
         run: >-
           cmake --build build/triaevum-module --config Release

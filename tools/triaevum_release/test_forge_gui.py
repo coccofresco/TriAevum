@@ -39,9 +39,11 @@ class ForgeGuiTests(unittest.TestCase):
             self.assertEqual(load_recipe_options(path)[0].label, "Fixture Title (EUR)")
 
     def test_gui_install_uses_the_existing_forge_pipeline(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
         request = InstallRequest(
             rom=Path("game.cci"),
-            data_root=Path("I:/user-data"),
+            data_root=Path(temporary.name).resolve() / "user-data",
         )
         source = request.data_root / "sources" / "fixture"
         extracted = ExtractedTitleInputs(
