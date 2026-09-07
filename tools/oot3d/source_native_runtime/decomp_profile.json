@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "profile_id": "oot3d-eur-bfc5ca73",
+  "decomp_revision": "bfc5ca73630feeebc57ea27323230225d0529069",
+  "canonical_source_lane": "portable_semantic",
+  "canonical_source_count": 1065,
+  "target_entry_count": 9274,
+  "title_id": "0004000000033600",
+  "product_code": "CTR-P-AQEP",
+  "code_bin_sha256": "16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220",
+  "code_load_address": "0x00100000"
+}

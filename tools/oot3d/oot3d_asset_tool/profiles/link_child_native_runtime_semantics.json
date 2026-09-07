@@ -1,0 +1,253 @@
+{
+  "format": "oot3d_character_runtime_semantics_v1",
+  "profile_id": "link_child",
+  "skel_anime_sampling_contract": {
+    "format": "oot3d_skel_anime_sampling_contract_v1",
+    "frame_data_path": 1,
+    "special_bone": 1,
+    "default_channel_mask": 2,
+    "special_bone_channel_mask": 3,
+    "base_translation": [0.0, 3538.080078125, 0.0],
+    "evidence": {
+      "authority": "oot3d_code_bin",
+      "player_init_common_function": "0x00250768",
+      "player_special_bone_write": "player+0x2C9 = 1",
+      "player_frame_data_path_write": "player+0x2CA = 1",
+      "frame_sampler_function": "0x003204A4",
+      "base_translation_source": "Player_InitCommon constants DAT_00250A98/DAT_00250A9C",
+      "channel_mask_semantics": "bit 0 translation, bit 1 rotation, bit 2 scale",
+      "runtime_policy": "frame_data_path 1 samples special bone with mask 3 and every other bone with mask 2"
+    }
+  },
+  "animation_time_source_contract": {
+    "format": "oot3d_character_animation_time_source_contract_v1",
+    "default_source": "skel_animation_clock",
+    "bindings": [
+      {
+        "csab_name": "child/anim/nml_walk_free.csab",
+        "source": "player_locomotion_cycle",
+        "sample_mode": "native_frame_span_over_source_span",
+        "source_frame_span": 29.0,
+        "sample_offset": 0.0
+      },
+      {
+        "csab_name": "child/anim/nml_walk.csab",
+        "source": "player_locomotion_cycle",
+        "sample_mode": "native_frame_span_over_source_span",
+        "source_frame_span": 29.0,
+        "sample_offset": 0.0
+      },
+      {
+        "csab_name": "child/anim/ft_walk_long.csab",
+        "source": "player_locomotion_cycle",
+        "sample_mode": "native_frame_span_over_source_span",
+        "source_frame_span": 29.0,
+        "sample_offset": 0.0
+      },
+      {
+        "csab_name": "child/anim/nml_run_free.csab",
+        "source": "player_locomotion_cycle",
+        "sample_mode": "native_frame_span_over_source_span",
+        "source_frame_span": 29.0,
+        "sample_offset": 0.0
+      },
+      {
+        "csab_name": "child/anim/nml_run.csab",
+        "source": "player_locomotion_cycle",
+        "sample_mode": "native_frame_span_over_source_span",
+        "source_frame_span": 29.0,
+        "sample_offset": 0.0
+      },
+      {
+        "csab_name": "child/anim/ft_run.csab",
+        "source": "player_locomotion_cycle",
+        "sample_mode": "native_frame_span_over_source_span",
+        "source_frame_span": 29.0,
+        "sample_offset": 0.0
+      },
+      {
+        "csab_name": "child/anim/ft_run_long.csab",
+        "source": "player_locomotion_cycle",
+        "sample_mode": "native_frame_span_over_source_span",
+        "source_frame_span": 29.0,
+        "sample_offset": 0.0
+      },
+      {
+        "csab_name": "boy/anim/nml_100step_up.csab",
+        "source": "player_skel_animation_timeline",
+        "sample_mode": "native_frame_span_over_source_span",
+        "source_frame_span": 18.0,
+        "sample_offset": 0.0
+      },
+      {
+        "csab_name": "boy/anim/nml_150step_up.csab",
+        "source": "player_skel_animation_timeline",
+        "sample_mode": "native_frame_span_over_source_span",
+        "source_frame_span": 24.0,
+        "sample_offset": 0.0
+      }
+    ],
+    "evidence": {
+      "authority": "oot3d_code_bin",
+      "player_locomotion_blend_function": "0x002BE660",
+      "player_locomotion_phase_function": "0x002DD8B0",
+      "player_boot_data_function": "0x003589DC",
+      "decoded_cycle_frame_span": 29.0,
+      "decoded_sample_ratio": "(CSAB inclusive last frame + 1) / 29",
+      "decoded_sample_ratio_callsite": "0x002BE7C4-0x002BE8E8",
+      "native_group_rows": [1, 2],
+      "corroborating_structure": "SoH func_8084029C/func_80841EE4; semantic scaffold only",
+      "full_span_step_action": "FUN_00183634",
+      "full_span_step_action_pointer_source": "code.bin 0x0023CB08 -> 0x00183634",
+      "full_span_step_animation_indices": { "nml_100step_up": 232, "nml_150step_up": 231 },
+      "full_span_step_completion_test": "FUN_0036B1E0 on player SkelAnime before state transition",
+      "full_span_step_native_speed": 1.3
+    }
+  },
+  "animation_semantic_binding_contract": {
+    "format": "oot3d_character_animation_semantic_binding_contract_v1",
+    "bindings": [
+      {
+        "n64_name": "gPlayerAnim_link_normal_wait",
+        "csab_name": "boy/anim/nml_wait.csab",
+        "oot3d_group_index": 0,
+        "csab_type_local_index": 88,
+        "animation_type_indices": [1, 2]
+      },
+      {
+        "n64_name": "gPlayerAnim_link_normal_wait_free",
+        "csab_name": "boy/anim/nml_wait_free.csab",
+        "oot3d_group_index": 0,
+        "csab_type_local_index": 80,
+        "animation_type_indices": [0, 4, 5]
+      },
+      {
+        "n64_name": "gPlayerAnim_link_normal_walk",
+        "csab_name": "child/anim/nml_walk.csab",
+        "oot3d_group_index": 1,
+        "csab_type_local_index": 76,
+        "animation_type_indices": [1, 2]
+      },
+      {
+        "n64_name": "gPlayerAnim_link_normal_walk_free",
+        "csab_name": "child/anim/nml_walk_free.csab",
+        "oot3d_group_index": 1,
+        "csab_type_local_index": 71,
+        "animation_type_indices": [0, 4, 5]
+      },
+      {
+        "n64_name": "gPlayerAnim_link_normal_run",
+        "csab_name": "child/anim/nml_run.csab",
+        "oot3d_group_index": 2,
+        "csab_type_local_index": 109,
+        "animation_type_indices": [2]
+      },
+      {
+        "n64_name": "gPlayerAnim_link_normal_run_free",
+        "csab_name": "child/anim/nml_run_free.csab",
+        "oot3d_group_index": 2,
+        "csab_type_local_index": 108,
+        "animation_type_indices": [0, 4, 5]
+      },
+      {
+        "n64_name": "gPlayerAnim_link_normal_jump_climb_hold",
+        "csab_name": "boy/anim/nml_hang_hold.csab",
+        "oot3d_group_index": 47,
+        "csab_type_local_index": 148,
+        "animation_type_indices": [1, 2]
+      },
+      {
+        "n64_name": "gPlayerAnim_link_normal_jump_climb_hold_free",
+        "csab_name": "boy/anim/nml_hang_hold_free.csab",
+        "oot3d_group_index": 47,
+        "csab_type_local_index": 147,
+        "animation_type_indices": [0, 3, 4, 5]
+      },
+      {
+        "n64_name": "gPlayerAnim_link_normal_jump_climb_wait",
+        "csab_name": "boy/anim/nml_hang_wait.csab",
+        "oot3d_group_index": 48,
+        "csab_type_local_index": 144,
+        "animation_type_indices": [1, 2]
+      },
+      {
+        "n64_name": "gPlayerAnim_link_normal_jump_climb_wait_free",
+        "csab_name": "boy/anim/nml_hang_wait_free.csab",
+        "oot3d_group_index": 48,
+        "csab_type_local_index": 143,
+        "animation_type_indices": [0, 3, 4, 5]
+      },
+      {
+        "n64_name": "gPlayerAnim_link_normal_jump_climb_up",
+        "csab_name": "boy/anim/nml_hang_up.csab",
+        "oot3d_group_index": 49,
+        "csab_type_local_index": 146,
+        "animation_type_indices": [1, 2]
+      },
+      {
+        "n64_name": "gPlayerAnim_link_normal_jump_climb_up_free",
+        "csab_name": "boy/anim/nml_hang_up_free.csab",
+        "oot3d_group_index": 49,
+        "csab_type_local_index": 145,
+        "animation_type_indices": [0, 3, 4, 5]
+      }
+    ],
+    "evidence": {
+      "authority": "OOT3D code.bin Player animation-group table and zelda_link_child_new.zar CSAB type-local list",
+      "decoded_contract": "tools/oot3d/decomp_support/analysis/player_animation_group_native_contract.json",
+      "table_pointer_literal": "0x0034D680",
+      "table_address": "0x0053A5F8",
+      "oot3d_group_rows": [0, 1, 2, 47, 48, 49],
+      "semantic_scaffold": "N64 Player jump-climb group identities only; OOT3D group rows and native CSAB members are authoritative",
+      "runtime_policy": "exact offline mapping; no runtime filename heuristic"
+    }
+  },
+  "animation_controller_contract": {
+    "format": "oot3d_character_animation_controller_contract_v1",
+    "controllers": [
+      {
+        "id": "player_forward_locomotion",
+        "notification_semantic": "player_forward_locomotion",
+        "phase_source": "player_locomotion_cycle",
+        "source_frame_span": 29.0,
+        "blend_source": "player_linear_velocity",
+        "blend_threshold": 3.7,
+        "blend_scale": 0.8,
+        "warmup_source": "player_locomotion_blend_weight",
+        "variants": [
+          { "animation_type_index": 0, "walk_csab_name": "child/anim/nml_walk_free.csab", "run_csab_name": "child/anim/nml_run_free.csab" },
+          { "animation_type_index": 1, "walk_csab_name": "child/anim/nml_walk.csab", "run_csab_name": "child/anim/ft_run.csab" },
+          { "animation_type_index": 2, "walk_csab_name": "child/anim/nml_walk.csab", "run_csab_name": "child/anim/nml_run.csab" },
+          { "animation_type_index": 3, "walk_csab_name": "child/anim/ft_walk_long.csab", "run_csab_name": "child/anim/ft_run_long.csab" },
+          { "animation_type_index": 4, "walk_csab_name": "child/anim/nml_walk_free.csab", "run_csab_name": "child/anim/nml_run_free.csab" },
+          { "animation_type_index": 5, "walk_csab_name": "child/anim/nml_walk_free.csab", "run_csab_name": "child/anim/nml_run_free.csab" }
+        ]
+      }
+    ],
+    "evidence": {
+      "authority": "OOT3D code.bin player locomotion controller FUN_002BE660 and Player_SetBootData",
+      "controller_function": "0x002BE660",
+      "phase_function": "0x002DD8B0",
+      "group_table": "0x0053A5F8",
+      "walk_group_index": 1,
+      "run_group_index": 2,
+      "blend_threshold_source": "GameInfo+0x74 multiplied by 0.01; child Kokiri-boots value 370",
+      "blend_scale_source": "GameInfo+0x5E multiplied by 0.001; child Kokiri-boots value 800",
+      "runtime_policy": "the gameplay scaffold only notifies direct locomotion sampling; phase, blend and CSAB variants are resolved from this native contract"
+    }
+  },
+  "root_motion_ownership_contract": {
+    "format": "oot3d_character_root_motion_ownership_contract_v1",
+    "movement_enabled_flag": 1,
+    "update_y_flag": 2,
+    "translation_policy": "align_only_controller_consumed_axes",
+    "xz_ownership": "controller_when_movement_enabled",
+    "y_ownership": "controller_when_movement_enabled_and_update_y",
+    "root_rotation_policy": "preserve_authored_oot3d",
+    "evidence": {
+      "native_pose_authority": "OOT3D CMB/CSAB root transforms and segment continuity audit",
+      "gameplay_scaffold": "Player_ApplyAnimMovementScaledByAge consumes XZ for movementFlags bit 1 and Y for bit 2; SkelAnime_ExtractRootMotion restores consumed visual axes to the Player_InitCommon base_translation",
+      "constraint": "N64 gameplay selects consumed world-motion axes; OOT3D authored pose remains authoritative elsewhere"
+    }
+  }
+}

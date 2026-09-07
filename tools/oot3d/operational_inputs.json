@@ -1,0 +1,937 @@
+{
+  "format": "oot3d_operational_inputs_v1",
+  "last_reviewed": "2026-08-27",
+  "policy": {
+    "purpose": "Stable local index for OOT3D tools, original game inputs, derived exports, and validation captures used by this workspace.",
+    "rule": "Check this manifest before searching for Ghidra, code.bin, ROMFS, emulator, trace, or demo manifest paths."
+  },
+  "variables": {
+    "repoRoot": "I:\\oot3dre",
+    "zelda3dRecompRoot": "I:\\Zelda3drecomp",
+    "zelda3dRecompEvidence": "${repoRoot}\\tools\\oot3d\\decomp_support\\evidence\\zelda3drecomp\\849140697187b895",
+    "workRoot": "I:\\oot3dre_work",
+    "oot3dExtractRoot": "E:\\ppssppvr\\oot3d_decomp\\work\\extract",
+    "oot3dDecompGit": "E:\\ppssppvr\\oot3d_decomp\\oot3d_decomp_git",
+    "azaharRoot": "E:\\azahar pcvr",
+    "pcvrReTools": "E:\\azahar pcvr\\tools\\pcvr-re-tools",
+    "cmakeExe": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\CMake\\bin\\cmake.exe",
+    "vsDevCmd": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\Tools\\VsDevCmd.bat",
+    "vsDevShell": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\Tools\\Launch-VsDevShell.ps1",
+    "fastBuildScript": "${repoRoot}\\tools\\oot3d\\build_fast_dev.ps1",
+    "buildRoot": "${repoRoot}\\build-codex",
+    "buildPhysicalRoot": "C:\\Users\\xander\\AppData\\Local\\oot3dre-build\\build-codex",
+    "llvmRoot": "I:\\oot3dre_tools\\llvm-22.1.6",
+    "llvmArchive": "I:\\oot3dre_tools\\downloads\\clang+llvm-22.1.6-x86_64-pc-windows-msvc.tar.xz",
+    "llvmBuildRoot": "I:\\oot3dre_work\\build-llvm-22.1.6",
+    "llvmToolchain": "${repoRoot}\\cmake\\Oot3dLlvmClToolchain.cmake",
+    "llvmSmokeScript": "${repoRoot}\\scripts\\oot3d\\Test-Oot3dLlvmToolchain.ps1",
+    "llvmConfigureScript": "${repoRoot}\\scripts\\oot3d\\Configure-Oot3dLlvmBuild.ps1",
+    "llvmBuildScript": "${repoRoot}\\scripts\\oot3d\\Build-Oot3dLlvm.ps1",
+    "wholeAotOptimizationAnalysis": "${repoRoot}\\tools\\oot3d\\native_a32_runtime\\analyze_whole_aot_optimization_ir.py",
+    "llvmAotPilot": "${repoRoot}\\tools\\oot3d\\native_a32_runtime\\run_llvm_aot_pilot.py",
+    "llvmAotPilotBuildRoot": "${workRoot}\\build-llvm-aot-pilot"
+  },
+  "entries": [
+    {
+      "id": "repo_root",
+      "kind": "directory",
+      "path": "${repoRoot}",
+      "required": true,
+      "purpose": "Active OoT3D recomp product workspace."
+    },
+    {
+      "id": "zelda3drecomp_readonly_checkout",
+      "kind": "directory",
+      "path": "${zelda3dRecompRoot}",
+      "required": false,
+      "purpose": "External OOT3D code.bin reconstruction checkout. Treat as read-only; copy selected evidence into this workspace before any operation that writes files."
+    },
+    {
+      "id": "zelda3drecomp_codebin_analysis",
+      "kind": "directory",
+      "path": "${zelda3dRecompRoot}\\analysis",
+      "required": false,
+      "purpose": "Read-only evidence catalogs for reconstructed functions, structures, actors, CMB rendering, animation, and scene/room behavior."
+    },
+    {
+      "id": "zelda3drecomp_ghidra_automation",
+      "kind": "directory",
+      "path": "${zelda3dRecompRoot}\\ghidra",
+      "required": false,
+      "purpose": "Read-only Ghidra scripts, targets, overrides, and reconstruction support associated with the external analysis catalogs."
+    },
+    {
+      "id": "zelda3drecomp_evidence_snapshot",
+      "kind": "directory",
+      "path": "${zelda3dRecompEvidence}",
+      "required": true,
+      "purpose": "Current immutable, hash-manifested subset of Zelda3drecomp contracts approved for use by this workspace."
+    },
+    {
+      "id": "zelda3drecomp_native_abi_catalog",
+      "kind": "file",
+      "path": "${zelda3dRecompEvidence}\\native_abi_catalog.json",
+      "required": true,
+      "purpose": "Reviewed unified ABI catalog derived from the immutable Zelda3drecomp snapshot; mounted once in the core playable pack and profile-bound through Room Compilation Units."
+    },
+    {
+      "id": "cmake_executable",
+      "kind": "file",
+      "path": "${cmakeExe}",
+      "required": true,
+      "purpose": "CMake executable used by the active Ninja Ship development build."
+    },
+    {
+      "id": "oot3d_llvm_root",
+      "kind": "directory",
+      "path": "${llvmRoot}",
+      "required": true,
+      "purpose": "Pinned LLVM 22.1.6 Windows x64 archive used for Clang-cl, LLD, LLVM IR, ThinLTO, profiling, and future native AOT backend work."
+    },
+    {
+      "id": "oot3d_llvm_clang_cl",
+      "kind": "file",
+      "path": "${llvmRoot}\\bin\\clang-cl.exe",
+      "required": true,
+      "purpose": "MSVC-compatible Clang frontend for isolated OOT3D builds."
+    },
+    {
+      "id": "oot3d_llvm_config",
+      "kind": "file",
+      "path": "${llvmRoot}\\bin\\llvm-config.exe",
+      "required": true,
+      "purpose": "Version and component discovery for the future LLVM AOT backend."
+    },
+    {
+      "id": "oot3d_llvm_archive",
+      "kind": "file",
+      "path": "${llvmArchive}",
+      "required": false,
+      "min_length": 861999212,
+      "purpose": "Verified official LLVM 22.1.6 archive; SHA-256 657343EDF361CA463BD642E39C74B251C6338B96CDBD55FF277555298B027696."
+    },
+    {
+      "id": "oot3d_llvm_cmake_toolchain",
+      "kind": "file",
+      "path": "${llvmToolchain}",
+      "required": true,
+      "purpose": "Pinned clang-cl/lld-link CMake toolchain that cannot alter the validated MSVC build tree implicitly."
+    },
+    {
+      "id": "oot3d_llvm_smoke_test",
+      "kind": "file",
+      "path": "${llvmSmokeScript}",
+      "required": true,
+      "purpose": "End-to-end LLVM toolchain validation through IR optimization, COFF emission, LLD link, and execution."
+    },
+    {
+      "id": "oot3d_llvm_configure_script",
+      "kind": "file",
+      "path": "${llvmConfigureScript}",
+      "required": true,
+      "purpose": "Configures an isolated Ninja build tree using the pinned LLVM toolchain."
+    },
+    {
+      "id": "oot3d_llvm_build_script",
+      "kind": "file",
+      "path": "${llvmBuildScript}",
+      "required": true,
+      "purpose": "Builds an isolated LLVM target after importing the required Windows SDK and VC environment."
+    },
+    {
+      "id": "whole_aot_optimization_analysis",
+      "kind": "file",
+      "path": "${wholeAotOptimizationAnalysis}",
+      "required": true,
+      "purpose": "Builds the backend-independent architectural-state, lazy-flag, dirty-exit, and SCC-region report for the selected whole-AOT corpus."
+    },
+    {
+      "id": "llvm_aot_pilot",
+      "kind": "file",
+      "path": "${llvmAotPilot}",
+      "required": true,
+      "purpose": "Compiles one real whole-AOT shard to LLVM IR, runs opt/llc, and quantifies residual GuestState traffic in a selected function."
+    },
+    {
+      "id": "llvm_aot_pilot_build",
+      "kind": "directory",
+      "path": "${llvmAotPilotBuildRoot}",
+      "required": false,
+      "purpose": "Isolated 256-shard LLVM whole-AOT pilot tree with compile_commands.json; regenerate rather than using it as a production build."
+    },
+    {
+      "id": "fast_development_build",
+      "kind": "file",
+      "path": "${fastBuildScript}",
+      "required": true,
+      "purpose": "Canonical OpenGL-only MSVC build entry point; selects the matching Visual Studio CMake and disables repeated vcpkg updates."
+    },
+    {
+      "id": "fast_development_build_tree",
+      "kind": "directory",
+      "path": "${buildRoot}",
+      "required": false,
+      "purpose": "Optional local Ninja cache created by the fast development build."
+    },
+    {
+      "id": "fast_development_build_tree_physical",
+      "kind": "directory",
+      "path": "${buildPhysicalRoot}",
+      "required": false,
+      "purpose": "Optional NVMe-backed cache that may host the logical development build tree."
+    },
+    {
+      "id": "native_game_fast_lane_script",
+      "kind": "file",
+      "path": "${repoRoot}\\scripts\\oot3d\\Invoke-Oot3dNativeGame.ps1",
+      "required": true,
+      "purpose": "Canonical OpenGL-only native game build and launch entry point; always uses the NVMe fast-link tree and supplies the native player animation and pose-sampling contracts."
+    },
+    {
+      "id": "visual_studio_developer_environment",
+      "kind": "file",
+      "path": "${vsDevCmd}",
+      "required": true,
+      "purpose": "MSVC developer environment used by build-codex."
+    },
+    {
+      "id": "azahar_checkout",
+      "kind": "directory",
+      "path": "${azaharRoot}",
+      "required": true,
+      "purpose": "Azahar source checkout used for emulator instrumentation branches."
+    },
+    {
+      "id": "azahar_pcvr_qt_exe",
+      "kind": "file",
+      "path": "${azaharRoot}\\build-pcvr-qt\\bin\\Release\\azahar.exe",
+      "required": true,
+      "min_length": 10000000,
+      "purpose": "Instrumented Azahar executable used to launch OOT3D with slot 4 save state."
+    },
+    {
+      "id": "azahar_pcvr_user_dir",
+      "kind": "directory",
+      "path": "${azaharRoot}\\build-pcvr-qt\\bin\\Release\\user",
+      "required": true,
+      "purpose": "Runtime Azahar user directory containing saves, states, and SDMC data."
+    },
+    {
+      "id": "ghidra_root",
+      "kind": "directory",
+      "path": "${pcvrReTools}\\ghidra",
+      "required": true,
+      "purpose": "Primary local Ghidra install to use for new headless runs."
+    },
+    {
+      "id": "ghidra_headless",
+      "kind": "file",
+      "path": "${pcvrReTools}\\ghidra\\support\\analyzeHeadless.bat",
+      "required": true,
+      "purpose": "Ghidra headless entry point for selective exports and script runs."
+    },
+    {
+      "id": "ghidra_gui",
+      "kind": "file",
+      "path": "${pcvrReTools}\\ghidra\\ghidraRun.bat",
+      "required": true,
+      "purpose": "Ghidra GUI launcher."
+    },
+    {
+      "id": "jdk21_root",
+      "kind": "directory",
+      "path": "${pcvrReTools}\\jdk21",
+      "required": true,
+      "purpose": "JDK used by Ghidra; do not rely on java.exe being on PATH."
+    },
+    {
+      "id": "oot3d_ghidra_project_dir",
+      "kind": "directory",
+      "path": "E:\\ppssppvr\\oot3d_decomp\\work\\ghidra_project",
+      "required": true,
+      "purpose": "Local Ghidra project directory containing project oot3d_code."
+    },
+    {
+      "id": "oot3d_ghidra_project_file",
+      "kind": "file",
+      "path": "E:\\ppssppvr\\oot3d_decomp\\work\\ghidra_project\\oot3d_code.gpr",
+      "required": true,
+      "purpose": "Ghidra project file for OOT3D code.bin."
+    },
+    {
+      "id": "oot3d_code_bin",
+      "kind": "file",
+      "path": "${oot3dExtractRoot}\\exefs\\code.bin",
+      "required": true,
+      "min_length": 4000000,
+      "purpose": "Original OOT3D ExeFS code image imported into Ghidra."
+    },
+    {
+      "id": "oot3d_exheader",
+      "kind": "file",
+      "path": "${oot3dExtractRoot}\\ncch0\\exheader.bin",
+      "required": true,
+      "min_length": 1024,
+      "purpose": "Original OOT3D ExHeader; authoritative process segments, entrypoint, stack and BSS layout."
+    },
+    {
+      "id": "oot3d_exefs_root",
+      "kind": "directory",
+      "path": "${oot3dExtractRoot}\\exefs",
+      "required": true,
+      "purpose": "Original OOT3D ExeFS extract root."
+    },
+    {
+      "id": "oot3d_romfs_root",
+      "kind": "directory",
+      "path": "${oot3dExtractRoot}\\romfs",
+      "required": true,
+      "purpose": "Original OOT3D ROMFS extract root."
+    },
+    {
+      "id": "oot3d_romfs_image",
+      "kind": "file",
+      "path": "${oot3dExtractRoot}\\ncch0\\romfs.bin",
+      "required": true,
+      "min_length": 400000000,
+      "purpose": "Original OOT3D SelfNCCH RomFS image exposed to native FS file sessions. Kept lazy and never hashed during incremental builds."
+    },
+    {
+      "id": "oot3d_romfs_scene_root",
+      "kind": "directory",
+      "path": "${oot3dExtractRoot}\\romfs\\scene",
+      "required": true,
+      "min_file_count": 700,
+      "purpose": "Original scene ZSI/ZAR root; includes link house, Kokiri Forest, and room/collision data."
+    },
+    {
+      "id": "oot3d_romfs_actor_root",
+      "kind": "directory",
+      "path": "${oot3dExtractRoot}\\romfs\\actor",
+      "required": true,
+      "purpose": "Original actor asset root."
+    },
+    {
+      "id": "oot3d_romfs_kankyo_root",
+      "kind": "directory",
+      "path": "${oot3dExtractRoot}\\romfs\\kankyo",
+      "required": true,
+      "purpose": "Original environment/sky/weather asset root."
+    },
+    {
+      "id": "oot3d_link_house_scene_zsi",
+      "kind": "file",
+      "path": "${oot3dExtractRoot}\\romfs\\scene\\link_info.zsi",
+      "required": true,
+      "purpose": "Original Link house scene metadata ZSI."
+    },
+    {
+      "id": "oot3d_link_house_room0_zsi",
+      "kind": "file",
+      "path": "${oot3dExtractRoot}\\romfs\\scene\\link_0_info.zsi",
+      "required": true,
+      "purpose": "Original Link house room 0 ZSI with embedded CMB room mesh."
+    },
+    {
+      "id": "oot3d_kokiri_scene_zsi",
+      "kind": "file",
+      "path": "${oot3dExtractRoot}\\romfs\\scene\\kokiri_info.zsi",
+      "required": true,
+      "purpose": "Original OOT3D scene stem named kokiri; do not use as the Kokiri Forest fixture, which is spot04."
+    },
+    {
+      "id": "oot3d_kokiri_room0_zsi",
+      "kind": "file",
+      "path": "${oot3dExtractRoot}\\romfs\\scene\\kokiri_0_info.zsi",
+      "required": true,
+      "purpose": "Original OOT3D room for the scene stem named kokiri; do not use as the Kokiri Forest fixture, which is spot04."
+    },
+    {
+      "id": "oot3d_kokiri_forest_scene_zsi",
+      "kind": "file",
+      "path": "${oot3dExtractRoot}\\romfs\\scene\\spot04_info.zsi",
+      "required": true,
+      "purpose": "Original Kokiri Forest scene metadata ZSI used by the native demo."
+    },
+    {
+      "id": "oot3d_kokiri_forest_room0_zsi",
+      "kind": "file",
+      "path": "${oot3dExtractRoot}\\romfs\\scene\\spot04_0_info.zsi",
+      "required": true,
+      "purpose": "Original Kokiri Forest room 0 ZSI with embedded CMB room mesh."
+    },
+    {
+      "id": "oot3d_kokiri_forest_room1_zsi",
+      "kind": "file",
+      "path": "${oot3dExtractRoot}\\romfs\\scene\\spot04_1_info.zsi",
+      "required": true,
+      "purpose": "Original Kokiri Forest room 1 ZSI with embedded CMB room mesh."
+    },
+    {
+      "id": "oot3d_kokiri_forest_room2_zsi",
+      "kind": "file",
+      "path": "${oot3dExtractRoot}\\romfs\\scene\\spot04_2_info.zsi",
+      "required": true,
+      "purpose": "Original Kokiri Forest room 2 ZSI with embedded CMB room mesh."
+    },
+    {
+      "id": "azahar_kokiri_slot5_pica_capture",
+      "kind": "directory",
+      "path": "${repoRoot}\\captures\\azahar_pica\\kokiri_slot5_after10s_packet_buffer_probe_20260705_071254",
+      "required": false,
+      "purpose": "Latest validation-only Azahar PICA/register capture from savestate slot 5 after 10 seconds of runtime, just outside Link house in Kokiri Forest."
+    },
+    {
+      "id": "azahar_kokiri_slot5_after10s_packet_buffer_probe",
+      "kind": "directory",
+      "path": "${repoRoot}\\captures\\azahar_pica\\kokiri_slot5_after10s_packet_buffer_probe_20260705_071254",
+      "required": false,
+      "purpose": "Slot 5 packet-buffer writer probe with three complete PICA frames, screenshot, converted native PICA traces, and writer trace seeded from VS light packet buffers."
+    },
+    {
+      "id": "analyze_actor_vs_packet_buffer_probe_script",
+      "kind": "file",
+      "path": "${repoRoot}\\tools\\oot3d\\decomp_support\\scripts\\analyze_actor_vs_packet_buffer_probe.py",
+      "required": true,
+      "purpose": "Validation-only analyzer that correlates Azahar writer traces to selected PICA f80/f83 actor/VS packet buffers without using emulator values as runtime asset data."
+    },
+    {
+      "id": "kokiri_slot5_actor_vs_packet_buffer_probe_json",
+      "kind": "file",
+      "path": "${repoRoot}\\captures\\azahar_pica\\kokiri_slot5_after10s_packet_buffer_probe_20260705_071254\\derived\\actor_vs_packet_buffer_probe.json",
+      "required": false,
+      "purpose": "Machine-readable slot 5 actor/VS packet-buffer correlation report: writer PCs, packet offsets, source vectors, prepared f80/f83 vectors, and PICA target match scores."
+    },
+    {
+      "id": "kokiri_slot5_actor_vs_packet_buffer_probe_md",
+      "kind": "file",
+      "path": "${repoRoot}\\captures\\azahar_pica\\kokiri_slot5_after10s_packet_buffer_probe_20260705_071254\\derived\\actor_vs_packet_buffer_probe.md",
+      "required": false,
+      "purpose": "Human-readable slot 5 actor/VS packet-buffer correlation report for current lighting/vector-source work."
+    },
+    {
+      "id": "azahar_kokiri_slot5_after10s_actor_vs_source_record_probe",
+      "kind": "directory",
+      "path": "${repoRoot}\\captures\\azahar_pica\\kokiri_slot5_after10s_actor_vs_source_record_probe_20260705_072239",
+      "required": false,
+      "purpose": "Slot 5 validation-only source-record writer probe targeting the FUN_0035BBE0 scratch light-record block after ten seconds of runtime."
+    },
+    {
+      "id": "analyze_actor_vs_source_record_probe_script",
+      "kind": "file",
+      "path": "${repoRoot}\\tools\\oot3d\\decomp_support\\scripts\\analyze_actor_vs_source_record_probe.py",
+      "required": true,
+      "purpose": "Validation-only analyzer for native actor/VS source records feeding FUN_0035BBE0; reconstructs 0x10-stride light entries, writer PCs, and source payload pointers."
+    },
+    {
+      "id": "kokiri_slot5_actor_vs_source_record_probe_json",
+      "kind": "file",
+      "path": "${repoRoot}\\captures\\azahar_pica\\kokiri_slot5_after10s_actor_vs_source_record_probe_20260705_072239\\derived\\actor_vs_source_record_probe.json",
+      "required": false,
+      "purpose": "Machine-readable slot 5 native actor/VS source-record report: scratch records, source payload pointers, handler-table PCs, and Ghidra mapping notes."
+    },
+    {
+      "id": "kokiri_slot5_actor_vs_source_record_probe_md",
+      "kind": "file",
+      "path": "${repoRoot}\\captures\\azahar_pica\\kokiri_slot5_after10s_actor_vs_source_record_probe_20260705_072239\\derived\\actor_vs_source_record_probe.md",
+      "required": false,
+      "purpose": "Human-readable source-record report proving the FUN_0035BF50 -> 0x00253A4C native handler route for actor/VS light records."
+    },
+    {
+      "id": "azahar_kokiri_slot5_after10s_actor_vs_payload_source_probe",
+      "kind": "directory",
+      "path": "${repoRoot}\\captures\\azahar_pica\\kokiri_slot5_after10s_actor_vs_payload_source_probe_20260705_080000",
+      "required": false,
+      "purpose": "Slot 5 validation-only writer probe captured after ten seconds of runtime, seeded around compact actor/VS dir+rgb payloads consumed by the native light-record handler."
+    },
+    {
+      "id": "kokiri_slot5_actor_vs_payload_source_watchlist",
+      "kind": "file",
+      "path": "${repoRoot}\\captures\\azahar_pica\\derived\\watch_addresses.slot5_actor_vs_payload_sources.txt",
+      "required": false,
+      "purpose": "Seed watchlist for compact actor/VS payload source probes: slot 0 r4+0x30, slot 1 r4+0x48, and one alias/control address."
+    },
+    {
+      "id": "analyze_actor_vs_payload_source_probe_script",
+      "kind": "file",
+      "path": "${repoRoot}\\tools\\oot3d\\decomp_support\\scripts\\analyze_actor_vs_payload_source_probe.py",
+      "required": true,
+      "purpose": "Validation-only analyzer for compact actor/VS dir+rgb payload source probes; maps payload writers to native environment-light owner code and reconstructs owner offsets."
+    },
+    {
+      "id": "kokiri_slot5_actor_vs_payload_source_probe_json",
+      "kind": "file",
+      "path": "${repoRoot}\\captures\\azahar_pica\\kokiri_slot5_after10s_actor_vs_payload_source_probe_20260705_080000\\derived\\actor_vs_payload_source_probe.json",
+      "required": false,
+      "purpose": "Machine-readable slot 5 compact actor/VS payload source report: r4 owner base, payload offsets, dir/rgb bytes, writer PCs, and native owner resolution."
+    },
+    {
+      "id": "kokiri_slot5_actor_vs_payload_source_probe_md",
+      "kind": "file",
+      "path": "${repoRoot}\\captures\\azahar_pica\\kokiri_slot5_after10s_actor_vs_payload_source_probe_20260705_080000\\derived\\actor_vs_payload_source_probe.md",
+      "required": false,
+      "purpose": "Human-readable report proving the 0x0045DD50 native environment-light payload source feeding the FUN_0035BF50 -> 0x00253A4C actor/VS light-record route."
+    },
+    {
+      "id": "kokiri_slot5_actor_vs_compact_payload_after10s_compare_json",
+      "kind": "file",
+      "path": "${workRoot}\\standalone_demo\\kokiri_forest\\native_host\\actor_vs_compact_payload_after10s_compare.json",
+      "required": false,
+      "purpose": "Automated comparison between demo actor/VS compact payload diagnostics and the validation-only after10s emulator payload-source probe; expected status is match without using emulator bytes as runtime data."
+    },
+    {
+      "id": "kokiri_slot5_after10s_full_visual_compare_dir",
+      "kind": "directory",
+      "path": "${workRoot}\\standalone_demo\\kokiri_forest\\native_host\\comparison\\kokiri_slot5",
+      "required": false,
+      "purpose": "Current systematic Kokiri slot 5 comparison workspace: demo screenshot/JSON, matched emulator screenshot, visual diff, lighting batch CSV, and lighting diagnostics."
+    },
+    {
+      "id": "kokiri_slot5_after10s_full_emulator_pica_dump_dir",
+      "kind": "directory",
+      "path": "${workRoot}\\standalone_demo\\kokiri_forest\\native_host\\comparison\\kokiri_slot5\\emulator_pica_dump\\slot5_after10s",
+      "required": false,
+      "purpose": "Validation-only Azahar slot 5 dump captured after ten seconds of runtime: three PICA frames, converted register traces, screenshot, and writer trace."
+    },
+    {
+      "id": "kokiri_slot5_after10s_wide_pica_scene_probe_dir",
+      "kind": "directory",
+      "path": "${repoRoot}\\captures\\azahar_pica\\kokiri_slot5_after10s_wide_pica_scene_probe_20260705",
+      "required": false,
+      "purpose": "Validation-only Azahar slot 5 dump captured after ten seconds of runtime with 45 PICA frames and no heavy writer watchlist; use this as the stable wide lighting/register comparison source."
+    },
+    {
+      "id": "kokiri_slot5_after10s_wide_pica_uniform_summary_json",
+      "kind": "file",
+      "path": "${repoRoot}\\captures\\azahar_pica\\kokiri_slot5_after10s_wide_pica_scene_probe_20260705\\derived\\wide_pica_frame_000000_lighting_uniform_summary.json",
+      "required": false,
+      "purpose": "Machine-readable dominant PICA material/light uniform summary for the stable full frame 000000 in the wide after10s slot 5 capture."
+    },
+    {
+      "id": "kokiri_slot5_after10s_wide_pica_frame000_register_trace_json",
+      "kind": "file",
+      "path": "${repoRoot}\\captures\\azahar_pica\\kokiri_slot5_after10s_wide_pica_scene_probe_20260705\\derived\\oot3d_pica_frame_000000.native_pica_register_trace.json",
+      "required": false,
+      "purpose": "Full validation-only PICA register trace for stable frame 000000; use with the uniform summary when checks need draw fog counts, GPUREG_FOG_COLOR, or non-uniform register state."
+    },
+    {
+      "id": "kokiri_slot5_after10s_lighting_fog_writer_probe_dir",
+      "kind": "directory",
+      "path": "${repoRoot}\\captures\\azahar_pica\\kokiri_slot5_after10s_lighting_fog_writer_probe_20260705_100245",
+      "required": false,
+      "purpose": "Validation-only Azahar slot 5 dump captured after ten seconds of runtime with preserved command-buffer watchlist, three PICA frames, screenshot, and large fog/material writer trace for precise lighting/fog comparison."
+    },
+    {
+      "id": "kokiri_slot5_after10s_lighting_fog_writer_frame000_register_trace_json",
+      "kind": "file",
+      "path": "${repoRoot}\\captures\\azahar_pica\\kokiri_slot5_after10s_lighting_fog_writer_probe_20260705_100245\\derived\\oot3d_pica_frame_000000.native_pica_register_trace.json",
+      "required": false,
+      "purpose": "Current validation frame for targeted fog/material work: 73 draws, 47 PICA fog-enabled draws, dominant fog color 244,239,130, and per-draw class/fog state."
+    },
+    {
+      "id": "summarize_kokiri_slot5_pica_lighting_uniforms_script",
+      "kind": "file",
+      "path": "${repoRoot}\\tools\\oot3d\\decomp_support\\scripts\\summarize_kokiri_slot5_pica_lighting_uniforms.py",
+      "required": true,
+      "purpose": "Builds the reduced validation-only PICA class/uniform summary from a normalized native PICA register trace so new after10s emulator dumps can be compared automatically."
+    },
+    {
+      "id": "kokiri_slot5_after10s_lighting_fog_writer_uniform_summary_json",
+      "kind": "file",
+      "path": "${repoRoot}\\captures\\azahar_pica\\kokiri_slot5_after10s_lighting_fog_writer_probe_20260705_100245\\derived\\pica_frame_000000_lighting_uniform_summary.json",
+      "required": false,
+      "purpose": "Machine-readable per-class PICA lighting uniform summary generated from the current after10s fog-writer frame; includes multimodal actor color/vector packets and per-class fog modes."
+    },
+    {
+      "id": "compare_kokiri_slot5_demo_lighting_to_pica_dump_script",
+      "kind": "file",
+      "path": "${repoRoot}\\tools\\oot3d\\decomp_support\\scripts\\compare_kokiri_slot5_demo_lighting_to_pica_dump.py",
+      "required": true,
+      "purpose": "Compares demo lighting diagnostics against validation-only emulator PICA uniform summaries, optional full register traces, and optional fog-writer reports; reports multimodal actor colors/vectors, fog, batch classes, and backend gap severity without promoting emulator values as runtime data."
+    },
+    {
+      "id": "kokiri_slot5_after10s_demo_vs_pica_lighting_compare_json",
+      "kind": "file",
+      "path": "${repoRoot}\\captures\\azahar_pica\\kokiri_slot5_after10s_lighting_fog_writer_probe_20260705_100245\\derived\\current_demo_vs_emulator_pica_lighting_compare_with_fog_backend_gap.json",
+      "required": false,
+      "purpose": "Latest machine-readable comparison between regenerated demo lighting diagnostics and the targeted after10s emulator PICA summary/register/writer trace. Current expected status is fail only for unapplied native PICA fog backend route, with PICA fog color/clear passing."
+    },
+    {
+      "id": "kokiri_slot5_after10s_demo_vs_pica_lighting_compare_md",
+      "kind": "file",
+      "path": "${repoRoot}\\captures\\azahar_pica\\kokiri_slot5_after10s_lighting_fog_writer_probe_20260705_100245\\derived\\current_demo_vs_emulator_pica_lighting_compare_with_fog_backend_gap.md",
+      "required": false,
+      "purpose": "Human-readable lighting comparison report: actor/VS multimodal color/vector packets, PICA fog color, background clear color, fog writer evidence, and explicit demo backend fog application gap."
+    },
+    {
+      "id": "kokiri_slot5_after20s_clean_probe_emulator_pica_dump_dir",
+      "kind": "directory",
+      "path": "${workRoot}\\standalone_demo\\kokiri_forest\\native_host\\comparison\\kokiri_slot5\\emulator_pica_dump\\slot5_after20s_clean_probe",
+      "required": false,
+      "purpose": "Validation-only Azahar slot 5 probe captured after twenty seconds of runtime; confirms Navi/HUD are still visible in this savestate, so comparisons must use masks/diagnostics rather than assuming a clean screenshot."
+    },
+    {
+      "id": "kokiri_slot5_after10s_visual_compare_summary_json",
+      "kind": "file",
+      "path": "${workRoot}\\standalone_demo\\kokiri_forest\\native_host\\comparison\\kokiri_slot5\\visual_compare_summary.json",
+      "required": false,
+      "purpose": "Machine-readable visual comparison summary for current Kokiri slot 5 demo versus the after10s emulator screenshot."
+    },
+    {
+      "id": "kokiri_slot5_after10s_lighting_diagnostics_json",
+      "kind": "file",
+      "path": "${workRoot}\\standalone_demo\\kokiri_forest\\native_host\\comparison\\kokiri_slot5\\lighting_diagnostics.json",
+      "required": false,
+      "purpose": "Machine-readable lighting diagnostics joining demo batch evaluations with the validation-only after10s PICA uniform/register trace."
+    },
+    {
+      "id": "analyze_kokiri_slot5_fog_writer_trace_script",
+      "kind": "file",
+      "path": "${repoRoot}\\tools\\oot3d\\decomp_support\\scripts\\analyze_kokiri_slot5_fog_writer_trace.py",
+      "required": true,
+      "purpose": "Validation-only analyzer that correlates Kokiri slot 5 fog PICA register writes with Azahar command-buffer writer PCs/LRs."
+    },
+    {
+      "id": "kokiri_slot5_after10s_fog_writer_trace_json",
+      "kind": "file",
+      "path": "${repoRoot}\\captures\\azahar_pica\\kokiri_slot5_after10s_lighting_fog_writer_probe_20260705_100245\\derived\\fog_writer_trace_summary.json",
+      "required": false,
+      "purpose": "Machine-readable per-register fog writer correlation for the current after10s slot 5 dump; used to guide code.bin/native asset source tracing only. Correlates GPUREG_FOG_COLOR to 0x00452894->0x0047D6F4 and GPUREG_FOG_LUT_DATA0 to 0x0047FF10."
+    },
+    {
+      "id": "kokiri_slot5_after10s_fog_writer_trace_md",
+      "kind": "file",
+      "path": "${repoRoot}\\captures\\azahar_pica\\kokiri_slot5_after10s_lighting_fog_writer_probe_20260705_100245\\derived\\fog_writer_trace_summary.md",
+      "required": false,
+      "purpose": "Human-readable fog writer correlation report showing native PICA fog mode/color/LUT writer paths for the current after10s slot 5 probe."
+    },
+    {
+      "id": "kokiri_slot5_after10s_actor_vs_uniform_world_vector_compare_json",
+      "kind": "file",
+      "path": "${workRoot}\\standalone_demo\\kokiri_forest\\native_host\\comparison\\kokiri_slot5\\actor_vs_uniform_world_vector_after10s_compare.json",
+      "required": false,
+      "purpose": "Validation-only comparison proving the demo's normalized 0x0045DD50 actor/VS compact payload vectors match the PICA VSH f80/f83 world vectors reconstructed from the after10s emulator trace."
+    },
+    {
+      "id": "kokiri_slot5_shadow_register_validation_json",
+      "kind": "file",
+      "path": "${repoRoot}\\tools\\oot3d\\decomp_support\\analysis\\kokiri_slot5_shadow_register_validation.json",
+      "required": true,
+      "purpose": "Validation-only summary of Kokiri slot 5 Shadow2D/FragOp PICA register values."
+    },
+    {
+      "id": "kokiri_slot5_shadow_register_validation_md",
+      "kind": "file",
+      "path": "${repoRoot}\\tools\\oot3d\\decomp_support\\analysis\\kokiri_slot5_shadow_register_validation.md",
+      "required": true,
+      "purpose": "Human-readable Kokiri slot 5 Shadow2D/FragOp register validation summary."
+    },
+    {
+      "id": "decode_player_shadow_model_tables_script",
+      "kind": "file",
+      "path": "${repoRoot}\\tools\\oot3d\\decomp_support\\scripts\\decode_player_shadow_model_tables.py",
+      "required": true,
+      "purpose": "Static decoder for the native player model-group table and player model pointer table in OOT3D code.bin."
+    },
+    {
+      "id": "player_shadow_model_tables_json",
+      "kind": "file",
+      "path": "${repoRoot}\\tools\\oot3d\\decomp_support\\analysis\\player_shadow_model_tables.json",
+      "required": true,
+      "purpose": "Machine-readable static decode of OOT3D player model/shadow selector tables from code.bin."
+    },
+    {
+      "id": "player_shadow_model_tables_md",
+      "kind": "file",
+      "path": "${repoRoot}\\tools\\oot3d\\decomp_support\\analysis\\player_shadow_model_tables.md",
+      "required": true,
+      "purpose": "Human-readable static decode of OOT3D player model/shadow selector tables from code.bin."
+    },
+    {
+      "id": "analyze_player_shadow_source_context_route_script",
+      "kind": "file",
+      "path": "${repoRoot}\\tools\\oot3d\\decomp_support\\scripts\\analyze_player_shadow_source_context_route.py",
+      "required": true,
+      "purpose": "Static audit script for the OOT3D player CMB to AutoClass1 source-context route."
+    },
+    {
+      "id": "player_shadow_source_context_route_json",
+      "kind": "file",
+      "path": "${repoRoot}\\tools\\oot3d\\decomp_support\\analysis\\player_shadow_source_context_route.json",
+      "required": true,
+      "purpose": "Machine-readable static audit of the player CMB/source-context route and Shadow2D record-owner boundary."
+    },
+    {
+      "id": "player_shadow_source_context_route_md",
+      "kind": "file",
+      "path": "${repoRoot}\\tools\\oot3d\\decomp_support\\analysis\\player_shadow_source_context_route.md",
+      "required": true,
+      "purpose": "Human-readable static audit of the player CMB/source-context route and Shadow2D record-owner boundary."
+    },
+    {
+      "id": "link_house_demo_manifest",
+      "kind": "file",
+      "path": "${workRoot}\\standalone_demo\\link_house\\demo_manifest.json",
+      "required": true,
+      "purpose": "Current Link house native demo manifest."
+    },
+    {
+      "id": "kokiri_demo_manifest",
+      "kind": "file",
+      "path": "${workRoot}\\standalone_demo\\kokiri_forest\\demo_manifest.json",
+      "required": true,
+      "purpose": "Current Kokiri Forest native demo manifest."
+    },
+    {
+      "id": "link_child_character_manifest",
+      "kind": "file",
+      "path": "${workRoot}\\character_conversion\\link_child_character_conversion_manifest.json",
+      "required": true,
+      "purpose": "Offline-derived Link child native CMB/CSAB manifest used by the demo."
+    },
+    {
+      "id": "local_oot3d_decomp_support",
+      "kind": "directory",
+      "path": "${repoRoot}\\tools\\oot3d\\decomp_support",
+      "required": true,
+      "purpose": "Local decompilation support scripts, exports, symbols, and analyses."
+    },
+    {
+      "id": "local_ghidra_scripts",
+      "kind": "directory",
+      "path": "${repoRoot}\\tools\\oot3d\\decomp_support\\ghidra_scripts",
+      "required": true,
+      "min_file_count": 10,
+      "purpose": "Ghidra Java scripts for selective export, references, data words, and PICA writers."
+    },
+    {
+      "id": "local_ghidra_export_decompiled",
+      "kind": "directory",
+      "path": "${repoRoot}\\tools\\oot3d\\decomp_support\\ghidra_export\\decompiled",
+      "required": true,
+      "min_file_count": 800,
+      "purpose": "Current local selective/applied Ghidra pseudocode export used in active analysis."
+    },
+    {
+      "id": "local_ghidra_export_disassembly",
+      "kind": "file",
+      "path": "${repoRoot}\\tools\\oot3d\\decomp_support\\ghidra_export\\disassembly.txt",
+      "required": true,
+      "min_length": 100000,
+      "purpose": "Current local target disassembly export used by analysis scripts."
+    },
+    {
+      "id": "canonical_full_ghidra_export_functions",
+      "kind": "file",
+      "path": "${oot3dDecompGit}\\ghidra_export\\functions.csv",
+      "required": true,
+      "min_length": 500000,
+      "purpose": "Full Ghidra function index from the original decomp workspace."
+    },
+    {
+      "id": "canonical_full_ghidra_export_disassembly",
+      "kind": "file",
+      "path": "${oot3dDecompGit}\\ghidra_export\\disassembly.txt",
+      "required": true,
+      "min_length": 10000000,
+      "purpose": "Full Ghidra target disassembly from the original decomp workspace."
+    },
+    {
+      "id": "pica_capture_root",
+      "kind": "directory",
+      "path": "${repoRoot}\\captures\\azahar_pica",
+      "required": true,
+      "purpose": "Azahar PICA capture and derived trace/audit artifacts."
+    },
+    {
+      "id": "azahar_title_intro_slot6_dump_script",
+      "kind": "file",
+      "path": "${repoRoot}\\scripts\\oot3d\\Invoke-Oot3dTitleIntroSlot6EmulatorDump.ps1",
+      "required": true,
+      "purpose": "Validation-only Azahar dump wrapper for the open-title intro savestate slot 6; preferred over boot capture until the exact pre-intro transition is needed. Runs compact PICA summary and demo/emulator comparison when the demo probe JSON is present."
+    },
+    {
+      "id": "compare_title_intro_slot6_demo_to_pica_dump_script",
+      "kind": "file",
+      "path": "${repoRoot}\\tools\\oot3d\\decomp_support\\scripts\\compare_title_intro_slot6_demo_to_pica_dump.py",
+      "required": true,
+      "purpose": "Validation-only comparator joining the slot 6 PICA dump to the native title-intro demo probe; reports backend/source mismatches without treating emulator values as runtime data."
+    },
+    {
+      "id": "azahar_title_intro_slot6_focused_capture",
+      "kind": "directory",
+      "path": "${repoRoot}\\captures\\azahar_pica\\title_intro_slot6_kankyo_focused_20260707_082324",
+      "required": false,
+      "purpose": "Current focused slot 6 validation capture for the open-title intro: three PICA frames, preserved watchlist, screenshot, converted register traces, and capped writer trace."
+    },
+    {
+      "id": "title_intro_slot6_pica_dump_summary_json",
+      "kind": "file",
+      "path": "${repoRoot}\\captures\\azahar_pica\\title_intro_slot6_kankyo_focused_20260707_082324\\derived\\title_intro_slot6_pica_dump_summary.json",
+      "required": false,
+      "purpose": "Compact slot 6 emulator validation summary: draw counts, PICA fog/material/shadow state, texture bindings, and top writer PCs/LRs."
+    },
+    {
+      "id": "title_intro_slot6_demo_vs_emulator_gap_json",
+      "kind": "file",
+      "path": "${repoRoot}\\captures\\azahar_pica\\title_intro_slot6_kankyo_focused_20260707_082324\\derived\\title_intro_slot6_demo_vs_emulator_gap.json",
+      "required": false,
+      "purpose": "Small gap summary joining the slot 6 emulator PICA dump to the current native demo output; validation evidence only."
+    },
+    {
+      "id": "title_intro_slot6_demo_vs_emulator_gap_md",
+      "kind": "file",
+      "path": "${repoRoot}\\captures\\azahar_pica\\title_intro_slot6_kankyo_focused_20260707_082324\\derived\\title_intro_slot6_demo_vs_emulator_gap.md",
+      "required": false,
+      "purpose": "Human-readable slot 6 demo/emulator gap summary. Current expected high-priority failure is native fog-color source selection, not Kankyo primitive backend submission."
+    },
+    {
+      "id": "title_intro_demo_manifest",
+      "kind": "file",
+      "path": "${workRoot}\\standalone_demo\\title_intro\\demo_manifest.json",
+      "required": true,
+      "purpose": "Current native demo manifest for the first/open-title intro reconstruction."
+    },
+    {
+      "id": "title_intro_fast_lane_script",
+      "kind": "file",
+      "path": "${repoRoot}\\scripts\\oot3d\\Invoke-Oot3dTitleIntro.ps1",
+      "required": true,
+      "purpose": "OpenGL-only fast lane for the title intro: release build, visible live launch, and deterministic checkpoint smoke captures."
+    },
+    {
+      "id": "title_intro_frame600_kankyo_runtime_scale_backend_stats",
+      "kind": "file",
+      "path": "${repoRoot}\\build-codex\\title_intro_frame600_kankyo_runtime_scale_backend_stats.json",
+      "required": false,
+      "purpose": "Native Fast3D frame-600 probe with Kankyo primitive backend draw stats and per-element runtime scale fields for slot 6 validation."
+    },
+    {
+      "id": "title_intro_frame600_kankyo_fog_backend_stats",
+      "kind": "file",
+      "path": "${repoRoot}\\build-codex\\title_intro_frame600_kankyo_fog_backend_stats.json",
+      "required": false,
+      "purpose": "Native Fast3D frame-600 probe after Kankyo primitive PICA fog backend support; used by the slot 6 demo/emulator comparator."
+    },
+    {
+      "id": "pica_writer_trace_slot4",
+      "kind": "file",
+      "path": "${repoRoot}\\captures\\azahar_pica\\derived\\oot3d_pica_writer_trace.slot4.csv",
+      "required": false,
+      "min_length": 100000000,
+      "purpose": "Slot 4 writer trace used only for validation/backtracing, not as native-source replacement."
+    },
+    {
+      "id": "pica_native_origin_audit",
+      "kind": "file",
+      "path": "${repoRoot}\\captures\\azahar_pica\\derived\\oot3d_pica_native_origin_audit.md",
+      "required": false,
+      "min_length": 10000,
+      "purpose": "Derived audit joining PICA traces to native-origin candidates."
+    },
+    {
+      "id": "native_origin_backlog",
+      "kind": "file",
+      "path": "${repoRoot}\\tools\\oot3d\\decomp_support\\analysis\\oot3d_pica_native_origin_structures.md",
+      "required": true,
+      "min_length": 50000,
+      "purpose": "Binding backlog for native PICA/light/shadow origin structures and unresolved mismatches."
+    }
+  ],
+  "commands": [
+    {
+      "id": "analyze_whole_aot_optimization_ir",
+      "working_directory": "${repoRoot}",
+      "command": "python tools\\oot3d\\native_a32_runtime\\analyze_whole_aot_optimization_ir.py --program build-codex\\oot3d_whole_aot\\aot_program.json --selection tools\\oot3d\\native_a32_runtime\\whole_aot_functions.json --code E:\\ppssppvr\\oot3d_decomp\\work\\extract\\exefs\\code.bin --output I:\\oot3dre_work\\whole_aot_optimization\\analysis.json"
+    },
+    {
+      "id": "run_llvm_aot_pilot_mesh_submit",
+      "working_directory": "${repoRoot}",
+      "command": "python tools\\oot3d\\native_a32_runtime\\run_llvm_aot_pilot.py --compile-database ${llvmAotPilotBuildRoot}\\compile_commands.json --source-root ${llvmAotPilotBuildRoot}\\oot3d_whole_aot_cpp --symbol Execute_MeshCommandPacket_Submit_00466E2C --output ${workRoot}\\whole_aot_optimization\\llvm_pilot\\mesh_submit"
+    },
+    {
+      "id": "verify_oot3d_llvm_toolchain",
+      "working_directory": "${repoRoot}",
+      "command": ".\\scripts\\oot3d\\Test-Oot3dLlvmToolchain.ps1"
+    },
+    {
+      "id": "configure_oot3d_llvm_build",
+      "working_directory": "${repoRoot}",
+      "command": ".\\scripts\\oot3d\\Configure-Oot3dLlvmBuild.ps1 -RebuildWholeAot"
+    },
+    {
+      "id": "build_oot3d_llvm_native_game",
+      "working_directory": "${repoRoot}",
+      "command": ".\\scripts\\oot3d\\Build-Oot3dLlvm.ps1 -Target oot3d_native_game -Parallel 2"
+    },
+    {
+      "id": "configure_native_runtime_fast",
+      "working_directory": "${repoRoot}",
+      "command": "& '${cmakeExe}' -S . -B build-codex -DOOT3D_FAST_DEV_LINK=ON -DTHREE_DS_RECOMP_ENABLE_DX11=OFF -DTHREE_DS_RECOMP_FAST_DEV_LINK=ON"
+    },
+    {
+      "id": "build_native_game_fast",
+      "working_directory": "${repoRoot}",
+      "command": "cmd.exe /d /c 'call \"${vsDevCmd}\" -arch=x64 -host_arch=x64 >nul && set CL=/EHsc && \"${cmakeExe}\" --build build-codex --target oot3d_native_game -j 16'"
+    },
+    {
+      "id": "verify_operational_inputs",
+      "working_directory": "${repoRoot}",
+      "command": ".\\scripts\\oot3d\\Test-Oot3dOperationalInputs.ps1"
+    },
+    {
+      "id": "launch_azahar_slot4_manual",
+      "working_directory": "${azaharRoot}\\build-pcvr-qt\\bin\\Release",
+      "command": "& '${azaharRoot}\\build-pcvr-qt\\bin\\Release\\azahar.exe'"
+    },
+    {
+      "id": "ghidra_selected_export_template",
+      "working_directory": "${repoRoot}\\tools\\oot3d\\decomp_support",
+      "command": "& '${pcvrReTools}\\ghidra\\support\\analyzeHeadless.bat' 'E:\\ppssppvr\\oot3d_decomp\\work\\ghidra_project' oot3d_code -process code.bin -noanalysis -scriptPath '${repoRoot}\\tools\\oot3d\\decomp_support\\ghidra_scripts' -postScript ExportOot3dSelected.java '${repoRoot}\\tools\\oot3d\\decomp_support\\ghidra_export' '<entries-file>' false false"
+    },
+    {
+      "id": "native_fast3d_link_house_demo",
+      "working_directory": "${repoRoot}",
+      "command": ".\\scripts\\oot3d\\Invoke-Oot3dNativeFast3dDemo.ps1 -Manifest '${workRoot}\\standalone_demo\\link_house\\demo_manifest.json' -Launch"
+    },
+    {
+      "id": "native_game_kokiri_forest_live",
+      "working_directory": "${repoRoot}",
+      "command": ".\\scripts\\oot3d\\Invoke-Oot3dNativeGame.ps1"
+    },
+    {
+      "id": "native_fast3d_title_intro_live",
+      "working_directory": "${repoRoot}",
+      "command": ".\\scripts\\oot3d\\Invoke-Oot3dTitleIntro.ps1 -Mode Live"
+    },
+    {
+      "id": "native_fast3d_title_intro_checkpoint_240",
+      "working_directory": "${repoRoot}",
+      "command": ".\\scripts\\oot3d\\Invoke-Oot3dTitleIntro.ps1 -Mode Checkpoint -CheckpointFrame 240"
+    },
+    {
+      "id": "capture_azahar_title_intro_slot6_focused",
+      "working_directory": "${repoRoot}",
+      "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\oot3d\\Invoke-Oot3dTitleIntroSlot6EmulatorDump.ps1 -Focused"
+    },
+    {
+      "id": "native_fast3d_title_intro_frame600_backend_probe",
+      "working_directory": "${repoRoot}",
+      "command": ".\\build-codex\\oot3d_native_fast3d_demo.exe --manifest '${workRoot}\\standalone_demo\\title_intro\\demo_manifest.json' --resource-root '${repoRoot}\\runtime/three_ds_recomp\\src\\fast' --title-intro --title-intro-frame 600 --frames 1 --max-seconds 1 --width 320 --height 180 --output build-codex\\title_intro_frame600_kankyo_fog_backend_stats.json"
+    }
+  ],
+  "known_absences": [
+    {
+      "id": "repo_root_code_bin",
+      "path": "${repoRoot}\\code.bin",
+      "status": "not_expected",
+      "reason": "The original code image is kept at ${oot3dExtractRoot}\\exefs\\code.bin."
+    },
+    {
+      "id": "local_ghidra_export_functions_csv",
+      "path": "${repoRoot}\\tools\\oot3d\\decomp_support\\ghidra_export\\functions.csv",
+      "status": "optional_missing",
+      "reason": "The local active export is selective; the full function index is canonical at ${oot3dDecompGit}\\ghidra_export\\functions.csv."
+    }
+  ]
+}

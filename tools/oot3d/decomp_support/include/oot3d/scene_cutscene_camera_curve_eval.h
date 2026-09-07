@@ -1,0 +1,23 @@
+#ifndef OOT3D_SCENE_CUTSCENE_CAMERA_CURVE_EVAL_H
+#define OOT3D_SCENE_CUTSCENE_CAMERA_CURVE_EVAL_H
+
+#include "oot3d/scene_cutscene_camera_keyframe_table.h"
+
+typedef enum {
+    OOT3D_CUTSCENE_CAMERA_SAMPLE_OK = 0,
+    OOT3D_CUTSCENE_CAMERA_SAMPLE_NULL_OUTPUT,
+    OOT3D_CUTSCENE_CAMERA_SAMPLE_CURVE_INDEX_OUT_OF_RANGE,
+    OOT3D_CUTSCENE_CAMERA_SAMPLE_UNSUPPORTED_INTERPOLATION,
+    OOT3D_CUTSCENE_CAMERA_SAMPLE_EMPTY_CURVE,
+    OOT3D_CUTSCENE_CAMERA_SAMPLE_SLICE_MISMATCH,
+    OOT3D_CUTSCENE_CAMERA_SAMPLE_ZERO_FRAME_SPAN,
+} Oot3dCutsceneCameraSampleStatus;
+
+Oot3dCutsceneCameraSampleStatus Oot3d_CutsceneCameraSampleCurve(
+    u16 cameraCurveSourceIndex,
+    float frame,
+    u8 loopMode,
+    float* outValue
+);
+
+#endif

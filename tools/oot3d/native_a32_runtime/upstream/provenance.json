@@ -1,0 +1,173 @@
+{
+  "aggregate_sha256": "28410ef516e294be210b84b359bcc2cf94ed88f8dbc088eeecb11c1c77ef8465",
+  "file_count": 21,
+  "local_extensions": [
+    {
+      "path": "src/oot3d_pack/a32_cpp_aot.py",
+      "base_sha256": "64bff9da1febca4c8f9195bac6c0203343884c8a61c8a5f892326152362c829c",
+      "working_sha256": "b83c8eebf5d6b3039c67b385c9fd1a2a5f71636ae5441f0c302136185d7dbe90",
+      "working_size": 54167,
+      "purpose": "Bound AOT flow to ExHeader .text, recover initializer targets, emit disjoint core metadata, and configure manifest-selected true-AOT candidates without regenerating packed shards."
+    },
+    {
+      "path": "src/oot3d_pack/arm_ir.py",
+      "base_sha256": "88c7a2287a0da12bd6edb5b7f43237d9f9eb88933448c3a91c90d85c4c7c260f",
+      "working_sha256": "e28570a1b61f80dc56cf965fe39eb1ffddc30202dc7891c81a5afd5cfdffe245",
+      "working_size": 65986,
+      "purpose": "Classify supported native core instructions into disjoint system, ALU, and memory runtime decoders."
+    },
+    {
+      "path": "recomp/a32_runtime.h",
+      "base_sha256": "cdd60e3bb5d76956c075c439490ba7578e17260de57659fb38b3cdd18340b04a",
+      "working_sha256": "82428b646cb72f43387005707c7f98e5df84f1b8aafc48d4b3d50bca8b0c4ba9",
+      "working_size": 7412,
+      "purpose": "Represent disjoint core decoders plus call-site compiled-function and budgeted multi-block true-AOT dispatch boundaries."
+    },
+    {
+      "path": "recomp/a32_runtime.cpp",
+      "base_sha256": "b96890bae8eb9d8d364f33506a80c3f0851da593a1d2af9ceaffb774feb1e6b0",
+      "working_sha256": "f55e7097583056007db63144b321f5327a941250f22800c45fb7a09791527f07",
+      "working_size": 30330,
+      "purpose": "Dispatch classified core operations, compiled functions reached by calls or direct/tail entries, and budgeted multi-block true-AOT regions while materializing the guest PC only at observable boundaries."
+    },
+    {
+      "path": "recomp/a32_vfp_scalar.cpp",
+      "base_sha256": "0792f44f783d4f5fff5563fa8af22ea1e3b24286140976e3fad5770c2e4746a1",
+      "working_sha256": "d07a379cb9e1a72487e5ac50533bbf718f31414fc6960500e4ce9d934b1e94cc",
+      "working_size": 31217,
+      "purpose": "Expose exact binary32 signed-conversion and comparison primitives to statically generated true-AOT regions without raw-op decoding."
+    },
+    {
+      "path": "recomp/a32_vfp_scalar.h",
+      "base_sha256": "a07b273d9f2c35ea374ec98a7208c7d9ec212ad203f0a74bf62bc1c3081ee43e",
+      "working_sha256": "f0a7b1e6848f0667d2599d619ce85409ad8bc0bdbfefa70e23fee11f2f6d48f4",
+      "working_size": 1148,
+      "purpose": "Declare exact binary32 primitives used directly by generated true-AOT VFP code."
+    },
+    {
+      "path": "recomp/a32_core_internal.h",
+      "base_sha256": "73280ca2998b68e383b7ad5c6c73c355536c3ab772687a49f7b0077ffc8cfa83",
+      "working_sha256": "47098caada43d32a1773d5160c80f26d52bab39e22c714ae52546174a4275be3",
+      "working_size": 662,
+      "purpose": "Expose the exact observed core-system decoder to the packed-operation dispatcher."
+    },
+    {
+      "path": "recomp/a32_core.cpp",
+      "base_sha256": "7112fc86359b1f6cd8b040f3f10036616898938a3a24e70a25c0e69e8b5c370c",
+      "working_sha256": "db60a1a09ec9174ef3e9eb1707c214b5240fb13ad46dc05dba3f08a186096788",
+      "working_size": 2066,
+      "purpose": "Provide the system decoder entry while retaining the compatibility Core chain."
+    }
+  ],
+  "files": [
+    {
+      "path": "analysis/codebin_callable_boundary_residue_audit_166.csv",
+      "sha256": "eaf97f65469065cdb7b90dbb9e393492fcf0d622f263203a1f7e68c7b1217883",
+      "size": 110256
+    },
+    {
+      "path": "analysis/codebin_function_inventory.csv",
+      "sha256": "82c3993200f43308a11d5c94bf2c1bb1651efa9426e1ef7c15fdb94658e3d1c8",
+      "size": 7290236
+    },
+    {
+      "path": "recomp/a32_core.cpp",
+      "sha256": "7112fc86359b1f6cd8b040f3f10036616898938a3a24e70a25c0e69e8b5c370c",
+      "size": 1883
+    },
+    {
+      "path": "recomp/a32_core.h",
+      "sha256": "4dc49db9d9ae58a5119c3840be53e2c35c10ec9b2b31d315b5fb81ccac6e2d5b",
+      "size": 441
+    },
+    {
+      "path": "recomp/a32_core_alu.cpp",
+      "sha256": "8c3e68ee76f599ea9e4338c2101ce9e056a81dbab55a24ce52c00a8583a43026",
+      "size": 29575
+    },
+    {
+      "path": "recomp/a32_core_internal.h",
+      "sha256": "73280ca2998b68e383b7ad5c6c73c355536c3ab772687a49f7b0077ffc8cfa83",
+      "size": 548
+    },
+    {
+      "path": "recomp/a32_core_memory.cpp",
+      "sha256": "3b3ba9694a6098ef6d26dd981e228d2b2d302ef937d617506364b97472d937cb",
+      "size": 20850
+    },
+    {
+      "path": "recomp/a32_runtime.cpp",
+      "sha256": "b96890bae8eb9d8d364f33506a80c3f0851da593a1d2af9ceaffb774feb1e6b0",
+      "size": 24656
+    },
+    {
+      "path": "recomp/a32_runtime.h",
+      "sha256": "cdd60e3bb5d76956c075c439490ba7578e17260de57659fb38b3cdd18340b04a",
+      "size": 6155
+    },
+    {
+      "path": "recomp/a32_vfp_binary64.cpp",
+      "sha256": "3a5282a1f1a75dea2e0487f7634dcd130be7758a98176283b6a11c420ca99ee1",
+      "size": 39544
+    },
+    {
+      "path": "recomp/a32_vfp_binary64.h",
+      "sha256": "27e614b4feeb55d3e51ab97dde61480c4f1e7f395f4c8f42255334e3c925300b",
+      "size": 643
+    },
+    {
+      "path": "recomp/a32_vfp_scalar.cpp",
+      "sha256": "0792f44f783d4f5fff5563fa8af22ea1e3b24286140976e3fad5770c2e4746a1",
+      "size": 30148
+    },
+    {
+      "path": "recomp/a32_vfp_scalar.h",
+      "sha256": "a07b273d9f2c35ea374ec98a7208c7d9ec212ad203f0a74bf62bc1c3081ee43e",
+      "size": 541
+    },
+    {
+      "path": "recomp/a32_vfp_transport.cpp",
+      "sha256": "b55939f0e0789acbaae7c491fa53d2f02bc5c44d224cb6fed149dc3bcacbc8ed",
+      "size": 12357
+    },
+    {
+      "path": "recomp/a32_vfp_transport.h",
+      "sha256": "18543bf915aa91b2b02aaf4bc33d068dac4d08c9b01c532a866474a68270c942",
+      "size": 680
+    },
+    {
+      "path": "src/oot3d_pack/a32_cpp_aot.py",
+      "sha256": "64bff9da1febca4c8f9195bac6c0203343884c8a61c8a5f892326152362c829c",
+      "size": 50007
+    },
+    {
+      "path": "src/oot3d_pack/arm_decode.py",
+      "sha256": "a18e543c246706143fc97cba449d72560236597c796255bb6d0dab0d97fa6012",
+      "size": 15958
+    },
+    {
+      "path": "src/oot3d_pack/arm_ir.py",
+      "sha256": "88c7a2287a0da12bd6edb5b7f43237d9f9eb88933448c3a91c90d85c4c7c260f",
+      "size": 65319
+    },
+    {
+      "path": "src/oot3d_pack/arm_lift.py",
+      "sha256": "600e2a306a9726309e4d61468adf0cba25f59d02c06faa4346dc095d68ab718b",
+      "size": 5660
+    },
+    {
+      "path": "src/oot3d_pack/arm_softfloat.py",
+      "sha256": "473e15375c3eb3442910bd30190dafe27ed443b1bad433b7ccba6dcfeb0b1ecd",
+      "size": 21338
+    },
+    {
+      "path": "src/oot3d_pack/arm_softfloat64.py",
+      "sha256": "d700d73fffa8720664f3d49411281ac6e865bffd85b1f2beb888f9f276ebda67",
+      "size": 20032
+    }
+  ],
+  "format": "oot3d_pinned_a32_runtime_v1",
+  "source_revision": "607aaa60e1e94caaeaaa524c9d6d120fdd265701",
+  "source_selection_version": 15,
+  "source_snapshot_id": "850483fb59713e87"
+}

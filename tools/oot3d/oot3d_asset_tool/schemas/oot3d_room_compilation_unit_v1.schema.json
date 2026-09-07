@@ -1,0 +1,300 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shipwright.dev/schemas/oot3d_room_compilation_unit_v1.schema.json",
+  "title": "OOT3D Room Compilation Unit v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "schema_version",
+    "status",
+    "identity",
+    "authority_policy",
+    "provenance",
+    "semantic_request",
+    "semantic_variant_evidence",
+    "native_route",
+    "source_assets",
+    "scene_resource_record",
+    "room_callback_contract",
+    "object_bank_contract",
+    "scene_setup",
+    "collision_headers",
+    "entrypoint",
+    "rooms",
+    "actor_instances",
+    "actor_profiles",
+    "object_dependencies",
+    "scene_catalog_bindings",
+    "closure",
+    "unresolved"
+  ],
+  "properties": {
+    "format": { "const": "oot3d_room_compilation_unit_v1" },
+    "schema_version": { "const": 1 },
+    "status": {
+      "enum": [
+        "composition_incomplete",
+        "composition_complete_behavior_incomplete",
+        "composition_complete_behavior_complete"
+      ]
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "unit_id",
+        "route_id",
+        "scene_id",
+        "scene_stem",
+        "scene_path",
+        "setup_index",
+        "native_room_indices",
+        "initial_room_index",
+        "payload_sha256"
+      ],
+      "properties": {
+        "unit_id": { "type": "string", "minLength": 1 },
+        "route_id": { "type": "string", "minLength": 1 },
+        "scene_id": { "type": "integer", "minimum": 0 },
+        "scene_stem": { "type": "string", "minLength": 1 },
+        "scene_path": { "type": "string", "pattern": "_info\\.zsi$" },
+        "setup_index": { "type": "integer", "minimum": 0 },
+        "native_room_indices": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 0 }
+        },
+        "initial_room_index": { "type": ["integer", "null"], "minimum": 0 },
+        "payload_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "authority_policy": { "type": "object" },
+    "provenance": { "type": "object" },
+    "semantic_request": { "type": "object" },
+    "semantic_variant_evidence": { "type": "object" },
+    "native_route": { "type": "object" },
+    "source_assets": {
+      "type": "object",
+      "required": ["code_bin", "scene_zsi", "room_zsi", "scene_zar"],
+      "properties": {
+        "code_bin": { "$ref": "#/$defs/source" },
+        "scene_zsi": { "$ref": "#/$defs/source" },
+        "room_zsi": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/source" }
+        },
+        "scene_zar": {
+          "oneOf": [
+            { "$ref": "#/$defs/source" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "scene_resource_record": { "type": "object" },
+    "room_callback_contract": { "type": "object" },
+    "object_bank_contract": { "type": "object" },
+    "scene_setup": { "type": "object" },
+    "collision_headers": { "type": "array", "items": { "type": "object" } },
+    "entrypoint": { "type": ["object", "null"] },
+    "rooms": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "room_index",
+          "setup_index",
+          "initially_active",
+          "source",
+          "commands",
+          "mesh_resources",
+          "object_list",
+          "actor_list"
+        ],
+        "properties": {
+          "room_index": { "type": "integer", "minimum": 0 },
+          "setup_index": { "type": "integer", "minimum": 0 },
+          "initially_active": { "type": "boolean" },
+          "source": { "$ref": "#/$defs/source" },
+          "commands": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "items": {
+              "type": "object",
+              "required": ["command_id", "parameter", "command_word", "argument"],
+              "properties": {
+                "command_id": { "type": "integer", "minimum": 0, "maximum": 255 },
+                "parameter": { "type": "integer", "minimum": 0, "maximum": 255 },
+                "command_word": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+                "argument": { "type": "integer", "minimum": 0, "maximum": 4294967295 }
+              }
+            }
+          },
+          "mesh_resources": { "type": "array" },
+          "object_list": { "type": "object" },
+          "actor_list": { "type": "object" }
+        }
+      }
+    },
+    "actor_instances": { "type": "array", "items": { "type": "object" } },
+    "actor_profiles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["behavior_graph"],
+        "properties": {
+          "behavior_graph": { "$ref": "#/$defs/actor_behavior_graph" }
+        }
+      }
+    },
+    "object_dependencies": { "type": "array", "items": { "type": "object" } },
+    "scene_catalog_bindings": { "type": "array", "items": { "type": "object" } },
+    "indirect_native_root_catalog": {
+      "type": "object",
+      "required": [
+        "format",
+        "status",
+        "source_snapshot_id",
+        "root_count",
+        "actor_candidate_count",
+        "profile_bound_root_count",
+        "unbound_actor_candidate_count",
+        "family_counts",
+        "source_catalogs",
+        "ownership_policy",
+        "runtime_binding_status"
+      ]
+    },
+    "closure": {
+      "type": "object",
+      "required": [
+        "composition_status",
+        "behavior_evidence_status",
+        "runtime_binding_status",
+        "room_count",
+        "actor_instance_count",
+        "unique_actor_profile_count",
+        "object_dependency_count",
+        "materialized_object_archive_count",
+        "unmaterialized_object_bank_count",
+        "callback_evidence_counts",
+        "behavior_graph_profile_count",
+        "behavior_function_count",
+        "behavior_action_transition_count",
+        "behavior_structure_field_count",
+        "unresolved_count",
+        "unresolved_severity_counts"
+      ],
+      "properties": {
+        "behavior_indirect_root_count": { "type": "integer", "minimum": 0 },
+        "behavior_consumer_root_count": { "type": "integer", "minimum": 0 },
+        "behavior_consumer_function_count": { "type": "integer", "minimum": 0 },
+        "behavior_consumer_call_edge_count": { "type": "integer", "minimum": 0 },
+        "behavior_actor_local_consumer_function_count": { "type": "integer", "minimum": 0 },
+        "behavior_native_service_dependency_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "unresolved": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "key", "severity", "reason"],
+        "properties": {
+          "kind": { "type": "string" },
+          "key": { "type": "string" },
+          "severity": {
+            "enum": ["composition", "behavior", "runtime_binding"]
+          },
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "actor_behavior_graph": {
+      "type": "object",
+      "required": [
+        "status",
+        "owner",
+        "structure",
+        "structure_size",
+        "function_count",
+        "action_transition_count",
+        "structure_field_count",
+        "initial_action_candidates",
+        "functions",
+        "action_transitions",
+        "structure_fields",
+        "runtime_binding_status"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "workflow_graph_recovered",
+            "native_function_set_recovered",
+            "native_consumer_graph_recovered",
+            "workflow_graph_unavailable"
+          ]
+        },
+        "owner": { "type": "string" },
+        "structure": { "type": "string" },
+        "structure_size": { "type": ["integer", "null"], "minimum": 1 },
+        "function_count": { "type": "integer", "minimum": 0 },
+        "action_transition_count": { "type": "integer", "minimum": 0 },
+        "structure_field_count": { "type": "integer", "minimum": 0 },
+        "indirect_root_count": { "type": "integer", "minimum": 0 },
+        "consumer_status": {
+          "enum": [
+            "original_lifecycle_consumers_recovered",
+            "lifecycle_consumer_inventory_partial",
+            "consumer_evidence_unavailable"
+          ]
+        },
+        "consumer_root_count": { "type": "integer", "minimum": 0 },
+        "consumer_function_count": { "type": "integer", "minimum": 0 },
+        "consumer_call_edge_count": { "type": "integer", "minimum": 0 },
+        "actor_local_consumer_function_count": { "type": "integer", "minimum": 0 },
+        "native_service_dependency_count": { "type": "integer", "minimum": 0 },
+        "initial_action_candidates": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "functions": { "type": "array", "items": { "type": "object" } },
+        "action_transitions": { "type": "array", "items": { "type": "object" } },
+        "structure_fields": { "type": "array", "items": { "type": "object" } },
+        "consumer_roots": { "type": "array", "items": { "type": "object" } },
+        "consumer_call_edges": { "type": "array", "items": { "type": "object" } },
+        "unresolved_consumer_dependencies": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string" }
+        },
+        "consumer_runtime_binding_status": {
+          "enum": [
+            "consumer_must_lower_original_bodies_and_bind_native_services",
+            "consumer_evidence_not_available"
+          ]
+        },
+        "runtime_binding_status": {
+          "enum": [
+            "consumer_must_bind_native_behavior_graph",
+            "behavior_evidence_not_available"
+          ]
+        }
+      }
+    },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "source": {
+      "type": "object",
+      "required": ["logical_path", "byte_length", "sha256"],
+      "properties": {
+        "logical_path": { "type": "string", "minLength": 1 },
+        "byte_length": { "type": "integer", "minimum": 0 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  }
+}

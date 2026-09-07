@@ -1,0 +1,21 @@
+{
+  "Graphics": {
+    "Grass": {
+      "Generation": { "InstancesPerSquareMeter": 4096 },
+      "Appearance": {
+        "BladeCurvature": 1.2,
+        "BladeDroop": 0.65,
+        "ShapeVariation": 0.8,
+        "BladeTwistDegrees": 100,
+        "BladeSegments": 6
+      }
+    },
+    "Effects": {
+      "Toon": {
+        "OutlineEnabled": true,
+        "OutlineWidth": 3.0,
+        "OutlineSoftness": 0.4
+      }
+    }
+  }
+}

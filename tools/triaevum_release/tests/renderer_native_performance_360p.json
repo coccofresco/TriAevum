@@ -1,0 +1,14 @@
+{
+  "Window": { "Width": 640, "Height": 360 },
+  "Graphics": {
+    "Output": { "Width": 640, "Height": 360 },
+    "AA": { "Mode": "Off", "MsaaSamples": 1 },
+    "Grass": { "Quality": "Off" },
+    "Effects": {
+      "Toon": { "Mode": "Off", "OutlineEnabled": false },
+      "AO": { "Mode": "Off" },
+      "Reflections": { "Mode": "Off" },
+      "DirectionalShadows": { "Mode": "Off" }
+    }
+  }
+}

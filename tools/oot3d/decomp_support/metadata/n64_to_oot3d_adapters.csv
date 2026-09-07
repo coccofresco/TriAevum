@@ -1,0 +1,132 @@
+id,category,domain,match_mode,n64_pattern,oot3d_symbol,confidence,notes
+lane_regs_init,source-lane,pause,map-n64-name,Regs_InitDataImpl,oot3d_pause_split_helpers,high,N64 init lane already yielded four exact pause helpers
+lane_message_update,source-lane,message,map-n64-name,Message_Update,oot3d_message_textbox_split,high,N64 message update lane yielded exact init and structured common body
+lane_message_start,source-lane,message,map-n64-name,Message_StartTextbox,oot3d_message_start_textbox,high,N64 message start is exact after OOT3D context offsets
+lane_boss_va_zapper,source-lane,boss_va,map-n64-source,src/overlays/actors/ovl_Boss_Va/z_boss_va.c,oot3d_boss_va_zapper_lane,high,BossVa state flow ports directly with offset adapters
+lane_player_collision,source-lane,player,map-n64-name,Player_ProcessSceneCollision,oot3d_player_process_scene_collision,high,Player collision has a structured OOT3D source lane
+lane_player_draw,source-lane,player,map-n64-name,Player_DrawImpl,oot3d_player_draw_impl,medium,Two OOT3D variants share the N64 draw implementation lane
+lane_kaleido_overlay,source-lane,pause,map-n64-name,KaleidoScope_DrawUIOverlay,oot3d_kaleido_overlay_splits,medium,Five OOT3D split targets share this N64 UI lane
+bossva_actor_params,struct-field,boss_va,member,this->actor.params,OOT3D_BOSS_VA_OFFSET_PARAMS,high,Observed in BossVa death setup
+bossva_shape_rot_x,struct-field,boss_va,member,this->actor.shape.rot.x,OOT3D_ACTOR_OFFSET_SHAPE_ROT_X,high,Shared actor shape rotation offset
+bossva_shape_rot_y,struct-field,boss_va,member,this->actor.shape.rot.y,OOT3D_ACTOR_OFFSET_SHAPE_ROT_Y,high,Shared actor shape rotation offset
+bossva_skel,struct-field,boss_va,member,this->skelAnime,oot3d_boss_va_skel_anime,high,SkelAnime moved to OOT3D_BOSS_VA_OFFSET_SKEL_ANIME
+bossva_skel_cur_frame,struct-field,boss_va,member,this->skelAnime.curFrame,OOT3D_BOSS_VA_OFFSET_SKEL_CUR_FRAME,high,Used by zapper targeting
+bossva_skel_play_speed,struct-field,boss_va,member,this->skelAnime.playSpeed,OOT3D_BOSS_VA_OFFSET_SKEL_PLAY_SPEED,high,Used by zapper targeting and death
+bossva_joint_table,struct-field,boss_va,member,this->skelAnime.jointTable,oot3d_boss_va_joint_table,high,Joint table pointer accessor exists
+bossva_action_func,struct-field,boss_va,member,this->actionFunc,OOT3D_BOSS_VA_OFFSET_ACTION_FUNC,high,Action setter helper exists
+bossva_burst,struct-field,boss_va,member,this->burst,OOT3D_BOSS_VA_OFFSET_BURST,high,Burst byte accessor exists
+bossva_timer2,struct-field,boss_va,member,this->timer2,OOT3D_BOSS_VA_OFFSET_TIMER2,high,Timer field exact in hold and setup lanes
+bossva_is_dead,struct-field,boss_va,member,this->isDead,OOT3D_BOSS_VA_OFFSET_IS_DEAD,medium,Observed in death path
+bossva_body_actor,struct-field,boss_va,token,GET_BODY,oot3d_boss_va_body_actor,high,Body pointer accessor replaces N64 macro
+bossva_player_actor,struct-field,boss_va,token,GET_PLAYER,oot3d_play_player_actor,high,Player actor accessor replaces N64 macro
+bossva_rot_e4,struct-field,boss_va,member,this->unk_1E4,OOT3D_BOSS_VA_OFFSET_ROT_E4,high,Zapper aim rotation bank
+bossva_rot_e6,struct-field,boss_va,member,this->unk_1E6,OOT3D_BOSS_VA_OFFSET_ROT_E6,high,Zapper aim rotation bank
+bossva_rot_e8_target,struct-field,boss_va,member,this->unk_1E8,OOT3D_BOSS_VA_OFFSET_ROT_E8_TARGET,medium,Zapper target rotation bank
+bossva_rot_ea,struct-field,boss_va,member,this->unk_1EA,OOT3D_BOSS_VA_OFFSET_ROT_EA,high,Zapper pitch rotation bank
+bossva_rot_ec,struct-field,boss_va,member,this->unk_1EC,OOT3D_BOSS_VA_OFFSET_ROT_EC,high,Zapper yaw rotation bank
+bossva_rot_ee_target,struct-field,boss_va,member,this->unk_1EE,OOT3D_BOSS_VA_OFFSET_ROT_EE_TARGET,medium,Zapper target rotation bank
+bossva_rot_f0,struct-field,boss_va,member,this->unk_1F0,OOT3D_BOSS_VA_OFFSET_ROT_F0,high,Zapper pitch rotation bank
+bossva_rot_f2,struct-field,boss_va,member,this->unk_1F2,OOT3D_BOSS_VA_OFFSET_ROT_F2,high,Zapper yaw rotation bank
+bossva_rot_f4_target,struct-field,boss_va,member,this->unk_1F4,OOT3D_BOSS_VA_OFFSET_ROT_F4_TARGET,medium,Zapper target rotation bank
+bossva_zap_neck,struct-field,boss_va,member,this->zapNeckPos,OOT3D_BOSS_VA_OFFSET_ZAP_NECK_POS,high,Targeting vector offset exists
+bossva_zap_head,struct-field,boss_va,member,this->zapHeadPos,OOT3D_BOSS_VA_OFFSET_ZAP_HEAD_POS,high,Targeting vector offset exists
+bossva_lightning_collider,struct-field,boss_va,member,this->colliderLightning.base,OOT3D_BOSS_VA_OFFSET_LIGHTNING_COLLIDER,medium,Lightning collider offset used in structured source
+engine_skel_update,engine-call,global,token,SkelAnime_Update,FUN_003731e0,high,Recovered animation update callee
+engine_anim_last_frame,engine-call,global,token,Animation_GetLastFrame,FUN_0036ae14,high,Recovered animation frame lookup
+engine_anim_change,engine-call,global,token,Animation_Change,FUN_00375c08,high,Recovered animation change callee
+engine_anim_change_full_abi,engine-call,global,token,Animation_Change,oot3d_anim_change_full,high,Hard-float Animation_Change ABI uses r0/r1/r2 plus s0-s3; convert N64 Animation_Change calls when target VFP evidence is classified
+engine_math_smooth_s,engine-call,global,token,Math_SmoothStepToS,FUN_00375a18,high,Primary s16 step function
+engine_math_scaled_s,engine-call,global,token,Math_ScaledStepToS,FUN_00375a18,medium,Same OOT3D s16 step family with argument review needed
+engine_math_smooth_f,engine-call,global,token,Math_SmoothStepToF,FUN_0036e168,high,Primary float step function
+engine_vec_yaw,engine-call,global,token,Math_Vec3f_Yaw,FUN_003758b0,high,Recovered Vec3 yaw callee; OOT3D call shape is hard-float scalar delta z/x, not N64 pointer args
+engine_vec_pitch,engine-call,global,token,Math_Vec3f_Pitch,FUN_0037587c,high,Recovered Vec3 pitch callee in BossVa
+engine_vec_copy,engine-call,global,token,Math_Vec3f_Copy,oot3d_vec3f_copy,high,Local OOT3D helper exists
+engine_rand_zero,engine-call,global,token,Rand_ZeroOne,FUN_003759d0,high,Recovered random float callee
+engine_rand_centered,engine-call,global,token,Rand_CenteredFloat,FUN_003738a8,medium,Recovered centered random callee
+engine_actor_sfx,engine-call,global,token,Actor_PlaySfx,FUN_00375bcc,high,Actor sfx callee used in structured source
+bossva_actor_kill,engine-call,boss_va,token,Actor_Kill,FUN_00374428,medium,Observed actor kill callee in BossVa structured source
+bossva_collision_ac,engine-call,boss_va,token,CollisionCheck_SetAC,FUN_00376168,medium,Lightning collision hook needs wrapper semantics
+bossva_collision_at,engine-call,boss_va,token,CollisionCheck_SetAT,FUN_00376168,medium,Lightning collision hook needs wrapper semantics
+bossva_spark,subsystem-call,boss_va,token,BossVa_Spark,FUN_0031f5a8,medium,Effect callee observed in zapper burst paths
+bossva_tumor,subsystem-call,boss_va,token,BossVa_Tumor,FUN_0031c7d4,medium,Effect callee observed near BossVa effect family
+bossva_find_boomerang,subsystem-flow,boss_va,token,BossVa_FindBoomerang,oot3d_boss_va_find_boomerang,medium,OOT3D attack target prediction scans actor list at play+0x20dc for actor id 0x32 and follows actor+0x130 links
+bossva_zapper_charge_effect,subsystem-flow,boss_va,token,BossVa_SpawnZapperCharge,oot3d_boss_va_spawn_zapper_charge,medium,OOT3D charge packet scans effect table with stride 0x5c and fills state pos rest velocity head rot timer and object handle
+bossva_zapper_timer_scale,subsystem-flow,boss_va,token,this->timer2,OOT3D_BOSS_VA_BURST_TIMER_PROFILE,medium,OOT3D zapper burst timers differ from N64 raw source; attack uses 30/45/48/60 and enraged uses 6/21/27/36
+bossva_set_spark_env,subsystem-call,boss_va,token,BossVa_SetSparkEnv,oot3d_boss_va_set_env_spark,high,Structured helper exists
+bossva_set_death_env,subsystem-call,boss_va,token,BossVa_SetDeathEnv,oot3d_boss_va_set_death_env,high,Structured helper exists
+bossva_setup_hold,subsystem-call,boss_va,token,BossVa_SetupZapperHold,oot3d_boss_va_setup_zapper_hold_structured,high,Structured setup helper exists
+bossva_setup_damaged,subsystem-call,boss_va,token,BossVa_SetupZapperDamaged,oot3d_boss_va_setup_zapper_damaged,high,Exact helper exists
+bossva_setup_enraged,subsystem-call,boss_va,token,BossVa_SetupZapperEnraged,oot3d_boss_va_setup_zapper_enraged_structured,high,Structured setup helper exists
+bossva_setup_death,subsystem-call,boss_va,token,BossVa_SetupZapperDeath,oot3d_boss_va_setup_zapper_death_structured,high,Structured setup helper exists
+player_play_colctx,struct-field,player,member,play->colCtx,OOT3D_PLAY_OFFSET_COLCTX,high,Observed in player collision source
+player_play_scene_id,struct-field,player,member,play->sceneId,OOT3D_PLAY_OFFSET_SCENE_ID,high,Observed in player collision source
+player_actor_category,struct-field,player,member,this->actor.category,OOT3D_ACTOR_OFFSET_CATEGORY,high,Player actor field offset
+player_actor_world_pos,struct-field,player,member,this->actor.world.pos,OOT3D_ACTOR_OFFSET_WORLD_POS,high,Player world position base
+player_actor_velocity_y,struct-field,player,member,this->actor.velocity.y,OOT3D_ACTOR_OFFSET_VELOCITY_Y,high,Player actor velocity field
+player_actor_speed_xz,struct-field,player,member,this->actor.speedXZ,OOT3D_ACTOR_OFFSET_SPEED_XZ,medium,N64 actor speed field when used through actor
+player_actor_floor_poly,struct-field,player,member,this->actor.floorPoly,OOT3D_ACTOR_OFFSET_FLOOR_POLY,high,Player collision floor poly
+player_actor_floor_bg,struct-field,player,member,this->actor.floorBgId,OOT3D_ACTOR_OFFSET_FLOOR_BG_ID,high,Player collision floor bg id
+player_actor_wall_poly,struct-field,player,member,this->actor.wallPoly,OOT3D_ACTOR_OFFSET_WALL_POLY,high,Player collision wall poly
+player_actor_wall_bg,struct-field,player,member,this->actor.wallBgId,OOT3D_ACTOR_OFFSET_WALL_BG_ID,high,Player collision wall bg id
+player_actor_wall_yaw,struct-field,player,member,this->actor.wallYaw,OOT3D_ACTOR_OFFSET_WALL_YAW,high,Player collision wall yaw
+player_actor_floor_height,struct-field,player,member,this->actor.floorHeight,OOT3D_ACTOR_OFFSET_FLOOR_HEIGHT,high,Player collision floor height
+player_actor_depth_water,struct-field,player,member,this->actor.depthInWater,OOT3D_ACTOR_OFFSET_DEPTH_IN_WATER,high,Player collision water depth
+player_actor_bg_flags,struct-field,player,member,this->actor.bgCheckFlags,OOT3D_ACTOR_OFFSET_BG_CHECK_FLAGS,high,Player collision bg flags
+player_actor_shape_rot_y,struct-field,player,member,this->actor.shape.rot.y,OOT3D_ACTOR_OFFSET_SHAPE_ROT_Y,high,Player actor shape yaw
+player_action_func,struct-field,player,member,this->actionFunc,OOT3D_PLAYER_OFFSET_ACTION_FUNC,high,Player action pointer offset
+player_age_properties,struct-field,player,member,this->ageProperties,OOT3D_PLAYER_OFFSET_AGE_PROPERTIES,high,Player age property pointer
+player_current_boots,struct-field,player,member,this->currentBoots,OOT3D_PLAYER_OFFSET_CURRENT_BOOTS,high,Current boots field
+player_state_flags1,struct-field,player,member,this->stateFlags1,OOT3D_PLAYER_OFFSET_STATE_FLAGS1,high,Player state flags
+player_state_flags2,struct-field,player,member,this->stateFlags2,OOT3D_PLAYER_OFFSET_STATE_FLAGS2,high,Player state flags
+player_state_flags3,struct-field,player,member,this->stateFlags3,OOT3D_PLAYER_OFFSET_STATE_FLAGS3,high,Player state flags
+player_speed_xz,struct-field,player,member,this->speedXZ,OOT3D_PLAYER_OFFSET_SPEED_XZ,high,Player speed field
+player_yaw,struct-field,player,member,this->yaw,OOT3D_PLAYER_OFFSET_YAW,high,Player yaw field
+player_wall_limit,struct-field,player,member,this->unk_880,OOT3D_PLAYER_OFFSET_WALL_SPEED_LIMIT,medium,N64 collision scratch field maps to OOT3D wall speed limit lane
+player_y_dist_to_ledge,struct-field,player,member,this->yDistToLedge,OOT3D_PLAYER_OFFSET_Y_DIST_TO_LEDGE,high,Ledge distance field
+player_dist_to_wall,struct-field,player,member,this->distToInteractWall,OOT3D_PLAYER_OFFSET_DIST_TO_WALL,high,Interact wall distance field
+player_ledge_type,struct-field,player,member,this->ledgeClimbType,OOT3D_PLAYER_OFFSET_LEDGE_CLIMB_TYPE,high,Ledge climb type byte
+player_ledge_delay,struct-field,player,member,this->ledgeClimbDelayTimer,OOT3D_PLAYER_OFFSET_LEDGE_DELAY_TIMER,high,Ledge delay timer
+player_floor_pitch,struct-field,player,member,this->floorPitch,OOT3D_PLAYER_OFFSET_FLOOR_PITCH,high,Floor pitch field
+player_floor_pitch_alt,struct-field,player,member,this->floorPitchAlt,OOT3D_PLAYER_OFFSET_FLOOR_PITCH_ALT,high,Alternate floor pitch field
+player_floor_sfx,struct-field,player,member,this->floorSfxOffset,OOT3D_PLAYER_OFFSET_FLOOR_SFX_OFFSET,high,Floor sfx offset
+player_floor_type_timer,struct-field,player,member,this->floorTypeTimer,OOT3D_PLAYER_OFFSET_FLOOR_TYPE_TIMER,high,Floor type timer
+player_floor_property,struct-field,player,member,this->floorProperty,OOT3D_PLAYER_OFFSET_FLOOR_PROPERTY,high,Floor property byte
+player_prev_floor_type,struct-field,player,member,this->prevFloorType,OOT3D_PLAYER_OFFSET_PREV_FLOOR_TYPE,high,Previous floor type
+player_prev_floor_sfx,struct-field,player,member,this->prevFloorSfxOffset,OOT3D_PLAYER_OFFSET_PREV_FLOOR_SFX_OFFSET,high,Previous floor sfx offset
+player_update_bgcheck,engine-call,player,token,Actor_UpdateBgCheckInfo,FUN_00376340,high,Recovered OOT3D bgcheck update callee
+player_surface_floor_prop,engine-call,player,token,SurfaceType_GetFloorProperty,FUN_0035ea4c,high,Recovered surface property callee
+player_surface_sfx,engine-call,player,token,SurfaceType_GetSfxOffset,oot3d_surface_type_get_sfx_semantic,high,Semantic wrapper exists
+player_surface_echo,engine-call,player,token,SurfaceType_GetEcho,FUN_00496914,medium,Recovered surface echo callee
+player_surface_light,engine-call,player,token,SurfaceType_GetLightSetting,FUN_002c1e10,medium,Recovered light setting callee
+player_surface_conveyor_speed,engine-call,player,token,SurfaceType_GetConveyorSpeed,FUN_003232a4,high,Recovered conveyor speed callee
+player_surface_is_conveyor,engine-call,player,token,SurfaceType_IsFloorConveyor,FUN_00496774,high,Recovered conveyor flag callee
+player_surface_conveyor_dir,engine-call,player,token,SurfaceType_GetConveyorDirection,FUN_00357d54,high,Recovered conveyor direction callee
+player_surface_wall_flags,engine-call,player,token,SurfaceType_GetWallFlags,FUN_0035fee8,high,Recovered wall flags callee
+player_wall_line_test,engine-call,player,token,Player_PosVsWallLineTest,FUN_002c1d18,high,Recovered wall line test callee
+player_raycast_down,engine-call,player,token,BgCheck_EntityRaycastDown1,FUN_003586a4,high,Recovered raycast down callee
+player_check_ceiling,engine-call,player,token,BgCheck_EntityCheckCeiling,FUN_002c1d18,medium,Same family requires argument review
+player_check_wallflag1,engine-call,player,token,SurfaceType_CheckWallFlag1,FUN_00496a9c,medium,Recovered wall flag callee
+player_check_wallflag0,engine-call,player,token,SurfaceType_CheckWallFlag0,FUN_00496ac8,medium,Recovered wall flag callee
+player_hover_boots,engine-call,player,token,Player_UpdateHoverBoots,FUN_002c1ba4,high,Recovered hover boots callee
+player_floor_type,engine-call,player,token,SurfaceType_GetFloorType,FUN_0035ea34,high,Recovered floor type callee
+player_set_on_top,engine-call,player,token,DynaPoly_SetPlayerOnTop,FUN_003365b0,medium,Recovered dyna player relation callee
+player_set_above,engine-call,player,token,DynaPoly_SetPlayerAbove,FUN_00496c60,medium,Recovered dyna player relation callee
+engine_math_atan2,engine-call,global,token,Math_Atan2S,FUN_003758b0,medium,OOT3D angle helper family
+engine_math_sin,engine-call,global,token,Math_SinS,oot3d_sin_idx8,high,Runtime helper exists
+engine_math_cos,engine-call,global,token,Math_CosS,oot3d_cos_idx8,high,Runtime helper exists
+message_play_msgctx,struct-field,message,member,play->msgCtx,OOT3D_PLAYSTATE_OFFSET_MSGCTX,high,PlayState message context moved to 0x32c0
+message_msg_mode,struct-field,message,member,msgCtx->msgMode,OOT3D_MESSAGE_OFFSET_TEXTBOX_MODE,high,Exact message_start uses 0xfa0
+message_textbox_state,struct-field,message,member,msgCtx->stateTimer,OOT3D_MESSAGE_OFFSET_TEXTBOX_STATE,medium,Primary state family needs split-specific review
+message_next_state,struct-field,message,member,msgCtx->textDelayTimer,OOT3D_MESSAGE_OFFSET_TEXTBOX_NEXT_STATE,medium,Next-state family needs split-specific review
+message_text_id,struct-field,message,member,msgCtx->textId,DAT_00343edc,medium,Structured message_textbox stores text id through globals and offsets
+message_textbox_end,struct-field,message,member,msgCtx->textboxEndType,DAT_00343ec4,medium,Textbox display state global packet
+message_start_textbox,engine-call,message,token,Message_StartTextbox,oot3d_message_start_textbox,high,Exact C helper exists
+message_continue,engine-call,message,token,Message_ContinueTextbox,FUN_00340bdc,medium,Message mode transition family
+message_close,engine-call,message,token,Message_CloseTextbox,FUN_0036788c,medium,Close prompt helper family
+message_input_advance,engine-call,message,token,Message_ShouldAdvance,FUN_003679b4,medium,Input advance check family
+pause_xreg,data-symbol,pause,token,XREG,oot3d_pause_reg_x_lane,medium,Pause split helpers recover register lane constants
+pause_yreg,data-symbol,pause,token,YREG,oot3d_pause_reg_y_lane,medium,Pause split helpers recover register lane constants
+pause_wreg,data-symbol,pause,token,WREG,oot3d_pause_reg_w_lane,medium,Pause split helpers recover register lane constants
+pause_zreg,data-symbol,pause,token,ZREG,oot3d_pause_reg_z_lane,medium,Pause split helpers recover register lane constants
+pause_vreg,data-symbol,pause,token,VREG,oot3d_pause_reg_v_lane,medium,Pause split helpers recover register lane constants
+global_save_context,data-symbol,global,token,gSaveContext,oot3d_global_state_packets,medium,Needs per-subsystem DAT naming before direct rewrite

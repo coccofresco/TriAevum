@@ -1,0 +1,258 @@
+# Decompilation status
+
+This repository captures the current automated decompilation state for the local `oot3d.cci` dump.
+
+Verified input:
+- SHA-256: `D4670C962A6DD5C9CB953DE63E6316B1B03214D78CE3FD52B75CCA6BCFE6AEF2`
+- Title ID: `0004000000033600`
+- Product code: `CTR-P-AQEP`
+- N64 comparison ROM: `Legend of Zelda, The - Ocarina of Time (U) (V1.2) [!].z64`
+- N64 comparison ROM MD5: `57A9719AD547C516342E1A15D5C28C3D`
+- N64 comparison ROM SHA-256: `49ACD3885F13B0730119B78FB970911CC8ABA614FE383368015C21565983368D`
+
+Current output:
+- Build summary: `metadata/build_summary.json`
+- RomFS manifest: `metadata/romfs_manifest.json`
+- CTRTool structural report: `metadata/oot3d_ctrtool_info.txt`
+- Ghidra function index: `ghidra_export/functions.csv`
+- Ghidra disassembly: `ghidra_export/disassembly.txt`
+- Ghidra C-like pseudocode: `ghidra_export/decompiled/`
+- Ghidra export status: selectively updated after applying 101 manual function symbols and 10 data labels to the local project; 4 newly reviewed manual function symbols are pending the next selective Ghidra apply/export checkpoint
+- Triage report: `analysis/export_analysis.md`
+- Enriched function call metadata: `analysis/functions_enriched.json`
+- Static callgraph: `analysis/callgraph.json`
+- Callgraph report: `analysis/callgraph_report.md`
+- Runtime trace event schema: `schemas/runtime_trace_event.schema.json`
+- Emulator instrumentation plan: `docs/emulator_instrumentation.md`
+- Azahar trace workflow: `docs/azahar_runtime_trace.md`
+- Bootstrap runtime trace summary: `analysis/runtime_trace_bootstrap.md`
+- Resolved runtime caller summaries: `analysis/runtime_trace_*_summary.md`
+- Manual symbol map: `symbols/manual_symbols.csv`
+- Maintained source seed: `src/` and `include/`
+- Compilable runtime workflow: `docs/compilable_runtime.md`
+- General matched source workflow: `docs/matched_source_workflow.md`
+- Runtime object builder/comparator: `scripts/build-runtime-objects.ps1` and `scripts/compare_runtime_objects.py`
+- General matched object builder: `scripts/build-matched-objects.ps1`
+- Target function extractor: `scripts/extract_target_function.py`
+- Leaf function ranking tool: `scripts/rank_leaf_functions.py`
+- Leaf function triage list: `analysis/leaf_function_triage.csv`
+- Data/global reference candidate report: `analysis/data_ref_candidates.md`
+- Data/global reference extractor: `scripts/extract_data_refs.py`
+- N64 OoT reuse audit: `analysis/n64_oot_reuse_audit.md`
+- N64 OoT reuse audit tool: `scripts/audit_n64_oot_reuse.py`
+- N64 OoT porting source audit: `analysis/n64_porting_sources.md`
+- N64 OoT porting source audit tool: `scripts/audit_n64_porting_sources.py`
+- N64/OOT3D port candidate rank: `analysis/n64_port_candidate_rank.md`
+- N64/OOT3D pause-item focused rank: `analysis/n64_port_candidate_rank_pause_item.md`
+- N64/OOT3D port candidate rank tool: `scripts/rank_n64_port_candidates.py`
+- N64/OOT3D batch porting plan: `analysis/n64_batch_porting_plan.md`
+- N64/OOT3D batch porting planner tool: `scripts/plan_n64_batch_porting.py`
+- N64/OOT3D importability classification: `analysis/n64_importability.md`
+- N64/OOT3D importability classifier: `scripts/classify_n64_importability.py`
+- N64/OOT3D batch porting packets: `analysis/port_batches/`
+- N64/OOT3D lane source extracts: `analysis/n64_lane_sources.md`
+- N64/OOT3D lane source extractor: `scripts/extract_n64_lane_sources.py`
+- Explicit N64/OOT3D source port map: `metadata/n64_port_map.csv`
+- N64 mapped source extractor: `scripts/extract_n64_port_units.py`
+- Structured port status generator: `scripts/build_structured_port_status.py`
+- Structured port index generator: `scripts/build_structured_port_index.py`
+- Structured port unit refresh helper: `scripts/refresh-structured-port-units.ps1`
+- Structured compile profile search: `scripts/search_structured_compile_profiles.py`
+- Structured port unit list: `metadata/structured_port_units.csv`
+- Extracted N64 source port units: `analysis/n64_port_units/`
+- Structured port status reports: `analysis/structured_port_status/`
+- Porting metrics report: `analysis/porting_metrics.md`
+- Porting metrics generator: `scripts/report_porting_metrics.py`
+- In-source C reconstruction probe report: `analysis/in_source_c_reconstruction_probe.md`
+- In-source C reconstruction probe tool: `scripts/probe_in_source_c_reconstructions.py`
+- Manual symbol batch promotion tool: `scripts/promote_manual_symbols_batch.py`
+- Manual symbol overlay report: `analysis/symbol_overlay.md`
+- Manual symbol overlay helper: `scripts/symbol_overlay.py`
+- Manual symbol overlay report tool: `scripts/build_symbol_overlay.py`
+- No-Ghidra N64 porting refresh helper: `scripts/refresh-n64-porting-plan.ps1`
+- Selective Ghidra export helper: `scripts/ghidra-export-selected.ps1`
+- Selective Ghidra export script: `ghidra_scripts/ExportOot3dSelected.java`
+- N64/OOT3D focused review packet generator: `scripts/prepare_n64_port_packet.py`
+- N64/OOT3D accelerated porting workflow: `docs/n64_porting_workflow.md`
+- Current focused review packets: `analysis/port_packets/00424324/`, `analysis/port_packets/004456a8/`, `analysis/port_packets/002ec3e4/`, `analysis/port_packets/002f8ee4/`, `analysis/port_packets/002eb72c/`, `analysis/port_packets/00480eb8/`, `analysis/port_packets/0033c25c/`, `analysis/port_packets/002eba9c/`, `analysis/port_packets/0046acb8/`, `analysis/port_packets/0046b554/`, `analysis/port_packets/0045598c/`, `analysis/port_packets/0042df3c/`, `analysis/port_packets/0041e968/`, `analysis/port_packets/00449a38/`, `analysis/port_packets/004439c4/`, `analysis/port_packets/002ef9b4/`, `analysis/port_packets/0016c300/`, `analysis/port_packets/0032eeb4/`
+- N64 OoT message semantics port: `analysis/n64_message_semantics.md`
+- N64 OoT message semantics port tool: `scripts/port_n64_message_semantics.py`
+- Ported OOT3D message semantics header: `include/oot3d/message_semantics.h`
+- N64 OoT actor/object/item semantics port: `analysis/n64_actor_object_semantics.md`
+- N64 OoT actor/object/item semantics port tool: `scripts/port_n64_actor_object_semantics.py`
+- Ported OOT3D actor/object/item semantics header: `include/oot3d/actor_object_semantics.h`
+- OOT3D semantic table candidate report: `analysis/oot3d_semantic_table_candidates.md`
+- OOT3D semantic table finder: `scripts/find_oot3d_semantic_tables.py`
+- OOT3D semantic table consumer report: `analysis/semantic_table_consumers.md`
+- OOT3D pause item semantic report: `analysis/pause_item_semantics.md`
+- OOT3D pause item semantic analyzer: `scripts/analyze_pause_item_semantics.py`
+- N64/OOT3D structure layout map: `analysis/n64_struct_layout_map.md`
+- N64/OOT3D structure layout map tool: `scripts/map_n64_struct_layouts.py`
+- Ported OOT3D structure layout anchors: `include/oot3d/struct_layouts.h`
+- N64 OoT extracted text headers: `..\external\oot\extracted\ntsc-1.2\text\`
+- OOT3D QM message index: `analysis/qm_message_index.md`
+- OOT3D QM message index tool: `scripts/inspect_qm_messages.py`
+- OOT3D/N64 text ID comparison: `analysis/qm_n64_text_id_comparison.md`
+- OOT3D/N64 text ID comparison tool: `scripts/compare_qm_n64_ids.py`
+- OOT3D/N64 message reuse map: `analysis/message_reuse_map.md`
+- OOT3D/N64 message reuse map tool: `scripts/build_message_reuse_map.py`
+- OOT3D message function candidates: `analysis/message_function_candidates.md`
+- OOT3D message function candidate tool: `scripts/find_message_function_candidates.py`
+- OOT3D message context usage map: `analysis/message_context_usage.md`
+- OOT3D message context usage map tool: `scripts/map_message_context_usage.py`
+- OOT3D QM payload analysis: `analysis/qm_payload_analysis.md`
+- OOT3D QM payload analysis tool: `scripts/analyze_qm_payloads.py`
+- Extracted target function working set: `analysis/target_functions/`
+- Ghidra manual symbol applier: `ghidra_scripts/ApplyManualSymbols.java`
+- Ghidra data symbol applier: `ghidra_scripts/ApplyDataSymbols.java`
+- Manual symbol promotion tool: `scripts/promote_manual_symbol.py`
+- Semantic data symbol generator: `scripts/build_semantic_data_symbols.py`
+- Semantic data symbol validator: `scripts/validate_data_symbols.py`
+- Copy helper discovery tool: `scripts/discover_copy_helpers.py`
+- Callgraph builder: `scripts/build_callgraph.py`
+- Runtime trace validator: `scripts/validate_runtime_trace.py`
+- Runtime trace summarizer: `scripts/summarize_runtime_trace.py`
+- Azahar trace helper: `scripts/azahar-trace.ps1`
+
+Current decompilation checkpoint:
+- Latest exact-source commit: `995ccdde` (`Convert Message textbox seed to inline asm`).
+- Latest reporting checkpoint: `4585856c` (`Shape FUN_001acb6c C probe ABI`), including the in-source C reconstruction probe audit, readiness queue evidence, and frontier classification.
+- Matched object lane: `204/204` exact functions with the GCC toolchain.
+- Current exact implementation split: `63` plain C, `141` inline asm C, `0` naked asm.
+- `FUN_001acac4` and `FUN_001acb6c` were moved from naked asm to normal inline asm exact seeds; both keep gated C reconstruction probes for the effect-init stack shape, but the natural C attempt did not match the target frame (`202/204` exact before fallback).
+- `FUN_001ac538` was moved from naked asm to a normal full-inline asm exact seed and now keeps a guarded C reconstruction probe. The probe is `semantic-gap` rather than promotable (`340` target instructions vs `385` compiled, LCS `33`, ratio `0.0971`), so the exact inline asm path remains the default.
+- `oot3d_kaleido_draw_ui_overlay_split_002ef9b4`, `oot3d_kaleido_draw_ui_overlay_split_00442654`, `oot3d_kaleido_draw_ui_overlay_split_002efd88`, `oot3d_kaleido_draw_ui_overlay_split_00446b10`, and `oot3d_kaleido_draw_ui_overlay_split_0042d0e4` were moved from naked asm to normal inline asm exact seeds; the Kaleido exact-seed frontier is now fully full-inline asm and remains open for C reconstruction from the materialized packets.
+- `oot3d_player_draw_impl_001abddc` and `oot3d_player_update_melee_weapon_info` were moved from naked asm to normal full-inline asm exact seeds; both remain C reconstruction work driven by the Player N64 source packets.
+- `oot3d_player_action_turn_in_place`, `oot3d_player_action_swing_bottle`, `oot3d_boss_mo_tentacle`, and `oot3d_player_draw_impl_0014a5a8` were moved from naked asm to normal full-inline asm exact seeds in the large direct lane.
+- `oot3d_message_textbox_common` was moved from naked asm to a normal full-inline asm exact seed; the structured Message_Update lane remains non-exact and open for C reconstruction.
+- C-readiness/frontier reports now count `15` N64-derived exact asm seeds still needing C: `0` remain naked asm and all `15` have been moved to full inline asm normal functions. Only `9` inline-asm exact matches are counted as maintained C-style exact functions.
+- The remaining C reconstruction frontier is `20` open functions: `5` structured C batch functions, `12` exact seeds with compiled packets, `3` exact seeds with in-source C probes, and `0` exact seeds needing materialized C.
+- The readiness queue now reports `3` in-source C probe functions in `1` file and uses that evidence for the `FUN_001ac538`, `FUN_001acac4`, and `FUN_001acb6c` Player split rows. `FUN_001acb6c` is now `codegen-near` after ABI register shaping (`27` target and compiled instructions, prefix `2`, suffix `3`, LCS `14`, ratio `0.5185`); `FUN_001acac4` remains `semantic-started` at `44` compiled instructions versus target `42`; `FUN_001ac538` remains a larger `semantic-gap` baseline. The next useful step is further source/frame shaping, not baseline promotion. All exact seeds now have either compiled-packet coverage or in-source C evidence.
+- BossVa `DAT_*` pointer/signed-state declarations were probed as a standalone lowering for `boss_va_zapper`; the unit stayed non-exact (`oot3d_boss_va_zapper_intro` remained LCS `13`) and `oot3d_boss_va_zapper_attack` regressed from LCS `109` to `108`, so the next useful BossVa step is target-shaped direct-offset/control-flow reshaping rather than isolated data-declaration changes.
+
+Counts from the verified run:
+- RomFS files: 1974
+- Ghidra functions exported: 9224
+- Decompiled C-like function files: 9224
+- Calls detected in C-like pseudocode: 36443
+- Callgraph connected components: 148
+- Largest callgraph component: 8953
+- Static address clusters: 61
+- Libc-like/helper candidates: 20
+- Manually named functions: 105
+- Manual symbols visible through no-Ghidra Python overlay: 105
+- Manual symbols already applied in the current Ghidra export: 101
+- Manual symbols pending selective/full Ghidra export: 4
+- Copy helper candidates currently detected: 11
+- Leaf function candidates currently ranked: 1167
+- Leaf function candidates deferred by triage: 33
+- Data/global reference candidates currently analyzed: 153
+- Maintained runtime functions currently object-compared: 44
+- Maintained runtime exact matches in normalized object comparison: 44
+- Maintained matched-source files currently object-compared: 20
+- Maintained matched-source files with exact functions: 20
+- Maintained matched-source functions currently object-compared: 204
+- Maintained matched-source exact matches in normalized object comparison: 204
+- Structured N64-derived source files currently compiling: 12
+- Structured N64-derived functions currently compiling: 16
+- Structured N64-derived exact matches in normalized object comparison: 9
+- N64 OoT source/header files currently audited for porting: 1194
+- N64 OoT C functions currently estimated for semantic porting: 13429
+- N64 OoT C functions currently indexed by the port-candidate ranker: 13591
+- OOT3D unnamed/manual-pending functions scanned by the port-candidate ranker: 9140
+- OOT3D functions emitted in the global N64 port-candidate queue: 100
+- OOT3D functions emitted in the pause/item/message focused N64 port-candidate queue: 13
+- N64 source-file lanes emitted by the batch porting planner: 42
+- N64 source-file lanes marked for subsystem batch review: 9
+- N64/OOT3D direct promotion candidates emitted by the batch planner: 0
+- N64/OOT3D name-conflict review rows emitted by the batch planner: 7
+- N64/OOT3D matching seed candidates emitted by the batch planner: 0
+- N64/OOT3D fan-out review rows emitted by the batch planner: 97
+- N64/OOT3D direct import-test rows currently classified: 0
+- N64/OOT3D large direct-port rows currently classified: 7
+- N64/OOT3D split/subsystem rows currently classified: 99
+- N64/OOT3D direct import-test rows already started: 1 (`0032eeb4` / `Player_ProcessSceneCollision`)
+- N64/OOT3D batch port packets currently generated: 5
+- Focused N64/OOT3D port review packets currently generated: 17
+- N64 OoT message object-like defines ported into OOT3D headers: 91
+- N64 OoT message enums ported into OOT3D headers: 11
+- N64 OoT message enum values ported into OOT3D headers: 106
+- N64 OoT actor IDs ported into OOT3D semantic headers: 471
+- N64 OoT actor categories ported into OOT3D semantic headers: 13
+- N64 OoT object IDs ported into OOT3D semantic headers: 402
+- N64 OoT item/inventory enums ported into OOT3D semantic headers: 16
+- N64 OoT item/inventory enum values ported into OOT3D semantic headers: 505
+- OOT3D semantic table candidates currently detected from N64 ID sequences: 51
+- OOT3D semantic table candidates with direct pointer references: 10
+- OOT3D semantic data symbols currently generated from candidate evidence: 10
+- OOT3D semantic table consumer functions promoted to manual symbols: 5
+- OOT3D surface-type semantic helper functions promoted to manual symbols: 1
+- OOT3D pause item/helper/controller functions promoted to manual symbols: 26
+- OOT3D EnWood02 actor update functions promoted to manual symbols: 1
+- OOT3D PlayState layout anchors mapped against N64 structs: 12
+- OOT3D MessageContext layout anchors mapped from current Ghidra evidence: 8
+- N64 OoT message control constants observed for reuse mapping: 82
+- N64 OoT `ntsc-1.2` extracted text files currently audited: 2
+- N64 OoT `ntsc-1.2` unique message IDs currently audited: 2166
+- OOT3D extracted message files currently audited: 9
+- OOT3D EU `.qm` message records currently indexed: 2510
+- OOT3D EU `.qm` payload slots populated per indexed language slot: 2508
+- OOT3D EU `.qm` payload streams currently analyzed: 12540
+- OOT3D EU `.qm` payload bytes currently analyzed: 1457740
+- OOT3D/N64 declared text ID overlap currently available: 2047
+- OOT3D/N64 `z_message.c` literal text ID overlap currently available: 33
+- OOT3D-only `.qm` IDs currently observed: 463
+- N64-only declared text IDs currently observed: 119
+- OOT3D/N64 shared IDs with N64 textbox metadata currently mapped: 2047
+- Shared ID dominant N64 textbox type: `TEXTBOX_TYPE_BLACK` (1511)
+- Shared ID dominant N64 textbox position: `TEXTBOX_POS_VARIABLE` (1123)
+- OOT3D message subsystem function candidates currently detected: 12
+- OOT3D message candidate functions with known message anchor calls: 5
+- OOT3D message candidate functions with `PlayState+0x32c0` message-context evidence: 2
+- High-confidence message subsystem symbols currently named: `oot3d_init_sys_message_font`, `oot3d_load_message_resources`, `oot3d_message_context_update`, `oot3d_message_start_textbox`
+
+Runtime instrumentation:
+- Local Azahar clone: `..\azahar_instrumented`
+- Instrumentation commits: `4314ccc`, `8d889a1`, and `72dc346`
+- Verified executable: `..\azahar_instrumented\build-oot3d-trace-mingw-nolto\bin\Release\azahar.exe`
+- Current hook emits allowlisted `function_enter` JSONL events from the DynCom interpreter path, with optional per-address sampling.
+- Runtime caller resolution currently resolves all observed LR sites in the bootstrap captures.
+
+Compilable reconstruction:
+- The local `arm-none-eabi` toolchain can build maintained runtime objects and matched-source objects.
+- Current matched compiler: `C:\devkitPro\devkitARM\bin\arm-none-eabi-gcc.exe`.
+- Current matched objdump: `C:\devkitPro\devkitARM\bin\arm-none-eabi-objdump.exe`.
+- Host GCC for generated decomp-support C syntax checks is available through MSYS2 at `C:\msys64\mingw64\bin\gcc.exe`; invoke it through `C:\msys64\usr\bin\bash.exe -lc "export PATH=/mingw64/bin:/usr/bin:$PATH; cd /i/oot3dre && gcc -std=c11 -fsyntax-only -I tools/oot3d/decomp_support/include <source.c>"` when the PowerShell `PATH` does not expose `gcc`.
+- `build-runtime-objects.ps1` emits object files, objdump output, and an exact-match comparison report under ignored `build/runtime/`.
+- The current maintained runtime seed reaches 44/44 exact normalized instruction matches against the Ghidra target export.
+- `build-matched-objects.ps1` extends the same compile/compare loop to all maintained source listed in `metadata/matched_sources.txt`.
+- The current maintained matched-source lane reaches 204/204 exact normalized instruction matches across 20 matched source files.
+- `metadata/n64_port_map.csv` records explicit N64 source-function origins for OOT3D ports; `scripts/extract_n64_port_units.py` turns those mappings into grouped N64 source packets.
+- `scripts/extract_n64_lane_sources.py` now extracts unique N64 functions for ranked file lanes into `analysis/n64_lane_sources/`; the current batch covers 7 lanes, 74 selected OOT3D hits, and 11 unique N64 source functions without rerunning Ghidra.
+- The BossVa zapper batch currently has 7 mapped N64 source functions extracted under `analysis/n64_port_units/`; all 7 now have structured N64-derived OOT3D ports that compile behind `OOT3D_BOSS_VA_STRUCTURED_PORT` and are tracked in `analysis/structured_port_status/index.md`.
+- The pause `Regs_InitDataImpl` split batch has 4 reviewed OOT3D helper names and a structured source unit at `src/overlays/misc/ovl_kaleido_scope/z_kaleido_pause_regs.c`; it compiles and compares in `build/pause_regs_structured_compare/` without affecting the 204/204 exact baseline.
+- Current priority is to port names, structs, enums, state-machine roles, and asset/message metadata from zeldaret/oot wherever OOT3D preserves N64 semantics, then use ARM matching for local implementation details.
+- `include/oot3d/message_semantics.h` is generated from N64 message headers and intentionally contains only semantic constants/enums, not dialogue text.
+- `include/oot3d/struct_layouts.h` is generated from N64 structure headers plus OOT3D Ghidra evidence and intentionally records only partial offset anchors.
+- `include/oot3d/actor_object_semantics.h` is generated from N64 actor/object/item headers and intentionally contains only semantic IDs and enum names.
+- `analysis/oot3d_semantic_table_candidates.md` links N64-derived semantic ID sequences to candidate OOT3D data addresses and Ghidra functions that reference those addresses.
+- `analysis/n64_port_candidate_rank.md` is now the main batch triage queue for speeding up N64-to-OOT3D porting: it ranks candidate N64 source functions for each unnamed OOT3D function using constants, strings, identifier tokens, call-token anchors, and size similarity.
+- `analysis/n64_port_candidate_rank.md` and the focused variant use manual-symbol overlay, so newly promoted names influence tokens/call anchors before the next Ghidra export.
+- `analysis/n64_port_candidate_rank_pause_item.md` is a focused variant that keeps small constants enabled for pause/item/message work, where slot IDs and enum values are meaningful rather than generic noise.
+- `analysis/n64_batch_porting_plan.md` is the faster operational queue: it aggregates function-level matches by N64 source file, flags high-fan-out rows as subsystem reconstruction evidence, flags duplicate proposed names as `name-conflict-review`, and emits `analysis/port_batches/` packets with external N64 source paths or optional `n64_source.c` copies plus related OOT3D decompiles.
+- `scripts/refresh-n64-porting-plan.ps1` is the default inner-loop command after symbol promotion; it updates overlay, rank queues, batch plan, and packets without running Ghidra.
+- `scripts/promote_manual_symbols_batch.py` applies reviewed CSV promotion decisions in one transaction and rejects duplicate entries or duplicate symbol names before writing `symbols/manual_symbols.csv`.
+- `scripts/ghidra-export-selected.ps1` plus `ghidra_scripts/ExportOot3dSelected.java` provide checkpoint exports for explicit entries, pending manual symbols, and optional caller/callee neighborhoods without deleting the full export.
+- `analysis/port_packets/002ef9b4/` is the next focused review packet after promoting `004439c4`; each packet contains one OOT3D decompile plus the top N64 candidate extracts and a promotion command template.
+- `symbols/data_symbols.csv` records data labels derived from semantic table evidence; these labels have been applied to the local Ghidra project and re-exported into the current `ghidra_export/decompiled/` files.
+- `ghidra_export/` currently includes applied manual names, so downstream pseudocode/callgraph tools can follow named calls instead of only raw `FUN_*` identifiers.
+
+Known limitations:
+- This is automated Ghidra output, not a clean matching decompilation.
+- Names and types are mostly placeholders.
+- Only the maintained matched-source lane is currently exact-matching; most remaining game code is still Ghidra pseudocode, analysis data, or non-exact structured C. For game code, N64-derived structured ports are the preferred source form and naked functions are only temporary exact-match anchors.
+- The zeldaret/oot text headers are generated external artifacts from the supplied N64 `ntsc-1.2` baserom and are intentionally kept outside this git repository.
+- N64 `z_message.c` literal overlaps are naming/triage hints only; payload equivalence still requires decoding OOT3D `.qm` text streams.
+- Current QM payload analysis treats control-argument bytes conservatively; unclassified bytes are decoder work items, not known bad data.
+- Some runtime address references are outside the raw `code.bin` memory image and are logged by Ghidra.
+- The Azahar trace hook requires CPU JIT to be disabled during collection.

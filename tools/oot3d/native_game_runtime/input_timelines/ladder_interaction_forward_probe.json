@@ -1,0 +1,12 @@
+{
+  "schema": "oot3d.native_game.input_timeline.v1",
+  "segments": [
+    {
+      "start_frame": 30568,
+      "end_frame_exclusive": 30748,
+      "buttons": [],
+      "circle_x": 0.0,
+      "circle_y": 1.0
+    }
+  ]
+}

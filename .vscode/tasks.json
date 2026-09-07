@@ -1,0 +1,39 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Configure OoT3D product",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "${workspaceFolder}\\scripts\\oot3d\\Configure-Oot3dWholeAotProduct.ps1"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "Build OoT3D native game",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "${workspaceFolder}\\tools\\oot3d\\build_fast_dev.ps1",
+                "-Target",
+                "oot3d_native_game",
+                "-Parallel",
+                "12"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": []
+        }
+    ]
+}

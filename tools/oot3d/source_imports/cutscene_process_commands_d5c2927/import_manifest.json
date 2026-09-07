@@ -1,0 +1,82 @@
+{
+  "format": "oot3d_source_owner_import_v1",
+  "owner": "cutscene_process_commands",
+  "canonical_name": "Cutscene_ProcessCommands",
+  "owner_entry": "0x002C5BA0",
+  "runtime_activation": "experimental_opt_in_native30_accepted",
+  "snapshot_id": "d5c292708f7f-ca8c22db1095",
+  "producer_revision": "d5c292708f7f25f921a066449db3cea43fad73c4",
+  "source_candidate_tree_sha256": "1385212d24e7204922bba5a3cba0775915aa6a0221df9c4b8aad8752a896d9a8",
+  "source_closure_sha256": "0edaca224ab920b71697493ec3d4fc78fc46b8d4f9a10ada0fa1c2182e25bd5c",
+  "runtime_import_work_order_sha256": "4048cecb0c096dbfce9eb5944cdff93e3e499fc80d859e8d4e6b97591467326c",
+  "runtime_import_consumer_input_sha256": "ca8c22db10959f2e7655820bd41df6582669512b0cd6e14e783ef820bf596f95",
+  "maintained_source_file_sha256": "f0b0c12ce7fd3da17d04a71059e911c91930796de495925d4e55d8eb3131cf52",
+  "code_bin_sha256": "16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220",
+  "owner_body": {
+    "range": "0x002C5BA0-0x002C82D3",
+    "size": 10036,
+    "sha256": "cc824a7e4f9ba414436f309497a3fbcc859e1f4225097cb51695948bf8eb053a"
+  },
+  "source_closure": {
+    "function_count": 435,
+    "direct_dependency_count": 49,
+    "literal_cell_count": 69,
+    "source_graph_closed": true
+  },
+  "consumer_lowering": [
+    "complete 1481-line maintained command body retained",
+    "checked target-width GuestPtr and GuestRef access",
+    "nested guest pointers encoded as four-byte target fields",
+    "69 target literal cells represented as runtime-loaded words",
+    "direct dependencies retained as target-address calls",
+    "local vector arguments reserved for guest-stack scratch marshalling",
+    "generic Ghidra label restored as the outer command switch default",
+    "camera track state passed to FUN_0033cb90 as input-only guest scratch",
+    "missing FUN_003665fc third arguments restored from owner call-site registers",
+    "command 0x92 callback retained as checked target-address dispatch"
+  ],
+  "validation": {
+    "owner_compile_target": "oot3d_source_cutscene_process_commands_owner",
+    "guest_pointer_test_target": "oot3d_source_cutscene_process_commands_guest_pointer_tests",
+    "guest_pointer_test_status": "pass",
+    "runtime_differential_test_target": "oot3d_source_cutscene_process_commands_tests",
+    "runtime_differential_status": "pass",
+    "runtime_differential_scenarios": 6,
+    "native30_process_status": "pass",
+    "native30_process_checkpoint": "link_dream_start.oot3dsav",
+    "native30_process_frames": 30,
+    "native30_guest_refresh_frame": 2939,
+    "native30_system_ticks": "13133012413",
+    "native30_memory_content_fingerprint": "13455304922352739916",
+    "native30_pcm_fnv1a64": "8058772573127251443",
+    "native30_dsp_frames": 201,
+    "native30_actor_owner_calls": 29,
+    "native30_actor_callback_calls": 377,
+    "native30_owner_calls": 29,
+    "native30_dependency_calls": 295,
+    "native30_guest_reads": 7195,
+    "native30_guest_writes": 120,
+    "native30_scratch_calls": 27,
+    "native30_hard_float_calls": 8,
+    "native30_conversion_operations": 6,
+    "native30_failures": 0,
+    "native30_a32_report": {
+      "path": "I:\\oot3dre_work\\native_game\\cutscene_process_commands_a32_baseline_link_dream_accepted.json",
+      "sha256": "9004795e6a67e602de973736aaba89b83a4d74cf47abfb9c7a08168df40e4372"
+    },
+    "native30_source_report": {
+      "path": "I:\\oot3dre_work\\native_game\\cutscene_process_commands_source_smoke_link_dream_accepted.json",
+      "sha256": "ddfeb034745612f83e3d22bafa33d75efcb44896b3dbce46313ba2a5b50419d9"
+    },
+    "implementation_fingerprints_expected_to_differ": [
+      "memory_state_fingerprint",
+      "process_state_fingerprint"
+    ]
+  },
+  "files": {
+    "generate_import.py": "1422d2bdc40b95743297b7ee84c82c61b3179051c51310bafc14aab94a5fc904",
+    "include/oot3d/cutscene_process_commands_owner.h": "4ff0c64e301625cb2cd90956e14e3414b5a3992be206d2279fb129f9e2ba2a5b",
+    "src/code/z_cutscene_process_commands_owner.cpp": "bb0e0e933bd1102b81b4ba7ac08b3e3998df912280b9cb13845e3d94451cf556",
+    "tests/guest_pointer_tests.cpp": "3be492696675b5f6e91cb6fb47c26b2282caaea774b04170f551b90c6f32ec7b"
+  }
+}

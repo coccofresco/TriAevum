@@ -1,0 +1,61 @@
+{
+  "format": "oot3d_semantic_scene_entry_bindings_v1",
+  "policy": {
+    "scaffold_identity": "oot_n64_gameplay_trigger_only",
+    "native_global_entry": "oot3d_code_bin_global_entrance_table",
+    "native_transform": "oot3d_zsi_spawn_entry",
+    "native_camera": "oot3d_zsi_player_params_then_collision_or_default_camera",
+    "native_player_action": "oot3d_player_entry_state",
+    "semantic_variant": "oot_n64_progression_semantics_to_verified_oot3d_setup",
+    "native_population": "oot3d_zsi_actor_and_object_lists",
+    "native_actor_configuration": "oot3d_zsi_actor_params",
+    "behavior_gap_policy": "oot_n64_semantic_scaffold_then_verified_oot3d_code_deltas",
+    "numeric_identity_assumption": "forbidden"
+  },
+  "records": [
+    {
+      "semantic_key": "SCENE_ENTRY_KOKIRI_FOREST_FROM_LINKS_HOUSE",
+      "variant_key": "KOKIRI_FOREST_INITIAL_CHILD_DAY",
+      "status": "resolved",
+      "native": {
+        "scene_asset_id": "scene:spot04_info.zsi",
+        "scene_id": 85,
+        "scene_path": "spot04_info.zsi",
+        "scene_stem": "spot04",
+        "global_entrance_index": 529,
+        "local_entrance_index": 3,
+        "setup_indices": [
+          0
+        ],
+        "setup_selection": "oot3d_new_game_child_day_scene_setup",
+        "room_bindings": [
+          {
+            "scaffold_room_index": 0,
+            "native_room_index": 0
+          },
+          {
+            "scaffold_room_index": 1,
+            "native_room_index": 1
+          },
+          {
+            "scaffold_room_index": 2,
+            "native_room_index": 2
+          }
+        ],
+        "population_source": "oot3d_zsi_actor_and_object_lists",
+        "actor_configuration_source": "oot3d_zsi_actor_params"
+      },
+      "completion_event": "scene_entry_finished",
+      "evidence": {
+        "scaffold_trigger": "soh/include/tables/entrance_table.h:658",
+        "native_global_table": "code.bin:0x00543BB8 entry 0x0211",
+        "native_global_entry_file_offset": "code.bin:0x004443FC",
+        "native_global_entry_raw": "55030442",
+        "native_scene_entry": "spot04_info.zsi setup 0 local entrance 3",
+        "native_spawn_source": "spot04_info.zsi scene commands 0x00 and 0x06",
+        "room_mapping": "OOT3D spot04 room references 0/1/2 are explicitly paired with the corresponding Ship scaffold rooms by the existing native room resource targets; numeric identity is recorded evidence, not an implicit fallback",
+        "emulator_validation": "Kokiri slot 5 confirms the decoded native entry; it is not a runtime source"
+      }
+    }
+  ]
+}

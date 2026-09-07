@@ -1,0 +1,12 @@
+#include "three_ds_recomp/legacy/bridge/scriptingbridge.h"
+
+#ifdef ENABLE_SCRIPTING
+
+#include "ship/scripting/ScriptLoader.h"
+#include "ship/Context.h"
+
+extern "C" void* ScriptGetFunction(const char* module, const char* function) {
+    return Ship::Context::GetRawInstance()->GetScriptLoader()->GetFunction(module, function);
+}
+
+#endif // ENABLE_SCRIPTING

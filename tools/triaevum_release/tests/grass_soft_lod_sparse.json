@@ -1,0 +1,19 @@
+{
+  "Graphics": {
+    "Grass": {
+      "Budget": { "DrawDistance": 2500 },
+      "Performance": {
+        "LodReferenceDistance": 1000,
+        "LodStartFraction": 0.1,
+        "LodEndFraction": 0.3,
+        "TuftTransitionFraction": 0.4,
+        "FarTuftsEnabled": true,
+        "FarTuftDensity": 0.25,
+        "FarTuftSpread": 1.0,
+        "DrawFadeFraction": 0.4,
+        "DensityFadeFraction": 0.25,
+        "SegmentLodSoftness": 1.0
+      }
+    }
+  }
+}

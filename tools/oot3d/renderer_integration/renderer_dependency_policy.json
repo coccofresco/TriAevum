@@ -1,0 +1,38 @@
+{
+  "format": "oot3d_renderer_dependency_policy_v1",
+  "baseline_project_commit": "71a99e502a9fc24f5e2f3f87ef501a7a2bcd4fa2",
+  "baseline_renderer_commit": "5bce42df156bc6d89fa8eabd4e5e14d7ab08ca3a",
+  "source_renderer_commit": "ffa3a1fa9966ad9522308db1db99583a2e37cf34",
+  "policy": "Limits are ratchets: they may only decrease. The completion target for every value is zero.",
+  "scope_file_limits": {
+    "renderer_core": {
+      "legacy_runtime_api": 0,
+      "n64": 0,
+      "fast3d_adapter": 0
+    },
+    "renderer_vulkan_backend": {
+      "legacy_runtime_api": 0,
+      "n64": 1,
+      "fast3d_adapter": 2
+    },
+    "native_renderer_adapter": {
+      "legacy_runtime_api": 0,
+      "n64": 1,
+      "fast3d_adapter": 4
+    },
+    "native_game_frontend": {
+      "legacy_runtime_api": 8,
+      "n64": 1,
+      "fast3d_adapter": 10
+    }
+  },
+  "reachable_runtime_edge_maximum": 1,
+  "forbidden_reachable_targets": [
+    "oot3d_native_cutscene_host",
+    "oot3d_native_runtime_host"
+  ],
+  "completion_requirements": {
+    "all_scope_file_limits": 0,
+    "reachable_runtime_edge_maximum": 0
+  }
+}

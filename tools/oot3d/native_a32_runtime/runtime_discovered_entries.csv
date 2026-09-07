@@ -1,0 +1,3 @@
+entry,size,name,evidence,confidence,notes
+0x004350F8,20,oot3d_stream_read_u8,runtime_pc:0x004350F8;arm_disassembly:ldr-add-str-ldrb-return,high,"Reached through an indirect native call after CFG, HID, DSP, RomFS, and GSP initialization; bounded by the return at 0x00435108 and the reviewed inventory entry at 0x0043510C."
+0x0044DBD4,20,oot3d_stream_read_u16,runtime_pc:0x0044DBD4;arm_disassembly:ldr-add-str-ldrh-return,high,"Reached through the native name-entry completion path; bounded by the return at 0x0044DBE4 and the reviewed FormatString_InvokeWideCore entry at 0x0044DBE8."

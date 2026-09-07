@@ -1,0 +1,2886 @@
+{
+  "format": "oot3d_hot_source_coverage_v1",
+  "functions": [
+    {
+      "end": 4651300,
+      "entry": 4637188,
+      "ghidra_pseudocode": [
+        "shadow_active_pointer_candidate_ghidra_export/decompiled/99076_0046c204_FUN_0046c204.c",
+        "shadow_global_refs_ghidra_export/decompiled/99037_0046c204_FUN_0046c204.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_0046c204",
+      "profiled_blocks": 46,
+      "samples": 49353,
+      "total_profile_coverage": 0.05375335733843932
+    },
+    {
+      "end": 4534000,
+      "entry": 4533056,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99105_00452b40_FUN_00452b40.c",
+        "draw_handle_builder_ghidra_export/decompiled/99081_00452b40_FUN_00452b40.c",
+        "material_lane_tail_ghidra_export/decompiled/99032_00452b40_FUN_00452b40.c",
+        "material_lighting_lane_ghidra_export/decompiled/99019_00452b40_FUN_00452b40.c",
+        "runtime_draw_handle_constructor_ghidra_export/decompiled/99128_00452b40_FUN_00452b40.c",
+        "shadow_gate_owner_ghidra_export/decompiled/99077_00452b40_FUN_00452b40.c",
+        "shadow_player_factory_manager_constructors_ghidra_export/decompiled/99160_00452b40_FUN_00452b40.c",
+        "shadow_texunit0_owner_ghidra_export/decompiled/99035_00452b40_FUN_00452b40.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "CmbRenderer_UpdateTextureTransforms",
+      "profiled_blocks": 13,
+      "samples": 48194,
+      "total_profile_coverage": 0.05249101986847293
+    },
+    {
+      "end": 3181160,
+      "entry": 3180452,
+      "ghidra_pseudocode": [
+        "cutscene_camera_blob_helper_ghidra_export/decompiled/99005_003087a4_FUN_003087a4.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "NativeCurve_SampleFloat",
+      "profiled_blocks": 18,
+      "samples": 33962,
+      "total_profile_coverage": 0.036990082100947785
+    },
+    {
+      "end": 4717724,
+      "entry": 4716920,
+      "ghidra_pseudocode": [
+        "audio_native_envelope_chain_ghidra_export/decompiled/99014_0047f978_FUN_0047f978.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_0047f978",
+      "profiled_blocks": 30,
+      "samples": 24764,
+      "total_profile_coverage": 0.02697198024697812
+    },
+    {
+      "end": 4533056,
+      "entry": 4532532,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99104_00452934_FUN_00452934.c",
+        "draw_handle_builder_ghidra_export/decompiled/99080_00452934_FUN_00452934.c",
+        "material_lane_tail_ghidra_export/decompiled/99031_00452934_FUN_00452934.c",
+        "material_lighting_lane_ghidra_export/decompiled/99018_00452934_FUN_00452934.c",
+        "runtime_draw_handle_constructor_ghidra_export/decompiled/99127_00452934_FUN_00452934.c",
+        "shadow_gate_owner_ghidra_export/decompiled/99076_00452934_FUN_00452934.c",
+        "shadow_player_factory_manager_constructors_ghidra_export/decompiled/99159_00452934_FUN_00452934.c",
+        "shadow_texunit0_owner_ghidra_export/decompiled/99034_00452934_FUN_00452934.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "CmbRenderer_UpdateMeshTransforms",
+      "profiled_blocks": 14,
+      "samples": 18740,
+      "total_profile_coverage": 0.020410875053641173
+    },
+    {
+      "end": 3180408,
+      "entry": 3179752,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "CsabCurve_SampleRotation",
+      "profiled_blocks": 18,
+      "samples": 18242,
+      "total_profile_coverage": 0.019868472931084433
+    },
+    {
+      "end": 4616324,
+      "entry": 4616056,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99121_00466f78_FUN_00466f78.c",
+        "material_lane_tail_ghidra_export/decompiled/99036_00466f78_FUN_00466f78.c",
+        "shadow_texunit0_owner_ghidra_export/decompiled/99042_00466f78_FUN_00466f78.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "MeshCommandPacket_PatchBoneUniforms",
+      "profiled_blocks": 12,
+      "samples": 16775,
+      "total_profile_coverage": 0.018270673907408254
+    },
+    {
+      "end": 4262508,
+      "entry": 4262360,
+      "ghidra_pseudocode": [
+        "audio_native_envelope_chain_ghidra_export/decompiled/99012_004109d8_FUN_004109d8.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_004109d8",
+      "profiled_blocks": 10,
+      "samples": 15474,
+      "total_profile_coverage": 0.016853675591250988
+    },
+    {
+      "end": 4168160,
+      "entry": 4167356,
+      "ghidra_pseudocode": [
+        "runtime_source_vector_ghidra_export/decompiled/99001_003f96bc_FUN_003f96bc.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_003f96bc",
+      "profiled_blocks": 13,
+      "samples": 14817,
+      "total_profile_coverage": 0.016138096887396012
+    },
+    {
+      "end": 2999112,
+      "entry": 2998428,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "UpdateParams",
+      "profiled_blocks": 14,
+      "samples": 14260,
+      "total_profile_coverage": 0.015531434272407852
+    },
+    {
+      "end": 4685356,
+      "entry": 4685104,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_00477d30",
+      "profiled_blocks": 4,
+      "samples": 12237,
+      "total_profile_coverage": 0.01332806179463218
+    },
+    {
+      "end": 3438296,
+      "entry": 3437904,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "CsabAnimation_SampleBoneTransform",
+      "profiled_blocks": 18,
+      "samples": 11485,
+      "total_profile_coverage": 0.012509012806353728
+    },
+    {
+      "end": 3178032,
+      "entry": 3177928,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "PicaCompare_ConvertFunction",
+      "profiled_blocks": 6,
+      "samples": 10066,
+      "total_profile_coverage": 0.010963493505333622
+    },
+    {
+      "end": 4851292,
+      "entry": 4851120,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_004a05b0",
+      "profiled_blocks": 8,
+      "samples": 9881,
+      "total_profile_coverage": 0.010761998740930012
+    },
+    {
+      "end": 3187640,
+      "entry": 3186920,
+      "ghidra_pseudocode": [
+        "audio_envelope_ghidra_export/decompiled/99003_0030a0e8_FUN_0030a0e8.c",
+        "audio_native_envelope_chain_ghidra_export/decompiled/99003_0030a0e8_FUN_0030a0e8.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_0030a0e8",
+      "profiled_blocks": 16,
+      "samples": 9444,
+      "total_profile_coverage": 0.01028603543258203
+    },
+    {
+      "end": 3610540,
+      "entry": 3610424,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99079_00371738_FUN_00371738.c",
+        "cutscene_camera_blob_helper_ghidra_export/decompiled/99011_00371738_FUN_00371738.c",
+        "draw_handle_builder_ghidra_export/decompiled/99042_00371738_FUN_00371738.c",
+        "fragop_penumbra_active_chain_ghidra_export/decompiled/99033_00371738_FUN_00371738.c",
+        "material_lighting_raw_field_consumer_ghidra_export/decompiled/99066_00371738_FUN_00371738.c",
+        "scene_command_index_consumers_ghidra_export/decompiled/99133_00371738_FUN_00371738.c",
+        "scene_resource_consumer_ghidra_export/decompiled/99001_00371738_FUN_00371738.c",
+        "shadow_active_pointer_candidate_ghidra_export/decompiled/99050_00371738_FUN_00371738.c",
+        "shadow_cmb_record_parser_ghidra_export/decompiled/99019_00371738_FUN_00371738.c",
+        "shadow_depth_flush_ghidra_export/decompiled/99032_00371738_FUN_00371738.c",
+        "shadow_fragop_handle_payload_ghidra_export/decompiled/99091_00371738_FUN_00371738.c",
+        "shadow_fragop_recordset_ghidra_export/decompiled/99047_00371738_FUN_00371738.c",
+        "shadow_gate_owner_ghidra_export/decompiled/99051_00371738_FUN_00371738.c",
+        "shadow_global_refs_ghidra_export/decompiled/99027_00371738_FUN_00371738.c",
+        "shadow_pica_state_ghidra_export/decompiled/99060_00371738_FUN_00371738.c",
+        "shadow_player_factory_manager_constructors_ghidra_export/decompiled/99122_00371738_FUN_00371738.c",
+        "shadow_record_copy_owner_ghidra_export/decompiled/99030_00371738_FUN_00371738.c",
+        "shadow_route_focus_ghidra_export/decompiled/99132_00371738_FUN_00371738.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "Runtime_Memcpy",
+      "profiled_blocks": 4,
+      "samples": 9425,
+      "total_profile_coverage": 0.010265341375697335
+    },
+    {
+      "end": 4173620,
+      "entry": 4173160,
+      "ghidra_pseudocode": [
+        "shadow_submit_vtable_ghidra_export/decompiled/99040_003fad68_FUN_003fad68.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "CmbRenderer_SetRenderState",
+      "profiled_blocks": 17,
+      "samples": 8632,
+      "total_profile_coverage": 0.00940163679098349
+    },
+    {
+      "end": 3161300,
+      "entry": 3160868,
+      "ghidra_pseudocode": [
+        "shadow_active_pointer_candidate_ghidra_export/decompiled/99023_00303b24_FUN_00303b24.c",
+        "shadow_global_refs_ghidra_export/decompiled/99019_00303b24_FUN_00303b24.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_00303b24",
+      "profiled_blocks": 5,
+      "samples": 8172,
+      "total_profile_coverage": 0.00890062278219614
+    },
+    {
+      "end": 4716328,
+      "entry": 4715640,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_0047f478",
+      "profiled_blocks": 13,
+      "samples": 7605,
+      "total_profile_coverage": 0.008283068558321298
+    },
+    {
+      "end": 4169520,
+      "entry": 4169116,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "CmbRenderer_ApplyTevConstantColors",
+      "profiled_blocks": 10,
+      "samples": 7010,
+      "total_profile_coverage": 0.007635017829563748
+    },
+    {
+      "end": 3227316,
+      "entry": 3226988,
+      "ghidra_pseudocode": [
+        "shadow_submit_vtable_ghidra_export/decompiled/99006_00313d6c_FUN_00313d6c.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaMaterialState_EmitFramebufferAccess",
+      "profiled_blocks": 14,
+      "samples": 7002,
+      "total_profile_coverage": 0.007626304542454402
+    },
+    {
+      "end": 3135988,
+      "entry": 3135720,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_002fd8e8",
+      "profiled_blocks": 3,
+      "samples": 6911,
+      "total_profile_coverage": 0.0075271909015856
+    },
+    {
+      "end": 3177428,
+      "entry": 3177296,
+      "ghidra_pseudocode": [
+        "shadow_pica_state_ghidra_export/decompiled/99039_00307b50_FUN_00307b50.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaTev_ConvertSource",
+      "profiled_blocks": 5,
+      "samples": 6695,
+      "total_profile_coverage": 0.00729193214963328
+    },
+    {
+      "end": 4806084,
+      "entry": 4804256,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_00494ea0",
+      "profiled_blocks": 14,
+      "samples": 6625,
+      "total_profile_coverage": 0.0072156908874265084
+    },
+    {
+      "end": 3179748,
+      "entry": 3179672,
+      "ghidra_pseudocode": [
+        "material_lighting_raw_field_consumer_ghidra_export/decompiled/99013_00308498_FUN_00308498.c",
+        "shadow_submit_vtable_ghidra_export/decompiled/99004_00308498_FUN_00308498.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaMaterialState_EmitLighting",
+      "profiled_blocks": 1,
+      "samples": 6606,
+      "total_profile_coverage": 0.007194996830541814
+    },
+    {
+      "end": 3334616,
+      "entry": 3332900,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "BgCheck_RaycastFloorImpl",
+      "profiled_blocks": 2,
+      "samples": 6495,
+      "total_profile_coverage": 0.007074099971899649
+    },
+    {
+      "end": 4716904,
+      "entry": 4716348,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_0047f73c",
+      "profiled_blocks": 8,
+      "samples": 6493,
+      "total_profile_coverage": 0.007071921650122313
+    },
+    {
+      "end": 4224808,
+      "entry": 4224280,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_00407518",
+      "profiled_blocks": 12,
+      "samples": 6313,
+      "total_profile_coverage": 0.0068758726901620455
+    },
+    {
+      "end": 2866124,
+      "entry": 2865940,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "Math3D_CirSquareVsTriSquare",
+      "profiled_blocks": 14,
+      "samples": 6186,
+      "total_profile_coverage": 0.00673754925730119
+    },
+    {
+      "end": 4814960,
+      "entry": 4814532,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_004976c4",
+      "profiled_blocks": 7,
+      "samples": 5811,
+      "total_profile_coverage": 0.006329113924050633
+    },
+    {
+      "end": 3092020,
+      "entry": 3091592,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_002f2c88",
+      "profiled_blocks": 11,
+      "samples": 5715,
+      "total_profile_coverage": 0.00622455447873849
+    },
+    {
+      "end": 3575744,
+      "entry": 3575188,
+      "ghidra_pseudocode": [
+        "audio_envelope_ghidra_export/decompiled/99006_00368d94_FUN_00368d94.c",
+        "material_lighting_raw_field_consumer_ghidra_export/decompiled/99060_00368d94_FUN_00368d94.c",
+        "shadow_player_context_access_ghidra_export/decompiled/99010_00368d94_FUN_00368d94.c",
+        "shadow_texunit0_runtime_writer_ghidra_export/decompiled/99034_00368d94_FUN_00368d94.c",
+        "title_intro_player_action_consumer_ghidra_export/decompiled/99062_00368d94_FUN_00368d94.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "Runtime_SignedDivMod32",
+      "profiled_blocks": 5,
+      "samples": 5690,
+      "total_profile_coverage": 0.006197325456521787
+    },
+    {
+      "end": 4698044,
+      "entry": 4697892,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_0047af24",
+      "profiled_blocks": 2,
+      "samples": 5336,
+      "total_profile_coverage": 0.00581176250193326
+    },
+    {
+      "end": 2867552,
+      "entry": 2867060,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_002bbf74",
+      "profiled_blocks": 10,
+      "samples": 5215,
+      "total_profile_coverage": 0.005679974034404414
+    },
+    {
+      "end": 3177860,
+      "entry": 3177620,
+      "ghidra_pseudocode": [
+        "shadow_texunit0_runtime_writer_ghidra_export/decompiled/99006_00307c94_FUN_00307c94.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaCommandWriter_UploadVertexFloatUniforms",
+      "profiled_blocks": 6,
+      "samples": 5075,
+      "total_profile_coverage": 0.005527491509990873
+    },
+    {
+      "end": 3495744,
+      "entry": 3495384,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "Math_TanF",
+      "profiled_blocks": 5,
+      "samples": 4895,
+      "total_profile_coverage": 0.005331442550030606
+    },
+    {
+      "end": 4614636,
+      "entry": 4614424,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_00466918",
+      "profiled_blocks": 6,
+      "samples": 4872,
+      "total_profile_coverage": 0.005306391849591238
+    },
+    {
+      "end": 3475552,
+      "entry": 3475488,
+      "ghidra_pseudocode": [
+        "material_lighting_lane_ghidra_export/decompiled/99015_00350820_FUN_00350820.c",
+        "material_lighting_raw_field_consumer_ghidra_export/decompiled/99034_00350820_FUN_00350820.c",
+        "scene_command_index_consumers_ghidra_export/decompiled/99062_00350820_FUN_00350820.c",
+        "shadow_active_pointer_candidate_ghidra_export/decompiled/99042_00350820_FUN_00350820.c",
+        "shadow_cmb_record_parser_ghidra_export/decompiled/99017_00350820_FUN_00350820.c",
+        "shadow_player_context_access_ghidra_export/decompiled/99009_00350820_FUN_00350820.c",
+        "shadow_player_factory_manager_constructors_ghidra_export/decompiled/99118_00350820_FUN_00350820.c",
+        "shadow_record_copy_owner_ghidra_export/decompiled/99018_00350820_FUN_00350820.c",
+        "shadow_route_focus_ghidra_export/decompiled/99084_00350820_FUN_00350820.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "Array_Construct",
+      "profiled_blocks": 3,
+      "samples": 4764,
+      "total_profile_coverage": 0.005188762473615077
+    },
+    {
+      "end": 2940272,
+      "entry": 2939900,
+      "ghidra_pseudocode": [
+        "fog_builder_ghidra_export/decompiled/99002_002cdbfc_FUN_002cdbfc.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_002cdbfc",
+      "profiled_blocks": 5,
+      "samples": 4646,
+      "total_profile_coverage": 0.005060241488752236
+    },
+    {
+      "end": 3137180,
+      "entry": 3137124,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_002fde64",
+      "profiled_blocks": 2,
+      "samples": 4628,
+      "total_profile_coverage": 0.005040636592756209
+    },
+    {
+      "end": 2939732,
+      "entry": 2939660,
+      "ghidra_pseudocode": [
+        "fog_builder_ghidra_export/decompiled/99000_002cdb0c_FUN_002cdb0c.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_002cdb0c",
+      "profiled_blocks": 4,
+      "samples": 4621,
+      "total_profile_coverage": 0.0050330124665355315
+    },
+    {
+      "end": 3004112,
+      "entry": 3003944,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99032_002dd628_FUN_002dd628.c",
+        "material_lane_tail_ghidra_export/decompiled/99007_002dd628_FUN_002dd628.c",
+        "shadow_texunit0_owner_ghidra_export/decompiled/99003_002dd628_FUN_002dd628.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "Skeleton_BuildSkinnedBonePalette",
+      "profiled_blocks": 6,
+      "samples": 4460,
+      "total_profile_coverage": 0.004857657563459959
+    },
+    {
+      "end": 3163192,
+      "entry": 3163072,
+      "ghidra_pseudocode": [
+        "audio_catalog_runtime_ghidra_export/decompiled/99004_003043c0_FUN_003043c0.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PackedBitmask_GetEntryForBit",
+      "profiled_blocks": 6,
+      "samples": 4444,
+      "total_profile_coverage": 0.004840230989241269
+    },
+    {
+      "end": 4180724,
+      "entry": 4178680,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_003fc2f8",
+      "profiled_blocks": 9,
+      "samples": 4320,
+      "total_profile_coverage": 0.004705175039046418
+    },
+    {
+      "end": 3184048,
+      "entry": 3183948,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_0030954c",
+      "profiled_blocks": 5,
+      "samples": 4044,
+      "total_profile_coverage": 0.004404566633774008
+    },
+    {
+      "end": 3164280,
+      "entry": 3164044,
+      "ghidra_pseudocode": [
+        "shadow_cmb_record_parser_ghidra_export/decompiled/99000_0030478c_FUN_0030478c.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_0030478c",
+      "profiled_blocks": 8,
+      "samples": 3854,
+      "total_profile_coverage": 0.004197626064927059
+    },
+    {
+      "end": 3159180,
+      "entry": 3159060,
+      "ghidra_pseudocode": [
+        "fragop_penumbra_active_chain_ghidra_export/decompiled/99010_00303414_strcmp.c"
+      ],
+      "maintained_source_mentions": [
+        "code/z_scene_cutscene_frame_runtime.c",
+        "code/z_title_intro_opening_actor_runtime.c",
+        "code/z_title_intro_opening_logo_runtime.c",
+        "code/z_title_intro_opening_resolver_runtime.c",
+        "code/z_title_intro_source_table.c"
+      ],
+      "name": "strcmp",
+      "profiled_blocks": 6,
+      "samples": 3818,
+      "total_profile_coverage": 0.004158416272935005
+    },
+    {
+      "end": 3227676,
+      "entry": 3227472,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99061_00313f50_FUN_00313f50.c",
+        "shadow_submit_vtable_ghidra_export/decompiled/99008_00313f50_FUN_00313f50.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaMaterialState_EmitDepthMapState",
+      "profiled_blocks": 6,
+      "samples": 3746,
+      "total_profile_coverage": 0.004079996688950899
+    },
+    {
+      "end": 4820176,
+      "entry": 4819756,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_00498b2c",
+      "profiled_blocks": 4,
+      "samples": 3694,
+      "total_profile_coverage": 0.004023360322740154
+    },
+    {
+      "end": 3296928,
+      "entry": 3295064,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "BgCheck_LineTestImpl",
+      "profiled_blocks": 2,
+      "samples": 3523,
+      "total_profile_coverage": 0.0038371138107779006
+    },
+    {
+      "end": 4982380,
+      "entry": 4982316,
+      "ghidra_pseudocode": [
+        "fog_builder_ghidra_export/decompiled/99007_004c062c_FUN_004c062c.c",
+        "shadow_route_focus_ghidra_export/decompiled/99176_004c062c_FUN_004c062c.c",
+        "shadow_runtime_record_helpers_ghidra_export/decompiled/99311_004c062c_FUN_004c062c.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_004c062c",
+      "profiled_blocks": 3,
+      "samples": 3523,
+      "total_profile_coverage": 0.0038371138107779006
+    },
+    {
+      "end": 3003944,
+      "entry": 3003860,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99031_002dd5d4_FUN_002dd5d4.c",
+        "material_lane_tail_ghidra_export/decompiled/99006_002dd5d4_FUN_002dd5d4.c",
+        "shadow_texunit0_owner_ghidra_export/decompiled/99002_002dd5d4_FUN_002dd5d4.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "Skeleton_BuildTranslatedBonePalette",
+      "profiled_blocks": 4,
+      "samples": 3346,
+      "total_profile_coverage": 0.0036443323334836375
+    },
+    {
+      "end": 2939876,
+      "entry": 2939744,
+      "ghidra_pseudocode": [
+        "fog_builder_ghidra_export/decompiled/99001_002cdb60_FUN_002cdb60.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_002cdb60",
+      "profiled_blocks": 4,
+      "samples": 3263,
+      "total_profile_coverage": 0.003553931979724181
+    },
+    {
+      "end": 3224628,
+      "entry": 3223716,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99055_003130a4_FUN_003130a4.c",
+        "draw_handle_builder_ghidra_export/decompiled/99028_003130a4_FUN_003130a4.c",
+        "material_lighting_lane_ghidra_export/decompiled/99011_003130a4_FUN_003130a4.c",
+        "runtime_draw_handle_constructor_ghidra_export/decompiled/99071_003130a4_FUN_003130a4.c",
+        "shadow_fragop_recordset_ghidra_export/decompiled/99034_003130a4_FUN_003130a4.c",
+        "shadow_gate_owner_ghidra_export/decompiled/99020_003130a4_FUN_003130a4.c",
+        "shadow_player_factory_manager_constructors_ghidra_export/decompiled/99092_003130a4_FUN_003130a4.c",
+        "shadow_texunit0_owner_ghidra_export/decompiled/99012_003130a4_FUN_003130a4.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "CmbRenderState_PrepareLights",
+      "profiled_blocks": 10,
+      "samples": 3259,
+      "total_profile_coverage": 0.003549575336169508
+    },
+    {
+      "end": 3183876,
+      "entry": 3183820,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_003094cc",
+      "profiled_blocks": 2,
+      "samples": 3255,
+      "total_profile_coverage": 0.003545218692614836
+    },
+    {
+      "end": 2940604,
+      "entry": 2940560,
+      "ghidra_pseudocode": [
+        "audio_native_envelope_chain_ghidra_export/decompiled/99001_002cde90_FUN_002cde90.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_002cde90",
+      "profiled_blocks": 3,
+      "samples": 3210,
+      "total_profile_coverage": 0.003496206452624769
+    },
+    {
+      "end": 2896952,
+      "entry": 2896652,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "SyncFrameData",
+      "profiled_blocks": 2,
+      "samples": 3155,
+      "total_profile_coverage": 0.0034363026037480203
+    },
+    {
+      "end": 4852104,
+      "entry": 4851616,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_004a07a0",
+      "profiled_blocks": 3,
+      "samples": 3096,
+      "total_profile_coverage": 0.0033720421113165996
+    },
+    {
+      "end": 4814520,
+      "entry": 4814472,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_00497688",
+      "profiled_blocks": 2,
+      "samples": 3019,
+      "total_profile_coverage": 0.0032881767228891516
+    },
+    {
+      "end": 3213692,
+      "entry": 3213380,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "glGetUniformLocation",
+      "profiled_blocks": 5,
+      "samples": 2987,
+      "total_profile_coverage": 0.0032533235744517707
+    },
+    {
+      "end": 4815016,
+      "entry": 4814968,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_00497878",
+      "profiled_blocks": 2,
+      "samples": 2975,
+      "total_profile_coverage": 0.003240253643787753
+    },
+    {
+      "end": 3120776,
+      "entry": 3120288,
+      "ghidra_pseudocode": [
+        "shadow_global_refs_ghidra_export/decompiled/99007_002f9ca0_nngxGetCmdlistParameteri.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "nngxGetCmdlistParameteri",
+      "profiled_blocks": 3,
+      "samples": 2749,
+      "total_profile_coverage": 0.0029941032829487505
+    },
+    {
+      "end": 4687812,
+      "entry": 4685380,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_00477e44",
+      "profiled_blocks": 6,
+      "samples": 2697,
+      "total_profile_coverage": 0.002937466916738007
+    },
+    {
+      "end": 3295044,
+      "entry": 3295004,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99066_0032471c_FUN_0032471c.c",
+        "draw_handle_builder_ghidra_export/decompiled/99032_0032471c_FUN_0032471c.c",
+        "material_lighting_lane_ghidra_export/decompiled/99014_0032471c_FUN_0032471c.c",
+        "runtime_draw_handle_constructor_ghidra_export/decompiled/99077_0032471c_FUN_0032471c.c",
+        "shadow_gate_owner_ghidra_export/decompiled/99025_0032471c_FUN_0032471c.c",
+        "shadow_player_factory_manager_constructors_ghidra_export/decompiled/99096_0032471c_FUN_0032471c.c",
+        "shadow_texunit0_owner_ghidra_export/decompiled/99019_0032471c_FUN_0032471c.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaMaterialState_BindCurrentCommandList",
+      "profiled_blocks": 3,
+      "samples": 2651,
+      "total_profile_coverage": 0.0028873655158592718
+    },
+    {
+      "end": 4715640,
+      "entry": 4715540,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_0047f414",
+      "profiled_blocks": 3,
+      "samples": 2484,
+      "total_profile_coverage": 0.00270547564745169
+    },
+    {
+      "end": 2940356,
+      "entry": 2940284,
+      "ghidra_pseudocode": [
+        "audio_native_envelope_chain_ghidra_export/decompiled/99000_002cdd7c_FUN_002cdd7c.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_002cdd7c",
+      "profiled_blocks": 3,
+      "samples": 2429,
+      "total_profile_coverage": 0.002645571798574942
+    },
+    {
+      "end": 3003244,
+      "entry": 3002480,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_002dd070",
+      "profiled_blocks": 2,
+      "samples": 2351,
+      "total_profile_coverage": 0.002560617249258826
+    },
+    {
+      "end": 2882732,
+      "entry": 2882596,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_002bfc24",
+      "profiled_blocks": 4,
+      "samples": 2319,
+      "total_profile_coverage": 0.002525764100821445
+    },
+    {
+      "end": 4742960,
+      "entry": 4742620,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_00485ddc",
+      "profiled_blocks": 2,
+      "samples": 2315,
+      "total_profile_coverage": 0.0025214074572667724
+    },
+    {
+      "end": 3287028,
+      "entry": 3286552,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "Math3D_TriChkPointParaY",
+      "profiled_blocks": 7,
+      "samples": 2301,
+      "total_profile_coverage": 0.0025061592048254183
+    },
+    {
+      "end": 3200384,
+      "entry": 3200312,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "IntrusiveList_RemoveRange",
+      "profiled_blocks": 2,
+      "samples": 2300,
+      "total_profile_coverage": 0.0025050700439367504
+    },
+    {
+      "end": 3636596,
+      "entry": 3636536,
+      "ghidra_pseudocode": [
+        "shadow_texunit0_runtime_writer_ghidra_export/decompiled/99036_00377d38_FUN_00377d38.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "Runtime_DestroyArrayReverse",
+      "profiled_blocks": 2,
+      "samples": 2300,
+      "total_profile_coverage": 0.0025050700439367504
+    },
+    {
+      "end": 4711124,
+      "entry": 4711096,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_0047e2b8",
+      "profiled_blocks": 2,
+      "samples": 2300,
+      "total_profile_coverage": 0.0025050700439367504
+    },
+    {
+      "end": 4991528,
+      "entry": 4988048,
+      "ghidra_pseudocode": [
+        "shadow_gate_owner_ghidra_export/decompiled/99090_004c1c90_oot3d_player_post_limb_draw_gameplay.c",
+        "shadow_record_copy_owner_ghidra_export/decompiled/99040_004c1c90_oot3d_player_post_limb_draw_gameplay.c"
+      ],
+      "maintained_source_mentions": [
+        "semantic_labels.c"
+      ],
+      "name": "oot3d_player_post_limb_draw_gameplay",
+      "profiled_blocks": 11,
+      "samples": 2247,
+      "total_profile_coverage": 0.0024473445168373383
+    },
+    {
+      "end": 4999052,
+      "entry": 4998496,
+      "ghidra_pseudocode": [
+        "shadow_gate_owner_ghidra_export/decompiled/99092_004c4560_FUN_004c4560.c",
+        "shadow_record_copy_owner_ghidra_export/decompiled/99042_004c4560_FUN_004c4560.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "Player_ApplyModelVisibility",
+      "profiled_blocks": 5,
+      "samples": 2077,
+      "total_profile_coverage": 0.0022621871657637523
+    },
+    {
+      "end": 3191720,
+      "entry": 3191556,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "LightEvent_Wait",
+      "profiled_blocks": 11,
+      "samples": 2073,
+      "total_profile_coverage": 0.0022578305222090795
+    },
+    {
+      "end": 4245964,
+      "entry": 4245316,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "Skeleton_BuildLocalTransformsFromPose",
+      "profiled_blocks": 4,
+      "samples": 2073,
+      "total_profile_coverage": 0.0022578305222090795
+    },
+    {
+      "end": 3612836,
+      "entry": 3612784,
+      "ghidra_pseudocode": [
+        "shadow_gate_owner_ghidra_export/decompiled/99052_00372070_oot3d_translate_mtx3x4_local.c",
+        "shadow_record_copy_owner_ghidra_export/decompiled/99031_00372070_oot3d_translate_mtx3x4_local.c"
+      ],
+      "maintained_source_mentions": [
+        "runtime/matrix_helpers.c"
+      ],
+      "name": "oot3d_translate_mtx3x4_local",
+      "profiled_blocks": 1,
+      "samples": 1963,
+      "total_profile_coverage": 0.002138022824455583
+    },
+    {
+      "end": 3182972,
+      "entry": 3182848,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_00309100",
+      "profiled_blocks": 5,
+      "samples": 1961,
+      "total_profile_coverage": 0.0021358445026782467
+    },
+    {
+      "end": 3184180,
+      "entry": 3184128,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_00309600",
+      "profiled_blocks": 3,
+      "samples": 1941,
+      "total_profile_coverage": 0.0021140612849048835
+    },
+    {
+      "end": 4176804,
+      "entry": 4176300,
+      "ghidra_pseudocode": [
+        "kankyo_cloud_sun_texture_owner_ghidra_export/decompiled/99005_003fb9ac_FUN_003fb9ac.c",
+        "shadow_pica_state_ghidra_export/decompiled/99063_003fb9ac_FUN_003fb9ac.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_003fb9ac",
+      "profiled_blocks": 6,
+      "samples": 1918,
+      "total_profile_coverage": 0.002089010584465516
+    },
+    {
+      "end": 2997644,
+      "entry": 2997512,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_002dbd08",
+      "profiled_blocks": 7,
+      "samples": 1886,
+      "total_profile_coverage": 0.002054157436028135
+    },
+    {
+      "end": 4708312,
+      "entry": 4708012,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99141_0047d6ac_FUN_0047d6ac.c",
+        "draw_handle_builder_ghidra_export/decompiled/99097_0047d6ac_FUN_0047d6ac.c",
+        "fog_builder_ghidra_export/decompiled/99004_0047d6ac_FUN_0047d6ac.c",
+        "material_lighting_lane_ghidra_export/decompiled/99024_0047d6ac_FUN_0047d6ac.c",
+        "runtime_draw_handle_constructor_ghidra_export/decompiled/99158_0047d6ac_FUN_0047d6ac.c",
+        "shadow_fragop_recordset_ghidra_export/decompiled/99065_0047d6ac_FUN_0047d6ac.c",
+        "shadow_gate_owner_ghidra_export/decompiled/99087_0047d6ac_FUN_0047d6ac.c",
+        "shadow_pica_state_ghidra_export/decompiled/99113_0047d6ac_FUN_0047d6ac.c",
+        "shadow_player_factory_manager_constructors_ghidra_export/decompiled/99189_0047d6ac_FUN_0047d6ac.c",
+        "shadow_texunit0_owner_ghidra_export/decompiled/99047_0047d6ac_FUN_0047d6ac.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "CmbRenderState_ApplyFog",
+      "profiled_blocks": 4,
+      "samples": 1823,
+      "total_profile_coverage": 0.0019855403000420416
+    },
+    {
+      "end": 4551436,
+      "entry": 4551112,
+      "ghidra_pseudocode": [
+        "title_intro_player_action_consumer_ghidra_export/decompiled/99113_004571c8_FUN_004571c8.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_004571c8",
+      "profiled_blocks": 8,
+      "samples": 1737,
+      "total_profile_coverage": 0.0018918724636165804
+    },
+    {
+      "end": 1048644,
+      "entry": 1048616,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "oot3d_clear_bss",
+      "profiled_blocks": 1,
+      "samples": 1732,
+      "total_profile_coverage": 0.0018864266591732397
+    },
+    {
+      "end": 4749864,
+      "entry": 4749760,
+      "ghidra_pseudocode": [
+        "audio_native_envelope_chain_ghidra_export/decompiled/99027_004879c0_FUN_004879c0.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_004879c0",
+      "profiled_blocks": 2,
+      "samples": 1724,
+      "total_profile_coverage": 0.0018777133720638945
+    },
+    {
+      "end": 4230796,
+      "entry": 4230692,
+      "ghidra_pseudocode": [
+        "pica_helper_ghidra_export/decompiled/99002_00408e24_FUN_00408e24.c",
+        "shadow_submit_vtable_ghidra_export/decompiled/99044_00408e24_FUN_00408e24.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaMaterialState_EmitCullMode",
+      "profiled_blocks": 4,
+      "samples": 1721,
+      "total_profile_coverage": 0.0018744458893978902
+    },
+    {
+      "end": 3183820,
+      "entry": 3183784,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_003094a8",
+      "profiled_blocks": 2,
+      "samples": 1713,
+      "total_profile_coverage": 0.001865732602288545
+    },
+    {
+      "end": 3120264,
+      "entry": 3120244,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99042_002f9c74_FUN_002f9c74.c",
+        "draw_handle_builder_ghidra_export/decompiled/99018_002f9c74_FUN_002f9c74.c",
+        "material_lighting_lane_ghidra_export/decompiled/99003_002f9c74_FUN_002f9c74.c",
+        "runtime_draw_handle_constructor_ghidra_export/decompiled/99064_002f9c74_FUN_002f9c74.c",
+        "shadow_gate_owner_ghidra_export/decompiled/99014_002f9c74_FUN_002f9c74.c",
+        "shadow_player_factory_manager_constructors_ghidra_export/decompiled/99077_002f9c74_FUN_002f9c74.c",
+        "shadow_texunit0_owner_ghidra_export/decompiled/99006_002f9c74_FUN_002f9c74.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaCommandStats_AccumulateWriter",
+      "profiled_blocks": 2,
+      "samples": 1686,
+      "total_profile_coverage": 0.0018363252582945047
+    },
+    {
+      "end": 3184092,
+      "entry": 3184056,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_003095b8",
+      "profiled_blocks": 2,
+      "samples": 1686,
+      "total_profile_coverage": 0.0018363252582945047
+    },
+    {
+      "end": 3177928,
+      "entry": 3177868,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "PicaCompare_ConvertGasMode",
+      "profiled_blocks": 3,
+      "samples": 1679,
+      "total_profile_coverage": 0.0018287011320738276
+    },
+    {
+      "end": 3300500,
+      "entry": 3298800,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_003255f0",
+      "profiled_blocks": 8,
+      "samples": 1672,
+      "total_profile_coverage": 0.0018210770058531506
+    },
+    {
+      "end": 4745012,
+      "entry": 4744768,
+      "ghidra_pseudocode": [
+        "audio_native_envelope_chain_ghidra_export/decompiled/99015_00486640_FUN_00486640.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_00486640",
+      "profiled_blocks": 4,
+      "samples": 1660,
+      "total_profile_coverage": 0.0018080070751891328
+    },
+    {
+      "end": 3228304,
+      "entry": 3228108,
+      "ghidra_pseudocode": [
+        "shadow_submit_vtable_ghidra_export/decompiled/99014_003141cc_FUN_003141cc.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaMaterialState_EmitBlendState",
+      "profiled_blocks": 4,
+      "samples": 1643,
+      "total_profile_coverage": 0.0017894913400817742
+    },
+    {
+      "end": 3183784,
+      "entry": 3183748,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_00309484",
+      "profiled_blocks": 2,
+      "samples": 1637,
+      "total_profile_coverage": 0.0017829563747497653
+    },
+    {
+      "end": 4614716,
+      "entry": 4614636,
+      "ghidra_pseudocode": [
+        "audio_native_envelope_chain_ghidra_export/decompiled/99013_004669ec_FUN_004669ec.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_004669ec",
+      "profiled_blocks": 2,
+      "samples": 1633,
+      "total_profile_coverage": 0.0017785997311950926
+    },
+    {
+      "end": 3184128,
+      "entry": 3184092,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_003095dc",
+      "profiled_blocks": 2,
+      "samples": 1618,
+      "total_profile_coverage": 0.0017622623178650703
+    },
+    {
+      "end": 3183940,
+      "entry": 3183880,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_00309508",
+      "profiled_blocks": 2,
+      "samples": 1584,
+      "total_profile_coverage": 0.0017252308476503532
+    },
+    {
+      "end": 3228044,
+      "entry": 3227912,
+      "ghidra_pseudocode": [
+        "shadow_submit_vtable_ghidra_export/decompiled/99012_00314108_FUN_00314108.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaMaterialState_EmitDepthTest",
+      "profiled_blocks": 3,
+      "samples": 1571,
+      "total_profile_coverage": 0.0017110717560976673
+    },
+    {
+      "end": 2940544,
+      "entry": 2940372,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_002cddd4",
+      "profiled_blocks": 2,
+      "samples": 1565,
+      "total_profile_coverage": 0.0017045367907656582
+    },
+    {
+      "end": 3085096,
+      "entry": 3084928,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_002f1280",
+      "profiled_blocks": 3,
+      "samples": 1541,
+      "total_profile_coverage": 0.0016783969294376228
+    },
+    {
+      "end": 4851116,
+      "entry": 4851060,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_004a0574",
+      "profiled_blocks": 2,
+      "samples": 1517,
+      "total_profile_coverage": 0.001652257068109587
+    },
+    {
+      "end": 3421204,
+      "entry": 3421068,
+      "ghidra_pseudocode": [
+        "fragop_penumbra_active_chain_ghidra_export/decompiled/99027_0034338c_memcpy.c",
+        "scene_command_index_consumers_ghidra_export/decompiled/99045_0034338c_memcpy.c",
+        "shadow_depth_flush_ghidra_export/decompiled/99026_0034338c_memcpy.c",
+        "shadow_fragop_recordset_ghidra_export/decompiled/99039_0034338c_memcpy.c",
+        "shadow_global_refs_ghidra_export/decompiled/99026_0034338c_memcpy.c",
+        "shadow_record_apply_ghidra_export/decompiled/99023_0034338c_memcpy.c",
+        "shadow_texunit0_owner_ghidra_export/decompiled/99021_0034338c_memcpy.c"
+      ],
+      "maintained_source_mentions": [
+        "code/z_scene_cutscene_camera_cmad_apply.c",
+        "code/z_scene_cutscene_camera_curve_eval.c",
+        "code/z_scene_cutscene_camera_runtime.c",
+        "code/z_scene_cutscene_frame_runtime.c",
+        "code/z_title_intro_opening_player_motion.c",
+        "code/z_title_intro_record_c_runtime.c",
+        "code/z_title_intro_source_selector_feed_runtime.c",
+        "runtime/runtime_helpers.c"
+      ],
+      "name": "memcpy",
+      "profiled_blocks": 3,
+      "samples": 1451,
+      "total_profile_coverage": 0.001580372449457489
+    },
+    {
+      "end": 2983108,
+      "entry": 2982920,
+      "ghidra_pseudocode": [
+        "title_intro_player_action_consumer_ghidra_export/decompiled/99019_002d8408_FUN_002d8408.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "CollisionCheck_ClearContext",
+      "profiled_blocks": 3,
+      "samples": 1449,
+      "total_profile_coverage": 0.0015781941276801527
+    },
+    {
+      "end": 3177148,
+      "entry": 3177032,
+      "ghidra_pseudocode": [
+        "material_lane_tail_ghidra_export/decompiled/99014_00307a48_FUN_00307a48.c",
+        "material_lighting_lane_ghidra_export/decompiled/99009_00307a48_FUN_00307a48.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaBlend_ConvertFactorOneDefault",
+      "profiled_blocks": 4,
+      "samples": 1408,
+      "total_profile_coverage": 0.0015335385312447583
+    },
+    {
+      "end": 3229784,
+      "entry": 3229412,
+      "ghidra_pseudocode": [
+        "shadow_pica_state_ghidra_export/decompiled/99048_003146e4_FUN_003146e4.c",
+        "shadow_submit_vtable_ghidra_export/decompiled/99025_003146e4_FUN_003146e4.c",
+        "shadow_texunit0_runtime_writer_ghidra_export/decompiled/99029_003146e4_FUN_003146e4.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaMaterialState_EmitTevStage",
+      "profiled_blocks": 5,
+      "samples": 1386,
+      "total_profile_coverage": 0.001509576991694059
+    },
+    {
+      "end": 2874668,
+      "entry": 2873836,
+      "ghidra_pseudocode": [
+        "player_jump_climb_animation_selector_ghidra_export/decompiled/99019_002bd9ec_FUN_002bd9ec.c",
+        "shadow_route_focus_ghidra_export/decompiled/99029_002bd9ec_FUN_002bd9ec.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "AnimationEntry_DecodeFrame",
+      "profiled_blocks": 6,
+      "samples": 1378,
+      "total_profile_coverage": 0.0015008637045847138
+    },
+    {
+      "end": 2997340,
+      "entry": 2997320,
+      "ghidra_pseudocode": [
+        "shadow_texunit0_owner_ghidra_export/decompiled/99000_002dbc48_FUN_002dbc48.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "MeshCommandPacket_ResolveOffset",
+      "profiled_blocks": 1,
+      "samples": 1365,
+      "total_profile_coverage": 0.0014867046130320279
+    },
+    {
+      "end": 3225164,
+      "entry": 3225156,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99059_00313644_FUN_00313644.c",
+        "material_lane_tail_ghidra_export/decompiled/99020_00313644_FUN_00313644.c",
+        "shadow_fragop_recordset_ghidra_export/decompiled/99035_00313644_FUN_00313644.c",
+        "shadow_texunit0_owner_ghidra_export/decompiled/99016_00313644_FUN_00313644.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "Renderer_GetCurrentModelViewMatrix",
+      "profiled_blocks": 1,
+      "samples": 1351,
+      "total_profile_coverage": 0.0014714563605906737
+    },
+    {
+      "end": 4741680,
+      "entry": 4741556,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_004859b4",
+      "profiled_blocks": 4,
+      "samples": 1320,
+      "total_profile_coverage": 0.001437692373041961
+    },
+    {
+      "end": 3182848,
+      "entry": 3182592,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_00309000",
+      "profiled_blocks": 4,
+      "samples": 1318,
+      "total_profile_coverage": 0.0014355140512646246
+    },
+    {
+      "end": 3327912,
+      "entry": 3327884,
+      "ghidra_pseudocode": [
+        "shadow_cmb_record_parser_ghidra_export/decompiled/99015_0032c78c_oot3d_translate_mtx3x4_world.c"
+      ],
+      "maintained_source_mentions": [
+        "runtime/matrix_helpers.c"
+      ],
+      "name": "oot3d_translate_mtx3x4_world",
+      "profiled_blocks": 1,
+      "samples": 1303,
+      "total_profile_coverage": 0.0014191766379346024
+    },
+    {
+      "end": 3227796,
+      "entry": 3227700,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99063_00314034_FUN_00314034.c",
+        "shadow_submit_vtable_ghidra_export/decompiled/99010_00314034_FUN_00314034.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaMaterialState_SetFragmentOperationMode",
+      "profiled_blocks": 2,
+      "samples": 1294,
+      "total_profile_coverage": 0.0014093741899365892
+    },
+    {
+      "end": 3177028,
+      "entry": 3176912,
+      "ghidra_pseudocode": [
+        "material_lane_tail_ghidra_export/decompiled/99013_003079d0_FUN_003079d0.c",
+        "material_lighting_lane_ghidra_export/decompiled/99008_003079d0_FUN_003079d0.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaBlend_ConvertFactorZeroDefault",
+      "profiled_blocks": 5,
+      "samples": 1286,
+      "total_profile_coverage": 0.001400660902827244
+    },
+    {
+      "end": 3227460,
+      "entry": 3227364,
+      "ghidra_pseudocode": [
+        "shadow_submit_vtable_ghidra_export/decompiled/99007_00313ee4_FUN_00313ee4.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaMaterialState_EmitAlphaTest",
+      "profiled_blocks": 2,
+      "samples": 1271,
+      "total_profile_coverage": 0.0013843234894972216
+    },
+    {
+      "end": 3280120,
+      "entry": 3277988,
+      "ghidra_pseudocode": [
+        "title_intro_actor_runtime_ghidra_export/decompiled/99261_003204a4_SkelAnime_GetFrameData.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "SkelAnime_GetFrameData",
+      "profiled_blocks": 5,
+      "samples": 1261,
+      "total_profile_coverage": 0.00137343188061054
+    },
+    {
+      "end": 3177204,
+      "entry": 3177152,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "PicaFloat_EncodeFloat24",
+      "profiled_blocks": 1,
+      "samples": 1218,
+      "total_profile_coverage": 0.0013265979623978096
+    },
+    {
+      "end": 2881148,
+      "entry": 2880944,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "BgCheck_GetStaticLookupIndicesFromPos",
+      "profiled_blocks": 6,
+      "samples": 1156,
+      "total_profile_coverage": 0.001259069987300384
+    },
+    {
+      "end": 4175340,
+      "entry": 4175324,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_003fb5dc",
+      "profiled_blocks": 1,
+      "samples": 1155,
+      "total_profile_coverage": 0.0012579808264117159
+    },
+    {
+      "end": 3265184,
+      "entry": 3265040,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "Math3D_PointDistToLine2D",
+      "profiled_blocks": 5,
+      "samples": 1142,
+      "total_profile_coverage": 0.00124382173485903
+    },
+    {
+      "end": 2901192,
+      "entry": 2901092,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_002c4464",
+      "profiled_blocks": 5,
+      "samples": 1091,
+      "total_profile_coverage": 0.0011882745295369542
+    },
+    {
+      "end": 4245316,
+      "entry": 4245192,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "Skeleton_ResetPoseFromBind",
+      "profiled_blocks": 2,
+      "samples": 1051,
+      "total_profile_coverage": 0.001144708093990228
+    },
+    {
+      "end": 4694752,
+      "entry": 4693648,
+      "ghidra_pseudocode": [
+        "material_lighting_raw_field_consumer_ghidra_export/decompiled/99083_00479e90_FUN_00479e90.c",
+        "runtime_draw_handle_constructor_ghidra_export/decompiled/99157_00479e90_FUN_00479e90.c",
+        "shadow_player_factory_manager_constructors_ghidra_export/decompiled/99187_00479e90_FUN_00479e90.c",
+        "shadow_route_focus_ghidra_export/decompiled/99160_00479e90_FUN_00479e90.c",
+        "shadow_runtime_record_helpers_ghidra_export/decompiled/99305_00479e90_FUN_00479e90.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_00479e90",
+      "profiled_blocks": 3,
+      "samples": 1051,
+      "total_profile_coverage": 0.001144708093990228
+    },
+    {
+      "end": 3426012,
+      "entry": 3425964,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_003446ac",
+      "profiled_blocks": 1,
+      "samples": 1035,
+      "total_profile_coverage": 0.0011272815197715376
+    },
+    {
+      "end": 4593960,
+      "entry": 4592452,
+      "ghidra_pseudocode": [
+        "material_lighting_raw_field_consumer_ghidra_export/decompiled/99078_00461344_FUN_00461344.c",
+        "title_intro_player_action_consumer_ghidra_export/decompiled/99133_00461344_FUN_00461344.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "Actor_UpdateAll",
+      "profiled_blocks": 7,
+      "samples": 1035,
+      "total_profile_coverage": 0.0011272815197715376
+    },
+    {
+      "end": 2940952,
+      "entry": 2940832,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_002cdfa0",
+      "profiled_blocks": 3,
+      "samples": 1006,
+      "total_profile_coverage": 0.0010956958540001612
+    },
+    {
+      "end": 4231548,
+      "entry": 4231372,
+      "ghidra_pseudocode": [
+        "shadow_pica_state_ghidra_export/decompiled/99067_004090cc_FUN_004090cc.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_004090cc",
+      "profiled_blocks": 2,
+      "samples": 1001,
+      "total_profile_coverage": 0.0010902500495568205
+    },
+    {
+      "end": 3183176,
+      "entry": 3182988,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_0030918c",
+      "profiled_blocks": 3,
+      "samples": 991,
+      "total_profile_coverage": 0.001079358440670139
+    },
+    {
+      "end": 3164372,
+      "entry": 3164284,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "SkeletonBindTransform_Decode",
+      "profiled_blocks": 1,
+      "samples": 979,
+      "total_profile_coverage": 0.0010662885100061212
+    },
+    {
+      "end": 4766476,
+      "entry": 4766360,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "ModelHandle_ApplyLimbTransformData",
+      "profiled_blocks": 2,
+      "samples": 952,
+      "total_profile_coverage": 0.001036881166012081
+    },
+    {
+      "end": 3229820,
+      "entry": 3229808,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99065_00314870_FUN_00314870.c",
+        "draw_handle_builder_ghidra_export/decompiled/99030_00314870_FUN_00314870.c",
+        "material_lane_tail_ghidra_export/decompiled/99022_00314870_FUN_00314870.c",
+        "material_lighting_lane_ghidra_export/decompiled/99012_00314870_FUN_00314870.c",
+        "runtime_draw_handle_constructor_ghidra_export/decompiled/99075_00314870_FUN_00314870.c",
+        "shadow_active_pointer_candidate_ghidra_export/decompiled/99027_00314870_FUN_00314870.c",
+        "shadow_cmb_record_parser_ghidra_export/decompiled/99014_00314870_FUN_00314870.c",
+        "shadow_gate_owner_ghidra_export/decompiled/99024_00314870_FUN_00314870.c",
+        "shadow_player_factory_manager_constructors_ghidra_export/decompiled/99093_00314870_FUN_00314870.c",
+        "shadow_route_focus_ghidra_export/decompiled/99046_00314870_FUN_00314870.c",
+        "shadow_submit_vtable_ghidra_export/decompiled/99027_00314870_FUN_00314870.c",
+        "shadow_texunit0_owner_ghidra_export/decompiled/99018_00314870_FUN_00314870.c",
+        "shadow_texunit0_runtime_writer_ghidra_export/decompiled/99031_00314870_FUN_00314870.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaCommandWriter_GetUsedSize",
+      "profiled_blocks": 1,
+      "samples": 920,
+      "total_profile_coverage": 0.0010020280175747
+    },
+    {
+      "end": 4539452,
+      "entry": 4538876,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_004541fc",
+      "profiled_blocks": 4,
+      "samples": 915,
+      "total_profile_coverage": 0.0009965822131313593
+    },
+    {
+      "end": 3186736,
+      "entry": 3186724,
+      "ghidra_pseudocode": [
+        "audio_envelope_ghidra_export/decompiled/99002_0030a024_FUN_0030a024.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_0030a024",
+      "profiled_blocks": 1,
+      "samples": 912,
+      "total_profile_coverage": 0.0009933147304653548
+    },
+    {
+      "end": 2858004,
+      "entry": 2857976,
+      "ghidra_pseudocode": [
+        "shadow_gate_owner_ghidra_export/decompiled/99008_002b9bf8_FUN_002b9bf8.c",
+        "shadow_record_copy_owner_ghidra_export/decompiled/99004_002b9bf8_FUN_002b9bf8.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "Player_SetLimbMeshVisible",
+      "profiled_blocks": 2,
+      "samples": 902,
+      "total_profile_coverage": 0.0009824231215786734
+    },
+    {
+      "end": 4233276,
+      "entry": 4233160,
+      "ghidra_pseudocode": [
+        "shadow_pica_state_ghidra_export/decompiled/99075_004097c8_FUN_004097c8.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaTev_ConvertAlphaModifier",
+      "profiled_blocks": 3,
+      "samples": 898,
+      "total_profile_coverage": 0.0009780664780240007
+    },
+    {
+      "end": 4862056,
+      "entry": 4860244,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_004a2954",
+      "profiled_blocks": 2,
+      "samples": 897,
+      "total_profile_coverage": 0.0009769773171353325
+    },
+    {
+      "end": 4655184,
+      "entry": 4654984,
+      "ghidra_pseudocode": [
+        "material_lighting_raw_field_consumer_ghidra_export/decompiled/99080_00470788_FUN_00470788.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_00470788",
+      "profiled_blocks": 4,
+      "samples": 878,
+      "total_profile_coverage": 0.0009562832602506377
+    },
+    {
+      "end": 3120284,
+      "entry": 3120264,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "PicaCommandStats_AddBytes",
+      "profiled_blocks": 1,
+      "samples": 870,
+      "total_profile_coverage": 0.0009475699731412925
+    },
+    {
+      "end": 3612584,
+      "entry": 3612444,
+      "ghidra_pseudocode": [
+        "kankyo_lens_enqueue_ghidra_export/decompiled/99029_00371f1c_FUN_00371f1c.c",
+        "material_lighting_raw_field_consumer_ghidra_export/decompiled/99068_00371f1c_FUN_00371f1c.c",
+        "title_intro_effectss_dust_ghidra_export/decompiled/99025_00371f1c_FUN_00371f1c.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "RendererQuad_SubmitWithUniformColor",
+      "profiled_blocks": 2,
+      "samples": 870,
+      "total_profile_coverage": 0.0009475699731412925
+    },
+    {
+      "end": 3229384,
+      "entry": 3229292,
+      "ghidra_pseudocode": [
+        "shadow_pica_state_ghidra_export/decompiled/99047_0031466c_FUN_0031466c.c",
+        "shadow_submit_vtable_ghidra_export/decompiled/99023_0031466c_FUN_0031466c.c",
+        "shadow_texunit0_runtime_writer_ghidra_export/decompiled/99027_0031466c_FUN_0031466c.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaMaterialState_DisableTevStage",
+      "profiled_blocks": 2,
+      "samples": 859,
+      "total_profile_coverage": 0.0009355892033659428
+    },
+    {
+      "end": 3055672,
+      "entry": 3055656,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99035_002ea028_FUN_002ea028.c",
+        "draw_handle_builder_ghidra_export/decompiled/99008_002ea028_FUN_002ea028.c",
+        "material_lighting_lane_ghidra_export/decompiled/99002_002ea028_FUN_002ea028.c",
+        "runtime_draw_handle_constructor_ghidra_export/decompiled/99055_002ea028_FUN_002ea028.c",
+        "shadow_gate_owner_ghidra_export/decompiled/99013_002ea028_FUN_002ea028.c",
+        "shadow_player_factory_manager_constructors_ghidra_export/decompiled/99069_002ea028_FUN_002ea028.c",
+        "shadow_texunit0_owner_ghidra_export/decompiled/99005_002ea028_FUN_002ea028.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaCommandWriter_BindExternalBuffer",
+      "profiled_blocks": 1,
+      "samples": 856,
+      "total_profile_coverage": 0.0009323217206999384
+    },
+    {
+      "end": 4188860,
+      "entry": 4188776,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "ActorPoseHook_AfterLimb",
+      "profiled_blocks": 4,
+      "samples": 855,
+      "total_profile_coverage": 0.0009312325598112702
+    },
+    {
+      "end": 4233156,
+      "entry": 4233024,
+      "ghidra_pseudocode": [
+        "shadow_pica_state_ghidra_export/decompiled/99074_00409740_FUN_00409740.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaTev_ConvertColorModifier",
+      "profiled_blocks": 3,
+      "samples": 844,
+      "total_profile_coverage": 0.0009192517900359205
+    },
+    {
+      "end": 3295064,
+      "entry": 3295044,
+      "ghidra_pseudocode": [
+        "shadow_active_pointer_candidate_ghidra_export/decompiled/99034_00324744_oot3d_copy_u32x16_if_distinct.c",
+        "shadow_player_factory_manager_constructors_ghidra_export/decompiled/99097_00324744_oot3d_copy_u32x16_if_distinct.c"
+      ],
+      "maintained_source_mentions": [
+        "runtime/runtime_helpers.c"
+      ],
+      "name": "oot3d_copy_u32x16_if_distinct",
+      "profiled_blocks": 2,
+      "samples": 841,
+      "total_profile_coverage": 0.0009159843073699161
+    },
+    {
+      "end": 3228976,
+      "entry": 3228812,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "PicaMaterialState_EmitTevConstantColor",
+      "profiled_blocks": 1,
+      "samples": 840,
+      "total_profile_coverage": 0.0009148951464812479
+    },
+    {
+      "end": 3186724,
+      "entry": 3186712,
+      "ghidra_pseudocode": [
+        "audio_envelope_ghidra_export/decompiled/99001_0030a018_FUN_0030a018.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_0030a018",
+      "profiled_blocks": 1,
+      "samples": 796,
+      "total_profile_coverage": 0.0008669720673798492
+    },
+    {
+      "end": 3203248,
+      "entry": 3203132,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "Lock_0030e03c",
+      "profiled_blocks": 5,
+      "samples": 768,
+      "total_profile_coverage": 0.0008364755624971409
+    },
+    {
+      "end": 3159672,
+      "entry": 3159196,
+      "ghidra_pseudocode": [
+        "shadow_global_refs_ghidra_export/decompiled/99017_0030349c_FUN_0030349c.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_0030349c",
+      "profiled_blocks": 3,
+      "samples": 745,
+      "total_profile_coverage": 0.0008114248620577734
+    },
+    {
+      "end": 2968624,
+      "entry": 2968276,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_002d4ad4",
+      "profiled_blocks": 1,
+      "samples": 736,
+      "total_profile_coverage": 0.0008016224140597601
+    },
+    {
+      "end": 4190640,
+      "entry": 4190548,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "SkelAnimePoseHook_BeforeLimb",
+      "profiled_blocks": 4,
+      "samples": 734,
+      "total_profile_coverage": 0.0007994440922824237
+    },
+    {
+      "end": 4246632,
+      "entry": 4246620,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "CmbRenderState_HasTevConstantOverride",
+      "profiled_blocks": 1,
+      "samples": 705,
+      "total_profile_coverage": 0.0007678584265110474
+    },
+    {
+      "end": 2961484,
+      "entry": 2961348,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "BlockingQueue_TryPop",
+      "profiled_blocks": 4,
+      "samples": 699,
+      "total_profile_coverage": 0.0007613234611790385
+    },
+    {
+      "end": 4188948,
+      "entry": 4188864,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "ActorPoseHook_BeforeLimb",
+      "profiled_blocks": 3,
+      "samples": 674,
+      "total_profile_coverage": 0.0007340944389623346
+    },
+    {
+      "end": 3211736,
+      "entry": 3211592,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "Signal",
+      "profiled_blocks": 4,
+      "samples": 670,
+      "total_profile_coverage": 0.000729737795407662
+    },
+    {
+      "end": 3022588,
+      "entry": 3022576,
+      "ghidra_pseudocode": [
+        "audio_native_dsp_effects_ghidra_export/decompiled/99001_002e1ef0_FUN_002e1ef0.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "Audio_IsInitialized",
+      "profiled_blocks": 1,
+      "samples": 669,
+      "total_profile_coverage": 0.0007286486345189939
+    },
+    {
+      "end": 2882932,
+      "entry": 2882740,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_002bfcb4",
+      "profiled_blocks": 1,
+      "samples": 660,
+      "total_profile_coverage": 0.0007188461865209805
+    },
+    {
+      "end": 3533196,
+      "entry": 3532960,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "WaterBox_GetSurfaceImpl",
+      "profiled_blocks": 4,
+      "samples": 647,
+      "total_profile_coverage": 0.0007046870949682946
+    },
+    {
+      "end": 3228376,
+      "entry": 3228316,
+      "ghidra_pseudocode": [
+        "shadow_submit_vtable_ghidra_export/decompiled/99015_0031429c_FUN_0031429c.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaMaterialState_ResetFramebufferAccess",
+      "profiled_blocks": 1,
+      "samples": 637,
+      "total_profile_coverage": 0.000693795486081613
+    },
+    {
+      "end": 3420884,
+      "entry": 3420800,
+      "ghidra_pseudocode": [
+        "draw_handle_builder_ghidra_export/decompiled/99034_00343280_FUN_00343280.c",
+        "fragop_penumbra_active_chain_ghidra_export/decompiled/99026_00343280_FUN_00343280.c",
+        "runtime_draw_handle_constructor_ghidra_export/decompiled/99084_00343280_FUN_00343280.c",
+        "shadow_fragop_handle_payload_ghidra_export/decompiled/99086_00343280_FUN_00343280.c",
+        "shadow_fragop_recordset_ghidra_export/decompiled/99038_00343280_FUN_00343280.c",
+        "shadow_global_refs_ghidra_export/decompiled/99025_00343280_FUN_00343280.c",
+        "shadow_pica_state_ghidra_export/decompiled/99050_00343280_FUN_00343280.c",
+        "shadow_player_context_access_ghidra_export/decompiled/99008_00343280_FUN_00343280.c",
+        "shadow_player_factory_manager_constructors_ghidra_export/decompiled/99108_00343280_FUN_00343280.c",
+        "title_intro_player_action_consumer_ghidra_export/decompiled/99061_00343280_FUN_00343280.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "Runtime_Memzero",
+      "profiled_blocks": 1,
+      "samples": 636,
+      "total_profile_coverage": 0.0006927063251929448
+    },
+    {
+      "end": 4709976,
+      "entry": 4709756,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_0047dd7c",
+      "profiled_blocks": 2,
+      "samples": 636,
+      "total_profile_coverage": 0.0006927063251929448
+    },
+    {
+      "end": 3227700,
+      "entry": 3227688,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99062_00314028_FUN_00314028.c",
+        "shadow_submit_vtable_ghidra_export/decompiled/99009_00314028_FUN_00314028.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaMaterialState_SetDepthMapParameters",
+      "profiled_blocks": 1,
+      "samples": 632,
+      "total_profile_coverage": 0.0006883496816382723
+    },
+    {
+      "end": 3179144,
+      "entry": 3179008,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99047_00308200_FUN_00308200.c",
+        "shadow_cmb_record_parser_ghidra_export/decompiled/99004_00308200_FUN_00308200.c",
+        "shadow_texunit0_runtime_writer_ghidra_export/decompiled/99008_00308200_FUN_00308200.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaTexture_ConvertType",
+      "profiled_blocks": 3,
+      "samples": 624,
+      "total_profile_coverage": 0.0006796363945289271
+    },
+    {
+      "end": 4615992,
+      "entry": 4615936,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99118_00466f00_FUN_00466f00.c",
+        "shadow_fragop_recordset_ghidra_export/decompiled/99057_00466f00_FUN_00466f00.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaMaterialState_UploadLightDirection",
+      "profiled_blocks": 1,
+      "samples": 614,
+      "total_profile_coverage": 0.0006687447856422455
+    },
+    {
+      "end": 3120196,
+      "entry": 3119644,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "PauseRenderBuffer_ApplyPositionOffsets",
+      "profiled_blocks": 1,
+      "samples": 609,
+      "total_profile_coverage": 0.0006632989811989048
+    },
+    {
+      "end": 3203128,
+      "entry": 3203032,
+      "ghidra_pseudocode": [
+        "shadow_global_refs_ghidra_export/decompiled/99020_0030dfd8_nngxlowUnlock.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "nngxlowUnlock",
+      "profiled_blocks": 4,
+      "samples": 601,
+      "total_profile_coverage": 0.0006545856940895595
+    },
+    {
+      "end": 4595372,
+      "entry": 4593924,
+      "ghidra_pseudocode": [
+        "material_lighting_raw_field_consumer_ghidra_export/decompiled/99079_00461904_FUN_00461904.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_00461904",
+      "profiled_blocks": 4,
+      "samples": 565,
+      "total_profile_coverage": 0.000615375902097506
+    },
+    {
+      "end": 2791032,
+      "entry": 2790832,
+      "ghidra_pseudocode": [
+        "shadow_factory_context_helpers_ghidra_export/decompiled/99155_002a95b0_EnHorse_PostLimbDraw.c",
+        "shadow_runtime_record_helpers_ghidra_export/decompiled/99205_002a95b0_EnHorse_PostLimbDraw.c",
+        "title_intro_horse_draw_callbacks_ghidra_export/decompiled/99003_002a95b0_EnHorse_PostLimbDraw.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "EnHorse_PostLimbDraw",
+      "profiled_blocks": 3,
+      "samples": 564,
+      "total_profile_coverage": 0.0006142867412088379
+    },
+    {
+      "end": 3577348,
+      "entry": 3577336,
+      "ghidra_pseudocode": [
+        "light_runtime_transition_consumer_ghidra_export/decompiled/99005_003695f8_PauseContext_GetState.c",
+        "material_lighting_raw_field_consumer_ghidra_export/decompiled/99061_003695f8_PauseContext_GetState.c",
+        "shadow_gate_owner_ghidra_export/decompiled/99044_003695f8_PauseContext_GetState.c",
+        "shadow_record_copy_owner_ghidra_export/decompiled/99024_003695f8_PauseContext_GetState.c",
+        "shadow_route_focus_ghidra_export/decompiled/99124_003695f8_PauseContext_GetState.c",
+        "title_intro_player_action_consumer_ghidra_export/decompiled/99087_003695f8_PauseContext_GetState.c"
+      ],
+      "maintained_source_mentions": [
+        "oot3d_public_structural_exact.c"
+      ],
+      "name": "PauseContext_GetState",
+      "profiled_blocks": 1,
+      "samples": 564,
+      "total_profile_coverage": 0.0006142867412088379
+    },
+    {
+      "end": 4416060,
+      "entry": 4415720,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_004360e8",
+      "profiled_blocks": 4,
+      "samples": 563,
+      "total_profile_coverage": 0.0006131975803201697
+    },
+    {
+      "end": 3618280,
+      "entry": 3618220,
+      "ghidra_pseudocode": [
+        "scene_command_index_consumers_ghidra_export/decompiled/99146_003735ac_oot3d_transform_mtx3x4_vec3.c",
+        "shadow_gate_owner_ghidra_export/decompiled/99058_003735ac_oot3d_transform_mtx3x4_vec3.c",
+        "shadow_record_copy_owner_ghidra_export/decompiled/99033_003735ac_oot3d_transform_mtx3x4_vec3.c"
+      ],
+      "maintained_source_mentions": [
+        "runtime/matrix_helpers.c"
+      ],
+      "name": "oot3d_transform_mtx3x4_vec3",
+      "profiled_blocks": 1,
+      "samples": 548,
+      "total_profile_coverage": 0.0005968601669901475
+    },
+    {
+      "end": 2917428,
+      "entry": 2917372,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_002c83fc",
+      "profiled_blocks": 2,
+      "samples": 543,
+      "total_profile_coverage": 0.0005914143625468067
+    },
+    {
+      "end": 4171244,
+      "entry": 4170572,
+      "ghidra_pseudocode": [
+        "shadow_submit_vtable_ghidra_export/decompiled/99037_003fa34c_FUN_003fa34c.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "CmbRenderer_PackFallbackLights",
+      "profiled_blocks": 1,
+      "samples": 543,
+      "total_profile_coverage": 0.0005914143625468067
+    },
+    {
+      "end": 4654984,
+      "entry": 4654968,
+      "ghidra_pseudocode": [
+        "cutscene_read_helper_probe_ghidra_export/decompiled/99000_00470778_FUN_00470778.c",
+        "title_intro_player_action_consumer_ghidra_export/decompiled/99085_00470778_FUN_00470778.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_00470778",
+      "profiled_blocks": 2,
+      "samples": 538,
+      "total_profile_coverage": 0.000585968558103466
+    },
+    {
+      "end": 4172824,
+      "entry": 4171216,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99081_003fa5d0_FUN_003fa5d0.c",
+        "shadow_submit_vtable_ghidra_export/decompiled/99038_003fa5d0_FUN_003fa5d0.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "CmbRenderer_PackRuntimeLights",
+      "profiled_blocks": 1,
+      "samples": 509,
+      "total_profile_coverage": 0.0005543828923320895
+    },
+    {
+      "end": 2954056,
+      "entry": 2953796,
+      "ghidra_pseudocode": [
+        "shadow_active_pointer_candidate_ghidra_export/decompiled/99015_002d1244_FUN_002d1244.c",
+        "shadow_global_refs_ghidra_export/decompiled/99004_002d1244_FUN_002d1244.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_002d1244",
+      "profiled_blocks": 1,
+      "samples": 503,
+      "total_profile_coverage": 0.0005478479270000806
+    },
+    {
+      "end": 3460088,
+      "entry": 3460020,
+      "ghidra_pseudocode": [
+        "shadow_gate_owner_ghidra_export/decompiled/99036_0034cbb4_FUN_0034cbb4.c",
+        "shadow_record_copy_owner_ghidra_export/decompiled/99016_0034cbb4_FUN_0034cbb4.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "Actor_SetFeetPosWithMatrix",
+      "profiled_blocks": 3,
+      "samples": 503,
+      "total_profile_coverage": 0.0005478479270000806
+    },
+    {
+      "end": 4202048,
+      "entry": 4201472,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "ReceiverThreadFunc",
+      "profiled_blocks": 3,
+      "samples": 482,
+      "total_profile_coverage": 0.0005249755483380495
+    },
+    {
+      "end": 2864936,
+      "entry": 2864924,
+      "ghidra_pseudocode": [
+        "shadow_gate_owner_ghidra_export/decompiled/99009_002bb71c_FUN_002bb71c.c",
+        "shadow_record_copy_owner_ghidra_export/decompiled/99005_002bb71c_FUN_002bb71c.c",
+        "shadow_route_focus_ghidra_export/decompiled/99027_002bb71c_FUN_002bb71c.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "CmbModel_GetMeshCount",
+      "profiled_blocks": 1,
+      "samples": 475,
+      "total_profile_coverage": 0.0005173514221173723
+    },
+    {
+      "end": 4226108,
+      "entry": 4226076,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_00407c1c",
+      "profiled_blocks": 1,
+      "samples": 475,
+      "total_profile_coverage": 0.0005173514221173723
+    },
+    {
+      "end": 2997436,
+      "entry": 2997348,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_002dbc64",
+      "profiled_blocks": 2,
+      "samples": 466,
+      "total_profile_coverage": 0.000507548974119359
+    },
+    {
+      "end": 2869080,
+      "entry": 2869016,
+      "ghidra_pseudocode": [
+        "title_intro_math_atan2_ghidra_export/decompiled/99000_002bc718_Math_GetAtan2Tbl.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "Math_GetAtan2Tbl",
+      "profiled_blocks": 3,
+      "samples": 457,
+      "total_profile_coverage": 0.0004977465261213456
+    },
+    {
+      "end": 4229784,
+      "entry": 4229160,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_00408828",
+      "profiled_blocks": 3,
+      "samples": 457,
+      "total_profile_coverage": 0.0004977465261213456
+    },
+    {
+      "end": 3576652,
+      "entry": 3576620,
+      "ghidra_pseudocode": [
+        "scene_command_index_consumers_ghidra_export/decompiled/99101_0036932c_FUN_0036932c.c",
+        "shadow_factory_context_helpers_ghidra_export/decompiled/99195_0036932c_FUN_0036932c.c",
+        "shadow_route_focus_ghidra_export/decompiled/99123_0036932c_FUN_0036932c.c",
+        "shadow_runtime_record_helpers_ghidra_export/decompiled/99272_0036932c_FUN_0036932c.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "ModelHandle_HideMesh",
+      "profiled_blocks": 1,
+      "samples": 428,
+      "total_profile_coverage": 0.0004661608603499692
+    },
+    {
+      "end": 4187212,
+      "entry": 4186996,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99086_003fe374_FUN_003fe374.c",
+        "draw_handle_builder_ghidra_export/decompiled/99044_003fe374_FUN_003fe374.c",
+        "material_lighting_lane_ghidra_export/decompiled/99016_003fe374_FUN_003fe374.c",
+        "runtime_draw_handle_constructor_ghidra_export/decompiled/99092_003fe374_FUN_003fe374.c",
+        "shadow_gate_owner_ghidra_export/decompiled/99069_003fe374_FUN_003fe374.c",
+        "shadow_player_factory_manager_constructors_ghidra_export/decompiled/99131_003fe374_FUN_003fe374.c",
+        "shadow_player_factory_manager_ghidra_export/decompiled/99365_003fe374_FUN_003fe374.c",
+        "shadow_runtime_record_helpers_ghidra_export/decompiled/99295_003fe374_FUN_003fe374.c",
+        "shadow_submit_vtable_ghidra_export/decompiled/99042_003fe374_FUN_003fe374.c",
+        "shadow_texunit0_owner_ghidra_export/decompiled/99027_003fe374_FUN_003fe374.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_003fe374",
+      "profiled_blocks": 2,
+      "samples": 426,
+      "total_profile_coverage": 0.0004639825385726329
+    },
+    {
+      "end": 4498596,
+      "entry": 4498112,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_0044a2c0",
+      "profiled_blocks": 3,
+      "samples": 416,
+      "total_profile_coverage": 0.00045309092968595134
+    },
+    {
+      "end": 4718284,
+      "entry": 4718148,
+      "ghidra_pseudocode": [
+        "shadow_fragop_recordset_ghidra_export/decompiled/99066_0047fe44_FUN_0047fe44.c",
+        "shadow_pica_state_ghidra_export/decompiled/99114_0047fe44_FUN_0047fe44.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaMaterialState_EmitFogModeAndColor",
+      "profiled_blocks": 1,
+      "samples": 390,
+      "total_profile_coverage": 0.0004247727465805794
+    },
+    {
+      "end": 4190548,
+      "entry": 4190520,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "SkelAnimePoseHook_AfterLimb",
+      "profiled_blocks": 2,
+      "samples": 371,
+      "total_profile_coverage": 0.0004040786896958845
+    },
+    {
+      "end": 3002472,
+      "entry": 3002100,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99029_002dcef4_FUN_002dcef4.c",
+        "shadow_fragop_recordset_ghidra_export/decompiled/99013_002dcef4_FUN_002dcef4.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "Mtx3x3_Multiply",
+      "profiled_blocks": 2,
+      "samples": 365,
+      "total_profile_coverage": 0.00039754372436387556
+    },
+    {
+      "end": 3627468,
+      "entry": 3627184,
+      "ghidra_pseudocode": [
+        "scene_command_index_consumers_ghidra_export/decompiled/99158_003758b0_Math_Atan2S.c",
+        "shadow_active_pointer_candidate_ghidra_export/decompiled/99056_003758b0_Math_Atan2S.c",
+        "title_intro_player_action_motion_consumer_ghidra_export/decompiled/99002_003758b0_Math_Atan2S.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "Math_Atan2S",
+      "profiled_blocks": 2,
+      "samples": 362,
+      "total_profile_coverage": 0.0003942762416978711
+    },
+    {
+      "end": 3226368,
+      "entry": 3226344,
+      "ghidra_pseudocode": [
+        "kankyo_cloud_sun_texture_owner_ghidra_export/decompiled/99002_00313ae8_FUN_00313ae8.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_00313ae8",
+      "profiled_blocks": 1,
+      "samples": 359,
+      "total_profile_coverage": 0.0003910087590318667
+    },
+    {
+      "end": 3177296,
+      "entry": 3177248,
+      "ghidra_pseudocode": [
+        "shadow_pica_state_ghidra_export/decompiled/99038_00307b20_FUN_00307b20.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaTev_ConvertScale",
+      "profiled_blocks": 2,
+      "samples": 335,
+      "total_profile_coverage": 0.000364868897703831
+    },
+    {
+      "end": 4176288,
+      "entry": 4175340,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99082_003fb5ec_FUN_003fb5ec.c",
+        "kankyo_cloud_sun_texture_owner_ghidra_export/decompiled/99004_003fb5ec_FUN_003fb5ec.c",
+        "shadow_pica_state_ghidra_export/decompiled/99062_003fb5ec_FUN_003fb5ec.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_003fb5ec",
+      "profiled_blocks": 2,
+      "samples": 332,
+      "total_profile_coverage": 0.00036160141503782656
+    },
+    {
+      "end": 3294952,
+      "entry": 3294908,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "PicaMaterialState_UploadUniformBlock4",
+      "profiled_blocks": 2,
+      "samples": 317,
+      "total_profile_coverage": 0.0003452640017078043
+    },
+    {
+      "end": 4589688,
+      "entry": 4589616,
+      "ghidra_pseudocode": [
+        "title_intro_player_action_consumer_ghidra_export/decompiled/99127_00460830_FUN_00460830.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_00460830",
+      "profiled_blocks": 2,
+      "samples": 315,
+      "total_profile_coverage": 0.00034308567993046797
+    },
+    {
+      "end": 4758716,
+      "entry": 4758684,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "nngxlowYieldThread",
+      "profiled_blocks": 1,
+      "samples": 314,
+      "total_profile_coverage": 0.00034199651904179984
+    },
+    {
+      "end": 3295000,
+      "entry": 3294956,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "PicaMaterialState_UploadUniformBlock0",
+      "profiled_blocks": 2,
+      "samples": 313,
+      "total_profile_coverage": 0.00034090735815313166
+    },
+    {
+      "end": 3499168,
+      "entry": 3498688,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_003562c0",
+      "profiled_blocks": 2,
+      "samples": 307,
+      "total_profile_coverage": 0.00033437239282112273
+    },
+    {
+      "end": 3196312,
+      "entry": 3196240,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "RendererCommandQueue_GetGlobal",
+      "profiled_blocks": 2,
+      "samples": 303,
+      "total_profile_coverage": 0.0003300157492664501
+    },
+    {
+      "end": 3379096,
+      "entry": 3379048,
+      "ghidra_pseudocode": [
+        "material_lighting_raw_field_consumer_ghidra_export/decompiled/99019_00338f68_FUN_00338f68.c",
+        "shadow_route_focus_ghidra_export/decompiled/99058_00338f68_FUN_00338f68.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_00338f68",
+      "profiled_blocks": 1,
+      "samples": 302,
+      "total_profile_coverage": 0.000328926588377782
+    },
+    {
+      "end": 4654968,
+      "entry": 4654796,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_004706cc",
+      "profiled_blocks": 2,
+      "samples": 300,
+      "total_profile_coverage": 0.0003267482666004457
+    },
+    {
+      "end": 2890416,
+      "entry": 2890124,
+      "ghidra_pseudocode": [
+        "audio_native_dsp_effects_ghidra_export/decompiled/99000_002c198c_ExecuteEffect.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "ExecuteEffect",
+      "profiled_blocks": 2,
+      "samples": 296,
+      "total_profile_coverage": 0.00032239162304577307
+    },
+    {
+      "end": 3225156,
+      "entry": 3225064,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99058_003135e8_FUN_003135e8.c",
+        "material_lane_tail_ghidra_export/decompiled/99019_003135e8_FUN_003135e8.c",
+        "shadow_texunit0_owner_ghidra_export/decompiled/99015_003135e8_FUN_003135e8.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaMaterialState_UploadBoneMatrices",
+      "profiled_blocks": 2,
+      "samples": 295,
+      "total_profile_coverage": 0.00032130246215710494
+    },
+    {
+      "end": 4610676,
+      "entry": 4609332,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_00465534",
+      "profiled_blocks": 2,
+      "samples": 293,
+      "total_profile_coverage": 0.00031912414037976863
+    },
+    {
+      "end": 3379048,
+      "entry": 3379040,
+      "ghidra_pseudocode": [
+        "light_runtime_transition_consumer_ghidra_export/decompiled/99002_00338f60_oot3d_cos_idx8.c",
+        "material_lighting_raw_field_consumer_ghidra_export/decompiled/99018_00338f60_oot3d_cos_idx8.c",
+        "scene_command_index_consumers_ghidra_export/decompiled/99038_00338f60_oot3d_cos_idx8.c",
+        "title_intro_actor_runtime_ghidra_export/decompiled/99269_00338f60_oot3d_cos_idx8.c",
+        "title_intro_player_action_consumer_ghidra_export/decompiled/99032_00338f60_oot3d_cos_idx8.c"
+      ],
+      "maintained_source_mentions": [
+        "overlays/actors/ovl_Boss_Va/z_boss_va.c",
+        "overlays/actors/ovl_player_actor/z_player_collision.c",
+        "runtime/runtime_helpers.c"
+      ],
+      "name": "oot3d_cos_idx8",
+      "profiled_blocks": 1,
+      "samples": 292,
+      "total_profile_coverage": 0.00031803497949110045
+    },
+    {
+      "end": 4338504,
+      "entry": 4337864,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_004230c8",
+      "profiled_blocks": 1,
+      "samples": 292,
+      "total_profile_coverage": 0.00031803497949110045
+    },
+    {
+      "end": 3176908,
+      "entry": 3176804,
+      "ghidra_pseudocode": [
+        "material_lane_tail_ghidra_export/decompiled/99012_00307964_FUN_00307964.c",
+        "material_lighting_lane_ghidra_export/decompiled/99007_00307964_FUN_00307964.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaBlend_ConvertEquation",
+      "profiled_blocks": 2,
+      "samples": 288,
+      "total_profile_coverage": 0.00031367833593642783
+    },
+    {
+      "end": 2948264,
+      "entry": 2948256,
+      "ghidra_pseudocode": [
+        "camera_quake_callbacks_ghidra_export/decompiled/99006_002cfca0_oot3d_sin_idx8.c",
+        "light_runtime_transition_consumer_ghidra_export/decompiled/99000_002cfca0_oot3d_sin_idx8.c",
+        "material_lighting_raw_field_consumer_ghidra_export/decompiled/99006_002cfca0_oot3d_sin_idx8.c",
+        "scene_command_index_consumers_ghidra_export/decompiled/99025_002cfca0_oot3d_sin_idx8.c",
+        "title_intro_actor_runtime_ghidra_export/decompiled/99256_002cfca0_oot3d_sin_idx8.c",
+        "title_intro_player_action_consumer_ghidra_export/decompiled/99012_002cfca0_oot3d_sin_idx8.c"
+      ],
+      "maintained_source_mentions": [
+        "oot3d_public_structural_exact.c",
+        "overlays/actors/ovl_Boss_Va/z_boss_va.c",
+        "overlays/actors/ovl_player_actor/z_player_collision.c",
+        "runtime/runtime_helpers.c"
+      ],
+      "name": "oot3d_sin_idx8",
+      "profiled_blocks": 1,
+      "samples": 284,
+      "total_profile_coverage": 0.00030932169238175527
+    },
+    {
+      "end": 3145588,
+      "entry": 3145280,
+      "ghidra_pseudocode": [
+        "shadow_global_refs_ghidra_export/decompiled/99010_002ffe40_nngxUpdateState.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "nngxUpdateState",
+      "profiled_blocks": 1,
+      "samples": 282,
+      "total_profile_coverage": 0.00030714337060441896
+    },
+    {
+      "end": 2997512,
+      "entry": 2997436,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_002dbcbc",
+      "profiled_blocks": 2,
+      "samples": 280,
+      "total_profile_coverage": 0.00030496504882708265
+    },
+    {
+      "end": 2948312,
+      "entry": 2948264,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_002cfca8",
+      "profiled_blocks": 1,
+      "samples": 272,
+      "total_profile_coverage": 0.0002962517617177374
+    },
+    {
+      "end": 2997348,
+      "entry": 2997340,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_002dbc5c",
+      "profiled_blocks": 1,
+      "samples": 243,
+      "total_profile_coverage": 0.000264666095946361
+    },
+    {
+      "end": 3596120,
+      "entry": 3596108,
+      "ghidra_pseudocode": [
+        "material_lighting_raw_field_consumer_ghidra_export/decompiled/99065_0036df4c_oot3d_copy_u32x3.c",
+        "shadow_active_pointer_candidate_ghidra_export/decompiled/99049_0036df4c_oot3d_copy_u32x3.c",
+        "shadow_gate_owner_ghidra_export/decompiled/99046_0036df4c_oot3d_copy_u32x3.c",
+        "shadow_record_copy_owner_ghidra_export/decompiled/99026_0036df4c_oot3d_copy_u32x3.c",
+        "title_intro_effectss_dust_ghidra_export/decompiled/99016_0036df4c_oot3d_copy_u32x3.c"
+      ],
+      "maintained_source_mentions": [
+        "runtime/runtime_helpers.c"
+      ],
+      "name": "oot3d_copy_u32x3",
+      "profiled_blocks": 1,
+      "samples": 241,
+      "total_profile_coverage": 0.0002624877741690247
+    },
+    {
+      "end": 2890112,
+      "entry": 2889868,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "TryEnqueue",
+      "profiled_blocks": 1,
+      "samples": 236,
+      "total_profile_coverage": 0.00025704196972568393
+    },
+    {
+      "end": 3344144,
+      "entry": 3344124,
+      "ghidra_pseudocode": [
+        "kankyo_cloud_sun_texture_owner_ghidra_export/decompiled/99003_003306fc_FUN_003306fc.c",
+        "title_intro_effectss_dust_ghidra_export/decompiled/99010_003306fc_FUN_003306fc.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_003306fc",
+      "profiled_blocks": 1,
+      "samples": 223,
+      "total_profile_coverage": 0.00024288287817299795
+    },
+    {
+      "end": 3627528,
+      "entry": 3627472,
+      "ghidra_pseudocode": [
+        "camera_quake_callbacks_ghidra_export/decompiled/99008_003759d0_Rand_ZeroOne.c",
+        "camera_quake_state_ghidra_export/decompiled/99005_003759d0_Rand_ZeroOne.c",
+        "scene_command_index_consumers_ghidra_export/decompiled/99159_003759d0_Rand_ZeroOne.c",
+        "title_intro_actor_runtime_ghidra_export/decompiled/99327_003759d0_Rand_ZeroOne.c",
+        "title_intro_effectss_dust_ghidra_export/decompiled/99018_003759d0_Rand_ZeroOne.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "Rand_ZeroOne",
+      "profiled_blocks": 1,
+      "samples": 220,
+      "total_profile_coverage": 0.0002396153955069935
+    },
+    {
+      "end": 3004160,
+      "entry": 3004112,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99033_002dd6d0_FUN_002dd6d0.c",
+        "draw_handle_builder_ghidra_export/decompiled/99004_002dd6d0_FUN_002dd6d0.c",
+        "material_lighting_lane_ghidra_export/decompiled/99001_002dd6d0_FUN_002dd6d0.c",
+        "runtime_draw_handle_constructor_ghidra_export/decompiled/99051_002dd6d0_FUN_002dd6d0.c",
+        "shadow_gate_owner_ghidra_export/decompiled/99012_002dd6d0_FUN_002dd6d0.c",
+        "shadow_player_factory_manager_constructors_ghidra_export/decompiled/99065_002dd6d0_FUN_002dd6d0.c",
+        "shadow_texunit0_owner_ghidra_export/decompiled/99004_002dd6d0_FUN_002dd6d0.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaMaterialState_DisableFog",
+      "profiled_blocks": 1,
+      "samples": 217,
+      "total_profile_coverage": 0.00023634791284098906
+    },
+    {
+      "end": 3003852,
+      "entry": 3003584,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99030_002dd4c0_FUN_002dd4c0.c",
+        "material_lane_tail_ghidra_export/decompiled/99005_002dd4c0_FUN_002dd4c0.c",
+        "shadow_gate_owner_ghidra_export/decompiled/99011_002dd4c0_FUN_002dd4c0.c",
+        "shadow_texunit0_owner_ghidra_export/decompiled/99001_002dd4c0_FUN_002dd4c0.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_002dd4c0",
+      "profiled_blocks": 1,
+      "samples": 215,
+      "total_profile_coverage": 0.00023416959106365275
+    },
+    {
+      "end": 3420764,
+      "entry": 3420716,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "Lib_MemSet",
+      "profiled_blocks": 1,
+      "samples": 205,
+      "total_profile_coverage": 0.0002232779821769712
+    },
+    {
+      "end": 4616004,
+      "entry": 4615996,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99119_00466f3c_FUN_00466f3c.c",
+        "shadow_fragop_recordset_ghidra_export/decompiled/99058_00466f3c_FUN_00466f3c.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "Renderer_GetCurrentNormalMatrix",
+      "profiled_blocks": 1,
+      "samples": 187,
+      "total_profile_coverage": 0.0002036730861809445
+    },
+    {
+      "end": 3209176,
+      "entry": 3208400,
+      "ghidra_pseudocode": [
+        "actor_vs_packet_writer_ghidra_export/decompiled/99054_0030f4d0_FUN_0030f4d0.c",
+        "draw_handle_builder_ghidra_export/decompiled/99027_0030f4d0_FUN_0030f4d0.c",
+        "draw_handle_packet_owner_ghidra_export/decompiled/99000_0030f4d0_FUN_0030f4d0.c",
+        "material_lane_tail_ghidra_export/decompiled/99016_0030f4d0_FUN_0030f4d0.c",
+        "material_lighting_lane_ghidra_export/decompiled/99010_0030f4d0_FUN_0030f4d0.c",
+        "runtime_draw_handle_constructor_ghidra_export/decompiled/99070_0030f4d0_FUN_0030f4d0.c",
+        "shadow_fragop_recordset_ghidra_export/decompiled/99033_0030f4d0_FUN_0030f4d0.c",
+        "shadow_gate_owner_ghidra_export/decompiled/99018_0030f4d0_FUN_0030f4d0.c",
+        "shadow_pica_state_ghidra_export/decompiled/99042_0030f4d0_FUN_0030f4d0.c",
+        "shadow_player_factory_manager_constructors_ghidra_export/decompiled/99089_0030f4d0_FUN_0030f4d0.c",
+        "shadow_player_factory_manager_ghidra_export/decompiled/99259_0030f4d0_FUN_0030f4d0.c",
+        "shadow_submit_vtable_ghidra_export/decompiled/99005_0030f4d0_FUN_0030f4d0.c",
+        "shadow_texunit0_owner_ghidra_export/decompiled/99011_0030f4d0_FUN_0030f4d0.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "CmbRenderer_SubmitDrawHandle",
+      "profiled_blocks": 1,
+      "samples": 160,
+      "total_profile_coverage": 0.00017426574218690435
+    },
+    {
+      "end": 2958944,
+      "entry": 2958596,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "TextureTile_CopyNibbleSwapped",
+      "profiled_blocks": 1,
+      "samples": 159,
+      "total_profile_coverage": 0.0001731765812982362
+    },
+    {
+      "end": 3179752,
+      "entry": 3179748,
+      "ghidra_pseudocode": [
+        "shadow_cmb_record_parser_ghidra_export/decompiled/99011_003084e4_thunk_FUN_002c83fc.c",
+        "shadow_texunit0_runtime_writer_ghidra_export/decompiled/99009_003084e4_thunk_FUN_002c83fc.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "thunk_FUN_002c83fc",
+      "profiled_blocks": 1,
+      "samples": 153,
+      "total_profile_coverage": 0.0001666416159662273
+    },
+    {
+      "end": 4416112,
+      "entry": 4416076,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "NNSi_FndInitHeapHead",
+      "profiled_blocks": 1,
+      "samples": 153,
+      "total_profile_coverage": 0.0001666416159662273
+    },
+    {
+      "end": 4872600,
+      "entry": 4871976,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_004a5728",
+      "profiled_blocks": 1,
+      "samples": 153,
+      "total_profile_coverage": 0.0001666416159662273
+    },
+    {
+      "end": 3298796,
+      "entry": 3298768,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "SkeletonModel_GetLimbDescriptor",
+      "profiled_blocks": 1,
+      "samples": 151,
+      "total_profile_coverage": 0.000164463294188891
+    },
+    {
+      "end": 3522480,
+      "entry": 3522384,
+      "ghidra_pseudocode": [
+        "material_lighting_raw_field_consumer_ghidra_export/decompiled/99048_0035bf50_FUN_0035bf50.c",
+        "shadow_runtime_record_helpers_ghidra_export/decompiled/99262_0035bf50_FUN_0035bf50.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "RendererCommandList_Execute",
+      "profiled_blocks": 1,
+      "samples": 151,
+      "total_profile_coverage": 0.000164463294188891
+    },
+    {
+      "end": 3226312,
+      "entry": 3225700,
+      "ghidra_pseudocode": [
+        "shadow_pica_state_ghidra_export/decompiled/99046_00313864_FUN_00313864.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaVertexInputBuilder_Finalize",
+      "profiled_blocks": 1,
+      "samples": 143,
+      "total_profile_coverage": 0.0001557500070795458
+    },
+    {
+      "end": 4704608,
+      "entry": 4704568,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_0047c938",
+      "profiled_blocks": 1,
+      "samples": 143,
+      "total_profile_coverage": 0.0001557500070795458
+    },
+    {
+      "end": 2916004,
+      "entry": 2907040,
+      "ghidra_pseudocode": [
+        "cutscene_camera_blob_helper_ghidra_export/decompiled/99003_002c5ba0_Cutscene_ProcessCommands.c",
+        "scene_cutscene_context_ghidra_export/decompiled/99068_002c5ba0_Cutscene_ProcessCommands.c",
+        "title_intro_player_action_consumer_ghidra_export/decompiled/99011_002c5ba0_Cutscene_ProcessCommands.c"
+      ],
+      "maintained_source_mentions": [
+        "code/z_scene_cutscene_direct_player_event_table.c",
+        "code/z_scene_cutscene_lighting_table.c",
+        "code/z_scene_cutscene_player_action_table.c",
+        "code/z_scene_cutscene_set_time_table.c",
+        "code/z_title_intro_opening_actor_runtime.c",
+        "code/z_title_intro_opening_frame_runtime.c",
+        "code/z_title_intro_opening_orchestration.c"
+      ],
+      "name": "Cutscene_ProcessCommands",
+      "profiled_blocks": 1,
+      "samples": 142,
+      "total_profile_coverage": 0.00015466084619087764
+    },
+    {
+      "end": 3202464,
+      "entry": 3202456,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "GetGpuIpc",
+      "profiled_blocks": 1,
+      "samples": 141,
+      "total_profile_coverage": 0.00015357168530220948
+    },
+    {
+      "end": 3616908,
+      "entry": 3616884,
+      "ghidra_pseudocode": [
+        "material_lighting_raw_field_consumer_ghidra_export/decompiled/99070_00373074_oot3d_field_80x4_positive.c",
+        "scene_command_index_consumers_ghidra_export/decompiled/99143_00373074_oot3d_field_80x4_positive.c",
+        "shadow_active_pointer_candidate_ghidra_export/decompiled/99052_00373074_oot3d_field_80x4_positive.c",
+        "title_intro_actor_runtime_ghidra_export/decompiled/99320_00373074_oot3d_field_80x4_positive.c"
+      ],
+      "maintained_source_mentions": [
+        "runtime/runtime_helpers.c"
+      ],
+      "name": "oot3d_field_80x4_positive",
+      "profiled_blocks": 1,
+      "samples": 141,
+      "total_profile_coverage": 0.00015357168530220948
+    },
+    {
+      "end": 3620100,
+      "entry": 3619820,
+      "ghidra_pseudocode": [
+        "shadow_route_focus_ghidra_export/decompiled/99141_00373bec_FUN_00373bec.c",
+        "shadow_runtime_record_helpers_ghidra_export/decompiled/99279_00373bec_FUN_00373bec.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "MaterialAnimation_Update",
+      "profiled_blocks": 1,
+      "samples": 141,
+      "total_profile_coverage": 0.00015357168530220948
+    },
+    {
+      "end": 4232892,
+      "entry": 4232768,
+      "ghidra_pseudocode": [
+        "shadow_pica_state_ghidra_export/decompiled/99072_00409640_FUN_00409640.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "PicaTev_ConvertColorOperation",
+      "profiled_blocks": 1,
+      "samples": 139,
+      "total_profile_coverage": 0.00015139336352487317
+    },
+    {
+      "end": 4851776,
+      "entry": 4851736,
+      "ghidra_pseudocode": [],
+      "maintained_source_mentions": [],
+      "name": "FUN_004a0818",
+      "profiled_blocks": 1,
+      "samples": 139,
+      "total_profile_coverage": 0.00015139336352487317
+    },
+    {
+      "end": 3285820,
+      "entry": 3285724,
+      "ghidra_pseudocode": [
+        "fragop_penumbra_active_chain_ghidra_export/decompiled/99022_003222dc_FUN_003222dc.c"
+      ],
+      "maintained_source_mentions": [],
+      "name": "FUN_003222dc",
+      "profiled_blocks": 1,
+      "samples": 138,
+      "total_profile_coverage": 0.00015030420263620502
+    }
+  ],
+  "mapped_functions": 235,
+  "mapped_samples": 703171,
+  "profile_format": "oot3d_a32_hot_block_profile_v1",
+  "profile_selected_samples": 754767,
+  "profile_total_samples": 918138,
+  "unmapped_samples": 51596
+}

@@ -1,0 +1,88 @@
+{
+  "format": "oot3d_source_owner_import_v1",
+  "owner": "player_update",
+  "canonical_name": "Player_Update",
+  "owner_entry": "0x001E1B54",
+  "runtime_activation": "experimental_opt_in_native30_accepted",
+  "snapshot_id": "d5c292708f7f-ca8c22db1095",
+  "producer_revision": "d5c292708f7f25f921a066449db3cea43fad73c4",
+  "source_candidate_tree_sha256": "bd34876d370a42f263c01267e717daf8acecb59504773b9e83e5d68363cf4413",
+  "source_closure_sha256": "6478ba5e5eaa1bd5e412d12375f3de82ad4fedc0ccb00f4982644ae1d88f497c",
+  "runtime_import_work_order_sha256": "62d2e04f70f5b64ca87f061e3b14980ef2594c61527537c759d3a2e4f429f381",
+  "runtime_import_consumer_input_sha256": "ca8c22db10959f2e7655820bd41df6582669512b0cd6e14e783ef820bf596f95",
+  "maintained_source_file_sha256": "ea21b2da2b5472c3f1242edf076376f05a45d2954dce43573a5e4e33aa4c2408",
+  "code_bin_sha256": "16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220",
+  "owner_body": {
+    "range": "0x001E1B54-0x001E1DC8",
+    "size": 628,
+    "sha256": "7c0fc5405ce9576c5b4fe379c4fb0e009b148ad800b0663e58f16d47927dd12e"
+  },
+  "source_closure": {
+    "function_count": 1085,
+    "direct_dependency_count": 7,
+    "literal_cell_count": 13,
+    "source_graph_closed": true
+  },
+  "consumer_lowering": [
+    "complete maintained Player_Update semantic body retained",
+    "checked target-width GuestPtr and GuestRef access",
+    "13 target literal cells represented as runtime-loaded words",
+    "target STRH under the LT condition retained as a two-byte write",
+    "Actor_Spawn hard-float ABI preserved across core, s0-s2 and stack arguments",
+    "target binary32 arithmetic, float-to-signed conversion and FPSCR exception flags preserved",
+    "exact 0x60-byte owner frame and Input scratch at owner SP+0x10 preserved",
+    "Player_UpdateCommon retained as an independently measured target-address dependency"
+  ],
+  "validation": {
+    "owner_compile_target": "oot3d_source_player_update_owner",
+    "guest_pointer_test_target": "oot3d_source_player_update_guest_pointer_tests",
+    "guest_pointer_test_status": "pass",
+    "runtime_differential_test_target": "oot3d_source_player_update_tests",
+    "runtime_differential_status": "pass",
+    "runtime_differential_scenarios": 6,
+    "native30_process_status": "pass",
+    "native30_process_checkpoint": "link_dream_start.oot3dsav",
+    "native30_process_checkpoint_sha256": "16a08ff19bd6ccbe48c2e1de63dc000ca5e7136c78c5055a729a75005fdae31b",
+    "native30_process_frames": 30,
+    "native30_guest_refresh_frame": 2939,
+    "native30_system_ticks": "13133012413",
+    "native30_memory_content_fingerprint": "13455304922352739916",
+    "native30_pcm_fnv1a64": "8058772573127251443",
+    "native30_dsp_frames": 201,
+    "native30_actor_owner_calls": 29,
+    "native30_actor_callback_calls": 377,
+    "native30_cutscene_update_frame_calls": 29,
+    "native30_cutscene_process_commands_calls": 29,
+    "native30_camera_update_calls": 58,
+    "native30_owner_calls": 29,
+    "native30_dependency_calls": 29,
+    "native30_direct_dependency_calls": 29,
+    "native30_player_update_common_calls": 29,
+    "native30_actor_spawn_calls": 0,
+    "native30_guest_reads": 261,
+    "native30_guest_writes": 203,
+    "native30_scratch_calls": 29,
+    "native30_hard_float_calls": 0,
+    "native30_vfp_operations": 87,
+    "native30_float_conversions": 87,
+    "native30_failures": 0,
+    "native30_a32_report": {
+      "path": "I:\\oot3dre_work\\native_game\\player_update_a32_baseline_link_dream_accepted.json",
+      "sha256": "6cb820acbf2ab58f1d4fe64a22d2a36cf85a05ac1f593d61925c48aeb386c208"
+    },
+    "native30_source_report": {
+      "path": "I:\\oot3dre_work\\native_game\\player_update_source_link_dream_accepted.json",
+      "sha256": "df52b3030e99fea98654ff4293895d0a10251bdb17995de750d47bfe97e5dc61"
+    },
+    "implementation_fingerprints_expected_to_differ": [
+      "memory_state_fingerprint",
+      "process_state_fingerprint"
+    ]
+  },
+  "files": {
+    "generate_import.py": "1ccf1844692fe0a447a5cf1fcdd49b1e497c71cd9688ab4cc1564c0f2c856320",
+    "include/oot3d/player_update_owner.h": "9fcf9b1bbb9f9240f33953a1aa602d246ab9454d4ecad0cda8fe0ff227dde762",
+    "src/code/z_player_update_owner.cpp": "96ef1ff2b48c5734e67e033d577c19e63dab3e087bc1ab3e3c1dc0a27f63a774",
+    "tests/guest_pointer_tests.cpp": "1b25cf20f40141a99ef47347db48b6b6098313bc6a4e721764058b4b9c611314"
+  }
+}

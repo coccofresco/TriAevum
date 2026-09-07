@@ -1,0 +1,10 @@
+{
+  "input_rom_sha256": "D4670C962A6DD5C9CB953DE63E6316B1B03214D78CE3FD52B75CCA6BCFE6AEF2",
+  "code_bin_sha256": "16A6B0AA4C4784680220A6F780F7F8A73CFB205557AA9F9F0E705179E0613220",
+  "title_id": "0004000000033600",
+  "product_code": "CTR-P-AQEP",
+  "romfs_files": 1974,
+  "ghidra_functions": 9223,
+  "decompiled_files": 9223,
+  "code_base": "0x00100000"
+}

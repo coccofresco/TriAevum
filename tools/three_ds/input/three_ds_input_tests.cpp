@@ -1,0 +1,237 @@
+#include "three_ds_input.h"
+
+#include <cmath>
+#include <cstdint>
+#include <stdexcept>
+
+namespace {
+
+void Require(bool condition, const char* message) {
+    if (!condition) {
+        throw std::runtime_error(message);
+    }
+}
+
+class TestHostButtonSource final
+    : public ThreeDsRecomp::Input::HostButtonSource {
+  public:
+    ThreeDsRecomp::Input::KeyboardKey Keyboard =
+        ThreeDsRecomp::Input::KeyboardKey::None;
+    ThreeDsRecomp::Input::MouseButton Mouse =
+        ThreeDsRecomp::Input::MouseButton::None;
+    ThreeDsRecomp::Input::GamepadButton Gamepad =
+        ThreeDsRecomp::Input::GamepadButton::None;
+
+    bool IsKeyboardKeyHeld(
+        ThreeDsRecomp::Input::KeyboardKey key) const noexcept override {
+        return key == Keyboard;
+    }
+
+    bool IsMouseButtonHeld(
+        ThreeDsRecomp::Input::MouseButton button) const noexcept override {
+        return button == Mouse;
+    }
+
+    bool IsGamepadButtonHeld(
+        ThreeDsRecomp::Input::GamepadButton button) const noexcept override {
+        return button == Gamepad;
+    }
+};
+
+} // namespace
+
+int main() {
+    using namespace ThreeDsRecomp::Input;
+
+    const auto old3ds = CapabilitiesFor(HardwareProfile::Old3ds);
+    const auto circlePadPro =
+        CapabilitiesFor(HardwareProfile::Old3dsCirclePadPro);
+    const auto new3ds = CapabilitiesFor(HardwareProfile::New3ds);
+    Require(!old3ds.CStick &&
+                (old3ds.ButtonMask & kExtraHidButtonMask) == 0U &&
+                circlePadPro.CStick && new3ds.CStick &&
+                (new3ds.ButtonMask & kExtraHidButtonMask) ==
+                    kExtraHidButtonMask,
+            "3DS hardware-profile capabilities are inconsistent");
+    HardwareProfile parsedHardware{};
+    Require(ParseHardwareProfile(HardwareProfileName(
+                                     HardwareProfile::New3ds),
+                                 &parsedHardware) &&
+                parsedHardware == HardwareProfile::New3ds,
+            "hardware-profile names are not reusable round trips");
+
+    std::size_t old3dsSupported = 0;
+    std::size_t extendedSupported = 0;
+    MappingConfig digitalMapping;
+    digitalMapping.CirclePadSource = AnalogStick::Disabled;
+    digitalMapping.CStickSource = MotionSource::DigitalLook;
+    digitalMapping.NativeMotionSource = MotionSource::Disabled;
+    for (std::size_t index = 0; index < kDigitalControlCount; ++index) {
+        const auto control = static_cast<DigitalControl>(index);
+        const auto route = NativeRouteFor(control);
+        Require(route.Channel != NativeChannelKind::None,
+                "an abstract digital control has no native 3DS route");
+        DigitalControl parsedControl{};
+        Require(ParseDigitalControl(DigitalControlName(control),
+                                    &parsedControl) &&
+                    parsedControl == control,
+                "a native digital-control name does not round trip");
+        old3dsSupported += IsDigitalControlSupported(
+                              HardwareProfile::Old3ds, control)
+                              ? 1U
+                              : 0U;
+        extendedSupported += IsDigitalControlSupported(
+                                  HardwareProfile::New3ds, control)
+                                  ? 1U
+                                  : 0U;
+
+        DigitalState singleControl;
+        singleControl.SetHeld(control);
+        const auto frame = ResolveInput(
+            digitalMapping, {}, singleControl);
+        const auto expectedAxis = static_cast<std::int16_t>(
+            static_cast<std::int32_t>(route.AxisDirection) *
+            static_cast<std::int32_t>(kNativeStickMaximum));
+        switch (route.Channel) {
+        case NativeChannelKind::StandardHidButton:
+        case NativeChannelKind::ExtraHidButton:
+            Require(IsButtonHeld(frame, route.ButtonValue),
+                    "a digital button did not reach its native HID bit");
+            break;
+        case NativeChannelKind::CirclePadX:
+            Require(frame.Hid.CirclePadX == expectedAxis,
+                    "a digital control did not reach native Circle Pad X");
+            break;
+        case NativeChannelKind::CirclePadY:
+            Require(frame.Hid.CirclePadY == expectedAxis,
+                    "a digital control did not reach native Circle Pad Y");
+            break;
+        case NativeChannelKind::CStickX:
+            Require(frame.CStick.X == expectedAxis,
+                    "a digital control did not reach native C-Stick X");
+            break;
+        case NativeChannelKind::CStickY:
+            Require(frame.CStick.Y == expectedAxis,
+                    "a digital control did not reach native C-Stick Y");
+            break;
+        case NativeChannelKind::None:
+            Require(false, "unreachable unmapped native channel");
+            break;
+        }
+    }
+    Require(old3dsSupported == 16U &&
+                extendedSupported == kDigitalControlCount,
+            "hardware variants expose an inconsistent native control set");
+
+    ControlProfile parsedProfile{};
+    KeyboardKey parsedKey{};
+    MouseButton parsedMouse{};
+    GamepadButton parsedGamepad{};
+    AnalogStick parsedStick{};
+    MotionSource parsedMotion{};
+    Require(ParseControlProfile("keyboard_mouse", &parsedProfile) &&
+                parsedProfile == ControlProfile::KeyboardMouse &&
+                ParseKeyboardKey("arrow_up", &parsedKey) &&
+                parsedKey == KeyboardKey::ArrowUp &&
+                ParseMouseButton("forward", &parsedMouse) &&
+                parsedMouse == MouseButton::Forward &&
+                ParseGamepadButton("right_trigger", &parsedGamepad) &&
+                parsedGamepad == GamepadButton::RightTrigger &&
+                ParseAnalogStick("right", &parsedStick) &&
+                parsedStick == AnalogStick::Right &&
+                ParseMotionSource("controller_motion", &parsedMotion) &&
+                parsedMotion == MotionSource::ControllerMotion,
+            "cross-title host binding names do not round trip");
+
+    TestHostButtonSource hostButtons;
+    hostButtons.Keyboard = KeyboardKey::W;
+    hostButtons.Mouse = MouseButton::Left;
+    hostButtons.Gamepad = GamepadButton::A;
+    const HostBinding multiDeviceBinding{
+        KeyboardKey::W, KeyboardKey::ArrowUp,
+        MouseButton::Left, GamepadButton::A};
+    Require(IsHostBindingHeld(multiDeviceBinding, {}, hostButtons) &&
+                !IsHostBindingHeld(
+                    multiDeviceBinding,
+                    {.Keyboard = false, .Mouse = false, .Gamepad = false},
+                    hostButtons) &&
+                IsHostBindingHeld(
+                    multiDeviceBinding,
+                    {.Keyboard = false, .Mouse = true, .Gamepad = false},
+                    hostButtons),
+            "host bindings bypass device enablement or duplicate resolution");
+
+    DigitalState digital;
+    digital.SetHeld(DigitalControl::CirclePadUp);
+    digital.SetHeld(DigitalControl::A);
+    digital.SetHeld(DigitalControl::Zl);
+    digital.SetHeld(DigitalControl::CStickLeft);
+    MappingConfig mapping;
+    mapping.CirclePadSource = AnalogStick::Disabled;
+    mapping.CStickSource = MotionSource::DigitalLook;
+    mapping.NativeMotionSource = MotionSource::DigitalLook;
+    const auto native = ResolveInput(mapping, {}, digital);
+    Require(native.Hid.CirclePadY == kNativeStickMaximum &&
+                IsButtonHeld(native, Button::A) &&
+                IsButtonHeld(native, Button::Zl) &&
+                native.CStick.X == -kNativeStickMaximum &&
+                native.CStick.Kind == AxisInputKind::Absolute &&
+                native.Hid.GyroscopeValid,
+            "digital controls did not resolve exclusively to native 3DS channels");
+    const auto standardProjection = ProjectStandardHid(native);
+    const auto unsupportedExtra = ProjectExtraHid(
+        native, HardwareProfile::Old3ds);
+    const auto extendedProjection = ProjectExtraHid(
+        native, HardwareProfile::New3ds);
+    Require((standardProjection.Buttons & ButtonMask(Button::A)) != 0U &&
+                (standardProjection.Buttons & kExtraHidButtonMask) == 0U &&
+                unsupportedExtra.Buttons == 0U &&
+                unsupportedExtra.CStickX == 0 &&
+                extendedProjection.Buttons == ButtonMask(Button::Zl) &&
+                extendedProjection.CStickX == -kNativeStickMaximum,
+            "standard and Extra HID projections duplicate or lose channels");
+
+    PhysicalInputState mouse;
+    mouse.MouseDeltaX = 5;
+    mouse.MouseDeltaY = -2;
+    mapping.CStickSource = MotionSource::Mouse;
+    mapping.MouseCStickUnitsPerPixel = 4.0F;
+    const auto mouseFrame = ResolveInput(mapping, mouse, {});
+    Require(mouseFrame.CStick.X == 20 && mouseFrame.CStick.Y == 8 &&
+                mouseFrame.CStick.Kind == AxisInputKind::Relative,
+            "mouse did not map to the canonical C-Stick channel");
+
+    AxisInputAccumulator accumulator;
+    accumulator.Observe(mouseFrame.CStick);
+    accumulator.Observe({4, -3, AxisInputKind::Relative});
+    const auto accumulated = accumulator.Consume();
+    Require(accumulated.X == 24 && accumulated.Y == 5 &&
+                accumulator.Peek().X == 0 &&
+                accumulator.RelativeSamplesObserved() == 2U &&
+                accumulator.RelativeSamplesConsumed() == 1U,
+            "relative canonical C-Stick samples were not retained");
+
+    Require(ResolveGameplayPointerOwnership(false, false, true, true) &&
+                !ResolveGameplayPointerOwnership(true, false, true, true) &&
+                !ResolveGameplayPointerOwnership(false, true, true, true),
+            "pointer ownership ignored native touch or host GUI ownership");
+
+    const auto touch = MapPresentationPointToTouch(
+        200.0F, 120.0F, 400.0F, 240.0F, true, true);
+    const auto outsideTouch = MapPresentationPointToTouch(
+        0.0F, 0.0F, 400.0F, 240.0F, false, true);
+    Require(touch.Inside && touch.Pressed && touch.X == 160U &&
+                touch.Y == 120U && !outsideTouch.Inside &&
+                !outsideTouch.Pressed,
+            "presentation pointer did not resolve to native 3DS touch");
+
+    Require(ConvertHostAxisToNative(7000, 25) == 0 &&
+                ConvertHostAxisToNative(-7000, 25) == 0 &&
+                ConvertHostAxisToNative(32767, 25) ==
+                    kNativeStickMaximum &&
+                ConvertHostAxisToNative(-32768, 25) ==
+                    -kNativeStickMaximum,
+            "host analog conversion does not preserve the native range");
+
+    return 0;
+}

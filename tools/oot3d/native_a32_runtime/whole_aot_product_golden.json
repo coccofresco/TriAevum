@@ -1,0 +1,101 @@
+{
+  "format": "oot3d_whole_aot_product_golden_v1",
+  "captured_utc": "2026-08-23T17:01:30Z",
+  "provenance": {
+    "kind": "controlled_historical_oracle_equivalence_suite",
+    "format": "oot3d_whole_aot_product_equivalence_suite_v1",
+    "sha256": "a002ba7fb3aa2341db139370b0108ca87aae1e535fca64f321903ccbdd8eca8b"
+  },
+  "width": 1280,
+  "height": 720,
+  "artifacts": {
+    "graphics": {
+      "bytes": 9643,
+      "sha256": "2d7c91f5d157d0b3955a1c94324d106a45633953307dfbd29b887b33deccd2dd"
+    },
+    "kokiri_cutscene_state": {
+      "bytes": 75871428,
+      "sha256": "888e3f2d599ba42a792efaecbc9785d43ead00bfe2cfe732dfc6444828b9dd1b"
+    },
+    "kokiri_gameplay_state": {
+      "bytes": 75733149,
+      "sha256": "5badc2e239cfcf3ed0016a298114e80b6e5d583942099f2f6e9058646492f2bd"
+    },
+    "gameplay_input": {
+      "bytes": 208,
+      "sha256": "3c5c4b499001270276d8d198af66e738e80a3d44a2eaabb61d803df74c621b0f"
+    }
+  },
+  "scenarios": [
+    {
+      "name": "boot_title",
+      "frames": 901,
+      "checkpoint_interval": 100,
+      "load_artifact": "",
+      "input_artifact": "",
+      "audio_sha256": "",
+      "calls": {
+        "whole_aot": 959481,
+        "direct": 5276382,
+        "indirect": 260084,
+        "external": 695364
+      },
+      "checkpoints": {
+        "0": "bae563168bce554f84401ba2012cabe4a3531de5f22efb6a1e4bcccd58434c53",
+        "100": "46f69bc585bad22e64da423ac0f1a51583b8b710d215f9bd3afb8c6a42a89477",
+        "200": "5537c347def12f6bc62eb2890e36667bd88ddd48fdbeae34ccf1e2333b1887f7",
+        "300": "0b25226a1351ffc593dc93764e67b7aeef2e70f6558c9e5a0b53eaa29869f0c1",
+        "400": "e39cafbfe8ecd02593b8ff1c1987475d4b393d90769c4f5f61be14093df28b3e",
+        "500": "19aeffb504c8ed8d934e2c3b9ded1af70fed0ae3763b7d910be600a2eb8a87df",
+        "600": "c9cd159dde2cabea23119fd59077458e5882835a61d270a9ec41eda33e874216",
+        "700": "91491fcf8de0ded09ad8da67b8a34fadda5febc350742c9c950168b340af42e3",
+        "800": "c831901f97f5ccdf339de1bc6ab6cef47b3e5efe6bce61a79279edfae9eece38",
+        "900": "ef46ebe78f4bb3da52f5abac002f3e7c008ee55bc378ecaf186cf09213bebff5"
+      }
+    },
+    {
+      "name": "kokiri_cutscene",
+      "frames": 481,
+      "checkpoint_interval": 60,
+      "load_artifact": "kokiri_cutscene_state",
+      "input_artifact": "",
+      "audio_sha256": "435c5279fb9cb069114b95183bce3f1d0adede670a7a5bea954feef86ea48f08",
+      "calls": {
+        "whole_aot": 876717,
+        "direct": 5849753,
+        "indirect": 476752,
+        "external": 745482
+      },
+      "checkpoints": {
+        "0": "bae563168bce554f84401ba2012cabe4a3531de5f22efb6a1e4bcccd58434c53",
+        "60": "13c33ed3831b34e564160c3cddcf24e3a80386dfef2ea8455e15a79b08ba8d34",
+        "120": "68171ef1f2a545a028832307a20e592ab25591f07a94640646623d37a3dece77",
+        "180": "df9f79b8570685a7ee122f23746701997cb44a6e975cd5429627dd783ba83bcd",
+        "240": "fe45edb60292e8e38ce2835153928e5d632409720db71911e876d26a0d3a854a",
+        "300": "3aed2ff688f827a3dc075e8c57c7cd46c89334ae8019d88ab49080467065306b",
+        "360": "e06105305c2ffe55f02cc3f44fe623cf611fa1e65e61251409caa49a56b652f1",
+        "420": "a235f456ccf7a47a69a89b3b140518d84a0cd56cb9220985d2b1c837221909a6",
+        "480": "ec69d8002ae15169a878707ea290aa0318be9eae99f776ffbce43e0323481a38"
+      }
+    },
+    {
+      "name": "kokiri_gameplay_input",
+      "frames": 61,
+      "checkpoint_interval": 30,
+      "load_artifact": "kokiri_gameplay_state",
+      "input_artifact": "gameplay_input",
+      "audio_sha256": "51630cc4dc1e3855a108c237f1e6ef2c1a5dee38fbcfd1411df977604812b5f9",
+      "calls": {
+        "whole_aot": 115920,
+        "direct": 648482,
+        "indirect": 59468,
+        "external": 73576
+      },
+      "checkpoints": {
+        "0": "bae563168bce554f84401ba2012cabe4a3531de5f22efb6a1e4bcccd58434c53",
+        "30": "4349dec4bff93c2260b5c4ca4e2186b88a601fcebc5c42fde7eb9e0c4dae6ef3",
+        "60": "ff26f84da0a7a309b698bb76e78185afaff8915b387d0a6a08c722fd901fa9d8"
+      }
+    }
+  ]
+}

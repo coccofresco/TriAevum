@@ -1,0 +1,98 @@
+{
+  "format": "oot3d_source_leaf_import_v1",
+  "leaf": "csab_curve_eval",
+  "canonical_entries": [
+    {
+      "name": "Oot3d_EvalAnimationCurveS16",
+      "entry": "0x003084E8",
+      "range": "0x003084E8-0x003087A4",
+      "size": 700,
+      "sha256": "f69588293b59c4f6ba9adc241d5ba723fc7eac381a5c215971f315a8a29d6557"
+    },
+    {
+      "name": "Oot3d_EvalAnimationCurveF32",
+      "entry": "0x003087A4",
+      "range": "0x003087A4-0x00308A78",
+      "size": 724,
+      "sha256": "262ad42c78583bbde19e192a690269ad4fb38d2f87587c20a3ef2baab34532b4"
+    }
+  ],
+  "runtime_activation": "native30_accepted_hybrid_hot_overlay_promoted_with_whole_aot_fallback",
+  "snapshot_id": "d5c292708f7f-ca8c22db1095",
+  "producer_revision": "d5c292708f7f25f921a066449db3cea43fad73c4",
+  "maintained_source": "owners/player_update/source_candidate/src/code/z_skel_anime_csab.c",
+  "maintained_source_sha256": "9cfaffc60ca92e56e8d989b94480cd1f5bd2a2bdd7100292de334ac9e0983791",
+  "code_bin_sha256": "16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220",
+  "target_proven_corrections": [
+    {
+      "maintained_source": "sinf(angle)",
+      "target_semantics": "Math_TanF(angle)",
+      "evidence": "callsites 0x003086FC and 0x0030871C branch to Math_TanF at 0x003555D8",
+      "consumer_action": "checked revision-local Math_TanF range reduction, classifier and VFP polynomial"
+    }
+  ],
+  "consumer_lowering": [
+    "native CSAB bytes are copied from checked guest memory without asset conversion",
+    "target FPSCR rounding, flush-to-zero, default-NaN and comparison NZCV are preserved",
+    "target evaluator and nested Math_TanF stack writes remain observable",
+    "native Math_TanF constants, range reduction and final APSR ownership are reproduced",
+    "malformed curves, non-finite inputs and unsupported exception-enable modes decline before guest mutation"
+  ],
+  "validation": {
+    "differential_test_target": "oot3d_source_overlay_loader_tests plus opt-in whole-AOT hot-path comparison",
+    "differential_test_status": "pass",
+    "native30_link_dream": {
+      "checkpoint": "link_dream_start.oot3dsav",
+      "checkpoint_sha256": "16a08ff19bd6ccbe48c2e1de63dc000ca5e7136c78c5055a729a75005fdae31b",
+      "presentation_frames": 60,
+      "guest_refresh_frame": 2940,
+      "system_ticks": "13137480944",
+      "memory_content_fingerprint": "2319055162437664213",
+      "memory_state_fingerprint": "2188857816430513968",
+      "process_state_fingerprint": "1587528270872453961",
+      "s16_calls": 1350,
+      "f32_calls": 14946,
+      "fallbacks": 0,
+      "guest_bytes_read": 2333352,
+      "a32_report": {
+        "path": "I:\\oot3dre_work\\native_game\\csab_curve_a32_baseline_link_dream.json",
+        "sha256": "044d02b09cffe40a1402fc9d03a0485c717cb1de04b52081362ae70a9ff892b1"
+      },
+      "source_report": {
+        "path": "I:\\oot3dre_work\\native_game\\csab_curve_source_link_dream.json",
+        "sha256": "3446368b8c7958c9e48aee0e6f94845076c8127b379cf33c848109813dac57ac"
+      }
+    },
+    "native30_profile": {
+      "presentation_frames": 180,
+      "s16_calls": 4050,
+      "f32_calls": 50162,
+      "fallbacks": 0,
+      "sampled_a32_blocks_before": 201430,
+      "sampled_a32_blocks_after": 193200,
+      "sampled_a32_block_reduction_percent": 4.0858,
+      "performance_claim": "none; independent wall-clock dispatch measurements are too variable",
+      "a32_report": {
+        "path": "I:\\oot3dre_work\\native_game\\source_gameplay_profile_link_dream_a32_hotspots.json",
+        "sha256": "c052465abf71ed3e96c223f4068235ff9a96681374b2eda8e28983d21a2cd55f"
+      },
+      "source_report": {
+        "path": "I:\\oot3dre_work\\native_game\\source_gameplay_profile_csab_link_dream_a32_hotspots.json",
+        "sha256": "f1784b3a9fb8cb9044457bd5038c6fcc08f95ba85c4a6f2d306e47aca34eafc1"
+      }
+    }
+  },
+  "files": {
+    "generate_import.py": "bfe76b3c460e0e52ad90b9ff5ac15ce0941b19cfc739b2d0d9eb58983905b68e",
+    "include/oot3d/csab_curve_eval.h": "5611f21c6973e03a090c4179b690b58e388d8a8684601fbf6afe7cb829e84745",
+    "src/code/z_csab_curve_eval.cpp": "6ac8a72b488806b8507779b558d6b3a18e6f6d5e0eb80ef7e51205a1b38e55e3",
+    "../../native_game_runtime/oot3d_source_csab_curve_runtime.h": "75e57a40f388e828b821f68577d7360389379117d97e04a3a3ee0e57bcf131d2",
+    "../../native_game_runtime/oot3d_source_csab_curve_runtime.cpp": "f86abe29026b9e1c14e6177d3a62f0889ec93d132e401466fa16ed76e647ca41",
+    "../../native_game_runtime/oot3d_source_csab_curve_core.h": "5120d92bc5a3224daeec8a4fdb44b5518caaa3ed4b4f34b821e9520c78b07d48",
+    "../../native_game_runtime/oot3d_source_csab_curve_core.cpp": "ecc70976436ffc8fd0a78c8e6f1c4b05772391365fe0bf9027aa5cef3609f10d",
+    "../../source_overlay/oot3d_source_overlay_csab_curves.h": "43d9d226af042816008e29afdcff8a916778ddb0a14884f4d22e9cb0ebb80f37",
+    "../../source_overlay/oot3d_source_overlay_csab_curves.cpp": "eb75ec69a105204a5222e034e6f42bc2b8afd0a9bb9019e75ecf8721e0649b9b",
+    "../../source_overlay/oot3d_source_overlay_loader_tests.cpp": "1958a07f0fb922675744b21d0bd336d1c8738b3e036cdc20ed0a49492e6622eb",
+    "../../native_game_runtime/oot3d_source_csab_curve_runtime_tests.cpp": "ee60336b7859d1d48a1dfb8a8cd82c4377cb18fc7fee856e9a11976b001e1c0e"
+  }
+}

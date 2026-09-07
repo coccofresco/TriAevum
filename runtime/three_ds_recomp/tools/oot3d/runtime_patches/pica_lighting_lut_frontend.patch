@@ -1,0 +1,109 @@
+diff --git a/tools/oot3d/native_pica_frontend/oot3d_native_pica_frontend.cpp b/tools/oot3d/native_pica_frontend/oot3d_native_pica_frontend.cpp
+index 12dd3f925..2b627fec8 100644
+--- a/tools/oot3d/native_pica_frontend/oot3d_native_pica_frontend.cpp
++++ b/tools/oot3d/native_pica_frontend/oot3d_native_pica_frontend.cpp
+@@ -34,0 +35,3 @@ constexpr uint16_t kPicaFogLutDataEnd = 0x0EFU;
++constexpr uint16_t kPicaLightingLutIndex = 0x1C5U;
++constexpr uint16_t kPicaLightingLutDataBegin = 0x1C8U;
++constexpr uint16_t kPicaLightingLutDataEnd = 0x1CFU;
+@@ -247,0 +251,19 @@ void Oot3dNativePicaFrontend::ApplyShaderRegisterSideEffects(
++    if (registerId >= kPicaLightingLutDataBegin &&
++        registerId <= kPicaLightingLutDataEnd) {
++        const uint32_t cursor = mPicaRegisters[kPicaLightingLutIndex];
++        const size_t table = (cursor >> 8U) & 0x1FU;
++        const size_t index = cursor & 0xFFU;
++        const bool validTable = table == 0U || table == 1U || table == 3U ||
++                                (table >= 4U && table <= 6U) ||
++                                (table >= 8U && table <= 23U);
++        if (validTable) {
++            if (mLightingLuts.use_count() != 1) {
++                mLightingLuts =
++                    std::make_shared<Oot3dPicaLightingLutState>(*mLightingLuts);
++            }
++            (*mLightingLuts)[table][index] = writeValue & 0xFFFFFFU;
++        }
++        mPicaRegisters[kPicaLightingLutIndex] =
++            (cursor & 0xFFFFFF00U) | ((index + 1U) & 0xFFU);
++        return;
++    }
+@@ -463 +485 @@ bool Oot3dNativePicaFrontend::SubmitGspCommand(
+-                    mVertexShader, mGeometryShader, mFogLut,
++                    mVertexShader, mGeometryShader, mFogLut, mLightingLuts,
+@@ -585 +607 @@ nlohmann::json Oot3dNativePicaFrontend::CaptureState() const {
+-        {"format", "oot3d_native_pica_frontend_state_v1"},
++        {"format", "oot3d_native_pica_frontend_state_v2"},
+@@ -590,0 +613 @@ nlohmann::json Oot3dNativePicaFrontend::CaptureState() const {
++        {"lighting_luts", *mLightingLuts},
+@@ -609,0 +633 @@ bool Oot3dNativePicaFrontend::RestoreState(const nlohmann::json& state,
++        const std::string format = state.value("format", std::string{});
+@@ -611,2 +635,2 @@ bool Oot3dNativePicaFrontend::RestoreState(const nlohmann::json& state,
+-            state.value("format", std::string{}) !=
+-                "oot3d_native_pica_frontend_state_v1") {
++            (format != "oot3d_native_pica_frontend_state_v1" &&
++             format != "oot3d_native_pica_frontend_state_v2")) {
+@@ -667,0 +692,5 @@ bool Oot3dNativePicaFrontend::RestoreState(const nlohmann::json& state,
++        mLightingLuts = format == "oot3d_native_pica_frontend_state_v2"
++                            ? std::make_shared<Oot3dPicaLightingLutState>(
++                                  state.at("lighting_luts")
++                                      .get<Oot3dPicaLightingLutState>())
++                            : std::make_shared<Oot3dPicaLightingLutState>();
+diff --git a/tools/oot3d/native_pica_frontend/oot3d_native_pica_frontend.h b/tools/oot3d/native_pica_frontend/oot3d_native_pica_frontend.h
+index c3fca6a47..7e5b66b1c 100644
+--- a/tools/oot3d/native_pica_frontend/oot3d_native_pica_frontend.h
++++ b/tools/oot3d/native_pica_frontend/oot3d_native_pica_frontend.h
+@@ -6,0 +7 @@
++#include <memory>
+@@ -88,0 +90,3 @@ struct Oot3dPicaShaderState {
++using Oot3dPicaLightingLutState =
++    std::array<std::array<uint32_t, 256>, 24>;
++
+@@ -96,0 +101 @@ struct Oot3dPicaDrawPacket {
++    std::shared_ptr<const Oot3dPicaLightingLutState> LightingLuts;
+@@ -188,0 +194,2 @@ class Oot3dNativePicaFrontend {
++    std::shared_ptr<Oot3dPicaLightingLutState> mLightingLuts =
++        std::make_shared<Oot3dPicaLightingLutState>();
+diff --git a/tools/oot3d/native_pica_frontend/oot3d_native_pica_frontend_tests.cpp b/tools/oot3d/native_pica_frontend/oot3d_native_pica_frontend_tests.cpp
+index 4a8bb9c36..be52ffb38 100644
+--- a/tools/oot3d/native_pica_frontend/oot3d_native_pica_frontend_tests.cpp
++++ b/tools/oot3d/native_pica_frontend/oot3d_native_pica_frontend_tests.cpp
+@@ -369,0 +370,40 @@ int main() {
++
++    Oot3dNativeGame::Oot3dNativePicaFrontend lightingLutFrontend;
++    Oot3dNativeGame::Oot3dGspCommandPacket lightingLutUpload{};
++    lightingLutUpload.Control = 1;
++    lightingLutUpload.Parameters[0] = 0x14004200U;
++    constexpr uint32_t lightingLutValue0 = 0x00123456U;
++    constexpr uint32_t lightingLutValue1 = 0x00ABCDEFU;
++    constexpr std::array<uint32_t, 5> lightingLutUploadCommands{
++        (16U << 8U) | 255U, 0x000F01C5U, lightingLutValue0,
++        0x801F01C8U, lightingLutValue1};
++    lightingLutUpload.Parameters[1] = static_cast<uint32_t>(
++        lightingLutUploadCommands.size() * sizeof(uint32_t));
++    Require(lightingLutFrontend.SubmitGspCommand(
++                lightingLutUpload, lightingLutUploadCommands, &error),
++            error);
++    Oot3dNativeGame::Oot3dGspCommandPacket lightingLutDraw{};
++    lightingLutDraw.Control = 1;
++    lightingLutDraw.Parameters[0] = 0x14004300U;
++    lightingLutDraw.Parameters[1] = 8U;
++    Require(lightingLutFrontend.SubmitGspCommand(
++                lightingLutDraw, fogDrawCommands, &error),
++            error);
++    const auto& lightingLutPacket =
++        lightingLutFrontend.PendingDrawPackets().back();
++    Require(lightingLutFrontend.ReadPicaRegister(0x1C5U) ==
++                ((16U << 8U) | 1U) &&
++                lightingLutPacket.LightingLuts != nullptr &&
++                (*lightingLutPacket.LightingLuts)[16][255] ==
++                    lightingLutValue0 &&
++                (*lightingLutPacket.LightingLuts)[16][0] ==
++                    lightingLutValue1,
++            "PICA lighting LUT upload did not preserve table and wrapped index");
++
++    const auto lightingLutState = lightingLutFrontend.CaptureState();
++    Oot3dNativeGame::Oot3dNativePicaFrontend restoredLightingLutFrontend;
++    Require(restoredLightingLutFrontend.RestoreState(lightingLutState, &error),
++            error);
++    Require(restoredLightingLutFrontend.CaptureState().at("lighting_luts") ==
++                lightingLutState.at("lighting_luts"),
++            "PICA lighting LUT state did not survive a savestate round-trip");

@@ -1,0 +1,22 @@
+if(NOT NRI_SOURCE_DIR)
+    message(FATAL_ERROR "NRI_SOURCE_DIR is required")
+endif()
+if(NOT NGX_VERSION)
+    message(FATAL_ERROR "NGX_VERSION is required")
+endif()
+
+set(_cmake "${NRI_SOURCE_DIR}/CMakeLists.txt")
+file(READ "${_cmake}" _source)
+set(_replacement "set(NGX_VERSION \"${NGX_VERSION}\")")
+string(FIND "${_source}" "${_replacement}" _already_patched)
+if(NOT _already_patched EQUAL -1)
+    return()
+endif()
+
+string(REGEX MATCH "set\\(NGX_VERSION \"[0-9]+\\.[0-9]+\\.[0-9]+\"\\)"
+    _existing "${_source}")
+if(NOT _existing)
+    message(FATAL_ERROR "NRI NGX version declaration changed; update the OOT3D patch")
+endif()
+string(REPLACE "${_existing}" "${_replacement}" _source "${_source}")
+file(WRITE "${_cmake}" "${_source}")

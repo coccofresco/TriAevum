@@ -1,0 +1,24 @@
+{
+  "schema": "oot3d_temporal_inventory_config_v1",
+  "owners": [
+    {
+      "id": "player",
+      "roots": ["001e1b54"],
+      "maximum_call_depth": 2,
+      "stop_entries": []
+    },
+    {
+      "id": "cutscene",
+      "roots": ["00321f50", "002c5ba0"],
+      "maximum_call_depth": 1,
+      "stop_entries": []
+    },
+    {
+      "id": "camera",
+      "roots": ["002d84c4"],
+      "maximum_call_depth": 1,
+      "stop_entries": []
+    }
+  ],
+  "site_overrides": []
+}

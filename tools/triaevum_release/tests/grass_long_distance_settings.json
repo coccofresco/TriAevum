@@ -1,0 +1,9 @@
+{
+  "Graphics": {
+    "Grass": {
+      "Quality": "Custom",
+      "Budget": { "DrawDistance": 20000 },
+      "Performance": { "LodReferenceDistance": 5000 }
+    }
+  }
+}

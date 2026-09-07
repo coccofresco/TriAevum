@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "imports": {
+    "compiler_runtime": {
+      "provider": "host_toolchain",
+      "symbols": ["___chkstk_ms"]
+    },
+    "host_c_runtime": {
+      "provider": "host_c_runtime",
+      "symbols": ["cosf", "memcpy", "memmove", "pow", "sinf", "sqrtf", "strlen"]
+    },
+    "ctr_platform": {
+      "provider": "oot3d_ctr_host_services",
+      "symbols": ["getThreadCommandBuffer", "svcCloseHandle", "svcSendSyncRequest"]
+    },
+    "host_platform_hook": {
+      "provider": "oot3d_ctr_host_services",
+      "symbols": [
+        "oot3d_host_ctr_clear_event",
+        "oot3d_host_ctr_arbitrate_address",
+        "oot3d_host_ctr_connect_to_port",
+        "oot3d_host_ctr_control_memory",
+        "oot3d_host_ctr_create_address_arbiter",
+        "oot3d_host_ctr_create_event",
+        "oot3d_host_ctr_create_thread",
+        "oot3d_host_ctr_exit_process",
+        "oot3d_host_ctr_exit_thread",
+        "oot3d_host_ctr_get_resource_limit",
+        "oot3d_host_ctr_resource_limit_current_value",
+        "oot3d_host_ctr_map_memory_block",
+        "oot3d_host_ctr_release_mutex",
+        "oot3d_host_ctr_signal_event",
+        "oot3d_host_ctr_sleep_thread",
+        "oot3d_host_ctr_unmap_memory_block",
+        "oot3d_host_register_target_function",
+        "oot3d_host_finalize_target_function_registry",
+        "oot3d_host_resolve_target_function",
+        "oot3d_host_target_thread_pointer",
+        "oot3d_host_target_system_tick",
+        "oot3d_host_owner_actor_global_resolve",
+        "oot3d_host_owner_actor_system_tick",
+        "oot3d_host_system_arena_current_thread_id",
+        "oot3d_host_system_arena_wait",
+        "oot3d_host_system_arena_wake_one"
+      ]
+    }
+  }
+}

@@ -1,0 +1,152 @@
+{
+  "format": "oot3d_whole_aot_scenario_catalog_v1",
+  "purpose": "determinism_and_runtime_coverage",
+  "checkpoint_root": "checkpoints",
+  "promotion_policy": "These scenarios are not visual goldens unless an independently controlled oracle is recorded.",
+  "scenarios": [
+    {
+      "name": "file_select_empty_slots",
+      "category": "frontend_ui",
+      "description": "Native file-select UI with coherent empty slots.",
+      "state": {
+        "path": "file_select_empty_slots_coherent_20260723.oot3dsav",
+        "bytes": 75644212,
+        "sha256": "6b3bbd8f3c10b5d52602c4d7b796efdd18f21c10a2a2ec60549d92599a76687a"
+      },
+      "input_profile": "idle",
+      "chunks": 1,
+      "frames_per_chunk": 180,
+      "seed": 1328497715,
+      "resume_validation": {
+        "total_frames": 180,
+        "split_frame": 73
+      }
+    },
+    {
+      "name": "link_dream",
+      "category": "cutscene",
+      "description": "Opening Link dream cutscene.",
+      "state": {
+        "path": "link_dream_start.oot3dsav",
+        "bytes": 77350003,
+        "sha256": "16a08ff19bd6ccbe48c2e1de63dc000ca5e7136c78c5055a729a75005fdae31b"
+      },
+      "input_profile": "idle",
+      "chunks": 1,
+      "frames_per_chunk": 240,
+      "seed": 1328497716,
+      "resume_validation": {
+        "total_frames": 240,
+        "split_frame": 97
+      }
+    },
+    {
+      "name": "navi_kokiri_flight",
+      "category": "cutscene_streaming",
+      "description": "Navi flight and Kokiri scene-loading path.",
+      "state": {
+        "path": "navi_kokiri_flight_start.oot3dsav",
+        "bytes": 75538010,
+        "sha256": "0c8e3b9590ad3f2a8e45e0985c78f04f635129b8e12f85162c12ff7d33b2f13e"
+      },
+      "input_profile": "idle",
+      "chunks": 2,
+      "frames_per_chunk": 300,
+      "seed": 1328497717,
+      "resume_validation": {
+        "total_frames": 600,
+        "split_frame": 257
+      }
+    },
+    {
+      "name": "kokiri_preload_transition",
+      "category": "scene_transition",
+      "description": "Checkpoint immediately before Kokiri main-scene materialization.",
+      "state": {
+        "path": "navi_kokiri_preload_10380.oot3dsav",
+        "bytes": 76480389,
+        "sha256": "ffe9dcac590b55429a124a448d969cbae636a09a3b7a31595c01968244744fb2"
+      },
+      "input_profile": "idle",
+      "chunks": 1,
+      "frames_per_chunk": 180,
+      "seed": 1328497718,
+      "resume_validation": {
+        "total_frames": 180,
+        "split_frame": 79
+      }
+    },
+    {
+      "name": "link_house_gameplay",
+      "category": "interior_gameplay",
+      "description": "Link house gameplay and interior camera path.",
+      "state": {
+        "path": "timing_link_house_11800.oot3dsav",
+        "bytes": 74350595,
+        "sha256": "109ffd611714cfebe283170161eadb21f0aa1981ef011062def211f0ff690a47"
+      },
+      "input_profile": "exploration",
+      "chunks": 1,
+      "frames_per_chunk": 180,
+      "seed": 1328497719,
+      "resume_validation": {
+        "total_frames": 180,
+        "split_frame": 83
+      }
+    },
+    {
+      "name": "kokiri_hud_gameplay",
+      "category": "outdoor_gameplay_hud",
+      "description": "Kokiri gameplay with the native minimap and HUD visible.",
+      "state": {
+        "path": "hud_minimap_visible_20260721.oot3dsav",
+        "bytes": 76858907,
+        "sha256": "dd866a2cf49d447131287620898eab273af72e7a9a2a4aabbf194bd7291d210f"
+      },
+      "input_profile": "exploration",
+      "chunks": 1,
+      "frames_per_chunk": 240,
+      "seed": 1328497720,
+      "resume_validation": {
+        "total_frames": 240,
+        "split_frame": 101
+      }
+    },
+    {
+      "name": "kokiri_ladder_interaction",
+      "category": "player_interaction",
+      "description": "Forward movement from the established ladder-approach checkpoint.",
+      "state": {
+        "path": "ladder_approach_28630.oot3dsav",
+        "bytes": 76073316,
+        "sha256": "80cf2d5df4abea7707c508854feb9c3dfc9fa188aa489bf44803f4f3d99fa83a"
+      },
+      "input_profile": "forward",
+      "chunks": 1,
+      "frames_per_chunk": 180,
+      "seed": 1328497721,
+      "resume_validation": {
+        "total_frames": 180,
+        "split_frame": 71
+      }
+    },
+    {
+      "name": "topscreen_items",
+      "category": "pause_ui",
+      "description": "Top-screen items-page diagnostic checkpoint.",
+      "state": {
+        "path": "topscreen_items_diag_temp.oot3dsav",
+        "bytes": 76227012,
+        "sha256": "3c5e9ee3ca490bc402f3345c955a9162f415b56ce2473d39cef26bde3d508afd"
+      },
+      "input_profile": "idle",
+      "chunks": 1,
+      "frames_per_chunk": 180,
+      "seed": 1328497722,
+      "resume_validation": {
+        "total_frames": 180,
+        "split_frame": 67
+      }
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+#include "oot3d/boss_va.h"
+
+/*
+ * OOT3D split helper recovered from N64 BossVa_SetupZapperDamaged.
+ * The N64 logic selects one of the damage animations, starts the filter
+ * transition, clears the burst flag, and installs BossVa_ZapperDamaged.
+ */
+void oot3d_boss_va_setup_zapper_damaged(Oot3dBossVa* this) {
+#if defined(__arm__)
+    __asm__ volatile(
+        ".syntax unified\n"
+        "stmdb sp!, {r4, lr}\n"
+        "mov r4, r0\n"
+        "vpush {d8, d9}\n"
+        "sub sp, sp, #0x48\n"
+        "add r1, r0, #0x1d4\n"
+        "mov r2, #0x44\n"
+        "add r0, sp, #4\n"
+        "bl FUN_00371738\n"
+        "bl FUN_003759d0\n"
+        "vmov r0, s0\n"
+        "vldr.32 s16, .Loot3d_boss_va_setup_zapper_damaged_morph\n"
+        "vldr.32 s17, .Loot3d_boss_va_setup_zapper_damaged_start\n"
+        "vldr.32 s18, .Loot3d_boss_va_setup_zapper_damaged_speed\n"
+        "cmp r0, #0x3f000000\n"
+        "ble .Loot3d_boss_va_setup_zapper_damaged_anim_c\n"
+        "mov r1, #0xb\n"
+        "add r0, r4, #0x1a4\n"
+        "bl FUN_0036ae14\n"
+        "vmov s0, r0\n"
+        "vmov.f32 s3, s16\n"
+        "vmov.f32 s1, s17\n"
+        "mov r2, #3\n"
+        "mov r1, #0xb\n"
+        "add r0, r4, #0x1a4\n"
+        "vcvt.f32.s32 s2, s0\n"
+        "vmov.f32 s0, s18\n"
+        "bl FUN_00375c08\n"
+        "b .Loot3d_boss_va_setup_zapper_damaged_filter\n"
+        ".Loot3d_boss_va_setup_zapper_damaged_anim_c:\n"
+        "mov r1, #0xc\n"
+        "add r0, r4, #0x1a4\n"
+        "bl FUN_0036ae14\n"
+        "vmov s0, r0\n"
+        "vmov.f32 s3, s16\n"
+        "vmov.f32 s1, s17\n"
+        "mov r2, #3\n"
+        "mov r1, #0xc\n"
+        "add r0, r4, #0x1a4\n"
+        "vcvt.f32.s32 s2, s0\n"
+        "vmov.f32 s0, s18\n"
+        "bl FUN_00375c08\n"
+        ".Loot3d_boss_va_setup_zapper_damaged_filter:\n"
+        "mov r3, #0xc\n"
+        "str r3, [sp, #0]\n"
+        "mov r3, #0\n"
+        "mov r2, #0xff\n"
+        "mov r1, r3\n"
+        "mov r0, r4\n"
+        "bl FUN_00375ed8\n"
+        "mov r0, #0\n"
+        "strb r0, [r4, #0xf95]\n"
+        "ldr r0, .Loot3d_boss_va_setup_zapper_damaged_action\n"
+        "str r0, [r4, #0xf90]\n"
+        "add sp, sp, #0x48\n"
+        "vpop {d8, d9}\n"
+        "ldmia sp!, {r4, pc}\n"
+        ".align 2\n"
+        ".Loot3d_boss_va_setup_zapper_damaged_morph:\n"
+        ".word 0x00000000\n"
+        ".Loot3d_boss_va_setup_zapper_damaged_start:\n"
+        ".word 0x00000000\n"
+        ".Loot3d_boss_va_setup_zapper_damaged_speed:\n"
+        ".word 0x3f800000\n"
+        ".Loot3d_boss_va_setup_zapper_damaged_action:\n"
+        ".word oot3d_boss_va_zapper_damaged\n"
+    );
+    __builtin_unreachable();
+#else
+    (void)this;
+#endif
+}

@@ -1,0 +1,30 @@
+{
+  "schema": "oot3d.demo_host.input_timeline.v1",
+  "segments": [
+    {
+      "start_frame": 0,
+      "end_frame_exclusive": 30
+    },
+    {
+      "start_frame": 30,
+      "end_frame_exclusive": 120,
+      "move_y": 1.0
+    },
+    {
+      "start_frame": 120,
+      "end_frame_exclusive": 210,
+      "move_x": 1.0,
+      "move_y": 0.35,
+      "fast": true
+    },
+    {
+      "start_frame": 210,
+      "end_frame_exclusive": 270,
+      "move_y": -1.0
+    },
+    {
+      "start_frame": 270,
+      "end_frame_exclusive": 360
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "schema": "oot3d_native_controls_v1",
+  "profile": "keyboard_mouse",
+  "devices": {
+    "keyboard": true,
+    "mouse": true,
+    "controller": true
+  },
+  "capture_mouse": true,
+  "controller_guid": "",
+  "analog": {
+    "movement_stick": "left",
+    "movement_dead_zone_percent": 18,
+    "look_dead_zone_percent": 20,
+    "trigger_dead_zone_percent": 20
+  },
+  "aim": {
+    "source": "automatic",
+    "mouse_degrees_per_pixel": 0.35,
+    "right_stick_max_degrees_per_second": 180.0,
+    "gyroscope_sensitivity": 1.0,
+    "accelerometer_sensitivity": 1.0,
+    "invert_x": false,
+    "invert_y": false
+  },
+  "free_camera": {
+    "source": "mouse",
+    "mouse_units_per_pixel": 4.0,
+    "motion_sensitivity": 1.0
+  },
+  "calibration": {
+    "gyroscope_bias_dps": [0.0, 0.0, 0.0],
+    "accelerometer_neutral": [0.0, -1.0, 0.0]
+  }
+}

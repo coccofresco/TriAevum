@@ -1,0 +1,86 @@
+{
+  "format": "oot3d_source_owner_import_v1",
+  "owner": "camera_update",
+  "canonical_name": "Camera_Update",
+  "owner_entry": "0x002D84C4",
+  "runtime_activation": "experimental_opt_in_native30_accepted",
+  "snapshot_id": "d5c292708f7f-ca8c22db1095",
+  "producer_revision": "d5c292708f7f25f921a066449db3cea43fad73c4",
+  "source_candidate_tree_sha256": "669b5d6a1b7bd6fd9eaa14c60f68f5e91501e21e099fe64b544c9b4104b284d7",
+  "source_closure_sha256": "d989a8a3c3c6497f0bd3433e5101a521d93f07b3d9eb3331673f7bc91744b2cb",
+  "runtime_import_work_order_sha256": "f3ce58633d0e1de4ba135cc416507284e9fa9361f3560712d27d0923fe794580",
+  "runtime_import_consumer_input_sha256": "ca8c22db10959f2e7655820bd41df6582669512b0cd6e14e783ef820bf596f95",
+  "maintained_source_file_sha256": "4c6d134cebc3049e2c367e7918ceb5c4edc1a54baa646326617fdd1f2db14b0f",
+  "code_bin_sha256": "16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220",
+  "owner_body": {
+    "range": "0x002D84C4-0x002D948C",
+    "size": 4040,
+    "sha256": "9064f6a8d3677fea176a2a1c07cf0ecb5560e6ebd98ca00e99b422acc8c60981"
+  },
+  "source_closure": {
+    "function_count": 281,
+    "direct_dependency_count": 31,
+    "literal_cell_count": 10,
+    "source_graph_closed": true
+  },
+  "consumer_lowering": [
+    "complete maintained Camera_Update semantic body retained",
+    "checked target-width GuestPtr and GuestRef access",
+    "target literal cells represented as runtime-loaded words",
+    "six-byte hidden-sret owner ABI preserved",
+    "HFA Vec3f dependency results preserved in s0-s2",
+    "scratch marshalling supports both core and stack arguments",
+    "camera mode callback retained as checked target-address dispatch",
+    "FUN_002d064c receives the FUN_0047bff8 data index proven in r1 at target call site 0x002D87E8",
+    "host floating-point rounding follows FPSCR RMode for the complete owner boundary"
+  ],
+  "validation": {
+    "owner_compile_target": "oot3d_source_camera_update_owner",
+    "guest_pointer_test_target": "oot3d_source_camera_update_guest_pointer_tests",
+    "guest_pointer_test_status": "pass",
+    "runtime_differential_test_target": "oot3d_source_camera_update_tests",
+    "runtime_differential_status": "pass",
+    "runtime_differential_scenarios": 5,
+    "native30_process_status": "pass",
+    "native30_process_checkpoint": "link_dream_start.oot3dsav",
+    "native30_process_checkpoint_sha256": "16a08ff19bd6ccbe48c2e1de63dc000ca5e7136c78c5055a729a75005fdae31b",
+    "native30_process_frames": 30,
+    "native30_guest_refresh_frame": 2939,
+    "native30_system_ticks": "13133012413",
+    "native30_memory_content_fingerprint": "13455304922352739916",
+    "native30_pcm_fnv1a64": "8058772573127251443",
+    "native30_dsp_frames": 201,
+    "native30_actor_owner_calls": 29,
+    "native30_actor_callback_calls": 377,
+    "native30_cutscene_update_frame_calls": 29,
+    "native30_cutscene_process_commands_calls": 29,
+    "native30_owner_calls": 58,
+    "native30_dependency_calls": 632,
+    "native30_direct_dependency_calls": 603,
+    "native30_dynamic_camera_function_calls": 29,
+    "native30_guest_reads": 2030,
+    "native30_guest_writes": 1044,
+    "native30_scratch_calls": 261,
+    "native30_hard_float_calls": 232,
+    "native30_square_root_operations": 0,
+    "native30_failures": 0,
+    "native30_a32_report": {
+      "path": "I:\\oot3dre_work\\native_game\\camera_update_a32_baseline_link_dream_accepted.json",
+      "sha256": "7da50afaed77e8c4c54012c9742b04332fc3c1f5d10661f88dcb91a605c2dbbd"
+    },
+    "native30_source_report": {
+      "path": "I:\\oot3dre_work\\native_game\\camera_update_source_link_dream_accepted.json",
+      "sha256": "4c26d89c47b3dca8952f70976c7b216eddc9d56861c50533791ba373f53994e3"
+    },
+    "implementation_fingerprints_expected_to_differ": [
+      "memory_state_fingerprint",
+      "process_state_fingerprint"
+    ]
+  },
+  "files": {
+    "generate_import.py": "54b13b76918140f761cb606f1a8756ab90535be401381ffa454947fbda074b27",
+    "include/oot3d/camera_update_owner.h": "45a77a19e78be96af4584c39f4df1aead98e41566540feb36c14f6217d787980",
+    "src/code/z_camera_update_owner.cpp": "86b1b4908fd4cf03c36e8d08321503eef4840326f6091f25f10edddf6aa6cdc8",
+    "tests/guest_pointer_tests.cpp": "95fa41ee3972c18915de02df0db841a19e2d03eab112f7307763aeb72feb9834"
+  }
+}

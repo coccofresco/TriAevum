@@ -1,0 +1,14 @@
+{
+  "Window": {
+    "AudioBackend": "sdl",
+    "Backend": {
+      "Id": 2,
+      "Name": "OpenGL"
+    },
+    "Fullscreen": {
+      "Enabled": false
+    },
+    "Height": 720,
+    "Width": 1280
+  }
+}

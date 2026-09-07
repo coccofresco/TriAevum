@@ -1,0 +1,138 @@
+{
+  "format": "oot3d_native_camera_table_v1",
+  "source_kind": "oot3d_ghidra_export_qualified_camera_table",
+  "runtime_asset_policy": "oot3d_native_table_resource_no_n64_runtime_asset_substitution",
+  "qualification": {
+    "status": "qualified_partial",
+    "basis": "Camera_InitPlayerSettings, Camera_Normal1, Camera_CopyModeValuesToPREG and OOT3D ZSI CollisionHeader bgCam records",
+    "known_gaps": [
+      "The OOT3D global camera table has not yet been fully split into named symbols; values here are carried as a data resource with OOT3D Ghidra/source provenance and runtime fallback diagnostics."
+    ]
+  },
+  "source_functions": [
+    {
+      "name": "Camera_Normal1",
+      "address": "00239fd8"
+    },
+    {
+      "name": "Camera_CopyModeValuesToPREG",
+      "address": "002c0a9c"
+    },
+    {
+      "name": "Camera_InitPlayerSettings",
+      "address": "002e547c"
+    }
+  ],
+  "initial_player_settings": {
+    "distance": 180.0,
+    "pitch_s16": 1820
+  },
+  "reference_player_height": 68.0,
+  "oreg": {
+    "2": 5,
+    "3": 5,
+    "4": 5,
+    "5": 14500,
+    "6": 20,
+    "7": 16,
+    "8": 150,
+    "25": 50,
+    "26": 20,
+    "41": 12,
+    "42": 110,
+    "46": -10,
+    "48": 30,
+    "49": 70,
+    "50": 20,
+    "51": 20
+  },
+  "collision_line_test": {
+    "ray_extend": 8.0,
+    "surface_push": 1.0
+  },
+  "bgcam_behaviors": {
+    "prerend_fixed_target_radius": 150.0,
+    "prerend_pivot_yaw_lerp": 0.4,
+    "prerend_pivot_max_yaw_step_s16": 2000.0,
+    "unique0_exit_distance": 10.0,
+    "floor_none_default_selector": {
+      "selector": "first_active_camera_with_preferred_setting_when_floor_setting_is_none",
+      "preferred_settings": [
+        26
+      ],
+      "start_settings_that_yield": [
+        25
+      ]
+    }
+  },
+  "function_by_setting": {
+    "1": 2,
+    "3": 2,
+    "5": 24,
+    "18": 3,
+    "22": 33,
+    "24": 35,
+    "25": 34,
+    "26": 48,
+    "30": 20,
+    "32": 41
+  },
+  "normal_mode_profiles": [
+    {
+      "set": 1,
+      "mode": 0,
+      "function": 2,
+      "behavior": "normal_follow",
+      "data_y_offset": -20.0,
+      "data_eye_distance_min": 200.0,
+      "data_eye_distance_max": 300.0,
+      "data_pitch_target_degrees": 10.0,
+      "data_yaw_update_rate_target": 12.0,
+      "data_max_yaw_update": 35.0,
+      "data_fov_degrees": 60.0,
+      "data_at_lerp_step_scale": 0.6
+    },
+    {
+      "set": 3,
+      "mode": 0,
+      "function": 2,
+      "behavior": "normal_follow_dungeon0_norm1",
+      "data_y_offset": -10.0,
+      "data_eye_distance_min": 150.0,
+      "data_eye_distance_max": 250.0,
+      "data_pitch_target_degrees": 5.0,
+      "data_yaw_update_rate_target": 10.0,
+      "data_max_yaw_update": 30.0,
+      "data_fov_degrees": 60.0,
+      "data_at_lerp_step_scale": 0.6
+    },
+    {
+      "set": 5,
+      "mode": 0,
+      "function": 24,
+      "behavior": "normal3_jump3",
+      "data_y_offset": -20.0,
+      "data_eye_distance_min": 280.0,
+      "data_eye_distance_max": 300.0,
+      "data_pitch_target_degrees": 20.0,
+      "data_yaw_update_rate_target": 15.0,
+      "data_max_yaw_update": 40.0,
+      "data_fov_degrees": 60.0,
+      "data_at_lerp_step_scale": 1.0
+    },
+    {
+      "set": 18,
+      "mode": 0,
+      "function": 3,
+      "behavior": "tower_climb_norm2",
+      "data_y_offset": 0.0,
+      "data_eye_distance_min": 120.0,
+      "data_eye_distance_max": 280.0,
+      "data_pitch_target_degrees": 12.0,
+      "data_yaw_update_rate_target": 8.0,
+      "data_max_yaw_update": 40.0,
+      "data_fov_degrees": 60.0,
+      "data_at_lerp_step_scale": 0.5
+    }
+  ]
+}

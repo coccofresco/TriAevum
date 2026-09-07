@@ -1,0 +1,932 @@
+{
+  "format": "oot3d_consumer_semantic_overlays_v1",
+  "entries": [
+    {
+      "id": "game_state_update_owner",
+      "entry": "0x00417014",
+      "name": "GameState_Update",
+      "status": "reviewed_semantic",
+      "implementation_files": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_game_state.h",
+        "tools/oot3d/native_game_runtime/oot3d_typed_game_state.cpp"
+      ],
+      "verification_files": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_gameplay_tests.cpp"
+      ],
+      "verification_cases": [
+        "TestGameStateUpdateOwnerDifferential",
+        "TestTypedGameStateCheckpointRoundTrip"
+      ],
+      "abi": {
+        "prototype": "void GameState_Update(GameState* gameState)",
+        "argument_registers": {
+          "r0": "GameState*"
+        },
+        "callback_abi": "void GameStateMain(GameState* gameState)",
+        "return": "void; r0 is caller-clobbered and contains the incremented frame counter in the target body"
+      },
+      "layout": [
+        {
+          "field": "main",
+          "offset": "0x04",
+          "type": "GameStateMain"
+        },
+        {
+          "field": "frames",
+          "offset": "0xF8",
+          "type": "uint32_t"
+        }
+      ],
+      "target_code": {
+        "entry": "0x00417014",
+        "size": 32,
+        "sha256": "cd3896654716c877313830f1ff251959e8ba219d7cdfdfd9d578fb4a62e4895a",
+        "bytes_little_endian": "10402de9041090e50040a0e131ff2fe1f80094e5010080e2f80084e51080bde8",
+        "instructions": [
+          "00417014: stmdb sp!,{r4,lr}",
+          "00417018: ldr r1,[r0,#0x4]",
+          "0041701c: cpy r4,r0",
+          "00417020: blx r1",
+          "00417024: ldr r0,[r4,#0xf8]",
+          "00417028: add r0,r0,#0x1",
+          "0041702c: str r0,[r4,#0xf8]",
+          "00417030: ldmia sp!,{r4,pc}"
+        ]
+      },
+      "target_evidence": [
+        "ghidra_export/disassembly.txt:00417014-00417030",
+        "ghidra_export/decompiled/07589_00417014_GameState_Update.c",
+        "symbols/manual_symbols.csv:00417014",
+        "Graph_ThreadEntry at 0x00416208 passes GameState* in r0"
+      ],
+      "decomp_handoff": {
+        "suggested_header_path": "include/oot3d/game_state.h",
+        "suggested_source_path": "src/code/z_game_state.c",
+        "replace_bulk_definition": "oot3d_recovered_00417014_GameState_Update",
+        "prototype": "void GameState_Update(GameState* gameState);",
+        "semantic_body": [
+          "void GameState_Update(GameState* gameState) {",
+          "    gameState->main(gameState);",
+          "    gameState->frames++;",
+          "}"
+        ],
+        "required_assertions": [
+          "offsetof(GameState, main) == 0x04",
+          "offsetof(GameState, frames) == 0xF8",
+          "GameStateMain receives GameState* in r0"
+        ],
+        "notes": [
+          "The callback is generic to every GameState; it is not a PlayState-only target.",
+          "OOT3D target code contains no N64 framebuffer or input work in this function.",
+          "The callback must complete before frames is incremented."
+        ]
+      }
+    },
+    {
+      "id": "actor_destroy_owner",
+      "entry": "0x002D644C",
+      "name": "Actor_Destroy",
+      "status": "reviewed_semantic",
+      "implementation_files": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_actor_lifecycle.h",
+        "tools/oot3d/native_game_runtime/oot3d_typed_actor_lifecycle.cpp"
+      ],
+      "verification_files": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_gameplay_tests.cpp"
+      ],
+      "verification_cases": [
+        "TestActorDestroyOwnerDifferential",
+        "TestTypedActorLifecycleCheckpointRoundTrip"
+      ],
+      "abi": {
+        "prototype": "void Actor_Destroy(Oot3dActor* actor, Oot3dPlayState* play)",
+        "argument_registers": {
+          "r0": "Oot3dActor*",
+          "r1": "Oot3dPlayState* retained for actor->destroy(actor, play)"
+        },
+        "callback_abi": "destroy is void(Oot3dActor*, Oot3dPlayState*); allocator cleanup is void(allocator, modelContext); owned-resource cleanup is void(resource)",
+        "return": "void; target leaves r0 equal to 2 and restores r4-r8 plus pc"
+      },
+      "layout": [
+        {
+          "field": "destroy",
+          "offset": "0x138",
+          "type": "Oot3dActorCallback"
+        },
+        {
+          "field": "modelContext",
+          "offset": "0x178",
+          "type": "uint32_t target pointer"
+        },
+        {
+          "field": "ownedModelSlots",
+          "offset": "0x17C",
+          "count": 6,
+          "type": "uint32_t target pointers"
+        },
+        {
+          "field": "lastOwnedModel",
+          "offset": "0x194",
+          "type": "uint32_t target pointer"
+        },
+        {
+          "field": "destroyState",
+          "offset": "0x198",
+          "type": "uint8_t"
+        }
+      ],
+      "target_code": {
+        "entry": "0x002D644C",
+        "size": 164,
+        "sha256": "12a0c22c64206998f326a3f220f8e401e707b89bd0e6756dc3e3108c5a6b2a21",
+        "bytes_little_endian": "f0412de90060a0e10070a0e3382190e5000052e30200000a0600a0e132ff2fe1387186e5780196e5000050e30800000a0000a0e168209fe50010a0e1002092e50200a0e1003092e5103093e533ff2fe1787186e50040a0e3045186e07c0195e5000050e3001090150410911531ff2f11014084e2060054e37c7185e5f5ffff3a940196e5000050e3001090150410911531ff2f110200a0e3947186e59801c6e5f081bde8",
+        "allocator_global_literal": {
+          "address": "0x002D64F0",
+          "value": "0x0055A1A8"
+        },
+        "instructions": [
+          "002D644C-002D646C: save r4-r8/lr, dispatch actor->destroy, clear actor+0x138",
+          "002D6470-002D649C: dispatch allocator vtable +0x10 for actor+0x178, then clear it",
+          "002D64A0-002D64C8: dispatch vtable +0x04 and clear six pointers at actor+0x17C..0x190",
+          "002D64CC-002D64E4: dispatch vtable +0x04 and clear actor+0x194",
+          "002D64E8-002D64EC: store byte 2 at actor+0x198 and restore r4-r8/pc"
+        ]
+      },
+      "target_evidence": [
+        "ghidra_export/disassembly.txt:002D644C-002D64EC",
+        "ghidra_export/disassembly.txt:004616A0-004616A8",
+        "ghidra_export/decompiled/03605_002d644c_Actor_Destroy.c",
+        "symbols/manual_symbols.csv:002D644C",
+        "include/oot3d/actor.h:Oot3dActor",
+        "code.bin SHA-256 16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220"
+      ],
+      "decomp_handoff": {
+        "suggested_header_path": "include/oot3d/actor.h",
+        "suggested_source_path": "src/code/z_actor.c",
+        "replace_bulk_definition": "oot3d_recovered_002d644c_Actor_Destroy",
+        "prototype": "void Actor_Destroy(Oot3dActor* actor, Oot3dPlayState* play);",
+        "semantic_body": [
+          "void Actor_Destroy(Oot3dActor* actor, Oot3dPlayState* play) {",
+          "    if (actor->destroy != NULL) {",
+          "        actor->destroy(actor, play);",
+          "        actor->destroy = NULL;",
+          "    }",
+          "    if (actor->modelContext != NULL) {",
+          "        gOot3dActorAllocator->vtable->destroy(gOot3dActorAllocator, actor->modelContext);",
+          "        actor->modelContext = NULL;",
+          "    }",
+          "    for (size_t i = 0; i < 6; ++i) {",
+          "        if (actor->ownedModelSlots[i] != NULL) {",
+          "            actor->ownedModelSlots[i]->vtable->destroy(actor->ownedModelSlots[i]);",
+          "        }",
+          "        actor->ownedModelSlots[i] = NULL;",
+          "    }",
+          "    if (actor->lastOwnedModel != NULL) {",
+          "        actor->lastOwnedModel->vtable->destroy(actor->lastOwnedModel);",
+          "    }",
+          "    actor->lastOwnedModel = NULL;",
+          "    actor->destroyState = 2;",
+          "}"
+        ],
+        "required_assertions": [
+          "offsetof(Oot3dActor, destroy) == 0x138",
+          "offsetof(Oot3dActor, modelContext) == 0x178",
+          "offsetof(Oot3dActor, ownedModelSlots) == 0x17C",
+          "offsetof(Oot3dActor, lastOwnedModel) == 0x194",
+          "offsetof(Oot3dActor, destroyState) == 0x198",
+          "gOot3dActorAllocator target pointer is stored at 0x0055A1A8"
+        ],
+        "notes": [
+          "Do not use the one-argument Ghidra signature: Actor_UpdateAll places PlayState* in r1 immediately before calling Actor_Destroy, and Actor_Destroy preserves r1 into actor->destroy.",
+          "Resource type and vtable member names are provisional; allocator vtable +0x10 and all seven resource vtable +0x04 calls must remain in target order.",
+          "Every owned pointer is cleared after its callback returns; the terminal state byte is written last.",
+          "The runtime continuation implementation contains no host-only lifecycle state and is MessagePack savestate tested."
+        ]
+      }
+    },
+    {
+      "id": "record_prefix_initializer",
+      "entry": "0x002FFA20",
+      "name": "FUN_002ffa20",
+      "status": "reviewed_semantic",
+      "implementation_files": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_record_initializer.h",
+        "tools/oot3d/native_game_runtime/oot3d_typed_record_initializer.cpp"
+      ],
+      "verification_files": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_gameplay_tests.cpp"
+      ],
+      "verification_cases": [
+        "TestRecordInitializerDifferential",
+        "TestTypedRecordInitializerCheckpointRoundTrip"
+      ],
+      "abi": {
+        "prototype": "void* Oot3d_Record54InitPrefix(void* record)",
+        "argument_registers": {
+          "r0": "record base"
+        },
+        "callback_abi": "Compatible with the one-argument constructor callback accepted by FUN_00350820",
+        "return": "the original record base in r0"
+      },
+      "layout": [
+        {
+          "field": "initializedPrefix",
+          "offset": "0x00",
+          "size": "0x50",
+          "type": "target-proven zero-initialized byte range"
+        },
+        {
+          "field": "preservedTail",
+          "offset": "0x50",
+          "size": "0x04",
+          "type": "unidentified field outside the initialized range"
+        }
+      ],
+      "target_code": {
+        "entry": "0x002FFA20",
+        "size": 40,
+        "sha256": "4090f7eae7f7623dd52330d71676f56beeae0242e0a04fce7ffc8ac89f5d6265",
+        "bytes_little_endian": "10402de90040a0e10000a0e3480084e54c0084e54810a0e30400a0e10f0e01eb0400a0e11080bde8",
+        "instructions": [
+          "002FFA20: stmdb sp!,{r4,lr}",
+          "002FFA24: cpy r4,r0",
+          "002FFA28: mov r0,#0",
+          "002FFA2C: str r0,[r4,#0x48]",
+          "002FFA30: str r0,[r4,#0x4c]",
+          "002FFA34: mov r1,#0x48",
+          "002FFA38: cpy r0,r4",
+          "002FFA3C: bl Runtime_Memzero",
+          "002FFA40: cpy r0,r4",
+          "002FFA44: ldmia sp!,{r4,pc}"
+        ]
+      },
+      "target_evidence": [
+        "ghidra_export/disassembly.txt:002FFA20-002FFA44",
+        "ghidra_export/decompiled/04123_002ffa20_FUN_002ffa20.c",
+        "ghidra_export/decompiled/05440_00350820_FUN_00350820.c",
+        "ghidra_export/decompiled/07631_00418984_FUN_00418984.c",
+        "ghidra_export/decompiled/07704_0041f048_FUN_0041f048.c",
+        "metadata/recovered_call_contracts.csv:002ffa20",
+        "code.bin SHA-256 16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220"
+      ],
+      "decomp_handoff": {
+        "suggested_name": "Oot3d_Record54InitPrefix",
+        "suggested_header_path": "include/oot3d/runtime_helpers.h",
+        "suggested_source_path": "src/code/z_runtime_structural_families.c",
+        "replace_bulk_definition": "oot3d_recovered_002ffa20_FUN_002ffa20",
+        "prototype": "void* Oot3d_Record54InitPrefix(void* record);",
+        "semantic_body": [
+          "void* Oot3d_Record54InitPrefix(void* record) {",
+          "    memset(record, 0, 0x50);",
+          "    return record;",
+          "}"
+        ],
+        "required_assertions": [
+          "the initialized range is exactly 0x00..0x4F",
+          "the constructor callers at 0x00418984 and 0x0041F048 use stride 0x54",
+          "the field at 0x50..0x53 is not modified by this function",
+          "the callback receives and returns the record base in r0"
+        ],
+        "notes": [
+          "Oot3d_Record54InitPrefix is a provisional structural name; rename it only after the shared record type is identified from target evidence.",
+          "Do not turn the 0x54-byte caller stride into a 0x54-byte memset: the final four bytes are intentionally outside this constructor's initialized range.",
+          "The target writes 0x48 and 0x4C explicitly, then clears 0x00..0x47 through Runtime_Memzero.",
+          "The consumer boundary dispatches the original Runtime_Memzero and resumes at 0x002FFA40; it does not replace the memory service."
+        ]
+      }
+    },
+    {
+      "id": "audio_request_flag100_callback",
+      "entry": "0x00465304",
+      "name": "FUN_00465304",
+      "status": "reviewed_semantic",
+      "implementation_files": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_audio_request_callback.h",
+        "tools/oot3d/native_game_runtime/oot3d_typed_audio_request_callback.cpp"
+      ],
+      "verification_files": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_gameplay_tests.cpp"
+      ],
+      "verification_cases": [
+        "TestAudioRequestFlag100CallbackDifferential",
+        "TestTypedAudioRequestCallbackCheckpointRoundTrip"
+      ],
+      "abi": {
+        "prototype": "void Oot3d_AudioRequestFlag100Callback(RendererObjectRef* descriptor, uint32_t unused1, uint32_t unused2, RendererObjectHandle initialHandle)",
+        "argument_registers": {
+          "r0": "RendererObjectRef* descriptor",
+          "r1": "unused by this callback",
+          "r2": "unused by this callback",
+          "r3": "initial temporary handle; its saved stack slot is passed by address to RendererObjectRef_Assign"
+        },
+        "callback_abi": "Concrete callback stored at literal 0x00453760 and registered by Oot3d_AudioRequestFlag100 through FUN_0030EFB0",
+        "return": "void; r4 and r5 are restored, while r3 receives the final temporary handle because its frame slot doubles as the local variable"
+      },
+      "layout": [
+        {
+          "field": "RendererObjectRef.object",
+          "offset": "0x00",
+          "type": "target pointer"
+        },
+        {
+          "field": "referencedObject.sfxId",
+          "offset": "0x9C",
+          "type": "uint32_t"
+        },
+        {
+          "field": "AudioRequestFlag100State.pending",
+          "offset": "0x04",
+          "type": "uint8_t"
+        },
+        {
+          "field": "AudioRequestFlag100State.requestedSfxId",
+          "offset": "0x28",
+          "type": "uint32_t"
+        },
+        {
+          "field": "requestStateLiteral",
+          "address": "0x00465368",
+          "value": "0x0054ABD4",
+          "type": "AudioRequestFlag100State*"
+        }
+      ],
+      "target_code": {
+        "entry": "0x00465304",
+        "size": 100,
+        "sha256": "aabf371b94456f19be4f1680fa1489858ac3c06d853247cd5a34446bf844a905",
+        "bytes_little_endian": "38402de90040a0e10010a0e10d00a0e1bea6faeb000094e544409fe5000050e39c009015281094e50000e003010050e10800001a00009de5000050e30300000a8d7000eb0c0050e300f020e30100008a0000a0e30400c4e50d00a0e19ea6faeb3880bde8",
+        "literal_pool": {
+          "entry": "0x00465368",
+          "size": 4,
+          "value": "0x0054ABD4",
+          "body_plus_literal_sha256": "8127595e8272d70b4048fa355bc19401fd289289401e2cd8674afef92b97d35a"
+        },
+        "instructions": [
+          "00465304-00465314: save r3-r5/lr, alias saved r3 as the local handle, and dispatch RendererObjectRef_Assign",
+          "00465318-00465334: resolve the referenced object SFX id or -1 and compare it with requestState+0x28",
+          "00465338-00465358: clear requestState+0x04 when the local handle is null or its unsigned status is at most 12",
+          "0046535C-00465364: dispatch RendererObjectRef_Clear and restore r3-r5/pc"
+        ]
+      },
+      "target_evidence": [
+        "ghidra_export/disassembly.txt:00465304-00465368",
+        "ghidra_export/decompiled/08313_00465304_FUN_00465304.c",
+        "ghidra_export/decompiled/08154_004536a4_Oot3d_AudioRequestFlag100.c",
+        "analysis/function_pointer_refs.csv:004536a4/DAT_00453760/00465304",
+        "src/code/z_audio_general.c:Oot3d_AudioRequestFlag100 call path",
+        "include/oot3d/audio.h:Oot3d_AudioRequestFlag100",
+        "code.bin SHA-256 16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220"
+      ],
+      "decomp_handoff": {
+        "suggested_name": "Oot3d_AudioRequestFlag100Callback",
+        "suggested_header_path": "include/oot3d/audio.h",
+        "suggested_source_path": "src/code/z_audio_general.c",
+        "replace_bulk_definition": "oot3d_recovered_00465304_FUN_00465304",
+        "prototype": "void Oot3d_AudioRequestFlag100Callback(RendererObjectRef* descriptor, uint32_t unused1, uint32_t unused2, RendererObjectHandle initialHandle);",
+        "semantic_body": [
+          "void Oot3d_AudioRequestFlag100Callback(RendererObjectRef* descriptor, uint32_t unused1, uint32_t unused2, RendererObjectHandle initialHandle) {",
+          "    RendererObjectHandle handle = initialHandle;",
+          "    RendererObjectRef_Assign(&handle, descriptor);",
+          "    int32_t objectSfxId = descriptor->object != NULL ? descriptor->object->sfxId : -1;",
+          "    if (objectSfxId == gAudioRequestFlag100State.requestedSfxId &&",
+          "        (handle == 0 || Oot3d_AudioRequestStatus(handle) <= 12U)) {",
+          "        gAudioRequestFlag100State.pending = 0;",
+          "    }",
+          "    RendererObjectRef_Clear(&handle);",
+          "}"
+        ],
+        "required_assertions": [
+          "the callback pointer loaded at 0x00453760 is 0x00465304",
+          "Oot3d_AudioRequestFlag100 stores sfxId at request state offset 0x28 before callback registration",
+          "the request-state pointer literal at 0x00465368 is 0x0054ABD4",
+          "referenced object id offset is 0x9C and pending byte offset is 0x04",
+          "the status comparison is unsigned and accepts values 0 through 12",
+          "the saved r3 word and local handle occupy the same stack address"
+        ],
+        "notes": [
+          "The names RendererObjectRef and RendererObjectHandle remain provisional structural types; retain the exact target offsets and helper calls if their final domain names change.",
+          "A historical imported semantic tranche labels 0x00465304 as PauseDungeonItem_AssignOptionalObjectRef. That classification conflicts with the concrete function-pointer producer Oot3d_AudioRequestFlag100 and with the SFX id stored at request-state offset 0x28; do not propagate it without new target evidence.",
+          "The consumer keeps RendererObjectRef_Assign, Oot3d_AudioRequestStatus and RendererObjectRef_Clear as original guest service calls rather than replacing their backend behavior.",
+          "All continuation state is guest-owned and the status-return boundary is MessagePack savestate tested."
+        ]
+      }
+    },
+    {
+      "id": "player_release_lock_on",
+      "entry": "0x00334354",
+      "name": "FUN_00334354",
+      "status": "reviewed_semantic",
+      "implementation_files": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_player_lock_on.h",
+        "tools/oot3d/native_game_runtime/oot3d_typed_player_lock_on.cpp"
+      ],
+      "verification_files": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_gameplay_tests.cpp"
+      ],
+      "verification_cases": [
+        "TestActorOwnerMicroleafDifferential",
+        "TestTypedActorOwnerMicroleafCheckpointRoundTrip"
+      ],
+      "abi": {
+        "prototype": "void Player_ReleaseLockOn(Oot3dPlayer* player)",
+        "argument_registers": {
+          "r0": "Oot3dPlayer*"
+        },
+        "return": "void; the exact target ABI leaves r0 at player+0x1000 and r1 at the masked state-flags value"
+      },
+      "layout": [
+        {
+          "field": "lockOnActor",
+          "offset": "0x16F8",
+          "type": "Oot3dActor*"
+        },
+        {
+          "field": "stateFlags",
+          "offset": "0x1714",
+          "type": "uint32_t",
+          "cleared_mask": "0x00002000"
+        }
+      ],
+      "target_code": {
+        "entry": "0x00334354",
+        "size": 28,
+        "sha256": "0be4e166aaa8e27afdbd29545fc1dbce14580293d4e8ce3b368cd9e69bd3a0d1",
+        "bytes_little_endian": "010a80e20010a0e3f81680e5141790e5021ac1e3141780e51eff2fe1",
+        "instructions": [
+          "00334354: add r0,r0,#0x1000",
+          "00334358: mov r1,#0",
+          "0033435C: str r1,[r0,#0x6F8]",
+          "00334360: ldr r1,[r0,#0x714]",
+          "00334364: bic r1,r1,#0x2000",
+          "00334368: str r1,[r0,#0x714]",
+          "0033436C: bx lr"
+        ]
+      },
+      "target_evidence": [
+        "analysis/codebin_semantic_tranche_102.csv:0x00334354",
+        "analysis/codebin_decompilation_batch_102.md",
+        "code.bin SHA-256 16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220",
+        "direct callers 0x00250AD0, Actor_Delete, Actor_UpdateAll and 0x004C3064"
+      ],
+      "decomp_handoff": {
+        "suggested_name": "Player_ReleaseLockOn",
+        "suggested_header_path": "include/oot3d/player.h",
+        "suggested_source_path": "src/oot3d/game/player/native_helpers.cpp",
+        "prototype": "void Player_ReleaseLockOn(Oot3dPlayer* player);",
+        "semantic_body": [
+          "void Player_ReleaseLockOn(Oot3dPlayer* player) {",
+          "    player->lockOnActor = NULL;",
+          "    player->stateFlags &= ~0x2000U;",
+          "}"
+        ],
+        "required_assertions": [
+          "offsetof(Oot3dPlayer, lockOnActor) == 0x16F8",
+          "offsetof(Oot3dPlayer, stateFlags) == 0x1714",
+          "the cleared state bit is exactly 0x00002000"
+        ],
+        "notes": [
+          "The field names follow the high-confidence producer classification; the offsets and mask are independently target-proven.",
+          "The consumer implementation is differential-tested against the generated A32 block and contains no host-only state.",
+          "The N64 source was used only as corroboration after deriving the operation from OoT3D code.bin."
+        ]
+      }
+    },
+    {
+      "id": "actor_update_record_initialize_defaults",
+      "entry": "0x0047C938",
+      "name": "FUN_0047c938",
+      "status": "reviewed_semantic",
+      "implementation_files": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_actor_update_records.h",
+        "tools/oot3d/native_game_runtime/oot3d_typed_actor_update_records.cpp"
+      ],
+      "verification_files": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_gameplay_tests.cpp"
+      ],
+      "verification_cases": [
+        "TestActorOwnerMicroleafDifferential",
+        "TestTypedActorOwnerMicroleafCheckpointRoundTrip"
+      ],
+      "abi": {
+        "prototype": "void ActorUpdateRecord_InitializeDefaults(void* record)",
+        "argument_registers": {
+          "r0": "record base"
+        },
+        "return": "void; r0 is preserved, r1 is zero and s0 contains the native literal word"
+      },
+      "layout": [
+        {
+          "field": "defaultWord0",
+          "offset": "0x04",
+          "type": "float/raw uint32_t"
+        },
+        {
+          "field": "defaultWord1",
+          "offset": "0x08",
+          "type": "float/raw uint32_t"
+        },
+        {
+          "field": "defaultWord2",
+          "offset": "0x0C",
+          "type": "float/raw uint32_t"
+        },
+        {
+          "field": "clearedBytes",
+          "offset": "0x18",
+          "size": "0x04",
+          "type": "uint8_t[4]"
+        }
+      ],
+      "target_code": {
+        "entry": "0x0047C938",
+        "size": 40,
+        "sha256": "221027393757458c4f16ef5bb6e9fab8b7697657674421598f4ca5199b4deefa",
+        "bytes_little_endian": "0010a0e31810c0e51910c0e5050a9fed1a10c0e51b10c0e5030a80ed020a80ed010a80ed1eff2fe1",
+        "literal_pool": {
+          "address": "0x0047C960",
+          "value": "0x00000000",
+          "body_plus_literal_sha256": "0f6fda12fd771dd83b0fd98a8eb27e410330ef5db38c18f12d3f3f22846f1147"
+        },
+        "instructions": [
+          "0047C938: mov r1,#0",
+          "0047C93C-0047C940: clear bytes at record+0x18 and record+0x19",
+          "0047C944: vldr s0,[pc,#0x14] from 0x0047C960",
+          "0047C948-0047C94C: clear bytes at record+0x1A and record+0x1B",
+          "0047C950-0047C958: store s0 at record+0x0C, +0x08 and +0x04",
+          "0047C95C: bx lr"
+        ]
+      },
+      "target_evidence": [
+        "analysis/codebin_semantic_tranche_123.csv:0x0047C938",
+        "analysis/codebin_decompilation_batch_123.md",
+        "Actor_UpdateAll is the sole direct caller",
+        "code.bin SHA-256 16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220"
+      ],
+      "decomp_handoff": {
+        "suggested_name": "ActorUpdateRecord_InitializeDefaults",
+        "suggested_header_path": "include/oot3d/actor.h",
+        "suggested_source_path": "src/oot3d/game/actors/native_structural_microleaves.cpp",
+        "prototype": "void ActorUpdateRecord_InitializeDefaults(void* record);",
+        "semantic_body": [
+          "void ActorUpdateRecord_InitializeDefaults(ActorUpdateRecord* record) {",
+          "    record->bytes18To1B[0] = 0;",
+          "    record->bytes18To1B[1] = 0;",
+          "    record->bytes18To1B[2] = 0;",
+          "    record->bytes18To1B[3] = 0;",
+          "    record->defaultWord0 = 0.0f;",
+          "    record->defaultWord1 = 0.0f;",
+          "    record->defaultWord2 = 0.0f;",
+          "}"
+        ],
+        "required_assertions": [
+          "the literal at 0x0047C960 is the source of all three default words",
+          "word offsets are exactly 0x04, 0x08 and 0x0C",
+          "byte offsets are exactly 0x18 through 0x1B"
+        ],
+        "notes": [
+          "ActorUpdateRecord is a provisional structural type; do not infer additional fields from this leaf.",
+          "The runtime reads the native literal instead of hardcoding zero, and the differential test replaces it with a nonzero bit pattern to enforce that contract.",
+          "No host-side continuation or savestate state is required."
+        ]
+      }
+    },
+    {
+      "id": "actor_update_record_clear_halfwords",
+      "entry": "0x0047CCDC",
+      "name": "FUN_0047ccdc",
+      "status": "reviewed_semantic",
+      "implementation_files": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_actor_update_records.h",
+        "tools/oot3d/native_game_runtime/oot3d_typed_actor_update_records.cpp"
+      ],
+      "verification_files": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_gameplay_tests.cpp"
+      ],
+      "verification_cases": [
+        "TestActorOwnerMicroleafDifferential",
+        "TestTypedActorOwnerMicroleafCheckpointRoundTrip"
+      ],
+      "abi": {
+        "prototype": "void ActorUpdateRecord_ClearHalfwords(void* record)",
+        "argument_registers": {
+          "r0": "record base"
+        },
+        "return": "void; r0 is preserved and r1 is zero"
+      },
+      "layout": [
+        {
+          "field": "halfword0",
+          "offset": "0x04",
+          "type": "uint16_t"
+        },
+        {
+          "field": "halfword1",
+          "offset": "0x0C",
+          "type": "uint16_t"
+        }
+      ],
+      "target_code": {
+        "entry": "0x0047CCDC",
+        "size": 16,
+        "sha256": "9ef6d3c75d1e952be7c755d609c735f1a20d5f3e18a110fa7e607b6fbfecd203",
+        "bytes_little_endian": "0010a0e3b410c0e1bc10c0e11eff2fe1",
+        "instructions": [
+          "0047CCDC: mov r1,#0",
+          "0047CCE0: strh r1,[r0,#0x04]",
+          "0047CCE4: strh r1,[r0,#0x0C]",
+          "0047CCE8: bx lr"
+        ]
+      },
+      "target_evidence": [
+        "analysis/codebin_semantic_tranche_122.csv:0x0047CCDC",
+        "analysis/codebin_decompilation_batch_122.md",
+        "Actor_UpdateAll is the sole direct caller",
+        "code.bin SHA-256 16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220"
+      ],
+      "decomp_handoff": {
+        "suggested_name": "ActorUpdateRecord_ClearHalfwords",
+        "suggested_header_path": "include/oot3d/actor.h",
+        "suggested_source_path": "src/oot3d/game/actors/native_structural_microleaves.cpp",
+        "prototype": "void ActorUpdateRecord_ClearHalfwords(void* record);",
+        "semantic_body": [
+          "void ActorUpdateRecord_ClearHalfwords(ActorUpdateRecord* record) {",
+          "    record->halfword04 = 0;",
+          "    record->halfword0C = 0;",
+          "}"
+        ],
+        "required_assertions": [
+          "both stores are 16-bit, not 32-bit",
+          "the cleared offsets are exactly 0x04 and 0x0C",
+          "adjacent bytes remain unmodified"
+        ],
+        "notes": [
+          "ActorUpdateRecord is a provisional structural type shared only when later evidence proves layout identity.",
+          "The differential test compares the complete surrounding record so widened stores cannot pass.",
+          "No host-side continuation or savestate state is required."
+        ]
+      }
+    },
+    {
+      "id": "pause_ui_update_dual_alpha",
+      "entry": "0x0047955C",
+      "name": "FUN_0047955c",
+      "status": "reviewed_semantic",
+      "implementation_files": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_pause_ui_alpha.h",
+        "tools/oot3d/native_game_runtime/oot3d_typed_pause_ui_alpha.cpp"
+      ],
+      "verification_files": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_gameplay_tests.cpp"
+      ],
+      "verification_cases": [
+        "TestPauseUiUpdateDualAlphaDifferential",
+        "TestTypedPauseUiAlphaCheckpointRoundTrip"
+      ],
+      "abi": {
+        "prototype": "void PauseUi_UpdateDualAlpha(uint32_t unused, PauseUiDualAlphaState* state)",
+        "argument_registers": {
+          "r0": "unused by the observed body",
+          "r1": "PauseUiDualAlphaState*"
+        },
+        "return": "void; the non-stepping paths return through the saved guest LR, while the second Math_StepToS is a native tail call"
+      },
+      "layout": [
+        {
+          "field": "fadeTimer",
+          "offset": "0x10",
+          "type": "uint8_t"
+        },
+        {
+          "field": "gateTimer",
+          "offset": "0x11",
+          "type": "uint8_t"
+        },
+        {
+          "field": "primaryAlpha",
+          "offset": "0x12",
+          "type": "int16_t"
+        },
+        {
+          "field": "secondaryAlpha",
+          "offset": "0x14",
+          "type": "int16_t"
+        }
+      ],
+      "target_code": {
+        "entry": "0x0047955C",
+        "size": 328,
+        "sha256": "f3a73c9020a3c6be40ac6f7ffbd02ff83a174001269859385696c254ca7d1e46",
+        "body_plus_literal_size": 352,
+        "body_plus_literal_sha256": "59d8beae6ce263b506b8b119b715d718b28334982727cfaf80bb56a31d2b5e68",
+        "literal_pool": {
+          "entry": "0x004796A4",
+          "size": 24,
+          "sha256": "9b830f4d7b9fccc8ddffaf327d0b28eabf5f75f973b0114bf28c1fa201a4bd80",
+          "values": [
+            "0x0051B2F4 update-rate pointer cell",
+            "0x3F000000 0.5f rounding bias",
+            "0x41200000 10.0f fade-out primary factor",
+            "0x41BAAAAB 23.333334f fade-out secondary factor",
+            "0x40555556 3.3333335f fade-in primary factor",
+            "0x40D55556 6.666667f fade-in secondary factor"
+          ]
+        },
+        "instructions": [
+          "0047955C-00479568: save {r4-r6,lr} and d8, preserve incoming state pointer from r1 in r4, call PauseContext_GetState",
+          "0047956C-0047958C: return while pause state is nonzero or decrement gateTimer and return while it remains nonzero",
+          "00479590-004795B0: load fadeTimer, update-rate pointer cell and 0.5f bias, then select fade-out when the timer is zero or expires",
+          "004795B4-00479624: derive native fade-out steps and call then tail-call Math_StepToS for offsets 0x12 and 0x14 toward zero",
+          "00479628-00479698: derive native fade-in steps and call then tail-call Math_StepToS for offsets 0x12 and 0x14 toward 255",
+          "0047969C-004796A0: restore d8 and {r4-r6,pc} on non-stepping exits"
+        ]
+      },
+      "direct_dependencies": [
+        {
+          "entry": "0x003695F8",
+          "name": "PauseContext_GetState",
+          "role": "native pause-state gate"
+        },
+        {
+          "entry": "0x00372AA8",
+          "name": "Math_StepToS",
+          "role": "native signed-alpha stepping service"
+        }
+      ],
+      "target_evidence": [
+        "analysis/codebin_semantic_tranche_120.csv:0x0047955C",
+        "analysis/codebin_decompilation_batch_120.md",
+        "Actor_UpdateAll is the sole direct caller",
+        "PauseContext_GetState and Math_StepToS are already producer-reviewed direct dependencies",
+        "code.bin SHA-256 16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220"
+      ],
+      "decomp_handoff": {
+        "suggested_name": "PauseUi_UpdateDualAlpha",
+        "suggested_header_path": "include/oot3d/pause.h",
+        "suggested_source_path": "src/oot3d/ui/pause/native_contract_stream.cpp",
+        "prototype": "void PauseUi_UpdateDualAlpha(uint32_t unused, PauseUiDualAlphaState* state);",
+        "semantic_body": [
+          "void PauseUi_UpdateDualAlpha(uint32_t unused, PauseUiDualAlphaState* state) {",
+          "    if (PauseContext_GetState() != 0) return;",
+          "    if (state->gateTimer != 0 && --state->gateTimer != 0) return;",
+          "    const int16_t updateRate = gOot3dUpdateContext->updateRate;",
+          "    const bool fadeIn = state->fadeTimer != 0 && --state->fadeTimer != 0;",
+          "    const float primaryFactor = fadeIn ? 3.3333335f : 10.0f;",
+          "    const float secondaryFactor = fadeIn ? 6.666667f : 23.333334f;",
+          "    const int16_t target = fadeIn ? 255 : 0;",
+          "    Math_StepToS(&state->primaryAlpha, target, (int16_t)(0.5f + updateRate * primaryFactor));",
+          "    Math_StepToS(&state->secondaryAlpha, target, (int16_t)(0.5f + updateRate * secondaryFactor));",
+          "}"
+        ],
+        "required_assertions": [
+          "the state pointer is supplied in r1 rather than r0",
+          "timer stores are exactly 8-bit at offsets 0x10 and 0x11",
+          "alpha values are exactly signed 16-bit at offsets 0x12 and 0x14",
+          "updateRate is a signed halfword at offset 0x110 from the object reached through pointer cell 0x0051B2F4",
+          "the six literal-pool words and VFP conversion order remain target-identical",
+          "PauseContext_GetState runs before either timer is read",
+          "the second Math_StepToS remains equivalent to the observed tail call"
+        ],
+        "notes": [
+          "PauseUiDualAlphaState and gOot3dUpdateContext are provisional structural names; preserve offsets and signedness if producer naming changes.",
+          "The consumer reads all six values from the original guest literal pool and retains both native guest services instead of introducing host timing or math substitutes.",
+          "Entry plus three continuations carry all state in guest registers, VFP lanes, stack and memory; the first-step boundary is MessagePack savestate tested.",
+          "Differential coverage exercises pause blocking, gate hold and expiry, fade-in, fade expiry, fade-out, both update rates and non-destructive read/write failure."
+        ]
+      }
+    },
+    {
+      "id": "dyna_reset_actor_interaction_if_registered",
+      "entry": "0x0047AF24",
+      "name": "FUN_0047af24",
+      "status": "reviewed_semantic",
+      "implementation_files": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_dyna_interaction_reset.h",
+        "tools/oot3d/native_game_runtime/oot3d_typed_dyna_interaction_reset.cpp"
+      ],
+      "verification_files": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_gameplay_tests.cpp"
+      ],
+      "verification_cases": [
+        "TestDynaInteractionResetDifferential",
+        "TestTypedDynaInteractionResetCheckpointRoundTrip"
+      ],
+      "abi": {
+        "prototype": "void DynaPoly_ResetActorInteractFlagsIfRegistered(Oot3dPlayState* play, void* dynaContext, Oot3dActor* actor)",
+        "argument_registers": {
+          "r0": "Oot3dPlayState*",
+          "r1": "separate Dyna context supplied by Actor_UpdateAll",
+          "r2": "Oot3dActor*"
+        },
+        "return": "void; a match clears r1 and restores lr, while a miss leaves r1 unchanged, r3 equal to 0x32 and lr equal to play+0x0A98"
+      },
+      "layout": [
+        {
+          "field": "PlayState.dynaActorContext",
+          "offset": "0x0A98",
+          "type": "embedded dynamic actor registry"
+        },
+        {
+          "field": "dynaContext.deleteFlags",
+          "offset": "0x151C",
+          "count": 50,
+          "type": "uint16_t"
+        },
+        {
+          "field": "dynaActorContext.actorFlags",
+          "offset": "0x156C",
+          "count": 50,
+          "type": "uint16_t"
+        },
+        {
+          "field": "dynaActorContext.actorEntries",
+          "stride": "0x6C",
+          "actor_pointer_offset": "0x54",
+          "count": 50,
+          "type": "target pointer records"
+        },
+        {
+          "field": "Oot3dDynaPolyActor.interactFlags",
+          "offset": "0x1B8",
+          "type": "uint8_t"
+        }
+      ],
+      "target_code": {
+        "entry": "0x0047AF24",
+        "combined_size": 152,
+        "combined_sha256": "ca2873d77a26ff4b2b5ea889604d29d2645c77ffac4593e155b368d34951a635",
+        "main_body": {
+          "entry": "0x0047AF24",
+          "end_exclusive": "0x0047AFB0",
+          "size": 140,
+          "sha256": "7fc90e708c31f6860e1d824077fd43dcded8d96979f6b597afbded331d94842a",
+          "bytes_little_endian": "00c0a0e110402de902eb8ce20200a0e10030a0e3a6ef8ee2832081e0152c82e2bc21d2e1010012e31300000a320053e30600002a83208ee0152c82e2bcc6d2e101001ce30100000a02001ce30100000a00c0a0e3030000ea83c183e08cc08ce00c218ee054c092e500005ce30200000a00005ce11040bd083e23000a013083e2320053e3e3ffffba1080bde8"
+        },
+        "conditional_tail": {
+          "entry": "0x00483C9C",
+          "end_exclusive": "0x00483CA8",
+          "size": 12,
+          "sha256": "08c1159363a108d353d072c2ca64bb567aa7fbc1642e06e06ba1396a29859b8a",
+          "bytes_little_endian": "0010a0e3b811c0e51eff2fe1",
+          "instructions": [
+            "00483C9C: mov r1,#0",
+            "00483CA0: strb r1,[r0,#0x1B8]",
+            "00483CA4: bx lr"
+          ]
+        },
+        "instructions": [
+          "0047AF24-0047AF38: preserve play, save {r4,lr}, set actor in r0 and derive play+0x0A98",
+          "0047AF3C-0047AF70: scan 50 delete and actor flag halfwords, accepting active non-deleted entries",
+          "0047AF7C-0047AF90: derive the 0x6C-stride entry, load its pointer at +0x54 and reject null",
+          "0047AF94-0047AF9C: on pointer equality restore {r4,lr} and branch to the conditional tail",
+          "0047AFA0-0047AFAC: otherwise advance to 0x32 and return through pop {r4,pc}"
+        ]
+      },
+      "target_evidence": [
+        "tools/oot3d/decomp_support/analysis/material_lighting_raw_field_consumer_ghidra_export/disassembly_selected.txt:004617B4-004617C0",
+        "src/recovered/z_long_tail_recovery_cohort_14.c:oot3d_recovered_0047af24_FUN_0047af24",
+        "src/code/z_gameplay_state.c:DynaPoly_DeleteBgActor provides independently recovered OOT3D registry offsets",
+        "include/oot3d/actor_bgcheck.h:Oot3dDynaPolyActor.interactFlags",
+        "code.bin SHA-256 16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220",
+        "N64 z_bgcheck.c:func_8003F8EC and z_bg_item.c:DynaPolyActor_UnsetAllInteractFlags are semantic corroboration only"
+      ],
+      "decomp_handoff": {
+        "suggested_name": "DynaPoly_ResetActorInteractFlagsIfRegistered",
+        "suggested_header_path": "include/oot3d/actor_bgcheck.h",
+        "suggested_source_path": "src/code/z_bgcheck.c",
+        "replace_bulk_definition": "oot3d_recovered_0047af24_FUN_0047af24",
+        "prototype": "void DynaPoly_ResetActorInteractFlagsIfRegistered(Oot3dPlayState* play, void* dynaContext, Oot3dActor* actor);",
+        "semantic_body": [
+          "void DynaPoly_ResetActorInteractFlagsIfRegistered(Oot3dPlayState* play, void* dynaContext, Oot3dActor* actor) {",
+          "    u8* actorContext = (u8*)play + 0x0A98;",
+          "    u8* dyna = (u8*)dynaContext;",
+          "    for (u32 i = 0; i < 0x32; ++i) {",
+          "        if ((*(u16*)(dyna + 0x151C + i * sizeof(u16)) & 1u) == 0) continue;",
+          "        u16 actorFlags = *(u16*)(actorContext + 0x156C + i * sizeof(u16));",
+          "        if ((actorFlags & 1u) == 0 || (actorFlags & 2u) != 0) continue;",
+          "        u32 actorAddress = *(u32*)(actorContext + i * 0x6C + 0x54);",
+          "        if (actorAddress != 0 && Oot3d_GameplayStateResolvePointer(actorAddress) == actor) {",
+          "            ((Oot3dDynaPolyActor*)actor)->interactFlags = 0;",
+          "            return;",
+          "        }",
+          "    }",
+          "}"
+        ],
+        "required_assertions": [
+          "Actor_UpdateAll supplies play in r0, its separate Dyna context in r1 and the updated actor in r2",
+          "the scan count is exactly 0x32",
+          "both flag arrays use 16-bit loads and distinct bases 0x151C and play+0x0A98+0x156C",
+          "actor records have stride 0x6C and their target pointer is at +0x54",
+          "only the byte at Oot3dDynaPolyActor+0x1B8 is cleared",
+          "the helper at 0x00483C9C is a conditional tail of this semantic function, not a 36-KiB contiguous body"
+        ],
+        "notes": [
+          "The semantic name is provisional but the operation, three-argument ABI and every offset are target-proven.",
+          "OOT3D target code and the existing OOT3D DynaPoly_DeleteBgActor implementation establish the layout; the N64 source is used only to corroborate gameplay intent.",
+          "Ghidra fused a shared 12-byte tail at 0x00483C9C into the function. Preserve the discontiguous body identity when regenerating function metadata.",
+          "The consumer differential test covers first, middle and final matches, all miss classes, exact caller-clobbered registers and both native epilogues.",
+          "The typed implementation owns no continuation state and is MessagePack savestate tested."
+        ]
+      }
+    }
+  ]
+}

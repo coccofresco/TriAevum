@@ -1,0 +1,12 @@
+{
+  "content_identity_sha256": "f38b82df35cf3e48118a4561faa8b7d437e57965782785b42164fe5ab9af0665",
+  "excluded_tracked_files": 13168,
+  "files": 2866,
+  "format": "triaevum_corresponding_source_v1",
+  "repositories": {
+    ".": "7875f7d14eb0cb09adbed8915098aab431f71323",
+    "runtime/three_ds_recomp": "485dcc5c680b8ce223aedbe2ba049979a46ef7cd"
+  },
+  "source_commit": "7875f7d14eb0cb09adbed8915098aab431f71323",
+  "uncompressed_bytes": 53057344
+}

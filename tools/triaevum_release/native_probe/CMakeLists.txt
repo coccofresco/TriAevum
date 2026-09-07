@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.21)
+project(TriAevumNativeProbe LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+find_package(nlohmann_json CONFIG REQUIRED)
+get_filename_component(TRIAEVUM_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
+include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/TitleSupport.cmake")
+triaevum_add_title_support("${TRIAEVUM_ROOT}" "${TRIAEVUM_ROOT}/tools/oot3d/native_a32_runtime/upstream")

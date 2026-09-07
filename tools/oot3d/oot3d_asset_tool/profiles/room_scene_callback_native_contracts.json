@@ -1,0 +1,98 @@
+{
+  "format": "oot3d_room_scene_callback_native_contracts_v1",
+  "status": "verified_partial_coverage",
+  "code_bin": {
+    "base_address": "0x00100000",
+    "sha256": "16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220"
+  },
+  "contracts": [
+    {
+      "callback_address": "0x001EB3D8",
+      "callback_name": "RoomScene_KokiriForest_PrepareDraw",
+      "role": "prepare_draw",
+      "function_size": 300,
+      "function_sha256": "67e1e67bb2102988084331f45853c987c600313ca2d56a314ad610606d67b175",
+      "runtime_binding_status": "native_typed_operations_ready",
+      "literal_words": [
+        { "address": "0x001EB504", "value": "0x00588958" },
+        { "address": "0x001EB508", "value": "0x00587958" },
+        { "address": "0x001EB50C", "value": "0x00588758" },
+        { "address": "0x001EB510", "value": "0x0000067C" },
+        { "address": "0x001EB514", "value": "0x3B03126F" },
+        { "address": "0x001EB518", "value": "0x004DD494" },
+        { "address": "0x001EB51C", "value": "0x3A1DEB07" },
+        { "address": "0x001EB520", "value": "0x3F800000" },
+        { "address": "0x001EB524", "value": "0xC2333332" },
+        { "address": "0x001EB528", "value": "0x01A66665" },
+        { "address": "0x001EB52C", "value": "0x3DCCCCCD" },
+        { "address": "0x004DD494", "value": "0x3F800000" },
+        { "address": "0x004DD498", "value": "0x3F800000" },
+        { "address": "0x004DD49C", "value": "0x3F800000" },
+        { "address": "0x004DD4A0", "value": "0x00000000" },
+        { "address": "0x00375A08", "value": "0x0050C0C4" },
+        { "address": "0x00375A0C", "value": "0x0019660D" },
+        { "address": "0x00375A10", "value": "0x3C6EF35F" },
+        { "address": "0x00375A14", "value": "0x3F800000" }
+      ],
+      "operations": [
+        {
+          "kind": "material_tev_constant_alpha",
+          "target": {
+            "room_index": 1,
+            "resource_index": 0,
+            "material_indices": [2, 3],
+            "constant_index": 0
+          },
+          "native_operation": 2,
+          "color_rgb_f32_bits": [
+            "0x3F800000",
+            "0x3F800000",
+            "0x3F800000"
+          ],
+          "alpha": {
+            "base_f32_bits": "0x3F800000",
+            "selector_scale_f32_bits": "0x3A1DEB07",
+            "selector": {
+              "default_value": 0,
+              "excluded_setup_index": 4,
+              "draw_param_setup_index": 6,
+              "draw_param_index": 0,
+              "progression_value": 1660,
+              "setup_less_than": 4,
+              "alternate_fact": {
+                "key": "player.age",
+                "equals": "adult"
+              },
+              "required_fact": {
+                "key": "quest.kokiri_emerald",
+                "equals": "true"
+              }
+            },
+            "random": {
+              "function": "Rand_S16Offset",
+              "function_address": "0x00368B68",
+              "function_size": 48,
+              "function_sha256": "cd31c7dc1aa8cdfcce686212535c9f9ed31a1bf48b24a67cd294ca8ed7aceb63",
+              "state_address": "0x0050C0C4",
+              "offset": 0,
+              "range": 100,
+              "lcg_initial_state": 1,
+              "lcg_multiplier": "0x0019660D",
+              "lcg_increment": "0x3C6EF35F",
+              "scale_f32_bits": "0x3B03126F",
+              "middle_test_add_u32": "0xC2333332",
+              "middle_test_less_than_u32": "0x01A66665",
+              "low_compare_f32_bits": "0x3DCCCCCD"
+            }
+          },
+          "evidence": {
+            "callback": "code.bin RoomScene_KokiriForest_PrepareDraw@0x001EB3D8",
+            "material_api": "code.bin SkeletonAnimationModel_ApplyTevConstantColor@0x00358778",
+            "random_api": "code.bin Rand_S16Offset@0x00368B68 and Rand_ZeroOne@0x003759D0",
+            "source_snapshot": "896f866d4b9b8ea7"
+          }
+        }
+      ]
+    }
+  ]
+}

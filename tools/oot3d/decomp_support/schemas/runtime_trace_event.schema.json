@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local/oot3d/runtime_trace_event.schema.json",
+  "title": "OOT3D runtime trace event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event",
+    "pc"
+  ],
+  "properties": {
+    "event": {
+      "type": "string",
+      "enum": [
+        "function_enter",
+        "function_exit",
+        "breakpoint_hit",
+        "memory_read",
+        "memory_write",
+        "romfs_open",
+        "heap_alloc",
+        "heap_free",
+        "scene_load",
+        "actor_spawn",
+        "actor_update",
+        "actor_draw",
+        "frame"
+      ]
+    },
+    "pc": {
+      "$ref": "#/$defs/hex32"
+    },
+    "tick": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "frame": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "thread_id": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "function_entry": {
+      "$ref": "#/$defs/hex32"
+    },
+    "function_name": {
+      "type": "string"
+    },
+    "caller_pc": {
+      "$ref": "#/$defs/hex32"
+    },
+    "sp": {
+      "$ref": "#/$defs/hex32"
+    },
+    "lr": {
+      "$ref": "#/$defs/hex32"
+    },
+    "regs": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/hex32"
+      }
+    },
+    "args": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/hex32"
+      }
+    },
+    "address": {
+      "$ref": "#/$defs/hex32"
+    },
+    "size": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "value": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/hex32"
+        },
+        {
+          "type": "integer"
+        }
+      ]
+    },
+    "romfs_path": {
+      "type": "string"
+    },
+    "scene_id": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "actor_id": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "object_ptr": {
+      "$ref": "#/$defs/hex32"
+    },
+    "result": {
+      "type": [
+        "string",
+        "integer",
+        "boolean",
+        "null"
+      ]
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "hex32": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{8}$"
+    }
+  }
+}

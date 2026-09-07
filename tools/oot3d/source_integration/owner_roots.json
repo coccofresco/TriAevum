@@ -1,0 +1,671 @@
+{
+  "format": "oot3d_source_owner_roots_v1",
+  "analysis_policy": {
+    "follow_direct_calls": true,
+    "follow_indirect_targets": false,
+    "require_indirect_contracts_for_import": true,
+    "materialize_closed_source_candidates": true
+  },
+  "consumer_semantic_overlay_manifest": "tools/oot3d/source_integration/consumer_semantic_overlays.json",
+  "profiles": [
+    {
+      "id": "kokiri_gameplay",
+      "path": "tools/oot3d/native_a32_runtime/profiles/navi_kokiri_main_forest_source_coverage.json",
+      "weight": 1.0
+    },
+    {
+      "id": "title_intro",
+      "path": "tools/oot3d/native_a32_runtime/profiles/title_intro_logo_source_coverage.json",
+      "weight": 0.35
+    }
+  ],
+  "runtime_entry_registries": [
+    {
+      "id": "typed_gameplay",
+      "headers": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_gameplay_bridge.h",
+        "tools/oot3d/native_game_runtime/oot3d_typed_actor_lifecycle.h",
+        "tools/oot3d/native_game_runtime/oot3d_typed_actor_update_records.h",
+        "tools/oot3d/native_game_runtime/oot3d_typed_audio_request_callback.h",
+        "tools/oot3d/native_game_runtime/oot3d_typed_dyna_interaction_reset.h",
+        "tools/oot3d/native_game_runtime/oot3d_typed_game_state.h",
+        "tools/oot3d/native_game_runtime/oot3d_typed_pause_ui_alpha.h",
+        "tools/oot3d/native_game_runtime/oot3d_typed_player_lock_on.h",
+        "tools/oot3d/native_game_runtime/oot3d_typed_record_initializer.h"
+      ],
+      "source": "tools/oot3d/native_game_runtime/oot3d_typed_gameplay_bridge.cpp",
+      "array": "kTypedGameplayEntryPoints"
+    }
+  ],
+  "source_status_overrides": [],
+  "service_boundaries": [
+    {
+      "id": "compiler_runtime",
+      "name_patterns": [
+        "^__aeabi_",
+        "^svc",
+        "^(?:oot3d_)?(?:memcpy|memmove|memset|malloc|calloc|realloc|free)$"
+      ],
+      "entries": [
+        "0x002DF174",
+        "0x00332754",
+        "0x00447FAC"
+      ],
+      "rationale": "Compiler, kernel and allocation primitives remain explicit host services."
+    },
+    {
+      "id": "c_math_runtime",
+      "name_patterns": [
+        "^sinf$"
+      ],
+      "entries": [
+        "0x003555D8"
+      ],
+      "rationale": "The target body is the C99 single-precision sine service with its scalar hard-float argument and result in s0; native consumers bind it to the host C math runtime instead of translating the library implementation as gameplay code."
+    },
+    {
+      "id": "ctr_nngx_gpu_state_runtime",
+      "name_patterns": [],
+      "entries": [
+        "0x0046C204"
+      ],
+      "rationale": "0x0046C204 is the target-proven nngxValidateState dirty-PICA-state emitter: a CTR/nngx platform-library service that serializes shadow GPU state into the guest command list. It is outside gameplay-source ownership. Source closure does not imply a typed native implementation or runtime-import acceptance; this entry remains on the A32/whole-AOT fallback until a differential-tested native service adapter is accepted."
+    }
+  ],
+  "dynamic_dispatch_contracts": [
+    {
+      "id": "game_state_main_callback",
+      "owner": "game_state_update",
+      "source": "0x00417014",
+      "kind": "game_state_main_field",
+      "status": "implemented",
+      "callback_fields": [
+        {
+          "name": "main",
+          "instance_offset": "0x04",
+          "abi": "void(GameState*)"
+        }
+      ],
+      "resolver": "typed gameplay entry lookup",
+      "fallback": "normal A32 dispatcher",
+      "description": "Dispatch the per-instance GameState main callback and resume at the target continuation before incrementing GameState.frames.",
+      "implementation": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_game_state.cpp",
+        "tools/oot3d/native_game_runtime/oot3d_typed_gameplay_bridge.cpp"
+      ],
+      "verification": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_gameplay_tests.cpp:TestGameStateUpdateOwnerDifferential"
+      ],
+      "evidence": [
+        "ghidra_export/disassembly.txt:00417014-00417030",
+        "ghidra_export/decompiled/07589_00417014_GameState_Update.c",
+        "Graph_ThreadEntry at 0x00416208 passes GameState* in r0"
+      ]
+    },
+    {
+      "id": "actor_instance_init_update_callbacks",
+      "owner": "actor_update_all",
+      "source": "0x00461344",
+      "kind": "actor_instance_callback_fields",
+      "status": "implemented",
+      "callback_fields": [
+        {
+          "name": "init",
+          "instance_offset": "0x134",
+          "profile_offset": "0x10"
+        },
+        {
+          "name": "update",
+          "instance_offset": "0x13C",
+          "profile_offset": "0x18"
+        }
+      ],
+      "resolver": "typed gameplay entry lookup",
+      "fallback": "normal NativeA32Process A32 dispatcher",
+      "description": "Dispatch Actor init/update addresses through one typed boundary, with generic A32 fallback for callback targets that have not migrated to reviewed source.",
+      "implementation": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_actor_lifecycle.cpp",
+        "tools/oot3d/native_game_runtime/oot3d_typed_gameplay_bridge.cpp"
+      ],
+      "verification": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_gameplay_tests.cpp:TestActorInstanceCallbackContractDifferential"
+      ],
+      "evidence": [
+        "ghidra_export/disassembly.txt:004615D8-004615E8",
+        "ghidra_export/disassembly.txt:004617A4-004617B0",
+        "include/oot3d/actor.h:Oot3dActor",
+        "include/oot3d/actor_spawn.h:Oot3dActorProfile"
+      ]
+    },
+    {
+      "id": "actor_instance_destroy_callback",
+      "owner": "actor_update_all",
+      "source": "0x002D644C",
+      "kind": "actor_instance_callback_field",
+      "status": "implemented",
+      "callback_fields": [
+        {
+          "name": "destroy",
+          "instance_offset": "0x138",
+          "profile_offset": "0x14"
+        }
+      ],
+      "resolver": "typed gameplay entry lookup",
+      "fallback": "normal NativeA32Process A32 dispatcher",
+      "description": "Dispatch the actor destroy callback through the same typed-or-A32 boundary while preserving the target calling convention and guest memory.",
+      "implementation": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_actor_lifecycle.cpp",
+        "tools/oot3d/native_game_runtime/oot3d_typed_gameplay_bridge.cpp"
+      ],
+      "verification": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_gameplay_tests.cpp:TestActorDestroyOwnerDifferential",
+        "tools/oot3d/native_game_runtime/oot3d_typed_gameplay_tests.cpp:TestTypedActorLifecycleCheckpointRoundTrip"
+      ],
+      "evidence": [
+        "ghidra_export/disassembly.txt:004616A0-004616A8",
+        "ghidra_export/decompiled/03605_002d644c_Actor_Destroy.c",
+        "include/oot3d/actor.h:Oot3dActor",
+        "include/oot3d/actor_spawn.h:Oot3dActorProfile"
+      ]
+    },
+    {
+      "id": "actor_owned_resource_virtual_cleanup",
+      "owner": "actor_update_all",
+      "source": "0x002D644C",
+      "kind": "actor_owned_resource_virtuals",
+      "status": "implemented",
+      "callback_fields": [
+        {
+          "name": "model_context_destroy",
+          "instance_offset": "0x178",
+          "vtable_offset": "0x10"
+        },
+        {
+          "name": "owned_model_slots_destroy",
+          "instance_offset": "0x17C-0x194",
+          "vtable_offset": "0x04"
+        }
+      ],
+      "resolver": "typed renderer resource service",
+      "fallback": "normal NativeA32Process A32 dispatcher",
+      "description": "Preserve the native virtual cleanup of the actor model context and seven owned renderer-resource slots when Actor_Destroy migrates.",
+      "implementation": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_actor_lifecycle.cpp",
+        "tools/oot3d/native_game_runtime/oot3d_typed_gameplay_bridge.cpp"
+      ],
+      "verification": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_gameplay_tests.cpp:TestActorDestroyOwnerDifferential",
+        "tools/oot3d/native_game_runtime/oot3d_typed_gameplay_tests.cpp:TestTypedActorLifecycleCheckpointRoundTrip"
+      ],
+      "evidence": [
+        "ghidra_export/decompiled/03605_002d644c_Actor_Destroy.c",
+        "include/oot3d/actor.h:Oot3dActor"
+      ]
+    }
+  ],
+  "owners": [
+    {
+      "id": "player_update",
+      "entry": "0x001E1B54",
+      "expected_name": "Player_Update",
+      "domain": "player",
+      "priority": 100
+    },
+    {
+      "id": "player_update_common_candidate",
+      "entry": "0x00250AD0",
+      "expected_name": "Player_UpdateCommon",
+      "domain": "player",
+      "priority": 100,
+      "identity_requires_target_verification": false,
+      "identity_resolution": {
+        "status": "resolved",
+        "resolved_name": "Player_UpdateCommon",
+        "description": "The sole target caller builds the 48-byte Input packet and calls 0x00250AD0 with Player, PlayState and Input; the target body then performs the timer, movement, collision and collider-reset phases of Player_UpdateCommon. The previous Player_Action_TurnInPlace label described a different short two-argument N64 action.",
+        "evidence": [
+          "ghidra_export/decompiled/01568_001e1b54_Player_Update.c:70-103",
+          "ghidra_export/decompiled/02370_00250ad0_oot3d_player_action_turn_in_place.c:73-88,1596-1643",
+          "external/oot/src/overlays/actors/ovl_player_actor/z_player.c:11679-12148",
+          "metadata/n64_structural_transfer.csv:00250AD0",
+          "code.bin 0x00250AD0 AAPCS r0=Player r1=PlayState r2=Input"
+        ]
+      }
+    },
+    {
+      "id": "actor_update_all",
+      "entry": "0x00461344",
+      "expected_name": "Actor_UpdateAll",
+      "domain": "actor",
+      "priority": 95,
+      "identity_requires_target_verification": false,
+      "identity_resolution": {
+        "status": "resolved",
+        "resolved_name": "Actor_UpdateAll",
+        "description": "Target-derived actor-core metadata and the maintained producer root identify 0x00461344 as Actor_UpdateAll: it traverses all twelve Actor categories, initializes resident actors, updates active instances and deletes killed instances.",
+        "evidence": [
+          "tools/oot3d/decomp_support/evidence/zelda3drecomp/fc3ee7680326a688/analysis/codebin_actor_core_symbols.csv:00461344",
+          "tools/oot3d/decomp_support/evidence/zelda3drecomp/fc3ee7680326a688/analysis/codebin_actor_core_signatures.csv:00461344",
+          "tools/oot3d/decomp_support/evidence/zelda3drecomp/fc3ee7680326a688/build/analysis/decomp_batches/actor_core_semantic_typed.md:Actor_UpdateAll",
+          "tools/oot3d/decomp_support/analysis/actor_update_all_timing_verify.md",
+          "code.bin SHA-256 16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220"
+        ]
+      },
+      "runtime_import_validation": {
+        "status": "native30_accepted_opt_in",
+        "current_boundary": "The revision-pinned complete owner root at 0x00461344 is registered only when --enable-source-actor-update-all is explicit. Native30 differential, callback-boundary savestate and Kokiri process evidence pass.",
+        "implementation_evidence": [
+          "tools/oot3d/native_game_runtime/oot3d_source_actor_update_all_runtime.h",
+          "tools/oot3d/native_game_runtime/oot3d_source_actor_update_all_runtime.cpp",
+          "tools/oot3d/native_game_runtime/oot3d_source_actor_callback_runtime.h",
+          "tools/oot3d/native_game_runtime/oot3d_source_actor_callback_runtime.cpp"
+        ],
+        "required_checks": [
+          "Retain longer Native30 interaction and scene-transition coverage.",
+          "Classify Enhanced60 owner timing independently from Native30 acceptance.",
+          "Remove the explicit opt-in only after the intended release fallback backend is linked."
+        ]
+      }
+    },
+    {
+      "id": "cutscene_frame_owner",
+      "entry": "0x00321F50",
+      "expected_name": "Cutscene_UpdateFrame",
+      "domain": "cutscene",
+      "priority": 90,
+      "identity_requires_target_verification": true,
+      "identity_resolution": {
+        "status": "resolved",
+        "resolved_name": "Cutscene_UpdateFrame",
+        "description": "Target control flow advances CutsceneContext+0x20, performs the native backend-clock handshake and dispatches Cutscene_ProcessCommands with PlayState+0x229C. The canonical identity is established from the OOT3D body and call ABI.",
+        "evidence": [
+          "target root 0x00321F50-0x00322073 SHA-256 bb317ded32373e22fc7aa7b775eb794455808f381868228c7dbe904f55ec3430",
+          "tools/oot3d/source_imports/cutscene_update_frame_d5c2927/import_manifest.json",
+          "code.bin SHA-256 16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220"
+        ]
+      },
+      "runtime_import_validation": {
+        "status": "native30_accepted_opt_in",
+        "current_boundary": "The complete 292-byte owner is registered only when --enable-source-cutscene-update-frame is explicit. Generated-A32 differential and a 300-frame Link-dream process run through the full Cutscene_ProcessCommands guest dependency pass.",
+        "implementation_evidence": [
+          "tools/oot3d/native_game_runtime/oot3d_source_cutscene_update_frame_runtime.h",
+          "tools/oot3d/native_game_runtime/oot3d_source_cutscene_update_frame_runtime.cpp",
+          "tools/oot3d/source_imports/cutscene_update_frame_d5c2927/include/oot3d/cutscene_update_frame_owner.h",
+          "tools/oot3d/source_imports/cutscene_update_frame_d5c2927/src/code/z_cutscene_update_frame_owner.cpp"
+        ],
+        "required_checks": [
+          "Retain longer Native30 coverage across backend-clock and scene-transition paths.",
+          "Keep the existing Enhanced60 crossing policy separate from Native30 owner acceptance.",
+          "Promote Cutscene_ProcessCommands independently instead of expanding this owner import."
+        ]
+      }
+    },
+    {
+      "id": "cutscene_process_commands",
+      "entry": "0x002C5BA0",
+      "expected_name": "Cutscene_ProcessCommands",
+      "domain": "cutscene",
+      "priority": 90
+    },
+    {
+      "id": "camera_update",
+      "entry": "0x002D84C4",
+      "expected_name": "Camera_Update",
+      "domain": "camera",
+      "priority": 85
+    },
+    {
+      "id": "game_state_update",
+      "entry": "0x00417014",
+      "expected_name": "GameState_Update",
+      "domain": "game_state",
+      "priority": 80
+    },
+    {
+      "id": "game_state_renderer_initializer",
+      "entry": "0x0044E7C0",
+      "expected_name": "Actor_InitContext",
+      "domain": "actor_initialization",
+      "priority": 70,
+      "identity_requires_target_verification": false,
+      "identity_resolution": {
+        "status": "resolved",
+        "resolved_name": "Actor_InitContext",
+        "description": "The historical consumer ID described only the visible renderer-resource tail. Target-derived actor-core metadata identifies the complete owner as Actor_InitContext: it clears the 0x20C ActorContext, initializes category lists, spawns Player, installs the context light and constructs attention/Navi resources.",
+        "evidence": [
+          "tools/oot3d/decomp_support/evidence/zelda3drecomp/fc3ee7680326a688/analysis/codebin_actor_core_symbols.csv:0044E7C0",
+          "tools/oot3d/decomp_support/evidence/zelda3drecomp/fc3ee7680326a688/analysis/codebin_actor_core_signatures.csv:0044E7C0",
+          "tools/oot3d/decomp_support/evidence/zelda3drecomp/fc3ee7680326a688/build/analysis/decomp_batches/actor_core_semantic_typed.md:Actor_InitContext",
+          "code.bin SHA-256 16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220"
+        ]
+      },
+      "runtime_import_validation": {
+        "status": "native30_accepted_opt_in",
+        "current_boundary": "The revision-pinned complete owner root at 0x0044E7C0 is registered only when --enable-source-actor-init-context is explicit. Full memory differential, pre/post-owner savestates and a frame-12000 process smoke pass.",
+        "implementation_evidence": [
+          "tools/oot3d/native_game_runtime/oot3d_source_actor_init_context_runtime.h",
+          "tools/oot3d/native_game_runtime/oot3d_source_actor_init_context_runtime.cpp",
+          "tools/oot3d/source_imports/actor_init_context_d5c2927/include/oot3d/actor_init_context_owner.h",
+          "tools/oot3d/source_imports/actor_init_context_d5c2927/src/code/z_actor_init_context_owner.cpp"
+        ],
+        "required_checks": [
+          "Retain startup and additional scene-entry Native30 coverage.",
+          "Classify Enhanced60 initialization timing independently from Native30 acceptance.",
+          "Remove the explicit opt-in only after the intended release fallback backend is linked."
+        ]
+      }
+    }
+  ],
+  "manual_blockers": [
+    {
+      "id": "resolve_playstate_virtual_update",
+      "owner": "game_state_update",
+      "entry": "0x00417014",
+      "kind": "indirect_owner_target",
+      "status": "resolved",
+      "description": "Target evidence establishes a generic per-GameState main callback at +0x04, not a PlayState-only virtual target.",
+      "evidence": [
+        "ghidra_export/disassembly.txt:00417018-00417020",
+        "tools/oot3d/native_game_runtime/oot3d_typed_gameplay_tests.cpp:TestGameStateUpdateOwnerDifferential"
+      ]
+    },
+    {
+      "id": "split_actor_update_all_boundary",
+      "owner": "actor_update_all",
+      "entry": "0x00461344",
+      "kind": "ghidra_function_boundary",
+      "status": "resolved",
+      "description": "Ghidra fused Actor_UpdateAll with its tail-called dynamic-collision transform helper.",
+      "resolution": "Actor_UpdateAll code is 0x00461344-0x004618F7 and ends with a tail branch at 0x004618F4 to the separate helper at 0x004796BC-0x00479717. Preserve the literal pool at 0x004618F8-0x00461903 and the independent function start at 0x00461904.",
+      "target_code": {
+        "entry": "0x00461344",
+        "end_exclusive": "0x004618F8",
+        "size": 1460,
+        "sha256": "0297da8fc97ddd76a7df76a01fe8ce4c1ee8a9169ef69877ce1c903727fb49cf",
+        "literal_pool": {
+          "entry": "0x004618F8",
+          "end_exclusive": "0x00461904",
+          "sha256": "59b37ac341685ea466155d2f8ceaec4d7f9aa487a7d0949adaee7ead9c710966"
+        },
+        "tail_target": {
+          "entry": "0x004796BC",
+          "end_exclusive": "0x00479718",
+          "size": 92,
+          "sha256": "27c9725b89ad3bd3f8aebb42bd3dbd583b6c7185225abdfa4e1e5f558f2e1df3",
+          "semantic_role": "DynaPoly_UpdateBgActorTransforms equivalent"
+        }
+      },
+      "evidence": [
+        "tools/oot3d/decomp_support/analysis/material_lighting_raw_field_consumer_ghidra_export/disassembly_selected.txt:00461344-00461904",
+        "tools/oot3d/decomp_support/analysis/material_lighting_raw_field_consumer_ghidra_export/functions_selected.csv:FUN_00461344",
+        "tools/oot3d/decomp_support/analysis/material_lighting_raw_field_consumer_ghidra_export/decompiled/99078_00461344_FUN_00461344.c",
+        "code.bin SHA-256 16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220",
+        "N64 z_actor.c Actor_UpdateAll is semantic corroboration only: its final operation is DynaPoly_UpdateBgActorTransforms"
+      ],
+      "decomp_action": "Split the Ghidra function at the 0x004618F4 tail branch, create/name the 0x004796BC helper independently, regenerate callgraph and function-pointer sidecars, and retain the helper as a direct tail dependency of Actor_UpdateAll."
+    },
+    {
+      "id": "split_actor_init_context_tail_helper",
+      "owner": "game_state_renderer_initializer",
+      "entry": "0x0044E7C0",
+      "kind": "ghidra_function_boundary",
+      "status": "resolved",
+      "description": "The Ghidra extent for Actor_InitContext spans from 0x0044E7C0 through 0x0046341F because it follows a tail branch across unrelated intervening text.",
+      "resolution": "Actor_InitContext has a contiguous root body at 0x0044E7C0-0x0044EFA7. After restoring its frame, 0x0044EFA4 tail-branches to the independently framed helper at 0x004632B4-0x0046341F. Treat the helper as a direct tail dependency; do not treat the 85,088-byte address extent as contiguous owner code.",
+      "target_code": {
+        "entry": "0x0044E7C0",
+        "end_exclusive": "0x0044EFA8",
+        "size": 2024,
+        "sha256": "09df5dfd35274cd1f493071bbe2c87cfc5e90ef2143f4dfed73ab0b1b112ebd4",
+        "tail_target": {
+          "entry": "0x004632B4",
+          "end_exclusive": "0x00463420",
+          "size": 364,
+          "sha256": "55824fd0e8c3c6989a61eb9a58e596d3dfb5f2424da490de04fa4a9795b4a3ac",
+          "semantic_role": "ActorContext attention auxiliary-model and material-animation initialization"
+        }
+      },
+      "evidence": [
+        "tools/oot3d/decomp_support/analysis/actor_vs_packet_writer_ghidra_export/disassembly_selected.txt:0044EFA0-0046341C",
+        "tools/oot3d/decomp_support/ghidra_export/decompiled/99323_0044e7c0_FUN_0044e7c0.c",
+        "tools/oot3d/decomp_support/evidence/zelda3drecomp/fc3ee7680326a688/build/analysis/decomp_batches/actor_core_semantic_typed.md:Actor_InitContext",
+        "code.bin SHA-256 16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220"
+      ],
+      "decomp_action": "Model 0x004632B4 as a separate direct tail dependency of Actor_InitContext and regenerate function extents, callgraph and source provenance without changing the recovered behavior."
+    },
+    {
+      "id": "classify_a32_signed_divmod_service_family",
+      "owner": "actor_update_all",
+      "entry": "0x00332754",
+      "kind": "compiler_runtime_identity_and_boundary",
+      "status": "resolved",
+      "affected_owner_depths": [
+        {
+          "owner": "actor_update_all",
+          "depth": 1
+        },
+        {
+          "owner": "cutscene_process_commands",
+          "depth": 2
+        },
+        {
+          "owner": "cutscene_frame_owner",
+          "depth": 3
+        }
+      ],
+      "description": "Target control flow strongly identifies 0x00332754, 0x00447FAC and 0x002DF174..0x002DF17B as a signed 64-bit divmod wrapper, unsigned 64-bit divmod core and divide-by-zero return service. Confirm the exact ARM EABI identities before treating this direct Actor subtree as compiler runtime.",
+      "resolution": "Producer commit 8944bd94a72c publishes exact spans and SHA-256 values in metadata/compiler_service_boundaries.csv, confirms the ARM EABI quotient/remainder register contract, and merges the logical 0x002DF174..0x002DF17B service boundary.",
+      "candidate_identity": [
+        {
+          "entry": "0x00332754",
+          "role": "signed 64-bit quotient/remainder wrapper",
+          "candidate_name": "__aeabi_ldivmod"
+        },
+        {
+          "entry": "0x00447FAC",
+          "role": "unsigned 64-bit quotient/remainder core",
+          "candidate_name": "__aeabi_uldivmod"
+        },
+        {
+          "entry": "0x002DF174",
+          "end_exclusive": "0x002DF17C",
+          "role": "divide-by-zero identity return",
+          "candidate_name": "__aeabi_ldiv0",
+          "current_boundary_issue": "Ghidra separates the terminal bx lr at 0x002DF178 into a second function."
+        }
+      ],
+      "target_code": [
+        {
+          "entry": "0x00332754",
+          "end_exclusive": "0x003327A4",
+          "size": 80,
+          "sha256": "ec1af4e82dfbf9e0f5d5deb0743ef285cb1722dd8d5f49ebe42a12ffc041adda"
+        },
+        {
+          "entry": "0x00447FAC",
+          "end_exclusive": "0x0044825C",
+          "size": 688,
+          "sha256": "c947f0888273995e7815e619f8b402a0edd6c06dd08c344e1cf9a33be4ae555f"
+        },
+        {
+          "entry": "0x002DF174",
+          "end_exclusive": "0x002DF17C",
+          "size": 8,
+          "sha256": "406da2c395ac47763d61d17f1172502baa78e7dfbfb4149415c26053cadd1a4f"
+        }
+      ],
+      "evidence": [
+        "ghidra_export/disassembly.txt:00332754-003327A0",
+        "ghidra_export/disassembly.txt:00447FAC-00448258",
+        "ghidra_export/disassembly.txt:002DF174-002DF178",
+        "ghidra_export/decompiled/04957_00332754_FUN_00332754.c",
+        "ghidra_export/decompiled/08009_00447fac_FUN_00447fac.c",
+        "ghidra_export/decompiled/03723_002df174_FUN_002df174.c",
+        "metadata/recovered_call_contracts.csv:002DF174,00332754,00447FAC",
+        "code.bin SHA-256 16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220"
+      ],
+      "decomp_action": "Compare the three target bodies with the exact ARM EABI/compiler-runtime implementation used by this title. If confirmed, merge 0x002DF174 and 0x002DF178, publish exact ABI-correct runtime source or service symbols for all three entries, and classify their addresses as compiler-runtime boundaries. Preserve quotient in r0:r1 and remainder in r2:r3, regenerate callgraph and function-pointer sidecars at the same commit, and do not derive these helpers from N64 gameplay source."
+    },
+    {
+      "id": "verify_player_update_common_identity",
+      "owner": "player_update_common_candidate",
+      "entry": "0x00250AD0",
+      "kind": "semantic_identity",
+      "status": "resolved",
+      "description": "Verify from OOT3D target evidence that 0x00250AD0 is Player_UpdateCommon and replace the stale turn-in-place label.",
+      "resolution": "The sole Player_Update caller supplies a 48-byte Input packet as the third argument, and the target body matches the complete N64 Player_UpdateCommon lifecycle rather than the short Player_Action_TurnInPlace action. The canonical owner identity is Player_UpdateCommon; producer source promotion remains a separate gate.",
+      "evidence": [
+        "ghidra_export/decompiled/01568_001e1b54_Player_Update.c:70-103",
+        "ghidra_export/decompiled/02370_00250ad0_oot3d_player_action_turn_in_place.c:73-88,1596-1643",
+        "external/oot/src/overlays/actors/ovl_player_actor/z_player.c:11679-12148",
+        "metadata/n64_structural_transfer.csv:00250AD0"
+      ]
+    }
+  ],
+  "indirect_contracts": [],
+  "owner_import_acceptance": [
+    {
+      "owner": "game_state_update",
+      "status": "approved",
+      "consumer_overlay": "game_state_update_owner",
+      "dynamic_dispatch_contracts": [
+        "game_state_main_callback"
+      ],
+      "implementation_files": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_game_state.h",
+        "tools/oot3d/native_game_runtime/oot3d_typed_game_state.cpp",
+        "tools/oot3d/native_game_runtime/oot3d_typed_gameplay_bridge.h",
+        "tools/oot3d/native_game_runtime/oot3d_typed_gameplay_bridge.cpp"
+      ],
+      "verification_files": [
+        "tools/oot3d/native_game_runtime/oot3d_typed_gameplay_tests.cpp"
+      ],
+      "verification_cases": [
+        "TestGameStateUpdateOwnerDifferential",
+        "TestTypedGameStateCheckpointRoundTrip"
+      ],
+      "target_evidence": [
+        "ghidra_export/disassembly.txt:00417014-00417030",
+        "target code SHA-256 cd3896654716c877313830f1ff251959e8ba219d7cdfdfd9d578fb4a62e4895a"
+      ],
+      "abi_layout": "Exact A32 entry/continuation differential covers r0-r15, CPSR, the saved {r4,lr} frame, GameState.main at +0x04 and GameState.frames at +0xF8.",
+      "native30_differential": "Entry dispatch, callback return, uint32 frame-counter wrap and invalid-memory fallback match the generated A32 registry.",
+      "savestate_contract": "The owner stores continuation state only in guest registers, stack and memory; a process-state MessagePack round trip at the callback boundary resumes identically.",
+      "callback_coverage": "GameState.main is dispatched through the normal typed-or-A32 process boundary; unknown callback targets retain the generic A32 path.",
+      "enhanced60_timing": "The owner increments GameState.frames exactly once per actual GameState update invocation; frame-rate scheduling remains outside this owner.",
+      "performance_scope": "The owner entry and post-callback continuation no longer execute as A32 blocks; callback bodies remain independently migratable and no broader speedup is claimed."
+    },
+    {
+      "owner": "actor_update_all",
+      "status": "approved",
+      "dynamic_dispatch_contracts": [
+        "actor_instance_init_update_callbacks",
+        "actor_instance_destroy_callback",
+        "actor_owned_resource_virtual_cleanup"
+      ],
+      "implementation_files": [
+        "tools/oot3d/native_game_runtime/oot3d_source_actor_update_all_runtime.h",
+        "tools/oot3d/native_game_runtime/oot3d_source_actor_update_all_runtime.cpp",
+        "tools/oot3d/native_game_runtime/oot3d_source_actor_callback_runtime.h",
+        "tools/oot3d/native_game_runtime/oot3d_source_actor_callback_runtime.cpp",
+        "tools/oot3d/native_game_runtime/oot3d_native_owner_call_adapter.h",
+        "tools/oot3d/native_game_runtime/oot3d_native_owner_call_adapter.cpp",
+        "tools/oot3d/source_imports/actor_update_all_449e219e/include/oot3d/owner_actor_runtime.h",
+        "tools/oot3d/source_imports/actor_update_all_449e219e/src/code/z_owner_actor_runtime.c"
+      ],
+      "verification_files": [
+        "tools/oot3d/native_game_runtime/oot3d_source_actor_update_all_tests.cpp",
+        "tools/oot3d/native_game_runtime/oot3d_native_a32_process_tests.cpp"
+      ],
+      "verification_cases": [
+        "TestActorUpdateAllDifferential",
+        "TestActorLifecycleDifferential",
+        "TestDependencyFailureIsControlled",
+        "TestSourceOwnerCallAdapterReentrantDispatch"
+      ],
+      "target_evidence": [
+        "target root 0x00461344-0x004618F7 SHA-256 0297da8fc97ddd76a7df76a01fe8ce4c1ee8a9169ef69877ce1c903727fb49cf",
+        "I:/oot3dre_work/native_game/actor_update_all_source_smoke.json SHA-256 d7052debf18b38c953b34c5c56ae811a82e59589cd8ce86ee41d9fd4ff102242",
+        "I:/oot3dre_work/native_game/actor_init_context_source_smoke_10380_objhana.json SHA-256 44dcac6bea9a601cc0f0bde8b412bcea44181d0b9f3f5cf23b25d932f63ac8ef"
+      ],
+      "abi_layout": "The complete 0x00461344 owner uses PlayState in r0, the embedded ActorContext at PlayState+0x208C, exact category-list links and target init/update/destroy callback continuations.",
+      "native30_differential": "Three authored ticks traverse all twelve populated categories and compare all mapped owner memory against generated A32, including initialization, update, kill, destroy, unlink and resource release.",
+      "savestate_contract": "Independent checkpoints before init/update callbacks and after a completed tick are destructively mutated, restored and resumed identically on source and A32 paths.",
+      "callback_coverage": "Actor init, update and destroy fields plus owned renderer-resource virtual cleanup use implemented typed-or-A32 contracts; recovered callbacks may register in the owner-independent source callback registry.",
+      "enhanced60_timing": "Acceptance is Native30 only. Enhanced60 timer and callback cadence remain an explicit follow-up and do not alter this owner's target semantics.",
+      "performance_scope": "The complete traversal owner executes as host C/C++; unmigrated actor callbacks and dependencies remain independently measurable nested guest calls."
+    },
+    {
+      "owner": "game_state_renderer_initializer",
+      "status": "approved",
+      "implementation_files": [
+        "tools/oot3d/native_game_runtime/oot3d_source_actor_init_context_runtime.h",
+        "tools/oot3d/native_game_runtime/oot3d_source_actor_init_context_runtime.cpp",
+        "tools/oot3d/native_game_runtime/oot3d_native_owner_call_adapter.h",
+        "tools/oot3d/native_game_runtime/oot3d_native_owner_call_adapter.cpp",
+        "tools/oot3d/source_imports/actor_init_context_d5c2927/include/oot3d/actor_init_context_owner.h",
+        "tools/oot3d/source_imports/actor_init_context_d5c2927/src/code/z_actor_init_context_owner.cpp"
+      ],
+      "verification_files": [
+        "tools/oot3d/native_game_runtime/oot3d_source_actor_init_context_tests.cpp",
+        "tools/oot3d/native_game_runtime/oot3d_native_a32_process_tests.cpp",
+        "tools/oot3d/native_game_runtime/oot3d_native_frame_rate_tests.cpp"
+      ],
+      "verification_cases": [
+        "TestActorInitContextDifferential",
+        "TestSourceOwnerCallAdapterPerCallBudget",
+        "RunNativeFrameRateTests"
+      ],
+      "target_evidence": [
+        "target root 0x0044E7C0-0x0044EFA7 SHA-256 09df5dfd35274cd1f493071bbe2c87cfc5e90ef2143f4dfed73ab0b1b112ebd4",
+        "target tail helper 0x004632B4-0x0046341F SHA-256 55824fd0e8c3c6989a61eb9a58e596d3dfb5f2424da490de04fa4a9795b4a3ac",
+        "I:/oot3dre_work/native_game/actor_init_context_source_smoke_frame12000_accepted.json SHA-256 bab3cbe1e70352747c4ac5a472dbae6f3efab3f0737ddf76cdd101b35d2e886a"
+      ],
+      "abi_layout": "The process entry uses r0=PlayState, r1=PlayState+0x208C and r2=the eight-word Player spawn entry. Differential coverage includes hard-float Actor_Spawn and light calls, exact virtual factories and the four-register 0x0034897C material constructor.",
+      "native30_differential": "Both renderer-guard paths compare all owner data and RAM against generated A32 after ActorContext initialization, Player spawn, light insertion, 29 factories, four materials and the tail helper.",
+      "savestate_contract": "Source and A32 lanes restore independently captured checkpoints before Player spawn and after renderer-resource construction; the retained process checkpoint completes 600 Native30 refreshes.",
+      "callback_coverage": "Direct dependencies, allocator virtual dispatch and renderer factory virtuals execute by exact guest address through the checked owner adapter; no guest function pointer is cast to a host function.",
+      "enhanced60_timing": "Acceptance is Native30 only. Finite initialization sleeps advance monotonic CTR time and overdue VBlanks catch up without changing owner logic; Enhanced60 remains separately classified.",
+      "performance_scope": "The complete initialization owner executes as host C/C++; per-call transition limits expose, rather than hide, remaining nested guest renderer work."
+    },
+    {
+      "owner": "cutscene_frame_owner",
+      "status": "approved",
+      "implementation_files": [
+        "tools/oot3d/native_game_runtime/oot3d_source_cutscene_update_frame_runtime.h",
+        "tools/oot3d/native_game_runtime/oot3d_source_cutscene_update_frame_runtime.cpp",
+        "tools/oot3d/native_game_runtime/oot3d_native_owner_call_adapter.h",
+        "tools/oot3d/native_game_runtime/oot3d_native_owner_call_adapter.cpp",
+        "tools/oot3d/source_imports/cutscene_update_frame_d5c2927/include/oot3d/cutscene_update_frame_owner.h",
+        "tools/oot3d/source_imports/cutscene_update_frame_d5c2927/src/code/z_cutscene_update_frame_owner.cpp"
+      ],
+      "verification_files": [
+        "tools/oot3d/native_game_runtime/oot3d_source_cutscene_update_frame_tests.cpp",
+        "tools/oot3d/native_game_runtime/oot3d_native_a32_process_tests.cpp"
+      ],
+      "verification_cases": [
+        "TestCutsceneUpdateFrameDifferential",
+        "Source and current-runtime 300-frame Link-dream process comparison"
+      ],
+      "target_evidence": [
+        "target root 0x00321F50-0x00322073 SHA-256 bb317ded32373e22fc7aa7b775eb794455808f381868228c7dbe904f55ec3430",
+        "I:/oot3dre_work/native_game/cutscene_update_frame_source_smoke_link_dream.json SHA-256 e59ca5d4ee2c40ce6a7c482021a69c03c7560632177843f2f02a8eb24a810f75",
+        "I:/oot3dre_work/native_game/cutscene_update_frame_a32_baseline_link_dream.json SHA-256 10a81e87b63a156251008538d385691aeca7f84cb133390a3f1d66d3a703f322"
+      ],
+      "abi_layout": "The owner uses r0=PlayState and r1=CutsceneContext. Differential coverage preserves r4-r11, sp, return PC, d8-d15, thread pointer and FPSCR while checking every direct dependency argument.",
+      "native30_differential": "Nine target-derived scenarios compare all mapped data and RAM, dependency order, parser frame cadence and software-exact VFP/FPSCR behavior against generated A32. A 300-frame process run matches the current typed baseline memory-content fingerprint and guest clock.",
+      "savestate_contract": "Every differential scenario captures independent pre-owner process states, destructively executes both lanes, restores each checkpoint and reproduces the same result.",
+      "callback_coverage": "Backend-clock query, backend-clock commit and Cutscene_ProcessCommands execute by exact guest address through the checked owner adapter. The retained process run crosses Cutscene_ProcessCommands 299 times with zero failure.",
+      "enhanced60_timing": "Acceptance is Native30 only. Enhanced60 continues to use the existing typed frame-crossing owner and rejects this opt-in instead of changing the imported target cadence.",
+      "performance_scope": "Only the 292-byte frame orchestrator executes as host C/C++; Cutscene_ProcessCommands remains a separately measured guest owner and no broad cutscene speedup is claimed."
+    }
+  ],
+  "approved_owners": [
+    "game_state_update",
+    "actor_update_all",
+    "game_state_renderer_initializer",
+    "cutscene_frame_owner"
+  ],
+  "bundle_support_paths": [
+    "include/oot3d"
+  ]
+}

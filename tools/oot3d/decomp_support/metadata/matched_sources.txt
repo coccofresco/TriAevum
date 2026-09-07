@@ -1,0 +1,22 @@
+# Maintained sources that should be built and compared against the Ghidra target
+# disassembly. Blank lines and # comments are ignored.
+src/startup/clear_bss.c
+src/runtime/runtime_helpers.c
+src/runtime/matrix_helpers.c
+src/overlays/actors/ovl_Boss_Va/z_boss_va_setup_zapper_damaged.c
+src/overlays/actors/ovl_Boss_Va/z_boss_va_zapper_hold.c
+src/overlays/actors/ovl_Boss_Va/z_boss_va_zapper_damaged.c
+src/code/z_message_start.c
+src/code/z_message_textbox.c
+src/code/z_message_textbox_init.c
+src/n64_large_direct_exact.c
+src/n64_split_kaleido_ui_overlay_exact.c
+src/overlays/misc/ovl_kaleido_scope/z_kaleido_pause_dungeon_item_page_init.c
+src/overlays/misc/ovl_kaleido_scope/z_kaleido_pause_item_icon_group_set_mode.c
+src/overlays/misc/ovl_kaleido_scope/z_kaleido_pause_item_page_set_mode.c
+src/overlays/misc/ovl_kaleido_scope/z_kaleido_pause_item_update_context_detail.c
+src/n64_target_split_exact.c
+src/leaf_pseudocode_matches.c
+src/leaf_codegen_near_matches.c
+src/oot3d_public_exact.c
+src/oot3d_public_structural_exact.c

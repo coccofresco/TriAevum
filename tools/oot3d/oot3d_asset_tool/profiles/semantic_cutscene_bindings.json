@@ -1,0 +1,43 @@
+{
+  "format": "oot3d_semantic_cutscene_bindings_v1",
+  "status": "verified_partial_coverage",
+  "ui_policy": {
+    "hud": "oot_n64_ship",
+    "menus": "oot_n64_ship",
+    "connected_logic": "oot_n64_ship",
+    "oot3d_title_logo_is_cutscene_content": true
+  },
+  "records": [
+    {
+      "semantic_key": "CUTSCENE_OPENING_TITLE",
+      "status": "resolved",
+      "scaffold": {
+        "game_state": "Opening",
+        "scene_semantic_key": "SCENE_HYRULE_FIELD",
+        "scene_id": 81,
+        "scene_setup_index": 7,
+        "cutscene_index": 65523
+      },
+      "native": {
+        "scene_asset_id": "scene:spot00_info.zsi",
+        "scene_id": 81,
+        "scene_path": "spot00_info.zsi",
+        "scene_stem": "spot00",
+        "setup_index": 6,
+        "sequence_asset_ids": [
+          "qdb:scene/spot00.zar!..\\..\\scene\\Spot00\\demo\\spot00_demo_epona_00.qdb",
+          "qdb:scene/spot00.zar!..\\..\\scene\\Spot00\\demo\\spot00_demo_epona_01.qdb",
+          "qdb:scene/spot00.zar!..\\..\\scene\\Spot00\\demo\\spot00_demo_epona_02.qdb"
+        ]
+      },
+      "completion_event": "cutscene_finished",
+      "evidence": {
+        "scaffold_control_flow": "soh/src/overlays/gamestates/ovl_opening/z_opening.c:11",
+        "scaffold_scene_identity": "soh/include/tables/scene_table.h:93",
+        "native_setup": "tools/oot3d/decomp_support/analysis/title_intro_day_transition_pending.md:3",
+        "native_qdb_sequence": "tools/oot3d/decomp_support/analysis/title_intro_source_table.json",
+        "native_runtime_role": "title/game-state intro; not a regular room cutscene"
+      }
+    }
+  ]
+}

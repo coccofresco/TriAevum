@@ -1,0 +1,167 @@
+{
+  "schema_version": 1,
+  "overlays": [
+    {
+      "guest_address": "0x00436270",
+      "symbol": "oot3d_boot_contract_heap_registry_00436270",
+      "source": "heap_registry_00436270.c",
+      "baseline_symbol": "Oot3dLoopStateFlowGuardedInitListInitListGetNextListObjectPlusRC181CW18GlobalAt00436270",
+      "evidence_revision": "bfc5ca73630feeebc57ea27323230225d0529069",
+      "evidence_path": "ghidra_export/decompiled/07867_00436270_FUN_00436270.c",
+      "contract": "DAT_00436320 is a target char pointer; test and update only its low byte"
+    },
+    {
+      "guest_address": "0x003FB4CC",
+      "symbol": "oot3d_boot_contract_constructor_003fb4cc",
+      "source": "constructor_chain_003fb4cc.c",
+      "baseline_symbol": "Oot3dStateFlowLinearStateFlowLinearCallPathSequenceSR242683PlusW268399PlusGlobalAt003FB4CC",
+      "evidence_revision": "8f00bb640074dc8fbbe3f144406fc87a8b4dd445",
+      "evidence_path": "src/runtime/owner_runtime/z_whole_residual_21_all_residual_21_17.c",
+      "contract": "constructor consumes and returns the same 32-bit outputRecord pointer"
+    },
+    {
+      "guest_address": "0x004026C4",
+      "symbol": "oot3d_boot_contract_constructor_004026c4",
+      "source": "constructor_chain_003fb4cc.c",
+      "baseline_symbol": "Oot3dCallPathSequenceStructuralStridedCallbackLoopAt004026C4",
+      "evidence_revision": "8f00bb640074dc8fbbe3f144406fc87a8b4dd445",
+      "evidence_path": "src/runtime/owner_runtime/z_whole_residual_21_all_residual_21_18.c",
+      "contract": "constructor consumes and returns the same 32-bit outputRecord pointer"
+    },
+    {
+      "guest_address": "0x00402C60",
+      "symbol": "oot3d_boot_contract_constructor_00402c60",
+      "source": "constructor_chain_003fb4cc.c",
+      "baseline_symbol": "Oot3dStateFlowLinearCallPathSequenceStructuralStrideR202481PlusW208182GlobalAt00402C60",
+      "evidence_revision": "8f00bb640074dc8fbbe3f144406fc87a8b4dd445",
+      "evidence_path": "src/runtime/owner_runtime/z_residual_saturation_22_residual_22_05.c",
+      "contract": "constructor consumes and returns the same 32-bit outputRecord pointer"
+    },
+    {
+      "guest_address": "0x00303B14",
+      "symbol": "oot3d_boot_contract_memset_00303b14",
+      "source": "memset_00303b14.c",
+      "baseline_symbol": "memset",
+      "evidence_revision": "8f00bb640074dc8fbbe3f144406fc87a8b4dd445",
+      "evidence_path": "src/runtime/owner_runtime/z_owner_packet_wave_long_tail_06.c",
+      "contract": "guest ABI is destination-size-value and returns the end pointer; host C calls retain destination-value-size"
+    },
+    {
+      "guest_address": "0x004160EC",
+      "symbol": "oot3d_boot_contract_nninit_startup_004160ec",
+      "source": "system_arena_startup_004160ec.c",
+      "baseline_symbol": "nninitStartUp",
+      "evidence_revision": "8f00bb640074dc8fbbe3f144406fc87a8b4dd445",
+      "evidence_path": "src/runtime/owner_runtime/z_whole_residual_21_all_residual_21_21.c",
+      "contract": "read arena start and size from the allocated memory-block descriptor and preserve both arguments across startup"
+    },
+    {
+      "guest_address": "0x004164DC",
+      "symbol": "oot3d_boot_contract_system_arena_dispatch_004164dc",
+      "source": "system_arena_startup_004160ec.c",
+      "baseline_symbol": "Oot3dNativeGraphIndirectDispatchLoopCallFlowGuardedStatePeer00416Cc4GlobalAt004164DC",
+      "evidence_revision": "8f00bb640074dc8fbbe3f144406fc87a8b4dd445",
+      "evidence_path": "src/runtime/owner_runtime/z_whole_residual_21_all_residual_21_21.c",
+      "contract": "forward arena start and size to 0x00416CC4 before executing the native relative callback list"
+    },
+    {
+      "guest_address": "0x002DA58C",
+      "symbol": "oot3d_boot_contract_scoped_lock_002da58c",
+      "source": "scoped_lock_word_002da58c.c",
+      "baseline_symbol": "Oot3dStructuralRecursiveScopedLockAAt002DA58C",
+      "evidence_revision": "8f00bb640074dc8fbbe3f144406fc87a8b4dd445",
+      "evidence_path": "src/runtime/mass_recovery.c",
+      "contract": "scoped lock contains one 32-bit guest lock address; never write a host-width pointer into the four-byte target output"
+    },
+    {
+      "guest_address": "0x0030AF40",
+      "symbol": "oot3d_boot_contract_scoped_lock_0030af40",
+      "source": "scoped_lock_word_002da58c.c",
+      "baseline_symbol": "ScopedLock_0030af40",
+      "evidence_revision": "8f00bb640074dc8fbbe3f144406fc87a8b4dd445",
+      "evidence_path": "src/runtime/mass_recovery.c",
+      "contract": "second scoped-lock constructor shares the same four-byte target layout and recursive-lock semantics"
+    },
+    {
+      "guest_address": "0x003FFF90",
+      "symbol": "Oot3dCtrHandleFieldClose_003fff90",
+      "source": "ctr_handle_field_close_003fff90.c",
+      "baseline_symbol": "",
+      "evidence_revision": "8f00bb640074dc8fbbe3f144406fc87a8b4dd445",
+      "evidence_path": "src/code/z_target_leaf_templates.c",
+      "contract": "vtable-only entrypoint closes the CTR handle in target word one, clears that 32-bit field, and returns the original object"
+    },
+    {
+      "guest_address": "0x00435C54",
+      "symbol": "oot3d_boot_contract_state_observer_00435c54",
+      "source": "state_observer_return_00435c54.c",
+      "baseline_symbol": "Oot3dStateObserverLinearGlobalAt00435C54",
+      "evidence_revision": "8f00bb640074dc8fbbe3f144406fc87a8b4dd445",
+      "evidence_path": "src/runtime/owner_runtime/z_whole_residual_21_all_residual_21_23.c",
+      "contract": "initialize the complete 0x118-byte state record and return its original 32-bit address; the baseline void signature leaked an unrelated global as the result"
+    },
+    {
+      "guest_address": "0x003FFAB0",
+      "symbol": "Oot3dMemoryStreamDeletingDestructorAt003FFAB0",
+      "source": "owner_destructor_family_8f00bb64.c",
+      "baseline_symbol": "",
+      "evidence_revision": "8f00bb640074dc8fbbe3f144406fc87a8b4dd445",
+      "evidence_path": "src/runtime/owner_destructor_runtime.c",
+      "contract": "complete reviewed owner-destructor family: memory-stream deleting destructor"
+    },
+    {
+      "guest_address": "0x003FFB7C",
+      "symbol": "Oot3dMemoryStreamDestructorAt003FFB7C",
+      "source": "owner_destructor_family_8f00bb64.c",
+      "baseline_symbol": "",
+      "evidence_revision": "8f00bb640074dc8fbbe3f144406fc87a8b4dd445",
+      "evidence_path": "src/runtime/owner_destructor_runtime.c",
+      "contract": "complete reviewed owner-destructor family: non-deleting memory-stream destructor"
+    },
+    {
+      "guest_address": "0x0044DA50",
+      "symbol": "Oot3dVtableObjectDtorAt0044DA50",
+      "source": "owner_destructor_family_8f00bb64.c",
+      "baseline_symbol": "",
+      "evidence_revision": "8f00bb640074dc8fbbe3f144406fc87a8b4dd445",
+      "evidence_path": "src/runtime/owner_destructor_runtime.c",
+      "contract": "complete reviewed owner-destructor family: vtable-object base destructor"
+    },
+    {
+      "guest_address": "0x003FFD60",
+      "symbol": "Oot3dAllocatorBackedDeletingDestructorAt003FFD60",
+      "source": "owner_destructor_family_8f00bb64.c",
+      "baseline_symbol": "",
+      "evidence_revision": "8f00bb640074dc8fbbe3f144406fc87a8b4dd445",
+      "evidence_path": "src/runtime/owner_destructor_runtime.c",
+      "contract": "complete reviewed owner-destructor family: allocator-backed deleting destructor"
+    },
+    {
+      "guest_address": "0x004000A0",
+      "symbol": "Oot3dArchiveOwnerDestructorAt004000A0",
+      "source": "owner_destructor_family_8f00bb64.c",
+      "baseline_symbol": "",
+      "evidence_revision": "8f00bb640074dc8fbbe3f144406fc87a8b4dd445",
+      "evidence_path": "src/runtime/owner_destructor_runtime.c",
+      "contract": "complete reviewed owner-destructor family: archive-owner close and reset"
+    },
+    {
+      "guest_address": "0x00400104",
+      "symbol": "Oot3dOwnerDeletingDestructor_00400104",
+      "source": "owner_destructor_family_8f00bb64.c",
+      "baseline_symbol": "",
+      "evidence_revision": "8f00bb640074dc8fbbe3f144406fc87a8b4dd445",
+      "evidence_path": "src/runtime/owner_destructor_runtime.c",
+      "contract": "complete reviewed owner-destructor family: owner deleting destructor reached through vtable 0x004EC274"
+    },
+    {
+      "guest_address": "0x00400134",
+      "symbol": "Oot3dOwnerDestructor_00400134",
+      "source": "owner_destructor_family_8f00bb64.c",
+      "baseline_symbol": "",
+      "evidence_revision": "8f00bb640074dc8fbbe3f144406fc87a8b4dd445",
+      "evidence_path": "src/runtime/owner_destructor_runtime.c",
+      "contract": "complete reviewed owner-destructor family: composite owner destructor"
+    }
+  ]
+}

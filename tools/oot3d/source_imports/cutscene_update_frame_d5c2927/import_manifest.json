@@ -1,0 +1,87 @@
+{
+  "format": "oot3d_source_owner_import_v1",
+  "owner": "cutscene_frame_owner",
+  "producer_name": "FUN_00321f50",
+  "canonical_name": "Cutscene_UpdateFrame",
+  "owner_entry": "0x00321F50",
+  "runtime_activation": "experimental_opt_in_native30_accepted",
+  "snapshot_id": "d5c292708f7f-4adc6afbb839",
+  "producer_revision": "d5c292708f7f25f921a066449db3cea43fad73c4",
+  "source_candidate_tree_sha256": "ee89a2fe11b119bbb3f1aec592add4753e59134cf88ddae0a3c3cecf4c2a92d1",
+  "runtime_import_work_order_sha256": "7e1f3774a781b48eb262d06f9541fcdd4f3731e63beea73a8b0cafa48438e85c",
+  "runtime_import_consumer_input_sha256": "4adc6afbb839fa85228d6e76201f373ab071c2eb18a702f280da4b6b1ded8d6f",
+  "code_bin_sha256": "16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220",
+  "owner_body": {
+    "range": "0x00321F50-0x00322073",
+    "size": 292,
+    "sha256": "bb317ded32373e22fc7aa7b775eb794455808f381868228c7dbe904f55ec3430"
+  },
+  "literal_cells": {
+    "0x00322074": "0x00587958",
+    "0x00322078": "0x0000FFF0",
+    "0x0032207C": "0x00007C60",
+    "0x00322080": "0x38000000",
+    "0x00322084": "0x41F00000"
+  },
+  "guest_dependencies": {
+    "0x002C2D78": "QueryBackendClock",
+    "0x0048B198": "CommitBackendClock",
+    "0x002C5BA0": "Cutscene_ProcessCommands"
+  },
+  "consumer_lowering": [
+    "checked 32-bit guest-address resolution",
+    "target-address dispatch for all three direct dependencies",
+    "software-exact target VFP conversion, multiply, signed truncation and FPSCR exception propagation",
+    "native uint16 frame increment and catch-up cadence",
+    "Cutscene_ProcessCommands retained as an independently measured guest owner"
+  ],
+  "differential_validation": {
+    "target": "oot3d_source_cutscene_update_frame_tests",
+    "scenarios": [
+      "scheduler_not_ready",
+      "backend_wrong_scene_mode",
+      "backend_query_not_ready",
+      "backend_clock_commit",
+      "normal_first_frame",
+      "negative_backend_ticks",
+      "backend_frame_catch_up",
+      "backend_target_already_reached",
+      "fpscr_inexact_clock_conversion"
+    ],
+    "compares": [
+      "all mapped data and game RAM",
+      "dependency call order and core-register ABI",
+      "frame value observed by every command-parser invocation",
+      "guest FPSCR propagation across inexact VFP conversion",
+      "pre-owner checkpoint restore and deterministic replay"
+    ]
+  },
+  "runtime_acceptance": {
+    "mode": "native30_no_interpolation",
+    "checkpoint": "I:/oot3dre_work/native_game/checkpoints/link_dream_start.oot3dsav",
+    "source_report": "I:/oot3dre_work/native_game/cutscene_update_frame_source_smoke_link_dream.json",
+    "source_report_sha256": "e59ca5d4ee2c40ce6a7c482021a69c03c7560632177843f2f02a8eb24a810f75",
+    "baseline_route": "current_typed_cutscene_owner",
+    "baseline_report": "I:/oot3dre_work/native_game/cutscene_update_frame_a32_baseline_link_dream.json",
+    "baseline_report_sha256": "10a81e87b63a156251008538d385691aeca7f84cb133390a3f1d66d3a703f322",
+    "run_frames": 300,
+    "owner_calls": 299,
+    "nested_guest_calls": 299,
+    "process_command_calls": 299,
+    "clock_query_calls": 0,
+    "clock_commit_calls": 0,
+    "failures": 0,
+    "late_vblank_deadlines": 0,
+    "memory_content_fingerprint": "15526982841859449935",
+    "baseline_memory_content_fingerprint": "15526982841859449935",
+    "system_ticks": 15546019117,
+    "baseline_system_ticks": 15546019117,
+    "composition_owner": "Actor_UpdateAll source opt-in",
+    "composition_owner_calls": 299,
+    "composition_callback_calls": 3872
+  },
+  "files": {
+    "include/oot3d/cutscene_update_frame_owner.h": "7bc38f87ea9a61ad4c2bb58d264d0bfa3ed3482d5227558a7476f6e886513a37",
+    "src/code/z_cutscene_update_frame_owner.cpp": "32d18fac0cb020f76d9717cb4c4fddb428f2f80da6e01b7a2a46d61911dd0a90"
+  }
+}

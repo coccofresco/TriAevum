@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "import_id": "oot3d-eur-native-startup-8f00bb64",
+  "decomp_revision": "8f00bb640074dc8fbbe3f144406fc87a8b4dd445",
+  "source_contract": "target-word-lowering-v5-manifested-abi",
+  "purpose": "Native process entry and ordered static-initializer closure missing from the pinned bfc5ca73 gameplay surface.",
+  "files": {
+    "include/oot3d/memory.h": "2474b0bae9d8df6142ba940695ed7682594fd1ef46db85e4971badd84e3c504b",
+    "include/oot3d/platform_abi.h": "f450c6b220bff6385fe07cf18bb803854e208ec17049a72993535e58af08d15e",
+    "include/oot3d/startup.h": "992240b60e2bf65c0def1a4038e4cd5e5ac8ea838885d4989337e2e599c4c1d8",
+    "include/oot3d/static_init.h": "df7ea462370ecfb57af81c5fbbe14524064ca21003ccdc9cffe12fdef4470f1d",
+    "include/oot3d/target_native_prelude.h": "f28070fdfe046718d2c4fe3ce71a01c1921e034a34de85be0c7d7bff81bd54e0",
+    "include/oot3d/types.h": "d9cafe0b318cb01e24cac0ed7dca6a7d4beadc56198843f2f68751c3e5ebd9ad",
+    "src/startup/callback_constructors.c": "20440e113b536fdfd91a5f1d21ede51420054bdbb217ca3b045ef83e2a4d9711",
+    "src/startup/process_entry.c": "719fae7f307432f4b5423909aba909389f598f696a36c3199fbfdde4e0d10923",
+    "src/startup/runtime_constructors.c": "bb6e276f75cfa8a26b1c136c8a2c364dbff0b055927093c080a54b8f73ce6966",
+    "src/startup/static_initializers.c": "f07fe1b170189fc08efa9d57eb4f295a1c50c8d29137b820bbd45b852874da67"
+  }
+}

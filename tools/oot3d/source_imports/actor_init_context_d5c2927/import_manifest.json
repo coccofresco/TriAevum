@@ -1,0 +1,48 @@
+{
+  "format": "oot3d_source_owner_import_v1",
+  "owner": "game_state_renderer_initializer",
+  "canonical_name": "Actor_InitContext",
+  "owner_entry": "0x0044E7C0",
+  "tail_helper_entry": "0x004632B4",
+  "runtime_activation": "experimental_opt_in_native30_accepted",
+  "snapshot_id": "d5c292708f7f-3819f4804b32",
+  "producer_revision": "d5c292708f7f25f921a066449db3cea43fad73c4",
+  "source_candidate_tree_sha256": "6995736fb983e1f492646f13819d4612edebe18b6593d3bfdb3fee94b68a701b",
+  "runtime_import_work_order_sha256": "d98a7c1085e97ec66e2d39a1a08b8d8b9988766b262e6351905751738aa03037",
+  "runtime_import_consumer_input_sha256": "3819f4804b327959afe58087d537fafc80c87ad3e1abf4a95b4c1d890c86904a",
+  "source_root_sha256": "f46d4d7562a6faa0c9ae31d901cc49be16ddcfcbc2f6041a59fe5a449ce61db7",
+  "code_bin_sha256": "16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220",
+  "owner_body": {
+    "range": "0x0044E7C0-0x0044EFA7",
+    "sha256": "09df5dfd35274cd1f493071bbe2c87cfc5e90ef2143f4dfed73ab0b1b112ebd4"
+  },
+  "tail_helper_body": {
+    "range": "0x004632B4-0x0046341F",
+    "sha256": "55824fd0e8c3c6989a61eb9a58e596d3dfb5f2424da490de04fa4a9795b4a3ac"
+  },
+  "consumer_lowering": [
+    "checked 32-bit guest-address resolution",
+    "target-address dispatch for direct and virtual dependencies",
+    "hard-float Actor_Spawn and Lights_PointNoGlowSetInfo ABI",
+    "explicit 0x0044EFA4 tail-helper semantics",
+    "float-store corrections for decompiler-typed undefined4 temporaries",
+    "target-proven four-core-register 0x0034897C material-construction ABI",
+    "per-call bounded transition budget for bulk renderer initialization"
+  ],
+  "runtime_acceptance": {
+    "mode": "native30_no_interpolation",
+    "checkpoint": "I:/oot3dre_work/native_game/new_game_frame12000.oot3dsav",
+    "report": "I:/oot3dre_work/native_game/actor_init_context_source_smoke_frame12000_accepted.json",
+    "report_sha256": "bab3cbe1e70352747c4ac5a472dbae6f3efab3f0737ddf76cdd101b35d2e886a",
+    "run_frames": 600,
+    "owner_calls": 1,
+    "nested_guest_calls": 86,
+    "failures": 0,
+    "late_vblank_deadlines": 5,
+    "maximum_vblank_deadline_overshoot_ticks": 19715893
+  },
+  "files": {
+    "include/oot3d/actor_init_context_owner.h": "59358aac17b3f496a95e08c2dac1dc4ab23dd8a92c4941e243c9679000a4880c",
+    "src/code/z_actor_init_context_owner.cpp": "ae5b77494b4ca2b695a6fa404783e5b47048e012da8cc2eac12635be538b9724"
+  }
+}

@@ -1,0 +1,121 @@
+name: TriAevum release policy
+
+on:
+  push:
+    paths:
+      - ".github/workflows/triaevum-release-policy.yml"
+      - "runtime/triaevum_module/**"
+      - "runtime/three_ds_recomp/**"
+      - "tools/oot3d/native_game_runtime/**"
+      - "tools/oot3d/native_a32_runtime/**"
+      - "CMakeLists.txt"
+      - "tools/triaevum_release/**"
+      - "scripts/triaevum/**"
+      - "docs/TRIAEVUM_*.md"
+      - "README.md"
+      - "THIRD_PARTY_NOTICES.md"
+      - "LICENSE_SCOPE.md"
+  pull_request:
+    paths:
+      - ".github/workflows/triaevum-release-policy.yml"
+      - "runtime/triaevum_module/**"
+      - "runtime/three_ds_recomp/**"
+      - "tools/oot3d/native_game_runtime/**"
+      - "tools/oot3d/native_a32_runtime/**"
+      - "CMakeLists.txt"
+      - "tools/triaevum_release/**"
+      - "scripts/triaevum/**"
+      - "docs/TRIAEVUM_*.md"
+      - "README.md"
+      - "THIRD_PARTY_NOTICES.md"
+      - "LICENSE_SCOPE.md"
+
+jobs:
+  windows-forge-contracts:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test Windows Forge contracts (not full game qualification)
+        run: python -m unittest discover tools/triaevum_release -p "test_*.py" -v
+      - name: Build and execute the real Windows title ABI with synthetic input
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $compiler = (Get-Command clang-cl.exe -ErrorAction Stop).Source
+          $llvm = Split-Path $compiler
+          $clangResources = (& $compiler -print-resource-dir).Trim()
+          if ($LASTEXITCODE) { throw 'Cannot locate Clang resource headers' }
+          $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
+          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw 'Runner has no VC toolset' }
+          $msvc = Get-ChildItem "$vs/VC/Tools/MSVC" -Directory | Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
+          $sdk = "${env:ProgramFiles(x86)}/Windows Kits/10"
+          $sdkVersion = Get-ChildItem "$sdk/Include" -Directory | Where-Object Name -Match '^10\.0\.\d+\.\d+$' | Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
+          $vcpkg = $env:VCPKG_INSTALLATION_ROOT
+          & "$vcpkg/vcpkg.exe" install nlohmann-json:x64-windows
+          if ($LASTEXITCODE) { throw 'Cannot prepare JSON headers' }
+          $include = "$vcpkg/installed/x64-windows/include"
+          $sysroot = "$env:RUNNER_TEMP/triaevum-ci-sysroot"
+          python tools/triaevum_release/import_windows_sysroot.py --msvc $msvc.FullName --sdk $sdk --sdk-version $sdkVersion.Name --clang $clangResources --output $sysroot
+          if ($LASTEXITCODE) { throw 'Cannot snapshot the runner SDK' }
+          $compatibility = '19.' + $msvc.Name.Split('.')[1]
+          $flags = "/vctoolsdir `"$sysroot/msvc`" /winsdkdir `"$sysroot/sdk`" /winsdkversion $($sdkVersion.Name) -resource-dir=`"$sysroot/clang`" -fms-compatibility-version=$compatibility"
+          cmake -S tools/triaevum_release/native_probe -B build/native-support -G Ninja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_CXX_COMPILER=$compiler" -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY "-DCMAKE_CXX_FLAGS=$flags" "-Dnlohmann_json_DIR=$vcpkg/installed/x64-windows/share/nlohmann_json"
+          if ($LASTEXITCODE) { throw 'Cannot configure native support' }
+          cmake --build build/native-support --target triaevum_title_whole_aot_support --parallel 2
+          if ($LASTEXITCODE) { throw 'Cannot compile native support' }
+          python tools/triaevum_release/validate_whole_aot_toolchain.py --compiler $compiler --archiver "$llvm/llvm-lib.exe" --support build/native-support/triaevum_title_whole_aot_support.lib --include $include --sysroot $sysroot --output build/native-abi-probe
+          if ($LASTEXITCODE) { throw 'Native title ABI qualification failed' }
+      - name: Preserve native ABI diagnostics (no ROM or SDK payloads)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-native-abi-evidence
+          path: |
+            build/native-abi-probe/receipt.json
+            build/native-abi-probe/*-command.json
+            build/native-abi-probe/*.log
+  policy-and-module:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test Forge and release policy
+        run: python -m unittest discover tools/triaevum_release -p "test_*.py" -v
+      - name: Configure isolated module runtime
+        run: cmake -S runtime/triaevum_module -B build/triaevum-module -DCMAKE_BUILD_TYPE=Release
+      - name: Build isolated module tests
+        run: >-
+          cmake --build build/triaevum-module --config Release
+          --target triaevum_module_tests triaevum_tam_metadata_tests
+          triaevum_service_registry_tests triaevum_service_abi_c_tests
+          triaevum_pica_service_adapter_tests
+          triaevum_guest_memory_lease_pool_tests
+          triaevum_native_module_loader_tests
+          -j 2
+      - name: Test TAM parser
+        run: >-
+          build/triaevum-module/triaevum_module_tests &&
+          build/triaevum-module/triaevum_tam_metadata_tests
+      - name: Test host service ABI
+        run: >-
+          build/triaevum-module/triaevum_service_registry_tests &&
+          build/triaevum-module/triaevum_service_abi_c_tests &&
+          build/triaevum-module/triaevum_pica_service_adapter_tests &&
+          build/triaevum-module/triaevum_guest_memory_lease_pool_tests
+      - name: Test verified dynamic loading
+        run: >-
+          build/triaevum-module/triaevum_native_module_loader_tests
+          build/triaevum-module/triaevum_mock_module.so
+      - name: Report qualification separately from contract tests
+        run: >-
+          python -c "from tools.triaevum_release.readiness import evaluate_readiness;
+          r=evaluate_readiness(); print(r); assert not r.errors, r.errors"

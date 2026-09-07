@@ -1,0 +1,62 @@
+{
+  "format": "oot3d_semantic_gameplay_source_v1",
+  "authority": {
+    "source": "oot_n64_decompiled_gameplay",
+    "purpose": "offline_semantic_control_plane",
+    "numeric_target_identity": "forbidden",
+    "native_content_authority": "oot3d"
+  },
+  "records": [
+    {
+      "semantic_key": "SCENE_ENTRY_KOKIRI_FOREST_FROM_LINKS_HOUSE",
+      "kind": "scene_entry",
+      "status": "resolved",
+      "trigger": {
+        "scene_id": 85,
+        "entrance_index": 529,
+        "entrance_symbol": "ENTR_KOKIRI_FOREST_OUTSIDE_LINKS_HOUSE",
+        "origin_semantic_key": "SCENE_LINKS_HOUSE_EXIT"
+      },
+      "variants": [
+        {
+          "variant_key": "KOKIRI_FOREST_INITIAL_CHILD_DAY",
+          "conditions": [
+            {
+              "fact": "player.age",
+              "equals": "child"
+            },
+            {
+              "fact": "world.day_phase",
+              "equals": "day"
+            },
+            {
+              "fact": "gameplay.layer",
+              "equals": "normal"
+            },
+            {
+              "fact": "quest.kokiri_emerald",
+              "equals": "false"
+            },
+            {
+              "fact": "event.zeldas_letter",
+              "equals": "false"
+            },
+            {
+              "fact": "quest.forest_medallion",
+              "equals": "false"
+            }
+          ],
+          "evidence": {
+            "variant_logic": "soh/src/code/z_play.c generic child/day normal-layer scene selection; initial-save quest facts provide the offline semantic control plane for the matching OOT3D EnKo five-state resolver",
+            "oot3d_enko_state_logic": "code.bin EnKo_Update@0x001B5F14 selects child start/stone/Saria and adult enemy/saved from age, Kokiri Emerald, Zelda's Letter, and Forest Medallion state",
+            "n64_structure_cross_check": "soh/src/overlays/actors/ovl_En_Ko/z_en_ko.c EnKo_GetForestQuestState2"
+          }
+        }
+      ],
+      "evidence": {
+        "entrance_declaration": "soh/include/tables/entrance_table.h:658",
+        "source_role": "N64 source identifies the semantic trigger and variant only"
+      }
+    }
+  ]
+}

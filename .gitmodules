@@ -1,0 +1,4 @@
+[submodule "three_ds_recomp_runtime"]
+	path = runtime/three_ds_recomp
+	url = https://github.com/kenix3/libultraship.git
+	branch = port-maintenance

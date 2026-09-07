@@ -1,0 +1,9 @@
+# Local clang-format hook for project-owned C/C++ sources.
+#   pre-commit install --install-hooks   # enable (downloads clang-format up front)
+repos:
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v14.0.6
+    hooks:
+      - id: clang-format
+        files: '^(tools/oot3d|runtime/three_ds_recomp)/.*\.(c|cpp|h|hpp)$'
+        exclude: '/(generated|third_party|extern)/'

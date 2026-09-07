@@ -1,0 +1,70 @@
+{
+  "format": "oot3d_character_mesh_selection_v1",
+  "profile_id": "link_adult_static_base",
+  "model_name": "link_v2",
+  "texture_orientation": "flip_y",
+  "uv_orientation": "normal",
+  "position_scale": 0.0001,
+  "primitive_keys": [
+    {
+      "mesh_index": 46,
+      "primitive_index": 0,
+      "role": "right_hand"
+    },
+    {
+      "mesh_index": 58,
+      "primitive_index": 0,
+      "role": "left_hand"
+    },
+    {
+      "mesh_index": 109,
+      "primitive_index": 0,
+      "role": "body_base"
+    },
+    {
+      "mesh_index": 109,
+      "primitive_index": 1,
+      "role": "body_base"
+    },
+    {
+      "mesh_index": 109,
+      "primitive_index": 2,
+      "role": "body_base"
+    },
+    {
+      "mesh_index": 110,
+      "primitive_index": 0,
+      "role": "body_base"
+    },
+    {
+      "mesh_index": 111,
+      "primitive_index": 0,
+      "role": "mouth_base"
+    },
+    {
+      "mesh_index": 112,
+      "primitive_index": 0,
+      "role": "face_base"
+    },
+    {
+      "mesh_index": 113,
+      "primitive_index": 0,
+      "role": "face_base"
+    },
+    {
+      "mesh_index": 114,
+      "primitive_index": 0,
+      "role": "head_base"
+    },
+    {
+      "mesh_index": 115,
+      "primitive_index": 0,
+      "role": "eyes_base"
+    },
+    {
+      "mesh_index": 116,
+      "primitive_index": 0,
+      "role": "face_aux_base"
+    }
+  ]
+}

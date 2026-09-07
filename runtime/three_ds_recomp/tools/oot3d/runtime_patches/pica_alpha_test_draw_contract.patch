@@ -1,0 +1,67 @@
+diff --git a/tools/oot3d/native_pica_frontend/oot3d_native_pica_draw_state.h b/tools/oot3d/native_pica_frontend/oot3d_native_pica_draw_state.h
+index 74e535c9f..6de1b83ec 100644
+--- a/tools/oot3d/native_pica_frontend/oot3d_native_pica_draw_state.h
++++ b/tools/oot3d/native_pica_frontend/oot3d_native_pica_draw_state.h
+@@ -201,6 +201,10 @@ struct Oot3dPicaBlendState {
+ struct Oot3dPicaOutputMergerState {
+     uint8_t FragmentOperationMode = 0;
+     uint8_t ColorWriteMask = 0;
++    bool AlphaTestEnabled = false;
++    Oot3dPicaCompareFunction AlphaCompare =
++        Oot3dPicaCompareFunction::Always;
++    uint8_t AlphaReference = 0;
+     Oot3dPicaLogicOperation LogicOperation = Oot3dPicaLogicOperation::Copy;
+     Oot3dPicaDepthState Depth;
+     Oot3dPicaStencilState Stencil;
+diff --git a/tools/oot3d/native_pica_frontend/oot3d_native_pica_draw_state.cpp b/tools/oot3d/native_pica_frontend/oot3d_native_pica_draw_state.cpp
+index 227437a10..439093297 100644
+--- a/tools/oot3d/native_pica_frontend/oot3d_native_pica_draw_state.cpp
++++ b/tools/oot3d/native_pica_frontend/oot3d_native_pica_draw_state.cpp
+@@ -258,4 +258,9 @@ bool DecodeOot3dPicaDrawState(const Oot3dPicaDrawPacket& packet,
+     auto& output = decoded.OutputMerger;
++    const uint32_t alphaTest = registers[0x104U];
++    output.AlphaTestEnabled = (alphaTest & 1U) != 0U;
++    output.AlphaCompare = static_cast<Oot3dPicaCompareFunction>(
++        (alphaTest >> 4U) & 7U);
++    output.AlphaReference = static_cast<uint8_t>((alphaTest >> 8U) & 0xFFU);
+     const uint32_t fragmentOperation =
+         registers[kFragmentOperationRegister];
+     output.FragmentOperationMode =
+diff --git a/tools/oot3d/native_game_runtime/oot3d_native_pica_vulkan_bridge.cpp b/tools/oot3d/native_game_runtime/oot3d_native_pica_vulkan_bridge.cpp
+--- a/tools/oot3d/native_game_runtime/oot3d_native_pica_vulkan_bridge.cpp
++++ b/tools/oot3d/native_game_runtime/oot3d_native_pica_vulkan_bridge.cpp
+@@ -279,6 +279,11 @@ bool SubmitOot3dPicaVulkanDrawPlan(
+         plan.State.OutputMerger.Blend.DestinationAlpha);
+     std::copy(blendConstantColor.begin(), blendConstantColor.end(),
+               draw.Blend.ConstantColor);
++    draw.AlphaTestEnabled = plan.State.OutputMerger.AlphaTestEnabled;
++    draw.AlphaCompare =
++        SameValueEnum<Fast::GfxNativePicaCompareFunction>(
++            plan.State.OutputMerger.AlphaCompare);
++    draw.AlphaReference = plan.State.OutputMerger.AlphaReference;
+     draw.DepthTestEnabled = plan.State.OutputMerger.Depth.TestEnabled;
+     draw.DepthWriteEnabled = plan.State.OutputMerger.Depth.WriteEnabled;
+     draw.DepthCompare =
+diff --git a/tools/oot3d/native_pica_frontend/oot3d_native_pica_frontend_tests.cpp b/tools/oot3d/native_pica_frontend/oot3d_native_pica_frontend_tests.cpp
+--- a/tools/oot3d/native_pica_frontend/oot3d_native_pica_frontend_tests.cpp
++++ b/tools/oot3d/native_pica_frontend/oot3d_native_pica_frontend_tests.cpp
+@@ -215,7 +215,7 @@ int main() {
+     capturedDraw.Registers[0x100] = 0x00E40100U;
+     capturedDraw.Registers[0x101] = 0x01010000U;
+     capturedDraw.Registers[0x102] = 0x00000003U;
+-    capturedDraw.Registers[0x104] = 0x00000060U;
++    capturedDraw.Registers[0x104] = 0x00007F61U;
+     capturedDraw.Registers[0x105] = 0xFF00FF10U;
+     capturedDraw.Registers[0x107] = 0x00001F11U;
+     capturedDraw.Registers[0x113] = 0x0000000FU;
+@@ -259,6 +259,10 @@ int main() {
+                 decodedDraw.Scissor.Mode ==
+                     Oot3dNativeGame::Oot3dPicaScissorMode::Disabled &&
+                 decodedDraw.OutputMerger.ColorWriteMask == 0xFU &&
++                decodedDraw.OutputMerger.AlphaTestEnabled &&
++                decodedDraw.OutputMerger.AlphaCompare ==
++                    Oot3dNativeGame::Oot3dPicaCompareFunction::Greater &&
++                decodedDraw.OutputMerger.AlphaReference == 0x7FU &&
+                 decodedDraw.OutputMerger.Blend.Enabled &&
+                 decodedDraw.OutputMerger.Blend.SourceColor ==
+                     Oot3dNativeGame::Oot3dPicaBlendFactor::One &&

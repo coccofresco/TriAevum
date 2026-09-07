@@ -1,0 +1,118 @@
+{
+  "format": "oot3d_source_owner_import_v1",
+  "owner": "player_update_common",
+  "canonical_name": "Player_UpdateCommon",
+  "owner_entry": "0x00250AD0",
+  "runtime_activation": "experimental_opt_in_native30_accepted",
+  "snapshot_id": "d5c292708f7f-ca8c22db1095",
+  "producer_revision": "d5c292708f7f25f921a066449db3cea43fad73c4",
+  "source_candidate_tree_sha256": "8ae22c00602fd88416d8828b6a196c7b2df55ba62ccec8e1c3c82ffb819714b9",
+  "source_closure_sha256": "10298ce236c180c496b4b440e235b24272b10b1a32f7d860f6a5605a92d162df",
+  "runtime_import_work_order_sha256": "f4412cd4a2bb6fba236b512c17eb6cf6c5630b365ace30161b9b29edd9e4dc26",
+  "runtime_import_consumer_input_sha256": "ca8c22db10959f2e7655820bd41df6582669512b0cd6e14e783ef820bf596f95",
+  "maintained_source_file_sha256": "cd3dfa5a543ea5a6dc274daa1e515516a2d0e46c8e95dede4e6fdfea7452d86c",
+  "code_bin_sha256": "16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220",
+  "owner_body": {
+    "range": "0x00250AD0-0x0025342C",
+    "size": 10588,
+    "sha256": "b2a9244e5eb77976fae277b6d16e01f2ea6d6263d525b8c6fb9b09d1d9307d7e"
+  },
+  "source_closure": {
+    "function_count": 1084,
+    "direct_dependency_count": 88,
+    "literal_cell_count": 136,
+    "source_graph_closed": true
+  },
+  "consumer_lowering": [
+    "complete maintained Player_UpdateCommon semantic body retained",
+    "checked target-width GuestPtr, GuestRef, GuestLocal and GuestIndirectRef access",
+    "136 target literal cells represented as runtime-loaded words",
+    "DAT_00251304 is treated as short pointer because target addressing doubles every maintained-source element offset",
+    "same-type guest double dereferences explicitly load the inner target pointer before constructing the outer GuestRef",
+    "exact 0xA0-byte target call frame preserved across direct dependencies and dynamic Player action dispatch",
+    "88 direct dependencies and the Player action callback retain checked target-address dispatch",
+    "target binary32 conversion, square root, FPSCR rounding and exception propagation preserved"
+  ],
+  "validation": {
+    "owner_compile_target": "oot3d_source_player_update_common_owner",
+    "guest_pointer_test_target": "oot3d_source_player_update_common_guest_pointer_tests",
+    "guest_pointer_test_status": "pass",
+    "generated_source_reproducibility_status": "pass",
+    "native30_process_status": "pass",
+    "native30_link_dream": {
+      "checkpoint": "link_dream_start.oot3dsav",
+      "checkpoint_sha256": "16a08ff19bd6ccbe48c2e1de63dc000ca5e7136c78c5055a729a75005fdae31b",
+      "presentation_frames": 60,
+      "guest_refresh_frame": 2940,
+      "simulation_ticks": 30,
+      "system_ticks": "13137480944",
+      "memory_content_fingerprint": "2319055162437664213",
+      "pcm_fnv1a64": "4924382187376014073",
+      "dsp_frames": 205,
+      "actor_owner_calls": 30,
+      "actor_callback_calls": 390,
+      "cutscene_update_frame_calls": 30,
+      "cutscene_process_commands_calls": 30,
+      "camera_update_calls": 60,
+      "player_update_calls": 30,
+      "owner_calls": 30,
+      "dependency_calls": 1230,
+      "direct_dependency_calls": 1200,
+      "dynamic_player_action_calls": 30,
+      "guest_reads": 4050,
+      "guest_writes": 2130,
+      "vfp_operations": 30,
+      "float_conversions": 30,
+      "failures": 0,
+      "a32_report": {
+        "path": "I:\\oot3dre_work\\native_game\\player_update_common_a32_baseline_link_dream_accepted.json",
+        "sha256": "3e3e559ba1d0199674d8cbf0a12e8b3c08bf85df6ae46ee84f77cfdfede08042"
+      },
+      "source_report": {
+        "path": "I:\\oot3dre_work\\native_game\\player_update_common_source_link_dream_accepted.json",
+        "sha256": "491875d10f73827766f3c454051650881e3ea12ed19e0fff94a6b138f6f005d4"
+      }
+    },
+    "native30_gameplay": {
+      "checkpoint": "ladder_approach_28630.oot3dsav",
+      "checkpoint_sha256": "80cf2d5df4abea7707c508854feb9c3dfc9fa188aa489bf44803f4f3d99fa83a",
+      "presentation_frames": 180,
+      "guest_refresh_frame": 28810,
+      "simulation_ticks": 90,
+      "system_ticks": "128738376189",
+      "memory_content_fingerprint": "10256699531768752404",
+      "pcm_fnv1a64": "15922785005745006140",
+      "dsp_frames": 614,
+      "actor_owner_calls": 90,
+      "actor_callback_calls": 4314,
+      "player_update_calls": 90,
+      "owner_calls": 90,
+      "dependency_calls": 3512,
+      "direct_dependency_calls": 3422,
+      "dynamic_player_action_calls": 90,
+      "guest_reads": 14854,
+      "guest_writes": 6561,
+      "vfp_operations": 90,
+      "float_conversions": 90,
+      "failures": 0,
+      "a32_report": {
+        "path": "I:\\oot3dre_work\\native_game\\player_update_common_a32_gameplay_accepted.json",
+        "sha256": "72bea70337622b364d47dbf6c28cb47c27b76de1cdb40a29fb4cbaaafe7078b"
+      },
+      "source_report": {
+        "path": "I:\\oot3dre_work\\native_game\\player_update_common_source_gameplay_accepted.json",
+        "sha256": "2c367ca472b2150df398eed68e414f8db2bbaabefa95d20ccd058341e32d452e"
+      }
+    },
+    "implementation_fingerprints_expected_to_differ": [
+      "memory_state_fingerprint",
+      "process_state_fingerprint"
+    ]
+  },
+  "files": {
+    "generate_import.py": "de3676a29ea4a7a8d6c946acf8b2cb8dc298f6e6ad61e33a7dd1506d6ad7c813",
+    "include/oot3d/player_update_common_owner.h": "a807b0139809eee75cc22934e30b45c3a041eb39683bbaf572af2a101afa5f96",
+    "src/code/z_player_update_common_owner.cpp": "adddaab50ce0dd8fa7dd4e981949898058e7ae914113630e11fd9f977b333f64",
+    "tests/guest_pointer_tests.cpp": "4b581064237d48f08563151acfb2cbe9334f6446d6d137eaad6b6bc7df2b6671"
+  }
+}

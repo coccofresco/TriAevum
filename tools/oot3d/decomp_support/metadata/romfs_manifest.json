@@ -1,0 +1,7898 @@
+[
+  {
+    "path": "CmbVShader.shbin",
+    "size": 3144
+  },
+  {
+    "path": "profile.shbin",
+    "size": 664
+  },
+  {
+    "path": "actor\\dk_board.zar",
+    "size": 916
+  },
+  {
+    "path": "actor\\dk_floater.zar",
+    "size": 500
+  },
+  {
+    "path": "actor\\dk_lightbox.zar",
+    "size": 8876
+  },
+  {
+    "path": "actor\\dk_pu_box.zar",
+    "size": 11512
+  },
+  {
+    "path": "actor\\dk_spia.zar",
+    "size": 10228
+  },
+  {
+    "path": "actor\\dk_stonebridge.zar",
+    "size": 7608
+  },
+  {
+    "path": "actor\\dk_trap.zar",
+    "size": 25636
+  },
+  {
+    "path": "actor\\dk_vase.zar",
+    "size": 9076
+  },
+  {
+    "path": "actor\\zelda_ahg.zar",
+    "size": 79492
+  },
+  {
+    "path": "actor\\zelda_am.zar",
+    "size": 41264
+  },
+  {
+    "path": "actor\\zelda_ane.zar",
+    "size": 56692
+  },
+  {
+    "path": "actor\\zelda_ani.zar",
+    "size": 70508
+  },
+  {
+    "path": "actor\\zelda_aob.zar",
+    "size": 66536
+  },
+  {
+    "path": "actor\\zelda_av.zar",
+    "size": 57492
+  },
+  {
+    "path": "actor\\zelda_bb.zar",
+    "size": 31884
+  },
+  {
+    "path": "actor\\zelda_bba.zar",
+    "size": 36216
+  },
+  {
+    "path": "actor\\zelda_bdan_objects.zar",
+    "size": 478168
+  },
+  {
+    "path": "actor\\zelda_bg.zar",
+    "size": 43308
+  },
+  {
+    "path": "actor\\zelda_bji.zar",
+    "size": 52960
+  },
+  {
+    "path": "actor\\zelda_bl.zar",
+    "size": 55192
+  },
+  {
+    "path": "actor\\zelda_blkobj.zar",
+    "size": 499252
+  },
+  {
+    "path": "actor\\zelda_bob.zar",
+    "size": 37636
+  },
+  {
+    "path": "actor\\zelda_boj.zar",
+    "size": 164056
+  },
+  {
+    "path": "actor\\zelda_bombf.zar",
+    "size": 22732
+  },
+  {
+    "path": "actor\\zelda_bombiwa.zar",
+    "size": 13564
+  },
+  {
+    "path": "actor\\zelda_boss_door.zar",
+    "size": 399116
+  },
+  {
+    "path": "actor\\zelda_bowl.zar",
+    "size": 60532
+  },
+  {
+    "path": "actor\\zelda_box.zar",
+    "size": 92936
+  },
+  {
+    "path": "actor\\zelda_brob.zar",
+    "size": 30308
+  },
+  {
+    "path": "actor\\zelda_bubble.zar",
+    "size": 5488
+  },
+  {
+    "path": "actor\\zelda_bv.zar",
+    "size": 739956
+  },
+  {
+    "path": "actor\\zelda_bw.zar",
+    "size": 21676
+  },
+  {
+    "path": "actor\\zelda_bwall.zar",
+    "size": 36900
+  },
+  {
+    "path": "actor\\zelda_bxa.zar",
+    "size": 213252
+  },
+  {
+    "path": "actor\\zelda_cne.zar",
+    "size": 36068
+  },
+  {
+    "path": "actor\\zelda_cob.zar",
+    "size": 13292
+  },
+  {
+    "path": "actor\\zelda_cow.zar",
+    "size": 66372
+  },
+  {
+    "path": "actor\\zelda_crow.zar",
+    "size": 20892
+  },
+  {
+    "path": "actor\\zelda_cs.zar",
+    "size": 88232
+  },
+  {
+    "path": "actor\\zelda_d_elevator.zar",
+    "size": 26284
+  },
+  {
+    "path": "actor\\zelda_d_hsblock.zar",
+    "size": 16204
+  },
+  {
+    "path": "actor\\zelda_d_lift.zar",
+    "size": 26328
+  },
+  {
+    "path": "actor\\zelda_daiku.zar",
+    "size": 125680
+  },
+  {
+    "path": "actor\\zelda_dangeon_keep.zar",
+    "size": 405596
+  },
+  {
+    "path": "actor\\zelda_ddan_objects.zar",
+    "size": 150740
+  },
+  {
+    "path": "actor\\zelda_dekubaba.zar",
+    "size": 42240
+  },
+  {
+    "path": "actor\\zelda_dekujr.zar",
+    "size": 48064
+  },
+  {
+    "path": "actor\\zelda_dekunuts.zar",
+    "size": 67336
+  },
+  {
+    "path": "actor\\zelda_demo_6k.zar",
+    "size": 22372
+  },
+  {
+    "path": "actor\\zelda_demo_kekkai.zar",
+    "size": 409432
+  },
+  {
+    "path": "actor\\zelda_dh.zar",
+    "size": 127324
+  },
+  {
+    "path": "actor\\zelda_dnk.zar",
+    "size": 56240
+  },
+  {
+    "path": "actor\\zelda_dns.zar",
+    "size": 63868
+  },
+  {
+    "path": "actor\\zelda_dodojr.zar",
+    "size": 41092
+  },
+  {
+    "path": "actor\\zelda_dodongo.zar",
+    "size": 131264
+  },
+  {
+    "path": "actor\\zelda_dog.zar",
+    "size": 30356
+  },
+  {
+    "path": "actor\\zelda_door_gerudo.zar",
+    "size": 9676
+  },
+  {
+    "path": "actor\\zelda_ds.zar",
+    "size": 23956
+  },
+  {
+    "path": "actor\\zelda_ds2.zar",
+    "size": 39220
+  },
+  {
+    "path": "actor\\zelda_du.zar",
+    "size": 542408
+  },
+  {
+    "path": "actor\\zelda_dy_obj.zar",
+    "size": 243780
+  },
+  {
+    "path": "actor\\zelda_ec.zar",
+    "size": 1565136
+  },
+  {
+    "path": "actor\\zelda_ec2.zar",
+    "size": 107848
+  },
+  {
+    "path": "actor\\zelda_efc_crystal_light.zar",
+    "size": 4460
+  },
+  {
+    "path": "actor\\zelda_efc_doughnut.zar",
+    "size": 31696
+  },
+  {
+    "path": "actor\\zelda_efc_erupc.zar",
+    "size": 15252
+  },
+  {
+    "path": "actor\\zelda_efc_fire_ball.zar",
+    "size": 4676
+  },
+  {
+    "path": "actor\\zelda_efc_flash.zar",
+    "size": 18636
+  },
+  {
+    "path": "actor\\zelda_efc_lgt_shower.zar",
+    "size": 8580
+  },
+  {
+    "path": "actor\\zelda_efc_star_field.zar",
+    "size": 66772
+  },
+  {
+    "path": "actor\\zelda_efc_tw.zar",
+    "size": 7564
+  },
+  {
+    "path": "actor\\zelda_ei.zar",
+    "size": 68416
+  },
+  {
+    "path": "actor\\zelda_fa.zar",
+    "size": 97688
+  },
+  {
+    "path": "actor\\zelda_fantomHG.zar",
+    "size": 586776
+  },
+  {
+    "path": "actor\\zelda_fd.zar",
+    "size": 730228
+  },
+  {
+    "path": "actor\\zelda_ff.zar",
+    "size": 30428
+  },
+  {
+    "path": "actor\\zelda_field_keep.zar",
+    "size": 168436
+  },
+  {
+    "path": "actor\\zelda_fishing.zar",
+    "size": 176804
+  },
+  {
+    "path": "actor\\zelda_fr.zar",
+    "size": 75320
+  },
+  {
+    "path": "actor\\zelda_fu.zar",
+    "size": 79160
+  },
+  {
+    "path": "actor\\zelda_fw.zar",
+    "size": 104400
+  },
+  {
+    "path": "actor\\zelda_fz.zar",
+    "size": 58676
+  },
+  {
+    "path": "actor\\zelda_ganon_demo.zar",
+    "size": 217888
+  },
+  {
+    "path": "actor\\zelda_ganon_down.zar",
+    "size": 170944
+  },
+  {
+    "path": "actor\\zelda_ganon_objects.zar",
+    "size": 23032
+  },
+  {
+    "path": "actor\\zelda_ganon.zar",
+    "size": 1447264
+  },
+  {
+    "path": "actor\\zelda_ganon2.zar",
+    "size": 1243924
+  },
+  {
+    "path": "actor\\zelda_ge1.zar",
+    "size": 84468
+  },
+  {
+    "path": "actor\\zelda_geff.zar",
+    "size": 24572
+  },
+  {
+    "path": "actor\\zelda_gelb.zar",
+    "size": 174304
+  },
+  {
+    "path": "actor\\zelda_gi_arrow.zar",
+    "size": 26320
+  },
+  {
+    "path": "actor\\zelda_gi_arrowcase.zar",
+    "size": 33888
+  },
+  {
+    "path": "actor\\zelda_gi_bean.zar",
+    "size": 10228
+  },
+  {
+    "path": "actor\\zelda_gi_bigghost.zar",
+    "size": 14912
+  },
+  {
+    "path": "actor\\zelda_gi_bomb_1.zar",
+    "size": 11384
+  },
+  {
+    "path": "actor\\zelda_gi_bomb_2.zar",
+    "size": 13560
+  },
+  {
+    "path": "actor\\zelda_gi_bombpouch.zar",
+    "size": 40156
+  },
+  {
+    "path": "actor\\zelda_gi_boomerang.zar",
+    "size": 11772
+  },
+  {
+    "path": "actor\\zelda_gi_boots_2.zar",
+    "size": 18040
+  },
+  {
+    "path": "actor\\zelda_gi_bosskey.zar",
+    "size": 17656
+  },
+  {
+    "path": "actor\\zelda_gi_bottle_letter.zar",
+    "size": 13696
+  },
+  {
+    "path": "actor\\zelda_gi_bottle.zar",
+    "size": 11000
+  },
+  {
+    "path": "actor\\zelda_gi_bow.zar",
+    "size": 11764
+  },
+  {
+    "path": "actor\\zelda_gi_bracelet.zar",
+    "size": 6776
+  },
+  {
+    "path": "actor\\zelda_gi_brokensword.zar",
+    "size": 26292
+  },
+  {
+    "path": "actor\\zelda_gi_butterfly.zar",
+    "size": 12972
+  },
+  {
+    "path": "actor\\zelda_gi_clothes.zar",
+    "size": 51296
+  },
+  {
+    "path": "actor\\zelda_gi_coin.zar",
+    "size": 4872
+  },
+  {
+    "path": "actor\\zelda_gi_compass.zar",
+    "size": 14480
+  },
+  {
+    "path": "actor\\zelda_gi_dekupouch.zar",
+    "size": 46684
+  },
+  {
+    "path": "actor\\zelda_gi_egg.zar",
+    "size": 14068
+  },
+  {
+    "path": "actor\\zelda_gi_eye_lotion.zar",
+    "size": 17020
+  },
+  {
+    "path": "actor\\zelda_gi_fire_arrow.zar",
+    "size": 25088
+  },
+  {
+    "path": "actor\\zelda_gi_fire.zar",
+    "size": 24920
+  },
+  {
+    "path": "actor\\zelda_gi_fish.zar",
+    "size": 42404
+  },
+  {
+    "path": "actor\\zelda_gi_frog.zar",
+    "size": 16500
+  },
+  {
+    "path": "actor\\zelda_gi_gerudo.zar",
+    "size": 11512
+  },
+  {
+    "path": "actor\\zelda_gi_gerudomask.zar",
+    "size": 14972
+  },
+  {
+    "path": "actor\\zelda_gi_ghost.zar",
+    "size": 34428
+  },
+  {
+    "path": "actor\\zelda_gi_glasses.zar",
+    "size": 17528
+  },
+  {
+    "path": "actor\\zelda_gi_gloves.zar",
+    "size": 40868
+  },
+  {
+    "path": "actor\\zelda_gi_goddess.zar",
+    "size": 39988
+  },
+  {
+    "path": "actor\\zelda_gi_golonmask.zar",
+    "size": 14716
+  },
+  {
+    "path": "actor\\zelda_gi_grass.zar",
+    "size": 12792
+  },
+  {
+    "path": "actor\\zelda_gi_hammer.zar",
+    "size": 12280
+  },
+  {
+    "path": "actor\\zelda_gi_heart.zar",
+    "size": 4344
+  },
+  {
+    "path": "actor\\zelda_gi_hearts.zar",
+    "size": 20900
+  },
+  {
+    "path": "actor\\zelda_gi_hookshot.zar",
+    "size": 33196
+  },
+  {
+    "path": "actor\\zelda_gi_hoverboots.zar",
+    "size": 22012
+  },
+  {
+    "path": "actor\\zelda_gi_ice_arrow.zar",
+    "size": 25088
+  },
+  {
+    "path": "actor\\zelda_gi_insect.zar",
+    "size": 27048
+  },
+  {
+    "path": "actor\\zelda_gi_jade.zar",
+    "size": 12156
+  },
+  {
+    "path": "actor\\zelda_gi_jewel.zar",
+    "size": 40784
+  },
+  {
+    "path": "actor\\zelda_gi_key.zar",
+    "size": 7796
+  },
+  {
+    "path": "actor\\zelda_gi_ki_tan_mask.zar",
+    "size": 10492
+  },
+  {
+    "path": "actor\\zelda_gi_letter.zar",
+    "size": 16376
+  },
+  {
+    "path": "actor\\zelda_gi_light_arrow.zar",
+    "size": 25088
+  },
+  {
+    "path": "actor\\zelda_gi_liquid.zar",
+    "size": 24912
+  },
+  {
+    "path": "actor\\zelda_gi_longsword.zar",
+    "size": 26028
+  },
+  {
+    "path": "actor\\zelda_gi_m_arrow.zar",
+    "size": 33628
+  },
+  {
+    "path": "actor\\zelda_gi_m_liquid.zar",
+    "size": 38248
+  },
+  {
+    "path": "actor\\zelda_gi_magicpot.zar",
+    "size": 26156
+  },
+  {
+    "path": "actor\\zelda_gi_map.zar",
+    "size": 34724
+  },
+  {
+    "path": "actor\\zelda_gi_medal.zar",
+    "size": 56020
+  },
+  {
+    "path": "actor\\zelda_gi_melody.zar",
+    "size": 7276
+  },
+  {
+    "path": "actor\\zelda_gi_milk_2.zar",
+    "size": 15868
+  },
+  {
+    "path": "actor\\zelda_gi_milk.zar",
+    "size": 15348
+  },
+  {
+    "path": "actor\\zelda_gi_mushroom.zar",
+    "size": 8952
+  },
+  {
+    "path": "actor\\zelda_gi_niwatori.zar",
+    "size": 57436
+  },
+  {
+    "path": "actor\\zelda_gi_none.zar",
+    "size": 1276
+  },
+  {
+    "path": "actor\\zelda_gi_nuts.zar",
+    "size": 11380
+  },
+  {
+    "path": "actor\\zelda_gi_ocarina_0.zar",
+    "size": 31072
+  },
+  {
+    "path": "actor\\zelda_gi_ocarina.zar",
+    "size": 39000
+  },
+  {
+    "path": "actor\\zelda_gi_pachinko.zar",
+    "size": 12944
+  },
+  {
+    "path": "actor\\zelda_gi_powder.zar",
+    "size": 8696
+  },
+  {
+    "path": "actor\\zelda_gi_prescription.zar",
+    "size": 7420
+  },
+  {
+    "path": "actor\\zelda_gi_purse.zar",
+    "size": 33444
+  },
+  {
+    "path": "actor\\zelda_gi_rabit_mask.zar",
+    "size": 9980
+  },
+  {
+    "path": "actor\\zelda_gi_redead_mask.zar",
+    "size": 12924
+  },
+  {
+    "path": "actor\\zelda_gi_ruby.zar",
+    "size": 15228
+  },
+  {
+    "path": "actor\\zelda_gi_rupy.zar",
+    "size": 23412
+  },
+  {
+    "path": "actor\\zelda_gi_sapphire.zar",
+    "size": 13564
+  },
+  {
+    "path": "actor\\zelda_gi_saw.zar",
+    "size": 14068
+  },
+  {
+    "path": "actor\\zelda_gi_scale.zar",
+    "size": 16916
+  },
+  {
+    "path": "actor\\zelda_gi_seed.zar",
+    "size": 11404
+  },
+  {
+    "path": "actor\\zelda_gi_shield_1.zar",
+    "size": 13944
+  },
+  {
+    "path": "actor\\zelda_gi_shield_2.zar",
+    "size": 29840
+  },
+  {
+    "path": "actor\\zelda_gi_shield_3.zar",
+    "size": 17400
+  },
+  {
+    "path": "actor\\zelda_gi_skj_mask.zar",
+    "size": 9592
+  },
+  {
+    "path": "actor\\zelda_gi_soldout.zar",
+    "size": 19876
+  },
+  {
+    "path": "actor\\zelda_gi_soul.zar",
+    "size": 27512
+  },
+  {
+    "path": "actor\\zelda_gi_stick.zar",
+    "size": 8184
+  },
+  {
+    "path": "actor\\zelda_gi_sutaru.zar",
+    "size": 10868
+  },
+  {
+    "path": "actor\\zelda_gi_sword_1.zar",
+    "size": 16760
+  },
+  {
+    "path": "actor\\zelda_gi_sword_2.zar",
+    "size": 31484
+  },
+  {
+    "path": "actor\\zelda_gi_ticketstone.zar",
+    "size": 22652
+  },
+  {
+    "path": "actor\\zelda_gi_truth_mask.zar",
+    "size": 14332
+  },
+  {
+    "path": "actor\\zelda_gi_zoramask.zar",
+    "size": 14712
+  },
+  {
+    "path": "actor\\zelda_gj.zar",
+    "size": 176652
+  },
+  {
+    "path": "actor\\zelda_gjyo_objects.zar",
+    "size": 179364
+  },
+  {
+    "path": "actor\\zelda_gla.zar",
+    "size": 155228
+  },
+  {
+    "path": "actor\\zelda_gm.zar",
+    "size": 51240
+  },
+  {
+    "path": "actor\\zelda_gnd_magic.zar",
+    "size": 16004
+  },
+  {
+    "path": "actor\\zelda_gnd.zar",
+    "size": 384456
+  },
+  {
+    "path": "actor\\zelda_gndd.zar",
+    "size": 223588
+  },
+  {
+    "path": "actor\\zelda_god_lgt.zar",
+    "size": 30392
+  },
+  {
+    "path": "actor\\zelda_goma.zar",
+    "size": 799160
+  },
+  {
+    "path": "actor\\zelda_goroiwa.zar",
+    "size": 14328
+  },
+  {
+    "path": "actor\\zelda_gr.zar",
+    "size": 44040
+  },
+  {
+    "path": "actor\\zelda_gs.zar",
+    "size": 19964
+  },
+  {
+    "path": "actor\\zelda_gt.zar",
+    "size": 579572
+  },
+  {
+    "path": "actor\\zelda_haka_door.zar",
+    "size": 33344
+  },
+  {
+    "path": "actor\\zelda_haka_objects.zar",
+    "size": 1139212
+  },
+  {
+    "path": "actor\\zelda_haka.zar",
+    "size": 22592
+  },
+  {
+    "path": "actor\\zelda_hakach_objects.zar",
+    "size": 204016
+  },
+  {
+    "path": "actor\\zelda_hata.zar",
+    "size": 31820
+  },
+  {
+    "path": "actor\\zelda_heavy_object.zar",
+    "size": 65464
+  },
+  {
+    "path": "actor\\zelda_hidan_objects.zar",
+    "size": 479996
+  },
+  {
+    "path": "actor\\zelda_hintnuts.zar",
+    "size": 71872
+  },
+  {
+    "path": "actor\\zelda_hintstone.zar",
+    "size": 27800
+  },
+  {
+    "path": "actor\\zelda_hlc.zar",
+    "size": 161092
+  },
+  {
+    "path": "actor\\zelda_hni.zar",
+    "size": 505780
+  },
+  {
+    "path": "actor\\zelda_horse_ganon.zar",
+    "size": 229368
+  },
+  {
+    "path": "actor\\zelda_horse_normal.zar",
+    "size": 302504
+  },
+  {
+    "path": "actor\\zelda_horse_zelda.zar",
+    "size": 65668
+  },
+  {
+    "path": "actor\\zelda_horse.zar",
+    "size": 534464
+  },
+  {
+    "path": "actor\\zelda_hs.zar",
+    "size": 43404
+  },
+  {
+    "path": "actor\\zelda_ice_objects.zar",
+    "size": 267432
+  },
+  {
+    "path": "actor\\zelda_ik.zar",
+    "size": 909528
+  },
+  {
+    "path": "actor\\zelda_im.zar",
+    "size": 239600
+  },
+  {
+    "path": "actor\\zelda_in.zar",
+    "size": 326216
+  },
+  {
+    "path": "actor\\zelda_ingate.zar",
+    "size": 35352
+  },
+  {
+    "path": "actor\\zelda_ironknack.zar",
+    "size": 368776
+  },
+  {
+    "path": "actor\\zelda_jj.zar",
+    "size": 119044
+  },
+  {
+    "path": "actor\\zelda_js.zar",
+    "size": 36552
+  },
+  {
+    "path": "actor\\zelda_jya_door.zar",
+    "size": 58408
+  },
+  {
+    "path": "actor\\zelda_jya_iron.zar",
+    "size": 92428
+  },
+  {
+    "path": "actor\\zelda_jya_obj.zar",
+    "size": 1003816
+  },
+  {
+    "path": "actor\\zelda_ka.zar",
+    "size": 41844
+  },
+  {
+    "path": "actor\\zelda_kanban.zar",
+    "size": 49824
+  },
+  {
+    "path": "actor\\zelda_kdodongo.zar",
+    "size": 816516
+  },
+  {
+    "path": "actor\\zelda_keep_opening.zar",
+    "size": 273100
+  },
+  {
+    "path": "actor\\zelda_keep.zar",
+    "size": 1553596
+  },
+  {
+    "path": "actor\\zelda_kibako2.zar",
+    "size": 23100
+  },
+  {
+    "path": "actor\\zelda_killer_door.zar",
+    "size": 62492
+  },
+  {
+    "path": "actor\\zelda_km1.zar",
+    "size": 296080
+  },
+  {
+    "path": "actor\\zelda_kogoma.zar",
+    "size": 63152
+  },
+  {
+    "path": "actor\\zelda_kusa.zar",
+    "size": 20924
+  },
+  {
+    "path": "actor\\zelda_kw1.zar",
+    "size": 300852
+  },
+  {
+    "path": "actor\\zelda_kz.zar",
+    "size": 90712
+  },
+  {
+    "path": "actor\\zelda_light_ring.zar",
+    "size": 4796
+  },
+  {
+    "path": "actor\\zelda_lightswitch.zar",
+    "size": 47548
+  },
+  {
+    "path": "actor\\zelda_link_boy_new.zar",
+    "size": 5199320
+  },
+  {
+    "path": "actor\\zelda_link_boy_ultra.zar",
+    "size": 2997956
+  },
+  {
+    "path": "actor\\zelda_link_child_new.zar",
+    "size": 5055916
+  },
+  {
+    "path": "actor\\zelda_link_child_ultra.zar",
+    "size": 2812356
+  },
+  {
+    "path": "actor\\zelda_link_opening.zar",
+    "size": 609932
+  },
+  {
+    "path": "actor\\zelda_ma1.zar",
+    "size": 77308
+  },
+  {
+    "path": "actor\\zelda_ma2.zar",
+    "size": 110812
+  },
+  {
+    "path": "actor\\zelda_mag.zar",
+    "size": 388300
+  },
+  {
+    "path": "actor\\zelda_magic_wind.zar",
+    "size": 25684
+  },
+  {
+    "path": "actor\\zelda_mamenoki.zar",
+    "size": 41668
+  },
+  {
+    "path": "actor\\zelda_mastergolon.zar",
+    "size": 49948
+  },
+  {
+    "path": "actor\\zelda_masterzoora.zar",
+    "size": 41364
+  },
+  {
+    "path": "actor\\zelda_mb.zar",
+    "size": 391660
+  },
+  {
+    "path": "actor\\zelda_md.zar",
+    "size": 141328
+  },
+  {
+    "path": "actor\\zelda_menkuri_objects.zar",
+    "size": 111660
+  },
+  {
+    "path": "actor\\zelda_mir_ray.zar",
+    "size": 3836
+  },
+  {
+    "path": "actor\\zelda_mizu_objects.zar",
+    "size": 337872
+  },
+  {
+    "path": "actor\\zelda_mjin_oka.zar",
+    "size": 9364
+  },
+  {
+    "path": "actor\\zelda_mjin.zar",
+    "size": 157120
+  },
+  {
+    "path": "actor\\zelda_mk.zar",
+    "size": 61072
+  },
+  {
+    "path": "actor\\zelda_mm.zar",
+    "size": 122492
+  },
+  {
+    "path": "actor\\zelda_mo.zar",
+    "size": 397972
+  },
+  {
+    "path": "actor\\zelda_mori_hineri1.zar",
+    "size": 127136
+  },
+  {
+    "path": "actor\\zelda_mori_hineri1a.zar",
+    "size": 115668
+  },
+  {
+    "path": "actor\\zelda_mori_hineri2.zar",
+    "size": 119392
+  },
+  {
+    "path": "actor\\zelda_mori_hineri2a.zar",
+    "size": 121996
+  },
+  {
+    "path": "actor\\zelda_mori_objects.zar",
+    "size": 216824
+  },
+  {
+    "path": "actor\\zelda_ms.zar",
+    "size": 46144
+  },
+  {
+    "path": "actor\\zelda_mu.zar",
+    "size": 102884
+  },
+  {
+    "path": "actor\\zelda_nb.zar",
+    "size": 314848
+  },
+  {
+    "path": "actor\\zelda_nw.zar",
+    "size": 19496
+  },
+  {
+    "path": "actor\\zelda_ny.zar",
+    "size": 21948
+  },
+  {
+    "path": "actor\\zelda_oc2.zar",
+    "size": 59740
+  },
+  {
+    "path": "actor\\zelda_ocd.zar",
+    "size": 139596
+  },
+  {
+    "path": "actor\\zelda_oF1d.zar",
+    "size": 235304
+  },
+  {
+    "path": "actor\\zelda_os.zar",
+    "size": 50628
+  },
+  {
+    "path": "actor\\zelda_ouke_haka.zar",
+    "size": 7032
+  },
+  {
+    "path": "actor\\zelda_owl.zar",
+    "size": 264968
+  },
+  {
+    "path": "actor\\zelda_ph.zar",
+    "size": 33912
+  },
+  {
+    "path": "actor\\zelda_po_composer.zar",
+    "size": 116024
+  },
+  {
+    "path": "actor\\zelda_po_field.zar",
+    "size": 99984
+  },
+  {
+    "path": "actor\\zelda_po_sisters.zar",
+    "size": 196732
+  },
+  {
+    "path": "actor\\zelda_po.zar",
+    "size": 70600
+  },
+  {
+    "path": "actor\\zelda_ps.zar",
+    "size": 101448
+  },
+  {
+    "path": "actor\\zelda_rb.zar",
+    "size": 22920
+  },
+  {
+    "path": "actor\\zelda_rd.zar",
+    "size": 155356
+  },
+  {
+    "path": "actor\\zelda_relay_objects.zar",
+    "size": 70240
+  },
+  {
+    "path": "actor\\zelda_rl.zar",
+    "size": 63976
+  },
+  {
+    "path": "actor\\zelda_rr.zar",
+    "size": 17580
+  },
+  {
+    "path": "actor\\zelda_rs.zar",
+    "size": 35284
+  },
+  {
+    "path": "actor\\zelda_ru1.zar",
+    "size": 366188
+  },
+  {
+    "path": "actor\\zelda_ru2.zar",
+    "size": 149136
+  },
+  {
+    "path": "actor\\zelda_sa.zar",
+    "size": 335188
+  },
+  {
+    "path": "actor\\zelda_saku.zar",
+    "size": 16412
+  },
+  {
+    "path": "actor\\zelda_sb.zar",
+    "size": 22188
+  },
+  {
+    "path": "actor\\zelda_sd.zar",
+    "size": 116700
+  },
+  {
+    "path": "actor\\zelda_sh.zar",
+    "size": 54344
+  },
+  {
+    "path": "actor\\zelda_shop_tana.zar",
+    "size": 69328
+  },
+  {
+    "path": "actor\\zelda_shopnuts.zar",
+    "size": 64632
+  },
+  {
+    "path": "actor\\zelda_siofuki.zar",
+    "size": 13704
+  },
+  {
+    "path": "actor\\zelda_skb.zar",
+    "size": 113532
+  },
+  {
+    "path": "actor\\zelda_skelton.zar",
+    "size": 329652
+  },
+  {
+    "path": "actor\\zelda_skj.zar",
+    "size": 144960
+  },
+  {
+    "path": "actor\\zelda_spo04_objects.zar",
+    "size": 1376728
+  },
+  {
+    "path": "actor\\zelda_spot00_break.zar",
+    "size": 74152
+  },
+  {
+    "path": "actor\\zelda_spot00_objects.zar",
+    "size": 26364
+  },
+  {
+    "path": "actor\\zelda_spot01_matoya.zar",
+    "size": 87396
+  },
+  {
+    "path": "actor\\zelda_spot01_matoyab.zar",
+    "size": 40112
+  },
+  {
+    "path": "actor\\zelda_spot01_objects.zar",
+    "size": 66616
+  },
+  {
+    "path": "actor\\zelda_spot02_objects.zar",
+    "size": 203252
+  },
+  {
+    "path": "actor\\zelda_spot03_object.zar",
+    "size": 22172
+  },
+  {
+    "path": "actor\\zelda_spot05_objects.zar",
+    "size": 24896
+  },
+  {
+    "path": "actor\\zelda_spot06_objects.zar",
+    "size": 94768
+  },
+  {
+    "path": "actor\\zelda_spot07_object.zar",
+    "size": 215220
+  },
+  {
+    "path": "actor\\zelda_spot08_obj.zar",
+    "size": 106116
+  },
+  {
+    "path": "actor\\zelda_spot09_obj.zar",
+    "size": 494632
+  },
+  {
+    "path": "actor\\zelda_spot11_obj.zar",
+    "size": 33976
+  },
+  {
+    "path": "actor\\zelda_spot12_obj.zar",
+    "size": 87360
+  },
+  {
+    "path": "actor\\zelda_spot15_obj.zar",
+    "size": 28152
+  },
+  {
+    "path": "actor\\zelda_spot16_obj.zar",
+    "size": 47552
+  },
+  {
+    "path": "actor\\zelda_spot17_obj.zar",
+    "size": 77240
+  },
+  {
+    "path": "actor\\zelda_spot18_obj.zar",
+    "size": 102028
+  },
+  {
+    "path": "actor\\zelda_ssh.zar",
+    "size": 56644
+  },
+  {
+    "path": "actor\\zelda_sst.zar",
+    "size": 718856
+  },
+  {
+    "path": "actor\\zelda_st.zar",
+    "size": 112016
+  },
+  {
+    "path": "actor\\zelda_stream.zar",
+    "size": 19180
+  },
+  {
+    "path": "actor\\zelda_syokudai.zar",
+    "size": 95656
+  },
+  {
+    "path": "actor\\zelda_ta.zar",
+    "size": 187344
+  },
+  {
+    "path": "actor\\zelda_timeblock.zar",
+    "size": 22068
+  },
+  {
+    "path": "actor\\zelda_tk.zar",
+    "size": 108084
+  },
+  {
+    "path": "actor\\zelda_toki_objects.zar",
+    "size": 184792
+  },
+  {
+    "path": "actor\\zelda_torch2.zar",
+    "size": 95496
+  },
+  {
+    "path": "actor\\zelda_toryo.zar",
+    "size": 70736
+  },
+  {
+    "path": "actor\\zelda_tp.zar",
+    "size": 15076
+  },
+  {
+    "path": "actor\\zelda_tr.zar",
+    "size": 191328
+  },
+  {
+    "path": "actor\\zelda_triforce_spot.zar",
+    "size": 14384
+  },
+  {
+    "path": "actor\\zelda_ts.zar",
+    "size": 31576
+  },
+  {
+    "path": "actor\\zelda_tsubo.zar",
+    "size": 22304
+  },
+  {
+    "path": "actor\\zelda_tt.zar",
+    "size": 103100
+  },
+  {
+    "path": "actor\\zelda_tw.zar",
+    "size": 1499816
+  },
+  {
+    "path": "actor\\zelda_umajump.zar",
+    "size": 17564
+  },
+  {
+    "path": "actor\\zelda_vali.zar",
+    "size": 77440
+  },
+  {
+    "path": "actor\\zelda_vm.zar",
+    "size": 38296
+  },
+  {
+    "path": "actor\\zelda_warp1.zar",
+    "size": 44112
+  },
+  {
+    "path": "actor\\zelda_wf.zar",
+    "size": 175120
+  },
+  {
+    "path": "actor\\zelda_wm2.zar",
+    "size": 185592
+  },
+  {
+    "path": "actor\\zelda_wood02.zar",
+    "size": 215440
+  },
+  {
+    "path": "actor\\zelda_xc.zar",
+    "size": 394232
+  },
+  {
+    "path": "actor\\zelda_ydan_objects.zar",
+    "size": 270264
+  },
+  {
+    "path": "actor\\zelda_yukabyun.zar",
+    "size": 7112
+  },
+  {
+    "path": "actor\\zelda_zf.zar",
+    "size": 293192
+  },
+  {
+    "path": "actor\\zelda_zg.zar",
+    "size": 7300
+  },
+  {
+    "path": "actor\\zelda_zl1.zar",
+    "size": 256580
+  },
+  {
+    "path": "actor\\zelda_zl2.zar",
+    "size": 829912
+  },
+  {
+    "path": "actor\\zelda_zl4.zar",
+    "size": 652164
+  },
+  {
+    "path": "actor\\zelda_zo.zar",
+    "size": 115808
+  },
+  {
+    "path": "actor\\keep\\cube.cmb",
+    "size": 3968
+  },
+  {
+    "path": "ending\\ending_still.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "kankyo\\BlueOnly.zar",
+    "size": 281500
+  },
+  {
+    "path": "kankyo\\BlueSky.zar",
+    "size": 848736
+  },
+  {
+    "path": "kankyo\\Dark.zar",
+    "size": 177064
+  },
+  {
+    "path": "kankyo\\Fogy.zar",
+    "size": 177064
+  },
+  {
+    "path": "kankyo\\God.zar",
+    "size": 308132
+  },
+  {
+    "path": "kankyo\\kankyo_common.zar",
+    "size": 800
+  },
+  {
+    "path": "menu\\home_nix_sign.ctxb",
+    "size": 8264
+  },
+  {
+    "path": "menu\\ltn16_alpha0.list",
+    "size": 96
+  },
+  {
+    "path": "menu\\ltn16_alpha1.list",
+    "size": 96
+  },
+  {
+    "path": "menu\\ltn16_alpha2.list",
+    "size": 94
+  },
+  {
+    "path": "menu\\ltn16_euro.list",
+    "size": 124
+  },
+  {
+    "path": "menu\\00_JP_JAPANESE\\cam_interface00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\00_JP_JAPANESE\\common_bg00.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\00_JP_JAPANESE\\common_bg01.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\00_JP_JAPANESE\\fieldmap_cloud_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\00_JP_JAPANESE\\hud_all00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\00_JP_JAPANESE\\hud_menu_title00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\00_JP_JAPANESE\\icon_item_menu00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\00_JP_JAPANESE\\menu_cursor00.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\00_JP_JAPANESE\\menu_equip_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\00_JP_JAPANESE\\menu_file_select_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\00_JP_JAPANESE\\menu_file_select_parts01.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\00_JP_JAPANESE\\menu_hint_movie_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\00_JP_JAPANESE\\menu_item_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\00_JP_JAPANESE\\menu_item_parts01.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\00_JP_JAPANESE\\menu_map_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\00_JP_JAPANESE\\menu_map_parts01.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\00_JP_JAPANESE\\menu_okarina_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\00_JP_JAPANESE\\menu_option_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\00_JP_JAPANESE\\menu_top_map00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\00_JP_JAPANESE\\menu_top_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\00_JP_JAPANESE\\name_entry00_parts00.ctxb",
+    "size": 524360
+  },
+  {
+    "path": "menu\\00_JP_JAPANESE\\name_entry00_parts01.ctxb",
+    "size": 524360
+  },
+  {
+    "path": "menu\\00_JP_JAPANESE\\num_all00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\01_US_ENGLISH\\cam_interface00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\01_US_ENGLISH\\common_bg00.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\01_US_ENGLISH\\common_bg01.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\01_US_ENGLISH\\fieldmap_cloud_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\01_US_ENGLISH\\hud_all00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\01_US_ENGLISH\\hud_menu_title00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\01_US_ENGLISH\\icon_item_menu00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\01_US_ENGLISH\\menu_cursor00.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\01_US_ENGLISH\\menu_equip_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\01_US_ENGLISH\\menu_file_select_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\01_US_ENGLISH\\menu_file_select_parts01.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\01_US_ENGLISH\\menu_hint_movie_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\01_US_ENGLISH\\menu_item_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\01_US_ENGLISH\\menu_item_parts01.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\01_US_ENGLISH\\menu_map_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\01_US_ENGLISH\\menu_map_parts01.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\01_US_ENGLISH\\menu_okarina_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\01_US_ENGLISH\\menu_option_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\01_US_ENGLISH\\menu_top_map00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\01_US_ENGLISH\\menu_top_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\01_US_ENGLISH\\name_entry00_parts00.ctxb",
+    "size": 524360
+  },
+  {
+    "path": "menu\\01_US_ENGLISH\\name_entry00_parts01.ctxb",
+    "size": 524360
+  },
+  {
+    "path": "menu\\01_US_ENGLISH\\num_all00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\02_EU_ENGLISH\\cam_interface00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\02_EU_ENGLISH\\common_bg00.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\02_EU_ENGLISH\\common_bg01.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\02_EU_ENGLISH\\fieldmap_cloud_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\02_EU_ENGLISH\\hud_all00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\02_EU_ENGLISH\\hud_menu_title00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\02_EU_ENGLISH\\icon_item_menu00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\02_EU_ENGLISH\\menu_cursor00.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\02_EU_ENGLISH\\menu_equip_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\02_EU_ENGLISH\\menu_file_select_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\02_EU_ENGLISH\\menu_file_select_parts01.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\02_EU_ENGLISH\\menu_hint_movie_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\02_EU_ENGLISH\\menu_item_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\02_EU_ENGLISH\\menu_item_parts01.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\02_EU_ENGLISH\\menu_map_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\02_EU_ENGLISH\\menu_map_parts01.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\02_EU_ENGLISH\\menu_okarina_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\02_EU_ENGLISH\\menu_option_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\02_EU_ENGLISH\\menu_top_map00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\02_EU_ENGLISH\\menu_top_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\02_EU_ENGLISH\\name_entry00_parts00.ctxb",
+    "size": 524360
+  },
+  {
+    "path": "menu\\02_EU_ENGLISH\\name_entry00_parts01.ctxb",
+    "size": 524360
+  },
+  {
+    "path": "menu\\02_EU_ENGLISH\\num_all00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\03_EU_GERMAN\\cam_interface00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\03_EU_GERMAN\\common_bg00.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\03_EU_GERMAN\\common_bg01.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\03_EU_GERMAN\\fieldmap_cloud_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\03_EU_GERMAN\\hud_all00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\03_EU_GERMAN\\hud_menu_title00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\03_EU_GERMAN\\icon_item_menu00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\03_EU_GERMAN\\menu_cursor00.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\03_EU_GERMAN\\menu_equip_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\03_EU_GERMAN\\menu_file_select_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\03_EU_GERMAN\\menu_file_select_parts01.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\03_EU_GERMAN\\menu_hint_movie_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\03_EU_GERMAN\\menu_item_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\03_EU_GERMAN\\menu_item_parts01.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\03_EU_GERMAN\\menu_map_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\03_EU_GERMAN\\menu_map_parts01.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\03_EU_GERMAN\\menu_okarina_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\03_EU_GERMAN\\menu_option_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\03_EU_GERMAN\\menu_top_map00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\03_EU_GERMAN\\menu_top_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\03_EU_GERMAN\\name_entry00_parts00.ctxb",
+    "size": 524360
+  },
+  {
+    "path": "menu\\03_EU_GERMAN\\name_entry00_parts01.ctxb",
+    "size": 524360
+  },
+  {
+    "path": "menu\\03_EU_GERMAN\\num_all00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\04_EU_FRENCH\\cam_interface00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\04_EU_FRENCH\\common_bg00.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\04_EU_FRENCH\\common_bg01.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\04_EU_FRENCH\\fieldmap_cloud_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\04_EU_FRENCH\\hud_all00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\04_EU_FRENCH\\hud_menu_title00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\04_EU_FRENCH\\icon_item_menu00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\04_EU_FRENCH\\menu_cursor00.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\04_EU_FRENCH\\menu_equip_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\04_EU_FRENCH\\menu_file_select_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\04_EU_FRENCH\\menu_file_select_parts01.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\04_EU_FRENCH\\menu_hint_movie_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\04_EU_FRENCH\\menu_item_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\04_EU_FRENCH\\menu_item_parts01.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\04_EU_FRENCH\\menu_map_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\04_EU_FRENCH\\menu_map_parts01.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\04_EU_FRENCH\\menu_okarina_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\04_EU_FRENCH\\menu_option_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\04_EU_FRENCH\\menu_top_map00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\04_EU_FRENCH\\menu_top_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\04_EU_FRENCH\\name_entry00_parts00.ctxb",
+    "size": 524360
+  },
+  {
+    "path": "menu\\04_EU_FRENCH\\name_entry00_parts01.ctxb",
+    "size": 524360
+  },
+  {
+    "path": "menu\\04_EU_FRENCH\\num_all00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\05_US_FRENCH\\cam_interface00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\05_US_FRENCH\\common_bg00.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\05_US_FRENCH\\common_bg01.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\05_US_FRENCH\\fieldmap_cloud_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\05_US_FRENCH\\hud_all00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\05_US_FRENCH\\hud_menu_title00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\05_US_FRENCH\\icon_item_menu00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\05_US_FRENCH\\menu_cursor00.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\05_US_FRENCH\\menu_equip_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\05_US_FRENCH\\menu_file_select_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\05_US_FRENCH\\menu_file_select_parts01.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\05_US_FRENCH\\menu_hint_movie_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\05_US_FRENCH\\menu_item_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\05_US_FRENCH\\menu_item_parts01.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\05_US_FRENCH\\menu_map_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\05_US_FRENCH\\menu_map_parts01.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\05_US_FRENCH\\menu_okarina_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\05_US_FRENCH\\menu_option_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\05_US_FRENCH\\menu_top_map00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\05_US_FRENCH\\menu_top_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\05_US_FRENCH\\name_entry00_parts00.ctxb",
+    "size": 524360
+  },
+  {
+    "path": "menu\\05_US_FRENCH\\name_entry00_parts01.ctxb",
+    "size": 524360
+  },
+  {
+    "path": "menu\\05_US_FRENCH\\num_all00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\06_EU_SPANISH\\cam_interface00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\06_EU_SPANISH\\common_bg00.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\06_EU_SPANISH\\common_bg01.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\06_EU_SPANISH\\fieldmap_cloud_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\06_EU_SPANISH\\hud_all00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\06_EU_SPANISH\\hud_menu_title00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\06_EU_SPANISH\\icon_item_menu00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\06_EU_SPANISH\\menu_cursor00.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\06_EU_SPANISH\\menu_equip_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\06_EU_SPANISH\\menu_file_select_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\06_EU_SPANISH\\menu_file_select_parts01.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\06_EU_SPANISH\\menu_hint_movie_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\06_EU_SPANISH\\menu_item_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\06_EU_SPANISH\\menu_item_parts01.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\06_EU_SPANISH\\menu_map_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\06_EU_SPANISH\\menu_map_parts01.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\06_EU_SPANISH\\menu_okarina_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\06_EU_SPANISH\\menu_option_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\06_EU_SPANISH\\menu_top_map00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\06_EU_SPANISH\\menu_top_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\06_EU_SPANISH\\name_entry00_parts00.ctxb",
+    "size": 524360
+  },
+  {
+    "path": "menu\\06_EU_SPANISH\\name_entry00_parts01.ctxb",
+    "size": 524360
+  },
+  {
+    "path": "menu\\06_EU_SPANISH\\num_all00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\07_US_SPANISH\\cam_interface00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\07_US_SPANISH\\common_bg00.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\07_US_SPANISH\\common_bg01.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\07_US_SPANISH\\fieldmap_cloud_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\07_US_SPANISH\\hud_all00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\07_US_SPANISH\\hud_menu_title00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\07_US_SPANISH\\icon_item_menu00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\07_US_SPANISH\\menu_cursor00.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\07_US_SPANISH\\menu_equip_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\07_US_SPANISH\\menu_file_select_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\07_US_SPANISH\\menu_file_select_parts01.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\07_US_SPANISH\\menu_hint_movie_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\07_US_SPANISH\\menu_item_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\07_US_SPANISH\\menu_item_parts01.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\07_US_SPANISH\\menu_map_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\07_US_SPANISH\\menu_map_parts01.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\07_US_SPANISH\\menu_okarina_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\07_US_SPANISH\\menu_option_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\07_US_SPANISH\\menu_top_map00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\07_US_SPANISH\\menu_top_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\07_US_SPANISH\\name_entry00_parts00.ctxb",
+    "size": 524360
+  },
+  {
+    "path": "menu\\07_US_SPANISH\\name_entry00_parts01.ctxb",
+    "size": 524360
+  },
+  {
+    "path": "menu\\07_US_SPANISH\\num_all00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\08_EU_ITALIAN\\cam_interface00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\08_EU_ITALIAN\\common_bg00.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\08_EU_ITALIAN\\common_bg01.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\08_EU_ITALIAN\\fieldmap_cloud_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\08_EU_ITALIAN\\hud_all00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\08_EU_ITALIAN\\hud_menu_title00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\08_EU_ITALIAN\\icon_item_menu00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\08_EU_ITALIAN\\menu_cursor00.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\08_EU_ITALIAN\\menu_equip_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\08_EU_ITALIAN\\menu_file_select_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\08_EU_ITALIAN\\menu_file_select_parts01.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\08_EU_ITALIAN\\menu_hint_movie_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\08_EU_ITALIAN\\menu_item_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\08_EU_ITALIAN\\menu_item_parts01.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\08_EU_ITALIAN\\menu_map_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\08_EU_ITALIAN\\menu_map_parts01.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\08_EU_ITALIAN\\menu_okarina_parts00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "menu\\08_EU_ITALIAN\\menu_option_parts00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\08_EU_ITALIAN\\menu_top_map00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\08_EU_ITALIAN\\menu_top_parts00.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "menu\\08_EU_ITALIAN\\name_entry00_parts00.ctxb",
+    "size": 524360
+  },
+  {
+    "path": "menu\\08_EU_ITALIAN\\name_entry00_parts01.ctxb",
+    "size": 524360
+  },
+  {
+    "path": "menu\\08_EU_ITALIAN\\num_all00.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\bdan\\bdan_kaisou_b1.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\bdan\\bdan_kaisou_f1.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\bdan\\bdan_i\\bdan_00_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\bdan\\bdan_i\\bdan_01_b1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\bdan\\bdan_i\\bdan_01_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\bdan\\bdan_i\\bdan_02_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\bdan\\bdan_i\\bdan_03_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\bdan\\bdan_i\\bdan_04_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\bdan\\bdan_i\\bdan_05_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\bdan\\bdan_i\\bdan_06_b1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\bdan\\bdan_i\\bdan_06_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\bdan\\bdan_i\\bdan_07_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\bdan\\bdan_i\\bdan_08_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\bdan\\bdan_i\\bdan_09_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\bdan\\bdan_i\\bdan_0a_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\bdan\\bdan_i\\bdan_0b_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\bdan\\bdan_i\\bdan_0c_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\bdan\\bdan_i\\bdan_0d_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\bdan\\bdan_i\\bdan_0e_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\bmori_kaisou_b1.ctxb",
+    "size": 4168
+  },
+  {
+    "path": "menu\\map\\Bmori\\bmori_kaisou_b2.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\Bmori\\bmori_kaisou_f1.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\Bmori\\bmori_kaisou_f2.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_00_1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_00_2_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_01_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_02_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_03_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_04_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_05_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_06_1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_06_2_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_07_1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_07_2_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_08_1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_08_2_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_09_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_0a_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_0b_1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_0b_2_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_0c_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_0d_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_0e_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_0f_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_10_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_11_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_12_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_13_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_14_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\Bmori\\Bmori_i\\bmori_15_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\DDAN\\ddan_kaisou_f1.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\DDAN\\ddan_kaisou_f2.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\DDAN\\ddan_i\\ddan_00_2_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\DDAN\\ddan_i\\ddan_00_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\DDAN\\ddan_i\\ddan_01_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\DDAN\\ddan_i\\ddan_02_2_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\DDAN\\ddan_i\\ddan_02_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\DDAN\\ddan_i\\ddan_03_2_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\DDAN\\ddan_i\\ddan_03_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\DDAN\\ddan_i\\ddan_04_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\DDAN\\ddan_i\\ddan_05_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\DDAN\\ddan_i\\ddan_06_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\DDAN\\ddan_i\\ddan_07_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\DDAN\\ddan_i\\ddan_08_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\DDAN\\ddan_i\\ddan_09_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\DDAN\\ddan_i\\ddan_0a_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\DDAN\\ddan_i\\ddan_0b_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\DDAN\\ddan_i\\ddan_0c_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\DDAN\\ddan_i\\ddan_0d_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\DDAN\\ddan_i\\ddan_0e_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\DDAN\\ddan_i\\ddan_0f_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\fm\\h_fm_00_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\fm\\h_fm_01_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\fm\\h_fm_02_1_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\fm\\h_fm_02_2_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\fm\\h_fm_03_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\fm\\h_fm_04_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\fm\\h_fm_05_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\fm\\h_fm_06_1_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\fm\\h_fm_06_2_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\fm\\h_fm_07_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\fm\\h_fm_08_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\fm\\h_fm_09_1_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\fm\\h_fm_09_2_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\fm\\h_fm_10_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\fm\\h_fm_11_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\fm\\h_fm_12_1_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\fm\\h_fm_12_2_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\fm\\h_fm_13_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\fm\\h_fm_15_1_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\fm\\h_fm_15_2_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\fm\\h_fm_16_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\fm\\h_fm_17_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\fm\\h_fm_18_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\fm\\h_fm_20_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\fm_l\\fm_l_00_txt.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\fm_l\\fm_l_01_txt.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\fm_l\\fm_l_02_1_txt.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\fm_l\\fm_l_02_2_txt.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\fm_l\\fm_l_03_txt.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\fm_l\\fm_l_04_txt.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\fm_l\\fm_l_05_txt.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\fm_l\\fm_l_06_1_txt.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\fm_l\\fm_l_06_2_txt.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\fm_l\\fm_l_07_txt.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\fm_l\\fm_l_08_txt.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\fm_l\\fm_l_09_1_txt.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\fm_l\\fm_l_09_2_txt.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\fm_l\\fm_l_10_txt.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\fm_l\\fm_l_11_txt.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\fm_l\\fm_l_12_1_txt.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\fm_l\\fm_l_12_2_txt.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\fm_l\\fm_l_13_txt.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\fm_l\\fm_l_15_1_txt.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\fm_l\\fm_l_15_2_txt.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\fm_l\\fm_l_16_txt.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\fm_l\\fm_l_17_txt.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\fm_l\\fm_l_18_txt.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\fm_l\\fm_l_20_txt.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_kaisou_b1.ctxb",
+    "size": 8264
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_kaisou_b2.ctxb",
+    "size": 8264
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_kaisou_b3.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_kaisou_b4.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_00_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_01_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_02_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_03_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_04_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_05_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_06_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_07_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_08_b2_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_08_b3_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_09_b3_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_09_b4_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_0a_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_0b_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_0c_b3_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_0c_b4_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_0d_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_0e_b3_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_0e_b4_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_0f_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_10_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_11_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_12_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_13_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_14_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_15_b3_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan\\hakadan_i\\hakadan_15_b4_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan_ch\\hakadan_ch_kaisou_b1.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\hakadan_ch\\hakadan_ch_kaisou_b2.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\hakadan_ch\\hakadan_ch_kaisou_b3.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan_ch\\hakadan_ch_i\\hakadan_ch_00_b1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan_ch\\hakadan_ch_i\\hakadan_ch_00_b2_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan_ch\\hakadan_ch_i\\hakadan_ch_01_b1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan_ch\\hakadan_ch_i\\hakadan_ch_01_b2_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan_ch\\hakadan_ch_i\\hakadan_ch_01_b3_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan_ch\\hakadan_ch_i\\hakadan_ch_02_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan_ch\\hakadan_ch_i\\hakadan_ch_03_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan_ch\\hakadan_ch_i\\hakadan_ch_04_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan_ch\\hakadan_ch_i\\hakadan_ch_05_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\hakadan_ch\\hakadan_ch_i\\hakadan_ch_06_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_kaisou_f1.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_kaisou_f2.ctxb",
+    "size": 8264
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_kaisou_f3.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_kaisou_f4.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_kaisou_f5.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_00_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_01_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_02_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_03_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_04_2_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_04_3_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_05_3_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_05_4_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_06_2_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_06_3_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_06_4_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_07_4_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_07_5_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_08_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_09_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_0a_2_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_0a_3_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_0a_4_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_0b_3_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_0b_4_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_0c_4_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_0c_5_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_0d_4_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_0d_5_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_0e_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_0f_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_10_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_11_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_12_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_13_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_14_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_15_1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_15_2_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_16_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_17_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_18_3_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_18_4_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\HIDAN\\hidan_i\\hidan_19_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\ice\\ice_kaisou_f1.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "menu\\map\\ice\\ice_i\\ice_i_00_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\ice\\ice_i\\ice_i_01_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\ice\\ice_i\\ice_i_02_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\ice\\ice_i\\ice_i_03_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\ice\\ice_i\\ice_i_04_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\ice\\ice_i\\ice_i_05_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\ice\\ice_i\\ice_i_06_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\ice\\ice_i\\ice_i_07_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\ice\\ice_i\\ice_i_08_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\ice\\ice_i\\ice_i_09_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\ice\\ice_i\\ice_i_0a_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\ice\\ice_i\\ice_i_0b_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_kaisou_f1.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_kaisou_f2.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_kaisou_f3.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_kaisou_f4.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_00_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_01_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_02_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_03_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_04_1_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_04_2_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_05_2_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_05_3_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_06_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_07_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_08_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_09_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_0a_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_0b_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_0c_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_0d_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_0e_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_0f_1_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_0f_2_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_10_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_11_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_12_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_13_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_14_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_15_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_16_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_17_3_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_17_4_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_18_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_19_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_1a_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\jyasinzou\\jyasinzou_i\\jyasinzou_1b_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_kaisou_b1.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_kaisou_f1.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_kaisou_f2.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_kaisou_f3.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_00_1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_00_2_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_00_3_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_00_b1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_01_1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_01_2_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_01_3_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_01_b1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_02_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_03_1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_03_b1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_04_2_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_04_3_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_05_1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_05_2_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_05_3_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_05_b1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_06_2_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_06_3_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_07_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_08_1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_08_b1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_09_1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_09_b1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_0a_2_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_0a_3_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_0b_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_0c_1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_0c_b1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_0d_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_0e_1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_0e_b1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_0f_1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_0f_b1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_10_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_11_1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_11_2_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_11_3_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_12_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_13_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_14_2_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_14_3_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_15_1_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\MIZUsin\\mizusin_i\\mizusin_15_2_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\YDAN\\ydan_kaisou_b1.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\YDAN\\ydan_kaisou_b2.ctxb",
+    "size": 8264
+  },
+  {
+    "path": "menu\\map\\YDAN\\ydan_kaisou_f1.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\YDAN\\ydan_kaisou_f2.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\YDAN\\ydan_kaisou_f3.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\YDAN\\ydan_i\\ydan_00_1_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\YDAN\\ydan_i\\ydan_00_2_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\YDAN\\ydan_i\\ydan_00_3_txt.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "menu\\map\\YDAN\\ydan_i\\ydan_01_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\YDAN\\ydan_i\\ydan_02_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\YDAN\\ydan_i\\ydan_03_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\YDAN\\ydan_i\\ydan_04_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\YDAN\\ydan_i\\ydan_05_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\YDAN\\ydan_i\\ydan_06_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\YDAN\\ydan_i\\ydan_07_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\YDAN\\ydan_i\\ydan_08_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\YDAN\\ydan_i\\ydan_09_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "menu\\map\\YDAN\\ydan_i\\ydan_0a_txt.ctxb",
+    "size": 32840
+  },
+  {
+    "path": "message\\anim.qan",
+    "size": 25544
+  },
+  {
+    "path": "message\\color.qcl",
+    "size": 2048
+  },
+  {
+    "path": "message\\layout.qly",
+    "size": 11264
+  },
+  {
+    "path": "message\\parts.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "message\\plate.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "message\\sprite.qsp",
+    "size": 10240
+  },
+  {
+    "path": "message\\sys8.qbf",
+    "size": 26896
+  },
+  {
+    "path": "message\\eu\\eu.qm",
+    "size": 1717464
+  },
+  {
+    "path": "message\\eu\\ltn16.qbf",
+    "size": 28232
+  },
+  {
+    "path": "misc\\boss_bongobongo.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "misc\\boss_dodongo.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "misc\\boss_goma.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "misc\\boss_mofa.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "misc\\boss_phantomeganon.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "misc\\boss_rush.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "misc\\boss_twinroba.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "misc\\boss_valvasia.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "misc\\boss_varinade.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "misc\\bossRush.qbr",
+    "size": 4608
+  },
+  {
+    "path": "misc\\common_bg01.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "misc\\ending_bottom.qly",
+    "size": 11264
+  },
+  {
+    "path": "misc\\ending_texture00.ctxb",
+    "size": 4168
+  },
+  {
+    "path": "misc\\ending_texture01.ctxb",
+    "size": 200
+  },
+  {
+    "path": "misc\\ending_texture02.ctxb",
+    "size": 584
+  },
+  {
+    "path": "misc\\ending_texture03.ctxb",
+    "size": 65608
+  },
+  {
+    "path": "misc\\ending_texture04.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "misc\\ending_texture05.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "misc\\ending_texture06.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "misc\\ending_texture07.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "misc\\ending_texture08.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "misc\\ending_texture09.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "misc\\ending_texture10.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "misc\\ending_texture11.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "misc\\ending_texture12.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "misc\\ending_texture13.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "misc\\ending_top.qly",
+    "size": 11264
+  },
+  {
+    "path": "misc\\ending.qan",
+    "size": 5484
+  },
+  {
+    "path": "misc\\ending.qsp",
+    "size": 10240
+  },
+  {
+    "path": "misc\\logo00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "misc\\menu_link.zar",
+    "size": 627348
+  },
+  {
+    "path": "misc\\throbber.ctxb",
+    "size": 8264
+  },
+  {
+    "path": "misc\\eu\\english\\challenge_bottom.qly",
+    "size": 11264
+  },
+  {
+    "path": "misc\\eu\\english\\challenge_top.qly",
+    "size": 11264
+  },
+  {
+    "path": "misc\\eu\\english\\challenge.qan",
+    "size": 11220
+  },
+  {
+    "path": "misc\\eu\\english\\challenge.qsp",
+    "size": 10240
+  },
+  {
+    "path": "misc\\eu\\english\\challenge00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "misc\\eu\\english\\gameover_bottom.qly",
+    "size": 11264
+  },
+  {
+    "path": "misc\\eu\\english\\gameover_top.qly",
+    "size": 11264
+  },
+  {
+    "path": "misc\\eu\\english\\gameover.qan",
+    "size": 7876
+  },
+  {
+    "path": "misc\\eu\\english\\gameover.qsp",
+    "size": 10240
+  },
+  {
+    "path": "misc\\eu\\english\\guideline_parts00.ctxb",
+    "size": 524360
+  },
+  {
+    "path": "misc\\eu\\english\\hint_movie_parts01.ctxb",
+    "size": 4168
+  },
+  {
+    "path": "misc\\eu\\english\\menu_title_logo_ura.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "misc\\eu\\english\\menu_title_logo.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "misc\\eu\\english\\ura.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "misc\\eu\\french\\challenge_bottom.qly",
+    "size": 11264
+  },
+  {
+    "path": "misc\\eu\\french\\challenge_top.qly",
+    "size": 11264
+  },
+  {
+    "path": "misc\\eu\\french\\challenge.qan",
+    "size": 11220
+  },
+  {
+    "path": "misc\\eu\\french\\challenge.qsp",
+    "size": 10240
+  },
+  {
+    "path": "misc\\eu\\french\\challenge00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "misc\\eu\\french\\gameover_bottom.qly",
+    "size": 11264
+  },
+  {
+    "path": "misc\\eu\\french\\gameover_top.qly",
+    "size": 11264
+  },
+  {
+    "path": "misc\\eu\\french\\gameover.qan",
+    "size": 7876
+  },
+  {
+    "path": "misc\\eu\\french\\gameover.qsp",
+    "size": 10240
+  },
+  {
+    "path": "misc\\eu\\french\\guideline_parts00.ctxb",
+    "size": 524360
+  },
+  {
+    "path": "misc\\eu\\french\\hint_movie_parts01.ctxb",
+    "size": 4168
+  },
+  {
+    "path": "misc\\eu\\french\\menu_title_logo_ura.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "misc\\eu\\french\\menu_title_logo.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "misc\\eu\\french\\ura.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "misc\\eu\\german\\challenge_bottom.qly",
+    "size": 11264
+  },
+  {
+    "path": "misc\\eu\\german\\challenge_top.qly",
+    "size": 11264
+  },
+  {
+    "path": "misc\\eu\\german\\challenge.qan",
+    "size": 11220
+  },
+  {
+    "path": "misc\\eu\\german\\challenge.qsp",
+    "size": 10240
+  },
+  {
+    "path": "misc\\eu\\german\\challenge00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "misc\\eu\\german\\gameover_bottom.qly",
+    "size": 11264
+  },
+  {
+    "path": "misc\\eu\\german\\gameover_top.qly",
+    "size": 11264
+  },
+  {
+    "path": "misc\\eu\\german\\gameover.qan",
+    "size": 7876
+  },
+  {
+    "path": "misc\\eu\\german\\gameover.qsp",
+    "size": 10240
+  },
+  {
+    "path": "misc\\eu\\german\\guideline_parts00.ctxb",
+    "size": 524360
+  },
+  {
+    "path": "misc\\eu\\german\\hint_movie_parts01.ctxb",
+    "size": 4168
+  },
+  {
+    "path": "misc\\eu\\german\\menu_title_logo_ura.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "misc\\eu\\german\\menu_title_logo.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "misc\\eu\\german\\ura.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "misc\\eu\\italian\\challenge_bottom.qly",
+    "size": 11264
+  },
+  {
+    "path": "misc\\eu\\italian\\challenge_top.qly",
+    "size": 11264
+  },
+  {
+    "path": "misc\\eu\\italian\\challenge.qan",
+    "size": 11220
+  },
+  {
+    "path": "misc\\eu\\italian\\challenge.qsp",
+    "size": 10240
+  },
+  {
+    "path": "misc\\eu\\italian\\challenge00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "misc\\eu\\italian\\gameover_bottom.qly",
+    "size": 11264
+  },
+  {
+    "path": "misc\\eu\\italian\\gameover_top.qly",
+    "size": 11264
+  },
+  {
+    "path": "misc\\eu\\italian\\gameover.qan",
+    "size": 7876
+  },
+  {
+    "path": "misc\\eu\\italian\\gameover.qsp",
+    "size": 10240
+  },
+  {
+    "path": "misc\\eu\\italian\\guideline_parts00.ctxb",
+    "size": 524360
+  },
+  {
+    "path": "misc\\eu\\italian\\hint_movie_parts01.ctxb",
+    "size": 4168
+  },
+  {
+    "path": "misc\\eu\\italian\\menu_title_logo_ura.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "misc\\eu\\italian\\menu_title_logo.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "misc\\eu\\italian\\ura.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "misc\\eu\\spanish\\challenge_bottom.qly",
+    "size": 11264
+  },
+  {
+    "path": "misc\\eu\\spanish\\challenge_top.qly",
+    "size": 11264
+  },
+  {
+    "path": "misc\\eu\\spanish\\challenge.qan",
+    "size": 11220
+  },
+  {
+    "path": "misc\\eu\\spanish\\challenge.qsp",
+    "size": 10240
+  },
+  {
+    "path": "misc\\eu\\spanish\\challenge00.ctxb",
+    "size": 131144
+  },
+  {
+    "path": "misc\\eu\\spanish\\gameover_bottom.qly",
+    "size": 11264
+  },
+  {
+    "path": "misc\\eu\\spanish\\gameover_top.qly",
+    "size": 11264
+  },
+  {
+    "path": "misc\\eu\\spanish\\gameover.qan",
+    "size": 7876
+  },
+  {
+    "path": "misc\\eu\\spanish\\gameover.qsp",
+    "size": 10240
+  },
+  {
+    "path": "misc\\eu\\spanish\\guideline_parts00.ctxb",
+    "size": 524360
+  },
+  {
+    "path": "misc\\eu\\spanish\\hint_movie_parts01.ctxb",
+    "size": 4168
+  },
+  {
+    "path": "misc\\eu\\spanish\\menu_title_logo_ura.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "misc\\eu\\spanish\\menu_title_logo.ctxb",
+    "size": 16456
+  },
+  {
+    "path": "misc\\eu\\spanish\\ura.ctxb",
+    "size": 262216
+  },
+  {
+    "path": "misc\\hint\\list.qhm",
+    "size": 5520
+  },
+  {
+    "path": "misc\\hint\\movie\\hint000.moflex",
+    "size": 1027645
+  },
+  {
+    "path": "misc\\hint\\movie\\hint001.moflex",
+    "size": 1018562
+  },
+  {
+    "path": "misc\\hint\\movie\\hint002.moflex",
+    "size": 1023414
+  },
+  {
+    "path": "misc\\hint\\movie\\hint003.moflex",
+    "size": 1020657
+  },
+  {
+    "path": "misc\\hint\\movie\\hint004.moflex",
+    "size": 1015915
+  },
+  {
+    "path": "misc\\hint\\movie\\hint006.moflex",
+    "size": 1019390
+  },
+  {
+    "path": "misc\\hint\\movie\\hint007.moflex",
+    "size": 1038090
+  },
+  {
+    "path": "misc\\hint\\movie\\hint008.moflex",
+    "size": 1021468
+  },
+  {
+    "path": "misc\\hint\\movie\\hint009.moflex",
+    "size": 1022177
+  },
+  {
+    "path": "misc\\hint\\movie\\hint010.moflex",
+    "size": 1022808
+  },
+  {
+    "path": "misc\\hint\\movie\\hint011.moflex",
+    "size": 1020180
+  },
+  {
+    "path": "misc\\hint\\movie\\hint012.moflex",
+    "size": 1014089
+  },
+  {
+    "path": "misc\\hint\\movie\\hint013.moflex",
+    "size": 1010739
+  },
+  {
+    "path": "misc\\hint\\movie\\hint014.moflex",
+    "size": 1024319
+  },
+  {
+    "path": "misc\\hint\\movie\\hint016.moflex",
+    "size": 1030666
+  },
+  {
+    "path": "misc\\hint\\movie\\hint017.moflex",
+    "size": 1011309
+  },
+  {
+    "path": "misc\\hint\\movie\\hint019.moflex",
+    "size": 1016301
+  },
+  {
+    "path": "misc\\hint\\movie\\hint020.moflex",
+    "size": 1020823
+  },
+  {
+    "path": "misc\\hint\\movie\\hint021.moflex",
+    "size": 1020820
+  },
+  {
+    "path": "misc\\hint\\movie\\hint022.moflex",
+    "size": 1007561
+  },
+  {
+    "path": "misc\\hint\\movie\\hint023.moflex",
+    "size": 1505684
+  },
+  {
+    "path": "misc\\hint\\movie\\hint024.moflex",
+    "size": 1513097
+  },
+  {
+    "path": "misc\\hint\\movie\\hint025.moflex",
+    "size": 1020000
+  },
+  {
+    "path": "misc\\hint\\movie\\hint027.moflex",
+    "size": 1010548
+  },
+  {
+    "path": "misc\\hint\\movie\\hint028.moflex",
+    "size": 1512474
+  },
+  {
+    "path": "misc\\hint\\movie\\hint030.moflex",
+    "size": 1011031
+  },
+  {
+    "path": "misc\\hint\\movie\\hint031.moflex",
+    "size": 1007341
+  },
+  {
+    "path": "misc\\hint\\movie\\hint032.moflex",
+    "size": 1023934
+  },
+  {
+    "path": "misc\\hint\\movie\\hint033.moflex",
+    "size": 1528620
+  },
+  {
+    "path": "misc\\hint\\movie\\hint034.moflex",
+    "size": 1510860
+  },
+  {
+    "path": "misc\\hint\\movie\\hint035.moflex",
+    "size": 1015086
+  },
+  {
+    "path": "misc\\hint\\movie\\hint036.moflex",
+    "size": 1012108
+  },
+  {
+    "path": "misc\\hint\\movie\\hint037.moflex",
+    "size": 1016555
+  },
+  {
+    "path": "misc\\hint\\movie\\hint038.moflex",
+    "size": 1032117
+  },
+  {
+    "path": "misc\\hint\\movie\\hint039.moflex",
+    "size": 1031822
+  },
+  {
+    "path": "misc\\hint\\movie\\hint040.moflex",
+    "size": 1019797
+  },
+  {
+    "path": "misc\\hint\\movie\\hint041.moflex",
+    "size": 1011549
+  },
+  {
+    "path": "misc\\hint\\movie\\hint042.moflex",
+    "size": 1015400
+  },
+  {
+    "path": "misc\\hint\\movie\\hint044.moflex",
+    "size": 1018070
+  },
+  {
+    "path": "misc\\hint\\movie\\hint045.moflex",
+    "size": 1013624
+  },
+  {
+    "path": "misc\\hint\\movie\\hint046.moflex",
+    "size": 1019854
+  },
+  {
+    "path": "misc\\hint\\movie\\hint047.moflex",
+    "size": 1010032
+  },
+  {
+    "path": "misc\\hint\\movie\\hint048.moflex",
+    "size": 1017096
+  },
+  {
+    "path": "misc\\hint\\movie\\hint049.moflex",
+    "size": 1012838
+  },
+  {
+    "path": "misc\\hint\\movie\\hint050.moflex",
+    "size": 1010441
+  },
+  {
+    "path": "misc\\hint\\movie\\hint051.moflex",
+    "size": 1026025
+  },
+  {
+    "path": "misc\\hint\\movie\\hint052.moflex",
+    "size": 1024534
+  },
+  {
+    "path": "misc\\hint\\movie\\hint054.moflex",
+    "size": 1020598
+  },
+  {
+    "path": "misc\\hint\\movie\\hint055.moflex",
+    "size": 1030721
+  },
+  {
+    "path": "misc\\hint\\movie\\hint056.moflex",
+    "size": 1022484
+  },
+  {
+    "path": "misc\\hint\\movie\\hint057.moflex",
+    "size": 1018417
+  },
+  {
+    "path": "misc\\hint\\movie\\hint058.moflex",
+    "size": 1038680
+  },
+  {
+    "path": "misc\\hint\\movie\\hint059.moflex",
+    "size": 1022867
+  },
+  {
+    "path": "misc\\hint\\movie\\hint061.moflex",
+    "size": 1061289
+  },
+  {
+    "path": "misc\\hint\\movie\\hint063.moflex",
+    "size": 1012841
+  },
+  {
+    "path": "misc\\hint\\movie\\hint064.moflex",
+    "size": 1026604
+  },
+  {
+    "path": "misc\\hint\\movie\\hint065.moflex",
+    "size": 1021154
+  },
+  {
+    "path": "misc\\hint\\movie\\hint070.moflex",
+    "size": 1034049
+  },
+  {
+    "path": "misc\\hint\\movie\\hint071.moflex",
+    "size": 1026272
+  },
+  {
+    "path": "misc\\hint\\movie\\hint072.moflex",
+    "size": 1044063
+  },
+  {
+    "path": "misc\\hint\\movie\\hint073.moflex",
+    "size": 1024344
+  },
+  {
+    "path": "misc\\hint\\movie\\hint074.moflex",
+    "size": 1034841
+  },
+  {
+    "path": "misc\\hint\\movie\\hint075.moflex",
+    "size": 1016133
+  },
+  {
+    "path": "misc\\hint\\movie\\hint076.moflex",
+    "size": 1017785
+  },
+  {
+    "path": "misc\\hint\\movie\\hint077.moflex",
+    "size": 1039188
+  },
+  {
+    "path": "misc\\hint\\movie\\hint079.moflex",
+    "size": 1016552
+  },
+  {
+    "path": "misc\\hint\\movie\\hint081.moflex",
+    "size": 1026610
+  },
+  {
+    "path": "misc\\hint\\movie\\hint082.moflex",
+    "size": 1040569
+  },
+  {
+    "path": "misc\\hint\\movie\\hint084.moflex",
+    "size": 1023557
+  },
+  {
+    "path": "misc\\hint\\movie\\hint085.moflex",
+    "size": 1517414
+  },
+  {
+    "path": "misc\\hint\\movie\\hint087.moflex",
+    "size": 1023552
+  },
+  {
+    "path": "misc\\hint\\movie\\hint088.moflex",
+    "size": 1013225
+  },
+  {
+    "path": "misc\\hint\\movie\\hint089.moflex",
+    "size": 1022286
+  },
+  {
+    "path": "misc\\hint\\movie\\hint090.moflex",
+    "size": 1026344
+  },
+  {
+    "path": "misc\\hint\\movie\\hint091.moflex",
+    "size": 1018937
+  },
+  {
+    "path": "misc\\hint\\movie\\hint093.moflex",
+    "size": 1009235
+  },
+  {
+    "path": "misc\\hint\\movie\\hint094.moflex",
+    "size": 1014017
+  },
+  {
+    "path": "misc\\hint\\movie\\hint095.moflex",
+    "size": 1020438
+  },
+  {
+    "path": "misc\\hint\\movie\\hint096.moflex",
+    "size": 1014019
+  },
+  {
+    "path": "misc\\hint\\movie\\hint097.moflex",
+    "size": 1039854
+  },
+  {
+    "path": "misc\\hint\\movie\\hint098.moflex",
+    "size": 1012643
+  },
+  {
+    "path": "misc\\hint\\movie\\hint100.moflex",
+    "size": 1020290
+  },
+  {
+    "path": "misc\\hint\\movie\\hint102.moflex",
+    "size": 1019924
+  },
+  {
+    "path": "misc\\hint\\movie\\hint104.moflex",
+    "size": 1008925
+  },
+  {
+    "path": "misc\\hint\\movie\\hint106.moflex",
+    "size": 1012818
+  },
+  {
+    "path": "misc\\hint\\movie\\hint107.moflex",
+    "size": 1017138
+  },
+  {
+    "path": "misc\\hint\\movie\\hint108.moflex",
+    "size": 1008138
+  },
+  {
+    "path": "misc\\hint\\movie\\hint110.moflex",
+    "size": 1043406
+  },
+  {
+    "path": "misc\\hint\\movie\\hint111.moflex",
+    "size": 1015152
+  },
+  {
+    "path": "misc\\hint\\movie\\hint112.moflex",
+    "size": 1034010
+  },
+  {
+    "path": "misc\\hint\\movie\\hint113.moflex",
+    "size": 1025377
+  },
+  {
+    "path": "misc\\hint\\movie\\hint114.moflex",
+    "size": 1045412
+  },
+  {
+    "path": "misc\\hint\\movie\\hint115.moflex",
+    "size": 1014400
+  },
+  {
+    "path": "misc\\hint\\movie\\hint116.moflex",
+    "size": 1027935
+  },
+  {
+    "path": "misc\\hint\\movie\\hint117.moflex",
+    "size": 1017075
+  },
+  {
+    "path": "misc\\hint\\movie\\hint118.moflex",
+    "size": 1024615
+  },
+  {
+    "path": "misc\\hint\\movie\\hint119.moflex",
+    "size": 1040486
+  },
+  {
+    "path": "misc\\hint\\movie\\hint120.moflex",
+    "size": 1046991
+  },
+  {
+    "path": "misc\\hint\\movie\\hint121.moflex",
+    "size": 1046971
+  },
+  {
+    "path": "misc\\hint\\movie\\hint122.moflex",
+    "size": 1020166
+  },
+  {
+    "path": "misc\\hint\\movie\\hint123.moflex",
+    "size": 1019450
+  },
+  {
+    "path": "misc\\hint\\movie\\hint124.moflex",
+    "size": 1014126
+  },
+  {
+    "path": "misc\\hint\\movie\\hint125.moflex",
+    "size": 1022247
+  },
+  {
+    "path": "misc\\hint\\movie\\hint126.moflex",
+    "size": 1017063
+  },
+  {
+    "path": "misc\\hint\\movie\\hint127.moflex",
+    "size": 1004402
+  },
+  {
+    "path": "misc\\hint\\movie\\hint129.moflex",
+    "size": 1009471
+  },
+  {
+    "path": "misc\\hint\\movie\\hint130.moflex",
+    "size": 1024107
+  },
+  {
+    "path": "misc\\hint\\movie\\hint131.moflex",
+    "size": 1012251
+  },
+  {
+    "path": "misc\\hint\\movie\\hint132.moflex",
+    "size": 1018530
+  },
+  {
+    "path": "misc\\hint\\movie\\hint134.moflex",
+    "size": 1024626
+  },
+  {
+    "path": "misc\\hint\\movie\\hint136.moflex",
+    "size": 1012842
+  },
+  {
+    "path": "misc\\hint\\movie\\hint137.moflex",
+    "size": 1013398
+  },
+  {
+    "path": "misc\\hint\\movie\\hint139.moflex",
+    "size": 1012818
+  },
+  {
+    "path": "misc\\hint\\movie\\hint140.moflex",
+    "size": 1015976
+  },
+  {
+    "path": "misc\\hint\\movie\\hint142.moflex",
+    "size": 1021839
+  },
+  {
+    "path": "misc\\hint\\movie\\hint144.moflex",
+    "size": 1010805
+  },
+  {
+    "path": "misc\\hint\\movie\\hint146.moflex",
+    "size": 1019780
+  },
+  {
+    "path": "misc\\hint\\movie\\hint148.moflex",
+    "size": 1013697
+  },
+  {
+    "path": "misc\\hint\\movie\\hint150.moflex",
+    "size": 1522175
+  },
+  {
+    "path": "misc\\hint\\movie\\hint166.moflex",
+    "size": 1524952
+  },
+  {
+    "path": "misc\\hint\\movie\\hint167.moflex",
+    "size": 1510532
+  },
+  {
+    "path": "misc\\hint\\movie\\hint168.moflex",
+    "size": 1013700
+  },
+  {
+    "path": "misc\\hint\\movie\\hint169.moflex",
+    "size": 1017445
+  },
+  {
+    "path": "misc\\hint\\movie\\hint172.moflex",
+    "size": 1012956
+  },
+  {
+    "path": "misc\\hint\\movie\\hint173.moflex",
+    "size": 1016459
+  },
+  {
+    "path": "misc\\hint\\movie\\hint174.moflex",
+    "size": 1013204
+  },
+  {
+    "path": "misc\\hint\\movie\\hint175.moflex",
+    "size": 1022133
+  },
+  {
+    "path": "misc\\hint\\movie\\hint176.moflex",
+    "size": 1007973
+  },
+  {
+    "path": "misc\\hint\\movie\\hint177.moflex",
+    "size": 1017522
+  },
+  {
+    "path": "misc\\hint\\movie\\hint178.moflex",
+    "size": 1015537
+  },
+  {
+    "path": "misc\\hint\\movie\\hint179.moflex",
+    "size": 1010565
+  },
+  {
+    "path": "misc\\hint\\movie\\hint183.moflex",
+    "size": 1511087
+  },
+  {
+    "path": "misc\\hint\\movie\\hint184.moflex",
+    "size": 1507666
+  },
+  {
+    "path": "misc\\hint\\movie\\hint185.moflex",
+    "size": 1510197
+  },
+  {
+    "path": "misc\\hint\\movie\\hint187.moflex",
+    "size": 1515795
+  },
+  {
+    "path": "misc\\hint\\movie\\hint189.moflex",
+    "size": 1511606
+  },
+  {
+    "path": "misc\\hint\\movie\\hint190.moflex",
+    "size": 1031198
+  },
+  {
+    "path": "misc\\hint\\movie\\hint191.moflex",
+    "size": 1513869
+  },
+  {
+    "path": "scene\\bdan_0_dd_info.zsi",
+    "size": 240600
+  },
+  {
+    "path": "scene\\bdan_0_info.zsi",
+    "size": 240384
+  },
+  {
+    "path": "scene\\bdan_1_dd_info.zsi",
+    "size": 358632
+  },
+  {
+    "path": "scene\\bdan_1_info.zsi",
+    "size": 358324
+  },
+  {
+    "path": "scene\\bdan_10_dd_info.zsi",
+    "size": 179868
+  },
+  {
+    "path": "scene\\bdan_10_info.zsi",
+    "size": 179880
+  },
+  {
+    "path": "scene\\bdan_11_dd_info.zsi",
+    "size": 181116
+  },
+  {
+    "path": "scene\\bdan_11_info.zsi",
+    "size": 180628
+  },
+  {
+    "path": "scene\\bdan_12_dd_info.zsi",
+    "size": 170488
+  },
+  {
+    "path": "scene\\bdan_12_info.zsi",
+    "size": 170468
+  },
+  {
+    "path": "scene\\bdan_13_dd_info.zsi",
+    "size": 337540
+  },
+  {
+    "path": "scene\\bdan_13_info.zsi",
+    "size": 337496
+  },
+  {
+    "path": "scene\\bdan_14_dd_info.zsi",
+    "size": 380500
+  },
+  {
+    "path": "scene\\bdan_14_info.zsi",
+    "size": 380520
+  },
+  {
+    "path": "scene\\bdan_15_dd_info.zsi",
+    "size": 209484
+  },
+  {
+    "path": "scene\\bdan_15_info.zsi",
+    "size": 209484
+  },
+  {
+    "path": "scene\\bdan_2_dd_info.zsi",
+    "size": 460992
+  },
+  {
+    "path": "scene\\bdan_2_info.zsi",
+    "size": 460888
+  },
+  {
+    "path": "scene\\bdan_3_dd_info.zsi",
+    "size": 456732
+  },
+  {
+    "path": "scene\\bdan_3_info.zsi",
+    "size": 456484
+  },
+  {
+    "path": "scene\\bdan_4_dd_info.zsi",
+    "size": 221044
+  },
+  {
+    "path": "scene\\bdan_4_info.zsi",
+    "size": 220864
+  },
+  {
+    "path": "scene\\bdan_5_dd_info.zsi",
+    "size": 382820
+  },
+  {
+    "path": "scene\\bdan_5_info.zsi",
+    "size": 382756
+  },
+  {
+    "path": "scene\\bdan_6_dd_info.zsi",
+    "size": 299068
+  },
+  {
+    "path": "scene\\bdan_6_info.zsi",
+    "size": 299064
+  },
+  {
+    "path": "scene\\bdan_7_dd_info.zsi",
+    "size": 245396
+  },
+  {
+    "path": "scene\\bdan_7_info.zsi",
+    "size": 245492
+  },
+  {
+    "path": "scene\\bdan_8_dd_info.zsi",
+    "size": 177500
+  },
+  {
+    "path": "scene\\bdan_8_info.zsi",
+    "size": 177560
+  },
+  {
+    "path": "scene\\bdan_9_dd_info.zsi",
+    "size": 168620
+  },
+  {
+    "path": "scene\\bdan_9_info.zsi",
+    "size": 168664
+  },
+  {
+    "path": "scene\\bdan_boss_0_info.zsi",
+    "size": 19574
+  },
+  {
+    "path": "scene\\bdan_boss_1_info.zsi",
+    "size": 374640
+  },
+  {
+    "path": "scene\\bdan_boss_info.zsi",
+    "size": 4572
+  },
+  {
+    "path": "scene\\bdan_boss.zar",
+    "size": 668
+  },
+  {
+    "path": "scene\\bdan_dd_info.zsi",
+    "size": 106856
+  },
+  {
+    "path": "scene\\bdan_dd.zar",
+    "size": 174944
+  },
+  {
+    "path": "scene\\bdan_info.zsi",
+    "size": 110352
+  },
+  {
+    "path": "scene\\bdan.zar",
+    "size": 174944
+  },
+  {
+    "path": "scene\\bmori1_0_dd_info.zsi",
+    "size": 402432
+  },
+  {
+    "path": "scene\\bmori1_0_info.zsi",
+    "size": 402372
+  },
+  {
+    "path": "scene\\bmori1_1_dd_info.zsi",
+    "size": 158016
+  },
+  {
+    "path": "scene\\bmori1_1_info.zsi",
+    "size": 157972
+  },
+  {
+    "path": "scene\\bmori1_10_dd_info.zsi",
+    "size": 101044
+  },
+  {
+    "path": "scene\\bmori1_10_info.zsi",
+    "size": 101032
+  },
+  {
+    "path": "scene\\bmori1_11_dd_info.zsi",
+    "size": 190824
+  },
+  {
+    "path": "scene\\bmori1_11_info.zsi",
+    "size": 190696
+  },
+  {
+    "path": "scene\\bmori1_12_dd_info.zsi",
+    "size": 263252
+  },
+  {
+    "path": "scene\\bmori1_12_info.zsi",
+    "size": 263248
+  },
+  {
+    "path": "scene\\bmori1_13_dd_info.zsi",
+    "size": 263684
+  },
+  {
+    "path": "scene\\bmori1_13_info.zsi",
+    "size": 263680
+  },
+  {
+    "path": "scene\\bmori1_14_dd_info.zsi",
+    "size": 205348
+  },
+  {
+    "path": "scene\\bmori1_14_info.zsi",
+    "size": 205304
+  },
+  {
+    "path": "scene\\bmori1_15_dd_info.zsi",
+    "size": 161340
+  },
+  {
+    "path": "scene\\bmori1_15_info.zsi",
+    "size": 161264
+  },
+  {
+    "path": "scene\\bmori1_16_dd_info.zsi",
+    "size": 204800
+  },
+  {
+    "path": "scene\\bmori1_16_info.zsi",
+    "size": 204800
+  },
+  {
+    "path": "scene\\bmori1_17_dd_info.zsi",
+    "size": 332016
+  },
+  {
+    "path": "scene\\bmori1_17_info.zsi",
+    "size": 331956
+  },
+  {
+    "path": "scene\\bmori1_18_dd_info.zsi",
+    "size": 64928
+  },
+  {
+    "path": "scene\\bmori1_18_info.zsi",
+    "size": 64932
+  },
+  {
+    "path": "scene\\bmori1_19_dd_info.zsi",
+    "size": 37444
+  },
+  {
+    "path": "scene\\bmori1_19_info.zsi",
+    "size": 37460
+  },
+  {
+    "path": "scene\\bmori1_2_dd_info.zsi",
+    "size": 402396
+  },
+  {
+    "path": "scene\\bmori1_2_info.zsi",
+    "size": 402428
+  },
+  {
+    "path": "scene\\bmori1_20_dd_info.zsi",
+    "size": 105044
+  },
+  {
+    "path": "scene\\bmori1_20_info.zsi",
+    "size": 105044
+  },
+  {
+    "path": "scene\\bmori1_21_dd_info.zsi",
+    "size": 71700
+  },
+  {
+    "path": "scene\\bmori1_21_info.zsi",
+    "size": 71716
+  },
+  {
+    "path": "scene\\bmori1_22_dd_info.zsi",
+    "size": 166008
+  },
+  {
+    "path": "scene\\bmori1_22_info.zsi",
+    "size": 166008
+  },
+  {
+    "path": "scene\\bmori1_3_dd_info.zsi",
+    "size": 75324
+  },
+  {
+    "path": "scene\\bmori1_3_info.zsi",
+    "size": 75340
+  },
+  {
+    "path": "scene\\bmori1_4_dd_info.zsi",
+    "size": 79648
+  },
+  {
+    "path": "scene\\bmori1_4_info.zsi",
+    "size": 79628
+  },
+  {
+    "path": "scene\\bmori1_5_dd_info.zsi",
+    "size": 74464
+  },
+  {
+    "path": "scene\\bmori1_5_info.zsi",
+    "size": 74444
+  },
+  {
+    "path": "scene\\bmori1_6_dd_info.zsi",
+    "size": 160964
+  },
+  {
+    "path": "scene\\bmori1_6_info.zsi",
+    "size": 160948
+  },
+  {
+    "path": "scene\\bmori1_7_dd_info.zsi",
+    "size": 528300
+  },
+  {
+    "path": "scene\\bmori1_7_info.zsi",
+    "size": 528184
+  },
+  {
+    "path": "scene\\bmori1_8_dd_info.zsi",
+    "size": 584792
+  },
+  {
+    "path": "scene\\bmori1_8_info.zsi",
+    "size": 584780
+  },
+  {
+    "path": "scene\\bmori1_9_dd_info.zsi",
+    "size": 367092
+  },
+  {
+    "path": "scene\\bmori1_9_info.zsi",
+    "size": 367044
+  },
+  {
+    "path": "scene\\bmori1_dd_info.zsi",
+    "size": 107712
+  },
+  {
+    "path": "scene\\bmori1_dd.zar",
+    "size": 168120
+  },
+  {
+    "path": "scene\\bmori1_info.zsi",
+    "size": 107712
+  },
+  {
+    "path": "scene\\bmori1.zar",
+    "size": 168120
+  },
+  {
+    "path": "scene\\bowling_0_info.zsi",
+    "size": 514136
+  },
+  {
+    "path": "scene\\bowling_info.zsi",
+    "size": 8132
+  },
+  {
+    "path": "scene\\bowling.zar",
+    "size": 165624
+  },
+  {
+    "path": "scene\\daiyousei_izumi_0_info.zsi",
+    "size": 348496
+  },
+  {
+    "path": "scene\\daiyousei_izumi_info.zsi",
+    "size": 35308
+  },
+  {
+    "path": "scene\\daiyousei_izumi.zar",
+    "size": 190496
+  },
+  {
+    "path": "scene\\ddan_0_dd_info.zsi",
+    "size": 602352
+  },
+  {
+    "path": "scene\\ddan_0_info.zsi",
+    "size": 602352
+  },
+  {
+    "path": "scene\\ddan_1_dd_info.zsi",
+    "size": 179520
+  },
+  {
+    "path": "scene\\ddan_1_info.zsi",
+    "size": 179408
+  },
+  {
+    "path": "scene\\ddan_10_dd_info.zsi",
+    "size": 184032
+  },
+  {
+    "path": "scene\\ddan_10_info.zsi",
+    "size": 183824
+  },
+  {
+    "path": "scene\\ddan_11_dd_info.zsi",
+    "size": 66948
+  },
+  {
+    "path": "scene\\ddan_11_info.zsi",
+    "size": 67036
+  },
+  {
+    "path": "scene\\ddan_12_dd_info.zsi",
+    "size": 171600
+  },
+  {
+    "path": "scene\\ddan_12_info.zsi",
+    "size": 171520
+  },
+  {
+    "path": "scene\\ddan_13_dd_info.zsi",
+    "size": 67040
+  },
+  {
+    "path": "scene\\ddan_13_info.zsi",
+    "size": 66960
+  },
+  {
+    "path": "scene\\ddan_14_dd_info.zsi",
+    "size": 66524
+  },
+  {
+    "path": "scene\\ddan_14_info.zsi",
+    "size": 66464
+  },
+  {
+    "path": "scene\\ddan_15_dd_info.zsi",
+    "size": 66748
+  },
+  {
+    "path": "scene\\ddan_15_info.zsi",
+    "size": 66524
+  },
+  {
+    "path": "scene\\ddan_16_dd_info.zsi",
+    "size": 103034
+  },
+  {
+    "path": "scene\\ddan_16_info.zsi",
+    "size": 103020
+  },
+  {
+    "path": "scene\\ddan_2_dd_info.zsi",
+    "size": 174660
+  },
+  {
+    "path": "scene\\ddan_2_info.zsi",
+    "size": 174380
+  },
+  {
+    "path": "scene\\ddan_3_dd_info.zsi",
+    "size": 428940
+  },
+  {
+    "path": "scene\\ddan_3_info.zsi",
+    "size": 428728
+  },
+  {
+    "path": "scene\\ddan_4_dd_info.zsi",
+    "size": 207228
+  },
+  {
+    "path": "scene\\ddan_4_info.zsi",
+    "size": 206952
+  },
+  {
+    "path": "scene\\ddan_5_dd_info.zsi",
+    "size": 160912
+  },
+  {
+    "path": "scene\\ddan_5_info.zsi",
+    "size": 160940
+  },
+  {
+    "path": "scene\\ddan_6_dd_info.zsi",
+    "size": 66636
+  },
+  {
+    "path": "scene\\ddan_6_info.zsi",
+    "size": 66456
+  },
+  {
+    "path": "scene\\ddan_7_dd_info.zsi",
+    "size": 258088
+  },
+  {
+    "path": "scene\\ddan_7_info.zsi",
+    "size": 258044
+  },
+  {
+    "path": "scene\\ddan_8_dd_info.zsi",
+    "size": 162584
+  },
+  {
+    "path": "scene\\ddan_8_info.zsi",
+    "size": 162172
+  },
+  {
+    "path": "scene\\ddan_9_dd_info.zsi",
+    "size": 244464
+  },
+  {
+    "path": "scene\\ddan_9_info.zsi",
+    "size": 244496
+  },
+  {
+    "path": "scene\\ddan_boss_0_info.zsi",
+    "size": 247156
+  },
+  {
+    "path": "scene\\ddan_boss_1_info.zsi",
+    "size": 439932
+  },
+  {
+    "path": "scene\\ddan_boss_info.zsi",
+    "size": 14344
+  },
+  {
+    "path": "scene\\ddan_boss.zar",
+    "size": 860
+  },
+  {
+    "path": "scene\\ddan_dd_info.zsi",
+    "size": 113120
+  },
+  {
+    "path": "scene\\ddan_dd.zar",
+    "size": 174200
+  },
+  {
+    "path": "scene\\ddan_info.zsi",
+    "size": 113112
+  },
+  {
+    "path": "scene\\ddan.zar",
+    "size": 174200
+  },
+  {
+    "path": "scene\\entra_day_0_info.zsi",
+    "size": 354964
+  },
+  {
+    "path": "scene\\entra_day_info.zsi",
+    "size": 1388
+  },
+  {
+    "path": "scene\\entra_day.zar",
+    "size": 316
+  },
+  {
+    "path": "scene\\entra_night_0_info.zsi",
+    "size": 359828
+  },
+  {
+    "path": "scene\\entra_night_info.zsi",
+    "size": 1460
+  },
+  {
+    "path": "scene\\entra_night.zar",
+    "size": 604
+  },
+  {
+    "path": "scene\\entra_ruins_0_info.zsi",
+    "size": 234884
+  },
+  {
+    "path": "scene\\entra_ruins_info.zsi",
+    "size": 1724
+  },
+  {
+    "path": "scene\\entra_ruins.zar",
+    "size": 316
+  },
+  {
+    "path": "scene\\fire_bs_0_info.zsi",
+    "size": 400118
+  },
+  {
+    "path": "scene\\fire_bs_1_info.zsi",
+    "size": 387488
+  },
+  {
+    "path": "scene\\fire_bs_info.zsi",
+    "size": 13588
+  },
+  {
+    "path": "scene\\fire_bs.zar",
+    "size": 1532
+  },
+  {
+    "path": "scene\\ganon_0_info.zsi",
+    "size": 148972
+  },
+  {
+    "path": "scene\\ganon_1_info.zsi",
+    "size": 172124
+  },
+  {
+    "path": "scene\\ganon_2_info.zsi",
+    "size": 201248
+  },
+  {
+    "path": "scene\\ganon_3_info.zsi",
+    "size": 126432
+  },
+  {
+    "path": "scene\\ganon_4_info.zsi",
+    "size": 206444
+  },
+  {
+    "path": "scene\\ganon_5_info.zsi",
+    "size": 201924
+  },
+  {
+    "path": "scene\\ganon_6_info.zsi",
+    "size": 516100
+  },
+  {
+    "path": "scene\\ganon_7_info.zsi",
+    "size": 210620
+  },
+  {
+    "path": "scene\\ganon_8_info.zsi",
+    "size": 371748
+  },
+  {
+    "path": "scene\\ganon_9_info.zsi",
+    "size": 273516
+  },
+  {
+    "path": "scene\\ganon_boss_0_info.zsi",
+    "size": 702480
+  },
+  {
+    "path": "scene\\ganon_boss_info.zsi",
+    "size": 6988
+  },
+  {
+    "path": "scene\\ganon_demo_0_info.zsi",
+    "size": 852276
+  },
+  {
+    "path": "scene\\ganon_demo_info.zsi",
+    "size": 52372
+  },
+  {
+    "path": "scene\\ganon_final_0_info.zsi",
+    "size": 683936
+  },
+  {
+    "path": "scene\\ganon_final_info.zsi",
+    "size": 19576
+  },
+  {
+    "path": "scene\\ganon_final.zar",
+    "size": 2464
+  },
+  {
+    "path": "scene\\ganon_info.zsi",
+    "size": 79084
+  },
+  {
+    "path": "scene\\ganon_sonogo_0_info.zsi",
+    "size": 247564
+  },
+  {
+    "path": "scene\\ganon_sonogo_1_info.zsi",
+    "size": 263196
+  },
+  {
+    "path": "scene\\ganon_sonogo_2_info.zsi",
+    "size": 251948
+  },
+  {
+    "path": "scene\\ganon_sonogo_3_info.zsi",
+    "size": 179148
+  },
+  {
+    "path": "scene\\ganon_sonogo_4_info.zsi",
+    "size": 398236
+  },
+  {
+    "path": "scene\\ganon_sonogo_info.zsi",
+    "size": 37400
+  },
+  {
+    "path": "scene\\ganon_sonogo.zar",
+    "size": 1596
+  },
+  {
+    "path": "scene\\ganon_tou_0_info.zsi",
+    "size": 793844
+  },
+  {
+    "path": "scene\\ganon_tou_info.zsi",
+    "size": 27568
+  },
+  {
+    "path": "scene\\ganon_tou.zar",
+    "size": 243072
+  },
+  {
+    "path": "scene\\ganon.zar",
+    "size": 256
+  },
+  {
+    "path": "scene\\ganontika_0_dd_info.zsi",
+    "size": 269116
+  },
+  {
+    "path": "scene\\ganontika_0_info.zsi",
+    "size": 269036
+  },
+  {
+    "path": "scene\\ganontika_1_dd_info.zsi",
+    "size": 725084
+  },
+  {
+    "path": "scene\\ganontika_1_info.zsi",
+    "size": 725052
+  },
+  {
+    "path": "scene\\ganontika_10_dd_info.zsi",
+    "size": 193680
+  },
+  {
+    "path": "scene\\ganontika_10_info.zsi",
+    "size": 193596
+  },
+  {
+    "path": "scene\\ganontika_11_dd_info.zsi",
+    "size": 210528
+  },
+  {
+    "path": "scene\\ganontika_11_info.zsi",
+    "size": 210524
+  },
+  {
+    "path": "scene\\ganontika_12_dd_info.zsi",
+    "size": 322400
+  },
+  {
+    "path": "scene\\ganontika_12_info.zsi",
+    "size": 322652
+  },
+  {
+    "path": "scene\\ganontika_13_dd_info.zsi",
+    "size": 219104
+  },
+  {
+    "path": "scene\\ganontika_13_info.zsi",
+    "size": 219104
+  },
+  {
+    "path": "scene\\ganontika_14_dd_info.zsi",
+    "size": 515456
+  },
+  {
+    "path": "scene\\ganontika_14_info.zsi",
+    "size": 515396
+  },
+  {
+    "path": "scene\\ganontika_15_dd_info.zsi",
+    "size": 219484
+  },
+  {
+    "path": "scene\\ganontika_15_info.zsi",
+    "size": 219484
+  },
+  {
+    "path": "scene\\ganontika_16_dd_info.zsi",
+    "size": 182108
+  },
+  {
+    "path": "scene\\ganontika_16_info.zsi",
+    "size": 182092
+  },
+  {
+    "path": "scene\\ganontika_17_dd_info.zsi",
+    "size": 139196
+  },
+  {
+    "path": "scene\\ganontika_17_info.zsi",
+    "size": 139328
+  },
+  {
+    "path": "scene\\ganontika_18_dd_info.zsi",
+    "size": 249464
+  },
+  {
+    "path": "scene\\ganontika_18_info.zsi",
+    "size": 249348
+  },
+  {
+    "path": "scene\\ganontika_19_dd_info.zsi",
+    "size": 219488
+  },
+  {
+    "path": "scene\\ganontika_19_info.zsi",
+    "size": 219488
+  },
+  {
+    "path": "scene\\ganontika_2_dd_info.zsi",
+    "size": 156388
+  },
+  {
+    "path": "scene\\ganontika_2_info.zsi",
+    "size": 156392
+  },
+  {
+    "path": "scene\\ganontika_3_dd_info.zsi",
+    "size": 274076
+  },
+  {
+    "path": "scene\\ganontika_3_info.zsi",
+    "size": 273900
+  },
+  {
+    "path": "scene\\ganontika_4_dd_info.zsi",
+    "size": 218844
+  },
+  {
+    "path": "scene\\ganontika_4_info.zsi",
+    "size": 218844
+  },
+  {
+    "path": "scene\\ganontika_5_dd_info.zsi",
+    "size": 173132
+  },
+  {
+    "path": "scene\\ganontika_5_info.zsi",
+    "size": 173168
+  },
+  {
+    "path": "scene\\ganontika_6_dd_info.zsi",
+    "size": 266964
+  },
+  {
+    "path": "scene\\ganontika_6_info.zsi",
+    "size": 266860
+  },
+  {
+    "path": "scene\\ganontika_7_dd_info.zsi",
+    "size": 231004
+  },
+  {
+    "path": "scene\\ganontika_7_info.zsi",
+    "size": 231004
+  },
+  {
+    "path": "scene\\ganontika_8_dd_info.zsi",
+    "size": 258156
+  },
+  {
+    "path": "scene\\ganontika_8_info.zsi",
+    "size": 258240
+  },
+  {
+    "path": "scene\\ganontika_9_dd_info.zsi",
+    "size": 231244
+  },
+  {
+    "path": "scene\\ganontika_9_info.zsi",
+    "size": 231360
+  },
+  {
+    "path": "scene\\ganontika_dd_info.zsi",
+    "size": 136584
+  },
+  {
+    "path": "scene\\ganontika_dd.zar",
+    "size": 187160
+  },
+  {
+    "path": "scene\\ganontika_info.zsi",
+    "size": 136548
+  },
+  {
+    "path": "scene\\ganontika.zar",
+    "size": 187160
+  },
+  {
+    "path": "scene\\ganontikasonogo_0_info.zsi",
+    "size": 531824
+  },
+  {
+    "path": "scene\\ganontikasonogo_1_info.zsi",
+    "size": 234076
+  },
+  {
+    "path": "scene\\ganontikasonogo_info.zsi",
+    "size": 14580
+  },
+  {
+    "path": "scene\\ganontikasonogo.zar",
+    "size": 824
+  },
+  {
+    "path": "scene\\gerudoway_0_info.zsi",
+    "size": 299168
+  },
+  {
+    "path": "scene\\gerudoway_1_info.zsi",
+    "size": 239280
+  },
+  {
+    "path": "scene\\gerudoway_2_info.zsi",
+    "size": 255920
+  },
+  {
+    "path": "scene\\gerudoway_3_info.zsi",
+    "size": 299232
+  },
+  {
+    "path": "scene\\gerudoway_4_info.zsi",
+    "size": 238656
+  },
+  {
+    "path": "scene\\gerudoway_5_info.zsi",
+    "size": 286992
+  },
+  {
+    "path": "scene\\gerudoway_info.zsi",
+    "size": 48052
+  },
+  {
+    "path": "scene\\gerudoway.zar",
+    "size": 166412
+  },
+  {
+    "path": "scene\\hairal_niwa_0_info.zsi",
+    "size": 578728
+  },
+  {
+    "path": "scene\\hairal_niwa_info.zsi",
+    "size": 17260
+  },
+  {
+    "path": "scene\\hairal_niwa_n_0_info.zsi",
+    "size": 326940
+  },
+  {
+    "path": "scene\\hairal_niwa_n_info.zsi",
+    "size": 5628
+  },
+  {
+    "path": "scene\\hairal_niwa_n.zar",
+    "size": 165372
+  },
+  {
+    "path": "scene\\hairal_niwa.zar",
+    "size": 165484
+  },
+  {
+    "path": "scene\\hakaana_0_info.zsi",
+    "size": 317880
+  },
+  {
+    "path": "scene\\hakaana_info.zsi",
+    "size": 6404
+  },
+  {
+    "path": "scene\\hakaana_ouke_0_info.zsi",
+    "size": 407700
+  },
+  {
+    "path": "scene\\hakaana_ouke_1_info.zsi",
+    "size": 228940
+  },
+  {
+    "path": "scene\\hakaana_ouke_2_info.zsi",
+    "size": 336316
+  },
+  {
+    "path": "scene\\hakaana_ouke_3_info.zsi",
+    "size": 407724
+  },
+  {
+    "path": "scene\\hakaana_ouke_info.zsi",
+    "size": 28948
+  },
+  {
+    "path": "scene\\hakaana_ouke.zar",
+    "size": 171456
+  },
+  {
+    "path": "scene\\hakaana.zar",
+    "size": 316
+  },
+  {
+    "path": "scene\\hakaana2_0_info.zsi",
+    "size": 661848
+  },
+  {
+    "path": "scene\\hakaana2_info.zsi",
+    "size": 18864
+  },
+  {
+    "path": "scene\\hakaana2.zar",
+    "size": 476
+  },
+  {
+    "path": "scene\\hakadan_0_dd_info.zsi",
+    "size": 366464
+  },
+  {
+    "path": "scene\\hakadan_0_info.zsi",
+    "size": 366376
+  },
+  {
+    "path": "scene\\hakadan_1_dd_info.zsi",
+    "size": 166896
+  },
+  {
+    "path": "scene\\hakadan_1_info.zsi",
+    "size": 166876
+  },
+  {
+    "path": "scene\\hakadan_10_dd_info.zsi",
+    "size": 301808
+  },
+  {
+    "path": "scene\\hakadan_10_info.zsi",
+    "size": 301812
+  },
+  {
+    "path": "scene\\hakadan_11_dd_info.zsi",
+    "size": 155248
+  },
+  {
+    "path": "scene\\hakadan_11_info.zsi",
+    "size": 155040
+  },
+  {
+    "path": "scene\\hakadan_12_dd_info.zsi",
+    "size": 167112
+  },
+  {
+    "path": "scene\\hakadan_12_info.zsi",
+    "size": 167108
+  },
+  {
+    "path": "scene\\hakadan_13_dd_info.zsi",
+    "size": 90188
+  },
+  {
+    "path": "scene\\hakadan_13_info.zsi",
+    "size": 90088
+  },
+  {
+    "path": "scene\\hakadan_14_dd_info.zsi",
+    "size": 220908
+  },
+  {
+    "path": "scene\\hakadan_14_info.zsi",
+    "size": 221012
+  },
+  {
+    "path": "scene\\hakadan_15_dd_info.zsi",
+    "size": 148868
+  },
+  {
+    "path": "scene\\hakadan_15_info.zsi",
+    "size": 148840
+  },
+  {
+    "path": "scene\\hakadan_16_dd_info.zsi",
+    "size": 146296
+  },
+  {
+    "path": "scene\\hakadan_16_info.zsi",
+    "size": 146140
+  },
+  {
+    "path": "scene\\hakadan_17_dd_info.zsi",
+    "size": 171536
+  },
+  {
+    "path": "scene\\hakadan_17_info.zsi",
+    "size": 171324
+  },
+  {
+    "path": "scene\\hakadan_18_dd_info.zsi",
+    "size": 237728
+  },
+  {
+    "path": "scene\\hakadan_18_info.zsi",
+    "size": 237740
+  },
+  {
+    "path": "scene\\hakadan_19_dd_info.zsi",
+    "size": 180096
+  },
+  {
+    "path": "scene\\hakadan_19_info.zsi",
+    "size": 180044
+  },
+  {
+    "path": "scene\\hakadan_2_dd_info.zsi",
+    "size": 506956
+  },
+  {
+    "path": "scene\\hakadan_2_info.zsi",
+    "size": 506876
+  },
+  {
+    "path": "scene\\hakadan_20_dd_info.zsi",
+    "size": 172080
+  },
+  {
+    "path": "scene\\hakadan_20_info.zsi",
+    "size": 172080
+  },
+  {
+    "path": "scene\\hakadan_21_dd_info.zsi",
+    "size": 652076
+  },
+  {
+    "path": "scene\\hakadan_21_info.zsi",
+    "size": 652008
+  },
+  {
+    "path": "scene\\hakadan_22_dd_info.zsi",
+    "size": 149362
+  },
+  {
+    "path": "scene\\hakadan_22_info.zsi",
+    "size": 149358
+  },
+  {
+    "path": "scene\\hakadan_3_dd_info.zsi",
+    "size": 198560
+  },
+  {
+    "path": "scene\\hakadan_3_info.zsi",
+    "size": 198536
+  },
+  {
+    "path": "scene\\hakadan_4_dd_info.zsi",
+    "size": 167424
+  },
+  {
+    "path": "scene\\hakadan_4_info.zsi",
+    "size": 167420
+  },
+  {
+    "path": "scene\\hakadan_5_dd_info.zsi",
+    "size": 353852
+  },
+  {
+    "path": "scene\\hakadan_5_info.zsi",
+    "size": 353848
+  },
+  {
+    "path": "scene\\hakadan_6_dd_info.zsi",
+    "size": 226060
+  },
+  {
+    "path": "scene\\hakadan_6_info.zsi",
+    "size": 225960
+  },
+  {
+    "path": "scene\\hakadan_7_dd_info.zsi",
+    "size": 167260
+  },
+  {
+    "path": "scene\\hakadan_7_info.zsi",
+    "size": 167248
+  },
+  {
+    "path": "scene\\hakadan_8_dd_info.zsi",
+    "size": 229504
+  },
+  {
+    "path": "scene\\hakadan_8_info.zsi",
+    "size": 229476
+  },
+  {
+    "path": "scene\\hakadan_9_dd_info.zsi",
+    "size": 558184
+  },
+  {
+    "path": "scene\\hakadan_9_info.zsi",
+    "size": 558048
+  },
+  {
+    "path": "scene\\hakadan_boss_0_info.zsi",
+    "size": 2012
+  },
+  {
+    "path": "scene\\hakadan_boss_1_info.zsi",
+    "size": 352912
+  },
+  {
+    "path": "scene\\hakadan_boss_info.zsi",
+    "size": 11196
+  },
+  {
+    "path": "scene\\hakadan_boss.zar",
+    "size": 348
+  },
+  {
+    "path": "scene\\hakadan_ch_0_dd_info.zsi",
+    "size": 641772
+  },
+  {
+    "path": "scene\\hakadan_ch_0_info.zsi",
+    "size": 641472
+  },
+  {
+    "path": "scene\\hakadan_ch_1_dd_info.zsi",
+    "size": 514540
+  },
+  {
+    "path": "scene\\hakadan_ch_1_info.zsi",
+    "size": 514948
+  },
+  {
+    "path": "scene\\hakadan_ch_2_dd_info.zsi",
+    "size": 139200
+  },
+  {
+    "path": "scene\\hakadan_ch_2_info.zsi",
+    "size": 139244
+  },
+  {
+    "path": "scene\\hakadan_ch_3_dd_info.zsi",
+    "size": 196684
+  },
+  {
+    "path": "scene\\hakadan_ch_3_info.zsi",
+    "size": 196588
+  },
+  {
+    "path": "scene\\hakadan_ch_4_dd_info.zsi",
+    "size": 148540
+  },
+  {
+    "path": "scene\\hakadan_ch_4_info.zsi",
+    "size": 148460
+  },
+  {
+    "path": "scene\\hakadan_ch_5_dd_info.zsi",
+    "size": 225180
+  },
+  {
+    "path": "scene\\hakadan_ch_5_info.zsi",
+    "size": 225124
+  },
+  {
+    "path": "scene\\hakadan_ch_6_dd_info.zsi",
+    "size": 139632
+  },
+  {
+    "path": "scene\\hakadan_ch_6_info.zsi",
+    "size": 139596
+  },
+  {
+    "path": "scene\\hakadan_ch_dd_info.zsi",
+    "size": 62312
+  },
+  {
+    "path": "scene\\hakadan_ch_dd.zar",
+    "size": 166420
+  },
+  {
+    "path": "scene\\hakadan_ch_info.zsi",
+    "size": 62256
+  },
+  {
+    "path": "scene\\hakadan_ch.zar",
+    "size": 166420
+  },
+  {
+    "path": "scene\\hakadan_dd_info.zsi",
+    "size": 123556
+  },
+  {
+    "path": "scene\\hakadan_dd.zar",
+    "size": 165888
+  },
+  {
+    "path": "scene\\hakadan_info.zsi",
+    "size": 123556
+  },
+  {
+    "path": "scene\\hakadan.zar",
+    "size": 165888
+  },
+  {
+    "path": "scene\\hakasitarelay_0_info.zsi",
+    "size": 354336
+  },
+  {
+    "path": "scene\\hakasitarelay_1_info.zsi",
+    "size": 266656
+  },
+  {
+    "path": "scene\\hakasitarelay_2_info.zsi",
+    "size": 296768
+  },
+  {
+    "path": "scene\\hakasitarelay_3_info.zsi",
+    "size": 380496
+  },
+  {
+    "path": "scene\\hakasitarelay_4_info.zsi",
+    "size": 193988
+  },
+  {
+    "path": "scene\\hakasitarelay_5_info.zsi",
+    "size": 365108
+  },
+  {
+    "path": "scene\\hakasitarelay_6_info.zsi",
+    "size": 582772
+  },
+  {
+    "path": "scene\\hakasitarelay_info.zsi",
+    "size": 70092
+  },
+  {
+    "path": "scene\\hakasitarelay.zar",
+    "size": 165376
+  },
+  {
+    "path": "scene\\hidan_0_dd_info.zsi",
+    "size": 142760
+  },
+  {
+    "path": "scene\\hidan_0_info.zsi",
+    "size": 142720
+  },
+  {
+    "path": "scene\\hidan_1_dd_info.zsi",
+    "size": 478284
+  },
+  {
+    "path": "scene\\hidan_1_info.zsi",
+    "size": 478436
+  },
+  {
+    "path": "scene\\hidan_10_dd_info.zsi",
+    "size": 474088
+  },
+  {
+    "path": "scene\\hidan_10_info.zsi",
+    "size": 474216
+  },
+  {
+    "path": "scene\\hidan_11_dd_info.zsi",
+    "size": 133040
+  },
+  {
+    "path": "scene\\hidan_11_info.zsi",
+    "size": 133000
+  },
+  {
+    "path": "scene\\hidan_12_dd_info.zsi",
+    "size": 74384
+  },
+  {
+    "path": "scene\\hidan_12_info.zsi",
+    "size": 74400
+  },
+  {
+    "path": "scene\\hidan_13_dd_info.zsi",
+    "size": 219584
+  },
+  {
+    "path": "scene\\hidan_13_info.zsi",
+    "size": 219652
+  },
+  {
+    "path": "scene\\hidan_14_dd_info.zsi",
+    "size": 75848
+  },
+  {
+    "path": "scene\\hidan_14_info.zsi",
+    "size": 75940
+  },
+  {
+    "path": "scene\\hidan_15_dd_info.zsi",
+    "size": 52920
+  },
+  {
+    "path": "scene\\hidan_15_info.zsi",
+    "size": 52992
+  },
+  {
+    "path": "scene\\hidan_16_dd_info.zsi",
+    "size": 401180
+  },
+  {
+    "path": "scene\\hidan_16_info.zsi",
+    "size": 401060
+  },
+  {
+    "path": "scene\\hidan_17_dd_info.zsi",
+    "size": 103356
+  },
+  {
+    "path": "scene\\hidan_17_info.zsi",
+    "size": 103304
+  },
+  {
+    "path": "scene\\hidan_18_dd_info.zsi",
+    "size": 75768
+  },
+  {
+    "path": "scene\\hidan_18_info.zsi",
+    "size": 75640
+  },
+  {
+    "path": "scene\\hidan_19_dd_info.zsi",
+    "size": 77436
+  },
+  {
+    "path": "scene\\hidan_19_info.zsi",
+    "size": 77352
+  },
+  {
+    "path": "scene\\hidan_2_dd_info.zsi",
+    "size": 498584
+  },
+  {
+    "path": "scene\\hidan_2_info.zsi",
+    "size": 498492
+  },
+  {
+    "path": "scene\\hidan_20_dd_info.zsi",
+    "size": 91228
+  },
+  {
+    "path": "scene\\hidan_20_info.zsi",
+    "size": 91224
+  },
+  {
+    "path": "scene\\hidan_21_dd_info.zsi",
+    "size": 336472
+  },
+  {
+    "path": "scene\\hidan_21_info.zsi",
+    "size": 336532
+  },
+  {
+    "path": "scene\\hidan_22_dd_info.zsi",
+    "size": 90700
+  },
+  {
+    "path": "scene\\hidan_22_info.zsi",
+    "size": 90712
+  },
+  {
+    "path": "scene\\hidan_23_dd_info.zsi",
+    "size": 91236
+  },
+  {
+    "path": "scene\\hidan_23_info.zsi",
+    "size": 91236
+  },
+  {
+    "path": "scene\\hidan_24_dd_info.zsi",
+    "size": 136632
+  },
+  {
+    "path": "scene\\hidan_24_info.zsi",
+    "size": 136628
+  },
+  {
+    "path": "scene\\hidan_25_dd_info.zsi",
+    "size": 90680
+  },
+  {
+    "path": "scene\\hidan_25_info.zsi",
+    "size": 90676
+  },
+  {
+    "path": "scene\\hidan_26_dd_info.zsi",
+    "size": 387454
+  },
+  {
+    "path": "scene\\hidan_26_info.zsi",
+    "size": 387444
+  },
+  {
+    "path": "scene\\hidan_3_dd_info.zsi",
+    "size": 93992
+  },
+  {
+    "path": "scene\\hidan_3_info.zsi",
+    "size": 94004
+  },
+  {
+    "path": "scene\\hidan_4_dd_info.zsi",
+    "size": 189716
+  },
+  {
+    "path": "scene\\hidan_4_info.zsi",
+    "size": 189620
+  },
+  {
+    "path": "scene\\hidan_5_dd_info.zsi",
+    "size": 237588
+  },
+  {
+    "path": "scene\\hidan_5_info.zsi",
+    "size": 237428
+  },
+  {
+    "path": "scene\\hidan_6_dd_info.zsi",
+    "size": 369468
+  },
+  {
+    "path": "scene\\hidan_6_info.zsi",
+    "size": 369476
+  },
+  {
+    "path": "scene\\hidan_7_dd_info.zsi",
+    "size": 74248
+  },
+  {
+    "path": "scene\\hidan_7_info.zsi",
+    "size": 74132
+  },
+  {
+    "path": "scene\\hidan_8_dd_info.zsi",
+    "size": 440956
+  },
+  {
+    "path": "scene\\hidan_8_info.zsi",
+    "size": 440916
+  },
+  {
+    "path": "scene\\hidan_9_dd_info.zsi",
+    "size": 102068
+  },
+  {
+    "path": "scene\\hidan_9_info.zsi",
+    "size": 102080
+  },
+  {
+    "path": "scene\\hidan_dd_info.zsi",
+    "size": 128652
+  },
+  {
+    "path": "scene\\hidan_dd.zar",
+    "size": 170896
+  },
+  {
+    "path": "scene\\hidan_info.zsi",
+    "size": 129312
+  },
+  {
+    "path": "scene\\hidan.zar",
+    "size": 170896
+  },
+  {
+    "path": "scene\\hiral_demo_0_info.zsi",
+    "size": 2472
+  },
+  {
+    "path": "scene\\hiral_demo_info.zsi",
+    "size": 40948
+  },
+  {
+    "path": "scene\\hut_0_info.zsi",
+    "size": 226188
+  },
+  {
+    "path": "scene\\hut_info.zsi",
+    "size": 1900
+  },
+  {
+    "path": "scene\\hut.zar",
+    "size": 167652
+  },
+  {
+    "path": "scene\\hylia_labo_0_info.zsi",
+    "size": 750440
+  },
+  {
+    "path": "scene\\hylia_labo_info.zsi",
+    "size": 7728
+  },
+  {
+    "path": "scene\\hylia_labo.zar",
+    "size": 166400
+  },
+  {
+    "path": "scene\\ice_doukutu_0_dd_info.zsi",
+    "size": 450370
+  },
+  {
+    "path": "scene\\ice_doukutu_0_info.zsi",
+    "size": 450350
+  },
+  {
+    "path": "scene\\ice_doukutu_1_dd_info.zsi",
+    "size": 506018
+  },
+  {
+    "path": "scene\\ice_doukutu_1_info.zsi",
+    "size": 506034
+  },
+  {
+    "path": "scene\\ice_doukutu_10_dd_info.zsi",
+    "size": 221530
+  },
+  {
+    "path": "scene\\ice_doukutu_10_info.zsi",
+    "size": 221522
+  },
+  {
+    "path": "scene\\ice_doukutu_11_dd_info.zsi",
+    "size": 245420
+  },
+  {
+    "path": "scene\\ice_doukutu_11_info.zsi",
+    "size": 245600
+  },
+  {
+    "path": "scene\\ice_doukutu_2_dd_info.zsi",
+    "size": 500418
+  },
+  {
+    "path": "scene\\ice_doukutu_2_info.zsi",
+    "size": 500414
+  },
+  {
+    "path": "scene\\ice_doukutu_3_dd_info.zsi",
+    "size": 555628
+  },
+  {
+    "path": "scene\\ice_doukutu_3_info.zsi",
+    "size": 555612
+  },
+  {
+    "path": "scene\\ice_doukutu_4_dd_info.zsi",
+    "size": 575794
+  },
+  {
+    "path": "scene\\ice_doukutu_4_info.zsi",
+    "size": 575830
+  },
+  {
+    "path": "scene\\ice_doukutu_5_dd_info.zsi",
+    "size": 473148
+  },
+  {
+    "path": "scene\\ice_doukutu_5_info.zsi",
+    "size": 473168
+  },
+  {
+    "path": "scene\\ice_doukutu_6_dd_info.zsi",
+    "size": 396370
+  },
+  {
+    "path": "scene\\ice_doukutu_6_info.zsi",
+    "size": 396550
+  },
+  {
+    "path": "scene\\ice_doukutu_7_dd_info.zsi",
+    "size": 405836
+  },
+  {
+    "path": "scene\\ice_doukutu_7_info.zsi",
+    "size": 405836
+  },
+  {
+    "path": "scene\\ice_doukutu_8_dd_info.zsi",
+    "size": 501826
+  },
+  {
+    "path": "scene\\ice_doukutu_8_info.zsi",
+    "size": 501886
+  },
+  {
+    "path": "scene\\ice_doukutu_9_dd_info.zsi",
+    "size": 554076
+  },
+  {
+    "path": "scene\\ice_doukutu_9_info.zsi",
+    "size": 554020
+  },
+  {
+    "path": "scene\\ice_doukutu_dd_info.zsi",
+    "size": 90888
+  },
+  {
+    "path": "scene\\ice_doukutu_dd.zar",
+    "size": 182780
+  },
+  {
+    "path": "scene\\ice_doukutu_info.zsi",
+    "size": 103212
+  },
+  {
+    "path": "scene\\ice_doukutu.zar",
+    "size": 182780
+  },
+  {
+    "path": "scene\\jyasinzou_0_dd_info.zsi",
+    "size": 337972
+  },
+  {
+    "path": "scene\\jyasinzou_0_info.zsi",
+    "size": 337808
+  },
+  {
+    "path": "scene\\jyasinzou_1_dd_info.zsi",
+    "size": 237172
+  },
+  {
+    "path": "scene\\jyasinzou_1_info.zsi",
+    "size": 237104
+  },
+  {
+    "path": "scene\\jyasinzou_10_dd_info.zsi",
+    "size": 322632
+  },
+  {
+    "path": "scene\\jyasinzou_10_info.zsi",
+    "size": 322632
+  },
+  {
+    "path": "scene\\jyasinzou_11_dd_info.zsi",
+    "size": 38128
+  },
+  {
+    "path": "scene\\jyasinzou_11_info.zsi",
+    "size": 38128
+  },
+  {
+    "path": "scene\\jyasinzou_12_dd_info.zsi",
+    "size": 93100
+  },
+  {
+    "path": "scene\\jyasinzou_12_info.zsi",
+    "size": 92972
+  },
+  {
+    "path": "scene\\jyasinzou_13_dd_info.zsi",
+    "size": 217748
+  },
+  {
+    "path": "scene\\jyasinzou_13_info.zsi",
+    "size": 217664
+  },
+  {
+    "path": "scene\\jyasinzou_14_dd_info.zsi",
+    "size": 130892
+  },
+  {
+    "path": "scene\\jyasinzou_14_info.zsi",
+    "size": 130876
+  },
+  {
+    "path": "scene\\jyasinzou_15_dd_info.zsi",
+    "size": 188208
+  },
+  {
+    "path": "scene\\jyasinzou_15_info.zsi",
+    "size": 188152
+  },
+  {
+    "path": "scene\\jyasinzou_16_dd_info.zsi",
+    "size": 83212
+  },
+  {
+    "path": "scene\\jyasinzou_16_info.zsi",
+    "size": 83160
+  },
+  {
+    "path": "scene\\jyasinzou_17_dd_info.zsi",
+    "size": 182060
+  },
+  {
+    "path": "scene\\jyasinzou_17_info.zsi",
+    "size": 182000
+  },
+  {
+    "path": "scene\\jyasinzou_18_dd_info.zsi",
+    "size": 136884
+  },
+  {
+    "path": "scene\\jyasinzou_18_info.zsi",
+    "size": 136844
+  },
+  {
+    "path": "scene\\jyasinzou_19_dd_info.zsi",
+    "size": 90984
+  },
+  {
+    "path": "scene\\jyasinzou_19_info.zsi",
+    "size": 91000
+  },
+  {
+    "path": "scene\\jyasinzou_2_dd_info.zsi",
+    "size": 166236
+  },
+  {
+    "path": "scene\\jyasinzou_2_info.zsi",
+    "size": 166324
+  },
+  {
+    "path": "scene\\jyasinzou_20_dd_info.zsi",
+    "size": 322632
+  },
+  {
+    "path": "scene\\jyasinzou_20_info.zsi",
+    "size": 322632
+  },
+  {
+    "path": "scene\\jyasinzou_21_dd_info.zsi",
+    "size": 66872
+  },
+  {
+    "path": "scene\\jyasinzou_21_info.zsi",
+    "size": 66856
+  },
+  {
+    "path": "scene\\jyasinzou_22_dd_info.zsi",
+    "size": 160108
+  },
+  {
+    "path": "scene\\jyasinzou_22_info.zsi",
+    "size": 160148
+  },
+  {
+    "path": "scene\\jyasinzou_23_dd_info.zsi",
+    "size": 217180
+  },
+  {
+    "path": "scene\\jyasinzou_23_info.zsi",
+    "size": 217056
+  },
+  {
+    "path": "scene\\jyasinzou_24_dd_info.zsi",
+    "size": 122580
+  },
+  {
+    "path": "scene\\jyasinzou_24_info.zsi",
+    "size": 122548
+  },
+  {
+    "path": "scene\\jyasinzou_25_dd_info.zsi",
+    "size": 457436
+  },
+  {
+    "path": "scene\\jyasinzou_25_info.zsi",
+    "size": 457384
+  },
+  {
+    "path": "scene\\jyasinzou_26_dd_info.zsi",
+    "size": 297232
+  },
+  {
+    "path": "scene\\jyasinzou_26_info.zsi",
+    "size": 297264
+  },
+  {
+    "path": "scene\\jyasinzou_27_dd_info.zsi",
+    "size": 115016
+  },
+  {
+    "path": "scene\\jyasinzou_27_info.zsi",
+    "size": 114936
+  },
+  {
+    "path": "scene\\jyasinzou_28_dd_info.zsi",
+    "size": 303490
+  },
+  {
+    "path": "scene\\jyasinzou_28_info.zsi",
+    "size": 303486
+  },
+  {
+    "path": "scene\\jyasinzou_3_dd_info.zsi",
+    "size": 106352
+  },
+  {
+    "path": "scene\\jyasinzou_3_info.zsi",
+    "size": 106220
+  },
+  {
+    "path": "scene\\jyasinzou_4_dd_info.zsi",
+    "size": 194684
+  },
+  {
+    "path": "scene\\jyasinzou_4_info.zsi",
+    "size": 194660
+  },
+  {
+    "path": "scene\\jyasinzou_5_dd_info.zsi",
+    "size": 571820
+  },
+  {
+    "path": "scene\\jyasinzou_5_info.zsi",
+    "size": 571576
+  },
+  {
+    "path": "scene\\jyasinzou_6_dd_info.zsi",
+    "size": 142596
+  },
+  {
+    "path": "scene\\jyasinzou_6_info.zsi",
+    "size": 142648
+  },
+  {
+    "path": "scene\\jyasinzou_7_dd_info.zsi",
+    "size": 84184
+  },
+  {
+    "path": "scene\\jyasinzou_7_info.zsi",
+    "size": 84180
+  },
+  {
+    "path": "scene\\jyasinzou_8_dd_info.zsi",
+    "size": 141992
+  },
+  {
+    "path": "scene\\jyasinzou_8_info.zsi",
+    "size": 141924
+  },
+  {
+    "path": "scene\\jyasinzou_9_dd_info.zsi",
+    "size": 90984
+  },
+  {
+    "path": "scene\\jyasinzou_9_info.zsi",
+    "size": 91020
+  },
+  {
+    "path": "scene\\jyasinzou_boss_0_info.zsi",
+    "size": 22464
+  },
+  {
+    "path": "scene\\jyasinzou_boss_1_info.zsi",
+    "size": 301572
+  },
+  {
+    "path": "scene\\jyasinzou_boss_2_info.zsi",
+    "size": 75686
+  },
+  {
+    "path": "scene\\jyasinzou_boss_3_info.zsi",
+    "size": 585664
+  },
+  {
+    "path": "scene\\jyasinzou_boss_info.zsi",
+    "size": 45912
+  },
+  {
+    "path": "scene\\jyasinzou_boss.zar",
+    "size": 22736
+  },
+  {
+    "path": "scene\\jyasinzou_dd_info.zsi",
+    "size": 130288
+  },
+  {
+    "path": "scene\\jyasinzou_dd.zar",
+    "size": 166108
+  },
+  {
+    "path": "scene\\jyasinzou_info.zsi",
+    "size": 130336
+  },
+  {
+    "path": "scene\\jyasinzou.zar",
+    "size": 166108
+  },
+  {
+    "path": "scene\\k_home_0_info.zsi",
+    "size": 427768
+  },
+  {
+    "path": "scene\\k_home_info.zsi",
+    "size": 4196
+  },
+  {
+    "path": "scene\\k_home3_0_info.zsi",
+    "size": 318776
+  },
+  {
+    "path": "scene\\k_home3_info.zsi",
+    "size": 7236
+  },
+  {
+    "path": "scene\\k_home3.zar",
+    "size": 256
+  },
+  {
+    "path": "scene\\k_home4_0_info.zsi",
+    "size": 245740
+  },
+  {
+    "path": "scene\\k_home4_info.zsi",
+    "size": 7736
+  },
+  {
+    "path": "scene\\k_home4.zar",
+    "size": 256
+  },
+  {
+    "path": "scene\\k_home5_0_info.zsi",
+    "size": 261212
+  },
+  {
+    "path": "scene\\k_home5_info.zsi",
+    "size": 5836
+  },
+  {
+    "path": "scene\\k_home5.zar",
+    "size": 256
+  },
+  {
+    "path": "scene\\kakariko_0_info.zsi",
+    "size": 690100
+  },
+  {
+    "path": "scene\\kakariko_home3_0_info.zsi",
+    "size": 482508
+  },
+  {
+    "path": "scene\\kakariko_home3_info.zsi",
+    "size": 4752
+  },
+  {
+    "path": "scene\\kakariko_home3.zar",
+    "size": 380
+  },
+  {
+    "path": "scene\\kakariko_impa_0_info.zsi",
+    "size": 653880
+  },
+  {
+    "path": "scene\\kakariko_impa_info.zsi",
+    "size": 8096
+  },
+  {
+    "path": "scene\\kakariko_impa.zar",
+    "size": 1596
+  },
+  {
+    "path": "scene\\kakariko_info.zsi",
+    "size": 9536
+  },
+  {
+    "path": "scene\\kakusiana_0_info.zsi",
+    "size": 160148
+  },
+  {
+    "path": "scene\\kakusiana_1_info.zsi",
+    "size": 135332
+  },
+  {
+    "path": "scene\\kakusiana_10_info.zsi",
+    "size": 176308
+  },
+  {
+    "path": "scene\\kakusiana_11_info.zsi",
+    "size": 258972
+  },
+  {
+    "path": "scene\\kakusiana_12_info.zsi",
+    "size": 234420
+  },
+  {
+    "path": "scene\\kakusiana_13_info.zsi",
+    "size": 198036
+  },
+  {
+    "path": "scene\\kakusiana_2_info.zsi",
+    "size": 150184
+  },
+  {
+    "path": "scene\\kakusiana_3_info.zsi",
+    "size": 134424
+  },
+  {
+    "path": "scene\\kakusiana_4_info.zsi",
+    "size": 200492
+  },
+  {
+    "path": "scene\\kakusiana_5_info.zsi",
+    "size": 143620
+  },
+  {
+    "path": "scene\\kakusiana_6_info.zsi",
+    "size": 247604
+  },
+  {
+    "path": "scene\\kakusiana_7_info.zsi",
+    "size": 299944
+  },
+  {
+    "path": "scene\\kakusiana_8_info.zsi",
+    "size": 155864
+  },
+  {
+    "path": "scene\\kakusiana_9_info.zsi",
+    "size": 252196
+  },
+  {
+    "path": "scene\\kakusiana_info.zsi",
+    "size": 68404
+  },
+  {
+    "path": "scene\\kakusiana.zar",
+    "size": 4992
+  },
+  {
+    "path": "scene\\kenjyanoma_0_info.zsi",
+    "size": 295700
+  },
+  {
+    "path": "scene\\kenjyanoma_info.zsi",
+    "size": 33364
+  },
+  {
+    "path": "scene\\kenjyanoma.zar",
+    "size": 166208
+  },
+  {
+    "path": "scene\\kinsuta_0_info.zsi",
+    "size": 893376
+  },
+  {
+    "path": "scene\\kinsuta_info.zsi",
+    "size": 12348
+  },
+  {
+    "path": "scene\\kinsuta.zar",
+    "size": 165116
+  },
+  {
+    "path": "scene\\kokiri_0_info.zsi",
+    "size": 318808
+  },
+  {
+    "path": "scene\\kokiri_info.zsi",
+    "size": 3736
+  },
+  {
+    "path": "scene\\kokiri.zar",
+    "size": 165112
+  },
+  {
+    "path": "scene\\labo_0_info.zsi",
+    "size": 587768
+  },
+  {
+    "path": "scene\\labo_info.zsi",
+    "size": 6332
+  },
+  {
+    "path": "scene\\labo.zar",
+    "size": 888
+  },
+  {
+    "path": "scene\\link_0_info.zsi",
+    "size": 379160
+  },
+  {
+    "path": "scene\\link_info.zsi",
+    "size": 16352
+  },
+  {
+    "path": "scene\\link.zar",
+    "size": 1432
+  },
+  {
+    "path": "scene\\mahouya_0_info.zsi",
+    "size": 767780
+  },
+  {
+    "path": "scene\\mahouya_info.zsi",
+    "size": 3144
+  },
+  {
+    "path": "scene\\mahouya.zar",
+    "size": 165496
+  },
+  {
+    "path": "scene\\market_alley_0_info.zsi",
+    "size": 581464
+  },
+  {
+    "path": "scene\\market_alley_info.zsi",
+    "size": 9640
+  },
+  {
+    "path": "scene\\market_alley_n_0_info.zsi",
+    "size": 586180
+  },
+  {
+    "path": "scene\\market_alley_n_info.zsi",
+    "size": 9608
+  },
+  {
+    "path": "scene\\market_alley_n.zar",
+    "size": 165668
+  },
+  {
+    "path": "scene\\market_alley.zar",
+    "size": 165116
+  },
+  {
+    "path": "scene\\market_day_0_info.zsi",
+    "size": 978064
+  },
+  {
+    "path": "scene\\market_day_info.zsi",
+    "size": 12952
+  },
+  {
+    "path": "scene\\market_day.zar",
+    "size": 165440
+  },
+  {
+    "path": "scene\\market_night_0_info.zsi",
+    "size": 1002308
+  },
+  {
+    "path": "scene\\market_night_info.zsi",
+    "size": 12884
+  },
+  {
+    "path": "scene\\market_night.zar",
+    "size": 165812
+  },
+  {
+    "path": "scene\\market_ruins_0_info.zsi",
+    "size": 793992
+  },
+  {
+    "path": "scene\\market_ruins_info.zsi",
+    "size": 7444
+  },
+  {
+    "path": "scene\\market_ruins.zar",
+    "size": 165972
+  },
+  {
+    "path": "scene\\men_0_dd_info.zsi",
+    "size": 378624
+  },
+  {
+    "path": "scene\\men_0_info.zsi",
+    "size": 378572
+  },
+  {
+    "path": "scene\\men_1_dd_info.zsi",
+    "size": 222908
+  },
+  {
+    "path": "scene\\men_1_info.zsi",
+    "size": 222940
+  },
+  {
+    "path": "scene\\men_10_dd_info.zsi",
+    "size": 183644
+  },
+  {
+    "path": "scene\\men_10_info.zsi",
+    "size": 183664
+  },
+  {
+    "path": "scene\\men_2_dd_info.zsi",
+    "size": 144884
+  },
+  {
+    "path": "scene\\men_2_info.zsi",
+    "size": 144688
+  },
+  {
+    "path": "scene\\men_3_dd_info.zsi",
+    "size": 253444
+  },
+  {
+    "path": "scene\\men_3_info.zsi",
+    "size": 253408
+  },
+  {
+    "path": "scene\\men_4_dd_info.zsi",
+    "size": 378800
+  },
+  {
+    "path": "scene\\men_4_info.zsi",
+    "size": 378656
+  },
+  {
+    "path": "scene\\men_5_dd_info.zsi",
+    "size": 234012
+  },
+  {
+    "path": "scene\\men_5_info.zsi",
+    "size": 234208
+  },
+  {
+    "path": "scene\\men_6_dd_info.zsi",
+    "size": 370564
+  },
+  {
+    "path": "scene\\men_6_info.zsi",
+    "size": 370500
+  },
+  {
+    "path": "scene\\men_7_dd_info.zsi",
+    "size": 232092
+  },
+  {
+    "path": "scene\\men_7_info.zsi",
+    "size": 232208
+  },
+  {
+    "path": "scene\\men_8_dd_info.zsi",
+    "size": 283780
+  },
+  {
+    "path": "scene\\men_8_info.zsi",
+    "size": 283752
+  },
+  {
+    "path": "scene\\men_9_dd_info.zsi",
+    "size": 247944
+  },
+  {
+    "path": "scene\\men_9_info.zsi",
+    "size": 248072
+  },
+  {
+    "path": "scene\\men_dd_info.zsi",
+    "size": 81492
+  },
+  {
+    "path": "scene\\men_dd.zar",
+    "size": 167104
+  },
+  {
+    "path": "scene\\men_info.zsi",
+    "size": 81628
+  },
+  {
+    "path": "scene\\men.zar",
+    "size": 167104
+  },
+  {
+    "path": "scene\\miharigoya_0_info.zsi",
+    "size": 267892
+  },
+  {
+    "path": "scene\\miharigoya_info.zsi",
+    "size": 4440
+  },
+  {
+    "path": "scene\\mizusin_0_dd_info.zsi",
+    "size": 758908
+  },
+  {
+    "path": "scene\\mizusin_0_info.zsi",
+    "size": 758984
+  },
+  {
+    "path": "scene\\mizusin_1_dd_info.zsi",
+    "size": 252112
+  },
+  {
+    "path": "scene\\mizusin_1_info.zsi",
+    "size": 251992
+  },
+  {
+    "path": "scene\\mizusin_10_dd_info.zsi",
+    "size": 134080
+  },
+  {
+    "path": "scene\\mizusin_10_info.zsi",
+    "size": 133880
+  },
+  {
+    "path": "scene\\mizusin_11_dd_info.zsi",
+    "size": 127272
+  },
+  {
+    "path": "scene\\mizusin_11_info.zsi",
+    "size": 127160
+  },
+  {
+    "path": "scene\\mizusin_12_dd_info.zsi",
+    "size": 256624
+  },
+  {
+    "path": "scene\\mizusin_12_info.zsi",
+    "size": 256476
+  },
+  {
+    "path": "scene\\mizusin_13_dd_info.zsi",
+    "size": 1292
+  },
+  {
+    "path": "scene\\mizusin_13_info.zsi",
+    "size": 1292
+  },
+  {
+    "path": "scene\\mizusin_14_dd_info.zsi",
+    "size": 192380
+  },
+  {
+    "path": "scene\\mizusin_14_info.zsi",
+    "size": 192344
+  },
+  {
+    "path": "scene\\mizusin_15_dd_info.zsi",
+    "size": 118952
+  },
+  {
+    "path": "scene\\mizusin_15_info.zsi",
+    "size": 118888
+  },
+  {
+    "path": "scene\\mizusin_16_dd_info.zsi",
+    "size": 65692
+  },
+  {
+    "path": "scene\\mizusin_16_info.zsi",
+    "size": 65592
+  },
+  {
+    "path": "scene\\mizusin_17_dd_info.zsi",
+    "size": 254544
+  },
+  {
+    "path": "scene\\mizusin_17_info.zsi",
+    "size": 254392
+  },
+  {
+    "path": "scene\\mizusin_18_dd_info.zsi",
+    "size": 66204
+  },
+  {
+    "path": "scene\\mizusin_18_info.zsi",
+    "size": 66136
+  },
+  {
+    "path": "scene\\mizusin_19_dd_info.zsi",
+    "size": 77656
+  },
+  {
+    "path": "scene\\mizusin_19_info.zsi",
+    "size": 77656
+  },
+  {
+    "path": "scene\\mizusin_2_dd_info.zsi",
+    "size": 153168
+  },
+  {
+    "path": "scene\\mizusin_2_info.zsi",
+    "size": 152904
+  },
+  {
+    "path": "scene\\mizusin_20_dd_info.zsi",
+    "size": 197984
+  },
+  {
+    "path": "scene\\mizusin_20_info.zsi",
+    "size": 197716
+  },
+  {
+    "path": "scene\\mizusin_21_dd_info.zsi",
+    "size": 321212
+  },
+  {
+    "path": "scene\\mizusin_21_info.zsi",
+    "size": 321216
+  },
+  {
+    "path": "scene\\mizusin_22_dd_info.zsi",
+    "size": 268540
+  },
+  {
+    "path": "scene\\mizusin_22_info.zsi",
+    "size": 268540
+  },
+  {
+    "path": "scene\\mizusin_3_dd_info.zsi",
+    "size": 163632
+  },
+  {
+    "path": "scene\\mizusin_3_info.zsi",
+    "size": 163448
+  },
+  {
+    "path": "scene\\mizusin_4_dd_info.zsi",
+    "size": 169468
+  },
+  {
+    "path": "scene\\mizusin_4_info.zsi",
+    "size": 169396
+  },
+  {
+    "path": "scene\\mizusin_5_dd_info.zsi",
+    "size": 259896
+  },
+  {
+    "path": "scene\\mizusin_5_info.zsi",
+    "size": 259816
+  },
+  {
+    "path": "scene\\mizusin_6_dd_info.zsi",
+    "size": 226200
+  },
+  {
+    "path": "scene\\mizusin_6_info.zsi",
+    "size": 226136
+  },
+  {
+    "path": "scene\\mizusin_7_dd_info.zsi",
+    "size": 116556
+  },
+  {
+    "path": "scene\\mizusin_7_info.zsi",
+    "size": 116540
+  },
+  {
+    "path": "scene\\mizusin_8_dd_info.zsi",
+    "size": 401100
+  },
+  {
+    "path": "scene\\mizusin_8_info.zsi",
+    "size": 400924
+  },
+  {
+    "path": "scene\\mizusin_9_dd_info.zsi",
+    "size": 178332
+  },
+  {
+    "path": "scene\\mizusin_9_info.zsi",
+    "size": 178116
+  },
+  {
+    "path": "scene\\mizusin_boss_0_info.zsi",
+    "size": 1912
+  },
+  {
+    "path": "scene\\mizusin_boss_1_info.zsi",
+    "size": 410388
+  },
+  {
+    "path": "scene\\mizusin_boss_info.zsi",
+    "size": 14940
+  },
+  {
+    "path": "scene\\mizusin_boss.zar",
+    "size": 348
+  },
+  {
+    "path": "scene\\mizusin_dd_info.zsi",
+    "size": 112840
+  },
+  {
+    "path": "scene\\mizusin_dd.zar",
+    "size": 172724
+  },
+  {
+    "path": "scene\\mizusin_info.zsi",
+    "size": 112984
+  },
+  {
+    "path": "scene\\mizusin.zar",
+    "size": 172724
+  },
+  {
+    "path": "scene\\moriboss_0_info.zsi",
+    "size": 166004
+  },
+  {
+    "path": "scene\\moriboss_1_info.zsi",
+    "size": 406288
+  },
+  {
+    "path": "scene\\moriboss_info.zsi",
+    "size": 7204
+  },
+  {
+    "path": "scene\\nakaniwa_0_info.zsi",
+    "size": 606696
+  },
+  {
+    "path": "scene\\nakaniwa_info.zsi",
+    "size": 27056
+  },
+  {
+    "path": "scene\\nakaniwa.zar",
+    "size": 176164
+  },
+  {
+    "path": "scene\\shop_0_info.zsi",
+    "size": 359368
+  },
+  {
+    "path": "scene\\shop_alley_0_info.zsi",
+    "size": 471868
+  },
+  {
+    "path": "scene\\shop_alley_info.zsi",
+    "size": 2668
+  },
+  {
+    "path": "scene\\shop_alley.zar",
+    "size": 165076
+  },
+  {
+    "path": "scene\\shop_drag_0_info.zsi",
+    "size": 616632
+  },
+  {
+    "path": "scene\\shop_drag_info.zsi",
+    "size": 1340
+  },
+  {
+    "path": "scene\\shop_drag.zar",
+    "size": 165076
+  },
+  {
+    "path": "scene\\shop_face_0_info.zsi",
+    "size": 378956
+  },
+  {
+    "path": "scene\\shop_face_info.zsi",
+    "size": 1492
+  },
+  {
+    "path": "scene\\shop_face.zar",
+    "size": 165332
+  },
+  {
+    "path": "scene\\shop_golon_0_info.zsi",
+    "size": 297764
+  },
+  {
+    "path": "scene\\shop_golon_info.zsi",
+    "size": 1580
+  },
+  {
+    "path": "scene\\shop_golon.zar",
+    "size": 165076
+  },
+  {
+    "path": "scene\\shop_info.zsi",
+    "size": 2320
+  },
+  {
+    "path": "scene\\shop_night_0_info.zsi",
+    "size": 456856
+  },
+  {
+    "path": "scene\\shop_night_info.zsi",
+    "size": 2872
+  },
+  {
+    "path": "scene\\shop_night.zar",
+    "size": 165948
+  },
+  {
+    "path": "scene\\shop.zar",
+    "size": 169396
+  },
+  {
+    "path": "scene\\shrine_0_info.zsi",
+    "size": 380104
+  },
+  {
+    "path": "scene\\shrine_info.zsi",
+    "size": 6888
+  },
+  {
+    "path": "scene\\shrine_n_0_info.zsi",
+    "size": 380008
+  },
+  {
+    "path": "scene\\shrine_n_info.zsi",
+    "size": 7004
+  },
+  {
+    "path": "scene\\shrine_n.zar",
+    "size": 344
+  },
+  {
+    "path": "scene\\shrine_r_0_info.zsi",
+    "size": 404424
+  },
+  {
+    "path": "scene\\shrine_r_info.zsi",
+    "size": 6528
+  },
+  {
+    "path": "scene\\shrine.zar",
+    "size": 360
+  },
+  {
+    "path": "scene\\souko_0_info.zsi",
+    "size": 375688
+  },
+  {
+    "path": "scene\\souko_1_info.zsi",
+    "size": 327844
+  },
+  {
+    "path": "scene\\souko_2_info.zsi",
+    "size": 714180
+  },
+  {
+    "path": "scene\\souko_info.zsi",
+    "size": 28404
+  },
+  {
+    "path": "scene\\souko.zar",
+    "size": 724
+  },
+  {
+    "path": "scene\\spot00_0_info.zsi",
+    "size": 956440
+  },
+  {
+    "path": "scene\\spot00_info.zsi",
+    "size": 178116
+  },
+  {
+    "path": "scene\\spot00.zar",
+    "size": 251136
+  },
+  {
+    "path": "scene\\spot01_0_info.zsi",
+    "size": 929744
+  },
+  {
+    "path": "scene\\spot01_info.zsi",
+    "size": 80648
+  },
+  {
+    "path": "scene\\spot01.zar",
+    "size": 232628
+  },
+  {
+    "path": "scene\\spot02_0_info.zsi",
+    "size": 103468
+  },
+  {
+    "path": "scene\\spot02_1_info.zsi",
+    "size": 704688
+  },
+  {
+    "path": "scene\\spot02_info.zsi",
+    "size": 36036
+  },
+  {
+    "path": "scene\\spot02.zar",
+    "size": 306684
+  },
+  {
+    "path": "scene\\spot03_0_info.zsi",
+    "size": 464356
+  },
+  {
+    "path": "scene\\spot03_1_info.zsi",
+    "size": 337900
+  },
+  {
+    "path": "scene\\spot03_info.zsi",
+    "size": 40112
+  },
+  {
+    "path": "scene\\spot03.zar",
+    "size": 231984
+  },
+  {
+    "path": "scene\\spot04_0_info.zsi",
+    "size": 658532
+  },
+  {
+    "path": "scene\\spot04_1_info.zsi",
+    "size": 433300
+  },
+  {
+    "path": "scene\\spot04_2_info.zsi",
+    "size": 295348
+  },
+  {
+    "path": "scene\\spot04_info.zsi",
+    "size": 144668
+  },
+  {
+    "path": "scene\\spot04.zar",
+    "size": 233592
+  },
+  {
+    "path": "scene\\spot05_0_info.zsi",
+    "size": 715136
+  },
+  {
+    "path": "scene\\spot05_info.zsi",
+    "size": 42580
+  },
+  {
+    "path": "scene\\spot05.zar",
+    "size": 250644
+  },
+  {
+    "path": "scene\\spot06_0_info.zsi",
+    "size": 934400
+  },
+  {
+    "path": "scene\\spot06_info.zsi",
+    "size": 73192
+  },
+  {
+    "path": "scene\\spot06.zar",
+    "size": 297824
+  },
+  {
+    "path": "scene\\spot07_0_info.zsi",
+    "size": 367856
+  },
+  {
+    "path": "scene\\spot07_1_info.zsi",
+    "size": 474352
+  },
+  {
+    "path": "scene\\spot07_info.zsi",
+    "size": 37024
+  },
+  {
+    "path": "scene\\spot07.zar",
+    "size": 232972
+  },
+  {
+    "path": "scene\\spot08_0_info.zsi",
+    "size": 476884
+  },
+  {
+    "path": "scene\\spot08_info.zsi",
+    "size": 62388
+  },
+  {
+    "path": "scene\\spot08.zar",
+    "size": 232612
+  },
+  {
+    "path": "scene\\spot09_0_info.zsi",
+    "size": 656576
+  },
+  {
+    "path": "scene\\spot09_info.zsi",
+    "size": 40680
+  },
+  {
+    "path": "scene\\spot09.zar",
+    "size": 299024
+  },
+  {
+    "path": "scene\\spot10_0_info.zsi",
+    "size": 311528
+  },
+  {
+    "path": "scene\\spot10_1_info.zsi",
+    "size": 488536
+  },
+  {
+    "path": "scene\\spot10_2_info.zsi",
+    "size": 358952
+  },
+  {
+    "path": "scene\\spot10_3_info.zsi",
+    "size": 381640
+  },
+  {
+    "path": "scene\\spot10_4_info.zsi",
+    "size": 312424
+  },
+  {
+    "path": "scene\\spot10_5_info.zsi",
+    "size": 429328
+  },
+  {
+    "path": "scene\\spot10_6_info.zsi",
+    "size": 420680
+  },
+  {
+    "path": "scene\\spot10_7_info.zsi",
+    "size": 312808
+  },
+  {
+    "path": "scene\\spot10_8_info.zsi",
+    "size": 316088
+  },
+  {
+    "path": "scene\\spot10_9_info.zsi",
+    "size": 382840
+  },
+  {
+    "path": "scene\\spot10_info.zsi",
+    "size": 90472
+  },
+  {
+    "path": "scene\\spot10.zar",
+    "size": 231688
+  },
+  {
+    "path": "scene\\spot11_0_info.zsi",
+    "size": 729040
+  },
+  {
+    "path": "scene\\spot11_info.zsi",
+    "size": 67944
+  },
+  {
+    "path": "scene\\spot11.zar",
+    "size": 232820
+  },
+  {
+    "path": "scene\\spot12_0_info.zsi",
+    "size": 703056
+  },
+  {
+    "path": "scene\\spot12_1_info.zsi",
+    "size": 470532
+  },
+  {
+    "path": "scene\\spot12_info.zsi",
+    "size": 43460
+  },
+  {
+    "path": "scene\\spot12.zar",
+    "size": 299308
+  },
+  {
+    "path": "scene\\spot13_0_info.zsi",
+    "size": 168592
+  },
+  {
+    "path": "scene\\spot13_1_info.zsi",
+    "size": 576240
+  },
+  {
+    "path": "scene\\spot13_info.zsi",
+    "size": 56772
+  },
+  {
+    "path": "scene\\spot13.zar",
+    "size": 231264
+  },
+  {
+    "path": "scene\\spot15_0_info.zsi",
+    "size": 846224
+  },
+  {
+    "path": "scene\\spot15_info.zsi",
+    "size": 37664
+  },
+  {
+    "path": "scene\\spot15.zar",
+    "size": 298504
+  },
+  {
+    "path": "scene\\spot16_0_info.zsi",
+    "size": 752264
+  },
+  {
+    "path": "scene\\spot16_info.zsi",
+    "size": 65076
+  },
+  {
+    "path": "scene\\spot16.zar",
+    "size": 265620
+  },
+  {
+    "path": "scene\\spot17_0_info.zsi",
+    "size": 397052
+  },
+  {
+    "path": "scene\\spot17_1_info.zsi",
+    "size": 537780
+  },
+  {
+    "path": "scene\\spot17_info.zsi",
+    "size": 55792
+  },
+  {
+    "path": "scene\\spot17.zar",
+    "size": 286408
+  },
+  {
+    "path": "scene\\spot18_0_info.zsi",
+    "size": 349000
+  },
+  {
+    "path": "scene\\spot18_1_info.zsi",
+    "size": 146972
+  },
+  {
+    "path": "scene\\spot18_2_info.zsi",
+    "size": 386764
+  },
+  {
+    "path": "scene\\spot18_3_info.zsi",
+    "size": 593856
+  },
+  {
+    "path": "scene\\spot18_info.zsi",
+    "size": 54112
+  },
+  {
+    "path": "scene\\spot18.zar",
+    "size": 244280
+  },
+  {
+    "path": "scene\\spot20_0_info.zsi",
+    "size": 1013628
+  },
+  {
+    "path": "scene\\spot20_info.zsi",
+    "size": 48632
+  },
+  {
+    "path": "scene\\spot20.zar",
+    "size": 232164
+  },
+  {
+    "path": "scene\\spot99_0_info.zsi",
+    "size": 754668
+  },
+  {
+    "path": "scene\\spot99_info.zsi",
+    "size": 23432
+  },
+  {
+    "path": "scene\\spot99.zar",
+    "size": 476
+  },
+  {
+    "path": "scene\\stable_0_info.zsi",
+    "size": 477452
+  },
+  {
+    "path": "scene\\stable_info.zsi",
+    "size": 3720
+  },
+  {
+    "path": "scene\\stable.zar",
+    "size": 165336
+  },
+  {
+    "path": "scene\\syatekijyou_0_info.zsi",
+    "size": 472056
+  },
+  {
+    "path": "scene\\syatekijyou_info.zsi",
+    "size": 8308
+  },
+  {
+    "path": "scene\\syatekijyou.zar",
+    "size": 165076
+  },
+  {
+    "path": "scene\\takaraya_0_info.zsi",
+    "size": 169516
+  },
+  {
+    "path": "scene\\takaraya_1_info.zsi",
+    "size": 93740
+  },
+  {
+    "path": "scene\\takaraya_2_info.zsi",
+    "size": 137916
+  },
+  {
+    "path": "scene\\takaraya_3_info.zsi",
+    "size": 126396
+  },
+  {
+    "path": "scene\\takaraya_4_info.zsi",
+    "size": 138028
+  },
+  {
+    "path": "scene\\takaraya_5_info.zsi",
+    "size": 86572
+  },
+  {
+    "path": "scene\\takaraya_6_info.zsi",
+    "size": 70700
+  },
+  {
+    "path": "scene\\takaraya_info.zsi",
+    "size": 25364
+  },
+  {
+    "path": "scene\\takaraya.zar",
+    "size": 165076
+  },
+  {
+    "path": "scene\\tent_0_info.zsi",
+    "size": 287192
+  },
+  {
+    "path": "scene\\tent_info.zsi",
+    "size": 2356
+  },
+  {
+    "path": "scene\\tent.zar",
+    "size": 248
+  },
+  {
+    "path": "scene\\tokinoma_0_info.zsi",
+    "size": 527984
+  },
+  {
+    "path": "scene\\tokinoma_1_info.zsi",
+    "size": 727240
+  },
+  {
+    "path": "scene\\tokinoma_info.zsi",
+    "size": 94836
+  },
+  {
+    "path": "scene\\tokinoma.zar",
+    "size": 190408
+  },
+  {
+    "path": "scene\\turibori_0_info.zsi",
+    "size": 846852
+  },
+  {
+    "path": "scene\\turibori_info.zsi",
+    "size": 33176
+  },
+  {
+    "path": "scene\\turibori.zar",
+    "size": 166020
+  },
+  {
+    "path": "scene\\ydan_0_dd_info.zsi",
+    "size": 546636
+  },
+  {
+    "path": "scene\\ydan_0_info.zsi",
+    "size": 546536
+  },
+  {
+    "path": "scene\\ydan_1_dd_info.zsi",
+    "size": 269380
+  },
+  {
+    "path": "scene\\ydan_1_info.zsi",
+    "size": 269208
+  },
+  {
+    "path": "scene\\ydan_10_dd_info.zsi",
+    "size": 286676
+  },
+  {
+    "path": "scene\\ydan_10_info.zsi",
+    "size": 286552
+  },
+  {
+    "path": "scene\\ydan_11_dd_info.zsi",
+    "size": 321786
+  },
+  {
+    "path": "scene\\ydan_11_info.zsi",
+    "size": 321788
+  },
+  {
+    "path": "scene\\ydan_2_dd_info.zsi",
+    "size": 369052
+  },
+  {
+    "path": "scene\\ydan_2_info.zsi",
+    "size": 368792
+  },
+  {
+    "path": "scene\\ydan_3_dd_info.zsi",
+    "size": 495628
+  },
+  {
+    "path": "scene\\ydan_3_info.zsi",
+    "size": 495608
+  },
+  {
+    "path": "scene\\ydan_4_dd_info.zsi",
+    "size": 250052
+  },
+  {
+    "path": "scene\\ydan_4_info.zsi",
+    "size": 249956
+  },
+  {
+    "path": "scene\\ydan_5_dd_info.zsi",
+    "size": 365868
+  },
+  {
+    "path": "scene\\ydan_5_info.zsi",
+    "size": 365752
+  },
+  {
+    "path": "scene\\ydan_6_dd_info.zsi",
+    "size": 218824
+  },
+  {
+    "path": "scene\\ydan_6_info.zsi",
+    "size": 218756
+  },
+  {
+    "path": "scene\\ydan_7_dd_info.zsi",
+    "size": 385756
+  },
+  {
+    "path": "scene\\ydan_7_info.zsi",
+    "size": 385352
+  },
+  {
+    "path": "scene\\ydan_8_dd_info.zsi",
+    "size": 136884
+  },
+  {
+    "path": "scene\\ydan_8_info.zsi",
+    "size": 136744
+  },
+  {
+    "path": "scene\\ydan_9_dd_info.zsi",
+    "size": 443036
+  },
+  {
+    "path": "scene\\ydan_9_info.zsi",
+    "size": 443028
+  },
+  {
+    "path": "scene\\ydan_boss_0_info.zsi",
+    "size": 442868
+  },
+  {
+    "path": "scene\\ydan_boss_1_info.zsi",
+    "size": 308496
+  },
+  {
+    "path": "scene\\ydan_boss_info.zsi",
+    "size": 4144
+  },
+  {
+    "path": "scene\\ydan_boss.zar",
+    "size": 1192
+  },
+  {
+    "path": "scene\\ydan_dd_info.zsi",
+    "size": 68884
+  },
+  {
+    "path": "scene\\ydan_dd.zar",
+    "size": 167624
+  },
+  {
+    "path": "scene\\ydan_info.zsi",
+    "size": 68900
+  },
+  {
+    "path": "scene\\ydan.zar",
+    "size": 167624
+  },
+  {
+    "path": "scene\\yousei_izumi_tate_0_info.zsi",
+    "size": 290952
+  },
+  {
+    "path": "scene\\yousei_izumi_tate_info.zsi",
+    "size": 16124
+  },
+  {
+    "path": "scene\\yousei_izumi_tate.zar",
+    "size": 165496
+  },
+  {
+    "path": "scene\\yousei_izumi_yoko_0_info.zsi",
+    "size": 440112
+  },
+  {
+    "path": "scene\\yousei_izumi_yoko_info.zsi",
+    "size": 34936
+  },
+  {
+    "path": "scene\\yousei_izumi_yoko.zar",
+    "size": 190344
+  },
+  {
+    "path": "scene\\zoora_0_info.zsi",
+    "size": 133044
+  },
+  {
+    "path": "scene\\zoora_info.zsi",
+    "size": 1124
+  },
+  {
+    "path": "scene\\zoora.zar",
+    "size": 165332
+  },
+  {
+    "path": "sound\\QueenSound.bcsar",
+    "size": 7023928
+  },
+  {
+    "path": "sound\\QueenStream.bcsar",
+    "size": 544
+  },
+  {
+    "path": "sound\\stream\\STRM_QUEEN_ROLL.bcstm",
+    "size": 5710176
+  }
+]

@@ -1,0 +1,161 @@
+{
+  "format": "oot3d_hybrid_source_migration_v1",
+  "qualified_baseline": {
+    "source_commit": "73eb59dd70b79b145eb263d22cc387d7cc1b69e1",
+    "executable": "F:/oot3dre_build/native-renderer-llvm/oot3d_native_game_source_overlay.exe",
+    "renderer": "nri_vulkan",
+    "role": "boot_and_gameplay_oracle"
+  },
+  "dispatch_precedence": [
+    "topscreen_ui_source_port",
+    "hot_source_overlay_dll",
+    "whole_aot_fallback"
+  ],
+  "migration_defaults": {
+    "gameplay_timing": "native30_no_interpolation",
+    "source_gameplay_profile": false,
+    "source_csab_curves": false,
+    "typed_gameplay": false,
+    "source_overlay_dll": true,
+    "manual_cpp_services": false,
+    "whole_aot_fallback": true,
+    "mass_aot": false,
+    "true_aot_blocks": false
+  },
+  "promoted_sets": {
+    "hot_source_overlay_dll": {
+      "status": "active",
+      "entry_count": 15,
+      "implementation": "tools/oot3d/source_overlay",
+      "verification": "tools/oot3d/source_overlay/oot3d_source_overlay_loader_tests.cpp",
+      "entries": [
+        { "address": "0x0034322C", "owner": "runtime.memory", "name": "Lib_MemSet" },
+        { "address": "0x0034325C", "owner": "runtime.memory", "name": "Oot3d_ClearTenBytes" },
+        { "address": "0x00343270", "owner": "runtime.memory", "name": "oot3d_memclear_counted_8byte_entries" },
+        { "address": "0x00343280", "owner": "runtime.memory", "name": "oot3d_memclear" },
+        { "address": "0x0034338C", "owner": "runtime.memory", "name": "oot3d_memcpy_end" },
+        { "address": "0x00371738", "owner": "runtime.memory", "name": "oot3d_memcpy_aligned_end" },
+        { "address": "0x00417014", "owner": "game_state_update", "name": "GameState_Update" },
+        { "address": "0x00417024", "owner": "game_state_update", "name": "GameState_Update_continuation" },
+        { "address": "0x002C5BA0", "owner": "cutscene_process_commands", "name": "Cutscene_ProcessCommands" },
+        { "address": "0x00321F50", "owner": "cutscene_frame_owner", "name": "Cutscene_UpdateFrame" },
+        {
+          "address": "0x00435C54",
+          "owner": "ui.pause.items",
+          "name": "PauseItemsPage_InitializeState",
+          "source_contract": "tools/oot3d/source_native_runtime/source_overlays/boot_contracts/state_observer_return_00435c54.c",
+          "evidence_revision": "8f00bb640074dc8fbbe3f144406fc87a8b4dd445",
+          "verification": "tools/oot3d/source_overlay/oot3d_source_overlay_loader_tests.cpp"
+        },
+        {
+          "address": "0x00303B14",
+          "owner": "boot.leaves",
+          "name": "memset",
+          "source_contract": "tools/oot3d/source_native_runtime/source_overlays/boot_contracts/memset_00303b14.c",
+          "evidence_revision": "8f00bb640074dc8fbbe3f144406fc87a8b4dd445",
+          "verification": "tools/oot3d/source_overlay/oot3d_source_overlay_loader_tests.cpp"
+        },
+        {
+          "address": "0x003FFB7C",
+          "owner": "boot.leaves",
+          "name": "MemoryStreamDestructor",
+          "source_contract": "tools/oot3d/source_native_runtime/source_overlays/boot_contracts/owner_destructor_family_8f00bb64.c",
+          "evidence_revision": "8f00bb640074dc8fbbe3f144406fc87a8b4dd445",
+          "verification": "tools/oot3d/source_overlay/oot3d_source_overlay_loader_tests.cpp"
+        },
+        {
+          "address": "0x003084E8",
+          "owner": "animation.csab",
+          "name": "Oot3d_EvalAnimationCurveS16",
+          "source_import": "csab_curve_eval_d5c2927",
+          "verification": "tools/oot3d/source_overlay/oot3d_source_overlay_loader_tests.cpp"
+        },
+        {
+          "address": "0x003087A4",
+          "owner": "animation.csab",
+          "name": "Oot3d_EvalAnimationCurveF32",
+          "source_import": "csab_curve_eval_d5c2927",
+          "verification": "tools/oot3d/source_overlay/oot3d_source_overlay_loader_tests.cpp"
+        }
+      ]
+    }
+  },
+  "accepted_pending_sets": {
+    "validated_source_gameplay_profile": {
+      "status": "accepted_inventory_partially_composed",
+      "entry_count": 8,
+      "selection_contract": "tools/oot3d/native_game_runtime/oot3d_source_gameplay_profile.h",
+      "verification": "tools/oot3d/native_game_runtime/oot3d_source_gameplay_profile_tests.cpp",
+      "entries": [
+        { "address": "0x00417014", "owner": "game_state_update", "name": "GameState_Update", "source_import": null },
+        { "address": "0x0044E7C0", "owner": "game_state_renderer_initializer", "name": "Actor_InitContext", "source_import": "actor_init_context_d5c2927" },
+        { "address": "0x00461344", "owner": "actor_update_all", "name": "Actor_UpdateAll", "source_import": "actor_update_all_449e219e" },
+        { "address": "0x00321F50", "owner": "cutscene_frame_owner", "name": "Cutscene_UpdateFrame", "source_import": "cutscene_update_frame_d5c2927" },
+        { "address": "0x002C5BA0", "owner": "cutscene_process_commands", "name": "Cutscene_ProcessCommands", "source_import": "cutscene_process_commands_d5c2927" },
+        { "address": "0x002D84C4", "owner": "camera_update", "name": "Camera_Update", "source_import": "camera_update_d5c2927" },
+        { "address": "0x001E1B54", "owner": "player_update", "name": "Player_Update", "source_import": "player_update_d5c2927" },
+        { "address": "0x00250AD0", "owner": "player_update_common", "name": "Player_UpdateCommon", "source_import": "player_update_common_d5c2927" }
+      ]
+    },
+    "validated_csab_source_leaves": {
+      "status": "accepted_promoted_hot_overlay",
+      "promoted_entries": [
+        "0x003084E8",
+        "0x003087A4"
+      ],
+      "entry_count": 2,
+      "source_import": "csab_curve_eval_d5c2927",
+      "entries": [
+        { "address": "0x003084E8", "name": "Oot3d_EvalAnimationCurveS16" },
+        { "address": "0x003087A4", "name": "Oot3d_EvalAnimationCurveF32" }
+      ]
+    },
+    "reviewed_typed_gameplay": {
+      "status": "reviewed_pending_hot_composition",
+      "entry_count": 9,
+      "manifest": "tools/oot3d/source_integration/consumer_semantic_overlays.json",
+      "entries": [
+        "0x00417014",
+        "0x002D644C",
+        "0x002FFA20",
+        "0x00465304",
+        "0x00334354",
+        "0x0047C938",
+        "0x0047CCDC",
+        "0x0047955C",
+        "0x0047AF24"
+      ]
+    }
+  },
+  "preserved_pending_sets": {
+    "source_native_boot_contracts": {
+      "status": "preserved_pending_hybrid_adapter",
+      "entry_count": 18,
+      "pending_entry_count": 15,
+      "promoted_entries": [
+        "0x00435C54",
+        "0x00303B14",
+        "0x003FFB7C"
+      ],
+      "checkpoint_commit": "243cc5632",
+      "manifest": "tools/oot3d/source_native_runtime/source_overlays/boot_contracts/overlays.json",
+      "reason": "Validated source-native target contracts are retained. Entries listed as promoted have acquired a mixed-boundary adapter; every other contract remains pending."
+    },
+    "source_native_startup_closure": {
+      "status": "preserved_standalone_target",
+      "checkpoint_commit": "243cc5632",
+      "manifest": "tools/oot3d/source_native_runtime/source_imports/startup_8f00bb64/import_manifest.json",
+      "reason": "This remains the final no-A32 composition root and is not used as a replacement for the working hybrid boot until its owner boundaries are promoted."
+    }
+  },
+  "fallback": {
+    "backend": "whole_aot",
+    "required": true,
+    "policy": "Every target not present in an active validated source set remains on whole-AOT; rejected source preconditions must return without mutating guest state."
+  },
+  "verification_commands": [
+    "python tools/oot3d/source_overlay/validate_hybrid_migration_manifest.py",
+    "powershell -ExecutionPolicy Bypass -File scripts/oot3d/Build-Oot3dSourceOverlay.ps1 -RunTests",
+    "powershell -ExecutionPolicy Bypass -File scripts/oot3d/Invoke-Oot3dSourceOverlayGame.ps1 -Frames 6"
+  ]
+}

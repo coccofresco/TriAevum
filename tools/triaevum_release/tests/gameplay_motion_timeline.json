@@ -1,0 +1,10 @@
+{
+  "schema": "oot3d.native_game.input_timeline.v1",
+  "frame_origin": "run",
+  "segments": [
+    { "start_frame": 0, "end_frame_exclusive": 120 },
+    { "start_frame": 120, "end_frame_exclusive": 210, "circle_y": 1 },
+    { "start_frame": 210, "end_frame_exclusive": 285, "circle_x": 1 },
+    { "start_frame": 285, "end_frame_exclusive": 360, "circle_x": -1 }
+  ]
+}

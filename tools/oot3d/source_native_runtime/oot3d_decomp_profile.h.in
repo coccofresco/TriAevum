@@ -1,0 +1,33 @@
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+#include <string_view>
+
+namespace Oot3dSourceRuntime {
+
+struct DecompProfile {
+    std::string_view ProfileId;
+    std::string_view Revision;
+    std::string_view SourceLane;
+    std::size_t CanonicalSourceCount;
+    std::size_t TargetEntryCount;
+    std::string_view TitleId;
+    std::string_view ProductCode;
+    std::string_view CodeBinSha256;
+    std::uint32_t CodeLoadAddress;
+};
+
+inline constexpr DecompProfile kDecompProfile{
+    "@OOT3D_DECOMP_PROFILE_ID@",
+    "@OOT3D_DECOMP_REVISION@",
+    "@OOT3D_DECOMP_SOURCE_LANE@",
+    @OOT3D_DECOMP_SOURCE_COUNT@,
+    @OOT3D_DECOMP_TARGET_ENTRY_COUNT@,
+    "@OOT3D_DECOMP_TITLE_ID@",
+    "@OOT3D_DECOMP_PRODUCT_CODE@",
+    "@OOT3D_DECOMP_CODE_BIN_SHA256@",
+    @OOT3D_DECOMP_CODE_LOAD_ADDRESS@
+};
+
+} // namespace Oot3dSourceRuntime

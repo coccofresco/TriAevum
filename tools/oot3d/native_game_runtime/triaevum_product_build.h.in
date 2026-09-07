@@ -1,0 +1,5 @@
+#pragma once
+
+inline constexpr const char* kTriAevumSourceCommit = "@GIT_COMMIT_HASH@";
+inline constexpr bool kTriAevumProductPlugin = @TRIAEVUM_PRODUCT_PLUGIN@ != 0;
+inline constexpr bool kTriAevumProductNri = @TRIAEVUM_PRODUCT_NRI@ != 0;

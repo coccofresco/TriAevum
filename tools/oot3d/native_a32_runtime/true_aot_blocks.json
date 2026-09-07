@@ -1,0 +1,24 @@
+{
+  "format": "oot3d_true_aot_blocks_v1",
+  "blocks": [
+    {
+      "end_pc": 3180876,
+      "pc": 3180816,
+      "symbol": "NativeCurve_SampleFloat.scan_type2_keys"
+    },
+    {
+      "end_pc": 3161272,
+      "entry_points": [
+        3161200,
+        3161260
+      ],
+      "pc": 3161200,
+      "symbol": "FUN_00303B24.copy_u32x16_region"
+    },
+    {
+      "end_pc": 3295172,
+      "pc": 3295152,
+      "symbol": "BgCheck_LineTestImpl.clear_bytes"
+    }
+  ]
+}

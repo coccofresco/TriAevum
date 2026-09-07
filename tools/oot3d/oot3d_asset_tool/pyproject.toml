@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oot3d-asset-tool"
+version = "0.1.0"
+description = "Offline converter and inspector for native Ocarina of Time 3D assets"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+oot3d-assets = "oot3d_asset_tool.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

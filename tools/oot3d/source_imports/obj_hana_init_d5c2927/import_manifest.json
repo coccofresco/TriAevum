@@ -1,0 +1,56 @@
+{
+  "format": "oot3d_source_callback_import_v1",
+  "callback": "ObjHana_Init",
+  "entry": "0x001E1734",
+  "snapshot_id": "d5c292708f7f-3819f4804b32",
+  "producer_revision": "d5c292708f7f25f921a066449db3cea43fad73c4",
+  "producer_source": "src/recovered/z_expanded_recovery_cohort_01.c",
+  "producer_definition": "oot3d_recovered_001e1734_ObjHana_Init",
+  "code_bin_sha256": "16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220",
+  "body": {
+    "range": "0x001E1734-0x001E1817",
+    "size": 228,
+    "sha256": "bfeba6d594858a59a92cc19ef22e4f72dfc6e08b33b38ea53aa89cd64c0af801"
+  },
+  "dependency_bodies": {
+    "Actor_LoadModelList": {
+      "range": "0x00372F38-0x0037305B",
+      "size": 292,
+      "sha256": "0bba419749c9f7ed9f20e8cfdb2a755dce7d4c9e8bd4c565e188e0259d2411bc"
+    }
+  },
+  "literal_cells": {
+    "0x001E1818": "0x005350D4",
+    "0x001E181C": "0x00535104",
+    "0x001E1820": "0x0053509C",
+    "0x001E1824": "0x00535094",
+    "0x001E1828": "0x00588758",
+    "0x0037305C": "0x00003A64",
+    "0x00373060": "0x0055A21C",
+    "0x00373064": "0x005BE5B8",
+    "0x00373070": "0x0050C058"
+  },
+  "consumer_lowering": [
+    "checked 32-bit guest-address resolution",
+    "target-address dispatch for all eight direct dependencies",
+    "hard-float Actor_SetScale ABI",
+    "exact 0x18 callback frame above the Actor_UpdateAll owner frame",
+    "target model-record selection and event-bit semantics",
+    "source Actor_LoadModelList with target ZAR and virtual-factory calls",
+    "finite CTR SleepThread completion through the synchronous owner-call contract"
+  ],
+  "runtime_validation": {
+    "report": "I:/oot3dre_work/native_game/actor_init_context_source_smoke_10380_objhana.json",
+    "report_sha256": "44dcac6bea9a601cc0f0bde8b412bcea44181d0b9f3f5cf23b25d932f63ac8ef",
+    "native30_frames": 120,
+    "actor_update_all_owner_calls": 119,
+    "nested_guest_calls": 36056,
+    "source_obj_hana_init_calls": 1,
+    "source_callback_failures": 0,
+    "owner_failures": 0
+  },
+  "files": {
+    "include/oot3d/obj_hana_init_owner.h": "d071225e2aa9b2969b9e3c4f4a67bde407452efcfc36cac93042e5b456a0bc3b",
+    "src/code/z_obj_hana_init_owner.cpp": "16dfa60a6114ce7c3725db45e30e86b0f054cd79c61bb7645912af45cbe7877c"
+  }
+}
