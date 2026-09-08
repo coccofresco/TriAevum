@@ -3,7 +3,7 @@
 A native PC AOT recompilation of *The Legend of Zelda: Ocarina of Time 3D*,
 with a modern NRI/Vulkan renderer, single-screen UI and customizable graphics.
 
-**[Download v0.6.0-alpha.1b for Windows x64](https://github.com/coccofresco/TriAevum/releases/tag/v0.6.0-alpha.1b)**
+**[Download v0.6.0-alpha.1c for Windows x64](https://github.com/coccofresco/TriAevum/releases/tag/v0.6.0-alpha.1c)**
 
 ## About
 
@@ -24,15 +24,8 @@ Requires Windows x64, a Vulkan-capable GPU with current drivers, and your own
 supported decrypted ROM. Forge accepts `.3ds` and `.cci` and checks the contents,
 not just the filename.
 
-| Input | Compatibility |
-| --- | --- |
-| European original release, `CTR-P-AQEP` | The previously supported input; not EUR Rev 1. |
-| Tested USA input, `CTR-P-AQEE` | New experimental install-time adapter; English, French and Spanish resources. |
-
-See **[exact ROM identification and checksums](docs/TRIAEVUM_SUPPORTED_ROM.md)**.
-USA support covers the verified input, not every dump labelled "USA Rev 1".
-Forge adapts it locally to the existing EUR execution contract; this is not a
-separate USA executable or a guarantee of identical regional behavior.
+It should work with any standard decrypted EUR or USA ROM, including Rev 1.
+See [ROM compatibility details](docs/TRIAEVUM_CONTENT_FAMILY_IMPORT.md).
 
 1. Download the **Windows-x64 ZIP**, not GitHub's source-code archive, and
    extract it into a writable folder.
