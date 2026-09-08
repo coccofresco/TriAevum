@@ -69,6 +69,11 @@ class PrecompiledTitleTests(unittest.TestCase):
             build.assert_not_called()
             extract.assert_not_called()
 
+    def test_unbound_content_family_cannot_bypass_catalog(self):
+        self.recipe['data_compatibility'] = {'format': 'unbound'}
+        with self.assertRaisesRegex(ValueError, 'content family differs'):
+            select_title(self.root, self.recipe)
+
     def test_duplicate_and_path_escape_rejected(self):
         self.catalog["titles"] *= 2
         atomic_write_json(self.root / CATALOG, self.catalog)

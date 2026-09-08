@@ -85,7 +85,13 @@ def adapt_extracted_inputs(extracted: ExtractedTitleInputs, recipe: dict, *, roo
             raise ValueError(f"Adapter {kind} source is not a regular file")
         original[kind] = {"bytes": item.path.stat().st_size, "sha256": sha256_file(item.path)}
     if original != adapter["source_inputs"]:
-        raise ValueError("Adapter source identity mismatch")
+        try:
+            from .data_compatibility import verify
+        except ImportError:
+            from data_compatibility import verify
+        if recipe.get('data_compatibility') is None:
+            raise ValueError("Adapter source identity mismatch")
+        verify(recipe, {kind: item.path for kind, item in extracted.by_kind().items()}, phase='source')
     output = output.resolve()
     if any(item.path.resolve().is_relative_to(output) for item in extracted.by_kind().values()):
         raise ValueError("Adapter output must not contain the source inputs")
@@ -100,7 +106,13 @@ def adapt_extracted_inputs(extracted: ExtractedTitleInputs, recipe: dict, *, roo
             files[kind] = ExtractedFile(path, path.stat().st_size, sha256_file(path))
         actual = {kind: {"bytes": item.bytes, "sha256": item.sha256} for kind, item in files.items()}
         if actual != recipe["inputs"]:
-            raise ValueError("Normalized input identity mismatch; title was not activated")
+            try:
+                from .data_compatibility import verify
+            except ImportError:
+                from data_compatibility import verify
+            if recipe.get('data_compatibility') is None:
+                raise ValueError("Normalized input identity mismatch; title was not activated")
+            verify(recipe, {kind: item.path for kind, item in files.items()}, phase='execution')
         receipt = {"format": "triaevum_input_adaptation_receipt_v1", "recipe": recipe["id"],
                    "program_id": f"{extracted.program_id:016X}",
                    "source_inputs": original, "execution_inputs": actual,

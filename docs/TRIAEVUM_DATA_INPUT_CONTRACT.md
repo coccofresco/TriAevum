@@ -1,5 +1,10 @@
 # Container-independent player inputs
 
+The main ROM-only workflow now also implements
+[content-family recognition](TRIAEVUM_CONTENT_FAMILY_IMPORT.md). Directory import
+is optional, not a prerequisite for the player. Qualified equivalent ExHeaders
+and RomFS layouts no longer require an exact additional recipe per image.
+
 ## Implemented
 
 Forge can import an extracted directory through `Use extracted data...`, or

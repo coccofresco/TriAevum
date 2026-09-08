@@ -274,6 +274,16 @@ def verify_sources(
     if not isinstance(contracts, dict):
         raise ForgeError("revision recipe input contracts are malformed")
     paths = {"code": code_path, "exheader": exheader_path, "romfs": romfs_path}
+    if recipe.get('data_compatibility') is not None:
+        try:
+            from .data_compatibility import verify as verify_family
+        except ImportError:
+            from data_compatibility import verify as verify_family
+        actual = {kind: {'bytes': path.stat().st_size, 'sha256': cache.digest(path)}
+                  for kind, path in paths.items()}
+        if actual != contracts:
+            verify_family(recipe, paths, phase='execution')
+            contracts = actual
     verified: dict[str, VerifiedInput] = {}
     for kind, path in paths.items():
         contract = contracts.get(kind)

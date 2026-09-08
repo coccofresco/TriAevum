@@ -108,6 +108,18 @@ def match_extracted_recipe(
         ):
             matches.append(recipe)
     if not matches:
+        try:
+            from .data_compatibility import expected, identity
+        except ImportError:
+            from data_compatibility import expected, identity
+        candidates = [recipe for recipe in recipes if isinstance(recipe, dict)
+                      and expected(recipe, 'source') is not None
+                      and expected(recipe, 'source')['code'] == {
+                          'bytes': extracted.code.bytes, 'sha256': extracted.code.sha256}]
+        if candidates:
+            actual_family = identity({kind: item.path for kind, item in actual.items()})
+            matches = [recipe for recipe in candidates if expected(recipe, 'source') == actual_family]
+    if not matches:
         raise forge.ForgeError(
             "the decrypted ROM does not match any supported game revision "
             f"(program ID {extracted.program_id:016X})"

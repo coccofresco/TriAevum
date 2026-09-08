@@ -61,6 +61,14 @@ def select_title(root: Path, recipe: dict, *, catalog: dict | None = None) -> di
         raise ValueError("Precompiled title revision/ABI does not match the ROM recipe")
     if item.get("input_adapter") != recipe.get("input_adapter"):
         raise ValueError("Precompiled title input adapter differs from the revision recipe")
+    if item.get('data_compatibility') != recipe.get('data_compatibility'):
+        raise ValueError('Precompiled title content family differs from the recipe')
+    if recipe.get('data_compatibility') is not None:
+        try:
+            from .data_compatibility import expected
+        except ImportError:
+            from data_compatibility import expected
+        expected(recipe, 'execution')
     if recipe.get("input_adapter") is not None:
         try:
             from .input_adapters import validate_adapter
@@ -91,11 +99,18 @@ def install_precompiled_title(prepared_directory: Path, *, root: Path, recipe: d
     prepared = forge.load_prepared_content(prepared_directory, required_inputs=("code", "exheader", "romfs"))
     if prepared.index.get("recipe") != item["recipe"]:
         raise ValueError("Prepared title differs from the precompiled revision")
+    mismatch = False
     for kind in ("code", "exheader", "romfs"):
         actual = prepared.inputs[kind]
         expected = item["inputs"][kind]
         if actual.sha256 != expected["sha256"] or actual.bytes != expected["bytes"]:
-            raise ValueError(f"Prepared {kind} differs from the precompiled revision")
+            mismatch = True
+    if mismatch:
+        try:
+            from .data_compatibility import verify
+        except ImportError:
+            from data_compatibility import verify
+        verify(recipe, {kind: value.path for kind, value in prepared.inputs.items()}, phase='execution')
     plugin = checked_file(root, item["plugin"])
     native_module = checked_file(root, catalog["native_module"])
     texture_pack = prepare_topscreen_assets(

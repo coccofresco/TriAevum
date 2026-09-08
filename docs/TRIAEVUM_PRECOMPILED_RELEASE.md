@@ -32,6 +32,11 @@ assets, mod payloads, keys, SDKs, captures and saves are still excluded.
 hashes and sizes, ABI/target, translator identity, runtime and neutral-module
 hashes. It also identifies the translated-source archive and the source snapshot
 used for the title build. The publisher checks the real DLL with the real runtime.
+Post-alpha.1b packages can additionally bind an explicitly qualified
+[content family](TRIAEVUM_CONTENT_FAMILY_IMPORT.md): execution code stays exact,
+while equivalent ExHeader packaging and logical RomFS contents may differ in
+their complete-file identities. Prepared files retain their actual hashes and
+are revalidated against the module-bound family before activation.
 Hash validation is integrity checking, not cryptographic publisher authentication.
 
 The user requested this distribution policy after discussing the Xbox 360 model.
