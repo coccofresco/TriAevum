@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 try:
-    from . import ctr_rom, forge
+    from . import ctr_rom, forge, extracted_inputs
     from .bundle_paths import installation_path
     from .common import load_json_object
     from .installed_runtime import validate_installed_runtime
@@ -28,6 +28,7 @@ try:
 except ImportError:
     import ctr_rom
     import forge
+    import extracted_inputs
     from bundle_paths import installation_path
     from common import load_json_object
     from installed_runtime import validate_installed_runtime
@@ -163,7 +164,10 @@ def install_private_title(
         root = runtime_path().parent
         catalog = load_catalog(root)
         report("extract", "Extracting native title data from the decrypted ROM...")
-        extracted = ctr_rom.extract_decrypted_rom(request.rom, staging)
+        if request.rom.expanduser().is_dir():
+            extracted = extracted_inputs.stage_directory(request.rom, staging)
+        else:
+            extracted = ctr_rom.extract_decrypted_rom(request.rom, staging)
 
         report("verify", "Identifying and verifying the supported game revision...")
         recipe = match_extracted_recipe(extracted)
@@ -315,7 +319,8 @@ class ForgeWindow:
             text=(
                 "Select your own decrypted Nintendo 3DS cartridge image. Forge "
                 "accepts .3ds and .cci ROMs, extracts the required native data, "
-                "and does not handle encryption keys.\n\n"
+                "and does not handle encryption keys. You can also select a folder "
+                "containing decompressed code.bin, exheader.bin and romfs.bin.\n\n"
                 "Forge will download the official TopScreen package and install its "
                 "modified HUD and menu textures for correct single-screen functionality. "
                 "Internet access is needed unless a verified local copy is already available."
@@ -344,19 +349,22 @@ class ForgeWindow:
             justify="left",
         )
         private_path.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(5, 0))
+        self.ttk.Button(
+            outer, text="Use extracted data...", command=self._browse_extracted
+        ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(5, 0))
 
         separator = self.ttk.Separator(outer)
-        separator.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(18, 14))
+        separator.grid(row=5, column=0, columnspan=3, sticky="ew", pady=(18, 14))
 
         self.status_label = self.ttk.Label(
             outer, textvariable=self.status, wraplength=700, justify="left"
         )
-        self.status_label.grid(row=5, column=0, columnspan=3, sticky="ew")
+        self.status_label.grid(row=6, column=0, columnspan=3, sticky="ew")
         self.progress = self.ttk.Progressbar(outer, mode="indeterminate")
-        self.progress.grid(row=6, column=0, columnspan=3, sticky="ew", pady=(10, 18))
+        self.progress.grid(row=7, column=0, columnspan=3, sticky="ew", pady=(10, 18))
 
         actions = self.ttk.Frame(outer)
-        actions.grid(row=7, column=0, columnspan=3, sticky="ew")
+        actions.grid(row=8, column=0, columnspan=3, sticky="ew")
         actions.columnconfigure(0, weight=1)
         self.install_button = self.ttk.Button(
             actions, text="Prepare and install", command=self._install
@@ -366,6 +374,13 @@ class ForgeWindow:
             actions, text="Launch game", command=self._launch
         )
         self.launch_button.grid(row=0, column=2, padx=(8, 0))
+
+    def _browse_extracted(self) -> None:
+        from tkinter import filedialog
+        selected = filedialog.askdirectory(title="Select extracted title data")
+        if selected:
+            self.rom.set(selected)
+            self._refresh_actions()
 
     def _file_row(
         self,
