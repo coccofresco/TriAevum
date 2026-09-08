@@ -232,7 +232,7 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
 				"${_oot3d_nri_sources}")
 			unset(_oot3d_nri_sources)
 		endif()
-		if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND TARGET NRI_Shared)
+		if(MSVC AND CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND TARGET NRI_Shared)
 			# NRI enables /WX for clang-cl after its Clang suppressions.
 			# Keep /W4 diagnostics, but do not let warnings in the pinned
 			# third-party SDK block a Clang/ThinLTO host build.

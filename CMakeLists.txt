@@ -946,7 +946,7 @@ if(OOT3D_WHOLE_AOT_PRODUCT_MODE)
         target_sources(oot3d_native_a32_process PRIVATE
             tools/oot3d/native_game_runtime/oot3d_native_direct_aot.cpp)
         target_link_libraries(oot3d_native_a32_process PUBLIC
-            oot3d_native_a32_runtime)
+            oot3d_native_a32_runtime ${CMAKE_DL_LIBS})
         target_compile_definitions(oot3d_native_a32_process PRIVATE
             OOT3D_NATIVE_DIRECT_AOT_PLUGIN=1
             OOT3D_NATIVE_GENERATED_WHOLE_AOT=1
@@ -2240,7 +2240,8 @@ endif()
 set_property(TARGET oot3d_native_pica_texture_tests PROPERTY FOLDER Tests)
 
 set(OOT3D_NATIVE_UI_EVIDENCE_ROOT
-    "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/decomp_support/evidence/zelda3drecomp/849140697187b895")
+    "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/decomp_support/evidence/zelda3drecomp/849140697187b895"
+    CACHE PATH "Pinned native UI contract snapshot (contains oot3d_ui)")
 
 add_library(oot3d_ui_topscreen STATIC EXCLUDE_FROM_ALL
     tools/oot3d/ui_topscreen/oot3d_top_screen_config.cpp
@@ -3043,10 +3044,12 @@ target_compile_options(oot3d_native_game_runtime PRIVATE "${WARNING_OVERRIDE}")
 target_link_libraries(oot3d_native_game_runtime PUBLIC
     oot3d_native_asset_runtime
     oot3d_room_compilation_runtime
-    oot3d_native_math
     oot3d_native_audio
     oot3d_native_a32_process
 )
+if(TARGET oot3d_native_math)
+    target_link_libraries(oot3d_native_game_runtime PUBLIC oot3d_native_math)
+endif()
 if (TARGET oot3d_native_a32_aot)
     target_link_libraries(oot3d_native_game_runtime PUBLIC oot3d_native_a32_aot)
     target_compile_definitions(oot3d_native_game_runtime PRIVATE

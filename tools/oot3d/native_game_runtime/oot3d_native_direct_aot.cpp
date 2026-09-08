@@ -7,6 +7,8 @@
 #include <stdexcept>
 #if defined(_WIN32)
 #include <windows.h>
+#elif defined(__linux__)
+#include <dlfcn.h>
 #endif
 
 #include <algorithm>
@@ -20,10 +22,11 @@ namespace {
 
 namespace a32 = oot3d::recomp::a32;
 
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__linux__)
 std::filesystem::path SelectedPlugin;
 bool PluginQueried = false;
 
+#if defined(_WIN32)
 HMODULE TitleModule() noexcept {
   static HMODULE module = []() noexcept -> HMODULE {
     PluginQueried = true;
@@ -43,13 +46,36 @@ HMODULE TitleModule() noexcept {
   }();
   return module;
 }
+#else
+void* TitleModule() noexcept {
+  // ABI tables contain function pointers used for the entire process lifetime.
+  static void* module = []() noexcept -> void* {
+    PluginQueried = true;
+    try {
+      auto path = SelectedPlugin;
+      if (path.empty()) {
+        path = std::filesystem::read_symlink("/proc/self/exe").parent_path() /
+               "triaevum_title_aot.so";
+      }
+      return dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL);
+    } catch (...) {
+      return nullptr;
+    }
+  }();
+  return module;
+}
+#endif
 
 template <class Result>
 const Result* QueryTitle(const char* name, uint32_t abi) noexcept {
   auto module = TitleModule();
   if (!module) return nullptr;
   auto query = reinterpret_cast<const Result* (*)(uint32_t) noexcept>(
+#if defined(_WIN32)
       GetProcAddress(module, name));
+#else
+      dlsym(module, name));
+#endif
   return query ? query(abi) : nullptr;
 }
 #endif
@@ -57,7 +83,7 @@ const Result* QueryTitle(const char* name, uint32_t abi) noexcept {
 const Oot3dWholeAotProgramV2 *WholeAotProgram() noexcept {
   static const Oot3dWholeAotProgramV2 *program = []() noexcept {
     const Oot3dWholeAotProgramV2 *candidate =
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__linux__)
         QueryTitle<Oot3dWholeAotProgramV2>("triaevum_title_whole_aot_query", kOot3dWholeAotPluginAbiV2);
 #else
         triaevum_title_whole_aot_query(kOot3dWholeAotPluginAbiV2);
@@ -83,7 +109,7 @@ const Oot3dWholeAotProgramV2 *WholeAotProgram() noexcept {
 const Oot3dDirectAotProgramV1 *DirectAotProgram() noexcept {
   static const Oot3dDirectAotProgramV1 *program = []() noexcept {
     const Oot3dDirectAotProgramV1 *candidate =
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__linux__)
         QueryTitle<Oot3dDirectAotProgramV1>("triaevum_title_aot_query", kOot3dDirectAotPluginAbiV1);
 #else
         triaevum_title_aot_query(kOot3dDirectAotPluginAbiV1);
@@ -180,7 +206,7 @@ bool DispatchDirectAot(const Oot3dDirectAotProgramV1 &program, uint32_t pc,
 } // namespace
 
 void ConfigureTitlePlugin(const std::filesystem::path& path) {
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__linux__)
   if (PluginQueried) throw std::runtime_error("Title plugin was already queried");
   SelectedPlugin = std::filesystem::absolute(path).lexically_normal();
   if (!std::filesystem::is_regular_file(SelectedPlugin))
