@@ -16,6 +16,7 @@ try:
     from .source_archive import create_source_archive
     from .toolchain_setup_layout import setup_layout
     from .precompiled_title_layout import title_layout
+    from .precompiled_variants import add_verified_variants
     from .forge import load_recipe, DEFAULT_RECIPES
 except ImportError:
     from build_forge_binary import build as build_forge
@@ -25,6 +26,7 @@ except ImportError:
     from source_archive import create_source_archive
     from toolchain_setup_layout import setup_layout
     from precompiled_title_layout import title_layout
+    from precompiled_variants import add_verified_variants
     from forge import load_recipe, DEFAULT_RECIPES
 
 
@@ -98,6 +100,10 @@ def prepare(args) -> dict:
         plugin_manifest=args.title_build, generated_manifest=args.title_sources,
         build_source=args.title_build_source, recipe=load_recipe(DEFAULT_RECIPES, args.recipe),
         work=work / "precompiled"))
+    catalog_path = work / "precompiled/precompiled-titles.json"
+    definitions = load_json_object(DEFAULT_RECIPES)
+    catalog, _ = add_verified_variants(load_json_object(catalog_path), definitions, definitions)
+    atomic_write_json(catalog_path, catalog)
     atomic_write_json(layout_path, layout)
     return package_release(layout_path, args.output, source_root=ROOT,
                            version=args.version, source_commit=commit,

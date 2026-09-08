@@ -31,6 +31,39 @@
           "sha256": "e0c143c872ccf4ad72033caab768753b147a4033d260a701204a63ee6bc16df4"
         }
       }
+    },
+    {
+      "id": "oot3d-eur-catalogue-a584b067",
+      "title": "The Legend of Zelda: Ocarina of Time 3D",
+      "region": "EUR (No-Intro original and Rev 1)",
+      "precompiled_base_recipe": "oot3d-eur-project-baseline-16a6b0aa",
+      "inputs": {
+        "code": {
+          "bytes": 4567040,
+          "sha256": "16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220"
+        },
+        "exheader": {
+          "bytes": 2048,
+          "sha256": "a584b067427f81edcca739497ec7b4ce1217eb9612090e6ae5b846e5674d12c1"
+        },
+        "romfs": {
+          "bytes": 479260672,
+          "sha256": "a3ad05dcf12893de5f1617a60f4e80f54f5e1c80069922a96a4f9c8c8cbac8ca"
+        }
+      },
+      "process": {
+        "base": 1048576,
+        "entrypoint": 1048576,
+        "executable_size": 3973120
+      },
+      "optional_inputs": {
+        "topscreen_2_1_1_archive": {
+          "url": "https://gamebanana.com/dl/1772020",
+          "bytes": 179430508,
+          "sha256": "e0c143c872ccf4ad72033caab768753b147a4033d260a701204a63ee6bc16df4"
+        }
+      },
+      "catalogue_records": ["no-intro-3ds-0004", "no-intro-3ds-1168"]
     }
   ]
 }
