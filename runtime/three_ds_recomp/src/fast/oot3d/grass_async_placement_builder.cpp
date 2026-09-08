@@ -4,6 +4,8 @@
 #include <bit>
 #include <chrono>
 #include <condition_variable>
+#include <cstdio>
+#include <cstdlib>
 #include <deque>
 #include <mutex>
 #include <stdexcept>
@@ -101,9 +103,14 @@ std::shared_ptr<const GrassWorldPlacement> Build(const GrassAsyncPlacementReques
     surface.Indices = *request.Indices;
     surface.PlacementView = request.PlacementView;
 
+    const bool diagnose = std::getenv("OOT3D_GRASS_DIAGNOSTICS") != nullptr;
+    const auto started = diagnose ? std::chrono::steady_clock::now()
+                                 : std::chrono::steady_clock::time_point{};
     auto anchors =
         GrassSurfaceExtractor::Extract(surface, request.Rule, request.Generation, *request.Mask, request.Budget);
+    const auto extracted = diagnose ? std::chrono::steady_clock::now() : started;
     auto local = BuildGrassPlacementSet(std::move(anchors), request.ClusterSize);
+    const auto clustered = diagnose ? std::chrono::steady_clock::now() : started;
 
     GrassWorldPlacementRequest world;
     world.Identity = request.WorldIdentity;
@@ -116,7 +123,18 @@ std::shared_ptr<const GrassWorldPlacement> Build(const GrassAsyncPlacementReques
     world.TransformBakedIntoVertices = request.TransformBakedIntoVertices;
     world.NormalOffset = request.NormalOffset;
     world.HeightScale = request.HeightScale;
-    return std::make_shared<const GrassWorldPlacement>(BuildGrassWorldPlacement(world));
+    auto result = std::make_shared<const GrassWorldPlacement>(BuildGrassWorldPlacement(world));
+    if (diagnose) {
+        const auto elapsed = [](auto begin, auto end) {
+            return std::chrono::duration<double, std::milli>(end - begin).count();
+        };
+        std::fprintf(stderr,
+            "[grass-build] source=%llx anchors=%zu clusters=%zu extract_ms=%.3f cluster_ms=%.3f world_ms=%.3f\n",
+            static_cast<unsigned long long>(request.WorldIdentity), local.Anchors.size(), local.Clusters.size(),
+            elapsed(started, extracted), elapsed(extracted, clustered),
+            elapsed(clustered, std::chrono::steady_clock::now()));
+    }
+    return result;
 }
 
 } // namespace

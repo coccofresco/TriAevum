@@ -38,12 +38,18 @@ shader_args=()
 if [[ -f "$runtime/oot3d_pica_default.o3ps" ]]; then
   shader_args+=(--pica-aot-shader-pack "$runtime/oot3d_pica_default.o3ps")
 fi
+capture_args=()
+# Readback deliberately stalls the device. Interactive previews must not pay
+# for periodic captures; opt in explicitly when collecting image evidence.
+if [[ "${TRIAEVUM_CAPTURE_FRAMES:-0}" == 1 ]]; then
+  capture_args+=(--screenshot "$installation/linux-captures/framebuffer.bmp"
+    --screenshot-start-frame 120 --screenshot-interval 300 --screenshot-sequence)
+fi
 # Keep the copied Windows profile unchanged; duplicate plugin options are forbidden.
 timeout --signal=TERM --kill-after=5 "$((seconds + 30))" \
   "$runtime/TriAevum" --launch-profile "$installation/TriAevum.linux.launch.json" \
   "${shader_args[@]}" \
   --frames 0 --max-seconds "$seconds" \
   --output "$installation/linux-captures/runtime.json" \
-  --screenshot "$installation/linux-captures/framebuffer.bmp" \
-  --screenshot-start-frame 120 --screenshot-interval 300 --screenshot-sequence \
+  "${capture_args[@]}" \
   2>&1 | tee "$installation/linux-captures/launch.log"
