@@ -16,13 +16,15 @@ Windows release behavior and artifacts are unchanged by this branch.
 Verified on 2026-09-08: CachyOS x86_64, KDE Wayland, 12 logical CPUs, 15 GiB RAM,
 NVIDIA RTX 4060 (8 GiB), proprietary driver 610.57.04. Vulkan enumerates the
 physical GPU through SSH. Clang 22.1.8, CMake 4.4.2, Ninja, SDL2 and shaderc are
-available. This is not Wine or WSL. No graphical game launch has been verified.
+available. This is not Wine or WSL. Native graphical boot and title animation
+have now been verified through NRI framebuffer captures on this GPU.
 
 First runtime build completed successfully: `~/triaevum-linux-build/TriAevum`
 and `oot3d_game_module.so` are native Linux ELF binaries. `TriAevum --product-info`
 exits 0 and reports NRI/F1/TopScreen enabled, ABI 2, default UI `topscreen`, and
-`private_title_loaded=false`. Explicit validation correctly rejects the empty
-`triaevum_title_aot.so` stub. This is an executable host, not a playable title yet.
+`private_title_loaded=false` without a selected title. Explicit validation
+correctly rejects the empty `triaevum_title_aot.so` stub and accepts the actual
+Linux title with `private_title_loaded=true` and ABI 2.
 The PICA AOT shader pack contains 198 generated modules (schema 3).
 
 Dedicated checkout and outputs on the test machine:
@@ -85,15 +87,83 @@ enabled and its SPIR-V generation has completed using native Linux DXC.
 ## Remaining Acceptance Steps
 
 1. Runtime build is complete; preserve the incremental tree for later changes.
-2. Compile the verified translated title archive into a Linux module, with
-   ABI/layout checks and deterministic floating-point settings.
+2. The verified translated title now compiles into a Linux module and passes
+   runtime ABI validation. Extend verification into interactive gameplay.
 3. Teach publisher catalog and Forge about ELF modules, Linux paths and target
    triples. Do not repurpose Windows binaries or compile on the player path.
-4. Test real boot on the active Wayland desktop, capturing the framebuffer;
-   then verify F1, TopScreen, audio, input and a playable save.
+4. Boot/title framebuffer verification is complete. Manually verify F1,
+   TopScreen controls, audible output and a playable save on Linux.
 5. Recover SSSR and check optional-provider capability reporting. Benchmark
    native and interpolated frame rates separately on the physical GPU.
 6. Produce a clean-install Linux package and correct source-package omissions.
 
 Never include personal ROMs, extracted assets, savestates or private inputs in
 Git or public artifacts. Service test success is not evidence of a game boot.
+
+## Publisher Title Build
+
+`tools/triaevum_release/linux_title` builds the already-published translated
+source, not a new translation. Configure-time SHA-256 checks validate every
+declared source/header in `TITLE_SOURCE_MANIFEST.json`. Clang uses strict
+floating point; hidden ELF symbols prevent internal title functions from
+interposing on the host's identically named helpers. Only ABI query exports
+are public title entry points. The linker rejects unresolved symbols.
+
+```sh
+cmake -S tools/triaevum_release/linux_title -B ../triaevum-linux-title-build \
+  -G Ninja -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_PREFIX_PATH="$HOME/triaevum-linux-deps/prefix" \
+  -DTRIAEVUM_TRANSLATED_TITLE_DIR="$HOME/triaevum-linux-deps/title-source"
+cmake --build ../triaevum-linux-title-build --parallel 3
+```
+
+This publisher build intentionally remains outside end-user Forge. Keep the
+incremental objects. Do not replace the stub in the runtime build tree: select
+the real title explicitly with `--title-plugin`.
+
+The bounded native desktop test reuses a separate copy of a prepared personal
+installation (relative data paths and configuration), overriding only the title
+library. It imports display routing from the logged-in user's desktop session:
+
+```sh
+bash scripts/run-linux-title.sh "$HOME/triaevum-linux-play" \
+  "$HOME/triaevum-linux-build" "$HOME/triaevum-linux-title-build" 60
+```
+
+Captures and logs are under that private installation's `linux-captures`.
+This is a developer bring-up workflow, not the final Linux Forge package.
+
+## Native Boot Evidence (2026-09-08)
+
+Title module: `~/triaevum-linux-title-build/triaevum_title_aot.so`, 85,548,248 bytes,
+SHA-256 `b305d574f815f365d7a73a582c020cd435f7ab2741accfa9638dced833a2097c`.
+All 12,419 published functions were compiled from the unchanged translated
+source manifest (256 shards plus registry). No new decompilation or translation.
+
+- First run: normal exit after 45 seconds; framebuffer samples at 120, 420,
+  720 show Hyrule Field, moon/sky and Link riding Epona. Native rendering plus
+  grass and toon are visible. Peak frame interval: 20.764 seconds.
+- Second run: normal exit after 80 seconds, with the 198-module PICA pack enabled.
+  Later captures show the full title/logo and subsequent animated shots. The
+  pack resolved 52 shader requests; 86 missed and used the normal runtime
+  compiler (extensions alter effective shader variants). Peak interval remained
+  14.341 seconds. AOT-pack selection alone does not solve graphics stalls.
+- Audio diagnostics: DSP enabled, host output enabled and initialized, nonzero
+  PCM samples at 32,728 Hz. This verifies the output path, not listening quality.
+- Default configuration retained TopScreen, 2x visual interpolation, 1.10 FOV,
+  toon and grass. Save data and configuration were copied to a separate test
+  installation; the Windows originals were not changed.
+- Four additional profile-preparation tests pass: preserve original profile,
+  reject duplicate/missing plugin arguments, reject missing library.
+
+Private Windows evidence copies:
+`I:/oot3dre_work/linux-port-proof/linux-captures` (first run), and
+`I:/oot3dre_work/linux-port-proof/second-run` (second summary, log, late capture).
+Latest complete captures remain in the Linux test installation.
+
+Performance is **not accepted yet**: these are paced, vsync-enabled capture runs
+with cold shader/pipeline work and interpolation. Their aggregate presentation
+rates (18.4 and 35.0 FPS) are not native simulation throughput measurements.
+Guest execution took 2.07/9.34 seconds versus 35.76/49.44 seconds in the graphics
+backend across the two runs. Profile shader/pipeline creation and steady-state
+rendering before changing title execution or claiming a 60 FPS result.
