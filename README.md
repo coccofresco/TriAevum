@@ -24,7 +24,8 @@ Requires Windows x64, a Vulkan-capable GPU with current drivers, and your own
 supported decrypted ROM. Forge accepts `.3ds` and `.cci` and checks the contents,
 not just the filename.
 
-It should work with any standard decrypted EUR or USA ROM, including Rev 1.
+It should work with any personal EUR or USA ROM dump, provided it is decrypted
+and in `.cci` or `.3ds` format.
 See [ROM compatibility details](docs/TRIAEVUM_CONTENT_FAMILY_IMPORT.md).
 
 1. Download the **Windows-x64 ZIP**, not GitHub's source-code archive, and
