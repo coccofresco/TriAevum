@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from ctr_rom import ExtractedFile, ExtractedTitleInputs
+from release_platform import host_platform
 from forge_gui import (
     InstallRequest,
     install_private_title,
@@ -96,7 +97,7 @@ class ForgeGuiTests(unittest.TestCase):
         )
         self.assertEqual(
             build.call_args.kwargs["runtime_plugin"].name,
-            "triaevum_title_aot.dll",
+            host_platform().title_module,
         )
         self.assertEqual(
             build.call_args.kwargs["launch_profile"].name,

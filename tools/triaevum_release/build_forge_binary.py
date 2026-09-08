@@ -129,7 +129,13 @@ def build(
     *,
     python: Path,
     nlohmann_include: Path | None = None,
+    bundle_mode: str | None = None,
 ) -> Path:
+    # Linux directory bundles start without unpacking into /tmp (which can be
+    # noexec) and keep the GUI/worker interpreter beside their shared libraries.
+    bundle_mode = bundle_mode or ("onefile" if sys.platform == "win32" else "onedir")
+    if bundle_mode not in ("onefile", "onedir"):
+        raise ValueError("Forge bundle mode must be onefile or onedir")
     output = output.resolve()
     work = work.resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -140,9 +146,7 @@ def build(
         "PyInstaller",
         "--noconfirm",
         "--clean",
-        "--onefile",
-        "--runtime-tmpdir",
-        ".triaevum-forge-runtime",
+        f"--{bundle_mode}",
         "--name",
         "TriAevumForge",
         "--distpath",
@@ -160,17 +164,20 @@ def build(
         "--hidden-import",
         "tkinter",
     ]
+    if bundle_mode == "onefile" and sys.platform == "win32":
+        command.extend(("--runtime-tmpdir", ".triaevum-forge-runtime"))
     separator = ";" if sys.platform == "win32" else ":"
     for source, destination in required_data(nlohmann_include):
         command.extend(("--add-data", f"{source}{separator}{destination}"))
     command.append(str(REPO_ROOT / "tools/triaevum_release/forge_entry.py"))
     subprocess.run(command, cwd=REPO_ROOT, check=True)
-    executable = output / (
+    executable_root = output / "TriAevumForge" if bundle_mode == "onedir" else output
+    executable = executable_root / (
         "TriAevumForge.exe" if sys.platform == "win32" else "TriAevumForge"
     )
     completed = subprocess.run(
         [str(executable), "doctor", "--inventory"],
-        cwd=output,
+        cwd=executable_root,
         check=True,
         capture_output=True,
         text=True,
@@ -189,12 +196,14 @@ def main() -> int:
     parser.add_argument("--work", type=Path, required=True)
     parser.add_argument("--python", type=Path, default=Path(sys.executable))
     parser.add_argument("--nlohmann-include", type=Path)
+    parser.add_argument("--bundle-mode", choices=("onefile", "onedir"))
     args = parser.parse_args()
     executable = build(
         args.output,
         args.work,
         python=args.python,
         nlohmann_include=args.nlohmann_include,
+        bundle_mode=args.bundle_mode,
     )
     print(executable)
     return 0

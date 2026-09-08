@@ -1,18 +1,34 @@
-"""Bind the installation worker tree to its process lifetime on Windows."""
+"""Keep background installation bound to its GUI owner, on Windows and Linux."""
 
 import ctypes
 import os
 import threading
+import select
+import sys
 from ctypes import wintypes
 
 _job = None
 
 
 def watch_owner(owner_pid: int) -> None:
-    if os.name != "nt":
-        return
     if owner_pid <= 0 or owner_pid == os.getpid():
         raise ValueError("Invalid worker owner PID")
+    if sys.platform.startswith("linux"):
+        # A pidfd tracks this process instance, so PID reuse cannot keep a
+        # detached installer alive. The worker does not need elevated privileges.
+        descriptor = os.pidfd_open(owner_pid, 0)
+        def monitor_linux():
+            try:
+                poller = select.poll()
+                poller.register(descriptor, select.POLLIN)
+                poller.poll()
+                os._exit(125)
+            finally:
+                os.close(descriptor)
+        threading.Thread(target=monitor_linux, name="ForgeOwnerLifetime", daemon=True).start()
+        return
+    if os.name != "nt":
+        return
     kernel = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
     kernel.OpenProcess.restype = wintypes.HANDLE

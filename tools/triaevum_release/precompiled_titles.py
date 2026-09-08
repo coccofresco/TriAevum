@@ -8,9 +8,11 @@ from typing import Any, Callable
 try:
     from .common import load_json_object, normalize_relative_path, sha256_file
     from .activation_transaction import activation_transaction
+    from .release_platform import catalog_platform, host_platform
 except ImportError:
     from common import load_json_object, normalize_relative_path, sha256_file
     from activation_transaction import activation_transaction
+    from release_platform import catalog_platform, host_platform
 
 
 FORMAT = "triaevum_precompiled_titles_v1"
@@ -38,7 +40,8 @@ def load_catalog(root: Path) -> dict:
     payload = load_json_object(root / CATALOG)
     if payload.get("format") != FORMAT or payload.get("install_model") != MODEL:
         raise ValueError("Unsupported precompiled-title catalog")
-    for field, expected in (("runtime", "TriAevum.exe"), ("native_module", "forge/oot3d_game_module.dll")):
+    platform = catalog_platform(payload)
+    for field, expected in (("runtime", platform.runtime), ("native_module", platform.native_module)):
         if not isinstance(payload.get(field), dict) or payload[field].get("path") != expected:
             raise ValueError(f"Invalid catalog {field} binding")
     titles = payload.get("titles")
@@ -52,12 +55,15 @@ def load_catalog(root: Path) -> dict:
 
 def select_title(root: Path, recipe: dict, *, catalog: dict | None = None) -> dict:
     catalog = catalog or load_catalog(root)
+    platform = catalog_platform(catalog)
+    if platform != host_platform():
+        raise ValueError(f"This package targets {platform.target}, not this host")
     matches = [item for item in catalog["titles"] if item["recipe"] == recipe["id"]]
     if len(matches) != 1:
         raise ValueError("No precompiled module for this ROM revision; obtain a compatible release")
     item = matches[0]
     if (item.get("inputs") != recipe.get("inputs") or item.get("abi_version") != 2
-            or item.get("target") != "x86_64-pc-windows-msvc"):
+            or item.get("target") != platform.target):
         raise ValueError("Precompiled title revision/ABI does not match the ROM recipe")
     if item.get("input_adapter") != recipe.get("input_adapter"):
         raise ValueError("Precompiled title input adapter differs from the revision recipe")

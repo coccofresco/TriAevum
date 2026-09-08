@@ -25,6 +25,7 @@ try:
     from .installation_context import resolve_reference
     from .precompiled_titles import load_catalog, select_title, install_precompiled_title
     from .input_adapters import import_contract, adapt_extracted_inputs
+    from .release_platform import host_platform
 except ImportError:
     import ctr_rom
     import forge
@@ -36,6 +37,7 @@ except ImportError:
     from installation_context import resolve_reference
     from precompiled_titles import load_catalog, select_title, install_precompiled_title
     from input_adapters import import_contract, adapt_extracted_inputs
+    from release_platform import host_platform
 
 
 StageReporter = Callable[[str, str], None]
@@ -240,7 +242,7 @@ def install_private_title(
 
 
 def runtime_path() -> Path:
-    return installation_path("TriAevum.exe").resolve()
+    return installation_path(host_platform().runtime).resolve()
 
 
 def launch_runtime(data_root: Path | None = None) -> subprocess.Popen[bytes]:
@@ -315,7 +317,19 @@ class ForgeWindow:
         self.rom.trace_add("write", lambda *_args: self._refresh_actions())
         self._refresh_active_title()
         self._refresh_actions()
+        self.status.trace_add("write", lambda *_args: self.root.after_idle(self._fit_to_content))
+        self.root.after_idle(self._fit_to_content)
         self.root.after(100, self._poll_events)
+
+    def _fit_to_content(self) -> None:
+        # Native Tk themes/font metrics and wrapped status text vary by host.
+        # Never place the primary actions below a fixed Windows-sized window.
+        self.root.update_idletasks()
+        width = max(760, self.root.winfo_reqwidth())
+        height = max(390, self.root.winfo_reqheight())
+        self.root.minsize(width, height)
+        if self.root.winfo_width() < width or self.root.winfo_height() < height:
+            self.root.geometry(f"{max(width, self.root.winfo_width())}x{max(height, self.root.winfo_height())}")
 
     def _build_layout(self) -> None:
         outer = self.ttk.Frame(self.root, padding=20)

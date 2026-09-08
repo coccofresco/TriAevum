@@ -15,6 +15,7 @@ from typing import Any, Callable, Sequence
 try:
     from . import TOOL_VERSION
     from .product_contract import ensure_runtime_config, query_product
+    from .release_platform import host_platform
     from .activation_transaction import activation_transaction
     from .installation_context import InstallationContext, resolve_reference
     from .toolchain_probe import probe_toolchain
@@ -56,6 +57,7 @@ try:
 except ImportError:
     from __init__ import TOOL_VERSION
     from product_contract import ensure_runtime_config, query_product
+    from release_platform import host_platform
     from activation_transaction import activation_transaction
     from installation_context import InstallationContext, resolve_reference
     from toolchain_probe import probe_toolchain
@@ -157,7 +159,7 @@ def default_active_title_state_path() -> Path:
 
 
 def default_runtime_plugin_path() -> Path:
-    return installation_path("triaevum_title_aot.dll")
+    return installation_path(host_platform().title_module)
 
 
 def default_runtime_launch_profile_path() -> Path:
@@ -925,10 +927,11 @@ def publish_private_runtime(
 
     plugin_hash = sha256_file(source_plugin)
     installation = runtime_plugin.expanduser().resolve().parent
-    destination = installation / "private-plugins" / plugin_hash / "triaevum_title_aot.dll"
+    platform = host_platform()
+    destination = installation / "private-plugins" / plugin_hash / platform.title_module
     profile_path = launch_profile.expanduser().resolve()
     private_root = data_root.expanduser().resolve()
-    product_receipt = query_product(installation / "TriAevum.exe")
+    product_receipt = query_product(installation / platform.runtime)
     destination.parent.mkdir(parents=True, exist_ok=True)
     profile_path.parent.mkdir(parents=True, exist_ok=True)
     private_root.mkdir(parents=True, exist_ok=True)
@@ -1011,11 +1014,12 @@ def publish_private_runtime(
             temporary.unlink(missing_ok=True)
     # Query the exact immutable generation in a short-lived process before the
     # single launch-profile replacement makes it visible to direct launches.
-    query_product(installation / "TriAevum.exe", plugin=destination)
+    query_product(installation / platform.runtime, plugin=destination)
     atomic_write_json(profile_path, profile)
     prepared.state["runtime"] = {
         "status": "ready",
         "backend": "generated_cpp_whole_aot_plugin_v2",
+        "target": platform.target,
         "runtime_sha256": product_receipt["runtime_sha256"],
         "plugin": context.reference(destination, prepared.directory),
         "plugin_scope": context.scope(destination, prepared.directory),

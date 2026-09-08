@@ -7,6 +7,7 @@ from unittest.mock import patch
 from common import atomic_write_json, sha256_file
 from precompiled_titles import CATALOG, FORMAT, MODEL, checked_file, load_catalog, select_title
 from forge_gui import InstallRequest, install_private_title
+from release_platform import host_platform
 
 
 class PrecompiledTitleTests(unittest.TestCase):
@@ -14,6 +15,7 @@ class PrecompiledTitleTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+        self.platform = host_platform()
         def artifact(name):
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -21,10 +23,10 @@ class PrecompiledTitleTests(unittest.TestCase):
             return {"path": name, "bytes": path.stat().st_size, "sha256": sha256_file(path)}
         self.recipe = {"id": "test", "inputs": {
             kind: {"sha256": str(i) * 64, "bytes": i} for i, kind in enumerate(("code", "exheader", "romfs"), 1)}}
-        self.catalog = {"format": FORMAT, "install_model": MODEL,
-                        "runtime": artifact("TriAevum.exe"), "native_module": artifact("forge/oot3d_game_module.dll"),
+        self.catalog = {"format": FORMAT, "install_model": MODEL, "target": self.platform.target,
+                        "runtime": artifact(self.platform.runtime), "native_module": artifact(self.platform.native_module),
                         "titles": [{"recipe": "test", "inputs": self.recipe["inputs"], "abi_version": 2,
-                                    "target": "x86_64-pc-windows-msvc", "translator_identity_sha256": "a" * 64,
+                                    "target": self.platform.target, "translator_identity_sha256": "a" * 64,
                                     "plugin": artifact("titles/test/contract.dll")}]}
         atomic_write_json(self.root / CATALOG, self.catalog)
 
@@ -34,7 +36,7 @@ class PrecompiledTitleTests(unittest.TestCase):
         import shutil
         source = self.root / "copy"
         source.mkdir()
-        for name in ("TriAevum.exe", "forge", "titles", "recipes"):
+        for name in (self.platform.runtime, "forge", "titles", "recipes"):
             item = self.root / name
             if item.is_dir():
                 shutil.copytree(item, source / name)

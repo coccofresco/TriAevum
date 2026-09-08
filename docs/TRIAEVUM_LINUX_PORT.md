@@ -89,8 +89,10 @@ enabled and its SPIR-V generation has completed using native Linux DXC.
 1. Runtime build is complete; preserve the incremental tree for later changes.
 2. The verified translated title now compiles into a Linux module and passes
    runtime ABI validation. Extend verification into interactive gameplay.
-3. Teach publisher catalog and Forge about ELF modules, Linux paths and target
-   triples. Do not repurpose Windows binaries or compile on the player path.
+3. Forge now supports ELF modules, Linux paths and explicit target triples;
+   its native Linux GUI and data preparation pass. Complete the real Linux
+   ROM-to-game installation test and release packaging; see
+   [Linux Forge](TRIAEVUM_LINUX_FORGE.md). Never compile on the player path.
 4. Boot/title framebuffer verification is complete. Manually verify F1,
    TopScreen controls, audible output and a playable save on Linux.
 5. Recover SSSR and check optional-provider capability reporting. Benchmark

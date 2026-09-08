@@ -13,6 +13,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if arguments and arguments[0] == "--install-worker":
         from tools.triaevum_release.install_worker import main as worker_main
         return worker_main(arguments[1:])
+    if arguments and arguments[0] == "--gui-smoke":
+        from tools.triaevum_release.forge_gui_probe import main as smoke_main
+        return smoke_main(arguments[1:])
     if arguments:
         return forge.main(arguments)
 

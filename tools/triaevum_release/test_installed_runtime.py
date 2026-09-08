@@ -9,6 +9,7 @@ import forge_gui
 from common import atomic_write_json, sha256_file
 from installed_runtime import validate_installed_runtime
 from activation_transaction import journal_path
+from release_platform import host_platform, LINUX, WINDOWS
 
 
 class InstalledRuntimeTests(unittest.TestCase):
@@ -16,9 +17,9 @@ class InstalledRuntimeTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        self.exe = self.root / "TriAevum.exe"
+        self.exe = self.root / host_platform().runtime
         self.exe.write_bytes(b"host")
-        self.plugin = self.root / "triaevum_title_aot.dll"
+        self.plugin = self.root / host_platform().title_module
         self.plugin.write_bytes(b"title")
         self.data = self.root / "custom-data"
         self.title = self.data / "titles" / "fixture"
@@ -51,6 +52,11 @@ class InstalledRuntimeTests(unittest.TestCase):
         self.assertEqual(self.validate(), self.profile)
         del self.receipt["launch_profile_sha256"]
         self.assertEqual(self.validate(), self.profile)
+
+    def test_rejects_receipt_from_another_platform(self):
+        self.receipt["target"] = WINDOWS.target if host_platform() == LINUX else LINUX.target
+        with self.assertRaisesRegex(ValueError, "another platform"):
+            self.validate()
 
     def test_rejects_changed_plugin_and_profile(self):
         self.plugin.write_bytes(b"another title")
