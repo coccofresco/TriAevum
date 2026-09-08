@@ -109,6 +109,10 @@ def collect_source_files(
 def source_path_allowed(relative: str, policy: dict[str, Any]) -> bool:
     path = PurePosixPath(normalize_relative_path(relative))
     lowered = relative.lower()
+    # A checkout imported from a source ZIP can still track its old receipt.
+    # The root receipt is generated below for this archive, never copied.
+    if path.as_posix().lower() == "source_archive_manifest.json":
+        return False
     if path.name.lower() in {
         str(item).lower() for item in policy.get("forbidden_basenames", [])
     }:

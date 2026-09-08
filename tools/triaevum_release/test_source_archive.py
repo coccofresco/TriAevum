@@ -79,6 +79,26 @@ class SourceArchiveTests(unittest.TestCase):
         self.assertFalse(source_path_allowed("private/evidence/dump.txt", policy))
         self.assertTrue(source_path_allowed("src/runtime.cpp", policy))
 
+    def test_imported_archive_receipt_is_replaced_not_duplicated(self) -> None:
+        receipt = "SOURCE_ARCHIVE_MANIFEST.json"
+        (self.repository / receipt).write_text('{"source_commit": "stale"}\n', encoding="utf-8")
+        subprocess.run(["git", "-C", str(self.repository), "add", receipt], check=True)
+        subprocess.run(
+            ["git", "-C", str(self.repository), "commit", "-q", "-m", "imported receipt"],
+            check=True,
+        )
+        commit = subprocess.check_output(
+            ["git", "-C", str(self.repository), "rev-parse", "HEAD"], text=True
+        ).strip()
+        output = self.root / "imported.zip"
+        result = create_source_archive(
+            self.repository, output, source_commit=commit, policy_path=self.policy
+        )
+        with zipfile.ZipFile(output) as archive:
+            self.assertEqual(archive.namelist().count(receipt), 1)
+            self.assertEqual(json.loads(archive.read(receipt))["source_commit"], commit)
+        self.assertEqual(result["excluded_tracked_files"], 2)
+
     def test_public_a32_runtime_sources_are_in_corresponding_source(self) -> None:
         policy = json.loads(DEFAULT_POLICY.read_text(encoding="utf-8"))
         required_runtime_sources = (
