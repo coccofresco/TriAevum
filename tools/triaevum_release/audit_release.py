@@ -17,10 +17,12 @@ try:
     from .product_contract import validate_product_info
     from .precompiled_titles import MODEL, CATALOG, load_catalog, select_title, checked_file
     from .common import load_json_object, normalize_relative_path, sha256_file
+    from .input_adapters import validate_adapter
 except ImportError:
     from product_contract import validate_product_info
     from precompiled_titles import MODEL, CATALOG, load_catalog, select_title, checked_file
     from common import load_json_object, normalize_relative_path, sha256_file
+    from input_adapters import validate_adapter
 
 
 ROOT = Path(__file__).resolve().parent
@@ -356,6 +358,7 @@ def audit_release(
             reject(f"required release role is missing: {role}")
 
     title_roles = {"precompiled_catalog", "precompiled_title", "translated_title_source", "title_build_source"}
+    adapter_paths = set()
     if precompiled:
         for role in title_roles - roles_seen:
             reject(f"precompiled release is missing role: {role}")
@@ -370,6 +373,13 @@ def audit_release(
                 if len(matches) != 1:
                     raise ValueError("Catalog revision is absent or ambiguous in supported recipes")
                 select_title(root, matches[0], catalog=catalog)
+                adapter = matches[0].get("input_adapter")
+                if adapter is not None:
+                    validate_adapter(root, matches[0])
+                    relative = adapter["code_copies"]["path"]
+                    if declared.get(relative, {}).get("role") != "input_copy_adapter":
+                        raise ValueError("COPY adapter lacks its explicit release role")
+                    adapter_paths.add(relative)
                 if declared.get(title["plugin"]["path"], {}).get("role") != "precompiled_title":
                     raise ValueError("Title DLL lacks its explicit precompiled role")
                 expected_title_paths.add(title["plugin"]["path"])
@@ -398,6 +408,8 @@ def audit_release(
             reject(f"invalid precompiled release: {exc}")
     elif roles_seen & title_roles:
         reject("title artifacts require the precompiled distribution model")
+    if {name for name, item in declared.items() if item["role"] == "input_copy_adapter"} != adapter_paths:
+        reject("Uncatalogued COPY adapter in release")
 
     # Only this explicit field may claim title code. Other embedded metadata
     # remains subject to the normal no-ROM/no-assets policy.

@@ -1,8 +1,12 @@
-# USA candidate revision port
+# USA candidate identity and address audit
 
-Status: **intake and address-window audit complete; not playable or supported yet**.
-Branch: `port/oot3d-usa-rev1`. Baseline public source: `aa4cfe5`.
-Do not add this candidate to the supported release recipes or reuse the EUR DLL.
+The separate-port proposal below has been **superseded by offline input
+adaptation**, as requested by the user. See
+[ROM input adapter](TRIAEVUM_ROM_INPUT_ADAPTER.md) for the implementation,
+successful boot/title/menu evidence, and remaining qualification work.
+Branch: `feat/rom-input-adapter`. Baseline public source: `aa4cfe5`.
+The EUR DLL must not consume raw USA code; it can consume an independently
+verified, byte-identical canonical image derived offline from that input.
 
 ## Input identity
 
@@ -28,7 +32,7 @@ both the full decrypted [No-Intro USA Rev 1 record 1259](https://datomatic.no-in
 [USA record 0033](https://datomatic.no-intro.org/index.php?page=show_record&s=64&n=0033)
 (`71d872eecd859b68153edbf12c19edfcead22c18`), checked 2026-09-08.
 That does not prove the game code is modified, but rules out claiming an exact
-catalogue dump match. Port to the explicit extracted identity first.
+catalogue dump match. Bind adaptation to the explicit extracted identity.
 
 ## Findings
 
@@ -70,29 +74,14 @@ entries, boundary audit, selection and product contract. Their identities are
 coupled to EUR. Generating with the USA bytes but those unchanged contracts is
 not a port, even when an entry prefix happens to match.
 
-## Implementation order
+## Consequence for adaptation
 
-1. Build a candidate-specific function/CFG inventory from its code, using these
-   window matches only as labels and discovery seeds. Resolve the ambiguous and
-   changed entries with control flow, call references and literal/data evidence.
-   Preserve complete coverage and the existing no-interpreter product contract.
-2. Make frontend inventory, supplemental entries, boundary evidence, selection
-   and product manifest a revision-owned bundle. Include its identity in the
-   existing build cache. Keep the EUR bundle untouched.
-3. Move active host hook addresses and guest global locations into a revision
-   profile owned by the title adapter. Verify each patch's expected instruction
-   and resume address. Start with boot/services and native top-screen rendering;
-   then port timing, interpolation and TopScreen consumers. Keep NRI revision-neutral.
-4. Compile the candidate DLL with the existing LLVM/support-library pipeline,
-   using an isolated build/cache and bounded worker count. Do not invalidate
-   the working EUR build or install development tools on end-user machines.
-5. Qualify boot, title intro, file selection, gameplay, pause and controls with
-   fresh candidate-owned saves and framebuffer capture. Do not load EUR memory
-   savestates: guest PCs and pointers may differ. Check region/language routing,
-   audio, asset resolution and TopScreen texture compatibility.
-6. Only then publish a second exact recipe and precompiled title entry, with
-   corresponding source and offline Forge installation proof. Keep both revisions
-   selectable automatically by extracted identity; do not replace EUR support.
+These findings rule out simply accepting another code hash or applying a
+blanket address offset. They do not require another runtime or game DLL when
+the install-time adapter can reproduce the canonical code image exactly.
+No candidate CFG reconstruction, hook relocation or USA compilation is part
+of the current implementation. The address audit remains useful diagnostic
+evidence, not an active build dependency or a semantic compatibility proof.
 
 ## Repeatable audit
 
@@ -111,4 +100,4 @@ python -m tools.triaevum_release.revision_port_audit `
 Repeat with `--source-root tools/oot3d/ui_topscreen` for the separate UI module.
 Reports contain hashes, addresses and source references, not game bytes.
 Seven synthetic tests cover matching, relocation, ambiguity, bounds and
-changed windows. No candidate runtime build or boot has been claimed.
+changed windows. The later input-adapter boot is documented separately.

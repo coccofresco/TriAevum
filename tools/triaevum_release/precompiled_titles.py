@@ -59,6 +59,14 @@ def select_title(root: Path, recipe: dict, *, catalog: dict | None = None) -> di
     if (item.get("inputs") != recipe.get("inputs") or item.get("abi_version") != 2
             or item.get("target") != "x86_64-pc-windows-msvc"):
         raise ValueError("Precompiled title revision/ABI does not match the ROM recipe")
+    if item.get("input_adapter") != recipe.get("input_adapter"):
+        raise ValueError("Precompiled title input adapter differs from the revision recipe")
+    if recipe.get("input_adapter") is not None:
+        try:
+            from .input_adapters import validate_adapter
+        except ImportError:
+            from input_adapters import validate_adapter
+        validate_adapter(root, recipe)
     identity = item.get("translator_identity_sha256", "")
     if not isinstance(identity, str) or len(identity) != 64 or any(c not in "0123456789abcdef" for c in identity):
         raise ValueError("Precompiled title has no valid translator identity")

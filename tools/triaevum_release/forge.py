@@ -94,6 +94,10 @@ ROOT = distribution_path("tools/triaevum_release")
 DEFAULT_RECIPES = distribution_path(
     "tools/triaevum_release/supported_revisions.json"
 )
+# The package owns its supported inputs; embedded recipes are the source-tool
+# fallback. Every packaged recipe is still checked against the title catalog.
+if installation_path("recipes/oot3d.json").is_file():
+    DEFAULT_RECIPES = installation_path("recipes/oot3d.json")
 
 
 class ForgeError(RuntimeError):

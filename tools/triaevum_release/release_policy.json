@@ -16,6 +16,7 @@
     "documentation": ["README.md", "LICENSE_SCOPE.md", "THIRD_PARTY_NOTICES.md", "SOURCE_OFFER.md", "docs/*", "docs/**/*"],
     "license": ["LICENSE", "LICENSES/*", "LICENSES/**/*"],
     "revision_recipe": ["recipes/*.json"],
+    "input_copy_adapter": ["recipes/adapters/*.json"],
     "precompiled_catalog": ["recipes/precompiled-titles.json"],
     "precompiled_title": ["titles/*/triaevum_title_aot.dll"],
     "translated_title_source": ["source/titles/*-translated.zip"],

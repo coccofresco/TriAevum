@@ -1,4 +1,5 @@
 import json
+import copy
 import shutil
 import tempfile
 import unittest
@@ -10,6 +11,9 @@ from audit_release import audit_release
 from common import atomic_write_json, load_json_object, sha256_file
 from precompiled_title_layout import title_layout
 from precompiled_titles import MODEL
+from input_adapters import FORMAT as ADAPTER_FORMAT
+from input_copy_adapter import FORMAT as COPY_FORMAT
+from oot3d_region_assets import ALGORITHM
 from test_release_audit import write_clean_package
 
 
@@ -110,6 +114,50 @@ class PrecompiledReleaseTests(unittest.TestCase):
         self.rehash(relative)
         self.save()
         self.assertTrue(any("compiler/SDK" in e for e in audit_release(self.root).errors))
+
+    def add_adapter(self):
+        relative = 'recipes/adapters/fixture.json'
+        source_inputs = copy.deepcopy(self.recipe['inputs'])
+        source_inputs['code']['sha256'] = 'a'*64
+        atomic_write_json(self.root/relative, {'format': COPY_FORMAT, 'source': source_inputs['code'],
+            'canonical': self.recipe['inputs']['code'], 'copies': [[0, 1]]})
+        self.manifest['files'].append({'path': relative, 'role': 'input_copy_adapter'})
+        self.rehash(relative)
+        record = {key: self.manifest['files'][-1][key] for key in ('path', 'bytes', 'sha256')}
+        adapter = {'format': ADAPTER_FORMAT, 'source_inputs': source_inputs,
+                   'resource_algorithm': ALGORITHM, 'code_copies': record}
+        recipe = {**copy.deepcopy(self.recipe), 'id': 'fixture-adapted', 'input_adapter': adapter}
+        atomic_write_json(self.root/'recipes/oot3d.json', {'recipes': [self.recipe, recipe]})
+        self.rehash('recipes/oot3d.json')
+        catalog = load_json_object(self.root/'recipes/precompiled-titles.json')
+        catalog['titles'].append({**copy.deepcopy(catalog['titles'][0]),
+                                  'recipe': recipe['id'], 'input_adapter': adapter})
+        atomic_write_json(self.root/'recipes/precompiled-titles.json', catalog)
+        self.rehash('recipes/precompiled-titles.json')
+        self.save()
+        return relative
+
+    def test_copy_adapter_reuses_same_title_and_corresponding_source(self):
+        self.add_adapter()
+        result = audit_release(self.root)
+        self.assertTrue(result.ok, result.errors)
+
+    def test_copy_adapter_cannot_hide_payload_or_diverge_from_catalog(self):
+        relative = self.add_adapter()
+        program = load_json_object(self.root/relative)
+        program['literal'] = 'replacement payload'
+        atomic_write_json(self.root/relative, program)
+        self.rehash(relative)
+        self.save()
+        self.assertFalse(audit_release(self.root).ok)
+
+    def test_orphan_copy_adapter_is_not_an_allowed_generic_json(self):
+        relative = 'recipes/adapters/orphan.json'
+        atomic_write_json(self.root/relative, {})
+        self.manifest['files'].append({'path': relative, 'role': 'input_copy_adapter'})
+        self.rehash(relative)
+        self.save()
+        self.assertTrue(any('Uncatalogued COPY' in e for e in audit_release(self.root).errors))
 
 
 if __name__ == "__main__":

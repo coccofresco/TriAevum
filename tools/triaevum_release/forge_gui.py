@@ -24,6 +24,7 @@ try:
     from .activation_transaction import installation_lock, journal_path
     from .installation_context import resolve_reference
     from .precompiled_titles import load_catalog, select_title, install_precompiled_title
+    from .input_adapters import import_contract, adapt_extracted_inputs
 except ImportError:
     import ctr_rom
     import forge
@@ -33,6 +34,7 @@ except ImportError:
     from activation_transaction import installation_lock, journal_path
     from installation_context import resolve_reference
     from precompiled_titles import load_catalog, select_title, install_precompiled_title
+    from input_adapters import import_contract, adapt_extracted_inputs
 
 
 StageReporter = Callable[[str, str], None]
@@ -94,7 +96,7 @@ def match_extracted_recipe(
     for recipe in recipes:
         if not isinstance(recipe, dict):
             continue
-        contracts = recipe.get("inputs")
+        contracts = import_contract(recipe)
         if not isinstance(contracts, dict):
             continue
         if all(
@@ -166,6 +168,11 @@ def install_private_title(
         report("verify", "Identifying and verifying the supported game revision...")
         recipe = match_extracted_recipe(extracted)
         select_title(root, recipe, catalog=catalog)
+        adaptation = None
+        if recipe.get("input_adapter") is not None:
+            report("adapt", "Adapting this ROM for the existing title module (no compilation)...")
+            extracted, adaptation = adapt_extracted_inputs(
+                extracted, recipe, root=root, output=staging / "normalized")
         extracted = ctr_rom.publish_extracted_inputs(extracted, data_root / "sources")
         cache = forge.HashCache(output_root / ".hash-cache.json")
         for item in extracted.by_kind().values():
@@ -211,6 +218,7 @@ def install_private_title(
         "recipe": recipe["id"],
         "prepared": prepared,
         "build": built,
+        "adaptation": adaptation,
         "install_wall_seconds": time.perf_counter() - started,
     }
 
