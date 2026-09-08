@@ -54,6 +54,7 @@
     "corresponding_source"
   ],
   "forbidden_basenames": [
+    "AGENTS.md",
     "code.bin",
     "exheader.bin",
     "romfs.bin",

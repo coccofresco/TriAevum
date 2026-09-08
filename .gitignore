@@ -417,6 +417,9 @@ tags
 *.otr
 *.o2r
 
+# Local agent instructions are not part of the public project.
+/AGENTS.md
+
 # Curated public README screenshots only; diagnostic captures stay private.
 !/docs/images/default-hyrule-night.png
 !/docs/images/default-kokiri-forest.png
