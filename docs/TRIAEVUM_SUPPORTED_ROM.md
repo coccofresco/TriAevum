@@ -5,12 +5,13 @@
 | Verified decrypted catalogue input | Availability |
 | --- | --- |
 | USA original (0033) and Rev 1 (1259) | Already accepted by published alpha.1b, with the existing USA adapter. |
-| Europe original (0004) and Rev 1 (1168) | Added to the post-alpha.1b candidate through one shared direct recipe. |
+| Europe original (0004) and Rev 1 (1168) | Supported in alpha.1c through one shared direct recipe. |
 
 All four complete images were SHA-1 matched to No-Intro and tested with frozen
 Forge and real NRI boot. Within each region their consumed inputs are identical.
 See [exact identities, implementation and qualification](TRIAEVUM_CATALOGUE_ROM_INPUTS.md).
-The new EUR recipe is not yet in the published alpha.1b ZIP.
+Alpha.1c also recognizes [equivalent content families](TRIAEVUM_CONTENT_FAMILY_IMPORT.md).
+The older alpha.1b ZIP does not contain the new EUR recipe.
 
 ## European input: catalogue reference
 

@@ -8,8 +8,8 @@ their existing fast path. Otherwise Forge recognizes qualified content
 families without requiring a new whole-file hash recipe for every repack.
 
 This is implemented in Forge, not in the renderer or game runtime. A new
-frozen Forge and matching recipe/catalog metadata are required; the current
-published alpha.1b remains unchanged.
+frozen Forge and matching recipe/catalog metadata are included in alpha.1c;
+the older alpha.1b package remains unchanged.
 
 ## Compatibility, not blind acceptance
 
