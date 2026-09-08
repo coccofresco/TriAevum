@@ -51,6 +51,20 @@ or was adapted against [Azahar Emulator](https://github.com/azahar-emu/azahar).
 Azahar's license text and source availability requirements apply to combined
 distributions that consume these files.
 
+## SDL2 and controller mappings
+
+The Windows runtime links SDL2 statically for window, audio and controller
+services; no separate `SDL2.dll` is required by this build. SDL2 2.32.10 is
+licensed under zlib; its notice is in `LICENSES/SDL2-zlib.txt`.
+
+`runtime/triaevum_resources/gamecontrollerdb.txt` is an unmodified copy from
+[SDL_GameControllerDB](https://github.com/mdqinc/SDL_GameControllerDB) at commit
+`28a856f2b92da8891b161acd0abd64fbf4445d97`, SHA-256
+`f6cb9252c3c3790c3513c7d279e5b4b37b0d75d739f6a573f3a55471914fbde6`.
+The release ships it as `resources/gamecontrollerdb.txt` together with its
+zlib notice in `LICENSES/SDL-GameControllerDB-zlib.txt`. These community
+mappings supplement SDL's built-in controller database.
+
 ## NVIDIA NRI
 
 The primary renderer uses
@@ -118,6 +132,9 @@ the generated source interface. nlohmann/json is MIT licensed, copyright
 The Windows runtime package includes `shaderc_shared.dll` from the pinned
 Vulkan SDK used for the release build. shaderc is licensed under Apache-2.0;
 the applicable license is distributed as `LICENSES/shaderc-Apache-2.0.txt`.
+Its Visual C++ runtime dependencies (`msvcp140.dll`, `vcruntime140.dll`,
+`vcruntime140_1.dll`) are deployed beside the executable from Visual Studio's
+redistributable directory; see `LICENSES/Microsoft-Visual-Cpp-Runtime.md`.
 The system Vulkan loader and display driver are machine prerequisites and are
 not redistributed by TriAevum.
 

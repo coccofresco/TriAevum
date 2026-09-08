@@ -48,8 +48,7 @@ struct Oot3dNativeGameLaunch {
         Oot3dNativeGame::Oot3dUiProfile::Oot3d;
     Oot3dNativeGame::TopScreenUiConfig TopScreenConfig;
     Oot3dNativeGame::NativeControlConfig ControlConfig =
-        Oot3dNativeGame::NativeControlPreset(
-            Oot3dNativeGame::NativeControlProfile::KeyboardMouse);
+        Oot3dNativeGame::NativeControlDefaults();
     std::vector<int32_t> RoomRequestSmokeSequence;
     bool ValidateOnly = false;
     bool ExtendedDiagnostics = false;

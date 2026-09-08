@@ -111,12 +111,14 @@ void InitContextForDemo(const Args& args) {
         throw std::runtime_error("failed to initialize Fast3dWindow");
     }
     RecordSwitchHostInitStage("host_window");
-    // ControlDeck is constructed before SDL video/game-controller startup in
-    // this host. Scan once after window initialization; SDL hotplug events keep
-    // the same manager current afterwards.
-    context->GetControlDeck()
-        ->GetConnectedPhysicalDeviceManager()
-        ->RefreshConnectedSDLGamepads();
+    // Video initialization does not initialize SDL's joystick/controller API.
+    // The device manager owns that subsystem independently of legacy osContInit.
+    const auto controllerDatabase = std::filesystem::is_directory(args.ResourceRoot)
+        ? (args.ResourceRoot / "gamecontrollerdb.txt").string()
+        : Ship::Context::LocateFileAcrossAppDirs("gamecontrollerdb.txt");
+    if (!context->GetControlDeck()->GetConnectedPhysicalDeviceManager()->Initialize(controllerDatabase)) {
+        throw std::runtime_error("failed to initialize SDL controller input");
+    }
     RecordSwitchHostInitStage("host_gamepads");
     if (args.AudioSampleRate == 0 || args.AudioSampleLength == 0 ||
         args.AudioDesiredBuffered <= 0) {
@@ -134,6 +136,9 @@ void InitContextForDemo(const Args& args) {
 }
 
 void DestroyContextForDemo() noexcept {
+    if (auto* context = Ship::Context::GetRawInstance(); context != nullptr && context->GetControlDeck() != nullptr) {
+        context->GetControlDeck()->GetConnectedPhysicalDeviceManager()->Shutdown();
+    }
     Ship::Context::DestroyInstance();
 }
 

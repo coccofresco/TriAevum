@@ -109,6 +109,7 @@ bool ParseNativeMotionSource(std::string_view value,
                              NativeMotionSource* source) noexcept;
 
 NativeControlConfig NativeControlPreset(NativeControlProfile profile);
+NativeControlConfig NativeControlDefaults();
 bool ValidateNativeControlConfig(const NativeControlConfig& config,
                                  std::string* error = nullptr);
 bool ParseNativeControlConfigText(std::string_view text,

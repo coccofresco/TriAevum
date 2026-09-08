@@ -37,6 +37,13 @@ FILES = {
     "SOURCE_OFFER.md": ("documentation", b"corresponding source included\n"),
     "LICENSE": ("license", b"GPL-3.0-or-later test fixture\n"),
     "LICENSES/GPL-2.0-or-later.txt": ("license", b"GPL test fixture\n"),
+    "LICENSES/SDL2-zlib.txt": ("license", b"SDL zlib test fixture\n"),
+    "LICENSES/SDL-GameControllerDB-zlib.txt": ("license", b"Controller DB zlib test fixture\n"),
+    "resources/gamecontrollerdb.txt": ("title_neutral_resource", b"# Controller DB fixture\n"),
+    "msvcp140.dll": ("runtime_library", b"MZ C++ library fixture"),
+    "vcruntime140.dll": ("runtime_library", b"MZ runtime fixture"),
+    "vcruntime140_1.dll": ("runtime_library", b"MZ exception runtime fixture"),
+    "LICENSES/Microsoft-Visual-Cpp-Runtime.md": ("license", b"Microsoft runtime notice fixture"),
     "LICENSES/shaderc-Apache-2.0.txt": ("license", b"Apache test fixture\n"),
     "LICENSES/Python-3.13.txt": ("license", b"Python test fixture\n"),
     "LICENSES/Capstone-BSD.txt": ("license", b"BSD test fixture\n"),
@@ -94,6 +101,21 @@ def write_clean_package(root: Path) -> None:
 
 
 class PublicReleaseAuditTests(unittest.TestCase):
+    def test_rejects_package_without_input_or_runtime_dependencies(self):
+        for relative in ("resources/gamecontrollerdb.txt", "msvcp140.dll",
+                         "vcruntime140.dll", "vcruntime140_1.dll"):
+            with self.subTest(path=relative), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                write_clean_package(root)
+                (root / relative).unlink()
+                manifest_path = root / "release-manifest.json"
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                manifest["files"] = [item for item in manifest["files"] if item["path"] != relative]
+                atomic_write_json(manifest_path, manifest)
+                result = audit_release(root)
+                self.assertFalse(result.ok)
+                self.assertTrue(any(relative in error for error in result.errors), result.errors)
+
     def test_private_plugin_is_rejected_before_publication(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

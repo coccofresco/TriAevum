@@ -12,6 +12,9 @@ their imported source.
 | nihstro subset | BSD-3-Clause | `tools/oot3d/third_party/azahar_pica/NIHSTRO_LICENSE.txt` |
 | libultraship | MIT | Upstream submodule `runtime/three_ds_recomp/LICENSE` |
 | NVIDIA NRI | MIT | `LICENSES/NRI-MIT.txt` and pinned upstream source |
+| SDL2 2.32.10 (statically linked) | zlib | `LICENSES/SDL2-zlib.txt` |
+| SDL_GameControllerDB mappings | zlib | `LICENSES/SDL-GameControllerDB-zlib.txt` |
+| Microsoft Visual C++ runtime for shaderc | Microsoft runtime redistribution terms | `LICENSES/Microsoft-Visual-Cpp-Runtime.md` |
 | NXVK probe | GPL-2.0-or-later | `ports/switch_vulkan_probe/COPYING` |
 | shaderc shared runtime | Apache-2.0 | `LICENSES/shaderc-Apache-2.0.txt` |
 | CPython 3.13 runtime embedded by Forge | Python Software Foundation License | `LICENSES/Python-3.13.txt` |

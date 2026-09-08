@@ -41,6 +41,19 @@ void RequireTouch(const NativeA32TouchMapping& touch, bool inside,
 } // namespace
 
 int main() {
+    const auto defaults = NativeControlDefaults();
+    Require(defaults.ControllerEnabled && defaults.KeyboardEnabled && defaults.MouseEnabled &&
+                defaults.MovementStick == NativeAnalogStick::Left &&
+                defaults.NativeAimSource == NativeMotionSource::Automatic &&
+                defaults.FreeCameraSource == NativeMotionSource::Automatic &&
+                defaults.PreferredControllerGuid.empty(),
+            "fresh-install controls must accept all devices without a device-specific GUID");
+    NativeControlHostInputState defaultGamepad;
+    defaultGamepad.LeftStickX = 32767;
+    defaultGamepad.RightStickY = 32767;
+    const auto mappedDefaultGamepad = MapNativeControlInput(defaults, defaultGamepad);
+    Require(mappedDefaultGamepad.Hid.CirclePadX == 154 && mappedDefaultGamepad.CStick.Y == 154,
+            "fresh-install defaults discarded controller movement or camera axes");
     const auto keyboardMouse =
         NativeControlPreset(NativeControlProfile::KeyboardMouse);
     Require(keyboardMouse.Profile ==
@@ -271,6 +284,12 @@ int main() {
                 parsedControls.GyroscopeBiasDegreesPerSecond ==
                     controllerConfig.GyroscopeBiasDegreesPerSecond,
             "native control JSON did not round-trip");
+    for (const auto& config : {defaults, keyboardMouse}) {
+        Require(SerializeNativeControlConfigText(config, &serializedControls, &controlsError) &&
+                    ParseNativeControlConfigText(serializedControls, &parsedControls, &controlsError) &&
+                    parsedControls == config,
+                "control persistence changed combined defaults or an explicit keyboard-only preference");
+    }
 
     RequireTouch(MapHostPointerToNativeA32Touch(160, 0, 1280, 720, true),
                  true, true, 0, 0,

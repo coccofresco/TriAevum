@@ -31,6 +31,17 @@ except ImportError:
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def visual_cpp_runtime_artifacts(directory: Path) -> dict[str, Path]:
+    """Use the licensed publisher's Redist directory, never its System32 DLLs."""
+    artifacts = {name: directory / name for name in (
+        "msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll")}
+    for name, source in artifacts.items():
+        if not source.is_file() or source.is_symlink():
+            raise ValueError(f"Missing Visual C++ redistributable {name} in {directory}; "
+                             "supply --vc-redist-dir pointing to x64/Microsoft.VC143.CRT")
+    return artifacts
+
+
 def clang_header_layout(llvm: Path) -> list[dict]:
     root = llvm / "lib/clang/22/include"
     if root.is_symlink() or not (root / "stddef.h").is_file():
@@ -47,6 +58,7 @@ def clang_header_layout(llvm: Path) -> list[dict]:
 
 
 def prepare(args) -> dict:
+    crt_artifacts = visual_cpp_runtime_artifacts(args.vc_redist_dir.resolve())
     build_dir = args.build_dir.resolve()
     work = args.work.resolve()
     work.mkdir(parents=True, exist_ok=True)
@@ -75,6 +87,7 @@ def prepare(args) -> dict:
         "TriAevum-source.zip": source_zip,
         "shaderc_shared.dll": Path(targets["runtime"]).parent / "shaderc_shared.dll",
         "oot3d_game_module.dll": build_dir / "oot3d_game_module.dll",
+        **crt_artifacts,
     }
     for item in layout["files"]:
         if item["source"].startswith("build-release/"):
@@ -96,6 +109,8 @@ def main() -> int:
     parser.add_argument("--build-dir", type=Path, required=True)
     parser.add_argument("--cmake", type=Path, required=True)
     parser.add_argument("--include", type=Path, required=True)
+    parser.add_argument("--vc-redist-dir", type=Path, required=True,
+                        help="Licensed Visual Studio x64/Microsoft.VC143.CRT redistributable directory")
     parser.add_argument("--work", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--version", required=True)

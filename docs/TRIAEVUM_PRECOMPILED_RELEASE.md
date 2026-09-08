@@ -67,6 +67,13 @@ Run `python -m tools.triaevum_release.prepare_release` with `--build-dir`,
 --recipe oot3d-eur-project-baseline-16a6b0aa
 ```
 
+Also supply `--vc-redist-dir` pointing to the licensed publisher's
+`VC/Redist/MSVC/<version>/x64/Microsoft.VC143.CRT` directory. The package
+includes shaderc's three Visual C++ runtime DLLs app-locally, SDL controller
+mappings and their notices. The release audit rejects omission of these
+dependencies; an SDK installed on the developer PC must not hide missing
+user dependencies. SDL2 itself is statically linked by the Windows build.
+
 The runtime's source archive follows its own current commit; the title build
 snapshot follows its build commit. These can differ and must not be conflated.
 Generated C++ is included separately, so its hashes can be checked and changes

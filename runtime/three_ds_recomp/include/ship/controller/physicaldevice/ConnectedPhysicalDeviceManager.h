@@ -18,9 +18,13 @@ namespace Ship {
  */
 class ConnectedPhysicalDeviceManager {
   public:
-    /** @brief Constructs the manager and performs an initial scan of connected gamepads. */
+    /** @brief Constructs the manager; initialize after host SDL startup. */
     ConnectedPhysicalDeviceManager();
     ~ConnectedPhysicalDeviceManager();
+
+    /** @brief Own one SDL controller-subsystem reference and load optional extra mappings. */
+    bool Initialize(const std::string& mappingDatabasePath);
+    void Shutdown();
 
     /**
      * @brief Returns the connected SDL gamepads available for the given port.
@@ -79,10 +83,11 @@ class ConnectedPhysicalDeviceManager {
      */
     void HandlePhysicalDeviceDisconnect(int32_t sdlJoystickInstanceId);
 
-    /** @brief Re-scans all connected SDL gamepads and rebuilds the internal maps. */
+    /** @brief Re-scans gamepads while retaining handles for still-connected devices. */
     void RefreshConnectedSDLGamepads();
 
   private:
+    bool mInitialized = false;
     std::unordered_map<int32_t, SDL_GameController*> mConnectedSDLGamepads;
     std::unordered_map<int32_t, std::string> mConnectedSDLGamepadNames;
     std::unordered_map<uint8_t, std::unordered_set<int32_t>> mIgnoredInstanceIds;

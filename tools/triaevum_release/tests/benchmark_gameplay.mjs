@@ -65,6 +65,7 @@ set('--topscreen-config', path.join(output, 'topscreen.json'));
 set('--save-data', path.join(output, 'savedata'));
 set('--output', path.join(output, 'runtime.json'));
 if (opts.plugin) set('--title-plugin', path.resolve(opts.plugin));
+if (opts.resources) set('--resource-root', path.resolve(opts.resources));
 if (opts.state) set('--load-state', path.resolve(opts.state));
 else {
     const index = args.indexOf('--load-state');

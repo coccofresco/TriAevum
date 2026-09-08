@@ -535,6 +535,16 @@ NativeControlConfig NativeControlPreset(NativeControlProfile profile) {
   return config;
 }
 
+NativeControlConfig NativeControlDefaults() {
+  auto config = NativeControlPreset(NativeControlProfile::KeyboardMouse);
+  config.Profile = NativeControlProfile::Custom;
+  config.ControllerEnabled = true;
+  config.MovementStick = NativeAnalogStick::Left;
+  config.NativeAimSource = NativeMotionSource::Automatic;
+  config.FreeCameraSource = NativeMotionSource::Automatic;
+  return config;
+}
+
 bool ValidateNativeControlConfig(const NativeControlConfig& config,
                                  std::string* error) {
   if (config.MovementStickDeadZonePercent < 0 ||
