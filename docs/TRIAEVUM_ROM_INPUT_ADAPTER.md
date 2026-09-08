@@ -1,8 +1,8 @@
 # Offline ROM input adapter
 
 Status, 2026-09-08: **experimental USA-input installation, boot, title intro
-and file-selection menu verified**. Not yet qualified for an entire playthrough
-or published in the GitHub release. Branch: `feat/rom-input-adapter`.
+and file-selection menu verified**. Included in the `v0.6.0-alpha.1b` release
+plan; not qualified for an entire playthrough. Implementation: `c20427f`.
 
 ## Decision
 
@@ -139,4 +139,6 @@ with fresh saves and can be tested without changing the published installation.
 3. Check repeat-install and EUR-install behavior, package/source correspondence
    and the existing release audit before publishing a new package.
 
-No public release or online README was changed to claim USA support in this step.
+The original `c20427f` step did not publish USA support. Alpha.1b packages the
+verified adapter with explicit experimental/input-identity limits and updates
+the README accordingly; the scenario gaps above remain open.

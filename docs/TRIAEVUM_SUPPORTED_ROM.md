@@ -1,6 +1,6 @@
 # Supported ROM identification
 
-## Catalogue reference
+## European input: catalogue reference
 
 The target is the original European cartridge release, application version 0:
 
@@ -62,3 +62,36 @@ the authoritative statement of this alpha's tested compatibility.
 
 No acceptance rules were relaxed to infer compatibility from the filename,
 region, product code or version field alone.
+
+## USA input: experimental support in alpha.1b
+
+The exact tested USA input is now supported through an installation-time
+adapter. No EUR ROM is needed by a user installing from this USA input.
+Product code: `CTR-P-AQEE`; Title ID: `0004000000033500`.
+
+| Input | Bytes | SHA-256 |
+| --- | --- | --- |
+| Tested complete decrypted ROM | 536,870,912 | `42d2bd2313e2cdd8b1d7b56f8b2476419fcb0239f4bbc08960e39c688d7632a1` |
+| Decompressed ExeFS `.code` | 4,567,040 | `ef210566e1d9d16879a746dfb063fcbad232f0171d860de906531ecc526cc020` |
+| ExHeader | 2,048 | `dbe5fa0174d73bffb75d7cf0fbaa05d3e0ee080df0e257afc58b6c45ae5de3d0` |
+| RomFS | 473,526,272 | `dd6def65af151d40fcbba7202c36bbdd8ed5b5b431373dc6a8c89bfd708af690` |
+
+The tested filename was `Legend of Zelda, The - Ocarina of Time 3D (USA)
+(En,Fr,Es) (Rev 1) Decrypted.3ds`. Its SHA-1 is
+`cc9a07e4c741194ed5c4b55405527fbd069f5861`: it does not match the full decrypted
+[No-Intro USA record 0033](https://datomatic.no-intro.org/index.php?page=show_record&s=64&n=0033)
+or [USA Rev 1 record 1259](https://datomatic.no-intro.org/index.php?page=show_record&s=64&n=1259)
+checked in the input audit. Do not infer a verified catalogue revision from
+this filename. As with EUR, Forge uses the extracted hashes above to recognize
+compatible containers, including equivalent trimmed `.3ds`/`.cci` images.
+
+Forge derives a canonical EUR code image and compatible regional resource
+index from the USA input, then activates the existing precompiled game DLL.
+Models, textures, scenes, audio and dialogue payloads come from the supplied
+USA ROM. This is **USA-input compatibility with EUR execution**, not a separate
+USA recompilation. Regional behavior may differ; no German/Italian dialogue is
+invented. See [adapter details and verification](TRIAEVUM_ROM_INPUT_ADAPTER.md).
+
+Installation, title intro and file selection have been tested. Full-playthrough,
+all hint/language paths and cross-region-save compatibility remain unqualified.
+This is not blanket support for other regions, revisions or modified inputs.

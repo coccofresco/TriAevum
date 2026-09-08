@@ -1,55 +1,94 @@
 # TriAevum
 
-A native PC recompilation of *The Legend of Zelda: Ocarina of Time 3D*, with
-single-screen controls and menus, widescreen support and customizable graphics.
+A native PC AOT recompilation of *The Legend of Zelda: Ocarina of Time 3D*,
+with a modern NRI/Vulkan renderer, single-screen UI and customizable graphics.
 
-**[Download v0.6.0-alpha.1 for Windows x64](https://github.com/coccofresco/TriAevum/releases/tag/v0.6.0-alpha.1)**
+**[Download v0.6.0-alpha.1b for Windows x64](https://github.com/coccofresco/TriAevum/releases/tag/v0.6.0-alpha.1b)**
+
+## About
+
+TriAevum is an AOT recomp in the same general spirit as the Xbox 360 recomp
+projects. I just ended up spending most of my time on the renderer instead of,
+you know, actually playing the game. The goal is to push the visuals further
+without completely losing the original look.
+
+**Development of this project is entirely AI-assisted, under human direction.**
+That describes the TriAevum-specific work, not the mature donor projects and
+libraries it builds on: Azahar, Ship of Harkinian, NRI and others. Aside from
+those foundations, you could fairly call this concentrated AI slop.
+Apparently, even AI slop can still consume several months of your life.
 
 ## Install
 
-Requires a Vulkan-capable GPU with current drivers and your own supported
-decrypted copy of the **original European cartridge release**, not **Rev 1**.
-The No-Intro catalogue name is:
+Requires Windows x64, a Vulkan-capable GPU with current drivers, and your own
+supported decrypted ROM. Forge accepts `.3ds` and `.cci` and checks the contents,
+not just the filename.
 
-**[Legend of Zelda, The - Ocarina of Time 3D (Europe) (En,Fr,De,Es,It)](https://datomatic.no-intro.org/index.php?page=show_record&s=64&n=0004)**
-Record **0004**, product code `CTR-P-AQEP`, Title ID `0004000000033600`.
+| Input | Compatibility |
+| --- | --- |
+| European original release, `CTR-P-AQEP` | The previously supported input; not EUR Rev 1. |
+| Tested USA input, `CTR-P-AQEE` | New experimental install-time adapter; English, French and Spanish resources. |
 
-Forge verifies the extracted contents automatically. See
-[ROM identification and checksums](docs/TRIAEVUM_SUPPORTED_ROM.md) for the
-catalogue hashes and the distinction between complete and trimmed dumps.
+See **[exact ROM identification and checksums](docs/TRIAEVUM_SUPPORTED_ROM.md)**.
+USA support covers the verified input, not every dump labelled "USA Rev 1".
+Forge adapts it locally to the existing EUR execution contract; this is not a
+separate USA executable or a guarantee of identical regional behavior.
 
-1. Download the **Windows-x64 ZIP** from the release page and extract it into
-   a writable folder.
-2. Run `TriAevumForge.exe` and select your `.3ds` or `.cci` ROM.
-3. When setup finishes, select **Launch game**. Afterwards, use `TriAevum.exe`.
+1. Download the **Windows-x64 ZIP**, not GitHub's source-code archive, and
+   extract it into a writable folder.
+2. Run `TriAevumForge.exe` and select your decrypted ROM.
+3. When setup finishes, choose **Launch game**. Afterwards, use `TriAevum.exe`.
 
-No compiler or SDK is needed. Forge checks ROM compatibility and downloads the
-TopScreen texture package during setup; an Internet connection is required
-unless the package is [provided locally](docs/TRIAEVUM_TOPSCREEN_INSTALLATION.md).
-Keep the `data/` folder: it contains your game data, saves and settings.
+No compiler or SDK is needed. Forge downloads the official TopScreen texture
+package during setup; an Internet connection is required unless that package
+is [provided locally](docs/TRIAEVUM_TOPSCREEN_INSTALLATION.md). No ROM or original
+game assets are included. Keep and back up `data/`: it holds your saves,
+settings and locally prepared game data.
 
-This is an experimental alpha. See the
-[release notes and known limitations](docs/releases/v0.6.0-alpha.1.md).
+## Graphics and controls
 
-## Features
+- Cel/toon shading and outlines.
+- Ambient occlusion, plus optional reflections, shadows and anti-aliasing.
+- Real widescreen framing and configurable field of view.
+- **60/90 FPS visual interpolation** of the original 30 Hz game state.
+  Game logic and gameplay speed remain unchanged; this is not 60/90 Hz physics.
+- Azahar-compatible custom textures and texture dumping.
+- Reimplemented **TopScreen** single-screen HUD and menus.
+- Configurable gameplay free camera, keyboard/mouse and controller inputs.
+- Named settings profiles, audio and save states.
+- Procedural grass. A lot of grass. Possibly too much grass.
 
-- Single-screen HUD and menus through the integrated **TopScreen** mod.
-- Widescreen framing and adjustable field of view.
-- **60/90 Hz visual interpolation**, retaining the original 30 Hz game logic
-  and normal gameplay speed.
-- Configurable **toon shading, outlines and procedural grass**.
-- Optional ambient occlusion, reflections, shadows and anti-aliasing.
-- **Azahar-compatible texture packs**, texture dumping and named graphics profiles.
-- Audio, configurable controls and save states.
+Press **F1** for settings. **F2** temporarily disables the main added graphics
+effects, then restores them without losing your configuration. Most of the
+presentation is configurable, so if my artistic decisions offend you
+personally, you can probably undo them. Effects can be expensive; adjust them
+to suit your GPU.
 
-Press **F1** for settings. **F2** temporarily toggles the main added graphics
-effects off and back on without losing your configuration. Performance depends
-on your hardware and selected effects.
+## Testing and contributing
+
+This is an **experimental alpha**, not a fully tested port. Gameplay testing
+currently covers the early parts of the game. The USA adapter has been checked
+through installation, the title intro and file selection, not a full playthrough.
+I find tweaking shaders considerably more entertaining than finishing Zelda
+again, so people willing to actually play through it are especially welcome.
+
+Please [report issues](https://github.com/coccofresco/TriAevum/issues) with the
+version, ROM input/revision, GPU/driver, settings and steps to reproduce.
+**Normal in-game save files are particularly useful for problems later in the
+game.** Review logs for personal information before sharing; do not upload
+ROMs, extracted assets or memory savestates containing game code.
+
+Contributions, experiments and forks taking the renderer in other directions
+are welcome. Longer term, I would like to explore a proper ray-tracing path
+and finish features still in the traditional state known as "technically
+implemented". Ray tracing is a wishlist item, not a feature of this release.
+
+[Release notes and known limitations](docs/releases/v0.6.0-alpha.1b.md).
 
 ## Screenshots
 
-Captured in game with the default profile: toon shading, outlines, grass,
-1.10x FOV, x2 interpolation and TopScreen. No additional HD texture pack.
+Captured with the default profile: toon shading, outlines, grass, 1.10x FOV,
+x2 interpolation and TopScreen. No additional HD texture pack.
 
 ![Hyrule Field at night](docs/images/default-hyrule-night.png)
 
@@ -62,12 +101,10 @@ Captured in game with the default profile: toon shading, outlines, grass,
 Original contributions are licensed under **GPL-3.0-or-later**. Third-party
 components retain their own licenses and notices:
 [license scope](LICENSE_SCOPE.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
+See the [release and build contract](docs/TRIAEVUM_PRECOMPILED_RELEASE.md) for
+source availability and developer packaging.
 
-For development and packaging, see the
-[developer workflows](docs/TRIAEVUM_DEVELOPMENT_AND_RELEASE_WORKFLOWS.md).
-
-No ROM or original game assets are included. TriAevum is an independent project,
-not affiliated with or endorsed by Nintendo.
+TriAevum is independent and is not affiliated with or endorsed by Nintendo.
 
 ## Thanks
 
@@ -76,8 +113,9 @@ for its platform and renderer foundations, and **[Azahar](https://github.com/aza
 for its 3DS rendering, audio and research contributions.
 
 Thanks also to [libultraship](https://github.com/Kenix3/libultraship),
-[NVIDIA NRI](https://github.com/NVIDIA-RTX/NRI), and **M-1**, author of
-[TopScreen](https://gamebanana.com/mods/695893), for the mod's reverse engineering
-and development. The original game was created by Nintendo and Grezzo.
+[NVIDIA NRI](https://github.com/NVIDIA-RTX/NRI), the SDL controller-mapping
+contributors, and **M-1**, author of [TopScreen](https://gamebanana.com/mods/695893),
+for the mod's reverse engineering and development. The original game was
+created by Nintendo and Grezzo. [Full credits and licenses](THIRD_PARTY_NOTICES.md).
 
-[Full credits and licenses](THIRD_PARTY_NOTICES.md).
+Worst case scenario, at least we got more grass.

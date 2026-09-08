@@ -4,6 +4,10 @@ Date: 2026-09-08. Scope: the published Windows `v0.6.0-alpha.1` runtime,
 native device routing, and public package dependencies. No ROM adaptation,
 renderer behavior or title logic is changed by this repair.
 
+Follow-up: the maintainer connected a physical controller, tested the patched
+game from startup and confirmed that it works. Fix commit: `d88ebb5`. This
+confirmation does not establish compatibility with every controller model.
+
 ## Confirmed defects
 
 1. `oot3d_demo_host_context.cpp` initialized video and audio but only scanned
