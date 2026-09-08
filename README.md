@@ -8,7 +8,21 @@ single-screen controls and menus, widescreen support and customizable graphics.
 ## Install
 
 Requires a Vulkan-capable GPU with current drivers and your own supported
-decrypted **EUR** copy of the game.
+decrypted copy of the **EUR cartridge release, product code `CTR-P-AQEP`,
+Title ID `0004000000033600`**, matching the supported revision below.
+
+**Supported revision:** `oot3d-eur-project-baseline-16a6b0aa`.
+Its decompressed ExeFS `.code` is **4,567,040 bytes**, with SHA-256:
+
+```text
+16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220
+```
+
+This is the hash of the **decompressed game code, not the entire ROM**.
+Forge checks it automatically along with the ExHeader and RomFS against the
+[exact revision catalogue](tools/triaevum_release/supported_revisions.json).
+An EUR label or matching Title ID alone does not establish compatibility;
+other revisions and modified ROMs are not supported.
 
 1. Download the **Windows-x64 ZIP** from the release page and extract it into
    a writable folder.
