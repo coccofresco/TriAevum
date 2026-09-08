@@ -1,8 +1,8 @@
 # Offline ROM input adapter
 
 Status, 2026-09-08: **experimental USA-input installation, boot, title intro
-and file-selection menu verified**. Included in the `v0.6.0-alpha.1b` release
-plan; not qualified for an entire playthrough. Implementation: `c20427f`.
+and file-selection menu verified**. Published in `v0.6.0-alpha.1b`;
+not qualified for an entire playthrough. Implementation: `c20427f`.
 
 ## Decision
 
@@ -13,8 +13,10 @@ audio, interpolation and TopScreen code remain unchanged.
 
 This runs **canonical EUR logic with resources derived from the supplied USA
 ROM**, not a newly recompiled USA executable. Regional behavior differences
-are not automatically preserved by this approach. The full dump catalogue
-identity is still unresolved; see [input identity audit](TRIAEVUM_USA_REV1_PORT.md).
+are not automatically preserved by this approach. The original supplied full
+image remains non-catalogue-matching; the subsequent
+[catalogue audit](TRIAEVUM_CATALOGUE_ROM_INPUTS.md) verified that USA records
+0033 and 1259 both share its exact consumed input triplet and existing adapter.
 Only the exact extracted input triplet is accepted, not every file named USA
 Rev 1. The existing EUR import path remains available and unchanged.
 

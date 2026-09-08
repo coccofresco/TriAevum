@@ -1,5 +1,17 @@
 # Supported ROM identification
 
+## Catalogue verification, 2026-09-08
+
+| Verified decrypted catalogue input | Availability |
+| --- | --- |
+| USA original (0033) and Rev 1 (1259) | Already accepted by published alpha.1b, with the existing USA adapter. |
+| Europe original (0004) and Rev 1 (1168) | Added to the post-alpha.1b candidate through one shared direct recipe. |
+
+All four complete images were SHA-1 matched to No-Intro and tested with frozen
+Forge and real NRI boot. Within each region their consumed inputs are identical.
+See [exact identities, implementation and qualification](TRIAEVUM_CATALOGUE_ROM_INPUTS.md).
+The new EUR recipe is not yet in the published alpha.1b ZIP.
+
 ## European input: catalogue reference
 
 The target is the original European cartridge release, application version 0:
@@ -30,7 +42,7 @@ These are catalogue values for the entire decrypted image, not hashes of
 individual extracted files. The encrypted entry is not an input accepted by
 Forge. No ROM download is provided.
 
-## What the release actually verifies
+## Legacy EUR input contract
 
 Forge accepts decrypted `.3ds` or `.cci` containers and verifies their
 extracted contents against
@@ -56,9 +68,9 @@ remaster-version field is 0, consistent with the original release.
 It is **not a byte-identical match** for the complete No-Intro image above.
 Virtually restoring either zero or FF padding to 512 MiB did not match the
 catalogue SHA-256, so trimming alone does not establish the correspondence.
-No complete catalogue-matching image has been tested here. The catalogue
-reference identifies the intended edition; the extracted-input checks remain
-the authoritative statement of this alpha's tested compatibility.
+The later four-image audit now verifies complete catalogue-matching images.
+Their EUR code and RomFS match this legacy input; their ExHeader requires the
+additional exact recipe documented above. The legacy recipe remains available.
 
 No acceptance rules were relaxed to infer compatibility from the filename,
 region, product code or version field alone.
@@ -95,3 +107,8 @@ invented. See [adapter details and verification](TRIAEVUM_ROM_INPUT_ADAPTER.md).
 Installation, title intro and file selection have been tested. Full-playthrough,
 all hint/language paths and cross-region-save compatibility remain unqualified.
 This is not blanket support for other regions, revisions or modified inputs.
+
+The subsequent catalogue audit confirmed that both complete USA records 0033
+and 1259 have exactly the extracted triplet above. Both were installed and
+booted using the unchanged published alpha.1b package; no additional USA recipe
+or adapter is required.

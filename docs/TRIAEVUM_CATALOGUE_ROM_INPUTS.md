@@ -73,6 +73,28 @@ Forge still asks for the **extracted decrypted `.cci` or `.3ds`**, not a 7z.
 
 ## Verification boundary
 
+Implementation commit: `581b9f4`. The release-tool suite passed **193 tests**.
+The metadata-only candidate passed the release allowlist audit (52 files),
+reusing the published runtime, Forge and game DLL without rebuilding them.
+
+Four fresh installations were exercised with the frozen Forge executable,
+without a compiler on PATH. All four installed successfully, compiled zero
+objects, and exited normally after bounded NRI/Vulkan intro runs. Framebuffer
+captures at frame 600 were visually inspected for all four inputs; the EUR
+original also reached the TopScreen file-selection menu (frame 1800).
+
+| Input | Package tested | Forge installation time |
+| --- | --- | --- |
+| EUR original | New metadata-only candidate | 22.57 s |
+| EUR Rev 1 | New metadata-only candidate | 12.35 s |
+| USA original | Unchanged published alpha.1b | 25.74 s |
+| USA Rev 1 | Unchanged published alpha.1b | 27.08 s |
+
+Times are installer-reported on this PC, excluding extraction from 7z and
+network download: the official TopScreen archive was already available locally.
+They are not cross-machine guarantees. Candidate location:
+`I:/oot3dre_work/catalog-rom-inputs/candidate-package`.
+
 Private evidence lives under `I:/oot3dre_work/catalog-rom-inputs/`:
 `audit.json`, `exheader-comparison.json`, `package-overlay/` and `proof/`.
 Unit tests exercise exact recognition, rejection, unchanged legacy/USA behavior,
