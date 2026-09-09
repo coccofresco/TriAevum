@@ -107,10 +107,15 @@ behavior. Partial imports cannot activate a pack. Cache receipts explicitly say
 
 Native scenario capture ingestion is now implemented and tested separately in
 [Scenario-driven shader preparation](TRIAEVUM_SCENARIO_SHADER_PREPARATION.md):
-4,235 draws across 13 scenario IDs, 153 generated shader modules and 172 observed
-native pipeline recipes. The union with this Citra seed and the boot inventory
-compiles to 745 modules. This completes the capture-ingestion part of step 3
-below, not device pipeline preparation or whole-game coverage.
+as of 2026-09-10, 102 launchable scene representatives and 110 setup variants
+have been captured automatically. The combined corpus contains 126,612 draws
+across 212 scenario IDs, 461 generated shader modules and 709 observed native
+pipeline recipes, each with a complete-resource observation. All draws import
+successfully. The union with this Citra seed and the boot inventory compiles to
+815 modules, up from 745. An 88-scenario selection covers the currently observed
+recipes. This completes the capture-ingestion part of step 3 below, not device
+pipeline preparation or whole-game coverage. Proceed to actual NRI preparation
+with these inputs; do not require an exhaustive gameplay collection first.
 
 The additional MMJ text corpora were reviewed separately in
 [MMJ shader cache review](TRIAEVUM_MMJ_SHADER_CACHE_REVIEW.md). They contribute

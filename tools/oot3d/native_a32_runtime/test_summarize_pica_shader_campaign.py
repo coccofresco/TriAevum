@@ -26,6 +26,7 @@ class CampaignTests(unittest.TestCase):
         self.assertEqual(report["counts"]["native_pipelines"], 2)
         self.assertEqual(report["compact_native_pipeline_cover"],
                          [{"scenario_id": "two", "new_native_pipeline_count": 2}])
+        self.assertEqual(report["scenario_ids"], ["two"])
         self.assertEqual(report["uncovered_native_pipeline_ids"], [])
         self.assertFalse(report["game_coverage_proven"])
 

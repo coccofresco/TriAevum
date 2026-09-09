@@ -36,7 +36,7 @@ def summarize(inventory: dict, baseline: dict | None = None) -> dict:
         row["shader_count"] = len(used)
         row["shaders_absent_from_baseline"] = len(used - previous)
         row["native_pipeline_ids"] = sorted(row.pop("pipelines"))
-    # This is a compact replay selection for the observed native recipe universe,
+    # This is a compact recapture selection for the observed native recipe universe,
     # not a promise that unobserved gameplay states need no further collection.
     uncovered = set(recipes)
     remaining = {name: set(row["native_pipeline_ids"]) for name, row in scenarios.items()}
@@ -61,6 +61,7 @@ def summarize(inventory: dict, baseline: dict | None = None) -> dict:
         "new_module_stages": dict(Counter(stage for stage, _ in sources.keys() - previous)),
         "scenarios": [{"scenario_id": name, **row} for name, row in sorted(scenarios.items())],
         "compact_native_pipeline_cover": cover,
+        "scenario_ids": [row["scenario_id"] for row in cover],
         "uncovered_native_pipeline_ids": sorted(uncovered),
     }
 

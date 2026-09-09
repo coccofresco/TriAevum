@@ -94,9 +94,8 @@ this adds **70 modules**, producing an **815-module union**, all compiled to
 SPIR-V. Existing modules are retained even when absent from this new sample.
 
 The six original targeted captures are no longer the extent of the collection.
-The separate 110-setup temporal campaign uses three windows at 0/4/12 seconds.
-Its results must be reported separately from completed representatives until
-the whole temporal matrix and its native import have finished.
+The separate 110-setup temporal campaign is also complete; its sampling and
+combined native-import results are reported below.
 
 Representative evidence and analysis are in
 `I:/oot3dre_work/shader-seed-expansion/representatives/`,
@@ -109,6 +108,67 @@ The representative campaign exposed a Windows checkpoint sharing-lock error.
 No capture was lost: pending completed checkpoints recovered both interrupted
 updates, without repeating their emulator runs. Atomic replacement and its
 bounded failure path are now tested separately from the game.
+
+### Complete Campaign, 2026-09-10
+
+| Measurement | Result |
+| --- | --- |
+| Native setup variants captured | 110/110, zero capture failures |
+| Temporal windows | 330: 12 frames at each requested offset 0/4/12 seconds |
+| Temporal corpus | 3,507 nonempty frames, 95,137 draws |
+| Variants with pipeline identities absent from their first window | 96/110 |
+| Representatives + variants + retained earlier captures | 212 distinct scenario IDs, 4,737 nonempty frames, 126,612 draws |
+| Complete native shader-pair imports | 126,612/126,612; zero failures or missing vertex programs |
+| Generated sources from captures alone | 461: 1 vertex, 230 fragment, 230 NRI fragment |
+| Observed native pipeline recipes | 709, all with at least one complete-resource observation |
+| Union with earlier Citra/boot modules | 815 modules; 70 more than the preceding 745-module pack |
+| Final portable pack | 6,525,944 bytes; schema 3; every module compiled and round-trip verified |
+| Compact scenario selection | 88 scenarios cover all 709 observed native recipes |
+| Native import / pack compile, Linux development PC | 119.8 s / 7.2 s, including SSH invocation |
+
+The temporal campaign adds **no distinct shader modules** beyond the expanded
+representative union. Do not count repeated captures as new shaders. It does
+provide further observed state combinations: the final corpus has 709 native
+recipes versus 654 in representatives alone. All 52 recipes previously backed
+only by historical hash-only observations now also have a complete-resource
+observation. The original 482 historical draws remain explicitly historical;
+their missing dynamic LUT values were not copied from another frame.
+
+The temporal matrix took 2,243.2 seconds summed across its 110 runs, averaging
+20.4 seconds per setup, with all launched emulator processes stopped. Corpus
+recovery found zero malformed/incomplete files. It skipped 591 completed empty
+frames in the combined corpus and retained the 9 catalog-only exclusions.
+These are capture/preparation measurements, not game FPS.
+
+No device pipeline preparation, installed-game activation, framebuffer parity
+or first-launch hitch reduction is claimed here. A requested setup reaching
+its scene and yielding valid draws is not proof that its whole named cutscene
+or boss sequence played. Wall-time samples do not prove animation-frame timing.
+
+Private final artifacts, under
+`C:/Users/xander/AppData/Local/TriAevumDeveloperEvidence/shader-seed-expansion/`:
+
+- `setup-variants/coverage_matrix.json`: all 110 results and capture windows.
+- `combined/corpus.json`: merged relocatable corpus and original provenance.
+- `expanded-combined-inventory.json`: shader sources, per-frame native IDs and
+  complete native recipe records. Keep this: the shader-only union drops recipe
+  metadata and cannot replace it for device preparation.
+- `expanded-analysis.json`: comparison with 745 modules and compact selection.
+- `expanded-vs-representatives-analysis.json`: comparison with 815 modules.
+- `expanded-union-inventory.json`, `expanded-compile.json`,
+  `expanded-union.o3ps`: the final shader union, compilation receipt and pack.
+
+Final pack SHA-256:
+`1f2a776aea6d84290d87644884867422d62ad24a740f947658ca52b0fb7a296d`.
+Native tools used `/home/xander/triaevum-android-build/expanded-combined/` on
+the Linux development host; no game, whole-AOT or Android build was required.
+
+Source milestones: `8af5834` introduced native capture ingestion; `17d6566`
+added temporal capture scheduling, resilient checkpoints and native campaign
+analysis. Verification includes 15 Python tests, 9 PowerShell scheduling cases,
+the checkpoint replacement/lock/recovery test, the native adapter tests and
+the five opt-in native-importer integration cases. The final compact selection
+contains only IDs present in the existing scenario catalog.
 
 ### Commands
 
@@ -182,16 +242,31 @@ The native importer also reports pipeline IDs per frame. Campaign analysis
 uses those observed relationships to count genuinely new modules and select a
 deterministic compact set covering the observed native recipes. It does not
 infer relationships from a shader Cartesian product or claim whole-game
-coverage. Capture scheduling and checkpoint I/O have isolated PowerShell tests:
+coverage. Its top-level `scenario_ids` is directly accepted by the existing
+matrix runner, without a second selection-format converter:
+
+```powershell
+./scripts/oot3d/Test-Oot3dAzaharCoverageMatrix.ps1 `
+  -Mode all -ScenarioListPath PRIVATE_ANALYSIS.json `
+  -AzaharExe INSTRUMENTED_AZAHAR -RomPath PERSONAL_ROM `
+  -Slot 5 -Backend vulkan -ShaderSeed -CompactEvidence -SkipFramebuffer `
+  -SettleMilliseconds 0 -CaptureFramesOverride 12 `
+  -CaptureWindowOffsetsSeconds 0,4,12 -RunDirectory NEW_PRIVATE_RUN
+```
+
+The compact set covers identities in the existing observations, not every
+possible later run. Keep the sampling policy explicit and compare new results;
+different timing or gameplay state can change which transient draws occur.
+Capture scheduling and checkpoint I/O have isolated PowerShell tests:
 `Test-Oot3dAzaharCaptureSchedule.ps1` and `Test-Oot3dCoverageCheckpoint.ps1`.
 
 ## Remaining Work
 
-- Expand scene representatives and native setup variants only where useful.
-  The existing catalog has 111 scene representatives, 102 launchable and 9
-  catalog-only. Its 1,692 entries are not 1,692 verified playable states. Boss
-  entrances alone do not prove coverage of spawn, death or other transient
-  effects; use evidenced native selectors, not arbitrary memory guesses.
+- Representatives and setup variants are collected. Further collection should
+  target additional rooms/local entrances and later or interactive states not
+  exercised by the first 12 seconds. The catalog's 1,692 entries are not 1,692
+  verified playable states. Boss entrances alone do not prove coverage of
+  spawn/death effects; use evidenced selectors, not arbitrary memory guesses.
 - Turn the observed recipes into a renderer-owned prepare-only job using the
   actual NRI pipeline creation path, including host target formats, sample
   counts, layouts and extension profile. Native snapshots alone do not specify
@@ -199,6 +274,9 @@ coverage. Capture scheduling and checkpoint I/O have isolated PowerShell tests:
 - Connect that job to Forge with progress/cancel and bounded batches; qualify
   first launch, reuse and invalidation on Windows, Linux and Android. Shader
   compilation success is not proof that driver compilation hitches are gone.
+- Use the compact observed-state selection for regression runs before repeating
+  the full catalog. A broader count of sampled scenarios is not itself a reason
+  to delay renderer-owned preparation of the recipes already collected.
 - Keep game-derived captures, inventories and packs private. No public title
   catalog or release is enabled by this change. A distributable seed or a
   user-ROM-derived recipe needs the separate release decision described in
