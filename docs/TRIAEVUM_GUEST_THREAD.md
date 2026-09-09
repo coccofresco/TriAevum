@@ -104,6 +104,26 @@ never runs ahead of input and audio buffering stays bounded.
    main rethrows at the join; main joins the guest thread before
    `WaitForAllPresents`/`vkDeviceWaitIdle` and before `process` destruction.
 
+## Measured (disjoint per-thread spans, 1200-frame uncapped runs)
+
+| per 1200 frames | single | `--guest-thread` |
+| --- | ---: | ---: |
+| guest drain (`RunUntilGuestWait` + PICA drain) | 10.5-11.9 s | 9.3-11.3 s |
+| guest step (clock, HID, DSP, VBlank) | 1.7 s | 1.5-1.8 s |
+| main present half | 2.5-3.0 s | 2.2-2.8 s |
+| main StartFrame (GPU fence/acquire wait) | 4.3-12.7 s | 6.8-18.0 s |
+| main waiting on guest | 0 | 8.8-10.5 s |
+| fps | 60.8 / 39.7 | 63.9 / 37.0 |
+
+The guest's cost is the drain (~9 ms/frame), not the step (~1.4 ms). The
+present half is ~2 ms, so overlapping it hides at most ~2 ms and main then
+waits on the guest; the loop is guest-bound (or GPU-bound when the iGPU clock
+is low, which doubles StartFrame in both modes). Frame rate is therefore within
+run-to-run noise. Reaching a gain requires overlapping `drain(k)` with
+`drain(k+1)`'s guest work, i.e. running the guest a full frame ahead behind a
+two-deep frame queue, at the cost of one presentation frame of input latency.
+That is the packet handoff above and is not implemented.
+
 ## Verification gate
 
 `--guest-thread` is accepted only when a deterministic replay
