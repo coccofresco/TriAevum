@@ -394,6 +394,7 @@ struct NativeWidescreenProjectionState {
   bool TopScreenUiProfile = false;
   Oot3dNativeGame::TopScreenUiConfig TopScreenConfig;
   const Oot3dNativeGame::TopScreenExtendedInputFrame *TopScreenInput = nullptr;
+  const uint32_t *PendingTopScreenItemsSelection = nullptr;
   std::span<const uint32_t> WholeAotObservableExitPcs;
   std::optional<Oot3dNativeGame::TopScreenPauseTargetPlan>
       PendingTopScreenPauseTarget;
@@ -1646,7 +1647,9 @@ bool ExecuteProductTopScreenCamera(uint32_t pc, oot3d::recomp::a32::GuestState &
   if (!dispatch.TopScreenUiProfile || dispatch.Memory == nullptr ||
       (pc != kTopScreenCameraUpdateEntry && pc != kTopScreenCameraUpdatePatchSite &&
        pc != kTopScreenCameraNormal1Scalar && !itemQueryEntry &&
-       pc != kGlobalActionStateGetSlotItemId)) return false;
+       pc != kGlobalActionStateGetSlotItemId &&
+       pc != kPauseItemsNativeUpdateCall &&
+       pc != kPauseItemsNativeUpdateReturn)) return false;
   const bool handled = ExecuteTopScreenUiSourcePortBlock(pc, state, dispatch, result, blocksConsumed);
   if (handled) return true;
   // This entry was already observed before returning to the dispatcher. If
@@ -1889,10 +1892,27 @@ void ApplyNativeWidescreenProjectionPolicy(
   // Exit to the dispatcher only when the typed replacement will handle the
   // call. A declined hook cannot resume the compiled block in product mode,
   // so an input-only gate would spin on the same entry while ZL/ZR is held.
+  const auto pauseItemsPageState = [&]() {
+    uint32_t pageState = 0U;
+    return runtime.TraceMemory != nullptr &&
+                   runtime.TraceMemory->Read32(0x0050672CU, &pageState)
+               ? pageState
+               : 0U;
+  };
   const bool enabledTopScreenItemExit =
       runtime.TopScreenInput == nullptr ||
       runtime.TraceMemory == nullptr ||
-      (!itemQueryEntry && pc != kGlobalActionStateGetSlotItemId) ||
+      (!itemQueryEntry && pc != kGlobalActionStateGetSlotItemId &&
+       pc != kPauseItemsNativeUpdateCall &&
+       pc != kPauseItemsNativeUpdateReturn) ||
+      (pc == kPauseItemsNativeUpdateCall &&
+       Oot3dNativeGame::ResolveTopScreenItemsSelectionBegin(
+           {runtime.TopScreenInput->ZrPressed,
+            runtime.TopScreenInput->ZlPressed, pauseItemsPageState()})
+           .Active) ||
+      (pc == kPauseItemsNativeUpdateReturn &&
+       runtime.PendingTopScreenItemsSelection != nullptr &&
+       *runtime.PendingTopScreenItemsSelection != 0U) ||
       (itemQueryEntry &&
        Oot3dNativeGame::HasTopScreenItemQueryOverrideInput(
            *runtime.TopScreenInput) &&
@@ -3738,6 +3758,9 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
       wholeAotObservableExitBlocks.push_back(contract.OriginalEntry);
     }
     wholeAotObservableExitBlocks.push_back(kGlobalActionStateGetSlotItemId);
+    // Items page: ZR/ZL assign the hovered item to Item I/II without touch.
+    wholeAotObservableExitBlocks.push_back(kPauseItemsNativeUpdateCall);
+    wholeAotObservableExitBlocks.push_back(kPauseItemsNativeUpdateReturn);
     nativeCandidateEntries.insert(nativeCandidateEntries.end(),
                                   topScreenSourcePortBlocks.begin(),
                                   topScreenSourcePortBlocks.end());
@@ -3832,6 +3855,8 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
 #endif
   widescreenProjection.TopScreenInput =
       &nativeCandidateDispatch.TopScreenInput;
+  widescreenProjection.PendingTopScreenItemsSelection =
+      &nativeCandidateDispatch.PendingTopScreenItemsSelection;
   nativeCandidateDispatch.UiLifecycleBridge = &uiLifecycleBridge;
   nativeCandidateDispatch.PicaCompositionDomain = &picaCompositionDomain;
   nativeCandidateDispatch.TopScreenPauseProjection =
