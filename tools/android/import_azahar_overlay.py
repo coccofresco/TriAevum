@@ -42,7 +42,7 @@ def adapt_kotlin(source: str) -> str:
     source = source.replace("TurboHelper.toggleTurbo", "OverlayHost.toggleTurbo")
     source = source.replace(
         "    private val settingsViewModel = OverlayHost.sEmulationActivity.get()!!.settingsViewModel\n", "")
-    return source
+    return re.sub(r"(?m)^[\t ]+$", "", source)
 
 
 def main() -> None:
@@ -120,7 +120,7 @@ def main() -> None:
         "license": "GPL-2.0-or-later",
         "adaptations": ["namespace", "host_callbacks_and_application_context",
                         "remove_unused_activity_viewmodel", "exclude_activity_drawer_setting",
-                        "extract_overlay_only_resources_and_button_constants"],
+                        "extract_overlay_only_resources_and_button_constants", "blank_line_whitespace"],
         "sources": entries,
         "outputs": {name: hashlib.sha256(data).hexdigest() for name, data in sorted(outputs.items())},
     }

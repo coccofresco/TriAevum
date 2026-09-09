@@ -4,7 +4,8 @@
     "host_callbacks_and_application_context",
     "remove_unused_activity_viewmodel",
     "exclude_activity_drawer_setting",
-    "extract_overlay_only_resources_and_button_constants"
+    "extract_overlay_only_resources_and_button_constants",
+    "blank_line_whitespace"
   ],
   "donor": "https://github.com/azahar-emu/azahar",
   "license": "GPL-2.0-or-later",
@@ -12,7 +13,7 @@
     "license.txt": "a77e81713ddfe05f9f7f3a3c46de4147f82b5fe9d6e5e24af96e36a6de53f613",
     "src/main/java/org/triaevum/android/controls/AzaharButtonIds.kt": "00f52b1c840f7d2d55e3c69c41a1e953f129738a7e94763f3be6cf9975149f48",
     "src/main/java/org/triaevum/android/controls/EmulationMenuSettings.kt": "fa7c86fbd96efdb436cc29ecdda4f9888cac64e122f8825afaa7a054590096d2",
-    "src/main/java/org/triaevum/android/controls/InputOverlay.kt": "4c5d5648eafe7b6d15dc74e39c36ce74e87aa5338a2077e6bfd6b29c24a22014",
+    "src/main/java/org/triaevum/android/controls/InputOverlay.kt": "f9d6d9c1e4f72cce8d15595a93f3ce607833259d5be93b8b8918d94f8847f85d",
     "src/main/java/org/triaevum/android/controls/InputOverlayDrawableButton.kt": "dd16923d40a37dc8a9376b2c8bdcc5e24b9fc37e5c7e5e074cd9b9dab4c8d414",
     "src/main/java/org/triaevum/android/controls/InputOverlayDrawableDpad.kt": "12ee874e1b31681904d465bf26647c42721885b206037b2e5fda020215328a62",
     "src/main/java/org/triaevum/android/controls/InputOverlayDrawableJoystick.kt": "37c9537d5c8a4994311fd5d945f227a064266a4a751e05827edf829c9b3f15ff",
