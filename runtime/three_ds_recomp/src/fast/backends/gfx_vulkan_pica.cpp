@@ -813,7 +813,15 @@ void GfxRenderingAPIVulkan::CreateNativePicaRenderPass() {
     if (mDepthFormat == VK_FORMAT_UNDEFINED) {
         throw std::runtime_error("native PICA render pass requires a resolved depth format");
     }
-    const auto createRenderPass = [this](uint32_t colorCount, VkRenderPass& renderPass) {
+    // Android's API-29 loader stub does not export Vulkan 1.2 entry points.
+    // Resolve against the selected device, whose Vulkan capabilities are checked
+    // at initialization; this also works with desktop and custom driver loaders.
+    const auto createRenderPass2 = reinterpret_cast<PFN_vkCreateRenderPass2>(
+        vkGetDeviceProcAddr(mDevice, "vkCreateRenderPass2"));
+    if (createRenderPass2 == nullptr) {
+        throw std::runtime_error("native PICA requires Vulkan vkCreateRenderPass2");
+    }
+    const auto createRenderPass = [this, createRenderPass2](uint32_t colorCount, VkRenderPass& renderPass) {
         const bool multisampled = mNativePicaSampleCount != VK_SAMPLE_COUNT_1_BIT;
         const uint32_t depthIndex = colorCount;
         const uint32_t resolveBase = colorCount + 1U;
@@ -909,7 +917,7 @@ void GfxRenderingAPIVulkan::CreateNativePicaRenderPass() {
         info.pSubpasses = &subpass;
         info.dependencyCount = static_cast<uint32_t>(dependencies.size());
         info.pDependencies = dependencies.data();
-        CheckNativeVk(vkCreateRenderPass2(mDevice, &info, nullptr, &renderPass), "vkCreateRenderPass2(native PICA)");
+        CheckNativeVk(createRenderPass2(mDevice, &info, nullptr, &renderPass), "vkCreateRenderPass2(native PICA)");
     };
     createRenderPass(1U, mNativePicaCanonicalRenderPass);
     createRenderPass(static_cast<uint32_t>(Oot3d::kPicaColorAttachmentCount), mNativePicaRenderPass);

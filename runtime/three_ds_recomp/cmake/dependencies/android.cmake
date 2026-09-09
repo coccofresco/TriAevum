@@ -7,6 +7,7 @@ if (NOT ${SDL2_FOUND})
         SDL2
     GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
     GIT_TAG release-2.32.10
+    OVERRIDE_FIND_PACKAGE
     )
     message("SDL2 not found. Downloading now...")
     FetchContent_MakeAvailable(SDL2)
@@ -71,3 +72,7 @@ if (NOT ${libzip_FOUND})
 endif()
 
 target_link_libraries(ImGui PUBLIC SDL2::SDL2)
+if(USE_OPENGLES)
+    target_compile_definitions(ImGui PRIVATE IMGUI_IMPL_OPENGL_ES3)
+    target_link_libraries(ImGui PUBLIC GLESv3)
+endif()
