@@ -383,30 +383,18 @@ std::vector<uint8_t> NriPicaPipelineBridge::GetPipelineCacheData() const {
 #endif
 }
 
-bool NriPicaPipelineBridge::CreateOwnedPipeline(
-    VkPipeline fallbackPipeline,
-    const NriPicaGraphicsPipelineDesc& desc) {
-#ifndef ENABLE_RENDERER3DS_NRI
-    (void)fallbackPipeline;
-    (void)desc;
-    return false;
-#else
-    if (!Available() || fallbackPipeline == VK_NULL_HANDLE ||
-        desc.VertexSpirv.empty() || desc.FragmentSpirv.empty() ||
-        desc.ColorAttachmentCount == 0U ||
-        desc.ColorAttachmentCount > kPicaColorAttachmentCount ||
-        desc.VertexBindings.size() >
-            std::numeric_limits<uint8_t>::max() ||
-        desc.VertexAttributes.size() >
-            std::numeric_limits<uint8_t>::max() ||
-        mImpl->OwnedPipelines.contains(fallbackPipeline))
-        return false;
-
+#ifdef ENABLE_RENDERER3DS_NRI
+nri::Pipeline* NriPicaPipelineBridge::CreatePipeline(const NriPicaGraphicsPipelineDesc& desc) {
+    if (!Available() || desc.VertexSpirv.empty() || desc.FragmentSpirv.empty() ||
+        desc.ColorAttachmentCount == 0U || desc.ColorAttachmentCount > kPicaColorAttachmentCount ||
+        desc.VertexBindings.size() > std::numeric_limits<uint8_t>::max() ||
+        desc.VertexAttributes.size() > std::numeric_limits<uint8_t>::max())
+        return nullptr;
     const nri::Topology topology = ToNriTopology(desc.Topology);
     const nri::CullMode cullMode = ToNriCullMode(desc.CullMode);
     if (topology == nri::Topology::MAX_NUM ||
         cullMode == nri::CullMode::MAX_NUM)
-        return false;
+        return nullptr;
 
     std::vector<nri::VertexStreamDesc> streams;
     streams.reserve(desc.VertexBindings.size());
@@ -415,7 +403,7 @@ bool NriPicaPipelineBridge::CreateOwnedPipeline(
                 std::numeric_limits<uint16_t>::max() ||
             binding.stride >
                 std::numeric_limits<uint16_t>::max())
-            return false;
+            return nullptr;
         streams.push_back({
             static_cast<uint16_t>(binding.binding),
             binding.inputRate == VK_VERTEX_INPUT_RATE_INSTANCE
@@ -428,7 +416,7 @@ bool NriPicaPipelineBridge::CreateOwnedPipeline(
     for (const auto& attribute : desc.VertexAttributes) {
         if (attribute.binding >
                 std::numeric_limits<uint16_t>::max())
-            return false;
+            return nullptr;
         nri::VertexAttributeDesc converted{};
         converted.vk.location = attribute.location;
         converted.offset = attribute.offset;
@@ -437,7 +425,7 @@ bool NriPicaPipelineBridge::CreateOwnedPipeline(
         converted.streamIndex =
             static_cast<uint16_t>(attribute.binding);
         if (converted.format == nri::Format::UNKNOWN)
-            return false;
+            return nullptr;
         attributes.push_back(converted);
     }
     const nri::VertexInputDesc vertexInput{
@@ -460,7 +448,7 @@ bool NriPicaPipelineBridge::CreateOwnedPipeline(
         destination.format =
             nri::nriConvertVKFormatToNRI(desc.ColorFormats[index]);
         if (destination.format == nri::Format::UNKNOWN)
-            return false;
+            return nullptr;
         destination.colorBlend = {
             ToNriBlendFactor(source.srcColorBlendFactor),
             ToNriBlendFactor(source.dstColorBlendFactor),
@@ -477,7 +465,7 @@ bool NriPicaPipelineBridge::CreateOwnedPipeline(
     const nri::Format depthFormat =
         nri::nriConvertVKFormatToNRI(desc.DepthStencilFormat);
     if (depthFormat == nri::Format::UNKNOWN)
-        return false;
+        return nullptr;
 
     nri::MultisampleDesc multisample{};
     multisample.sampleMask = 0xFFFFFFFFU;
@@ -527,7 +515,34 @@ bool NriPicaPipelineBridge::CreateOwnedPipeline(
                 *mImpl->Interop->Device(),
                 pipeline, owned) != nri::Result::SUCCESS ||
         owned == nullptr)
+        return nullptr;
+    return owned;
+}
+#endif
+
+bool NriPicaPipelineBridge::PreparePipeline(const NriPicaGraphicsPipelineDesc& desc) {
+#ifndef ENABLE_RENDERER3DS_NRI
+    (void)desc;
+    return false;
+#else
+    auto* pipeline = CreatePipeline(desc);
+    if (!pipeline) return false;
+    mImpl->Interop->Core()->DestroyPipeline(pipeline);
+    return true;
+#endif
+}
+
+bool NriPicaPipelineBridge::CreateOwnedPipeline(
+    VkPipeline fallbackPipeline, const NriPicaGraphicsPipelineDesc& desc) {
+#ifndef ENABLE_RENDERER3DS_NRI
+    (void)fallbackPipeline;
+    (void)desc;
+    return false;
+#else
+    if (fallbackPipeline == VK_NULL_HANDLE || mImpl->OwnedPipelines.contains(fallbackPipeline))
         return false;
+    auto* owned = CreatePipeline(desc);
+    if (!owned) return false;
     mImpl->OwnedPipelines.emplace(fallbackPipeline, owned);
     const bool usesBlendConstants = std::any_of(
         desc.Colors.begin(), desc.Colors.end(),

@@ -180,6 +180,36 @@ int main() {
                     plan.ResolvedFragmentShaderSource()),
             "native PICA submission did not produce a complete Vulkan plan");
 
+    {
+        auto metadata = submission;
+        metadata.Resources.clear();
+        Oot3dNativeGame::Oot3dPicaVulkanDrawPlan prepared, rejectedDraw;
+        Require(Oot3dNativeGame::BuildOot3dPicaVulkanPipelinePlan(metadata, prepared, &error), error);
+        Require(!Oot3dNativeGame::BuildOot3dPicaVulkanDrawPlan(metadata, rejectedDraw, &error),
+                "pipeline preparation must not make resource-less draws executable");
+        Require(prepared.ResolvedVertexShaderSource() == plan.ResolvedVertexShaderSource() &&
+                prepared.ResolvedFragmentShaderSource() == plan.ResolvedFragmentShaderSource() &&
+                prepared.VertexBindings.size() == plan.VertexBindings.size() &&
+                prepared.VertexAttributes.size() == plan.VertexAttributes.size() &&
+                prepared.IndexBytes.empty() && prepared.Textures.empty() &&
+                prepared.VertexBindings[0].ResolvedBytes().empty() && !prepared.GeometryIdentityAvailable,
+                "preparation must share live shaders/layout without copying geometry or textures");
+        for (size_t i = 0; i < plan.VertexBindings.size(); ++i) {
+            const auto& a = prepared.VertexBindings[i];
+            const auto& b = plan.VertexBindings[i];
+            Require(a.Binding == b.Binding && a.ByteStride == b.ByteStride && a.InputRate == b.InputRate,
+                    "preparation/live vertex binding mismatch");
+        }
+        for (size_t i = 0; i < plan.VertexAttributes.size(); ++i) {
+            const auto& a = prepared.VertexAttributes[i];
+            const auto& b = plan.VertexAttributes[i];
+            Require(a.Location == b.Location && a.Binding == b.Binding && a.Format == b.Format &&
+                    a.ComponentCount == b.ComponentCount && a.ByteOffset == b.ByteOffset,
+                    "preparation/live vertex attribute mismatch");
+        }
+        error.clear();
+    }
+
     const std::string vertexSource(plan.ResolvedVertexShaderSource());
     const std::string fragmentSource(plan.ResolvedFragmentShaderSource());
     submission.Packet.VertexShader.BooleanUniforms[3] = true;

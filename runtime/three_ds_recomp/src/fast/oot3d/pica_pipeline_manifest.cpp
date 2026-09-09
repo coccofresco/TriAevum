@@ -945,4 +945,53 @@ const std::filesystem::path& PicaGraphicsPipelineInventory::Path() const
     return mPath;
 }
 
+PicaGraphicsPipelineManifestEntry DescribePicaGraphicsPipelineDraw(
+    const Renderer3ds::PicaDrawView& draw) {
+    PicaGraphicsPipelineManifestEntry entry;
+    entry.DescriptorSchemaVersion = draw.CanonicalDescriptorSchemaVersion;
+    entry.VertexShaderKey = draw.VertexShaderKey;
+    entry.FragmentShaderKey = draw.FragmentShaderKey;
+    entry.Topology = draw.Topology;
+    entry.CullMode = draw.CullMode;
+    entry.FramebufferFlipped = draw.FramebufferFlipped;
+    entry.VertexBindings.reserve(draw.VertexBindings.size());
+    for (const auto& binding : draw.VertexBindings) {
+        entry.VertexBindings.push_back({
+            binding.Binding, binding.ByteStride, binding.PerInstance});
+    }
+    entry.VertexAttributes.reserve(draw.VertexAttributes.size());
+    for (const auto& attribute : draw.VertexAttributes) {
+        entry.VertexAttributes.push_back({
+            attribute.Location, attribute.Binding, attribute.Format,
+            attribute.ComponentCount, attribute.ByteOffset});
+    }
+    entry.ColorWriteMask = draw.ColorWriteMask;
+    entry.FragmentOperationMode = draw.FragmentOperationMode;
+    entry.LogicOperation = draw.LogicOperation;
+    entry.Blend = {
+        draw.Blend.Enabled,
+        draw.Blend.EquationRgb,
+        draw.Blend.EquationAlpha,
+        draw.Blend.SourceRgb,
+        draw.Blend.DestRgb,
+        draw.Blend.SourceAlpha,
+        draw.Blend.DestAlpha,
+    };
+    entry.AlphaTestEnabled = draw.AlphaTestEnabled;
+    entry.DepthTestEnabled = draw.DepthTestEnabled;
+    entry.DepthWriteEnabled = draw.DepthWriteEnabled;
+    entry.DepthCompare = draw.DepthCompare;
+    entry.Stencil = {
+        draw.Stencil.Enabled,
+        draw.Stencil.Compare,
+        draw.Stencil.Reference,
+        draw.Stencil.CompareMask,
+        draw.Stencil.WriteMask,
+        draw.Stencil.Fail,
+        draw.Stencil.DepthFail,
+        draw.Stencil.Pass,
+    };
+    return entry;
+}
+
 } // namespace Fast::Oot3d

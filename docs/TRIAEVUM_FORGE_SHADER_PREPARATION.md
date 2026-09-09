@@ -103,6 +103,18 @@ No catalog object means no preparation job and unchanged existing installation
 behavior. Partial imports cannot activate a pack. Cache receipts explicitly say
 `device_pipeline_prewarm: not_performed` and `game_coverage_proven: false`.
 
+## Device Preparation Update (2026-09-10)
+
+[NRI pipeline preparation](TRIAEVUM_NRI_PIPELINE_PREPARATION.md) now implements
+the shared cache store, bounded renderer job and prepare-only CLI plus the
+optional Forge host. The 709 captured native recipes resolve to 500 distinct
+host pipelines: all created on Linux RTX 4060 in 8.224 s, then 0.807 s with the
+persisted cache. Actual Forge reuse, corruption and cancellation tests pass.
+The same helper compiles for Android ARM64. Installed-game framebuffer checks,
+Windows/Android GPU qualification, extension variants and release enablement
+remain pending. The earlier `not_performed` receipt belongs specifically to
+portable shader preparation, not this separate device-stage receipt.
+
 ## Remaining Work, In Order
 
 Native scenario capture ingestion is now implemented and tested separately in
@@ -123,13 +135,11 @@ validated foreign GLSL stage links, not native PICA state or directly usable NRI
 modules. Do not route `.shader` files into the transferable `.bin` importer or
 count their successful desktop GLSL compilation as runtime coverage.
 
-1. Adapt PR #11's session persistence/prewarm after the review fixes below;
-   isolate storage and queue scheduling from the large Vulkan backend class.
-   Preserve the recent Android swapchain/pipeline lifetime fixes.
-2. Add a renderer-owned **prepare-only** entry point, callable by Forge, with
-   progress/cancel, no guest boot, no frame drops, and bounded work batches.
-   Use actual NRI pipelines and the same device/cache directory as the game.
-   Do not merely create unused Vulkan shader modules or the fallback pipeline.
+1. Shared storage and prepare-only scheduling are implemented using the
+   existing NRI persistence/factory. Validate live rendering after extraction;
+   preserve Android swapchain and pipeline lifetime behavior.
+2. Qualify the implemented prepare-only entry point on the other target GPUs;
+   native Linux preparation and ARM64 compilation are already verified.
 3. Merge the imported fragment seed with our captured vertex programs and
    actual pipeline recipes; reconstruct additional vertex programs from the
    user's ROM where possible. Do not create a Cartesian product of every VS,

@@ -1739,7 +1739,12 @@ add_executable(oot3d_native_pica_cache_inventory EXCLUDE_FROM_ALL
 target_link_libraries(oot3d_native_pica_cache_inventory PRIVATE oot3d_native_pica_frontend)
 add_executable(oot3d_native_pica_capture_inventory EXCLUDE_FROM_ALL
     tools/oot3d/native_pica_frontend/oot3d_native_pica_capture_inventory.cpp
+    tools/oot3d/native_game_runtime/oot3d_native_pica_vulkan_plan.cpp
+    tools/oot3d/native_game_runtime/oot3d_native_pica_vulkan_bridge.cpp
+    runtime/three_ds_recomp/src/fast/oot3d/pica_pipeline_manifest.cpp
+    runtime/three_ds_recomp/src/fast/oot3d/pica_aot_shader_pack.cpp
     runtime/three_ds_recomp/src/fast/renderer3ds/pica_nri_shader_contract.cpp)
+target_include_directories(oot3d_native_pica_capture_inventory PRIVATE tools/oot3d/native_game_runtime)
 target_link_libraries(oot3d_native_pica_capture_inventory PRIVATE
     oot3d_native_pica_frontend oot3d_native_pica_azahar_capture)
 foreach(_cache_target oot3d_native_pica_transferable_cache_tests oot3d_native_pica_cache_inventory oot3d_native_pica_capture_inventory)

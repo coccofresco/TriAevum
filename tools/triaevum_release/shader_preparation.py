@@ -1,7 +1,7 @@
 """Forge's optional, recipe-bound portable shader preparation stage.
 
 This compiles GPU shader modules, never title C++ or an SDK. Device pipeline
-prewarm belongs to the renderer and is deliberately not represented as done.
+prewarm is a separate renderer job, hosted by device_pipeline_preparation.py.
 No seed is discovered by filename or silently downloaded.
 """
 

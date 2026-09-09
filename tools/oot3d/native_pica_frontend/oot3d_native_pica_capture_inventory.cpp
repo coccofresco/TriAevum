@@ -3,6 +3,8 @@
 #include "oot3d_native_pica_program_descriptor.h"
 #include "oot3d_native_pica_shader_gen.h"
 #include "fast/renderer3ds/pica_nri_shader_contract.h"
+#include "fast/oot3d/pica_pipeline_manifest.h"
+#include "oot3d_native_pica_vulkan_bridge.h"
 
 #include <filesystem>
 #include <fstream>
@@ -17,6 +19,25 @@ namespace {
 using Json = nlohmann::json;
 using namespace Oot3dNativeGame;
 
+class PipelineRecorder final : public Oot3d::Renderer::PicaRenderBackend {
+  public:
+    Fast::Oot3d::PicaGraphicsPipelineInventory Inventory;
+    bool SubmitPicaDraw(const Oot3d::Renderer::PicaDrawView& draw, std::string* error) override {
+        auto entry = Fast::Oot3d::DescribePicaGraphicsPipelineDraw(draw);
+        entry.VertexSource = Fast::Oot3d::IdentifyPicaAotShaderSource(draw.VertexShaderSource);
+        entry.FragmentSource = Fast::Oot3d::IdentifyPicaAotShaderSource(draw.FragmentShaderSource);
+        const auto nri = Fast::Renderer3ds::BuildPicaNriFragmentShaderVariant(draw.FragmentShaderSource);
+        if (!nri.Applied) { if (error) *error = nri.Error; return false; }
+        entry.NriFragmentSource = Fast::Oot3d::IdentifyPicaAotShaderSource(nri.Source);
+        entry.NriFragmentAvailable = true;
+        Inventory.Observe(std::move(entry), draw.CanonicalPipelineId, 0);
+        return true;
+    }
+    bool SubmitPicaDisplayTransfer(const Oot3d::Renderer::PicaDisplayTransferView&, std::string*) override { return false; }
+    bool SubmitPicaMemoryFill(const Oot3d::Renderer::PicaMemoryFillView&, std::string*) override { return false; }
+    bool ClearPicaRenderTarget(uint64_t, uint32_t, std::string*) override { return false; }
+};
+
 Json ReadJson(const std::filesystem::path& path) {
     std::ifstream input(path, std::ios::binary);
     if (!input) throw std::runtime_error("cannot read " + path.string());
@@ -30,6 +51,9 @@ ProgramKey Key(const Json& payload) {
 }
 
 struct Collector {
+    PipelineRecorder PipelineOutput;
+    Oot3dPicaVulkanShaderSourceCache PipelineShaderCache;
+    std::set<std::string> PreparedRecipes;
     std::map<ProgramKey, Oot3dPicaShaderState> Programs;
     std::map<std::pair<std::string, std::string>, Json> Shaders;
     std::map<uint64_t, std::string> VertexSources;
@@ -149,6 +173,18 @@ struct Collector {
             }
             const auto identity = BuildOot3dPicaCanonicalDrawIdentity(packet, state);
             const std::string recipeId = FormatOot3dPicaCanonicalId(identity.PipelineId);
+            if (seeded && PipelineOutput.Inventory.Enabled() && !PreparedRecipes.contains(recipeId)) {
+                Oot3dPicaDrawSubmission submission;
+                submission.Packet = packet;
+                submission.State = state;
+                Oot3dPicaVulkanDrawPlan plan;
+                if (!BuildOot3dPicaVulkanPipelinePlan(submission, plan, &error, &PipelineShaderCache) ||
+                    !SubmitOot3dPicaVulkanDrawPlan(PipelineOutput, plan, &error)) {
+                    fail("pipeline metadata: " + error);
+                    continue;
+                }
+                PreparedRecipes.insert(recipeId);
+            }
             const auto [it, added] = Recipes.try_emplace(recipeId, Json{
                 {"native_pipeline_id", recipeId},
                 {"native_raster_state_id", FormatOot3dPicaCanonicalId(identity.RasterStateId)},
@@ -183,12 +219,13 @@ struct Collector {
 
 int main(int argc, char** argv) {
     try {
-        std::filesystem::path manifest, output;
+        std::filesystem::path manifest, output, pipelineManifest;
         for (int i = 1; i < argc; ++i) {
             const std::string arg = argv[i];
             if (++i >= argc) throw std::runtime_error("missing option value");
             if (arg == "--manifest") manifest = argv[i];
             else if (arg == "--output") output = argv[i];
+            else if (arg == "--pipeline-manifest") pipelineManifest = argv[i];
             else throw std::runtime_error("unknown option " + arg);
         }
         if (manifest.empty() || output.empty())
@@ -199,6 +236,13 @@ int main(int argc, char** argv) {
         if (std::filesystem::weakly_canonical(manifest) == std::filesystem::weakly_canonical(output))
             throw std::runtime_error("output overlaps manifest");
         Collector collector;
+        if (!pipelineManifest.empty()) {
+            if (std::filesystem::weakly_canonical(pipelineManifest) == std::filesystem::weakly_canonical(output) ||
+                std::filesystem::weakly_canonical(pipelineManifest) == std::filesystem::weakly_canonical(manifest))
+                throw std::runtime_error("pipeline manifest overlaps an input/output");
+            std::string error;
+            if (!collector.PipelineOutput.Inventory.Configure(pipelineManifest, &error)) throw std::runtime_error(error);
+        }
         // Program bytes are immutable for their captured identity and can repair
         // hash-only historical draws. Dynamic LUT state never crosses frames.
         for (const auto& frame : corpus.at("frames"))
@@ -207,6 +251,9 @@ int main(int argc, char** argv) {
             const auto path = manifest.parent_path() / frame.at("path").get<std::string>();
             if (std::filesystem::weakly_canonical(path) == std::filesystem::weakly_canonical(output))
                 throw std::runtime_error("output overlaps capture");
+            if (!pipelineManifest.empty() && std::filesystem::weakly_canonical(path) ==
+                    std::filesystem::weakly_canonical(pipelineManifest))
+                throw std::runtime_error("pipeline manifest overlaps capture");
             collector.Frame(path, frame.at("scenario"));
         }
         Json shaders = Json::array(), recipes = Json::array();
@@ -227,6 +274,13 @@ int main(int argc, char** argv) {
         std::ofstream out(output, std::ios::binary | std::ios::trunc);
         out << inventory.dump(2) << '\n'; out.close();
         if (!out) throw std::runtime_error("failed writing inventory");
+        if (!pipelineManifest.empty()) {
+            if (collector.PreparedRecipes.size() != collector.Recipes.size())
+                throw std::runtime_error("not all pipeline recipes have complete preparation metadata");
+            std::string error;
+            if (!collector.PipelineOutput.Inventory.Finish(&error)) throw std::runtime_error(error);
+            std::cout << "host_pipeline_recipes=" << collector.PipelineOutput.Inventory.EntryCount() << '\n';
+        }
         std::cout << "draws=" << collector.Draws << " complete=" << collector.CompleteDraws
                   << " modules=" << shaders.size() << " recipes=" << recipes.size()
                   << " failures=" << collector.Failures << '\n';

@@ -134,6 +134,9 @@ struct PicaGraphicsPipelineManifestEntry {
         bool nativeFidelity) const noexcept;
 };
 
+PicaGraphicsPipelineManifestEntry DescribePicaGraphicsPipelineDraw(
+    const Renderer3ds::PicaDrawView& draw);
+
 bool WritePicaGraphicsPipelineManifest(
     const std::filesystem::path& path,
     uint32_t descriptorSchemaVersion,

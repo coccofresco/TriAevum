@@ -1,6 +1,8 @@
 #ifdef ENABLE_OOT3D_VULKAN
 
 #include "fast/backends/gfx_vulkan.h"
+#include "fast/renderer3ds/vulkan_pipeline_cache_store.h"
+#include "fast/oot3d/pica_nri_pipeline_state.h"
 
 #include "fast/backends/gfx_sdl.h"
 #include "fast/interpreter.h"
@@ -42,7 +44,6 @@ namespace {
 
 constexpr size_t kOot3dCachedVertexBufferLimit = 1024;
 constexpr uint32_t kVulkanShaderCacheVersion = 1;
-constexpr uint32_t kVulkanPipelineCacheVersion = 1;
 constexpr uint32_t kSpirvMagic = 0x07230203U;
 constexpr uint64_t kMaximumPipelineCacheBytes = 64ULL * 1024ULL * 1024ULL;
 
@@ -153,76 +154,15 @@ void StoreCachedSpirv(const std::filesystem::path& path,
                  static_cast<std::streamsize>(spirv.size_bytes()));
 }
 
-struct VulkanPipelineCacheHeader {
-    uint32_t Magic = 0x4F335650U;
-    uint32_t Version = kVulkanPipelineCacheVersion;
-    uint32_t VendorId = 0;
-    uint32_t DeviceId = 0;
-    uint32_t DriverVersion = 0;
-    std::array<uint8_t, VK_UUID_SIZE> Uuid{};
-    uint64_t DataSize = 0;
-};
+using Renderer3ds::VulkanPipelineCacheHeader;
+using Renderer3ds::MakePipelineCacheHeader;
+using Renderer3ds::LoadPipelineCacheData;
+using Renderer3ds::StorePipelineCacheData;
 
 std::filesystem::path VulkanPipelineCachePath(bool nri = false) {
     const auto directory = VulkanShaderCacheDirectory();
     return directory.empty() ? std::filesystem::path{}
-                             : directory / (nri ? "nri_pipeline_cache.bin" : "pipeline_cache.bin");
-}
-
-VulkanPipelineCacheHeader MakePipelineCacheHeader(
-    const VkPhysicalDeviceProperties& properties) {
-    VulkanPipelineCacheHeader header;
-    header.VendorId = properties.vendorID;
-    header.DeviceId = properties.deviceID;
-    header.DriverVersion = properties.driverVersion;
-    std::copy_n(properties.pipelineCacheUUID, VK_UUID_SIZE,
-                header.Uuid.begin());
-    return header;
-}
-
-bool LoadPipelineCacheData(const std::filesystem::path& path,
-                           const VulkanPipelineCacheHeader& expected,
-                           std::vector<uint8_t>& data) {
-    if (path.empty()) {
-        return false;
-    }
-    std::ifstream input(path, std::ios::binary);
-    VulkanPipelineCacheHeader header;
-    if (!input.read(reinterpret_cast<char*>(&header), sizeof(header)) ||
-        header.Magic != expected.Magic ||
-        header.Version != expected.Version ||
-        header.VendorId != expected.VendorId ||
-        header.DeviceId != expected.DeviceId ||
-        header.DriverVersion != expected.DriverVersion ||
-        header.Uuid != expected.Uuid || header.DataSize == 0 ||
-        header.DataSize > kMaximumPipelineCacheBytes) {
-        return false;
-    }
-    data.resize(static_cast<size_t>(header.DataSize));
-    return static_cast<bool>(input.read(
-        reinterpret_cast<char*>(data.data()),
-        static_cast<std::streamsize>(data.size())));
-}
-
-void StorePipelineCacheData(const std::filesystem::path& path,
-                            VulkanPipelineCacheHeader header,
-                            std::span<const uint8_t> data) {
-    if (path.empty() || data.empty()) {
-        return;
-    }
-    std::error_code error;
-    std::filesystem::create_directories(path.parent_path(), error);
-    if (error) {
-        return;
-    }
-    header.DataSize = data.size();
-    std::ofstream output(path, std::ios::binary | std::ios::trunc);
-    if (!output.write(reinterpret_cast<const char*>(&header),
-                      sizeof(header))) {
-        return;
-    }
-    output.write(reinterpret_cast<const char*>(data.data()),
-                 static_cast<std::streamsize>(data.size()));
+        : directory / (nri ? Renderer3ds::kNriPipelineCacheFilename : "pipeline_cache.bin");
 }
 
 void CheckVk(VkResult result, const char* operation) {
@@ -3106,9 +3046,12 @@ void GfxRenderingAPIVulkan::StorePipelineCache() {
     if (!nriData.empty()) {
         VkPhysicalDeviceProperties properties{};
         vkGetPhysicalDeviceProperties(mPhysicalDevice, &properties);
-        StorePipelineCacheData(VulkanPipelineCachePath(true),
-                               MakePipelineCacheHeader(properties), nriData);
-        SPDLOG_INFO("NRI PICA pipeline cache: stored {} bytes", nriData.size());
+        std::string error;
+        if (StorePipelineCacheData(VulkanPipelineCachePath(true),
+                                  MakePipelineCacheHeader(properties), nriData, &error))
+            SPDLOG_INFO("NRI PICA pipeline cache: stored {} bytes", nriData.size());
+        else
+            SPDLOG_WARN("NRI PICA pipeline cache: {}", error);
     }
     if (mPipelineCache == VK_NULL_HANDLE) {
         return;
@@ -3141,8 +3084,11 @@ void GfxRenderingAPIVulkan::StorePipelineCache() {
     VkPhysicalDeviceProperties properties{};
     vkGetPhysicalDeviceProperties(mPhysicalDevice, &properties);
     const std::filesystem::path path = VulkanPipelineCachePath();
-    StorePipelineCacheData(path, MakePipelineCacheHeader(properties), data);
-    SPDLOG_INFO("OOT3D Vulkan pipeline cache: stored {} bytes", data.size());
+    std::string error;
+    if (StorePipelineCacheData(path, MakePipelineCacheHeader(properties), data, &error))
+        SPDLOG_INFO("OOT3D Vulkan pipeline cache: stored {} bytes", data.size());
+    else
+        SPDLOG_WARN("OOT3D Vulkan pipeline cache: {}", error);
 }
 
 void GfxRenderingAPIVulkan::StartPresentWorker() {
@@ -5361,18 +5307,7 @@ VkExtent2D GfxRenderingAPIVulkan::ChooseExtent(const VkSurfaceCapabilitiesKHR& c
 }
 
 VkFormat GfxRenderingAPIVulkan::FindDepthFormat() const {
-    const VkFormat candidates[] = { VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT,
-                                    VK_FORMAT_D24_UNORM_S8_UINT };
-    for (VkFormat format : candidates) {
-        VkFormatProperties properties{};
-        vkGetPhysicalDeviceFormatProperties(mPhysicalDevice, format, &properties);
-        const VkFormatFeatureFlags required = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT |
-                                              VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
-        if ((properties.optimalTilingFeatures & required) == required) {
-            return format;
-        }
-    }
-    throw std::runtime_error("Vulkan device has no sampleable depth attachment format");
+    return Oot3d::FindPicaDepthFormat(mPhysicalDevice);
 }
 
 uint32_t GfxRenderingAPIVulkan::FindMemoryType(uint32_t typeFilter,

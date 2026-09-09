@@ -123,6 +123,9 @@ class NriPicaPipelineBridge final {
                     const NriPicaExecutionConfig& config = {});
     bool InitializePipelineCache(std::span<const uint8_t> data = {});
     [[nodiscard]] std::vector<uint8_t> GetPipelineCacheData() const;
+    // Uses the live pipeline factory, then releases the pipeline. No draw,
+    // framebuffer, upload allocation or fake Vulkan pipeline handle is needed.
+    bool PreparePipeline(const NriPicaGraphicsPipelineDesc& desc);
     bool CreateOwnedPipeline(
         VkPipeline fallbackPipeline,
         const NriPicaGraphicsPipelineDesc& desc);
@@ -146,6 +149,9 @@ class NriPicaPipelineBridge final {
     [[nodiscard]] const std::string& UnavailableReason() const;
 
   private:
+#ifdef ENABLE_RENDERER3DS_NRI
+    nri::Pipeline* CreatePipeline(const NriPicaGraphicsPipelineDesc& desc);
+#endif
     struct Impl;
     std::unique_ptr<Impl> mImpl;
 };
