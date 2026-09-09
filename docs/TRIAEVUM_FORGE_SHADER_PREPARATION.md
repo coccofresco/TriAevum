@@ -105,6 +105,12 @@ behavior. Partial imports cannot activate a pack. Cache receipts explicitly say
 
 ## Remaining Work, In Order
 
+The additional MMJ text corpora were reviewed separately in
+[MMJ shader cache review](TRIAEVUM_MMJ_SHADER_CACHE_REVIEW.md). They contribute
+validated foreign GLSL stage links, not native PICA state or directly usable NRI
+modules. Do not route `.shader` files into the transferable `.bin` importer or
+count their successful desktop GLSL compilation as runtime coverage.
+
 1. Adapt PR #11's session persistence/prewarm after the review fixes below;
    isolate storage and queue scheduling from the large Vulkan backend class.
    Preserve the recent Android swapchain/pipeline lifetime fixes.
