@@ -8,6 +8,7 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <set>
 #include <stdexcept>
 #include <tuple>
 #include <nlohmann/json.hpp>
@@ -72,6 +73,7 @@ struct Collector {
         bool begun = false, ended = false, lutsAvailable = false;
         uint64_t draws = 0, complete = 0, missing = 0, failures = 0;
         Json errors = Json::array();
+        std::set<std::string> framePipelines;
         std::string line, error;
         while (std::getline(input, line)) {
             if (line.size() > 16U * 1024U * 1024U) throw std::runtime_error("oversized capture record");
@@ -167,13 +169,14 @@ struct Collector {
                 it->second["resource_draw"] = metadata.DrawIndex;
             }
             it->second["draws"] = it->second.at("draws").get<uint64_t>() + 1;
+            framePipelines.insert(recipeId);
             ++complete;
         }
         if (!begun || !ended) throw std::runtime_error("incomplete capture " + path.string());
         Draws += draws; CompleteDraws += complete; MissingVertex += missing; Failures += failures;
         Reports.push_back({{"scenario", scenario}, {"frame", path.generic_string()},
             {"draws", draws}, {"complete_draws", complete}, {"missing_vertex_draws", missing},
-            {"failures", failures}, {"errors", errors}});
+            {"failures", failures}, {"errors", errors}, {"native_pipeline_ids", framePipelines}});
     }
 };
 }

@@ -81,6 +81,7 @@ def summarize(capture_summary_path: Path) -> dict[str, Any]:
     for trace_name in capture_summary["pica_frames"]:
         trace_path = Path(trace_name)
         draw_count = 0
+        frame_pipeline_ids = set()
         capture_complete = False
         has_program = has_luts = False
         for event in iter_events(trace_path):
@@ -112,6 +113,7 @@ def summarize(capture_summary_path: Path) -> dict[str, Any]:
                 geometry_programs[geometry_key] += 1
             fragment_configs[fragment_hash] += 1
             pipelines[pipeline_key] += 1
+            frame_pipeline_ids.add(canonical_id("pipeline", pipeline_key))
             draw_modes[draw_mode] += 1
 
             for texture in event.get("textures", []):
@@ -125,12 +127,23 @@ def summarize(capture_summary_path: Path) -> dict[str, Any]:
             total_draws += 1
         if not capture_complete:
             raise ValueError(f"PICA capture lacks capture_end: {trace_path}")
-        frame_records.append({"path": str(trace_path.resolve()), "draw_count": draw_count})
+        frame_records.append({"path": str(trace_path.resolve()), "draw_count": draw_count,
+                              "pipeline_ids": sorted(frame_pipeline_ids)})
 
     if total_draws == 0:
         raise ValueError("Azahar capture contains no draw_begin events")
 
     scenario = capture_summary["scenario"]
+    windows = []
+    seen_pipelines = set()
+    for window in capture_summary.get("capture_windows", []):
+        first, count = int(window["first_frame_index"]), int(window["frame_count"])
+        if first < 0 or count < 1 or first + count > len(frame_records):
+            raise ValueError("capture window references unavailable frames")
+        observed = set().union(*(set(f["pipeline_ids"]) for f in frame_records[first:first + count]))
+        windows.append({**window, "unique_pipelines": len(observed),
+                        "new_pipeline_ids": sorted(observed - seen_pipelines)})
+        seen_pipelines.update(observed)
     return {
         "format": OUTPUT_FORMAT,
         "evidence_role": "validation_only_not_runtime_input",
@@ -158,6 +171,7 @@ def summarize(capture_summary_path: Path) -> dict[str, Any]:
             "unique_shadow_states": len(shadow_states),
         },
         "frames": frame_records,
+        "capture_windows": windows,
         "vertex_programs": counted_records(vertex_programs, "vs"),
         "geometry_programs": counted_records(geometry_programs, "gs"),
         "fragment_configs": [

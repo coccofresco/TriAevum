@@ -15,6 +15,7 @@ param(
     [int]$TimeoutSeconds = 90,
     [int]$MaxVerticesPerDraw = 65536,
     [int]$CaptureFramesOverride = 0,
+    [double[]]$CaptureWindowOffsetsSeconds = @(0),
     [switch]$SkipFramebuffer,
     [switch]$CompactEvidence,
     [switch]$ShaderSeed,
@@ -82,6 +83,16 @@ if ($Slot -lt 1 -or $Slot -gt 10) {
 }
 if ($CaptureFramesOverride -lt 0) {
     throw "CaptureFramesOverride must be zero or greater."
+}
+if ($CaptureWindowOffsetsSeconds.Count -eq 0 -or $CaptureWindowOffsetsSeconds[0] -ne 0) {
+    throw "CaptureWindowOffsetsSeconds must start at zero."
+}
+for ($i = 0; $i -lt $CaptureWindowOffsetsSeconds.Count; ++$i) {
+    $offset = $CaptureWindowOffsetsSeconds[$i]
+    if ([double]::IsNaN($offset) -or [double]::IsInfinity($offset) -or $offset -lt 0 -or
+        ($i -gt 0 -and $offset -le $CaptureWindowOffsetsSeconds[$i - 1])) {
+        throw "Capture window offsets must be finite, nonnegative and strictly increasing."
+    }
 }
 
 $catalog = Get-Content -LiteralPath $CatalogPath -Raw | ConvertFrom-Json
@@ -238,31 +249,51 @@ try {
     if ($settleMs -gt 0) {
         Start-Sleep -Milliseconds $settleMs
     }
-    "capture $ScenarioId" | Set-Content -LiteralPath $picaTriggerPath -Encoding ascii
-    if (-not $SkipFramebuffer.IsPresent) {
-        "capture $ScenarioId" | Set-Content -LiteralPath $screenshotTriggerPath -Encoding ascii
-    }
-    $triggeredAt = Get-Date
-
-    $captureDeadline = (Get-Date).AddSeconds([Math]::Max(15, $effectiveTimeout))
+    $captureWindows = @()
+    $scheduleOrigin = Get-Date
+    $targetFrameCount = 0
     $frames = @()
-    while ((Get-Date) -lt $captureDeadline) {
-        $frames = @(Get-ChildItem -LiteralPath $captureDir -Filter "oot3d_pica_frame_*.jsonl" -File -ErrorAction SilentlyContinue | Sort-Object Name)
-        $completeFrames = @($frames | Where-Object { Test-PicaFrameComplete $_ })
-        $screenshotReady = $SkipFramebuffer.IsPresent -or (
-            (Test-Path -LiteralPath $screenshotPath -PathType Leaf) -and
-            (Test-Path -LiteralPath $metadataPath -PathType Leaf))
-        if ($completeFrames.Count -ge $captureFrames -and $screenshotReady) {
-            break
+    foreach ($offset in $CaptureWindowOffsetsSeconds) {
+        $windowAt = $scheduleOrigin.AddSeconds($offset)
+        while ((Get-Date) -lt $windowAt) {
+            if ($process.HasExited) { throw "Azahar exited between capture windows." }
+            Start-Sleep -Milliseconds 50
         }
-        if ($process.HasExited -and (-not $screenshotReady -or $completeFrames.Count -lt $captureFrames)) {
-            throw "Azahar exited before producing the requested capture evidence."
+        "capture $ScenarioId" | Set-Content -LiteralPath $picaTriggerPath -Encoding ascii
+        if ($null -eq $triggeredAt) {
+            $triggeredAt = Get-Date
+            if (-not $SkipFramebuffer.IsPresent) {
+                "capture $ScenarioId" | Set-Content -LiteralPath $screenshotTriggerPath -Encoding ascii
+            }
         }
-        Start-Sleep -Milliseconds 100
-    }
-    $frames = @($frames | Where-Object { Test-PicaFrameComplete $_ } | Select-Object -First $captureFrames)
-    if ($frames.Count -lt $captureFrames) {
-        throw "Only $($frames.Count)/$captureFrames complete PICA frame dumps were produced."
+        $windowTriggeredAt = Get-Date
+        $targetFrameCount += $captureFrames
+        $captureDeadline = (Get-Date).AddSeconds([Math]::Max(15, $effectiveTimeout))
+        while ((Get-Date) -lt $captureDeadline) {
+            $frames = @(Get-ChildItem -LiteralPath $captureDir -Filter "oot3d_pica_frame_*.jsonl" -File -ErrorAction SilentlyContinue | Sort-Object Name)
+            $completeFrames = @($frames | Where-Object { Test-PicaFrameComplete $_ })
+            $screenshotReady = $SkipFramebuffer.IsPresent -or (
+                (Test-Path -LiteralPath $screenshotPath -PathType Leaf) -and
+                (Test-Path -LiteralPath $metadataPath -PathType Leaf))
+            if ($completeFrames.Count -ge $targetFrameCount -and $screenshotReady) {
+                break
+            }
+            if ($process.HasExited -and (-not $screenshotReady -or $completeFrames.Count -lt $targetFrameCount)) {
+                throw "Azahar exited before producing the requested capture evidence."
+            }
+            Start-Sleep -Milliseconds 100
+        }
+        $frames = @($frames | Where-Object { Test-PicaFrameComplete $_ } | Select-Object -First $targetFrameCount)
+        if ($frames.Count -lt $targetFrameCount) {
+            throw "Only $($frames.Count)/$targetFrameCount complete PICA frame dumps were produced."
+        }
+        $captureWindows += [ordered]@{
+            requested_offset_seconds = $offset
+            actual_offset_seconds = [Math]::Round(($windowTriggeredAt - $scheduleOrigin).TotalSeconds, 3)
+            triggered_at = $windowTriggeredAt.ToString("o")
+            first_frame_index = $targetFrameCount - $captureFrames
+            frame_count = $captureFrames
+        }
     }
     if (-not $SkipFramebuffer.IsPresent) {
         Assert-FileExists $screenshotPath "Azahar framebuffer capture"
@@ -278,7 +309,11 @@ try {
         }
     }
 
-    if (-not $process.HasExited) {
+    if ($ShaderSeed.IsPresent) {
+        # All requested capture_end records are already flushed. Avoid a hidden
+        # confirmation dialog and its five-second timeout in unattended batches.
+        Stop-ProcessQuietly $process
+    } elseif (-not $process.HasExited) {
         if (-not $process.CloseMainWindow() -or -not $process.WaitForExit(5000)) {
             Stop-ProcessQuietly $process
         }
@@ -301,7 +336,8 @@ try {
         triggered_at = $triggeredAt.ToString("o")
         settle_milliseconds_after_ready = $settleMs
         scenario_status = $finalStatus
-        capture_frame_count_requested = $captureFrames
+        capture_frame_count_requested = $targetFrameCount
+        capture_windows = $captureWindows
         framebuffer_capture_enabled = -not $SkipFramebuffer.IsPresent
         framebuffer_path = if ($SkipFramebuffer.IsPresent) { $null } else { $screenshotPath }
         framebuffer_metadata_path = if ($SkipFramebuffer.IsPresent) { $null } else { $metadataPath }

@@ -83,6 +83,35 @@ claim is part of this work.
 
 ## Reproduce And Extend
 
+### Expanded Representatives, 2026-09-09
+
+The complete representative campaign now has **102/102 launchable scenarios
+captured**, zero game/capture failures, and 9 catalog-only entries explicitly
+classified as unavailable. It contains 1,099 nonempty frames and 27,240 draws.
+All 27,240 draw shader pairs import successfully: 449 source modules and 654
+native pipeline recipes. Compared with the preceding 745-module portable pack,
+this adds **70 modules**, producing an **815-module union**, all compiled to
+SPIR-V. Existing modules are retained even when absent from this new sample.
+
+The six original targeted captures are no longer the extent of the collection.
+The separate 110-setup temporal campaign uses three windows at 0/4/12 seconds.
+Its results must be reported separately from completed representatives until
+the whole temporal matrix and its native import have finished.
+
+Representative evidence and analysis are in
+`I:/oot3dre_work/shader-seed-expansion/representatives/`,
+`representatives-inventory.json`, `representatives-analysis.json` and
+`representatives-compile.json` in the parent directory. Larger temporal capture
+outputs use `C:/Users/xander/AppData/Local/TriAevumDeveloperEvidence/shader-seed-expansion/`
+to avoid exhausting I:. These remain private development artifacts.
+
+The representative campaign exposed a Windows checkpoint sharing-lock error.
+No capture was lost: pending completed checkpoints recovered both interrupted
+updates, without repeating their emulator runs. Atomic replacement and its
+bounded failure path are now tested separately from the game.
+
+### Commands
+
 Build isolated tools, not the game:
 
 ```text
@@ -93,18 +122,43 @@ PowerShell, with the instrumented emulator and an existing seed in slot 5:
 
 ```powershell
 ./scripts/oot3d/Test-Oot3dAzaharCoverageMatrix.ps1 `
-  -Mode scene_representative -StartIndex 5 -MaxScenarios 3 `
+  -Mode scene_representative `
   -AzaharExe INSTRUMENTED_AZAHAR -RomPath PERSONAL_ROM `
   -Slot 5 -Backend vulkan -ShaderSeed -CompactEvidence -SkipFramebuffer `
   -CaptureFramesOverride 12 -TimeoutSeconds 75 -RunDirectory PRIVATE_RUN
 ```
+
+This visits all 111 representatives and classifies the 9 catalog-only entries
+without launching them. For temporal coverage of the 110 native setup variants:
+
+```powershell
+./scripts/oot3d/Test-Oot3dAzaharCoverageMatrix.ps1 `
+  -Mode setup_variant -AzaharExe INSTRUMENTED_AZAHAR -RomPath PERSONAL_ROM `
+  -Slot 5 -Backend vulkan -ShaderSeed -CompactEvidence -SkipFramebuffer `
+  -SettleMilliseconds 0 -CaptureFramesOverride 12 `
+  -CaptureWindowOffsetsSeconds 0,4,12 -RunDirectory PRIVATE_VARIANT_RUN
+```
+
+Offsets are host-wall-time sampling requests relative to the first capture,
+not guest animation-frame assertions. Every window records its actual trigger
+time and frame range. The game runs normally between samples. An optional
+framebuffer image still refers to the first window only. The coverage summary
+reports which native pipeline identities first appear in subsequent windows.
+The first 12 seconds do not establish full-timeline coverage of long cutscenes,
+boss deaths or interactive states that the requested setup never reaches.
 
 Omit `SeedSavestatePath` to use the already installed slot without copying it.
 `-ShaderSeed` always retains native payloads even with `-CompactEvidence`;
 derived diagnostic conversions remain disabled. The summarizer rejects seed
 mode when the executable fails to emit resource events. Reuse `RunDirectory`
 to resume; use `-RetryFailures` for failed scenarios. Mixing an old non-seed
-matrix with a seed campaign is rejected. `ScenarioListPath` can select the
+matrix with a seed campaign, or changing its sampling schedule, is rejected.
+Checkpoint publication uses atomic replacement with bounded sharing-lock
+retries; a complete newer `.tmp` checkpoint is recovered on resume. This avoids
+losing a completed capture when Windows briefly locks the report for reading.
+Unattended seed captures stop their own emulator after all capture-end records
+are present; they do not wait on hidden exit-confirmation dialogs.
+`ScenarioListPath` can select the
 existing greedy cover; `setup_variant` selects cutscene setups. Adjust settle
 and frame windows deliberately for transitions, rather than blindly waiting
 until a transient effect has ended.
@@ -115,6 +169,7 @@ with earlier campaigns, run recovery with repeated `--matrix` / `--summary`.
 ```text
 python tools/oot3d/native_a32_runtime/recover_pica_capture_corpus.py --matrix OLD_MATRIX --matrix NEW_MATRIX --output-root PRIVATE_CORPUS
 oot3d_native_pica_capture_inventory --manifest PRIVATE_CORPUS/corpus.json --output PRIVATE_INVENTORY.json
+python tools/oot3d/native_a32_runtime/summarize_pica_shader_campaign.py --inventory PRIVATE_INVENTORY.json --baseline PREVIOUS_INVENTORY.json --output PRIVATE_ANALYSIS.json
 oot3d_native_pica_aot_compiler --inventory PRIVATE_INVENTORY.json --inventory OTHER_INVENTORY.json --pack PRIVATE_PACK.o3ps --manifest PRIVATE_COMPILE.json --merged-inventory PRIVATE_UNION.json
 ```
 
@@ -123,6 +178,12 @@ report; 1 means malformed/conflicting input or an I/O error. Never activate a
 partial pack as if it were complete. For opt-in integration tests, set
 `TRIAEVUM_CAPTURE_IMPORTER` to the tool and `TRIAEVUM_CAPTURE_CORPUS` to the
 private manifest, then run `test_capture_inventory_integration.py -v`.
+The native importer also reports pipeline IDs per frame. Campaign analysis
+uses those observed relationships to count genuinely new modules and select a
+deterministic compact set covering the observed native recipes. It does not
+infer relationships from a shader Cartesian product or claim whole-game
+coverage. Capture scheduling and checkpoint I/O have isolated PowerShell tests:
+`Test-Oot3dAzaharCaptureSchedule.ps1` and `Test-Oot3dCoverageCheckpoint.ps1`.
 
 ## Remaining Work
 

@@ -176,6 +176,22 @@ class AzaharShaderCoverageTests(unittest.TestCase):
             self.assertEqual(report["counts"]["program_payloads"], 1)
             self.assertEqual(report["counts"]["lut_snapshots"], 1)
 
+    def test_window_novelty_does_not_count_repeated_pipelines_twice(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = self.write_capture(Path(temporary))
+            summary = json.loads(path.read_text())
+            summary["pica_frames"] *= 2
+            summary["capture_windows"] = [{"first_frame_index": i, "frame_count": 1,
+                                           "requested_offset_seconds": i * 4} for i in range(2)]
+            path.write_text(json.dumps(summary))
+            report = summarize(path)
+            self.assertEqual(len(report["capture_windows"][0]["new_pipeline_ids"]), 2)
+            self.assertEqual(report["capture_windows"][1]["new_pipeline_ids"], [])
+            summary["capture_windows"][1]["frame_count"] = 5
+            path.write_text(json.dumps(summary))
+            with self.assertRaisesRegex(ValueError, "unavailable frames"):
+                summarize(path)
+
 
 class AzaharPipelineCoverTests(unittest.TestCase):
     def test_greedy_cover_is_deterministic_and_preserves_failed_scenarios(self) -> None:
