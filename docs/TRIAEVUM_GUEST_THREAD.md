@@ -69,9 +69,13 @@ same guest phase:
   and the probe flags (`nativeFrontendTouchEnabled`, native game mode) that
   main needs to poll input for `k+1`.
 
-Main waits for A before present-half and for B before rendering the HUD, so
-`step(k)` overlaps `StartFrame(k)` and `drain(k)+HUD(k)` overlaps
-present-half(k). Tokens (`guestRefreshesDue` from
+Main waits for A before present-half and for B before rendering the HUD.
+In the current implementation only `drain(k)+HUD(k)` overlaps
+present-half(k); `step(k)` still runs while main waits, because its input is
+polled after `StartFrame` and moving that poll earlier changes input phase
+relative to the single-thread path (the byte-identity gate). Overlapping the
+step with `StartFrame` is the next step and needs the explicit packet handoff
+below rather than shared loop locals. Tokens (`guestRefreshesDue` from
 `presentationScheduler.Advance`) and the polled `physicalInputFrame` are sent
 to the guest thread each presentation; the guest thread blocks on them, so it
 never runs ahead of input and audio buffering stays bounded.

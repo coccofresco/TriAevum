@@ -541,6 +541,18 @@ struct NativeFramePhaseTiming {
   double PresentSeconds = 0.0;
 };
 
+// Wall-clock spans that partition each thread's time. Main's spans plus its
+// waits sum to the host loop; the guest thread's spans are disjoint from them.
+struct NativeThreadSpanTiming {
+  double MainStartFrameSeconds = 0.0;
+  double MainPresentHalfSeconds = 0.0;
+  double MainHudAndEndFrameSeconds = 0.0;
+  double MainWaitForGuestSeconds = 0.0;
+  double GuestStepSeconds = 0.0;
+  double GuestDrainSeconds = 0.0;
+  double GuestHudBuildSeconds = 0.0;
+};
+
 struct NativeAudioOutputDiagnostics {
   void Observe(uint32_t hostFrame, int32_t before, int32_t after,
                uint64_t requestedFrames, int32_t desiredBuffered) {
@@ -3986,6 +3998,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
 #endif
 
   NativeFramePhaseTiming phaseTiming;
+  NativeThreadSpanTiming spanTiming;
   // Runs one unit of guest work per presentation on a persistent thread and
   // joins it before main touches guest state again. With the guest thread
   // disabled the same units execute inline, so both modes share one loop.
@@ -4806,6 +4819,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     widescreenProjection.CurrentHostFrame =
         static_cast<uint32_t>(presentationFrameCount);
     WindowDemoFrameTiming frameTiming;
+    const auto mainFrameStart = std::chrono::steady_clock::now();
     if (!PrepareNextWindowDemoFrame(hostArgs, window, timing, frameTiming)) {
       continue;
     }
@@ -4948,11 +4962,17 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     api.SetViewport(0, 0, static_cast<int>(width), static_cast<int>(height));
     api.SetScissor(0, 0, static_cast<int>(width), static_cast<int>(height));
     phaseTiming.FrameStartSeconds += SecondsSince(phaseStart);
+    spanTiming.MainStartFrameSeconds += SecondsSince(mainFrameStart);
     const uint32_t guestRefreshIterations =
         std::max<uint32_t>(1U, guestRefreshesDue);
     // Guest unit 1: input routing and one guest step. Runs on the guest
     // thread while main waits in StartFrame; touches no renderer state.
     const auto guestStep = [&](uint32_t guestRefreshIndex) -> bool {
+      const auto spanStart = std::chrono::steady_clock::now();
+      struct SpanEnd {
+        std::chrono::steady_clock::time_point Start; double &Total;
+        ~SpanEnd() { Total += SecondsSince(Start); }
+      } spanEnd{spanStart, spanTiming.GuestStepSeconds};
       // Private to this unit: main uses its own phaseStart/error meanwhile.
       auto phaseStart = std::chrono::steady_clock::now();
       std::string error;
@@ -5695,6 +5715,11 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     // accumulator. Overlaps the present half; touches no renderer state
     // except through the scene-view mailbox.
     const auto guestDrain = [&]() {
+      const auto spanStart = std::chrono::steady_clock::now();
+      struct SpanEnd {
+        std::chrono::steady_clock::time_point Start; double &Total;
+        ~SpanEnd() { Total += SecondsSince(Start); }
+      } spanEnd{spanStart, spanTiming.GuestDrainSeconds};
       // Private to this unit: main uses its own phaseStart/error meanwhile.
       auto phaseStart = std::chrono::steady_clock::now();
       std::string error;
@@ -6158,6 +6183,11 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                oot3d::ui::kUiSubsystemCount>
         hudPrimitives;
     const auto buildHud = [&]() {
+      const auto t0 = std::chrono::steady_clock::now();
+      struct SpanEnd {
+        std::chrono::steady_clock::time_point Start; double &Total;
+        ~SpanEnd() { Total += SecondsSince(Start); }
+      } spanEnd{t0, spanTiming.GuestHudBuildSeconds};
       for (std::size_t subsystemIndex = 0;
            subsystemIndex < oot3d::ui::kUiSubsystemCount; ++subsystemIndex) {
         hudPrimitives[subsystemIndex].reset();
@@ -6220,7 +6250,11 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
         guestStep(guestRefreshesDue - 1U);
       }
     });
-    guestWorker.Wait();
+    {
+      const auto t0 = std::chrono::steady_clock::now();
+      guestWorker.Wait();
+      spanTiming.MainWaitForGuestSeconds += SecondsSince(t0);
+    }
     if (guestStopRequested) {
       hostLoopExitReason = "guest_requested_stop";
       window.Close();
@@ -6233,8 +6267,16 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
       }
       buildHud();
     });
-    presentHalf(presentInputs);
-    guestWorker.Wait();
+    {
+      const auto t0 = std::chrono::steady_clock::now();
+      presentHalf(presentInputs);
+      spanTiming.MainPresentHalfSeconds += SecondsSince(t0);
+    }
+    {
+      const auto t0 = std::chrono::steady_clock::now();
+      guestWorker.Wait();
+      spanTiming.MainWaitForGuestSeconds += SecondsSince(t0);
+    }
     flushSceneView();
     renderHud();
 
@@ -6250,6 +6292,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     picaSemanticTrace.RecordFrameBoundary(
         presentationFrameCount, frameCount, guestRefreshesDue != 0U);
     phaseTiming.PresentSeconds += SecondsSince(phaseStart);
+    spanTiming.MainHudAndEndFrameSeconds += SecondsSince(phaseStart);
     ++presentationFrameCount;
     ++runFrameCount;
 #if defined(__SWITCH__)
@@ -8982,6 +9025,16 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
             {"phase_timing",
              {{"guest_seconds", phaseTiming.GuestSeconds},
               {"frame_start_seconds", phaseTiming.FrameStartSeconds},
+              {"thread_spans",
+               {{"main_start_frame_seconds", spanTiming.MainStartFrameSeconds},
+                {"main_present_half_seconds", spanTiming.MainPresentHalfSeconds},
+                {"main_hud_and_end_frame_seconds",
+                 spanTiming.MainHudAndEndFrameSeconds},
+                {"main_wait_for_guest_seconds",
+                 spanTiming.MainWaitForGuestSeconds},
+                {"guest_step_seconds", spanTiming.GuestStepSeconds},
+                {"guest_drain_seconds", spanTiming.GuestDrainSeconds},
+                {"guest_hud_build_seconds", spanTiming.GuestHudBuildSeconds}}},
               {"dsp_mix_seconds", phaseTiming.DspMixSeconds},
               {"audio_output_seconds", phaseTiming.AudioOutputSeconds},
               {"pica_submit_seconds", phaseTiming.PicaSubmitSeconds},
