@@ -163,6 +163,8 @@ def build(
         "tools.triaevum_release.forge_gui",
         "--hidden-import",
         "tkinter",
+        "--copy-metadata",
+        "certifi",
     ]
     if bundle_mode == "onefile" and sys.platform == "win32":
         command.extend(("--runtime-tmpdir", ".triaevum-forge-runtime"))

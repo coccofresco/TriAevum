@@ -9,8 +9,10 @@ from typing import Any
 
 try:
     from .common import atomic_write_json, load_json_object, sha256_file
+    from .native_process import native_process_environment
 except ImportError:
     from common import atomic_write_json, load_json_object, sha256_file
+    from native_process import native_process_environment
 
 
 def validate_product_info(info: dict[str, Any], source_commit: str = "") -> None:
@@ -42,6 +44,7 @@ def query_product(executable: Path, source_commit: str = "", *, plugin: Path | N
              [str(executable), "--verify-title-plugin", str(plugin.resolve(strict=True))]),
             cwd=executable.parent,
             capture_output=True, text=True, timeout=15, check=False,
+            env=native_process_environment(),
         )
         if result.returncode != 0:
             raise ValueError(

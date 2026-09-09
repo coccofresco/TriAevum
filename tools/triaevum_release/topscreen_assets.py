@@ -14,8 +14,12 @@ from tools.oot3d.decomp_support.scripts.build_topscreen_texture_override_pack im
 
 try:
     from .common import atomic_write_bytes, atomic_write_json, load_json_object, sha256_file
+    from .https_transport import download_ssl_context
+    from .release_platform import host_platform
 except ImportError:
     from common import atomic_write_bytes, atomic_write_json, load_json_object, sha256_file
+    from https_transport import download_ssl_context
+    from release_platform import host_platform
 
 
 IMPORT_VERSION = 1
@@ -42,7 +46,7 @@ def acquire_archive(root: Path, data_root: Path, contract: dict,
     try:
         digest = hashlib.sha256()
         count = 0
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with urllib.request.urlopen(request, timeout=30, context=download_ssl_context()) as response:
             if not response.geturl().startswith("https://"):
                 raise ValueError("TopScreen download redirected to an insecure URL")
             with tempfile.NamedTemporaryFile(dir=cache.parent, suffix=".partial", delete=False) as stream:
@@ -61,7 +65,7 @@ def acquire_archive(root: Path, data_root: Path, contract: dict,
     except (OSError, ValueError) as exc:
         raise ValueError(
             f"Could not prepare TopScreen textures: {exc}. Retry with internet access, "
-            f"or place the official {ARCHIVE_NAME} beside TriAevumForge.exe.") from exc
+            f"or place the official {ARCHIVE_NAME} beside {host_platform().forge}.") from exc
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)

@@ -111,18 +111,25 @@ traceable through this repository's Git history.
 
 ## Forge and runtime binary dependencies
 
-`TriAevumForge.exe` embeds CPython 3.13, Capstone 5.0.7 and the PyInstaller
+Windows `TriAevumForge.exe` embeds CPython 3.13; the initial Linux Forge build
+embeds CPython 3.12. Both include Capstone 5.0.7 and the PyInstaller
 6.16.0 bootloader. Their license texts, including PyInstaller's bootloader
 exception, are distributed under `LICENSES/`. PyInstaller is a packaging tool;
 its presence does not change the license selected for TriAevum source.
 
-Forge invokes the separately shipped LLVM 22 tools `clang-cl.exe`,
-`llvm-lib.exe` and `lld-link.exe` to compile verified private structural IR
-into the user's local title plugin. LLVM is licensed under Apache-2.0 WITH
+Developer-only Forge build commands can invoke LLVM 22 tools `clang-cl.exe`,
+`llvm-lib.exe` and `lld-link.exe`. The current precompiled player release does
+not ship or invoke a compiler. LLVM is licensed under Apache-2.0 WITH
 LLVM-exception; the Apache 2.0 text and LLVM exception are distributed under
 `LICENSES/`. These tools, their compiler-rt builtins, the whole-AOT support
 archive and the public `forge/oot3d_game_module.dll` are title-neutral and
 contain no game code or content.
+
+Portable Forge builds include [certifi](https://github.com/certifi/python-certifi)
+2026.7.22 and its Mozilla root certificate collection to verify HTTPS downloads
+independently of the build host's OpenSSL CA paths. Certifi is MPL-2.0 licensed;
+its distribution metadata and license are included in the frozen bundle.
+Certificate and hostname verification remain enabled.
 
 Forge embeds the minimal nlohmann/json forward-declaration headers needed by
 the generated source interface. nlohmann/json is MIT licensed, copyright

@@ -3168,6 +3168,14 @@ if(WIN32)
     target_sources(oot3d_native_game PRIVATE
         tools/oot3d/native_game_runtime/triaevum_windows.manifest)
 endif()
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    # Relocated packages must resolve the bootstrap library beside the runtime,
+    # never accidentally fall back to the publisher's build directory.
+    set_target_properties(oot3d_native_game PROPERTIES
+        BUILD_RPATH_USE_ORIGIN TRUE
+        BUILD_RPATH "$ORIGIN;$ORIGIN/lib"
+        INSTALL_RPATH "$ORIGIN;$ORIGIN/lib")
+endif()
 set(TRIAEVUM_PRODUCT_PLUGIN 0)
 if(OOT3D_DIRECT_AOT_PLUGIN)
     set(TRIAEVUM_PRODUCT_PLUGIN 1)

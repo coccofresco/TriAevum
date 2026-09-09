@@ -26,6 +26,7 @@ try:
     from .precompiled_titles import load_catalog, select_title, install_precompiled_title
     from .input_adapters import import_contract, adapt_extracted_inputs
     from .release_platform import host_platform
+    from .native_process import native_process_environment
 except ImportError:
     import ctr_rom
     import forge
@@ -38,6 +39,7 @@ except ImportError:
     from precompiled_titles import load_catalog, select_title, install_precompiled_title
     from input_adapters import import_contract, adapt_extracted_inputs
     from release_platform import host_platform
+    from native_process import native_process_environment
 
 
 StageReporter = Callable[[str, str], None]
@@ -274,6 +276,7 @@ def _launch_runtime_locked(data_root: Path | None) -> subprocess.Popen[bytes]:
     return subprocess.Popen(
         [str(executable), "--launch-profile", str(profile)],
         cwd=executable.parent,
+        env=native_process_environment(),
     )
 
 
@@ -573,6 +576,14 @@ class ForgeWindow:
         self.root.destroy()
 
 
+def present_window(root: Any) -> None:
+    root.deiconify()
+    root.lift()
+    root.attributes("-topmost", True)
+    root.after(300, lambda: root.attributes("-topmost", False))
+    root.focus_force()
+
+
 def main() -> int:
     try:
         import tkinter as tk
@@ -592,10 +603,7 @@ def main() -> int:
         return 1
 
     _hide_explorer_console()
-    root.lift()
-    root.attributes("-topmost", True)
-    root.after(300, lambda: root.attributes("-topmost", False))
-    root.focus_force()
+    present_window(root)
     root.mainloop()
     return 0
 

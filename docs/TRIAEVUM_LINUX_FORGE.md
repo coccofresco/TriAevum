@@ -1,7 +1,8 @@
 # Linux Forge
 
-Status: Linux x86-64 Forge development build, tested on 2026-09-08. This is
-not yet a complete Linux game release or Steam Deck qualification.
+Status: Linux x86-64 Forge development build, installation and native game boot
+tested on the physical Linux host on 2026-09-09. GUI visibility on that host is
+still unverified. This is not a public Linux release or Steam Deck qualification.
 
 ## Player Contract
 
@@ -12,7 +13,7 @@ the launch profile. It never compiles or translates game code on this path.
 The existing TopScreen texture acquisition, configuration preservation,
 save directories and transactional activation remain shared with Windows.
 
-Python, Tk and Capstone are bundled. Linux Forge is a directory bundle: do not
+Python, Tk, Capstone and HTTPS root certificates are bundled. Linux Forge is a directory bundle: do not
 distribute only its executable or omit `_internal`. Vulkan drivers and the
 native game's shared-library dependencies are a separate packaging concern.
 
@@ -38,6 +39,19 @@ native game's shared-library dependencies are a separate packaging concern.
   ELF64 x86-64 binaries. Preserves ROM families, adapters and translated-source
   provenance; verifies reference source bindings and native title ABI before
   replacing the catalog. It does not compile, stage files or certify gameplay.
+- `native_process.py`: restores the caller's library search path for the native
+  runtime and ABI probes. Forge workers keep the frozen Python environment.
+  Otherwise PyInstaller's `LD_LIBRARY_PATH` can inject bundled Python/Tk
+  dependencies into the game. This follows the
+  [PyInstaller native-child guidance](https://pyinstaller.org/en/stable/common-issues-and-pitfalls.html#launching-external-programs-from-the-frozen-application).
+- `https_transport.py`: preserves system TLS trust and adds bundled
+  [certifi roots](https://github.com/certifi/python-certifi) in frozen builds.
+  The first physical-host install exposed missing build-host OpenSSL CA paths.
+  Certificate and hostname verification remain enabled; no insecure retry.
+- The Linux runtime uses origin-relative RUNPATH for its bootstrap library.
+  The relocated test package resolves that library inside the package, not
+  the publisher's build directory. The fix required only an incremental link
+  (2.2 seconds), not rebuilding the translated game.
 
 ## Build and Repeat Tests
 
@@ -73,21 +87,25 @@ Merge the entire Forge output directory into the staged game package root:
 TriAevum
 TriAevumForge
 _internal/...
+triaevum_title_aot.so                  # empty runtime bootstrap dependency
 forge/oot3d_game_module.so
-titles/<execution-id>/triaevum_title_aot.so
+titles/<execution-id>/triaevum_title_aot.so  # actual translated game
 recipes/precompiled-titles.json
 recipes/oot3d.json
 source/titles/...-translated.zip
 config/...
 resources/...
 recipes/adapters/...
-licenses/...
+LICENSES/...
 ```
 
 The example omits detailed resource/dependency files; use the same validated
 recipes, adapters, configuration and source artifacts as the reference package.
 Do not copy DLLs as Linux modules. The title must be the real build documented
 in [the Linux port report](TRIAEVUM_LINUX_PORT.md), not the runtime's empty stub.
+Both `.so` roles are required: the root bootstrap satisfies an ELF dependency;
+Forge selects the separately catalogued real title through an immutable private
+plugin path. Do not overwrite one with the other.
 
 After staging actual Linux binaries and reference supporting files:
 
@@ -106,38 +124,97 @@ The publisher must build the `.so` from those sources: an ABI check alone does
 not prove translation equivalence. Existing `linux_title` CMake validates
 the translated source inventory before building it.
 
-## Evidence and Remaining Work
+## Repeat the Full Installation Test
 
-- Windows: 57 targeted tests pass; actual source GUI smoke passes.
-- Linux: 57 tests run, 56 pass, one Windows-only descendant Job Object test
+These developer helpers stage a **private test candidate**, not an audited
+public release. The reference directory supplies only explicitly selected
+recipes, resources, translated sources and notices. No Windows DLLs, personal
+data or existing public release manifest are reused as Linux artifacts.
+
+```sh
+python3 tools/triaevum_release/stage_linux_forge_candidate.py \
+  --reference /path/to/reference-package \
+  --forge-bundle "$HOME/triaevum-forge-dist/TriAevumForge" \
+  --runtime-build "$HOME/triaevum-linux-build" \
+  --title "$HOME/triaevum-linux-title-build/triaevum_title_aot.so" \
+  --output "$HOME/TriAevum Linux Test" \
+  --source-commit FULL_PLATFORM_GIT_COMMIT
+python3 tools/triaevum_release/qualify_linux_forge.py \
+  --installation "$HOME/TriAevum Linux Test" \
+  --rom /path/to/personal-decrypted.cci \
+  --output "$HOME/triaevum-forge-qualification" --seconds 60
+```
+
+Use new output directories. Qualification refuses an already active personal
+installation. It imports display routing from the logged-in desktop, invokes
+the actual frozen GUI installation worker, repeats installation while checking
+configuration/save-sentinel hashes, and boots the exact generated game profile.
+Every test process is bounded and reaped. Framebuffer readbacks are retained for
+inspection; their presence alone is not an automatic image-quality test.
+
+Read `qualification.json`, not only the command exit code. The helper permits
+continuing the functional test when a successful install has an iconified GUI,
+but reports `functional_pass_gui_visibility_pending`, never a visual pass.
+Other installation/layout failures abort. This exception is not a release gate
+bypass: public usability must still be verified.
+
+## Evidence (2026-09-09)
+
+- Windows: 68 targeted tests pass; actual source GUI smoke passes.
+- Linux: 68 tests run, 67 pass, one Windows-only descendant Job Object test
   skipped. Linux GUI-owner termination is tested, not skipped.
-- Frozen Linux binary: doctor passes; real GUI probe passes with no clipped
-  controls and correct Prepare button enablement.
-- Frozen Linux binary: real EUR0 extracted ROM data verified with fresh hashes
-  and prepared into `content.tap` plus `process-manifest.json`, exit 0. This is
-  data preparation only, not module installation or a game boot.
+- Build host: Ubuntu 24.04 WSL/WSLg, Python 3.12.3, PyInstaller 6.16.0. Its
+  frozen GUI probe passes with mapped controls and no clipping. It does not
+  establish physical-GPU performance or visibility on every desktop.
+- Physical host: CachyOS/KDE Wayland, RTX 4060, same native runtime/title as
+  the port report. Fresh personal EUR0 `.cci` installation into a path with
+  spaces completed in **25.55 seconds**, including the official TopScreen
+  download. Reinstallation completed in **7.62 seconds**, preserving the
+  existing two configuration files and a save-directory sentinel byte-for-byte.
+  These are worker/probe elapsed times; full process wall times were 27.86 and
+  9.89 seconds. No compiler, SDK acquisition or translation was invoked.
+- The installed native game completed its bounded 60-second run, exit 0.
+  Framebuffer captures at frames 120 and 720 show the rendered title/scene;
+  the latter was visually inspected with grass, toon and the animated logo
+  present. TopScreen and the generated default launch profile were retained.
+  This does not certify interactive gameplay, audio listening quality, SSSR,
+  absence of intermittent flashing, or native/interpolated FPS targets.
 - Missing-runtime worker test: exits 1 with a structured error before ROM
   extraction or activation. No compilation fallback or background game.
-- Build host: existing Ubuntu 24.04 WSL/WSLg. Forge is a native Linux ELF with
-  its own interpreter. This GUI result says nothing about GPU performance.
 
-Private evidence is under `I:/oot3dre_work/linux-port-proof/`, including
-`forge-gui-smoke-fixed.json`, `forge-windows-gui-smoke.json` and
-`forge-native-prepared/`. The local candidate bundle is under
-`I:/oot3dre_work/linux-port-proof/forge/`. No private game data belongs in Git
-or the Forge artifact.
+**Open GUI issue:** during SSH-launched probes in the current physical KDE
+session, Forge remains `iconic` with unmapped widgets. Installation completes,
+controls fit, but the window is not certified visible. The same failure was
+reproduced by a minimal Tk window outside Forge, including the distribution's
+Tk 8.6.16 (privately extracted, not installed). This narrows the investigation
+to desktop/Tk window mapping; it does not prove that local desktop launch works.
+No desktop security settings were disabled to obtain a passing result.
 
-Still required before a player release:
+Private evidence: `I:/oot3dre_work/linux-port-proof/forge/qualification-4/`
+contains `qualification.json`, separate install/reinstall reports, game log,
+runtime report and framebuffer captures. The physical candidate is
+`~/triaevum-forge-proof/TriAevum Linux Candidate 4`. No test process was left
+running. These files and personal ROM-derived data must stay outside Git.
 
-1. Full GUI ROM-to-installed-game run against the actual Linux runtime and
-   title. The existing CachyOS test host stopped responding on SSH during this
-   work; its successful prior game boot is not a Forge installation test.
+The test uses base commit `80a944864da74bdf4bb726f29799cc5f6dad49cd` plus the
+loader/TLS/probe changes accompanying this report. Remote source was updated
+by file transfer, not by changing its Git HEAD. The recorded base commit alone
+does not certify the complete tested source: a public build needs a fresh,
+exact source/artifact binding. The actual title `.so` remains unchanged, hash
+`b305d574f815f365d7a73a582c020cd435f7ab2741accfa9638dced833a2097c`.
+
+## Before a Player Release
+
+1. Verify Forge's window from the physical desktop and fix any remaining
+   mapping/activation issue. Successful worker installation is not sufficient
+   for a usable installer GUI.
 2. Stage native dependencies/resources, adapt the release allowlist/audit to
    Linux and include corresponding source and all bundled-library licenses.
    Current Windows packaging/auditing must not be bypassed or relabeled.
 3. Build against the selected Steam-compatible libc baseline and test in a
    clean environment, including Steam Deck Desktop Mode. The Ubuntu 24.04
    development build is not a portability guarantee.
-4. Verify installation into paths with spaces, reinstallation preserving saves
-   and settings, TopScreen acquisition and launch in Steam/Game Mode on the
-   actual release bundle. Keep tests on Windows as a regression check.
+4. Repeat the now-passing installation, preservation and TopScreen tests on the
+   final portable bundle; verify visible GUI and launch in Steam/Game Mode.
+   Keep Windows tests as a regression check. Performance and SSSR remain
+   separate renderer work, not claimed fixed by this installer change.

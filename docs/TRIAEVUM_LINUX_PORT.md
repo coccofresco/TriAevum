@@ -90,14 +90,23 @@ enabled and its SPIR-V generation has completed using native Linux DXC.
 2. The verified translated title now compiles into a Linux module and passes
    runtime ABI validation. Extend verification into interactive gameplay.
 3. Forge now supports ELF modules, Linux paths and explicit target triples;
-   its native Linux GUI and data preparation pass. Complete the real Linux
-   ROM-to-game installation test and release packaging; see
+   its WSLg GUI and physical Linux ROM-to-installed-game test pass. On the
+   physical KDE session the Forge window remains iconified during remote
+   probes, so GUI visibility and release packaging are still open; see
    [Linux Forge](TRIAEVUM_LINUX_FORGE.md). Never compile on the player path.
 4. Boot/title framebuffer verification is complete. Manually verify F1,
    TopScreen controls, audible output and a playable save on Linux.
 5. Recover SSSR and check optional-provider capability reporting. Benchmark
    native and interpolated frame rates separately on the physical GPU.
 6. Produce a clean-install Linux package and correct source-package omissions.
+
+The 2026-09-09 Forge qualification installed a personal ROM in 25.55 seconds,
+reinstalled in 7.62 seconds preserving config/save-sentinel hashes, and booted
+the generated profile for 60 seconds with native framebuffer captures. No
+player-side compilation. Linux RUNPATH now resolves the runtime's empty
+bootstrap `.so` beside the executable after relocation; the real translated
+title remains a separately selected immutable plugin. This is a private
+candidate using host libraries, not yet a Steam-compatible portable package.
 
 Never include personal ROMs, extracted assets, savestates or private inputs in
 Git or public artifacts. Service test success is not evidence of a game boot.
