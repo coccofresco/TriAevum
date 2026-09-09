@@ -5,6 +5,11 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+try:
+    from .host_layout import HostLayout, for_package
+except ImportError:
+    from host_layout import HostLayout, for_package
+
 
 def distribution_root() -> Path:
     frozen_root = getattr(sys, "_MEIPASS", None)
@@ -26,3 +31,11 @@ def installation_root() -> Path:
 
 def installation_path(relative: str) -> Path:
     return installation_root() / Path(relative)
+
+
+def installation_layout() -> HostLayout:
+    return for_package(installation_root())
+
+
+def activation_path(relative: str) -> Path:
+    return installation_layout().activation / Path(relative)

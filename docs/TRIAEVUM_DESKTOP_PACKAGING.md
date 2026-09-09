@@ -65,7 +65,7 @@ Do not copy the complete installed application into the home directory to make
 its current write assumptions work. No Flatpak branches in PICA or title logic;
 future Android supplies its own storage/lifecycle adapter and native binaries.
 
-Forge's current Tk chooser needs an isolated portal adapter; selecting a ROM must
+Forge's Tk chooser uses an isolated portal adapter; selecting a ROM must
 not require `--filesystem=home` or `--filesystem=host`. Scope GPU, audio, display,
 network for TopScreen, and controller access explicitly. Qualify controller
 motion separately: input access alone does not guarantee hidraw availability.
@@ -118,14 +118,68 @@ Vulkan probe compiled in the SDK and run in the Platform sandbox enumerates
 the physical RTX 4060 (Vulkan 1.4.341), not only software rendering. This is
 host preparation, not a game rendering test or a completed TriAevum Flatpak.
 
+### Flatpak Implementation and Private Proof (2026-09-09)
+
+Implemented in `tools/triaevum_release/`:
+
+- `host_layout.py` owns package/activation separation. `bundle_paths.py`, Forge
+  publication and precompiled activation use it without changing Windows defaults.
+  Import/launch locks, journals and generated profiles use the writable root.
+- `desktop_launcher.py` opens Forge before import, launches the verified game
+  afterwards, and retains `--forge` for repair. Launch failures return to Forge
+  with an error rather than silently closing. No compiler fallback was added.
+- `portal_picker.py` and `flatpak/file_chooser.c` implement asynchronous file
+  selection, cancellation and bounded cleanup. No home/host filesystem grant.
+- `flatpak_package.py` stages an existing audited Linux inventory, audits the
+  copied inventory again and preserves its qualification level. The manifest
+  disables stripping/debug extraction and Python timestamp rewriting to preserve
+  catalog hashes. It does not turn developer binaries into a qualified release.
+
+Verification: 276 Python tests on Windows, 274 passed and two platform skips;
+six isolated D-Bus tests execute the compiled portal helper on Linux, all passed.
+Frozen Linux Forge rebuilt successfully. A private bundle was built and installed
+under Platform 25.08. Its real GUI probe passed: normal mapped window, no clipped
+or unmapped controls. Full game import/rendering from this Flatpak and actual
+user file-portal selection have not yet been qualified.
+
+The private proof reuses the existing SDK4 runtime and explicitly records that
+its exact source/build provenance is not release-qualified. Dependency inspection
+found `libzip` requiring `libbz2.so.1.0`, absent under that name in Freedesktop.
+Including the matching SDK4 library resolved the dependency closure and native
+product-info query. The launcher preserves `/app/lib/triaevum/lib` through
+PyInstaller's native-process environment restoration. Complete source/license
+closure for these bundled libraries remains a release requirement.
+
+The maintainer's desktop test bundle and personal decrypted ROM are separate
+files. No ROM was added to the bundle or repository. Its ROM import is deliberately
+left unprepared for a first-run user test. Placeholder desktop icon/AppStream
+metadata still need finishing before public distribution.
+
+Audited build path (developer tools only):
+
+```sh
+python -m tools.triaevum_release.flatpak_package \
+  --package /path/to/audited-linux-package --output /path/to/new-flatpak-inputs
+flatpak-builder --user --repo=/path/to/repo /path/to/new-build \
+  /path/to/new-flatpak-inputs/io.github.coccofresco.TriAevum.json
+flatpak build-bundle /path/to/repo TriAevum.flatpak \
+  io.github.coccofresco.TriAevum stable \
+  --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo
+flatpak install --user ./TriAevum.flatpak
+flatpak run io.github.coccofresco.TriAevum
+```
+
+The explicit `stable` argument matters: build-bundle otherwise searches `master`.
+Use a fresh build directory; do not delete a user installation for build cleanup.
+
 Remaining before Linux release, in dependency order:
 
-1. Implement/test the separate package/activation layout with unchanged Windows
-   defaults; move the existing import and launch transactions to its writable root.
-2. Integrate the ROM file portal and first-run/game launcher. Qualify read-only
-   /app, missing/cancelled portal selections, spaces in paths and preserved saves.
-3. Stage audited binaries/sources, add the manifest and desktop integration, then
-   build/install the candidate bundle under the Freedesktop runtime.
+1. Qualify real portal selection and ROM-only import, reimport/update and launch
+   from the installed bundle, including spaces in paths and preserved saves.
+2. Bind all native artifacts to corresponding source, complete dependency notices,
+   desktop metadata/icon and stage the final bundle through the audited path.
+3. Execute the complete contract suite on Linux for this revision; the new portal
+   protocol tests should also become part of CI.
 4. Qualify ROM-only import, reimport/update, F1, controller/audio and GPU launch
    from that installed bundle. Check Gaming Mode on actual Steam Deck hardware.
 5. Close the known stalls/black flashes and unsupported-effect gaps. Packaging

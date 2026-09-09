@@ -23,6 +23,7 @@ try:
         distribution_path,
         distribution_root,
         installation_path,
+        activation_path,
     )
     from .common import (
         atomic_write_bytes,
@@ -61,7 +62,7 @@ except ImportError:
     from activation_transaction import activation_transaction
     from installation_context import InstallationContext, resolve_reference
     from toolchain_probe import probe_toolchain
-    from bundle_paths import distribution_path, distribution_root, installation_path
+    from bundle_paths import distribution_path, distribution_root, installation_path, activation_path
     from common import (
         atomic_write_bytes,
         atomic_write_json,
@@ -133,7 +134,7 @@ class PreparedForgeContent:
 
 
 def default_output_root() -> Path:
-    return installation_path("data/titles").resolve()
+    return activation_path("data/titles").resolve()
 
 
 def default_translation_cache_root() -> Path:
@@ -156,11 +157,11 @@ def default_active_title_state_path() -> Path:
 
 
 def default_runtime_plugin_path() -> Path:
-    return installation_path(host_platform().title_module)
+    return activation_path(host_platform().title_module)
 
 
 def default_runtime_launch_profile_path() -> Path:
-    return installation_path("TriAevum.launch.json")
+    return activation_path("TriAevum.launch.json")
 
 
 class HashCache:
@@ -915,6 +916,7 @@ def publish_private_runtime(
     launch_profile: Path,
     data_root: Path,
     topscreen_texture_pack: Path | None = None,
+    package_root: Path | None = None,
 ) -> dict[str, Any]:
     """Publish verified files; multi-file activation is not yet transactional."""
 
@@ -928,11 +930,12 @@ def publish_private_runtime(
 
     plugin_hash = sha256_file(source_plugin)
     installation = runtime_plugin.expanduser().resolve().parent
+    package = (package_root or installation).expanduser().resolve()
     platform = host_platform()
     destination = installation / "private-plugins" / plugin_hash / platform.title_module
     profile_path = launch_profile.expanduser().resolve()
     private_root = data_root.expanduser().resolve()
-    product_receipt = query_product(installation / platform.runtime)
+    product_receipt = query_product(package / platform.runtime)
     destination.parent.mkdir(parents=True, exist_ok=True)
     profile_path.parent.mkdir(parents=True, exist_ok=True)
     private_root.mkdir(parents=True, exist_ok=True)
@@ -964,7 +967,7 @@ def publish_private_runtime(
             "--a32-process-manifest",
             str(process_manifest),
             "--resource-root",
-            str((installation / "resources").resolve()),
+            str((package / "resources").resolve()),
             "--renderer",
             "nri",
             "--ui-profile",
@@ -1015,7 +1018,7 @@ def publish_private_runtime(
             temporary.unlink(missing_ok=True)
     # Query the exact immutable generation in a short-lived process before the
     # single launch-profile replacement makes it visible to direct launches.
-    query_product(installation / platform.runtime, plugin=destination)
+    query_product(package / platform.runtime, plugin=destination)
     atomic_write_json(profile_path, profile)
     prepared.state["runtime"] = {
         "status": "ready",

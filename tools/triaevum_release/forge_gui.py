@@ -27,6 +27,8 @@ try:
     from .input_adapters import import_contract, adapt_extracted_inputs
     from .release_platform import host_platform
     from .native_process import native_process_environment
+    from .host_layout import for_package
+    from . import portal_picker
 except ImportError:
     import ctr_rom
     import forge
@@ -40,6 +42,8 @@ except ImportError:
     from input_adapters import import_contract, adapt_extracted_inputs
     from release_platform import host_platform
     from native_process import native_process_environment
+    from host_layout import for_package
+    import portal_picker
 
 
 StageReporter = Callable[[str, str], None]
@@ -249,8 +253,9 @@ def runtime_path() -> Path:
 
 def launch_runtime(data_root: Path | None = None) -> subprocess.Popen[bytes]:
     try:
-        with installation_lock(runtime_path().parent):
-            if journal_path(runtime_path().parent).exists():
+        layout = for_package(runtime_path().parent)
+        with installation_lock(layout.activation):
+            if journal_path(layout.activation).exists():
                 raise forge.ForgeError("An activation was interrupted; run Forge again before playing")
             return _launch_runtime_locked(data_root)
     except (OSError, ValueError) as exc:
@@ -275,7 +280,7 @@ def _launch_runtime_locked(data_root: Path | None) -> subprocess.Popen[bytes]:
         raise forge.ForgeError(str(exc)) from exc
     return subprocess.Popen(
         [str(executable), "--launch-profile", str(profile)],
-        cwd=executable.parent,
+        cwd=for_package(executable.parent).activation,
         env=native_process_environment(),
     )
 
@@ -304,6 +309,8 @@ class ForgeWindow:
         self.messagebox = messagebox
         self.events: queue.Queue[tuple[str, object]] = queue.Queue()
         self.busy = False
+        self.picking = False
+        self.picker_thread = None
         self.worker_process = None
         self.closing = threading.Event()
 
@@ -405,8 +412,12 @@ class ForgeWindow:
         self.launch_button.grid(row=0, column=2, padx=(8, 0))
 
     def _browse_extracted(self) -> None:
-        from tkinter import filedialog
-        selected = filedialog.askdirectory(title="Select extracted title data")
+        if self.busy or self.picking:
+            return
+        if for_package(runtime_path().parent).use_file_portal:
+            self._portal_browse(self.rom, "Select extracted title data", directory=True)
+            return
+        selected = self.filedialog.askdirectory(title="Select extracted title data", parent=self.root)
         if selected:
             self.rom.set(selected)
             self._refresh_actions()
@@ -439,12 +450,34 @@ class ForgeWindow:
         title: str,
         filetypes: tuple[tuple[str, str], ...] | None,
     ) -> None:
-        arguments: dict[str, Any] = {"title": title}
+        if self.busy or self.picking:
+            return
+        if for_package(runtime_path().parent).use_file_portal:
+            self._portal_browse(variable, title, directory=False)
+            return
+        arguments: dict[str, Any] = {"title": title, "parent": self.root}
         if filetypes is not None:
             arguments["filetypes"] = filetypes
         selected = self.filedialog.askopenfilename(**arguments)
         if selected:
             variable.set(selected)
+
+    def _portal_browse(self, variable: Any, title: str, *, directory: bool) -> None:
+        self.picking = True
+        self._refresh_actions()
+        # Tk on Linux owns an X11 window, including under XWayland.
+        parent = f"x11:{self.root.winfo_id():x}"
+        helper = installation_path("triaevum-file-chooser")
+
+        def worker() -> None:
+            try:
+                selected = portal_picker.choose(helper, title=title, directory=directory,
+                                                parent=parent, closing=self.closing)
+                self.events.put(("selection", (variable, selected, None)))
+            except Exception as exc:
+                self.events.put(("selection", (variable, None, str(exc))))
+        self.picker_thread = threading.Thread(target=worker, name="TriAevumFilePortal", daemon=True)
+        self.picker_thread.start()
 
     def _request(self) -> InstallRequest:
         return InstallRequest(
@@ -464,16 +497,16 @@ class ForgeWindow:
     def _refresh_actions(self) -> None:
         complete = bool(self.rom.get().strip())
         self.install_button.configure(
-            state="normal" if complete and not self.busy else "disabled"
+            state="normal" if complete and not self.busy and not self.picking else "disabled"
         )
         self.launch_button.configure(
             state="normal"
-            if self.active_title is not None and not self.busy
+            if self.active_title is not None and not self.busy and not self.picking
             else "disabled"
         )
 
     def _install(self) -> None:
-        if self.busy:
+        if self.busy or self.picking:
             return
         request = self._request()
         self.busy = True
@@ -536,7 +569,15 @@ class ForgeWindow:
         try:
             while True:
                 event, payload = self.events.get_nowait()
-                if event == "stage":
+                if event == "selection":
+                    self.picking = False
+                    variable, selected, error = payload
+                    if selected is not None:
+                        variable.set(str(selected))
+                    if error:
+                        self.messagebox.showerror("TriAevum Forge", error, parent=self.root)
+                    self._refresh_actions()
+                elif event == "stage":
                     _stage, message = payload
                     self.status.set(str(message))
                 elif event == "error":
@@ -569,6 +610,8 @@ class ForgeWindow:
         ):
             return
         self.closing.set()
+        if self.picker_thread is not None:
+            self.picker_thread.join(timeout=15)
         process = self.worker_process
         if process is not None and process.poll() is None:
             process.kill()
@@ -584,7 +627,7 @@ def present_window(root: Any) -> None:
     root.focus_force()
 
 
-def main() -> int:
+def main(*, startup_error: str | None = None) -> int:
     try:
         import tkinter as tk
         from tkinter import filedialog, messagebox, ttk
@@ -603,6 +646,8 @@ def main() -> int:
         return 1
 
     _hide_explorer_console()
+    if startup_error:
+        root.after(0, lambda: messagebox.showerror("TriAevum", startup_error, parent=root))
     present_window(root)
     root.mainloop()
     return 0

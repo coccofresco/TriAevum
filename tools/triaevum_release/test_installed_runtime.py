@@ -104,6 +104,47 @@ class InstalledRuntimeTests(unittest.TestCase):
         self.assertEqual(self.plugin.read_bytes(), b"title")
         self.assertEqual(sha256_file(self.profile), self.receipt["launch_profile_sha256"])
 
+    def test_separate_package_is_never_modified_and_user_files_survive_reimport(self):
+        from common import load_json_object
+        from installation_context import expand_profile_argument
+        package = self.root / "immutable package"
+        package.mkdir()
+        executable = package / host_platform().runtime
+        executable.write_bytes(b"read-only runtime")
+        incoming = package / host_platform().title_module
+        incoming.write_bytes(b"read-only title")
+        before = {p.name: p.read_bytes() for p in package.iterdir()}
+        profile = self.data / "activation" / "TriAevum.launch.json"
+        marker = self.data / "savedata" / "keep.save"
+        marker.parent.mkdir()
+        marker.write_bytes(b"existing save")
+        config = self.data / "config" / "TriAevum.json"
+        atomic_write_json(config, {"user_setting": 42})
+        config_before = config.read_bytes()
+        prepared = SimpleNamespace(directory=self.title, state={})
+        old_mode = package.stat().st_mode
+        package.chmod(0o555)
+        try:
+            with (patch("forge.load_prepared_content", return_value=prepared),
+                  patch("forge.ensure_runtime_config"),
+                  patch("forge.query_product", return_value={
+                      "product": {}, "runtime_sha256": sha256_file(executable)}) as query):
+                for _ in range(2):
+                    forge.publish_private_runtime(
+                        self.title, plugin=incoming,
+                        runtime_plugin=profile.parent / host_platform().title_module,
+                        launch_profile=profile, data_root=self.data, package_root=package)
+                    self.assertEqual(validate_installed_runtime(
+                        executable, self.title, self.data, prepared.state["runtime"]), profile)
+                self.assertTrue(all(call.args[0] == executable for call in query.call_args_list))
+        finally:
+            package.chmod(old_mode)
+        arguments = [expand_profile_argument(arg, profile) for arg in load_json_object(profile)["arguments"]]
+        self.assertEqual(Path(arguments[arguments.index("--resource-root") + 1]), package / "resources")
+        self.assertEqual({p.name: p.read_bytes() for p in package.iterdir()}, before)
+        self.assertEqual(marker.read_bytes(), b"existing save")
+        self.assertEqual(config.read_bytes(), config_before)
+
     def test_texture_pack_is_published_and_verified_with_launch_profile(self):
         pack = self.data / "mods/topscreen/atlas_overrides.o3tu"
         pack.parent.mkdir(parents=True)

@@ -129,7 +129,7 @@ def install_precompiled_title(prepared_directory: Path, *, root: Path, recipe: d
     texture_pack = prepare_topscreen_assets(
         root=root, data_root=data_root, recipe=recipe,
         romfs=prepared.inputs["romfs"].path, report=report)
-    with activation_transaction(root.resolve(), [
+    with activation_transaction(runtime_plugin.resolve().parent, [
         runtime_plugin, launch_profile, active_title_state,
         prepared.directory / "forge-state.json",
         data_root / "config" / "TriAevum.json", data_root / "config" / "topscreen_ui.json",
@@ -140,7 +140,7 @@ def install_precompiled_title(prepared_directory: Path, *, root: Path, recipe: d
         runtime = forge.publish_private_runtime(
             prepared.directory, plugin=plugin, runtime_plugin=runtime_plugin,
             launch_profile=launch_profile, data_root=data_root,
-            topscreen_texture_pack=texture_pack)
+            topscreen_texture_pack=texture_pack, package_root=root)
         activation = forge.activate_prepared_title(prepared.directory, active_title_state=active_title_state)
     return {"status": "ready", "install_model": MODEL, "objects_compiled": 0,
             "package": packaged, "runtime": runtime, "active_title": activation["active_title"]}
