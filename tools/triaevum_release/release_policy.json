@@ -2,15 +2,7 @@
   "format": "triaevum_public_release_policy_v1",
   "manifest_format": "triaevum_public_release_manifest_v1",
   "allowed_roles": {
-    "runtime_executable": ["TriAevum.exe"],
-    "forge_executable": ["TriAevumForge.exe"],
-    "forge_tool": ["forge/*.exe"],
-    "forge_toolchain_setup": ["forge/toolchain-setup.json", "forge/toolchain-plan.json", "forge/toolchain-license.txt"],
-    "forge_link_library": ["forge/*.lib"],
-    "forge_tool_resource": ["lib/clang/*", "lib/clang/**/*"],
     "forge_clang_header": ["forge/clang/include/*.h", "forge/clang/include/**/*.h", "forge/clang/include/*.modulemap", "forge/clang/include/**/*.modulemap", "forge/clang/include/cuda_wrappers/algorithm", "forge/clang/include/cuda_wrappers/bits/basic_string.tcc", "forge/clang/include/cuda_wrappers/cmath", "forge/clang/include/cuda_wrappers/complex", "forge/clang/include/cuda_wrappers/new", "forge/clang/include/openmp_wrappers/cmath", "forge/clang/include/openmp_wrappers/complex", "forge/clang/include/openmp_wrappers/new", "forge/clang/include/profile/InstrProfData.inc"],
-    "forge_runtime_module": ["forge/*.dll"],
-    "runtime_library": ["*.dll", "bin/*.dll"],
     "title_neutral_resource": ["resources/*", "resources/**/*", "gamecontrollerdb.txt"],
     "configuration": ["config/*", "config/**/*"],
     "documentation": ["README.md", "LICENSE_SCOPE.md", "THIRD_PARTY_NOTICES.md", "SOURCE_OFFER.md", "docs/*", "docs/**/*"],
@@ -18,19 +10,12 @@
     "revision_recipe": ["recipes/*.json"],
     "input_copy_adapter": ["recipes/adapters/*.json"],
     "precompiled_catalog": ["recipes/precompiled-titles.json"],
-    "precompiled_title": ["titles/*/triaevum_title_aot.dll"],
     "translated_title_source": ["source/titles/*-translated.zip"],
     "title_build_source": ["source/titles/*-build.zip"],
     "corresponding_source": ["source/*.zip"]
   },
   "required_paths": [
-    "TriAevum.exe",
-    "TriAevumForge.exe",
-    "forge/oot3d_game_module.dll",
     "resources/gamecontrollerdb.txt",
-    "msvcp140.dll",
-    "vcruntime140.dll",
-    "vcruntime140_1.dll",
     "README.md",
     "LICENSE_SCOPE.md",
     "THIRD_PARTY_NOTICES.md",
@@ -39,13 +24,40 @@
     "LICENSES/GPL-2.0-or-later.txt",
     "LICENSES/SDL2-zlib.txt",
     "LICENSES/SDL-GameControllerDB-zlib.txt",
-    "LICENSES/Microsoft-Visual-Cpp-Runtime.md",
     "LICENSES/shaderc-Apache-2.0.txt",
-    "LICENSES/Python-3.13.txt",
     "LICENSES/Capstone-BSD.txt",
     "LICENSES/PyInstaller-GPL-2.0-or-later-with-bootloader-exception.txt",
     "LICENSES/LLVM-exception.txt"
   ],
+  "platforms": {
+    "x86_64-pc-windows-msvc": {
+      "allowed_roles": {
+        "runtime_executable": ["TriAevum.exe"],
+        "forge_executable": ["TriAevumForge.exe"],
+        "forge_tool": ["forge/*.exe"],
+        "forge_toolchain_setup": ["forge/toolchain-setup.json", "forge/toolchain-plan.json", "forge/toolchain-license.txt"],
+        "forge_link_library": ["forge/*.lib"],
+        "forge_tool_resource": ["lib/clang/*", "lib/clang/**/*"],
+        "forge_runtime_module": ["forge/*.dll"],
+        "runtime_library": ["*.dll", "bin/*.dll"],
+        "precompiled_title": ["titles/*/triaevum_title_aot.dll"]
+      },
+      "required_paths": ["TriAevum.exe", "TriAevumForge.exe", "forge/oot3d_game_module.dll", "msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll", "LICENSES/Microsoft-Visual-Cpp-Runtime.md", "LICENSES/Python-3.13.txt"]
+    },
+    "x86_64-unknown-linux-gnu": {
+      "allowed_roles": {
+        "runtime_executable": ["TriAevum"],
+        "forge_executable": ["TriAevumForge"],
+        "forge_runtime_module": ["forge/oot3d_game_module.so"],
+        "runtime_library": ["triaevum_title_aot.so", "lib/*.so", "lib/*.so.*"],
+        "forge_frozen_resource": ["_internal/*", "_internal/**/*"],
+        "precompiled_title": ["titles/*/triaevum_title_aot.so"]
+      },
+      "required_paths": ["TriAevum", "TriAevumForge", "forge/oot3d_game_module.so", "triaevum_title_aot.so", "_internal/base_library.zip", "LICENSES/Python-3.12.txt"],
+      "forbidden_basenames": ["libc.so.6", "libpthread.so.0", "libdl.so.2", "ld-linux-x86-64.so.2", "libvulkan.so.1"],
+      "forbidden_extensions": [".dll", ".exe", ".lib"]
+    }
+  },
   "required_roles": [
     "runtime_executable",
     "forge_executable",

@@ -149,6 +149,23 @@ with 1,032 assertions, including per-frame scope checks.
 
 ## Limits
 
+### Portable Widget Test (2026-09-09)
+
+The existing real-widget fixture is also available through CMake:
+
+```sh
+cmake --build BUILD --target triaevum_f1_settings_smoke --parallel 3
+BUILD/tools/triaevum_release/tests/triaevum_f1_settings_smoke
+```
+
+Use `.exe`/the configuration subdirectory on Windows where applicable. The
+target is excluded from normal builds and uses a private test-engine ImGui.
+SDK Clang 19.1.7 on Linux passes 1,761 assertions, including the complete,
+reversible shoulders/triggers exchange. It links actual panels/configuration,
+not a mock UI. Hardware button detection still needs device validation.
+
+### Remaining Device Coverage
+
 Hardware motion calibration, subjective sensitivity and all GPU/provider
 combinations still require their respective devices. A selectable setting is
 validated and wired to its existing consumer; this does not assert that every

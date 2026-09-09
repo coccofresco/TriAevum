@@ -2584,6 +2584,8 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
 endif()
 set_property(TARGET oot3d_native_a32_input_tests PROPERTY FOLDER Tests)
 
+add_subdirectory(tools/triaevum_release/tests)
+
 set(_oot3d_native_a32_ctr_host_sources
     tools/oot3d/native_game_runtime/oot3d_native_a32_ctr_host.cpp
     tools/oot3d/native_game_runtime/oot3d_native_a32_dsp_hle.cpp

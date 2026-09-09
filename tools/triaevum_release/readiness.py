@@ -10,8 +10,10 @@ from typing import Sequence
 
 try:
     from .common import load_json_object
+    from .release_platform import WINDOWS, for_target
 except ImportError:
     from common import load_json_object
+    from release_platform import WINDOWS, for_target
 
 
 ROOT = Path(__file__).resolve().parent
@@ -29,7 +31,7 @@ class ReadinessResult:
         return not self.blockers and not self.errors
 
 
-def evaluate_readiness(path: Path = DEFAULT_READINESS) -> ReadinessResult:
+def evaluate_readiness(path: Path = DEFAULT_READINESS, *, target: str = WINDOWS.target) -> ReadinessResult:
     errors: list[str] = []
     complete: list[str] = []
     blockers: list[str] = []
@@ -39,6 +41,12 @@ def evaluate_readiness(path: Path = DEFAULT_READINESS) -> ReadinessResult:
         return ReadinessResult((), (), (f"cannot load release readiness: {exc}",))
     if payload.get("format") != "triaevum_release_readiness_v1":
         return ReadinessResult((), (), ("unsupported release readiness format",))
+    try:
+        for_target(target)
+        if payload.get("target", WINDOWS.target) != target:
+            return ReadinessResult((), (), (f"release readiness does not qualify target {target}",))
+    except ValueError as exc:
+        return ReadinessResult((), (), (str(exc),))
     gates = payload.get("gates")
     if not isinstance(gates, list):
         return ReadinessResult((), (), ("release readiness gates are malformed",))
@@ -70,8 +78,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--readiness", type=Path, default=DEFAULT_READINESS)
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--target", default=WINDOWS.target)
     args = parser.parse_args(argv)
-    result = evaluate_readiness(args.readiness)
+    result = evaluate_readiness(args.readiness, target=args.target)
     payload = {
         "ready": result.ready,
         "complete": result.complete,

@@ -161,6 +161,31 @@ int main() {
                     hostButtons),
             "host bindings bypass device enablement or duplicate resolution");
 
+    std::array<HostBinding, 5> swapBindings{};
+    swapBindings[0] = multiDeviceBinding;
+    swapBindings[0].Gamepad = GamepadButton::LeftShoulder;
+    swapBindings[1].Gamepad = GamepadButton::LeftTrigger;
+    swapBindings[2].Gamepad = GamepadButton::LeftShoulder;
+    swapBindings[3].Gamepad = GamepadButton::RightTrigger;
+    const auto originalBindings = swapBindings;
+    SwapGamepadSources(swapBindings, GamepadButton::LeftShoulder,
+                       GamepadButton::LeftTrigger);
+    Require(swapBindings[0].Gamepad == GamepadButton::LeftTrigger &&
+                swapBindings[1].Gamepad == GamepadButton::LeftShoulder &&
+                swapBindings[2].Gamepad == GamepadButton::LeftTrigger &&
+                swapBindings[3] == originalBindings[3] &&
+                swapBindings[4] == originalBindings[4] &&
+                swapBindings[0].KeyboardPrimary == originalBindings[0].KeyboardPrimary &&
+                swapBindings[0].Mouse == originalBindings[0].Mouse,
+            "source swap lost a custom binding or changed another device");
+    SwapGamepadSources(swapBindings, GamepadButton::LeftShoulder,
+                       GamepadButton::LeftTrigger);
+    SwapGamepadSources(swapBindings, GamepadButton::None, GamepadButton::A);
+    SwapGamepadSources(swapBindings, GamepadButton::A, GamepadButton::None);
+    SwapGamepadSources(swapBindings, GamepadButton::A, GamepadButton::A);
+    Require(swapBindings == originalBindings,
+            "source swap is not reversible or assigned unbound actions");
+
     DigitalState digital;
     digital.SetHeld(DigitalControl::CirclePadUp);
     digital.SetHeld(DigitalControl::A);

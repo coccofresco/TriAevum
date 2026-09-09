@@ -2445,6 +2445,7 @@ int main() {
 
   TopScreenPauseIconBuild ordinaryIcon{1U, 0x44U, 3U, 4U};
   TopScreenUiConfig normalHud;
+  normalHud.HudScale = 0.9F; // This fixture tests the 90% layout, not the user default.
   Require(!ResolveTopScreenPauseIconBuild(&ordinaryIcon, normalHud) &&
               ordinaryIcon.Argument2 == 1U && ordinaryIcon.Argument3 == 0x44U &&
               ordinaryIcon.StackArgument0 == 3U &&

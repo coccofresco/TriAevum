@@ -15,13 +15,17 @@ from typing import Any, Iterable, Sequence
 
 try:
     from .product_contract import validate_product_info
-    from .precompiled_titles import MODEL, CATALOG, load_catalog, select_title, checked_file
+    from .precompiled_titles import MODEL, CATALOG, load_catalog, validate_title, checked_file
+    from .release_platform import WINDOWS, for_target, catalog_platform
+    from .platform_policy import resolve_policy
     from .common import load_json_object, normalize_relative_path, sha256_file
     from .input_adapters import validate_adapter
     from .source_contracts import source_contract_errors
 except ImportError:
     from product_contract import validate_product_info
-    from precompiled_titles import MODEL, CATALOG, load_catalog, select_title, checked_file
+    from precompiled_titles import MODEL, CATALOG, load_catalog, validate_title, checked_file
+    from release_platform import WINDOWS, for_target, catalog_platform
+    from platform_policy import resolve_policy
     from common import load_json_object, normalize_relative_path, sha256_file
     from input_adapters import validate_adapter
     from source_contracts import source_contract_errors
@@ -195,6 +199,11 @@ def audit_release(
     if not isinstance(release, dict):
         reject("release metadata is missing")
         release = {}
+    try:
+        platform = for_target(release.get("target", WINDOWS.target))
+        policy = resolve_policy(policy, platform.target)
+    except ValueError as exc:
+        return ReleaseAuditResult({}, (str(exc),))
     precompiled = release.get("distribution_model") == MODEL
     if release.get("contains_title_code") is not precompiled:
         reject("release.contains_title_code must accurately declare the distribution model")
@@ -273,7 +282,7 @@ def audit_release(
             validate_product_info(contract["product"], release.get("source_commit", ""))
             if contract["product"].get("private_title_loaded") is not False:
                 reject("runtime contract identifies a private title plugin")
-            if contract.get("runtime_sha256") != declared.get("TriAevum.exe", {}).get("sha256"):
+            if contract.get("runtime_sha256") != declared.get(platform.runtime, {}).get("sha256"):
                 reject("runtime contract hash differs from packaged executable")
         except (KeyError, TypeError, AttributeError, ValueError) as exc:
             reject(f"invalid runtime contract: {exc}")
@@ -374,13 +383,15 @@ def audit_release(
             reject("user precompiled release must not include compiler/SDK acquisition payloads")
         try:
             catalog = load_catalog(root)
+            if catalog_platform(catalog) != platform:
+                raise ValueError("Catalog target differs from release target")
             recipes = load_json_object(root / "recipes/oot3d.json")["recipes"]
             expected_title_paths = {CATALOG}
             for title in catalog["titles"]:
                 matches = [recipe for recipe in recipes if recipe["id"] == title["recipe"]]
                 if len(matches) != 1:
                     raise ValueError("Catalog revision is absent or ambiguous in supported recipes")
-                select_title(root, matches[0], catalog=catalog)
+                validate_title(root, matches[0], catalog=catalog)
                 adapter = matches[0].get("input_adapter")
                 if adapter is not None:
                     validate_adapter(root, matches[0])
@@ -430,6 +441,7 @@ def audit_release(
 
     summary = {
         "package": str(root),
+        "target": platform.target,
         "manifest": manifest_relative,
         "declared_files": len(declared),
         "verified_files": verified_files,

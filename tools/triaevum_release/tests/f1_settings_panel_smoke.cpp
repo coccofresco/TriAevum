@@ -443,6 +443,20 @@ int main() try {
     Frame();
     Click("Keyboard");
     Check(controls->Snapshot().Config.MouseAimDegreesPerPixel == 0.77F, "stale draft overwrote external controls");
+    Click("Bindings");
+    const auto beforeSwap = controls->Snapshot().Config;
+    Click("Swap shoulders / triggers");
+    const auto swapped = controls->Snapshot().Config;
+    using Action = Oot3dNativeGame::NativeControlAction;
+    using Button = Oot3dNativeGame::NativeGamepadButton;
+    Check(swapped.Bindings[static_cast<size_t>(Action::L)].Gamepad == Button::LeftTrigger &&
+          swapped.Bindings[static_cast<size_t>(Action::R)].Gamepad == Button::RightTrigger &&
+          swapped.Bindings[static_cast<size_t>(Action::Zl)].Gamepad == Button::LeftShoulder &&
+          swapped.Bindings[static_cast<size_t>(Action::Zr)].Gamepad == Button::RightShoulder,
+          "full controller swap failed to move both item bindings");
+    Click("Swap shoulders / triggers");
+    Check(controls->Snapshot().Config.Bindings == beforeSwap.Bindings,
+          "second controller swap did not restore original bindings");
     Click("TopScreen 2.1.1");
     Click("Render HUD");
     Check(!topScreen->Snapshot().Config.RenderHud, "TopScreen preview not connected");

@@ -1,5 +1,6 @@
 #include "oot3d_native_a32_input.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
@@ -38,9 +39,60 @@ void RequireTouch(const NativeA32TouchMapping& touch, bool inside,
             message);
 }
 
+class ControllerButtonSource final : public ThreeDsRecomp::Input::HostButtonSource {
+  public:
+    NativeGamepadButton Held = NativeGamepadButton::None;
+    bool IsKeyboardKeyHeld(NativeKeyboardKey) const noexcept override { return false; }
+    bool IsMouseButtonHeld(NativeMouseButton) const noexcept override { return false; }
+    bool IsGamepadButtonHeld(NativeGamepadButton button) const noexcept override {
+        return button == Held;
+    }
+};
+
+void TestShoulderMappings() {
+    using ThreeDsRecomp::Input::IsHostBindingHeld;
+    constexpr std::array actions{NativeControlAction::L, NativeControlAction::R,
+                                 NativeControlAction::Zl, NativeControlAction::Zr};
+    constexpr std::array masks{NativeA32HidButtonMask(NativeA32HidButton::L),
+                               NativeA32HidButtonMask(NativeA32HidButton::R),
+                               NativeA32HidButtonMask(NativeA32HidButton::Zl),
+                               NativeA32HidButtonMask(NativeA32HidButton::Zr)};
+    std::array sources{NativeGamepadButton::LeftShoulder, NativeGamepadButton::RightShoulder,
+                       NativeGamepadButton::LeftTrigger, NativeGamepadButton::RightTrigger};
+    std::sort(sources.begin(), sources.end());
+    unsigned permutations = 0;
+    do {
+        auto config = NativeControlPreset(NativeControlProfile::Controller);
+        config.Profile = NativeControlProfile::Custom;
+        for (size_t i = 0; i < actions.size(); ++i)
+            config.Bindings[static_cast<size_t>(actions[i])].Gamepad = sources[i];
+        std::string json, error;
+        NativeControlConfig loaded;
+        Require(SerializeNativeControlConfigText(config, &json, &error) &&
+                    ParseNativeControlConfigText(json, &loaded, &error) && loaded == config,
+                "custom shoulder mapping did not survive save/reload");
+        ControllerButtonSource physical;
+        for (size_t i = 0; i < actions.size(); ++i) {
+            // Exercise the same host-binding -> title action -> native HID path as the window.
+            for (const bool held : {true, true, false}) {
+                physical.Held = held ? sources[i] : NativeGamepadButton::None;
+                NativeControlHostInputState host;
+                for (size_t j = 0; j < host.Actions.size(); ++j)
+                    host.Actions[j] = IsHostBindingHeld(loaded.Bindings[j], {}, physical);
+                const auto frame = MapNativeControlInput(loaded, host);
+                Require(frame.Hid.Buttons == (held ? masks[i] : 0U),
+                        "remapped shoulder lost ZL/ZR or leaked L/R into the item press");
+            }
+        }
+        ++permutations;
+    } while (std::next_permutation(sources.begin(), sources.end()));
+    Require(permutations == 24U, "not all shoulder/trigger assignments were exercised");
+}
+
 } // namespace
 
 int main() {
+    TestShoulderMappings();
     const auto defaults = NativeControlDefaults();
     Require(defaults.ControllerEnabled && defaults.KeyboardEnabled && defaults.MouseEnabled &&
                 defaults.MovementStick == NativeAnalogStick::Left &&

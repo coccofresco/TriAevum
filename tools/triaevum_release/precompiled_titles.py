@@ -53,11 +53,10 @@ def load_catalog(root: Path) -> dict:
     return payload
 
 
-def select_title(root: Path, recipe: dict, *, catalog: dict | None = None) -> dict:
+def validate_title(root: Path, recipe: dict, *, catalog: dict | None = None) -> dict:
+    """Validate catalog content without executing binaries or requiring its host."""
     catalog = catalog or load_catalog(root)
     platform = catalog_platform(catalog)
-    if platform != host_platform():
-        raise ValueError(f"This package targets {platform.target}, not this host")
     matches = [item for item in catalog["titles"] if item["recipe"] == recipe["id"]]
     if len(matches) != 1:
         raise ValueError("No precompiled module for this ROM revision; obtain a compatible release")
@@ -88,6 +87,14 @@ def select_title(root: Path, recipe: dict, *, catalog: dict | None = None) -> di
     checked_file(root, catalog["native_module"])
     checked_file(root, item["plugin"])
     return item
+
+
+def select_title(root: Path, recipe: dict, *, catalog: dict | None = None) -> dict:
+    catalog = catalog or load_catalog(root)
+    platform = catalog_platform(catalog)
+    if platform != host_platform():
+        raise ValueError(f"This package targets {platform.target}, not this host")
+    return validate_title(root, recipe, catalog=catalog)
 
 
 def install_precompiled_title(prepared_directory: Path, *, root: Path, recipe: dict,

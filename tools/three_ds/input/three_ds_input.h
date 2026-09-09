@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -285,6 +286,11 @@ class HostButtonSource {
     [[nodiscard]] virtual bool IsGamepadButtonHeld(
         GamepadButton button) const noexcept = 0;
 };
+
+// Exchange physical sources, including every use in a customized mapping.
+// None is not a source: exchanging it would bind every unassigned action.
+void SwapGamepadSources(std::span<HostBinding> bindings,
+                        GamepadButton first, GamepadButton second) noexcept;
 
 [[nodiscard]] bool IsHostBindingHeld(
     const HostBinding& binding,

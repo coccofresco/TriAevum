@@ -41,6 +41,8 @@ class ReleasePlatformTests(unittest.TestCase):
                            "target": LINUX.target, "translator_identity_sha256": "a" * 64,
                            "plugin": record("titles/fixture/" + LINUX.title_module)}]}
             atomic_write_json(root / precompiled_titles.CATALOG, catalog)
+            with patch("precompiled_titles.host_platform", side_effect=AssertionError("metadata validation queried host")):
+                self.assertEqual(precompiled_titles.validate_title(root, recipe)["target"], LINUX.target)
             with patch("precompiled_titles.host_platform", return_value=LINUX):
                 self.assertEqual(precompiled_titles.select_title(root, recipe)["target"], LINUX.target)
                 corrupted = copy.deepcopy(catalog)

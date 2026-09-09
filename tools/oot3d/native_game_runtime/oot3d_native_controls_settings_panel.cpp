@@ -291,6 +291,18 @@ class NativeControlsSettingsPanel final
   }
 
   void DrawBindings() {
+    if (ImGui::Button("Swap shoulders / triggers")) {
+      ThreeDsRecomp::Input::SwapGamepadSources(
+          mControlDraft.Bindings, NativeGamepadButton::LeftShoulder,
+          NativeGamepadButton::LeftTrigger);
+      ThreeDsRecomp::Input::SwapGamepadSources(
+          mControlDraft.Bindings, NativeGamepadButton::RightShoulder,
+          NativeGamepadButton::RightTrigger);
+      MarkCustom(mControlDraft, mControlDirty);
+    }
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("Exchange both pairs of controller bindings. Keyboard and mouse bindings are unchanged.");
+    }
     if (!ImGui::CollapsingHeader("Bindings",
                                  ImGuiTreeNodeFlags_DefaultOpen)) {
       return;

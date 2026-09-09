@@ -679,6 +679,20 @@ bool ParseMotionSource(std::string_view value,
     return ParseNamed(value, source, kMotionSources);
 }
 
+void SwapGamepadSources(std::span<HostBinding> bindings,
+                        GamepadButton first, GamepadButton second) noexcept {
+    if (first == GamepadButton::None || second == GamepadButton::None) {
+        return;
+    }
+    for (auto& binding : bindings) {
+        if (binding.Gamepad == first) {
+            binding.Gamepad = second;
+        } else if (binding.Gamepad == second) {
+            binding.Gamepad = first;
+        }
+    }
+}
+
 bool IsHostBindingHeld(const HostBinding& binding,
                        const HostDeviceEnablement& enabled,
                        const HostButtonSource& source) noexcept {
