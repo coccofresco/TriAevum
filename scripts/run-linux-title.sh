@@ -83,6 +83,10 @@ if [[ "${TRIAEVUM_PIPELINE_PREWARM:-0}" == 1 ]]; then
   test -f "$pipelines"
   shader_args+=(--pica-pipeline-manifest "$pipelines" --pica-pipeline-prewarm)
 fi
+# Overlap guest execution with rendering on a second thread.
+if [[ "${TRIAEVUM_GUEST_THREAD:-0}" == 1 ]]; then
+  shader_args+=(--guest-thread)
+fi
 capture_args=()
 # Readback deliberately stalls the device. Interactive previews must not pay
 # for periodic captures; opt in explicitly when collecting image evidence.
