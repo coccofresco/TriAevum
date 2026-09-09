@@ -2,6 +2,7 @@
 
 #include <charconv>
 #include <limits>
+#include <stdexcept>
 #include <system_error>
 
 namespace Fast::Oot3d {
@@ -31,16 +32,24 @@ VulkanQueueFamilySelection SelectVulkanQueueFamilies(
     return selection;
 }
 
+VulkanPresentDispatchMode ParseVulkanPresentDispatchMode(std::string_view value) {
+    if (value.empty() || value == "auto") return VulkanPresentDispatchMode::Automatic;
+    if (value == "inline") return VulkanPresentDispatchMode::Inline;
+    if (value == "graphics") return VulkanPresentDispatchMode::GraphicsQueue;
+    throw std::invalid_argument("TRIAEVUM_VULKAN_PRESENT_DISPATCH must be auto, inline or graphics");
+}
+
 VulkanQueueTopologyPlan ResolveVulkanQueueTopology(
     uint32_t graphicsFamily, uint32_t presentFamily,
-    uint32_t graphicsQueueCount) {
+    uint32_t graphicsQueueCount, VulkanPresentDispatchMode mode) {
     VulkanQueueTopologyPlan plan;
     plan.GraphicsFamily = graphicsFamily;
     plan.PresentFamily = presentFamily;
     plan.GraphicsQueueCount = graphicsQueueCount;
     plan.SharedFamily = graphicsFamily == presentFamily;
     plan.NriSwapchainEligible = plan.SharedFamily;
-    if (plan.SharedFamily && graphicsQueueCount >= 2U) {
+    if (plan.SharedFamily && graphicsQueueCount >= 2U &&
+        mode != VulkanPresentDispatchMode::GraphicsQueue) {
         plan.RequestedGraphicsQueueCount = 2U;
         plan.PresentQueueIndex = 1U;
         plan.AsynchronousPresent = true;
@@ -49,6 +58,7 @@ VulkanQueueTopologyPlan ResolveVulkanQueueTopology(
         plan.PresentQueueIndex = 0U;
         plan.AsynchronousPresent = !plan.SharedFamily;
     }
+    if (mode != VulkanPresentDispatchMode::Automatic) plan.AsynchronousPresent = false;
     return plan;
 }
 

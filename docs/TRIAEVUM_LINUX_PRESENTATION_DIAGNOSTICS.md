@@ -80,6 +80,41 @@ effects as a workaround.
 
 ## Nonblocking Framebuffer Probe
 
+### Native Wayland Isolation, September 9
+
+`wayland-protocol30` (60 seconds, native 30, FIFO, no readback) still flashed
+according to the user. Its client protocol trace shows the Vulkan WSI attaching
+alternating buffers with explicit DRM syncobj acquire/release points. SDL's
+default queue requests damage/frame callbacks but does not repeatedly attach or
+commit a second image. This rules out that particular double-present hypothesis;
+it does not establish that the driver, compositor or renderer is responsible.
+The installed SDL2 library is SDL2-compat, backed by SDL3. The display reports
+VRR/HDR incapable, 2560x1440 at approximately 59.95 Hz.
+
+An opt-in `TRIAEVUM_VULKAN_PRESENT_DISPATCH` diagnostic now separates host
+dispatch from GPU queue choice without changing shaders, assets or frame rate:
+
+- Unset/`auto`: unchanged production policy, including the present worker when
+  separate queues are available.
+- `inline`: same GPU queue topology, but call present on the main thread.
+- `graphics`: use graphics queue 0 for presentation if the family supports it,
+  with inline dispatch. Devices requiring a separate present family retain it.
+
+Invalid values are rejected. No per-frame queue-idle wait is introduced. These
+are startup diagnostics, not new persisted user settings. Fast standalone policy
+tests pass with Windows Clang 22 and the Linux shipping SDK's Clang 19.
+
+`wayland-inline30`: 2,701 frames over a bounded 90-second run, native profile,
+640x360, FIFO, no readback/validation. **User observed fewer but still present
+flashes**. Removing the worker alone is therefore not a fix.
+
+`wayland-graphics30`: completed a bounded 100-second run, 3,084 presentations.
+The effective profile changed from Authentic to Custom and the output changed
+from 640x360 to 1280x960 during the run; it is not a single-setting benchmark.
+Visual qualification is pending. Do not select this mode as a production fix
+based only on a clean exit or render counters. Preserve the X11 mitigation while
+native Wayland remains unqualified.
+
 Set `TRIAEVUM_VULKAN_SCANOUT_PROBE` to a writable CSV path before launching.
 `fast/backends/vulkan_scanout_probe.*` records the final swapchain image after
 composition, before presentation. It copies into a per-in-flight-slot coherent

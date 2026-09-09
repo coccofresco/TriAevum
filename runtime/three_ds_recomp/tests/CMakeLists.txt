@@ -1,5 +1,12 @@
 include(FetchContent)
 
+add_executable(vulkan_present_dispatch_tests
+    vulkan_present_dispatch_tests.cpp
+    ../src/fast/oot3d/vulkan_adapter_policy.cpp)
+target_compile_features(vulkan_present_dispatch_tests PRIVATE cxx_std_20)
+target_include_directories(vulkan_present_dispatch_tests PRIVATE ../include)
+add_test(NAME vulkan_present_dispatch_tests COMMAND vulkan_present_dispatch_tests)
+
 if(TARGET SDL2::SDL2)
     add_executable(sdl_video_driver_policy_tests sdl_video_driver_policy_tests.cpp)
     target_compile_features(sdl_video_driver_policy_tests PRIVATE cxx_std_20)
