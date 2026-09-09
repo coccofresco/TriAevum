@@ -83,6 +83,14 @@
     "tools/oot3d/decomp_support/src/code",
     "tools/oot3d/decomp_support/symbols"
   ],
+  "source_archive_required_paths": [
+    "CMakeLists.txt",
+    "tools/oot3d/ui_contract/CMakeLists.txt",
+    "tools/oot3d/ui_contract/README.md"
+  ],
+  "source_archive_required_manifests": [
+    "tools/oot3d/ui_contract/SOURCE_MANIFEST.json"
+  ],
   "forbidden_sha256": [
     "16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220",
     "9f065aec342b7df2421998deacedde44d475d36264f861cffd3381a1adf8900a",

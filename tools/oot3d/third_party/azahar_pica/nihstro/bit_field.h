@@ -39,6 +39,11 @@
 
 namespace nihstro {
 
+// A local customization point: specializing std::make_unsigned is undefined
+// behavior and is rejected by recent libc++ headers.
+template <typename T>
+struct MakeUnsigned : std::make_unsigned<T> {};
+
 /*
  * Abstract bitfield class
  *
@@ -187,7 +192,7 @@ private:
         std::enable_if < true, T >> ::type::type StorageType;
 
     // Unsigned version of StorageType
-    typedef typename std::make_unsigned<StorageType>::type StorageTypeU;
+    typedef typename MakeUnsigned<StorageType>::type StorageTypeU;
 
     __forceinline StorageType GetMask() const
     {

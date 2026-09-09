@@ -77,6 +77,8 @@ void RunNativeFrameRateTests() {
         Oot3dNativeGame::ResolveNativePacerDeadlineAction(
             34ms, 16666667ns) != NativePacerDeadlineAction::Resync ||
         Oot3dNativeGame::ResolveNativePacerDeadlineAction(
+            200ms, 16666667ns) != NativePacerDeadlineAction::Resync ||
+        Oot3dNativeGame::ResolveNativePacerDeadlineAction(
             200ms, 16666667ns, 15U) !=
             NativePacerDeadlineAction::CarryDebt ||
         Oot3dNativeGame::ResolveNativePacerDeadlineAction(

@@ -18,11 +18,13 @@ try:
     from .precompiled_titles import MODEL, CATALOG, load_catalog, select_title, checked_file
     from .common import load_json_object, normalize_relative_path, sha256_file
     from .input_adapters import validate_adapter
+    from .source_contracts import source_contract_errors
 except ImportError:
     from product_contract import validate_product_info
     from precompiled_titles import MODEL, CATALOG, load_catalog, select_title, checked_file
     from common import load_json_object, normalize_relative_path, sha256_file
     from input_adapters import validate_adapter
+    from source_contracts import source_contract_errors
 
 
 ROOT = Path(__file__).resolve().parent
@@ -102,9 +104,14 @@ def _source_archive_errors(
     forbidden_components: set[str],
     forbidden_hashes: set[str],
     forbidden_prefixes: tuple[str, ...],
+    source_policy: dict[str, Any] | None = None,
 ) -> Iterable[str]:
     try:
         with zipfile.ZipFile(archive) as source:
+            if source_policy is not None:
+                yield from source_contract_errors(
+                    {item.filename for item in source.infolist() if not item.is_dir()},
+                    source.read, source_policy)
             for item in source.infolist():
                 if item.is_dir():
                     continue
@@ -336,6 +343,7 @@ def audit_release(
                 forbidden_components=forbidden_components,
                 forbidden_hashes=forbidden_hashes,
                 forbidden_prefixes=source_forbidden_prefixes,
+                source_policy=policy if role == "corresponding_source" else None,
             ):
                 reject(error)
 

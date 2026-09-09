@@ -261,8 +261,13 @@ nlohmann::json RunProbe(const ProbeArgs &probeArgs) {
     api.StartDrawToFramebuffer(0, 1.0f);
     api.SetClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     api.ClearFramebuffer(true, true);
-    api.SetViewport(0, 0, static_cast<int>(width), static_cast<int>(height));
-    api.SetScissor(0, 0, static_cast<int>(width), static_cast<int>(height));
+    // Vulkan restores its full drawable viewport after the shadow pass.
+    // Window dimensions are logical points on Retina; using them as Vulkan
+    // pixel extents would render only the upper-left quarter of the image.
+    if (probeArgs.Renderer != "vulkan") {
+      api.SetViewport(0, 0, static_cast<int>(width), static_cast<int>(height));
+      api.SetScissor(0, 0, static_cast<int>(width), static_cast<int>(height));
+    }
     api.SetDepthTestAndMask(false, false);
     api.SetZmodeDecal(false);
     api.SetUseAlpha(false);

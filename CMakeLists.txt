@@ -946,7 +946,7 @@ if(OOT3D_WHOLE_AOT_PRODUCT_MODE)
         target_sources(oot3d_native_a32_process PRIVATE
             tools/oot3d/native_game_runtime/oot3d_native_direct_aot.cpp)
         target_link_libraries(oot3d_native_a32_process PUBLIC
-            oot3d_native_a32_runtime)
+            oot3d_native_a32_runtime ${CMAKE_DL_LIBS})
         target_compile_definitions(oot3d_native_a32_process PRIVATE
             OOT3D_NATIVE_DIRECT_AOT_PLUGIN=1
             OOT3D_NATIVE_GENERATED_WHOLE_AOT=1
@@ -2239,8 +2239,7 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
 endif()
 set_property(TARGET oot3d_native_pica_texture_tests PROPERTY FOLDER Tests)
 
-set(OOT3D_NATIVE_UI_EVIDENCE_ROOT
-    "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/decomp_support/evidence/zelda3drecomp/849140697187b895")
+add_subdirectory(tools/oot3d/ui_contract EXCLUDE_FROM_ALL)
 
 add_library(oot3d_ui_topscreen STATIC EXCLUDE_FROM_ALL
     tools/oot3d/ui_topscreen/oot3d_top_screen_config.cpp
@@ -2256,7 +2255,6 @@ add_library(oot3d_ui_topscreen STATIC EXCLUDE_FROM_ALL
 target_include_directories(oot3d_ui_topscreen PUBLIC
     tools/oot3d/native_game_runtime
     tools/oot3d/ui_topscreen
-    "${OOT3D_NATIVE_UI_EVIDENCE_ROOT}"
 )
 target_link_libraries(oot3d_ui_topscreen PUBLIC
     oot3d_native_a32_process
@@ -2293,25 +2291,6 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
         MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 set_property(TARGET oot3d_top_screen_items_hint_tests PROPERTY FOLDER Tests)
-
-file(GLOB OOT3D_NATIVE_UI_CONTRACT_SOURCES CONFIGURE_DEPENDS
-    "${OOT3D_NATIVE_UI_EVIDENCE_ROOT}/oot3d_ui/*.cpp")
-if (OOT3D_NATIVE_UI_CONTRACT_SOURCES)
-add_library(oot3d_native_ui_contract STATIC EXCLUDE_FROM_ALL
-    ${OOT3D_NATIVE_UI_CONTRACT_SOURCES}
-)
-target_include_directories(oot3d_native_ui_contract PUBLIC
-    "${OOT3D_NATIVE_UI_EVIDENCE_ROOT}"
-)
-target_compile_options(oot3d_native_ui_contract PRIVATE "${WARNING_OVERRIDE}")
-if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    target_compile_definitions(oot3d_native_ui_contract PRIVATE NOMINMAX)
-    set_property(TARGET oot3d_native_ui_contract PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-endif()
-set_property(TARGET oot3d_native_ui_contract PROPERTY FOLDER Tools)
-else()
-    add_library(oot3d_native_ui_contract INTERFACE)
-endif()
 
 add_executable(oot3d_native_ui_contract_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_ui_contract_tests.cpp
@@ -3043,10 +3022,12 @@ target_compile_options(oot3d_native_game_runtime PRIVATE "${WARNING_OVERRIDE}")
 target_link_libraries(oot3d_native_game_runtime PUBLIC
     oot3d_native_asset_runtime
     oot3d_room_compilation_runtime
-    oot3d_native_math
     oot3d_native_audio
     oot3d_native_a32_process
 )
+if(TARGET oot3d_native_math)
+    target_link_libraries(oot3d_native_game_runtime PUBLIC oot3d_native_math)
+endif()
 if (TARGET oot3d_native_a32_aot)
     target_link_libraries(oot3d_native_game_runtime PUBLIC oot3d_native_a32_aot)
     target_compile_definitions(oot3d_native_game_runtime PRIVATE
@@ -3152,7 +3133,7 @@ target_compile_options(oot3d_native_cutscene_player PRIVATE "${WARNING_OVERRIDE}
 add_executable(oot3d_shadow2d_backend_probe EXCLUDE_FROM_ALL
     tools/oot3d/native_demo_host/oot3d_shadow2d_backend_probe.cpp
 )
-target_link_libraries(oot3d_shadow2d_backend_probe PRIVATE oot3d_native_cutscene_host)
+target_link_libraries(oot3d_shadow2d_backend_probe PRIVATE oot3d_native_application_host)
 target_compile_options(oot3d_shadow2d_backend_probe PRIVATE "${WARNING_OVERRIDE}")
 
 add_executable(oot3d_native_game EXCLUDE_FROM_ALL
@@ -3175,6 +3156,10 @@ if(OOT3D_DIRECT_AOT_PLUGIN)
         CONTENT "{\n  \"format\": \"triaevum_runtime_targets_v1\",\n  \"source_commit\": \"${GIT_COMMIT_HASH}\",\n  \"runtime\": \"$<TARGET_FILE:oot3d_native_game>\",\n  \"stub\": \"$<TARGET_FILE:triaevum_title_aot_stub>\"\n}\n")
 endif()
 set(TRIAEVUM_PRODUCT_NRI 0)
+set(TRIAEVUM_PRODUCT_VULKAN 0)
+if(OOT3D_ENABLE_VULKAN_RENDERER)
+    set(TRIAEVUM_PRODUCT_VULKAN 1)
+endif()
 if(THREE_DS_RECOMP_ENABLE_NRI AND OOT3D_ENABLE_VULKAN_RENDERER)
     set(TRIAEVUM_PRODUCT_NRI 1)
 endif()
@@ -3290,8 +3275,10 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
             oot3d_native_a32_aot)
     endif()
     if (OOT3D_DIRECT_AOT_PLUGIN)
-        target_link_libraries(oot3d_native_game PRIVATE
-            triaevum_title_aot_stub)
+        if(NOT APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+            target_link_libraries(oot3d_native_game PRIVATE
+                triaevum_title_aot_stub)
+        endif()
         target_compile_definitions(oot3d_native_game PRIVATE
             OOT3D_REQUIRE_WHOLE_AOT_PLUGIN_V2=1
             OOT3D_NATIVE_DIRECT_AOT_PLUGIN=1)

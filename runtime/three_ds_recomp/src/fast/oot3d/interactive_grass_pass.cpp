@@ -1353,7 +1353,14 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
         }
 
         const auto placementStart = std::chrono::steady_clock::now();
+        // The pass already handles pending placements and retries next frame.
+        // Do not stop the Mac presentation/game clock while workers generate
+        // the title's dense grass; publish each immutable result when ready.
+#if defined(__APPLE__)
+        auto placements = mImpl->PlacementBuilder.Resolve(placementRequests, false);
+#else
         auto placements = mImpl->PlacementBuilder.Resolve(placementRequests);
+#endif
         telemetry.PlacementMilliseconds += std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - placementStart).count();
         for (size_t i = 0; i < placements.size(); ++i) {

@@ -25,6 +25,13 @@ def fixture_product():
 
 
 class ProductContractTests(unittest.TestCase):
+    def test_vulkan_product_preserves_default_nri_requirement(self):
+        info = fixture_product()
+        info["capabilities"].update(nri=False, vulkan=True)
+        validate_product_info(info, renderer="vulkan")
+        with self.assertRaisesRegex(ValueError, "NRI"):
+            validate_product_info(info)
+
     def test_rejects_old_host_missing_features_and_wrong_commit(self):
         for key, value in (("runtime", "triaevum_oot3d_module_host"),
                            ("whole_aot_plugin_abi", 1), ("capabilities", {})):
@@ -58,7 +65,7 @@ class ProductContractTests(unittest.TestCase):
             with patch("product_contract.subprocess.run", return_value=result) as run:
                 receipt = query_product(exe, "a" * 40)
             self.assertEqual(run.call_args.kwargs["timeout"], 15)
-            self.assertEqual(run.call_args.args[0], [str(exe), "--product-info"])
+            self.assertEqual(run.call_args.args[0], [str(exe.resolve()), "--product-info"])
             self.assertEqual(len(receipt["runtime_sha256"]), 64)
 
     def test_selected_plugin_query_requires_native_abi_success(self):
@@ -76,4 +83,4 @@ class ProductContractTests(unittest.TestCase):
                 result.stdout = json.dumps(info)
                 query_product(exe, plugin=plugin)
                 self.assertEqual(run.call_args.args[0],
-                                 [str(exe), "--verify-title-plugin", str(plugin)])
+                                 [str(exe.resolve()), "--verify-title-plugin", str(plugin.resolve())])

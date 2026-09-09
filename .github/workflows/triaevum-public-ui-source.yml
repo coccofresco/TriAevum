@@ -1,0 +1,59 @@
+name: TriAevum public UI source
+
+on:
+  push:
+    paths:
+      - '.github/workflows/triaevum-public-ui-source.yml'
+      - 'CMakeLists.txt'
+      - 'tools/oot3d/ui_contract/**'
+      - 'tools/oot3d/ui_n64/**'
+      - 'tools/oot3d/ui_topscreen/**'
+      - 'tools/oot3d/native_game_runtime/oot3d_native_ui_contract_tests.cpp'
+      - 'tools/triaevum_release/**'
+  pull_request:
+    paths:
+      - '.github/workflows/triaevum-public-ui-source.yml'
+      - 'CMakeLists.txt'
+      - 'tools/oot3d/ui_contract/**'
+      - 'tools/oot3d/ui_n64/**'
+      - 'tools/oot3d/ui_topscreen/**'
+      - 'tools/oot3d/native_game_runtime/oot3d_native_ui_contract_tests.cpp'
+      - 'tools/triaevum_release/**'
+
+jobs:
+  exported-ui-consumers:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            compiler: GCC
+            cmake_args: '-DCMAKE_CXX_COMPILER=g++'
+          - os: ubuntu-24.04
+            compiler: Clang
+            cmake_args: '-DCMAKE_CXX_COMPILER=clang++'
+          - os: windows-latest
+            compiler: MSVC
+            cmake_args: ''
+    runs-on: ${{ matrix.os }}
+    name: Exported UI / ${{ matrix.compiler }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Create policy-filtered public source archive
+        run: >-
+          python tools/triaevum_release/source_archive.py --repository .
+          --source-commit ${{ github.sha }} --output build/TriAevum-source.zip
+      - name: Extract without access to private snapshots
+        run: python -m zipfile -e build/TriAevum-source.zip build/public-source
+      - name: Configure exported real UI consumers
+        run: >-
+          cmake -S build/public-source/tools/oot3d/ui_contract -B build/ui-contract
+          -DCMAKE_BUILD_TYPE=Release ${{ matrix.cmake_args }}
+      - name: Compile
+        run: cmake --build build/ui-contract --config Release --parallel 2
+      - name: Test
+        run: ctest --test-dir build/ui-contract -C Release --output-on-failure

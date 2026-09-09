@@ -16,7 +16,6 @@ namespace Oot3dNativeGame {
 namespace {
 
 constexpr auto kMaximumSpinDuration = std::chrono::microseconds(500);
-constexpr auto kMaximumRecoverableDebt = std::chrono::milliseconds(250);
 
 #ifdef _WIN32
 #ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
@@ -129,13 +128,11 @@ void NativeRealtimeRefreshPacer::WaitForNextRefresh() {
         mStats.MaximumLatenessSeconds =
             std::max(mStats.MaximumLatenessSeconds, lateness);
         ++mStats.DeadlineMisses;
-        const auto maximumRecoverablePeriods = static_cast<uint32_t>(
-            std::max<int64_t>(
-                1, (kMaximumRecoverableDebt.count() * 1'000'000LL +
-                    period.count() - 1) /
-                       period.count()));
+        // Recover a short late interpolation sample, not a quarter second
+        // of presentations. The simulation clock already accounts for real
+        // elapsed time; retaining a long presentation debt creates bursts.
         if (ResolveNativePacerDeadlineAction(
-                latenessDuration, period, maximumRecoverablePeriods) ==
+                latenessDuration, period) ==
             NativePacerDeadlineAction::Resync) {
             ++mStats.DeadlineResyncs;
             mNextDeadline = now;

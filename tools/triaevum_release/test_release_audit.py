@@ -56,6 +56,18 @@ FILES = {
 }
 
 
+def write_source_fixture(archive):
+    policy = json.loads(DEFAULT_POLICY.read_text())
+    archive.writestr("src/main.cpp", "int main() { return 0; }\n")
+    for relative in policy.get("source_archive_required_paths", []):
+        archive.writestr(relative, "// source fixture\n")
+    for relative in policy.get("source_archive_required_manifests", []):
+        manifest = json.loads((DEFAULT_POLICY.parents[2] / relative).read_text())
+        archive.writestr(relative, json.dumps(manifest))
+        for item in manifest["files"]:
+            archive.writestr((Path(relative).parent / item["path"]).as_posix(), "// source fixture\n")
+
+
 def write_clean_package(root: Path) -> None:
     inventory = []
     for relative, (role, data) in FILES.items():
@@ -73,7 +85,7 @@ def write_clean_package(root: Path) -> None:
     source_archive = root / "source" / "TriAevum-source.zip"
     source_archive.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(source_archive, "w") as archive:
-        archive.writestr("src/main.cpp", "int main() { return 0; }\n")
+        write_source_fixture(archive)
     inventory.append(
         {
             "path": "source/TriAevum-source.zip",
@@ -101,6 +113,26 @@ def write_clean_package(root: Path) -> None:
 
 
 class PublicReleaseAuditTests(unittest.TestCase):
+    def test_rejects_source_archive_missing_ui_header(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            write_clean_package(root)
+            path = root / "source/TriAevum-source.zip"
+            missing = "tools/oot3d/ui_contract/oot3d_ui/ui_primitives.h"
+            with zipfile.ZipFile(path) as archive:
+                kept = {name: archive.read(name) for name in archive.namelist() if name != missing}
+            with zipfile.ZipFile(path, "w") as archive:
+                for name, data in kept.items():
+                    archive.writestr(name, data)
+            manifest_path = root / "release-manifest.json"
+            manifest = json.loads(manifest_path.read_text())
+            item = next(item for item in manifest["files"] if item["role"] == "corresponding_source")
+            item.update(bytes=path.stat().st_size, sha256=sha256_file(path))
+            atomic_write_json(manifest_path, manifest)
+            result = audit_release(root)
+            self.assertFalse(result.ok)
+            self.assertTrue(any(missing in error for error in result.errors), result.errors)
+
     def test_rejects_package_without_input_or_runtime_dependencies(self):
         for relative in ("resources/gamecontrollerdb.txt", "msvcp140.dll",
                          "vcruntime140.dll", "vcruntime140_1.dll"):
@@ -252,7 +284,7 @@ class PublicReleaseAuditTests(unittest.TestCase):
             source_archive = source / "source" / "TriAevum-source.zip"
             source_archive.parent.mkdir(parents=True, exist_ok=True)
             with zipfile.ZipFile(source_archive, "w") as archive:
-                archive.writestr("src/main.cpp", "int main() { return 0; }\n")
+                write_source_fixture(archive)
             layout_items.append(
                 {
                     "source": "source/TriAevum-source.zip",

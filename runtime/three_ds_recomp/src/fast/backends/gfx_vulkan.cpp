@@ -2293,9 +2293,14 @@ void GfxRenderingAPIVulkan::UpdateFramebufferParameters(int fbId, uint32_t width
     if (fbId != 0) {
         return;
     }
+    // Host dimensions are logical points on macOS; the swapchain extent is
+    // drawable pixels. Comparing the two rebuilds the swapchain every frame
+    // on Retina displays, destroying all pipelines and the ImGui font atlas.
+    // Window/display events and OUT_OF_DATE handle drawable-only changes.
+    const bool sizeChanged = width != mRequestedWidth || height != mRequestedHeight;
     mRequestedWidth = width;
     mRequestedHeight = height;
-    if (mInitialized && (width != mSwapchainExtent.width || height != mSwapchainExtent.height)) {
+    if (mInitialized && sizeChanged) {
         mSwapchainDirty = true;
     }
 }
@@ -2492,7 +2497,7 @@ void GfxRenderingAPIVulkan::ClearFramebuffer(bool, bool) {
 }
 
 void GfxRenderingAPIVulkan::ReadFramebufferToCPU(int, uint32_t width, uint32_t height, uint16_t* rgba16Buf) {
-    if (rgba16Buf == nullptr || mDevice == VK_NULL_HANDLE ||
+    if (rgba16Buf == nullptr || width == 0 || height == 0 || mDevice == VK_NULL_HANDLE ||
         (mSwapchain == VK_NULL_HANDLE && !mNriSwapchain.Active()) ||
         mCurrentFramebuffer != 0) {
         return;
@@ -2507,8 +2512,10 @@ void GfxRenderingAPIVulkan::ReadFramebufferToCPU(int, uint32_t width, uint32_t h
                             std::numeric_limits<uint64_t>::max()),
             "vkWaitForFences(readback)");
 
-    const uint32_t copyWidth = std::min(width, mSwapchainExtent.width);
-    const uint32_t copyHeight = std::min(height, mSwapchainExtent.height);
+    // The drawable may be larger than the logical window on Retina displays.
+    // Read the whole drawable, then scale into the caller's requested size.
+    const uint32_t copyWidth = mSwapchainExtent.width;
+    const uint32_t copyHeight = mSwapchainExtent.height;
     const VkDeviceSize byteCount = static_cast<VkDeviceSize>(copyWidth) * copyHeight * 4;
     auto readback = CreateBuffer(byteCount, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
@@ -2552,9 +2559,11 @@ void GfxRenderingAPIVulkan::ReadFramebufferToCPU(int, uint32_t width, uint32_t h
     const auto* rgba8 = static_cast<const uint8_t*>(readback.Mapped);
     const bool bgra = mSwapchainFormat == VK_FORMAT_B8G8R8A8_UNORM ||
                       mSwapchainFormat == VK_FORMAT_B8G8R8A8_SRGB;
-    for (uint32_t y = 0; y < copyHeight; ++y) {
-        for (uint32_t x = 0; x < copyWidth; ++x) {
-            const size_t source = (static_cast<size_t>(y) * copyWidth + x) * 4;
+    for (uint32_t y = 0; y < height; ++y) {
+        const size_t sourceY = static_cast<uint64_t>(y) * copyHeight / height;
+        for (uint32_t x = 0; x < width; ++x) {
+            const size_t sourceX = static_cast<uint64_t>(x) * copyWidth / width;
+            const size_t source = (sourceY * copyWidth + sourceX) * 4;
             const uint8_t r = rgba8[source + (bgra ? 2 : 0)];
             const uint8_t g = rgba8[source + 1];
             const uint8_t b = rgba8[source + (bgra ? 0 : 2)];
@@ -2654,6 +2663,21 @@ void GfxRenderingAPIVulkan::CreateInstance() {
     std::vector<VkExtensionProperties> available(availableCount);
     vkEnumerateInstanceExtensionProperties(
         nullptr, &availableCount, available.data());
+    // MoltenVK devices are hidden by the Vulkan loader unless the application
+    // opts into portability enumeration. Enable it only when advertised so
+    // native Vulkan drivers and older loaders retain their existing behavior.
+    const bool portabilityEnumeration = std::any_of(
+        available.begin(), available.end(), [](const auto& extension) {
+            return std::strcmp(extension.extensionName,
+                               VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME) == 0;
+        });
+    if (portabilityEnumeration && std::none_of(
+            extensions.begin(), extensions.end(), [](const char* name) {
+                return std::strcmp(name,
+                                   VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME) == 0;
+            })) {
+        extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+    }
     for (const std::string& required : ngxRequirements.InstanceExtensions) {
         const bool supported = std::any_of(
             available.begin(), available.end(), [&](const auto& extension) {
@@ -2693,6 +2717,8 @@ void GfxRenderingAPIVulkan::CreateInstance() {
     applicationInfo.apiVersion = VK_API_VERSION_1_2;
 
     VkInstanceCreateInfo createInfo{ VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
+    if (portabilityEnumeration)
+        createInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
     createInfo.pApplicationInfo = &applicationInfo;
     createInfo.enabledExtensionCount =
         static_cast<uint32_t>(extensions.size());
@@ -2883,6 +2909,10 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
                            });
     };
     std::vector<const char*> extensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+    // Required by portability devices. Use the extension name directly to
+    // avoid enabling all provisional Vulkan declarations via vulkan_beta.h.
+    if (hasExtension("VK_KHR_portability_subset"))
+        extensions.push_back("VK_KHR_portability_subset");
     VkPhysicalDeviceProperties deviceProperties{};
     vkGetPhysicalDeviceProperties(mPhysicalDevice, &deviceProperties);
     const bool hasVulkan12 = deviceProperties.apiVersion >= VK_API_VERSION_1_2;

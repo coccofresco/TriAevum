@@ -78,6 +78,14 @@ model or DLL is part of the clean public release baseline.
 
 ## TopScreen single-screen modifications
 
+The required title-owned UI contract is published in
+`tools/oot3d/ui_contract`, imported from Zelda3drecomp revision
+`2cec5ef08305fbe1e4fe00efaf3f2467ff5228b1` with the existing TriAevum
+`HorseStamina` extension. Its source manifest records the 62 imported files and
+their provenance. It includes reconstructed UI semantics and resource-layout
+tables, not UI textures. It must not be described as title-neutral code; the
+original-game rights exclusions in `LICENSE_SCOPE.md` still apply.
+
 TriAevum contains an independently maintained typed reimplementation of
 behavior observed in the TopScreen modifications for OoT3D. The official 2.1.1
 archive is identified by SHA-256

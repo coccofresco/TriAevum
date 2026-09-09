@@ -60,6 +60,10 @@ to suit your GPU.
 
 ## Testing and contributing
 
+An [experimental macOS port](docs/OOT3D_MACOS_PORT.md) builds and runs on
+Apple Silicon, with a local app bundle and ROM importer. The linked notes
+track validation and remaining distribution work.
+
 This is an **experimental alpha**, not a fully tested port. Gameplay testing
 currently covers the early parts of the game. The USA adapter has been checked
 through installation, the title intro and file selection, not a full playthrough.

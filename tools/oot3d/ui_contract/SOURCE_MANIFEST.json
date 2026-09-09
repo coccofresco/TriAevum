@@ -1,0 +1,325 @@
+{
+  "format": "triaevum_public_source_unit_v1",
+  "source_project": "Zelda3drecomp",
+  "source_revision": "2cec5ef08305fbe1e4fe00efaf3f2467ff5228b1",
+  "snapshot_id": "849140697187b895",
+  "local_changes": [
+    {
+      "path": "oot3d_ui/ui_primitives.h",
+      "commit": "0ac5109b4bcc8f0a6fb973dd2f87f28116d1245f",
+      "description": "Preserve TriAevum UiPrimitiveRole::HorseStamina"
+    }
+  ],
+  "files": [
+    {
+      "path": "oot3d_ui/guest_ui_layout.h",
+      "imported_sha256": "066a4a0151d2b549484cf51bc037e878ffced3c900d7be35056cff64f5ed7665",
+      "snapshot_sha256": "066a4a0151d2b549484cf51bc037e878ffced3c900d7be35056cff64f5ed7665"
+    },
+    {
+      "path": "oot3d_ui/state_mirror.h",
+      "imported_sha256": "fb9f93f7fd2b0ed24c1193e9ffb297ff7a6fe460b984014bd2b750bb6faf45b3",
+      "snapshot_sha256": "fb9f93f7fd2b0ed24c1193e9ffb297ff7a6fe460b984014bd2b750bb6faf45b3"
+    },
+    {
+      "path": "oot3d_ui/ui_backend.cpp",
+      "imported_sha256": "c235dee0b7f4ba85f506a02a49675f73f16e727721e5077d2d6353a1c0ee58cd",
+      "snapshot_sha256": "c235dee0b7f4ba85f506a02a49675f73f16e727721e5077d2d6353a1c0ee58cd"
+    },
+    {
+      "path": "oot3d_ui/ui_backend.h",
+      "imported_sha256": "1296c5e9574e852e28ddced85b2c86ce1c348df09fb84636ab5a4e740a1bf49e",
+      "snapshot_sha256": "1296c5e9574e852e28ddced85b2c86ce1c348df09fb84636ab5a4e740a1bf49e"
+    },
+    {
+      "path": "oot3d_ui/ui_backend_fwd.h",
+      "imported_sha256": "4a5064ad8992b49cc0e62fb0e7f7da5176dbd87959d4991bdace84ad683a9a7a",
+      "snapshot_sha256": "4a5064ad8992b49cc0e62fb0e7f7da5176dbd87959d4991bdace84ad683a9a7a"
+    },
+    {
+      "path": "oot3d_ui/ui_backend_state.h",
+      "imported_sha256": "0a9e68d4f8ff4e5ce24e4943fcb5634d14657d8bca0476d169af603514c5b949",
+      "snapshot_sha256": "0a9e68d4f8ff4e5ce24e4943fcb5634d14657d8bca0476d169af603514c5b949"
+    },
+    {
+      "path": "oot3d_ui/ui_content_value.h",
+      "imported_sha256": "3da26a68238564ad152dc9260e7c686b697766a77654366d8c7d988ce3732dfa",
+      "snapshot_sha256": "3da26a68238564ad152dc9260e7c686b697766a77654366d8c7d988ce3732dfa"
+    },
+    {
+      "path": "oot3d_ui/ui_contract_types.h",
+      "imported_sha256": "12e2a9eb86ddb3bc0613e89ecf48b9c91d8eed774a7e8053e78b87262ab3f894",
+      "snapshot_sha256": "12e2a9eb86ddb3bc0613e89ecf48b9c91d8eed774a7e8053e78b87262ab3f894"
+    },
+    {
+      "path": "oot3d_ui/ui_frontend_actions.cpp",
+      "imported_sha256": "00cb0a124e99fa82bd16139cea8def36117e9a3d8501938f04e60607ca1bdc1f",
+      "snapshot_sha256": "00cb0a124e99fa82bd16139cea8def36117e9a3d8501938f04e60607ca1bdc1f"
+    },
+    {
+      "path": "oot3d_ui/ui_frontend_actions.h",
+      "imported_sha256": "c41be7a1510cff951b4c5b3adcda2bcae9bf180ae62460363a4902495dca57d7",
+      "snapshot_sha256": "c41be7a1510cff951b4c5b3adcda2bcae9bf180ae62460363a4902495dca57d7"
+    },
+    {
+      "path": "oot3d_ui/ui_frontend_menu_content.cpp",
+      "imported_sha256": "7903b75ac907e97c56912fed68514f9597bb6605097da9600d550d3267712171",
+      "snapshot_sha256": "7903b75ac907e97c56912fed68514f9597bb6605097da9600d550d3267712171"
+    },
+    {
+      "path": "oot3d_ui/ui_frontend_menu_content.h",
+      "imported_sha256": "65c77ea4ef8bdc2a63228ec23a04b282a3f84f20af83c34938d54e2512d1cbc2",
+      "snapshot_sha256": "65c77ea4ef8bdc2a63228ec23a04b282a3f84f20af83c34938d54e2512d1cbc2"
+    },
+    {
+      "path": "oot3d_ui/ui_frontend_resources.cpp",
+      "imported_sha256": "a68c319bd350964d9a03bfffa7bbafe07db718d8680f90dbedf505fbc7c4fc72",
+      "snapshot_sha256": "a68c319bd350964d9a03bfffa7bbafe07db718d8680f90dbedf505fbc7c4fc72"
+    },
+    {
+      "path": "oot3d_ui/ui_frontend_resources.h",
+      "imported_sha256": "5486c77d7666200b13fd6384ac4d9ad17329f20d15f99ec4a12137216f0e50bd",
+      "snapshot_sha256": "5486c77d7666200b13fd6384ac4d9ad17329f20d15f99ec4a12137216f0e50bd"
+    },
+    {
+      "path": "oot3d_ui/ui_gameplay_hud_composite_split.cpp",
+      "imported_sha256": "0d4fceee326eebf1da9dd9605f025376d0011a0993474722670a05b89c8f5e44",
+      "snapshot_sha256": "0d4fceee326eebf1da9dd9605f025376d0011a0993474722670a05b89c8f5e44"
+    },
+    {
+      "path": "oot3d_ui/ui_gameplay_hud_composite_split.h",
+      "imported_sha256": "77147191cf9dbe255355949941a70e0f7ade6cdba4aec634dd6e32495ef93518",
+      "snapshot_sha256": "77147191cf9dbe255355949941a70e0f7ade6cdba4aec634dd6e32495ef93518"
+    },
+    {
+      "path": "oot3d_ui/ui_gameplay_hud_inline_semantics.cpp",
+      "imported_sha256": "f8448141b5e59119afbe4f52fd05cb4ea03937aea50bd451d928d87e7dcbca1a",
+      "snapshot_sha256": "f8448141b5e59119afbe4f52fd05cb4ea03937aea50bd451d928d87e7dcbca1a"
+    },
+    {
+      "path": "oot3d_ui/ui_gameplay_hud_inline_semantics.h",
+      "imported_sha256": "0cbe8b0ba0557882bc2b65c7c2c137eeaddea14c173d70bf3c18231bc85be103",
+      "snapshot_sha256": "0cbe8b0ba0557882bc2b65c7c2c137eeaddea14c173d70bf3c18231bc85be103"
+    },
+    {
+      "path": "oot3d_ui/ui_gameplay_hud_workflow.cpp",
+      "imported_sha256": "4e9e8e96a4c140a302f42640a16087ef1d7f99a2ac41a1d12c77510ecf6dcd3d",
+      "snapshot_sha256": "4e9e8e96a4c140a302f42640a16087ef1d7f99a2ac41a1d12c77510ecf6dcd3d"
+    },
+    {
+      "path": "oot3d_ui/ui_gameplay_hud_workflow.h",
+      "imported_sha256": "deb3a6a6f642fb97b5fdde2e0b98936be6d00d3ffa2c4f2f9ea64d1ed7d7e556",
+      "snapshot_sha256": "deb3a6a6f642fb97b5fdde2e0b98936be6d00d3ffa2c4f2f9ea64d1ed7d7e556"
+    },
+    {
+      "path": "oot3d_ui/ui_hud_content.cpp",
+      "imported_sha256": "924b3cb8b1b0a7b9b0ca78510d31f323faf1d93acf7e5a4f3c579f715d73d426",
+      "snapshot_sha256": "924b3cb8b1b0a7b9b0ca78510d31f323faf1d93acf7e5a4f3c579f715d73d426"
+    },
+    {
+      "path": "oot3d_ui/ui_hud_content.h",
+      "imported_sha256": "0d01380ac4b6875f39afc496457782f4cb0730c9175712d14508c58599a0b9f6",
+      "snapshot_sha256": "0d01380ac4b6875f39afc496457782f4cb0730c9175712d14508c58599a0b9f6"
+    },
+    {
+      "path": "oot3d_ui/ui_inventory_content.cpp",
+      "imported_sha256": "b9fe75fa257580b705e3356c2c95ba4cebd2da2481ffa7b6213b1550b352a7aa",
+      "snapshot_sha256": "b9fe75fa257580b705e3356c2c95ba4cebd2da2481ffa7b6213b1550b352a7aa"
+    },
+    {
+      "path": "oot3d_ui/ui_inventory_content.h",
+      "imported_sha256": "90d27c86feef32dfe7f98e29560aa64df1e3772deecf0aa85a8c4e1a733cc5b0",
+      "snapshot_sha256": "90d27c86feef32dfe7f98e29560aa64df1e3772deecf0aa85a8c4e1a733cc5b0"
+    },
+    {
+      "path": "oot3d_ui/ui_inventory_grid.h",
+      "imported_sha256": "fead21b9726f90f2680af90f8294fc9865edf439296c1509bc68e0c07d36761b",
+      "snapshot_sha256": "fead21b9726f90f2680af90f8294fc9865edf439296c1509bc68e0c07d36761b"
+    },
+    {
+      "path": "oot3d_ui/ui_localized_menu_resources.cpp",
+      "imported_sha256": "6674ceb7914a4f6b6e7116e6f85ad16a7138fddcf934314cdd7bfd28987db450",
+      "snapshot_sha256": "6674ceb7914a4f6b6e7116e6f85ad16a7138fddcf934314cdd7bfd28987db450"
+    },
+    {
+      "path": "oot3d_ui/ui_localized_menu_resources.h",
+      "imported_sha256": "85fa9be3313f1083ab0a5203d9edc46f99a0a909a5c6598d3d113774c7f28f2b",
+      "snapshot_sha256": "85fa9be3313f1083ab0a5203d9edc46f99a0a909a5c6598d3d113774c7f28f2b"
+    },
+    {
+      "path": "oot3d_ui/ui_name_entry_tables.cpp",
+      "imported_sha256": "9fe12a5412f97eb11f2edeab63de3ba8756dd90a08807dc7f34063f3a99119e6",
+      "snapshot_sha256": "9fe12a5412f97eb11f2edeab63de3ba8756dd90a08807dc7f34063f3a99119e6"
+    },
+    {
+      "path": "oot3d_ui/ui_name_entry_tables.h",
+      "imported_sha256": "850a3fc2f25526b9b56f1d9dfaead24ce44538f5ea199dc507e5051203857c11",
+      "snapshot_sha256": "850a3fc2f25526b9b56f1d9dfaead24ce44538f5ea199dc507e5051203857c11"
+    },
+    {
+      "path": "oot3d_ui/ui_native_actions.cpp",
+      "imported_sha256": "7c75d9470fb7e6f4053c7fe06ff6e8c2f096b141da0006b294488790edfda561",
+      "snapshot_sha256": "7c75d9470fb7e6f4053c7fe06ff6e8c2f096b141da0006b294488790edfda561"
+    },
+    {
+      "path": "oot3d_ui/ui_native_actions.h",
+      "imported_sha256": "582c9f0a2d1b7521e423207fcc40003b0e3f131747b9eeb9711bee6967299c59",
+      "snapshot_sha256": "582c9f0a2d1b7521e423207fcc40003b0e3f131747b9eeb9711bee6967299c59"
+    },
+    {
+      "path": "oot3d_ui/ui_native_queries.cpp",
+      "imported_sha256": "90cb0b35d04a7a5ffcf1605f0bf5cdbd9763364649f0b4972ab5948bc4f2a177",
+      "snapshot_sha256": "90cb0b35d04a7a5ffcf1605f0bf5cdbd9763364649f0b4972ab5948bc4f2a177"
+    },
+    {
+      "path": "oot3d_ui/ui_native_queries.h",
+      "imported_sha256": "1843b89f6426b5d9eee49ee954eacd77ca0dd98ddf71ecdb541833d8deddae56",
+      "snapshot_sha256": "1843b89f6426b5d9eee49ee954eacd77ca0dd98ddf71ecdb541833d8deddae56"
+    },
+    {
+      "path": "oot3d_ui/ui_native_workflow_closure.cpp",
+      "imported_sha256": "1e0e9a4d917e3b7537477b18de26bb5397791b908c287d89de89101b74481f8c",
+      "snapshot_sha256": "1e0e9a4d917e3b7537477b18de26bb5397791b908c287d89de89101b74481f8c"
+    },
+    {
+      "path": "oot3d_ui/ui_native_workflow_closure.h",
+      "imported_sha256": "e14b79aab6d0b368c20cd80d12178458b84332b927a4c45475ce5f4a1ff1480a",
+      "snapshot_sha256": "e14b79aab6d0b368c20cd80d12178458b84332b927a4c45475ce5f4a1ff1480a"
+    },
+    {
+      "path": "oot3d_ui/ui_pause_atlas_regions.cpp",
+      "imported_sha256": "a1efc2a5e82f62750012492e332875b8e9f171f0e22f9c52dbd3378ee3ee9f89",
+      "snapshot_sha256": "a1efc2a5e82f62750012492e332875b8e9f171f0e22f9c52dbd3378ee3ee9f89"
+    },
+    {
+      "path": "oot3d_ui/ui_pause_atlas_regions.h",
+      "imported_sha256": "ca65c19c3fc2e1ef96a80937d4dd714443101eb1a12c88a1c61f5a11d4e42671",
+      "snapshot_sha256": "ca65c19c3fc2e1ef96a80937d4dd714443101eb1a12c88a1c61f5a11d4e42671"
+    },
+    {
+      "path": "oot3d_ui/ui_pause_component_lifecycle.cpp",
+      "imported_sha256": "ea4a116f04aa3bdfb4628a922bbf3b6ade6bd420bcc82c2b9727e1553e82449a",
+      "snapshot_sha256": "ea4a116f04aa3bdfb4628a922bbf3b6ade6bd420bcc82c2b9727e1553e82449a"
+    },
+    {
+      "path": "oot3d_ui/ui_pause_component_lifecycle.h",
+      "imported_sha256": "2199c850c5130003ccea0fbd51e1dd13899c583826e6f0226cdae51059d88ec5",
+      "snapshot_sha256": "2199c850c5130003ccea0fbd51e1dd13899c583826e6f0226cdae51059d88ec5"
+    },
+    {
+      "path": "oot3d_ui/ui_pause_content.cpp",
+      "imported_sha256": "a2767d9ecfb213b95179139911a8b148e72ac8eb653f3d390d2011b2673a3412",
+      "snapshot_sha256": "a2767d9ecfb213b95179139911a8b148e72ac8eb653f3d390d2011b2673a3412"
+    },
+    {
+      "path": "oot3d_ui/ui_pause_content.h",
+      "imported_sha256": "daf7795165b524ce784a3254839ede24b967023a675121d8c75dda645810f0f2",
+      "snapshot_sha256": "daf7795165b524ce784a3254839ede24b967023a675121d8c75dda645810f0f2"
+    },
+    {
+      "path": "oot3d_ui/ui_pause_gear_semantics.cpp",
+      "imported_sha256": "d4ca355a68a4c0d3be90ad54a4f40b60d92436913861484d7210abbb19c4de73",
+      "snapshot_sha256": "d4ca355a68a4c0d3be90ad54a4f40b60d92436913861484d7210abbb19c4de73"
+    },
+    {
+      "path": "oot3d_ui/ui_pause_gear_semantics.h",
+      "imported_sha256": "bbdf89971253df857f4c15e4831ba5011dd2564a3499705a012986b421cb9402",
+      "snapshot_sha256": "bbdf89971253df857f4c15e4831ba5011dd2564a3499705a012986b421cb9402"
+    },
+    {
+      "path": "oot3d_ui/ui_pause_geometry_updates.cpp",
+      "imported_sha256": "7f1531540f422626f67bcfb267f42d6b35fc3ed96b8ce2be1b2a80102d963f07",
+      "snapshot_sha256": "7f1531540f422626f67bcfb267f42d6b35fc3ed96b8ce2be1b2a80102d963f07"
+    },
+    {
+      "path": "oot3d_ui/ui_pause_geometry_updates.h",
+      "imported_sha256": "e07670f122035aa60c39e45db1eaaa0ef08ba4a190481561f85668b562ec93f6",
+      "snapshot_sha256": "e07670f122035aa60c39e45db1eaaa0ef08ba4a190481561f85668b562ec93f6"
+    },
+    {
+      "path": "oot3d_ui/ui_pause_items_semantics.cpp",
+      "imported_sha256": "da44b694a327d4ab4c79c416ba0ba2fc03649b9eddc74973d3880dfb237cbf3e",
+      "snapshot_sha256": "da44b694a327d4ab4c79c416ba0ba2fc03649b9eddc74973d3880dfb237cbf3e"
+    },
+    {
+      "path": "oot3d_ui/ui_pause_items_semantics.h",
+      "imported_sha256": "48e49addbaa88503b48569871eca712898d942d16d25455eec66883eb53b626e",
+      "snapshot_sha256": "48e49addbaa88503b48569871eca712898d942d16d25455eec66883eb53b626e"
+    },
+    {
+      "path": "oot3d_ui/ui_pause_native_geometry.cpp",
+      "imported_sha256": "99fb9f878d129046eb253b9b8a6c1154be227f2474250113153f2fcf1abe0cc4",
+      "snapshot_sha256": "99fb9f878d129046eb253b9b8a6c1154be227f2474250113153f2fcf1abe0cc4"
+    },
+    {
+      "path": "oot3d_ui/ui_pause_native_geometry.h",
+      "imported_sha256": "2a168e66023f84e340b2d22ee47278b9411878ca9ecfd2c16301590b0c6b5ca2",
+      "snapshot_sha256": "2a168e66023f84e340b2d22ee47278b9411878ca9ecfd2c16301590b0c6b5ca2"
+    },
+    {
+      "path": "oot3d_ui/ui_pause_page_pipeline.cpp",
+      "imported_sha256": "61b1bbbfe8e3254bc33588a89c3ee88ea4eb8e19d5139cbabf43d77df63894e3",
+      "snapshot_sha256": "61b1bbbfe8e3254bc33588a89c3ee88ea4eb8e19d5139cbabf43d77df63894e3"
+    },
+    {
+      "path": "oot3d_ui/ui_pause_page_pipeline.h",
+      "imported_sha256": "8247d8a1a577e98476bc49d0c149a2ce28ab5fbe26d38c3bdd7528603209b655",
+      "snapshot_sha256": "8247d8a1a577e98476bc49d0c149a2ce28ab5fbe26d38c3bdd7528603209b655"
+    },
+    {
+      "path": "oot3d_ui/ui_pause_render_lifecycle.cpp",
+      "imported_sha256": "1ab26c5fa6c812d04d2a922a54484f46c75455c7a154dc95e322d4e9e5c4efe3",
+      "snapshot_sha256": "1ab26c5fa6c812d04d2a922a54484f46c75455c7a154dc95e322d4e9e5c4efe3"
+    },
+    {
+      "path": "oot3d_ui/ui_pause_render_lifecycle.h",
+      "imported_sha256": "60ec0df8cc2a22b02baedaa91affb60d21006286e6a618a2d82e7f6f09851f32",
+      "snapshot_sha256": "60ec0df8cc2a22b02baedaa91affb60d21006286e6a618a2d82e7f6f09851f32"
+    },
+    {
+      "path": "oot3d_ui/ui_pause_shared_texture_consumers.cpp",
+      "imported_sha256": "be21e0aa3abd34361e053b1139afc2706913ff93b543d4ffdd9a9967b46f877c",
+      "snapshot_sha256": "be21e0aa3abd34361e053b1139afc2706913ff93b543d4ffdd9a9967b46f877c"
+    },
+    {
+      "path": "oot3d_ui/ui_pause_shared_texture_consumers.h",
+      "imported_sha256": "10ff1ddb625a2a0d19b217bf848d2d3aecf083c41426a4262727f25a9be346d9",
+      "snapshot_sha256": "10ff1ddb625a2a0d19b217bf848d2d3aecf083c41426a4262727f25a9be346d9"
+    },
+    {
+      "path": "oot3d_ui/ui_persistent_content.cpp",
+      "imported_sha256": "cbfb6072f11f41d777a6523639ae9614f88747bd3c261e1512c7992a23fb5b72",
+      "snapshot_sha256": "cbfb6072f11f41d777a6523639ae9614f88747bd3c261e1512c7992a23fb5b72"
+    },
+    {
+      "path": "oot3d_ui/ui_persistent_content.h",
+      "imported_sha256": "d6104cccb7d65ecc354cb0d968b67b395946812e13020abc7f567c1a40197132",
+      "snapshot_sha256": "d6104cccb7d65ecc354cb0d968b67b395946812e13020abc7f567c1a40197132"
+    },
+    {
+      "path": "oot3d_ui/ui_primitives.h",
+      "imported_sha256": "e0ef0210292fa601d23dff23406c780a1032c34a535adb3dedf5ddb7c6afb0e7",
+      "snapshot_sha256": "e40a4709b5a219f1c63c5c676bc3e4696c7a76b67e5578ed6192907d6e60fe2b"
+    },
+    {
+      "path": "oot3d_ui/ui_semantics.h",
+      "imported_sha256": "6d27b3e29e23c170646b5f60d5c4ab4b40da20609f16a0ff3e85f941d7273303",
+      "snapshot_sha256": "6d27b3e29e23c170646b5f60d5c4ab4b40da20609f16a0ff3e85f941d7273303"
+    },
+    {
+      "path": "oot3d_ui/ui_state_adapter.cpp",
+      "imported_sha256": "03b245298df56ecb61302ed865c93730293c9c472b9bfa9ee98252ebefa14f9b",
+      "snapshot_sha256": "03b245298df56ecb61302ed865c93730293c9c472b9bfa9ee98252ebefa14f9b"
+    },
+    {
+      "path": "oot3d_ui/ui_state_adapter.h",
+      "imported_sha256": "57215a7190d44b8e6d45f110a7d7e38e3a1792d631fcf4637c9699ae6015de6b",
+      "snapshot_sha256": "57215a7190d44b8e6d45f110a7d7e38e3a1792d631fcf4637c9699ae6015de6b"
+    },
+    {
+      "path": "oot3d_ui/ui_value_domains.h",
+      "imported_sha256": "955c3a204866328c158f6490777a65bfa3a58b2db6b19a9a4b760ef65897e74c",
+      "snapshot_sha256": "955c3a204866328c158f6490777a65bfa3a58b2db6b19a9a4b760ef65897e74c"
+    }
+  ]
+}
