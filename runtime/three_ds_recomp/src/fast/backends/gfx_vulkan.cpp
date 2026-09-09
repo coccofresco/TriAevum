@@ -2014,6 +2014,9 @@ void GfxRenderingAPIVulkan::StartFrame() {
     if (mPresentSwapchainDirty.exchange(false)) {
         mSwapchainDirty = true;
     }
+    if (mSwapchainSuboptimal.exchange(false) && !mSwapchainDirty) {
+        mSwapchainDirty = SwapchainSurfaceChanged();
+    }
     const auto presentError = static_cast<VkResult>(mPresentError.exchange(VK_SUCCESS));
     if (presentError != VK_SUCCESS) {
         CheckVk(presentError, "asynchronous vkQueuePresentKHR");
@@ -2089,7 +2092,7 @@ void GfxRenderingAPIVulkan::StartFrame() {
         CheckVk(acquire, "vkAcquireNextImageKHR");
     }
     if (acquire == VK_SUBOPTIMAL_KHR) {
-        mSwapchainDirty = true;
+        mSwapchainSuboptimal.store(true);
     }
 
     if (mImagesInFlight[mCurrentImage] != VK_NULL_HANDLE) {
@@ -2280,8 +2283,10 @@ void GfxRenderingAPIVulkan::FinishRender() {
             std::lock_guard swapchainLock(mSwapchainCallMutex);
             present = vkQueuePresentKHR(mPresentQueue, &presentInfo);
         }
-        if (present == VK_ERROR_OUT_OF_DATE_KHR || present == VK_SUBOPTIMAL_KHR) {
+        if (present == VK_ERROR_OUT_OF_DATE_KHR) {
             mSwapchainDirty = true;
+        } else if (present == VK_SUBOPTIMAL_KHR) {
+            mSwapchainSuboptimal.store(true);
         } else if (present != VK_SUCCESS) {
             CheckVk(present, "vkQueuePresentKHR");
         }
@@ -3218,8 +3223,10 @@ void GfxRenderingAPIVulkan::PresentWorkerMain() {
             std::lock_guard swapchainLock(mSwapchainCallMutex);
             present = vkQueuePresentKHR(mPresentQueue, &presentInfo);
         }
-        if (present == VK_ERROR_OUT_OF_DATE_KHR || present == VK_SUBOPTIMAL_KHR) {
+        if (present == VK_ERROR_OUT_OF_DATE_KHR) {
             mPresentSwapchainDirty.store(true);
+        } else if (present == VK_SUBOPTIMAL_KHR) {
+            mSwapchainSuboptimal.store(true);
         } else if (present != VK_SUCCESS) {
             mPresentError.store(static_cast<int32_t>(present));
         }
@@ -4865,7 +4872,7 @@ VkPipeline GfxRenderingAPIVulkan::GetOrCreatePipeline(const VulkanShaderProgram&
     return pipeline;
 }
 
-void GfxRenderingAPIVulkan::DestroyGraphicsPipelines() {
+void GfxRenderingAPIVulkan::DestroyPresentationPipelines() {
     if (mDevice == VK_NULL_HANDLE) {
         return;
     }
@@ -4873,12 +4880,6 @@ void GfxRenderingAPIVulkan::DestroyGraphicsPipelines() {
         vkDestroyPipeline(mDevice, pipeline, nullptr);
     }
     mPipelines.clear();
-    for (const auto& [key, pipeline] : mNativePicaPipelines) {
-        mNriPicaPipelineBridge.Forget(pipeline);
-        vkDestroyPipeline(mDevice, pipeline, nullptr);
-    }
-    mNativePicaPipelines.clear();
-    mPicaPipelinePrewarmedProfiles.clear();
     if (mNativePicaScanoutPipeline != VK_NULL_HANDLE) {
         vkDestroyPipeline(mDevice, mNativePicaScanoutPipeline, nullptr);
         mNativePicaScanoutPipeline = VK_NULL_HANDLE;
@@ -4887,6 +4888,17 @@ void GfxRenderingAPIVulkan::DestroyGraphicsPipelines() {
         vkDestroyPipeline(mDevice, mNativePicaScanoutOverlayPipeline, nullptr);
         mNativePicaScanoutOverlayPipeline = VK_NULL_HANDLE;
     }
+}
+
+void GfxRenderingAPIVulkan::DestroyGraphicsPipelines() {
+    DestroyPresentationPipelines();
+    if (mDevice == VK_NULL_HANDLE) return;
+    for (const auto& [key, pipeline] : mNativePicaPipelines) {
+        mNriPicaPipelineBridge.Forget(pipeline);
+        vkDestroyPipeline(mDevice, pipeline, nullptr);
+    }
+    mNativePicaPipelines.clear();
+    mPicaPipelinePrewarmedProfiles.clear();
     if (mOot3dShadow2dDepthEncodePipeline != VK_NULL_HANDLE) {
         vkDestroyPipeline(mDevice, mOot3dShadow2dDepthEncodePipeline, nullptr);
         mOot3dShadow2dDepthEncodePipeline = VK_NULL_HANDLE;
@@ -5131,6 +5143,9 @@ void GfxRenderingAPIVulkan::CreateSwapchainResources() {
                 "vkCreateFramebuffer");
     }
     mImagesInFlight.assign(imageCount, VK_NULL_HANDLE);
+    mSwapchainSurfaceCapabilities = support.Capabilities;
+    mSwapchainSurfaceFormat = surfaceFormat;
+    mSwapchainSuboptimal.store(false);
     mSwapchainDirty = false;
     SPDLOG_INFO(
         "OOT3D {} swapchain: {}x{}, {} images, format {}, present mode {}",
@@ -5145,7 +5160,7 @@ void GfxRenderingAPIVulkan::DestroySwapchainResources() {
         return;
     }
     ShutdownImGuiBackend();
-    DestroyGraphicsPipelines();
+    DestroyPresentationPipelines();
     for (VkFramebuffer framebuffer : mSwapchainFramebuffers) {
         vkDestroyFramebuffer(mDevice, framebuffer, nullptr);
     }
@@ -5196,6 +5211,21 @@ void GfxRenderingAPIVulkan::DestroySwapchainResources() {
         mNriSwapchain.Destroy();
     }
     mImagesInFlight.clear();
+}
+
+bool GfxRenderingAPIVulkan::SwapchainSurfaceChanged() const {
+    const auto support = QuerySwapchainSupport(mPhysicalDevice);
+    const auto extent = ChooseExtent(support.Capabilities);
+    const auto format = ChooseSurfaceFormat(support.Formats);
+    // SUBOPTIMAL still permits presentation. In particular, compositor rotation
+    // can report it forever; rebuilding an identical configuration cannot help.
+    return extent.width != mSwapchainExtent.width || extent.height != mSwapchainExtent.height ||
+           format.format != mSwapchainSurfaceFormat.format ||
+           format.colorSpace != mSwapchainSurfaceFormat.colorSpace ||
+           support.Capabilities.currentTransform != mSwapchainSurfaceCapabilities.currentTransform ||
+           support.Capabilities.supportedTransforms != mSwapchainSurfaceCapabilities.supportedTransforms ||
+           support.Capabilities.minImageCount != mSwapchainSurfaceCapabilities.minImageCount ||
+           support.Capabilities.maxImageCount != mSwapchainSurfaceCapabilities.maxImageCount;
 }
 
 void GfxRenderingAPIVulkan::RecreateSwapchain() {

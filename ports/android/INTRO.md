@@ -92,6 +92,65 @@ Only then disable the costly effective-shader inventory for normal playback
 benchmarks. The current Android activity is a bounded developer test, not the
 final user-facing launcher.
 
+### Device Rejection And Second Invalidation Path
+
+The next real device test rejected the logical-request fix as sufficient: the
+user saw no speedup and simpleperf still sampled `RecreateSwapchain` at 21.1%
+and `GetOrCreateNativePicaPipeline` at 42.5% of CPU cycles. Do not describe
+commit `777d39a` as a demonstrated performance win.
+
+The separate `VK_SUBOPTIMAL_KHR` paths also unconditionally invalidated the
+swapchain after acquire/present. That status allows presentation and can remain
+asserted with compositor rotation. The host now queues a surface recheck on the
+render thread, recreating only when selected extent/format/color space, transform
+support or image-count limits actually changed. `OUT_OF_DATE`, real resize and
+explicit output-mode changes retain their mandatory invalidation paths. See the
+[Vulkan swapchain contract](https://docs.vulkan.org/refpages/latest/refpages/source/VK_KHR_swapchain.html).
+
+Swapchain teardown now calls `DestroyPresentationPipelines`, not the full
+`DestroyGraphicsPipelines`: native PICA and Shadow2D scene pipelines do not depend
+on swapchain render passes and retain their own invalidation/shutdown paths.
+This removes the coupling that converted surface churn into repeated scene
+pipeline creation. Android cross-build and packaging pass. On-device simpleperf
+no longer finds swapchain recreation or repeated pipeline construction among the
+dominant costs, and the user confirms a substantial speedup, still below real
+time. Native capture timestamps suggest roughly 8-17 presentations/s across
+different clips; this is not a controlled sustained-frame-rate result.
+
+The five-second profile (16,464 samples, none lost) now attributes 64.9% of CPU
+cycles to `RunUntilGuestWait`. `PicaEffectiveShaderInventory::Observe` alone
+accounts for 23.5% self samples. The installed title is still compiled at `-O0`;
+guest memory helpers and their uninlined callers are prominent. These CPU-cycle
+figures are not additive frame-time shares. The private launch profile's explicit
+`--pica-effective-shader-inventory` diagnostic was removed for normal playback;
+`prepare_intro_data.py` already leaves it off. Do not disable rendering features
+to make this diagnostic overhead disappear.
+
+The private interactive profile allows 600 seconds; reproducible bounded tests
+still use 120 seconds and native 30 Hz without interpolation. Confirm foreground
+execution throughout: a later recording caught the Activity being backgrounded
+and then the phone locking, not an SDL keep-screen-on failure. That recording is
+not valid performance evidence. The Android host already requests screen-on
+while its window is visible; no keyguard or device security setting was changed.
+
+### Optimized Title Qualification
+
+Keep the title and renderer in separate build directories. The largest shard
+(203, about 2.16 MB source) compiles at `-O1 -g0 -ffp-model=strict` in 21.31 seconds
+on the Linux build host. The earlier slow pilot also emitted debug information;
+it did not establish that optimization itself was impractical. The complete O1
+title build passed (264 commands, two jobs); packaging took eight seconds. The
+stripped title is 89,461,696 bytes, versus roughly 175 MB for O0. The O1 APK is
+installed; the working O0 APK/build remain available for rollback and comparison.
+No translated game source,
+timing constants, floating-point semantics or canonical PICA shaders change.
+
+Next measurement: install the O1 title with the same renderer, run without the
+effective-shader inventory, and compare bounded runtime counters plus an active
+simpleperf sample and framebuffer captures. The device was locked after install;
+no O1 FPS gain is claimed until an active run is measured. Do not count lock-screen video,
+interpolated frames, or an old runtime summary left behind by a force-stop.
+
 ## Build Boundaries
 
 `native/`: module ABI/service probes and the independently compiled title.
@@ -116,7 +175,8 @@ cmake -S "$SRC/ports/android/native" -B "$BUILD/title" -G Ninja \
   -DANDROID_STL=c++_shared -DCMAKE_BUILD_TYPE=Release \
   -DTRIAEVUM_ANDROID_BUILD_NRI=OFF \
   -DTRIAEVUM_TRANSLATED_TITLE_DIR="$TITLE_SOURCES" \
-  -DTRIAEVUM_ANDROID_TITLE_OPTIMIZATION=0
+  -DTRIAEVUM_ANDROID_TITLE_OPTIMIZATION=1 \
+  -DTRIAEVUM_ANDROID_TITLE_DEBUG_INFO=OFF
 cmake --build "$BUILD/title" --target triaevum_android_title --parallel 1
 
 python3 "$SRC/tools/android/stage_native_app.py" \
@@ -172,10 +232,13 @@ and captures directories, outside public source. Profiling used NDK simpleperf
 
 ## Remaining Android Issues
 
-- Verify the surface-transform change on the phone and a full title intro.
-- Measure cold/warm pipeline-cache costs separately, then profile the remaining
-  PICA backend and frame-start waits. The current measured 4.26 presentations/s
-  remains unacceptable; a present count is not a sustained in-scene benchmark.
+- Landscape presentation is user-verified; qualify a full title intro at native
+  speed. The second surface-lifecycle correction is visibly faster, not yet
+  real-time. Older 4-5 presentations/s results describe the invalidation bug,
+  not the latest renderer.
+- Qualify the optimized title without diagnostic shader inventory, then profile
+  the remaining guest/backend/wait costs. Separate cold-cache startup from steady
+  in-scene performance, and never use captured-video FPS as game FPS.
 - Full app restart after Activity destruction: desktop runtime globals are
   process-lifetime. For now use an explicit package force-stop before relaunch.
 - Pinned SDL HID Android receiver needs the target-SDK exported/not-exported

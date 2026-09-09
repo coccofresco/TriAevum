@@ -21,6 +21,25 @@ Verified on 2026-09-09, Windows USB bridge to the SM-S931B (Android 16):
 The binaries, their licenses and capture data stay outside the repository. scrcpy
 is an external diagnostic tool, not a runtime or release dependency.
 
+### Stable ADB Identity
+
+- Keep the USB ADB server on the Windows host, under the same user account.
+  Always use the absolute platform-tools path above; pass it as `ADB` to scrcpy.
+  Do not let another SDK/IDE or the Linux build host replace the USB server.
+- Reuse `%USERPROFILE%/.android/adbkey` and its public companion. Never delete,
+  regenerate, copy into the repository, or move this private key to Linux as a
+  troubleshooting step. On 2026-09-09 the existing pair still had its original
+  2026-05-07 timestamp; no key rotation caused by this workflow was found.
+- Do not routinely run `kill-server`, reconnect the transport, or revoke phone
+  authorizations between tests. Force-stopping the game package does not require
+  restarting ADB. Inspect `adb devices -l` first.
+- If Android reports `unauthorized`, the user must approve this computer on the
+  phone and select **Always allow from this computer**. A host cannot guarantee
+  persistence or bypass a phone-side revocation/security policy.
+- Screen lock and USB authorization are separate states. A locked phone can
+  remain authorized while preventing the SDL activity from running. Never count
+  such a launch as a renderer test or change device security settings to bypass it.
+
 ## Record
 
 From the source root, PowerShell:

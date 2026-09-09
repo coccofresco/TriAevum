@@ -603,10 +603,12 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
                                        bool hasDepthBuffer);
     void CreateSwapchainResources();
     void DestroySwapchainResources();
+    void DestroyPresentationPipelines();
     void DestroyGraphicsPipelines();
     void DestroyTexture(TextureRecord& texture);
     void DestroyBuffer(BufferAllocation& buffer);
     void RecreateSwapchain();
+    bool SwapchainSurfaceChanged() const;
     QueueFamilies FindQueueFamilies(VkPhysicalDevice device) const;
     SwapchainSupport QuerySwapchainSupport(VkPhysicalDevice device) const;
     bool DeviceSupportsSwapchain(VkPhysicalDevice device) const;
@@ -702,6 +704,8 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     VkSwapchainKHR mSwapchain = VK_NULL_HANDLE;
     VkFormat mSwapchainFormat = VK_FORMAT_UNDEFINED;
     VkExtent2D mSwapchainExtent{};
+    VkSurfaceCapabilitiesKHR mSwapchainSurfaceCapabilities{};
+    VkSurfaceFormatKHR mSwapchainSurfaceFormat{};
     std::vector<VkImage> mSwapchainImages;
     std::vector<VkImageView> mSwapchainImageViews;
     VkFormat mDepthFormat = VK_FORMAT_UNDEFINED;
@@ -738,6 +742,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     uint64_t mNextPresentSerial = 1;
     bool mPresentWorkerStop = false;
     std::atomic_bool mPresentSwapchainDirty = false;
+    std::atomic_bool mSwapchainSuboptimal = false;
     std::atomic<int32_t> mPresentError = VK_SUCCESS;
     std::vector<VkFence> mImagesInFlight;
     VkDescriptorSetLayout mTextureDescriptorSetLayout = VK_NULL_HANDLE;
