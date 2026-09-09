@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.26.0 FATAL_ERROR)
 
-set(CMAKE_SYSTEM_VERSION 10.0 CACHE STRING "" FORCE)
+if(CMAKE_HOST_WIN32 AND NOT CMAKE_TOOLCHAIN_FILE)
+    set(CMAKE_SYSTEM_VERSION 10.0 CACHE STRING "" FORCE)
+endif()
 set(CMAKE_CXX_STANDARD 20 CACHE STRING "The C++ standard to use")
 set(CMAKE_C_STANDARD 23 CACHE STRING "The C standard to use")
 
@@ -30,30 +32,30 @@ endif()
 set(GIT_BRANCH "source-archive")
 set(GIT_COMMIT_HASH "unknown")
 set(GIT_COMMIT_TAG "")
-if(EXISTS "${CMAKE_SOURCE_DIR}/.git")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
     find_package(Git QUIET)
     if(GIT_FOUND)
         execute_process(
             COMMAND "${GIT_EXECUTABLE}" branch --show-current
-            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
             OUTPUT_VARIABLE GIT_BRANCH
             OUTPUT_STRIP_TRAILING_WHITESPACE
             ERROR_QUIET)
         execute_process(
             COMMAND "${GIT_EXECUTABLE}" rev-parse HEAD
-            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
             OUTPUT_VARIABLE GIT_COMMIT_HASH
             OUTPUT_STRIP_TRAILING_WHITESPACE
             ERROR_QUIET)
         execute_process(
             COMMAND "${GIT_EXECUTABLE}" describe --tags --abbrev=0 --exact-match HEAD
-            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
             OUTPUT_VARIABLE GIT_COMMIT_TAG
             OUTPUT_STRIP_TRAILING_WHITESPACE
             ERROR_QUIET)
     endif()
-elseif(EXISTS "${CMAKE_SOURCE_DIR}/SOURCE_ARCHIVE_MANIFEST.json")
-    file(READ "${CMAKE_SOURCE_DIR}/SOURCE_ARCHIVE_MANIFEST.json"
+elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/SOURCE_ARCHIVE_MANIFEST.json")
+    file(READ "${CMAKE_CURRENT_SOURCE_DIR}/SOURCE_ARCHIVE_MANIFEST.json"
          SOURCE_ARCHIVE_MANIFEST_JSON)
     string(REGEX MATCH
         "\"source_commit\"[ \t\r\n]*:[ \t\r\n]*\"([0-9a-fA-F]+)\""
@@ -79,7 +81,7 @@ set(GIT_COMMIT_TAG "${GIT_COMMIT_TAG}" CACHE STRING "Git commit tag" FORCE)
 
 set(CMAKE_PROJECT_GIT_COMMIT_TAG "${GIT_COMMIT_TAG}" CACHE STRING "Git commit tag" FORCE)
 
-set_property(DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT oot3d_native_game)
+set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT oot3d_native_game)
 add_compile_options($<$<CXX_COMPILER_ID:MSVC>:/MP>)
 add_compile_options($<$<CXX_COMPILER_ID:MSVC>:/utf-8>)
 add_compile_options($<$<CXX_COMPILER_ID:MSVC>:/Zc:preprocessor>)
@@ -2039,6 +2041,14 @@ if(OOT3D_ENABLE_VULKAN_RENDERER AND TARGET three_ds_recomp_shaderc)
     endif()
     set_property(TARGET oot3d_native_pica_aot_compiler PROPERTY FOLDER Tools)
 
+    set(OOT3D_PICA_HOST_AOT_COMPILER "" CACHE FILEPATH
+        "Host-native PICA shader compiler for cross-compilation")
+    if(NOT CMAKE_CROSSCOMPILING OR OOT3D_PICA_HOST_AOT_COMPILER)
+    if(CMAKE_CROSSCOMPILING)
+        set(_oot3d_shader_compiler "${OOT3D_PICA_HOST_AOT_COMPILER}")
+    else()
+        set(_oot3d_shader_compiler oot3d_native_pica_aot_compiler)
+    endif()
     set(OOT3D_PICA_DEFAULT_SHADER_INVENTORY
         "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/native_pica_frontend/profiles/oot3d_pica_boot_title_kokiri_pipeline.json")
     set(OOT3D_PICA_DEFAULT_SHADER_PACK
@@ -2049,12 +2059,12 @@ if(OOT3D_ENABLE_VULKAN_RENDERER AND TARGET three_ds_recomp_shaderc)
         OUTPUT
             "${OOT3D_PICA_DEFAULT_SHADER_PACK}"
             "${OOT3D_PICA_DEFAULT_SHADER_MANIFEST}"
-        COMMAND $<TARGET_FILE:oot3d_native_pica_aot_compiler>
+        COMMAND ${_oot3d_shader_compiler}
             --inventory "${OOT3D_PICA_DEFAULT_SHADER_INVENTORY}"
             --pack "${OOT3D_PICA_DEFAULT_SHADER_PACK}"
             --manifest "${OOT3D_PICA_DEFAULT_SHADER_MANIFEST}"
         DEPENDS
-            oot3d_native_pica_aot_compiler
+            ${_oot3d_shader_compiler}
             "${OOT3D_PICA_DEFAULT_SHADER_INVENTORY}"
         COMMENT "Compiling the baseline OOT3D PICA shader corpus AOT"
         VERBATIM)
@@ -2063,6 +2073,10 @@ if(OOT3D_ENABLE_VULKAN_RENDERER AND TARGET three_ds_recomp_shaderc)
             "${OOT3D_PICA_DEFAULT_SHADER_PACK}"
             "${OOT3D_PICA_DEFAULT_SHADER_MANIFEST}")
     set_property(TARGET oot3d_native_pica_default_pack PROPERTY FOLDER Tools)
+    unset(_oot3d_shader_compiler)
+    else()
+        message(STATUS "Cross-build: using runtime shaderc; set OOT3D_PICA_HOST_AOT_COMPILER for a precompiled shader pack")
+    endif()
 endif()
 
 add_library(oot3d_native_pica_vulkan_bridge STATIC EXCLUDE_FROM_ALL
@@ -2687,6 +2701,10 @@ if (OOT3D_DIRECT_AOT_PLUGIN)
     set_target_properties(triaevum_title_aot_stub PROPERTIES
         PREFIX ""
         OUTPUT_NAME "triaevum_title_aot")
+    if(ANDROID)
+        set_target_properties(triaevum_title_aot_stub PROPERTIES
+            PREFIX "lib" OUTPUT_NAME "triaevum_title_bootstrap")
+    endif()
     if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
         target_compile_definitions(triaevum_title_aot_stub PRIVATE NOMINMAX)
         set_property(TARGET triaevum_title_aot_stub PROPERTY
@@ -3138,7 +3156,12 @@ add_executable(oot3d_shadow2d_backend_probe EXCLUDE_FROM_ALL
 target_link_libraries(oot3d_shadow2d_backend_probe PRIVATE oot3d_native_cutscene_host)
 target_compile_options(oot3d_shadow2d_backend_probe PRIVATE "${WARNING_OVERRIDE}")
 
-add_executable(oot3d_native_game EXCLUDE_FROM_ALL
+if(ANDROID)
+    add_library(oot3d_native_game SHARED EXCLUDE_FROM_ALL)
+else()
+    add_executable(oot3d_native_game EXCLUDE_FROM_ALL)
+endif()
+target_sources(oot3d_native_game PRIVATE
     tools/oot3d/native_game_runtime/oot3d_native_game.cpp
     tools/oot3d/native_game_runtime/triaevum_product_info.cpp
     tools/oot3d/native_game_runtime/oot3d_native_game_bootstrap.cpp
@@ -3251,7 +3274,7 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
         tools/oot3d/native_game_runtime/oot3d_native_controls_settings_panel.cpp
         tools/oot3d/native_game_runtime/oot3d_top_screen_settings_panel.cpp)
     set_source_files_properties(tools/oot3d/native_game_runtime/oot3d_native_actor_interactions.cpp
-        PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/tools/oot3d/source_imports/actor_update_all_449e219e/include")
+        PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/source_imports/actor_update_all_449e219e/include")
     target_link_libraries(oot3d_native_game PRIVATE
         oot3d_native_a32_input
         oot3d_native_a32_process_image

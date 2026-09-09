@@ -208,6 +208,8 @@ struct NriPicaPipelineBridge::Impl {
     std::unordered_map<VkPipeline, nri::Pipeline*> OwnedPipelines;
     std::unordered_map<VkPipeline, bool> OwnedPipelineUsesBlendConstants;
     nri::PipelineLayout* DescriptorLayout = nullptr;
+    nri::PipelineCache* PipelineCache = nullptr;
+    bool PipelineCacheAttempted = false;
     struct FrameDescriptors {
         nri::DescriptorPool* Pool = nullptr;
         std::vector<nri::DescriptorSet*> Sets;
@@ -338,6 +340,46 @@ bool NriPicaPipelineBridge::Initialize(
     }
     mImpl->Reason.clear();
     return true;
+#endif
+}
+
+bool NriPicaPipelineBridge::InitializePipelineCache(std::span<const uint8_t> data) {
+#ifndef ENABLE_RENDERER3DS_NRI
+    (void)data;
+    return false;
+#else
+    if (!Available()) return false;
+    if (mImpl->PipelineCacheAttempted) return mImpl->PipelineCache != nullptr;
+    mImpl->PipelineCacheAttempted = true;
+    nri::PipelineCacheDesc desc{};
+    desc.data = data.data();
+    desc.size = data.size();
+    auto* core = mImpl->Interop->Core();
+    auto result = core->CreatePipelineCache(*mImpl->Interop->Device(), desc, mImpl->PipelineCache);
+    if (result != nri::Result::SUCCESS && !data.empty()) {
+        mImpl->PipelineCache = nullptr;
+        desc = {};
+        result = core->CreatePipelineCache(*mImpl->Interop->Device(), desc, mImpl->PipelineCache);
+    }
+    if (result != nri::Result::SUCCESS) mImpl->PipelineCache = nullptr;
+    return mImpl->PipelineCache != nullptr;
+#endif
+}
+
+std::vector<uint8_t> NriPicaPipelineBridge::GetPipelineCacheData() const {
+#ifndef ENABLE_RENDERER3DS_NRI
+    return {};
+#else
+    if (!Available() || mImpl->PipelineCache == nullptr) return {};
+    auto* core = mImpl->Interop->Core();
+    uint64_t size = 0;
+    if (core->GetPipelineCacheData(*mImpl->PipelineCache, nullptr, size) != nri::Result::SUCCESS ||
+        size == 0 || size > 64ULL * 1024ULL * 1024ULL) return {};
+    std::vector<uint8_t> data(static_cast<size_t>(size));
+    if (core->GetPipelineCacheData(*mImpl->PipelineCache, data.data(), size) != nri::Result::SUCCESS ||
+        size == 0 || size > data.size()) return {};
+    data.resize(static_cast<size_t>(size));
+    return data;
 #endif
 }
 
@@ -475,6 +517,10 @@ bool NriPicaPipelineBridge::CreateOwnedPipeline(
     }
     pipeline.shaders = shaders.data();
     pipeline.shaderNum = static_cast<uint32_t>(shaders.size());
+    // Reuse driver compilation across layout/raster variants and Reset().
+    // Cache failure is non-fatal: the same canonical pipeline remains valid.
+    InitializePipelineCache();
+    pipeline.cache = mImpl->PipelineCache;
     nri::Pipeline* owned = nullptr;
     if (mImpl->Interop->Core()
             ->CreateGraphicsPipeline(
@@ -889,6 +935,9 @@ void NriPicaPipelineBridge::Shutdown() {
         if (mImpl->DescriptorLayout != nullptr)
             core->DestroyPipelineLayout(mImpl->DescriptorLayout);
         mImpl->DescriptorLayout = nullptr;
+        if (mImpl->PipelineCache != nullptr)
+            core->DestroyPipelineCache(mImpl->PipelineCache);
+        mImpl->PipelineCache = nullptr;
     }
 #endif
     *mImpl = {};

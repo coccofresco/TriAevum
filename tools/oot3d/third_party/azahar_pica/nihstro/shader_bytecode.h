@@ -477,19 +477,19 @@ private:
 
 } // namespace nihstro
 
-namespace std {
+namespace nihstro {
     template<>
-    struct make_unsigned<nihstro::SourceRegister> {
+    struct BitFieldUnsigned<SourceRegister> {
         using type = nihstro::SourceRegister;
     };
 
     template<>
-    struct make_unsigned<nihstro::DestRegister> {
+    struct BitFieldUnsigned<DestRegister> {
         using type = nihstro::DestRegister;
     };
 
     template<>
-    struct make_unsigned<nihstro::OpCode> {
+    struct BitFieldUnsigned<OpCode> {
         using type = nihstro::OpCode;
     };
 }

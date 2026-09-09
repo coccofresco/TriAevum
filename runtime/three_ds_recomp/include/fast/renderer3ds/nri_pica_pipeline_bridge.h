@@ -121,6 +121,8 @@ class NriPicaPipelineBridge final {
 
     bool Initialize(NriPicaInterop& interop,
                     const NriPicaExecutionConfig& config = {});
+    bool InitializePipelineCache(std::span<const uint8_t> data = {});
+    [[nodiscard]] std::vector<uint8_t> GetPipelineCacheData() const;
     bool CreateOwnedPipeline(
         VkPipeline fallbackPipeline,
         const NriPicaGraphicsPipelineDesc& desc);

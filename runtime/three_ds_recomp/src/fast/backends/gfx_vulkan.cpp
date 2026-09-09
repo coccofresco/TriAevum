@@ -163,10 +163,10 @@ struct VulkanPipelineCacheHeader {
     uint64_t DataSize = 0;
 };
 
-std::filesystem::path VulkanPipelineCachePath() {
+std::filesystem::path VulkanPipelineCachePath(bool nri = false) {
     const auto directory = VulkanShaderCacheDirectory();
     return directory.empty() ? std::filesystem::path{}
-                             : directory / "pipeline_cache.bin";
+                             : directory / (nri ? "nri_pipeline_cache.bin" : "pipeline_cache.bin");
 }
 
 VulkanPipelineCacheHeader MakePipelineCacheHeader(
@@ -1042,6 +1042,14 @@ void GfxRenderingAPIVulkan::Init() {
                     nriPicaPipelinesEnabled
                         ? mNriPicaPipelineBridge.UnavailableReason()
                         : "disabled by environment");
+    } else {
+        VkPhysicalDeviceProperties properties{};
+        vkGetPhysicalDeviceProperties(mPhysicalDevice, &properties);
+        std::vector<uint8_t> data;
+        LoadPipelineCacheData(VulkanPipelineCachePath(true),
+                              MakePipelineCacheHeader(properties), data);
+        mNriPicaPipelineBridge.InitializePipelineCache(data);
+        SPDLOG_INFO("NRI PICA pipeline cache: supplied {} bytes", data.size());
     }
     if (!mNriPicaTextureImageOwner.Initialize(mNriInterop)) {
         SPDLOG_INFO(
@@ -1314,6 +1322,7 @@ void GfxRenderingAPIVulkan::Shutdown() {
         WaitForAllPresents();
         StopPresentWorker();
         vkDeviceWaitIdle(mDevice);
+        StorePipelineCache();
         ShutdownImGuiBackend();
         mSceneSurfaces.Clear();
         mResourceStates.Clear();
@@ -1358,7 +1367,6 @@ void GfxRenderingAPIVulkan::Shutdown() {
         mNriInterop.Shutdown();
         mGpuProfiler.Shutdown();
         mScanoutProbe.Shutdown();
-        StorePipelineCache();
         DestroyGraphicsPipelines();
         for (auto& [id, framebuffer] : mOffscreenFramebuffers) {
             DestroyOffscreenFramebuffer(framebuffer);
@@ -3080,6 +3088,14 @@ void GfxRenderingAPIVulkan::CreatePipelineCache() {
 }
 
 void GfxRenderingAPIVulkan::StorePipelineCache() {
+    const auto nriData = mNriPicaPipelineBridge.GetPipelineCacheData();
+    if (!nriData.empty()) {
+        VkPhysicalDeviceProperties properties{};
+        vkGetPhysicalDeviceProperties(mPhysicalDevice, &properties);
+        StorePipelineCacheData(VulkanPipelineCachePath(true),
+                               MakePipelineCacheHeader(properties), nriData);
+        SPDLOG_INFO("NRI PICA pipeline cache: stored {} bytes", nriData.size());
+    }
     if (mPipelineCache == VK_NULL_HANDLE) {
         return;
     }
@@ -4961,7 +4977,16 @@ void GfxRenderingAPIVulkan::CreateSwapchainResources() {
         } else {
             createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
         }
-        createInfo.preTransform = support.Capabilities.currentTransform;
+        // Scanout is in logical window coordinates, not pre-rotated display
+        // coordinates. Let the compositor apply the surface transform.
+        createInfo.preTransform =
+            (support.Capabilities.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
+                ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR
+                : support.Capabilities.currentTransform;
+        SPDLOG_INFO("Vulkan surface: {}x{}, transform {}, preTransform {}",
+                    extent.width, extent.height,
+                    static_cast<uint32_t>(support.Capabilities.currentTransform),
+                    static_cast<uint32_t>(createInfo.preTransform));
         createInfo.compositeAlpha =
             (support.Capabilities.supportedCompositeAlpha &
              VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR)

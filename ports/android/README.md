@@ -1,6 +1,9 @@
 # Android Native Foundation
 
-Status: developer cross-build, not a playable APK or a supported release target.
+Status: developer APK now links and launches the actual ARM64 title/runtime with
+Vulkan/NRI. Nonblack game output is confirmed, but presentation and performance
+still need correction/validation; this is not a supported release.
+See [intro bring-up and reproduction](INTRO.md) for current results and commands.
 Build on Linux with the Android NDK; the existing Windows PC may provide the USB
 ADB connection without hosting a second compiler/SDK installation.
 
@@ -65,7 +68,8 @@ it does not create an Android window or present a game frame.
 The isolated [Azahar controls library](controls/README.md) imports the original
 overlay and controller artwork with a narrow native-3DS input adapter. Its AAR
 and adapter tests build independently of all C++ title/renderer compilation.
-APK host and live-game overlay integration remain to be implemented.
+The SDL APK host exists; live-game overlay integration is deliberately deferred
+until title-intro playback works.
 
 ## Device Verification
 
@@ -90,8 +94,8 @@ not an authoritative mobile device-compatibility gate.
 
 ## Next Deliverable
 
-1. Add the APK/SDL host around the now-linked PICA Vulkan renderer: surface
-   recreation, pause/resume, app-local module/data paths and audio lifecycle.
+1. Complete and validate intro presentation through the APK/SDL host; qualify
+   surface recreation, pause/resume and audio lifecycle afterward.
 2. Wire the imported Azahar overlay, settings editor and shared input owner.
 3. Add ROM selection/import and package the precompiled ARM64 title and runtime.
 4. Test real on-device startup, native framebuffer output, audio, input and
@@ -102,6 +106,9 @@ Toolchains, ROMs, game-derived data and build directories are never public sourc
 or APK payloads. Preserve existing donor licenses and source-distribution rules.
 
 ## Evidence (2026-09-09)
+
+Historical foundation milestones below are superseded by [INTRO.md](INTRO.md)
+for the full title/APK build and active-device status.
 
 - Linux-hosted r29 cross-build passed for the pinned NRI core/device probe,
   actual title memory/VFP support and loader, module services, input/audio/storage

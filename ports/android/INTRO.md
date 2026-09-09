@@ -1,0 +1,159 @@
+# Android Title Intro Bring-Up
+
+## Scope And Status
+
+Run the real whole-AOT title from normal boot through the existing Vulkan/NRI
+runtime, not an emulator or reconstructed cutscene demo. Android uses the shared
+native-presentation policy (the same extension mask as F2). Controls overlay,
+Forge import UI and release qualification follow a visible intro.
+
+Implemented: ARM64 shared game host with `SDL_main`, SDL Android Activity/Surface,
+explicit packaged-title loading, app-local paths/logs, landscape orientation,
+keep-screen-on, private prepared-data staging, separate native/APK builds.
+Native libraries are installed by Android, never executed from writable game data.
+
+2026-09-09 measured on SM-S931B / Adreno 830:
+
+- Full 256-shard / 12,419-function title linked. Temporary `-O0 -g0` title build
+  took about 488 seconds with one job; runtime remains optimized. This is not a
+  release optimization or a qualified performance configuration.
+- One worst-shard `-O1` build with debug information exceeded a 120-second pilot;
+  the same shard at `-O0 -g0` took about three seconds. Both optimization and
+  debug-info changed, so this does not isolate their individual costs.
+- Full runtime cross-build passed; subsequent host/renderer changes rebuild and
+  relink in roughly 2-6 seconds. APK rebuilds take roughly 9-14 seconds; the title
+  is not recompiled. Linux is the build host; Windows only transfers/uses USB.
+- Native PICA frontend tests pass on the phone; 17 Android tooling tests pass on
+  the Windows host. Java/SDL APK compilation and installation pass.
+- A real 122.68-second active run produced 69 guest refreshes / 35 presentations:
+  guest execution 0.810 s, PICA backend 119.822 s. Whole-AOT recorded no memory
+  faults, unsupported exits or retained ARM fallback. The frame-30 native
+  framebuffer was black. This is **not successful intro playback**.
+- Simpleperf identified driver pipeline compilation under NRI's
+  `CreateGraphicsPipeline`. The NRI pipeline owner now has a device-lifetime
+  `PipelineCache`, retained across pipeline resets and destroyed at shutdown.
+  A subsequent active 120.132-second run produced 1,022 guest refreshes and
+  512 presentations (4.26 presentations/s): guest execution 17.843 s, PICA
+  backend 63.529 s and frame-start work/waits 33.826 s. Native framebuffer
+  captures are nonblack and the user confirmed intact graphics, but reported
+  vertical stretching and very slow playback. This is not a full-speed intro.
+  Do not attribute the entire difference to the NRI cache: the baseline also
+  warmed the Vulkan driver cache and the follow-up reached different draws.
+- A follow-up launch occurred behind the lock screen, with no `SDL_main` entry;
+  that capture is invalid as a renderer/performance test.
+
+### Presentation And Cache Follow-Up
+
+The Vulkan fallback swapchain (used on Android; scene rendering remains NRI)
+was declaring `currentTransform` as its `preTransform`, without pre-rotating
+scanout. It now requests identity when the surface supports it, matching the
+existing logical-window-coordinate scanout. Android's compositor owns rotation;
+game cameras, PICA coordinates and native framebuffers are unchanged. Native
+pre-rotation is a later optimization, not an excuse to stretch the image.
+See [Android's surface-transform contract](https://developer.android.com/games/optimize/vulkan-prerotation).
+Surfaces lacking identity support still need an explicit pre-rotated scanout path.
+
+NRI pipeline cache data now survives normal shutdown/relaunch. The shared bridge
+exposes opaque byte import/export; the Vulkan host owns the separate
+`nri_pipeline_cache.bin`, existing vendor/device/driver/UUID validation and
+64-MiB bound. Rejected cache data retries an empty cache; cache failures never
+disable rendering. Cache export occurs before NRI owner/device destruction.
+No canonical shaders, draw ordering or game timing were modified.
+
+This follow-up cross-builds and packages successfully (latest one-file runtime
+rebuild about nine seconds). Its device presentation, persistence and warm-cache
+timings remain to be verified on an unlocked phone. Do not report the code change
+as a measured performance win. The current Android activity is a bounded developer
+test, not the final user-facing launcher.
+
+## Build Boundaries
+
+`native/`: module ABI/service probes and the independently compiled title.
+`runtime/`: thin Android configuration around the existing root runtime target.
+`app/`: SDL Activity and packaging only; no Gradle-triggered C++ compilation.
+`controls/`: isolated Azahar overlay donor import, not wired into this intro app.
+
+Prerequisites: Linux CMake/Ninja, NDK r29, SDK 35, JDK 17, Gradle 8.13. Use separate
+binary directories; downloaded FetchContent **sources** may be shared.
+
+```bash
+cmake -S "$SRC/ports/android/runtime" -B "$BUILD/runtime" -G Ninja \
+  -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
+  -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-29 \
+  -DANDROID_STL=c++_shared -DCMAKE_BUILD_TYPE=Release
+cmake --build "$BUILD/runtime" --target oot3d_native_game \
+  oot3d_native_pica_frontend_tests --parallel 2
+
+cmake -S "$SRC/ports/android/native" -B "$BUILD/title" -G Ninja \
+  -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
+  -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-29 \
+  -DANDROID_STL=c++_shared -DCMAKE_BUILD_TYPE=Release \
+  -DTRIAEVUM_ANDROID_BUILD_NRI=OFF \
+  -DTRIAEVUM_TRANSLATED_TITLE_DIR="$TITLE_SOURCES" \
+  -DTRIAEVUM_ANDROID_TITLE_OPTIMIZATION=0
+cmake --build "$BUILD/title" --target triaevum_android_title --parallel 1
+
+python3 "$SRC/tools/android/stage_native_app.py" \
+  --runtime-build "$BUILD/runtime" \
+  --title-module "$BUILD/title/libtriaevum_title_aot.so" \
+  --ndk "$NDK" --output "$BUILD/apk-libs"
+gradle -p "$SRC/ports/android" :app:assembleDebug \
+  -PtriaevumSdlSource="$SDL_SOURCE" \
+  -PtriaevumNativeStage="$BUILD/apk-libs" --no-daemon --max-workers=2
+```
+
+`SDL_SOURCE` must be the exact SDL FetchContent source used for the native build.
+The runtime wrapper accepts `TRIAEVUM_ANDROID_DEPENDENCY_SOURCE_CACHE` to reuse
+already downloaded sources. Never point two builds at the same `_deps/*-build`.
+Cross-build shader-pack generation accepts `OOT3D_PICA_HOST_AOT_COMPILER`; without
+a host-native tool the shared on-device shaderc path remains enabled. Do not run
+an Android executable on the Linux build host.
+
+## Private Inputs And Verification
+
+```bash
+python3 "$SRC/tools/android/prepare_intro_data.py" \
+  --installation "$PREPARED_FORGE_INSTALL" \
+  --launch-profile "$PREPARED_FORGE_INSTALL/TriAevum.linux.launch.json" \
+  --output "$PRIVATE_STAGE"
+```
+
+The tool copies only required manifest/resources/ROM-derived data and TopScreen
+inputs, relocates paths, excludes desktop title binaries and saves, and uses a
+fresh configuration. The generated developer profile selects native 30 Hz,
+no interpolation, 640x360, bounded 120-second execution and native framebuffer
+captures. Data is **not APK content and must never be published**.
+
+Install `app/build/outputs/apk/debug/app-debug.apk` with ADB. The profile/data root
+is `/sdcard/Android/data/org.triaevum.android/files`. After the app has created
+this directory, transfer a private tar to `/data/local/tmp`, then stream it into
+`run-as org.triaevum.android tar -xf - -C <data-root>`. Do not extract as the ADB
+shell UID: Android will allow reads but deny app writes to those directories.
+Do not overwrite an existing user's data. Captures/logs may likewise require
+`adb exec-out run-as org.triaevum.android cat <path>` rather than `adb pull`.
+
+Before each cold test, force-stop only this package and start
+`org.triaevum.android/.TriAevumActivity` on an **unlocked** phone. Confirm a fresh
+`SDL_main` log entry and foreground Surface before timing. A process ID or black
+lock-screen capture does not establish game execution. Use `capture_device.py`
+for bounded scrcpy recordings, plus the runtime's native framebuffer files.
+Inspect `data/runtime-state.json`, not presentation video FPS, for guest/backend
+timings. Stop the process after the bounded test if it did not terminate.
+
+Private evidence for this session remains in the local Android device-probes
+and captures directories, outside public source. Profiling used NDK simpleperf
+`record --app org.triaevum.android`; `security.perf_harden` was restored to 1.
+
+## Remaining Android Issues
+
+- Verify the surface-transform change on the phone and a full title intro.
+- Measure cold/warm pipeline-cache costs separately, then profile the remaining
+  PICA backend and frame-start waits. The current measured 4.26 presentations/s
+  remains unacceptable; a present count is not a sustained in-scene benchmark.
+- Full app restart after Activity destruction: desktop runtime globals are
+  process-lifetime. For now use an explicit package force-stop before relaunch.
+- Pinned SDL HID Android receiver needs the target-SDK exported/not-exported
+  flag adaptation before USB-controller qualification; no gameplay-input claim.
+- Validate Vulkan Surface loss/recreation, native audio playback, mobile output
+  sizing and app close/error presentation. No gameplay/decompilation changes are
+  required by the measured initial bottleneck.

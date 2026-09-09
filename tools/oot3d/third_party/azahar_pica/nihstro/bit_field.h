@@ -39,6 +39,10 @@
 
 namespace nihstro {
 
+// Register wrappers opt into unsigned bit operations without specializing std.
+template<typename T>
+struct BitFieldUnsigned : std::make_unsigned<T> {};
+
 /*
  * Abstract bitfield class
  *
@@ -187,7 +191,7 @@ private:
         std::enable_if < true, T >> ::type::type StorageType;
 
     // Unsigned version of StorageType
-    typedef typename std::make_unsigned<StorageType>::type StorageTypeU;
+    typedef typename BitFieldUnsigned<StorageType>::type StorageTypeU;
 
     __forceinline StorageType GetMask() const
     {

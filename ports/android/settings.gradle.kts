@@ -5,3 +5,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "TriAevumAndroid"
 include(":controls")
+include(":app")
