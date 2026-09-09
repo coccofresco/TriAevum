@@ -147,7 +147,8 @@ jobs:
       - name: Build actual host loader and title support without graphics dependencies
         run: |
           cmake -S tools/triaevum_release/native_probe -B build/native-support -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++
-          cmake --build build/native-support --target triaevum_title_whole_aot_support oot3d_native_direct_aot_tests triaevum_probe_empty_title --parallel 2
+          cmake --build build/native-support --target triaevum_title_whole_aot_support oot3d_native_direct_aot_tests triaevum_probe_empty_title triaevum_runtime_layout_tests --parallel 2
+          build/native-support/triaevum_runtime_layout_tests
       - name: Verify synthetic execution, compiler symlinks, loader and empty-title rejection
         run: |
           python tools/triaevum_release/validate_whole_aot_toolchain.py --compiler "$(command -v clang++)" --archiver "$(command -v llvm-ar)" --support build/native-support/libtriaevum_title_whole_aot_support.a --include /usr/include --output build/native-abi-probe

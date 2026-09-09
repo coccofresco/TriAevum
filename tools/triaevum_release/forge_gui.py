@@ -134,7 +134,7 @@ def match_extracted_recipe(
 
 
 def default_gui_data_root() -> Path:
-    return installation_path("data").resolve()
+    return forge.default_output_root().parent
 
 
 def load_active_title(

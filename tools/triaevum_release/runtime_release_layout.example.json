@@ -2,6 +2,11 @@
   "format": "triaevum_public_release_layout_v1",
   "files": [
     {
+      "source": "docs/TRIAEVUM_DESKTOP_PACKAGING.md",
+      "path": "docs/TRIAEVUM_DESKTOP_PACKAGING.md",
+      "role": "documentation"
+    },
+    {
       "source": "docs/TRIAEVUM_CONTRIBUTIONS.md",
       "path": "docs/TRIAEVUM_CONTRIBUTIONS.md",
       "role": "documentation"

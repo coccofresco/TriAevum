@@ -9,6 +9,10 @@ triaevum_add_title_support("${TRIAEVUM_ROOT}" "${TRIAEVUM_ROOT}/tools/oot3d/nati
 
 # Exercise the real loader without configuring SDL, graphics SDKs, UI or a title.
 set(host "${TRIAEVUM_ROOT}/tools/oot3d/native_game_runtime")
+add_executable(triaevum_runtime_layout_tests EXCLUDE_FROM_ALL
+    "${host}/triaevum_runtime_layout.cpp"
+    "${host}/triaevum_runtime_layout_tests.cpp")
+target_link_libraries(triaevum_runtime_layout_tests PRIVATE nlohmann_json::nlohmann_json)
 set(pinned "${TRIAEVUM_ROOT}/tools/oot3d/native_a32_runtime/upstream/recomp")
 add_executable(oot3d_native_direct_aot_tests EXCLUDE_FROM_ALL
     "${host}/oot3d_native_direct_aot_tests.cpp"

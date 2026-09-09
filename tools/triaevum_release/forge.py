@@ -133,10 +133,7 @@ class PreparedForgeContent:
 
 
 def default_output_root() -> Path:
-    local_app_data = os.environ.get("LOCALAPPDATA")
-    if local_app_data:
-        return Path(local_app_data) / "TriAevum" / "titles"
-    return Path.home() / ".local" / "share" / "TriAevum" / "titles"
+    return installation_path("data/titles").resolve()
 
 
 def default_translation_cache_root() -> Path:

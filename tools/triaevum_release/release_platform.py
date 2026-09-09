@@ -16,16 +16,17 @@ class ReleasePlatform:
     compiler: str
     archiver: str
     support_library: str
+    archive_suffix: str
 
 
 WINDOWS = ReleasePlatform("x86_64-pc-windows-msvc", "TriAevum.exe",
                           "TriAevumForge.exe", "forge/oot3d_game_module.dll",
                           "triaevum_title_aot.dll", "x86_64-windows-thinlto-release-v1",
-                          "clang-cl.exe", "llvm-lib.exe", "triaevum_title_whole_aot_support.lib")
+                          "clang-cl.exe", "llvm-lib.exe", "triaevum_title_whole_aot_support.lib", ".zip")
 LINUX = ReleasePlatform("x86_64-unknown-linux-gnu", "TriAevum",
                         "TriAevumForge", "forge/oot3d_game_module.so",
                         "triaevum_title_aot.so", "x86_64-linux-thinlto-release-v1",
-                        "clang++", "llvm-ar", "libtriaevum_title_whole_aot_support.a")
+                        "clang++", "llvm-ar", "libtriaevum_title_whole_aot_support.a", ".tar.gz")
 
 
 def is_windows(value: ReleasePlatform) -> bool:

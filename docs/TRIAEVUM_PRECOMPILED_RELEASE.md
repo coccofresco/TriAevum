@@ -7,6 +7,10 @@ runtime execution backend, game timing, graphics or save format.
 
 ## User contract
 
+Windows packages are portable ZIPs, with application-managed persistent data
+beside the executable and no silent AppData fallback. The Linux packaging
+decision and remaining work are in [desktop packaging](TRIAEVUM_DESKTOP_PACKAGING.md).
+
 - One GUI: `TriAevumForge.exe`, one input: a supported decrypted `.3ds`/`.cci` ROM.
 - Forge verifies/extracts the ROM and activates a shipped optimized title DLL.
 - No C++ compiler, linker, SDK, IR generation or compiler cache is needed.

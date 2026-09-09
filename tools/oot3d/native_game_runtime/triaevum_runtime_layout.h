@@ -28,8 +28,10 @@ struct TriAevumRuntimeLayout {
   std::filesystem::path ConfigurationPath;
 };
 
-std::filesystem::path DefaultTriAevumDataRoot();
-std::filesystem::path DefaultTriAevumActiveTitleState();
+std::filesystem::path DefaultTriAevumDataRoot(
+    const std::filesystem::path &executablePath);
+std::filesystem::path DefaultTriAevumActiveTitleState(
+    const std::filesystem::path &executablePath);
 
 TriAevumRuntimeLayout ResolveTriAevumRuntimeLayout(
     const TriAevumRuntimePathOverrides &overrides);

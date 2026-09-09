@@ -51,6 +51,10 @@ not a Linux module; an x86-64 ELF is not an Android arm64 module.
 
 ## Next Release Checklist
 
+Distribution choice: [portable Windows ZIP and Linux/Steam Deck tar.gz with
+Steam Runtime 4](TRIAEVUM_DESKTOP_PACKAGING.md). The archive format never replaces
+native dependency and installation qualification.
+
 1. Obtain issue #5's configuration and verify remapped items in real gameplay.
    See [investigation](TRIAEVUM_ISSUE_5_CONTROLS.md); do not mark it resolved based
    only on mapping tests.

@@ -12,6 +12,7 @@ try:
     from .build_forge_binary import build as build_forge
     from .common import atomic_write_json, load_json_object
     from .package_release import package_release
+    from .archive_release import create_release_archive
     from .product_contract import query_product
     from .source_archive import create_source_archive
     from .toolchain_setup_layout import setup_layout
@@ -22,6 +23,7 @@ except ImportError:
     from build_forge_binary import build as build_forge
     from common import atomic_write_json, load_json_object
     from package_release import package_release
+    from archive_release import create_release_archive
     from product_contract import query_product
     from source_archive import create_source_archive
     from toolchain_setup_layout import setup_layout
@@ -105,9 +107,12 @@ def prepare(args) -> dict:
     catalog, _ = add_verified_variants(load_json_object(catalog_path), definitions, definitions)
     atomic_write_json(catalog_path, catalog)
     atomic_write_json(layout_path, layout)
-    return package_release(layout_path, args.output, source_root=ROOT,
-                           version=args.version, source_commit=commit,
-                           enforce_readiness=not args.candidate)
+    result = package_release(layout_path, args.output, source_root=ROOT,
+                             version=args.version, source_commit=commit,
+                             enforce_readiness=not args.candidate)
+    if args.archive is not None:
+        result["archive"] = create_release_archive(args.output, args.archive)
+    return result
 
 
 def main() -> int:
@@ -119,6 +124,7 @@ def main() -> int:
                         help="Licensed Visual Studio x64/Microsoft.VC143.CRT redistributable directory")
     parser.add_argument("--work", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--archive", type=Path, help="Optional audited portable ZIP outside the output directory")
     parser.add_argument("--version", required=True)
     parser.add_argument("--candidate", action="store_true")
     parser.add_argument("--title-build", type=Path, required=True, help="Verified whole-aot-plugin.json")

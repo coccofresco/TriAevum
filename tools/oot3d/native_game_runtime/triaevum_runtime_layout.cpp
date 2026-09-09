@@ -1,6 +1,5 @@
 #include "triaevum_runtime_layout.h"
 
-#include <cstdlib>
 #include <fstream>
 #include <stdexcept>
 #include <string>
@@ -101,27 +100,23 @@ std::filesystem::path ResolveActiveTitle(
   if (active.value("format", "") != "triaevum_active_title_v1") {
     throw std::runtime_error("unsupported active-title state format");
   }
-  return AbsoluteNormalized(
+  const std::filesystem::path directory(
       RequiredString(active, "directory", "active-title state"));
+  return AbsoluteNormalized(directory.is_absolute()
+                                ? directory
+                                : activeTitleState.parent_path() / directory);
 }
 
 } // namespace
 
-std::filesystem::path DefaultTriAevumDataRoot() {
-  if (const char *localAppData = std::getenv("LOCALAPPDATA");
-      localAppData != nullptr && *localAppData != '\0') {
-    return AbsoluteNormalized(std::filesystem::path(localAppData) / "TriAevum");
-  }
-  if (const char *home = std::getenv("HOME"); home != nullptr && *home != '\0') {
-    return AbsoluteNormalized(std::filesystem::path(home) / ".local" / "share" /
-                              "TriAevum");
-  }
-  throw std::runtime_error(
-      "cannot locate the TriAevum user-data directory (LOCALAPPDATA/HOME unset)");
+std::filesystem::path DefaultTriAevumDataRoot(
+    const std::filesystem::path &executablePath) {
+  return ResolveExecutableRoot(executablePath) / "data";
 }
 
-std::filesystem::path DefaultTriAevumActiveTitleState() {
-  return DefaultTriAevumDataRoot() / "active-title.json";
+std::filesystem::path DefaultTriAevumActiveTitleState(
+    const std::filesystem::path &executablePath) {
+  return DefaultTriAevumDataRoot(executablePath) / "active-title.json";
 }
 
 TriAevumRuntimeLayout ResolveTriAevumRuntimeLayout(
@@ -131,12 +126,7 @@ TriAevumRuntimeLayout ResolveTriAevumRuntimeLayout(
   if (!overrides.DataRoot.empty()) {
     result.DataRoot = AbsoluteNormalized(overrides.DataRoot);
   } else {
-    const auto portableDataRoot = executableRoot / "data";
-    std::error_code error;
-    const bool hasPortableTitle = std::filesystem::is_regular_file(
-        portableDataRoot / "active-title.json", error);
-    result.DataRoot = hasPortableTitle ? AbsoluteNormalized(portableDataRoot)
-                                       : DefaultTriAevumDataRoot();
+    result.DataRoot = DefaultTriAevumDataRoot(overrides.ExecutablePath);
   }
 
   const bool hasDirectPair = !overrides.ModulePath.empty() &&
