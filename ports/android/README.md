@@ -53,6 +53,10 @@ compile the full TriAevum PICA renderer or Android window host.
 
 ## Device Verification
 
+For direct video, screenshots and optional app-filtered logs, use the isolated
+[scrcpy capture workflow](CAPTURE.md). Windows may capture over USB while Linux
+continues to build; no desktop screenshot capture is involved.
+
 Use `adb devices -l` before deployment. A USB/MTP device without an ADB entry
 needs debugging enabled and the host authorized on the unlocked device.
 Do not expose the ADB server on a public/network interface. Use local USB,
@@ -98,9 +102,10 @@ or APK payloads. Preserve existing donor licenses and source-distribution rules.
   The full-title build was stopped deliberately with completed objects retained;
   there is no linked/qualified Android game module yet. It is explicitly excluded
   from the default rapid build. Investigate compiler timings before release builds.
-- USB transport is detected by Windows, but ADB lists no authorized device yet.
-  Consequently none of the ARM64 probes has been executed on the phone. No APK,
-  Android framebuffer capture, gameplay or mobile performance claim is established.
+- Follow-up: ADB now authorizes the SM-S931B (Android 16/API 36, arm64-v8a),
+  which advertises Vulkan support. Direct scrcpy capture works; see CAPTURE.md.
+  None of the ARM64 probes has yet been executed on the phone. No APK,
+  gameplay or mobile performance claim is established.
 
 References: [NDK downloads](https://developer.android.com/ndk/downloads/index.html),
 [16-KiB page support](https://developer.android.com/guide/practices/page-sizes),
