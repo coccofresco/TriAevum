@@ -13,8 +13,10 @@ from typing import Any, Sequence
 
 try:
     from .common import load_json_object, normalize_relative_path, sha256_file
+    from .source_contracts import source_contract_errors
 except ImportError:
     from common import load_json_object, normalize_relative_path, sha256_file
+    from source_contracts import source_contract_errors
 
 
 ROOT = Path(__file__).resolve().parent
@@ -160,6 +162,10 @@ def create_source_archive(
     )
     if not included:
         raise ValueError("source policy selected no files")
+    by_path = {item.archive_path: item.repository / item.relative for item in included}
+    errors = list(source_contract_errors(by_path, lambda path: by_path[path].read_bytes(), policy))
+    if errors:
+        raise ValueError("Incomplete corresponding source: " + "; ".join(errors))
     output = output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_name(output.name + ".tmp")

@@ -21,8 +21,5 @@ fi
 if [[ -n "${TRIAEVUM_VULKAN_INCLUDE:-}" ]]; then
   args+=("-DVulkan_INCLUDE_DIR=$TRIAEVUM_VULKAN_INCLUDE")
 fi
-if [[ -n "${TRIAEVUM_UI_EVIDENCE:-}" ]]; then
-  args+=("-DOOT3D_NATIVE_UI_EVIDENCE_ROOT=$TRIAEVUM_UI_EVIDENCE")
-fi
 cmake "${args[@]}"
 cmake --build "$build" --target triaevum_public_runtime oot3d_game_module --parallel "$jobs"

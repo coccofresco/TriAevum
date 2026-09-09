@@ -47,7 +47,6 @@ Run explicitly with Bash (the test user's interactive shell is fish):
 ```sh
 env TRIAEVUM_DEPS_PREFIX="$HOME/triaevum-linux-deps/prefix" \
     TRIAEVUM_VULKAN_INCLUDE="$HOME/triaevum-linux-deps/Vulkan-Headers/include" \
-    TRIAEVUM_UI_EVIDENCE="$HOME/triaevum-linux-deps/ui-evidence" \
     bash scripts/build-linux-runtime.sh
 ```
 
@@ -77,12 +76,11 @@ enabled and its SPIR-V generation has completed using native Linux DXC.
   Repeat with `bash scripts/test-linux-module.sh`. Standalone CTest does not
   register these executables; the script runs them explicitly and fails on
   the first nonzero exit.
-- The public source is missing the pinned `oot3d_ui` contract snapshot still
-  referenced by CMake. The original files were recovered read-only from
-  `I:/oot3dre_work/oot3d-native-renderer-integration/tools/oot3d/decomp_support/evidence/zelda3drecomp/849140697187b895/oot3d_ui`.
-  The Linux copy is outside the public checkout; `OOT3D_NATIVE_UI_EVIDENCE_ROOT`
-  now accepts an explicit external snapshot. This source-release completeness
-  issue remains to be repaired with proper provenance, not hidden stubs.
+- The initially missing `oot3d_ui` contract is now a checked-in dependency in
+  `tools/oot3d/ui_contract`. The public-source inventory includes all 62 files,
+  preserves the existing TriAevum extension, and rejects omissions before
+  publication. CMake no longer uses an external evidence path or an empty
+  interface fallback. See [UI source repair](TRIAEVUM_UI_SOURCE_REPAIR.md).
 
 ## Remaining Acceptance Steps
 
@@ -98,7 +96,8 @@ enabled and its SPIR-V generation has completed using native Linux DXC.
    TopScreen controls, audible output and a playable save on Linux.
 5. Recover SSSR and check optional-provider capability reporting. Benchmark
    native and interpolated frame rates separately on the physical GPU.
-6. Produce a clean-install Linux package and correct source-package omissions.
+6. Produce a clean-install Linux package and repeat the source-archive build on
+   the final Steam-compatible toolchain. The UI source omission is repaired.
 
 The 2026-09-09 Forge qualification installed a personal ROM in 25.55 seconds,
 reinstalled in 7.62 seconds preserving config/save-sentinel hashes, and booted

@@ -9,6 +9,7 @@ from pathlib import Path
 
 from build_forge_binary import REPO_ROOT, required_data
 from source_archive import DEFAULT_POLICY, create_source_archive, source_path_allowed
+from source_contracts import source_contract_errors
 
 
 class SourceArchiveTests(unittest.TestCase):
@@ -132,6 +133,45 @@ class SourceArchiveTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertNotIn("z_fog_material_scalar.c", root_cmake)
         self.assertNotIn("fog_material_scalar.h", renderer)
+
+    def test_ui_contract_is_public_and_has_no_private_build_dependency(self) -> None:
+        policy = json.loads(DEFAULT_POLICY.read_text(encoding="utf-8"))
+        manifest_path = "tools/oot3d/ui_contract/SOURCE_MANIFEST.json"
+        manifest = json.loads((REPO_ROOT / manifest_path).read_text())
+        files = {"tools/oot3d/ui_contract/" + item["path"] for item in manifest["files"]}
+        files.update(policy["source_archive_required_paths"])
+        files.add(manifest_path)
+        for relative in files:
+            with self.subTest(path=relative):
+                self.assertTrue((REPO_ROOT / relative).is_file())
+                self.assertTrue(source_path_allowed(relative, policy))
+        self.assertEqual(list(source_contract_errors(
+            files, lambda path: (REPO_ROOT / path).read_bytes(), policy)), [])
+        root_cmake = (REPO_ROOT / "CMakeLists.txt").read_text()
+        self.assertIn("add_subdirectory(tools/oot3d/ui_contract", root_cmake)
+        self.assertNotIn("OOT3D_NATIVE_UI_EVIDENCE_ROOT", root_cmake)
+        self.assertNotIn("add_library(oot3d_native_ui_contract INTERFACE)", root_cmake)
+        self.assertFalse(source_path_allowed(
+            "tools/oot3d/decomp_support/evidence/private.h", policy))
+
+    def test_policy_cannot_silently_filter_a_required_source(self) -> None:
+        policy = json.loads(self.policy.read_text())
+        policy["source_archive_required_paths"] = ["private.bin"]
+        self.policy.write_text(json.dumps(policy))
+        with self.assertRaisesRegex(ValueError, "required public source missing: private.bin"):
+            create_source_archive(self.repository, self.root / "incomplete.zip",
+                                  source_commit=self.commit, policy_path=self.policy)
+        self.assertFalse((self.root / "incomplete.zip").exists())
+
+    def test_required_source_manifest_rejects_missing_or_unsafe_entries(self) -> None:
+        manifest = "module/SOURCE_MANIFEST.json"
+        policy = {"source_archive_required_manifests": [manifest]}
+        for files in ([], [{"path": "missing.h"}], [{"path": "../private.h"}],
+                      [{"path": "a.h"}, {"path": "a.h"}], None):
+            with self.subTest(files=files):
+                payload = json.dumps({"format": "triaevum_public_source_unit_v1", "files": files})
+                self.assertTrue(list(source_contract_errors(
+                    {manifest, "module/a.h"}, lambda _: payload, policy)))
 
 
 if __name__ == "__main__":

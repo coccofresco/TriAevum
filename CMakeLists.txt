@@ -2239,9 +2239,7 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
 endif()
 set_property(TARGET oot3d_native_pica_texture_tests PROPERTY FOLDER Tests)
 
-set(OOT3D_NATIVE_UI_EVIDENCE_ROOT
-    "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/decomp_support/evidence/zelda3drecomp/849140697187b895"
-    CACHE PATH "Pinned native UI contract snapshot (contains oot3d_ui)")
+add_subdirectory(tools/oot3d/ui_contract EXCLUDE_FROM_ALL)
 
 add_library(oot3d_ui_topscreen STATIC EXCLUDE_FROM_ALL
     tools/oot3d/ui_topscreen/oot3d_top_screen_config.cpp
@@ -2257,7 +2255,6 @@ add_library(oot3d_ui_topscreen STATIC EXCLUDE_FROM_ALL
 target_include_directories(oot3d_ui_topscreen PUBLIC
     tools/oot3d/native_game_runtime
     tools/oot3d/ui_topscreen
-    "${OOT3D_NATIVE_UI_EVIDENCE_ROOT}"
 )
 target_link_libraries(oot3d_ui_topscreen PUBLIC
     oot3d_native_a32_process
@@ -2294,25 +2291,6 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
         MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 set_property(TARGET oot3d_top_screen_items_hint_tests PROPERTY FOLDER Tests)
-
-file(GLOB OOT3D_NATIVE_UI_CONTRACT_SOURCES CONFIGURE_DEPENDS
-    "${OOT3D_NATIVE_UI_EVIDENCE_ROOT}/oot3d_ui/*.cpp")
-if (OOT3D_NATIVE_UI_CONTRACT_SOURCES)
-add_library(oot3d_native_ui_contract STATIC EXCLUDE_FROM_ALL
-    ${OOT3D_NATIVE_UI_CONTRACT_SOURCES}
-)
-target_include_directories(oot3d_native_ui_contract PUBLIC
-    "${OOT3D_NATIVE_UI_EVIDENCE_ROOT}"
-)
-target_compile_options(oot3d_native_ui_contract PRIVATE "${WARNING_OVERRIDE}")
-if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    target_compile_definitions(oot3d_native_ui_contract PRIVATE NOMINMAX)
-    set_property(TARGET oot3d_native_ui_contract PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-endif()
-set_property(TARGET oot3d_native_ui_contract PROPERTY FOLDER Tools)
-else()
-    add_library(oot3d_native_ui_contract INTERFACE)
-endif()
 
 add_executable(oot3d_native_ui_contract_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_ui_contract_tests.cpp
