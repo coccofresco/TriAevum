@@ -144,6 +144,8 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     bool SetOot3dPicaAlphaTestShaderParameters(bool enabled, uint32_t function,
                                                uint8_t reference) override;
     bool SupportsOot3dPicaTexture2() const override;
+    GfxNativePicaPrewarmProgress NativePicaPipelinePrewarmProgress()
+        const noexcept override;
     bool PublishPicaCompositionSequence(
         const ::Fast::Renderer3ds::PicaCompositionSequenceView& sequence,
         std::string* error = nullptr) override;
@@ -638,11 +640,26 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         const std::string& source, bool vertexShader,
         const char* sourceName);
     void ConfigureNativePicaAotShaders();
+    void ConfigureLocalPicaShaderCache();
+    void StoreLocalPicaShaderCache();
     void FinishNativePicaAotShaders();
     void PrewarmNativePicaPipelines();
+    void PrewarmNativePicaPipelineEntry(
+        const Oot3d::PicaGraphicsPipelineManifestEntry& entry);
+    std::span<const uint32_t> FindNativePicaAotSpirv(
+        Oot3d::PicaAotShaderStage stage,
+        const Oot3d::PicaAotShaderSourceIdentity& source) const noexcept;
     std::vector<uint32_t> ResolveNativePicaShaderSpirv(
         std::string_view source, Oot3d::PicaAotShaderStage stage,
         bool vertexShader, const char* sourceName);
+    Oot3d::PicaGraphicsPipelineManifestEntry
+    BuildNativePicaPipelineManifestEntry(
+        const GfxNativePicaDrawView& draw,
+        const NativePicaShaderProgram& shader, bool writesReactiveMask,
+        Oot3d::PicaShaderDomain domain,
+        Oot3d::PicaShaderInstrumentationFeature requestedFeatures,
+        Oot3d::PicaShaderInstrumentationFeature appliedFeatures,
+        bool outlineOcclusionOnly) const;
     VkShaderModule CreateShaderModuleFromSpirv(
         std::span<const uint32_t> spirv);
     VkPipeline GetOrCreateNativePicaPipeline(
@@ -765,10 +782,26 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     Oot3d::PicaEffectiveShaderInventory mPicaEffectiveShaderInventory;
     Oot3d::PicaGraphicsPipelineInventory mPicaPipelineInventory;
     Oot3d::PicaGraphicsPipelineManifest mPicaPipelineManifest;
+    // Per-user disk cache: shaders and pipelines discovered at runtime.
+    Oot3d::PicaAotShaderPack mLocalPicaShaderPack;
+    Oot3d::PicaGraphicsPipelineManifest mLocalPicaPipelineManifest;
+    Oot3d::PicaGraphicsPipelineInventory mLocalPicaPipelineInventory;
+    std::vector<Oot3d::PicaAotShaderBinary> mLocalPicaShaderAdditions;
+    std::set<std::pair<Oot3d::PicaAotShaderStage,
+                       Oot3d::PicaAotShaderSourceIdentity>>
+        mLocalPicaShaderAdditionKeys;
+    uint64_t mLocalPicaPipelinesAdded = 0U;
+    uint32_t mLocalPicaDescriptorSchema = 0U;
+    bool mLocalPicaCacheEnabled = false;
+    std::vector<const Oot3d::PicaGraphicsPipelineManifestEntry*>
+        mPicaPipelinePrewarmQueue;
+    size_t mPicaPipelinePrewarmCursor = 0U;
+    std::chrono::steady_clock::time_point mPicaPipelinePrewarmBatchStart{};
     std::set<uint64_t> mPicaPipelinePrewarmedProfiles;
     std::set<std::pair<Oot3d::PicaAotShaderStage, uint64_t>>
         mPicaAotShaderMissesLogged;
     uint64_t mPicaAotShaderHits = 0;
+    uint64_t mLocalPicaShaderHits = 0;
     uint64_t mPicaAotShaderMisses = 0;
     bool mPicaAotShaderStrict = false;
     bool mPicaAotShaderSummaryLogged = false;

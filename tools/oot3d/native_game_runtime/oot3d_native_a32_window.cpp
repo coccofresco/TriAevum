@@ -4767,9 +4767,13 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                                             lastPresentationTime)
                   .count();
     lastPresentationTime = presentationTime;
-    const auto presentationStep =
-        presentationScheduler.Advance(presentationElapsedSeconds);
-    const uint32_t guestRefreshesDue = presentationStep.GuestRefreshesDue;
+    // Startup shader precompilation (Citra-style "preparing shaders"): hold
+    // the guest so no draw reaches a pipeline before it is created.
+    const bool shaderPrewarmHold =
+        api.NativePicaPipelinePrewarmProgress().Blocking;
+    const auto presentationStep = presentationScheduler.Advance(
+        shaderPrewarmHold ? 0.0 : presentationElapsedSeconds);
+    uint32_t guestRefreshesDue = presentationStep.GuestRefreshesDue;
     const float visualInterpolationAlpha = static_cast<float>(
         std::clamp(presentationStep.InterpolationAlpha, 0.0, 1.0));
     applyTopScreenConfigSnapshot();
@@ -4848,6 +4852,11 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     api.UpdateFramebufferParameters(0, width, height, 1, false, true, true,
                                     true);
     api.StartFrame();
+    // StartFrame may have detected a new renderer profile and queued its
+    // batch; drop this frame's refresh rather than let a draw race it.
+    if (api.NativePicaPipelinePrewarmProgress().Blocking) {
+      guestRefreshesDue = 0U;
+    }
     picaPresentationScheduler.BeginPresentation(presentationFrameCount);
     api.StartDrawToFramebuffer(0, 1.0F);
     api.SetClearColor(0.0F, 0.0F, 0.0F, 1.0F);

@@ -386,6 +386,19 @@ size_t PicaAotShaderPack::EntryCount() const noexcept {
     return mEntries.size();
 }
 
+std::vector<PicaAotShaderBinary> PicaAotShaderPack::Binaries() const {
+    std::vector<PicaAotShaderBinary> result;
+    result.reserve(mEntries.size());
+    for (const auto& [key, range] : mEntries) {
+        const auto spirv = Find(key.Stage, key.Source);
+        if (!spirv.empty()) {
+            result.push_back({key.Stage, key.Source,
+                              {spirv.begin(), spirv.end()}});
+        }
+    }
+    return result;
+}
+
 const std::filesystem::path& PicaAotShaderPack::Path() const noexcept {
     return mPath;
 }

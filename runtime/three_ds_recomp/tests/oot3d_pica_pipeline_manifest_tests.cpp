@@ -2,8 +2,12 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <chrono>
 #include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <string>
 
 namespace Fast::Oot3d {
 namespace {
@@ -106,6 +110,51 @@ TEST(PicaPipelineManifest, RoundTripsTypedPipelineState) {
     EXPECT_EQ(loaded.ObservationCount, 8U);
     EXPECT_EQ(loaded.CanonicalPipelineIds, entry.CanonicalPipelineIds);
     EXPECT_EQ(loaded.SettingsRevisions, entry.SettingsRevisions);
+
+    std::error_code ignored;
+    std::filesystem::remove(path, ignored);
+}
+
+TEST(PicaPipelineManifest, OutlineOcclusionFlagIsCompatibleWithOlderManifests) {
+    const auto path = TemporaryPath("oot3d_pica_pipeline_outline");
+    auto plain = MakeEntry();
+    auto outline = MakeEntry();
+    outline.OutlineOcclusionOnly = true;
+    EXPECT_NE(plain.StructuralId(), outline.StructuralId());
+    EXPECT_FALSE(plain.StructurallyEquivalent(outline));
+
+    const std::array entries{plain, outline};
+    std::string error;
+    ASSERT_TRUE(WritePicaGraphicsPipelineManifest(
+        path, plain.DescriptorSchemaVersion, entries, &error)) << error;
+
+    // Manifests written before the flag existed carry neither the key nor its
+    // hash contribution; drop every "false" line and the stored ids must still
+    // validate, while the "true" entry keeps its flag and distinct id.
+    std::ifstream input(path);
+    std::stringstream kept;
+    size_t trueLines = 0U;
+    for (std::string line; std::getline(input, line);) {
+        if (line.find("\"outline_occlusion_only\": false") != std::string::npos) {
+            continue;
+        }
+        trueLines += line.find("\"outline_occlusion_only\": true") != std::string::npos;
+        kept << line << '\n';
+    }
+    input.close();
+    ASSERT_EQ(trueLines, 1U);
+    std::ofstream(path, std::ios::trunc) << kept.str();
+
+    PicaGraphicsPipelineManifest manifest;
+    ASSERT_TRUE(manifest.Load(path, &error)) << error;
+    ASSERT_EQ(manifest.Entries().size(), 2U);
+    size_t outlineEntries = 0U;
+    for (const auto& loaded : manifest.Entries()) {
+        outlineEntries += loaded.OutlineOcclusionOnly ? 1U : 0U;
+        EXPECT_TRUE(loaded.StructurallyEquivalent(
+            loaded.OutlineOcclusionOnly ? outline : plain));
+    }
+    EXPECT_EQ(outlineEntries, 1U);
 
     std::error_code ignored;
     std::filesystem::remove(path, ignored);

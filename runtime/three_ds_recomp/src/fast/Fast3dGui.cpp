@@ -331,6 +331,34 @@ void Fast3dGui::DrawMenu() {
                 mouse->UpdateMouseCapture();
             }
         }
+        if (const auto* api = window != nullptr
+                                  ? window->GetCurrentRenderingAPI()
+                                  : nullptr;
+            api != nullptr) {
+            const auto prewarm = api->NativePicaPipelinePrewarmProgress();
+            if (prewarm.Blocking) {
+                const ImGuiViewport* viewport = ImGui::GetMainViewport();
+                ImGui::SetNextWindowPos(
+                    {viewport->WorkPos.x + viewport->WorkSize.x * 0.5F,
+                     viewport->WorkPos.y + viewport->WorkSize.y * 0.5F},
+                    ImGuiCond_Always, {0.5F, 0.5F});
+                ImGui::SetNextWindowBgAlpha(0.85F);
+                ImGui::Begin("Preparing shaders", nullptr,
+                             ImGuiWindowFlags_NoDecoration |
+                                 ImGuiWindowFlags_NoInputs |
+                                 ImGuiWindowFlags_AlwaysAutoResize |
+                                 ImGuiWindowFlags_NoSavedSettings);
+                ImGui::Text("Preparing shaders  %u / %u", prewarm.Completed,
+                            prewarm.Total);
+                ImGui::ProgressBar(
+                    prewarm.Total == 0U
+                        ? 0.0F
+                        : static_cast<float>(prewarm.Completed) /
+                              static_cast<float>(prewarm.Total),
+                    {320.0F, 0.0F}, "");
+                ImGui::End();
+            }
+        }
     }
 #endif
 }
