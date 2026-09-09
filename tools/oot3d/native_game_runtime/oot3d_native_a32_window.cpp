@@ -4231,6 +4231,8 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
       latestVisualFrame;
   std::optional<Oot3dNativeGame::Oot3dPicaVisualFrame>
       previousVisualFrame;
+  uint64_t topScreenOcarinaRelocatedFrames = 0;
+  uint64_t topScreenOcarinaRelocatedDraws = 0;
   bool latestVisualTransitionContinuous = false;
   uint64_t visualContinuityEpoch = 1U;
   std::map<uint32_t, Oot3dNativeGame::Oot3dPicaDisplayTransferSubmission>
@@ -5560,6 +5562,21 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
           Oot3dNativeGame::PublishNativeActorInteractions(
               process.Memory(), sceneViewProbe.Stats().LastPlayStateAddress,
               in.CurrentVisualFrame->Sequence);
+          if (launch.UiProfile == Oot3dNativeGame::Oot3dUiProfile::TopScreen &&
+              in.SelectedBottom.has_value()) {
+            bool ocarinaUiActive = false;
+            if (Oot3dNativeGame::ReadTopScreenOcarinaUiActive(
+                    process.Memory(), &ocarinaUiActive) &&
+                ocarinaUiActive) {
+              Oot3dNativeGame::TopScreenOcarinaRelocationStats stats;
+              if (Oot3dNativeGame::RelocateTopScreenOcarinaDraws(
+                      *in.CurrentVisualFrame,
+                      in.SelectedBottom->InputPhysicalAddress, &stats)) {
+                ++topScreenOcarinaRelocatedFrames;
+                topScreenOcarinaRelocatedDraws += stats.DrawsRelocated;
+              }
+            }
+          }
           Oot3dNativeGame::ComposeTopScreenFrontendFrame(
               *in.CurrentVisualFrame,
               Oot3dNativeGame::ShouldSuppressTopScreenFrontendBackdrop(
@@ -7788,6 +7805,16 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                    {"topscreen_gameplay_composition_observed",
                     nativeCandidateDispatch.TopScreenLowerCompositionSkips !=
                         0U},
+                   {"topscreen_quest_hook_calls",
+                    bridge.topscreen_quest_hook_calls},
+                   {"topscreen_quest_transforms",
+                    bridge.topscreen_quest_transforms},
+                   {"topscreen_quest_hook_failures",
+                    bridge.topscreen_quest_hook_failures},
+                   {"topscreen_ocarina_relocated_frames",
+                    topScreenOcarinaRelocatedFrames},
+                   {"topscreen_ocarina_relocated_draws",
+                    topScreenOcarinaRelocatedDraws},
                    {"backend_profile",
                     uiLifecycleBridge.Runtime().Profile().id},
                    {"matched_entries", bridge.matched_entries},

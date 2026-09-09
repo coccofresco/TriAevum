@@ -73,4 +73,85 @@ inline bool ComposeTopScreenFrontendFrame(Oot3dPicaVisualFrame& frame,
     return true;
 }
 
+struct TopScreenOcarinaRelocationStats {
+    size_t DrawsRelocated = 0;
+    size_t OpaqueDrawsSkipped = 0;
+    size_t UntexturedDrawsSkipped = 0;
+};
+
+// The ocarina performance UI (staff, notes, song banner) is drawn only to the
+// lower screen, which the single-screen layout never shows. While a
+// performance is active, re-emit the lower target's alpha-blended, textured
+// draws over the upper scene and defer the upper scanout past them. The lower
+// canvas is 320 lines tall against the upper 400, so its viewport is shifted
+// by 40 to center it, the same placement ResolveTopScreenFrontendTargetCommand
+// gives the relocated frontend. The lower background fills opaquely
+// (One/Zero) and is left behind; copying it would paint over the scene.
+inline bool RelocateTopScreenOcarinaDraws(
+    Oot3dPicaVisualFrame& frame, uint32_t lowerColorAddress,
+    TopScreenOcarinaRelocationStats* stats = nullptr) {
+    constexpr int16_t kLowerCanvasCenteringOffset = 40;
+    const uint32_t upperColorAddress = frame.TopTransfer.InputPhysicalAddress;
+    if (lowerColorAddress == 0U || upperColorAddress == 0U ||
+        lowerColorAddress == upperColorAddress) {
+        return false;
+    }
+    std::optional<Oot3dPicaFramebufferState> upperTarget;
+    uint64_t lastSubmission = 0;
+    for (const auto& draw : frame.Draws) {
+        lastSubmission = std::max(lastSubmission, draw.SubmissionId);
+        if (!upperTarget.has_value() &&
+            draw.State.Framebuffer.ColorPhysicalAddress == upperColorAddress) {
+            upperTarget = draw.State.Framebuffer;
+        }
+    }
+    if (!upperTarget.has_value()) {
+        return false;
+    }
+    TopScreenOcarinaRelocationStats result;
+    const size_t originalCount = frame.Draws.size();
+    for (size_t index = 0; index < originalCount; ++index) {
+        const auto& draw = frame.Draws[index];
+        if (draw.State.Framebuffer.ColorPhysicalAddress != lowerColorAddress) {
+            continue;
+        }
+        const auto& blend = draw.State.OutputMerger.Blend;
+        if (!blend.Enabled ||
+            blend.DestinationColor == Oot3dPicaBlendFactor::Zero) {
+            ++result.OpaqueDrawsSkipped;
+            continue;
+        }
+        const bool textured = std::any_of(
+            draw.Textures.begin(), draw.Textures.end(),
+            [](const Oot3dPicaVulkanTextureBinding& texture) {
+                return texture.State.Enabled;
+            });
+        if (!textured) {
+            ++result.UntexturedDrawsSkipped;
+            continue;
+        }
+        Oot3dPicaVulkanDrawPlan copy = draw;
+        copy.SubmissionId = ++lastSubmission;
+        copy.State.Framebuffer = *upperTarget;
+        copy.State.Viewport.CornerY = static_cast<int16_t>(
+            copy.State.Viewport.CornerY + kLowerCanvasCenteringOffset);
+        // An overlay must not be occluded by the scene's depth buffer.
+        copy.State.OutputMerger.Depth.TestEnabled = false;
+        copy.State.OutputMerger.Depth.WriteEnabled = false;
+        if (frame.StrictDrawIdentities.size() == frame.Draws.size()) {
+            frame.StrictDrawIdentities.push_back(
+                ComputeOot3dPicaVisualDrawIdentity(copy));
+        }
+        frame.Draws.push_back(std::move(copy));
+        ++result.DrawsRelocated;
+    }
+    if (stats != nullptr) {
+        *stats = result;
+    }
+    if (result.DrawsRelocated == 0U) {
+        return false;
+    }
+    return ComposeTopScreenFrontendFrame(frame, true);
+}
+
 } // namespace Oot3dNativeGame
