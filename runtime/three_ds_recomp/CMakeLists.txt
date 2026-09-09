@@ -133,8 +133,13 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
 		PATH_SUFFIXES Include include
 		REQUIRED
 	)
+	set(THREE_DS_RECOMP_SHADERC_LIBRARY_NAMES shaderc_shared)
+	if(UNIX)
+		# Debian names the shared C API library libshaderc.so.
+		list(APPEND THREE_DS_RECOMP_SHADERC_LIBRARY_NAMES shaderc)
+	endif()
 	find_library(THREE_DS_RECOMP_SHADERC_LIBRARY
-		NAMES shaderc_shared
+		NAMES ${THREE_DS_RECOMP_SHADERC_LIBRARY_NAMES}
 		HINTS "$ENV{VULKAN_SDK}"
 		PATH_SUFFIXES Lib lib
 		REQUIRED

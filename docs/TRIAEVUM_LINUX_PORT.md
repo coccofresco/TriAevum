@@ -42,6 +42,10 @@ User-local dependencies recovered for this host:
 
 ## Reproducible Runtime Build
 
+For release portability, use the pinned [Steam Runtime SDK build](TRIAEVUM_STEAM_RUNTIME_BUILD.md).
+The host-library build below remains useful for development, but its CachyOS
+binary requires `GLIBC_2.43` and is not the portable release baseline.
+
 Run explicitly with Bash (the test user's interactive shell is fish):
 
 ```sh
@@ -89,8 +93,8 @@ enabled and its SPIR-V generation has completed using native Linux DXC.
    runtime ABI validation. Extend verification into interactive gameplay.
 3. Forge now supports ELF modules, Linux paths and explicit target triples;
    its WSLg GUI and physical Linux ROM-to-installed-game test pass. On the
-   physical KDE session the Forge window remains iconified during remote
-   probes, so GUI visibility and release packaging are still open; see
+   physical KDE session the iconified-window issue was traced to DPMS-off
+   outputs; the visible widget probe now passes. Release packaging remains open; see
    [Linux Forge](TRIAEVUM_LINUX_FORGE.md). Never compile on the player path.
 4. Boot/title framebuffer verification is complete. Manually verify F1,
    TopScreen controls, audible output and a playable save on Linux.

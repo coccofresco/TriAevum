@@ -29,6 +29,7 @@ if [[ -z "${WAYLAND_DISPLAY:-}${DISPLAY:-}" ]]; then
   printf 'No active desktop display; log into the Linux desktop first\n' >&2
   exit 2
 fi
+python3 "$root/tools/triaevum_release/linux_desktop.py"
 
 cd "$installation"
 mkdir -p linux-captures

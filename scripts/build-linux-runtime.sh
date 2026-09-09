@@ -10,6 +10,8 @@ args=(
   -DCMAKE_BUILD_TYPE=Release
   -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
   -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+  # No C++ modules are used; minimal Clang SDKs omit clang-scan-deps.
+  -DCMAKE_CXX_SCAN_FOR_MODULES=OFF
   -DOOT3D_WHOLE_AOT_PRODUCT_MODE=ON -DOOT3D_DIRECT_AOT_PLUGIN=ON
   -DOOT3D_ENABLE_VULKAN_RENDERER=ON
   # The current SSSR build invokes the Windows-only FidelityFX_SC.exe.

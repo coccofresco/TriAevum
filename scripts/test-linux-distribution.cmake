@@ -1,0 +1,10 @@
+cmake_minimum_required(VERSION 3.26)
+include("${CMAKE_CURRENT_LIST_DIR}/../CMake/Utils.cmake")
+# Force the minimal-SDK path even on hosts with lsb_release installed.
+set(LSB_RELEASE_EXEC FALSE)
+get_linux_lsb_release_information()
+cmake_host_system_information(RESULT expected QUERY DISTRIB_ID)
+if(NOT LSB_RELEASE_ID_SHORT STREQUAL expected)
+    message(FATAL_ERROR "Distribution fallback does not match os-release")
+endif()
+message(STATUS "Distribution metadata fallback: ${LSB_RELEASE_ID_SHORT}")

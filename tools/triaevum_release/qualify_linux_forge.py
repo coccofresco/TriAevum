@@ -10,9 +10,11 @@ import time
 try:
     from .common import atomic_write_json, sha256_file
     from .release_platform import LINUX, host_platform
+    from .linux_desktop import check_display_power
 except ImportError:
     from common import atomic_write_json, sha256_file
     from release_platform import LINUX, host_platform
+    from linux_desktop import check_display_power
 
 
 def desktop_environment():
@@ -26,6 +28,7 @@ def desktop_environment():
             environment[key] = value
     if not environment.get("DISPLAY"):
         raise ValueError("Log into a graphical Linux session before testing Forge")
+    check_display_power(environment)
     return environment
 
 

@@ -182,13 +182,22 @@ bypass: public usability must still be verified.
 - Missing-runtime worker test: exits 1 with a structured error before ROM
   extraction or activation. No compilation fallback or background game.
 
-**Open GUI issue:** during SSH-launched probes in the current physical KDE
-session, Forge remains `iconic` with unmapped widgets. Installation completes,
-controls fit, but the window is not certified visible. The same failure was
-reproduced by a minimal Tk window outside Forge, including the distribution's
-Tk 8.6.16 (privately extracted, not installed). This narrows the investigation
-to desktop/Tk window mapping; it does not prove that local desktop launch works.
-No desktop security settings were disabled to obtain a passing result.
+**GUI issue resolved (same day):** the physical output was powered off by DPMS,
+despite KDE being active and unlocked. The failure also affected a minimal Tk
+window; a later game run blocked in X11 event waiting before producing frames.
+After explicitly waking the output with `kscreen-doctor --dpms on`, the same
+frozen Forge passed its real-widget probe inside Steam Runtime 4: normal
+760x443 window, no unmapped/clipped controls, correct button enablement.
+No Forge rebuild, desktop security change, or window-manager preference change
+was necessary. The earlier installation/preservation proof remains separate.
+
+`linux_desktop.py` now checks the optional KDE display-power query before
+developer GUI qualification. It rejects known all-off outputs, does not assume
+other desktops are broken when the query is unavailable, and never turns on a
+screen automatically. `run-linux-title.sh` shares this check. For remote tests,
+wake the display first and keep it active; an unlocked login alone is insufficient.
+The post-wake report is privately retained as
+`I:/oot3dre_work/linux-port-proof/forge-steamrt4-display-on.json`.
 
 Private evidence: `I:/oot3dre_work/linux-port-proof/forge/qualification-4/`
 contains `qualification.json`, separate install/reinstall reports, game log,
@@ -205,15 +214,15 @@ exact source/artifact binding. The actual title `.so` remains unchanged, hash
 
 ## Before a Player Release
 
-1. Verify Forge's window from the physical desktop and fix any remaining
-   mapping/activation issue. Successful worker installation is not sufficient
-   for a usable installer GUI.
+1. Physical desktop widget visibility now passes. Verify end-user file selection
+   and interaction again on the final bundle and Steam Deck; do not substitute
+   the earlier iconified worker result for the new visible-GUI evidence.
 2. Stage native dependencies/resources, adapt the release allowlist/audit to
    Linux and include corresponding source and all bundled-library licenses.
    Current Windows packaging/auditing must not be bypassed or relabeled.
-3. Build against the selected Steam-compatible libc baseline and test in a
-   clean environment, including Steam Deck Desktop Mode. The Ubuntu 24.04
-   development build is not a portability guarantee.
+3. The runtime/title [Steam SDK build](TRIAEVUM_STEAM_RUNTIME_BUILD.md) and a
+   native Steam Runtime 4 GPU boot now pass. Complete portable packaging and
+   test on Steam Deck Desktop Mode; these desktop checks are not Deck coverage.
 4. Repeat the now-passing installation, preservation and TopScreen tests on the
    final portable bundle; verify visible GUI and launch in Steam/Game Mode.
    Keep Windows tests as a regression check. Performance and SSSR remain
