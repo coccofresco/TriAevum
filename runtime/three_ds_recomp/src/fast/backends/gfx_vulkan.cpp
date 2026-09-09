@@ -2860,10 +2860,11 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
             ? queueFamilyProperties[mGraphicsQueueFamily].queueCount
             : 0U;
     const char* presentDispatch = std::getenv("TRIAEVUM_VULKAN_PRESENT_DISPATCH");
+    const char* videoDriver = SDL_GetCurrentVideoDriver();
     const auto queuePlan = Oot3d::ResolveVulkanQueueTopology(
         mGraphicsQueueFamily, mPresentQueueFamily,
         graphicsQueueCount, Oot3d::ParseVulkanPresentDispatchMode(
-            presentDispatch ? presentDispatch : ""));
+            presentDispatch ? presentDispatch : ""), videoDriver ? videoDriver : "");
     mNriSwapchainQueueEligible =
         queuePlan.NriSwapchainEligible;
     std::set<uint32_t> families = { mGraphicsQueueFamily, mPresentQueueFamily };

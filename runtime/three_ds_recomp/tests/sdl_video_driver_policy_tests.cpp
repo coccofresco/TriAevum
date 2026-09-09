@@ -16,7 +16,7 @@ int main() {
     Fast::ConfigureSdlVideoDriver(false);
     require(SDL_GetHint(SDL_HINT_VIDEODRIVER) == nullptr);
     Fast::ConfigureSdlVideoDriver(true);
-    require(std::string_view(SDL_GetHint(SDL_HINT_VIDEODRIVER)) == "x11,wayland");
+    require(std::string_view(SDL_GetHint(SDL_HINT_VIDEODRIVER)) == "wayland,x11");
     SDL_SetHint(SDL_HINT_VIDEODRIVER, "dummy");
     Fast::ConfigureSdlVideoDriver(true);
     require(std::string_view(SDL_GetHint(SDL_HINT_VIDEODRIVER)) == "dummy");

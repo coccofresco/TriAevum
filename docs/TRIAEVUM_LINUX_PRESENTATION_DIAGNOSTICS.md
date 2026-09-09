@@ -1,5 +1,10 @@
 # Linux Input and Presentation Qualification
 
+Current Linux default: native Wayland with shared graphics/present queue and
+inline presentation; X11 fallback remains available. The user confirmed the
+shared-queue Wayland probe no longer flashed. The history below distinguishes
+that confirmation from validation, framebuffer probes and earlier mitigations.
+
 ## Escape (2026-09-09)
 
 Escape belongs to the host window, not to the guest or the application-exit
@@ -41,13 +46,13 @@ treats the sentinels explicitly; `nri_stage_scope_tests` passes on Linux Clang
 19. The corrected 75-second validation run (`acquire-scopes-fixed`) reports
 zero Vulkan validation errors. The erroneous merge is not retained.
 
-**Status:** the user confirms that interpolated presentation no longer flashes,
+**Intermediate status, before the queue-policy fix below:** the user confirms that interpolated presentation no longer flashes,
 but native Wayland at 30 FPS still alternates visible/black frames, including
 a fresh launch without readback (`native30-visible-no-probe`). Switching ONLY
 the SDL video backend to X11, at 30 FPS without readback or validation, produced
 a 120-second run the user reports as stable (`native30-x11-no-probe`).
 
-`fast/backends/sdl_video_driver_policy.h` now selects `x11,wayland` before SDL
+Commit `170382f` selected `x11,wayland` before SDL
 video initialization for Linux Vulkan. Explicit `SDL_VIDEODRIVER`/SDL hints
 remain authoritative. It changes the window-system backend, NOT Vulkan,
 gameplay timing, interpolation or effects. Windows, Android and non-Vulkan
@@ -71,16 +76,14 @@ confirmation. Its X11 window was verified without `SDL_VIDEODRIVER` override.
 The driver-policy test passes under the shipping Steam Runtime SDK. Forge's
 ordinary ROM import refreshed the installed runtime receipt in 4.4 seconds.
 
-**Pure Wayland remains open:** falling back to Wayland when X11 is unavailable
+**Status at `170382f`:** falling back to Wayland when X11 is unavailable
 preserves launch capability but does NOT guarantee flicker-free output. X11 is
 a temporary qualified route, not a new universal system requirement. A complete
 Linux release still needs uninstrumented native-Wayland qualification at both
 30 FPS and interpolated rates. Do not force interpolation or silently disable
 effects as a workaround.
 
-## Nonblocking Framebuffer Probe
-
-### Native Wayland Isolation, September 9
+## Native Wayland Queue Policy, September 9
 
 `wayland-protocol30` (60 seconds, native 30, FIFO, no readback) still flashed
 according to the user. Its client protocol trace shows the Vulkan WSI attaching
@@ -94,8 +97,9 @@ VRR/HDR incapable, 2560x1440 at approximately 59.95 Hz.
 An opt-in `TRIAEVUM_VULKAN_PRESENT_DISPATCH` diagnostic now separates host
 dispatch from GPU queue choice without changing shaders, assets or frame rate:
 
-- Unset/`auto`: unchanged production policy, including the present worker when
-  separate queues are available.
+- Unset/`auto`: same graphics/present queue on Wayland when supported; the
+  existing worker policy on other video drivers.
+- `async`: diagnostic override reproducing the earlier separate-queue worker.
 - `inline`: same GPU queue topology, but call present on the main thread.
 - `graphics`: use graphics queue 0 for presentation if the family supports it,
   with inline dispatch. Devices requiring a separate present family retain it.
@@ -111,9 +115,44 @@ flashes**. Removing the worker alone is therefore not a fix.
 `wayland-graphics30`: completed a bounded 100-second run, 3,084 presentations.
 The effective profile changed from Authentic to Custom and the output changed
 from 640x360 to 1280x960 during the run; it is not a single-setting benchmark.
-Visual qualification is pending. Do not select this mode as a production fix
-based only on a clean exit or render counters. Preserve the X11 mitigation while
-native Wayland remains unqualified.
+**User confirmed no flashes in this run.** Unlike inline dispatch on a separate
+queue, the shared-queue path passed this visual check without any framebuffer
+readback. This identifies queue selection as an effective correction on the
+tested stack; it does not by itself prove a Vulkan specification violation or
+assign blame to NVIDIA/KWin.
+
+The backend now supplies SDL's actual video driver to the isolated queue policy.
+Wayland defaults to graphics queue 0 for present, called inline. No global idle,
+new fence wait, dropped frame or forced interpolation is added. A mandatory
+separate present family is preserved (not yet qualified on such hardware).
+Windows, X11 and other surface policies are unchanged. SDL now prefers
+`wayland,x11`, retaining explicit user hints and X11-only desktop fallback.
+The unit tests cover both defaults, diagnostic overrides and single/separate
+family devices. This supersedes the temporary X11-first mitigation above.
+
+Steam Deck/AMD hardware qualification remains outstanding: NVIDIA desktop
+success is not a substitute. The dispatch diagnostics can reproduce the old
+policy without new builds, and must not be confused with graphics presets.
+
+Default-policy follow-up (no forced SDL video driver or dispatch override):
+
+- `wayland-ordered-default30-validation`: 65 seconds, 1,951 frames, zero Vulkan
+  validation errors, no readback. The output/profile changed near the end of
+  the interactive run; this is not a performance comparison. Diagnostics show
+  one requested graphics queue, present family 0/index 0.
+- `wayland-ordered-full-x2`: 100 seconds, configured x2 with the full user preset,
+  no readback/validation. The bounded diagnostic history retained 4,000 frames,
+  227,567 toon draws and 3,796 grass executions, with zero effect-graph dispatch
+  failures. Do not divide the capped 4,000 records by run time to infer FPS.
+  This confirms the effects path remains active, not independent visual proof.
+- Installed private Flatpak commit:
+  `7401b203749cf5efe8c2ed1ca6d9723667ad658bbb70d33b4ff7f0a17e1a2972`.
+  Runtime SHA-256:
+  `8a370a9c5aa35bc3ccf1acd3f1a71c449f86cdb00023771d0ced0fba474a046b`.
+  The desktop `TriAevum-Linux-test.flatpak` was re-exported. Ordinary Forge
+  import refreshed the installed receipt in 4.5 seconds, preserving user data.
+
+## Nonblocking Framebuffer Probe
 
 Set `TRIAEVUM_VULKAN_SCANOUT_PROBE` to a writable CSV path before launching.
 `fast/backends/vulkan_scanout_probe.*` records the final swapchain image after

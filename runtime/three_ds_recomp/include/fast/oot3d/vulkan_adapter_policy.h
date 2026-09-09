@@ -30,6 +30,7 @@ struct VulkanQueueTopologyPlan {
 
 enum class VulkanPresentDispatchMode : uint8_t {
     Automatic,
+    Asynchronous,
     Inline,
     // Share the queue only when the graphics family also supports presentation.
     GraphicsQueue,
@@ -60,7 +61,8 @@ struct VulkanQueueFamilySelection {
 [[nodiscard]] VulkanQueueTopologyPlan ResolveVulkanQueueTopology(
     uint32_t graphicsFamily, uint32_t presentFamily,
     uint32_t graphicsQueueCount,
-    VulkanPresentDispatchMode mode = VulkanPresentDispatchMode::Automatic);
+    VulkanPresentDispatchMode mode = VulkanPresentDispatchMode::Automatic,
+    std::string_view videoDriver = {});
 
 struct VulkanAdapterIndexParseResult {
     std::optional<uint32_t> EnumerationIndex;
