@@ -60,11 +60,37 @@ exposes opaque byte import/export; the Vulkan host owns the separate
 disable rendering. Cache export occurs before NRI owner/device destruction.
 No canonical shaders, draw ordering or game timing were modified.
 
-This follow-up cross-builds and packages successfully (latest one-file runtime
-rebuild about nine seconds). Its device presentation, persistence and warm-cache
-timings remain to be verified on an unlocked phone. Do not report the code change
-as a measured performance win. The current Android activity is a bounded developer
-test, not the final user-facing launcher.
+The follow-up cross-builds and packages successfully (one-file runtime rebuild
+about nine seconds). On-device capture and the user confirm correct landscape
+presentation, including Link/Epona and the title scene. The bounded 120.008-second
+run produced 598 presentations (4.98/s); guest execution took 19.775 s, backend
+60.396 s and frame-start work 34.519 s. Normal shutdown wrote a 1,439,944-byte NRI
+cache. This verifies persistence, not yet the warm-cache performance gain.
+
+### Repeated Surface Recreation
+
+Simpleperf during that active run identified `RecreateSwapchain` under
+`StartFrame` (21.2% of sampled CPU cycles), and graphics-pipeline creation
+(42.2%). These are CPU samples, not additive frame-time percentages. The caller
+repeats a 640x360 logical framebuffer request while Android grants 2340x1080.
+`UpdateFramebufferParameters` compared those different coordinate domains and
+invalidated the swapchain every frame. Destruction also discarded native PICA
+pipelines, explaining the continuing pipeline creation despite caching.
+
+The consumer now treats identical repeated requests as inert. Changed requests
+are compared against the surface-supported extent selected by `ChooseExtent`,
+not blindly against requested dimensions. Window resize and Vulkan out-of-date
+events retain their existing invalidation paths. No game or shader policy changes.
+The fix is compiled and installed; its speedup still requires a fresh active run.
+A second attempted launch was behind the lock screen and never entered SDL_main;
+it must not be counted as a warm-cache performance test.
+
+Reproduce with the same profile/capture interval before changing instrumentation:
+verify `RecreateSwapchain` and pipeline creation disappear from steady-state
+profiles, compare guest/presentation counts, and confirm correct native output.
+Only then disable the costly effective-shader inventory for normal playback
+benchmarks. The current Android activity is a bounded developer test, not the
+final user-facing launcher.
 
 ## Build Boundaries
 

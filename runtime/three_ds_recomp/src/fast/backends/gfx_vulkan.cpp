@@ -2307,10 +2307,19 @@ void GfxRenderingAPIVulkan::UpdateFramebufferParameters(int fbId, uint32_t width
     if (fbId != 0) {
         return;
     }
+    if (width == mRequestedWidth && height == mRequestedHeight) {
+        return;
+    }
     mRequestedWidth = width;
     mRequestedHeight = height;
-    if (mInitialized && (width != mSwapchainExtent.width || height != mSwapchainExtent.height)) {
-        mSwapchainDirty = true;
+    if (mInitialized) {
+        // A fullscreen/mobile surface can grant a different extent from the
+        // logical render request. Recreating it cannot change that constraint.
+        // Real window changes still invalidate through OnResize/OUT_OF_DATE.
+        const auto extent = ChooseExtent(QuerySwapchainSupport(mPhysicalDevice).Capabilities);
+        if (extent.width != mSwapchainExtent.width || extent.height != mSwapchainExtent.height) {
+            mSwapchainDirty = true;
+        }
     }
 }
 
