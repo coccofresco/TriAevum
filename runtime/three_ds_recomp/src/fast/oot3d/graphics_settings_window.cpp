@@ -52,6 +52,10 @@ void GraphicsSettingsPanel::DrawPresentationStatus() {
     } else if (status.Phase == PresentationTransactionPhase::RollbackRequested) {
         ImGui::TextUnformatted("Restoring previous display settings...");
     }
+    if (const auto rejection = runtime.LastPresentationRejection();
+        !rejection.empty()) {
+        ImGui::TextWrapped("Display change reverted: %s", rejection.c_str());
+    }
     switch (runtime.SaveState()) {
         case GraphicsSettingsSaveState::Failed:
             ImGui::TextWrapped("Settings applied, but could not be saved.");

@@ -1737,7 +1737,7 @@ void GfxRenderingAPIVulkan::StartFrame() {
             if (presentationRequest->Kind ==
                 Oot3d::RendererPresentationRequestKind::Candidate) {
                 settingsRuntime.RejectPresentationApply(
-                    initialGraphicsSettings);
+                    initialGraphicsSettings, presentationError);
             }
             SPDLOG_ERROR("OOT3D display settings were not applied: {}",
                          presentationError);
