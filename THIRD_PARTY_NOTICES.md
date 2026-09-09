@@ -57,6 +57,15 @@ or was adapted against [Azahar Emulator](https://github.com/azahar-emu/azahar).
 Azahar's license text and source availability requirements apply to combined
 distributions that consume these files.
 
+The Android port also imports Azahar/Citra's actual touchscreen overlay in
+`ports/android/controls` under GPL-2.0-or-later: four Kotlin drawing/input classes,
+overlay preferences, button identifiers and their original artwork/layouts.
+`donor_manifest.json` records the snapshot and per-file hashes; `license.txt`
+retains the donor license. TriAevum changes the host boundary and namespace,
+not the controller artwork or gesture algorithms. The isolated input adapter
+reproduces Azahar JNI's axis normalization. See the module README for tested
+scope and the remaining in-game integration; this is not an Android release.
+
 ## SDL2 and controller mappings
 
 The Windows runtime links SDL2 statically for window, audio and controller
