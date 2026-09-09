@@ -6,6 +6,8 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+
+import platforms
 from typing import Sequence
 
 from whole_aot_object_cache import (
@@ -32,15 +34,19 @@ class FakeNativeTools:
         del working_directory
         command = tuple(arguments)
         self.commands.append(command)
-        output_argument = next(
-            item for item in command if item.startswith(("/Fo", "/out:"))
-        )
-        if output_argument.startswith("/Fo"):
-            output = Path(output_argument[3:])
+        if "-o" in command:
+            output = Path(command[command.index("-o") + 1])
+        elif "rcs" in command:
+            output = Path(command[command.index("rcs") + 1])
+        else:
+            output_argument = next(
+                item for item in command if item.startswith(("/Fo", "/out:"))
+            )
+            output = Path(output_argument[3:] if output_argument.startswith("/Fo") else output_argument[5:])
+        if "-c" in command or "/c" in command:
             source = Path(command[-1])
             output.write_bytes(b"OBJ\0" + source.read_bytes())
         else:
-            output = Path(output_argument[5:])
             output.write_bytes(b"LIB\0" + str(len(command)).encode("ascii"))
         return subprocess.CompletedProcess(command, 0, "", "")
 
@@ -95,7 +101,7 @@ class WholeAotObjectCacheTests(unittest.TestCase):
             "repo_root": self.repo,
             "nlohmann_include": self.nlohmann,
             "cache_root": self.cache,
-            "toolchain": NativeToolchain(self.compiler, self.archiver),
+            "toolchain": NativeToolchain(self.compiler, self.archiver, target_triple=platforms.WINDOWS.triple, profile=platforms.WINDOWS.profile),
             "jobs": 2,
             "dependencies": (DependencyFile("runtime/runtime.h", self.dependency),),
             "runner": self.runner,
@@ -177,10 +183,30 @@ class WholeAotObjectCacheTests(unittest.TestCase):
                 toolchain=NativeToolchain(
                     self.compiler,
                     self.archiver,
+                    target_triple=platforms.WINDOWS.triple,
                     profile=PROFILE + "-changed",
                 )
             )
 
+    def test_linux_target_uses_elf_recipes(self) -> None:
+        result = self.build(toolchain=NativeToolchain(
+            self.compiler, self.archiver,
+            target_triple=platforms.LINUX.triple, profile=platforms.LINUX.profile))
+        self.assertEqual(result["status"], "built")
+        self.assertTrue(Path(result["archive"]).name.endswith(".a"))
+        compile_commands, archive_command = self.runner.commands[:-1], self.runner.commands[-1]
+        for command in compile_commands:
+            self.assertIn("--target=" + platforms.LINUX.triple, command)
+            for flag in ("-fPIC", "-fvisibility=hidden", "-flto=thin", "-c"):
+                self.assertIn(flag, command)
+            self.assertFalse(any(item.startswith(("/D", "/I", "/Fo", "/std:", "/MT")) for item in command))
+            self.assertTrue(Path(command[command.index("-o") + 1]).name.endswith(".o"))
+        self.assertEqual(archive_command[1], "rcs")
+        self.assertTrue(archive_command[2].endswith(".a"))
+        with self.assertRaisesRegex(WholeAotObjectError, "profile"):
+            self.build(toolchain=NativeToolchain(
+                self.compiler, self.archiver,
+                target_triple=platforms.LINUX.triple, profile=platforms.WINDOWS.profile))
 
 if __name__ == "__main__":
     unittest.main()

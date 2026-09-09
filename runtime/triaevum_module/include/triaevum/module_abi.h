@@ -30,7 +30,15 @@ enum {
 };
 
 typedef uint32_t TriAevumModuleStatusV1;
+/* In C++ the status constants share the typedef's type so that
+ * `cond ? TRIAEVUM_MODULE_X_V1 : status` has one type (GCC -Wextra otherwise
+ * rejects mixing an anonymous enum with uint32_t). C keeps the plain enum;
+ * values and ABI are unchanged. */
+#ifdef __cplusplus
+enum : TriAevumModuleStatusV1 {
+#else
 enum {
+#endif
   TRIAEVUM_MODULE_OK_V1 = 0,
   TRIAEVUM_MODULE_INVALID_ARGUMENT_V1 = 1,
   TRIAEVUM_MODULE_INCOMPATIBLE_ABI_V1 = 2,

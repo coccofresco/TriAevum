@@ -79,6 +79,39 @@ mappings and their notices. The release audit rejects omission of these
 dependencies; an SDK installed on the developer PC must not hide missing
 user dependencies. SDL2 itself is statically linked by the Windows build.
 
+### Linux packages
+
+Artifact names, the title target triple and the title build profile are
+platform-bound and live in one table, `tools/triaevum_release/platforms.py`
+(`TriAevum`/`triaevum_title_aot.so`/`forge/oot3d_game_module.so`,
+`x86_64-unknown-linux-gnu`, `x86_64-linux-thinlto-release-v1`). Forge, the
+launcher and `installed_runtime` use the host entry; the publisher and audit
+derive the platform from the package's `runtime_executable` role and the
+catalog's per-title `target`, so a Linux CI runner still audits Windows
+packages unchanged. A Linux package is a separate catalog, not a fat one.
+
+`prepare_release.py --platform linux-x64` selects
+`release_policy.linux-x64.json` and
+`runtime_release_layout.linux-x64.example.json`: no Visual C++ runtime, no
+`shaderc_shared.dll` (shaderc, SDL2 and the Vulkan loader come from the
+distribution), and no compiler payload roles. `--build-dir` must be a cache
+configured by `scripts/linux/build-public-runtime.sh`; the receipt and
+`--product-info` checks reject any other configuration. Title builds use
+`clang++`/`llvm-ar`/`ld.lld` with `-fvisibility=hidden -Bsymbolic
+--exclude-libs ALL`, so the `.so` exports only the two query symbols and never
+interposes the host's whole-AOT helpers (`whole-aot-plugin.json` now records
+`target`; receipts without it are Windows builds).
+
+Status: the Linux title ABI is qualified in CI (support library, synthetic
+`.so`, `dlopen` probe). The public runtime itself does **not** yet build from
+a clean clone on any platform: `oot3d_ui_n64`/`oot3d_ui_topscreen` include
+`oot3d_ui/*.h` from `tools/oot3d/decomp_support/evidence/zelda3drecomp/<snapshot>`,
+which is neither tracked nor in the corresponding-source archive
+(`release_policy.json` forbids that prefix). Until those headers, or a
+redistributable replacement, are published, `build-public-runtime.sh` is
+the intended configuration, not a proven one, and no Linux package can be
+qualified.
+
 The runtime's source archive follows its own current commit; the title build
 snapshot follows its build commit. These can differ and must not be conflated.
 Generated C++ is included separately, so its hashes can be checked and changes

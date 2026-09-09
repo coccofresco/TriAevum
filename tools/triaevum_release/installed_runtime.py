@@ -4,9 +4,11 @@ from pathlib import Path
 from typing import Any
 
 try:
+    from . import platforms
     from .common import load_json_object, sha256_file
     from .installation_context import resolve_reference, expand_profile_argument
 except ImportError:
+    import platforms
     from common import load_json_object, sha256_file
     from installation_context import resolve_reference, expand_profile_argument
 
@@ -16,7 +18,7 @@ def validate_installed_runtime(
 ) -> Path:
     if runtime.get("status") != "ready":
         raise ValueError("The active title has no ready playable runtime; run Forge again")
-    plugin = resolve_reference(str(runtime.get("plugin") or (executable.parent / "triaevum_title_aot.dll")), title)
+    plugin = resolve_reference(str(runtime.get("plugin") or (executable.parent / platforms.host().plugin)), title)
     for path, key in ((executable, "runtime_sha256"), (plugin, "plugin_sha256")):
         if not path.is_file() or sha256_file(path) != runtime.get(key):
             raise ValueError(f"Installed runtime identity mismatch: {path}; run Forge again")
@@ -39,7 +41,7 @@ def validate_installed_runtime(
         if (arguments.count("--title-plugin") != 1 or index >= len(arguments)
                 or Path(arguments[index]).resolve() != plugin.resolve()):
             raise ValueError("Launch profile selects another title plugin")
-    elif plugin.resolve() != (executable.parent / "triaevum_title_aot.dll").resolve():
+    elif plugin.resolve() != (executable.parent / platforms.host().plugin).resolve():
         raise ValueError("Launch profile does not select the installed plugin generation")
     # Resolve profile-relative paths first. Reject ambiguous duplicate
     # routing arguments rather than validating one value and executing another.

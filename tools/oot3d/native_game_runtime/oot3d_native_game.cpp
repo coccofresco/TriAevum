@@ -94,10 +94,11 @@ NativeGameArguments PrepareNativeGameArguments(int argc, char** argv) {
     NativeGameArguments prepared;
     std::filesystem::path profilePath;
     int commandLineStart = argc;
+    const auto executable = Oot3dNativeGame::ResolveNativeGameExecutablePath(
+        argc > 0 ? argv[0] : "oot3d_native_game");
 
     if (argc <= 1) {
-        profilePath = Oot3dNativeGame::DefaultNativeGameLaunchProfilePath(
-            argc > 0 ? argv[0] : "oot3d_native_game");
+        profilePath = Oot3dNativeGame::DefaultNativeGameLaunchProfilePath(executable);
         commandLineStart = argc;
     } else if (std::string_view(argv[1]) == "--launch-profile") {
         if (argc <= 2) {
@@ -109,8 +110,7 @@ NativeGameArguments PrepareNativeGameArguments(int argc, char** argv) {
         return prepared;
     }
 
-    prepared.Storage.emplace_back(
-        argc > 0 ? argv[0] : "oot3d_native_game");
+    prepared.Storage.emplace_back(executable.string());
     auto profileArguments =
         Oot3dNativeGame::LoadNativeGameLaunchProfile(profilePath);
     prepared.Storage.insert(prepared.Storage.end(),

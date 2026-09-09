@@ -1,6 +1,10 @@
 #include "triaevum_title_whole_aot_abi.h"
 #include "oot3d_native_a32_memory.h"
+#if defined(_WIN32)
 #include <windows.h>
+#else
+#include <dlfcn.h>
+#endif
 #include <memory>
 #include <iostream>
 
@@ -24,13 +28,22 @@ void OnBlock(uint32_t, a32::GuestState& guest, a32::MemoryBus&, void* user) {
     }
 }
 
+#if defined(_WIN32)
 int wmain(int argc, wchar_t** argv) {
     if (argc != 2) return 2;
     const auto module = LoadLibraryExW(argv[1], nullptr,
         LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
     if (!module) return 3;
-    const auto query = reinterpret_cast<const Oot3dWholeAotProgramV2* (*)(uint32_t) noexcept>(
+    const auto symbol = reinterpret_cast<void*>(
         GetProcAddress(module, "triaevum_title_whole_aot_query"));
+#else
+int main(int argc, char** argv) {
+    if (argc != 2) return 2;
+    const auto module = dlopen(argv[1], RTLD_NOW | RTLD_LOCAL);
+    if (!module) return 3;
+    const auto symbol = dlsym(module, "triaevum_title_whole_aot_query");
+#endif
+    const auto query = reinterpret_cast<const Oot3dWholeAotProgramV2* (*)(uint32_t) noexcept>(symbol);
     if (!query || query(1) != nullptr) return 4;
     const auto program = query(kOot3dWholeAotPluginAbiV2);
     if (!program || program->StructSize != sizeof(*program) || program->EntryPointCount != 1 ||

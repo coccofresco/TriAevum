@@ -946,11 +946,23 @@ if(OOT3D_WHOLE_AOT_PRODUCT_MODE)
         target_sources(oot3d_native_a32_process PRIVATE
             tools/oot3d/native_game_runtime/oot3d_native_direct_aot.cpp)
         target_link_libraries(oot3d_native_a32_process PUBLIC
-            oot3d_native_a32_runtime)
+            oot3d_native_a32_runtime ${CMAKE_DL_LIBS})
         target_compile_definitions(oot3d_native_a32_process PRIVATE
             OOT3D_NATIVE_DIRECT_AOT_PLUGIN=1
             OOT3D_NATIVE_GENERATED_WHOLE_AOT=1
             OOT3D_WHOLE_AOT_PRODUCT_MODE=1)
+        add_executable(oot3d_native_direct_aot_tests EXCLUDE_FROM_ALL
+            tools/oot3d/native_game_runtime/oot3d_native_direct_aot_tests.cpp)
+        target_link_libraries(oot3d_native_direct_aot_tests PRIVATE
+            oot3d_native_a32_process)
+        target_compile_options(oot3d_native_direct_aot_tests PRIVATE
+            "${WARNING_OVERRIDE}")
+        if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+            target_compile_definitions(oot3d_native_direct_aot_tests PRIVATE NOMINMAX)
+            set_property(TARGET oot3d_native_direct_aot_tests PROPERTY
+                MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+        endif()
+        set_property(TARGET oot3d_native_direct_aot_tests PROPERTY FOLDER Tests)
     else()
         target_sources(oot3d_native_a32_process PRIVATE
             tools/oot3d/native_game_runtime/oot3d_memory_bus_abi.cpp)
@@ -1046,10 +1058,12 @@ if (EXISTS "${_oot3d_whole_aot_generated_header}" AND
             NOT OOT3D_WHOLE_AOT_PROFILE_MODE STREQUAL "none")
             if (NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
                 message(FATAL_ERROR
-                    "Whole-AOT ThinLTO/profile modes require clang-cl/LLVM")
+                    "Whole-AOT ThinLTO/profile modes require clang/LLVM")
             endif()
         endif()
-        if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        # clang-cl does not link compiler-rt builtins implicitly; clang on
+        # Linux does, so the explicit library is a Windows-only requirement.
+        if (MSVC AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
             execute_process(
                 COMMAND "${CMAKE_CXX_COMPILER}" /clang:--print-resource-dir
                 OUTPUT_VARIABLE _oot3d_clang_resource_dir
@@ -1105,8 +1119,16 @@ if (EXISTS "${_oot3d_whole_aot_generated_header}" AND
                 message(FATAL_ERROR
                     "OOT3D_WHOLE_AOT_ORDER_FILE does not exist")
             endif()
-            target_link_options(oot3d_native_whole_aot INTERFACE
-                "/ORDER:@${OOT3D_WHOLE_AOT_ORDER_FILE}")
+            if (MSVC)
+                target_link_options(oot3d_native_whole_aot INTERFACE
+                    "/ORDER:@${OOT3D_WHOLE_AOT_ORDER_FILE}")
+            elseif (CMAKE_LINKER_TYPE STREQUAL "LLD")
+                target_link_options(oot3d_native_whole_aot INTERFACE
+                    "-Wl,--symbol-ordering-file=${OOT3D_WHOLE_AOT_ORDER_FILE}")
+            else()
+                message(FATAL_ERROR
+                    "OOT3D_WHOLE_AOT_ORDER_FILE requires lld (-DCMAKE_LINKER_TYPE=LLD)")
+            endif()
         endif()
         set_property(GLOBAL APPEND PROPERTY JOB_POOLS
             oot3d_whole_aot_compile=${OOT3D_WHOLE_AOT_MAX_PARALLEL_COMPILES})
@@ -1163,7 +1185,7 @@ if (EXISTS "${_oot3d_whole_aot_generated_header}" AND
         add_library(oot3d_native_whole_aot STATIC IMPORTED GLOBAL)
         set_target_properties(oot3d_native_whole_aot PROPERTIES
             IMPORTED_LOCATION "${OOT3D_WHOLE_AOT_PREBUILT_LIBRARY}")
-        if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        if (MSVC AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
             execute_process(
                 COMMAND "${CMAKE_CXX_COMPILER}" /clang:--print-resource-dir
                 OUTPUT_VARIABLE _oot3d_clang_resource_dir
@@ -1217,8 +1239,16 @@ if (EXISTS "${_oot3d_whole_aot_generated_header}" AND
         endif()
         if (OOT3D_WHOLE_AOT_THINLTO_CACHE_DIR)
             file(MAKE_DIRECTORY "${OOT3D_WHOLE_AOT_THINLTO_CACHE_DIR}")
-            target_link_options(oot3d_native_whole_aot INTERFACE
-                "/lldltocache:${OOT3D_WHOLE_AOT_THINLTO_CACHE_DIR}")
+            if (MSVC)
+                target_link_options(oot3d_native_whole_aot INTERFACE
+                    "/lldltocache:${OOT3D_WHOLE_AOT_THINLTO_CACHE_DIR}")
+            elseif (CMAKE_LINKER_TYPE STREQUAL "LLD")
+                target_link_options(oot3d_native_whole_aot INTERFACE
+                    "-Wl,--thinlto-cache-dir=${OOT3D_WHOLE_AOT_THINLTO_CACHE_DIR}")
+            else()
+                message(FATAL_ERROR
+                    "OOT3D_WHOLE_AOT_THINLTO_CACHE_DIR requires lld (-DCMAKE_LINKER_TYPE=LLD)")
+            endif()
         endif()
         target_link_libraries(oot3d_native_a32_process PUBLIC
             oot3d_native_whole_aot)
@@ -1256,7 +1286,7 @@ if (EXISTS "${OOT3D_MASS_AOT_GENERATED_DIR}/oot3d_mass_generated.h" AND
         tools/oot3d/native_a32_runtime/mass_cpp)
     target_compile_definitions(oot3d_native_a32_process PRIVATE
         OOT3D_NATIVE_GENERATED_MASS_AOT=1)
-    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    if (MSVC AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         execute_process(
             COMMAND "${CMAKE_CXX_COMPILER}" /clang:--print-resource-dir
             OUTPUT_VARIABLE _oot3d_mass_clang_resource_dir
@@ -2732,10 +2762,6 @@ if (OOT3D_WHOLE_AOT_PRODUCT_MODE AND
         oot3d_triaevum_pica_client_bridge
         triaevum_module
         nlohmann_json::nlohmann_json)
-    if (OOT3D_DIRECT_AOT_PLUGIN)
-        target_link_libraries(oot3d_game_module PRIVATE
-            triaevum_title_aot_stub)
-    endif()
     target_compile_options(oot3d_game_module PRIVATE "${WARNING_OVERRIDE}")
     set_target_properties(oot3d_game_module PROPERTIES
         PREFIX ""
@@ -3290,8 +3316,6 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
             oot3d_native_a32_aot)
     endif()
     if (OOT3D_DIRECT_AOT_PLUGIN)
-        target_link_libraries(oot3d_native_game PRIVATE
-            triaevum_title_aot_stub)
         target_compile_definitions(oot3d_native_game PRIVATE
             OOT3D_REQUIRE_WHOLE_AOT_PLUGIN_V2=1
             OOT3D_NATIVE_DIRECT_AOT_PLUGIN=1)

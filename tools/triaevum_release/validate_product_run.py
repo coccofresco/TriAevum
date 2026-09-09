@@ -16,12 +16,14 @@ import time
 from pathlib import Path
 
 try:
+    from . import platforms
     from .audit_release import audit_release
     from .bundle_paths import distribution_path
     from .common import atomic_write_json, load_json_object, sha256_file
     from .product_contract import ensure_runtime_config, query_product
     from .installation_context import InstallationContext, resolve_reference
 except ImportError:
+    import platforms
     from audit_release import audit_release
     from bundle_paths import distribution_path
     from common import atomic_write_json, load_json_object, sha256_file
@@ -125,7 +127,7 @@ def validate_run(package: Path, plugin: Path, process_manifest: Path,
         installation / "data/config/topscreen_ui.json",
     ]):
         published = forge.publish_private_runtime(
-            title, plugin=plugin, runtime_plugin=installation / "triaevum_title_aot.dll",
+            title, plugin=plugin, runtime_plugin=installation / platforms.host().plugin,
             launch_profile=profile_path, data_root=installation / "data")
         forge.activate_prepared_title(title, active_title_state=active_path)
     generation = Path(published["plugin"])
@@ -143,9 +145,9 @@ def validate_run(package: Path, plugin: Path, process_manifest: Path,
         generation = installation / generation_relative
         profile_path = installation / profile_path.name
         forge.load_prepared_content(title, required_inputs=("code", "exheader", "romfs"))
-    validate_installed_runtime(installation / "TriAevum.exe", title, installation / "data",
+    validate_installed_runtime(installation / platforms.host().runtime, title, installation / "data",
                               load_json_object(title / "forge-state.json")["runtime"])
-    receipt = query_product(installation / "TriAevum.exe", plugin=generation)
+    receipt = query_product(installation / platforms.host().runtime, plugin=generation)
     if receipt["product"].get("private_title_loaded") is not True:
         raise ValueError("Validation requires the private whole-AOT v2 plugin")
     config = installation / "data/config/TriAevum.json"
@@ -160,7 +162,7 @@ def validate_run(package: Path, plugin: Path, process_manifest: Path,
     report_path = output / "runtime-state.json"
     screenshot = output / "framebuffer.bmp"
     arguments = [
-        str(installation / "TriAevum.exe"), "--launch-profile", str(profile_path),
+        str(installation / platforms.host().runtime), "--launch-profile", str(profile_path),
         "--frames", "0", "--max-seconds", str(seconds),
         "--output", str(report_path), "--screenshot", str(screenshot),
         "--screenshot-start-frame", str(min(600, seconds * 30)),

@@ -1,6 +1,8 @@
 import tempfile
 import unittest
 from pathlib import Path
+
+import platforms
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -16,9 +18,9 @@ class InstalledRuntimeTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        self.exe = self.root / "TriAevum.exe"
+        self.exe = self.root / platforms.host().runtime
         self.exe.write_bytes(b"host")
-        self.plugin = self.root / "triaevum_title_aot.dll"
+        self.plugin = self.root / platforms.host().plugin
         self.plugin.write_bytes(b"title")
         self.data = self.root / "custom-data"
         self.title = self.data / "titles" / "fixture"
@@ -128,7 +130,7 @@ class InstalledRuntimeTests(unittest.TestCase):
 
     def test_immutable_generation_must_be_selected_by_profile(self):
         import json
-        generation = self.root / "private-plugins" / "hash" / "triaevum_title_aot.dll"
+        generation = self.root / "private-plugins" / "hash" / platforms.host().plugin
         generation.parent.mkdir(parents=True)
         generation.write_bytes(self.plugin.read_bytes())
         self.receipt["plugin"] = str(generation)

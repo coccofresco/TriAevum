@@ -7,6 +7,8 @@
 #include <stdexcept>
 #if defined(_WIN32)
 #include <windows.h>
+#else
+#include <dlfcn.h>
 #endif
 
 #include <algorithm>
@@ -20,23 +22,55 @@ namespace {
 
 namespace a32 = oot3d::recomp::a32;
 
-#if defined(_WIN32)
 std::filesystem::path SelectedPlugin;
 bool PluginQueried = false;
 
-HMODULE TitleModule() noexcept {
-  static HMODULE module = []() noexcept -> HMODULE {
+#if defined(_WIN32)
+using TitleModuleHandle = HMODULE;
+
+std::filesystem::path DefaultPluginPath() {
+  wchar_t executable[32768];
+  const DWORD length = GetModuleFileNameW(nullptr, executable, 32768);
+  if (length == 0 || length == 32768) return {};
+  return std::filesystem::path(executable).parent_path() / L"triaevum_title_aot.dll";
+}
+
+TitleModuleHandle LoadTitleModule(const std::filesystem::path& path) noexcept {
+  return LoadLibraryExW(path.c_str(), nullptr,
+      LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+}
+
+void* TitleSymbol(TitleModuleHandle module, const char* name) noexcept {
+  return reinterpret_cast<void*>(GetProcAddress(module, name));
+}
+#else
+using TitleModuleHandle = void*;
+
+std::filesystem::path DefaultPluginPath() {
+  std::error_code error;
+  auto executable = std::filesystem::read_symlink("/proc/self/exe", error);
+  if (error) return {};
+  return executable.parent_path() / "triaevum_title_aot.so";
+}
+
+// RTLD_LOCAL is required: host and plugin both define the whole-AOT helpers
+// and inline thread_locals, and must never interpose each other.
+TitleModuleHandle LoadTitleModule(const std::filesystem::path& path) noexcept {
+  return dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL);
+}
+
+void* TitleSymbol(TitleModuleHandle module, const char* name) noexcept {
+  return dlsym(module, name);
+}
+#endif
+
+TitleModuleHandle TitleModule() noexcept {
+  static TitleModuleHandle module = []() noexcept -> TitleModuleHandle {
     PluginQueried = true;
     try {
-      auto path = SelectedPlugin;
-      if (path.empty()) {
-        wchar_t executable[32768];
-        const DWORD length = GetModuleFileNameW(nullptr, executable, 32768);
-        if (length == 0 || length == 32768) return nullptr;
-        path = std::filesystem::path(executable).parent_path() / L"triaevum_title_aot.dll";
-      }
-      return LoadLibraryExW(path.c_str(), nullptr,
-          LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+      const auto path = SelectedPlugin.empty() ? DefaultPluginPath() : SelectedPlugin;
+      if (path.empty()) return nullptr;
+      return LoadTitleModule(path);
     } catch (...) {
       return nullptr;
     }
@@ -49,19 +83,14 @@ const Result* QueryTitle(const char* name, uint32_t abi) noexcept {
   auto module = TitleModule();
   if (!module) return nullptr;
   auto query = reinterpret_cast<const Result* (*)(uint32_t) noexcept>(
-      GetProcAddress(module, name));
+      TitleSymbol(module, name));
   return query ? query(abi) : nullptr;
 }
-#endif
 
 const Oot3dWholeAotProgramV2 *WholeAotProgram() noexcept {
   static const Oot3dWholeAotProgramV2 *program = []() noexcept {
     const Oot3dWholeAotProgramV2 *candidate =
-#if defined(_WIN32)
         QueryTitle<Oot3dWholeAotProgramV2>("triaevum_title_whole_aot_query", kOot3dWholeAotPluginAbiV2);
-#else
-        triaevum_title_whole_aot_query(kOot3dWholeAotPluginAbiV2);
-#endif
     if (candidate == nullptr ||
         candidate->AbiVersion != kOot3dWholeAotPluginAbiV2 ||
         candidate->StructSize < sizeof(Oot3dWholeAotProgramV2) ||
@@ -83,11 +112,7 @@ const Oot3dWholeAotProgramV2 *WholeAotProgram() noexcept {
 const Oot3dDirectAotProgramV1 *DirectAotProgram() noexcept {
   static const Oot3dDirectAotProgramV1 *program = []() noexcept {
     const Oot3dDirectAotProgramV1 *candidate =
-#if defined(_WIN32)
         QueryTitle<Oot3dDirectAotProgramV1>("triaevum_title_aot_query", kOot3dDirectAotPluginAbiV1);
-#else
-        triaevum_title_aot_query(kOot3dDirectAotPluginAbiV1);
-#endif
     if (candidate == nullptr ||
         candidate->AbiVersion != kOot3dDirectAotPluginAbiV1 ||
         candidate->StructSize < sizeof(Oot3dDirectAotProgramV1) ||
@@ -180,14 +205,10 @@ bool DispatchDirectAot(const Oot3dDirectAotProgramV1 &program, uint32_t pc,
 } // namespace
 
 void ConfigureTitlePlugin(const std::filesystem::path& path) {
-#if defined(_WIN32)
   if (PluginQueried) throw std::runtime_error("Title plugin was already queried");
   SelectedPlugin = std::filesystem::absolute(path).lexically_normal();
   if (!std::filesystem::is_regular_file(SelectedPlugin))
     throw std::runtime_error("Selected title plugin is missing: " + SelectedPlugin.string());
-#else
-  throw std::runtime_error("Explicit title plugins are not supported on this platform yet");
-#endif
 }
 
 bool Oot3dWholeAotPluginV2Available() noexcept {

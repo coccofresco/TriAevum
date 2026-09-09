@@ -70,6 +70,30 @@ to fill misses. A 30-second non-strict test completed normally with 72 cache
 hits and four runtime-compiled variants. The gameplay closure audit remains
 12,419 compiled functions, three host boundaries and zero residual A32 entries.
 
+## Public runtime (plugin mode)
+
+The product host no longer resolves the title at link time on Linux: the
+direct-AOT loader `dlopen`s `triaevum_title_aot.so` beside the executable
+(`/proc/self/exe`) or the `--title-plugin` path with `RTLD_LOCAL`, exactly as
+Windows uses `LoadLibraryExW`. `--verify-title-plugin` and `--product-info`
+therefore have the same contract on both hosts, and the stub is a build
+dependency only. NRI is enabled on Linux (Xlib/Wayland WSI via SDL, NIS
+upscaler, CACAO when a DXC is available); the FidelityFX and NGX SDK adapters
+remain Windows-only and are not fetched elsewhere. `lsb_release` is optional
+and the whole-AOT ThinLTO cache/order-file link options use lld spellings on
+ELF.
+
+```sh
+scripts/linux/stage-deps.sh            # tinyxml2 CMake package if missing
+scripts/linux/build-public-runtime.sh  # build-linux-public-runtime/TriAevum
+```
+
+Known blocker: `oot3d_ui/*.h` come from the untracked evidence snapshot (see
+`docs/TRIAEVUM_PRECOMPILED_RELEASE.md`), so the final link of `TriAevum` is
+not reproducible from a clean clone yet. Every other product object,
+including the NRI renderer, compiles; the title ABI is proven by
+`validate_whole_aot_toolchain.py` on Linux.
+
 ## Switch OpenGL performance proxy
 
 The Switch product currently uses the compatibility OpenGL renderer, so its

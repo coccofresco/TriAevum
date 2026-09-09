@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 try:
+    from . import platforms
     from .cache_lock import acquire_cache_lock, release_cache_lock
     from .windows_sysroot import WindowsSysroot, compiler_sysroot, build_environment
     from .bundle_paths import distribution_path, distribution_root
@@ -24,6 +25,7 @@ try:
         build_generated_cpp_archive,
     )
 except ImportError:
+    import platforms
     from cache_lock import acquire_cache_lock, release_cache_lock
     from windows_sysroot import WindowsSysroot, compiler_sysroot, build_environment
     from bundle_paths import distribution_path, distribution_root
@@ -36,7 +38,7 @@ except ImportError:
 
 
 FORMAT = "triaevum_generated_cpp_whole_aot_plugin_v2"
-PROFILE = "x86_64-windows-thinlto-release-v1"
+PROFILE = platforms.WINDOWS.profile
 REPO_ROOT = distribution_root()
 A32_ROOT = distribution_path("tools/oot3d/native_a32_runtime")
 RUNTIME_ROOT = distribution_path("tools/oot3d/native_game_runtime")
@@ -52,9 +54,13 @@ class WholeAotPluginToolchain:
     archiver: Path
     support_library: Path
     nlohmann_include: Path
-    target_triple: str = "x86_64-pc-windows-msvc"
-    profile: str = PROFILE
+    target_triple: str = platforms.host().triple
+    profile: str = platforms.host().profile
     sysroot: Path | None = None
+
+    @property
+    def platform(self) -> platforms.Platform:
+        return platforms.for_triple(self.target_triple)
 
 
 def _regular_file(path: Path, label: str) -> Path:
@@ -154,10 +160,12 @@ def build_whole_aot_plugin(
         raise WholeAotPluginError("whole-AOT shard count must be between 1 and 512")
     if jobs <= 0 or jobs > 16:
         raise WholeAotPluginError("whole-AOT jobs must be between 1 and 16")
-    if toolchain.profile != PROFILE:
+    if toolchain.profile != toolchain.platform.profile:
         raise WholeAotPluginError(
             f"unsupported whole-AOT plugin profile: {toolchain.profile}"
         )
+    windows = platforms.is_windows(toolchain.platform)
+    plugin_name = toolchain.platform.plugin
 
     started = time.perf_counter()
     program = _regular_file(program_path, "structural AOT program")
@@ -165,14 +173,19 @@ def build_whole_aot_plugin(
     code = _regular_file(code_path, "title code image")
     compiler = _regular_file(toolchain.compiler, "native C++ compiler")
     archiver = _regular_file(toolchain.archiver, "native object archiver")
-    linker = _regular_file(compiler.with_name("lld-link.exe"), "native linker")
+    linker = _regular_file(compiler.with_name("lld-link.exe" if windows else "ld.lld"), "native linker")
     builder = _regular_file(
         distribution_path("tools/triaevum_release/whole_aot_plugin_backend.py"),
         "whole-AOT builder identity",
     )
     support = _regular_file(toolchain.support_library, "whole-AOT support library")
     nlohmann = _directory(toolchain.nlohmann_include, "nlohmann include root")
-    sysroot = compiler_sysroot(compiler, toolchain.sysroot, verified=sysroot_contract)
+    if windows:
+        sysroot = compiler_sysroot(compiler, toolchain.sysroot, verified=sysroot_contract)
+    elif toolchain.sysroot is not None or sysroot_contract is not None:
+        raise WholeAotPluginError("Verified sysroots are only defined for Windows targets")
+    else:
+        sysroot = None
     wrapper = _regular_file(
         RUNTIME_ROOT / "triaevum_title_whole_aot_plugin.cpp",
         "whole-AOT plugin wrapper",
@@ -222,12 +235,12 @@ def build_whole_aot_plugin(
                     or any(c not in "0123456789abcdef" for c in key)):
                 raise WholeAotPluginError("Invalid whole-AOT request cache identity")
             root = cache / "plugins" / key
-            cached = _validate_cached_plugin(root / "triaevum_title_aot.dll", root / "whole-aot-plugin.json", key)
+            cached = _validate_cached_plugin(root / plugin_name, root / "whole-aot-plugin.json", key)
             if cached is not None and cached.get("request_key") == request_key:
                 return {**cached, "status": "reused", "early_cache_hit": True,
                         "cached_build_objects_compiled": cached["objects_compiled"],
                         "objects_compiled": 0, "objects_reused": 0,
-                        "plugin": str(root / "triaevum_title_aot.dll"),
+                        "plugin": str(root / plugin_name),
                         "generated_directory": str(generated),
                         "elapsed_seconds": time.perf_counter() - started}
     # Generated source depends on title/translator inputs, not linker or SDK.
@@ -302,7 +315,7 @@ def build_whole_aot_plugin(
         )
     )
     plugin_root = cache / "plugins" / cache_key
-    plugin = plugin_root / "triaevum_title_aot.dll"
+    plugin = plugin_root / plugin_name
     manifest_path = plugin_root / "whole-aot-plugin.json"
     cached = _validate_cached_plugin(plugin, manifest_path, cache_key)
     if cached is not None:
@@ -341,16 +354,16 @@ def build_whole_aot_plugin(
 
         with tempfile.TemporaryDirectory(prefix=".link-", dir=plugin_root) as temporary:
             temporary_root = Path(temporary)
-            wrapper_object = temporary_root / "wrapper.obj"
-            linked = temporary_root / "triaevum_title_aot.dll"
+            wrapper_object = temporary_root / ("wrapper.obj" if windows else "wrapper.o")
+            linked = temporary_root / plugin_name
             include_roots = (
                 generated,
                 RUNTIME_ROOT,
                 A32_ROOT,
                 A32_ROOT / "upstream",
             )
-            _run(
-                (
+            if windows:
+                compile_command = (
                     str(compiler),
                     f"--target={toolchain.target_triple}",
                     *(sysroot.arguments() if sysroot else ()),
@@ -373,12 +386,8 @@ def build_whole_aot_plugin(
                     "/c",
                     f"/Fo{wrapper_object}",
                     str(wrapper),
-                ),
-                temporary_root,
-                "compiling the whole-AOT plugin wrapper",
-            )
-            _run(
-                (
+                )
+                link_command = (
                     str(compiler),
                     f"--target={toolchain.target_triple}",
                     *(sysroot.arguments() if sysroot else ()),
@@ -397,10 +406,48 @@ def build_whole_aot_plugin(
                     "/OPT:ICF",
                     "/INCREMENTAL:NO",
                     "/Brepro",
-                ),
-                temporary_root,
-                "linking the private whole-AOT plugin",
-            )
+                )
+            else:
+                # Only the two query exports stay visible; -Bsymbolic keeps the
+                # plugin's own whole-AOT helpers from binding to the host's copies.
+                compile_command = (
+                    str(compiler),
+                    f"--target={toolchain.target_triple}",
+                    "-x", "c++",
+                    "-std=c++20",
+                    "-O2",
+                    "-DNDEBUG",
+                    "-fPIC",
+                    "-fvisibility=hidden",
+                    "-ffp-model=strict",
+                    "-w",
+                    "-DNOMINMAX",
+                    "-DOOT3D_NATIVE_GENERATED_WHOLE_AOT=1",
+                    *(f"-I{path}" for path in include_roots),
+                    "-c",
+                    "-o", str(wrapper_object),
+                    str(wrapper),
+                )
+                link_command = (
+                    str(compiler),
+                    f"--target={toolchain.target_triple}",
+                    "-shared",
+                    "-fuse-ld=lld",
+                    "-flto=thin",
+                    "-static-libstdc++",
+                    "-static-libgcc",
+                    "-Wl,--gc-sections",
+                    "-Wl,--icf=all",
+                    "-Wl,-Bsymbolic",
+                    "-Wl,--exclude-libs,ALL",
+                    "-Wl,--build-id=sha1",
+                    "-o", str(linked),
+                    str(wrapper_object),
+                    str(archive_path),
+                    str(support),
+                )
+            _run(compile_command, temporary_root, "compiling the whole-AOT plugin wrapper")
+            _run(link_command, temporary_root, "linking the private whole-AOT plugin")
             if not linked.is_file():
                 raise WholeAotPluginError("whole-AOT linker produced no title plugin")
             linked.replace(plugin)
@@ -410,6 +457,7 @@ def build_whole_aot_plugin(
             "status": "built",
             "backend": "generated_cpp_whole_aot_plugin_v2",
             "profile": toolchain.profile,
+            "target": toolchain.target_triple,
             "cache_key": cache_key,
             "toolchain_identity_sha256": toolchain_identity,
             "translator_identity_sha256": _identity(

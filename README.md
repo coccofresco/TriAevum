@@ -20,8 +20,9 @@ Apparently, even AI slop can still consume several months of your life.
 
 ## Install
 
-Requires Windows x64, a Vulkan-capable GPU with current drivers, and your own
-supported decrypted ROM. Forge accepts `.3ds` and `.cci` and checks the contents,
+Requires Windows x64 (Linux x64 support is in progress; see
+[the Linux port notes](docs/OOT3D_LINUX_WHOLE_AOT_PORT.md)), a Vulkan-capable
+GPU with current drivers, and your own supported decrypted ROM. Forge accepts `.3ds` and `.cci` and checks the contents,
 not just the filename.
 
 It should work with any personal EUR or USA ROM dump, provided it is decrypted

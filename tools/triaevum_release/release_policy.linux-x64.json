@@ -1,0 +1,174 @@
+{
+  "format": "triaevum_public_release_policy_v1",
+  "manifest_format": "triaevum_public_release_manifest_v1",
+  "allowed_roles": {
+    "runtime_executable": [
+      "TriAevum"
+    ],
+    "forge_executable": [
+      "TriAevumForge"
+    ],
+    "forge_runtime_module": [
+      "forge/*.so"
+    ],
+    "runtime_library": [
+      "*.so",
+      "*.so.*",
+      "bin/*.so",
+      "bin/*.so.*"
+    ],
+    "title_neutral_resource": [
+      "resources/*",
+      "resources/**/*",
+      "gamecontrollerdb.txt"
+    ],
+    "configuration": [
+      "config/*",
+      "config/**/*"
+    ],
+    "documentation": [
+      "README.md",
+      "LICENSE_SCOPE.md",
+      "THIRD_PARTY_NOTICES.md",
+      "SOURCE_OFFER.md",
+      "docs/*",
+      "docs/**/*"
+    ],
+    "license": [
+      "LICENSE",
+      "LICENSES/*",
+      "LICENSES/**/*"
+    ],
+    "revision_recipe": [
+      "recipes/*.json"
+    ],
+    "input_copy_adapter": [
+      "recipes/adapters/*.json"
+    ],
+    "precompiled_catalog": [
+      "recipes/precompiled-titles.json"
+    ],
+    "precompiled_title": [
+      "titles/*/triaevum_title_aot.so"
+    ],
+    "translated_title_source": [
+      "source/titles/*-translated.zip"
+    ],
+    "title_build_source": [
+      "source/titles/*-build.zip"
+    ],
+    "corresponding_source": [
+      "source/*.zip"
+    ]
+  },
+  "required_paths": [
+    "TriAevum",
+    "TriAevumForge",
+    "forge/oot3d_game_module.so",
+    "resources/gamecontrollerdb.txt",
+    "README.md",
+    "LICENSE_SCOPE.md",
+    "THIRD_PARTY_NOTICES.md",
+    "SOURCE_OFFER.md",
+    "LICENSE",
+    "LICENSES/GPL-2.0-or-later.txt",
+    "LICENSES/SDL2-zlib.txt",
+    "LICENSES/SDL-GameControllerDB-zlib.txt",
+    "LICENSES/shaderc-Apache-2.0.txt",
+    "LICENSES/Python-3.13.txt",
+    "LICENSES/Capstone-BSD.txt",
+    "LICENSES/PyInstaller-GPL-2.0-or-later-with-bootloader-exception.txt"
+  ],
+  "required_roles": [
+    "runtime_executable",
+    "forge_executable",
+    "forge_runtime_module",
+    "revision_recipe",
+    "corresponding_source"
+  ],
+  "forbidden_basenames": [
+    "AGENTS.md",
+    "code.bin",
+    "exheader.bin",
+    "romfs.bin",
+    "oot3d_native_game.exe",
+    "oot3d_pica_default.o3ps",
+    "atlas_overrides.o3tu",
+    "oot3d_native_game"
+  ],
+  "forbidden_extensions": [
+    ".3ds",
+    ".7z",
+    ".a",
+    ".bcseq",
+    ".bcwav",
+    ".bin",
+    ".bps",
+    ".cci",
+    ".cia",
+    ".citra",
+    ".cmb",
+    ".csab",
+    ".ctxb",
+    ".cxi",
+    ".dmp",
+    ".ips",
+    ".gz",
+    ".lib",
+    ".map",
+    ".o",
+    ".o3ps",
+    ".o3tu",
+    ".obj",
+    ".pdb",
+    ".rar",
+    ".sav",
+    ".state",
+    ".tam",
+    ".tap",
+    ".tar",
+    ".xdelta",
+    ".xdelta3",
+    ".zar",
+    ".zsi",
+    ".zst"
+  ],
+  "forbidden_extension_role_exceptions": {},
+  "forbidden_path_components": [
+    "captures",
+    "evidence",
+    "exefs",
+    "game",
+    "generated",
+    "mod",
+    "romfs",
+    "savedata",
+    "symbols",
+    "whole_aot"
+  ],
+  "source_archive_forbidden_prefixes": [
+    "tools/oot3d/decomp_support/analysis",
+    "tools/oot3d/decomp_support/evidence",
+    "tools/oot3d/decomp_support/ghidra_export",
+    "tools/oot3d/decomp_support/src/code",
+    "tools/oot3d/decomp_support/symbols"
+  ],
+  "forbidden_sha256": [
+    "16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220",
+    "9f065aec342b7df2421998deacedde44d475d36264f861cffd3381a1adf8900a",
+    "a3ad05dcf12893de5f1617a60f4e80f54f5e1c80069922a96a4f9c8c8cbac8ca",
+    "e0c143c872ccf4ad72033caab768753b147a4033d260a701204a63ee6bc16df4",
+    "c834030be2fbbfd93db26180333f112e1abcfd85050b09252a8449f06bf90400",
+    "e25bacdae7331714cb8be89044e07f973c3f9701a30bc84e6e282a15aaf89ade"
+  ],
+  "forbidden_json_true_fields": [
+    "contains_title_code",
+    "contains_title_content",
+    "original_game_data_included",
+    "proprietary_sdk_included"
+  ],
+  "forbidden_json_false_fields": [
+    "redistributable",
+    "redistribution_allowed"
+  ]
+}

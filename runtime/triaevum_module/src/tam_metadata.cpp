@@ -24,20 +24,31 @@ constexpr std::size_t kMaximumPhysicalMemoryRegions = 64U;
 
 enum class JsonKind { Null, Boolean, Number, String, Object, Array };
 
+struct JsonMember;
+
 struct JsonValue {
   JsonKind kind = JsonKind::Null;
   bool boolean = false;
   std::string text;
-  std::vector<std::pair<std::string, JsonValue>> members;
+  // Not std::pair: clang with libstdc++ 16 in C++20 mode instantiates
+  // pair<string, JsonValue> while JsonValue is still incomplete.
+  std::vector<JsonMember> members;
   std::vector<JsonValue> elements;
 
-  [[nodiscard]] const JsonValue *Find(std::string_view name) const {
-    const auto found = std::find_if(
-        members.begin(), members.end(),
-        [name](const auto &member) { return member.first == name; });
-    return found == members.end() ? nullptr : &found->second;
-  }
+  [[nodiscard]] const JsonValue *Find(std::string_view name) const;
 };
+
+struct JsonMember {
+  std::string name;
+  JsonValue value;
+};
+
+const JsonValue *JsonValue::Find(std::string_view name) const {
+  const auto found = std::find_if(
+      members.begin(), members.end(),
+      [name](const JsonMember &member) { return member.name == name; });
+  return found == members.end() ? nullptr : &found->value;
+}
 
 bool IsValidUtf8(std::string_view value) {
   const auto *bytes = reinterpret_cast<const std::uint8_t *>(value.data());
@@ -179,7 +190,7 @@ private:
       }
       if (std::any_of(
               result->members.begin(), result->members.end(),
-              [&name](const auto &member) { return member.first == name; })) {
+              [&name](const JsonMember &member) { return member.name == name; })) {
         return Fail("JSON object contains a duplicate key");
       }
       SkipWhitespace();
@@ -190,7 +201,7 @@ private:
       if (!ParseValue(depth + 1U, &value)) {
         return false;
       }
-      result->members.emplace_back(std::move(name), std::move(value));
+      result->members.push_back(JsonMember{std::move(name), std::move(value)});
       SkipWhitespace();
       if (Consume('}')) {
         return true;

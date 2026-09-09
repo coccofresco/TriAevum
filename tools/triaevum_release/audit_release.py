@@ -14,11 +14,13 @@ from pathlib import Path
 from typing import Any, Iterable, Sequence
 
 try:
+    from . import platforms
     from .product_contract import validate_product_info
     from .precompiled_titles import MODEL, CATALOG, load_catalog, select_title, checked_file
     from .common import load_json_object, normalize_relative_path, sha256_file
     from .input_adapters import validate_adapter
 except ImportError:
+    import platforms
     from product_contract import validate_product_info
     from precompiled_titles import MODEL, CATALOG, load_catalog, select_title, checked_file
     from common import load_json_object, normalize_relative_path, sha256_file
@@ -260,13 +262,22 @@ def audit_release(
         declared[relative] = item
 
     manifest_relative = manifest_path.relative_to(root).as_posix()
+    runtime_paths = [path for path, item in declared.items() if item.get("role") == "runtime_executable"]
+    platform = None
+    if len(runtime_paths) == 1:
+        try:
+            platform = platforms.for_runtime(runtime_paths[0])
+        except ValueError as exc:
+            reject(str(exc))
+    else:
+        reject("release must declare exactly one runtime_executable")
     contract = release.get("runtime_contract")
     if contract is not None:
         try:
             validate_product_info(contract["product"], release.get("source_commit", ""))
             if contract["product"].get("private_title_loaded") is not False:
                 reject("runtime contract identifies a private title plugin")
-            if contract.get("runtime_sha256") != declared.get("TriAevum.exe", {}).get("sha256"):
+            if not runtime_paths or contract.get("runtime_sha256") != declared[runtime_paths[0]].get("sha256"):
                 reject("runtime contract hash differs from packaged executable")
         except (KeyError, TypeError, AttributeError, ValueError) as exc:
             reject(f"invalid runtime contract: {exc}")
@@ -365,14 +376,14 @@ def audit_release(
         if roles_seen & {"forge_tool", "forge_toolchain_setup", "forge_link_library", "forge_tool_resource", "forge_clang_header"}:
             reject("user precompiled release must not include compiler/SDK acquisition payloads")
         try:
-            catalog = load_catalog(root)
+            catalog = load_catalog(root, platform=platform)
             recipes = load_json_object(root / "recipes/oot3d.json")["recipes"]
             expected_title_paths = {CATALOG}
             for title in catalog["titles"]:
                 matches = [recipe for recipe in recipes if recipe["id"] == title["recipe"]]
                 if len(matches) != 1:
                     raise ValueError("Catalog revision is absent or ambiguous in supported recipes")
-                select_title(root, matches[0], catalog=catalog)
+                select_title(root, matches[0], catalog=catalog, platform=platform)
                 adapter = matches[0].get("input_adapter")
                 if adapter is not None:
                     validate_adapter(root, matches[0])

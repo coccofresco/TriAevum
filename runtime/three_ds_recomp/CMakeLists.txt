@@ -105,7 +105,12 @@ cmake_dependent_option(
 	"WIN32;THREE_DS_RECOMP_ENABLE_VULKAN;THREE_DS_RECOMP_ENABLE_NRI"
 	OFF)
 option(THREE_DS_RECOMP_ENABLE_CACAO "Enable FidelityFX CACAO for the native 3DS Vulkan backend" ${THREE_DS_RECOMP_ENABLE_NRI})
-option(THREE_DS_RECOMP_ENABLE_SSSR "Enable FidelityFX SSSR for the native 3DS Vulkan backend" ${THREE_DS_RECOMP_ENABLE_NRI})
+cmake_dependent_option(
+	THREE_DS_RECOMP_ENABLE_SSSR
+	"Enable FidelityFX SSSR for the native 3DS Vulkan backend (Windows-only FidelityFX toolchain)"
+	${THREE_DS_RECOMP_ENABLE_NRI}
+	"WIN32"
+	OFF)
 set(THREE_DS_RECOMP_NRI_SOURCE_DIR "" CACHE PATH "Optional existing NRI v180 source directory")
 set(THREE_DS_RECOMP_CACAO_SOURCE_DIR "" CACHE PATH "Optional existing FidelityFX CACAO v1.2 source directory")
 set(THREE_DS_RECOMP_NGX_VERSION "310.7.0" CACHE STRING
@@ -180,9 +185,17 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
 		set(NRI_ENABLE_DEBUG_NAMES_AND_ANNOTATIONS ON CACHE BOOL "" FORCE)
 		# Keep every NRIUpscaler provider independently capability-gated at
 		# runtime even though their SDK adapters are compiled together here.
+		# The FidelityFX and NGX SDK adapters are Windows-only in this tree
+		# (FFX_SC.exe, WIN32-gated NGX include/deploy), so do not fetch them
+		# for other hosts.
 		set(NRI_ENABLE_NIS_SDK ON CACHE BOOL "" FORCE)
-		set(NRI_ENABLE_FFX_SDK ON CACHE BOOL "" FORCE)
-		set(NRI_ENABLE_NGX_SDK ON CACHE BOOL "" FORCE)
+		if(WIN32)
+			set(NRI_ENABLE_FFX_SDK ON CACHE BOOL "" FORCE)
+			set(NRI_ENABLE_NGX_SDK ON CACHE BOOL "" FORCE)
+		else()
+			set(NRI_ENABLE_FFX_SDK OFF CACHE BOOL "" FORCE)
+			set(NRI_ENABLE_NGX_SDK OFF CACHE BOOL "" FORCE)
+		endif()
 		if(THREE_DS_RECOMP_NRI_SOURCE_DIR)
 			FetchContent_Declare(nri SOURCE_DIR "${THREE_DS_RECOMP_NRI_SOURCE_DIR}")
 			execute_process(
@@ -232,13 +245,16 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
 				"${_oot3d_nri_sources}")
 			unset(_oot3d_nri_sources)
 		endif()
-		if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND TARGET NRI_Shared)
+		if(MSVC AND CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND TARGET NRI_Shared)
 			# NRI enables /WX for clang-cl after its Clang suppressions.
 			# Keep /W4 diagnostics, but do not let warnings in the pinned
 			# third-party SDK block a Clang/ThinLTO host build.
 			target_compile_options(NRI_Shared PUBLIC /WX-)
 		endif()
 		if(THREE_DS_RECOMP_ENABLE_SSSR)
+			if(NOT WIN32)
+				message(FATAL_ERROR "FidelityFX SSSR requires the Windows-only FidelityFX SDK toolchain")
+			endif()
 			include(cmake/dependencies/oot3d-sssr.cmake)
 		endif()
 		if(WIN32 AND NRI_ENABLE_FFX_SDK)

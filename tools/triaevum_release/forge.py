@@ -18,6 +18,7 @@ try:
     from .activation_transaction import activation_transaction
     from .installation_context import InstallationContext, resolve_reference
     from .toolchain_probe import probe_toolchain
+    from . import platforms
     from .bundle_paths import (
         distribution_path,
         distribution_root,
@@ -60,6 +61,7 @@ except ImportError:
     from installation_context import InstallationContext, resolve_reference
     from toolchain_probe import probe_toolchain
     from bundle_paths import distribution_path, distribution_root, installation_path
+    import platforms
     from common import (
         atomic_write_bytes,
         atomic_write_json,
@@ -156,8 +158,11 @@ def default_active_title_state_path() -> Path:
     return default_output_root().parent / "active-title.json"
 
 
+HOST = platforms.host()
+
+
 def default_runtime_plugin_path() -> Path:
-    return installation_path("triaevum_title_aot.dll")
+    return installation_path(HOST.plugin)
 
 
 def default_runtime_launch_profile_path() -> Path:
@@ -748,8 +753,8 @@ def build_private_aot_fallback(
         nlohmann_include=nlohmann_include,
         cache_root=cache_root,
         toolchain=NativeToolchain(
-            compiler=llvm_bin / "clang-cl.exe",
-            archiver=llvm_bin / "llvm-lib.exe",
+            compiler=llvm_bin / HOST.compiler,
+            archiver=llvm_bin / HOST.archiver,
         ),
         jobs=jobs,
     )
@@ -925,10 +930,10 @@ def publish_private_runtime(
 
     plugin_hash = sha256_file(source_plugin)
     installation = runtime_plugin.expanduser().resolve().parent
-    destination = installation / "private-plugins" / plugin_hash / "triaevum_title_aot.dll"
+    destination = installation / "private-plugins" / plugin_hash / HOST.plugin
     profile_path = launch_profile.expanduser().resolve()
     private_root = data_root.expanduser().resolve()
-    product_receipt = query_product(installation / "TriAevum.exe")
+    product_receipt = query_product(installation / HOST.runtime)
     destination.parent.mkdir(parents=True, exist_ok=True)
     profile_path.parent.mkdir(parents=True, exist_ok=True)
     private_root.mkdir(parents=True, exist_ok=True)
@@ -1011,7 +1016,7 @@ def publish_private_runtime(
             temporary.unlink(missing_ok=True)
     # Query the exact immutable generation in a short-lived process before the
     # single launch-profile replacement makes it visible to direct launches.
-    query_product(installation / "TriAevum.exe", plugin=destination)
+    query_product(installation / HOST.runtime, plugin=destination)
     atomic_write_json(profile_path, profile)
     prepared.state["runtime"] = {
         "status": "ready",
@@ -1350,24 +1355,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     title_parser.add_argument(
         "--native-image",
         type=Path,
-        default=default_forge_support_path("oot3d_game_module.dll"),
+        default=default_forge_support_path(HOST.native_module),
     )
     title_parser.add_argument(
         "--compiler",
         type=Path,
-        default=default_forge_support_path("clang-cl.exe"),
+        default=default_forge_support_path(HOST.compiler),
     )
     title_parser.add_argument(
         "--archiver",
         type=Path,
-        default=default_forge_support_path("llvm-lib.exe"),
+        default=default_forge_support_path(HOST.archiver),
     )
     title_parser.add_argument(
         "--support-library",
         type=Path,
-        default=default_forge_support_path(
-            "triaevum_title_whole_aot_support.lib"
-        ),
+        default=default_forge_support_path(HOST.support_library),
     )
     title_parser.add_argument(
         "--nlohmann-include",
@@ -1381,9 +1384,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     title_parser.add_argument("--shards", type=int, default=256)
     title_parser.add_argument("--jobs", type=int, default=8)
     title_parser.add_argument("--sysroot", type=Path,
-                              help="Use a verified private Windows sysroot instead of host discovery")
+                              help="Use a verified private sysroot instead of host discovery")
     title_parser.add_argument(
-        "--target-triple", default="x86_64-pc-windows-msvc"
+        "--target-triple", default=HOST.triple
     )
     title_parser.add_argument(
         "--active-title-state",
@@ -1446,25 +1449,25 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "lld-link.exe"
                     ).is_file(),
                     "game_module": str(
-                        default_forge_support_path("oot3d_game_module.dll")
+                        default_forge_support_path(HOST.native_module)
                     ),
                     "game_module_available": default_forge_support_path(
-                        "oot3d_game_module.dll"
+                        HOST.native_module
                     ).is_file(),
                     "compiler": str(
-                        default_forge_support_path("clang-cl.exe")
+                        default_forge_support_path(HOST.compiler)
                     ),
                     "compiler_available": default_forge_support_path(
-                        "clang-cl.exe"
+                        HOST.compiler
                     ).is_file(),
                     "archiver": str(
-                        default_forge_support_path("llvm-lib.exe")
+                        default_forge_support_path(HOST.archiver)
                     ),
                     "archiver_available": default_forge_support_path(
-                        "llvm-lib.exe"
+                        HOST.archiver
                     ).is_file(),
                     "whole_aot_support_available": default_forge_support_path(
-                        "triaevum_title_whole_aot_support.lib"
+                        HOST.support_library
                     ).is_file(),
                     "compiler_headers": str(default_forge_include_path()),
                     "compiler_headers_available": (
@@ -1481,9 +1484,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             }
             if not args.inventory:
                 result["toolchain_probe"] = probe_toolchain(
-                    default_forge_support_path("clang-cl.exe"),
-                    default_forge_support_path("llvm-lib.exe"),
-                    default_forge_support_path("triaevum_title_whole_aot_support.lib"),
+                    default_forge_support_path(HOST.compiler),
+                    default_forge_support_path(HOST.archiver),
+                    default_forge_support_path(HOST.support_library),
                     default_forge_include_path(),
                 )
                 result["status"] = "ok"

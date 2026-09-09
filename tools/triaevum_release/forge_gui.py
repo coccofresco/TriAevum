@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 try:
-    from . import ctr_rom, forge, extracted_inputs
+    from . import ctr_rom, forge, extracted_inputs, platforms
     from .bundle_paths import installation_path
     from .common import load_json_object
     from .installed_runtime import validate_installed_runtime
@@ -29,6 +29,7 @@ except ImportError:
     import ctr_rom
     import forge
     import extracted_inputs
+    import platforms
     from bundle_paths import installation_path
     from common import load_json_object
     from installed_runtime import validate_installed_runtime
@@ -240,7 +241,7 @@ def install_private_title(
 
 
 def runtime_path() -> Path:
-    return installation_path("TriAevum.exe").resolve()
+    return installation_path(platforms.host().runtime).resolve()
 
 
 def launch_runtime(data_root: Path | None = None) -> subprocess.Popen[bytes]:

@@ -3,11 +3,13 @@
 from pathlib import Path
 
 try:
+    from . import platforms
     from .activation_transaction import activation_transaction
     from .common import atomic_write_json, load_json_object, sha256_file
     from .installation_context import InstallationContext, expand_profile_argument, resolve_reference
     from .installed_runtime import validate_installed_runtime
 except ImportError:
+    import platforms
     from activation_transaction import activation_transaction
     from common import atomic_write_json, load_json_object, sha256_file
     from installation_context import InstallationContext, expand_profile_argument, resolve_reference
@@ -41,10 +43,10 @@ def migrate_installation(installation: Path, title: Path, data_root: Path) -> di
     with activation_transaction(installation, targets):
         prepared = load_prepared_content(title, required_inputs=("code", "exheader", "romfs"))
         runtime = prepared.state.get("runtime", {})
-        selected_profile = validate_installed_runtime(installation / "TriAevum.exe", title, data_root, runtime)
+        selected_profile = validate_installed_runtime(installation / platforms.host().runtime, title, data_root, runtime)
         if selected_profile != profile:
             raise ValueError("Migration requires the installation's own default launch profile")
-        runtime.setdefault("plugin", str(installation / "triaevum_title_aot.dll"))
+        runtime.setdefault("plugin", str(installation / platforms.host().plugin))
         manifest = load_json_object(manifest_path)
         fields = {"code": "code_bin_path", "exheader": "exheader_path", "romfs": "romfs_image_path"}
         external = []
@@ -97,6 +99,6 @@ def migrate_installation(installation: Path, title: Path, data_root: Path) -> di
                 active["directory_scope"] = "relative"
                 write_if_changed(active_path, active)
         load_prepared_content(title, required_inputs=("code", "exheader", "romfs"))
-        validate_installed_runtime(installation / "TriAevum.exe", title, data_root, runtime)
+        validate_installed_runtime(installation / platforms.host().runtime, title, data_root, runtime)
     return {"status": "migrated" if changed else "unchanged", "changed_files": changed,
             "external_inputs": external, "saves_modified": False, "title_recompiled": False}

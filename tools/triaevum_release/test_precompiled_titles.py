@@ -2,6 +2,8 @@ import copy
 import tempfile
 import unittest
 from pathlib import Path
+
+import platforms
 from unittest.mock import patch
 
 from common import atomic_write_json, sha256_file
@@ -22,9 +24,9 @@ class PrecompiledTitleTests(unittest.TestCase):
         self.recipe = {"id": "test", "inputs": {
             kind: {"sha256": str(i) * 64, "bytes": i} for i, kind in enumerate(("code", "exheader", "romfs"), 1)}}
         self.catalog = {"format": FORMAT, "install_model": MODEL,
-                        "runtime": artifact("TriAevum.exe"), "native_module": artifact("forge/oot3d_game_module.dll"),
+                        "runtime": artifact(platforms.host().runtime), "native_module": artifact(platforms.host().native_module_path),
                         "titles": [{"recipe": "test", "inputs": self.recipe["inputs"], "abi_version": 2,
-                                    "target": "x86_64-pc-windows-msvc", "translator_identity_sha256": "a" * 64,
+                                    "target": platforms.host().triple, "translator_identity_sha256": "a" * 64,
                                     "plugin": artifact("titles/test/contract.dll")}]}
         atomic_write_json(self.root / CATALOG, self.catalog)
 
@@ -34,7 +36,7 @@ class PrecompiledTitleTests(unittest.TestCase):
         import shutil
         source = self.root / "copy"
         source.mkdir()
-        for name in ("TriAevum.exe", "forge", "titles", "recipes"):
+        for name in (platforms.host().runtime, "forge", "titles", "recipes"):
             item = self.root / name
             if item.is_dir():
                 shutil.copytree(item, source / name)
@@ -58,7 +60,7 @@ class PrecompiledTitleTests(unittest.TestCase):
 
     def test_missing_catalog_never_falls_back_to_compilation(self):
         (self.root / CATALOG).unlink()
-        with patch("forge_gui.runtime_path", return_value=self.root / "TriAevum.exe"), \
+        with patch("forge_gui.runtime_path", return_value=self.root / platforms.host().runtime), \
                 patch("forge_gui.forge.query_product"), \
                 patch("forge_gui.forge.probe_toolchain") as probe, \
                 patch("forge_gui.forge.build_private_title") as build, \

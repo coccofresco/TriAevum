@@ -1,0 +1,205 @@
+{
+  "format": "triaevum_public_release_layout_v1",
+  "files": [
+    {
+      "source": "build-release/TriAevum",
+      "path": "TriAevum",
+      "role": "runtime_executable"
+    },
+    {
+      "source": "build-release/triaevum_title_aot.so",
+      "path": "triaevum_title_aot.so",
+      "role": "runtime_library"
+    },
+    {
+      "source": "build-release/TriAevumForge",
+      "path": "TriAevumForge",
+      "role": "forge_executable"
+    },
+    {
+      "source": "build-release/oot3d_game_module.so",
+      "path": "forge/oot3d_game_module.so",
+      "role": "forge_runtime_module"
+    },
+    {
+      "source": "runtime/triaevum_resources/README.txt",
+      "path": "resources/README.txt",
+      "role": "title_neutral_resource"
+    },
+    {
+      "source": "runtime/triaevum_resources/gamecontrollerdb.txt",
+      "path": "resources/gamecontrollerdb.txt",
+      "role": "title_neutral_resource"
+    },
+    {
+      "source": "README.md",
+      "path": "README.md",
+      "role": "documentation"
+    },
+    {
+      "source": "docs/releases/v0.6.0-alpha.1b.md",
+      "path": "docs/releases/v0.6.0-alpha.1b.md",
+      "role": "documentation"
+    },
+    {
+      "source": "docs/TRIAEVUM_SUPPORTED_ROM.md",
+      "path": "docs/TRIAEVUM_SUPPORTED_ROM.md",
+      "role": "documentation"
+    },
+    {
+      "source": "docs/TRIAEVUM_ROM_INPUT_ADAPTER.md",
+      "path": "docs/TRIAEVUM_ROM_INPUT_ADAPTER.md",
+      "role": "documentation"
+    },
+    {
+      "source": "docs/TRIAEVUM_USA_REV1_PORT.md",
+      "path": "docs/TRIAEVUM_USA_REV1_PORT.md",
+      "role": "documentation"
+    },
+    {
+      "source": "docs/TRIAEVUM_TOPSCREEN_INSTALLATION.md",
+      "path": "docs/TRIAEVUM_TOPSCREEN_INSTALLATION.md",
+      "role": "documentation"
+    },
+    {
+      "source": "docs/TRIAEVUM_GRAPHICS_DEFAULTS_AND_GRASS_PERFORMANCE.md",
+      "path": "docs/TRIAEVUM_GRAPHICS_DEFAULTS_AND_GRASS_PERFORMANCE.md",
+      "role": "documentation"
+    },
+    {
+      "source": "docs/TRIAEVUM_PRECOMPILED_RELEASE.md",
+      "path": "docs/TRIAEVUM_PRECOMPILED_RELEASE.md",
+      "role": "documentation"
+    },
+    {
+      "source": "LICENSE_SCOPE.md",
+      "path": "LICENSE_SCOPE.md",
+      "role": "documentation"
+    },
+    {
+      "source": "THIRD_PARTY_NOTICES.md",
+      "path": "THIRD_PARTY_NOTICES.md",
+      "role": "documentation"
+    },
+    {
+      "source": "SOURCE_OFFER.md",
+      "path": "SOURCE_OFFER.md",
+      "role": "documentation"
+    },
+    {
+      "source": "LICENSE",
+      "path": "LICENSE",
+      "role": "license"
+    },
+    {
+      "source": "docs/TRIAEVUM_RELEASE_ARCHITECTURE.md",
+      "path": "docs/TRIAEVUM_RELEASE_ARCHITECTURE.md",
+      "role": "documentation"
+    },
+    {
+      "source": "docs/TRIAEVUM_PROVENANCE_POLICY.md",
+      "path": "docs/TRIAEVUM_PROVENANCE_POLICY.md",
+      "role": "documentation"
+    },
+    {
+      "source": "docs/TRIAEVUM_RELEASE_APPROVAL_RECORD.md",
+      "path": "docs/TRIAEVUM_RELEASE_APPROVAL_RECORD.md",
+      "role": "documentation"
+    },
+    {
+      "source": "docs/TRIAEVUM_PUBLIC_RUNTIME_VERTICAL.md",
+      "path": "docs/TRIAEVUM_PUBLIC_RUNTIME_VERTICAL.md",
+      "role": "documentation"
+    },
+    {
+      "source": "docs/TRIAEVUM_FORGE.md",
+      "path": "docs/TRIAEVUM_FORGE.md",
+      "role": "documentation"
+    },
+    {
+      "source": "docs/TRIAEVUM_FORGE_WHOLE_AOT_V2.md",
+      "path": "docs/TRIAEVUM_FORGE_WHOLE_AOT_V2.md",
+      "role": "documentation"
+    },
+    {
+      "source": "docs/TRIAEVUM_PRODUCT_WORKFLOW.md",
+      "path": "docs/TRIAEVUM_PRODUCT_WORKFLOW.md",
+      "role": "documentation"
+    },
+    {
+      "source": "docs/AZAHAR_AUDIO_PROVENANCE.md",
+      "path": "docs/AZAHAR_AUDIO_PROVENANCE.md",
+      "role": "documentation"
+    },
+    {
+      "source": "LICENSES/README.md",
+      "path": "LICENSES/README.md",
+      "role": "license"
+    },
+    {
+      "source": "tools/oot3d/third_party/azahar_audio/LICENSE.txt",
+      "path": "LICENSES/GPL-2.0-or-later.txt",
+      "role": "license"
+    },
+    {
+      "source": "tools/oot3d/third_party/azahar_pica/NIHSTRO_LICENSE.txt",
+      "path": "LICENSES/nihstro-BSD-3-Clause.txt",
+      "role": "license"
+    },
+    {
+      "source": "LICENSES/NRI-MIT.txt",
+      "path": "LICENSES/NRI-MIT.txt",
+      "role": "license"
+    },
+    {
+      "source": "LICENSES/SDL2-zlib.txt",
+      "path": "LICENSES/SDL2-zlib.txt",
+      "role": "license"
+    },
+    {
+      "source": "LICENSES/SDL-GameControllerDB-zlib.txt",
+      "path": "LICENSES/SDL-GameControllerDB-zlib.txt",
+      "role": "license"
+    },
+    {
+      "source": "LICENSES/nlohmann-json-MIT.txt",
+      "path": "LICENSES/nlohmann-json-MIT.txt",
+      "role": "license"
+    },
+    {
+      "source": "LICENSES/shaderc-Apache-2.0.txt",
+      "path": "LICENSES/shaderc-Apache-2.0.txt",
+      "role": "license"
+    },
+    {
+      "source": "LICENSES/Python-3.13.txt",
+      "path": "LICENSES/Python-3.13.txt",
+      "role": "license"
+    },
+    {
+      "source": "LICENSES/Capstone-BSD.txt",
+      "path": "LICENSES/Capstone-BSD.txt",
+      "role": "license"
+    },
+    {
+      "source": "LICENSES/PyInstaller-GPL-2.0-or-later-with-bootloader-exception.txt",
+      "path": "LICENSES/PyInstaller-GPL-2.0-or-later-with-bootloader-exception.txt",
+      "role": "license"
+    },
+    {
+      "source": "runtime/three_ds_recomp/LICENSE",
+      "path": "LICENSES/libultraship-MIT.txt",
+      "role": "license"
+    },
+    {
+      "source": "tools/triaevum_release/supported_revisions.json",
+      "path": "recipes/oot3d.json",
+      "role": "revision_recipe"
+    },
+    {
+      "source": "build-release/TriAevum-source.zip",
+      "path": "source/TriAevum-source.zip",
+      "role": "corresponding_source"
+    }
+  ]
+}

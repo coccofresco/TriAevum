@@ -141,8 +141,6 @@ def build(
         "--noconfirm",
         "--clean",
         "--onefile",
-        "--runtime-tmpdir",
-        ".triaevum-forge-runtime",
         "--name",
         "TriAevumForge",
         "--distpath",
@@ -160,6 +158,11 @@ def build(
         "--hidden-import",
         "tkinter",
     ]
+    if sys.platform == "win32":
+        # Extract beside the package instead of a shared %TEMP%. Linux launchers
+        # (file managers, .desktop entries) start with an unwritable cwd, so
+        # the bootloader keeps its $TMPDIR default there.
+        command.extend(("--runtime-tmpdir", ".triaevum-forge-runtime"))
     separator = ";" if sys.platform == "win32" else ":"
     for source, destination in required_data(nlohmann_include):
         command.extend(("--add-data", f"{source}{separator}{destination}"))

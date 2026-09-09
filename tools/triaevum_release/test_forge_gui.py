@@ -4,6 +4,8 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+
+import platforms
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -96,7 +98,7 @@ class ForgeGuiTests(unittest.TestCase):
         )
         self.assertEqual(
             build.call_args.kwargs["runtime_plugin"].name,
-            "triaevum_title_aot.dll",
+            platforms.host().plugin,
         )
         self.assertEqual(
             build.call_args.kwargs["launch_profile"].name,

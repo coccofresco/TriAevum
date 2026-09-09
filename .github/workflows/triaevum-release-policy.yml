@@ -127,6 +127,37 @@ jobs:
         run: >-
           build/triaevum-module/triaevum_native_module_loader_tests
           build/triaevum-module/triaevum_mock_module.so
+      - name: Install Linux title ABI and runtime toolchain
+        run: >-
+          sudo apt-get update &&
+          sudo apt-get install -y --no-install-recommends clang lld llvm
+          nlohmann-json3-dev libsdl2-dev libpng-dev libglew-dev libspdlog-dev
+          libogg-dev libopus-dev libopusfile-dev libvorbis-dev libopengl-dev
+          libbz2-dev libzip-dev libtinyxml2-dev libvulkan-dev libshaderc-dev
+      - name: Build and execute the real Linux title ABI with synthetic input
+        run: |
+          set -euo pipefail
+          cmake -S tools/triaevum_release/native_probe -B build/native-support -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++
+          cmake --build build/native-support --target triaevum_title_whole_aot_support --parallel 2
+          python tools/triaevum_release/validate_whole_aot_toolchain.py --compiler "$(command -v clang++)" --archiver "$(command -v llvm-ar)" --support build/native-support/libtriaevum_title_whole_aot_support.a --include /usr/include --output build/native-abi-probe
+      - name: Exercise the host title-plugin loader against the synthetic plugin
+        # Plugin-mode configure of the product tree; the loader library does not
+        # depend on the renderer, so NRI stays off here to keep the job small.
+        run: |
+          set -euo pipefail
+          cmake -S . -B build/plugin-host -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_LINKER_TYPE=LLD -DOOT3D_ENABLE_VULKAN_RENDERER=ON -DTHREE_DS_RECOMP_ENABLE_NRI=OFF -DTHREE_DS_RECOMP_ENABLE_CACAO=OFF -DOOT3D_WHOLE_AOT_PRODUCT_MODE=ON -DOOT3D_DIRECT_AOT_PLUGIN=ON
+          cmake --build build/plugin-host --target oot3d_native_direct_aot_tests --parallel 2
+          plugin=$(find build/native-abi-probe/cache/plugins -name triaevum_title_aot.so | head -1)
+          build/plugin-host/oot3d_native_direct_aot_tests "$plugin"
+      - name: Preserve Linux native ABI diagnostics (no ROM or SDK payloads)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-native-abi-evidence
+          path: |
+            build/native-abi-probe/receipt.json
+            build/native-abi-probe/*-command.json
+            build/native-abi-probe/*.log
       - name: Report qualification separately from contract tests
         run: >-
           python -c "from tools.triaevum_release.readiness import evaluate_readiness;

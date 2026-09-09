@@ -1,18 +1,48 @@
-"""Bind the installation worker tree to its process lifetime on Windows."""
+"""Bind the installation worker tree to its owner's process lifetime."""
 
 import ctypes
 import os
+import select
+import sys
 import threading
-from ctypes import wintypes
+import time
+
+if os.name == "nt":
+    from ctypes import wintypes
 
 _job = None
 
 
-def watch_owner(owner_pid: int) -> None:
-    if os.name != "nt":
+def _watch_owner_linux(owner_pid: int) -> None:
+    # A pidfd is a stable handle to exactly this process (no PID reuse), and
+    # becomes readable when it exits, matching the SYNCHRONIZE wait on Windows.
+    # The GUI, not any PyInstaller bootstrap in between, is the owner.
+    try:
+        fd = os.pidfd_open(owner_pid)
+    except (AttributeError, OSError):
+        # Pre-5.3 kernels or a sandbox denying pidfd_open: poll /proc instead.
+        # The 1 s poll tolerates a PID-reuse window that pidfd does not have.
+        def poll():
+            while os.path.exists(f"/proc/{owner_pid}"):
+                time.sleep(1.0)
+            os._exit(125)
+        threading.Thread(target=poll, name="ForgeOwnerLifetime", daemon=True).start()
         return
+
+    def monitor():
+        select.select([fd], [], [])
+        os.close(fd)
+        os._exit(125)
+    threading.Thread(target=monitor, name="ForgeOwnerLifetime", daemon=True).start()
+
+
+def watch_owner(owner_pid: int) -> None:
     if owner_pid <= 0 or owner_pid == os.getpid():
         raise ValueError("Invalid worker owner PID")
+    if os.name != "nt":
+        if sys.platform.startswith("linux"):
+            _watch_owner_linux(owner_pid)
+        return
     kernel = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
     kernel.OpenProcess.restype = wintypes.HANDLE

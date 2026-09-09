@@ -2,6 +2,8 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+
+import platforms
 from unittest.mock import patch
 
 from common import atomic_write_json, sha256_file
@@ -101,7 +103,7 @@ class WindowsSysrootTests(unittest.TestCase):
             archiver = Path(tools) / "llvm-lib.exe"
             compiler.write_bytes(b"compiler")
             archiver.write_bytes(b"archiver")
-            toolchain = NativeToolchain(compiler, archiver, sysroot=self.root)
+            toolchain = NativeToolchain(compiler, archiver, sysroot=self.root, target_triple=platforms.WINDOWS.triple, profile=platforms.WINDOWS.profile)
             first = load_sysroot(self.root)
             first_key, _ = _toolchain_identity(toolchain, first)
             args = _compile_arguments(toolchain, Path(tools), Path(tools), Path(tools), first)

@@ -7,6 +7,10 @@
 
 #include <nlohmann/json.hpp>
 
+#if defined(_WIN32)
+#include <windows.h>
+#endif
+
 namespace Oot3dNativeGame {
 namespace {
 
@@ -29,6 +33,33 @@ std::string ExpandVariables(
 }
 
 } // namespace
+
+std::filesystem::path ResolveNativeGameExecutablePath(
+    const std::filesystem::path& argv0) {
+    // argv[0] is a bare name for PATH/.desktop launches; the profile, plugin
+    // and portable data live beside the real executable, not the cwd.
+#if defined(_WIN32)
+    wchar_t executable[32768];
+    const DWORD length = GetModuleFileNameW(nullptr, executable, 32768);
+    if (length != 0 && length != 32768) {
+        return std::filesystem::path(executable).lexically_normal();
+    }
+#elif defined(__linux__)
+    std::error_code error;
+    auto executable = std::filesystem::read_symlink("/proc/self/exe", error);
+    if (!error) {
+        return executable.lexically_normal();
+    }
+#endif
+    std::filesystem::path resolved = argv0;
+    if (resolved.empty()) {
+        resolved = "oot3d_native_game";
+    }
+    if (resolved.is_relative()) {
+        resolved = std::filesystem::absolute(resolved);
+    }
+    return resolved.lexically_normal();
+}
 
 std::filesystem::path DefaultNativeGameLaunchProfilePath(
     const std::filesystem::path& executablePath) {

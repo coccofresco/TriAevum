@@ -103,7 +103,10 @@ def package_release(
 
         runtime_contract = None
         if verify_runtime:
-            runtime_contract = query_product(staging / "TriAevum.exe", source_commit)
+            runtimes = [item["path"] for item in inventory if item["role"] == "runtime_executable"]
+            if len(runtimes) != 1:
+                raise ValueError("release layout must declare exactly one runtime_executable")
+            runtime_contract = query_product(staging / runtimes[0], source_commit)
             if runtime_contract["product"].get("private_title_loaded") is not False:
                 raise ValueError("public package contains a private title plugin, not the stub")
         precompiled = any(item["role"] == "precompiled_catalog" for item in inventory)
