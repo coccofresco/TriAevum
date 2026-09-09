@@ -76,18 +76,30 @@ def summarize(capture_summary_path: Path) -> dict[str, Any]:
     draw_modes: Counter[str] = Counter()
     frame_records: list[dict[str, Any]] = []
     total_draws = 0
+    seed_draws = program_payloads = lut_snapshots = 0
 
     for trace_name in capture_summary["pica_frames"]:
         trace_path = Path(trace_name)
         draw_count = 0
         capture_complete = False
+        has_program = has_luts = False
         for event in iter_events(trace_path):
             event_kind = event.get("event")
+            if event_kind == "shader_seed_program":
+                has_program = True
+                program_payloads += 1
+            elif event_kind == "shader_seed_luts":
+                has_luts = True
+                lut_snapshots += 1
             if event_kind == "capture_end":
                 capture_complete = True
                 continue
             if event_kind != "draw_begin":
                 continue
+            seeded = bool(event.get("shader_seed_resources"))
+            if capture_summary.get("shader_seed_capture") and not (seeded and has_program and has_luts):
+                raise ValueError(f"shader-seed capture lacks resources; check instrumented Azahar: {trace_path}")
+            seed_draws += seeded
             identity = event.get("shader_identity")
             if not isinstance(identity, dict):
                 raise ValueError(f"draw without native shader identity in {trace_path}")
@@ -135,6 +147,9 @@ def summarize(capture_summary_path: Path) -> dict[str, Any]:
         "counts": {
             "frames": len(frame_records),
             "draws": total_draws,
+            "shader_seed_draws": seed_draws,
+            "program_payloads": program_payloads,
+            "lut_snapshots": lut_snapshots,
             "unique_vertex_programs": len(vertex_programs),
             "unique_geometry_programs": len(geometry_programs),
             "unique_fragment_configs": len(fragment_configs),

@@ -1,7 +1,7 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$ScenarioId,
-    [string]$CatalogPath = "I:\oot3dre_work\whole-aot-product\tools\oot3d\native_a32_runtime\oot3d_azahar_coverage_scenarios.json",
+    [string]$CatalogPath = (Join-Path $PSScriptRoot "../../tools/oot3d/native_a32_runtime/oot3d_azahar_coverage_scenarios.json"),
     [string]$AzaharExe = "I:\oot3dre_work\azahar-oot3d-coverage-build\bin\Release\azahar.exe",
     [string]$RomPath = "E:\ppssppvr\oot3d_decomp\oot3d.cci",
     [string]$OutputRoot = "I:\oot3dre_work\azahar-coverage",
@@ -17,6 +17,7 @@ param(
     [int]$CaptureFramesOverride = 0,
     [switch]$SkipFramebuffer,
     [switch]$CompactEvidence,
+    [switch]$ShaderSeed,
     [switch]$ShowWindow
 )
 
@@ -168,6 +169,7 @@ try {
         OOT3D_PICA_DUMP_FRAMES = [string]$captureFrames
         OOT3D_PICA_DUMP_MAX_VERTICES = [string][Math]::Max(1, $MaxVerticesPerDraw)
         OOT3D_PICA_DUMP_IMMEDIATE = "0"
+        OOT3D_PICA_DUMP_SHADER_SEED = if ($ShaderSeed.IsPresent) { "1" } else { $null }
         OOT3D_SCENARIO_ID = [string]$scenario.id
         OOT3D_SCENARIO_STATUS_PATH = $statusPath
         OOT3D_SCENARIO_ENTRANCE = [string][int]$scenario.entrance_index
@@ -268,7 +270,7 @@ try {
     }
 
     $converted = @()
-    if (-not $CompactEvidence.IsPresent) {
+    if (-not $CompactEvidence.IsPresent -and -not $ShaderSeed.IsPresent) {
         foreach ($frame in $frames) {
             $outputPath = Join-Path $derivedDir ($frame.BaseName + ".native_pica_register_trace.json")
             & $convertTraceScript -InputPath $frame.FullName -OutputPath $outputPath -InputFormat jsonl | Out-Null
@@ -285,13 +287,14 @@ try {
     $summary = [ordered]@{
         format = "oot3d_azahar_coverage_capture_v1"
         generated_at = (Get-Date).ToString("o")
-        evidence_role = "validation_only_not_runtime_input"
+        evidence_role = if ($ShaderSeed.IsPresent) { "offline_shader_preparation_not_gameplay_replay" } else { "validation_only_not_runtime_input" }
         scenario = $scenario
         catalog_path = (Resolve-Path $CatalogPath).Path
         catalog_decomp_provenance = $catalog.provenance.decomp
         azahar_exe = (Resolve-Path $AzaharExe).Path
         rom_path = (Resolve-Path $RomPath).Path
         backend = $Backend
+        shader_seed_capture = $ShaderSeed.IsPresent
         seed_savestate_slot = $Slot
         seed_savestate_path = $installedSeedPath
         ready_at = $readyAt.ToString("o")
@@ -307,7 +310,7 @@ try {
             Get-Content -LiteralPath $metadataPath -Raw | ConvertFrom-Json
         } else { $null }
         pica_frame_count = $frames.Count
-        pica_evidence_retained = -not $CompactEvidence.IsPresent
+        pica_evidence_retained = -not $CompactEvidence.IsPresent -or $ShaderSeed.IsPresent
         pica_frames = @($frames | ForEach-Object { $_.FullName })
         converted_register_traces = $converted
         process_exit_code = if ($process.HasExited) { $process.ExitCode } else { $null }
@@ -319,7 +322,8 @@ try {
     }
     $summary["shader_coverage_path"] = $shaderCoveragePath
     $summary["shader_coverage"] = Get-Content -LiteralPath $shaderCoveragePath -Raw | ConvertFrom-Json
-    if ($CompactEvidence.IsPresent) {
+    # Shader seed resources are the corpus, not disposable diagnostic traces.
+    if ($CompactEvidence.IsPresent -and -not $ShaderSeed.IsPresent) {
         foreach ($frame in $frames) {
             Remove-Item -LiteralPath $frame.FullName -Force
         }

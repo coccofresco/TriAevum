@@ -29,12 +29,19 @@ struct Oot3dAzaharPicaDrawMetadata {
   std::string FragmentConfigHash;
 };
 
-// Validation-only adapter for the native state snapshots emitted by the
-// instrumented Azahar build. Captured state must never become runtime input.
+// Offline validation and shader-preparation adapter for instrumented Azahar.
+// Live draws remain game-owned; captures are not a gameplay replay source.
 bool DecodeOot3dAzaharPicaDraw(const nlohmann::json &event,
                                Oot3dPicaDrawPacket &packet,
                                Oot3dAzaharPicaDrawMetadata &metadata,
                                std::string *error = nullptr);
+
+// Optional preparation resources emitted once per frame (or on LUT changes).
+// Callers resolve these by captured identity, never by a title/scene heuristic.
+bool DecodeOot3dAzaharShaderSeedProgram(const nlohmann::json& event,
+    Oot3dPicaShaderState& shader, std::string* error = nullptr);
+bool DecodeOot3dAzaharShaderSeedLuts(const nlohmann::json& event,
+    Oot3dPicaDrawPacket& packet, std::string* error = nullptr);
 
 // Matches the identity tuple stored in oot3d_azahar_shader_coverage_v1.
 std::string

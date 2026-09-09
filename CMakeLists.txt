@@ -1737,7 +1737,12 @@ add_executable(oot3d_native_pica_cache_inventory EXCLUDE_FROM_ALL
     tools/oot3d/native_pica_frontend/oot3d_native_pica_cache_inventory.cpp
     runtime/three_ds_recomp/src/fast/renderer3ds/pica_nri_shader_contract.cpp)
 target_link_libraries(oot3d_native_pica_cache_inventory PRIVATE oot3d_native_pica_frontend)
-foreach(_cache_target oot3d_native_pica_transferable_cache_tests oot3d_native_pica_cache_inventory)
+add_executable(oot3d_native_pica_capture_inventory EXCLUDE_FROM_ALL
+    tools/oot3d/native_pica_frontend/oot3d_native_pica_capture_inventory.cpp
+    runtime/three_ds_recomp/src/fast/renderer3ds/pica_nri_shader_contract.cpp)
+target_link_libraries(oot3d_native_pica_capture_inventory PRIVATE
+    oot3d_native_pica_frontend oot3d_native_pica_azahar_capture)
+foreach(_cache_target oot3d_native_pica_transferable_cache_tests oot3d_native_pica_cache_inventory oot3d_native_pica_capture_inventory)
     target_compile_options(${_cache_target} PRIVATE "${WARNING_OVERRIDE}")
     if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
         target_compile_definitions(${_cache_target} PRIVATE NOMINMAX)

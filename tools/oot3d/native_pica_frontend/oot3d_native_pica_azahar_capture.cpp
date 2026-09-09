@@ -351,6 +351,65 @@ bool DecodeOot3dAzaharPicaDraw(const nlohmann::json &event,
   return true;
 }
 
+bool DecodeOot3dAzaharShaderSeedProgram(const nlohmann::json& event,
+    Oot3dPicaShaderState& shader, std::string* error) {
+  const auto program = event.find("program");
+  const auto swizzles = event.find("swizzles");
+  if (event.value("event", std::string{}) != "shader_seed_program" ||
+      program == event.end() || swizzles == event.end() ||
+      !program->is_array() || program->empty() || program->size() > shader.Program.size() ||
+      !swizzles->is_array() || swizzles->size() > shader.Swizzles.size()) {
+    SetError(error, "invalid shader seed program/swizzle payload");
+    return false;
+  }
+  Oot3dPicaShaderState decoded;
+  for (size_t i = 0; i < program->size(); ++i)
+    if (!ReadU32(program->at(i), decoded.Program[i])) {
+      SetError(error, "invalid shader seed instruction"); return false;
+    }
+  for (size_t i = 0; i < swizzles->size(); ++i)
+    if (!ReadU32(swizzles->at(i), decoded.Swizzles[i])) {
+      SetError(error, "invalid shader seed swizzle"); return false;
+    }
+  shader.Program = std::move(decoded.Program);
+  shader.Swizzles = std::move(decoded.Swizzles);
+  shader.ProgramWordCount = program->size();
+  shader.SwizzleWordCount = swizzles->size();
+  return true;
+}
+
+bool DecodeOot3dAzaharShaderSeedLuts(const nlohmann::json& event,
+    Oot3dPicaDrawPacket& packet, std::string* error) {
+  constexpr size_t expected = 24 * 256 + 128 * 4 + 256 * 2;
+  const auto words = event.find("words");
+  if (event.value("event", std::string{}) != "shader_seed_luts" ||
+      event.value("format", std::string{}) != "pica_lut_words_v1" ||
+      words == event.end() || !words->is_array() || words->size() != expected) {
+    SetError(error, "invalid shader seed LUT snapshot"); return false;
+  }
+  std::array<uint32_t, expected> decoded{};
+  for (size_t i = 0; i < expected; ++i)
+    if (!ReadU32(words->at(i), decoded[i])) {
+      SetError(error, "invalid shader seed LUT word"); return false;
+    }
+  auto lighting = std::make_shared<Oot3dPicaLightingLutState>();
+  size_t offset = 0;
+  const auto copy = [&](auto& target) {
+    for (auto& word : target) word = decoded[offset++];
+  };
+  copy(lighting->PackedEntries);
+  lighting->ContentHash = ComputeOot3dPicaLightingLutContentHash(*lighting);
+  lighting->ContentHashAvailable = true;
+  packet.LightingLuts = std::move(lighting);
+  copy(packet.ProcTexLuts.Noise);
+  copy(packet.ProcTexLuts.ColorMap);
+  copy(packet.ProcTexLuts.AlphaMap);
+  copy(packet.ProcTexLuts.Color);
+  copy(packet.ProcTexLuts.ColorDifference);
+  copy(packet.FogLut);
+  return true;
+}
+
 std::string
 BuildOot3dAzaharPipelineKey(const Oot3dAzaharPicaDrawMetadata &metadata) {
   const nlohmann::json vertex = {

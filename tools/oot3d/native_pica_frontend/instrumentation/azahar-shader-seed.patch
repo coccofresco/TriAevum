@@ -1,0 +1,246 @@
+diff --git a/src/video_core/pica/oot3d_pica_frame_dump.cpp b/src/video_core/pica/oot3d_pica_frame_dump.cpp
+index 84c130b83..54a9b67b4 100644
+--- a/src/video_core/pica/oot3d_pica_frame_dump.cpp
++++ b/src/video_core/pica/oot3d_pica_frame_dump.cpp
+@@ -13,6 +13,8 @@
+ #include <filesystem>
+ #include <fstream>
+ #include <iomanip>
++#include <set>
++#include <tuple>
+ #include <sstream>
+ #include <string>
+ #include <string_view>
+@@ -20,6 +22,7 @@
+ #include "common/logging/log.h"
+ #include "core/core.h"
+ #include "video_core/pica/regs_rasterizer.h"
++#include "video_core/pica/pica_core.h"
+ #include "video_core/pica/regs_texturing.h"
+ #include "video_core/pica_types.h"
+ #include "video_core/shader/generator/pica_fs_config.h"
+@@ -34,6 +37,7 @@ std::atomic<u64> observed_presented_frame_epoch{0};
+ struct Config {
+     bool enabled = false;
+     bool immediate = false;
++    bool shader_seed = false;
+     bool dump_texture_payloads = false;
+     bool register_watch_enabled = false;
+     bool register_watch_all = false;
+@@ -63,6 +67,8 @@ struct State {
+     std::ofstream out;
+     std::ofstream register_watch_out;
+     u64 register_watch_count = 0;
++    std::set<std::tuple<u64, u64, u32, u32>> seed_programs;
++    std::vector<u32> seed_luts;
+ };
+ 
+ std::string ToLower(std::string_view value) {
+@@ -139,6 +145,7 @@ Config ReadConfig() {
+             : config.dump_dir / "oot3d_pica_register_watch.jsonl";
+ 
+     config.frames_per_trigger = std::max<u32>(1, EnvU32("OOT3D_PICA_DUMP_FRAMES", 1));
++    config.shader_seed = EnvFlag("OOT3D_PICA_DUMP_SHADER_SEED");
+     config.max_vertices_per_draw =
+         std::max<u32>(1, EnvU32("OOT3D_PICA_DUMP_MAX_VERTICES", 16384));
+     config.immediate = EnvFlag("OOT3D_PICA_DUMP_IMMEDIATE");
+@@ -371,6 +378,8 @@ bool OpenCapture(State& state) {
+     state.current_draw_vertex_index = 0;
+     state.current_draw_vertices_truncated = false;
+ 
++    state.seed_programs.clear();
++    state.seed_luts.clear();
+     Event(state, "capture_begin") << ",\"path\":";
+     WriteString(state.out, path.string());
+     state.out << ",\"frames_left\":" << state.frames_left << "}\n";
+@@ -670,8 +679,14 @@ void WriteRegisterRange(std::ostream& out, const RegsInternal& regs, u32 first,
+     out << "]}";
+ }
+ 
+-void WriteRegisterSnapshot(std::ostream& out, const RegsInternal& regs) {
++void WriteRegisterSnapshot(std::ostream& out, const RegsInternal& regs, bool complete = false) {
+     out << "\"register_snapshot\":{";
++    if (complete) {
++        out << "\"complete\":";
++        WriteRegisterRange(out, regs, 0, 0x2FF);
++        out << '}';
++        return;
++    }
+     out << "\"rasterizer\":";
+     WriteRegisterRange(out, regs, 0x040, 0x06F);
+     out << ",\"texturing\":";
+@@ -701,7 +716,7 @@ void WriteShaderIdentity(std::ostream& out, const RegsInternal& regs, ShaderSetu
+     WriteHex(out, vs_setup.GetProgramCodeHash(), 16);
+     out << ",\"swizzle_hash\":";
+     WriteHex(out, vs_setup.GetSwizzleDataHash(), 16);
+-    out << ",\"entry_point\":" << vs_setup.entry_point
++    out << ",\"entry_point\":" << static_cast<u32>(regs.vs.main_offset)
+         << ",\"program_words\":" << vs_setup.GetBiggestProgramSize()
+         << ",\"swizzle_words\":" << vs_setup.GetBiggestSwizzleSize() << "},\"geometry\":{";
+     out << "\"enabled\":";
+@@ -710,7 +725,7 @@ void WriteShaderIdentity(std::ostream& out, const RegsInternal& regs, ShaderSetu
+     WriteHex(out, gs_setup.GetProgramCodeHash(), 16);
+     out << ",\"swizzle_hash\":";
+     WriteHex(out, gs_setup.GetSwizzleDataHash(), 16);
+-    out << ",\"entry_point\":" << gs_setup.entry_point
++    out << ",\"entry_point\":" << static_cast<u32>(regs.gs.main_offset)
+         << ",\"program_words\":" << gs_setup.GetBiggestProgramSize()
+         << ",\"swizzle_words\":" << gs_setup.GetBiggestSwizzleSize()
+         << "},\"fragment_config_hash\":";
+@@ -718,6 +733,53 @@ void WriteShaderIdentity(std::ostream& out, const RegsInternal& regs, ShaderSetu
+     out << '}';
+ }
+ 
++void WriteSeedProgram(State& state, ShaderSetup& setup) {
++    setup.DoProgramCodeFixup();
++    const auto key = std::tuple{setup.GetProgramCodeHash(), setup.GetSwizzleDataHash(),
++                               setup.GetBiggestProgramSize(), setup.GetBiggestSwizzleSize()};
++    if (!state.seed_programs.insert(key).second) return;
++    Event(state, "shader_seed_program") << ",\"program_hash\":";
++    WriteHex(state.out, setup.GetProgramCodeHash(), 16);
++    state.out << ",\"swizzle_hash\":";
++    WriteHex(state.out, setup.GetSwizzleDataHash(), 16);
++    state.out << ",\"program\":[";
++    for (u32 i = 0; i < setup.GetBiggestProgramSize(); ++i) {
++        if (i) state.out << ',';
++        WriteHex(state.out, setup.GetProgramCode()[i]);
++    }
++    state.out << "],\"swizzles\":[";
++    for (u32 i = 0; i < setup.GetBiggestSwizzleSize(); ++i) {
++        if (i) state.out << ',';
++        WriteHex(state.out, setup.GetSwizzleData()[i]);
++    }
++    state.out << "]}\n";
++}
++
++// Each frame is self-contained; unchanged resources are emitted only once.
++// These are preparation inputs, not a replacement for live game resource state.
++void WriteSeedLuts(State& state, const PicaCore& core) {
++    std::vector<u32> words;
++    words.reserve(24 * 256 + 128 * 4 + 256 * 2);
++    const auto append = [&](const auto& table) {
++        for (const auto& entry : table) words.push_back(entry.raw);
++    };
++    for (const auto& table : core.lighting.luts) append(table);
++    append(core.proctex.noise_table);
++    append(core.proctex.color_map_table);
++    append(core.proctex.alpha_map_table);
++    append(core.proctex.color_table);
++    append(core.proctex.color_diff_table);
++    append(core.fog.lut);
++    if (words == state.seed_luts) return;
++    state.seed_luts = std::move(words);
++    Event(state, "shader_seed_luts") << ",\"format\":\"pica_lut_words_v1\",\"words\":[";
++    for (size_t i = 0; i < state.seed_luts.size(); ++i) {
++        if (i) state.out << ',';
++        WriteHex(state.out, state.seed_luts[i]);
++    }
++    state.out << "]}\n";
++}
++
+ void WriteShaderOutput(std::ostream& out, const AttributeBuffer& shader_output) {
+     out << "\"shader_output\":[";
+     for (std::size_t i = 0; i < shader_output.size(); ++i) {
+@@ -826,7 +888,7 @@ void RecordRegisterWrite(PAddr cmd_list_addr, u32 cmd_list_offset_words, u32 id,
+     State& state = GetState();
+     RecordRegisterWatch(state, cmd_list_addr, cmd_list_offset_words, id, write_value, mask,
+                         old_value, final_value);
+-    if (!state.active) {
++    if (!state.active || state.config.shader_seed) {
+         return;
+     }
+ 
+@@ -867,7 +929,7 @@ void RecordShaderUniformUpload(PAddr cmd_list_addr, u32 cmd_list_offset_words, c
+                                u32 uniform_index, bool is_float32, u32 write_register_id,
+                                u32 write_value, const Common::Vec4<f24>& value) {
+     State& state = GetState();
+-    if (!state.active) {
++    if (!state.active || state.config.shader_seed) {
+         return;
+     }
+ 
+@@ -895,7 +957,7 @@ void RecordShaderUniformUpload(PAddr cmd_list_addr, u32 cmd_list_offset_words, c
+ 
+ void BeginDraw(const RegsInternal& regs, ShaderSetup& vs_setup, ShaderSetup& gs_setup,
+                PAddr cmd_list_addr, u32 cmd_list_offset_words,
+-               bool is_indexed, const char* mode) {
++               bool is_indexed, const char* mode, const PicaCore& core) {
+     State& state = GetState();
+     if (!state.active) {
+         return;
+@@ -911,6 +973,12 @@ void BeginDraw(const RegsInternal& regs, ShaderSetup& vs_setup, ShaderSetup& gs_
+ 
+     DumpTexturePayloads(state, regs.texturing);
+ 
++    if (state.config.shader_seed) {
++        WriteSeedProgram(state, vs_setup);
++        if (static_cast<u32>(regs.pipeline.use_gs.Value()) != 0U) WriteSeedProgram(state, gs_setup);
++        WriteSeedLuts(state, core);
++    }
++
+     Event(state, "draw_begin") << ",\"draw_index\":" << state.draw_index << ",\"mode\":";
+     WriteString(state.out, mode);
+     state.out << ",\"is_indexed\":";
+@@ -937,7 +1005,8 @@ void BeginDraw(const RegsInternal& regs, ShaderSetup& vs_setup, ShaderSetup& gs_
+     state.out << ',';
+     WriteShaderIdentity(state.out, regs, vs_setup, gs_setup);
+     state.out << ',';
+-    WriteRegisterSnapshot(state.out, regs);
++    WriteRegisterSnapshot(state.out, regs, state.config.shader_seed);
++    if (state.config.shader_seed) state.out << ",\"shader_seed_resources\":true";
+     state.out << "}\n";
+ }
+ 
+@@ -984,7 +1053,7 @@ void RecordOutputVertex(const RegsInternal& regs, const AttributeBuffer& shader_
+ 
+ bool WantsSoftwareVertexCapture() {
+     const State& state = GetState();
+-    return state.active;
++    return state.active && !state.config.shader_seed;
+ }
+ 
+ } // namespace Pica::Oot3dPicaFrameDump
+diff --git a/src/video_core/pica/oot3d_pica_frame_dump.h b/src/video_core/pica/oot3d_pica_frame_dump.h
+index c7589512a..15532e47f 100644
+--- a/src/video_core/pica/oot3d_pica_frame_dump.h
++++ b/src/video_core/pica/oot3d_pica_frame_dump.h
+@@ -9,6 +9,8 @@
+ #include "video_core/pica/regs_internal.h"
+ #include "video_core/pica/shader_setup.h"
+ 
++namespace Pica { class PicaCore; }
++
+ namespace Pica::Oot3dPicaFrameDump {
+ 
+ void PollTrigger();
+@@ -28,7 +30,7 @@ void RecordShaderUniformUpload(PAddr cmd_list_addr, u32 cmd_list_offset_words, c
+ 
+ void BeginDraw(const RegsInternal& regs, ShaderSetup& vs_setup, ShaderSetup& gs_setup,
+                PAddr cmd_list_addr, u32 cmd_list_offset_words,
+-               bool is_indexed, const char* mode);
++               bool is_indexed, const char* mode, const PicaCore& core);
+ void EndDraw();
+ void RecordOutputVertex(const RegsInternal& regs, const AttributeBuffer& shader_output,
+                         const OutputVertex& vertex);
+diff --git a/src/video_core/pica/pica_core.cpp b/src/video_core/pica/pica_core.cpp
+index 5007e2aaa..924ca6cf1 100644
+--- a/src/video_core/pica/pica_core.cpp
++++ b/src/video_core/pica/pica_core.cpp
+@@ -1163,7 +1163,7 @@ void PicaCore::SubmitImmediate(u32 value) {
+ void PicaCore::DrawImmediate() {
+     ProjectionMatrixPatchGuard projection_patch{vs_setup, regs, true};
+     Oot3dPicaFrameDump::BeginDraw(regs.internal, vs_setup, gs_setup, cmd_list.addr,
+-                                  cmd_list.current_index, false, "immediate");
++                                  cmd_list.current_index, false, "immediate", *this);
+     SCOPE_EXIT({ Oot3dPicaFrameDump::EndDraw(); });
+     rasterizer->SetPCVRDrawContext(cmd_list.current_index, false, false);
+     RecordCullingProbeDraw(memory, regs, vs_setup, gs_setup, cmd_list, "immediate", false,
+@@ -1331,7 +1331,7 @@ void PicaCore::DrawArrays(bool is_indexed) {
+ 
+     ProjectionMatrixPatchGuard projection_patch{vs_setup, regs, true};
+     Oot3dPicaFrameDump::BeginDraw(regs.internal, vs_setup, gs_setup, cmd_list.addr,
+-                                  cmd_list.current_index, is_indexed, "arrays");
++                                  cmd_list.current_index, is_indexed, "arrays", *this);
+     SCOPE_EXIT({ Oot3dPicaFrameDump::EndDraw(); });
+     pcvr_draw_arrays_vertex_output_control_active = false;
+     pcvr_current_draw_vertex_output_scale_requested = false;
