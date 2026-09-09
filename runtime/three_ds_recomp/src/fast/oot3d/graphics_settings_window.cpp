@@ -72,11 +72,16 @@ void GraphicsSettingsPanel::DrawPresentationStatus() {
 }
 
 void GraphicsSettingsPanel::Draw() {
-    ImGui::TextWrapped("F2: quick native presentation - Grass, Toon/outline, CACAO and reflections off.");
+    const bool nativeRequired = GraphicsSettingsRuntime::Instance().NativePresentationOverrideRequired();
+    if (nativeRequired) {
+        ImGui::TextWrapped("Native presentation: Grass, Toon/outline, CACAO and reflections are unavailable in this build.");
+    } else {
+        ImGui::TextWrapped("F2: quick native presentation - Grass, Toon/outline, CACAO and reflections off.");
+    }
     const bool nativeOverride = GraphicsSettingsRuntime::Instance().NativePresentationOverrideActive();
     ImGui::PushStyleColor(ImGuiCol_Text, nativeOverride ? ImVec4(1.0F, 0.78F, 0.25F, 1.0F)
                                                       : ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    ImGui::TextWrapped(nativeOverride
+    ImGui::TextWrapped(nativeRequired ? "Vulkan/NRI active. Configured effect values are preserved." : nativeOverride
         ? "F2 override ACTIVE. Configured effects are suspended; press F2 to restore."
         : "F2 override inactive. Using configured effects.");
     ImGui::PopStyleColor();
@@ -89,7 +94,7 @@ void GraphicsSettingsPanel::Draw() {
             DrawRendererSettings();
             ImGui::EndTabItem();
         }
-        if (ImGui::BeginTabItem("Grass")) {
+        if (!nativeRequired && ImGui::BeginTabItem("Grass")) {
             DrawGrassSettings();
             ImGui::EndTabItem();
         }

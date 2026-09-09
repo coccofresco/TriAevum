@@ -400,24 +400,22 @@ GraphicsSettingsRuntime::SnapshotWithRevision() const {
 VersionedGraphicsSettings GraphicsSettingsRuntime::SnapshotForRendering() const {
     std::scoped_lock lock(mMutex);
     VersionedGraphicsSettings result{mService.Current(), mRevision};
-    if (mNativePresentationOverride) {
-        result.Value.Grass.Quality = GrassQuality::Off;
-        result.Value.Effects.Toon = ToonMode::Off;
-        result.Value.Effects.ToonStyle.OutlineEnabled = false;
-        result.Value.Effects.AmbientOcclusion = AmbientOcclusionMode::Off;
-        result.Value.Effects.Reflections = ReflectionMode::Off;
-    }
+    mNativePresentation.Apply(result.Value);
     return result;
 }
 bool GraphicsSettingsRuntime::NativePresentationOverrideActive() const {
     std::scoped_lock lock(mMutex);
-    return mNativePresentationOverride;
+    return mNativePresentation.Active();
+}
+bool GraphicsSettingsRuntime::NativePresentationOverrideRequired() const {
+    std::scoped_lock lock(mMutex);
+    return mNativePresentation.Required();
 }
 void GraphicsSettingsRuntime::ToggleNativePresentationOverride() {
     std::scoped_lock lock(mMutex);
-    mNativePresentationOverride = !mNativePresentationOverride;
+    if (!mNativePresentation.Toggle()) return;
     ++mRevision;
-    SPDLOG_INFO("F2 native presentation override: {}", mNativePresentationOverride ? "on" : "off");
+    SPDLOG_INFO("F2 native presentation override: {}", mNativePresentation.Active() ? "on" : "off");
 }
 GraphicsCapabilities GraphicsSettingsRuntime::Capabilities() const {
     std::scoped_lock lock(mMutex);

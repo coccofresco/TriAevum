@@ -1,0 +1,61 @@
+cmake_minimum_required(VERSION 3.30)
+project(TriAevumAndroidNative LANGUAGES C CXX)
+if(NOT ANDROID OR NOT CMAKE_ANDROID_ARCH_ABI STREQUAL "arm64-v8a")
+    message(FATAL_ERROR "Configure with the Android NDK toolchain and arm64-v8a")
+endif()
+if(ANDROID_NATIVE_API_LEVEL LESS 29)
+    message(FATAL_ERROR "The initial Android host targets API 29 or newer")
+endif()
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+get_filename_component(root "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
+include(FetchContent)
+FetchContent_Declare(nlohmann_json
+    URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz
+    URL_HASH SHA256=42f6e95cad6ec532fd372391373363b62a14af6d771056dbfc86160e6dfff7aa)
+set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(nlohmann_json)
+
+add_subdirectory("${root}/runtime/triaevum_module" module)
+add_subdirectory("${root}/tools/triaevum_release/native_probe" abi)
+add_executable(native_presentation_policy_tests
+    "${root}/runtime/three_ds_recomp/tests/native_presentation_policy_tests.cpp")
+target_include_directories(native_presentation_policy_tests PRIVATE "${root}/runtime/three_ds_recomp/include")
+add_executable(triaevum_android_abi_probe "${root}/tools/triaevum_release/whole_aot_abi_probe.cpp")
+target_link_libraries(triaevum_android_abi_probe PRIVATE triaevum_title_whole_aot_support dl)
+
+option(TRIAEVUM_ANDROID_BUILD_NRI "Cross-build the same pinned Vulkan/NRI core" ON)
+if(TRIAEVUM_ANDROID_BUILD_NRI)
+    set(NRI_STATIC_LIBRARY ON CACHE BOOL "" FORCE)
+    set(NRI_ENABLE_VK_SUPPORT ON CACHE BOOL "" FORCE)
+    set(NRI_ENABLE_NONE_SUPPORT OFF CACHE BOOL "" FORCE)
+    set(NRI_ENABLE_NVTX_SUPPORT OFF CACHE BOOL "" FORCE)
+    set(NRI_ENABLE_VALIDATION_SUPPORT ON CACHE BOOL "" FORCE)
+    set(NRI_ENABLE_NIS_SDK OFF CACHE BOOL "" FORCE)
+    set(NRI_ENABLE_NGX_SDK OFF CACHE BOOL "" FORCE)
+    set(NRI_ENABLE_FFX_SDK OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(nri
+        URL https://github.com/NVIDIA-RTX/NRI/archive/4b485316463969f182db15e67aad2aec2f40a3d7.tar.gz
+        PATCH_COMMAND "${CMAKE_COMMAND}" -DNRI_SOURCE_DIR=<SOURCE_DIR>
+            -P "${root}/runtime/three_ds_recomp/cmake/patches/nri_android_platform.cmake")
+    FetchContent_MakeAvailable(nri)
+    add_executable(triaevum_android_nri_probe nri_probe.cpp)
+    target_link_libraries(triaevum_android_nri_probe PRIVATE NRI ${CMAKE_DL_LIBS} log)
+endif()
+
+set(TRIAEVUM_TRANSLATED_TITLE_DIR "" CACHE PATH "Verified translated title sources (publisher only)")
+if(TRIAEVUM_TRANSLATED_TITLE_DIR)
+    include("${root}/tools/triaevum_release/cmake/TranslatedTitleSources.cmake")
+    triaevum_translated_title_sources("${TRIAEVUM_TRANSLATED_TITLE_DIR}" title_sources)
+    add_library(triaevum_android_title SHARED EXCLUDE_FROM_ALL ${title_sources}
+        "${root}/tools/oot3d/native_game_runtime/triaevum_title_whole_aot_plugin.cpp")
+    target_compile_definitions(triaevum_android_title PRIVATE OOT3D_NATIVE_GENERATED_WHOLE_AOT=1)
+    target_include_directories(triaevum_android_title PRIVATE "${TRIAEVUM_TRANSLATED_TITLE_DIR}")
+    target_compile_options(triaevum_android_title PRIVATE -O2 -ffp-model=strict)
+    target_compile_options(triaevum_title_whole_aot_support PRIVATE -O2 -ffp-model=strict)
+    target_link_libraries(triaevum_android_title PRIVATE triaevum_title_whole_aot_support)
+    target_link_options(triaevum_android_title PRIVATE -Wl,--no-undefined -Wl,-z,max-page-size=16384)
+    set_target_properties(triaevum_android_title PROPERTIES OUTPUT_NAME triaevum_title_aot
+        CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
+endif()

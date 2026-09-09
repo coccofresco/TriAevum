@@ -1,6 +1,7 @@
 #pragma once
 
 #include "fast/oot3d/graphics_settings.h"
+#include "fast/oot3d/native_presentation_policy.h"
 #include "fast/oot3d/presentation_settings_transaction.h"
 
 #include <cstdint>
@@ -40,6 +41,7 @@ class GraphicsSettingsRuntime final {
     // Rendering consumes the session override; editors/persistence consume Snapshot().
     [[nodiscard]] VersionedGraphicsSettings SnapshotForRendering() const;
     [[nodiscard]] bool NativePresentationOverrideActive() const;
+    [[nodiscard]] bool NativePresentationOverrideRequired() const;
     void ToggleNativePresentationOverride();
     [[nodiscard]] GraphicsCapabilities Capabilities() const;
     [[nodiscard]] PresentationTransactionStatus PresentationStatus() const;
@@ -65,7 +67,7 @@ class GraphicsSettingsRuntime final {
     PresentationSettingsTransaction mPresentationTransaction;
     std::shared_ptr<GraphicsSettingsPersistencePort> mPersistence;
     uint64_t mRevision = 1;
-    bool mNativePresentationOverride = false;
+    NativePresentationPolicy mNativePresentation;
     bool mPersistenceSuppressed = false;
     GraphicsSettingsSaveState mSaveState = GraphicsSettingsSaveState::Saved;
 };
