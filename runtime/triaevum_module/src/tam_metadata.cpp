@@ -683,7 +683,13 @@ ParseTamMetadataV1(std::span<const std::uint8_t> jsonBytes) {
 }
 
 bool TamTargetMatchesCurrentProcess(std::string_view target) {
-#if defined(_WIN32)
+#if defined(__ANDROID__)
+#if defined(__aarch64__)
+  return target == "aarch64-linux-android";
+#else
+  return false;
+#endif
+#elif defined(_WIN32)
 #if defined(_M_ARM64) || defined(__aarch64__)
   return target == "aarch64-pc-windows-msvc";
 #else

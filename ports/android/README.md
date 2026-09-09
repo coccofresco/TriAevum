@@ -48,8 +48,24 @@ from fast incremental renderer/host builds.
 
 NRI is pinned to the same revision as desktop. A small idempotent CMake patch
 admits Android, whose Vulkan loader branch already exists upstream. This build
-does not enable NRI's optional desktop SDK integrations. It does **not** yet
-compile the full TriAevum PICA renderer or Android window host.
+does not enable NRI's optional desktop SDK integrations. The separate renderer
+build now compiles and links the actual shared TriAevum PICA/Vulkan/NRI backend:
+
+```sh
+export TRIAEVUM_ANDROID_RENDERER_BUILD_DIR="$HOME/triaevum-android-build/renderer"
+bash scripts/build-android-renderer.sh
+```
+
+This cross-build uses pinned shaderc/glslang/SPIRV-Tools sources, never Linux host
+shader libraries. API-29 loader compatibility resolves `vkCreateRenderPass2`
+from the selected device, preserving the existing Vulkan render-pass semantics.
+The link probe exercises real renderer construction and CPU shader compilation;
+it does not create an Android window or present a game frame.
+
+The isolated [Azahar controls library](controls/README.md) imports the original
+overlay and controller artwork with a narrow native-3DS input adapter. Its AAR
+and adapter tests build independently of all C++ title/renderer compilation.
+APK host and live-game overlay integration remain to be implemented.
 
 ## Device Verification
 
@@ -74,10 +90,9 @@ not an authoritative mobile device-compatibility gate.
 
 ## Next Deliverable
 
-1. Integrate the existing PICA Vulkan renderer in the Android build, including
-   cross-compiled shader compiler dependencies, without forking render logic.
-2. Add the APK host: surface recreation, pause/resume, app-local module/data
-   paths, audio-device lifecycle and shared input routing.
+1. Add the APK/SDL host around the now-linked PICA Vulkan renderer: surface
+   recreation, pause/resume, app-local module/data paths and audio lifecycle.
+2. Wire the imported Azahar overlay, settings editor and shared input owner.
 3. Add ROM selection/import and package the precompiled ARM64 title and runtime.
 4. Test real on-device startup, native framebuffer output, audio, input and
    resume. Qualify capability requirements and performance on actual hardware.
@@ -104,8 +119,23 @@ or APK payloads. Preserve existing donor licenses and source-distribution rules.
   from the default rapid build. Investigate compiler timings before release builds.
 - Follow-up: ADB now authorizes the SM-S931B (Android 16/API 36, arm64-v8a),
   which advertises Vulkan support. Direct scrcpy capture works; see CAPTURE.md.
-  None of the ARM64 probes has yet been executed on the phone. No APK,
-  gameplay or mobile performance claim is established.
+- On-device ARM64 probes now pass: native presentation policy, input/audio/
+  filesystem services, runtime memory layout, empty-title rejection, TAM
+  metadata and mock module loading. NRI creates a Vulkan 1.3 device/graphics
+  queue on Adreno 830. The linked shared-renderer probe also compiles a GLSL
+  vertex shader to SPIR-V on the phone and exits successfully.
+- Android TAM target matching now accepts `aarch64-linux-android` and rejects
+  desktop GNU/Linux modules of the same CPU architecture. Positive/negative
+  metadata and loader tests pass on both Android and Linux.
+- These are shell-UID probes, not APK sandbox tests. They establish neither
+  surface presentation nor permission to execute a library from writable app
+  storage. APK-native libraries must be packaged for the platform loader.
+- The actual shared renderer cross-build completed 1,017 build steps. The
+  subsequent render-pass loader correction rebuilt and linked in about seven
+  seconds, without recompiling the translated title.
+- The controls AAR and four adapter tests pass; three offline import/resource/
+  ABI tests pass. In-game multitouch/editor/overlay composition still require
+  the APK host. No APK, gameplay or mobile FPS claim is established.
 
 References: [NDK downloads](https://developer.android.com/ndk/downloads/index.html),
 [16-KiB page support](https://developer.android.com/guide/practices/page-sizes),
