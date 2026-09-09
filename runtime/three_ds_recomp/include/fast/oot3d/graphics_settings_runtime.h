@@ -49,7 +49,10 @@ class GraphicsSettingsRuntime final {
     bool RetrySave();
     bool AcknowledgePresentationApplied(
         const GraphicsSettings& applied);
-    bool RejectPresentationApply(const GraphicsSettings& rejected);
+    bool RejectPresentationApply(const GraphicsSettings& rejected,
+                                 std::string reason = {});
+    // Why the last display change was rolled back; empty once a later change applies.
+    [[nodiscard]] std::string LastPresentationRejection() const;
     bool ConfirmPresentation();
     bool RollbackPresentation();
     bool TickPresentation();
@@ -68,5 +71,6 @@ class GraphicsSettingsRuntime final {
     bool mNativePresentationOverride = false;
     bool mPersistenceSuppressed = false;
     GraphicsSettingsSaveState mSaveState = GraphicsSettingsSaveState::Saved;
+    std::string mLastPresentationRejection;
 };
 } // namespace Fast::Oot3d
