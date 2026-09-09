@@ -557,7 +557,8 @@ Oot3dPicaFragmentUniformState BuildOot3dPicaFragmentUniformState(
 bool GenerateOot3dPicaFragmentShader(
     const Oot3dPicaDrawPacket& packet,
     const Oot3dPicaDecodedDrawState& state,
-    Oot3dPicaGeneratedFragmentShader& shader, std::string* error) {
+    Oot3dPicaGeneratedFragmentShader& shader, std::string* error,
+    Oot3dPicaShaderBuildPurpose purpose) {
     shader = {};
     const auto lighting =
         Fast::Oot3d::DecodePicaFragmentLighting(packet.Registers);
@@ -569,6 +570,13 @@ bool GenerateOot3dPicaFragmentShader(
     const bool procTexReferenced =
         Oot3dPicaReferencesProceduralTexture(packet) ||
         shadowProcTexReferenced;
+    // Procedural LUT values are embedded in source, unlike the dynamically
+    // bound lighting LUT image. A register-only cache cannot supply them.
+    if (purpose == Oot3dPicaShaderBuildPurpose::OfflineSource &&
+        procTexReferenced && procTexEnabled) {
+        SetError(error, "offline register-only shader input lacks procedural LUT payload");
+        return false;
+    }
     std::string procTexSource;
     if (procTexReferenced && procTexEnabled &&
         !GenerateOot3dPicaProceduralTextureSampler(
@@ -605,7 +613,7 @@ bool GenerateOot3dPicaFragmentShader(
     if (!GenerateOot3dPicaFragmentLightingSource(
             packet, bumpTextureSample, shadowTextureSample,
             lightingDeclarations,
-            lightingMainBody, error)) {
+            lightingMainBody, error, purpose)) {
         return false;
     }
     const bool fragmentLighting = Oot3dPicaFragmentLightingEnabled(packet);
@@ -926,7 +934,8 @@ bool GenerateOot3dPicaFragmentShader(
         StreamOffset(source);
     source << "}\n";
 
-    shader.Uniforms = BuildOot3dPicaFragmentUniformState(packet);
+    if (purpose == Oot3dPicaShaderBuildPurpose::RuntimeDraw)
+        shader.Uniforms = BuildOot3dPicaFragmentUniformState(packet);
     shader.StateKey = ComputeOot3dPicaFragmentShaderStateKey(packet, state);
     shader.Source = source.str();
     shader.SourceIdentity =

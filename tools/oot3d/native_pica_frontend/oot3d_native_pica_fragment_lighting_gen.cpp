@@ -160,7 +160,8 @@ bool Oot3dPicaFragmentLightingUsesLuts(const Oot3dPicaDrawPacket &packet) {
 }
 
 bool Oot3dPicaFragmentLightingConfigurationSupported(
-    const Oot3dPicaDrawPacket &packet, std::string *error) {
+    const Oot3dPicaDrawPacket &packet, std::string *error,
+    Oot3dPicaShaderBuildPurpose purpose) {
   const auto lighting =
       Fast::Oot3d::DecodePicaFragmentLighting(packet.Registers);
   if (!lighting.Enabled) {
@@ -185,7 +186,8 @@ bool Oot3dPicaFragmentLightingConfigurationSupported(
     SetError(error, "PICA fragment-lighting environment configuration is invalid");
     return false;
   }
-  if (LightingUsesLuts(lighting) &&
+  if (purpose == Oot3dPicaShaderBuildPurpose::RuntimeDraw &&
+      LightingUsesLuts(lighting) &&
       (packet.LightingLuts == nullptr ||
        !packet.LightingLuts->ContentHashAvailable ||
        packet.LightingLuts->ContentHash == 0U)) {
@@ -280,7 +282,8 @@ bool GenerateOot3dPicaFragmentLightingSource(const Oot3dPicaDrawPacket &packet,
                                              std::string_view shadowTextureSample,
                                              std::string &declarations,
                                              std::string &mainBody,
-                                             std::string *error) {
+                                             std::string *error,
+                                             Oot3dPicaShaderBuildPurpose purpose) {
   declarations.clear();
   mainBody.clear();
   const auto lighting =
@@ -288,7 +291,7 @@ bool GenerateOot3dPicaFragmentLightingSource(const Oot3dPicaDrawPacket &packet,
   if (!lighting.Enabled) {
     return true;
   }
-  if (!Oot3dPicaFragmentLightingConfigurationSupported(packet, error)) {
+  if (!Oot3dPicaFragmentLightingConfigurationSupported(packet, error, purpose)) {
     return false;
   }
   if (lighting.BumpMode != Fast::Oot3d::PicaLightingBumpMode::None &&

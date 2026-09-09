@@ -104,9 +104,11 @@ def install_precompiled_title(prepared_directory: Path, *, root: Path, recipe: d
     try:
         from . import forge
         from .topscreen_assets import prepare_topscreen_assets
+        from .shader_preparation import prepare_shader_seed
     except ImportError:
         import forge
         from topscreen_assets import prepare_topscreen_assets
+        from shader_preparation import prepare_shader_seed
     catalog = load_catalog(root)
     item = select_title(root, recipe, catalog=catalog)
     prepared = forge.load_prepared_content(prepared_directory, required_inputs=("code", "exheader", "romfs"))
@@ -129,6 +131,8 @@ def install_precompiled_title(prepared_directory: Path, *, root: Path, recipe: d
     texture_pack = prepare_topscreen_assets(
         root=root, data_root=data_root, recipe=recipe,
         romfs=prepared.inputs["romfs"].path, report=report)
+    shader_pack = prepare_shader_seed(root=root, data_root=data_root,
+                                     title=item, report=report)
     with activation_transaction(runtime_plugin.resolve().parent, [
         runtime_plugin, launch_profile, active_title_state,
         prepared.directory / "forge-state.json",
@@ -140,7 +144,8 @@ def install_precompiled_title(prepared_directory: Path, *, root: Path, recipe: d
         runtime = forge.publish_private_runtime(
             prepared.directory, plugin=plugin, runtime_plugin=runtime_plugin,
             launch_profile=launch_profile, data_root=data_root,
-            topscreen_texture_pack=texture_pack, package_root=root)
+            topscreen_texture_pack=texture_pack, package_root=root,
+            pica_shader_pack=shader_pack)
         activation = forge.activate_prepared_title(prepared.directory, active_title_state=active_title_state)
     return {"status": "ready", "install_model": MODEL, "objects_compiled": 0,
             "package": packaged, "runtime": runtime, "active_title": activation["active_title"]}

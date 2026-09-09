@@ -1729,6 +1729,23 @@ target_link_libraries(oot3d_native_pica_program_descriptor_tests PRIVATE
     oot3d_native_pica_frontend)
 target_compile_options(oot3d_native_pica_program_descriptor_tests PRIVATE
     "${WARNING_OVERRIDE}")
+add_executable(oot3d_native_pica_transferable_cache_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_pica_frontend/oot3d_native_pica_transferable_cache.cpp
+    tools/oot3d/native_pica_frontend/oot3d_native_pica_transferable_cache_tests.cpp)
+add_executable(oot3d_native_pica_cache_inventory EXCLUDE_FROM_ALL
+    tools/oot3d/native_pica_frontend/oot3d_native_pica_transferable_cache.cpp
+    tools/oot3d/native_pica_frontend/oot3d_native_pica_cache_inventory.cpp
+    runtime/three_ds_recomp/src/fast/renderer3ds/pica_nri_shader_contract.cpp)
+target_link_libraries(oot3d_native_pica_cache_inventory PRIVATE oot3d_native_pica_frontend)
+foreach(_cache_target oot3d_native_pica_transferable_cache_tests oot3d_native_pica_cache_inventory)
+    target_compile_options(${_cache_target} PRIVATE "${WARNING_OVERRIDE}")
+    if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+        target_compile_definitions(${_cache_target} PRIVATE NOMINMAX)
+        set_property(TARGET ${_cache_target} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+    set_property(TARGET ${_cache_target} PROPERTY FOLDER Tools)
+endforeach()
+
 if(OOT3D_ENABLE_VULKAN_RENDERER AND TARGET three_ds_recomp_shaderc)
     target_link_libraries(oot3d_native_pica_program_descriptor_tests PRIVATE
         three_ds_recomp_shaderc)

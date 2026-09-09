@@ -917,6 +917,7 @@ def publish_private_runtime(
     data_root: Path,
     topscreen_texture_pack: Path | None = None,
     package_root: Path | None = None,
+    pica_shader_pack: Path | None = None,
 ) -> dict[str, Any]:
     """Publish verified files; multi-file activation is not yet transactional."""
 
@@ -995,9 +996,13 @@ def publish_private_runtime(
             raise ForgeError("TopScreen texture pack is missing before activation")
         profile["arguments"].extend(("--topscreen-texture-overrides", str(topscreen_texture_pack.resolve())))
     context = InstallationContext(installation)
+    if pica_shader_pack is not None:
+        if not pica_shader_pack.is_file():
+            raise ForgeError("Prepared PICA shader pack is missing before activation")
+        profile["arguments"].extend(("--pica-aot-shader-pack", str(pica_shader_pack.resolve())))
     path_options = {"--title-plugin", "--a32-process-manifest", "--resource-root",
                     "--config", "--topscreen-config", "--save-data", "--output",
-                    "--topscreen-texture-overrides"}
+                    "--topscreen-texture-overrides", "--pica-aot-shader-pack"}
     scopes = {}
     for index, argument in enumerate(profile["arguments"][:-1]):
         if argument in path_options:
@@ -1038,6 +1043,11 @@ def publish_private_runtime(
         prepared.state["runtime"]["topscreen_textures"] = {
             "path": context.reference(topscreen_texture_pack, prepared.directory),
             "sha256": sha256_file(topscreen_texture_pack),
+        }
+    if pica_shader_pack is not None:
+        prepared.state["runtime"]["pica_shader_pack"] = {
+            "path": context.reference(pica_shader_pack, prepared.directory),
+            "sha256": sha256_file(pica_shader_pack),
         }
     atomic_write_json(prepared.directory / "forge-state.json", prepared.state)
     return {

@@ -61,14 +61,18 @@ def validate_installed_runtime(
             raise ValueError(f"Launch profile points to another installation: {option}")
         if option != "--save-data":
             load_json_object(expected)
-    textures = runtime.get("topscreen_textures")
-    if textures is not None:
-        pack = resolve_reference(textures["path"], title)
-        option = "--topscreen-texture-overrides"
+    for field, option, label in (
+        ("topscreen_textures", "--topscreen-texture-overrides", "TopScreen textures"),
+        ("pica_shader_pack", "--pica-aot-shader-pack", "PICA shader pack"),
+    ):
+        resource = runtime.get(field)
+        if resource is None:
+            continue
+        pack = resolve_reference(resource["path"], title)
         if arguments.count(option) != 1:
-            raise ValueError("Installed TopScreen texture routing is missing or duplicated")
+            raise ValueError(f"Installed {label} routing is missing or duplicated")
         index = arguments.index(option) + 1
         if (index >= len(arguments) or Path(arguments[index]).resolve() != pack.resolve()
-                or not pack.is_file() or sha256_file(pack) != textures["sha256"]):
-            raise ValueError("Installed TopScreen textures changed or are missing; run Forge again")
+                or not pack.is_file() or sha256_file(pack) != resource["sha256"]):
+            raise ValueError(f"Installed {label} changed or are missing; run Forge again")
     return profile

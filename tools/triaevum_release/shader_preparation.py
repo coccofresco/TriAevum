@@ -1,0 +1,131 @@
+"""Forge's optional, recipe-bound portable shader preparation stage.
+
+This compiles GPU shader modules, never title C++ or an SDK. Device pipeline
+prewarm belongs to the renderer and is deliberately not represented as done.
+No seed is discovered by filename or silently downloaded.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import struct
+import subprocess
+import tempfile
+from pathlib import Path
+from typing import Callable
+
+try:
+    from .common import atomic_write_bytes, atomic_write_json, load_json_object, sha256_file
+    from .precompiled_titles import checked_file
+    from .native_process import native_process_environment
+except ImportError:
+    from common import atomic_write_bytes, atomic_write_json, load_json_object, sha256_file
+    from precompiled_titles import checked_file
+    from native_process import native_process_environment
+
+
+FORMAT = "triaevum_shader_preparation_v1"
+
+
+def _pack_header(path: Path, schema: int) -> int:
+    size = path.stat().st_size
+    if size < 24 or size > 512 * 1024 * 1024:
+        raise ValueError("Invalid portable shader pack size")
+    with path.open("rb") as stream:
+        magic, version, actual_schema, count, reserved = struct.unpack("<8s4I", stream.read(24))
+    if (magic != b"O3PSAOT\0" or version != 1 or actual_schema != schema
+            or count == 0 or reserved != 0 or 24 + count * 56 > size):
+        raise ValueError("Portable shader pack has incompatible header/schema")
+    return count
+
+
+def _run(command: list[str], root: Path) -> None:
+    result = subprocess.run(command, cwd=root, env=native_process_environment(),
+                            capture_output=True, text=True, errors="replace", timeout=600)
+    if result.returncode:
+        raise ValueError("Shader preparation failed: " + (result.stderr or result.stdout)[-4000:])
+
+
+def prepare_shader_seed(*, root: Path, data_root: Path, title: dict,
+                        report: Callable[[str, str], None] = lambda *_: None) -> Path | None:
+    seed = title.get("shader_preparation")
+    if seed is None:
+        return None
+    if not isinstance(seed, dict) or seed.get("format") != FORMAT:
+        raise ValueError("Unsupported shader preparation contract")
+    schema = seed.get("descriptor_schema_version")
+    if type(schema) is not int or schema <= 0:
+        raise ValueError("Shader preparation requires a descriptor schema")
+    mode = seed.get("mode")
+    if mode == "portable_pack":
+        pack = checked_file(root, seed["pack"])
+        _pack_header(pack, schema)
+        artifacts = [pack]
+    elif mode == "citra_transferable":
+        dialect = seed.get("dialect")
+        if dialect not in ("citra-legacy-v1", "azahar-v1"):
+            raise ValueError("Shader cache requires an explicit Citra/Azahar dialect")
+        sources = [checked_file(root, value) for value in seed.get("caches", [])]
+        if not sources:
+            raise ValueError("Shader preparation has no transferable inputs")
+        importer = checked_file(root, seed["importer"])
+        compiler = checked_file(root, seed["compiler"])
+        inventories = [checked_file(root, value) for value in seed.get("inventories", [])]
+        # Include dynamically linked compiler dependencies in the cache identity.
+        dependencies = [checked_file(root, value) for value in seed.get("dependencies", [])]
+        artifacts = [*sources, importer, compiler, *inventories, *dependencies]
+    else:
+        raise ValueError("Unsupported shader preparation mode")
+    identity = {"contract": seed, "recipe": title["recipe"],
+                "artifact_hashes": [sha256_file(path) for path in artifacts]}
+    key = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
+    directory = data_root.resolve() / "shader-seeds" / key
+    pack_path = directory / "portable.o3ps"
+    receipt_path = directory / "preparation.json"
+    if receipt_path.is_file() and pack_path.is_file():
+        try:
+            receipt = load_json_object(receipt_path)
+            if (receipt.get("identity") == identity
+                    and receipt.get("pack_sha256") == sha256_file(pack_path)):
+                _pack_header(pack_path, schema)
+                report("shaders", "Reusing prepared portable shaders...")
+                return pack_path
+        except (OSError, ValueError):
+            pass
+    directory.mkdir(parents=True, exist_ok=True)
+    report("shaders", "Preparing portable shaders (no game recompilation)...")
+    with tempfile.TemporaryDirectory(prefix=".preparing-", dir=directory) as temporary:
+        stage = Path(temporary)
+        if mode == "citra_transferable":
+            inventory = stage / "transferable.json"
+            command = [str(importer), "--dialect", dialect, "--output", str(inventory)]
+            for source in sources:
+                command.extend(("--input", str(source)))
+            _run(command, root)
+            imported = load_json_object(inventory)
+            if imported.get("transferable_import", {}).get("complete_import") is not True:
+                raise ValueError("Transferable shader import was incomplete")
+            pack = stage / "compiled.o3ps"
+            command = [str(compiler), "--pack", str(pack), "--manifest", str(stage / "compile.json")]
+            for source in [inventory, *inventories]:
+                command.extend(("--inventory", str(source)))
+            _run(command, root)
+        count = _pack_header(pack, schema)
+        atomic_write_bytes(pack_path, pack.read_bytes())
+        atomic_write_json(receipt_path, {"format": FORMAT, "identity": identity,
+            "pack_sha256": sha256_file(pack_path), "modules": count,
+            "device_pipeline_prewarm": "not_performed", "game_coverage_proven": False})
+    return pack_path
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Prepare a catalogued shader seed without running the game")
+    parser.add_argument("--root", required=True, type=Path)
+    parser.add_argument("--data-root", required=True, type=Path)
+    parser.add_argument("--title-record", required=True, type=Path)
+    arguments = parser.parse_args()
+    print(prepare_shader_seed(root=arguments.root, data_root=arguments.data_root,
+                              title=load_json_object(arguments.title_record),
+                              report=lambda _stage, message: print(message, flush=True)))

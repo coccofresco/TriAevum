@@ -416,6 +416,26 @@ int main() {
 #if defined(OOT3D_NATIVE_PICA_TEST_SHADERC)
     RequireFragmentShaderCompiles(lightingShader.Source);
 #endif
+    auto offlineLutPacket = lutLightingPacket;
+    offlineLutPacket.LightingLuts.reset();
+    Oot3dPicaGeneratedFragmentShader offlineLutShader;
+    Require(!GenerateOot3dPicaFragmentShader(offlineLutPacket, state,
+                offlineLutShader, &lightingError),
+            "runtime generation must still reject missing lighting LUTs");
+    Require(GenerateOot3dPicaFragmentShader(offlineLutPacket, state,
+                offlineLutShader, &lightingError,
+                Oot3dPicaShaderBuildPurpose::OfflineSource) &&
+                offlineLutShader.Source == lightingShader.Source &&
+                offlineLutShader.SourceIdentity == lightingShader.SourceIdentity,
+            "offline preparation changed native lighting shader source");
+    auto offlineProcPacket = offlineLutPacket;
+    offlineProcPacket.Registers[0x080U] |= 1U << 10U;
+    offlineProcPacket.Registers[0x0C0U] = 6U;
+    Require(!GenerateOot3dPicaFragmentShader(offlineProcPacket, state,
+                offlineLutShader, &lightingError,
+                Oot3dPicaShaderBuildPurpose::OfflineSource) &&
+                lightingError.find("procedural LUT payload") != std::string::npos,
+            "offline preparation fabricated an embedded procedural LUT");
     auto completeLutLightingPacket = lightingPacket;
     completeLutLightingPacket.Registers[0x1C3U] =
         (8U << 4U) | (3U << 2U);
