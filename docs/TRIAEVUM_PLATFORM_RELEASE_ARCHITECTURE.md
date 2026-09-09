@@ -42,6 +42,12 @@ not a Linux module; an x86-64 ELF is not an Android arm64 module.
 - Verified download/retry is shared; TopScreen acquisition/import policy is not.
 - Real F1 widget tests have a portable CMake target. No ROM or GPU is required;
   tests do not inject private ImGui instrumentation into the runtime.
+- The developer-only native compiler policy uses the same target registry as
+  packaging. Compiler driver mode remains explicit after symlink resolution;
+  unsupported Android/ARM targets cannot inherit desktop x64 flags or artifacts.
+  The synthetic title ABI and real loader have an isolated CMake target, without
+  renderer/UI dependencies. Community provenance is recorded in
+  [PR credits](TRIAEVUM_CONTRIBUTIONS.md).
 
 ## Next Release Checklist
 

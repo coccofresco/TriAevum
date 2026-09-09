@@ -9,37 +9,49 @@ import time
 from pathlib import Path
 
 try:
+    from . import release_platform
+    from .native_toolchain import cxx_driver_arguments
     from .bundle_paths import distribution_path
     from .windows_sysroot import compiler_sysroot, build_environment
 except ImportError:
+    import release_platform
+    from native_toolchain import cxx_driver_arguments
     from bundle_paths import distribution_path
     from windows_sysroot import compiler_sysroot, build_environment
 
 
 def probe_toolchain(compiler: Path, archiver: Path, support: Path, include: Path,
                     *, sysroot: Path | None = None) -> dict:
+    host = release_platform.host_platform()
+    windows = release_platform.is_windows(host)
     paths = {
         "compiler": compiler, "archiver": archiver,
-        "linker": compiler.with_name("lld-link.exe"), "support": support,
+        "linker": compiler.with_name("lld-link.exe" if windows else "ld.lld"), "support": support,
         "json_header": include / "nlohmann/json.hpp",
     }
     missing = [name for name, path in paths.items() if not path.is_file()]
     if missing:
         raise ValueError("Forge toolchain is incomplete: " + ", ".join(missing))
     started = time.perf_counter()
-    verified_sysroot = compiler_sysroot(compiler, sysroot)
+    verified_sysroot = compiler_sysroot(compiler, sysroot) if windows else None
     source = distribution_path("tools/triaevum_release/toolchain_probe.cpp")
     with tempfile.TemporaryDirectory(prefix="triaevum-probe-") as directory:
         root = Path(directory)
-        exe = root / "probe.exe"
-        commands = (
-            [str(compiler.resolve()), "--target=x86_64-pc-windows-msvc", "/nologo",
-             "/std:c++20", "/EHsc", "/MT", "/O2", "/fp:strict", "-fuse-ld=lld",
-             *(verified_sysroot.arguments() if verified_sysroot else ()),
-             f"/I{include.resolve()}", f"/Fo{root / 'probe.obj'}", f"/Fe{exe}",
-             str(source.resolve())],
-            [str(exe)],
-        )
+        if windows:
+            exe = root / "probe.exe"
+            compile_command = [
+                str(compiler.resolve()), f"--target={host.target}", "/nologo",
+                "/std:c++20", "/EHsc", "/MT", "/O2", "/fp:strict", "-fuse-ld=lld",
+                *(verified_sysroot.arguments() if verified_sysroot else ()),
+                f"/I{include.resolve()}", f"/Fo{root / 'probe.obj'}", f"/Fe{exe}",
+                str(source.resolve())]
+        else:
+            exe = root / "probe"
+            compile_command = [
+                str(compiler.resolve()), *cxx_driver_arguments(host.target), "-std=c++20", "-O2",
+                "-ffp-model=strict", "-fuse-ld=lld", f"-I{include.resolve()}",
+                "-o", str(exe), str(source.resolve())]
+        commands = (compile_command, [str(exe)])
         for command in commands:
             try:
                 result = subprocess.run(command, cwd=root, capture_output=True,

@@ -73,7 +73,9 @@ game.** Review logs for personal information before sharing; do not upload
 ROMs, extracted assets or memory savestates containing game code.
 
 Contributions, experiments and forks taking the renderer in other directions
-are welcome. Longer term, I would like to explore a proper ray-tracing path
+are welcome. [Community contributors and PR credits](docs/TRIAEVUM_CONTRIBUTIONS.md)
+are recorded separately from the original AI-assisted development. Longer term,
+I would like to explore a proper ray-tracing path
 and finish features still in the traditional state known as "technically
 implemented". Ray tracing is a wishlist item, not a feature of this release.
 

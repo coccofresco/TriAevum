@@ -5,6 +5,12 @@ the current known scope; source-file notices and copied license texts remain
 authoritative. Renaming a module never removes its copyright, license or
 history.
 
+Community patches and their authors are recorded in
+[Community Contributions](docs/TRIAEVUM_CONTRIBUTIONS.md), including the
+Linux infrastructure contribution by [999sian](https://github.com/999sian)
+in [PR #6](https://github.com/coccofresco/TriAevum/pull/6). Partial/adapted
+integrations retain their original provenance and Git coauthor credit.
+
 ## Shipwright / Ship of Harkinian
 
 This repository originated as a fork of

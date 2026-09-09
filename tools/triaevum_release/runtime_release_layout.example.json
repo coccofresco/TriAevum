@@ -1,6 +1,11 @@
 {
   "format": "triaevum_public_release_layout_v1",
   "files": [
+    {
+      "source": "docs/TRIAEVUM_CONTRIBUTIONS.md",
+      "path": "docs/TRIAEVUM_CONTRIBUTIONS.md",
+      "role": "documentation"
+    },
     {"source": "build-release/TriAevum.exe", "path": "TriAevum.exe", "role": "runtime_executable"},
     {"source": "build-release/triaevum_title_aot.dll", "path": "triaevum_title_aot.dll", "role": "runtime_library"},
     {"source": "build-release/TriAevumForge.exe", "path": "TriAevumForge.exe", "role": "forge_executable"},

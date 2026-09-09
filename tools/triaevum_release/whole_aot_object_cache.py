@@ -18,6 +18,8 @@ from pathlib import Path
 from typing import Any, Callable, Sequence
 
 try:
+    from . import release_platform
+    from .native_toolchain import cxx_driver_arguments
     from .bounded_build import run_bounded
     from .cache_lock import acquire_cache_lock, release_cache_lock
     from .windows_sysroot import WindowsSysroot, compiler_sysroot, build_environment
@@ -28,6 +30,8 @@ try:
         sha256_file,
     )
 except ImportError:
+    import release_platform
+    from native_toolchain import cxx_driver_arguments
     from bounded_build import run_bounded
     from cache_lock import acquire_cache_lock, release_cache_lock
     from windows_sysroot import WindowsSysroot, compiler_sysroot, build_environment
@@ -41,7 +45,7 @@ except ImportError:
 
 FORMAT = "triaevum_whole_aot_object_cache_v1"
 GENERATED_FORMAT = "oot3d_whole_aot_cpp_v1"
-PROFILE = "x86_64-windows-thinlto-release-v1"
+PROFILE = release_platform.WINDOWS.profile
 
 
 class WholeAotObjectError(ValueError):
@@ -52,9 +56,13 @@ class WholeAotObjectError(ValueError):
 class NativeToolchain:
     compiler: Path
     archiver: Path
-    target_triple: str = "x86_64-pc-windows-msvc"
-    profile: str = PROFILE
+    target_triple: str = release_platform.WINDOWS.target
+    profile: str = release_platform.WINDOWS.profile
     sysroot: Path | None = None
+
+    @property
+    def platform(self) -> release_platform.ReleasePlatform:
+        return release_platform.for_target(self.target_triple)
 
 
 @dataclass(frozen=True)
@@ -232,28 +240,47 @@ def _compile_arguments(
         repo_root / "tools/oot3d/native_a32_runtime/upstream",
         nlohmann_include,
     )
+    if release_platform.is_windows(toolchain.platform):
+        return (
+            *cxx_driver_arguments(toolchain.target_triple),
+            *(sysroot.arguments() if sysroot else ()),
+            "/nologo",
+            "/TP",
+            "/DWIN32",
+            "/D_WINDOWS",
+            "/EHsc",
+            "/O2",
+            "/Ob2",
+            "/DNDEBUG",
+            "/std:c++20",
+            "/MT",
+            "/bigobj",
+            "/fp:strict",
+            "/w",
+            "/Zc:preprocessor",
+            "-flto=thin",
+            "/DNOMINMAX",
+            "/DOOT3D_NATIVE_GENERATED_WHOLE_AOT=1",
+            *(f"/I{path.resolve()}" for path in include_roots),
+            "/c",
+        )
+    # ELF: every symbol hidden except the two plugin exports, which the wrapper
+    # marks visible. The host defines the same helpers and must not interpose.
     return (
-        f"--target={toolchain.target_triple}",
-        *(sysroot.arguments() if sysroot else ()),
-        "/nologo",
-        "/TP",
-        "/DWIN32",
-        "/D_WINDOWS",
-        "/EHsc",
-        "/O2",
-        "/Ob2",
-        "/DNDEBUG",
-        "/std:c++20",
-        "/MT",
-        "/bigobj",
-        "/fp:strict",
-        "/w",
-        "/Zc:preprocessor",
+        *cxx_driver_arguments(toolchain.target_triple),
+        "-x", "c++",
+        "-std=c++20",
+        "-O2",
+        "-DNDEBUG",
+        "-fPIC",
+        "-fvisibility=hidden",
+        "-ffp-model=strict",
+        "-w",
         "-flto=thin",
-        "/DNOMINMAX",
-        "/DOOT3D_NATIVE_GENERATED_WHOLE_AOT=1",
-        *(f"/I{path.resolve()}" for path in include_roots),
-        "/c",
+        "-DNOMINMAX",
+        "-DOOT3D_NATIVE_GENERATED_WHOLE_AOT=1",
+        *(f"-I{path.resolve()}" for path in include_roots),
+        "-c",
     )
 
 
@@ -272,7 +299,7 @@ def source_object_key(
     for argument in compile_arguments:
         # Include paths are covered by dependency identities; stripping their
         # host locations keeps identical inputs portable across workspaces.
-        normalized = "/I<verified>" if argument.startswith("/I") else argument
+        normalized = "/I<verified>" if argument[:2] in ("/I", "-I") else argument
         digest.update(normalized.encode("utf-8"))
         digest.update(b"\0")
     return digest.hexdigest()
@@ -346,7 +373,7 @@ def build_generated_cpp_archive(
 ) -> dict[str, Any]:
     if jobs <= 0 or jobs > 16:
         raise WholeAotObjectError("native object-cache jobs must be between 1 and 16")
-    if toolchain.profile != PROFILE:
+    if toolchain.profile != toolchain.platform.profile:
         raise WholeAotObjectError(
             f"unsupported native object-cache profile: {toolchain.profile}"
         )
@@ -355,7 +382,12 @@ def build_generated_cpp_archive(
     repo_root = repo_root.expanduser().resolve()
     nlohmann_include = nlohmann_include.expanduser().resolve()
     manifest, sources = _load_generated_sources(generated_directory)
-    sysroot = compiler_sysroot(toolchain.compiler, toolchain.sysroot, verified=sysroot_contract)
+    if release_platform.is_windows(toolchain.platform):
+        sysroot = compiler_sysroot(toolchain.compiler, toolchain.sysroot, verified=sysroot_contract)
+    elif toolchain.sysroot is not None or sysroot_contract is not None:
+        raise WholeAotObjectError("Verified sysroots are only defined for Windows targets")
+    else:
+        sysroot = None
     toolchain_identity, toolchain = _toolchain_identity(toolchain, sysroot)
     dependencies = tuple(
         dependencies
@@ -387,7 +419,8 @@ def build_generated_cpp_archive(
 
     cache_root = cache_root.expanduser().resolve()
     cache_root.mkdir(parents=True, exist_ok=True)
-    archive = cache_root / "archives" / f"{archive_key}.lib"
+    windows = release_platform.is_windows(toolchain.platform)
+    archive = cache_root / "archives" / f"{archive_key}{'.lib' if windows else '.a'}"
     archive_metadata = archive.with_suffix(".json")
     cached_archive = _validate_cached_file(archive, archive_metadata, archive_key)
     if cached_archive is not None:
@@ -424,7 +457,7 @@ def build_generated_cpp_archive(
         object_paths: list[Path] = []
         compile_queue: list[tuple[GeneratedSource, str, Path, Path]] = []
         for source, key in object_records:
-            object_path = cache_root / "objects" / key[:2] / f"{key}.obj"
+            object_path = cache_root / "objects" / key[:2] / f"{key}{'.obj' if windows else '.o'}"
             metadata_path = object_path.with_suffix(".json")
             object_paths.append(object_path)
             if _validate_cached_file(object_path, metadata_path, key) is None:
@@ -436,11 +469,11 @@ def build_generated_cpp_archive(
             with tempfile.TemporaryDirectory(
                 prefix=f".{key[:16]}.", dir=object_path.parent
             ) as temporary:
-                output = Path(temporary) / "output.obj"
+                output = Path(temporary) / ("output.obj" if windows else "output.o")
                 arguments = (
                     str(toolchain.compiler),
                     *compile_arguments,
-                    f"/Fo{output}",
+                    *((f"/Fo{output}",) if windows else ("-o", str(output))),
                     str(source.path),
                 )
                 result = runner(arguments, generated_directory)
@@ -457,7 +490,7 @@ def build_generated_cpp_archive(
             prefix=f".{archive_key[:16]}.", dir=archive.parent
         ) as temporary:
             temporary_root = Path(temporary)
-            output = temporary_root / "whole_aot.lib"
+            output = temporary_root / ("whole_aot.lib" if windows else "whole_aot.a")
             response = temporary_root / "objects.rsp"
             response.write_text(
                 "\n".join(f'"{path}"' for path in object_paths) + "\n",
@@ -466,8 +499,7 @@ def build_generated_cpp_archive(
             result = runner(
                 (
                     str(toolchain.archiver),
-                    "/nologo",
-                    f"/out:{output}",
+                    *(("/nologo", f"/out:{output}") if windows else ("rcs", str(output))),
                     f"@{response}",
                 ),
                 archive.parent,
