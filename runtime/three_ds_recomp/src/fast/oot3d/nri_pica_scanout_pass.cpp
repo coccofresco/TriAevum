@@ -316,8 +316,13 @@ bool NriPicaScanoutPass::Execute(
     mImpl->LastBarrierExecution = barrierPlan.BeginExecution();
     const auto writable = mImpl->TargetStates.PlanTransition(
         target, {outputBarrier->DispatchAccess, 0});
-    if (!NriInteropAccess::CmdTextureBarrier(
-            *mImpl->Interop, desc.FrameSlot, desc.TargetImage, writable))
+    // The host waits for swapchain acquisition at COLOR_ATTACHMENT. Chain the
+    // layout transition to that same stage before clearing/reusing the image;
+    // a NONE -> COLOR transition could otherwise run while it is still shown.
+    const NriTextureTransitionDesc acquiredTarget{
+        desc.TargetImage, writable, 0, 0, nri::StageBits::COLOR_ATTACHMENT};
+    if (!NriInteropAccess::CmdTextureBarriers(
+            *mImpl->Interop, desc.FrameSlot, &acquiredTarget, 1))
         return false;
     mImpl->LastBarrierExecution.RecordGraphTransition(writable);
     mImpl->TargetStates.Commit(writable);

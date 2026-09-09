@@ -49,6 +49,7 @@
 
 #include "ship/window/gui/Gui.h"
 #include "fast/Fast3dGui.h"
+#include "fast/backends/sdl_video_driver_policy.h"
 
 #ifdef _WIN32
 #include <WTypesbase.h>
@@ -371,6 +372,11 @@ void GfxWindowBackendSDL2::Init(const char* gameName, const char* gfxApiName, bo
     mWindowWidth = width;
     mWindowHeight = height;
 
+#ifdef ENABLE_OOT3D_VULKAN
+    mUsesVulkan = strcmp(gfxApiName, "Vulkan") == 0;
+#endif
+    ConfigureSdlVideoDriver(mUsesVulkan);
+
 #if SDL_VERSION_ATLEAST(2, 24, 0)
     /* fix DPI scaling issues on Windows */
     SDL_SetHint(SDL_HINT_WINDOWS_DPI_AWARENESS, "permonitorv2");
@@ -379,14 +385,11 @@ void GfxWindowBackendSDL2::Init(const char* gameName, const char* gfxApiName, bo
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         throw std::runtime_error(std::string("SDL video initialization failed: ") + SDL_GetError());
     }
+    SPDLOG_INFO("SDL video driver: {}", SDL_GetCurrentVideoDriver());
 
     EnsureWindowPositionIsVisible(posX, posY, width, height);
 
     SDL_EventState(SDL_DROPFILE, SDL_ENABLE);
-
-#ifdef ENABLE_OOT3D_VULKAN
-    mUsesVulkan = strcmp(gfxApiName, "Vulkan") == 0;
-#endif
 
 #if defined(__APPLE__)
     bool use_opengl = !mUsesVulkan && strcmp(gfxApiName, "OpenGL") == 0;

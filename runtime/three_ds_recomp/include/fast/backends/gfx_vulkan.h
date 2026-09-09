@@ -10,6 +10,7 @@
 #include "fast/backends/oot3d_vulkan_diagnostics.h"
 #include "fast/backends/oot3d_vulkan_gpu_profiler.h"
 #include "fast/backends/oot3d_vulkan_validation.h"
+#include "fast/backends/vulkan_scanout_probe.h"
 #include "fast/oot3d/nri_interop_context.h"
 #include "fast/oot3d/cacao_pass.h"
 #if defined(_WIN32) && defined(ENABLE_OOT3D_D3D12_NGX_PROVIDER)
@@ -725,6 +726,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     std::vector<VkSemaphore> mRenderFinishedSemaphores;
     std::array<VkFence, kFramesInFlight> mInFlightFences{};
     std::array<FrameResources, kFramesInFlight> mFrameResources{};
+    VulkanScanoutProbe mScanoutProbe;
     std::thread mPresentThread;
     std::mutex mSwapchainCallMutex;
     std::mutex mPresentMutex;

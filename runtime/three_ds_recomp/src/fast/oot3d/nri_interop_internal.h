@@ -14,6 +14,9 @@ struct NriTextureTransitionDesc {
     ResourceTransition Transition{};
     uint32_t MipOffset = 0;
     uint32_t MipNum = 0;
+    // Semaphore wait scopes must participate in the transition's source scope,
+    // even when the old contents are discarded (UNDEFINED has no access stage).
+    nri::StageBits ExternalWaitStages = nri::StageBits::NONE;
 };
 
 // Narrow internal bridge used by renderer passes that record NRI commands on

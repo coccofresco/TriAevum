@@ -2735,7 +2735,7 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
 
     bool IsKeyboardKeyHeld(
         NativeKeyboardKey key) const noexcept override {
-      return !mKeyboardCaptured && key != NativeKeyboardKey::None &&
+      return !mKeyboardCaptured && key != NativeKeyboardKey::None && key != NativeKeyboardKey::Escape &&
              mWindow.IsKeyDown(static_cast<int32_t>(key));
     }
 
@@ -2899,24 +2899,16 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
       (topScreenUiProfile && topScreenFreeCameraEnabled &&
        (config.FreeCameraSource == NativeMotionSource::Mouse ||
         config.FreeCameraSource == NativeMotionSource::Automatic));
-  const bool gameplayMouseOwned = ResolveNativeGameplayMouseOwnership(
+  const bool gameplayMouseEligible = ResolveNativeGameplayMouseOwnership(
       nativeFrontendTouchEnabled, hostGuiVisible, config.MouseEnabled,
       sourceUsesMouse);
+  const bool wasCaptured = window.IsMouseCaptured();
+  window.SetMouseCapture(gameplayMouseEligible && config.CaptureMouseInGameplay);
+  window.SetCursorVisibility(!window.IsMouseCaptured());
+  const bool gameplayMouseOwned = gameplayMouseEligible && !window.IsMouseCaptureReleased();
   bool mouseCaptureChanged =
-      gameplayMouseOwned != pollingState.GameplayMouseOwned;
+      gameplayMouseOwned != pollingState.GameplayMouseOwned || wasCaptured != window.IsMouseCaptured();
   pollingState.GameplayMouseOwned = gameplayMouseOwned;
-  if (gameplayMouseOwned && config.CaptureMouseInGameplay) {
-    if (!window.IsMouseCaptured()) {
-      window.SetMouseCapture(true);
-      mouseCaptureChanged = true;
-    }
-    window.SetCursorVisibility(false);
-  } else if (window.IsMouseCaptured() &&
-             (!gameplayMouseOwned || !config.CaptureMouseInGameplay)) {
-    window.SetMouseCapture(false);
-    mouseCaptureChanged = true;
-    window.SetCursorVisibility(true);
-  }
   // SDL relative motion is an accumulator. Drain it even while ImGui owns the
   // pointer so menu movement and capture warps cannot leak into gameplay.
   const auto mouseDelta = window.GetMouseDelta();
@@ -2963,8 +2955,6 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
     frame.Hid.TouchPressed = touch.Pressed;
   }
   ApplyNativeControlShortcutTouch(host, frame);
-  frame.Exit = !keyboardCaptured &&
-               window.IsKeyDown(Ship::LUS_KB_ESCAPE);
   return frame;
 }
 

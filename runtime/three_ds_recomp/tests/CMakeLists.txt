@@ -1,5 +1,15 @@
 include(FetchContent)
 
+if(TARGET SDL2::SDL2)
+    add_executable(sdl_video_driver_policy_tests sdl_video_driver_policy_tests.cpp)
+    target_compile_features(sdl_video_driver_policy_tests PRIVATE cxx_std_20)
+    target_include_directories(sdl_video_driver_policy_tests PRIVATE ../include)
+    target_link_libraries(sdl_video_driver_policy_tests PRIVATE SDL2::SDL2)
+    add_test(NAME sdl_video_driver_policy_tests COMMAND sdl_video_driver_policy_tests)
+    set_tests_properties(sdl_video_driver_policy_tests PROPERTIES
+        ENVIRONMENT_MODIFICATION "SDL_VIDEODRIVER=unset:")
+endif()
+
 FetchContent_Declare(
     googletest
     GIT_REPOSITORY https://github.com/google/googletest.git
@@ -64,6 +74,16 @@ endif()
 
 include(GoogleTest)
 gtest_discover_tests(three_ds_recomp_tests DISCOVERY_TIMEOUT 30)
+
+add_executable(mouse_capture_policy_tests mouse_capture_policy_tests.cpp)
+add_test(NAME mouse_capture_policy_tests COMMAND mouse_capture_policy_tests)
+if(TARGET NRI)
+    add_executable(nri_stage_scope_tests nri_stage_scope_tests.cpp)
+    target_compile_definitions(nri_stage_scope_tests PRIVATE ENABLE_OOT3D_NRI)
+    target_include_directories(nri_stage_scope_tests PRIVATE ../include)
+    target_link_libraries(nri_stage_scope_tests PRIVATE NRI)
+    add_test(NAME nri_stage_scope_tests COMMAND nri_stage_scope_tests)
+endif()
 
 add_executable(oot3d_vulkan_diagnostics_tests
     oot3d_vulkan_diagnostics_tests.cpp

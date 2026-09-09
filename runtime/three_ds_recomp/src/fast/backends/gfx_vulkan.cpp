@@ -1294,6 +1294,7 @@ void GfxRenderingAPIVulkan::Init() {
                     mInteractiveGrassPass.UnavailableReason());
     }
     CreateFrameResources();
+    mScanoutProbe.Initialize(mPhysicalDevice, mDevice, kFramesInFlight);
     mGpuProfiler.Initialize(mPhysicalDevice, mDevice, mGraphicsQueueFamily,
                             mDiagnostics.Enabled());
     CreateFallbackTexture();
@@ -1356,6 +1357,7 @@ void GfxRenderingAPIVulkan::Shutdown() {
 #endif
         mNriInterop.Shutdown();
         mGpuProfiler.Shutdown();
+        mScanoutProbe.Shutdown();
         StorePipelineCache();
         DestroyGraphicsPipelines();
         for (auto& [id, framebuffer] : mOffscreenFramebuffers) {
@@ -2023,6 +2025,7 @@ void GfxRenderingAPIVulkan::StartFrame() {
     CheckVk(vkWaitForFences(mDevice, 1, &mInFlightFences[mCurrentFrame], VK_TRUE,
                             std::numeric_limits<uint64_t>::max()),
             "vkWaitForFences");
+    mScanoutProbe.Consume(mCurrentFrame);
     ReleaseRetiredNativePicaGeometryBuffers(mCurrentFrame);
     auto& frame = mFrameResources[mCurrentFrame];
     mCompletedNativePicaIds.insert(mCompletedNativePicaIds.end(),
@@ -2187,6 +2190,9 @@ void GfxRenderingAPIVulkan::EndFrame() {
         mOverlayRenderPassActive = false;
     }
     const auto sceneFrameStats = mPicaSceneFrame.Stats();
+    mScanoutProbe.Record(mCommandBuffers[mCurrentFrame], mSwapchainImages[mCurrentImage],
+                         mSwapchainFormat, mSwapchainExtent, mCurrentFrame, mCurrentImage,
+                         mFrameCounter, mNativePicaPresentedThisFrame);
     mDiagnostics.RecordPicaSceneFrame(sceneFrameStats);
     mGpuProfiler.EndFrame(mCurrentFrame, mCommandBuffers[mCurrentFrame]);
     CheckVk(vkEndCommandBuffer(mCommandBuffers[mCurrentFrame]), "vkEndCommandBuffer");
@@ -4045,10 +4051,14 @@ void GfxRenderingAPIVulkan::CreateOot3dShadow2dRenderPass() {
     std::array<VkSubpassDependency, 2> dependencies{};
     dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
     dependencies[0].dstSubpass = 0;
-    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-    dependencies[0].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+                                   VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+                                   VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+    dependencies[0].srcAccessMask = VK_ACCESS_SHADER_READ_BIT |
+                                    VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
     dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                                   VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+                                   VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+                                   VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
     dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
                                     VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
     dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
@@ -5030,11 +5040,16 @@ void GfxRenderingAPIVulkan::CreateSwapchainResources() {
     dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
     dependency.dstSubpass = 0;
     dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                              VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+                              VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+                              VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
     dependency.dstStageMask = dependency.srcStageMask;
-    dependency.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    // Discarding depth contents does not discard prior depth writes. Both the
+    // clear pass and the load-color overlay reuse this attachment in one frame.
+    dependency.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+                               VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
     dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
                                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+                               VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
                                VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
     const VkAttachmentDescription attachments[] = { colorAttachment, depthAttachment };
     VkRenderPassCreateInfo renderPassInfo{ VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO };

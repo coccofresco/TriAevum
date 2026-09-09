@@ -71,7 +71,7 @@ public:
         mTriggerThreshold(triggerThreshold) {}
 
   bool IsKeyboardKeyHeld(NativeKeyboardKey key) const noexcept override {
-    return key != NativeKeyboardKey::None &&
+    return key != NativeKeyboardKey::None && key != NativeKeyboardKey::Escape &&
            mWindow.IsKeyDown(static_cast<std::int32_t>(key));
   }
 
@@ -221,8 +221,9 @@ bool TriAevumOot3dInputBackend::Poll(Fast::Fast3dWindow &window,
   }
 
   const auto mouseDelta = window.GetMouseDelta();
-  host.MouseDeltaX = mConfig.MouseEnabled ? mouseDelta.x : 0;
-  host.MouseDeltaY = mConfig.MouseEnabled ? mouseDelta.y : 0;
+  const bool mouseOwned = mConfig.MouseEnabled && !window.IsMouseCaptureReleased();
+  host.MouseDeltaX = mouseOwned ? mouseDelta.x : 0;
+  host.MouseDeltaY = mouseOwned ? mouseDelta.y : 0;
   auto frame =
       MapNativeControlInput(mConfig, host, {}, &mRightStickProfile, true);
   ApplyNativeControlShortcutTouch(host, frame);
@@ -268,7 +269,7 @@ bool TriAevumOot3dInputBackend::Poll(Fast::Fast3dWindow &window,
     mState.accelerometerZ = frame.Hid.Accelerometer[2];
     mState.flags |= TRIAEVUM_INPUT_ACCELEROMETER_VALID_V1;
   }
-  return !window.IsKeyDown(Ship::LUS_KB_ESCAPE);
+  return window.IsRunning();
 }
 
 TriAevumModuleStatusV1
