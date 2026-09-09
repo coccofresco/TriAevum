@@ -1,7 +1,8 @@
 # Desktop Packaging Decision
 
-Decision: 2026-09-09. Windows releases are portable ZIPs. The first native
-Linux/Steam Deck release uses a portable tar.gz and Steam Linux Runtime 4.
+Decision updated: 2026-09-09, following the maintainer's Flatpak request.
+Windows releases are portable ZIPs. Linux desktop and Steam Deck share one
+x86-64 Flatpak containing Forge and the native game runtime.
 This defines the packaging target; it does not claim Linux release qualification.
 
 ## Windows: Portable Is the Default
@@ -32,61 +33,56 @@ manifest. Older explicit absolute references remain readable; use
 
 ## Linux and Steam Deck: First Deliverable
 
-Use one `TriAevum-<version>-linux-x86_64.tar.gz` containing a writable directory:
+Use app ID `io.github.coccofresco.TriAevum` and Freedesktop Platform/SDK 25.08
+as the first qualification baseline. This supersedes the earlier tar.gz plus
+Steam Runtime launcher proposal. A tar.gz remains useful for developer staging,
+not a second end-user distribution to maintain.
 
 ```text
-TriAevum/
-  TriAevum                 native game executable
-  TriAevumForge            frozen GUI, no system Python requirement
-  _internal/              private Forge dependencies
-  lib/                    qualified application libraries, not GPU drivers
-  forge/                  neutral module
-  titles/                 catalogued precompiled title logic
-  recipes/ resources/ source/ LICENSES/ docs/
-  data/                   created locally after import, never distributed
+/app/                         read-only installed application
+  bin/                        single launcher and explicit Forge entry
+  lib/triaevum/               runtime, Forge, catalog, recipes and resources
+  share/                      desktop integration, source and notices
+$XDG_DATA_HOME/TriAevum/       writable private activation root
+  private-plugins/            verified active title module
+  TriAevum.launch.json        existing launch-profile contract
+  data/                      ROM-derived data, saves, settings and caches
 ```
 
-Keep the same installation and activation code as Windows. tar.gz retains Unix
-permissions and avoids requiring FUSE. The archive tool sets executable modes
-from declared runtime/Forge roles, including when packaging on Windows.
+The launcher opens Forge on an unprepared installation and the game after a
+successful import. Keep an explicit Forge action for reimport/repair. On Deck,
+prepare the ROM in Desktop Mode and use the same app from Gaming Mode. Forge
+selects a personal decrypted .3ds/.cci through the file portal and performs the
+existing verified import without compilation. Subsequent launches must not need
+access to the original ROM. Do not publish ROM data, saves or TopScreen payloads.
 
-The **execution environment is part of the package contract**: build and qualify
-against Steam Runtime 4, then launch within its matching container. A tarball of
-SDK-built ELF files is not automatically compatible with every host distribution.
-Do not ship libc, the ELF loader, Vulkan ICDs, host GPU drivers or the SDK.
-Steam Runtime supplies the runtime ABI and integrates host graphics drivers;
-it does not emulate the game or replace NRI/Vulkan.
+One host layout adapter separates immutable package resources from writable
+activation and data roots. Windows maps these roots to its portable directory;
+Flatpak maps them to /app and XDG private storage. The same importer, receipts,
+atomic activation, save format and update logic consume that adapter. Locks,
+journals, downloaded textures and launch profiles must never be written to /app.
+Do not copy the complete installed application into the home directory to make
+its current write assumptions work. No Flatpak branches in PICA or title logic;
+future Android supplies its own storage/lifecycle adapter and native binaries.
 
-For the GitHub release (not a Steam-store application), finish a small launcher
-adapter that uses an installed Steam Runtime 4, including non-default Steam
-libraries, or reports how to install/select it. Use Valve's entry point, not
-our own container implementation. Runtime acquisition must be explicit and
-verified; never run arbitrary downloaded shell installers. Both Forge and the
-game must use the same qualified environment. Detect an already-active runtime
-to avoid recursive launch and preserve arguments and exit codes.
+Forge's current Tk chooser needs an isolated portal adapter; selecting a ROM must
+not require `--filesystem=home` or `--filesystem=host`. Scope GPU, audio, display,
+network for TopScreen, and controller access explicitly. Qualify controller
+motion separately: input access alone does not guarantee hidraw availability.
+The SDK is developer-only. Both Forge and the game run in the same Flatpak
+environment; no nested Steam Runtime, Proton, root changes or user compiler.
 
-First-run workflow: extract in the user's home or an executable, writable game
-library, launch Forge from Desktop Mode, import the ROM, then add the game
-launcher as a non-Steam game. Test that exact shortcut in Gaming Mode. Do not
-assume Steam automatically selects Runtime 4 for an arbitrary non-Steam ELF.
-No `sudo`, SteamOS read-only-root changes, system package installation or Proton
-should be required by this **native Linux** package.
+The existing Steam SDK-built ELF artifacts are reuse candidates, not proof of
+Flatpak compatibility. Check the complete dependency closure and execute it in
+the chosen Freedesktop runtime; rebuild only incompatible components. Private
+Forge Python/Tk dependencies must be qualified too. Let Flatpak provide its GPU
+extensions rather than bundling host drivers. Ship corresponding source and
+notices under the existing audit policy, including adopted PR contributions.
 
-## Why Not AppImage or Flatpak First?
-
-| Format | Assessment for this codebase |
-| --- | --- |
-| tar.gz + Steam Runtime 4 | Reuses the already-built SDK/runtime and writable Forge installation; smallest new surface. Selected first. |
-| AppImage | Useful future standalone download, but not an ABI fix: still needs a compatible build baseline/dependency closure. Its image is read-only; Forge currently activates beside itself. Requires a separate writable data/activation root and its qualification. |
-| Flatpak | Worth evaluating for Discover and managed updates later. Requires a qualified Flatpak runtime build, external-ROM file portal, GPU/audio/controller permissions and writable activation outside `/app`. Avoid broad home/device grants as a shortcut. |
-| deb/rpm | Additional distro-specific maintenance without addressing Steam Deck first. Not planned for the first release. |
-
-Do not implement four packagers in parallel. Keep portable desktop installation
-as the first policy. A later read-only package should supply resource, activation
-and user-data roots through one host layout adapter, consumed by Forge and the
-runtime. No Flatpak/AppImage branches in PICA, title code, TopScreen or effects.
-Android can then supply its own sandbox/storage adapter; it does not inherit
-desktop paths or an x86-64 title binary.
+Deliver a single .flatpak bundle initially, with the runtime repository recorded.
+Flatpak installation manages runtime downloads; a future signed update repository
+can retain the same app ID and private data. Do not claim Flathub publication or
+Steam Deck qualification before those have actually happened.
 
 ## Implemented and Remaining
 
@@ -114,18 +110,33 @@ Use `.zip` for Windows; `prepare_release --archive <path.zip>` optionally invoke
 the same tool. The full `prepare_release` build/staging driver remains Windows-
 specific; Linux uses the common `package_release` layout/audit boundary.
 
-Remaining before Linux release: finish the end-user runtime launcher, final
-dependency/license closure and exact-source staging; qualify ROM-only import,
-reimport/update/relocation, F1, controller/audio and GPU launch from the **final
-extracted archive**. Close the known stalls/black flashes and test an actual
-Steam Deck. Unit tests and native desktop proofs do not replace those checks.
+Flatpak prerequisites are now installed and verified on the Linux test host:
+Flatpak 1.18.1, flatpak-builder 1.4.10, with no missing package-owned files.
+Freedesktop Platform/SDK 25.08 and the host-matching NVIDIA extension are
+installed per user; sandbox startup and SDK compiler execution pass. A small
+Vulkan probe compiled in the SDK and run in the Platform sandbox enumerates
+the physical RTX 4060 (Vulkan 1.4.341), not only software rendering. This is
+host preparation, not a game rendering test or a completed TriAevum Flatpak.
+
+Remaining before Linux release, in dependency order:
+
+1. Implement/test the separate package/activation layout with unchanged Windows
+   defaults; move the existing import and launch transactions to its writable root.
+2. Integrate the ROM file portal and first-run/game launcher. Qualify read-only
+   /app, missing/cancelled portal selections, spaces in paths and preserved saves.
+3. Stage audited binaries/sources, add the manifest and desktop integration, then
+   build/install the candidate bundle under the Freedesktop runtime.
+4. Qualify ROM-only import, reimport/update, F1, controller/audio and GPU launch
+   from that installed bundle. Check Gaming Mode on actual Steam Deck hardware.
+5. Close the known stalls/black flashes and unsupported-effect gaps. Packaging
+   checks and private desktop proofs do not replace final gameplay qualification.
 
 ## Primary References
 
-- [Valve Steam Runtime guidance](https://github.com/ValveSoftware/steam-runtime):
-  Runtime 4 SDK/execution pairing and installation via Steam (app ID 4183110).
-- [AppImage concepts](https://docs.appimage.org/introduction/concepts.html):
-  build ABI baseline, excluded system/graphics libraries and read-only AppDir image.
+- [Flatpak build workflow](https://docs.flatpak.org/en/latest/first-build.html):
+  matching runtime/SDK and a single-file bundle with its runtime repository.
+- [Flatpak conventions](https://docs.flatpak.org/en/latest/conventions.html):
+  application identity, /app, XDG storage and desktop integration.
 - [Flatpak permissions](https://docs.flatpak.org/en/latest/sandbox-permissions.html):
   private writable storage, file portals and least-privilege device access.
 - Local [platform architecture](TRIAEVUM_PLATFORM_RELEASE_ARCHITECTURE.md),

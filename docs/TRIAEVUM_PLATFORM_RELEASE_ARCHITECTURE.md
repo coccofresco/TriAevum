@@ -51,22 +51,24 @@ not a Linux module; an x86-64 ELF is not an Android arm64 module.
 
 ## Next Release Checklist
 
-Distribution choice: [portable Windows ZIP and Linux/Steam Deck tar.gz with
-Steam Runtime 4](TRIAEVUM_DESKTOP_PACKAGING.md). The archive format never replaces
+Distribution choice: [portable Windows ZIP and one Linux/Steam Deck Flatpak
+with Forge integrated](TRIAEVUM_DESKTOP_PACKAGING.md). The package format never replaces
 native dependency and installation qualification.
 
 1. Obtain issue #5's configuration and verify remapped items in real gameplay.
    See [investigation](TRIAEVUM_ISSUE_5_CONTROLS.md); do not mark it resolved based
    only on mapping tests.
 2. Finish the Linux dependency closure and matching notices/sources for the
-   exact Steam Runtime build. Materialize only validated internal bundle links
+   exact artifacts in the selected Freedesktop runtime. Prior Steam Runtime
+   builds are reuse candidates, not Flatpak qualification. Materialize validated internal bundle links
    when staging public files; do not relax the no-symlink publication policy.
 3. Use this shared packager/auditor for the final Linux artifact, replacing the
    private qualification stager. Bind the final runtime, Forge, title and source
    archives to their actual build identities, not the stale remote checkout HEAD.
 4. Qualify fresh ROM-only installation, reinstallation preserving saves/config,
    visible F1/controller UI, native audio, and native GPU boot from the final
-   archive on Linux and Windows. Existing private proofs are not a final archive.
+   installed Flatpak on Linux and final portable ZIP on Windows. Existing private
+   proofs are not final-package qualification.
 5. Resolve/measure the Linux stalls and black flashes before Steam Deck claims.
    The latest bounded run still has a 13.50-second maximum interval, many cold
    shader misses, and significant frame-start/backend time. Do not call its
