@@ -45,6 +45,9 @@ constexpr uint32_t kVulkanShaderCacheVersion = 1;
 constexpr uint32_t kVulkanPipelineCacheVersion = 1;
 constexpr uint32_t kSpirvMagic = 0x07230203U;
 constexpr uint64_t kMaximumPipelineCacheBytes = 64ULL * 1024ULL * 1024ULL;
+constexpr const char* kLocalPicaShaderPackName = "local_pica_shaders.o3ps";
+constexpr const char* kLocalPicaPipelineManifestName =
+    "local_pica_pipelines.json";
 
 void* ResolveNriNativeWindow(GfxWindowBackendSDL2* backend) {
 #ifdef _WIN32
@@ -1314,6 +1317,11 @@ void GfxRenderingAPIVulkan::Shutdown() {
         WaitForAllPresents();
         StopPresentWorker();
         vkDeviceWaitIdle(mDevice);
+        // A frame that failed mid-record (strict shader miss) never submits;
+        // ending its pass on a torn-down scope crashes the driver. Freeing the
+        // pool below is valid for a command buffer in the recording state.
+        mNativePicaRenderPassActive = false;
+        mActiveNativePicaRenderTarget = nullptr;
         ShutdownImGuiBackend();
         mSceneSurfaces.Clear();
         mResourceStates.Clear();
@@ -3737,6 +3745,7 @@ void GfxRenderingAPIVulkan::ConfigureNativePicaAotShaders() {
     mPicaPipelinePrewarmedProfiles.clear();
     mPicaAotShaderMissesLogged.clear();
     mPicaAotShaderHits = 0;
+    mLocalPicaShaderHits = 0;
     mPicaAotShaderMisses = 0;
     mPicaAotShaderSummaryLogged = false;
     mPicaPipelinePrewarmSummaryLogged = false;
@@ -3820,9 +3829,132 @@ void GfxRenderingAPIVulkan::ConfigureNativePicaAotShaders() {
             "OOT3D_PICA_PIPELINE_PREWARM requires both a pipeline manifest "
             "and an AOT shader pack");
     }
+    ConfigureLocalPicaShaderCache();
+}
+
+// Per-user disk shader cache, modelled on Citra's: every shader compiled at
+// runtime and every pipeline created at runtime is persisted at shutdown, and
+// the next launch prewarms all of it before the guest runs. SPIR-V and the
+// pipeline descriptors are hardware-independent; the driver's own cache holds
+// the per-GPU binaries.
+void GfxRenderingAPIVulkan::ConfigureLocalPicaShaderCache() {
+    mLocalPicaShaderPack.Clear();
+    mLocalPicaPipelineManifest.Clear();
+    mLocalPicaPipelineInventory.Clear();
+    mLocalPicaShaderAdditions.clear();
+    mLocalPicaShaderAdditionKeys.clear();
+    mLocalPicaPipelinesAdded = 0U;
+    mPicaPipelinePrewarmQueue.clear();
+    mPicaPipelinePrewarmCursor = 0U;
+    const char* disabled = std::getenv("OOT3D_PICA_LOCAL_SHADER_CACHE");
+    // Strict validation answers "does the selected pack cover this content";
+    // the per-user cache would answer it falsely.
+    mLocalPicaCacheEnabled =
+        !mPicaAotShaderStrict &&
+        !(disabled != nullptr && std::string_view(disabled) == "0") &&
+        !VulkanShaderCacheDirectory().empty();
+    if (!mLocalPicaCacheEnabled) {
+        return;
+    }
+    const auto directory = VulkanShaderCacheDirectory();
+    std::string error;
+    if (!mLocalPicaPipelineInventory.Configure(
+            directory / kLocalPicaPipelineManifestName, &error)) {
+        SPDLOG_WARN("Local PICA pipeline cache disabled: {}", error);
+        mLocalPicaCacheEnabled = false;
+        return;
+    }
+    std::error_code ignored;
+    const auto packPath = directory / kLocalPicaShaderPackName;
+    if (std::filesystem::exists(packPath, ignored) &&
+        !mLocalPicaShaderPack.Load(packPath, &error)) {
+        SPDLOG_WARN("Local PICA shader pack ignored: {}", error);
+        mLocalPicaShaderPack.Clear();
+    }
+    if (mLocalPicaShaderPack.Loaded() && mPicaAotShaderPack.Loaded() &&
+        mLocalPicaShaderPack.DescriptorSchemaVersion() !=
+            mPicaAotShaderPack.DescriptorSchemaVersion()) {
+        SPDLOG_WARN("Local PICA shader pack ignored: descriptor schema {} "
+                    "differs from shipped pack schema {}",
+                    mLocalPicaShaderPack.DescriptorSchemaVersion(),
+                    mPicaAotShaderPack.DescriptorSchemaVersion());
+        mLocalPicaShaderPack.Clear();
+    }
+    const auto manifestPath = mLocalPicaPipelineInventory.Path();
+    if (std::filesystem::exists(manifestPath, ignored) &&
+        !mLocalPicaPipelineManifest.Load(manifestPath, &error)) {
+        SPDLOG_WARN("Local PICA pipeline manifest ignored: {}", error);
+        mLocalPicaPipelineManifest.Clear();
+    }
+    if (mLocalPicaPipelineManifest.Loaded() &&
+        mLocalPicaPipelineManifest.DescriptorSchemaVersion() !=
+            (mPicaAotShaderPack.Loaded()
+                 ? mPicaAotShaderPack.DescriptorSchemaVersion()
+                 : mLocalPicaShaderPack.DescriptorSchemaVersion())) {
+        SPDLOG_WARN("Local PICA pipeline manifest ignored: descriptor "
+                    "schema mismatch");
+        mLocalPicaPipelineManifest.Clear();
+    }
+    // Seed the inventory so the rewritten manifest is the union.
+    for (const auto& entry : mLocalPicaPipelineManifest.Entries()) {
+        mLocalPicaPipelineInventory.Observe(entry, 0U, 0U);
+    }
+    std::fprintf(stderr,
+                 "OOT3D_PICA_LOCAL_SHADER_CACHE modules=%zu pipelines=%zu "
+                 "path=%s\n",
+                 mLocalPicaShaderPack.EntryCount(),
+                 mLocalPicaPipelineManifest.Entries().size(),
+                 directory.string().c_str());
+}
+
+void GfxRenderingAPIVulkan::StoreLocalPicaShaderCache() {
+    if (!mLocalPicaCacheEnabled) {
+        return;
+    }
+    std::string error;
+    std::fprintf(stderr,
+                 "OOT3D_PICA_LOCAL_SHADER_CACHE session added_modules=%zu "
+                 "added_pipelines=%llu\n",
+                 mLocalPicaShaderAdditions.size(),
+                 static_cast<unsigned long long>(mLocalPicaPipelinesAdded));
+    if (!mLocalPicaShaderAdditions.empty()) {
+        auto binaries = mLocalPicaShaderPack.Binaries();
+        binaries.insert(binaries.end(), mLocalPicaShaderAdditions.begin(),
+                        mLocalPicaShaderAdditions.end());
+        const uint32_t schema = mPicaAotShaderPack.Loaded()
+            ? mPicaAotShaderPack.DescriptorSchemaVersion()
+            : mLocalPicaShaderPack.Loaded()
+                  ? mLocalPicaShaderPack.DescriptorSchemaVersion()
+                  : mLocalPicaDescriptorSchema;
+        const auto path =
+            VulkanShaderCacheDirectory() / kLocalPicaShaderPackName;
+        if (schema == 0U) {
+            SPDLOG_WARN("Local PICA shader pack not written: no descriptor "
+                        "schema observed");
+        } else if (!Oot3d::WritePicaAotShaderPack(path, schema, binaries,
+                                                  &error)) {
+            SPDLOG_WARN("Local PICA shader pack not written: {}", error);
+        } else {
+            std::fprintf(stderr,
+                         "OOT3D_PICA_LOCAL_SHADER_CACHE wrote modules=%zu\n",
+                         binaries.size());
+            mLocalPicaShaderAdditions.clear();
+        }
+    }
+    if (mLocalPicaPipelinesAdded != 0U) {
+        if (!mLocalPicaPipelineInventory.Finish(&error)) {
+            SPDLOG_WARN("Local PICA pipeline manifest not written: {}", error);
+        } else {
+            std::fprintf(stderr,
+                         "OOT3D_PICA_LOCAL_SHADER_CACHE wrote pipelines=%zu\n",
+                         mLocalPicaPipelineInventory.EntryCount());
+            mLocalPicaPipelinesAdded = 0U;
+        }
+    }
 }
 
 void GfxRenderingAPIVulkan::FinishNativePicaAotShaders() {
+    StoreLocalPicaShaderCache();
     if (mPicaEffectiveShaderInventory.Enabled()) {
         std::string error;
         if (!mPicaEffectiveShaderInventory.Finish(&error)) {
@@ -3875,13 +4007,16 @@ void GfxRenderingAPIVulkan::FinishNativePicaAotShaders() {
     }
     if (!mPicaAotShaderSummaryLogged &&
         (mPicaAotShaderPack.Loaded() || mPicaAotShaderHits != 0U ||
-         mPicaAotShaderMisses != 0U)) {
-        SPDLOG_INFO("Native PICA AOT shader resolution: {} hits, {} misses",
-                    mPicaAotShaderHits, mPicaAotShaderMisses);
+         mLocalPicaShaderHits != 0U || mPicaAotShaderMisses != 0U)) {
+        SPDLOG_INFO("Native PICA AOT shader resolution: {} shipped hits, "
+                    "{} local hits, {} misses",
+                    mPicaAotShaderHits, mLocalPicaShaderHits,
+                    mPicaAotShaderMisses);
         std::fprintf(stderr,
-                     "OOT3D_PICA_AOT_SHADER_RESOLUTION hits=%llu misses=%llu "
-                     "strict=%u entries=%zu\n",
+                     "OOT3D_PICA_AOT_SHADER_RESOLUTION hits=%llu "
+                     "local_hits=%llu misses=%llu strict=%u entries=%zu\n",
                      static_cast<unsigned long long>(mPicaAotShaderHits),
+                     static_cast<unsigned long long>(mLocalPicaShaderHits),
                      static_cast<unsigned long long>(mPicaAotShaderMisses),
                      mPicaAotShaderStrict ? 1U : 0U,
                      mPicaAotShaderPack.EntryCount());
@@ -3893,18 +4028,28 @@ std::vector<uint32_t>
 GfxRenderingAPIVulkan::ResolveNativePicaShaderSpirv(
     std::string_view source, Oot3d::PicaAotShaderStage stage,
     bool vertexShader, const char* sourceName) {
-    if (!mPicaAotShaderPack.Loaded()) {
+    const bool anyPack =
+        mPicaAotShaderPack.Loaded() || mLocalPicaShaderPack.Loaded();
+    if (!anyPack && !mLocalPicaCacheEnabled) {
         return CompileShaderSpirv(std::string(source), vertexShader,
                                   sourceName);
     }
-    const auto binary = mPicaAotShaderPack.Find(stage, source);
+    const auto identity = Oot3d::IdentifyPicaAotShaderSource(source);
+    // Strict validation must be satisfied only by the explicitly selected pack.
+    const auto binary = mPicaAotShaderStrict
+        ? mPicaAotShaderPack.Find(stage, identity)
+        : FindNativePicaAotSpirv(stage, identity);
     if (!binary.empty()) {
-        ++mPicaAotShaderHits;
+        // "hits" measures shipped-pack coverage; local-cache hits are separate.
+        if (!mPicaAotShaderPack.Find(stage, identity).empty()) {
+            ++mPicaAotShaderHits;
+        } else {
+            ++mLocalPicaShaderHits;
+        }
         return {binary.begin(), binary.end()};
     }
 
     ++mPicaAotShaderMisses;
-    const auto identity = Oot3d::IdentifyPicaAotShaderSource(source);
     if (mPicaAotShaderMissesLogged.insert({stage, identity.Id}).second) {
         SPDLOG_WARN(
             "Native PICA AOT shader miss: stage={}, source={}, name={}",
@@ -3917,8 +4062,13 @@ GfxRenderingAPIVulkan::ResolveNativePicaShaderSpirv(
             std::string(Oot3d::PicaAotShaderStageName(stage)) +
             " module for " + Oot3d::FormatPicaAotShaderId(identity.Id));
     }
-    return CompileShaderSpirv(std::string(source), vertexShader,
-                              sourceName);
+    auto spirv = CompileShaderSpirv(std::string(source), vertexShader,
+                                    sourceName);
+    if (mLocalPicaCacheEnabled &&
+        mLocalPicaShaderAdditionKeys.insert({stage, identity}).second) {
+        mLocalPicaShaderAdditions.push_back({stage, identity, spirv});
+    }
+    return spirv;
 }
 
 VkShaderModule GfxRenderingAPIVulkan::CreateShaderModuleFromSpirv(
@@ -4854,6 +5004,8 @@ void GfxRenderingAPIVulkan::DestroyGraphicsPipelines() {
     }
     mNativePicaPipelines.clear();
     mPicaPipelinePrewarmedProfiles.clear();
+    mPicaPipelinePrewarmQueue.clear();
+    mPicaPipelinePrewarmCursor = 0U;
     if (mNativePicaScanoutPipeline != VK_NULL_HANDLE) {
         vkDestroyPipeline(mDevice, mNativePicaScanoutPipeline, nullptr);
         mNativePicaScanoutPipeline = VK_NULL_HANDLE;

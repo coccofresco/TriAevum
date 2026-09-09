@@ -206,6 +206,7 @@ nlohmann::json EntryJson(
         {"attachment_requirements_key", entry.AttachmentRequirementsKey},
         {"sample_count", entry.SampleCount},
         {"writes_reactive_mask", entry.WritesReactiveMask},
+        {"outline_occlusion_only", entry.OutlineOcclusionOnly},
         {"topology", static_cast<uint8_t>(entry.Topology)},
         {"cull_mode", static_cast<uint8_t>(entry.CullMode)},
         {"framebuffer_flipped", entry.FramebufferFlipped},
@@ -329,6 +330,9 @@ bool ReadEntry(const nlohmann::json& value,
         !ReadUnsigned(value, "sample_count", entry.SampleCount) ||
         !ReadBool(value, "writes_reactive_mask",
                   entry.WritesReactiveMask) ||
+        (value.contains("outline_occlusion_only") &&
+         !ReadBool(value, "outline_occlusion_only",
+                   entry.OutlineOcclusionOnly)) ||
         !value.contains("topology") ||
         !ReadEnum(value["topology"],
                   ::Oot3d::Renderer::PicaTopology::GeometryShader,
@@ -649,6 +653,10 @@ uint64_t PicaGraphicsPipelineManifestEntry::StructuralId() const noexcept {
     HashValue(hash, AttachmentRequirementsKey);
     HashValue(hash, SampleCount);
     HashValue(hash, WritesReactiveMask);
+    // Only hashed when set so ids of pre-existing entries stay valid.
+    if (OutlineOcclusionOnly) {
+        HashValue(hash, OutlineOcclusionOnly);
+    }
     HashValue(hash, Topology);
     HashValue(hash, CullMode);
     HashValue(hash, FramebufferFlipped);
@@ -716,6 +724,7 @@ bool PicaGraphicsPipelineManifestEntry::StructurallyEquivalent(
            AttachmentRequirementsKey == other.AttachmentRequirementsKey &&
            SampleCount == other.SampleCount &&
            WritesReactiveMask == other.WritesReactiveMask &&
+           OutlineOcclusionOnly == other.OutlineOcclusionOnly &&
            Topology == other.Topology && CullMode == other.CullMode &&
            FramebufferFlipped == other.FramebufferFlipped &&
            VertexBindings == other.VertexBindings &&
