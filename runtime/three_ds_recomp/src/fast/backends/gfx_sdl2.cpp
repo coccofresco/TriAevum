@@ -660,12 +660,25 @@ void GfxWindowBackendSDL2::GetDimensions(uint32_t* width, uint32_t* height, int3
 }
 
 void GfxWindowBackendSDL2::SetDimensions(uint32_t width, uint32_t height, int32_t posX, int32_t posY) {
+#ifdef __ANDROID__
+    // The Activity/SurfaceHolder owns mobile output size. SDL_SetWindowSize only
+    // changes SDL's logical dimensions here, not the Android buffer; accepting a
+    // desktop request would give camera/input a different aspect than Vulkan.
+    if (mWnd) {
+        int32_t actualX = 0, actualY = 0;
+        uint32_t actualWidth = 0, actualHeight = 0;
+        GetDimensions(&actualWidth, &actualHeight, &actualX, &actualY);
+        mWindowWidth = static_cast<int>(actualWidth);
+        mWindowHeight = static_cast<int>(actualHeight);
+    }
+#else
     mWindowWidth = width;
     mWindowHeight = height;
     if (mWnd) {
         SDL_SetWindowPosition(mWnd, posX, posY);
         SDL_SetWindowSize(mWnd, mWindowWidth, mWindowHeight);
     }
+#endif
 }
 
 Ship::WindowRect GfxWindowBackendSDL2::GetPrimaryMonitorRect() {

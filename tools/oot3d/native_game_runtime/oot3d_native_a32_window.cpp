@@ -525,6 +525,9 @@ double SecondsSince(std::chrono::steady_clock::time_point start) {
 struct NativeFramePhaseTiming {
   double GuestSeconds = 0.0;
   double FrameStartSeconds = 0.0;
+  double HostFrameStartSeconds = 0.0;
+  double InputPollSeconds = 0.0;
+  double RendererFrameStartSeconds = 0.0;
   double DspMixSeconds = 0.0;
   double AudioOutputSeconds = 0.0;
   double PicaSubmitSeconds = 0.0;
@@ -4776,6 +4779,8 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     window.GetMouseStateManager()->StartFrame();
     gui->StartDraw();
     window.StartFrame();
+    phaseTiming.HostFrameStartSeconds += SecondsSince(phaseStart);
+    const auto inputPhaseStart = std::chrono::steady_clock::now();
     const bool quickSaveKeyDown = window.IsKeyDown(Ship::KbScancode::LUS_KB_F5);
     const bool quickLoadKeyDown = window.IsKeyDown(Ship::KbScancode::LUS_KB_F8);
     quickSavePending =
@@ -4835,6 +4840,8 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
           physicalStartHeld, nativeCandidateDispatch.TopScreenStartRouting);
     }
     Oot3dNativeGame::NativeA32InputFrame inputFrame;
+    phaseTiming.InputPollSeconds += SecondsSince(inputPhaseStart);
+    const auto rendererFrameStart = std::chrono::steady_clock::now();
     api.UpdateFramebufferParameters(0, width, height, 1, false, true, true,
                                     true);
     api.StartFrame();
@@ -4844,6 +4851,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     api.ClearFramebuffer(true, true);
     api.SetViewport(0, 0, static_cast<int>(width), static_cast<int>(height));
     api.SetScissor(0, 0, static_cast<int>(width), static_cast<int>(height));
+    phaseTiming.RendererFrameStartSeconds += SecondsSince(rendererFrameStart);
     phaseTiming.FrameStartSeconds += SecondsSince(phaseStart);
     const uint32_t guestRefreshIterations =
         std::max<uint32_t>(1U, guestRefreshesDue);
@@ -8812,6 +8820,9 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
             {"phase_timing",
              {{"guest_seconds", phaseTiming.GuestSeconds},
               {"frame_start_seconds", phaseTiming.FrameStartSeconds},
+              {"host_frame_start_seconds", phaseTiming.HostFrameStartSeconds},
+              {"input_poll_seconds", phaseTiming.InputPollSeconds},
+              {"renderer_frame_start_seconds", phaseTiming.RendererFrameStartSeconds},
               {"dsp_mix_seconds", phaseTiming.DspMixSeconds},
               {"audio_output_seconds", phaseTiming.AudioOutputSeconds},
               {"pica_submit_seconds", phaseTiming.PicaSubmitSeconds},

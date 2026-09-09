@@ -142,14 +142,85 @@ it did not establish that optimization itself was impractical. The complete O1
 title build passed (264 commands, two jobs); packaging took eight seconds. The
 stripped title is 89,461,696 bytes, versus roughly 175 MB for O0. The O1 APK is
 installed; the working O0 APK/build remain available for rollback and comparison.
-No translated game source,
-timing constants, floating-point semantics or canonical PICA shaders change.
+No translated game source, timing constants, floating-point semantics or
+canonical PICA shaders change.
 
-Next measurement: install the O1 title with the same renderer, run without the
-effective-shader inventory, and compare bounded runtime counters plus an active
-simpleperf sample and framebuffer captures. The device was locked after install;
-no O1 FPS gain is claimed until an active run is measured. Do not count lock-screen video,
-interpolated frames, or an old runtime summary left behind by a force-stop.
+The completed active O1 run without shader inventory produced 2,504 presentations
+and 2,472 logical game updates in 120.029 seconds (20.9 and 20.6/s respectively).
+The user confirms a substantial improvement, still below native speed. A 5-second
+simpleperf sample has 9,790 samples and none lost: guest execution accounts for
+65.1% of sampled cycles, typed `ReadFast<uint32_t>` for 8.4% self cycles and
+canonical draw identity construction for 7.3%. However, wall-clock timing shows
+66.0 seconds in frame start, versus 34.7 in guest execution and 7.2 in backend
+submission. CPU-cycle sampling alone misses the dominant wait cost.
+
+`NativeFramePhaseTiming` now separates host window/GUI preparation, input polling
+and renderer frame start. Existing total fields remain compatible. Do not count
+lock-screen video, interpolated frames, or stale summaries after force-stop.
+
+### Android Output Budget
+
+The SDL Activity now bounds the actual `SurfaceHolder` buffer, not just the
+desktop-style logical window request. Default maximum short edge is 720 pixels:
+2340x1080 becomes 1560x720; 1920x1080 becomes 1280x720; narrower outputs preserve
+their own aspect. No upscaling or fixed 16:9 stretching is introduced. Scene FOV
+and UI composition remain under the existing renderer contracts. The native
+PICA target policy sizes its targets from this output extent as before.
+
+The Android-only `TriAevumSurface` uses
+[`SurfaceHolder.setFixedSize`](https://developer.android.com/reference/android/view/SurfaceHolder#setFixedSize(int,%20int)).
+`SurfaceExtentPolicy` is an independently tested, game-independent extent policy.
+View layout remains match-parent; a fixed buffer must not constrain layout after
+portrait-lock-screen to landscape transitions. SDL receives buffer dimensions;
+touch normalization continues to use the physical view dimensions. Android's SDL
+window backend ignores desktop `SetDimensions` requests, which otherwise mutate
+SDL's logical size without resizing the native Surface and mislead camera aspect.
+
+Optional app-local configuration, read on Activity creation:
+
+```json
+{"maximum_surface_short_edge": 720}
+```
+
+Save it as `TriAevum.android.host.json` beside the launch profile. Zero selects
+native surface resolution; a missing/invalid file uses 720. This is an Android
+host setting, not an OOT3D asset or canonical shader adjustment.
+
+The first 720p run verified actual 1560x720 buffers through SDL logs and Android
+SurfaceFlinger, and captured an intact landscape title. In 120.021 seconds it
+produced 3,132 presentations (26.1/s) and 3,034 logical updates (25.3/s). Frame
+start fell to 36.34 seconds: host/GUI 0.519, input 0.037, backend 35.787. The first
+clips run around 30/s, but an 8.88-second maximum interval prevents a sustained
+native-speed claim. Backend submission totals 21.90 seconds and presentation
+19.02 seconds (including pacing; these are not all additive). The run reaches
+later intro content than the old 1080p test, so compare clip-matched captures
+before assigning every cost difference to resolution. The user confirms it is
+often real-time. Interpolation remains **disabled**, presentation capped at 30 Hz.
+
+Three JVM extent-policy tests and the incremental native build pass. The final
+active 120.023-second run with warm caches and the SDL logical-aspect/layout
+corrections produced 3,527 presentations (29.39/s) and 3,401 logical game updates
+(28.34/s). No interpolation or simulation acceleration is enabled. The largest
+interval is now 97.3 ms, not 8.88 seconds; interval RMS error is 5.75 ms. Guest
+execution took 33.42 s, backend submission 8.75 s, renderer frame start 44.11 s,
+GUI/window preparation 0.593 s and input polling 0.040 s. Presentation includes
+17.13 s of pacing sleep. These runs have different cached/visible content; the
+overall improvement is verified, not a pure isolated resolution benchmark.
+
+The final native framebuffer is 1560x720. The runtime reports output aspect
+2.166667 and horizontal FOV expansion 1.30 from the native 5:3 baseline, versus
+the erroneous old logical 16:9; both the scene policy and buffer now agree.
+Native capture inspection confirms landscape geometry and Link/Epona. The user
+also confirms often-real-time playback. Residual missed refreshes (359 in this
+run) mean fully stable native timing is not yet qualified. The next performance
+probe should split backend acquire/fence/present waits and inspect remaining
+per-draw CPU work, rather than assuming host input or interpolation is costly.
+
+One intervening run was backgrounded during startup and returned
+`VK_ERROR_SURFACE_LOST_KHR` before producing a summary. It is excluded from all
+performance figures. Surface loss/recreation remains a lifecycle qualification
+item, not a reason to count a paused app as slow gameplay. The interactive launch
+is left at a 600-second bound with repeated framebuffer capture disabled.
 
 ## Build Boundaries
 
@@ -236,9 +307,10 @@ and captures directories, outside public source. Profiling used NDK simpleperf
   speed. The second surface-lifecycle correction is visibly faster, not yet
   real-time. Older 4-5 presentations/s results describe the invalidation bug,
   not the latest renderer.
-- Qualify the optimized title without diagnostic shader inventory, then profile
-  the remaining guest/backend/wait costs. Separate cold-cache startup from steady
-  in-scene performance, and never use captured-video FPS as game FPS.
+- O1 and a real 720p output budget are device-tested. Qualify warm-cache playback,
+  the remaining occasional long stalls and the corrected logical aspect on
+  Android. Separate cold-cache startup from steady in-scene performance, and
+  never use captured-video FPS as game FPS.
 - Full app restart after Activity destruction: desktop runtime globals are
   process-lifetime. For now use an explicit package force-stop before relaunch.
 - Pinned SDL HID Android receiver needs the target-SDK exported/not-exported
