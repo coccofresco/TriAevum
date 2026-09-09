@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from release_platform import host_platform
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -216,7 +217,8 @@ class ForgeTests(unittest.TestCase):
         index["process_manifest"] = {"path": str(manifest_path), "bytes": manifest_path.stat().st_size,
                                      "sha256": sha256_file(manifest_path)}
         atomic_write_json(title / "content.tap", index)
-        exe, plugin = self.root / "TriAevum.exe", self.root / "triaevum_title_aot.dll"
+        platform = host_platform()
+        exe, plugin = self.root / platform.runtime, self.root / platform.title_module
         exe.write_bytes(b"synthetic host")
         plugin.write_bytes(b"synthetic plugin")
         profile = self.root / "TriAevum.launch.json"
@@ -252,7 +254,7 @@ class ForgeTests(unittest.TestCase):
             shutil.copytree(self.root, moved)
             new_title = moved / title.relative_to(self.root)
             runtime = load_json_object(new_title / "forge-state.json")["runtime"]
-            validate_installed_runtime(moved / "TriAevum.exe", new_title, moved / "forge-output", runtime)
+            validate_installed_runtime(moved / host_platform().runtime, new_title, moved / "forge-output", runtime)
             self.assertEqual((moved / save.relative_to(self.root)).read_bytes(), save_before)
 
     def test_migration_rolls_back_every_metadata_file_on_late_failure(self):

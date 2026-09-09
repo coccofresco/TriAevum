@@ -76,6 +76,28 @@ tests; real F1 widgets; current Linux frozen Forge GUI (760x443, mapped controls
 no clipping). Windows controller hardware regression and final release builds
 have not been repeated for these changes. No new public tag/package yet.
 
+## PR Integration Verification (2026-09-09)
+
+Selective integration starts at `f1c05a8` (original PR #6: `505d7b8`).
+The full release Python suite runs 251 tests on each host: Windows Python 3.13
+passes with 2 skips; Linux Python 3.14 passes with 5 skips. The isolated actual-loader/support
+build took 2.81 seconds on the Linux host with three compiler jobs. The synthetic
+title build and six ABI execution checks passed in 1.57 seconds using Clang
+22.1.8 invoked as `/usr/bin/clang`, not `clang++`: explicit driver policy fixes
+the symlink/name hazard. Actual-loader query/entry/sealing checks and empty-stub
+rejection also pass. All 12 service/module tests pass under GCC 16.2.1,
+including the C ABI test. These timings are small-test iteration costs, not a
+full-title build, game FPS, or Steam Deck gameplay qualification.
+
+The new Linux CI job uses `tools/triaevum_release/native_probe` directly. It
+does not configure SDL, shaderc, NRI or the UI to verify the plugin ABI. The full
+runtime continues using the already-corrected distro shaderc lookup. Developer
+title creation and catalog promotion now propagate the same explicit target
+and profile, while legacy manifests without a target remain Windows.
+Installation migration uses platform artifact names and tests repeated migration,
+relocation and preservation of save/configuration bytes. No compilation is added
+to ROM-only end-user installation.
+
 ## Android Extension Point
 
 Add an arm64 target only together with its build/loader, dependency policy and

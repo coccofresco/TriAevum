@@ -99,11 +99,12 @@ def _run(arguments: Sequence[str], cwd: Path, label: str) -> None:
     if completed.returncode == 0:
         return
     details = (completed.stderr or completed.stdout or "no diagnostics").strip()
-    if "cannot open include file" in details.lower() or "linker command failed" in details.lower():
+    if (f"--target={release_platform.WINDOWS.target}" in arguments and
+            ("cannot open include file" in details.lower() or "linker command failed" in details.lower())):
         details += (
-            "\nThe bundled LLVM tools require the title-neutral C++/Windows "
-            "link environment shipped with Forge or a compatible Visual C++ "
-            "Build Tools installation."
+            "\nThe developer compiler requires a verified Windows sysroot or "
+            "a compatible Visual C++ Build Tools installation. "
+            "End-user Forge installations do not require a compiler."
         )
     raise WholeAotPluginError(
         f"{label} failed with status {completed.returncode}: {details}"

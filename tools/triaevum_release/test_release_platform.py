@@ -1,5 +1,7 @@
 import copy
 import json
+import contextlib
+import io
 from pathlib import Path
 import tempfile
 import unittest
@@ -14,6 +16,17 @@ from release_platform import WINDOWS, LINUX, catalog_platform, for_target
 
 
 class ReleasePlatformTests(unittest.TestCase):
+    def test_developer_title_command_selects_host_toolchain(self):
+        for platform in (WINDOWS, LINUX):
+            with self.subTest(target=platform.target), \
+                 patch("forge.host_platform", return_value=platform), \
+                 patch("forge.build_private_title", return_value={"status": "fixture"}) as build, \
+                 contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(forge.main(["build-title", "--prepared-directory", "fixture"]), 0)
+                self.assertEqual(build.call_args.kwargs["target_triple"], platform.target)
+                self.assertEqual(build.call_args.kwargs["compiler"].name, platform.compiler)
+                self.assertEqual(build.call_args.kwargs["archiver"].name, platform.archiver)
+
     def test_legacy_windows_and_explicit_linux(self):
         self.assertEqual(catalog_platform({}), WINDOWS)
         self.assertEqual(catalog_platform({"target": LINUX.target}), LINUX)

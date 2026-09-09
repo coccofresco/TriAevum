@@ -15,7 +15,7 @@ from typing import Any, Callable, Sequence
 try:
     from . import TOOL_VERSION
     from .product_contract import ensure_runtime_config, query_product
-    from .release_platform import host_platform
+    from .release_platform import WINDOWS, for_target, host_platform
     from .activation_transaction import activation_transaction
     from .installation_context import InstallationContext, resolve_reference
     from .toolchain_probe import probe_toolchain
@@ -57,7 +57,7 @@ try:
 except ImportError:
     from __init__ import TOOL_VERSION
     from product_contract import ensure_runtime_config, query_product
-    from release_platform import host_platform
+    from release_platform import WINDOWS, for_target, host_platform
     from activation_transaction import activation_transaction
     from installation_context import InstallationContext, resolve_reference
     from toolchain_probe import probe_toolchain
@@ -842,8 +842,10 @@ def build_private_whole_aot(
     shard_count: int = 256,
     jobs: int = 8,
     sysroot: Path | None = None,
+    target_triple: str = WINDOWS.target,
 ) -> dict[str, Any]:
     """Build the direct generated-C++ plugin consumed by the mature runtime."""
+    platform = for_target(target_triple)
 
     prepared = load_prepared_content(
         prepared_directory, required_inputs=("code", "exheader")
@@ -880,6 +882,8 @@ def build_private_whole_aot(
                 support_library=support_library,
                 nlohmann_include=nlohmann_include,
                 sysroot=sysroot,
+                target_triple=platform.target,
+                profile=platform.profile,
             ),
             shard_count=shard_count,
             jobs=jobs,
@@ -1213,6 +1217,7 @@ def build_private_title(
         nlohmann_include=nlohmann_include,
         cache_root=cache_root / "whole-aot-v2",
         sysroot=sysroot,
+        target_triple=target_triple,
         shard_count=shard_count,
         jobs=jobs,
     )
@@ -1354,23 +1359,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     title_parser.add_argument(
         "--native-image",
         type=Path,
-        default=default_forge_support_path("oot3d_game_module.dll"),
+        default=default_forge_support_path(Path(host_platform().native_module).name),
     )
     title_parser.add_argument(
         "--compiler",
         type=Path,
-        default=default_forge_support_path("clang-cl.exe"),
+        default=default_forge_support_path(host_platform().compiler),
     )
     title_parser.add_argument(
         "--archiver",
         type=Path,
-        default=default_forge_support_path("llvm-lib.exe"),
+        default=default_forge_support_path(host_platform().archiver),
     )
     title_parser.add_argument(
         "--support-library",
         type=Path,
         default=default_forge_support_path(
-            "triaevum_title_whole_aot_support.lib"
+            host_platform().support_library
         ),
     )
     title_parser.add_argument(
@@ -1387,7 +1392,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     title_parser.add_argument("--sysroot", type=Path,
                               help="Use a verified private Windows sysroot instead of host discovery")
     title_parser.add_argument(
-        "--target-triple", default="x86_64-pc-windows-msvc"
+        "--target-triple", default=host_platform().target
     )
     title_parser.add_argument(
         "--active-title-state",

@@ -12,7 +12,7 @@ tests=(
   triaevum_service_abi_c_tests
 )
 cmake -S "$root/runtime/triaevum_module" -B "$build" -G Ninja \
-  -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER="${CC:-clang}" -DCMAKE_CXX_COMPILER="${CXX:-clang++}"
 cmake --build "$build" --target "${tests[@]}" triaevum_native_module_loader_tests \
   --parallel "${CMAKE_BUILD_PARALLEL_LEVEL:-3}"
 for test in "${tests[@]}"; do

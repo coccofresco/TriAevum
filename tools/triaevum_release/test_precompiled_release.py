@@ -15,6 +15,7 @@ from input_adapters import FORMAT as ADAPTER_FORMAT
 from input_copy_adapter import FORMAT as COPY_FORMAT
 from oot3d_region_assets import ALGORITHM
 from test_release_audit import write_clean_package
+from release_platform import LINUX, WINDOWS
 
 
 class PrecompiledReleaseTests(unittest.TestCase):
@@ -82,6 +83,37 @@ class PrecompiledReleaseTests(unittest.TestCase):
     def test_explicit_title_code_and_sources_pass_without_compiler(self):
         result = audit_release(self.root)
         self.assertTrue(result.ok, result.errors)
+
+    def test_linux_promotion_uses_build_target_not_host(self):
+        build = load_json_object(self.build)
+        build.update(target=LINUX.target, profile=LINUX.profile)
+        atomic_write_json(self.build, build)
+        shutil.copy2(self.work / WINDOWS.title_module, self.work / LINUX.title_module)
+        runtime = self.work / LINUX.runtime
+        native = self.work / LINUX.native_module
+        native.parent.mkdir(parents=True)
+        runtime.write_bytes(b"runtime fixture")
+        native.write_bytes(b"native module fixture")
+        with patch("precompiled_title_layout.query_product"), \
+             patch("release_platform.host_platform", side_effect=AssertionError("publisher metadata queried host")):
+            items = title_layout(runtime=runtime, native_module=native,
+                plugin_manifest=self.build, generated_manifest=self.generated,
+                build_source=self.build_source, recipe=self.recipe, work=self.work / "linux-promotion")
+        catalog_item = next(item for item in items if item["role"] == "precompiled_catalog")
+        catalog = load_json_object(Path(catalog_item["source"]))
+        self.assertEqual(catalog["target"], LINUX.target)
+        self.assertEqual(catalog["runtime"]["path"], LINUX.runtime)
+        self.assertEqual(catalog["native_module"]["path"], LINUX.native_module)
+        self.assertEqual(catalog["titles"][0]["plugin"]["path"], "titles/fixture/" + LINUX.title_module)
+
+    def test_promotion_rejects_target_profile_mismatch_before_runtime_probe(self):
+        build = load_json_object(self.build)
+        build["target"] = LINUX.target
+        atomic_write_json(self.build, build)
+        with patch("precompiled_title_layout.query_product") as query:
+            with self.assertRaisesRegex(ValueError, "do not correspond"):
+                self.layout()
+            query.assert_not_called()
 
     def test_title_code_cannot_be_hidden_as_neutral(self):
         self.manifest["release"]["contains_title_code"] = False

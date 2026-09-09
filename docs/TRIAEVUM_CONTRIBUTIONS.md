@@ -10,10 +10,14 @@ rebased, or substantially adapted. This record complements Git history and
 - Pull request: [Linux x64 port of runtime loader, Forge and packaging](https://github.com/coccofresco/TriAevum/pull/6).
 - Original commit: [`505d7b8c974a2eadd5a362933a5ffdc19bd28214`](https://github.com/999sian/TriAevum/commit/505d7b8c974a2eadd5a362933a5ffdc19bd28214).
 - Integration: selective adaptation on `port/linux-nri`, not a wholesale merge.
+- First integration commit: [`f1c05a8`](https://github.com/coccofresco/TriAevum/commit/f1c05a8).
 
 Retained contribution: Linux object-cache/plugin build support, ELF visibility
 and link policy, the POSIX synthetic ABI probe, the actual title-loader test,
 compiler portability changes, and the fixed-width C++ module status enum.
+The target-aware precompiled-title promotion is also adapted into the existing
+common publisher, as is portable installation migration, without introducing
+a second Linux release policy.
 Relevant owners are `tools/triaevum_release/whole_aot_*`,
 `validate_whole_aot_toolchain.py`, `toolchain_probe.py`,
 `tools/oot3d/native_game_runtime/oot3d_native_direct_aot_tests.cpp`, and
