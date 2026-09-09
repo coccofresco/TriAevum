@@ -405,7 +405,6 @@ def build_whole_aot_plugin(
                     "-fuse-ld=lld",
                     "/link",
                     "/NOIMPLIB",
-                    "/NOEXP",
                     "/OPT:REF",
                     "/OPT:ICF",
                     "/INCREMENTAL:NO",

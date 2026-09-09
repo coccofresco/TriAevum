@@ -98,6 +98,14 @@ Installation migration uses platform artifact names and tests repeated migration
 relocation and preservation of save/configuration bytes. No compilation is added
 to ROM-only end-user installation.
 
+CI run `34310058002` passes the Linux policy/module and native title ABI jobs.
+The Windows native link exposed a pre-existing `/NOEXP` option unsupported by
+the runner's LLD. The developer linker and profiling relinker no longer request
+it: any auxiliary export file stays in the temporary link directory, and only
+the verified DLL is promoted. A regression test verifies both the command and
+the absence of auxiliary files in the cache. This is independent of PR #6's
+Linux contribution and does not require changing the Windows title ABI.
+
 ## Android Extension Point
 
 Add an arm64 target only together with its build/loader, dependency policy and

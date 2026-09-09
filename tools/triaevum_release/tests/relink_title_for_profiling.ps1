@@ -42,7 +42,7 @@ $compile = $common + @('/TP','/EHsc','/O2','/Ob2','/DNDEBUG','/std:c++20',
     '/DOOT3D_NATIVE_GENERATED_WHOLE_AOT=1',"/I$Generated","/I$runtime","/I$a32","/I$a32/upstream",
     '/c',"/Fo$Output/wrapper.obj",$wrapper)
 $link = $common + @('/LD',"/Fe$Output/triaevum_title_aot.dll","$Output/wrapper.obj",
-    $Archive,$Support,'-fuse-ld=lld','/link','/NOIMPLIB','/NOEXP','/OPT:REF','/OPT:ICF',
+    $Archive,$Support,'-fuse-ld=lld','/link','/NOIMPLIB','/OPT:REF','/OPT:ICF',
     '/INCREMENTAL:NO','/Brepro',"/MAP:$Output/title.map",'/DEBUG:FULL',"/PDB:$Output/title.pdb",
     "/OPT:LLDLTOJOBS=$Jobs","/threads:$Jobs","/lldltocache:$LtoCache")
 $watch = [Diagnostics.Stopwatch]::StartNew()

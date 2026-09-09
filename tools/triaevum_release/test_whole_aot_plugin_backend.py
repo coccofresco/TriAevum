@@ -75,6 +75,7 @@ class WholeAotPluginBackendTests(unittest.TestCase):
                         Path(argument[3:]).write_bytes(b"wrapper")
                     elif argument.startswith("/Fe"):
                         Path(argument[3:]).write_bytes(b"MZ plugin")
+                        Path(argument[3:]).with_suffix(".exp").write_bytes(b"linker auxiliary")
 
             with (
                 patch.object(backend, "REPO_ROOT", repo),
@@ -121,6 +122,9 @@ class WholeAotPluginBackendTests(unittest.TestCase):
                 with patch.object(backend, "build_generated_cpp_archive", side_effect=AssertionError("archive must not be visited")):
                     backend.build_whole_aot_plugin(**arguments)
                 self.assertEqual(len(commands), 2)
+                self.assertIn("/NOIMPLIB", commands[1])
+                self.assertNotIn("/NOEXP", commands[1])
+                self.assertEqual(list((root / "cache").rglob("*.exp")), [])
                 (root / "lld-link.exe").write_bytes(b"updated linker")
                 relinked = backend.build_whole_aot_plugin(**arguments)
                 self.assertEqual(built["generated_directory"], relinked["generated_directory"])
