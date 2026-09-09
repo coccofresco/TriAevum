@@ -41,6 +41,16 @@ no failures. Tests deliberately remove a UI header from an otherwise correctly
 hashed package and check that release auditing rejects it; filtering a required
 source before ZIP creation is rejected as well.
 
+The policy-filtered ZIP from commit `c5d85340a8f8b8d48538c49d8933cbb9e3d3c0ac`
+was then exported, transferred and extracted into a fresh physical-Linux source
+directory. It contains 2,995 source files, including all 62 UI files with the
+expected imported hashes, and no evidence directory or `AGENTS.md`. GCC 16.2.1
+configured, compiled and passed the same three tests from that archive in
+3.21 seconds. ZIP SHA-256:
+`36319a8c489be5e7faf023256153d46688c8911f2c164799d7fb06aa05b190ea`.
+Private test log/receipt: `~/triaevum-public-ui-export/{test.log,report.json}`.
+This is archive-build evidence, not a claim that the old alpha archives changed.
+
 The local Visual Studio installation lacks `cl.exe`; native MSVC compilation
 is covered by the new CI job, not claimed as a completed local test. Building
 the whole runtime with GCC remains separate from the contributor's reported
