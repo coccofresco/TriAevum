@@ -727,6 +727,8 @@ bool ParseOot3dNativeGameArgs(int argc, char** argv, Oot3dNativeGameLaunch& laun
                 ParseU32(argv[++index], "benchmark warm-up frame count");
         } else if (arg == "--throughput-benchmark") {
             launch.Host.ThroughputBenchmark = true;
+        } else if (arg == "--guest-thread") {
+            launch.Host.GuestThread = true;
         } else if (arg == "--max-seconds" && index + 1 < argc) {
             launch.Host.MaxSeconds = std::max(0.0, ParseDouble(argv[++index], "maximum seconds"));
         } else if (arg == "--fixed-delta-seconds" && index + 1 < argc) {

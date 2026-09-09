@@ -100,6 +100,8 @@ struct Args {
     // bootstrap supplies one complete simulation step per host frame while
     // the host disables VSync and its SDL software frame limiter.
     bool ThroughputBenchmark = false;
+    // Runs guest execution on its own thread so it overlaps rendering.
+    bool GuestThread = false;
     double MaxSeconds = 0.0;
     double FixedDeltaSeconds = 0.0;
     std::filesystem::path InputTimelinePath;
