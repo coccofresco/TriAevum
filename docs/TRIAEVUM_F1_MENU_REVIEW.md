@@ -6,6 +6,55 @@ Date: 2026-09-06. Worktree: `triaevum-release`.
 adds a session-only effect comparison and persistent header status. F1 now starts
 closed even when the previous session saved it open.
 
+## Controls redesign (2026-09-10)
+
+The previous five-column binding table combined keyboard, alternate key, mouse
+and controller in a content-proportional layout. Full-width combo boxes fed their
+current widths back into auto-fit sizing. The replacement uses explicit stretch
+weights, no persisted table widths and no nested table scrolling.
+
+- Four sections: **Bindings**, **Camera**, **Devices**, **Shortcuts**. Bindings
+  opens first, with separate Keyboard / Mouse / Controller views and collapsible
+  Movement, Game buttons, D-pad, Menu shortcuts and Look directions groups.
+- Search controls by name; search assignments inside their dropdowns; select
+  **Unassigned** to clear one source. Keyboard primary/alternate remain separate.
+  Shared assignments are indicated on their row with the other actions in a
+  tooltip, not an expanding list above the table. They remain allowed because
+  context-dependent mappings can intentionally share a source.
+- Preset selection does not mutate live input until **Apply preset** is pressed.
+  Controller preference and motion calibration survive a preset change.
+- Camera contains free-camera behavior, native gyro aiming and C-stick aiming;
+  Devices contains enablement, controller selection, analog settings and motion
+  calibration. Shortcuts contains the child/adult D-pad and menu actions.
+  Full-width fields place labels above their values and remain usable at the
+  minimum F1 window width.
+- **Save controls** / **Revert changes** stay below the single scrolling body.
+  Revert works before the first save using the initial profile. It parses
+  existing required files before applying either, and restores only the
+  control-owned TopScreen fields, preserving live HUD layout. Failures remain
+  visible, with the complete message available on hover.
+
+The UI still uses `NativeControlConfigRuntime` and `TopScreenUiConfigRuntime`.
+No new input poller, gameplay routing, SDL mapping, JSON schema or save format.
+Reusable field layout is in `oot3d_control_settings_widgets.h`; title-specific
+widgets and the control-owned TopScreen field copy are kept together in
+`oot3d_top_screen_control_widgets.h`.
+
+The real-widget smoke covers 120 consecutive frames at each of 520, 760, 1100,
+then 520 pixels, binding search/clear/reassignment on all three devices, preset
+confirmation/cancel, external revisions, and the compact footer on all sections.
+Isolated JSON fixtures exercise save, revert, preserved HUD state and failure
+atomicity on reload. This tests UI wiring and geometry, not physical-controller
+ergonomics; the existing shared input tests cover routing. Windows incremental
+runtime build recompiles the panel and relinks only, with no title/AOT rebuild.
+
+Validation on Windows: **3,569 actual-widget assertions**, shared native input
+tests passing, and the rebuilt Vulkan runtime loads the existing complete-save
+checkpoint and renders a native framebuffer (bounded run, exit 0). No UI inputs
+were injected in that game run; the menu's interaction/layout tests use the real
+widgets in the headless fixture. Linux/Android execution was not repeated for
+this panel-only change.
+
 ## Scope and ownership
 
 This change repairs the existing F1 control surfaces, not the rendering algorithms.
@@ -17,8 +66,8 @@ scheduling has been replaced.
 | Renderer | Display, Antialiasing, Lighting, Reflections, Toon | GraphicsSettingsRuntime |
 | Grass | Sources, Generation, Appearance, Performance, Wind, Interaction | GraphicsSettingsRuntime / grass module |
 | Textures | Load, dump, directories, reload, diagnostics | GraphicsSettingsRuntime / texture-pack module |
-| Controls | Devices, Bindings, Aiming, Motion | NativeControlConfigRuntime |
-| TopScreen 2.1.1 | HUD, Camera, D-pad | TopScreenUiConfigRuntime |
+| Controls | Bindings, Camera, Devices, Shortcuts | NativeControlConfigRuntime / TopScreenUiConfigRuntime |
+| TopScreen 2.1.1 | HUD and layout | TopScreenUiConfigRuntime |
 
 Input still owns host-device routing and sensitivity. TopScreen owns game-camera
 behavior, layout and D-pad actions. Its C-stick smoothing really is consumed by

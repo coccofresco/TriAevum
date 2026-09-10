@@ -1,26 +1,45 @@
 #pragma once
 
 #include "oot3d_top_screen_config.h"
+#include "oot3d_control_settings_widgets.h"
 #include <imgui.h>
 #include <array>
 
 namespace Oot3dNativeGame {
 
+// Controls owns these fields, not the HUD layout stored in the same JSON file.
+inline void CopyTopScreenControlSettings(const TopScreenUiConfig& source, TopScreenUiConfig& target) {
+    target.SelectAction = source.SelectAction;
+    target.ExitItemsToSaveScreen = source.ExitItemsToSaveScreen;
+    target.CameraZoomPercent = source.CameraZoomPercent;
+    target.CameraFovPercent = source.CameraFovPercent;
+    target.ChildDpad = source.ChildDpad;
+    target.AdultDpad = source.AdultDpad;
+    target.FreeCameraEnabled = source.FreeCameraEnabled;
+    target.FreeCameraSpeedLevel = source.FreeCameraSpeedLevel;
+    target.FreeCameraSmoothing = source.FreeCameraSmoothing;
+    target.FreeCameraInvertX = source.FreeCameraInvertX;
+    target.FreeCameraInvertY = source.FreeCameraInvertY;
+    target.CStickAimSpeedLevel = source.CStickAimSpeedLevel;
+    target.CStickAimInvertX = source.CStickAimInvertX;
+    target.CStickAimInvertY = source.CStickAimInvertY;
+}
+
 inline bool DrawTopScreenCameraBehavior(TopScreenUiConfig& config) {
     bool changed = ImGui::Checkbox("Enabled##freecam", &config.FreeCameraEnabled);
     int speed = config.FreeCameraSpeedLevel;
-    if (ImGui::SliderInt("Speed##freecam", &speed, 0, 6)) {
+    if (ControlWidgets::SliderInt("Speed##freecam", &speed, 0, 6)) {
         config.FreeCameraSpeedLevel = static_cast<uint8_t>(speed);
         changed = true;
     }
     changed |= ImGui::Checkbox("Invert X##freecam", &config.FreeCameraInvertX);
     changed |= ImGui::Checkbox("Invert Y##freecam", &config.FreeCameraInvertY);
     int zoom = config.CameraZoomPercent, fov = config.CameraFovPercent;
-    if (ImGui::SliderInt("Camera zoom", &zoom, kTopScreenCameraZoomMinimum, kTopScreenCameraZoomMaximum, "%d%%")) {
+    if (ControlWidgets::SliderInt("Camera zoom", &zoom, kTopScreenCameraZoomMinimum, kTopScreenCameraZoomMaximum, "%d%%")) {
         config.CameraZoomPercent = static_cast<uint8_t>(zoom / 5 * 5);
         changed = true;
     }
-    if (ImGui::SliderInt("Field of view", &fov, kTopScreenCameraFovMinimum, kTopScreenCameraFovMaximum, "%d%%")) {
+    if (ControlWidgets::SliderInt("Field of view", &fov, kTopScreenCameraFovMinimum, kTopScreenCameraFovMaximum, "%d%%")) {
         config.CameraFovPercent = static_cast<uint8_t>(fov / 5 * 5);
         changed = true;
     }
@@ -31,13 +50,13 @@ inline bool DrawTopScreenStickAiming(TopScreenUiConfig& config) {
     ImGui::SeparatorText("C-stick aiming");
     bool changed = false;
     int speed = config.CStickAimSpeedLevel;
-    if (ImGui::SliderInt("Speed##aim", &speed, 0, 6)) {
+    if (ControlWidgets::SliderInt("Speed##aim", &speed, 0, 6)) {
         config.CStickAimSpeedLevel = static_cast<uint8_t>(speed);
         changed = true;
     }
     constexpr const char* smoothingLabels[]{"Off", "Light", "Medium", "Default", "Heavy"};
     int smoothing = static_cast<int>(config.FreeCameraSmoothing);
-    if (ImGui::Combo("Smoothing##aim", &smoothing, smoothingLabels, 5)) {
+    if (ControlWidgets::Combo("Smoothing##aim", &smoothing, smoothingLabels, 5)) {
         config.FreeCameraSmoothing = static_cast<TopScreenFreeCameraSmoothing>(smoothing);
         changed = true;
     }
@@ -57,7 +76,7 @@ inline bool DrawTopScreenActionBindings(TopScreenUiConfig& config) {
         ImGui::PushID(id);
         for (size_t i = 0; i < bindings.size(); ++i) {
             int action = static_cast<int>(bindings[i]);
-            if (ImGui::Combo(directions[i], &action, labels, 14)) {
+            if (ControlWidgets::Combo(directions[i], &action, labels, 14)) {
                 bindings[i] = static_cast<TopScreenDpadAction>(action);
                 changed = true;
             }
@@ -68,7 +87,7 @@ inline bool DrawTopScreenActionBindings(TopScreenUiConfig& config) {
     draw("Adult D-pad", config.AdultDpad);
     int select = static_cast<int>(config.SelectAction);
     constexpr const char* actions[]{"Open Save screen", "Toggle minimap"};
-    if (ImGui::Combo("SELECT action", &select, actions, 2)) {
+    if (ControlWidgets::Combo("SELECT action", &select, actions, 2)) {
         config.SelectAction = static_cast<TopScreenSelectAction>(select);
         changed = true;
     }

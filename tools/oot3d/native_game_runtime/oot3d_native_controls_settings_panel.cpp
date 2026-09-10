@@ -15,7 +15,8 @@ namespace {
 template <typename Enum, std::size_t Size>
 bool EnumCombo(const char* label, Enum* value,
                const std::array<Enum, Size>& values,
-               const char* (*name)(Enum) noexcept) {
+               const char* (*name)(Enum) noexcept, bool cell = false,
+               char* search = nullptr, std::size_t searchSize = 0) {
   std::size_t selected = values.size();
   for (std::size_t index = 0; index < values.size(); ++index) {
     if (values[index] == *value) {
@@ -24,14 +25,26 @@ bool EnumCombo(const char* label, Enum* value,
     }
   }
   bool changed = false;
-  if (ImGui::BeginCombo(label, name(*value))) {
+  const std::string id = cell ? label : ControlWidgets::Field(label);
+  const auto preview = ControlWidgets::DisplayName(name(*value));
+  if (ImGui::BeginCombo(id.c_str(), preview.c_str())) {
+    if (search) {
+      if (ImGui::IsWindowAppearing()) {
+        search[0] = '\0';
+        ImGui::SetKeyboardFocusHere();
+      }
+      ImGui::SetNextItemWidth(-1.0F);
+      ImGui::InputTextWithHint("##BindingSearch", "Find input...", search, searchSize);
+    }
     for (std::size_t index = 0; index < values.size(); ++index) {
+      const auto option = ControlWidgets::DisplayName(name(values[index]));
+      if (search && !ControlWidgets::Contains(option, search)) continue;
       const bool current = index == selected;
-      if (ImGui::Selectable(name(values[index]), current)) {
+      if (ImGui::Selectable(option.c_str(), current)) {
         *value = values[index];
         changed = true;
       }
-      if (current) {
+      if (current && !search) {
         ImGui::SetItemDefaultFocus();
       }
     }
@@ -131,6 +144,30 @@ constexpr std::array<const char*, kNativeControlActionCount> kActionLabels{
     "Look up", "Look down", "Look left", "Look right",
 };
 
+struct BindingGroup {
+  const char* Name;
+  std::size_t First;
+  std::size_t End;
+};
+constexpr std::array<BindingGroup, 5> kBindingGroups{{
+    {"Movement", 0, 4}, {"Game buttons", 4, 14}, {"D-pad", 14, 18},
+    {"Menu shortcuts", 18, 21}, {"Look directions", 21, 25},
+}};
+enum class BindingDevice { Keyboard, Mouse, Controller };
+
+bool SharesBinding(const NativeControlBinding& a, const NativeControlBinding& b,
+                   BindingDevice device) {
+  const auto keyIn = [&](auto key) {
+    return key != NativeKeyboardKey::None &&
+        (key == b.KeyboardPrimary || key == b.KeyboardSecondary);
+  };
+  if (device == BindingDevice::Keyboard)
+    return keyIn(a.KeyboardPrimary) || keyIn(a.KeyboardSecondary);
+  if (device == BindingDevice::Mouse)
+    return a.Mouse != NativeMouseButton::None && a.Mouse == b.Mouse;
+  return a.Gamepad != NativeGamepadButton::None && a.Gamepad == b.Gamepad;
+}
+
 void MarkCustom(NativeControlConfig& config, bool& dirty) {
   config.Profile = NativeControlProfile::Custom;
   dirty = true;
@@ -159,43 +196,33 @@ class NativeControlsSettingsPanel final
     if (mTopScreen) mTopDraft = mTopScreen->Snapshot().Config;
     const auto frameStartTopDraft = mTopDraft;
 
-    ImGui::TextUnformatted("Profile");
-    NativeControlProfile presetSelection = mControlDraft.Profile;
-    if (EnumCombo("Preset", &presetSelection, kProfiles,
-                  NativeControlProfileName)) {
-      const auto preferredController =
-          mControlDraft.PreferredControllerGuid;
-      const auto gyroBias = mControlDraft.GyroscopeBiasDegreesPerSecond;
-      const auto accelNeutral = mControlDraft.AccelerometerNeutral;
-      mControlDraft = NativeControlPreset(presetSelection);
-      mControlDraft.PreferredControllerGuid = preferredController;
-      mControlDraft.GyroscopeBiasDegreesPerSecond = gyroBias;
-      mControlDraft.AccelerometerNeutral = accelNeutral;
-      mControlDirty = true;
-    }
+    DrawProfile();
     if (ImGui::BeginTabBar("##ControlSections")) {
       const auto section = [&](const char* label, auto draw) {
         if (ImGui::BeginTabItem(label)) {
+          // A single scrolling body; persistence never scrolls with the fields.
           ImGui::BeginChild(label, ImVec2(0.0F, std::max(
-              80.0F, ImGui::GetContentRegionAvail().y - ImGui::GetFrameHeightWithSpacing() * 4.0F)));
-          ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45F);
+              1.0F, ImGui::GetContentRegionAvail().y - ImGui::GetFrameHeightWithSpacing() * 3.0F)));
           draw();
-          ImGui::PopItemWidth();
           ImGui::EndChild();
           ImGui::EndTabItem();
         }
       };
-      section("Devices", [&] { DrawDevices(); DrawControllerSelection(); DrawAnalog(); });
       section("Bindings", [&] { DrawBindings(); });
-      section("Aiming", [&] {
-        DrawNativeAim();
-        if (mTopScreen) DrawTopScreenStickAiming(mTopDraft);
+      section("Camera", [&] {
+        if (ImGui::CollapsingHeader("Free camera", ImGuiTreeNodeFlags_DefaultOpen)) DrawFreeCamera();
+        if (ImGui::CollapsingHeader("Aiming")) DrawNativeAim();
+        if (mTopScreen && ImGui::CollapsingHeader("C-stick aiming")) DrawTopScreenStickAiming(mTopDraft);
       });
-      section("Camera", [&] { DrawFreeCamera(); });
-      section("Actions", [&] {
+      section("Devices", [&] {
+        DrawDevices(); DrawControllerSelection();
+        if (ImGui::CollapsingHeader("Analog sticks and triggers")) DrawAnalog();
+        if (ImGui::CollapsingHeader("Motion calibration")) DrawCalibration();
+      });
+      section("Shortcuts", [&] {
         if (mTopScreen) DrawTopScreenActionBindings(mTopDraft);
+        else ImGui::TextDisabled("TopScreen profile is not active");
       });
-      section("Motion", [&] { DrawCalibration(); });
       ImGui::EndTabBar();
     }
     if (mControlDraft != frameStartDraft) {
@@ -219,6 +246,33 @@ class NativeControlsSettingsPanel final
   }
 
  private:
+  void DrawProfile() {
+    if (ImGui::Button("Presets...")) {
+      if (mControlDraft.Profile != NativeControlProfile::Custom) mPresetSelection = mControlDraft.Profile;
+      ImGui::OpenPopup("Load control preset");
+    }
+    ImGui::SameLine();
+    ImGui::TextUnformatted(ControlWidgets::DisplayName(NativeControlProfileName(mControlDraft.Profile)).c_str());
+    if (ImGui::BeginPopupModal("Load control preset", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+      ImGui::PushItemWidth(300.0F);
+      EnumCombo("##Preset", &mPresetSelection, kProfiles, NativeControlProfileName, true);
+      ImGui::PopItemWidth();
+      ImGui::TextUnformatted("Replace bindings and device settings?");
+      if (ImGui::Button("Apply preset")) {
+        const auto previous = mControlDraft;
+        mControlDraft = NativeControlPreset(mPresetSelection);
+        mControlDraft.PreferredControllerGuid = previous.PreferredControllerGuid;
+        mControlDraft.GyroscopeBiasDegreesPerSecond = previous.GyroscopeBiasDegreesPerSecond;
+        mControlDraft.AccelerometerNeutral = previous.AccelerometerNeutral;
+        mControlDirty = true;
+        ImGui::CloseCurrentPopup();
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+      ImGui::EndPopup();
+    }
+  }
+
   void DrawDevices() {
     bool deviceSelectionChanged = false;
     deviceSelectionChanged |=
@@ -239,6 +293,10 @@ class NativeControlsSettingsPanel final
 
   void SynchronizeDrafts() {
     const auto controlSnapshot = mControls->Snapshot();
+    if (!mInitialized) {
+      mSavedControls = controlSnapshot.Config;
+      if (mTopScreen) mSavedTop = mTopScreen->Snapshot().Config;
+    }
     if (!mInitialized ||
         controlSnapshot.Revision != mObservedControlRevision) {
       mControlDraft = controlSnapshot.Config;
@@ -259,7 +317,7 @@ class NativeControlsSettingsPanel final
         break;
       }
     }
-    if (ImGui::BeginCombo("Active controller", preview.c_str())) {
+    if (ImGui::BeginCombo(ControlWidgets::Field("Active controller").c_str(), preview.c_str())) {
       const bool automatic =
           mControlDraft.PreferredControllerGuid.empty();
       if (ImGui::Selectable("Automatic", automatic)) {
@@ -282,7 +340,7 @@ class NativeControlsSettingsPanel final
       ImGui::TextDisabled("No SDL controller connected");
     } else {
       for (const auto& device : devices) {
-        ImGui::BulletText(
+        ImGui::TextWrapped(
             "%s%s%s", device.Name.c_str(),
             device.HasGyroscope ? " | gyro" : "",
             device.HasAccelerometer ? " | accelerometer" : "");
@@ -291,7 +349,19 @@ class NativeControlsSettingsPanel final
   }
 
   void DrawBindings() {
-    if (ImGui::Button("Swap shoulders / triggers")) {
+    for (const auto& [label, device] : std::array{
+             std::pair{"Keyboard", BindingDevice::Keyboard},
+             std::pair{"Mouse", BindingDevice::Mouse},
+             std::pair{"Controller", BindingDevice::Controller}}) {
+      if (device != BindingDevice::Keyboard) ImGui::SameLine();
+      if (ImGui::RadioButton(label, mBindingDevice == device)) mBindingDevice = device;
+    }
+    ImGui::SetNextItemWidth(-1.0F);
+    ImGui::InputTextWithHint("##ActionFilter", "Find control...", mActionFilter.data(), mActionFilter.size());
+    const bool enabled = mBindingDevice == BindingDevice::Keyboard ? mControlDraft.KeyboardEnabled :
+        mBindingDevice == BindingDevice::Mouse ? mControlDraft.MouseEnabled : mControlDraft.ControllerEnabled;
+    if (!enabled) ImGui::TextDisabled("Device disabled");
+    if (mBindingDevice == BindingDevice::Controller && ImGui::Button("Swap shoulders / triggers")) {
       ThreeDsRecomp::Input::SwapGamepadSources(
           mControlDraft.Bindings, NativeGamepadButton::LeftShoulder,
           NativeGamepadButton::LeftTrigger);
@@ -300,78 +370,81 @@ class NativeControlsSettingsPanel final
           NativeGamepadButton::RightTrigger);
       MarkCustom(mControlDraft, mControlDirty);
     }
-    if (ImGui::IsItemHovered()) {
+    if (mBindingDevice == BindingDevice::Controller && ImGui::IsItemHovered()) {
       ImGui::SetTooltip("Exchange both pairs of controller bindings. Keyboard and mouse bindings are unchanged.");
     }
-    if (!ImGui::CollapsingHeader("Bindings",
-                                 ImGuiTreeNodeFlags_DefaultOpen)) {
-      return;
+    ImGui::PushID(static_cast<int>(mBindingDevice));
+    bool any = false;
+    for (const auto& group : kBindingGroups) {
+      bool matches = false;
+      for (auto i = group.First; i < group.End; ++i)
+        matches |= ControlWidgets::Contains(kActionLabels[i], mActionFilter.data());
+      if (!matches) continue;
+      any = true;
+      if (mActionFilter[0]) ImGui::SetNextItemOpen(true);
+      if (ImGui::CollapsingHeader(group.Name, ImGuiTreeNodeFlags_DefaultOpen)) DrawBindingGroup(group);
     }
-    size_t duplicates = 0;
-    for (size_t a = 0; a < kNativeControlActionCount; ++a) {
-      const auto& first = mControlDraft.Bindings[a];
-      for (size_t b = a + 1; b < kNativeControlActionCount; ++b) {
-        const auto& second = mControlDraft.Bindings[b];
-        const auto sameKey = [](auto key, const auto& binding) {
-          return key != NativeKeyboardKey::None &&
-              (key == binding.KeyboardPrimary || key == binding.KeyboardSecondary);
-        };
-        if (sameKey(first.KeyboardPrimary, second) || sameKey(first.KeyboardSecondary, second) ||
-            (first.Mouse != NativeMouseButton::None && first.Mouse == second.Mouse) ||
-            (first.Gamepad != NativeGamepadButton::None && first.Gamepad == second.Gamepad)) {
-          ++duplicates;
-          ImGui::TextWrapped("Shared binding: %s / %s", kActionLabels[a], kActionLabels[b]);
-        }
-      }
-    }
-    if (duplicates != 0) ImGui::Separator();
+    if (!any) ImGui::TextDisabled("No matching controls");
+    ImGui::PopID();
+  }
+
+  void DrawBindingGroup(const BindingGroup& group) {
+    const bool keyboard = mBindingDevice == BindingDevice::Keyboard;
+    ImGui::PushID(group.Name);
+    // Explicit weights and no persisted auto-fit widths break the feedback loop
+    // between full-width combos and content-derived column sizing.
     if (!ImGui::BeginTable(
-            "##NativeControlBindings", 5,
-            ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg |
-                ImGuiTableFlags_SizingStretchProp |
-                ImGuiTableFlags_ScrollY,
-            ImVec2(0.0F, std::max(120.0F, ImGui::GetContentRegionAvail().y)))) {
+            "##BindingsV2", keyboard ? 3 : 2,
+            ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchSame |
+                ImGuiTableFlags_NoSavedSettings)) {
+      ImGui::PopID();
       return;
     }
-    ImGui::TableSetupColumn("Action");
-    ImGui::TableSetupColumn("Key 1");
-    ImGui::TableSetupColumn("Key 2");
-    ImGui::TableSetupColumn("Mouse");
-    ImGui::TableSetupColumn("Controller");
+    ImGui::TableSetupColumn("Game control", ImGuiTableColumnFlags_WidthStretch, 1.3F);
+    ImGui::TableSetupColumn(keyboard ? "Primary key" : "Button", ImGuiTableColumnFlags_WidthStretch, keyboard ? 1.0F : 2.0F);
+    if (keyboard) ImGui::TableSetupColumn("Alternate key", ImGuiTableColumnFlags_WidthStretch, 1.0F);
     ImGui::TableHeadersRow();
-    for (std::size_t index = 0; index < kNativeControlActionCount; ++index) {
+    for (std::size_t index = group.First; index < group.End; ++index) {
+      if (!ControlWidgets::Contains(kActionLabels[index], mActionFilter.data())) continue;
       auto& binding = mControlDraft.Bindings[index];
       ImGui::PushID(static_cast<int>(index));
       ImGui::TableNextRow();
       ImGui::TableSetColumnIndex(0);
+      ImGui::AlignTextToFramePadding();
       ImGui::TextWrapped("%s", kActionLabels[index]);
+      std::string shared;
+      for (std::size_t other = 0; other < kNativeControlActionCount; ++other) {
+        if (other != index && SharesBinding(binding, mControlDraft.Bindings[other], mBindingDevice)) {
+          if (!shared.empty()) shared += ", ";
+          shared += kActionLabels[other];
+        }
+      }
+      if (!shared.empty()) {
+        ImGui::TextDisabled("Shared");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Also assigned to: %s", shared.c_str());
+      }
       ImGui::TableSetColumnIndex(1);
       ImGui::SetNextItemWidth(-1.0F);
-      if (EnumCombo("##key1", &binding.KeyboardPrimary, kKeyboardKeys,
-                    NativeKeyboardKeyName)) {
-        MarkCustom(mControlDraft, mControlDirty);
+      bool changed = false;
+      if (keyboard) {
+        changed |= EnumCombo((std::string("##primary:") + kActionLabels[index]).c_str(), &binding.KeyboardPrimary, kKeyboardKeys,
+                             NativeKeyboardKeyName, true, mKeySearch.data(), mKeySearch.size());
+        ImGui::TableSetColumnIndex(2);
+        ImGui::SetNextItemWidth(-1.0F);
+        changed |= EnumCombo((std::string("##alternate:") + kActionLabels[index]).c_str(), &binding.KeyboardSecondary, kKeyboardKeys,
+                             NativeKeyboardKeyName, true, mKeySearch.data(), mKeySearch.size());
+      } else if (mBindingDevice == BindingDevice::Mouse) {
+        changed |= EnumCombo((std::string("##mouse:") + kActionLabels[index]).c_str(), &binding.Mouse, kMouseButtons,
+                             NativeMouseButtonName, true, mKeySearch.data(), mKeySearch.size());
+      } else {
+        changed |= EnumCombo((std::string("##gamepad:") + kActionLabels[index]).c_str(), &binding.Gamepad, kGamepadButtons,
+                             NativeGamepadButtonName, true, mKeySearch.data(), mKeySearch.size());
       }
-      ImGui::TableSetColumnIndex(2);
-      ImGui::SetNextItemWidth(-1.0F);
-      if (EnumCombo("##key2", &binding.KeyboardSecondary, kKeyboardKeys,
-                    NativeKeyboardKeyName)) {
-        MarkCustom(mControlDraft, mControlDirty);
-      }
-      ImGui::TableSetColumnIndex(3);
-      ImGui::SetNextItemWidth(-1.0F);
-      if (EnumCombo("##mouse", &binding.Mouse, kMouseButtons,
-                    NativeMouseButtonName)) {
-        MarkCustom(mControlDraft, mControlDirty);
-      }
-      ImGui::TableSetColumnIndex(4);
-      ImGui::SetNextItemWidth(-1.0F);
-      if (EnumCombo("##gamepad", &binding.Gamepad, kGamepadButtons,
-                    NativeGamepadButtonName)) {
-        MarkCustom(mControlDraft, mControlDirty);
-      }
+      if (changed) MarkCustom(mControlDraft, mControlDirty);
       ImGui::PopID();
     }
     ImGui::EndTable();
+    ImGui::PopID();
   }
 
   void DrawAnalog() {
@@ -379,13 +452,13 @@ class NativeControlsSettingsPanel final
     bool changed =
         EnumCombo("Movement stick", &mControlDraft.MovementStick,
                   kAnalogSticks, NativeAnalogStickName);
-    changed |= ImGui::SliderInt(
+    changed |= ControlWidgets::SliderInt(
         "Movement dead zone",
         &mControlDraft.MovementStickDeadZonePercent, 0, 50, "%d%%");
-    changed |= ImGui::SliderInt(
+    changed |= ControlWidgets::SliderInt(
         "Look dead zone", &mControlDraft.LookStickDeadZonePercent,
         0, 50, "%d%%");
-    changed |= ImGui::SliderInt(
+    changed |= ControlWidgets::SliderInt(
         "Trigger dead zone", &mControlDraft.TriggerDeadZonePercent,
         0, 50, "%d%%");
     if (changed) {
@@ -394,13 +467,12 @@ class NativeControlsSettingsPanel final
   }
 
   void DrawNativeAim() {
-    ImGui::SeparatorText("Native gyro aiming");
     bool changed =
         EnumCombo("Aim source", &mControlDraft.NativeAimSource,
                   kMotionSources, NativeMotionSourceName);
     if (SourceUses(mControlDraft.NativeAimSource,
                    NativeMotionSource::Mouse)) {
-      changed |= ImGui::SliderFloat(
+      changed |= ControlWidgets::SliderFloat(
           "Mouse aim sensitivity",
           &mControlDraft.MouseAimDegreesPerPixel,
           0.01F, 2.0F, "%.2f deg/px",
@@ -410,7 +482,7 @@ class NativeControlsSettingsPanel final
                    NativeMotionSource::RightStick) ||
         SourceUses(mControlDraft.NativeAimSource,
                    NativeMotionSource::DigitalLook)) {
-      changed |= ImGui::SliderFloat(
+      changed |= ControlWidgets::SliderFloat(
           "Right-stick aim speed",
           &mControlDraft.RightStickAimMaximumDegreesPerSecond,
           30.0F, 720.0F, "%.0f deg/s");
@@ -419,7 +491,7 @@ class NativeControlsSettingsPanel final
                    NativeMotionSource::ControllerGyroscope) ||
         mControlDraft.NativeAimSource ==
             NativeMotionSource::ControllerMotion) {
-      changed |= ImGui::SliderFloat(
+      changed |= ControlWidgets::SliderFloat(
           "Gyroscope sensitivity",
           &mControlDraft.ControllerGyroscopeSensitivity,
           0.1F, 4.0F, "%.2fx");
@@ -428,7 +500,7 @@ class NativeControlsSettingsPanel final
                    NativeMotionSource::ControllerAccelerometer) ||
         mControlDraft.NativeAimSource ==
             NativeMotionSource::ControllerMotion) {
-      changed |= ImGui::SliderFloat(
+      changed |= ControlWidgets::SliderFloat(
           "Accelerometer sensitivity",
           &mControlDraft.ControllerAccelerometerSensitivity,
           0.1F, 4.0F, "%.2fx");
@@ -440,13 +512,9 @@ class NativeControlsSettingsPanel final
     if (changed) {
       MarkCustom(mControlDraft, mControlDirty);
     }
-    ImGui::TextDisabled(
-        "Samples are supplied through the native 3DS HID gyro and "
-        "accelerometer rings.");
   }
 
   void DrawFreeCamera() {
-    ImGui::SeparatorText("Free-camera input");
     if (mTopScreen == nullptr) {
       ImGui::TextDisabled("TopScreen profile is not active");
       return;
@@ -459,7 +527,7 @@ class NativeControlsSettingsPanel final
                   kMotionSources, NativeMotionSourceName);
     if (SourceUses(mControlDraft.FreeCameraSource,
                    NativeMotionSource::Mouse)) {
-      controlChanged |= ImGui::SliderFloat(
+      controlChanged |= ControlWidgets::SliderFloat(
           "Free-camera mouse sensitivity",
           &mControlDraft.MouseFreeCameraUnitsPerPixel,
           0.25F, 16.0F, "%.2f",
@@ -471,7 +539,7 @@ class NativeControlsSettingsPanel final
                    NativeMotionSource::ControllerAccelerometer) ||
         mControlDraft.FreeCameraSource ==
             NativeMotionSource::ControllerMotion) {
-      controlChanged |= ImGui::SliderFloat(
+      controlChanged |= ControlWidgets::SliderFloat(
           "Free-camera motion sensitivity",
           &mControlDraft.FreeCameraMotionSensitivity,
           0.1F, 4.0F, "%.2fx");
@@ -485,7 +553,6 @@ class NativeControlsSettingsPanel final
   }
 
   void DrawCalibration() {
-    ImGui::SeparatorText("Motion calibration");
     const auto calibration = mControls->CalibrationStatus();
     if (!calibration.Active) {
       if (ImGui::Button("Calibrate controller motion")) {
@@ -501,7 +568,6 @@ class NativeControlsSettingsPanel final
         mControls->CancelMotionCalibration();
       }
     }
-    ImGui::SameLine();
     if (ImGui::Button("Reset motion calibration")) {
       std::string error;
       if (!mControls->ResetMotionCalibration(&error)) {
@@ -510,8 +576,7 @@ class NativeControlsSettingsPanel final
         mStatus = "Motion calibration reset";
       }
     }
-    ImGui::TextDisabled(
-        "Keep the controller still in its neutral aiming position.");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Calibrate with the controller still in its neutral aiming position.");
   }
 
   void DrawPersistence() {
@@ -522,9 +587,13 @@ class NativeControlsSettingsPanel final
     if (ImGui::Button("Save controls")) {
       std::string error;
       bool saved = mControls->Apply(mControlDraft, &error);
+      if (saved) mSavedControls = mControlDraft;
       if (saved && mTopScreen && mCameraDirty) {
         saved = mTopScreen->Apply(mTopScreen->Snapshot().Config, &error);
-        if (saved) mCameraDirty = false;
+        if (saved) {
+          mSavedTop = mTopScreen->Snapshot().Config;
+          mCameraDirty = false;
+        }
       }
       if (saved) {
         mObservedControlRevision = mControls->Snapshot().Revision;
@@ -536,29 +605,49 @@ class NativeControlsSettingsPanel final
     }
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
       ImGui::SetTooltip("%s", mControls->Path().string().c_str());
+    if (!mControls->Persistent()) ImGui::EndDisabled();
     ImGui::SameLine();
-    if (ImGui::Button("Reload controls")) {
+    if (ImGui::Button("Revert changes")) {
       std::string error;
-      bool loaded = mControls->Reload(&error);
-      if (loaded && mTopScreen) {
-        loaded = mTopScreen->Reload(&error);
-        if (loaded) mCameraDirty = false;
+      NativeControlConfig loadedControls = mSavedControls;
+      TopScreenUiConfig loadedTop = mSavedTop;
+      // Before the first save, revert to the initial runtime profile. A missing
+      // file is distinct from an unreadable or invalid existing configuration.
+      std::error_code fileError;
+      const bool controlFile = mControls->Persistent() && std::filesystem::exists(mControls->Path(), fileError);
+      bool loaded = !fileError && (!controlFile || LoadNativeControlConfig(mControls->Path(), &loadedControls, &error));
+      if (fileError) error = fileError.message();
+      if (loaded && mTopScreen && mCameraDirty) {
+        const bool topFile = mTopScreen->Persistent() && std::filesystem::exists(mTopScreen->Path(), fileError);
+        loaded = !fileError && (!topFile || LoadTopScreenUiConfig(mTopScreen->Path(), &loadedTop, &error));
+        if (fileError) error = fileError.message();
       }
       if (loaded) {
+        // Parse both files before applying either; a failed read must not leave
+        // a half-reverted live configuration.
+        loaded = mControls->Preview(loadedControls, &error);
+      }
+      if (loaded) {
+        if (mTopScreen && mCameraDirty) {
+          auto currentTop = mTopScreen->Snapshot().Config;
+          CopyTopScreenControlSettings(loadedTop, currentTop);
+          mTopScreen->Preview(currentTop);
+        }
+        mCameraDirty = false;
         mControlDirty = false;
-        mStatus = "Reloaded";
+        mSavedControls = loadedControls;
+        mSavedTop = loadedTop;
+        mStatus = "Restored saved controls";
       } else {
         mStatus = std::move(error);
       }
     }
-    if (!mControls->Persistent()) {
-      ImGui::EndDisabled();
-    }
-    if (mControlDirty || mCameraDirty) {
-      ImGui::TextDisabled("Unsaved changes");
-    }
-    if (!mStatus.empty()) {
-      ImGui::TextWrapped("%s", mStatus.c_str());
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+      ImGui::SetTooltip("Restore saved bindings, camera and shortcuts. HUD layout is unchanged.");
+    ImGui::TextUnformatted(mControlDirty || mCameraDirty ? "Unsaved changes" : "No pending changes");
+    if (!mStatus.empty() && mStatus != "Live preview") {
+      ImGui::TextUnformatted(mStatus.c_str());
+      if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", mStatus.c_str());
     }
   }
 
@@ -566,11 +655,17 @@ class NativeControlsSettingsPanel final
   std::shared_ptr<TopScreenUiConfigRuntime> mTopScreen;
   NativeControlConfig mControlDraft;
   TopScreenUiConfig mTopDraft;
+  NativeControlConfig mSavedControls;
+  TopScreenUiConfig mSavedTop;
   bool mCameraDirty = false;
   std::uint64_t mObservedControlRevision = 0;
   bool mInitialized = false;
   bool mControlDirty = false;
   std::string mStatus;
+  NativeControlProfile mPresetSelection = NativeControlProfile::KeyboardMouse;
+  BindingDevice mBindingDevice = BindingDevice::Keyboard;
+  std::array<char, 96> mActionFilter{};
+  std::array<char, 64> mKeySearch{};
 };
 
 } // namespace

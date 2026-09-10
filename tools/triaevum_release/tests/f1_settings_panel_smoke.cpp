@@ -6,7 +6,9 @@
 #include <imgui_internal.h>
 #include <nlohmann/json.hpp>
 #include <cmath>
+#include <chrono>
 #include <cstdio>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <stdexcept>
@@ -124,6 +126,17 @@ void EditScalar(const char* label, const char* value) {
     io.AddKeyEvent(ImGuiKey_Enter, true); Frame();
     io.AddKeyEvent(ImGuiKey_Enter, false); Frame(); Frame();
 }
+void EditText(const char* label, const char* value) {
+    Click(label);
+    auto& io = ImGui::GetIO();
+    io.AddKeyEvent(ImGuiMod_Ctrl, true);
+    io.AddKeyEvent(ImGuiKey_A, true); Frame();
+    io.AddKeyEvent(ImGuiKey_A, false);
+    io.AddKeyEvent(ImGuiMod_Ctrl, false); Frame();
+    io.AddKeyEvent(ImGuiKey_Backspace, true); Frame();
+    io.AddKeyEvent(ImGuiKey_Backspace, false); Frame();
+    io.AddInputCharactersUTF8(value); Frame(); Frame();
+}
 void ClickTexture(uint64_t hash, bool reorderDuringClick = false) {
     std::cout << "Select texture " << std::hex << hash << std::dec << std::endl;
     Frame();
@@ -158,6 +171,69 @@ void AllCapabilities(bool available) {
     auto& runtime = GraphicsSettingsRuntime::Instance();
     for (unsigned value = 0; value <= static_cast<unsigned>(GraphicsCapability::ExclusiveFullscreen); ++value)
         runtime.SetCapability(static_cast<GraphicsCapability>(value), available, "test capability");
+}
+
+void CheckControlPersistence() {
+    using namespace Oot3dNativeGame;
+    const auto root = std::filesystem::temp_directory_path() /
+        ("triaevum-controls-smoke-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    Check(std::filesystem::create_directory(root), "could not create isolated config fixture");
+    struct Cleanup { std::filesystem::path Root; ~Cleanup() { std::error_code ec; std::filesystem::remove_all(Root, ec); } } cleanup{root};
+    auto controls = std::make_shared<NativeControlConfigRuntime>(root / "controls.json", NativeControlDefaults());
+    auto top = std::make_shared<TopScreenUiConfigRuntime>(root / "topscreen.json", TopScreenUiConfig{});
+    InstallGraphicsSettingsPanelTabs({CreateNativeControlsSettingsPanel(controls, top)});
+    size = ImVec2(760, 680);
+    Click("Controls");
+    Click("Devices");
+    Click("Keyboard");
+    Click("Revert changes");
+    Check(controls->Snapshot().Config.KeyboardEnabled, "cannot undo before first save");
+    Click("Keyboard");
+    Click("Camera");
+    // The previous panel may have saved this section collapsed in ImGui.
+    Frame();
+    bool freeCameraVisible = false;
+    for (const auto& [id, item] : items) freeCameraVisible |= item.Label == "Enabled##freecam";
+    if (!freeCameraVisible) Click("Free camera");
+    Click("Enabled##freecam");
+    Click("Save controls");
+    NativeControlConfig saved;
+    TopScreenUiConfig savedTop;
+    Check(LoadNativeControlConfig(root / "controls.json", &saved) && !saved.KeyboardEnabled,
+          "Save controls did not persist live input");
+    Check(LoadTopScreenUiConfig(root / "topscreen.json", &savedTop) && savedTop.FreeCameraEnabled,
+          "Save controls did not persist camera settings");
+    Click("Enabled##freecam");
+    auto externalHud = top->Snapshot().Config;
+    externalHud.HudScale = 0.65F;
+    externalHud.HudMarginX = 8;
+    top->Preview(externalHud);
+    Click("Devices");
+    Click("Keyboard");
+    Click("Revert changes");
+    Check(controls->Snapshot().Config == saved, "Revert did not restore saved bindings");
+    Check(top->Snapshot().Config.FreeCameraEnabled && top->Snapshot().Config.HudScale == 0.65F &&
+          top->Snapshot().Config.HudMarginX == 8, "Revert overwrote unrelated live HUD configuration");
+    Click("Camera");
+    Click("Enabled##freecam");
+    Click("Devices");
+    Click("Keyboard");
+    const auto live = controls->Snapshot().Config;
+    const auto liveTop = top->Snapshot().Config;
+    std::ofstream(root / "topscreen.json") << "invalid json";
+    Click("Revert changes");
+    Check(controls->Snapshot().Config == live && top->Snapshot().Config == liveTop,
+          "failed Revert partially modified live configuration");
+    Frame(true);
+    Check(loggedPanelText.find("parse") != std::string::npos, "Revert error was not visible");
+    std::filesystem::create_directory(root / "not-a-file");
+    auto blocked = std::make_shared<NativeControlConfigRuntime>(root / "not-a-file", NativeControlDefaults());
+    InstallGraphicsSettingsPanelTabs({CreateNativeControlsSettingsPanel(blocked, nullptr)});
+    Frame(); Frame();
+    Click("Save controls");
+    Frame(true);
+    Check(loggedPanelText.find("cannot") != std::string::npos, "Save error was not visible");
+    InstallGraphicsSettingsPanelTabs({});
 }
 }
 
@@ -466,7 +542,7 @@ int main() try {
     Click("Textures");
     Find("Apply folders");
     Click("Controls");
-    for (const char* section : {"Bindings", "Aiming", "Actions", "Camera"}) Click(section);
+    for (const char* section : {"Bindings", "Shortcuts", "Camera"}) Click(section);
     Click("Enabled##freecam");
     Check(topScreen->Snapshot().Config.FreeCameraEnabled, "central camera control not connected");
     auto cameraExternal = topScreen->Snapshot().Config;
@@ -476,7 +552,13 @@ int main() try {
     Click("Enabled##freecam");
     Check(!topScreen->Snapshot().Config.FreeCameraEnabled && topScreen->Snapshot().Config.HudMarginX == 7,
           "central camera control overwrote external HUD state");
-    for (const char* section : {"Motion", "Devices"}) Click(section);
+    Click("Free camera");
+    Click("Aiming");
+    Select("##Aim source", "Mouse");
+    EditScalar("##Mouse aim sensitivity", "0.61");
+    Check(std::abs(controls->Snapshot().Config.MouseAimDegreesPerPixel - 0.61F) < 0.001F,
+          "aiming sensitivity not connected");
+    Click("Devices");
     Click("Keyboard");
     Check(!controls->Snapshot().Config.KeyboardEnabled, "control preview not connected");
     auto external = controls->Snapshot().Config;
@@ -486,10 +568,50 @@ int main() try {
     Click("Keyboard");
     Check(controls->Snapshot().Config.MouseAimDegreesPerPixel == 0.77F, "stale draft overwrote external controls");
     Click("Bindings");
+    using Action = Oot3dNativeGame::NativeControlAction;
+    using Key = Oot3dNativeGame::NativeKeyboardKey;
+    const auto movementIndex = static_cast<size_t>(Action::MoveForward);
+    // Old content-proportional columns shrink progressively, not just on resize.
+    EditText("##ActionFilter", "move");
+    for (const auto width : {520.0F, 760.0F, 1100.0F, 520.0F}) {
+        size = ImVec2(width, 680.0F);
+        Frame(); Frame(); Frame();
+        const auto primary = Find("##primary:Move forward").Rect;
+        const auto alternate = Find("##alternate:Move forward").Rect;
+        Check(primary.GetWidth() > 100.0F && alternate.GetWidth() > 100.0F,
+              "binding fields became too narrow");
+        Check(primary.Max.x < alternate.Min.x && alternate.Max.x < size.x + 8.0F,
+              "binding columns overlap or leave the window");
+        for (int frame = 0; frame < 120; ++frame) Frame();
+        const auto after = Find("##primary:Move forward").Rect;
+        Check(std::abs(after.Min.x - primary.Min.x) < 1.0F &&
+              std::abs(after.GetWidth() - primary.GetWidth()) < 1.0F,
+              "binding columns drifted across idle frames");
+    }
+    size = ImVec2(760.0F, 680.0F); Frame(); Frame();
+    Select("##primary:Move forward", "Unassigned");
+    Check(controls->Snapshot().Config.Bindings[movementIndex].KeyboardPrimary == Key::None,
+          "clear key did not update runtime");
+    Click("##primary:Move forward");
+    EditText("##BindingSearch", "numpad 8");
+    Click("Numpad 8");
+    Check(controls->Snapshot().Config.Bindings[movementIndex].KeyboardPrimary == Key::Numpad8,
+          "searchable key assignment did not update runtime");
+    Click("##primary:Move forward");
+    Check(GImGui->OpenPopupStack.Size > 0, "key popup failed to reopen");
+    Click("W");
+    Check(controls->Snapshot().Config.Bindings[movementIndex].KeyboardPrimary == Key::W,
+          "key popup retained stale search on reopen");
+    Click("Mouse");
+    Select("##mouse:Move forward", "Back");
+    Check(controls->Snapshot().Config.Bindings[movementIndex].Mouse == Oot3dNativeGame::NativeMouseButton::Back &&
+          controls->Snapshot().Config.Bindings[movementIndex].KeyboardPrimary == Key::W,
+          "mouse assignment changed the wrong device");
+    Select("##mouse:Move forward", "Unassigned");
+    Click("Controller");
     const auto beforeSwap = controls->Snapshot().Config;
     Click("Swap shoulders / triggers");
     const auto swapped = controls->Snapshot().Config;
-    using Action = Oot3dNativeGame::NativeControlAction;
     using Button = Oot3dNativeGame::NativeGamepadButton;
     Check(swapped.Bindings[static_cast<size_t>(Action::L)].Gamepad == Button::LeftTrigger &&
           swapped.Bindings[static_cast<size_t>(Action::R)].Gamepad == Button::RightTrigger &&
@@ -499,6 +621,33 @@ int main() try {
     Click("Swap shoulders / triggers");
     Check(controls->Snapshot().Config.Bindings == beforeSwap.Bindings,
           "second controller swap did not restore original bindings");
+    Click("##gamepad:Move forward");
+    EditText("##BindingSearch", "right stick");
+    Click("Right Stick");
+    Check(controls->Snapshot().Config.Bindings[movementIndex].Gamepad == Button::RightStick &&
+          controls->Snapshot().Config.Bindings[movementIndex].KeyboardPrimary == Key::W,
+          "controller assignment changed the wrong device");
+    Select("##gamepad:Move forward", "Unassigned");
+    EditText("##ActionFilter", "no such control");
+    Frame(true);
+    Check(loggedPanelText.find("No matching controls") != std::string::npos,
+          "empty binding search not reported");
+    EditText("##ActionFilter", "");
+    Find("##gamepad:Move forward");
+    Click("Presets...");
+    const auto beforePreset = controls->Snapshot().Config;
+    Select("##Preset", "Controller");
+    Check(controls->Snapshot().Config == beforePreset, "preset selection applied without confirmation");
+    Click("Cancel");
+    Check(controls->Snapshot().Config == beforePreset, "cancel changed the control profile");
+    Click("Presets...");
+    Click("Apply preset");
+    Check(controls->Snapshot().Config.Profile == Oot3dNativeGame::NativeControlProfile::Controller,
+          "confirmed preset not applied");
+    Check(controls->Snapshot().Config.PreferredControllerGuid == beforePreset.PreferredControllerGuid &&
+          controls->Snapshot().Config.GyroscopeBiasDegreesPerSecond == beforePreset.GyroscopeBiasDegreesPerSecond &&
+          controls->Snapshot().Config.AccelerometerNeutral == beforePreset.AccelerometerNeutral,
+          "preset discarded controller identity or calibration");
     Click("TopScreen 2.1.1");
     Click("Render HUD");
     Check(!topScreen->Snapshot().Config.RenderHud, "TopScreen preview not connected");
@@ -513,7 +662,18 @@ int main() try {
     Frame(); Frame();
     Find("Save TopScreen");
     Click("Controls");
-    Find("Save controls");
+    for (const char* section : {"Bindings", "Camera", "Devices", "Shortcuts"}) {
+        Click(section);
+        Frame(); Frame();
+        const auto saveRect = Find("Save controls").Rect;
+        const auto revertRect = Find("Revert changes").Rect;
+        Check(saveRect.Min.y > 8.0F && saveRect.Max.y < size.y + 8.0F &&
+              revertRect.Max.x < size.x + 8.0F && saveRect.Max.x < revertRect.Min.x,
+              "compact Controls footer is clipped or overlapping");
+        for (const auto* window : GImGui->Windows)
+            if (window->Active && (window->Flags & ImGuiWindowFlags_ChildWindow))
+                Check(window->ScrollMax.x == 0.0F, "Controls contents overflow horizontally");
+    }
 
     auto pending = runtime.Snapshot();
     const int storesBefore = store->Stores;
@@ -552,6 +712,7 @@ int main() try {
     Frame();
     Click("Retry saving graphics");
     Check(runtime.SaveState() == GraphicsSettingsSaveState::Saved, "save retry failed");
+    CheckControlPersistence();
     ImGui::DestroyContext();
     std::cout << "F1 UI smoke passed: " << assertions << " assertions, real renderer/Controls/TopScreen widgets\n";
     return 0;
