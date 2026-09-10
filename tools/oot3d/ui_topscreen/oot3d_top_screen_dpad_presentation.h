@@ -18,7 +18,7 @@ struct TopScreenDpadPresentationState {
 bool ReadTopScreenDpadPresentationState(NativeA32Memory &memory,
                                         TopScreenDpadPresentationState *state);
 
-// Emits only the four mapped action icons. The cross, face buttons and global
+// Emits mapped action icons and their native cycle marks. The cross, face buttons and global
 // HUD scale remain owned by the existing HUD compositor.
 std::size_t AppendTopScreenDpadPresentation(
     const TopScreenUiConfig &config,

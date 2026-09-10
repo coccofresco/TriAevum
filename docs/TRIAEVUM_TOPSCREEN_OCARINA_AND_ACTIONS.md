@@ -131,8 +131,15 @@ must not be described as every ocarina state or the entire mod being complete.
 The additional `gear-practice-entry`, `gear-song-entry`, and `gear-song-confirm`
 probes only reached Gear and selected the ocarina icon; they did not enter song
 practice and are not counted as practice or first-time learning qualification.
-The new mapped presenter also does not claim pixel-identical small decorative
-cycle badges or native per-item dimming during every restricted context.
+The mapped presenter now includes the original sword/boots cycle marks from
+`custom_menu`: payload rectangle `005E1894` is `(458, 2, 40, 40)` in the
+512-pixel atlas; the original draw uses 14-pixel marks and direction-specific
+sword offsets. Unit tests cover atlas selection, geometry and layering. These
+marks still require paired in-game visual qualification; native per-item
+dimming during every restricted context is not implemented by this change.
+
+The supplied practice saves and their actual qualification results are tracked
+in [Practice Save Fixtures](TRIAEVUM_TOPSCREEN_PRACTICE_SAVE_FIXTURES.md).
 
 [PR #18](https://github.com/coccofresco/TriAevum/pull/18), by **999sian**, supplied
 useful ocarina scope and gameplay evidence as credited in the earlier owner

@@ -1,4 +1,5 @@
 #include "oot3d_top_screen_dpad_presentation.h"
+#include "oot3d_top_screen_items_hint.h"
 
 #include "oot3d_native_a32_memory.h"
 #include "oot3d_ui/ui_contract_types.h"
@@ -159,6 +160,28 @@ std::size_t AppendTopScreenDpadPresentation(
     }
     if (!p.texture.semantic_name.empty())
       output.push_back(std::move(p));
+  }
+  // 005D818C..005D81FC: the original adds cycle marks only for boots/sword.
+  // Rect 005E1894 belongs to custom_menu, not either native item atlas.
+  for (std::size_t direction = 0; direction < actions.size(); ++direction) {
+    const auto action = actions[direction];
+    if ((action != TopScreenDpadAction::SwordToggle &&
+         action != TopScreenDpadAction::AllBootsToggle) ||
+        !ResolveItem(action, state))
+      continue;
+    oot3d::ui::UiPrimitive p;
+    p.subsystem = oot3d::ui::UiSubsystem::GameplayHud;
+    p.role = oot3d::ui::UiPrimitiveRole::ActionButton;
+    p.owner_address = 0x005D4A8CU;
+    p.source_quad = static_cast<std::uint32_t>(4 + direction);
+    p.layer = 14;
+    p.texture.semantic_name = kTopScreen211MenuAtlasSemantic;
+    p.color = {1, 1, 1, std::clamp(alpha, 0.0F, 1.0F)};
+    const float shift = action == TopScreenDpadAction::SwordToggle && direction < 2 ? 2.0F : 0.0F;
+    p.destination = {kCenterX[direction] - 7.0F + shift,
+                     kCenterY[direction] - 8.0F, 14.0F, 14.0F};
+    p.uv = {458.0F / 512, 2.0F / 512, 40.0F / 512, 40.0F / 512};
+    output.push_back(std::move(p));
   }
   return output.size() - start;
 }

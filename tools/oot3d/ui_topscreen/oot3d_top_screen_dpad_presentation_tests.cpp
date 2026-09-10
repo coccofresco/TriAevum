@@ -41,7 +41,8 @@ void RunTopScreenDpadPresentationTests() {
       const bool childOnly = action == 10 || action == 11;
       const bool visible =
           action != 0 && !(child && adultOnly) && !(!child && childOnly);
-      require(result.size() == (visible ? 4 : 0),
+      const bool badges = visible && (action == 7 || action == 8);
+      require(result.size() == (visible ? (badges ? 8 : 4) : 0),
               "D-pad action age/availability mismatch");
       for (std::size_t i = 0; i < result.size(); ++i) {
         require(result[i].source_quad == i &&
@@ -51,6 +52,21 @@ void RunTopScreenDpadPresentationTests() {
                     result[i].uv.x + result[i].uv.width <= 1 &&
                     result[i].uv.y + result[i].uv.height <= 1,
                 "mapped icon must fit its native atlas");
+      }
+      if (badges) {
+        for (std::size_t direction = 0; direction < 4; ++direction) {
+          const auto &icon = result[direction];
+          const auto &badge = result[4 + direction];
+          require(badge.texture.semantic_name != icon.texture.semantic_name &&
+                      badge.uv.x == 458.0F / 512 && badge.uv.y == 2.0F / 512 &&
+                      badge.uv.width == 40.0F / 512 && badge.uv.height == 40.0F / 512,
+                  "cycle mark must use the original custom-menu atlas rect");
+          require(badge.destination.x == icon.destination.x +
+                      ((action == 7 && direction < 2) ? 2.0F : 0.0F) &&
+                      badge.destination.y == icon.destination.y - 1.0F &&
+                      badge.layer > icon.layer,
+                  "cycle mark must retain native direction offsets and order");
+        }
       }
     }
   }
