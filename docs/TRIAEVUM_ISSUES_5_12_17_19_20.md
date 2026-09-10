@@ -35,7 +35,7 @@ Sources: [FS IPC](https://www.3dbrew.org/wiki/FS:DeleteFile),
 
 ## #20: Gyroscope Seen By Calibration, Not By Game
 
-The SDL sensor-axis conversion already matches Azahar. The fault is downstream:
+The SDL sensor-axis conversion already matches Azahar. Two faults are downstream:
 the gyro shared-memory section started at `0x154`, four bytes before its native
 `0x158` location. The index, timestamps, raw vector and ring were all shifted;
 timestamp writes also overlapped the last accelerometer record. Host calibration
@@ -54,6 +54,57 @@ It fails against the old producer and passes after correction, including all
 still requires user/device confirmation. The #5 attachment additionally selects
 `controller_accelerometer`, which intentionally supplies no angular velocity;
 this is distinct from the gyro memory-layout defect.
+
+### Second Root Cause: Truncated VFP Double Transfers
+
+The HID repair alone did **not** restore aiming. Paired gameplay probes received
+raw gyro changes, but the native reader's three double-precision conversion
+coefficients were zero, including after a cold boot. The service's sensitivity
+coefficient and factory calibration replies already matched Azahar.
+
+`whole_aot_cpp.py::_emit_vfp` recognized both scalar VLDR/VSTR encodings but
+always emitted a 32-bit transfer. A double register uses **two** aliased S lanes.
+For example, native gyro reset `0x004230C8` loads its double literal at
+`0x00436714` and stores double coefficients at `0x004367A8`, `0x004367B0` and
+`0x004367C8`. The generated code discarded the high word on every transfer.
+The reference interpreter `upstream/recomp/a32_vfp_transport.cpp` was already
+correct; the defect was specific to the optimized C++ emitter.
+
+The emitter now distinguishes 32/64-bit memory width, preserves both lanes,
+and rejects unmodelled D16-D31 and PC stores. No gyro-specific constants,
+camera adaptation or original game data are changed. A full regeneration of
+the same 12,419-function program changes only **6 of 256 shards**, correcting
+135 generated loads and 39 stores. All other generated files remain identical.
+
+Verification:
+
+- Red/green emitter regressions cover all 16 double registers, signed offsets,
+  literals, conditionals, invalid registers and unchanged odd single lanes.
+- `test_whole_aot_vfp_memory_execution.py` compiles and runs the emitted C++:
+  192 transfer variants, each with success, fault, skipped and skipped-fault
+  cases; both words, adjacent lanes, guards and four-byte alignment are checked.
+- 45 generator/optimization/true-AOT/executable tests pass on Windows.
+- Incremental Linux title build recompiles only the six affected shards.
+- Cold boot from a copied native save produces coefficients
+  `1.0041044776119403` on all three axes instead of zero, derived by the native
+  SDK from its calibration replies.
+- Paired Hyrule Field bow-aiming runs use the same new checkpoint and inputs.
+  Zero motion stays level; +30 degrees/second on X changes the actual camera
+  and native SDK orientation; -30 on X moves it in the opposite direction,
+  while +30 on Y produces horizontal aiming. Z-only rotation does not move
+  this two-axis aim view in this posture. Before this emitter fix the matching positive
+  and zero-input framebuffers were identical. Evidence:
+  `issues-20260910-vfp64-{coldboot,field,aim-control,aim-gyro,aim-negative,aim-y}/`.
+
+**Packaging:** this requires a regenerated/rebuilt precompiled title module as
+well as the runtime HID fix. Updating the runtime alone cannot repair already
+compiled transfers. The normal developer translator identity invalidates its
+artifact cache; Forge must still activate a shipped module, never compile for
+the user. Local verification uses a diagnostic manifest, not a published release.
+Ordinary save files remain compatible. A savestate captured before the repair
+can retain the old zero calibration in memory: qualify from cold boot/native
+save, not from such an old checkpoint. Physical Switch Pro sensor transport
+still needs confirmation on the reporter's device.
 
 ## #12: Runtime Preflight Loader Error
 
@@ -100,9 +151,11 @@ not just HUD assignment or a query returning true:
 The Temple of Time legitimately suppresses ordinary weapons. That explained
 the earlier negative use probe; its rules were not bypassed. All 24 shoulder
 mapping permutations have unit coverage (288 held/pressed/released checks),
-but a physical Xbox/Switch Pro qualification remains separate. The current
-product run uses logical native input and free camera disabled; it does not
-alone close the free-camera-specific variant of #17.
+but a physical Xbox/Switch Pro qualification remains separate. A second product
+run with `free_camera_enabled=true` also fires one arrow (50 -> 49) and enters
+longshot aiming, with both actions visibly confirmed in framebuffer captures:
+`issues-20260910-vfp64-free-camera-items/`. These runs exercise logical native
+inputs, not a physical controller's remapped SDL bindings.
 
 Diagnostics are opt-in under `--extended-diagnostics`: a bounded 128-record
 item-query trace captures native caller/result/suppression and the resolved
