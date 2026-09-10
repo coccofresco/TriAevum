@@ -468,6 +468,11 @@ bool GraphicsSettingsRuntime::AcknowledgePresentationApplied(
     const bool acknowledged = mPresentationTransaction.MarkApplied(
         GetPresentationSettings(applied),
         PresentationClockMilliseconds());
+    // Only a successfully applied new candidate supersedes the previous failure.
+    // A rollback acknowledgement is recovery, not a successful user request.
+    if (acknowledged && phase == PresentationTransactionPhase::ApplyRequested) {
+        mLastPresentationRejection.clear();
+    }
     if (acknowledged &&
         (phase == PresentationTransactionPhase::RollbackRequested ||
          mPresentationTransaction.Status(PresentationClockMilliseconds())
@@ -477,7 +482,7 @@ bool GraphicsSettingsRuntime::AcknowledgePresentationApplied(
     return acknowledged;
 }
 bool GraphicsSettingsRuntime::RejectPresentationApply(
-    const GraphicsSettings& rejected) {
+    const GraphicsSettings& rejected, std::string reason) {
     std::scoped_lock lock(mMutex);
     const auto status = mPresentationTransaction.Status(
         PresentationClockMilliseconds());
@@ -493,6 +498,7 @@ bool GraphicsSettingsRuntime::RejectPresentationApply(
         if (!RestoreLastKnownPresentationLocked()) {
             return false;
         }
+        mLastPresentationRejection = std::move(reason);
         mPresentationTransaction.MarkApplied(
             status.LastKnownGood,
             PresentationClockMilliseconds());
@@ -501,6 +507,10 @@ bool GraphicsSettingsRuntime::RejectPresentationApply(
     }
     return status.Phase ==
         PresentationTransactionPhase::RollbackRequested;
+}
+std::string GraphicsSettingsRuntime::LastPresentationRejection() const {
+    std::scoped_lock lock(mMutex);
+    return mLastPresentationRejection;
 }
 bool GraphicsSettingsRuntime::ConfirmPresentation() {
     std::scoped_lock lock(mMutex);

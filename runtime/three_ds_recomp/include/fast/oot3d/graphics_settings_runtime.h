@@ -51,7 +51,8 @@ class GraphicsSettingsRuntime final {
     bool RetrySave();
     bool AcknowledgePresentationApplied(
         const GraphicsSettings& applied);
-    bool RejectPresentationApply(const GraphicsSettings& rejected);
+    bool RejectPresentationApply(const GraphicsSettings& rejected, std::string reason = {});
+    [[nodiscard]] std::string LastPresentationRejection() const;
     bool ConfirmPresentation();
     bool RollbackPresentation();
     bool TickPresentation();
@@ -65,6 +66,7 @@ class GraphicsSettingsRuntime final {
     GraphicsSettingsService mService;
     GraphicsCapabilities mCapabilities;
     PresentationSettingsTransaction mPresentationTransaction;
+    std::string mLastPresentationRejection;
     std::shared_ptr<GraphicsSettingsPersistencePort> mPersistence;
     uint64_t mRevision = 1;
     NativePresentationPolicy mNativePresentation;

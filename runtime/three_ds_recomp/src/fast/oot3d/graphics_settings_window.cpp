@@ -40,6 +40,10 @@ void GraphicsSettingsPanel::DrawPresentationStatus() {
     runtime.TickPresentation();
     if (!ImGui::IsAnyItemActive()) runtime.SavePending();
     const auto status = runtime.PresentationStatus();
+    const auto rejection = runtime.LastPresentationRejection();
+    if (!rejection.empty()) {
+        ImGui::TextWrapped("Display change reverted: %s", rejection.c_str());
+    }
     if (status.Phase == PresentationTransactionPhase::AwaitingConfirmation) {
         ImGui::Text("Confirm display change (%u s)",
                     (status.RemainingMilliseconds + 999U) / 1000U);

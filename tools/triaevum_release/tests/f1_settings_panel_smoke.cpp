@@ -421,6 +421,48 @@ int main() try {
     Click("Keep display settings");
     Check(runtime.PresentationStatus().Phase == PresentationTransactionPhase::Idle,
           "display confirmation not accessible outside Renderer");
+    const auto confirmedDisplay = runtime.Snapshot();
+    auto rejectedDisplay = confirmedDisplay;
+    rejectedDisplay.Window = WindowMode::ExclusiveFullscreen;
+    Check(runtime.Apply(rejectedDisplay).Accepted(), "display request rejected before backend");
+    const std::string displayFailure = "Test monitor: exclusive mode unsupported";
+    Check(runtime.RejectPresentationApply(rejectedDisplay, displayFailure),
+          "backend display failure not accepted");
+    Check(GetPresentationSettings(runtime.Snapshot()) == GetPresentationSettings(confirmedDisplay),
+          "failed display request did not restore previous settings");
+    Frame(true);
+    Check(loggedPanelText.find("Display change reverted: " + displayFailure) != std::string::npos,
+          "backend failure not visible in F1 outside Renderer");
+    Check(!runtime.RejectPresentationApply(rejectedDisplay, "stale failure"),
+          "stale display failure accepted");
+    Check(!runtime.RejectPresentationApply(confirmedDisplay, "idle failure"),
+          "idle display failure accepted");
+    Check(!runtime.AcknowledgePresentationApplied(confirmedDisplay),
+          "duplicate recovery acknowledgement accepted");
+    Check(runtime.LastPresentationRejection() == displayFailure,
+          "stale response erased the useful display failure");
+    Check(runtime.Apply(rejectedDisplay).Accepted(), "display retry not staged");
+    Check(runtime.RollbackPresentation(), "pending display retry not reverted");
+    Check(runtime.AcknowledgePresentationApplied(confirmedDisplay),
+          "display retry rollback not acknowledged");
+    Check(runtime.LastPresentationRejection() == displayFailure,
+          "rollback acknowledgement erased the useful display failure");
+    Check(runtime.Apply(rejectedDisplay).Accepted(), "second display retry not staged");
+    Check(!runtime.RejectPresentationApply(confirmedDisplay, "older request failed"),
+          "older display request replaced a newer one");
+    Check(!runtime.AcknowledgePresentationApplied(confirmedDisplay),
+          "older display acknowledgement replaced a newer one");
+    Check(runtime.LastPresentationRejection() == displayFailure,
+          "retry lost display failure before backend success");
+    Check(runtime.AcknowledgePresentationApplied(rejectedDisplay),
+          "successful display retry not acknowledged");
+    Check(runtime.LastPresentationRejection().empty(), "successful retry retained old error");
+    Frame(true);
+    Check(loggedPanelText.find("Display change reverted:") == std::string::npos,
+          "F1 retained error after successful retry");
+    Click("Revert display settings");
+    Check(runtime.AcknowledgePresentationApplied(confirmedDisplay),
+          "smoke test could not restore its original display");
     Click("Textures");
     Find("Apply folders");
     Click("Controls");
