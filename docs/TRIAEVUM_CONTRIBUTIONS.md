@@ -40,6 +40,7 @@ release qualification records. See [platform architecture](TRIAEVUM_PLATFORM_REL
 - Contributor: [999sian](https://github.com/999sian), Git author `sian <sian@localhost>`.
 - Pull request: [Show why a display change was reverted](https://github.com/coccofresco/TriAevum/pull/14).
 - Original commit: `a359f7063a512e7626eed4e5d849dd46aab8fc79`.
+- Integration commit: `dd7539e`.
 - Integration: selective adaptation on `port/linux-nri`; the integration commit
   records the PR URL, original SHA and a `Co-authored-by` trailer.
 
