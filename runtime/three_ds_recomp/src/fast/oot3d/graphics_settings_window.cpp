@@ -35,6 +35,38 @@ void InstallGraphicsSettingsPanelTab(
     }
     InstallGraphicsSettingsPanelTabs(std::move(tabs));
 }
+void DrawDisplayConfirmation() {
+    auto& runtime = GraphicsSettingsRuntime::Instance();
+    const bool awaiting = runtime.PresentationStatus().Phase == PresentationTransactionPhase::AwaitingConfirmation;
+    constexpr const char* title = "Keep display settings?";
+    if (awaiting && !ImGui::IsPopupOpen(title)) ImGui::OpenPopup(title);
+    if (!awaiting && !ImGui::IsPopupOpen(title)) return;
+    const auto* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Always, ImVec2(0.5F, 0.5F));
+    ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
+        ImVec2(std::max(240.0F, viewport->WorkSize.x - 16.0F), viewport->WorkSize.y - 16.0F));
+    if (ImGui::BeginPopupModal(title, nullptr, ImGuiWindowFlags_AlwaysAutoResize |
+            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove)) {
+        if (!awaiting) {
+            ImGui::CloseCurrentPopup();
+        } else {
+            runtime.PresentationConfirmationVisible();
+            const auto metrics = runtime.DisplayMetrics();
+            if (metrics.OutputWidth)
+                ImGui::Text("Output: %u x %u", metrics.OutputWidth, metrics.OutputHeight);
+            ImGui::Text("Reverting in %u seconds", (runtime.PresentationStatus().RemainingMilliseconds + 999U) / 1000U);
+            if (ImGui::Button("Keep display settings")) {
+                runtime.ConfirmPresentation();
+                ImGui::CloseCurrentPopup();
+            }
+            if (ImGui::Button("Revert display settings")) {
+                runtime.RollbackPresentation();
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        ImGui::EndPopup();
+    }
+}
 void GraphicsSettingsPanel::DrawPresentationStatus() {
     auto& runtime = GraphicsSettingsRuntime::Instance();
     runtime.TickPresentation();
@@ -45,12 +77,7 @@ void GraphicsSettingsPanel::DrawPresentationStatus() {
         ImGui::TextWrapped("Display change reverted: %s", rejection.c_str());
     }
     if (status.Phase == PresentationTransactionPhase::AwaitingConfirmation) {
-        ImGui::Text("Confirm display change (%u s)",
-                    (status.RemainingMilliseconds + 999U) / 1000U);
-        if (ImGui::Button("Keep display settings")) runtime.ConfirmPresentation();
-        ImGui::SameLine();
-        if (ImGui::Button("Revert display settings")) runtime.RollbackPresentation();
-        ImGui::Separator();
+        ImGui::TextUnformatted("Waiting for display confirmation...");
     } else if (status.Phase == PresentationTransactionPhase::ApplyRequested) {
         ImGui::TextUnformatted("Applying display settings...");
     } else if (status.Phase == PresentationTransactionPhase::RollbackRequested) {

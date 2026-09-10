@@ -51,7 +51,8 @@ class PresentationSettingsTransaction final {
     bool Begin(const PresentationSettingsValue& currentApplied,
                const PresentationSettingsValue& requested);
     bool MarkApplied(const PresentationSettingsValue& applied,
-                     uint64_t nowMilliseconds);
+                     uint64_t nowMilliseconds, bool waitForVisibleConfirmation = false);
+    bool ConfirmationVisible(uint64_t nowMilliseconds);
     bool Confirm();
     bool RequestRollback();
     bool Advance(uint64_t nowMilliseconds);

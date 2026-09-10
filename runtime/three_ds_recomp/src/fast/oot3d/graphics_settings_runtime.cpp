@@ -445,6 +445,25 @@ GraphicsSettingsValidation GraphicsSettingsRuntime::Apply(GraphicsSettings candi
     }
     return result;
 }
+GraphicsDisplayMetrics GraphicsSettingsRuntime::DisplayMetrics() const {
+    std::scoped_lock lock(mMutex);
+    return mDisplayMetrics;
+}
+void GraphicsSettingsRuntime::PublishDisplayMetrics(GraphicsDisplayMetrics metrics) {
+    std::scoped_lock lock(mMutex);
+    if (metrics.OutputWidth == mDisplayMetrics.OutputWidth &&
+        metrics.OutputHeight == mDisplayMetrics.OutputHeight &&
+        metrics.InternalScale == mDisplayMetrics.InternalScale) {
+        metrics.SceneWidth = mDisplayMetrics.SceneWidth;
+        metrics.SceneHeight = mDisplayMetrics.SceneHeight;
+    }
+    mDisplayMetrics = metrics;
+}
+void GraphicsSettingsRuntime::PublishSceneExtent(uint32_t width, uint32_t height) {
+    std::scoped_lock lock(mMutex);
+    mDisplayMetrics.SceneWidth = width;
+    mDisplayMetrics.SceneHeight = height;
+}
 GraphicsSettingsSaveState GraphicsSettingsRuntime::SaveState() const {
     std::scoped_lock lock(mMutex);
     if (mPersistenceSuppressed || mPersistence == nullptr)
@@ -467,7 +486,7 @@ bool GraphicsSettingsRuntime::AcknowledgePresentationApplied(
         PresentationClockMilliseconds()).Phase;
     const bool acknowledged = mPresentationTransaction.MarkApplied(
         GetPresentationSettings(applied),
-        PresentationClockMilliseconds());
+        PresentationClockMilliseconds(), true);
     // Only a successfully applied new candidate supersedes the previous failure.
     // A rollback acknowledgement is recovery, not a successful user request.
     if (acknowledged && phase == PresentationTransactionPhase::ApplyRequested) {
@@ -519,6 +538,10 @@ bool GraphicsSettingsRuntime::ConfirmPresentation() {
     }
     PersistCurrentLocked();
     return true;
+}
+void GraphicsSettingsRuntime::PresentationConfirmationVisible() {
+    std::scoped_lock lock(mMutex);
+    mPresentationTransaction.ConfirmationVisible(PresentationClockMilliseconds());
 }
 bool GraphicsSettingsRuntime::RollbackPresentation() {
     std::scoped_lock lock(mMutex);

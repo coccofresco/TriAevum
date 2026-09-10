@@ -41,6 +41,15 @@ std::optional<PicaDisplayTransferPlan> BuildPicaDisplayTransferPlan(
         SetError(error, "PICA display transfer mode is unsupported");
         return std::nullopt;
     }
+    const uint32_t horizontalSamples = scaling != 0U ? 2U : 1U;
+    const uint32_t verticalSamples = scaling == 2U ? 2U : 1U;
+    // Validate the guest command before host-resolution rounding. A valid box
+    // filter over an odd host extent repeats its last texel (shader edge clamp).
+    if (static_cast<uint64_t>(input.NativeOutputWidth) * horizontalSamples > input.NativeInputWidth ||
+        static_cast<uint64_t>(input.NativeOutputHeight) * verticalSamples > input.NativeInputHeight) {
+        SetError(error, "PICA display transfer samples outside its native source image");
+        return std::nullopt;
+    }
 
     const auto destinationWidth = ScaleNativeExtent(
         input.NativeOutputWidth, input.SourceWidth,
@@ -58,18 +67,11 @@ std::optional<PicaDisplayTransferPlan> BuildPicaDisplayTransferPlan(
     plan.SourceHeight = input.SourceHeight;
     plan.DestinationWidth = *destinationWidth;
     plan.DestinationHeight = *destinationHeight;
-    plan.HorizontalSamples = scaling != 0U ? 2U : 1U;
-    plan.VerticalSamples = scaling == 2U ? 2U : 1U;
+    plan.HorizontalSamples = horizontalSamples;
+    plan.VerticalSamples = verticalSamples;
     plan.ScalingMode = scaling;
 
-    const uint64_t sampledWidth =
-        static_cast<uint64_t>(plan.DestinationWidth) *
-        plan.HorizontalSamples;
-    const uint64_t sampledHeight =
-        static_cast<uint64_t>(plan.DestinationHeight) *
-        plan.VerticalSamples;
-    if (sampledWidth > plan.SourceWidth ||
-        sampledHeight > plan.SourceHeight) {
+    if (!plan.SamplingFitsSource()) {
         SetError(error,
                  "PICA display transfer samples outside its source image");
         return std::nullopt;

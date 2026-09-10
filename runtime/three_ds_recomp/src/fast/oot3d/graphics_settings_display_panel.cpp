@@ -8,6 +8,14 @@ using SettingsUi::EnumCombo;
 bool GraphicsSettingsPanel::DrawDisplaySettings(GraphicsSettings& settings, const GraphicsCapabilities& capabilities) {
     bool changed = false;
     ImGui::SeparatorText("Display");
+    const auto observed = GraphicsSettingsRuntime::Instance().DisplayMetrics();
+    if (observed.OutputWidth != 0 && observed.OutputHeight != 0) {
+        ImGui::Text("Output framebuffer: %u x %u (%.3f:1)", observed.OutputWidth,
+                    observed.OutputHeight, float(observed.OutputWidth) / observed.OutputHeight);
+        if (observed.SceneWidth != 0)
+            ImGui::Text("Scene image: %u x %u (%.2fx)", observed.SceneWidth,
+                        observed.SceneHeight, observed.InternalScale);
+    }
     const char* const windowModes[] = { "Windowed", "Borderless", "Exclusive fullscreen" };
     changed |= SettingsUi::ValidatedCombo<WindowMode>(
         "Window mode", settings, capabilities, windowModes,
@@ -39,7 +47,8 @@ bool GraphicsSettingsPanel::DrawDisplaySettings(GraphicsSettings& settings, cons
     const std::string customResolution =
         std::to_string(settings.OutputWidth) + " x " +
         std::to_string(settings.OutputHeight) + " (custom)";
-    if (ImGui::BeginCombo("Resolution",
+    ImGui::BeginDisabled(settings.Window == WindowMode::Borderless);
+    if (ImGui::BeginCombo("Requested resolution",
                           selectedResolution != nullptr
                               ? selectedResolution->Label
                               : customResolution.c_str())) {
@@ -68,9 +77,14 @@ bool GraphicsSettingsPanel::DrawDisplaySettings(GraphicsSettings& settings, cons
         changed = true;
     }
     mOutputResolutionEditing = ImGui::IsItemActive();
+    ImGui::EndDisabled();
+    if (settings.Window == WindowMode::Borderless)
+        ImGui::TextDisabled("Borderless uses the desktop resolution.");
     if (!mRenderScaleEditing) {
         mPendingRenderScale = settings.InternalResolutionScale;
     }
+    const bool upscalerOwnsScale = settings.AntiAliasing == AntiAliasingMode::Upscaler;
+    ImGui::BeginDisabled(upscalerOwnsScale);
     if (ImGui::SliderFloat("Internal render scale", &mPendingRenderScale,
                            0.5F, 2.0F, "%.2fx")) {
         mRenderScaleEditing = true;
@@ -80,6 +94,8 @@ bool GraphicsSettingsPanel::DrawDisplaySettings(GraphicsSettings& settings, cons
         mRenderScaleEditing = false;
         changed = true;
     }
+    ImGui::EndDisabled();
+    if (upscalerOwnsScale) ImGui::TextDisabled("Render scale is set by upscaler quality.");
     changed |= ImGui::Checkbox("VSync", &settings.VSync);
 
     ImGui::SeparatorText("Motion and camera");

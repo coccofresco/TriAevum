@@ -20,6 +20,7 @@
 #include <imgui_impl_vulkan.h>
 #include "fast/oot3d/graphics_settings_runtime.h"
 #include "fast/oot3d/cacao_diagnostics.h"
+#include "fast/oot3d/display_diagnostics.h"
 #include "fast/oot3d/anti_aliasing_frame_policy.h"
 #include "fast/oot3d/renderer_presentation_controller.h"
 #include "fast/oot3d/render_resolution_policy.h"
@@ -1592,6 +1593,7 @@ void GfxRenderingAPIVulkan::StartFrame() {
     }
     auto& settingsRuntime = Oot3d::GraphicsSettingsRuntime::Instance();
     Oot3d::TickCacaoDiagnostics(settingsRuntime, mFrameCounter);
+    Oot3d::TickDisplayDiagnostics(settingsRuntime, mFrameCounter);
     settingsRuntime.TickPresentation();
     const auto initialGraphicsSettings = settingsRuntime.Snapshot();
     const auto presentationRequest =
@@ -1970,6 +1972,29 @@ void GfxRenderingAPIVulkan::StartFrame() {
     if (acquire == VK_SUBOPTIMAL_KHR) {
         mSwapchainSuboptimal.store(true);
     }
+
+    // Acquire can recreate the swapchain too. Validate against its final extent,
+    // not the requested window size or the previous swapchain. Mode/present-only
+    // changes retain targets; saved display pixels bridge presentation-only frames.
+    const bool staleTargetExtent = std::any_of(
+        mNativePicaRenderTargets.begin(), mNativePicaRenderTargets.end(),
+        [&](const auto& entry) {
+            const auto& [key, target] = entry;
+            const auto expected = Oot3d::ResolveNativePicaRenderExtent(
+                {key.Width, key.Height},
+                {mSwapchainExtent.width, mSwapchainExtent.height},
+                mInternalResolutionScale);
+            return target.Width != expected.Width || target.Height != expected.Height;
+        });
+    if (staleTargetExtent) {
+        ResetNativePicaRenderTargets(true);
+    }
+    settingsRuntime.PublishDisplayMetrics({
+        mSwapchainExtent.width, mSwapchainExtent.height, 0, 0,
+        mInternalResolutionScale,
+        !mWindowBackend->IsFullscreen() ? Oot3d::WindowMode::Windowed :
+        mWindowBackend->IsWindowedFullscreen() ? Oot3d::WindowMode::Borderless :
+                                               Oot3d::WindowMode::ExclusiveFullscreen});
 
     if (mImagesInFlight[mCurrentImage] != VK_NULL_HANDLE) {
         CheckVk(vkWaitForFences(mDevice, 1, &mImagesInFlight[mCurrentImage], VK_TRUE,

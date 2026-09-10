@@ -31,20 +31,7 @@ struct NriPicaDisplayCopyDesc {
            desc.DestinationImage != VK_NULL_HANDLE &&
            desc.SourceImage != desc.DestinationImage &&
            desc.Format != VK_FORMAT_UNDEFINED &&
-           desc.Plan.SourceWidth != 0U &&
-           desc.Plan.SourceHeight != 0U &&
-           desc.Plan.DestinationWidth != 0U &&
-           desc.Plan.DestinationHeight != 0U &&
-           (desc.Plan.HorizontalSamples == 1U ||
-            desc.Plan.HorizontalSamples == 2U) &&
-           (desc.Plan.VerticalSamples == 1U ||
-            desc.Plan.VerticalSamples == 2U) &&
-           static_cast<uint64_t>(desc.Plan.DestinationWidth) *
-                   desc.Plan.HorizontalSamples <=
-               desc.Plan.SourceWidth &&
-           static_cast<uint64_t>(desc.Plan.DestinationHeight) *
-                   desc.Plan.VerticalSamples <=
-               desc.Plan.SourceHeight;
+           desc.Plan.SamplingFitsSource();
 }
 
 // Executes native crop/downsample semantics while preserving the layouts

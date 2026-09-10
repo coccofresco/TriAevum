@@ -56,7 +56,7 @@ bool PresentationSettingsTransaction::Begin(
 
 bool PresentationSettingsTransaction::MarkApplied(
     const PresentationSettingsValue& applied,
-    uint64_t nowMilliseconds) {
+    uint64_t nowMilliseconds, bool waitForVisibleConfirmation) {
     if (mPhase == PresentationTransactionPhase::ApplyRequested &&
         applied == mRequested) {
         if (!RequiresPresentationConfirmation(mLastKnownGood, mRequested)) {
@@ -66,14 +66,8 @@ bool PresentationSettingsTransaction::MarkApplied(
             return true;
         }
         mPhase = PresentationTransactionPhase::AwaitingConfirmation;
-        const uint64_t maximum =
-            std::numeric_limits<uint64_t>::max();
-        mDeadlineMilliseconds =
-            nowMilliseconds > maximum -
-                    mConfirmationTimeoutMilliseconds
-                ? maximum
-                : nowMilliseconds +
-                    mConfirmationTimeoutMilliseconds;
+        mDeadlineMilliseconds = 0;
+        if (!waitForVisibleConfirmation) ConfirmationVisible(nowMilliseconds);
         return true;
     }
     if (mPhase == PresentationTransactionPhase::RollbackRequested &&
@@ -82,6 +76,14 @@ bool PresentationSettingsTransaction::MarkApplied(
         return true;
     }
     return false;
+}
+
+bool PresentationSettingsTransaction::ConfirmationVisible(uint64_t nowMilliseconds) {
+    if (mPhase != PresentationTransactionPhase::AwaitingConfirmation || mDeadlineMilliseconds != 0) return false;
+    const uint64_t maximum = std::numeric_limits<uint64_t>::max();
+    mDeadlineMilliseconds = nowMilliseconds > maximum - mConfirmationTimeoutMilliseconds
+        ? maximum : nowMilliseconds + mConfirmationTimeoutMilliseconds;
+    return true;
 }
 
 bool PresentationSettingsTransaction::Confirm() {
@@ -109,6 +111,7 @@ bool PresentationSettingsTransaction::Advance(
     uint64_t nowMilliseconds) {
     if (mPhase !=
             PresentationTransactionPhase::AwaitingConfirmation ||
+        mDeadlineMilliseconds == 0 ||
         nowMilliseconds < mDeadlineMilliseconds) {
         return false;
     }
@@ -122,6 +125,8 @@ PresentationSettingsTransaction::Status(
     status.Phase = mPhase;
     status.Requested = mRequested;
     status.LastKnownGood = mLastKnownGood;
+    if (mPhase == PresentationTransactionPhase::AwaitingConfirmation && mDeadlineMilliseconds == 0)
+        status.RemainingMilliseconds = mConfirmationTimeoutMilliseconds;
     if (mPhase ==
             PresentationTransactionPhase::AwaitingConfirmation &&
         nowMilliseconds < mDeadlineMilliseconds) {

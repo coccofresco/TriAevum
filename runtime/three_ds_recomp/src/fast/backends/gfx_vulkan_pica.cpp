@@ -884,14 +884,15 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
               {key.Width, key.Height},
               {mSwapchainExtent.width, mSwapchainExtent.height},
               mInternalResolutionScale);
-    mDiagnostics.RecordRenderResolution(
-        mInternalResolutionScale, mSwapchainExtent.width,
-        mSwapchainExtent.height, targetExtent.Width, targetExtent.Height);
     if (const auto found = mNativePicaRenderTargets.find(key);
         found != mNativePicaRenderTargets.end()) {
+        mDiagnostics.RecordRenderResolution(mInternalResolutionScale, mSwapchainExtent.width,
+            mSwapchainExtent.height, found->second.Width, found->second.Height);
         PrepareNativePicaTargetAttachments(found->second);
         return found->second;
     }
+    mDiagnostics.RecordRenderResolution(mInternalResolutionScale, mSwapchainExtent.width,
+        mSwapchainExtent.height, targetExtent.Width, targetExtent.Height);
 
     NativePicaRenderTarget target;
     target.Key = key;
@@ -5519,6 +5520,11 @@ bool GfxRenderingAPIVulkan::SubmitPicaDisplayTransfer(
                     "native PICA display transfer plan failed: " +
                     transferPlanError);
             }
+            if (source->Key.Width == Oot3d::kNativeTopScreenPhysicalWidth &&
+                source->Key.Height == Oot3d::kNativeTopScreenPhysicalHeight) {
+                Oot3d::GraphicsSettingsRuntime::Instance().PublishSceneExtent(
+                    transferPlan->DestinationHeight, transferPlan->DestinationWidth);
+            }
 
             const auto& graphicsSettings =
                 mFrameGraphicsSettings;
@@ -5660,11 +5666,9 @@ bool GfxRenderingAPIVulkan::SubmitPicaDisplayTransfer(
                 blit.srcSubresource.layerCount = 1;
                 blit.srcOffsets[1] = {
                     static_cast<int32_t>(
-                        transferPlan->DestinationWidth *
-                        transferPlan->HorizontalSamples),
+                        transferPlan->BlitSourceWidth()),
                     static_cast<int32_t>(
-                        transferPlan->DestinationHeight *
-                        transferPlan->VerticalSamples),
+                        transferPlan->BlitSourceHeight()),
                     1};
                 blit.dstSubresource.aspectMask =
                     VK_IMAGE_ASPECT_COLOR_BIT;
@@ -9445,11 +9449,11 @@ void GfxRenderingAPIVulkan::ReleaseEffectGraphImageClients() {
 }
 
 void GfxRenderingAPIVulkan::ApplyInternalResolutionScale(float scale) {
-    ResetNativePicaRenderTargets();
+    ResetNativePicaRenderTargets(true);
     mInternalResolutionScale = scale;
 }
 
-void GfxRenderingAPIVulkan::ResetNativePicaRenderTargets() {
+void GfxRenderingAPIVulkan::ResetNativePicaRenderTargets(bool preserveDisplayImages) {
     EndNativePicaRenderPass();
     WaitForAllPresents();
     CheckNativeVk(vkDeviceWaitIdle(mDevice),
@@ -9507,12 +9511,19 @@ void GfxRenderingAPIVulkan::ResetNativePicaRenderTargets() {
     }
     mNativePicaRenderTargets.clear();
     mNativePicaDisplayDepthTargets.clear();
-    for (auto& [key, image] : mNativePicaDisplayImages) {
-        DestroyNativePicaDisplayImage(image);
+    if (!preserveDisplayImages) {
+        for (auto& [key, image] : mNativePicaDisplayImages) {
+            DestroyNativePicaDisplayImage(image);
+        }
+        mNativePicaDisplayImages.clear();
+        mLastPresentedNativePicaDisplayTransfer.reset();
+    } else {
+        // Retained pixels remain presentable, but their old scene/depth guides
+        // no longer exist. The next native transfer republishes that capability;
+        // until then the graph must not declare reads from retired attachments.
+        for (auto& [key, image] : mNativePicaDisplayImages) image.SceneResolved = false;
     }
-    mNativePicaDisplayImages.clear();
     mInvalidatedNativePicaRenderTargetAddresses.clear();
-    mLastPresentedNativePicaDisplayTransfer.reset();
     mActiveNativePicaRenderTarget = nullptr;
     mNativePicaRenderPassActive = false;
     mNativePicaPresentedThisFrame = false;

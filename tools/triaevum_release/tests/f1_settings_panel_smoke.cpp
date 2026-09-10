@@ -45,6 +45,7 @@ struct MemoryStore final : GraphicsSettingsPersistencePort {
 GraphicsSettingsPanel panel;
 std::string loggedPanelText;
 bool updateTextureObservations = false;
+bool showPanel = true;
 constexpr uint64_t firstTextureHash = 0xA100U;
 constexpr uint64_t secondTextureHash = 0xB200U;
 ImVec2 size(760.0F, 680.0F);
@@ -60,16 +61,19 @@ void Frame(bool logText = false) {
                             std::max(720.0F, size.y + 16.0F));
     io.DeltaTime = 1.0F / 60.0F;
     ImGui::NewFrame();
-    ImGui::SetNextWindowPos(ImVec2(8, 8));
-    ImGui::SetNextWindowSize(size);
-    ImGui::Begin("F1 test", nullptr, ImGuiWindowFlags_NoSavedSettings);
-    if (logText) ImGui::LogToBuffer(0);
-    panel.Draw();
-    if (logText) {
-        loggedPanelText = GImGui->LogBuffer.c_str();
-        ImGui::LogFinish();
+    if (showPanel) {
+        ImGui::SetNextWindowPos(ImVec2(8, 8));
+        ImGui::SetNextWindowSize(size);
+        ImGui::Begin("F1 test", nullptr, ImGuiWindowFlags_NoSavedSettings);
+        if (logText) ImGui::LogToBuffer(0);
+        panel.Draw();
+        if (logText) {
+            loggedPanelText = GImGui->LogBuffer.c_str();
+            ImGui::LogFinish();
+        }
+        ImGui::End();
     }
-    ImGui::End();
+    DrawDisplayConfirmation();
     ImGui::Render();
     Check(GImGui->DisabledStackSize == 0, "unbalanced disabled scope");
     Check(GImGui->ColorStack.Size == 0 && GImGui->StyleVarStack.Size == 0,
@@ -99,7 +103,8 @@ void Click(const char* label) {
     Check(!item.Disabled, std::string("disabled UI item: ") + label);
     const ImVec2 p(item.Rect.Min.x + std::min(12.0F, item.Rect.GetWidth() / 2.0F),
                    (item.Rect.Min.y + item.Rect.Max.y) / 2.0F);
-    Check(p.y < size.y + 8.0F && p.x < size.x + 8.0F, std::string("clipped UI action: ") + label);
+    const auto bounds = item.Popup ? ImGui::GetIO().DisplaySize : ImVec2(size.x + 8.0F, size.y + 8.0F);
+    Check(p.y < bounds.y && p.x < bounds.x, std::string("clipped UI action: ") + label);
     auto& io = ImGui::GetIO();
     io.AddMousePosEvent(p.x, p.y);
     Frame();
@@ -285,6 +290,17 @@ const char* ImGuiTestEngine_FindItemDebugLabel(ImGuiContext*, ImGuiID id) {
 }
 
 int main() try {
+    PresentationSettingsTransaction delayedConfirmation(500);
+    PresentationSettingsValue previousDisplay;
+    auto nextDisplay = previousDisplay;
+    nextDisplay.Window = WindowMode::Borderless;
+    Check(delayedConfirmation.Begin(previousDisplay, nextDisplay), "display transaction did not begin");
+    Check(delayedConfirmation.MarkApplied(nextDisplay, 100, true), "display transaction did not apply");
+    Check(!delayedConfirmation.Advance(100000), "hidden confirmation expired before it could be seen");
+    Check(delayedConfirmation.ConfirmationVisible(100000), "visible confirmation did not start the timer");
+    Check(!delayedConfirmation.ConfirmationVisible(100100), "redrawing the confirmation renewed its timer");
+    Check(!delayedConfirmation.Advance(100499) && delayedConfirmation.Advance(100500),
+          "visible confirmation lost the automatic rollback deadline");
     auto store = std::make_shared<MemoryStore>();
     auto initial = GraphicsSettingsService::Preset(GraphicsPreset::Custom);
     store->Root["Graphics"] = SerializeGraphicsSettings(initial);
@@ -306,6 +322,21 @@ int main() try {
     int width, height;
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
     Frame(); Frame();
+
+    auto requestedDisplay = runtime.Snapshot();
+    requestedDisplay.OutputWidth = 3840;
+    requestedDisplay.OutputHeight = 2160;
+    runtime.Apply(requestedDisplay);
+    runtime.AcknowledgePresentationApplied(requestedDisplay);
+    runtime.PublishDisplayMetrics({1920, 1080, 960, 540, 0.5F, WindowMode::Windowed});
+    Frame(true);
+    Check(loggedPanelText.find("Output framebuffer: 1920 x 1080") != std::string::npos &&
+          loggedPanelText.find("Scene image: 960 x 540") != std::string::npos,
+          "F1 labels the requested resolution as the actual renderer extent");
+    Check(runtime.Snapshot().OutputWidth == 3840, "observed extent overwrote the requested resolution");
+    runtime.Apply(initial);
+    runtime.AcknowledgePresentationApplied(initial);
+    Frame();
 
     Check(!runtime.NativePresentationOverrideActive(), "F2 must start inactive");
     for (const auto toon : {ToonMode::Off, ToonMode::PostProcessPreview, ToonMode::PicaMaterial}) {
@@ -522,10 +553,13 @@ int main() try {
     display.Window = WindowMode::Borderless;
     runtime.Apply(display);
     runtime.AcknowledgePresentationApplied(display);
+    showPanel = false;
+    runtime.PublishDisplayMetrics({1920, 1080, 1280, 720, 2.0F / 3.0F, WindowMode::Borderless});
     Frame();
     Click("Keep display settings");
     Check(runtime.PresentationStatus().Phase == PresentationTransactionPhase::Idle,
-          "display confirmation not accessible outside Renderer");
+          "display confirmation not accessible with F1 closed");
+    showPanel = true;
     const auto confirmedDisplay = runtime.Snapshot();
     auto rejectedDisplay = confirmedDisplay;
     rejectedDisplay.Window = WindowMode::ExclusiveFullscreen;

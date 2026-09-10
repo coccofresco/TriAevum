@@ -12,6 +12,9 @@
 
 namespace Fast::Oot3d {
 
+// Draw independently of F1 visibility, collapse state, tabs and scroll position.
+void DrawDisplayConfirmation();
+
 class GraphicsSettingsPanelTab {
   public:
     virtual ~GraphicsSettingsPanelTab() = default;

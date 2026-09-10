@@ -382,6 +382,15 @@ void Fast3dWindow::SetMsaaLevel(uint32_t value) {
 }
 
 void Fast3dWindow::SetFullscreen(bool isFullscreen) {
+#ifdef ENABLE_OOT3D_VULKAN
+    if (GetWindowBackend() == WindowBackend::FAST3D_SDL_OOT3D_VULKAN) {
+        auto& runtime = Oot3d::GraphicsSettingsRuntime::Instance();
+        auto settings = runtime.Snapshot();
+        settings.Window = isFullscreen ? Oot3d::WindowMode::Borderless : Oot3d::WindowMode::Windowed;
+        runtime.Apply(settings);
+        return;
+    }
+#endif
     // Save current window position before fullscreening
     SaveWindowToConfig();
     mWindowManagerApi->SetFullscreen(isFullscreen);

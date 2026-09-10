@@ -29,6 +29,14 @@ struct VersionedGraphicsSettings {
     uint64_t Revision = 0;
 };
 
+// Observed renderer state, never persisted as a user request.
+struct GraphicsDisplayMetrics {
+    uint32_t OutputWidth = 0, OutputHeight = 0;
+    uint32_t SceneWidth = 0, SceneHeight = 0;
+    float InternalScale = 1.0F;
+    WindowMode Window = WindowMode::Windowed;
+};
+
 enum class GraphicsSettingsSaveState {
     Saved, Pending, WaitingForDisplay, SessionOnly, Failed
 };
@@ -45,6 +53,9 @@ class GraphicsSettingsRuntime final {
     void ToggleNativePresentationOverride();
     [[nodiscard]] GraphicsCapabilities Capabilities() const;
     [[nodiscard]] PresentationTransactionStatus PresentationStatus() const;
+    [[nodiscard]] GraphicsDisplayMetrics DisplayMetrics() const;
+    void PublishDisplayMetrics(GraphicsDisplayMetrics metrics);
+    void PublishSceneExtent(uint32_t width, uint32_t height);
     GraphicsSettingsValidation Apply(GraphicsSettings candidate, bool persist = true);
     [[nodiscard]] GraphicsSettingsSaveState SaveState() const;
     void SavePending();
@@ -54,6 +65,7 @@ class GraphicsSettingsRuntime final {
     bool RejectPresentationApply(const GraphicsSettings& rejected, std::string reason = {});
     [[nodiscard]] std::string LastPresentationRejection() const;
     bool ConfirmPresentation();
+    void PresentationConfirmationVisible();
     bool RollbackPresentation();
     bool TickPresentation();
     void SetCapability(GraphicsCapability capability, bool available, std::string reason = {});
@@ -65,6 +77,7 @@ class GraphicsSettingsRuntime final {
     mutable std::mutex mMutex;
     GraphicsSettingsService mService;
     GraphicsCapabilities mCapabilities;
+    GraphicsDisplayMetrics mDisplayMetrics;
     PresentationSettingsTransaction mPresentationTransaction;
     std::string mLastPresentationRejection;
     std::shared_ptr<GraphicsSettingsPersistencePort> mPersistence;

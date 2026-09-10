@@ -591,7 +591,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         const Oot3d::PicaCompositionStageAnchor& anchor);
     void ReleaseEffectGraphImageClients();
     void ApplyInternalResolutionScale(float scale);
-    void ResetNativePicaRenderTargets();
+    void ResetNativePicaRenderTargets(bool preserveDisplayImages = false);
     void ForgetNativePicaEffectNriTextures();
     void ApplyPendingNativePicaMemoryFills(NativePicaRenderTarget& target);
     void CreateFrameResources();

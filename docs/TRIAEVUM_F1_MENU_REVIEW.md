@@ -2,6 +2,10 @@
 
 Date: 2026-09-06. Worktree: `triaevum-release`.
 
+2026-09-10: [Display resolution and confirmation](TRIAEVUM_DISPLAY_RESOLUTION_FIX.md)
+supersedes the in-panel display confirmation below. The modal now works with
+F1 closed; output and scene resolution report actual renderer extents.
+
 2026-09-07: [F2 native presentation override](TRIAEVUM_F2_NATIVE_PRESENTATION.md)
 adds a session-only effect comparison and persistent header status. F1 now starts
 closed even when the previous session saved it open.
