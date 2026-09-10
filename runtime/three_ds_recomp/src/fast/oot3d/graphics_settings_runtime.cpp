@@ -462,6 +462,10 @@ bool GraphicsSettingsRuntime::RetrySave() {
     std::scoped_lock lock(mMutex);
     return PersistCurrentLocked();
 }
+std::string GraphicsSettingsRuntime::LastPresentationRejection() const {
+    std::scoped_lock lock(mMutex);
+    return mLastPresentationRejection;
+}
 bool GraphicsSettingsRuntime::AcknowledgePresentationApplied(
     const GraphicsSettings& applied) {
     std::scoped_lock lock(mMutex);
@@ -470,6 +474,9 @@ bool GraphicsSettingsRuntime::AcknowledgePresentationApplied(
     const bool acknowledged = mPresentationTransaction.MarkApplied(
         GetPresentationSettings(applied),
         PresentationClockMilliseconds());
+    if (acknowledged) {
+        mLastPresentationRejection.clear();
+    }
     if (acknowledged &&
         (phase == PresentationTransactionPhase::RollbackRequested ||
          mPresentationTransaction.Status(PresentationClockMilliseconds())
@@ -479,8 +486,9 @@ bool GraphicsSettingsRuntime::AcknowledgePresentationApplied(
     return acknowledged;
 }
 bool GraphicsSettingsRuntime::RejectPresentationApply(
-    const GraphicsSettings& rejected) {
+    const GraphicsSettings& rejected, std::string reason) {
     std::scoped_lock lock(mMutex);
+    mLastPresentationRejection = std::move(reason);
     const auto status = mPresentationTransaction.Status(
         PresentationClockMilliseconds());
     if (GetPresentationSettings(rejected) !=

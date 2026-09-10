@@ -2026,12 +2026,23 @@ int main() {
   Require(
       questModelMemory.Write32(0x005043E0U, questDrawScene) &&
           questModelMemory.Write32(questDrawScene + 0x20ACU, 0U) &&
-          questModelMemory.Write16(questDrawScene + 0x2B82U, 0x00FFU) &&
-          questModelMemory.Write16(questDrawScene + 0x2B80U, 1U) &&
+          questModelMemory.Write16(questDrawScene + 0x2B82U, 0x0000U) &&
+          questModelMemory.Write16(questDrawScene + 0x2B80U, 0U) &&
           ReadTopScreenOcarinaUiActive(questModelMemory, &ocarinaUiActive,
                                       &error) &&
           !ocarinaUiActive,
-      "TopScreen 1.2 Ocarina gate blocked the native idle state");
+      "TopScreen 1.2 Ocarina gate reported active during ordinary HUD "
+      "gameplay");
+  // Verified in-game (Kokiri Forest, D-pad Down): a performance in progress
+  // reads action 0x0001 and result 0x00FF while the native HUD is suppressed.
+  // The earlier gate mislabelled this exact state as idle.
+  Require(
+      questModelMemory.Write16(questDrawScene + 0x2B82U, 0x00FFU) &&
+          questModelMemory.Write16(questDrawScene + 0x2B80U, 1U) &&
+          ReadTopScreenOcarinaUiActive(questModelMemory, &ocarinaUiActive,
+                                      &error) &&
+          ocarinaUiActive,
+      "TopScreen 1.2 Ocarina gate missed a performance in progress");
   Require(
       questModelMemory.Write16(questDrawScene + 0x2B80U, 2U) &&
           ReadTopScreenOcarinaUiActive(questModelMemory, &ocarinaUiActive,

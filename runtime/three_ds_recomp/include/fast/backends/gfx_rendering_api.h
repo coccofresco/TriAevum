@@ -62,6 +62,14 @@ using GfxNativePicaDisplayImageColorSnapshot =
 using GfxNativePicaPresentationStateSnapshot =
     ::Fast::Renderer3ds::PicaPresentationStateSnapshot;
 
+// Startup shader/pipeline precompilation state. While Blocking, the host must
+// hold the guest and show progress instead of advancing the game.
+struct GfxNativePicaPrewarmProgress {
+    uint32_t Completed = 0;
+    uint32_t Total = 0;
+    bool Blocking = false;
+};
+
 struct GfxNativePicaBackendStats {
     bool Available = false;
     bool GeometryCacheEnabled = false;
@@ -204,6 +212,10 @@ class GfxRenderingAPI : public ::Fast::Renderer3ds::PicaRenderBackend {
         return {};
     }
     virtual void SetNativePicaGeometryCacheEnabled(bool) noexcept {
+    }
+    virtual GfxNativePicaPrewarmProgress NativePicaPipelinePrewarmProgress()
+        const noexcept {
+        return {};
     }
     bool SubmitPicaDraw(const GfxNativePicaDrawView&,
                         std::string* error = nullptr) override {

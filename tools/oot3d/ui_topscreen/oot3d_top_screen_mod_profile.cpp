@@ -2609,7 +2609,12 @@ bool ReadTopScreenOcarinaUiActive(NativeA32Memory &memory, bool *active,
       *error = "cannot read TopScreen Ocarina UI state";
     return false;
   }
-  if (ocarinaResult != 0x00FFU) {
+  // Result branch (inherited, provisional): treat a nonzero, non-0xFF result
+  // as active. Verified in-game only for the two endpoints: idle reads 0x0000
+  // and a performance in progress reads 0x00FF; excluding 0x0000 stops the
+  // earlier bare `!= 0x00FF` from reporting active during ordinary HUD play.
+  // The nonzero-result (completed-song) case is not yet sampled.
+  if (ocarinaResult != 0x00FFU && ocarinaResult != 0x0000U) {
     *active = true;
     return true;
   }
@@ -2633,7 +2638,9 @@ bool ReadTopScreenOcarinaUiActive(NativeA32Memory &memory, bool *active,
       *error = "cannot read TopScreen Ocarina action";
     return false;
   }
-  *active = ocarinaAction > 1U;
+  // A performance in progress reads action 1 (verified in-game); idle reads 0.
+  // The earlier `> 1U` missed the active state entirely.
+  *active = ocarinaAction != 0U;
   return true;
 }
 

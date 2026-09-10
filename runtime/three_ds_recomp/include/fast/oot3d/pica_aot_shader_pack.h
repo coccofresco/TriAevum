@@ -64,6 +64,8 @@ class PicaAotShaderPack final {
     [[nodiscard]] bool Loaded() const noexcept;
     [[nodiscard]] uint32_t DescriptorSchemaVersion() const noexcept;
     [[nodiscard]] size_t EntryCount() const noexcept;
+    // Copies every module; for merging into a rewritten pack at shutdown.
+    [[nodiscard]] std::vector<PicaAotShaderBinary> Binaries() const;
     [[nodiscard]] const std::filesystem::path& Path() const noexcept;
 
   private:

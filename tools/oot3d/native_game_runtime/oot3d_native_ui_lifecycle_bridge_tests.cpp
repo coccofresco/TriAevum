@@ -267,12 +267,16 @@ int main() {
                                     kPauseTopPageResource) &&
           gameplayHudMemory.Write32(kPauseTopPageResource + 0x4CU, 0x14001234U),
       "cannot seed gameplay HUD fixture");
-  bool ocarinaUiActive = false;
+  // This ordinary gameplay HUD fixture seeds no ocarina performance fields
+  // (scene +0x2B80/+0x2B82 stay zero), so the predicate must read inactive.
+  // It previously "activated" only through the inverted `result != 0x00FF`
+  // branch treating the zero idle value as a song result.
+  bool ocarinaUiActive = true;
   Require(ReadTopScreenOcarinaUiActive(gameplayHudMemory, &ocarinaUiActive,
                                        &error) &&
-              ocarinaUiActive,
-          "gameplay HUD regression fixture did not activate the local Ocarina "
-          "predicate");
+              !ocarinaUiActive,
+          "ordinary gameplay HUD fixture must not report the Ocarina UI as "
+          "active");
   Oot3dNativeUiLifecycleBridge gameplayHudBridge(gameplayHudMemory);
   gameplayHudBridge.BeginHostFrame(1U);
   Require(gameplayHudBridge.ObserveGuestEntry(kGameplayHudDraw).matched,
