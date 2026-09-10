@@ -1,4 +1,5 @@
 #include "oot3d_top_screen_item_dispatch.h"
+#include "oot3d_top_screen_input_cadence.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -15,6 +16,42 @@ void Check(bool value, const char* message) {
 
 void RunTopScreenItemDispatchTests() {
     using namespace Oot3dNativeGame;
+    {
+        TopScreenInputCadence clock;
+        clock.ObserveGuest({.XHeld = true});
+        clock.ObserveGuest({});
+        auto snapshot = clock.Advance();
+        Check(snapshot.XPressed && !snapshot.XHeld, "short refresh tap lost or made held");
+        Check(!clock.Advance().XPressed, "short refresh tap repeated");
+        for (unsigned skippedRefreshes : {0U, 1U, 2U, 5U}) {
+            clock.Reset();
+            clock.ObserveGuest({.ZrHeld = true, .ZlHeld = true});
+            for (unsigned i = 0; i < skippedRefreshes; ++i)
+                clock.ObserveGuest({.ZrHeld = true, .ZlHeld = true});
+            snapshot = clock.Advance();
+            Check(snapshot.ZrPressed && snapshot.ZlPressed && snapshot.ZrHeld,
+                  "refresh phase lost an extended edge");
+            Check(!clock.Advance().ZrPressed, "held input repeated edge");
+        }
+        clock.ObserveGuest({});
+        clock.ObserveGuest({.ZrHeld = true});
+        clock.Reset();
+        Check(!clock.Advance().ZrPressed, "load reset retained edge");
+        clock.ObserveGuest({.ZrHeld = true});
+        snapshot = clock.Advance();
+        clock.ObserveGuest({});
+        Check(snapshot.ZrPressed && snapshot.ZrHeld,
+              "consumer snapshot changed on a refresh without a native update");
+        Check(!clock.Advance().ZrPressed, "release repeated edge");
+        clock.ObserveGuest({.ZrHeld = true});
+        Check(clock.Advance().ZrPressed, "release/repress lost edge");
+        clock.ObserveGuest({.DpadLeftHeld = true, .DpadRightHeld = true,
+                            .RestorationLayout = true});
+        snapshot = clock.Advance();
+        Check(snapshot.RestorationLayout && snapshot.DpadLeftHeld &&
+              snapshot.DpadRightHeld && !snapshot.ZrPressed,
+              "compatibility/chord fields changed at cadence boundary");
+    }
     using oot3d::recomp::a32::GuestState;
     NativeA32Memory memory;
     Check(memory.MapRegion({"ui", 0x00500000U, 0x90000U, true, false, {}}), "map UI");
@@ -88,16 +125,22 @@ void RunTopScreenItemDispatchTests() {
           state.r[0] == global, "special state did not stay native");
 
     for (const bool secondSlot : {false, true}) {
-        input = {.ZrPressed = !secondSlot, .ZlPressed = secondSlot};
+        input = {.ZrPressed = !secondSlot, .ZlPressed = secondSlot,
+                 .ZrHeld = !secondSlot, .ZlHeld = secondSlot};
+        const auto assignmentPress = input;
         Check(memory.Write32(0x0050672CU, 1), "inactive page");
-        Check(!ShouldObserveTopScreenItemDispatch(kTopScreenItemsUpdateCall, memory, state, input, runtime),
+        state.r[14] = kTopScreenItemsUpdateReturn;
+        Check(!ExecuteTopScreenItemDispatch(kTopScreenItemsUpdateEntry, memory, state, input, runtime),
               "assignment allowed during page transition");
+        ExecuteTopScreenItemDispatch(kTopScreenItemsUpdateEntry, memory, state, {}, runtime);
         Check(memory.Write32(0x0050672CU, 2) && memory.Write32(0x0050AF18U, 0x20U), "active page");
-        Check(ShouldObserveTopScreenItemDispatch(kTopScreenItemsUpdateCall, memory, state, input, runtime) &&
-              ExecuteTopScreenItemDispatch(kTopScreenItemsUpdateCall, memory, state, input, runtime),
+        Check(ShouldObserveTopScreenItemDispatch(kTopScreenItemsUpdateEntry, memory, state, input, runtime) &&
+              ExecuteTopScreenItemDispatch(kTopScreenItemsUpdateEntry, memory, state, input, runtime),
               "assignment begin");
         Check(state.r[15] == 0x002EC3E4U && state.r[14] == kTopScreenItemsUpdateReturn,
               "assignment did not call native Items update");
+        Check(!ExecuteTopScreenItemDispatch(kTopScreenItemsUpdateEntry, memory, state, input, runtime),
+              "assignment entry retrapped before native update");
         uint32_t value = 0;
         Check(memory.Read32(0x0050AF18U, &value) && value == 0x420U, "assignment touch bit");
         Check(memory.Write32(0x0050674CU, 0xBU), "native selection result");
@@ -106,7 +149,7 @@ void RunTopScreenItemDispatchTests() {
         Check(ShouldObserveTopScreenItemDispatch(kTopScreenItemsUpdateReturn, memory, state, input, runtime) &&
               ExecuteTopScreenItemDispatch(kTopScreenItemsUpdateReturn, memory, state, input, runtime),
               "assignment continuation lost after release");
-        Check(state.r[15] == kTopScreenItemsUpdateReturn + 4 && runtime.PendingSelection == 0,
+        Check(state.r[15] == kTopScreenItemsUpdateReturn && runtime.PendingSelection == 0,
               "assignment continuation branch");
         Check(memory.Read32(0x0050AF18U, &value) && value == 0x20U, "assignment bit cleanup");
         Check(memory.Read32(0x0050674CU, &value) && value == (secondSlot ? 0x17U : 5U), "assignment slot");
@@ -118,6 +161,12 @@ void RunTopScreenItemDispatchTests() {
         }
         Check(!ShouldObserveTopScreenItemDispatch(kTopScreenItemsUpdateReturn, memory, state, input, runtime),
               "assignment completion repeated");
+        Check(!ExecuteTopScreenItemDispatch(kTopScreenItemsUpdateEntry, memory, state,
+                  assignmentPress, runtime), "same update repeated assignment");
+        Check(!ExecuteTopScreenItemDispatch(kTopScreenItemsUpdateEntry, memory, state,
+                  {.ZrHeld = !secondSlot, .ZlHeld = secondSlot}, runtime),
+              "held trigger repeated assignment on the next update");
+        ExecuteTopScreenItemDispatch(kTopScreenItemsUpdateEntry, memory, state, {}, runtime);
     }
     Check(runtime.SelectionBegins == 2 && runtime.SelectionCompletions == 2, "assignment counts");
     runtime.PendingSelection = 5;

@@ -2299,6 +2299,7 @@ target_include_directories(oot3d_ui_topscreen PUBLIC
     tools/oot3d/ui_topscreen
 )
 target_link_libraries(oot3d_ui_topscreen PUBLIC
+    three_ds_recomp_input
     oot3d_native_a32_process
     oot3d_native_ui_contract)
 target_compile_options(oot3d_ui_topscreen PRIVATE "${WARNING_OVERRIDE}")

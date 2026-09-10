@@ -64,10 +64,18 @@ call/return hooks, eligibility-based exits and handled-or-resume-once routing.
 TriAevum adaptation: move the pre-existing item execution into a separate tested
 adapter; use one registry for observation and dispatch; validate writes before
 partial assignment changes; add repeatable gameplay probing and diagnostics.
-The PR's six-refresh input latch is not adopted. Getter routing is verified in
-the actual product. A newly imported populated native save confirms a remaining
-input-phase discrepancy and no positive assignment through these hooks yet;
-do not describe the entire PR as fixed. See [scope and results](TRIAEVUM_TOPSCREEN_PRODUCT_ITEM_DISPATCH.md).
+The PR's six-refresh input latch is not adopted. The follow-up now fixes native
+update cadence and moves the assignment hook from an unobservable instruction
+to the real compiled function entry. Paired refresh phases produce identical
+counters and two completed assignments; framebuffers confirm the assigned
+objects. Item-use and device coverage are not implied by those results.
+See [scope and results](TRIAEVUM_TOPSCREEN_REFRESH_AND_OCARINA.md).
+
+PR #18 (same author), head `3655e285f4c53733b9e486a9434c073dba2d5954`, contributed
+the report and live investigation of missing ocarina UI. Its two ocarina commits
+are reviewed separately from the stacked branch. No code from them has been
+adopted yet; official-mod analysis identified a pre-existing owner/classification
+error instead. Credit that evidence without representing the PR as merged.
 
 ## Integration Rules
 

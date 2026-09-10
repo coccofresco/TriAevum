@@ -1,5 +1,10 @@
 # TopScreen Product Item Dispatch
 
+Follow-up: [refresh fix and official-mod investigation](TRIAEVUM_TOPSCREEN_REFRESH_AND_OCARINA.md)
+supersedes the input-phase and zero-assignment limitations below. The remaining
+item-use/physical-input limits are still explicit. The rest of this document
+records the earlier `7617c8a` tranche, not the final cadence implementation.
+
 2026-09-10, based on `port/linux-nri` at `5c6d93f`. Selectively adapted from
 [999sian's PR #13](https://github.com/coccofresco/TriAevum/pull/13), head
 `800345379958fc7d9c03555e8ecb28c1f8e44dea`. This closes a product routing gap,

@@ -6,6 +6,7 @@ namespace Oot3dNativeGame {
 
 inline constexpr uint32_t kTopScreenSlotItemEntry = 0x002C3970U;
 inline constexpr uint32_t kTopScreenItemsUpdateCall = 0x00433B68U;
+inline constexpr uint32_t kTopScreenItemsUpdateEntry = 0x002EC3E4U;
 inline constexpr uint32_t kTopScreenItemsUpdateReturn = 0x00433B6CU;
 
 struct TopScreenItemDispatchRuntime {
@@ -19,6 +20,9 @@ struct TopScreenItemDispatchRuntime {
     uint64_t SlotNativeFallbacks = 0;
     uint64_t SelectionBegins = 0;
     uint64_t SelectionCompletions = 0;
+    uint64_t SelectionUpdates = 0;
+    uint32_t PreviousSelectionButtons = 0;
+    uint32_t PreviousSelectionPressed = 0;
 };
 
 // One registry for compiled-code observation and native callback routing.

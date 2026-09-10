@@ -5,7 +5,6 @@
 
 namespace Oot3dNativeGame {
 namespace {
-constexpr uint32_t kItemsUpdate = 0x002EC3E4U;
 constexpr uint32_t kItemsPageState = 0x0050672CU;
 constexpr uint32_t kActionFlags = 0x0050AF18U;
 constexpr uint32_t kSelectionState = 0x0050674CU;
@@ -27,7 +26,7 @@ std::span<const uint32_t> TopScreenItemDispatchEntries() {
         for (const auto& query : TopScreenVerifiedItemQueryContracts())
             result.push_back(query.OriginalEntry);
         result.insert(result.end(), {kTopScreenSlotItemEntry,
-            kTopScreenItemsUpdateCall, kTopScreenItemsUpdateReturn});
+            kTopScreenItemsUpdateEntry, kTopScreenItemsUpdateReturn});
         std::sort(result.begin(), result.end());
         return result;
     }();
@@ -44,8 +43,8 @@ bool ShouldObserveTopScreenItemDispatch(
     const oot3d::recomp::a32::GuestState& state,
     const TopScreenExtendedInputFrame& input,
     const TopScreenItemDispatchRuntime& runtime) {
-    if (pc == kTopScreenItemsUpdateCall)
-        return SelectionPlan(memory, input).Active;
+    if (pc == kTopScreenItemsUpdateEntry)
+        return state.r[14] == kTopScreenItemsUpdateReturn && runtime.PendingSelection == 0;
     if (pc == kTopScreenItemsUpdateReturn)
         return runtime.PendingSelection != 0;
     if (pc == kTopScreenSlotItemEntry)
@@ -61,15 +60,27 @@ bool ExecuteTopScreenItemDispatch(
     oot3d::recomp::a32::GuestState& state,
     const TopScreenExtendedInputFrame& input,
     TopScreenItemDispatchRuntime& runtime) {
-    if (pc == kTopScreenItemsUpdateCall) {
-        const auto plan = SelectionPlan(memory, input);
+    if (pc == kTopScreenItemsUpdateEntry) {
+        if (state.r[14] != kTopScreenItemsUpdateReturn || runtime.PendingSelection != 0)
+            return false;
+        ++runtime.SelectionUpdates;
+        // The official assignment wrapper has its own held-to-pressed sampler.
+        const uint32_t held = uint32_t(input.ZrHeld) | (uint32_t(input.ZlHeld) << 1);
+        const uint32_t presses = uint32_t(input.ZrPressed) | (uint32_t(input.ZlPressed) << 1);
+        const auto edges = (held & ~runtime.PreviousSelectionButtons) |
+                           (presses & ~runtime.PreviousSelectionPressed);
+        runtime.PreviousSelectionButtons = held;
+        runtime.PreviousSelectionPressed = presses;
+        auto selectionInput = input;
+        selectionInput.ZrPressed = (edges & 1U) != 0;
+        selectionInput.ZlPressed = (edges & 2U) != 0;
+        const auto plan = SelectionPlan(memory, selectionInput);
         uint32_t flags = 0;
         if (!plan.Active || !memory.Read32(kActionFlags, &flags) ||
             !memory.Write32(kActionFlags, flags | 0x400U)) return false;
         runtime.PendingSelection = plan.Selection;
         ++runtime.SelectionBegins;
-        state.r[14] = kTopScreenItemsUpdateReturn;
-        state.r[15] = kItemsUpdate;
+        state.r[15] = pc;
         return true;
     }
     if (pc == kTopScreenItemsUpdateReturn) {
@@ -98,7 +109,9 @@ bool ExecuteTopScreenItemDispatch(
             ++runtime.SelectionCompletions;
         }
         runtime.PendingSelection = 0;
-        state.r[15] = pc + 4U; // Original return-site instruction is NOP.
+        // Resume the original compiled return block once. pc+4 is an internal
+        // NOP, not a valid entry in the precompiled module.
+        state.r[15] = pc;
         return true;
     }
     if (pc == kTopScreenSlotItemEntry) {
