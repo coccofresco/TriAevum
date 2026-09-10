@@ -50,6 +50,8 @@ target_sources(three_ds_recomp_runtime PRIVATE ${Source_Files__Graphic})
 #=================== Reusable renderer extension core ===================
 
 set(Source_Files__RendererExtensions
+    renderer/cache_file.cpp
+    renderer/spirv_cache.cpp
     renderer/pipeline_preparation_job.cpp
     renderer/extension_resource_allocation.cpp
     renderer/extension_resource_binding.cpp
@@ -128,7 +130,7 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
         PUBLIC ENABLE_RENDERER3DS_VULKAN
         PRIVATE $<$<BOOL:${THREE_DS_RECOMP_ENABLE_NRI}>:ENABLE_RENDERER3DS_NRI>)
     target_link_libraries(renderer_3ds_nri_pica_execution
-        PUBLIC Vulkan::Vulkan)
+        PUBLIC Vulkan::Vulkan PRIVATE ThreeDsRecomp::RendererExtensionCore)
     if(THREE_DS_RECOMP_ENABLE_NRI)
         target_link_libraries(renderer_3ds_nri_pica_execution PRIVATE NRI)
     endif()

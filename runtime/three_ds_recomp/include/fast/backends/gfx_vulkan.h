@@ -7,6 +7,7 @@
 #endif
 
 #include "fast/backends/gfx_rendering_api.h"
+#include "fast/renderer/spirv_cache.h"
 #include "fast/backends/oot3d_vulkan_diagnostics.h"
 #include "fast/backends/oot3d_vulkan_gpu_profiler.h"
 #include "fast/backends/oot3d_vulkan_validation.h"
@@ -769,6 +770,8 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     std::array<std::vector<BufferAllocation>, kFramesInFlight> mRetiredNativePicaGeometryBuffers;
     Oot3d::PicaShaderPipelineCache mPicaShaderPipelineCache;
     Oot3d::PicaAotShaderPack mPicaAotShaderPack;
+    Renderer::SpirvCache mCompiledShaderCache;
+    bool mCompiledShaderCacheSummaryLogged = false;
     Oot3d::PicaEffectiveShaderInventory mPicaEffectiveShaderInventory;
     Oot3d::PicaGraphicsPipelineInventory mPicaPipelineInventory;
     Oot3d::PicaGraphicsPipelineManifest mPicaPipelineManifest;

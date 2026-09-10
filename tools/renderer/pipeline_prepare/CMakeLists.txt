@@ -20,6 +20,7 @@ if(NOT TARGET NRI)
 endif()
 set(runtime "${root}/runtime/three_ds_recomp")
 add_library(triaevum_pipeline_preparation STATIC
+    "${runtime}/src/fast/renderer/cache_file.cpp"
     "${runtime}/src/fast/renderer/pipeline_preparation_job.cpp"
     "${runtime}/src/fast/renderer3ds/vulkan_pipeline_cache_store.cpp"
     "${runtime}/src/fast/renderer3ds/nri_pica_pipeline_bridge.cpp"

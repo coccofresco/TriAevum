@@ -1,0 +1,28 @@
+cmake_minimum_required(VERSION 3.24)
+project(TriAevumShaderCacheTests LANGUAGES CXX)
+enable_testing()
+find_package(Threads REQUIRED)
+get_filename_component(runtime "${CMAKE_CURRENT_LIST_DIR}/../../../runtime/three_ds_recomp" ABSOLUTE)
+add_library(shader_cache STATIC
+    "${runtime}/src/fast/renderer/cache_file.cpp"
+    "${runtime}/src/fast/renderer/spirv_cache.cpp")
+target_compile_features(shader_cache PUBLIC cxx_std_20)
+target_include_directories(shader_cache PUBLIC "${runtime}/include")
+add_executable(spirv_cache_tests "${runtime}/tests/spirv_cache_tests.cpp")
+target_link_libraries(spirv_cache_tests PRIVATE shader_cache Threads::Threads)
+add_test(NAME spirv_cache COMMAND spirv_cache_tests)
+
+option(TEST_SHADERC_COMPILER "Test actual shaderc compilation and runtime fingerprint" ON)
+if(TEST_SHADERC_COMPILER)
+    find_path(SHADERC_INCLUDE_DIR shaderc/shaderc.hpp HINTS "$ENV{VULKAN_SDK}" PATH_SUFFIXES include Include REQUIRED)
+    find_library(SHADERC_LIBRARY NAMES shaderc_shared shaderc HINTS "$ENV{VULKAN_SDK}" PATH_SUFFIXES lib Lib REQUIRED)
+    add_executable(shaderc_cache_tests shaderc_tests.cpp "${runtime}/src/fast/renderer/shaderc_compiler.cpp")
+    target_include_directories(shaderc_cache_tests PRIVATE "${SHADERC_INCLUDE_DIR}")
+    target_link_libraries(shaderc_cache_tests PRIVATE shader_cache "${SHADERC_LIBRARY}" ${CMAKE_DL_LIBS})
+    if(WIN32)
+        find_file(SHADERC_RUNTIME shaderc_shared.dll HINTS "$ENV{VULKAN_SDK}" PATH_SUFFIXES Bin bin REQUIRED)
+        add_custom_command(TARGET shaderc_cache_tests POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${SHADERC_RUNTIME}" "$<TARGET_FILE_DIR:shaderc_cache_tests>")
+    endif()
+    add_test(NAME shaderc_cache COMMAND shaderc_cache_tests)
+endif()

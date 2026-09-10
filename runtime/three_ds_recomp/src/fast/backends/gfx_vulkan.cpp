@@ -2,6 +2,7 @@
 
 #include "fast/backends/gfx_vulkan.h"
 #include "fast/renderer/framebuffer_readback.h"
+#include "fast/renderer/shaderc_compiler.h"
 #include "fast/renderer3ds/vulkan_pipeline_cache_store.h"
 #include "fast/renderer3ds/pica_vulkan_device_profile.h"
 #include "fast/oot3d/pica_nri_pipeline_state.h"
@@ -16,7 +17,6 @@
 #endif
 #include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
-#include <shaderc/shaderc.hpp>
 #include <imgui_impl_vulkan.h>
 #include "fast/oot3d/graphics_settings_runtime.h"
 #include "fast/oot3d/cacao_diagnostics.h"
@@ -46,7 +46,6 @@ namespace Fast {
 namespace {
 
 constexpr size_t kOot3dCachedVertexBufferLimit = 1024;
-constexpr uint32_t kVulkanShaderCacheVersion = 1;
 constexpr uint32_t kSpirvMagic = 0x07230203U;
 constexpr uint64_t kMaximumPipelineCacheBytes = 64ULL * 1024ULL * 1024ULL;
 
@@ -65,15 +64,6 @@ void* ResolveNriNativeWindow(GfxWindowBackendSDL2* backend) {
     (void)backend;
     return nullptr;
 #endif
-}
-
-uint64_t HashShaderSource(std::string_view source, uint64_t seed) {
-    uint64_t hash = seed;
-    for (const unsigned char byte : source) {
-        hash ^= byte;
-        hash *= 1099511628211ULL;
-    }
-    return hash;
 }
 
 std::filesystem::path VulkanShaderCacheDirectory() {
@@ -96,76 +86,6 @@ std::filesystem::path VulkanShaderCacheDirectory() {
         std::filesystem::path(prefPath) / "shader_cache";
     SDL_free(prefPath);
     return directory;
-}
-
-struct VulkanShaderCacheHeader {
-    uint32_t Magic = 0x4F335653U;
-    uint32_t Version = kVulkanShaderCacheVersion;
-    uint32_t Stage = 0;
-    uint32_t WordCount = 0;
-    uint64_t SourceSize = 0;
-    uint64_t SourceHash0 = 0;
-    uint64_t SourceHash1 = 0;
-};
-
-std::filesystem::path VulkanShaderCachePath(std::string_view source,
-                                            bool vertexShader,
-                                            VulkanShaderCacheHeader& header) {
-    header.Stage = vertexShader ? 1U : 2U;
-    header.SourceSize = source.size();
-    header.SourceHash0 =
-        HashShaderSource(source, 14695981039346656037ULL ^ header.Stage);
-    header.SourceHash1 =
-        HashShaderSource(source, 1099511628211ULL ^ header.SourceSize);
-    std::ostringstream name;
-    name << std::hex << header.SourceHash0 << '_' << header.SourceHash1
-         << '_' << header.Stage << ".spv";
-    const auto directory = VulkanShaderCacheDirectory();
-    return directory.empty() ? std::filesystem::path{}
-                             : directory / name.str();
-}
-
-bool LoadCachedSpirv(const std::filesystem::path& path,
-                     const VulkanShaderCacheHeader& expected,
-                     std::vector<uint32_t>& spirv) {
-    if (path.empty()) {
-        return false;
-    }
-    std::ifstream input(path, std::ios::binary);
-    VulkanShaderCacheHeader header;
-    if (!input.read(reinterpret_cast<char*>(&header), sizeof(header)) ||
-        header.Magic != expected.Magic ||
-        header.Version != expected.Version || header.Stage != expected.Stage ||
-        header.SourceSize != expected.SourceSize ||
-        header.SourceHash0 != expected.SourceHash0 ||
-        header.SourceHash1 != expected.SourceHash1 || header.WordCount == 0) {
-        return false;
-    }
-    spirv.resize(header.WordCount);
-    return input.read(reinterpret_cast<char*>(spirv.data()),
-                      static_cast<std::streamsize>(spirv.size() *
-                                                   sizeof(uint32_t))) &&
-           spirv.front() == kSpirvMagic;
-}
-
-void StoreCachedSpirv(const std::filesystem::path& path,
-                      VulkanShaderCacheHeader header,
-                      std::span<const uint32_t> spirv) {
-    if (path.empty() || spirv.empty()) {
-        return;
-    }
-    std::error_code error;
-    std::filesystem::create_directories(path.parent_path(), error);
-    if (error) {
-        return;
-    }
-    header.WordCount = static_cast<uint32_t>(spirv.size());
-    std::ofstream output(path, std::ios::binary | std::ios::trunc);
-    if (!output.write(reinterpret_cast<const char*>(&header), sizeof(header))) {
-        return;
-    }
-    output.write(reinterpret_cast<const char*>(spirv.data()),
-                 static_cast<std::streamsize>(spirv.size_bytes()));
 }
 
 using Renderer3ds::VulkanPipelineCacheHeader;
@@ -3666,33 +3586,22 @@ void main() {
 
 std::vector<uint32_t> GfxRenderingAPIVulkan::CompileShaderSpirv(
     const std::string& source, bool vertexShader, const char* sourceName) {
-    VulkanShaderCacheHeader cacheHeader;
-    const auto cachePath =
-        VulkanShaderCachePath(source, vertexShader, cacheHeader);
-    std::vector<uint32_t> spirv;
-    if (!LoadCachedSpirv(cachePath, cacheHeader, spirv)) {
-        shaderc::Compiler compiler;
-        shaderc::CompileOptions options;
-        options.SetTargetEnvironment(shaderc_target_env_vulkan,
-                                     shaderc_env_version_vulkan_1_1);
-        options.SetOptimizationLevel(shaderc_optimization_level_performance);
-        const auto result = compiler.CompileGlslToSpv(
-            source,
-            vertexShader ? shaderc_vertex_shader : shaderc_fragment_shader,
-            sourceName, "main", options);
-        if (result.GetCompilationStatus() !=
-            shaderc_compilation_status_success) {
-            throw std::runtime_error(std::string("shaderc failed for ") +
-                                     sourceName + ": " +
-                                     result.GetErrorMessage());
-        }
-        spirv.assign(result.cbegin(), result.cend());
-        StoreCachedSpirv(cachePath, cacheHeader, spirv);
-    }
+    const auto stage = vertexShader ? Renderer::SpirvStage::Vertex : Renderer::SpirvStage::Fragment;
+    const auto failures = mCompiledShaderCache.Stats().WriteFailures;
+    auto spirv = mCompiledShaderCache.Resolve(source, stage, [&] {
+        return Renderer::CompileShadercSpirv(source, stage, sourceName);
+    });
+    if (failures == 0 && mCompiledShaderCache.Stats().WriteFailures != 0)
+        SPDLOG_WARN("Shader cache persistence unavailable; rendering continues: {}",
+                    mCompiledShaderCache.LastWriteError());
     return spirv;
 }
 
 void GfxRenderingAPIVulkan::ConfigureNativePicaAotShaders() {
+    mCompiledShaderCache.Configure(VulkanShaderCacheDirectory(), Renderer::ShadercCompilerContract());
+    mCompiledShaderCacheSummaryLogged = false;
+    if (!mCompiledShaderCache.Enabled())
+        SPDLOG_WARN("SPIR-V disk reuse disabled: cache directory or compiler identity unavailable");
     mPicaAotShaderPack.Clear();
     mPicaEffectiveShaderInventory.Clear();
     mPicaPipelineInventory.Clear();
@@ -3786,6 +3695,20 @@ void GfxRenderingAPIVulkan::ConfigureNativePicaAotShaders() {
 }
 
 void GfxRenderingAPIVulkan::FinishNativePicaAotShaders() {
+    const auto& cache = mCompiledShaderCache.Stats();
+    if (cache.Requests && !mCompiledShaderCacheSummaryLogged) {
+        std::fprintf(stderr,
+            "TRIAEVUM_SPIRV_CACHE requests=%llu hits=%llu misses=%llu rejected=%llu "
+            "compiled=%llu compile_failed=%llu writes=%llu write_failed=%llu "
+            "compile_ms=%.3f read_ms=%.3f write_ms=%.3f enabled=%d\n",
+            static_cast<unsigned long long>(cache.Requests), static_cast<unsigned long long>(cache.Hits),
+            static_cast<unsigned long long>(cache.Misses), static_cast<unsigned long long>(cache.Rejected),
+            static_cast<unsigned long long>(cache.Compilations), static_cast<unsigned long long>(cache.CompilationFailures),
+            static_cast<unsigned long long>(cache.Writes), static_cast<unsigned long long>(cache.WriteFailures),
+            cache.CompileNanoseconds / 1e6, cache.ReadNanoseconds / 1e6, cache.WriteNanoseconds / 1e6,
+            mCompiledShaderCache.Enabled() ? 1 : 0);
+        mCompiledShaderCacheSummaryLogged = true;
+    }
     if (mPicaEffectiveShaderInventory.Enabled()) {
         std::string error;
         if (!mPicaEffectiveShaderInventory.Finish(&error)) {

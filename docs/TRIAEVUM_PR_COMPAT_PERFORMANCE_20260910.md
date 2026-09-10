@@ -125,6 +125,12 @@ the direct coverage of mismatched readback extents.
 
 ## Next Priority
 
+Follow-up: [persistent SPIR-V cache](TRIAEVUM_PERSISTENT_SPIRV_CACHE.md) replaces
+the unsafe legacy store with shared, bounded, compiler/source-validated atomic
+storage. Native live cold/warm tests give 51 -> 0 compilations with identical
+framebuffers. Automatic persistence and prewarm of pipeline discoveries remain
+separate from this completed shader-module storage work.
+
 1. Finish #11's per-user discoveries behind the existing shared cache store:
    bind to the generator/compiler contract and exact effective source identity,
    checkpoint atomically during the session, isolate strict mode, and reuse the

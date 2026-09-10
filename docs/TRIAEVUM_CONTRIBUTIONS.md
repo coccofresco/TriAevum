@@ -102,6 +102,12 @@ reported Linux Clang GoogleTest option issue. The PR's local store, queue and
 thread behavior are not attributed as merged. See
 [scope and verification](TRIAEVUM_PR_COMPAT_PERFORMANCE_20260910.md).
 
+The next [persistent-cache integration](TRIAEVUM_PERSISTENT_SPIRV_CACHE.md)
+addresses the same PR's reuse objective by replacing the existing generic
+SPIR-V store with a shared, bounded, compiler-validated atomic implementation.
+This is newly implemented storage informed by the PR review, not attribution
+of its unmerged local-pack/queue code as part of the runtime.
+
 ## PR #16: Full-Drawable Readback
 
 Contributor: [Pablo Souza](https://github.com/PabloVSouza), Git author

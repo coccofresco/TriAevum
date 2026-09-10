@@ -1,14 +1,8 @@
 #include "fast/renderer3ds/vulkan_pipeline_cache_store.h"
+#include "fast/renderer/cache_file.h"
 
 #include <algorithm>
 #include <fstream>
-#include <random>
-#ifdef _WIN32
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#endif
 
 namespace Fast::Renderer3ds {
 namespace {
@@ -67,38 +61,18 @@ bool LoadPipelineCacheData(const std::filesystem::path& path,
 bool StorePipelineCacheData(const std::filesystem::path& path,
                             const VulkanPipelineCacheHeader& identity,
                             std::span<const uint8_t> data, std::string* error) {
-    std::filesystem::path temporary;
     try {
         if (path.empty() || data.empty() || data.size() > kMaximumPipelineCacheBytes)
             throw std::runtime_error("invalid pipeline cache path or size");
-        if (!path.parent_path().empty()) std::filesystem::create_directories(path.parent_path());
         std::vector<uint8_t> header;
         Append(header, kMagic, 4); Append(header, kVersion, 4);
         Append(header, identity.RendererAbi, 4); Append(header, identity.VendorId, 4);
         Append(header, identity.DeviceId, 4); Append(header, identity.DriverVersion, 4);
         header.insert(header.end(), identity.Uuid.begin(), identity.Uuid.end());
         Append(header, data.size(), 8); Append(header, Checksum(data), 8);
-        std::random_device random;
-        temporary = path;
-        temporary += "." + std::to_string(random()) + "." + std::to_string(random()) + ".tmp";
-        std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
-        output.write(reinterpret_cast<const char*>(header.data()), header.size());
-        output.write(reinterpret_cast<const char*>(data.data()), data.size());
-        output.flush();
-        if (!output) throw std::runtime_error("pipeline cache write failed");
-        output.close();
-        if (!output) throw std::runtime_error("pipeline cache close failed");
-#ifdef _WIN32
-        if (!MoveFileExW(temporary.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
-            throw std::runtime_error("pipeline cache atomic replacement failed");
-#else
-        std::filesystem::rename(temporary, path);
-#endif
-        return true;
+        return Renderer::WriteCacheFileAtomically(path, header, data, error);
     } catch (const std::exception& exception) {
         if (error) *error = exception.what();
-        std::error_code ignored;
-        if (!temporary.empty()) std::filesystem::remove(temporary, ignored);
         return false;
     }
 }

@@ -1,5 +1,11 @@
 include(FetchContent)
 
+find_package(Threads REQUIRED)
+add_executable(spirv_cache_tests spirv_cache_tests.cpp)
+target_compile_features(spirv_cache_tests PRIVATE cxx_std_20)
+target_link_libraries(spirv_cache_tests PRIVATE ThreeDsRecomp::RendererExtensionCore Threads::Threads)
+add_test(NAME spirv_cache_tests COMMAND spirv_cache_tests)
+
 add_executable(framebuffer_readback_tests framebuffer_readback_tests.cpp)
 target_compile_features(framebuffer_readback_tests PRIVATE cxx_std_20)
 target_include_directories(framebuffer_readback_tests PRIVATE ../include)
