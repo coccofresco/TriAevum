@@ -86,6 +86,20 @@ def validate_title(root: Path, recipe: dict, *, catalog: dict | None = None) -> 
     checked_file(root, catalog["runtime"])
     checked_file(root, catalog["native_module"])
     checked_file(root, item["plugin"])
+    renderer = item.get("renderer_shader_preparation")
+    if renderer is not None:
+        try:
+            from .shader_preparation import RENDERER_CONTRACT
+        except ImportError:
+            from shader_preparation import RENDERER_CONTRACT
+        if not isinstance(renderer, dict) or renderer.get("format") != RENDERER_CONTRACT:
+            raise ValueError("Invalid renderer shader preparation binding")
+        if not isinstance(renderer.get("compiler"), dict) or not isinstance(renderer.get("dependencies", []), list):
+            raise ValueError("Invalid renderer shader compiler artifacts")
+        for record in [renderer["compiler"], *renderer.get("dependencies", [])]:
+            if not isinstance(record, dict):
+                raise ValueError("Invalid renderer shader compiler artifact")
+            checked_file(root, record)
     return item
 
 

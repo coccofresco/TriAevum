@@ -95,6 +95,16 @@ class ProbeRendererTests(unittest.TestCase):
             self.assertFalse(json.loads((root / "probe/invocation.json").read_text())["synchronous_captures"])
             self.assertIn("OOT3D_VULKAN_DIAGNOSTICS_PATH", launch.call_args.kwargs["env"])
 
+    def test_throughput_rejects_interpolation_unbounded_or_capture_measurements(self):
+        for options in ([], ["--native-fidelity"], ["--native-fidelity", "--no-captures"]):
+            with patch.object(sys, "argv", ["probe_renderer", "install", "runtime", "output",
+                                            "--throughput", *options]), \
+                    patch.object(probe_renderer.subprocess, "Popen") as launch:
+                with self.assertRaises(SystemExit) as stopped:
+                    probe_renderer.main()
+                self.assertEqual(stopped.exception.code, 2)
+                launch.assert_not_called()
+
     def test_native_probe_replaces_timing_and_reuses_only_explicit_cache(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -111,7 +121,7 @@ class ProbeRendererTests(unittest.TestCase):
                 "--scenario-catalog", "DO_NOT_LOAD", "--scenario", "OLD_SCENE",
                 "--renderer-cache-directory", "DO_NOT_OVERWRITE_CACHE"]}))
             argv = ["probe_renderer", str(root), str(root / "runtime"), str(root / "probe"),
-                    "--native-fidelity", "--frames", "360", "--shader-pack", str(root / "pack.o3ps"),
+                    "--native-fidelity", "--no-captures", "--throughput", "--frames", "360", "--shader-pack", str(root / "pack.o3ps"),
                     "--cache-directory", str(root / "prepared"),
                     "--load-state", str(root / "checkpoint.oot3dsav"),
                     "--scenario-catalog", str(root / "scenarios.json"), "--scenario", "native_field",
@@ -123,6 +133,8 @@ class ProbeRendererTests(unittest.TestCase):
                     probe_renderer.main()
                 self.assertEqual(stopped.exception.code, 0)
             command = launch.call_args.args[0]
+            self.assertEqual(command.count("--throughput-benchmark"), 1)
+            self.assertNotIn("--screenshot", command)
             for option, value in {"--gameplay-timing": "native30_no_interpolation",
                                   "--presentation-rate": "30", "--frames": "360", "--max-seconds": "45",
                                   "--pica-aot-shader-pack": (root / "pack.o3ps").as_posix(),

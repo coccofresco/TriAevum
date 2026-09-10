@@ -7,6 +7,7 @@ import ntpath
 import subprocess
 import threading
 from contextlib import contextmanager
+from pathlib import Path
 
 
 _loader_lock = threading.RLock()
@@ -34,6 +35,23 @@ def native_process_environment() -> dict[str, str]:
                     return True
             environment["PATH"] = ";".join(
                 entry for entry in environment["PATH"].split(";") if outside_bundle(entry))
+    return environment
+
+
+def native_helper_environment(executable) -> dict[str, str]:
+    """Use catalog-verified sibling libraries, never PyInstaller's library set.
+
+    Callers validate the executable/dependencies before invoking this function.
+    LD_LIBRARY_PATH also resolves indirect shaderc dependencies on Linux; an
+    executable's RUNPATH alone does not propagate to those libraries.
+    """
+    environment = native_process_environment()
+    if sys.platform.startswith("linux"):
+        directory = str(Path(executable).resolve().parent)
+        if ":" in directory:
+            raise ValueError("Native helper path cannot contain a Linux loader separator")
+        original = environment.get("LD_LIBRARY_PATH", "")
+        environment["LD_LIBRARY_PATH"] = directory + (":" + original if original else "")
     return environment
 
 

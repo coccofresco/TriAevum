@@ -272,6 +272,10 @@ Windows evidence: `I:/oot3dre_work/forge-handoff-windows/`.
 
 ## Remaining Scope
 
+Follow-up: [release integration and Windows compiler-identity repair](TRIAEVUM_SHADER_RELEASE_AND_PR15.md)
+now ships renderer-owned pass preparation independently of private game seeds.
+The public-seed and Android/Flatpak qualification limits below remain explicit.
+
 - The technical handoff works; **no public release catalog has been enabled**.
   Known game-derived inputs/packs remain private under the release policy. A
   release must supply an explicitly permitted seed or a local ROM-derived

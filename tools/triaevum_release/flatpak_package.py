@@ -38,7 +38,8 @@ def stage_flatpak(package: Path, output: Path, *, policy_path: Path = DEFAULT_PO
             destination = output / "package" / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(package / relative, destination)
-            destination.chmod(0o755 if entry["role"] in ("runtime_executable", "forge_executable") else 0o644)
+            destination.chmod(0o755 if entry["role"] in (
+                "runtime_executable", "forge_executable", "forge_tool", "shader_preparation_tool") else 0o644)
         # Recheck after copying; never silently publish changed or extra inputs.
         copied_audit = audit_release(output / "package", policy_path=policy_path)
         if not copied_audit.ok:

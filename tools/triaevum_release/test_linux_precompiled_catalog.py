@@ -72,6 +72,24 @@ class LinuxCatalogTests(unittest.TestCase):
                 self.assertEqual(result["titles"][0][key], title[key])
             self.assertEqual(result["titles"][0]["plugin"]["path"], "titles/fixture/" + LINUX.title_module)
             self.assertEqual(json.loads((reference / CATALOG).read_text()), catalog)
+            # Cross-platform promotion must not retain a Windows shader tool.
+            catalog["titles"][0]["renderer_shader_preparation"] = {
+                "format": "triaevum_renderer_shader_compiler_v1",
+                "compiler": {"path": "forge/windows.exe"}}
+            atomic_write_json(reference / CATALOG, catalog)
+            with patch("linux_precompiled_catalog.host_platform", return_value=LINUX), \
+                 patch("linux_precompiled_catalog.query_product") as query:
+                with self.assertRaisesRegex(ValueError, "own staged renderer"):
+                    create_catalog(reference, installation, plugin, source_commit="6" * 40)
+                query.assert_not_called()
+                helper = installation / "forge/oot3d_native_pica_aot_compiler"
+                elf(helper, kind=2)
+                rebound = create_catalog(reference, installation, plugin, source_commit="6" * 40,
+                                         shader_compiler=helper)
+                self.assertEqual(rebound["titles"][0]["renderer_shader_preparation"]["compiler"]["path"],
+                                 "forge/oot3d_native_pica_aot_compiler")
+            del catalog["titles"][0]["renderer_shader_preparation"]
+            atomic_write_json(reference / CATALOG, catalog)
             before = (installation / CATALOG).read_bytes()
             with patch("linux_precompiled_catalog.host_platform", return_value=LINUX), \
                  patch("linux_precompiled_catalog.query_product", side_effect=ValueError("ABI failed")):

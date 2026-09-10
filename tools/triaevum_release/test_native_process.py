@@ -4,12 +4,23 @@ import ctypes
 import subprocess
 import tempfile
 import unittest
+from pathlib import PurePosixPath
 from unittest.mock import patch
 
 import native_process
 
 
 class NativeProcessTests(unittest.TestCase):
+    def test_linux_helper_uses_verified_siblings_not_python_libraries(self):
+        with patch.dict(os.environ, {"LD_LIBRARY_PATH": "/python/private", "LD_LIBRARY_PATH_ORIG": "/steam/lib"}, clear=True), \
+             patch.object(native_process.sys, "platform", "linux"), \
+             patch.object(native_process.sys, "frozen", True, create=True), \
+             patch.object(native_process, "Path") as path:
+            path.return_value.resolve.return_value = PurePosixPath("/portable/forge/compiler")
+            env = native_process.native_helper_environment("/portable/forge/compiler")
+            self.assertEqual(env["LD_LIBRARY_PATH"], "/portable/forge:/steam/lib")
+            self.assertEqual(os.environ["LD_LIBRARY_PATH"], "/python/private")
+
     def test_frozen_linux_restores_original_without_mutating_parent(self):
         for original in (None, "", "/steam/runtime/lib"):
             with self.subTest(original=original):

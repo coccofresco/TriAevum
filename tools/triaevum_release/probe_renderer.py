@@ -46,6 +46,10 @@ def main():
     parser.add_argument("--capture-interval", type=int, default=300)
     parser.add_argument("--no-captures", action="store_true",
                         help="Measure pacing without synchronous framebuffer readback and image writes")
+    parser.add_argument("--throughput", action="store_true",
+                        help="Bounded native-step benchmark; requires native fidelity, no captures and a frame count")
+    parser.add_argument("--warmup-frames", type=int, default=120,
+                        help="Frames excluded from throughput measurement (default: 120)")
     parser.add_argument("--extended-diagnostics", action="store_true")
     parser.add_argument("--native-fidelity", action="store_true",
                         help="Authentic rendering, fixed native ticks, no interpolation")
@@ -68,6 +72,10 @@ def main():
         parser.error("seconds and capture interval must be positive; frames cannot be negative")
     if args.save_state_frame is not None and args.save_state_frame < 0:
         parser.error("save-state frame cannot be negative")
+    if args.throughput and (not args.native_fidelity or not args.no_captures or args.frames <= 0):
+        parser.error("throughput requires --native-fidelity --no-captures and positive --frames")
+    if args.throughput and not 0 <= args.warmup_frames < args.frames:
+        parser.error("throughput warmup must be nonnegative and smaller than the frame count")
     if bool(args.scenario_catalog) != bool(args.scenario):
         parser.error("scenario and scenario-catalog must be supplied together")
     if args.native_fidelity and (args.reflections not in (None, "Off") or args.material_hash or args.debug_view):
@@ -87,12 +95,17 @@ def main():
         while option in arguments:
             index = arguments.index(option)
             del arguments[index:index + 2]
-    arguments = [value for value in arguments if value != "--screenshot-sequence"]
+    arguments = [value for value in arguments if value not in (
+        "--screenshot-sequence", "--throughput-benchmark")]
+    if args.throughput:
+        arguments.append("--throughput-benchmark")
     def set_option(option, value):
         if option in arguments:
             arguments[arguments.index(option) + 1] = str(value)
         else:
             arguments.extend([option, str(value)])
+    if args.throughput:
+        set_option("--benchmark-warmup-frames", args.warmup_frames)
     config_index = arguments.index("--config") + 1
     language_source = Path(arguments[config_index]).parent / "game_language.json"
     language = json.loads(language_source.read_text(encoding="utf-8-sig")) if language_source.exists() else None
@@ -169,7 +182,9 @@ def main():
     environment["OOT3D_VULKAN_DIAGNOSTICS_MAX_FRAMES"] = str(args.seconds * 120)
     (output / "invocation.json").write_text(json.dumps(
         {"executable": str(executable), "arguments": arguments,
+         "executable_sha256": hashlib.sha256(executable.read_bytes()).hexdigest(),
          "renderer_cache_directory": str(cache), "native_fidelity": args.native_fidelity,
+         "throughput": args.throughput,
          "synchronous_captures": not args.no_captures},
         indent=2), encoding="utf-8")
     with (output / "launch.log").open("wb") as log:

@@ -8,9 +8,31 @@ from audit_release import audit_release
 from flatpak_package import ASSETS, stage_flatpak
 from test_platform_policy import write_linux_package
 from test_release_audit import write_clean_package
+from common import atomic_write_json, sha256_file
 
 
 class FlatpakPackageTests(unittest.TestCase):
+    def test_shader_helper_remains_executable_in_flatpak(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            write_linux_package(source)
+            relative = "forge/oot3d_native_pica_aot_compiler"
+            helper = source / relative
+            helper.write_bytes(b"fixture helper")
+            manifest = json.loads((source / "release-manifest.json").read_text())
+            manifest["files"].append({"path": relative, "role": "shader_preparation_tool",
+                "bytes": helper.stat().st_size, "sha256": sha256_file(helper)})
+            atomic_write_json(source / "release-manifest.json", manifest)
+            original_chmod = Path.chmod
+            calls = []
+            def chmod(path, mode, **kwargs):
+                calls.append((path, mode))
+                return original_chmod(path, mode, **kwargs)
+            with patch.object(Path, "chmod", chmod):
+                stage_flatpak(source, root / "build")
+            self.assertIn((root / "build/package" / relative, 0o755), calls)
+
     def test_stages_only_audited_linux_inventory_without_promoting_qualification(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

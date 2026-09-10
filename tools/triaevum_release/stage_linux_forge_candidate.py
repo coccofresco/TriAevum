@@ -15,7 +15,8 @@ except ImportError:
 
 
 def stage(reference: Path, forge_bundle: Path, runtime_build: Path,
-          title: Path, output: Path, source_commit: str):
+          title: Path, output: Path, source_commit: str, *,
+          shader_compiler: Path | None = None, shader_dependencies: list[Path] = ()):
     if host_platform() != LINUX:
         raise ValueError("Stage and qualify Linux candidates on Linux")
     if output.exists():
@@ -43,7 +44,12 @@ def stage(reference: Path, forge_bundle: Path, runtime_build: Path,
     plugin = output / "titles/shared-execution" / LINUX.title_module
     plugin.parent.mkdir(parents=True)
     shutil.copy2(title, plugin)
-    create_catalog(reference, output, plugin, source_commit=source_commit)
+    if shader_compiler is not None:
+        shutil.copy2(shader_compiler, output / "forge/oot3d_native_pica_aot_compiler")
+        for dependency in shader_dependencies:
+            shutil.copy2(dependency, output / "forge" / dependency.name)
+    create_catalog(reference, output, plugin, source_commit=source_commit,
+                   shader_compiler=shader_compiler, shader_dependencies=shader_dependencies)
     atomic_write_json(output / "linux-candidate.json", {
         "format": "triaevum_private_linux_candidate_v1",
         "public_release_qualified": False,
@@ -62,9 +68,12 @@ def main():
     for argument in ("reference", "forge-bundle", "runtime-build", "title", "output"):
         parser.add_argument("--" + argument, type=Path, required=True)
     parser.add_argument("--source-commit", required=True)
+    parser.add_argument("--shader-compiler", type=Path)
+    parser.add_argument("--shader-dependency", type=Path, action="append", default=[])
     args = parser.parse_args()
     print(stage(args.reference, args.forge_bundle, args.runtime_build, args.title,
-                args.output, args.source_commit))
+                args.output, args.source_commit, shader_compiler=args.shader_compiler,
+                shader_dependencies=args.shader_dependency))
 
 
 if __name__ == "__main__":

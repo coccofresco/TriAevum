@@ -2069,6 +2069,10 @@ if(OOT3D_ENABLE_VULKAN_RENDERER AND TARGET three_ds_recomp_shaderc)
             COMMENT "Deploying shaderc for PICA AOT compiler")
     endif()
     set_property(TARGET oot3d_native_pica_aot_compiler PROPERTY FOLDER Tools)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        set_property(TARGET oot3d_native_pica_aot_compiler APPEND PROPERTY BUILD_RPATH "$ORIGIN")
+        set_property(TARGET oot3d_native_pica_aot_compiler PROPERTY INSTALL_RPATH "$ORIGIN")
+    endif()
 
     set(OOT3D_PICA_HOST_AOT_COMPILER "" CACHE FILEPATH
         "Host-native PICA shader compiler for cross-compilation")

@@ -18,6 +18,7 @@ try:
     from .toolchain_setup_layout import setup_layout
     from .precompiled_title_layout import title_layout
     from .precompiled_variants import add_verified_variants
+    from .shader_release_layout import bind_renderer_compiler
     from .forge import load_recipe, DEFAULT_RECIPES
 except ImportError:
     from build_forge_binary import build as build_forge
@@ -29,6 +30,7 @@ except ImportError:
     from toolchain_setup_layout import setup_layout
     from precompiled_title_layout import title_layout
     from precompiled_variants import add_verified_variants
+    from shader_release_layout import bind_renderer_compiler
     from forge import load_recipe, DEFAULT_RECIPES
 
 
@@ -71,6 +73,7 @@ def prepare(args) -> dict:
     subprocess.run([str(args.cmake), "-S", str(ROOT), "-B", str(build_dir)], check=True)
     subprocess.run([str(args.cmake), "--build", str(build_dir), "--config", "Release",
                     "--target", "triaevum_public_runtime", "oot3d_game_module",
+                    "oot3d_native_pica_aot_compiler",
                     "--parallel", "2"], check=True)
     targets = load_json_object(build_dir / "triaevum-runtime-targets-Release.json")
     if targets.get("format") != "triaevum_runtime_targets_v1":
@@ -105,6 +108,10 @@ def prepare(args) -> dict:
     catalog_path = work / "precompiled/precompiled-titles.json"
     definitions = load_json_object(DEFAULT_RECIPES)
     catalog, _ = add_verified_variants(load_json_object(catalog_path), definitions, definitions)
+    catalog, shader_files = bind_renderer_compiler(catalog,
+        Path(targets["runtime"]).parent / "oot3d_native_pica_aot_compiler.exe",
+        [artifacts["shaderc_shared.dll"]])
+    layout["files"].extend(shader_files)
     atomic_write_json(catalog_path, catalog)
     atomic_write_json(layout_path, layout)
     result = package_release(layout_path, args.output, source_root=ROOT,

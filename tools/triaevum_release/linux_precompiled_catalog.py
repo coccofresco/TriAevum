@@ -12,12 +12,14 @@ try:
     from .precompiled_titles import load_catalog, checked_file, CATALOG
     from .precompiled_title_layout import artifact
     from .product_contract import query_product
+    from .shader_release_layout import bind_renderer_compiler
     from .release_platform import LINUX, host_platform
 except ImportError:
     from common import atomic_write_json, sha256_file
     from precompiled_titles import load_catalog, checked_file, CATALOG
     from precompiled_title_layout import artifact
     from product_contract import query_product
+    from shader_release_layout import bind_renderer_compiler
     from release_platform import LINUX, host_platform
 
 
@@ -31,7 +33,8 @@ def require_elf(path: Path, *, shared: bool):
         raise ValueError(f"Expected x86-64 Linux artifact: {path}")
 
 
-def create_catalog(reference_root: Path, installation: Path, plugin: Path, *, source_commit: str):
+def create_catalog(reference_root: Path, installation: Path, plugin: Path, *, source_commit: str,
+                   shader_compiler: Path | None = None, shader_dependencies: list[Path] = ()):
     if host_platform() != LINUX:
         raise ValueError("Linux catalog qualification must run on Linux")
     if len(source_commit) != 40 or any(c not in "0123456789abcdef" for c in source_commit):
@@ -75,6 +78,19 @@ def create_catalog(reference_root: Path, installation: Path, plugin: Path, *, so
                     platform_build={"source_commit": source_commit,
                                     "translated_source_sha256": sha256_file(archive_path),
                                     "build_target": "tools/triaevum_release/linux_title"})
+    if shader_compiler is not None:
+        require_elf(shader_compiler, shared=False)
+        for dependency in shader_dependencies:
+            require_elf(dependency, shared=True)
+        result, _ = bind_renderer_compiler(result, shader_compiler, shader_dependencies)
+        # Staging owns copying. Never bind a missing dependency or a Windows
+        # helper inherited from the reference release into a Linux catalog.
+        for title in result["titles"]:
+            contract = title["renderer_shader_preparation"]
+            for record in [contract["compiler"], *contract["dependencies"]]:
+                checked_file(installation, record)
+    elif any("renderer_shader_preparation" in item for item in result["titles"]):
+        raise ValueError("Linux catalog requires its own staged renderer shader compiler")
     query_product(runtime, plugin=plugin)
     atomic_write_json(installation / CATALOG, result)
     return result
@@ -86,8 +102,11 @@ def main():
     parser.add_argument("--installation", type=Path, required=True)
     parser.add_argument("--plugin", type=Path, required=True)
     parser.add_argument("--source-commit", required=True)
+    parser.add_argument("--shader-compiler", type=Path)
+    parser.add_argument("--shader-dependency", type=Path, action="append", default=[])
     args = parser.parse_args()
-    create_catalog(args.reference_package, args.installation, args.plugin, source_commit=args.source_commit)
+    create_catalog(args.reference_package, args.installation, args.plugin, source_commit=args.source_commit,
+                   shader_compiler=args.shader_compiler, shader_dependencies=args.shader_dependency)
     print(args.installation / CATALOG)
 
 

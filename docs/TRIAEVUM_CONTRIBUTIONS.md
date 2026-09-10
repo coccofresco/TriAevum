@@ -108,6 +108,22 @@ SPIR-V store with a shared, bounded, compiler-validated atomic implementation.
 This is newly implemented storage informed by the PR review, not attribution
 of its unmerged local-pack/queue code as part of the runtime.
 
+The [publisher follow-up](TRIAEVUM_SHADER_RELEASE_AND_PR15.md) ships the
+renderer-owned preparation independently of private seeds and fixes a Windows
+compiler-identity mismatch. It retains this contribution's provenance without
+introducing a second cache owner.
+
+## PR #15: Worker Review And Admission Fixture
+
+Contributor: [999sian](https://github.com/999sian), Git author `sian <sian@localhost>`.
+[PR #15](https://github.com/coccofresco/TriAevum/pull/15), head
+`99454b757805c5580a2cada2ac214870fcd52693`.
+The loop partitioning and measurement proposal informed the bounded throughput
+evaluation. `qualify_pr15_lifetime.py` extracts the contributor's exact worker
+into a private generated fixture to reproduce the exception-lifetime defect.
+The fixture and guard are TriAevum review code; no threaded game loop is merged.
+See [measured scope and remaining A/B work](TRIAEVUM_SHADER_RELEASE_AND_PR15.md).
+
 ## PR #16: Full-Drawable Readback
 
 Contributor: [Pablo Souza](https://github.com/PabloVSouza), Git author

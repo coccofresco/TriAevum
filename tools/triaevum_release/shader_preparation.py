@@ -18,15 +18,16 @@ from typing import Callable
 try:
     from .common import atomic_write_bytes, atomic_write_json, load_json_object, sha256_file
     from .precompiled_titles import checked_file
-    from .native_process import run_native
+    from .native_process import run_native, native_helper_environment
 except ImportError:
     from common import atomic_write_bytes, atomic_write_json, load_json_object, sha256_file
     from precompiled_titles import checked_file
-    from native_process import run_native
+    from native_process import run_native, native_helper_environment
 
 
 FORMAT = "triaevum_shader_preparation_v1"
 RENDERER_FORMAT = "triaevum_renderer_shader_preparation_v1"
+RENDERER_CONTRACT = "triaevum_renderer_shader_compiler_v1"
 
 
 def _pack_header(path: Path, schema: int) -> int:
@@ -43,6 +44,7 @@ def _pack_header(path: Path, schema: int) -> int:
 
 def _run(command: list[str], root: Path) -> None:
     result = run_native(command, cwd=root,
+                            env=native_helper_environment(command[0]),
                             capture_output=True, text=True, errors="replace", timeout=600,
                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     if result.returncode:
@@ -52,10 +54,13 @@ def _run(command: list[str], root: Path) -> None:
 def prepare_renderer_shader_cache(*, root: Path, data_root: Path, title: dict,
                                  cache_directory: Path,
                                  report: Callable[[str, str], None] = lambda *_: None) -> dict | None:
-    seed = title.get("shader_preparation")
+    # Renderer-owned sources are distributable independently of a private game
+    # inventory. Retain compatibility with the original combined catalog.
+    seed = title.get("renderer_shader_preparation", title.get("shader_preparation"))
     if seed is None:
         return None
-    if not isinstance(seed, dict) or seed.get("format") != FORMAT:
+    expected = RENDERER_CONTRACT if "renderer_shader_preparation" in title else FORMAT
+    if not isinstance(seed, dict) or seed.get("format") != expected:
         raise ValueError("Unsupported shader preparation contract")
     if "compiler" not in seed:
         return None

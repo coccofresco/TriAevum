@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from common import atomic_write_json, sha256_file
-from shader_preparation import FORMAT, RENDERER_FORMAT, prepare_renderer_shader_cache
+from shader_preparation import FORMAT, RENDERER_FORMAT, RENDERER_CONTRACT, prepare_renderer_shader_cache, prepare_shader_seed
 
 
 class RendererShaderPreparationTests(unittest.TestCase):
@@ -42,6 +42,22 @@ class RendererShaderPreparationTests(unittest.TestCase):
         with patch("shader_preparation._run") as run:
             self.assertIsNone(self.prepare())
             run.assert_not_called()
+
+    def test_public_renderer_contract_without_private_seed(self):
+        seed = self.title.pop("shader_preparation")
+        seed["format"] = RENDERER_CONTRACT
+        self.title["renderer_shader_preparation"] = seed
+        with patch("shader_preparation._run", side_effect=self.complete) as run:
+            self.assertIsNone(prepare_shader_seed(root=self.root, data_root=self.root / "data", title=self.title))
+            self.assertEqual(self.prepare()["renderer_shader_preparation"], "complete")
+            self.assertEqual(run.call_count, 1)
+
+    def test_explicit_renderer_contract_wins_over_legacy_seed(self):
+        self.title["renderer_shader_preparation"] = {
+            **self.title["shader_preparation"], "format": RENDERER_CONTRACT}
+        self.title["shader_preparation"] = {"format": "not-a-renderer-compiler"}
+        with patch("shader_preparation._run", side_effect=self.complete):
+            self.assertEqual(self.prepare()["renderer_shader_preparation"], "complete")
 
     def test_invalid_artifact_fails_before_tool(self):
         (self.root / "compiler").write_bytes(b"changed")

@@ -1,4 +1,10 @@
 #include "fast/renderer/shaderc_compiler.h"
+#if defined(_WIN32) && !defined(SHADERC_SHAREDLIB)
+// The Windows backend links shaderc_shared. Without dllimport, taking a
+// function address identifies an EXE import thunk, incorrectly binding the
+// persistent cache to Forge/the game executable instead of the compiler DLL.
+#define SHADERC_SHAREDLIB
+#endif
 #include <shaderc/shaderc.hpp>
 
 #include <algorithm>

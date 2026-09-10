@@ -84,6 +84,29 @@ class PrecompiledReleaseTests(unittest.TestCase):
         result = audit_release(self.root)
         self.assertTrue(result.ok, result.errors)
 
+    def test_renderer_tool_binding_is_audited_without_private_shader_content(self):
+        from shader_release_layout import bind_renderer_compiler
+        path = self.root / "recipes/precompiled-titles.json"
+        compiler = self.work / "compiler.exe"
+        compiler.write_bytes(b"MZ renderer compiler fixture")
+        catalog, files = bind_renderer_compiler(load_json_object(path), compiler, [])
+        atomic_write_json(path, catalog)
+        self.rehash("recipes/precompiled-titles.json")
+        for item in files:
+            dest = self.root / item["path"]
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(item["source"], dest)
+            self.manifest["files"].append({"path": item["path"], "role": item["role"]})
+            self.rehash(item["path"])
+        self.save()
+        result = audit_release(self.root)
+        self.assertTrue(result.ok, result.errors)
+        dest.write_bytes(b"changed compiler")
+        self.rehash(item["path"])
+        self.save()
+        result = audit_release(self.root)
+        self.assertTrue(any("integrity" in error for error in result.errors), result.errors)
+
     def test_linux_promotion_uses_build_target_not_host(self):
         build = load_json_object(self.build)
         build.update(target=LINUX.target, profile=LINUX.profile)
