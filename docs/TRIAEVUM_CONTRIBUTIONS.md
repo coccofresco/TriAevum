@@ -52,6 +52,23 @@ tests cover the full lifecycle. No renderer feature or performance improvement
 is attributed to this UI fix. Validation and the other pending community PRs
 are recorded in [the 2026-09-10 review](TRIAEVUM_PR_REVIEW_20260910.md).
 
+## PR #13: Product TopScreen Item Hooks
+
+- Contributor: [999sian](https://github.com/999sian), Git author `sian <sian@localhost>`.
+- Pull request: [Fix TopScreen ZL/ZR item slots](https://github.com/coccofresco/TriAevum/pull/13).
+- Original head: `800345379958fc7d9c03555e8ecb28c1f8e44dea`.
+- Integration: selective, with original SHA/PR and coauthor recorded in Git.
+
+Retained contribution: product-mode observable item getter/slot and assignment
+call/return hooks, eligibility-based exits and handled-or-resume-once routing.
+TriAevum adaptation: move the pre-existing item execution into a separate tested
+adapter; use one registry for observation and dispatch; validate writes before
+partial assignment changes; add repeatable gameplay probing and diagnostics.
+The PR's six-refresh input latch is not adopted. Getter routing is verified in
+the actual product. A newly imported populated native save confirms a remaining
+input-phase discrepancy and no positive assignment through these hooks yet;
+do not describe the entire PR as fixed. See [scope and results](TRIAEVUM_TOPSCREEN_PRODUCT_ITEM_DISPATCH.md).
+
 ## Integration Rules
 
 1. Preserve original author metadata when merging or cherry-picking unchanged

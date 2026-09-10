@@ -13,7 +13,7 @@ older branch files must not replace the current Linux/Android implementation.
 | --- | --- | --- |
 | [#6 Linux infrastructure](https://github.com/coccofresco/TriAevum/pull/6) | 999sian | Already selectively integrated in `f1c05a8`; do not merge obsolete packaging over current work. |
 | [#11 local PICA cache](https://github.com/coccofresco/TriAevum/pull/11) | 999sian | Retain useful persistence/strict-mode ideas, not this implementation wholesale. Forge/NRI preparation now has shared owners. |
-| [#13 TopScreen ZL/ZR](https://github.com/coccofresco/TriAevum/pull/13) | 999sian | Concrete product-dispatch fix worth adapting next; input lifetime needs its own tests. Not integrated in this review. |
+| [#13 TopScreen ZL/ZR](https://github.com/coccofresco/TriAevum/pull/13) | 999sian | Follow-up: product hooks selectively integrated; getter routing verified in game. Assignment and short-tap coverage remain explicit limits. |
 | [#14 display failure feedback](https://github.com/coccofresco/TriAevum/pull/14) | 999sian | Integrated with corrected failure lifetime and actual-widget regression coverage. |
 | [#15 guest thread](https://github.com/coccofresco/TriAevum/pull/15) | 999sian | Defer: exception lifetime defect and no demonstrated stable throughput gain. Useful phase decomposition, not a default optimization yet. |
 | [#16 Apple Silicon](https://github.com/coccofresco/TriAevum/pull/16) | PabloVSouza | Valuable experimental port; split portable fixes from Mac host/package support. Not integrated or advertised as supported. |
@@ -85,6 +85,11 @@ atomic incremental discovery, strict-mode shutdown handling and explicit
 outline-occlusion recipe coverage, each in its existing owner.
 
 ### #13: Missing Product Hooks Are Real; Press Lifetime Is Separate
+
+Follow-up implementation and measured limits are now recorded in
+[Product Item Dispatch](TRIAEVUM_TOPSCREEN_PRODUCT_ITEM_DISPATCH.md). The findings
+below describe the original reviewed baseline, not the subsequently fixed hook
+registration. The six-refresh latch remains unmerged.
 
 The current `oot3d_native_a32_window.cpp:3675` registers item getters only in the
 non-product branch; `ExecuteProductTopScreenCamera` at 1606 handles camera PCs
@@ -168,7 +173,7 @@ No persistent setting, second status owner or title-specific behavior added.
   See [contribution record](TRIAEVUM_CONTRIBUTIONS.md). Selective integrations
   carry PR URL, original SHA and the original public Git author trailer.
 
-Next implementation order: #13 product item hooks with input tests; portable
-HiDPI readback; remaining #11 recording behind shared cache owners. Revisit #15
+Next implementation order: qualify #13 equipped-item/assignment behavior and
+input timing; portable HiDPI readback; remaining #11 recording behind shared cache owners. Revisit #15
 only after lifetime repair and a meaningful measured gain. Qualify #16 through
 the shared platform pipeline, with the contributor's Mac hardware evidence.

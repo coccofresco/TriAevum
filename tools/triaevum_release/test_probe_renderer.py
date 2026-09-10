@@ -9,6 +9,34 @@ import probe_renderer
 
 
 class ProbeRendererTests(unittest.TestCase):
+    def test_save_seed_is_an_independent_hashed_copy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source"
+            source.mkdir()
+            (source / "save00.bin").write_bytes(b"original")
+            destination = root / "private"
+            manifest = probe_renderer.seed_save_data(source, destination)
+            self.assertEqual(manifest["files"][0]["path"], "save00.bin")
+            self.assertEqual(len(manifest["files"][0]["sha256"]), 64)
+            (destination / "save00.bin").write_bytes(b"game updated")
+            self.assertEqual((source / "save00.bin").read_bytes(), b"original")
+            with self.assertRaises(FileExistsError):
+                probe_renderer.seed_save_data(source, destination)
+            with self.assertRaisesRegex(ValueError, "outside"):
+                probe_renderer.seed_save_data(source, source / "nested")
+
+    def test_save_seed_rejects_links(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source"
+            source.mkdir()
+            (source / "save00.bin").write_bytes(b"original")
+            with patch.object(Path, "is_symlink", return_value=True):
+                with self.assertRaisesRegex(ValueError, "links"):
+                    probe_renderer.seed_save_data(source, root / "private")
+            self.assertFalse((root / "private").exists())
+
     def test_probe_isolates_configuration_and_persistent_outputs(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -46,13 +74,18 @@ class ProbeRendererTests(unittest.TestCase):
             root = Path(directory)
             (root / "runtime").touch()
             (root / "pack.o3ps").touch()
+            (root / "checkpoint.oot3dsav").write_bytes(b"checkpoint")
+            (root / "inputs.json").write_text("{}")
             (root / "config.json").write_text('{"Graphics":{"Preset":"Toon"}}')
             (root / "TriAevum.launch.json").write_text(json.dumps({"arguments": [
                 "--config", "${profile_dir}/config.json", "--gameplay-timing", "native30_interpolated",
-                "--presentation-rate", "90", "--frames", "100", "--max-seconds", "600"]}))
+                "--presentation-rate", "90", "--frames", "100", "--max-seconds", "600",
+                "--save-state", "DO_NOT_OVERWRITE", "--save-state-frame", "1"]}))
             argv = ["probe_renderer", str(root), str(root / "runtime"), str(root / "probe"),
                     "--native-fidelity", "--frames", "360", "--shader-pack", str(root / "pack.o3ps"),
-                    "--cache-directory", str(root / "prepared")]
+                    "--cache-directory", str(root / "prepared"),
+                    "--load-state", str(root / "checkpoint.oot3dsav"),
+                    "--input-timeline", str(root / "inputs.json"), "--save-state-frame", "300"]
             process = MagicMock()
             process.wait.return_value = 0
             with patch.object(sys, "argv", argv), patch.object(probe_renderer.subprocess, "Popen", return_value=process) as launch:
@@ -62,10 +95,16 @@ class ProbeRendererTests(unittest.TestCase):
             command = launch.call_args.args[0]
             for option, value in {"--gameplay-timing": "native30_no_interpolation",
                                   "--presentation-rate": "30", "--frames": "360", "--max-seconds": "45",
-                                  "--pica-aot-shader-pack": (root / "pack.o3ps").as_posix()}.items():
+                                  "--pica-aot-shader-pack": (root / "pack.o3ps").as_posix(),
+                                  "--load-state": (root / "checkpoint.oot3dsav").as_posix(),
+                                  "--input-timeline": (root / "inputs.json").as_posix(),
+                                  "--save-state": (root / "probe/checkpoint.oot3dsav").as_posix(),
+                                  "--save-state-frame": "300"}.items():
                 self.assertEqual(command.count(option), 1)
                 self.assertEqual(command[command.index(option) + 1], value)
             self.assertEqual(json.loads((root / "probe/config.json").read_text())["Graphics"]["Preset"], "Authentic")
+            self.assertEqual((root / "checkpoint.oot3dsav").read_bytes(), b"checkpoint")
+            self.assertNotIn("DO_NOT_OVERWRITE", command)
             self.assertEqual(launch.call_args.kwargs["env"]["TRIAEVUM_RENDERER_CACHE_DIR"], str(root / "prepared"))
 
 

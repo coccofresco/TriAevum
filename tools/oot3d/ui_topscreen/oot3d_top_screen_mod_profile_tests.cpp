@@ -139,7 +139,10 @@ Oot3dNativeGame::NativeA32Memory BuildWorldMapFixture() {
 
 } // namespace
 
+void RunTopScreenItemDispatchTests();
+
 int main() {
+  RunTopScreenItemDispatchTests();
   using namespace Oot3dNativeGame;
 
   Oot3dUiProfile profile = Oot3dUiProfile::Oot3d;
