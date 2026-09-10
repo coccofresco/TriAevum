@@ -2725,6 +2725,28 @@ struct NativeControlPollingState {
   double PendingMouseSeconds = 0.0;
   bool GameplayMouseOwned = false;
   Oot3dNativeGame::NativeRightStickProfileState RightStickProfile;
+  // Ocarina song browsing on the single screen. The presenter publishes
+  // whether the performance UI and its song browser are visible and which
+  // tile the game's cursor is on; D-pad Left/Right then step through the
+  // song grid by tapping the tile the game itself takes a touch on, since
+  // the grid is not drawn. A tap on a song Link has not learned is refused
+  // (the cursor stays put and the staff clears), so a step keeps tapping
+  // onward until the cursor moves, or returns to where it started.
+  bool OcarinaUiActive = false;
+  bool OcarinaBrowserVisible = false;
+  int OcarinaCursorTile = -1;
+  bool OcarinaDpadLeftHeld = false;
+  bool OcarinaDpadRightHeld = false;
+  int OcarinaStepDirection = 0;
+  int OcarinaStepOrigin = -1;
+  int OcarinaStepTarget = -1;
+  uint8_t OcarinaStepAttempts = 0;
+  uint8_t OcarinaSettleFramesLeft = 0;
+  uint8_t OcarinaTouchFramesLeft = 0;
+  uint16_t OcarinaTouchX = 0;
+  uint16_t OcarinaTouchY = 0;
+  uint64_t OcarinaTapsIssued = 0;
+  uint64_t OcarinaStepsRefused = 0;
 };
 
 Oot3dNativeGame::NativeA32InputFrame
@@ -3052,6 +3074,94 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
   frame.Exit = !keyboardCaptured &&
                window.IsKeyDown(Ship::LUS_KB_ESCAPE);
   return frame;
+}
+
+// Single-screen ocarina song browsing. The song grid is not drawn, so D-pad
+// Left/Right step through it by tapping the tile the game itself takes a
+// touch on: four columns by three rows of 68x40 tiles from (18,70) on the
+// lower canvas, with the list icon at the bottom-right corner opening the
+// browser from the free-play page. The consumed D-pad bits are cleared so
+// the TopScreen item-slot actions do not fire while playing.
+void ApplyTopScreenOcarinaBrowsing(NativeControlPollingState &state,
+                                   Oot3dNativeGame::NativeA32HidState &hid) {
+  constexpr int kSongColumns = 4;
+  constexpr int kSongTiles = 12;
+  constexpr uint16_t kListIconX = 290;
+  constexpr uint16_t kListIconY = 225;
+  constexpr uint8_t kTapFrames = 3;
+  // Guest frames for the game to react to a tap before the cursor is read.
+  constexpr uint8_t kSettleFrames = 12;
+  const uint32_t leftMask = Oot3dNativeGame::NativeA32HidButtonMask(
+      Oot3dNativeGame::NativeA32HidButton::DpadLeft);
+  const uint32_t rightMask = Oot3dNativeGame::NativeA32HidButtonMask(
+      Oot3dNativeGame::NativeA32HidButton::DpadRight);
+  const auto tapTile = [&](int tile) {
+    state.OcarinaTouchX =
+        static_cast<uint16_t>(52 + 72 * (tile % kSongColumns));
+    state.OcarinaTouchY =
+        static_cast<uint16_t>(90 + 44 * (tile / kSongColumns));
+    state.OcarinaTouchFramesLeft = kTapFrames;
+    state.OcarinaSettleFramesLeft = kSettleFrames;
+    ++state.OcarinaTapsIssued;
+  };
+  if (!state.OcarinaUiActive) {
+    state.OcarinaDpadLeftHeld = false;
+    state.OcarinaDpadRightHeld = false;
+    state.OcarinaStepDirection = 0;
+    state.OcarinaTouchFramesLeft = 0;
+    state.OcarinaSettleFramesLeft = 0;
+    return;
+  }
+  const bool left = (hid.Buttons & leftMask) != 0U;
+  const bool right = (hid.Buttons & rightMask) != 0U;
+  hid.Buttons &= ~(leftMask | rightMask);
+  const int edge = (right && !state.OcarinaDpadRightHeld) ? 1
+                   : (left && !state.OcarinaDpadLeftHeld) ? -1
+                                                          : 0;
+  state.OcarinaDpadLeftHeld = left;
+  state.OcarinaDpadRightHeld = right;
+
+  if (state.OcarinaStepDirection != 0 && state.OcarinaTouchFramesLeft == 0U) {
+    if (state.OcarinaSettleFramesLeft != 0U) {
+      --state.OcarinaSettleFramesLeft;
+    } else if (state.OcarinaCursorTile == state.OcarinaStepTarget ||
+               state.OcarinaStepTarget == state.OcarinaStepOrigin ||
+               state.OcarinaStepAttempts >= kSongTiles) {
+      state.OcarinaStepDirection = 0;
+    } else {
+      // Refused: try the next tile in the same direction. Reaching the
+      // origin again means nothing else is learned; re-select it so the
+      // staff the refused taps cleared comes back.
+      ++state.OcarinaStepAttempts;
+      ++state.OcarinaStepsRefused;
+      state.OcarinaStepTarget =
+          (state.OcarinaStepTarget + state.OcarinaStepDirection + kSongTiles) %
+          kSongTiles;
+      tapTile(state.OcarinaStepTarget);
+    }
+  }
+  if (edge != 0 && state.OcarinaStepDirection == 0 &&
+      state.OcarinaTouchFramesLeft == 0U) {
+    if (!state.OcarinaBrowserVisible) {
+      state.OcarinaTouchX = kListIconX;
+      state.OcarinaTouchY = kListIconY;
+      state.OcarinaTouchFramesLeft = kTapFrames;
+      ++state.OcarinaTapsIssued;
+    } else if (state.OcarinaCursorTile >= 0) {
+      state.OcarinaStepDirection = edge;
+      state.OcarinaStepOrigin = state.OcarinaCursorTile;
+      state.OcarinaStepTarget =
+          (state.OcarinaCursorTile + edge + kSongTiles) % kSongTiles;
+      state.OcarinaStepAttempts = 1;
+      tapTile(state.OcarinaStepTarget);
+    }
+  }
+  if (state.OcarinaTouchFramesLeft != 0U) {
+    --state.OcarinaTouchFramesLeft;
+    hid.TouchX = state.OcarinaTouchX;
+    hid.TouchY = state.OcarinaTouchY;
+    hid.TouchPressed = true;
+  }
 }
 
 Oot3dNativeGame::NativeA32InputFrame ResolveNativeA32GuestInput(
@@ -5114,6 +5224,10 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
             nativeCandidateDispatch.TopScreenUiProfile,
             nativeCandidateDispatch.StartButtonLatch,
             nativeCandidateDispatch.TopScreenStartRouting);
+        if (nativeCandidateDispatch.TopScreenUiProfile) {
+          ApplyTopScreenOcarinaBrowsing(nativeControlPollingState,
+                                        inputFrame.Hid);
+        }
         inputDiagnostics.Observe(inputFrame);
         if (inputFrame.Exit) {
           guestStopRequested = true;
@@ -5521,6 +5635,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
           SelectedBottom;
       std::optional<Oot3dNativeGame::Oot3dPicaVisualFrame> CurrentVisualFrame;
       uint32_t GuestFrameCount = 0;
+      bool OcarinaUiActive = false;
     };
     const auto gatherPresentInputs = [&]() {
       PresentInputs in;
@@ -5562,20 +5677,16 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
           Oot3dNativeGame::PublishNativeActorInteractions(
               process.Memory(), sceneViewProbe.Stats().LastPlayStateAddress,
               in.CurrentVisualFrame->Sequence);
+          // Guest memory is read here while the guest is idle; the draw
+          // relocation itself runs at present time, after the drain has
+          // refreshed the shared vertex buffers this frame references.
           if (launch.UiProfile == Oot3dNativeGame::Oot3dUiProfile::TopScreen &&
               in.SelectedBottom.has_value()) {
             bool ocarinaUiActive = false;
-            if (Oot3dNativeGame::ReadTopScreenOcarinaUiActive(
+            in.OcarinaUiActive =
+                Oot3dNativeGame::ReadTopScreenOcarinaUiActive(
                     process.Memory(), &ocarinaUiActive) &&
-                ocarinaUiActive) {
-              Oot3dNativeGame::TopScreenOcarinaRelocationStats stats;
-              if (Oot3dNativeGame::RelocateTopScreenOcarinaDraws(
-                      *in.CurrentVisualFrame,
-                      in.SelectedBottom->InputPhysicalAddress, &stats)) {
-                ++topScreenOcarinaRelocatedFrames;
-                topScreenOcarinaRelocatedDraws += stats.DrawsRelocated;
-              }
-            }
+                ocarinaUiActive;
           }
           Oot3dNativeGame::ComposeTopScreenFrontendFrame(
               *in.CurrentVisualFrame,
@@ -5597,6 +5708,22 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
               bool selectedNewVisualFrame = false;
               if (in.CurrentVisualFrame.has_value()) {
                 auto currentVisualFrame = std::move(in.CurrentVisualFrame);
+                if (in.OcarinaUiActive && in.SelectedBottom.has_value()) {
+                  Oot3dNativeGame::TopScreenOcarinaRelocationStats stats;
+                  const bool relocated =
+                      Oot3dNativeGame::RelocateTopScreenOcarinaDraws(
+                          *currentVisualFrame,
+                          in.SelectedBottom->InputPhysicalAddress, &stats);
+                  if (relocated) {
+                    ++topScreenOcarinaRelocatedFrames;
+                    topScreenOcarinaRelocatedDraws += stats.DrawsRelocated;
+                  }
+                  nativeControlPollingState.OcarinaBrowserVisible =
+                      relocated && stats.BrowserVisible;
+                  nativeControlPollingState.OcarinaCursorTile =
+                      relocated ? stats.CursorTile : -1;
+                }
+                nativeControlPollingState.OcarinaUiActive = in.OcarinaUiActive;
                 in.CurrentVisualFrame.reset();
                 {
                   selectedNewVisualFrame = true;
@@ -7815,6 +7942,10 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                     topScreenOcarinaRelocatedFrames},
                    {"topscreen_ocarina_relocated_draws",
                     topScreenOcarinaRelocatedDraws},
+                   {"topscreen_ocarina_taps_issued",
+                    nativeControlPollingState.OcarinaTapsIssued},
+                   {"topscreen_ocarina_steps_refused",
+                    nativeControlPollingState.OcarinaStepsRefused},
                    {"backend_profile",
                     uiLifecycleBridge.Runtime().Profile().id},
                    {"matched_entries", bridge.matched_entries},
