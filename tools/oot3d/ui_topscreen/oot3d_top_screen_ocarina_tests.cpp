@@ -208,6 +208,30 @@ void RunTopScreenOcarinaTests() {
   ocarinaBrowser.Advance(browserState, true, true);
   Require(ocarinaBrowser.SelectedSong() == 0 && ocarinaBrowser.Direction() == 1,
           "right must have priority in both selection and arrow presentation");
+  ocarinaBrowser.Advance(browserState, false, false, false, false, true);
+  Require(ocarinaBrowser.GuideHidden(), "Up edge must hide the guide");
+  Require(ocarinaBrowser.TakeGuideSound() == 0x01000499U &&
+          ocarinaBrowser.TakeGuideSound() == 0U,
+          "hide sound must be delivered once, not for held Up");
+  for (unsigned i = 0; i < 30; ++i)
+    ocarinaBrowser.Advance(browserState, false, true);
+  Require(ocarinaBrowser.SelectedSong() == 0,
+          "hidden guide must not browse or repeat");
+  Require(ReadTopScreenOcarinaGeometry(ocarinaMemory, ocarinaBrowser, &ocarinaGeometry) &&
+              !ocarinaGeometry.Active, "hidden guide still publishes graphics");
+  ocarinaBrowser.Advance({}, false, false);
+  Require(ocarinaBrowser.GuideHidden() && ocarinaBrowser.SelectedSong() == -2,
+          "closing must clear selection but retain guide visibility preference");
+  ocarinaBrowser.Advance({false, 12, 0}, false, false, false, false, true);
+  Require(ocarinaBrowser.GuideHidden(), "transition accepted a guide toggle");
+  ocarinaBrowser.Advance(browserState, false, false, false, false, true);
+  Require(!ocarinaBrowser.GuideHidden(), "second Up edge must restore the guide");
+  Require(ocarinaBrowser.TakeGuideSound() == 0x01000498U,
+          "show guide must use the original distinct sound");
+  ocarinaBrowser.Advance(browserState, false, false, false, false, true);
+  ocarinaBrowser.Reset();
+  Require(!ocarinaBrowser.GuideHidden(), "runtime reset retained hidden guide state");
+  Require(ocarinaBrowser.TakeGuideSound() == 0U, "runtime reset retained a guide sound");
   Require(ocarinaMemory.WriteGeneration() == generationBefore,
           "guide navigation must not modify native pause or quest state");
 

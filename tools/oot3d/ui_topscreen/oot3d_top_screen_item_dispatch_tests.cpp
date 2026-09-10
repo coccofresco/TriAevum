@@ -29,6 +29,16 @@ void RunTopScreenItemDispatchTests() {
         Check(snapshot.DpadRightPressed && !snapshot.DpadRightHeld,
               "short song browser tap lost or made held");
         Check(!clock.Advance().DpadRightPressed, "song browser tap repeated");
+        clock.ObserveGuest({.DpadUpHeld = true});
+        clock.ObserveGuest({});
+        snapshot = clock.Advance();
+        Check(snapshot.DpadUpPressed && !snapshot.DpadUpHeld,
+              "short guide toggle lost between native updates");
+        Check(!clock.Advance().DpadUpPressed, "guide toggle repeated");
+        clock.ObserveGuest({.DpadUpHeld = true});
+        Check(clock.Advance().DpadUpPressed, "guide repress lost");
+        clock.ObserveGuest({.DpadUpHeld = true});
+        Check(!clock.Advance().DpadUpPressed, "held Up toggled guide repeatedly");
         for (unsigned skippedRefreshes : {0U, 1U, 2U, 5U}) {
             clock.Reset();
             clock.ObserveGuest({.ZrHeld = true, .ZlHeld = true});
@@ -84,6 +94,34 @@ void RunTopScreenItemDispatchTests() {
         Check(state.r == before.r && state.vfp == before.vfp && state.cpsr == before.cpsr &&
               memory.WriteGeneration() == generation, "declined hook changed guest state");
     }
+    // Active direct-item lifetime is not an extended-button press. Its slot
+    // resolver must still be observed by the compiled dispatcher after release.
+    for (const uint8_t item : {uint8_t{6}, uint8_t{14}}) {
+        runtime.DirectItemId = item;
+        memory.Write32(0x0058795CU, 1);
+        memory.Write8(0x00506C58U + item, 1);
+        memory.Write8(0x00588ECAU, 0);
+        state.r[0] = global;
+        state.r[1] = 3;
+        state.r[14] = 0x123400;
+        Check(ShouldObserveTopScreenItemDispatch(kTopScreenSlotItemEntry, memory, state, input, runtime),
+              "direct item resolver not armed without ZR/ZL");
+        const auto generation = memory.WriteGeneration();
+        Check(ExecuteTopScreenItemDispatch(kTopScreenSlotItemEntry, memory, state, input, runtime) &&
+              state.r[0] == item && state.r[15] == state.r[14] &&
+              memory.WriteGeneration() == generation, "direct item did not return through native ABI");
+        memory.Write8(0x00588ECAU, 0xFF);
+        Check(!ResolveTopScreenDirectSlotItemGuest(memory, 3, item), "disabled direct item accepted");
+        memory.Write8(0x00588ECAU, 0);
+        memory.Write32(0x0058795CU, 0);
+        Check(!ResolveTopScreenDirectSlotItemGuest(memory, 3, item), "wrong-age direct item accepted");
+        memory.Write8(0x00506C58U + item, 9);
+        Check(ResolveTopScreenDirectSlotItemGuest(memory, 3, item) == item,
+              "native shared-age rule rejected");
+        Check(!ResolveTopScreenDirectSlotItemGuest(memory, 4, item), "direct item contaminated another slot");
+    }
+    runtime = {};
+    state.r[0] = global;
     input.ZrPressed = input.ZlPressed = input.ZrHeld = input.ZlHeld = true;
     for (const auto& query : TopScreenVerifiedItemQueryContracts()) {
         Check(IsTopScreenItemDispatchEntry(query.OriginalEntry), "query missing from registry");

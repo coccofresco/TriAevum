@@ -11,7 +11,11 @@ navigation. B returns to normal gameplay and removes this presentation.
 The unknown-song marker is reconstructed and unit-tested; its visual path has
 not yet been qualified using a partially learned original save.
 
-This is **not yet complete ocarina parity**. The follow-up
+For the current status, see [ocarina and mapped actions](TRIAEVUM_TOPSCREEN_OCARINA_AND_ACTIONS.md):
+the guide toggle is implemented and native recognition has been verified in
+game. The remaining paragraphs record the scope at this earlier checkpoint.
+
+This was **not yet complete ocarina parity**. The follow-up
 [native localized song-text integration](TRIAEVUM_TOPSCREEN_OCARINA_TEXT.md)
 fills the previously empty title band. Native free-play instructions, the live
 history of performed notes, recognition/learning transitions and the original
@@ -124,7 +128,7 @@ Now integrated in the follow-up: original mod `0x005D4A8C` creates localized tex
 `0x00313CE0(0x4C)` / `0x002F57F0`, using message table `0x004D5480` + `0x9AD`;
 `0x005D2078` draws it via `0x002FB944`. The follow-up documents the explicit
 lifecycle, GPU waits, immutable snapshot and cleanup/reset.
-The native ocarina draw `0x00425930` owns globals `0x005093E4..0x005093F4`:
+The native ocarina submit `0x00425930` (draw `0x0042676C`) owns globals `0x005093E4..0x005093F4`:
 model descriptor, model instance, quad renderer, cursor helper and text owner.
 The quad renderer is at global **+8**, not +0/+4. These pointers are leads for
 the remaining prompt/performed-note path, not a claim it is already qualified.

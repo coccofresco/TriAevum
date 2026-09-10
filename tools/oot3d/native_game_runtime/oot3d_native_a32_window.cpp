@@ -4922,8 +4922,13 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                 (inputFrame.Hid.Buttons &
                  Oot3dNativeGame::NativeA32HidButtonMask(
                      Oot3dNativeGame::NativeA32HidButton::DpadRight)) != 0U};
+        sampledTopScreenInput.DpadUpHeld =
+            (inputFrame.Hid.Buttons & topScreenButton(
+                Oot3dNativeGame::NativeA32HidButton::DpadUp)) != 0U;
         if (ocarinaOwnsDpad) {
           inputFrame.Hid.Buttons &= ~(topScreenButton(Oot3dNativeGame::NativeA32HidButton::DpadLeft) |
+                                     (ocarinaOwner.Page == 12 ? topScreenButton(
+                                         Oot3dNativeGame::NativeA32HidButton::DpadUp) : 0U) |
                                      topScreenButton(Oot3dNativeGame::NativeA32HidButton::DpadRight));
         }
         sampledTopScreenInput.XHeld =
@@ -5019,6 +5024,12 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
             }
           }
           std::string gameplayActionError;
+          if (const auto sound = uiLifecycleBridge.TakeOcarinaGuideSound(); sound != 0U) {
+            if (!Oot3dNativeGame::PlayTopScreenUiSound(
+                    process, sound, kTopScreenDirectCallReturn, &gameplayActionError)) {
+              throw std::runtime_error("TopScreen ocarina guide sound failed: " + gameplayActionError);
+            }
+          }
           if (!Oot3dNativeGame::ConsumeTopScreenGameplayActions(
                   process, topScreenDpadActions,
                   nativeCandidateDispatch.TopScreenInput.ZrPressed ||
@@ -5032,6 +5043,8 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                 gameplayActionError);
           }
           nativeCandidateDispatch.PreviousTopScreenButtons = buttons;
+          nativeCandidateDispatch.TopScreenItems.DirectItemId =
+              nativeCandidateDispatch.TopScreenGameplayActionRuntime.DirectItem.ActiveItemId;
           Oot3dNativeGame::TopScreenPauseDrawInputs pauseInputs;
           if (!Oot3dNativeGame::ReadTopScreenPauseDrawInputs(process.Memory(),
                                                              &pauseInputs)) {

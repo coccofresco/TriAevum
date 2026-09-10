@@ -18,13 +18,22 @@ class TopScreenOcarinaBrowser {
 public:
   void Reset() noexcept;
   void Advance(const TopScreenOcarinaState &state, bool left, bool right,
-               bool leftPressed = false, bool rightPressed = false) noexcept;
+               bool leftPressed = false, bool rightPressed = false,
+               bool togglePressed = false) noexcept;
+  bool GuideHidden() const noexcept { return mGuideHidden; }
+  std::uint32_t TakeGuideSound() noexcept {
+    const auto sound = mGuideSound;
+    mGuideSound = 0;
+    return sound;
+  }
   int SelectedSong() const noexcept { return mSong; }
   std::int8_t Direction() const noexcept { return static_cast<std::int8_t>(mDirection); }
 private:
   int mSong = -2;
   int mDirection = 0;
   unsigned mRepeat = 0;
+  bool mGuideHidden = false;
+  std::uint32_t mGuideSound = 0;
 };
 
 struct TopScreenOcarinaGeometry {

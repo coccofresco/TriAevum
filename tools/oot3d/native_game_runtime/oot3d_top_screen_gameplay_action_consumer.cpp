@@ -173,6 +173,35 @@ bool InvokeChangeEquipment(NativeA32Process &process,
 
 } // namespace
 
+bool PlayTopScreenUiSound(NativeA32Process &process, std::uint32_t sound,
+                         std::uint32_t returnAddress, std::string *error) {
+  // 005D42E0..005D4308: four register arguments and two stack arguments.
+  // Gain/frequency and reverb are persistent native globals, not host floats.
+  auto state = process.PrimaryThreadState();
+  auto &memory = process.Memory();
+  if (state.r[13] < 8U) return false;
+  const auto stack = (state.r[13] - 8U) & ~7U;
+  std::uint32_t savedGain = 0, savedReverb = 0;
+  if (!memory.IsWritable(stack, 8U) ||
+      !memory.Read32(stack, &savedGain) || !memory.Read32(stack + 4, &savedReverb) ||
+      !memory.IsMapped(0x0054AC20U, 8U)) {
+    SetError(error, "native TopScreen UI sound arguments are unavailable");
+    return false;
+  }
+  memory.Write32(stack, 0x0054AC20U);
+  memory.Write32(stack + 4, 0x0054AC24U);
+  state.r[0] = sound;
+  state.r[1] = 0;
+  state.r[2] = 4;
+  state.r[3] = 0x0054AC20U;
+  state.r[13] = stack;
+  const bool success = process.InvokeFunctionWithState(
+      0x0037547CU, state, returnAddress, error);
+  memory.Write32(stack, savedGain);
+  memory.Write32(stack + 4, savedReverb);
+  return success;
+}
+
 bool ReadTopScreenChildLink(const NativeA32Memory &memory, bool *childLink,
                             std::string *error) {
   if (childLink == nullptr) {

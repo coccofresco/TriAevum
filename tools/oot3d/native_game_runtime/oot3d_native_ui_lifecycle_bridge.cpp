@@ -1,4 +1,5 @@
 #include "oot3d_native_ui_lifecycle_bridge.h"
+#include "oot3d_top_screen_dpad_presentation.h"
 
 #include "oot3d_native_a32_input.h"
 #include "oot3d_top_screen_items_hint_consumer.h"
@@ -352,11 +353,12 @@ Oot3dNativeUiLifecycleBridge::BuildTopScreenPresentation(
       std::string auxiliaryInputError;
       if (ReadTopScreenAuxiliaryTouchInputs(mMemory, &auxiliaryInputs,
                                             &auxiliaryInputError)) {
-        (void)AppendTopScreenAuxiliaryTouchPresentation(
-            BuildTopScreenAuxiliaryTouchGeometry(
+        auto auxiliaryGeometry = BuildTopScreenAuxiliaryTouchGeometry(
                 auxiliaryInputs, touchState.VerticalOffsets, touchState.Alpha,
-                mTopScreenConfig.HudLayout),
-            *texture, output);
+                mTopScreenConfig.HudLayout);
+        auxiliaryGeometry.Quads[4].Visible = false;
+        (void)AppendTopScreenAuxiliaryTouchPresentation(
+            auxiliaryGeometry, *texture, output);
       }
       (void)AppendTopScreenTouchLabelsPresentation(
           BuildTopScreenTouchLabelsGeometry(touchState.VerticalOffsets,
@@ -369,7 +371,13 @@ Oot3dNativeUiLifecycleBridge::BuildTopScreenPresentation(
         std::string itemCopyError;
         (void)AppendTopScreenNativeItemIconCopies(
             mMemory, touchState.VerticalOffsets, touchState.Alpha, *itemIcons,
-            output, &itemCopyError, mTopScreenConfig.RenderDpadIcons);
+            output, &itemCopyError, false);
+        TopScreenDpadPresentationState dpadState;
+        if (ReadTopScreenDpadPresentationState(mMemory, &dpadState)) {
+          (void)AppendTopScreenDpadPresentation(
+              mTopScreenConfig, dpadState, auxiliaryInputs, touchState.Alpha,
+              *itemIcons, *texture, output);
+        }
       }
       if (const auto numberGlyphs = NativePauseSharedTextureIdentity(
               oot3d::ui::UiPauseSharedTextureSlot::NumberGlyphs);
@@ -378,21 +386,6 @@ Oot3dNativeUiLifecycleBridge::BuildTopScreenPresentation(
         (void)AppendTopScreenNativeCounters(
             mMemory, touchState.VerticalOffsets, *numberGlyphs, output,
             &counterError, &mTopScreenConfig, &mTopScreenInput);
-      }
-    }
-    std::uint8_t itemISlotIdentity = 0U;
-    std::uint8_t itemIISlotIdentity = 0U;
-    if (mTopScreenConfig.RenderDpadIcons &&
-        mTopScreenConfig.HudLayout == TopScreenHudLayout::Normal &&
-        mMemory.Read8(0x005879FCU, &itemISlotIdentity) &&
-        mMemory.Read8(0x005879FDU, &itemIISlotIdentity)) {
-      if (const auto itemIcons = NativePauseSharedTextureIdentity(
-              oot3d::ui::UiPauseSharedTextureSlot::ItemIcons);
-          itemIcons.has_value()) {
-        (void)AppendTopScreenExtendedItemButtonsPresentation(
-            BuildTopScreenExtendedItemButtonsGeometry(
-                itemISlotIdentity == 0x45U, itemIISlotIdentity == 0x46U),
-            *itemIcons, output);
       }
     }
     TopScreenNativeTouchCopyStats nativeTouchStats;
@@ -488,7 +481,8 @@ void Oot3dNativeUiLifecycleBridge::SetTopScreenInputFrame(
   if (ReadTopScreenOcarinaState(mMemory, &state)) {
     mTopScreenOcarina.Advance(state, input.DpadLeftHeld || input.DpadLeftPressed,
                             input.DpadRightHeld || input.DpadRightPressed,
-                            input.DpadLeftPressed, input.DpadRightPressed);
+                            input.DpadLeftPressed, input.DpadRightPressed,
+                            input.DpadUpPressed);
   }
 }
 

@@ -20,6 +20,8 @@ struct TopScreenItemQueryTrace {
 };
 
 struct TopScreenItemDispatchRuntime {
+    // Published by the gameplay-action owner, independent of HID sampling.
+    uint8_t DirectItemId = 0;
     uint32_t PendingSelection = 0;
     uint64_t QueryEntries = 0;
     std::array<uint64_t, 4> QueryCalls{};

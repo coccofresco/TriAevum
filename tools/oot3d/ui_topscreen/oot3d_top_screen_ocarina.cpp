@@ -49,15 +49,30 @@ void TopScreenOcarinaBrowser::Reset() noexcept {
   mSong = -2;
   mDirection = 0;
   mRepeat = 0;
+  mGuideHidden = false;
+  mGuideSound = 0;
 }
 
 void TopScreenOcarinaBrowser::Advance(const TopScreenOcarinaState &state,
                                     bool left, bool right,
-                                    bool leftPressed, bool rightPressed) noexcept {
+                                    bool leftPressed, bool rightPressed,
+                                    bool togglePressed) noexcept {
   // Original 0x005D3D30: immediate direction change, then 12/5 native updates.
   // Unlearned songs remain selectable and display the original unknown marker.
-  if (state.Page != 12) { Reset(); return; }
+  if (state.Page != 12) {
+    mSong = -2;
+    mDirection = 0;
+    mRepeat = 0;
+    return;
+  }
   if (!state.Active) return;
+  // 0x005D3D30 toggles 0x005E3E6C on D-pad Up. Unlike the song cursor,
+  // this preference survives closing the instrument, until runtime reset.
+  if (togglePressed) {
+    mGuideHidden = !mGuideHidden;
+    mGuideSound = mGuideHidden ? 0x01000499U : 0x01000498U;
+  }
+  if (mGuideHidden) return;
   const int direction = right ? 1 : (left ? -1 : 0);
   bool step = direction != mDirection ||
               (direction > 0 ? rightPressed : direction < 0 && leftPressed);
@@ -100,7 +115,7 @@ bool ReadTopScreenOcarinaGeometry(NativeA32Memory &memory,
   if (!ReadTopScreenOcarinaState(memory, &state)) {
     SetError(error, "cannot read native ocarina owner state"); return false;
   }
-  if (!state.Active) return true;
+  if (!state.Active || browser.GuideHidden()) return true;
   const bool localSong = state.Page == 12 && browser.SelectedSong() >= 0;
   const std::uint32_t song = localSong ? browser.SelectedSong() : state.CursorSong;
   geometry->Song = static_cast<std::uint8_t>(song);

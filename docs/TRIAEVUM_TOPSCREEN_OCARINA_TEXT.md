@@ -127,6 +127,11 @@ This is functional qualification, not a performance benchmark.
 
 ## Remaining Work
 
+Updated qualification and subsequent fixes are recorded in
+[ocarina and mapped actions](TRIAEVUM_TOPSCREEN_OCARINA_AND_ACTIONS.md).
+In particular, the guide toggle has since been implemented and the native
+recognition staff observed in real gameplay; do not reopen those as absent.
+
 Free-play instructions, performed-note feedback, recognition/learning
 transitions and the original guide-mode toggle are still separate owners.
 The native ocarina draw `0x00425930` and globals `0x005093E4..0x005093F4`

@@ -24,6 +24,11 @@ std::optional<std::uint8_t> ResolveTopScreenSlotItemOverrideGuest(
     NativeA32Memory& memory, std::uint32_t globalContext,
     std::uint8_t slot, const TopScreenExtendedInputFrame& input);
 
+// 2.1.1 slot resolver 005CC440: the active direct item precedes both the
+// ordinary inventory lane and special-state fallback. It never edits a slot.
+std::optional<std::uint8_t> ResolveTopScreenDirectSlotItemGuest(
+    NativeA32Memory& memory, std::uint8_t slot, std::uint8_t directItem);
+
 struct TopScreenAimProjectileCycleInput {
     bool PreviousPressed = false;
     bool NextPressed = false;

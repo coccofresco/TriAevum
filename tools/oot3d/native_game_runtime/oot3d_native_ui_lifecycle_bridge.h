@@ -86,6 +86,9 @@ public:
   bool ReadOcarinaGeometry(TopScreenOcarinaGeometry &geometry, std::string *error) {
     return ReadTopScreenOcarinaGeometry(mMemory, mTopScreenOcarina, &geometry, error);
   }
+  std::uint32_t TakeOcarinaGuideSound() noexcept {
+    return mTopScreenOcarina.TakeGuideSound();
+  }
   bool
   NativePresentationActive(oot3d::ui::UiSubsystem subsystem) const noexcept;
   bool NativeGameplayPresentationActive() const noexcept;

@@ -83,10 +83,12 @@ Oot3dNativeGame::NativeA32Memory BuildLayoutFixture() {
 
 void RunTopScreenItemDispatchTests();
 void RunTopScreenOcarinaTests();
+void RunTopScreenDpadPresentationTests();
 
 int main() {
   RunTopScreenItemDispatchTests();
   RunTopScreenOcarinaTests();
+  RunTopScreenDpadPresentationTests();
   using namespace Oot3dNativeGame;
 
   Oot3dUiProfile profile = Oot3dUiProfile::Oot3d;

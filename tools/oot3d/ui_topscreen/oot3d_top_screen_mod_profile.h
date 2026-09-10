@@ -121,6 +121,8 @@ struct TopScreenExtendedInputFrame {
   bool RestorationLayout = false;
   bool DpadLeftPressed = false;
   bool DpadRightPressed = false;
+  bool DpadUpHeld = false;
+  bool DpadUpPressed = false;
 };
 
 bool HasTopScreenItemQueryOverrideInput(

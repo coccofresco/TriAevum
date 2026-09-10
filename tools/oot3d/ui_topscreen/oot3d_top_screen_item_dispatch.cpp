@@ -48,9 +48,11 @@ bool ShouldObserveTopScreenItemDispatch(
     if (pc == kTopScreenItemsUpdateReturn)
         return runtime.PendingSelection != 0;
     if (pc == kTopScreenSlotItemEntry)
-        return HasTopScreenSlotItemOverrideInput(input) &&
+        return ResolveTopScreenDirectSlotItemGuest(
+                   memory, static_cast<uint8_t>(state.r[1]), runtime.DirectItemId).has_value() ||
+            (HasTopScreenSlotItemOverrideInput(input) &&
             ResolveTopScreenSlotItemOverrideGuest(
-                memory, state.r[0], static_cast<uint8_t>(state.r[1]), input).has_value();
+                memory, state.r[0], static_cast<uint8_t>(state.r[1]), input).has_value());
     return HasTopScreenItemQueryOverrideInput(input) &&
         ResolveTopScreenItemQueryGuest(memory, pc, input).has_value();
 }
@@ -116,9 +118,11 @@ bool ExecuteTopScreenItemDispatch(
     }
     if (pc == kTopScreenSlotItemEntry) {
         ++runtime.SlotEntries;
-        if (!HasTopScreenSlotItemOverrideInput(input)) return false;
+        if (runtime.DirectItemId == 0 && !HasTopScreenSlotItemOverrideInput(input)) return false;
         ++runtime.SlotAttempts;
-        const auto resolved = ResolveTopScreenSlotItemOverrideGuest(
+        auto resolved = ResolveTopScreenDirectSlotItemGuest(
+            memory, static_cast<uint8_t>(state.r[1]), runtime.DirectItemId);
+        if (!resolved) resolved = ResolveTopScreenSlotItemOverrideGuest(
             memory, state.r[0], static_cast<uint8_t>(state.r[1]), input);
         if (!resolved.has_value()) {
             ++runtime.SlotNativeFallbacks;
