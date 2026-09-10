@@ -3,6 +3,19 @@
 A native PC AOT recompilation of *The Legend of Zelda: Ocarina of Time 3D*,
 with a modern NRI/Vulkan renderer, single-screen UI and customizable graphics.
 
+## Credit Where It Belongs
+
+Before the shaders, settings and excessive grass: **TriAevum would not exist in
+its current form without [TopScreen](https://gamebanana.com/mods/695893),
+developed by rlgcarrot**. Its single-screen experience is reimplemented here for
+our runtime, but the vision, care and tremendous work behind it deserve a
+special thank-you. Please consider [buying rlgcarrot a coffee](https://ko-fi.com/rlgcarrot)
+to support that fantastic work.
+
+Just as essential are **Azahar, Ship of Harkinian, libultraship, NVIDIA NRI**,
+and the SDL controller-mapping community. And, of course, **Nintendo and
+Grezzo**, who created the original game. [Full credits and licenses](THIRD_PARTY_NOTICES.md).
+
 **[Download v0.6.0-alpha.1c for Windows x64](https://github.com/coccofresco/TriAevum/releases/tag/v0.6.0-alpha.1c)**
 
 ## About
@@ -99,17 +112,5 @@ See the [release and build contract](docs/TRIAEVUM_PRECOMPILED_RELEASE.md) for
 source availability and developer packaging.
 
 TriAevum is independent and is not affiliated with or endorsed by Nintendo.
-
-## Thanks
-
-Special thanks to **[Ship of Harkinian / Shipwright](https://github.com/HarbourMasters/Shipwright)**
-for its platform and renderer foundations, and **[Azahar](https://github.com/azahar-emu/azahar)**
-for its 3DS rendering, audio and research contributions.
-
-Thanks also to [libultraship](https://github.com/Kenix3/libultraship),
-[NVIDIA NRI](https://github.com/NVIDIA-RTX/NRI), the SDL controller-mapping
-contributors, and **M-1**, author of [TopScreen](https://gamebanana.com/mods/695893),
-for the mod's reverse engineering and development. The original game was
-created by Nintendo and Grezzo. [Full credits and licenses](THIRD_PARTY_NOTICES.md).
 
 Worst case scenario, at least we got more grass.
