@@ -3696,7 +3696,7 @@ void GfxRenderingAPIVulkan::ConfigureNativePicaAotShaders() {
 
 void GfxRenderingAPIVulkan::FinishNativePicaAotShaders() {
     const auto& cache = mCompiledShaderCache.Stats();
-    if (cache.Requests && !mCompiledShaderCacheSummaryLogged) {
+    if ((cache.Requests || mPicaAotShaderPack.Loaded()) && !mCompiledShaderCacheSummaryLogged) {
         std::fprintf(stderr,
             "TRIAEVUM_SPIRV_CACHE requests=%llu hits=%llu misses=%llu rejected=%llu "
             "compiled=%llu compile_failed=%llu writes=%llu write_failed=%llu "

@@ -564,12 +564,12 @@ void GfxRenderingAPIVulkan::CreateNativePicaScanoutPipeline() {
     const std::string fragmentSource =
         Oot3d::BuildPicaScanoutFragmentShader();
 
-    VkShaderModule vertexShader = CompileShaderModule(
-        vertexSource, true, "oot3d_native_pica_scanout.vert");
+    VkShaderModule vertexShader = CreateShaderModuleFromSpirv(ResolveNativePicaShaderSpirv(
+        vertexSource, Oot3d::PicaAotShaderStage::Vertex, true, "oot3d_native_pica_scanout.vert"));
     VkShaderModule fragmentShader = VK_NULL_HANDLE;
     try {
-        fragmentShader = CompileShaderModule(
-            fragmentSource, false, "oot3d_native_pica_scanout.frag");
+        fragmentShader = CreateShaderModuleFromSpirv(ResolveNativePicaShaderSpirv(
+            fragmentSource, Oot3d::PicaAotShaderStage::Fragment, false, "oot3d_native_pica_scanout.frag"));
     } catch (...) {
         vkDestroyShaderModule(mDevice, vertexShader, nullptr);
         throw;

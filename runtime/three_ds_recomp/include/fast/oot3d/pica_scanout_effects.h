@@ -68,6 +68,7 @@ struct PicaScanoutPolicyInput {
     const PicaScanoutPolicyInput& input);
 [[nodiscard]] std::string BuildPicaScanoutVertexShader();
 [[nodiscard]] std::string BuildPicaScanoutFragmentShader(
-    bool separateSampler = false);
+    bool separateSampler = false,
+    std::optional<int> diagnosticMode = std::nullopt);
 
 } // namespace Fast::Oot3d

@@ -1,4 +1,5 @@
 #include "fast/oot3d/pica_aot_shader_pack.h"
+#include "fast/oot3d/pica_scanout_effects.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -176,6 +177,27 @@ int main(int argc, char** argv) {
             throw std::runtime_error(
                 "effective shader inventory merge is empty or too large");
 
+        // Renderer-owned sources accompany every seed, without needing a game
+        // capture. Explicit mode zero keeps developer diagnostics out of Forge.
+        const size_t capturedSources = inputs.size();
+        const auto appendRendererSource = [&](PicaAotShaderStage stage,
+                                              const std::string& source) {
+            const auto identity = IdentifyPicaAotShaderSource(source);
+            const std::string stageName(PicaAotShaderStageName(stage));
+            const auto sourceId = FormatPicaAotShaderId(identity.Id);
+            const auto [found, inserted] = uniqueSources.emplace(
+                std::pair{stageName, sourceId}, source);
+            if (!inserted && found->second != source)
+                throw std::runtime_error("renderer shader source identity collision");
+            if (inserted)
+                inputs.push_back({{"stage", stageName}, {"source_id", sourceId},
+                    {"secondary_hash", FormatPicaAotShaderId(identity.SecondaryHash)},
+                    {"source_size", identity.Size}, {"source", source}});
+        };
+        appendRendererSource(PicaAotShaderStage::Vertex, BuildPicaScanoutVertexShader());
+        appendRendererSource(PicaAotShaderStage::Fragment, BuildPicaScanoutFragmentShader(false, 0));
+        const size_t rendererSourcesAdded = inputs.size() - capturedSources;
+
         std::sort(inputs.begin(), inputs.end(), [](const auto& left,
                                                    const auto& right) {
             return std::tie(left.at("stage"), left.at("source_id")) <
@@ -267,6 +289,7 @@ int main(int argc, char** argv) {
                  : nlohmann::json(options.MergedInventory.string())},
             {"pack", options.Pack.string()},
             {"shader_count", binaries.size()},
+            {"renderer_sources_added", rendererSourcesAdded},
             {"shaders", std::move(manifestEntries)},
         };
         WriteJsonAtomically(options.Manifest, manifest);

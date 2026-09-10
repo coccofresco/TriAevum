@@ -80,7 +80,8 @@ void main() {
 )glsl";
 }
 
-std::string BuildPicaScanoutFragmentShader(bool separateSampler) {
+std::string BuildPicaScanoutFragmentShader(bool separateSampler,
+                                          std::optional<int> diagnosticMode) {
     std::string source = R"glsl(
 #version 450
 layout(set = 0, binding = 0) uniform sampler2D physical_scanout;
@@ -198,7 +199,8 @@ vec4 oot3d_compose_at(vec2 uv) {
 )glsl";
     source += BuildSpatialAaShaderLibrary();
     source += EffectSurfaceCoordinateShaderLibrary;
-    source += PicaGuideDiagnosticShaderLibrary();
+    source += PicaGuideDiagnosticShaderLibrary(
+        diagnosticMode.value_or(PicaGuideDiagnosticMode()));
     source += R"glsl(
 
 void main() {

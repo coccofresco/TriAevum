@@ -2047,6 +2047,11 @@ if(OOT3D_ENABLE_VULKAN_RENDERER AND TARGET three_ds_recomp_shaderc)
     add_executable(oot3d_native_pica_aot_compiler EXCLUDE_FROM_ALL
         tools/oot3d/native_pica_frontend/oot3d_native_pica_aot_compiler.cpp
         runtime/three_ds_recomp/src/fast/oot3d/pica_aot_shader_pack.cpp
+        runtime/three_ds_recomp/src/fast/oot3d/pica_scanout_effects.cpp
+        runtime/three_ds_recomp/src/fast/oot3d/toon_outline_shader.cpp
+        runtime/three_ds_recomp/src/fast/oot3d/ambient_occlusion_composite.cpp
+        runtime/three_ds_recomp/src/fast/oot3d/reflection_debug.cpp
+        runtime/three_ds_recomp/src/fast/oot3d/spatial_aa.cpp
     )
     target_include_directories(oot3d_native_pica_aot_compiler PRIVATE
         runtime/three_ds_recomp/include)

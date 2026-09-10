@@ -5,6 +5,11 @@ cache to an installation-owned directory shared with offline NRI preparation.
 Real incomplete-pack testing verifies that newly compiled shaders survive into
 the next launch. No automatic gameplay-time preparation queue was introduced.
 
+Measurement correction: the counters below cover calls routed through this
+cache, not all renderer passes. The subsequent independent shaderc audit found
+20 direct NRI/effect calls even with native presentation. See the handoff above;
+a zero cache compilation count is not a whole-renderer zero-compilation claim.
+
 2026-09-10. Continuation of PR #11 review after `09f6202`, on `port/linux-nri`.
 This changes the common renderer, not TopScreen, gameplay or title compilation.
 

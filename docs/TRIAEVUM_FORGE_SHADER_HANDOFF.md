@@ -4,6 +4,79 @@
 `298a9a1` (persistent SPIR-V cache). This is the Forge-first implementation,
 not a new game-time prewarm queue.
 
+## Current Result And Counter Correction
+
+The two legacy Vulkan scanout modules now come from the same shared source
+generators in the Forge compiler and live renderer. The complete private pack
+contains **889 modules** (887 observed PICA/extension sources + 2 scanout sources).
+Fresh Forge preparation still prepares **588 NRI pipeline recipes**.
+
+Two fresh native intro launches each resolve **98 pack hits, zero misses and
+zero cache compiler calls**, with no SPIR-V disk entries needed. Six captures
+are byte-identical to each other and to the previous accepted baseline.
+This closes the two previously identified common shaders, **not all runtime
+shader compilation**.
+
+The current-effects run similarly has 137 pack hits and zero cache compiler
+calls on both launches. Its independent audit still counts 20 direct calls on
+each launch (2,952.040 ms first, 2,751.625 ms second): warming the PICA cache does
+not fix that separate path. Effects/interpolation captures are not deterministic
+and are not used for byte-equality claims. The focused Python checks pass (52
+tests, 2 optional-input tests skipped), plus the real synthetic compiler test on
+Linux. No new Windows game or Android device qualification is claimed here.
+
+A new independent `shaderc_compile_into_spv` audit found **20 additional calls
+outside the cache counter**, including in native/effects-off mode. They cost
+2,937.706 ms in the measured native launch. The earlier statements about zero
+compilation on warm launches only applied to the PICA/legacy scanout cache;
+they must not be read as whole-renderer measurements. These are existing direct
+compiler paths, not a regression introduced by the Forge pack.
+
+The 20 calls are:
+
+| Owner under `runtime/three_ds_recomp/src/fast/oot3d/` | Calls | Modules |
+|---|---:|---|
+| `nri_pica_display_copy_pass.cpp` | 1 | Display transfer compute |
+| `hiz_depth_pyramid_pass.cpp` | 1 | Hi-Z reduction |
+| `hiz_reflection_pass.cpp` | 2 | Reflection ray/filter |
+| `reflection_ibl_pass.cpp` | 2 | Environment/BRDF |
+| `reflection_material_resolve_pass.cpp` | 1 | Material resolve |
+| `linear_scene_color_pass.cpp` | 1 | Linear color |
+| `motion_vector_pass.cpp` | 1 | Motion vectors |
+| `temporal_aa_pass.cpp` | 1 | TAA |
+| `scene_composite_pass.cpp` | 1 | Scene composition |
+| `smaa_1x_pass.cpp` | 3 | Edges/blend weights/neighborhood |
+| `nri_pica_scanout_pass.cpp` | 2 | Separate-sampler NRI scanout |
+| `interactive_grass_pass.cpp` | 3 | Vertex/canonical/instrumented fragment |
+| `grass_gpu_instance_compactor.cpp` | 1 | Grass compaction |
+
+The next implementation must prepare this whole renderer-owned family offline,
+not chase additional captured game scenarios for these fixed sources. Share the
+actual generators; extract inline grass generators from pass execution first.
+Preserve Vulkan 1.2 options, shader stage and macro definitions (the two grass
+fragments have the same source but different defines). Do not force these compute
+modules into the existing PICA vertex/fragment-only schema. A versioned portable
+renderer library can be built with the release tools and installed by Forge;
+the existing persistent cache should remain the fallback for genuinely new
+sources. Avoid a second gameplay prewarm queue. Require an independent all-pass
+audit, not just the PICA counter, before claiming complete first-launch readiness.
+
+Implementation points for the completed pair:
+
+- `oot3d_native_pica_aot_compiler.cpp` appends shared scanout generators and
+  deduplicates against merged inventories; reports `renderer_sources_added`.
+- `pica_scanout_effects.cpp` accepts explicit diagnostic mode, so Forge always
+  prepares mode zero regardless of developer environment variables.
+- `gfx_vulkan_pica.cpp` resolves those modules through the existing pack-first
+  path. Missing old-pack entries retain normal persistent fallback; strict
+  diagnostic packs need regeneration.
+- `test_shader_compiler.py` compiles synthetic-only inputs, checks both sources,
+  merged-input deduplication, byte-stable packs and diagnostic independence.
+
+Private new evidence: `forge-complete-cold-native`, `forge-complete-shaderc-audit`
+and `forge-complete-cold-effects` below `/home/xander/triaevum-pipeline-live-proof/`.
+No title code was rebuilt; only the compiler/renderer changed.
+
 ## Product Behavior
 
 1. Forge verifies the catalogued shader inputs and compiler dependencies.
@@ -58,7 +131,10 @@ artifact records (`path`, `bytes`, `sha256`). Native and extension inputs may
 coexist. The device contract accepts either `manifest` or `manifests`, never both.
 The Forge GUI receives stage/progress messages through its existing worker.
 
-## Qualification
+## Previous Qualification (1d802f5)
+
+The compilation counts in this section cover only the PICA/legacy scanout
+cache. See the independent audit above for the subsequently discovered gap.
 
 The private corpus combines the 815-module native seed with the 77-module
 effects inventory: **887 unique modules**, not 892. The pipeline union is
@@ -109,6 +185,9 @@ the bounded renderer probe twice. It checks pack hits, accepted device cache,
 zero recompilation on second launch, and deterministic capture equality when
 `--native-fidelity` is selected. It never changes the user's live configuration
 or saves. Specify the compiler's bundled dependencies with `--dependency`.
+`--require-pica-cold-zero` also rejects first-launch misses/compilations in that
+path. It is deliberately not named as an all-renderer guarantee. Without the
+independent audit, `all_pass_compiled` is null, never implicitly zero.
 
 ```text
 python tools/triaevum_release/qualify_shader_handoff.py
@@ -117,7 +196,24 @@ python tools/triaevum_release/qualify_shader_handoff.py
   --manifest NATIVE_MANIFEST --manifest EFFECTS_MANIFEST
   --installation PRIVATE_INSTALL --runtime CURRENT_RUNTIME
   --profile EXISTING_LAUNCH_PROFILE --native-fidelity --frames 900 --seconds 90
+  --require-pica-cold-zero
 ```
+
+For an independent Linux audit, build the developer-only shim against the same
+shaderc headers, then set `LD_PRELOAD` to its absolute path for the probe:
+
+```sh
+clang++ -std=c++20 -fPIC -shared -O2 -I SHADERC_INCLUDE \
+  tools/renderer/shader_cache/trace_shaderc.cpp -ldl -o trace_shaderc.so
+```
+
+Read `TRIAEVUM_SHADERC_CALL` and the final `TRIAEVUM_SHADERC_AUDIT` from the
+**game's** `launch.log`, not the Python parent process. The shim counts dynamically
+linked shaderc SPIR-V compilation, including bypass paths; it does not measure
+driver pipeline creation or statically embedded third-party compiler code. It
+does not capture shader contents and is never part of the distributed runtime.
+Preloading changes the compiler fingerprint, so use an isolated audit cache;
+do not use audit timing as a cache performance benchmark.
 
 Private Linux evidence: `/home/xander/triaevum-pipeline-live-proof/` under
 `forge-handoff-native`, `forge-handoff-effects`, `forge-handoff-missing-variants`.
@@ -130,8 +226,9 @@ Windows evidence: `I:/oot3dre_work/forge-handoff-windows/`.
   release must supply an explicitly permitted seed or a local ROM-derived
   reconstruction recipe, and bundle the matching preparation tools. This is
   packaging/input provenance work, not a missing cache mechanism.
-- Two common renderer shaders still compile on first use; move their shared
-  source preparation into Forge without copying shader definitions.
+- The two identified legacy scanout shaders are closed; the 20 direct NRI/effect
+  calls listed above still need offline preparation. Do not claim whole-renderer
+  zero compilation based only on the cache's zero counter.
 - The covered extension recipes are observed typed variants, not every future
   setting combination. New variants correctly use persistent fallback.
 - Source identity lookup still follows canonical GLSL source construction;

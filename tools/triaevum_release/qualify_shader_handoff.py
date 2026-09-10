@@ -28,11 +28,14 @@ def shader_statistics(log: str) -> dict:
         return dict(re.findall(r"(\w+)=([^ ]+)", matches[0]))
     cache = record("TRIAEVUM_SPIRV_CACHE")
     pack = record("OOT3D_PICA_AOT_SHADER_RESOLUTION")
+    audit = record("TRIAEVUM_SHADERC_AUDIT") if "TRIAEVUM_SHADERC_AUDIT " in log else None
     if int(cache["compile_failed"]) or int(cache["write_failed"]) or pack["strict"] != "0":
         raise ValueError("Shader fallback/cache failed or strict diagnostic mode is active")
     return {"pack_hits": int(pack["hits"]), "pack_misses": int(pack["misses"]),
             "compiled": int(cache["compiled"]), "cache_hits": int(cache["hits"]),
-            "cache_writes": int(cache["writes"]), "compile_ms": float(cache["compile_ms"])}
+            "cache_writes": int(cache["writes"]), "compile_ms": float(cache["compile_ms"]),
+            "all_pass_compiled": int(audit["calls"]) if audit else None,
+            "all_pass_compile_ms": float(audit["compile_ms"]) if audit else None}
 
 
 def main():
@@ -47,6 +50,8 @@ def main():
     parser.add_argument("--frames", type=int, default=900)
     parser.add_argument("--seconds", type=int, default=90)
     parser.add_argument("--native-fidelity", action="store_true")
+    parser.add_argument("--require-pica-cold-zero", action="store_true",
+                        help="Fail on PICA/scanout pack misses or cache compiler calls (not an all-pass audit)")
     args = parser.parse_args()
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
@@ -99,6 +104,8 @@ def main():
         captures = {path.name: sha256_file(path) for path in output.glob("framebuffer_*.bmp")}
         if not captures or stats["pack_hits"] <= 0:
             raise ValueError("Game did not produce captures and use the Forge shader pack")
+        if args.require_pica_cold_zero and (stats["compiled"] or stats["pack_misses"]):
+            raise ValueError(f"Complete Forge seed left runtime shader work: {stats}")
         runs.append({"name": name, "shaders": stats, "nri_pipelines": pipeline, "captures": captures})
     identical = runs[0]["captures"] == runs[1]["captures"]
     if args.native_fidelity and not identical:
@@ -109,6 +116,7 @@ def main():
               "shader_preparation": load_json_object(pack.parent / "preparation.json"),
               "device_preparation": device, "runs": runs,
               "captures_identical": identical, "fps_benchmark": False,
+              "compiler_measurement_scope": "pica_and_legacy_scanout_cache_not_all_renderer_passes",
               "full_game_coverage": False, "title_recompiled": False}
     atomic_write_json(root / "qualification.json", result)
     print(json.dumps({"device_pipelines": device["prepared"], "runs": [r["shaders"] for r in runs],
