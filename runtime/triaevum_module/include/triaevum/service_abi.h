@@ -202,6 +202,7 @@ enum {
   TRIAEVUM_FILESYSTEM_CLOSE_V1 = 4,
   TRIAEVUM_FILESYSTEM_STAT_V1 = 5,
   TRIAEVUM_FILESYSTEM_RESIZE_V1 = 6,
+  TRIAEVUM_FILESYSTEM_REMOVE_FILE_V1 = 7,
 };
 
 typedef uint32_t TriAevumFilesystemRootV1;
@@ -211,6 +212,20 @@ enum {
 };
 
 typedef uint32_t TriAevumFilesystemOpenFlagsV1;
+/* Additive operation; existing request layouts and title ABI remain unchanged. */
+typedef struct TriAevumFilesystemRemoveFileRequestV1 {
+  TriAevumServiceRequestHeaderV1 header;
+  TriAevumFilesystemRootV1 root;
+  uint32_t reserved;
+  TriAevumPayloadRangeV1 utf8_path;
+} TriAevumFilesystemRemoveFileRequestV1;
+
+typedef struct TriAevumFilesystemRemoveFileResponseV1 {
+  TriAevumServiceResponseHeaderV1 header;
+  uint32_t removed;
+  uint32_t reserved;
+} TriAevumFilesystemRemoveFileResponseV1;
+
 enum {
   TRIAEVUM_FILESYSTEM_OPEN_READ_V1 = 1U << 0U,
   TRIAEVUM_FILESYSTEM_OPEN_WRITE_V1 = 1U << 1U,

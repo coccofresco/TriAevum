@@ -32,6 +32,8 @@ public:
                               std::string_view utf8Path,
                               FilesystemStatV1 *result);
   TriAevumModuleStatusV1 Resize(std::uint64_t handle, std::uint64_t size);
+  TriAevumModuleStatusV1 RemoveFile(TriAevumFilesystemRootV1 root,
+                                    std::string_view utf8Path, bool *removed);
   TriAevumModuleStatusV1 ReadAll(TriAevumFilesystemRootV1 root,
                                  std::string_view utf8Path,
                                  std::uint64_t maximumSize,

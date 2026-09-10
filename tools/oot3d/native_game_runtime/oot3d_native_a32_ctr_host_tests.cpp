@@ -484,6 +484,34 @@ int main() {
                 NativeA32HostAction::Resume,
             "newly established SaveData file did not close");
 
+    const auto deleteSave = [&](uint64_t archive, uint32_t descriptor) {
+        Require(memory.WriteBytes(0x1FF82170, newSaveFilePath) &&
+                    memory.Write32(0x1FF82080, 0x08040142) &&
+                    memory.Write32(0x1FF82084, 0) &&
+                    memory.Write64(0x1FF82088, archive, &faultAddress) &&
+                    memory.Write32(0x1FF82090, 4) &&
+                    memory.Write32(0x1FF82094, newSaveFilePath.size()) &&
+                    memory.Write32(0x1FF82098, descriptor) &&
+                    memory.Write32(0x1FF8209C, 0x1FF82170),
+                "cannot write DeleteFile request");
+        state.r[0] = fsSession;
+        Require(host.HandleSvc(0x32, state, memory, context).Action == NativeA32HostAction::Resume &&
+                    memory.Read32(0x1FF82080, &response) && response == 0x08040040 &&
+                    memory.Read32(0x1FF82084, &response),
+                "DeleteFile left its client waiting instead of replying");
+        return response;
+    };
+    const uint32_t deleteDescriptor = (newSaveFilePath.size() << 14U) | 2U;
+    Require(deleteSave(saveArchive + 1U, deleteDescriptor) == 0xC8804465U &&
+                std::filesystem::exists(saveDataPath / "new.dat"), "invalid archive deleted a save");
+    Require(deleteSave(saveArchive, 2U) == 0xE0E046BEU &&
+                std::filesystem::exists(saveDataPath / "new.dat"), "malformed deletion changed a save");
+    Require(deleteSave(saveArchive, deleteDescriptor) == 0U &&
+                !std::filesystem::exists(saveDataPath / "new.dat") &&
+                std::filesystem::exists(saveDataPath / "test.dat"), "DeleteFile removed the wrong file");
+    Require(deleteSave(saveArchive, deleteDescriptor) == 0xC8804470U,
+            "repeated DeleteFile did not report missing file");
+
     Require(memory.Write8(0x1FF82190, 0x5A) &&
                 memory.Write8(0x1FF82194, 0xFF) &&
                 memory.Write32(0x1FF82080, 0x080D0144) &&
@@ -1264,7 +1292,7 @@ int main() {
             motionUpdate.GyroscopeSamplesWritten == 1U &&
             memory.Read32(0x10002118, &accelerometerIndex) &&
             accelerometerIndex == 0U &&
-            memory.Read32(0x10002164, &gyroscopeIndex) &&
+            memory.Read32(0x10002168, &gyroscopeIndex) &&
             gyroscopeIndex == 0U &&
             readVector(0x10002120, accelerometerRaw) &&
             static_cast<int16_t>(accelerometerRaw[0]) == -512 &&
@@ -1274,11 +1302,11 @@ int main() {
             static_cast<int16_t>(accelerometerEntry[0]) == 256 &&
             static_cast<int16_t>(accelerometerEntry[1]) == -512 &&
             static_cast<int16_t>(accelerometerEntry[2]) == 128 &&
-            readVector(0x1000216C, gyroscopeRaw) &&
+            readVector(0x10002170, gyroscopeRaw) &&
             static_cast<int16_t>(gyroscopeRaw[0]) == 144 &&
             static_cast<int16_t>(gyroscopeRaw[1]) == 431 &&
             static_cast<int16_t>(gyroscopeRaw[2]) == 288 &&
-            readVector(0x10002174, gyroscopeEntry) &&
+            readVector(0x10002178, gyroscopeEntry) &&
             static_cast<int16_t>(gyroscopeEntry[0]) == 144 &&
             static_cast<int16_t>(gyroscopeEntry[1]) == -288 &&
             static_cast<int16_t>(gyroscopeEntry[2]) == 431,
@@ -1289,6 +1317,26 @@ int main() {
                 motionProfile.NextAccelerometerIndex == 1U &&
                 motionProfile.NextGyroscopeIndex == 1U,
             "native HID motion profile lost producer state");
+    // Consumer locations from libctru hidScanInput (word 86 + header 8),
+    // independent of producer constants. Exercise both rings through wrap.
+    host.AdvanceSystemTicks(NativeA32CtrHostServices::HidGyroscopeUpdateTicks * 40U);
+    Require(host.AdvanceHidToCurrentTick(memory, motionState).Status ==
+                NativeA32CtrHidUpdateStatus::Updated,
+            "motion rings did not advance");
+    for (uint32_t index = 0; index < 8U; ++index) {
+        Require(readVector(0x10002128U + index * 6U, accelerometerEntry) &&
+                    static_cast<int16_t>(accelerometerEntry[0]) == 256 &&
+                    static_cast<int16_t>(accelerometerEntry[1]) == -512 &&
+                    static_cast<int16_t>(accelerometerEntry[2]) == 128,
+                "gyro timestamps overwrote the accelerometer tail");
+    }
+    for (uint32_t index = 0; index < 32U; ++index) {
+        Require(readVector(0x10002178U + index * 6U, gyroscopeEntry) &&
+                    static_cast<int16_t>(gyroscopeEntry[0]) == 144 &&
+                    static_cast<int16_t>(gyroscopeEntry[1]) == -288 &&
+                    static_cast<int16_t>(gyroscopeEntry[2]) == 431,
+                "libctru-compatible consumer read shifted gyro data");
+    }
     Require(memory.Write32(0x1FF82080, 0x00160000),
             "cannot write HID gyro calibration request");
     state.r[0] = hidSession;

@@ -91,6 +91,10 @@ constexpr uint32_t kFsOpenFileResponse = 0x08020042U;
 constexpr uint32_t kFsOpenFileDirectlyRequest = 0x08030204U;
 constexpr uint32_t kFsOpenFileDirectlyResponse = 0x08030042U;
 constexpr uint32_t kFsCreateFileRequest = 0x08080202U;
+constexpr uint32_t kFsDeleteFileRequest = 0x08040142U;
+constexpr uint32_t kFsDeleteFileResponse = 0x08040040U;
+constexpr uint32_t kFsInvalidPath = 0xE0E046BEU;
+constexpr uint32_t kFsCommandNotAllowed = 0xD9004676U;
 constexpr uint32_t kFsCreateFileResponse = 0x08080040U;
 constexpr uint32_t kFsOpenArchiveRequest = 0x080C00C2U;
 constexpr uint32_t kFsOpenArchiveResponse = 0x080C00C0U;
@@ -203,12 +207,18 @@ constexpr uint32_t kHidAccelerometerIndexOffset = 0x118U;
 constexpr uint32_t kHidAccelerometerRawEntryOffset = 0x120U;
 constexpr uint32_t kHidAccelerometerEntriesOffset = 0x128U;
 constexpr uint32_t kHidAccelerometerEntrySize = 0x06U;
-constexpr uint32_t kHidGyroscopeIndexResetTicksOffset = 0x154U;
-constexpr uint32_t kHidGyroscopeIndexResetTicksPreviousOffset = 0x15CU;
-constexpr uint32_t kHidGyroscopeIndexOffset = 0x164U;
-constexpr uint32_t kHidGyroscopeRawEntryOffset = 0x16CU;
-constexpr uint32_t kHidGyroscopeEntriesOffset = 0x174U;
+// CTR/libctru gyro section begins after all eight 6-byte accel records.
+// Starting four bytes early aliases the final accel sample and shifts every
+// gyro field from the native consumer, even though host calibration looks OK.
+constexpr uint32_t kHidGyroscopeIndexResetTicksOffset =
+    kHidAccelerometerEntriesOffset + 8U * kHidAccelerometerEntrySize;
+constexpr uint32_t kHidGyroscopeIndexResetTicksPreviousOffset = kHidGyroscopeIndexResetTicksOffset + 8U;
+constexpr uint32_t kHidGyroscopeIndexOffset = kHidGyroscopeIndexResetTicksOffset + 0x10U;
+constexpr uint32_t kHidGyroscopeRawEntryOffset = kHidGyroscopeIndexResetTicksOffset + 0x18U;
+constexpr uint32_t kHidGyroscopeEntriesOffset = kHidGyroscopeIndexResetTicksOffset + 0x20U;
 constexpr uint32_t kHidGyroscopeEntrySize = 0x06U;
+static_assert(kHidGyroscopeIndexResetTicksOffset == 0x158U);
+static_assert(kHidGyroscopeEntriesOffset == 0x178U);
 constexpr uint32_t kHidCircleRight = 1U << 28U;
 constexpr uint32_t kHidCircleLeft = 1U << 29U;
 constexpr uint32_t kHidCircleUp = 1U << 30U;
@@ -3058,6 +3068,64 @@ NativeA32HostResult NativeA32CtrHostServices::HandleSvc(
                             CloseHandle(handle);
                         }
                     }
+                }
+            }
+            if (event.Detail == kFsDeleteFileRequest) {
+                uint64_t archiveHandle = 0;
+                uint32_t pathType = 0, pathSize = 0, descriptor = 0, pathAddress = 0;
+                uint32_t result = kFsInvalidPath;
+                const bool readable =
+                    memory.Read64(commandBuffer + 8U, &archiveHandle, nullptr) &&
+                    memory.Read32(commandBuffer + 16U, &pathType) &&
+                    memory.Read32(commandBuffer + 20U, &pathSize) &&
+                    memory.Read32(commandBuffer + 24U, &descriptor) &&
+                    memory.Read32(commandBuffer + 28U, &pathAddress) &&
+                    (descriptor & 0x3FFFU) == 2U && (descriptor >> 14U) == pathSize &&
+                    memory.IsWritable(commandBuffer, 8U);
+                if (readable) {
+                    const auto archive = std::find_if(mArchives.begin(), mArchives.end(),
+                        [archiveHandle](const ArchiveRecord& record) {
+                            return record.Handle == archiveHandle;
+                        });
+                    const auto relative = DecodeArchiveRelativePath(memory, pathType, pathSize, pathAddress);
+                    if (archive == mArchives.end()) {
+                        result = kFsInvalidArchiveHandle;
+                    } else if (relative) {
+                        bool removed = false;
+                        bool success = false;
+                        if (archive->Id == kFsSaveDataArchiveId && mConfig.Filesystem) {
+                            success = mConfig.Filesystem->RemoveFile(relative->generic_string(), &removed);
+                        } else if (archive->Id == kFsSaveDataArchiveId) {
+                            std::error_code error;
+                            std::error_code rootError;
+                            const auto root = std::filesystem::weakly_canonical(archive->Root, rootError);
+                            const auto target = root / *relative;
+                            const auto parent = std::filesystem::weakly_canonical(target.parent_path(), error);
+                            const auto within = parent.lexically_relative(root);
+                            bool contained = !rootError && !error && !within.empty() && !within.is_absolute();
+                            for (const auto& part : within) contained = contained && part != "..";
+                            if (contained) {
+                                const auto status = std::filesystem::symlink_status(target, error);
+                                if (status.type() == std::filesystem::file_type::not_found &&
+                                    (!error || error == std::errc::no_such_file_or_directory)) {
+                                    success = true;
+                                } else if (!error && std::filesystem::is_regular_file(status)) {
+                                    removed = std::filesystem::remove(target, error);
+                                    success = !error;
+                                }
+                            }
+                        }
+                        result = success ? (removed ? kResultSuccess : kFsFileNotFound) : kFsCommandNotAllowed;
+                    }
+                }
+                if (memory.Write32(commandBuffer, kFsDeleteFileResponse) &&
+                    memory.Write32(commandBuffer + 4U, result)) {
+                    state.r[0] = kResultSuccess;
+                    event.Name += ":DeleteFile:" + DescribeLowPath(memory, pathType, pathSize, pathAddress);
+                    event.Detail = result;
+                    event.Handled = true;
+                    mSvcEvents.push_back(std::move(event));
+                    return {NativeA32HostAction::Resume};
                 }
             }
             if (event.Detail == kFsCreateFileRequest) {

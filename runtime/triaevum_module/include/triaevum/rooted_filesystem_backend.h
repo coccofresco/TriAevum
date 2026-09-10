@@ -53,6 +53,8 @@ public:
                               FilesystemStatV1 *result) override;
   TriAevumModuleStatusV1 Resize(std::uint64_t handle,
                                 std::uint64_t size) override;
+  TriAevumModuleStatusV1 RemoveFile(TriAevumFilesystemRootV1 root,
+                                    std::string_view utf8Path, bool *removed) override;
 
   [[nodiscard]] RootedFilesystemStatsV1 Stats() const noexcept;
 

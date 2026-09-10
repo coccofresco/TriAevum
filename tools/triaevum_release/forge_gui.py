@@ -26,7 +26,7 @@ try:
     from .precompiled_titles import load_catalog, select_title, install_precompiled_title
     from .input_adapters import import_contract, adapt_extracted_inputs
     from .release_platform import host_platform
-    from .native_process import native_process_environment
+    from .native_process import popen_native
     from .host_layout import for_package
     from . import portal_picker
 except ImportError:
@@ -41,7 +41,7 @@ except ImportError:
     from precompiled_titles import load_catalog, select_title, install_precompiled_title
     from input_adapters import import_contract, adapt_extracted_inputs
     from release_platform import host_platform
-    from native_process import native_process_environment
+    from native_process import popen_native
     from host_layout import for_package
     import portal_picker
 
@@ -278,10 +278,9 @@ def _launch_runtime_locked(data_root: Path | None) -> subprocess.Popen[bytes]:
         profile = validate_installed_runtime(executable, active.directory, private_root, runtime)
     except (OSError, ValueError) as exc:
         raise forge.ForgeError(str(exc)) from exc
-    return subprocess.Popen(
+    return popen_native(
         [str(executable), "--launch-profile", str(profile)],
         cwd=for_package(executable.parent).activation,
-        env=native_process_environment(),
     )
 
 

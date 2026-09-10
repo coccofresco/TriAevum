@@ -300,6 +300,28 @@ TriAevumModuleStatusV1 RootedFilesystemBackendV1::Close(std::uint64_t handle) {
   return TRIAEVUM_MODULE_OK_V1;
 }
 
+TriAevumModuleStatusV1 RootedFilesystemBackendV1::RemoveFile(
+    TriAevumFilesystemRootV1 root, std::string_view utf8Path, bool *removed) {
+  if (removed == nullptr || root != TRIAEVUM_FILESYSTEM_SAVE_V1)
+    return TRIAEVUM_MODULE_INVALID_ARGUMENT_V1;
+  *removed = false;
+  std::scoped_lock lock(mImpl->Mutex);
+  const auto path = mImpl->Resolve(root, utf8Path, false);
+  if (!path) return TRIAEVUM_MODULE_INVALID_ARGUMENT_V1;
+  std::error_code error;
+  const auto status = std::filesystem::symlink_status(*path, error);
+  if (status.type() == std::filesystem::file_type::not_found &&
+      (!error || error == std::errc::no_such_file_or_directory))
+    return TRIAEVUM_MODULE_OK_V1;
+  if (error) return TRIAEVUM_MODULE_HOST_ERROR_V1;
+  if (!std::filesystem::is_regular_file(status))
+    return TRIAEVUM_MODULE_INVALID_ARGUMENT_V1;
+  for (const auto &[handle, file] : mImpl->OpenFiles)
+    if (file.Path == *path) return TRIAEVUM_MODULE_HOST_ERROR_V1;
+  *removed = std::filesystem::remove(*path, error);
+  return error ? TRIAEVUM_MODULE_HOST_ERROR_V1 : TRIAEVUM_MODULE_OK_V1;
+}
+
 TriAevumModuleStatusV1
 RootedFilesystemBackendV1::Stat(TriAevumFilesystemRootV1 root,
                                 std::string_view utf8Path,

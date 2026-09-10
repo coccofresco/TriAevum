@@ -101,6 +101,26 @@ TriAevumModuleStatusV1 FilesystemHostServiceAdapterV1::Dispatch(
     return EncodeServiceResponse(result, response, responseSize);
   }
 
+  if (operation == TRIAEVUM_FILESYSTEM_REMOVE_FILE_V1) {
+    TriAevumFilesystemRemoveFileRequestV1 decoded{};
+    auto status = DecodeServiceRequest(request, &decoded);
+    std::string_view path;
+    if (status == TRIAEVUM_MODULE_OK_V1)
+      status = DecodePath(request, decoded.header.struct_size, decoded.utf8_path, &path);
+    if (status != TRIAEVUM_MODULE_OK_V1) return status;
+    if (decoded.root != TRIAEVUM_FILESYSTEM_SAVE_V1 || decoded.reserved != 0U)
+      return TRIAEVUM_MODULE_MALFORMED_REQUEST_V1;
+    *responseSize = sizeof(TriAevumFilesystemRemoveFileResponseV1);
+    if (response.data == nullptr || response.size < *responseSize)
+      return TRIAEVUM_MODULE_RESPONSE_TOO_SMALL_V1;
+    bool removed = false;
+    status = mBackend.RemoveFile(decoded.root, path, &removed);
+    if (status != TRIAEVUM_MODULE_OK_V1) return status;
+    const TriAevumFilesystemRemoveFileResponseV1 result = {
+        ResponseHeader<TriAevumFilesystemRemoveFileResponseV1>(), removed ? 1U : 0U, 0U};
+    return EncodeServiceResponse(result, response, responseSize);
+  }
+
   if (operation == TRIAEVUM_FILESYSTEM_READ_V1) {
     TriAevumFilesystemReadRequestV1 decoded{};
     const TriAevumModuleStatusV1 decodeStatus =

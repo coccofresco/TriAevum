@@ -47,6 +47,10 @@ public:
                                       FilesystemStatV1 *result) = 0;
   virtual TriAevumModuleStatusV1 Resize(std::uint64_t handle,
                                         std::uint64_t size) = 0;
+  virtual TriAevumModuleStatusV1 RemoveFile(TriAevumFilesystemRootV1,
+                                            std::string_view, bool *) {
+    return TRIAEVUM_MODULE_OPERATION_NOT_SUPPORTED_V1;
+  }
 };
 
 } // namespace triaevum::module

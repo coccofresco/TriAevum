@@ -17,11 +17,11 @@ from typing import Callable
 
 try:
     from .common import atomic_write_bytes, atomic_write_json, load_json_object, sha256_file
-    from .native_process import native_process_environment
+    from .native_process import popen_native
     from .precompiled_titles import checked_file
 except ImportError:
     from common import atomic_write_bytes, atomic_write_json, load_json_object, sha256_file
-    from native_process import native_process_environment
+    from native_process import popen_native
     from precompiled_titles import checked_file
 
 FORMAT = "triaevum_device_pipeline_preparation_v1"
@@ -112,7 +112,7 @@ def _run(command: list[str], root: Path, stage: Path, cancel: Callable[[], bool]
     with (stage / "stdout.log").open("w", encoding="utf-8") as output, \
             (stage / "stderr.log").open("w", encoding="utf-8") as errors, \
             (stage / "stdout.log").open(encoding="utf-8", errors="replace") as progress:
-        process = subprocess.Popen(command, cwd=root, env=native_process_environment(),
+        process = popen_native(command, cwd=root,
                                    stdout=output, stderr=errors,
                                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         try:

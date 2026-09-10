@@ -7,9 +7,9 @@ from urllib.parse import urlsplit
 from urllib.request import url2pathname
 
 try:
-    from .native_process import native_process_environment
+    from .native_process import popen_native
 except ImportError:
-    from native_process import native_process_environment
+    from native_process import popen_native
 
 
 def selected_path(output: str) -> Path:
@@ -32,8 +32,8 @@ def choose(helper: Path, *, title: str, directory: bool, parent: str,
     command = [str(helper), "--title", title, "--parent", parent]
     if directory:
         command.append("--directory")
-    with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                          text=True, encoding="utf-8", env=native_process_environment()) as process:
+    with popen_native(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                      text=True, encoding="utf-8") as process:
         while True:
             try:
                 output, error = process.communicate(timeout=0.1)

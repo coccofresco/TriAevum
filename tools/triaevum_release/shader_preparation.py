@@ -18,11 +18,11 @@ from typing import Callable
 try:
     from .common import atomic_write_bytes, atomic_write_json, load_json_object, sha256_file
     from .precompiled_titles import checked_file
-    from .native_process import native_process_environment
+    from .native_process import run_native
 except ImportError:
     from common import atomic_write_bytes, atomic_write_json, load_json_object, sha256_file
     from precompiled_titles import checked_file
-    from native_process import native_process_environment
+    from native_process import run_native
 
 
 FORMAT = "triaevum_shader_preparation_v1"
@@ -42,7 +42,7 @@ def _pack_header(path: Path, schema: int) -> int:
 
 
 def _run(command: list[str], root: Path) -> None:
-    result = subprocess.run(command, cwd=root, env=native_process_environment(),
+    result = run_native(command, cwd=root,
                             capture_output=True, text=True, errors="replace", timeout=600,
                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     if result.returncode:

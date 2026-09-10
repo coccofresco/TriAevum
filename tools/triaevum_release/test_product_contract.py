@@ -55,7 +55,7 @@ class ProductContractTests(unittest.TestCase):
             exe = Path(directory) / "TriAevum.exe"
             exe.write_bytes(b"fixture")
             result = SimpleNamespace(returncode=0, stdout=json.dumps(fixture_product()))
-            with patch("product_contract.subprocess.run", return_value=result) as run:
+            with patch("product_contract.run_native", return_value=result) as run:
                 receipt = query_product(exe, "a" * 40)
             self.assertEqual(run.call_args.kwargs["timeout"], 15)
             self.assertEqual(run.call_args.args[0], [str(exe), "--product-info"])
@@ -69,7 +69,7 @@ class ProductContractTests(unittest.TestCase):
             plugin.write_bytes(b"plugin")
             info = fixture_product()
             result = SimpleNamespace(returncode=0, stdout=json.dumps(info))
-            with patch("product_contract.subprocess.run", return_value=result) as run:
+            with patch("product_contract.run_native", return_value=result) as run:
                 with self.assertRaisesRegex(ValueError, "native ABI"):
                     query_product(exe, plugin=plugin)
                 info["private_title_loaded"] = True
@@ -77,3 +77,13 @@ class ProductContractTests(unittest.TestCase):
                 query_product(exe, plugin=plugin)
                 self.assertEqual(run.call_args.args[0],
                                  [str(exe), "--verify-title-plugin", str(plugin)])
+
+    def test_windows_loader_failure_names_dependency_not_rom(self):
+        with tempfile.TemporaryDirectory() as directory:
+            exe = Path(directory) / "TriAevum.exe"
+            exe.write_bytes(b"host")
+            for code in (3221225785, -1073741511):
+                result = SimpleNamespace(returncode=code, stdout="", stderr="")
+                with patch("product_contract.run_native", return_value=result):
+                    with self.assertRaisesRegex(ValueError, "0xC0000139.*DLL export.*before ROM"):
+                        query_product(exe)
