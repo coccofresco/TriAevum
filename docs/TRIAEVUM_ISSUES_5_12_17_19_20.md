@@ -81,9 +81,34 @@ Source: [PyInstaller external-program guidance](https://pyinstaller.org/en/stabl
 
 ## #5 / #17: Shoulder Item Use
 
-Under investigation. Existing mapping and assignment tests do not establish
-that an equipped item is used. Preserve native availability/suppression rules;
-verify actual item action, not merely button enlargement or getter counts.
-See `TRIAEVUM_TOPSCREEN_REFRESH_AND_OCARINA.md` for prior cadence/assignment
-fixes and the remaining gameplay validation boundary. Do not close these issues
-on the strength of those earlier tests.
+The native-update cadence and real compiled assignment boundary were repaired
+in `3ebef38`, following `7617c8a`. The follow-up now verifies actual item use,
+not just HUD assignment or a query returning true:
+
+- Linux NRI/Vulkan, copied original completed save, native Items menu: bow
+  assigned to ZR and longshot to ZL.
+- The existing structural scenario loader invokes the native transition to
+  Hyrule Field (`spot00_info_entry_00cd`). It does not patch inventory, actor
+  actions or suppression. Start from an established gameplay checkpoint;
+  requesting this scenario during file-select boot can target an earlier state.
+- Hold/release ZR: Link uses the bow and the native arrow count decreases
+  **50 -> 49**. Hold ZL: Link holds the longshot with its aiming laser visible.
+- Evidence: `issues-20260910-field-use/`, framebuffers 120 and 180, runtime
+  counters and checkpoint. Native item getter calls come from the actual Link
+  action selector, with one ZR and one ZL pressed update.
+
+The Temple of Time legitimately suppresses ordinary weapons. That explained
+the earlier negative use probe; its rules were not bypassed. All 24 shoulder
+mapping permutations have unit coverage (288 held/pressed/released checks),
+but a physical Xbox/Switch Pro qualification remains separate. The current
+product run uses logical native input and free camera disabled; it does not
+alone close the free-camera-specific variant of #17.
+
+Diagnostics are opt-in under `--extended-diagnostics`: a bounded 128-record
+item-query trace captures native caller/result/suppression and the resolved
+input without reading guest state twice. Normal gameplay allocates no trace.
+The input timeline now preserves explicit `zr`/`zl` when legacy boolean keys
+are absent and accepts finite three-axis `gyroscope_dps`/`accelerometer_g`
+vectors. These are probe repairs, not a change to physical controller mapping.
+`probe_renderer.py` forwards an explicitly paired scenario/catalog and strips
+inherited automation, retaining isolated saves/settings and bounded execution.

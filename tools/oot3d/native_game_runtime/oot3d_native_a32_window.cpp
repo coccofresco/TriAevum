@@ -3680,6 +3680,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
   widescreenProjection.TopScreenInputClock =
       &nativeCandidateDispatch.TopScreenInputClock;
   widescreenProjection.TopScreenItems = &nativeCandidateDispatch.TopScreenItems;
+  nativeCandidateDispatch.TopScreenItems.TraceEnabled = launch.ExtendedDiagnostics;
   nativeCandidateDispatch.UiLifecycleBridge = &uiLifecycleBridge;
   nativeCandidateDispatch.PicaCompositionDomain = &picaCompositionDomain;
   nativeCandidateDispatch.TopScreenPauseProjection =
@@ -8640,6 +8641,16 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                           .LastOwnershipInput.RightStickY}}},
                    {"topscreen_item_query_calls",
                     nativeCandidateDispatch.TopScreenItems.QueryCalls},
+                   {"topscreen_item_query_trace", [&] {
+                      auto rows = nlohmann::json::array();
+                      for (const auto& row : nativeCandidateDispatch.TopScreenItems.QueryTrace)
+                        rows.push_back({{"entry", row.Entry}, {"return_pc", row.ReturnPc},
+                            {"flags", row.SuppressionFlags}, {"native", row.NativeResult},
+                            {"result", row.Result}, {"zr_pressed", row.Input.ZrPressed},
+                            {"zl_pressed", row.Input.ZlPressed}, {"zr_held", row.Input.ZrHeld},
+                            {"zl_held", row.Input.ZlHeld}});
+                      return rows;
+                    }()},
                    {"topscreen_input_native_updates",
                     nativeCandidateDispatch.TopScreenInputClock.Updates},
                    {"topscreen_input_zr_press_updates",

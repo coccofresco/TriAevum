@@ -61,7 +61,12 @@ with the same counters and 12/12 matching framebuffers. A separate 900-presentat
 title control (`topscreen-cadence-title`) matches all six `pr13-title` baseline
 framebuffers byte for byte and exits normally.
 
-**Limits:** a query returning true is not proof of using an item. The Temple
+**Follow-up (2026-09-10):** actual bow use (50 -> 49 arrows) and longshot aiming
+are now verified in Hyrule Field using native menu assignment and native scene
+transition. See [issues 5/17 product evidence](TRIAEVUM_ISSUES_5_12_17_19_20.md).
+The following paragraph records the earlier Temple-only validation limit.
+
+**Original limits:** a query returning true is not proof of using an item. The Temple
 fixture has native suppression flags (`0x03800000` at its original checkpoint).
 The follow-up movement/use run did not demonstrate Din's Fire being cast or a
 magic decrease. That action and held-use items still need an eligible gameplay

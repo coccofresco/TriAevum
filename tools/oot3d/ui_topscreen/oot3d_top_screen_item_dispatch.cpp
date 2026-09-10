@@ -135,8 +135,13 @@ bool ExecuteTopScreenItemDispatch(
         if (!HasTopScreenItemQueryOverrideInput(input)) return false;
         const auto index = static_cast<size_t>(query.Query);
         ++runtime.QueryCalls[index];
-        const auto resolved = ResolveTopScreenItemQueryGuest(memory, pc, input);
+        TopScreenItemQueryState observed;
+        const auto resolved = ResolveTopScreenItemQueryGuest(memory, pc, input,
+            runtime.TraceEnabled ? &observed : nullptr);
         if (!resolved.has_value()) return false;
+        if (runtime.TraceEnabled && runtime.QueryTrace.size() < 128U)
+            runtime.QueryTrace.push_back({pc, state.r[14], observed.SuppressionFlags,
+                observed.NativeResults[index], *resolved, input});
         runtime.QueryTrueResults[index] += *resolved ? 1U : 0U;
         state.r[0] = *resolved ? 1U : 0U;
         state.r[15] = state.r[14];

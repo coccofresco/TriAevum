@@ -102,16 +102,19 @@ class ProbeRendererTests(unittest.TestCase):
             (root / "pack.o3ps").touch()
             (root / "checkpoint.oot3dsav").write_bytes(b"checkpoint")
             (root / "inputs.json").write_text("{}")
+            (root / "scenarios.json").write_text("{}")
             (root / "config.json").write_text('{"Graphics":{"Preset":"Toon"}}')
             (root / "TriAevum.launch.json").write_text(json.dumps({"arguments": [
                 "--config", "${profile_dir}/config.json", "--gameplay-timing", "native30_interpolated",
                 "--presentation-rate", "90", "--frames", "100", "--max-seconds", "600",
                 "--save-state", "DO_NOT_OVERWRITE", "--save-state-frame", "1",
+                "--scenario-catalog", "DO_NOT_LOAD", "--scenario", "OLD_SCENE",
                 "--renderer-cache-directory", "DO_NOT_OVERWRITE_CACHE"]}))
             argv = ["probe_renderer", str(root), str(root / "runtime"), str(root / "probe"),
                     "--native-fidelity", "--frames", "360", "--shader-pack", str(root / "pack.o3ps"),
                     "--cache-directory", str(root / "prepared"),
                     "--load-state", str(root / "checkpoint.oot3dsav"),
+                    "--scenario-catalog", str(root / "scenarios.json"), "--scenario", "native_field",
                     "--input-timeline", str(root / "inputs.json"), "--save-state-frame", "300"]
             process = MagicMock()
             process.wait.return_value = 0
@@ -126,6 +129,8 @@ class ProbeRendererTests(unittest.TestCase):
                                   "--renderer-cache-directory": (root / "prepared").as_posix(),
                                   "--load-state": (root / "checkpoint.oot3dsav").as_posix(),
                                   "--input-timeline": (root / "inputs.json").as_posix(),
+                                  "--scenario-catalog": (root / "scenarios.json").as_posix(),
+                                  "--scenario": "native_field",
                                   "--save-state": (root / "probe/checkpoint.oot3dsav").as_posix(),
                                   "--save-state-frame": "300"}.items():
                 self.assertEqual(command.count(option), 1)
@@ -133,7 +138,18 @@ class ProbeRendererTests(unittest.TestCase):
             self.assertEqual(json.loads((root / "probe/config.json").read_text())["Graphics"]["Preset"], "Authentic")
             self.assertEqual((root / "checkpoint.oot3dsav").read_bytes(), b"checkpoint")
             self.assertNotIn("DO_NOT_OVERWRITE", command)
+            self.assertNotIn("DO_NOT_LOAD", command)
+            self.assertNotIn("OLD_SCENE", command)
             self.assertEqual(launch.call_args.kwargs["env"]["TRIAEVUM_RENDERER_CACHE_DIR"], str(root / "prepared"))
+
+    def test_scenario_requires_catalog_and_identity(self):
+        for options in (["--scenario", "field"], ["--scenario-catalog", "missing.json"]):
+            with patch.object(sys, "argv", ["probe_renderer", "install", "runtime", "output", *options]), \
+                    patch.object(probe_renderer.subprocess, "Popen") as launch:
+                with self.assertRaises(SystemExit) as stopped:
+                    probe_renderer.main()
+                self.assertEqual(stopped.exception.code, 2)
+                launch.assert_not_called()
 
 
 if __name__ == "__main__":

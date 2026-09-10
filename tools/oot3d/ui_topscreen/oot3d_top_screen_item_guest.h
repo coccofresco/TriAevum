@@ -14,7 +14,8 @@ namespace Oot3dNativeGame {
 // the caller can execute the original function unchanged.
 std::optional<bool> ResolveTopScreenItemQueryGuest(
     NativeA32Memory& memory, std::uint32_t originalEntry,
-    const TopScreenExtendedInputFrame& input);
+    const TopScreenExtendedInputFrame& input,
+    TopScreenItemQueryState* observed = nullptr);
 
 // Returns only the mod's compatibility override for slots 3/4. Native special
 // state and every ordinary case return no value and retain the original OoT3D

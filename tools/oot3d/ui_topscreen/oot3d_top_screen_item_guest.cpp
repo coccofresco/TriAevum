@@ -53,7 +53,7 @@ std::optional<std::array<bool, 4>> ResolveCompatibilityOverrides(
 
 std::optional<bool> ResolveTopScreenItemQueryGuest(
     NativeA32Memory& memory, std::uint32_t originalEntry,
-    const TopScreenExtendedInputFrame& input) {
+    const TopScreenExtendedInputFrame& input, TopScreenItemQueryState* observed) {
     const TopScreenItemQueryContract* contract = nullptr;
     for (const auto& candidate : TopScreenVerifiedItemQueryContracts()) {
         if (candidate.OriginalEntry == originalEntry) {
@@ -81,6 +81,7 @@ std::optional<bool> ResolveTopScreenItemQueryGuest(
         nativeResult != 0U;
     state.CompatibilityOverrides = *compatibility;
     state.Input = input;
+    if (observed) *observed = state;
     return ResolveTopScreenItemQuery(contract->Query, state);
 }
 

@@ -56,6 +56,8 @@ def main():
     parser.add_argument("--shader-pack", type=Path)
     parser.add_argument("--load-state", type=Path, help="Read-only checkpoint for a gameplay probe")
     parser.add_argument("--input-timeline", type=Path, help="Repeatable native input sequence")
+    parser.add_argument("--scenario-catalog", type=Path, help="Existing native-transition scenario catalog")
+    parser.add_argument("--scenario", help="Scenario loaded by the original game's transition helper")
     parser.add_argument("--save-data-seed", type=Path,
                         help="Copy original persistent saves into private OUTPUT/savedata")
     parser.add_argument("--save-state-frame", type=int,
@@ -65,6 +67,8 @@ def main():
         parser.error("seconds and capture interval must be positive; frames cannot be negative")
     if args.save_state_frame is not None and args.save_state_frame < 0:
         parser.error("save-state frame cannot be negative")
+    if bool(args.scenario_catalog) != bool(args.scenario):
+        parser.error("scenario and scenario-catalog must be supplied together")
     if args.native_fidelity and (args.reflections not in (None, "Off") or args.material_hash or args.debug_view):
         parser.error("native fidelity cannot enable reflection diagnostics")
     installation = args.installation.resolve(strict=True)
@@ -77,6 +81,7 @@ def main():
     # Diagnostic state and automation must be explicit, not inherited from a
     # user's launcher (especially a checkpoint destination outside this probe).
     for option in ("--load-state", "--save-state", "--save-state-frame", "--input-timeline",
+                   "--scenario-catalog", "--scenario",
                    "--screenshot", "--screenshot-start-frame", "--screenshot-interval"):
         while option in arguments:
             index = arguments.index(option)
@@ -99,9 +104,12 @@ def main():
     if args.cache_directory or "--renderer-cache-directory" in arguments:
         set_option("--renderer-cache-directory", (args.cache_directory or output / "cache").resolve().as_posix())
     for option, source in (("--load-state", args.load_state),
-                           ("--input-timeline", args.input_timeline)):
+                           ("--input-timeline", args.input_timeline),
+                           ("--scenario-catalog", args.scenario_catalog)):
         if source:
             set_option(option, source.resolve(strict=True).as_posix())
+    if args.scenario:
+        set_option("--scenario", args.scenario)
     if args.save_state_frame is not None:
         set_option("--save-state", (output / "checkpoint.oot3dsav").as_posix())
         set_option("--save-state-frame", args.save_state_frame)

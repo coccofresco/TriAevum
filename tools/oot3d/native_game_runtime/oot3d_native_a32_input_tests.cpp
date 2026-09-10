@@ -699,6 +699,31 @@ int main() {
             "run-relative input timeline used the guest frame");
 
     WriteText(path, R"json({
+      "schema": "oot3d.native_game.input_timeline.v1",
+      "segments": [{"start_frame": 0, "end_frame_exclusive": 2,
+        "buttons": ["zr", "zl"], "gyroscope_dps": [10, -20, 30],
+        "accelerometer_g": [0.5, -1, 0.25]}]
+    })json");
+    const auto sensorTimeline = NativeA32InputTimeline::LoadFile(path);
+    const auto sensorFrame = sensorTimeline.Sample(0, 0);
+    Require(ThreeDsRecomp::Input::IsButtonHeld(sensorFrame, ThreeDsRecomp::Input::Button::Zr) &&
+            ThreeDsRecomp::Input::IsButtonHeld(sensorFrame, ThreeDsRecomp::Input::Button::Zl),
+            "absent legacy TopScreen aliases cleared explicit native shoulder buttons");
+    Require(sensorFrame.Hid.GyroscopeValid && sensorFrame.Hid.AccelerometerValid &&
+            sensorFrame.Hid.GyroscopeDegreesPerSecond == std::array<float, 3>{10, -20, 30} &&
+            sensorFrame.Hid.Accelerometer == std::array<float, 3>{0.5F, -1, 0.25F} &&
+            !sensorTimeline.Sample(2, 2).Hid.GyroscopeValid,
+            "timeline sensor units or sample lifetime changed");
+    WriteText(path, R"json({
+      "schema": "oot3d.native_game.input_timeline.v1",
+      "segments": [{"start_frame": 0, "end_frame_exclusive": 2, "gyroscope_dps": [1, 2]}]
+    })json");
+    bool rejectedMotion = false;
+    try { static_cast<void>(NativeA32InputTimeline::LoadFile(path)); }
+    catch (const std::runtime_error&) { rejectedMotion = true; }
+    Require(rejectedMotion, "malformed timeline motion vector was accepted");
+
+    WriteText(path, R"json({
   "schema": "oot3d.native_game.input_timeline.v1",
   "frame_origin": "invalid",
   "segments": [{"start_frame": 0, "end_frame_exclusive": 1}]

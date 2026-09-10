@@ -1,6 +1,7 @@
 #pragma once
 
 #include "oot3d_top_screen_item_guest.h"
+#include <vector>
 
 namespace Oot3dNativeGame {
 
@@ -8,6 +9,15 @@ inline constexpr uint32_t kTopScreenSlotItemEntry = 0x002C3970U;
 inline constexpr uint32_t kTopScreenItemsUpdateCall = 0x00433B68U;
 inline constexpr uint32_t kTopScreenItemsUpdateEntry = 0x002EC3E4U;
 inline constexpr uint32_t kTopScreenItemsUpdateReturn = 0x00433B6CU;
+
+struct TopScreenItemQueryTrace {
+    uint32_t Entry = 0;
+    uint32_t ReturnPc = 0;
+    uint32_t SuppressionFlags = 0;
+    bool NativeResult = false;
+    bool Result = false;
+    TopScreenExtendedInputFrame Input;
+};
 
 struct TopScreenItemDispatchRuntime {
     uint32_t PendingSelection = 0;
@@ -23,6 +33,8 @@ struct TopScreenItemDispatchRuntime {
     uint64_t SelectionUpdates = 0;
     uint32_t PreviousSelectionButtons = 0;
     uint32_t PreviousSelectionPressed = 0;
+    bool TraceEnabled = false;
+    std::vector<TopScreenItemQueryTrace> QueryTrace;
 };
 
 // One registry for compiled-code observation and native callback routing.

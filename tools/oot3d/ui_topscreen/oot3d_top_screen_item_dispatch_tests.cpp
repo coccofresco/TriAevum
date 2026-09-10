@@ -104,6 +104,15 @@ void RunTopScreenItemDispatchTests() {
         Check(memory.Write32(0x0050AF34U + query.NativeFieldOffset, 0) &&
               memory.Write32(0x0050AF9CU, 0), "reset native result");
     }
+    Check(runtime.QueryTrace.empty(), "disabled diagnostic recorded queries");
+    runtime.TraceEnabled = true;
+    const auto traceEntry = TopScreenVerifiedItemQueryContracts()[0].OriginalEntry;
+    for (unsigned i = 0; i < 140; ++i)
+        ExecuteTopScreenItemDispatch(traceEntry, memory, state, input, runtime);
+    Check(runtime.QueryTrace.size() == 128 && runtime.QueryTrace.front().ReturnPc == state.r[14] &&
+          runtime.QueryTrace.front().Result && !runtime.QueryTrace.front().NativeResult,
+          "query diagnostic lost caller/result or exceeded its bound");
+    runtime.TraceEnabled = false;
     input = {.ZrHeld = true, .ZlHeld = true};
     for (const auto& query : TopScreenVerifiedItemQueryContracts()) {
         Check(ExecuteTopScreenItemDispatch(query.OriginalEntry, memory, state, input, runtime),
