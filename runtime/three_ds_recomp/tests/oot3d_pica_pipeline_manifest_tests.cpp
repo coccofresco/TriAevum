@@ -1,9 +1,12 @@
 #include "fast/oot3d/pica_pipeline_manifest.h"
 
 #include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
 
+#include <array>
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 
 namespace Fast::Oot3d {
 namespace {
@@ -109,6 +112,53 @@ TEST(PicaPipelineManifest, RoundTripsTypedPipelineState) {
 
     std::error_code ignored;
     std::filesystem::remove(path, ignored);
+}
+
+TEST(PicaPipelineManifest, OutlineOcclusionSurvivesRoundTripWithoutInvalidatingOldIds) {
+    auto plain = MakeEntry();
+    plain.ShaderOutputs.SceneDomainTransparentDepthOverlay = true;
+    plain.AttachmentRequirementsKey |= static_cast<uint8_t>(PicaAuxiliaryOutput::RigidMotionGuide);
+    auto outline = plain;
+    outline.OutlineOcclusionOnly = true;
+    ASSERT_TRUE(outline.Valid());
+    EXPECT_NE(plain.StructuralId(), outline.StructuralId());
+    EXPECT_FALSE(plain.StructurallyEquivalent(outline));
+    const auto path = TemporaryPath("oot3d_pica_outline");
+    const std::array entries{plain, outline};
+    std::string error;
+    ASSERT_TRUE(WritePicaGraphicsPipelineManifest(path, plain.DescriptorSchemaVersion, entries, &error)) << error;
+    auto json = nlohmann::json::parse(std::ifstream(path));
+    for (auto& pipeline : json["pipelines"])
+        if (!pipeline["outline_occlusion_only"].get<bool>()) pipeline.erase("outline_occlusion_only");
+    std::ofstream(path) << json.dump();
+    PicaGraphicsPipelineManifest manifest;
+    ASSERT_TRUE(manifest.Load(path, &error)) << error;
+    ASSERT_EQ(manifest.Entries().size(), 2U);
+    size_t occlusionCount = 0;
+    for (const auto& entry : manifest.Entries()) {
+        occlusionCount += entry.OutlineOcclusionOnly;
+        EXPECT_TRUE(entry.StructurallyEquivalent(entry.OutlineOcclusionOnly ? outline : plain));
+    }
+    EXPECT_EQ(occlusionCount, 1U);
+    json["pipelines"][0]["outline_occlusion_only"] = "true";
+    std::ofstream(path) << json.dump();
+    EXPECT_FALSE(manifest.Load(path, &error));
+    EXPECT_FALSE(manifest.Loaded());
+    std::filesystem::remove(path);
+}
+
+TEST(PicaPipelineManifest, OutlineOcclusionCannotMasqueradeAsCanonicalOrOmitItsAttachment) {
+    auto entry = MakeEntry();
+    entry.OutlineOcclusionOnly = true;
+    EXPECT_FALSE(entry.Valid());
+    entry.ShaderOutputs.SceneDomainTransparentDepthOverlay = true;
+    EXPECT_FALSE(entry.Valid());
+    entry.AttachmentRequirementsKey |= static_cast<uint8_t>(PicaAuxiliaryOutput::RigidMotionGuide);
+    EXPECT_TRUE(entry.Valid());
+    EXPECT_FALSE(entry.MatchesPrewarmProfile(entry.AppliedFeatures, true));
+    entry.Domain = PicaGraphicsPipelineDomain::Canonical;
+    entry.AppliedFeatures = entry.RequestedFeatures = PicaShaderInstrumentationFeature::None;
+    EXPECT_FALSE(entry.Valid());
 }
 
 TEST(PicaPipelineManifest, RoundTripsNativeFogInstrumentation) {

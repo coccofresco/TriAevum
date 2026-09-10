@@ -39,7 +39,8 @@ PicaPipelinePreparationItem ResolvePicaPipelinePreparationItem(
     item.Descriptor = BuildPicaNriPipelineState(
         draw, entry.ShaderOutputs,
         {static_cast<Renderer3ds::PicaAuxiliaryOutput>(entry.AttachmentRequirementsKey)},
-        static_cast<VkSampleCountFlagBits>(entry.SampleCount), depthFormat, entry.WritesReactiveMask);
+        static_cast<VkSampleCountFlagBits>(entry.SampleCount), depthFormat,
+        entry.WritesReactiveMask, entry.OutlineOcclusionOnly);
     item.Descriptor.VertexSpirv = pack.Find(PicaAotShaderStage::Vertex, entry.VertexSource);
     item.Descriptor.FragmentSpirv = pack.Find(PicaAotShaderStage::NriFragment, entry.NriFragmentSource);
     if (item.Descriptor.VertexSpirv.empty() || item.Descriptor.FragmentSpirv.empty())

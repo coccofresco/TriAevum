@@ -84,8 +84,37 @@ UI module, verified against original-mod producers and in-game framebuffers.
 Texture-size heuristics, raw replay copying and synthetic tile browsing were
 not adopted. This is a replacement implementation informed by the PR's
 evidence, not a wholesale merge or attribution of the new module to its author.
-Localized text and performed-note feedback remain open. See
+Localized song text is subsequently integrated in `cb21d7f`; performed-note
+feedback remains separate. See
 [scope, evidence and verification](TRIAEVUM_TOPSCREEN_OCARINA_OWNER.md).
+
+## PR #11: Outline Pipeline Cache Coverage
+
+Contributor: [999sian](https://github.com/999sian), Git author `sian <sian@localhost>`.
+[PR #11](https://github.com/coccofresco/TriAevum/pull/11), head
+`28fa5fdd60dc79c9145dc299f4440a90a8f1d026`.
+
+Selectively adopted: outline-occlusion manifest flag, backward-compatible
+identity and live recording/prewarm propagation. The current integration also
+forwards the flag through Forge's shared NRI preparation, validates the declared
+pass domain/attachment, tests the complete contract and fixes the contributor's
+reported Linux Clang GoogleTest option issue. The PR's local store, queue and
+thread behavior are not attributed as merged. See
+[scope and verification](TRIAEVUM_PR_COMPAT_PERFORMANCE_20260910.md).
+
+## PR #16: Full-Drawable Readback
+
+Contributor: [Pablo Souza](https://github.com/PabloVSouza), Git author
+`Pablo Souza <30412188+PabloVSouza@users.noreply.github.com>`.
+[PR #16](https://github.com/coccofresco/TriAevum/pull/16), head
+`49fbfcd7149526d1fc0474055279af9a556b77e6`.
+
+Selectively adopted: capture the entire drawable and resample to the requested
+output extent. TriAevum adaptation extracts a backend-independent tested helper
+with bounds validation, RGBA/BGRA handling and unchanged equal-size conversion.
+The broader Mac launcher, package, pacing and Grass changes are not merged;
+this is not a macOS release or a claim of platform parity. The integration
+commit preserves both PR references and original-author coauthor trailers.
 
 ## Integration Rules
 

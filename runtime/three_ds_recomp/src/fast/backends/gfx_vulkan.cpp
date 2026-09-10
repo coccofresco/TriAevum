@@ -1,6 +1,7 @@
 #ifdef ENABLE_OOT3D_VULKAN
 
 #include "fast/backends/gfx_vulkan.h"
+#include "fast/renderer/framebuffer_readback.h"
 #include "fast/renderer3ds/vulkan_pipeline_cache_store.h"
 #include "fast/renderer3ds/pica_vulkan_device_profile.h"
 #include "fast/oot3d/pica_nri_pipeline_state.h"
@@ -2474,7 +2475,8 @@ void GfxRenderingAPIVulkan::ClearFramebuffer(bool, bool) {
 }
 
 void GfxRenderingAPIVulkan::ReadFramebufferToCPU(int, uint32_t width, uint32_t height, uint16_t* rgba16Buf) {
-    if (rgba16Buf == nullptr || mDevice == VK_NULL_HANDLE ||
+    if (rgba16Buf == nullptr || width == 0 || height == 0 ||
+        mSwapchainExtent.width == 0 || mSwapchainExtent.height == 0 || mDevice == VK_NULL_HANDLE ||
         (mSwapchain == VK_NULL_HANDLE && !mNriSwapchain.Active()) ||
         mCurrentFramebuffer != 0) {
         return;
@@ -2489,8 +2491,8 @@ void GfxRenderingAPIVulkan::ReadFramebufferToCPU(int, uint32_t width, uint32_t h
                             std::numeric_limits<uint64_t>::max()),
             "vkWaitForFences(readback)");
 
-    const uint32_t copyWidth = std::min(width, mSwapchainExtent.width);
-    const uint32_t copyHeight = std::min(height, mSwapchainExtent.height);
+    const uint32_t copyWidth = mSwapchainExtent.width;
+    const uint32_t copyHeight = mSwapchainExtent.height;
     const VkDeviceSize byteCount = static_cast<VkDeviceSize>(copyWidth) * copyHeight * 4;
     auto readback = CreateBuffer(byteCount, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
@@ -2530,23 +2532,14 @@ void GfxRenderingAPIVulkan::ReadFramebufferToCPU(int, uint32_t width, uint32_t h
                          &toPresent);
     EndImmediateCommands(commandBuffer);
 
-    std::fill(rgba16Buf, rgba16Buf + static_cast<size_t>(width) * height, 0);
     const auto* rgba8 = static_cast<const uint8_t*>(readback.Mapped);
     const bool bgra = mSwapchainFormat == VK_FORMAT_B8G8R8A8_UNORM ||
                       mSwapchainFormat == VK_FORMAT_B8G8R8A8_SRGB;
-    for (uint32_t y = 0; y < copyHeight; ++y) {
-        for (uint32_t x = 0; x < copyWidth; ++x) {
-            const size_t source = (static_cast<size_t>(y) * copyWidth + x) * 4;
-            const uint8_t r = rgba8[source + (bgra ? 2 : 0)];
-            const uint8_t g = rgba8[source + 1];
-            const uint8_t b = rgba8[source + (bgra ? 0 : 2)];
-            const uint8_t a = rgba8[source + 3];
-            rgba16Buf[static_cast<size_t>(y) * width + x] =
-                static_cast<uint16_t>(((r >> 3) << 11) | ((g >> 3) << 6) |
-                                      ((b >> 3) << 1) | (a != 0 ? 1 : 0));
-        }
-    }
+    const bool copied = Renderer::CopyScaledFramebufferRgba5551(
+        {rgba8, static_cast<size_t>(byteCount)}, copyWidth, copyHeight, bgra,
+        {rgba16Buf, static_cast<size_t>(width) * height}, width, height);
     DestroyBuffer(readback);
+    if (!copied) throw std::runtime_error("invalid framebuffer readback extent");
 }
 
 void GfxRenderingAPIVulkan::ResolveMSAAColorBuffer(int, int) {

@@ -1,5 +1,10 @@
 include(FetchContent)
 
+add_executable(framebuffer_readback_tests framebuffer_readback_tests.cpp)
+target_compile_features(framebuffer_readback_tests PRIVATE cxx_std_20)
+target_include_directories(framebuffer_readback_tests PRIVATE ../include)
+add_test(NAME framebuffer_readback_tests COMMAND framebuffer_readback_tests)
+
 add_executable(native_presentation_policy_tests native_presentation_policy_tests.cpp)
 target_compile_features(native_presentation_policy_tests PRIVATE cxx_std_20)
 target_include_directories(native_presentation_policy_tests PRIVATE ../include)
@@ -30,8 +35,12 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    target_compile_options(gtest PRIVATE /WX- -Wno-character-conversion)
-    target_compile_options(gtest_main PRIVATE /WX- -Wno-character-conversion)
+    target_compile_options(gtest PRIVATE -Wno-character-conversion)
+    target_compile_options(gtest_main PRIVATE -Wno-character-conversion)
+    if(MSVC)
+        target_compile_options(gtest PRIVATE /WX-)
+        target_compile_options(gtest_main PRIVATE /WX-)
+    endif()
 endif()
 
 add_executable(three_ds_recomp_tests

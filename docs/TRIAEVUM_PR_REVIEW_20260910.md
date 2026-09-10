@@ -1,5 +1,10 @@
 # Community PR Integration Review
 
+Latest compatibility/performance follow-up:
+[selective #11/#16 integration](TRIAEVUM_PR_COMPAT_PERFORMANCE_20260910.md).
+It supersedes the pending readback and outline-recipe items below, not the
+remaining cache/worker/macOS limitations.
+
 Later same-day follow-up: [refresh and ocarina investigation](TRIAEVUM_TOPSCREEN_REFRESH_AND_OCARINA.md)
 records positive product assignment, phase-independent input, and review of the
 new PR #18 (`3655e285f4c53733b9e486a9434c073dba2d5954`). The six-PR inventory and

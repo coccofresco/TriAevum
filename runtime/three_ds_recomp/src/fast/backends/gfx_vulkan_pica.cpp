@@ -3156,6 +3156,7 @@ VkPipeline GfxRenderingAPIVulkan::GetOrCreateNativePicaPipeline(
         entry.SampleCount =
             static_cast<uint8_t>(mNativePicaSampleCount);
         entry.WritesReactiveMask = writesReactiveMask;
+        entry.OutlineOcclusionOnly = outlineOcclusionOnly;
         entry.ShaderOutputs = shader.FragmentOutputs;
         mPicaPipelineInventory.Observe(
             std::move(entry), draw.CanonicalPipelineId,
@@ -3558,7 +3559,7 @@ void GfxRenderingAPIVulkan::PrewarmNativePicaPipelines() {
                     ? Oot3d::PicaShaderDomain::Canonical
                     : Oot3d::PicaShaderDomain::Instrumented,
                 entry.RequestedFeatures, entry.AppliedFeatures,
-                false);
+                false, entry.OutlineOcclusionOnly);
             if (mNativePicaPipelines.size() == pipelineCount) {
                 ++mPicaPipelinePrewarmReused;
             } else {
@@ -5089,7 +5090,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             ? GetOrCreateNativePicaPipeline(
                 effectiveDraw, shaderIt->second, shaderVariant.Reactive,
                 shaderVariant.Domain, shaderVariant.RequestedFeatures, shaderVariant.AppliedFeatures,
-                false, true)
+                true, true)
             : VK_NULL_HANDLE;
         // Coverage runs before the native draw: stencil must still have its
         // original value if that draw modifies it. The auxiliary pass is read-only.

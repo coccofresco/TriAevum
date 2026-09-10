@@ -2,6 +2,7 @@
 #include "fast/renderer3ds/vulkan_pipeline_cache_store.h"
 #include "fast/renderer3ds/pica_vulkan_device_profile.h"
 #include "fast/oot3d/pica_nri_pipeline_state.h"
+#include "fast/oot3d/pica_pipeline_preparation.h"
 #include <chrono>
 #include <fstream>
 #include <iostream>
@@ -96,6 +97,39 @@ int main() {
                                                 VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_D32_SFLOAT, false, true);
         Check(!state.DepthWrite && !state.DepthTest && state.Colors[0].colorWriteMask == 0);
         Check(state.Colors[3].colorWriteMask == VK_COLOR_COMPONENT_A_BIT);
+        // Exercise the same manifest-to-NRI lowering used by Forge, not only
+        // the live raster-state factory. Synthetic modules never reach a GPU.
+        Fast::Oot3d::PicaGraphicsPipelineManifestEntry recipe;
+        recipe.DescriptorSchemaVersion = 3;
+        recipe.VertexShaderKey = 1; recipe.FragmentShaderKey = 2;
+        recipe.VertexSource = {1, 2, 8}; recipe.FragmentSource = {3, 4, 8};
+        recipe.NriFragmentSource = {5, 6, 8}; recipe.NriFragmentAvailable = true;
+        recipe.VertexBindings = {{0, 16, false}};
+        recipe.VertexAttributes = {{0, 0, ::Oot3d::Renderer::PicaVertexFormat::Float, 4, 0}};
+        recipe.Domain = Fast::Oot3d::PicaGraphicsPipelineDomain::Instrumented;
+        recipe.RequestedFeatures = recipe.AppliedFeatures = Fast::Oot3d::PicaShaderInstrumentationFeature::NormalGuide;
+        recipe.AttachmentRequirementsKey = static_cast<uint8_t>(Renderer3ds::kAllPicaAuxiliaryOutputs);
+        recipe.ShaderOutputs.SceneDomainTransparentDepthOverlay = true;
+        recipe.DepthTestEnabled = recipe.DepthWriteEnabled = true;
+        recipe.ColorWriteMask = 15;
+        const std::vector<uint32_t> spirv{0x07230203, 0x00010000, 0, 1, 0};
+        const std::array binaries{
+            Fast::Oot3d::PicaAotShaderBinary{Fast::Oot3d::PicaAotShaderStage::Vertex, recipe.VertexSource, spirv},
+            Fast::Oot3d::PicaAotShaderBinary{Fast::Oot3d::PicaAotShaderStage::NriFragment, recipe.NriFragmentSource, spirv}};
+        path += ".o3ps";
+        std::string error;
+        Check(Fast::Oot3d::WritePicaAotShaderPack(path, 3, binaries, &error));
+        Fast::Oot3d::PicaAotShaderPack pack;
+        Check(pack.Load(path, &error));
+        auto prepared = Fast::Oot3d::ResolvePicaPipelinePreparationItem(recipe, pack, VK_FORMAT_D32_SFLOAT);
+        Check(prepared.Descriptor.DepthTest && prepared.Descriptor.DepthWrite &&
+              prepared.Descriptor.Colors[0].colorWriteMask == 15);
+        recipe.OutlineOcclusionOnly = true;
+        prepared = Fast::Oot3d::ResolvePicaPipelinePreparationItem(recipe, pack, VK_FORMAT_D32_SFLOAT);
+        Check(!prepared.Descriptor.DepthTest && !prepared.Descriptor.DepthWrite &&
+              !prepared.Descriptor.StencilTest && prepared.Descriptor.Colors[0].colorWriteMask == 0 &&
+              prepared.Descriptor.Colors[3].colorWriteMask == VK_COLOR_COMPONENT_A_BIT);
+        std::filesystem::remove(path);
         draw.FragmentOperationMode = 3;
         state = Fast::Oot3d::BuildPicaNriPipelineState(draw, {}, {}, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_D32_SFLOAT);
         Check(state.Colors[0].colorWriteMask == 0 && !state.LogicOpEnabled);
