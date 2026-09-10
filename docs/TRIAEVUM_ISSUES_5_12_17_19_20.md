@@ -165,3 +165,113 @@ are absent and accepts finite three-axis `gyroscope_dps`/`accelerometer_g`
 vectors. These are probe repairs, not a change to physical controller mapping.
 `probe_renderer.py` forwards an explicitly paired scenario/catalog and strips
 inherited automation, retaining isolated saves/settings and bounded execution.
+
+## Windows Product Qualification
+
+The corrected runtime, title DLL and frozen Forge were rebuilt and exercised
+on **Windows 11 Pro for Workstations 10.0.26200**, RTX 3060, driver
+`32.0.16.1074`, NRI/Vulkan. This is actual native Windows execution, not an
+inference from the Linux results. Build source: `c7f96869a9bf07c4dada763b067102d94f24d9bd`.
+No additional product-code repair was needed for the five reported issue paths.
+
+Private evidence root: `J:/TriAevum-verify-20260910/`. It contains:
+
+- `runtime/`: fresh current-source Windows build, not a legacy worktree binary;
+  CMake's `triaevum-runtime-targets-Release.json` records its source identity.
+- `title-build.json`: regenerated 12,419-function title DLL build receipt.
+- `package/`: allowlist-built, audited private candidate, subsequently installed
+  by the actual frozen Forge GUI using the user's ROM. Not a published release.
+- `win-*/`: input invocation, runtime counters, direct framebuffer BMPs and
+  private checkpoints. Original persistent saves were copied for every probe.
+- `verification.json`: assertions across **19 completed gameplay probes**,
+  native SDK calibration/orientation, item counts and file-deletion results.
+- `forge-install.json`, `forge-play-result.json`: real GUI installation and
+  subsequent frozen-launcher/native-child outcomes.
+
+### Results
+
+| Path | Windows evidence |
+| --- | --- |
+| #5 / #17, native 30 FPS | Cold boot, native Items assignment of bow to ZR and longshot to ZL, native transition to Hyrule Field, actual bow shot **50 -> 49** arrows, longshot aiming laser visible. |
+| #5 / #17, free camera | Same checkpoint and actions with `free_camera_enabled=true`: one arrow consumed and longshot aiming still works. |
+| #20, native 30 FPS | All three SDK gains are `1.0041044776119403`; zero gyro leaves aim unchanged, positive and negative X produce opposite pitch, Y changes horizontal aim. Framebuffers and SDK state both change. |
+| Default interpolated 2x | A separate cold-boot/checkpoint chain repeats assignment, transition, bow/longshot use and gyro aiming with the installed default graphics configuration. Simulation stays **30 Hz**, presentation is **60 Hz**, and real interpolated frame lists are submitted. Item-use probe: 560 presentations, 280 completed native visual frames, 278 interpolated frame lists, arrow **50 -> 49**. |
+| #19 | Native Erase menu and confirmations finish with **File deleted**. `DeleteFile:wchar:/save03.bin` is handled; only that copied file disappears. `save00.bin` and `system.dat` retain their original SHA-256 hashes. |
+| #12, installation | Real frozen Forge GUI imports `I:/Zelda3drecomp/oot3d.cci`, prepares TopScreen and enables Play in **23.58 seconds**. No compiler is invoked by the installation. |
+| #12, launch | `TriAevumForge.exe --play` launches its installed runtime with `PATH=C:/Windows/System32;C:/Windows`. The title renders with TopScreen/2x enabled; a normal window-close message after a 25-second play interval returns **0** from both game and Forge, without forced termination. |
+
+All 19 gameplay probes reached their requested frame counts with exit 0 and
+**zero whole-AOT memory faults**. Native-fidelity tests disable interpolation;
+the six 2x probes use new checkpoints created in that timing mode. The existing
+loader explicitly rejects a non-interpolated checkpoint in interpolated mode;
+that guard was not bypassed and checkpoint contents were not patched.
+
+The same-frame positive/negative gyro checkpoint pitch values are
+`-0.045241184532642365` / `+0.045241184532642365`; the zero-motion control is
+zero. These are observations of the native SDK, not values supplied to the game.
+
+Windows test suites also pass:
+
+- Four C++ executables: `oot3d_native_a32_input_tests`,
+  `oot3d_native_a32_ctr_host_tests`, `oot3d_top_screen_mod_profile_tests`,
+  `triaevum_filesystem_service_tests`.
+- 45 AOT generator/optimization/executable tests.
+- 47 Forge/process/probe/shader-preparation tests: 45 passed, two
+  platform-specific skips. Combined Python count: **90 passed, two skipped**.
+- Frozen Forge real-widget smoke: all controls mapped, none clipped, Prepare
+  correctly enabled/disabled according to ROM input.
+
+### Build And Reproduction
+
+The private scripts `build-windows.ps1`, `build-title.py`,
+`package-candidate.py`, `run-probe.py`, `read-state.py`, `verify-results.py` and
+`forge-play.ps1` retain the exact commands and assertions. `run-probe.py` uses
+the repository's shared `tools/triaevum_release/probe_renderer.py`; it does not
+replace input, filesystem or gameplay consumers. Use fresh output directories
+for another qualification, never reuse mutable user saves.
+
+Windows runtime build: Ninja, clang-cl 22.1.6, Release, three compile jobs,
+current NRI/Vulkan desktop features, static SDL2 2.32.10 and explicit SDK paths.
+Existing donor sources were reused, not legacy runtime object files. The
+current title support library was rebuilt separately.
+
+The title emitter still changes only six source shards for the VFP fix.
+This Windows build nevertheless compiled **257 objects** (256 shards plus
+registry), taking **593.65 seconds including generation/linking**: the available
+September 5 object cache recorded bundled nlohmann headers under
+`repo/forge/include/...`, whereas the current developer build records the same
+files under the external include role. Toolchain and normalized dependency
+content hashes match, but their cache identities differ. No identity checks
+were disabled to force reuse. The fresh cache remains on J: for incremental
+development; end-user Forge still installs the precompiled DLL.
+
+SHA-256 of tested artifacts:
+
+- Runtime: `29365168792bdf275e49c7985cdc98b9630daa2599dbab2c06261582977a89b8`.
+- Title DLL: `42abdf0846be2f778e9432ce47c7cc21a5a3815dc6ec99057ec1a4c3a259018b`.
+- Frozen Forge: `25d883dc1aa916f4bf0f0d57c375b7181981fc9c61a4e9402f587e5530be1273`.
+
+### Limits And Separate Finding
+
+This verifies logical shoulder/sensor inputs through the real Windows game,
+not the reporter's physical Switch Pro/Xbox device, remapping or Windows
+installation. #12 remains a demonstrated local loader-isolation fix, not proof
+of the particular missing export on the reporter's machine. A reduced PATH
+does not turn this development PC into a clean Windows VM.
+
+The candidate's minimal release layout does not include the expanded private
+shader seed/pipeline inventory. Initial playback consequently still compiles
+unseeded shaders; these runs are **not** qualification of complete Forge shader
+prewarming or performance benchmarks. Do not publish this diagnostic candidate
+as a replacement for the ongoing cache/release work.
+
+An unrelated visible defect was found in the default graphics profile:
+**toon outline draws a rectangular boundary inside letterboxed weapon aiming**.
+Same checkpoint, input and 2x timing, changing only
+`Graphics.Effects.Toon.OutlineEnabled=false`, removes that boundary.
+Compare frame 360 in `win-item-use-x2/` and
+`win-item-use-x2-outline-disabled/`. This additional A/B run exits 0; it is not
+counted among the 19 issue probes. The composition/outline cause needs its own
+renderer investigation under the existing fidelity-extension architecture.
+No outline masking or per-scene workaround was introduced here, and the user's
+defaults were not changed to hide it.
