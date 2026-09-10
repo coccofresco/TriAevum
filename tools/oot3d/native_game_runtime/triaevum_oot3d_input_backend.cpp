@@ -225,7 +225,7 @@ bool TriAevumOot3dInputBackend::Poll(Fast::Fast3dWindow &window,
   host.MouseDeltaX = mouseOwned ? mouseDelta.x : 0;
   host.MouseDeltaY = mouseOwned ? mouseDelta.y : 0;
   auto frame =
-      MapNativeControlInput(mConfig, host, {}, &mRightStickProfile, true);
+      MapNativeControlInput(mConfig, host, {}, &mRightStickProfile, true, &mVirtualMotion);
   ApplyNativeControlShortcutTouch(host, frame);
   const auto pointer = window.GetMousePos();
   const auto touch = MapHostPointerToNativeA32Touch(

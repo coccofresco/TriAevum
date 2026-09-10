@@ -80,7 +80,8 @@ NativeA32InputFrame MapNativeControlInput(
     const NativeControlHostInputState& host,
     const NativeAimProfileTransform& aimTransform = {},
     NativeRightStickProfileState* rightStickState = nullptr,
-    bool advanceRightStickState = true) noexcept;
+    bool advanceRightStickState = true,
+    ThreeDsRecomp::Input::VirtualMotionState* virtualMotion = nullptr) noexcept;
 
 using NativeA32TouchMapping = ThreeDsRecomp::Input::TouchMapping;
 

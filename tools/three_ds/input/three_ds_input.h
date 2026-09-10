@@ -375,6 +375,15 @@ struct CStickFilterState {
     float Y = 0.0F;
 };
 
+// A virtual upright device: pitch about its local X, yaw about world up.
+// Retain gravity when input stops; a fixed neutral accelerometer would make
+// the guest sensor fusion undo the simulated rotation.
+struct VirtualMotionState {
+    double PitchRadians = 0.0;
+    bool Active = false;
+    void RestoreGravity(const std::array<float, 3>& gravity) noexcept;
+};
+
 enum class AxisInputKind : std::uint8_t {
     Absolute,
     Relative,
@@ -439,7 +448,8 @@ InputFrame ResolveInput(const MappingConfig& config,
                         const DigitalState& digital,
                         const AimTransform& aimTransform = {},
                         CStickFilterState* cStickFilter = nullptr,
-                        bool advanceCStickFilter = true) noexcept;
+                        bool advanceCStickFilter = true,
+                        VirtualMotionState* virtualMotion = nullptr) noexcept;
 
 std::int16_t ConvertHostAxisToNative(std::int16_t value,
                                      std::int32_t deadZonePercent) noexcept;

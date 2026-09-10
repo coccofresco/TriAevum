@@ -330,14 +330,15 @@ NativeA32InputFrame MapNativeControlInput(
     const NativeControlHostInputState& host,
     const NativeAimProfileTransform& aimTransform,
     NativeRightStickProfileState* rightStickState,
-    bool advanceRightStickState) noexcept {
+    bool advanceRightStickState,
+    ThreeDsRecomp::Input::VirtualMotionState* virtualMotion) noexcept {
     NativeA32InputFrame frame;
     static_cast<ThreeDsRecomp::Input::InputFrame&>(frame) =
         ThreeDsRecomp::Input::ResolveInput(
             BuildThreeDsMappingConfig(config), host,
             BuildThreeDsDigitalState(host),
             BuildThreeDsAimTransform(aimTransform), rightStickState,
-            advanceRightStickState);
+            advanceRightStickState, virtualMotion);
     return frame;
 }
 

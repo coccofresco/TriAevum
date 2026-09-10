@@ -2560,6 +2560,7 @@ struct NativeControlPollingState {
   uint64_t MouseCaptureTransitions = 0;
   uint64_t MouseMovementPolls = 0;
   Oot3dNativeGame::NativeRightStickProfileState RightStickProfile;
+  ThreeDsRecomp::Input::VirtualMotionState VirtualMotion;
 };
 
 Oot3dNativeGame::NativeA32InputFrame
@@ -2883,7 +2884,8 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
 
   auto frame = MapNativeControlInput(config, host, aimTransform,
                                      &pollingState.RightStickProfile,
-                                     guestRefreshWillConsume);
+                                     guestRefreshWillConsume,
+                                     &pollingState.VirtualMotion);
   if (nativeFrontendTouchEnabled && !hostGuiVisible) {
     if (window.IsMouseCaptured()) {
       window.SetMouseCapture(false);
@@ -4206,6 +4208,13 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
       throw std::runtime_error("native savestate load failed: " + error);
     }
     Oot3dNativeGame::ResetOot3dTypedGameplayTransientState();
+    const auto restoredGravity = hostServices.HidRuntimeProfile().LastAccelerometer;
+    nativeControlPollingState.VirtualMotion.RestoreGravity(
+        {static_cast<float>(restoredGravity[0]), static_cast<float>(restoredGravity[1]),
+         static_cast<float>(restoredGravity[2])});
+    nativeControlPollingState.PendingMouseDeltaX = 0;
+    nativeControlPollingState.PendingMouseDeltaY = 0;
+    nativeControlPollingState.PendingMouseSeconds = 0.0;
     picaCompositionTracker.Reset();
     frameCount = restoredRuntime.FrameCount;
     refreshTickRemainder = restoredRuntime.RefreshTickRemainder;
@@ -4542,6 +4551,13 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     }
     Oot3dNativeGame::ResetOot3dTypedGameplayTransientState();
     picaCompositionTracker.Reset();
+    const auto restoredGravity = hostServices.HidRuntimeProfile().LastAccelerometer;
+    nativeControlPollingState.VirtualMotion.RestoreGravity(
+        {static_cast<float>(restoredGravity[0]), static_cast<float>(restoredGravity[1]),
+         static_cast<float>(restoredGravity[2])});
+    nativeControlPollingState.PendingMouseDeltaX = 0;
+    nativeControlPollingState.PendingMouseDeltaY = 0;
+    nativeControlPollingState.PendingMouseSeconds = 0.0;
     applySelectedUiProfile();
     if (!api.ResetPicaState(&error)) {
       throw std::runtime_error(

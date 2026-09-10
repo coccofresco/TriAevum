@@ -8,6 +8,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string_view>
+#include <nlohmann/json.hpp>
 
 namespace {
 
@@ -89,9 +90,36 @@ void TestShoulderMappings() {
     Require(permutations == 24U, "not all shoulder/trigger assignments were exercised");
 }
 
+void EmitMouseAimTimeline(const std::filesystem::path& path, std::string_view axis) {
+    Require(axis == "pitch" || axis == "yaw", "probe axis must be pitch or yaw");
+    const auto config = NativeControlPreset(NativeControlProfile::KeyboardMouse);
+    ThreeDsRecomp::Input::VirtualMotionState motion;
+    nlohmann::json segments = nlohmann::json::array();
+    for (int frame = 0; frame < 320; ++frame) {
+        NativeControlHostInputState host;
+        host.SamplePeriodSeconds = 1.0 / 30.0;
+        if (frame >= 100 && frame < 140) {
+            if (axis == "pitch") host.MouseDeltaY = 3;
+            else host.MouseDeltaX = 3;
+        }
+        const auto mapped = MapNativeControlInput(config, host, {}, nullptr, true, &motion);
+        segments.push_back({{"start_frame", frame}, {"end_frame_exclusive", frame + 1},
+            {"buttons", frame >= 60 && frame < 310 ? nlohmann::json::array({"zr"}) : nlohmann::json::array()},
+            {"gyroscope_dps", mapped.Hid.GyroscopeDegreesPerSecond},
+            {"accelerometer_g", mapped.Hid.Accelerometer}});
+    }
+    WriteText(path, nlohmann::json{{"schema", "oot3d.native_game.input_timeline.v1"},
+        {"frame_origin", "run"}, {"segments", segments}}.dump(2));
+}
+
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    if (argc == 4 && std::string_view(argv[1]) == "--emit-mouse-aim") {
+        EmitMouseAimTimeline(argv[2], argv[3]);
+        return 0;
+    }
+    Require(argc == 1, "usage: [--emit-mouse-aim FILE pitch|yaw]");
     TestShoulderMappings();
     const auto mousePreset = NativeControlPreset(NativeControlProfile::KeyboardMouse);
     const auto controllerPreset = NativeControlPreset(NativeControlProfile::Controller);
@@ -201,11 +229,11 @@ int main() {
                 mappedKeyboardMouse.Hid.GyroscopeValid &&
                 std::abs(
                     mappedKeyboardMouse.Hid
-                        .GyroscopeDegreesPerSecond[0] -
+                        .GyroscopeDegreesPerSecond[0] +
                     35.0F) < 0.001F &&
                 std::abs(
                     mappedKeyboardMouse.Hid
-                        .GyroscopeDegreesPerSecond[2] -
+                        .GyroscopeDegreesPerSecond[1] +
                     70.0F) < 0.001F,
             "keyboard/mouse profile did not map movement, buttons and "
             "native gyro units");
@@ -266,8 +294,9 @@ int main() {
                 std::abs(transformedRightStickAim.Hid
                              .GyroscopeDegreesPerSecond[0] +
                          360.0F) < 0.001F &&
-                std::abs(transformedRightStickAim.Hid
-                             .GyroscopeDegreesPerSecond[2] +
+                transformedRightStickAim.Hid.GyroscopeDegreesPerSecond[1] > 0.0F &&
+                std::abs(std::hypot(transformedRightStickAim.Hid.GyroscopeDegreesPerSecond[1],
+                                    transformedRightStickAim.Hid.GyroscopeDegreesPerSecond[2]) -
                          360.0F) < 0.001F,
             "profile transform did not scale and invert right-stick aim");
     auto smoothedRightStickConfig = rightStickAimConfig;
@@ -287,8 +316,8 @@ int main() {
     Require(firstSmoothedFrame.CStick.X == 154 &&
                 heldSmoothedFrame.CStick.X == 154 &&
                 secondSmoothedFrame.CStick.X == 154 &&
-                std::abs(firstSmoothedFrame.Hid
-                             .GyroscopeDegreesPerSecond[2] -
+                std::abs(std::hypot(firstSmoothedFrame.Hid.GyroscopeDegreesPerSecond[1],
+                                    firstSmoothedFrame.Hid.GyroscopeDegreesPerSecond[2]) -
                          90.0F) < 0.001F,
             "C-stick aiming smoothing contaminated free-camera input");
 

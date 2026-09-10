@@ -35,6 +35,7 @@ public:
 private:
   NativeControlConfig mConfig;
   NativeRightStickProfileState mRightStickProfile;
+  ThreeDsRecomp::Input::VirtualMotionState mVirtualMotion;
   triaevum::module::InputStateV1 mState;
   TriAevumOot3dInputStats mStats;
 };
