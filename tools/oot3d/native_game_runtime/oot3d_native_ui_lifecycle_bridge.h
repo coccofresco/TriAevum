@@ -83,6 +83,9 @@ public:
   void
   SetTopScreenInputFrame(const TopScreenExtendedInputFrame &input) noexcept;
   void SetTopScreenConfig(const TopScreenUiConfig &config) noexcept;
+  bool ReadOcarinaGeometry(TopScreenOcarinaGeometry &geometry, std::string *error) {
+    return ReadTopScreenOcarinaGeometry(mMemory, mTopScreenOcarina, &geometry, error);
+  }
   bool
   NativePresentationActive(oot3d::ui::UiSubsystem subsystem) const noexcept;
   bool NativeGameplayPresentationActive() const noexcept;

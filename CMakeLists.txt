@@ -2519,6 +2519,19 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
 endif()
 set_property(TARGET oot3d_native_ui_texture_provider_tests PROPERTY FOLDER Tests)
 
+add_executable(oot3d_top_screen_ocarina_text_runtime_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/oot3d_top_screen_ocarina_text_runtime.cpp
+    tools/oot3d/native_game_runtime/oot3d_top_screen_ocarina_text_runtime_tests.cpp)
+target_link_libraries(oot3d_top_screen_ocarina_text_runtime_tests PRIVATE
+    oot3d_native_ui_texture_provider oot3d_native_a32_process)
+target_compile_options(oot3d_top_screen_ocarina_text_runtime_tests PRIVATE "${WARNING_OVERRIDE}")
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    target_compile_definitions(oot3d_top_screen_ocarina_text_runtime_tests PRIVATE NOMINMAX)
+    set_property(TARGET oot3d_top_screen_ocarina_text_runtime_tests PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+set_property(TARGET oot3d_top_screen_ocarina_text_runtime_tests PROPERTY FOLDER Tests)
+
 add_library(oot3d_top_screen_texture_runtime STATIC EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_top_screen_texture_runtime.cpp
 )
@@ -3301,6 +3314,7 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
     OOT3D_DIRECT_AOT_PLUGIN)
     target_sources(oot3d_native_game PRIVATE
         tools/oot3d/native_game_runtime/oot3d_native_a32_window.cpp
+        tools/oot3d/native_game_runtime/oot3d_top_screen_ocarina_text_runtime.cpp
         tools/oot3d/native_game_runtime/oot3d_native_actor_interactions.cpp
         tools/oot3d/native_game_runtime/oot3d_native_pcm_diagnostics.cpp
         tools/oot3d/native_game_runtime/oot3d_native_controls_settings_panel.cpp

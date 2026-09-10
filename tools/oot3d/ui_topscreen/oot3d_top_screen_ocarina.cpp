@@ -263,6 +263,93 @@ std::size_t AppendTopScreenOcarinaPresentation(
   return output.size() - startSize;
 }
 
+bool ReadTopScreenOcarinaSongMessage(NativeA32Memory &memory,
+                                     const TopScreenOcarinaGeometry &geometry,
+                                     std::uint32_t *message, std::string *error) {
+  if (!message) return false;
+  *message = 0;
+  if (!geometry.Active || !geometry.SongSelected || !geometry.SongLearned) return true;
+  std::uint32_t index = 0;
+  if (geometry.Song >= 12 ||
+      !memory.Read32(0x004D5480U + geometry.Song * 4U, &index) ||
+      index > UINT32_MAX - 0x9ADU) {
+    SetError(error, "cannot read native ocarina message table");
+    return false;
+  }
+  *message = index + 0x9ADU;
+  return true;
+}
+
+bool ReadTopScreenOcarinaTextPrimitives(
+    NativeA32Memory &memory, std::uint32_t overlay,
+    const TopScreenOcarinaGeometry &geometry,
+    std::vector<oot3d::ui::UiPrimitive> &output, std::string *error) {
+  std::vector<oot3d::ui::UiPrimitive> staged;
+  if (geometry.Song >= kTopScreenOcarinaColors.size() ||
+      !overlay || !memory.IsMapped(overlay, 0x4C)) {
+    SetError(error, "invalid native ocarina text owner"); return false;
+  }
+  const auto readFloats = [&](std::uint32_t address, auto &values) {
+    return memory.ReadBytes(address, std::span<std::uint8_t>(
+        reinterpret_cast<std::uint8_t *>(values.data()), sizeof(values))) &&
+        std::all_of(values.begin(), values.end(), [](float f) { return std::isfinite(f); });
+  };
+  for (std::uint32_t layer = 0; layer < 2; ++layer) {
+    std::uint32_t model = 0, descriptor = 0, count = 0, flags = 0, buffer = 0;
+    std::uint32_t texture = 0, surface = 0, buffers = 0;
+    // 0x00348BE4 owns the packed vertex buffer: position, optional normal,
+    // optional UV, optional color. The generated overlay is single-buffered.
+    if (!memory.Read32(overlay + 8U + layer * 4U, &model) || !model || !memory.IsMapped(model, 0x1B8) ||
+        !memory.Read32(model, &descriptor) || !descriptor || !memory.IsMapped(descriptor, 0x20) ||
+        !memory.Read32(descriptor + 0xCU, &count) || count == 0 || count > 4096 || count % 4 ||
+        !memory.Read32(descriptor + 0x1CU, &flags) || (flags & 0x118U) != 0 ||
+        !memory.Read32(model + 0x128U, &buffers) || buffers != 1 ||
+        !memory.Read32(model + 0x1A0U, &buffer) || !buffer ||
+        !memory.Read32(overlay + layer * 4U, &texture) || !texture || !memory.IsMapped(texture, 0x54) ||
+        !memory.Read32(texture + 0x4CU, &surface) || !surface) {
+      SetError(error, "incompatible native generated-text model"); return false;
+    }
+    const std::uint32_t uvOffset = count * ((flags & 0x80U) ? 12U : 24U);
+    const std::uint32_t colorOffset = uvOffset + count * 8U;
+    const std::uint32_t totalBytes = colorOffset + count * 16U;
+    if (buffer > UINT32_MAX - totalBytes || !memory.IsMapped(buffer, totalBytes)) {
+      SetError(error, "native generated-text buffer is unmapped"); return false;
+    }
+    for (std::uint32_t vertex = 0; vertex < count; vertex += 4) {
+      std::array<float, 12> positions{};
+      std::array<float, 8> uvs{};
+      std::array<float, 16> colors{};
+      if (!readFloats(buffer + vertex * 12U, positions) ||
+          !readFloats(buffer + uvOffset + vertex * 8U, uvs) ||
+          !readFloats(buffer + colorOffset + vertex * 16U, colors)) {
+        SetError(error, "invalid native generated-text vertices"); return false;
+      }
+      oot3d::ui::UiPrimitive primitive;
+      primitive.subsystem = oot3d::ui::UiSubsystem::TouchControls;
+      primitive.role = oot3d::ui::UiPrimitiveRole::PauseText;
+      primitive.owner_address = 0x005D4A8CU;
+      primitive.source_quad = vertex / 4;
+      primitive.texture = {texture, surface, "oot3d/native/generated_text"};
+      // Native 0x005D2078 shifts the rotated viewport by -40: +40 in host X.
+      // The text builder emits TL, BL, TR, BR, unlike the ordinary UI quads.
+      primitive.destination = {positions[0] + 40.0F, positions[1],
+                               positions[6] - positions[0], positions[4] - positions[1]};
+      primitive.uv = {uvs[0], 1.0F - uvs[1], uvs[4] - uvs[0], uvs[1] - uvs[3]};
+      primitive.color = {colors[0], colors[1], colors[2], colors[3]};
+      if (layer == 1) {
+        const auto &rgb = kTopScreenOcarinaColors[geometry.Song];
+        primitive.color.red = rgb[0] / 255.0F;
+        primitive.color.green = rgb[1] / 255.0F;
+        primitive.color.blue = rgb[2] / 255.0F;
+      }
+      primitive.layer = 22U + layer;
+      staged.push_back(std::move(primitive));
+    }
+  }
+  output.insert(output.end(), staged.begin(), staged.end());
+  return true;
+}
+
 
 TopScreenOcarinaNavigationGeometry
 BuildTopScreenOcarinaNavigationGeometry(std::int8_t direction) noexcept {

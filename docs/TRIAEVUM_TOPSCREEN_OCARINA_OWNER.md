@@ -11,11 +11,12 @@ navigation. B returns to normal gameplay and removes this presentation.
 The unknown-song marker is reconstructed and unit-tested; its visual path has
 not yet been qualified using a partially learned original save.
 
-This is **not yet complete ocarina parity**. Localized song names, native
-free-play instructions, the live history of performed notes, recognition/
-learning transitions and the original guide-mode toggle remain separate work.
-The current title band is intentionally documented as missing its song name;
-do not mistake the displayed reference sequence for performed-note feedback.
+This is **not yet complete ocarina parity**. The follow-up
+[native localized song-text integration](TRIAEVUM_TOPSCREEN_OCARINA_TEXT.md)
+fills the previously empty title band. Native free-play instructions, the live
+history of performed notes, recognition/learning transitions and the original
+guide-mode toggle remain separate work. Do not mistake the displayed reference
+sequence for performed-note feedback.
 
 ## Root Causes And Repair
 
@@ -119,10 +120,10 @@ These are Linux tests. Windows and Android executables were not rebuilt or
 visually qualified in this tranche. No new Azahar capture or completed-song
 comparison is claimed. No ROM, save, payload or framebuffer is published.
 
-Next owner: original mod `0x005D4A8C` creates localized text via native
+Now integrated in the follow-up: original mod `0x005D4A8C` creates localized text via native
 `0x00313CE0(0x4C)` / `0x002F57F0`, using message table `0x004D5480` + `0x9AD`;
-`0x005D2078` draws it via `0x002FB944`. Integrate this lifecycle explicitly,
-including cleanup/reset, instead of guessing glyph textures or host-font names.
+`0x005D2078` draws it via `0x002FB944`. The follow-up documents the explicit
+lifecycle, GPU waits, immutable snapshot and cleanup/reset.
 The native ocarina draw `0x00425930` owns globals `0x005093E4..0x005093F4`:
 model descriptor, model instance, quad renderer, cursor helper and text owner.
 The quad renderer is at global **+8**, not +0/+4. These pointers are leads for

@@ -51,6 +51,7 @@
 #include "oot3d_native_true_aot_blocks.h"
 #include "oot3d_native_ui_lifecycle_bridge.h"
 #include "oot3d_native_ui_texture_provider.h"
+#include "oot3d_top_screen_ocarina_text_runtime.h"
 #include "oot3d_native_whole_aot_runtime.h"
 #ifdef OOT3D_NATIVE_DIRECT_AOT_PLUGIN
 #include "oot3d_native_direct_aot.h"
@@ -383,6 +384,7 @@ struct NativeWidescreenProjectionState {
   Oot3dNativeGame::NativeA32Memory *TraceMemory = nullptr;
   std::deque<A32BlockTraceRecord> BlockTrace;
   Oot3dNativeGame::Oot3dNativeUiLifecycleBridge *UiLifecycleBridge = nullptr;
+  Oot3dNativeGame::TopScreenOcarinaTextRuntime *OcarinaText = nullptr;
   Oot3dNativeGame::Oot3dPicaCompositionDomain *PicaCompositionDomain =
       nullptr;
   Oot3dNativeGame::Oot3dNativePicaCompositionTracker
@@ -763,6 +765,7 @@ struct NativeCandidateDispatchState {
   uint64_t TopScreenCameraUpdateCalls = 0;
   uint64_t TopScreenCameraActiveCalls = 0;
   Oot3dNativeGame::Oot3dNativeUiLifecycleBridge *UiLifecycleBridge = nullptr;
+  Oot3dNativeGame::TopScreenOcarinaTextRuntime *OcarinaText = nullptr;
   Oot3dNativeGame::Oot3dPicaCompositionDomain *PicaCompositionDomain =
       nullptr;
   Oot3dNativeGame::TopScreenPauseProjectionState *TopScreenPauseProjection =
@@ -788,6 +791,9 @@ bool ExecuteTopScreenUiSourcePortBlock(
     NativeCandidateDispatchState &dispatch,
     oot3d::recomp::a32::ExecutionResult *result, uint32_t *blocksConsumed) {
   auto &memory = *dispatch.Memory;
+  if (pc == Oot3dNativeGame::kTopScreenInputUpdateBoundary && dispatch.OcarinaText != nullptr) {
+    return dispatch.OcarinaText->Execute(state, result, blocksConsumed);
+  }
   uint32_t nextPc = 0U;
   auto branchFromCallsite = [&](uint32_t target, uint32_t returnAddress) {
     state.r[14] = returnAddress;
@@ -1507,6 +1513,7 @@ bool ExecuteProductTopScreenHook(uint32_t pc, oot3d::recomp::a32::GuestState &st
   if (!dispatch.TopScreenUiProfile || dispatch.Memory == nullptr ||
       (pc != kTopScreenCameraUpdateEntry && pc != kTopScreenCameraUpdatePatchSite &&
        pc != kTopScreenCameraNormal1Scalar &&
+       pc != Oot3dNativeGame::kTopScreenInputUpdateBoundary &&
        !Oot3dNativeGame::IsTopScreenItemDispatchEntry(pc))) return false;
   const bool handled = ExecuteTopScreenUiSourcePortBlock(pc, state, dispatch, result, blocksConsumed);
   if (handled) return true;
@@ -1738,10 +1745,18 @@ void ApplyNativeWidescreenProjectionPolicy(
   auto &runtime = *static_cast<NativeWidescreenProjectionState *>(user);
   if (runtime.TopScreenUiProfile &&
       pc == Oot3dNativeGame::kTopScreenInputUpdateBoundary &&
+      (runtime.OcarinaText == nullptr || !runtime.OcarinaText->Pending()) &&
       runtime.TopScreenInputClock != nullptr && runtime.TopScreenInput != nullptr) {
     *runtime.TopScreenInput = runtime.TopScreenInputClock->Advance();
     if (runtime.UiLifecycleBridge != nullptr)
       runtime.UiLifecycleBridge->SetTopScreenInputFrame(*runtime.TopScreenInput);
+    if (runtime.UiLifecycleBridge != nullptr && runtime.OcarinaText != nullptr) {
+      Oot3dNativeGame::TopScreenOcarinaGeometry geometry;
+      std::string textError;
+      if (!runtime.UiLifecycleBridge->ReadOcarinaGeometry(geometry, &textError) ||
+          !runtime.OcarinaText->Prepare(geometry, &textError))
+        throw std::runtime_error("TopScreen song text preparation: " + textError);
+    }
   }
   const bool enabledTopScreenCameraExit =
       (pc != kTopScreenCameraUpdateEntry ||
@@ -1764,6 +1779,8 @@ void ApplyNativeWidescreenProjectionPolicy(
 #endif
   if (wholeAotExecutionActive &&
       enabledTopScreenCameraExit && enabledTopScreenItemExit &&
+      (pc != Oot3dNativeGame::kTopScreenInputUpdateBoundary ||
+       (runtime.OcarinaText != nullptr && runtime.OcarinaText->NeedsExecution())) &&
       std::binary_search(runtime.WholeAotObservableExitPcs.begin(),
                          runtime.WholeAotObservableExitPcs.end(), pc)) {
 #if defined(OOT3D_NATIVE_DIRECT_AOT_PLUGIN)
@@ -3543,6 +3560,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     topScreenSourcePortBlocks.insert(topScreenSourcePortBlocks.end(),
                                     itemEntries.begin(), itemEntries.end());
     topScreenSourcePortBlocks.push_back(kTopScreenGameplayCompositionPrefix);
+    topScreenSourcePortBlocks.push_back(Oot3dNativeGame::kTopScreenInputUpdateBoundary);
     // These source ports are reached from inside large AOT regions. Make
     // their native entries observable so execution returns to the dispatcher
     // before applying the typed replacement. Keep this list sorted because
@@ -3562,6 +3580,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     wholeAotObservableExitBlocks.push_back(kTopScreenCameraUpdateEntry);
     wholeAotObservableExitBlocks.push_back(kTopScreenCameraNormal1Scalar);
 #endif
+    wholeAotObservableExitBlocks.push_back(Oot3dNativeGame::kTopScreenInputUpdateBoundary);
     wholeAotObservableExitBlocks.insert(wholeAotObservableExitBlocks.end(),
                                        itemEntries.begin(), itemEntries.end());
     nativeCandidateEntries.insert(nativeCandidateEntries.end(),
@@ -3827,9 +3846,12 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
 #endif
   Oot3dNativeGame::Oot3dNativeA32UiTextureProvider nativeUiTextureProvider(
       picaMemoryView, topScreenTextureOverridePackPointer);
+  Oot3dNativeGame::TopScreenOcarinaTextRuntime ocarinaText(process.Memory(), nativeUiTextureProvider);
+  nativeCandidateDispatch.OcarinaText = &ocarinaText;
+  widescreenProjection.OcarinaText = &ocarinaText;
   oot3d::ui::Fast3dUiRenderBackend uiRenderBackend(api);
   oot3d::ui::N64UiFast3dRenderer n64UiRenderer(uiRenderBackend,
-                                               &nativeUiTextureProvider);
+                                               &ocarinaText);
   std::array<std::vector<oot3d::ui::UiPrimitive>,
              oot3d::ui::kUiSubsystemCount>
       lastTopScreenPrimitivesBySubsystem;
@@ -4343,6 +4365,8 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
   std::optional<uint32_t> automatedStateSavedAtGuestFrame;
 
   const auto saveState = [&](const std::filesystem::path &path) {
+    // Host-owned continuation registers must never escape into a standalone savestate.
+    if (ocarinaText.Pending()) return false;
     const auto started = std::chrono::steady_clock::now();
     Oot3dNativeGame::NativeA32SavestateRuntimeState runtime;
     runtime.FrameCount = frameCount;
@@ -4510,6 +4534,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     restoreSavestateTiming(runtime);
     picaFrontend.SetPacketSink(&submissionQueue);
     uiLifecycleBridge.ResetAfterStateLoad(frameCount);
+    ocarinaText.Reset();
     uiLifecycleBridge.SetTopScreenConfig(activeTopScreenConfig);
     widescreenProjection.TopScreenPauseDrawRouting = {};
     widescreenProjection.TopScreenPausePageRedraw = {};
@@ -5939,6 +5964,9 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
         Oot3dNativeGame::AppendTopScreenFreeCameraOptionPresentation(
             nativeCandidateDispatch.TopScreenCamera.Camera, primitives);
       }
+      if (topScreenPresentation && subsystem == oot3d::ui::UiSubsystem::TouchControls) {
+        ocarinaText.Append(primitives);
+      }
       if (topScreenPresentation) {
         lastTopScreenPrimitivesBySubsystem[subsystemIndex] = primitives;
       }
@@ -7364,6 +7392,8 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                    {"shadow_presentation_frames",
                     bridge.shadow_presentation_frames},
                    {"topscreen_ocarina_frames", bridge.topscreen_ocarina_frames},
+                   {"topscreen_ocarina_text_builds", ocarinaText.Builds()},
+                   {"topscreen_ocarina_text_releases", ocarinaText.Releases()},
                    {"topscreen_ocarina_primitives", bridge.topscreen_ocarina_primitives},
                    {"topscreen_ocarina_failures", bridge.topscreen_ocarina_failures},
                    {"topscreen_ocarina_error", bridge.topscreen_ocarina_error},

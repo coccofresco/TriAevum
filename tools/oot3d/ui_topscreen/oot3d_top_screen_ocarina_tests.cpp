@@ -83,6 +83,57 @@ void RunTopScreenOcarinaTests() {
                                         &ocarinaError) &&
               ocarinaGeometry.Active && ocarinaGeometry.Song == 5U,
           "ocarina producer did not activate the native destination");
+  std::uint32_t message = 0;
+  Require(ocarinaMemory.Write32(0x004D5480U + 5U * 4U, 8U) &&
+              ReadTopScreenOcarinaSongMessage(ocarinaMemory, ocarinaGeometry, &message, &ocarinaError) &&
+              message == 0x9B5U, "song title must use the native message table");
+  auto hiddenTitle = ocarinaGeometry;
+  hiddenTitle.SongLearned = false;
+  Require(ReadTopScreenOcarinaSongMessage(ocarinaMemory, hiddenTitle, &message) && message == 0,
+          "unknown song leaked its name");
+  hiddenTitle = ocarinaGeometry;
+  hiddenTitle.SongSelected = false;
+  Require(ReadTopScreenOcarinaSongMessage(ocarinaMemory, hiddenTitle, &message) && message == 0,
+          "free play without selection leaked a title");
+
+  constexpr std::uint32_t overlay = 0x00560000;
+  const auto floats = [&](std::uint32_t address, const auto &values) {
+    return ocarinaMemory.WriteBytes(address, std::span<const std::uint8_t>(
+        reinterpret_cast<const std::uint8_t *>(values.data()), sizeof(values)));
+  };
+  for (std::uint32_t layer = 0; layer < 2; ++layer) {
+    const auto model = overlay + 0x100 + layer * 0x200;
+    const auto descriptor = overlay + 0x600 + layer * 0x100;
+    const auto buffer = overlay + 0x900 + layer * 0x200;
+    const auto texture = overlay + 0xE00 + layer * 0x80;
+    const std::array<float, 12> positions{100, 30, 0, 100, 46, 0, 110, 30, 0, 110, 46, 0};
+    const std::array<float, 8> uv{0.25F, 0.75F, 0.25F, 0.5F, 0.5F, 0.75F, 0.5F, 0.5F};
+    const std::array<float, 16> colors{0, 0, 0, 0.8F, 0, 0, 0, 0.8F,
+                                       0, 0, 0, 0.8F, 0, 0, 0, 0.8F};
+    Require(ocarinaMemory.Write32(overlay + 8 + layer * 4, model) &&
+                ocarinaMemory.Write32(model, descriptor) &&
+                ocarinaMemory.Write32(descriptor + 0xC, 4) &&
+                ocarinaMemory.Write32(descriptor + 0x1C, 0xC0) &&
+                ocarinaMemory.Write32(model + 0x128, 1) &&
+                ocarinaMemory.Write32(model + 0x1A0, buffer) &&
+                ocarinaMemory.Write32(overlay + layer * 4, texture) &&
+                ocarinaMemory.Write32(texture + 0x4C, 0x18000000 + layer * 0x1000) &&
+                floats(buffer, positions) && floats(buffer + 48, uv) && floats(buffer + 80, colors),
+            "could not seed native generated-text models");
+  }
+  std::vector<oot3d::ui::UiPrimitive> titlePrimitives;
+  Require(ReadTopScreenOcarinaTextPrimitives(ocarinaMemory, overlay, ocarinaGeometry,
+                                            titlePrimitives, &ocarinaError) && titlePrimitives.size() == 2 &&
+              titlePrimitives[0].destination.x == 140 && titlePrimitives[0].destination.y == 30 &&
+              titlePrimitives[0].destination.width == 10 && titlePrimitives[0].destination.height == 16 &&
+              titlePrimitives[0].uv.y == 0.25F && titlePrimitives[0].uv.height == 0.25F &&
+              titlePrimitives[0].color.red == 0 && titlePrimitives[1].color.red == 110.0F / 255 &&
+              titlePrimitives[1].color.alpha == 0.8F,
+          "native title import lost geometry, orientation, shadow or song tint");
+  Require(ocarinaMemory.Write32(overlay + 0x700 + 0xC, 4097) &&
+              !ReadTopScreenOcarinaTextPrimitives(ocarinaMemory, overlay, ocarinaGeometry,
+                                                  titlePrimitives, &ocarinaError) &&
+              titlePrimitives.size() == 2, "malformed model appended a partial title");
   Require(
       std::abs(ocarinaGeometry.Quads[0].Position.X - 50.0F) < 0.001F &&
           std::abs(ocarinaGeometry.Quads[0].Position.Y - 189.0F) < 0.001F &&

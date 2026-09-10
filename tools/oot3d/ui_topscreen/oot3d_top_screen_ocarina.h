@@ -36,6 +36,19 @@ struct TopScreenOcarinaGeometry {
   TopScreenTexturedQuad UnknownSong{};
 };
 
+// Native message selection, not a host-font or translated-string table.
+bool ReadTopScreenOcarinaSongMessage(NativeA32Memory &memory,
+                                     const TopScreenOcarinaGeometry &geometry,
+                                     std::uint32_t *message,
+                                     std::string *error = nullptr);
+
+// Imports the two generated glyph models (shadow, then colored foreground).
+bool ReadTopScreenOcarinaTextPrimitives(
+    NativeA32Memory &memory, std::uint32_t overlay,
+    const TopScreenOcarinaGeometry &geometry,
+    std::vector<oot3d::ui::UiPrimitive> &output,
+    std::string *error = nullptr);
+
 bool ReadTopScreenOcarinaGeometry(NativeA32Memory &memory,
                                  const TopScreenOcarinaBrowser &browser,
                                  TopScreenOcarinaGeometry *geometry,
