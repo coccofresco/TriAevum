@@ -285,8 +285,9 @@ Windows evidence: `I:/oot3dre_work/forge-handoff-windows/`.
 - Source identity lookup still follows canonical GLSL source construction;
   that does not compile GLSL on pack hits. A validated descriptor-to-module
   fast lookup is a separate optimization, not required for this handoff.
-- Android shares the NRI helper core, but its installer needs an in-process host
-  and device qualification. Do not ship Python/desktop executables in the APK.
+- Android now has [Adreno 830 preparation and live intro qualification](../ports/android/SHADER_PREPARATION.md).
+  Its installer still needs an in-process host, including pass preparation in
+  the same shaderc-bearing APK module. Do not ship Python/desktop executables.
 
 PR #11's input and authorship remain recorded in
 `TRIAEVUM_PR_COMPAT_PERFORMANCE_20260910.md` and `TRIAEVUM_CONTRIBUTIONS.md`.

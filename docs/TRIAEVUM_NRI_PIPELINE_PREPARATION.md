@@ -205,8 +205,10 @@ of the release logger's severity threshold. Neither cache-file existence nor
 - The tested runs report zero composition mismatches and zero rejected scene
   draws. Native fidelity remains active, with zero interpolated draws.
 - The same helper builds for Android ARM64 with NDK r29 and the renderer's
-  patched NRI. No Android GPU or installer execution is claimed: no ADB device
-  was connected during this qualification.
+  patched NRI. Subsequent Adreno 830 qualification prepares **500/500** pipelines
+  in 94.635 s, then reuses the cache in 0.975 s. The updated APK also reuses the
+  portable pack and pass cache. This is device qualification, not an Android
+  installer UI: see [Android results](../ports/android/SHADER_PREPARATION.md).
 
 Private live evidence is under `/home/xander/triaevum-pipeline-live-proof/`:
 `baseline-resolved/`, `cold-measured/`, `prepared-live-profile/`, and
@@ -230,7 +232,7 @@ Private evidence:
    the packaged Windows runtime and Steam Deck/AMD environment. Linux intro
    parity and actual cache acceptance are established above, not whole-game
    hitch coverage.
-2. Qualify the Android GPU; connect Android's installer in-process and
+2. Connect Android's installer in-process after the Adreno qualification, and
    select the same physical GPU as gameplay on multi-GPU desktops.
 3. Generate the **actual enabled extension profile's** instrumented recipes with
    the existing typed shader hooks. This corpus currently prepares native

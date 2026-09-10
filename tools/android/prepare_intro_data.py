@@ -13,7 +13,7 @@ def contained(root: Path, path: Path) -> Path:
     return resolved
 
 
-def prepare(installation: Path, launch_profile: Path, output: Path) -> None:
+def prepare(installation: Path, launch_profile: Path, output: Path, *, capture: bool = False) -> None:
     root = installation.resolve()
     output = output.resolve()
     repository = Path(__file__).resolve().parents[2]
@@ -36,7 +36,7 @@ def prepare(installation: Path, launch_profile: Path, output: Path) -> None:
     inputs = [manifest_path, input_path("--resource-root")]
     for key in ("code_bin_path", "exheader_path", "romfs_image_path"):
         inputs.append(contained(root, manifest_path.parent / manifest["source"][key]))
-    for key in ("--topscreen-config", "--topscreen-texture-overrides"):
+    for key in ("--topscreen-config", "--topscreen-texture-overrides", "--pica-aot-shader-pack"):
         if key in options:
             inputs.append(input_path(key))
     if any(not path.exists() for path in inputs):
@@ -60,15 +60,17 @@ def prepare(installation: Path, launch_profile: Path, output: Path) -> None:
         "--ui-profile": options.get("--ui-profile", "topscreen"),
         "--config": "${profile_dir}/data/config/TriAevum.android.json",
         "--save-data": "${profile_dir}/data/savedata",
+        "--renderer-cache-directory": "${profile_dir}/data/cache/renderer",
         "--output": "${profile_dir}/data/runtime-state.json",
         "--gameplay-timing": "native30_no_interpolation",
         "--presentation-rate": "30",
         "--width": "640", "--height": "360",
         "--max-seconds": "120",
-        "--screenshot": "${profile_dir}/data/intro-frame.bmp",
-        "--screenshot-start-frame": "30", "--screenshot-interval": "150",
     }
-    for key in ("--topscreen-config", "--topscreen-texture-overrides"):
+    if capture:
+        target.update({"--screenshot": "${profile_dir}/data/intro-frame.bmp",
+                       "--screenshot-start-frame": "30", "--screenshot-interval": "150"})
+    for key in ("--topscreen-config", "--topscreen-texture-overrides", "--pica-aot-shader-pack"):
         if key in options:
             target[key] = relocated(key)
     config = output / "data/config/TriAevum.android.json"
@@ -76,7 +78,7 @@ def prepare(installation: Path, launch_profile: Path, output: Path) -> None:
     config.write_text("{}\n", encoding="utf-8")
     (output / "TriAevum.android.launch.json").write_text(json.dumps({
         "format": "oot3d_native_game_launch_profile_v1",
-        "arguments": [item for pair in target.items() for item in pair] + ["--screenshot-sequence"],
+        "arguments": [item for pair in target.items() for item in pair] + (["--screenshot-sequence"] if capture else []),
         "path_scopes": {key: "relative" for key, value in target.items()
                         if value.startswith("${profile_dir}/")},
     }, indent=2) + "\n", encoding="utf-8")
@@ -88,8 +90,10 @@ def main() -> None:
     parser.add_argument("--installation", type=Path, required=True)
     parser.add_argument("--launch-profile", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--capture", action="store_true",
+                        help="Enable synchronous framebuffer captures; do not use this run for pacing measurements")
     args = parser.parse_args()
-    prepare(args.installation, args.launch_profile, args.output)
+    prepare(args.installation, args.launch_profile, args.output, capture=args.capture)
 
 
 if __name__ == "__main__":

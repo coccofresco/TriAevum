@@ -275,11 +275,19 @@ python3 "$SRC/tools/android/prepare_intro_data.py" \
   --output "$PRIVATE_STAGE"
 ```
 
-The tool copies only required manifest/resources/ROM-derived data and TopScreen
-inputs, relocates paths, excludes desktop title binaries and saves, and uses a
-fresh configuration. The generated developer profile selects native 30 Hz,
-no interpolation, 640x360, bounded 120-second execution and native framebuffer
-captures. Data is **not APK content and must never be published**.
+The tool copies only required manifest/resources/ROM-derived data, TopScreen
+inputs and an optional prepared `--pica-aot-shader-pack`. It relocates paths,
+excludes desktop title binaries, saves and driver caches, and uses a fresh
+configuration. The generated developer profile selects native 30 Hz, no
+interpolation, logical 640x360 and bounded 120-second execution. The Android
+Surface policy above determines the actual pixel extent.
+
+Framebuffer capture is now **opt-in** with `--capture`; leave it off for pacing
+tests. The profile supplies an app-local `--renderer-cache-directory`; portable
+SPIR-V may cross platforms, GPU driver caches must be prepared on the actual
+device. See [Android shader preparation](SHADER_PREPARATION.md) for the real
+Adreno qualification and remaining installer work. Data is **not APK content
+and must never be published**.
 
 Install `app/build/outputs/apk/debug/app-debug.apk` with ADB. The profile/data root
 is `/sdcard/Android/data/org.triaevum.android/files`. After the app has created

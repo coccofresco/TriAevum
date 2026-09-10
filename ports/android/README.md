@@ -1,9 +1,11 @@
 # Android Native Foundation
 
 Status: developer APK now links and launches the actual ARM64 title/runtime with
-Vulkan/NRI. Nonblack game output is confirmed, but presentation and performance
-still need correction/validation; this is not a supported release.
+Vulkan/NRI. Two-minute warm-cache intro samples reach 30 presentations/s and
+29.0-29.8 native updates/s without interpolation on Adreno 830. Residual pacing spikes,
+gameplay, input and installer integration remain; this is not a supported release.
 See [intro bring-up and reproduction](INTRO.md) for current results and commands.
+See [shader preparation](SHADER_PREPARATION.md) for device/cache qualification.
 Build on Linux with the Android NDK; the existing Windows PC may provide the USB
 ADB connection without hosting a second compiler/SDK installation.
 

@@ -2944,10 +2944,12 @@ void GfxRenderingAPIVulkan::StorePipelineCache() {
     mDiagnostics.SetNriPipelineStatistics(statistics.InitialCacheBytes,
         statistics.CreationAttempts, statistics.Created, statistics.CreationNanoseconds);
     mDiagnostics.Flush();
-    SPDLOG_INFO("NRI PICA pipeline statistics: {}", nlohmann::json({
+    const auto receipt = nlohmann::json({
         {"initial_cache_bytes", statistics.InitialCacheBytes},
         {"creation_attempts", statistics.CreationAttempts}, {"created", statistics.Created},
-        {"creation_nanoseconds", statistics.CreationNanoseconds}}).dump());
+        {"creation_nanoseconds", statistics.CreationNanoseconds}}).dump();
+    // Release/mobile hosts may suppress INFO and have no per-frame diagnostics enabled.
+    std::fprintf(stderr, "TRIAEVUM_NRI_PIPELINE_CACHE %s\n", receipt.c_str());
     const auto nriData = mNriPicaPipelineBridge.GetPipelineCacheData();
     if (!nriData.empty()) {
         VkPhysicalDeviceProperties properties{};
