@@ -105,12 +105,12 @@ def install_precompiled_title(prepared_directory: Path, *, root: Path, recipe: d
         from . import forge
         from .topscreen_assets import prepare_topscreen_assets
         from .shader_preparation import prepare_shader_seed
-        from .device_pipeline_preparation import prepare_device_pipelines
+        from .device_pipeline_preparation import prepare_device_pipelines, installation_cache_directory, adopt_existing_cache
     except ImportError:
         import forge
         from topscreen_assets import prepare_topscreen_assets
         from shader_preparation import prepare_shader_seed
-        from device_pipeline_preparation import prepare_device_pipelines
+        from device_pipeline_preparation import prepare_device_pipelines, installation_cache_directory, adopt_existing_cache
     catalog = load_catalog(root)
     item = select_title(root, recipe, catalog=catalog)
     prepared = forge.load_prepared_content(prepared_directory, required_inputs=("code", "exheader", "romfs"))
@@ -135,8 +135,10 @@ def install_precompiled_title(prepared_directory: Path, *, root: Path, recipe: d
         romfs=prepared.inputs["romfs"].path, report=report)
     shader_pack = prepare_shader_seed(root=root, data_root=data_root,
                                      title=item, report=report)
+    renderer_cache = installation_cache_directory(data_root)
+    adopt_existing_cache(renderer_cache, report=report)
     pipeline_preparation = prepare_device_pipelines(root=root, data_root=data_root,
-        title=item, pack=shader_pack, report=report)
+        title=item, pack=shader_pack, cache_directory=renderer_cache, report=report)
     with activation_transaction(runtime_plugin.resolve().parent, [
         runtime_plugin, launch_profile, active_title_state,
         prepared.directory / "forge-state.json",
@@ -149,7 +151,7 @@ def install_precompiled_title(prepared_directory: Path, *, root: Path, recipe: d
             prepared.directory, plugin=plugin, runtime_plugin=runtime_plugin,
             launch_profile=launch_profile, data_root=data_root,
             topscreen_texture_pack=texture_pack, package_root=root,
-            pica_shader_pack=shader_pack)
+            pica_shader_pack=shader_pack, renderer_cache_directory=renderer_cache)
         activation = forge.activate_prepared_title(prepared.directory, active_title_state=active_title_state)
     return {"status": "ready", "install_model": MODEL, "objects_compiled": 0,
             "device_pipeline_preparation": pipeline_preparation,

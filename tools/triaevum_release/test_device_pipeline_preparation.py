@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from common import atomic_write_json, sha256_file
 from device_pipeline_preparation import (
-    FORMAT, CACHE_FILENAME, _run, prepare_device_pipelines, renderer_cache_directory,
+    FORMAT, CACHE_FILENAME, _run, prepare_device_pipelines, renderer_cache_directory, adopt_existing_cache,
 )
 
 
@@ -61,6 +61,27 @@ class DevicePreparationTests(unittest.TestCase):
                 self.assertEqual(result["pack_sha256"], sha256_file(self.pack))
             self.assertEqual(run.call_count, 2)
 
+    def test_native_and_effect_manifests_share_one_device_job_and_cache(self):
+        contract = self.title["device_pipeline_preparation"]
+        native = contract.pop("manifest")
+        contract["manifests"] = [native, self.artifact("effects.json"), native]
+        with patch("device_pipeline_preparation._run", side_effect=self.fake_run) as run:
+            result = self.prepare()
+            self.assertEqual(result["device_pipeline_prewarm"], "complete")
+            self.assertEqual(run.call_count, 1)
+            self.assertEqual(run.call_args.args[0].count("--manifest"), 2)
+            self.assertEqual(len(result["manifest_sha256s"]), 2)
+
+    def test_ambiguous_or_empty_manifests_do_not_run(self):
+        contract = self.title["device_pipeline_preparation"]
+        with patch("device_pipeline_preparation._run") as run:
+            contract["manifests"] = [contract["manifest"]]
+            with self.assertRaisesRegex(ValueError, "not both"): self.prepare()
+            del contract["manifest"]
+            contract["manifests"] = []
+            with self.assertRaisesRegex(ValueError, "1 to 64"): self.prepare()
+            run.assert_not_called()
+
     def test_missing_gpu_report_or_failed_job_is_not_success(self):
         for behavior in (lambda *_: 1, lambda *_: (_ for _ in ()).throw(TimeoutError("timeout"))):
             with patch("device_pipeline_preparation._run", side_effect=behavior):
@@ -106,6 +127,18 @@ class DevicePreparationTests(unittest.TestCase):
         with patch.dict(os.environ, {"TRIAEVUM_RENDERER_CACHE_DIR": "relative/cache"}):
             with self.assertRaisesRegex(ValueError, "must be absolute"):
                 renderer_cache_directory()
+
+    def test_existing_cache_is_copied_without_overwrite_or_unknown_files(self):
+        source = self.root / "previous-cache"
+        (source / "spirv-v2").mkdir(parents=True)
+        for name in (CACHE_FILENAME, "spirv-v2/ab_cd.spvc", "unknown.bin", "spirv-v2/invalid-name.spvc"):
+            (source / name).write_bytes(b"fixture, validated only by renderer")
+        self.assertEqual(adopt_existing_cache(self.cache, source=source), 2)
+        self.assertFalse((self.cache / "unknown.bin").exists())
+        (self.cache / CACHE_FILENAME).write_bytes(b"new learned cache")
+        self.assertEqual(adopt_existing_cache(self.cache, source=source), 0)
+        self.assertEqual((self.cache / CACHE_FILENAME).read_bytes(), b"new learned cache")
+        self.assertTrue((source / "spirv-v2/ab_cd.spvc").is_file())
 
     def test_subprocess_progress_and_cooperative_cancel(self):
         messages = []

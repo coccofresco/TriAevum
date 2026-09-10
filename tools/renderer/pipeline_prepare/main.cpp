@@ -23,16 +23,23 @@ using TriAevum::Tools::HeadlessDevice;
 int main(int argc, char** argv) {
     try {
         std::map<std::string, std::string> args;
+        std::vector<std::filesystem::path> manifests;
         bool validation = false;
         for (int i = 1; i < argc; ++i) {
             const std::string key = argv[i];
             if (key == "--validation") { validation = true; continue; }
+            if (key == "--manifest") {
+                if (++i >= argc || manifests.size() == 64) throw std::runtime_error("expected 1 to 64 manifests");
+                manifests.emplace_back(argv[i]);
+                continue;
+            }
             if (key != "--manifest" && key != "--pack" && key != "--cache-dir" &&
                 key != "--report" && key != "--cancel-file" && key != "--adapter")
                 throw std::runtime_error("unknown pipeline preparation option: " + key);
             if (++i >= argc || !args.emplace(key, argv[i]).second) throw std::runtime_error("missing or duplicate option");
         }
-        for (const auto* key : {"--manifest", "--pack", "--cache-dir", "--report"})
+        if (manifests.empty()) throw std::runtime_error("required: --manifest");
+        for (const auto* key : {"--pack", "--cache-dir", "--report"})
             if (!args.contains(key) || args.at(key).empty()) throw std::runtime_error(std::string("required: ") + key);
         uint32_t adapter = 0;
         if (args.contains("--adapter")) {
@@ -51,12 +58,33 @@ int main(int argc, char** argv) {
                 throw std::runtime_error("pipeline preparation output overlaps an input");
         }
         if (cachePath == reportPath) throw std::runtime_error("preparation outputs overlap");
+        for (const auto& path : manifests) {
+            const auto input = std::filesystem::weakly_canonical(path);
+            if (input == cachePath || input == reportPath)
+                throw std::runtime_error("pipeline preparation output overlaps a manifest");
+        }
         const auto begin = std::chrono::steady_clock::now();
-        Fast::Oot3d::PicaGraphicsPipelineManifest manifest;
         Fast::Oot3d::PicaAotShaderPack pack;
         std::string error;
-        if (!manifest.Load(args.at("--manifest"), &error) || !pack.Load(args.at("--pack"), &error))
+        if (!pack.Load(args.at("--pack"), &error))
             throw std::runtime_error(error);
+        std::map<uint64_t, Fast::Oot3d::PicaGraphicsPipelineManifestEntry> unique;
+        size_t observations = 0;
+        for (const auto& path : manifests) {
+            Fast::Oot3d::PicaGraphicsPipelineManifest manifest;
+            if (!manifest.Load(path, &error)) throw std::runtime_error(error);
+            if (manifest.DescriptorSchemaVersion() != pack.DescriptorSchemaVersion())
+                throw std::runtime_error("pipeline manifest and shader pack schema differ");
+            observations += manifest.Entries().size();
+            for (const auto& entry : manifest.Entries()) {
+                auto [position, inserted] = unique.emplace(entry.StructuralId(), entry);
+                if (!inserted && !position->second.StructurallyEquivalent(entry))
+                    throw std::runtime_error("pipeline manifest structural collision");
+                if (unique.size() > 65536) throw std::runtime_error("pipeline union exceeds recipe budget");
+            }
+        }
+        std::vector<Fast::Oot3d::PicaGraphicsPipelineManifestEntry> entries;
+        for (auto& [id, entry] : unique) entries.push_back(std::move(entry));
         HeadlessDevice device;
         if (!device.Initialize(adapter, validation))
             throw std::runtime_error("headless NRI Vulkan device initialization failed");
@@ -74,8 +102,8 @@ int main(int argc, char** argv) {
         std::vector<uint8_t> cache;
         const bool loaded = Renderer3ds::LoadPipelineCacheData(cachePath, identity, cache);
         if (!bridge.InitializePipelineCache(cache)) throw std::runtime_error("NRI device pipeline cache unavailable");
-        Renderer::PipelinePreparationJob job(manifest.Entries().size(), [&](size_t index, std::string& why) {
-            const auto item = Fast::Oot3d::ResolvePicaPipelinePreparationItem(manifest.Entries()[index], pack, depthFormat);
+        Renderer::PipelinePreparationJob job(entries.size(), [&](size_t index, std::string& why) {
+            const auto item = Fast::Oot3d::ResolvePicaPipelinePreparationItem(entries[index], pack, depthFormat);
             if (!bridge.PreparePipeline(item.Descriptor)) { why = "NRI rejected pipeline " + std::to_string(index); return false; }
             if (device.ValidationErrors()) { why = "NRI/Vulkan validation reported errors"; return false; }
             return true;
@@ -93,6 +121,7 @@ int main(int argc, char** argv) {
         Json report{{"format", "triaevum_device_pipeline_preparation_v1"},
             {"device_pipeline_prewarm", p.Complete() ? "complete" : p.Cancelled ? "cancelled" : "partial"},
             {"total", p.Total}, {"prepared", p.Prepared}, {"failed", p.Failed}, {"error", p.LastError},
+            {"manifest_count", manifests.size()}, {"input_recipes", observations},
             {"validation_requested", validation}, {"validation_errors", device.ValidationErrors()},
             {"creation_nanoseconds", statistics.CreationNanoseconds},
             {"initial_cache_bytes", statistics.InitialCacheBytes},

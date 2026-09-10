@@ -78,7 +78,7 @@ def migrate_installation(installation: Path, title: Path, data_root: Path) -> di
         scopes = {}
         path_options = {"--title-plugin", "--a32-process-manifest", "--resource-root",
                         "--config", "--topscreen-config", "--save-data", "--output",
-                        "--topscreen-texture-overrides", "--pica-aot-shader-pack"}
+                        "--topscreen-texture-overrides", "--pica-aot-shader-pack", "--renderer-cache-directory"}
         for index, argument in enumerate(arguments[:-1]):
             if argument in path_options:
                 path = Path(expand_profile_argument(arguments[index + 1], profile))
@@ -92,7 +92,7 @@ def migrate_installation(installation: Path, title: Path, data_root: Path) -> di
             path = resolve_reference(runtime[field], title)
             runtime[field] = context.reference(path, title)
             runtime[field + "_scope"] = context.scope(path)
-        for field in ("topscreen_textures", "pica_shader_pack"):
+        for field in ("topscreen_textures", "pica_shader_pack", "renderer_cache"):
             if field in runtime:
                 path = resolve_reference(runtime[field]["path"], title)
                 runtime[field]["path"] = context.reference(path, title)

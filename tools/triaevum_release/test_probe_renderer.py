@@ -80,7 +80,8 @@ class ProbeRendererTests(unittest.TestCase):
             (root / "TriAevum.launch.json").write_text(json.dumps({"arguments": [
                 "--config", "${profile_dir}/config.json", "--gameplay-timing", "native30_interpolated",
                 "--presentation-rate", "90", "--frames", "100", "--max-seconds", "600",
-                "--save-state", "DO_NOT_OVERWRITE", "--save-state-frame", "1"]}))
+                "--save-state", "DO_NOT_OVERWRITE", "--save-state-frame", "1",
+                "--renderer-cache-directory", "DO_NOT_OVERWRITE_CACHE"]}))
             argv = ["probe_renderer", str(root), str(root / "runtime"), str(root / "probe"),
                     "--native-fidelity", "--frames", "360", "--shader-pack", str(root / "pack.o3ps"),
                     "--cache-directory", str(root / "prepared"),
@@ -96,6 +97,7 @@ class ProbeRendererTests(unittest.TestCase):
             for option, value in {"--gameplay-timing": "native30_no_interpolation",
                                   "--presentation-rate": "30", "--frames": "360", "--max-seconds": "45",
                                   "--pica-aot-shader-pack": (root / "pack.o3ps").as_posix(),
+                                  "--renderer-cache-directory": (root / "prepared").as_posix(),
                                   "--load-state": (root / "checkpoint.oot3dsav").as_posix(),
                                   "--input-timeline": (root / "inputs.json").as_posix(),
                                   "--save-state": (root / "probe/checkpoint.oot3dsav").as_posix(),

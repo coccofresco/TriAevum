@@ -103,6 +103,36 @@ class ShaderPreparationTests(unittest.TestCase):
         del self.title["shader_preparation"]["dialect"]
         with self.assertRaisesRegex(ValueError, "dialect"): self.prepare()
 
+    def test_known_native_and_extension_sources_compile_together_and_reuse(self):
+        self.title["shader_preparation"] = {
+            "format": FORMAT, "mode": "source_inventories", "descriptor_schema_version": 3,
+            "compiler": self.artifact("compiler"),
+            "inventories": [self.artifact("native.json"), self.artifact("effects.json")],
+            "dependencies": [self.artifact("shaderc.so")]}
+        with patch("shader_preparation._run", side_effect=self.fake_run) as run:
+            first = self.prepare()
+            self.assertEqual(first, self.prepare())
+            self.assertEqual(run.call_count, 1)
+            command = run.call_args.args[0]
+            self.assertEqual(command.count("--inventory"), 2)
+            self.assertNotIn("--input", command)
+            self.assertNotIn("--title-plugin", command)
+            self.title["shader_preparation"]["inventories"][1] = self.artifact("effects.json", b"new variant")
+            self.assertNotEqual(first, self.prepare())
+            self.assertTrue(first.is_file())
+            self.assertEqual(run.call_count, 2)
+
+    def test_inventory_preparation_requires_verified_inputs(self):
+        self.title["shader_preparation"] = {
+            "format": FORMAT, "mode": "source_inventories", "descriptor_schema_version": 3,
+            "compiler": self.artifact("compiler"), "inventories": []}
+        with patch("shader_preparation._run") as run:
+            with self.assertRaisesRegex(ValueError, "no source inventories"): self.prepare()
+            self.title["shader_preparation"]["inventories"] = [self.artifact("native.json")]
+            (self.root / "native.json").write_bytes(b"changed")
+            with self.assertRaisesRegex(ValueError, "integrity"): self.prepare()
+            run.assert_not_called()
+
     @unittest.skipUnless(all(os.environ.get(key) for key in (
         "TRIAEVUM_TEST_CITRA_CACHE", "TRIAEVUM_TEST_CACHE_IMPORTER", "TRIAEVUM_TEST_SHADER_COMPILER")),
         "optional real shader-tool qualification")

@@ -92,6 +92,8 @@ def main():
         set_option("--fixed-delta-seconds", "0.033333333333333333")
     if args.shader_pack:
         set_option("--pica-aot-shader-pack", args.shader_pack.resolve(strict=True).as_posix())
+    if args.cache_directory or "--renderer-cache-directory" in arguments:
+        set_option("--renderer-cache-directory", (args.cache_directory or output / "cache").resolve().as_posix())
     for option, source in (("--load-state", args.load_state),
                            ("--input-timeline", args.input_timeline)):
         if source:

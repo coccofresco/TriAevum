@@ -3,9 +3,10 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from types import SimpleNamespace
 
 from common import atomic_write_json, sha256_file
-from precompiled_titles import CATALOG, FORMAT, MODEL, checked_file, load_catalog, select_title
+from precompiled_titles import CATALOG, FORMAT, MODEL, checked_file, load_catalog, select_title, install_precompiled_title
 from forge_gui import InstallRequest, install_private_title
 from release_platform import host_platform
 
@@ -83,6 +84,38 @@ class PrecompiledTitleTests(unittest.TestCase):
             load_catalog(self.root)
         with self.assertRaises(ValueError):
             checked_file(self.root, {"path": "../outside.dll"})
+
+    def test_install_prepares_before_activation_and_routes_same_cache_to_game(self):
+        title_directory = self.root / "data/titles/test"
+        title_directory.mkdir(parents=True)
+        prepared = SimpleNamespace(directory=title_directory, index={"recipe": "test"}, inputs={
+            kind: SimpleNamespace(sha256=value["sha256"], bytes=value["bytes"], path=self.root / kind)
+            for kind, value in self.recipe["inputs"].items()})
+        pack = self.root / "data/shader-seeds/test/portable.o3ps"
+        order = []
+        def step(name, result):
+            def invoke(*args, **kwargs):
+                order.append(name)
+                return result
+            return invoke
+        with patch("forge.load_prepared_content", return_value=prepared), \
+                patch("device_pipeline_preparation.adopt_existing_cache"), \
+                patch("topscreen_assets.prepare_topscreen_assets", return_value=None), \
+                patch("shader_preparation.prepare_shader_seed", side_effect=step("shaders", pack)), \
+                patch("device_pipeline_preparation.prepare_device_pipelines",
+                      side_effect=step("pipelines", {"device_pipeline_prewarm": "complete"})) as device, \
+                patch("forge.package_private_module", side_effect=step("package", {})), \
+                patch("forge.publish_private_runtime", side_effect=step("publish", {})) as publish, \
+                patch("forge.activate_prepared_title", side_effect=step("activate", {"active_title": "test"})):
+            result = install_precompiled_title(title_directory, root=self.root, recipe=self.recipe,
+                data_root=self.root / "data", runtime_plugin=self.root / self.platform.title_module,
+                launch_profile=self.root / "TriAevum.launch.json", active_title_state=self.root / "data/active-title.json")
+        self.assertEqual(order, ["shaders", "pipelines", "package", "publish", "activate"])
+        cache = (self.root / "data/cache/renderer").resolve()
+        self.assertEqual(device.call_args.kwargs["cache_directory"], cache)
+        self.assertEqual(publish.call_args.kwargs["renderer_cache_directory"], cache)
+        self.assertEqual(publish.call_args.kwargs["pica_shader_pack"], pack)
+        self.assertEqual(result["objects_compiled"], 0)
 
 
 if __name__ == "__main__":

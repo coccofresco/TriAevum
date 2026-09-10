@@ -1,5 +1,10 @@
 # Persistent SPIR-V Cache
 
+The [Forge shader handoff](TRIAEVUM_FORGE_SHADER_HANDOFF.md) now connects this
+cache to an installation-owned directory shared with offline NRI preparation.
+Real incomplete-pack testing verifies that newly compiled shaders survive into
+the next launch. No automatic gameplay-time preparation queue was introduced.
+
 2026-09-10. Continuation of PR #11 review after `09f6202`, on `port/linux-nri`.
 This changes the common renderer, not TopScreen, gameplay or title compilation.
 
@@ -148,8 +153,10 @@ Private evidence: `/home/xander/triaevum-pipeline-live-proof/` directories
 `/home/xander/triaevum-shader-cache-android-tests`, and
 `I:/oot3dre_work/shader-cache-windows`.
 
-Next: persist newly observed **pipeline recipes** incrementally through shared
-storage and reuse the existing bounded preparation job, with cancellation and
-effect-profile invalidation. That automatic discovery-to-next-launch-prewarm
-workflow is not completed here. Measure first-use hitches separately from
-steady-state CPU/GPU rendering. Do not import #15's unsafe worker to hide them.
+The former automatic next-launch-prewarm proposal is superseded by the
+[Forge-first handoff](TRIAEVUM_FORGE_SHADER_HANDOFF.md): prepare known work in
+Forge, compile and persist only uncovered work in the game. Do not introduce a
+gameplay-time preparation queue or import #15's unsafe worker. Incremental
+recipe export may feed a future Forge update, but is not a prerequisite for
+reusing the already persistent shader and driver caches. Measure first-use
+hitches separately from steady-state CPU/GPU rendering.

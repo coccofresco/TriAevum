@@ -42,7 +42,8 @@ def _pack_header(path: Path, schema: int) -> int:
 
 def _run(command: list[str], root: Path) -> None:
     result = subprocess.run(command, cwd=root, env=native_process_environment(),
-                            capture_output=True, text=True, errors="replace", timeout=600)
+                            capture_output=True, text=True, errors="replace", timeout=600,
+                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     if result.returncode:
         raise ValueError("Shader preparation failed: " + (result.stderr or result.stdout)[-4000:])
 
@@ -62,19 +63,24 @@ def prepare_shader_seed(*, root: Path, data_root: Path, title: dict,
         pack = checked_file(root, seed["pack"])
         _pack_header(pack, schema)
         artifacts = [pack]
-    elif mode == "citra_transferable":
-        dialect = seed.get("dialect")
-        if dialect not in ("citra-legacy-v1", "azahar-v1"):
-            raise ValueError("Shader cache requires an explicit Citra/Azahar dialect")
-        sources = [checked_file(root, value) for value in seed.get("caches", [])]
-        if not sources:
-            raise ValueError("Shader preparation has no transferable inputs")
-        importer = checked_file(root, seed["importer"])
+    elif mode in ("citra_transferable", "source_inventories"):
+        sources = []
+        importer = None
+        if mode == "citra_transferable":
+            dialect = seed.get("dialect")
+            if dialect not in ("citra-legacy-v1", "azahar-v1"):
+                raise ValueError("Shader cache requires an explicit Citra/Azahar dialect")
+            sources = [checked_file(root, value) for value in seed.get("caches", [])]
+            if not sources:
+                raise ValueError("Shader preparation has no transferable inputs")
+            importer = checked_file(root, seed["importer"])
         compiler = checked_file(root, seed["compiler"])
         inventories = [checked_file(root, value) for value in seed.get("inventories", [])]
+        if mode == "source_inventories" and not inventories:
+            raise ValueError("Shader preparation has no source inventories")
         # Include dynamically linked compiler dependencies in the cache identity.
         dependencies = [checked_file(root, value) for value in seed.get("dependencies", [])]
-        artifacts = [*sources, importer, compiler, *inventories, *dependencies]
+        artifacts = [*sources, *([importer] if importer else []), compiler, *inventories, *dependencies]
     else:
         raise ValueError("Unsupported shader preparation mode")
     identity = {"contract": seed, "recipe": title["recipe"],
@@ -106,9 +112,11 @@ def prepare_shader_seed(*, root: Path, data_root: Path, title: dict,
             imported = load_json_object(inventory)
             if imported.get("transferable_import", {}).get("complete_import") is not True:
                 raise ValueError("Transferable shader import was incomplete")
+            inventories = [inventory, *inventories]
+        if mode in ("citra_transferable", "source_inventories"):
             pack = stage / "compiled.o3ps"
             command = [str(compiler), "--pack", str(pack), "--manifest", str(stage / "compile.json")]
-            for source in [inventory, *inventories]:
+            for source in inventories:
                 command.extend(("--inventory", str(source)))
             _run(command, root)
         count = _pack_header(pack, schema)
@@ -116,6 +124,7 @@ def prepare_shader_seed(*, root: Path, data_root: Path, title: dict,
         atomic_write_json(receipt_path, {"format": FORMAT, "identity": identity,
             "pack_sha256": sha256_file(pack_path), "modules": count,
             "device_pipeline_prewarm": "not_performed", "game_coverage_proven": False})
+    report("shaders", f"Prepared {count} portable shader modules.")
     return pack_path
 
 

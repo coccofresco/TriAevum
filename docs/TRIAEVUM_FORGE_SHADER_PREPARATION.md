@@ -7,6 +7,12 @@ canonical PICA output. This is not a promise of complete game coverage.
 
 ## Decision
 
+2026-09-10 update: [Forge-to-game handoff](TRIAEVUM_FORGE_SHADER_HANDOFF.md)
+connects the prepared seed and device cache to installation, with native/effect
+inventory union and persistent fallback verified in actual game launches.
+The current combined private corpus is 887 modules and 588 pipelines. Public
+release enablement remains separate; the results below describe earlier tranches.
+
 Use two independent cache layers, not Citra driver binaries:
 
 1. **Portable seed:** native PICA state -> TriAevum shader frontend -> canonical
@@ -94,6 +100,8 @@ entry, not an F1 setting or arbitrary filename scan. Its format is
 `triaevum_shader_preparation_v1`, with `descriptor_schema_version` and:
 
 - `mode: portable_pack`: `pack` is an integrity-checked artifact record.
+- `mode: source_inventories`: verified `compiler`, `inventories` and optional
+  `dependencies`; compiles the native/extension union with the existing compiler.
 - `mode: citra_transferable`: explicit `dialect`, `caches`, `importer`, `compiler`,
   optional extra `inventories`, and `dependencies` for dynamically linked tools.
   Artifact records use the existing `{path, bytes, sha256}` catalog convention.
