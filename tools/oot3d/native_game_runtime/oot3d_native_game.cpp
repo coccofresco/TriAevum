@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include "oot3d_game_language.h"
 #include <array>
 #include <exception>
 #include <fstream>
@@ -149,6 +150,11 @@ int main(int argc, char** argv) {
             return 0;
         }
 #endif
+        if (argc == 3 && std::string_view(argv[1]) == "--game-language-info") {
+            std::cout << Oot3dNativeGame::GameLanguageDocument(
+                Oot3dNativeGame::DetectGameLanguages(argv[2])).dump() << '\n';
+            return 0;
+        }
         if (argc == 2 && std::string_view(argv[1]) == "--product-info") {
             WriteTriAevumProductInfo(std::cout);
             return 0;

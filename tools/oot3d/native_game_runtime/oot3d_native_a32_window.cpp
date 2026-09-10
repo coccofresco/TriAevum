@@ -1,4 +1,5 @@
 #include "oot3d_native_a32_window.h"
+#include "oot3d_game_language_panel.h"
 #ifdef OOT3D_WHOLE_AOT_PRODUCT_MODE
 #include "oot3d_native_crash_diagnostics.h"
 #endif
@@ -3133,6 +3134,11 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
   Oot3dNativeGame::Oot3dPicaCompositionDomain picaCompositionDomain =
       Oot3dNativeGame::Oot3dPicaCompositionDomain::Unknown;
   Oot3dNativeGame::NativeA32CtrHostConfig hostConfig;
+  const auto languageSettings = std::make_shared<Oot3dNativeGame::GameLanguageSettings>(
+      std::filesystem::path(launch.Host.ConfigurationPath).parent_path() / "game_language.json",
+      Oot3dNativeGame::DetectGameLanguages(manifest->RomFsImagePath,
+          manifest->RomFsImageOffset, manifest->RomFsImageSize));
+  hostConfig.SystemLanguage = languageSettings->SystemId();
   hostConfig.ResourceLimitValues = manifest->ResourceLimitValues;
   hostConfig.ResourceCurrentValues = manifest->ResourceCurrentValues;
   hostConfig.LinearHeapBaseAddress = manifest->LinearHeapBaseAddress;
@@ -3835,6 +3841,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                            1000U));
   std::vector<std::shared_ptr<Fast::Oot3d::GraphicsSettingsPanelTab>>
       applicationSettingsTabs;
+  applicationSettingsTabs.push_back(Oot3dNativeGame::CreateGameLanguagePanel(languageSettings));
   applicationSettingsTabs.push_back(
       Oot3dNativeGame::CreateNativeControlsSettingsPanel(
           controlConfigRuntime,

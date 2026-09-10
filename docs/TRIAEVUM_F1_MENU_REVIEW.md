@@ -2,6 +2,10 @@
 
 Date: 2026-09-06. Worktree: `triaevum-release`.
 
+2026-09-10: [Game language selection](TRIAEVUM_GAME_LANGUAGE.md) adds the
+application-owned Game tab, shared with Forge and limited to detected ROM
+languages. Changes apply on a full restart, not on save-state load.
+
 2026-09-10: [Display resolution and confirmation](TRIAEVUM_DISPLAY_RESOLUTION_FIX.md)
 supersedes the in-panel display confirmation below. The modal now works with
 F1 closed; output and scene resolution report actual renderer extents.

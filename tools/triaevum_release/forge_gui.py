@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 try:
-    from . import ctr_rom, forge, extracted_inputs
+    from . import ctr_rom, forge, extracted_inputs, game_language
     from .bundle_paths import installation_path
     from .common import load_json_object
     from .installed_runtime import validate_installed_runtime
@@ -33,6 +33,7 @@ except ImportError:
     import ctr_rom
     import forge
     import extracted_inputs
+    import game_language
     from bundle_paths import installation_path
     from common import load_json_object
     from installed_runtime import validate_installed_runtime
@@ -197,6 +198,7 @@ def install_private_title(
             report("adapt", "Adapting this ROM for the existing title module (no compilation)...")
             extracted, adaptation = adapt_extracted_inputs(
                 extracted, recipe, root=root, output=staging / "normalized")
+        languages = game_language.discover(runtime_path(), extracted.romfs.path)
         extracted = ctr_rom.publish_extracted_inputs(extracted, data_root / "sources")
         cache = forge.HashCache(output_root / ".hash-cache.json")
         for item in extracted.by_kind().values():
@@ -232,6 +234,7 @@ def install_private_title(
             data_root=data_root,
             report=report,
         )
+        game_language.install(data_root, languages)
     finally:
         if staging.exists():
             shutil.rmtree(staging, ignore_errors=True)
@@ -320,6 +323,8 @@ class ForgeWindow:
 
         self.data_root = default_gui_data_root()
         self.rom = tk.StringVar()
+        self.language = tk.StringVar()
+        self.language_options = []
         self.status = tk.StringVar(value="Checking the local installation...")
 
         self._build_layout()
@@ -388,18 +393,22 @@ class ForgeWindow:
             outer, text="Use extracted data...", command=self._browse_extracted
         ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(5, 0))
 
+        self.ttk.Label(outer, text="Game language").grid(row=5, column=0, sticky="w")
+        self.language_combo = self.ttk.Combobox(outer, textvariable=self.language, state="disabled")
+        self.language_combo.grid(row=5, column=1, columnspan=2, sticky="ew", pady=(10, 0))
+        self.language_combo.bind("<<ComboboxSelected>>", self._select_language)
         separator = self.ttk.Separator(outer)
-        separator.grid(row=5, column=0, columnspan=3, sticky="ew", pady=(18, 14))
+        separator.grid(row=6, column=0, columnspan=3, sticky="ew", pady=(18, 14))
 
         self.status_label = self.ttk.Label(
             outer, textvariable=self.status, wraplength=700, justify="left"
         )
-        self.status_label.grid(row=6, column=0, columnspan=3, sticky="ew")
+        self.status_label.grid(row=7, column=0, columnspan=3, sticky="ew")
         self.progress = self.ttk.Progressbar(outer, mode="indeterminate")
-        self.progress.grid(row=7, column=0, columnspan=3, sticky="ew", pady=(10, 18))
+        self.progress.grid(row=8, column=0, columnspan=3, sticky="ew", pady=(10, 18))
 
         actions = self.ttk.Frame(outer)
-        actions.grid(row=8, column=0, columnspan=3, sticky="ew")
+        actions.grid(row=9, column=0, columnspan=3, sticky="ew")
         actions.columnconfigure(0, weight=1)
         self.install_button = self.ttk.Button(
             actions, text="Prepare and install", command=self._install
@@ -492,8 +501,35 @@ class ForgeWindow:
         else:
             self.active_title = active
             self.status.set(f"Ready to play: {active.recipe_id}\n{active.directory}")
+        self._refresh_languages()
+
+    def _refresh_languages(self) -> None:
+        self.language_options = []
+        path = game_language.config_path(self.data_root)
+        if path.exists():
+            try:
+                document = game_language.validate(load_json_object(path))
+                self.language_options = document["available"]
+                self.language_combo.configure(values=[v["label"] for v in self.language_options])
+                self.language.set(next(v["label"] for v in self.language_options if v["code"] == document["selected"]))
+            except (OSError, ValueError) as exc:
+                self.status.set(f"Cannot read game language settings: {exc}")
+        if not self.language_options:
+            self.language.set("Available after ROM preparation")
+
+    def _select_language(self, _event=None) -> None:
+        if self.busy or self.picking:
+            return
+        try:
+            code = next(v["code"] for v in self.language_options if v["label"] == self.language.get())
+            game_language.select(self.data_root, code)
+            self.status.set("Game language saved. Applies on the next full game start.")
+        except (OSError, ValueError, StopIteration) as exc:
+            self.messagebox.showerror("TriAevum Forge", str(exc), parent=self.root)
+            self._refresh_languages()
 
     def _refresh_actions(self) -> None:
+        self.language_combo.configure(state="readonly" if self.language_options and not self.busy and not self.picking else "disabled")
         complete = bool(self.rom.get().strip())
         self.install_button.configure(
             state="normal" if complete and not self.busy and not self.picking else "disabled"

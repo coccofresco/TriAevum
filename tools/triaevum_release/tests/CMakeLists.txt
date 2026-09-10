@@ -4,6 +4,8 @@ add_executable(triaevum_f1_settings_smoke EXCLUDE_FROM_ALL
     f1_settings_panel_smoke.cpp
     ../../oot3d/native_game_runtime/oot3d_native_controls_settings_panel.cpp
     ../../oot3d/native_game_runtime/oot3d_top_screen_settings_panel.cpp
+    ../../oot3d/native_game_runtime/oot3d_game_language.cpp
+    ../../oot3d/native_game_runtime/oot3d_game_language_panel.cpp
     ${_f1_imgui_source}/imgui.cpp
     ${_f1_imgui_source}/imgui_draw.cpp
     ${_f1_imgui_source}/imgui_tables.cpp

@@ -3,6 +3,7 @@
 #include "fast/oot3d/graphics_settings_persistence.h"
 #include "oot3d_native_controls_settings_panel.h"
 #include "oot3d_top_screen_settings_panel.h"
+#include "oot3d_game_language_panel.h"
 #include "fast/MouseCapturePolicy.h"
 #include <imgui_internal.h>
 #include <nlohmann/json.hpp>
@@ -814,6 +815,25 @@ int main() try {
     Check(runtime.SaveState() == GraphicsSettingsSaveState::Saved, "save retry failed");
     CheckControlPersistence();
     CheckGameSurfaceMouseResume();
+    const auto languagePath = std::filesystem::temp_directory_path() /
+        ("triaevum-language-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".json");
+    const std::vector<Oot3dNativeGame::GameLanguage> languages{{"en","English",1},{"it","Italiano",4}};
+    auto language = std::make_shared<Oot3dNativeGame::GameLanguageSettings>(languagePath,languages);
+    InstallGraphicsSettingsPanelTabs({Oot3dNativeGame::CreateGameLanguagePanel(language)});
+    Frame(); Frame();
+    Click("Game"); Frame();
+    Select("Game language", "Italiano");
+    Check(language->Selected() == "it", "language widget did not persist choice");
+    Check(language->SystemId() == 1, "language selection mutated the running guest");
+    Frame(true);
+    Check(loggedPanelText.find("Restart required") != std::string::npos, "language restart notice missing");
+    Oot3dNativeGame::GameLanguageSettings restarted(languagePath,languages);
+    Check(restarted.SystemId() == 4, "next boot did not select Italian CFG language");
+    Check(!restarted.Select("de"), "language absent from ROM was accepted");
+    Oot3dNativeGame::GameLanguageSettings differentRom(languagePath,{{"en","English",1}});
+    Check(differentRom.SystemId() == 1, "unsupported old language leaked into another ROM");
+    std::filesystem::remove(languagePath);
+    InstallGraphicsSettingsPanelTabs({});
     ImGui::DestroyContext();
     std::cout << "F1 UI smoke passed: " << assertions << " assertions, real renderer/Controls/TopScreen widgets\n";
     return 0;

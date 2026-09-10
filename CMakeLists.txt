@@ -3312,6 +3312,7 @@ target_link_libraries(oot3d_native_game PRIVATE
     oot3d_native_a32_savestate
     oot3d_native_control_config
     oot3d_ui_topscreen)
+target_sources(oot3d_native_game PRIVATE tools/oot3d/native_game_runtime/oot3d_game_language.cpp)
 if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
     OOT3D_DIRECT_AOT_PLUGIN)
     target_sources(oot3d_native_game PRIVATE
@@ -3320,6 +3321,7 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
         tools/oot3d/native_game_runtime/oot3d_native_actor_interactions.cpp
         tools/oot3d/native_game_runtime/oot3d_native_pcm_diagnostics.cpp
         tools/oot3d/native_game_runtime/oot3d_native_controls_settings_panel.cpp
+        tools/oot3d/native_game_runtime/oot3d_game_language_panel.cpp
         tools/oot3d/native_game_runtime/oot3d_top_screen_settings_panel.cpp)
     set_source_files_properties(tools/oot3d/native_game_runtime/oot3d_native_actor_interactions.cpp
         PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/source_imports/actor_update_all_449e219e/include")

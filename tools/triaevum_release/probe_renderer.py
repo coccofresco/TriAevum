@@ -55,6 +55,7 @@ def main():
                         help="Isolated renderer cache (defaults to OUTPUT/cache)")
     parser.add_argument("--shader-pack", type=Path)
     parser.add_argument("--load-state", type=Path, help="Read-only checkpoint for a gameplay probe")
+    parser.add_argument("--game-language", help="Private game language preference; requires a cold boot to apply")
     parser.add_argument("--input-timeline", type=Path, help="Repeatable native input sequence")
     parser.add_argument("--scenario-catalog", type=Path, help="Existing native-transition scenario catalog")
     parser.add_argument("--scenario", help="Scenario loaded by the original game's transition helper")
@@ -93,6 +94,12 @@ def main():
         else:
             arguments.extend([option, str(value)])
     config_index = arguments.index("--config") + 1
+    language_source = Path(arguments[config_index]).parent / "game_language.json"
+    language = json.loads(language_source.read_text(encoding="utf-8-sig")) if language_source.exists() else None
+    if args.game_language:
+        language = dict(language or {}, format="triaevum_game_language_v1", selected=args.game_language)
+    if language is not None:
+        (output / "game_language.json").write_text(json.dumps(language), encoding="utf-8")
     config = json.loads(Path(arguments[config_index]).read_text(encoding="utf-8-sig"))
     if args.native_fidelity:
         config.setdefault("Graphics", {})["Preset"] = "Authentic"

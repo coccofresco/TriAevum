@@ -47,7 +47,7 @@ def main(arguments):
             while pending:
                 widget = pending.pop()
                 pending.extend(widget.winfo_children())
-                if widget.winfo_class() not in ("TButton", "TEntry", "TLabel", "TProgressbar"):
+                if widget.winfo_class() not in ("TButton", "TEntry", "TLabel", "TProgressbar", "TCombobox"):
                     continue
                 bounds = [widget.winfo_rootx() - root.winfo_rootx(),
                           widget.winfo_rooty() - root.winfo_rooty(),
