@@ -570,6 +570,57 @@ AxisInputSample ResolveCStick(const MappingConfig& config,
 
 } // namespace
 
+void HostBindingCapture::Begin(BindingDevice device) noexcept {
+    mState = {BindingCapturePhase::Release, device, {}};
+}
+
+void HostBindingCapture::Cancel() noexcept {
+    mState.Phase = BindingCapturePhase::Cancelled;
+}
+
+bool HostBindingCapture::Active() const noexcept {
+    return mState.Phase == BindingCapturePhase::Release || mState.Phase == BindingCapturePhase::Listening;
+}
+
+void HostBindingCapture::Observe(const HostButtonSource& source, bool cancel) noexcept {
+    if (!Active()) return;
+    if (cancel) { Cancel(); return; }
+    HostBinding pressed;
+    bool held = false;
+    if (mState.Device == BindingDevice::Keyboard) {
+        for (const auto& entry : kKeyboardKeys) {
+            if (entry.Value != KeyboardKey::None && entry.Value != KeyboardKey::Escape &&
+                source.IsKeyboardKeyHeld(entry.Value)) {
+                pressed.KeyboardPrimary = entry.Value;
+                held = true;
+                break;
+            }
+        }
+    } else if (mState.Device == BindingDevice::Mouse) {
+        for (const auto& entry : kMouseButtons) {
+            if (entry.Value != MouseButton::None && source.IsMouseButtonHeld(entry.Value)) {
+                pressed.Mouse = entry.Value;
+                held = true;
+                break;
+            }
+        }
+    } else {
+        for (const auto& entry : kGamepadButtons) {
+            if (entry.Value != GamepadButton::None && source.IsGamepadButtonHeld(entry.Value)) {
+                pressed.Gamepad = entry.Value;
+                held = true;
+                break;
+            }
+        }
+    }
+    if (mState.Phase == BindingCapturePhase::Release) {
+        if (!held) mState.Phase = BindingCapturePhase::Listening;
+    } else if (held) {
+        mState.Binding = pressed;
+        mState.Phase = BindingCapturePhase::Complete;
+    }
+}
+
 HardwareCapabilities CapabilitiesFor(HardwareProfile profile) noexcept {
     HardwareCapabilities capabilities;
     if (profile == HardwareProfile::Old3dsCirclePadPro ||

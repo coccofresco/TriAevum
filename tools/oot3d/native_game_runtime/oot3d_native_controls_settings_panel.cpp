@@ -16,7 +16,7 @@ template <typename Enum, std::size_t Size>
 bool EnumCombo(const char* label, Enum* value,
                const std::array<Enum, Size>& values,
                const char* (*name)(Enum) noexcept, bool cell = false,
-               char* search = nullptr, std::size_t searchSize = 0) {
+               char* search = nullptr, std::size_t searchSize = 0, bool* listen = nullptr) {
   std::size_t selected = values.size();
   for (std::size_t index = 0; index < values.size(); ++index) {
     if (values[index] == *value) {
@@ -28,6 +28,12 @@ bool EnumCombo(const char* label, Enum* value,
   const std::string id = cell ? label : ControlWidgets::Field(label);
   const auto preview = ControlWidgets::DisplayName(name(*value));
   if (ImGui::BeginCombo(id.c_str(), preview.c_str())) {
+    if (listen && ImGui::Button("Listen...", ImVec2(-1.0F, 0.0F))) {
+      *listen = true;
+      ImGui::CloseCurrentPopup();
+      ImGui::EndCombo();
+      return false;
+    }
     if (search) {
       if (ImGui::IsWindowAppearing()) {
         search[0] = '\0';
@@ -59,12 +65,12 @@ constexpr std::array<NativeControlProfile, 3> kProfiles{
     NativeControlProfile::Controller,
 };
 
-constexpr std::array<NativeKeyboardKey, 59> kKeyboardKeys{
+constexpr std::array<NativeKeyboardKey, 58> kKeyboardKeys{
     NativeKeyboardKey::None,       NativeKeyboardKey::W,
     NativeKeyboardKey::A,          NativeKeyboardKey::S,
     NativeKeyboardKey::D,          NativeKeyboardKey::Space,
     NativeKeyboardKey::Enter,      NativeKeyboardKey::Tab,
-    NativeKeyboardKey::Backspace,  NativeKeyboardKey::Escape,
+    NativeKeyboardKey::Backspace,
     NativeKeyboardKey::Control,    NativeKeyboardKey::Shift,
     NativeKeyboardKey::RightShift, NativeKeyboardKey::Alt,
     NativeKeyboardKey::Q,          NativeKeyboardKey::E,
@@ -154,6 +160,7 @@ constexpr std::array<BindingGroup, 5> kBindingGroups{{
     {"Menu shortcuts", 18, 21}, {"Look directions", 21, 25},
 }};
 enum class BindingDevice { Keyboard, Mouse, Controller };
+enum class BindingSlot { Primary, Alternate, Mouse, Gamepad };
 
 bool SharesBinding(const NativeControlBinding& a, const NativeControlBinding& b,
                    BindingDevice device) {
@@ -225,6 +232,7 @@ class NativeControlsSettingsPanel final
       });
       ImGui::EndTabBar();
     }
+    DrawBindingCapture();
     if (mControlDraft != frameStartDraft) {
       std::string error;
       if (mControls->Preview(mControlDraft, &error)) {
@@ -246,6 +254,50 @@ class NativeControlsSettingsPanel final
   }
 
  private:
+  void BeginBindingCapture(std::size_t action, BindingSlot slot) {
+    mCaptureAction = action;
+    mCaptureSlot = slot;
+    mOpenCapture = true;
+    mCaptureStarted = ImGui::GetTime();
+    using Device = ThreeDsRecomp::Input::BindingDevice;
+    mControls->BeginBindingCapture(slot == BindingSlot::Mouse ? Device::Mouse :
+        slot == BindingSlot::Gamepad ? Device::Gamepad : Device::Keyboard);
+  }
+
+  void DrawBindingCapture() {
+    if (mOpenCapture) {
+      ImGui::OpenPopup("Assign input");
+      mOpenCapture = false;
+    }
+    if (!ImGui::BeginPopupModal("Assign input", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) return;
+    using Phase = ThreeDsRecomp::Input::BindingCapturePhase;
+    const auto status = mControls->BindingCaptureStatus();
+    constexpr std::array<const char*, 4> slots{"Primary key", "Alternate key", "Mouse button", "Controller button"};
+    ImGui::Text("%s: %s", kActionLabels[mCaptureAction], slots[static_cast<std::size_t>(mCaptureSlot)]);
+    if (status.Phase == Phase::Complete) {
+      auto& binding = mControlDraft.Bindings[mCaptureAction];
+      switch (mCaptureSlot) {
+        case BindingSlot::Primary: binding.KeyboardPrimary = status.Binding.KeyboardPrimary; break;
+        case BindingSlot::Alternate: binding.KeyboardSecondary = status.Binding.KeyboardPrimary; break;
+        case BindingSlot::Mouse: binding.Mouse = status.Binding.Mouse; break;
+        case BindingSlot::Gamepad: binding.Gamepad = status.Binding.Gamepad; break;
+      }
+      MarkCustom(mControlDraft, mControlDirty);
+      mControls->CancelBindingCapture();
+      ImGui::CloseCurrentPopup();
+    } else if (status.Phase == Phase::Cancelled) {
+      ImGui::CloseCurrentPopup();
+    } else {
+      ImGui::TextUnformatted(status.Phase == Phase::Release ? "Release held inputs..." : "Press the input to assign...");
+      if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape, false) ||
+          ImGui::GetTime() - mCaptureStarted > 20.0) {
+        mControls->CancelBindingCapture();
+        ImGui::CloseCurrentPopup();
+      }
+    }
+    ImGui::EndPopup();
+  }
+
   void DrawProfile() {
     if (ImGui::Button("Presets...")) {
       if (mControlDraft.Profile != NativeControlProfile::Custom) mPresetSelection = mControlDraft.Profile;
@@ -426,19 +478,25 @@ class NativeControlsSettingsPanel final
       ImGui::TableSetColumnIndex(1);
       ImGui::SetNextItemWidth(-1.0F);
       bool changed = false;
+      bool listen = false;
       if (keyboard) {
         changed |= EnumCombo((std::string("##primary:") + kActionLabels[index]).c_str(), &binding.KeyboardPrimary, kKeyboardKeys,
-                             NativeKeyboardKeyName, true, mKeySearch.data(), mKeySearch.size());
+                             NativeKeyboardKeyName, true, mKeySearch.data(), mKeySearch.size(), &listen);
+        if (listen) BeginBindingCapture(index, BindingSlot::Primary);
+        listen = false;
         ImGui::TableSetColumnIndex(2);
         ImGui::SetNextItemWidth(-1.0F);
         changed |= EnumCombo((std::string("##alternate:") + kActionLabels[index]).c_str(), &binding.KeyboardSecondary, kKeyboardKeys,
-                             NativeKeyboardKeyName, true, mKeySearch.data(), mKeySearch.size());
+                             NativeKeyboardKeyName, true, mKeySearch.data(), mKeySearch.size(), &listen);
+        if (listen) BeginBindingCapture(index, BindingSlot::Alternate);
       } else if (mBindingDevice == BindingDevice::Mouse) {
         changed |= EnumCombo((std::string("##mouse:") + kActionLabels[index]).c_str(), &binding.Mouse, kMouseButtons,
-                             NativeMouseButtonName, true, mKeySearch.data(), mKeySearch.size());
+                             NativeMouseButtonName, true, mKeySearch.data(), mKeySearch.size(), &listen);
+        if (listen) BeginBindingCapture(index, BindingSlot::Mouse);
       } else {
         changed |= EnumCombo((std::string("##gamepad:") + kActionLabels[index]).c_str(), &binding.Gamepad, kGamepadButtons,
-                             NativeGamepadButtonName, true, mKeySearch.data(), mKeySearch.size());
+                             NativeGamepadButtonName, true, mKeySearch.data(), mKeySearch.size(), &listen);
+        if (listen) BeginBindingCapture(index, BindingSlot::Gamepad);
       }
       if (changed) MarkCustom(mControlDraft, mControlDirty);
       ImGui::PopID();
@@ -666,6 +724,10 @@ class NativeControlsSettingsPanel final
   BindingDevice mBindingDevice = BindingDevice::Keyboard;
   std::array<char, 96> mActionFilter{};
   std::array<char, 64> mKeySearch{};
+  std::size_t mCaptureAction = 0;
+  BindingSlot mCaptureSlot = BindingSlot::Primary;
+  bool mOpenCapture = false;
+  double mCaptureStarted = 0.0;
 };
 
 } // namespace

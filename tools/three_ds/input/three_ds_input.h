@@ -287,6 +287,28 @@ class HostButtonSource {
         GamepadButton button) const noexcept = 0;
 };
 
+enum class BindingDevice : std::uint8_t { Keyboard, Mouse, Gamepad };
+enum class BindingCapturePhase : std::uint8_t { Idle, Release, Listening, Complete, Cancelled };
+
+struct BindingCaptureSnapshot {
+    BindingCapturePhase Phase = BindingCapturePhase::Idle;
+    BindingDevice Device = BindingDevice::Keyboard;
+    HostBinding Binding;
+};
+
+// Reads the existing host poll before device enablement and gameplay/UI filtering.
+// The opening gesture must be released before a new press can be assigned.
+class HostBindingCapture {
+  public:
+    void Begin(BindingDevice device) noexcept;
+    void Cancel() noexcept;
+    void Observe(const HostButtonSource& source, bool cancel) noexcept;
+    [[nodiscard]] BindingCaptureSnapshot Snapshot() const noexcept { return mState; }
+    [[nodiscard]] bool Active() const noexcept;
+  private:
+    BindingCaptureSnapshot mState;
+};
+
 // Exchange physical sources, including every use in a customized mapping.
 // None is not a source: exchanging it would bind every unassigned action.
 void SwapGamepadSources(std::span<HostBinding> bindings,

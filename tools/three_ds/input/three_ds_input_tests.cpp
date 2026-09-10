@@ -43,6 +43,46 @@ class TestHostButtonSource final
 int main() {
     using namespace ThreeDsRecomp::Input;
 
+    HostBindingCapture capture;
+    TestHostButtonSource raw;
+    capture.Begin(BindingDevice::Keyboard);
+    raw.Keyboard = KeyboardKey::Enter;
+    capture.Observe(raw, false);
+    Require(capture.Snapshot().Phase == BindingCapturePhase::Release, "opening key was assigned");
+    raw.Keyboard = KeyboardKey::None;
+    capture.Observe(raw, false);
+    Require(capture.Snapshot().Phase == BindingCapturePhase::Listening, "capture did not arm after release");
+    raw.Mouse = MouseButton::Left;
+    capture.Observe(raw, false);
+    Require(capture.Active(), "wrong device completed keyboard capture");
+    raw.Keyboard = KeyboardKey::RightShift;
+    capture.Observe(raw, false);
+    Require(capture.Snapshot().Phase == BindingCapturePhase::Complete &&
+            capture.Snapshot().Binding.KeyboardPrimary == KeyboardKey::RightShift, "keyboard capture failed");
+    raw.Keyboard = KeyboardKey::W;
+    capture.Observe(raw, false);
+    Require(capture.Snapshot().Binding.KeyboardPrimary == KeyboardKey::RightShift, "completed capture was overwritten");
+    capture.Begin(BindingDevice::Mouse);
+    capture.Observe(raw, false);
+    Require(capture.Snapshot().Phase == BindingCapturePhase::Release, "Listen click was assigned to mouse");
+    raw.Mouse = MouseButton::None;
+    capture.Observe(raw, false);
+    raw.Mouse = MouseButton::Forward;
+    capture.Observe(raw, false);
+    Require(capture.Snapshot().Binding.Mouse == MouseButton::Forward, "mouse side-button capture failed");
+    capture.Begin(BindingDevice::Gamepad);
+    raw.Gamepad = GamepadButton::RightTrigger;
+    capture.Observe(raw, false);
+    Require(capture.Snapshot().Phase == BindingCapturePhase::Release, "held trigger was assigned");
+    raw.Gamepad = GamepadButton::None;
+    capture.Observe(raw, false);
+    raw.Gamepad = GamepadButton::LeftTrigger;
+    capture.Observe(raw, false);
+    Require(capture.Snapshot().Binding.Gamepad == GamepadButton::LeftTrigger, "controller trigger capture failed");
+    capture.Begin(BindingDevice::Keyboard);
+    capture.Observe(raw, true);
+    Require(capture.Snapshot().Phase == BindingCapturePhase::Cancelled && !capture.Active(), "Escape did not cancel capture");
+
     const auto old3ds = CapabilitiesFor(HardwareProfile::Old3ds);
     const auto circlePadPro =
         CapabilitiesFor(HardwareProfile::Old3dsCirclePadPro);

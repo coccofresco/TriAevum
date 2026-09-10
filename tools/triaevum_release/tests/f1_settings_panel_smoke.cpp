@@ -3,6 +3,7 @@
 #include "fast/oot3d/graphics_settings_persistence.h"
 #include "oot3d_native_controls_settings_panel.h"
 #include "oot3d_top_screen_settings_panel.h"
+#include "fast/MouseCapturePolicy.h"
 #include <imgui_internal.h>
 #include <nlohmann/json.hpp>
 #include <cmath>
@@ -17,6 +18,12 @@
 using namespace Fast::Oot3d;
 namespace {
 struct Item { std::string Label; ImRect Rect; ImGuiID Seed = 0; bool Disabled = false; bool Popup = false; };
+struct RawBindingSource final : ThreeDsRecomp::Input::HostButtonSource {
+    ThreeDsRecomp::Input::HostBinding Held;
+    bool IsKeyboardKeyHeld(ThreeDsRecomp::Input::KeyboardKey key) const noexcept override { return key == Held.KeyboardPrimary; }
+    bool IsMouseButtonHeld(ThreeDsRecomp::Input::MouseButton button) const noexcept override { return button == Held.Mouse; }
+    bool IsGamepadButtonHeld(ThreeDsRecomp::Input::GamepadButton button) const noexcept override { return button == Held.Gamepad; }
+};
 std::map<ImGuiID, Item> items;
 int assertions = 0;
 void Check(bool condition, const std::string& what) {
@@ -234,6 +241,28 @@ void CheckControlPersistence() {
     Frame(true);
     Check(loggedPanelText.find("cannot") != std::string::npos, "Save error was not visible");
     InstallGraphicsSettingsPanelTabs({});
+}
+
+void CheckGameSurfaceMouseResume() {
+    Fast::MouseCapturePolicy policy;
+    Check(policy.Request(true), "initial mouse capture denied");
+    policy.Release();
+    auto& io = ImGui::GetIO();
+    io.AddMousePosEvent(100, 100);
+    for (int frame = 0; frame < 3; ++frame) {
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(ImVec2(640, 480));
+        ImGui::Begin("Main Game", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground);
+        ImGui::End();
+        ImGui::Render();
+    }
+    Check(io.WantCaptureMouse, "game viewport did not reproduce generic ImGui capture");
+    Check(!policy.Request(true) && !policy.ResumeClick(true), "a real F1 window allowed recapture");
+    Check(policy.ResumeClick(false) && policy.Request(true),
+          "game-surface-only ImGui capture blocked resuming gameplay");
+    Check(policy.ConsumeClickRelease(), "recapture click would leak a game action");
 }
 }
 
@@ -634,6 +663,43 @@ int main() try {
           "empty binding search not reported");
     EditText("##ActionFilter", "");
     Find("##gamepad:Move forward");
+    EditText("##ActionFilter", "Move forward");
+    RawBindingSource rawBinding;
+    using CapturePhase = ThreeDsRecomp::Input::BindingCapturePhase;
+    Click("##gamepad:Move forward"); Click("Listen...");
+    Check(controls->BindingCaptureStatus().Phase == CapturePhase::Release, "controller Listen did not start capture");
+    controls->ObserveBindingCapture(rawBinding, false); Frame();
+    rawBinding.Held.Gamepad = Button::LeftTrigger;
+    controls->ObserveBindingCapture(rawBinding, false); Frame(); Frame();
+    Check(controls->Snapshot().Config.Bindings[movementIndex].Gamepad == Button::LeftTrigger &&
+          !controls->Snapshot().Config.ControllerEnabled, "Listen did not assign a disabled controller source");
+    Click("Keyboard");
+    rawBinding.Held = {};
+    Click("##alternate:Move forward"); Click("Listen...");
+    controls->ObserveBindingCapture(rawBinding, false); Frame();
+    rawBinding.Held.KeyboardPrimary = Key::P;
+    controls->ObserveBindingCapture(rawBinding, false); Frame(); Frame();
+    Check(controls->Snapshot().Config.Bindings[movementIndex].KeyboardSecondary == Key::P &&
+          controls->Snapshot().Config.Bindings[movementIndex].KeyboardPrimary == Key::W,
+          "Listen assigned wrong keyboard slot");
+    Click("Mouse");
+    rawBinding.Held = {};
+    rawBinding.Held.Mouse = Oot3dNativeGame::NativeMouseButton::Left;
+    const auto beforeCapture = controls->Snapshot().Config;
+    Click("##mouse:Move forward"); Click("Listen...");
+    controls->ObserveBindingCapture(rawBinding, false); Frame();
+    Check(controls->Snapshot().Config == beforeCapture && controls->BindingCaptureStatus().Phase == CapturePhase::Release,
+          "Listen captured its opening mouse click");
+    rawBinding.Held = {};
+    controls->ObserveBindingCapture(rawBinding, false); Frame();
+    rawBinding.Held.Mouse = Oot3dNativeGame::NativeMouseButton::Forward;
+    controls->ObserveBindingCapture(rawBinding, false); Frame(); Frame();
+    Check(controls->Snapshot().Config.Bindings[movementIndex].Mouse == Oot3dNativeGame::NativeMouseButton::Forward,
+          "Listen did not assign the mouse side button");
+    const auto beforeCancel = controls->Snapshot().Config;
+    Click("##mouse:Move forward"); Click("Listen...");
+    Click("Cancel");
+    Check(controls->Snapshot().Config == beforeCancel, "cancelling Listen modified a binding");
     Click("Presets...");
     const auto beforePreset = controls->Snapshot().Config;
     Select("##Preset", "Controller");
@@ -713,6 +779,7 @@ int main() try {
     Click("Retry saving graphics");
     Check(runtime.SaveState() == GraphicsSettingsSaveState::Saved, "save retry failed");
     CheckControlPersistence();
+    CheckGameSurfaceMouseResume();
     ImGui::DestroyContext();
     std::cout << "F1 UI smoke passed: " << assertions << " assertions, real renderer/Controls/TopScreen widgets\n";
     return 0;

@@ -198,6 +198,59 @@ with 1,032 assertions, including per-frame scope checks.
 
 ## Limits
 
+### Direct Input Assignment And Mouse Recapture (2026-09-10)
+
+Each binding selector now offers `Listen...` as well as the searchable list.
+The capture waits for the selected device's held inputs to be released, then
+assigns the next supported keyboard key, mouse button, controller button or
+trigger. Escape, Cancel, closing F1, or a 20-second timeout cancels it. Escape
+remains reserved for releasing the mouse; primary and alternate keys are
+assigned independently. Existing custom configurations are not reset.
+
+Ownership remains split by responsibility:
+
+- `tools/three_ds/input/three_ds_input.{h,cpp}` owns the portable capture state
+  machine, reusing the existing host binding vocabulary, without SDL or ImGui.
+- `oot3d_native_control_config` owns the synchronized capture instance and
+  presets. Keyboard + Mouse uses mouse aim and mouse free look; Controller
+  uses the right stick for both. Physical motion remains separately selectable.
+- `oot3d_native_a32_window` supplies the existing raw host poll before gameplay
+  filters, including disabled devices during assignment. F1 suppresses gameplay
+  keyboard, controller, motion and native-touch input while retaining sensor
+  observation for calibration. No second SDL event pump is introduced.
+- `oot3d_native_controls_settings_panel` owns the modal and draft assignment;
+  the usual Preview, Save and Revert paths persist the result.
+
+The mouse recapture defect was in `Fast3dWindow::MouseButtonDown`: it used
+`ImGuiIO::WantCaptureMouse` to reject the click after Escape. The full-window
+`Main Game` surface also sets that flag, even with F1 closed. Recapture now
+uses the actual host menu/window visibility, consistently with the gameplay
+input poll. The resume click is still consumed, and Escape still releases
+capture rather than closing the game. Native TopScreen camera eligibility,
+including cutscene restrictions, is unchanged.
+
+Verification on Windows:
+
+- Shared input tests, native input tests and TopScreen contract tests pass.
+- The actual F1 widget smoke passes 3,756 assertions (including UI-frame
+  invariants), exercising direct assignments, opening-gesture release, triggers,
+  alternate keys, cancellation and the real ImGui `Main Game` capture flag.
+- Two bounded 180-presentation-frame Vulkan runs from the same gameplay state
+  complete normally. A supplied C-Stick command produces 60 active camera
+  updates versus zero without input. Renderer framebuffer captures confirm
+  different camera orientations. This verifies the camera consumer, not physical
+  mouse delivery; the latter still needs the user's hardware confirmation.
+
+The runtime report now includes `hid_input.mouse_polling` counters for eligible,
+released, host/native UI-owned polls, capture transitions and physical movement.
+Together with `free_camera_input` and TopScreen camera counters, these distinguish
+capture, delivery and native-camera eligibility without another instrumented build.
+
+Current local build: `J:/TriAevum-verify-20260910/runtime/TriAevum.exe`; evidence:
+`J:/TriAevum-verify-20260910/camera-consumer-20260910-162418/` (command) and
+`camera-consumer-20260910-162456/` (control). Only host runtime/UI libraries were
+rebuilt; the title AOT module, game data and savestate format are unchanged.
+
 ### Portable Widget Test (2026-09-09)
 
 The existing real-widget fixture is also available through CMake:

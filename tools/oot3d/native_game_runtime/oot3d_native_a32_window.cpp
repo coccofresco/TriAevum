@@ -2553,6 +2553,12 @@ struct NativeControlPollingState {
   int64_t PendingMouseDeltaY = 0;
   double PendingMouseSeconds = 0.0;
   bool GameplayMouseOwned = false;
+  uint64_t MouseEligiblePolls = 0;
+  uint64_t MouseReleasedPolls = 0;
+  uint64_t MouseHostUiPolls = 0;
+  uint64_t MouseNativeUiPolls = 0;
+  uint64_t MouseCaptureTransitions = 0;
+  uint64_t MouseMovementPolls = 0;
   Oot3dNativeGame::NativeRightStickProfileState RightStickProfile;
 };
 
@@ -2573,7 +2579,7 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
   NativeControlHostInputState host;
   host.SamplePeriodSeconds = samplePeriodSeconds;
   const auto &io = ImGui::GetIO();
-  const bool keyboardCaptured = io.WantCaptureKeyboard;
+  const bool keyboardCaptured = hostGuiVisible || io.WantCaptureKeyboard;
   const bool mouseCaptured = hostGuiVisible;
 
   struct SelectedController {
@@ -2720,9 +2726,22 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
     SDL_GameController *mController = nullptr;
     int16_t mTriggerThreshold = 0;
   };
+  // Remapping observes the same physical source, before gameplay's device and
+  // UI filters. It works even for a currently disabled device.
+  LusHostButtonSource rawButtonSource(window, false, false,
+      selectedController.has_value() ? selectedController->Controller : nullptr,
+      triggerThreshold);
+  if (hostGuiVisible) {
+    controls.ObserveBindingCapture(rawButtonSource, window.IsKeyDown(Ship::LUS_KB_ESCAPE));
+  } else {
+    const auto phase = controls.BindingCaptureStatus().Phase;
+    if (phase != ThreeDsRecomp::Input::BindingCapturePhase::Idle &&
+        phase != ThreeDsRecomp::Input::BindingCapturePhase::Cancelled)
+      controls.CancelBindingCapture();
+  }
   LusHostButtonSource buttonSource(
       window, keyboardCaptured, mouseCaptured,
-      selectedController.has_value() ? selectedController->Controller
+      !hostGuiVisible && selectedController.has_value() ? selectedController->Controller
                                      : nullptr,
       triggerThreshold);
   const ThreeDsRecomp::Input::HostDeviceEnablement enabledDevices{
@@ -2732,6 +2751,7 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
   };
 
   for (size_t index = 0; index < kNativeControlActionCount; ++index) {
+    if (hostGuiVisible) pollingState.PendingPressedActions[index] = false;
     const auto &binding = config.Bindings[index];
     const bool physicalHeld = ThreeDsRecomp::Input::IsHostBindingHeld(
         binding, enabledDevices, buttonSource);
@@ -2760,10 +2780,12 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
       return static_cast<int16_t>(std::clamp(
           -static_cast<int32_t>(axis(value)), -32767, 32767));
     };
-    host.LeftStickX = axis(SDL_CONTROLLER_AXIS_LEFTX);
-    host.LeftStickY = invertedAxis(SDL_CONTROLLER_AXIS_LEFTY);
-    host.RightStickX = axis(SDL_CONTROLLER_AXIS_RIGHTX);
-    host.RightStickY = invertedAxis(SDL_CONTROLLER_AXIS_RIGHTY);
+    if (!hostGuiVisible) {
+      host.LeftStickX = axis(SDL_CONTROLLER_AXIS_LEFTX);
+      host.LeftStickY = invertedAxis(SDL_CONTROLLER_AXIS_LEFTY);
+      host.RightStickX = axis(SDL_CONTROLLER_AXIS_RIGHTX);
+      host.RightStickY = invertedAxis(SDL_CONTROLLER_AXIS_RIGHTY);
+    }
 #if SDL_VERSION_ATLEAST(2, 0, 14)
     constexpr float kGravityMetersPerSecondSquared = 9.80665F;
     constexpr float kRadiansToDegrees =
@@ -2807,6 +2829,10 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
 #endif
   }
   controls.ObserveMotion(host.ControllerMotion);
+  if (hostGuiVisible) {
+    host.ControllerMotion = {};
+    pollingState.RightStickProfile = {};
+  }
 
   const bool sourceUsesMouse =
       config.NativeAimSource == NativeMotionSource::Mouse ||
@@ -2823,10 +2849,16 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
   const bool gameplayMouseOwned = gameplayMouseEligible && !window.IsMouseCaptureReleased();
   bool mouseCaptureChanged =
       gameplayMouseOwned != pollingState.GameplayMouseOwned || wasCaptured != window.IsMouseCaptured();
+  pollingState.MouseEligiblePolls += gameplayMouseEligible ? 1U : 0U;
+  pollingState.MouseReleasedPolls += window.IsMouseCaptureReleased() ? 1U : 0U;
+  pollingState.MouseHostUiPolls += hostGuiVisible ? 1U : 0U;
+  pollingState.MouseNativeUiPolls += nativeFrontendTouchEnabled ? 1U : 0U;
+  pollingState.MouseCaptureTransitions += mouseCaptureChanged ? 1U : 0U;
   pollingState.GameplayMouseOwned = gameplayMouseOwned;
   // SDL relative motion is an accumulator. Drain it even while ImGui owns the
   // pointer so menu movement and capture warps cannot leak into gameplay.
   const auto mouseDelta = window.GetMouseDelta();
+  pollingState.MouseMovementPolls += mouseDelta.x != 0 || mouseDelta.y != 0 ? 1U : 0U;
   if (gameplayMouseOwned && !mouseCaptureChanged) {
     pollingState.PendingMouseDeltaX += mouseDelta.x;
     pollingState.PendingMouseDeltaY += mouseDelta.y;
@@ -2852,7 +2884,7 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
   auto frame = MapNativeControlInput(config, host, aimTransform,
                                      &pollingState.RightStickProfile,
                                      guestRefreshWillConsume);
-  if (nativeFrontendTouchEnabled) {
+  if (nativeFrontendTouchEnabled && !hostGuiVisible) {
     if (window.IsMouseCaptured()) {
       window.SetMouseCapture(false);
     }
@@ -6912,6 +6944,13 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                         controls.FreeCameraSource)},
                    {"gameplay_mouse_owned",
                     nativeControlPollingState.GameplayMouseOwned},
+                   {"mouse_polling", {
+                       {"eligible", nativeControlPollingState.MouseEligiblePolls},
+                       {"released", nativeControlPollingState.MouseReleasedPolls},
+                       {"host_ui", nativeControlPollingState.MouseHostUiPolls},
+                       {"native_ui", nativeControlPollingState.MouseNativeUiPolls},
+                       {"capture_transitions", nativeControlPollingState.MouseCaptureTransitions},
+                       {"movement", nativeControlPollingState.MouseMovementPolls}}},
                    {"free_camera_input",
                     {{"pending_x",
                       nativeCandidateDispatch.TopScreenCameraInput.Peek().X},

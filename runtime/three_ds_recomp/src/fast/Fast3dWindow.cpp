@@ -470,8 +470,12 @@ bool Fast3dWindow::MouseButtonUp(int button) {
 
 bool Fast3dWindow::MouseButtonDown(int button) {
     auto window = std::static_pointer_cast<Fast3dWindow>(Ship::Context::GetRawInstance()->GetWindow());
+    const auto gui = window->GetGui();
+    // The full-window "Main Game" ImGui surface also sets WantCaptureMouse.
+    // Only actual host menus/windows block resuming gameplay after Escape.
+    const bool hostUiOwnsMouse = gui->GetMenuOrMenubarVisible() || gui->GetAnyGuiWindowVisible();
     if (button == Ship::LUS_MOUSE_BTN_LEFT && !window->IsKeyDown(Ship::LUS_KB_ESCAPE) &&
-        window->mMouseCapturePolicy.ResumeClick(ImGui::GetCurrentContext() != nullptr && ImGui::GetIO().WantCaptureMouse)) {
+        window->mMouseCapturePolicy.ResumeClick(hostUiOwnsMouse)) {
         (void)window->GetMouseDelta();
         return true;
     }

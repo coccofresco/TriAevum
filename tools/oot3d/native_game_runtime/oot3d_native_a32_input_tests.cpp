@@ -93,6 +93,23 @@ void TestShoulderMappings() {
 
 int main() {
     TestShoulderMappings();
+    const auto mousePreset = NativeControlPreset(NativeControlProfile::KeyboardMouse);
+    const auto controllerPreset = NativeControlPreset(NativeControlProfile::Controller);
+    Require(mousePreset.NativeAimSource == NativeMotionSource::Mouse &&
+            mousePreset.FreeCameraSource == NativeMotionSource::Mouse && mousePreset.CaptureMouseInGameplay,
+            "keyboard/mouse preset must use mouse for aim and free camera");
+    Require(controllerPreset.NativeAimSource == NativeMotionSource::RightStick &&
+            controllerPreset.FreeCameraSource == NativeMotionSource::RightStick,
+            "controller preset must use the right stick for aim and free camera");
+    NativeControlHostInputState controllerMotion;
+    controllerMotion.RightStickX = 28000;
+    controllerMotion.ControllerMotion.GyroscopeValid = true;
+    controllerMotion.ControllerMotion.GyroscopeDegreesPerSecond = {-90, 0, -90};
+    const auto controllerMapped = MapNativeControlInput(controllerPreset, controllerMotion);
+    controllerMotion.ControllerMotion = {};
+    const auto withoutSensor = MapNativeControlInput(controllerPreset, controllerMotion);
+    Require(controllerMapped.CStick.X > 0 && controllerMapped.Hid.GyroscopeDegreesPerSecond == withoutSensor.Hid.GyroscopeDegreesPerSecond,
+            "controller preset mixed motion sensors into right-stick aiming");
     const auto defaults = NativeControlDefaults();
     Require(defaults.ControllerEnabled && defaults.KeyboardEnabled && defaults.MouseEnabled &&
                 defaults.MovementStick == NativeAnalogStick::Left &&
@@ -221,8 +238,10 @@ int main() {
             "automatic controller profile did not prioritize active C-stick");
     auto motionOnlyControllerHost = controllerHost;
     motionOnlyControllerHost.RightStickY = 0;
+    auto automaticControllerConfig = controllerConfig;
+    automaticControllerConfig.NativeAimSource = NativeMotionSource::Automatic;
     const auto mappedControllerMotion =
-        MapNativeControlInput(controllerConfig, motionOnlyControllerHost);
+        MapNativeControlInput(automaticControllerConfig, motionOnlyControllerHost);
     Require(mappedControllerMotion.Hid.GyroscopeValid &&
                 mappedControllerMotion.Hid.AccelerometerValid &&
                 std::abs(mappedControllerMotion.Hid
@@ -311,7 +330,7 @@ int main() {
                                                      true),
             "gameplay mouse ownership did not respect frontend and host GUI");
     const auto unchangedPhysicalMotion = MapNativeControlInput(
-        controllerConfig, motionOnlyControllerHost,
+        automaticControllerConfig, motionOnlyControllerHost,
         {.RightStickScale = 2.0F,
          .RightStickInvertX = true,
          .RightStickInvertY = true});
