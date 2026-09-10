@@ -26,6 +26,7 @@ except ImportError:
 
 
 FORMAT = "triaevum_shader_preparation_v1"
+RENDERER_FORMAT = "triaevum_renderer_shader_preparation_v1"
 
 
 def _pack_header(path: Path, schema: int) -> int:
@@ -46,6 +47,48 @@ def _run(command: list[str], root: Path) -> None:
                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     if result.returncode:
         raise ValueError("Shader preparation failed: " + (result.stderr or result.stdout)[-4000:])
+
+
+def prepare_renderer_shader_cache(*, root: Path, data_root: Path, title: dict,
+                                 cache_directory: Path,
+                                 report: Callable[[str, str], None] = lambda *_: None) -> dict | None:
+    seed = title.get("shader_preparation")
+    if seed is None:
+        return None
+    if not isinstance(seed, dict) or seed.get("format") != FORMAT:
+        raise ValueError("Unsupported shader preparation contract")
+    if "compiler" not in seed:
+        return None
+    compiler = checked_file(root, seed["compiler"])
+    dependencies = [checked_file(root, value) for value in seed.get("dependencies", [])]
+    cache = cache_directory.resolve()
+    receipts = data_root.resolve() / "shader-seeds" / "renderer-preparation"
+    receipts.mkdir(parents=True, exist_ok=True)
+    report("shaders", "Preparing renderer pass shaders (no game boot)...")
+    with tempfile.TemporaryDirectory(prefix=".preparing-", dir=receipts) as temporary:
+        manifest = Path(temporary) / "result.json"
+        try:
+            _run([str(compiler), "--prepare-renderer-cache", str(cache), "--manifest", str(manifest)], root)
+            result = load_json_object(manifest)
+            modules, hits, compiled = (result.get(key) for key in ("modules", "hits", "compiled"))
+            if (result.get("format") != RENDERER_FORMAT or result.get("game_booted") is not False
+                    or any(type(value) is not int or value < 0 for value in (modules, hits, compiled))
+                    or not 0 < modules <= 256 or hits + compiled != modules
+                    or result.get("compile_failed") != 0 or result.get("write_failed") != 0
+                    or result.get("writes") != compiled
+                    or not isinstance(result.get("cache_directory"), str)
+                    or Path(result.get("cache_directory", "")).resolve() != cache):
+                raise ValueError("Renderer shader preparation did not persist the requested cache")
+            result["renderer_shader_preparation"] = "complete"
+        except (OSError, ValueError, subprocess.TimeoutExpired) as error:
+            # Optional acceleration, like device pipeline preparation. Invalid
+            # catalog artifacts fail above; unsupported old tools remain playable.
+            result = {"format": RENDERER_FORMAT, "renderer_shader_preparation": "failed", "error": str(error)}
+        result.update(compiler_sha256=sha256_file(compiler),
+                      dependency_sha256=[sha256_file(path) for path in dependencies])
+        atomic_write_json(receipts / "latest.json", result)
+        report("shaders", "Renderer shader preparation: " + result["renderer_shader_preparation"])
+        return result
 
 
 def prepare_shader_seed(*, root: Path, data_root: Path, title: dict,

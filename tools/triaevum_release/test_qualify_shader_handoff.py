@@ -12,6 +12,24 @@ class ShaderHandoffStatisticsTests(unittest.TestCase):
         stats = shader_statistics(self.log)
         self.assertEqual(stats["compiled"], 0)
         self.assertIsNone(stats["all_pass_compiled"])
+        self.assertIsNone(stats["pass_compiled"])
+
+    def test_pass_hits_do_not_imply_independent_zero(self):
+        log = self.log + ("TRIAEVUM_PASS_SHADER_CACHE requests=20 hits=20 compiled=0 "
+                         "compile_failed=0 writes=0 write_failed=0 compile_ms=0.0\n")
+        stats = shader_statistics(log)
+        self.assertEqual(stats["pass_compiled"], 0)
+        self.assertEqual(stats["pass_cache_hits"], 20)
+        self.assertIsNone(stats["all_pass_compiled"])
+        stats = shader_statistics(log + "TRIAEVUM_SHADERC_AUDIT calls=0 compile_ms=0.0\n")
+        self.assertEqual(stats["all_pass_compiled"], 0)
+
+    def test_pass_failure_or_duplicate_is_rejected(self):
+        line = ("TRIAEVUM_PASS_SHADER_CACHE requests=20 hits=20 compiled=0 "
+                "compile_failed=0 writes=0 write_failed=0 compile_ms=0.0\n")
+        for log in (self.log + line + line, self.log + line.replace("write_failed=0", "write_failed=1")):
+            with self.assertRaises(ValueError):
+                shader_statistics(log)
 
     def test_audit_exposes_compilation_outside_cache(self):
         stats = shader_statistics(self.log + "TRIAEVUM_SHADERC_AUDIT calls=20 compile_ms=2900.0\n")

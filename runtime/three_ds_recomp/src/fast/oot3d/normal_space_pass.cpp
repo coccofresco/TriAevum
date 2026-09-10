@@ -5,7 +5,7 @@
 #ifdef ENABLE_OOT3D_NRI
 #include "nri_interop_internal.h"
 #endif
-#include <shaderc/shaderc.hpp>
+#include "fast/oot3d/normal_space_shader.h"
 #include <stdexcept>
 #include <vector>
 
@@ -55,29 +55,8 @@ void NormalSpacePass::Initialize(NriInteropContext& interop) {
     layout.flags = nri::PipelineLayoutBits::IGNORE_GLOBAL_SPIRV_OFFSETS;
     if (mImpl->Core->CreatePipelineLayout(*device, layout, mImpl->Layout) != nri::Result::SUCCESS)
         throw std::runtime_error("normal-space layout creation failed");
-    const char* source = R"glsl(#version 450
-#extension GL_EXT_samplerless_texture_functions : require
-layout(local_size_x=8,local_size_y=8) in;
-layout(set=0,binding=0) uniform texture2D input_normal;
-layout(set=0,binding=1,rgba16f) uniform writeonly image2D output_normal;
-layout(push_constant) uniform Transform { mat4 normal_to_output; } pc;
-void main() {
-    ivec2 p=ivec2(gl_GlobalInvocationID.xy);
-    if(any(greaterThanEqual(p,imageSize(output_normal)))) return;
-    vec4 guide=texelFetch(input_normal,p,0);
-    vec3 n=guide.xyz*2.0-1.0;
-    n=normalize(mat3(pc.normal_to_output)*n);
-    imageStore(output_normal,p,vec4(n*0.5+0.5,guide.a));
-}
-)glsl";
-    shaderc::Compiler compiler;
-    shaderc::CompileOptions options;
-    options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_2);
-    options.SetOptimizationLevel(shaderc_optimization_level_performance);
-    const auto compiled = compiler.CompileGlslToSpv(source, shaderc_compute_shader, "normal_space.comp", options);
-    if (compiled.GetCompilationStatus() != shaderc_compilation_status_success)
-        throw std::runtime_error(compiled.GetErrorMessage());
-    const std::vector<uint32_t> code(compiled.cbegin(), compiled.cend());
+    const auto code = interop.Shaders().Resolve(kNormalSpaceComputeShader,
+        Renderer::SpirvStage::Compute, "normal_space.comp");
     nri::ComputePipelineDesc pipeline{};
     pipeline.pipelineLayout = mImpl->Layout;
     pipeline.shader.stage = nri::StageBits::COMPUTE_SHADER;

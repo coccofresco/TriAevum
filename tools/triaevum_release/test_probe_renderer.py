@@ -67,7 +67,33 @@ class ProbeRendererTests(unittest.TestCase):
             self.assertEqual(reflection["Mode"], "FidelityFXSSSR")
             self.assertEqual(reflection["Materials"][0]["Target"]["ContentHash"], "123456789abcdef0")
             self.assertEqual(launch.call_args.kwargs["env"]["TRIAEVUM_RENDERER_CACHE_DIR"], str(output / "cache"))
+            self.assertIn("--screenshot-sequence", command)
+            self.assertTrue(json.loads((output / "invocation.json").read_text())["synchronous_captures"])
             process.wait.assert_called_once_with(timeout=75)
+
+    def test_pacing_probe_strips_inherited_synchronous_captures(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "runtime").touch()
+            (root / "config.json").write_text("{}")
+            (root / "TriAevum.launch.json").write_text(json.dumps({"arguments": [
+                "--config", "${profile_dir}/config.json",
+                "--screenshot", "DO_NOT_WRITE", "--screenshot-start-frame", "0",
+                "--screenshot-interval", "1", "--screenshot-sequence"]}))
+            argv = ["probe_renderer", str(root), str(root / "runtime"), str(root / "probe"),
+                    "--no-captures", "--frames", "900"]
+            process = MagicMock()
+            process.wait.return_value = 0
+            with patch.object(sys, "argv", argv), patch.object(probe_renderer.subprocess, "Popen", return_value=process) as launch:
+                with self.assertRaises(SystemExit) as stopped:
+                    probe_renderer.main()
+                self.assertEqual(stopped.exception.code, 0)
+            command = launch.call_args.args[0]
+            self.assertFalse(any(value.startswith("--screenshot") for value in command))
+            self.assertNotIn("DO_NOT_WRITE", command)
+            self.assertEqual(command[command.index("--frames") + 1], "900")
+            self.assertFalse(json.loads((root / "probe/invocation.json").read_text())["synchronous_captures"])
+            self.assertIn("OOT3D_VULKAN_DIAGNOSTICS_PATH", launch.call_args.kwargs["env"])
 
     def test_native_probe_replaces_timing_and_reuses_only_explicit_cache(self):
         with tempfile.TemporaryDirectory() as directory:

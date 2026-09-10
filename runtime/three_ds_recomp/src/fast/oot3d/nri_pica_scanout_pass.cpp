@@ -10,7 +10,6 @@
 #include <NRI.h>
 #endif
 
-#include <shaderc/shaderc.hpp>
 
 #include <algorithm>
 #include <array>
@@ -25,19 +24,10 @@ namespace {
 constexpr uint32_t kFrameSlots = 2U;
 constexpr uint32_t kDrawsPerFrame = 8U;
 
-std::vector<uint32_t> Compile(const std::string& source,
-                              shaderc_shader_kind kind,
+std::vector<uint32_t> Compile(Renderer::CachedPassShaderCompiler& shaders, const std::string& source,
+                              Renderer::SpirvStage kind,
                               const char* name) {
-    shaderc::Compiler compiler;
-    shaderc::CompileOptions options;
-    options.SetTargetEnvironment(shaderc_target_env_vulkan,
-                                 shaderc_env_version_vulkan_1_2);
-    options.SetOptimizationLevel(shaderc_optimization_level_performance);
-    const auto result =
-        compiler.CompileGlslToSpv(source, kind, name, options);
-    if (result.GetCompilationStatus() != shaderc_compilation_status_success)
-        throw std::runtime_error(result.GetErrorMessage());
-    return {result.cbegin(), result.cend()};
+    return shaders.Resolve(source, kind, name);
 }
 } // namespace
 
@@ -189,11 +179,11 @@ bool NriPicaScanoutPass::Configure(VkFormat targetFormat) {
     mImpl->BasePipeline = nullptr;
     mImpl->OverlayPipeline = nullptr;
     try {
-        const auto vertex = Compile(
-            BuildPicaScanoutVertexShader(), shaderc_vertex_shader,
+        const auto vertex = Compile(mImpl->Interop->Shaders(),
+            BuildPicaScanoutVertexShader(), Renderer::SpirvStage::Vertex,
             "oot3d_nri_pica_scanout.vert");
-        const auto fragment = Compile(
-            BuildPicaScanoutFragmentShader(true), shaderc_fragment_shader,
+        const auto fragment = Compile(mImpl->Interop->Shaders(),
+            BuildPicaScanoutFragmentShader(true), Renderer::SpirvStage::Fragment,
             "oot3d_nri_pica_scanout.frag");
         const std::array<nri::ShaderDesc, 2> shaders{{
             {nri::StageBits::VERTEX_SHADER, vertex.data(),

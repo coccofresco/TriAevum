@@ -7,6 +7,7 @@
 #include "fast/oot3d/grass_placement_cache.h"
 #include "fast/oot3d/pica_attachment_contract.h"
 #include "fast/renderer3ds/pica_scene_payloads.h"
+#include "fast/renderer/shaderc_compiler.h"
 
 #include <vulkan/vulkan.h>
 
@@ -25,6 +26,7 @@ class InteractiveGrassPass final {
     InteractiveGrassPass& operator=(const InteractiveGrassPass&) = delete;
 
     bool Initialize(VkPhysicalDevice physicalDevice, VkDevice device,
+                    Renderer::CachedPassShaderCompiler& shaders,
                     VkRenderPass canonicalRenderPass,
                     VkRenderPass instrumentedRenderPass,
                     VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT,

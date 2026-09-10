@@ -7,6 +7,7 @@
 #include "fast/oot3d/linear_scene_color.h"
 #include "fast/oot3d/renderer_validation_telemetry.h"
 #include "fast/oot3d/upscaler_contract.h"
+#include "fast/renderer/shaderc_compiler.h"
 
 #include <array>
 #include <cstdint>
@@ -83,6 +84,7 @@ class NriInteropContext final {
                     bool swapchainExtensionsEnabled = false,
                     RendererValidationTelemetry* validationTelemetry = nullptr);
     void Shutdown();
+    Renderer::CachedPassShaderCompiler& Shaders() { return mShaders; }
 
     bool WrapFrameCommandBuffer(uint32_t frameIndex, VkCommandBuffer commandBuffer);
     bool WrapTexture(VkImage image, VkFormat format, VkImageType type,
@@ -126,6 +128,7 @@ class NriInteropContext final {
     friend class NriInteropAccess;
     struct Impl;
     std::unique_ptr<Impl> mImpl;
+    Renderer::CachedPassShaderCompiler mShaders;
 };
 
 } // namespace Fast::Oot3d

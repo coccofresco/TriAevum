@@ -13,7 +13,6 @@
 #include "nri_interop_internal.h"
 #endif
 
-#include <shaderc/shaderc.hpp>
 
 #include <array>
 #include <stdexcept>
@@ -34,21 +33,8 @@ struct SmaaPush {
 };
 static_assert(sizeof(SmaaPush) == 16U);
 
-std::vector<uint32_t> Compile(Smaa1xStage stage, const char* name) {
-    shaderc::Compiler compiler;
-    shaderc::CompileOptions options;
-    options.SetTargetEnvironment(shaderc_target_env_vulkan,
-                                 shaderc_env_version_vulkan_1_2);
-    options.SetOptimizationLevel(shaderc_optimization_level_performance);
-    const auto result = compiler.CompileGlslToSpv(
-        BuildSmaa1xComputeShader(stage), shaderc_compute_shader,
-        name, options);
-    if (result.GetCompilationStatus() !=
-        shaderc_compilation_status_success) {
-        throw std::runtime_error(
-            std::string(name) + ": " + result.GetErrorMessage());
-    }
-    return { result.cbegin(), result.cend() };
+std::vector<uint32_t> Compile(Renderer::CachedPassShaderCompiler& shaders, Smaa1xStage stage, const char* name) {
+    return shaders.Resolve(BuildSmaa1xComputeShader(stage), Renderer::SpirvStage::Compute, name);
 }
 
 } // namespace
@@ -169,7 +155,7 @@ bool Smaa1xPass::Initialize(VkPhysicalDevice physicalDevice,
             "oot3d_smaa_neighborhood.comp",
         };
         for (uint32_t i = 0; i < kStageCount; ++i) {
-            const auto shader = Compile(stages[i], names[i]);
+            const auto shader = Compile(interop.Shaders(), stages[i], names[i]);
             nri::ComputePipelineDesc pipeline{};
             pipeline.pipelineLayout = mImpl->PipelineLayout;
             pipeline.shader.stage =

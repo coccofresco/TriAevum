@@ -44,6 +44,8 @@ def main():
     parser.add_argument("--material-hash", help="Diagnostic-only explicit reflective texture (16 hex digits)")
     parser.add_argument("--debug-view", type=int, choices=range(5), default=0)
     parser.add_argument("--capture-interval", type=int, default=300)
+    parser.add_argument("--no-captures", action="store_true",
+                        help="Measure pacing without synchronous framebuffer readback and image writes")
     parser.add_argument("--extended-diagnostics", action="store_true")
     parser.add_argument("--native-fidelity", action="store_true",
                         help="Authentic rendering, fixed native ticks, no interpolation")
@@ -74,10 +76,12 @@ def main():
                  for value in profile["arguments"]]
     # Diagnostic state and automation must be explicit, not inherited from a
     # user's launcher (especially a checkpoint destination outside this probe).
-    for option in ("--load-state", "--save-state", "--save-state-frame", "--input-timeline"):
+    for option in ("--load-state", "--save-state", "--save-state-frame", "--input-timeline",
+                   "--screenshot", "--screenshot-start-frame", "--screenshot-interval"):
         while option in arguments:
             index = arguments.index(option)
             del arguments[index:index + 2]
+    arguments = [value for value in arguments if value != "--screenshot-sequence"]
     def set_option(option, value):
         if option in arguments:
             arguments[arguments.index(option) + 1] = str(value)
@@ -132,13 +136,14 @@ def main():
             arguments[arguments.index(option) + 1] = value.as_posix()
         else:
             arguments.extend([option, value.as_posix()])
-    for option, value in {
-        "--frames": args.frames, "--max-seconds": args.seconds,
-        "--screenshot": (output / "framebuffer.bmp").as_posix(),
-        "--screenshot-start-frame": 120, "--screenshot-interval": args.capture_interval,
-    }.items():
+    for option, value in {"--frames": args.frames, "--max-seconds": args.seconds}.items():
         set_option(option, value)
-    if "--screenshot-sequence" not in arguments:
+    if not args.no_captures:
+        for option, value in {
+            "--screenshot": (output / "framebuffer.bmp").as_posix(),
+            "--screenshot-start-frame": 120, "--screenshot-interval": args.capture_interval,
+        }.items():
+            set_option(option, value)
         arguments.append("--screenshot-sequence")
     if args.extended_diagnostics:
         arguments.append("--extended-diagnostics")
@@ -149,7 +154,8 @@ def main():
     environment["OOT3D_VULKAN_DIAGNOSTICS_MAX_FRAMES"] = str(args.seconds * 120)
     (output / "invocation.json").write_text(json.dumps(
         {"executable": str(executable), "arguments": arguments,
-         "renderer_cache_directory": str(cache), "native_fidelity": args.native_fidelity},
+         "renderer_cache_directory": str(cache), "native_fidelity": args.native_fidelity,
+         "synchronous_captures": not args.no_captures},
         indent=2), encoding="utf-8")
     with (output / "launch.log").open("wb") as log:
         process = subprocess.Popen([str(executable), *arguments], cwd=installation,

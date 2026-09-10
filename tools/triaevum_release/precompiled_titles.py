@@ -104,12 +104,12 @@ def install_precompiled_title(prepared_directory: Path, *, root: Path, recipe: d
     try:
         from . import forge
         from .topscreen_assets import prepare_topscreen_assets
-        from .shader_preparation import prepare_shader_seed
+        from .shader_preparation import prepare_shader_seed, prepare_renderer_shader_cache
         from .device_pipeline_preparation import prepare_device_pipelines, installation_cache_directory, adopt_existing_cache
     except ImportError:
         import forge
         from topscreen_assets import prepare_topscreen_assets
-        from shader_preparation import prepare_shader_seed
+        from shader_preparation import prepare_shader_seed, prepare_renderer_shader_cache
         from device_pipeline_preparation import prepare_device_pipelines, installation_cache_directory, adopt_existing_cache
     catalog = load_catalog(root)
     item = select_title(root, recipe, catalog=catalog)
@@ -137,6 +137,8 @@ def install_precompiled_title(prepared_directory: Path, *, root: Path, recipe: d
                                      title=item, report=report)
     renderer_cache = installation_cache_directory(data_root)
     adopt_existing_cache(renderer_cache, report=report)
+    renderer_preparation = prepare_renderer_shader_cache(root=root, data_root=data_root,
+        title=item, cache_directory=renderer_cache, report=report)
     pipeline_preparation = prepare_device_pipelines(root=root, data_root=data_root,
         title=item, pack=shader_pack, cache_directory=renderer_cache, report=report)
     with activation_transaction(runtime_plugin.resolve().parent, [
@@ -154,5 +156,6 @@ def install_precompiled_title(prepared_directory: Path, *, root: Path, recipe: d
             pica_shader_pack=shader_pack, renderer_cache_directory=renderer_cache)
         activation = forge.activate_prepared_title(prepared.directory, active_title_state=active_title_state)
     return {"status": "ready", "install_model": MODEL, "objects_compiled": 0,
+            "renderer_shader_preparation": renderer_preparation,
             "device_pipeline_preparation": pipeline_preparation,
             "package": packaged, "runtime": runtime, "active_title": activation["active_title"]}

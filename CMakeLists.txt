@@ -2047,17 +2047,14 @@ if(OOT3D_ENABLE_VULKAN_RENDERER AND TARGET three_ds_recomp_shaderc)
     add_executable(oot3d_native_pica_aot_compiler EXCLUDE_FROM_ALL
         tools/oot3d/native_pica_frontend/oot3d_native_pica_aot_compiler.cpp
         runtime/three_ds_recomp/src/fast/oot3d/pica_aot_shader_pack.cpp
-        runtime/three_ds_recomp/src/fast/oot3d/pica_scanout_effects.cpp
-        runtime/three_ds_recomp/src/fast/oot3d/toon_outline_shader.cpp
-        runtime/three_ds_recomp/src/fast/oot3d/ambient_occlusion_composite.cpp
-        runtime/three_ds_recomp/src/fast/oot3d/reflection_debug.cpp
-        runtime/three_ds_recomp/src/fast/oot3d/spatial_aa.cpp
     )
+    include(runtime/three_ds_recomp/cmake/pass_shader_sources.cmake)
+    triaevum_add_pass_shader_sources(oot3d_native_pica_aot_compiler)
     target_include_directories(oot3d_native_pica_aot_compiler PRIVATE
         runtime/three_ds_recomp/include)
     target_link_libraries(oot3d_native_pica_aot_compiler PRIVATE
         nlohmann_json::nlohmann_json
-        three_ds_recomp_shaderc)
+        three_ds_recomp_shaderc ${CMAKE_DL_LIBS})
     target_compile_options(oot3d_native_pica_aot_compiler PRIVATE
         "${WARNING_OVERRIDE}")
     if (CMAKE_SYSTEM_NAME STREQUAL "Windows")

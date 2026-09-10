@@ -3,6 +3,7 @@
 import json
 import os
 import subprocess
+import struct
 import tempfile
 import unittest
 from pathlib import Path
@@ -21,6 +22,48 @@ def inventory_source(source):
 
 @unittest.skipUnless(os.environ.get("TRIAEVUM_TEST_SHADER_COMPILER"), "requires built shader compiler")
 class ShaderCompilerTests(unittest.TestCase):
+    def test_renderer_cache_cold_warm_macros_and_corruption_repair(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            cache = root / "cache"
+            manifest = root / "prepared.json"
+            def prepare():
+                subprocess.run([os.environ["TRIAEVUM_TEST_SHADER_COMPILER"],
+                    "--prepare-renderer-cache", str(cache), "--manifest", str(manifest)],
+                    check=True, capture_output=True, timeout=60)
+                return json.loads(manifest.read_text())
+            cold = prepare()
+            self.assertGreaterEqual(cold["modules"], 22)
+            self.assertEqual(cold["compiled"], cold["modules"])
+            self.assertEqual(cold["writes"], cold["modules"])
+            self.assertEqual(cold["write_failed"], 0)
+            self.assertFalse(cold["game_booted"])
+            warm = prepare()
+            self.assertEqual(warm["hits"], cold["modules"])
+            self.assertEqual(warm["compiled"], 0)
+            self.assertEqual(warm["writes"], 0)
+            # Same fragment source, two macro configurations, two distinct keys
+            # and SPIR-V payloads. Never merge canonical/instrumented grass.
+            grass = []
+            files = sorted((cache / "spirv-v2").glob("*.spvc"))
+            for path in files:
+                data = path.read_bytes()
+                stage, contract_size, source_size = struct.unpack_from("<3I", data, 8)
+                contract = data[40:40 + contract_size]
+                if b"GRASS_AUXILIARY_OUTPUTS" in contract:
+                    start = 40 + contract_size
+                    grass.append((stage, contract, data[start:start + source_size], data[start + source_size:]))
+            self.assertEqual(len(grass), 2)
+            self.assertEqual(grass[0][0], 2)
+            self.assertEqual(grass[0][2], grass[1][2])
+            self.assertNotEqual(grass[0][1], grass[1][1])
+            self.assertNotEqual(grass[0][3], grass[1][3])
+            files[0].write_bytes(b"damaged")
+            repaired = prepare()
+            self.assertEqual(repaired["compiled"], 1)
+            self.assertEqual(repaired["hits"], cold["modules"] - 1)
+            self.assertEqual(repaired["writes"], 1)
+
     def test_renderer_sources_included_deduplicated_and_diagnostic_independent(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -17,7 +17,7 @@ from common import atomic_write_json, load_json_object, sha256_file
 from device_pipeline_preparation import (
     FORMAT as DEVICE_FORMAT, installation_cache_directory, prepare_device_pipelines,
 )
-from shader_preparation import FORMAT as SHADER_FORMAT, prepare_shader_seed
+from shader_preparation import FORMAT as SHADER_FORMAT, prepare_shader_seed, prepare_renderer_shader_cache
 
 
 def shader_statistics(log: str) -> dict:
@@ -28,12 +28,17 @@ def shader_statistics(log: str) -> dict:
         return dict(re.findall(r"(\w+)=([^ ]+)", matches[0]))
     cache = record("TRIAEVUM_SPIRV_CACHE")
     pack = record("OOT3D_PICA_AOT_SHADER_RESOLUTION")
+    passes = record("TRIAEVUM_PASS_SHADER_CACHE") if "TRIAEVUM_PASS_SHADER_CACHE " in log else None
     audit = record("TRIAEVUM_SHADERC_AUDIT") if "TRIAEVUM_SHADERC_AUDIT " in log else None
     if int(cache["compile_failed"]) or int(cache["write_failed"]) or pack["strict"] != "0":
         raise ValueError("Shader fallback/cache failed or strict diagnostic mode is active")
+    if passes and (int(passes["compile_failed"]) or int(passes["write_failed"])):
+        raise ValueError("Pass shader cache failed")
     return {"pack_hits": int(pack["hits"]), "pack_misses": int(pack["misses"]),
             "compiled": int(cache["compiled"]), "cache_hits": int(cache["hits"]),
             "cache_writes": int(cache["writes"]), "compile_ms": float(cache["compile_ms"]),
+            "pass_compiled": int(passes["compiled"]) if passes else None,
+            "pass_cache_hits": int(passes["hits"]) if passes else None,
             "all_pass_compiled": int(audit["calls"]) if audit else None,
             "all_pass_compile_ms": float(audit["compile_ms"]) if audit else None}
 
@@ -52,6 +57,8 @@ def main():
     parser.add_argument("--native-fidelity", action="store_true")
     parser.add_argument("--require-pica-cold-zero", action="store_true",
                         help="Fail on PICA/scanout pack misses or cache compiler calls (not an all-pass audit)")
+    parser.add_argument("--require-all-cold-zero", action="store_true",
+                        help="Require zero PICA/pass compiles and zero independent shaderc audit calls")
     args = parser.parse_args()
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
@@ -81,6 +88,10 @@ def main():
     if prepare_shader_seed(root=package, data_root=data, title=title, report=report) != pack or pack.stat().st_mtime_ns != stamp:
         raise ValueError("Unchanged Forge preparation did not reuse the portable pack")
     cache = installation_cache_directory(data)
+    renderer = prepare_renderer_shader_cache(root=package, data_root=data, title=title,
+                                             cache_directory=cache, report=report)
+    if not renderer or renderer["renderer_shader_preparation"] != "complete":
+        raise ValueError(f"Renderer shader preparation failed: {renderer}")
     device = prepare_device_pipelines(root=package, data_root=data, title=title,
                                      pack=pack, cache_directory=cache, report=report)
     if device["device_pipeline_prewarm"] != "complete":
@@ -106,6 +117,9 @@ def main():
             raise ValueError("Game did not produce captures and use the Forge shader pack")
         if args.require_pica_cold_zero and (stats["compiled"] or stats["pack_misses"]):
             raise ValueError(f"Complete Forge seed left runtime shader work: {stats}")
+        if args.require_all_cold_zero and (stats["compiled"] or stats["pack_misses"]
+                or stats["pass_compiled"] != 0 or stats["all_pass_compiled"] != 0):
+            raise ValueError(f"Full shaderc audit did not confirm zero compilation: {stats}")
         runs.append({"name": name, "shaders": stats, "nri_pipelines": pipeline, "captures": captures})
     identical = runs[0]["captures"] == runs[1]["captures"]
     if args.native_fidelity and not identical:
@@ -114,9 +128,10 @@ def main():
         raise ValueError("Second launch recompiled shaders instead of reusing the local cache")
     result = {"format": "triaevum_forge_shader_handoff_qualification_v1",
               "shader_preparation": load_json_object(pack.parent / "preparation.json"),
+              "renderer_preparation": renderer,
               "device_preparation": device, "runs": runs,
               "captures_identical": identical, "fps_benchmark": False,
-              "compiler_measurement_scope": "pica_and_legacy_scanout_cache_not_all_renderer_passes",
+              "compiler_measurement_scope": "pica_cache_and_pass_cache_with_optional_independent_shaderc_audit",
               "full_game_coverage": False, "title_recompiled": False}
     atomic_write_json(root / "qualification.json", result)
     print(json.dumps({"device_pipelines": device["prepared"], "runs": [r["shaders"] for r in runs],

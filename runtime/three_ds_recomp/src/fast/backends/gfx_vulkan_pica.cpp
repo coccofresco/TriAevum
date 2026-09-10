@@ -850,6 +850,7 @@ void GfxRenderingAPIVulkan::ApplyNativePicaSampleCount(VkSampleCountFlagBits sam
     mNativePicaSampleCount = sampleCount;
     CreateNativePicaRenderPass();
     if (!mInteractiveGrassPass.Initialize(mPhysicalDevice, mDevice,
+                                           mNriInterop.Shaders(),
                                            mNativePicaCanonicalRenderPass,
                                            mNativePicaRenderPass,
                                            mNativePicaSampleCount,

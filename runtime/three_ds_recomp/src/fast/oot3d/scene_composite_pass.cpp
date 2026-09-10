@@ -9,7 +9,6 @@
 #ifdef ENABLE_OOT3D_NRI
 #include "nri_interop_internal.h"
 #endif
-#include <shaderc/shaderc.hpp>
 #include <array>
 #include <stdexcept>
 #include <vector>
@@ -35,18 +34,8 @@ struct CompositePush {
 };
 static_assert(sizeof(CompositePush) == 80U);
 
-std::vector<uint32_t> Compile() {
-    shaderc::Compiler compiler;
-    shaderc::CompileOptions options;
-    options.SetTargetEnvironment(shaderc_target_env_vulkan,
-                                 shaderc_env_version_vulkan_1_2);
-    options.SetOptimizationLevel(shaderc_optimization_level_performance);
-    const auto result = compiler.CompileGlslToSpv(
-        BuildSceneCompositeComputeShader(), shaderc_compute_shader,
-        "oot3d_scene_composite.comp", options);
-    if (result.GetCompilationStatus() != shaderc_compilation_status_success)
-        throw std::runtime_error(result.GetErrorMessage());
-    return {result.cbegin(), result.cend()};
+std::vector<uint32_t> Compile(Renderer::CachedPassShaderCompiler& shaders) {
+    return shaders.Resolve(BuildSceneCompositeComputeShader(), Renderer::SpirvStage::Compute, "oot3d_scene_composite.comp");
 }
 } // namespace
 
@@ -131,7 +120,7 @@ bool SceneCompositePass::Initialize(VkPhysicalDevice physical, VkDevice device,
         if (mImpl->Core->CreatePipelineLayout(
                 *nriDevice, layout, mImpl->PipelineLayout) != nri::Result::SUCCESS)
             throw std::runtime_error("NRI scene composite layout failed");
-        const auto shader = Compile();
+        const auto shader = Compile(interop.Shaders());
         nri::ComputePipelineDesc pipeline{};
         pipeline.pipelineLayout = mImpl->PipelineLayout;
         pipeline.shader.stage = nri::StageBits::COMPUTE_SHADER;

@@ -105,7 +105,7 @@ std::string IdentifyCompiler() {
         if (fingerprint.empty()) return {};
         fingerprints.insert(std::move(fingerprint));
     }
-    // Keep this option contract beside the only compiler invocation below.
+    // Legacy PICA options; pass variants append their Vulkan 1.2/macro contract.
     std::string contract = "shaderc/vulkan1.1/performance/main/v1";
     for (const auto& fingerprint : fingerprints) contract += "/" + fingerprint;
     return contract;
@@ -136,5 +136,59 @@ std::vector<uint32_t> CompileShadercSpirv(std::string_view source, SpirvStage st
     if (result.GetCompilationStatus() != shaderc_compilation_status_success)
         throw std::runtime_error(std::string("shaderc failed for ") + name + ": " + result.GetErrorMessage());
     return {result.cbegin(), result.cend()};
+}
+
+void CachedPassShaderCompiler::Configure(std::filesystem::path directory) {
+    mDirectory = std::move(directory);
+    mVariants.clear();
+}
+
+bool CachedPassShaderCompiler::Enabled() const {
+    return !mDirectory.empty() && !ShadercCompilerContract().empty();
+}
+
+std::vector<uint32_t> CachedPassShaderCompiler::Resolve(
+    std::string_view source, SpirvStage stage, const char* name, const ShaderDefines& defines) {
+    std::string variant = "/pass-vulkan1.2/performance/main/v1";
+    for (const auto& [key, value] : defines)
+        variant += "/" + std::to_string(key.size()) + ":" + key +
+                   "/" + std::to_string(value.size()) + ":" + value;
+    auto [entry, inserted] = mVariants.try_emplace(variant);
+    if (inserted) {
+        const auto& compiler = ShadercCompilerContract();
+        entry->second.Configure(mDirectory, compiler.empty() ? std::string{} : compiler + variant);
+    }
+    return entry->second.Resolve(source, stage, [&] {
+        shaderc_shader_kind kind;
+        switch (stage) {
+            case SpirvStage::Vertex: kind = shaderc_vertex_shader; break;
+            case SpirvStage::Fragment: kind = shaderc_fragment_shader; break;
+            case SpirvStage::Compute: kind = shaderc_compute_shader; break;
+            default: throw std::invalid_argument("unsupported pass shader stage");
+        }
+        shaderc::Compiler compiler;
+        shaderc::CompileOptions options;
+        options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_2);
+        options.SetOptimizationLevel(shaderc_optimization_level_performance);
+        for (const auto& [key, value] : defines) options.AddMacroDefinition(key, value);
+        const auto result = compiler.CompileGlslToSpv(source.data(), source.size(), kind, name, options);
+        if (result.GetCompilationStatus() != shaderc_compilation_status_success)
+            throw std::runtime_error(std::string(name) + ": " + result.GetErrorMessage());
+        return std::vector<uint32_t>(result.cbegin(), result.cend());
+    });
+}
+
+SpirvCacheStats CachedPassShaderCompiler::Stats() const {
+    SpirvCacheStats total;
+    for (const auto& [variant, cache] : mVariants) {
+        const auto& stats = cache.Stats();
+        total.Requests += stats.Requests; total.Hits += stats.Hits;
+        total.Misses += stats.Misses; total.Rejected += stats.Rejected;
+        total.Compilations += stats.Compilations; total.CompilationFailures += stats.CompilationFailures;
+        total.Writes += stats.Writes; total.WriteFailures += stats.WriteFailures;
+        total.CompileNanoseconds += stats.CompileNanoseconds;
+        total.ReadNanoseconds += stats.ReadNanoseconds; total.WriteNanoseconds += stats.WriteNanoseconds;
+    }
+    return total;
 }
 }

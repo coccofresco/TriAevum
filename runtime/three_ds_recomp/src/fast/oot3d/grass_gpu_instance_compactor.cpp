@@ -1,8 +1,8 @@
 #include "fast/oot3d/grass_gpu_instance_compactor.h"
+#include "fast/oot3d/grass_shader_sources.h"
 
 #ifdef ENABLE_OOT3D_VULKAN
 
-#include <shaderc/shaderc.hpp>
 
 #include <algorithm>
 #include <array>
@@ -56,17 +56,8 @@ uint32_t FindMemoryType(VkPhysicalDevice physicalDevice, uint32_t mask, VkMemory
     throw std::runtime_error("grass compactor has no compatible memory type");
 }
 
-VkShaderModule CompileCompute(VkDevice device, const char* source) {
-    shaderc::Compiler compiler;
-    shaderc::CompileOptions options;
-    options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_2);
-    options.SetOptimizationLevel(shaderc_optimization_level_performance);
-    const auto compiled = compiler.CompileGlslToSpv(source, std::strlen(source), shaderc_compute_shader,
-                                                    "grass_instance_compactor.comp", options);
-    if (compiled.GetCompilationStatus() != shaderc_compilation_status_success) {
-        throw std::runtime_error("grass_instance_compactor.comp: " + compiled.GetErrorMessage());
-    }
-    const std::vector<uint32_t> words(compiled.cbegin(), compiled.cend());
+VkShaderModule CompileCompute(Renderer::CachedPassShaderCompiler& shaders, VkDevice device, const char* source) {
+    const auto words = shaders.Resolve(source, Renderer::SpirvStage::Compute, "grass_instance_compactor.comp");
     const VkShaderModuleCreateInfo info{
         VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, nullptr, 0U, words.size() * sizeof(uint32_t), words.data(),
     };
@@ -167,228 +158,14 @@ GrassGpuInstanceCompactor::~GrassGpuInstanceCompactor() {
     Shutdown();
 }
 
-bool GrassGpuInstanceCompactor::Initialize(VkPhysicalDevice physicalDevice, VkDevice device) {
+bool GrassGpuInstanceCompactor::Initialize(VkPhysicalDevice physicalDevice, VkDevice device,
+                                          Renderer::CachedPassShaderCompiler& shaders) {
     Shutdown();
     mImpl->PhysicalDevice = physicalDevice;
     mImpl->Device = device;
     try {
-        static constexpr const char* kComputeSource = R"glsl(
-#version 450
-layout(local_size_x=256, local_size_y=1, local_size_z=1) in;
 
-layout(std430, set=0, binding=0) readonly buffer StaticAnchors {
-    uint words[];
-} static_anchors;
-layout(std430, set=0, binding=1) readonly buffer VisibleIndices {
-    uint values[];
-} visible_indices;
-layout(std430, set=0, binding=2) readonly buffer InteractionSamples {
-    vec4 values[];
-} interaction_samples;
-layout(std430, set=0, binding=3) writeonly buffer OutputInstances {
-    float words[];
-} output_instances;
-
-struct ActorCollider {
-    vec4 previous_radius;
-    vec4 current_half_height;
-    vec4 velocity_teleported;
-};
-layout(std430, set=0, binding=4) readonly buffer Actors {
-    ActorCollider values[];
-} actors;
-
-layout(push_constant) uniform CompactionState {
-    uvec4 counts_flags;
-    vec4 interaction;
-    vec4 collision;
-    vec4 bend;
-} state;
-
-vec2 sample_interaction(vec3 base) {
-    uint resolution = state.counts_flags.y;
-    bool initialized = (state.counts_flags.w & 1u) != 0u;
-    if (!initialized || resolution == 0u)
-        return vec2(0.0);
-    float extent = state.interaction.z;
-    float cell = (extent * 2.0) / float(resolution);
-    float half_cell = extent / float(resolution);
-    if (base.x < state.interaction.x - extent + half_cell ||
-        base.x > state.interaction.x + extent - half_cell ||
-        base.z < state.interaction.y - extent + half_cell ||
-        base.z > state.interaction.y + extent - half_cell)
-        return vec2(0.0);
-    float origin_x = state.interaction.x - extent;
-    float origin_z = state.interaction.y - extent;
-    vec2 grid = vec2(
-        (base.x - origin_x) / cell - 0.5,
-        (base.z - origin_z) / cell - 0.5);
-    if (grid.x < 0.0 || grid.y < 0.0 ||
-        grid.x > float(resolution - 1u) ||
-        grid.y > float(resolution - 1u))
-        return vec2(0.0);
-    uvec2 lower = uvec2(floor(grid));
-    uvec2 upper = min(
-        lower + uvec2(1u),
-        uvec2(resolution - 1u));
-    vec2 fraction = grid - vec2(lower);
-    vec2 result = vec2(0.0);
-    uvec2 coordinates[4] = uvec2[4](
-        uvec2(lower.x, lower.y),
-        uvec2(upper.x, lower.y),
-        uvec2(lower.x, upper.y),
-        uvec2(upper.x, upper.y));
-    float weights[4] = float[4](
-        (1.0 - fraction.x) * (1.0 - fraction.y),
-        fraction.x * (1.0 - fraction.y),
-        (1.0 - fraction.x) * fraction.y,
-        fraction.x * fraction.y);
-    for (uint index = 0u; index < 4u; ++index) {
-        uint sample_index =
-            coordinates[index].y * resolution +
-            coordinates[index].x;
-        vec4 sample_value =
-            interaction_samples.values[sample_index];
-        if (!isnan(sample_value.z) &&
-            abs(base.y - sample_value.z) <=
-                state.interaction.w) {
-            result += sample_value.xy * weights[index];
-        }
-    }
-    return result;
-}
-
-vec2 resolve_direct_collision(vec3 base, float blade_height, ActorCollider actor) {
-    if (state.collision.z <= 0.0 ||
-        blade_height <= 0.0)
-        return vec2(0.0);
-    vec3 previous = actor.previous_radius.xyz;
-    vec3 current = actor.current_half_height.xyz;
-    float radius = max(0.01, actor.previous_radius.w * state.collision.x);
-    // Reject the swept bounding box before projection, roots and normalization.
-    if (any(lessThan(base.xz, min(previous.xz, current.xz) - radius)) ||
-        any(greaterThan(base.xz, max(previous.xz, current.xz) + radius))) return vec2(0.0);
-    vec2 segment = current.xz - previous.xz;
-    float segment_length_squared = dot(segment, segment);
-    float t = 1.0;
-    if (actor.velocity_teleported.w <= 0.5 &&
-        segment_length_squared > 1.0e-6) {
-        t = clamp(
-            dot(base.xz - previous.xz, segment) /
-                segment_length_squared,
-            0.0, 1.0);
-    }
-    vec3 closest = mix(previous, current, t);
-    vec2 delta = base.xz - closest.xz;
-    float distance = length(delta);
-    if (distance >= radius)
-        return vec2(0.0);
-    float full_height = max(
-        radius,
-        actor.current_half_height.w * 2.0 *
-            state.collision.y);
-    float collider_bottom =
-        closest.y - state.bend.y;
-    float collider_top =
-        closest.y + full_height + state.bend.y;
-    if (base.y + blade_height < collider_bottom ||
-        base.y > collider_top)
-        return vec2(0.0);
-    if (distance > 1.0e-5) {
-        delta /= distance;
-    } else {
-        float velocity_length =
-            length(actor.velocity_teleported.xz);
-        float motion_length = sqrt(segment_length_squared);
-        if (velocity_length > 1.0e-5)
-            delta =
-                actor.velocity_teleported.xz /
-                velocity_length;
-        else if (motion_length > 1.0e-5)
-            delta = segment / motion_length;
-        else
-            delta = vec2(1.0, 0.0);
-    }
-    float speed =
-        length(actor.velocity_teleported.xz);
-    float velocity_gain =
-        1.0 + clamp(speed / 300.0, 0.0, 2.0) *
-            state.collision.w;
-    float weight =
-        (1.0 - distance / radius) *
-        state.collision.z * velocity_gain;
-    return delta * min(weight, state.bend.x);
-}
-
-void main() {
-    uint visible_index = gl_GlobalInvocationID.x;
-    if (visible_index >= state.counts_flags.x)
-        return;
-    uint static_index =
-        visible_indices.values[visible_index];
-    if (static_index >= state.counts_flags.z)
-        return;
-    uint source = static_index * 9u;
-    vec4 base_height = uintBitsToFloat(uvec4(
-        static_anchors.words[source + 0u],
-        static_anchors.words[source + 1u],
-        static_anchors.words[source + 2u],
-        static_anchors.words[source + 3u]));
-    vec2 half_width_phase = uintBitsToFloat(uvec2(
-        static_anchors.words[source + 4u],
-        static_anchors.words[source + 5u]));
-    vec2 width_axis = unpackSnorm2x16(static_anchors.words[source + 6u]);
-    vec2 oct = unpackSnorm2x16(static_anchors.words[source + 7u]);
-    vec3 normal = vec3(oct, 1.0 - abs(oct.x) - abs(oct.y));
-    float fold = max(-normal.z, 0.0);
-    normal.xy += mix(vec2(fold), vec2(-fold), greaterThanEqual(normal.xy, vec2(0.0)));
-    // Identical to GrassStableVisibilityValue; W was unused in the instance ABI.
-    uint stable = static_anchors.words[source + 8u];
-    stable ^= stable >> 16u;
-    stable *= 0x7feb352du;
-    stable ^= stable >> 15u;
-    stable *= 0x846ca68bu;
-    stable ^= stable >> 16u;
-    vec4 world_normal = vec4(normalize(normal), float(stable >> 8u) / 16777216.0);
-    vec2 dynamic_bend = sample_interaction(base_height.xyz);
-    for (uint i = 0u; i < (state.counts_flags.w >> 1u); ++i)
-        dynamic_bend += resolve_direct_collision(base_height.xyz, base_height.w, actors.values[i]);
-    float bend_length = length(dynamic_bend);
-    if (bend_length > state.bend.x && bend_length > 0.0)
-        dynamic_bend *= state.bend.x / bend_length;
-
-    uint destination = visible_index * 14u;
-    output_instances.words[destination + 0u] =
-        base_height.x;
-    output_instances.words[destination + 1u] =
-        base_height.y;
-    output_instances.words[destination + 2u] =
-        base_height.z;
-    output_instances.words[destination + 3u] =
-        base_height.w;
-    output_instances.words[destination + 4u] =
-        dynamic_bend.x;
-    output_instances.words[destination + 5u] =
-        dynamic_bend.y;
-    output_instances.words[destination + 6u] =
-        half_width_phase.x;
-    output_instances.words[destination + 7u] =
-        half_width_phase.y;
-    output_instances.words[destination + 8u] =
-        width_axis.x;
-    output_instances.words[destination + 9u] =
-        width_axis.y;
-    output_instances.words[destination + 10u] =
-        world_normal.x;
-    output_instances.words[destination + 11u] =
-        world_normal.y;
-    output_instances.words[destination + 12u] =
-        world_normal.z;
-    output_instances.words[destination + 13u] =
-        world_normal.w;
-}
-)glsl";
-        const VkShaderModule shader = CompileCompute(device, kComputeSource);
+        const VkShaderModule shader = CompileCompute(shaders, device, BuildGrassCompactionComputeShader().c_str());
         try {
             std::array<VkDescriptorSetLayoutBinding, 5U> bindings{};
             for (uint32_t index = 0U; index < bindings.size(); ++index) {

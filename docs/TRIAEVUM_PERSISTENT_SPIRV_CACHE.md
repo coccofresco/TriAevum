@@ -7,8 +7,12 @@ the next launch. No automatic gameplay-time preparation queue was introduced.
 
 Measurement correction: the counters below cover calls routed through this
 cache, not all renderer passes. The subsequent independent shaderc audit found
-20 direct NRI/effect calls even with native presentation. See the handoff above;
-a zero cache compilation count is not a whole-renderer zero-compilation claim.
+20 direct NRI/effect calls even with native presentation. Those calls now use
+`CachedPassShaderCompiler`, sharing this storage but preserving their Vulkan 1.2
+options and macro contracts. Forge prepares 22 built-in pass variants before
+launch; independent native/effects audits report zero shaderc calls. See the
+handoff above for proof and limits: cache counters alone are not whole-renderer
+measurements, and no shader result promises stall-free gameplay.
 
 2026-09-10. Continuation of PR #11 review after `09f6202`, on `port/linux-nri`.
 This changes the common renderer, not TopScreen, gameplay or title compilation.

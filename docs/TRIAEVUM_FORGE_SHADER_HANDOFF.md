@@ -4,7 +4,62 @@
 `298a9a1` (persistent SPIR-V cache). This is the Forge-first implementation,
 not a new game-time prewarm queue.
 
-## Current Result And Counter Correction
+## Current Result
+
+Forge now also prepares **22 renderer-owned pass modules** in the same persistent
+`spirv-v2` cache used by live NRI passes. The 20 uncached calls identified in
+`15cb6fb` are closed; the extra two catalog entries cover normal-space compute
+and the shared depth-only shadow fragment. No game boot, title compilation or
+GPU is required for this shader stage. Driver pipeline preparation remains a
+separate destination-GPU job.
+
+Fresh native and current-effects installations each pass two 900-presentation
+Linux launches with **20 pass-cache hits, zero pass compilations, zero PICA
+compilations/misses, and zero calls in the independent shaderc audit**. The native
+run has 98 pack hits; effects have 140/137. All six native framebuffer captures
+remain byte-identical to each other and the accepted pre-change baseline.
+Effects/interpolation captures are not claimed deterministic.
+
+The first Forge pass preparation compiled/wrote 22 modules in 3.354 s in the
+instrumented Linux test. This moves work out of launch, not out of existence.
+An empty-cache live fallback separately compiled/wrote the observed 20 modules.
+The following launch recovered all 20 without compilation.
+The real compiler tests on Linux and Windows also prove warm reuse of all 22
+and recovery of one deliberately corrupted entry without rebuilding the others.
+These are compiler/cache measurements, not FPS improvements or whole-game
+coverage. No full Windows game or Android device qualification is claimed.
+
+Private evidence: `forge-pass-cache-native-v2`, `forge-pass-cache-effects` and
+`pass-cache-fallback-cold` under `/home/xander/triaevum-pipeline-live-proof/`.
+The initial `forge-pass-cache-native` attempt exposed a null interop owner in
+display-copy initialization; initialization now passes its live context directly
+and the subsequent complete runs passed. This was not a shader/fidelity change.
+
+### Shared Implementation
+
+- `renderer/shaderc_compiler.{h,cpp}`: explicit `CachedPassShaderCompiler` owner;
+  existing SPVC v2 storage, Vulkan 1.2/performance/main and length-delimited ordered
+  macro definitions in the compiler contract. No global cache or GLSL injection.
+- `nri_interop_context.h`: renderer-owned compiler shared explicitly with pass
+  initialization, Grass and its GPU compactor; dynamic variants use the same
+  persistent fallback. Grass canonical/instrumented macros retain distinct keys.
+- `builtin_pass_shaders.cpp`: catalog uses the actual shared generators, including
+  extracted `grass_shader_sources.cpp`, normal-space and shadow-fragment sources.
+  No copied game assets or duplicate shader bodies in Forge.
+- `oot3d_native_pica_aot_compiler --prepare-renderer-cache DIR --manifest FILE`:
+  same compiler/options as runtime, receipt rejects missing or failed cache writes.
+- `shader_preparation.py`, `precompiled_titles.py`: verified bundled compiler and
+  dependencies, renderer stage before GPU recipes and installation activation.
+  Existing caches are rechecked/repaired rather than trusting a stale receipt.
+- `runtime/three_ds_recomp/cmake/pass_shader_sources.cmake`: one source list for
+  the root compiler target and lightweight `tools/renderer/pass_shader_prepare`.
+Windows MSVC and Linux compiler integration tests pass without a title rebuild.
+
+Focused Python suite: 59 passing tests and 2 optional-input skips. Real compiler
+integration: 2 tests each on Windows and Linux (22 cold/warm modules, macro
+separation, corrupted-entry repair and synthetic PICA pack compatibility).
+
+## Previous Counter Correction (15cb6fb)
 
 The two legacy Vulkan scanout modules now come from the same shared source
 generators in the Forge compiler and live renderer. The complete private pack
@@ -17,8 +72,8 @@ are byte-identical to each other and to the previous accepted baseline.
 This closes the two previously identified common shaders, **not all runtime
 shader compilation**.
 
-The current-effects run similarly has 137 pack hits and zero cache compiler
-calls on both launches. Its independent audit still counts 20 direct calls on
+The previous current-effects run had 137 pack hits and zero cache compiler
+calls on both launches. Its independent audit counted 20 direct calls on
 each launch (2,952.040 ms first, 2,751.625 ms second): warming the PICA cache does
 not fix that separate path. Effects/interpolation captures are not deterministic
 and are not used for byte-equality claims. The focused Python checks pass (52
@@ -50,16 +105,9 @@ The 20 calls are:
 | `interactive_grass_pass.cpp` | 3 | Vertex/canonical/instrumented fragment |
 | `grass_gpu_instance_compactor.cpp` | 1 | Grass compaction |
 
-The next implementation must prepare this whole renderer-owned family offline,
-not chase additional captured game scenarios for these fixed sources. Share the
-actual generators; extract inline grass generators from pass execution first.
-Preserve Vulkan 1.2 options, shader stage and macro definitions (the two grass
-fragments have the same source but different defines). Do not force these compute
-modules into the existing PICA vertex/fragment-only schema. A versioned portable
-renderer library can be built with the release tools and installed by Forge;
-the existing persistent cache should remain the fallback for genuinely new
-sources. Avoid a second gameplay prewarm queue. Require an independent all-pass
-audit, not just the PICA counter, before claiming complete first-launch readiness.
+This was the reason for the renderer-owned preparation stage now described
+above. It uses shared generators and the existing persistent cache, not extra
+game scenario captures or a second gameplay prewarm queue.
 
 Implementation points for the completed pair:
 
@@ -82,12 +130,14 @@ No title code was rebuilt; only the compiler/renderer changed.
 1. Forge verifies the catalogued shader inputs and compiler dependencies.
 2. Known native and extension source inventories compile into one deduplicated
    portable `.o3ps` pack. An unchanged input/tool contract reuses that pack.
-3. The headless NRI helper merges known pipeline recipes and prepares them on
+3. The bundled compiler prepares the renderer pass catalog in the live SPIR-V
+   cache. Missing/corrupt entries are repaired, matching the runtime contract.
+4. The headless NRI helper merges known pipeline recipes and prepares them on
    the destination GPU. Native and instrumented recipes remain distinct; no
    Cartesian product of shaders, settings and attachments is constructed.
-4. Forge activates the title only after these preparation stages. The launch
+5. Forge activates the title only after these preparation stages. The launch
    profile selects both the prepared pack and the same writable renderer cache.
-5. The game tries the pack first. Uncovered shaders compile through the existing
+6. The game tries the pack first. Uncovered shaders compile through the existing
    compiler and immediately enter the existing persistent SPIR-V cache. Native
    pipeline creation also extends the driver cache. Subsequent launches reuse
    these entries. Pack misses are not fatal in the normal installation profile.
@@ -186,8 +236,9 @@ zero recompilation on second launch, and deterministic capture equality when
 `--native-fidelity` is selected. It never changes the user's live configuration
 or saves. Specify the compiler's bundled dependencies with `--dependency`.
 `--require-pica-cold-zero` also rejects first-launch misses/compilations in that
-path. It is deliberately not named as an all-renderer guarantee. Without the
-independent audit, `all_pass_compiled` is null, never implicitly zero.
+path. `--require-all-cold-zero` additionally requires the pass-cache counter and
+independent shaderc audit to report zero. Without the audit, `all_pass_compiled`
+is null, never implicitly zero; missing pass counters are also null.
 
 ```text
 python tools/triaevum_release/qualify_shader_handoff.py
@@ -196,7 +247,7 @@ python tools/triaevum_release/qualify_shader_handoff.py
   --manifest NATIVE_MANIFEST --manifest EFFECTS_MANIFEST
   --installation PRIVATE_INSTALL --runtime CURRENT_RUNTIME
   --profile EXISTING_LAUNCH_PROFILE --native-fidelity --frames 900 --seconds 90
-  --require-pica-cold-zero
+  --require-all-cold-zero
 ```
 
 For an independent Linux audit, build the developer-only shim against the same
@@ -226,9 +277,9 @@ Windows evidence: `I:/oot3dre_work/forge-handoff-windows/`.
   release must supply an explicitly permitted seed or a local ROM-derived
   reconstruction recipe, and bundle the matching preparation tools. This is
   packaging/input provenance work, not a missing cache mechanism.
-- The two identified legacy scanout shaders are closed; the 20 direct NRI/effect
-  calls listed above still need offline preparation. Do not claim whole-renderer
-  zero compilation based only on the cache's zero counter.
+- The two legacy scanout shaders and 20 observed NRI/effect calls are closed.
+  The optional Windows `d3d12_ngx_frame_bridge.cpp` direct compiler path was not
+  observed/qualified here; this is not a guarantee about every optional SDK.
 - The covered extension recipes are observed typed variants, not every future
   setting combination. New variants correctly use persistent fallback.
 - Source identity lookup still follows canonical GLSL source construction;
@@ -239,3 +290,14 @@ Windows evidence: `I:/oot3dre_work/forge-handoff-windows/`.
 
 PR #11's input and authorship remain recorded in
 `TRIAEVUM_PR_COMPAT_PERFORMANCE_20260910.md` and `TRIAEVUM_CONTRIBUTIONS.md`.
+
+## Pacing Is A Separate Test
+
+The cache qualification deliberately captures six synchronous GPU framebuffers;
+its FPS must not be used as a performance result. In Linux tests those captures
+caused six 0.43-0.61 s stalls at precisely presentations 120/270/420/570/720/870
+(renderer telemetry frame IDs are one higher). Use `probe_renderer.py
+--no-captures` for pacing observations; it removes inherited screenshot options
+but retains identical game/configuration/cache and frame diagnostics. See
+`TRIAEVUM_LINUX_PROBE_STALLS.md` for the controlled comparison and the separate
+Grass startup stall that remains unresolved.

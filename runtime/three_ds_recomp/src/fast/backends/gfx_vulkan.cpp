@@ -1168,6 +1168,7 @@ void GfxRenderingAPIVulkan::Init() {
                     mPicaDynamicRenderingScope.UnavailableReason());
     }
     if (!mInteractiveGrassPass.Initialize(mPhysicalDevice, mDevice,
+                                          mNriInterop.Shaders(),
                                           mNativePicaCanonicalRenderPass,
                                           mNativePicaRenderPass,
                                           mNativePicaSampleCount,
@@ -3599,6 +3600,7 @@ std::vector<uint32_t> GfxRenderingAPIVulkan::CompileShaderSpirv(
 
 void GfxRenderingAPIVulkan::ConfigureNativePicaAotShaders() {
     mCompiledShaderCache.Configure(VulkanShaderCacheDirectory(), Renderer::ShadercCompilerContract());
+    mNriInterop.Shaders().Configure(VulkanShaderCacheDirectory());
     mCompiledShaderCacheSummaryLogged = false;
     if (!mCompiledShaderCache.Enabled())
         SPDLOG_WARN("SPIR-V disk reuse disabled: cache directory or compiler identity unavailable");
@@ -3696,7 +3698,15 @@ void GfxRenderingAPIVulkan::ConfigureNativePicaAotShaders() {
 
 void GfxRenderingAPIVulkan::FinishNativePicaAotShaders() {
     const auto& cache = mCompiledShaderCache.Stats();
-    if ((cache.Requests || mPicaAotShaderPack.Loaded()) && !mCompiledShaderCacheSummaryLogged) {
+    const auto passes = mNriInterop.Shaders().Stats();
+    if ((cache.Requests || passes.Requests || mPicaAotShaderPack.Loaded()) && !mCompiledShaderCacheSummaryLogged) {
+        std::fprintf(stderr,
+            "TRIAEVUM_PASS_SHADER_CACHE requests=%llu hits=%llu compiled=%llu compile_failed=%llu "
+            "writes=%llu write_failed=%llu compile_ms=%.3f enabled=%d\n",
+            static_cast<unsigned long long>(passes.Requests), static_cast<unsigned long long>(passes.Hits),
+            static_cast<unsigned long long>(passes.Compilations), static_cast<unsigned long long>(passes.CompilationFailures),
+            static_cast<unsigned long long>(passes.Writes), static_cast<unsigned long long>(passes.WriteFailures),
+            passes.CompileNanoseconds / 1e6, mNriInterop.Shaders().Enabled() ? 1 : 0);
         std::fprintf(stderr,
             "TRIAEVUM_SPIRV_CACHE requests=%llu hits=%llu misses=%llu rejected=%llu "
             "compiled=%llu compile_failed=%llu writes=%llu write_failed=%llu "
