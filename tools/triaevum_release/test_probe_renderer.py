@@ -38,7 +38,35 @@ class ProbeRendererTests(unittest.TestCase):
             reflection = json.loads((output / "config.json").read_text())["Graphics"]["Effects"]["Reflections"]
             self.assertEqual(reflection["Mode"], "FidelityFXSSSR")
             self.assertEqual(reflection["Materials"][0]["Target"]["ContentHash"], "123456789abcdef0")
+            self.assertEqual(launch.call_args.kwargs["env"]["TRIAEVUM_RENDERER_CACHE_DIR"], str(output / "cache"))
             process.wait.assert_called_once_with(timeout=75)
+
+    def test_native_probe_replaces_timing_and_reuses_only_explicit_cache(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "runtime").touch()
+            (root / "pack.o3ps").touch()
+            (root / "config.json").write_text('{"Graphics":{"Preset":"Toon"}}')
+            (root / "TriAevum.launch.json").write_text(json.dumps({"arguments": [
+                "--config", "${profile_dir}/config.json", "--gameplay-timing", "native30_interpolated",
+                "--presentation-rate", "90", "--frames", "100", "--max-seconds", "600"]}))
+            argv = ["probe_renderer", str(root), str(root / "runtime"), str(root / "probe"),
+                    "--native-fidelity", "--frames", "360", "--shader-pack", str(root / "pack.o3ps"),
+                    "--cache-directory", str(root / "prepared")]
+            process = MagicMock()
+            process.wait.return_value = 0
+            with patch.object(sys, "argv", argv), patch.object(probe_renderer.subprocess, "Popen", return_value=process) as launch:
+                with self.assertRaises(SystemExit) as stopped:
+                    probe_renderer.main()
+                self.assertEqual(stopped.exception.code, 0)
+            command = launch.call_args.args[0]
+            for option, value in {"--gameplay-timing": "native30_no_interpolation",
+                                  "--presentation-rate": "30", "--frames": "360", "--max-seconds": "45",
+                                  "--pica-aot-shader-pack": (root / "pack.o3ps").as_posix()}.items():
+                self.assertEqual(command.count(option), 1)
+                self.assertEqual(command[command.index(option) + 1], value)
+            self.assertEqual(json.loads((root / "probe/config.json").read_text())["Graphics"]["Preset"], "Authentic")
+            self.assertEqual(launch.call_args.kwargs["env"]["TRIAEVUM_RENDERER_CACHE_DIR"], str(root / "prepared"))
 
 
 if __name__ == "__main__":

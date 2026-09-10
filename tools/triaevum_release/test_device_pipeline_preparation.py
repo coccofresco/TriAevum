@@ -14,6 +14,9 @@ from device_pipeline_preparation import (
 
 class DevicePreparationTests(unittest.TestCase):
     def setUp(self):
+        self.environment = patch.dict(os.environ, {"TRIAEVUM_RENDERER_CACHE_DIR": ""})
+        self.environment.start()
+        self.addCleanup(self.environment.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
@@ -97,6 +100,13 @@ class DevicePreparationTests(unittest.TestCase):
             _run([sys.executable, "-c", "import time; time.sleep(60)"],
                  self.root, self.root, lambda: False, lambda *_: None, timeout=0.1)
 
+    def test_explicit_cache_directory_matches_renderer_override(self):
+        with patch.dict(os.environ, {"TRIAEVUM_RENDERER_CACHE_DIR": str(self.cache)}):
+            self.assertEqual(renderer_cache_directory(), self.cache)
+        with patch.dict(os.environ, {"TRIAEVUM_RENDERER_CACHE_DIR": "relative/cache"}):
+            with self.assertRaisesRegex(ValueError, "must be absolute"):
+                renderer_cache_directory()
+
     def test_subprocess_progress_and_cooperative_cancel(self):
         messages = []
         program = ("import json,pathlib,time; "
@@ -118,15 +128,19 @@ class DevicePreparationTests(unittest.TestCase):
             return {"path": name, "bytes": target.stat().st_size, "sha256": sha256_file(target)}
         self.title["device_pipeline_preparation"] = {
             "format": FORMAT,
-            "helper": copy_artifact("TRIAEVUM_TEST_NRI_PREPARE_HELPER", "prepare"),
+            "helper": copy_artifact("TRIAEVUM_TEST_NRI_PREPARE_HELPER", "prepare" + Path(os.environ["TRIAEVUM_TEST_NRI_PREPARE_HELPER"]).suffix),
             "manifest": copy_artifact("TRIAEVUM_TEST_NRI_PIPELINE_MANIFEST", "pipelines.json")}
         copy_artifact("TRIAEVUM_TEST_NRI_SHADER_PACK", "pack.o3ps")
         first, second = self.prepare(), self.prepare()
         for result in (first, second):
             self.assertEqual(result["device_pipeline_prewarm"], "complete", result)
             self.assertGreater(result["prepared"], 0)
+            self.assertEqual(result["creation_attempts"], result["prepared"])
+            self.assertEqual(result["created"], result["prepared"])
         self.assertFalse(first["cache_input_loaded"])
+        self.assertEqual(first["initial_cache_bytes"], 0)
         self.assertTrue(second["cache_input_loaded"])
+        self.assertGreater(second["initial_cache_bytes"], 0)
         (self.cache / CACHE_FILENAME).write_bytes(b"invalid cache")
         repaired = self.prepare()
         self.assertEqual(repaired["device_pipeline_prewarm"], "complete", repaired)

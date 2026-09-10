@@ -1,5 +1,6 @@
 #include "fast/renderer/pipeline_preparation_job.h"
 #include "fast/renderer3ds/vulkan_pipeline_cache_store.h"
+#include "fast/renderer3ds/pica_vulkan_device_profile.h"
 #include "fast/oot3d/pica_nri_pipeline_state.h"
 #include <chrono>
 #include <fstream>
@@ -15,6 +16,18 @@ void Check(bool ok, std::source_location at = std::source_location::current()) {
 int main() {
     using namespace Fast;
     try {
+        Check(Renderer3ds::PicaVulkanApplicationInfo().apiVersion == VK_API_VERSION_1_2);
+        VkPhysicalDeviceFeatures supported{};
+        supported.independentBlend = VK_TRUE;
+        supported.geometryShader = VK_TRUE;
+        const auto enabled = Renderer3ds::PicaVulkanCoreFeatures(supported);
+        Check(enabled.independentBlend && !enabled.geometryShader && !enabled.shaderInt16);
+        VkPhysicalDeviceVulkan12Features supported12{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
+        supported12.timelineSemaphore = VK_TRUE;
+        supported12.descriptorIndexing = VK_TRUE;
+        supported12.pNext = &supported;
+        const auto enabled12 = Renderer3ds::PicaVulkan12Features(supported12);
+        Check(enabled12.timelineSemaphore && !enabled12.descriptorIndexing && !enabled12.shaderFloat16 && !enabled12.pNext);
         size_t calls = 0;
         Renderer::PipelinePreparationJob job(5, [&](size_t index, std::string&) { Check(index == calls++); return true; });
         Check(job.Step(2).Prepared == 2);

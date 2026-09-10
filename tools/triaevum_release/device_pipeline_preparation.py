@@ -34,6 +34,12 @@ def renderer_cache_directory() -> Path:
     Android's in-process host supplies its app-private directory instead. Under
     Flatpak these environment paths already refer to the sandbox's data area.
     """
+    override = os.environ.get("TRIAEVUM_RENDERER_CACHE_DIR")
+    if override:
+        directory = Path(override)
+        if not directory.is_absolute():
+            raise ValueError("TRIAEVUM_RENDERER_CACHE_DIR must be absolute")
+        return directory
     if sys.platform == "win32":
         base = os.environ.get("APPDATA")
         if not base:

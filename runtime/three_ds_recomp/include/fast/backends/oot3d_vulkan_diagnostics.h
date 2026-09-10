@@ -556,6 +556,8 @@ class Oot3dVulkanDiagnostics {
     [[nodiscard]] bool Enabled() const;
     void ReloadFromEnvironment();
     void SetVulkanAdapter(Oot3dVulkanAdapterDiagnostics adapter);
+    void SetNriPipelineStatistics(uint64_t initialCacheBytes, uint64_t attempts,
+                                  uint64_t created, uint64_t nanoseconds);
     void SetD3d12NgxProvider(Oot3dD3d12NgxProviderDiagnostics provider);
     void SetVulkanPresentationFallback(
         Oot3dVulkanPresentationFallbackReason reason,
@@ -781,6 +783,10 @@ class Oot3dVulkanDiagnostics {
     std::optional<Oot3dVulkanFrameDiagnostics> mActiveFrame;
     std::chrono::steady_clock::time_point mFrameStart{};
     Oot3dVulkanAdapterDiagnostics mVulkanAdapter;
+    uint64_t mNriInitialCacheBytes = 0;
+    uint64_t mNriPipelineAttempts = 0;
+    uint64_t mNriPipelinesCreated = 0;
+    uint64_t mNriPipelineCreationNanoseconds = 0;
     Oot3dD3d12NgxProviderDiagnostics mD3d12NgxProvider;
     Oot3dVulkanPresentationFallbackReason
         mNriSwapchainFallbackReason =

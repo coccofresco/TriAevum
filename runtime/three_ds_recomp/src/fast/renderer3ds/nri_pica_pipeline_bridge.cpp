@@ -1,4 +1,5 @@
 #include "fast/renderer3ds/nri_pica_pipeline_bridge.h"
+#include <chrono>
 
 #ifdef ENABLE_RENDERER3DS_VULKAN
 
@@ -201,6 +202,7 @@ struct NriPicaSamplerKey {
 };
 
 struct NriPicaPipelineBridge::Impl {
+    NriPicaPipelineStatistics Statistics;
     NriPicaInterop* Interop = nullptr;
     std::string Reason = "NRI PICA pipeline bridge is not initialized";
 #ifdef ENABLE_RENDERER3DS_NRI
@@ -356,6 +358,8 @@ bool NriPicaPipelineBridge::InitializePipelineCache(std::span<const uint8_t> dat
     desc.size = data.size();
     auto* core = mImpl->Interop->Core();
     auto result = core->CreatePipelineCache(*mImpl->Interop->Device(), desc, mImpl->PipelineCache);
+    if (result == nri::Result::SUCCESS && mImpl->PipelineCache != nullptr)
+        mImpl->Statistics.InitialCacheBytes = data.size();
     if (result != nri::Result::SUCCESS && !data.empty()) {
         mImpl->PipelineCache = nullptr;
         desc = {};
@@ -510,12 +514,15 @@ nri::Pipeline* NriPicaPipelineBridge::CreatePipeline(const NriPicaGraphicsPipeli
     InitializePipelineCache();
     pipeline.cache = mImpl->PipelineCache;
     nri::Pipeline* owned = nullptr;
-    if (mImpl->Interop->Core()
-            ->CreateGraphicsPipeline(
-                *mImpl->Interop->Device(),
-                pipeline, owned) != nri::Result::SUCCESS ||
-        owned == nullptr)
+    const auto start = std::chrono::steady_clock::now();
+    ++mImpl->Statistics.CreationAttempts;
+    const auto result = mImpl->Interop->Core()->CreateGraphicsPipeline(
+        *mImpl->Interop->Device(), pipeline, owned);
+    mImpl->Statistics.CreationNanoseconds += std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now() - start).count();
+    if (result != nri::Result::SUCCESS || owned == nullptr)
         return nullptr;
+    ++mImpl->Statistics.Created;
     return owned;
 }
 #endif
@@ -530,6 +537,10 @@ bool NriPicaPipelineBridge::PreparePipeline(const NriPicaGraphicsPipelineDesc& d
     mImpl->Interop->Core()->DestroyPipeline(pipeline);
     return true;
 #endif
+}
+
+NriPicaPipelineStatistics NriPicaPipelineBridge::PipelineStatistics() const {
+    return mImpl->Statistics;
 }
 
 bool NriPicaPipelineBridge::CreateOwnedPipeline(

@@ -19,9 +19,18 @@ def main():
     parser.add_argument("--debug-view", type=int, choices=range(5), default=0)
     parser.add_argument("--capture-interval", type=int, default=300)
     parser.add_argument("--extended-diagnostics", action="store_true")
+    parser.add_argument("--native-fidelity", action="store_true",
+                        help="Authentic rendering, fixed native ticks, no interpolation")
+    parser.add_argument("--frames", type=int, default=0,
+                        help="Optional presentation count; seconds remains a safety bound")
+    parser.add_argument("--cache-directory", type=Path,
+                        help="Isolated renderer cache (defaults to OUTPUT/cache)")
+    parser.add_argument("--shader-pack", type=Path)
     args = parser.parse_args()
-    if args.seconds <= 0 or args.capture_interval <= 0:
-        parser.error("seconds and capture interval must be positive")
+    if args.seconds <= 0 or args.capture_interval <= 0 or args.frames < 0:
+        parser.error("seconds and capture interval must be positive; frames cannot be negative")
+    if args.native_fidelity and (args.reflections not in (None, "Off") or args.material_hash or args.debug_view):
+        parser.error("native fidelity cannot enable reflection diagnostics")
     installation = args.installation.resolve(strict=True)
     executable = args.executable.resolve(strict=True)
     output = args.output.resolve()
@@ -29,8 +38,20 @@ def main():
     profile = json.loads((installation / args.profile).read_text(encoding="utf-8-sig"))
     arguments = [value.replace("${profile_dir}", installation.as_posix())
                  for value in profile["arguments"]]
+    def set_option(option, value):
+        if option in arguments:
+            arguments[arguments.index(option) + 1] = str(value)
+        else:
+            arguments.extend([option, str(value)])
     config_index = arguments.index("--config") + 1
     config = json.loads(Path(arguments[config_index]).read_text(encoding="utf-8-sig"))
+    if args.native_fidelity:
+        config.setdefault("Graphics", {})["Preset"] = "Authentic"
+        set_option("--gameplay-timing", "native30_no_interpolation")
+        set_option("--presentation-rate", "30")
+        set_option("--fixed-delta-seconds", "0.033333333333333333")
+    if args.shader_pack:
+        set_option("--pica-aot-shader-pack", args.shader_pack.resolve(strict=True).as_posix())
     reflections = config.setdefault("Graphics", {}).setdefault("Effects", {}).setdefault("Reflections", {})
     if args.reflections is not None:
         reflections["Mode"] = args.reflections
@@ -59,17 +80,25 @@ def main():
             arguments[arguments.index(option) + 1] = value.as_posix()
         else:
             arguments.extend([option, value.as_posix()])
-    arguments.extend(["--frames", "0", "--max-seconds", str(args.seconds),
-                      "--screenshot", (output / "framebuffer.bmp").as_posix(),
-                      "--screenshot-start-frame", "120", "--screenshot-sequence",
-                      "--screenshot-interval", str(args.capture_interval)])
+    for option, value in {
+        "--frames": args.frames, "--max-seconds": args.seconds,
+        "--screenshot": (output / "framebuffer.bmp").as_posix(),
+        "--screenshot-start-frame": 120, "--screenshot-interval": args.capture_interval,
+    }.items():
+        set_option(option, value)
+    if "--screenshot-sequence" not in arguments:
+        arguments.append("--screenshot-sequence")
     if args.extended_diagnostics:
         arguments.append("--extended-diagnostics")
     environment = os.environ.copy()
+    cache = (args.cache_directory or output / "cache").resolve()
+    environment["TRIAEVUM_RENDERER_CACHE_DIR"] = str(cache)
     environment["OOT3D_VULKAN_DIAGNOSTICS_PATH"] = str(output / "gpu.json")
     environment["OOT3D_VULKAN_DIAGNOSTICS_MAX_FRAMES"] = str(args.seconds * 120)
     (output / "invocation.json").write_text(json.dumps(
-        {"executable": str(executable), "arguments": arguments}, indent=2), encoding="utf-8")
+        {"executable": str(executable), "arguments": arguments,
+         "renderer_cache_directory": str(cache), "native_fidelity": args.native_fidelity},
+        indent=2), encoding="utf-8")
     with (output / "launch.log").open("wb") as log:
         process = subprocess.Popen([str(executable), *arguments], cwd=installation,
                                    env=environment, stdout=log, stderr=subprocess.STDOUT)

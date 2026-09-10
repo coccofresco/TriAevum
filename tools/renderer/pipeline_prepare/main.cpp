@@ -1,5 +1,6 @@
 #include "fast/renderer/pipeline_preparation_job.h"
 #include "fast/renderer3ds/vulkan_pipeline_cache_store.h"
+#include "headless_device.h"
 #include "fast/oot3d/pica_pipeline_preparation.h"
 #include <NRI.h>
 #include <Extensions/NRIDeviceCreation.h>
@@ -8,7 +9,6 @@
 #include <nlohmann/json.hpp>
 #include <chrono>
 #include <charconv>
-#include <atomic>
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -17,51 +17,7 @@ namespace {
 using namespace Fast;
 using Json = nlohmann::json;
 
-class HeadlessDevice final : public Renderer3ds::NriPicaInterop {
-  public:
-    ~HeadlessDevice() override { if (mDevice) nri::nriDestroyDevice(mDevice); }
-    bool Initialize(uint32_t index, bool validation) {
-        uint32_t count = 0;
-        if (nri::nriEnumerateAdapters(nullptr, count) != nri::Result::SUCCESS || !count || count > 64 || index >= count)
-            return false;
-        std::vector<nri::AdapterDesc> adapters(count);
-        if (nri::nriEnumerateAdapters(adapters.data(), count) != nri::Result::SUCCESS || index >= count) return false;
-        nri::DeviceCreationDesc create{};
-        create.graphicsAPI = nri::GraphicsAPI::VK;
-        create.adapterDesc = &adapters[index];
-        create.disableVKRayTracing = true;
-        create.enableNRIValidation = validation;
-        create.enableGraphicsAPIValidation = validation;
-        create.callbackInterface.MessageCallback = Message;
-        create.callbackInterface.userArg = this;
-        if (nri::nriCreateDevice(create, mDevice) != nri::Result::SUCCESS) return false;
-        return nri::nriGetInterface(*mDevice, NRI_INTERFACE(nri::CoreInterface), &mCore) == nri::Result::SUCCESS &&
-            nri::nriGetInterface(*mDevice, NRI_INTERFACE(nri::WrapperVKInterface), &Wrapper) == nri::Result::SUCCESS;
-    }
-    bool Available() const override { return mDevice != nullptr; }
-    const std::string& UnavailableReason() const override { return Reason; }
-    nri::Device* Device() override { return mDevice; }
-    nri::CoreInterface* Core() override { return &mCore; }
-    bool WrapBuffer(VkBuffer, uint64_t, uint8_t*) override { return false; }
-    bool WrapTexture(VkImage, VkFormat, VkImageType, VkImageUsageFlags, uint32_t, uint32_t, uint32_t) override { return false; }
-    nri::CommandBuffer* CommandBuffer(uint32_t) override { return nullptr; }
-    nri::Descriptor* TextureView(VkImage, bool) override { return nullptr; }
-    nri::Buffer* Buffer(VkBuffer) override { return nullptr; }
-    nri::Pipeline* WrapGraphicsPipeline(VkPipeline) override { return nullptr; }
-    void DestroyPipelineWrapper(nri::Pipeline*) override {}
-    bool CmdSetPipeline(uint32_t, nri::Pipeline*) override { return false; }
-    uint32_t ValidationErrors() const { return mValidationErrors.load(); }
-    nri::WrapperVKInterface Wrapper{};
-  private:
-    static void NRI_CALL Message(nri::Message type, const char*, uint32_t, const char* text, void* context) {
-        if (type == nri::Message::ERROR) ++static_cast<HeadlessDevice*>(context)->mValidationErrors;
-        std::cerr << "NRI: " << text << '\n';
-    }
-    std::atomic<uint32_t> mValidationErrors{0};
-    nri::Device* mDevice = nullptr;
-    nri::CoreInterface mCore{};
-    std::string Reason = "headless NRI device unavailable";
-};
+using TriAevum::Tools::HeadlessDevice;
 }
 
 int main(int argc, char** argv) {
@@ -133,10 +89,14 @@ int main(int argc, char** argv) {
         cache = bridge.GetPipelineCacheData();
         if (!Renderer3ds::StorePipelineCacheData(cachePath, identity, cache, &error)) throw std::runtime_error(error);
         const auto& p = job.Progress();
+        const auto statistics = bridge.PipelineStatistics();
         Json report{{"format", "triaevum_device_pipeline_preparation_v1"},
             {"device_pipeline_prewarm", p.Complete() ? "complete" : p.Cancelled ? "cancelled" : "partial"},
             {"total", p.Total}, {"prepared", p.Prepared}, {"failed", p.Failed}, {"error", p.LastError},
             {"validation_requested", validation}, {"validation_errors", device.ValidationErrors()},
+            {"creation_nanoseconds", statistics.CreationNanoseconds},
+            {"initial_cache_bytes", statistics.InitialCacheBytes},
+            {"creation_attempts", statistics.CreationAttempts}, {"created", statistics.Created},
             {"cache_input_loaded", loaded}, {"cache_bytes", cache.size()}, {"cache_path", cachePath.string()},
             {"gpu", properties.deviceName}, {"vendor_id", identity.VendorId}, {"device_id", identity.DeviceId},
             {"driver_version", identity.DriverVersion}, {"pipeline_cache_uuid", identity.Uuid},

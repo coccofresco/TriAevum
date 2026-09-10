@@ -15,6 +15,9 @@ The headless tool creates **actual NRI graphics pipelines**, destroys each after
 creation and persists the driver cache. It does not just compile GLSL, create
 shader modules or prepare the fallback Vulkan pipeline.
 
+Initial helper-only qualification at `eed1a02` (superseded for live-cache
+acceptance by **Live Qualification** below):
+
 | Qualification | Result |
 |---|---|
 | Linux RTX 4060, empty application cache | 500/500, 8.224 seconds |
@@ -30,11 +33,10 @@ shader modules or prepare the fallback Vulkan pipeline.
 
 These are **preparation times**, not FPS, installation times or whole-game
 coverage. An empty application cache does not imply an empty vendor-global
-shader cache. No game/framebuffer equivalence run was made with this refactor
-yet. The installed game, public catalogs and release packages have not been
-replaced. Windows native helper/GPU execution and Android device execution remain
-to qualify; no Android device was visible to local ADB. The Forge Python host
-tests also pass on Windows, with real-GPU tests explicitly skipped there.
+shader cache. At that initial checkpoint no game/framebuffer equivalence run or
+Windows GPU preparation had been made. Both are now covered below. Public
+catalogs and release packages remain unchanged; Android GPU execution remains
+unqualified because no device was visible to local ADB.
 
 ## Ownership
 
@@ -70,6 +72,21 @@ drawable; only the recording backend consumes it.
 - Driver cache data remains local. The portable pack is not a driver cache.
 - Do not prepare concurrently with gameplay writing the same cache: atomic
   writes prevent partial files, but last-writer-wins can discard additions.
+
+The helper now wraps a Vulkan device using the live renderer's shared
+`renderer3ds/pica_vulkan_device_profile.h`: application/API contract and enabled
+core/Vulkan-1.2 features. It no longer lets standalone NRI choose a different API
+and feature set. Queue/surface ownership stays in the host; no window is needed
+for preparation. The helper's host implementation is isolated in
+`tools/renderer/pipeline_prepare/headless_device.h`.
+
+GPU/driver identity is necessary but not sufficient. On the tested Linux NVIDIA
+driver, importing the desktop display/session environment changes the reported
+pipeline-cache UUID even on the same GPU. An SSH-only preparation produced an
+incompatible cache; importing the same session used by gameplay produced the
+matching UUID. Run the helper in Forge's inherited desktop/sandbox environment,
+not in a detached environment with display variables stripped. Never rewrite
+the UUID or weaken validation to force a cache to load.
 
 Cancellation is checked between pipeline calls. A synchronous driver compilation
 cannot be interrupted safely inside NRI. Forge requests cooperative cancellation
@@ -113,6 +130,15 @@ The helper reports its GPU; `adapter` is an NRI enumeration index. On multi-GPU
 hosts verify that it matches gameplay before enabling a package contract. A
 mismatch invalidates the cache, not rendering.
 
+For isolated tests, both Forge and the renderer accept the same optional
+`TRIAEVUM_RENDERER_CACHE_DIR` absolute path. Relative paths are rejected; absent
+overrides retain the normal platform directory. This is a developer isolation
+mechanism, not another user-facing cache preference.
+
+`--validation` on the helper now requires an actual Khronos validation layer;
+missing layers fail explicitly rather than implying API validation from NRI's
+error counter alone. Normal Forge preparation does not require a Vulkan SDK.
+
 ## Reproduce
 
 Developer build only, using existing pinned dependencies:
@@ -134,6 +160,62 @@ Real Forge test: set `TRIAEVUM_TEST_NRI_PREPARE_HELPER`,
 `python -m unittest test_device_pipeline_preparation` in the release-tools folder.
 Inputs are copied to a temporary private package; no installed cache is modified.
 
+Live qualification uses the existing bounded probe, with savedata/configuration
+copies and framebuffer readback rather than desktop screenshots:
+
+```text
+python tools/triaevum_release/probe_renderer.py INSTALLATION RUNTIME COLD_OUTPUT --profile HOST_LAUNCH_PROFILE --native-fidelity --frames 900 --seconds 90 --capture-interval 150 --shader-pack PRIVATE_PACK.o3ps
+triaevum_nri_pipeline_prepare --manifest PRIVATE_PIPELINES.json --pack PRIVATE_PACK.o3ps --cache-dir PREPARED_CACHE --report PRIVATE_REPORT.json
+python tools/triaevum_release/probe_renderer.py INSTALLATION RUNTIME WARM_OUTPUT --profile HOST_LAUNCH_PROFILE --native-fidelity --frames 900 --seconds 90 --capture-interval 150 --shader-pack PRIVATE_PACK.o3ps --cache-directory PREPARED_CACHE
+```
+
+Use the same desktop environment for all three commands. Each probe output must
+be a new directory. `--native-fidelity` selects Authentic, fixed native ticks
+and no interpolation. The seconds argument remains a safety bound, not the
+measured gameplay duration. Compare the six `framebuffer_*.bmp` hashes, runtime
+state fingerprints and `gpu.json/nri_pipeline_compilation`. The latter records
+driver-accepted initial bytes and timed creation attempts/successes, independent
+of the release logger's severity threshold. Neither cache-file existence nor
+`cache_input_loaded` alone proves that gameplay used the prepared data.
+
+## Live Qualification (2026-09-10)
+
+- Windows MSVC helper/contract build passes. Actual Forge preparation on RTX
+  3060: **500/500**, 9.815 s first preparation, 0.688 s reuse. All 13 Forge/probe
+  tests pass, including GPU-accepted bytes, corruption, cancellation, Windows
+  executable suffix and isolated configuration. A separate 500-pipeline Vulkan
+  and NRI validation run reports zero errors (unused vertex attributes produce
+  warnings from the existing live 16-attribute layout).
+- Linux RTX 4060: **500/500**, 8.298 s first preparation, 0.664 s reuse through
+  Forge. All 13 Forge/probe tests, the pipeline contract test, and 6 diagnostic
+  tests pass. These Linux runs do **not** claim Khronos API validation: that
+  layer is absent on this host. Earlier `validation_requested` reports from
+  standalone NRI did not prove it was installed.
+- Real Linux intro: **900 presentations, 70,391 submitted draws**, no visual
+  interpolation. Six framebuffer captures at presentations 120, 270, 420, 570,
+  720 and 870 are byte-identical between the pre-change runtime, the modified
+  renderer with empty application cache, and the prepared-cache run. All three
+  finish with process-state fingerprint `2405137468041955`.
+- Gameplay accepts **5,056,331 cache payload bytes**. Its 58 NRI pipeline
+  creations take **68.580 ms** with empty application cache versus **18.765 ms**
+  with the prepared cache in these samples. Driver-global disk caches were not
+  cleared; this is not a cold-driver benchmark, an FPS improvement claim, or
+  proof that every first-use hitch is eliminated. The fallback Vulkan pipeline
+  factory still has its own cost/cache.
+- The tested runs report zero composition mismatches and zero rejected scene
+  draws. Native fidelity remains active, with zero interpolated draws.
+- The same helper builds for Android ARM64 with NDK r29 and the renderer's
+  patched NRI. No Android GPU or installer execution is claimed: no ADB device
+  was connected during this qualification.
+
+Private live evidence is under `/home/xander/triaevum-pipeline-live-proof/`:
+`baseline-resolved/`, `cold-measured/`, `prepared-live-profile/`, and
+`prepare-desktop.json`. The intermediate `prepared/` run intentionally remains
+as negative evidence: identical images but **zero** accepted cache bytes.
+Windows helper evidence/build is in
+`I:/oot3dre_work/nri-pipeline-preparation-windows/`. No captures, packs, driver
+caches or executable backups belong in the public source archive.
+
 Private evidence:
 - Linux: `/home/xander/triaevum-android-build/prepared-native-pipelines.json`,
   `prepared-capture-inventory.json`, `nri-preparation-{cold,warm}.json`.
@@ -144,10 +226,11 @@ Private evidence:
 
 ## Next Integration
 
-1. Qualify the modified live renderer with deterministic framebuffer captures
-   and confirm that it loads the prepared cache. Preparation success is not
-   visual equivalence or measured first-use hitch reduction.
-2. Qualify Windows and Android GPUs; connect Android's installer in-process and
+1. Extend the live prepared-cache qualification beyond the intro, then verify
+   the packaged Windows runtime and Steam Deck/AMD environment. Linux intro
+   parity and actual cache acceptance are established above, not whole-game
+   hitch coverage.
+2. Qualify the Android GPU; connect Android's installer in-process and
    select the same physical GPU as gameplay on multi-GPU desktops.
 3. Generate the **actual enabled extension profile's** instrumented recipes with
    the existing typed shader hooks. This corpus currently prepares native

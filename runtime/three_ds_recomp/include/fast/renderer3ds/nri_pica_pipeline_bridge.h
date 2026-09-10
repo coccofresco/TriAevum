@@ -112,6 +112,13 @@ struct NriPicaOwnedDrawDesc {
     uint8_t StencilReference = 0;
 };
 
+struct NriPicaPipelineStatistics {
+    uint64_t InitialCacheBytes = 0;
+    uint64_t CreationAttempts = 0;
+    uint64_t Created = 0;
+    uint64_t CreationNanoseconds = 0;
+};
+
 class NriPicaPipelineBridge final {
   public:
     NriPicaPipelineBridge();
@@ -123,6 +130,7 @@ class NriPicaPipelineBridge final {
                     const NriPicaExecutionConfig& config = {});
     bool InitializePipelineCache(std::span<const uint8_t> data = {});
     [[nodiscard]] std::vector<uint8_t> GetPipelineCacheData() const;
+    [[nodiscard]] NriPicaPipelineStatistics PipelineStatistics() const;
     // Uses the live pipeline factory, then releases the pipeline. No draw,
     // framebuffer, upload allocation or fake Vulkan pipeline handle is needed.
     bool PreparePipeline(const NriPicaGraphicsPipelineDesc& desc);

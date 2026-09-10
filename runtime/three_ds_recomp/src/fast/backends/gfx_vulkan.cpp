@@ -2,6 +2,7 @@
 
 #include "fast/backends/gfx_vulkan.h"
 #include "fast/renderer3ds/vulkan_pipeline_cache_store.h"
+#include "fast/renderer3ds/pica_vulkan_device_profile.h"
 #include "fast/oot3d/pica_nri_pipeline_state.h"
 
 #include "fast/backends/gfx_sdl.h"
@@ -13,6 +14,7 @@
 #include <SDL2/SDL_syswm.h>
 #endif
 #include <spdlog/spdlog.h>
+#include <nlohmann/json.hpp>
 #include <shaderc/shaderc.hpp>
 #include <imgui_impl_vulkan.h>
 #include "fast/oot3d/graphics_settings_runtime.h"
@@ -74,6 +76,17 @@ uint64_t HashShaderSource(std::string_view source, uint64_t seed) {
 }
 
 std::filesystem::path VulkanShaderCacheDirectory() {
+#ifdef _WIN32
+    const auto* overridePath = _wgetenv(L"TRIAEVUM_RENDERER_CACHE_DIR");
+#else
+    const auto* overridePath = std::getenv("TRIAEVUM_RENDERER_CACHE_DIR");
+#endif
+    if (overridePath != nullptr && *overridePath != 0) {
+        const std::filesystem::path directory(overridePath);
+        if (!directory.is_absolute())
+            throw std::runtime_error("TRIAEVUM_RENDERER_CACHE_DIR must be absolute");
+        return directory;
+    }
     char* prefPath = SDL_GetPrefPath(nullptr, "oot3d_native_vulkan");
     if (prefPath == nullptr) {
         return {};
@@ -988,8 +1001,9 @@ void GfxRenderingAPIVulkan::Init() {
         std::vector<uint8_t> data;
         LoadPipelineCacheData(VulkanPipelineCachePath(true),
                               MakePipelineCacheHeader(properties), data);
-        mNriPicaPipelineBridge.InitializePipelineCache(data);
-        SPDLOG_INFO("NRI PICA pipeline cache: supplied {} bytes", data.size());
+        const bool initialized = mNriPicaPipelineBridge.InitializePipelineCache(data);
+        SPDLOG_INFO("NRI PICA pipeline cache: initialized={}, accepted {} bytes", initialized,
+                    mNriPicaPipelineBridge.PipelineStatistics().InitialCacheBytes);
     }
     if (!mNriPicaTextureImageOwner.Initialize(mNriInterop)) {
         SPDLOG_INFO(
@@ -2653,12 +2667,7 @@ void GfxRenderingAPIVulkan::CreateInstance() {
     mVulkanValidation.ConfigureFromEnvironment(
         extensions, mValidationTelemetry);
 
-    VkApplicationInfo applicationInfo{ VK_STRUCTURE_TYPE_APPLICATION_INFO };
-    applicationInfo.pApplicationName = "OOT3D Native Renderer";
-    applicationInfo.applicationVersion = VK_MAKE_VERSION(0, 1, 0);
-    applicationInfo.pEngineName = "ThreeDsRecomp Runtime";
-    applicationInfo.engineVersion = VK_MAKE_VERSION(0, 1, 0);
-    applicationInfo.apiVersion = VK_API_VERSION_1_2;
+    const auto applicationInfo = Renderer3ds::PicaVulkanApplicationInfo();
 
     VkInstanceCreateInfo createInfo{ VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
     createInfo.pApplicationInfo = &applicationInfo;
@@ -2926,37 +2935,12 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
                 }))
             extensions.push_back(required.c_str());
     }
-    VkPhysicalDeviceFeatures features{};
-    features.independentBlend =
-        supportedFeatures.features.independentBlend;
-    features.multiViewport =
-        supportedFeatures.features.multiViewport;
-    features.shaderImageGatherExtended =
-        supportedFeatures.features.shaderImageGatherExtended;
-    features.shaderStorageImageWriteWithoutFormat =
-        supportedFeatures.features.shaderStorageImageWriteWithoutFormat;
-    features.shaderStorageImageExtendedFormats =
-        supportedFeatures.features.shaderStorageImageExtendedFormats;
-    features.shaderInt16 =
-        supportedFeatures.features.shaderInt16;
-    const VkPhysicalDeviceVulkan12Features supportedVulkan12 = vulkan12;
-    vulkan12 = {
-        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES
-    };
+    const auto features = Renderer3ds::PicaVulkanCoreFeatures(supportedFeatures.features);
     // NRI's Vulkan helper and NIS implementation create timeline fences,
     // FP16 shader permutations and update-after-bind image descriptors.
     // Advertise to NRI only features that are also enabled on the wrapped
     // device; otherwise IsUpscalerSupported can return a false positive.
-    vulkan12.bufferDeviceAddress =
-        supportedVulkan12.bufferDeviceAddress;
-    vulkan12.timelineSemaphore =
-        supportedVulkan12.timelineSemaphore;
-    vulkan12.shaderFloat16 =
-        supportedVulkan12.shaderFloat16;
-    vulkan12.descriptorBindingSampledImageUpdateAfterBind =
-        supportedVulkan12.descriptorBindingSampledImageUpdateAfterBind;
-    vulkan12.descriptorBindingStorageImageUpdateAfterBind =
-        supportedVulkan12.descriptorBindingStorageImageUpdateAfterBind;
+    vulkan12 = Renderer3ds::PicaVulkan12Features(vulkan12);
     mNisVulkanFeaturesEnabled =
         features.shaderStorageImageWriteWithoutFormat == VK_TRUE &&
         vulkan12.timelineSemaphore == VK_TRUE &&
@@ -3042,6 +3026,14 @@ void GfxRenderingAPIVulkan::CreatePipelineCache() {
 }
 
 void GfxRenderingAPIVulkan::StorePipelineCache() {
+    const auto statistics = mNriPicaPipelineBridge.PipelineStatistics();
+    mDiagnostics.SetNriPipelineStatistics(statistics.InitialCacheBytes,
+        statistics.CreationAttempts, statistics.Created, statistics.CreationNanoseconds);
+    mDiagnostics.Flush();
+    SPDLOG_INFO("NRI PICA pipeline statistics: {}", nlohmann::json({
+        {"initial_cache_bytes", statistics.InitialCacheBytes},
+        {"creation_attempts", statistics.CreationAttempts}, {"created", statistics.Created},
+        {"creation_nanoseconds", statistics.CreationNanoseconds}}).dump());
     const auto nriData = mNriPicaPipelineBridge.GetPipelineCacheData();
     if (!nriData.empty()) {
         VkPhysicalDeviceProperties properties{};
