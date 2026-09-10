@@ -71,11 +71,21 @@ counters and two completed assignments; framebuffers confirm the assigned
 objects. Item-use and device coverage are not implied by those results.
 See [scope and results](TRIAEVUM_TOPSCREEN_REFRESH_AND_OCARINA.md).
 
-PR #18 (same author), head `3655e285f4c53733b9e486a9434c073dba2d5954`, contributed
-the report and live investigation of missing ocarina UI. Its two ocarina commits
-are reviewed separately from the stacked branch. No code from them has been
-adopted yet; official-mod analysis identified a pre-existing owner/classification
-error instead. Credit that evidence without representing the PR as merged.
+## PR #18: Ocarina Evidence And Selective Adaptation
+
+Contributor: [999sian](https://github.com/999sian), Git author `sian <sian@localhost>`.
+[PR #18](https://github.com/coccofresco/TriAevum/pull/18), head
+`3655e285f4c53733b9e486a9434c073dba2d5954`, contributed the report and live
+investigation of missing ocarina UI. Its ocarina commits `e3eca08`/`3655e28`
+are reviewed separately from the stacked branch.
+
+The song-guide and D-pad ownership intent is now adapted in a dedicated title
+UI module, verified against original-mod producers and in-game framebuffers.
+Texture-size heuristics, raw replay copying and synthetic tile browsing were
+not adopted. This is a replacement implementation informed by the PR's
+evidence, not a wholesale merge or attribution of the new module to its author.
+Localized text and performed-note feedback remain open. See
+[scope, evidence and verification](TRIAEVUM_TOPSCREEN_OCARINA_OWNER.md).
 
 ## Integration Rules
 

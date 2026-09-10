@@ -4789,8 +4789,12 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
               return Oot3dNativeGame::NativeA32HidButtonMask(value);
             };
         Oot3dNativeGame::TopScreenDpadActionState topScreenDpadActions;
+        Oot3dNativeGame::TopScreenOcarinaState ocarinaOwner;
+        const bool ocarinaOwnsDpad = nativeCandidateDispatch.TopScreenUiProfile &&
+            Oot3dNativeGame::ReadTopScreenOcarinaState(process.Memory(), &ocarinaOwner) &&
+            ocarinaOwner.Active;
         if (nativeCandidateDispatch.TopScreenUiProfile &&
-            topScreenStartRoutingEligible) {
+            topScreenStartRoutingEligible && !ocarinaOwnsDpad) {
           bool childLink = false;
           std::string childLinkError;
           if (!Oot3dNativeGame::ReadTopScreenChildLink(
@@ -4837,6 +4841,10 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                 (inputFrame.Hid.Buttons &
                  Oot3dNativeGame::NativeA32HidButtonMask(
                      Oot3dNativeGame::NativeA32HidButton::DpadRight)) != 0U};
+        if (ocarinaOwnsDpad) {
+          inputFrame.Hid.Buttons &= ~(topScreenButton(Oot3dNativeGame::NativeA32HidButton::DpadLeft) |
+                                     topScreenButton(Oot3dNativeGame::NativeA32HidButton::DpadRight));
+        }
         sampledTopScreenInput.XHeld =
             (topScreenButtons &
              topScreenButton(Oot3dNativeGame::NativeA32HidButton::X)) != 0U;
@@ -5913,7 +5921,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
           launch.UiProfile == Oot3dNativeGame::Oot3dUiProfile::TopScreen;
       if (topScreenProfile &&
           subsystem != oot3d::ui::UiSubsystem::GameplayHud &&
-          subsystem != oot3d::ui::UiSubsystem::Map) {
+          subsystem != oot3d::ui::UiSubsystem::TouchControls) {
         continue;
       }
       const bool topScreenPresentation = topScreenProfile;
@@ -7355,6 +7363,10 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                     ui.name_entry_save_commit_timer},
                    {"shadow_presentation_frames",
                     bridge.shadow_presentation_frames},
+                   {"topscreen_ocarina_frames", bridge.topscreen_ocarina_frames},
+                   {"topscreen_ocarina_primitives", bridge.topscreen_ocarina_primitives},
+                   {"topscreen_ocarina_failures", bridge.topscreen_ocarina_failures},
+                   {"topscreen_ocarina_error", bridge.topscreen_ocarina_error},
                    {"shadow_presentation_primitives",
                     bridge.shadow_presentation_primitives},
                    {"topscreen_native_touch_copy_frames",

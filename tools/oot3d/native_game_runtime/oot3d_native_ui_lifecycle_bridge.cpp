@@ -122,6 +122,7 @@ void Oot3dNativeUiLifecycleBridge::ResetAfterStateLoad(
   mTopScreenPauseEdgeGeometry.reset();
   mTopScreenPausePageRedrawEdgeGeometry.reset();
   mTopScreenItemsHint = {};
+  mTopScreenOcarina.Reset();
 }
 
 NativeUiLifecycleObservation
@@ -279,33 +280,38 @@ Oot3dNativeUiLifecycleBridge::BuildTopScreenPresentation(
       subsystem == oot3d::ui::UiSubsystem::GameplayHud &&
       (mTopScreenPauseEdgeGeometry.has_value() ||
        mTopScreenPausePageRedrawEdgeGeometry.has_value());
-  if (!mHasLatestState || index >= mObservedSubsystems.size() ||
-      (!mObservedSubsystems[index] && !retainedPauseEdge)) {
+  const bool ocarinaLane = subsystem == oot3d::ui::UiSubsystem::TouchControls;
+  if (index >= mObservedSubsystems.size() ||
+      (!ocarinaLane && (!mHasLatestState ||
+       (!mObservedSubsystems[index] && !retainedPauseEdge)))) {
     return output;
   }
-  if (subsystem == oot3d::ui::UiSubsystem::Map) {
-    const auto mapTexture = NativePauseSharedTextureIdentity(
+  if (ocarinaLane) {
+    const auto ocarinaTexture = NativePauseSharedTextureIdentity(
         oot3d::ui::UiPauseSharedTextureSlot::OcarinaPage);
     const auto pauseTexture = NativePauseSharedTextureIdentity(
         oot3d::ui::UiPauseSharedTextureSlot::PauseTopPage);
-    if (!mapTexture.has_value()) {
+    if (!ocarinaTexture.has_value()) {
       return output;
     }
-    TopScreenWorldMapGeometry geometry;
-    std::string worldMapError;
-    if (ReadTopScreenWorldMapGeometry(mMemory, &geometry, &worldMapError)) {
-      (void)AppendTopScreenWorldMapPresentation(geometry, *mapTexture, output);
+    TopScreenOcarinaGeometry geometry;
+    std::string ocarinaError;
+    if (ReadTopScreenOcarinaGeometry(mMemory, mTopScreenOcarina, &geometry, &ocarinaError)) {
+      oot3d::ui::UiTextureIdentity menuTexture;
+      menuTexture.semantic_name = kTopScreen211MenuAtlasSemantic;
+      (void)AppendTopScreenOcarinaPresentation(geometry, *ocarinaTexture, output, menuTexture);
       if (geometry.Active && pauseTexture.has_value()) {
-        const std::int8_t direction =
-            mTopScreenInput.DpadLeftHeld
-                ? -1
-                : (mTopScreenInput.DpadRightHeld ? 1 : 0);
-        (void)AppendTopScreenPauseNavigationPresentation(
-            BuildTopScreenPauseNavigationGeometry(direction), *pauseTexture,
+        (void)AppendTopScreenOcarinaNavigationPresentation(
+            BuildTopScreenOcarinaNavigationGeometry(mTopScreenOcarina.Direction()), *pauseTexture,
             output);
       }
+    } else {
+      ++mStats.topscreen_ocarina_failures;
+      mStats.topscreen_ocarina_error = ocarinaError;
     }
     if (!output.empty()) {
+      ++mStats.topscreen_ocarina_frames;
+      mStats.topscreen_ocarina_primitives += output.size();
       ++mStats.shadow_presentation_frames;
       mStats.shadow_presentation_primitives += output.size();
     }
@@ -478,6 +484,12 @@ void Oot3dNativeUiLifecycleBridge::SetTopScreenPausePageRedrawEdgePresentation(
 void Oot3dNativeUiLifecycleBridge::SetTopScreenInputFrame(
     const TopScreenExtendedInputFrame &input) noexcept {
   mTopScreenInput = input;
+  TopScreenOcarinaState state;
+  if (ReadTopScreenOcarinaState(mMemory, &state)) {
+    mTopScreenOcarina.Advance(state, input.DpadLeftHeld || input.DpadLeftPressed,
+                            input.DpadRightHeld || input.DpadRightPressed,
+                            input.DpadLeftPressed, input.DpadRightPressed);
+  }
 }
 
 void Oot3dNativeUiLifecycleBridge::SetTopScreenConfig(

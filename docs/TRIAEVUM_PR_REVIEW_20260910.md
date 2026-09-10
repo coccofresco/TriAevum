@@ -5,6 +5,11 @@ records positive product assignment, phase-independent input, and review of the
 new PR #18 (`3655e285f4c53733b9e486a9434c073dba2d5954`). The six-PR inventory and
 remaining #13 limitations below describe the earlier snapshot.
 
+Second follow-up: [ocarina owner implementation](TRIAEVUM_TOPSCREEN_OCARINA_OWNER.md)
+adapts #18's guide/input intent through native owners. The guide is now verified
+in game; text and performed-note coverage remain open. The PR's replay filters
+and synthetic browsing are not merged.
+
 Reviewed against `port/linux-nri` at `9920fc5`, on 2026-09-10. GitHub's live
 API lists **six open PRs**. Heads below are pinned: conclusions do not silently
 apply to future revisions. This supplements the

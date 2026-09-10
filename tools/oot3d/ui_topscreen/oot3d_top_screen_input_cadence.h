@@ -22,6 +22,8 @@ class TopScreenInputCadence {
         if (input.ZlHeld) held |= ButtonMask(Button::Zl);
         if (input.XHeld) held |= ButtonMask(Button::X);
         if (input.YHeld) held |= ButtonMask(Button::Y);
+        if (input.DpadLeftHeld) held |= ButtonMask(Button::DpadLeft);
+        if (input.DpadRightHeld) held |= ButtonMask(Button::DpadRight);
         Guest.Observe(held);
     }
 
@@ -33,6 +35,8 @@ class TopScreenInputCadence {
         result.ZlPressed = (pressed & ButtonMask(Button::Zl)) != 0;
         result.XPressed = (pressed & ButtonMask(Button::X)) != 0;
         result.YPressed = (pressed & ButtonMask(Button::Y)) != 0;
+        result.DpadLeftPressed = (pressed & ButtonMask(Button::DpadLeft)) != 0;
+        result.DpadRightPressed = (pressed & ButtonMask(Button::DpadRight)) != 0;
         ++Updates;
         ZrPressUpdates += result.ZrPressed;
         ZlPressUpdates += result.ZlPressed;

@@ -120,6 +120,10 @@ decompilation or external-repo modification was required.
 
 ## Ocarina: Concrete Remaining Gap
 
+**Follow-up:** the owner/guide repair is now implemented and verified in game;
+see [ocarina owner, PR assessment and remaining scope](TRIAEVUM_TOPSCREEN_OCARINA_OWNER.md).
+The section below records the diagnosis before that repair, not current status.
+
 [PR #18](https://github.com/coccofresco/TriAevum/pull/18), by 999sian, head
 `3655e285f4c53733b9e486a9434c073dba2d5954`, adds useful live evidence for the
 missing performance UI. Review only its two ocarina commits (`e3eca08` and

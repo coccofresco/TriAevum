@@ -23,6 +23,12 @@ void RunTopScreenItemDispatchTests() {
         auto snapshot = clock.Advance();
         Check(snapshot.XPressed && !snapshot.XHeld, "short refresh tap lost or made held");
         Check(!clock.Advance().XPressed, "short refresh tap repeated");
+        clock.ObserveGuest({.DpadRightHeld = true});
+        clock.ObserveGuest({});
+        snapshot = clock.Advance();
+        Check(snapshot.DpadRightPressed && !snapshot.DpadRightHeld,
+              "short song browser tap lost or made held");
+        Check(!clock.Advance().DpadRightPressed, "song browser tap repeated");
         for (unsigned skippedRefreshes : {0U, 1U, 2U, 5U}) {
             clock.Reset();
             clock.ObserveGuest({.ZrHeld = true, .ZlHeld = true});

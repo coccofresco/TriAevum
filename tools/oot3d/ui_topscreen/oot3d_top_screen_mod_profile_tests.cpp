@@ -78,71 +78,15 @@ Oot3dNativeGame::NativeA32Memory BuildLayoutFixture() {
   return memory;
 }
 
-Oot3dNativeGame::NativeA32Memory BuildWorldMapFixture() {
-  using namespace Oot3dNativeGame;
-  NativeA32Memory memory;
-  std::string error;
-  Require(memory.MapRegion({"topscreen-world-map-fixture",
-                            0x004D0000U,
-                            0x000C0000U,
-                            true,
-                            false,
-                            {}},
-                           &error),
-          "could not map world-map fixture");
-  const auto writeFloat = [&memory](std::uint32_t address, float value) {
-    return memory.Write32(address, std::bit_cast<std::uint32_t>(value));
-  };
-  constexpr std::uint32_t kWorldMap = 0x005093E4U;
-  constexpr std::uint32_t kScene = 0x00520000U;
-  constexpr std::uint32_t kMarkerTypes = 0x00521000U;
-  Require(memory.Write32(0x005043D4U + 0x0CU, kScene) &&
-              memory.Write32(0x0050AF68U, 2U) &&
-              memory.Write8(kScene + 0x100U, 3U) &&
-              memory.Write32(kWorldMap + 0x14U, 4U) &&
-              memory.Write32(kWorldMap + 0x18U, 1U) &&
-              memory.Write32(kWorldMap + 0x1CU, 1U) &&
-              memory.Write32(kWorldMap + 0x38U, 0U) &&
-              memory.Write32(kWorldMap + 0x44U, 1U),
-          "could not seed world-map controller state");
-  for (std::uint32_t index = 0U; index < 6U; ++index) {
-    Require(writeFloat(kWorldMap + 0x68U + index * 8U,
-                       10.0F + static_cast<float>(index)) &&
-                writeFloat(kWorldMap + 0x6CU + index * 8U,
-                           20.0F + static_cast<float>(index)) &&
-                writeFloat(kWorldMap + 0x3C8U + index * 8U, 30.0F) &&
-                writeFloat(kWorldMap + 0x3CCU + index * 8U, 40.0F) &&
-                writeFloat(kWorldMap + 0x728U + index * 8U, 50.0F) &&
-                writeFloat(kWorldMap + 0x72CU + index * 8U, 60.0F) &&
-                writeFloat(kWorldMap + 0xA88U + index * 8U, 70.0F) &&
-                writeFloat(kWorldMap + 0xA8CU + index * 8U, 80.0F),
-            "could not seed world-map native geometry arrays");
-  }
-  constexpr std::uint32_t kDestination = 5U;
-  Require(memory.Write32(0x00587A14U, 4U) &&
-              memory.Write32(0x0050A3B0U + kDestination * 4U, 2U) &&
-              memory.Write32(0x0053C9D4U + 2U * 4U, 4U) &&
-              memory.Write32(0x004D53C8U + kDestination * 4U, 2U) &&
-              memory.Write32(0x004D541CU + kDestination * 4U, kMarkerTypes) &&
-              memory.Write32(kMarkerTypes, 1U) &&
-              memory.Write32(kMarkerTypes + 4U, 4U),
-          "could not seed world-map destination tables");
-  for (std::uint32_t type = 0U; type < 5U; ++type) {
-    Require(
-        writeFloat(0x0050A1CCU + type * 4U, 5.0F + static_cast<float>(type)) &&
-            writeFloat(0x0050A1E0U + type * 4U,
-                       90.0F + static_cast<float>(type)),
-        "could not seed world-map marker tables");
-  }
-  return memory;
-}
 
 } // namespace
 
 void RunTopScreenItemDispatchTests();
+void RunTopScreenOcarinaTests();
 
 int main() {
   RunTopScreenItemDispatchTests();
+  RunTopScreenOcarinaTests();
   using namespace Oot3dNativeGame;
 
   Oot3dUiProfile profile = Oot3dUiProfile::Oot3d;
@@ -419,78 +363,6 @@ int main() {
           "TopScreen 2.1.1 config runtime edit did not round-trip");
   std::filesystem::remove(configRoundTripPath, removeError);
 
-  auto worldMapMemory = BuildWorldMapFixture();
-  TopScreenWorldMapGeometry worldMapGeometry;
-  std::string worldMapError;
-  Require(ReadTopScreenWorldMapGeometry(worldMapMemory, &worldMapGeometry,
-                                        &worldMapError) &&
-              worldMapGeometry.Active && worldMapGeometry.Destination == 5U,
-          "world-map producer did not activate the native destination");
-  Require(
-      std::abs(worldMapGeometry.Quads[0].Position.X - 50.0F) < 0.001F &&
-          std::abs(worldMapGeometry.Quads[0].Position.Y - 189.0F) < 0.001F &&
-          std::abs(worldMapGeometry.Quads[0].Size.Y - 39.0F) < 0.001F &&
-          std::abs(worldMapGeometry.Quads[0].AtlasOrigin.Y - 81.0F) < 0.001F &&
-          std::abs(worldMapGeometry.Quads[0].AtlasSize.Y - 59.0F) < 0.001F,
-      "world-map base-quad transformation is incorrect");
-  Require(
-      worldMapGeometry.Quads[6].Visible && worldMapGeometry.Quads[7].Visible &&
-          !worldMapGeometry.Quads[8].Visible &&
-          std::abs(worldMapGeometry.Quads[6].Position.X - 122.0F) < 0.001F &&
-          std::abs(worldMapGeometry.Quads[6].Position.Y - 174.0F) < 0.001F &&
-          worldMapGeometry.Quads[14].Visible &&
-          std::abs(worldMapGeometry.Quads[14].Size.X - 24.0F) < 0.001F,
-      "world-map marker or arrow reconstruction is incorrect");
-  std::vector<oot3d::ui::UiPrimitive> worldMapPresentation;
-  const oot3d::ui::UiTextureIdentity worldMapTexture{
-      0x005D0000U, 0x18000000U, "oot3d/native/pause_shared/ocarina_page"};
-  Require(AppendTopScreenWorldMapPresentation(worldMapGeometry, worldMapTexture,
-                                              worldMapPresentation) == 10U &&
-              worldMapPresentation.front().subsystem ==
-                  oot3d::ui::UiSubsystem::Map &&
-              worldMapPresentation.front().role ==
-                  oot3d::ui::UiPrimitiveRole::PauseMap &&
-              std::abs(worldMapPresentation.front().color.alpha - 0.68F) <
-                  0.001F,
-          "world-map presentation did not preserve recovered semantics");
-  Require(worldMapMemory.Write32(0x005093E4U + 0x44U, 0U) &&
-              ReadTopScreenWorldMapGeometry(worldMapMemory, &worldMapGeometry,
-                                            &worldMapError) &&
-              !worldMapGeometry.Active,
-          "disabled native world-map owner still produced a presentation");
-  worldMapMemory = BuildWorldMapFixture();
-  Require(worldMapMemory.Write32(0x0050AF68U, 0U) &&
-              ReadTopScreenWorldMapGeometry(worldMapMemory, &worldMapGeometry,
-                                            &worldMapError) &&
-              !worldMapGeometry.Active,
-          "persistent world-map controller escaped the native pause root");
-
-  const auto idleNavigation = BuildTopScreenPauseNavigationGeometry(0);
-  const auto leftNavigation = BuildTopScreenPauseNavigationGeometry(-1);
-  const auto rightNavigation = BuildTopScreenPauseNavigationGeometry(1);
-  Require(std::abs(idleNavigation.Quads[0].Color.red - 0.6F) < 0.001F &&
-              std::abs(idleNavigation.Quads[1].Color.red - 0.6F) < 0.001F &&
-              std::abs(idleNavigation.Quads[0].Position.Y - 191.0F) < 0.001F &&
-              std::abs(leftNavigation.Quads[0].Color.red - 1.0F) < 0.001F &&
-              std::abs(leftNavigation.Quads[0].Position.Y - 193.0F) < 0.001F &&
-              std::abs(leftNavigation.Quads[1].Color.red - 0.6F) < 0.001F &&
-              std::abs(rightNavigation.Quads[1].Color.red - 1.0F) < 0.001F &&
-              std::abs(rightNavigation.Quads[1].Position.Y - 193.0F) < 0.001F &&
-              leftNavigation.Quads[0].Size.X == 26.0F &&
-              leftNavigation.Quads[0].AtlasSize.X == -26.0F &&
-              rightNavigation.Quads[1].Size.X == 26.0F,
-          "pause navigation geometry does not match the payload producer");
-  std::vector<oot3d::ui::UiPrimitive> navigationPresentation;
-  const oot3d::ui::UiTextureIdentity navigationTexture{
-      0x005D1000U, 0x18010000U, "oot3d/native/pause_shared/pause_top_page"};
-  Require(
-      AppendTopScreenPauseNavigationPresentation(
-          leftNavigation, navigationTexture, navigationPresentation) == 2U &&
-          navigationPresentation.front().role ==
-              oot3d::ui::UiPrimitiveRole::PauseCursor &&
-          std::abs(navigationPresentation.front().color.alpha - 0.8F) < 0.001F,
-      "pause navigation presentation lost recovered texture semantics");
-
   const auto fileSelectStrip = BuildTopScreenFileSelectStripGeometry(true);
   Require(fileSelectStrip.Active && fileSelectStrip.Quad.Visible &&
               fileSelectStrip.Quad.Position.X == 66.0F &&
@@ -546,6 +418,8 @@ int main() {
               std::abs(touchLabels.Quads[0].Color.alpha - 0.45F) < 0.001F,
           "touch-label geometry diverges from payload 0x005C9940");
   std::vector<oot3d::ui::UiPrimitive> touchLabelPresentation;
+  const oot3d::ui::UiTextureIdentity navigationTexture{
+      0x005D1000U, 0x18010000U, "oot3d/native/pause_shared/pause_top_page"};
   Require(AppendTopScreenTouchLabelsPresentation(
               touchLabels, navigationTexture, touchLabelPresentation) == 2U &&
               touchLabelPresentation.front().role ==
@@ -2432,7 +2306,7 @@ int main() {
           "stable active page must be redrawn on the top viewport");
   redrawInputs.WorldMapControllerState = 1U;
   Require(!ResolveTopScreenPausePageRedraw(redrawInputs, &redrawState),
-          "world-map controller must retain ownership of its redraw");
+          "ocarina controller must retain ownership of its redraw");
   redrawInputs.WorldMapControllerState = 0U;
   redrawInputs.Pause.SceneSequence = 1U;
   Require(!ResolveTopScreenPausePageRedraw(redrawInputs, &redrawState) &&
