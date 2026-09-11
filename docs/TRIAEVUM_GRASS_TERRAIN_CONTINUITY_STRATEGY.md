@@ -739,3 +739,54 @@ exceptions to conceal this tradeoff. A larger image-preserving gain should
 target shared instance preparation/selection and lighting reuse described
 above, rather than silently replacing the user's preset with sparse hills.
 No whole-game or Linux/Android claim follows from this Windows intro sweep.
+
+### Compact Tufts and Midrange Cluster Evaluation
+
+The follow-up varies tuft representation as well as density, preserving the
+same four intro views and image reference. Private plans/evidence:
+`grass-tuft-coverage-plan.json`, `grass-tuft-coverage-sweep`,
+`grass-tuft-segments-plan.json`, `grass-tuft-segments-sweep` under the same
+20260911 evidence root. All runs exit normally; active/default settings stay
+unchanged. These are parameter experiments, not a new renderer implementation.
+
+Common Compact settings: density 1024, LodReferenceDistance 1200,
+LodStartFraction 0.12, LodEndFraction 0.22, FarDensity 0.6,
+FarTuftDensity 0.8, TuftTransitionFraction 0.2, DensityFadeFraction 0.3.
+Other original settings remain intact. The comparison varies:
+
+| Candidate | Tuft blades / spread | Other changes | Selected GPU ms | Wide-view MAE /255 |
+| --- | --- | --- | ---: | ---: |
+| Compact five | 5 / 1.0 | none | 3.691 | 0.976 |
+| Compact nine | 9 / 0.8 | none | 3.739 | 1.002 |
+| Wide five | 5 / 2.0 | none | 3.962 | 0.982 |
+| Covered five | 5 / 1.0 | reference1668, start0.2/end0.25, far0.8, tuftdensity1, segments250..500 | 4.490 | 0.631 |
+| Compact five segments | 5 / 1.0 | segments250..500 | 3.644 | 0.990 |
+
+Tuft blades are multiple silhouettes in one cutout quad, not that many
+complete near meshes. Compact five begins its transition at 264 world units
+and completes it at 504, rather than 1668..2235 in the reference. It keeps
+more distant roots, reduces gaps within the footprint and spends fewer
+fragments on empty spaces than the wider variant. Roots remain on the same
+accepted surface anchors. Five is the better tested compromise than nine;
+this is not proof of an optimum over every possible parameter combination.
+
+Fresh `grass-tuft-historical-control` measures 5.409 ms; immediately following
+`grass-tuft-compact-control` measures 3.705 ms (-31.5%). The final segment
+variant measures 3.644 ms (-32.6%), Grass0.731 ms and host12.308 ms per native
+step over the full post-warmup interval. The original control's native PICA
+cost is 1.880 ms versus 1.759 in the final variant: there is still unrelated
+clock/workload variation. Do not promote -32.6% into a stable -33% claim.
+
+Compared to the preceding Medium thinner experiment, the final variant's
+wide-view image MAE falls from 1.424 to 0.990 (about 30%). Visual inspection of
+frame840 confirms better continuous hill coverage, but still not parity with
+the original dense preset. Covered five reduces visual error further at an
+unacceptable cost for the current timing target. The final candidate is
+retained privately at `grass-tuft-segments-sweep/compact-five-segments/launch.json`
+for an interactive review; it has not replaced the product preset.
+
+For the requested repeatable midrange clusters, see
+[Midrange Clusters](TRIAEVUM_GRASS_MIDRANGE_CLUSTERS.md). Existing distribution
+noise, culling clusters and distant cutout tufts are explicitly distinguished
+from a new shared 3D-clump representation. The design reuses static placement,
+mask validation and batching, without scene exceptions or geometry shaders.
