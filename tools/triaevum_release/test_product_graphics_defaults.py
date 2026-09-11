@@ -3,9 +3,21 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import struct
 import unittest
 
 SOURCE = Path(__file__).resolve().parents[1] / "oot3d/native_game_runtime"
+
+
+def runtime_floats(value):
+    """Graphics settings store floating-point JSON values as C++ float."""
+    if isinstance(value, float):
+        return struct.unpack("f", struct.pack("f", value))[0]
+    if isinstance(value, dict):
+        return {key: runtime_floats(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [runtime_floats(item) for item in value]
+    return value
 
 
 class ProductGraphicsDefaultsTests(unittest.TestCase):
@@ -35,7 +47,7 @@ class ProductGraphicsDefaultsTests(unittest.TestCase):
         self.assertEqual(grass["Performance"]["LodReferenceDistance"], 1668)
         self.assertAlmostEqual(grass["Performance"]["LodStartFraction"], 1)
         self.assertAlmostEqual(grass["Performance"]["LodEndFraction"], 1)
-        self.assertEqual(grass["Performance"]["DensityFadeFraction"], 1)
+        self.assertAlmostEqual(grass["Performance"]["DensityFadeFraction"], 0.3)
         self.assertAlmostEqual(grass["Performance"]["DrawFadeFraction"], 0.15)
         self.assertAlmostEqual(grass["Performance"]["TuftTransitionFraction"], 0.34)
         self.assertAlmostEqual(grass["Performance"]["FarTuftDensity"], 0.1)
@@ -63,8 +75,13 @@ class ProductGraphicsDefaultsTests(unittest.TestCase):
         self.assertEqual([source["Target"]["Rgba8Hash"] for source in grass["Sources"]],
                          ["be15aff93dfdcd88", "2321986eb9820c29", "4b8941fd174516b0",
                           "0a29e93a3b0742b3", "bd769b9ce136d73a", "d13528cd4896c851"])
-        self.assertTrue(grass["Performance"]["FarTuftsEnabled"])
+        self.assertFalse(grass["Performance"]["FarTuftsEnabled"])
         self.assertEqual(grass["Performance"]["FarTuftBladeCount"], 3)
+        self.assertTrue(grass["Performance"]["MidrangeClustersEnabled"])
+        self.assertTrue(grass["Performance"]["MidrangeAdaptiveEnabled"])
+        self.assertEqual(grass["Performance"]["MidrangeAdaptiveCapacity"], 10000)
+        self.assertEqual(grass["Performance"]["MidrangeClusterCellExtent"], 88)
+        self.assertEqual(grass["Performance"]["MidrangeFarBladeFraction"], 1)
 
     def test_topscreen_installer_template_preserves_current_profile(self):
         root = SOURCE.parents[2]
@@ -88,7 +105,7 @@ class ProductGraphicsDefaultsTests(unittest.TestCase):
         result = subprocess.run([os.environ["TRIAEVUM_PRODUCT_TEST_EXE"], "--product-info"],
                                 capture_output=True, text=True, check=True, timeout=10)
         graphics = json.loads(result.stdout)["default_config"]["Graphics"]
-        self.assertEqual(graphics["Grass"], self.defaults["Grass"])
+        self.assertEqual(graphics["Grass"], runtime_floats(self.defaults["Grass"]))
         self.assertEqual(graphics["GrassSavedPreset"], graphics["Grass"])
         self.assertEqual(graphics["Effects"]["Toon"], self.defaults["Effects"]["Toon"])
         self.assertEqual(graphics["FrameRate"], self.defaults["FrameRate"])
