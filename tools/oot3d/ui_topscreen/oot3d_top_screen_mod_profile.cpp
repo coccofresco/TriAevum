@@ -1424,7 +1424,7 @@ bool AppendTopScreenNativeItemIconCopies(
     NativeA32Memory &memory, const std::array<float, 4> &nativeVerticalOffsets,
     float nativeAlpha, const oot3d::ui::UiTextureIdentity &itemIcons,
     std::vector<oot3d::ui::UiPrimitive> &output, std::string *error,
-    bool renderDpadIcons) {
+    bool renderDpadIcons, TopScreenNativeItemOpacity *itemOpacity) {
   if (itemIcons.semantic_name.empty()) {
     SetError(error, "native TopScreen item-icon texture is unavailable");
     return false;
@@ -1459,6 +1459,7 @@ bool AppendTopScreenNativeItemIconCopies(
                                 values.size() * sizeof(float)));
   };
   const float alphaScale = std::clamp(nativeAlpha, 0.0F, 1.0F);
+  TopScreenNativeItemOpacity observedOpacity;
   for (std::uint32_t source = 0U; source < 5U; ++source) {
     std::array<float, 12> positions{};
     std::array<float, 8> uvs{};
@@ -1484,6 +1485,14 @@ bool AppendTopScreenNativeItemIconCopies(
         break;
       }
     }
+    // Original 005D6D70/005D6E1C captures region 0/3 alpha, and the
+    // region-4 branch captures ocarina alpha before hiding the source lane.
+    if (regionIndex == 0U)
+      observedOpacity.ItemZr = colors[3];
+    else if (regionIndex == 3U)
+      observedOpacity.ItemZl = colors[3];
+    else if (regionIndex == 4U)
+      observedOpacity.Ocarina = colors[3];
     // Region four is the native item/action lane relocated around the D-pad.
     // The remaining regions are face-button items and stay visible when the
     // independent 2.1.1 D-pad presentation option is disabled.
@@ -1530,6 +1539,8 @@ bool AppendTopScreenNativeItemIconCopies(
     primitive.visible = primitive.color.alpha != 0.0F;
     output.push_back(std::move(primitive));
   }
+  if (itemOpacity != nullptr)
+    *itemOpacity = observedOpacity;
   return true;
 }
 

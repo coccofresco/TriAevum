@@ -1356,6 +1356,26 @@ int main() {
               dpadItemSuppressedCopies.size() == 4U,
           "disabled TopScreen D-pad icons did not suppress only its lane");
 
+  const std::array<float, 2> zlTranslation{0.0F, 184.0F};
+  Require(touchStateMemory.WriteBytes(
+              kItemTranslations + 3U * 0x08U,
+              std::span<const std::uint8_t>(
+                  reinterpret_cast<const std::uint8_t *>(zlTranslation.data()),
+                  sizeof(zlTranslation))) &&
+              touchStateMemory.Write32(kItemColors + 3U * 0x40U + 0xCU,
+                                       std::bit_cast<std::uint32_t>(0.25F)) &&
+              touchStateMemory.Write32(kItemColors + 4U * 0x40U + 0xCU, 0U),
+          "could not seed native item opacity lanes");
+  TopScreenNativeItemOpacity opacity;
+  std::vector<oot3d::ui::UiPrimitive> opacityCopies;
+  Require(AppendTopScreenNativeItemIconCopies(
+              touchStateMemory, dynamicTouch.VerticalOffsets,
+              dynamicTouch.Alpha, itemIconsTexture, opacityCopies,
+              &error, false, &opacity) &&
+              opacity.ItemZr == 0.5F && opacity.ItemZl == 0.25F &&
+              opacity.Ocarina == 0.0F && opacityCopies.size() == 4U,
+          "native opacity must survive suppressed source quads without HUD scaling");
+
   Require(touchStateMemory.MapRegion({"topscreen-counter-save-fixture",
                                       0x00587000U,
                                       0x00003000U,

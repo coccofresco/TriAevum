@@ -132,6 +132,13 @@ std::size_t AppendTopScreenDpadPresentation(
     p.source_quad = static_cast<std::uint32_t>(direction);
     p.layer = 13;
     p.color = {1, 1, 1, std::clamp(alpha, 0.0F, 1.0F)};
+    // 005D7D68 / 005D7C9C / 005D7C6C multiply native lane alpha once.
+    if (actions[direction] == TopScreenDpadAction::ItemZr)
+      p.color.alpha *= state.ItemOpacity.ItemZr;
+    else if (actions[direction] == TopScreenDpadAction::ItemZl)
+      p.color.alpha *= state.ItemOpacity.ItemZl;
+    else if (actions[direction] == TopScreenDpadAction::Ocarina)
+      p.color.alpha *= state.ItemOpacity.Ocarina;
     p.destination = {kCenterX[direction] - kIconSize / 2,
                      kCenterY[direction] - kIconSize / 2, kIconSize, kIconSize};
     if (actions[direction] == TopScreenDpadAction::View) {

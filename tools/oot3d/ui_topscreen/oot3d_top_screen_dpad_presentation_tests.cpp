@@ -2,6 +2,7 @@
 #include "oot3d_ui/ui_pause_atlas_regions.h"
 
 #include <cstdlib>
+#include <cmath>
 #include <iostream>
 
 void RunTopScreenDpadPresentationTests() {
@@ -71,6 +72,20 @@ void RunTopScreenDpadPresentationTests() {
     }
   }
   state.Child = false;
+  config.AdultDpad = {TopScreenDpadAction::ItemZr,
+                     TopScreenDpadAction::ItemZl,
+                     TopScreenDpadAction::Ocarina,
+                     TopScreenDpadAction::IronBoots};
+  state.ItemOpacity = {0.5F, 0.25F, 0.0F};
+  std::vector<oot3d::ui::UiPrimitive> dimmed;
+  AppendTopScreenDpadPresentation(config, state, {}, 0.6F, items, page, dimmed);
+  require(dimmed.size() == 4 &&
+              std::abs(dimmed[0].color.alpha - 0.3F) < 0.0001F &&
+              std::abs(dimmed[1].color.alpha - 0.15F) < 0.0001F &&
+              dimmed[2].color.alpha == 0.0F &&
+              std::abs(dimmed[3].color.alpha - 0.6F) < 0.0001F,
+          "native item opacity must multiply HUD alpha once, not affect boots");
+  state.ItemOpacity = {};
   config.AdultDpad.fill(TopScreenDpadAction::None);
   config.AdultDpad[0] = TopScreenDpadAction::TunicToggle;
   auto before = render();

@@ -56,6 +56,8 @@ logs and the exact input paths required to reproduce it.
 | `practice-tomb-forward` | Ordinary movement reaches the barred door in the first tomb room, not the song tablet. |
 | `practice-tomb-turn` | Reverse movement exits into the graveyard; not a learning test. |
 | `practice-tomb-cutscene` | Rejected setup experiment: changing the cutscene selector in a cloned checkpoint before transition faults at 00371788. Do not reuse or count as coverage. |
+| `practice-meadow` | Native entrance 00FC reached, 650 frames completed, checkpoint at 620; starts at the normal meadow entrance with a barred path, not beside Saria. |
+| `practice-ocarina-opacity` | Rebuilt runtime, 700 frames completed from the meadow checkpoint using `topscreen_ocarina_recognition.json`; guide and native note staff visible. Upper guide text box empty in inspected capture. Not first-time learning qualification. |
 
 No first-time learning sequence has yet been qualified with these fixtures.
 The failed setup experiment is not justification to suppress a native fault

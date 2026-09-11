@@ -13,6 +13,7 @@ struct TopScreenDpadPresentationState {
   std::uint8_t Ocarina = 0xFF;
   bool Boomerang = false;
   bool Slingshot = false;
+  TopScreenNativeItemOpacity ItemOpacity;
 };
 
 bool ReadTopScreenDpadPresentationState(NativeA32Memory &memory,

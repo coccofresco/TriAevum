@@ -340,11 +340,18 @@ std::size_t AppendTopScreenExtendedItemButtonsPresentation(
 // Copies the first five live item/action quads from the native PlayState
 // renderer through payload table 0x005D33C8. The source renderer remains the
 // authority for UVs, colors and per-item animation.
+struct TopScreenNativeItemOpacity {
+  float ItemZr = 1.0F;
+  float ItemZl = 1.0F;
+  float Ocarina = 1.0F;
+};
+
 bool AppendTopScreenNativeItemIconCopies(
     NativeA32Memory &memory, const std::array<float, 4> &nativeVerticalOffsets,
     float nativeAlpha, const oot3d::ui::UiTextureIdentity &itemIcons,
     std::vector<oot3d::ui::UiPrimitive> &output, std::string *error = nullptr,
-    bool renderDpadIcons = true);
+    bool renderDpadIcons = true,
+    TopScreenNativeItemOpacity *itemOpacity = nullptr);
 
 // Reconstructs the six PauseCounter instances allocated by payload
 // 0x005C9474: rupees, dungeon keys and four action-item ammo counters. Native

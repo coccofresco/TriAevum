@@ -136,10 +136,45 @@ The mapped presenter now includes the original sword/boots cycle marks from
 512-pixel atlas; the original draw uses 14-pixel marks and direction-specific
 sword offsets. Unit tests cover atlas selection, geometry and layering. These
 marks still require paired in-game visual qualification; native per-item
-dimming during every restricted context is not implemented by this change.
+dimming now reuses the source HUD opacity for mapped ZR/ZL items and ocarina,
+but has not been visually qualified in every restricted context.
 
 The supplied practice saves and their actual qualification results are tracked
 in [Practice Save Fixtures](TRIAEVUM_TOPSCREEN_PRACTICE_SAVE_FIXTURES.md).
+
+### Native Item Opacity Follow-Up (2026-09-11)
+
+The original mod does not invent another availability rule for these icons.
+In `005D4A8C`, it captures the first vertex alpha from the live native item
+renderer (`renderer+0x18`, quad stride 0x40, alpha +0x0C): region 0 goes to
+`005E21D0`, region 3 to `005E21CC`, region 4 to `005E21D4`. The mapped draw
+then multiplies that value by HUD alpha `005E2204` exactly once.
+
+Do not confuse the texture-category loop with the configured action enum:
+the signed-halfword jump table at `005D8F68` sends category 2 to `005D8998`
+(action 5, ItemZr), category 3 to `005D8A88` (action 6, ItemZl).
+This was checked against ARM instructions, not the incomplete Ghidra switch.
+
+`AppendTopScreenNativeItemIconCopies` now publishes a typed, unscaled opacity
+snapshot during its existing read. It collects ocarina opacity even when the
+old source D-pad quad is suppressed. The lifecycle bridge passes that snapshot
+to the mapped presenter; no extra memory scan, native call, persistent cache,
+new gameplay availability policy or renderer-specific code is needed.
+Equipment cycle marks retain their original independent HUD alpha.
+
+Unit tests cover distinct source-lane alphas, the hidden ocarina source lane,
+zero opacity, single HUD multiplication and unaffected boots. Both the unit
+target and Windows runtime build pass. Run the pinned build script through
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File`, not directly inside
+PowerShell 7: the latter failed the post-link Authenticode module import in
+this environment. The required DLL signature/version check was not bypassed.
+
+`practice-ocarina-opacity` completed 700 native-30-Hz frames with the rebuilt
+runtime and the unmodified AD child progress carried through a native scene
+transition. Captures show the guide and native note staff. The guide's upper
+text box is empty in the inspected capture, so this is a regression smoke
+test, not proof of complete free-play text or first-time learning parity.
+No paired Azahar reference was obtained in this tranche.
 
 [PR #18](https://github.com/coccofresco/TriAevum/pull/18), by **999sian**, supplied
 useful ocarina scope and gameplay evidence as credited in the earlier owner

@@ -369,11 +369,13 @@ Oot3dNativeUiLifecycleBridge::BuildTopScreenPresentation(
               oot3d::ui::UiPauseSharedTextureSlot::ItemIcons);
           itemIcons.has_value()) {
         std::string itemCopyError;
+        TopScreenNativeItemOpacity itemOpacity;
         (void)AppendTopScreenNativeItemIconCopies(
             mMemory, touchState.VerticalOffsets, touchState.Alpha, *itemIcons,
-            output, &itemCopyError, false);
+            output, &itemCopyError, false, &itemOpacity);
         TopScreenDpadPresentationState dpadState;
         if (ReadTopScreenDpadPresentationState(mMemory, &dpadState)) {
+          dpadState.ItemOpacity = itemOpacity;
           (void)AppendTopScreenDpadPresentation(
               mTopScreenConfig, dpadState, auxiliaryInputs, touchState.Alpha,
               *itemIcons, *texture, output);
