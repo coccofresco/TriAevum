@@ -1,5 +1,10 @@
 # Linux Forge
 
+Latest development alignment and external Tk packaging repair:
+[September 10-11 qualification](TRIAEVUM_LINUX_PARITY_20260911.md).
+The host Forge is rebuilt and GUI-tested; the installed Flatpak is not yet
+updated to this source baseline.
+
 Status: Linux x86-64 Forge development build, installation and native game boot
 tested on the physical Linux host on 2026-09-09. GUI visibility on that host is
 still unverified. This is not a public Linux release or Steam Deck qualification.

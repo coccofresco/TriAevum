@@ -15,6 +15,28 @@ A32_ROOT = REPO_ROOT / "tools/oot3d/native_a32_runtime"
 GAME_RUNTIME_ROOT = REPO_ROOT / "tools/oot3d/native_game_runtime"
 
 
+def configured_tk_data() -> tuple[tuple[Path, str], ...]:
+    """Preserve publisher-selected Tcl/Tk data in the frozen runtime.
+
+    PyInstaller can discover the shared library but miss data installed outside
+    the system prefix. Its runtime hook requires these exact bundle locations.
+    Without explicit overrides, retain PyInstaller's normal discovery.
+    """
+    items = []
+    for variable, marker, destination in (
+        ("TCL_LIBRARY", "init.tcl", "_tcl_data"),
+        ("TK_LIBRARY", "tk.tcl", "_tk_data"),
+    ):
+        value = os.environ.get(variable)
+        if not value:
+            continue
+        source = Path(value).resolve()
+        if not (source / marker).is_file():
+            raise ValueError(f"{variable} does not contain {marker}: {source}")
+        items.append((source, destination))
+    return tuple(items)
+
+
 def _find_nlohmann_include(explicit: Path | None = None) -> Path:
     candidates = [
         explicit,
@@ -169,7 +191,7 @@ def build(
     if bundle_mode == "onefile" and sys.platform == "win32":
         command.extend(("--runtime-tmpdir", ".triaevum-forge-runtime"))
     separator = ";" if sys.platform == "win32" else ":"
-    for source, destination in required_data(nlohmann_include):
+    for source, destination in (*required_data(nlohmann_include), *configured_tk_data()):
         command.extend(("--add-data", f"{source}{separator}{destination}"))
     command.append(str(REPO_ROOT / "tools/triaevum_release/forge_entry.py"))
     subprocess.run(command, cwd=REPO_ROOT, check=True)
