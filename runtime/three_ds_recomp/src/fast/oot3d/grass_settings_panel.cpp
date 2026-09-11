@@ -273,6 +273,22 @@ bool DrawAppearance(InteractiveGrassSettings& grass) {
     changed |= ImGui::Checkbox(
         "Receive native fog",
         &grass.Appearance.ReceiveFog);
+    ImGui::SeparatorText("Nearby toon rim");
+    changed |= ImGui::Checkbox("Enable nearby rim", &grass.Appearance.ToonRimEnabled);
+    ImGui::BeginDisabled(!grass.Appearance.ToonRimEnabled);
+    float start = grass.Appearance.ToonRimFadeStart / 100.0F;
+    float end = grass.Appearance.ToonRimFadeEnd / 100.0F;
+    if (ImGui::DragFloat("Rim fade start (m)", &start, 0.1F, 0.0F, 1000.0F, "%.2f", ImGuiSliderFlags_AlwaysClamp)) {
+        grass.Appearance.ToonRimFadeStart = start * 100.0F;
+        grass.Appearance.ToonRimFadeEnd = std::max(grass.Appearance.ToonRimFadeEnd, start * 100.0F + 1.0F);
+        end = grass.Appearance.ToonRimFadeEnd / 100.0F;
+        changed = true;
+    }
+    if (ImGui::DragFloat("Rim fade end (m)", &end, 0.1F, start + 0.01F, 1000.01F, "%.2f", ImGuiSliderFlags_AlwaysClamp)) {
+        grass.Appearance.ToonRimFadeEnd = end * 100.0F;
+        changed = true;
+    }
+    ImGui::EndDisabled();
     return changed;
 }
 

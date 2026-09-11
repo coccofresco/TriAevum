@@ -427,6 +427,11 @@ GraphicsSettingsValidation GraphicsSettingsService::Validate(
     value.Grass.Appearance.HeightScale =
         std::clamp(value.Grass.Appearance.HeightScale, 0.05F, 8.0F);
     auto& appearance = value.Grass.Appearance;
+    appearance.ToonRimFadeStart = std::isfinite(appearance.ToonRimFadeStart)
+        ? std::clamp(appearance.ToonRimFadeStart, 0.0F, 100000.0F) : 200.0F;
+    appearance.ToonRimFadeEnd = std::isfinite(appearance.ToonRimFadeEnd)
+        ? std::clamp(appearance.ToonRimFadeEnd, appearance.ToonRimFadeStart + 1.0F, 100001.0F)
+        : std::min(appearance.ToonRimFadeStart + 600.0F, 100001.0F);
     appearance.BladeCurvature = std::clamp(appearance.BladeCurvature, 0.0F, 2.0F);
     appearance.BladeDroop = std::clamp(appearance.BladeDroop, 0.0F, 0.95F);
     appearance.ShapeVariation = std::clamp(appearance.ShapeVariation, 0.0F, 1.0F);

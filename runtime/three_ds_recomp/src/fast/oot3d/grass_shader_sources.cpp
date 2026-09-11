@@ -41,6 +41,7 @@ struct GrassEnvironmentRecord {
     vec4 tuft_style;
     ToonSurfaceParameters toon;
     uvec4 native_lighting;
+    vec4 rim_distance;
 };
 layout(std430, set=0, binding=0) readonly buffer GrassEnvironmentState {
     GrassEnvironmentRecord records[];
@@ -57,6 +58,8 @@ layout(location=2) out vec4 blade_ambient_guide;
 layout(location=3) out vec4 tuft_sample;
 layout(location=4) flat out float lod_visibility;
 layout(location=5) out vec3 blade_lighting;
+layout(location=6) out vec3 blade_view_direction;
+layout(location=7) flat out float blade_rim_weight;
 
 void evaluate_shading(
     uint environment_index, vec3 world_normal,
@@ -315,6 +318,15 @@ void main() {
     blade_ambient_guide =
         vec4(ambient_response, 1.0);
     blade_lighting = lighting;
+    vec3 eye = environment_state.records[grass.flags.w].camera_position.xyz;
+    vec3 toward_eye = eye - position;
+    blade_view_direction = vec3(dot(view_side, toward_eye),
+        dot(environment_state.records[grass.flags.w].view_up.xyz, toward_eye),
+        -dot(environment_state.records[grass.flags.w].view_forward.xyz, toward_eye));
+    vec4 rim_distance = environment_state.records[grass.flags.w].rim_distance;
+    // Root distance is identical for all vertices and LOD representations.
+    float root_distance = length(eye - in_base_height.xyz);
+    blade_rim_weight = rim_distance.z * (1.0 - smoothstep(rim_distance.x, rim_distance.y, root_distance));
 }
 )glsl";
 }
@@ -329,6 +341,8 @@ layout(location=2) in vec4 blade_ambient_guide;
 layout(location=3) in vec4 tuft_sample;
 layout(location=4) flat in float lod_visibility;
 layout(location=5) in vec3 blade_lighting;
+layout(location=6) in vec3 blade_view_direction;
+layout(location=7) flat in float blade_rim_weight;
 struct GrassEnvironmentRecord {
     vec4 color_and_mode;
     vec2 lut[128];
@@ -352,6 +366,7 @@ struct GrassEnvironmentRecord {
     vec4 tuft_style;
     ToonSurfaceParameters toon;
     uvec4 native_lighting;
+    vec4 rim_distance;
 };
 layout(std430, set=0, binding=0) readonly buffer GrassEnvironmentState {
     GrassEnvironmentRecord records[];
@@ -383,6 +398,10 @@ void main() {
     vec4 resolved_color = blade_color;
     resolved_color.rgb = oot3d_toon_diffuse_response(resolved_color.rgb, blade_lighting,
         environment_state.records[grass.flags.w].toon);
+    ToonSurfaceParameters toon = environment_state.records[grass.flags.w].toon;
+    if (toon.flags.x > 0.5 && blade_rim_weight > 0.0)
+        resolved_color.rgb = clamp(resolved_color.rgb + blade_rim_weight *
+            oot3d_toon_rim(blade_normal_guide.xyz * 2.0 - 1.0, blade_view_direction, toon), 0.0, 1.0);
 #if GRASS_AUXILIARY_OUTPUTS
     out_normal_guide = blade_normal_guide;
     // Grass topology, LOD and wind can change every presentation. Let the

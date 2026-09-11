@@ -3847,12 +3847,14 @@ TEST(Oot3dGrassToon, SharesCanonicalShaderAndAppliesBeforeFogWithoutChangingAlph
     EXPECT_NE(grass.find(": step(edge, guide)"), std::string::npos);
 }
 
-TEST(Oot3dGrassToon, TerrainCoverCannotGenerateGrazingRimHighlights) {
+TEST(Oot3dGrassToon, RimIsBoundedByRootDistanceWithoutChangingDiffuseResponse) {
     using namespace Fast::Oot3d;
     const auto fragment = BuildGrassFragmentShader();
     const auto vertex = BuildGrassVertexShader();
-    EXPECT_EQ(fragment.find("blade_view_direction"), std::string::npos);
-    EXPECT_EQ(vertex.find("blade_view_direction"), std::string::npos);
+    EXPECT_NE(vertex.find("length(eye - in_base_height.xyz)"), std::string::npos);
+    EXPECT_NE(vertex.find("1.0 - smoothstep(rim_distance.x, rim_distance.y, root_distance)"), std::string::npos);
+    EXPECT_NE(fragment.find("toon.flags.x > 0.5 && blade_rim_weight > 0.0"), std::string::npos);
+    EXPECT_NE(fragment.find("blade_rim_weight *"), std::string::npos);
     EXPECT_EQ(fragment.find("resolved_color.rgb = oot3d_toon_surface_response"), std::string::npos);
     const std::string common(kToonSurfaceResponseShader);
     const auto start = common.find("vec3 oot3d_toon_diffuse_response(");
@@ -3862,6 +3864,22 @@ TEST(Oot3dGrassToon, TerrainCoverCannotGenerateGrazingRimHighlights) {
     EXPECT_EQ(diffuse.find("viewDirection"), std::string::npos);
     EXPECT_NE(diffuse.find("oot3d_toon_banded_color("), std::string::npos);
     EXPECT_NE(common.find("+ oot3d_toon_rim(normal, viewDirection, p)"), std::string::npos);
+}
+
+TEST(Oot3dGrassToon, RimDistanceValidationKeepsSmoothstepEdgesOrdered) {
+    using namespace Fast::Oot3d;
+    GraphicsSettings settings;
+    settings.Preset = GraphicsPreset::Custom;
+    settings.Grass.Appearance.ToonRimFadeStart = 1000;
+    settings.Grass.Appearance.ToonRimFadeEnd = 100;
+    const auto checked = GraphicsSettingsService::Validate(settings, {}).Value.Grass.Appearance;
+    EXPECT_EQ(checked.ToonRimFadeStart, 1000);
+    EXPECT_EQ(checked.ToonRimFadeEnd, 1001);
+    settings.Grass.Appearance.ToonRimFadeStart = -10;
+    settings.Grass.Appearance.ToonRimFadeEnd = 0;
+    const auto zero = GraphicsSettingsService::Validate(settings, {}).Value.Grass.Appearance;
+    EXPECT_EQ(zero.ToonRimFadeStart, 0);
+    EXPECT_EQ(zero.ToonRimFadeEnd, 1);
 }
 
 TEST(Oot3dGrassToon, PacksTheExistingStyleAndKeepsOffAndLightingIndependent) {

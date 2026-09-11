@@ -54,6 +54,9 @@ Fast::Oot3d::GraphicsSettings CompleteSettings() {
     grass.Appearance.ShapeVariation = 0.9F;
     grass.Appearance.BladeTwistDegrees = 160.0F;
     grass.Appearance.BladeSegments = 7U;
+    grass.Appearance.ToonRimEnabled = false;
+    grass.Appearance.ToonRimFadeStart = 350.0F;
+    grass.Appearance.ToonRimFadeEnd = 1400.0F;
     grass.WindDirectionDegrees = 271.0F;
     grass.WindStrength = 0.73F;
     grass.WindSpeed = 2.3F;

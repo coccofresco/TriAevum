@@ -489,6 +489,14 @@ int main() try {
           std::abs(shape.BladeDroop - 0.8F) < 0.001F &&
           std::abs(shape.ShapeVariation - 0.9F) < 0.001F &&
           shape.BladeTwistDegrees == 150.0F, "grass shape controls not applied");
+    EditScalar("Rim fade start (m)", "3");
+    EditScalar("Rim fade end (m)", "12");
+    Check(runtime.Snapshot().Grass.Appearance.ToonRimFadeStart == 300.0F &&
+          runtime.Snapshot().Grass.Appearance.ToonRimFadeEnd == 1200.0F, "grass rim metre conversion failed");
+    Click("Enable nearby rim");
+    Check(!runtime.Snapshot().Grass.Appearance.ToonRimEnabled, "grass rim disable failed");
+    Click("Enable nearby rim");
+    Check(runtime.Snapshot().Grass.Appearance.ToonRimEnabled, "grass rim enable failed");
     Click("Performance");
     EditScalar("Draw distance", "20000");
     EditScalar("Density falloff distance", "5000");

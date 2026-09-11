@@ -288,3 +288,11 @@ The existing local launcher
 `I:/oot3dre_work/cacao-release-diagnostics/Avvia-TriAevum-corretto.cmd`
 uses it with the user's installed launch profile. The catalogued release
 installation is not overwritten with an unpaired executable.
+
+## Grass Nearby Rim (2026-09-11)
+
+Grass > Appearance groups the enable checkbox and start/end distance controls
+under Nearby toon rim. Distances use meters in the UI and world units in storage;
+disabled rim disables its distance widgets. The real-widget smoke edits start
+to 3 m and end to 12 m, checks 300/1200 world units, and toggles off/on. Global
+toon rim strength/color remain shared rather than duplicated in Grass settings.

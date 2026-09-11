@@ -82,9 +82,10 @@ struct alignas(16) GrassEnvironmentRecord {
     std::array<float, 4> TuftStyle{};
     ToonSurfaceParameters Toon;
     std::array<uint32_t, 4> NativeLighting{};
+    std::array<float, 4> RimDistance{};
 };
 static_assert(offsetof(GrassEnvironmentRecord, Toon) == 1424U);
-static_assert(sizeof(GrassEnvironmentRecord) == 1568U);
+static_assert(sizeof(GrassEnvironmentRecord) == 1584U);
 
 struct GrassPushConstants {
     std::array<float, 16> PositionToClip{};
@@ -186,6 +187,8 @@ GrassEnvironmentRecord BuildGrassEnvironmentRecord(
     const std::array<float, 3>& viewSide,
     const std::array<float, 3>& viewUp) {
     GrassEnvironmentRecord result;
+    result.RimDistance = {settings.Appearance.ToonRimFadeStart, settings.Appearance.ToonRimFadeEnd,
+        settings.Appearance.ToonRimEnabled ? 1.0F : 0.0F, 0.0F};
     result.TuftLod = {settings.LodEndFraction,
         settings.LodReferenceDistance > 0.0F ? settings.LodReferenceDistance : settings.DrawDistance,
         static_cast<float>(settings.FarTuftBladeCount), settings.TuftTransitionFraction};

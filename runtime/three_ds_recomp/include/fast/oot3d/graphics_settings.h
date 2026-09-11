@@ -73,6 +73,9 @@ struct GrassAppearanceSettings {
     uint8_t BladeSegments = 2U;
     bool ReceiveLighting = true;
     bool ReceiveFog = true;
+    bool ToonRimEnabled = true;
+    float ToonRimFadeStart = 200.0F;
+    float ToonRimFadeEnd = 800.0F;
 };
 
 struct InteractiveGrassSettings {

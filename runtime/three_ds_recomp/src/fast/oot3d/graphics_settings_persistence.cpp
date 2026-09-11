@@ -411,6 +411,9 @@ Json SerializeInteractiveGrassSettings(
              {"BladeTwistDegrees", grass.Appearance.BladeTwistDegrees},
              {"BladeSegments", grass.Appearance.BladeSegments},
              {"ReceiveLighting", grass.Appearance.ReceiveLighting},
+             {"ToonRimEnabled", grass.Appearance.ToonRimEnabled},
+             {"ToonRimFadeStart", grass.Appearance.ToonRimFadeStart},
+             {"ToonRimFadeEnd", grass.Appearance.ToonRimFadeEnd},
              {"ReceiveFog", grass.Appearance.ReceiveFog},
          }},
         {"Wind",
@@ -699,6 +702,12 @@ void DeserializeInteractiveGrassSettings(
         ReadScalar(*appearance, "ReceiveFog",
                    value.Appearance.ReceiveFog,
                    path + ".Appearance.ReceiveFog", result);
+        ReadScalar(*appearance, "ToonRimEnabled", value.Appearance.ToonRimEnabled,
+                   path + ".Appearance.ToonRimEnabled", result);
+        ReadScalar(*appearance, "ToonRimFadeStart", value.Appearance.ToonRimFadeStart,
+                   path + ".Appearance.ToonRimFadeStart", result);
+        ReadScalar(*appearance, "ToonRimFadeEnd", value.Appearance.ToonRimFadeEnd,
+                   path + ".Appearance.ToonRimFadeEnd", result);
     }
     if (const Json* wind =
             RequireObject(document, "Wind", path + ".Wind",

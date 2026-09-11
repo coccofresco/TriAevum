@@ -497,3 +497,31 @@ image-domain comparison, not radiometric luminance. The checked hearts and
 castle rectangles are pixel-identical. The corrected 180-presentation run exits
 normally with zero Vulkan/NRI validation errors (11 Vulkan warnings remain).
 No Linux/Android execution or whole-game visual parity is claimed.
+
+## Configurable Nearby Rim (2026-09-11)
+
+User-selected refinement of the preceding policy: retain the shared toon rim
+near the camera, fading it out by root distance. Grass still consumes the shared
+diffuse response independently; only the additional rim receives
+`1 - smoothstep(start, end, rootDistance)`. Fog is applied afterwards.
+Native PICA materials, terrain lighting, density and placement are unchanged.
+
+F1 > Grass > Appearance exposes Enable nearby rim, Rim fade start (m) and
+Rim fade end (m). Defaults are enabled, full strength through 2 m, zero beyond
+8 m. Color, exponent and strength come from the existing global toon controls.
+The three Appearance keys ToonRimEnabled, ToonRimFadeStart and ToonRimFadeEnd
+persist in configurations and saved Grass presets; distances are stored in
+world units (100 per displayed meter). Validation orders the smoothstep edges
+and rejects non-finite values. The weight is flat per root, shared by all blade
+vertices and LOD representations, so wind cannot modulate the fade. This stays
+inside the existing Grass provider without extra passes or CPU root generation.
+
+Verification: 118 focused Grass/toon/persistence tests pass. The unrelated known
+GraphicsSettingsRuntimeTest.UsesInjectedPersistencePort store-count failure is
+excluded. Actual F1 widget smoke covers editing both distances, unit conversion
+and toggling the rim. Windows NRI/Vulkan runs 180 presentations successfully,
+with zero validation errors and 11 existing Vulkan warnings. Framebuffer evidence:
+`C:/Users/xander/triaevum-verify-20260911/grass-rim-distance`.
+Against the preceding rim-off capture, distant pixels x100..499/y240..299,
+the checked hearts and castle are identical; closer grass regains the highlight.
+This is a bounded visual test, not a performance benchmark or cross-platform test.
