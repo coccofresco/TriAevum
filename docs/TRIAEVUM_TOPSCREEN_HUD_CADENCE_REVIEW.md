@@ -207,7 +207,41 @@ were relinked without AOT changes. Windows `epona-fix-onfoot-regression` also
 completed 125 presentations, exit 0. Linux runtime was rebuilt, but the mounted
 visual comparison here was performed on Windows.
 
-Remaining visible discrepancy: mounted ammunition still has duplicate counters
-near the upper command group. Navi notification transitions and full mounted
+At that checkpoint, mounted ammunition still had adjacent counters
+near the upper command group (corrected below). Navi notification transitions and full mounted
 input/alpha parity remain separate investigations; these captures do not close
 those issues or prove complete TopScreen parity.
+
+## Mounted Counter Destination and Restored Grass (September 11)
+
+The two adjacent `50` labels came from copying the source counter's positions
+along with its style. Original TopScreen 2.1.1 `FUN_005CD254` instead constructs
+and scales the destination geometry (`005C7C78`, `005CC5F4`), then copies UVs,
+colors and per-digit translation. `AppendTopScreenNativeCounters` now retains
+the existing destination slot anchor/scale in the styled-copy path. The source
+position stream is not needed. A regression test supplies deliberately different
+source positions and checks both destination digit anchors and dimensions.
+
+Two counts can legitimately remain: the mounted B bow and the bow assigned to
+ZR share ammunition. They must appear under their respective commands, not
+side by side under B. `epona-ammo-grass/framebuffer_000150.bmp` verifies that
+layout in the real checkpoint; do not hide either count based on equal values.
+
+That probe also isolated missing Grass: three eligible configured surfaces,
+but zero ready masks and `texture masks unavailable`. The savestate texture
+cache lazy upload returned before the ordinary decode observer, so GPU textures
+were restored without repopulating `GrassTextureSourceCache`. The restored-upload
+path in `GetOrCreateNativePicaTexture` now publishes native base-level pixels
+before upload. Replacement images are never used as native masks: when restoring
+a custom image, decode its native source base level for the observer. This work
+runs once at lazy restoration, not on every cached draw. No save format changes,
+scene-specific rules, or preset changes are involved.
+
+Windows before/after probes used the same immutable checkpoint, profile and
+180-presentation limit, with framebuffer captures at 120 and 150; both exited 0.
+`epona-grass-restored` reports three masks, three placements and about 87,000
+visible Grass elements in nine draws, versus zero before. Its frame 150 visibly
+contains Grass. Cold placement construction still costs about eight seconds in
+this diagnostic run; restoring masks does not claim to eliminate that separate
+startup cost. These capture runs are not throughput measurements. Profile tests
+pass; these latest two changes have not yet received Linux visual validation.

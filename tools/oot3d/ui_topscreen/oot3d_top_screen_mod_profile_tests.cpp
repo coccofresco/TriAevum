@@ -1428,6 +1428,28 @@ int main() {
                   oot3d::ui::UiPrimitiveRole::CounterDigit,
           "TopScreen native counter reconstruction is incomplete");
 
+  constexpr std::uint32_t sourceAmmo = kPlayState + 0x800U;
+  Require(touchStateMemory.Write32(kPlayState + 0x10U, sourceAmmo) &&
+              touchStateMemory.Write32(sourceAmmo, 0U) &&
+              touchStateMemory.Write32(sourceAmmo + 4U, 2U) &&
+              touchStateMemory.Write32(sourceAmmo + 8U, kItemRenderer),
+          "cannot seed styled source ammo counter");
+  for (std::uint32_t digit = 0; digit < 2; ++digit) {
+    Require(touchStateMemory.Write32(kItemTranslations + digit * 8U, 0U) &&
+                touchStateMemory.Write32(kItemTranslations + digit * 8U + 4U, 0U),
+            "cannot clear ammo source translation");
+  }
+  std::vector<oot3d::ui::UiPrimitive> styledCounters;
+  Require(AppendTopScreenNativeCounters(touchStateMemory, dynamicTouch.VerticalOffsets,
+                                         numberGlyphTexture, styledCounters, &error) &&
+              styledCounters.size() == 6U &&
+              styledCounters[4].role == oot3d::ui::UiPrimitiveRole::AmmoCounter &&
+              styledCounters[4].destination.x == 389.0F &&
+              styledCounters[5].destination.x == 382.0F &&
+              styledCounters[4].destination.y == 49.0F &&
+              std::abs(styledCounters[4].destination.width - 7.7F) < 0.001F,
+          "styled ammo copied the native B placement instead of the destination layout");
+
   const auto fixedPauseEdges =
       BuildTopScreenPauseEdgeGeometry(true, 5U, 0U, 0U, 0, 1.0F, 1.0F);
   Require(fixedPauseEdges.Positions[0].X == 288.0F &&

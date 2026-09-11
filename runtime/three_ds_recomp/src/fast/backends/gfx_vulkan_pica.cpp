@@ -2648,6 +2648,33 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaTexture(
                         "restored native PICA texture payload is invalid");
                 }
                 auto pixels = std::move(record.Rgba8);
+                // Snapshot uploads bypass the normal decode observer. Restore
+                // native mask pixels too, never the custom replacement image.
+                if (!shadow2d && baseLevelContentHash.has_value()) {
+                    const size_t baseBytes =
+                        static_cast<size_t>(key.Width) * key.Height * 4U;
+                    if (!textureKey.CustomReplacement &&
+                        record.Width == key.Width && record.Height == key.Height &&
+                        pixels.size() >= baseBytes) {
+                        Oot3d::GrassTextureSourceCache::Instance().ObserveDecoded(
+                            *baseLevelContentHash, key.Width, key.Height,
+                            std::span<const uint8_t>(pixels).first(baseBytes));
+                    } else {
+                        const auto encodedBytes = NativePicaEncodedMipSize(
+                            texture.NativeFormat, key.Width, key.Height);
+                        std::vector<uint8_t> nativePixels;
+                        if (encodedBytes.has_value() &&
+                            *encodedBytes <= texture.NativeBytes.size() &&
+                            Oot3d::DecodePicaTextureRgba8(
+                                texture.NativeFormat, key.Width, key.Height,
+                                texture.NativeBytes.first(*encodedBytes),
+                                nativePixels, nullptr)) {
+                            Oot3d::GrassTextureSourceCache::Instance().ObserveDecoded(
+                                *baseLevelContentHash, key.Width, key.Height,
+                                nativePixels);
+                        }
+                    }
+                }
                 const VkFormat format =
                     textureKey.Type == 2U &&
                             !textureKey.CustomReplacement

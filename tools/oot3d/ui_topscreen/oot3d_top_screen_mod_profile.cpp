@@ -1650,9 +1650,8 @@ bool AppendTopScreenNativeCounters(
         return false;
       }
       if (type != 8U && digitCount != 0U && geometry != 0U) {
-        std::array<std::uint32_t, 4> streams{};
-        constexpr std::array<std::uint32_t, 4> kStreamOffsets{0x0CU, 0x14U,
-                                                              0x18U, 0x1CU};
+        std::array<std::uint32_t, 3> streams{};
+        constexpr std::array<std::uint32_t, 3> kStreamOffsets{0x14U, 0x18U, 0x1CU};
         bool streamsAvailable = true;
         for (std::size_t stream = 0; stream < streams.size(); ++stream) {
           streamsAvailable &= memory.Read32(geometry + kStreamOffsets[stream],
@@ -1662,7 +1661,6 @@ bool AppendTopScreenNativeCounters(
         if (streamsAvailable) {
           const std::uint32_t copiedDigits = std::min(digitCount, 2U);
           for (std::uint32_t digit = 0U; digit < copiedDigits; ++digit) {
-            std::array<float, 12> positions{};
             std::array<float, 8> uvs{};
             std::array<float, 16> colors{};
             std::array<float, 2> translation{};
@@ -1673,10 +1671,9 @@ bool AppendTopScreenNativeCounters(
                                reinterpret_cast<std::uint8_t *>(values.data()),
                                values.size() * sizeof(float)));
             };
-            if (!readFloats(streams[0] + digit * 0x30U, positions) ||
-                !readFloats(streams[1] + digit * 0x20U, uvs) ||
-                !readFloats(streams[2] + digit * 0x40U, colors) ||
-                !readFloats(streams[3] + digit * 0x08U, translation)) {
+            if (!readFloats(streams[0] + digit * 0x20U, uvs) ||
+                !readFloats(streams[1] + digit * 0x40U, colors) ||
+                !readFloats(streams[2] + digit * 0x08U, translation)) {
               SetError(error,
                        "cannot read native TopScreen special counter quad");
               return false;
@@ -1688,9 +1685,15 @@ bool AppendTopScreenNativeCounters(
             primitive.descriptor_address = sourceCounter;
             primitive.source_quad = digit;
             primitive.texture = numberGlyphs;
+            // 2.1.1 FUN_005CD254 retains the destination counter's geometry;
+            // only UV, color and per-digit translation come from the source.
+            // Copying source positions duplicates the mounted B counter nearby.
+            const auto offsetLane = kOffsetLane[index];
+            constexpr float counterScale = 0.7F;
             primitive.destination = {
-                positions[0] + translation[0], positions[1] + translation[1],
-                positions[3] - positions[0], positions[7] - positions[1]};
+                kAmmoX[index] + (1U - digit) * 10.0F * counterScale + translation[0],
+                kAmmoY[index] + 3.0F + nativeVerticalOffsets[offsetLane] + translation[1],
+                11.0F * counterScale, kCounterGlyphHeight[0] * counterScale};
             primitive.uv = NativePicaQuadUvToHost(uvs);
             primitive.color = {colors[0], colors[1], colors[2], colors[3]};
             primitive.layer = 14U;
