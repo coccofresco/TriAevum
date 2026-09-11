@@ -74,6 +74,7 @@ void MaybeWriteFramebufferScreenshot(const Args& args, Fast::GfxRenderingAPI& ap
         metadata["grass"] = {{"frame", grass.FrameId}, {"status", Fast::Oot3d::GrassRenderStatusName(grass.Status)},
             {"transition", grassTransition}, {"visible_blades", grass.VisibleBlades},
             {"cluster_instances", grass.ClusterDrawInstances}, {"cluster_blades", grass.ClusterRepresentedBlades},
+            {"prepared_draw_clusters", grass.PreparedDrawClusters}, {"large_draw_clusters", grass.LargeDrawClusters},
             {"candidate_clusters", grass.CandidateClusters}, {"tested_nodes", grass.VisibilityNodesTested},
             {"cpu_ms", grass.CpuMilliseconds}, {"selection_ms", grass.SelectionMilliseconds},
             {"placement_ms", grass.PlacementMilliseconds}, {"upload_ms", grass.UploadMilliseconds},

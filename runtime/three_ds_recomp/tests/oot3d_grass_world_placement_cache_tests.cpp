@@ -152,8 +152,8 @@ TEST(Oot3dGrassIndexedTopology, PreservesEveryExpandedTriangleAndWinding) {
         for (uint32_t planes = 1; planes <= 2; ++planes) {
             const auto blade = topology.Blades[segments-1][planes-1];
             const auto group = topology.Groups[segments-1][planes-1];
-            ASSERT_EQ(group.Count, 50U*blade.Count);
-            for (uint32_t child = 0; child < 50; ++child)
+            ASSERT_EQ(group.Count, kGrassMidrangeClusterCapacity*blade.Count);
+            for (uint32_t child = 0; child < kGrassMidrangeClusterCapacity; ++child)
                 for (uint32_t i = 0; i < blade.Count; ++i)
                     EXPECT_EQ(topology.Indices[group.First+child*blade.Count+i],
                         topology.Indices[blade.First+i]+child*planes*(2*segments+1));

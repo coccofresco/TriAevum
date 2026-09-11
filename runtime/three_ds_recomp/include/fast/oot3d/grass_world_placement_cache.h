@@ -86,6 +86,9 @@ struct GrassWorldPlacementRequest {
     // Disabled until the cluster draw consumer is selected. Independent of
     // the existing coarse-culling cluster size and never camera-dependent.
     float MidrangeCellExtent = 0.0F;
+    bool MidrangeAdaptive = false;
+    const GrassScalarMask* MidrangeMask = nullptr;
+    const GrassPlacementRule* MidrangeMaskRule = nullptr;
 };
 
 struct GrassWorldPlacementCacheStats {

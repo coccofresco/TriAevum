@@ -58,7 +58,7 @@ int main() {
 
         for (uint32_t segments : {1U, 2U}) {
             const auto topology = BuildGrassMidrangeTopology(segments);
-            Check(topology.Indices.size() == 50 * segments * 6, "shared topology size");
+            Check(topology.Indices.size() == kGrassMidrangeClusterCapacity * segments * 6, "shared topology size");
             for (size_t i = 0; i < topology.Indices.size(); ++i) {
                 const uint32_t child = uint32_t(i) / (segments * 6);
                 Check(topology.Indices[i] / topology.VerticesPerBlade == child,
@@ -70,8 +70,8 @@ int main() {
             for (uint32_t planes : {1U, 2U}) {
                 const auto blade = indexed.Blades[segments-1][planes-1];
                 const auto cluster = indexed.Groups[segments-1][planes-1];
-                Check(cluster.Count == 50*blade.Count, "indexed cluster capacity");
-                for (uint32_t child = 0; child < 50; ++child)
+                Check(cluster.Count == kGrassMidrangeClusterCapacity*blade.Count, "indexed cluster capacity");
+                for (uint32_t child = 0; child < kGrassMidrangeClusterCapacity; ++child)
                     for (uint32_t i = 0; i < blade.Count; ++i)
                         Check(indexed.Indices[cluster.First+child*blade.Count+i] ==
                             indexed.Indices[blade.First+i]+child*planes*(2*segments+1), "indexed child parity");
@@ -132,6 +132,45 @@ int main() {
             }
         }
         Check(leaves.size()==100, "every cluster occurs in one leaf");
+        std::vector<uint8_t> maskPixels(64*64,255);
+        const auto makeInterior = [&] { return GrassMaskInterior(64,64,maskPixels,[](uint8_t x) { return x>0; }); };
+        const auto white = makeInterior();
+        Check(white.Contains({0,0},{1,1}), "uniform mask interior");
+        maskPixels[32*64+32]=0;
+        const auto hole = makeInterior();
+        Check(!hole.Contains({0.2F,0.2F},{0.8F,0.8F}), "single texel hole cannot be hidden by coarse index");
+        Check(hole.Contains({0,0},{0.1F,0.1F}), "unaffected interior remains usable");
+        std::vector<uint8_t> grayPixels(64*64,128);
+        const GrassMaskInterior gray(64,64,grayPixels,[](uint8_t x) { return x>0; });
+        Check(gray.Contains({0,0},{1,1}), "accepted grayscale is not a mask hole");
+        std::vector<GrassMidrangeRoot> adaptiveRoots;
+        for (uint32_t i=0; i<120; ++i) {
+            const float x=float(i%60);
+            adaptiveRoots.push_back({{x,0,float(i/60)},i,7,1,0.1F,{0.2F+x/100,0.5F}});
+        }
+        const auto makeAdaptive = [&](const GrassMaskInterior& mask) {
+            return BuildGrassMidrangeClusters(adaptiveRoots.size(),22,[&](uint32_t i) { return adaptiveRoots[i]; },
+                true,[&](auto lo,auto hi) { return mask.Contains(lo,hi); });
+        };
+        const auto interiorGroups=makeAdaptive(white);
+        Check(interiorGroups.Groups.size()==1 && interiorGroups.LargeGroupCount==1 &&
+              interiorGroups.Groups[0].MemberCount==120, "uniform support merges across small cells");
+        const auto boundaryGroups=makeAdaptive(hole);
+        Check(boundaryGroups.Groups.size()>1 && boundaryGroups.Members.size()==adaptiveRoots.size(), "mask hole forces adaptive split without dropping roots");
+        for (const auto& group: boundaryGroups.Groups) {
+            if (group.MemberCount>50) {
+                auto lo=adaptiveRoots[boundaryGroups.Members[group.FirstMember]].Uv, hi=lo;
+                for (uint32_t i=0;i<group.MemberCount;++i) {
+                    const auto uv=adaptiveRoots[boundaryGroups.Members[group.FirstMember+i]].Uv;
+                    for (size_t axis=0;axis<2;++axis) { lo[axis]=std::min(lo[axis],uv[axis]); hi[axis]=std::max(hi[axis],uv[axis]); }
+                }
+                Check(hole.Contains(lo,hi), "large groups require certified interior");
+            }
+        }
+        std::reverse(adaptiveRoots.begin(),adaptiveRoots.end());
+        const auto stableAdaptive=makeAdaptive(white);
+        for (uint32_t i=0;i<120;++i) Check(adaptiveRoots[stableAdaptive.Members[i]].StableId==i,
+            "adaptive membership independent of input traversal");
         uint32_t previous = 50;
         for (int distance = 0; distance <= 2200; ++distance) {
             const auto count = GrassClusterChildCount(50,float(distance),500,2000,0.25F);

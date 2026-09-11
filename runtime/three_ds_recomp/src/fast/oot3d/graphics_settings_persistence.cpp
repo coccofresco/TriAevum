@@ -385,6 +385,7 @@ Json SerializeInteractiveGrassSettings(
              {"FarBladeSegments", grass.FarBladeSegments},
              {"FarTuftsEnabled", grass.FarTuftsEnabled},
              {"MidrangeClustersEnabled", grass.MidrangeClustersEnabled},
+             {"MidrangeAdaptiveEnabled", grass.MidrangeAdaptiveEnabled},
              {"MidrangeClusterCellExtent", grass.MidrangeClusterCellExtent},
              {"MidrangeFarBladeFraction", grass.MidrangeFarBladeFraction},
              {"FarTuftBladeCount", grass.FarTuftBladeCount},
@@ -630,6 +631,8 @@ void DeserializeInteractiveGrassSettings(
                    path + ".Performance.FarTuftsEnabled", result);
         ReadScalar(*performance, "MidrangeClustersEnabled", value.MidrangeClustersEnabled,
                    path + ".Performance.MidrangeClustersEnabled", result);
+        ReadScalar(*performance, "MidrangeAdaptiveEnabled", value.MidrangeAdaptiveEnabled,
+                   path + ".Performance.MidrangeAdaptiveEnabled", result);
         ReadScalar(*performance, "MidrangeClusterCellExtent", value.MidrangeClusterCellExtent,
                    path + ".Performance.MidrangeClusterCellExtent", result);
         ReadScalar(*performance, "MidrangeFarBladeFraction", value.MidrangeFarBladeFraction,

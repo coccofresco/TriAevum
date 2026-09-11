@@ -42,6 +42,7 @@ struct GrassAsyncPlacementRequest {
     float NormalOffset = 0.0F;
     float HeightScale = 1.0F;
     float MidrangeCellExtent = 0.0F;
+    bool MidrangeAdaptive = false;
     GrassPlacementView PlacementView;
 };
 

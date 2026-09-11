@@ -113,6 +113,8 @@ def main():
         if variant.get("performance", {}).get("MidrangeClustersEnabled") and not any(
                 s.get("status") == "drawing" and s.get("cluster_instances", 0) for s in grass_samples):
             raise ValueError("cluster test did not draw any cluster instances")
+        if variant.get("require_large_groups") and not any(s.get("large_draw_clusters", 0) for s in grass_samples):
+            raise ValueError("adaptive test did not prepare any groups above the boundary capacity")
         result = {"name": name, "performance": variant.get("performance", {}),
                   "timing": stats, "pixels": pixels, "grass_samples": grass_samples}
         results.append(result)

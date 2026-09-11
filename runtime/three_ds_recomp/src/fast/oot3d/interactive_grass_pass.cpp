@@ -944,6 +944,7 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                 placementRequest.NormalOffset =
                     rule.NormalOffset;
                 placementRequest.MidrangeCellExtent = settings.MidrangeClustersEnabled ? settings.MidrangeClusterCellExtent : 0.0F;
+                placementRequest.MidrangeAdaptive = settings.MidrangeClustersEnabled && settings.MidrangeAdaptiveEnabled;
                 placementRequest.HeightScale =
                     settings.Appearance.HeightScale;
                 GrassPushConstants push = ProjectionForMesh(mesh, view);
@@ -1007,6 +1008,8 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
             ++telemetry.Placements;
             telemetry.ExtractedAnchors += result.Placement->Anchors.size();
             telemetry.Clusters += result.Placement->Clusters.size();
+            telemetry.PreparedDrawClusters += static_cast<uint32_t>(result.Placement->Midrange.Groups.size());
+            telemetry.LargeDrawClusters += result.Placement->Midrange.LargeGroupCount;
             preparedPlacements[i].World = std::move(result.Placement);
         }
         std::erase_if(preparedPlacements, [](const auto& placement) { return placement.World == nullptr; });

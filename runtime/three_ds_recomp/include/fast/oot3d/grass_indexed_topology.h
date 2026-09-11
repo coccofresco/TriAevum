@@ -1,6 +1,7 @@
 #pragma once
 
 #include "fast/oot3d/grass_blade_geometry.h"
+#include "fast/oot3d/grass_cluster_limits.h"
 
 #include <algorithm>
 #include <array>
@@ -50,7 +51,7 @@ inline GrassIndexedTopology BuildGrassIndexedTopology() {
             auto& group = result.Groups[segments - 1][planes - 1];
             group.First = static_cast<uint32_t>(result.Indices.size());
             const auto blade = result.Blades[segments - 1][planes - 1];
-            for (uint16_t child = 0; child < 50; ++child)
+            for (uint16_t child = 0; child < kGrassMidrangeClusterCapacity; ++child)
                 for (uint32_t i = 0; i < blade.Count; ++i)
                     result.Indices.push_back(result.Indices[blade.First + i] + child * planes * (2 * segments + 1));
             group.Count = static_cast<uint32_t>(result.Indices.size()) - group.First;

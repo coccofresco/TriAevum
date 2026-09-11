@@ -1,4 +1,6 @@
 #pragma once
+#include "fast/oot3d/grass_mask_interior.h"
+#include "fast/oot3d/grass_cluster_limits.h"
 
 #include <algorithm>
 #include <array>
@@ -12,7 +14,6 @@
 
 namespace Fast::Oot3d {
 
-inline constexpr uint32_t kGrassMidrangeClusterCapacity = 50;
 
 struct GrassMidrangeRoot {
     std::array<float, 3> Position{};
@@ -21,6 +22,7 @@ struct GrassMidrangeRoot {
     uint64_t Support = 0;
     float BladeRadius = 0;
     float StableVisibility = 0;
+    std::array<float,2> Uv{};
 };
 
 struct GrassMidrangeCluster {
@@ -46,14 +48,15 @@ struct GrassMidrangeClusters {
     std::vector<uint32_t> GroupForRoot;
     std::vector<uint32_t> GroupOrder;
     std::vector<Node> Nodes;
+    uint32_t LargeGroupCount = 0;
 };
 
 // Invoke separately per placement/mask owner, after mask acceptance. Cell
 // extent is explicit world space, never enlarged to compensate sparse masks.
 // RootAt is a view, avoiding an additional scene-sized copy of root data.
-template <class RootAt>
+template <class RootAt, class Interior = GrassUnknownMaskInterior>
 GrassMidrangeClusters BuildGrassMidrangeClusters(
-    size_t count, float cellExtent, RootAt rootAt) {
+    size_t count, float cellExtent, RootAt rootAt, bool adaptive = false, Interior interior = {}) {
     if (!std::isfinite(cellExtent) || cellExtent <= 0 || count > UINT32_MAX)
         throw std::invalid_argument("invalid Grass midrange cluster extent/count");
     struct Entry {
@@ -61,7 +64,8 @@ GrassMidrangeClusters BuildGrassMidrangeClusters(
         uint64_t Support;
         uint32_t StableId;
         uint32_t Index;
-        auto Key() const { return std::tie(Cell, Support, StableId, Index); }
+        uint8_t Morton = 0;
+        auto Key() const { return std::tie(Cell, Support, Morton, StableId, Index); }
     };
     std::vector<Entry> entries;
     entries.reserve(count);
@@ -73,6 +77,11 @@ GrassMidrangeClusters BuildGrassMidrangeClusters(
             if (!std::isfinite(cell) || cell < -0x1p63 || cell >= 0x1p63)
                 throw std::invalid_argument("invalid Grass midrange root coordinate");
             entry.Cell[axis] = static_cast<int64_t>(cell);
+            if (adaptive) {
+                const auto local = static_cast<uint32_t>((entry.Cell[axis] % 4 + 4) % 4);
+                entry.Cell[axis] = entry.Cell[axis] / 4 - (entry.Cell[axis] % 4 < 0 ? 1 : 0);
+                entry.Morton |= static_cast<uint8_t>((local & 1U) << axis | (local >> 1U) << (axis+3));
+            }
         }
         entries.push_back(entry);
     }
@@ -82,11 +91,42 @@ GrassMidrangeClusters BuildGrassMidrangeClusters(
     GrassMidrangeClusters result;
     result.Members.reserve(count);
     result.GroupForRoot.resize(count);
+    std::vector<std::pair<size_t,size_t>> ranges;
+    const auto partition = [&](auto&& self,size_t first,size_t end,uint32_t depth) -> void {
+        auto lo = rootAt(entries[first].Index).Uv, hi = lo;
+        for (size_t i=first+1; i<end; ++i) {
+            const auto uv = rootAt(entries[i].Index).Uv;
+            for (size_t axis=0; axis<2; ++axis) { lo[axis]=std::min(lo[axis],uv[axis]); hi[axis]=std::max(hi[axis],uv[axis]); }
+        }
+        const bool uniform = adaptive && interior(lo,hi);
+        const size_t capacity = uniform ? kGrassMidrangeClusterCapacity : kGrassBoundaryClusterCapacity;
+        if ((uniform && end-first <= capacity) || depth == 0) {
+            for (size_t begin=first; begin<end; begin+=capacity)
+                ranges.emplace_back(begin,std::min(begin+capacity,end));
+            return;
+        }
+        for (size_t begin=first; begin<end;) {
+            size_t next=begin+1;
+            const auto octant = entries[begin].Morton >> ((depth-1)*3);
+            while (next<end && entries[next].Morton >> ((depth-1)*3) == octant) ++next;
+            self(self,begin,next,depth-1);
+            begin=next;
+        }
+    };
     for (size_t first = 0; first < entries.size();) {
         size_t end = first + 1;
-        while (end < entries.size() && end - first < kGrassMidrangeClusterCapacity &&
+        while (end < entries.size() &&
                entries[end].Cell == entries[first].Cell &&
                entries[end].Support == entries[first].Support) ++end;
+        partition(partition,first,end,adaptive ? 2 : 0);
+        first=end;
+    }
+    for (const auto& [first,end] : ranges) {
+        // Spatial partitioning must not bias the nested far prefix toward one
+        // corner: restore the camera-independent randomized identity order.
+        if (adaptive) std::sort(entries.begin()+first,entries.begin()+end,[](const Entry& a,const Entry& b) {
+            return std::pair{a.StableId,a.Index}<std::pair{b.StableId,b.Index};
+        });
         auto lo = rootAt(entries[first].Index).Position;
         auto hi = lo;
         for (size_t i = first; i < end; ++i) {
@@ -101,6 +141,7 @@ GrassMidrangeClusters BuildGrassMidrangeClusters(
         GrassMidrangeCluster group;
         group.FirstMember = static_cast<uint32_t>(first);
         group.MemberCount = static_cast<uint32_t>(end - first);
+        if (group.MemberCount > kGrassBoundaryClusterCapacity) ++result.LargeGroupCount;
         group.StableVisibility = rootAt(entries[first].Index).StableVisibility;
         for (size_t axis = 0; axis < 3; ++axis)
             group.Center[axis] = float((double(lo[axis]) + hi[axis]) * 0.5);
@@ -118,7 +159,6 @@ GrassMidrangeClusters BuildGrassMidrangeClusters(
         group.RootRadius = std::nextafter(float(std::sqrt(radiusSquared)),
                                          std::numeric_limits<float>::infinity());
         result.Groups.push_back(group);
-        first = end;
     }
     result.GroupOrder.resize(result.Groups.size());
     for (uint32_t i = 0; i < result.GroupOrder.size(); ++i) result.GroupOrder[i] = i;

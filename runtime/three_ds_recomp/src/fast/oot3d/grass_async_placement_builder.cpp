@@ -45,6 +45,7 @@ uint64_t GrassPlacementSourceVersion(const GrassAsyncPlacementRequest& request) 
     HashValue(hash, std::bit_cast<uint32_t>(request.HeightScale));
     if (request.MidrangeCellExtent != 0.0F)
         HashValue(hash, std::bit_cast<uint32_t>(request.MidrangeCellExtent));
+    if (request.MidrangeAdaptive) HashValue(hash, request.MidrangeAdaptive);
     HashValue(hash, request.MaterialWrapS);
     HashValue(hash, request.MaterialWrapT);
     HashValue(hash, request.ColorSource.ContentVersion());
@@ -130,6 +131,9 @@ std::shared_ptr<const GrassWorldPlacement> Build(const GrassAsyncPlacementReques
     world.NormalOffset = request.NormalOffset;
     world.HeightScale = request.HeightScale;
     world.MidrangeCellExtent = request.MidrangeCellExtent;
+    world.MidrangeAdaptive = request.MidrangeAdaptive;
+    world.MidrangeMask = request.Mask.get();
+    world.MidrangeMaskRule = &request.Rule;
     auto result = std::make_shared<const GrassWorldPlacement>(BuildGrassWorldPlacement(world));
     if (diagnose) {
         const auto elapsed = [](auto begin, auto end) {

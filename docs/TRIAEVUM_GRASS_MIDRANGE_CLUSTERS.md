@@ -1,5 +1,9 @@
 # Repeatable Midrange Grass Clusters
 
+The subsequent [adaptive grouping implementation](TRIAEVUM_GRASS_ADAPTIVE_CLUSTERS.md)
+uses mask-certified spatial subdivision and a separate 128-root GPU capacity;
+50-root figures below describe the fixed-cluster implementation and its tests.
+
 Status: experimental GPU consumer and cluster-owned selection implemented,
 2026-09-11. The original equivalent-geometry prototype and its measurements
 are retained below as history. The cluster-owned successor is described in
