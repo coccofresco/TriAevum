@@ -142,6 +142,11 @@ Application files under `tools/oot3d/native_game_runtime/`:
 
 ## Repeatable verification
 
+The post-1c audit repairs the Windows runner's missing language objects and adds
+`tools/triaevum_release/tests/run_f1_settings_smoke.sh RUNTIME_BUILD [DEPENDENCIES]`
+for Linux. Set `TRIAEVUM_NLOHMANN_INCLUDE` when JSON headers use a private prefix.
+Both runners now pass 3,896 assertions against the current built runtime objects.
+
 First build the regular runtime target, without rebuilding the title:
 
 ```powershell

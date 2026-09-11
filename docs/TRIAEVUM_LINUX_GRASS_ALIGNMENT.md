@@ -1,5 +1,9 @@
 # Linux Runtime Alignment, September 11
 
+Follow-up: the [post-1c audit](TRIAEVUM_POST_1C_REGRESSION_AUDIT.md) found that
+the preserved SDK title still lacked the VFP64 correction and updated it.
+The renderer/Grass results below do not establish title-module parity.
+
 Runtime source: `d3ffc1f` on `port/linux-nri`, including the accepted adaptive
 Grass preset and current TopScreen/HUD corrections. This update qualifies the
 installed private Linux runtime, not a new public release or actual Steam Deck.
