@@ -121,6 +121,13 @@ The recent intro/Grass results remain in
 
 ## Remaining Regression Work
 
+Update: portable Forge and its renderer shader helper are now built and staged
+in the installed private Flatpak. Shared automatic package-update handling is
+implemented with 26 targeted tests per OS and an actual Windows reactivation.
+See [package parity](TRIAEVUM_DESKTOP_PACKAGE_PARITY.md) for exact artifacts,
+counts and remaining packaged/visual qualification. Do not treat the old Forge
+distribution gap as unchanged, or the remaining GUI/SSSR work as closed.
+
 The previously documented outline rectangle in letterboxed weapon aiming has
 no subsequent corrective commit identified in this range. Keep it open; do not
 hide it by disabling outline defaults. See the evidence in

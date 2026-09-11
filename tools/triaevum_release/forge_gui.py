@@ -256,7 +256,17 @@ def runtime_path() -> Path:
 
 def launch_runtime(data_root: Path | None = None) -> subprocess.Popen[bytes]:
     try:
+        from tools.triaevum_release.package_update import refresh_packaged_runtime
         layout = for_package(runtime_path().parent)
+        with installation_lock(layout.activation):
+            if journal_path(layout.activation).exists():
+                raise forge.ForgeError("An activation was interrupted; run Forge again before playing")
+        if (runtime_path().parent / "recipes/precompiled-titles.json").is_file():
+            private_root = (data_root or default_gui_data_root()).expanduser().resolve()
+            active = load_active_title(private_root / "active-title.json")
+            if active is not None:
+                refresh_packaged_runtime(executable=runtime_path(), title=active.directory,
+                    data_root=private_root, recipe_id=active.recipe_id, recipes=forge.DEFAULT_RECIPES)
         with installation_lock(layout.activation):
             if journal_path(layout.activation).exists():
                 raise forge.ForgeError("An activation was interrupted; run Forge again before playing")

@@ -38,8 +38,17 @@ def main(arguments):
     present_window(root)
     result = {}
     started = time.monotonic()
+    presentation_attempts = 0
 
     def verify():
+        nonlocal presentation_attempts
+        # KWin can minimize a just-created XWayland window during activation.
+        # Retry presentation, never waive the mapped-widget requirement.
+        if root.state() == "iconic" and presentation_attempts < 3:
+            presentation_attempts += 1
+            present_window(root)
+            root.after(500, verify)
+            return
         try:
             root.update_idletasks()
             widgets = []
