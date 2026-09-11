@@ -2,6 +2,7 @@
 
 #include "fast/oot3d/grass_visibility.h"
 #include "fast/oot3d/grass_world_placement_cache.h"
+#include <type_traits>
 
 namespace Fast::Oot3d {
 
@@ -40,18 +41,16 @@ uint32_t SelectGrassDrawableClusters(const GrassWorldPlacement& world,
     for (const auto groupIndex : candidates) {
         const auto& group = world.Midrange.Groups[groupIndex];
         ++evaluated;
-        const auto firstRoot = world.Midrange.Members[group.FirstMember];
-        const auto& representative = world.CullingAnchors[firstRoot];
         float squared = 0;
         for (size_t axis = 0; axis < 3; ++axis) {
-            const float delta = representative.Position[axis] - eye[axis];
+            const float delta = group.RepresentativePosition[axis] - eye[axis];
             squared += delta * delta;
         }
         const float distance = std::sqrt(squared);
         const float radius = group.RootRadius + group.MaximumBladeRadius * bladeRadiusScale;
         if (distance - 2.0F * group.RootRadius - radius > policy.DrawDistance ||
             (frustumCulling && !GrassSphereIntersectsFrustum(clip, radiusScale, group.Center, radius))) continue;
-        const auto groupLod = ResolveGrassLodWithStableVisibility(policy, distance, representative.StableVisibility);
+        const auto groupLod = ResolveGrassLodWithStableVisibility(policy, distance, group.StableVisibility);
         // Keep individual near geometry, but choose ownership for the entire group
         // to avoid simultaneous individual and grouped representations.
         const bool grouped = groupLod.BladeSegments <= 2;
@@ -61,8 +60,11 @@ uint32_t SelectGrassDrawableClusters(const GrassWorldPlacement& world,
                 policy.LodReferenceDistance > 0 ? std::min(policy.DrawDistance, policy.LodReferenceDistance) : policy.DrawDistance,
                 farBladeFraction);
             if (!groupLod.Visible || children > budget - visible) continue;
-            for (uint32_t child = 0; child < children; ++child)
-                emit(world.Midrange.Members[group.FirstMember + child], groupLod);
+            const auto members = std::span<const uint32_t>(world.Midrange.Members).subspan(group.FirstMember, children);
+            if constexpr (std::is_invocable_v<Emit, std::span<const uint32_t>, const GrassLodDecision&>)
+                emit(members, groupLod);
+            else
+                for (const auto index : members) emit(index, groupLod);
             visible += children;
         } else {
             for (uint32_t child = 0; child < group.MemberCount && visible < budget; ++child) {

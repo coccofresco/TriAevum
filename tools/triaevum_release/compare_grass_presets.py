@@ -54,14 +54,15 @@ def main():
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
     (root / "plan.json").write_text(json.dumps(plan, indent=2))
-    profile = json.loads(Path(plan["profile"]).read_text(encoding="utf-8-sig"))
-    config_path = Path(profile["arguments"][profile["arguments"].index("--config") + 1])
-    original = json.loads(config_path.read_text(encoding="utf-8-sig"))
     probe = Path(__file__).with_name("probe_renderer.py")
     results = []
     frames = plan.get("frames", 900)
     warmup = plan.get("warmup", 240)
     for variant in plan["variants"]:
+        profile = json.loads(Path(variant.get("profile", plan["profile"])).read_text(encoding="utf-8-sig"))
+        config_path = Path(profile["arguments"][profile["arguments"].index("--config") + 1])
+        original = json.loads(config_path.read_text(encoding="utf-8-sig"))
+        executable = variant.get("executable", plan["executable"])
         name = variant["name"]
         if not name.replace("-", "").replace("_", "").isalnum():
             raise ValueError("variant name must be a simple directory name")
@@ -74,7 +75,7 @@ def main():
         launch = copy.deepcopy(profile)
         launch["arguments"][launch["arguments"].index("--config") + 1] = str(case / "config.json")
         (case / "launch.json").write_text(json.dumps(launch, indent=2))
-        base = [sys.executable, str(probe), plan["installation"], plan["executable"]]
+        base = [sys.executable, str(probe), plan["installation"], executable]
         common = ["--profile", str(case / "launch.json"), "--seconds", "120",
                   "--cache-directory", plan["cache"],
                   "--shader-pack", plan["shader_pack"]]
@@ -99,10 +100,13 @@ def main():
                 stats["windows"].append({"start": start, "end": end, **window_stats})
             stats["selected"] = gpu_statistics({"frames": selected}, 0, 0)
         stats["host_frame_ms"] = 1000.0 / window["frames_per_second"]
-        subprocess.run(base + [str(case / "capture")] + common + ["--frames", str(plan.get("capture_frames", 180)),
-            "--capture-interval", str(plan.get("capture_interval", 30))], check=True, timeout=160)
-        reference = Path(plan["reference_capture"]) if "reference_capture" in plan else root / plan["variants"][0]["name"] / "capture"
-        pixels = pixel_statistics(reference, case / "capture")
+        capture_enabled = variant.get("capture", True)
+        pixels = []
+        if capture_enabled:
+            subprocess.run(base + [str(case / "capture")] + common + ["--frames", str(plan.get("capture_frames", 180)),
+                "--capture-interval", str(plan.get("capture_interval", 30))], check=True, timeout=160)
+            reference = Path(plan["reference_capture"]) if "reference_capture" in plan else root / plan["variants"][0]["name"] / "capture"
+            pixels = pixel_statistics(reference, case / "capture")
         grass_samples = []
         for sample in sorted((case / "capture").glob("framebuffer_*.bmp.json")):
             metadata = json.loads(sample.read_text())
@@ -110,12 +114,14 @@ def main():
                 grass_samples.append({"host_frame": metadata["host_frame"], **metadata["grass"]})
         if grass_samples and not any(s.get("status") == "drawing" and s.get("visible_blades", 0) for s in grass_samples):
             raise ValueError("captures do not contain a successfully drawn Grass effect")
-        if variant.get("performance", {}).get("MidrangeClustersEnabled") and not any(
+        if capture_enabled and variant.get("performance", {}).get("MidrangeClustersEnabled") and not any(
                 s.get("status") == "drawing" and s.get("cluster_instances", 0) for s in grass_samples):
             raise ValueError("cluster test did not draw any cluster instances")
         if variant.get("require_large_groups") and not any(s.get("large_draw_clusters", 0) for s in grass_samples):
             raise ValueError("adaptive test did not prepare any groups above the boundary capacity")
+        invocation = json.loads((case / "timing/invocation.json").read_text())
         result = {"name": name, "performance": variant.get("performance", {}),
+                  "executable": invocation["executable"], "executable_sha256": invocation["executable_sha256"],
                   "timing": stats, "pixels": pixels, "grass_samples": grass_samples}
         results.append(result)
         (root / "results.json").write_text(json.dumps(results, indent=2))

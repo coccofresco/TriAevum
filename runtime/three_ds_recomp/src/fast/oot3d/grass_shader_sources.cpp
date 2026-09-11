@@ -207,10 +207,10 @@ void main() {
         uint child = vertex / vertices_per_child;
         vertex %= vertices_per_child;
         uvec2 group = prepared_groups.entries[gl_InstanceIndex];
+        if (child >= group.y) { gl_Position = vec4(0.0,0.0,2.0,1.0); return; }
         uint representative = group.x * 17u;
         visibility_position = uintBitsToFloat(uvec3(prepared_roots.words[representative], prepared_roots.words[representative+1u], prepared_roots.words[representative+2u]));
         visibility_seed = uintBitsToFloat(prepared_roots.words[representative+13u]);
-        if (child >= group.y) { gl_Position = vec4(0.0,0.0,2.0,1.0); return; }
         uint base = (group.x + child) * 17u;
         in_base_height = uintBitsToFloat(uvec4(prepared_roots.words[base],prepared_roots.words[base+1u],prepared_roots.words[base+2u],prepared_roots.words[base+3u]));
         in_bend_half_width = uintBitsToFloat(uvec4(prepared_roots.words[base+4u],prepared_roots.words[base+5u],prepared_roots.words[base+6u],prepared_roots.words[base+7u]));

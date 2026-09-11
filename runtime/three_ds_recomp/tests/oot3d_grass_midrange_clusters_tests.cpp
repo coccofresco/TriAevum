@@ -1,6 +1,7 @@
 #include "fast/oot3d/grass_midrange_clusters.h"
 #include "fast/oot3d/grass_indexed_topology.h"
 #include "fast/oot3d/grass_cluster_selection.h"
+#include "fast/oot3d/grass_selection_cache.h"
 
 #include <iostream>
 #include <numeric>
@@ -66,6 +67,23 @@ int main() {
             }
         }
         const auto indexed = BuildGrassIndexedTopology();
+        uint32_t lastBucket=0, bucketCount=0;
+        for (uint32_t members=1;members<=kGrassMidrangeClusterCapacity;++members) {
+            const auto capacity=GrassClusterDrawCapacity(members);
+            Check(capacity>=members && capacity<=kGrassMidrangeClusterCapacity && capacity<2*members,
+                  "bucket covers occupied prefix without exceeding shared topology");
+            Check(capacity>=lastBucket,"draw buckets preserve occupancy order");
+            if (capacity!=lastBucket) ++bucketCount;
+            lastBucket=capacity;
+        }
+        Check(bucketCount==15,"10k occupancies collapse to fifteen bounded draw capacities");
+        GrassSelectionCache selectionCache;
+        GrassSelectionKey selectionKey;
+        selectionKey.ClusterFarBladeFraction=0.25F;
+        selectionCache.Store(selectionKey);
+        Check(selectionCache.Matches(selectionKey),"unchanged cluster selection reused");
+        selectionKey.ClusterFarBladeFraction=0.5F;
+        Check(!selectionCache.Matches(selectionKey),"far child retention changes invalidate cached selection");
         Check(*std::max_element(indexed.Indices.begin(), indexed.Indices.end()) > UINT16_MAX,
               "10k two-plane clusters require non-truncating 32-bit indices");
         for (uint32_t segments : {1U, 2U})
@@ -88,6 +106,12 @@ int main() {
         Check(PackGrassMidrangeDraws(ordered,map,100,10,true) == packed && ordered == selected,
               "cluster-owned stream needs no root sort");
         Check(GrassClusterChildCount(50,200,500,2000,0.25F) == 50, "full medium cluster");
+        const std::vector<std::array<uint32_t,2>> ranges{{0,2},{2,1},{3,1}};
+        Check(RebaseGrassMidrangeDraws(ranges,4,10) == packed, "range descriptors equal rescanned owners");
+        rejected=false;
+        try { (void)RebaseGrassMidrangeDraws(ranges,5,10); }
+        catch (const std::invalid_argument&) { rejected=true; }
+        Check(rejected,"incomplete range partition rejected");
         Check(GrassClusterChildCount(50,2000,500,2000,0.25F) == 13, "reduced far cluster");
         GrassWorldPlacement world;
         for (uint32_t i = 0; i < 50; ++i) {
@@ -111,8 +135,25 @@ int main() {
         Check(select(1000,1,100) == 50, "group retention must precede child retention");
         Check(select(1000,1,49) == 0, "budget never tears a cluster");
         Check(select(2000,0.25F,100) == 13 && emitted.front() == 0, "far prefix preserves representative");
+        for (uint8_t nearSegments : {2U, 5U}) {
+            policy.NearBladeSegments = nearSegments;
+            for (float distance : {0.0F, 500.0F, 1000.0F, 2000.0F, 2100.0F}) {
+                for (uint32_t budget : {0U, 1U, 13U, 49U, 50U, 100U}) {
+                    const auto expected = select(distance,0.25F,budget);
+                    std::vector<uint32_t> bulk;
+                    const auto count = SelectGrassDrawableClusters(world,clip,{0,0,distance},policy,0.25F,1,false,budget,evaluated,
+                        [&](auto selected,const GrassLodDecision&) {
+                            if constexpr (std::is_same_v<decltype(selected),uint32_t>) bulk.push_back(selected);
+                            else bulk.insert(bulk.end(),selected.begin(),selected.end());
+                        });
+                    Check(count==expected && bulk==emitted,"bulk selection preserves root order and budget");
+                }
+            }
+        }
+        policy.NearBladeSegments = 2;
         Check(select(2100,1,100) == 0, "draw distance exclusion");
         world.CullingAnchors[0].StableVisibility=0.99F;
+        world.Midrange.Groups[0].StableVisibility=0.99F;
         Check(select(1000,1,100) == 0, "whole cluster rejection");
         world.Midrange.Nodes[0].MinimumStableVisibility=0.99F;
         evaluated=0;
@@ -134,6 +175,14 @@ int main() {
             }
         }
         Check(leaves.size()==100, "every cluster occurs in one leaf");
+        for (uint32_t i=0; i<tree.Groups.size(); ++i) {
+            Check(tree.GroupOrder[i]==i,"cluster metadata has traversal locality");
+            const auto& group=tree.Groups[i];
+            const auto root=tree.Members[group.FirstMember];
+            Check(group.RepresentativePosition[0]==float(root)*30,"cached representative is the same root");
+            for (uint32_t child=0; child<group.MemberCount; ++child)
+                Check(tree.GroupForRoot[tree.Members[group.FirstMember+child]]==i,"remapped cluster ownership");
+        }
         std::vector<uint8_t> maskPixels(64*64,255);
         const auto makeInterior = [&] { return GrassMaskInterior(64,64,maskPixels,[](uint8_t x) { return x>0; }); };
         const auto white = makeInterior();

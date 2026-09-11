@@ -1,9 +1,11 @@
 # Adaptive Grass Clusters
 
-Experimental successor to [fixed clusters](TRIAEVUM_GRASS_MIDRANGE_CLUSTERS.md).
-Enable both `Graphics.Grass.Performance.MidrangeClustersEnabled` and
-`MidrangeAdaptiveEnabled` in a private configuration. Product defaults and the
-live preset remain unchanged; no additional F1 control is advertised yet.
+Successor to [fixed clusters](TRIAEVUM_GRASS_MIDRANGE_CLUSTERS.md). The
+coverage-preserving 10000-capacity / 88-extent preset is now the product default.
+See [historical -33% acceptance](TRIAEVUM_GRASS_GOAL_ACCEPTANCE.md) for the
+paired measurements, preserved 1024 near density, and recovered distant cover.
+The sections below record earlier experiments; their rejected thinning
+settings and earlier default-status statements are historical, not current.
 
 ## Ownership and Mask Contract
 

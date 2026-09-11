@@ -105,7 +105,7 @@ struct GrassDrawBatch {
     GrassPushConstants Push{};
     uint32_t PlacementIndex = 0;
     bool Grouped = false;
-    uint32_t GroupMemberCount = 0;
+    uint32_t GroupDrawCapacity = 0;
 };
 
 struct GrassPreparedPlacement {
@@ -442,6 +442,7 @@ struct InteractiveGrassPass::Impl {
     std::vector<GrassPreparedPlacement> PreparedPlacements;
     std::vector<GrassAsyncPlacementRequest> PlacementRequests;
     GrassVisibleIndexBins VisibleIndexBins;
+    std::array<std::vector<std::array<uint32_t, 2>>, kGrassLodBinCount> SelectedClusterRanges;
     std::vector<uint32_t> VisibleAnchorIndices;
     std::vector<GrassWorldAnchor> StaticAnchors;
     std::vector<GrassClusterWork> ClusterWork;
@@ -1074,6 +1075,7 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
         uint32_t remaining = settings.MaxInstancesPerRoom;
         GrassSelectionKey selectionKey{mImpl->StaticRevision, lodPolicy, bladeRadiusScale,
             settings.MaxInstancesPerRoom, settings.FrustumCulling, {}};
+        selectionKey.ClusterFarBladeFraction = settings.MidrangeClustersEnabled ? settings.MidrangeFarBladeFraction : 0.0F;
         for (const auto& prepared : preparedPlacements) {
             selectionKey.Views.push_back({prepared.Push.PositionToClip, prepared.Eye});
             environmentRecords.push_back(prepared.Environment);
@@ -1101,6 +1103,7 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                 for (auto& bin : mImpl->VisibleIndexBins) {
                     bin.clear();
                 }
+                for (auto& ranges : mImpl->SelectedClusterRanges) ranges.clear();
                 const auto processCluster = [&](const GrassClusterWork& work, GrassVisibleIndexBins& outputBins,
                                                 uint32_t visibleLimit) {
                     GrassClusterCounters counters;
@@ -1168,9 +1171,19 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                     uint64_t evaluated = 0;
                     const auto visible = SelectGrassDrawableClusters(*prepared.World, prepared.Push.PositionToClip,
                         prepared.Eye, lodPolicy, settings.MidrangeFarBladeFraction, bladeRadiusScale, settings.FrustumCulling, remaining, evaluated,
-                        [&](uint32_t index, const GrassLodDecision& lod) {
-                            mImpl->VisibleIndexBins[GrassLodBinIndex(lod.BladeSegments, lod.PlaneCount)]
-                                .push_back(prepared.StaticBaseIndex + index);
+                        [&](auto selected, const GrassLodDecision& lod) {
+                            const auto binIndex = GrassLodBinIndex(lod.BladeSegments, lod.PlaneCount);
+                            auto& bin = mImpl->VisibleIndexBins[binIndex];
+                            if constexpr (std::is_same_v<decltype(selected), uint32_t>) {
+                                bin.push_back(prepared.StaticBaseIndex + selected);
+                            } else {
+                                const auto first = bin.size();
+                                mImpl->SelectedClusterRanges[binIndex].push_back(
+                                    {static_cast<uint32_t>(first), static_cast<uint32_t>(selected.size())});
+                                bin.resize(first + selected.size());
+                                std::transform(selected.begin(), selected.end(), bin.begin()+first,
+                                    [&](uint32_t index) { return prepared.StaticBaseIndex + index; });
+                            }
                         }, &telemetry.VisibilityNodesTested);
                     telemetry.CandidateClusters += evaluated;
                     remaining -= visible;
@@ -1283,15 +1296,16 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                     if (grouped) {
                         const auto& map = prepared.World->Midrange.GroupForRoot;
                         const uint32_t firstGroup = static_cast<uint32_t>(mImpl->DrawGroups.size());
-                        const auto groups = PackGrassMidrangeDraws(
+                        const auto groups = clusterOwned ? RebaseGrassMidrangeDraws(
+                            mImpl->SelectedClusterRanges[binIndex], binInstanceCount, firstInstance) : PackGrassMidrangeDraws(
                             std::span<uint32_t>(mImpl->VisibleAnchorIndices).subspan(firstInstance, binInstanceCount),
                             map, prepared.StaticBaseIndex, firstInstance, clusterOwned);
                         mImpl->DrawGroups.insert(mImpl->DrawGroups.end(), groups.begin(), groups.end());
                         batchPush.Flags[1] |= 0x80000000U;
                         for (uint32_t first = firstGroup; first < mImpl->DrawGroups.size();) {
                             uint32_t end = first+1;
-                            const auto count = mImpl->DrawGroups[first][1];
-                            while (end < mImpl->DrawGroups.size() && mImpl->DrawGroups[end][1] == count) ++end;
+                            const auto count = GrassClusterDrawCapacity(mImpl->DrawGroups[first][1]);
+                            while (end < mImpl->DrawGroups.size() && GrassClusterDrawCapacity(mImpl->DrawGroups[end][1]) == count) ++end;
                             batches.push_back({first, end-first, bladeSegments, planeCount, batchPush, placementIndex,
                                               true, count});
                             first = end;
@@ -1489,7 +1503,7 @@ bool InteractiveGrassPass::DrawPrepared(
                            &batch.Push);
         const auto& range = batch.Grouped ? mImpl->IndexedTopology.Groups[batch.BladeSegments-1][batch.PlaneCount-1] : batch.BladeSegments == 0U ? mImpl->IndexedTopology.Tuft :
             mImpl->IndexedTopology.Blades[batch.BladeSegments - 1U][batch.PlaneCount - 1U];
-        const uint32_t count = batch.Grouped ? range.Count / kGrassMidrangeClusterCapacity * batch.GroupMemberCount : range.Count;
+        const uint32_t count = batch.Grouped ? range.Count / kGrassMidrangeClusterCapacity * batch.GroupDrawCapacity : range.Count;
         vkCmdDrawIndexed(commandBuffer, count, batch.InstanceCount, range.First, 0, batch.FirstInstance);
     }
     mImpl->Prepared = false;
@@ -1549,6 +1563,7 @@ void InteractiveGrassPass::Shutdown() {
     for (auto& bin : mImpl->VisibleIndexBins) {
         bin.clear();
     }
+    for (auto& ranges : mImpl->SelectedClusterRanges) ranges.clear();
     mImpl->VisibleAnchorIndices.clear();
     mImpl->StaticAnchors.clear();
     mImpl->ActivePlacements.clear();

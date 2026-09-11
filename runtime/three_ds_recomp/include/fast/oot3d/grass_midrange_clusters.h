@@ -32,6 +32,7 @@ struct GrassMidrangeCluster {
     float RootRadius = 0;
     float MaximumBladeRadius = 0;
     float StableVisibility = 0;
+    std::array<float, 3> RepresentativePosition{};
 };
 
 struct GrassMidrangeClusters {
@@ -150,6 +151,7 @@ GrassMidrangeClusters BuildGrassMidrangeClusters(
         result.MaximumMemberCount = std::max(result.MaximumMemberCount, group.MemberCount);
         if (group.MemberCount > kGrassBoundaryClusterCapacity) ++result.LargeGroupCount;
         group.StableVisibility = rootAt(entries[first].Index).StableVisibility;
+        group.RepresentativePosition = rootAt(entries[first].Index).Position;
         for (size_t axis = 0; axis < 3; ++axis)
             group.Center[axis] = float((double(lo[axis]) + hi[axis]) * 0.5);
         double radiusSquared = 0;
@@ -208,6 +210,19 @@ GrassMidrangeClusters BuildGrassMidrangeClusters(
         result.Nodes[nodeIndex].Escape=static_cast<uint32_t>(result.Nodes.size());
     };
     if (!result.Groups.empty()) buildNode(buildNode,0,static_cast<uint32_t>(result.Groups.size()));
+    // Publish cluster metadata in traversal order. Keep member ranges/root
+    // identities unchanged, and remap ownership once rather than chasing
+    // scattered group/member/root arrays on every moving-camera frame.
+    std::vector<GrassMidrangeCluster> ordered;
+    ordered.reserve(result.Groups.size());
+    for (uint32_t i=0; i<result.GroupOrder.size(); ++i) {
+        const auto& group = result.Groups[result.GroupOrder[i]];
+        ordered.push_back(group);
+        for (uint32_t child=0; child<group.MemberCount; ++child)
+            result.GroupForRoot[result.Members[group.FirstMember+child]] = i;
+        result.GroupOrder[i] = i;
+    }
+    result.Groups = std::move(ordered);
     return result;
 }
 
@@ -228,6 +243,33 @@ inline uint32_t GrassClusterChildCount(uint32_t members, float distance,
 
 // Reorder only selected indices; bucket descriptors by occupancy so sparse
 // groups draw an exact prefix rather than fifty mostly unused children.
+inline void SortGrassMidrangeDraws(std::span<std::array<uint32_t, 2>> groups) {
+    std::sort(groups.begin(), groups.end(), [](const auto& a, const auto& b) {
+        return std::pair{a[1],a[0]} < std::pair{b[1],b[0]};
+    });
+}
+
+// The range emitter already knows group boundaries. Preserve this information
+// instead of looking up the owner of every selected root a second time.
+inline std::vector<std::array<uint32_t, 2>> RebaseGrassMidrangeDraws(
+    std::span<const std::array<uint32_t, 2>> ranges, uint32_t selectedCount, uint32_t preparedBase) {
+    std::vector<std::array<uint32_t, 2>> result;
+    result.reserve(ranges.size());
+    uint32_t next = 0;
+    for (const auto& range : ranges) {
+        if (range[0] != next || range[1] == 0 || range[1] > kGrassMidrangeClusterCapacity ||
+            next > selectedCount || range[1] > selectedCount-next ||
+            uint64_t(preparedBase)+next+range[1] > uint64_t(UINT32_MAX)+1)
+            throw std::invalid_argument("Grass selected ranges do not partition their prepared roots");
+        result.push_back({preparedBase+next, range[1]});
+        next += range[1];
+    }
+    if (next != selectedCount)
+        throw std::invalid_argument("Grass selected ranges omit prepared roots");
+    SortGrassMidrangeDraws(result);
+    return result;
+}
+
 inline std::vector<std::array<uint32_t, 2>> PackGrassMidrangeDraws(
     std::span<uint32_t> selected, std::span<const uint32_t> groupForRoot,
     uint32_t rootBase, uint32_t preparedBase, bool groupOrdered = false) {
@@ -246,9 +288,7 @@ inline std::vector<std::array<uint32_t, 2>> PackGrassMidrangeDraws(
         result.push_back({preparedBase+first, end-first});
         first = end;
     }
-    std::sort(result.begin(), result.end(), [](const auto& a, const auto& b) {
-        return std::pair{a[1],a[0]} < std::pair{b[1],b[0]};
-    });
+    SortGrassMidrangeDraws(result);
     return result;
 }
 
