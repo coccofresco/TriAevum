@@ -43,6 +43,7 @@ struct GrassAsyncPlacementRequest {
     float HeightScale = 1.0F;
     float MidrangeCellExtent = 0.0F;
     bool MidrangeAdaptive = false;
+    uint32_t MidrangeAdaptiveCapacity = kGrassDefaultAdaptiveClusterCapacity;
     GrassPlacementView PlacementView;
 };
 

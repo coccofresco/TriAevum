@@ -105,7 +105,7 @@ struct GrassDrawBatch {
     GrassPushConstants Push{};
     uint32_t PlacementIndex = 0;
     bool Grouped = false;
-    uint8_t GroupMemberCount = 0;
+    uint32_t GroupMemberCount = 0;
 };
 
 struct GrassPreparedPlacement {
@@ -764,7 +764,7 @@ bool InteractiveGrassPass::Initialize(VkPhysicalDevice physicalDevice,
             mImpl->InstanceCompactor.Initialize(
                 physicalDevice, device, shaders);
         mImpl->IndexedTopology = BuildGrassIndexedTopology();
-        const auto indexBytes = mImpl->IndexedTopology.Indices.size() * sizeof(uint16_t);
+        const auto indexBytes = mImpl->IndexedTopology.Indices.size() * sizeof(uint32_t);
         mImpl->EnsureBuffer(mImpl->IndexBuffer, indexBytes, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, 4096);
         std::memcpy(mImpl->IndexBuffer.Mapped, mImpl->IndexedTopology.Indices.data(), indexBytes);
         mImpl->Reason.clear();
@@ -945,6 +945,7 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                     rule.NormalOffset;
                 placementRequest.MidrangeCellExtent = settings.MidrangeClustersEnabled ? settings.MidrangeClusterCellExtent : 0.0F;
                 placementRequest.MidrangeAdaptive = settings.MidrangeClustersEnabled && settings.MidrangeAdaptiveEnabled;
+                placementRequest.MidrangeAdaptiveCapacity = settings.MidrangeAdaptiveCapacity;
                 placementRequest.HeightScale =
                     settings.Appearance.HeightScale;
                 GrassPushConstants push = ProjectionForMesh(mesh, view);
@@ -1010,6 +1011,8 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
             telemetry.Clusters += result.Placement->Clusters.size();
             telemetry.PreparedDrawClusters += static_cast<uint32_t>(result.Placement->Midrange.Groups.size());
             telemetry.LargeDrawClusters += result.Placement->Midrange.LargeGroupCount;
+            telemetry.MaximumClusterMembers = std::max(telemetry.MaximumClusterMembers, result.Placement->Midrange.MaximumMemberCount);
+            telemetry.CapacityLimitedRanges += result.Placement->Midrange.CapacityLimitedRanges;
             preparedPlacements[i].World = std::move(result.Placement);
         }
         std::erase_if(preparedPlacements, [](const auto& placement) { return placement.World == nullptr; });
@@ -1290,7 +1293,7 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                             const auto count = mImpl->DrawGroups[first][1];
                             while (end < mImpl->DrawGroups.size() && mImpl->DrawGroups[end][1] == count) ++end;
                             batches.push_back({first, end-first, bladeSegments, planeCount, batchPush, placementIndex,
-                                              true, static_cast<uint8_t>(count)});
+                                              true, count});
                             first = end;
                         }
                     } else batches.push_back({ firstInstance, binInstanceCount,
@@ -1475,7 +1478,7 @@ bool InteractiveGrassPass::DrawPrepared(
                             &mImpl->DescriptorSets[slotIndex], 0U, nullptr);
     const VkDeviceSize offset = 0U;
     vkCmdBindVertexBuffers(commandBuffer, 0U, 1U, &mImpl->PreparedInstanceBuffer, &offset);
-    vkCmdBindIndexBuffer(commandBuffer, mImpl->IndexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT16);
+    vkCmdBindIndexBuffer(commandBuffer, mImpl->IndexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
     const VkViewport viewport{ 0.0F, 0.0F, static_cast<float>(width), static_cast<float>(height), 0.0F, 1.0F };
     const VkRect2D scissor{ { 0, 0 }, { width, height } };
     vkCmdSetViewport(commandBuffer, 0U, 1U, &viewport);

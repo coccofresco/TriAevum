@@ -18,7 +18,7 @@ struct GrassIndexRange {
 // Triangle order and winding match the former expanded procedural stream.
 // Each row has two unique vertices, plus a single tip, independently per plane.
 struct GrassIndexedTopology {
-    std::vector<uint16_t> Indices;
+    std::vector<uint32_t> Indices;
     std::array<std::array<GrassIndexRange, 2>, kMaximumGrassBladeSegments> Blades{};
     GrassIndexRange Tuft;
     std::array<std::array<GrassIndexRange, 2>, 2> Groups{};

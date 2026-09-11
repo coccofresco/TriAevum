@@ -402,6 +402,7 @@ GraphicsSettingsValidation GraphicsSettingsService::Validate(
     value.Grass.FarTuftDensity = finiteGrass(value.Grass.FarTuftDensity, 1.0F, 0.1F, 4.0F);
     value.Grass.FarTuftSpread = finiteGrass(value.Grass.FarTuftSpread, 1.0F, 0.25F, 4.0F);
     value.Grass.MidrangeClusterCellExtent = finiteGrass(value.Grass.MidrangeClusterCellExtent, 22.0F, 1.0F, 100.0F);
+    value.Grass.MidrangeAdaptiveCapacity = std::clamp(value.Grass.MidrangeAdaptiveCapacity, 50U, 10000U);
     value.Grass.MidrangeFarBladeFraction = finiteGrass(value.Grass.MidrangeFarBladeFraction, 0.25F, 0.02F, 1.0F);
     value.Grass.SegmentLodSoftness = finiteGrass(value.Grass.SegmentLodSoftness, 0.5F, 0.0F, 1.0F);
     value.Grass.SegmentLodStartDistance =

@@ -87,6 +87,7 @@ struct GrassWorldPlacementRequest {
     // the existing coarse-culling cluster size and never camera-dependent.
     float MidrangeCellExtent = 0.0F;
     bool MidrangeAdaptive = false;
+    uint32_t MidrangeAdaptiveCapacity = kGrassDefaultAdaptiveClusterCapacity;
     const GrassScalarMask* MidrangeMask = nullptr;
     const GrassPlacementRule* MidrangeMaskRule = nullptr;
 };

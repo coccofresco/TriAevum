@@ -75,6 +75,7 @@ void MaybeWriteFramebufferScreenshot(const Args& args, Fast::GfxRenderingAPI& ap
             {"transition", grassTransition}, {"visible_blades", grass.VisibleBlades},
             {"cluster_instances", grass.ClusterDrawInstances}, {"cluster_blades", grass.ClusterRepresentedBlades},
             {"prepared_draw_clusters", grass.PreparedDrawClusters}, {"large_draw_clusters", grass.LargeDrawClusters},
+            {"maximum_cluster_members", grass.MaximumClusterMembers}, {"capacity_limited_ranges", grass.CapacityLimitedRanges},
             {"candidate_clusters", grass.CandidateClusters}, {"tested_nodes", grass.VisibilityNodesTested},
             {"cpu_ms", grass.CpuMilliseconds}, {"selection_ms", grass.SelectionMilliseconds},
             {"placement_ms", grass.PlacementMilliseconds}, {"upload_ms", grass.UploadMilliseconds},

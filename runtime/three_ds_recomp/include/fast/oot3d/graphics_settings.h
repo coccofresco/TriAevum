@@ -95,6 +95,7 @@ struct InteractiveGrassSettings {
     bool FarTuftsEnabled = true;
     bool MidrangeClustersEnabled = false;
     bool MidrangeAdaptiveEnabled = false;
+    uint32_t MidrangeAdaptiveCapacity = 128;
     float MidrangeClusterCellExtent = 22.0F;
     float MidrangeFarBladeFraction = 0.25F;
     uint8_t FarTuftBladeCount = 5U;

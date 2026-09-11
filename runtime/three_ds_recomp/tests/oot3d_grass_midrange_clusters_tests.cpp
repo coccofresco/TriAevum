@@ -66,6 +66,8 @@ int main() {
             }
         }
         const auto indexed = BuildGrassIndexedTopology();
+        Check(*std::max_element(indexed.Indices.begin(), indexed.Indices.end()) > UINT16_MAX,
+              "10k two-plane clusters require non-truncating 32-bit indices");
         for (uint32_t segments : {1U, 2U})
             for (uint32_t planes : {1U, 2U}) {
                 const auto blade = indexed.Blades[segments-1][planes-1];
@@ -171,6 +173,36 @@ int main() {
         const auto stableAdaptive=makeAdaptive(white);
         for (uint32_t i=0;i<120;++i) Check(adaptiveRoots[stableAdaptive.Members[i]].StableId==i,
             "adaptive membership independent of input traversal");
+        adaptiveRoots.clear();
+        for (uint32_t i=0;i<12000;++i)
+            adaptiveRoots.push_back({{float(i%100)*0.1F,0,float(i/100)*0.1F},i,7,1,0.1F,
+                                     {0.2F+float(i%100)*0.006F,0.5F}});
+        for (uint32_t capacity : {128U,256U,5000U,10000U}) {
+            const auto large = BuildGrassMidrangeClusters(adaptiveRoots.size(),22,
+                [&](uint32_t i) { return adaptiveRoots[i]; },true,
+                [&](auto lo,auto hi) { return white.Contains(lo,hi); },capacity);
+            Check(large.MaximumMemberCount==capacity && large.CapacityLimitedRanges>0,
+                  "configurable capacity reached and saturation recorded");
+            Check(large.Groups.size()==(12000+capacity-1)/capacity, "large cluster partition");
+            auto all=large.Members;
+            std::sort(all.begin(),all.end());
+            for (uint32_t i=0;i<12000;++i) Check(all[i]==i,"no missing or duplicate large-cluster roots");
+            auto stream=large.Members;
+            const auto descriptors=PackGrassMidrangeDraws(stream,large.GroupForRoot,0,0,true);
+            uint32_t covered=0;
+            for (const auto& descriptor:descriptors) covered+=descriptor[1];
+            Check(covered==12000 && stream==large.Members,"large GPU descriptors preserve every accepted root");
+            const auto boundary=BuildGrassMidrangeClusters(adaptiveRoots.size(),22,
+                [&](uint32_t i) { return adaptiveRoots[i]; },true,
+                [&](auto lo,auto hi) { return hole.Contains(lo,hi); },capacity);
+            Check(boundary.MaximumMemberCount==50 && boundary.Members.size()==12000,
+                  "single mask hole still enforces small boundary groups at 10k capacity");
+        }
+        rejected=false;
+        try { (void)BuildGrassMidrangeClusters(0,22,[](uint32_t) { return GrassMidrangeRoot{}; },
+                                               true,GrassUnknownMaskInterior{},10001); }
+        catch (const std::invalid_argument&) { rejected=true; }
+        Check(rejected,"capacity exceeding GPU topology rejected before building");
         uint32_t previous = 50;
         for (int distance = 0; distance <= 2200; ++distance) {
             const auto count = GrassClusterChildCount(50,float(distance),500,2000,0.25F);

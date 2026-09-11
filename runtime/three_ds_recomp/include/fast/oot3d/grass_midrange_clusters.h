@@ -49,6 +49,8 @@ struct GrassMidrangeClusters {
     std::vector<uint32_t> GroupOrder;
     std::vector<Node> Nodes;
     uint32_t LargeGroupCount = 0;
+    uint32_t MaximumMemberCount = 0;
+    uint32_t CapacityLimitedRanges = 0;
 };
 
 // Invoke separately per placement/mask owner, after mask acceptance. Cell
@@ -56,7 +58,10 @@ struct GrassMidrangeClusters {
 // RootAt is a view, avoiding an additional scene-sized copy of root data.
 template <class RootAt, class Interior = GrassUnknownMaskInterior>
 GrassMidrangeClusters BuildGrassMidrangeClusters(
-    size_t count, float cellExtent, RootAt rootAt, bool adaptive = false, Interior interior = {}) {
+    size_t count, float cellExtent, RootAt rootAt, bool adaptive = false, Interior interior = {},
+    uint32_t adaptiveCapacity = kGrassDefaultAdaptiveClusterCapacity) {
+    if (adaptiveCapacity < kGrassBoundaryClusterCapacity || adaptiveCapacity > kGrassMidrangeClusterCapacity)
+        throw std::invalid_argument("invalid Grass adaptive cluster capacity");
     if (!std::isfinite(cellExtent) || cellExtent <= 0 || count > UINT32_MAX)
         throw std::invalid_argument("invalid Grass midrange cluster extent/count");
     struct Entry {
@@ -99,7 +104,8 @@ GrassMidrangeClusters BuildGrassMidrangeClusters(
             for (size_t axis=0; axis<2; ++axis) { lo[axis]=std::min(lo[axis],uv[axis]); hi[axis]=std::max(hi[axis],uv[axis]); }
         }
         const bool uniform = adaptive && interior(lo,hi);
-        const size_t capacity = uniform ? kGrassMidrangeClusterCapacity : kGrassBoundaryClusterCapacity;
+        const size_t capacity = uniform ? adaptiveCapacity : kGrassBoundaryClusterCapacity;
+        if (uniform && end-first > capacity) ++result.CapacityLimitedRanges;
         if ((uniform && end-first <= capacity) || depth == 0) {
             for (size_t begin=first; begin<end; begin+=capacity)
                 ranges.emplace_back(begin,std::min(begin+capacity,end));
@@ -141,6 +147,7 @@ GrassMidrangeClusters BuildGrassMidrangeClusters(
         GrassMidrangeCluster group;
         group.FirstMember = static_cast<uint32_t>(first);
         group.MemberCount = static_cast<uint32_t>(end - first);
+        result.MaximumMemberCount = std::max(result.MaximumMemberCount, group.MemberCount);
         if (group.MemberCount > kGrassBoundaryClusterCapacity) ++result.LargeGroupCount;
         group.StableVisibility = rootAt(entries[first].Index).StableVisibility;
         for (size_t axis = 0; axis < 3; ++axis)

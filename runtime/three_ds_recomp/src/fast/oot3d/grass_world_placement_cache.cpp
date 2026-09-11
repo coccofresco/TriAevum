@@ -39,6 +39,7 @@ uint64_t TransformVersion(const GrassWorldPlacementRequest& request) noexcept {
         HashValue(hash, std::bit_cast<uint32_t>(request.MidrangeCellExtent));
     if (request.MidrangeAdaptive) {
         HashValue(hash, request.MidrangeAdaptive);
+        HashValue(hash, request.MidrangeAdaptiveCapacity);
         if (request.MidrangeMask && request.MidrangeMaskRule) {
             HashValue(hash, request.MidrangeMask->Width);
             HashValue(hash, request.MidrangeMask->Height);
@@ -258,7 +259,7 @@ GrassWorldPlacement BuildPlacement(const GrassWorldPlacementRequest& request, ui
                     }
                 }
                 return interior->Contains(lo,hi);
-            });
+            }, request.MidrangeAdaptiveCapacity);
     }
     return result;
 }
