@@ -95,7 +95,7 @@ class ProbeRendererTests(unittest.TestCase):
             self.assertFalse(json.loads((root / "probe/invocation.json").read_text())["synchronous_captures"])
             self.assertIn("OOT3D_VULKAN_DIAGNOSTICS_PATH", launch.call_args.kwargs["env"])
 
-    def test_throughput_rejects_interpolation_unbounded_or_capture_measurements(self):
+    def test_throughput_rejects_unbounded_or_capture_measurements(self):
         for options in ([], ["--native-fidelity"], ["--native-fidelity", "--no-captures"]):
             with patch.object(sys, "argv", ["probe_renderer", "install", "runtime", "output",
                                             "--throughput", *options]), \
@@ -104,6 +104,32 @@ class ProbeRendererTests(unittest.TestCase):
                     probe_renderer.main()
                 self.assertEqual(stopped.exception.code, 2)
                 launch.assert_not_called()
+
+    def test_effect_throughput_preserves_style_but_forces_native_steps(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "runtime").touch()
+            graphics = {"Preset": "Custom", "Grass": {"Quality": "Custom"},
+                        "FrameRate": {"Mode": "Interpolated3x"}}
+            (root / "config.json").write_text(json.dumps({"Graphics": graphics}))
+            (root / "TriAevum.launch.json").write_text(json.dumps({"arguments": [
+                "--config", "${profile_dir}/config.json", "--gameplay-timing", "native30_interpolated"]}))
+            process = MagicMock()
+            process.wait.return_value = 0
+            with patch.object(sys, "argv", ["probe_renderer", str(root), str(root / "runtime"),
+                    str(root / "probe"), "--throughput", "--no-captures", "--frames", "360"]), \
+                    patch.object(probe_renderer.subprocess, "Popen", return_value=process) as launch:
+                with self.assertRaises(SystemExit) as stopped:
+                    probe_renderer.main()
+                self.assertEqual(stopped.exception.code, 0)
+            saved = json.loads((root / "probe/config.json").read_text())["Graphics"]
+            self.assertEqual(saved["Preset"], "Custom")
+            self.assertEqual(saved["Grass"], graphics["Grass"])
+            self.assertEqual(saved["FrameRate"]["Mode"], "Original30")
+            self.assertFalse(saved["Presentation"]["VSync"])
+            command = launch.call_args.args[0]
+            self.assertEqual(command[command.index("--gameplay-timing") + 1], "native30_no_interpolation")
+            self.assertNotIn("--screenshot", command)
 
     def test_native_probe_replaces_timing_and_reuses_only_explicit_cache(self):
         with tempfile.TemporaryDirectory() as directory:

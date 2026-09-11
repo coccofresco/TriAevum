@@ -47,7 +47,7 @@ def main():
     parser.add_argument("--no-captures", action="store_true",
                         help="Measure pacing without synchronous framebuffer readback and image writes")
     parser.add_argument("--throughput", action="store_true",
-                        help="Bounded native-step benchmark; requires native fidelity, no captures and a frame count")
+                        help="Bounded native-step benchmark; disables interpolation, requires no captures and a frame count")
     parser.add_argument("--warmup-frames", type=int, default=120,
                         help="Frames excluded from throughput measurement (default: 120)")
     parser.add_argument("--extended-diagnostics", action="store_true")
@@ -72,8 +72,8 @@ def main():
         parser.error("seconds and capture interval must be positive; frames cannot be negative")
     if args.save_state_frame is not None and args.save_state_frame < 0:
         parser.error("save-state frame cannot be negative")
-    if args.throughput and (not args.native_fidelity or not args.no_captures or args.frames <= 0):
-        parser.error("throughput requires --native-fidelity --no-captures and positive --frames")
+    if args.throughput and (not args.no_captures or args.frames <= 0):
+        parser.error("throughput requires --no-captures and positive --frames")
     if args.throughput and not 0 <= args.warmup_frames < args.frames:
         parser.error("throughput warmup must be nonnegative and smaller than the frame count")
     if bool(args.scenario_catalog) != bool(args.scenario):
@@ -116,9 +116,14 @@ def main():
     config = json.loads(Path(arguments[config_index]).read_text(encoding="utf-8-sig"))
     if args.native_fidelity:
         config.setdefault("Graphics", {})["Preset"] = "Authentic"
+    if args.native_fidelity or args.throughput:
+        config.setdefault("Graphics", {}).setdefault("FrameRate", {})["Mode"] = "Original30"
         set_option("--gameplay-timing", "native30_no_interpolation")
         set_option("--presentation-rate", "30")
         set_option("--fixed-delta-seconds", "0.033333333333333333")
+    if args.throughput:
+        # The renderer reapplies this setting after the host disables its limiter.
+        config["Graphics"].setdefault("Presentation", {})["VSync"] = False
     if args.shader_pack:
         set_option("--pica-aot-shader-pack", args.shader_pack.resolve(strict=True).as_posix())
     if args.cache_directory or "--renderer-cache-directory" in arguments:

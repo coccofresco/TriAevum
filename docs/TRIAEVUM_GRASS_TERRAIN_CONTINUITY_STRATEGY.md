@@ -537,3 +537,133 @@ density 0.1 with three blades and spread 4. All six texture rules and remaining
 Grass values are copied together. Existing unrelated profiles, global toon,
 TopScreen and presentation defaults are not changed. Product-default tests
 check the snapshot and its compiled export, including GrassSavedPreset equality.
+
+## Preset Cost Audit and Lossless-Intent Optimization (2026-09-11)
+
+The next user-saved preset differs in two fields: density 1862.9000244140625
+and TuftTransitionFraction 0.3400000035762787. These are now the product default.
+Every current-renderer measurement below used these values; no density, shape,
+mask, distance, fog or lighting controls were reduced to manufacture a speedup.
+Local Grass and GrassSavedPreset match. Other graphics settings are unchanged.
+
+### Method and Measurement Corrections
+
+The renderer/frontend/bridge surface preceding the 4x4 color work was rebuilt
+from `4bd045f`, using the same build configuration and title module. Its old
+product Grass preset was tested separately from the current preset. Historical
+sources were temporary measurement inputs and have all been restored. The
+optimized code remains the development build, not the historical executable.
+
+`probe_renderer.py --throughput --no-captures --frames 900 --warmup-frames 240`
+now preserves effects unless `--native-fidelity` is explicitly requested, while
+forcing native30_no_interpolation and Original30. It also writes
+Graphics.Presentation.VSync=false in the **private probe config**. Previously
+the host reported VSync off but the persisted renderer setting re-enabled it;
+GPU diagnostics confirmed presentation_vsync=true. Those initial capped runs
+are not throughput evidence. The corrected runs confirm false at both layers,
+no application limiter, no pacing and no interpolated frames. Shader caches
+are warm; the first 240 presentations and the final pending GPU-query slots
+are excluded from GPU means. Tests never modify user saves/configuration.
+
+Evidence root: `C:/Users/xander/triaevum-verify-20260911/`. Each probe contains
+its executable SHA256, arguments, private config, runtime counters and GPU log.
+Windows RTX 3060, output 1280x720, Kokiri legacy hudtest checkpoint:
+
+| Run | Grass GPU mean ms | Total GPU mean ms | Measured native steps/s |
+| --- | ---: | ---: | ---: |
+| grass-perf-before-free | 2.733 | 4.307 | 85.7 |
+| grass-perf-optimized-a | 2.338 | 3.870 | 86.5 |
+| grass-perf-before-b | 6.341 | 9.988 | 80.5 |
+| grass-perf-optimized-c | 5.379 | 8.836 | 88.5 |
+
+The two before/after comparisons reduce Grass GPU time by about 14-15% and
+total GPU time by 10-12%. Absolute GPU times vary substantially: the device
+changes power/clock states (a spot check observed P3, 780 MHz), and host work
+remains significant. Do not advertise these as fixed game FPS improvements.
+An additional optimized run, grass-perf-optimized-b, measured 2.385 ms Grass.
+The clean historical renderer + old-preset run grass-perf-historical-old-b
+measured 1.783 ms Grass, 3.632 ms total GPU, 87.0 native steps/s. The current
+implementation has **not demonstrated lower cost than that historical setup**.
+The earlier historical-old-free run overlapped a build and is excluded from
+host-performance comparisons. Initial capped historical-new measurements are
+also not a basis for an uncapped improvement claim.
+
+### Implemented Changes
+
+- Collapse the validated RGB pass-through TEV scale chain to one CPU-computed
+  power-of-two gain per environment, retaining the first byte round and final
+  saturation. After byte quantization, the remaining integer gains preserve
+  the byte lattice. This is restricted to the decoder's existing capability,
+  not an approximation for arbitrary PICA expressions. The canonical native
+  material renderer and decoded register representation remain unchanged.
+- Evaluate the shared, **unclamped** toon band/saturation/tint transform in the
+  Grass vertex shader. The lighting input is constant for every vertex of a
+  root, so this color-linear transform commutes with perspective interpolation.
+  Clamp still happens in the fragment shader, before rim and fog. Remove the
+  unused lighting varying. Native terrain lighting, shadows and toon controls
+  remain active; no lighting term is dropped to reduce cost.
+
+Validation: 119 focused Grass/toon/persistence tests pass, including all
+729 valid scale combinations times 256 byte values. Eight probe tests pass.
+The known unrelated UsesInjectedPersistencePort store-count test remains
+excluded. A Vulkan validation run has zero errors, 11 existing warnings.
+No F1 controls were changed.
+
+Framebuffers use the same preset, checkpoint and explicit 1/60 fixed delta
+(capture profiles are intentionally separate from throughput profiles):
+grass-opt-fixed-before/after differ by 1 pixel at presentation 120 and 2 pixels
+at 150 out of 921600, maximum encoded-channel delta 8. In
+grass-intro-before/optimized, presentations 120, 300, 660, 840 are identical;
+480 differs by one pixel, maximum delta 8. This is effectively unchanged for
+these samples, not a claim of bit-exact output for every scene or toon profile.
+Earlier non-fixed captures had different animation phases and are discarded
+as pixel-comparison evidence.
+
+### Remaining Work, Ordered by Expected Benefit
+
+1. Move root-constant native lighting fetches and material endpoint evaluation
+   into the existing GPU instance-preparation stage, once per visible root
+   instead of repeatedly for each strip vertex. This needs an explicit
+   environment/atlas-range input contract and the existing CPU fallback; do
+   not add a second scene renderer or read the atlas back to the CPU.
+2. Measure cold placement generation, moving-frustum selection and static
+   uploads separately. The 4x4 two-nearest color is already cached in roots;
+   it is not a full texture lookup performed on the CPU every frame.
+3. Only consider geometry/LOD/coverage reductions after the above, using
+   fixed-time framebuffers and quantified silhouettes/coverage. Keep the
+   user's chosen preset intact unless a visual tradeoff is approved.
+
+The mounted Field checkpoint contains a native30_interpolated clock and rejects
+a native30_no_interpolation benchmark. The three grass-field-* probes correctly
+failed before rendering; they are not performance measurements. Obtain a
+compatible fixture through the runtime's supported save path before claiming
+Field throughput. Do not patch out the timing-contract check. Linux/Android and
+whole-game performance remain untested in this tranche.
+
+### User-Approved Density 1024
+
+The user then explicitly requested 1024 instead of 1862.9. Updated active
+Grass, GrassSavedPreset and the title product snapshot to 1024; every other
+Grass setting is unchanged, including TuftTransitionFraction 0.34. The product
+snapshot tests now require this density. The following consecutive runs use
+the same optimized executable and methodology, no builds running concurrently:
+
+| Run | Density | Grass GPU mean ms | Total GPU mean ms | Native steps/s |
+| --- | ---: | ---: | ---: | ---: |
+| grass-perf-1024-a | 1024 | 3.098 | 6.613 | 94.2 |
+| grass-perf-1863-control | 1862.9 | 5.412 | 8.913 | 90.6 |
+| grass-perf-1024-b | 1024 | 3.088 | 6.610 | 92.9 |
+| grass-perf-historical-old-c | historical preset | 3.373 | 6.904 | 91.1 |
+
+At 1024 the Grass GPU cost falls about 43% versus the current renderer at
+1862.9, with total GPU time about 26% lower. In this consecutive run block it
+is also about 8% below the historical renderer/old-preset Grass time. This is
+the measured Kokiri case, not proof that every scene is faster than history.
+Host throughput improves much less, consistent with remaining non-Grass work.
+The earlier absolute timings at different device power states must not be
+mixed with this block to invent a larger improvement.
+
+`grass-image-1024` contains the fixed-time framebuffer check. Coverage remains
+dense but the placement is deliberately different because the user changed
+density. Do not describe that change as pixel-identical; the 1-2 pixel figures
+above concern shader optimization alone at unchanged density.

@@ -1,4 +1,5 @@
 #include "fast/oot3d/effect_graph.h"
+#include "fast/renderer3ds/pica_surface_passthrough_scale.h"
 #include "fast/oot3d/display_effect_plan.h"
 #include "fast/oot3d/directional_shadows.h"
 #include "fast/oot3d/ambient_occlusion_composite.h"
@@ -3839,12 +3840,35 @@ TEST(Oot3dGrassToon, SharesCanonicalShaderAndAppliesBeforeFogWithoutChangingAlph
         7U, draw, ToonMode::PostProcessPreview, {});
     ASSERT_TRUE(native.Applied());
     EXPECT_NE(native.Source.find(kToonSurfaceResponseShader), std::string::npos);
-    const auto apply = grass.find("resolved_color.rgb = oot3d_toon_diffuse_response");
+    const auto vertex = BuildGrassVertexShader();
+    EXPECT_NE(vertex.find("blade_color.rgb = oot3d_toon_banded_color"), std::string::npos);
+    EXPECT_EQ(grass.find("resolved_color.rgb = oot3d_toon_diffuse_response"), std::string::npos);
+    EXPECT_EQ(vertex.find("blade_lighting"), std::string::npos);
+    const auto apply = grass.find("resolved_color.rgb = clamp(resolved_color.rgb, 0.0, 1.0)");
     ASSERT_NE(apply, std::string::npos);
     EXPECT_LT(apply, grass.find("resolved_color.rgb = mix("));
     EXPECT_EQ(grass.find("resolved_color.a ="), std::string::npos);
     EXPECT_NE(grass.find("if (p.flags.x < 0.5) return sourceColor;"), std::string::npos);
     EXPECT_NE(grass.find(": step(edge, guide)"), std::string::npos);
+}
+
+TEST(Oot3dGrassToon, CollapsedNativeScalePreservesEveryByteAndValidStageCombination) {
+    for (uint32_t combination = 0; combination < 729; ++combination) {
+        uint32_t remaining = combination, packed = 0;
+        for (uint32_t stage = 0; stage < 6; ++stage) {
+            packed |= (remaining % 3) << (stage * 2);
+            remaining /= 3;
+        }
+        const float scale = static_cast<float>(Fast::Renderer3ds::PicaSurfacePassthroughScale(packed));
+        for (uint32_t byte = 0; byte < 256; ++byte) {
+            float reference = static_cast<float>(byte) / 255.0F;
+            for (uint32_t stage = 0; stage < 6; ++stage) {
+                reference = std::floor(std::clamp(reference, 0.0F, 1.0F) * 255.0F + 0.5F) / 255.0F;
+                reference = std::clamp(reference * static_cast<float>(1U << ((packed >> (stage * 2)) & 3U)), 0.0F, 1.0F);
+            }
+            EXPECT_FLOAT_EQ(reference, std::clamp(static_cast<float>(byte) / 255.0F * scale, 0.0F, 1.0F));
+        }
+    }
 }
 
 TEST(Oot3dGrassToon, RimIsBoundedByRootDistanceWithoutChangingDiffuseResponse) {

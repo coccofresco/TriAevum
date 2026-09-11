@@ -57,7 +57,6 @@ layout(location=1) out vec4 blade_normal_guide;
 layout(location=2) out vec4 blade_ambient_guide;
 layout(location=3) out vec4 tuft_sample;
 layout(location=4) flat out float lod_visibility;
-layout(location=5) out vec3 blade_lighting;
 layout(location=6) out vec3 blade_view_direction;
 layout(location=7) flat out float blade_rim_weight;
 
@@ -106,11 +105,8 @@ void evaluate_shading(
 vec3 grass_native_material_rgb(vec3 base_color, vec3 lighting, uvec4 response) {
     if (response.w == 0u) return floor(clamp(base_color * lighting, 0.0, 1.0) * 255.0 + 0.5) / 255.0;
     vec3 color = base_color * (floor(lighting * 255.0 + 0.5) / 255.0);
-    for (uint stage = 0u; stage < 6u; ++stage) {
-        color = floor(clamp(color, 0.0, 1.0) * 255.0 + 0.5) / 255.0;
-        color = clamp(color * float(1u << ((response.z >> (stage * 2u)) & 3u)), 0.0, 1.0);
-    }
-    return color;
+    color = floor(clamp(color, 0.0, 1.0) * 255.0 + 0.5) / 255.0;
+    return clamp(color * float(response.z), 0.0, 1.0);
 }
 
 vec3 evaluate_blade_color(
@@ -296,6 +292,11 @@ void main() {
         evaluate_blade_color(
             grass.flags.w, height_factor, lighting),
         1.0);
+    // Lighting is constant over a blade. The unclamped toon transform is
+    // linear in color, so it commutes with perspective interpolation.
+    ToonSurfaceParameters toon = environment_state.records[grass.flags.w].toon;
+    if (toon.flags.x > 0.5)
+        blade_color.rgb = oot3d_toon_banded_color(blade_color.rgb, lighting, toon.flags.y, true, toon);
     vec3 view_side =
         environment_state.records[
             grass.flags.w].view_side.xyz;
@@ -317,7 +318,6 @@ void main() {
         0.25098039215686274);
     blade_ambient_guide =
         vec4(ambient_response, 1.0);
-    blade_lighting = lighting;
     vec3 eye = environment_state.records[grass.flags.w].camera_position.xyz;
     vec3 toward_eye = eye - position;
     blade_view_direction = vec3(dot(view_side, toward_eye),
@@ -340,7 +340,6 @@ layout(location=1) in vec4 blade_normal_guide;
 layout(location=2) in vec4 blade_ambient_guide;
 layout(location=3) in vec4 tuft_sample;
 layout(location=4) flat in float lod_visibility;
-layout(location=5) in vec3 blade_lighting;
 layout(location=6) in vec3 blade_view_direction;
 layout(location=7) flat in float blade_rim_weight;
 struct GrassEnvironmentRecord {
@@ -396,9 +395,9 @@ void main() {
             uint(environment_state.records[grass.flags.w].tuft_lod.z),
             environment_state.records[grass.flags.w].tuft_style.x)) discard;
     vec4 resolved_color = blade_color;
-    resolved_color.rgb = oot3d_toon_diffuse_response(resolved_color.rgb, blade_lighting,
-        environment_state.records[grass.flags.w].toon);
     ToonSurfaceParameters toon = environment_state.records[grass.flags.w].toon;
+    if (toon.flags.x > 0.5)
+        resolved_color.rgb = clamp(resolved_color.rgb, 0.0, 1.0);
     if (toon.flags.x > 0.5 && blade_rim_weight > 0.0)
         resolved_color.rgb = clamp(resolved_color.rgb + blade_rim_weight *
             oot3d_toon_rim(blade_normal_guide.xyz * 2.0 - 1.0, blade_view_direction, toon), 0.0, 1.0);

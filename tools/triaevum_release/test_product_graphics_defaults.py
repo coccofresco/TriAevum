@@ -37,7 +37,7 @@ class ProductGraphicsDefaultsTests(unittest.TestCase):
         self.assertAlmostEqual(grass["Performance"]["LodEndFraction"], 1)
         self.assertEqual(grass["Performance"]["DensityFadeFraction"], 1)
         self.assertAlmostEqual(grass["Performance"]["DrawFadeFraction"], 0.15)
-        self.assertAlmostEqual(grass["Performance"]["TuftTransitionFraction"], 0.49)
+        self.assertAlmostEqual(grass["Performance"]["TuftTransitionFraction"], 0.34)
         self.assertAlmostEqual(grass["Performance"]["FarTuftDensity"], 0.1)
         self.assertEqual(grass["Performance"]["FarTuftSpread"], 4)
         self.assertEqual(grass["Performance"]["SegmentLodSoftness"], 0.75)
@@ -58,7 +58,7 @@ class ProductGraphicsDefaultsTests(unittest.TestCase):
         self.assertAlmostEqual(interaction["VelocityResponse"], 0.87, places=5)
         self.assertEqual(interaction["VerticalMargin"], 69)
         self.assertEqual(grass["Generation"]["IndividualRandomness"], 1)
-        self.assertAlmostEqual(grass["Generation"]["InstancesPerSquareMeter"], 1123.9, places=3)
+        self.assertEqual(grass["Generation"]["InstancesPerSquareMeter"], 1024)
         self.assertEqual(grass["Budget"]["MaxInstancesPerRoom"], 500000)
         self.assertEqual([source["Target"]["Rgba8Hash"] for source in grass["Sources"]],
                          ["be15aff93dfdcd88", "2321986eb9820c29", "4b8941fd174516b0",

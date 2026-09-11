@@ -2,6 +2,7 @@
 #include "fast/oot3d/grass_shader_sources.h"
 #include "fast/oot3d/pica_attachment_contract.h"
 #include "fast/renderer3ds/pica_surface_lighting_pass.h"
+#include "fast/renderer3ds/pica_surface_passthrough_scale.h"
 
 #ifdef ENABLE_OOT3D_VULKAN
 
@@ -975,7 +976,8 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
             const auto& source = mImpl->LightingRequests[i];
             if (source.Available && settings.Appearance.ReceiveLighting) {
                 preparedPlacements[i].Environment.NativeLighting = {source.AtlasBase, 1,
-                    source.ColorResponse.PackedScales, source.ColorResponse.Available ? 1U : 0U};
+                    ::Fast::Renderer3ds::PicaSurfacePassthroughScale(source.ColorResponse.PackedScales),
+                    source.ColorResponse.Available ? 1U : 0U};
                 preparedPlacements[i].Environment.Toon.Flags[1] = 1;
                 ++nativeLit;
             }

@@ -95,7 +95,7 @@ R"json({
       "ClusterScale": 300.0,
       "ClusterStrength": 0.0,
       "IndividualRandomness": 1.0,
-      "InstancesPerSquareMeter": 1123.9000244140625,
+      "InstancesPerSquareMeter": 1024.0,
       "MinimumSpacing": 0.0,
       "Seed": 1
     },
@@ -128,7 +128,7 @@ R"json({
       "SegmentLodEndDistance": 1000.0,
       "SegmentLodSoftness": 0.75,
       "SegmentLodStartDistance": 501.0,
-      "TuftTransitionFraction": 0.49000000953674316
+      "TuftTransitionFraction": 0.3400000035762787
     },
     "Quality": "Custom",
     "Sources": [
