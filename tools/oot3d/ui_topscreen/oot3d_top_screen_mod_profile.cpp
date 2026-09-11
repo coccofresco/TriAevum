@@ -2113,9 +2113,12 @@ void ApplyTopScreenHudScale(
 
     const bool left = centerX < 200.0F;
     const bool top = centerY < 120.0F;
-    const float pivotX = left ? 0.0F : 400.0F;
+    // 2.1.1 005CE554 scales copied stamina quads 28..33 as one row
+    // about (200, 240), not as independent left/right HUD groups.
+    const bool stamina = primitive.role == oot3d::ui::UiPrimitiveRole::HorseStamina;
+    const float pivotX = stamina ? 200.0F : (left ? 0.0F : 400.0F);
     const float pivotY = top ? 0.0F : 240.0F;
-    const float insetX = left ? marginX : -marginX;
+    const float insetX = stamina ? 0.0F : (left ? marginX : -marginX);
     const float insetY = top ? marginY : -marginY;
     destination.x =
         pivotX + (destination.x - pivotX) * scale + insetX;
@@ -2273,9 +2276,9 @@ bool ReadTopScreenQuestGeometryContext(
     }
   }
   context->PauseState = pauseState;
-  context->NativePageGateActive =
-      nativePageGateActive ||
-      (projection != nullptr && projection->NativeQuestGate);
+  // The alternate gameplay HUD owner is not an open pause page. In
+  // particular, riding must still relocate the native A/B geometry.
+  context->NativePageGateActive = nativePageGateActive;
   context->PlayerSpecialState = specialMode;
   context->LeftRegionOffsetX =
       projection != nullptr ? projection->OffsetX : 0.0F;

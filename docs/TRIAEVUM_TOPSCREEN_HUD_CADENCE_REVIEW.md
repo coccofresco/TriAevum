@@ -163,3 +163,51 @@ That replacement run completed with exit 0, 160 presentations and 40 consecutive
 framebuffer captures (120..159). Frame 159 was inspected: gameplay and the
 on-foot HUD are present. This is a regression run, not a reproduction of the
 reported mounted/Navi defects.
+
+## Mounted Reproduction: A/B and Map Marker
+
+The user supplied an actual mounted checkpoint on September 11:
+`C:/Users/xander/triaevum-verify-20260911/epona-user/epona-hud-reference.oot3dsav`.
+It is private evidence, not a distributable fixture. It was copied from the
+user's F5 save without editing guest state.
+
+`epona-before/framebuffer_000124.bmp` reproduces native A/Down and B over the
+right minimap, a red map marker still on the left, and six carrots split into
+two groups. All paths below are relative to the private verification directory.
+
+Root causes and corrections:
+
+1. `ReadTopScreenQuestGeometryContext` incorrectly ORed the alternate gameplay
+   HUD's `NativeQuestGate` into the open-page bypass. On horseback this skipped
+   the *whole* native geometry relocation, including the left map marker and
+   right A/B group. The original 2.1.1 `FUN_005C7F48` checks page predicates
+   separately, then uses player `+12B8` to select the contextual geometry rule;
+   it does not bypass relocation just because that owner is present. Keep the
+   four real pause-page gates, but do not combine them with the alternate HUD
+   flag. The existing special-state rule moves A and hides the redundant B.
+2. `ApplyTopScreenHudScale` chose a left/right pivot independently per carrot.
+   A row crossing X=200 therefore split at scales below 1. The original
+   `005CE554` copies 28..33 use one center/bottom pivot: literals `005CF558=200`
+   and `005CF55C=240`. The HorseStamina role now shares that horizontal pivot
+   instead of inheriting independent edge margins.
+
+`epona-context-fixed/framebuffer_000124.bmp` was captured from the **same**
+checkpoint, same 2x profile, after 125 presentations (exit 0). It shows A/Down
+in the upper command group, no duplicate B on the map, the red marker on the
+right minimap, and a contiguous six-carrot row. No checkpoint repair was
+needed. An initial hypothesis about missing saved projection tracking did
+not explain these persistent artifacts: live diagnostics showed the native
+map offset being refreshed before relocation. Do not treat that hypothesis
+as an established cause or add a save migration for this fix.
+
+Tests now cover mounted map/A/B relocation while the alternate HUD flag is
+set, real page bypass retention, and a scaled stamina row crossing X=200.
+Both profile and lifecycle tests pass on Windows and Linux; developer binaries
+were relinked without AOT changes. Windows `epona-fix-onfoot-regression` also
+completed 125 presentations, exit 0. Linux runtime was rebuilt, but the mounted
+visual comparison here was performed on Windows.
+
+Remaining visible discrepancy: mounted ammunition still has duplicate counters
+near the upper command group. Navi notification transitions and full mounted
+input/alpha parity remain separate investigations; these captures do not close
+those issues or prove complete TopScreen parity.

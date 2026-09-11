@@ -1630,6 +1630,16 @@ int main() {
                     copies[i].destination.y == 210.0F)),
               "stamina mount/dismount transition changed position or visibility");
     }
+    if (lane == 0.0F) {
+      TopScreenUiConfig scaled;
+      scaled.HudScale = 0.8F;
+      ApplyTopScreenHudScale(copies, scaled);
+      for (std::size_t i = 4U; i < 10U; ++i) {
+        const float expected = 200.0F + (128.0F + (i - 4U) * 16.0F - 200.0F) * 0.8F;
+        Require(std::abs(copies[i].destination.x - expected) < 0.001F,
+                "HUD scaling split the stamina row across different pivots");
+      }
+    }
   }
   std::vector<oot3d::ui::UiPrimitive> clippedCanvasPrimitive(1U);
   clippedCanvasPrimitive[0].destination = {390.0F, 230.0F, 20.0F, 20.0F};
@@ -1667,7 +1677,7 @@ int main() {
   scaledSpecialHud[0].role = oot3d::ui::UiPrimitiveRole::Timer;
   scaledSpecialHud[0].destination = {224.0F, 8.0F, 32.0F, 32.0F};
   scaledSpecialHud[1].role = oot3d::ui::UiPrimitiveRole::HorseStamina;
-  scaledSpecialHud[1].destination = {330.0F, 8.0F, 48.0F, 12.0F};
+  scaledSpecialHud[1].destination = {128.0F, 210.0F, 24.0F, 24.0F};
   scaledSpecialHud[2].role = oot3d::ui::UiPrimitiveRole::ActionButton;
   scaledSpecialHud[2].destination = {342.0F, 4.0F, 32.0F, 32.0F};
   scaledSpecialHud[3].role = oot3d::ui::UiPrimitiveRole::AmmoCounter;
@@ -1680,9 +1690,9 @@ int main() {
       near(scaledSpecialHud[0].destination.x, 255.2F) &&
           near(scaledSpecialHud[0].destination.y, 7.4F) &&
           near(scaledSpecialHud[0].destination.width, 25.6F) &&
-          near(scaledSpecialHud[1].destination.x, 340.0F) &&
-          near(scaledSpecialHud[1].destination.y, 7.4F) &&
-          near(scaledSpecialHud[1].destination.width, 38.4F) &&
+          near(scaledSpecialHud[1].destination.x, 142.4F) &&
+          near(scaledSpecialHud[1].destination.y, 215.0F) &&
+          near(scaledSpecialHud[1].destination.width, 19.2F) &&
           near(scaledSpecialHud[2].destination.x, 349.6F) &&
           near(scaledSpecialHud[2].destination.y, 4.2F) &&
           near(scaledSpecialHud[3].destination.x, 381.6F) &&
@@ -2052,10 +2062,23 @@ int main() {
                                             &projectionState, &error) &&
               decodedContext.PauseState == 9U &&
               decodedContext.PlayerSpecialState &&
-              decodedContext.NativePageGateActive &&
+              !decodedContext.NativePageGateActive &&
               decodedContext.LeftRegionOffsetX == 7.0F &&
               decodedContext.LeftRegionOffsetY == -3.0F,
           "Quest geometry context did not consume typed projection state");
+  // The mounted alternate HUD is not a pause page. Its map marker and
+  // A/B quads still pass through the original relocation rules.
+  std::array<std::array<TopScreenVec3, 4>, 3> mountedQuads{};
+  for (auto &v : mountedQuads[0]) v = {50.0F, 170.0F, 0.0F};
+  for (auto &v : mountedQuads[1]) v = {360.0F, 170.0F, 0.0F};
+  for (auto &v : mountedQuads[2]) v = {360.0F, 210.0F, 0.0F};
+  const auto mountedResult = TransformTopScreenQuestGeometry(mountedQuads, decodedContext);
+  Require(mountedResult.QuadsTranslated == 3U &&
+              mountedQuads[0][0].X == 57.0F &&
+              mountedQuads[1][0].X == 288.0F &&
+              mountedQuads[1][0].Y == 24.0F &&
+              mountedQuads[2][0].X == 500.0F,
+          "mounted HUD bypassed minimap/A/B relocation");
   projectionState.NativeQuestGate = false;
   Require(questStateMemory.Write32(0x00504484U, 1U) &&
               ReadTopScreenQuestGeometryContext(questStateMemory,
