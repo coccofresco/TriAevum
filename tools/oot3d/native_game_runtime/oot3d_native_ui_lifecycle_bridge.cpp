@@ -298,9 +298,11 @@ Oot3dNativeUiLifecycleBridge::BuildTopScreenPresentation(
     TopScreenOcarinaGeometry geometry;
     std::string ocarinaError;
     if (ReadTopScreenOcarinaGeometry(mMemory, mTopScreenOcarina, &geometry, &ocarinaError)) {
-      oot3d::ui::UiTextureIdentity menuTexture;
-      menuTexture.semantic_name = kTopScreen211MenuAtlasSemantic;
-      (void)AppendTopScreenOcarinaPresentation(geometry, *ocarinaTexture, output, menuTexture);
+      const auto itemIcons = NativePauseSharedTextureIdentity(
+          oot3d::ui::UiPauseSharedTextureSlot::ItemIcons);
+      (void)AppendTopScreenOcarinaPresentation(
+          geometry, *ocarinaTexture, output,
+          itemIcons.value_or(oot3d::ui::UiTextureIdentity{}));
       if (geometry.Active && pauseTexture.has_value()) {
         (void)AppendTopScreenOcarinaNavigationPresentation(
             BuildTopScreenOcarinaNavigationGeometry(mTopScreenOcarina.Direction()), *pauseTexture,

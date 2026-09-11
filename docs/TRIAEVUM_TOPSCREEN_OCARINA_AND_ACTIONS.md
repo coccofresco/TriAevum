@@ -171,10 +171,49 @@ this environment. The required DLL signature/version check was not bypassed.
 
 `practice-ocarina-opacity` completed 700 native-30-Hz frames with the rebuilt
 runtime and the unmodified AD child progress carried through a native scene
-transition. Captures show the guide and native note staff. The guide's upper
-text box is empty in the inspected capture, so this is a regression smoke
-test, not proof of complete free-play text or first-time learning parity.
+transition. Captures show the guide and native note staff. **Correction:** the
+upper text box is empty at frame 120 while the generated text is pending, but
+frame 160 displays Zelda's Lullaby correctly. A single transitional capture
+did not establish a missing title. This remains a regression smoke test, not
+proof of complete free-play instructions or first-time learning parity.
 No paired Azahar reference was obtained in this tranche.
+
+### Unknown-Song Atlas Repair (2026-09-11)
+
+The partial-progress fixture exposed a different, real omission: selecting
+the unlearned Sun's Song suppressed the learned name and reference notes but
+also left the unknown marker invisible. The marker rectangle `(406,484,54,24)`
+was being sampled from custom_menu, whose corresponding pixels are empty.
+
+Original `005CC694` creates the marker renderer through `005CAA5C` with texture
+slot **10**, not a custom texture: globals `005E3F1C` (quad renderer),
+`005E3F18` (model) and `005E3F14` (instance) are later consumed by `005D2078`.
+`005CAA5C` resolves that slot through native `002E11D0`. The shared contract
+identifies slot 10 as **ItemIcons**. The title bridge now passes that live
+native identity to the marker presenter. No texture asset, renderer shader,
+UV rectangle, save progress or gameplay rule was changed.
+
+The new test asserts the marker's texture identity, source rectangle and
+layer, in addition to the existing unlearned-song note/title suppression.
+The reusable timeline `topscreen_ocarina_partial_progress.json` requires
+free gameplay with Ocarina on Down, song 0 learned and song 1 unlearned:
+open instrument, browse learned -> unknown -> learned, then close with B.
+
+Windows Vulkan/NRI run `ocarina-partial-progress-fixed` completed 540 frames
+at native 30 Hz. Compared with the same pre-fix timeline, frames 240/260/280/300
+differ only inside `(570,89)-(710,148)` at 1280x720: the three tinted question
+marks. Frames 160/360 (learned title/notes) and 480/520 (gameplay after B) are
+pixel-identical. Unit tests pass. This verifies a real fix without attributing
+the already-working generated song title to this change. No new paired
+Azahar capture or first-time teaching sequence is claimed.
+
+The cutscene-selector experiment `tomb-native-transition-setup1` is rejected:
+applying FFF1 at accepted transition still faults at native 00371788, inside
+the aligned-memory-copy routine. This disproves the previous claim that an
+early checkpoint write alone explained the fault. The experimental runtime
+extension and generator were removed before the final build. Do not retry
+the same selector as if its preconditions were established, or modify memcpy
+to suppress the fault. First-time learning is still unqualified.
 
 [PR #18](https://github.com/coccofresco/TriAevum/pull/18), by **999sian**, supplied
 useful ocarina scope and gameplay evidence as credited in the earlier owner

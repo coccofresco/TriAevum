@@ -152,8 +152,10 @@ void RunTopScreenOcarinaTests() {
   std::vector<oot3d::ui::UiPrimitive> ocarinaPresentation;
   const oot3d::ui::UiTextureIdentity ocarinaTexture{
       0x005D0000U, 0x18000000U, "oot3d/native/pause_shared/ocarina_page"};
+  const oot3d::ui::UiTextureIdentity itemIcons{
+      0x005D1000U, 0x18001000U, "oot3d/native/pause_shared/item_icons"};
   Require(AppendTopScreenOcarinaPresentation(ocarinaGeometry, ocarinaTexture,
-                                              ocarinaPresentation) == 10U &&
+                                              ocarinaPresentation, itemIcons) == 10U &&
               ocarinaPresentation.front().subsystem ==
                   oot3d::ui::UiSubsystem::TouchControls &&
               ocarinaPresentation.front().role ==
@@ -186,6 +188,16 @@ void RunTopScreenOcarinaTests() {
               !ocarinaGeometry.SongLearned && ocarinaGeometry.UnknownSong.Visible &&
               !ocarinaGeometry.Quads[6].Visible,
           "unlearned song must show the mod marker without revealing notes");
+  std::vector<oot3d::ui::UiPrimitive> unknownPresentation;
+  AppendTopScreenOcarinaPresentation(ocarinaGeometry, ocarinaTexture,
+                                      unknownPresentation, itemIcons);
+  const auto &unknown = unknownPresentation.back();
+  Require(unknown.source_quad == 16 && unknown.layer == 21 &&
+              unknown.texture.semantic_name == itemIcons.semantic_name &&
+              unknown.texture.guest_resource_address == itemIcons.guest_resource_address &&
+              unknown.uv.x == 406.0F / 512 && unknown.uv.y == 484.0F / 512 &&
+              unknown.uv.width == 54.0F / 512 && unknown.uv.height == 24.0F / 512,
+          "unknown-song marker must use native ItemIcons, not the custom menu");
   const auto generationBefore = ocarinaMemory.WriteGeneration();
   TopScreenOcarinaState browserState{true, 12, 0};
   ocarinaBrowser.Advance(browserState, false, true);

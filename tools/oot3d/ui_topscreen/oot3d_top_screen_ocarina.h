@@ -66,7 +66,7 @@ std::size_t AppendTopScreenOcarinaPresentation(
     const TopScreenOcarinaGeometry &geometry,
     const oot3d::ui::UiTextureIdentity &texture,
     std::vector<oot3d::ui::UiPrimitive> &output,
-    const oot3d::ui::UiTextureIdentity &menuTexture = {});
+    const oot3d::ui::UiTextureIdentity &itemIcons);
 
 struct TopScreenOcarinaNavigationGeometry {
   std::array<TopScreenTexturedQuad, 2> Quads{};

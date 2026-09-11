@@ -57,13 +57,15 @@ logs and the exact input paths required to reproduce it.
 | `practice-tomb-turn` | Reverse movement exits into the graveyard; not a learning test. |
 | `practice-tomb-cutscene` | Rejected setup experiment: changing the cutscene selector in a cloned checkpoint before transition faults at 00371788. Do not reuse or count as coverage. |
 | `practice-meadow` | Native entrance 00FC reached, 650 frames completed, checkpoint at 620; starts at the normal meadow entrance with a barred path, not beside Saria. |
-| `practice-ocarina-opacity` | Rebuilt runtime, 700 frames completed from the meadow checkpoint using `topscreen_ocarina_recognition.json`; guide and native note staff visible. Upper guide text box empty in inspected capture. Not first-time learning qualification. |
+| `practice-ocarina-opacity` | Rebuilt runtime, 700 frames completed from the meadow checkpoint using `topscreen_ocarina_recognition.json`; guide and native note staff visible. Frame 160 confirms Zelda's Lullaby text after the transitional empty frame 120. Not first-time learning qualification. |
+| `ocarina-partial-progress` | 540 frames completed; learned title/notes return after browsing an unknown song. Exposes wrong texture binding for the unknown marker. |
+| `ocarina-partial-progress-fixed` | 540 frames completed; unknown marker now visible. Four unknown-state captures differ only over the marker; four checked learned/gameplay captures match the pre-fix run exactly. |
+| `tomb-native-transition-setup1` | Rejected: selector FFF1 applied at accepted transition still faults at 00371788. Experimental consumer removed. |
 
 No first-time learning sequence has yet been qualified with these fixtures.
-The failed setup experiment is not justification to suppress a native fault
-or skip game logic. Any future setup injection must occur at the supported
-native transition boundary, not while the previous scene is still consuming
-the modified save state.
+The failed setup experiments are not justification to suppress a native fault
+or skip game logic. Moving the selector write to the native transition
+boundary did not resolve the fault; additional preconditions remain unknown.
 
 The isolated Azahar reference preparation did not produce a usable movie or
 capture: bounded launches timed out and their processes were terminated.

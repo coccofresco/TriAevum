@@ -77,7 +77,8 @@ they are **not bit positions limited to 0..31**. Bounds checks use address
 overflow and mapped-memory reads, not an invented enum range.
 The unknown marker comes from literals `0x005D2720..0x005D273C`: destination
 (173,26), extent (54,24), atlas (406,484), alpha .85, in the mod's 512-square
-menu atlas. Layout and timing constants above are recovered mod policy, not
+ItemIcons atlas (native shared slot 10, corrected 2026-09-11; the previous
+description incorrectly named the custom menu atlas). Layout and timing constants above are recovered mod policy, not
 scene-specific adjustments.
 
 ## PR #18 Assessment And Credit

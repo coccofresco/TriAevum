@@ -184,7 +184,8 @@ bool ReadTopScreenOcarinaGeometry(NativeA32Memory &memory,
   const bool notesEnabled =
       songFocused && (songFlags & flagMask) != 0U;
   geometry->SongLearned = (songFlags & flagMask) != 0U;
-  // 0x005D2720..0x005D2734, the mod's own localized menu atlas.
+  // 005CC694 creates this model through 005CAA5C with native texture slot 10
+  // (ItemIcons); 005D2720..005D2734 supplies the unknown-marker rectangle.
   geometry->UnknownSong = {songFocused && !geometry->SongLearned,
       {173, 26}, {54, 24}, {406, 484}, {54, 24}, color(0.85F)};
   for (std::uint32_t note = 0U; note < 8U; ++note) {
@@ -235,7 +236,7 @@ std::size_t AppendTopScreenOcarinaPresentation(
     const TopScreenOcarinaGeometry &geometry,
     const oot3d::ui::UiTextureIdentity &ocarinaPage,
     std::vector<oot3d::ui::UiPrimitive> &output,
-    const oot3d::ui::UiTextureIdentity &menuTexture) {
+    const oot3d::ui::UiTextureIdentity &itemIcons) {
   if (!geometry.Active || ocarinaPage.semantic_name.empty()) {
     return 0U;
   }
@@ -260,14 +261,14 @@ std::size_t AppendTopScreenOcarinaPresentation(
     primitive.layer = 20U;
     output.push_back(std::move(primitive));
   }
-  if (geometry.UnknownSong.Visible && !menuTexture.semantic_name.empty()) {
+  if (geometry.UnknownSong.Visible && !itemIcons.semantic_name.empty()) {
     const auto &quad = geometry.UnknownSong;
     oot3d::ui::UiPrimitive primitive;
     primitive.subsystem = oot3d::ui::UiSubsystem::TouchControls;
     primitive.role = oot3d::ui::UiPrimitiveRole::TouchControl;
     primitive.owner_address = 0x005D2078U;
     primitive.source_quad = 16;
-    primitive.texture = menuTexture;
+    primitive.texture = itemIcons;
     primitive.destination = {quad.Position.X, quad.Position.Y, quad.Size.X, quad.Size.Y};
     primitive.uv = {quad.AtlasOrigin.X / 512, quad.AtlasOrigin.Y / 512,
                     quad.AtlasSize.X / 512, quad.AtlasSize.Y / 512};
