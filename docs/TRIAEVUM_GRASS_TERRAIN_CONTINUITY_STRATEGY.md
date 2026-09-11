@@ -525,3 +525,15 @@ with zero validation errors and 11 existing Vulkan warnings. Framebuffer evidenc
 Against the preceding rim-off capture, distant pixels x100..499/y240..299,
 the checked hearts and castle are identical; closer grass regains the highlight.
 This is a bounded visual test, not a performance benchmark or cross-platform test.
+
+## User Grass Default Snapshot (2026-09-11)
+
+Promoted the complete Grass configuration saved after the user's Kokiri session
+to the title-owned `triaevum_product_graphics.inc` default, and to the local
+GrassSavedPreset. This supersedes the initial nearby-rim defaults for new title
+configurations: rim disabled, retained fade range 0..9.01 m. Texture blend is
+0.75, root/tip brightness 1.01/1.74, density 1123.9 per square meter, far tuft
+density 0.1 with three blades and spread 4. All six texture rules and remaining
+Grass values are copied together. Existing unrelated profiles, global toon,
+TopScreen and presentation defaults are not changed. Product-default tests
+check the snapshot and its compiled export, including GrassSavedPreset equality.
