@@ -667,3 +667,75 @@ mixed with this block to invent a larger improvement.
 dense but the placement is deliberately different because the user changed
 density. Do not describe that change as pixel-identical; the 1-2 pixel figures
 above concern shader optimization alone at unchanged density.
+
+### Wide Intro Distance-Density Sweep (2026-09-11)
+
+The user explicitly redirected the compromise search to the widest title-intro
+views. Kokiri sweeps are exploratory only and do not establish the requested
+33% total-render-time reduction. All candidates retain density 1024, colors,
+native lighting, toon, FOV, resolution, tuft settings and segment geometry.
+Only distance-density settings vary. No candidate in this section has been
+promoted to the active or product default.
+
+`tools/triaevum_release/compare_grass_presets.py` automates sequential private
+configurations, bounded throughput runs and separate fixed-time framebuffer
+captures. It rejects paced/incomplete host windows and enabled renderer VSync.
+GPU timestamps exclude warmup and trailing pending queries. Host throughput
+is reported separately: GPU time is not equivalent to actual game FPS.
+
+The intro starts from boot without a savestate. Tests use 1280x720, original
+30 Hz simulation with a fixed 1/30 step, no interpolation, no pacing, warmed
+shader cache and no simultaneous builds. Select four wide views before
+evaluating candidates: captures 300, 840, 1020 and 1200; associated measurement
+intervals [270,330), [810,870), [990,1050), [1170,1230). Loading, the close-up
+ground view at 480 and the tree view at 660 do not enter this primary score.
+Captures are direct framebuffers, not desktop screenshots.
+
+Private evidence root: `C:/Users/xander/triaevum-verify-20260911/`.
+Plans `grass-intro-distance-plan.json` and `grass-intro-final-plan.json` feed
+outputs `grass-intro-distance-sweep` and `grass-intro-final-sweep`. Replay with
+`python tools/triaevum_release/compare_grass_presets.py PLAN NEW_OUTPUT`.
+`grass-intro-wide-reference` is the unchanged 1024 visual reference; its rerun
+is pixel-identical in every captured image. The executable is HEAD e208a9b.
+Private ROM-derived captures/configuration are deliberately not published.
+
+| Candidate | LOD start fraction | Reference distance | Far density | Total GPU ms | Image MAE /255 | Lower 2/3 MAE /255 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Unchanged 1024 | 1.00 | 1668 | 0.62 | 5.281 | 0 | 0 |
+| Gentle | 0.20 | 1668 | 0.30 | 4.938 | 0.358 | 0.536 |
+| Balanced | 0.12 | 1200 | 0.20 | 4.348 | 1.077 | 1.613 |
+| Medium | 0.16 | 900 | 0.15 | 3.895 | 1.328 | 1.990 |
+| Medium repeat | 0.16 | 900 | 0.15 | 3.911 | 1.328 | 1.990 |
+| Medium thinner | 0.16 | 900 | 0.08 | 3.799 | 1.424 | 2.134 |
+
+Scores average the four selected views, not the entire intro. MAE is an
+encoded RGB channel difference, not a perceptual similarity percentage. The
+unchanged sky and logo dilute the full-image score; even the lower crop is
+not an exact Grass mask. Medium thinner changes 11-15% of pixels in those
+views and visibly removes coverage on hill silhouettes (notably frame 840).
+Its small average RGB error must not be described as an invisible change.
+Medium repeat produces identical captures to Medium; its selected GPU mean
+differs by 0.4%.
+
+The historical renderer/frontend/bridge at 4bd045f and its old preset are
+measured with the same current title module, host and toolchain, separately
+from the 1024 image reference. `grass-intro-historical-timing` measures 5.739 ms
+over the selected windows, making the provisional -33% target 3.845 ms.
+Medium thinner reaches -33.8% against that run; Medium reaches about -32%.
+Do not reuse the historical Kokiri 6.904 ms as the intro denominator.
+The historical repeat at the end of the sweep measures 5.946 ms, 3.6% above
+the initial historical run. Thus Medium thinner reduces selected GPU time by
+33.8-36.1% against the two controls. Medium's target crossing depends on which
+control is chosen; do not round it into a reliable -33% result. Historical
+repeat host time is 16.216 ms per native step versus 9.268 ms for Medium
+thinner across the full post-warmup interval, not just the four GPU windows.
+Host timing is noisier than GPU timing and is not a sustained playable-FPS
+guarantee. All probes exited normally; none is left running.
+
+Decision: keep the current 1024 default. The tested density-only frontier
+offers a low-error Gentle candidate or a roughly one-third GPU reduction
+with visible thinning, not both proven together. Do not add title-clip
+exceptions to conceal this tradeoff. A larger image-preserving gain should
+target shared instance preparation/selection and lighting reuse described
+above, rather than silently replacing the user's preset with sparse hills.
+No whole-game or Linux/Android claim follows from this Windows intro sweep.
