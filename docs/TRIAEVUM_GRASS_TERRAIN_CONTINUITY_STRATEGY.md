@@ -171,6 +171,67 @@ needed, it must be keyed by surface identity and declare its graph resources.
 Avoid a new full-resolution G-buffer or replay of every terrain draw by default.
 First qualify supported canonical material paths and expose unsupported ones.
 
+### Vertex Lighting Reuse Investigation (2026-09-11)
+
+Scope: source-path verification only. No new lighting implementation, runtime
+capture or performance claim is included in this investigation.
+
+Verified boundaries:
+
+- `grass_geometry_registry.h`, `GrassGeometryRequest`: extracts position and
+  texture coordinates, but no native vertex color or normal attribute stream.
+- `grass_surface_extractor.h`, `GrassSourceVertex`: stores position, normal and
+  UV, but no color. `grass_surface_extractor.cpp` already computes barycentric
+  weights for roots; normals currently come from the triangle face. Triangle
+  subdivision also needs to preserve any newly introduced shading attributes.
+- `gfx_vulkan_pica.cpp`, Grass publication immediately before
+  `ForgetNativePicaEffectNriTextures`: publishes geometry and a separately
+  decoded `GrassShadingEnvironment`, not the native vertex shader's output.
+- `grass_shading_environment.cpp` and `grass_shader_sources.cpp`: Grass uses
+  ambient plus absolute N.L, independently of the terrain shader. It does not
+  reproduce the terrain's primary color, full TEV or fragment-lighting result.
+- `tools/oot3d/native_pica_frontend/oot3d_native_pica_shader_gen.cpp` exports
+  `pica_primary_color` from native output semantics 8..11, after native
+  `min(abs(raw), 1)` conversion. This is already calculated on the GPU.
+- `oot3d_native_pica_fragment_shader_gen.cpp` consumes the interpolated primary
+  color with byte rounding before TEV. It is not necessarily pure illumination:
+  vertex tint/material factors and TEV consumption must be respected.
+
+Decision: first qualify a native terrain material path in which primary RGB
+provides the multiplicative surface appearance response. Reuse its resolved
+vertex output, then interpolate over the source triangle at each root. Three
+barycentric vertex weights are appropriate here; this is separate from, and
+does not change, the user's two-nearest-point rule for the texture color grid.
+Native smooth perspective-correct interpolation corresponds to surface
+barycentric interpolation at the same geometric point; preserve native rounding
+at the appropriate consumption boundary rather than quantizing prematurely.
+
+Do not read raw input vertex colors and label them final lighting. Do not divide
+final pixel color by albedo to invent an illumination factor. Primary RGB may
+already contain tint, and fragment lighting/TEV can prevent this factorization.
+Unsupported material paths need an explicit contract, not a claimed exact match.
+
+The missing piece is a declared, versioned GPU output resource for surface
+shading, not a new CPU lighting grid. Prefer a supported producer/output hook
+sharing the canonical vertex program over CPU readback or evaluating the whole
+shader once per blade. The existing `MainBodyEnd` hook is a potential producer
+insertion boundary, not an already implemented surface-output cache. Validate
+indexed/shared-vertex writes, resource barriers and platform costs before
+choosing the concrete producer. No shader string patching or mandatory replay
+of every terrain draw.
+
+Keep topology/placement versions separate from shading versions: changed light,
+uniforms or shader output must refresh appearance without rebuilding millions
+of roots. Key shading by surface instance and relevant native shader/material
+state, never just texture hash. A bounded per-patch 4x4 lighting cache remains
+an alternative only if profiling makes it cheaper; allocating one per texture
+repeat throughout the room is not justified by this inspection.
+
+Next acceptance step: on one existing terrain fixture, capture canonical
+primary RGB and TEV consumption alongside the proposed surface response;
+verify shaded/unshaded regions and two light states, no double lighting and
+no placement rebuild. This must precede claims of visual parity or savings.
+
 ### 2. Bounded Patch Generation
 
 Replace full-surface blade populations with small deterministic surface patches.
