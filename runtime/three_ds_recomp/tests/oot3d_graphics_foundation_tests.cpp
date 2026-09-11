@@ -1167,6 +1167,49 @@ TEST(Oot3dGrassTextureColor, UsesAlphaWeightedAverage) {
     cache.Clear();
 }
 
+TEST(Oot3dGrassTextureColor, GridUsesOnlyTwoNearestDistanceWeightedPoints) {
+    using namespace Fast::Oot3d;
+    auto grid = std::make_shared<GrassTextureColorGrid>();
+    for (auto& rgb : grid->Rgb) rgb = {0, 255, 255};
+    grid->Rgb[0] = {0, 0, 0};
+    grid->Rgb[1] = {100, 0, 0};
+    grid->Rgb[3] = {240, 0, 0};
+    const GrassTextureColorSource source{grid};
+    EXPECT_EQ(source.SamplePacked(0.125F, 0.125F, GrassTextureWrap::Clamp, GrassTextureWrap::Clamp), 0xff000000U);
+    EXPECT_EQ(source.SamplePacked(0.2F, 0.125F, GrassTextureWrap::Clamp, GrassTextureWrap::Clamp), 0xff00001eU);
+    EXPECT_EQ(source.SamplePacked(0.25F, 0.125F, GrassTextureWrap::Clamp, GrassTextureWrap::Clamp), 0xff000032U);
+    EXPECT_EQ(source.SamplePacked(0.0F, 0.125F, GrassTextureWrap::Repeat, GrassTextureWrap::Clamp), 0xff000078U);
+    EXPECT_EQ(source.SamplePacked(1.0F, 0.125F, GrassTextureWrap::Repeat, GrassTextureWrap::Clamp), 0xff000078U);
+    EXPECT_EQ(source.SamplePacked(-0.2F, 0.125F, GrassTextureWrap::Mirror, GrassTextureWrap::Clamp),
+              source.SamplePacked(0.2F, 0.125F, GrassTextureWrap::Mirror, GrassTextureWrap::Clamp));
+    EXPECT_EQ(source.SamplePacked(-1.0F, 0.125F, GrassTextureWrap::Clamp, GrassTextureWrap::Clamp),
+              source.SamplePacked(0.0F, 0.125F, GrassTextureWrap::Clamp, GrassTextureWrap::Clamp));
+    EXPECT_EQ(GrassTextureColorSource{}.SamplePacked(0, 0, GrassTextureWrap::Repeat, GrassTextureWrap::Repeat), 0U);
+}
+
+TEST(Oot3dGrassTextureColor, GridIsSharedAndSurvivesSourceCacheReset) {
+    using namespace Fast::Oot3d;
+    auto& cache = GrassTextureSourceCache::Instance();
+    cache.Clear();
+    std::vector<uint8_t> pixels(8U * 8U * 4U);
+    for (size_t y = 0; y < 8; ++y) for (size_t x = 0; x < 8; ++x) {
+        pixels[(y * 8 + x) * 4] = static_cast<uint8_t>((x / 2) * 60);
+        pixels[(y * 8 + x) * 4 + 3] = 255;
+    }
+    cache.ObserveDecoded(99, 8, 8, pixels);
+    auto source = cache.AcquireColorSource(99);
+    ASSERT_NE(source.Grid, nullptr);
+    EXPECT_EQ(source.Grid, cache.AcquireColorSource(99).Grid);
+    EXPECT_FLOAT_EQ(source.Grid->Rgb[0][0], 0);
+    EXPECT_FLOAT_EQ(source.Grid->Rgb[3][0], 180);
+    cache.Clear();
+    EXPECT_EQ(source.SamplePacked(0.375F, 0.125F, GrassTextureWrap::Clamp, GrassTextureWrap::Clamp), 0xff00003cU);
+    const std::array<uint8_t, 4> black{0, 0, 0, 255};
+    cache.ObserveDecoded(100, 1, 1, black);
+    EXPECT_EQ(cache.AcquireColorSource(100).SamplePacked(0.5F, 0.5F, GrassTextureWrap::Repeat, GrassTextureWrap::Repeat), 0xff000000U);
+    cache.Clear();
+}
+
 TEST(Oot3dGrassVisibility, CullsOutsideAndReducesFarGeometry) {
     using namespace Fast::Oot3d;
     const std::array<float, 16> identity{

@@ -1,7 +1,8 @@
 # Grass: Terrain Continuity and Bounded Cost
 
 Date: 2026-09-11. Reviewed implementation: `0079a43`.
-Status: research and code audit, not an implemented performance improvement.
+Status: first color-grid implementation verified on Windows; full lighting
+continuity and bounded-patch generation remain pending.
 
 ## Decision
 
@@ -10,6 +11,50 @@ visible silhouettes. Do not compensate for a color/lighting mismatch with more
 blades, larger caches, or a longer draw distance. Retain the existing NRI effect
 boundary and portable Vulkan path. This is an optional extension, not a change
 to native OOT3D rendering or an attempt to reproduce BotW gameplay.
+
+## First Implementation: 4x4 Grid, Two Nearest Points
+
+Per the user's refinement, cache 16 RGB reference points per source texture.
+Each point is an alpha-weighted regional average at a cell center. Grid creation
+runs once per observed texture; workers share the immutable 192-byte RGB grid.
+For each retained root UV, choose only the two nearest points, using Euclidean
+distance in normalized UV space. Weights are `d1/(d0+d1)` and `d0/(d0+d1)`;
+an exact match takes that point's color. Only four neighboring candidate distances
+are needed on the regular grid, and only the selected two colors are read.
+This is deliberately **not** a 16-point blend or four-point bilinear blend.
+Ties use stable grid indices. Two-nearest selection can have changes at pair
+boundaries; do not silently replace the requested method with bilinear smoothing.
+
+The resulting RGB is stored once per world anchor with a validity byte, including
+valid black. The vertex shader uses it through the existing texture influence
+and root/tip brightness controls; missing color retains the prior average
+fallback. Native mask resolution and semantics are unchanged. No full texture
+sampling or nearest-point search occurs in the frame's Grass shader.
+
+`grass_texture_source_cache` owns the grid and shared source lifetime;
+`grass_world_placement_cache` samples it; `grass_instance_layout.h` owns the common
+CPU/compute/render instance layout. CPU fallback and compute expansion both copy
+the packed color. Compute output uses integer words to preserve packed bits,
+and shader strides derive from C++ layout sizes. Reused source observations no
+longer construct a redundant texture-byte copy before `try_emplace`.
+
+This costs four additional bytes per retained world anchor (36 -> 40) and visible
+instance (56 -> 60), about 17.8 MiB extra for the old 4.68-million-anchor fixture.
+It is **not** the planned memory/performance reduction. Dynamic terrain lighting,
+vertex colors/TEV, distance contrast and patch-bounded populations are unchanged.
+
+Validation: 77 Grass tests pass on Windows, including two-nearest weighting,
+exact point, black, repeat seam, mirror/clamp, shared grid/cache reset, 1x1 source
+and unchanged world placement. The previously disabled foundation test target
+was missing source dependencies for existing static placement/instrumentation
+tests; its CMake list was repaired so these tests can actually link.
+
+Private Vulkan/NRI probe: `epona-grass-grid4-two`, same mounted checkpoint and
+profile, 180 presentations, captures at 120/150, exit 0. Grass remains visible;
+at frame 172 the counts remain 87,315 instances and nine draws. The profile has
+22% texture-color influence and root/tip brightness 2.87/4.0, so this is not a
+neutral-lighting or full-influence comparison. No FPS improvement is claimed.
+Linux/Android validation and lower-density appearance qualification are pending.
 
 ## What Is Actually Known About BotW
 
@@ -102,9 +147,9 @@ No BotW-versus-TriAevum hardware benchmark was performed.
 
 Introduce a versioned surface-appearance input at the existing scene/extension
 boundary, owned by the PICA producer and consumed by Grass. Retain root UV or
-triangle+barycentric identity. Sample local RGB with the native mapper/wrap and
-the selected texture policy instead of recomputing an average for every root.
-Cache static samples per patch/material generation, not per presentation.
+triangle+barycentric identity. Use the 4x4 color grid and the two-nearest weighting
+specified above with the native mapper/wrap and selected texture policy.
+Cache static root colors per patch/material generation, not per presentation.
 
 Local RGB alone is an intermediate improvement, not the finished lighting fix.
 Publish/evaluate the terrain's relevant native vertex-color, material/TEV and

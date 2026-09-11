@@ -26,6 +26,19 @@ struct GrassTexturePreview {
     std::vector<uint8_t> Rgba8;
 };
 
+struct GrassTextureColorGrid {
+    static constexpr uint32_t Side = 4U;
+    std::array<std::array<float, 3>, Side * Side> Rgb{};
+};
+
+struct GrassTextureColorSource {
+    std::shared_ptr<const GrassTextureColorGrid> Grid;
+
+    // Inverse-distance RGB from the two nearest grid points. High byte is validity.
+    [[nodiscard]] uint32_t SamplePacked(float u, float v,
+        GrassTextureWrap wrapS, GrassTextureWrap wrapT) const noexcept;
+};
+
 class GrassTextureSourceCache final {
   public:
     static GrassTextureSourceCache& Instance();
@@ -42,6 +55,7 @@ class GrassTextureSourceCache final {
     AcquireMaskShared(
         uint64_t rgba8Hash, GrassSampleChannel channel) const;
     [[nodiscard]] GrassTexturePreview AcquirePreview(uint64_t rgba8Hash) const;
+    [[nodiscard]] GrassTextureColorSource AcquireColorSource(uint64_t rgba8Hash) const;
     // Alpha-weighted encoded RGB average. This intentionally stays in the
     // texture's color domain because the PICA color target is UNORM and the
     // grass color controls operate in that same domain.
@@ -53,12 +67,13 @@ class GrassTextureSourceCache final {
     struct Source {
         uint16_t Width = 0;
         uint16_t Height = 0;
-        std::vector<uint8_t> Rgba8;
+        std::shared_ptr<const std::vector<uint8_t>> Rgba8;
         mutable std::array<
             std::shared_ptr<const GrassScalarMask>, 5U>
             Masks;
         mutable std::optional<std::array<float, 3>> AverageColor;
         mutable bool AverageColorComputed = false;
+        mutable std::shared_ptr<const GrassTextureColorGrid> ColorGrid;
     };
     mutable std::mutex mMutex;
     std::unordered_map<uint64_t, Source> mSources;

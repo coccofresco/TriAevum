@@ -18,11 +18,13 @@ struct GrassWorldAnchor {
     uint32_t PackedWidthAxis = 0x00007fffU;
     uint32_t PackedWorldNormal = 0x7fff0000U;
     uint32_t StableId = 0U;
+    uint32_t SurfaceColor = 0U;
 };
-// Shared CPU/storage-buffer format: nine scalar words, no std430 vec3 padding.
-static_assert(sizeof(GrassWorldAnchor) == 36U);
+// Shared CPU/storage-buffer format: ten scalar words, no std430 vec3 padding.
+static_assert(sizeof(GrassWorldAnchor) == 40U);
 static_assert(offsetof(GrassWorldAnchor, PackedWidthAxis) == 24U);
 static_assert(offsetof(GrassWorldAnchor, StableId) == 32U);
+static_assert(offsetof(GrassWorldAnchor, SurfaceColor) == 36U);
 
 // Compact immutable stream used only by camera-dependent visibility. It
 // retains the exact anchor order while keeping the full GPU payload cold.
@@ -65,6 +67,9 @@ struct GrassWorldPlacement {
 };
 
 struct GrassWorldPlacementRequest {
+    GrassTextureColorSource ColorSource;
+    GrassTextureWrap ColorWrapS = GrassTextureWrap::Repeat;
+    GrassTextureWrap ColorWrapT = GrassTextureWrap::Repeat;
     uint64_t Identity = 0U;
     uint64_t ContentVersion = 0U;
     uint64_t FrameId = 0U;

@@ -45,6 +45,7 @@ uint64_t GrassPlacementSourceVersion(const GrassAsyncPlacementRequest& request) 
     HashValue(hash, std::bit_cast<uint32_t>(request.HeightScale));
     HashValue(hash, request.MaterialWrapS);
     HashValue(hash, request.MaterialWrapT);
+    HashValue(hash, request.ColorSource.Grid != nullptr);
     return hash == 0U ? 1U : hash;
 }
 
@@ -113,6 +114,9 @@ std::shared_ptr<const GrassWorldPlacement> Build(const GrassAsyncPlacementReques
     const auto clustered = diagnose ? std::chrono::steady_clock::now() : started;
 
     GrassWorldPlacementRequest world;
+    world.ColorSource = request.ColorSource;
+    world.ColorWrapS = ResolveGrassTextureWrap(request.Rule.Wrap, request.MaterialWrapS);
+    world.ColorWrapT = ResolveGrassTextureWrap(request.Rule.Wrap, request.MaterialWrapT);
     world.Identity = request.WorldIdentity;
     world.ContentVersion = request.PlacementKey.ContentVersion ^ TransformVersion(request);
     if (world.ContentVersion == 0U) world.ContentVersion = 1U;

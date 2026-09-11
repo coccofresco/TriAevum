@@ -1,5 +1,6 @@
 #include "fast/oot3d/grass_gpu_instance_compactor.h"
 #include "fast/oot3d/grass_shader_sources.h"
+#include "fast/oot3d/grass_instance_layout.h"
 
 #ifdef ENABLE_OOT3D_VULKAN
 
@@ -18,7 +19,7 @@ namespace {
 
 constexpr uint32_t kFrameSlots = 2U;
 constexpr uint32_t kComputeGroupSize = 256U;
-constexpr VkDeviceSize kGrassInstanceBytes = 56U;
+constexpr VkDeviceSize kGrassInstanceBytes = sizeof(GrassInstance);
 constexpr VkDeviceSize kStaticAnchorBytes = sizeof(GrassWorldAnchor);
 
 struct alignas(16) GrassGpuInteractionSample {

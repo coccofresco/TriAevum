@@ -2,6 +2,8 @@
 #include "fast/oot3d/grass_blade_shape.h"
 #include "fast/oot3d/grass_distant_tuft.h"
 #include "fast/oot3d/grass_indexed_topology.h"
+#include "fast/oot3d/grass_instance_layout.h"
+#include "fast/oot3d/grass_world_placement_cache.h"
 
 namespace Fast::Oot3d {
 std::string BuildGrassVertexShader() {
@@ -12,6 +14,7 @@ layout(location=0) in vec4 in_base_height;
 layout(location=1) in vec4 in_bend_half_width;
 layout(location=2) in vec2 in_width_axis;
 layout(location=3) in vec4 in_world_normal;
+layout(location=4) in uint in_surface_color;
 struct GrassEnvironmentRecord {
     vec4 color_and_mode;
     vec2 lut[128];
@@ -106,11 +109,13 @@ vec3 evaluate_blade_color(
     vec4 flags =
         environment_state.records[
             environment_index].texture_brightness_flags;
+    vec3 surface_color = (in_surface_color >> 24u) != 0u
+        ? unpackUnorm4x8(in_surface_color).rgb : texture.rgb;
     vec3 root_color =
-        mix(root, texture.rgb * flags.x, texture.w) *
+        mix(root, surface_color * flags.x, texture.w) *
         lighting;
     vec3 tip_color =
-        mix(tip, texture.rgb * flags.y, texture.w) *
+        mix(tip, surface_color * flags.y, texture.w) *
         lighting;
     root_color =
         floor(clamp(root_color, 0.0, 1.0) * 255.0 + 0.5) /
@@ -405,8 +410,10 @@ void main() {
 }
 
 std::string BuildGrassCompactionComputeShader() {
-    return R"glsl(
-#version 450
+    return std::string("#version 450\n#define GRASS_ANCHOR_WORDS ") +
+        std::to_string(sizeof(GrassWorldAnchor) / sizeof(uint32_t)) +
+        "u\n#define GRASS_INSTANCE_WORDS " +
+        std::to_string(sizeof(GrassInstance) / sizeof(uint32_t)) + "u\n" + R"glsl(
 layout(local_size_x=256, local_size_y=1, local_size_z=1) in;
 
 layout(std430, set=0, binding=0) readonly buffer StaticAnchors {
@@ -419,7 +426,7 @@ layout(std430, set=0, binding=2) readonly buffer InteractionSamples {
     vec4 values[];
 } interaction_samples;
 layout(std430, set=0, binding=3) writeonly buffer OutputInstances {
-    float words[];
+    uint words[];
 } output_instances;
 
 struct ActorCollider {
@@ -561,7 +568,7 @@ void main() {
         visible_indices.values[visible_index];
     if (static_index >= state.counts_flags.z)
         return;
-    uint source = static_index * 9u;
+    uint source = static_index * GRASS_ANCHOR_WORDS;
     vec4 base_height = uintBitsToFloat(uvec4(
         static_anchors.words[source + 0u],
         static_anchors.words[source + 1u],
@@ -590,35 +597,36 @@ void main() {
     if (bend_length > state.bend.x && bend_length > 0.0)
         dynamic_bend *= state.bend.x / bend_length;
 
-    uint destination = visible_index * 14u;
+    uint destination = visible_index * GRASS_INSTANCE_WORDS;
     output_instances.words[destination + 0u] =
-        base_height.x;
+        floatBitsToUint(base_height.x);
     output_instances.words[destination + 1u] =
-        base_height.y;
+        floatBitsToUint(base_height.y);
     output_instances.words[destination + 2u] =
-        base_height.z;
+        floatBitsToUint(base_height.z);
     output_instances.words[destination + 3u] =
-        base_height.w;
+        floatBitsToUint(base_height.w);
     output_instances.words[destination + 4u] =
-        dynamic_bend.x;
+        floatBitsToUint(dynamic_bend.x);
     output_instances.words[destination + 5u] =
-        dynamic_bend.y;
+        floatBitsToUint(dynamic_bend.y);
     output_instances.words[destination + 6u] =
-        half_width_phase.x;
+        floatBitsToUint(half_width_phase.x);
     output_instances.words[destination + 7u] =
-        half_width_phase.y;
+        floatBitsToUint(half_width_phase.y);
     output_instances.words[destination + 8u] =
-        width_axis.x;
+        floatBitsToUint(width_axis.x);
     output_instances.words[destination + 9u] =
-        width_axis.y;
+        floatBitsToUint(width_axis.y);
     output_instances.words[destination + 10u] =
-        world_normal.x;
+        floatBitsToUint(world_normal.x);
     output_instances.words[destination + 11u] =
-        world_normal.y;
+        floatBitsToUint(world_normal.y);
     output_instances.words[destination + 12u] =
-        world_normal.z;
+        floatBitsToUint(world_normal.z);
     output_instances.words[destination + 13u] =
-        world_normal.w;
+        floatBitsToUint(world_normal.w);
+    output_instances.words[destination + 14u] = static_anchors.words[source + 9u];
 }
 )glsl";
 }

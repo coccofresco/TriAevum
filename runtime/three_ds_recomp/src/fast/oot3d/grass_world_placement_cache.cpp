@@ -24,6 +24,9 @@ template <typename Value> void HashValue(uint64_t& hash, const Value& value) noe
 
 uint64_t TransformVersion(const GrassWorldPlacementRequest& request) noexcept {
     uint64_t hash = kFnvOffset;
+    HashValue(hash, request.ColorSource.Grid != nullptr);
+    HashValue(hash, request.ColorWrapS);
+    HashValue(hash, request.ColorWrapT);
     for (const float value : request.ModelToWorld) {
         HashValue(hash, std::bit_cast<uint32_t>(value));
     }
@@ -168,6 +171,8 @@ GrassWorldPlacement BuildPlacement(const GrassWorldPlacementRequest& request, ui
         destination.PackedWidthAxis = PackGrassDirection(source.WidthAxis);
         destination.PackedWorldNormal = PackGrassNormal(normal);
         destination.StableId = source.StableId;
+        destination.SurfaceColor = request.ColorSource.SamplePacked(
+            source.Uv[0], source.Uv[1], request.ColorWrapS, request.ColorWrapT);
         result.CullingAnchors[index] = {
             { destination.BaseHeight[0], destination.BaseHeight[1], destination.BaseHeight[2] },
             GrassStableVisibilityValue(source.StableId),

@@ -36,6 +36,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <future>
+#include "fast/oot3d/grass_instance_layout.h"
 #include <limits>
 #include <numbers>
 #include <optional>
@@ -45,15 +46,6 @@
 
 namespace Fast::Oot3d {
 namespace {
-
-struct GrassInstance {
-    std::array<float, 4> BaseHeight{};
-    std::array<float, 4> BendAndHalfWidth{};
-    std::array<float, 2> WidthAxis{1.0F, 0.0F};
-    std::array<float, 4> WorldNormal{
-        0.0F, 1.0F, 0.0F, 0.0F};
-};
-static_assert(sizeof(GrassInstance) == 56U);
 
 struct alignas(16) GrassEnvironmentRecord {
     // W is 0 when disabled, 1 for regular depth and 2 for flipped depth.
@@ -627,7 +619,9 @@ bool InteractiveGrassPass::Initialize(VkPhysicalDevice physicalDevice,
                 {2, 0, VK_FORMAT_R32G32_SFLOAT,
                  offsetof(GrassInstance, WidthAxis)},
                 {3, 0, VK_FORMAT_R32G32B32A32_SFLOAT,
-                 offsetof(GrassInstance, WorldNormal)}};
+                 offsetof(GrassInstance, WorldNormal)},
+                {4, 0, VK_FORMAT_R32_UINT,
+                 offsetof(GrassInstance, SurfaceColor)}};
             VkPipelineVertexInputStateCreateInfo vertexInput{
                 VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
             vertexInput.vertexBindingDescriptionCount = 1;
@@ -920,6 +914,7 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                 placementRequest.Vertices = mesh.Vertices;
                 placementRequest.Indices = mesh.Indices;
                 placementRequest.Mask = mask;
+                placementRequest.ColorSource = GrassTextureSourceCache::Instance().AcquireColorSource(mesh.TextureHash);
                 placementRequest.Rule = rule;
                 placementRequest.Generation =
                     settings.Generation;
@@ -1315,6 +1310,7 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                     },
                     UnpackGrassDirection(anchor.PackedWidthAxis),
                     UnpackGrassNormal(anchor.PackedWorldNormal),
+                    anchor.SurfaceColor,
                 };
                 instanceOutput[instanceIndex].WorldNormal[3] = GrassStableVisibilityValue(anchor.StableId);
             }

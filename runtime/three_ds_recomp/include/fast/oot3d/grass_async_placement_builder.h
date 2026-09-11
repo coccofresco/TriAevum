@@ -34,6 +34,7 @@ struct GrassAsyncPlacementRequest {
     std::shared_ptr<const std::vector<GrassSourceVertex>> Vertices;
     std::shared_ptr<const std::vector<uint32_t>> Indices;
     std::shared_ptr<const GrassScalarMask> Mask;
+    GrassTextureColorSource ColorSource;
     GrassPlacementRule Rule;
     GrassGenerationSettings Generation;
     uint32_t Budget = 0U;

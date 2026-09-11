@@ -475,6 +475,7 @@ add_executable(oot3d_graphics_foundation_tests
     ../src/fast/oot3d/azahar_texture_pack.cpp
     ../src/fast/oot3d/cacao_normal_input.cpp
     ../src/fast/oot3d/grass_async_placement_builder.cpp
+    ../src/fast/oot3d/grass_static_placement_cache.cpp
     ../src/fast/oot3d/grass_blade_geometry.cpp
     ../src/fast/oot3d/grass_collision_resolver.cpp
     ../src/fast/oot3d/grass_geometry_registry.cpp
@@ -530,6 +531,9 @@ add_executable(oot3d_graphics_foundation_tests
     ../src/fast/oot3d/pica_rigid_motion.cpp
     ../src/fast/oot3d/pica_texture_decode.cpp
     ../src/fast/oot3d/pica_toon_shader.cpp
+    ../src/fast/oot3d/pica_shader_instrumentation.cpp
+    ../src/fast/oot3d/pica_directional_shadow_lighting.cpp
+    ../src/fast/oot3d/pica_directional_shadow_semantics.cpp
     ../src/fast/oot3d/pica_toon_telemetry.cpp
     ../src/fast/oot3d/pica_scanout_effects.cpp
     ../src/fast/oot3d/spatial_aa.cpp

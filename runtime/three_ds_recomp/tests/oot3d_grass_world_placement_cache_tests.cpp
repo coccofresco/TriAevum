@@ -115,9 +115,33 @@ TEST(Oot3dGrassSelectionBudget, ParallelBinsKeepExactlyTheSerialPrefixAtEveryBud
     }
 }
 
+TEST(Oot3dGrassSurfaceColor, WorldAnchorsRetainGridColorsWithoutChangingPlacement) {
+    using namespace Fast::Oot3d;
+    std::array<GrassAnchor, 2> anchors{};
+    anchors[0].LocalPosition = {1, 2, 3};
+    anchors[1].LocalPosition = {4, 5, 6};
+    anchors[0].Uv = {0.125F, 0.125F};
+    anchors[1].Uv = {0.375F, 0.125F};
+    auto request = BaseRequest(anchors, {});
+    const auto before = BuildGrassWorldPlacement(request);
+    auto grid = std::make_shared<GrassTextureColorGrid>();
+    grid->Rgb[0] = {32, 64, 128};
+    grid->Rgb[1] = {192, 128, 64};
+    request.ColorSource = {grid};
+    const auto after = BuildGrassWorldPlacement(request);
+    ASSERT_EQ(after.Anchors.size(), 2U);
+    EXPECT_EQ(after.Anchors[0].SurfaceColor, 0xff804020U);
+    EXPECT_EQ(after.Anchors[1].SurfaceColor, 0xff4080c0U);
+    EXPECT_NE(before.ContentVersion, after.ContentVersion);
+    for (size_t i = 0; i < 2; ++i) {
+        EXPECT_EQ(after.Anchors[i].BaseHeight, before.Anchors[i].BaseHeight);
+        EXPECT_EQ(after.Anchors[i].StableId, before.Anchors[i].StableId);
+    }
+}
+
 TEST(Oot3dGrassAnchorCodec, DirectionsRoundTripAcrossBothHemispheres) {
     using namespace Fast::Oot3d;
-    EXPECT_EQ(sizeof(GrassWorldAnchor), 36U);
+    EXPECT_EQ(sizeof(GrassWorldAnchor), 40U);
     for (int x = -10; x <= 10; ++x) for (int y = -10; y <= 10; ++y) for (int z = -10; z <= 10; ++z) {
         const float length = std::sqrt(static_cast<float>(x*x+y*y+z*z));
         if (length == 0) continue;
