@@ -1,5 +1,6 @@
 #include "fast/oot3d/grass_midrange_clusters.h"
 #include "fast/oot3d/grass_indexed_topology.h"
+#include "fast/oot3d/grass_cluster_selection.h"
 
 #include <iostream>
 #include <numeric>
@@ -81,6 +82,63 @@ int main() {
         Check(selected == std::vector<uint32_t>({100,101,102,104}), "selected stream grouped");
         Check(packed == std::vector<std::array<uint32_t,2>>({{12,1},{13,1},{10,2}}), "occupancy buckets and prepared offsets");
         Check(map[3] == 1 && selected.size() == 4, "unselected child remains absent");
+        auto ordered = selected;
+        Check(PackGrassMidrangeDraws(ordered,map,100,10,true) == packed && ordered == selected,
+              "cluster-owned stream needs no root sort");
+        Check(GrassClusterChildCount(50,200,500,2000,0.25F) == 50, "full medium cluster");
+        Check(GrassClusterChildCount(50,2000,500,2000,0.25F) == 13, "reduced far cluster");
+        GrassWorldPlacement world;
+        for (uint32_t i = 0; i < 50; ++i) {
+            world.CullingAnchors.push_back({{float(i)*0.01F,0,0}, i == 0 ? 0.1F : 0.99F});
+        }
+        world.Midrange = BuildGrassMidrangeClusters(50,22,[&](uint32_t i) {
+            return GrassMidrangeRoot{world.CullingAnchors[i].Position,i,7,1,world.CullingAnchors[i].StableVisibility};
+        });
+        GrassLodPolicy policy;
+        policy.DrawDistance = 2000; policy.LodReferenceDistance = 2000;
+        policy.FarDensity = 0.2F; policy.NearBladeSegments = 2; policy.FarBladeSegments = 1;
+        policy.SegmentStartDistance = 100; policy.SegmentEndDistance = 500;
+        std::array<float,16> clip{}; clip[0]=clip[5]=clip[10]=clip[15]=1;
+        std::vector<uint32_t> emitted;
+        uint64_t evaluated=0;
+        const auto select = [&](float distance, float fraction, uint32_t budget) {
+            emitted.clear();
+            return SelectGrassDrawableClusters(world,clip,{0,0,distance},policy,fraction,1,false,budget,evaluated,
+                [&](uint32_t index,const GrassLodDecision&) { emitted.push_back(index); });
+        };
+        Check(select(1000,1,100) == 50, "group retention must precede child retention");
+        Check(select(1000,1,49) == 0, "budget never tears a cluster");
+        Check(select(2000,0.25F,100) == 13 && emitted.front() == 0, "far prefix preserves representative");
+        Check(select(2100,1,100) == 0, "draw distance exclusion");
+        world.CullingAnchors[0].StableVisibility=0.99F;
+        Check(select(1000,1,100) == 0, "whole cluster rejection");
+        world.Midrange.Nodes[0].MinimumStableVisibility=0.99F;
+        evaluated=0;
+        Check(select(1000,1,100) == 0 && evaluated==0, "density bound skips entire node");
+        const auto tree = BuildGrassMidrangeClusters(100,22,[](uint32_t i) {
+            return GrassMidrangeRoot{{float(i)*30,0,0},i,7,2};
+        });
+        Check(tree.Nodes.size()>1 && tree.Nodes.front().Escape==tree.Nodes.size(), "spatial hierarchy complete");
+        std::set<uint32_t> leaves;
+        for (uint32_t i=0; i<tree.Nodes.size(); ++i) {
+            const auto& node=tree.Nodes[i];
+            Check(node.Escape>i && node.Escape<=tree.Nodes.size(), "valid stackless escape");
+            for (uint32_t j=0; j<node.Count; ++j) {
+                const auto groupIndex=tree.GroupOrder[node.First+j];
+                const auto& group=tree.Groups[groupIndex];
+                const float delta=group.Center[0]-node.Center[0];
+                Check(std::abs(delta)+group.RootRadius<=node.Radius+0.001F, "conservative leaf bounds");
+                leaves.insert(groupIndex);
+            }
+        }
+        Check(leaves.size()==100, "every cluster occurs in one leaf");
+        uint32_t previous = 50;
+        for (int distance = 0; distance <= 2200; ++distance) {
+            const auto count = GrassClusterChildCount(50,float(distance),500,2000,0.25F);
+            Check(count <= previous && count >= 13, "nested monotonic far detail");
+            previous = count;
+            Check(GrassClusterChildCount(1,float(distance),500,2000,0.25F) == 1, "sparse mask retains its root");
+        }
         std::cout << "Grass midrange cluster invariants passed\n";
         return 0;
     } catch (const std::exception& error) {

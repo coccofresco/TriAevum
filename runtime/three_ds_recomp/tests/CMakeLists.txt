@@ -454,7 +454,8 @@ if(MSVC)
 endif()
 gtest_discover_tests(oot3d_effect_graph_tests DISCOVERY_TIMEOUT 30)
 
-add_executable(oot3d_grass_midrange_clusters_tests oot3d_grass_midrange_clusters_tests.cpp)
+add_executable(oot3d_grass_midrange_clusters_tests oot3d_grass_midrange_clusters_tests.cpp
+    ../src/fast/oot3d/grass_visibility.cpp)
 target_include_directories(oot3d_grass_midrange_clusters_tests PRIVATE ../include)
 target_compile_features(oot3d_grass_midrange_clusters_tests PRIVATE cxx_std_20)
 add_test(NAME oot3d_grass_midrange_clusters_tests COMMAND oot3d_grass_midrange_clusters_tests)

@@ -19,6 +19,8 @@ struct GrassMidrangeRoot {
     uint32_t StableId = 0;
     // Exact support identity, not interpolated barycentric weights.
     uint64_t Support = 0;
+    float BladeRadius = 0;
+    float StableVisibility = 0;
 };
 
 struct GrassMidrangeCluster {
@@ -26,13 +28,24 @@ struct GrassMidrangeCluster {
     uint32_t MemberCount = 0;
     std::array<float, 3> Center{};
     float RootRadius = 0;
+    float MaximumBladeRadius = 0;
+    float StableVisibility = 0;
 };
 
 struct GrassMidrangeClusters {
+    struct Node {
+        std::array<float,3> Center{};
+        float Radius = 0;
+        float MaximumBladeRadius = 0;
+        float MinimumStableVisibility = 1;
+        uint32_t First = 0, Count = 0, Escape = 0;
+    };
     // Indices into the existing immutable roots; no duplicate root payload.
     std::vector<uint32_t> Members;
     std::vector<GrassMidrangeCluster> Groups;
     std::vector<uint32_t> GroupForRoot;
+    std::vector<uint32_t> GroupOrder;
+    std::vector<Node> Nodes;
 };
 
 // Invoke separately per placement/mask owner, after mask acceptance. Cell
@@ -88,10 +101,12 @@ GrassMidrangeClusters BuildGrassMidrangeClusters(
         GrassMidrangeCluster group;
         group.FirstMember = static_cast<uint32_t>(first);
         group.MemberCount = static_cast<uint32_t>(end - first);
+        group.StableVisibility = rootAt(entries[first].Index).StableVisibility;
         for (size_t axis = 0; axis < 3; ++axis)
             group.Center[axis] = float((double(lo[axis]) + hi[axis]) * 0.5);
         double radiusSquared = 0;
         for (size_t i = first; i < end; ++i) {
+            group.MaximumBladeRadius = std::max(group.MaximumBladeRadius, rootAt(entries[i].Index).BladeRadius);
             const auto p = rootAt(entries[i].Index).Position;
             double squared = 0;
             for (size_t axis = 0; axis < 3; ++axis) {
@@ -105,6 +120,47 @@ GrassMidrangeClusters BuildGrassMidrangeClusters(
         result.Groups.push_back(group);
         first = end;
     }
+    result.GroupOrder.resize(result.Groups.size());
+    for (uint32_t i = 0; i < result.GroupOrder.size(); ++i) result.GroupOrder[i] = i;
+    const auto buildNode = [&](auto&& self, uint32_t first, uint32_t count) -> void {
+        const uint32_t nodeIndex = static_cast<uint32_t>(result.Nodes.size());
+        result.Nodes.emplace_back();
+        std::array<float,3> lo{INFINITY,INFINITY,INFINITY}, hi{-INFINITY,-INFINITY,-INFINITY};
+        float blade = 0;
+        for (uint32_t i=first; i<first+count; ++i) {
+            const auto& group = result.Groups[result.GroupOrder[i]];
+            for (size_t axis=0; axis<3; ++axis) {
+                lo[axis]=std::min(lo[axis],group.Center[axis]-group.RootRadius);
+                hi[axis]=std::max(hi[axis],group.Center[axis]+group.RootRadius);
+            }
+            blade=std::max(blade,group.MaximumBladeRadius);
+            result.Nodes[nodeIndex].MinimumStableVisibility = std::min(
+                result.Nodes[nodeIndex].MinimumStableVisibility, group.StableVisibility);
+        }
+        float squared=0;
+        size_t split=0;
+        for (size_t axis=0; axis<3; ++axis) {
+            result.Nodes[nodeIndex].Center[axis]=(lo[axis]+hi[axis])*0.5F;
+            const float half=(hi[axis]-lo[axis])*0.5F;
+            squared+=half*half;
+            if (hi[axis]-lo[axis]>hi[split]-lo[split]) split=axis;
+        }
+        result.Nodes[nodeIndex].Radius=std::nextafter(std::sqrt(squared),INFINITY);
+        result.Nodes[nodeIndex].MaximumBladeRadius=blade;
+        if (count<=16) {
+            result.Nodes[nodeIndex].First=first;
+            result.Nodes[nodeIndex].Count=count;
+        } else {
+            const auto begin=result.GroupOrder.begin()+first;
+            std::nth_element(begin,begin+count/2,begin+count,[&](uint32_t a,uint32_t b) {
+                return std::pair{result.Groups[a].Center[split],a}<std::pair{result.Groups[b].Center[split],b};
+            });
+            self(self,first,count/2);
+            self(self,first+count/2,count-count/2);
+        }
+        result.Nodes[nodeIndex].Escape=static_cast<uint32_t>(result.Nodes.size());
+    };
+    if (!result.Groups.empty()) buildNode(buildNode,0,static_cast<uint32_t>(result.Groups.size()));
     return result;
 }
 
@@ -113,15 +169,25 @@ struct GrassMidrangeTopology {
     std::vector<uint16_t> Indices;
 };
 
+// Nested stable prefixes: reducing detail never repositions a root or admits
+// a previously rejected mask sample. Sparse clusters keep at least one root.
+inline uint32_t GrassClusterChildCount(uint32_t members, float distance,
+    float start, float end, float farFraction) noexcept {
+    const float t = end > start ? std::clamp((distance-start)/(end-start), 0.0F, 1.0F) :
+        (distance > start ? 1.0F : 0.0F);
+    const float smooth = t*t*(3.0F-2.0F*t);
+    return static_cast<uint32_t>(std::ceil(members * (1.0F-smooth*(1.0F-std::clamp(farFraction,0.02F,1.0F)))));
+}
+
 // Reorder only selected indices; bucket descriptors by occupancy so sparse
 // groups draw an exact prefix rather than fifty mostly unused children.
 inline std::vector<std::array<uint32_t, 2>> PackGrassMidrangeDraws(
     std::span<uint32_t> selected, std::span<const uint32_t> groupForRoot,
-    uint32_t rootBase, uint32_t preparedBase) {
+    uint32_t rootBase, uint32_t preparedBase, bool groupOrdered = false) {
     for (uint32_t root : selected)
         if (root < rootBase || root-rootBase >= groupForRoot.size())
             throw std::invalid_argument("Grass group references an unrelated placement");
-    std::sort(selected.begin(), selected.end(), [&](uint32_t a, uint32_t b) {
+    if (!groupOrdered) std::sort(selected.begin(), selected.end(), [&](uint32_t a, uint32_t b) {
         return std::pair{groupForRoot[a-rootBase], a} < std::pair{groupForRoot[b-rootBase], b};
     });
     std::vector<std::array<uint32_t, 2>> result;

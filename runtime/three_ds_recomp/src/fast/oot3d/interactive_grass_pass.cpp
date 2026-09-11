@@ -22,6 +22,7 @@
 #include "fast/oot3d/grass_shading_environment.h"
 #include "fast/oot3d/grass_texture_source_cache.h"
 #include "fast/oot3d/grass_visibility.h"
+#include "fast/oot3d/grass_cluster_selection.h"
 #include "fast/oot3d/outline_occlusion_pass.h"
 #include "fast/oot3d/visual_clock.h"
 
@@ -1142,7 +1143,8 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
 
                 const auto selectionStart = std::chrono::steady_clock::now();
                 auto& clusterWork = mImpl->ClusterWork;
-                const auto selection = SelectGrassClusterWork(
+                const bool clusterOwned = settings.MidrangeClustersEnabled && !prepared.World->Midrange.Groups.empty();
+                const auto selection = clusterOwned ? GrassClusterSelectionStats{} : SelectGrassClusterWork(
                     *prepared.World, prepared.Push.PositionToClip, prepared.Eye, lodPolicy,
                     bladeRadiusScale, settings.FrustumCulling, clusterWork);
                 const auto clusterSelectionEnd = std::chrono::steady_clock::now();
@@ -1150,13 +1152,25 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                 telemetry.CandidateClusters += selection.CandidateClusters;
                 const auto retainedCandidates = selection.CandidateAnchors;
                 size_t parallelWorkerCount = 0U;
-                if (retainedCandidates >= kGrassAnchorsPerWorker * 2U &&
+                if (!clusterOwned && retainedCandidates >= kGrassAnchorsPerWorker * 2U &&
                     remaining >= kGrassAnchorsPerWorker && clusterWork.size() > 1U) {
                     parallelWorkerCount =
                         std::min({ mImpl->WorkerCount(), clusterWork.size(),
                                    static_cast<size_t>(retainedCandidates / kGrassAnchorsPerWorker) });
                 }
-                if (parallelWorkerCount > 1U) {
+                if (clusterOwned) {
+                    uint64_t evaluated = 0;
+                    const auto visible = SelectGrassDrawableClusters(*prepared.World, prepared.Push.PositionToClip,
+                        prepared.Eye, lodPolicy, settings.MidrangeFarBladeFraction, bladeRadiusScale, settings.FrustumCulling, remaining, evaluated,
+                        [&](uint32_t index, const GrassLodDecision& lod) {
+                            mImpl->VisibleIndexBins[GrassLodBinIndex(lod.BladeSegments, lod.PlaneCount)]
+                                .push_back(prepared.StaticBaseIndex + index);
+                        }, &telemetry.VisibilityNodesTested);
+                    telemetry.CandidateClusters += evaluated;
+                    remaining -= visible;
+                    mImpl->LastBlades += visible;
+                    telemetry.VisibleBlades += visible;
+                } else if (parallelWorkerCount > 1U) {
                     telemetry.CullingWorkers =
                         std::max(telemetry.CullingWorkers, static_cast<uint32_t>(parallelWorkerCount));
                     mImpl->WorkerOutputs.resize(parallelWorkerCount);
@@ -1265,7 +1279,7 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                         const uint32_t firstGroup = static_cast<uint32_t>(mImpl->DrawGroups.size());
                         const auto groups = PackGrassMidrangeDraws(
                             std::span<uint32_t>(mImpl->VisibleAnchorIndices).subspan(firstInstance, binInstanceCount),
-                            map, prepared.StaticBaseIndex, firstInstance);
+                            map, prepared.StaticBaseIndex, firstInstance, clusterOwned);
                         mImpl->DrawGroups.insert(mImpl->DrawGroups.end(), groups.begin(), groups.end());
                         batchPush.Flags[1] |= 0x80000000U;
                         for (uint32_t first = firstGroup; first < mImpl->DrawGroups.size();) {

@@ -208,7 +208,9 @@ GrassWorldPlacement BuildPlacement(const GrassWorldPlacementRequest& request, ui
                 const uint64_t triangle = uint64_t(anchor.SurfaceReference[0]) |
                     (uint64_t(anchor.SurfaceReference[1] & 0xffffU) << 32U);
                 return GrassMidrangeRoot{{anchor.BaseHeight[0], anchor.BaseHeight[1], anchor.BaseHeight[2]},
-                                         anchor.StableId, triangle};
+                                         anchor.StableId, triangle,
+                                         anchor.BaseHeight[3] + anchor.HalfWidthPhase[0] * 2.0F,
+                                         result.CullingAnchors[index].StableVisibility};
             });
     }
     return result;

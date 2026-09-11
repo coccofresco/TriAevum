@@ -200,11 +200,16 @@ void main() {
     vec4 in_world_normal = attr_world_normal;
     uint in_surface_color = attr_surface_color;
     uvec2 in_surface_reference = attr_surface_reference;
+    vec3 visibility_position = attr_base_height.xyz;
+    float visibility_seed = attr_world_normal.w;
     if (grouped) {
         uint vertices_per_child = grass.flags.z * (2u * segments + 1u);
         uint child = vertex / vertices_per_child;
         vertex %= vertices_per_child;
         uvec2 group = prepared_groups.entries[gl_InstanceIndex];
+        uint representative = group.x * 17u;
+        visibility_position = uintBitsToFloat(uvec3(prepared_roots.words[representative], prepared_roots.words[representative+1u], prepared_roots.words[representative+2u]));
+        visibility_seed = uintBitsToFloat(prepared_roots.words[representative+13u]);
         if (child >= group.y) { gl_Position = vec4(0.0,0.0,2.0,1.0); return; }
         uint base = (group.x + child) * 17u;
         in_base_height = uintBitsToFloat(uvec4(prepared_roots.words[base],prepared_roots.words[base+1u],prepared_roots.words[base+2u],prepared_roots.words[base+3u]));
@@ -222,13 +227,13 @@ void main() {
     vec4 lod = environment_state.records[grass.flags.w].tuft_lod;
     vec4 distance_lod = environment_state.records[grass.flags.w].distance_lod;
     vec4 tuft_style = environment_state.records[grass.flags.w].tuft_style;
-    float distance = length(in_base_height.xyz - environment_state.records[grass.flags.w].camera_position.xyz);
+    float distance = length(visibility_position - environment_state.records[grass.flags.w].camera_position.xyz);
     float normalized_distance = distance/max(lod.y,1.0e-6);
     float tuft_weight = grass_tuft_weight(normalized_distance,lod.x,lod.x+lod.w);
     float retention = grass_density_retention(normalized_distance,distance_lod.y,distance_lod.z);
     if (tuft_style.w > 0.5)
         retention *= grass_tuft_retention_scale(tuft_weight,lod.z,tuft_style.y);
-    lod_visibility = grass_visibility_fade(clamp(retention,0.0,1.0),in_world_normal.w,distance_lod.w);
+    lod_visibility = grass_visibility_fade(clamp(retention,0.0,1.0),visibility_seed,distance_lod.w);
     lod_visibility *= 1.0-grass_tuft_weight(distance,distance_lod.x*(1.0-tuft_style.z),distance_lod.x);
     if (tuft) {
         float choice = grass_lod_choice(in_world_normal.w);

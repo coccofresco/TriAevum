@@ -95,6 +95,7 @@ struct InteractiveGrassSettings {
     bool FarTuftsEnabled = true;
     bool MidrangeClustersEnabled = false;
     float MidrangeClusterCellExtent = 22.0F;
+    float MidrangeFarBladeFraction = 0.25F;
     uint8_t FarTuftBladeCount = 5U;
     float DrawFadeFraction = 0.15F;
     float DensityFadeFraction = 0.10F;

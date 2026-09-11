@@ -1,9 +1,9 @@
 # Repeatable Midrange Grass Clusters
 
-Status: experimental GPU consumer connected and measured, 2026-09-11.
-Visual parity is verified for the equivalent-geometry comparison below;
-performance is not sufficient for promotion. Whole-cluster density/LOD remains
-to be implemented.
+Status: experimental GPU consumer and cluster-owned selection implemented,
+2026-09-11. The original equivalent-geometry prototype and its measurements
+are retained below as history. The cluster-owned successor is described in
+the final section; it remains opt-in, not a promoted product preset.
 The current 1024 default is unchanged. See
 [terrain continuity](TRIAEVUM_GRASS_TERRAIN_CONTINUITY_STRATEGY.md) for the
 fixed-time wide-intro measurement protocol and historical references.
@@ -200,3 +200,109 @@ controls with template-selection semantics.
    no swimming, pop-in, persistent holes or density doubling.
 5. Keep a candidate opt-in until measured coverage and total cost improve.
    Shared architecture does not replace later Linux/Android validation.
+
+## Cluster-Owned Selection (Successor)
+
+`grass_cluster_selection.h::SelectGrassDrawableClusters` now selects ownership
+and density before emitting children. A grouped draw retains or rejects the
+whole cluster, rather than grouping individually thinned survivors. The shader
+uses the same representative root's position and visibility seed for all
+children, preventing a second independent per-blade fade. Color, lighting,
+wind and interaction still use each child's actual root. Near geometry remains
+individual; topology ownership switches per group so representations cannot
+overlap. Near topology selection is consequently not pixel-identical to the
+old independent per-root selection at the transition.
+
+The immutable placement stores a stackless spatial hierarchy over groups.
+Bounds include accepted-root extent and maximum blade extent; traversal skips
+whole invisible regions. Cache accounting includes the index. Its fixed
+traversal order also defines stable budget priority without a per-frame sort.
+The prepared root stream is already group-contiguous, so draw packing skips
+the old individual-index sort. Occupancy-bucketed draws remain in use.
+
+`Graphics.Grass.Performance.MidrangeFarBladeFraction` is an experimental
+manual configuration parameter (default 0.25; 1 disables child reduction).
+Between `SegmentLodEndDistance` and `LodReferenceDistance` (bounded by draw
+distance), smooth progression selects a nested prefix of the existing stable
+members. A full 50-root group reaches 13 roots at fraction 0.25. Sparse groups
+remain sparse, at least one root survives, and no root is moved or invented.
+Whole-cluster density and final draw-distance fade remain independent stages.
+The initial use of maximum draw distance as the reduction endpoint was too
+remote to exercise the feature meaningfully in the sampled intro views; that
+is corrected to the established LOD reference distance.
+
+This is a reduced geometric cluster, not yet a coverage-compensated far
+template: it does not widen blades or guarantee the original silhouette.
+Child-count changes are discrete within a smooth distance schedule. Their
+temporal visibility and the near/group handover still require a moving-view
+quality pass before promotion. No new F1 controls or live/default changes are
+made by this tranche.
+
+Tests now cover whole-group retention despite individually rejected children,
+indivisible budgets, distance rejection, stable nested far subsets, sparse
+masks, spatial leaves/bounds/escape links, and sort-free packing. The standalone
+test links the actual `grass_visibility.cpp`, not a duplicate LOD model.
+Framebuffer sidecars additionally expose CPU preparation/selection/upload
+times and upload bytes for diagnosis; those capture-run samples are not the
+throughput benchmark.
+
+Intermediate private evidence: `grass-cluster-owned-selection` (linear group
+scan) and `grass-cluster-hierarchy` (indexed scan, before removing the candidate
+sort and correcting the far endpoint). At frame 840 the full cluster path
+draws 75281 roots in 7248 group instances, rather than the previous prototype's
+74352 roots in 35219 instances. The linear scan examined 443069 groups;
+the index reduced this to 121341 candidate groups without changing that
+frame's selected roots. Fewer instances alone still did not establish a total
+speedup: the intermediate full-cluster host average was 19.948 ms, versus
+14.183 ms for its individual control. Do not present these intermediate runs
+as a completed performance optimization.
+
+### Final Validation and Remaining Target
+
+The index also stores a conservative minimum representative visibility seed.
+Where an entire node is guaranteed to use grouped topology, its nearest-point
+density upper bound can reject the node before visiting its groups. This is
+not applied to nodes that could still contain individually selected near
+blades. At frame 840 candidate groups fall from 121341 to 43015. All seven
+captures are pixel-identical before/after this optimization. Removing the
+candidate sort likewise preserved all seven full-cluster captures.
+
+Final evidence: `grass-cluster-density-bounds`, with reversed-order timing-only
+repeats `grass-cluster-repeat-cluster-far` and
+`grass-cluster-repeat-individual-control`. Same 1320/180 frame protocol as
+above; no compilation or screenshot capture during these final timing runs.
+
+| Pair / variant | Host ms/step | Selected total GPU ms | Selected Grass GPU ms |
+| --- | ---: | ---: | ---: |
+| First / individual control | 13.106 | 4.137 | 1.170 |
+| First / reduced far clusters | 12.373 | 3.972 | 0.921 |
+| Reverse repeat / individual control | 17.042 | 4.169 | 1.156 |
+| Reverse repeat / reduced far clusters | 16.098 | 3.915 | 0.869 |
+
+Absolute host timings vary substantially between pairs; the within-pair
+improvement is about 5.5-5.6%. Grass GPU time falls 21.2-24.8%, while total
+selected GPU time falls only 4.0-6.1%. This does NOT meet the overall -33%
+target, and is not a comparison against a fresh historical executable or the
+unchanged live preset. Do not report the Grass-only reduction as total gain.
+
+At frame 840 the full cluster variant renders 79804 roots, reduced-far 32585,
+including near individuals. Compared with full clusters, far reduction changes
+0.26% of pixels in that frame. Across the four wide views its mean MAE is
+0.0615/255; relative to the individual test control it is 0.3538/255. Relative
+to the original unchanged 1024 image reference it is 0.8549/255 (lower-two-thirds
+MAE 1.2797/255). These are different references, not interchangeable claims of
+parity. Rare local differences can be much larger than full-image averages.
+
+The current executable was built and run successfully; standalone invariants
+and the three Python harness tests pass. Captures confirm Grass is drawn in
+all seven sampled views and native-frame interpolation is disabled. The live
+configuration and product defaults remain unchanged. No Linux/Android,
+interpolated-mode, first-frame, or prolonged moving-view acceptance is claimed.
+
+The next performance work should use selection costs rather than just draw
+instance counts: frame-840 diagnostic selection drops to 4.881 ms, but is
+still substantial; the current implementation still traverses candidates and
+emits/compacts individual child records on CPU/GPU each frame. Reusing compact
+cluster selections and reducing this per-child preparation is the remaining
+structural opportunity. Validate temporal handover and far silhouette before
+promoting the experimental path or adding user-facing controls.

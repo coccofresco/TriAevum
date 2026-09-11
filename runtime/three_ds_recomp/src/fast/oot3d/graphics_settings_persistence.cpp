@@ -386,6 +386,7 @@ Json SerializeInteractiveGrassSettings(
              {"FarTuftsEnabled", grass.FarTuftsEnabled},
              {"MidrangeClustersEnabled", grass.MidrangeClustersEnabled},
              {"MidrangeClusterCellExtent", grass.MidrangeClusterCellExtent},
+             {"MidrangeFarBladeFraction", grass.MidrangeFarBladeFraction},
              {"FarTuftBladeCount", grass.FarTuftBladeCount},
              {"DrawFadeFraction", grass.DrawFadeFraction},
              {"DensityFadeFraction", grass.DensityFadeFraction},
@@ -631,6 +632,8 @@ void DeserializeInteractiveGrassSettings(
                    path + ".Performance.MidrangeClustersEnabled", result);
         ReadScalar(*performance, "MidrangeClusterCellExtent", value.MidrangeClusterCellExtent,
                    path + ".Performance.MidrangeClusterCellExtent", result);
+        ReadScalar(*performance, "MidrangeFarBladeFraction", value.MidrangeFarBladeFraction,
+                   path + ".Performance.MidrangeFarBladeFraction", result);
         ReadScalar(*performance, "FarTuftBladeCount", value.FarTuftBladeCount,
                    path + ".Performance.FarTuftBladeCount", result);
         // Additive settings: older profiles are valid, not malformed documents.

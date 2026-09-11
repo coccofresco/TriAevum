@@ -261,8 +261,9 @@ struct GrassAsyncPlacementBuilder::Impl {
             return p.Anchors.capacity()*sizeof(GrassWorldAnchor)+p.CullingAnchors.capacity()*sizeof(GrassWorldCullingAnchor)+
                 p.Clusters.capacity()*sizeof(GrassWorldCluster)+p.VisibilityNodes.capacity()*sizeof(GrassClusterVisibilityNode)+
                 p.VisibilityClusterOrder.capacity()*sizeof(uint32_t)+
-                (p.Midrange.Members.capacity()+p.Midrange.GroupForRoot.capacity())*sizeof(uint32_t)+
-                p.Midrange.Groups.capacity()*sizeof(GrassMidrangeCluster);
+                (p.Midrange.Members.capacity()+p.Midrange.GroupForRoot.capacity()+p.Midrange.GroupOrder.capacity())*sizeof(uint32_t)+
+                p.Midrange.Groups.capacity()*sizeof(GrassMidrangeCluster)+
+                p.Midrange.Nodes.capacity()*sizeof(GrassMidrangeClusters::Node);
         };
         size_t resident=0;
         for (const auto& [key,entry] : Entries) resident+=bytes(entry);

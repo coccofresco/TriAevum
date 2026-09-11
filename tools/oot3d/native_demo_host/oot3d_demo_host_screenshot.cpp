@@ -74,7 +74,11 @@ void MaybeWriteFramebufferScreenshot(const Args& args, Fast::GfxRenderingAPI& ap
         metadata["grass"] = {{"frame", grass.FrameId}, {"status", Fast::Oot3d::GrassRenderStatusName(grass.Status)},
             {"transition", grassTransition}, {"visible_blades", grass.VisibleBlades},
             {"cluster_instances", grass.ClusterDrawInstances}, {"cluster_blades", grass.ClusterRepresentedBlades},
-            {"candidate_clusters", grass.CandidateClusters}, {"tested_nodes", grass.VisibilityNodesTested}};
+            {"candidate_clusters", grass.CandidateClusters}, {"tested_nodes", grass.VisibilityNodesTested},
+            {"cpu_ms", grass.CpuMilliseconds}, {"selection_ms", grass.SelectionMilliseconds},
+            {"placement_ms", grass.PlacementMilliseconds}, {"upload_ms", grass.UploadMilliseconds},
+            {"static_upload_bytes", grass.StaticUploadedBytes}, {"dynamic_upload_bytes", grass.DynamicUploadedBytes},
+            {"gpu_compaction", grass.GpuCompaction}};
     }
     auto metadataPath = screenshotPath;
     metadataPath += ".json";
