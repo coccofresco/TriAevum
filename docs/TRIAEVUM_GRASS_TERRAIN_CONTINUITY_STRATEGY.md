@@ -330,3 +330,74 @@ compute/instancing implementation; mesh shaders are optional future work.
 The first deliverable should be local appearance continuity with a density
 comparison. The next is patch-bounded generation. Another increase in cache
 capacity, worker count or draw distance is not the strategy.
+
+## Native Vertex Lighting Consumer (2026-09-11)
+
+Implemented after `9b7c3b3` (shared toon response), without changing native
+geometry, PICA lighting equations, user presets or gameplay/AOT:
+
+- `renderer3ds/pica_surface_lighting_pass.{h,cpp}` is a shared 3DS Vulkan
+  producer, called inside the authorized Grass geometry-provider preparation.
+  It borrows the resolved native vertex program, packed GPU geometry and current
+  uniform buffer. One point draw per eligible surface writes native primary RGB
+  to an atlas. It does not replay the scene or read framebuffer pixels/CPU data.
+- `renderer3ds/pica_surface_lighting_shader.h` uses typed shader hooks, preserving
+  the canonical vertex computation and replacing only the final position with
+  an atlas texel coordinate. The canonical draw/shader is not modified.
+- Submission ID plus render-target namespace identifies the current draw.
+  `grass_scene_bridge.cpp` refreshes the submission even when geometry is reused.
+- `grass_surface_reference.h` retains three original vertex indices and two
+  normalized barycentric weights in eight bytes. Surface subdivision propagates
+  the original triangle weights; placement caches do not bake lighting values.
+- CPU fallback and GPU compaction preserve the same reference. The Grass vertex
+  shader interpolates three native primary RGB texels at the root, replacing
+  its independent ambient/directional estimate. Shared toon response is applied
+  next, then native fog. Texture color remains the separate two-nearest-samples
+  4x4 grid; the large source texture is not sampled per blade.
+
+### Cost, Ownership And Limits
+
+The producer owns private frame-slot atlas images, descriptors and pipelines;
+the existing Grass provider invocation controls its execution before transparent
+geometry. It records color-write to vertex-read barriers and relies on the
+renderer frame-slot fence before reuse/shutdown. It does not export an image
+to postprocessing or change scene/HUD ownership. A future second consumer must
+promote this private dependency to an explicit shared graph resource rather
+than borrow the Grass-owned lifetime.
+
+Atlas allocation is lazy: two 256x1024 RGBA32F images (8 MiB total), with a
+capability fallback to RGBA16F. At most 262144 vertex texels and 256 descriptor
+sets per slot/frame; unavailable sources retain the prior Grass response.
+There is no cross-frame lighting cache yet. Persistent roots and draw instances
+each grow by eight bytes (48 and 68 bytes respectively). Lighting currently
+requires three atlas fetches per Grass vertex, not one compute evaluation per
+blade. No performance improvement is claimed for this lighting addition.
+
+This implements **native vertex primary RGB**, not complete material/TEV parity:
+fragment-lit materials are excluded; combiner multipliers, secondary color and
+material-specific fragment effects are not reconstructed by this producer.
+Barycentric weights have 8-bit precision. The separate ambient guide used by
+other effects is unchanged. Do not describe this as complete native material
+lighting or bit-identical final terrain color.
+
+### Verification
+
+- Windows Clang-cl incremental runtime build; no title whole-AOT rebuild.
+- 98 Grass/toon tests pass, including original-triangle references after
+  subdivision, packing normalization and typed shader-hook preservation.
+- Broader foundation suite: 285/286 pass. The settings persistence test
+  `GraphicsSettingsRuntimeTest.UsesInjectedPersistencePort` fails because initial
+  normalization adds one Store call; this unrelated settings behavior was not
+  changed to make the lighting tests pass.
+- Kokiri `hudtest`: 180 presentations, native lighting available for 2/2 selected
+  surfaces. Mounted Hyrule Field: 180 presentations, available for 3/3 surfaces.
+  Both exit normally; actual framebuffer captures were inspected.
+- Vulkan/NRI validation enabled in both probes: zero errors. Vulkan warnings
+  remain and are not being reported as a clean warning-free validation run.
+- Evidence (local, not distributed):
+  `C:/Users/xander/triaevum-verify-20260911/grass-native-light-validation` and
+  `C:/Users/xander/triaevum-verify-20260911/grass-native-light-field`.
+  These bounded capture runs are functional checks, not FPS benchmarks.
+- Linux/Android execution, day/night comparison and density-sweep visual
+  acceptance remain to be verified. Neither whole-game parity nor a speedup is
+  established by the two fixtures.

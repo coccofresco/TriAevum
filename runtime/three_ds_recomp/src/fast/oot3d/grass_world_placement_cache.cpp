@@ -171,6 +171,7 @@ GrassWorldPlacement BuildPlacement(const GrassWorldPlacementRequest& request, ui
         destination.PackedWidthAxis = PackGrassDirection(source.WidthAxis);
         destination.PackedWorldNormal = PackGrassNormal(normal);
         destination.StableId = source.StableId;
+        destination.SurfaceReference = source.SurfaceReference;
         destination.SurfaceColor = request.ColorSource.SamplePacked(
             source.Uv[0], source.Uv[1], request.ColorWrapS, request.ColorWrapT);
         result.CullingAnchors[index] = {

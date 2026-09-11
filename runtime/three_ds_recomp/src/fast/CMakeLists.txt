@@ -117,6 +117,7 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
         renderer3ds/nri_pica_upload_arena.cpp
         renderer3ds/pica_nri_shader_contract.cpp
         renderer3ds/pica_nri_upload.cpp
+        renderer3ds/pica_surface_lighting_pass.cpp
     )
     add_library(renderer_3ds_nri_pica_execution STATIC
         ${Source_Files__Renderer3dsNriPica})

@@ -45,6 +45,7 @@ void GrassSceneBridge::Publish(GrassSceneMesh mesh) {
         // immutable for renderer-owned static grass. The exact PICA clip
         // transform is camera-dependent, so refresh it alongside liveness.
         found->second.FrameId = mesh.FrameId;
+        found->second.SubmissionId = mesh.SubmissionId;
         found->second.RenderTargetNamespace =
             mesh.RenderTargetNamespace;
         found->second.FramebufferColorPhysicalAddress =

@@ -7,6 +7,7 @@
 #include "fast/oot3d/grass_placement_cache.h"
 #include "fast/oot3d/pica_attachment_contract.h"
 #include "fast/oot3d/toon_surface_response.h"
+#include "fast/renderer3ds/pica_resolved_draw_stream.h"
 #include "fast/renderer3ds/pica_scene_payloads.h"
 #include "fast/renderer/shaderc_compiler.h"
 
@@ -38,6 +39,7 @@ class InteractiveGrassPass final {
                  const ::Fast::Renderer3ds::PicaPerspectiveCameraState& view,
                  const InteractiveGrassSettings& settings,
                  const ToonSurfaceParameters& toon,
+                 ::Fast::Renderer3ds::PicaResolvedDrawStreamView scene,
                  uint64_t frameId, uint64_t renderTargetNamespace,
                  uint32_t framebufferColorPhysicalAddress,
                  uint32_t frameSlot,

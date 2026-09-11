@@ -14,6 +14,7 @@
 namespace Fast::Oot3d {
 
 struct GrassSceneMesh {
+    uint64_t SubmissionId = 0;
     uint64_t GeometryId = 0;
     uint64_t AnchorVersion = 0;
     uint64_t ContentVersion = 0;

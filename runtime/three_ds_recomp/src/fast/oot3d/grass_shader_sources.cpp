@@ -16,6 +16,8 @@ layout(location=1) in vec4 in_bend_half_width;
 layout(location=2) in vec2 in_width_axis;
 layout(location=3) in vec4 in_world_normal;
 layout(location=4) in uint in_surface_color;
+layout(location=5) in uvec2 in_surface_reference;
+layout(set=0,binding=1) uniform sampler2D native_surface_lighting;
 struct GrassEnvironmentRecord {
     vec4 color_and_mode;
     vec2 lut[128];
@@ -38,6 +40,7 @@ struct GrassEnvironmentRecord {
     vec4 distance_lod;
     vec4 tuft_style;
     ToonSurfaceParameters toon;
+    uvec4 native_lighting;
 };
 layout(std430, set=0, binding=0) readonly buffer GrassEnvironmentState {
     GrassEnvironmentRecord records[];
@@ -274,6 +277,18 @@ void main() {
     evaluate_shading(
         grass.flags.w, world_normal,
         lighting, ambient_response);
+    uvec4 source_light = environment_state.records[grass.flags.w].native_lighting;
+    if (source_light.y != 0u) {
+        uvec3 vertices = uvec3(in_surface_reference.x & 65535u,
+            in_surface_reference.x >> 16u, in_surface_reference.y & 65535u) + source_light.x;
+        vec2 weights = vec2((in_surface_reference.y >> 16u) & 255u, in_surface_reference.y >> 24u) / 255.0;
+        uint width = uint(textureSize(native_surface_lighting, 0).x);
+        vec4 a = texelFetch(native_surface_lighting, ivec2(vertices.x % width, vertices.x / width), 0);
+        vec4 b = texelFetch(native_surface_lighting, ivec2(vertices.y % width, vertices.y / width), 0);
+        vec4 c = texelFetch(native_surface_lighting, ivec2(vertices.z % width, vertices.z / width), 0);
+        if (min(a.a, min(b.a, c.a)) > 0.5)
+            lighting = a.rgb * (1.0 - weights.x - weights.y) + b.rgb * weights.x + c.rgb * weights.y;
+    }
     blade_color = vec4(
         evaluate_blade_color(
             grass.flags.w, height_factor, lighting),
@@ -341,6 +356,7 @@ struct GrassEnvironmentRecord {
     vec4 distance_lod;
     vec4 tuft_style;
     ToonSurfaceParameters toon;
+    uvec4 native_lighting;
 };
 layout(std430, set=0, binding=0) readonly buffer GrassEnvironmentState {
     GrassEnvironmentRecord records[];
@@ -643,6 +659,8 @@ void main() {
     output_instances.words[destination + 13u] =
         floatBitsToUint(world_normal.w);
     output_instances.words[destination + 14u] = static_anchors.words[source + 9u];
+    output_instances.words[destination + 15u] = static_anchors.words[source + 10u];
+    output_instances.words[destination + 16u] = static_anchors.words[source + 11u];
 }
 )glsl";
 }

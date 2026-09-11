@@ -19,12 +19,14 @@ struct GrassWorldAnchor {
     uint32_t PackedWorldNormal = 0x7fff0000U;
     uint32_t StableId = 0U;
     uint32_t SurfaceColor = 0U;
+    std::array<uint32_t, 2> SurfaceReference{};
 };
-// Shared CPU/storage-buffer format: ten scalar words, no std430 vec3 padding.
-static_assert(sizeof(GrassWorldAnchor) == 40U);
+// Shared CPU/storage-buffer format: twelve scalar words, no std430 vec3 padding.
+static_assert(sizeof(GrassWorldAnchor) == 48U);
 static_assert(offsetof(GrassWorldAnchor, PackedWidthAxis) == 24U);
 static_assert(offsetof(GrassWorldAnchor, StableId) == 32U);
 static_assert(offsetof(GrassWorldAnchor, SurfaceColor) == 36U);
+static_assert(offsetof(GrassWorldAnchor, SurfaceReference) == 40U);
 
 // Compact immutable stream used only by camera-dependent visibility. It
 // retains the exact anchor order while keeping the full GPU payload cold.

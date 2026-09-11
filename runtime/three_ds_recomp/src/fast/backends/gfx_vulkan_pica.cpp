@@ -5282,6 +5282,7 @@ bool GfxRenderingAPIVulkan::TryRenderInteractiveGrass(
         mCommandBuffers[mCurrentFrame], target.Width,
         target.Height, *perspective, settings.Grass,
         Oot3d::PackToonSurfaceParameters(settings.Effects.Toon, settings.Effects.ToonStyle, false),
+        mPicaSceneFrame.ResolvedDrawStream(),
         mFrameCounter, target.Key.RenderTargetNamespace,
         target.Key.ColorPhysicalAddress, mCurrentFrame,
         mInteractiveGrassProviderPlan,
@@ -9355,6 +9356,7 @@ bool PublishNativePicaGrassSurface(
     const auto& grassGeometry =
         *grassGeometryResolution.Geometry;
     Oot3d::GrassSceneMesh mesh;
+    mesh.SubmissionId = draw.SubmissionId;
     mesh.GeometryId = grassGeometry.GeometryId;
     mesh.AnchorVersion = grassGeometry.AnchorVersion;
     mesh.ContentVersion = grassGeometry.ContentVersion;

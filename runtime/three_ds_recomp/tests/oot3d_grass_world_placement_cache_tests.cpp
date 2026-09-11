@@ -4,6 +4,8 @@
 #include "fast/oot3d/grass_indexed_topology.h"
 #include "fast/oot3d/grass_selection_cache.h"
 #include "fast/oot3d/grass_selection_budget.h"
+#include "fast/oot3d/grass_surface_reference.h"
+#include "fast/renderer3ds/pica_surface_lighting_shader.h"
 
 #include <gtest/gtest.h>
 
@@ -30,6 +32,70 @@ Fast::Oot3d::GrassWorldPlacementRequest BaseRequest(std::span<const Fast::Oot3d:
 }
 
 } // namespace
+
+TEST(Oot3dGrassSurfaceReference, PreservesNativeIndicesAndNormalizedWeights) {
+    using namespace Fast::Oot3d;
+    const auto reference = PackGrassSurfaceReference({0, 65535, 12345}, 0.25F, 0.5F);
+    EXPECT_EQ(reference[0] & 65535U, 0U);
+    EXPECT_EQ(reference[0] >> 16U, 65535U);
+    EXPECT_EQ(reference[1] & 65535U, 12345U);
+    EXPECT_NEAR(float((reference[1] >> 16U) & 255U) / 255.0F, 0.25F, 1.0F / 255);
+    EXPECT_NEAR(float(reference[1] >> 24U) / 255.0F, 0.5F, 1.0F / 255);
+    const auto corner = PackGrassSurfaceReference({1, 2, 3}, 1, 1);
+    EXPECT_EQ((corner[1] >> 16U) & 255U, 255U);
+    EXPECT_EQ(corner[1] >> 24U, 0U);
+}
+
+TEST(Oot3dGrassSurfaceLighting, RejectsMissingNativeShaderHooks) {
+    EXPECT_TRUE(Fast::Renderer3ds::BuildPicaSurfaceLightingVertexShader(
+        "void main() {}", {}).empty());
+}
+
+TEST(Oot3dGrassSurfaceLighting, PreservesNativeProgramBeforeAtlasProjection) {
+    using namespace Fast::Renderer3ds;
+    const std::string source = "// native registers\nvoid main() { native_lighting();\n}";
+    PicaVertexShaderHookLayout hooks;
+    hooks.SchemaVersion = kPicaShaderHookSchemaVersion;
+    hooks.SourceSize = source.size();
+    hooks.Offsets.fill(0);
+    hooks.Offsets[size_t(PicaVertexShaderHook::RegisterStateEnd)] = source.find("void main");
+    hooks.Offsets[size_t(PicaVertexShaderHook::MainBodyBegin)] = source.find("native_lighting");
+    hooks.Offsets[size_t(PicaVertexShaderHook::MainBodyEnd)] = source.rfind('}');
+    const auto patched = BuildPicaSurfaceLightingVertexShader(source, hooks);
+    ASSERT_FALSE(patched.empty());
+    EXPECT_LT(patched.find("native_lighting();"), patched.find("uint atlas_index"));
+    EXPECT_LT(patched.find("layout(push_constant)"), patched.find("void main()"));
+    EXPECT_EQ(source, "// native registers\nvoid main() { native_lighting();\n}");
+}
+
+TEST(Oot3dGrassSurfaceReference, SubdivisionRetainsOriginalTriangleCoordinates) {
+    using namespace Fast::Oot3d;
+    std::array<GrassSourceVertex, 3> vertices{};
+    vertices[1].Position = {1000, 0, 0};
+    vertices[2].Position = {0, 0, 1000};
+    const std::array<uint32_t, 3> indices{0, 1, 2};
+    GrassSourceSurface surface;
+    surface.Vertices = vertices;
+    surface.Indices = indices;
+    surface.PlacementView.Enabled = true;
+    surface.PlacementView.DrawDistance = 10000;
+    surface.PlacementView.FullDensityDistance = 10000;
+    surface.PlacementView.FarDensity = 1;
+    GrassScalarMask mask;
+    mask.Width = mask.Height = 1;
+    mask.Samples = {255};
+    GrassGenerationSettings generation;
+    generation.InstancesPerSquareMeter = 8;
+    const auto anchors = GrassSurfaceExtractor::Extract(surface, {}, generation, mask, 100);
+    ASSERT_FALSE(anchors.empty());
+    for (const auto& anchor : anchors) {
+        const auto ref = anchor.SurfaceReference;
+        EXPECT_EQ(ref[0], 1U << 16U);
+        EXPECT_EQ(ref[1] & 65535U, 2U);
+        EXPECT_NEAR(float((ref[1] >> 16U) & 255U) * 1000.0F / 255, anchor.LocalPosition[0], 1000.0F / 255);
+        EXPECT_NEAR(float(ref[1] >> 24U) * 1000.0F / 255, anchor.LocalPosition[2], 1000.0F / 255);
+    }
+}
 
 TEST(Oot3dGrassIndexedTopology, PreservesEveryExpandedTriangleAndWinding) {
     using namespace Fast::Oot3d;
@@ -141,7 +207,7 @@ TEST(Oot3dGrassSurfaceColor, WorldAnchorsRetainGridColorsWithoutChangingPlacemen
 
 TEST(Oot3dGrassAnchorCodec, DirectionsRoundTripAcrossBothHemispheres) {
     using namespace Fast::Oot3d;
-    EXPECT_EQ(sizeof(GrassWorldAnchor), 40U);
+    EXPECT_EQ(sizeof(GrassWorldAnchor), 48U);
     for (int x = -10; x <= 10; ++x) for (int y = -10; y <= 10; ++y) for (int z = -10; z <= 10; ++z) {
         const float length = std::sqrt(static_cast<float>(x*x+y*y+z*z));
         if (length == 0) continue;
