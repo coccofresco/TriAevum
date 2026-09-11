@@ -2,6 +2,7 @@
 
 #include "fast/oot3d/grass_surface_extractor.h"
 #include "fast/oot3d/grass_anchor_codec.h"
+#include "fast/oot3d/grass_midrange_clusters.h"
 
 #include <array>
 #include <cstddef>
@@ -66,6 +67,7 @@ struct GrassWorldPlacement {
     // anchors or changing their deterministic identity.
     std::vector<uint32_t> VisibilityClusterOrder;
     std::vector<GrassClusterVisibilityNode> VisibilityNodes;
+    GrassMidrangeClusters Midrange;
 };
 
 struct GrassWorldPlacementRequest {
@@ -81,6 +83,9 @@ struct GrassWorldPlacementRequest {
     bool TransformBakedIntoVertices = true;
     float NormalOffset = 0.0F;
     float HeightScale = 1.0F;
+    // Disabled until the cluster draw consumer is selected. Independent of
+    // the existing coarse-culling cluster size and never camera-dependent.
+    float MidrangeCellExtent = 0.0F;
 };
 
 struct GrassWorldPlacementCacheStats {

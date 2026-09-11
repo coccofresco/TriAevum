@@ -1,10 +1,51 @@
 # Repeatable Midrange Grass Clusters
 
-Status: architecture evaluation and measured existing-LOD experiments,
-2026-09-11. The new 3D cluster representation is not implemented yet.
+Status: CPU grouping and shared index topology implemented, 2026-09-11.
+The new 3D cluster draw/LOD consumer is not connected yet.
 The current 1024 default is unchanged. See
 [terrain continuity](TRIAEVUM_GRASS_TERRAIN_CONTINUITY_STRATEGY.md) for the
 fixed-time wide-intro measurement protocol and historical references.
+
+## First Implementation: Maximum 50 Accepted Roots
+
+`grass_midrange_clusters.h` groups existing accepted roots into explicit
+world-space cells, with a hard limit of 50 members per group. Cells include
+height and exact triangle support, keeping floors and native triangle seams
+separate. Construction is scoped to one placement/mask owner. Root order is
+not modified: the result is an index table plus group bounds. Sorting by
+cell/support/stable ID makes membership independent of input traversal order
+when IDs are unique. No camera input, new positions, mask filling or duplicate
+root/color payload is introduced. Sparse groups stay sparse; the footprint
+does not grow to reach 50. Invalid extent/coordinates fail explicitly.
+
+`GrassWorldPlacementRequest::MidrangeCellExtent` opts into this producer after
+the existing world transformation and mask extraction. Zero keeps it disabled
+without changing the existing cache content hash. Enabling/changing extent
+invalidates the affected placement. Exact triangle indices are separated from
+packed barycentric weights, so different points on one triangle can group
+without mixing unrelated supports. `GrassWorldPlacement::Midrange` retains
+the immutable result; no per-frame build is added.
+
+`BuildGrassMidrangeTopology` supplies one shared 50-child indexed topology
+for either one or two segments. Child indices never cross-connect; partial
+groups draw a prefix. The initial representation preserves every admitted
+root, with 100/200 triangles for a full group, rather than inventing unmasked
+positions from a generic template. This is repeated topology with different
+root references, not yet a compressed set of recurring geometric patterns.
+The radius covers roots only: a draw consumer must expand it for blade shape,
+wind and actor bending, as the current Grass path already does.
+
+The dependency-free `oot3d_grass_midrange_clusters_tests` target covers capacity,
+one-to-one membership, stable order, bounds, supports, stacked/negative cells,
+empty/sparse masks, invalid input and topology prefixes. GCC compiles/runs it
+separately from the game; the changed placement consumer also passes a C++20
+syntax check. These are CPU/contract checks, NOT an in-game validation.
+
+Remaining: upload/bind the member/group tables in the Grass pass, select group
+LOD alongside individual roots without double coverage, resolve each member's
+native lighting/color and interactions, then measure the new path. No F1
+toggle or product preset advertises this incomplete path; previous tuft tests
+must not be presented as measurements of these 50-root groups.
 
 ## What Already Exists
 

@@ -33,6 +33,8 @@ uint64_t TransformVersion(const GrassWorldPlacementRequest& request) noexcept {
     HashValue(hash, request.TransformBakedIntoVertices);
     HashValue(hash, std::bit_cast<uint32_t>(request.NormalOffset));
     HashValue(hash, std::bit_cast<uint32_t>(request.HeightScale));
+    if (request.MidrangeCellExtent != 0.0F)
+        HashValue(hash, std::bit_cast<uint32_t>(request.MidrangeCellExtent));
     HashValue(hash, request.Anchors.size());
     HashValue(hash, request.Clusters.size());
     return hash == 0U ? 1U : hash;
@@ -199,6 +201,16 @@ GrassWorldPlacement BuildPlacement(const GrassWorldPlacementRequest& request, ui
         });
     }
     BuildVisibilityIndex(result);
+    if (request.MidrangeCellExtent != 0.0F) {
+        result.Midrange = BuildGrassMidrangeClusters(result.Anchors.size(), request.MidrangeCellExtent,
+            [&](uint32_t index) {
+                const auto& anchor = result.Anchors[index];
+                const uint64_t triangle = uint64_t(anchor.SurfaceReference[0]) |
+                    (uint64_t(anchor.SurfaceReference[1] & 0xffffU) << 32U);
+                return GrassMidrangeRoot{{anchor.BaseHeight[0], anchor.BaseHeight[1], anchor.BaseHeight[2]},
+                                         anchor.StableId, triangle};
+            });
+    }
     return result;
 }
 
