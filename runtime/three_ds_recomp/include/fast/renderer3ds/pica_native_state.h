@@ -1,4 +1,5 @@
 #pragma once
+#include "fast/renderer3ds/pica_surface_color_response.h"
 
 #include <array>
 #include <cmath>
@@ -305,6 +306,7 @@ struct PicaFragmentFeatureView {
     bool FogFlip = false;
     uint8_t FogMode = 0U;
     PicaFragmentLightingLayout FragmentLighting;
+    PicaSurfaceColorResponse SurfaceColorResponse;
 
     [[nodiscard]] bool Valid() const noexcept {
         const bool knownSchema =

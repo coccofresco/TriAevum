@@ -38,6 +38,7 @@ enum class Oot3dPicaFragmentUnsupportedFeature : uint32_t {
 };
 
 struct Oot3dPicaFragmentFeatureSet {
+    Fast::Renderer3ds::PicaSurfaceColorResponse SurfaceColorResponse;
     bool FragmentLightingEnabled = false;
     bool ProceduralTextureEnabled = false;
     bool ProceduralTextureReferenced = false;

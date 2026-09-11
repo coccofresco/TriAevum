@@ -6,6 +6,7 @@
 #include "fast/oot3d/grass_selection_budget.h"
 #include "fast/oot3d/grass_surface_reference.h"
 #include "fast/renderer3ds/pica_surface_lighting_shader.h"
+#include "fast/renderer3ds/pica_surface_color_response.h"
 
 #include <gtest/gtest.h>
 
@@ -44,6 +45,30 @@ TEST(Oot3dGrassSurfaceReference, PreservesNativeIndicesAndNormalizedWeights) {
     const auto corner = PackGrassSurfaceReference({1, 2, 3}, 1, 1);
     EXPECT_EQ((corner[1] >> 16U) & 255U, 255U);
     EXPECT_EQ(corner[1] >> 24U, 0U);
+}
+
+TEST(Oot3dGrassSurfaceLighting, DecodesMaterialScalesWithoutSceneExceptions) {
+    using namespace Fast::Renderer3ds;
+    std::array<uint32_t, 0x300> registers{};
+    registers[0xc0] = 0x30;
+    registers[0xc2] = 1;
+    for (auto base : {0xc8, 0xd0, 0xd8, 0xf0, 0xf8}) registers[base] = 15;
+    for (uint32_t scale = 0; scale < 3; ++scale) {
+        registers[0xc4] = scale;
+        const auto decoded = DecodePicaSurfaceColorResponse(registers);
+        ASSERT_TRUE(decoded.Available);
+        EXPECT_EQ(decoded.PackedScales, scale);
+    }
+    registers[0xc0] = 0x03;
+    EXPECT_TRUE(DecodePicaSurfaceColorResponse(registers).Available);
+    registers[0xcc] = 1;
+    EXPECT_EQ(DecodePicaSurfaceColorResponse(registers).PackedScales, 2U | (1U << 2U));
+    registers[0xca] = 1;
+    EXPECT_FALSE(DecodePicaSurfaceColorResponse(registers).Available);
+    registers[0xca] = 0;
+    registers[0xc1] = 1;
+    EXPECT_FALSE(DecodePicaSurfaceColorResponse(registers).Available);
+    EXPECT_FALSE(DecodePicaSurfaceColorResponse({}).Available);
 }
 
 TEST(Oot3dGrassSurfaceLighting, RejectsMissingNativeShaderHooks) {
@@ -203,6 +228,29 @@ TEST(Oot3dGrassSurfaceColor, WorldAnchorsRetainGridColorsWithoutChangingPlacemen
         EXPECT_EQ(after.Anchors[i].BaseHeight, before.Anchors[i].BaseHeight);
         EXPECT_EQ(after.Anchors[i].StableId, before.Anchors[i].StableId);
     }
+}
+
+TEST(Oot3dGrassSurfaceColor, RebuildsColorsWhenPresentGridChanges) {
+    using namespace Fast::Oot3d;
+    std::array<GrassAnchor, 1> anchors{};
+    anchors[0].Uv = {0.125F, 0.125F};
+    auto request = BaseRequest(anchors, {});
+    auto red = std::make_shared<GrassTextureColorGrid>();
+    red->Rgb[0] = {255, 0, 0};
+    auto blue = std::make_shared<GrassTextureColorGrid>();
+    blue->Rgb[0] = {0, 0, 255};
+    request.ColorSource = {red};
+    GrassWorldPlacementCache cache;
+    const auto first = cache.Resolve(request);
+    request.ColorSource = {blue};
+    const auto second = cache.Resolve(request);
+    ASSERT_NE(first, second);
+    EXPECT_EQ(first->Anchors[0].SurfaceColor, 0xff0000ffU);
+    EXPECT_EQ(second->Anchors[0].SurfaceColor, 0xffff0000U);
+    EXPECT_EQ(first->Anchors[0].BaseHeight, second->Anchors[0].BaseHeight);
+    auto sameBlue = std::make_shared<GrassTextureColorGrid>(*blue);
+    request.ColorSource = {sameBlue};
+    EXPECT_EQ(cache.Resolve(request), second);
 }
 
 TEST(Oot3dGrassAnchorCodec, DirectionsRoundTripAcrossBothHemispheres) {

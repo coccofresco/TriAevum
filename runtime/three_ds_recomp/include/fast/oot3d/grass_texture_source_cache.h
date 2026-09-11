@@ -34,6 +34,8 @@ struct GrassTextureColorGrid {
 struct GrassTextureColorSource {
     std::shared_ptr<const GrassTextureColorGrid> Grid;
 
+    [[nodiscard]] uint64_t ContentVersion() const noexcept;
+
     // Inverse-distance RGB from the two nearest grid points. High byte is validity.
     [[nodiscard]] uint32_t SamplePacked(float u, float v,
         GrassTextureWrap wrapS, GrassTextureWrap wrapT) const noexcept;

@@ -15,6 +15,7 @@ struct PicaSurfaceLightingRequest {
     uint32_t AtlasBase = 0;
     bool Available = false;
     uint64_t RenderTargetNamespace = 0;
+    PicaSurfaceColorResponse ColorResponse;
 };
 
 // Private producer within an authorized geometry-provider invocation. Replays

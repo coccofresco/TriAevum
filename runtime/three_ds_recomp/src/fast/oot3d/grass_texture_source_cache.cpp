@@ -3,6 +3,7 @@
 #include "fast/oot3d/grass_surface_extractor.h"
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 
 namespace Fast::Oot3d {
@@ -24,6 +25,17 @@ uint64_t AliasKey(uint64_t hash, uint16_t width, uint16_t height) {
 }
 
 } // namespace
+
+uint64_t GrassTextureColorSource::ContentVersion() const noexcept {
+    if (!Grid) return 0;
+    uint64_t hash = 14695981039346656037ULL;
+    for (const auto& rgb : Grid->Rgb) for (float value : rgb) {
+        const auto bits = std::bit_cast<uint32_t>(value);
+        for (unsigned shift = 0; shift < 32; shift += 8)
+            hash = (hash ^ ((bits >> shift) & 255U)) * 1099511628211ULL;
+    }
+    return hash == 0 ? 1 : hash;
+}
 
 uint32_t GrassTextureColorSource::SamplePacked(float u, float v,
     GrassTextureWrap wrapS, GrassTextureWrap wrapT) const noexcept {

@@ -45,7 +45,7 @@ uint64_t GrassPlacementSourceVersion(const GrassAsyncPlacementRequest& request) 
     HashValue(hash, std::bit_cast<uint32_t>(request.HeightScale));
     HashValue(hash, request.MaterialWrapS);
     HashValue(hash, request.MaterialWrapT);
-    HashValue(hash, request.ColorSource.Grid != nullptr);
+    HashValue(hash, request.ColorSource.ContentVersion());
     return hash == 0U ? 1U : hash;
 }
 

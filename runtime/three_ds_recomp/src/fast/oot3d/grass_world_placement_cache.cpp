@@ -24,7 +24,7 @@ template <typename Value> void HashValue(uint64_t& hash, const Value& value) noe
 
 uint64_t TransformVersion(const GrassWorldPlacementRequest& request) noexcept {
     uint64_t hash = kFnvOffset;
-    HashValue(hash, request.ColorSource.Grid != nullptr);
+    HashValue(hash, request.ColorSource.ContentVersion());
     HashValue(hash, request.ColorWrapS);
     HashValue(hash, request.ColorWrapT);
     for (const float value : request.ModelToWorld) {

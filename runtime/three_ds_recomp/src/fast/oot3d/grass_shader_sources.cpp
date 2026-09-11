@@ -101,6 +101,16 @@ void evaluate_shading(
             ? clamp(ambient.z / total.z, 0.0, 1.0) : 1.0);
 }
 
+vec3 grass_native_material_rgb(vec3 base_color, vec3 lighting, uvec4 response) {
+    if (response.w == 0u) return floor(clamp(base_color * lighting, 0.0, 1.0) * 255.0 + 0.5) / 255.0;
+    vec3 color = base_color * (floor(lighting * 255.0 + 0.5) / 255.0);
+    for (uint stage = 0u; stage < 6u; ++stage) {
+        color = floor(clamp(color, 0.0, 1.0) * 255.0 + 0.5) / 255.0;
+        color = clamp(color * float(1u << ((response.z >> (stage * 2u)) & 3u)), 0.0, 1.0);
+    }
+    return color;
+}
+
 vec3 evaluate_blade_color(
     uint environment_index, float height_factor,
     vec3 lighting) {
@@ -118,18 +128,9 @@ vec3 evaluate_blade_color(
             environment_index].texture_brightness_flags;
     vec3 surface_color = (in_surface_color >> 24u) != 0u
         ? unpackUnorm4x8(in_surface_color).rgb : texture.rgb;
-    vec3 root_color =
-        mix(root, surface_color * flags.x, texture.w) *
-        lighting;
-    vec3 tip_color =
-        mix(tip, surface_color * flags.y, texture.w) *
-        lighting;
-    root_color =
-        floor(clamp(root_color, 0.0, 1.0) * 255.0 + 0.5) /
-        255.0;
-    tip_color =
-        floor(clamp(tip_color, 0.0, 1.0) * 255.0 + 0.5) /
-        255.0;
+    uvec4 response = environment_state.records[environment_index].native_lighting;
+    vec3 root_color = grass_native_material_rgb(mix(root, surface_color * flags.x, texture.w), lighting, response);
+    vec3 tip_color = grass_native_material_rgb(mix(tip, surface_color * flags.y, texture.w), lighting, response);
     return mix(root_color, tip_color, height_factor);
 }
 

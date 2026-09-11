@@ -922,7 +922,7 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                 placementRequest.Vertices = mesh.Vertices;
                 placementRequest.Indices = mesh.Indices;
                 placementRequest.Mask = mask;
-                placementRequest.ColorSource = GrassTextureSourceCache::Instance().AcquireColorSource(mesh.TextureHash);
+                placementRequest.ColorSource = GrassTextureSourceCache::Instance().AcquireColorSource(mesh.ObservedTextureHash);
                 placementRequest.Rule = rule;
                 placementRequest.Generation =
                     settings.Generation;
@@ -971,7 +971,8 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
         for (size_t i = 0; i < preparedPlacements.size(); ++i) {
             const auto& source = mImpl->LightingRequests[i];
             if (source.Available && settings.Appearance.ReceiveLighting) {
-                preparedPlacements[i].Environment.NativeLighting = {source.AtlasBase, 1, 0, 0};
+                preparedPlacements[i].Environment.NativeLighting = {source.AtlasBase, 1,
+                    source.ColorResponse.PackedScales, source.ColorResponse.Available ? 1U : 0U};
                 preparedPlacements[i].Environment.Toon.Flags[1] = 1;
                 ++nativeLit;
             }

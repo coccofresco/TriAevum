@@ -401,3 +401,69 @@ lighting or bit-identical final terrain color.
 - Linux/Android execution, day/night comparison and density-sweep visual
   acceptance remain to be verified. Neither whole-game parity nor a speedup is
   established by the two fixtures.
+
+## Color And TEV Correction After Visual Feedback (2026-09-11)
+
+The user correctly reported that increasing texture blend did not establish
+terrain continuity. The previous vertex-lighting probe was not evidence of
+complete material response. Investigation separated three issues:
+
+1. The live appearance profile had texture root/tip gains 2.87/4.0. Blend=1
+   therefore selected an amplified texture, not a neutral texture response.
+   These controls are independent and have not silently been reinterpreted.
+2. At gains 1/1 the framebuffer still showed an underlit result. Exporting the
+   actual selected canonical shader proved a missing operation: texture0 times
+   rounded primary RGB, byte-round/clamp, then TEV RGB scale 2, followed by five
+   pass-through stages. This is material state, not an artistic correction.
+3. Placement color caches hashed only the presence of a color grid, not its
+   values. Two nonempty grids could reuse stale colors. They now fingerprint
+   the 16 RGB reference points; equal content still reuses placement. The color
+   consumer also uses the observed texture identity used by the mask/selector,
+   avoiding the decoded/observed alias mismatch.
+
+### Implementation
+
+`renderer3ds/pica_surface_color_response.h` decodes an explicit capability from
+the six native TEV register groups: initial texture0/primary RGB modulation in
+either input order, then RGB pass-through stages, each with native 1x/2x/4x
+scale. It rejects unsupported sources, modifiers, operations and scale codes.
+The canonical frontend passes this typed capability through the Vulkan bridge
+and resolved material state to the surface-lighting consumer. No shader-string
+recognition, texture hashes or room-specific gains drive rendering.
+
+`grass_shader_sources.cpp` now executes primary rounding, per-stage byte
+rounding/clamping and decoded scales in native order, before the shared toon
+response and native fog. Simply removing the previous clamp would have been
+incorrect: the missing scale, not rounding itself, was the material discrepancy.
+More general TEV expressions, fragment lighting and secondary-color combinations
+remain outside this capability; unavailable is not reported as full parity.
+
+The explicit opt-in `TRIAEVUM_SURFACE_LIGHTING_DUMP=<directory>` exports only
+selected surface canonical shaders and decoded response metadata once per
+fragment program per run. These are local game-derived diagnostics, not public
+package contents. Normal runs perform no export.
+
+### Reproduction
+
+Local evidence lives under
+`C:/Users/xander/triaevum-verify-20260911/grass-color-audit/`:
+
+- `boosted-run`: blend 1, existing gains 2.87/4, before the TEV correction.
+- `neutral-run`: same settings and checkpoint, gains 1/1, before correction.
+- `materials`: actual canonical shader exposing the missing scale.
+- `tev-fixed`: same neutral settings, corrected TEV response; metadata reports
+  `available=1 packed_scales=1` (stage0 2x, remaining stages 1x).
+- `field-fixed`: independent mounted Hyrule Field fixture.
+
+The user's config and saved Grass preset were not overwritten. `neutral.json`
+is a private comparison configuration: blend 1 and gains 1/1. A request to
+test terrain inheritance should use these neutral gains, not mistake the old
+amplified preset for a neutral reference. Root/tip styling can then be restored
+deliberately. Identical root/tip gains naturally remove the artistic gradient
+along a blade; this is distinct from spatial terrain lighting.
+
+Windows runtime builds and 100 Grass/toon tests pass, including 1x/2x/4x decode,
+swapped modulation operands, invalid expressions, and stale-grid regression.
+Kokiri corrected framebuffer probe exits normally with Vulkan/NRI validation
+enabled, zero errors and 11 Vulkan warnings. No Linux/Android execution or
+performance improvement is claimed by this correction.

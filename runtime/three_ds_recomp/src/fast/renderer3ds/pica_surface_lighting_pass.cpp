@@ -5,7 +5,11 @@
 #include <algorithm>
 #include <array>
 #include <cstdio>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <map>
+#include <set>
 #include <stdexcept>
 
 namespace Fast::Renderer3ds {
@@ -44,6 +48,7 @@ struct PicaSurfaceLightingPass::Impl {
     VkSampler Sampler{};
     std::array<Slot, kSlots> Slots;
     std::map<std::pair<uint64_t, uint64_t>, VkPipeline> Pipelines;
+    std::set<uint64_t> ExportedMaterials;
 
     VkShaderModule Compile(std::string_view source, Renderer::SpirvStage stage, const char* name) {
         auto words = Shaders->Resolve(source, stage, name);
@@ -198,6 +203,7 @@ bool PicaSurfaceLightingPass::Prepare(VkCommandBuffer command, uint32_t frameSlo
     uint32_t base = 0;
     for (auto& request : requests) {
         request.Available = false;
+        request.ColorResponse = {};
         if (!request.VertexCount || request.VertexCount > kWidth * kHeight - base || slot.Used == kSets) continue;
         auto found = std::find_if(scene.Draws.begin(), scene.Draws.end(), [&](const auto& d) {
             return d.SubmissionId == request.SubmissionId &&
@@ -206,6 +212,20 @@ bool PicaSurfaceLightingPass::Prepare(VkCommandBuffer command, uint32_t frameSlo
         if (found == scene.Draws.end() || found->CompositionDomain != PicaCompositionDomain::Scene ||
             found->Material.FragmentFeatures.FragmentLightingEnabled) continue;
         const auto& draw = *found;
+        if (const char* directory = std::getenv("TRIAEVUM_SURFACE_LIGHTING_DUMP");
+            directory && *directory && draw.FragmentShader &&
+            p.ExportedMaterials.insert(draw.FragmentShader->Key).second) {
+            std::error_code error;
+            std::filesystem::create_directories(directory, error);
+            if (!error) {
+                const auto stem = std::filesystem::path(directory) / std::to_string(draw.FragmentShader->Key);
+                std::ofstream(stem.string() + ".frag") << draw.FragmentShader->Source;
+                if (draw.VertexShader) std::ofstream(stem.string() + ".vert") << draw.VertexShader->Source;
+                const auto response = draw.Material.FragmentFeatures.SurfaceColorResponse;
+                std::ofstream(stem.string() + ".response.txt") << "available=" << response.Available
+                    << " packed_scales=" << response.PackedScales << '\n';
+            }
+        }
         if (!draw.VertexLayout) continue;
         bool valid = draw.UniformBuffer.NativeHandle && draw.GeometryBuffer.NativeHandle &&
             draw.VertexUniformSize && draw.VertexUniformOffset <= draw.UniformBuffer.Size &&
@@ -234,6 +254,7 @@ bool PicaSurfaceLightingPass::Prepare(VkCommandBuffer command, uint32_t frameSlo
         vkCmdPushConstants(command, p.Layout, VK_SHADER_STAGE_VERTEX_BIT, 0, 16, push.data());
         vkCmdDraw(command, request.VertexCount, 1, 0, 0);
         request.AtlasBase = base; request.Available = true; base += request.VertexCount;
+        request.ColorResponse = draw.Material.FragmentFeatures.SurfaceColorResponse;
     }
     vkCmdEndRenderPass(command);
     barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT; barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
