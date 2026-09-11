@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
+#include <span>
 #include <tuple>
 #include <vector>
 
@@ -31,6 +32,7 @@ struct GrassMidrangeClusters {
     // Indices into the existing immutable roots; no duplicate root payload.
     std::vector<uint32_t> Members;
     std::vector<GrassMidrangeCluster> Groups;
+    std::vector<uint32_t> GroupForRoot;
 };
 
 // Invoke separately per placement/mask owner, after mask acceptance. Cell
@@ -66,6 +68,7 @@ GrassMidrangeClusters BuildGrassMidrangeClusters(
     });
     GrassMidrangeClusters result;
     result.Members.reserve(count);
+    result.GroupForRoot.resize(count);
     for (size_t first = 0; first < entries.size();) {
         size_t end = first + 1;
         while (end < entries.size() && end - first < kGrassMidrangeClusterCapacity &&
@@ -80,6 +83,7 @@ GrassMidrangeClusters BuildGrassMidrangeClusters(
                 hi[axis] = std::max(hi[axis], p[axis]);
             }
             result.Members.push_back(entries[i].Index);
+            result.GroupForRoot[entries[i].Index] = static_cast<uint32_t>(result.Groups.size());
         }
         GrassMidrangeCluster group;
         group.FirstMember = static_cast<uint32_t>(first);
@@ -108,6 +112,32 @@ struct GrassMidrangeTopology {
     uint32_t VerticesPerBlade = 0;
     std::vector<uint16_t> Indices;
 };
+
+// Reorder only selected indices; bucket descriptors by occupancy so sparse
+// groups draw an exact prefix rather than fifty mostly unused children.
+inline std::vector<std::array<uint32_t, 2>> PackGrassMidrangeDraws(
+    std::span<uint32_t> selected, std::span<const uint32_t> groupForRoot,
+    uint32_t rootBase, uint32_t preparedBase) {
+    for (uint32_t root : selected)
+        if (root < rootBase || root-rootBase >= groupForRoot.size())
+            throw std::invalid_argument("Grass group references an unrelated placement");
+    std::sort(selected.begin(), selected.end(), [&](uint32_t a, uint32_t b) {
+        return std::pair{groupForRoot[a-rootBase], a} < std::pair{groupForRoot[b-rootBase], b};
+    });
+    std::vector<std::array<uint32_t, 2>> result;
+    for (uint32_t first = 0; first < selected.size();) {
+        uint32_t end = first+1;
+        while (end < selected.size() && groupForRoot[selected[end]-rootBase] == groupForRoot[selected[first]-rootBase]) ++end;
+        if (end-first > kGrassMidrangeClusterCapacity)
+            throw std::invalid_argument("Grass draw group exceeds capacity");
+        result.push_back({preparedBase+first, end-first});
+        first = end;
+    }
+    std::sort(result.begin(), result.end(), [](const auto& a, const auto& b) {
+        return std::pair{a[1],a[0]} < std::pair{b[1],b[0]};
+    });
+    return result;
+}
 
 // One reusable indexed strip per child. Vertex / VerticesPerBlade selects
 // the accepted member; a partial group draws the corresponding index prefix.

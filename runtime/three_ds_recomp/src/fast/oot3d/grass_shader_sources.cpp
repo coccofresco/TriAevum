@@ -11,12 +11,14 @@ std::string BuildGrassVertexShader() {
     return
             std::string("#version 450\n") + std::string(kToonSurfaceResponseShader) + std::string(kGrassBladeShapeShader) +
             std::string(kGrassDistantTuftShader) + std::string(kGrassIndexedVertexShader) + R"glsl(
-layout(location=0) in vec4 in_base_height;
-layout(location=1) in vec4 in_bend_half_width;
-layout(location=2) in vec2 in_width_axis;
-layout(location=3) in vec4 in_world_normal;
-layout(location=4) in uint in_surface_color;
-layout(location=5) in uvec2 in_surface_reference;
+layout(location=0) in vec4 attr_base_height;
+layout(location=1) in vec4 attr_bend_half_width;
+layout(location=2) in vec2 attr_width_axis;
+layout(location=3) in vec4 attr_world_normal;
+layout(location=4) in uint attr_surface_color;
+layout(location=5) in uvec2 attr_surface_reference;
+layout(std430,set=0,binding=2) readonly buffer GrassPreparedRoots { uint words[]; } prepared_roots;
+layout(std430,set=0,binding=3) readonly buffer GrassPreparedGroups { uvec2 entries[]; } prepared_groups;
 layout(set=0,binding=1) uniform sampler2D native_surface_lighting;
 struct GrassEnvironmentRecord {
     vec4 color_and_mode;
@@ -111,7 +113,7 @@ vec3 grass_native_material_rgb(vec3 base_color, vec3 lighting, uvec4 response) {
 
 vec3 evaluate_blade_color(
     uint environment_index, float height_factor,
-    vec3 lighting) {
+    vec3 lighting, uint in_surface_color) {
     vec3 root =
         environment_state.records[
             environment_index].appearance_root.rgb;
@@ -187,12 +189,35 @@ vec2 evaluate_wind(
 }
 
 void main() {
-    bool tuft = grass.flags.y == 0u;
-    uint segments = clamp(grass.flags.y, 1u, 12u);
+    bool grouped = (grass.flags.y & 0x80000000u) != 0u;
+    uint segment_mode = grass.flags.y & 0x7fffffffu;
+    bool tuft = segment_mode == 0u;
+    uint segments = clamp(segment_mode, 1u, 12u);
+    uint vertex = uint(gl_VertexIndex);
+    vec4 in_base_height = attr_base_height;
+    vec4 in_bend_half_width = attr_bend_half_width;
+    vec2 in_width_axis = attr_width_axis;
+    vec4 in_world_normal = attr_world_normal;
+    uint in_surface_color = attr_surface_color;
+    uvec2 in_surface_reference = attr_surface_reference;
+    if (grouped) {
+        uint vertices_per_child = grass.flags.z * (2u * segments + 1u);
+        uint child = vertex / vertices_per_child;
+        vertex %= vertices_per_child;
+        uvec2 group = prepared_groups.entries[gl_InstanceIndex];
+        if (child >= group.y) { gl_Position = vec4(0.0,0.0,2.0,1.0); return; }
+        uint base = (group.x + child) * 17u;
+        in_base_height = uintBitsToFloat(uvec4(prepared_roots.words[base],prepared_roots.words[base+1u],prepared_roots.words[base+2u],prepared_roots.words[base+3u]));
+        in_bend_half_width = uintBitsToFloat(uvec4(prepared_roots.words[base+4u],prepared_roots.words[base+5u],prepared_roots.words[base+6u],prepared_roots.words[base+7u]));
+        in_width_axis = uintBitsToFloat(uvec2(prepared_roots.words[base+8u],prepared_roots.words[base+9u]));
+        in_world_normal = uintBitsToFloat(uvec4(prepared_roots.words[base+10u],prepared_roots.words[base+11u],prepared_roots.words[base+12u],prepared_roots.words[base+13u]));
+        in_surface_color = prepared_roots.words[base+14u];
+        in_surface_reference = uvec2(prepared_roots.words[base+15u],prepared_roots.words[base+16u]);
+    }
     uint plane;
     float height_factor;
     float width_sign;
-    grass_indexed_vertex(uint(gl_VertexIndex), segments, tuft, plane, height_factor, width_sign);
+    grass_indexed_vertex(vertex, segments, tuft, plane, height_factor, width_sign);
     float tuft_coverage = 1.0;
     vec4 lod = environment_state.records[grass.flags.w].tuft_lod;
     vec4 distance_lod = environment_state.records[grass.flags.w].distance_lod;
@@ -290,7 +315,7 @@ void main() {
     }
     blade_color = vec4(
         evaluate_blade_color(
-            grass.flags.w, height_factor, lighting),
+            grass.flags.w, height_factor, lighting, in_surface_color),
         1.0);
     // Lighting is constant over a blade. The unclamped toon transform is
     // linear in color, so it commutes with perspective interpolation.

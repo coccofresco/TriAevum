@@ -426,7 +426,7 @@ bool GrassGpuInstanceCompactor::Compact(const GrassGpuInstanceCompactionRequest&
         barriers[barrierCount++] = {
             VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
             nullptr,
-            VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,
+            VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_SHADER_READ_BIT,
             VK_ACCESS_SHADER_WRITE_BIT,
             VK_QUEUE_FAMILY_IGNORED,
             VK_QUEUE_FAMILY_IGNORED,
@@ -436,8 +436,8 @@ bool GrassGpuInstanceCompactor::Compact(const GrassGpuInstanceCompactionRequest&
         };
         vkCmdPipelineBarrier(request.CommandBuffer,
                              staticChanged ? VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_HOST_BIT |
-                                                 VK_PIPELINE_STAGE_VERTEX_INPUT_BIT
-                                           : VK_PIPELINE_STAGE_HOST_BIT | VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
+                                                 VK_PIPELINE_STAGE_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT
+                                           : VK_PIPELINE_STAGE_HOST_BIT | VK_PIPELINE_STAGE_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
                              VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0U, 0U, nullptr, barrierCount, barriers.data(), 0U,
                              nullptr);
 
@@ -479,7 +479,7 @@ bool GrassGpuInstanceCompactor::Compact(const GrassGpuInstanceCompactionRequest&
             VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
             nullptr,
             VK_ACCESS_SHADER_WRITE_BIT,
-            VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,
+            VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_SHADER_READ_BIT,
             VK_QUEUE_FAMILY_IGNORED,
             VK_QUEUE_FAMILY_IGNORED,
             mImpl->OutputInstances[slot].Handle,
@@ -487,7 +487,7 @@ bool GrassGpuInstanceCompactor::Compact(const GrassGpuInstanceCompactionRequest&
             outputBytes,
         };
         vkCmdPipelineBarrier(request.CommandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                             VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, 0U, 0U, nullptr, 1U, &outputReady, 0U, nullptr);
+                             VK_PIPELINE_STAGE_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, 0U, 0U, nullptr, 1U, &outputReady, 0U, nullptr);
 
         result.InstanceBuffer = mImpl->OutputInstances[slot].Handle;
         result.InstanceCount = push.CountsFlags[0];

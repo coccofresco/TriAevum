@@ -103,6 +103,8 @@ struct GrassDrawBatch {
     uint8_t PlaneCount = 1U;
     GrassPushConstants Push{};
     uint32_t PlacementIndex = 0;
+    bool Grouped = false;
+    uint8_t GroupMemberCount = 0;
 };
 
 struct GrassPreparedPlacement {
@@ -195,7 +197,7 @@ GrassEnvironmentRecord BuildGrassEnvironmentRecord(
         static_cast<float>(settings.FarTuftBladeCount), settings.TuftTransitionFraction};
     result.DistanceLod = {settings.DrawDistance, settings.LodStartFraction, settings.FarDensity, settings.DensityFadeFraction};
     result.TuftStyle = {settings.FarTuftSpread, settings.FarTuftDensity, settings.DrawFadeFraction,
-        settings.FarTuftsEnabled ? 1.0F : 0.0F};
+        settings.FarTuftsEnabled && !settings.MidrangeClustersEnabled ? 1.0F : 0.0F};
     result.BladeShape = {
         settings.Appearance.BladeCurvature,
         settings.Appearance.BladeDroop,
@@ -429,6 +431,8 @@ struct InteractiveGrassPass::Impl {
     };
     std::array<BufferSlot, 2> InstanceBuffers{};
     std::array<BufferSlot, 2> EnvironmentBuffers{};
+    std::array<BufferSlot, 2> GroupBuffers{};
+    std::vector<std::array<uint32_t, 2>> DrawGroups;
     BufferSlot IndexBuffer;
     GrassIndexedTopology IndexedTopology;
     GrassSelectionCache SelectionCache;
@@ -549,9 +553,11 @@ bool InteractiveGrassPass::Initialize(VkPhysicalDevice physicalDevice,
                 shaders, device, fragmentSource.c_str(), Renderer::SpirvStage::Fragment,
                 "interactive_grass_instrumented.frag",
                 "GRASS_AUXILIARY_OUTPUTS", "1");
-            const std::array<VkDescriptorSetLayoutBinding, 2> environmentBindings{{
+            const std::array<VkDescriptorSetLayoutBinding, 4> environmentBindings{{
                 {0U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
-                {1U, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1U, VK_SHADER_STAGE_VERTEX_BIT, nullptr}}};
+                {1U, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1U, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+                {2U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+                {3U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, VK_SHADER_STAGE_VERTEX_BIT, nullptr}}};
             VkDescriptorSetLayoutCreateInfo descriptorLayoutInfo{
                 VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
             descriptorLayoutInfo.bindingCount = static_cast<uint32_t>(environmentBindings.size());
@@ -563,7 +569,7 @@ bool InteractiveGrassPass::Initialize(VkPhysicalDevice physicalDevice,
                     "cannot create interactive grass descriptor layout");
             }
             const std::array<VkDescriptorPoolSize, 2> poolSizes{{
-                {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2}}};
+                {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 6}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2}}};
             VkDescriptorPoolCreateInfo poolInfo{
                 VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
             poolInfo.maxSets =
@@ -936,6 +942,7 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                     settings.CullingClusterSize;
                 placementRequest.NormalOffset =
                     rule.NormalOffset;
+                placementRequest.MidrangeCellExtent = settings.MidrangeClustersEnabled ? settings.MidrangeClusterCellExtent : 0.0F;
                 placementRequest.HeightScale =
                     settings.Appearance.HeightScale;
                 GrassPushConstants push = ProjectionForMesh(mesh, view);
@@ -1070,13 +1077,14 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
             telemetry.VisibleBlades = mImpl->LastBlades;
             for (auto& batch : batches) {
                 batch.Push = preparedPlacements[batch.PlacementIndex].Push;
-                batch.Push.Flags[1] = batch.BladeSegments;
+                batch.Push.Flags[1] = batch.BladeSegments | (batch.Grouped ? 0x80000000U : 0U);
                 batch.Push.Flags[2] = batch.PlaneCount;
                 batch.Push.Flags[3] = batch.PlacementIndex;
             }
         } else {
             mImpl->SelectionCache.Reset();
             batches.clear();
+            mImpl->DrawGroups.clear();
             mImpl->VisibleAnchorIndices.clear();
             for (uint32_t placementIndex = 0; placementIndex < preparedPlacements.size(); ++placementIndex) {
                 const auto& prepared = preparedPlacements[placementIndex];
@@ -1250,7 +1258,25 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                     batchPush.Flags[1] = tuft ? 0U : bladeSegments;
                     batchPush.Flags[2] = planeCount;
                     batchPush.Flags[3] = environmentRecordIndex;
-                    batches.push_back({ firstInstance, binInstanceCount,
+                    const bool grouped = settings.MidrangeClustersEnabled && !tuft && bladeSegments <= 2 &&
+                        !prepared.World->Midrange.Groups.empty();
+                    if (grouped) {
+                        const auto& map = prepared.World->Midrange.GroupForRoot;
+                        const uint32_t firstGroup = static_cast<uint32_t>(mImpl->DrawGroups.size());
+                        const auto groups = PackGrassMidrangeDraws(
+                            std::span<uint32_t>(mImpl->VisibleAnchorIndices).subspan(firstInstance, binInstanceCount),
+                            map, prepared.StaticBaseIndex, firstInstance);
+                        mImpl->DrawGroups.insert(mImpl->DrawGroups.end(), groups.begin(), groups.end());
+                        batchPush.Flags[1] |= 0x80000000U;
+                        for (uint32_t first = firstGroup; first < mImpl->DrawGroups.size();) {
+                            uint32_t end = first+1;
+                            const auto count = mImpl->DrawGroups[first][1];
+                            while (end < mImpl->DrawGroups.size() && mImpl->DrawGroups[end][1] == count) ++end;
+                            batches.push_back({first, end-first, bladeSegments, planeCount, batchPush, placementIndex,
+                                              true, static_cast<uint8_t>(count)});
+                            first = end;
+                        }
+                    } else batches.push_back({ firstInstance, binInstanceCount,
                                         static_cast<uint8_t>(tuft ? 0U : bladeSegments), planeCount, batchPush,
                                         placementIndex });
                 }
@@ -1314,7 +1340,7 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
         } else {
             auto& instanceBuffer = mImpl->InstanceBuffers[slotIndex];
             const VkDeviceSize instanceBytes = static_cast<VkDeviceSize>(instanceCount) * sizeof(GrassInstance);
-            mImpl->EnsureBuffer(instanceBuffer, instanceBytes, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+            mImpl->EnsureBuffer(instanceBuffer, instanceBytes, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
             auto* instanceOutput = static_cast<GrassInstance*>(instanceBuffer.Mapped);
             for (size_t instanceIndex = 0U; instanceIndex < mImpl->VisibleAnchorIndices.size(); ++instanceIndex) {
                 const uint32_t anchorIndex = mImpl->VisibleAnchorIndices[instanceIndex];
@@ -1373,11 +1399,28 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
         lightingWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER; lightingWrite.descriptorCount = 1;
         lightingWrite.pImageInfo = &nativeLightingImage;
         vkUpdateDescriptorSets(mImpl->Device, 1, &lightingWrite, 0, nullptr);
+        auto& groupBuffer = mImpl->GroupBuffers[slotIndex];
+        const VkDeviceSize groupBytes = std::max<size_t>(1, mImpl->DrawGroups.size()) * sizeof(std::array<uint32_t,2>);
+        mImpl->EnsureBuffer(groupBuffer, groupBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+        if (!mImpl->DrawGroups.empty())
+            std::memcpy(groupBuffer.Mapped, mImpl->DrawGroups.data(), mImpl->DrawGroups.size()*sizeof(std::array<uint32_t,2>));
+        const std::array<VkDescriptorBufferInfo,2> clusterBuffers{{
+            {mImpl->PreparedInstanceBuffer, 0, VkDeviceSize(instanceCount)*sizeof(GrassInstance)},
+            {groupBuffer.Buffer, 0, groupBytes}}};
+        for (uint32_t index = 0; index < 2; ++index) {
+            VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            write.dstSet = mImpl->DescriptorSets[slotIndex]; write.dstBinding = index+2;
+            write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; write.descriptorCount = 1;
+            write.pBufferInfo = &clusterBuffers[index];
+            vkUpdateDescriptorSets(mImpl->Device, 1, &write, 0, nullptr);
+        }
         telemetry.DrawCalls = static_cast<uint32_t>(batches.size());
-        telemetry.UploadedBytes = static_cast<uint64_t>(dynamicUploadedBytes + staticUploadedBytes + environmentBytes);
+        telemetry.ClusterDrawInstances = static_cast<uint32_t>(mImpl->DrawGroups.size());
+        for (const auto& group : mImpl->DrawGroups) telemetry.ClusterRepresentedBlades += group[1];
+        telemetry.UploadedBytes = static_cast<uint64_t>(dynamicUploadedBytes + staticUploadedBytes + environmentBytes + groupBytes);
         telemetry.DynamicUploadedBytes =
             dynamicUploadedBytes +
-            static_cast<uint64_t>(environmentBytes);
+            static_cast<uint64_t>(environmentBytes + groupBytes);
         telemetry.StaticUploadedBytes =
             staticUploadedBytes;
         telemetry.GpuCompaction = gpuCompacted;
@@ -1424,9 +1467,10 @@ bool InteractiveGrassPass::DrawPrepared(
         vkCmdPushConstants(commandBuffer, mImpl->PipelineLayout,
                            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0U, sizeof(batch.Push),
                            &batch.Push);
-        const auto& range = batch.BladeSegments == 0U ? mImpl->IndexedTopology.Tuft :
+        const auto& range = batch.Grouped ? mImpl->IndexedTopology.Groups[batch.BladeSegments-1][batch.PlaneCount-1] : batch.BladeSegments == 0U ? mImpl->IndexedTopology.Tuft :
             mImpl->IndexedTopology.Blades[batch.BladeSegments - 1U][batch.PlaneCount - 1U];
-        vkCmdDrawIndexed(commandBuffer, range.Count, batch.InstanceCount, range.First, 0, batch.FirstInstance);
+        const uint32_t count = batch.Grouped ? range.Count / kGrassMidrangeClusterCapacity * batch.GroupMemberCount : range.Count;
+        vkCmdDrawIndexed(commandBuffer, count, batch.InstanceCount, range.First, 0, batch.FirstInstance);
     }
     mImpl->Prepared = false;
     return true;
@@ -1454,6 +1498,8 @@ void InteractiveGrassPass::Shutdown() {
         for (auto& buffer : mImpl->InstanceBuffers)
             mImpl->DestroyBuffer(buffer);
         for (auto& buffer : mImpl->EnvironmentBuffers)
+            mImpl->DestroyBuffer(buffer);
+        for (auto& buffer : mImpl->GroupBuffers)
             mImpl->DestroyBuffer(buffer);
         for (const auto pipeline : mImpl->Pipelines) {
             if (pipeline != VK_NULL_HANDLE) {

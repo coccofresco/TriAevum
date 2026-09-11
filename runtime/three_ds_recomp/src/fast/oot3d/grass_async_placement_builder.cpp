@@ -43,6 +43,8 @@ uint64_t GrassPlacementSourceVersion(const GrassAsyncPlacementRequest& request) 
     HashValue(hash, request.TransformBakedIntoVertices);
     HashValue(hash, std::bit_cast<uint32_t>(request.NormalOffset));
     HashValue(hash, std::bit_cast<uint32_t>(request.HeightScale));
+    if (request.MidrangeCellExtent != 0.0F)
+        HashValue(hash, std::bit_cast<uint32_t>(request.MidrangeCellExtent));
     HashValue(hash, request.MaterialWrapS);
     HashValue(hash, request.MaterialWrapT);
     HashValue(hash, request.ColorSource.ContentVersion());
@@ -127,6 +129,7 @@ std::shared_ptr<const GrassWorldPlacement> Build(const GrassAsyncPlacementReques
     world.TransformBakedIntoVertices = request.TransformBakedIntoVertices;
     world.NormalOffset = request.NormalOffset;
     world.HeightScale = request.HeightScale;
+    world.MidrangeCellExtent = request.MidrangeCellExtent;
     auto result = std::make_shared<const GrassWorldPlacement>(BuildGrassWorldPlacement(world));
     if (diagnose) {
         const auto elapsed = [](auto begin, auto end) {
@@ -257,7 +260,9 @@ struct GrassAsyncPlacementBuilder::Impl {
             const auto& p=*entry.Placement;
             return p.Anchors.capacity()*sizeof(GrassWorldAnchor)+p.CullingAnchors.capacity()*sizeof(GrassWorldCullingAnchor)+
                 p.Clusters.capacity()*sizeof(GrassWorldCluster)+p.VisibilityNodes.capacity()*sizeof(GrassClusterVisibilityNode)+
-                p.VisibilityClusterOrder.capacity()*sizeof(uint32_t);
+                p.VisibilityClusterOrder.capacity()*sizeof(uint32_t)+
+                (p.Midrange.Members.capacity()+p.Midrange.GroupForRoot.capacity())*sizeof(uint32_t)+
+                p.Midrange.Groups.capacity()*sizeof(GrassMidrangeCluster);
         };
         size_t resident=0;
         for (const auto& [key,entry] : Entries) resident+=bytes(entry);

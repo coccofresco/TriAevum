@@ -243,7 +243,7 @@ GrassLodPolicy BuildGrassLodPolicy(const InteractiveGrassSettings& settings) noe
     policy.SegmentEndDistance = settings.SegmentLodEndDistance;
     policy.NearBladeSegments = settings.Appearance.BladeSegments;
     policy.FarBladeSegments = std::min(policy.NearBladeSegments, settings.FarBladeSegments);
-    policy.FarTuftsEnabled = settings.FarTuftsEnabled;
+    policy.FarTuftsEnabled = settings.FarTuftsEnabled && !settings.MidrangeClustersEnabled;
     policy.FarTuftBladeCount = settings.FarTuftBladeCount;
     policy.TuftTransitionFraction = settings.TuftTransitionFraction;
     policy.FarTuftDensity = settings.FarTuftDensity;

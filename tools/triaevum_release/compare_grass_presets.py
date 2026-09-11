@@ -18,6 +18,8 @@ def gpu_statistics(document, warmup, pending=3):
         if not values:
             raise ValueError(f"no GPU timestamps for {name}")
         result[name] = statistics.mean(values)
+    if result["grass_ms"] < 0.01:
+        raise ValueError("Grass GPU work absent; reject disabled/failed effect as a speedup")
     return result
 
 
@@ -101,8 +103,18 @@ def main():
             "--capture-interval", str(plan.get("capture_interval", 30))], check=True, timeout=160)
         reference = Path(plan["reference_capture"]) if "reference_capture" in plan else root / plan["variants"][0]["name"] / "capture"
         pixels = pixel_statistics(reference, case / "capture")
+        grass_samples = []
+        for sample in sorted((case / "capture").glob("framebuffer_*.bmp.json")):
+            metadata = json.loads(sample.read_text())
+            if "grass" in metadata:
+                grass_samples.append({"host_frame": metadata["host_frame"], **metadata["grass"]})
+        if grass_samples and not any(s.get("status") == "drawing" and s.get("visible_blades", 0) for s in grass_samples):
+            raise ValueError("captures do not contain a successfully drawn Grass effect")
+        if variant.get("performance", {}).get("MidrangeClustersEnabled") and not any(
+                s.get("status") == "drawing" and s.get("cluster_instances", 0) for s in grass_samples):
+            raise ValueError("cluster test did not draw any cluster instances")
         result = {"name": name, "performance": variant.get("performance", {}),
-                  "timing": stats, "pixels": pixels}
+                  "timing": stats, "pixels": pixels, "grass_samples": grass_samples}
         results.append(result)
         (root / "results.json").write_text(json.dumps(results, indent=2))
         print(json.dumps(result), flush=True)

@@ -51,6 +51,7 @@ void MaybeWriteFramebufferScreenshot(const Args& args, Fast::GfxRenderingAPI& ap
     }
 
     std::vector<uint16_t> framebuffer(static_cast<size_t>(width) * height, 0);
+    if (!grassDiagnostics) grass = Fast::Oot3d::GrassRenderTelemetry::Instance().Snapshot();
     api.ReadFramebufferToCPU(0, width, height, framebuffer.data());
     const auto screenshotPath =
         args.ScreenshotSequence ? ScreenshotSequenceFramePath(args.ScreenshotPath, frameCount) : args.ScreenshotPath;
@@ -69,9 +70,10 @@ void MaybeWriteFramebufferScreenshot(const Args& args, Fast::GfxRenderingAPI& ap
             {"ordinal", sample.SampleOrdinal}, {"alpha", sample.Alpha},
             {"synthetic", sample.Synthetic}, {"history_reset", sample.HistoryReset}};
     }
-    if (grassDiagnostics) {
+    if (grass.FrameId != 0U) {
         metadata["grass"] = {{"frame", grass.FrameId}, {"status", Fast::Oot3d::GrassRenderStatusName(grass.Status)},
             {"transition", grassTransition}, {"visible_blades", grass.VisibleBlades},
+            {"cluster_instances", grass.ClusterDrawInstances}, {"cluster_blades", grass.ClusterRepresentedBlades},
             {"candidate_clusters", grass.CandidateClusters}, {"tested_nodes", grass.VisibilityNodesTested}};
     }
     auto metadataPath = screenshotPath;

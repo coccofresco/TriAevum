@@ -41,6 +41,7 @@ struct GrassAsyncPlacementRequest {
     float ClusterSize = 1.0F;
     float NormalOffset = 0.0F;
     float HeightScale = 1.0F;
+    float MidrangeCellExtent = 0.0F;
     GrassPlacementView PlacementView;
 };
 

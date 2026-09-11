@@ -144,9 +144,20 @@ TEST(Oot3dGrassIndexedTopology, PreservesEveryExpandedTriangleAndWinding) {
         }
     }
     EXPECT_EQ(topology.Tuft.Count, 6);
-    const std::vector<uint16_t> tuft(topology.Indices.begin()+topology.Tuft.First, topology.Indices.end());
+    const std::vector<uint16_t> tuft(topology.Indices.begin()+topology.Tuft.First,
+                                   topology.Indices.begin()+topology.Tuft.First+topology.Tuft.Count);
     EXPECT_EQ(tuft, (std::vector<uint16_t>{0,1,2,0,2,3}));
-    EXPECT_LT(topology.Indices.size()*sizeof(uint16_t), 4096);
+    EXPECT_LT((topology.Tuft.First+topology.Tuft.Count)*sizeof(uint16_t), 4096);
+    for (uint32_t segments = 1; segments <= 2; ++segments)
+        for (uint32_t planes = 1; planes <= 2; ++planes) {
+            const auto blade = topology.Blades[segments-1][planes-1];
+            const auto group = topology.Groups[segments-1][planes-1];
+            ASSERT_EQ(group.Count, 50U*blade.Count);
+            for (uint32_t child = 0; child < 50; ++child)
+                for (uint32_t i = 0; i < blade.Count; ++i)
+                    EXPECT_EQ(topology.Indices[group.First+child*blade.Count+i],
+                        topology.Indices[blade.First+i]+child*planes*(2*segments+1));
+        }
 }
 
 TEST(Oot3dGrassSelectionCache, ReusesOnlyIdenticalSelectionInputs) {

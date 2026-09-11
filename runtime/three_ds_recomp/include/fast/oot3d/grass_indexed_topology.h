@@ -20,6 +20,7 @@ struct GrassIndexedTopology {
     std::vector<uint16_t> Indices;
     std::array<std::array<GrassIndexRange, 2>, kMaximumGrassBladeSegments> Blades{};
     GrassIndexRange Tuft;
+    std::array<std::array<GrassIndexRange, 2>, 2> Groups{};
 };
 
 inline GrassIndexedTopology BuildGrassIndexedTopology() {
@@ -44,6 +45,17 @@ inline GrassIndexedTopology BuildGrassIndexedTopology() {
     }
     result.Tuft = {static_cast<uint32_t>(result.Indices.size()), 6};
     result.Indices.insert(result.Indices.end(), {0, 1, 2, 0, 2, 3});
+    for (uint16_t segments = 1; segments <= 2; ++segments) {
+        for (uint16_t planes = 1; planes <= 2; ++planes) {
+            auto& group = result.Groups[segments - 1][planes - 1];
+            group.First = static_cast<uint32_t>(result.Indices.size());
+            const auto blade = result.Blades[segments - 1][planes - 1];
+            for (uint16_t child = 0; child < 50; ++child)
+                for (uint32_t i = 0; i < blade.Count; ++i)
+                    result.Indices.push_back(result.Indices[blade.First + i] + child * planes * (2 * segments + 1));
+            group.Count = static_cast<uint32_t>(result.Indices.size()) - group.First;
+        }
+    }
     return result;
 }
 

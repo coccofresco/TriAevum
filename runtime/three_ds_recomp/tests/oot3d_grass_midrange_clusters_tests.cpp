@@ -1,4 +1,5 @@
 #include "fast/oot3d/grass_midrange_clusters.h"
+#include "fast/oot3d/grass_indexed_topology.h"
 
 #include <iostream>
 #include <numeric>
@@ -63,6 +64,23 @@ int main() {
                       "indices must not connect different children");
             }
         }
+        const auto indexed = BuildGrassIndexedTopology();
+        for (uint32_t segments : {1U, 2U})
+            for (uint32_t planes : {1U, 2U}) {
+                const auto blade = indexed.Blades[segments-1][planes-1];
+                const auto cluster = indexed.Groups[segments-1][planes-1];
+                Check(cluster.Count == 50*blade.Count, "indexed cluster capacity");
+                for (uint32_t child = 0; child < 50; ++child)
+                    for (uint32_t i = 0; i < blade.Count; ++i)
+                        Check(indexed.Indices[cluster.First+child*blade.Count+i] ==
+                            indexed.Indices[blade.First+i]+child*planes*(2*segments+1), "indexed child parity");
+            }
+        std::vector<uint32_t> selected{104,100,102,101};
+        const std::vector<uint32_t> map{0,0,1,1,2};
+        const auto packed = PackGrassMidrangeDraws(selected,map,100,10);
+        Check(selected == std::vector<uint32_t>({100,101,102,104}), "selected stream grouped");
+        Check(packed == std::vector<std::array<uint32_t,2>>({{12,1},{13,1},{10,2}}), "occupancy buckets and prepared offsets");
+        Check(map[3] == 1 && selected.size() == 4, "unselected child remains absent");
         std::cout << "Grass midrange cluster invariants passed\n";
         return 0;
     } catch (const std::exception& error) {

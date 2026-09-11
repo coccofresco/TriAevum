@@ -1,7 +1,9 @@
 # Repeatable Midrange Grass Clusters
 
-Status: CPU grouping and shared index topology implemented, 2026-09-11.
-The new 3D cluster draw/LOD consumer is not connected yet.
+Status: experimental GPU consumer connected and measured, 2026-09-11.
+Visual parity is verified for the equivalent-geometry comparison below;
+performance is not sufficient for promotion. Whole-cluster density/LOD remains
+to be implemented.
 The current 1024 default is unchanged. See
 [terrain continuity](TRIAEVUM_GRASS_TERRAIN_CONTINUITY_STRATEGY.md) for the
 fixed-time wide-intro measurement protocol and historical references.
@@ -41,11 +43,73 @@ empty/sparse masks, invalid input and topology prefixes. GCC compiles/runs it
 separately from the game; the changed placement consumer also passes a C++20
 syntax check. These are CPU/contract checks, NOT an in-game validation.
 
-Remaining: upload/bind the member/group tables in the Grass pass, select group
-LOD alongside individual roots without double coverage, resolve each member's
-native lighting/color and interactions, then measure the new path. No F1
-toggle or product preset advertises this incomplete path; previous tuft tests
-must not be presented as measurements of these 50-root groups.
+The section above records the initial CPU tranche. The GPU consumer and its
+in-game validation are described below. No F1 toggle or product preset
+advertises this experimental path.
+
+## GPU Consumer and Measured Limitation
+
+Opt in through `Graphics.Grass.Performance.MidrangeClustersEnabled`; the
+optional `MidrangeClusterCellExtent` defaults to 22 world units. Default is
+off. Enabling it suppresses the old far cutout tufts for an unambiguous test.
+The async placement cache retains group membership and an inverse root map.
+`PackGrassMidrangeDraws` groups selected roots in the one/two-segment bins.
+The actual GPU topology is the extension in `grass_indexed_topology.h`,
+repeating the canonical blade indices for up to 50 children and one/two
+planes. `BuildGrassMidrangeTopology` above remains a prototype helper, not
+the topology used by this consumer.
+
+`interactive_grass_pass.cpp` batches groups by occupancy, issuing instanced
+draws with only the occupied index prefix, not a draw per group. The vertex
+shader reads exact prepared roots and group descriptors from storage buffers.
+Root positions, color, live native lighting, wind and actor interaction stay
+on the existing Grass path. Compaction barriers cover vertex shader reads.
+Native PICA, UI composition and the product preset are unchanged.
+
+IMPORTANT: individual-root thinning still precedes grouping. In the wide
+intro frames 300/840/1020/1200, respectively 32195/74352/75409/73370 clustered
+blades occupy 11051/35219/36353/36009 group instances: only about 2-3 surviving
+blades per group. This is not yet the intended 50-blade amortization. Existing
+LOD-bin splits and cell/support boundaries also constrain occupancy.
+
+### Verification
+
+The full Windows runtime builds successfully. Standalone cluster invariants
+pass, including canonical GPU topology parity and selected-root packing.
+Three comparison-harness tests pass; the full foundation suite was not run.
+Framebuffer sidecars now record successful Grass draws and cluster counts.
+The harness rejects absent Grass GPU timings or inactive experimental draws.
+An initial shader-compilation failure was corrected and its timings discarded.
+
+Private evidence root: `C:/Users/xander/triaevum-verify-20260911/`.
+Protocol: boot through 1320 fixed native 30 Hz steps, 180 warmup steps,
+1280x720, no interpolation, VSync or pacing in throughput runs. Captures run
+separately. GPU means use windows [270,330), [810,870), [990,1050),
+[1170,1230); host time covers the entire post-warmup run.
+
+`grass-cluster-render-occupancy` compares identical density/segment settings
+with old tufts disabled. The cluster-equivalent variant has identical captured
+pixels at all four wide frames; frame 480 differs by two pixels. The earlier
+segment reduction variant has mean wide-view MAE 0.7165/255 relative to this
+control, but does not improve host cost. This control is NOT the live preset.
+
+Separate paired timing repeats, using the final occupancy consumer:
+
+| Run directory | Selected total GPU ms | Grass GPU ms | Host ms/step |
+| --- | ---: | ---: | ---: |
+| grass-cluster-control-repeat | 3.925 | 1.129 | 14.944 |
+| grass-cluster-equivalent-repeat | 3.739 | 1.009 | 18.535 |
+
+GPU differences vary between runs (including native PICA timing), so no
+stable GPU speedup is established. Host time is about 24% worse in this pair;
+the preceding series was also slower. Per-root selection/sorting remains a
+cost, and fewer draw instances alone do not demonstrate an optimization.
+
+`grass-cluster-default-regression` matches `grass-intro-wide-reference`
+exactly in all seven captured BMPs: experimental-off preserves the existing
+1024 preset in these samples. BMP parity is capture-format parity, not proof
+of floating-point identity. Linux, Android and interpolated modes are not
+validated by this tranche. No running game or changed live preset is left.
 
 ## What Already Exists
 
@@ -69,11 +133,15 @@ must not be presented as measurements of these 50-root groups.
 
 ## Recommended Representation
 
-Retain individual curved blades nearby, use small instanced 3D clumps in the
-middle, and retain compact cutout tufts far away. A midrange clump should
-represent several blades with one/two-segment geometry, not several complete
-copies of the near mesh. Prototype a small template set (for example eight
-templates with five blades); these counts are experimental, not native data.
+Retain individual curved blades nearby. In the middle, select compact clusters
+representing up to about 50 accepted blades BEFORE thinning individual roots.
+Farther away, represent the same bounded footprint with fewer silhouettes and
+vertices, then thin whole clusters with a gradual fade. This supersedes the
+old recommendation to keep an independent far-tuft system. Counts and shapes
+are experimental rendering choices, not native game data. Fewer silhouettes
+must preserve apparent coverage without widening across invalid mask regions.
+Avoid sorting every surviving root each frame; reuse immutable cluster
+membership and select/budget clusters as units.
 
 Templates share immutable vertex/index buffers. Each blade has a fixed local
 root, bend, width and phase. A stable hash of surface identity, cell and seed
