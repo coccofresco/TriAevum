@@ -91,7 +91,8 @@ Capture runs deliberately stall on synchronous GPU readback; not FPS tests.
 
 ## Remaining Investigation
 
-The exact users' scenarios/platforms/settings have not yet been supplied.
+The user has now narrowed the report to Navi notifications and mounted HUD
+behavior. A reproducible checkpoint and platform/settings are still needed.
 These fixes remove reproduced causes of incorrect visibility, but do not
 establish that every report has the same cause. Further focused qualification:
 
@@ -107,3 +108,58 @@ establish that every report has the same cause. Further focused qualification:
 
 TopScreen is an independent reimplementation of rlgcarrot's mod; attribution
 and original reference hashes remain in the existing TopScreen documents.
+
+## Contextual Copies: Navi / Mounted Follow-Up
+
+The previous idle field and menu runs did not qualify either reported case.
+In particular, the earlier stamina test only exercised the on-foot hidden lane.
+
+The original 2.1.1 payload has the same ten-copy transform table as the older
+implementation, but its current address is `005E1734`, consumed inside
+`FUN_005D4A8C`. The former `005C9940` owner annotation is obsolete for 2.1.1.
+Do not use an old mod function address against a new payload.
+
+Two missing visibility predicates are now implemented at the title UI adapter:
+
+- `005D6C50..005D6C88`: clear alpha of copies of source quads 34/35 when
+  `PauseTouchButton+34` is 7..9 or greater than 11. Source alpha alone is not
+  authoritative while the owner is changing modes.
+- `005D6890..005D6910` and `005D6990..005D69B4`: source quad 27 requires
+  Play type/subtype 3/2, scene 3..16 inclusive, and a nonnegative signed byte
+  at `Save+D4+u16(Save+1592)`. Preserve this recovered predicate without
+  guessing a semantic identity for the byte.
+
+Literal pointers were decoded from the original payload, and branch conditions
+were checked against ARM disassembly, not only Ghidra's C output. The consumer
+does not modify native positions, alpha, save flags, or gameplay to apply these
+filters. No new smoothing or unconditional visibility override was introduced.
+
+Regression tests cover nine owner-state transitions with deliberately stale
+nonzero source alpha, sixteen scene/signed-byte boundary cases, and four
+alternating hidden/visible stamina rows with six independent positions.
+These are synthetic contract tests, **not mounted gameplay qualification**.
+Profile and lifecycle tests pass on Windows and Linux; both developer runtimes
+were relinked incrementally without rebuilding AOT. Installed packages are not
+updated by these developer builds.
+
+Still open: reproduce the actual Navi and riding artifacts in game, verify
+native versus copied draw ordering and alpha ownership, and audit remaining
+2.1.1 copy predicates. In particular, the mod's additional first-two-copy
+suppression via payload state `005E3D88` is computed at the start of
+`005D4A8C` from the previous `005E3D8C` state, touch mode 11, and native
+alternate renderer `004FC648+40`. `005E3D8C` is later updated from the player
+owner at `+12B8` or cleared on several paths. Its update timing must be
+preserved before porting it; do not replace it with a guessed host flag.
+`ReadTopScreenTouchDynamicState` currently
+uses quad 34 as shared alpha: its equivalence to each original producer's alpha
+must be qualified in these contexts, not assumed from an idle capture.
+
+The first Windows framebuffer regression attempt stopped on disk exhaustion
+on J:, not a rendering assertion. Its log is retained under
+`J:/TriAevum-verify-20260910/hud-context-gates-x2`; incomplete generated images
+were removed. The replacement run uses
+`C:/Users/xander/triaevum-verify-20260911/hud-context-gates-x2`.
+That replacement run completed with exit 0, 160 presentations and 40 consecutive
+framebuffer captures (120..159). Frame 159 was inspected: gameplay and the
+on-foot HUD are present. This is a regression run, not a reproduction of the
+reported mounted/Navi defects.

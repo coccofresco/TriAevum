@@ -1468,6 +1468,10 @@ int main() {
   Require(nativeTouchMemory.MapRegion(
               {"touch-state", 0x0050A000U, 0x1000U, true, false, {}}, &error) &&
               nativeTouchMemory.MapRegion(
+                  {"touch-play-root", 0x00504000U, 0x1000U, true, false, {}}, &error) &&
+              nativeTouchMemory.MapRegion(
+                  {"touch-save", 0x00587000U, 0x3000U, true, false, {}}, &error) &&
+              nativeTouchMemory.MapRegion(
                   {"touch-streams", 0x00600000U, 0x10000U, true, false, {}},
                   &error),
           "could not map native touch-copy fixture");
@@ -1476,6 +1480,12 @@ int main() {
   constexpr std::uint32_t kUvs = 0x00602000U;
   constexpr std::uint32_t kColors = 0x00604000U;
   constexpr std::uint32_t kTranslations = 0x00608000U;
+  constexpr std::uint32_t kTouchPlay = 0x00609000U;
+  Require(nativeTouchMemory.Write32(0x005043E0U, kTouchPlay) &&
+              nativeTouchMemory.Write8(kTouchPlay + 0x100U, 3U) &&
+              nativeTouchMemory.Write8(kTouchPlay + 0x101U, 2U) &&
+              nativeTouchMemory.Write16(kTouchPlay + 0x104U, 3U),
+          "could not seed touch-copy scene gate");
   Require(nativeTouchMemory.Write32(0x0050AF38U, kRenderer) &&
               nativeTouchMemory.Write32(kRenderer + 0x0CU, kPositions) &&
               nativeTouchMemory.Write32(kRenderer + 0x14U, kUvs) &&
@@ -1571,6 +1581,56 @@ int main() {
               !copiedTouchPrimitives[3].visible &&
               !copiedTouchPrimitives[4].visible,
           "TopScreen canvas did not preserve native off-screen visibility");
+
+  // Keep source colors nonzero throughout owner transitions. The payload's
+  // visibility rules, not stale source alpha or a scene-specific workaround,
+  // must suppress and restore the contextual copies.
+  for (std::uint32_t touchState : {2U, 7U, 8U, 9U, 10U, 11U, 12U, 19U, 2U}) {
+    Require(nativeTouchMemory.Write32(0x0050AF68U, touchState),
+            "cannot set touch-copy owner state");
+    std::vector<oot3d::ui::UiPrimitive> copies;
+    Require(AppendTopScreenNativeTouchCopies(nativeTouchMemory, heartTexture,
+                                             copies, nullptr, &error),
+            "cannot copy contextual touch quads");
+    const bool visible = touchState < 7U || touchState == 10U || touchState == 11U;
+    Require(copies[0].visible == visible && copies[1].visible == visible &&
+                copies[2].visible && copies[4].visible,
+            "contextual touch state leaked stale alpha or hid unrelated lanes");
+  }
+  for (const std::uint16_t scene : {2U, 3U, 16U, 17U}) {
+    for (const std::uint8_t value : {0U, 0x7FU, 0x80U, 0xFFU}) {
+      Require(nativeTouchMemory.Write16(kTouchPlay + 0x104U, scene) &&
+                  nativeTouchMemory.Write16(0x00587958U + 0x1592U, 5U) &&
+                  nativeTouchMemory.Write8(0x00587958U + 0xD4U + 5U, value),
+              "cannot set touch-copy scene/save state");
+      std::vector<oot3d::ui::UiPrimitive> copies;
+      Require(AppendTopScreenNativeTouchCopies(nativeTouchMemory, heartTexture,
+                                               copies, nullptr, &error) &&
+                  copies[3].visible ==
+                      (scene >= 3U && scene <= 16U && value < 0x80U),
+              "source 27 ignored the original mod scene/save visibility rule");
+    }
+  }
+  // Exercise mounted stamina, not just the on-foot +400 hidden lane.
+  for (const float lane : {400.0F, 0.0F, 400.0F, 0.0F}) {
+    for (std::uint32_t source = 86U; source <= 91U; ++source) {
+      const std::array<float, 2> translation{88.0F + lane + (source - 86U) * 16.0F, 8.0F};
+      Require(writeFloats(kTranslations + source * 8U, translation),
+              "cannot set stamina lane");
+    }
+    std::vector<oot3d::ui::UiPrimitive> copies;
+    Require(AppendTopScreenNativeTouchCopies(nativeTouchMemory, heartTexture,
+                                             copies, nullptr, &error),
+            "cannot copy stamina lanes");
+    ApplyTopScreenGameplayCanvas(copies);
+    for (std::size_t i = 4U; i < 10U; ++i) {
+      Require(copies[i].visible == (lane == 0.0F) &&
+                  (lane != 0.0F ||
+                   (copies[i].destination.x == 128.0F + (i - 4U) * 16.0F &&
+                    copies[i].destination.y == 210.0F)),
+              "stamina mount/dismount transition changed position or visibility");
+    }
+  }
   std::vector<oot3d::ui::UiPrimitive> clippedCanvasPrimitive(1U);
   clippedCanvasPrimitive[0].destination = {390.0F, 230.0F, 20.0F, 20.0F};
   clippedCanvasPrimitive[0].uv = {0.0F, 0.0F, 1.0F, 1.0F};

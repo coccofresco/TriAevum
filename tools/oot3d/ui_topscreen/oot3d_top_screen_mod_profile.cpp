@@ -442,7 +442,7 @@ std::size_t AppendTopScreenCounterDigits(
   return output.size() - startSize;
 }
 
-// Payload table 0x005D3440, consumed by 0x005C9940.
+// TopScreen 2.1.1 table 005E1734, consumed by FUN_005D4A8C.
 constexpr std::array kNativeTouchCopyContracts{
     NativeTouchCopyContract{34U, 278, 149, 229, 11, 1.0F},
     NativeTouchCopyContract{35U, 278, 149, 229, 11, 1.0F},
@@ -1913,6 +1913,36 @@ bool AppendTopScreenNativeTouchCopies(
     const TopScreenUiConfig *config) {
   TopScreenNativeTouchCopyStats result;
   constexpr std::uint32_t kPauseTouchButtonState = 0x0050AF34U;
+  std::uint32_t touchState = 0U;
+  std::uint32_t play = 0U;
+  if (!memory.Read32(kPauseTouchButtonState + 0x34U, &touchState) ||
+      !memory.Read32(0x005043D4U + 0x0CU, &play)) {
+    SetError(error, "cannot read native TopScreen touch-copy visibility state");
+    return false;
+  }
+  // 005D6890..005D6910 / 005D6990..005D69B4: source 27 has a
+  // scene/save gate independent of its source alpha and off-screen translation.
+  bool source27Visible = false;
+  if (play != 0U) {
+    std::uint8_t type = 0U, subtype = 0U;
+    std::uint16_t scene = 0U;
+    if (!memory.Read8(play + 0x100U, &type) ||
+        !memory.Read8(play + 0x101U, &subtype) ||
+        !memory.Read16(play + 0x104U, &scene)) {
+      SetError(error, "cannot read native TopScreen touch-copy scene");
+      return false;
+    }
+    if (type == 3U && subtype == 2U && scene >= 3U && scene <= 16U) {
+      std::uint16_t index = 0U;
+      std::uint8_t value = 0U;
+      if (!memory.Read16(0x00587958U + 0x1592U, &index) ||
+          !memory.Read8(0x00587958U + 0xD4U + index, &value)) {
+        SetError(error, "cannot read native TopScreen touch-copy save flag");
+        return false;
+      }
+      source27Visible = (value & 0x80U) == 0U;
+    }
+  }
   std::uint32_t renderer = 0U;
   std::array<std::uint32_t, 4> streams{};
   if (!memory.Read32(kPauseTouchButtonState + 4U, &renderer) ||
@@ -1990,7 +2020,7 @@ bool AppendTopScreenNativeTouchCopies(
     primitive.role = horseStamina
                          ? oot3d::ui::UiPrimitiveRole::HorseStamina
                          : oot3d::ui::UiPrimitiveRole::TouchControl;
-    primitive.owner_address = 0x005C9940U;
+    primitive.owner_address = 0x005D4A8CU;
     primitive.descriptor_address = renderer;
     primitive.source_quad = source;
     primitive.texture = pauseTopPage;
@@ -1999,6 +2029,13 @@ bool AppendTopScreenNativeTouchCopies(
                              transformed[2].Y - transformed[0].Y};
     primitive.uv = NativePicaQuadUvToHost(uvs);
     primitive.color = {colors[0], colors[1], colors[2], colors[3]};
+    // 005D6C50..005D6C88: do not expose stale contextual quads while
+    // their native owner is in another mode. Keep source memory untouched.
+    if ((contractIndex < 2U &&
+         ((touchState >= 7U && touchState <= 9U) || touchState > 11U)) ||
+        (source == 27U && !source27Visible)) {
+      primitive.color.alpha = 0.0F;
+    }
     primitive.layer = 13U;
     primitive.visible = primitive.color.alpha != 0.0F;
     if (primitive.visible) {
