@@ -57,7 +57,6 @@ layout(location=2) out vec4 blade_ambient_guide;
 layout(location=3) out vec4 tuft_sample;
 layout(location=4) flat out float lod_visibility;
 layout(location=5) out vec3 blade_lighting;
-layout(location=6) out vec3 blade_view_direction;
 
 void evaluate_shading(
     uint environment_index, vec3 world_normal,
@@ -316,10 +315,6 @@ void main() {
     blade_ambient_guide =
         vec4(ambient_response, 1.0);
     blade_lighting = lighting;
-    vec3 toward_eye = environment_state.records[grass.flags.w].camera_position.xyz - position;
-    blade_view_direction = vec3(dot(view_side, toward_eye),
-        dot(environment_state.records[grass.flags.w].view_up.xyz, toward_eye),
-        -dot(environment_state.records[grass.flags.w].view_forward.xyz, toward_eye));
 }
 )glsl";
 }
@@ -334,7 +329,6 @@ layout(location=2) in vec4 blade_ambient_guide;
 layout(location=3) in vec4 tuft_sample;
 layout(location=4) flat in float lod_visibility;
 layout(location=5) in vec3 blade_lighting;
-layout(location=6) in vec3 blade_view_direction;
 struct GrassEnvironmentRecord {
     vec4 color_and_mode;
     vec2 lut[128];
@@ -387,8 +381,7 @@ void main() {
             uint(environment_state.records[grass.flags.w].tuft_lod.z),
             environment_state.records[grass.flags.w].tuft_style.x)) discard;
     vec4 resolved_color = blade_color;
-    resolved_color.rgb = oot3d_toon_surface_response(resolved_color.rgb, blade_lighting,
-        blade_normal_guide.xyz * 2.0 - 1.0, blade_view_direction,
+    resolved_color.rgb = oot3d_toon_diffuse_response(resolved_color.rgb, blade_lighting,
         environment_state.records[grass.flags.w].toon);
 #if GRASS_AUXILIARY_OUTPUTS
     out_normal_guide = blade_normal_guide;

@@ -467,3 +467,33 @@ swapped modulation operands, invalid expressions, and stale-grid regression.
 Kokiri corrected framebuffer probe exits normally with Vulkan/NRI validation
 enabled, zero errors and 11 Vulkan warnings. No Linux/Android execution or
 performance improvement is claimed by this correction.
+
+## Grazing-Angle Brightening (2026-09-11)
+
+The full toon surface response introduced an additional Grass rim highlight.
+It used the terrain normal and a per-blade view direction; as the view became
+grazing, `pow(1 - abs(N dot V), width)` approached one. With the tested rim
+strength 0.34 this produced a conspicuous bright distant band, independent of
+the inherited diffuse terrain response. This was not a reason to disable fog
+or compensate distant LOD colors.
+
+Grass now calls the shared `oot3d_toon_diffuse_response`: light bands,
+saturation and shadow tint remain, but the diffuse interface intentionally has
+no view-direction/normal inputs and does not add rim light. Individual blades
+and distant tufts use the same call. Removed the unused view-direction varying
+and its vertex calculation. Native PICA toon and its rim remain unchanged;
+normal guides used by scene effects are retained. No settings or presets were
+changed. The earlier statement that Grass inherits the complete toon response,
+including rim, is superseded by this explicit terrain-cover policy.
+
+Verification: 101 Grass/toon tests pass, including a regression that checks the
+diffuse consumer cannot invoke the grazing rim while the canonical full response
+still contains it. Windows NRI/Vulkan mounted Field captures at presentation 150
+use the same checkpoint, camera and settings before/after. Local evidence:
+`C:/Users/xander/triaevum-verify-20260911/grass-grazing-before` and
+`grass-grazing-after`. A distant Grass rectangle (x100..499, y310..379) changes
+mean encoded RGB from (143.85,98.89,44.45) to (102.21,58.33,13.69); this is an
+image-domain comparison, not radiometric luminance. The checked hearts and
+castle rectangles are pixel-identical. The corrected 180-presentation run exits
+normally with zero Vulkan/NRI validation errors (11 Vulkan warnings remain).
+No Linux/Android execution or whole-game visual parity is claimed.

@@ -3839,12 +3839,29 @@ TEST(Oot3dGrassToon, SharesCanonicalShaderAndAppliesBeforeFogWithoutChangingAlph
         7U, draw, ToonMode::PostProcessPreview, {});
     ASSERT_TRUE(native.Applied());
     EXPECT_NE(native.Source.find(kToonSurfaceResponseShader), std::string::npos);
-    const auto apply = grass.find("resolved_color.rgb = oot3d_toon_surface_response");
+    const auto apply = grass.find("resolved_color.rgb = oot3d_toon_diffuse_response");
     ASSERT_NE(apply, std::string::npos);
     EXPECT_LT(apply, grass.find("resolved_color.rgb = mix("));
     EXPECT_EQ(grass.find("resolved_color.a ="), std::string::npos);
     EXPECT_NE(grass.find("if (p.flags.x < 0.5) return sourceColor;"), std::string::npos);
     EXPECT_NE(grass.find(": step(edge, guide)"), std::string::npos);
+}
+
+TEST(Oot3dGrassToon, TerrainCoverCannotGenerateGrazingRimHighlights) {
+    using namespace Fast::Oot3d;
+    const auto fragment = BuildGrassFragmentShader();
+    const auto vertex = BuildGrassVertexShader();
+    EXPECT_EQ(fragment.find("blade_view_direction"), std::string::npos);
+    EXPECT_EQ(vertex.find("blade_view_direction"), std::string::npos);
+    EXPECT_EQ(fragment.find("resolved_color.rgb = oot3d_toon_surface_response"), std::string::npos);
+    const std::string common(kToonSurfaceResponseShader);
+    const auto start = common.find("vec3 oot3d_toon_diffuse_response(");
+    ASSERT_NE(start, std::string::npos);
+    const auto diffuse = common.substr(start, common.find("\n}", start) - start);
+    EXPECT_EQ(diffuse.find("oot3d_toon_rim("), std::string::npos);
+    EXPECT_EQ(diffuse.find("viewDirection"), std::string::npos);
+    EXPECT_NE(diffuse.find("oot3d_toon_banded_color("), std::string::npos);
+    EXPECT_NE(common.find("+ oot3d_toon_rim(normal, viewDirection, p)"), std::string::npos);
 }
 
 TEST(Oot3dGrassToon, PacksTheExistingStyleAndKeepsOffAndLightingIndependent) {

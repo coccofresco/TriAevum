@@ -105,6 +105,13 @@ vec3 oot3d_toon_surface_response(vec3 sourceColor, vec3 lighting,
     return clamp(oot3d_toon_banded_color(sourceColor, lighting, p.flags.y, true, p)
         + oot3d_toon_rim(normal, viewDirection, p), 0.0, 1.0);
 }
+
+// Terrain-cover extensions inherit diffuse bands, not an independent rim.
+// The response intentionally has no normal or viewing-direction argument.
+vec3 oot3d_toon_diffuse_response(vec3 sourceColor, vec3 lighting, ToonSurfaceParameters p) {
+    if (p.flags.x < 0.5) return sourceColor;
+    return clamp(oot3d_toon_banded_color(sourceColor, lighting, p.flags.y, true, p), 0.0, 1.0);
+}
 )glsl";
 
 } // namespace Fast::Oot3d
