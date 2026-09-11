@@ -59,9 +59,13 @@ The game's private PICA seed and device pipeline preparation are separate:
   compilations/writes. No game boot was needed for either preparation.
 - Normal Flatpak Forge-to-game launch: exit 0 with a runtime report in a
   bounded 35-second run (before adding automatic update handling).
-- Frozen GUI widgets are created without clipping, but the desktop repeatedly
-  minimized the smoke-test window. Visible-widget qualification remains open;
-  the probe retries presentation without accepting unmapped widgets as success.
+- Frozen GUI qualification subsequently passed with mapped, unclipped widgets.
+  Actual ROM preparation passed in 8.21 seconds on the existing installation;
+  a new isolated activation passed in 25.15 seconds, including shader preparation.
+  The first direct-helper probe omitted the launcher's library path and failed
+  preflight; use the real launcher's environment for frozen GUI qualification.
+  Flatpak reserves XDG variables during startup: isolation must apply
+  `XDG_DATA_HOME` through the child `env` command, not `flatpak --env` alone.
 
 Private Flatpak candidate: `TriAevum-Linux-forge-parity-update.flatpak`,
 commit `6d1bdd819a6e76449260c2b90478d3ed11d9ff17daf5631059531f7b5eab4172`.
@@ -70,7 +74,20 @@ in `TRIAEVUM_POST_1C_REGRESSION_AUDIT.md`.
 
 ## Still Open
 
-Packaged end-to-end update/GUI qualification on Linux, portable SSSR parity,
+The newer private SSSR package activated through normal frozen Forge on Linux:
+the runtime receipt changed and the game launched without ROM reselection or
+manual hash edits. However, the bounded session's termination produced allocator
+errors, and the runtime also normalized an invalid reflection configuration.
+Consequently this is not a clean configuration-preservation/shutdown test.
+The candidate (`686b76c9b140d4f8b15609d49589afd06e4da969dbaac785c43979134eb91776`)
+was withdrawn in favor of the preceding private Flatpak. Preserve the failed
+evidence; do not publish it as qualified. See `TRIAEVUM_SSSR_PORTABLE_BACKEND.md`.
+
+Release test discovery now covers 364 tests on each OS: no failures, 9 Windows
+skips and 13 Linux skips. Use the provisioned Linux virtual environment, not
+system Python without its required Capstone package.
+
+Clean packaged end-to-end update/shutdown qualification on Linux, portable SSSR parity,
 the letterboxed weapon-aim outline rectangle and the remaining packaged
 gameplay replays are not closed by these installer fixes. Retain their explicit
 status in the regression audit; successful boot is not complete parity.

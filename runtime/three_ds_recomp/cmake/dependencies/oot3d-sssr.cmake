@@ -4,6 +4,16 @@ if(NOT THREE_DS_RECOMP_ENABLE_NRI OR NOT NRI_ENABLE_FFX_SDK)
 endif()
 
 FetchContent_GetProperties(ffx)
+if(NOT ffx_POPULATED)
+    # NRI's optional upscaler integration fetches FFX only on Windows. SSSR
+    # uses the SDK sources, not its prebuilt platform DLLs.
+    FetchContent_Declare(ffx
+        URL https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/releases/download/v1.1.4/FidelityFX-SDK-v1.1.4.zip
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+        SOURCE_SUBDIR "ignore CMakeLists.txt")
+    FetchContent_MakeAvailable(ffx)
+    FetchContent_GetProperties(ffx)
+endif()
 if(NOT ffx_POPULATED OR NOT EXISTS "${ffx_SOURCE_DIR}/sdk/CMakeLists.txt")
     message(FATAL_ERROR "The pinned FidelityFX SDK source is unavailable")
 endif()
@@ -18,6 +28,8 @@ set(_ffx_generated
     "${CMAKE_CURRENT_BINARY_DIR}/oot3d-ffx-sssr-generated")
 set(_ffx_sc
     "${_ffx_sdk}/tools/binary_store/FidelityFX_SC.exe")
+set(THREE_DS_RECOMP_FFX_SHADER_BUNDLE "" CACHE PATH
+    "Verified host-independent FidelityFX Vulkan shader header bundle")
 
 # The pinned GLSL callbacks declare 32-bit images where ffx_sssr.cpp creates
 # compact images. Keep the donor intact and compile a checked source overlay.
@@ -42,9 +54,23 @@ foreach(_contract IN ITEMS
         _ffx_callbacks_source "${_ffx_callbacks_source}")
 endforeach()
 set(_ffx_sssr_overlay "${_ffx_generated}/source/sssr/ffx_sssr_callbacks_glsl.h")
-file(GENERATE OUTPUT "${_ffx_sssr_overlay}" CONTENT "${_ffx_callbacks_source}")
+file(CONFIGURE OUTPUT "${_ffx_sssr_overlay}" CONTENT "${_ffx_callbacks_source}" @ONLY)
 
-if(NOT EXISTS "${_ffx_sc}")
+if(THREE_DS_RECOMP_FFX_SHADER_BUNDLE)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    get_filename_component(_repository_root "${CMAKE_CURRENT_LIST_DIR}/../../../.." ABSOLUTE)
+    execute_process(COMMAND "${Python3_EXECUTABLE}"
+        "${_repository_root}/tools/triaevum_release/ffx_shader_bundle.py" install
+        --sdk "${_ffx_sdk}" --bundle "${THREE_DS_RECOMP_FFX_SHADER_BUNDLE}"
+        --overlay "${_ffx_sssr_overlay}" --output "${_ffx_generated}"
+        COMMAND_ERROR_IS_FATAL ANY)
+    file(GLOB_RECURSE _ffx_bundle_inputs CONFIGURE_DEPENDS
+        "${_ffx_include}/FidelityFX/gpu/*"
+        "${_ffx_backend_vk}/shaders/sssr/*"
+        "${_ffx_backend_vk}/shaders/denoiser/*"
+        "${THREE_DS_RECOMP_FFX_SHADER_BUNDLE}/*")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${_ffx_bundle_inputs})
+elseif(NOT WIN32 OR NOT EXISTS "${_ffx_sc}")
     message(FATAL_ERROR "The pinned FidelityFX shader compiler is unavailable")
 endif()
 
@@ -53,6 +79,10 @@ execute_process(
         -DFFX_SOURCE_DIR=${ffx_SOURCE_DIR}
         -P
         ${CMAKE_CURRENT_LIST_DIR}/../patches/oot3d_fidelityfx_vk_core_aliases.cmake
+    COMMAND_ERROR_IS_FATAL ANY)
+execute_process(COMMAND ${CMAKE_COMMAND}
+    -DFFX_SOURCE_DIR=${ffx_SOURCE_DIR}
+    -P ${CMAKE_CURRENT_LIST_DIR}/../patches/oot3d_fidelityfx_vk_scratch_alignment.cmake
     COMMAND_ERROR_IS_FATAL ANY)
 
 function(_oot3d_ffx_compile_shader shader effect_define output_list)
@@ -68,6 +98,15 @@ function(_oot3d_ffx_compile_shader shader effect_define output_list)
         "${_shader_name}_16bit"
         "${_shader_name}_wave64_16bit")
     set(_half_values 0 0 1 1)
+    if(THREE_DS_RECOMP_FFX_SHADER_BUNDLE)
+        foreach(_output IN LISTS _outputs)
+            if(NOT EXISTS "${_output}")
+                message(FATAL_ERROR "Missing FidelityFX shader permutation: ${_output}")
+            endif()
+        endforeach()
+        set(${output_list} ${${output_list}} ${_outputs} PARENT_SCOPE)
+        return()
+    endif()
     foreach(_index RANGE 0 3)
         list(GET _outputs ${_index} _output)
         list(GET _variant_names ${_index} _variant)
@@ -171,6 +210,39 @@ if(MSVC)
             /wd4244
             /wd4267
             /wd4324)
+    endforeach()
+endif()
+
+if(NOT WIN32)
+    option(THREE_DS_RECOMP_FFX_SANITIZE "Instrument only FidelityFX host code with AddressSanitizer" OFF)
+    # The donor's opaque context budgets assume 16-bit wchar_t debug names.
+    # POSIX keeps native wchar_t and libc; reserve a conservative width-scaled
+    # budget, with the donor's sizeof(private) assertions still authoritative.
+    set(_ffx_host_overlay "${_ffx_generated}/host-overlay")
+    foreach(_effect sssr denoiser)
+        set(_header "${_ffx_include}/FidelityFX/host/ffx_${_effect}.h")
+        file(READ "${_header}" _host_source)
+        string(TOUPPER "${_effect}" _effect_upper)
+        string(REGEX MATCH "#define FFX_${_effect_upper}_CONTEXT_SIZE \\(([0-9]+)\\)"
+            _size_definition "${_host_source}")
+        if(NOT _size_definition)
+            message(FATAL_ERROR "FidelityFX context budget contract changed: ${_effect}")
+        endif()
+        string(REPLACE "${_size_definition}"
+            "#define FFX_${_effect_upper}_CONTEXT_SIZE (${CMAKE_MATCH_1} * sizeof(wchar_t) / 2)"
+            _host_source "${_host_source}")
+        file(CONFIGURE OUTPUT "${_ffx_host_overlay}/FidelityFX/host/ffx_${_effect}.h"
+            CONTENT "${_host_source}" @ONLY)
+        set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_header}")
+    endforeach()
+    foreach(_target oot3d_ffx_denoiser oot3d_ffx_sssr oot3d_ffx_sssr_backend_vk)
+        target_include_directories(${_target} BEFORE PUBLIC "${_ffx_host_overlay}")
+        target_compile_options(${_target} PRIVATE -include
+            "${CMAKE_CURRENT_LIST_DIR}/oot3d_ffx_posix_compat.h")
+        if(THREE_DS_RECOMP_FFX_SANITIZE)
+            target_compile_options(${_target} PRIVATE -fsanitize=address -fno-omit-frame-pointer -g)
+            target_link_options(${_target} INTERFACE -fsanitize=address)
+        endif()
     endforeach()
 endif()
 
