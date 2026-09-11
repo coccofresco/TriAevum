@@ -288,6 +288,38 @@ int main() {
           "a lane-local Ocarina predicate suppressed the complete gameplay "
           "HUD");
 
+  gameplayHudBridge.BeginHostFrame(2U);
+  gameplayHudBridge.ObserveGuestEntry(kFileSelectUpdate);
+  const auto interleavedHud = gameplayHudBridge.BuildTopScreenPresentation(
+      oot3d::ui::UiSubsystem::GameplayHud);
+  Require(std::any_of(interleavedHud.begin(), interleavedHud.end(),
+                     [](const auto &primitive) {
+                       return primitive.role == oot3d::ui::UiPrimitiveRole::Heart;
+                     }),
+          "unrelated callback hid HUD despite the live native compositor gate");
+  gameplayHudBridge.BeginHostFrame(3U);
+  Require(!gameplayHudBridge.BuildTopScreenPresentation(
+               oot3d::ui::UiSubsystem::GameplayHud).empty(),
+          "presentation-only frame lost the native HUD");
+  Require(gameplayHudMemory.Write8(kGameplayPlayState + 0x7F40U, 1U),
+          "cannot suppress native HUD");
+  Require(gameplayHudBridge.BuildTopScreenPresentation(
+              oot3d::ui::UiSubsystem::GameplayHud).empty(),
+          "live native HUD suppression retained stale presentation");
+  Require(gameplayHudMemory.Write8(kGameplayPlayState + 0x7F40U, 0U),
+          "cannot restore native HUD");
+  gameplayHudBridge.BeginHostFrame(4U);
+  gameplayHudBridge.ObserveGuestEntry(kGameplayHudDraw);
+  Require(gameplayHudMemory.Write16(0x00587958U + 0x42U, 0x40U),
+          "cannot update capacity after lifecycle entry");
+  const auto updatedHud = gameplayHudBridge.BuildTopScreenPresentation(
+      oot3d::ui::UiSubsystem::GameplayHud);
+  Require(std::count_if(updatedHud.begin(), updatedHud.end(),
+                        [](const auto &primitive) {
+                          return primitive.role == oot3d::ui::UiPrimitiveRole::Heart;
+                        }) == 4,
+          "presentation mixed pre-update health with current native streams");
+
   constexpr uint32_t kQuestRenderBuffer = 0x005E0000U;
   constexpr uint32_t kQuestPositions = 0x005E0100U;
   std::array<std::array<TopScreenVec3, 4>, 8> questQuads{};

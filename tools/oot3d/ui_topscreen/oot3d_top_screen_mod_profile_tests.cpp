@@ -1249,6 +1249,16 @@ int main() {
                                          &error) &&
               compositorGate.Draw,
           "TopScreen compositor rejected the native gameplay state");
+  Require(compositorGateMemory.Write16(kGateSceneOwner + 0x224EU, 1U) &&
+              ReadTopScreenHudCompositorGate(compositorGateMemory,
+                                             &compositorGate, &error) &&
+              !compositorGate.Draw,
+          "TopScreen compositor ignored native player HUD suppression");
+  Require(compositorGateMemory.Write16(kGateSceneOwner + 0x224EU, 0U) &&
+              ReadTopScreenHudCompositorGate(compositorGateMemory,
+                                             &compositorGate, &error) &&
+              compositorGate.Draw,
+          "TopScreen compositor did not restore HUD after player suppression");
   Require(compositorGateMemory.Write32(0x005066F8U + 0x34U, 1U) &&
               ReadTopScreenHudCompositorGate(compositorGateMemory,
                                              &compositorGate, &error) &&

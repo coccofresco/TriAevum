@@ -1023,6 +1023,15 @@ bool ReadTopScreenHudCompositorGate(NativeA32Memory &memory,
     SetError(error, "cannot read native TopScreen player HUD readiness");
     return false;
   }
+  // Original TopScreen 005CE554 also suppresses its compositor while the
+  // native player's +224E field is nonzero; a missing player is allowed.
+  std::uint32_t player = 0U;
+  std::uint16_t playerHudState = 0U;
+  if (!memory.Read32(playState + 0x20ACU, &player) ||
+      (player != 0U && !memory.Read16(player + 0x224EU, &playerHudState))) {
+    SetError(error, "cannot read native TopScreen player HUD state");
+    return false;
+  }
   for (const auto address : kCompetingOwnerStates) {
     std::uint32_t active = 0U;
     if (!memory.Read32(address, &active)) {
@@ -1036,7 +1045,7 @@ bool ReadTopScreenHudCompositorGate(NativeA32Memory &memory,
   gate->Draw = stateType == 3U && stateSubtype == 2U && health != 0U &&
                playerTransition == 0U && runtimeMode == 0U &&
                (playerHudReady != 0U || alternateHudOwner != 0U) &&
-               playerHudSuppressed == 0U;
+               playerHudSuppressed == 0U && playerHudState == 0U;
   return true;
 }
 

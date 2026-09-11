@@ -277,14 +277,8 @@ Oot3dNativeUiLifecycleBridge::BuildTopScreenPresentation(
     oot3d::ui::UiSubsystem subsystem) {
   std::vector<oot3d::ui::UiPrimitive> output;
   const std::size_t index = static_cast<std::size_t>(subsystem);
-  const bool retainedPauseEdge =
-      subsystem == oot3d::ui::UiSubsystem::GameplayHud &&
-      (mTopScreenPauseEdgeGeometry.has_value() ||
-       mTopScreenPausePageRedrawEdgeGeometry.has_value());
   const bool ocarinaLane = subsystem == oot3d::ui::UiSubsystem::TouchControls;
-  if (index >= mObservedSubsystems.size() ||
-      (!ocarinaLane && (!mHasLatestState ||
-       (!mObservedSubsystems[index] && !retainedPauseEdge)))) {
+  if (index >= mObservedSubsystems.size()) {
     return output;
   }
   if (ocarinaLane) {
@@ -336,7 +330,12 @@ Oot3dNativeUiLifecycleBridge::BuildTopScreenPresentation(
       mTopScreenConfig.RenderHud) {
     std::uint32_t pulsePhase = 0U;
     (void)mMemory.Read32(0x0050AF8CU, &pulsePhase);
-    const auto content = oot3d::ui::BuildOot3dUiHudContent(mLatestState);
+    // TopScreen's compositor reads current native state, not the set of UI
+    // callbacks reached in this host refresh. Read after guest work, alongside
+    // the live quad streams below; do not advance lifecycle/input state here.
+    const NativeA32UiMemoryReader reader(mMemory);
+    const auto capture = oot3d::ui::CaptureOot3dUiState(reader, mRoots);
+    const auto content = oot3d::ui::BuildOot3dUiHudContent(capture.state);
     (void)AppendTopScreenHealthPresentation(
         content, *texture, static_cast<std::uint8_t>(pulsePhase), output);
     TopScreenTouchDynamicState touchState;
