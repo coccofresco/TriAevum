@@ -5281,6 +5281,7 @@ bool GfxRenderingAPIVulkan::TryRenderInteractiveGrass(
     const bool prepared = mInteractiveGrassPass.Prepare(
         mCommandBuffers[mCurrentFrame], target.Width,
         target.Height, *perspective, settings.Grass,
+        Oot3d::PackToonSurfaceParameters(settings.Effects.Toon, settings.Effects.ToonStyle, false),
         mFrameCounter, target.Key.RenderTargetNamespace,
         target.Key.ColorPhysicalAddress, mCurrentFrame,
         mInteractiveGrassProviderPlan,

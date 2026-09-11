@@ -171,6 +171,47 @@ needed, it must be keyed by surface identity and declare its graph resources.
 Avoid a new full-resolution G-buffer or replay of every terrain draw by default.
 First qualify supported canonical material paths and expose unsupported ones.
 
+### Shared Toon Response Implemented (2026-09-11)
+
+`toon_surface_response.h` now owns the common GLSL response and its 128-byte
+std430 parameter payload. `pica_toon_shader.cpp` specializes that response with
+the existing native toon settings; Grass consumes the same response with the
+frame's effective settings supplied by its caller. No second F1 settings owner,
+new preset, scene exception or dependency from canonical rendering to Grass.
+
+Shared operations: automatic/custom bands, band softness, saturation, shadow
+tint/strength and rim tint/strength/width. Zero softness now uses an explicit
+step, avoiding undefined GLSL smoothstep with coincident edges. The native toon
+variant key carries a new implementation revision to avoid old cached variants.
+
+Grass passes lighting, normal and view direction to its fragment stage and
+applies the response before native fog, without altering alpha or outline
+policy. Off returns its incoming color unchanged. Settings are per-draw data,
+not Grass shader variants or placement-cache dependencies. The parameter payload
+adds 128 bytes per environment record, not per blade; no new full-screen pass,
+texture sampling or CPU readback is introduced. This is not a measured speedup.
+
+Important boundary: this implements shared **style**, not yet canonical terrain
+lighting inheritance. Grass still receives the existing decoded-light response.
+Its lighting-available flag must not pretend that native primary RGB has already
+been captured. The native material-lighting path retains its pre-TEV placement;
+Grass currently follows the vertex-lit surface-style path. The next section's
+native output publication remains necessary for full terrain continuity.
+
+Verification: Windows NRI/Vulkan runtime built incrementally (no title AOT
+rebuild); 94 Grass/PICA-toon tests passed, including shared-source identity,
+parameter packing, Off, alpha/fog order and outline independence. Three bounded
+180-presentation Hyrule Field probes exited 0, using the same read-only mounted
+checkpoint: `grass-shared-toon-default`, `grass-shared-toon-off`, and
+`grass-shared-toon-hard-bands` under
+`C:/Users/xander/triaevum-verify-20260911/`. Native framebuffer frame 150 inspected
+in each. The diagnostic two-band profile visibly darkens both terrain and Grass;
+the default rim visibly brightens grazing-angle Grass. User presets were not
+modified. No shader compilation failures in the default run. The final default
+sample retains 4,677,577 anchors, 87,315 blades and nine draws, with no pending
+placement builds. Captures are not throughput benchmarks; Linux/Android and
+live F1 interaction were not tested in this step.
+
 ### Vertex Lighting Reuse Investigation (2026-09-11)
 
 Scope: source-path verification only. No new lighting implementation, runtime

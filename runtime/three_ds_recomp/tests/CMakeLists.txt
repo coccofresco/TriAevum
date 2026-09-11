@@ -476,6 +476,7 @@ add_executable(oot3d_graphics_foundation_tests
     ../src/fast/oot3d/cacao_normal_input.cpp
     ../src/fast/oot3d/grass_async_placement_builder.cpp
     ../src/fast/oot3d/grass_static_placement_cache.cpp
+    ../src/fast/oot3d/grass_shader_sources.cpp
     ../src/fast/oot3d/grass_blade_geometry.cpp
     ../src/fast/oot3d/grass_collision_resolver.cpp
     ../src/fast/oot3d/grass_geometry_registry.cpp

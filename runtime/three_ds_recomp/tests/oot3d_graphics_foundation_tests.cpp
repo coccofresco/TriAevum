@@ -40,6 +40,8 @@
 #include "fast/oot3d/temporal_aa.h"
 #include "fast/oot3d/texture_preview_artifact.h"
 #include "fast/oot3d/pica_toon_shader.h"
+#include "fast/oot3d/toon_surface_response.h"
+#include "fast/oot3d/grass_shader_sources.h"
 #include "fast/oot3d/renderer_validation_telemetry.h"
 #include "fast/oot3d/reflection_ibl.h"
 #include "fast/oot3d/pica_uniform_layout.h"
@@ -3820,11 +3822,57 @@ TEST(Oot3dPicaToon, CustomBandValuesChangeShaderAndVariantKey) {
     ASSERT_TRUE(second.Applied());
     EXPECT_NE(first.FragmentKey, second.FragmentKey);
     EXPECT_NE(second.Source.find(
-                  "0.120000 - OOT3D_TOON_SOFTNESS"),
+                  "vec4(0.120000,"),
               std::string::npos);
     EXPECT_NE(second.Source.find(
                   "float oot3d_toon_band_luminance"),
               std::string::npos);
+}
+
+TEST(Oot3dGrassToon, SharesCanonicalShaderAndAppliesBeforeFogWithoutChangingAlpha) {
+    using namespace Fast::Oot3d;
+    const auto grass = BuildGrassFragmentShader();
+    EXPECT_NE(grass.find(kToonSurfaceResponseShader), std::string::npos);
+    PicaToonDrawInfo draw{Oot3d::Renderer::PicaCompositionDomain::Scene, true, true, false, 0xfU};
+    const auto native = BuildPicaToonShaderVariant(
+        "void main() {\n    float pica_z_over_w = -gl_FragCoord.z;\n}",
+        7U, draw, ToonMode::PostProcessPreview, {});
+    ASSERT_TRUE(native.Applied());
+    EXPECT_NE(native.Source.find(kToonSurfaceResponseShader), std::string::npos);
+    const auto apply = grass.find("resolved_color.rgb = oot3d_toon_surface_response");
+    ASSERT_NE(apply, std::string::npos);
+    EXPECT_LT(apply, grass.find("resolved_color.rgb = mix("));
+    EXPECT_EQ(grass.find("resolved_color.a ="), std::string::npos);
+    EXPECT_NE(grass.find("if (p.flags.x < 0.5) return sourceColor;"), std::string::npos);
+    EXPECT_NE(grass.find(": step(edge, guide)"), std::string::npos);
+}
+
+TEST(Oot3dGrassToon, PacksTheExistingStyleAndKeepsOffAndLightingIndependent) {
+    using namespace Fast::Oot3d;
+    ToonStyleSettings style;
+    style.LightBands = 6;
+    style.CustomLightBands = true;
+    style.LightBandLevels = {0.03F, 0.2F, 0.3F, 0.4F, 0.8F, 1.0F};
+    style.LightBandThresholds = {0.1F, 0.25F, 0.35F, 0.6F, 0.9F};
+    style.BandSoftness = 0;
+    const auto packed = PackToonSurfaceParameters(ToonMode::PicaMaterial, style, true);
+    EXPECT_EQ(packed.Control, (std::array<float, 4>{5, 0, style.Saturation, 1}));
+    EXPECT_EQ(packed.Flags, (std::array<float, 4>{1, 1, style.RimWidth, 0}));
+    for (size_t i = 0; i < style.LightBandLevels.size(); ++i)
+        EXPECT_EQ(packed.Levels[i / 4][i % 4], style.LightBandLevels[i]);
+    for (size_t i = 0; i < style.LightBandThresholds.size(); ++i)
+        EXPECT_EQ(packed.Thresholds[i / 4][i % 4], style.LightBandThresholds[i]);
+    EXPECT_FLOAT_EQ(packed.Shadow[3], style.ShadowStrength);
+    EXPECT_FLOAT_EQ(packed.Rim[3], style.RimStrength);
+    EXPECT_FLOAT_EQ(PackToonSurfaceParameters(ToonMode::Off, style, true).Flags[0], 0);
+    EXPECT_FLOAT_EQ(PackToonSurfaceParameters(ToonMode::PicaMaterial, style, false).Flags[1], 0);
+    style.OutlineEnabled = !style.OutlineEnabled;
+    style.OutlineWidth = 10;
+    const auto outlineOnly = PackToonSurfaceParameters(ToonMode::PicaMaterial, style, true);
+    EXPECT_EQ(packed.Flags, outlineOnly.Flags);
+    EXPECT_EQ(packed.Control, outlineOnly.Control);
+    EXPECT_EQ(packed.Shadow, outlineOnly.Shadow);
+    EXPECT_EQ(packed.Rim, outlineOnly.Rim);
 }
 
 TEST(Oot3dPicaToon, MaterialModeInjectsBeforeTevAndNeverPostprocessesTexels) {

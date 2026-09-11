@@ -4,11 +4,12 @@
 #include "fast/oot3d/grass_indexed_topology.h"
 #include "fast/oot3d/grass_instance_layout.h"
 #include "fast/oot3d/grass_world_placement_cache.h"
+#include "fast/oot3d/toon_surface_response.h"
 
 namespace Fast::Oot3d {
 std::string BuildGrassVertexShader() {
     return
-            std::string("#version 450\n") + std::string(kGrassBladeShapeShader) +
+            std::string("#version 450\n") + std::string(kToonSurfaceResponseShader) + std::string(kGrassBladeShapeShader) +
             std::string(kGrassDistantTuftShader) + std::string(kGrassIndexedVertexShader) + R"glsl(
 layout(location=0) in vec4 in_base_height;
 layout(location=1) in vec4 in_bend_half_width;
@@ -36,6 +37,7 @@ struct GrassEnvironmentRecord {
     vec4 tuft_lod;
     vec4 distance_lod;
     vec4 tuft_style;
+    ToonSurfaceParameters toon;
 };
 layout(std430, set=0, binding=0) readonly buffer GrassEnvironmentState {
     GrassEnvironmentRecord records[];
@@ -51,6 +53,8 @@ layout(location=1) out vec4 blade_normal_guide;
 layout(location=2) out vec4 blade_ambient_guide;
 layout(location=3) out vec4 tuft_sample;
 layout(location=4) flat out float lod_visibility;
+layout(location=5) out vec3 blade_lighting;
+layout(location=6) out vec3 blade_view_direction;
 
 void evaluate_shading(
     uint environment_index, vec3 world_normal,
@@ -295,18 +299,26 @@ void main() {
         0.25098039215686274);
     blade_ambient_guide =
         vec4(ambient_response, 1.0);
+    blade_lighting = lighting;
+    vec3 toward_eye = environment_state.records[grass.flags.w].camera_position.xyz - position;
+    blade_view_direction = vec3(dot(view_side, toward_eye),
+        dot(environment_state.records[grass.flags.w].view_up.xyz, toward_eye),
+        -dot(environment_state.records[grass.flags.w].view_forward.xyz, toward_eye));
 }
 )glsl";
 }
 
 std::string BuildGrassFragmentShader() {
     return std::string("#version 450\n") +
+            std::string(kToonSurfaceResponseShader) +
             std::string(kGrassDistantTuftShader) + R"glsl(
 layout(location=0) in vec4 blade_color;
 layout(location=1) in vec4 blade_normal_guide;
 layout(location=2) in vec4 blade_ambient_guide;
 layout(location=3) in vec4 tuft_sample;
 layout(location=4) flat in float lod_visibility;
+layout(location=5) in vec3 blade_lighting;
+layout(location=6) in vec3 blade_view_direction;
 struct GrassEnvironmentRecord {
     vec4 color_and_mode;
     vec2 lut[128];
@@ -328,6 +340,7 @@ struct GrassEnvironmentRecord {
     vec4 tuft_lod;
     vec4 distance_lod;
     vec4 tuft_style;
+    ToonSurfaceParameters toon;
 };
 layout(std430, set=0, binding=0) readonly buffer GrassEnvironmentState {
     GrassEnvironmentRecord records[];
@@ -357,6 +370,9 @@ void main() {
             uint(environment_state.records[grass.flags.w].tuft_lod.z),
             environment_state.records[grass.flags.w].tuft_style.x)) discard;
     vec4 resolved_color = blade_color;
+    resolved_color.rgb = oot3d_toon_surface_response(resolved_color.rgb, blade_lighting,
+        blade_normal_guide.xyz * 2.0 - 1.0, blade_view_direction,
+        environment_state.records[grass.flags.w].toon);
 #if GRASS_AUXILIARY_OUTPUTS
     out_normal_guide = blade_normal_guide;
     // Grass topology, LOD and wind can change every presentation. Let the

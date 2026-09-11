@@ -79,8 +79,10 @@ struct alignas(16) GrassEnvironmentRecord {
     std::array<float, 4> DistanceLod{};
     // Tuft spread/density, final fade range, enabled.
     std::array<float, 4> TuftStyle{};
+    ToonSurfaceParameters Toon;
 };
-static_assert(sizeof(GrassEnvironmentRecord) == 1424U);
+static_assert(offsetof(GrassEnvironmentRecord, Toon) == 1424U);
+static_assert(sizeof(GrassEnvironmentRecord) == 1552U);
 
 struct GrassPushConstants {
     std::array<float, 16> PositionToClip{};
@@ -764,6 +766,7 @@ bool InteractiveGrassPass::Initialize(VkPhysicalDevice physicalDevice,
 bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width, uint32_t height,
                                    const ::Fast::Renderer3ds::PicaPerspectiveCameraState& view,
                                    const InteractiveGrassSettings& settings,
+                                   const ToonSurfaceParameters& toon,
                                    uint64_t frameId, uint64_t renderTargetNamespace,
                                    uint32_t framebufferColorPhysicalAddress, uint32_t frameSlot,
                                    const EffectGeometryProviderPlan& providerPlan,
@@ -941,6 +944,9 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                     textureAverage, visualSeconds, view, viewForward, viewSide, viewUp);
                 prepared.Environment.CameraPosition = {
                     prepared.Eye[0], prepared.Eye[1], prepared.Eye[2], 0.0F};
+                prepared.Environment.Toon = toon;
+                prepared.Environment.Toon.Flags[1] =
+                    settings.Appearance.ReceiveLighting && mesh.Shading.ActiveLightCount > 0U ? 1.0F : 0.0F;
                 placementRequests.push_back(std::move(placementRequest));
                 preparedPlacements.push_back(std::move(prepared));
             }

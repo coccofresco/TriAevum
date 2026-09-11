@@ -1,4 +1,5 @@
 #include "fast/oot3d/pica_toon_shader.h"
+#include "fast/oot3d/toon_surface_response.h"
 
 #include <algorithm>
 #include <bit>
@@ -25,6 +26,7 @@ uint64_t AppendHash(uint64_t hash, uint32_t value) {
 uint64_t VariantKey(uint64_t original, ToonMode mode,
                     const ToonStyleSettings& style) {
     uint64_t hash = 1469598103934665603ULL;
+    hash = AppendHash(hash, 2U); // Shared surface response and defined hard-band edges.
     hash = AppendHash(hash, static_cast<uint32_t>(original));
     hash = AppendHash(hash, static_cast<uint32_t>(original >> 32));
     hash = AppendHash(hash, static_cast<uint32_t>(mode));
@@ -60,61 +62,19 @@ std::string Float(float value) {
     return out.str();
 }
 
-std::string BandLuminanceHelper(const ToonStyleSettings& style) {
-    if (!style.CustomLightBands) {
-        return R"(
-float oot3d_toon_band_luminance(float guide) {
-    float scaled = guide * OOT3D_TOON_BAND_SPAN;
-    float lowerBand = floor(scaled);
-    float transition = smoothstep(0.5 - OOT3D_TOON_SOFTNESS,
-                                  0.5 + OOT3D_TOON_SOFTNESS,
-                                  fract(scaled));
-    return (lowerBand + transition) / OOT3D_TOON_BAND_SPAN;
-}
-)";
-    }
-
-    const size_t bandCount = std::clamp<size_t>(
-        style.LightBands, 2U, kMaximumToonLightBands);
-    const size_t thresholdCount = bandCount - 1U;
-    std::string source =
-        "\nfloat oot3d_toon_band_luminance(float guide) {\n"
-        "    float bandLuminance = " +
-        Float(style.LightBandLevels[0]) + ";\n";
-    for (size_t index = 0; index < thresholdCount; ++index) {
-        float spacing = 1.0F;
-        if (thresholdCount > 1U) {
-            if (index == 0U) {
-                spacing = style.LightBandThresholds[1] -
-                          style.LightBandThresholds[0];
-            } else if (index + 1U == thresholdCount) {
-                spacing = style.LightBandThresholds[index] -
-                          style.LightBandThresholds[index - 1U];
-            } else {
-                spacing = std::min(
-                    style.LightBandThresholds[index] -
-                        style.LightBandThresholds[index - 1U],
-                    style.LightBandThresholds[index + 1U] -
-                        style.LightBandThresholds[index]);
-            }
-        }
-        spacing = std::max(spacing, 0.001F);
-        const float delta = style.LightBandLevels[index + 1U] -
-                            style.LightBandLevels[index];
-        source += "    bandLuminance += " + Float(delta) +
-                  " * smoothstep(" +
-                  Float(style.LightBandThresholds[index]) +
-                  " - OOT3D_TOON_SOFTNESS * " + Float(spacing) + ", " +
-                  Float(style.LightBandThresholds[index]) +
-                  " + OOT3D_TOON_SOFTNESS * " + Float(spacing) +
-                  ", guide);\n";
-    }
-    source += "    return clamp(bandLuminance, 0.0, 1.0);\n}\n";
-    return source;
-}
-
-std::string Helpers(const ToonStyleSettings& style) {
-    std::string source = R"(
+std::string Declarations(const ToonStyleSettings& style, bool usesVertexLighting) {
+    const auto params = PackToonSurfaceParameters(ToonMode::PicaMaterial, style, usesVertexLighting);
+    const auto vec4 = [](const std::array<float, 4>& value) {
+        return "vec4(" + Float(value[0]) + ", " + Float(value[1]) + ", " +
+            Float(value[2]) + ", " + Float(value[3]) + ")";
+    };
+    std::string source(kToonSurfaceResponseShader);
+    source += "\nToonSurfaceParameters oot3d_toon_parameters() {\n"
+        "    return ToonSurfaceParameters(" + vec4(params.Control) + ", " +
+        vec4(params.Shadow) + ", " + vec4(params.Rim) + ", " + vec4(params.Flags) +
+        ", vec4[2](" + vec4(params.Levels[0]) + ", " + vec4(params.Levels[1]) +
+        "), vec4[2](" + vec4(params.Thresholds[0]) + ", " + vec4(params.Thresholds[1]) + "));\n}\n";
+    source += R"glsl(
 vec3 oot3d_toon_rotate_z(vec4 q) {
     float qlen = dot(q, q);
     if (qlen < 0.000001) return vec3(0.0, 0.0, 1.0);
@@ -123,93 +83,20 @@ vec3 oot3d_toon_rotate_z(vec4 q) {
                 2.0 * (q.y * q.z - q.w * q.x),
                 1.0 - 2.0 * (q.x * q.x + q.y * q.y));
 }
-)";
-    source += BandLuminanceHelper(style);
-    source += R"(
-
 vec3 oot3d_apply_toon(vec3 sourceColor) {
-    const vec3 lumaWeights = vec3(0.2126, 0.7152, 0.0722);
-    // Quantize the interpolated PICA lighting/color contribution, never the
-    // post-TEV texel. This preserves albedo gradients and texture detail.
-    float lightingGuide = clamp(dot(pica_primary_color.rgb, lumaWeights), 0.0, 1.0);
-    float bandLuminance = oot3d_toon_band_luminance(lightingGuide);
-    float lightingScale = clamp(bandLuminance / max(lightingGuide, 0.05),
-                                0.0, 2.0);
-    lightingScale = mix(1.0, lightingScale, OOT3D_TOON_HAS_VERTEX_LIGHT);
-    vec3 banded = sourceColor * lightingScale;
-    float bandedLuma = dot(banded, lumaWeights);
-    banded = mix(vec3(bandedLuma), banded, OOT3D_TOON_SATURATION);
-    float shadowMask = (1.0 - smoothstep(0.0, 0.55, bandLuminance)) *
-                       OOT3D_TOON_HAS_VERTEX_LIGHT;
-    banded = mix(banded, banded * OOT3D_TOON_SHADOW_TINT,
-                 shadowMask * OOT3D_TOON_SHADOW_STRENGTH);
-    vec3 normal = normalize(oot3d_toon_rotate_z(pica_normquat));
-    vec3 viewDirection = dot(pica_view, pica_view) > 0.000001
-        ? normalize(pica_view) : vec3(0.0, 0.0, 1.0);
-    float rim = pow(clamp(1.0 - abs(dot(normal, viewDirection)), 0.0, 1.0),
-                    OOT3D_TOON_RIM_WIDTH);
-    return clamp(banded + OOT3D_TOON_RIM_TINT *
-                 (rim * OOT3D_TOON_RIM_STRENGTH), 0.0, 1.0);
+    return oot3d_toon_surface_response(sourceColor, pica_primary_color.rgb,
+        oot3d_toon_rotate_z(pica_normquat), pica_view, oot3d_toon_parameters());
 }
-
 vec3 oot3d_material_bands(vec3 lighting, bool shadow_tint) {
-    const vec3 lumaWeights = vec3(0.2126, 0.7152, 0.0722);
-    float guide = clamp(dot(lighting, lumaWeights), 0.0, 1.0);
-    float bandLuminance = oot3d_toon_band_luminance(guide);
-    vec3 banded = lighting * clamp(bandLuminance / max(guide, 0.05), 0.0, 2.0);
-    float bandedLuma = dot(banded, lumaWeights);
-    banded = mix(vec3(bandedLuma), banded, OOT3D_TOON_SATURATION);
-    if (shadow_tint) {
-        float shadowMask = 1.0 - smoothstep(0.0, 0.55, bandLuminance);
-        banded = mix(banded, banded * OOT3D_TOON_SHADOW_TINT,
-                     shadowMask * OOT3D_TOON_SHADOW_STRENGTH);
-    }
-    return clamp(banded, 0.0, 1.0);
+    return clamp(oot3d_toon_banded_color(lighting, lighting, 1.0,
+        shadow_tint, oot3d_toon_parameters()), 0.0, 1.0);
 }
-
 vec3 oot3d_material_rim(vec3 materialNormal) {
-    vec3 normal = normalize(materialNormal);
-    vec3 viewDirection = dot(pica_view, pica_view) > 0.000001
-        ? normalize(pica_view) : vec3(0.0, 0.0, 1.0);
-    float rim = pow(clamp(1.0 - abs(dot(normal, viewDirection)), 0.0, 1.0),
-                    OOT3D_TOON_RIM_WIDTH);
-    return OOT3D_TOON_RIM_TINT * (rim * OOT3D_TOON_RIM_STRENGTH);
+    return oot3d_toon_rim(materialNormal, pica_view, oot3d_toon_parameters());
 }
-)";
+)glsl";
     return source;
 }
-
-std::string Declarations(const ToonStyleSettings& style,
-                         bool usesVertexLighting) {
-    std::string declarations;
-    const uint8_t lightBands = std::clamp<uint8_t>(
-        style.LightBands, 2U, kMaximumToonLightBands);
-    declarations += "\n#define OOT3D_TOON_BAND_SPAN " +
-                    Float(static_cast<float>(lightBands - 1U)) + "\n";
-    declarations += "#define OOT3D_TOON_SOFTNESS " +
-                    Float(style.BandSoftness) + "\n";
-    declarations += "#define OOT3D_TOON_SATURATION " +
-                    Float(style.Saturation) + "\n";
-    declarations += std::string("#define OOT3D_TOON_HAS_VERTEX_LIGHT ") +
-                    (usesVertexLighting ? "1.0\n" : "0.0\n");
-    declarations += "#define OOT3D_TOON_SHADOW_TINT vec3(" +
-                    Float(style.ShadowTint[0]) + ", " +
-                    Float(style.ShadowTint[1]) + ", " +
-                    Float(style.ShadowTint[2]) + ")\n";
-    declarations += "#define OOT3D_TOON_SHADOW_STRENGTH " +
-                    Float(style.ShadowStrength) + "\n";
-    declarations += "#define OOT3D_TOON_RIM_STRENGTH " +
-                    Float(style.RimStrength) + "\n";
-    declarations += "#define OOT3D_TOON_RIM_WIDTH " +
-                    Float(style.RimWidth) + "\n";
-    declarations += "#define OOT3D_TOON_RIM_TINT vec3(" +
-                    Float(style.RimTint[0]) + ", " +
-                    Float(style.RimTint[1]) + ", " +
-                    Float(style.RimTint[2]) + ")\n";
-    declarations += Helpers(style);
-    return declarations;
-}
-
 } // namespace
 
 PicaToonEligibility ClassifyPicaToonDraw(const PicaToonDrawInfo& draw,
