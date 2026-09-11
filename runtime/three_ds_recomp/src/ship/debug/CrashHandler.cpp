@@ -1,6 +1,7 @@
 #include <spdlog/spdlog.h>
 #include "ship/utils/StringHelper.h"
 #include "ship/debug/CrashHandler.h"
+#include "ship/utils/ShutdownRequest.h"
 #include "ship/Context.h"
 
 #ifdef _WIN32
@@ -199,10 +200,6 @@ static void ErrorHandler(int sig, siginfo_t* sigInfo, void* data) {
 
     Context::GetRawInstance()->GetLogger()->flush();
     spdlog::shutdown();
-    exit(1);
-}
-
-static void ShutdownHandler(int sig, siginfo_t* sigInfo, void* data) {
     exit(1);
 }
 
@@ -415,6 +412,7 @@ extern "C" LONG WINAPI seh_filter(PEXCEPTION_POINTERS ex) {
 #endif
 
 CrashHandler::CrashHandler() : mOutBuffer(std::make_unique<char[]>(gMaxBufferSize)) {
+    ShutdownRequest::Reset();
 #if defined(__linux__) && !defined(__ANDROID__)
     struct sigaction action = { 0 };
     struct sigaction shutdownAction = { 0 };
@@ -427,12 +425,11 @@ CrashHandler::CrashHandler() : mOutBuffer(std::make_unique<char[]>(gMaxBufferSiz
     sigaction(SIGFPE, &action, nullptr);
     sigaction(SIGSEGV, &action, nullptr);
 
-    shutdownAction.sa_flags = SA_SIGINFO;
-    shutdownAction.sa_sigaction = ShutdownHandler;
+    shutdownAction.sa_flags = SA_RESTART;
+    shutdownAction.sa_handler = ShutdownRequest::HandleSignal;
     sigaction(SIGINT, &shutdownAction, nullptr);
     sigaction(SIGTERM, &shutdownAction, nullptr);
     sigaction(SIGQUIT, &shutdownAction, nullptr);
-    sigaction(SIGKILL, &shutdownAction, nullptr);
 #elif defined(_WIN32)
     SetUnhandledExceptionFilter(seh_filter);
 #endif

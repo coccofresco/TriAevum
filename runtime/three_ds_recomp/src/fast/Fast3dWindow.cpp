@@ -1,6 +1,7 @@
 #include "fast/Fast3dWindow.h"
 
 #include "ship/Context.h"
+#include "ship/utils/ShutdownRequest.h"
 #include "ship/config/Config.h"
 #include "ship/controller/controldeck/ControlDeck.h"
 #include "ship/config/ConsoleVariable.h"
@@ -401,7 +402,7 @@ bool Fast3dWindow::IsFullscreen() {
 }
 
 bool Fast3dWindow::IsRunning() {
-    return mWindowManagerApi->IsRunning();
+    return !Ship::ShutdownRequest::Requested() && mWindowManagerApi->IsRunning();
 }
 
 uintptr_t Fast3dWindow::GetGfxFrameBuffer() {

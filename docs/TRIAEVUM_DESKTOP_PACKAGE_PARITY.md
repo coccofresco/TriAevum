@@ -91,3 +91,13 @@ Clean packaged end-to-end update/shutdown qualification on Linux, portable SSSR 
 the letterboxed weapon-aim outline rectangle and the remaining packaged
 gameplay replays are not closed by these installer fixes. Retain their explicit
 status in the regression audit; successful boot is not complete parity.
+
+### September 12 Follow-Up
+
+The Linux update/shutdown path above now passes after removing signal-time
+`exit()` from the donor shutdown handler. Normal frozen Forge reactivation plus
+45 seconds of gameplay and SIGTERM terminates with exit 0. See
+[shutdown qualification](TRIAEVUM_DESKTOP_SHUTDOWN.md) for the exact installed
+candidate and limitations. SSSR is built into this candidate; Windows binary
+qualification, the outline rectangle and the remaining gameplay replays are
+still open. Current release discovery is 365 tests per OS, no failures.

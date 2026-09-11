@@ -64,3 +64,9 @@ configuration and `--max-seconds 35` exited 0. It reused all 23 pass modules and
 140 PICA modules without compilation. This narrows the unresolved case to the
 package/external-shutdown conditions, but does not prove its root cause or
 exclude timing-dependent corruption. The previous Flatpak was restored.
+
+Follow-up: the shutdown fault was reproduced under Flatpak GDB and traced to
+the donor's signal-time `exit()`, not SSSR. The corrected signal path now exits
+normally in the same test. See `TRIAEVUM_DESKTOP_SHUTDOWN.md`; this supersedes
+the earlier unlocalized shutdown observation, not the remaining Windows/GPU
+qualification requirements.

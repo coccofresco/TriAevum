@@ -121,6 +121,15 @@ The recent intro/Grass results remain in
 
 ## Remaining Regression Work
 
+September 12: the Linux frozen Forge update and clean shutdown qualification
+now pass in the private candidate documented in
+[desktop shutdown](TRIAEVUM_DESKTOP_SHUTDOWN.md). The failure was signal-time
+destruction of a live renderer, not an SSSR shading fault. SSSR host portability
+and scratch alignment are implemented; the Windows runtime rebuild/qualification
+is still pending because its build drive is full. Test discovery is now 365 per
+OS without failures. These updates supersede the older distribution status
+above, not the unresolved outline/gameplay cases below.
+
 Update: portable Forge and its renderer shader helper are now built and staged
 in the installed private Flatpak. Shared automatic package-update handling is
 implemented with 26 targeted tests per OS and an actual Windows reactivation.
