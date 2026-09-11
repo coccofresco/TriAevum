@@ -62,7 +62,8 @@ logs and the exact input paths required to reproduce it.
 | `ocarina-partial-progress-fixed` | 540 frames completed; unknown marker now visible. Four unknown-state captures differ only over the marker; four checked learned/gameplay captures match the pre-fix run exactly. |
 | `tomb-native-transition-setup1` | Rejected: selector FFF1 applied at accepted transition still faults at 00371788. Experimental consumer removed. |
 
-No first-time learning sequence has yet been qualified with these fixtures.
+At this stage no first-time learning sequence had been qualified; the
+successful windmill follow-up below supersedes that coverage status.
 The failed setup experiments are not justification to suppress a native fault
 or skip game logic. Moving the selector write to the native transition
 boundary did not resolve the fault; additional preconditions remain unknown.
@@ -70,5 +71,65 @@ boundary did not resolve the fault; additional preconditions remain unknown.
 The isolated Azahar reference preparation did not produce a usable movie or
 capture: bounded launches timed out and their processes were terminated.
 Thus these results are native-runtime fixture qualification, not paired
-Azahar visual parity. Next: reach a genuine learning interaction from an
-unmodified practice save and capture matching original TopScreen behavior.
+Azahar visual parity. Matching original TopScreen captures remain pending.
+
+## First-Time Song of Storms Qualification (2026-09-11)
+
+Windows Vulkan/NRI runtime at commit `a52fcf4` completed genuine native
+teaching, player repetition and reward processing. No production change was
+needed for this sequence. This qualifies one learning interaction, not all
+ocarina states or cross-platform visual parity.
+
+Start with the complete original `100% Practice (Adult 1-1)` save group and
+select file 0 using `title_to_existing_save.json`. `practice-adult-boot`
+completed 1,450 frames, checkpoint 1,400. `practice-windmill` then used the
+existing native entrance recipe `hakasitarelay_info_entry_0453` (scene 72,
+local entrance 1), completing 650 frames, checkpoint 620. The private
+`windmill-entrance-probe.json` retains the native transition contract; it does
+not inject a cutscene selector, inventory or event flags.
+
+**Setup exception, not gameplay coverage:** normal approach probes reached a
+pillar or free play instead of the musician. In a private checkpoint clone,
+only Link's world position was moved to `(3110,-127,34)`, 75 units in front of
+the native EnFu position `(3185,-127,34)`. The native distance gate is 100.
+For this exact snapshot, player `098F4010` has position at `+28`; use
+`patch_native_a32_savestate_memory.py` with write
+`0x98f4038:006042450000fec200000842`. Do not reuse that pointer in another
+snapshot. The clone is `fixtures/windmill-front-position.oot3dsav`.
+The original save, inventory and quest/event progress were not edited.
+
+Reproduction stages, under private root `J:/TriAevum-verify-20260910/`:
+
+| Output / input | Result |
+| --- | --- |
+| `windmill-lesson-start`, `windmill-lesson-start.json` | Down at 45; A at 160/260/360, each held four frames. 750 frames, checkpoint 700. NPC starts native lesson dialogue. |
+| `windmill-lesson-demo`, `windmill-lesson-dialogue.json` | From previous checkpoint, A at 30/130/230/330. 900 frames, checkpoint 850. Frame 870 shows native repetition staff with L,R,A,L,R,A. |
+| `windmill-lesson-complete`, repository `topscreen_storms_first_learning.json` | From previous checkpoint, native note inputs followed by dialogue advances. 1,100 frames, checkpoint 1,050, exit 0. Storm effect and subsequent NPC dialogue visible. |
+
+All stages use native 30 Hz, interpolation disabled, isolated saves, and
+runtime framebuffer captures, not desktop captures. Invocation manifests
+record the executable hash, renderer options, shader pack and input paths.
+The timeline starts at player repetition, not the beginning of the lesson.
+
+`verify_storms_learning.py BEFORE AFTER` compares the `practice-windmill` and
+`windmill-lesson-complete` checkpoints without writing either:
+
+| EUR baseline field | Before | After |
+| --- | --- | --- |
+| Quest flags `00587A14` | `109DD620` | `109FD620` |
+| Lesson gate event `0058884E` | `0600` | `0E00` |
+| Completion event `00588850` | `8000` | `8020` |
+
+All five checks pass: song initially absent, subsequently present, only the
+expected quest bit changed, and completion event changed from clear to set.
+The verifier is deliberately fixture-specific, not a generic save validator.
+Addresses refer to the EUR baseline only; checksum verification is skipped
+for these locally generated trusted checkpoints, as in other state analyses.
+
+Read-only native evidence: `EnFu_WaitAdult` at `001426F8` starts message 5035
+when the player offers the ocarina; `EnFu_TeachSong` at `0015F6C8` and
+`EnFu_WaitForPlayback` at `0015FB80` lead to action `00104720`.
+That action awards `Item_Give(0x65)` and sets event `00588758+F8` bit 20.
+The native song table gives Storms quest bit `00020000` and notes
+`0,1,4,0,1,4`, displayed as L,R,A,L,R,A. These are checks of native outcomes,
+not replacement implementations of the lesson or reward logic.

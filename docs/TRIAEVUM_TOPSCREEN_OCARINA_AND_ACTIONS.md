@@ -213,7 +213,21 @@ the aligned-memory-copy routine. This disproves the previous claim that an
 early checkpoint write alone explained the fault. The experimental runtime
 extension and generator were removed before the final build. Do not retry
 the same selector as if its preconditions were established, or modify memcpy
-to suppress the fault. First-time learning is still unqualified.
+to suppress the fault. First-time learning was still unqualified at this stage.
+
+### Native First-Time Learning Follow-Up (2026-09-11)
+
+The Song of Storms windmill lesson now passes an end-to-end Windows Vulkan/NRI
+test with original unlearned practice-save progress: NPC teaching, native
+repetition staff, player notes, storm and reward/event updates. The checkpoint
+comparison confirms quest bit `00020000` and completion event bit `20` were
+set by native gameplay. No production code or reward override was added.
+Only the private setup clone's player position was relocated beside the NPC;
+this is not coverage of navigating to the windmill. The reproducible timeline,
+state verifier, native evidence and precise qualification limits are recorded
+in [Practice Save Fixtures](TRIAEVUM_TOPSCREEN_PRACTICE_SAVE_FIXTURES.md).
+Other teaching contexts, paired original-mod captures and restricted-action
+opacity coverage remain separate work; this result does not close them all.
 
 [PR #18](https://github.com/coccofresco/TriAevum/pull/18), by **999sian**, supplied
 useful ocarina scope and gameplay evidence as credited in the earlier owner
