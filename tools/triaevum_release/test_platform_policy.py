@@ -18,15 +18,13 @@ def linux_files():
     policy = json.loads(DEFAULT_POLICY.read_text())
     common = policy["allowed_roles"]
     files = {name: record for name, record in fixture.FILES.items()
-             if record[0] in common and not name.startswith("LICENSES/Microsoft-")
-             and name != "LICENSES/Python-3.13.txt"}
+             if record[0] in common and not name.startswith("LICENSES/Microsoft-")}
     files.update({
         "TriAevum": ("runtime_executable", b"ELF runtime fixture"),
         "TriAevumForge": ("forge_executable", b"ELF forge fixture"),
         "forge/oot3d_game_module.so": ("forge_runtime_module", b"ELF module fixture"),
         "triaevum_title_aot.so": ("runtime_library", b"ELF bootstrap fixture"),
         "_internal/base_library.zip": ("forge_frozen_resource", b"Python library fixture"),
-        "LICENSES/Python-3.12.txt": ("license", b"Python license fixture"),
     })
     return files
 
@@ -41,6 +39,24 @@ def write_linux_package(root, files=None):
 
 
 class PlatformPolicyTests(unittest.TestCase):
+    def test_sdk_shaderc_is_explicit_and_current_python_notice_is_required(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            files = linux_files()
+            files['forge/libshaderc.so.1'] = ('forge_runtime_module', b'ELF shaderc fixture')
+            write_linux_package(root, files)
+            result = audit_release(root)
+            self.assertTrue(result.ok, result.errors)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            files = linux_files()
+            files['forge/libunreviewed.so.1'] = ('forge_runtime_module', b'unreviewed')
+            del files['LICENSES/Python-3.13.txt']
+            write_linux_package(root, files)
+            errors = audit_release(root).errors
+            self.assertTrue(any('libunreviewed.so.1' in error for error in errors))
+            self.assertIn('required release file is missing: LICENSES/Python-3.13.txt', errors)
+
     def test_windows_qualification_cannot_approve_linux_release(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "readiness.json"

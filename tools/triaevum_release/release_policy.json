@@ -51,13 +51,13 @@
       "allowed_roles": {
         "runtime_executable": ["TriAevum"],
         "forge_executable": ["TriAevumForge"],
-        "forge_runtime_module": ["forge/oot3d_game_module.so", "forge/libshaderc_shared.so", "forge/libshaderc_shared.so.*", "forge/libglslang.so", "forge/libglslang.so.*", "forge/libSPIRV-Tools.so", "forge/libSPIRV-Tools.so.*", "forge/libSPIRV-Tools-opt.so", "forge/libSPIRV-Tools-opt.so.*"],
+        "forge_runtime_module": ["forge/oot3d_game_module.so", "forge/libshaderc.so.1", "forge/libshaderc_shared.so", "forge/libshaderc_shared.so.*", "forge/libglslang.so", "forge/libglslang.so.*", "forge/libSPIRV-Tools.so", "forge/libSPIRV-Tools.so.*", "forge/libSPIRV-Tools-opt.so", "forge/libSPIRV-Tools-opt.so.*"],
         "shader_preparation_tool": ["forge/oot3d_native_pica_aot_compiler", "forge/oot3d_native_nri_pipeline_prepare"],
         "runtime_library": ["triaevum_title_aot.so", "lib/*.so", "lib/*.so.*"],
         "forge_frozen_resource": ["_internal/*", "_internal/**/*"],
         "precompiled_title": ["titles/*/triaevum_title_aot.so"]
       },
-      "required_paths": ["TriAevum", "TriAevumForge", "forge/oot3d_game_module.so", "triaevum_title_aot.so", "_internal/base_library.zip", "LICENSES/Python-3.12.txt"],
+      "required_paths": ["TriAevum", "TriAevumForge", "forge/oot3d_game_module.so", "triaevum_title_aot.so", "_internal/base_library.zip", "LICENSES/Python-3.13.txt"],
       "forbidden_basenames": ["libc.so.6", "libpthread.so.0", "libdl.so.2", "ld-linux-x86-64.so.2", "libvulkan.so.1"],
       "forbidden_extensions": [".dll", ".exe", ".lib"]
     }
