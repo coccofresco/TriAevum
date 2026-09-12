@@ -16,7 +16,7 @@ Just as essential are **Azahar, Ship of Harkinian, libultraship, NVIDIA NRI**,
 and the SDL controller-mapping community. And, of course, **Nintendo and
 Grezzo**, who created the original game. [Full credits and licenses](THIRD_PARTY_NOTICES.md).
 
-**[Download v0.6.0-alpha.2b: Windows portable and Linux Flatpak](https://github.com/coccofresco/TriAevum/releases/tag/v0.6.0-alpha.2b)**
+**[Download v0.6.0-alpha.2c: Windows portable and Linux Flatpak](https://github.com/coccofresco/TriAevum/releases/tag/v0.6.0-alpha.2c)**
 
 ## About
 
@@ -51,7 +51,7 @@ See [ROM compatibility details](docs/TRIAEVUM_CONTENT_FAMILY_IMPORT.md).
 ### Linux and Steam Deck
 
 1. Install the **Linux-x86_64.flatpak** using your software manager or
-   `flatpak install --user ./TriAevum-v0.6.0-alpha.2b-Linux-x86_64.flatpak`.
+   `flatpak install --user ./TriAevum-v0.6.0-alpha.2c-Linux-x86_64.flatpak`.
 2. Open **TriAevum** and select your decrypted ROM in Forge.
 3. Choose **Launch game** when preparation finishes.
 

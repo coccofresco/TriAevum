@@ -78,9 +78,12 @@ An unusual exclusive resolution may legitimately select the closest display mode
 | Linux fixed mode matrix | Exit 0; 1,912 frames; modes 0/1/2; 8 applies, 1 rollback, 0 apply failures; reported GPU errors 0 |
 
 Linux runtime compilation passed with both the guard and bounded-acquisition
-changes. Linux execution above covers the guard build; the final bounded-retry
-binary has not yet been re-executed because permission review blocked updating
-the private test copy. Windows final matrix/minimize cover both changes.
+changes. The initial remote-update permission interruption was resolved after
+verifying the public source archive and host identity. The final alpha.2c package
+subsequently passed two minimize/restore cycles and a complete mode matrix
+(1,852 frames, 8 applies, 1 rollback, no apply failures). Windows packaged
+qualification passed with 1,322 frames. See
+[alpha.2c qualification](releases/v0.6.0-alpha.2c-preparation.md).
 Linux matrix did not request Vulkan validation layers. No physical Steam Deck,
 multi-monitor migration, hot unplug, or device-loss recovery is claimed.
 
@@ -96,7 +99,7 @@ saves and test installations must not enter source or public packages.
 
 ## Release boundary
 
-The source fix does not update the already published alpha.2b artifacts.
-Before shipping, rebuild and bind the executable to its package catalogue,
-include corresponding source, run the release audit and packaged-launch checks.
-The private Linux test copy has a replaced binary and is not a releasable package.
+The alpha.2b artifacts remain unchanged. Alpha.2c has rebuilt executables bound
+to new package catalogues, corresponding source, release audits and packaged
+launch checks. The earlier private Linux test copy with a replaced binary was
+not published; the release was assembled from the audited inventory instead.
