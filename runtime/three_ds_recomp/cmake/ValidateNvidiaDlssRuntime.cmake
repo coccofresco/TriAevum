@@ -38,6 +38,9 @@ Write-Output "NVIDIA DLSS runtime verified: $actual ($($signature.SignerCertific
 ]=])
 execute_process(
     COMMAND ${CMAKE_COMMAND} -E env
+        # Let the selected PowerShell rebuild its own module paths, rather than
+        # inheriting incompatible PowerShell 7 modules through CMake.
+        --unset=PSModulePath
         "OOT3D_DLSS_VALIDATION_RUNTIME=${RUNTIME_PATH}"
         "OOT3D_DLSS_VALIDATION_VERSION=${EXPECTED_VERSION}"
         "${_powershell}" -NoProfile -ExecutionPolicy Bypass

@@ -70,3 +70,28 @@ the donor's signal-time `exit()`, not SSSR. The corrected signal path now exits
 normally in the same test. See `TRIAEVUM_DESKTOP_SHUTDOWN.md`; this supersedes
 the earlier unlocalized shutdown observation, not the remaining Windows/GPU
 qualification requirements.
+
+### Windows Qualification After Cleanup (September 12)
+
+The current Windows runtime now builds and executes the shared scratch fix.
+The first configure exposed a separate host-build issue: CMake inherited
+PowerShell 7's `PSModulePath`, then launched Windows PowerShell for Authenticode
+validation. Module loading failed with duplicate security type members.
+`ValidateNvidiaDlssRuntime.cmake` now unsets that variable only for its child;
+signature, NVIDIA signer and version checks are unchanged. Both new validator
+tests pass, including a real signed 310.7.0 runtime and rejection of an unsigned
+file and an incorrect required version. No proprietary binary is added.
+
+Incremental runtime build completed with 18 scheduled steps and no whole-AOT
+regeneration. Runtime SHA-256:
+`6a1f9454984b86f9b98eb8682a8713ed31d2142a0b3b0dfe8f874b0b559dae24`.
+Two Windows NRI/Vulkan 2x runs from the field checkpoint each completed 560
+presentations, 557 SSSR dispatches, zero fallback and 553 valid-history
+dispatches, exit 0. The first compiled 17 PICA modules; the warm repetition
+used all 23 pass and 106 PICA modules from cache with zero compilations.
+The warm run disabled captures. Neither run is an unlocked performance test
+or exhaustive reflection-quality validation; 30 Hz simulation is retained.
+
+Private evidence: `I:/TriAevum-public/qualification-20260912-win-sssr/` and
+`qualification-20260912-win-sssr-warm/`. The Windows rebuild/dispatch blocker
+above is closed; other GPUs and debug configurations remain unqualified.

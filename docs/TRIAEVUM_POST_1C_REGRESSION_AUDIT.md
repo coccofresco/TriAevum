@@ -155,3 +155,47 @@ the current runtime/widget outputs; Linux `~/triaevum-post-1c-audit-backup/`,
 `~/triaevum-align-d3ffc1f-backup/release-audit-tests.*`, and Flatpak probes
 `aligned-d3ffc1f-audit-gameplay` / `post-1c-launcher-audit`. No private assets,
 screenshots, SDKs or caches are committed or uploaded.
+
+## September 12 Cleanup And Follow-Up
+
+The Windows build-drive blocker is resolved for incremental work. Cleanup
+removed the following obsolete artifacts after explicit path/reparse checks:
+
+| Removed path | Bytes | Retained evidence |
+| --- | ---: | --- |
+| `J:/TriAevum-diagnostics/release-alpha1-offline-20260907/package` | 360892325 | All 42 files SHA-256 identical to retained `proof/installation` copies. |
+| `J:/TriAevum-diagnostics/release-alpha1-20260907/installation/data/sources` | 483829760 | All three extracted files SHA-256 identical to retained offline `proof/installation/data/sources`. |
+| `I:/TriAevumFinalSourceValidation-build-1e7a9a4` | 2977016 | Obsolete generated CMake metadata and two stb dependency copies; active build remains on J. |
+| `I:/TriAevumForgeBuild/work` | 24365414 | Old PyInstaller intermediate files; spec retained. |
+
+Total removed: **872064515 bytes**. No original ROM, user save, active source
+repository or active incremental object cache was removed. The first broad
+package deletion was rejected by automatic review; it was accepted only after
+all duplicate hashes were verified. Sandbox helper startup is still broken
+in this session: reviewed external execution was required. Cleanup success
+does not establish that the sandbox helper itself has been repaired.
+
+Windows rebuilt with SSSR and deferred shutdown changes. A distinct PowerShell
+module-path bug was fixed without weakening DLL signature validation; two
+new integration tests pass. Two 560-frame SSSR runs pass with no fallback;
+see `TRIAEVUM_SSSR_PORTABLE_BACKEND.md` for counters and hashes.
+
+Mounted HUD replay was repeated on the new Windows runtime and the current
+Linux packaged runtime, using the same original `epona-hud-reference.oot3dsav`
+and the original `epona-ammo-grass` configuration. Both reached 180 presentations
+in 2x mode, 30 Hz simulation, zero whole-AOT memory faults, exit 0. Direct
+framebuffer 150 was inspected on each: A/Down is in the upper command group,
+the two ammunition counters remain at their respective commands, the minimap
+marker is on the right map, six carrots form one contiguous row and Grass is
+present. No fixture memory edits or per-scene renderer fixes were introduced.
+
+Runner: `I:/TriAevum-public/probe-mounted-parity.py` (private, also copied to
+the user's Linux host). Windows output: `mounted-parity-20260912/game-ready`;
+Linux: `/home/xander/triaevum-mounted-parity-20260912/game-ready`. A first private
+Windows runner attempt failed before boot because its relative manifest was
+resolved against the output directory; only the runner was corrected.
+
+These results close the pending mounted-layout replay and Windows SSSR build/
+dispatch checks, not all mounted inputs, Navi notifications, restricted-item
+contexts, physical Steam Deck coverage or complete game visual parity. No new
+public release is produced by this qualification.
