@@ -69,9 +69,18 @@ files inside an already installed game or use an old title DLL.
   a warm repeat, not a cold-install performance claim.
 - The resulting USA installation boots the real NRI intro: 300 presentations,
   zero whole-AOT memory faults, exit 0, framebuffer visually inspected.
-- Linux candidate metadata contains all three recipes and retains the Linux
-  binaries and preparation contracts. A full USA import on Linux is still
-  pending authorization to transfer the private test ROM to the Linux PC.
+- With explicit maintainer permission, the existing private equivalent USA
+  repack was transferred to the Linux test PC. Actual frozen Forge inside the
+  read-only Flatpak candidate accepts it through the content-family path:
+  its ExHeader and RomFS whole-file hashes differ from the exact reference.
+  Preparation completes in 27.86 seconds with the verified TopScreen archive
+  already available, zero compiled title objects and 588 device pipelines.
+- The resulting Linux USA installation boots 300 intro presentations with zero
+  whole-AOT memory faults and exit 0. Its framebuffer was visually inspected.
+  This tests the real Flatpak runtime/Forge and equivalent-dump acceptance,
+  not physical Steam Deck hardware or a complete USA playthrough.
+- GitHub workflow 34698471414 passes all three jobs on the source correction
+  b1702ea: Windows Forge/native ABI, Linux native ABI and release/module policy.
 
 Public alpha.2 release assets have not yet been replaced. The source fix and
 private candidates do not repair existing user downloads by themselves.
