@@ -64,6 +64,10 @@ def required_data(
 ) -> tuple[tuple[Path, str], ...]:
     items: list[tuple[Path, str]] = [
         (
+            REPO_ROOT / "tools/triaevum_release/input_coverage/coverage.json",
+            "tools/triaevum_release/input_coverage",
+        ),
+        (
             REPO_ROOT / "tools/triaevum_release/supported_revisions.json",
             "tools/triaevum_release",
         ),

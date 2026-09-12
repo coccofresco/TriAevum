@@ -1,0 +1,179 @@
+{
+  "bindings": [
+    {
+      "base_inputs": {
+        "code": {
+          "bytes": 4567040,
+          "sha256": "16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220"
+        },
+        "exheader": {
+          "bytes": 2048,
+          "sha256": "9f065aec342b7df2421998deacedde44d475d36264f861cffd3381a1adf8900a"
+        },
+        "romfs": {
+          "bytes": 479260672,
+          "sha256": "a3ad05dcf12893de5f1617a60f4e80f54f5e1c80069922a96a4f9c8c8cbac8ca"
+        }
+      },
+      "base_recipe": "oot3d-eur-project-baseline-16a6b0aa",
+      "input": {
+        "data_compatibility": {
+          "execution": {
+            "code": {
+              "bytes": 4567040,
+              "sha256": "16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220"
+            },
+            "exheader": "194c3e16d6afb111150cede03bbc2d78e784f3dae77d60475fccd2ddc4048dc6",
+            "romfs": {
+              "directories": 50,
+              "files": 1944,
+              "payload_bytes": 469654431,
+              "sha256": "74a5744c9718319922fb63e7f8e7a4959af4e90d1d8409a4e99ba47d92c0a715"
+            }
+          },
+          "format": "triaevum_content_family_v1",
+          "source": {
+            "code": {
+              "bytes": 4567040,
+              "sha256": "ef210566e1d9d16879a746dfb063fcbad232f0171d860de906531ecc526cc020"
+            },
+            "exheader": "194c3e16d6afb111150cede03bbc2d78e784f3dae77d60475fccd2ddc4048dc6",
+            "romfs": {
+              "directories": 50,
+              "files": 1944,
+              "payload_bytes": 469654431,
+              "sha256": "9b8994825cafe5f0ab7686afc4a1c7a78d94cdc21f0523e271d4a284e2280898"
+            }
+          }
+        },
+        "dialogue_languages": [
+          "English",
+          "French",
+          "Spanish"
+        ],
+        "id": "oot3d-usa-input-canonical-eur-ef210566",
+        "input_adapter": {
+          "code_copies": {
+            "bytes": 1825834,
+            "path": "recipes/adapters/oot3d-usa-ef210566-copies.json",
+            "sha256": "3a7771a365157c6a2a26ce6916a3a3437a15384a98c39c130cd16a98d2dd9519"
+          },
+          "format": "triaevum_revision_input_adapter_v1",
+          "resource_algorithm": "oot3d_usa_resources_to_eur_v1",
+          "source_inputs": {
+            "code": {
+              "bytes": 4567040,
+              "sha256": "ef210566e1d9d16879a746dfb063fcbad232f0171d860de906531ecc526cc020"
+            },
+            "exheader": {
+              "bytes": 2048,
+              "sha256": "dbe5fa0174d73bffb75d7cf0fbaa05d3e0ee080df0e257afc58b6c45ae5de3d0"
+            },
+            "romfs": {
+              "bytes": 473526272,
+              "sha256": "dd6def65af151d40fcbba7202c36bbdd8ed5b5b431373dc6a8c89bfd708af690"
+            }
+          }
+        },
+        "inputs": {
+          "code": {
+            "bytes": 4567040,
+            "sha256": "16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220"
+          },
+          "exheader": {
+            "bytes": 2048,
+            "sha256": "dbe5fa0174d73bffb75d7cf0fbaa05d3e0ee080df0e257afc58b6c45ae5de3d0"
+          },
+          "romfs": {
+            "bytes": 473522176,
+            "sha256": "011c0b6933f3932c704ff1c6ab562023f407c2929661a6d54ecea1ca81072f99"
+          }
+        },
+        "region": "USA input, canonical EUR runtime"
+      },
+      "process": {
+        "base": 1048576,
+        "entrypoint": 1048576,
+        "executable_size": 3973120
+      }
+    },
+    {
+      "base_inputs": {
+        "code": {
+          "bytes": 4567040,
+          "sha256": "16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220"
+        },
+        "exheader": {
+          "bytes": 2048,
+          "sha256": "9f065aec342b7df2421998deacedde44d475d36264f861cffd3381a1adf8900a"
+        },
+        "romfs": {
+          "bytes": 479260672,
+          "sha256": "a3ad05dcf12893de5f1617a60f4e80f54f5e1c80069922a96a4f9c8c8cbac8ca"
+        }
+      },
+      "base_recipe": "oot3d-eur-project-baseline-16a6b0aa",
+      "input": {
+        "catalogue_records": [
+          "no-intro-3ds-0004",
+          "no-intro-3ds-1168"
+        ],
+        "data_compatibility": {
+          "execution": {
+            "code": {
+              "bytes": 4567040,
+              "sha256": "16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220"
+            },
+            "exheader": "1be59c559f1c98ee99ac5f9be3473be84a938bf65f2bc5f405fd180db7541e8c",
+            "romfs": {
+              "directories": 52,
+              "files": 1974,
+              "payload_bytes": 475348554,
+              "sha256": "5cc7cd96785b5c2ffe95705510cebe82bb20e9720e1694c5e7f72b7f7b938480"
+            }
+          },
+          "format": "triaevum_content_family_v1",
+          "source": {
+            "code": {
+              "bytes": 4567040,
+              "sha256": "16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220"
+            },
+            "exheader": "1be59c559f1c98ee99ac5f9be3473be84a938bf65f2bc5f405fd180db7541e8c",
+            "romfs": {
+              "directories": 52,
+              "files": 1974,
+              "payload_bytes": 475348554,
+              "sha256": "5cc7cd96785b5c2ffe95705510cebe82bb20e9720e1694c5e7f72b7f7b938480"
+            }
+          }
+        },
+        "id": "oot3d-eur-catalogue-a584b067",
+        "inputs": {
+          "code": {
+            "bytes": 4567040,
+            "sha256": "16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220"
+          },
+          "exheader": {
+            "bytes": 2048,
+            "sha256": "a584b067427f81edcca739497ec7b4ce1217eb9612090e6ae5b846e5674d12c1"
+          },
+          "romfs": {
+            "bytes": 479260672,
+            "sha256": "a3ad05dcf12893de5f1617a60f4e80f54f5e1c80069922a96a4f9c8c8cbac8ca"
+          }
+        },
+        "region": "EUR (No-Intro original and Rev 1)"
+      },
+      "process": {
+        "base": 1048576,
+        "entrypoint": 1048576,
+        "executable_size": 3973120
+      }
+    }
+  ],
+  "format": "triaevum_qualified_input_coverage_v1",
+  "provenance": {
+    "recipes_sha256": "d973a1ca7576a7ac2850f39230a60dc45b29d543a501da0139539cd5cb55a5f6",
+    "release": "v0.6.0-alpha.1c"
+  }
+}

@@ -22,6 +22,7 @@ try:
     from .input_adapters import validate_adapter
     from .source_contracts import source_contract_errors
     from .shader_corpus_layout import validate_bundled_corpus
+    from .qualified_input_coverage import require_coverage
 except ImportError:
     from product_contract import validate_product_info
     from precompiled_titles import MODEL, CATALOG, load_catalog, validate_title, checked_file
@@ -31,6 +32,7 @@ except ImportError:
     from input_adapters import validate_adapter
     from source_contracts import source_contract_errors
     from shader_corpus_layout import validate_bundled_corpus
+    from qualified_input_coverage import require_coverage
 
 
 ROOT = Path(__file__).resolve().parent
@@ -389,6 +391,7 @@ def audit_release(
             if catalog_platform(catalog) != platform:
                 raise ValueError("Catalog target differs from release target")
             recipes = load_json_object(root / "recipes/oot3d.json")["recipes"]
+            require_coverage(catalog, {"recipes": recipes})
             expected_title_paths = {CATALOG}
             for title in catalog["titles"]:
                 matches = [recipe for recipe in recipes if recipe["id"] == title["recipe"]]

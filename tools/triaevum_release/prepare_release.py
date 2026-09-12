@@ -18,6 +18,7 @@ try:
     from .toolchain_setup_layout import setup_layout
     from .precompiled_title_layout import title_layout
     from .precompiled_variants import add_verified_variants
+    from .qualified_input_coverage import bind as bind_input_coverage
     from .shader_release_layout import bind_renderer_compiler
     from .shader_corpus_layout import bind_shader_corpus
     from .forge import load_recipe, DEFAULT_RECIPES
@@ -31,6 +32,7 @@ except ImportError:
     from toolchain_setup_layout import setup_layout
     from precompiled_title_layout import title_layout
     from precompiled_variants import add_verified_variants
+    from qualified_input_coverage import bind as bind_input_coverage
     from shader_release_layout import bind_renderer_compiler
     from shader_corpus_layout import bind_shader_corpus
     from forge import load_recipe, DEFAULT_RECIPES
@@ -109,7 +111,14 @@ def prepare(args) -> dict:
         work=work / "precompiled"))
     catalog_path = work / "precompiled/precompiled-titles.json"
     definitions = load_json_object(DEFAULT_RECIPES)
-    catalog, _ = add_verified_variants(load_json_object(catalog_path), definitions, definitions)
+    catalog, definitions = add_verified_variants(load_json_object(catalog_path), definitions, definitions)
+    catalog, definitions, input_files = bind_input_coverage(catalog, definitions)
+    qualified_recipes = work / "qualified-recipes.json"
+    atomic_write_json(qualified_recipes, definitions)
+    for item in layout["files"]:
+        if item["path"] == "recipes/oot3d.json":
+            item["source"] = str(qualified_recipes.resolve())
+    layout["files"].extend(input_files)
     catalog, shader_files = bind_renderer_compiler(catalog,
         Path(targets["runtime"]).parent / "oot3d_native_pica_aot_compiler.exe",
         [artifacts["shaderc_shared.dll"]])
