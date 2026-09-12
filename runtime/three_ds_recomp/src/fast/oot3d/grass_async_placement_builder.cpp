@@ -4,6 +4,8 @@
 #include <bit>
 #include <chrono>
 #include <condition_variable>
+#include <cstdio>
+#include <cstdlib>
 #include <deque>
 #include <mutex>
 #include <stdexcept>
@@ -41,8 +43,15 @@ uint64_t GrassPlacementSourceVersion(const GrassAsyncPlacementRequest& request) 
     HashValue(hash, request.TransformBakedIntoVertices);
     HashValue(hash, std::bit_cast<uint32_t>(request.NormalOffset));
     HashValue(hash, std::bit_cast<uint32_t>(request.HeightScale));
+    if (request.MidrangeCellExtent != 0.0F)
+        HashValue(hash, std::bit_cast<uint32_t>(request.MidrangeCellExtent));
+    if (request.MidrangeAdaptive) {
+        HashValue(hash, request.MidrangeAdaptive);
+        HashValue(hash, request.MidrangeAdaptiveCapacity);
+    }
     HashValue(hash, request.MaterialWrapS);
     HashValue(hash, request.MaterialWrapT);
+    HashValue(hash, request.ColorSource.ContentVersion());
     return hash == 0U ? 1U : hash;
 }
 
@@ -101,11 +110,19 @@ std::shared_ptr<const GrassWorldPlacement> Build(const GrassAsyncPlacementReques
     surface.Indices = *request.Indices;
     surface.PlacementView = request.PlacementView;
 
+    const bool diagnose = std::getenv("OOT3D_GRASS_DIAGNOSTICS") != nullptr;
+    const auto started = diagnose ? std::chrono::steady_clock::now()
+                                 : std::chrono::steady_clock::time_point{};
     auto anchors =
         GrassSurfaceExtractor::Extract(surface, request.Rule, request.Generation, *request.Mask, request.Budget);
+    const auto extracted = diagnose ? std::chrono::steady_clock::now() : started;
     auto local = BuildGrassPlacementSet(std::move(anchors), request.ClusterSize);
+    const auto clustered = diagnose ? std::chrono::steady_clock::now() : started;
 
     GrassWorldPlacementRequest world;
+    world.ColorSource = request.ColorSource;
+    world.ColorWrapS = ResolveGrassTextureWrap(request.Rule.Wrap, request.MaterialWrapS);
+    world.ColorWrapT = ResolveGrassTextureWrap(request.Rule.Wrap, request.MaterialWrapT);
     world.Identity = request.WorldIdentity;
     world.ContentVersion = request.PlacementKey.ContentVersion ^ TransformVersion(request);
     if (world.ContentVersion == 0U) world.ContentVersion = 1U;
@@ -116,7 +133,23 @@ std::shared_ptr<const GrassWorldPlacement> Build(const GrassAsyncPlacementReques
     world.TransformBakedIntoVertices = request.TransformBakedIntoVertices;
     world.NormalOffset = request.NormalOffset;
     world.HeightScale = request.HeightScale;
-    return std::make_shared<const GrassWorldPlacement>(BuildGrassWorldPlacement(world));
+    world.MidrangeCellExtent = request.MidrangeCellExtent;
+    world.MidrangeAdaptive = request.MidrangeAdaptive;
+    world.MidrangeAdaptiveCapacity = request.MidrangeAdaptiveCapacity;
+    world.MidrangeMask = request.Mask.get();
+    world.MidrangeMaskRule = &request.Rule;
+    auto result = std::make_shared<const GrassWorldPlacement>(BuildGrassWorldPlacement(world));
+    if (diagnose) {
+        const auto elapsed = [](auto begin, auto end) {
+            return std::chrono::duration<double, std::milli>(end - begin).count();
+        };
+        std::fprintf(stderr,
+            "[grass-build] source=%llx anchors=%zu clusters=%zu extract_ms=%.3f cluster_ms=%.3f world_ms=%.3f\n",
+            static_cast<unsigned long long>(request.WorldIdentity), local.Anchors.size(), local.Clusters.size(),
+            elapsed(started, extracted), elapsed(extracted, clustered),
+            elapsed(clustered, std::chrono::steady_clock::now()));
+    }
+    return result;
 }
 
 } // namespace
@@ -235,7 +268,10 @@ struct GrassAsyncPlacementBuilder::Impl {
             const auto& p=*entry.Placement;
             return p.Anchors.capacity()*sizeof(GrassWorldAnchor)+p.CullingAnchors.capacity()*sizeof(GrassWorldCullingAnchor)+
                 p.Clusters.capacity()*sizeof(GrassWorldCluster)+p.VisibilityNodes.capacity()*sizeof(GrassClusterVisibilityNode)+
-                p.VisibilityClusterOrder.capacity()*sizeof(uint32_t);
+                p.VisibilityClusterOrder.capacity()*sizeof(uint32_t)+
+                (p.Midrange.Members.capacity()+p.Midrange.GroupForRoot.capacity()+p.Midrange.GroupOrder.capacity())*sizeof(uint32_t)+
+                p.Midrange.Groups.capacity()*sizeof(GrassMidrangeCluster)+
+                p.Midrange.Nodes.capacity()*sizeof(GrassMidrangeClusters::Node);
         };
         size_t resident=0;
         for (const auto& [key,entry] : Entries) resident+=bytes(entry);

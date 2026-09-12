@@ -12,6 +12,10 @@ function(triaevum_add_title_support root pinned)
         "${a32}" "${a32}/mass_cpp")
     target_link_libraries(triaevum_title_whole_aot_support PUBLIC nlohmann_json::nlohmann_json)
     target_compile_features(triaevum_title_whole_aot_support PUBLIC cxx_std_20)
+    set_target_properties(triaevum_title_whole_aot_support PROPERTIES
+        POSITION_INDEPENDENT_CODE ON
+        CXX_VISIBILITY_PRESET hidden
+        VISIBILITY_INLINES_HIDDEN ON)
     if(MSVC)
         target_compile_options(triaevum_title_whole_aot_support PRIVATE /EHsc)
     endif()

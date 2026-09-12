@@ -1,4 +1,6 @@
 #include "fast/oot3d/pica_aot_shader_pack.h"
+#include "fast/oot3d/pica_scanout_effects.h"
+#include "fast/oot3d/builtin_pass_shaders.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -23,6 +25,7 @@ struct Options {
     std::filesystem::path Pack;
     std::filesystem::path Manifest;
     std::filesystem::path MergedInventory;
+    std::filesystem::path RendererCache;
 };
 
 void PrintUsage() {
@@ -30,7 +33,8 @@ void PrintUsage() {
         << "usage: oot3d_native_pica_aot_compiler "
            "--inventory <file> [--inventory <file> ...] "
            "--pack <file> --manifest <file> "
-           "[--merged-inventory <file>]\n";
+           "[--merged-inventory <file>]\n"
+        << "or: --prepare-renderer-cache <directory> --manifest <file>\n";
 }
 
 bool ParseOptions(int argc, char** argv, Options& options) {
@@ -47,9 +51,14 @@ bool ParseOptions(int argc, char** argv, Options& options) {
             options.Manifest = value;
         else if (argument == "--merged-inventory")
             options.MergedInventory = value;
+        else if (argument == "--prepare-renderer-cache")
+            options.RendererCache = value;
         else
             return false;
     }
+    if (!options.RendererCache.empty())
+        return options.Inventories.empty() && options.Pack.empty() &&
+               options.MergedInventory.empty() && !options.Manifest.empty();
     return !options.Inventories.empty() && !options.Pack.empty() &&
            !options.Manifest.empty();
 }
@@ -128,6 +137,26 @@ int main(int argc, char** argv) {
             PrintUsage();
             return 2;
         }
+        if (!options.RendererCache.empty()) {
+            Fast::Renderer::CachedPassShaderCompiler compiler;
+            compiler.Configure(options.RendererCache);
+            if (!compiler.Enabled())
+                throw std::runtime_error("renderer shader cache has no compiler identity");
+            const auto shaders = BuildBuiltinPassShaders();
+            for (const auto& shader : shaders)
+                compiler.Resolve(shader.Source, shader.Stage, shader.Name, shader.Defines);
+            const auto stats = compiler.Stats();
+            WriteJsonAtomically(options.Manifest, {
+                {"format", "triaevum_renderer_shader_preparation_v1"},
+                {"modules", shaders.size()}, {"hits", stats.Hits}, {"compiled", stats.Compilations},
+                {"compile_failed", stats.CompilationFailures}, {"writes", stats.Writes},
+                {"write_failed", stats.WriteFailures}, {"compile_ms", stats.CompileNanoseconds / 1e6},
+                {"cache_directory", std::filesystem::absolute(options.RendererCache).string()},
+                {"game_booted", false}});
+            if (stats.WriteFailures)
+                throw std::runtime_error("renderer shader cache could not persist every module");
+            return 0;
+        }
         uint32_t schema = 0U;
         nlohmann::json inputs = nlohmann::json::array();
         std::map<std::pair<std::string, std::string>, std::string>
@@ -175,6 +204,27 @@ int main(int argc, char** argv) {
             inputs.size() > std::numeric_limits<uint32_t>::max())
             throw std::runtime_error(
                 "effective shader inventory merge is empty or too large");
+
+        // Renderer-owned sources accompany every seed, without needing a game
+        // capture. Explicit mode zero keeps developer diagnostics out of Forge.
+        const size_t capturedSources = inputs.size();
+        const auto appendRendererSource = [&](PicaAotShaderStage stage,
+                                              const std::string& source) {
+            const auto identity = IdentifyPicaAotShaderSource(source);
+            const std::string stageName(PicaAotShaderStageName(stage));
+            const auto sourceId = FormatPicaAotShaderId(identity.Id);
+            const auto [found, inserted] = uniqueSources.emplace(
+                std::pair{stageName, sourceId}, source);
+            if (!inserted && found->second != source)
+                throw std::runtime_error("renderer shader source identity collision");
+            if (inserted)
+                inputs.push_back({{"stage", stageName}, {"source_id", sourceId},
+                    {"secondary_hash", FormatPicaAotShaderId(identity.SecondaryHash)},
+                    {"source_size", identity.Size}, {"source", source}});
+        };
+        appendRendererSource(PicaAotShaderStage::Vertex, BuildPicaScanoutVertexShader());
+        appendRendererSource(PicaAotShaderStage::Fragment, BuildPicaScanoutFragmentShader(false, 0));
+        const size_t rendererSourcesAdded = inputs.size() - capturedSources;
 
         std::sort(inputs.begin(), inputs.end(), [](const auto& left,
                                                    const auto& right) {
@@ -267,6 +317,7 @@ int main(int argc, char** argv) {
                  : nlohmann::json(options.MergedInventory.string())},
             {"pack", options.Pack.string()},
             {"shader_count", binaries.size()},
+            {"renderer_sources_added", rendererSourcesAdded},
             {"shaders", std::move(manifestEntries)},
         };
         WriteJsonAtomically(options.Manifest, manifest);

@@ -12,21 +12,27 @@ try:
     from .build_forge_binary import build as build_forge
     from .common import atomic_write_json, load_json_object
     from .package_release import package_release
+    from .archive_release import create_release_archive
     from .product_contract import query_product
     from .source_archive import create_source_archive
     from .toolchain_setup_layout import setup_layout
     from .precompiled_title_layout import title_layout
     from .precompiled_variants import add_verified_variants
+    from .shader_release_layout import bind_renderer_compiler
+    from .shader_corpus_layout import bind_shader_corpus
     from .forge import load_recipe, DEFAULT_RECIPES
 except ImportError:
     from build_forge_binary import build as build_forge
     from common import atomic_write_json, load_json_object
     from package_release import package_release
+    from archive_release import create_release_archive
     from product_contract import query_product
     from source_archive import create_source_archive
     from toolchain_setup_layout import setup_layout
     from precompiled_title_layout import title_layout
     from precompiled_variants import add_verified_variants
+    from shader_release_layout import bind_renderer_compiler
+    from shader_corpus_layout import bind_shader_corpus
     from forge import load_recipe, DEFAULT_RECIPES
 
 
@@ -69,6 +75,7 @@ def prepare(args) -> dict:
     subprocess.run([str(args.cmake), "-S", str(ROOT), "-B", str(build_dir)], check=True)
     subprocess.run([str(args.cmake), "--build", str(build_dir), "--config", "Release",
                     "--target", "triaevum_public_runtime", "oot3d_game_module",
+                    "oot3d_native_pica_aot_compiler",
                     "--parallel", "2"], check=True)
     targets = load_json_object(build_dir / "triaevum-runtime-targets-Release.json")
     if targets.get("format") != "triaevum_runtime_targets_v1":
@@ -103,11 +110,21 @@ def prepare(args) -> dict:
     catalog_path = work / "precompiled/precompiled-titles.json"
     definitions = load_json_object(DEFAULT_RECIPES)
     catalog, _ = add_verified_variants(load_json_object(catalog_path), definitions, definitions)
+    catalog, shader_files = bind_renderer_compiler(catalog,
+        Path(targets["runtime"]).parent / "oot3d_native_pica_aot_compiler.exe",
+        [artifacts["shaderc_shared.dll"]])
+    layout["files"].extend(shader_files)
+    catalog, corpus_files = bind_shader_corpus(catalog, args.shader_pack,
+        args.pipeline_manifest, args.pipeline_helper)
+    layout["files"].extend(corpus_files)
     atomic_write_json(catalog_path, catalog)
     atomic_write_json(layout_path, layout)
-    return package_release(layout_path, args.output, source_root=ROOT,
-                           version=args.version, source_commit=commit,
-                           enforce_readiness=not args.candidate)
+    result = package_release(layout_path, args.output, source_root=ROOT,
+                             version=args.version, source_commit=commit,
+                             enforce_readiness=not args.candidate)
+    if args.archive is not None:
+        result["archive"] = create_release_archive(args.output, args.archive)
+    return result
 
 
 def main() -> int:
@@ -119,12 +136,17 @@ def main() -> int:
                         help="Licensed Visual Studio x64/Microsoft.VC143.CRT redistributable directory")
     parser.add_argument("--work", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--archive", type=Path, help="Optional audited portable ZIP outside the output directory")
     parser.add_argument("--version", required=True)
     parser.add_argument("--candidate", action="store_true")
     parser.add_argument("--title-build", type=Path, required=True, help="Verified whole-aot-plugin.json")
     parser.add_argument("--title-sources", type=Path, required=True, help="Corresponding generated C++ manifest")
     parser.add_argument("--title-build-source", type=Path, required=True, help="Source ZIP used to build the title")
     parser.add_argument("--recipe", default="oot3d-eur-project-baseline-16a6b0aa")
+    parser.add_argument("--shader-pack", type=Path, required=True,
+                        help="Publisher input: bundled portable corpus, never a user choice")
+    parser.add_argument("--pipeline-manifest", type=Path, action="append", required=True)
+    parser.add_argument("--pipeline-helper", type=Path, required=True)
     args = parser.parse_args()
     print(json.dumps(prepare(args), indent=2))
     return 0

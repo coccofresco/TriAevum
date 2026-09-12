@@ -198,6 +198,21 @@ int main() {
                 provider.Stats().decode_failures == 0U,
             "native UI provider diagnostics do not match the read path");
 
+    oot3d::ui::UiTextureIdentity generated{kCtxbSource, 0x20000000U, "oot3d/native/generated_text"};
+    Require(seedCtxbSource(16, 16, 0x6756, 0x6761, 0x20000000U) &&
+                memory.Write32(kCtxbSource + 0x24, 128) && provider.Resolve(generated, pixels, &error) &&
+                pixels.width == 16 && pixels.height == 16 && pixels.rgba8.size() == 1024 &&
+                pixels.rgba8[0] == 255 && pixels.rgba8[1] == 255 &&
+                pixels.rgba8[2] == 255 && pixels.rgba8[3] == 0,
+            "native generated alpha text did not decode from its own descriptor");
+    Require(memory.Write32(kCtxbSource + 0x24, 127) && !provider.Resolve(generated, pixels, &error),
+            "generated text accepted an inconsistent encoded size");
+    Require(seedCtxbSource(15, 16, 0x6756, 0x6761, 0x20000000U) &&
+                !provider.Resolve(generated, pixels, &error), "generated text accepted invalid dimensions");
+    Require(seedCtxbSource(16, 16, 0x6756, 0x6761, 0x20000080U) &&
+                memory.Write32(kCtxbSource + 0x24, 128) && !provider.Resolve(generated, pixels, &error),
+            "generated text accepted stale native surface identity");
+
     oot3d::ui::UiTextureIdentity cameraGlyphIdentity;
     cameraGlyphIdentity.semantic_name =
         "oot3d/topscreen/camera_option_glyphs";

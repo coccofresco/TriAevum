@@ -2134,6 +2134,14 @@ void Oot3dVulkanDiagnostics::SetGpuTimings(
     }
 }
 
+void Oot3dVulkanDiagnostics::SetNriPipelineStatistics(
+    uint64_t initialCacheBytes, uint64_t attempts, uint64_t created, uint64_t nanoseconds) {
+    mNriInitialCacheBytes = initialCacheBytes;
+    mNriPipelineAttempts = attempts;
+    mNriPipelinesCreated = created;
+    mNriPipelineCreationNanoseconds = nanoseconds;
+}
+
 void Oot3dVulkanDiagnostics::Flush() const {
     if (!Enabled()) {
         return;
@@ -2184,6 +2192,12 @@ void Oot3dVulkanDiagnostics::Flush() const {
         { "compatibility_contract",
           "original_pica_runtime_owns_scene_rasterization" },
         { "frame_count", frames.size() },
+        { "nri_pipeline_compilation", {
+            { "initial_cache_bytes", mNriInitialCacheBytes },
+            { "creation_attempts", mNriPipelineAttempts },
+            { "created", mNriPipelinesCreated },
+            { "creation_nanoseconds", mNriPipelineCreationNanoseconds },
+        } },
         { "d3d12_ngx_provider", std::move(d3d12NgxProvider) },
         { "frames", std::move(frames) },
     };

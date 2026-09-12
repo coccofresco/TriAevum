@@ -263,6 +263,29 @@ TriAevumModuleStatusV1 FilesystemServiceClientV1::Resize(std::uint64_t handle,
       responseSize, &response);
 }
 
+TriAevumModuleStatusV1 FilesystemServiceClientV1::RemoveFile(
+    TriAevumFilesystemRootV1 root, std::string_view utf8Path, bool *removed) {
+  if (removed == nullptr || utf8Path.empty() || utf8Path.size() > 4096U)
+    return TRIAEVUM_MODULE_INVALID_ARGUMENT_V1;
+  *removed = false;
+  TriAevumFilesystemRemoveFileRequestV1 request{};
+  request.header = RequestHeader<TriAevumFilesystemRemoveFileRequestV1>();
+  request.root = root;
+  const auto encoded = EncodePathRequest(request, utf8Path);
+  TriAevumFilesystemRemoveFileResponseV1 response{};
+  std::size_t responseSize = sizeof(response);
+  auto status = Invoke(TRIAEVUM_FILESYSTEM_REMOVE_FILE_V1, encoded,
+      {reinterpret_cast<std::uint8_t *>(&response), sizeof(response)}, &responseSize);
+  if (status != TRIAEVUM_MODULE_OK_V1) return status;
+  status = DecodeFixedResponse(
+      {reinterpret_cast<const std::uint8_t *>(&response), sizeof(response)},
+      responseSize, &response);
+  if (status != TRIAEVUM_MODULE_OK_V1 || response.reserved != 0U || response.removed > 1U)
+    return TRIAEVUM_MODULE_HOST_ERROR_V1;
+  *removed = response.removed != 0U;
+  return TRIAEVUM_MODULE_OK_V1;
+}
+
 TriAevumModuleStatusV1 FilesystemServiceClientV1::ReadAll(
     TriAevumFilesystemRootV1 root, std::string_view utf8Path,
     std::uint64_t maximumSize, std::vector<std::uint8_t> *bytes) {

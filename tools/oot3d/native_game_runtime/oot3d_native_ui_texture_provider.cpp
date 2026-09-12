@@ -323,9 +323,10 @@ bool Oot3dNativeA32UiTextureProvider::Resolve(
     if (ResolveCameraOptionGlyphAtlas(identity, pixels)) {
         return true;
     }
-    const auto descriptor = ResolveOot3dNativeUiTextureDescriptor(
-        identity.semantic_name, error);
-    if (!descriptor.has_value()) {
+    const bool generatedText = identity.semantic_name == "oot3d/native/generated_text";
+    auto descriptor = generatedText ? std::optional<Oot3dNativeUiTextureDescriptor>{}
+                                   : ResolveOot3dNativeUiTextureDescriptor(identity.semantic_name, error);
+    if (!generatedText && !descriptor.has_value()) {
         return false;
     }
     if (identity.guest_resource_address == 0U) {
@@ -356,6 +357,29 @@ bool Oot3dNativeA32UiTextureProvider::Resolve(
         LoadU32(metadata, kCtxbSourceSurfaceOffset);
     const auto runtimeFormat = NativePicaFormat(runtimeRawFormat,
                                                 runtimeRawType);
+    if (generatedText) {
+        constexpr std::array<std::uint8_t, 14> bitsPerPixel{
+            32, 24, 16, 16, 16, 16, 16, 8, 8, 8, 4, 4, 4, 8};
+        if (!runtimeFormat || !runtimeWidth || !runtimeHeight ||
+            runtimeWidth > 1024 || runtimeHeight > 1024 ||
+            (runtimeWidth & (runtimeWidth - 1)) || (runtimeHeight & (runtimeHeight - 1)) ||
+            runtimeWidth < 8 || runtimeHeight < 8) {
+            ++mStats.contract_mismatches;
+            SetError(error, "invalid native generated-text texture descriptor");
+            return false;
+        }
+        const auto bytes = std::size_t(runtimeWidth) * runtimeHeight * bitsPerPixel[*runtimeFormat] / 8;
+        std::array<std::uint8_t, 4> size{};
+        if (!mMemory.ReadGuest(identity.guest_resource_address + 0x24U, size) ||
+            LoadU32(size, 0) != bytes) {
+            ++mStats.contract_mismatches;
+            SetError(error, "native generated-text texture size mismatch");
+            return false;
+        }
+        descriptor = Oot3dNativeUiTextureDescriptor{
+            oot3d::ui::UiPauseSharedTextureSlot::Count, runtimeWidth, runtimeHeight,
+            {{*runtimeFormat, bytes}}};
+    }
     if (runtimeWidth != descriptor->width ||
         runtimeHeight != descriptor->height) {
         ++mStats.contract_mismatches;
@@ -424,6 +448,14 @@ bool Oot3dNativeA32UiTextureProvider::Resolve(
         ++mStats.decode_failures;
         pixels = {};
         return false;
+    }
+    if (generatedText && (*runtimeFormat == 8U || *runtimeFormat == 11U)) {
+        // Native text uses primary RGB and the A8/A4 font as coverage. The
+        // host UI multiplies RGBA, so lower that mask to neutral RGB here.
+        // Canonical PICA decoding (whose absent RGB is zero) stays untouched.
+        for (std::size_t pixel = 0; pixel < pixels.rgba8.size(); pixel += 4) {
+            pixels.rgba8[pixel] = pixels.rgba8[pixel + 1] = pixels.rgba8[pixel + 2] = 255;
+        }
     }
     return true;
 }

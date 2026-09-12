@@ -35,6 +35,7 @@ struct Oot3dNativeGameLaunch {
     std::filesystem::path A32BlockTracePath;
     std::filesystem::path PicaSemanticTracePath;
     std::filesystem::path PicaAotShaderPackPath;
+    std::filesystem::path RendererCacheDirectory;
     std::filesystem::path PicaEffectiveShaderInventoryPath;
     std::filesystem::path PicaPipelineInventoryPath;
     std::filesystem::path PicaPipelineManifestPath;

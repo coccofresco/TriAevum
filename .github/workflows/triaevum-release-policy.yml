@@ -131,3 +131,36 @@ jobs:
         run: >-
           python -c "from tools.triaevum_release.readiness import evaluate_readiness;
           r=evaluate_readiness(); print(r); assert not r.errors, r.errors"
+
+  linux-title-abi:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install isolated native ABI dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang lld llvm nlohmann-json3-dev
+      - name: Build actual host loader and title support without graphics dependencies
+        run: |
+          cmake -S tools/triaevum_release/native_probe -B build/native-support -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++
+          cmake --build build/native-support --target triaevum_title_whole_aot_support oot3d_native_direct_aot_tests triaevum_probe_empty_title triaevum_runtime_layout_tests --parallel 2
+          build/native-support/triaevum_runtime_layout_tests
+      - name: Verify synthetic execution, compiler symlinks, loader and empty-title rejection
+        run: |
+          python tools/triaevum_release/validate_whole_aot_toolchain.py --compiler "$(command -v clang++)" --archiver "$(command -v llvm-ar)" --support build/native-support/libtriaevum_title_whole_aot_support.a --include /usr/include --output build/native-abi-probe
+          plugin=$(python -c 'import json; from pathlib import Path; r=json.loads(Path("build/native-abi-probe/receipt.json").read_text()); print(r["plugin"])')
+          build/native-support/oot3d_native_direct_aot_tests "$plugin"
+          build/native-support/oot3d_native_direct_aot_tests build/native-support/triaevum_probe_empty_title.so --expect-empty
+      - name: Preserve ABI evidence, not generated input or title binaries
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-native-abi-evidence
+          path: |
+            build/native-abi-probe/receipt.json
+            build/native-abi-probe/*-command.json
+            build/native-abi-probe/*.log

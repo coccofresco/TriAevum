@@ -199,6 +199,7 @@ class NativeA32CtrFilesystem {
     virtual ~NativeA32CtrFilesystem() = default;
 
     virtual bool EnsureSaveRoot() = 0;
+    virtual bool RemoveFile(std::string_view, bool*) { return false; }
     virtual bool Open(NativeA32CtrFilesystemRoot root, std::string_view path,
                       uint32_t flags,
                       std::shared_ptr<NativeA32CtrFile>* file) = 0;

@@ -78,68 +78,17 @@ Oot3dNativeGame::NativeA32Memory BuildLayoutFixture() {
   return memory;
 }
 
-Oot3dNativeGame::NativeA32Memory BuildWorldMapFixture() {
-  using namespace Oot3dNativeGame;
-  NativeA32Memory memory;
-  std::string error;
-  Require(memory.MapRegion({"topscreen-world-map-fixture",
-                            0x004D0000U,
-                            0x000C0000U,
-                            true,
-                            false,
-                            {}},
-                           &error),
-          "could not map world-map fixture");
-  const auto writeFloat = [&memory](std::uint32_t address, float value) {
-    return memory.Write32(address, std::bit_cast<std::uint32_t>(value));
-  };
-  constexpr std::uint32_t kWorldMap = 0x005093E4U;
-  constexpr std::uint32_t kScene = 0x00520000U;
-  constexpr std::uint32_t kMarkerTypes = 0x00521000U;
-  Require(memory.Write32(0x005043D4U + 0x0CU, kScene) &&
-              memory.Write32(0x0050AF68U, 2U) &&
-              memory.Write8(kScene + 0x100U, 3U) &&
-              memory.Write32(kWorldMap + 0x14U, 4U) &&
-              memory.Write32(kWorldMap + 0x18U, 1U) &&
-              memory.Write32(kWorldMap + 0x1CU, 1U) &&
-              memory.Write32(kWorldMap + 0x38U, 0U) &&
-              memory.Write32(kWorldMap + 0x44U, 1U),
-          "could not seed world-map controller state");
-  for (std::uint32_t index = 0U; index < 6U; ++index) {
-    Require(writeFloat(kWorldMap + 0x68U + index * 8U,
-                       10.0F + static_cast<float>(index)) &&
-                writeFloat(kWorldMap + 0x6CU + index * 8U,
-                           20.0F + static_cast<float>(index)) &&
-                writeFloat(kWorldMap + 0x3C8U + index * 8U, 30.0F) &&
-                writeFloat(kWorldMap + 0x3CCU + index * 8U, 40.0F) &&
-                writeFloat(kWorldMap + 0x728U + index * 8U, 50.0F) &&
-                writeFloat(kWorldMap + 0x72CU + index * 8U, 60.0F) &&
-                writeFloat(kWorldMap + 0xA88U + index * 8U, 70.0F) &&
-                writeFloat(kWorldMap + 0xA8CU + index * 8U, 80.0F),
-            "could not seed world-map native geometry arrays");
-  }
-  constexpr std::uint32_t kDestination = 5U;
-  Require(memory.Write32(0x00587A14U, 4U) &&
-              memory.Write32(0x0050A3B0U + kDestination * 4U, 2U) &&
-              memory.Write32(0x0053C9D4U + 2U * 4U, 4U) &&
-              memory.Write32(0x004D53C8U + kDestination * 4U, 2U) &&
-              memory.Write32(0x004D541CU + kDestination * 4U, kMarkerTypes) &&
-              memory.Write32(kMarkerTypes, 1U) &&
-              memory.Write32(kMarkerTypes + 4U, 4U),
-          "could not seed world-map destination tables");
-  for (std::uint32_t type = 0U; type < 5U; ++type) {
-    Require(
-        writeFloat(0x0050A1CCU + type * 4U, 5.0F + static_cast<float>(type)) &&
-            writeFloat(0x0050A1E0U + type * 4U,
-                       90.0F + static_cast<float>(type)),
-        "could not seed world-map marker tables");
-  }
-  return memory;
-}
 
 } // namespace
 
+void RunTopScreenItemDispatchTests();
+void RunTopScreenOcarinaTests();
+void RunTopScreenDpadPresentationTests();
+
 int main() {
+  RunTopScreenItemDispatchTests();
+  RunTopScreenOcarinaTests();
+  RunTopScreenDpadPresentationTests();
   using namespace Oot3dNativeGame;
 
   Oot3dUiProfile profile = Oot3dUiProfile::Oot3d;
@@ -416,78 +365,6 @@ int main() {
           "TopScreen 2.1.1 config runtime edit did not round-trip");
   std::filesystem::remove(configRoundTripPath, removeError);
 
-  auto worldMapMemory = BuildWorldMapFixture();
-  TopScreenWorldMapGeometry worldMapGeometry;
-  std::string worldMapError;
-  Require(ReadTopScreenWorldMapGeometry(worldMapMemory, &worldMapGeometry,
-                                        &worldMapError) &&
-              worldMapGeometry.Active && worldMapGeometry.Destination == 5U,
-          "world-map producer did not activate the native destination");
-  Require(
-      std::abs(worldMapGeometry.Quads[0].Position.X - 50.0F) < 0.001F &&
-          std::abs(worldMapGeometry.Quads[0].Position.Y - 189.0F) < 0.001F &&
-          std::abs(worldMapGeometry.Quads[0].Size.Y - 39.0F) < 0.001F &&
-          std::abs(worldMapGeometry.Quads[0].AtlasOrigin.Y - 81.0F) < 0.001F &&
-          std::abs(worldMapGeometry.Quads[0].AtlasSize.Y - 59.0F) < 0.001F,
-      "world-map base-quad transformation is incorrect");
-  Require(
-      worldMapGeometry.Quads[6].Visible && worldMapGeometry.Quads[7].Visible &&
-          !worldMapGeometry.Quads[8].Visible &&
-          std::abs(worldMapGeometry.Quads[6].Position.X - 122.0F) < 0.001F &&
-          std::abs(worldMapGeometry.Quads[6].Position.Y - 174.0F) < 0.001F &&
-          worldMapGeometry.Quads[14].Visible &&
-          std::abs(worldMapGeometry.Quads[14].Size.X - 24.0F) < 0.001F,
-      "world-map marker or arrow reconstruction is incorrect");
-  std::vector<oot3d::ui::UiPrimitive> worldMapPresentation;
-  const oot3d::ui::UiTextureIdentity worldMapTexture{
-      0x005D0000U, 0x18000000U, "oot3d/native/pause_shared/ocarina_page"};
-  Require(AppendTopScreenWorldMapPresentation(worldMapGeometry, worldMapTexture,
-                                              worldMapPresentation) == 10U &&
-              worldMapPresentation.front().subsystem ==
-                  oot3d::ui::UiSubsystem::Map &&
-              worldMapPresentation.front().role ==
-                  oot3d::ui::UiPrimitiveRole::PauseMap &&
-              std::abs(worldMapPresentation.front().color.alpha - 0.68F) <
-                  0.001F,
-          "world-map presentation did not preserve recovered semantics");
-  Require(worldMapMemory.Write32(0x005093E4U + 0x44U, 0U) &&
-              ReadTopScreenWorldMapGeometry(worldMapMemory, &worldMapGeometry,
-                                            &worldMapError) &&
-              !worldMapGeometry.Active,
-          "disabled native world-map owner still produced a presentation");
-  worldMapMemory = BuildWorldMapFixture();
-  Require(worldMapMemory.Write32(0x0050AF68U, 0U) &&
-              ReadTopScreenWorldMapGeometry(worldMapMemory, &worldMapGeometry,
-                                            &worldMapError) &&
-              !worldMapGeometry.Active,
-          "persistent world-map controller escaped the native pause root");
-
-  const auto idleNavigation = BuildTopScreenPauseNavigationGeometry(0);
-  const auto leftNavigation = BuildTopScreenPauseNavigationGeometry(-1);
-  const auto rightNavigation = BuildTopScreenPauseNavigationGeometry(1);
-  Require(std::abs(idleNavigation.Quads[0].Color.red - 0.6F) < 0.001F &&
-              std::abs(idleNavigation.Quads[1].Color.red - 0.6F) < 0.001F &&
-              std::abs(idleNavigation.Quads[0].Position.Y - 191.0F) < 0.001F &&
-              std::abs(leftNavigation.Quads[0].Color.red - 1.0F) < 0.001F &&
-              std::abs(leftNavigation.Quads[0].Position.Y - 193.0F) < 0.001F &&
-              std::abs(leftNavigation.Quads[1].Color.red - 0.6F) < 0.001F &&
-              std::abs(rightNavigation.Quads[1].Color.red - 1.0F) < 0.001F &&
-              std::abs(rightNavigation.Quads[1].Position.Y - 193.0F) < 0.001F &&
-              leftNavigation.Quads[0].Size.X == 26.0F &&
-              leftNavigation.Quads[0].AtlasSize.X == -26.0F &&
-              rightNavigation.Quads[1].Size.X == 26.0F,
-          "pause navigation geometry does not match the payload producer");
-  std::vector<oot3d::ui::UiPrimitive> navigationPresentation;
-  const oot3d::ui::UiTextureIdentity navigationTexture{
-      0x005D1000U, 0x18010000U, "oot3d/native/pause_shared/pause_top_page"};
-  Require(
-      AppendTopScreenPauseNavigationPresentation(
-          leftNavigation, navigationTexture, navigationPresentation) == 2U &&
-          navigationPresentation.front().role ==
-              oot3d::ui::UiPrimitiveRole::PauseCursor &&
-          std::abs(navigationPresentation.front().color.alpha - 0.8F) < 0.001F,
-      "pause navigation presentation lost recovered texture semantics");
-
   const auto fileSelectStrip = BuildTopScreenFileSelectStripGeometry(true);
   Require(fileSelectStrip.Active && fileSelectStrip.Quad.Visible &&
               fileSelectStrip.Quad.Position.X == 66.0F &&
@@ -543,6 +420,8 @@ int main() {
               std::abs(touchLabels.Quads[0].Color.alpha - 0.45F) < 0.001F,
           "touch-label geometry diverges from payload 0x005C9940");
   std::vector<oot3d::ui::UiPrimitive> touchLabelPresentation;
+  const oot3d::ui::UiTextureIdentity navigationTexture{
+      0x005D1000U, 0x18010000U, "oot3d/native/pause_shared/pause_top_page"};
   Require(AppendTopScreenTouchLabelsPresentation(
               touchLabels, navigationTexture, touchLabelPresentation) == 2U &&
               touchLabelPresentation.front().role ==
@@ -1370,6 +1249,16 @@ int main() {
                                          &error) &&
               compositorGate.Draw,
           "TopScreen compositor rejected the native gameplay state");
+  Require(compositorGateMemory.Write16(kGateSceneOwner + 0x224EU, 1U) &&
+              ReadTopScreenHudCompositorGate(compositorGateMemory,
+                                             &compositorGate, &error) &&
+              !compositorGate.Draw,
+          "TopScreen compositor ignored native player HUD suppression");
+  Require(compositorGateMemory.Write16(kGateSceneOwner + 0x224EU, 0U) &&
+              ReadTopScreenHudCompositorGate(compositorGateMemory,
+                                             &compositorGate, &error) &&
+              compositorGate.Draw,
+          "TopScreen compositor did not restore HUD after player suppression");
   Require(compositorGateMemory.Write32(0x005066F8U + 0x34U, 1U) &&
               ReadTopScreenHudCompositorGate(compositorGateMemory,
                                              &compositorGate, &error) &&
@@ -1477,6 +1366,26 @@ int main() {
               dpadItemSuppressedCopies.size() == 4U,
           "disabled TopScreen D-pad icons did not suppress only its lane");
 
+  const std::array<float, 2> zlTranslation{0.0F, 184.0F};
+  Require(touchStateMemory.WriteBytes(
+              kItemTranslations + 3U * 0x08U,
+              std::span<const std::uint8_t>(
+                  reinterpret_cast<const std::uint8_t *>(zlTranslation.data()),
+                  sizeof(zlTranslation))) &&
+              touchStateMemory.Write32(kItemColors + 3U * 0x40U + 0xCU,
+                                       std::bit_cast<std::uint32_t>(0.25F)) &&
+              touchStateMemory.Write32(kItemColors + 4U * 0x40U + 0xCU, 0U),
+          "could not seed native item opacity lanes");
+  TopScreenNativeItemOpacity opacity;
+  std::vector<oot3d::ui::UiPrimitive> opacityCopies;
+  Require(AppendTopScreenNativeItemIconCopies(
+              touchStateMemory, dynamicTouch.VerticalOffsets,
+              dynamicTouch.Alpha, itemIconsTexture, opacityCopies,
+              &error, false, &opacity) &&
+              opacity.ItemZr == 0.5F && opacity.ItemZl == 0.25F &&
+              opacity.Ocarina == 0.0F && opacityCopies.size() == 4U,
+          "native opacity must survive suppressed source quads without HUD scaling");
+
   Require(touchStateMemory.MapRegion({"topscreen-counter-save-fixture",
                                       0x00587000U,
                                       0x00003000U,
@@ -1519,6 +1428,28 @@ int main() {
                   oot3d::ui::UiPrimitiveRole::CounterDigit,
           "TopScreen native counter reconstruction is incomplete");
 
+  constexpr std::uint32_t sourceAmmo = kPlayState + 0x800U;
+  Require(touchStateMemory.Write32(kPlayState + 0x10U, sourceAmmo) &&
+              touchStateMemory.Write32(sourceAmmo, 0U) &&
+              touchStateMemory.Write32(sourceAmmo + 4U, 2U) &&
+              touchStateMemory.Write32(sourceAmmo + 8U, kItemRenderer),
+          "cannot seed styled source ammo counter");
+  for (std::uint32_t digit = 0; digit < 2; ++digit) {
+    Require(touchStateMemory.Write32(kItemTranslations + digit * 8U, 0U) &&
+                touchStateMemory.Write32(kItemTranslations + digit * 8U + 4U, 0U),
+            "cannot clear ammo source translation");
+  }
+  std::vector<oot3d::ui::UiPrimitive> styledCounters;
+  Require(AppendTopScreenNativeCounters(touchStateMemory, dynamicTouch.VerticalOffsets,
+                                         numberGlyphTexture, styledCounters, &error) &&
+              styledCounters.size() == 6U &&
+              styledCounters[4].role == oot3d::ui::UiPrimitiveRole::AmmoCounter &&
+              styledCounters[4].destination.x == 389.0F &&
+              styledCounters[5].destination.x == 382.0F &&
+              styledCounters[4].destination.y == 49.0F &&
+              std::abs(styledCounters[4].destination.width - 7.7F) < 0.001F,
+          "styled ammo copied the native B placement instead of the destination layout");
+
   const auto fixedPauseEdges =
       BuildTopScreenPauseEdgeGeometry(true, 5U, 0U, 0U, 0, 1.0F, 1.0F);
   Require(fixedPauseEdges.Positions[0].X == 288.0F &&
@@ -1559,6 +1490,10 @@ int main() {
   Require(nativeTouchMemory.MapRegion(
               {"touch-state", 0x0050A000U, 0x1000U, true, false, {}}, &error) &&
               nativeTouchMemory.MapRegion(
+                  {"touch-play-root", 0x00504000U, 0x1000U, true, false, {}}, &error) &&
+              nativeTouchMemory.MapRegion(
+                  {"touch-save", 0x00587000U, 0x3000U, true, false, {}}, &error) &&
+              nativeTouchMemory.MapRegion(
                   {"touch-streams", 0x00600000U, 0x10000U, true, false, {}},
                   &error),
           "could not map native touch-copy fixture");
@@ -1567,6 +1502,12 @@ int main() {
   constexpr std::uint32_t kUvs = 0x00602000U;
   constexpr std::uint32_t kColors = 0x00604000U;
   constexpr std::uint32_t kTranslations = 0x00608000U;
+  constexpr std::uint32_t kTouchPlay = 0x00609000U;
+  Require(nativeTouchMemory.Write32(0x005043E0U, kTouchPlay) &&
+              nativeTouchMemory.Write8(kTouchPlay + 0x100U, 3U) &&
+              nativeTouchMemory.Write8(kTouchPlay + 0x101U, 2U) &&
+              nativeTouchMemory.Write16(kTouchPlay + 0x104U, 3U),
+          "could not seed touch-copy scene gate");
   Require(nativeTouchMemory.Write32(0x0050AF38U, kRenderer) &&
               nativeTouchMemory.Write32(kRenderer + 0x0CU, kPositions) &&
               nativeTouchMemory.Write32(kRenderer + 0x14U, kUvs) &&
@@ -1662,6 +1603,66 @@ int main() {
               !copiedTouchPrimitives[3].visible &&
               !copiedTouchPrimitives[4].visible,
           "TopScreen canvas did not preserve native off-screen visibility");
+
+  // Keep source colors nonzero throughout owner transitions. The payload's
+  // visibility rules, not stale source alpha or a scene-specific workaround,
+  // must suppress and restore the contextual copies.
+  for (std::uint32_t touchState : {2U, 7U, 8U, 9U, 10U, 11U, 12U, 19U, 2U}) {
+    Require(nativeTouchMemory.Write32(0x0050AF68U, touchState),
+            "cannot set touch-copy owner state");
+    std::vector<oot3d::ui::UiPrimitive> copies;
+    Require(AppendTopScreenNativeTouchCopies(nativeTouchMemory, heartTexture,
+                                             copies, nullptr, &error),
+            "cannot copy contextual touch quads");
+    const bool visible = touchState < 7U || touchState == 10U || touchState == 11U;
+    Require(copies[0].visible == visible && copies[1].visible == visible &&
+                copies[2].visible && copies[4].visible,
+            "contextual touch state leaked stale alpha or hid unrelated lanes");
+  }
+  for (const std::uint16_t scene : {2U, 3U, 16U, 17U}) {
+    for (const std::uint8_t value : {0U, 0x7FU, 0x80U, 0xFFU}) {
+      Require(nativeTouchMemory.Write16(kTouchPlay + 0x104U, scene) &&
+                  nativeTouchMemory.Write16(0x00587958U + 0x1592U, 5U) &&
+                  nativeTouchMemory.Write8(0x00587958U + 0xD4U + 5U, value),
+              "cannot set touch-copy scene/save state");
+      std::vector<oot3d::ui::UiPrimitive> copies;
+      Require(AppendTopScreenNativeTouchCopies(nativeTouchMemory, heartTexture,
+                                               copies, nullptr, &error) &&
+                  copies[3].visible ==
+                      (scene >= 3U && scene <= 16U && value < 0x80U),
+              "source 27 ignored the original mod scene/save visibility rule");
+    }
+  }
+  // Exercise mounted stamina, not just the on-foot +400 hidden lane.
+  for (const float lane : {400.0F, 0.0F, 400.0F, 0.0F}) {
+    for (std::uint32_t source = 86U; source <= 91U; ++source) {
+      const std::array<float, 2> translation{88.0F + lane + (source - 86U) * 16.0F, 8.0F};
+      Require(writeFloats(kTranslations + source * 8U, translation),
+              "cannot set stamina lane");
+    }
+    std::vector<oot3d::ui::UiPrimitive> copies;
+    Require(AppendTopScreenNativeTouchCopies(nativeTouchMemory, heartTexture,
+                                             copies, nullptr, &error),
+            "cannot copy stamina lanes");
+    ApplyTopScreenGameplayCanvas(copies);
+    for (std::size_t i = 4U; i < 10U; ++i) {
+      Require(copies[i].visible == (lane == 0.0F) &&
+                  (lane != 0.0F ||
+                   (copies[i].destination.x == 128.0F + (i - 4U) * 16.0F &&
+                    copies[i].destination.y == 210.0F)),
+              "stamina mount/dismount transition changed position or visibility");
+    }
+    if (lane == 0.0F) {
+      TopScreenUiConfig scaled;
+      scaled.HudScale = 0.8F;
+      ApplyTopScreenHudScale(copies, scaled);
+      for (std::size_t i = 4U; i < 10U; ++i) {
+        const float expected = 200.0F + (128.0F + (i - 4U) * 16.0F - 200.0F) * 0.8F;
+        Require(std::abs(copies[i].destination.x - expected) < 0.001F,
+                "HUD scaling split the stamina row across different pivots");
+      }
+    }
+  }
   std::vector<oot3d::ui::UiPrimitive> clippedCanvasPrimitive(1U);
   clippedCanvasPrimitive[0].destination = {390.0F, 230.0F, 20.0F, 20.0F};
   clippedCanvasPrimitive[0].uv = {0.0F, 0.0F, 1.0F, 1.0F};
@@ -1698,7 +1699,7 @@ int main() {
   scaledSpecialHud[0].role = oot3d::ui::UiPrimitiveRole::Timer;
   scaledSpecialHud[0].destination = {224.0F, 8.0F, 32.0F, 32.0F};
   scaledSpecialHud[1].role = oot3d::ui::UiPrimitiveRole::HorseStamina;
-  scaledSpecialHud[1].destination = {330.0F, 8.0F, 48.0F, 12.0F};
+  scaledSpecialHud[1].destination = {128.0F, 210.0F, 24.0F, 24.0F};
   scaledSpecialHud[2].role = oot3d::ui::UiPrimitiveRole::ActionButton;
   scaledSpecialHud[2].destination = {342.0F, 4.0F, 32.0F, 32.0F};
   scaledSpecialHud[3].role = oot3d::ui::UiPrimitiveRole::AmmoCounter;
@@ -1711,9 +1712,9 @@ int main() {
       near(scaledSpecialHud[0].destination.x, 255.2F) &&
           near(scaledSpecialHud[0].destination.y, 7.4F) &&
           near(scaledSpecialHud[0].destination.width, 25.6F) &&
-          near(scaledSpecialHud[1].destination.x, 340.0F) &&
-          near(scaledSpecialHud[1].destination.y, 7.4F) &&
-          near(scaledSpecialHud[1].destination.width, 38.4F) &&
+          near(scaledSpecialHud[1].destination.x, 142.4F) &&
+          near(scaledSpecialHud[1].destination.y, 215.0F) &&
+          near(scaledSpecialHud[1].destination.width, 19.2F) &&
           near(scaledSpecialHud[2].destination.x, 349.6F) &&
           near(scaledSpecialHud[2].destination.y, 4.2F) &&
           near(scaledSpecialHud[3].destination.x, 381.6F) &&
@@ -2083,10 +2084,23 @@ int main() {
                                             &projectionState, &error) &&
               decodedContext.PauseState == 9U &&
               decodedContext.PlayerSpecialState &&
-              decodedContext.NativePageGateActive &&
+              !decodedContext.NativePageGateActive &&
               decodedContext.LeftRegionOffsetX == 7.0F &&
               decodedContext.LeftRegionOffsetY == -3.0F,
           "Quest geometry context did not consume typed projection state");
+  // The mounted alternate HUD is not a pause page. Its map marker and
+  // A/B quads still pass through the original relocation rules.
+  std::array<std::array<TopScreenVec3, 4>, 3> mountedQuads{};
+  for (auto &v : mountedQuads[0]) v = {50.0F, 170.0F, 0.0F};
+  for (auto &v : mountedQuads[1]) v = {360.0F, 170.0F, 0.0F};
+  for (auto &v : mountedQuads[2]) v = {360.0F, 210.0F, 0.0F};
+  const auto mountedResult = TransformTopScreenQuestGeometry(mountedQuads, decodedContext);
+  Require(mountedResult.QuadsTranslated == 3U &&
+              mountedQuads[0][0].X == 57.0F &&
+              mountedQuads[1][0].X == 288.0F &&
+              mountedQuads[1][0].Y == 24.0F &&
+              mountedQuads[2][0].X == 500.0F,
+          "mounted HUD bypassed minimap/A/B relocation");
   projectionState.NativeQuestGate = false;
   Require(questStateMemory.Write32(0x00504484U, 1U) &&
               ReadTopScreenQuestGeometryContext(questStateMemory,
@@ -2429,7 +2443,7 @@ int main() {
           "stable active page must be redrawn on the top viewport");
   redrawInputs.WorldMapControllerState = 1U;
   Require(!ResolveTopScreenPausePageRedraw(redrawInputs, &redrawState),
-          "world-map controller must retain ownership of its redraw");
+          "ocarina controller must retain ownership of its redraw");
   redrawInputs.WorldMapControllerState = 0U;
   redrawInputs.Pause.SceneSequence = 1U;
   Require(!ResolveTopScreenPausePageRedraw(redrawInputs, &redrawState) &&
@@ -2445,6 +2459,7 @@ int main() {
 
   TopScreenPauseIconBuild ordinaryIcon{1U, 0x44U, 3U, 4U};
   TopScreenUiConfig normalHud;
+  normalHud.HudScale = 0.9F; // This fixture tests the 90% layout, not the user default.
   Require(!ResolveTopScreenPauseIconBuild(&ordinaryIcon, normalHud) &&
               ordinaryIcon.Argument2 == 1U && ordinaryIcon.Argument3 == 0x44U &&
               ordinaryIcon.StackArgument0 == 3U &&

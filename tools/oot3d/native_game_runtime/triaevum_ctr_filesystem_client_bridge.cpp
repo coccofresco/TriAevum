@@ -73,6 +73,10 @@ bool TriAevumCtrFilesystemClientBridge::EnsureSaveRoot() {
     return mClient.IsAvailable();
 }
 
+bool TriAevumCtrFilesystemClientBridge::RemoveFile(std::string_view path, bool* removed) {
+    return mClient.RemoveFile(TRIAEVUM_FILESYSTEM_SAVE_V1, path, removed) == TRIAEVUM_MODULE_OK_V1;
+}
+
 bool TriAevumCtrFilesystemClientBridge::Open(
     NativeA32CtrFilesystemRoot root, std::string_view path, uint32_t flags,
     std::shared_ptr<NativeA32CtrFile>* file) {

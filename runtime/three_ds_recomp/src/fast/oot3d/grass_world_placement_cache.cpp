@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <bit>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <limits>
 #include <numeric>
 #include <unordered_map>
@@ -24,12 +26,27 @@ template <typename Value> void HashValue(uint64_t& hash, const Value& value) noe
 
 uint64_t TransformVersion(const GrassWorldPlacementRequest& request) noexcept {
     uint64_t hash = kFnvOffset;
+    HashValue(hash, request.ColorSource.ContentVersion());
+    HashValue(hash, request.ColorWrapS);
+    HashValue(hash, request.ColorWrapT);
     for (const float value : request.ModelToWorld) {
         HashValue(hash, std::bit_cast<uint32_t>(value));
     }
     HashValue(hash, request.TransformBakedIntoVertices);
     HashValue(hash, std::bit_cast<uint32_t>(request.NormalOffset));
     HashValue(hash, std::bit_cast<uint32_t>(request.HeightScale));
+    if (request.MidrangeCellExtent != 0.0F)
+        HashValue(hash, std::bit_cast<uint32_t>(request.MidrangeCellExtent));
+    if (request.MidrangeAdaptive) {
+        HashValue(hash, request.MidrangeAdaptive);
+        HashValue(hash, request.MidrangeAdaptiveCapacity);
+        if (request.MidrangeMask && request.MidrangeMaskRule) {
+            HashValue(hash, request.MidrangeMask->Width);
+            HashValue(hash, request.MidrangeMask->Height);
+            for (uint8_t sample : request.MidrangeMask->Samples) HashValue(hash,sample);
+            HashValue(hash,GrassPlacementRuleVersion(*request.MidrangeMaskRule,GrassGenerationSettings{}));
+        }
+    }
     HashValue(hash, request.Anchors.size());
     HashValue(hash, request.Clusters.size());
     return hash == 0U ? 1U : hash;
@@ -168,6 +185,9 @@ GrassWorldPlacement BuildPlacement(const GrassWorldPlacementRequest& request, ui
         destination.PackedWidthAxis = PackGrassDirection(source.WidthAxis);
         destination.PackedWorldNormal = PackGrassNormal(normal);
         destination.StableId = source.StableId;
+        destination.SurfaceReference = source.SurfaceReference;
+        destination.SurfaceColor = request.ColorSource.SamplePacked(
+            source.Uv[0], source.Uv[1], request.ColorWrapS, request.ColorWrapT);
         result.CullingAnchors[index] = {
             { destination.BaseHeight[0], destination.BaseHeight[1], destination.BaseHeight[2] },
             GrassStableVisibilityValue(source.StableId),
@@ -193,6 +213,54 @@ GrassWorldPlacement BuildPlacement(const GrassWorldPlacementRequest& request, ui
         });
     }
     BuildVisibilityIndex(result);
+    if (request.MidrangeCellExtent != 0.0F) {
+        std::optional<GrassMaskInterior> interior;
+        if (request.MidrangeAdaptive && request.MidrangeMask && request.MidrangeMaskRule) {
+            const auto& mask = *request.MidrangeMask;
+            interior.emplace(mask.Width,mask.Height,mask.Samples,[&](uint8_t sample) {
+                // Grayscale probability already shaped the immutable roots.
+                // Only excluded texels mark a boundary for geometric grouping.
+                return EvaluateGrassMaskLevel(sample/255.0F,*request.MidrangeMaskRule) > 0.0F;
+            });
+            if (std::getenv("OOT3D_GRASS_DIAGNOSTICS")) {
+                std::array<uint64_t,256> histogram{};
+                for (uint8_t sample : mask.Samples) ++histogram[sample];
+                uint64_t zero=0,partial=0,full=0;
+                for (uint32_t sample=0;sample<256;++sample) {
+                    const float level=EvaluateGrassMaskLevel(sample/255.0F,*request.MidrangeMaskRule);
+                    (level<=0 ? zero : level>=1 ? full : partial)+=histogram[sample];
+                }
+                std::fprintf(stderr,"[grass-adaptive-mask] rule=%llu size=%ux%u tiles=%u/%u zero=%llu partial=%llu full=%llu\n",
+                    static_cast<unsigned long long>(request.MidrangeMaskRule->RuleId),mask.Width,mask.Height,
+                    interior->InteriorTiles(),interior->TileCount(),static_cast<unsigned long long>(zero),
+                    static_cast<unsigned long long>(partial),static_cast<unsigned long long>(full));
+            }
+        }
+        result.Midrange = BuildGrassMidrangeClusters(result.Anchors.size(), request.MidrangeCellExtent,
+            [&](uint32_t index) {
+                const auto& anchor = result.Anchors[index];
+                const uint64_t triangle = uint64_t(anchor.SurfaceReference[0]) |
+                    (uint64_t(anchor.SurfaceReference[1] & 0xffffU) << 32U);
+                return GrassMidrangeRoot{{anchor.BaseHeight[0], anchor.BaseHeight[1], anchor.BaseHeight[2]},
+                                         anchor.StableId, triangle,
+                                         anchor.BaseHeight[3] + anchor.HalfWidthPhase[0] * 2.0F,
+                                         result.CullingAnchors[index].StableVisibility, request.Anchors[index].Uv};
+            }, request.MidrangeAdaptive, [&](std::array<float,2> lo,std::array<float,2> hi) {
+                if (!interior) return false;
+                for (size_t axis=0; axis<2; ++axis) {
+                    if (!std::isfinite(lo[axis]) || !std::isfinite(hi[axis])) return false;
+                    const auto wrap=axis==0 ? request.ColorWrapS : request.ColorWrapT;
+                    if (wrap!=GrassTextureWrap::Clamp && std::floor(lo[axis])!=std::floor(hi[axis])) {
+                        lo[axis]=0; hi[axis]=1;
+                    } else {
+                        const float a=WrapGrassTextureCoordinate(lo[axis],wrap);
+                        const float b=WrapGrassTextureCoordinate(hi[axis],wrap);
+                        lo[axis]=std::min(a,b); hi[axis]=std::max(a,b);
+                    }
+                }
+                return interior->Contains(lo,hi);
+            }, request.MidrangeAdaptiveCapacity);
+    }
     return result;
 }
 

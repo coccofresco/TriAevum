@@ -176,6 +176,8 @@ endif()
 target_link_libraries(three_ds_recomp_runtime PUBLIC prism monocypher)
 
 if(THREE_DS_RECOMP_ENABLE_VULKAN)
+    target_sources(three_ds_recomp_runtime PRIVATE fast/renderer/shaderc_compiler.cpp)
+    target_link_libraries(three_ds_recomp_runtime PRIVATE ${CMAKE_DL_LIBS})
     target_link_libraries(three_ds_recomp_runtime PUBLIC Vulkan::Vulkan PRIVATE three_ds_recomp_shaderc)
     if(THREE_DS_RECOMP_ENABLE_NRI)
         target_link_libraries(three_ds_recomp_runtime PRIVATE NRI)

@@ -34,12 +34,16 @@ struct GrassAsyncPlacementRequest {
     std::shared_ptr<const std::vector<GrassSourceVertex>> Vertices;
     std::shared_ptr<const std::vector<uint32_t>> Indices;
     std::shared_ptr<const GrassScalarMask> Mask;
+    GrassTextureColorSource ColorSource;
     GrassPlacementRule Rule;
     GrassGenerationSettings Generation;
     uint32_t Budget = 0U;
     float ClusterSize = 1.0F;
     float NormalOffset = 0.0F;
     float HeightScale = 1.0F;
+    float MidrangeCellExtent = 0.0F;
+    bool MidrangeAdaptive = false;
+    uint32_t MidrangeAdaptiveCapacity = kGrassDefaultAdaptiveClusterCapacity;
     GrassPlacementView PlacementView;
 };
 

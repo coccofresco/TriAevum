@@ -100,6 +100,8 @@ struct PicaGraphicsPipelineManifestEntry {
     uint8_t AttachmentRequirementsKey = 0U;
     uint8_t SampleCount = 1U;
     bool WritesReactiveMask = false;
+    // A distinct live pipeline; absent in older manifests means false.
+    bool OutlineOcclusionOnly = false;
     ::Oot3d::Renderer::PicaTopology Topology =
         ::Oot3d::Renderer::PicaTopology::TriangleList;
     ::Oot3d::Renderer::NativeCullMode CullMode =
@@ -133,6 +135,9 @@ struct PicaGraphicsPipelineManifestEntry {
         PicaShaderInstrumentationFeature activeFeatures,
         bool nativeFidelity) const noexcept;
 };
+
+PicaGraphicsPipelineManifestEntry DescribePicaGraphicsPipelineDraw(
+    const Renderer3ds::PicaDrawView& draw);
 
 bool WritePicaGraphicsPipelineManifest(
     const std::filesystem::path& path,

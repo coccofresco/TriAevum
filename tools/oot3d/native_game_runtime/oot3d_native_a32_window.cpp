@@ -1,4 +1,5 @@
 #include "oot3d_native_a32_window.h"
+#include "oot3d_game_language_panel.h"
 #ifdef OOT3D_WHOLE_AOT_PRODUCT_MODE
 #include "oot3d_native_crash_diagnostics.h"
 #endif
@@ -51,6 +52,7 @@
 #include "oot3d_native_true_aot_blocks.h"
 #include "oot3d_native_ui_lifecycle_bridge.h"
 #include "oot3d_native_ui_texture_provider.h"
+#include "oot3d_top_screen_ocarina_text_runtime.h"
 #include "oot3d_native_whole_aot_runtime.h"
 #ifdef OOT3D_NATIVE_DIRECT_AOT_PLUGIN
 #include "oot3d_native_direct_aot.h"
@@ -61,6 +63,8 @@
 #include "oot3d_top_screen_gameplay_actions.h"
 #include "oot3d_top_screen_gameplay_action_consumer.h"
 #include "oot3d_top_screen_item_guest.h"
+#include "oot3d_top_screen_item_dispatch.h"
+#include "oot3d_top_screen_input_cadence.h"
 #include "oot3d_top_screen_items_hint.h"
 #include "oot3d_top_screen_settings_panel.h"
 #include "oot3d_top_screen_texture_overrides.h"
@@ -236,10 +240,6 @@ constexpr uint32_t kPauseDungeonMapCursorInput = 0x00442F38U;
 constexpr uint32_t kPauseUiNativeUpdateCall = 0x0041EAE0U;
 constexpr uint32_t kPauseProjectionPrepareCall = 0x0041EB28U;
 constexpr uint32_t kPauseProjectionPrepare = 0x002FBC50U;
-constexpr uint32_t kGlobalActionStateGetSlotItemId = 0x002C3970U;
-constexpr uint32_t kPauseItemsNativeUpdateCall = 0x00433B68U;
-constexpr uint32_t kPauseItemsNativeUpdateReturn = 0x00433B6CU;
-constexpr uint32_t kPauseItemsNativeUpdate = 0x002EC3E4U;
 constexpr uint32_t kPauseUiNativeUpdate = 0x0042DDA8U;
 constexpr uint32_t kTopScreenCameraNormal1Scalar = 0x0023A930U;
 constexpr uint32_t kTopScreenCameraNormal1DefaultPath = 0x0023A94CU;
@@ -385,6 +385,7 @@ struct NativeWidescreenProjectionState {
   Oot3dNativeGame::NativeA32Memory *TraceMemory = nullptr;
   std::deque<A32BlockTraceRecord> BlockTrace;
   Oot3dNativeGame::Oot3dNativeUiLifecycleBridge *UiLifecycleBridge = nullptr;
+  Oot3dNativeGame::TopScreenOcarinaTextRuntime *OcarinaText = nullptr;
   Oot3dNativeGame::Oot3dPicaCompositionDomain *PicaCompositionDomain =
       nullptr;
   Oot3dNativeGame::Oot3dNativePicaCompositionTracker
@@ -393,7 +394,9 @@ struct NativeWidescreenProjectionState {
       nullptr;
   bool TopScreenUiProfile = false;
   Oot3dNativeGame::TopScreenUiConfig TopScreenConfig;
-  const Oot3dNativeGame::TopScreenExtendedInputFrame *TopScreenInput = nullptr;
+  Oot3dNativeGame::TopScreenExtendedInputFrame *TopScreenInput = nullptr;
+  Oot3dNativeGame::TopScreenInputCadence *TopScreenInputClock = nullptr;
+  const Oot3dNativeGame::TopScreenItemDispatchRuntime *TopScreenItems = nullptr;
   std::span<const uint32_t> WholeAotObservableExitPcs;
   std::optional<Oot3dNativeGame::TopScreenPauseTargetPlan>
       PendingTopScreenPauseTarget;
@@ -525,6 +528,9 @@ double SecondsSince(std::chrono::steady_clock::time_point start) {
 struct NativeFramePhaseTiming {
   double GuestSeconds = 0.0;
   double FrameStartSeconds = 0.0;
+  double HostFrameStartSeconds = 0.0;
+  double InputPollSeconds = 0.0;
+  double RendererFrameStartSeconds = 0.0;
   double DspMixSeconds = 0.0;
   double AudioOutputSeconds = 0.0;
   double PicaSubmitSeconds = 0.0;
@@ -686,8 +692,7 @@ struct NativeCandidateDispatchState {
   Oot3dNativeGame::TopScreenCameraFovOwnership TopScreenCameraFov;
   Oot3dNativeGame::NativeFreeCameraInputAccumulator TopScreenCameraInput;
   Oot3dNativeGame::TopScreenExtendedInputFrame TopScreenInput;
-  bool PreviousTopScreenZrHeld = false;
-  bool PreviousTopScreenZlHeld = false;
+  Oot3dNativeGame::TopScreenInputCadence TopScreenInputClock;
   uint32_t PreviousTopScreenButtons = 0U;
   Oot3dNativeGame::NativeA32PolledButtonLatch StartButtonLatch;
   Oot3dNativeGame::TopScreenStartRoutingState TopScreenStartRouting;
@@ -726,7 +731,7 @@ struct NativeCandidateDispatchState {
   Oot3dNativeGame::TopScreenPauseControllerState TopScreenPauseController;
   uint8_t TopScreenPauseControllerDrawPhase = 0U;
   std::array<uint32_t, 2> TopScreenPauseControllerVisibleRenderers{};
-  uint32_t PendingTopScreenItemsSelection = 0U;
+  Oot3dNativeGame::TopScreenItemDispatchRuntime TopScreenItems;
   uint32_t SampleState = 0xA32C0DE1U;
   uint64_t Calls = 0;
   uint64_t Samples = 0;
@@ -760,12 +765,8 @@ struct NativeCandidateDispatchState {
   uint64_t TopScreenCameraNormal1Calls = 0;
   uint64_t TopScreenCameraUpdateCalls = 0;
   uint64_t TopScreenCameraActiveCalls = 0;
-  std::array<uint64_t, 4> TopScreenItemQueryCalls{};
-  std::array<uint64_t, 4> TopScreenItemQueryTrueResults{};
-  uint64_t TopScreenSlotItemAttempts = 0;
-  uint64_t TopScreenSlotItemOverrides = 0;
-  uint64_t TopScreenSlotItemNativeFallbacks = 0;
   Oot3dNativeGame::Oot3dNativeUiLifecycleBridge *UiLifecycleBridge = nullptr;
+  Oot3dNativeGame::TopScreenOcarinaTextRuntime *OcarinaText = nullptr;
   Oot3dNativeGame::Oot3dPicaCompositionDomain *PicaCompositionDomain =
       nullptr;
   Oot3dNativeGame::TopScreenPauseProjectionState *TopScreenPauseProjection =
@@ -791,6 +792,9 @@ bool ExecuteTopScreenUiSourcePortBlock(
     NativeCandidateDispatchState &dispatch,
     oot3d::recomp::a32::ExecutionResult *result, uint32_t *blocksConsumed) {
   auto &memory = *dispatch.Memory;
+  if (pc == Oot3dNativeGame::kTopScreenInputUpdateBoundary && dispatch.OcarinaText != nullptr) {
+    return dispatch.OcarinaText->Execute(state, result, blocksConsumed);
+  }
   uint32_t nextPc = 0U;
   auto branchFromCallsite = [&](uint32_t target, uint32_t returnAddress) {
     state.r[14] = returnAddress;
@@ -1368,110 +1372,11 @@ bool ExecuteTopScreenUiSourcePortBlock(
       *blocksConsumed = 1U;
     return true;
   }
-  if (pc == kPauseItemsNativeUpdateCall) {
-    uint32_t pageState = 0U;
-    if (!memory.Read32(0x0050672CU, &pageState))
-      return false;
-    const auto plan = Oot3dNativeGame::ResolveTopScreenItemsSelectionBegin(
-        {dispatch.TopScreenInput.ZrPressed, dispatch.TopScreenInput.ZlPressed,
-         pageState});
-    if (!plan.Active)
-      return false;
-    uint32_t actionFlags = 0U;
-    if (!memory.Read32(0x0050AF18U, &actionFlags) ||
-        !memory.Write32(0x0050AF18U, actionFlags | 0x400U)) {
-      return false;
-    }
-    dispatch.PendingTopScreenItemsSelection = plan.Selection;
-    state.r[14] = kPauseItemsNativeUpdateReturn;
-    nextPc = kPauseItemsNativeUpdate;
-    state.r[15] = nextPc;
-    *result = {oot3d::recomp::a32::ExitKind::Branch, nextPc,
+  if (Oot3dNativeGame::ExecuteTopScreenItemDispatch(
+          pc, memory, state, dispatch.TopScreenInput, dispatch.TopScreenItems)) {
+    *result = {oot3d::recomp::a32::ExitKind::Branch, state.r[15],
                oot3d::recomp::a32::FallbackReason::None, pc};
-    if (blocksConsumed != nullptr)
-      *blocksConsumed = 1U;
-    return true;
-  }
-  if (pc == kPauseItemsNativeUpdateReturn &&
-      dispatch.PendingTopScreenItemsSelection != 0U) {
-    uint32_t actionFlags = 0U;
-    uint32_t selectionState = 0U;
-    if (!memory.Read32(0x0050AF18U, &actionFlags) ||
-        !memory.Write32(0x0050AF18U, actionFlags & ~0x400U) ||
-        !memory.Read32(0x0050674CU, &selectionState)) {
-      return false;
-    }
-    uint32_t selection = 0U;
-    uint16_t cursorY = 0U;
-    if (Oot3dNativeGame::CompleteTopScreenItemsSelection(
-            dispatch.PendingTopScreenItemsSelection, selectionState, &selection,
-            &cursorY)) {
-      constexpr std::array<uint32_t, 3> kCursorOffsets{0U, 8U, 0x10U};
-      if (!memory.Write32(0x0050674CU, selection))
-        return false;
-      for (const auto offset : kCursorOffsets) {
-        if (!memory.Write16(0x00506700U + offset, 0x010FU) ||
-            !memory.Write16(0x00506702U + offset, cursorY)) {
-          return false;
-        }
-      }
-    }
-    dispatch.PendingTopScreenItemsSelection = 0U;
-    nextPc = pc + 4U; // the original return instruction is a NOP
-    state.r[15] = nextPc;
-    *result = {oot3d::recomp::a32::ExitKind::Branch, nextPc,
-               oot3d::recomp::a32::FallbackReason::None, pc};
-    if (blocksConsumed != nullptr)
-      *blocksConsumed = 1U;
-    return true;
-  }
-  if (pc == kGlobalActionStateGetSlotItemId) {
-    if (!Oot3dNativeGame::HasTopScreenSlotItemOverrideInput(
-            dispatch.TopScreenInput)) {
-      return false;
-    }
-    ++dispatch.TopScreenSlotItemAttempts;
-    const uint8_t slot = static_cast<uint8_t>(state.r[1]);
-    const auto resolved =
-        Oot3dNativeGame::ResolveTopScreenSlotItemOverrideGuest(
-            memory, state.r[0], slot, dispatch.TopScreenInput);
-    if (resolved.has_value()) {
-      ++dispatch.TopScreenSlotItemOverrides;
-      state.r[0] = *resolved;
-      nextPc = state.r[14];
-      state.r[15] = nextPc;
-      *result = {oot3d::recomp::a32::ExitKind::Branch, nextPc,
-                 oot3d::recomp::a32::FallbackReason::None, pc};
-      if (blocksConsumed != nullptr)
-        *blocksConsumed = 1U;
-      return true;
-    }
-    ++dispatch.TopScreenSlotItemNativeFallbacks;
-    return false;
-  }
-  for (const auto &contract :
-       Oot3dNativeGame::TopScreenVerifiedItemQueryContracts()) {
-    if (contract.OriginalEntry != pc)
-      continue;
-    if (!Oot3dNativeGame::HasTopScreenItemQueryOverrideInput(
-            dispatch.TopScreenInput)) {
-      return false;
-    }
-    const auto index = static_cast<std::size_t>(contract.Query);
-    ++dispatch.TopScreenItemQueryCalls[index];
-    const auto resolved = Oot3dNativeGame::ResolveTopScreenItemQueryGuest(
-        memory, pc, dispatch.TopScreenInput);
-    if (!resolved.has_value()) {
-      return false;
-    }
-    dispatch.TopScreenItemQueryTrueResults[index] += *resolved ? 1U : 0U;
-    state.r[0] = *resolved ? 1U : 0U;
-    nextPc = state.r[14];
-    state.r[15] = nextPc;
-    *result = {oot3d::recomp::a32::ExitKind::Branch, nextPc,
-               oot3d::recomp::a32::FallbackReason::None, pc};
-    if (blocksConsumed != nullptr)
-      *blocksConsumed = 1U;
+    if (blocksConsumed != nullptr) *blocksConsumed = 1U;
     return true;
   }
   if (pc == kTopScreenGameplayCompositionPrefix) {
@@ -1600,7 +1505,7 @@ void ApplyNativeWidescreenProjectionPolicy(
     uint32_t pc, oot3d::recomp::a32::GuestState &state,
     oot3d::recomp::a32::MemoryBus &memory, void *user);
 
-bool ExecuteProductTopScreenCamera(uint32_t pc, oot3d::recomp::a32::GuestState &state,
+bool ExecuteProductTopScreenHook(uint32_t pc, oot3d::recomp::a32::GuestState &state,
                                    oot3d::recomp::a32::MemoryBus &,
                                    oot3d::recomp::a32::ExecutionResult *result,
                                    uint32_t blockBudget, uint32_t *blocksConsumed, void *user) {
@@ -1608,7 +1513,9 @@ bool ExecuteProductTopScreenCamera(uint32_t pc, oot3d::recomp::a32::GuestState &
   // Product opt-in UI mod, not the experimental source/gameplay dispatcher.
   if (!dispatch.TopScreenUiProfile || dispatch.Memory == nullptr ||
       (pc != kTopScreenCameraUpdateEntry && pc != kTopScreenCameraUpdatePatchSite &&
-       pc != kTopScreenCameraNormal1Scalar)) return false;
+       pc != kTopScreenCameraNormal1Scalar &&
+       pc != Oot3dNativeGame::kTopScreenInputUpdateBoundary &&
+       !Oot3dNativeGame::IsTopScreenItemDispatchEntry(pc))) return false;
   const bool handled = ExecuteTopScreenUiSourcePortBlock(pc, state, dispatch, result, blocksConsumed);
   if (handled) return true;
   // This entry was already observed before returning to the dispatcher. If
@@ -1837,26 +1744,33 @@ void ApplyNativeWidescreenProjectionPolicy(
     uint32_t pc, oot3d::recomp::a32::GuestState &state,
     oot3d::recomp::a32::MemoryBus &memory, void *user) {
   auto &runtime = *static_cast<NativeWidescreenProjectionState *>(user);
+  if (runtime.TopScreenUiProfile &&
+      pc == Oot3dNativeGame::kTopScreenInputUpdateBoundary &&
+      (runtime.OcarinaText == nullptr || !runtime.OcarinaText->Pending()) &&
+      runtime.TopScreenInputClock != nullptr && runtime.TopScreenInput != nullptr) {
+    *runtime.TopScreenInput = runtime.TopScreenInputClock->Advance();
+    if (runtime.UiLifecycleBridge != nullptr)
+      runtime.UiLifecycleBridge->SetTopScreenInputFrame(*runtime.TopScreenInput);
+    if (runtime.UiLifecycleBridge != nullptr && runtime.OcarinaText != nullptr) {
+      Oot3dNativeGame::TopScreenOcarinaGeometry geometry;
+      std::string textError;
+      if (!runtime.UiLifecycleBridge->ReadOcarinaGeometry(geometry, &textError) ||
+          !runtime.OcarinaText->Prepare(geometry, &textError))
+        throw std::runtime_error("TopScreen song text preparation: " + textError);
+    }
+  }
   const bool enabledTopScreenCameraExit =
       (pc != kTopScreenCameraUpdateEntry ||
        runtime.TopScreenConfig.FreeCameraEnabled) &&
       (pc != kTopScreenCameraNormal1Scalar ||
        runtime.TopScreenConfig.CameraZoomPercent != 100U);
-  const bool itemQueryEntry = std::any_of(
-      Oot3dNativeGame::TopScreenVerifiedItemQueryContracts().begin(),
-      Oot3dNativeGame::TopScreenVerifiedItemQueryContracts().end(),
-      [pc](const Oot3dNativeGame::TopScreenItemQueryContract &contract) {
-        return contract.OriginalEntry == pc;
-      });
   const bool enabledTopScreenItemExit =
-      runtime.TopScreenInput == nullptr ||
-      (!itemQueryEntry && pc != kGlobalActionStateGetSlotItemId) ||
-      (itemQueryEntry &&
-       Oot3dNativeGame::HasTopScreenItemQueryOverrideInput(
-           *runtime.TopScreenInput)) ||
-      (pc == kGlobalActionStateGetSlotItemId &&
-       Oot3dNativeGame::HasTopScreenSlotItemOverrideInput(
-           *runtime.TopScreenInput));
+      !Oot3dNativeGame::IsTopScreenItemDispatchEntry(pc) ||
+      (runtime.TopScreenInput != nullptr && runtime.TopScreenItems != nullptr &&
+       runtime.TraceMemory != nullptr &&
+       Oot3dNativeGame::ShouldObserveTopScreenItemDispatch(
+           pc, *runtime.TraceMemory, state, *runtime.TopScreenInput,
+           *runtime.TopScreenItems));
 #if defined(OOT3D_NATIVE_DIRECT_AOT_PLUGIN)
   const bool wholeAotExecutionActive =
       Oot3dNativeGame::Oot3dWholeAotPluginExecutionActive();
@@ -1866,6 +1780,8 @@ void ApplyNativeWidescreenProjectionPolicy(
 #endif
   if (wholeAotExecutionActive &&
       enabledTopScreenCameraExit && enabledTopScreenItemExit &&
+      (pc != Oot3dNativeGame::kTopScreenInputUpdateBoundary ||
+       (runtime.OcarinaText != nullptr && runtime.OcarinaText->NeedsExecution())) &&
       std::binary_search(runtime.WholeAotObservableExitPcs.begin(),
                          runtime.WholeAotObservableExitPcs.end(), pc)) {
 #if defined(OOT3D_NATIVE_DIRECT_AOT_PLUGIN)
@@ -2638,7 +2554,14 @@ struct NativeControlPollingState {
   int64_t PendingMouseDeltaY = 0;
   double PendingMouseSeconds = 0.0;
   bool GameplayMouseOwned = false;
+  uint64_t MouseEligiblePolls = 0;
+  uint64_t MouseReleasedPolls = 0;
+  uint64_t MouseHostUiPolls = 0;
+  uint64_t MouseNativeUiPolls = 0;
+  uint64_t MouseCaptureTransitions = 0;
+  uint64_t MouseMovementPolls = 0;
   Oot3dNativeGame::NativeRightStickProfileState RightStickProfile;
+  ThreeDsRecomp::Input::VirtualMotionState VirtualMotion;
 };
 
 Oot3dNativeGame::NativeA32InputFrame
@@ -2658,7 +2581,7 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
   NativeControlHostInputState host;
   host.SamplePeriodSeconds = samplePeriodSeconds;
   const auto &io = ImGui::GetIO();
-  const bool keyboardCaptured = io.WantCaptureKeyboard;
+  const bool keyboardCaptured = hostGuiVisible || io.WantCaptureKeyboard;
   const bool mouseCaptured = hostGuiVisible;
 
   struct SelectedController {
@@ -2735,7 +2658,7 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
 
     bool IsKeyboardKeyHeld(
         NativeKeyboardKey key) const noexcept override {
-      return !mKeyboardCaptured && key != NativeKeyboardKey::None &&
+      return !mKeyboardCaptured && key != NativeKeyboardKey::None && key != NativeKeyboardKey::Escape &&
              mWindow.IsKeyDown(static_cast<int32_t>(key));
     }
 
@@ -2805,9 +2728,22 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
     SDL_GameController *mController = nullptr;
     int16_t mTriggerThreshold = 0;
   };
+  // Remapping observes the same physical source, before gameplay's device and
+  // UI filters. It works even for a currently disabled device.
+  LusHostButtonSource rawButtonSource(window, false, false,
+      selectedController.has_value() ? selectedController->Controller : nullptr,
+      triggerThreshold);
+  if (hostGuiVisible) {
+    controls.ObserveBindingCapture(rawButtonSource, window.IsKeyDown(Ship::LUS_KB_ESCAPE));
+  } else {
+    const auto phase = controls.BindingCaptureStatus().Phase;
+    if (phase != ThreeDsRecomp::Input::BindingCapturePhase::Idle &&
+        phase != ThreeDsRecomp::Input::BindingCapturePhase::Cancelled)
+      controls.CancelBindingCapture();
+  }
   LusHostButtonSource buttonSource(
       window, keyboardCaptured, mouseCaptured,
-      selectedController.has_value() ? selectedController->Controller
+      !hostGuiVisible && selectedController.has_value() ? selectedController->Controller
                                      : nullptr,
       triggerThreshold);
   const ThreeDsRecomp::Input::HostDeviceEnablement enabledDevices{
@@ -2817,6 +2753,7 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
   };
 
   for (size_t index = 0; index < kNativeControlActionCount; ++index) {
+    if (hostGuiVisible) pollingState.PendingPressedActions[index] = false;
     const auto &binding = config.Bindings[index];
     const bool physicalHeld = ThreeDsRecomp::Input::IsHostBindingHeld(
         binding, enabledDevices, buttonSource);
@@ -2845,10 +2782,12 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
       return static_cast<int16_t>(std::clamp(
           -static_cast<int32_t>(axis(value)), -32767, 32767));
     };
-    host.LeftStickX = axis(SDL_CONTROLLER_AXIS_LEFTX);
-    host.LeftStickY = invertedAxis(SDL_CONTROLLER_AXIS_LEFTY);
-    host.RightStickX = axis(SDL_CONTROLLER_AXIS_RIGHTX);
-    host.RightStickY = invertedAxis(SDL_CONTROLLER_AXIS_RIGHTY);
+    if (!hostGuiVisible) {
+      host.LeftStickX = axis(SDL_CONTROLLER_AXIS_LEFTX);
+      host.LeftStickY = invertedAxis(SDL_CONTROLLER_AXIS_LEFTY);
+      host.RightStickX = axis(SDL_CONTROLLER_AXIS_RIGHTX);
+      host.RightStickY = invertedAxis(SDL_CONTROLLER_AXIS_RIGHTY);
+    }
 #if SDL_VERSION_ATLEAST(2, 0, 14)
     constexpr float kGravityMetersPerSecondSquared = 9.80665F;
     constexpr float kRadiansToDegrees =
@@ -2892,6 +2831,10 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
 #endif
   }
   controls.ObserveMotion(host.ControllerMotion);
+  if (hostGuiVisible) {
+    host.ControllerMotion = {};
+    pollingState.RightStickProfile = {};
+  }
 
   const bool sourceUsesMouse =
       config.NativeAimSource == NativeMotionSource::Mouse ||
@@ -2899,27 +2842,25 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
       (topScreenUiProfile && topScreenFreeCameraEnabled &&
        (config.FreeCameraSource == NativeMotionSource::Mouse ||
         config.FreeCameraSource == NativeMotionSource::Automatic));
-  const bool gameplayMouseOwned = ResolveNativeGameplayMouseOwnership(
+  const bool gameplayMouseEligible = ResolveNativeGameplayMouseOwnership(
       nativeFrontendTouchEnabled, hostGuiVisible, config.MouseEnabled,
       sourceUsesMouse);
+  const bool wasCaptured = window.IsMouseCaptured();
+  window.SetMouseCapture(gameplayMouseEligible && config.CaptureMouseInGameplay);
+  window.SetCursorVisibility(!window.IsMouseCaptured());
+  const bool gameplayMouseOwned = gameplayMouseEligible && !window.IsMouseCaptureReleased();
   bool mouseCaptureChanged =
-      gameplayMouseOwned != pollingState.GameplayMouseOwned;
+      gameplayMouseOwned != pollingState.GameplayMouseOwned || wasCaptured != window.IsMouseCaptured();
+  pollingState.MouseEligiblePolls += gameplayMouseEligible ? 1U : 0U;
+  pollingState.MouseReleasedPolls += window.IsMouseCaptureReleased() ? 1U : 0U;
+  pollingState.MouseHostUiPolls += hostGuiVisible ? 1U : 0U;
+  pollingState.MouseNativeUiPolls += nativeFrontendTouchEnabled ? 1U : 0U;
+  pollingState.MouseCaptureTransitions += mouseCaptureChanged ? 1U : 0U;
   pollingState.GameplayMouseOwned = gameplayMouseOwned;
-  if (gameplayMouseOwned && config.CaptureMouseInGameplay) {
-    if (!window.IsMouseCaptured()) {
-      window.SetMouseCapture(true);
-      mouseCaptureChanged = true;
-    }
-    window.SetCursorVisibility(false);
-  } else if (window.IsMouseCaptured() &&
-             (!gameplayMouseOwned || !config.CaptureMouseInGameplay)) {
-    window.SetMouseCapture(false);
-    mouseCaptureChanged = true;
-    window.SetCursorVisibility(true);
-  }
   // SDL relative motion is an accumulator. Drain it even while ImGui owns the
   // pointer so menu movement and capture warps cannot leak into gameplay.
   const auto mouseDelta = window.GetMouseDelta();
+  pollingState.MouseMovementPolls += mouseDelta.x != 0 || mouseDelta.y != 0 ? 1U : 0U;
   if (gameplayMouseOwned && !mouseCaptureChanged) {
     pollingState.PendingMouseDeltaX += mouseDelta.x;
     pollingState.PendingMouseDeltaY += mouseDelta.y;
@@ -2944,8 +2885,9 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
 
   auto frame = MapNativeControlInput(config, host, aimTransform,
                                      &pollingState.RightStickProfile,
-                                     guestRefreshWillConsume);
-  if (nativeFrontendTouchEnabled) {
+                                     guestRefreshWillConsume,
+                                     &pollingState.VirtualMotion);
+  if (nativeFrontendTouchEnabled && !hostGuiVisible) {
     if (window.IsMouseCaptured()) {
       window.SetMouseCapture(false);
     }
@@ -2963,8 +2905,6 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
     frame.Hid.TouchPressed = touch.Pressed;
   }
   ApplyNativeControlShortcutTouch(host, frame);
-  frame.Exit = !keyboardCaptured &&
-               window.IsKeyDown(Ship::LUS_KB_ESCAPE);
   return frame;
 }
 
@@ -3194,6 +3134,11 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
   Oot3dNativeGame::Oot3dPicaCompositionDomain picaCompositionDomain =
       Oot3dNativeGame::Oot3dPicaCompositionDomain::Unknown;
   Oot3dNativeGame::NativeA32CtrHostConfig hostConfig;
+  const auto languageSettings = std::make_shared<Oot3dNativeGame::GameLanguageSettings>(
+      std::filesystem::path(launch.Host.ConfigurationPath).parent_path() / "game_language.json",
+      Oot3dNativeGame::DetectGameLanguages(manifest->RomFsImagePath,
+          manifest->RomFsImageOffset, manifest->RomFsImageSize));
+  hostConfig.SystemLanguage = languageSettings->SystemId();
   hostConfig.ResourceLimitValues = manifest->ResourceLimitValues;
   hostConfig.ResourceCurrentValues = manifest->ResourceCurrentValues;
   hostConfig.LinearHeapBaseAddress = manifest->LinearHeapBaseAddress;
@@ -3401,9 +3346,6 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
         kPauseDungeonMapCursorInput,
         kPauseUiNativeUpdateCall,
         kPauseProjectionPrepareCall,
-        kGlobalActionStateGetSlotItemId,
-        kPauseItemsNativeUpdateCall,
-        kPauseItemsNativeUpdateReturn,
         kPauseAlternateViewportDrawCall,
         kPauseConditionalDrawCall,
         kPauseRoutedCommandCallA,
@@ -3432,10 +3374,9 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
          Oot3dNativeGame::TopScreenVerifiedFloatLoadContracts()) {
       blockEntryHooks.push_back(contract.Entry);
     }
-    for (const auto &contract :
-         Oot3dNativeGame::TopScreenVerifiedItemQueryContracts()) {
-      blockEntryHooks.push_back(contract.OriginalEntry);
-    }
+    const auto itemHooks = Oot3dNativeGame::TopScreenItemDispatchEntries();
+    blockEntryHooks.insert(blockEntryHooks.end(), itemHooks.begin(), itemHooks.end());
+    blockEntryHooks.push_back(Oot3dNativeGame::kTopScreenInputUpdateBoundary);
   }
   if (launch.ExtendedDiagnostics) {
     const std::array diagnosticHooks{
@@ -3655,14 +3596,11 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
          Oot3dNativeGame::TopScreenVerifiedFloatLoadContracts()) {
       topScreenSourcePortBlocks.push_back(contract.Entry);
     }
-    for (const auto &contract :
-         Oot3dNativeGame::TopScreenVerifiedItemQueryContracts()) {
-      topScreenSourcePortBlocks.push_back(contract.OriginalEntry);
-    }
-    topScreenSourcePortBlocks.push_back(kGlobalActionStateGetSlotItemId);
-    topScreenSourcePortBlocks.push_back(kPauseItemsNativeUpdateCall);
-    topScreenSourcePortBlocks.push_back(kPauseItemsNativeUpdateReturn);
+    const auto itemEntries = Oot3dNativeGame::TopScreenItemDispatchEntries();
+    topScreenSourcePortBlocks.insert(topScreenSourcePortBlocks.end(),
+                                    itemEntries.begin(), itemEntries.end());
     topScreenSourcePortBlocks.push_back(kTopScreenGameplayCompositionPrefix);
+    topScreenSourcePortBlocks.push_back(Oot3dNativeGame::kTopScreenInputUpdateBoundary);
     // These source ports are reached from inside large AOT regions. Make
     // their native entries observable so execution returns to the dispatcher
     // before applying the typed replacement. Keep this list sorted because
@@ -3678,15 +3616,13 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
         wholeAotObservableExitBlocks.end(),
         topScreenObservableExitBlocks.begin(),
         topScreenObservableExitBlocks.end());
-    for (const auto &contract :
-         Oot3dNativeGame::TopScreenVerifiedItemQueryContracts()) {
-      wholeAotObservableExitBlocks.push_back(contract.OriginalEntry);
-    }
-    wholeAotObservableExitBlocks.push_back(kGlobalActionStateGetSlotItemId);
 #else
     wholeAotObservableExitBlocks.push_back(kTopScreenCameraUpdateEntry);
     wholeAotObservableExitBlocks.push_back(kTopScreenCameraNormal1Scalar);
 #endif
+    wholeAotObservableExitBlocks.push_back(Oot3dNativeGame::kTopScreenInputUpdateBoundary);
+    wholeAotObservableExitBlocks.insert(wholeAotObservableExitBlocks.end(),
+                                       itemEntries.begin(), itemEntries.end());
     nativeCandidateEntries.insert(nativeCandidateEntries.end(),
                                   topScreenSourcePortBlocks.begin(),
                                   topScreenSourcePortBlocks.end());
@@ -3781,6 +3717,10 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
 #endif
   widescreenProjection.TopScreenInput =
       &nativeCandidateDispatch.TopScreenInput;
+  widescreenProjection.TopScreenInputClock =
+      &nativeCandidateDispatch.TopScreenInputClock;
+  widescreenProjection.TopScreenItems = &nativeCandidateDispatch.TopScreenItems;
+  nativeCandidateDispatch.TopScreenItems.TraceEnabled = launch.ExtendedDiagnostics;
   nativeCandidateDispatch.UiLifecycleBridge = &uiLifecycleBridge;
   nativeCandidateDispatch.PicaCompositionDomain = &picaCompositionDomain;
   nativeCandidateDispatch.TopScreenPauseProjection =
@@ -3828,7 +3768,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
   }
 #else
   if (nativeCandidateDispatch.TopScreenUiProfile) {
-    process.SetNativeBlockCallback(&ExecuteProductTopScreenCamera,
+    process.SetNativeBlockCallback(&ExecuteProductTopScreenHook,
                                    &nativeCandidateDispatch);
   }
 #endif
@@ -3901,6 +3841,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                            1000U));
   std::vector<std::shared_ptr<Fast::Oot3d::GraphicsSettingsPanelTab>>
       applicationSettingsTabs;
+  applicationSettingsTabs.push_back(Oot3dNativeGame::CreateGameLanguagePanel(languageSettings));
   applicationSettingsTabs.push_back(
       Oot3dNativeGame::CreateNativeControlsSettingsPanel(
           controlConfigRuntime,
@@ -3947,9 +3888,12 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
 #endif
   Oot3dNativeGame::Oot3dNativeA32UiTextureProvider nativeUiTextureProvider(
       picaMemoryView, topScreenTextureOverridePackPointer);
+  Oot3dNativeGame::TopScreenOcarinaTextRuntime ocarinaText(process.Memory(), nativeUiTextureProvider);
+  nativeCandidateDispatch.OcarinaText = &ocarinaText;
+  widescreenProjection.OcarinaText = &ocarinaText;
   oot3d::ui::Fast3dUiRenderBackend uiRenderBackend(api);
   oot3d::ui::N64UiFast3dRenderer n64UiRenderer(uiRenderBackend,
-                                               &nativeUiTextureProvider);
+                                               &ocarinaText);
   std::array<std::vector<oot3d::ui::UiPrimitive>,
              oot3d::ui::kUiSubsystemCount>
       lastTopScreenPrimitivesBySubsystem;
@@ -4271,6 +4215,13 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
       throw std::runtime_error("native savestate load failed: " + error);
     }
     Oot3dNativeGame::ResetOot3dTypedGameplayTransientState();
+    const auto restoredGravity = hostServices.HidRuntimeProfile().LastAccelerometer;
+    nativeControlPollingState.VirtualMotion.RestoreGravity(
+        {static_cast<float>(restoredGravity[0]), static_cast<float>(restoredGravity[1]),
+         static_cast<float>(restoredGravity[2])});
+    nativeControlPollingState.PendingMouseDeltaX = 0;
+    nativeControlPollingState.PendingMouseDeltaY = 0;
+    nativeControlPollingState.PendingMouseSeconds = 0.0;
     picaCompositionTracker.Reset();
     frameCount = restoredRuntime.FrameCount;
     refreshTickRemainder = restoredRuntime.RefreshTickRemainder;
@@ -4463,6 +4414,8 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
   std::optional<uint32_t> automatedStateSavedAtGuestFrame;
 
   const auto saveState = [&](const std::filesystem::path &path) {
+    // Host-owned continuation registers must never escape into a standalone savestate.
+    if (ocarinaText.Pending()) return false;
     const auto started = std::chrono::steady_clock::now();
     Oot3dNativeGame::NativeA32SavestateRuntimeState runtime;
     runtime.FrameCount = frameCount;
@@ -4605,6 +4558,13 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     }
     Oot3dNativeGame::ResetOot3dTypedGameplayTransientState();
     picaCompositionTracker.Reset();
+    const auto restoredGravity = hostServices.HidRuntimeProfile().LastAccelerometer;
+    nativeControlPollingState.VirtualMotion.RestoreGravity(
+        {static_cast<float>(restoredGravity[0]), static_cast<float>(restoredGravity[1]),
+         static_cast<float>(restoredGravity[2])});
+    nativeControlPollingState.PendingMouseDeltaX = 0;
+    nativeControlPollingState.PendingMouseDeltaY = 0;
+    nativeControlPollingState.PendingMouseSeconds = 0.0;
     applySelectedUiProfile();
     if (!api.ResetPicaState(&error)) {
       throw std::runtime_error(
@@ -4630,6 +4590,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     restoreSavestateTiming(runtime);
     picaFrontend.SetPacketSink(&submissionQueue);
     uiLifecycleBridge.ResetAfterStateLoad(frameCount);
+    ocarinaText.Reset();
     uiLifecycleBridge.SetTopScreenConfig(activeTopScreenConfig);
     widescreenProjection.TopScreenPauseDrawRouting = {};
     widescreenProjection.TopScreenPausePageRedraw = {};
@@ -4639,9 +4600,8 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     widescreenProjection.TopScreenPausePageRedrawSkips = 0U;
     widescreenProjection.PendingTopScreenPauseChildRestore.reset();
     nativeCandidateDispatch.TopScreenInput = {};
+    nativeCandidateDispatch.TopScreenInputClock.Reset();
     nativeCandidateDispatch.TopScreenGameplayActionRuntime = {};
-    nativeCandidateDispatch.PreviousTopScreenZrHeld = false;
-    nativeCandidateDispatch.PreviousTopScreenZlHeld = false;
     nativeCandidateDispatch.PreviousTopScreenButtons = 0U;
     nativeCandidateDispatch.StartButtonLatch = {};
     nativeCandidateDispatch.TopScreenStartRouting = {};
@@ -4659,7 +4619,9 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     nativeCandidateDispatch.TopScreenPauseController = {};
     nativeCandidateDispatch.TopScreenPauseControllerDrawPhase = 0U;
     nativeCandidateDispatch.TopScreenPauseControllerVisibleRenderers = {};
-    nativeCandidateDispatch.PendingTopScreenItemsSelection = 0U;
+    nativeCandidateDispatch.TopScreenItems.PendingSelection = 0U;
+    nativeCandidateDispatch.TopScreenItems.PreviousSelectionButtons = 0U;
+    nativeCandidateDispatch.TopScreenItems.PreviousSelectionPressed = 0U;
     nativeCandidateDispatch.TopScreenCamera = {};
     nativeCandidateDispatch.TopScreenCameraInput.Reset();
     Oot3dNativeGame::ApplyTopScreenFreeCameraConfig(
@@ -4786,6 +4748,8 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     window.GetMouseStateManager()->StartFrame();
     gui->StartDraw();
     window.StartFrame();
+    phaseTiming.HostFrameStartSeconds += SecondsSince(phaseStart);
+    const auto inputPhaseStart = std::chrono::steady_clock::now();
     const bool quickSaveKeyDown = window.IsKeyDown(Ship::KbScancode::LUS_KB_F5);
     const bool quickLoadKeyDown = window.IsKeyDown(Ship::KbScancode::LUS_KB_F8);
     quickSavePending =
@@ -4845,6 +4809,8 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
           physicalStartHeld, nativeCandidateDispatch.TopScreenStartRouting);
     }
     Oot3dNativeGame::NativeA32InputFrame inputFrame;
+    phaseTiming.InputPollSeconds += SecondsSince(inputPhaseStart);
+    const auto rendererFrameStart = std::chrono::steady_clock::now();
     api.UpdateFramebufferParameters(0, width, height, 1, false, true, true,
                                     true);
     api.StartFrame();
@@ -4854,6 +4820,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     api.ClearFramebuffer(true, true);
     api.SetViewport(0, 0, static_cast<int>(width), static_cast<int>(height));
     api.SetScissor(0, 0, static_cast<int>(width), static_cast<int>(height));
+    phaseTiming.RendererFrameStartSeconds += SecondsSince(rendererFrameStart);
     phaseTiming.FrameStartSeconds += SecondsSince(phaseStart);
     const uint32_t guestRefreshIterations =
         std::max<uint32_t>(1U, guestRefreshesDue);
@@ -4903,8 +4870,12 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
               return Oot3dNativeGame::NativeA32HidButtonMask(value);
             };
         Oot3dNativeGame::TopScreenDpadActionState topScreenDpadActions;
+        Oot3dNativeGame::TopScreenOcarinaState ocarinaOwner;
+        const bool ocarinaOwnsDpad = nativeCandidateDispatch.TopScreenUiProfile &&
+            Oot3dNativeGame::ReadTopScreenOcarinaState(process.Memory(), &ocarinaOwner) &&
+            ocarinaOwner.Active;
         if (nativeCandidateDispatch.TopScreenUiProfile &&
-            topScreenStartRoutingEligible) {
+            topScreenStartRoutingEligible && !ocarinaOwnsDpad) {
           bool childLink = false;
           std::string childLinkError;
           if (!Oot3dNativeGame::ReadTopScreenChildLink(
@@ -4934,17 +4905,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
             inputFrame, ThreeDsRecomp::Input::Button::Zr);
         const bool zlHeld = ThreeDsRecomp::Input::IsButtonHeld(
             inputFrame, ThreeDsRecomp::Input::Button::Zl);
-        nativeCandidateDispatch.TopScreenInput = {
-            .ZrPressed =
-                (zrHeld &&
-                 !nativeCandidateDispatch.PreviousTopScreenZrHeld) ||
-                topScreenDpadActions.WasPressed(
-                    Oot3dNativeGame::TopScreenDpadAction::ItemZr),
-            .ZlPressed =
-                (zlHeld &&
-                 !nativeCandidateDispatch.PreviousTopScreenZlHeld) ||
-                topScreenDpadActions.WasPressed(
-                    Oot3dNativeGame::TopScreenDpadAction::ItemZl),
+        Oot3dNativeGame::TopScreenExtendedInputFrame sampledTopScreenInput = {
             .ZrHeld =
                 zrHeld ||
                 topScreenDpadActions.IsHeld(
@@ -4961,27 +4922,25 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                 (inputFrame.Hid.Buttons &
                  Oot3dNativeGame::NativeA32HidButtonMask(
                      Oot3dNativeGame::NativeA32HidButton::DpadRight)) != 0U};
-        nativeCandidateDispatch.TopScreenInput.XPressed =
-            (topScreenPressed &
-             topScreenButton(Oot3dNativeGame::NativeA32HidButton::X)) != 0U;
-        nativeCandidateDispatch.TopScreenInput.YPressed =
-            (topScreenPressed &
-             topScreenButton(Oot3dNativeGame::NativeA32HidButton::Y)) != 0U;
-        nativeCandidateDispatch.TopScreenInput.XHeld =
+        sampledTopScreenInput.DpadUpHeld =
+            (inputFrame.Hid.Buttons & topScreenButton(
+                Oot3dNativeGame::NativeA32HidButton::DpadUp)) != 0U;
+        if (ocarinaOwnsDpad) {
+          inputFrame.Hid.Buttons &= ~(topScreenButton(Oot3dNativeGame::NativeA32HidButton::DpadLeft) |
+                                     (ocarinaOwner.Page == 12 ? topScreenButton(
+                                         Oot3dNativeGame::NativeA32HidButton::DpadUp) : 0U) |
+                                     topScreenButton(Oot3dNativeGame::NativeA32HidButton::DpadRight));
+        }
+        sampledTopScreenInput.XHeld =
             (topScreenButtons &
              topScreenButton(Oot3dNativeGame::NativeA32HidButton::X)) != 0U;
-        nativeCandidateDispatch.TopScreenInput.YHeld =
+        sampledTopScreenInput.YHeld =
             (topScreenButtons &
              topScreenButton(Oot3dNativeGame::NativeA32HidButton::Y)) != 0U;
-        nativeCandidateDispatch.TopScreenInput.RestorationLayout =
+        sampledTopScreenInput.RestorationLayout =
             activeTopScreenConfig.HudLayout ==
             Oot3dNativeGame::TopScreenHudLayout::Restoration;
-        uiLifecycleBridge.SetTopScreenInputFrame(
-            nativeCandidateDispatch.TopScreenInput);
-        nativeCandidateDispatch.PreviousTopScreenZrHeld =
-            zrHeld;
-        nativeCandidateDispatch.PreviousTopScreenZlHeld =
-            zlHeld;
+        nativeCandidateDispatch.TopScreenInputClock.ObserveGuest(sampledTopScreenInput);
         if (nativeCandidateDispatch.TopScreenUiProfile &&
             activeTopScreenConfig.FreeCameraEnabled &&
             nativeControlPollingState.GameplayMouseOwned) {
@@ -5065,6 +5024,12 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
             }
           }
           std::string gameplayActionError;
+          if (const auto sound = uiLifecycleBridge.TakeOcarinaGuideSound(); sound != 0U) {
+            if (!Oot3dNativeGame::PlayTopScreenUiSound(
+                    process, sound, kTopScreenDirectCallReturn, &gameplayActionError)) {
+              throw std::runtime_error("TopScreen ocarina guide sound failed: " + gameplayActionError);
+            }
+          }
           if (!Oot3dNativeGame::ConsumeTopScreenGameplayActions(
                   process, topScreenDpadActions,
                   nativeCandidateDispatch.TopScreenInput.ZrPressed ||
@@ -5078,6 +5043,8 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                 gameplayActionError);
           }
           nativeCandidateDispatch.PreviousTopScreenButtons = buttons;
+          nativeCandidateDispatch.TopScreenItems.DirectItemId =
+              nativeCandidateDispatch.TopScreenGameplayActionRuntime.DirectItem.ActiveItemId;
           Oot3dNativeGame::TopScreenPauseDrawInputs pauseInputs;
           if (!Oot3dNativeGame::ReadTopScreenPauseDrawInputs(process.Memory(),
                                                              &pauseInputs)) {
@@ -6048,7 +6015,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
           launch.UiProfile == Oot3dNativeGame::Oot3dUiProfile::TopScreen;
       if (topScreenProfile &&
           subsystem != oot3d::ui::UiSubsystem::GameplayHud &&
-          subsystem != oot3d::ui::UiSubsystem::Map) {
+          subsystem != oot3d::ui::UiSubsystem::TouchControls) {
         continue;
       }
       const bool topScreenPresentation = topScreenProfile;
@@ -6065,6 +6032,9 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
           subsystem == oot3d::ui::UiSubsystem::GameplayHud) {
         Oot3dNativeGame::AppendTopScreenFreeCameraOptionPresentation(
             nativeCandidateDispatch.TopScreenCamera.Camera, primitives);
+      }
+      if (topScreenPresentation && subsystem == oot3d::ui::UiSubsystem::TouchControls) {
+        ocarinaText.Append(primitives);
       }
       if (topScreenPresentation) {
         lastTopScreenPrimitivesBySubsystem[subsystemIndex] = primitives;
@@ -7010,6 +6980,13 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                         controls.FreeCameraSource)},
                    {"gameplay_mouse_owned",
                     nativeControlPollingState.GameplayMouseOwned},
+                   {"mouse_polling", {
+                       {"eligible", nativeControlPollingState.MouseEligiblePolls},
+                       {"released", nativeControlPollingState.MouseReleasedPolls},
+                       {"host_ui", nativeControlPollingState.MouseHostUiPolls},
+                       {"native_ui", nativeControlPollingState.MouseNativeUiPolls},
+                       {"capture_transitions", nativeControlPollingState.MouseCaptureTransitions},
+                       {"movement", nativeControlPollingState.MouseMovementPolls}}},
                    {"free_camera_input",
                     {{"pending_x",
                       nativeCandidateDispatch.TopScreenCameraInput.Peek().X},
@@ -7490,6 +7467,12 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                     ui.name_entry_save_commit_timer},
                    {"shadow_presentation_frames",
                     bridge.shadow_presentation_frames},
+                   {"topscreen_ocarina_frames", bridge.topscreen_ocarina_frames},
+                   {"topscreen_ocarina_text_builds", ocarinaText.Builds()},
+                   {"topscreen_ocarina_text_releases", ocarinaText.Releases()},
+                   {"topscreen_ocarina_primitives", bridge.topscreen_ocarina_primitives},
+                   {"topscreen_ocarina_failures", bridge.topscreen_ocarina_failures},
+                   {"topscreen_ocarina_error", bridge.topscreen_ocarina_error},
                    {"shadow_presentation_primitives",
                     bridge.shadow_presentation_primitives},
                    {"topscreen_native_touch_copy_frames",
@@ -8658,7 +8641,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                       nativeCandidateDispatch
                           .TopScreenPauseControllerDrawPhase},
                      {"pending_items_selection",
-                      nativeCandidateDispatch.PendingTopScreenItemsSelection},
+                      nativeCandidateDispatch.TopScreenItems.PendingSelection},
                      {"pending_target",
                       widescreenProjection.PendingTopScreenPauseTarget
                           .has_value()},
@@ -8732,15 +8715,41 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                       nativeCandidateDispatch.TopScreenCamera
                           .LastOwnershipInput.RightStickY}}},
                    {"topscreen_item_query_calls",
-                    nativeCandidateDispatch.TopScreenItemQueryCalls},
+                    nativeCandidateDispatch.TopScreenItems.QueryCalls},
+                   {"topscreen_item_query_trace", [&] {
+                      auto rows = nlohmann::json::array();
+                      for (const auto& row : nativeCandidateDispatch.TopScreenItems.QueryTrace)
+                        rows.push_back({{"entry", row.Entry}, {"return_pc", row.ReturnPc},
+                            {"flags", row.SuppressionFlags}, {"native", row.NativeResult},
+                            {"result", row.Result}, {"zr_pressed", row.Input.ZrPressed},
+                            {"zl_pressed", row.Input.ZlPressed}, {"zr_held", row.Input.ZrHeld},
+                            {"zl_held", row.Input.ZlHeld}});
+                      return rows;
+                    }()},
+                   {"topscreen_input_native_updates",
+                    nativeCandidateDispatch.TopScreenInputClock.Updates},
+                   {"topscreen_input_zr_press_updates",
+                    nativeCandidateDispatch.TopScreenInputClock.ZrPressUpdates},
+                   {"topscreen_input_zl_press_updates",
+                    nativeCandidateDispatch.TopScreenInputClock.ZlPressUpdates},
+                   {"topscreen_items_selection_updates",
+                    nativeCandidateDispatch.TopScreenItems.SelectionUpdates},
                    {"topscreen_item_query_true_results",
-                    nativeCandidateDispatch.TopScreenItemQueryTrueResults},
+                    nativeCandidateDispatch.TopScreenItems.QueryTrueResults},
                    {"topscreen_slot_item_attempts",
-                    nativeCandidateDispatch.TopScreenSlotItemAttempts},
+                    nativeCandidateDispatch.TopScreenItems.SlotAttempts},
                    {"topscreen_slot_item_overrides",
-                    nativeCandidateDispatch.TopScreenSlotItemOverrides},
+                    nativeCandidateDispatch.TopScreenItems.SlotOverrides},
                    {"topscreen_slot_item_native_fallbacks",
-                    nativeCandidateDispatch.TopScreenSlotItemNativeFallbacks},
+                    nativeCandidateDispatch.TopScreenItems.SlotNativeFallbacks},
+                   {"topscreen_item_query_entries",
+                    nativeCandidateDispatch.TopScreenItems.QueryEntries},
+                   {"topscreen_slot_item_entries",
+                    nativeCandidateDispatch.TopScreenItems.SlotEntries},
+                   {"topscreen_items_selection_begins",
+                    nativeCandidateDispatch.TopScreenItems.SelectionBegins},
+                   {"topscreen_items_selection_completions",
+                    nativeCandidateDispatch.TopScreenItems.SelectionCompletions},
                    {"candidate_samples", nativeCandidateDispatch.Samples},
                    {"candidate_estimated_seconds",
                     candidateSampleNanoseconds * kA32RuntimeSampleDenominator *
@@ -8822,6 +8831,9 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
             {"phase_timing",
              {{"guest_seconds", phaseTiming.GuestSeconds},
               {"frame_start_seconds", phaseTiming.FrameStartSeconds},
+              {"host_frame_start_seconds", phaseTiming.HostFrameStartSeconds},
+              {"input_poll_seconds", phaseTiming.InputPollSeconds},
+              {"renderer_frame_start_seconds", phaseTiming.RendererFrameStartSeconds},
               {"dsp_mix_seconds", phaseTiming.DspMixSeconds},
               {"audio_output_seconds", phaseTiming.AudioOutputSeconds},
               {"pica_submit_seconds", phaseTiming.PicaSubmitSeconds},

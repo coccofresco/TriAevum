@@ -151,6 +151,23 @@ bool ReadOptionalBool(const nlohmann::json& segment, const char* key) {
     return segment.at(key).get<bool>();
 }
 
+bool ReadMotionVector(const nlohmann::json& segment, const char* key,
+                      std::array<float, 3>& output) {
+    if (!segment.contains(key)) return false;
+    const auto& values = segment.at(key);
+    if (!values.is_array() || values.size() != output.size())
+        throw std::runtime_error(std::string("native input timeline requires a 3-axis ") + key);
+    for (size_t axis = 0; axis < output.size(); ++axis) {
+        if (!values[axis].is_number())
+            throw std::runtime_error(std::string("native input timeline requires numeric ") + key);
+        const auto value = values[axis].get<float>();
+        if (!std::isfinite(value))
+            throw std::runtime_error(std::string("native input timeline requires finite ") + key);
+        output[axis] = value;
+    }
+    return true;
+}
+
 void ReadTouch(const nlohmann::json& segment, NativeA32HidState& state) {
     if (!segment.contains("touch")) {
         return;
@@ -313,14 +330,15 @@ NativeA32InputFrame MapNativeControlInput(
     const NativeControlHostInputState& host,
     const NativeAimProfileTransform& aimTransform,
     NativeRightStickProfileState* rightStickState,
-    bool advanceRightStickState) noexcept {
+    bool advanceRightStickState,
+    ThreeDsRecomp::Input::VirtualMotionState* virtualMotion) noexcept {
     NativeA32InputFrame frame;
     static_cast<ThreeDsRecomp::Input::InputFrame&>(frame) =
         ThreeDsRecomp::Input::ResolveInput(
             BuildThreeDsMappingConfig(config), host,
             BuildThreeDsDigitalState(host),
             BuildThreeDsAimTransform(aimTransform), rightStickState,
-            advanceRightStickState);
+            advanceRightStickState, virtualMotion);
     return frame;
 }
 
@@ -516,13 +534,17 @@ NativeA32InputTimeline NativeA32InputTimeline::LoadFile(
         segment.Hid.CirclePadY = ReadCircleAxis(source, "circle_y");
         ThreeDsRecomp::Input::SetButtonHeld(
             segment, ThreeDsRecomp::Input::Button::Zr,
+            ThreeDsRecomp::Input::IsButtonHeld(segment, ThreeDsRecomp::Input::Button::Zr) ||
             ReadOptionalBool(source, "topscreen_zr"));
         ThreeDsRecomp::Input::SetButtonHeld(
             segment, ThreeDsRecomp::Input::Button::Zl,
+            ThreeDsRecomp::Input::IsButtonHeld(segment, ThreeDsRecomp::Input::Button::Zl) ||
             ReadOptionalBool(source, "topscreen_zl"));
         segment.CStick.X = ReadCircleAxis(source, "right_x");
         segment.CStick.Y = ReadCircleAxis(source, "right_y");
         ReadTouch(source, segment.Hid);
+        segment.Hid.GyroscopeValid = ReadMotionVector(source, "gyroscope_dps", segment.Hid.GyroscopeDegreesPerSecond);
+        segment.Hid.AccelerometerValid = ReadMotionVector(source, "accelerometer_g", segment.Hid.Accelerometer);
         timeline.mSegments.push_back(segment);
         previousEnd = segment.EndFrameExclusive;
         first = false;

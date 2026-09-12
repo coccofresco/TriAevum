@@ -1,5 +1,6 @@
 #include "oot3d_native_a32_input.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
@@ -7,6 +8,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string_view>
+#include <nlohmann/json.hpp>
 
 namespace {
 
@@ -38,9 +40,104 @@ void RequireTouch(const NativeA32TouchMapping& touch, bool inside,
             message);
 }
 
+class ControllerButtonSource final : public ThreeDsRecomp::Input::HostButtonSource {
+  public:
+    NativeGamepadButton Held = NativeGamepadButton::None;
+    bool IsKeyboardKeyHeld(NativeKeyboardKey) const noexcept override { return false; }
+    bool IsMouseButtonHeld(NativeMouseButton) const noexcept override { return false; }
+    bool IsGamepadButtonHeld(NativeGamepadButton button) const noexcept override {
+        return button == Held;
+    }
+};
+
+void TestShoulderMappings() {
+    using ThreeDsRecomp::Input::IsHostBindingHeld;
+    constexpr std::array actions{NativeControlAction::L, NativeControlAction::R,
+                                 NativeControlAction::Zl, NativeControlAction::Zr};
+    constexpr std::array masks{NativeA32HidButtonMask(NativeA32HidButton::L),
+                               NativeA32HidButtonMask(NativeA32HidButton::R),
+                               NativeA32HidButtonMask(NativeA32HidButton::Zl),
+                               NativeA32HidButtonMask(NativeA32HidButton::Zr)};
+    std::array sources{NativeGamepadButton::LeftShoulder, NativeGamepadButton::RightShoulder,
+                       NativeGamepadButton::LeftTrigger, NativeGamepadButton::RightTrigger};
+    std::sort(sources.begin(), sources.end());
+    unsigned permutations = 0;
+    do {
+        auto config = NativeControlPreset(NativeControlProfile::Controller);
+        config.Profile = NativeControlProfile::Custom;
+        for (size_t i = 0; i < actions.size(); ++i)
+            config.Bindings[static_cast<size_t>(actions[i])].Gamepad = sources[i];
+        std::string json, error;
+        NativeControlConfig loaded;
+        Require(SerializeNativeControlConfigText(config, &json, &error) &&
+                    ParseNativeControlConfigText(json, &loaded, &error) && loaded == config,
+                "custom shoulder mapping did not survive save/reload");
+        ControllerButtonSource physical;
+        for (size_t i = 0; i < actions.size(); ++i) {
+            // Exercise the same host-binding -> title action -> native HID path as the window.
+            for (const bool held : {true, true, false}) {
+                physical.Held = held ? sources[i] : NativeGamepadButton::None;
+                NativeControlHostInputState host;
+                for (size_t j = 0; j < host.Actions.size(); ++j)
+                    host.Actions[j] = IsHostBindingHeld(loaded.Bindings[j], {}, physical);
+                const auto frame = MapNativeControlInput(loaded, host);
+                Require(frame.Hid.Buttons == (held ? masks[i] : 0U),
+                        "remapped shoulder lost ZL/ZR or leaked L/R into the item press");
+            }
+        }
+        ++permutations;
+    } while (std::next_permutation(sources.begin(), sources.end()));
+    Require(permutations == 24U, "not all shoulder/trigger assignments were exercised");
+}
+
+void EmitMouseAimTimeline(const std::filesystem::path& path, std::string_view axis) {
+    Require(axis == "pitch" || axis == "yaw", "probe axis must be pitch or yaw");
+    const auto config = NativeControlPreset(NativeControlProfile::KeyboardMouse);
+    ThreeDsRecomp::Input::VirtualMotionState motion;
+    nlohmann::json segments = nlohmann::json::array();
+    for (int frame = 0; frame < 320; ++frame) {
+        NativeControlHostInputState host;
+        host.SamplePeriodSeconds = 1.0 / 30.0;
+        if (frame >= 100 && frame < 140) {
+            if (axis == "pitch") host.MouseDeltaY = 3;
+            else host.MouseDeltaX = 3;
+        }
+        const auto mapped = MapNativeControlInput(config, host, {}, nullptr, true, &motion);
+        segments.push_back({{"start_frame", frame}, {"end_frame_exclusive", frame + 1},
+            {"buttons", frame >= 60 && frame < 310 ? nlohmann::json::array({"zr"}) : nlohmann::json::array()},
+            {"gyroscope_dps", mapped.Hid.GyroscopeDegreesPerSecond},
+            {"accelerometer_g", mapped.Hid.Accelerometer}});
+    }
+    WriteText(path, nlohmann::json{{"schema", "oot3d.native_game.input_timeline.v1"},
+        {"frame_origin", "run"}, {"segments", segments}}.dump(2));
+}
+
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    if (argc == 4 && std::string_view(argv[1]) == "--emit-mouse-aim") {
+        EmitMouseAimTimeline(argv[2], argv[3]);
+        return 0;
+    }
+    Require(argc == 1, "usage: [--emit-mouse-aim FILE pitch|yaw]");
+    TestShoulderMappings();
+    const auto mousePreset = NativeControlPreset(NativeControlProfile::KeyboardMouse);
+    const auto controllerPreset = NativeControlPreset(NativeControlProfile::Controller);
+    Require(mousePreset.NativeAimSource == NativeMotionSource::Mouse &&
+            mousePreset.FreeCameraSource == NativeMotionSource::Mouse && mousePreset.CaptureMouseInGameplay,
+            "keyboard/mouse preset must use mouse for aim and free camera");
+    Require(controllerPreset.NativeAimSource == NativeMotionSource::RightStick &&
+            controllerPreset.FreeCameraSource == NativeMotionSource::RightStick,
+            "controller preset must use the right stick for aim and free camera");
+    NativeControlHostInputState controllerMotion;
+    controllerMotion.RightStickX = 28000;
+    controllerMotion.ControllerMotion.GyroscopeValid = true;
+    controllerMotion.ControllerMotion.GyroscopeDegreesPerSecond = {-90, 0, -90};
+    const auto controllerMapped = MapNativeControlInput(controllerPreset, controllerMotion);
+    controllerMotion.ControllerMotion = {};
+    const auto withoutSensor = MapNativeControlInput(controllerPreset, controllerMotion);
+    Require(controllerMapped.CStick.X > 0 && controllerMapped.Hid.GyroscopeDegreesPerSecond == withoutSensor.Hid.GyroscopeDegreesPerSecond,
+            "controller preset mixed motion sensors into right-stick aiming");
     const auto defaults = NativeControlDefaults();
     Require(defaults.ControllerEnabled && defaults.KeyboardEnabled && defaults.MouseEnabled &&
                 defaults.MovementStick == NativeAnalogStick::Left &&
@@ -132,11 +229,11 @@ int main() {
                 mappedKeyboardMouse.Hid.GyroscopeValid &&
                 std::abs(
                     mappedKeyboardMouse.Hid
-                        .GyroscopeDegreesPerSecond[0] -
+                        .GyroscopeDegreesPerSecond[0] +
                     35.0F) < 0.001F &&
                 std::abs(
                     mappedKeyboardMouse.Hid
-                        .GyroscopeDegreesPerSecond[2] -
+                        .GyroscopeDegreesPerSecond[1] +
                     70.0F) < 0.001F,
             "keyboard/mouse profile did not map movement, buttons and "
             "native gyro units");
@@ -169,8 +266,10 @@ int main() {
             "automatic controller profile did not prioritize active C-stick");
     auto motionOnlyControllerHost = controllerHost;
     motionOnlyControllerHost.RightStickY = 0;
+    auto automaticControllerConfig = controllerConfig;
+    automaticControllerConfig.NativeAimSource = NativeMotionSource::Automatic;
     const auto mappedControllerMotion =
-        MapNativeControlInput(controllerConfig, motionOnlyControllerHost);
+        MapNativeControlInput(automaticControllerConfig, motionOnlyControllerHost);
     Require(mappedControllerMotion.Hid.GyroscopeValid &&
                 mappedControllerMotion.Hid.AccelerometerValid &&
                 std::abs(mappedControllerMotion.Hid
@@ -195,8 +294,9 @@ int main() {
                 std::abs(transformedRightStickAim.Hid
                              .GyroscopeDegreesPerSecond[0] +
                          360.0F) < 0.001F &&
-                std::abs(transformedRightStickAim.Hid
-                             .GyroscopeDegreesPerSecond[2] +
+                transformedRightStickAim.Hid.GyroscopeDegreesPerSecond[1] > 0.0F &&
+                std::abs(std::hypot(transformedRightStickAim.Hid.GyroscopeDegreesPerSecond[1],
+                                    transformedRightStickAim.Hid.GyroscopeDegreesPerSecond[2]) -
                          360.0F) < 0.001F,
             "profile transform did not scale and invert right-stick aim");
     auto smoothedRightStickConfig = rightStickAimConfig;
@@ -216,8 +316,8 @@ int main() {
     Require(firstSmoothedFrame.CStick.X == 154 &&
                 heldSmoothedFrame.CStick.X == 154 &&
                 secondSmoothedFrame.CStick.X == 154 &&
-                std::abs(firstSmoothedFrame.Hid
-                             .GyroscopeDegreesPerSecond[2] -
+                std::abs(std::hypot(firstSmoothedFrame.Hid.GyroscopeDegreesPerSecond[1],
+                                    firstSmoothedFrame.Hid.GyroscopeDegreesPerSecond[2]) -
                          90.0F) < 0.001F,
             "C-stick aiming smoothing contaminated free-camera input");
 
@@ -259,7 +359,7 @@ int main() {
                                                      true),
             "gameplay mouse ownership did not respect frontend and host GUI");
     const auto unchangedPhysicalMotion = MapNativeControlInput(
-        controllerConfig, motionOnlyControllerHost,
+        automaticControllerConfig, motionOnlyControllerHost,
         {.RightStickScale = 2.0F,
          .RightStickInvertX = true,
          .RightStickInvertY = true});
@@ -645,6 +745,31 @@ int main() {
                 runTimeline.Sample(3, 2).ScriptSegmentIndex == -1 &&
                 runTimeline.Sample(1003, 3).ScriptSegmentIndex == 0,
             "run-relative input timeline used the guest frame");
+
+    WriteText(path, R"json({
+      "schema": "oot3d.native_game.input_timeline.v1",
+      "segments": [{"start_frame": 0, "end_frame_exclusive": 2,
+        "buttons": ["zr", "zl"], "gyroscope_dps": [10, -20, 30],
+        "accelerometer_g": [0.5, -1, 0.25]}]
+    })json");
+    const auto sensorTimeline = NativeA32InputTimeline::LoadFile(path);
+    const auto sensorFrame = sensorTimeline.Sample(0, 0);
+    Require(ThreeDsRecomp::Input::IsButtonHeld(sensorFrame, ThreeDsRecomp::Input::Button::Zr) &&
+            ThreeDsRecomp::Input::IsButtonHeld(sensorFrame, ThreeDsRecomp::Input::Button::Zl),
+            "absent legacy TopScreen aliases cleared explicit native shoulder buttons");
+    Require(sensorFrame.Hid.GyroscopeValid && sensorFrame.Hid.AccelerometerValid &&
+            sensorFrame.Hid.GyroscopeDegreesPerSecond == std::array<float, 3>{10, -20, 30} &&
+            sensorFrame.Hid.Accelerometer == std::array<float, 3>{0.5F, -1, 0.25F} &&
+            !sensorTimeline.Sample(2, 2).Hid.GyroscopeValid,
+            "timeline sensor units or sample lifetime changed");
+    WriteText(path, R"json({
+      "schema": "oot3d.native_game.input_timeline.v1",
+      "segments": [{"start_frame": 0, "end_frame_exclusive": 2, "gyroscope_dps": [1, 2]}]
+    })json");
+    bool rejectedMotion = false;
+    try { static_cast<void>(NativeA32InputTimeline::LoadFile(path)); }
+    catch (const std::runtime_error&) { rejectedMotion = true; }
+    Require(rejectedMotion, "malformed timeline motion vector was accepted");
 
     WriteText(path, R"json({
   "schema": "oot3d.native_game.input_timeline.v1",

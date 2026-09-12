@@ -1215,12 +1215,38 @@ def _emit_vfp(item: Instruction) -> list[str]:
         load = bool(raw & (1 << 20))
         add_offset = bool(raw & (1 << 23))
         rn = (raw >> 16) & 0xF
+        double_register = bool(raw & (1 << 8))
+        if (double_register and raw & (1 << 22)) or (not load and rn == 15):
+            raise LoweringError(f"invalid VFP scalar memory transfer at 0x{pc:08X}")
         lane = _vfp_lane(raw, 12, 22)
         offset = (raw & 0xFF) * 4
         base = f"0x{(pc + 8) & ~3:08X}U" if rn == 15 else _reg(rn)
         operator = "+" if add_offset else "-"
         body.append(f"const uint32_t address = {base} {operator} {offset}U;")
-        if load:
+        if double_register:
+            # D0-D15 alias consecutive pairs of S registers, including the high word.
+            if load:
+                body.extend(
+                    [
+                        "uint64_t value = 0;",
+                        "if (!context.Memory.ReadFast<uint64_t>(address, &value)) {",
+                        f"    return Oot3dAotMemoryFault(context, 0x{pc:08X}U, address);",
+                        "}",
+                        f"{_lane(lane)} = static_cast<uint32_t>(value);",
+                        f"{_lane(lane + 1)} = static_cast<uint32_t>(value >> 32U);",
+                    ]
+                )
+            else:
+                body.extend(
+                    [
+                        f"const uint64_t value = static_cast<uint64_t>({_lane(lane)}) |",
+                        f"    (static_cast<uint64_t>({_lane(lane + 1)}) << 32U);",
+                        "if (!context.Memory.WriteFast<uint64_t>(address, value)) {",
+                        f"    return Oot3dAotMemoryFault(context, 0x{pc:08X}U, address);",
+                        "}",
+                    ]
+                )
+        elif load:
             body.extend(
                 [
                     "uint32_t value = 0;",

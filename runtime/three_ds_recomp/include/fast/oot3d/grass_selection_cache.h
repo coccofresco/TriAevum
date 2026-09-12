@@ -21,6 +21,7 @@ struct GrassSelectionKey {
     uint32_t Budget = 0;
     bool FrustumCulling = false;
     std::vector<GrassSelectionView> Views;
+    float ClusterFarBladeFraction = 0;
     bool operator==(const GrassSelectionKey&) const = default;
 };
 

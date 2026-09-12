@@ -4,6 +4,7 @@
 
 #include "fast/oot3d/grass_interaction_field.h"
 #include "fast/oot3d/grass_world_placement_cache.h"
+#include "fast/renderer/shaderc_compiler.h"
 
 #include <vulkan/vulkan.h>
 
@@ -40,7 +41,8 @@ class GrassGpuInstanceCompactor final {
     GrassGpuInstanceCompactor(const GrassGpuInstanceCompactor&) = delete;
     GrassGpuInstanceCompactor& operator=(const GrassGpuInstanceCompactor&) = delete;
 
-    bool Initialize(VkPhysicalDevice physicalDevice, VkDevice device);
+    bool Initialize(VkPhysicalDevice physicalDevice, VkDevice device,
+                    Renderer::CachedPassShaderCompiler& shaders);
     [[nodiscard]] bool Compact(const GrassGpuInstanceCompactionRequest& request,
                                GrassGpuInstanceCompactionResult& result);
     void Shutdown();

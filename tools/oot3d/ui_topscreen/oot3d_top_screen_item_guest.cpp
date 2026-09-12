@@ -53,7 +53,7 @@ std::optional<std::array<bool, 4>> ResolveCompatibilityOverrides(
 
 std::optional<bool> ResolveTopScreenItemQueryGuest(
     NativeA32Memory& memory, std::uint32_t originalEntry,
-    const TopScreenExtendedInputFrame& input) {
+    const TopScreenExtendedInputFrame& input, TopScreenItemQueryState* observed) {
     const TopScreenItemQueryContract* contract = nullptr;
     for (const auto& candidate : TopScreenVerifiedItemQueryContracts()) {
         if (candidate.OriginalEntry == originalEntry) {
@@ -81,7 +81,22 @@ std::optional<bool> ResolveTopScreenItemQueryGuest(
         nativeResult != 0U;
     state.CompatibilityOverrides = *compatibility;
     state.Input = input;
+    if (observed) *observed = state;
     return ResolveTopScreenItemQuery(contract->Query, state);
+}
+
+std::optional<std::uint8_t> ResolveTopScreenDirectSlotItemGuest(
+    NativeA32Memory& memory, std::uint8_t slot, std::uint8_t directItem) {
+    if (slot != 3U || directItem == 0U) return std::nullopt;
+    std::uint8_t enabled = 0xFF, allowedAge = 0;
+    std::uint32_t age = 0;
+    if (!memory.Read8(0x00588ECAU, &enabled) || enabled == 0xFF)
+        return std::nullopt;
+    if (directItem > 0x3DU) return directItem;
+    if (!memory.Read8(0x00506C58U + directItem, &allowedAge) ||
+        !memory.Read32(0x0058795CU, &age)) return std::nullopt;
+    if (allowedAge == 9U || allowedAge == age) return directItem;
+    return std::nullopt;
 }
 
 std::optional<std::uint8_t> ResolveTopScreenSlotItemOverrideGuest(

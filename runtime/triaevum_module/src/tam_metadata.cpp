@@ -24,20 +24,30 @@ constexpr std::size_t kMaximumPhysicalMemoryRegions = 64U;
 
 enum class JsonKind { Null, Boolean, Number, String, Object, Array };
 
+struct JsonMember;
+
 struct JsonValue {
   JsonKind kind = JsonKind::Null;
   bool boolean = false;
   std::string text;
-  std::vector<std::pair<std::string, JsonValue>> members;
+  std::vector<JsonMember> members;
   std::vector<JsonValue> elements;
 
-  [[nodiscard]] const JsonValue *Find(std::string_view name) const {
-    const auto found = std::find_if(
-        members.begin(), members.end(),
-        [name](const auto &member) { return member.first == name; });
-    return found == members.end() ? nullptr : &found->second;
-  }
+  [[nodiscard]] const JsonValue *Find(std::string_view name) const;
 };
+
+// std::vector supports incomplete elements; std::pair's traits need complete types.
+struct JsonMember {
+  std::string first;
+  JsonValue second;
+};
+
+const JsonValue *JsonValue::Find(std::string_view name) const {
+  const auto found = std::find_if(
+      members.begin(), members.end(),
+      [name](const auto &member) { return member.first == name; });
+  return found == members.end() ? nullptr : &found->second;
+}
 
 bool IsValidUtf8(std::string_view value) {
   const auto *bytes = reinterpret_cast<const std::uint8_t *>(value.data());
@@ -673,7 +683,13 @@ ParseTamMetadataV1(std::span<const std::uint8_t> jsonBytes) {
 }
 
 bool TamTargetMatchesCurrentProcess(std::string_view target) {
-#if defined(_WIN32)
+#if defined(__ANDROID__)
+#if defined(__aarch64__)
+  return target == "aarch64-linux-android";
+#else
+  return false;
+#endif
+#elif defined(_WIN32)
 #if defined(_M_ARM64) || defined(__aarch64__)
   return target == "aarch64-pc-windows-msvc";
 #else

@@ -29,7 +29,7 @@ class TopScreenAssetsTests(unittest.TestCase):
         archive = self.root / "topscreen211.zip"
         archive.write_bytes(self.archive_bytes)
         with patch("topscreen_assets.build_texture_pack", return_value=b"O3TU fixture") as build, \
-                patch("topscreen_assets.urllib.request.urlopen") as network:
+                patch("verified_download.urllib.request.urlopen") as network:
             pack = prepare_topscreen_assets(root=self.root, data_root=self.data,
                                            recipe=self.recipe, romfs=self.root / "romfs.bin")
             build.assert_called_once_with(archive=archive, original_romfs_image=self.root / "romfs.bin")
@@ -51,7 +51,7 @@ class TopScreenAssetsTests(unittest.TestCase):
         for payload, valid in ((self.archive_bytes + b"extra", False), (self.archive_bytes, True)):
             response = io.BytesIO(payload)
             response.geturl = lambda: "https://example.test/archive"
-            with patch("topscreen_assets.urllib.request.urlopen", return_value=response):
+            with patch("verified_download.urllib.request.urlopen", return_value=response):
                 if valid:
                     path = acquire_archive(self.root, self.data, self.contract, lambda *_: None)
                     self.assertEqual(path.read_bytes(), self.archive_bytes)
@@ -62,7 +62,7 @@ class TopScreenAssetsTests(unittest.TestCase):
             self.assertFalse(list(self.data.rglob("*.partial")))
 
     def test_other_title_does_not_acquire_oot3d_assets(self):
-        with patch("topscreen_assets.urllib.request.urlopen") as network:
+        with patch("verified_download.urllib.request.urlopen") as network:
             self.assertIsNone(prepare_topscreen_assets(root=self.root, data_root=self.data,
                               recipe={}, romfs=self.root / "other.bin"))
             network.assert_not_called()

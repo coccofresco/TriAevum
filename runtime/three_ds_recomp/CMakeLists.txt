@@ -98,6 +98,8 @@ set(GBI_UCODE F3DEX_GBI_2 CACHE STRING "Specify the GBI ucode version")
 option(THREE_DS_RECOMP_ENABLE_DX11 "Build the legacy Direct3D 11 backend on Windows" OFF)
 option(THREE_DS_RECOMP_ENABLE_VULKAN "Build the native 3DS Vulkan backend" OFF)
 option(THREE_DS_RECOMP_ENABLE_NRI "Enable NVIDIA NRI interop for the native 3DS Vulkan backend" ${THREE_DS_RECOMP_ENABLE_VULKAN})
+cmake_dependent_option(THREE_DS_RECOMP_ENABLE_NRI_UPSCALER_SDKS
+	"Compile the optional NRI desktop upscaler SDK integrations" ON "NOT ANDROID" OFF)
 cmake_dependent_option(
 	THREE_DS_RECOMP_ENABLE_D3D12_NGX_PROVIDER
 	"Expose an official NGX D3D12 provider beside the Vulkan renderer"
@@ -124,40 +126,50 @@ if(CMAKE_SYSTEM_NAME STREQUAL "NintendoSwitch")
 endif()
 
 if(THREE_DS_RECOMP_ENABLE_VULKAN)
+	if(ANDROID)
+		include(cmake/dependencies/android-vulkan.cmake)
+	endif()
 	find_package(Vulkan REQUIRED)
 	target_sources(ImGui PRIVATE "${imgui_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp")
 	target_link_libraries(ImGui PUBLIC Vulkan::Vulkan)
-	find_path(THREE_DS_RECOMP_SHADERC_INCLUDE_DIR
-		NAMES shaderc/shaderc.hpp
-		HINTS "$ENV{VULKAN_SDK}"
-		PATH_SUFFIXES Include include
-		REQUIRED
-	)
-	find_library(THREE_DS_RECOMP_SHADERC_LIBRARY
-		NAMES shaderc_shared
-		HINTS "$ENV{VULKAN_SDK}"
-		PATH_SUFFIXES Lib lib
-		REQUIRED
-	)
-	if(WIN32)
-		find_file(THREE_DS_RECOMP_SHADERC_RUNTIME
-			NAMES shaderc_shared.dll
+	if(NOT TARGET three_ds_recomp_shaderc)
+		find_path(THREE_DS_RECOMP_SHADERC_INCLUDE_DIR
+			NAMES shaderc/shaderc.hpp
 			HINTS "$ENV{VULKAN_SDK}"
-			PATH_SUFFIXES Bin bin
+			PATH_SUFFIXES Include include
 			REQUIRED
 		)
-		add_library(three_ds_recomp_shaderc SHARED IMPORTED GLOBAL)
-		set_target_properties(three_ds_recomp_shaderc PROPERTIES
-			IMPORTED_IMPLIB "${THREE_DS_RECOMP_SHADERC_LIBRARY}"
-			IMPORTED_LOCATION "${THREE_DS_RECOMP_SHADERC_RUNTIME}"
-			INTERFACE_INCLUDE_DIRECTORIES "${THREE_DS_RECOMP_SHADERC_INCLUDE_DIR}"
+		set(THREE_DS_RECOMP_SHADERC_LIBRARY_NAMES shaderc_shared)
+		if(UNIX)
+			# Debian names the shared C API library libshaderc.so.
+			list(APPEND THREE_DS_RECOMP_SHADERC_LIBRARY_NAMES shaderc)
+		endif()
+		find_library(THREE_DS_RECOMP_SHADERC_LIBRARY
+			NAMES ${THREE_DS_RECOMP_SHADERC_LIBRARY_NAMES}
+			HINTS "$ENV{VULKAN_SDK}"
+			PATH_SUFFIXES Lib lib
+			REQUIRED
 		)
-	else()
-		add_library(three_ds_recomp_shaderc UNKNOWN IMPORTED GLOBAL)
-		set_target_properties(three_ds_recomp_shaderc PROPERTIES
-			IMPORTED_LOCATION "${THREE_DS_RECOMP_SHADERC_LIBRARY}"
-			INTERFACE_INCLUDE_DIRECTORIES "${THREE_DS_RECOMP_SHADERC_INCLUDE_DIR}"
-		)
+		if(WIN32)
+			find_file(THREE_DS_RECOMP_SHADERC_RUNTIME
+				NAMES shaderc_shared.dll
+				HINTS "$ENV{VULKAN_SDK}"
+				PATH_SUFFIXES Bin bin
+				REQUIRED
+			)
+			add_library(three_ds_recomp_shaderc SHARED IMPORTED GLOBAL)
+			set_target_properties(three_ds_recomp_shaderc PROPERTIES
+				IMPORTED_IMPLIB "${THREE_DS_RECOMP_SHADERC_LIBRARY}"
+				IMPORTED_LOCATION "${THREE_DS_RECOMP_SHADERC_RUNTIME}"
+				INTERFACE_INCLUDE_DIRECTORIES "${THREE_DS_RECOMP_SHADERC_INCLUDE_DIR}"
+			)
+		else()
+			add_library(three_ds_recomp_shaderc UNKNOWN IMPORTED GLOBAL)
+			set_target_properties(three_ds_recomp_shaderc PROPERTIES
+				IMPORTED_LOCATION "${THREE_DS_RECOMP_SHADERC_LIBRARY}"
+				INTERFACE_INCLUDE_DIRECTORIES "${THREE_DS_RECOMP_SHADERC_INCLUDE_DIR}"
+			)
+		endif()
 	endif()
 
 	if(THREE_DS_RECOMP_ENABLE_NRI)
@@ -180,12 +192,15 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
 		set(NRI_ENABLE_DEBUG_NAMES_AND_ANNOTATIONS ON CACHE BOOL "" FORCE)
 		# Keep every NRIUpscaler provider independently capability-gated at
 		# runtime even though their SDK adapters are compiled together here.
-		set(NRI_ENABLE_NIS_SDK ON CACHE BOOL "" FORCE)
-		set(NRI_ENABLE_FFX_SDK ON CACHE BOOL "" FORCE)
-		set(NRI_ENABLE_NGX_SDK ON CACHE BOOL "" FORCE)
+		set(NRI_ENABLE_NIS_SDK ${THREE_DS_RECOMP_ENABLE_NRI_UPSCALER_SDKS} CACHE BOOL "" FORCE)
+		set(NRI_ENABLE_FFX_SDK ${THREE_DS_RECOMP_ENABLE_NRI_UPSCALER_SDKS} CACHE BOOL "" FORCE)
+		set(NRI_ENABLE_NGX_SDK ${THREE_DS_RECOMP_ENABLE_NRI_UPSCALER_SDKS} CACHE BOOL "" FORCE)
 		if(THREE_DS_RECOMP_NRI_SOURCE_DIR)
 			FetchContent_Declare(nri SOURCE_DIR "${THREE_DS_RECOMP_NRI_SOURCE_DIR}")
 			execute_process(
+				COMMAND ${CMAKE_COMMAND}
+					-DNRI_SOURCE_DIR=${THREE_DS_RECOMP_NRI_SOURCE_DIR}
+					-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/nri_android_platform.cmake
 				COMMAND ${CMAKE_COMMAND}
 					-DNRI_SOURCE_DIR=${THREE_DS_RECOMP_NRI_SOURCE_DIR}
 					-DNGX_VERSION=${THREE_DS_RECOMP_NGX_VERSION}
@@ -206,6 +221,9 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
 				GIT_TAG 4b485316463969f182db15e67aad2aec2f40a3d7
 				GIT_SHALLOW FALSE
 				PATCH_COMMAND ${CMAKE_COMMAND}
+					-DNRI_SOURCE_DIR=<SOURCE_DIR>
+					-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/nri_android_platform.cmake
+				COMMAND ${CMAKE_COMMAND}
 					-DNRI_SOURCE_DIR=<SOURCE_DIR>
 					-DNGX_VERSION=${THREE_DS_RECOMP_NGX_VERSION}
 					-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/oot3d_nri_ngx_version.cmake
@@ -232,7 +250,7 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
 				"${_oot3d_nri_sources}")
 			unset(_oot3d_nri_sources)
 		endif()
-		if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND TARGET NRI_Shared)
+		if(MSVC AND CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND TARGET NRI_Shared)
 			# NRI enables /WX for clang-cl after its Clang suppressions.
 			# Keep /W4 diagnostics, but do not let warnings in the pinned
 			# third-party SDK block a Clang/ThinLTO host build.

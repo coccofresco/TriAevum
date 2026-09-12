@@ -9,6 +9,7 @@ import forge_gui
 from common import atomic_write_json, sha256_file
 from installed_runtime import validate_installed_runtime
 from activation_transaction import journal_path
+from release_platform import host_platform, LINUX, WINDOWS
 
 
 class InstalledRuntimeTests(unittest.TestCase):
@@ -16,9 +17,9 @@ class InstalledRuntimeTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        self.exe = self.root / "TriAevum.exe"
+        self.exe = self.root / host_platform().runtime
         self.exe.write_bytes(b"host")
-        self.plugin = self.root / "triaevum_title_aot.dll"
+        self.plugin = self.root / host_platform().title_module
         self.plugin.write_bytes(b"title")
         self.data = self.root / "custom-data"
         self.title = self.data / "titles" / "fixture"
@@ -51,6 +52,11 @@ class InstalledRuntimeTests(unittest.TestCase):
         self.assertEqual(self.validate(), self.profile)
         del self.receipt["launch_profile_sha256"]
         self.assertEqual(self.validate(), self.profile)
+
+    def test_rejects_receipt_from_another_platform(self):
+        self.receipt["target"] = WINDOWS.target if host_platform() == LINUX else LINUX.target
+        with self.assertRaisesRegex(ValueError, "another platform"):
+            self.validate()
 
     def test_rejects_changed_plugin_and_profile(self):
         self.plugin.write_bytes(b"another title")
@@ -97,6 +103,47 @@ class InstalledRuntimeTests(unittest.TestCase):
                 )
         self.assertEqual(self.plugin.read_bytes(), b"title")
         self.assertEqual(sha256_file(self.profile), self.receipt["launch_profile_sha256"])
+
+    def test_separate_package_is_never_modified_and_user_files_survive_reimport(self):
+        from common import load_json_object
+        from installation_context import expand_profile_argument
+        package = self.root / "immutable package"
+        package.mkdir()
+        executable = package / host_platform().runtime
+        executable.write_bytes(b"read-only runtime")
+        incoming = package / host_platform().title_module
+        incoming.write_bytes(b"read-only title")
+        before = {p.name: p.read_bytes() for p in package.iterdir()}
+        profile = self.data / "activation" / "TriAevum.launch.json"
+        marker = self.data / "savedata" / "keep.save"
+        marker.parent.mkdir()
+        marker.write_bytes(b"existing save")
+        config = self.data / "config" / "TriAevum.json"
+        atomic_write_json(config, {"user_setting": 42})
+        config_before = config.read_bytes()
+        prepared = SimpleNamespace(directory=self.title, state={})
+        old_mode = package.stat().st_mode
+        package.chmod(0o555)
+        try:
+            with (patch("forge.load_prepared_content", return_value=prepared),
+                  patch("forge.ensure_runtime_config"),
+                  patch("forge.query_product", return_value={
+                      "product": {}, "runtime_sha256": sha256_file(executable)}) as query):
+                for _ in range(2):
+                    forge.publish_private_runtime(
+                        self.title, plugin=incoming,
+                        runtime_plugin=profile.parent / host_platform().title_module,
+                        launch_profile=profile, data_root=self.data, package_root=package)
+                    self.assertEqual(validate_installed_runtime(
+                        executable, self.title, self.data, prepared.state["runtime"]), profile)
+                self.assertTrue(all(call.args[0] == executable for call in query.call_args_list))
+        finally:
+            package.chmod(old_mode)
+        arguments = [expand_profile_argument(arg, profile) for arg in load_json_object(profile)["arguments"]]
+        self.assertEqual(Path(arguments[arguments.index("--resource-root") + 1]), package / "resources")
+        self.assertEqual({p.name: p.read_bytes() for p in package.iterdir()}, before)
+        self.assertEqual(marker.read_bytes(), b"existing save")
+        self.assertEqual(config.read_bytes(), config_before)
 
     def test_texture_pack_is_published_and_verified_with_launch_profile(self):
         pack = self.data / "mods/topscreen/atlas_overrides.o3tu"

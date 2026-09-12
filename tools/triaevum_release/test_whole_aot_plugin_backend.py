@@ -3,6 +3,8 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+
+import release_platform
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -73,6 +75,7 @@ class WholeAotPluginBackendTests(unittest.TestCase):
                         Path(argument[3:]).write_bytes(b"wrapper")
                     elif argument.startswith("/Fe"):
                         Path(argument[3:]).write_bytes(b"MZ plugin")
+                        Path(argument[3:]).with_suffix(".exp").write_bytes(b"linker auxiliary")
 
             with (
                 patch.object(backend, "REPO_ROOT", repo),
@@ -105,6 +108,7 @@ class WholeAotPluginBackendTests(unittest.TestCase):
                         archiver=archiver,
                         support_library=support,
                         nlohmann_include=nlohmann,
+                        target_triple=release_platform.WINDOWS.target, profile=release_platform.WINDOWS.profile,
                     ),
                     "shard_count": 2,
                     "jobs": 2,
@@ -118,6 +122,9 @@ class WholeAotPluginBackendTests(unittest.TestCase):
                 with patch.object(backend, "build_generated_cpp_archive", side_effect=AssertionError("archive must not be visited")):
                     backend.build_whole_aot_plugin(**arguments)
                 self.assertEqual(len(commands), 2)
+                self.assertIn("/NOIMPLIB", commands[1])
+                self.assertNotIn("/NOEXP", commands[1])
+                self.assertEqual(list((root / "cache").rglob("*.exp")), [])
                 (root / "lld-link.exe").write_bytes(b"updated linker")
                 relinked = backend.build_whole_aot_plugin(**arguments)
                 self.assertEqual(built["generated_directory"], relinked["generated_directory"])
@@ -146,6 +153,80 @@ class WholeAotPluginBackendTests(unittest.TestCase):
             self.assertNotEqual(relinked["cache_key"], built["cache_key"])
             self.assertTrue(Path(str(reused["plugin"])).is_file())
 
+    def test_linux_target_links_hidden_symbol_shared_object(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            repo, a32, runtime = root / "repo", root / "a32", root / "runtime"
+            a32.mkdir(parents=True)
+            runtime.mkdir(parents=True)
+            for path in (
+                runtime / "triaevum_title_whole_aot_plugin.cpp",
+                runtime / "triaevum_title_aot_abi.h",
+                runtime / "triaevum_title_whole_aot_abi.h",
+                runtime / "oot3d_native_whole_aot_runtime.h",
+                a32 / "oot3d_aot_architectural_state.h",
+                a32 / "oot3d_native_a32_vfp_ops.h",
+                a32 / "whole_aot_cpp.py",
+                a32 / "whole_aot_optimization_ir.py",
+            ):
+                path.write_text(path.name, encoding="utf-8")
+            program, selection, code = root / "program.json", root / "selection.json", root / "code.bin"
+            compiler, archiver, support = root / "clang++", root / "llvm-ar", root / "support.a"
+            (root / "ld.lld").write_bytes(b"linker")
+            nlohmann = root / "include"
+            nlohmann.mkdir()
+            for path in (program, selection, code, compiler, archiver, support):
+                path.write_bytes(path.name.encode("ascii"))
+            archive = root / "whole-aot.a"
+            archive.write_bytes(b"archive")
+
+            def generate(_program, _selection, _code, output, **_kwargs):
+                output.mkdir(parents=True, exist_ok=True)
+                (output / "oot3d_whole_aot_generated.h").write_text("generated", encoding="utf-8")
+                return {"functions": [{"entry": 1}]}
+
+            commands: list[tuple[str, ...]] = []
+
+            def run(arguments: tuple[str, ...], _cwd: Path, _label: str) -> None:
+                commands.append(arguments)
+                Path(arguments[arguments.index("-o") + 1]).write_bytes(b"ELF")
+
+            with (
+                patch.object(backend, "REPO_ROOT", repo),
+                patch.object(backend, "A32_ROOT", a32),
+                patch.object(backend, "RUNTIME_ROOT", runtime),
+                patch.object(backend, "_load_generator", return_value=(
+                    SimpleNamespace(generate=generate), a32 / "whole_aot_cpp.py", a32 / "whole_aot_optimization_ir.py")),
+                patch.object(backend, "build_generated_cpp_archive", return_value={
+                    "archive": str(archive), "archive_sha256": backend.sha256_file(archive),
+                    "archive_cache_key": "a" * 64, "objects_compiled": 1, "objects_reused": 0}),
+                patch.object(backend, "_run", side_effect=run),
+                patch.object(backend, "compiler_sysroot", side_effect=AssertionError("Windows sysroot must not be consulted")),
+            ):
+                toolchain = backend.WholeAotPluginToolchain(
+                    compiler=compiler, archiver=archiver, support_library=support, nlohmann_include=nlohmann,
+                    target_triple=release_platform.LINUX.target, profile=release_platform.LINUX.profile)
+                built = backend.build_whole_aot_plugin(
+                    program_path=program, selection_path=selection, code_path=code,
+                    cache_root=root / "cache", toolchain=toolchain, shard_count=1, jobs=1)
+                self.assertEqual(built["target"], release_platform.LINUX.target)
+                self.assertEqual(Path(built["plugin"]).name, release_platform.LINUX.title_module)
+                compile_command, link_command = commands
+                for flag in ("--driver-mode=g++", "-fPIC", "-fvisibility=hidden", "-c"):
+                    self.assertIn(flag, compile_command)
+                for flag in ("--driver-mode=g++", "-shared", "-fuse-ld=lld", "-Wl,-Bsymbolic",
+                             "-Wl,--exclude-libs,ALL", "-Wl,--no-undefined", "-static-libstdc++"):
+                    self.assertIn(flag, link_command)
+                self.assertIn(str(support), link_command)
+                self.assertIn(str(archive), link_command)
+                with self.assertRaisesRegex(backend.WholeAotPluginError, "sysroot"):
+                    backend.build_whole_aot_plugin(
+                        program_path=program, selection_path=selection, code_path=code,
+                        cache_root=root / "cache", shard_count=1, jobs=1,
+                        toolchain=backend.WholeAotPluginToolchain(
+                            compiler=compiler, archiver=archiver, support_library=support,
+                            nlohmann_include=nlohmann, target_triple=release_platform.LINUX.target,
+                            profile=release_platform.LINUX.profile, sysroot=root))
 
 if __name__ == "__main__":
     unittest.main()

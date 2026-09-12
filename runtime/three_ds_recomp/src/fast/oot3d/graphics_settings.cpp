@@ -401,6 +401,9 @@ GraphicsSettingsValidation GraphicsSettingsService::Validate(
     value.Grass.TuftTransitionFraction = finiteGrass(value.Grass.TuftTransitionFraction, 0.20F, 0.0F, 1.0F);
     value.Grass.FarTuftDensity = finiteGrass(value.Grass.FarTuftDensity, 1.0F, 0.1F, 4.0F);
     value.Grass.FarTuftSpread = finiteGrass(value.Grass.FarTuftSpread, 1.0F, 0.25F, 4.0F);
+    value.Grass.MidrangeClusterCellExtent = finiteGrass(value.Grass.MidrangeClusterCellExtent, 22.0F, 1.0F, 100.0F);
+    value.Grass.MidrangeAdaptiveCapacity = std::clamp(value.Grass.MidrangeAdaptiveCapacity, 50U, 10000U);
+    value.Grass.MidrangeFarBladeFraction = finiteGrass(value.Grass.MidrangeFarBladeFraction, 0.25F, 0.02F, 1.0F);
     value.Grass.SegmentLodSoftness = finiteGrass(value.Grass.SegmentLodSoftness, 0.5F, 0.0F, 1.0F);
     value.Grass.SegmentLodStartDistance =
         std::clamp(value.Grass.SegmentLodStartDistance, 0.0F, 10000.0F);
@@ -427,6 +430,11 @@ GraphicsSettingsValidation GraphicsSettingsService::Validate(
     value.Grass.Appearance.HeightScale =
         std::clamp(value.Grass.Appearance.HeightScale, 0.05F, 8.0F);
     auto& appearance = value.Grass.Appearance;
+    appearance.ToonRimFadeStart = std::isfinite(appearance.ToonRimFadeStart)
+        ? std::clamp(appearance.ToonRimFadeStart, 0.0F, 100000.0F) : 200.0F;
+    appearance.ToonRimFadeEnd = std::isfinite(appearance.ToonRimFadeEnd)
+        ? std::clamp(appearance.ToonRimFadeEnd, appearance.ToonRimFadeStart + 1.0F, 100001.0F)
+        : std::min(appearance.ToonRimFadeStart + 600.0F, 100001.0F);
     appearance.BladeCurvature = std::clamp(appearance.BladeCurvature, 0.0F, 2.0F);
     appearance.BladeDroop = std::clamp(appearance.BladeDroop, 0.0F, 0.95F);
     appearance.ShapeVariation = std::clamp(appearance.ShapeVariation, 0.0F, 1.0F);

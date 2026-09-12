@@ -206,6 +206,7 @@ nlohmann::json EntryJson(
         {"attachment_requirements_key", entry.AttachmentRequirementsKey},
         {"sample_count", entry.SampleCount},
         {"writes_reactive_mask", entry.WritesReactiveMask},
+        {"outline_occlusion_only", entry.OutlineOcclusionOnly},
         {"topology", static_cast<uint8_t>(entry.Topology)},
         {"cull_mode", static_cast<uint8_t>(entry.CullMode)},
         {"framebuffer_flipped", entry.FramebufferFlipped},
@@ -329,6 +330,8 @@ bool ReadEntry(const nlohmann::json& value,
         !ReadUnsigned(value, "sample_count", entry.SampleCount) ||
         !ReadBool(value, "writes_reactive_mask",
                   entry.WritesReactiveMask) ||
+        (value.contains("outline_occlusion_only") &&
+         !ReadBool(value, "outline_occlusion_only", entry.OutlineOcclusionOnly)) ||
         !value.contains("topology") ||
         !ReadEnum(value["topology"],
                   ::Oot3d::Renderer::PicaTopology::GeometryShader,
@@ -564,6 +567,10 @@ bool PicaGraphicsPipelineManifestEntry::Valid() const noexcept {
          appliedFeatures != 0U) ||
         (Domain == PicaGraphicsPipelineDomain::Instrumented &&
          appliedFeatures == 0U) ||
+        (OutlineOcclusionOnly &&
+         (Domain != PicaGraphicsPipelineDomain::Instrumented ||
+          !ShaderOutputs.SceneDomainTransparentDepthOverlay ||
+          (AttachmentRequirementsKey & static_cast<uint8_t>(PicaAuxiliaryOutput::RigidMotionGuide)) == 0U)) ||
         (SampleCount != 1U && SampleCount != 2U && SampleCount != 4U &&
          SampleCount != 8U) ||
         !EnumAtMost(Domain, PicaGraphicsPipelineDomain::Instrumented) ||
@@ -649,6 +656,8 @@ uint64_t PicaGraphicsPipelineManifestEntry::StructuralId() const noexcept {
     HashValue(hash, AttachmentRequirementsKey);
     HashValue(hash, SampleCount);
     HashValue(hash, WritesReactiveMask);
+    // Preserve identities of pre-existing ordinary pipelines.
+    if (OutlineOcclusionOnly) HashValue(hash, OutlineOcclusionOnly);
     HashValue(hash, Topology);
     HashValue(hash, CullMode);
     HashValue(hash, FramebufferFlipped);
@@ -716,6 +725,7 @@ bool PicaGraphicsPipelineManifestEntry::StructurallyEquivalent(
            AttachmentRequirementsKey == other.AttachmentRequirementsKey &&
            SampleCount == other.SampleCount &&
            WritesReactiveMask == other.WritesReactiveMask &&
+           OutlineOcclusionOnly == other.OutlineOcclusionOnly &&
            Topology == other.Topology && CullMode == other.CullMode &&
            FramebufferFlipped == other.FramebufferFlipped &&
            VertexBindings == other.VertexBindings &&
@@ -943,6 +953,55 @@ size_t PicaGraphicsPipelineInventory::EntryCount() const noexcept {
 const std::filesystem::path& PicaGraphicsPipelineInventory::Path() const
     noexcept {
     return mPath;
+}
+
+PicaGraphicsPipelineManifestEntry DescribePicaGraphicsPipelineDraw(
+    const Renderer3ds::PicaDrawView& draw) {
+    PicaGraphicsPipelineManifestEntry entry;
+    entry.DescriptorSchemaVersion = draw.CanonicalDescriptorSchemaVersion;
+    entry.VertexShaderKey = draw.VertexShaderKey;
+    entry.FragmentShaderKey = draw.FragmentShaderKey;
+    entry.Topology = draw.Topology;
+    entry.CullMode = draw.CullMode;
+    entry.FramebufferFlipped = draw.FramebufferFlipped;
+    entry.VertexBindings.reserve(draw.VertexBindings.size());
+    for (const auto& binding : draw.VertexBindings) {
+        entry.VertexBindings.push_back({
+            binding.Binding, binding.ByteStride, binding.PerInstance});
+    }
+    entry.VertexAttributes.reserve(draw.VertexAttributes.size());
+    for (const auto& attribute : draw.VertexAttributes) {
+        entry.VertexAttributes.push_back({
+            attribute.Location, attribute.Binding, attribute.Format,
+            attribute.ComponentCount, attribute.ByteOffset});
+    }
+    entry.ColorWriteMask = draw.ColorWriteMask;
+    entry.FragmentOperationMode = draw.FragmentOperationMode;
+    entry.LogicOperation = draw.LogicOperation;
+    entry.Blend = {
+        draw.Blend.Enabled,
+        draw.Blend.EquationRgb,
+        draw.Blend.EquationAlpha,
+        draw.Blend.SourceRgb,
+        draw.Blend.DestRgb,
+        draw.Blend.SourceAlpha,
+        draw.Blend.DestAlpha,
+    };
+    entry.AlphaTestEnabled = draw.AlphaTestEnabled;
+    entry.DepthTestEnabled = draw.DepthTestEnabled;
+    entry.DepthWriteEnabled = draw.DepthWriteEnabled;
+    entry.DepthCompare = draw.DepthCompare;
+    entry.Stencil = {
+        draw.Stencil.Enabled,
+        draw.Stencil.Compare,
+        draw.Stencil.Reference,
+        draw.Stencil.CompareMask,
+        draw.Stencil.WriteMask,
+        draw.Stencil.Fail,
+        draw.Stencil.DepthFail,
+        draw.Stencil.Pass,
+    };
+    return entry;
 }
 
 } // namespace Fast::Oot3d

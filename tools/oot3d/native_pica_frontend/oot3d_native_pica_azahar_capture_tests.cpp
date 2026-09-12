@@ -123,6 +123,43 @@ void TestPipelineKeyMatchesCoverageTuple() {
           "pipeline tuple does not match the coverage schema");
 }
 
+void TestSeedResourcesAndBounds() {
+  using namespace Oot3dNativeGame;
+  auto event = nlohmann::json{{"event", "shader_seed_program"},
+                            {"program", {"0x88000000", "0x00000001"}},
+                            {"swizzles", {"0x12345678"}}};
+  Oot3dPicaShaderState shader;
+  shader.FloatUniforms[0][0] = 7.0F;
+  std::string error;
+  Require(DecodeOot3dAzaharShaderSeedProgram(event, shader, &error), error);
+  Require(shader.ProgramWordCount == 2 && shader.SwizzleWordCount == 1 &&
+          shader.Program[0] == 0x88000000U && shader.Swizzles[0] == 0x12345678U,
+          "seed program not decoded");
+  Require(shader.FloatUniforms[0][0] == 7.0F, "seed program overwrote live uniforms");
+  event["program"] = nlohmann::json::array();
+  Require(!DecodeOot3dAzaharShaderSeedProgram(event, shader, &error), "empty seed accepted");
+  event["program"] = {0x100000000ULL};
+  Require(!DecodeOot3dAzaharShaderSeedProgram(event, shader, &error), "wide seed word accepted");
+  event["program"] = std::vector<uint32_t>(4097, 0);
+  Require(!DecodeOot3dAzaharShaderSeedProgram(event, shader, &error), "oversized seed accepted");
+
+  constexpr size_t count = 24 * 256 + 128 * 4 + 256 * 2;
+  std::vector<uint32_t> words(count);
+  for (size_t i = 0; i < count; ++i) words[i] = static_cast<uint32_t>(i);
+  event = {{"event", "shader_seed_luts"}, {"format", "pica_lut_words_v1"}, {"words", words}};
+  Oot3dPicaDrawPacket packet;
+  Require(DecodeOot3dAzaharShaderSeedLuts(event, packet, &error), error);
+  Require(packet.LightingLuts && packet.LightingLuts->Entry(23, 255) == 6143,
+          "lighting seed layout mismatch");
+  Require(packet.ProcTexLuts.Noise[0] == 6144 && packet.ProcTexLuts.ColorMap[0] == 6272 &&
+          packet.ProcTexLuts.AlphaMap[0] == 6400 && packet.ProcTexLuts.Color[0] == 6528 &&
+          packet.ProcTexLuts.ColorDifference[0] == 6784 && packet.FogLut[0] == 7040 &&
+          packet.FogLut[127] == 7167, "procedural/fog seed layout mismatch");
+  Require(packet.LightingLuts->ContentHashAvailable, "seed LUT identity unavailable");
+  event["words"].erase(event["words"].end() - 1);
+  Require(!DecodeOot3dAzaharShaderSeedLuts(event, packet, &error), "short LUT seed accepted");
+}
+
 } // namespace
 
 int main() {
@@ -130,6 +167,7 @@ int main() {
     TestValidCaptureDecodesThroughProductionFrontend();
     TestMalformedRegisterRangeIsRejected();
     TestPipelineKeyMatchesCoverageTuple();
+    TestSeedResourcesAndBounds();
     std::cout << "OOT3D Azahar capture adapter tests passed\n";
     return EXIT_SUCCESS;
   } catch (const std::exception &exception) {

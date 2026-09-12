@@ -1,4 +1,5 @@
 #include "fast/oot3d/grass_surface_extractor.h"
+#include "fast/oot3d/grass_surface_reference.h"
 #include "fast/oot3d/grass_visibility.h"
 
 #include <algorithm>
@@ -325,6 +326,8 @@ static std::vector<GrassAnchor> ExtractAnchors(
     std::vector<GrassAnchor> anchors;
     if (surface.Vertices.empty() || surface.Indices.size() < 3 ||
         mask.Samples.empty() || budget == 0) return anchors;
+    if (!surface.TriangleSources.empty() && surface.TriangleSources.size() != surface.Indices.size() / 3U)
+        return anchors;
     const uint32_t limit = budget;
     anchors.reserve(std::min<uint32_t>(limit, 4096U));
     std::unordered_map<
@@ -459,6 +462,13 @@ static std::vector<GrassAnchor> ExtractAnchors(
                 SampleMask(mask, uv[0], uv[1], wrapS, wrapT),
                 rule);
             GrassAnchor anchor;
+            if (surface.TriangleSources.empty()) {
+                anchor.SurfaceReference = PackGrassSurfaceReference({ia, ib, ic}, u, v);
+            } else {
+                anchor.SurfaceReference = PackGrassSurfaceReference(surface.TriangleSources[triangle / 3U],
+                    a.SourceWeights[1] * w + b.SourceWeights[1] * u + c.SourceWeights[1] * v,
+                    a.SourceWeights[2] * w + b.SourceWeights[2] * u + c.SourceWeights[2] * v);
+            }
             for (size_t axis = 0; axis < 3; ++axis) {
                 anchor.LocalPosition[axis] =
                     a.Position[axis] * w + b.Position[axis] * u +
@@ -541,9 +551,11 @@ std::vector<GrassAnchor> GrassSurfaceExtractor::Extract(
     // barycentric sequence survive every change of frustum or allocation.
     std::vector<GrassSourceVertex> vertices;
     std::vector<uint32_t> indices;
+    std::vector<std::array<uint32_t, 3>> triangleSources;
     const unsigned maxDepth = std::min(16U, static_cast<unsigned>(std::bit_width(
         std::max<size_t>(1U, 524288U / (surface.Indices.size() / 3U))) - 1U));
-    const auto split = [&](auto&& self, std::array<GrassSourceVertex, 3> triangle, unsigned depth) -> void {
+    const auto split = [&](auto&& self, std::array<GrassSourceVertex, 3> triangle,
+                           std::array<uint32_t, 3> sourceIndices, unsigned depth) -> void {
         std::array<float, 3> lengths;
         for (size_t i = 0; i < 3U; ++i) lengths[i] = Length(Subtract(
             TransformPoint(surface, triangle[i].Position), TransformPoint(surface, triangle[(i+1U)%3U].Position)));
@@ -555,14 +567,16 @@ std::vector<GrassAnchor> GrassSurfaceExtractor::Extract(
             for (size_t i = 0; i < 3U; ++i) {
                 middle.Position[i] = (triangle[edge].Position[i] + triangle[next].Position[i]) * 0.5F;
                 middle.Normal[i] = (triangle[edge].Normal[i] + triangle[next].Normal[i]) * 0.5F;
+                middle.SourceWeights[i] = (triangle[edge].SourceWeights[i] + triangle[next].SourceWeights[i]) * 0.5F;
             }
             for (size_t i = 0; i < 2U; ++i) middle.Uv[i] = (triangle[edge].Uv[i] + triangle[next].Uv[i]) * 0.5F;
             auto second = triangle;
             triangle[next] = middle;
             second[edge] = middle;
-            self(self, triangle, depth + 1U);
-            self(self, second, depth + 1U);
+            self(self, triangle, sourceIndices, depth + 1U);
+            self(self, second, sourceIndices, depth + 1U);
         } else {
+            triangleSources.push_back(sourceIndices);
             for (const auto& vertex : triangle) {
                 indices.push_back(static_cast<uint32_t>(vertices.size()));
                 vertices.push_back(vertex);
@@ -572,12 +586,18 @@ std::vector<GrassAnchor> GrassSurfaceExtractor::Extract(
     for (size_t i = 0; i + 2U < surface.Indices.size(); i += 3U) {
         if (surface.Indices[i] >= surface.Vertices.size() || surface.Indices[i+1U] >= surface.Vertices.size() ||
             surface.Indices[i+2U] >= surface.Vertices.size()) continue;
-        split(split, {surface.Vertices[surface.Indices[i]], surface.Vertices[surface.Indices[i+1U]],
-                      surface.Vertices[surface.Indices[i+2U]]}, 0U);
+        std::array<GrassSourceVertex, 3> triangle{surface.Vertices[surface.Indices[i]],
+            surface.Vertices[surface.Indices[i+1U]], surface.Vertices[surface.Indices[i+2U]]};
+        for (size_t j = 0; j < 3; ++j) {
+            triangle[j].SourceWeights = {};
+            triangle[j].SourceWeights[j] = 1.0F;
+        }
+        split(split, triangle, {surface.Indices[i], surface.Indices[i+1U], surface.Indices[i+2U]}, 0U);
     }
     auto patches = surface;
     patches.Vertices = vertices;
     patches.Indices = indices;
+    patches.TriangleSources = triangleSources;
     return ExtractAnchors(patches, rule, generation, mask, budget);
 }
 

@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from ctr_rom import ExtractedFile, ExtractedTitleInputs
+from release_platform import host_platform
 from forge_gui import (
     InstallRequest,
     install_private_title,
@@ -65,6 +66,9 @@ class ForgeGuiTests(unittest.TestCase):
             patch("forge_gui.ctr_rom.extract_decrypted_rom", return_value=extracted),
             patch("forge_gui.ctr_rom.publish_extracted_inputs", return_value=extracted),
             patch("forge_gui.match_extracted_recipe", return_value={"id": "fixture"}),
+            patch("forge_gui.game_language.discover", return_value={
+                "format": "triaevum_game_language_v1", "selected": "en",
+                "available": [{"code": "en", "label": "English", "system_id": 1}]}),
             patch("forge_gui.forge.HashCache"),
             patch(
                 "forge_gui.forge.verify_sources",
@@ -85,6 +89,7 @@ class ForgeGuiTests(unittest.TestCase):
             probe.assert_not_called()
 
         self.assertEqual(result["status"], "ready")
+        self.assertEqual(json.loads((request.data_root / "config/game_language.json").read_text())["selected"], "en")
         self.assertEqual(stages, ["preflight", "extract", "verify", "prepare", "activate", "ready"])
         self.assertEqual(verify.call_args.kwargs["code_path"], extracted.code.path)
         self.assertEqual(prepare.call_args.kwargs["output_root"], output.resolve())
@@ -96,7 +101,7 @@ class ForgeGuiTests(unittest.TestCase):
         )
         self.assertEqual(
             build.call_args.kwargs["runtime_plugin"].name,
-            "triaevum_title_aot.dll",
+            host_platform().title_module,
         )
         self.assertEqual(
             build.call_args.kwargs["launch_profile"].name,

@@ -144,7 +144,7 @@ void FinalizeGeometryContract(Oot3dPicaVulkanDrawPlan &plan) {
   plan.GeometryIdentityAvailable = versionAvailable;
 }
 
-template <bool ConsumeResources, typename Submission>
+template <bool ConsumeResources, bool PreparationOnly = false, typename Submission>
 bool BuildOot3dPicaVulkanDrawPlanImpl(
     Submission& submission,
     Oot3dPicaVulkanDrawPlan& plan, std::string* error,
@@ -318,7 +318,7 @@ bool BuildOot3dPicaVulkanDrawPlanImpl(
                           ? -static_cast<int32_t>(
                                 submission.MinimumVertexIndex)
                           : 0;
-    if (plan.Indexed) {
+    if (plan.Indexed && !PreparationOnly) {
         auto* indices = FindResource(
             submission, Oot3dPicaResourceKind::IndexBuffer);
         if (indices == nullptr) {
@@ -353,7 +353,7 @@ bool BuildOot3dPicaVulkanDrawPlanImpl(
         auto* resource = FindResource(
             submission, Oot3dPicaResourceKind::VertexLoader,
             static_cast<uint8_t>(loaderIndex));
-        if (resource == nullptr) {
+        if (resource == nullptr && !PreparationOnly) {
             SetError(error, "native PICA Vulkan draw has no vertex snapshot");
             return false;
         }
@@ -405,20 +405,21 @@ bool BuildOot3dPicaVulkanDrawPlanImpl(
           vertexBinding.Binding = binding;
           vertexBinding.ByteStride = loader.ByteStride;
           vertexBinding.InputRate = Oot3dPicaVertexInputRate::PerVertex;
-          vertexBinding.SourcePhysicalAddress = resource->PhysicalAddress;
-          vertexBinding.ContentVersion = resource->ContentVersion;
-          vertexBinding.ContentVersionAvailable =
-              resource->ContentVersionAvailable;
-          if (resource->SharedBytes != nullptr) {
-            if constexpr (ConsumeResources) {
-              vertexBinding.SharedBytes = std::move(resource->SharedBytes);
+          if constexpr (!PreparationOnly) {
+            vertexBinding.SourcePhysicalAddress = resource->PhysicalAddress;
+            vertexBinding.ContentVersion = resource->ContentVersion;
+            vertexBinding.ContentVersionAvailable = resource->ContentVersionAvailable;
+            if (resource->SharedBytes != nullptr) {
+              if constexpr (ConsumeResources) {
+                vertexBinding.SharedBytes = std::move(resource->SharedBytes);
+              } else {
+                vertexBinding.SharedBytes = resource->SharedBytes;
+              }
+            } else if constexpr (ConsumeResources) {
+              vertexBinding.Bytes = std::move(resource->Bytes);
             } else {
-              vertexBinding.SharedBytes = resource->SharedBytes;
+              vertexBinding.Bytes = resource->Bytes;
             }
-          } else if constexpr (ConsumeResources) {
-            vertexBinding.Bytes = std::move(resource->Bytes);
-          } else {
-            vertexBinding.Bytes = resource->Bytes;
           }
             plan.VertexBindings.push_back(std::move(vertexBinding));
         }
@@ -474,6 +475,7 @@ bool BuildOot3dPicaVulkanDrawPlanImpl(
             *attributesByLocation[location]);
     }
     plan.VertexBindings.push_back(std::move(fixedBinding));
+    if constexpr (PreparationOnly) return true;
     FinalizeGeometryContract(plan);
 
     for (size_t texture = 0; texture < submission.State.Textures.size();
@@ -570,6 +572,14 @@ bool BuildOot3dPicaVulkanDrawPlanAndConsumeResources(
     Oot3dPicaVulkanDrawPlan& plan, std::string* error,
     Oot3dPicaVulkanShaderSourceCache* shaderCache) {
     return BuildOot3dPicaVulkanDrawPlanImpl<true>(
+        submission, plan, error, shaderCache);
+}
+
+bool BuildOot3dPicaVulkanPipelinePlan(
+    const Oot3dPicaDrawSubmission& submission,
+    Oot3dPicaVulkanDrawPlan& plan, std::string* error,
+    Oot3dPicaVulkanShaderSourceCache* shaderCache) {
+    return BuildOot3dPicaVulkanDrawPlanImpl<false, true>(
         submission, plan, error, shaderCache);
 }
 

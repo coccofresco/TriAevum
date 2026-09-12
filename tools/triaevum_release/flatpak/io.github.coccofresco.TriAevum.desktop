@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=TriAevum
+Comment=Prepare your personal ROM with Forge and play TriAevum
+Exec=triaevum
+Icon=applications-games
+Terminal=false
+Categories=Game;
+Actions=Forge;
+
+[Desktop Action Forge]
+Name=Open Forge
+Exec=triaevum --forge

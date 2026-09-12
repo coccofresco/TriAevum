@@ -250,6 +250,31 @@ int main() {
             rooted->Close(rootedFile.handle) == TRIAEVUM_MODULE_OK_V1 &&
             std::filesystem::file_size(saveRoot / "slot/save.bin") == 8U,
         "rooted save write/resize failed");
+    FilesystemHostServiceAdapterV1 rootedAdapter(*rooted);
+    HostServiceRegistry rootedRegistry({});
+    ok &= Expect(rootedRegistry.Register(TRIAEVUM_SERVICE_FILESYSTEM_V1,
+        FilesystemHostServiceAdapterV1::Invoke, &rootedAdapter) == ServiceRegistrationResult::Registered,
+        "rooted removal service registration failed");
+    const auto rootedHost = rootedRegistry.SealAndCreateHostApi();
+    FilesystemServiceClientV1 rootedClient(&rootedHost);
+    bool removed = false;
+    ok &= Expect(rootedClient.RemoveFile(TRIAEVUM_FILESYSTEM_SAVE_V1, "slot/save.bin", &removed) ==
+        TRIAEVUM_MODULE_OK_V1 && removed && !std::filesystem::exists(saveRoot / "slot/save.bin"),
+        "save removal did not cross the service boundary");
+    ok &= Expect(rootedClient.RemoveFile(TRIAEVUM_FILESYSTEM_SAVE_V1, "slot/save.bin", &removed) ==
+        TRIAEVUM_MODULE_OK_V1 && !removed, "missing file removal was reported as a deletion");
+    for (const auto* invalid : {"../private-content.bin", "/private-content.bin", "slot"})
+      ok &= Expect(rootedClient.RemoveFile(TRIAEVUM_FILESYSTEM_SAVE_V1, invalid, &removed) !=
+          TRIAEVUM_MODULE_OK_V1 && std::filesystem::exists(contentPath),
+          "removal accepted a directory or escaped the save root");
+    ok &= Expect(rootedClient.RemoveFile(TRIAEVUM_FILESYSTEM_CONTENT_V1, "inputs/content", &removed) !=
+        TRIAEVUM_MODULE_OK_V1 && std::filesystem::exists(contentPath), "removal accepted the content root");
+    const auto linked = saveRoot / "linked.bin";
+    std::error_code linkError;
+    std::filesystem::create_symlink(contentPath, linked, linkError);
+    if (!linkError)
+      ok &= Expect(rootedClient.RemoveFile(TRIAEVUM_FILESYSTEM_SAVE_V1, "linked.bin", &removed) !=
+          TRIAEVUM_MODULE_OK_V1 && std::filesystem::exists(contentPath), "removal followed an external symlink");
   }
   std::error_code cleanupError;
   std::filesystem::remove_all(testRoot, cleanupError);

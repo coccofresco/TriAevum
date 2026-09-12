@@ -436,7 +436,7 @@ NativeControlConfig NativeControlPreset(NativeControlProfile profile) {
       profile == NativeControlProfile::Keyboard
           ? NativeMotionSource::DigitalLook
           : (profile == NativeControlProfile::Controller
-                 ? NativeMotionSource::Automatic
+                 ? NativeMotionSource::RightStick
                  : NativeMotionSource::Mouse);
   config.FreeCameraSource =
       profile == NativeControlProfile::Keyboard
@@ -893,6 +893,26 @@ bool NativeControlConfigRuntime::ResetMotionCalibration(std::string* error) {
   reset.GyroscopeBiasDegreesPerSecond = {};
   reset.AccelerometerNeutral = {0.0F, -1.0F, 0.0F};
   return Apply(reset, error);
+}
+
+void NativeControlConfigRuntime::BeginBindingCapture(ThreeDsRecomp::Input::BindingDevice device) {
+  std::scoped_lock lock(mMutex);
+  mBindingCapture.Begin(device);
+}
+
+void NativeControlConfigRuntime::CancelBindingCapture() {
+  std::scoped_lock lock(mMutex);
+  mBindingCapture.Cancel();
+}
+
+void NativeControlConfigRuntime::ObserveBindingCapture(const ThreeDsRecomp::Input::HostButtonSource& source, bool cancel) {
+  std::scoped_lock lock(mMutex);
+  mBindingCapture.Observe(source, cancel);
+}
+
+ThreeDsRecomp::Input::BindingCaptureSnapshot NativeControlConfigRuntime::BindingCaptureStatus() const {
+  std::scoped_lock lock(mMutex);
+  return mBindingCapture.Snapshot();
 }
 
 NativeControlCalibrationStatus

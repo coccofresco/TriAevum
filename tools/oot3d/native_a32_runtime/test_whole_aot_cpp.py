@@ -11,6 +11,9 @@ from whole_aot_cpp import (
     PROGRAM_FORMAT,
     SELECTION_FORMAT,
     SOURCE_NAME,
+    Instruction,
+    LoweringError,
+    _emit_vfp,
     generate,
 )
 
@@ -294,6 +297,37 @@ class WholeAotCppTests(unittest.TestCase):
             self.assertIn(
                 "r0 = r0 + 48U", source
             )
+
+    def test_vfp_double_memory_transfers_preserve_both_words(self) -> None:
+        for register in range(16):
+            for add in (False, True):
+                with self.subTest(register=register, add=add):
+                    raw = 0xED120B03 | (register << 12) | (int(add) << 23)
+                    load = "\n".join(_emit_vfp(Instruction(0x1000, raw)))
+                    store = "\n".join(_emit_vfp(Instruction(0x1004, raw & ~(1 << 20))))
+                    self.assertIn("ReadFast<uint64_t>", load)
+                    self.assertIn(f"frame.Guest.vfp[{register * 2}] = static_cast<uint32_t>(value)", load)
+                    self.assertIn(f"frame.Guest.vfp[{register * 2 + 1}] = static_cast<uint32_t>(value >> 32U)", load)
+                    self.assertIn("WriteFast<uint64_t>", store)
+                    self.assertIn(f"static_cast<uint64_t>(frame.Guest.vfp[{register * 2 + 1}]) << 32U", store)
+                    self.assertIn(f"{'+' if add else '-'} 12U", load)
+
+    def test_vfp_double_literal_and_conditional_memory(self) -> None:
+        source = "\n".join(_emit_vfp(Instruction(0x1000, 0x1D9F0B03)))
+        self.assertIn("0x00001008U + 12U", source)
+        self.assertIn("ReadFast<uint64_t>", source)
+        self.assertIn("if (!(state.Flags.Z()))", source)
+
+    def test_vfp_single_memory_retains_odd_lanes(self) -> None:
+        source = "\n".join(_emit_vfp(Instruction(0x1000, 0xEDD2FA03)))
+        self.assertIn("ReadFast<uint32_t>", source)
+        self.assertIn("frame.Guest.vfp[31] = value", source)
+        self.assertNotIn("uint64_t", source)
+
+    def test_vfp_double_memory_rejects_unmodelled_registers_and_pc_store(self) -> None:
+        for raw in (0xEDD20B03, 0xEDC20B03, 0xED8F0B03):
+            with self.subTest(raw=hex(raw)), self.assertRaises(LoweringError):
+                _emit_vfp(Instruction(0x1000, raw))
 
     def test_emits_vfp_decrement_before_double_store(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

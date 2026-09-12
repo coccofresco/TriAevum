@@ -374,6 +374,7 @@ Oot3dPicaFragmentFeatureSet AnalyzeOot3dPicaFragmentFeatures(
     const Oot3dPicaDrawPacket& packet,
     const Oot3dPicaDecodedDrawState& state) {
     Oot3dPicaFragmentFeatureSet result;
+    result.SurfaceColorResponse = Fast::Renderer3ds::DecodePicaSurfaceColorResponse(packet.Registers);
     result.FragmentLightingEnabled = Oot3dPicaFragmentLightingEnabled(packet);
     result.FragmentLighting =
         BuildOot3dPicaFragmentLightingLayout(packet);

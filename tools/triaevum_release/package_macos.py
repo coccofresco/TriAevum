@@ -27,6 +27,9 @@ def bundle_libraries(runtime: Path) -> list[dict]:
     molten = Path(run("brew", "--prefix", "molten-vk")) / "lib/libMoltenVK.dylib"
     pending = [(runtime / "TriAevum", runtime / "TriAevum"),
                (runtime / "triaevum_title_aot.dylib", runtime / "triaevum_title_aot.dylib")]
+    compiler = runtime / "oot3d_native_pica_aot_compiler"
+    if compiler.exists():
+        pending.append((compiler, compiler))
     copied: dict[str, Path] = {}
 
     def copy(source: Path) -> Path:
@@ -100,15 +103,17 @@ def main() -> int:
     runtime.mkdir(parents=True)
     shutil.copy2(build / "TriAevum", runtime / "TriAevum")
     shutil.copy2(args.title, runtime / "triaevum_title_aot.dylib")
+    shutil.copy2(build / "oot3d_native_pica_aot_compiler", runtime / "oot3d_native_pica_aot_compiler")
     shutil.copytree(build / "installation/recipes", runtime / "recipes")
     shutil.copytree(build / "installation/resources", runtime / "resources")
+    shutil.copytree(build / "installation/forge/shader-corpus", runtime / "forge/shader-corpus")
     shutil.copytree(build / "forge-dist/TriAevumForge", resources / "forge", symlinks=True)
     inventory = bundle_libraries(runtime)
     minimum = run("sw_vers", "-productVersion")
     with (contents / "Info.plist").open("wb") as stream:
         plistlib.dump({"CFBundleName": "TriAevum", "CFBundleDisplayName": "TriAevum",
                        "CFBundleIdentifier": "org.triaevum.macos", "CFBundleVersion": "1",
-                       "CFBundleShortVersionString": "0.6.0-macos-dev",
+                       "CFBundleShortVersionString": "0.6.0-alpha.2-macos-dev",
                        "CFBundleExecutable": "TriAevum", "CFBundlePackageType": "APPL",
                        "NSHighResolutionCapable": True, "LSMinimumSystemVersion": minimum}, stream)
     subprocess.run(["swiftc", "-O", "-swift-version", "5", "-framework", "AppKit",
@@ -118,6 +123,10 @@ def main() -> int:
     shutil.copytree(root / "LICENSES", resources / "LICENSES")
     (resources / "macos-build.json").write_text(json.dumps({
         "format": "triaevum_macos_development_bundle_v1", "architecture": "arm64",
+        "upstream_release": "v0.6.0-alpha.2", "upstream_commit": "9587e59",
+        "title_manifest_sha256": hashlib.sha256(
+            (build / "translated-title-alpha2/TITLE_SOURCE_MANIFEST.json").read_bytes()
+        ).hexdigest(),
         "minimum_macos": minimum, "source_commit": run("git", "rev-parse", "HEAD"),
         "source_dirty": bool(run("git", "status", "--porcelain")),
         "libraries": inventory}, indent=2) + "\n")

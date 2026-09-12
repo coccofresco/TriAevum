@@ -16,6 +16,9 @@ from tools.triaevum_release.common import atomic_write_json
 from tools.triaevum_release.forge_gui import match_extracted_recipe
 from tools.triaevum_release.input_adapters import adapt_extracted_inputs
 from tools.triaevum_release.product_contract import ensure_runtime_config
+from tools.triaevum_release import game_language
+from tools.triaevum_release.shader_preparation import prepare_shader_seed, prepare_renderer_shader_cache
+from tools.triaevum_release.common import sha256_file
 from tools.triaevum_release.topscreen_assets import prepare_topscreen_assets
 
 
@@ -39,6 +42,7 @@ def install(rom: Path, root: Path, data: Path) -> Path:
         report("verify", f"Matched {recipe['id']}")
         extracted, _ = adapt_extracted_inputs(
             extracted, recipe, root=root, output=Path(temporary) / "normalized")
+        languages = game_language.discover(runtime, extracted.romfs.path)
         extracted = ctr_rom.publish_extracted_inputs(extracted, data / "sources")
         cache = forge.HashCache(data / ".hash-cache.json")
         verified, _ = forge.verify_sources(
@@ -52,6 +56,27 @@ def install(rom: Path, root: Path, data: Path) -> Path:
     config = settings / "runtime.json"
     topscreen = settings / "topscreen.json"
     ensure_runtime_config(config, product, renderer="vulkan")
+    # The runtime discovers this beside --config. Mac installations retain
+    # their existing settings/ layout rather than desktop Forge's config/.
+    language_path = settings / "game_language.json"
+    if language_path.exists():
+        previous = game_language.validate(json.loads(language_path.read_text()))["selected"]
+        if previous in {entry["code"] for entry in languages["available"]}:
+            languages["selected"] = previous
+    atomic_write_json(language_path, languages)
+    pack = root / "forge/shader-corpus/portable.o3ps"
+    compiler = root / "oot3d_native_pica_aot_compiler"
+    def artifact(path: Path) -> dict:
+        return {"path": path.relative_to(root).as_posix(), "bytes": path.stat().st_size,
+                "sha256": sha256_file(path)}
+    shader_pack = prepare_shader_seed(root=root, data_root=data, title={
+        "recipe": recipe["id"],
+        "shader_preparation": {"format": "triaevum_shader_preparation_v1",
+            "mode": "portable_pack", "descriptor_schema_version": 3, "pack": artifact(pack)}}, report=report)
+    renderer_cache = data / "cache/renderer"
+    prepare_renderer_shader_cache(root=root, data_root=data, cache_directory=renderer_cache,
+        title={"renderer_shader_preparation": {"format": "triaevum_renderer_shader_compiler_v1",
+            "compiler": artifact(compiler)}}, report=report)
     if not topscreen.exists():
         shutil.copyfile(distribution_path("config/topscreen_ui.example.json"), topscreen)
     savedata = data / "savedata"
@@ -65,6 +90,8 @@ def install(rom: Path, root: Path, data: Path) -> Path:
         "--gameplay-timing", "native30_interpolated", "--presentation-rate", "60",
         "--save-data", str(savedata), "--output", str(data / "runtime-state.json"),
         "--width", "1280", "--height", "720",
+        "--pica-aot-shader-pack", str(shader_pack),
+        "--renderer-cache-directory", str(renderer_cache),
     ]
     if texture_pack:
         arguments += ["--topscreen-texture-overrides", str(texture_pack)]

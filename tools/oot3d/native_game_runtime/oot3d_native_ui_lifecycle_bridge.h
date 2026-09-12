@@ -5,6 +5,7 @@
 #include "oot3d_top_screen_config.h"
 #include "oot3d_top_screen_items_hint.h"
 #include "oot3d_top_screen_mod_profile.h"
+#include "oot3d_top_screen_ocarina.h"
 #include "oot3d_ui/ui_localized_menu_resources.h"
 #include "oot3d_ui/ui_state_adapter.h"
 
@@ -12,6 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace Oot3dNativeGame {
@@ -22,6 +24,10 @@ inline constexpr std::uint32_t kTopScreenQuestSubmitModelsHook = 0x0042B86CU;
 inline constexpr std::uint32_t kTopScreenQuestDrawHook = 0x0042B9F4U;
 
 struct NativeUiLifecycleBridgeStats {
+  uint64_t topscreen_ocarina_frames = 0;
+  uint64_t topscreen_ocarina_primitives = 0;
+  uint64_t topscreen_ocarina_failures = 0;
+  std::string topscreen_ocarina_error;
   uint64_t matched_entries = 0;
   uint64_t guest_routed_entries = 0;
   uint64_t host_routed_entries = 0;
@@ -77,6 +83,12 @@ public:
   void
   SetTopScreenInputFrame(const TopScreenExtendedInputFrame &input) noexcept;
   void SetTopScreenConfig(const TopScreenUiConfig &config) noexcept;
+  bool ReadOcarinaGeometry(TopScreenOcarinaGeometry &geometry, std::string *error) {
+    return ReadTopScreenOcarinaGeometry(mMemory, mTopScreenOcarina, &geometry, error);
+  }
+  std::uint32_t TakeOcarinaGuideSound() noexcept {
+    return mTopScreenOcarina.TakeGuideSound();
+  }
   bool
   NativePresentationActive(oot3d::ui::UiSubsystem subsystem) const noexcept;
   bool NativeGameplayPresentationActive() const noexcept;
@@ -116,6 +128,7 @@ private:
   std::optional<TopScreenPauseEdgeGeometry>
       mTopScreenPausePageRedrawEdgeGeometry;
   TopScreenExtendedInputFrame mTopScreenInput;
+  TopScreenOcarinaBrowser mTopScreenOcarina;
   TopScreenItemsHintRuntimeState mTopScreenItemsHint;
   TopScreenUiConfig mTopScreenConfig;
 };

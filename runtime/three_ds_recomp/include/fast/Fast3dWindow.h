@@ -3,6 +3,7 @@
 #include "ship/window/gui/Gui.h"
 #include "ship/controller/controldevice/controller/mapping/keyboard/KeyboardScancodes.h"
 #include "FastMouseStateManager.h"
+#include "MouseCapturePolicy.h"
 #include "fast/debug/GfxDebugger.h"
 
 #include <unordered_set>
@@ -56,6 +57,8 @@ class Fast3dWindow : public Ship::Window {
     bool GetMouseState(Ship::MouseBtn btn) override;
     void SetMouseCapture(bool capture) override;
     bool IsMouseCaptured() override;
+    bool IsMouseCaptureReleased() const;
+    void ReleaseMouseCapture();
     uint32_t GetCurrentRefreshRate() override;
     bool SupportsWindowedFullscreen() override;
     bool CanDisableVerticalSync() override;
@@ -109,6 +112,7 @@ class Fast3dWindow : public Ship::Window {
     std::shared_ptr<Interpreter> mInterpreter = nullptr;
     std::shared_ptr<GfxDebugger> mGfxDebugger;
     bool mOot3dVulkanEnabled = false;
+    MouseCapturePolicy mMouseCapturePolicy;
     static std::unordered_set<int32_t> sPressedKeys;
 };
 } // namespace Fast

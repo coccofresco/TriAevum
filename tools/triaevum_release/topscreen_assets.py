@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-import os
-import tempfile
-import time
-import urllib.request
+import http.client
 from pathlib import Path
 from typing import Callable
 
@@ -14,8 +11,12 @@ from tools.oot3d.decomp_support.scripts.build_topscreen_texture_override_pack im
 
 try:
     from .common import atomic_write_bytes, atomic_write_json, load_json_object, sha256_file
+    from .verified_download import download_verified
+    from .release_platform import host_platform
 except ImportError:
     from common import atomic_write_bytes, atomic_write_json, load_json_object, sha256_file
+    from verified_download import download_verified
+    from release_platform import host_platform
 
 
 IMPORT_VERSION = 1
@@ -33,38 +34,15 @@ def acquire_archive(root: Path, data_root: Path, contract: dict,
             return candidate
 
     report("topscreen", "Downloading the official TopScreen 2.1.1 texture source...")
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    request = urllib.request.Request(contract["url"], headers={"User-Agent": "TriAevum-Forge"})
-    if not request.full_url.startswith("https://"):
-        raise ValueError("TopScreen downloads require HTTPS")
-    temporary: Path | None = None
-    started = time.monotonic()
     try:
-        digest = hashlib.sha256()
-        count = 0
-        with urllib.request.urlopen(request, timeout=30) as response:
-            if not response.geturl().startswith("https://"):
-                raise ValueError("TopScreen download redirected to an insecure URL")
-            with tempfile.NamedTemporaryFile(dir=cache.parent, suffix=".partial", delete=False) as stream:
-                temporary = Path(stream.name)
-                while block := response.read(1024 * 1024):
-                    count += len(block)
-                    if count > contract["bytes"] or time.monotonic() - started > 900:
-                        raise ValueError("TopScreen download exceeded its size or time limit")
-                    digest.update(block)
-                    stream.write(block)
-                    report("topscreen", f"Downloading TopScreen textures: {count * 100 // contract['bytes']}%")
-        if count != contract["bytes"] or digest.hexdigest() != contract["sha256"]:
-            raise ValueError("TopScreen download failed integrity verification")
-        os.replace(temporary, cache)
-        return cache
-    except (OSError, ValueError) as exc:
+        return download_verified(contract["url"], cache,
+            size=contract["bytes"], sha256=contract["sha256"],
+            progress=lambda count, size: report("topscreen", f"Downloading TopScreen textures: {count * 100 // size}%"),
+            retry=lambda attempt, error: report("topscreen", f"Retrying TopScreen download ({attempt}/3): {error}"))
+    except (OSError, EOFError, http.client.HTTPException, ValueError) as exc:
         raise ValueError(
             f"Could not prepare TopScreen textures: {exc}. Retry with internet access, "
-            f"or place the official {ARCHIVE_NAME} beside TriAevumForge.exe.") from exc
-    finally:
-        if temporary is not None:
-            temporary.unlink(missing_ok=True)
+            f"or place the official {ARCHIVE_NAME} beside {host_platform().forge}.") from exc
 
 
 def prepare_topscreen_assets(*, root: Path, data_root: Path, recipe: dict,

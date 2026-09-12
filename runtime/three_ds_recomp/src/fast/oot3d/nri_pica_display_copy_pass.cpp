@@ -9,7 +9,6 @@
 #include "nri_interop_internal.h"
 
 #include <NRI.h>
-#include <shaderc/shaderc.hpp>
 #endif
 
 #include <array>
@@ -38,20 +37,8 @@ struct DisplayTransferPush {
 static_assert(sizeof(DisplayTransferPush) == 24U);
 
 #ifdef ENABLE_OOT3D_NRI
-std::vector<uint32_t> CompileDisplayTransferShader() {
-    shaderc::Compiler compiler;
-    shaderc::CompileOptions options;
-    options.SetTargetEnvironment(shaderc_target_env_vulkan,
-                                 shaderc_env_version_vulkan_1_2);
-    options.SetOptimizationLevel(shaderc_optimization_level_performance);
-    const auto result = compiler.CompileGlslToSpv(
-        BuildPicaDisplayTransferComputeShader(), shaderc_compute_shader,
-        "oot3d_pica_display_transfer.comp", options);
-    if (result.GetCompilationStatus() !=
-        shaderc_compilation_status_success) {
-        throw std::runtime_error(result.GetErrorMessage());
-    }
-    return {result.cbegin(), result.cend()};
+std::vector<uint32_t> CompileDisplayTransferShader(Renderer::CachedPassShaderCompiler& shaders) {
+    return shaders.Resolve(BuildPicaDisplayTransferComputeShader(), Renderer::SpirvStage::Compute, "oot3d_pica_display_transfer.comp");
 }
 #endif
 
@@ -136,7 +123,7 @@ bool NriPicaDisplayCopyPass::Initialize(NriInteropContext& interop) {
                 "NRI PICA display-transfer layout creation failed");
         }
 
-        const auto shader = CompileDisplayTransferShader();
+        const auto shader = CompileDisplayTransferShader(interop.Shaders());
         nri::ComputePipelineDesc pipeline{};
         pipeline.pipelineLayout = mImpl->PipelineLayout;
         pipeline.shader.stage = nri::StageBits::COMPUTE_SHADER;

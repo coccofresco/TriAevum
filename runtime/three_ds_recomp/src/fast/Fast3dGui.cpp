@@ -107,6 +107,20 @@ class Oot3dGraphicsSettingsWindow final : public Ship::GuiWindow {
     Oot3d::GraphicsSettingsPanel mPanel;
 };
 
+class Oot3dDisplayConfirmationWindow final : public Ship::GuiWindow {
+  public:
+    Oot3dDisplayConfirmationWindow() : GuiWindow("", false, "Display confirmation") {}
+    void Draw() override {
+        SetVisibility(Oot3d::GraphicsSettingsRuntime::Instance().PresentationStatus().Phase ==
+                      Oot3d::PresentationTransactionPhase::AwaitingConfirmation);
+        Oot3d::DrawDisplayConfirmation();
+    }
+  protected:
+    void InitElement() override {}
+    void UpdateElement() override {}
+    void DrawElement() override {}
+};
+
 struct Oot3dMousePosition {
     float X = 0.0F;
     float Y = 0.0F;
@@ -197,6 +211,7 @@ void Fast3dGui::Init(GuiWindowInitData windowImpl) {
         Oot3d::InstallGraphicsSettingsPersistencePort(
             std::make_shared<Oot3dGraphicsSettingsPersistence>());
         AddGuiWindow(std::make_shared<Oot3dGraphicsSettingsWindow>());
+        AddGuiWindow(std::make_shared<Oot3dDisplayConfirmationWindow>());
     }
 #endif
     Gui::Init();
@@ -316,9 +331,9 @@ void Fast3dGui::DrawMenu() {
             settingsWindow->ToggleVisibility();
         }
         mOot3dGraphicsToggleKeyWasDown = toggleKeyDown;
-        if (settingsWindow != nullptr &&
-            settingsWindow->IsVisible() != mOot3dGraphicsWindowVisible) {
-            mOot3dGraphicsWindowVisible = settingsWindow->IsVisible();
+        const bool hostUiVisible = GetAnyGuiWindowVisible();
+        if (hostUiVisible != mOot3dGraphicsWindowVisible) {
+            mOot3dGraphicsWindowVisible = hostUiVisible;
             const auto shipWindow =
                 Ship::Context::GetRawInstance()->GetWindow();
             const auto mouse = shipWindow->GetMouseStateManager();

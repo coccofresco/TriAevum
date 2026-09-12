@@ -2,9 +2,66 @@
 
 Date: 2026-09-06. Worktree: `triaevum-release`.
 
+2026-09-10: [Game language selection](TRIAEVUM_GAME_LANGUAGE.md) adds the
+application-owned Game tab, shared with Forge and limited to detected ROM
+languages. Changes apply on a full restart, not on save-state load.
+
+2026-09-10: [Display resolution and confirmation](TRIAEVUM_DISPLAY_RESOLUTION_FIX.md)
+supersedes the in-panel display confirmation below. The modal now works with
+F1 closed; output and scene resolution report actual renderer extents.
+
 2026-09-07: [F2 native presentation override](TRIAEVUM_F2_NATIVE_PRESENTATION.md)
 adds a session-only effect comparison and persistent header status. F1 now starts
 closed even when the previous session saved it open.
+
+## Controls redesign (2026-09-10)
+
+The previous five-column binding table combined keyboard, alternate key, mouse
+and controller in a content-proportional layout. Full-width combo boxes fed their
+current widths back into auto-fit sizing. The replacement uses explicit stretch
+weights, no persisted table widths and no nested table scrolling.
+
+- Four sections: **Bindings**, **Camera**, **Devices**, **Shortcuts**. Bindings
+  opens first, with separate Keyboard / Mouse / Controller views and collapsible
+  Movement, Game buttons, D-pad, Menu shortcuts and Look directions groups.
+- Search controls by name; search assignments inside their dropdowns; select
+  **Unassigned** to clear one source. Keyboard primary/alternate remain separate.
+  Shared assignments are indicated on their row with the other actions in a
+  tooltip, not an expanding list above the table. They remain allowed because
+  context-dependent mappings can intentionally share a source.
+- Preset selection does not mutate live input until **Apply preset** is pressed.
+  Controller preference and motion calibration survive a preset change.
+- Camera contains free-camera behavior, native gyro aiming and C-stick aiming;
+  Devices contains enablement, controller selection, analog settings and motion
+  calibration. Shortcuts contains the child/adult D-pad and menu actions.
+  Full-width fields place labels above their values and remain usable at the
+  minimum F1 window width.
+- **Save controls** / **Revert changes** stay below the single scrolling body.
+  Revert works before the first save using the initial profile. It parses
+  existing required files before applying either, and restores only the
+  control-owned TopScreen fields, preserving live HUD layout. Failures remain
+  visible, with the complete message available on hover.
+
+The UI still uses `NativeControlConfigRuntime` and `TopScreenUiConfigRuntime`.
+No new input poller, gameplay routing, SDL mapping, JSON schema or save format.
+Reusable field layout is in `oot3d_control_settings_widgets.h`; title-specific
+widgets and the control-owned TopScreen field copy are kept together in
+`oot3d_top_screen_control_widgets.h`.
+
+The real-widget smoke covers 120 consecutive frames at each of 520, 760, 1100,
+then 520 pixels, binding search/clear/reassignment on all three devices, preset
+confirmation/cancel, external revisions, and the compact footer on all sections.
+Isolated JSON fixtures exercise save, revert, preserved HUD state and failure
+atomicity on reload. This tests UI wiring and geometry, not physical-controller
+ergonomics; the existing shared input tests cover routing. Windows incremental
+runtime build recompiles the panel and relinks only, with no title/AOT rebuild.
+
+Validation on Windows: **3,569 actual-widget assertions**, shared native input
+tests passing, and the rebuilt Vulkan runtime loads the existing complete-save
+checkpoint and renders a native framebuffer (bounded run, exit 0). No UI inputs
+were injected in that game run; the menu's interaction/layout tests use the real
+widgets in the headless fixture. Linux/Android execution was not repeated for
+this panel-only change.
 
 ## Scope and ownership
 
@@ -17,8 +74,8 @@ scheduling has been replaced.
 | Renderer | Display, Antialiasing, Lighting, Reflections, Toon | GraphicsSettingsRuntime |
 | Grass | Sources, Generation, Appearance, Performance, Wind, Interaction | GraphicsSettingsRuntime / grass module |
 | Textures | Load, dump, directories, reload, diagnostics | GraphicsSettingsRuntime / texture-pack module |
-| Controls | Devices, Bindings, Aiming, Motion | NativeControlConfigRuntime |
-| TopScreen 2.1.1 | HUD, Camera, D-pad | TopScreenUiConfigRuntime |
+| Controls | Bindings, Camera, Devices, Shortcuts | NativeControlConfigRuntime / TopScreenUiConfigRuntime |
+| TopScreen 2.1.1 | HUD and layout | TopScreenUiConfigRuntime |
 
 Input still owns host-device routing and sensitivity. TopScreen owns game-camera
 behavior, layout and D-pad actions. Its C-stick smoothing really is consumed by
@@ -85,6 +142,11 @@ Application files under `tools/oot3d/native_game_runtime/`:
 
 ## Repeatable verification
 
+The post-1c audit repairs the Windows runner's missing language objects and adds
+`tools/triaevum_release/tests/run_f1_settings_smoke.sh RUNTIME_BUILD [DEPENDENCIES]`
+for Linux. Set `TRIAEVUM_NLOHMANN_INCLUDE` when JSON headers use a private prefix.
+Both runners now pass 3,896 assertions against the current built runtime objects.
+
 First build the regular runtime target, without rebuilding the title:
 
 ```powershell
@@ -149,6 +211,76 @@ with 1,032 assertions, including per-frame scope checks.
 
 ## Limits
 
+### Direct Input Assignment And Mouse Recapture (2026-09-10)
+
+Each binding selector now offers `Listen...` as well as the searchable list.
+The capture waits for the selected device's held inputs to be released, then
+assigns the next supported keyboard key, mouse button, controller button or
+trigger. Escape, Cancel, closing F1, or a 20-second timeout cancels it. Escape
+remains reserved for releasing the mouse; primary and alternate keys are
+assigned independently. Existing custom configurations are not reset.
+
+Ownership remains split by responsibility:
+
+- `tools/three_ds/input/three_ds_input.{h,cpp}` owns the portable capture state
+  machine, reusing the existing host binding vocabulary, without SDL or ImGui.
+- `oot3d_native_control_config` owns the synchronized capture instance and
+  presets. Keyboard + Mouse uses mouse aim and mouse free look; Controller
+  uses the right stick for both. Physical motion remains separately selectable.
+- `oot3d_native_a32_window` supplies the existing raw host poll before gameplay
+  filters, including disabled devices during assignment. F1 suppresses gameplay
+  keyboard, controller, motion and native-touch input while retaining sensor
+  observation for calibration. No second SDL event pump is introduced.
+- `oot3d_native_controls_settings_panel` owns the modal and draft assignment;
+  the usual Preview, Save and Revert paths persist the result.
+
+The mouse recapture defect was in `Fast3dWindow::MouseButtonDown`: it used
+`ImGuiIO::WantCaptureMouse` to reject the click after Escape. The full-window
+`Main Game` surface also sets that flag, even with F1 closed. Recapture now
+uses the actual host menu/window visibility, consistently with the gameplay
+input poll. The resume click is still consumed, and Escape still releases
+capture rather than closing the game. Native TopScreen camera eligibility,
+including cutscene restrictions, is unchanged.
+
+Verification on Windows:
+
+- Shared input tests, native input tests and TopScreen contract tests pass.
+- The actual F1 widget smoke passes 3,756 assertions (including UI-frame
+  invariants), exercising direct assignments, opening-gesture release, triggers,
+  alternate keys, cancellation and the real ImGui `Main Game` capture flag.
+- Two bounded 180-presentation-frame Vulkan runs from the same gameplay state
+  complete normally. A supplied C-Stick command produces 60 active camera
+  updates versus zero without input. Renderer framebuffer captures confirm
+  different camera orientations. This verifies the camera consumer, not physical
+  mouse delivery; the latter still needs the user's hardware confirmation.
+
+The runtime report now includes `hid_input.mouse_polling` counters for eligible,
+released, host/native UI-owned polls, capture transitions and physical movement.
+Together with `free_camera_input` and TopScreen camera counters, these distinguish
+capture, delivery and native-camera eligibility without another instrumented build.
+
+Current local build: `J:/TriAevum-verify-20260910/runtime/TriAevum.exe`; evidence:
+`J:/TriAevum-verify-20260910/camera-consumer-20260910-162418/` (command) and
+`camera-consumer-20260910-162456/` (control). Only host runtime/UI libraries were
+rebuilt; the title AOT module, game data and savestate format are unchanged.
+
+### Portable Widget Test (2026-09-09)
+
+The existing real-widget fixture is also available through CMake:
+
+```sh
+cmake --build BUILD --target triaevum_f1_settings_smoke --parallel 3
+BUILD/tools/triaevum_release/tests/triaevum_f1_settings_smoke
+```
+
+Use `.exe`/the configuration subdirectory on Windows where applicable. The
+target is excluded from normal builds and uses a private test-engine ImGui.
+SDK Clang 19.1.7 on Linux passes 1,761 assertions, including the complete,
+reversible shoulders/triggers exchange. It links actual panels/configuration,
+not a mock UI. Hardware button detection still needs device validation.
+
+### Remaining Device Coverage
+
 Hardware motion calibration, subjective sensitivity and all GPU/provider
 combinations still require their respective devices. A selectable setting is
 validated and wired to its existing consumer; this does not assert that every
@@ -161,3 +293,11 @@ The existing local launcher
 `I:/oot3dre_work/cacao-release-diagnostics/Avvia-TriAevum-corretto.cmd`
 uses it with the user's installed launch profile. The catalogued release
 installation is not overwritten with an unpaired executable.
+
+## Grass Nearby Rim (2026-09-11)
+
+Grass > Appearance groups the enable checkbox and start/end distance controls
+under Nearby toon rim. Distances use meters in the UI and world units in storage;
+disabled rim disables its distance widgets. The real-widget smoke edits start
+to 3 m and end to 12 m, checks 300/1200 world units, and toggles off/on. Global
+toon rim strength/color remain shared rather than duplicated in Grass settings.

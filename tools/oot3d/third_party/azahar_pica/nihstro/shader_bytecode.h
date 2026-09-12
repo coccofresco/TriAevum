@@ -479,17 +479,17 @@ private:
 
 namespace nihstro {
     template<>
-    struct MakeUnsigned<SourceRegister> {
+    struct BitFieldUnsigned<SourceRegister> {
         using type = nihstro::SourceRegister;
     };
 
     template<>
-    struct MakeUnsigned<DestRegister> {
+    struct BitFieldUnsigned<DestRegister> {
         using type = nihstro::DestRegister;
     };
 
     template<>
-    struct MakeUnsigned<OpCode> {
+    struct BitFieldUnsigned<OpCode> {
         using type = nihstro::OpCode;
     };
 }

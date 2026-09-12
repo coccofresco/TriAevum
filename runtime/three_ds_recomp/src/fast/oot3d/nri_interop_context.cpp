@@ -1,4 +1,5 @@
 #include "fast/oot3d/nri_interop_context.h"
+#include "fast/oot3d/nri_stage_scope.h"
 
 #ifdef ENABLE_OOT3D_VULKAN
 
@@ -360,6 +361,7 @@ bool NriInteropAccess::CmdTextureBarriers(
         nri::TextureBarrierDesc barrier{};
         barrier.texture = texture->second.Texture;
         barrier.before = state(requested.Transition.Before.Access);
+        barrier.before.stages = MergeNriStageScopes(barrier.before.stages, requested.ExternalWaitStages);
         barrier.after = state(requested.Transition.After.Access);
         barrier.mipOffset =
             static_cast<nri::Dim_t>(requested.MipOffset);

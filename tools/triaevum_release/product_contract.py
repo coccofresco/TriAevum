@@ -9,8 +9,10 @@ from typing import Any
 
 try:
     from .common import atomic_write_json, load_json_object, sha256_file
+    from .native_process import run_native, describe_exit_status
 except ImportError:
     from common import atomic_write_json, load_json_object, sha256_file
+    from native_process import run_native, describe_exit_status
 
 
 def validate_product_info(info: dict[str, Any], source_commit: str = "", *, renderer: str = "nri") -> None:
@@ -39,7 +41,7 @@ def validate_product_info(info: dict[str, Any], source_commit: str = "", *, rend
 def query_product(executable: Path, source_commit: str = "", *, plugin: Path | None = None) -> dict[str, Any]:
     executable = executable.resolve(strict=True)
     try:
-        result = subprocess.run(
+        result = run_native(
             ([str(executable), "--product-info"] if plugin is None else
              [str(executable), "--verify-title-plugin", str(plugin.resolve(strict=True))]),
             cwd=executable.parent,
@@ -47,7 +49,7 @@ def query_product(executable: Path, source_commit: str = "", *, plugin: Path | N
         )
         if result.returncode != 0:
             raise ValueError(
-                f"Runtime preflight failed ({result.returncode}): "
+                f"Runtime preflight failed ({describe_exit_status(result.returncode)}): "
                 f"{(result.stderr or result.stdout)[-2000:]}"
             )
         info = json.loads(result.stdout)

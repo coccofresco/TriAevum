@@ -263,6 +263,7 @@ bool SubmitOot3dPicaVulkanDrawPlan(
         };
     }
     draw.FragmentShaderHooks = plan.FragmentShader.Hooks;
+    draw.FragmentFeatures.SurfaceColorResponse = plan.FragmentFeatures.SurfaceColorResponse;
     draw.FragmentFeatures.SchemaVersion =
         plan.FragmentFeatures.FragmentLighting.Available()
             ? Oot3d::Renderer::kPicaFragmentFeatureSchemaVersion

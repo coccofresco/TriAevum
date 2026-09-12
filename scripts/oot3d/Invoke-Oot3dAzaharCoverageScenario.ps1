@@ -1,7 +1,7 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$ScenarioId,
-    [string]$CatalogPath = "I:\oot3dre_work\whole-aot-product\tools\oot3d\native_a32_runtime\oot3d_azahar_coverage_scenarios.json",
+    [string]$CatalogPath = (Join-Path $PSScriptRoot "../../tools/oot3d/native_a32_runtime/oot3d_azahar_coverage_scenarios.json"),
     [string]$AzaharExe = "I:\oot3dre_work\azahar-oot3d-coverage-build\bin\Release\azahar.exe",
     [string]$RomPath = "E:\ppssppvr\oot3d_decomp\oot3d.cci",
     [string]$OutputRoot = "I:\oot3dre_work\azahar-coverage",
@@ -15,8 +15,10 @@ param(
     [int]$TimeoutSeconds = 90,
     [int]$MaxVerticesPerDraw = 65536,
     [int]$CaptureFramesOverride = 0,
+    [double[]]$CaptureWindowOffsetsSeconds = @(0),
     [switch]$SkipFramebuffer,
     [switch]$CompactEvidence,
+    [switch]$ShaderSeed,
     [switch]$ShowWindow
 )
 
@@ -81,6 +83,16 @@ if ($Slot -lt 1 -or $Slot -gt 10) {
 }
 if ($CaptureFramesOverride -lt 0) {
     throw "CaptureFramesOverride must be zero or greater."
+}
+if ($CaptureWindowOffsetsSeconds.Count -eq 0 -or $CaptureWindowOffsetsSeconds[0] -ne 0) {
+    throw "CaptureWindowOffsetsSeconds must start at zero."
+}
+for ($i = 0; $i -lt $CaptureWindowOffsetsSeconds.Count; ++$i) {
+    $offset = $CaptureWindowOffsetsSeconds[$i]
+    if ([double]::IsNaN($offset) -or [double]::IsInfinity($offset) -or $offset -lt 0 -or
+        ($i -gt 0 -and $offset -le $CaptureWindowOffsetsSeconds[$i - 1])) {
+        throw "Capture window offsets must be finite, nonnegative and strictly increasing."
+    }
 }
 
 $catalog = Get-Content -LiteralPath $CatalogPath -Raw | ConvertFrom-Json
@@ -168,6 +180,7 @@ try {
         OOT3D_PICA_DUMP_FRAMES = [string]$captureFrames
         OOT3D_PICA_DUMP_MAX_VERTICES = [string][Math]::Max(1, $MaxVerticesPerDraw)
         OOT3D_PICA_DUMP_IMMEDIATE = "0"
+        OOT3D_PICA_DUMP_SHADER_SEED = if ($ShaderSeed.IsPresent) { "1" } else { $null }
         OOT3D_SCENARIO_ID = [string]$scenario.id
         OOT3D_SCENARIO_STATUS_PATH = $statusPath
         OOT3D_SCENARIO_ENTRANCE = [string][int]$scenario.entrance_index
@@ -236,31 +249,51 @@ try {
     if ($settleMs -gt 0) {
         Start-Sleep -Milliseconds $settleMs
     }
-    "capture $ScenarioId" | Set-Content -LiteralPath $picaTriggerPath -Encoding ascii
-    if (-not $SkipFramebuffer.IsPresent) {
-        "capture $ScenarioId" | Set-Content -LiteralPath $screenshotTriggerPath -Encoding ascii
-    }
-    $triggeredAt = Get-Date
-
-    $captureDeadline = (Get-Date).AddSeconds([Math]::Max(15, $effectiveTimeout))
+    $captureWindows = @()
+    $scheduleOrigin = Get-Date
+    $targetFrameCount = 0
     $frames = @()
-    while ((Get-Date) -lt $captureDeadline) {
-        $frames = @(Get-ChildItem -LiteralPath $captureDir -Filter "oot3d_pica_frame_*.jsonl" -File -ErrorAction SilentlyContinue | Sort-Object Name)
-        $completeFrames = @($frames | Where-Object { Test-PicaFrameComplete $_ })
-        $screenshotReady = $SkipFramebuffer.IsPresent -or (
-            (Test-Path -LiteralPath $screenshotPath -PathType Leaf) -and
-            (Test-Path -LiteralPath $metadataPath -PathType Leaf))
-        if ($completeFrames.Count -ge $captureFrames -and $screenshotReady) {
-            break
+    foreach ($offset in $CaptureWindowOffsetsSeconds) {
+        $windowAt = $scheduleOrigin.AddSeconds($offset)
+        while ((Get-Date) -lt $windowAt) {
+            if ($process.HasExited) { throw "Azahar exited between capture windows." }
+            Start-Sleep -Milliseconds 50
         }
-        if ($process.HasExited -and (-not $screenshotReady -or $completeFrames.Count -lt $captureFrames)) {
-            throw "Azahar exited before producing the requested capture evidence."
+        "capture $ScenarioId" | Set-Content -LiteralPath $picaTriggerPath -Encoding ascii
+        if ($null -eq $triggeredAt) {
+            $triggeredAt = Get-Date
+            if (-not $SkipFramebuffer.IsPresent) {
+                "capture $ScenarioId" | Set-Content -LiteralPath $screenshotTriggerPath -Encoding ascii
+            }
         }
-        Start-Sleep -Milliseconds 100
-    }
-    $frames = @($frames | Where-Object { Test-PicaFrameComplete $_ } | Select-Object -First $captureFrames)
-    if ($frames.Count -lt $captureFrames) {
-        throw "Only $($frames.Count)/$captureFrames complete PICA frame dumps were produced."
+        $windowTriggeredAt = Get-Date
+        $targetFrameCount += $captureFrames
+        $captureDeadline = (Get-Date).AddSeconds([Math]::Max(15, $effectiveTimeout))
+        while ((Get-Date) -lt $captureDeadline) {
+            $frames = @(Get-ChildItem -LiteralPath $captureDir -Filter "oot3d_pica_frame_*.jsonl" -File -ErrorAction SilentlyContinue | Sort-Object Name)
+            $completeFrames = @($frames | Where-Object { Test-PicaFrameComplete $_ })
+            $screenshotReady = $SkipFramebuffer.IsPresent -or (
+                (Test-Path -LiteralPath $screenshotPath -PathType Leaf) -and
+                (Test-Path -LiteralPath $metadataPath -PathType Leaf))
+            if ($completeFrames.Count -ge $targetFrameCount -and $screenshotReady) {
+                break
+            }
+            if ($process.HasExited -and (-not $screenshotReady -or $completeFrames.Count -lt $targetFrameCount)) {
+                throw "Azahar exited before producing the requested capture evidence."
+            }
+            Start-Sleep -Milliseconds 100
+        }
+        $frames = @($frames | Where-Object { Test-PicaFrameComplete $_ } | Select-Object -First $targetFrameCount)
+        if ($frames.Count -lt $targetFrameCount) {
+            throw "Only $($frames.Count)/$targetFrameCount complete PICA frame dumps were produced."
+        }
+        $captureWindows += [ordered]@{
+            requested_offset_seconds = $offset
+            actual_offset_seconds = [Math]::Round(($windowTriggeredAt - $scheduleOrigin).TotalSeconds, 3)
+            triggered_at = $windowTriggeredAt.ToString("o")
+            first_frame_index = $targetFrameCount - $captureFrames
+            frame_count = $captureFrames
+        }
     }
     if (-not $SkipFramebuffer.IsPresent) {
         Assert-FileExists $screenshotPath "Azahar framebuffer capture"
@@ -268,7 +301,7 @@ try {
     }
 
     $converted = @()
-    if (-not $CompactEvidence.IsPresent) {
+    if (-not $CompactEvidence.IsPresent -and -not $ShaderSeed.IsPresent) {
         foreach ($frame in $frames) {
             $outputPath = Join-Path $derivedDir ($frame.BaseName + ".native_pica_register_trace.json")
             & $convertTraceScript -InputPath $frame.FullName -OutputPath $outputPath -InputFormat jsonl | Out-Null
@@ -276,7 +309,11 @@ try {
         }
     }
 
-    if (-not $process.HasExited) {
+    if ($ShaderSeed.IsPresent) {
+        # All requested capture_end records are already flushed. Avoid a hidden
+        # confirmation dialog and its five-second timeout in unattended batches.
+        Stop-ProcessQuietly $process
+    } elseif (-not $process.HasExited) {
         if (-not $process.CloseMainWindow() -or -not $process.WaitForExit(5000)) {
             Stop-ProcessQuietly $process
         }
@@ -285,20 +322,22 @@ try {
     $summary = [ordered]@{
         format = "oot3d_azahar_coverage_capture_v1"
         generated_at = (Get-Date).ToString("o")
-        evidence_role = "validation_only_not_runtime_input"
+        evidence_role = if ($ShaderSeed.IsPresent) { "offline_shader_preparation_not_gameplay_replay" } else { "validation_only_not_runtime_input" }
         scenario = $scenario
         catalog_path = (Resolve-Path $CatalogPath).Path
         catalog_decomp_provenance = $catalog.provenance.decomp
         azahar_exe = (Resolve-Path $AzaharExe).Path
         rom_path = (Resolve-Path $RomPath).Path
         backend = $Backend
+        shader_seed_capture = $ShaderSeed.IsPresent
         seed_savestate_slot = $Slot
         seed_savestate_path = $installedSeedPath
         ready_at = $readyAt.ToString("o")
         triggered_at = $triggeredAt.ToString("o")
         settle_milliseconds_after_ready = $settleMs
         scenario_status = $finalStatus
-        capture_frame_count_requested = $captureFrames
+        capture_frame_count_requested = $targetFrameCount
+        capture_windows = $captureWindows
         framebuffer_capture_enabled = -not $SkipFramebuffer.IsPresent
         framebuffer_path = if ($SkipFramebuffer.IsPresent) { $null } else { $screenshotPath }
         framebuffer_metadata_path = if ($SkipFramebuffer.IsPresent) { $null } else { $metadataPath }
@@ -307,7 +346,7 @@ try {
             Get-Content -LiteralPath $metadataPath -Raw | ConvertFrom-Json
         } else { $null }
         pica_frame_count = $frames.Count
-        pica_evidence_retained = -not $CompactEvidence.IsPresent
+        pica_evidence_retained = -not $CompactEvidence.IsPresent -or $ShaderSeed.IsPresent
         pica_frames = @($frames | ForEach-Object { $_.FullName })
         converted_register_traces = $converted
         process_exit_code = if ($process.HasExited) { $process.ExitCode } else { $null }
@@ -319,7 +358,8 @@ try {
     }
     $summary["shader_coverage_path"] = $shaderCoveragePath
     $summary["shader_coverage"] = Get-Content -LiteralPath $shaderCoveragePath -Raw | ConvertFrom-Json
-    if ($CompactEvidence.IsPresent) {
+    # Shader seed resources are the corpus, not disposable diagnostic traces.
+    if ($CompactEvidence.IsPresent -and -not $ShaderSeed.IsPresent) {
         foreach ($frame in $frames) {
             Remove-Item -LiteralPath $frame.FullName -Force
         }

@@ -3,10 +3,14 @@
 #include "fast/oot3d/graphics_settings_persistence.h"
 #include "oot3d_native_controls_settings_panel.h"
 #include "oot3d_top_screen_settings_panel.h"
+#include "oot3d_game_language_panel.h"
+#include "fast/MouseCapturePolicy.h"
 #include <imgui_internal.h>
 #include <nlohmann/json.hpp>
 #include <cmath>
+#include <chrono>
 #include <cstdio>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <stdexcept>
@@ -15,6 +19,12 @@
 using namespace Fast::Oot3d;
 namespace {
 struct Item { std::string Label; ImRect Rect; ImGuiID Seed = 0; bool Disabled = false; bool Popup = false; };
+struct RawBindingSource final : ThreeDsRecomp::Input::HostButtonSource {
+    ThreeDsRecomp::Input::HostBinding Held;
+    bool IsKeyboardKeyHeld(ThreeDsRecomp::Input::KeyboardKey key) const noexcept override { return key == Held.KeyboardPrimary; }
+    bool IsMouseButtonHeld(ThreeDsRecomp::Input::MouseButton button) const noexcept override { return button == Held.Mouse; }
+    bool IsGamepadButtonHeld(ThreeDsRecomp::Input::GamepadButton button) const noexcept override { return button == Held.Gamepad; }
+};
 std::map<ImGuiID, Item> items;
 int assertions = 0;
 void Check(bool condition, const std::string& what) {
@@ -36,6 +46,7 @@ struct MemoryStore final : GraphicsSettingsPersistencePort {
 GraphicsSettingsPanel panel;
 std::string loggedPanelText;
 bool updateTextureObservations = false;
+bool showPanel = true;
 constexpr uint64_t firstTextureHash = 0xA100U;
 constexpr uint64_t secondTextureHash = 0xB200U;
 ImVec2 size(760.0F, 680.0F);
@@ -51,16 +62,19 @@ void Frame(bool logText = false) {
                             std::max(720.0F, size.y + 16.0F));
     io.DeltaTime = 1.0F / 60.0F;
     ImGui::NewFrame();
-    ImGui::SetNextWindowPos(ImVec2(8, 8));
-    ImGui::SetNextWindowSize(size);
-    ImGui::Begin("F1 test", nullptr, ImGuiWindowFlags_NoSavedSettings);
-    if (logText) ImGui::LogToBuffer(0);
-    panel.Draw();
-    if (logText) {
-        loggedPanelText = GImGui->LogBuffer.c_str();
-        ImGui::LogFinish();
+    if (showPanel) {
+        ImGui::SetNextWindowPos(ImVec2(8, 8));
+        ImGui::SetNextWindowSize(size);
+        ImGui::Begin("F1 test", nullptr, ImGuiWindowFlags_NoSavedSettings);
+        if (logText) ImGui::LogToBuffer(0);
+        panel.Draw();
+        if (logText) {
+            loggedPanelText = GImGui->LogBuffer.c_str();
+            ImGui::LogFinish();
+        }
+        ImGui::End();
     }
-    ImGui::End();
+    DrawDisplayConfirmation();
     ImGui::Render();
     Check(GImGui->DisabledStackSize == 0, "unbalanced disabled scope");
     Check(GImGui->ColorStack.Size == 0 && GImGui->StyleVarStack.Size == 0,
@@ -90,7 +104,8 @@ void Click(const char* label) {
     Check(!item.Disabled, std::string("disabled UI item: ") + label);
     const ImVec2 p(item.Rect.Min.x + std::min(12.0F, item.Rect.GetWidth() / 2.0F),
                    (item.Rect.Min.y + item.Rect.Max.y) / 2.0F);
-    Check(p.y < size.y + 8.0F && p.x < size.x + 8.0F, std::string("clipped UI action: ") + label);
+    const auto bounds = item.Popup ? ImGui::GetIO().DisplaySize : ImVec2(size.x + 8.0F, size.y + 8.0F);
+    Check(p.y < bounds.y && p.x < bounds.x, std::string("clipped UI action: ") + label);
     auto& io = ImGui::GetIO();
     io.AddMousePosEvent(p.x, p.y);
     Frame();
@@ -123,6 +138,17 @@ void EditScalar(const char* label, const char* value) {
     io.AddInputCharactersUTF8(value); Frame();
     io.AddKeyEvent(ImGuiKey_Enter, true); Frame();
     io.AddKeyEvent(ImGuiKey_Enter, false); Frame(); Frame();
+}
+void EditText(const char* label, const char* value) {
+    Click(label);
+    auto& io = ImGui::GetIO();
+    io.AddKeyEvent(ImGuiMod_Ctrl, true);
+    io.AddKeyEvent(ImGuiKey_A, true); Frame();
+    io.AddKeyEvent(ImGuiKey_A, false);
+    io.AddKeyEvent(ImGuiMod_Ctrl, false); Frame();
+    io.AddKeyEvent(ImGuiKey_Backspace, true); Frame();
+    io.AddKeyEvent(ImGuiKey_Backspace, false); Frame();
+    io.AddInputCharactersUTF8(value); Frame(); Frame();
 }
 void ClickTexture(uint64_t hash, bool reorderDuringClick = false) {
     std::cout << "Select texture " << std::hex << hash << std::dec << std::endl;
@@ -159,6 +185,91 @@ void AllCapabilities(bool available) {
     for (unsigned value = 0; value <= static_cast<unsigned>(GraphicsCapability::ExclusiveFullscreen); ++value)
         runtime.SetCapability(static_cast<GraphicsCapability>(value), available, "test capability");
 }
+
+void CheckControlPersistence() {
+    using namespace Oot3dNativeGame;
+    const auto root = std::filesystem::temp_directory_path() /
+        ("triaevum-controls-smoke-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    Check(std::filesystem::create_directory(root), "could not create isolated config fixture");
+    struct Cleanup { std::filesystem::path Root; ~Cleanup() { std::error_code ec; std::filesystem::remove_all(Root, ec); } } cleanup{root};
+    auto controls = std::make_shared<NativeControlConfigRuntime>(root / "controls.json", NativeControlDefaults());
+    auto top = std::make_shared<TopScreenUiConfigRuntime>(root / "topscreen.json", TopScreenUiConfig{});
+    InstallGraphicsSettingsPanelTabs({CreateNativeControlsSettingsPanel(controls, top)});
+    size = ImVec2(760, 680);
+    Click("Controls");
+    Click("Devices");
+    Click("Keyboard");
+    Click("Revert changes");
+    Check(controls->Snapshot().Config.KeyboardEnabled, "cannot undo before first save");
+    Click("Keyboard");
+    Click("Camera");
+    // The previous panel may have saved this section collapsed in ImGui.
+    Frame();
+    bool freeCameraVisible = false;
+    for (const auto& [id, item] : items) freeCameraVisible |= item.Label == "Enabled##freecam";
+    if (!freeCameraVisible) Click("Free camera");
+    Click("Enabled##freecam");
+    Click("Save controls");
+    NativeControlConfig saved;
+    TopScreenUiConfig savedTop;
+    Check(LoadNativeControlConfig(root / "controls.json", &saved) && !saved.KeyboardEnabled,
+          "Save controls did not persist live input");
+    Check(LoadTopScreenUiConfig(root / "topscreen.json", &savedTop) && savedTop.FreeCameraEnabled,
+          "Save controls did not persist camera settings");
+    Click("Enabled##freecam");
+    auto externalHud = top->Snapshot().Config;
+    externalHud.HudScale = 0.65F;
+    externalHud.HudMarginX = 8;
+    top->Preview(externalHud);
+    Click("Devices");
+    Click("Keyboard");
+    Click("Revert changes");
+    Check(controls->Snapshot().Config == saved, "Revert did not restore saved bindings");
+    Check(top->Snapshot().Config.FreeCameraEnabled && top->Snapshot().Config.HudScale == 0.65F &&
+          top->Snapshot().Config.HudMarginX == 8, "Revert overwrote unrelated live HUD configuration");
+    Click("Camera");
+    Click("Enabled##freecam");
+    Click("Devices");
+    Click("Keyboard");
+    const auto live = controls->Snapshot().Config;
+    const auto liveTop = top->Snapshot().Config;
+    std::ofstream(root / "topscreen.json") << "invalid json";
+    Click("Revert changes");
+    Check(controls->Snapshot().Config == live && top->Snapshot().Config == liveTop,
+          "failed Revert partially modified live configuration");
+    Frame(true);
+    Check(loggedPanelText.find("parse") != std::string::npos, "Revert error was not visible");
+    std::filesystem::create_directory(root / "not-a-file");
+    auto blocked = std::make_shared<NativeControlConfigRuntime>(root / "not-a-file", NativeControlDefaults());
+    InstallGraphicsSettingsPanelTabs({CreateNativeControlsSettingsPanel(blocked, nullptr)});
+    Frame(); Frame();
+    Click("Save controls");
+    Frame(true);
+    Check(loggedPanelText.find("cannot") != std::string::npos, "Save error was not visible");
+    InstallGraphicsSettingsPanelTabs({});
+}
+
+void CheckGameSurfaceMouseResume() {
+    Fast::MouseCapturePolicy policy;
+    Check(policy.Request(true), "initial mouse capture denied");
+    policy.Release();
+    auto& io = ImGui::GetIO();
+    io.AddMousePosEvent(100, 100);
+    for (int frame = 0; frame < 3; ++frame) {
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(ImVec2(640, 480));
+        ImGui::Begin("Main Game", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground);
+        ImGui::End();
+        ImGui::Render();
+    }
+    Check(io.WantCaptureMouse, "game viewport did not reproduce generic ImGui capture");
+    Check(!policy.Request(true) && !policy.ResumeClick(true), "a real F1 window allowed recapture");
+    Check(policy.ResumeClick(false) && policy.Request(true),
+          "game-surface-only ImGui capture blocked resuming gameplay");
+    Check(policy.ConsumeClickRelease(), "recapture click would leak a game action");
+}
 }
 
 void ImGuiTestEngineHook_ItemAdd(ImGuiContext* ctx, ImGuiID id, const ImRect& bb,
@@ -180,6 +291,17 @@ const char* ImGuiTestEngine_FindItemDebugLabel(ImGuiContext*, ImGuiID id) {
 }
 
 int main() try {
+    PresentationSettingsTransaction delayedConfirmation(500);
+    PresentationSettingsValue previousDisplay;
+    auto nextDisplay = previousDisplay;
+    nextDisplay.Window = WindowMode::Borderless;
+    Check(delayedConfirmation.Begin(previousDisplay, nextDisplay), "display transaction did not begin");
+    Check(delayedConfirmation.MarkApplied(nextDisplay, 100, true), "display transaction did not apply");
+    Check(!delayedConfirmation.Advance(100000), "hidden confirmation expired before it could be seen");
+    Check(delayedConfirmation.ConfirmationVisible(100000), "visible confirmation did not start the timer");
+    Check(!delayedConfirmation.ConfirmationVisible(100100), "redrawing the confirmation renewed its timer");
+    Check(!delayedConfirmation.Advance(100499) && delayedConfirmation.Advance(100500),
+          "visible confirmation lost the automatic rollback deadline");
     auto store = std::make_shared<MemoryStore>();
     auto initial = GraphicsSettingsService::Preset(GraphicsPreset::Custom);
     store->Root["Graphics"] = SerializeGraphicsSettings(initial);
@@ -201,6 +323,21 @@ int main() try {
     int width, height;
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
     Frame(); Frame();
+
+    auto requestedDisplay = runtime.Snapshot();
+    requestedDisplay.OutputWidth = 3840;
+    requestedDisplay.OutputHeight = 2160;
+    runtime.Apply(requestedDisplay);
+    runtime.AcknowledgePresentationApplied(requestedDisplay);
+    runtime.PublishDisplayMetrics({1920, 1080, 960, 540, 0.5F, WindowMode::Windowed});
+    Frame(true);
+    Check(loggedPanelText.find("Output framebuffer: 1920 x 1080") != std::string::npos &&
+          loggedPanelText.find("Scene image: 960 x 540") != std::string::npos,
+          "F1 labels the requested resolution as the actual renderer extent");
+    Check(runtime.Snapshot().OutputWidth == 3840, "observed extent overwrote the requested resolution");
+    runtime.Apply(initial);
+    runtime.AcknowledgePresentationApplied(initial);
+    Frame();
 
     Check(!runtime.NativePresentationOverrideActive(), "F2 must start inactive");
     for (const auto toon : {ToonMode::Off, ToonMode::PostProcessPreview, ToonMode::PicaMaterial}) {
@@ -352,6 +489,14 @@ int main() try {
           std::abs(shape.BladeDroop - 0.8F) < 0.001F &&
           std::abs(shape.ShapeVariation - 0.9F) < 0.001F &&
           shape.BladeTwistDegrees == 150.0F, "grass shape controls not applied");
+    EditScalar("Rim fade start (m)", "3");
+    EditScalar("Rim fade end (m)", "12");
+    Check(runtime.Snapshot().Grass.Appearance.ToonRimFadeStart == 300.0F &&
+          runtime.Snapshot().Grass.Appearance.ToonRimFadeEnd == 1200.0F, "grass rim metre conversion failed");
+    Click("Enable nearby rim");
+    Check(!runtime.Snapshot().Grass.Appearance.ToonRimEnabled, "grass rim disable failed");
+    Click("Enable nearby rim");
+    Check(runtime.Snapshot().Grass.Appearance.ToonRimEnabled, "grass rim enable failed");
     Click("Performance");
     EditScalar("Draw distance", "20000");
     EditScalar("Density falloff distance", "5000");
@@ -417,14 +562,59 @@ int main() try {
     display.Window = WindowMode::Borderless;
     runtime.Apply(display);
     runtime.AcknowledgePresentationApplied(display);
+    showPanel = false;
+    runtime.PublishDisplayMetrics({1920, 1080, 1280, 720, 2.0F / 3.0F, WindowMode::Borderless});
     Frame();
     Click("Keep display settings");
     Check(runtime.PresentationStatus().Phase == PresentationTransactionPhase::Idle,
-          "display confirmation not accessible outside Renderer");
+          "display confirmation not accessible with F1 closed");
+    showPanel = true;
+    const auto confirmedDisplay = runtime.Snapshot();
+    auto rejectedDisplay = confirmedDisplay;
+    rejectedDisplay.Window = WindowMode::ExclusiveFullscreen;
+    Check(runtime.Apply(rejectedDisplay).Accepted(), "display request rejected before backend");
+    const std::string displayFailure = "Test monitor: exclusive mode unsupported";
+    Check(runtime.RejectPresentationApply(rejectedDisplay, displayFailure),
+          "backend display failure not accepted");
+    Check(GetPresentationSettings(runtime.Snapshot()) == GetPresentationSettings(confirmedDisplay),
+          "failed display request did not restore previous settings");
+    Frame(true);
+    Check(loggedPanelText.find("Display change reverted: " + displayFailure) != std::string::npos,
+          "backend failure not visible in F1 outside Renderer");
+    Check(!runtime.RejectPresentationApply(rejectedDisplay, "stale failure"),
+          "stale display failure accepted");
+    Check(!runtime.RejectPresentationApply(confirmedDisplay, "idle failure"),
+          "idle display failure accepted");
+    Check(!runtime.AcknowledgePresentationApplied(confirmedDisplay),
+          "duplicate recovery acknowledgement accepted");
+    Check(runtime.LastPresentationRejection() == displayFailure,
+          "stale response erased the useful display failure");
+    Check(runtime.Apply(rejectedDisplay).Accepted(), "display retry not staged");
+    Check(runtime.RollbackPresentation(), "pending display retry not reverted");
+    Check(runtime.AcknowledgePresentationApplied(confirmedDisplay),
+          "display retry rollback not acknowledged");
+    Check(runtime.LastPresentationRejection() == displayFailure,
+          "rollback acknowledgement erased the useful display failure");
+    Check(runtime.Apply(rejectedDisplay).Accepted(), "second display retry not staged");
+    Check(!runtime.RejectPresentationApply(confirmedDisplay, "older request failed"),
+          "older display request replaced a newer one");
+    Check(!runtime.AcknowledgePresentationApplied(confirmedDisplay),
+          "older display acknowledgement replaced a newer one");
+    Check(runtime.LastPresentationRejection() == displayFailure,
+          "retry lost display failure before backend success");
+    Check(runtime.AcknowledgePresentationApplied(rejectedDisplay),
+          "successful display retry not acknowledged");
+    Check(runtime.LastPresentationRejection().empty(), "successful retry retained old error");
+    Frame(true);
+    Check(loggedPanelText.find("Display change reverted:") == std::string::npos,
+          "F1 retained error after successful retry");
+    Click("Revert display settings");
+    Check(runtime.AcknowledgePresentationApplied(confirmedDisplay),
+          "smoke test could not restore its original display");
     Click("Textures");
     Find("Apply folders");
     Click("Controls");
-    for (const char* section : {"Bindings", "Aiming", "Actions", "Camera"}) Click(section);
+    for (const char* section : {"Bindings", "Shortcuts", "Camera"}) Click(section);
     Click("Enabled##freecam");
     Check(topScreen->Snapshot().Config.FreeCameraEnabled, "central camera control not connected");
     auto cameraExternal = topScreen->Snapshot().Config;
@@ -434,7 +624,13 @@ int main() try {
     Click("Enabled##freecam");
     Check(!topScreen->Snapshot().Config.FreeCameraEnabled && topScreen->Snapshot().Config.HudMarginX == 7,
           "central camera control overwrote external HUD state");
-    for (const char* section : {"Motion", "Devices"}) Click(section);
+    Click("Free camera");
+    Click("Aiming");
+    Select("##Aim source", "Mouse");
+    EditScalar("##Mouse aim sensitivity", "0.61");
+    Check(std::abs(controls->Snapshot().Config.MouseAimDegreesPerPixel - 0.61F) < 0.001F,
+          "aiming sensitivity not connected");
+    Click("Devices");
     Click("Keyboard");
     Check(!controls->Snapshot().Config.KeyboardEnabled, "control preview not connected");
     auto external = controls->Snapshot().Config;
@@ -443,6 +639,124 @@ int main() try {
     Frame();
     Click("Keyboard");
     Check(controls->Snapshot().Config.MouseAimDegreesPerPixel == 0.77F, "stale draft overwrote external controls");
+    Click("Bindings");
+    using Action = Oot3dNativeGame::NativeControlAction;
+    using Key = Oot3dNativeGame::NativeKeyboardKey;
+    const auto movementIndex = static_cast<size_t>(Action::MoveForward);
+    // Old content-proportional columns shrink progressively, not just on resize.
+    EditText("##ActionFilter", "move");
+    for (const auto width : {520.0F, 760.0F, 1100.0F, 520.0F}) {
+        size = ImVec2(width, 680.0F);
+        Frame(); Frame(); Frame();
+        const auto primary = Find("##primary:Move forward").Rect;
+        const auto alternate = Find("##alternate:Move forward").Rect;
+        Check(primary.GetWidth() > 100.0F && alternate.GetWidth() > 100.0F,
+              "binding fields became too narrow");
+        Check(primary.Max.x < alternate.Min.x && alternate.Max.x < size.x + 8.0F,
+              "binding columns overlap or leave the window");
+        for (int frame = 0; frame < 120; ++frame) Frame();
+        const auto after = Find("##primary:Move forward").Rect;
+        Check(std::abs(after.Min.x - primary.Min.x) < 1.0F &&
+              std::abs(after.GetWidth() - primary.GetWidth()) < 1.0F,
+              "binding columns drifted across idle frames");
+    }
+    size = ImVec2(760.0F, 680.0F); Frame(); Frame();
+    Select("##primary:Move forward", "Unassigned");
+    Check(controls->Snapshot().Config.Bindings[movementIndex].KeyboardPrimary == Key::None,
+          "clear key did not update runtime");
+    Click("##primary:Move forward");
+    EditText("##BindingSearch", "numpad 8");
+    Click("Numpad 8");
+    Check(controls->Snapshot().Config.Bindings[movementIndex].KeyboardPrimary == Key::Numpad8,
+          "searchable key assignment did not update runtime");
+    Click("##primary:Move forward");
+    Check(GImGui->OpenPopupStack.Size > 0, "key popup failed to reopen");
+    Click("W");
+    Check(controls->Snapshot().Config.Bindings[movementIndex].KeyboardPrimary == Key::W,
+          "key popup retained stale search on reopen");
+    Click("Mouse");
+    Select("##mouse:Move forward", "Back");
+    Check(controls->Snapshot().Config.Bindings[movementIndex].Mouse == Oot3dNativeGame::NativeMouseButton::Back &&
+          controls->Snapshot().Config.Bindings[movementIndex].KeyboardPrimary == Key::W,
+          "mouse assignment changed the wrong device");
+    Select("##mouse:Move forward", "Unassigned");
+    Click("Controller");
+    const auto beforeSwap = controls->Snapshot().Config;
+    Click("Swap shoulders / triggers");
+    const auto swapped = controls->Snapshot().Config;
+    using Button = Oot3dNativeGame::NativeGamepadButton;
+    Check(swapped.Bindings[static_cast<size_t>(Action::L)].Gamepad == Button::LeftTrigger &&
+          swapped.Bindings[static_cast<size_t>(Action::R)].Gamepad == Button::RightTrigger &&
+          swapped.Bindings[static_cast<size_t>(Action::Zl)].Gamepad == Button::LeftShoulder &&
+          swapped.Bindings[static_cast<size_t>(Action::Zr)].Gamepad == Button::RightShoulder,
+          "full controller swap failed to move both item bindings");
+    Click("Swap shoulders / triggers");
+    Check(controls->Snapshot().Config.Bindings == beforeSwap.Bindings,
+          "second controller swap did not restore original bindings");
+    Click("##gamepad:Move forward");
+    EditText("##BindingSearch", "right stick");
+    Click("Right Stick");
+    Check(controls->Snapshot().Config.Bindings[movementIndex].Gamepad == Button::RightStick &&
+          controls->Snapshot().Config.Bindings[movementIndex].KeyboardPrimary == Key::W,
+          "controller assignment changed the wrong device");
+    Select("##gamepad:Move forward", "Unassigned");
+    EditText("##ActionFilter", "no such control");
+    Frame(true);
+    Check(loggedPanelText.find("No matching controls") != std::string::npos,
+          "empty binding search not reported");
+    EditText("##ActionFilter", "");
+    Find("##gamepad:Move forward");
+    EditText("##ActionFilter", "Move forward");
+    RawBindingSource rawBinding;
+    using CapturePhase = ThreeDsRecomp::Input::BindingCapturePhase;
+    Click("##gamepad:Move forward"); Click("Listen...");
+    Check(controls->BindingCaptureStatus().Phase == CapturePhase::Release, "controller Listen did not start capture");
+    controls->ObserveBindingCapture(rawBinding, false); Frame();
+    rawBinding.Held.Gamepad = Button::LeftTrigger;
+    controls->ObserveBindingCapture(rawBinding, false); Frame(); Frame();
+    Check(controls->Snapshot().Config.Bindings[movementIndex].Gamepad == Button::LeftTrigger &&
+          !controls->Snapshot().Config.ControllerEnabled, "Listen did not assign a disabled controller source");
+    Click("Keyboard");
+    rawBinding.Held = {};
+    Click("##alternate:Move forward"); Click("Listen...");
+    controls->ObserveBindingCapture(rawBinding, false); Frame();
+    rawBinding.Held.KeyboardPrimary = Key::P;
+    controls->ObserveBindingCapture(rawBinding, false); Frame(); Frame();
+    Check(controls->Snapshot().Config.Bindings[movementIndex].KeyboardSecondary == Key::P &&
+          controls->Snapshot().Config.Bindings[movementIndex].KeyboardPrimary == Key::W,
+          "Listen assigned wrong keyboard slot");
+    Click("Mouse");
+    rawBinding.Held = {};
+    rawBinding.Held.Mouse = Oot3dNativeGame::NativeMouseButton::Left;
+    const auto beforeCapture = controls->Snapshot().Config;
+    Click("##mouse:Move forward"); Click("Listen...");
+    controls->ObserveBindingCapture(rawBinding, false); Frame();
+    Check(controls->Snapshot().Config == beforeCapture && controls->BindingCaptureStatus().Phase == CapturePhase::Release,
+          "Listen captured its opening mouse click");
+    rawBinding.Held = {};
+    controls->ObserveBindingCapture(rawBinding, false); Frame();
+    rawBinding.Held.Mouse = Oot3dNativeGame::NativeMouseButton::Forward;
+    controls->ObserveBindingCapture(rawBinding, false); Frame(); Frame();
+    Check(controls->Snapshot().Config.Bindings[movementIndex].Mouse == Oot3dNativeGame::NativeMouseButton::Forward,
+          "Listen did not assign the mouse side button");
+    const auto beforeCancel = controls->Snapshot().Config;
+    Click("##mouse:Move forward"); Click("Listen...");
+    Click("Cancel");
+    Check(controls->Snapshot().Config == beforeCancel, "cancelling Listen modified a binding");
+    Click("Presets...");
+    const auto beforePreset = controls->Snapshot().Config;
+    Select("##Preset", "Controller");
+    Check(controls->Snapshot().Config == beforePreset, "preset selection applied without confirmation");
+    Click("Cancel");
+    Check(controls->Snapshot().Config == beforePreset, "cancel changed the control profile");
+    Click("Presets...");
+    Click("Apply preset");
+    Check(controls->Snapshot().Config.Profile == Oot3dNativeGame::NativeControlProfile::Controller,
+          "confirmed preset not applied");
+    Check(controls->Snapshot().Config.PreferredControllerGuid == beforePreset.PreferredControllerGuid &&
+          controls->Snapshot().Config.GyroscopeBiasDegreesPerSecond == beforePreset.GyroscopeBiasDegreesPerSecond &&
+          controls->Snapshot().Config.AccelerometerNeutral == beforePreset.AccelerometerNeutral,
+          "preset discarded controller identity or calibration");
     Click("TopScreen 2.1.1");
     Click("Render HUD");
     Check(!topScreen->Snapshot().Config.RenderHud, "TopScreen preview not connected");
@@ -457,7 +771,18 @@ int main() try {
     Frame(); Frame();
     Find("Save TopScreen");
     Click("Controls");
-    Find("Save controls");
+    for (const char* section : {"Bindings", "Camera", "Devices", "Shortcuts"}) {
+        Click(section);
+        Frame(); Frame();
+        const auto saveRect = Find("Save controls").Rect;
+        const auto revertRect = Find("Revert changes").Rect;
+        Check(saveRect.Min.y > 8.0F && saveRect.Max.y < size.y + 8.0F &&
+              revertRect.Max.x < size.x + 8.0F && saveRect.Max.x < revertRect.Min.x,
+              "compact Controls footer is clipped or overlapping");
+        for (const auto* window : GImGui->Windows)
+            if (window->Active && (window->Flags & ImGuiWindowFlags_ChildWindow))
+                Check(window->ScrollMax.x == 0.0F, "Controls contents overflow horizontally");
+    }
 
     auto pending = runtime.Snapshot();
     const int storesBefore = store->Stores;
@@ -496,6 +821,27 @@ int main() try {
     Frame();
     Click("Retry saving graphics");
     Check(runtime.SaveState() == GraphicsSettingsSaveState::Saved, "save retry failed");
+    CheckControlPersistence();
+    CheckGameSurfaceMouseResume();
+    const auto languagePath = std::filesystem::temp_directory_path() /
+        ("triaevum-language-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".json");
+    const std::vector<Oot3dNativeGame::GameLanguage> languages{{"en","English",1},{"it","Italiano",4}};
+    auto language = std::make_shared<Oot3dNativeGame::GameLanguageSettings>(languagePath,languages);
+    InstallGraphicsSettingsPanelTabs({Oot3dNativeGame::CreateGameLanguagePanel(language)});
+    Frame(); Frame();
+    Click("Game"); Frame();
+    Select("Game language", "Italiano");
+    Check(language->Selected() == "it", "language widget did not persist choice");
+    Check(language->SystemId() == 1, "language selection mutated the running guest");
+    Frame(true);
+    Check(loggedPanelText.find("Restart required") != std::string::npos, "language restart notice missing");
+    Oot3dNativeGame::GameLanguageSettings restarted(languagePath,languages);
+    Check(restarted.SystemId() == 4, "next boot did not select Italian CFG language");
+    Check(!restarted.Select("de"), "language absent from ROM was accepted");
+    Oot3dNativeGame::GameLanguageSettings differentRom(languagePath,{{"en","English",1}});
+    Check(differentRom.SystemId() == 1, "unsupported old language leaked into another ROM");
+    std::filesystem::remove(languagePath);
+    InstallGraphicsSettingsPanelTabs({});
     ImGui::DestroyContext();
     std::cout << "F1 UI smoke passed: " << assertions << " assertions, real renderer/Controls/TopScreen widgets\n";
     return 0;

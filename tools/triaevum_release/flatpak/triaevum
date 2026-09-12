@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+case "${XDG_DATA_HOME:-}" in
+    /*) ;;
+    *) printf '%s\n' 'TriAevum: Flatpak did not provide an absolute data directory.' >&2; exit 1 ;;
+esac
+mkdir -p "$XDG_DATA_HOME/TriAevum"
+cd "$XDG_DATA_HOME/TriAevum"
+export LD_LIBRARY_PATH="/app/lib/triaevum/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec /app/lib/triaevum/TriAevumForge --play "$@"

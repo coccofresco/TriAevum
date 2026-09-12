@@ -11,8 +11,8 @@ inline int PicaGuideDiagnosticMode() {
     const int mode = option ? std::atoi(option) : 0;
     return mode >= 1 && mode <= 7 ? mode : 0;
 }
-inline std::string PicaGuideDiagnosticShaderLibrary() {
-    return "const int oot3d_guide_diagnostic_mode = " + std::to_string(PicaGuideDiagnosticMode()) + ";\n" + R"glsl(
+inline std::string PicaGuideDiagnosticShaderLibrary(int mode = PicaGuideDiagnosticMode()) {
+    return "const int oot3d_guide_diagnostic_mode = " + std::to_string(mode) + ";\n" + R"glsl(
 vec3 oot3d_guide_view_position(vec2 uv) {
     float depth = texture(scene_depth,uv).r;
     float n=scanout.near_plane, f=scanout.far_plane;

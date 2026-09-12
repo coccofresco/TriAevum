@@ -8,9 +8,11 @@ from typing import Any, Callable
 try:
     from .common import load_json_object, normalize_relative_path, sha256_file
     from .activation_transaction import activation_transaction
+    from .release_platform import catalog_platform, host_platform
 except ImportError:
     from common import load_json_object, normalize_relative_path, sha256_file
     from activation_transaction import activation_transaction
+    from release_platform import catalog_platform, host_platform
 
 
 FORMAT = "triaevum_precompiled_titles_v1"
@@ -38,7 +40,8 @@ def load_catalog(root: Path) -> dict:
     payload = load_json_object(root / CATALOG)
     if payload.get("format") != FORMAT or payload.get("install_model") != MODEL:
         raise ValueError("Unsupported precompiled-title catalog")
-    for field, expected in (("runtime", "TriAevum.exe"), ("native_module", "forge/oot3d_game_module.dll")):
+    platform = catalog_platform(payload)
+    for field, expected in (("runtime", platform.runtime), ("native_module", platform.native_module)):
         if not isinstance(payload.get(field), dict) or payload[field].get("path") != expected:
             raise ValueError(f"Invalid catalog {field} binding")
     titles = payload.get("titles")
@@ -50,14 +53,16 @@ def load_catalog(root: Path) -> dict:
     return payload
 
 
-def select_title(root: Path, recipe: dict, *, catalog: dict | None = None) -> dict:
+def validate_title(root: Path, recipe: dict, *, catalog: dict | None = None) -> dict:
+    """Validate catalog content without executing binaries or requiring its host."""
     catalog = catalog or load_catalog(root)
+    platform = catalog_platform(catalog)
     matches = [item for item in catalog["titles"] if item["recipe"] == recipe["id"]]
     if len(matches) != 1:
         raise ValueError("No precompiled module for this ROM revision; obtain a compatible release")
     item = matches[0]
     if (item.get("inputs") != recipe.get("inputs") or item.get("abi_version") != 2
-            or item.get("target") != "x86_64-pc-windows-msvc"):
+            or item.get("target") != platform.target):
         raise ValueError("Precompiled title revision/ABI does not match the ROM recipe")
     if item.get("input_adapter") != recipe.get("input_adapter"):
         raise ValueError("Precompiled title input adapter differs from the revision recipe")
@@ -81,7 +86,29 @@ def select_title(root: Path, recipe: dict, *, catalog: dict | None = None) -> di
     checked_file(root, catalog["runtime"])
     checked_file(root, catalog["native_module"])
     checked_file(root, item["plugin"])
+    renderer = item.get("renderer_shader_preparation")
+    if renderer is not None:
+        try:
+            from .shader_preparation import RENDERER_CONTRACT
+        except ImportError:
+            from shader_preparation import RENDERER_CONTRACT
+        if not isinstance(renderer, dict) or renderer.get("format") != RENDERER_CONTRACT:
+            raise ValueError("Invalid renderer shader preparation binding")
+        if not isinstance(renderer.get("compiler"), dict) or not isinstance(renderer.get("dependencies", []), list):
+            raise ValueError("Invalid renderer shader compiler artifacts")
+        for record in [renderer["compiler"], *renderer.get("dependencies", [])]:
+            if not isinstance(record, dict):
+                raise ValueError("Invalid renderer shader compiler artifact")
+            checked_file(root, record)
     return item
+
+
+def select_title(root: Path, recipe: dict, *, catalog: dict | None = None) -> dict:
+    catalog = catalog or load_catalog(root)
+    platform = catalog_platform(catalog)
+    if platform != host_platform():
+        raise ValueError(f"This package targets {platform.target}, not this host")
+    return validate_title(root, recipe, catalog=catalog)
 
 
 def install_precompiled_title(prepared_directory: Path, *, root: Path, recipe: dict,
@@ -91,9 +118,13 @@ def install_precompiled_title(prepared_directory: Path, *, root: Path, recipe: d
     try:
         from . import forge
         from .topscreen_assets import prepare_topscreen_assets
+        from .shader_preparation import prepare_shader_seed, prepare_renderer_shader_cache
+        from .device_pipeline_preparation import prepare_device_pipelines, installation_cache_directory, adopt_existing_cache
     except ImportError:
         import forge
         from topscreen_assets import prepare_topscreen_assets
+        from shader_preparation import prepare_shader_seed, prepare_renderer_shader_cache
+        from device_pipeline_preparation import prepare_device_pipelines, installation_cache_directory, adopt_existing_cache
     catalog = load_catalog(root)
     item = select_title(root, recipe, catalog=catalog)
     prepared = forge.load_prepared_content(prepared_directory, required_inputs=("code", "exheader", "romfs"))
@@ -116,7 +147,15 @@ def install_precompiled_title(prepared_directory: Path, *, root: Path, recipe: d
     texture_pack = prepare_topscreen_assets(
         root=root, data_root=data_root, recipe=recipe,
         romfs=prepared.inputs["romfs"].path, report=report)
-    with activation_transaction(root.resolve(), [
+    shader_pack = prepare_shader_seed(root=root, data_root=data_root,
+                                     title=item, report=report)
+    renderer_cache = installation_cache_directory(data_root)
+    adopt_existing_cache(renderer_cache, report=report)
+    renderer_preparation = prepare_renderer_shader_cache(root=root, data_root=data_root,
+        title=item, cache_directory=renderer_cache, report=report)
+    pipeline_preparation = prepare_device_pipelines(root=root, data_root=data_root,
+        title=item, pack=shader_pack, cache_directory=renderer_cache, report=report)
+    with activation_transaction(runtime_plugin.resolve().parent, [
         runtime_plugin, launch_profile, active_title_state,
         prepared.directory / "forge-state.json",
         data_root / "config" / "TriAevum.json", data_root / "config" / "topscreen_ui.json",
@@ -127,7 +166,10 @@ def install_precompiled_title(prepared_directory: Path, *, root: Path, recipe: d
         runtime = forge.publish_private_runtime(
             prepared.directory, plugin=plugin, runtime_plugin=runtime_plugin,
             launch_profile=launch_profile, data_root=data_root,
-            topscreen_texture_pack=texture_pack)
+            topscreen_texture_pack=texture_pack, package_root=root,
+            pica_shader_pack=shader_pack, renderer_cache_directory=renderer_cache)
         activation = forge.activate_prepared_title(prepared.directory, active_title_state=active_title_state)
     return {"status": "ready", "install_model": MODEL, "objects_compiled": 0,
+            "renderer_shader_preparation": renderer_preparation,
+            "device_pipeline_preparation": pipeline_preparation,
             "package": packaged, "runtime": runtime, "active_title": activation["active_title"]}

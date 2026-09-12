@@ -233,4 +233,12 @@ bool BuildOot3dPicaVulkanDrawPlanAndConsumeResources(
     std::string* error = nullptr,
     Oot3dPicaVulkanShaderSourceCache* shaderCache = nullptr);
 
+// Offline pipeline metadata only. Shares the exact live vertex-layout planner;
+// no texture/index/vertex payload is needed or fabricated. Not a drawable plan.
+bool BuildOot3dPicaVulkanPipelinePlan(
+    const Oot3dPicaDrawSubmission& submission,
+    Oot3dPicaVulkanDrawPlan& plan,
+    std::string* error = nullptr,
+    Oot3dPicaVulkanShaderSourceCache* shaderCache = nullptr);
+
 } // namespace Oot3dNativeGame

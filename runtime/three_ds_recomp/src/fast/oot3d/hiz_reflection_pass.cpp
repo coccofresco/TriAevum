@@ -8,7 +8,6 @@
 #ifdef ENABLE_OOT3D_NRI
 #include "nri_interop_internal.h"
 #endif
-#include <shaderc/shaderc.hpp>
 #include <array>
 #include <stdexcept>
 #include <vector>
@@ -26,18 +25,8 @@ struct ReflectionPush {
 };
 static_assert(sizeof(ReflectionPush) == 76U);
 
-std::vector<uint32_t> Compile(const std::string& source, const char* name) {
-    shaderc::Compiler compiler;
-    shaderc::CompileOptions options;
-    options.SetTargetEnvironment(shaderc_target_env_vulkan,
-                                 shaderc_env_version_vulkan_1_2);
-    options.SetOptimizationLevel(shaderc_optimization_level_performance);
-    const auto result = compiler.CompileGlslToSpv(
-        source, shaderc_compute_shader, name, options);
-    if (result.GetCompilationStatus() != shaderc_compilation_status_success)
-        throw std::runtime_error(std::string(name) + ": " +
-                                 result.GetErrorMessage());
-    return {result.cbegin(), result.cend()};
+std::vector<uint32_t> Compile(Renderer::CachedPassShaderCompiler& shaders, const std::string& source, const char* name) {
+    return shaders.Resolve(source, Renderer::SpirvStage::Compute, name);
 }
 } // namespace
 
@@ -124,7 +113,7 @@ bool HiZReflectionPass::Initialize(VkPhysicalDevice physicalDevice,
         const auto createPipeline = [&](const std::string& source,
                                         const char* name,
                                         nri::Pipeline*& output) {
-            const auto shader = Compile(source, name);
+            const auto shader = Compile(interop.Shaders(), source, name);
             nri::ComputePipelineDesc pipeline{};
             pipeline.pipelineLayout = mImpl->PipelineLayout;
             pipeline.shader.stage = nri::StageBits::COMPUTE_SHADER;

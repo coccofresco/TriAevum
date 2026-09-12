@@ -8,6 +8,8 @@
 
 namespace Fast::Oot3d {
 
+inline constexpr const char* kPicaDirectionalShadowFragmentShader = "#version 450\nvoid main(){}\n";
+
 enum class PicaDirectionalShadowCasterShaderStatus : uint8_t {
     Applied,
     EmptySource,

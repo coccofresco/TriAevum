@@ -1,5 +1,63 @@
 # Experimental macOS port
 
+## Alpha 2 update (2026-09-12)
+
+The Mac branch incorporates upstream release tag `v0.6.0-alpha.2`
+(`9587e59`), including the shared grass optimizations, TopScreen/control fixes
+and shader-cache refactoring. Upstream's revised Retina resize, scaled
+framebuffer copy and `BitFieldUnsigned` implementations replace the original
+Mac patches. Mac-specific dylib discovery, the two-period pacing bound and
+nonblocking grass admission remain.
+
+The title dylib is rebuilt from alpha 2's translated C++ archive, with each
+source hash checked against its manifest. The app bundles the release's 1,039
+portable shader modules and the native renderer-pass shader compiler. Forge
+prepares these shaders into installation-private storage and detects the ROM's
+available languages. Existing installs adopt the bundled portable shader pack
+when launched through Play; learned device pipelines remain local. NRI-only
+headless GPU pipeline preparation is not enabled on this Vulkan/MoltenVK build.
+Missing shader variants are still compiled and cached during play.
+
+The published alpha 2 Windows bundle only lists EUR recipes. The Mac input
+preparation step retains alpha 1c's verified USA adapter and content-family
+recipe, so the existing USA ROM remains supported with the new native title.
+It does not reuse the Windows title DLL or old translated game code.
+
+Build the complete local app with Xcode Command Line Tools, Homebrew and
+Python 3.10 or newer:
+
+```sh
+brew install cmake ninja sdl2 glew spdlog nlohmann-json tinyxml2 libzip \
+  libogg libvorbis opusfile vulkan-headers vulkan-loader molten-vk shaderc python
+scripts/macos/build-app.sh
+```
+
+The script downloads and verifies pinned official release archives, compiles
+the runtime and title, freezes Forge, and packages `build-macos/TriAevum.app`.
+It refuses to replace an existing app; provide a different output when updating:
+
+```sh
+scripts/macos/build-app.sh "$PWD/build-macos" "$PWD/build-macos/TriAevum-new.app"
+```
+
+`TRIAEVUM_PYTHON` can select another suitable Python interpreter. Existing
+user saves/settings remain under Application Support and are preserved.
+Old graphics configurations retain their choices; fresh installs use alpha 2
+defaults. The historical measurements below refer to the alpha 1c Mac port.
+
+Alpha 2 validation on this Mac: runtime/title builds and ABI preflight pass;
+frozen Forge imports the USA ROM, prepares the 1,039-module seed and renderer
+pass shaders, and preserves existing save files/configuration on repeat import.
+ROM language preferences are written beside the Mac runtime configuration,
+where the runtime discovers them. File selection and the new-game intro inside
+Link's house render successfully. The Shadow2D GPU probe, frame-rate/scheduler
+checks, all 12 grass cache tests and the product/source/shader/language Python
+checks pass (46 Python tests passed, four platform-specific tests skipped).
+The 45-second real-time intro averaged 55.8 FPS; cold shader encounters caused
+a maximum interval of 820 ms. This is not a full-game compatibility or steady
+60 FPS claim. Native title execution reported zero memory faults, unsupported
+exits or retained ARM fallbacks in the exercised sequences.
+
 Status: the Apple Silicon runtime and generated title plugin build natively,
 and the local `build-macos/TriAevum.app` imports the user's decrypted USA ROM,
 boots the game and reaches playable 3D scenes through MoltenVK. The AppKit
@@ -110,8 +168,8 @@ is launched by `ports/macos/Launcher.swift`. User settings and saves live in
 `tools/triaevum_release/package_macos.py` bundles and relocates dylibs, writes
 the MoltenVK ICD and signs the local app ad-hoc.
 
-`scripts/macos/build.sh runtime` rebuilds the runtime; the title build and
-application packaging remain separate steps. Clean-machine validation,
+`scripts/macos/build.sh runtime` rebuilds only the runtime;
+`scripts/macos/build-app.sh` orchestrates the full application build. Clean-machine validation,
 Intel/universal builds, notarization and a complete game playthrough remain.
 
 ## Retina performance

@@ -119,6 +119,10 @@ struct TopScreenExtendedInputFrame {
   bool XHeld = false;
   bool YHeld = false;
   bool RestorationLayout = false;
+  bool DpadLeftPressed = false;
+  bool DpadRightPressed = false;
+  bool DpadUpHeld = false;
+  bool DpadUpPressed = false;
 };
 
 bool HasTopScreenItemQueryOverrideInput(
@@ -291,7 +295,7 @@ std::size_t AppendTopScreenPauseEdgePresentation(
     const oot3d::ui::UiTextureIdentity &itemPage,
     std::vector<oot3d::ui::UiPrimitive> &output);
 
-struct TopScreenWorldMapQuad {
+struct TopScreenTexturedQuad {
   bool Visible = false;
   TopScreenVec2 Position{};
   TopScreenVec2 Size{};
@@ -300,41 +304,9 @@ struct TopScreenWorldMapQuad {
   oot3d::ui::UiColor Color{};
 };
 
-struct TopScreenWorldMapGeometry {
-  bool Active = false;
-  std::uint8_t Destination = 0;
-  std::array<TopScreenWorldMapQuad, 16> Quads{};
-};
-
-// Source reconstruction of payload producer 0x005CE57C's world-map lane.
-// All mutable inputs come from the original PauseWorldMap arrays, save flags,
-// scene state and destination tables.
-bool ReadTopScreenWorldMapGeometry(NativeA32Memory &memory,
-                                   TopScreenWorldMapGeometry *geometry,
-                                   std::string *error = nullptr);
-
-std::size_t AppendTopScreenWorldMapPresentation(
-    const TopScreenWorldMapGeometry &geometry,
-    const oot3d::ui::UiTextureIdentity &ocarinaPage,
-    std::vector<oot3d::ui::UiPrimitive> &output);
-
-struct TopScreenPauseNavigationGeometry {
-  std::array<TopScreenWorldMapQuad, 2> Quads{};
-};
-
-// Exact pause navigation arrows produced by payload 0x005C887C/0x005C9040.
-// Direction is derived from the native OoT3D input frame: -1 left, +1 right.
-TopScreenPauseNavigationGeometry
-BuildTopScreenPauseNavigationGeometry(std::int8_t direction) noexcept;
-
-std::size_t AppendTopScreenPauseNavigationPresentation(
-    const TopScreenPauseNavigationGeometry &geometry,
-    const oot3d::ui::UiTextureIdentity &pauseTopPage,
-    std::vector<oot3d::ui::UiPrimitive> &output);
-
 struct TopScreenFileSelectStripGeometry {
   bool Active = false;
-  TopScreenWorldMapQuad Quad{};
+  TopScreenTexturedQuad Quad{};
 };
 
 // Exact visible quad from payload 0x005CD64C. Its second allocated quad has
@@ -351,7 +323,7 @@ std::size_t AppendTopScreenFileSelectStripPresentation(
     std::vector<oot3d::ui::UiPrimitive> &output);
 
 struct TopScreenExtendedItemButtonsGeometry {
-  std::array<TopScreenWorldMapQuad, 2> Quads{};
+  std::array<TopScreenTexturedQuad, 2> Quads{};
 };
 
 // Exact quads 5/6 of the seven-quad renderer produced by payload 0x005C9940.
@@ -368,11 +340,18 @@ std::size_t AppendTopScreenExtendedItemButtonsPresentation(
 // Copies the first five live item/action quads from the native PlayState
 // renderer through payload table 0x005D33C8. The source renderer remains the
 // authority for UVs, colors and per-item animation.
+struct TopScreenNativeItemOpacity {
+  float ItemZr = 1.0F;
+  float ItemZl = 1.0F;
+  float Ocarina = 1.0F;
+};
+
 bool AppendTopScreenNativeItemIconCopies(
     NativeA32Memory &memory, const std::array<float, 4> &nativeVerticalOffsets,
     float nativeAlpha, const oot3d::ui::UiTextureIdentity &itemIcons,
     std::vector<oot3d::ui::UiPrimitive> &output, std::string *error = nullptr,
-    bool renderDpadIcons = true);
+    bool renderDpadIcons = true,
+    TopScreenNativeItemOpacity *itemOpacity = nullptr);
 
 // Reconstructs the six PauseCounter instances allocated by payload
 // 0x005C9474: rupees, dungeon keys and four action-item ammo counters. Native
@@ -386,7 +365,7 @@ bool AppendTopScreenNativeCounters(
     const TopScreenExtendedInputFrame *input = nullptr);
 
 struct TopScreenTouchLabelsGeometry {
-  std::array<TopScreenWorldMapQuad, 2> Quads{};
+  std::array<TopScreenTexturedQuad, 2> Quads{};
 };
 
 // Exact two-quad label group produced by payload 0x005C9940. Vertical offsets
@@ -413,7 +392,7 @@ struct TopScreenAuxiliaryTouchInputs {
 };
 
 struct TopScreenAuxiliaryTouchGeometry {
-  std::array<TopScreenWorldMapQuad, 5> Quads{};
+  std::array<TopScreenTexturedQuad, 5> Quads{};
 };
 
 // Exact group-39 quads 34..38 produced by payload 0x005C9940. The visibility
@@ -516,9 +495,9 @@ bool ApplyTopScreenSystemMenuLayerSuppression(
     NativeA32Memory &memory, TopScreenSystemMenuLayerStats *stats = nullptr,
     std::string *error = nullptr);
 
-// TopScreen 1.2 payload helper 0x005C9058 reads the native PlayState
-// message/Ocarina fields and blocks promoted HUD layers while that UI owns the
-// presentation surface.
+// Historical name: this is the suppression predicate (1.2: 0x005C9058,
+// 2.1.1: 0x005C9ED8), NOT positive free-play visibility. The ocarina guide
+// requires its negation plus its own native page/scene/transition contract.
 bool ReadTopScreenOcarinaUiActive(NativeA32Memory &memory, bool *active,
                                   std::string *error = nullptr);
 

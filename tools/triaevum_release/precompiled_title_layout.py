@@ -5,10 +5,12 @@ import json
 import zipfile
 
 try:
+    from .release_platform import WINDOWS, for_target
     from .common import atomic_write_json, load_json_object, normalize_relative_path, sha256_file
     from .precompiled_titles import FORMAT, MODEL, CATALOG
     from .product_contract import query_product
 except ImportError:
+    from release_platform import WINDOWS, for_target
     from common import atomic_write_json, load_json_object, normalize_relative_path, sha256_file
     from precompiled_titles import FORMAT, MODEL, CATALOG
     from product_contract import query_product
@@ -25,8 +27,9 @@ def title_layout(*, runtime: Path, native_module: Path, plugin_manifest: Path,
                  work: Path) -> list[dict]:
     build = load_json_object(plugin_manifest)
     generated = load_json_object(generated_manifest)
+    platform = for_target(build.get("target", WINDOWS.target))
     if (build.get("format") != "triaevum_generated_cpp_whole_aot_plugin_v2"
-            or build.get("profile") != "x86_64-windows-thinlto-release-v1"
+            or build.get("profile") != platform.profile
             or build.get("code_sha256") != recipe["inputs"]["code"]["sha256"]
             or generated.get("format") != "oot3d_whole_aot_cpp_v1"
             or generated.get("code_sha256") != build["code_sha256"]
@@ -37,8 +40,8 @@ def title_layout(*, runtime: Path, native_module: Path, plugin_manifest: Path,
     name = normalize_relative_path(recipe["id"])
     if "/" in name:
         raise ValueError("Recipe ID must be a single path component")
-    plugin = plugin_manifest.parent / "triaevum_title_aot.dll"
-    record = artifact(plugin, f"titles/{name}/triaevum_title_aot.dll")
+    plugin = plugin_manifest.parent / platform.title_module
+    record = artifact(plugin, f"titles/{name}/{platform.title_module}")
     if record["sha256"] != build.get("plugin_sha256") or record["bytes"] != build.get("plugin_bytes"):
         raise ValueError("Precompiled title differs from its build receipt")
     query_product(runtime, plugin=plugin)
@@ -70,10 +73,11 @@ def title_layout(*, runtime: Path, native_module: Path, plugin_manifest: Path,
     sources = [artifact(translated, f"source/titles/{name}-translated.zip"),
                artifact(build_source, f"source/titles/{name}-build.zip")]
     catalog = {"format": FORMAT, "install_model": MODEL,
-               "runtime": artifact(runtime, "TriAevum.exe"),
-               "native_module": artifact(native_module, "forge/oot3d_game_module.dll"),
+               "target": platform.target,
+               "runtime": artifact(runtime, platform.runtime),
+               "native_module": artifact(native_module, platform.native_module),
                "titles": [{"recipe": name, "inputs": recipe["inputs"], "abi_version": 2,
-                           "target": "x86_64-pc-windows-msvc", "plugin": record,
+                           "target": platform.target, "plugin": record,
                            "translator_identity_sha256": build["translator_identity_sha256"],
                            "build_source_commit": build_commit, "sources": sources}]}
     catalog_path = work / "precompiled-titles.json"

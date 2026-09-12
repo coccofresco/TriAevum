@@ -15,6 +15,7 @@ from input_adapters import FORMAT as ADAPTER_FORMAT
 from input_copy_adapter import FORMAT as COPY_FORMAT
 from oot3d_region_assets import ALGORITHM
 from test_release_audit import write_clean_package
+from release_platform import LINUX, WINDOWS
 
 
 class PrecompiledReleaseTests(unittest.TestCase):
@@ -82,6 +83,97 @@ class PrecompiledReleaseTests(unittest.TestCase):
     def test_explicit_title_code_and_sources_pass_without_compiler(self):
         result = audit_release(self.root)
         self.assertTrue(result.ok, result.errors)
+
+    def test_renderer_tool_binding_is_audited_without_private_shader_content(self):
+        from shader_release_layout import bind_renderer_compiler
+        path = self.root / "recipes/precompiled-titles.json"
+        compiler = self.work / "compiler.exe"
+        compiler.write_bytes(b"MZ renderer compiler fixture")
+        catalog, files = bind_renderer_compiler(load_json_object(path), compiler, [])
+        atomic_write_json(path, catalog)
+        self.rehash("recipes/precompiled-titles.json")
+        for item in files:
+            dest = self.root / item["path"]
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(item["source"], dest)
+            self.manifest["files"].append({"path": item["path"], "role": item["role"]})
+            self.rehash(item["path"])
+        self.save()
+        result = audit_release(self.root)
+        self.assertTrue(result.ok, result.errors)
+        dest.write_bytes(b"changed compiler")
+        self.rehash(item["path"])
+        self.save()
+        result = audit_release(self.root)
+        self.assertTrue(any("integrity" in error for error in result.errors), result.errors)
+
+    def test_linux_promotion_uses_build_target_not_host(self):
+        build = load_json_object(self.build)
+        build.update(target=LINUX.target, profile=LINUX.profile)
+        atomic_write_json(self.build, build)
+        shutil.copy2(self.work / WINDOWS.title_module, self.work / LINUX.title_module)
+        runtime = self.work / LINUX.runtime
+        native = self.work / LINUX.native_module
+        native.parent.mkdir(parents=True)
+        runtime.write_bytes(b"runtime fixture")
+        native.write_bytes(b"native module fixture")
+        with patch("precompiled_title_layout.query_product"), \
+             patch("release_platform.host_platform", side_effect=AssertionError("publisher metadata queried host")):
+            items = title_layout(runtime=runtime, native_module=native,
+                plugin_manifest=self.build, generated_manifest=self.generated,
+                build_source=self.build_source, recipe=self.recipe, work=self.work / "linux-promotion")
+        catalog_item = next(item for item in items if item["role"] == "precompiled_catalog")
+        catalog = load_json_object(Path(catalog_item["source"]))
+        self.assertEqual(catalog["target"], LINUX.target)
+        self.assertEqual(catalog["runtime"]["path"], LINUX.runtime)
+        self.assertEqual(catalog["native_module"]["path"], LINUX.native_module)
+        self.assertEqual(catalog["titles"][0]["plugin"]["path"], "titles/fixture/" + LINUX.title_module)
+
+    def test_catalogued_portable_corpus_and_rejection_of_unclaimed_bytes(self):
+        from shader_release_layout import bind_renderer_compiler
+        from shader_corpus_layout import bind_shader_corpus
+        from merge_shader_packs import encode
+        from precompiled_title_layout import artifact
+        path = self.root / "recipes/precompiled-titles.json"
+        compiler = self.work / "compiler.exe"
+        compiler.write_bytes(b"MZ renderer compiler fixture")
+        pack = self.work / "pack.o3ps"
+        pack.write_bytes(encode(3, {(2, 1, 2, 4): b"\x03\x02\x23\x07"}))
+        recipes = self.work / "pipelines.json"
+        atomic_write_json(recipes, dict(format="oot3d_pica_pipeline_manifest_v2", schema_version=2,
+            descriptor_schema_version=3, pipeline_count=1, pipelines=[{}]))
+        catalog, items = bind_renderer_compiler(load_json_object(path), compiler, [])
+        catalog, extra = bind_shader_corpus(catalog, pack, [recipes], compiler)
+        for item in [*items, *extra]:
+            dest = self.root / item["path"]
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(item["source"], dest)
+            self.manifest["files"].append({"path": item["path"], "role": item["role"]})
+            self.rehash(item["path"])
+        atomic_write_json(path, catalog)
+        self.rehash("recipes/precompiled-titles.json")
+        self.save()
+        result = audit_release(self.root)
+        self.assertTrue(result.ok, result.errors)
+        record = catalog["titles"][0]["shader_preparation"]["pack"]
+        target = self.root / record["path"]
+        target.write_bytes(target.read_bytes() + b"unclaimed game data")
+        record.update(artifact(target, record["path"]))
+        atomic_write_json(path, catalog)
+        self.rehash(record["path"])
+        self.rehash("recipes/precompiled-titles.json")
+        self.save()
+        result = audit_release(self.root)
+        self.assertTrue(any("unclaimed" in error for error in result.errors), result.errors)
+
+    def test_promotion_rejects_target_profile_mismatch_before_runtime_probe(self):
+        build = load_json_object(self.build)
+        build["target"] = LINUX.target
+        atomic_write_json(self.build, build)
+        with patch("precompiled_title_layout.query_product") as query:
+            with self.assertRaisesRegex(ValueError, "do not correspond"):
+                self.layout()
+            query.assert_not_called()
 
     def test_title_code_cannot_be_hidden_as_neutral(self):
         self.manifest["release"]["contains_title_code"] = False

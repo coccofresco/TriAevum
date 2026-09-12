@@ -400,24 +400,22 @@ GraphicsSettingsRuntime::SnapshotWithRevision() const {
 VersionedGraphicsSettings GraphicsSettingsRuntime::SnapshotForRendering() const {
     std::scoped_lock lock(mMutex);
     VersionedGraphicsSettings result{mService.Current(), mRevision};
-    if (mNativePresentationOverride) {
-        result.Value.Grass.Quality = GrassQuality::Off;
-        result.Value.Effects.Toon = ToonMode::Off;
-        result.Value.Effects.ToonStyle.OutlineEnabled = false;
-        result.Value.Effects.AmbientOcclusion = AmbientOcclusionMode::Off;
-        result.Value.Effects.Reflections = ReflectionMode::Off;
-    }
+    mNativePresentation.Apply(result.Value);
     return result;
 }
 bool GraphicsSettingsRuntime::NativePresentationOverrideActive() const {
     std::scoped_lock lock(mMutex);
-    return mNativePresentationOverride;
+    return mNativePresentation.Active();
+}
+bool GraphicsSettingsRuntime::NativePresentationOverrideRequired() const {
+    std::scoped_lock lock(mMutex);
+    return mNativePresentation.Required();
 }
 void GraphicsSettingsRuntime::ToggleNativePresentationOverride() {
     std::scoped_lock lock(mMutex);
-    mNativePresentationOverride = !mNativePresentationOverride;
+    if (!mNativePresentation.Toggle()) return;
     ++mRevision;
-    SPDLOG_INFO("F2 native presentation override: {}", mNativePresentationOverride ? "on" : "off");
+    SPDLOG_INFO("F2 native presentation override: {}", mNativePresentation.Active() ? "on" : "off");
 }
 GraphicsCapabilities GraphicsSettingsRuntime::Capabilities() const {
     std::scoped_lock lock(mMutex);
@@ -447,6 +445,25 @@ GraphicsSettingsValidation GraphicsSettingsRuntime::Apply(GraphicsSettings candi
     }
     return result;
 }
+GraphicsDisplayMetrics GraphicsSettingsRuntime::DisplayMetrics() const {
+    std::scoped_lock lock(mMutex);
+    return mDisplayMetrics;
+}
+void GraphicsSettingsRuntime::PublishDisplayMetrics(GraphicsDisplayMetrics metrics) {
+    std::scoped_lock lock(mMutex);
+    if (metrics.OutputWidth == mDisplayMetrics.OutputWidth &&
+        metrics.OutputHeight == mDisplayMetrics.OutputHeight &&
+        metrics.InternalScale == mDisplayMetrics.InternalScale) {
+        metrics.SceneWidth = mDisplayMetrics.SceneWidth;
+        metrics.SceneHeight = mDisplayMetrics.SceneHeight;
+    }
+    mDisplayMetrics = metrics;
+}
+void GraphicsSettingsRuntime::PublishSceneExtent(uint32_t width, uint32_t height) {
+    std::scoped_lock lock(mMutex);
+    mDisplayMetrics.SceneWidth = width;
+    mDisplayMetrics.SceneHeight = height;
+}
 GraphicsSettingsSaveState GraphicsSettingsRuntime::SaveState() const {
     std::scoped_lock lock(mMutex);
     if (mPersistenceSuppressed || mPersistence == nullptr)
@@ -469,7 +486,12 @@ bool GraphicsSettingsRuntime::AcknowledgePresentationApplied(
         PresentationClockMilliseconds()).Phase;
     const bool acknowledged = mPresentationTransaction.MarkApplied(
         GetPresentationSettings(applied),
-        PresentationClockMilliseconds());
+        PresentationClockMilliseconds(), true);
+    // Only a successfully applied new candidate supersedes the previous failure.
+    // A rollback acknowledgement is recovery, not a successful user request.
+    if (acknowledged && phase == PresentationTransactionPhase::ApplyRequested) {
+        mLastPresentationRejection.clear();
+    }
     if (acknowledged &&
         (phase == PresentationTransactionPhase::RollbackRequested ||
          mPresentationTransaction.Status(PresentationClockMilliseconds())
@@ -479,7 +501,7 @@ bool GraphicsSettingsRuntime::AcknowledgePresentationApplied(
     return acknowledged;
 }
 bool GraphicsSettingsRuntime::RejectPresentationApply(
-    const GraphicsSettings& rejected) {
+    const GraphicsSettings& rejected, std::string reason) {
     std::scoped_lock lock(mMutex);
     const auto status = mPresentationTransaction.Status(
         PresentationClockMilliseconds());
@@ -495,6 +517,7 @@ bool GraphicsSettingsRuntime::RejectPresentationApply(
         if (!RestoreLastKnownPresentationLocked()) {
             return false;
         }
+        mLastPresentationRejection = std::move(reason);
         mPresentationTransaction.MarkApplied(
             status.LastKnownGood,
             PresentationClockMilliseconds());
@@ -504,6 +527,10 @@ bool GraphicsSettingsRuntime::RejectPresentationApply(
     return status.Phase ==
         PresentationTransactionPhase::RollbackRequested;
 }
+std::string GraphicsSettingsRuntime::LastPresentationRejection() const {
+    std::scoped_lock lock(mMutex);
+    return mLastPresentationRejection;
+}
 bool GraphicsSettingsRuntime::ConfirmPresentation() {
     std::scoped_lock lock(mMutex);
     if (!mPresentationTransaction.Confirm()) {
@@ -511,6 +538,10 @@ bool GraphicsSettingsRuntime::ConfirmPresentation() {
     }
     PersistCurrentLocked();
     return true;
+}
+void GraphicsSettingsRuntime::PresentationConfirmationVisible() {
+    std::scoped_lock lock(mMutex);
+    mPresentationTransaction.ConfirmationVisible(PresentationClockMilliseconds());
 }
 bool GraphicsSettingsRuntime::RollbackPresentation() {
     std::scoped_lock lock(mMutex);

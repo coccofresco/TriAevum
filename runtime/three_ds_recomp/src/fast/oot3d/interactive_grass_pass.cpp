@@ -1,5 +1,8 @@
 #include "fast/oot3d/interactive_grass_pass.h"
+#include "fast/oot3d/grass_shader_sources.h"
 #include "fast/oot3d/pica_attachment_contract.h"
+#include "fast/renderer3ds/pica_surface_lighting_pass.h"
+#include "fast/renderer3ds/pica_surface_passthrough_scale.h"
 
 #ifdef ENABLE_OOT3D_VULKAN
 
@@ -19,13 +22,13 @@
 #include "fast/oot3d/grass_shading_environment.h"
 #include "fast/oot3d/grass_texture_source_cache.h"
 #include "fast/oot3d/grass_visibility.h"
+#include "fast/oot3d/grass_cluster_selection.h"
 #include "fast/oot3d/outline_occlusion_pass.h"
 #include "fast/oot3d/visual_clock.h"
 
 #define BS_THREAD_POOL_ENABLE_PAUSE
 #define BS_THREAD_POOL_ENABLE_PRIORITY
 #include <BS_thread_pool.hpp>
-#include <shaderc/shaderc.hpp>
 
 #include <algorithm>
 #include <array>
@@ -36,6 +39,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <future>
+#include "fast/oot3d/grass_instance_layout.h"
 #include <limits>
 #include <numbers>
 #include <optional>
@@ -45,15 +49,6 @@
 
 namespace Fast::Oot3d {
 namespace {
-
-struct GrassInstance {
-    std::array<float, 4> BaseHeight{};
-    std::array<float, 4> BendAndHalfWidth{};
-    std::array<float, 2> WidthAxis{1.0F, 0.0F};
-    std::array<float, 4> WorldNormal{
-        0.0F, 1.0F, 0.0F, 0.0F};
-};
-static_assert(sizeof(GrassInstance) == 56U);
 
 struct alignas(16) GrassEnvironmentRecord {
     // W is 0 when disabled, 1 for regular depth and 2 for flipped depth.
@@ -87,8 +82,12 @@ struct alignas(16) GrassEnvironmentRecord {
     std::array<float, 4> DistanceLod{};
     // Tuft spread/density, final fade range, enabled.
     std::array<float, 4> TuftStyle{};
+    ToonSurfaceParameters Toon;
+    std::array<uint32_t, 4> NativeLighting{};
+    std::array<float, 4> RimDistance{};
 };
-static_assert(sizeof(GrassEnvironmentRecord) == 1424U);
+static_assert(offsetof(GrassEnvironmentRecord, Toon) == 1424U);
+static_assert(sizeof(GrassEnvironmentRecord) == 1584U);
 
 struct GrassPushConstants {
     std::array<float, 16> PositionToClip{};
@@ -105,6 +104,8 @@ struct GrassDrawBatch {
     uint8_t PlaneCount = 1U;
     GrassPushConstants Push{};
     uint32_t PlacementIndex = 0;
+    bool Grouped = false;
+    uint32_t GroupDrawCapacity = 0;
 };
 
 struct GrassPreparedPlacement {
@@ -190,12 +191,14 @@ GrassEnvironmentRecord BuildGrassEnvironmentRecord(
     const std::array<float, 3>& viewSide,
     const std::array<float, 3>& viewUp) {
     GrassEnvironmentRecord result;
+    result.RimDistance = {settings.Appearance.ToonRimFadeStart, settings.Appearance.ToonRimFadeEnd,
+        settings.Appearance.ToonRimEnabled ? 1.0F : 0.0F, 0.0F};
     result.TuftLod = {settings.LodEndFraction,
         settings.LodReferenceDistance > 0.0F ? settings.LodReferenceDistance : settings.DrawDistance,
         static_cast<float>(settings.FarTuftBladeCount), settings.TuftTransitionFraction};
     result.DistanceLod = {settings.DrawDistance, settings.LodStartFraction, settings.FarDensity, settings.DensityFadeFraction};
     result.TuftStyle = {settings.FarTuftSpread, settings.FarTuftDensity, settings.DrawFadeFraction,
-        settings.FarTuftsEnabled ? 1.0F : 0.0F};
+        settings.FarTuftsEnabled && !settings.MidrangeClustersEnabled ? 1.0F : 0.0F};
     result.BladeShape = {
         settings.Appearance.BladeCurvature,
         settings.Appearance.BladeDroop,
@@ -367,25 +370,15 @@ uint32_t FindMemoryType(VkPhysicalDevice physicalDevice, uint32_t mask,
     throw std::runtime_error("interactive grass has no compatible memory type");
 }
 
-VkShaderModule Compile(VkDevice device, const char* source,
-                       shaderc_shader_kind kind, const char* name,
+VkShaderModule Compile(Renderer::CachedPassShaderCompiler& shaders, VkDevice device, const char* source,
+                       Renderer::SpirvStage kind, const char* name,
                        const char* defineName = nullptr,
                        const char* defineValue = nullptr) {
-    shaderc::Compiler compiler;
-    shaderc::CompileOptions options;
-    options.SetTargetEnvironment(shaderc_target_env_vulkan,
-                                 shaderc_env_version_vulkan_1_2);
-    options.SetOptimizationLevel(shaderc_optimization_level_performance);
+    Renderer::ShaderDefines defines;
     if (defineName != nullptr && defineValue != nullptr) {
-        options.AddMacroDefinition(defineName, defineValue);
+        defines.emplace_back(defineName, defineValue);
     }
-    const auto result = compiler.CompileGlslToSpv(source, std::strlen(source),
-                                                  kind, name, options);
-    if (result.GetCompilationStatus() != shaderc_compilation_status_success) {
-        throw std::runtime_error(std::string(name) + ": " +
-                                 result.GetErrorMessage());
-    }
-    const std::vector<uint32_t> words(result.cbegin(), result.cend());
+    const auto words = shaders.Resolve(source, kind, name, defines);
     VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
     info.codeSize = words.size() * sizeof(uint32_t);
     info.pCode = words.data();
@@ -421,6 +414,9 @@ std::array<float, 3> Cross(const std::array<float, 3>& left,
 } // namespace
 
 struct InteractiveGrassPass::Impl {
+    ::Fast::Renderer3ds::PicaSurfaceLightingPass SurfaceLighting;
+    Renderer::CachedPassShaderCompiler* SurfaceShaders = nullptr;
+    std::vector<::Fast::Renderer3ds::PicaSurfaceLightingRequest> LightingRequests;
     VkPhysicalDevice PhysicalDevice = VK_NULL_HANDLE;
     VkDevice Device = VK_NULL_HANDLE;
     VkDescriptorSetLayout DescriptorSetLayout = VK_NULL_HANDLE;
@@ -436,6 +432,8 @@ struct InteractiveGrassPass::Impl {
     };
     std::array<BufferSlot, 2> InstanceBuffers{};
     std::array<BufferSlot, 2> EnvironmentBuffers{};
+    std::array<BufferSlot, 2> GroupBuffers{};
+    std::vector<std::array<uint32_t, 2>> DrawGroups;
     BufferSlot IndexBuffer;
     GrassIndexedTopology IndexedTopology;
     GrassSelectionCache SelectionCache;
@@ -444,6 +442,7 @@ struct InteractiveGrassPass::Impl {
     std::vector<GrassPreparedPlacement> PreparedPlacements;
     std::vector<GrassAsyncPlacementRequest> PlacementRequests;
     GrassVisibleIndexBins VisibleIndexBins;
+    std::array<std::vector<std::array<uint32_t, 2>>, kGrassLodBinCount> SelectedClusterRanges;
     std::vector<uint32_t> VisibleAnchorIndices;
     std::vector<GrassWorldAnchor> StaticAnchors;
     std::vector<GrassClusterWork> ClusterWork;
@@ -527,6 +526,7 @@ InteractiveGrassPass::~InteractiveGrassPass() { Shutdown(); }
 
 bool InteractiveGrassPass::Initialize(VkPhysicalDevice physicalDevice,
                                       VkDevice device,
+                                      Renderer::CachedPassShaderCompiler& shaders,
                                       VkRenderPass canonicalRenderPass,
                                       VkRenderPass instrumentedRenderPass,
                                       VkSampleCountFlagBits sampleCount,
@@ -539,439 +539,46 @@ bool InteractiveGrassPass::Initialize(VkPhysicalDevice physicalDevice,
     mImpl->PlacementBuilder.SetCandidateCapacity(std::min(8U * 1024U * 1024U,
         grassDeviceProperties.limits.maxStorageBufferRange / static_cast<uint32_t>(sizeof(GrassWorldAnchor))));
     mImpl->Device = device;
+    mImpl->SurfaceShaders = &shaders;
     try {
-        static const std::string vertexSource =
-            std::string("#version 450\n") + std::string(kGrassBladeShapeShader) +
-            std::string(kGrassDistantTuftShader) + std::string(kGrassIndexedVertexShader) + R"glsl(
-layout(location=0) in vec4 in_base_height;
-layout(location=1) in vec4 in_bend_half_width;
-layout(location=2) in vec2 in_width_axis;
-layout(location=3) in vec4 in_world_normal;
-struct GrassEnvironmentRecord {
-    vec4 color_and_mode;
-    vec2 lut[128];
-    vec4 wind_direction_time;
-    vec4 wind_primary;
-    vec4 wind_detail;
-    vec4 camera_position;
-    vec4 appearance_root;
-    vec4 appearance_tip;
-    vec4 texture_color;
-    vec4 texture_brightness_flags;
-    vec4 light_directions[3];
-    vec4 light_diffuse[3];
-    vec4 light_ambient[3];
-    vec4 view_forward;
-    vec4 view_side;
-    vec4 view_up;
-    vec4 blade_shape;
-    vec4 tuft_lod;
-    vec4 distance_lod;
-    vec4 tuft_style;
-};
-layout(std430, set=0, binding=0) readonly buffer GrassEnvironmentState {
-    GrassEnvironmentRecord records[];
-} environment_state;
-layout(push_constant) uniform GrassState {
-    mat4 position_to_clip;
-    vec4 jitter_ndc;
-    vec4 depth_state;
-    uvec4 flags;
-} grass;
-layout(location=0) out vec4 blade_color;
-layout(location=1) out vec4 blade_normal_guide;
-layout(location=2) out vec4 blade_ambient_guide;
-layout(location=3) out vec4 tuft_sample;
-layout(location=4) flat out float lod_visibility;
-
-void evaluate_shading(
-    uint environment_index, vec3 world_normal,
-    out vec3 lighting, out vec3 ambient_response) {
-    vec4 flags =
-        environment_state.records[
-            environment_index].texture_brightness_flags;
-    uint light_count =
-        uint(clamp(flags.w, 0.0, 3.0));
-    if (flags.z <= 0.5 || light_count == 0u) {
-        lighting = vec3(1.0);
-        ambient_response = vec3(1.0);
-        return;
-    }
-    vec3 ambient = vec3(0.0);
-    vec3 direct = vec3(0.0);
-    for (uint index = 0u; index < light_count; ++index) {
-        vec4 direction =
-            environment_state.records[
-                environment_index].light_directions[index];
-        if (direction.w <= 0.5)
-            continue;
-        float diffuse_factor = abs(clamp(
-            dot(world_normal, direction.xyz), -1.0, 1.0));
-        ambient +=
-            environment_state.records[
-                environment_index].light_ambient[index].rgb;
-        direct +=
-            environment_state.records[
-                environment_index].light_diffuse[index].rgb *
-            diffuse_factor;
-    }
-    vec3 total = ambient + direct;
-    lighting = clamp(total, 0.0, 1.0);
-    ambient_response = vec3(
-        total.x > 1.0e-6
-            ? clamp(ambient.x / total.x, 0.0, 1.0) : 1.0,
-        total.y > 1.0e-6
-            ? clamp(ambient.y / total.y, 0.0, 1.0) : 1.0,
-        total.z > 1.0e-6
-            ? clamp(ambient.z / total.z, 0.0, 1.0) : 1.0);
-}
-
-vec3 evaluate_blade_color(
-    uint environment_index, float height_factor,
-    vec3 lighting) {
-    vec3 root =
-        environment_state.records[
-            environment_index].appearance_root.rgb;
-    vec3 tip =
-        environment_state.records[
-            environment_index].appearance_tip.rgb;
-    vec4 texture =
-        environment_state.records[
-            environment_index].texture_color;
-    vec4 flags =
-        environment_state.records[
-            environment_index].texture_brightness_flags;
-    vec3 root_color =
-        mix(root, texture.rgb * flags.x, texture.w) *
-        lighting;
-    vec3 tip_color =
-        mix(tip, texture.rgb * flags.y, texture.w) *
-        lighting;
-    root_color =
-        floor(clamp(root_color, 0.0, 1.0) * 255.0 + 0.5) /
-        255.0;
-    tip_color =
-        floor(clamp(tip_color, 0.0, 1.0) * 255.0 + 0.5) /
-        255.0;
-    return mix(root_color, tip_color, height_factor);
-}
-
-vec2 evaluate_wind(
-    uint environment_index,
-    vec3 world_position, float anchor_phase) {
-    vec4 wind_direction_time =
-        environment_state.records[
-            environment_index].wind_direction_time;
-    vec4 wind_primary =
-        environment_state.records[
-            environment_index].wind_primary;
-    vec4 wind_detail =
-        environment_state.records[
-            environment_index].wind_detail;
-    if (wind_detail.w <= 0.5)
-        return vec2(0.0);
-    vec2 direction = wind_direction_time.xy;
-    vec2 lateral =
-        vec2(-direction.y, direction.x);
-    float spatial =
-        dot(world_position.xz, direction) * 0.01 *
-        wind_primary.y;
-    float random_phase =
-        anchor_phase *
-        clamp(wind_detail.y, 0.0, 1.0);
-    float primary = sin(
-        wind_direction_time.z * wind_primary.x +
-        spatial + random_phase);
-    float gust_phase =
-        wind_direction_time.z *
-            wind_primary.w * 6.28318530718 +
-        spatial * 0.21 + random_phase * 0.37;
-    float gust = 0.5 + 0.5 * sin(gust_phase);
-    float turbulence = sin(
-        wind_direction_time.z *
-            (wind_primary.x * 1.71 + 0.31) -
-        world_position.x * 0.017 +
-        world_position.z * 0.013 +
-        random_phase * 2.13);
-    float directional_amount =
-        wind_direction_time.w *
-        (0.55 + primary * 0.30 +
-         gust * wind_primary.z * 0.45);
-    float lateral_amount =
-        wind_direction_time.w *
-        wind_detail.x * turbulence * 0.35;
-    vec2 bend =
-        direction * directional_amount +
-        lateral * lateral_amount;
-    float bend_length = length(bend);
-    if (bend_length > wind_detail.z &&
-        bend_length > 1.0e-6)
-        bend *= wind_detail.z / bend_length;
-    return bend;
-}
-
-void main() {
-    bool tuft = grass.flags.y == 0u;
-    uint segments = clamp(grass.flags.y, 1u, 12u);
-    uint plane;
-    float height_factor;
-    float width_sign;
-    grass_indexed_vertex(uint(gl_VertexIndex), segments, tuft, plane, height_factor, width_sign);
-    float tuft_coverage = 1.0;
-    vec4 lod = environment_state.records[grass.flags.w].tuft_lod;
-    vec4 distance_lod = environment_state.records[grass.flags.w].distance_lod;
-    vec4 tuft_style = environment_state.records[grass.flags.w].tuft_style;
-    float distance = length(in_base_height.xyz - environment_state.records[grass.flags.w].camera_position.xyz);
-    float normalized_distance = distance/max(lod.y,1.0e-6);
-    float tuft_weight = grass_tuft_weight(normalized_distance,lod.x,lod.x+lod.w);
-    float retention = grass_density_retention(normalized_distance,distance_lod.y,distance_lod.z);
-    if (tuft_style.w > 0.5)
-        retention *= grass_tuft_retention_scale(tuft_weight,lod.z,tuft_style.y);
-    lod_visibility = grass_visibility_fade(clamp(retention,0.0,1.0),in_world_normal.w,distance_lod.w);
-    lod_visibility *= 1.0-grass_tuft_weight(distance,distance_lod.x*(1.0-tuft_style.z),distance_lod.x);
-    if (tuft) {
-        float choice = grass_lod_choice(in_world_normal.w);
-        float growth = clamp((tuft_weight-choice)/max(1.0-choice,1.0e-6),0.0,1.0);
-        tuft_coverage += (lod.z-1.0) * growth * tuft_style.x;
-    }
-    tuft_sample = vec4(width_sign, height_factor, tuft_coverage, in_bend_half_width.w);
-
-    vec2 width_axis = in_width_axis;
-    if (grass.flags.z == 1u) {
-        vec2 camera_delta =
-            in_base_height.xz -
-            environment_state.records[
-                grass.flags.w].camera_position.xz;
-        float camera_distance = length(camera_delta);
-        width_axis = camera_distance > 1.0e-6
-            ? vec2(
-                  camera_delta.y / camera_distance,
-                  -camera_delta.x / camera_distance)
-            : vec2(1.0, 0.0);
-    } else {
-        width_axis = normalize(width_axis);
-    }
-    if (plane != 0u)
-        width_axis = vec2(-width_axis.y, width_axis.x);
-    float bend_factor =
-        height_factor * (0.65 + 0.35 * height_factor);
-    float width_factor =
-        tuft ? tuft_coverage : height_factor >= 1.0 ? 0.0 :
-        1.0 - 0.75 * height_factor;
-    vec2 normalized_bend =
-        evaluate_wind(
-            grass.flags.w, in_base_height.xyz,
-            in_bend_half_width.w) +
-        in_bend_half_width.xy;
-    float bend_length = length(normalized_bend);
-    float maximum_bend =
-        environment_state.records[
-            grass.flags.w].wind_detail.z;
-    if (bend_length > maximum_bend &&
-        bend_length > 1.0e-6)
-        normalized_bend *=
-            maximum_bend / bend_length;
-    vec2 bend = normalized_bend * in_base_height.w;
-    float twist;
-    vec3 shape = grass_blade_shape(
-        height_factor, in_bend_half_width.w, normalize(in_width_axis),
-        environment_state.records[grass.flags.w].blade_shape, twist);
-    if (!tuft) width_axis = mat2(cos(twist), sin(twist), -sin(twist), cos(twist)) * width_axis;
-    vec3 position = in_base_height.xyz;
-    position += shape * in_base_height.w;
-    position.xz += bend * bend_factor;
-    position.xz += width_axis * in_bend_half_width.z *
-                   width_factor * width_sign;
-
-    vec4 clip = grass.position_to_clip * vec4(position, 1.0);
-    if (grass.flags.x != 0u) {
-        // Match the generated PICA vertex shader exactly. Its projection is
-        // already rotated for the physical CTR framebuffer.
-        gl_Position = vec4(clip.x, clip.y, -clip.z, clip.w);
-    } else {
-        // Renderer-owned world projections are logical/unrotated and must be
-        // transposed into the physical top framebuffer before scanout.
-        gl_Position = vec4(clip.y, clip.x, clip.z, clip.w);
-    }
-    gl_Position.xy += grass.jitter_ndc.xy * gl_Position.w;
-    vec3 world_normal = normalize(in_world_normal.xyz);
-    vec3 lighting;
-    vec3 ambient_response;
-    evaluate_shading(
-        grass.flags.w, world_normal,
-        lighting, ambient_response);
-    blade_color = vec4(
-        evaluate_blade_color(
-            grass.flags.w, height_factor, lighting),
-        1.0);
-    vec3 view_side =
-        environment_state.records[
-            grass.flags.w].view_side.xyz;
-    vec3 guide_normal =
-        dot(view_side, view_side) > 1.0e-8
-            ? vec3(
-                  dot(view_side, world_normal),
-                  dot(
-                      environment_state.records[
-                          grass.flags.w].view_up.xyz,
-                      world_normal),
-                  -dot(
-                      environment_state.records[
-                          grass.flags.w].view_forward.xyz,
-                      world_normal))
-            : vec3(0.0, 0.0, 1.0);
-    blade_normal_guide = vec4(
-        guide_normal * 0.5 + 0.5,
-        0.25098039215686274);
-    blade_ambient_guide =
-        vec4(ambient_response, 1.0);
-}
-)glsl";
-        static const std::string fragmentSource = std::string("#version 450\n") +
-            std::string(kGrassDistantTuftShader) + R"glsl(
-layout(location=0) in vec4 blade_color;
-layout(location=1) in vec4 blade_normal_guide;
-layout(location=2) in vec4 blade_ambient_guide;
-layout(location=3) in vec4 tuft_sample;
-layout(location=4) flat in float lod_visibility;
-struct GrassEnvironmentRecord {
-    vec4 color_and_mode;
-    vec2 lut[128];
-    vec4 wind_direction_time;
-    vec4 wind_primary;
-    vec4 wind_detail;
-    vec4 camera_position;
-    vec4 appearance_root;
-    vec4 appearance_tip;
-    vec4 texture_color;
-    vec4 texture_brightness_flags;
-    vec4 light_directions[3];
-    vec4 light_diffuse[3];
-    vec4 light_ambient[3];
-    vec4 view_forward;
-    vec4 view_side;
-    vec4 view_up;
-    vec4 blade_shape;
-    vec4 tuft_lod;
-    vec4 distance_lod;
-    vec4 tuft_style;
-};
-layout(std430, set=0, binding=0) readonly buffer GrassEnvironmentState {
-    GrassEnvironmentRecord records[];
-} environment_state;
-layout(push_constant) uniform GrassState {
-    mat4 position_to_clip;
-    vec4 jitter_ndc;
-    vec4 depth_state;
-    uvec4 flags;
-} grass;
-layout(location=0) out vec4 out_color;
-#if GRASS_AUXILIARY_OUTPUTS
-layout(location=1) out vec4 out_normal_guide;
-layout(location=2) out vec4 out_material_guide;
-layout(location=3) out vec4 out_rigid_motion;
-layout(location=4) out vec4 out_ambient_guide;
-#endif
-void main() {
-    // Blade-local stipple, not frame/screen-space noise. Discard before every
-    // guide/depth write; fading geometry cannot leave invisible occluders.
-    if (lod_visibility < 1.0) {
-        vec2 cell = floor(vec2(tuft_sample.x*tuft_sample.z,tuft_sample.y)*32.0);
-        float threshold = fract(sin(dot(cell,vec2(12.9898,78.233))+tuft_sample.w*37.719)*43758.5453);
-        if (lod_visibility <= threshold) discard;
-    }
-    if (grass.flags.y == 0u && !grass_tuft_covered(tuft_sample,
-            uint(environment_state.records[grass.flags.w].tuft_lod.z),
-            environment_state.records[grass.flags.w].tuft_style.x)) discard;
-    vec4 resolved_color = blade_color;
-#if GRASS_AUXILIARY_OUTPUTS
-    out_normal_guide = blade_normal_guide;
-    // Grass topology, LOD and wind can change every presentation. Let the
-    // motion pass reconstruct camera motion from depth and reject temporal
-    // history for these pixels instead of emitting unstable rigid vectors.
-    out_material_guide = vec4(0.0, 1.0, 0.0, 1.0);
-    out_ambient_guide = blade_ambient_guide;
-    out_rigid_motion = vec4(0.0);
-#endif
-    float resolved_depth = gl_FragCoord.z;
-    if (grass.depth_state.w > 0.5) {
-        float pica_z_over_w =
-            grass.flags.x != 0u ? -gl_FragCoord.z : gl_FragCoord.z;
-        resolved_depth =
-            pica_z_over_w * grass.depth_state.x +
-            grass.depth_state.y;
-        if (grass.depth_state.z > 0.5)
-            resolved_depth /= max(gl_FragCoord.w, 1.0e-7);
-    }
-    vec4 fog_color_and_mode =
-        environment_state.records[
-            grass.flags.w].color_and_mode;
-    if (fog_color_and_mode.w > 0.5) {
-        float fog_depth =
-            fog_color_and_mode.w > 1.5
-                ? 1.0 - resolved_depth
-                : resolved_depth;
-        float fog_index = fog_depth * 128.0;
-        float floor_index = clamp(floor(fog_index), 0.0, 127.0);
-        vec2 sample_pair =
-            environment_state.records[
-                grass.flags.w].lut[
-                uint(floor_index)];
-        float fog_factor = clamp(
-            sample_pair.x +
-                sample_pair.y * (fog_index - floor_index),
-            0.0, 1.0);
-        resolved_color.rgb = mix(
-            fog_color_and_mode.rgb,
-            resolved_color.rgb, fog_factor);
-    }
-    out_color = resolved_color;
-    gl_FragDepth = clamp(resolved_depth, 0.0, 1.0);
-#if GRASS_AUXILIARY_OUTPUTS
-    // Only rasterized, depth-visible blades/tufts occlude native contours.
-    // The separate native geometry guide remains untouched.
-    out_rigid_motion.a = 1.0 - gl_FragDepth;
-#endif
-}
-)glsl";
-        VkShaderModule vertex = Compile(device, vertexSource.c_str(),
-                                        shaderc_vertex_shader, "interactive_grass.vert");
+        const auto vertexSource = BuildGrassVertexShader();
+        const auto fragmentSource = BuildGrassFragmentShader();
+        VkShaderModule vertex = Compile(shaders, device, vertexSource.c_str(),
+                                        Renderer::SpirvStage::Vertex, "interactive_grass.vert");
         std::array<VkShaderModule, 2> fragments{};
         try {
             fragments[0] = Compile(
-                device, fragmentSource.c_str(), shaderc_fragment_shader,
+                shaders, device, fragmentSource.c_str(), Renderer::SpirvStage::Fragment,
                 "interactive_grass_canonical.frag",
                 "GRASS_AUXILIARY_OUTPUTS", "0");
             fragments[1] = Compile(
-                device, fragmentSource.c_str(), shaderc_fragment_shader,
+                shaders, device, fragmentSource.c_str(), Renderer::SpirvStage::Fragment,
                 "interactive_grass_instrumented.frag",
                 "GRASS_AUXILIARY_OUTPUTS", "1");
-            const VkDescriptorSetLayoutBinding environmentBinding{
-                0U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U,
-                VK_SHADER_STAGE_VERTEX_BIT |
-                    VK_SHADER_STAGE_FRAGMENT_BIT,
-                nullptr};
+            const std::array<VkDescriptorSetLayoutBinding, 4> environmentBindings{{
+                {0U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+                {1U, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1U, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+                {2U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+                {3U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, VK_SHADER_STAGE_VERTEX_BIT, nullptr}}};
             VkDescriptorSetLayoutCreateInfo descriptorLayoutInfo{
                 VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-            descriptorLayoutInfo.bindingCount = 1U;
-            descriptorLayoutInfo.pBindings = &environmentBinding;
+            descriptorLayoutInfo.bindingCount = static_cast<uint32_t>(environmentBindings.size());
+            descriptorLayoutInfo.pBindings = environmentBindings.data();
             if (vkCreateDescriptorSetLayout(
                     device, &descriptorLayoutInfo, nullptr,
                     &mImpl->DescriptorSetLayout) != VK_SUCCESS) {
                 throw std::runtime_error(
                     "cannot create interactive grass descriptor layout");
             }
-            const VkDescriptorPoolSize poolSize{
-                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                static_cast<uint32_t>(
-                    mImpl->DescriptorSets.size())};
+            const std::array<VkDescriptorPoolSize, 2> poolSizes{{
+                {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 6}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2}}};
             VkDescriptorPoolCreateInfo poolInfo{
                 VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
             poolInfo.maxSets =
                 static_cast<uint32_t>(
                     mImpl->DescriptorSets.size());
-            poolInfo.poolSizeCount = 1U;
-            poolInfo.pPoolSizes = &poolSize;
+            poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+            poolInfo.pPoolSizes = poolSizes.data();
             if (vkCreateDescriptorPool(
                     device, &poolInfo, nullptr,
                     &mImpl->DescriptorPool) != VK_SUCCESS) {
@@ -1028,7 +635,10 @@ void main() {
                 {2, 0, VK_FORMAT_R32G32_SFLOAT,
                  offsetof(GrassInstance, WidthAxis)},
                 {3, 0, VK_FORMAT_R32G32B32A32_SFLOAT,
-                 offsetof(GrassInstance, WorldNormal)}};
+                 offsetof(GrassInstance, WorldNormal)},
+                {4, 0, VK_FORMAT_R32_UINT,
+                 offsetof(GrassInstance, SurfaceColor)},
+                {5, 0, VK_FORMAT_R32G32_UINT, offsetof(GrassInstance, SurfaceReference)}};
             VkPipelineVertexInputStateCreateInfo vertexInput{
                 VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
             vertexInput.vertexBindingDescriptionCount = 1;
@@ -1153,9 +763,9 @@ void main() {
         vkDestroyShaderModule(device, vertex, nullptr);
         mImpl->GpuCompactorAvailable =
             mImpl->InstanceCompactor.Initialize(
-                physicalDevice, device);
+                physicalDevice, device, shaders);
         mImpl->IndexedTopology = BuildGrassIndexedTopology();
-        const auto indexBytes = mImpl->IndexedTopology.Indices.size() * sizeof(uint16_t);
+        const auto indexBytes = mImpl->IndexedTopology.Indices.size() * sizeof(uint32_t);
         mImpl->EnsureBuffer(mImpl->IndexBuffer, indexBytes, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, 4096);
         std::memcpy(mImpl->IndexBuffer.Mapped, mImpl->IndexedTopology.Indices.data(), indexBytes);
         mImpl->Reason.clear();
@@ -1171,6 +781,8 @@ void main() {
 bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width, uint32_t height,
                                    const ::Fast::Renderer3ds::PicaPerspectiveCameraState& view,
                                    const InteractiveGrassSettings& settings,
+                                   const ToonSurfaceParameters& toon,
+                                   ::Fast::Renderer3ds::PicaResolvedDrawStreamView scene,
                                    uint64_t frameId, uint64_t renderTargetNamespace,
                                    uint32_t framebufferColorPhysicalAddress, uint32_t frameSlot,
                                    const EffectGeometryProviderPlan& providerPlan,
@@ -1264,6 +876,7 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
         auto& preparedPlacements = mImpl->PreparedPlacements;
         environmentRecords.clear();
         preparedPlacements.clear();
+        mImpl->LightingRequests.clear();
         auto& placementRequests = mImpl->PlacementRequests;
         placementRequests.clear();
         batches.reserve(settings.Rules.size() * 4U);
@@ -1321,6 +934,7 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                 placementRequest.Vertices = mesh.Vertices;
                 placementRequest.Indices = mesh.Indices;
                 placementRequest.Mask = mask;
+                placementRequest.ColorSource = GrassTextureSourceCache::Instance().AcquireColorSource(mesh.ObservedTextureHash);
                 placementRequest.Rule = rule;
                 placementRequest.Generation =
                     settings.Generation;
@@ -1330,6 +944,9 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                     settings.CullingClusterSize;
                 placementRequest.NormalOffset =
                     rule.NormalOffset;
+                placementRequest.MidrangeCellExtent = settings.MidrangeClustersEnabled ? settings.MidrangeClusterCellExtent : 0.0F;
+                placementRequest.MidrangeAdaptive = settings.MidrangeClustersEnabled && settings.MidrangeAdaptiveEnabled;
+                placementRequest.MidrangeAdaptiveCapacity = settings.MidrangeAdaptiveCapacity;
                 placementRequest.HeightScale =
                     settings.Appearance.HeightScale;
                 GrassPushConstants push = ProjectionForMesh(mesh, view);
@@ -1347,8 +964,14 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                     textureAverage, visualSeconds, view, viewForward, viewSide, viewUp);
                 prepared.Environment.CameraPosition = {
                     prepared.Eye[0], prepared.Eye[1], prepared.Eye[2], 0.0F};
+                prepared.Environment.Toon = toon;
+                prepared.Environment.Toon.Flags[1] =
+                    settings.Appearance.ReceiveLighting && mesh.Shading.ActiveLightCount > 0U ? 1.0F : 0.0F;
                 placementRequests.push_back(std::move(placementRequest));
                 preparedPlacements.push_back(std::move(prepared));
+                mImpl->LightingRequests.push_back({mesh.SubmissionId,
+                    settings.Appearance.ReceiveLighting ? static_cast<uint32_t>(mesh.Vertices->size()) : 0U,
+                    0, false, mesh.RenderTargetNamespace});
             }
         }
 
@@ -1361,6 +984,25 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
 #else
         auto placements = mImpl->PlacementBuilder.Resolve(placementRequests);
 #endif
+        if (!mImpl->SurfaceLighting.Sampler() && !mImpl->SurfaceLighting.Initialize(
+                mImpl->PhysicalDevice, mImpl->Device, *mImpl->SurfaceShaders))
+            return finish(GrassRenderStatus::PipelineUnavailable, false);
+        if (!mImpl->SurfaceLighting.Prepare(commandBuffer, frameSlot, frameId, scene, mImpl->LightingRequests))
+            return finish(GrassRenderStatus::PipelineUnavailable, false);
+        size_t nativeLit = 0;
+        for (size_t i = 0; i < preparedPlacements.size(); ++i) {
+            const auto& source = mImpl->LightingRequests[i];
+            if (source.Available && settings.Appearance.ReceiveLighting) {
+                preparedPlacements[i].Environment.NativeLighting = {source.AtlasBase, 1,
+                    ::Fast::Renderer3ds::PicaSurfacePassthroughScale(source.ColorResponse.PackedScales),
+                    source.ColorResponse.Available ? 1U : 0U};
+                preparedPlacements[i].Environment.Toon.Flags[1] = 1;
+                ++nativeLit;
+            }
+        }
+        if (std::getenv("OOT3D_GRASS_DIAGNOSTICS") && frameId % 30 == 0)
+            std::fprintf(stderr, "Grass native surface lighting: frame=%llu available=%zu requested=%zu\n",
+                static_cast<unsigned long long>(frameId), nativeLit, preparedPlacements.size());
         telemetry.PlacementMilliseconds += std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - placementStart).count();
         for (size_t i = 0; i < placements.size(); ++i) {
@@ -1375,6 +1017,10 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
             ++telemetry.Placements;
             telemetry.ExtractedAnchors += result.Placement->Anchors.size();
             telemetry.Clusters += result.Placement->Clusters.size();
+            telemetry.PreparedDrawClusters += static_cast<uint32_t>(result.Placement->Midrange.Groups.size());
+            telemetry.LargeDrawClusters += result.Placement->Midrange.LargeGroupCount;
+            telemetry.MaximumClusterMembers = std::max(telemetry.MaximumClusterMembers, result.Placement->Midrange.MaximumMemberCount);
+            telemetry.CapacityLimitedRanges += result.Placement->Midrange.CapacityLimitedRanges;
             preparedPlacements[i].World = std::move(result.Placement);
         }
         std::erase_if(preparedPlacements, [](const auto& placement) { return placement.World == nullptr; });
@@ -1436,6 +1082,7 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
         uint32_t remaining = settings.MaxInstancesPerRoom;
         GrassSelectionKey selectionKey{mImpl->StaticRevision, lodPolicy, bladeRadiusScale,
             settings.MaxInstancesPerRoom, settings.FrustumCulling, {}};
+        selectionKey.ClusterFarBladeFraction = settings.MidrangeClustersEnabled ? settings.MidrangeFarBladeFraction : 0.0F;
         for (const auto& prepared : preparedPlacements) {
             selectionKey.Views.push_back({prepared.Push.PositionToClip, prepared.Eye});
             environmentRecords.push_back(prepared.Environment);
@@ -1446,13 +1093,14 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
             telemetry.VisibleBlades = mImpl->LastBlades;
             for (auto& batch : batches) {
                 batch.Push = preparedPlacements[batch.PlacementIndex].Push;
-                batch.Push.Flags[1] = batch.BladeSegments;
+                batch.Push.Flags[1] = batch.BladeSegments | (batch.Grouped ? 0x80000000U : 0U);
                 batch.Push.Flags[2] = batch.PlaneCount;
                 batch.Push.Flags[3] = batch.PlacementIndex;
             }
         } else {
             mImpl->SelectionCache.Reset();
             batches.clear();
+            mImpl->DrawGroups.clear();
             mImpl->VisibleAnchorIndices.clear();
             for (uint32_t placementIndex = 0; placementIndex < preparedPlacements.size(); ++placementIndex) {
                 const auto& prepared = preparedPlacements[placementIndex];
@@ -1462,6 +1110,7 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                 for (auto& bin : mImpl->VisibleIndexBins) {
                     bin.clear();
                 }
+                for (auto& ranges : mImpl->SelectedClusterRanges) ranges.clear();
                 const auto processCluster = [&](const GrassClusterWork& work, GrassVisibleIndexBins& outputBins,
                                                 uint32_t visibleLimit) {
                     GrassClusterCounters counters;
@@ -1510,7 +1159,8 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
 
                 const auto selectionStart = std::chrono::steady_clock::now();
                 auto& clusterWork = mImpl->ClusterWork;
-                const auto selection = SelectGrassClusterWork(
+                const bool clusterOwned = settings.MidrangeClustersEnabled && !prepared.World->Midrange.Groups.empty();
+                const auto selection = clusterOwned ? GrassClusterSelectionStats{} : SelectGrassClusterWork(
                     *prepared.World, prepared.Push.PositionToClip, prepared.Eye, lodPolicy,
                     bladeRadiusScale, settings.FrustumCulling, clusterWork);
                 const auto clusterSelectionEnd = std::chrono::steady_clock::now();
@@ -1518,13 +1168,35 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                 telemetry.CandidateClusters += selection.CandidateClusters;
                 const auto retainedCandidates = selection.CandidateAnchors;
                 size_t parallelWorkerCount = 0U;
-                if (retainedCandidates >= kGrassAnchorsPerWorker * 2U &&
+                if (!clusterOwned && retainedCandidates >= kGrassAnchorsPerWorker * 2U &&
                     remaining >= kGrassAnchorsPerWorker && clusterWork.size() > 1U) {
                     parallelWorkerCount =
                         std::min({ mImpl->WorkerCount(), clusterWork.size(),
                                    static_cast<size_t>(retainedCandidates / kGrassAnchorsPerWorker) });
                 }
-                if (parallelWorkerCount > 1U) {
+                if (clusterOwned) {
+                    uint64_t evaluated = 0;
+                    const auto visible = SelectGrassDrawableClusters(*prepared.World, prepared.Push.PositionToClip,
+                        prepared.Eye, lodPolicy, settings.MidrangeFarBladeFraction, bladeRadiusScale, settings.FrustumCulling, remaining, evaluated,
+                        [&](auto selected, const GrassLodDecision& lod) {
+                            const auto binIndex = GrassLodBinIndex(lod.BladeSegments, lod.PlaneCount);
+                            auto& bin = mImpl->VisibleIndexBins[binIndex];
+                            if constexpr (std::is_same_v<decltype(selected), uint32_t>) {
+                                bin.push_back(prepared.StaticBaseIndex + selected);
+                            } else {
+                                const auto first = bin.size();
+                                mImpl->SelectedClusterRanges[binIndex].push_back(
+                                    {static_cast<uint32_t>(first), static_cast<uint32_t>(selected.size())});
+                                bin.resize(first + selected.size());
+                                std::transform(selected.begin(), selected.end(), bin.begin()+first,
+                                    [&](uint32_t index) { return prepared.StaticBaseIndex + index; });
+                            }
+                        }, &telemetry.VisibilityNodesTested);
+                    telemetry.CandidateClusters += evaluated;
+                    remaining -= visible;
+                    mImpl->LastBlades += visible;
+                    telemetry.VisibleBlades += visible;
+                } else if (parallelWorkerCount > 1U) {
                     telemetry.CullingWorkers =
                         std::max(telemetry.CullingWorkers, static_cast<uint32_t>(parallelWorkerCount));
                     mImpl->WorkerOutputs.resize(parallelWorkerCount);
@@ -1626,7 +1298,26 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                     batchPush.Flags[1] = tuft ? 0U : bladeSegments;
                     batchPush.Flags[2] = planeCount;
                     batchPush.Flags[3] = environmentRecordIndex;
-                    batches.push_back({ firstInstance, binInstanceCount,
+                    const bool grouped = settings.MidrangeClustersEnabled && !tuft && bladeSegments <= 2 &&
+                        !prepared.World->Midrange.Groups.empty();
+                    if (grouped) {
+                        const auto& map = prepared.World->Midrange.GroupForRoot;
+                        const uint32_t firstGroup = static_cast<uint32_t>(mImpl->DrawGroups.size());
+                        const auto groups = clusterOwned ? RebaseGrassMidrangeDraws(
+                            mImpl->SelectedClusterRanges[binIndex], binInstanceCount, firstInstance) : PackGrassMidrangeDraws(
+                            std::span<uint32_t>(mImpl->VisibleAnchorIndices).subspan(firstInstance, binInstanceCount),
+                            map, prepared.StaticBaseIndex, firstInstance, clusterOwned);
+                        mImpl->DrawGroups.insert(mImpl->DrawGroups.end(), groups.begin(), groups.end());
+                        batchPush.Flags[1] |= 0x80000000U;
+                        for (uint32_t first = firstGroup; first < mImpl->DrawGroups.size();) {
+                            uint32_t end = first+1;
+                            const auto count = GrassClusterDrawCapacity(mImpl->DrawGroups[first][1]);
+                            while (end < mImpl->DrawGroups.size() && GrassClusterDrawCapacity(mImpl->DrawGroups[end][1]) == count) ++end;
+                            batches.push_back({first, end-first, bladeSegments, planeCount, batchPush, placementIndex,
+                                              true, count});
+                            first = end;
+                        }
+                    } else batches.push_back({ firstInstance, binInstanceCount,
                                         static_cast<uint8_t>(tuft ? 0U : bladeSegments), planeCount, batchPush,
                                         placementIndex });
                 }
@@ -1690,7 +1381,7 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
         } else {
             auto& instanceBuffer = mImpl->InstanceBuffers[slotIndex];
             const VkDeviceSize instanceBytes = static_cast<VkDeviceSize>(instanceCount) * sizeof(GrassInstance);
-            mImpl->EnsureBuffer(instanceBuffer, instanceBytes, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+            mImpl->EnsureBuffer(instanceBuffer, instanceBytes, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
             auto* instanceOutput = static_cast<GrassInstance*>(instanceBuffer.Mapped);
             for (size_t instanceIndex = 0U; instanceIndex < mImpl->VisibleAnchorIndices.size(); ++instanceIndex) {
                 const uint32_t anchorIndex = mImpl->VisibleAnchorIndices[instanceIndex];
@@ -1723,6 +1414,8 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                     },
                     UnpackGrassDirection(anchor.PackedWidthAxis),
                     UnpackGrassNormal(anchor.PackedWorldNormal),
+                    anchor.SurfaceColor,
+                    anchor.SurfaceReference,
                 };
                 instanceOutput[instanceIndex].WorldNormal[3] = GrassStableVisibilityValue(anchor.StableId);
             }
@@ -1740,11 +1433,35 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
             VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,      nullptr, &environmentBufferInfo,           nullptr
         };
         vkUpdateDescriptorSets(mImpl->Device, 1U, &environmentWrite, 0U, nullptr);
+        VkDescriptorImageInfo nativeLightingImage{mImpl->SurfaceLighting.Sampler(), mImpl->SurfaceLighting.View(frameSlot),
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+        VkWriteDescriptorSet lightingWrite{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+        lightingWrite.dstSet = mImpl->DescriptorSets[slotIndex]; lightingWrite.dstBinding = 1;
+        lightingWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER; lightingWrite.descriptorCount = 1;
+        lightingWrite.pImageInfo = &nativeLightingImage;
+        vkUpdateDescriptorSets(mImpl->Device, 1, &lightingWrite, 0, nullptr);
+        auto& groupBuffer = mImpl->GroupBuffers[slotIndex];
+        const VkDeviceSize groupBytes = std::max<size_t>(1, mImpl->DrawGroups.size()) * sizeof(std::array<uint32_t,2>);
+        mImpl->EnsureBuffer(groupBuffer, groupBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+        if (!mImpl->DrawGroups.empty())
+            std::memcpy(groupBuffer.Mapped, mImpl->DrawGroups.data(), mImpl->DrawGroups.size()*sizeof(std::array<uint32_t,2>));
+        const std::array<VkDescriptorBufferInfo,2> clusterBuffers{{
+            {mImpl->PreparedInstanceBuffer, 0, VkDeviceSize(instanceCount)*sizeof(GrassInstance)},
+            {groupBuffer.Buffer, 0, groupBytes}}};
+        for (uint32_t index = 0; index < 2; ++index) {
+            VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            write.dstSet = mImpl->DescriptorSets[slotIndex]; write.dstBinding = index+2;
+            write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; write.descriptorCount = 1;
+            write.pBufferInfo = &clusterBuffers[index];
+            vkUpdateDescriptorSets(mImpl->Device, 1, &write, 0, nullptr);
+        }
         telemetry.DrawCalls = static_cast<uint32_t>(batches.size());
-        telemetry.UploadedBytes = static_cast<uint64_t>(dynamicUploadedBytes + staticUploadedBytes + environmentBytes);
+        telemetry.ClusterDrawInstances = static_cast<uint32_t>(mImpl->DrawGroups.size());
+        for (const auto& group : mImpl->DrawGroups) telemetry.ClusterRepresentedBlades += group[1];
+        telemetry.UploadedBytes = static_cast<uint64_t>(dynamicUploadedBytes + staticUploadedBytes + environmentBytes + groupBytes);
         telemetry.DynamicUploadedBytes =
             dynamicUploadedBytes +
-            static_cast<uint64_t>(environmentBytes);
+            static_cast<uint64_t>(environmentBytes + groupBytes);
         telemetry.StaticUploadedBytes =
             staticUploadedBytes;
         telemetry.GpuCompaction = gpuCompacted;
@@ -1782,7 +1499,7 @@ bool InteractiveGrassPass::DrawPrepared(
                             &mImpl->DescriptorSets[slotIndex], 0U, nullptr);
     const VkDeviceSize offset = 0U;
     vkCmdBindVertexBuffers(commandBuffer, 0U, 1U, &mImpl->PreparedInstanceBuffer, &offset);
-    vkCmdBindIndexBuffer(commandBuffer, mImpl->IndexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT16);
+    vkCmdBindIndexBuffer(commandBuffer, mImpl->IndexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
     const VkViewport viewport{ 0.0F, 0.0F, static_cast<float>(width), static_cast<float>(height), 0.0F, 1.0F };
     const VkRect2D scissor{ { 0, 0 }, { width, height } };
     vkCmdSetViewport(commandBuffer, 0U, 1U, &viewport);
@@ -1791,9 +1508,10 @@ bool InteractiveGrassPass::DrawPrepared(
         vkCmdPushConstants(commandBuffer, mImpl->PipelineLayout,
                            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0U, sizeof(batch.Push),
                            &batch.Push);
-        const auto& range = batch.BladeSegments == 0U ? mImpl->IndexedTopology.Tuft :
+        const auto& range = batch.Grouped ? mImpl->IndexedTopology.Groups[batch.BladeSegments-1][batch.PlaneCount-1] : batch.BladeSegments == 0U ? mImpl->IndexedTopology.Tuft :
             mImpl->IndexedTopology.Blades[batch.BladeSegments - 1U][batch.PlaneCount - 1U];
-        vkCmdDrawIndexed(commandBuffer, range.Count, batch.InstanceCount, range.First, 0, batch.FirstInstance);
+        const uint32_t count = batch.Grouped ? range.Count / kGrassMidrangeClusterCapacity * batch.GroupDrawCapacity : range.Count;
+        vkCmdDrawIndexed(commandBuffer, count, batch.InstanceCount, range.First, 0, batch.FirstInstance);
     }
     mImpl->Prepared = false;
     return true;
@@ -1814,12 +1532,15 @@ void InteractiveGrassPass::Shutdown() {
     mImpl->WorkerPool.reset();
     mImpl->WorkerOutputs.clear();
     mImpl->InstanceCompactor.Shutdown();
+    mImpl->SurfaceLighting.Shutdown();
     mImpl->GpuCompactorAvailable = false;
     if (mImpl->Device != VK_NULL_HANDLE) {
         mImpl->DestroyBuffer(mImpl->IndexBuffer);
         for (auto& buffer : mImpl->InstanceBuffers)
             mImpl->DestroyBuffer(buffer);
         for (auto& buffer : mImpl->EnvironmentBuffers)
+            mImpl->DestroyBuffer(buffer);
+        for (auto& buffer : mImpl->GroupBuffers)
             mImpl->DestroyBuffer(buffer);
         for (const auto pipeline : mImpl->Pipelines) {
             if (pipeline != VK_NULL_HANDLE) {
@@ -1849,6 +1570,7 @@ void InteractiveGrassPass::Shutdown() {
     for (auto& bin : mImpl->VisibleIndexBins) {
         bin.clear();
     }
+    for (auto& ranges : mImpl->SelectedClusterRanges) ranges.clear();
     mImpl->VisibleAnchorIndices.clear();
     mImpl->StaticAnchors.clear();
     mImpl->ActivePlacements.clear();

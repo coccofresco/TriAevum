@@ -30,6 +30,7 @@
 #include "fast/oot3d/pica_reactive_mask.h"
 #include "fast/oot3d/pica_nri_shader_contract.h"
 #include "fast/oot3d/pica_nri_vertex_input.h"
+#include "fast/oot3d/pica_nri_pipeline_state.h"
 #include "fast/oot3d/pica_nri_draw_ownership.h"
 #include "fast/oot3d/pica_directional_shadow_lighting.h"
 #include "fast/oot3d/pica_scene_semantics.h"
@@ -105,105 +106,13 @@ uint64_t HashNativeBytes(std::span<const uint8_t> bytes) {
     return hash;
 }
 
-VkCompareOp ToNativeVkCompare(GfxNativePicaCompareFunction compare) {
-    switch (compare) {
-        case GfxNativePicaCompareFunction::Never:
-            return VK_COMPARE_OP_NEVER;
-        case GfxNativePicaCompareFunction::Always:
-            return VK_COMPARE_OP_ALWAYS;
-        case GfxNativePicaCompareFunction::Equal:
-            return VK_COMPARE_OP_EQUAL;
-        case GfxNativePicaCompareFunction::NotEqual:
-            return VK_COMPARE_OP_NOT_EQUAL;
-        case GfxNativePicaCompareFunction::Less:
-            return VK_COMPARE_OP_LESS;
-        case GfxNativePicaCompareFunction::LessOrEqual:
-            return VK_COMPARE_OP_LESS_OR_EQUAL;
-        case GfxNativePicaCompareFunction::Greater:
-            return VK_COMPARE_OP_GREATER;
-        case GfxNativePicaCompareFunction::GreaterOrEqual:
-            return VK_COMPARE_OP_GREATER_OR_EQUAL;
-    }
-    throw std::runtime_error("invalid native PICA compare function");
-}
+using Oot3d::ToNativeVkCompare;
 
-VkStencilOp ToNativeVkStencil(GfxNativePicaStencilAction action) {
-    switch (action) {
-        case GfxNativePicaStencilAction::Keep:
-            return VK_STENCIL_OP_KEEP;
-        case GfxNativePicaStencilAction::Zero:
-            return VK_STENCIL_OP_ZERO;
-        case GfxNativePicaStencilAction::Replace:
-            return VK_STENCIL_OP_REPLACE;
-        case GfxNativePicaStencilAction::Increment:
-            return VK_STENCIL_OP_INCREMENT_AND_CLAMP;
-        case GfxNativePicaStencilAction::Decrement:
-            return VK_STENCIL_OP_DECREMENT_AND_CLAMP;
-        case GfxNativePicaStencilAction::Invert:
-            return VK_STENCIL_OP_INVERT;
-        case GfxNativePicaStencilAction::IncrementWrap:
-            return VK_STENCIL_OP_INCREMENT_AND_WRAP;
-        case GfxNativePicaStencilAction::DecrementWrap:
-            return VK_STENCIL_OP_DECREMENT_AND_WRAP;
-    }
-    throw std::runtime_error("invalid native PICA stencil action");
-}
+using Oot3d::ToNativeVkStencil;
 
-VkLogicOp ToNativeVkLogic(GfxNativePicaLogicOperation operation) {
-    switch (operation) {
-        case GfxNativePicaLogicOperation::Clear:
-            return VK_LOGIC_OP_CLEAR;
-        case GfxNativePicaLogicOperation::And:
-            return VK_LOGIC_OP_AND;
-        case GfxNativePicaLogicOperation::AndReverse:
-            return VK_LOGIC_OP_AND_REVERSE;
-        case GfxNativePicaLogicOperation::Copy:
-            return VK_LOGIC_OP_COPY;
-        case GfxNativePicaLogicOperation::Set:
-            return VK_LOGIC_OP_SET;
-        case GfxNativePicaLogicOperation::CopyInverted:
-            return VK_LOGIC_OP_COPY_INVERTED;
-        case GfxNativePicaLogicOperation::NoOp:
-            return VK_LOGIC_OP_NO_OP;
-        case GfxNativePicaLogicOperation::Invert:
-            return VK_LOGIC_OP_INVERT;
-        case GfxNativePicaLogicOperation::Nand:
-            return VK_LOGIC_OP_NAND;
-        case GfxNativePicaLogicOperation::Or:
-            return VK_LOGIC_OP_OR;
-        case GfxNativePicaLogicOperation::Nor:
-            return VK_LOGIC_OP_NOR;
-        case GfxNativePicaLogicOperation::Xor:
-            return VK_LOGIC_OP_XOR;
-        case GfxNativePicaLogicOperation::Equivalent:
-            return VK_LOGIC_OP_EQUIVALENT;
-        case GfxNativePicaLogicOperation::AndInverted:
-            return VK_LOGIC_OP_AND_INVERTED;
-        case GfxNativePicaLogicOperation::OrReverse:
-            return VK_LOGIC_OP_OR_REVERSE;
-        case GfxNativePicaLogicOperation::OrInverted:
-            return VK_LOGIC_OP_OR_INVERTED;
-    }
-    throw std::runtime_error("invalid native PICA logic operation");
-}
+using Oot3d::ToNativeVkLogic;
 
-VkPrimitiveTopology ToNativeVkTopology(GfxNativePicaTopology topology) {
-    switch (topology) {
-        case GfxNativePicaTopology::TriangleList:
-            return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-        case GfxNativePicaTopology::TriangleStrip:
-            return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
-        case GfxNativePicaTopology::TriangleFan:
-            throw std::runtime_error(
-                "native PICA triangle fan requires index expansion");
-        case GfxNativePicaTopology::GeometryShader:
-            // PICA topology 3 selects the programmable primitive setup path,
-            // whose assembled output is a triangle list. Geometry shader
-            // enablement is tracked independently by pipeline.use_gs.
-            return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    }
-    throw std::runtime_error("invalid native PICA topology");
-}
+using Oot3d::ToNativeVkTopology;
 
 Oot3d::PicaSceneTopology ToPicaSceneTopology(
     GfxNativePicaTopology topology) {
@@ -288,16 +197,7 @@ DecodeNativePicaGrassWrap(uint8_t wrap) {
     }
 }
 
-bool UsesTranslucentBlend(const GfxNativeBlendState& blend) {
-    const bool opaqueReplace =
-        blend.EquationRgb == GfxNativeBlendEquation::Add &&
-        blend.EquationAlpha == GfxNativeBlendEquation::Add &&
-        blend.SourceRgb == GfxNativeBlendFactor::One &&
-        blend.DestRgb == GfxNativeBlendFactor::Zero &&
-        blend.SourceAlpha == GfxNativeBlendFactor::One &&
-        blend.DestAlpha == GfxNativeBlendFactor::Zero;
-    return blend.Enabled && !opaqueReplace;
-}
+using Oot3d::UsesTranslucentBlend;
 
 VkFilter ToNativePicaVkFilter(GfxNativeTextureFilter filter) {
     switch (filter) {
@@ -331,57 +231,9 @@ VkSamplerAddressMode ToNativePicaVkAddressMode(
     return VK_SAMPLER_ADDRESS_MODE_REPEAT;
 }
 
-VkBlendOp ToNativeVkBlendOperation(GfxNativeBlendEquation equation) {
-    switch (equation) {
-        case GfxNativeBlendEquation::Add:
-            return VK_BLEND_OP_ADD;
-        case GfxNativeBlendEquation::Subtract:
-            return VK_BLEND_OP_SUBTRACT;
-        case GfxNativeBlendEquation::ReverseSubtract:
-            return VK_BLEND_OP_REVERSE_SUBTRACT;
-        case GfxNativeBlendEquation::Min:
-            return VK_BLEND_OP_MIN;
-        case GfxNativeBlendEquation::Max:
-            return VK_BLEND_OP_MAX;
-    }
-    throw std::runtime_error("invalid native PICA blend equation");
-}
+using Oot3d::ToNativeVkBlendOperation;
 
-VkBlendFactor ToNativeVkBlendFactor(GfxNativeBlendFactor factor) {
-    switch (factor) {
-        case GfxNativeBlendFactor::Zero:
-            return VK_BLEND_FACTOR_ZERO;
-        case GfxNativeBlendFactor::One:
-            return VK_BLEND_FACTOR_ONE;
-        case GfxNativeBlendFactor::SourceColor:
-            return VK_BLEND_FACTOR_SRC_COLOR;
-        case GfxNativeBlendFactor::OneMinusSourceColor:
-            return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
-        case GfxNativeBlendFactor::DestColor:
-            return VK_BLEND_FACTOR_DST_COLOR;
-        case GfxNativeBlendFactor::OneMinusDestColor:
-            return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
-        case GfxNativeBlendFactor::SourceAlpha:
-            return VK_BLEND_FACTOR_SRC_ALPHA;
-        case GfxNativeBlendFactor::OneMinusSourceAlpha:
-            return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-        case GfxNativeBlendFactor::DestAlpha:
-            return VK_BLEND_FACTOR_DST_ALPHA;
-        case GfxNativeBlendFactor::OneMinusDestAlpha:
-            return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
-        case GfxNativeBlendFactor::ConstantColor:
-            return VK_BLEND_FACTOR_CONSTANT_COLOR;
-        case GfxNativeBlendFactor::OneMinusConstantColor:
-            return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR;
-        case GfxNativeBlendFactor::ConstantAlpha:
-            return VK_BLEND_FACTOR_CONSTANT_ALPHA;
-        case GfxNativeBlendFactor::OneMinusConstantAlpha:
-            return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA;
-        case GfxNativeBlendFactor::SourceAlphaSaturate:
-            return VK_BLEND_FACTOR_SRC_ALPHA_SATURATE;
-    }
-    throw std::runtime_error("invalid native PICA blend factor");
-}
+using Oot3d::ToNativeVkBlendFactor;
 
 VkImageAspectFlags NativeDepthAspect(VkFormat format) {
     VkImageAspectFlags aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
@@ -712,12 +564,12 @@ void GfxRenderingAPIVulkan::CreateNativePicaScanoutPipeline() {
     const std::string fragmentSource =
         Oot3d::BuildPicaScanoutFragmentShader();
 
-    VkShaderModule vertexShader = CompileShaderModule(
-        vertexSource, true, "oot3d_native_pica_scanout.vert");
+    VkShaderModule vertexShader = CreateShaderModuleFromSpirv(ResolveNativePicaShaderSpirv(
+        vertexSource, Oot3d::PicaAotShaderStage::Vertex, true, "oot3d_native_pica_scanout.vert"));
     VkShaderModule fragmentShader = VK_NULL_HANDLE;
     try {
-        fragmentShader = CompileShaderModule(
-            fragmentSource, false, "oot3d_native_pica_scanout.frag");
+        fragmentShader = CreateShaderModuleFromSpirv(ResolveNativePicaShaderSpirv(
+            fragmentSource, Oot3d::PicaAotShaderStage::Fragment, false, "oot3d_native_pica_scanout.frag"));
     } catch (...) {
         vkDestroyShaderModule(mDevice, vertexShader, nullptr);
         throw;
@@ -813,7 +665,15 @@ void GfxRenderingAPIVulkan::CreateNativePicaRenderPass() {
     if (mDepthFormat == VK_FORMAT_UNDEFINED) {
         throw std::runtime_error("native PICA render pass requires a resolved depth format");
     }
-    const auto createRenderPass = [this](uint32_t colorCount, VkRenderPass& renderPass) {
+    // Android's API-29 loader stub does not export Vulkan 1.2 entry points.
+    // Resolve against the selected device, whose Vulkan capabilities are checked
+    // at initialization; this also works with desktop and custom driver loaders.
+    const auto createRenderPass2 = reinterpret_cast<PFN_vkCreateRenderPass2>(
+        vkGetDeviceProcAddr(mDevice, "vkCreateRenderPass2"));
+    if (createRenderPass2 == nullptr) {
+        throw std::runtime_error("native PICA requires Vulkan vkCreateRenderPass2");
+    }
+    const auto createRenderPass = [this, createRenderPass2](uint32_t colorCount, VkRenderPass& renderPass) {
         const bool multisampled = mNativePicaSampleCount != VK_SAMPLE_COUNT_1_BIT;
         const uint32_t depthIndex = colorCount;
         const uint32_t resolveBase = colorCount + 1U;
@@ -909,7 +769,7 @@ void GfxRenderingAPIVulkan::CreateNativePicaRenderPass() {
         info.pSubpasses = &subpass;
         info.dependencyCount = static_cast<uint32_t>(dependencies.size());
         info.pDependencies = dependencies.data();
-        CheckNativeVk(vkCreateRenderPass2(mDevice, &info, nullptr, &renderPass), "vkCreateRenderPass2(native PICA)");
+        CheckNativeVk(createRenderPass2(mDevice, &info, nullptr, &renderPass), "vkCreateRenderPass2(native PICA)");
     };
     createRenderPass(1U, mNativePicaCanonicalRenderPass);
     createRenderPass(static_cast<uint32_t>(Oot3d::kPicaColorAttachmentCount), mNativePicaRenderPass);
@@ -990,6 +850,7 @@ void GfxRenderingAPIVulkan::ApplyNativePicaSampleCount(VkSampleCountFlagBits sam
     mNativePicaSampleCount = sampleCount;
     CreateNativePicaRenderPass();
     if (!mInteractiveGrassPass.Initialize(mPhysicalDevice, mDevice,
+                                           mNriInterop.Shaders(),
                                            mNativePicaCanonicalRenderPass,
                                            mNativePicaRenderPass,
                                            mNativePicaSampleCount,
@@ -1023,14 +884,15 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
               {key.Width, key.Height},
               {mSwapchainExtent.width, mSwapchainExtent.height},
               mInternalResolutionScale);
-    mDiagnostics.RecordRenderResolution(
-        mInternalResolutionScale, mSwapchainExtent.width,
-        mSwapchainExtent.height, targetExtent.Width, targetExtent.Height);
     if (const auto found = mNativePicaRenderTargets.find(key);
         found != mNativePicaRenderTargets.end()) {
+        mDiagnostics.RecordRenderResolution(mInternalResolutionScale, mSwapchainExtent.width,
+            mSwapchainExtent.height, found->second.Width, found->second.Height);
         PrepareNativePicaTargetAttachments(found->second);
         return found->second;
     }
+    mDiagnostics.RecordRenderResolution(mInternalResolutionScale, mSwapchainExtent.width,
+        mSwapchainExtent.height, targetExtent.Width, targetExtent.Height);
 
     NativePicaRenderTarget target;
     target.Key = key;
@@ -2786,6 +2648,33 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaTexture(
                         "restored native PICA texture payload is invalid");
                 }
                 auto pixels = std::move(record.Rgba8);
+                // Snapshot uploads bypass the normal decode observer. Restore
+                // native mask pixels too, never the custom replacement image.
+                if (!shadow2d && baseLevelContentHash.has_value()) {
+                    const size_t baseBytes =
+                        static_cast<size_t>(key.Width) * key.Height * 4U;
+                    if (!textureKey.CustomReplacement &&
+                        record.Width == key.Width && record.Height == key.Height &&
+                        pixels.size() >= baseBytes) {
+                        Oot3d::GrassTextureSourceCache::Instance().ObserveDecoded(
+                            *baseLevelContentHash, key.Width, key.Height,
+                            std::span<const uint8_t>(pixels).first(baseBytes));
+                    } else {
+                        const auto encodedBytes = NativePicaEncodedMipSize(
+                            texture.NativeFormat, key.Width, key.Height);
+                        std::vector<uint8_t> nativePixels;
+                        if (encodedBytes.has_value() &&
+                            *encodedBytes <= texture.NativeBytes.size() &&
+                            Oot3d::DecodePicaTextureRgba8(
+                                texture.NativeFormat, key.Width, key.Height,
+                                texture.NativeBytes.first(*encodedBytes),
+                                nativePixels, nullptr)) {
+                            Oot3d::GrassTextureSourceCache::Instance().ObserveDecoded(
+                                *baseLevelContentHash, key.Width, key.Height,
+                                nativePixels);
+                        }
+                    }
+                }
                 const VkFormat format =
                     textureKey.Type == 2U &&
                             !textureKey.CustomReplacement
@@ -3277,7 +3166,7 @@ VkPipeline GfxRenderingAPIVulkan::GetOrCreateNativePicaPipeline(
     Oot3d::PicaShaderInstrumentationFeature appliedFeatures,
     bool recordInventory, bool outlineOcclusionOnly) {
     if (recordInventory && mPicaPipelineInventory.Enabled()) {
-        Oot3d::PicaGraphicsPipelineManifestEntry entry;
+        auto entry = Oot3d::DescribePicaGraphicsPipelineDraw(draw);
         entry.DescriptorSchemaVersion =
             draw.CanonicalDescriptorSchemaVersion;
         entry.Domain = domain == Oot3d::PicaShaderDomain::Canonical
@@ -3296,46 +3185,7 @@ VkPipeline GfxRenderingAPIVulkan::GetOrCreateNativePicaPipeline(
         entry.SampleCount =
             static_cast<uint8_t>(mNativePicaSampleCount);
         entry.WritesReactiveMask = writesReactiveMask;
-        entry.Topology = draw.Topology;
-        entry.CullMode = draw.CullMode;
-        entry.FramebufferFlipped = draw.FramebufferFlipped;
-        entry.VertexBindings.reserve(draw.VertexBindings.size());
-        for (const auto& binding : draw.VertexBindings) {
-            entry.VertexBindings.push_back({
-                binding.Binding, binding.ByteStride, binding.PerInstance});
-        }
-        entry.VertexAttributes.reserve(draw.VertexAttributes.size());
-        for (const auto& attribute : draw.VertexAttributes) {
-            entry.VertexAttributes.push_back({
-                attribute.Location, attribute.Binding, attribute.Format,
-                attribute.ComponentCount, attribute.ByteOffset});
-        }
-        entry.ColorWriteMask = draw.ColorWriteMask;
-        entry.FragmentOperationMode = draw.FragmentOperationMode;
-        entry.LogicOperation = draw.LogicOperation;
-        entry.Blend = {
-            draw.Blend.Enabled,
-            draw.Blend.EquationRgb,
-            draw.Blend.EquationAlpha,
-            draw.Blend.SourceRgb,
-            draw.Blend.DestRgb,
-            draw.Blend.SourceAlpha,
-            draw.Blend.DestAlpha,
-        };
-        entry.AlphaTestEnabled = draw.AlphaTestEnabled;
-        entry.DepthTestEnabled = draw.DepthTestEnabled;
-        entry.DepthWriteEnabled = draw.DepthWriteEnabled;
-        entry.DepthCompare = draw.DepthCompare;
-        entry.Stencil = {
-            draw.Stencil.Enabled,
-            draw.Stencil.Compare,
-            draw.Stencil.Reference,
-            draw.Stencil.CompareMask,
-            draw.Stencil.WriteMask,
-            draw.Stencil.Fail,
-            draw.Stencil.DepthFail,
-            draw.Stencil.Pass,
-        };
+        entry.OutlineOcclusionOnly = outlineOcclusionOnly;
         entry.ShaderOutputs = shader.FragmentOutputs;
         mPicaPipelineInventory.Observe(
             std::move(entry), draw.CanonicalPipelineId,
@@ -3470,162 +3320,33 @@ VkPipeline GfxRenderingAPIVulkan::GetOrCreateNativePicaPipeline(
         VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};
     viewport.viewportCount = 1;
     viewport.scissorCount = 1;
+    const auto resolvedState = Oot3d::BuildPicaNriPipelineState(
+        draw, shader.FragmentOutputs, mFramePicaAttachmentRequirements,
+        mNativePicaSampleCount, mDepthFormat, writesReactiveMask, outlineOcclusionOnly);
     VkPipelineRasterizationStateCreateInfo rasterization{
         VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
     rasterization.polygonMode = VK_POLYGON_MODE_FILL;
     rasterization.lineWidth = 1.0F;
-    rasterization.cullMode =
-        draw.CullMode == GfxNativeCullMode::KeepAll
-            ? VK_CULL_MODE_NONE
-            : (draw.FramebufferFlipped ? VK_CULL_MODE_FRONT_BIT
-                                       : VK_CULL_MODE_BACK_BIT);
-    rasterization.frontFace =
-        draw.CullMode == GfxNativeCullMode::KeepCounterClockwise
-            ? VK_FRONT_FACE_CLOCKWISE
-            : VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterization.cullMode = resolvedState.CullMode;
+    rasterization.frontFace = resolvedState.FrontFace;
     VkPipelineMultisampleStateCreateInfo multisample{
         VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
-    multisample.rasterizationSamples = mNativePicaSampleCount;
-    const auto alphaCoverage = Oot3d::ResolvePicaAlphaCoveragePolicy(
-        mNativePicaSampleCount, draw.AlphaTestEnabled, draw.DepthTestEnabled,
-        draw.DepthWriteEnabled, UsesTranslucentBlend(draw.Blend),
-        draw.ColorWriteMask);
-    multisample.alphaToCoverageEnable =
-        alphaCoverage.Enable ? VK_TRUE : VK_FALSE;
+    multisample.rasterizationSamples = resolvedState.Samples;
+    multisample.alphaToCoverageEnable = resolvedState.AlphaToCoverage;
     VkPipelineDepthStencilStateCreateInfo depthStencil{
         VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
-    depthStencil.depthTestEnable = draw.DepthTestEnabled ||
-                                   draw.DepthWriteEnabled;
-    depthStencil.depthWriteEnable = draw.DepthWriteEnabled;
-    depthStencil.depthCompareOp = draw.DepthTestEnabled
-                                      ? ToNativeVkCompare(draw.DepthCompare)
-                                      : VK_COMPARE_OP_ALWAYS;
-    depthStencil.stencilTestEnable = draw.Stencil.Enabled;
-    const VkStencilOpState stencil{
-        ToNativeVkStencil(draw.Stencil.Fail),
-        ToNativeVkStencil(draw.Stencil.Pass),
-        ToNativeVkStencil(draw.Stencil.DepthFail),
-        ToNativeVkCompare(draw.Stencil.Compare), draw.Stencil.CompareMask,
-        draw.Stencil.WriteMask, draw.Stencil.Reference};
-    depthStencil.front = stencil;
-    depthStencil.back = stencil;
-
-    VkPipelineColorBlendAttachmentState attachment{};
-    const bool shadowProducer = draw.FragmentOperationMode == 3U;
-    attachment.blendEnable = !shadowProducer && draw.Blend.Enabled;
-    attachment.colorBlendOp =
-        ToNativeVkBlendOperation(draw.Blend.EquationRgb);
-    attachment.alphaBlendOp =
-        ToNativeVkBlendOperation(draw.Blend.EquationAlpha);
-    attachment.srcColorBlendFactor =
-        ToNativeVkBlendFactor(draw.Blend.SourceRgb);
-    attachment.dstColorBlendFactor =
-        ToNativeVkBlendFactor(draw.Blend.DestRgb);
-    attachment.srcAlphaBlendFactor =
-        ToNativeVkBlendFactor(draw.Blend.SourceAlpha);
-    attachment.dstAlphaBlendFactor =
-        ToNativeVkBlendFactor(draw.Blend.DestAlpha);
-    attachment.colorWriteMask = 0;
-    if (!shadowProducer && (draw.ColorWriteMask & 1U) != 0U) {
-        attachment.colorWriteMask |= VK_COLOR_COMPONENT_R_BIT;
-    }
-    if (!shadowProducer && (draw.ColorWriteMask & 2U) != 0U) {
-        attachment.colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
-    }
-    if (!shadowProducer && (draw.ColorWriteMask & 4U) != 0U) {
-        attachment.colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
-    }
-    if (!shadowProducer && (draw.ColorWriteMask & 8U) != 0U) {
-        attachment.colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
-    }
-    VkPipelineColorBlendAttachmentState guideAttachment{};
-    const bool writesNormalGuide = !shadowProducer && draw.DepthTestEnabled &&
-                                   draw.DepthWriteEnabled &&
-                                   (draw.ColorWriteMask & 7U) != 0U;
-    const bool sceneDomainBlendedOverlay =
-        shader.FragmentOutputs.SceneDomainBlendedOverlay;
-    const bool sceneDomainNormalOverlay =
-        shader.FragmentOutputs.SceneDomainNormalOverlay;
-    const bool sceneDomainAmbientOverlay =
-        shader.FragmentOutputs.SceneDomainAmbientOverlay;
-    const bool sceneDomainTransparentDepthOverlay =
-        shader.FragmentOutputs.SceneDomainTransparentDepthOverlay;
-    const auto configureOverlayCoverage =
-        [sceneDomainBlendedOverlay](
-            VkPipelineColorBlendAttachmentState& state) {
-            state.colorWriteMask = VK_COLOR_COMPONENT_A_BIT;
-            state.blendEnable =
-                sceneDomainBlendedOverlay ? VK_TRUE : VK_FALSE;
-            if (sceneDomainBlendedOverlay) {
-                state.alphaBlendOp = VK_BLEND_OP_ADD;
-                state.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-                state.dstAlphaBlendFactor =
-                    VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-            }
-        };
-    if (sceneDomainNormalOverlay) {
-        configureOverlayCoverage(guideAttachment);
-    } else {
-        guideAttachment.colorWriteMask = writesNormalGuide
-            ? VK_COLOR_COMPONENT_R_BIT |
-                  VK_COLOR_COMPONENT_G_BIT |
-                  VK_COLOR_COMPONENT_B_BIT |
-                  VK_COLOR_COMPONENT_A_BIT
-            : 0U;
-    }
-    VkPipelineColorBlendAttachmentState materialAttachment{};
-    materialAttachment.colorWriteMask = writesNormalGuide
-        ? VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-              VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
-        : 0U;
-    if (writesReactiveMask) {
-        materialAttachment.colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
-        materialAttachment.blendEnable = VK_TRUE;
-        materialAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-        materialAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-        materialAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
-        materialAttachment.alphaBlendOp = VK_BLEND_OP_MAX;
-        materialAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-        materialAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-    }
-    VkPipelineColorBlendAttachmentState rigidMotionAttachment{};
-    if (sceneDomainTransparentDepthOverlay) {
-        // Only the isolated coverage pass may publish native occlusion. The
-        // primary color pass tests mixed depth, which can contain extension Grass.
-        rigidMotionAttachment.colorWriteMask = 0;
-        rigidMotionAttachment.blendEnable = VK_TRUE;
-        rigidMotionAttachment.alphaBlendOp = VK_BLEND_OP_MAX;
-        rigidMotionAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-        rigidMotionAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-    } else {
-        rigidMotionAttachment.colorWriteMask = writesNormalGuide
-            ? VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                  VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
-            : 0U;
-    }
-    VkPipelineColorBlendAttachmentState ambientAttachment{};
-    if (sceneDomainAmbientOverlay) {
-        configureOverlayCoverage(ambientAttachment);
-    } else if (shader.FragmentOutputs.WritesAmbientGuide) {
-        ambientAttachment.colorWriteMask =
-            VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-            VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    }
-    VkPipelineColorBlendAttachmentState outlineGeometryAttachment{};
-    outlineGeometryAttachment.colorWriteMask = shader.FragmentOutputs.WritesOutlineGeometryGuide ? 0xfU : 0U;
-    VkPipelineColorBlendAttachmentState fogAttachment{};
-    fogAttachment.colorWriteMask = shader.FragmentOutputs.WritesFogGuide ? 0xfU : 0U;
-    std::array<VkPipelineColorBlendAttachmentState, Oot3d::kPicaColorAttachmentCount> colorAttachments{
-        attachment,        guideAttachment, materialAttachment,       rigidMotionAttachment,
-        ambientAttachment, fogAttachment,   outlineGeometryAttachment
-    };
-    if (outlineOcclusionOnly) Oot3d::ConfigureOutlineOcclusionPass(depthStencil, colorAttachments);
-    const uint32_t colorAttachmentCount =
-        mFramePicaAttachmentRequirements.ColorAttachmentCount();
+    depthStencil.depthTestEnable = resolvedState.DepthTest;
+    depthStencil.depthWriteEnable = resolvedState.DepthWrite;
+    depthStencil.depthCompareOp = resolvedState.DepthCompare;
+    depthStencil.stencilTestEnable = resolvedState.StencilTest;
+    depthStencil.front = resolvedState.FrontStencil;
+    depthStencil.back = resolvedState.BackStencil;
+    const auto& colorAttachments = resolvedState.Colors;
+    const uint32_t colorAttachmentCount = resolvedState.ColorAttachmentCount;
     VkPipelineColorBlendStateCreateInfo colorBlend{
         VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-    colorBlend.logicOpEnable = !shadowProducer && !draw.Blend.Enabled;
-    colorBlend.logicOp = ToNativeVkLogic(draw.LogicOperation);
+    colorBlend.logicOpEnable = resolvedState.LogicOpEnabled;
+    colorBlend.logicOp = resolvedState.LogicOp;
     colorBlend.attachmentCount = colorAttachmentCount;
     colorBlend.pAttachments = colorAttachments.data();
     const VkDynamicState dynamicStates[]{VK_DYNAMIC_STATE_VIEWPORT,
@@ -3649,10 +3370,7 @@ VkPipeline GfxRenderingAPIVulkan::GetOrCreateNativePicaPipeline(
     pipelineInfo.pColorBlendState = &colorBlend;
     pipelineInfo.pDynamicState = &dynamic;
     pipelineInfo.layout = mNativePicaPipelineLayout;
-    const std::array<VkFormat, Oot3d::kPicaColorAttachmentCount> renderingColorFormats{
-        VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM,     VK_FORMAT_R16G16B16A16_SFLOAT,
-        VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R32G32B32A32_SFLOAT
-    };
+    const auto& renderingColorFormats = resolvedState.ColorFormats;
     VkPipelineRenderingCreateInfoKHR rendering{
         VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR};
     if (mPicaDynamicRenderingScope.Available()) {
@@ -3677,28 +3395,11 @@ VkPipeline GfxRenderingAPIVulkan::GetOrCreateNativePicaPipeline(
                                             &pipelineInfo, nullptr, &pipeline),
                   "vkCreateGraphicsPipelines(native PICA)");
     if (shader.NriDescriptorContract) {
-        Oot3d::NriPicaGraphicsPipelineDesc nriPipeline;
+        auto nriPipeline = resolvedState;
         nriPipeline.VertexSpirv = shader.NriVertexSpirv;
         nriPipeline.FragmentSpirv = shader.NriFragmentSpirv;
         nriPipeline.VertexBindings = nriBindings;
         nriPipeline.VertexAttributes = nriAttributes;
-        nriPipeline.Topology = inputAssembly.topology;
-        nriPipeline.CullMode = rasterization.cullMode;
-        nriPipeline.FrontFace = rasterization.frontFace;
-        nriPipeline.Samples = mNativePicaSampleCount;
-        nriPipeline.AlphaToCoverage = alphaCoverage.Enable;
-        nriPipeline.DepthTest = depthStencil.depthTestEnable != VK_FALSE;
-        nriPipeline.DepthWrite = depthStencil.depthWriteEnable != VK_FALSE;
-        nriPipeline.DepthCompare = depthStencil.depthCompareOp;
-        nriPipeline.StencilTest = depthStencil.stencilTestEnable != VK_FALSE;
-        nriPipeline.FrontStencil = depthStencil.front;
-        nriPipeline.BackStencil = depthStencil.back;
-        nriPipeline.Colors = colorAttachments;
-        nriPipeline.LogicOpEnabled = colorBlend.logicOpEnable != VK_FALSE;
-        nriPipeline.LogicOp = colorBlend.logicOp;
-        nriPipeline.ColorFormats = renderingColorFormats;
-        nriPipeline.ColorAttachmentCount = colorAttachmentCount;
-        nriPipeline.DepthStencilFormat = mDepthFormat;
         if (!mNriPicaPipelineBridge.CreateOwnedPipeline(
                 pipeline, nriPipeline)) {
             SPDLOG_WARN(
@@ -3887,7 +3588,7 @@ void GfxRenderingAPIVulkan::PrewarmNativePicaPipelines() {
                     ? Oot3d::PicaShaderDomain::Canonical
                     : Oot3d::PicaShaderDomain::Instrumented,
                 entry.RequestedFeatures, entry.AppliedFeatures,
-                false);
+                false, entry.OutlineOcclusionOnly);
             if (mNativePicaPipelines.size() == pipelineCount) {
                 ++mPicaPipelinePrewarmReused;
             } else {
@@ -5418,7 +5119,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             ? GetOrCreateNativePicaPipeline(
                 effectiveDraw, shaderIt->second, shaderVariant.Reactive,
                 shaderVariant.Domain, shaderVariant.RequestedFeatures, shaderVariant.AppliedFeatures,
-                false, true)
+                true, true)
             : VK_NULL_HANDLE;
         // Coverage runs before the native draw: stencil must still have its
         // original value if that draw modifies it. The auxiliary pass is read-only.
@@ -5580,6 +5281,8 @@ bool GfxRenderingAPIVulkan::TryRenderInteractiveGrass(
     const bool prepared = mInteractiveGrassPass.Prepare(
         mCommandBuffers[mCurrentFrame], target.Width,
         target.Height, *perspective, settings.Grass,
+        Oot3d::PackToonSurfaceParameters(settings.Effects.Toon, settings.Effects.ToonStyle, false),
+        mPicaSceneFrame.ResolvedDrawStream(),
         mFrameCounter, target.Key.RenderTargetNamespace,
         target.Key.ColorPhysicalAddress, mCurrentFrame,
         mInteractiveGrassProviderPlan,
@@ -5846,6 +5549,11 @@ bool GfxRenderingAPIVulkan::SubmitPicaDisplayTransfer(
                     "native PICA display transfer plan failed: " +
                     transferPlanError);
             }
+            if (source->Key.Width == Oot3d::kNativeTopScreenPhysicalWidth &&
+                source->Key.Height == Oot3d::kNativeTopScreenPhysicalHeight) {
+                Oot3d::GraphicsSettingsRuntime::Instance().PublishSceneExtent(
+                    transferPlan->DestinationHeight, transferPlan->DestinationWidth);
+            }
 
             const auto& graphicsSettings =
                 mFrameGraphicsSettings;
@@ -5987,11 +5695,9 @@ bool GfxRenderingAPIVulkan::SubmitPicaDisplayTransfer(
                 blit.srcSubresource.layerCount = 1;
                 blit.srcOffsets[1] = {
                     static_cast<int32_t>(
-                        transferPlan->DestinationWidth *
-                        transferPlan->HorizontalSamples),
+                        transferPlan->BlitSourceWidth()),
                     static_cast<int32_t>(
-                        transferPlan->DestinationHeight *
-                        transferPlan->VerticalSamples),
+                        transferPlan->BlitSourceHeight()),
                     1};
                 blit.dstSubresource.aspectMask =
                     VK_IMAGE_ASPECT_COLOR_BIT;
@@ -9650,6 +9356,7 @@ bool PublishNativePicaGrassSurface(
     const auto& grassGeometry =
         *grassGeometryResolution.Geometry;
     Oot3d::GrassSceneMesh mesh;
+    mesh.SubmissionId = draw.SubmissionId;
     mesh.GeometryId = grassGeometry.GeometryId;
     mesh.AnchorVersion = grassGeometry.AnchorVersion;
     mesh.ContentVersion = grassGeometry.ContentVersion;
@@ -9772,11 +9479,11 @@ void GfxRenderingAPIVulkan::ReleaseEffectGraphImageClients() {
 }
 
 void GfxRenderingAPIVulkan::ApplyInternalResolutionScale(float scale) {
-    ResetNativePicaRenderTargets();
+    ResetNativePicaRenderTargets(true);
     mInternalResolutionScale = scale;
 }
 
-void GfxRenderingAPIVulkan::ResetNativePicaRenderTargets() {
+void GfxRenderingAPIVulkan::ResetNativePicaRenderTargets(bool preserveDisplayImages) {
     EndNativePicaRenderPass();
     WaitForAllPresents();
     CheckNativeVk(vkDeviceWaitIdle(mDevice),
@@ -9834,12 +9541,19 @@ void GfxRenderingAPIVulkan::ResetNativePicaRenderTargets() {
     }
     mNativePicaRenderTargets.clear();
     mNativePicaDisplayDepthTargets.clear();
-    for (auto& [key, image] : mNativePicaDisplayImages) {
-        DestroyNativePicaDisplayImage(image);
+    if (!preserveDisplayImages) {
+        for (auto& [key, image] : mNativePicaDisplayImages) {
+            DestroyNativePicaDisplayImage(image);
+        }
+        mNativePicaDisplayImages.clear();
+        mLastPresentedNativePicaDisplayTransfer.reset();
+    } else {
+        // Retained pixels remain presentable, but their old scene/depth guides
+        // no longer exist. The next native transfer republishes that capability;
+        // until then the graph must not declare reads from retired attachments.
+        for (auto& [key, image] : mNativePicaDisplayImages) image.SceneResolved = false;
     }
-    mNativePicaDisplayImages.clear();
     mInvalidatedNativePicaRenderTargetAddresses.clear();
-    mLastPresentedNativePicaDisplayTransfer.reset();
     mActiveNativePicaRenderTarget = nullptr;
     mNativePicaRenderPassActive = false;
     mNativePicaPresentedThisFrame = false;

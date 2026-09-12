@@ -35,18 +35,49 @@ void InstallGraphicsSettingsPanelTab(
     }
     InstallGraphicsSettingsPanelTabs(std::move(tabs));
 }
+void DrawDisplayConfirmation() {
+    auto& runtime = GraphicsSettingsRuntime::Instance();
+    const bool awaiting = runtime.PresentationStatus().Phase == PresentationTransactionPhase::AwaitingConfirmation;
+    constexpr const char* title = "Keep display settings?";
+    if (awaiting && !ImGui::IsPopupOpen(title)) ImGui::OpenPopup(title);
+    if (!awaiting && !ImGui::IsPopupOpen(title)) return;
+    const auto* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Always, ImVec2(0.5F, 0.5F));
+    ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
+        ImVec2(std::max(240.0F, viewport->WorkSize.x - 16.0F), viewport->WorkSize.y - 16.0F));
+    if (ImGui::BeginPopupModal(title, nullptr, ImGuiWindowFlags_AlwaysAutoResize |
+            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove)) {
+        if (!awaiting) {
+            ImGui::CloseCurrentPopup();
+        } else {
+            runtime.PresentationConfirmationVisible();
+            const auto metrics = runtime.DisplayMetrics();
+            if (metrics.OutputWidth)
+                ImGui::Text("Output: %u x %u", metrics.OutputWidth, metrics.OutputHeight);
+            ImGui::Text("Reverting in %u seconds", (runtime.PresentationStatus().RemainingMilliseconds + 999U) / 1000U);
+            if (ImGui::Button("Keep display settings")) {
+                runtime.ConfirmPresentation();
+                ImGui::CloseCurrentPopup();
+            }
+            if (ImGui::Button("Revert display settings")) {
+                runtime.RollbackPresentation();
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        ImGui::EndPopup();
+    }
+}
 void GraphicsSettingsPanel::DrawPresentationStatus() {
     auto& runtime = GraphicsSettingsRuntime::Instance();
     runtime.TickPresentation();
     if (!ImGui::IsAnyItemActive()) runtime.SavePending();
     const auto status = runtime.PresentationStatus();
+    const auto rejection = runtime.LastPresentationRejection();
+    if (!rejection.empty()) {
+        ImGui::TextWrapped("Display change reverted: %s", rejection.c_str());
+    }
     if (status.Phase == PresentationTransactionPhase::AwaitingConfirmation) {
-        ImGui::Text("Confirm display change (%u s)",
-                    (status.RemainingMilliseconds + 999U) / 1000U);
-        if (ImGui::Button("Keep display settings")) runtime.ConfirmPresentation();
-        ImGui::SameLine();
-        if (ImGui::Button("Revert display settings")) runtime.RollbackPresentation();
-        ImGui::Separator();
+        ImGui::TextUnformatted("Waiting for display confirmation...");
     } else if (status.Phase == PresentationTransactionPhase::ApplyRequested) {
         ImGui::TextUnformatted("Applying display settings...");
     } else if (status.Phase == PresentationTransactionPhase::RollbackRequested) {
@@ -72,11 +103,16 @@ void GraphicsSettingsPanel::DrawPresentationStatus() {
 }
 
 void GraphicsSettingsPanel::Draw() {
-    ImGui::TextWrapped("F2: quick native presentation - Grass, Toon/outline, CACAO and reflections off.");
+    const bool nativeRequired = GraphicsSettingsRuntime::Instance().NativePresentationOverrideRequired();
+    if (nativeRequired) {
+        ImGui::TextWrapped("Native presentation: Grass, Toon/outline, CACAO and reflections are unavailable in this build.");
+    } else {
+        ImGui::TextWrapped("F2: quick native presentation - Grass, Toon/outline, CACAO and reflections off.");
+    }
     const bool nativeOverride = GraphicsSettingsRuntime::Instance().NativePresentationOverrideActive();
     ImGui::PushStyleColor(ImGuiCol_Text, nativeOverride ? ImVec4(1.0F, 0.78F, 0.25F, 1.0F)
                                                       : ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    ImGui::TextWrapped(nativeOverride
+    ImGui::TextWrapped(nativeRequired ? "Vulkan/NRI active. Configured effect values are preserved." : nativeOverride
         ? "F2 override ACTIVE. Configured effects are suspended; press F2 to restore."
         : "F2 override inactive. Using configured effects.");
     ImGui::PopStyleColor();
@@ -89,7 +125,7 @@ void GraphicsSettingsPanel::Draw() {
             DrawRendererSettings();
             ImGui::EndTabItem();
         }
-        if (ImGui::BeginTabItem("Grass")) {
+        if (!nativeRequired && ImGui::BeginTabItem("Grass")) {
             DrawGrassSettings();
             ImGui::EndTabItem();
         }

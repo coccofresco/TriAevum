@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include "oot3d_game_language.h"
 #include <array>
 #include <exception>
 #include <fstream>
@@ -9,11 +10,14 @@
 #include <string_view>
 #include <vector>
 
-#if defined(__SWITCH__)
+#if defined(__SWITCH__) || defined(__ANDROID__)
 #include <SDL.h>
 #endif
 
 #include "oot3d_demo_host_context.h"
+#if defined(__ANDROID__)
+#include "android_host.h"
+#endif
 #include "oot3d_native_game_bootstrap.h"
 #include "oot3d_native_game_launch_profile.h"
 #include "triaevum_product_info.h"
@@ -49,7 +53,7 @@ void SetRendererEnvironment(const char* name,
     if (value.empty())
         return;
 #ifdef _WIN32
-    if (_putenv_s(name, value.string().c_str()) != 0)
+    if (_wputenv_s(std::filesystem::path(name).c_str(), value.c_str()) != 0)
 #else
     if (setenv(name, value.string().c_str(), 1) != 0)
 #endif
@@ -57,6 +61,7 @@ void SetRendererEnvironment(const char* name,
 }
 
 void ConfigurePicaAotShaders(const Oot3dNativeGameLaunch& launch) {
+    SetRendererEnvironment("TRIAEVUM_RENDERER_CACHE_DIR", launch.RendererCacheDirectory);
     SetRendererEnvironment("OOT3D_PICA_AOT_SHADER_PACK",
                            launch.PicaAotShaderPackPath);
     SetRendererEnvironment("OOT3D_PICA_EFFECTIVE_SHADER_INVENTORY",
@@ -133,6 +138,9 @@ NativeGameArguments PrepareNativeGameArguments(int argc, char** argv) {
 
 int main(int argc, char** argv) {
     try {
+#if defined(__ANDROID__)
+        InitializeAndroidGameHost();
+#endif
 #if defined(OOT3D_REQUIRE_WHOLE_AOT_PLUGIN_V2)
         if (argc == 3 && std::string_view(argv[1]) == "--verify-title-plugin") {
             Oot3dNativeGame::ConfigureTitlePlugin(argv[2]);
@@ -142,6 +150,11 @@ int main(int argc, char** argv) {
             return 0;
         }
 #endif
+        if (argc == 3 && std::string_view(argv[1]) == "--game-language-info") {
+            std::cout << Oot3dNativeGame::GameLanguageDocument(
+                Oot3dNativeGame::DetectGameLanguages(argv[2])).dump() << '\n';
+            return 0;
+        }
         if (argc == 2 && std::string_view(argv[1]) == "--product-info") {
             WriteTriAevumProductInfo(std::cout);
             return 0;

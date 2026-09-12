@@ -8,7 +8,6 @@
 #ifdef ENABLE_OOT3D_NRI
 #include "nri_interop_internal.h"
 #endif
-#include <shaderc/shaderc.hpp>
 #include <array>
 #include <cmath>
 #include <cstring>
@@ -29,17 +28,8 @@ struct alignas(16) MotionUniforms {
 };
 static_assert(sizeof(MotionUniforms) == 208U);
 
-std::vector<uint32_t> Compile(const std::string& source) {
-    shaderc::Compiler compiler;
-    shaderc::CompileOptions options;
-    options.SetTargetEnvironment(shaderc_target_env_vulkan,
-                                 shaderc_env_version_vulkan_1_2);
-    options.SetOptimizationLevel(shaderc_optimization_level_performance);
-    const auto result = compiler.CompileGlslToSpv(
-        source, shaderc_compute_shader, "oot3d_motion_vectors.comp", options);
-    if (result.GetCompilationStatus() != shaderc_compilation_status_success)
-        throw std::runtime_error(result.GetErrorMessage());
-    return {result.cbegin(), result.cend()};
+std::vector<uint32_t> Compile(Renderer::CachedPassShaderCompiler& shaders, const std::string& source) {
+    return shaders.Resolve(source, Renderer::SpirvStage::Compute, "oot3d_motion_vectors.comp");
 }
 } // namespace
 
@@ -142,7 +132,7 @@ bool MotionVectorPass::Initialize(VkPhysicalDevice physicalDevice,
             throw std::runtime_error("NRI motion pipeline layout creation failed");
 
         const std::vector<uint32_t> shader =
-            Compile(BuildCameraMotionComputeShader());
+            Compile(interop.Shaders(), BuildCameraMotionComputeShader());
         nri::ComputePipelineDesc pipelineDesc{};
         pipelineDesc.pipelineLayout = mImpl->PipelineLayout;
         pipelineDesc.shader.stage = nri::StageBits::COMPUTE_SHADER;

@@ -384,6 +384,11 @@ Json SerializeInteractiveGrassSettings(
              {"FarDensity", grass.FarDensity},
              {"FarBladeSegments", grass.FarBladeSegments},
              {"FarTuftsEnabled", grass.FarTuftsEnabled},
+             {"MidrangeClustersEnabled", grass.MidrangeClustersEnabled},
+             {"MidrangeAdaptiveEnabled", grass.MidrangeAdaptiveEnabled},
+             {"MidrangeAdaptiveCapacity", grass.MidrangeAdaptiveCapacity},
+             {"MidrangeClusterCellExtent", grass.MidrangeClusterCellExtent},
+             {"MidrangeFarBladeFraction", grass.MidrangeFarBladeFraction},
              {"FarTuftBladeCount", grass.FarTuftBladeCount},
              {"DrawFadeFraction", grass.DrawFadeFraction},
              {"DensityFadeFraction", grass.DensityFadeFraction},
@@ -411,6 +416,9 @@ Json SerializeInteractiveGrassSettings(
              {"BladeTwistDegrees", grass.Appearance.BladeTwistDegrees},
              {"BladeSegments", grass.Appearance.BladeSegments},
              {"ReceiveLighting", grass.Appearance.ReceiveLighting},
+             {"ToonRimEnabled", grass.Appearance.ToonRimEnabled},
+             {"ToonRimFadeStart", grass.Appearance.ToonRimFadeStart},
+             {"ToonRimFadeEnd", grass.Appearance.ToonRimFadeEnd},
              {"ReceiveFog", grass.Appearance.ReceiveFog},
          }},
         {"Wind",
@@ -622,6 +630,16 @@ void DeserializeInteractiveGrassSettings(
                    path + ".Performance.FarBladeSegments", result);
         ReadScalar(*performance, "FarTuftsEnabled", value.FarTuftsEnabled,
                    path + ".Performance.FarTuftsEnabled", result);
+        ReadScalar(*performance, "MidrangeClustersEnabled", value.MidrangeClustersEnabled,
+                   path + ".Performance.MidrangeClustersEnabled", result);
+        ReadScalar(*performance, "MidrangeAdaptiveEnabled", value.MidrangeAdaptiveEnabled,
+                   path + ".Performance.MidrangeAdaptiveEnabled", result);
+        ReadScalar(*performance, "MidrangeAdaptiveCapacity", value.MidrangeAdaptiveCapacity,
+                   path + ".Performance.MidrangeAdaptiveCapacity", result);
+        ReadScalar(*performance, "MidrangeClusterCellExtent", value.MidrangeClusterCellExtent,
+                   path + ".Performance.MidrangeClusterCellExtent", result);
+        ReadScalar(*performance, "MidrangeFarBladeFraction", value.MidrangeFarBladeFraction,
+                   path + ".Performance.MidrangeFarBladeFraction", result);
         ReadScalar(*performance, "FarTuftBladeCount", value.FarTuftBladeCount,
                    path + ".Performance.FarTuftBladeCount", result);
         // Additive settings: older profiles are valid, not malformed documents.
@@ -699,6 +717,12 @@ void DeserializeInteractiveGrassSettings(
         ReadScalar(*appearance, "ReceiveFog",
                    value.Appearance.ReceiveFog,
                    path + ".Appearance.ReceiveFog", result);
+        ReadScalar(*appearance, "ToonRimEnabled", value.Appearance.ToonRimEnabled,
+                   path + ".Appearance.ToonRimEnabled", result);
+        ReadScalar(*appearance, "ToonRimFadeStart", value.Appearance.ToonRimFadeStart,
+                   path + ".Appearance.ToonRimFadeStart", result);
+        ReadScalar(*appearance, "ToonRimFadeEnd", value.Appearance.ToonRimFadeEnd,
+                   path + ".Appearance.ToonRimFadeEnd", result);
     }
     if (const Json* wind =
             RequireObject(document, "Wind", path + ".Wind",

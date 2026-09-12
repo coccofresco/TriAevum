@@ -1,6 +1,16 @@
 {
   "format": "triaevum_public_release_layout_v1",
   "files": [
+    {
+      "source": "docs/TRIAEVUM_DESKTOP_PACKAGING.md",
+      "path": "docs/TRIAEVUM_DESKTOP_PACKAGING.md",
+      "role": "documentation"
+    },
+    {
+      "source": "docs/TRIAEVUM_CONTRIBUTIONS.md",
+      "path": "docs/TRIAEVUM_CONTRIBUTIONS.md",
+      "role": "documentation"
+    },
     {"source": "build-release/TriAevum.exe", "path": "TriAevum.exe", "role": "runtime_executable"},
     {"source": "build-release/triaevum_title_aot.dll", "path": "triaevum_title_aot.dll", "role": "runtime_library"},
     {"source": "build-release/TriAevumForge.exe", "path": "TriAevumForge.exe", "role": "forge_executable"},
@@ -12,7 +22,7 @@
     {"source": "runtime/triaevum_resources/README.txt", "path": "resources/README.txt", "role": "title_neutral_resource"},
     {"source": "runtime/triaevum_resources/gamecontrollerdb.txt", "path": "resources/gamecontrollerdb.txt", "role": "title_neutral_resource"},
     {"source": "README.md", "path": "README.md", "role": "documentation"},
-    {"source": "docs/releases/v0.6.0-alpha.1b.md", "path": "docs/releases/v0.6.0-alpha.1b.md", "role": "documentation"},
+    {"source": "docs/releases/v0.6.0-alpha.2.md", "path": "docs/releases/v0.6.0-alpha.2.md", "role": "documentation"},
     {"source": "docs/TRIAEVUM_SUPPORTED_ROM.md", "path": "docs/TRIAEVUM_SUPPORTED_ROM.md", "role": "documentation"},
     {"source": "docs/TRIAEVUM_ROM_INPUT_ADAPTER.md", "path": "docs/TRIAEVUM_ROM_INPUT_ADAPTER.md", "role": "documentation"},
     {"source": "docs/TRIAEVUM_USA_REV1_PORT.md", "path": "docs/TRIAEVUM_USA_REV1_PORT.md", "role": "documentation"},

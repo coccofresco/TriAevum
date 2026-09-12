@@ -29,6 +29,16 @@ std::string ValidMetadata() {
 
 int main() {
   bool ok = true;
+#if defined(__ANDROID__) && defined(__aarch64__)
+  ok &= Expect(TamTargetMatchesCurrentProcess("aarch64-linux-android"),
+               "Android ARM64 target rejected");
+  ok &= Expect(!TamTargetMatchesCurrentProcess("aarch64-unknown-linux-gnu") &&
+                   !TamTargetMatchesCurrentProcess("x86_64-unknown-linux-gnu"),
+               "Android accepted a desktop Linux ABI");
+#else
+  ok &= Expect(!TamTargetMatchesCurrentProcess("aarch64-linux-android"),
+               "desktop host accepted an Android module");
+#endif
   auto parsed = Parse(ValidMetadata());
   ok &= Expect(parsed.Ok() && parsed.metadata.runtimeAbi == 1U &&
                    parsed.metadata.nativeImageBytes == 42U &&

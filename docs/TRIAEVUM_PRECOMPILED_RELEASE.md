@@ -5,7 +5,18 @@ model of static Xbox 360 recomp ports. This supersedes earlier requirements to
 compile title code on the end user's machine. It changes distribution, not the
 runtime execution backend, game timing, graphics or save format.
 
+2026-09-12 amendment, explicitly confirmed by the maintainer: the catalogued
+portable shader corpus and observed pipeline recipes are included with Forge
+for all users. This is a narrow exception to the earlier private-cache rule,
+not permission to ship driver caches, ROMs, extracted assets, saves or captures.
+Forge prepares device-specific pipelines locally, without asking users to
+select or enable a cache. See [the verified contract](TRIAEVUM_BUNDLED_FORGE_SHADER_CORPUS.md).
+
 ## User contract
+
+Windows packages are portable ZIPs, with application-managed persistent data
+beside the executable and no silent AppData fallback. The Linux packaging
+decision and remaining work are in [desktop packaging](TRIAEVUM_DESKTOP_PACKAGING.md).
 
 - One GUI: `TriAevumForge.exe`, one input: a supported decrypted `.3ds`/`.cci` ROM.
 - Forge verifies/extracts the ROM and activates a shipped optimized title DLL.

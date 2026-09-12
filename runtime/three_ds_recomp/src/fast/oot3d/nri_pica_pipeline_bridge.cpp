@@ -96,6 +96,15 @@ bool NriPicaPipelineBridge::Initialize(NriInteropContext& interop) {
     return true;
 }
 
+bool NriPicaPipelineBridge::InitializePipelineCache(std::span<const uint8_t> data) {
+    return mBridge.InitializePipelineCache(data);
+}
+std::vector<uint8_t> NriPicaPipelineBridge::GetPipelineCacheData() const {
+    return mBridge.GetPipelineCacheData();
+}
+Renderer3ds::NriPicaPipelineStatistics NriPicaPipelineBridge::PipelineStatistics() const {
+    return mBridge.PipelineStatistics();
+}
 bool NriPicaPipelineBridge::CreateOwnedPipeline(
     VkPipeline fallbackPipeline,
     const NriPicaGraphicsPipelineDesc& desc) {

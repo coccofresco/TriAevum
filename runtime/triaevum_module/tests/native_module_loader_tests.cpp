@@ -79,7 +79,9 @@ BuildTam(const std::vector<std::uint8_t> &nativeImage,
   sourceIdentity[0] = '4';
   sourceIdentity[1] = '2';
   const std::string nativeHash = HashHex(detail::Sha256(nativeImage));
-#if defined(_WIN32) && (defined(_M_ARM64) || defined(__aarch64__))
+#if defined(__ANDROID__)
+  constexpr std::string_view target = "aarch64-linux-android";
+#elif defined(_WIN32) && (defined(_M_ARM64) || defined(__aarch64__))
   constexpr std::string_view target = "aarch64-pc-windows-msvc";
 #elif defined(_WIN32)
   constexpr std::string_view target = "x86_64-pc-windows-msvc";

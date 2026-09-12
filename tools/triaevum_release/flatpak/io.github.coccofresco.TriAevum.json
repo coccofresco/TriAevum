@@ -1,0 +1,36 @@
+{
+  "app-id": "io.github.coccofresco.TriAevum",
+  "runtime": "org.freedesktop.Platform",
+  "runtime-version": "25.08",
+  "sdk": "org.freedesktop.Sdk",
+  "command": "triaevum",
+  "branch": "stable",
+  "add-extensions": {},
+  "build-options": {"strip": false, "no-debuginfo": true},
+  "finish-args": [
+    "--share=ipc", "--share=network", "--socket=x11", "--socket=wayland",
+    "--socket=pulseaudio", "--device=dri", "--device=input"
+  ],
+  "modules": [
+    {
+      "name": "triaevum-package",
+      "buildsystem": "simple",
+      "no-python-timestamp-fix": true,
+      "build-commands": [
+        "mkdir -p /app/lib/triaevum",
+        "cp -a package/. /app/lib/triaevum/",
+        "chmod 755 /app/lib/triaevum/TriAevum /app/lib/triaevum/TriAevumForge",
+        "cc -std=c11 -O2 -Wall -Wextra -Werror file_chooser.c $(pkg-config --cflags --libs gio-2.0 gio-unix-2.0) -o triaevum-file-chooser",
+        "install -m755 triaevum-file-chooser /app/lib/triaevum/triaevum-file-chooser",
+        "install -Dm755 triaevum /app/bin/triaevum",
+        "install -Dm644 io.github.coccofresco.TriAevum.desktop /app/share/applications/io.github.coccofresco.TriAevum.desktop"
+      ],
+      "sources": [
+        {"type": "dir", "path": "package", "dest": "package"},
+        {"type": "file", "path": "file_chooser.c"},
+        {"type": "file", "path": "triaevum"},
+        {"type": "file", "path": "io.github.coccofresco.TriAevum.desktop"}
+      ]
+    }
+  ]
+}

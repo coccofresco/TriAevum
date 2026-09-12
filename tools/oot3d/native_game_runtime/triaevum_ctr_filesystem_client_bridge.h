@@ -11,6 +11,7 @@ class TriAevumCtrFilesystemClientBridge final : public NativeA32CtrFilesystem {
         triaevum::module::FilesystemServiceClientV1& client);
 
     bool EnsureSaveRoot() override;
+    bool RemoveFile(std::string_view path, bool* removed) override;
     bool Open(NativeA32CtrFilesystemRoot root, std::string_view path,
               uint32_t flags, std::shared_ptr<NativeA32CtrFile>* file) override;
 

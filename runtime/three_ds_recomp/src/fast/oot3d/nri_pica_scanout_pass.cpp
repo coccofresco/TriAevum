@@ -10,7 +10,6 @@
 #include <NRI.h>
 #endif
 
-#include <shaderc/shaderc.hpp>
 
 #include <algorithm>
 #include <array>
@@ -25,19 +24,10 @@ namespace {
 constexpr uint32_t kFrameSlots = 2U;
 constexpr uint32_t kDrawsPerFrame = 8U;
 
-std::vector<uint32_t> Compile(const std::string& source,
-                              shaderc_shader_kind kind,
+std::vector<uint32_t> Compile(Renderer::CachedPassShaderCompiler& shaders, const std::string& source,
+                              Renderer::SpirvStage kind,
                               const char* name) {
-    shaderc::Compiler compiler;
-    shaderc::CompileOptions options;
-    options.SetTargetEnvironment(shaderc_target_env_vulkan,
-                                 shaderc_env_version_vulkan_1_2);
-    options.SetOptimizationLevel(shaderc_optimization_level_performance);
-    const auto result =
-        compiler.CompileGlslToSpv(source, kind, name, options);
-    if (result.GetCompilationStatus() != shaderc_compilation_status_success)
-        throw std::runtime_error(result.GetErrorMessage());
-    return {result.cbegin(), result.cend()};
+    return shaders.Resolve(source, kind, name);
 }
 } // namespace
 
@@ -189,11 +179,11 @@ bool NriPicaScanoutPass::Configure(VkFormat targetFormat) {
     mImpl->BasePipeline = nullptr;
     mImpl->OverlayPipeline = nullptr;
     try {
-        const auto vertex = Compile(
-            BuildPicaScanoutVertexShader(), shaderc_vertex_shader,
+        const auto vertex = Compile(mImpl->Interop->Shaders(),
+            BuildPicaScanoutVertexShader(), Renderer::SpirvStage::Vertex,
             "oot3d_nri_pica_scanout.vert");
-        const auto fragment = Compile(
-            BuildPicaScanoutFragmentShader(true), shaderc_fragment_shader,
+        const auto fragment = Compile(mImpl->Interop->Shaders(),
+            BuildPicaScanoutFragmentShader(true), Renderer::SpirvStage::Fragment,
             "oot3d_nri_pica_scanout.frag");
         const std::array<nri::ShaderDesc, 2> shaders{{
             {nri::StageBits::VERTEX_SHADER, vertex.data(),
@@ -316,8 +306,13 @@ bool NriPicaScanoutPass::Execute(
     mImpl->LastBarrierExecution = barrierPlan.BeginExecution();
     const auto writable = mImpl->TargetStates.PlanTransition(
         target, {outputBarrier->DispatchAccess, 0});
-    if (!NriInteropAccess::CmdTextureBarrier(
-            *mImpl->Interop, desc.FrameSlot, desc.TargetImage, writable))
+    // The host waits for swapchain acquisition at COLOR_ATTACHMENT. Chain the
+    // layout transition to that same stage before clearing/reusing the image;
+    // a NONE -> COLOR transition could otherwise run while it is still shown.
+    const NriTextureTransitionDesc acquiredTarget{
+        desc.TargetImage, writable, 0, 0, nri::StageBits::COLOR_ATTACHMENT};
+    if (!NriInteropAccess::CmdTextureBarriers(
+            *mImpl->Interop, desc.FrameSlot, &acquiredTarget, 1))
         return false;
     mImpl->LastBarrierExecution.RecordGraphTransition(writable);
     mImpl->TargetStates.Commit(writable);

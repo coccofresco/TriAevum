@@ -3,9 +3,21 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import struct
 import unittest
 
 SOURCE = Path(__file__).resolve().parents[1] / "oot3d/native_game_runtime"
+
+
+def runtime_floats(value):
+    """Graphics settings store floating-point JSON values as C++ float."""
+    if isinstance(value, float):
+        return struct.unpack("f", struct.pack("f", value))[0]
+    if isinstance(value, dict):
+        return {key: runtime_floats(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [runtime_floats(item) for item in value]
+    return value
 
 
 class ProductGraphicsDefaultsTests(unittest.TestCase):
@@ -32,34 +44,44 @@ class ProductGraphicsDefaultsTests(unittest.TestCase):
             self.assertTrue(grass[section])
         self.assertEqual(grass["Performance"]["SegmentLodStartDistance"], 501)
         self.assertEqual(grass["Performance"]["SegmentLodEndDistance"], 1000)
-        self.assertEqual(grass["Performance"]["LodReferenceDistance"], 2282)
-        self.assertAlmostEqual(grass["Performance"]["LodStartFraction"], 0.32)
-        self.assertAlmostEqual(grass["Performance"]["LodEndFraction"], 0.32)
-        self.assertEqual(grass["Performance"]["DensityFadeFraction"], 1)
+        self.assertEqual(grass["Performance"]["LodReferenceDistance"], 1668)
+        self.assertAlmostEqual(grass["Performance"]["LodStartFraction"], 1)
+        self.assertAlmostEqual(grass["Performance"]["LodEndFraction"], 1)
+        self.assertAlmostEqual(grass["Performance"]["DensityFadeFraction"], 0.3)
         self.assertAlmostEqual(grass["Performance"]["DrawFadeFraction"], 0.15)
-        self.assertAlmostEqual(grass["Performance"]["TuftTransitionFraction"], 0.48)
-        self.assertEqual(grass["Performance"]["FarTuftDensity"], 2)
-        self.assertEqual(grass["Performance"]["FarTuftSpread"], 1)
+        self.assertAlmostEqual(grass["Performance"]["TuftTransitionFraction"], 0.34)
+        self.assertAlmostEqual(grass["Performance"]["FarTuftDensity"], 0.1)
+        self.assertEqual(grass["Performance"]["FarTuftSpread"], 4)
         self.assertEqual(grass["Performance"]["SegmentLodSoftness"], 0.75)
-        self.assertEqual(grass["Performance"]["FarDensity"], 1)
-        self.assertAlmostEqual(grass["Appearance"]["TextureColorInfluence"], 0.22)
-        self.assertAlmostEqual(grass["Appearance"]["TextureRootBrightness"], 2.87, places=5)
+        self.assertAlmostEqual(grass["Performance"]["FarDensity"], 0.62)
+        self.assertAlmostEqual(grass["Appearance"]["TextureColorInfluence"], 0.75)
+        self.assertAlmostEqual(grass["Appearance"]["TextureRootBrightness"], 1.01, places=5)
+        self.assertAlmostEqual(grass["Appearance"]["TextureTipBrightness"], 1.74, places=5)
+        self.assertFalse(grass["Appearance"]["ToonRimEnabled"])
+        self.assertEqual(grass["Appearance"]["ToonRimFadeStart"], 0)
+        self.assertEqual(grass["Appearance"]["ToonRimFadeEnd"], 901)
         self.assertEqual(grass["Budget"]["DrawDistance"], 50000)
         self.assertEqual(grass["Appearance"]["BladeSegments"], 5)
-        self.assertAlmostEqual(grass["Generation"]["MinimumSpacing"], 0.6)
+        self.assertEqual(grass["Generation"]["MinimumSpacing"], 0)
         interaction = grass["LinkInteraction"]
         self.assertAlmostEqual(interaction["ColliderHeightMultiplier"], 1.69, places=5)
         self.assertAlmostEqual(interaction["ColliderRadiusMultiplier"], 1.19, places=5)
         self.assertAlmostEqual(interaction["CollisionPush"], 1.66, places=5)
         self.assertAlmostEqual(interaction["VelocityResponse"], 0.87, places=5)
         self.assertEqual(interaction["VerticalMargin"], 69)
-        self.assertEqual(grass["Generation"]["IndividualRandomness"], 0)
+        self.assertEqual(grass["Generation"]["IndividualRandomness"], 1)
+        self.assertEqual(grass["Generation"]["InstancesPerSquareMeter"], 1024)
         self.assertEqual(grass["Budget"]["MaxInstancesPerRoom"], 500000)
         self.assertEqual([source["Target"]["Rgba8Hash"] for source in grass["Sources"]],
                          ["be15aff93dfdcd88", "2321986eb9820c29", "4b8941fd174516b0",
                           "0a29e93a3b0742b3", "bd769b9ce136d73a", "d13528cd4896c851"])
-        self.assertTrue(grass["Performance"]["FarTuftsEnabled"])
-        self.assertEqual(grass["Performance"]["FarTuftBladeCount"], 4)
+        self.assertFalse(grass["Performance"]["FarTuftsEnabled"])
+        self.assertEqual(grass["Performance"]["FarTuftBladeCount"], 3)
+        self.assertTrue(grass["Performance"]["MidrangeClustersEnabled"])
+        self.assertTrue(grass["Performance"]["MidrangeAdaptiveEnabled"])
+        self.assertEqual(grass["Performance"]["MidrangeAdaptiveCapacity"], 10000)
+        self.assertEqual(grass["Performance"]["MidrangeClusterCellExtent"], 88)
+        self.assertEqual(grass["Performance"]["MidrangeFarBladeFraction"], 1)
 
     def test_topscreen_installer_template_preserves_current_profile(self):
         root = SOURCE.parents[2]
@@ -83,7 +105,7 @@ class ProductGraphicsDefaultsTests(unittest.TestCase):
         result = subprocess.run([os.environ["TRIAEVUM_PRODUCT_TEST_EXE"], "--product-info"],
                                 capture_output=True, text=True, check=True, timeout=10)
         graphics = json.loads(result.stdout)["default_config"]["Graphics"]
-        self.assertEqual(graphics["Grass"], self.defaults["Grass"])
+        self.assertEqual(graphics["Grass"], runtime_floats(self.defaults["Grass"]))
         self.assertEqual(graphics["GrassSavedPreset"], graphics["Grass"])
         self.assertEqual(graphics["Effects"]["Toon"], self.defaults["Effects"]["Toon"])
         self.assertEqual(graphics["FrameRate"], self.defaults["FrameRate"])

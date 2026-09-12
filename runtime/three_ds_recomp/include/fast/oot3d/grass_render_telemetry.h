@@ -47,6 +47,12 @@ struct GrassRenderTelemetrySnapshot {
     uint64_t EvaluatedAnchors = 0;
     uint32_t VisibleBlades = 0;
     uint32_t DrawCalls = 0;
+    uint32_t ClusterDrawInstances = 0;
+    uint32_t ClusterRepresentedBlades = 0;
+    uint32_t PreparedDrawClusters = 0;
+    uint32_t LargeDrawClusters = 0;
+    uint32_t MaximumClusterMembers = 0;
+    uint32_t CapacityLimitedRanges = 0;
     uint32_t CullingWorkers = 0;
     uint64_t UploadedBytes = 0;
     uint64_t DynamicUploadedBytes = 0;

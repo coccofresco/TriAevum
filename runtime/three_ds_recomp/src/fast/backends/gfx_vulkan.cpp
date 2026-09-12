@@ -1,6 +1,11 @@
 #ifdef ENABLE_OOT3D_VULKAN
 
 #include "fast/backends/gfx_vulkan.h"
+#include "fast/renderer/framebuffer_readback.h"
+#include "fast/renderer/shaderc_compiler.h"
+#include "fast/renderer3ds/vulkan_pipeline_cache_store.h"
+#include "fast/renderer3ds/pica_vulkan_device_profile.h"
+#include "fast/oot3d/pica_nri_pipeline_state.h"
 
 #include "fast/backends/gfx_sdl.h"
 #include "fast/interpreter.h"
@@ -11,10 +16,11 @@
 #include <SDL2/SDL_syswm.h>
 #endif
 #include <spdlog/spdlog.h>
-#include <shaderc/shaderc.hpp>
+#include <nlohmann/json.hpp>
 #include <imgui_impl_vulkan.h>
 #include "fast/oot3d/graphics_settings_runtime.h"
 #include "fast/oot3d/cacao_diagnostics.h"
+#include "fast/oot3d/display_diagnostics.h"
 #include "fast/oot3d/anti_aliasing_frame_policy.h"
 #include "fast/oot3d/renderer_presentation_controller.h"
 #include "fast/oot3d/render_resolution_policy.h"
@@ -41,8 +47,6 @@ namespace Fast {
 namespace {
 
 constexpr size_t kOot3dCachedVertexBufferLimit = 1024;
-constexpr uint32_t kVulkanShaderCacheVersion = 1;
-constexpr uint32_t kVulkanPipelineCacheVersion = 1;
 constexpr uint32_t kSpirvMagic = 0x07230203U;
 constexpr uint64_t kMaximumPipelineCacheBytes = 64ULL * 1024ULL * 1024ULL;
 
@@ -63,16 +67,18 @@ void* ResolveNriNativeWindow(GfxWindowBackendSDL2* backend) {
 #endif
 }
 
-uint64_t HashShaderSource(std::string_view source, uint64_t seed) {
-    uint64_t hash = seed;
-    for (const unsigned char byte : source) {
-        hash ^= byte;
-        hash *= 1099511628211ULL;
-    }
-    return hash;
-}
-
 std::filesystem::path VulkanShaderCacheDirectory() {
+#ifdef _WIN32
+    const auto* overridePath = _wgetenv(L"TRIAEVUM_RENDERER_CACHE_DIR");
+#else
+    const auto* overridePath = std::getenv("TRIAEVUM_RENDERER_CACHE_DIR");
+#endif
+    if (overridePath != nullptr && *overridePath != 0) {
+        const std::filesystem::path directory(overridePath);
+        if (!directory.is_absolute())
+            throw std::runtime_error("TRIAEVUM_RENDERER_CACHE_DIR must be absolute");
+        return directory;
+    }
     char* prefPath = SDL_GetPrefPath(nullptr, "oot3d_native_vulkan");
     if (prefPath == nullptr) {
         return {};
@@ -83,146 +89,15 @@ std::filesystem::path VulkanShaderCacheDirectory() {
     return directory;
 }
 
-struct VulkanShaderCacheHeader {
-    uint32_t Magic = 0x4F335653U;
-    uint32_t Version = kVulkanShaderCacheVersion;
-    uint32_t Stage = 0;
-    uint32_t WordCount = 0;
-    uint64_t SourceSize = 0;
-    uint64_t SourceHash0 = 0;
-    uint64_t SourceHash1 = 0;
-};
+using Renderer3ds::VulkanPipelineCacheHeader;
+using Renderer3ds::MakePipelineCacheHeader;
+using Renderer3ds::LoadPipelineCacheData;
+using Renderer3ds::StorePipelineCacheData;
 
-std::filesystem::path VulkanShaderCachePath(std::string_view source,
-                                            bool vertexShader,
-                                            VulkanShaderCacheHeader& header) {
-    header.Stage = vertexShader ? 1U : 2U;
-    header.SourceSize = source.size();
-    header.SourceHash0 =
-        HashShaderSource(source, 14695981039346656037ULL ^ header.Stage);
-    header.SourceHash1 =
-        HashShaderSource(source, 1099511628211ULL ^ header.SourceSize);
-    std::ostringstream name;
-    name << std::hex << header.SourceHash0 << '_' << header.SourceHash1
-         << '_' << header.Stage << ".spv";
+std::filesystem::path VulkanPipelineCachePath(bool nri = false) {
     const auto directory = VulkanShaderCacheDirectory();
     return directory.empty() ? std::filesystem::path{}
-                             : directory / name.str();
-}
-
-bool LoadCachedSpirv(const std::filesystem::path& path,
-                     const VulkanShaderCacheHeader& expected,
-                     std::vector<uint32_t>& spirv) {
-    if (path.empty()) {
-        return false;
-    }
-    std::ifstream input(path, std::ios::binary);
-    VulkanShaderCacheHeader header;
-    if (!input.read(reinterpret_cast<char*>(&header), sizeof(header)) ||
-        header.Magic != expected.Magic ||
-        header.Version != expected.Version || header.Stage != expected.Stage ||
-        header.SourceSize != expected.SourceSize ||
-        header.SourceHash0 != expected.SourceHash0 ||
-        header.SourceHash1 != expected.SourceHash1 || header.WordCount == 0) {
-        return false;
-    }
-    spirv.resize(header.WordCount);
-    return input.read(reinterpret_cast<char*>(spirv.data()),
-                      static_cast<std::streamsize>(spirv.size() *
-                                                   sizeof(uint32_t))) &&
-           spirv.front() == kSpirvMagic;
-}
-
-void StoreCachedSpirv(const std::filesystem::path& path,
-                      VulkanShaderCacheHeader header,
-                      std::span<const uint32_t> spirv) {
-    if (path.empty() || spirv.empty()) {
-        return;
-    }
-    std::error_code error;
-    std::filesystem::create_directories(path.parent_path(), error);
-    if (error) {
-        return;
-    }
-    header.WordCount = static_cast<uint32_t>(spirv.size());
-    std::ofstream output(path, std::ios::binary | std::ios::trunc);
-    if (!output.write(reinterpret_cast<const char*>(&header), sizeof(header))) {
-        return;
-    }
-    output.write(reinterpret_cast<const char*>(spirv.data()),
-                 static_cast<std::streamsize>(spirv.size_bytes()));
-}
-
-struct VulkanPipelineCacheHeader {
-    uint32_t Magic = 0x4F335650U;
-    uint32_t Version = kVulkanPipelineCacheVersion;
-    uint32_t VendorId = 0;
-    uint32_t DeviceId = 0;
-    uint32_t DriverVersion = 0;
-    std::array<uint8_t, VK_UUID_SIZE> Uuid{};
-    uint64_t DataSize = 0;
-};
-
-std::filesystem::path VulkanPipelineCachePath() {
-    const auto directory = VulkanShaderCacheDirectory();
-    return directory.empty() ? std::filesystem::path{}
-                             : directory / "pipeline_cache.bin";
-}
-
-VulkanPipelineCacheHeader MakePipelineCacheHeader(
-    const VkPhysicalDeviceProperties& properties) {
-    VulkanPipelineCacheHeader header;
-    header.VendorId = properties.vendorID;
-    header.DeviceId = properties.deviceID;
-    header.DriverVersion = properties.driverVersion;
-    std::copy_n(properties.pipelineCacheUUID, VK_UUID_SIZE,
-                header.Uuid.begin());
-    return header;
-}
-
-bool LoadPipelineCacheData(const std::filesystem::path& path,
-                           const VulkanPipelineCacheHeader& expected,
-                           std::vector<uint8_t>& data) {
-    if (path.empty()) {
-        return false;
-    }
-    std::ifstream input(path, std::ios::binary);
-    VulkanPipelineCacheHeader header;
-    if (!input.read(reinterpret_cast<char*>(&header), sizeof(header)) ||
-        header.Magic != expected.Magic ||
-        header.Version != expected.Version ||
-        header.VendorId != expected.VendorId ||
-        header.DeviceId != expected.DeviceId ||
-        header.DriverVersion != expected.DriverVersion ||
-        header.Uuid != expected.Uuid || header.DataSize == 0 ||
-        header.DataSize > kMaximumPipelineCacheBytes) {
-        return false;
-    }
-    data.resize(static_cast<size_t>(header.DataSize));
-    return static_cast<bool>(input.read(
-        reinterpret_cast<char*>(data.data()),
-        static_cast<std::streamsize>(data.size())));
-}
-
-void StorePipelineCacheData(const std::filesystem::path& path,
-                            VulkanPipelineCacheHeader header,
-                            std::span<const uint8_t> data) {
-    if (path.empty() || data.empty()) {
-        return;
-    }
-    std::error_code error;
-    std::filesystem::create_directories(path.parent_path(), error);
-    if (error) {
-        return;
-    }
-    header.DataSize = data.size();
-    std::ofstream output(path, std::ios::binary | std::ios::trunc);
-    if (!output.write(reinterpret_cast<const char*>(&header),
-                      sizeof(header))) {
-        return;
-    }
-    output.write(reinterpret_cast<const char*>(data.data()),
-                 static_cast<std::streamsize>(data.size()));
+        : directory / (nri ? Renderer3ds::kNriPipelineCacheFilename : "pipeline_cache.bin");
 }
 
 void CheckVk(VkResult result, const char* operation) {
@@ -1042,6 +917,15 @@ void GfxRenderingAPIVulkan::Init() {
                     nriPicaPipelinesEnabled
                         ? mNriPicaPipelineBridge.UnavailableReason()
                         : "disabled by environment");
+    } else {
+        VkPhysicalDeviceProperties properties{};
+        vkGetPhysicalDeviceProperties(mPhysicalDevice, &properties);
+        std::vector<uint8_t> data;
+        LoadPipelineCacheData(VulkanPipelineCachePath(true),
+                              MakePipelineCacheHeader(properties), data);
+        const bool initialized = mNriPicaPipelineBridge.InitializePipelineCache(data);
+        SPDLOG_INFO("NRI PICA pipeline cache: initialized={}, accepted {} bytes", initialized,
+                    mNriPicaPipelineBridge.PipelineStatistics().InitialCacheBytes);
     }
     if (!mNriPicaTextureImageOwner.Initialize(mNriInterop)) {
         SPDLOG_INFO(
@@ -1285,6 +1169,7 @@ void GfxRenderingAPIVulkan::Init() {
                     mPicaDynamicRenderingScope.UnavailableReason());
     }
     if (!mInteractiveGrassPass.Initialize(mPhysicalDevice, mDevice,
+                                          mNriInterop.Shaders(),
                                           mNativePicaCanonicalRenderPass,
                                           mNativePicaRenderPass,
                                           mNativePicaSampleCount,
@@ -1294,6 +1179,7 @@ void GfxRenderingAPIVulkan::Init() {
                     mInteractiveGrassPass.UnavailableReason());
     }
     CreateFrameResources();
+    mScanoutProbe.Initialize(mPhysicalDevice, mDevice, kFramesInFlight);
     mGpuProfiler.Initialize(mPhysicalDevice, mDevice, mGraphicsQueueFamily,
                             mDiagnostics.Enabled());
     CreateFallbackTexture();
@@ -1313,6 +1199,7 @@ void GfxRenderingAPIVulkan::Shutdown() {
         WaitForAllPresents();
         StopPresentWorker();
         vkDeviceWaitIdle(mDevice);
+        StorePipelineCache();
         ShutdownImGuiBackend();
         mSceneSurfaces.Clear();
         mResourceStates.Clear();
@@ -1356,7 +1243,7 @@ void GfxRenderingAPIVulkan::Shutdown() {
 #endif
         mNriInterop.Shutdown();
         mGpuProfiler.Shutdown();
-        StorePipelineCache();
+        mScanoutProbe.Shutdown();
         DestroyGraphicsPipelines();
         for (auto& [id, framebuffer] : mOffscreenFramebuffers) {
             DestroyOffscreenFramebuffer(framebuffer);
@@ -1706,6 +1593,7 @@ void GfxRenderingAPIVulkan::StartFrame() {
     }
     auto& settingsRuntime = Oot3d::GraphicsSettingsRuntime::Instance();
     Oot3d::TickCacaoDiagnostics(settingsRuntime, mFrameCounter);
+    Oot3d::TickDisplayDiagnostics(settingsRuntime, mFrameCounter);
     settingsRuntime.TickPresentation();
     const auto initialGraphicsSettings = settingsRuntime.Snapshot();
     const auto presentationRequest =
@@ -1735,7 +1623,7 @@ void GfxRenderingAPIVulkan::StartFrame() {
             if (presentationRequest->Kind ==
                 Oot3d::RendererPresentationRequestKind::Candidate) {
                 settingsRuntime.RejectPresentationApply(
-                    initialGraphicsSettings);
+                    initialGraphicsSettings, presentationError);
             }
             SPDLOG_ERROR("OOT3D display settings were not applied: {}",
                          presentationError);
@@ -2004,6 +1892,9 @@ void GfxRenderingAPIVulkan::StartFrame() {
     if (mPresentSwapchainDirty.exchange(false)) {
         mSwapchainDirty = true;
     }
+    if (mSwapchainSuboptimal.exchange(false) && !mSwapchainDirty) {
+        mSwapchainDirty = SwapchainSurfaceChanged();
+    }
     const auto presentError = static_cast<VkResult>(mPresentError.exchange(VK_SUCCESS));
     if (presentError != VK_SUCCESS) {
         CheckVk(presentError, "asynchronous vkQueuePresentKHR");
@@ -2023,6 +1914,7 @@ void GfxRenderingAPIVulkan::StartFrame() {
     CheckVk(vkWaitForFences(mDevice, 1, &mInFlightFences[mCurrentFrame], VK_TRUE,
                             std::numeric_limits<uint64_t>::max()),
             "vkWaitForFences");
+    mScanoutProbe.Consume(mCurrentFrame);
     ReleaseRetiredNativePicaGeometryBuffers(mCurrentFrame);
     auto& frame = mFrameResources[mCurrentFrame];
     mCompletedNativePicaIds.insert(mCompletedNativePicaIds.end(),
@@ -2078,8 +1970,31 @@ void GfxRenderingAPIVulkan::StartFrame() {
         CheckVk(acquire, "vkAcquireNextImageKHR");
     }
     if (acquire == VK_SUBOPTIMAL_KHR) {
-        mSwapchainDirty = true;
+        mSwapchainSuboptimal.store(true);
     }
+
+    // Acquire can recreate the swapchain too. Validate against its final extent,
+    // not the requested window size or the previous swapchain. Mode/present-only
+    // changes retain targets; saved display pixels bridge presentation-only frames.
+    const bool staleTargetExtent = std::any_of(
+        mNativePicaRenderTargets.begin(), mNativePicaRenderTargets.end(),
+        [&](const auto& entry) {
+            const auto& [key, target] = entry;
+            const auto expected = Oot3d::ResolveNativePicaRenderExtent(
+                {key.Width, key.Height},
+                {mSwapchainExtent.width, mSwapchainExtent.height},
+                mInternalResolutionScale);
+            return target.Width != expected.Width || target.Height != expected.Height;
+        });
+    if (staleTargetExtent) {
+        ResetNativePicaRenderTargets(true);
+    }
+    settingsRuntime.PublishDisplayMetrics({
+        mSwapchainExtent.width, mSwapchainExtent.height, 0, 0,
+        mInternalResolutionScale,
+        !mWindowBackend->IsFullscreen() ? Oot3d::WindowMode::Windowed :
+        mWindowBackend->IsWindowedFullscreen() ? Oot3d::WindowMode::Borderless :
+                                               Oot3d::WindowMode::ExclusiveFullscreen});
 
     if (mImagesInFlight[mCurrentImage] != VK_NULL_HANDLE) {
         CheckVk(vkWaitForFences(mDevice, 1, &mImagesInFlight[mCurrentImage], VK_TRUE,
@@ -2187,6 +2102,9 @@ void GfxRenderingAPIVulkan::EndFrame() {
         mOverlayRenderPassActive = false;
     }
     const auto sceneFrameStats = mPicaSceneFrame.Stats();
+    mScanoutProbe.Record(mCommandBuffers[mCurrentFrame], mSwapchainImages[mCurrentImage],
+                         mSwapchainFormat, mSwapchainExtent, mCurrentFrame, mCurrentImage,
+                         mFrameCounter, mNativePicaPresentedThisFrame);
     mDiagnostics.RecordPicaSceneFrame(sceneFrameStats);
     mGpuProfiler.EndFrame(mCurrentFrame, mCommandBuffers[mCurrentFrame]);
     CheckVk(vkEndCommandBuffer(mCommandBuffers[mCurrentFrame]), "vkEndCommandBuffer");
@@ -2266,8 +2184,10 @@ void GfxRenderingAPIVulkan::FinishRender() {
             std::lock_guard swapchainLock(mSwapchainCallMutex);
             present = vkQueuePresentKHR(mPresentQueue, &presentInfo);
         }
-        if (present == VK_ERROR_OUT_OF_DATE_KHR || present == VK_SUBOPTIMAL_KHR) {
+        if (present == VK_ERROR_OUT_OF_DATE_KHR) {
             mSwapchainDirty = true;
+        } else if (present == VK_SUBOPTIMAL_KHR) {
+            mSwapchainSuboptimal.store(true);
         } else if (present != VK_SUCCESS) {
             CheckVk(present, "vkQueuePresentKHR");
         }
@@ -2293,15 +2213,19 @@ void GfxRenderingAPIVulkan::UpdateFramebufferParameters(int fbId, uint32_t width
     if (fbId != 0) {
         return;
     }
-    // Host dimensions are logical points on macOS; the swapchain extent is
-    // drawable pixels. Comparing the two rebuilds the swapchain every frame
-    // on Retina displays, destroying all pipelines and the ImGui font atlas.
-    // Window/display events and OUT_OF_DATE handle drawable-only changes.
-    const bool sizeChanged = width != mRequestedWidth || height != mRequestedHeight;
+    if (width == mRequestedWidth && height == mRequestedHeight) {
+        return;
+    }
     mRequestedWidth = width;
     mRequestedHeight = height;
-    if (mInitialized && sizeChanged) {
-        mSwapchainDirty = true;
+    if (mInitialized) {
+        // A fullscreen/mobile surface can grant a different extent from the
+        // logical render request. Recreating it cannot change that constraint.
+        // Real window changes still invalidate through OnResize/OUT_OF_DATE.
+        const auto extent = ChooseExtent(QuerySwapchainSupport(mPhysicalDevice).Capabilities);
+        if (extent.width != mSwapchainExtent.width || extent.height != mSwapchainExtent.height) {
+            mSwapchainDirty = true;
+        }
     }
 }
 
@@ -2497,7 +2421,8 @@ void GfxRenderingAPIVulkan::ClearFramebuffer(bool, bool) {
 }
 
 void GfxRenderingAPIVulkan::ReadFramebufferToCPU(int, uint32_t width, uint32_t height, uint16_t* rgba16Buf) {
-    if (rgba16Buf == nullptr || width == 0 || height == 0 || mDevice == VK_NULL_HANDLE ||
+    if (rgba16Buf == nullptr || width == 0 || height == 0 ||
+        mSwapchainExtent.width == 0 || mSwapchainExtent.height == 0 || mDevice == VK_NULL_HANDLE ||
         (mSwapchain == VK_NULL_HANDLE && !mNriSwapchain.Active()) ||
         mCurrentFramebuffer != 0) {
         return;
@@ -2512,8 +2437,6 @@ void GfxRenderingAPIVulkan::ReadFramebufferToCPU(int, uint32_t width, uint32_t h
                             std::numeric_limits<uint64_t>::max()),
             "vkWaitForFences(readback)");
 
-    // The drawable may be larger than the logical window on Retina displays.
-    // Read the whole drawable, then scale into the caller's requested size.
     const uint32_t copyWidth = mSwapchainExtent.width;
     const uint32_t copyHeight = mSwapchainExtent.height;
     const VkDeviceSize byteCount = static_cast<VkDeviceSize>(copyWidth) * copyHeight * 4;
@@ -2555,25 +2478,14 @@ void GfxRenderingAPIVulkan::ReadFramebufferToCPU(int, uint32_t width, uint32_t h
                          &toPresent);
     EndImmediateCommands(commandBuffer);
 
-    std::fill(rgba16Buf, rgba16Buf + static_cast<size_t>(width) * height, 0);
     const auto* rgba8 = static_cast<const uint8_t*>(readback.Mapped);
     const bool bgra = mSwapchainFormat == VK_FORMAT_B8G8R8A8_UNORM ||
                       mSwapchainFormat == VK_FORMAT_B8G8R8A8_SRGB;
-    for (uint32_t y = 0; y < height; ++y) {
-        const size_t sourceY = static_cast<uint64_t>(y) * copyHeight / height;
-        for (uint32_t x = 0; x < width; ++x) {
-            const size_t sourceX = static_cast<uint64_t>(x) * copyWidth / width;
-            const size_t source = (sourceY * copyWidth + sourceX) * 4;
-            const uint8_t r = rgba8[source + (bgra ? 2 : 0)];
-            const uint8_t g = rgba8[source + 1];
-            const uint8_t b = rgba8[source + (bgra ? 0 : 2)];
-            const uint8_t a = rgba8[source + 3];
-            rgba16Buf[static_cast<size_t>(y) * width + x] =
-                static_cast<uint16_t>(((r >> 3) << 11) | ((g >> 3) << 6) |
-                                      ((b >> 3) << 1) | (a != 0 ? 1 : 0));
-        }
-    }
+    const bool copied = Renderer::CopyScaledFramebufferRgba5551(
+        {rgba8, static_cast<size_t>(byteCount)}, copyWidth, copyHeight, bgra,
+        {rgba16Buf, static_cast<size_t>(width) * height}, width, height);
     DestroyBuffer(readback);
+    if (!copied) throw std::runtime_error("invalid framebuffer readback extent");
 }
 
 void GfxRenderingAPIVulkan::ResolveMSAAColorBuffer(int, int) {
@@ -2709,12 +2621,7 @@ void GfxRenderingAPIVulkan::CreateInstance() {
     mVulkanValidation.ConfigureFromEnvironment(
         extensions, mValidationTelemetry);
 
-    VkApplicationInfo applicationInfo{ VK_STRUCTURE_TYPE_APPLICATION_INFO };
-    applicationInfo.pApplicationName = "OOT3D Native Renderer";
-    applicationInfo.applicationVersion = VK_MAKE_VERSION(0, 1, 0);
-    applicationInfo.pEngineName = "ThreeDsRecomp Runtime";
-    applicationInfo.engineVersion = VK_MAKE_VERSION(0, 1, 0);
-    applicationInfo.apiVersion = VK_API_VERSION_1_2;
+    const auto applicationInfo = Renderer3ds::PicaVulkanApplicationInfo();
 
     VkInstanceCreateInfo createInfo{ VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
     if (portabilityEnumeration)
@@ -2879,9 +2786,12 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
         mGraphicsQueueFamily < queueFamilyProperties.size()
             ? queueFamilyProperties[mGraphicsQueueFamily].queueCount
             : 0U;
+    const char* presentDispatch = std::getenv("TRIAEVUM_VULKAN_PRESENT_DISPATCH");
+    const char* videoDriver = SDL_GetCurrentVideoDriver();
     const auto queuePlan = Oot3d::ResolveVulkanQueueTopology(
         mGraphicsQueueFamily, mPresentQueueFamily,
-        graphicsQueueCount);
+        graphicsQueueCount, Oot3d::ParseVulkanPresentDispatchMode(
+            presentDispatch ? presentDispatch : ""), videoDriver ? videoDriver : "");
     mNriSwapchainQueueEligible =
         queuePlan.NriSwapchainEligible;
     std::set<uint32_t> families = { mGraphicsQueueFamily, mPresentQueueFamily };
@@ -2985,37 +2895,12 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
                 }))
             extensions.push_back(required.c_str());
     }
-    VkPhysicalDeviceFeatures features{};
-    features.independentBlend =
-        supportedFeatures.features.independentBlend;
-    features.multiViewport =
-        supportedFeatures.features.multiViewport;
-    features.shaderImageGatherExtended =
-        supportedFeatures.features.shaderImageGatherExtended;
-    features.shaderStorageImageWriteWithoutFormat =
-        supportedFeatures.features.shaderStorageImageWriteWithoutFormat;
-    features.shaderStorageImageExtendedFormats =
-        supportedFeatures.features.shaderStorageImageExtendedFormats;
-    features.shaderInt16 =
-        supportedFeatures.features.shaderInt16;
-    const VkPhysicalDeviceVulkan12Features supportedVulkan12 = vulkan12;
-    vulkan12 = {
-        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES
-    };
+    const auto features = Renderer3ds::PicaVulkanCoreFeatures(supportedFeatures.features);
     // NRI's Vulkan helper and NIS implementation create timeline fences,
     // FP16 shader permutations and update-after-bind image descriptors.
     // Advertise to NRI only features that are also enabled on the wrapped
     // device; otherwise IsUpscalerSupported can return a false positive.
-    vulkan12.bufferDeviceAddress =
-        supportedVulkan12.bufferDeviceAddress;
-    vulkan12.timelineSemaphore =
-        supportedVulkan12.timelineSemaphore;
-    vulkan12.shaderFloat16 =
-        supportedVulkan12.shaderFloat16;
-    vulkan12.descriptorBindingSampledImageUpdateAfterBind =
-        supportedVulkan12.descriptorBindingSampledImageUpdateAfterBind;
-    vulkan12.descriptorBindingStorageImageUpdateAfterBind =
-        supportedVulkan12.descriptorBindingStorageImageUpdateAfterBind;
+    vulkan12 = Renderer3ds::PicaVulkan12Features(vulkan12);
     mNisVulkanFeaturesEnabled =
         features.shaderStorageImageWriteWithoutFormat == VK_TRUE &&
         vulkan12.timelineSemaphore == VK_TRUE &&
@@ -3101,6 +2986,27 @@ void GfxRenderingAPIVulkan::CreatePipelineCache() {
 }
 
 void GfxRenderingAPIVulkan::StorePipelineCache() {
+    const auto statistics = mNriPicaPipelineBridge.PipelineStatistics();
+    mDiagnostics.SetNriPipelineStatistics(statistics.InitialCacheBytes,
+        statistics.CreationAttempts, statistics.Created, statistics.CreationNanoseconds);
+    mDiagnostics.Flush();
+    const auto receipt = nlohmann::json({
+        {"initial_cache_bytes", statistics.InitialCacheBytes},
+        {"creation_attempts", statistics.CreationAttempts}, {"created", statistics.Created},
+        {"creation_nanoseconds", statistics.CreationNanoseconds}}).dump();
+    // Release/mobile hosts may suppress INFO and have no per-frame diagnostics enabled.
+    std::fprintf(stderr, "TRIAEVUM_NRI_PIPELINE_CACHE %s\n", receipt.c_str());
+    const auto nriData = mNriPicaPipelineBridge.GetPipelineCacheData();
+    if (!nriData.empty()) {
+        VkPhysicalDeviceProperties properties{};
+        vkGetPhysicalDeviceProperties(mPhysicalDevice, &properties);
+        std::string error;
+        if (StorePipelineCacheData(VulkanPipelineCachePath(true),
+                                  MakePipelineCacheHeader(properties), nriData, &error))
+            SPDLOG_INFO("NRI PICA pipeline cache: stored {} bytes", nriData.size());
+        else
+            SPDLOG_WARN("NRI PICA pipeline cache: {}", error);
+    }
     if (mPipelineCache == VK_NULL_HANDLE) {
         return;
     }
@@ -3132,8 +3038,11 @@ void GfxRenderingAPIVulkan::StorePipelineCache() {
     VkPhysicalDeviceProperties properties{};
     vkGetPhysicalDeviceProperties(mPhysicalDevice, &properties);
     const std::filesystem::path path = VulkanPipelineCachePath();
-    StorePipelineCacheData(path, MakePipelineCacheHeader(properties), data);
-    SPDLOG_INFO("OOT3D Vulkan pipeline cache: stored {} bytes", data.size());
+    std::string error;
+    if (StorePipelineCacheData(path, MakePipelineCacheHeader(properties), data, &error))
+        SPDLOG_INFO("OOT3D Vulkan pipeline cache: stored {} bytes", data.size());
+    else
+        SPDLOG_WARN("OOT3D Vulkan pipeline cache: {}", error);
 }
 
 void GfxRenderingAPIVulkan::StartPresentWorker() {
@@ -3214,8 +3123,10 @@ void GfxRenderingAPIVulkan::PresentWorkerMain() {
             std::lock_guard swapchainLock(mSwapchainCallMutex);
             present = vkQueuePresentKHR(mPresentQueue, &presentInfo);
         }
-        if (present == VK_ERROR_OUT_OF_DATE_KHR || present == VK_SUBOPTIMAL_KHR) {
+        if (present == VK_ERROR_OUT_OF_DATE_KHR) {
             mPresentSwapchainDirty.store(true);
+        } else if (present == VK_SUBOPTIMAL_KHR) {
+            mSwapchainSuboptimal.store(true);
         } else if (present != VK_SUCCESS) {
             mPresentError.store(static_cast<int32_t>(present));
         }
@@ -3724,33 +3635,23 @@ void main() {
 
 std::vector<uint32_t> GfxRenderingAPIVulkan::CompileShaderSpirv(
     const std::string& source, bool vertexShader, const char* sourceName) {
-    VulkanShaderCacheHeader cacheHeader;
-    const auto cachePath =
-        VulkanShaderCachePath(source, vertexShader, cacheHeader);
-    std::vector<uint32_t> spirv;
-    if (!LoadCachedSpirv(cachePath, cacheHeader, spirv)) {
-        shaderc::Compiler compiler;
-        shaderc::CompileOptions options;
-        options.SetTargetEnvironment(shaderc_target_env_vulkan,
-                                     shaderc_env_version_vulkan_1_1);
-        options.SetOptimizationLevel(shaderc_optimization_level_performance);
-        const auto result = compiler.CompileGlslToSpv(
-            source,
-            vertexShader ? shaderc_vertex_shader : shaderc_fragment_shader,
-            sourceName, "main", options);
-        if (result.GetCompilationStatus() !=
-            shaderc_compilation_status_success) {
-            throw std::runtime_error(std::string("shaderc failed for ") +
-                                     sourceName + ": " +
-                                     result.GetErrorMessage());
-        }
-        spirv.assign(result.cbegin(), result.cend());
-        StoreCachedSpirv(cachePath, cacheHeader, spirv);
-    }
+    const auto stage = vertexShader ? Renderer::SpirvStage::Vertex : Renderer::SpirvStage::Fragment;
+    const auto failures = mCompiledShaderCache.Stats().WriteFailures;
+    auto spirv = mCompiledShaderCache.Resolve(source, stage, [&] {
+        return Renderer::CompileShadercSpirv(source, stage, sourceName);
+    });
+    if (failures == 0 && mCompiledShaderCache.Stats().WriteFailures != 0)
+        SPDLOG_WARN("Shader cache persistence unavailable; rendering continues: {}",
+                    mCompiledShaderCache.LastWriteError());
     return spirv;
 }
 
 void GfxRenderingAPIVulkan::ConfigureNativePicaAotShaders() {
+    mCompiledShaderCache.Configure(VulkanShaderCacheDirectory(), Renderer::ShadercCompilerContract());
+    mNriInterop.Shaders().Configure(VulkanShaderCacheDirectory());
+    mCompiledShaderCacheSummaryLogged = false;
+    if (!mCompiledShaderCache.Enabled())
+        SPDLOG_WARN("SPIR-V disk reuse disabled: cache directory or compiler identity unavailable");
     mPicaAotShaderPack.Clear();
     mPicaEffectiveShaderInventory.Clear();
     mPicaPipelineInventory.Clear();
@@ -3844,6 +3745,28 @@ void GfxRenderingAPIVulkan::ConfigureNativePicaAotShaders() {
 }
 
 void GfxRenderingAPIVulkan::FinishNativePicaAotShaders() {
+    const auto& cache = mCompiledShaderCache.Stats();
+    const auto passes = mNriInterop.Shaders().Stats();
+    if ((cache.Requests || passes.Requests || mPicaAotShaderPack.Loaded()) && !mCompiledShaderCacheSummaryLogged) {
+        std::fprintf(stderr,
+            "TRIAEVUM_PASS_SHADER_CACHE requests=%llu hits=%llu compiled=%llu compile_failed=%llu "
+            "writes=%llu write_failed=%llu compile_ms=%.3f enabled=%d\n",
+            static_cast<unsigned long long>(passes.Requests), static_cast<unsigned long long>(passes.Hits),
+            static_cast<unsigned long long>(passes.Compilations), static_cast<unsigned long long>(passes.CompilationFailures),
+            static_cast<unsigned long long>(passes.Writes), static_cast<unsigned long long>(passes.WriteFailures),
+            passes.CompileNanoseconds / 1e6, mNriInterop.Shaders().Enabled() ? 1 : 0);
+        std::fprintf(stderr,
+            "TRIAEVUM_SPIRV_CACHE requests=%llu hits=%llu misses=%llu rejected=%llu "
+            "compiled=%llu compile_failed=%llu writes=%llu write_failed=%llu "
+            "compile_ms=%.3f read_ms=%.3f write_ms=%.3f enabled=%d\n",
+            static_cast<unsigned long long>(cache.Requests), static_cast<unsigned long long>(cache.Hits),
+            static_cast<unsigned long long>(cache.Misses), static_cast<unsigned long long>(cache.Rejected),
+            static_cast<unsigned long long>(cache.Compilations), static_cast<unsigned long long>(cache.CompilationFailures),
+            static_cast<unsigned long long>(cache.Writes), static_cast<unsigned long long>(cache.WriteFailures),
+            cache.CompileNanoseconds / 1e6, cache.ReadNanoseconds / 1e6, cache.WriteNanoseconds / 1e6,
+            mCompiledShaderCache.Enabled() ? 1 : 0);
+        mCompiledShaderCacheSummaryLogged = true;
+    }
     if (mPicaEffectiveShaderInventory.Enabled()) {
         std::string error;
         if (!mPicaEffectiveShaderInventory.Finish(&error)) {
@@ -4075,10 +3998,14 @@ void GfxRenderingAPIVulkan::CreateOot3dShadow2dRenderPass() {
     std::array<VkSubpassDependency, 2> dependencies{};
     dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
     dependencies[0].dstSubpass = 0;
-    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-    dependencies[0].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+                                   VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+                                   VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+    dependencies[0].srcAccessMask = VK_ACCESS_SHADER_READ_BIT |
+                                    VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
     dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                                   VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+                                   VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+                                   VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
     dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
                                     VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
     dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
@@ -4857,7 +4784,7 @@ VkPipeline GfxRenderingAPIVulkan::GetOrCreatePipeline(const VulkanShaderProgram&
     return pipeline;
 }
 
-void GfxRenderingAPIVulkan::DestroyGraphicsPipelines() {
+void GfxRenderingAPIVulkan::DestroyPresentationPipelines() {
     if (mDevice == VK_NULL_HANDLE) {
         return;
     }
@@ -4865,12 +4792,6 @@ void GfxRenderingAPIVulkan::DestroyGraphicsPipelines() {
         vkDestroyPipeline(mDevice, pipeline, nullptr);
     }
     mPipelines.clear();
-    for (const auto& [key, pipeline] : mNativePicaPipelines) {
-        mNriPicaPipelineBridge.Forget(pipeline);
-        vkDestroyPipeline(mDevice, pipeline, nullptr);
-    }
-    mNativePicaPipelines.clear();
-    mPicaPipelinePrewarmedProfiles.clear();
     if (mNativePicaScanoutPipeline != VK_NULL_HANDLE) {
         vkDestroyPipeline(mDevice, mNativePicaScanoutPipeline, nullptr);
         mNativePicaScanoutPipeline = VK_NULL_HANDLE;
@@ -4879,6 +4800,17 @@ void GfxRenderingAPIVulkan::DestroyGraphicsPipelines() {
         vkDestroyPipeline(mDevice, mNativePicaScanoutOverlayPipeline, nullptr);
         mNativePicaScanoutOverlayPipeline = VK_NULL_HANDLE;
     }
+}
+
+void GfxRenderingAPIVulkan::DestroyGraphicsPipelines() {
+    DestroyPresentationPipelines();
+    if (mDevice == VK_NULL_HANDLE) return;
+    for (const auto& [key, pipeline] : mNativePicaPipelines) {
+        mNriPicaPipelineBridge.Forget(pipeline);
+        vkDestroyPipeline(mDevice, pipeline, nullptr);
+    }
+    mNativePicaPipelines.clear();
+    mPicaPipelinePrewarmedProfiles.clear();
     if (mOot3dShadow2dDepthEncodePipeline != VK_NULL_HANDLE) {
         vkDestroyPipeline(mDevice, mOot3dShadow2dDepthEncodePipeline, nullptr);
         mOot3dShadow2dDepthEncodePipeline = VK_NULL_HANDLE;
@@ -4978,7 +4910,16 @@ void GfxRenderingAPIVulkan::CreateSwapchainResources() {
         } else {
             createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
         }
-        createInfo.preTransform = support.Capabilities.currentTransform;
+        // Scanout is in logical window coordinates, not pre-rotated display
+        // coordinates. Let the compositor apply the surface transform.
+        createInfo.preTransform =
+            (support.Capabilities.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
+                ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR
+                : support.Capabilities.currentTransform;
+        SPDLOG_INFO("Vulkan surface: {}x{}, transform {}, preTransform {}",
+                    extent.width, extent.height,
+                    static_cast<uint32_t>(support.Capabilities.currentTransform),
+                    static_cast<uint32_t>(createInfo.preTransform));
         createInfo.compositeAlpha =
             (support.Capabilities.supportedCompositeAlpha &
              VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR)
@@ -5060,11 +5001,16 @@ void GfxRenderingAPIVulkan::CreateSwapchainResources() {
     dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
     dependency.dstSubpass = 0;
     dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                              VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+                              VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+                              VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
     dependency.dstStageMask = dependency.srcStageMask;
-    dependency.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    // Discarding depth contents does not discard prior depth writes. Both the
+    // clear pass and the load-color overlay reuse this attachment in one frame.
+    dependency.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+                               VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
     dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
                                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+                               VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
                                VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
     const VkAttachmentDescription attachments[] = { colorAttachment, depthAttachment };
     VkRenderPassCreateInfo renderPassInfo{ VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO };
@@ -5109,6 +5055,9 @@ void GfxRenderingAPIVulkan::CreateSwapchainResources() {
                 "vkCreateFramebuffer");
     }
     mImagesInFlight.assign(imageCount, VK_NULL_HANDLE);
+    mSwapchainSurfaceCapabilities = support.Capabilities;
+    mSwapchainSurfaceFormat = surfaceFormat;
+    mSwapchainSuboptimal.store(false);
     mSwapchainDirty = false;
     SPDLOG_INFO(
         "OOT3D {} swapchain: {}x{}, {} images, format {}, present mode {}",
@@ -5123,7 +5072,7 @@ void GfxRenderingAPIVulkan::DestroySwapchainResources() {
         return;
     }
     ShutdownImGuiBackend();
-    DestroyGraphicsPipelines();
+    DestroyPresentationPipelines();
     for (VkFramebuffer framebuffer : mSwapchainFramebuffers) {
         vkDestroyFramebuffer(mDevice, framebuffer, nullptr);
     }
@@ -5174,6 +5123,21 @@ void GfxRenderingAPIVulkan::DestroySwapchainResources() {
         mNriSwapchain.Destroy();
     }
     mImagesInFlight.clear();
+}
+
+bool GfxRenderingAPIVulkan::SwapchainSurfaceChanged() const {
+    const auto support = QuerySwapchainSupport(mPhysicalDevice);
+    const auto extent = ChooseExtent(support.Capabilities);
+    const auto format = ChooseSurfaceFormat(support.Formats);
+    // SUBOPTIMAL still permits presentation. In particular, compositor rotation
+    // can report it forever; rebuilding an identical configuration cannot help.
+    return extent.width != mSwapchainExtent.width || extent.height != mSwapchainExtent.height ||
+           format.format != mSwapchainSurfaceFormat.format ||
+           format.colorSpace != mSwapchainSurfaceFormat.colorSpace ||
+           support.Capabilities.currentTransform != mSwapchainSurfaceCapabilities.currentTransform ||
+           support.Capabilities.supportedTransforms != mSwapchainSurfaceCapabilities.supportedTransforms ||
+           support.Capabilities.minImageCount != mSwapchainSurfaceCapabilities.minImageCount ||
+           support.Capabilities.maxImageCount != mSwapchainSurfaceCapabilities.maxImageCount;
 }
 
 void GfxRenderingAPIVulkan::RecreateSwapchain() {
@@ -5309,18 +5273,7 @@ VkExtent2D GfxRenderingAPIVulkan::ChooseExtent(const VkSurfaceCapabilitiesKHR& c
 }
 
 VkFormat GfxRenderingAPIVulkan::FindDepthFormat() const {
-    const VkFormat candidates[] = { VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT,
-                                    VK_FORMAT_D24_UNORM_S8_UINT };
-    for (VkFormat format : candidates) {
-        VkFormatProperties properties{};
-        vkGetPhysicalDeviceFormatProperties(mPhysicalDevice, format, &properties);
-        const VkFormatFeatureFlags required = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT |
-                                              VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
-        if ((properties.optimalTilingFeatures & required) == required) {
-            return format;
-        }
-    }
-    throw std::runtime_error("Vulkan device has no sampleable depth attachment format");
+    return Oot3d::FindPicaDepthFormat(mPhysicalDevice);
 }
 
 uint32_t GfxRenderingAPIVulkan::FindMemoryType(uint32_t typeFilter,

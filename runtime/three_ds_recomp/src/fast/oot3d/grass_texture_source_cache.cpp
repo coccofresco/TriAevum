@@ -1,7 +1,9 @@
 #include "fast/oot3d/grass_texture_source_cache.h"
 #include "fast/oot3d/texture_preview_artifact.h"
+#include "fast/oot3d/grass_surface_extractor.h"
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 
 namespace Fast::Oot3d {
@@ -24,6 +26,59 @@ uint64_t AliasKey(uint64_t hash, uint16_t width, uint16_t height) {
 
 } // namespace
 
+uint64_t GrassTextureColorSource::ContentVersion() const noexcept {
+    if (!Grid) return 0;
+    uint64_t hash = 14695981039346656037ULL;
+    for (const auto& rgb : Grid->Rgb) for (float value : rgb) {
+        const auto bits = std::bit_cast<uint32_t>(value);
+        for (unsigned shift = 0; shift < 32; shift += 8)
+            hash = (hash ^ ((bits >> shift) & 255U)) * 1099511628211ULL;
+    }
+    return hash == 0 ? 1 : hash;
+}
+
+uint32_t GrassTextureColorSource::SamplePacked(float u, float v,
+    GrassTextureWrap wrapS, GrassTextureWrap wrapT) const noexcept {
+    if (!Grid || !std::isfinite(u) || !std::isfinite(v)) return 0U;
+    constexpr int side = GrassTextureColorGrid::Side;
+    const float x = WrapGrassTextureCoordinate(u, wrapS) * side - 0.5F;
+    const float y = WrapGrassTextureCoordinate(v, wrapT) * side - 0.5F;
+    const int x0 = wrapS == GrassTextureWrap::Repeat ? static_cast<int>(std::floor(x))
+        : std::clamp(static_cast<int>(std::floor(x)), 0, side - 2);
+    const int y0 = wrapT == GrassTextureWrap::Repeat ? static_cast<int>(std::floor(y))
+        : std::clamp(static_cast<int>(std::floor(y)), 0, side - 2);
+    const auto index = [](int i, int size, GrassTextureWrap wrap) {
+        if (wrap == GrassTextureWrap::Clamp) return std::clamp(i, 0, size - 1);
+        const int period = wrap == GrassTextureWrap::Mirror ? 2 * size : size;
+        i = (i % period + period) % period;
+        return i < size ? i : period - 1 - i;
+    };
+    // Only four adjacent candidates are needed to find the nearest two in a
+    // regular grid. Read RGB only for the two selected points.
+    struct Candidate { float DistanceSquared; int Index; };
+    std::array<Candidate, 4> candidates{};
+    for (int i = 0; i < 4; ++i) {
+        const int ix = x0 + (i & 1), iy = y0 + (i >> 1);
+        candidates[i] = {(x - ix) * (x - ix) + (y - iy) * (y - iy),
+            index(iy, side, wrapT) * side + index(ix, side, wrapS)};
+    }
+    std::partial_sort(candidates.begin(), candidates.begin() + 2, candidates.end(),
+        [](const auto& a, const auto& b) {
+            return a.DistanceSquared == b.DistanceSquared ? a.Index < b.Index
+                : a.DistanceSquared < b.DistanceSquared;
+        });
+    const float d0 = std::sqrt(candidates[0].DistanceSquared);
+    const float d1 = std::sqrt(candidates[1].DistanceSquared);
+    const float weight1 = d0 == 0.0F ? 0.0F : d0 / (d0 + d1);
+    uint32_t packed = 0xff000000U;
+    for (size_t c = 0; c < 3; ++c) {
+        const float value = std::lerp(Grid->Rgb[candidates[0].Index][c],
+            Grid->Rgb[candidates[1].Index][c], weight1);
+        packed |= static_cast<uint32_t>(std::clamp(std::lround(value), 0L, 255L)) << (8U * c);
+    }
+    return packed;
+}
+
 GrassTextureSourceCache& GrassTextureSourceCache::Instance() {
     static GrassTextureSourceCache cache;
     return cache;
@@ -35,8 +90,10 @@ void GrassTextureSourceCache::ObserveDecoded(
     if (rgba8Hash == 0 || rgba8.size() !=
             static_cast<size_t>(width) * height * 4U) return;
     std::scoped_lock lock(mMutex);
-    mSources.try_emplace(rgba8Hash, Source{width, height,
-        std::vector<uint8_t>(rgba8.begin(), rgba8.end())});
+    if (!mSources.contains(rgba8Hash)) {
+        mSources.emplace(rgba8Hash, Source{width, height,
+            std::make_shared<const std::vector<uint8_t>>(rgba8.begin(), rgba8.end())});
+    }
     mDecodedToObserved.insert_or_assign(
         AliasKey(Fnv1a64(rgba8), width, height), rgba8Hash);
     ExportTexturePreviewArtifact(
@@ -77,7 +134,7 @@ GrassTextureSourceCache::AcquireMaskShared(
     result->Samples.resize(
         static_cast<size_t>(result->Width) * result->Height);
     for (size_t index = 0; index < result->Samples.size(); ++index) {
-        const uint8_t* rgba = found->second.Rgba8.data() + index * 4U;
+        const uint8_t* rgba = found->second.Rgba8->data() + index * 4U;
         switch (channel) {
             case GrassSampleChannel::Red: result->Samples[index] = rgba[0]; break;
             case GrassSampleChannel::Green: result->Samples[index] = rgba[1]; break;
@@ -100,7 +157,47 @@ GrassTexturePreview GrassTextureSourceCache::AcquirePreview(
     const auto found = mSources.find(rgba8Hash);
     if (found == mSources.end()) return {};
     return {found->second.Width, found->second.Height,
-            found->second.Rgba8};
+            *found->second.Rgba8};
+}
+
+GrassTextureColorSource GrassTextureSourceCache::AcquireColorSource(uint64_t rgba8Hash) const {
+    std::scoped_lock lock(mMutex);
+    const auto found = mSources.find(rgba8Hash);
+    if (found == mSources.end() || found->second.Width == 0 || found->second.Height == 0) return {};
+    auto& source = found->second;
+    if (!source.ColorGrid) {
+        auto grid = std::make_shared<GrassTextureColorGrid>();
+        constexpr uint32_t side = GrassTextureColorGrid::Side;
+        // Area averages retain broad texture variation without baking individual
+        // texel noise into blades. The 16 reference points are cell centers.
+        for (uint32_t gy = 0; gy < side; ++gy) {
+            const uint32_t y0 = gy * source.Height / side;
+            const uint32_t y1 = std::max(y0 + 1U, (gy + 1U) * source.Height / side);
+            for (uint32_t gx = 0; gx < side; ++gx) {
+                const uint32_t x0 = gx * source.Width / side;
+                const uint32_t x1 = std::max(x0 + 1U, (gx + 1U) * source.Width / side);
+                std::array<double, 3> sum{}, opaqueSum{};
+                double weight = 0;
+                for (uint32_t y = y0; y < y1; ++y) {
+                    for (uint32_t x = x0; x < x1; ++x) {
+                        const auto* rgba = source.Rgba8->data() + (static_cast<size_t>(y) * source.Width + x) * 4U;
+                        const double alpha = rgba[3] / 255.0;
+                        for (size_t c = 0; c < 3; ++c) {
+                            sum[c] += rgba[c] * alpha;
+                            opaqueSum[c] += rgba[c];
+                        }
+                        weight += alpha;
+                    }
+                }
+                for (size_t c = 0; c < 3; ++c) {
+                    grid->Rgb[gy * side + gx][c] = static_cast<float>(weight > 0
+                        ? sum[c] / weight : opaqueSum[c] / ((x1 - x0) * (y1 - y0)));
+                }
+            }
+        }
+        source.ColorGrid = std::move(grid);
+    }
+    return {source.ColorGrid};
 }
 
 std::optional<std::array<float, 3>>
@@ -108,7 +205,7 @@ GrassTextureSourceCache::AcquireAverageColor(
     uint64_t rgba8Hash) const {
     std::scoped_lock lock(mMutex);
     const auto found = mSources.find(rgba8Hash);
-    if (found == mSources.end() || found->second.Rgba8.empty()) {
+    if (found == mSources.end() || found->second.Rgba8->empty()) {
         return std::nullopt;
     }
     if (found->second.AverageColorComputed) {
@@ -116,10 +213,10 @@ GrassTextureSourceCache::AcquireAverageColor(
     }
     std::array<double, 3> weighted{};
     double totalWeight = 0.0;
-    const size_t texelCount = found->second.Rgba8.size() / 4U;
+    const size_t texelCount = found->second.Rgba8->size() / 4U;
     for (size_t texel = 0U; texel < texelCount; ++texel) {
         const uint8_t* rgba =
-            found->second.Rgba8.data() + texel * 4U;
+            found->second.Rgba8->data() + texel * 4U;
         const double weight =
             static_cast<double>(rgba[3]) / 255.0;
         for (size_t channel = 0U; channel < 3U; ++channel) {
@@ -132,7 +229,7 @@ GrassTextureSourceCache::AcquireAverageColor(
         totalWeight = static_cast<double>(texelCount);
         for (size_t texel = 0U; texel < texelCount; ++texel) {
             const uint8_t* rgba =
-                found->second.Rgba8.data() + texel * 4U;
+                found->second.Rgba8->data() + texel * 4U;
             for (size_t channel = 0U; channel < 3U; ++channel) {
                 weighted[channel] += rgba[channel];
             }

@@ -1,4 +1,5 @@
 #include "fast/oot3d/effect_graph.h"
+#include "fast/renderer3ds/pica_surface_passthrough_scale.h"
 #include "fast/oot3d/display_effect_plan.h"
 #include "fast/oot3d/directional_shadows.h"
 #include "fast/oot3d/ambient_occlusion_composite.h"
@@ -40,6 +41,8 @@
 #include "fast/oot3d/temporal_aa.h"
 #include "fast/oot3d/texture_preview_artifact.h"
 #include "fast/oot3d/pica_toon_shader.h"
+#include "fast/oot3d/toon_surface_response.h"
+#include "fast/oot3d/grass_shader_sources.h"
 #include "fast/oot3d/renderer_validation_telemetry.h"
 #include "fast/oot3d/reflection_ibl.h"
 #include "fast/oot3d/pica_uniform_layout.h"
@@ -1164,6 +1167,49 @@ TEST(Oot3dGrassTextureColor, UsesAlphaWeightedAverage) {
     EXPECT_FLOAT_EQ((*average)[0], 1.0F);
     EXPECT_NEAR((*average)[1], 32.0F / 255.0F, 1.0e-6F);
     EXPECT_NEAR((*average)[2], 16.0F / 255.0F, 1.0e-6F);
+    cache.Clear();
+}
+
+TEST(Oot3dGrassTextureColor, GridUsesOnlyTwoNearestDistanceWeightedPoints) {
+    using namespace Fast::Oot3d;
+    auto grid = std::make_shared<GrassTextureColorGrid>();
+    for (auto& rgb : grid->Rgb) rgb = {0, 255, 255};
+    grid->Rgb[0] = {0, 0, 0};
+    grid->Rgb[1] = {100, 0, 0};
+    grid->Rgb[3] = {240, 0, 0};
+    const GrassTextureColorSource source{grid};
+    EXPECT_EQ(source.SamplePacked(0.125F, 0.125F, GrassTextureWrap::Clamp, GrassTextureWrap::Clamp), 0xff000000U);
+    EXPECT_EQ(source.SamplePacked(0.2F, 0.125F, GrassTextureWrap::Clamp, GrassTextureWrap::Clamp), 0xff00001eU);
+    EXPECT_EQ(source.SamplePacked(0.25F, 0.125F, GrassTextureWrap::Clamp, GrassTextureWrap::Clamp), 0xff000032U);
+    EXPECT_EQ(source.SamplePacked(0.0F, 0.125F, GrassTextureWrap::Repeat, GrassTextureWrap::Clamp), 0xff000078U);
+    EXPECT_EQ(source.SamplePacked(1.0F, 0.125F, GrassTextureWrap::Repeat, GrassTextureWrap::Clamp), 0xff000078U);
+    EXPECT_EQ(source.SamplePacked(-0.2F, 0.125F, GrassTextureWrap::Mirror, GrassTextureWrap::Clamp),
+              source.SamplePacked(0.2F, 0.125F, GrassTextureWrap::Mirror, GrassTextureWrap::Clamp));
+    EXPECT_EQ(source.SamplePacked(-1.0F, 0.125F, GrassTextureWrap::Clamp, GrassTextureWrap::Clamp),
+              source.SamplePacked(0.0F, 0.125F, GrassTextureWrap::Clamp, GrassTextureWrap::Clamp));
+    EXPECT_EQ(GrassTextureColorSource{}.SamplePacked(0, 0, GrassTextureWrap::Repeat, GrassTextureWrap::Repeat), 0U);
+}
+
+TEST(Oot3dGrassTextureColor, GridIsSharedAndSurvivesSourceCacheReset) {
+    using namespace Fast::Oot3d;
+    auto& cache = GrassTextureSourceCache::Instance();
+    cache.Clear();
+    std::vector<uint8_t> pixels(8U * 8U * 4U);
+    for (size_t y = 0; y < 8; ++y) for (size_t x = 0; x < 8; ++x) {
+        pixels[(y * 8 + x) * 4] = static_cast<uint8_t>((x / 2) * 60);
+        pixels[(y * 8 + x) * 4 + 3] = 255;
+    }
+    cache.ObserveDecoded(99, 8, 8, pixels);
+    auto source = cache.AcquireColorSource(99);
+    ASSERT_NE(source.Grid, nullptr);
+    EXPECT_EQ(source.Grid, cache.AcquireColorSource(99).Grid);
+    EXPECT_FLOAT_EQ(source.Grid->Rgb[0][0], 0);
+    EXPECT_FLOAT_EQ(source.Grid->Rgb[3][0], 180);
+    cache.Clear();
+    EXPECT_EQ(source.SamplePacked(0.375F, 0.125F, GrassTextureWrap::Clamp, GrassTextureWrap::Clamp), 0xff00003cU);
+    const std::array<uint8_t, 4> black{0, 0, 0, 255};
+    cache.ObserveDecoded(100, 1, 1, black);
+    EXPECT_EQ(cache.AcquireColorSource(100).SamplePacked(0.5F, 0.5F, GrassTextureWrap::Repeat, GrassTextureWrap::Repeat), 0xff000000U);
     cache.Clear();
 }
 
@@ -3777,11 +3823,115 @@ TEST(Oot3dPicaToon, CustomBandValuesChangeShaderAndVariantKey) {
     ASSERT_TRUE(second.Applied());
     EXPECT_NE(first.FragmentKey, second.FragmentKey);
     EXPECT_NE(second.Source.find(
-                  "0.120000 - OOT3D_TOON_SOFTNESS"),
+                  "vec4(0.120000,"),
               std::string::npos);
     EXPECT_NE(second.Source.find(
                   "float oot3d_toon_band_luminance"),
               std::string::npos);
+}
+
+TEST(Oot3dGrassToon, SharesCanonicalShaderAndAppliesBeforeFogWithoutChangingAlpha) {
+    using namespace Fast::Oot3d;
+    const auto grass = BuildGrassFragmentShader();
+    EXPECT_NE(grass.find(kToonSurfaceResponseShader), std::string::npos);
+    PicaToonDrawInfo draw{Oot3d::Renderer::PicaCompositionDomain::Scene, true, true, false, 0xfU};
+    const auto native = BuildPicaToonShaderVariant(
+        "void main() {\n    float pica_z_over_w = -gl_FragCoord.z;\n}",
+        7U, draw, ToonMode::PostProcessPreview, {});
+    ASSERT_TRUE(native.Applied());
+    EXPECT_NE(native.Source.find(kToonSurfaceResponseShader), std::string::npos);
+    const auto vertex = BuildGrassVertexShader();
+    EXPECT_NE(vertex.find("blade_color.rgb = oot3d_toon_banded_color"), std::string::npos);
+    EXPECT_EQ(grass.find("resolved_color.rgb = oot3d_toon_diffuse_response"), std::string::npos);
+    EXPECT_EQ(vertex.find("blade_lighting"), std::string::npos);
+    const auto apply = grass.find("resolved_color.rgb = clamp(resolved_color.rgb, 0.0, 1.0)");
+    ASSERT_NE(apply, std::string::npos);
+    EXPECT_LT(apply, grass.find("resolved_color.rgb = mix("));
+    EXPECT_EQ(grass.find("resolved_color.a ="), std::string::npos);
+    EXPECT_NE(grass.find("if (p.flags.x < 0.5) return sourceColor;"), std::string::npos);
+    EXPECT_NE(grass.find(": step(edge, guide)"), std::string::npos);
+}
+
+TEST(Oot3dGrassToon, CollapsedNativeScalePreservesEveryByteAndValidStageCombination) {
+    for (uint32_t combination = 0; combination < 729; ++combination) {
+        uint32_t remaining = combination, packed = 0;
+        for (uint32_t stage = 0; stage < 6; ++stage) {
+            packed |= (remaining % 3) << (stage * 2);
+            remaining /= 3;
+        }
+        const float scale = static_cast<float>(Fast::Renderer3ds::PicaSurfacePassthroughScale(packed));
+        for (uint32_t byte = 0; byte < 256; ++byte) {
+            float reference = static_cast<float>(byte) / 255.0F;
+            for (uint32_t stage = 0; stage < 6; ++stage) {
+                reference = std::floor(std::clamp(reference, 0.0F, 1.0F) * 255.0F + 0.5F) / 255.0F;
+                reference = std::clamp(reference * static_cast<float>(1U << ((packed >> (stage * 2)) & 3U)), 0.0F, 1.0F);
+            }
+            EXPECT_FLOAT_EQ(reference, std::clamp(static_cast<float>(byte) / 255.0F * scale, 0.0F, 1.0F));
+        }
+    }
+}
+
+TEST(Oot3dGrassToon, RimIsBoundedByRootDistanceWithoutChangingDiffuseResponse) {
+    using namespace Fast::Oot3d;
+    const auto fragment = BuildGrassFragmentShader();
+    const auto vertex = BuildGrassVertexShader();
+    EXPECT_NE(vertex.find("length(eye - in_base_height.xyz)"), std::string::npos);
+    EXPECT_NE(vertex.find("1.0 - smoothstep(rim_distance.x, rim_distance.y, root_distance)"), std::string::npos);
+    EXPECT_NE(fragment.find("toon.flags.x > 0.5 && blade_rim_weight > 0.0"), std::string::npos);
+    EXPECT_NE(fragment.find("blade_rim_weight *"), std::string::npos);
+    EXPECT_EQ(fragment.find("resolved_color.rgb = oot3d_toon_surface_response"), std::string::npos);
+    const std::string common(kToonSurfaceResponseShader);
+    const auto start = common.find("vec3 oot3d_toon_diffuse_response(");
+    ASSERT_NE(start, std::string::npos);
+    const auto diffuse = common.substr(start, common.find("\n}", start) - start);
+    EXPECT_EQ(diffuse.find("oot3d_toon_rim("), std::string::npos);
+    EXPECT_EQ(diffuse.find("viewDirection"), std::string::npos);
+    EXPECT_NE(diffuse.find("oot3d_toon_banded_color("), std::string::npos);
+    EXPECT_NE(common.find("+ oot3d_toon_rim(normal, viewDirection, p)"), std::string::npos);
+}
+
+TEST(Oot3dGrassToon, RimDistanceValidationKeepsSmoothstepEdgesOrdered) {
+    using namespace Fast::Oot3d;
+    GraphicsSettings settings;
+    settings.Preset = GraphicsPreset::Custom;
+    settings.Grass.Appearance.ToonRimFadeStart = 1000;
+    settings.Grass.Appearance.ToonRimFadeEnd = 100;
+    const auto checked = GraphicsSettingsService::Validate(settings, {}).Value.Grass.Appearance;
+    EXPECT_EQ(checked.ToonRimFadeStart, 1000);
+    EXPECT_EQ(checked.ToonRimFadeEnd, 1001);
+    settings.Grass.Appearance.ToonRimFadeStart = -10;
+    settings.Grass.Appearance.ToonRimFadeEnd = 0;
+    const auto zero = GraphicsSettingsService::Validate(settings, {}).Value.Grass.Appearance;
+    EXPECT_EQ(zero.ToonRimFadeStart, 0);
+    EXPECT_EQ(zero.ToonRimFadeEnd, 1);
+}
+
+TEST(Oot3dGrassToon, PacksTheExistingStyleAndKeepsOffAndLightingIndependent) {
+    using namespace Fast::Oot3d;
+    ToonStyleSettings style;
+    style.LightBands = 6;
+    style.CustomLightBands = true;
+    style.LightBandLevels = {0.03F, 0.2F, 0.3F, 0.4F, 0.8F, 1.0F};
+    style.LightBandThresholds = {0.1F, 0.25F, 0.35F, 0.6F, 0.9F};
+    style.BandSoftness = 0;
+    const auto packed = PackToonSurfaceParameters(ToonMode::PicaMaterial, style, true);
+    EXPECT_EQ(packed.Control, (std::array<float, 4>{5, 0, style.Saturation, 1}));
+    EXPECT_EQ(packed.Flags, (std::array<float, 4>{1, 1, style.RimWidth, 0}));
+    for (size_t i = 0; i < style.LightBandLevels.size(); ++i)
+        EXPECT_EQ(packed.Levels[i / 4][i % 4], style.LightBandLevels[i]);
+    for (size_t i = 0; i < style.LightBandThresholds.size(); ++i)
+        EXPECT_EQ(packed.Thresholds[i / 4][i % 4], style.LightBandThresholds[i]);
+    EXPECT_FLOAT_EQ(packed.Shadow[3], style.ShadowStrength);
+    EXPECT_FLOAT_EQ(packed.Rim[3], style.RimStrength);
+    EXPECT_FLOAT_EQ(PackToonSurfaceParameters(ToonMode::Off, style, true).Flags[0], 0);
+    EXPECT_FLOAT_EQ(PackToonSurfaceParameters(ToonMode::PicaMaterial, style, false).Flags[1], 0);
+    style.OutlineEnabled = !style.OutlineEnabled;
+    style.OutlineWidth = 10;
+    const auto outlineOnly = PackToonSurfaceParameters(ToonMode::PicaMaterial, style, true);
+    EXPECT_EQ(packed.Flags, outlineOnly.Flags);
+    EXPECT_EQ(packed.Control, outlineOnly.Control);
+    EXPECT_EQ(packed.Shadow, outlineOnly.Shadow);
+    EXPECT_EQ(packed.Rim, outlineOnly.Rim);
 }
 
 TEST(Oot3dPicaToon, MaterialModeInjectsBeforeTevAndNeverPostprocessesTexels) {

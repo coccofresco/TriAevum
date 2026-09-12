@@ -1,0 +1,17 @@
+{
+  "schema": "oot3d.native_game.input_timeline.v1",
+  "frame_origin": "run",
+  "segments": [
+    {"start_frame": 30, "end_frame_exclusive": 34, "buttons": ["down"]},
+    {"start_frame": 120, "end_frame_exclusive": 124, "buttons": ["right"]},
+    {"start_frame": 170, "end_frame_exclusive": 174, "buttons": ["up"]},
+    {"start_frame": 220, "end_frame_exclusive": 224, "buttons": ["up"]},
+    {"start_frame": 260, "end_frame_exclusive": 268, "buttons": ["x"]},
+    {"start_frame": 280, "end_frame_exclusive": 288, "buttons": ["a"]},
+    {"start_frame": 300, "end_frame_exclusive": 308, "buttons": ["y"]},
+    {"start_frame": 320, "end_frame_exclusive": 328, "buttons": ["x"]},
+    {"start_frame": 340, "end_frame_exclusive": 348, "buttons": ["a"]},
+    {"start_frame": 360, "end_frame_exclusive": 368, "buttons": ["y"]},
+    {"start_frame": 520, "end_frame_exclusive": 524, "buttons": ["b"]}
+  ]
+}

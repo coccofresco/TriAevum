@@ -50,6 +50,9 @@ target_sources(three_ds_recomp_runtime PRIVATE ${Source_Files__Graphic})
 #=================== Reusable renderer extension core ===================
 
 set(Source_Files__RendererExtensions
+    renderer/cache_file.cpp
+    renderer/spirv_cache.cpp
+    renderer/pipeline_preparation_job.cpp
     renderer/extension_resource_allocation.cpp
     renderer/extension_resource_binding.cpp
     renderer/extension_resource_graph.cpp
@@ -110,9 +113,11 @@ source_group("renderer3ds" FILES ${Source_Files__Renderer3dsPica})
 if(THREE_DS_RECOMP_ENABLE_VULKAN)
     set(Source_Files__Renderer3dsNriPica
         renderer3ds/nri_pica_pipeline_bridge.cpp
+        renderer3ds/vulkan_pipeline_cache_store.cpp
         renderer3ds/nri_pica_upload_arena.cpp
         renderer3ds/pica_nri_shader_contract.cpp
         renderer3ds/pica_nri_upload.cpp
+        renderer3ds/pica_surface_lighting_pass.cpp
     )
     add_library(renderer_3ds_nri_pica_execution STATIC
         ${Source_Files__Renderer3dsNriPica})
@@ -126,7 +131,7 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
         PUBLIC ENABLE_RENDERER3DS_VULKAN
         PRIVATE $<$<BOOL:${THREE_DS_RECOMP_ENABLE_NRI}>:ENABLE_RENDERER3DS_NRI>)
     target_link_libraries(renderer_3ds_nri_pica_execution
-        PUBLIC Vulkan::Vulkan)
+        PUBLIC Vulkan::Vulkan PRIVATE ThreeDsRecomp::RendererExtensionCore)
     if(THREE_DS_RECOMP_ENABLE_NRI)
         target_link_libraries(renderer_3ds_nri_pica_execution PRIVATE NRI)
     endif()
@@ -151,6 +156,8 @@ if(NOT THREE_DS_RECOMP_ENABLE_VULKAN)
     # implementation.  Keep Vulkan headers out of OpenGL-only ports such as
     # Nintendo Switch.
     list(REMOVE_ITEM Source_Files__Oot3dRenderer
+        "oot3d/pica_nri_pipeline_state.cpp"
+        "oot3d/pica_pipeline_preparation.cpp"
         "oot3d/pica_guide_sampling_barriers.cpp")
 endif()
 source_group("oot3d" FILES ${Source_Files__Oot3dRenderer})

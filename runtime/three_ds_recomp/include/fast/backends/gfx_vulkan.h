@@ -7,9 +7,11 @@
 #endif
 
 #include "fast/backends/gfx_rendering_api.h"
+#include "fast/renderer/spirv_cache.h"
 #include "fast/backends/oot3d_vulkan_diagnostics.h"
 #include "fast/backends/oot3d_vulkan_gpu_profiler.h"
 #include "fast/backends/oot3d_vulkan_validation.h"
+#include "fast/backends/vulkan_scanout_probe.h"
 #include "fast/oot3d/nri_interop_context.h"
 #include "fast/oot3d/cacao_pass.h"
 #if defined(_WIN32) && defined(ENABLE_OOT3D_D3D12_NGX_PROVIDER)
@@ -589,7 +591,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         const Oot3d::PicaCompositionStageAnchor& anchor);
     void ReleaseEffectGraphImageClients();
     void ApplyInternalResolutionScale(float scale);
-    void ResetNativePicaRenderTargets();
+    void ResetNativePicaRenderTargets(bool preserveDisplayImages = false);
     void ForgetNativePicaEffectNriTextures();
     void ApplyPendingNativePicaMemoryFills(NativePicaRenderTarget& target);
     void CreateFrameResources();
@@ -602,10 +604,12 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
                                        bool hasDepthBuffer);
     void CreateSwapchainResources();
     void DestroySwapchainResources();
+    void DestroyPresentationPipelines();
     void DestroyGraphicsPipelines();
     void DestroyTexture(TextureRecord& texture);
     void DestroyBuffer(BufferAllocation& buffer);
     void RecreateSwapchain();
+    bool SwapchainSurfaceChanged() const;
     QueueFamilies FindQueueFamilies(VkPhysicalDevice device) const;
     SwapchainSupport QuerySwapchainSupport(VkPhysicalDevice device) const;
     bool DeviceSupportsSwapchain(VkPhysicalDevice device) const;
@@ -701,6 +705,8 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     VkSwapchainKHR mSwapchain = VK_NULL_HANDLE;
     VkFormat mSwapchainFormat = VK_FORMAT_UNDEFINED;
     VkExtent2D mSwapchainExtent{};
+    VkSurfaceCapabilitiesKHR mSwapchainSurfaceCapabilities{};
+    VkSurfaceFormatKHR mSwapchainSurfaceFormat{};
     std::vector<VkImage> mSwapchainImages;
     std::vector<VkImageView> mSwapchainImageViews;
     VkFormat mDepthFormat = VK_FORMAT_UNDEFINED;
@@ -725,6 +731,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     std::vector<VkSemaphore> mRenderFinishedSemaphores;
     std::array<VkFence, kFramesInFlight> mInFlightFences{};
     std::array<FrameResources, kFramesInFlight> mFrameResources{};
+    VulkanScanoutProbe mScanoutProbe;
     std::thread mPresentThread;
     std::mutex mSwapchainCallMutex;
     std::mutex mPresentMutex;
@@ -736,6 +743,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     uint64_t mNextPresentSerial = 1;
     bool mPresentWorkerStop = false;
     std::atomic_bool mPresentSwapchainDirty = false;
+    std::atomic_bool mSwapchainSuboptimal = false;
     std::atomic<int32_t> mPresentError = VK_SUCCESS;
     std::vector<VkFence> mImagesInFlight;
     VkDescriptorSetLayout mTextureDescriptorSetLayout = VK_NULL_HANDLE;
@@ -762,6 +770,8 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     std::array<std::vector<BufferAllocation>, kFramesInFlight> mRetiredNativePicaGeometryBuffers;
     Oot3d::PicaShaderPipelineCache mPicaShaderPipelineCache;
     Oot3d::PicaAotShaderPack mPicaAotShaderPack;
+    Renderer::SpirvCache mCompiledShaderCache;
+    bool mCompiledShaderCacheSummaryLogged = false;
     Oot3d::PicaEffectiveShaderInventory mPicaEffectiveShaderInventory;
     Oot3d::PicaGraphicsPipelineInventory mPicaPipelineInventory;
     Oot3d::PicaGraphicsPipelineManifest mPicaPipelineManifest;

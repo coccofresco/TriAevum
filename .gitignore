@@ -424,6 +424,8 @@ tags
 !/docs/images/default-hyrule-night.png
 !/docs/images/default-kokiri-forest.png
 !/docs/images/default-title.png
+# Licensed Azahar controller artwork, not ROM-derived textures or captures.
+!/ports/android/controls/src/main/res/drawable*/*.png
 *.sav
 shipofharkinian.ini
 shipofharkinian.json

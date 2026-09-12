@@ -2,11 +2,11 @@ param(
     [ValidateSet("smoke", "scene_representative", "local_entrance_representative",
         "setup_variant", "exhaustive", "all")]
     [string]$Mode = "smoke",
-    [string]$CatalogPath = "I:\oot3dre_work\whole-aot-product\tools\oot3d\native_a32_runtime\oot3d_azahar_coverage_scenarios.json",
-    [string]$LauncherPath = "I:\oot3dre_work\whole-aot-product\scripts\oot3d\Invoke-Oot3dAzaharCoverageScenario.ps1",
+    [string]$CatalogPath = (Join-Path $PSScriptRoot "../../tools/oot3d/native_a32_runtime/oot3d_azahar_coverage_scenarios.json"),
+    [string]$LauncherPath = (Join-Path $PSScriptRoot "Invoke-Oot3dAzaharCoverageScenario.ps1"),
     [string]$AzaharExe = "I:\oot3dre_work\azahar-oot3d-coverage-build\bin\Release\azahar.exe",
     [string]$RomPath = "E:\ppssppvr\oot3d_decomp\oot3d.cci",
-    [string]$SeedSavestatePath = "E:\azahar pcvr\build-pcvr-qt\bin\Release\user\states\0004000000033600.05.cst",
+    [string]$SeedSavestatePath = "",
     [string]$OutputRoot = "I:\oot3dre_work\azahar-coverage-matrices",
     [string]$RunDirectory = "",
     [string]$ScenarioListPath = "",
@@ -19,8 +19,10 @@ param(
     [int]$TimeoutSeconds = 90,
     [int]$MaxVerticesPerDraw = 1,
     [int]$CaptureFramesOverride = 0,
+    [double[]]$CaptureWindowOffsetsSeconds = @(0),
     [switch]$SkipFramebuffer,
     [switch]$CompactEvidence,
+    [switch]$ShaderSeed,
     [switch]$RetryFailures,
     [switch]$FailFast
 )
@@ -97,7 +99,7 @@ function Write-MatrixState {
     $document = [pscustomobject][ordered]@{
         format = "oot3d_azahar_coverage_matrix_v1"
         updated_at = (Get-Date).ToString("o")
-        evidence_role = "validation_only_not_runtime_input"
+        evidence_role = if ($ShaderSeed.IsPresent) { "offline_shader_preparation_not_gameplay_replay" } else { "validation_only_not_runtime_input" }
         mode = $Mode
         backend = $Backend
         selection_source = if ([string]::IsNullOrWhiteSpace($ScenarioListPath)) {
@@ -107,8 +109,10 @@ function Write-MatrixState {
         }
         capture_policy = [ordered]@{
             capture_frames_override = $CaptureFramesOverride
+            capture_window_offsets_seconds = @($CaptureWindowOffsetsSeconds)
             framebuffer_capture_enabled = -not $SkipFramebuffer.IsPresent
-            detailed_pica_evidence_retained = -not $CompactEvidence.IsPresent
+            detailed_pica_evidence_retained = -not $CompactEvidence.IsPresent -or $ShaderSeed.IsPresent
+            shader_seed_capture = $ShaderSeed.IsPresent
             max_vertices_per_draw = $MaxVerticesPerDraw
         }
         catalog_path = (Resolve-Path -LiteralPath $CatalogPath).Path
@@ -151,7 +155,22 @@ function Write-MatrixState {
     }
     $temporary = $Path + ".tmp"
     $document | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $temporary -Encoding ascii
-    Move-Item -LiteralPath $temporary -Destination $Path -Force
+    # Readers may briefly deny delete-sharing on Windows. Keep the old complete
+    # checkpoint until an atomic replacement succeeds; retain the pending file
+    # for resume if the bounded retry is exhausted.
+    for ($attempt = 0; ; ++$attempt) {
+        try {
+            if ([System.IO.File]::Exists($Path)) {
+                [System.IO.File]::Replace($temporary, $Path, [NullString]::Value)
+            } else {
+                [System.IO.File]::Move($temporary, $Path)
+            }
+            break
+        } catch [System.IO.IOException] {
+            if ($attempt -ge 39) { throw }
+            Start-Sleep -Milliseconds 50
+        }
+    }
     return $document
 }
 
@@ -159,7 +178,9 @@ Assert-FileExists $CatalogPath "Azahar coverage catalog"
 Assert-FileExists $LauncherPath "Azahar scenario launcher"
 Assert-FileExists $AzaharExe "Instrumented Azahar executable"
 Assert-FileExists $RomPath "OOT3D game image"
-Assert-FileExists $SeedSavestatePath "Seed savestate"
+if (-not [string]::IsNullOrWhiteSpace($SeedSavestatePath)) {
+    Assert-FileExists $SeedSavestatePath "Seed savestate"
+}
 
 $catalog = Get-Content -LiteralPath $CatalogPath -Raw | ConvertFrom-Json
 if ([string]$catalog.format -ne "oot3d_azahar_coverage_catalog_v1") {
@@ -207,8 +228,32 @@ New-Item -ItemType Directory -Force -Path $RunDirectory, $captureRoot, $logRoot 
 $results = [System.Collections.ArrayList]::new()
 if (Test-Path -LiteralPath $statePath -PathType Leaf) {
     $existing = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
+    $pendingPath = $statePath + ".tmp"
+    if (Test-Path -LiteralPath $pendingPath -PathType Leaf) {
+        try {
+            $pending = Get-Content -LiteralPath $pendingPath -Raw | ConvertFrom-Json
+            if ($pending.format -eq "oot3d_azahar_coverage_matrix_v1" -and
+                $pending.mode -eq $existing.mode -and $pending.backend -eq $existing.backend -and
+                $pending.catalog_path -eq $existing.catalog_path -and
+                [datetime]$pending.updated_at -gt [datetime]$existing.updated_at -and
+                $pending.attempt_count -ge $existing.attempt_count) {
+                $existing = $pending
+                Write-Host "Resuming the completed pending checkpoint: $pendingPath"
+            }
+        } catch { Write-Warning "Ignoring an incomplete pending checkpoint: $pendingPath" }
+    }
     if ([string]$existing.format -ne "oot3d_azahar_coverage_matrix_v1") {
         throw "Unsupported existing matrix state: $statePath"
+    }
+    $seedProperty = $existing.capture_policy.PSObject.Properties["shader_seed_capture"]
+    $existingSeed = $null -ne $seedProperty -and [bool]$seedProperty.Value
+    if ($existingSeed -ne $ShaderSeed.IsPresent) {
+        throw "Cannot resume a matrix with a different shader-seed capture policy. Use a new RunDirectory."
+    }
+    $windowProperty = $existing.capture_policy.PSObject.Properties["capture_window_offsets_seconds"]
+    $existingWindows = if ($null -eq $windowProperty) { @(0) } else { @($windowProperty.Value) }
+    if (($existingWindows -join ',') -ne ($CaptureWindowOffsetsSeconds -join ',')) {
+        throw "Cannot resume with a different capture window schedule. Use a new RunDirectory."
     }
     foreach ($result in @($existing.results)) {
         $null = $results.Add($result)
@@ -272,6 +317,7 @@ foreach ($scenario in $selected) {
             Backend = $Backend
             TimeoutSeconds = $TimeoutSeconds
             MaxVerticesPerDraw = $MaxVerticesPerDraw
+            CaptureWindowOffsetsSeconds = $CaptureWindowOffsetsSeconds
         }
         if ($CaptureFramesOverride -gt 0) {
             $arguments.CaptureFramesOverride = $CaptureFramesOverride
@@ -281,6 +327,9 @@ foreach ($scenario in $selected) {
         }
         if ($CompactEvidence.IsPresent) {
             $arguments.CompactEvidence = $true
+        }
+        if ($ShaderSeed.IsPresent) {
+            $arguments.ShaderSeed = $true
         }
         if ($SettleMilliseconds -ge 0) {
             $arguments.SettleMilliseconds = $SettleMilliseconds
@@ -349,3 +398,8 @@ foreach ($scenario in $selected) {
 $final = Write-MatrixState $statePath $catalog $selected $results
 $final | Select-Object format, mode, backend, selected_scenario_count, coverage | Format-List
 Write-Host "Azahar coverage matrix: $statePath"
+if ($ShaderSeed.IsPresent) {
+    $recovery = Join-Path $PSScriptRoot "../../tools/oot3d/native_a32_runtime/recover_pica_capture_corpus.py"
+    & python $recovery --matrix $statePath --output-root (Join-Path $RunDirectory "shader-corpus")
+    if ($LASTEXITCODE -ne 0) { throw "Shader corpus recovery failed: $statePath" }
+}

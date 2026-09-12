@@ -14,7 +14,8 @@ namespace Oot3dNativeGame {
 // the caller can execute the original function unchanged.
 std::optional<bool> ResolveTopScreenItemQueryGuest(
     NativeA32Memory& memory, std::uint32_t originalEntry,
-    const TopScreenExtendedInputFrame& input);
+    const TopScreenExtendedInputFrame& input,
+    TopScreenItemQueryState* observed = nullptr);
 
 // Returns only the mod's compatibility override for slots 3/4. Native special
 // state and every ordinary case return no value and retain the original OoT3D
@@ -22,6 +23,11 @@ std::optional<bool> ResolveTopScreenItemQueryGuest(
 std::optional<std::uint8_t> ResolveTopScreenSlotItemOverrideGuest(
     NativeA32Memory& memory, std::uint32_t globalContext,
     std::uint8_t slot, const TopScreenExtendedInputFrame& input);
+
+// 2.1.1 slot resolver 005CC440: the active direct item precedes both the
+// ordinary inventory lane and special-state fallback. It never edits a slot.
+std::optional<std::uint8_t> ResolveTopScreenDirectSlotItemGuest(
+    NativeA32Memory& memory, std::uint8_t slot, std::uint8_t directItem);
 
 struct TopScreenAimProjectileCycleInput {
     bool PreviousPressed = false;

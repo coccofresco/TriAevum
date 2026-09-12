@@ -368,23 +368,27 @@ ResolvedMotion ResolveMotion(const MappingConfig& config,
                              std::int16_t digitalCStickX,
                              std::int16_t digitalCStickY,
                              const AimTransform& transform,
-                             const std::array<float, 2>& cStick) noexcept {
+                             const std::array<float, 2>& cStick,
+                             VirtualMotionState* virtualMotion,
+                             bool advanceState) noexcept {
     ResolvedMotion result;
+    bool synthetic = false;
     const double seconds =
         std::clamp(physical.SamplePeriodSeconds, 1.0 / 1000.0, 0.25);
     const float invertX = config.NativeMotionInvertX ? -1.0F : 1.0F;
     const float invertY = config.NativeMotionInvertY ? -1.0F : 1.0F;
     const auto useMouse = [&]() {
         result.Gyroscope[0] =
-            -static_cast<float>(physical.MouseDeltaY) *
+            static_cast<float>(physical.MouseDeltaY) *
             config.MouseMotionDegreesPerPixel /
             static_cast<float>(seconds) * invertY;
-        result.Gyroscope[2] =
-            static_cast<float>(physical.MouseDeltaX) *
+        result.Gyroscope[1] =
+            -static_cast<float>(physical.MouseDeltaX) *
             config.MouseMotionDegreesPerPixel /
             static_cast<float>(seconds) * invertX;
         result.GyroscopeValid = true;
         result.AccelerometerValid = true;
+        synthetic = true;
     };
     const auto useCStick = [&]() {
         const float x = cStick[0] / static_cast<float>(kNativeStickMaximum);
@@ -395,11 +399,12 @@ ResolvedMotion ResolveMotion(const MappingConfig& config,
         result.Gyroscope[0] =
             -y * config.CStickMotionMaximumDegreesPerSecond * profileScale *
             invertY * profileInvertY;
-        result.Gyroscope[2] =
-            x * config.CStickMotionMaximumDegreesPerSecond * profileScale *
+        result.Gyroscope[1] =
+            -x * config.CStickMotionMaximumDegreesPerSecond * profileScale *
             invertX * profileInvertX;
         result.GyroscopeValid = true;
         result.AccelerometerValid = true;
+        synthetic = true;
     };
     const auto useDigital = [&]() {
         const float x = static_cast<float>(digitalCStickX) /
@@ -408,10 +413,11 @@ ResolvedMotion ResolveMotion(const MappingConfig& config,
                         static_cast<float>(kNativeStickMaximum);
         result.Gyroscope[0] =
             -y * config.CStickMotionMaximumDegreesPerSecond * invertY;
-        result.Gyroscope[2] =
-            x * config.CStickMotionMaximumDegreesPerSecond * invertX;
+        result.Gyroscope[1] =
+            -x * config.CStickMotionMaximumDegreesPerSecond * invertX;
         result.GyroscopeValid = true;
         result.AccelerometerValid = true;
+        synthetic = true;
     };
     const auto useControllerGyroscope = [&]() {
         if (!physical.ControllerMotion.GyroscopeValid) {
@@ -477,8 +483,35 @@ ResolvedMotion ResolveMotion(const MappingConfig& config,
                    physical.ControllerMotion.AccelerometerValid) {
             static_cast<void>(useControllerGyroscope());
             static_cast<void>(useControllerAccelerometer());
+        } else if (virtualMotion != nullptr && virtualMotion->Active) {
+            result.GyroscopeValid = true;
+            result.AccelerometerValid = true;
+            synthetic = true;
         }
         break;
+    }
+    if (synthetic) {
+        constexpr double radiansPerDegree = 3.14159265358979323846 / 180.0;
+        const double pitch = virtualMotion != nullptr ? virtualMotion->PitchRadians : 0.0;
+        const double delta = advanceState ? result.Gyroscope[0] * seconds * radiansPerDegree : 0.0;
+        const double nextPitch = std::remainder(pitch + delta, 2.0 * 3.14159265358979323846);
+        // HID expects body-space rates. Yaw about world up becomes a Y/Z
+        // combination while pitched, not a roll about neutral Z.
+        const double samplePitch = pitch + delta * 0.5;
+        const float yaw = result.Gyroscope[1];
+        result.Gyroscope[1] = yaw * static_cast<float>(std::cos(samplePitch));
+        result.Gyroscope[2] = -yaw * static_cast<float>(std::sin(samplePitch));
+        result.Accelerometer = {0.0F, -static_cast<float>(std::cos(nextPitch)),
+                               static_cast<float>(std::sin(nextPitch))};
+        if (virtualMotion != nullptr && advanceState) {
+            virtualMotion->PitchRadians = nextPitch;
+            virtualMotion->Active = true;
+        }
+    } else if (virtualMotion != nullptr && advanceState) {
+        // A physical sensor owns both vectors. Rebase a later virtual source
+        // to that pose instead of resurrecting an unrelated virtual tilt.
+        virtualMotion->RestoreGravity(result.Accelerometer);
+        virtualMotion->Active = false;
     }
     return result;
 }
@@ -569,6 +602,64 @@ AxisInputSample ResolveCStick(const MappingConfig& config,
 }
 
 } // namespace
+
+void VirtualMotionState::RestoreGravity(const std::array<float, 3>& gravity) noexcept {
+    PitchRadians = std::isfinite(gravity[1]) && std::isfinite(gravity[2]) &&
+                           (gravity[1] != 0.0F || gravity[2] != 0.0F) ?
+        std::atan2(static_cast<double>(gravity[2]), -static_cast<double>(gravity[1])) : 0.0;
+    Active = true;
+}
+
+void HostBindingCapture::Begin(BindingDevice device) noexcept {
+    mState = {BindingCapturePhase::Release, device, {}};
+}
+
+void HostBindingCapture::Cancel() noexcept {
+    mState.Phase = BindingCapturePhase::Cancelled;
+}
+
+bool HostBindingCapture::Active() const noexcept {
+    return mState.Phase == BindingCapturePhase::Release || mState.Phase == BindingCapturePhase::Listening;
+}
+
+void HostBindingCapture::Observe(const HostButtonSource& source, bool cancel) noexcept {
+    if (!Active()) return;
+    if (cancel) { Cancel(); return; }
+    HostBinding pressed;
+    bool held = false;
+    if (mState.Device == BindingDevice::Keyboard) {
+        for (const auto& entry : kKeyboardKeys) {
+            if (entry.Value != KeyboardKey::None && entry.Value != KeyboardKey::Escape &&
+                source.IsKeyboardKeyHeld(entry.Value)) {
+                pressed.KeyboardPrimary = entry.Value;
+                held = true;
+                break;
+            }
+        }
+    } else if (mState.Device == BindingDevice::Mouse) {
+        for (const auto& entry : kMouseButtons) {
+            if (entry.Value != MouseButton::None && source.IsMouseButtonHeld(entry.Value)) {
+                pressed.Mouse = entry.Value;
+                held = true;
+                break;
+            }
+        }
+    } else {
+        for (const auto& entry : kGamepadButtons) {
+            if (entry.Value != GamepadButton::None && source.IsGamepadButtonHeld(entry.Value)) {
+                pressed.Gamepad = entry.Value;
+                held = true;
+                break;
+            }
+        }
+    }
+    if (mState.Phase == BindingCapturePhase::Release) {
+        if (!held) mState.Phase = BindingCapturePhase::Listening;
+    } else if (held) {
+        mState.Binding = pressed;
+        mState.Phase = BindingCapturePhase::Complete;
+    }
+}
 
 HardwareCapabilities CapabilitiesFor(HardwareProfile profile) noexcept {
     HardwareCapabilities capabilities;
@@ -679,6 +770,20 @@ bool ParseMotionSource(std::string_view value,
     return ParseNamed(value, source, kMotionSources);
 }
 
+void SwapGamepadSources(std::span<HostBinding> bindings,
+                        GamepadButton first, GamepadButton second) noexcept {
+    if (first == GamepadButton::None || second == GamepadButton::None) {
+        return;
+    }
+    for (auto& binding : bindings) {
+        if (binding.Gamepad == first) {
+            binding.Gamepad = second;
+        } else if (binding.Gamepad == second) {
+            binding.Gamepad = first;
+        }
+    }
+}
+
 bool IsHostBindingHeld(const HostBinding& binding,
                        const HostDeviceEnablement& enabled,
                        const HostButtonSource& source) noexcept {
@@ -785,7 +890,8 @@ InputFrame ResolveInput(const MappingConfig& config,
                         const DigitalState& digital,
                         const AimTransform& aimTransform,
                         CStickFilterState* cStickFilter,
-                        bool advanceCStickFilter) noexcept {
+                        bool advanceCStickFilter,
+                        VirtualMotionState* virtualMotion) noexcept {
     InputFrame frame;
     const auto digitalChannels = ResolveDigitalChannels(digital);
     const std::int16_t analogX = ConvertHostAxisToNative(
@@ -812,7 +918,8 @@ InputFrame ResolveInput(const MappingConfig& config,
         digitalChannels.CStickY, rawCStick);
     const auto motion = ResolveMotion(
         config, physical, digitalChannels.CStickX,
-        digitalChannels.CStickY, aimTransform, filteredCStick);
+        digitalChannels.CStickY, aimTransform, filteredCStick,
+        virtualMotion, advanceCStickFilter);
     frame.Hid.GyroscopeDegreesPerSecond = motion.Gyroscope;
     frame.Hid.Accelerometer = motion.Accelerometer;
     frame.Hid.GyroscopeValid = motion.GyroscopeValid;

@@ -153,6 +153,45 @@ class AzaharShaderCoverageTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "lacks capture_end"):
                 summarize(summary_path)
 
+    def test_shader_seed_requires_actual_resources_not_only_the_launcher_flag(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = self.write_capture(Path(temporary))
+            summary = json.loads(path.read_text())
+            summary["shader_seed_capture"] = True
+            path.write_text(json.dumps(summary))
+            with self.assertRaisesRegex(ValueError, "lacks resources"):
+                summarize(path)
+            frame = Path(summary["pica_frames"][0])
+            events = [json.loads(line) for line in frame.read_text().splitlines()]
+            for event in events:
+                if event["event"] == "draw_begin":
+                    event["shader_seed_resources"] = True
+            frame.write_text("".join(json.dumps(e) + "\n" for e in events))
+            with self.assertRaisesRegex(ValueError, "lacks resources"):
+                summarize(path)
+            events = [{"event": "shader_seed_program"}, {"event": "shader_seed_luts"}, *events]
+            frame.write_text("".join(json.dumps(e) + "\n" for e in events))
+            report = summarize(path)
+            self.assertEqual(report["counts"]["shader_seed_draws"], 2)
+            self.assertEqual(report["counts"]["program_payloads"], 1)
+            self.assertEqual(report["counts"]["lut_snapshots"], 1)
+
+    def test_window_novelty_does_not_count_repeated_pipelines_twice(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = self.write_capture(Path(temporary))
+            summary = json.loads(path.read_text())
+            summary["pica_frames"] *= 2
+            summary["capture_windows"] = [{"first_frame_index": i, "frame_count": 1,
+                                           "requested_offset_seconds": i * 4} for i in range(2)]
+            path.write_text(json.dumps(summary))
+            report = summarize(path)
+            self.assertEqual(len(report["capture_windows"][0]["new_pipeline_ids"]), 2)
+            self.assertEqual(report["capture_windows"][1]["new_pipeline_ids"], [])
+            summary["capture_windows"][1]["frame_count"] = 5
+            path.write_text(json.dumps(summary))
+            with self.assertRaisesRegex(ValueError, "unavailable frames"):
+                summarize(path)
+
 
 class AzaharPipelineCoverTests(unittest.TestCase):
     def test_greedy_cover_is_deterministic_and_preserves_failed_scenarios(self) -> None:

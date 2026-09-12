@@ -1,0 +1,590 @@
+{
+  "adaptations": [
+    "namespace",
+    "host_callbacks_and_application_context",
+    "remove_unused_activity_viewmodel",
+    "exclude_activity_drawer_setting",
+    "extract_overlay_only_resources_and_button_constants",
+    "blank_line_whitespace"
+  ],
+  "donor": "https://github.com/azahar-emu/azahar",
+  "license": "GPL-2.0-or-later",
+  "outputs": {
+    "license.txt": "a77e81713ddfe05f9f7f3a3c46de4147f82b5fe9d6e5e24af96e36a6de53f613",
+    "src/main/java/org/triaevum/android/controls/AzaharButtonIds.kt": "00f52b1c840f7d2d55e3c69c41a1e953f129738a7e94763f3be6cf9975149f48",
+    "src/main/java/org/triaevum/android/controls/EmulationMenuSettings.kt": "fa7c86fbd96efdb436cc29ecdda4f9888cac64e122f8825afaa7a054590096d2",
+    "src/main/java/org/triaevum/android/controls/InputOverlay.kt": "f9d6d9c1e4f72cce8d15595a93f3ce607833259d5be93b8b8918d94f8847f85d",
+    "src/main/java/org/triaevum/android/controls/InputOverlayDrawableButton.kt": "dd16923d40a37dc8a9376b2c8bdcc5e24b9fc37e5c7e5e074cd9b9dab4c8d414",
+    "src/main/java/org/triaevum/android/controls/InputOverlayDrawableDpad.kt": "12ee874e1b31681904d465bf26647c42721885b206037b2e5fda020215328a62",
+    "src/main/java/org/triaevum/android/controls/InputOverlayDrawableJoystick.kt": "37c9537d5c8a4994311fd5d945f227a064266a4a751e05827edf829c9b3f15ff",
+    "src/main/res/drawable-hdpi/button_a.png": "7322a0cffaff1ccde5b55139d31c08958bc6945581116d813fd6f91b453b7e7b",
+    "src/main/res/drawable-hdpi/button_a_pressed.png": "7d46b9bf4cdb3bc31289ef31f813ac6746afc4c18dc7326d16a3684bf60a8000",
+    "src/main/res/drawable-hdpi/button_b.png": "3490616c44de82d6104489693ab6efdfe655f9e3e766864ec523ffa1c7c5f498",
+    "src/main/res/drawable-hdpi/button_b_pressed.png": "15351ed5de28215ef679ac4d0b67900cbf9a8e5458cfe454f98f56847c630833",
+    "src/main/res/drawable-hdpi/button_l.png": "d40b565b0450fd3f5eafc8a4ab96acecba0a9b2102db78211f30b141dc9b5b76",
+    "src/main/res/drawable-hdpi/button_l_pressed.png": "2a6b3d7d84b4ce265969cea00176c765cea7ffc8cc6883797d8ae68765f4d954",
+    "src/main/res/drawable-hdpi/button_r.png": "c50f32df91b13d6856d3fa39303ec06b56c3fe64fcc92c8a4bd651968c23cc45",
+    "src/main/res/drawable-hdpi/button_r_pressed.png": "560d9a498f5e267559408febdc871b526d4aa767f8bfd1f9a9a07bf2a2b17a73",
+    "src/main/res/drawable-hdpi/button_select.png": "633f85fd80c510e19ea9a1da96fbf3f22191f4411ac4b4a5109ded4090de7a84",
+    "src/main/res/drawable-hdpi/button_select_pressed.png": "4c5f7b0d679a096bc15870df763f3f6242d9645a7f0a3cba69292daf96c71825",
+    "src/main/res/drawable-hdpi/button_start.png": "0ffc5e51d28f0ab2e42fb4d4c56ae93943a0ea11c73817fbccac8669a002bf7e",
+    "src/main/res/drawable-hdpi/button_start_pressed.png": "d32699e2d722edead7972cfb50e434a8df7b8e6af6049bea6b88835214dc4726",
+    "src/main/res/drawable-hdpi/button_swap.png": "928c2041c77e83ec8a154e1b2abc708cdee78a82bd47457e97aecf394839b047",
+    "src/main/res/drawable-hdpi/button_swap_pressed.png": "6549eb9aa0fdbf4259a31394af623150514a1593927151faafce58973ea305ce",
+    "src/main/res/drawable-hdpi/button_turbo.png": "2542b0bef754b1fa23c75e3cc84108895330578acf48a9b1394f13c64efe4812",
+    "src/main/res/drawable-hdpi/button_turbo_pressed.png": "9cef67498ac27dedc50eeb382f8fefd2893a69c64704333dafbb5a4b37434915",
+    "src/main/res/drawable-hdpi/button_x.png": "508b0b465cd2e5e4d64830283b59523d0ccde77af6a47128b34fb1dd3c75fd71",
+    "src/main/res/drawable-hdpi/button_x_pressed.png": "598b503ad26a99b3dcb12b600825e97b8225b79b515cb2322690defb18e92660",
+    "src/main/res/drawable-hdpi/button_y.png": "958b8ef3ca9df3c6e673b9c46474573350e9482f6c215bf9e6f2920e7dd67fa2",
+    "src/main/res/drawable-hdpi/button_y_pressed.png": "2550e5c3b010837b7a8159bb4a5f790190944b1c7baa201b99291b51a13b48ae",
+    "src/main/res/drawable-hdpi/button_zl.png": "b0d580bb07cb070a6e382017f0c52d25645b4a55efa7fffc0f05ea4e2dc2f422",
+    "src/main/res/drawable-hdpi/button_zl_pressed.png": "c3415c12df8a991f368bacee781cd86c8d3d96ce29ff3ceb695586e507573cac",
+    "src/main/res/drawable-hdpi/button_zr.png": "6070e6b31ea6f6d79c7c6d18e9e2114e7a8a1ebc35c25a3565e82ff6c905aceb",
+    "src/main/res/drawable-hdpi/button_zr_pressed.png": "c7a7d33c5dc6cd0aac55452cc674f79355e9e47886a4340926d2db5e0fdd3011",
+    "src/main/res/drawable-hdpi/dpad.png": "15644e9631b8488a1519b76800105506a448d56d9f3c8c423dc0cbf2578df31c",
+    "src/main/res/drawable-hdpi/dpad_pressed_one_direction.png": "1896b5e5a75731a0075267e997221be92f5c23db3f878c932669f29911bf2914",
+    "src/main/res/drawable-hdpi/dpad_pressed_two_directions.png": "f3ae235f0296d627a21536b115a2a060fde9f42071ae4f43a4c96fdf73c6cb72",
+    "src/main/res/drawable-hdpi/stick_c.png": "6bc6203537a03943d427721fdb38b76c3a12f65cc884759760fb85a7e38cebfb",
+    "src/main/res/drawable-hdpi/stick_c_pressed.png": "24af9452c068ce7a849d7e396f3bbe568959832a0985d7c834d631d7de15c997",
+    "src/main/res/drawable-hdpi/stick_c_range.png": "75471b72c6b79c7ebc09a553a60017c8d1d12de339369e56295d2f1b5933d64a",
+    "src/main/res/drawable-hdpi/stick_main.png": "9dfc1e189a5cfca0af5e177f3e68a2801cce9061245dc37718a05528107ba8ef",
+    "src/main/res/drawable-hdpi/stick_main_pressed.png": "9ba8f6ccf8dc7e8dc34056a9572ddbe36aa8375f301fc5c7a5294cd05f4b5767",
+    "src/main/res/drawable-hdpi/stick_main_range.png": "f9b1ae489533d9f96b2501b164731d4caaf597810989ce16b044c8a6d1525ac4",
+    "src/main/res/drawable-xhdpi/button_a.png": "43c8467a0f0098b896255f791f4217e68beb9656d06e983921aaf2d46501cbdb",
+    "src/main/res/drawable-xhdpi/button_a_pressed.png": "7bd6331bbc21e1af35c3fea158da194b72dc1159331f8d10c091dc34df78e0f2",
+    "src/main/res/drawable-xhdpi/button_b.png": "9662e2726a04fbd8e17a6dc8ff574bff695f7451f550b60faec321513b29995c",
+    "src/main/res/drawable-xhdpi/button_b_pressed.png": "e41deb7847a7e7e0888422c65a684efb1d5205416c22c77f759a34c29af35d73",
+    "src/main/res/drawable-xhdpi/button_l.png": "1c03cce80355dedee8ee468e972c623487b7d5a55ddc3024d9010a5530393313",
+    "src/main/res/drawable-xhdpi/button_l_pressed.png": "5a6bd4314400cc0e53c85450bc99b5eb3c8bacc5f725cb88eaa0d7c3c581f485",
+    "src/main/res/drawable-xhdpi/button_r.png": "f6e29cf6c319a7494a07a7bea827d50926056d5cbde437e43a1b334b8450fde5",
+    "src/main/res/drawable-xhdpi/button_r_pressed.png": "71792bcf7d9f6e33dd0b9ea7636fcbcbe0b85c21bcd7fd25486e1eea0087469b",
+    "src/main/res/drawable-xhdpi/button_select.png": "e90af18364d91520869e0165c936d73e9f2e67a8b2ad5da2fda8aea4186622a4",
+    "src/main/res/drawable-xhdpi/button_select_pressed.png": "83dd11b1e4f97a52f961dff2dbe10838d36524de821cc5cf6632312932b10a73",
+    "src/main/res/drawable-xhdpi/button_start.png": "af2a6bd5061b88dbdf2e7e0af3df9999956c3f47ffc35754fb7eb7aee782ccab",
+    "src/main/res/drawable-xhdpi/button_start_pressed.png": "1e773d40ae13c84e5203c6aaa4050627e51b0f9f30971cbb4b86caa8d33b845f",
+    "src/main/res/drawable-xhdpi/button_swap.png": "a493c9e80381f67076053b978b9f27cec013a25b592d243bc3a3d3a3c8f788ea",
+    "src/main/res/drawable-xhdpi/button_swap_pressed.png": "8814c60cdb511748edbe6829be71d136fa43c77219123782add6b8d4543e54be",
+    "src/main/res/drawable-xhdpi/button_turbo.png": "259ca38d5123869d73d1e4cafc83cea3d59a144342997538a536e50cd3748dc4",
+    "src/main/res/drawable-xhdpi/button_turbo_pressed.png": "e743c09dd9325ad9bfd1c91abf3d13b6317f6c97a57e9b4a4ae3f7becf4dee8e",
+    "src/main/res/drawable-xhdpi/button_x.png": "f10678184201b88f2c86806175732321fd750d67defc0258ac2c291e0c2fd3e8",
+    "src/main/res/drawable-xhdpi/button_x_pressed.png": "a2d5455e45e849edbcad744d8cb8cecf2579e1e6c41911fc59cff20aa4def368",
+    "src/main/res/drawable-xhdpi/button_y.png": "ffacbad64e4de40b6c12d9c8099d97fa42689f57f891f65e51a865802adfea77",
+    "src/main/res/drawable-xhdpi/button_y_pressed.png": "b42105e9934ce8054a6b45c6658f2cd26e5684defbf96b3982606fe9b2da71cb",
+    "src/main/res/drawable-xhdpi/button_zl.png": "53f1f655a2ec273362eb8057ac88c781f5b512b9bdb0d0361fdd5a0a276f8d5c",
+    "src/main/res/drawable-xhdpi/button_zl_pressed.png": "19094178ca59f235fae83c575f4181022562f134cbc759319d3226e28ae49836",
+    "src/main/res/drawable-xhdpi/button_zr.png": "5243acddcfa6c46d17662c4d5770acb2556e2bde0961c8cae897bbebf5bebb89",
+    "src/main/res/drawable-xhdpi/button_zr_pressed.png": "888aa4d0f39b2e9892a9bcc1418bab22c894c653300f74409fa9d9eee5fd5207",
+    "src/main/res/drawable-xhdpi/dpad.png": "0b05bf0160069ec67f8709d8cc70ef9d81a2e5b0ac1c24bb380cb81810a2ed32",
+    "src/main/res/drawable-xhdpi/dpad_pressed_one_direction.png": "cedcf92f0316aca068ecfb492f176ce1ee9b4cda3a42bfb7059f664b96a94a49",
+    "src/main/res/drawable-xhdpi/dpad_pressed_two_directions.png": "cb71f40193ee06018f619413c00d459e93d0dfee4d38d8b42cd01a60a6cf7a71",
+    "src/main/res/drawable-xhdpi/stick_c.png": "7ee3c9aadcde8f9d6d7782727a33e1c77525fcb52549ebd914d88f44d71328a9",
+    "src/main/res/drawable-xhdpi/stick_c_pressed.png": "a3d8b3cfc88ca5e7b4ed2bf7f4b74cbb4457926435861f1cd807f4db0a41a519",
+    "src/main/res/drawable-xhdpi/stick_c_range.png": "c2ab4264e8fda592abbe6f027741a484c31cf47044af258c247a4a3eb3ffe3f2",
+    "src/main/res/drawable-xhdpi/stick_main.png": "b6f2a3ed55b59b93df8038b6fb8b6361941bbf1d38ffa645a1a1df83acb572cd",
+    "src/main/res/drawable-xhdpi/stick_main_pressed.png": "126c44f2149218c1433c47ea5afb24e996a4556efcf892f0355c95d3cc688b20",
+    "src/main/res/drawable-xhdpi/stick_main_range.png": "cd720605d2f72d600402a47f94d85425d5520cf4ac30e86483473feeb27870d8",
+    "src/main/res/drawable-xxhdpi/button_a.png": "e0b5319ae700213b4960f4ca1e6ee7bc059b6c7c2a4870f4c61715014b72fc6e",
+    "src/main/res/drawable-xxhdpi/button_a_pressed.png": "39d59372ecf926dfb474ad7d91e47787a82c9ecb4b361d5e3b835b7127a89150",
+    "src/main/res/drawable-xxhdpi/button_b.png": "8db9123a68fc7381424a0dad72f3a535bb77745e852aaba12cbf58016eadf5db",
+    "src/main/res/drawable-xxhdpi/button_b_pressed.png": "0be0eb28e63c464a9987a5f168339f1b120969373fb02176791ae30e07899b98",
+    "src/main/res/drawable-xxhdpi/button_l.png": "ef1df9999c0a923a6634fa68afc6ddf89479ad7020f6e3dd707873d913fc2679",
+    "src/main/res/drawable-xxhdpi/button_l_pressed.png": "afb2130457d8a47dfd044e0f3ad27e58206b28aa248fc0c451513b1181e5a2dc",
+    "src/main/res/drawable-xxhdpi/button_r.png": "076cac5b421306d654c2222ee8085912e4bda1f4ac55f6b156b5a96d8f649797",
+    "src/main/res/drawable-xxhdpi/button_r_pressed.png": "4684b91a05f5e76399f0f27be920134061b46579ec6fb653a8a883132e689a14",
+    "src/main/res/drawable-xxhdpi/button_select.png": "5872ffb0bb835bfa009f8826e955d3feb3a21ea8a84216d218a1d25ceaa74e1e",
+    "src/main/res/drawable-xxhdpi/button_select_pressed.png": "6740c25da70c78f83ffde84e6d4b365d339733cc546db50fc795a85899bf6967",
+    "src/main/res/drawable-xxhdpi/button_start.png": "8c49da51550bab4cd6ec617518754d54415f343f4857fac25a8a663e37b9b274",
+    "src/main/res/drawable-xxhdpi/button_start_pressed.png": "4114a0d5aee82d98c5a5df90135dd3d8f2ce2464c409eb5c01b61512c7f57287",
+    "src/main/res/drawable-xxhdpi/button_swap.png": "8492a2d67711134159de47effc9294a5e896d55461bd2bb8cdcefbcb94ab2ef5",
+    "src/main/res/drawable-xxhdpi/button_swap_pressed.png": "03e250d34a03bd2f77e800accdcc62b8e017fca0bb22f437f91c22886c18689a",
+    "src/main/res/drawable-xxhdpi/button_turbo.png": "9162767777f6679f85a5db803b03b0d3c076ecd11cc9a5bbbea3c7105e214fbd",
+    "src/main/res/drawable-xxhdpi/button_turbo_pressed.png": "e3884f398f4850c4a6c1d58fa98155b46b88ba71bcb2c8480e256ab769bf6a4d",
+    "src/main/res/drawable-xxhdpi/button_x.png": "0a01cba932ead4fed13d040b0e5f14e32f450f4f1c89e4b40cf950c7a5177b37",
+    "src/main/res/drawable-xxhdpi/button_x_pressed.png": "3e139804feb22f0635d1fe505018b6ed2332e017f10e634395c08ed12eb0df42",
+    "src/main/res/drawable-xxhdpi/button_y.png": "5b9d36650fc6f0272b7a149c9f9dc5f0bfe93bb267133262b925dc95dac8d492",
+    "src/main/res/drawable-xxhdpi/button_y_pressed.png": "c7f63dd1906c43c83df1fedc8b1a45b7c7c1452c51837d3b2f6312e1aa31579d",
+    "src/main/res/drawable-xxhdpi/button_zl.png": "29123a78eba1976709a79a5fed68f3428f601b6e04311a46bdc9375723ac98f3",
+    "src/main/res/drawable-xxhdpi/button_zl_pressed.png": "3bd9d7fd8f4fa499279e03ad60324d4f2d976a2987a24e56f83e78bdbf6b29a7",
+    "src/main/res/drawable-xxhdpi/button_zr.png": "b3a416896199d19db0d3db10f3f831a5cb62f2e0f6f04512e3a47e381b00e3e3",
+    "src/main/res/drawable-xxhdpi/button_zr_pressed.png": "24c1cc0bb66448f9b6d65a58c38760c5166fb61f3ec5b0d1d011f9409453fef4",
+    "src/main/res/drawable-xxhdpi/dpad.png": "8fe41031877f36c5885c8842aafd7b97b69ed91625b86811998d0dd620a8b8f7",
+    "src/main/res/drawable-xxhdpi/dpad_pressed_one_direction.png": "309e8eb385388d5da79b729517e0f90ea3d3e70967797aeaee8e2d4193f65aad",
+    "src/main/res/drawable-xxhdpi/dpad_pressed_two_directions.png": "de43b595d3005366f795efb9fb52c672650d8ee1dd7438ee03fdde042e6f6016",
+    "src/main/res/drawable-xxhdpi/stick_c.png": "873cd2d79adec815243ff71679017d1d120550ce4bc55dff6e9fe07c9660ded0",
+    "src/main/res/drawable-xxhdpi/stick_c_pressed.png": "5f1516df6776a450d0877a2c7df9db8937f7d776421efa26b2b77a871ae0458a",
+    "src/main/res/drawable-xxhdpi/stick_c_range.png": "7df913f09e4a824146739e93bb7cf5720c92e17f3f238d56cafeff95cf221d33",
+    "src/main/res/drawable-xxhdpi/stick_main.png": "93ff7b80aa0d02c5d3e85cec8e0763c94f8e6031f029c6bb4396c324f3daa429",
+    "src/main/res/drawable-xxhdpi/stick_main_pressed.png": "cf96f8064a186e304113f0d3b7308ca229fdcf2af6e419ad1de516b70f5ec33c",
+    "src/main/res/drawable-xxhdpi/stick_main_range.png": "4672f34afb965e1a7da83e1886209d3048926a48b8883109a910798446e27ac3",
+    "src/main/res/drawable-xxxhdpi/button_a.png": "736961cfa3776da0aa3f4da04e355f03e71b026e7ef7e088fc4255fab2a8bc64",
+    "src/main/res/drawable-xxxhdpi/button_a_pressed.png": "11de7d3001faa434f43dea85006bdcd8a48147bfb40c563ed7d7b6ab8e19aa70",
+    "src/main/res/drawable-xxxhdpi/button_b.png": "3665f5dae0caaebe10e4e10b0b11a704e993b5010927d9bf69ec967f2f763108",
+    "src/main/res/drawable-xxxhdpi/button_b_pressed.png": "f3100e18c17416e0c1c511ece68f2882be3b213943aaaa0e2929c8c2317ef450",
+    "src/main/res/drawable-xxxhdpi/button_l.png": "053124f73d0699742a56e0b050a73db9056c1e910af736923737512bf11ecf5c",
+    "src/main/res/drawable-xxxhdpi/button_l_pressed.png": "77dd2b83c84fa3e1c3f4d904cee27423e7a8d98dbfe1824c47bc7a3f7f7d1b90",
+    "src/main/res/drawable-xxxhdpi/button_r.png": "33f089d962e5e0830b6ceddde96dfa74842e12840166630e0e7932b4bcbb87f3",
+    "src/main/res/drawable-xxxhdpi/button_r_pressed.png": "ab2bb2f253860b736bcb320ab767ad738ce33499741967e906e4c310838fd517",
+    "src/main/res/drawable-xxxhdpi/button_select.png": "c4070f21ae51d299a41907a4684e24c548a75ba0f565711d23b9caaa13f27a33",
+    "src/main/res/drawable-xxxhdpi/button_select_pressed.png": "5b145981468cbcc116ec02ad503722fe64e03ef32f7d5abacfd76086432ad81f",
+    "src/main/res/drawable-xxxhdpi/button_start.png": "959572094b27d7bba2ef620b72ddfc6c29add5a9d7d551b68084c00a47de2fff",
+    "src/main/res/drawable-xxxhdpi/button_start_pressed.png": "49f830895b4a02a7d4e1da5c8f577d5ba32b6c5ddbe8b91e4ad5f43c8b467ada",
+    "src/main/res/drawable-xxxhdpi/button_swap.png": "d5ed0eb4a9a42722d54050e52387f23d221bf025a0b3d2cb753a418bb54aa862",
+    "src/main/res/drawable-xxxhdpi/button_swap_pressed.png": "7caa7fabae258ac6d32628a63e9c41da94b72537e99e835ca918d3a8720437f7",
+    "src/main/res/drawable-xxxhdpi/button_turbo.png": "b52c83acc64bf406f8442e0c502c5c66eb2972c712d055733d4bb4aeb36dfdaa",
+    "src/main/res/drawable-xxxhdpi/button_turbo_pressed.png": "8b5ed06ce3cc74900b352e3f5b71fcc2adb402438ae0a6248536375c41060e21",
+    "src/main/res/drawable-xxxhdpi/button_x.png": "2cf7263eb19e917ab52d74871f952312ab7d50d944e4c0589aedf1428fff1d0d",
+    "src/main/res/drawable-xxxhdpi/button_x_pressed.png": "0ff52f763345accde7c0293b148a06a025245b7fd113e581e67c64ccfb9bb5f5",
+    "src/main/res/drawable-xxxhdpi/button_y.png": "9c22160232392b00e6795f467c5550a74785cd9ec705e0abd092cc424566ffe2",
+    "src/main/res/drawable-xxxhdpi/button_y_pressed.png": "e92a8634170550e8bcd8dd6916ec660d9c8b34c689a8774acdf8a64b88b9b4b6",
+    "src/main/res/drawable-xxxhdpi/button_zl.png": "98b4971674f4d79720e77fe0caf9e11f476d62cc9cb33b8f0290890ad7763c5e",
+    "src/main/res/drawable-xxxhdpi/button_zl_pressed.png": "cbee554af3b9260578b08f328340fa8ff7d52f688535c3fcd3532fb02acefc41",
+    "src/main/res/drawable-xxxhdpi/button_zr.png": "23b1c86c6e2e0a9b346b6e41f818fdfaaf8067b765afd942f394725640751169",
+    "src/main/res/drawable-xxxhdpi/button_zr_pressed.png": "dc337ecbec863e7511021658bdb0bdac453660b7af4de9aa8f24eeb255efc01f",
+    "src/main/res/drawable-xxxhdpi/dpad.png": "c57b1db18dda113585743708d089b175bd8c49d213684989b82ccc2d7eddafe9",
+    "src/main/res/drawable-xxxhdpi/dpad_pressed_one_direction.png": "b0b8b2aad5df91ac5c4f4f2089462c20fcced23608431b99bc37fd4bcd0649cc",
+    "src/main/res/drawable-xxxhdpi/dpad_pressed_two_directions.png": "07ecf3b0624adb0e3e5b8379bfa0b3d66e9a6c8d60036404d4fa52ebea57c308",
+    "src/main/res/drawable-xxxhdpi/stick_c.png": "5f471e503af08edea7cca04a39b4300f427500421acbc14fb2ef00fa3244769b",
+    "src/main/res/drawable-xxxhdpi/stick_c_pressed.png": "4f866287231677f881ae5775be6d708d97f0b9ad15bd08044f8b1a092844f642",
+    "src/main/res/drawable-xxxhdpi/stick_c_range.png": "ca576438b395132dc798f3530a09bd392c44247dbf1d300d231b144f6d36d437",
+    "src/main/res/drawable-xxxhdpi/stick_main.png": "a41ce92e271592cbfca9c9095a70c23d2484a409ea53c5c0652b7d6b77d31844",
+    "src/main/res/drawable-xxxhdpi/stick_main_pressed.png": "8b4ea997a46db77ff75a5760ce447d429eb425ef182d1393de4a639b1acd72f8",
+    "src/main/res/drawable-xxxhdpi/stick_main_range.png": "30762db408bee290d9f33a102bd7ce78d2e461b3b433041fbb5c9e1d90a0e706",
+    "src/main/res/drawable/button_home.xml": "ae0ae91469fbf82d622d14af8e25a9e822eea22243c2cf844abccaa21a048ca7",
+    "src/main/res/drawable/button_home_pressed.xml": "1ea92d4e175dd18c7bd111598dcab2015d06b26756ea9a851afdec0bae50928e",
+    "src/main/res/values/azahar_overlay_integers.xml": "68cb299efcacd6fa6105b948358a7719b48293e7981410df97c4cad4b2a94296"
+  },
+  "overlay_last_change": "3716f6b9b63ee5271fe5a1c4327972e02158834d",
+  "schema": 1,
+  "snapshot_commit": "beb5681ee7f85586501b16b083a961b707092cd7",
+  "sources": {
+    "license.txt": {
+      "sha256": "a77e81713ddfe05f9f7f3a3c46de4147f82b5fe9d6e5e24af96e36a6de53f613"
+    },
+    "src/android/app/src/main/java/org/citra/citra_emu/NativeLibrary.kt": {
+      "sha256": "31489f86af290dad6faab921595687547664b087257ef9a841155d8c954a179b"
+    },
+    "src/android/app/src/main/java/org/citra/citra_emu/overlay/InputOverlay.kt": {
+      "sha256": "fb9257916b92c32eba8a0093ac7579770bd3d59c15c212261b9c5ab7150075c5"
+    },
+    "src/android/app/src/main/java/org/citra/citra_emu/overlay/InputOverlayDrawableButton.kt": {
+      "sha256": "2932500e947075e2287cc16cb01720dd91f3eff958f19de208a3a83c5491a5cb"
+    },
+    "src/android/app/src/main/java/org/citra/citra_emu/overlay/InputOverlayDrawableDpad.kt": {
+      "sha256": "c888b3abcf1923f9375d28783853139c8d291f07bee3dde10b22a6ed20a46479"
+    },
+    "src/android/app/src/main/java/org/citra/citra_emu/overlay/InputOverlayDrawableJoystick.kt": {
+      "sha256": "b8b40381aa37bc56e1ce6812cf9af1405e562f99786e8f7fee7a6a7ec31fe73e"
+    },
+    "src/android/app/src/main/java/org/citra/citra_emu/utils/EmulationMenuSettings.kt": {
+      "sha256": "d9e3e3e6de42058f78dda050a0bca818c8a24e2708ae2f8e37f3b1143c0260db"
+    },
+    "src/android/app/src/main/jni/native.cpp": {
+      "sha256": "a9ccf116700d134e9bdbe2efaf2d893c060c0c23a6651a3d1aed01ebb93ee502"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/button_a.png": {
+      "sha256": "7322a0cffaff1ccde5b55139d31c08958bc6945581116d813fd6f91b453b7e7b"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/button_a_pressed.png": {
+      "sha256": "7d46b9bf4cdb3bc31289ef31f813ac6746afc4c18dc7326d16a3684bf60a8000"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/button_b.png": {
+      "sha256": "3490616c44de82d6104489693ab6efdfe655f9e3e766864ec523ffa1c7c5f498"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/button_b_pressed.png": {
+      "sha256": "15351ed5de28215ef679ac4d0b67900cbf9a8e5458cfe454f98f56847c630833"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/button_l.png": {
+      "sha256": "d40b565b0450fd3f5eafc8a4ab96acecba0a9b2102db78211f30b141dc9b5b76"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/button_l_pressed.png": {
+      "sha256": "2a6b3d7d84b4ce265969cea00176c765cea7ffc8cc6883797d8ae68765f4d954"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/button_r.png": {
+      "sha256": "c50f32df91b13d6856d3fa39303ec06b56c3fe64fcc92c8a4bd651968c23cc45"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/button_r_pressed.png": {
+      "sha256": "560d9a498f5e267559408febdc871b526d4aa767f8bfd1f9a9a07bf2a2b17a73"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/button_select.png": {
+      "sha256": "633f85fd80c510e19ea9a1da96fbf3f22191f4411ac4b4a5109ded4090de7a84"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/button_select_pressed.png": {
+      "sha256": "4c5f7b0d679a096bc15870df763f3f6242d9645a7f0a3cba69292daf96c71825"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/button_start.png": {
+      "sha256": "0ffc5e51d28f0ab2e42fb4d4c56ae93943a0ea11c73817fbccac8669a002bf7e"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/button_start_pressed.png": {
+      "sha256": "d32699e2d722edead7972cfb50e434a8df7b8e6af6049bea6b88835214dc4726"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/button_swap.png": {
+      "sha256": "928c2041c77e83ec8a154e1b2abc708cdee78a82bd47457e97aecf394839b047"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/button_swap_pressed.png": {
+      "sha256": "6549eb9aa0fdbf4259a31394af623150514a1593927151faafce58973ea305ce"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/button_turbo.png": {
+      "sha256": "2542b0bef754b1fa23c75e3cc84108895330578acf48a9b1394f13c64efe4812"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/button_turbo_pressed.png": {
+      "sha256": "9cef67498ac27dedc50eeb382f8fefd2893a69c64704333dafbb5a4b37434915"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/button_x.png": {
+      "sha256": "508b0b465cd2e5e4d64830283b59523d0ccde77af6a47128b34fb1dd3c75fd71"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/button_x_pressed.png": {
+      "sha256": "598b503ad26a99b3dcb12b600825e97b8225b79b515cb2322690defb18e92660"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/button_y.png": {
+      "sha256": "958b8ef3ca9df3c6e673b9c46474573350e9482f6c215bf9e6f2920e7dd67fa2"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/button_y_pressed.png": {
+      "sha256": "2550e5c3b010837b7a8159bb4a5f790190944b1c7baa201b99291b51a13b48ae"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/button_zl.png": {
+      "sha256": "b0d580bb07cb070a6e382017f0c52d25645b4a55efa7fffc0f05ea4e2dc2f422"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/button_zl_pressed.png": {
+      "sha256": "c3415c12df8a991f368bacee781cd86c8d3d96ce29ff3ceb695586e507573cac"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/button_zr.png": {
+      "sha256": "6070e6b31ea6f6d79c7c6d18e9e2114e7a8a1ebc35c25a3565e82ff6c905aceb"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/button_zr_pressed.png": {
+      "sha256": "c7a7d33c5dc6cd0aac55452cc674f79355e9e47886a4340926d2db5e0fdd3011"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/dpad.png": {
+      "sha256": "15644e9631b8488a1519b76800105506a448d56d9f3c8c423dc0cbf2578df31c"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/dpad_pressed_one_direction.png": {
+      "sha256": "1896b5e5a75731a0075267e997221be92f5c23db3f878c932669f29911bf2914"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/dpad_pressed_two_directions.png": {
+      "sha256": "f3ae235f0296d627a21536b115a2a060fde9f42071ae4f43a4c96fdf73c6cb72"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/stick_c.png": {
+      "sha256": "6bc6203537a03943d427721fdb38b76c3a12f65cc884759760fb85a7e38cebfb"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/stick_c_pressed.png": {
+      "sha256": "24af9452c068ce7a849d7e396f3bbe568959832a0985d7c834d631d7de15c997"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/stick_c_range.png": {
+      "sha256": "75471b72c6b79c7ebc09a553a60017c8d1d12de339369e56295d2f1b5933d64a"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/stick_main.png": {
+      "sha256": "9dfc1e189a5cfca0af5e177f3e68a2801cce9061245dc37718a05528107ba8ef"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/stick_main_pressed.png": {
+      "sha256": "9ba8f6ccf8dc7e8dc34056a9572ddbe36aa8375f301fc5c7a5294cd05f4b5767"
+    },
+    "src/android/app/src/main/res/drawable-hdpi/stick_main_range.png": {
+      "sha256": "f9b1ae489533d9f96b2501b164731d4caaf597810989ce16b044c8a6d1525ac4"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/button_a.png": {
+      "sha256": "43c8467a0f0098b896255f791f4217e68beb9656d06e983921aaf2d46501cbdb"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/button_a_pressed.png": {
+      "sha256": "7bd6331bbc21e1af35c3fea158da194b72dc1159331f8d10c091dc34df78e0f2"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/button_b.png": {
+      "sha256": "9662e2726a04fbd8e17a6dc8ff574bff695f7451f550b60faec321513b29995c"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/button_b_pressed.png": {
+      "sha256": "e41deb7847a7e7e0888422c65a684efb1d5205416c22c77f759a34c29af35d73"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/button_l.png": {
+      "sha256": "1c03cce80355dedee8ee468e972c623487b7d5a55ddc3024d9010a5530393313"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/button_l_pressed.png": {
+      "sha256": "5a6bd4314400cc0e53c85450bc99b5eb3c8bacc5f725cb88eaa0d7c3c581f485"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/button_r.png": {
+      "sha256": "f6e29cf6c319a7494a07a7bea827d50926056d5cbde437e43a1b334b8450fde5"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/button_r_pressed.png": {
+      "sha256": "71792bcf7d9f6e33dd0b9ea7636fcbcbe0b85c21bcd7fd25486e1eea0087469b"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/button_select.png": {
+      "sha256": "e90af18364d91520869e0165c936d73e9f2e67a8b2ad5da2fda8aea4186622a4"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/button_select_pressed.png": {
+      "sha256": "83dd11b1e4f97a52f961dff2dbe10838d36524de821cc5cf6632312932b10a73"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/button_start.png": {
+      "sha256": "af2a6bd5061b88dbdf2e7e0af3df9999956c3f47ffc35754fb7eb7aee782ccab"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/button_start_pressed.png": {
+      "sha256": "1e773d40ae13c84e5203c6aaa4050627e51b0f9f30971cbb4b86caa8d33b845f"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/button_swap.png": {
+      "sha256": "a493c9e80381f67076053b978b9f27cec013a25b592d243bc3a3d3a3c8f788ea"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/button_swap_pressed.png": {
+      "sha256": "8814c60cdb511748edbe6829be71d136fa43c77219123782add6b8d4543e54be"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/button_turbo.png": {
+      "sha256": "259ca38d5123869d73d1e4cafc83cea3d59a144342997538a536e50cd3748dc4"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/button_turbo_pressed.png": {
+      "sha256": "e743c09dd9325ad9bfd1c91abf3d13b6317f6c97a57e9b4a4ae3f7becf4dee8e"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/button_x.png": {
+      "sha256": "f10678184201b88f2c86806175732321fd750d67defc0258ac2c291e0c2fd3e8"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/button_x_pressed.png": {
+      "sha256": "a2d5455e45e849edbcad744d8cb8cecf2579e1e6c41911fc59cff20aa4def368"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/button_y.png": {
+      "sha256": "ffacbad64e4de40b6c12d9c8099d97fa42689f57f891f65e51a865802adfea77"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/button_y_pressed.png": {
+      "sha256": "b42105e9934ce8054a6b45c6658f2cd26e5684defbf96b3982606fe9b2da71cb"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/button_zl.png": {
+      "sha256": "53f1f655a2ec273362eb8057ac88c781f5b512b9bdb0d0361fdd5a0a276f8d5c"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/button_zl_pressed.png": {
+      "sha256": "19094178ca59f235fae83c575f4181022562f134cbc759319d3226e28ae49836"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/button_zr.png": {
+      "sha256": "5243acddcfa6c46d17662c4d5770acb2556e2bde0961c8cae897bbebf5bebb89"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/button_zr_pressed.png": {
+      "sha256": "888aa4d0f39b2e9892a9bcc1418bab22c894c653300f74409fa9d9eee5fd5207"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/dpad.png": {
+      "sha256": "0b05bf0160069ec67f8709d8cc70ef9d81a2e5b0ac1c24bb380cb81810a2ed32"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/dpad_pressed_one_direction.png": {
+      "sha256": "cedcf92f0316aca068ecfb492f176ce1ee9b4cda3a42bfb7059f664b96a94a49"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/dpad_pressed_two_directions.png": {
+      "sha256": "cb71f40193ee06018f619413c00d459e93d0dfee4d38d8b42cd01a60a6cf7a71"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/stick_c.png": {
+      "sha256": "7ee3c9aadcde8f9d6d7782727a33e1c77525fcb52549ebd914d88f44d71328a9"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/stick_c_pressed.png": {
+      "sha256": "a3d8b3cfc88ca5e7b4ed2bf7f4b74cbb4457926435861f1cd807f4db0a41a519"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/stick_c_range.png": {
+      "sha256": "c2ab4264e8fda592abbe6f027741a484c31cf47044af258c247a4a3eb3ffe3f2"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/stick_main.png": {
+      "sha256": "b6f2a3ed55b59b93df8038b6fb8b6361941bbf1d38ffa645a1a1df83acb572cd"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/stick_main_pressed.png": {
+      "sha256": "126c44f2149218c1433c47ea5afb24e996a4556efcf892f0355c95d3cc688b20"
+    },
+    "src/android/app/src/main/res/drawable-xhdpi/stick_main_range.png": {
+      "sha256": "cd720605d2f72d600402a47f94d85425d5520cf4ac30e86483473feeb27870d8"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/button_a.png": {
+      "sha256": "e0b5319ae700213b4960f4ca1e6ee7bc059b6c7c2a4870f4c61715014b72fc6e"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/button_a_pressed.png": {
+      "sha256": "39d59372ecf926dfb474ad7d91e47787a82c9ecb4b361d5e3b835b7127a89150"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/button_b.png": {
+      "sha256": "8db9123a68fc7381424a0dad72f3a535bb77745e852aaba12cbf58016eadf5db"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/button_b_pressed.png": {
+      "sha256": "0be0eb28e63c464a9987a5f168339f1b120969373fb02176791ae30e07899b98"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/button_l.png": {
+      "sha256": "ef1df9999c0a923a6634fa68afc6ddf89479ad7020f6e3dd707873d913fc2679"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/button_l_pressed.png": {
+      "sha256": "afb2130457d8a47dfd044e0f3ad27e58206b28aa248fc0c451513b1181e5a2dc"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/button_r.png": {
+      "sha256": "076cac5b421306d654c2222ee8085912e4bda1f4ac55f6b156b5a96d8f649797"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/button_r_pressed.png": {
+      "sha256": "4684b91a05f5e76399f0f27be920134061b46579ec6fb653a8a883132e689a14"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/button_select.png": {
+      "sha256": "5872ffb0bb835bfa009f8826e955d3feb3a21ea8a84216d218a1d25ceaa74e1e"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/button_select_pressed.png": {
+      "sha256": "6740c25da70c78f83ffde84e6d4b365d339733cc546db50fc795a85899bf6967"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/button_start.png": {
+      "sha256": "8c49da51550bab4cd6ec617518754d54415f343f4857fac25a8a663e37b9b274"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/button_start_pressed.png": {
+      "sha256": "4114a0d5aee82d98c5a5df90135dd3d8f2ce2464c409eb5c01b61512c7f57287"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/button_swap.png": {
+      "sha256": "8492a2d67711134159de47effc9294a5e896d55461bd2bb8cdcefbcb94ab2ef5"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/button_swap_pressed.png": {
+      "sha256": "03e250d34a03bd2f77e800accdcc62b8e017fca0bb22f437f91c22886c18689a"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/button_turbo.png": {
+      "sha256": "9162767777f6679f85a5db803b03b0d3c076ecd11cc9a5bbbea3c7105e214fbd"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/button_turbo_pressed.png": {
+      "sha256": "e3884f398f4850c4a6c1d58fa98155b46b88ba71bcb2c8480e256ab769bf6a4d"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/button_x.png": {
+      "sha256": "0a01cba932ead4fed13d040b0e5f14e32f450f4f1c89e4b40cf950c7a5177b37"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/button_x_pressed.png": {
+      "sha256": "3e139804feb22f0635d1fe505018b6ed2332e017f10e634395c08ed12eb0df42"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/button_y.png": {
+      "sha256": "5b9d36650fc6f0272b7a149c9f9dc5f0bfe93bb267133262b925dc95dac8d492"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/button_y_pressed.png": {
+      "sha256": "c7f63dd1906c43c83df1fedc8b1a45b7c7c1452c51837d3b2f6312e1aa31579d"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/button_zl.png": {
+      "sha256": "29123a78eba1976709a79a5fed68f3428f601b6e04311a46bdc9375723ac98f3"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/button_zl_pressed.png": {
+      "sha256": "3bd9d7fd8f4fa499279e03ad60324d4f2d976a2987a24e56f83e78bdbf6b29a7"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/button_zr.png": {
+      "sha256": "b3a416896199d19db0d3db10f3f831a5cb62f2e0f6f04512e3a47e381b00e3e3"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/button_zr_pressed.png": {
+      "sha256": "24c1cc0bb66448f9b6d65a58c38760c5166fb61f3ec5b0d1d011f9409453fef4"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/dpad.png": {
+      "sha256": "8fe41031877f36c5885c8842aafd7b97b69ed91625b86811998d0dd620a8b8f7"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/dpad_pressed_one_direction.png": {
+      "sha256": "309e8eb385388d5da79b729517e0f90ea3d3e70967797aeaee8e2d4193f65aad"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/dpad_pressed_two_directions.png": {
+      "sha256": "de43b595d3005366f795efb9fb52c672650d8ee1dd7438ee03fdde042e6f6016"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/stick_c.png": {
+      "sha256": "873cd2d79adec815243ff71679017d1d120550ce4bc55dff6e9fe07c9660ded0"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/stick_c_pressed.png": {
+      "sha256": "5f1516df6776a450d0877a2c7df9db8937f7d776421efa26b2b77a871ae0458a"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/stick_c_range.png": {
+      "sha256": "7df913f09e4a824146739e93bb7cf5720c92e17f3f238d56cafeff95cf221d33"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/stick_main.png": {
+      "sha256": "93ff7b80aa0d02c5d3e85cec8e0763c94f8e6031f029c6bb4396c324f3daa429"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/stick_main_pressed.png": {
+      "sha256": "cf96f8064a186e304113f0d3b7308ca229fdcf2af6e419ad1de516b70f5ec33c"
+    },
+    "src/android/app/src/main/res/drawable-xxhdpi/stick_main_range.png": {
+      "sha256": "4672f34afb965e1a7da83e1886209d3048926a48b8883109a910798446e27ac3"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/button_a.png": {
+      "sha256": "736961cfa3776da0aa3f4da04e355f03e71b026e7ef7e088fc4255fab2a8bc64"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/button_a_pressed.png": {
+      "sha256": "11de7d3001faa434f43dea85006bdcd8a48147bfb40c563ed7d7b6ab8e19aa70"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/button_b.png": {
+      "sha256": "3665f5dae0caaebe10e4e10b0b11a704e993b5010927d9bf69ec967f2f763108"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/button_b_pressed.png": {
+      "sha256": "f3100e18c17416e0c1c511ece68f2882be3b213943aaaa0e2929c8c2317ef450"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/button_l.png": {
+      "sha256": "053124f73d0699742a56e0b050a73db9056c1e910af736923737512bf11ecf5c"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/button_l_pressed.png": {
+      "sha256": "77dd2b83c84fa3e1c3f4d904cee27423e7a8d98dbfe1824c47bc7a3f7f7d1b90"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/button_r.png": {
+      "sha256": "33f089d962e5e0830b6ceddde96dfa74842e12840166630e0e7932b4bcbb87f3"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/button_r_pressed.png": {
+      "sha256": "ab2bb2f253860b736bcb320ab767ad738ce33499741967e906e4c310838fd517"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/button_select.png": {
+      "sha256": "c4070f21ae51d299a41907a4684e24c548a75ba0f565711d23b9caaa13f27a33"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/button_select_pressed.png": {
+      "sha256": "5b145981468cbcc116ec02ad503722fe64e03ef32f7d5abacfd76086432ad81f"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/button_start.png": {
+      "sha256": "959572094b27d7bba2ef620b72ddfc6c29add5a9d7d551b68084c00a47de2fff"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/button_start_pressed.png": {
+      "sha256": "49f830895b4a02a7d4e1da5c8f577d5ba32b6c5ddbe8b91e4ad5f43c8b467ada"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/button_swap.png": {
+      "sha256": "d5ed0eb4a9a42722d54050e52387f23d221bf025a0b3d2cb753a418bb54aa862"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/button_swap_pressed.png": {
+      "sha256": "7caa7fabae258ac6d32628a63e9c41da94b72537e99e835ca918d3a8720437f7"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/button_turbo.png": {
+      "sha256": "b52c83acc64bf406f8442e0c502c5c66eb2972c712d055733d4bb4aeb36dfdaa"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/button_turbo_pressed.png": {
+      "sha256": "8b5ed06ce3cc74900b352e3f5b71fcc2adb402438ae0a6248536375c41060e21"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/button_x.png": {
+      "sha256": "2cf7263eb19e917ab52d74871f952312ab7d50d944e4c0589aedf1428fff1d0d"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/button_x_pressed.png": {
+      "sha256": "0ff52f763345accde7c0293b148a06a025245b7fd113e581e67c64ccfb9bb5f5"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/button_y.png": {
+      "sha256": "9c22160232392b00e6795f467c5550a74785cd9ec705e0abd092cc424566ffe2"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/button_y_pressed.png": {
+      "sha256": "e92a8634170550e8bcd8dd6916ec660d9c8b34c689a8774acdf8a64b88b9b4b6"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/button_zl.png": {
+      "sha256": "98b4971674f4d79720e77fe0caf9e11f476d62cc9cb33b8f0290890ad7763c5e"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/button_zl_pressed.png": {
+      "sha256": "cbee554af3b9260578b08f328340fa8ff7d52f688535c3fcd3532fb02acefc41"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/button_zr.png": {
+      "sha256": "23b1c86c6e2e0a9b346b6e41f818fdfaaf8067b765afd942f394725640751169"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/button_zr_pressed.png": {
+      "sha256": "dc337ecbec863e7511021658bdb0bdac453660b7af4de9aa8f24eeb255efc01f"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/dpad.png": {
+      "sha256": "c57b1db18dda113585743708d089b175bd8c49d213684989b82ccc2d7eddafe9"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/dpad_pressed_one_direction.png": {
+      "sha256": "b0b8b2aad5df91ac5c4f4f2089462c20fcced23608431b99bc37fd4bcd0649cc"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/dpad_pressed_two_directions.png": {
+      "sha256": "07ecf3b0624adb0e3e5b8379bfa0b3d66e9a6c8d60036404d4fa52ebea57c308"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/stick_c.png": {
+      "sha256": "5f471e503af08edea7cca04a39b4300f427500421acbc14fb2ef00fa3244769b"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/stick_c_pressed.png": {
+      "sha256": "4f866287231677f881ae5775be6d708d97f0b9ad15bd08044f8b1a092844f642"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/stick_c_range.png": {
+      "sha256": "ca576438b395132dc798f3530a09bd392c44247dbf1d300d231b144f6d36d437"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/stick_main.png": {
+      "sha256": "a41ce92e271592cbfca9c9095a70c23d2484a409ea53c5c0652b7d6b77d31844"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/stick_main_pressed.png": {
+      "sha256": "8b4ea997a46db77ff75a5760ce447d429eb425ef182d1393de4a639b1acd72f8"
+    },
+    "src/android/app/src/main/res/drawable-xxxhdpi/stick_main_range.png": {
+      "sha256": "30762db408bee290d9f33a102bd7ce78d2e461b3b433041fbb5c9e1d90a0e706"
+    },
+    "src/android/app/src/main/res/drawable/button_home.xml": {
+      "sha256": "ae0ae91469fbf82d622d14af8e25a9e822eea22243c2cf844abccaa21a048ca7"
+    },
+    "src/android/app/src/main/res/drawable/button_home_pressed.xml": {
+      "sha256": "1ea92d4e175dd18c7bd111598dcab2015d06b26756ea9a851afdec0bae50928e"
+    },
+    "src/android/app/src/main/res/values/integers.xml": {
+      "sha256": "06f29bfb80271d62cf2ba712cdd9f5e6843b2872a0c90b158e68591e219b5e92"
+    }
+  }
+}

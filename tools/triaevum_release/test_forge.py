@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from release_platform import host_platform
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -216,7 +217,8 @@ class ForgeTests(unittest.TestCase):
         index["process_manifest"] = {"path": str(manifest_path), "bytes": manifest_path.stat().st_size,
                                      "sha256": sha256_file(manifest_path)}
         atomic_write_json(title / "content.tap", index)
-        exe, plugin = self.root / "TriAevum.exe", self.root / "triaevum_title_aot.dll"
+        platform = host_platform()
+        exe, plugin = self.root / platform.runtime, self.root / platform.title_module
         exe.write_bytes(b"synthetic host")
         plugin.write_bytes(b"synthetic plugin")
         profile = self.root / "TriAevum.launch.json"
@@ -252,7 +254,7 @@ class ForgeTests(unittest.TestCase):
             shutil.copytree(self.root, moved)
             new_title = moved / title.relative_to(self.root)
             runtime = load_json_object(new_title / "forge-state.json")["runtime"]
-            validate_installed_runtime(moved / "TriAevum.exe", new_title, moved / "forge-output", runtime)
+            validate_installed_runtime(moved / host_platform().runtime, new_title, moved / "forge-output", runtime)
             self.assertEqual((moved / save.relative_to(self.root)).read_bytes(), save_before)
 
     def test_migration_rolls_back_every_metadata_file_on_late_failure(self):
@@ -264,6 +266,60 @@ class ForgeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "late failure"):
                 migrate_installation(self.root, title, self.output)
         self.assertEqual({path: path.read_bytes() for path in paths}, before)
+
+    def test_shader_seed_routing_survives_move_and_rejects_corruption(self):
+        title, save = self.prepare_legacy_installation()
+        pack = self.output / "seed.o3ps"
+        pack.write_bytes(b"synthetic pack, not a renderer test")
+        profile = self.root / "TriAevum.launch.json"
+        payload = load_json_object(profile)
+        payload["arguments"].extend(("--pica-aot-shader-pack", str(pack)))
+        atomic_write_json(profile, payload)
+        state = load_json_object(title / "forge-state.json")
+        state["runtime"]["launch_profile_sha256"] = sha256_file(profile)
+        state["runtime"]["pica_shader_pack"] = {"path": str(pack), "sha256": sha256_file(pack)}
+        atomic_write_json(title / "forge-state.json", state)
+        migrate_installation(self.root, title, self.output)
+        with tempfile.TemporaryDirectory() as temporary:
+            moved = Path(temporary) / "moved"
+            shutil.copytree(self.root, moved)
+            new_title = moved / title.relative_to(self.root)
+            runtime = load_json_object(new_title / "forge-state.json")["runtime"]
+            validate_installed_runtime(moved / host_platform().runtime, new_title, moved / "forge-output", runtime)
+            (moved / pack.relative_to(self.root)).write_bytes(b"corrupted")
+            with self.assertRaisesRegex(ValueError, "PICA shader pack changed"):
+                validate_installed_runtime(moved / host_platform().runtime, new_title, moved / "forge-output", runtime)
+
+    def test_mutable_shader_cache_moves_with_install_and_is_not_a_required_artifact(self):
+        title, save = self.prepare_legacy_installation()
+        cache = self.output / "cache/renderer"
+        cache.mkdir(parents=True)
+        (cache / "nri_pipeline_cache.bin").write_bytes(b"driver specific")
+        profile = self.root / "TriAevum.launch.json"
+        payload = load_json_object(profile)
+        payload["arguments"].extend(("--renderer-cache-directory", str(cache)))
+        atomic_write_json(profile, payload)
+        state = load_json_object(title / "forge-state.json")
+        state["runtime"]["launch_profile_sha256"] = sha256_file(profile)
+        state["runtime"]["renderer_cache"] = {"path": str(cache)}
+        atomic_write_json(title / "forge-state.json", state)
+        migrate_installation(self.root, title, self.output)
+        with tempfile.TemporaryDirectory() as temporary:
+            moved = Path(temporary) / "moved"
+            shutil.copytree(self.root, moved)
+            new_title = moved / title.relative_to(self.root)
+            runtime = load_json_object(new_title / "forge-state.json")["runtime"]
+            new_cache = moved / cache.relative_to(self.root)
+            for _ in range(2):
+                validate_installed_runtime(moved / host_platform().runtime, new_title, moved / "forge-output", runtime)
+                if new_cache.exists(): shutil.rmtree(new_cache)
+            new_profile = moved / profile.relative_to(self.root)
+            payload = load_json_object(new_profile)
+            payload["arguments"].extend(("--renderer-cache-directory", str(new_cache)))
+            atomic_write_json(new_profile, payload)
+            runtime["launch_profile_sha256"] = sha256_file(new_profile)
+            with self.assertRaisesRegex(ValueError, "cache routing"):
+                validate_installed_runtime(moved / host_platform().runtime, new_title, moved / "forge-output", runtime)
 
     def test_reuses_identical_content_addressed_output(self) -> None:
         recipe, verified, verified_mod = self.verify()

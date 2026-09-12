@@ -51,6 +51,7 @@ void MaybeWriteFramebufferScreenshot(const Args& args, Fast::GfxRenderingAPI& ap
     }
 
     std::vector<uint16_t> framebuffer(static_cast<size_t>(width) * height, 0);
+    if (!grassDiagnostics) grass = Fast::Oot3d::GrassRenderTelemetry::Instance().Snapshot();
     api.ReadFramebufferToCPU(0, width, height, framebuffer.data());
     const auto screenshotPath =
         args.ScreenshotSequence ? ScreenshotSequenceFramePath(args.ScreenshotPath, frameCount) : args.ScreenshotPath;
@@ -69,10 +70,18 @@ void MaybeWriteFramebufferScreenshot(const Args& args, Fast::GfxRenderingAPI& ap
             {"ordinal", sample.SampleOrdinal}, {"alpha", sample.Alpha},
             {"synthetic", sample.Synthetic}, {"history_reset", sample.HistoryReset}};
     }
-    if (grassDiagnostics) {
+    if (grass.FrameId != 0U) {
         metadata["grass"] = {{"frame", grass.FrameId}, {"status", Fast::Oot3d::GrassRenderStatusName(grass.Status)},
             {"transition", grassTransition}, {"visible_blades", grass.VisibleBlades},
-            {"candidate_clusters", grass.CandidateClusters}, {"tested_nodes", grass.VisibilityNodesTested}};
+            {"cluster_instances", grass.ClusterDrawInstances}, {"cluster_blades", grass.ClusterRepresentedBlades},
+            {"draw_calls", grass.DrawCalls},
+            {"prepared_draw_clusters", grass.PreparedDrawClusters}, {"large_draw_clusters", grass.LargeDrawClusters},
+            {"maximum_cluster_members", grass.MaximumClusterMembers}, {"capacity_limited_ranges", grass.CapacityLimitedRanges},
+            {"candidate_clusters", grass.CandidateClusters}, {"tested_nodes", grass.VisibilityNodesTested},
+            {"cpu_ms", grass.CpuMilliseconds}, {"selection_ms", grass.SelectionMilliseconds},
+            {"placement_ms", grass.PlacementMilliseconds}, {"upload_ms", grass.UploadMilliseconds},
+            {"static_upload_bytes", grass.StaticUploadedBytes}, {"dynamic_upload_bytes", grass.DynamicUploadedBytes},
+            {"gpu_compaction", grass.GpuCompaction}};
     }
     auto metadataPath = screenshotPath;
     metadataPath += ".json";

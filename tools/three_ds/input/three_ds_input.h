@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -286,6 +287,33 @@ class HostButtonSource {
         GamepadButton button) const noexcept = 0;
 };
 
+enum class BindingDevice : std::uint8_t { Keyboard, Mouse, Gamepad };
+enum class BindingCapturePhase : std::uint8_t { Idle, Release, Listening, Complete, Cancelled };
+
+struct BindingCaptureSnapshot {
+    BindingCapturePhase Phase = BindingCapturePhase::Idle;
+    BindingDevice Device = BindingDevice::Keyboard;
+    HostBinding Binding;
+};
+
+// Reads the existing host poll before device enablement and gameplay/UI filtering.
+// The opening gesture must be released before a new press can be assigned.
+class HostBindingCapture {
+  public:
+    void Begin(BindingDevice device) noexcept;
+    void Cancel() noexcept;
+    void Observe(const HostButtonSource& source, bool cancel) noexcept;
+    [[nodiscard]] BindingCaptureSnapshot Snapshot() const noexcept { return mState; }
+    [[nodiscard]] bool Active() const noexcept;
+  private:
+    BindingCaptureSnapshot mState;
+};
+
+// Exchange physical sources, including every use in a customized mapping.
+// None is not a source: exchanging it would bind every unassigned action.
+void SwapGamepadSources(std::span<HostBinding> bindings,
+                        GamepadButton first, GamepadButton second) noexcept;
+
 [[nodiscard]] bool IsHostBindingHeld(
     const HostBinding& binding,
     const HostDeviceEnablement& enabled,
@@ -345,6 +373,15 @@ struct AimTransform {
 struct CStickFilterState {
     float X = 0.0F;
     float Y = 0.0F;
+};
+
+// A virtual upright device: pitch about its local X, yaw about world up.
+// Retain gravity when input stops; a fixed neutral accelerometer would make
+// the guest sensor fusion undo the simulated rotation.
+struct VirtualMotionState {
+    double PitchRadians = 0.0;
+    bool Active = false;
+    void RestoreGravity(const std::array<float, 3>& gravity) noexcept;
 };
 
 enum class AxisInputKind : std::uint8_t {
@@ -411,7 +448,8 @@ InputFrame ResolveInput(const MappingConfig& config,
                         const DigitalState& digital,
                         const AimTransform& aimTransform = {},
                         CStickFilterState* cStickFilter = nullptr,
-                        bool advanceCStickFilter = true) noexcept;
+                        bool advanceCStickFilter = true,
+                        VirtualMotionState* virtualMotion = nullptr) noexcept;
 
 std::int16_t ConvertHostAxisToNative(std::int16_t value,
                                      std::int32_t deadZonePercent) noexcept;

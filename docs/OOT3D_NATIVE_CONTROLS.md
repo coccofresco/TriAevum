@@ -29,8 +29,9 @@ not required to make a control active for the current session.
 ## Configuration
 
 The default path is `oot3d_controls.json` beside `oot3d_native_game.json`.
-Use `--controls-config <path>` to select another file. A missing file starts
-from the Keyboard + Mouse preset and is created by `Apply and save`.
+Use `--controls-config <path>` to select another file. A missing file uses
+`NativeControlDefaults`: keyboard/mouse bindings plus an enabled controller,
+with automatic source selection. Saving creates the configuration file.
 
 Built-in presets:
 
@@ -38,7 +39,7 @@ Built-in presets:
   directions drive aiming/freecam.
 - `keyboard_mouse`: the keyboard layout plus mouse buttons and mouse motion.
 - `controller`: left stick for movement, standard SDL buttons/triggers,
-  controller motion for native aiming and right stick for freecam.
+  right stick for both native aiming and freecam. Physical motion is opt-in.
 - `custom`: assigned automatically after editing a preset.
 
 Every binding has two keyboard slots, one mouse button and one controller
@@ -56,7 +57,7 @@ guest enables the corresponding `hid:USER` sensor.
 The producer matches the native layout and cadence:
 
 - accelerometer ring at HID offset `0x108`, 8 entries, 104 Hz;
-- gyroscope ring at HID offset `0x154`, 32 entries, 101 Hz;
+- gyroscope section at HID offset `0x158`, samples at `0x178`, 32 entries, 101 Hz;
 - accelerometer input is expressed in `g` and quantized at 512 units/g;
 - gyroscope input is expressed in degrees/second and quantized with the
   native coefficient exposed by `HID:GetGyroscopeCoefficient`;
@@ -65,6 +66,69 @@ The producer matches the native layout and cadence:
 Mouse motion is converted to angular velocity using elapsed host-poll time.
 Right-stick and digital sources produce the same physical unit, so the guest
 continues to own aiming state, filtering and gameplay behavior.
+
+### Coherent Virtual Motion (2026-09-10)
+
+The old virtual producer treated horizontal movement as roll (neutral Z),
+and always supplied a neutral accelerometer, even while simulating pitch.
+The native game consumes X/Y pitch/yaw; its sensor fusion corrected the
+contradictory gravity back toward neutral. This reproduced the user's forced
+returns in a bounded bow-aiming probe, independently of mouse capture.
+
+`ThreeDsRecomp::Input::VirtualMotionState` now retains the virtual device's
+pitch. The shared mapper produces body-space angular velocity and gravity
+from the same pose. At neutral, yaw uses Y; when pitched, world-up yaw is
+projected onto body Y/Z. Mouse down produces positive sensor pitch; mouse
+right produces negative sensor yaw, matching the native view consumer's
+subtraction of motion angles. Stick/digital synthesis uses the same model.
+No idle decay, mouse-origin rectangle, tilt clamp or camera-memory override
+is introduced. Native action limits and sensor filtering still apply: this
+is not a replacement with an unrestricted FPS camera.
+
+The runtime owns this state alongside polling, not in the renderer or a
+global singleton. Interpolated presentation-only polls do not advance it.
+When input stops, angular velocity is zero but gravity retains the pose.
+Cold checkpoint loading and F8 restore pitch from the HID accelerometer
+already present in the savestate and clear pending mouse movement; no save
+schema or title AOT changes are required. The separate module-host adapter
+also retains the same shared state. Physical controller sensor vectors and
+calibration remain on their existing path. Freecam still consumes C-Stick.
+
+Evidence and verification:
+
+- Read-only native evidence: `I:/oot3decomp/src/runtime/shared_semantic/`
+  `z_shared_n64_semantic_mass11_agent_wave2r_collision_runtime.c`,
+  `PlayerView_UpdateStickAndMotionAngles` at `0x002C036C`; SDK reader
+  `CalculateGyroscopeAxisStatus` at `0x002FA5EC`. No new decompilation/import.
+- [Azahar virtual motion](https://github.com/azahar-emu/azahar/blob/master/src/input_common/motion_emu.cpp)
+  likewise derives gravity and angular velocity from the same device pose.
+  Its drag-origin, tilt limit, thread and release-to-neutral behavior are
+  deliberately not adopted for relative PC mouse input.
+- Shared tests cover neutral axes, both inversion switches, tilted yaw,
+  stationary gravity for 600 polls, 30/60/90/120 Hz displacement consistency,
+  presentation-only polls, restored/absent gravity, automatic idle retention,
+  and unchanged physical sensor data. Native-adapter and F1 tests also pass.
+- Paired native Vulkan probes: 30 degrees/second of pitch for 40 native
+  frames, then zero rate. At frame 280 the fixed-gravity camera is back at
+  **+0.571 degrees** pitch; coherent gravity retains **-57.354 degrees**.
+  These are observed camera angles, not a claim of one-to-one sensor gain.
+- Timelines emitted by the **actual updated mapper** produce a retained
+  pitched view and correctly directed horizontal aiming in the game. Local
+  evidence is under `J:/TriAevum-verify-20260910/aim-sensor-*` and
+  `aim-mapped-{pitch,yaw}`; captures come from the renderer framebuffer.
+  Physical mouse feel and remaining native angle limits need user validation.
+
+To reproduce mapper output without hand-authoring sensor vectors:
+
+```sh
+oot3d_native_a32_input_tests --emit-mouse-aim mouse-pitch.json pitch
+oot3d_native_a32_input_tests --emit-mouse-aim mouse-yaw.json yaw
+```
+
+Supply one generated file to `--input-timeline` with the existing private
+Hyrule Field checkpoint (bow on ZR), native 30 Hz, 320 frames, screenshots at
+120/200/280 and a checkpoint at 280. The fixture holds the bow from 60 to 310,
+moves the mouse during 100-139, then holds still. No game data is distributed.
 
 `Automatic` selects an input that is actually moving: mouse first, then
 right stick, then controller motion. Merely connecting a controller with a

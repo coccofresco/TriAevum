@@ -4,6 +4,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <cstdlib>
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
@@ -19,6 +20,9 @@ TEST(Oot3dVulkanDiagnostics, ReadsOptInEnvironment) {
         "OOT3D_VULKAN_DIAGNOSTICS_PATH", "diagnostics-from-environment.json"));
     ASSERT_TRUE(SetEnvironmentVariableA(
         "OOT3D_VULKAN_DIAGNOSTICS_MAX_FRAMES", "17"));
+#else
+    ASSERT_EQ(setenv("OOT3D_VULKAN_DIAGNOSTICS_PATH", "diagnostics-from-environment.json", 1), 0);
+    ASSERT_EQ(setenv("OOT3D_VULKAN_DIAGNOSTICS_MAX_FRAMES", "17", 1), 0);
 #endif
     const auto config = Fast::Oot3dVulkanDiagnosticsConfig::FromEnvironment();
     EXPECT_TRUE(config.Enabled());
@@ -27,6 +31,9 @@ TEST(Oot3dVulkanDiagnostics, ReadsOptInEnvironment) {
 #ifdef _WIN32
     SetEnvironmentVariableA("OOT3D_VULKAN_DIAGNOSTICS_PATH", nullptr);
     SetEnvironmentVariableA("OOT3D_VULKAN_DIAGNOSTICS_MAX_FRAMES", nullptr);
+#else
+    unsetenv("OOT3D_VULKAN_DIAGNOSTICS_PATH");
+    unsetenv("OOT3D_VULKAN_DIAGNOSTICS_MAX_FRAMES");
 #endif
 }
 
@@ -51,11 +58,15 @@ TEST(Oot3dVulkanDiagnostics, CaptureAndDelayedGpuTimingDoNotWriteFromTheFrameLoo
         EXPECT_FALSE(std::filesystem::exists(output));
     }
     ASSERT_EQ(diagnostics.Frames().size(), 2U);
+    diagnostics.SetNriPipelineStatistics(4096, 12, 11, 1234567);
     diagnostics.Flush();
     std::ifstream input(output);
     const auto json = nlohmann::json::parse(input);
     ASSERT_EQ(json.at("frame_count"), 2U);
     EXPECT_EQ(json.at("frames").back().at("gpu").at("frame_ms"), 2.5);
+    EXPECT_EQ(json.at("nri_pipeline_compilation"), (nlohmann::json{
+        {"initial_cache_bytes", 4096}, {"creation_attempts", 12},
+        {"created", 11}, {"creation_nanoseconds", 1234567}}));
     input.close();
     std::filesystem::remove(output);
 }

@@ -324,20 +324,7 @@ void StageTopScreenGeometryFloat(
   writes.push_back({address, std::bit_cast<std::uint32_t>(value)});
 }
 
-constexpr std::array<std::array<std::uint8_t, 3>, 12> kTopScreenWorldMapColors{{
-    {{0xD8, 0x82, 0xE6}},
-    {{0xF0, 0xC8, 0x3C}},
-    {{0x3C, 0xC8, 0x46}},
-    {{0xF0, 0x8C, 0x28}},
-    {{0xD2, 0x96, 0x5A}},
-    {{0x6E, 0xC8, 0xE6}},
-    {{0xF0, 0x3C, 0x32}},
-    {{0x96, 0x50, 0xDC}},
-    {{0x64, 0xDC, 0x5A}},
-    {{0x96, 0xA0, 0xBE}},
-    {{0x46, 0x82, 0xF0}},
-    {{0xF0, 0xE1, 0x46}},
-}};
+
 
 constexpr std::array kVerifiedItemQueryContracts{
     TopScreenItemQueryContract{TopScreenItemQuery::ItemIPressed, 0x00349504U,
@@ -455,7 +442,7 @@ std::size_t AppendTopScreenCounterDigits(
   return output.size() - startSize;
 }
 
-// Payload table 0x005D3440, consumed by 0x005C9940.
+// TopScreen 2.1.1 table 005E1734, consumed by FUN_005D4A8C.
 constexpr std::array kNativeTouchCopyContracts{
     NativeTouchCopyContract{34U, 278, 149, 229, 11, 1.0F},
     NativeTouchCopyContract{35U, 278, 149, 229, 11, 1.0F},
@@ -1036,6 +1023,15 @@ bool ReadTopScreenHudCompositorGate(NativeA32Memory &memory,
     SetError(error, "cannot read native TopScreen player HUD readiness");
     return false;
   }
+  // Original TopScreen 005CE554 also suppresses its compositor while the
+  // native player's +224E field is nonzero; a missing player is allowed.
+  std::uint32_t player = 0U;
+  std::uint16_t playerHudState = 0U;
+  if (!memory.Read32(playState + 0x20ACU, &player) ||
+      (player != 0U && !memory.Read16(player + 0x224EU, &playerHudState))) {
+    SetError(error, "cannot read native TopScreen player HUD state");
+    return false;
+  }
   for (const auto address : kCompetingOwnerStates) {
     std::uint32_t active = 0U;
     if (!memory.Read32(address, &active)) {
@@ -1049,7 +1045,7 @@ bool ReadTopScreenHudCompositorGate(NativeA32Memory &memory,
   gate->Draw = stateType == 3U && stateSubtype == 2U && health != 0U &&
                playerTransition == 0U && runtimeMode == 0U &&
                (playerHudReady != 0U || alternateHudOwner != 0U) &&
-               playerHudSuppressed == 0U;
+               playerHudSuppressed == 0U && playerHudState == 0U;
   return true;
 }
 
@@ -1328,249 +1324,6 @@ std::size_t AppendTopScreenPauseEdgePresentation(
   return output.size() - startSize;
 }
 
-bool ReadTopScreenWorldMapGeometry(NativeA32Memory &memory,
-                                   TopScreenWorldMapGeometry *geometry,
-                                   std::string *error) {
-  if (geometry == nullptr) {
-    SetError(error, "TopScreen world-map geometry output is null");
-    return false;
-  }
-  *geometry = {};
-
-  constexpr std::uint32_t kPauseRoot = 0x005043D4U;
-  constexpr std::uint32_t kPauseState = 0x0050AF68U;
-  constexpr std::uint32_t kWorldMap = 0x005093E4U;
-  constexpr std::uint32_t kPositionArray = kWorldMap + 0x68U;
-  constexpr std::uint32_t kSizeArray = kWorldMap + 0x3C8U;
-  constexpr std::uint32_t kAtlasSizeArray = kWorldMap + 0x728U;
-  constexpr std::uint32_t kAtlasOriginArray = kWorldMap + 0xA88U;
-  constexpr std::uint32_t kDestinationCountTable = 0x004D53C8U;
-  constexpr std::uint32_t kDestinationTypeTable = 0x004D541CU;
-  constexpr std::uint32_t kDestinationFlagIndexTable = 0x0050A3B0U;
-  constexpr std::uint32_t kDestinationFlagMaskTable = 0x0053C9D4U;
-  constexpr std::uint32_t kDestinationFlagState = 0x00587A14U;
-  constexpr std::uint32_t kMarkerAtlasX = 0x0050A1E0U;
-  constexpr std::uint32_t kMarkerPositionY = 0x0050A1CCU;
-
-  std::uint32_t scene = 0U;
-  std::uint32_t pauseState = 0U;
-  std::uint8_t sceneMode = 0U;
-  std::uint32_t controllerState = 0U;
-  std::uint32_t enabled = 0U;
-  std::uint32_t cursorColumn = 0U;
-  std::uint32_t cursorRow = 0U;
-  std::uint32_t transitionFrame = 0U;
-  if (!memory.Read32(kPauseRoot + 0x0CU, &scene) ||
-      !memory.Read32(kPauseState, &pauseState) ||
-      !memory.Read32(kWorldMap + 0x14U, &controllerState) ||
-      !memory.Read32(kWorldMap + 0x18U, &cursorColumn) ||
-      !memory.Read32(kWorldMap + 0x1CU, &cursorRow) ||
-      !memory.Read32(kWorldMap + 0x38U, &transitionFrame) ||
-      !memory.Read32(kWorldMap + 0x44U, &enabled)) {
-    SetError(error, "cannot read native PauseWorldMap controller state");
-    return false;
-  }
-  if (scene == 0U || !memory.Read8(scene + 0x100U, &sceneMode)) {
-    return true;
-  }
-  // PauseWorldMap_GetEnabled (0x00425910) exposes +0x44 as the page-local
-  // enable flag. Both it and the controller state persist after pause closes,
-  // so presentation additionally requires the native pause root to own the
-  // frame.
-  if (pauseState == 0U || enabled == 0U || controllerState == 0U ||
-      transitionFrame != 0U || sceneMode != 3U) {
-    return true;
-  }
-
-  const std::uint32_t destination =
-      std::min<std::uint32_t>(cursorColumn + cursorRow * 4U, 11U);
-  geometry->Active = true;
-  geometry->Destination = static_cast<std::uint8_t>(destination);
-  const auto &rgb = kTopScreenWorldMapColors[destination];
-  const auto color = [&](float alpha) {
-    return oot3d::ui::UiColor{static_cast<float>(rgb[0]) / 255.0F,
-                              static_cast<float>(rgb[1]) / 255.0F,
-                              static_cast<float>(rgb[2]) / 255.0F, alpha};
-  };
-  const bool destinationFocused = controllerState == 4U;
-
-  const auto readVec2 = [&](std::uint32_t address, TopScreenVec2 *value) {
-    std::array<std::uint32_t, 2> words{};
-    if (value == nullptr || !memory.Read32(address, &words[0]) ||
-        !memory.Read32(address + 4U, &words[1])) {
-      return false;
-    }
-    value->X = std::bit_cast<float>(words[0]);
-    value->Y = std::bit_cast<float>(words[1]);
-    return true;
-  };
-
-  for (std::uint32_t index = 0U; index < 6U; ++index) {
-    auto &quad = geometry->Quads[index];
-    if (!readVec2(kPositionArray + index * 8U, &quad.Position) ||
-        !readVec2(kSizeArray + index * 8U, &quad.Size) ||
-        !readVec2(kAtlasOriginArray + index * 8U, &quad.AtlasOrigin) ||
-        !readVec2(kAtlasSizeArray + index * 8U, &quad.AtlasSize)) {
-      SetError(error, "cannot read native PauseWorldMap quad arrays");
-      return false;
-    }
-    quad.Position.X += 40.0F;
-    quad.Position.Y += index < 3U ? 168.0F : -182.0F;
-    if (index < 3U) {
-      quad.Position.Y += 1.0F;
-      quad.Size.Y -= 1.0F;
-      quad.AtlasOrigin.Y += 1.0F;
-      quad.AtlasSize.Y -= 1.0F;
-    } else if (index == 3U) {
-      quad.AtlasSize.X -= 1.0F;
-    } else if (index == 5U) {
-      quad.AtlasOrigin.X -= 1.0F;
-      quad.AtlasSize.X += 1.0F;
-    }
-    quad.Color = color(destinationFocused ? 0.68F : 0.30F);
-    quad.Visible = quad.Size.X != 0.0F && quad.Size.Y != 0.0F;
-  }
-
-  std::uint32_t destinationFlags = 0U;
-  std::uint32_t flagIndex = 0U;
-  std::uint32_t flagMask = 0U;
-  std::uint32_t markerCount = 0U;
-  std::uint32_t markerTypes = 0U;
-  if (!memory.Read32(kDestinationFlagState, &destinationFlags) ||
-      !memory.Read32(kDestinationFlagIndexTable + destination * 4U,
-                     &flagIndex) ||
-      !memory.Read32(kDestinationFlagMaskTable + flagIndex * 4U, &flagMask) ||
-      !memory.Read32(kDestinationCountTable + destination * 4U, &markerCount) ||
-      !memory.Read32(kDestinationTypeTable + destination * 4U, &markerTypes)) {
-    SetError(error, "cannot read native world-map destination tables");
-    return false;
-  }
-  const bool markersEnabled =
-      destinationFocused && (destinationFlags & flagMask) != 0U;
-  for (std::uint32_t marker = 0U; marker < 8U; ++marker) {
-    auto &quad = geometry->Quads[marker + 6U];
-    std::uint32_t markerType = 0U;
-    const bool visible =
-        markersEnabled && marker < markerCount && markerTypes != 0U;
-    if (visible && !memory.Read32(markerTypes + marker * 4U, &markerType)) {
-      SetError(error, "cannot read native world-map marker type");
-      return false;
-    }
-    markerType = std::min<std::uint32_t>(markerType, 4U);
-    std::uint32_t markerYWord = 0U;
-    if (!memory.Read32(kMarkerPositionY + markerType * 4U, &markerYWord)) {
-      SetError(error, "cannot read native world-map marker position");
-      return false;
-    }
-    std::uint32_t markerAtlasWord = 0U;
-    if (!memory.Read32(kMarkerAtlasX + markerType * 4U, &markerAtlasWord)) {
-      SetError(error, "cannot read native world-map marker atlas table");
-      return false;
-    }
-    quad.Position.X = 122.0F + static_cast<float>(marker) * 24.0F;
-    quad.Position.Y = std::bit_cast<float>(markerYWord) + 168.0F;
-    quad.Size = visible ? TopScreenVec2{16.0F, 16.0F} : TopScreenVec2{};
-    quad.AtlasOrigin = {std::bit_cast<float>(markerAtlasWord), 160.0F};
-    quad.AtlasSize = {16.0F, 16.0F};
-    quad.Color = color(0.85F);
-    quad.Visible = visible;
-  }
-
-  for (std::uint32_t index = 14U; index < 16U; ++index) {
-    auto &quad = geometry->Quads[index];
-    quad.Position = {index == 14U ? 308.0F : 68.0F, 24.0F};
-    quad.Size =
-        destinationFocused ? TopScreenVec2{24.0F, 28.0F} : TopScreenVec2{};
-    quad.AtlasOrigin = {112.0F, 160.0F};
-    quad.AtlasSize = {23.0F, 28.0F};
-    quad.Color = color(0.85F);
-    quad.Visible = destinationFocused;
-  }
-  return true;
-}
-
-std::size_t AppendTopScreenWorldMapPresentation(
-    const TopScreenWorldMapGeometry &geometry,
-    const oot3d::ui::UiTextureIdentity &ocarinaPage,
-    std::vector<oot3d::ui::UiPrimitive> &output) {
-  if (!geometry.Active || ocarinaPage.semantic_name.empty()) {
-    return 0U;
-  }
-  const std::size_t startSize = output.size();
-  for (std::size_t index = 0; index < geometry.Quads.size(); ++index) {
-    const auto &quad = geometry.Quads[index];
-    if (!quad.Visible || quad.Size.X == 0.0F || quad.Size.Y == 0.0F) {
-      continue;
-    }
-    oot3d::ui::UiPrimitive primitive;
-    primitive.subsystem = oot3d::ui::UiSubsystem::Map;
-    primitive.role = oot3d::ui::UiPrimitiveRole::PauseMap;
-    primitive.owner_address = 0x005CE57CU;
-    primitive.source_quad = static_cast<std::uint32_t>(index);
-    primitive.texture = ocarinaPage;
-    primitive.destination = {quad.Position.X, quad.Position.Y, quad.Size.X,
-                             quad.Size.Y};
-    primitive.uv = {quad.AtlasOrigin.X / 512.0F,
-                    1.0F - quad.AtlasOrigin.Y / 256.0F,
-                    quad.AtlasSize.X / 512.0F, -quad.AtlasSize.Y / 256.0F};
-    primitive.color = quad.Color;
-    primitive.layer = 20U;
-    output.push_back(std::move(primitive));
-  }
-  return output.size() - startSize;
-}
-
-TopScreenPauseNavigationGeometry
-BuildTopScreenPauseNavigationGeometry(std::int8_t direction) noexcept {
-  TopScreenPauseNavigationGeometry geometry;
-  const std::array<bool, 2> active{direction < 0, direction > 0};
-  constexpr std::array<float, 2> kCentersX{50.0F, 350.0F};
-  for (std::size_t index = 0; index < geometry.Quads.size(); ++index) {
-    auto &quad = geometry.Quads[index];
-    const bool left = index == 0U;
-    quad.Visible = true;
-    quad.Position = {kCentersX[index] - 13.0F,
-                     204.0F - 13.0F + (active[index] ? 2.0F : 0.0F)};
-    quad.Size = {26.0F, 26.0F};
-    quad.AtlasOrigin = {left ? 512.0F : 486.0F, 230.0F};
-    quad.AtlasSize = {left ? -26.0F : 26.0F, 26.0F};
-    const float rgb = active[index] ? 1.0F : 0.6F;
-    quad.Color = {rgb, rgb, rgb, 0.8F};
-  }
-  return geometry;
-}
-
-std::size_t AppendTopScreenPauseNavigationPresentation(
-    const TopScreenPauseNavigationGeometry &geometry,
-    const oot3d::ui::UiTextureIdentity &pauseTopPage,
-    std::vector<oot3d::ui::UiPrimitive> &output) {
-  if (pauseTopPage.semantic_name.empty()) {
-    return 0U;
-  }
-  const std::size_t startSize = output.size();
-  for (std::size_t index = 0; index < geometry.Quads.size(); ++index) {
-    const auto &quad = geometry.Quads[index];
-    if (!quad.Visible) {
-      continue;
-    }
-    oot3d::ui::UiPrimitive primitive;
-    primitive.subsystem = oot3d::ui::UiSubsystem::Map;
-    primitive.role = oot3d::ui::UiPrimitiveRole::PauseCursor;
-    primitive.owner_address = 0x005C9040U;
-    primitive.source_quad = static_cast<std::uint32_t>(index);
-    primitive.texture = pauseTopPage;
-    primitive.destination = {quad.Position.X, quad.Position.Y, quad.Size.X,
-                             quad.Size.Y};
-    primitive.uv = {quad.AtlasOrigin.X / 512.0F,
-                    1.0F - quad.AtlasOrigin.Y / 256.0F,
-                    quad.AtlasSize.X / 512.0F, -quad.AtlasSize.Y / 256.0F};
-    primitive.color = quad.Color;
-    primitive.layer = 21U;
-    output.push_back(std::move(primitive));
-  }
-  return output.size() - startSize;
-}
-
 TopScreenFileSelectStripGeometry
 BuildTopScreenFileSelectStripGeometry(bool active) noexcept {
   TopScreenFileSelectStripGeometry geometry;
@@ -1680,7 +1433,7 @@ bool AppendTopScreenNativeItemIconCopies(
     NativeA32Memory &memory, const std::array<float, 4> &nativeVerticalOffsets,
     float nativeAlpha, const oot3d::ui::UiTextureIdentity &itemIcons,
     std::vector<oot3d::ui::UiPrimitive> &output, std::string *error,
-    bool renderDpadIcons) {
+    bool renderDpadIcons, TopScreenNativeItemOpacity *itemOpacity) {
   if (itemIcons.semantic_name.empty()) {
     SetError(error, "native TopScreen item-icon texture is unavailable");
     return false;
@@ -1715,6 +1468,7 @@ bool AppendTopScreenNativeItemIconCopies(
                                 values.size() * sizeof(float)));
   };
   const float alphaScale = std::clamp(nativeAlpha, 0.0F, 1.0F);
+  TopScreenNativeItemOpacity observedOpacity;
   for (std::uint32_t source = 0U; source < 5U; ++source) {
     std::array<float, 12> positions{};
     std::array<float, 8> uvs{};
@@ -1740,6 +1494,14 @@ bool AppendTopScreenNativeItemIconCopies(
         break;
       }
     }
+    // Original 005D6D70/005D6E1C captures region 0/3 alpha, and the
+    // region-4 branch captures ocarina alpha before hiding the source lane.
+    if (regionIndex == 0U)
+      observedOpacity.ItemZr = colors[3];
+    else if (regionIndex == 3U)
+      observedOpacity.ItemZl = colors[3];
+    else if (regionIndex == 4U)
+      observedOpacity.Ocarina = colors[3];
     // Region four is the native item/action lane relocated around the D-pad.
     // The remaining regions are face-button items and stay visible when the
     // independent 2.1.1 D-pad presentation option is disabled.
@@ -1786,6 +1548,8 @@ bool AppendTopScreenNativeItemIconCopies(
     primitive.visible = primitive.color.alpha != 0.0F;
     output.push_back(std::move(primitive));
   }
+  if (itemOpacity != nullptr)
+    *itemOpacity = observedOpacity;
   return true;
 }
 
@@ -1886,9 +1650,8 @@ bool AppendTopScreenNativeCounters(
         return false;
       }
       if (type != 8U && digitCount != 0U && geometry != 0U) {
-        std::array<std::uint32_t, 4> streams{};
-        constexpr std::array<std::uint32_t, 4> kStreamOffsets{0x0CU, 0x14U,
-                                                              0x18U, 0x1CU};
+        std::array<std::uint32_t, 3> streams{};
+        constexpr std::array<std::uint32_t, 3> kStreamOffsets{0x14U, 0x18U, 0x1CU};
         bool streamsAvailable = true;
         for (std::size_t stream = 0; stream < streams.size(); ++stream) {
           streamsAvailable &= memory.Read32(geometry + kStreamOffsets[stream],
@@ -1898,7 +1661,6 @@ bool AppendTopScreenNativeCounters(
         if (streamsAvailable) {
           const std::uint32_t copiedDigits = std::min(digitCount, 2U);
           for (std::uint32_t digit = 0U; digit < copiedDigits; ++digit) {
-            std::array<float, 12> positions{};
             std::array<float, 8> uvs{};
             std::array<float, 16> colors{};
             std::array<float, 2> translation{};
@@ -1909,10 +1671,9 @@ bool AppendTopScreenNativeCounters(
                                reinterpret_cast<std::uint8_t *>(values.data()),
                                values.size() * sizeof(float)));
             };
-            if (!readFloats(streams[0] + digit * 0x30U, positions) ||
-                !readFloats(streams[1] + digit * 0x20U, uvs) ||
-                !readFloats(streams[2] + digit * 0x40U, colors) ||
-                !readFloats(streams[3] + digit * 0x08U, translation)) {
+            if (!readFloats(streams[0] + digit * 0x20U, uvs) ||
+                !readFloats(streams[1] + digit * 0x40U, colors) ||
+                !readFloats(streams[2] + digit * 0x08U, translation)) {
               SetError(error,
                        "cannot read native TopScreen special counter quad");
               return false;
@@ -1924,9 +1685,15 @@ bool AppendTopScreenNativeCounters(
             primitive.descriptor_address = sourceCounter;
             primitive.source_quad = digit;
             primitive.texture = numberGlyphs;
+            // 2.1.1 FUN_005CD254 retains the destination counter's geometry;
+            // only UV, color and per-digit translation come from the source.
+            // Copying source positions duplicates the mounted B counter nearby.
+            const auto offsetLane = kOffsetLane[index];
+            constexpr float counterScale = 0.7F;
             primitive.destination = {
-                positions[0] + translation[0], positions[1] + translation[1],
-                positions[3] - positions[0], positions[7] - positions[1]};
+                kAmmoX[index] + (1U - digit) * 10.0F * counterScale + translation[0],
+                kAmmoY[index] + 3.0F + nativeVerticalOffsets[offsetLane] + translation[1],
+                11.0F * counterScale, kCounterGlyphHeight[0] * counterScale};
             primitive.uv = NativePicaQuadUvToHost(uvs);
             primitive.color = {colors[0], colors[1], colors[2], colors[3]};
             primitive.layer = 14U;
@@ -2149,6 +1916,36 @@ bool AppendTopScreenNativeTouchCopies(
     const TopScreenUiConfig *config) {
   TopScreenNativeTouchCopyStats result;
   constexpr std::uint32_t kPauseTouchButtonState = 0x0050AF34U;
+  std::uint32_t touchState = 0U;
+  std::uint32_t play = 0U;
+  if (!memory.Read32(kPauseTouchButtonState + 0x34U, &touchState) ||
+      !memory.Read32(0x005043D4U + 0x0CU, &play)) {
+    SetError(error, "cannot read native TopScreen touch-copy visibility state");
+    return false;
+  }
+  // 005D6890..005D6910 / 005D6990..005D69B4: source 27 has a
+  // scene/save gate independent of its source alpha and off-screen translation.
+  bool source27Visible = false;
+  if (play != 0U) {
+    std::uint8_t type = 0U, subtype = 0U;
+    std::uint16_t scene = 0U;
+    if (!memory.Read8(play + 0x100U, &type) ||
+        !memory.Read8(play + 0x101U, &subtype) ||
+        !memory.Read16(play + 0x104U, &scene)) {
+      SetError(error, "cannot read native TopScreen touch-copy scene");
+      return false;
+    }
+    if (type == 3U && subtype == 2U && scene >= 3U && scene <= 16U) {
+      std::uint16_t index = 0U;
+      std::uint8_t value = 0U;
+      if (!memory.Read16(0x00587958U + 0x1592U, &index) ||
+          !memory.Read8(0x00587958U + 0xD4U + index, &value)) {
+        SetError(error, "cannot read native TopScreen touch-copy save flag");
+        return false;
+      }
+      source27Visible = (value & 0x80U) == 0U;
+    }
+  }
   std::uint32_t renderer = 0U;
   std::array<std::uint32_t, 4> streams{};
   if (!memory.Read32(kPauseTouchButtonState + 4U, &renderer) ||
@@ -2226,7 +2023,7 @@ bool AppendTopScreenNativeTouchCopies(
     primitive.role = horseStamina
                          ? oot3d::ui::UiPrimitiveRole::HorseStamina
                          : oot3d::ui::UiPrimitiveRole::TouchControl;
-    primitive.owner_address = 0x005C9940U;
+    primitive.owner_address = 0x005D4A8CU;
     primitive.descriptor_address = renderer;
     primitive.source_quad = source;
     primitive.texture = pauseTopPage;
@@ -2235,6 +2032,13 @@ bool AppendTopScreenNativeTouchCopies(
                              transformed[2].Y - transformed[0].Y};
     primitive.uv = NativePicaQuadUvToHost(uvs);
     primitive.color = {colors[0], colors[1], colors[2], colors[3]};
+    // 005D6C50..005D6C88: do not expose stale contextual quads while
+    // their native owner is in another mode. Keep source memory untouched.
+    if ((contractIndex < 2U &&
+         ((touchState >= 7U && touchState <= 9U) || touchState > 11U)) ||
+        (source == 27U && !source27Visible)) {
+      primitive.color.alpha = 0.0F;
+    }
     primitive.layer = 13U;
     primitive.visible = primitive.color.alpha != 0.0F;
     if (primitive.visible) {
@@ -2312,9 +2116,12 @@ void ApplyTopScreenHudScale(
 
     const bool left = centerX < 200.0F;
     const bool top = centerY < 120.0F;
-    const float pivotX = left ? 0.0F : 400.0F;
+    // 2.1.1 005CE554 scales copied stamina quads 28..33 as one row
+    // about (200, 240), not as independent left/right HUD groups.
+    const bool stamina = primitive.role == oot3d::ui::UiPrimitiveRole::HorseStamina;
+    const float pivotX = stamina ? 200.0F : (left ? 0.0F : 400.0F);
     const float pivotY = top ? 0.0F : 240.0F;
-    const float insetX = left ? marginX : -marginX;
+    const float insetX = stamina ? 0.0F : (left ? marginX : -marginX);
     const float insetY = top ? marginY : -marginY;
     destination.x =
         pivotX + (destination.x - pivotX) * scale + insetX;
@@ -2472,9 +2279,9 @@ bool ReadTopScreenQuestGeometryContext(
     }
   }
   context->PauseState = pauseState;
-  context->NativePageGateActive =
-      nativePageGateActive ||
-      (projection != nullptr && projection->NativeQuestGate);
+  // The alternate gameplay HUD owner is not an open pause page. In
+  // particular, riding must still relocate the native A/B geometry.
+  context->NativePageGateActive = nativePageGateActive;
   context->PlayerSpecialState = specialMode;
   context->LeftRegionOffsetX =
       projection != nullptr ? projection->OffsetX : 0.0F;

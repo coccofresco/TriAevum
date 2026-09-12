@@ -12,7 +12,6 @@
 #include <NRI.h>
 #endif
 
-#include <shaderc/shaderc.hpp>
 
 #include <algorithm>
 #include <array>
@@ -63,21 +62,10 @@ struct ShadowTargetKeyHash {
     }
 };
 
-std::vector<uint32_t> Compile(const std::string& source,
-                              shaderc_shader_kind kind,
+std::vector<uint32_t> Compile(Renderer::CachedPassShaderCompiler& shaders, const std::string& source,
+                              Renderer::SpirvStage kind,
                               const char* name) {
-    shaderc::Compiler compiler;
-    shaderc::CompileOptions options;
-    options.SetTargetEnvironment(shaderc_target_env_vulkan,
-                                 shaderc_env_version_vulkan_1_2);
-    options.SetOptimizationLevel(shaderc_optimization_level_performance);
-    const auto result = compiler.CompileGlslToSpv(
-        source, kind, name, options);
-    if (result.GetCompilationStatus() !=
-        shaderc_compilation_status_success) {
-        throw std::runtime_error(result.GetErrorMessage());
-    }
-    return {result.cbegin(), result.cend()};
+    return shaders.Resolve(source, kind, name);
 }
 
 uint64_t HashBytes(uint64_t hash, const void* data, size_t size) {
@@ -352,13 +340,13 @@ struct NriDirectionalShadowPass::Impl {
             if (!casterShader.Applied()) {
                 return reject();
             }
-            vertex = Compile(
+            vertex = Compile(Interop->Shaders(),
                 casterShader.Source,
-                shaderc_vertex_shader,
+                Renderer::SpirvStage::Vertex,
                 "oot3d_nri_directional_shadow.vert");
-            fragment = Compile(
-                "#version 450\nvoid main(){}\n",
-                shaderc_fragment_shader,
+            fragment = Compile(Interop->Shaders(),
+                kPicaDirectionalShadowFragmentShader,
+                Renderer::SpirvStage::Fragment,
                 "oot3d_nri_directional_shadow.frag");
         } catch (const std::exception&) {
             return reject();

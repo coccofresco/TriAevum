@@ -111,6 +111,34 @@ void TestPortableForgeLayout() {
          "portable Forge module was not resolved");
 }
 
+void TestPortableDefaultsAndRelocation() {
+  TemporaryDirectory temporary;
+  const auto original = temporary.Path() / "original package";
+  const auto moved = temporary.Path() / "moved package";
+  const auto executable = original / "TriAevum.exe";
+  Expect(Oot3dNativeGame::DefaultTriAevumDataRoot(executable) == original / "data",
+         "first-run data default must not fall back to a user profile");
+  Expect(Oot3dNativeGame::DefaultTriAevumActiveTitleState(executable) ==
+             original / "data" / "active-title.json",
+         "active title must use the same portable root");
+  const auto title = original / "data" / "titles" / "portable";
+  Write(title / "forge-state.json",
+        R"({"format":"triaevum_forge_state_v1","content":{"status":"ready","index":"content.tap"},"module":{"status":"ready","container":"modules/game.tam"}})");
+  Write(original / "data" / "active-title.json",
+        R"({"format":"triaevum_active_title_v1","directory":"titles/portable"})");
+  Write(original / "data" / "config" / "controls.json", "{}");
+  std::filesystem::rename(original, moved);
+  Oot3dNativeGame::TriAevumRuntimePathOverrides overrides;
+  overrides.ExecutablePath = moved / "TriAevum.exe";
+  const auto result = Oot3dNativeGame::ResolveTriAevumRuntimeLayout(overrides);
+  Expect(result.TitleDirectory == moved / "data" / "titles" / "portable",
+         "active-title relative path was resolved against the working directory");
+  Expect(result.ControlConfigPath == moved / "data" / "config" / "controls.json",
+         "controls did not follow the moved package");
+  Expect(result.ConfigurationPath == moved / "data" / "config" / "TriAevum.json",
+         "configuration did not follow the moved package");
+}
+
 void TestEscapingModuleIsRejected() {
   TemporaryDirectory temporary;
   const auto title = temporary.Path() / "title";
@@ -137,6 +165,7 @@ int main() {
     TestInstalledLayout();
     TestDirectDevelopmentLayout();
     TestPortableForgeLayout();
+    TestPortableDefaultsAndRelocation();
     TestEscapingModuleIsRejected();
     std::cout << "TriAevum runtime layout tests passed\n";
     return 0;

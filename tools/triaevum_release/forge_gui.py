@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 try:
-    from . import ctr_rom, forge, extracted_inputs
+    from . import ctr_rom, forge, extracted_inputs, game_language
     from .bundle_paths import installation_path
     from .common import load_json_object
     from .installed_runtime import validate_installed_runtime
@@ -25,10 +25,15 @@ try:
     from .installation_context import resolve_reference
     from .precompiled_titles import load_catalog, select_title, install_precompiled_title
     from .input_adapters import import_contract, adapt_extracted_inputs
+    from .release_platform import host_platform
+    from .native_process import popen_native
+    from .host_layout import for_package
+    from . import portal_picker
 except ImportError:
     import ctr_rom
     import forge
     import extracted_inputs
+    import game_language
     from bundle_paths import installation_path
     from common import load_json_object
     from installed_runtime import validate_installed_runtime
@@ -36,6 +41,10 @@ except ImportError:
     from installation_context import resolve_reference
     from precompiled_titles import load_catalog, select_title, install_precompiled_title
     from input_adapters import import_contract, adapt_extracted_inputs
+    from release_platform import host_platform
+    from native_process import popen_native
+    from host_layout import for_package
+    import portal_picker
 
 
 StageReporter = Callable[[str, str], None]
@@ -130,7 +139,7 @@ def match_extracted_recipe(
 
 
 def default_gui_data_root() -> Path:
-    return installation_path("data").resolve()
+    return forge.default_output_root().parent
 
 
 def load_active_title(
@@ -189,6 +198,7 @@ def install_private_title(
             report("adapt", "Adapting this ROM for the existing title module (no compilation)...")
             extracted, adaptation = adapt_extracted_inputs(
                 extracted, recipe, root=root, output=staging / "normalized")
+        languages = game_language.discover(runtime_path(), extracted.romfs.path)
         extracted = ctr_rom.publish_extracted_inputs(extracted, data_root / "sources")
         cache = forge.HashCache(output_root / ".hash-cache.json")
         for item in extracted.by_kind().values():
@@ -224,6 +234,7 @@ def install_private_title(
             data_root=data_root,
             report=report,
         )
+        game_language.install(data_root, languages)
     finally:
         if staging.exists():
             shutil.rmtree(staging, ignore_errors=True)
@@ -240,13 +251,24 @@ def install_private_title(
 
 
 def runtime_path() -> Path:
-    return installation_path("TriAevum.exe").resolve()
+    return installation_path(host_platform().runtime).resolve()
 
 
 def launch_runtime(data_root: Path | None = None) -> subprocess.Popen[bytes]:
     try:
-        with installation_lock(runtime_path().parent):
-            if journal_path(runtime_path().parent).exists():
+        from tools.triaevum_release.package_update import refresh_packaged_runtime
+        layout = for_package(runtime_path().parent)
+        with installation_lock(layout.activation):
+            if journal_path(layout.activation).exists():
+                raise forge.ForgeError("An activation was interrupted; run Forge again before playing")
+        if (runtime_path().parent / "recipes/precompiled-titles.json").is_file():
+            private_root = (data_root or default_gui_data_root()).expanduser().resolve()
+            active = load_active_title(private_root / "active-title.json")
+            if active is not None:
+                refresh_packaged_runtime(executable=runtime_path(), title=active.directory,
+                    data_root=private_root, recipe_id=active.recipe_id, recipes=forge.DEFAULT_RECIPES)
+        with installation_lock(layout.activation):
+            if journal_path(layout.activation).exists():
                 raise forge.ForgeError("An activation was interrupted; run Forge again before playing")
             return _launch_runtime_locked(data_root)
     except (OSError, ValueError) as exc:
@@ -269,9 +291,9 @@ def _launch_runtime_locked(data_root: Path | None) -> subprocess.Popen[bytes]:
         profile = validate_installed_runtime(executable, active.directory, private_root, runtime)
     except (OSError, ValueError) as exc:
         raise forge.ForgeError(str(exc)) from exc
-    return subprocess.Popen(
+    return popen_native(
         [str(executable), "--launch-profile", str(profile)],
-        cwd=executable.parent,
+        cwd=for_package(executable.parent).activation,
     )
 
 
@@ -299,6 +321,8 @@ class ForgeWindow:
         self.messagebox = messagebox
         self.events: queue.Queue[tuple[str, object]] = queue.Queue()
         self.busy = False
+        self.picking = False
+        self.picker_thread = None
         self.worker_process = None
         self.closing = threading.Event()
 
@@ -309,13 +333,27 @@ class ForgeWindow:
 
         self.data_root = default_gui_data_root()
         self.rom = tk.StringVar()
+        self.language = tk.StringVar()
+        self.language_options = []
         self.status = tk.StringVar(value="Checking the local installation...")
 
         self._build_layout()
         self.rom.trace_add("write", lambda *_args: self._refresh_actions())
         self._refresh_active_title()
         self._refresh_actions()
+        self.status.trace_add("write", lambda *_args: self.root.after_idle(self._fit_to_content))
+        self.root.after_idle(self._fit_to_content)
         self.root.after(100, self._poll_events)
+
+    def _fit_to_content(self) -> None:
+        # Native Tk themes/font metrics and wrapped status text vary by host.
+        # Never place the primary actions below a fixed Windows-sized window.
+        self.root.update_idletasks()
+        width = max(760, self.root.winfo_reqwidth())
+        height = max(390, self.root.winfo_reqheight())
+        self.root.minsize(width, height)
+        if self.root.winfo_width() < width or self.root.winfo_height() < height:
+            self.root.geometry(f"{max(width, self.root.winfo_width())}x{max(height, self.root.winfo_height())}")
 
     def _build_layout(self) -> None:
         outer = self.ttk.Frame(self.root, padding=20)
@@ -365,18 +403,22 @@ class ForgeWindow:
             outer, text="Use extracted data...", command=self._browse_extracted
         ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(5, 0))
 
+        self.ttk.Label(outer, text="Game language").grid(row=5, column=0, sticky="w")
+        self.language_combo = self.ttk.Combobox(outer, textvariable=self.language, state="disabled")
+        self.language_combo.grid(row=5, column=1, columnspan=2, sticky="ew", pady=(10, 0))
+        self.language_combo.bind("<<ComboboxSelected>>", self._select_language)
         separator = self.ttk.Separator(outer)
-        separator.grid(row=5, column=0, columnspan=3, sticky="ew", pady=(18, 14))
+        separator.grid(row=6, column=0, columnspan=3, sticky="ew", pady=(18, 14))
 
         self.status_label = self.ttk.Label(
             outer, textvariable=self.status, wraplength=700, justify="left"
         )
-        self.status_label.grid(row=6, column=0, columnspan=3, sticky="ew")
+        self.status_label.grid(row=7, column=0, columnspan=3, sticky="ew")
         self.progress = self.ttk.Progressbar(outer, mode="indeterminate")
-        self.progress.grid(row=7, column=0, columnspan=3, sticky="ew", pady=(10, 18))
+        self.progress.grid(row=8, column=0, columnspan=3, sticky="ew", pady=(10, 18))
 
         actions = self.ttk.Frame(outer)
-        actions.grid(row=8, column=0, columnspan=3, sticky="ew")
+        actions.grid(row=9, column=0, columnspan=3, sticky="ew")
         actions.columnconfigure(0, weight=1)
         self.install_button = self.ttk.Button(
             actions, text="Prepare and install", command=self._install
@@ -388,8 +430,12 @@ class ForgeWindow:
         self.launch_button.grid(row=0, column=2, padx=(8, 0))
 
     def _browse_extracted(self) -> None:
-        from tkinter import filedialog
-        selected = filedialog.askdirectory(title="Select extracted title data")
+        if self.busy or self.picking:
+            return
+        if for_package(runtime_path().parent).use_file_portal:
+            self._portal_browse(self.rom, "Select extracted title data", directory=True)
+            return
+        selected = self.filedialog.askdirectory(title="Select extracted title data", parent=self.root)
         if selected:
             self.rom.set(selected)
             self._refresh_actions()
@@ -422,12 +468,34 @@ class ForgeWindow:
         title: str,
         filetypes: tuple[tuple[str, str], ...] | None,
     ) -> None:
-        arguments: dict[str, Any] = {"title": title}
+        if self.busy or self.picking:
+            return
+        if for_package(runtime_path().parent).use_file_portal:
+            self._portal_browse(variable, title, directory=False)
+            return
+        arguments: dict[str, Any] = {"title": title, "parent": self.root}
         if filetypes is not None:
             arguments["filetypes"] = filetypes
         selected = self.filedialog.askopenfilename(**arguments)
         if selected:
             variable.set(selected)
+
+    def _portal_browse(self, variable: Any, title: str, *, directory: bool) -> None:
+        self.picking = True
+        self._refresh_actions()
+        # Tk on Linux owns an X11 window, including under XWayland.
+        parent = f"x11:{self.root.winfo_id():x}"
+        helper = installation_path("triaevum-file-chooser")
+
+        def worker() -> None:
+            try:
+                selected = portal_picker.choose(helper, title=title, directory=directory,
+                                                parent=parent, closing=self.closing)
+                self.events.put(("selection", (variable, selected, None)))
+            except Exception as exc:
+                self.events.put(("selection", (variable, None, str(exc))))
+        self.picker_thread = threading.Thread(target=worker, name="TriAevumFilePortal", daemon=True)
+        self.picker_thread.start()
 
     def _request(self) -> InstallRequest:
         return InstallRequest(
@@ -443,20 +511,47 @@ class ForgeWindow:
         else:
             self.active_title = active
             self.status.set(f"Ready to play: {active.recipe_id}\n{active.directory}")
+        self._refresh_languages()
+
+    def _refresh_languages(self) -> None:
+        self.language_options = []
+        path = game_language.config_path(self.data_root)
+        if path.exists():
+            try:
+                document = game_language.validate(load_json_object(path))
+                self.language_options = document["available"]
+                self.language_combo.configure(values=[v["label"] for v in self.language_options])
+                self.language.set(next(v["label"] for v in self.language_options if v["code"] == document["selected"]))
+            except (OSError, ValueError) as exc:
+                self.status.set(f"Cannot read game language settings: {exc}")
+        if not self.language_options:
+            self.language.set("Available after ROM preparation")
+
+    def _select_language(self, _event=None) -> None:
+        if self.busy or self.picking:
+            return
+        try:
+            code = next(v["code"] for v in self.language_options if v["label"] == self.language.get())
+            game_language.select(self.data_root, code)
+            self.status.set("Game language saved. Applies on the next full game start.")
+        except (OSError, ValueError, StopIteration) as exc:
+            self.messagebox.showerror("TriAevum Forge", str(exc), parent=self.root)
+            self._refresh_languages()
 
     def _refresh_actions(self) -> None:
+        self.language_combo.configure(state="readonly" if self.language_options and not self.busy and not self.picking else "disabled")
         complete = bool(self.rom.get().strip())
         self.install_button.configure(
-            state="normal" if complete and not self.busy else "disabled"
+            state="normal" if complete and not self.busy and not self.picking else "disabled"
         )
         self.launch_button.configure(
             state="normal"
-            if self.active_title is not None and not self.busy
+            if self.active_title is not None and not self.busy and not self.picking
             else "disabled"
         )
 
     def _install(self) -> None:
-        if self.busy:
+        if self.busy or self.picking:
             return
         request = self._request()
         self.busy = True
@@ -519,7 +614,15 @@ class ForgeWindow:
         try:
             while True:
                 event, payload = self.events.get_nowait()
-                if event == "stage":
+                if event == "selection":
+                    self.picking = False
+                    variable, selected, error = payload
+                    if selected is not None:
+                        variable.set(str(selected))
+                    if error:
+                        self.messagebox.showerror("TriAevum Forge", error, parent=self.root)
+                    self._refresh_actions()
+                elif event == "stage":
                     _stage, message = payload
                     self.status.set(str(message))
                 elif event == "error":
@@ -552,6 +655,8 @@ class ForgeWindow:
         ):
             return
         self.closing.set()
+        if self.picker_thread is not None:
+            self.picker_thread.join(timeout=15)
         process = self.worker_process
         if process is not None and process.poll() is None:
             process.kill()
@@ -559,7 +664,15 @@ class ForgeWindow:
         self.root.destroy()
 
 
-def main() -> int:
+def present_window(root: Any) -> None:
+    root.deiconify()
+    root.lift()
+    root.attributes("-topmost", True)
+    root.after(300, lambda: root.attributes("-topmost", False))
+    root.focus_force()
+
+
+def main(*, startup_error: str | None = None) -> int:
     try:
         import tkinter as tk
         from tkinter import filedialog, messagebox, ttk
@@ -578,10 +691,9 @@ def main() -> int:
         return 1
 
     _hide_explorer_console()
-    root.lift()
-    root.attributes("-topmost", True)
-    root.after(300, lambda: root.attributes("-topmost", False))
-    root.focus_force()
+    if startup_error:
+        root.after(0, lambda: messagebox.showerror("TriAevum", startup_error, parent=root))
+    present_window(root)
     root.mainloop()
     return 0
 

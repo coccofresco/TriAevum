@@ -28,6 +28,16 @@ struct VulkanQueueTopologyPlan {
     bool NriSwapchainEligible = false;
 };
 
+enum class VulkanPresentDispatchMode : uint8_t {
+    Automatic,
+    Asynchronous,
+    Inline,
+    // Share the queue only when the graphics family also supports presentation.
+    GraphicsQueue,
+};
+
+[[nodiscard]] VulkanPresentDispatchMode ParseVulkanPresentDispatchMode(std::string_view value);
+
 struct VulkanQueueFamilyCandidate {
     uint32_t EnumerationIndex = 0;
     uint32_t QueueCount = 0;
@@ -50,7 +60,9 @@ struct VulkanQueueFamilySelection {
 
 [[nodiscard]] VulkanQueueTopologyPlan ResolveVulkanQueueTopology(
     uint32_t graphicsFamily, uint32_t presentFamily,
-    uint32_t graphicsQueueCount);
+    uint32_t graphicsQueueCount,
+    VulkanPresentDispatchMode mode = VulkanPresentDispatchMode::Automatic,
+    std::string_view videoDriver = {});
 
 struct VulkanAdapterIndexParseResult {
     std::optional<uint32_t> EnumerationIndex;

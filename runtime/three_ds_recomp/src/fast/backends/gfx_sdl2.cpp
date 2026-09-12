@@ -49,6 +49,7 @@
 
 #include "ship/window/gui/Gui.h"
 #include "fast/Fast3dGui.h"
+#include "fast/backends/sdl_video_driver_policy.h"
 
 #ifdef _WIN32
 #include <WTypesbase.h>
@@ -371,6 +372,11 @@ void GfxWindowBackendSDL2::Init(const char* gameName, const char* gfxApiName, bo
     mWindowWidth = width;
     mWindowHeight = height;
 
+#ifdef ENABLE_OOT3D_VULKAN
+    mUsesVulkan = strcmp(gfxApiName, "Vulkan") == 0;
+#endif
+    ConfigureSdlVideoDriver(mUsesVulkan);
+
 #if SDL_VERSION_ATLEAST(2, 24, 0)
     /* fix DPI scaling issues on Windows */
     SDL_SetHint(SDL_HINT_WINDOWS_DPI_AWARENESS, "permonitorv2");
@@ -379,14 +385,11 @@ void GfxWindowBackendSDL2::Init(const char* gameName, const char* gfxApiName, bo
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         throw std::runtime_error(std::string("SDL video initialization failed: ") + SDL_GetError());
     }
+    SPDLOG_INFO("SDL video driver: {}", SDL_GetCurrentVideoDriver());
 
     EnsureWindowPositionIsVisible(posX, posY, width, height);
 
     SDL_EventState(SDL_DROPFILE, SDL_ENABLE);
-
-#ifdef ENABLE_OOT3D_VULKAN
-    mUsesVulkan = strcmp(gfxApiName, "Vulkan") == 0;
-#endif
 
 #if defined(__APPLE__)
     bool use_opengl = !mUsesVulkan && strcmp(gfxApiName, "OpenGL") == 0;
@@ -657,12 +660,25 @@ void GfxWindowBackendSDL2::GetDimensions(uint32_t* width, uint32_t* height, int3
 }
 
 void GfxWindowBackendSDL2::SetDimensions(uint32_t width, uint32_t height, int32_t posX, int32_t posY) {
+#ifdef __ANDROID__
+    // The Activity/SurfaceHolder owns mobile output size. SDL_SetWindowSize only
+    // changes SDL's logical dimensions here, not the Android buffer; accepting a
+    // desktop request would give camera/input a different aspect than Vulkan.
+    if (mWnd) {
+        int32_t actualX = 0, actualY = 0;
+        uint32_t actualWidth = 0, actualHeight = 0;
+        GetDimensions(&actualWidth, &actualHeight, &actualX, &actualY);
+        mWindowWidth = static_cast<int>(actualWidth);
+        mWindowHeight = static_cast<int>(actualHeight);
+    }
+#else
     mWindowWidth = width;
     mWindowHeight = height;
     if (mWnd) {
         SDL_SetWindowPosition(mWnd, posX, posY);
         SDL_SetWindowSize(mWnd, mWindowWidth, mWindowHeight);
     }
+#endif
 }
 
 Ship::WindowRect GfxWindowBackendSDL2::GetPrimaryMonitorRect() {

@@ -3,11 +3,13 @@
 from pathlib import Path
 
 try:
+    from .release_platform import host_platform
     from .activation_transaction import activation_transaction
     from .common import atomic_write_json, load_json_object, sha256_file
     from .installation_context import InstallationContext, expand_profile_argument, resolve_reference
     from .installed_runtime import validate_installed_runtime
 except ImportError:
+    from release_platform import host_platform
     from activation_transaction import activation_transaction
     from common import atomic_write_json, load_json_object, sha256_file
     from installation_context import InstallationContext, expand_profile_argument, resolve_reference
@@ -23,6 +25,7 @@ def migrate_installation(installation: Path, title: Path, data_root: Path) -> di
     if not title.is_relative_to(installation) or not data_root.is_relative_to(installation):
         raise ValueError("Portable migration requires title and data inside the installation")
     context = InstallationContext(installation)
+    platform = host_platform()
     profile = installation / "TriAevum.launch.json"
     manifest_path = title / "process-manifest.json"
     state_path = title / "forge-state.json"
@@ -41,10 +44,10 @@ def migrate_installation(installation: Path, title: Path, data_root: Path) -> di
     with activation_transaction(installation, targets):
         prepared = load_prepared_content(title, required_inputs=("code", "exheader", "romfs"))
         runtime = prepared.state.get("runtime", {})
-        selected_profile = validate_installed_runtime(installation / "TriAevum.exe", title, data_root, runtime)
+        selected_profile = validate_installed_runtime(installation / platform.runtime, title, data_root, runtime)
         if selected_profile != profile:
             raise ValueError("Migration requires the installation's own default launch profile")
-        runtime.setdefault("plugin", str(installation / "triaevum_title_aot.dll"))
+        runtime.setdefault("plugin", str(installation / platform.title_module))
         manifest = load_json_object(manifest_path)
         fields = {"code": "code_bin_path", "exheader": "exheader_path", "romfs": "romfs_image_path"}
         external = []
@@ -74,7 +77,8 @@ def migrate_installation(installation: Path, title: Path, data_root: Path) -> di
         arguments = payload["arguments"]
         scopes = {}
         path_options = {"--title-plugin", "--a32-process-manifest", "--resource-root",
-                        "--config", "--topscreen-config", "--save-data", "--output"}
+                        "--config", "--topscreen-config", "--save-data", "--output",
+                        "--topscreen-texture-overrides", "--pica-aot-shader-pack", "--renderer-cache-directory"}
         for index, argument in enumerate(arguments[:-1]):
             if argument in path_options:
                 path = Path(expand_profile_argument(arguments[index + 1], profile))
@@ -88,6 +92,10 @@ def migrate_installation(installation: Path, title: Path, data_root: Path) -> di
             path = resolve_reference(runtime[field], title)
             runtime[field] = context.reference(path, title)
             runtime[field + "_scope"] = context.scope(path)
+        for field in ("topscreen_textures", "pica_shader_pack", "renderer_cache"):
+            if field in runtime:
+                path = resolve_reference(runtime[field]["path"], title)
+                runtime[field]["path"] = context.reference(path, title)
         runtime["launch_profile_sha256"] = sha256_file(profile)
         write_if_changed(state_path, prepared.state)
         if active_path.exists():
@@ -97,6 +105,6 @@ def migrate_installation(installation: Path, title: Path, data_root: Path) -> di
                 active["directory_scope"] = "relative"
                 write_if_changed(active_path, active)
         load_prepared_content(title, required_inputs=("code", "exheader", "romfs"))
-        validate_installed_runtime(installation / "TriAevum.exe", title, data_root, runtime)
+        validate_installed_runtime(installation / platform.runtime, title, data_root, runtime)
     return {"status": "migrated" if changed else "unchanged", "changed_files": changed,
             "external_inputs": external, "saves_modified": False, "title_recompiled": False}

@@ -2,6 +2,7 @@
 
 #include "fast/oot3d/grass_surface_extractor.h"
 #include "fast/oot3d/grass_anchor_codec.h"
+#include "fast/oot3d/grass_midrange_clusters.h"
 
 #include <array>
 #include <cstddef>
@@ -18,11 +19,15 @@ struct GrassWorldAnchor {
     uint32_t PackedWidthAxis = 0x00007fffU;
     uint32_t PackedWorldNormal = 0x7fff0000U;
     uint32_t StableId = 0U;
+    uint32_t SurfaceColor = 0U;
+    std::array<uint32_t, 2> SurfaceReference{};
 };
-// Shared CPU/storage-buffer format: nine scalar words, no std430 vec3 padding.
-static_assert(sizeof(GrassWorldAnchor) == 36U);
+// Shared CPU/storage-buffer format: twelve scalar words, no std430 vec3 padding.
+static_assert(sizeof(GrassWorldAnchor) == 48U);
 static_assert(offsetof(GrassWorldAnchor, PackedWidthAxis) == 24U);
 static_assert(offsetof(GrassWorldAnchor, StableId) == 32U);
+static_assert(offsetof(GrassWorldAnchor, SurfaceColor) == 36U);
+static_assert(offsetof(GrassWorldAnchor, SurfaceReference) == 40U);
 
 // Compact immutable stream used only by camera-dependent visibility. It
 // retains the exact anchor order while keeping the full GPU payload cold.
@@ -62,9 +67,13 @@ struct GrassWorldPlacement {
     // anchors or changing their deterministic identity.
     std::vector<uint32_t> VisibilityClusterOrder;
     std::vector<GrassClusterVisibilityNode> VisibilityNodes;
+    GrassMidrangeClusters Midrange;
 };
 
 struct GrassWorldPlacementRequest {
+    GrassTextureColorSource ColorSource;
+    GrassTextureWrap ColorWrapS = GrassTextureWrap::Repeat;
+    GrassTextureWrap ColorWrapT = GrassTextureWrap::Repeat;
     uint64_t Identity = 0U;
     uint64_t ContentVersion = 0U;
     uint64_t FrameId = 0U;
@@ -74,6 +83,13 @@ struct GrassWorldPlacementRequest {
     bool TransformBakedIntoVertices = true;
     float NormalOffset = 0.0F;
     float HeightScale = 1.0F;
+    // Disabled until the cluster draw consumer is selected. Independent of
+    // the existing coarse-culling cluster size and never camera-dependent.
+    float MidrangeCellExtent = 0.0F;
+    bool MidrangeAdaptive = false;
+    uint32_t MidrangeAdaptiveCapacity = kGrassDefaultAdaptiveClusterCapacity;
+    const GrassScalarMask* MidrangeMask = nullptr;
+    const GrassPlacementRule* MidrangeMaskRule = nullptr;
 };
 
 struct GrassWorldPlacementCacheStats {

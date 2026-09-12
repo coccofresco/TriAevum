@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <iostream>
 #include <stdexcept>
 
 namespace {
@@ -38,10 +39,135 @@ class TestHostButtonSource final
     }
 };
 
+void TestVirtualMotion() {
+    using namespace ThreeDsRecomp::Input;
+    constexpr double pi = 3.14159265358979323846;
+    MappingConfig config;
+    config.NativeMotionSource = MotionSource::Mouse;
+    config.MouseMotionDegreesPerPixel = 0.25F;
+    VirtualMotionState state;
+    PhysicalInputState input;
+    input.MouseDeltaY = 160;
+    input.SamplePeriodSeconds = 1.0 / 60.0;
+    const auto tilted = ResolveInput(config, input, {}, {}, nullptr, true, &state);
+    Require(std::abs(state.PitchRadians - 40.0 * pi / 180.0) < 1e-6,
+            "mouse displacement did not integrate into device tilt");
+    Require(tilted.Hid.Accelerometer[2] > 0.64F && tilted.Hid.Accelerometer[1] > -0.77F,
+            "virtual pitch still supplies neutral gravity to native sensor fusion");
+    input.MouseDeltaY = 0;
+    for (int i = 0; i < 600; ++i) {
+        const auto stopped = ResolveInput(config, input, {}, {}, nullptr, true, &state);
+        Require(stopped.Hid.GyroscopeDegreesPerSecond == std::array<float, 3>{} &&
+                    stopped.Hid.Accelerometer == tilted.Hid.Accelerometer,
+                "stationary mouse recentered gravity or generated a reverse rotation");
+    }
+    input.MouseDeltaX = -4;
+    const auto yaw = ResolveInput(config, input, {}, {}, nullptr, true, &state);
+    Require(std::abs(yaw.Hid.GyroscopeDegreesPerSecond[1] - 60.0F * std::cos(state.PitchRadians)) < 1e-4 &&
+                std::abs(yaw.Hid.GyroscopeDegreesPerSecond[2] + 60.0F * std::sin(state.PitchRadians)) < 1e-4 &&
+                yaw.Hid.Accelerometer == tilted.Hid.Accelerometer,
+            "horizontal mouse motion rolls the device instead of yawing about gravity");
+    VirtualMotionState neutral;
+    const auto horizontal = ResolveInput(config, input, {}, {}, nullptr, true, &neutral);
+    Require(std::abs(horizontal.Hid.GyroscopeDegreesPerSecond[1] - 60.0F) < 1e-4F &&
+                horizontal.Hid.GyroscopeDegreesPerSecond[2] == 0.0F,
+            "neutral horizontal mouse motion uses the roll axis");
+    input.MouseDeltaX = 0;
+    input.MouseDeltaY = 20;
+    const auto beforePresentation = state.PitchRadians;
+    (void)ResolveInput(config, input, {}, {}, nullptr, false, &state);
+    Require(state.PitchRadians == beforePresentation, "interpolated presentation advanced virtual motion");
+    for (const int hz : {30, 60, 90, 120}) {
+        VirtualMotionState cadence;
+        input.MouseDeltaY = 360 / hz;
+        input.SamplePeriodSeconds = 1.0 / hz;
+        for (int i = 0; i < hz; ++i)
+            (void)ResolveInput(config, input, {}, {}, nullptr, true, &cadence);
+        Require(std::abs(cadence.PitchRadians - pi / 2.0) < 1e-6,
+                "mouse sensitivity changes with polling cadence");
+    }
+    VirtualMotionState restored;
+    restored.RestoreGravity(tilted.Hid.Accelerometer);
+    Require(std::abs(restored.PitchRadians - state.PitchRadians) < 1e-6,
+            "restoring sensor gravity lost virtual tilt");
+    restored.RestoreGravity({0.0F, 0.0F, 0.0F});
+    Require(restored.PitchRadians == 0.0, "missing savestate gravity inverted the virtual device");
+    input = {};
+    input.MouseDeltaX = 4;
+    input.MouseDeltaY = -4;
+    const auto upRight = ResolveInput(config, input, {});
+    Require(upRight.Hid.GyroscopeDegreesPerSecond[0] < 0.0F &&
+                upRight.Hid.GyroscopeDegreesPerSecond[1] < 0.0F,
+            "mouse up/right has opposite signs to native analog aim");
+    config.NativeMotionInvertX = true;
+    config.NativeMotionInvertY = true;
+    const auto inverted = ResolveInput(config, input, {});
+    Require(inverted.Hid.GyroscopeDegreesPerSecond[0] > 0.0F &&
+                inverted.Hid.GyroscopeDegreesPerSecond[1] > 0.0F,
+            "virtual mouse inversion was not applied once per axis");
+    config.NativeMotionInvertX = false;
+    config.NativeMotionInvertY = false;
+    input = {};
+    config.NativeMotionSource = MotionSource::Automatic;
+    const auto idle = ResolveInput(config, input, {}, {}, nullptr, true, &state);
+    Require(idle.Hid.Accelerometer == tilted.Hid.Accelerometer,
+            "automatic source dropped virtual gravity as soon as mouse stopped");
+    config.NativeMotionSource = MotionSource::ControllerMotion;
+    input.ControllerMotion.GyroscopeValid = true;
+    input.ControllerMotion.AccelerometerValid = true;
+    input.ControllerMotion.GyroscopeDegreesPerSecond = {10, 20, 30};
+    input.ControllerMotion.Accelerometer = {0.1F, -0.9F, 0.2F};
+    const auto physical = ResolveInput(config, input, {}, {}, nullptr, true, &state);
+    Require(physical.Hid.GyroscopeDegreesPerSecond == input.ControllerMotion.GyroscopeDegreesPerSecond &&
+                physical.Hid.Accelerometer == input.ControllerMotion.Accelerometer,
+            "virtual motion changed physical controller sensors");
+}
+
 } // namespace
 
-int main() {
+int main() try {
     using namespace ThreeDsRecomp::Input;
+    TestVirtualMotion();
+
+    HostBindingCapture capture;
+    TestHostButtonSource raw;
+    capture.Begin(BindingDevice::Keyboard);
+    raw.Keyboard = KeyboardKey::Enter;
+    capture.Observe(raw, false);
+    Require(capture.Snapshot().Phase == BindingCapturePhase::Release, "opening key was assigned");
+    raw.Keyboard = KeyboardKey::None;
+    capture.Observe(raw, false);
+    Require(capture.Snapshot().Phase == BindingCapturePhase::Listening, "capture did not arm after release");
+    raw.Mouse = MouseButton::Left;
+    capture.Observe(raw, false);
+    Require(capture.Active(), "wrong device completed keyboard capture");
+    raw.Keyboard = KeyboardKey::RightShift;
+    capture.Observe(raw, false);
+    Require(capture.Snapshot().Phase == BindingCapturePhase::Complete &&
+            capture.Snapshot().Binding.KeyboardPrimary == KeyboardKey::RightShift, "keyboard capture failed");
+    raw.Keyboard = KeyboardKey::W;
+    capture.Observe(raw, false);
+    Require(capture.Snapshot().Binding.KeyboardPrimary == KeyboardKey::RightShift, "completed capture was overwritten");
+    capture.Begin(BindingDevice::Mouse);
+    capture.Observe(raw, false);
+    Require(capture.Snapshot().Phase == BindingCapturePhase::Release, "Listen click was assigned to mouse");
+    raw.Mouse = MouseButton::None;
+    capture.Observe(raw, false);
+    raw.Mouse = MouseButton::Forward;
+    capture.Observe(raw, false);
+    Require(capture.Snapshot().Binding.Mouse == MouseButton::Forward, "mouse side-button capture failed");
+    capture.Begin(BindingDevice::Gamepad);
+    raw.Gamepad = GamepadButton::RightTrigger;
+    capture.Observe(raw, false);
+    Require(capture.Snapshot().Phase == BindingCapturePhase::Release, "held trigger was assigned");
+    raw.Gamepad = GamepadButton::None;
+    capture.Observe(raw, false);
+    raw.Gamepad = GamepadButton::LeftTrigger;
+    capture.Observe(raw, false);
+    Require(capture.Snapshot().Binding.Gamepad == GamepadButton::LeftTrigger, "controller trigger capture failed");
+    capture.Begin(BindingDevice::Keyboard);
+    capture.Observe(raw, true);
+    Require(capture.Snapshot().Phase == BindingCapturePhase::Cancelled && !capture.Active(), "Escape did not cancel capture");
 
     const auto old3ds = CapabilitiesFor(HardwareProfile::Old3ds);
     const auto circlePadPro =
@@ -161,6 +287,31 @@ int main() {
                     hostButtons),
             "host bindings bypass device enablement or duplicate resolution");
 
+    std::array<HostBinding, 5> swapBindings{};
+    swapBindings[0] = multiDeviceBinding;
+    swapBindings[0].Gamepad = GamepadButton::LeftShoulder;
+    swapBindings[1].Gamepad = GamepadButton::LeftTrigger;
+    swapBindings[2].Gamepad = GamepadButton::LeftShoulder;
+    swapBindings[3].Gamepad = GamepadButton::RightTrigger;
+    const auto originalBindings = swapBindings;
+    SwapGamepadSources(swapBindings, GamepadButton::LeftShoulder,
+                       GamepadButton::LeftTrigger);
+    Require(swapBindings[0].Gamepad == GamepadButton::LeftTrigger &&
+                swapBindings[1].Gamepad == GamepadButton::LeftShoulder &&
+                swapBindings[2].Gamepad == GamepadButton::LeftTrigger &&
+                swapBindings[3] == originalBindings[3] &&
+                swapBindings[4] == originalBindings[4] &&
+                swapBindings[0].KeyboardPrimary == originalBindings[0].KeyboardPrimary &&
+                swapBindings[0].Mouse == originalBindings[0].Mouse,
+            "source swap lost a custom binding or changed another device");
+    SwapGamepadSources(swapBindings, GamepadButton::LeftShoulder,
+                       GamepadButton::LeftTrigger);
+    SwapGamepadSources(swapBindings, GamepadButton::None, GamepadButton::A);
+    SwapGamepadSources(swapBindings, GamepadButton::A, GamepadButton::None);
+    SwapGamepadSources(swapBindings, GamepadButton::A, GamepadButton::A);
+    Require(swapBindings == originalBindings,
+            "source swap is not reversible or assigned unbound actions");
+
     DigitalState digital;
     digital.SetHeld(DigitalControl::CirclePadUp);
     digital.SetHeld(DigitalControl::A);
@@ -234,4 +385,7 @@ int main() {
             "host analog conversion does not preserve the native range");
 
     return 0;
+} catch (const std::exception& error) {
+    std::cerr << "three_ds_recomp_input_tests: " << error.what() << '\n';
+    return 1;
 }

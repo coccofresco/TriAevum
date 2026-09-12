@@ -24,6 +24,7 @@ struct GrassSourceVertex {
     std::array<float, 3> Position{};
     std::array<float, 3> Normal{0.0F, 1.0F, 0.0F};
     std::array<float, 2> Uv{};
+    std::array<float, 3> SourceWeights{};
 };
 
 struct GrassSourceSurface {
@@ -39,9 +40,11 @@ struct GrassSourceSurface {
     std::span<const GrassSourceVertex> Vertices;
     std::span<const uint32_t> Indices;
     GrassPlacementView PlacementView;
+    std::span<const std::array<uint32_t, 3>> TriangleSources;
 };
 
 struct GrassAnchor {
+    std::array<uint32_t, 2> SurfaceReference{};
     std::array<float, 3> LocalPosition{};
     std::array<float, 3> LocalNormal{};
     std::array<float, 2> Uv{};

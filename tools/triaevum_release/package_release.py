@@ -19,6 +19,7 @@ try:
     )
     from .readiness import DEFAULT_READINESS, evaluate_readiness
     from .product_contract import query_product
+    from .release_platform import WINDOWS, for_target
 except ImportError:
     from audit_release import DEFAULT_POLICY, audit_release
     from common import (
@@ -29,6 +30,7 @@ except ImportError:
     )
     from readiness import DEFAULT_READINESS, evaluate_readiness
     from product_contract import query_product
+    from release_platform import WINDOWS, for_target
 
 
 def package_release(
@@ -43,8 +45,12 @@ def package_release(
     enforce_readiness: bool = True,
     verify_runtime: bool = True,
 ) -> dict[str, Any]:
+    layout = load_json_object(layout_path)
+    if layout.get("format") != "triaevum_public_release_layout_v1":
+        raise ValueError("unsupported release layout format")
+    platform = for_target(layout.get("target", WINDOWS.target))
     if enforce_readiness:
-        readiness = evaluate_readiness(readiness_path)
+        readiness = evaluate_readiness(readiness_path, target=platform.target)
         if not readiness.ready:
             details = "\n".join(
                 f"  - {item}" for item in readiness.blockers + readiness.errors
@@ -52,9 +58,6 @@ def package_release(
             raise ValueError(
                 "public release readiness gates are not complete:\n" + details
             )
-    layout = load_json_object(layout_path)
-    if layout.get("format") != "triaevum_public_release_layout_v1":
-        raise ValueError("unsupported release layout format")
     items = layout.get("files")
     if not isinstance(items, list) or not items:
         raise ValueError("release layout has no files")
@@ -103,7 +106,7 @@ def package_release(
 
         runtime_contract = None
         if verify_runtime:
-            runtime_contract = query_product(staging / "TriAevum.exe", source_commit)
+            runtime_contract = query_product(staging / platform.runtime, source_commit)
             if runtime_contract["product"].get("private_title_loaded") is not False:
                 raise ValueError("public package contains a private title plugin, not the stub")
         precompiled = any(item["role"] == "precompiled_catalog" for item in inventory)
@@ -112,6 +115,7 @@ def package_release(
             "release": {
                 "name": "TriAevum",
                 "version": version,
+                "target": platform.target,
                 "source_commit": source_commit,
                 "distribution_model": "precompiled_title_rom_import_v1" if precompiled else "local_compile_v1",
                 "contains_title_code": precompiled,

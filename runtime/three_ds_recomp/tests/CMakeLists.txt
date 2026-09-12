@@ -1,5 +1,38 @@
 include(FetchContent)
 
+find_package(Threads REQUIRED)
+add_executable(spirv_cache_tests spirv_cache_tests.cpp)
+target_compile_features(spirv_cache_tests PRIVATE cxx_std_20)
+target_link_libraries(spirv_cache_tests PRIVATE ThreeDsRecomp::RendererExtensionCore Threads::Threads)
+add_test(NAME spirv_cache_tests COMMAND spirv_cache_tests)
+
+add_executable(framebuffer_readback_tests framebuffer_readback_tests.cpp)
+target_compile_features(framebuffer_readback_tests PRIVATE cxx_std_20)
+target_include_directories(framebuffer_readback_tests PRIVATE ../include)
+add_test(NAME framebuffer_readback_tests COMMAND framebuffer_readback_tests)
+
+add_executable(native_presentation_policy_tests native_presentation_policy_tests.cpp)
+target_compile_features(native_presentation_policy_tests PRIVATE cxx_std_20)
+target_include_directories(native_presentation_policy_tests PRIVATE ../include)
+add_test(NAME native_presentation_policy_tests COMMAND native_presentation_policy_tests)
+
+add_executable(vulkan_present_dispatch_tests
+    vulkan_present_dispatch_tests.cpp
+    ../src/fast/oot3d/vulkan_adapter_policy.cpp)
+target_compile_features(vulkan_present_dispatch_tests PRIVATE cxx_std_20)
+target_include_directories(vulkan_present_dispatch_tests PRIVATE ../include)
+add_test(NAME vulkan_present_dispatch_tests COMMAND vulkan_present_dispatch_tests)
+
+if(TARGET SDL2::SDL2)
+    add_executable(sdl_video_driver_policy_tests sdl_video_driver_policy_tests.cpp)
+    target_compile_features(sdl_video_driver_policy_tests PRIVATE cxx_std_20)
+    target_include_directories(sdl_video_driver_policy_tests PRIVATE ../include)
+    target_link_libraries(sdl_video_driver_policy_tests PRIVATE SDL2::SDL2)
+    add_test(NAME sdl_video_driver_policy_tests COMMAND sdl_video_driver_policy_tests)
+    set_tests_properties(sdl_video_driver_policy_tests PROPERTIES
+        ENVIRONMENT_MODIFICATION "SDL_VIDEODRIVER=unset:")
+endif()
+
 FetchContent_Declare(
     googletest
     GIT_REPOSITORY https://github.com/google/googletest.git
@@ -8,8 +41,12 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    target_compile_options(gtest PRIVATE /WX- -Wno-character-conversion)
-    target_compile_options(gtest_main PRIVATE /WX- -Wno-character-conversion)
+    target_compile_options(gtest PRIVATE -Wno-character-conversion)
+    target_compile_options(gtest_main PRIVATE -Wno-character-conversion)
+    if(MSVC)
+        target_compile_options(gtest PRIVATE /WX-)
+        target_compile_options(gtest_main PRIVATE /WX-)
+    endif()
 endif()
 
 add_executable(three_ds_recomp_tests
@@ -64,6 +101,16 @@ endif()
 
 include(GoogleTest)
 gtest_discover_tests(three_ds_recomp_tests DISCOVERY_TIMEOUT 30)
+
+add_executable(mouse_capture_policy_tests mouse_capture_policy_tests.cpp)
+add_test(NAME mouse_capture_policy_tests COMMAND mouse_capture_policy_tests)
+if(TARGET NRI)
+    add_executable(nri_stage_scope_tests nri_stage_scope_tests.cpp)
+    target_compile_definitions(nri_stage_scope_tests PRIVATE ENABLE_OOT3D_NRI)
+    target_include_directories(nri_stage_scope_tests PRIVATE ../include)
+    target_link_libraries(nri_stage_scope_tests PRIVATE NRI)
+    add_test(NAME nri_stage_scope_tests COMMAND nri_stage_scope_tests)
+endif()
 
 add_executable(oot3d_vulkan_diagnostics_tests
     oot3d_vulkan_diagnostics_tests.cpp
@@ -407,6 +454,12 @@ if(MSVC)
 endif()
 gtest_discover_tests(oot3d_effect_graph_tests DISCOVERY_TIMEOUT 30)
 
+add_executable(oot3d_grass_midrange_clusters_tests oot3d_grass_midrange_clusters_tests.cpp
+    ../src/fast/oot3d/grass_visibility.cpp)
+target_include_directories(oot3d_grass_midrange_clusters_tests PRIVATE ../include)
+target_compile_features(oot3d_grass_midrange_clusters_tests PRIVATE cxx_std_20)
+add_test(NAME oot3d_grass_midrange_clusters_tests COMMAND oot3d_grass_midrange_clusters_tests)
+
 add_executable(oot3d_graphics_foundation_tests
     oot3d_graphics_foundation_tests.cpp
     oot3d_azahar_texture_pack_tests.cpp
@@ -428,6 +481,8 @@ add_executable(oot3d_graphics_foundation_tests
     ../src/fast/oot3d/azahar_texture_pack.cpp
     ../src/fast/oot3d/cacao_normal_input.cpp
     ../src/fast/oot3d/grass_async_placement_builder.cpp
+    ../src/fast/oot3d/grass_static_placement_cache.cpp
+    ../src/fast/oot3d/grass_shader_sources.cpp
     ../src/fast/oot3d/grass_blade_geometry.cpp
     ../src/fast/oot3d/grass_collision_resolver.cpp
     ../src/fast/oot3d/grass_geometry_registry.cpp
@@ -483,6 +538,9 @@ add_executable(oot3d_graphics_foundation_tests
     ../src/fast/oot3d/pica_rigid_motion.cpp
     ../src/fast/oot3d/pica_texture_decode.cpp
     ../src/fast/oot3d/pica_toon_shader.cpp
+    ../src/fast/oot3d/pica_shader_instrumentation.cpp
+    ../src/fast/oot3d/pica_directional_shadow_lighting.cpp
+    ../src/fast/oot3d/pica_directional_shadow_semantics.cpp
     ../src/fast/oot3d/pica_toon_telemetry.cpp
     ../src/fast/oot3d/pica_scanout_effects.cpp
     ../src/fast/oot3d/spatial_aa.cpp

@@ -73,6 +73,9 @@ struct GrassAppearanceSettings {
     uint8_t BladeSegments = 2U;
     bool ReceiveLighting = true;
     bool ReceiveFog = true;
+    bool ToonRimEnabled = true;
+    float ToonRimFadeStart = 200.0F;
+    float ToonRimFadeEnd = 800.0F;
 };
 
 struct InteractiveGrassSettings {
@@ -90,6 +93,11 @@ struct InteractiveGrassSettings {
     float FarDensity = 0.30F;
     uint8_t FarBladeSegments = 1U;
     bool FarTuftsEnabled = true;
+    bool MidrangeClustersEnabled = false;
+    bool MidrangeAdaptiveEnabled = false;
+    uint32_t MidrangeAdaptiveCapacity = 128;
+    float MidrangeClusterCellExtent = 22.0F;
+    float MidrangeFarBladeFraction = 0.25F;
     uint8_t FarTuftBladeCount = 5U;
     float DrawFadeFraction = 0.15F;
     float DensityFadeFraction = 0.10F;

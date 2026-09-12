@@ -1,6 +1,7 @@
 #include "fast/Fast3dWindow.h"
 
 #include "ship/Context.h"
+#include "ship/utils/ShutdownRequest.h"
 #include "ship/config/Config.h"
 #include "ship/controller/controldeck/ControlDeck.h"
 #include "ship/config/ConsoleVariable.h"
@@ -269,7 +270,7 @@ void Fast3dWindow::RequestFocus() {
 }
 
 void Fast3dWindow::SetCursorVisibility(bool visible) {
-    mWindowManagerApi->SetCursorVisibility(visible);
+    mWindowManagerApi->SetCursorVisibility(visible || mMouseCapturePolicy.Released());
 }
 
 uint32_t Fast3dWindow::GetWidth() {
@@ -327,11 +328,24 @@ Ship::CoordsF Fast3dWindow::GetMouseWheel() {
 }
 
 bool Fast3dWindow::GetMouseState(Ship::MouseBtn btn) {
+    if (btn == Ship::LUS_MOUSE_BTN_LEFT && mMouseCapturePolicy.ResumeClickHeld()) return false;
     return mWindowManagerApi->GetMouseState(static_cast<uint32_t>(btn));
 }
 
 void Fast3dWindow::SetMouseCapture(bool capture) {
-    mWindowManagerApi->SetMouseCapture(capture);
+    const bool resolved = mMouseCapturePolicy.Request(capture);
+    if (resolved != IsMouseCaptured()) mWindowManagerApi->SetMouseCapture(resolved);
+}
+
+bool Fast3dWindow::IsMouseCaptureReleased() const {
+    return mMouseCapturePolicy.Released();
+}
+
+void Fast3dWindow::ReleaseMouseCapture() {
+    mMouseCapturePolicy.Release();
+    mWindowManagerApi->SetMouseCapture(false);
+    mWindowManagerApi->SetCursorVisibility(true);
+    (void)GetMouseDelta();
 }
 
 bool Fast3dWindow::IsMouseCaptured() {
@@ -369,6 +383,15 @@ void Fast3dWindow::SetMsaaLevel(uint32_t value) {
 }
 
 void Fast3dWindow::SetFullscreen(bool isFullscreen) {
+#ifdef ENABLE_OOT3D_VULKAN
+    if (GetWindowBackend() == WindowBackend::FAST3D_SDL_OOT3D_VULKAN) {
+        auto& runtime = Oot3d::GraphicsSettingsRuntime::Instance();
+        auto settings = runtime.Snapshot();
+        settings.Window = isFullscreen ? Oot3d::WindowMode::Borderless : Oot3d::WindowMode::Windowed;
+        runtime.Apply(settings);
+        return;
+    }
+#endif
     // Save current window position before fullscreening
     SaveWindowToConfig();
     mWindowManagerApi->SetFullscreen(isFullscreen);
@@ -379,7 +402,7 @@ bool Fast3dWindow::IsFullscreen() {
 }
 
 bool Fast3dWindow::IsRunning() {
-    return mWindowManagerApi->IsRunning();
+    return !Ship::ShutdownRequest::Requested() && mWindowManagerApi->IsRunning();
 }
 
 uintptr_t Fast3dWindow::GetGfxFrameBuffer() {
@@ -392,6 +415,7 @@ const char* Fast3dWindow::GetKeyName(int32_t scancode) {
 
 bool Fast3dWindow::KeyUp(int32_t scancode) {
     sPressedKeys.erase(scancode);
+    if (scancode == Ship::LUS_KB_ESCAPE) return true;
 
 #ifdef ENABLE_OOT3D_VULKAN
     if (Ship::Context::GetRawInstance()->GetWindow()->GetWindowBackend() ==
@@ -417,6 +441,11 @@ bool Fast3dWindow::KeyUp(int32_t scancode) {
 
 bool Fast3dWindow::KeyDown(int32_t scancode) {
     const bool firstPress = sPressedKeys.insert(scancode).second;
+    if (scancode == Ship::LUS_KB_ESCAPE) {
+        auto window = std::static_pointer_cast<Fast3dWindow>(Ship::Context::GetRawInstance()->GetWindow());
+        window->ReleaseMouseCapture();
+        return true;
+    }
 
 #ifdef ENABLE_OOT3D_VULKAN
     if (Ship::Context::GetRawInstance()->GetWindow()->GetWindowBackend() ==
@@ -443,11 +472,23 @@ void Fast3dWindow::AllKeysUp() {
 }
 
 bool Fast3dWindow::MouseButtonUp(int button) {
+    auto window = std::static_pointer_cast<Fast3dWindow>(Ship::Context::GetRawInstance()->GetWindow());
+    if (button == Ship::LUS_MOUSE_BTN_LEFT && window->mMouseCapturePolicy.ConsumeClickRelease()) return true;
     return Ship::Context::GetRawInstance()->GetControlDeck()->ProcessMouseButtonEvent(
         false, static_cast<Ship::MouseBtn>(button));
 }
 
 bool Fast3dWindow::MouseButtonDown(int button) {
+    auto window = std::static_pointer_cast<Fast3dWindow>(Ship::Context::GetRawInstance()->GetWindow());
+    const auto gui = window->GetGui();
+    // The full-window "Main Game" ImGui surface also sets WantCaptureMouse.
+    // Only actual host menus/windows block resuming gameplay after Escape.
+    const bool hostUiOwnsMouse = gui->GetMenuOrMenubarVisible() || gui->GetAnyGuiWindowVisible();
+    if (button == Ship::LUS_MOUSE_BTN_LEFT && !window->IsKeyDown(Ship::LUS_KB_ESCAPE) &&
+        window->mMouseCapturePolicy.ResumeClick(hostUiOwnsMouse)) {
+        (void)window->GetMouseDelta();
+        return true;
+    }
     bool isProcessed = Ship::Context::GetRawInstance()->GetControlDeck()->ProcessMouseButtonEvent(
         true, static_cast<Ship::MouseBtn>(button));
     return isProcessed;

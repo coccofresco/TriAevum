@@ -40,10 +40,13 @@ uint64_t ComputeOot3dPicaFragmentShaderStateKey(
 Oot3dPicaFragmentUniformState BuildOot3dPicaFragmentUniformState(
     const Oot3dPicaDrawPacket& packet);
 
+// OfflineSource emits identical code without draw-time uniforms or resident
+// lighting LUTs. It rejects missing data that would be embedded into source.
 bool GenerateOot3dPicaFragmentShader(
     const Oot3dPicaDrawPacket& packet,
     const Oot3dPicaDecodedDrawState& state,
     Oot3dPicaGeneratedFragmentShader& shader,
-    std::string* error = nullptr);
+    std::string* error = nullptr,
+    Oot3dPicaShaderBuildPurpose purpose = Oot3dPicaShaderBuildPurpose::RuntimeDraw);
 
 } // namespace Oot3dNativeGame

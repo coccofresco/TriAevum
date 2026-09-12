@@ -165,6 +165,11 @@ class NativeControlConfigRuntime final {
   bool ResetMotionCalibration(std::string* error = nullptr);
   [[nodiscard]] NativeControlCalibrationStatus CalibrationStatus() const;
 
+  void BeginBindingCapture(ThreeDsRecomp::Input::BindingDevice device);
+  void CancelBindingCapture();
+  void ObserveBindingCapture(const ThreeDsRecomp::Input::HostButtonSource& source, bool cancel);
+  [[nodiscard]] ThreeDsRecomp::Input::BindingCaptureSnapshot BindingCaptureStatus() const;
+
  private:
   std::filesystem::path mPath;
   mutable std::mutex mMutex;
@@ -172,6 +177,7 @@ class NativeControlConfigRuntime final {
   std::uint64_t mRevision = 1;
   std::vector<NativeControlDeviceDescriptor> mDevices;
   NativeControlCalibrationStatus mCalibration;
+  ThreeDsRecomp::Input::HostBindingCapture mBindingCapture;
   std::array<double, 3> mCalibrationGyroscopeSum{};
   std::array<double, 3> mCalibrationAccelerometerSum{};
   std::uint32_t mCalibrationGyroscopeSamples = 0;

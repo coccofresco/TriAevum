@@ -15,6 +15,7 @@ from typing import Any, Callable, Sequence
 try:
     from . import TOOL_VERSION
     from .product_contract import ensure_runtime_config, query_product
+    from .release_platform import WINDOWS, for_target, host_platform
     from .activation_transaction import activation_transaction
     from .installation_context import InstallationContext, resolve_reference
     from .toolchain_probe import probe_toolchain
@@ -22,6 +23,7 @@ try:
         distribution_path,
         distribution_root,
         installation_path,
+        activation_path,
     )
     from .common import (
         atomic_write_bytes,
@@ -56,10 +58,11 @@ try:
 except ImportError:
     from __init__ import TOOL_VERSION
     from product_contract import ensure_runtime_config, query_product
+    from release_platform import WINDOWS, for_target, host_platform
     from activation_transaction import activation_transaction
     from installation_context import InstallationContext, resolve_reference
     from toolchain_probe import probe_toolchain
-    from bundle_paths import distribution_path, distribution_root, installation_path
+    from bundle_paths import distribution_path, distribution_root, installation_path, activation_path
     from common import (
         atomic_write_bytes,
         atomic_write_json,
@@ -131,10 +134,7 @@ class PreparedForgeContent:
 
 
 def default_output_root() -> Path:
-    local_app_data = os.environ.get("LOCALAPPDATA")
-    if local_app_data:
-        return Path(local_app_data) / "TriAevum" / "titles"
-    return Path.home() / ".local" / "share" / "TriAevum" / "titles"
+    return activation_path("data/titles").resolve()
 
 
 def default_translation_cache_root() -> Path:
@@ -157,11 +157,11 @@ def default_active_title_state_path() -> Path:
 
 
 def default_runtime_plugin_path() -> Path:
-    return installation_path("triaevum_title_aot.dll")
+    return activation_path(host_platform().title_module)
 
 
 def default_runtime_launch_profile_path() -> Path:
-    return installation_path("TriAevum.launch.json")
+    return activation_path("TriAevum.launch.json")
 
 
 class HashCache:
@@ -840,8 +840,10 @@ def build_private_whole_aot(
     shard_count: int = 256,
     jobs: int = 8,
     sysroot: Path | None = None,
+    target_triple: str = WINDOWS.target,
 ) -> dict[str, Any]:
     """Build the direct generated-C++ plugin consumed by the mature runtime."""
+    platform = for_target(target_triple)
 
     prepared = load_prepared_content(
         prepared_directory, required_inputs=("code", "exheader")
@@ -878,6 +880,8 @@ def build_private_whole_aot(
                 support_library=support_library,
                 nlohmann_include=nlohmann_include,
                 sysroot=sysroot,
+                target_triple=platform.target,
+                profile=platform.profile,
             ),
             shard_count=shard_count,
             jobs=jobs,
@@ -912,6 +916,9 @@ def publish_private_runtime(
     launch_profile: Path,
     data_root: Path,
     topscreen_texture_pack: Path | None = None,
+    package_root: Path | None = None,
+    pica_shader_pack: Path | None = None,
+    renderer_cache_directory: Path | None = None,
 ) -> dict[str, Any]:
     """Publish verified files; multi-file activation is not yet transactional."""
 
@@ -925,10 +932,12 @@ def publish_private_runtime(
 
     plugin_hash = sha256_file(source_plugin)
     installation = runtime_plugin.expanduser().resolve().parent
-    destination = installation / "private-plugins" / plugin_hash / "triaevum_title_aot.dll"
+    package = (package_root or installation).expanduser().resolve()
+    platform = host_platform()
+    destination = installation / "private-plugins" / plugin_hash / platform.title_module
     profile_path = launch_profile.expanduser().resolve()
     private_root = data_root.expanduser().resolve()
-    product_receipt = query_product(installation / "TriAevum.exe")
+    product_receipt = query_product(package / platform.runtime)
     destination.parent.mkdir(parents=True, exist_ok=True)
     profile_path.parent.mkdir(parents=True, exist_ok=True)
     private_root.mkdir(parents=True, exist_ok=True)
@@ -960,7 +969,7 @@ def publish_private_runtime(
             "--a32-process-manifest",
             str(process_manifest),
             "--resource-root",
-            str((installation / "resources").resolve()),
+            str((package / "resources").resolve()),
             "--renderer",
             "nri",
             "--ui-profile",
@@ -988,9 +997,15 @@ def publish_private_runtime(
             raise ForgeError("TopScreen texture pack is missing before activation")
         profile["arguments"].extend(("--topscreen-texture-overrides", str(topscreen_texture_pack.resolve())))
     context = InstallationContext(installation)
+    if pica_shader_pack is not None:
+        if not pica_shader_pack.is_file():
+            raise ForgeError("Prepared PICA shader pack is missing before activation")
+        profile["arguments"].extend(("--pica-aot-shader-pack", str(pica_shader_pack.resolve())))
+    if renderer_cache_directory is not None:
+        profile["arguments"].extend(("--renderer-cache-directory", str(renderer_cache_directory.resolve())))
     path_options = {"--title-plugin", "--a32-process-manifest", "--resource-root",
                     "--config", "--topscreen-config", "--save-data", "--output",
-                    "--topscreen-texture-overrides"}
+                    "--topscreen-texture-overrides", "--pica-aot-shader-pack", "--renderer-cache-directory"}
     scopes = {}
     for index, argument in enumerate(profile["arguments"][:-1]):
         if argument in path_options:
@@ -1011,11 +1026,12 @@ def publish_private_runtime(
             temporary.unlink(missing_ok=True)
     # Query the exact immutable generation in a short-lived process before the
     # single launch-profile replacement makes it visible to direct launches.
-    query_product(installation / "TriAevum.exe", plugin=destination)
+    query_product(package / platform.runtime, plugin=destination)
     atomic_write_json(profile_path, profile)
     prepared.state["runtime"] = {
         "status": "ready",
         "backend": "generated_cpp_whole_aot_plugin_v2",
+        "target": platform.target,
         "runtime_sha256": product_receipt["runtime_sha256"],
         "plugin": context.reference(destination, prepared.directory),
         "plugin_scope": context.scope(destination, prepared.directory),
@@ -1030,6 +1046,15 @@ def publish_private_runtime(
         prepared.state["runtime"]["topscreen_textures"] = {
             "path": context.reference(topscreen_texture_pack, prepared.directory),
             "sha256": sha256_file(topscreen_texture_pack),
+        }
+    if pica_shader_pack is not None:
+        prepared.state["runtime"]["pica_shader_pack"] = {
+            "path": context.reference(pica_shader_pack, prepared.directory),
+            "sha256": sha256_file(pica_shader_pack),
+        }
+    if renderer_cache_directory is not None:
+        prepared.state["runtime"]["renderer_cache"] = {
+            "path": context.reference(renderer_cache_directory, prepared.directory),
         }
     atomic_write_json(prepared.directory / "forge-state.json", prepared.state)
     return {
@@ -1209,6 +1234,7 @@ def build_private_title(
         nlohmann_include=nlohmann_include,
         cache_root=cache_root / "whole-aot-v2",
         sysroot=sysroot,
+        target_triple=target_triple,
         shard_count=shard_count,
         jobs=jobs,
     )
@@ -1350,23 +1376,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     title_parser.add_argument(
         "--native-image",
         type=Path,
-        default=default_forge_support_path("oot3d_game_module.dll"),
+        default=default_forge_support_path(Path(host_platform().native_module).name),
     )
     title_parser.add_argument(
         "--compiler",
         type=Path,
-        default=default_forge_support_path("clang-cl.exe"),
+        default=default_forge_support_path(host_platform().compiler),
     )
     title_parser.add_argument(
         "--archiver",
         type=Path,
-        default=default_forge_support_path("llvm-lib.exe"),
+        default=default_forge_support_path(host_platform().archiver),
     )
     title_parser.add_argument(
         "--support-library",
         type=Path,
         default=default_forge_support_path(
-            "triaevum_title_whole_aot_support.lib"
+            host_platform().support_library
         ),
     )
     title_parser.add_argument(
@@ -1383,7 +1409,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     title_parser.add_argument("--sysroot", type=Path,
                               help="Use a verified private Windows sysroot instead of host discovery")
     title_parser.add_argument(
-        "--target-triple", default="x86_64-pc-windows-msvc"
+        "--target-triple", default=host_platform().target
     )
     title_parser.add_argument(
         "--active-title-state",

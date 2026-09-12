@@ -80,14 +80,26 @@ final class Launcher: NSObject, NSApplicationDelegate {
     @objc func play() {
         do {
             // Refresh bundle-relative paths after moving or updating the app.
-            var document = try JSONSerialization.jsonObject(with: Data(contentsOf: profile)) as! [String: Any]
-            var arguments = document["arguments"] as! [String]
+            guard var document = try JSONSerialization.jsonObject(with: Data(contentsOf: profile)) as? [String: Any],
+                  var arguments = document["arguments"] as? [String] else {
+                throw NSError(domain: "TriAevum", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid launch profile; import the ROM again."])
+            }
             for (key, path) in [("--title-plugin", runtime.appendingPathComponent("triaevum_title_aot.dylib").path),
                                 ("--resource-root", runtime.appendingPathComponent("resources").path)] {
                 guard let index = arguments.firstIndex(of: key), index + 1 < arguments.count else {
                     throw NSError(domain: "TriAevum", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid launch profile; import the ROM again."])
                 }
                 arguments[index + 1] = path
+            }
+            // Adopt alpha 2 shaders when updating an existing alpha 1 install.
+            // These publisher artifacts are portable; driver caches stay local.
+            for (key, path) in [("--pica-aot-shader-pack", runtime.appendingPathComponent("forge/shader-corpus/portable.o3ps").path),
+                                ("--renderer-cache-directory", data.appendingPathComponent("cache/renderer").path)] {
+                if let index = arguments.firstIndex(of: key), index + 1 < arguments.count {
+                    arguments[index + 1] = path
+                } else {
+                    arguments += [key, path]
+                }
             }
             document["arguments"] = arguments
             try JSONSerialization.data(withJSONObject: document, options: [.prettyPrinted]).write(to: profile, options: .atomic)
