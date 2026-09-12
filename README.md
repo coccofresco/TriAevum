@@ -111,14 +111,15 @@ implemented". Ray tracing is a wishlist item, not a feature of this release.
 
 ## Screenshots
 
-Captured with the default profile: toon shading, outlines, grass, 1.10x FOV,
-x2 interpolation and TopScreen. No additional HD texture pack.
+Captured directly from the alpha.2 framebuffer on Windows and Linux with the
+default profile: toon shading, outlines, grass, 1.10x FOV, x2 interpolation and
+TopScreen. No additional HD texture pack.
 
-![Hyrule Field at night](docs/images/default-hyrule-night.png)
+![Windows: Hyrule Field at night, with procedural grass](docs/images/alpha2-hyrule-night.png)
 
-![Kokiri Forest gameplay with the TopScreen HUD](docs/images/default-kokiri-forest.png)
+![Windows: Link and Epona in the title intro](docs/images/alpha2-title.png)
 
-![Link and Epona in the title sequence](docs/images/default-title.png)
+![Linux Flatpak: mounted gameplay with the TopScreen HUD](docs/images/alpha2-mounted-linux.png)
 
 ## Source and license
 
