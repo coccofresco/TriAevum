@@ -265,13 +265,26 @@ unseeded shaders; these runs are **not** qualification of complete Forge shader
 prewarming or performance benchmarks. Do not publish this diagnostic candidate
 as a replacement for the ongoing cache/release work.
 
-An unrelated visible defect was found in the default graphics profile:
-**toon outline draws a rectangular boundary inside letterboxed weapon aiming**.
+An apparent rectangular outline was investigated in the default graphics
+profile during letterboxed weapon aiming.
 Same checkpoint, input and 2x timing, changing only
 `Graphics.Effects.Toon.OutlineEnabled=false`, removes that boundary.
 Compare frame 360 in `win-item-use-x2/` and
 `win-item-use-x2-outline-disabled/`. This additional A/B run exits 0; it is not
-counted among the 19 issue probes. The composition/outline cause needs its own
-renderer investigation under the existing fidelity-extension architecture.
+counted among the 19 issue probes. This prompted a separate renderer
+investigation under the existing fidelity-extension architecture.
 No outline masking or per-scene workaround was introduced here, and the user's
 defaults were not changed to hide it.
+
+September 12 disposition: **not an active regression**. The user does not
+observe a problem in gameplay and explicitly requested that it be excluded.
+Linux replay of the same checkpoint also shows the contour, but the existing
+geometry-guide diagnostic (mode 4, frame 360) places it on actual wall/bridge
+boundaries. Mode 7 shows it without mixed extension depth. The effective draw
+trace at frame 359 finds only the initial raster clear as a non-perspective
+guide writer; no observed NoOp guide draw explains an overlay. These results
+do not establish an erroneous HUD/camera rectangle. No renderer correction was
+made. Temporary diagnostic source edits were removed and the clean SDK runtime
+rebuilt successfully. Private evidence: `/home/xander/triaevum-outline-parity/`
+(`projection-trace`, `geometry-guide-4`, `diagnostic-7`). Each bounded replay
+completed with exit 0; these are diagnostic runs, not performance benchmarks.
