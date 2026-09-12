@@ -21,6 +21,7 @@ try:
     from .common import load_json_object, normalize_relative_path, sha256_file
     from .input_adapters import validate_adapter
     from .source_contracts import source_contract_errors
+    from .shader_corpus_layout import validate_bundled_corpus
 except ImportError:
     from product_contract import validate_product_info
     from precompiled_titles import MODEL, CATALOG, load_catalog, validate_title, checked_file
@@ -29,6 +30,7 @@ except ImportError:
     from common import load_json_object, normalize_relative_path, sha256_file
     from input_adapters import validate_adapter
     from source_contracts import source_contract_errors
+    from shader_corpus_layout import validate_bundled_corpus
 
 
 ROOT = Path(__file__).resolve().parent
@@ -383,6 +385,7 @@ def audit_release(
             reject("user precompiled release must not include compiler/SDK acquisition payloads")
         try:
             catalog = load_catalog(root)
+            validate_bundled_corpus(root, catalog, declared)
             if catalog_platform(catalog) != platform:
                 raise ValueError("Catalog target differs from release target")
             recipes = load_json_object(root / "recipes/oot3d.json")["recipes"]
@@ -427,6 +430,8 @@ def audit_release(
             reject(f"invalid precompiled release: {exc}")
     elif roles_seen & title_roles:
         reject("title artifacts require the precompiled distribution model")
+    if not precompiled and roles_seen & {"portable_shader_corpus", "portable_pipeline_recipes"}:
+        reject("bundled shader artifacts require a validated precompiled catalog")
     if {name for name, item in declared.items() if item["role"] == "input_copy_adapter"} != adapter_paths:
         reject("Uncatalogued COPY adapter in release")
 

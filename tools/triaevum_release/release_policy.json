@@ -10,6 +10,8 @@
     "revision_recipe": ["recipes/*.json"],
     "input_copy_adapter": ["recipes/adapters/*.json"],
     "precompiled_catalog": ["recipes/precompiled-titles.json"],
+    "portable_shader_corpus": ["forge/shader-corpus/portable.o3ps"],
+    "portable_pipeline_recipes": ["forge/shader-corpus/pipelines-*.json"],
     "translated_title_source": ["source/titles/*-translated.zip"],
     "title_build_source": ["source/titles/*-build.zip"],
     "corresponding_source": ["source/*.zip"]
@@ -84,6 +86,7 @@
     ".xdelta3", ".zar", ".zsi", ".zst"
   ],
   "forbidden_extension_role_exceptions": {
+    ".o3ps": ["portable_shader_corpus"],
     ".lib": ["forge_link_library", "forge_tool_resource"]
   },
   "forbidden_path_components": [

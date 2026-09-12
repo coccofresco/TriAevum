@@ -9,18 +9,78 @@ from pathlib import Path
 
 try:
     from .common import load_json_object
-    from .merge_shader_packs import decode, MAX_BYTES
+    from .merge_shader_packs import decode, encode, MAX_BYTES
+    from .precompiled_titles import checked_file
     from .precompiled_title_layout import artifact
     from .release_platform import WINDOWS, for_target
     from .shader_preparation import FORMAT as SEED_FORMAT
     from .device_pipeline_preparation import FORMAT as DEVICE_FORMAT
 except ImportError:
     from common import load_json_object
-    from merge_shader_packs import decode, MAX_BYTES
+    from merge_shader_packs import decode, encode, MAX_BYTES
+    from precompiled_titles import checked_file
     from precompiled_title_layout import artifact
     from release_platform import WINDOWS, for_target
     from shader_preparation import FORMAT as SEED_FORMAT
     from device_pipeline_preparation import FORMAT as DEVICE_FORMAT
+
+
+def read_portable_corpus(pack: Path):
+    if pack.is_symlink() or not pack.is_file() or pack.stat().st_size > MAX_BYTES:
+        raise ValueError('Invalid portable corpus file')
+    data = pack.read_bytes()
+    schema, modules = decode(data)
+    if encode(schema, modules) != data:
+        raise ValueError('Public corpus must be canonical, without unclaimed data')
+    return schema, modules
+
+
+def read_pipeline_manifest(source: Path, schema: int):
+    if source.is_symlink() or source.stat().st_size > 16 * 1024 * 1024:
+        raise ValueError('Invalid pipeline manifest file')
+    data = load_json_object(source)
+    pipelines = data.get('pipelines')
+    if (set(data) != {'format', 'schema_version', 'descriptor_schema_version', 'pipeline_count', 'pipelines'}
+            or data.get('format') != 'oot3d_pica_pipeline_manifest_v2'
+            or data.get('schema_version') != 2
+            or data.get('descriptor_schema_version') != schema
+            or not isinstance(pipelines, list) or not pipelines
+            or data.get('pipeline_count') != len(pipelines)):
+        raise ValueError('Incompatible observed pipeline manifest')
+    return data
+
+
+def validate_bundled_corpus(root: Path, catalog: dict, declared: dict):
+    roles = {'portable_shader_corpus', 'portable_pipeline_recipes'}
+    actual = {path for path, record in declared.items() if record['role'] in roles}
+    if not actual:
+        return
+    expected = set()
+    for title in catalog['titles']:
+        seed = title.get('shader_preparation', {})
+        device = title.get('device_pipeline_preparation', {})
+        if seed.get('mode') != 'portable_pack' or device.get('format') != DEVICE_FORMAT:
+            raise ValueError('Every title requires the bundled corpus and GPU preparation')
+        pack = seed['pack']
+        if declared.get(pack['path'], {}).get('role') != 'portable_shader_corpus':
+            raise ValueError('Portable corpus lacks its explicit release role')
+        schema, _ = read_portable_corpus(checked_file(root, pack))
+        if schema != seed['descriptor_schema_version']:
+            raise ValueError('Portable corpus descriptor schema mismatch')
+        expected.add(pack['path'])
+        helper = device['helper']
+        checked_file(root, helper)
+        if declared.get(helper['path'], {}).get('role') != 'shader_preparation_tool':
+            raise ValueError('Pipeline helper lacks its explicit release role')
+        if not device.get('manifests'):
+            raise ValueError('Bundled corpus requires observed pipeline recipes')
+        for record in device['manifests']:
+            if declared.get(record['path'], {}).get('role') != 'portable_pipeline_recipes':
+                raise ValueError('Pipeline recipes lack their explicit release role')
+            read_pipeline_manifest(checked_file(root, record), schema)
+            expected.add(record['path'])
+    if actual != expected:
+        raise ValueError('Uncatalogued portable shader artifact')
 
 
 def bind_shader_corpus(catalog: dict, pack: Path, manifests: list[Path],
@@ -30,9 +90,7 @@ def bind_shader_corpus(catalog: dict, pack: Path, manifests: list[Path],
     if not catalog.get('titles'):
         raise ValueError('Shader corpus requires title recipes')
     # Never guess a corpus from a directory or import a GPU-cache binary.
-    if pack.is_symlink() or not pack.is_file() or pack.stat().st_size > MAX_BYTES:
-        raise ValueError('Invalid portable corpus file')
-    schema, _modules = decode(pack.read_bytes())
+    schema, _modules = read_portable_corpus(pack)
     if not 1 <= len(manifests) <= 64:
         raise ValueError('Shader corpus requires observed pipeline manifests')
     items = []
@@ -49,16 +107,7 @@ def bind_shader_corpus(catalog: dict, pack: Path, manifests: list[Path],
     packed = add(pack, 'forge/shader-corpus/portable.o3ps', 'portable_shader_corpus')
     pipeline_records = []
     for index, source in enumerate(manifests):
-        if source.is_symlink() or source.stat().st_size > 16 * 1024 * 1024:
-            raise ValueError('Invalid pipeline manifest file')
-        data = load_json_object(source)
-        pipelines = data.get('pipelines')
-        if (data.get('format') != 'oot3d_pica_pipeline_manifest_v2'
-                or data.get('schema_version') != 2
-                or data.get('descriptor_schema_version') != schema
-                or not isinstance(pipelines, list) or not pipelines
-                or data.get('pipeline_count') != len(pipelines)):
-            raise ValueError('Incompatible observed pipeline manifest')
+        read_pipeline_manifest(source, schema)
         pipeline_records.append(add(source, f'forge/shader-corpus/pipelines-{index}.json',
                                     'portable_pipeline_recipes'))
     suffix = '.exe' if platform == WINDOWS else ''

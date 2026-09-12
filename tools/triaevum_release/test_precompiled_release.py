@@ -129,6 +129,43 @@ class PrecompiledReleaseTests(unittest.TestCase):
         self.assertEqual(catalog["native_module"]["path"], LINUX.native_module)
         self.assertEqual(catalog["titles"][0]["plugin"]["path"], "titles/fixture/" + LINUX.title_module)
 
+    def test_catalogued_portable_corpus_and_rejection_of_unclaimed_bytes(self):
+        from shader_release_layout import bind_renderer_compiler
+        from shader_corpus_layout import bind_shader_corpus
+        from merge_shader_packs import encode
+        from precompiled_title_layout import artifact
+        path = self.root / "recipes/precompiled-titles.json"
+        compiler = self.work / "compiler.exe"
+        compiler.write_bytes(b"MZ renderer compiler fixture")
+        pack = self.work / "pack.o3ps"
+        pack.write_bytes(encode(3, {(2, 1, 2, 4): b"\x03\x02\x23\x07"}))
+        recipes = self.work / "pipelines.json"
+        atomic_write_json(recipes, dict(format="oot3d_pica_pipeline_manifest_v2", schema_version=2,
+            descriptor_schema_version=3, pipeline_count=1, pipelines=[{}]))
+        catalog, items = bind_renderer_compiler(load_json_object(path), compiler, [])
+        catalog, extra = bind_shader_corpus(catalog, pack, [recipes], compiler)
+        for item in [*items, *extra]:
+            dest = self.root / item["path"]
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(item["source"], dest)
+            self.manifest["files"].append({"path": item["path"], "role": item["role"]})
+            self.rehash(item["path"])
+        atomic_write_json(path, catalog)
+        self.rehash("recipes/precompiled-titles.json")
+        self.save()
+        result = audit_release(self.root)
+        self.assertTrue(result.ok, result.errors)
+        record = catalog["titles"][0]["shader_preparation"]["pack"]
+        target = self.root / record["path"]
+        target.write_bytes(target.read_bytes() + b"unclaimed game data")
+        record.update(artifact(target, record["path"]))
+        atomic_write_json(path, catalog)
+        self.rehash(record["path"])
+        self.rehash("recipes/precompiled-titles.json")
+        self.save()
+        result = audit_release(self.root)
+        self.assertTrue(any("unclaimed" in error for error in result.errors), result.errors)
+
     def test_promotion_rejects_target_profile_mismatch_before_runtime_probe(self):
         build = load_json_object(self.build)
         build["target"] = LINUX.target

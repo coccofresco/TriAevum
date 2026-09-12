@@ -22,7 +22,7 @@
     {"source": "runtime/triaevum_resources/README.txt", "path": "resources/README.txt", "role": "title_neutral_resource"},
     {"source": "runtime/triaevum_resources/gamecontrollerdb.txt", "path": "resources/gamecontrollerdb.txt", "role": "title_neutral_resource"},
     {"source": "README.md", "path": "README.md", "role": "documentation"},
-    {"source": "docs/releases/v0.6.0-alpha.1b.md", "path": "docs/releases/v0.6.0-alpha.1b.md", "role": "documentation"},
+    {"source": "docs/releases/v0.6.0-alpha.2.md", "path": "docs/releases/v0.6.0-alpha.2.md", "role": "documentation"},
     {"source": "docs/TRIAEVUM_SUPPORTED_ROM.md", "path": "docs/TRIAEVUM_SUPPORTED_ROM.md", "role": "documentation"},
     {"source": "docs/TRIAEVUM_ROM_INPUT_ADAPTER.md", "path": "docs/TRIAEVUM_ROM_INPUT_ADAPTER.md", "role": "documentation"},
     {"source": "docs/TRIAEVUM_USA_REV1_PORT.md", "path": "docs/TRIAEVUM_USA_REV1_PORT.md", "role": "documentation"},
