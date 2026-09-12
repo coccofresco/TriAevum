@@ -1,0 +1,105 @@
+name: TriAevum macOS
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/triaevum-macos.yml'
+      - 'scripts/macos/**'
+      - 'ports/macos/**'
+      - 'runtime/**'
+      - 'tools/oot3d/**'
+      - 'tools/triaevum_release/**'
+      - 'CMakeLists.txt'
+      - 'config/**'
+      - 'cmake/**'
+  push:
+    branches: [main, port/macos-arm64]
+    paths:
+      - '.github/workflows/triaevum-macos.yml'
+      - 'scripts/macos/**'
+      - 'ports/macos/**'
+      - 'runtime/**'
+      - 'tools/oot3d/**'
+      - 'tools/triaevum_release/**'
+      - 'CMakeLists.txt'
+      - 'config/**'
+      - 'cmake/**'
+  workflow_dispatch:
+    inputs:
+      build_app:
+        description: Build and upload the experimental app (no ROM required)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apple-silicon:
+    name: Apple Silicon build and contracts
+    runs-on: macos-26
+    timeout-minutes: 120
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: '2'
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install native build dependencies
+        run: |
+          test "$(uname -m)" = arm64
+          brew install cmake ninja sdl2 glew spdlog nlohmann-json tinyxml2 libzip \
+            libogg libvorbis opusfile vulkan-headers vulkan-loader molten-vk shaderc
+      - name: Build native runtime and shader compiler
+        run: scripts/macos/build.sh runtime "$PWD/build-macos"
+      - name: Build AppKit launcher
+        run: swiftc -O -swift-version 5 -framework AppKit ports/macos/Launcher.swift -o build-macos/TriAevumLauncher
+      - name: Validate runtime product information
+        run: |
+          build-macos/TriAevum --product-info > build-macos/product-info.json
+          python -c 'import json; from pathlib import Path; from tools.triaevum_release.product_contract import validate_product_info; validate_product_info(json.loads(Path("build-macos/product-info.json").read_text()), renderer="vulkan")'
+      - name: Build and test public UI consumers
+        run: |
+          cmake -S tools/oot3d/ui_contract -B build-macos/ui-tests -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-macos/ui-tests
+          ctest --test-dir build-macos/ui-tests --output-on-failure
+      - name: Build and test pacing, grass cache and framebuffer readback
+        run: |
+          cmake -S tools/triaevum_release/macos_checks -B build-macos/contract-tests -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-macos/contract-tests
+          ctest --test-dir build-macos/contract-tests --output-on-failure
+      - name: Build experimental app from verified public release inputs
+        if: github.event_name == 'workflow_dispatch' && inputs.build_app
+        run: TRIAEVUM_PYTHON="$(command -v python)" scripts/macos/build-app.sh "$PWD/build-macos" "$PWD/build-macos/TriAevum.app"
+      - name: Verify packaged application
+        if: github.event_name == 'workflow_dispatch' && inputs.build_app
+        run: python tools/triaevum_release/verify_macos_app.py build-macos/TriAevum.app --output build-macos/app-verification.json
+      - name: Archive experimental application
+        if: github.event_name == 'workflow_dispatch' && inputs.build_app
+        run: ditto -c -k --sequesterRsrc --keepParent build-macos/TriAevum.app build-macos/TriAevum-macos-arm64.zip
+      - name: Upload experimental app (ad-hoc signed, not notarized)
+        if: github.event_name == 'workflow_dispatch' && inputs.build_app
+        uses: actions/upload-artifact@v4
+        with:
+          name: TriAevum-macos-arm64-${{ github.sha }}
+          path: build-macos/TriAevum-macos-arm64.zip
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build-evidence-${{ github.sha }}
+          path: |
+            build-macos/product-info.json
+            build-macos/app-verification.json
+            build-macos/contract-tests/Testing/Temporary/LastTest.log
+            build-macos/ui-tests/Testing/Temporary/LastTest.log
+          if-no-files-found: ignore
+          retention-days: 14

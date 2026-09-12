@@ -24,23 +24,28 @@ void WriteTriAevumProductInfo(std::ostream& output) {
     graphics.OutputWidth = 1280;
     graphics.OutputHeight = 720;
     const nlohmann::json info = {
-        {"format", "triaevum_product_info_v1"},
-        {"runtime", "oot3d_native_game"},
-        {"source_commit", kTriAevumSourceCommit},
-        {"whole_aot_plugin_abi", kTriAevumProductPlugin ? 2 : 0},
+      {"format", "triaevum_product_info_v1"},
+      {"runtime", "oot3d_native_game"},
+      {"source_commit", kTriAevumSourceCommit},
+      {"whole_aot_plugin_abi", kTriAevumProductPlugin ? 2 : 0},
 #if defined(OOT3D_REQUIRE_WHOLE_AOT_PLUGIN_V2)
-        {"private_title_loaded", Oot3dNativeGame::Oot3dWholeAotPluginV2Available()},
+      {"private_title_loaded",
+       Oot3dNativeGame::Oot3dWholeAotPluginV2Available()},
 #else
-        {"private_title_loaded", false},
+      {"private_title_loaded", false},
 #endif
-        {"capabilities", {{"nri", kTriAevumProductNri},
+      {"capabilities",
+       {{"nri", kTriAevumProductNri},
+        {"vulkan", kTriAevumProductVulkan},
 #ifdef OOT3D_NATIVE_A32_WINDOW_AVAILABLE
-                          {"f1", true}, {"topscreen", true}}},
+        {"f1", true},
+        {"topscreen", true}}},
 #else
-                          {"f1", false}, {"topscreen", false}}},
+        {"f1", false},
+        {"topscreen", false}}},
 #endif
-        {"default_config", {{"Graphics", SerializeGraphicsSettings(graphics)}}},
-        {"default_ui_profile", "topscreen"},
+      {"default_config", {{"Graphics", SerializeGraphicsSettings(graphics)}}},
+      {"default_ui_profile", "topscreen"},
     };
     output << info.dump(2) << '\n';
 }

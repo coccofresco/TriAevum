@@ -463,6 +463,7 @@ _deps
 _packages
 */extract_assets_cmake*
 /build*
+/rom/
 /oot3d_native_game.json
 
 

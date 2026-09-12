@@ -2575,6 +2575,17 @@ void GfxRenderingAPIVulkan::CreateInstance() {
     std::vector<VkExtensionProperties> available(availableCount);
     vkEnumerateInstanceExtensionProperties(
         nullptr, &availableCount, available.data());
+    // MoltenVK devices are hidden by the Vulkan loader unless the application
+    // opts into portability enumeration. Enable it only when advertised so
+    // native Vulkan drivers and older loaders retain their existing behavior.
+    const bool portabilityEnumeration = std::any_of(available.begin(), available.end(), [](const auto& extension) {
+        return std::strcmp(extension.extensionName, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME) == 0;
+    });
+    if (portabilityEnumeration && std::none_of(extensions.begin(), extensions.end(), [](const char* name) {
+            return std::strcmp(name, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME) == 0;
+        })) {
+        extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+    }
     for (const std::string& required : ngxRequirements.InstanceExtensions) {
         const bool supported = std::any_of(
             available.begin(), available.end(), [&](const auto& extension) {
@@ -2609,6 +2620,8 @@ void GfxRenderingAPIVulkan::CreateInstance() {
     const auto applicationInfo = Renderer3ds::PicaVulkanApplicationInfo();
 
     VkInstanceCreateInfo createInfo{ VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
+    if (portabilityEnumeration)
+        createInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
     createInfo.pApplicationInfo = &applicationInfo;
     createInfo.enabledExtensionCount =
         static_cast<uint32_t>(extensions.size());
@@ -2802,6 +2815,10 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
                            });
     };
     std::vector<const char*> extensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+    // Required by portability devices. Use the extension name directly to
+    // avoid enabling all provisional Vulkan declarations via vulkan_beta.h.
+    if (hasExtension("VK_KHR_portability_subset"))
+        extensions.push_back("VK_KHR_portability_subset");
     VkPhysicalDeviceProperties deviceProperties{};
     vkGetPhysicalDeviceProperties(mPhysicalDevice, &deviceProperties);
     const bool hasVulkan12 = deviceProperties.apiVersion >= VK_API_VERSION_1_2;

@@ -380,6 +380,25 @@ TEST(Oot3dGrassStaticPlacement, CameraCutsDistanceChangesAndReturningSourcesNeve
     EXPECT_EQ(builder.Stats().Builds,beforeTransient);
 }
 
+TEST(Oot3dGrassStaticPlacement, NonblockingAdmissionPublishesCompletedWorkOnRetry) {
+    using namespace Fast::Oot3d;
+    std::vector<GrassAsyncPlacementRequest> requests{ BaseRequest() };
+    GrassStaticPlacementCache cache;
+    const auto pending = cache.Resolve(requests, false);
+    ASSERT_EQ(pending.size(), 1U);
+    EXPECT_TRUE(pending[0].Queued);
+    EXPECT_EQ(pending[0].State, GrassAsyncPlacementState::Pending);
+    EXPECT_EQ(pending[0].Placement, nullptr);
+    cache.WaitForIdle();
+    const auto ready = cache.Resolve(requests, false);
+    ASSERT_NE(ready[0].Placement, nullptr);
+    EXPECT_FALSE(ready[0].Placement->Anchors.empty());
+    EXPECT_EQ(ready[0].State, GrassAsyncPlacementState::Ready);
+    EXPECT_FALSE(ready[0].Queued);
+    EXPECT_EQ(cache.Resolve(requests)[0].Placement, ready[0].Placement);
+    EXPECT_EQ(cache.Stats().Builds, 1U);
+}
+
 TEST(Oot3dGrassStaticPlacement, FirstAdmissionHasCompleteCoverageWithoutIgnoringBlackMasks) {
     using namespace Fast::Oot3d;
     auto request = BaseRequest();

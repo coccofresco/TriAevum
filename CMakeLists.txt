@@ -3206,7 +3206,7 @@ target_compile_options(oot3d_native_cutscene_player PRIVATE "${WARNING_OVERRIDE}
 add_executable(oot3d_shadow2d_backend_probe EXCLUDE_FROM_ALL
     tools/oot3d/native_demo_host/oot3d_shadow2d_backend_probe.cpp
 )
-target_link_libraries(oot3d_shadow2d_backend_probe PRIVATE oot3d_native_cutscene_host)
+target_link_libraries(oot3d_shadow2d_backend_probe PRIVATE oot3d_native_application_host)
 target_compile_options(oot3d_shadow2d_backend_probe PRIVATE "${WARNING_OVERRIDE}")
 
 if(ANDROID)
@@ -3242,6 +3242,10 @@ if(OOT3D_DIRECT_AOT_PLUGIN)
         CONTENT "{\n  \"format\": \"triaevum_runtime_targets_v1\",\n  \"source_commit\": \"${GIT_COMMIT_HASH}\",\n  \"runtime\": \"$<TARGET_FILE:oot3d_native_game>\",\n  \"stub\": \"$<TARGET_FILE:triaevum_title_aot_stub>\"\n}\n")
 endif()
 set(TRIAEVUM_PRODUCT_NRI 0)
+set(TRIAEVUM_PRODUCT_VULKAN 0)
+if(OOT3D_ENABLE_VULKAN_RENDERER)
+    set(TRIAEVUM_PRODUCT_VULKAN 1)
+endif()
 if(THREE_DS_RECOMP_ENABLE_NRI AND OOT3D_ENABLE_VULKAN_RENDERER)
     set(TRIAEVUM_PRODUCT_NRI 1)
 endif()
@@ -3360,8 +3364,10 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
             oot3d_native_a32_aot)
     endif()
     if (OOT3D_DIRECT_AOT_PLUGIN)
-        target_link_libraries(oot3d_native_game PRIVATE
-            triaevum_title_aot_stub)
+        if(NOT APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+            target_link_libraries(oot3d_native_game PRIVATE
+                triaevum_title_aot_stub)
+        endif()
         target_compile_definitions(oot3d_native_game PRIVATE
             OOT3D_REQUIRE_WHOLE_AOT_PLUGIN_V2=1
             OOT3D_NATIVE_DIRECT_AOT_PLUGIN=1)
