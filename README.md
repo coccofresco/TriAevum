@@ -115,7 +115,7 @@ Captured directly from the alpha.2 framebuffer on Windows and Linux with the
 default profile: toon shading, outlines, grass, 1.10x FOV, x2 interpolation and
 TopScreen. No additional HD texture pack.
 
-![Windows: Hyrule Field at night, with procedural grass](docs/images/alpha2-hyrule-night.png)
+![Windows: Kokiri Forest outside Link's house, with the TopScreen HUD](docs/images/alpha2-kokiri.png)
 
 ![Windows: Link and Epona in the title intro](docs/images/alpha2-title.png)
 
