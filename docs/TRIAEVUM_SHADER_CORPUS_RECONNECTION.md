@@ -1,5 +1,9 @@
 # Retained shader corpus: installation status
 
+Update: [TAS corpus activation](TRIAEVUM_TAS_CORPUS_ACTIVATION.md) supersedes the
+Windows 887-module snapshot below with a 1,039-module pack and an updated actual
+launch profile. The historical counts below remain evidence of the earlier test.
+
 2026-09-12. Steam Deck is a conformity target, not a physically tested device.
 
 ## Finding
