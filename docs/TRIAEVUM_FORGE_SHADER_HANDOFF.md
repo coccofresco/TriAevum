@@ -1,5 +1,10 @@
 # Forge Shader Handoff
 
+For the actual package bindings and retained-corpus reconnection status, see
+[2026-09-12 installation audit](TRIAEVUM_SHADER_CORPUS_RECONNECTION.md).
+The private qualifications below do not imply every ordinary package binds the
+same corpus.
+
 2026-09-10. Builds on `09f6202` (PR compatibility and pipeline recipes) and
 `298a9a1` (persistent SPIR-V cache). This is the Forge-first implementation,
 not a new game-time prewarm queue.
