@@ -382,7 +382,7 @@ TEST(Oot3dGrassStaticPlacement, CameraCutsDistanceChangesAndReturningSourcesNeve
 
 TEST(Oot3dGrassStaticPlacement, NonblockingAdmissionPublishesCompletedWorkOnRetry) {
     using namespace Fast::Oot3d;
-    std::vector<GrassAsyncPlacementRequest> requests{BaseRequest()};
+    std::vector<GrassAsyncPlacementRequest> requests{ BaseRequest() };
     GrassStaticPlacementCache cache;
     const auto pending = cache.Resolve(requests, false);
     ASSERT_EQ(pending.size(), 1U);

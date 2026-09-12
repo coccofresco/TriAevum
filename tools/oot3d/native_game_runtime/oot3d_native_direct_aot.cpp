@@ -61,7 +61,8 @@ void* TitleModule() noexcept {
         uint32_t size = 0;
         _NSGetExecutablePath(nullptr, &size);
         std::string executable(size, '\0');
-        if (_NSGetExecutablePath(executable.data(), &size) != 0) return nullptr;
+        if (_NSGetExecutablePath(executable.data(), &size) != 0)
+          return nullptr;
         path = std::filesystem::canonical(executable.c_str()).parent_path() /
                "triaevum_title_aot.dylib";
 #else
@@ -96,7 +97,8 @@ const Oot3dWholeAotProgramV2 *WholeAotProgram() noexcept {
   static const Oot3dWholeAotProgramV2 *program = []() noexcept {
     const Oot3dWholeAotProgramV2 *candidate =
 #if defined(_WIN32) || defined(__linux__) || defined(__APPLE__)
-        QueryTitle<Oot3dWholeAotProgramV2>("triaevum_title_whole_aot_query", kOot3dWholeAotPluginAbiV2);
+        QueryTitle<Oot3dWholeAotProgramV2>("triaevum_title_whole_aot_query",
+                                           kOot3dWholeAotPluginAbiV2);
 #else
         triaevum_title_whole_aot_query(kOot3dWholeAotPluginAbiV2);
 #endif
@@ -122,7 +124,8 @@ const Oot3dDirectAotProgramV1 *DirectAotProgram() noexcept {
   static const Oot3dDirectAotProgramV1 *program = []() noexcept {
     const Oot3dDirectAotProgramV1 *candidate =
 #if defined(_WIN32) || defined(__linux__) || defined(__APPLE__)
-        QueryTitle<Oot3dDirectAotProgramV1>("triaevum_title_aot_query", kOot3dDirectAotPluginAbiV1);
+        QueryTitle<Oot3dDirectAotProgramV1>("triaevum_title_aot_query",
+                                            kOot3dDirectAotPluginAbiV1);
 #else
         triaevum_title_aot_query(kOot3dDirectAotPluginAbiV1);
 #endif

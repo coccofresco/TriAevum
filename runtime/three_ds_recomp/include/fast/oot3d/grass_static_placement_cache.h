@@ -13,8 +13,8 @@ class GrassStaticPlacementCache final {
     void SetCandidateCapacity(uint32_t capacity) {
         mCandidateCapacity = capacity;
     }
-    [[nodiscard]] std::vector<GrassAsyncPlacementResult> Resolve(
-        std::span<const GrassAsyncPlacementRequest> requests, bool waitUntilReady = true);
+    [[nodiscard]] std::vector<GrassAsyncPlacementResult> Resolve(std::span<const GrassAsyncPlacementRequest> requests,
+                                                                 bool waitUntilReady = true);
     [[nodiscard]] GrassAsyncPlacementStats Stats() const {
         return mBuilder.Stats();
     }

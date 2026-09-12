@@ -2578,16 +2578,12 @@ void GfxRenderingAPIVulkan::CreateInstance() {
     // MoltenVK devices are hidden by the Vulkan loader unless the application
     // opts into portability enumeration. Enable it only when advertised so
     // native Vulkan drivers and older loaders retain their existing behavior.
-    const bool portabilityEnumeration = std::any_of(
-        available.begin(), available.end(), [](const auto& extension) {
-            return std::strcmp(extension.extensionName,
-                               VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME) == 0;
-        });
-    if (portabilityEnumeration && std::none_of(
-            extensions.begin(), extensions.end(), [](const char* name) {
-                return std::strcmp(name,
-                                   VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME) == 0;
-            })) {
+    const bool portabilityEnumeration = std::any_of(available.begin(), available.end(), [](const auto& extension) {
+        return std::strcmp(extension.extensionName, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME) == 0;
+    });
+    if (portabilityEnumeration && std::none_of(extensions.begin(), extensions.end(), [](const char* name) {
+            return std::strcmp(name, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME) == 0;
+        })) {
         extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
     }
     for (const std::string& required : ngxRequirements.InstanceExtensions) {

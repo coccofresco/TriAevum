@@ -39,8 +39,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install Forge test dependency
-        run: python -m pip install capstone==5.0.7
+      - name: Install Forge test dependencies
+        run: python -m pip install capstone==5.0.7 numpy==2.2.6 Pillow==11.3.0
       - name: Test Windows Forge contracts (not full game qualification)
         env:
           # Avoid the runner's 8.3 user-profile alias in path identity fixtures.
@@ -94,8 +94,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install Forge test dependency
-        run: python -m pip install capstone==5.0.7
+      - name: Install Forge test dependencies
+        run: python -m pip install capstone==5.0.7 numpy==2.2.6 Pillow==11.3.0
       - name: Test Forge and release policy
         run: python -m unittest discover tools/triaevum_release -p "test_*.py" -v
       - name: Configure isolated module runtime

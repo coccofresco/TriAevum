@@ -87,7 +87,8 @@ GrassStaticPlacementCache::Resolve(std::span<const GrassAsyncPlacementRequest> r
     // batch first so construction remains parallel. Tickets pin results even
     // when the resident cache evicts an entry before the batch finishes.
     if (waitUntilReady) {
-        for (auto& result : results) result.WaitUntilReady();
+        for (auto& result : results)
+            result.WaitUntilReady();
     }
     while (mDemands.size() > std::max<size_t>(32U, activeKeys.size())) {
         auto oldest = mDemands.end();

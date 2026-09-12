@@ -70,22 +70,20 @@ void ExpectNear(double actual, double expected, const char* role) {
 void RunNativeFrameRateTests() {
     using namespace std::chrono_literals;
     using Oot3dNativeGame::NativePacerDeadlineAction;
-    if (Oot3dNativeGame::ResolveNativePacerDeadlineAction(
-            -1ns, 16666667ns) != NativePacerDeadlineAction::Wait ||
-        Oot3dNativeGame::ResolveNativePacerDeadlineAction(
-            8ms, 16666667ns) != NativePacerDeadlineAction::CarryDebt ||
-        Oot3dNativeGame::ResolveNativePacerDeadlineAction(
-            34ms, 16666667ns) != NativePacerDeadlineAction::Resync ||
-        Oot3dNativeGame::ResolveNativePacerDeadlineAction(
-            200ms, 16666667ns) != NativePacerDeadlineAction::Resync ||
-        Oot3dNativeGame::ResolveNativePacerDeadlineAction(
-            200ms, 16666667ns, 15U) !=
+    if (Oot3dNativeGame::ResolveNativePacerDeadlineAction(-1ns, 16666667ns) !=
+            NativePacerDeadlineAction::Wait ||
+        Oot3dNativeGame::ResolveNativePacerDeadlineAction(8ms, 16666667ns) !=
             NativePacerDeadlineAction::CarryDebt ||
+        Oot3dNativeGame::ResolveNativePacerDeadlineAction(34ms, 16666667ns) !=
+            NativePacerDeadlineAction::Resync ||
+        Oot3dNativeGame::ResolveNativePacerDeadlineAction(200ms, 16666667ns) !=
+            NativePacerDeadlineAction::Resync ||
         Oot3dNativeGame::ResolveNativePacerDeadlineAction(
-            300ms, 16666667ns, 15U) !=
-            NativePacerDeadlineAction::Resync) {
-        throw std::runtime_error(
-            "presentation pacer bounded-debt policy mismatch");
+            200ms, 16666667ns, 15U) != NativePacerDeadlineAction::CarryDebt ||
+        Oot3dNativeGame::ResolveNativePacerDeadlineAction(
+            300ms, 16666667ns, 15U) != NativePacerDeadlineAction::Resync) {
+      throw std::runtime_error(
+          "presentation pacer bounded-debt policy mismatch");
     }
 
     const Oot3dNativeGame::NativeFrameRateContract defaultContract;

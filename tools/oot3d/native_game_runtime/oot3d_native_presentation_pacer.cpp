@@ -131,14 +131,13 @@ void NativeRealtimeRefreshPacer::WaitForNextRefresh() {
         // Recover a short late interpolation sample, not a quarter second
         // of presentations. The simulation clock already accounts for real
         // elapsed time; retaining a long presentation debt creates bursts.
-        if (ResolveNativePacerDeadlineAction(
-                latenessDuration, period) ==
+        if (ResolveNativePacerDeadlineAction(latenessDuration, period) ==
             NativePacerDeadlineAction::Resync) {
-            ++mStats.DeadlineResyncs;
-            mNextDeadline = now;
-            mNanosecondRemainder = 0;
+          ++mStats.DeadlineResyncs;
+          mNextDeadline = now;
+          mNanosecondRemainder = 0;
         } else {
-            ++mStats.CarriedDeadlineDebt;
+          ++mStats.CarriedDeadlineDebt;
         }
         return;
     }
