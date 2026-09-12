@@ -108,6 +108,7 @@
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -4729,6 +4730,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                                             lastPresentationTime)
                   .count();
     lastPresentationTime = presentationTime;
+    const auto presentationStateBeforeFrame = presentationScheduler.CaptureState();
     const auto presentationStep =
         presentationScheduler.Advance(presentationElapsedSeconds);
     const uint32_t guestRefreshesDue = presentationStep.GuestRefreshesDue;
@@ -4814,6 +4816,19 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     api.UpdateFramebufferParameters(0, width, height, 1, false, true, true,
                                     true);
     api.StartFrame();
+    if (!api.HasActiveFrame()) {
+      // A minimized or changing surface is not a guest/PICA failure. Keep events
+      // and UI balanced, but do not consume guest time without an acquired frame.
+      if (!presentationScheduler.Restore(presentationStateBeforeFrame, &error)) {
+        throw std::runtime_error("cannot restore suspended presentation clock: " + error);
+      }
+      gui->EndDraw();
+      window.EndFrame();
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      realtimePacer.ResetDeadline();
+      lastPresentationTime = std::chrono::steady_clock::now();
+      continue;
+    }
     picaPresentationScheduler.BeginPresentation(presentationFrameCount);
     api.StartDrawToFramebuffer(0, 1.0F);
     api.SetClearColor(0.0F, 0.0F, 0.0F, 1.0F);

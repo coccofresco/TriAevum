@@ -161,6 +161,8 @@ class GfxRenderingAPI : public ::Fast::Renderer3ds::PicaRenderBackend {
     }
     virtual void OnResize() = 0;
     virtual void StartFrame() = 0;
+    // Explicitly acquired backends can defer a frame while their surface is unavailable.
+    virtual bool HasActiveFrame() const { return true; }
     virtual void EndFrame() = 0;
     virtual void FinishRender() = 0;
     virtual int CreateFramebuffer() = 0;

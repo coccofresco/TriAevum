@@ -4,6 +4,7 @@
 #ifdef ENABLE_OOT3D_VULKAN
 
 #include <algorithm>
+#include <cstdio>
 #include <unordered_map>
 #include <vector>
 
@@ -106,6 +107,7 @@ struct NriInteropContext::Impl {
                 RendererValidationSource::Nri, severity);
         }
         if (messageType == nri::Message::ERROR) {
+            std::fprintf(stderr, "OOT3D NRI error [%s:%u]: %s\n", source, line, text);
             SPDLOG_ERROR(
                 "OOT3D NRI validation [{}:{}]: {}",
                 source, line, text);

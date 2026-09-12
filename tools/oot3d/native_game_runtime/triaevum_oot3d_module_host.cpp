@@ -28,6 +28,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <type_traits>
 #include <utility>
 
@@ -399,6 +400,12 @@ void RunModuleHost(const ModuleHostArguments &arguments) {
     api.UpdateFramebufferParameters(0, width, height, 1U, false, true, true,
                                     true);
     api.StartFrame();
+    if (!api.HasActiveFrame()) {
+      gui->EndDraw();
+      window.EndFrame();
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      continue;
+    }
     api.StartDrawToFramebuffer(0, 1.0F);
 
     if (!picaRenderer.PollCompletions(&picaError)) {

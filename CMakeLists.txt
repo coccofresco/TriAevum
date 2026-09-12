@@ -3136,6 +3136,17 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
 endif()
 set_property(TARGET oot3d_native_game_runtime_tests PROPERTY FOLDER Tests)
 
+# Clock verification must also work without the optional legacy cutscene host.
+add_executable(triaevum_presentation_clock_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/oot3d_native_frame_rate_tests.cpp
+    tools/triaevum_release/tests/presentation_clock_main.cpp)
+target_link_libraries(triaevum_presentation_clock_tests PRIVATE oot3d_native_game_runtime)
+if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    target_compile_definitions(triaevum_presentation_clock_tests PRIVATE NOMINMAX)
+    set_property(TARGET triaevum_presentation_clock_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+set_property(TARGET triaevum_presentation_clock_tests PROPERTY FOLDER Tests)
+
 add_executable(oot3d_native_actor_core_contract_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_actor_core_contract_tests.cpp
 )

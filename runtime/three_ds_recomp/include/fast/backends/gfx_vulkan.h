@@ -201,6 +201,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     void Shutdown() override;
     void OnResize() override;
     void StartFrame() override;
+    bool HasActiveFrame() const override { return mFrameActive; }
     void EndFrame() override;
     void FinishRender() override;
     int CreateFramebuffer() override;

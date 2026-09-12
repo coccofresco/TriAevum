@@ -1930,10 +1930,8 @@ void GfxRenderingAPIVulkan::StartFrame() {
             if (result ==
                 Oot3d::NriSwapchainOperationResult::OutOfDate) {
                 mSwapchainDirty = true;
-                RecreateSwapchain();
-                if (mSwapchainDirty)
-                    return;
-                continue;
+                // Let the host pump window events before retrying acquisition.
+                return;
             }
             if (result !=
                 Oot3d::NriSwapchainOperationResult::Success) {
@@ -1953,16 +1951,11 @@ void GfxRenderingAPIVulkan::StartFrame() {
                 &mCurrentImage);
         }
         if (acquire == VK_NOT_READY || acquire == VK_TIMEOUT) {
-            SDL_Delay(1);
-            continue;
+            return;
         }
         if (acquire == VK_ERROR_OUT_OF_DATE_KHR) {
             mSwapchainDirty = true;
-            RecreateSwapchain();
-            if (mSwapchainDirty) {
-                return;
-            }
-            continue;
+            return;
         }
         break;
     }
@@ -1973,7 +1966,7 @@ void GfxRenderingAPIVulkan::StartFrame() {
         mSwapchainSuboptimal.store(true);
     }
 
-    // Acquire can recreate the swapchain too. Validate against its final extent,
+    // Validate targets against the successfully acquired swapchain's extent,
     // not the requested window size or the previous swapchain. Mode/present-only
     // changes retain targets; saved display pixels bridge presentation-only frames.
     const bool staleTargetExtent = std::any_of(

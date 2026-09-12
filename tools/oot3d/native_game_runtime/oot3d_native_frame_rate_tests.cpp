@@ -376,6 +376,21 @@ void RunNativeFrameRateTests() {
                uninterruptedStep.InterpolationAlpha,
                "restored presentation interpolation mismatch");
     auto invalidPresentationState = capturedPresentationState;
+    const auto beforeSuspension = restoredPresentation.CaptureState();
+    for (unsigned attempt = 0; attempt < 120; ++attempt) {
+        (void)restoredPresentation.Advance(1.0 / 60.0);
+        if (!restoredPresentation.Restore(beforeSuspension)) {
+            throw std::runtime_error("suspended frame clock restore failed");
+        }
+    }
+    const auto resumed = restoredPresentation.Advance(1.0 / 120.0);
+    const auto reference = native30Presentation.Advance(1.0 / 120.0);
+    if (resumed.GuestRefreshesDue != reference.GuestRefreshesDue ||
+        resumed.DroppedGuestRefreshes != reference.DroppedGuestRefreshes) {
+        throw std::runtime_error("suspended frames advanced guest time");
+    }
+    ExpectNear(resumed.InterpolationAlpha, reference.InterpolationAlpha,
+               "suspended frames changed interpolation phase");
     invalidPresentationState.VisualSamplePhase = 1.5;
     if (restoredPresentation.Restore(invalidPresentationState)) {
         throw std::runtime_error(
