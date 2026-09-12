@@ -128,7 +128,7 @@ destruction of a live renderer, not an SSSR shading fault. SSSR host portability
 and scratch alignment are implemented; the Windows runtime rebuild/qualification
 is still pending because its build drive is full. Test discovery is now 365 per
 OS without failures. These updates supersede the older distribution status
-above, not the unresolved outline/gameplay cases below.
+above, not the remaining gameplay qualification below.
 
 Update: portable Forge and its renderer shader helper are now built and staged
 in the installed private Flatpak. Shared automatic package-update handling is
@@ -137,9 +137,10 @@ See [package parity](TRIAEVUM_DESKTOP_PACKAGE_PARITY.md) for exact artifacts,
 counts and remaining packaged/visual qualification. Do not treat the old Forge
 distribution gap as unchanged, or the remaining GUI/SSSR work as closed.
 
-The previously documented outline rectangle in letterboxed weapon aiming has
-no subsequent corrective commit identified in this range. Keep it open; do not
-hide it by disabling outline defaults. See the evidence in
+September 12: the previously suspected outline rectangle is not an active
+regression. Geometry-guide inspection places the contour on wall/bridge
+boundaries, and the user explicitly excluded it after gameplay inspection.
+No renderer correction or disabled default is required. See the evidence in
 [issue qualification](TRIAEVUM_ISSUES_5_12_17_19_20.md).
 
 Next qualification should first close portable Forge/helper distribution and

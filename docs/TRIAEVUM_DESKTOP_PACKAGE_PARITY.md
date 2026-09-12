@@ -99,5 +99,40 @@ The Linux update/shutdown path above now passes after removing signal-time
 45 seconds of gameplay and SIGTERM terminates with exit 0. See
 [shutdown qualification](TRIAEVUM_DESKTOP_SHUTDOWN.md) for the exact installed
 candidate and limitations. SSSR is built into this candidate; Windows binary
-qualification, the outline rectangle and the remaining gameplay replays are
-still open. Current release discovery is 365 tests per OS, no failures.
+qualification and the remaining gameplay replays are still open. Current
+release discovery is 365 tests per OS, no failures. The suspected outline
+rectangle was subsequently excluded after geometry-guide and user inspection;
+see `TRIAEVUM_ISSUES_5_12_17_19_20.md`. No outline workaround was applied.
+
+### Packaged Gameplay Replays (September 12)
+
+The physical Linux desktop reran three existing Windows/host qualification
+scenarios using the runtime and title from the private Flatpak payload, not
+the development executable. The shared `probe_renderer.py` isolated saves and
+configuration. These launches used the package's physical staged files and
+library environment; Flatpak sandbox/Forge launching was qualified separately
+above. No user save or graphics default was edited.
+
+| Replay | Presentations | Observed result |
+| --- | ---: | --- |
+| Gyro aiming, 2x | 420 | 208 interpolated frame lists; SDK pitch -0.04524119570851326, within 1.2e-8 of the Windows reference. All three repaired gyro gains retained. |
+| Bow/longshot, 2x | 560 | 278 interpolated frame lists; one arrow consumed, 50 -> 49; framebuffer shows the deployed longshot and TopScreen HUD. |
+| First Song of Storms learning, native | 1100 | Zero interpolated frame lists; all five checks in `verify_storms_learning.py` pass. Quest 109DD620 -> 109FD620, gate 0600 -> 0E00, completion 8000 -> 8020. |
+
+All three reached their requested frame/checkpoint counts, returned exit 0,
+reported zero whole-AOT memory faults, and preserved 30 Hz simulation. Captures
+were taken directly from the framebuffer. These are correctness replays, not
+unlocked throughput measurements or physical-controller tests.
+
+Runtime SHA-256: `629afe741ca4ae262b5ed60c8385381ba62ee7becabc474c27b0702cfc88e5b6`.
+Title SHA-256: `97de67f0e595375761661831fa65c4e14f9a70eee52849a4a55d89459d79be15`.
+Private runner: `/home/xander/probe-packaged-parity.py`; results and isolated
+inputs: `/home/xander/triaevum-packaged-gameplay-20260912/`. No game-derived
+fixtures or captures are committed. All test processes were closed afterward.
+
+Remaining: Windows SSSR/shutdown binary rebuild and qualification, packaged
+mounted-HUD/restricted-item contexts, and physical Steam Deck/input coverage.
+The Windows build drive has only 737,280 bytes free. Cleanup was requested but
+the execution tool rejected recursive deletion before PowerShell ran; no
+deleted bytes are claimed for that attempt. Do not trigger a full rebuild or
+discard the active incremental cache to work around the lack of space.
