@@ -89,3 +89,23 @@ report; no new Linux, Android or Steam Deck result is claimed.
 Public package allowlists still exclude game-derived shader caches. This change
 does not authorize publishing the collected payload or silently embedding it in
 the frozen Forge executable.
+
+## Cross-platform follow-up
+
+Windows activation was subsequently rechecked through
+`validate_installed_runtime`: executable/plugin/profile identities, pack hash
+and installation-local cache routing all pass.
+
+A verified private Linux handoff is staged at
+`I:/TriAevum-private-tas/citra-1796-repaired/linux-corpus-handoff.zip`
+(2,369,757 bytes, SHA256
+`aef194af42995d9df85303834a57e2e470774048c293178a961183a18ab452e7`).
+It contains portable packs, provenance, merge tools and instructions; no native
+executables or driver caches. Reproduce with the private
+`I:/TriAevum-private-tas/prepare-linux-corpus-handoff.py`.
+
+The Linux host responds to SSH, but authentication with the default identity
+failed. Automatic permission review denied listing the SSH identity directory;
+explicit user authorization to locate/use the dedicated TriAevum key was
+requested. The handoff has not been transferred or activated. Do not equate this
+staged archive with Linux parity or a successful Flatpak launch.
