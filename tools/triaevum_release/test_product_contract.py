@@ -87,3 +87,19 @@ class ProductContractTests(unittest.TestCase):
                 with patch("product_contract.run_native", return_value=result):
                     with self.assertRaisesRegex(ValueError, "0xC0000139.*DLL export.*before ROM"):
                         query_product(exe)
+                log = json.loads((exe.parent / "TriAevum-preflight-error.json").read_text())
+                self.assertEqual(log["exit_status"], "0xC0000139")
+                self.assertEqual(log["operation"], "product-info")
+                self.assertEqual(log["stdout"], "")
+                self.assertEqual(len(log["runtime_sha256"]), 64)
+
+    def test_log_write_failure_does_not_hide_loader_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            exe = Path(directory) / "TriAevum.exe"
+            exe.write_bytes(b"fixture")
+            result = SimpleNamespace(returncode=3221225785, stdout="", stderr="")
+            with patch("product_contract.run_native", return_value=result), patch(
+                "product_contract.atomic_write_json", side_effect=PermissionError("read only")
+            ):
+                with self.assertRaisesRegex(ValueError, "Could not save diagnostic log"):
+                    query_product(exe)

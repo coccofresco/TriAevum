@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import platform
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -46,9 +47,26 @@ def query_product(executable: Path, source_commit: str = "", *, plugin: Path | N
             capture_output=True, text=True, timeout=15, check=False,
         )
         if result.returncode != 0:
+            status = describe_exit_status(result.returncode)
+            log = executable.parent / "TriAevum-preflight-error.json"
+            report = {
+                "format": "triaevum_preflight_error_v1",
+                "platform": platform.platform(),
+                "runtime_sha256": sha256_file(executable),
+                "operation": "verify-title-plugin" if plugin else "product-info",
+                "exit_status": f"0x{result.returncode & 0xFFFFFFFF:08X}",
+                "description": status,
+                "stdout": (result.stdout or "")[-8000:],
+                "stderr": (result.stderr or "")[-8000:],
+            }
+            try:
+                atomic_write_json(log, report)
+                logging = f"Diagnostic log: {log}. Review personal paths before sharing."
+            except OSError as error:
+                logging = f"Could not save diagnostic log at {log}: {error}"
             raise ValueError(
-                f"Runtime preflight failed ({describe_exit_status(result.returncode)}): "
-                f"{(result.stderr or result.stdout)[-2000:]}"
+                f"Runtime preflight failed ({status}): "
+                f"{(result.stderr or result.stdout or '')[-2000:]}\n{logging}"
             )
         info = json.loads(result.stdout)
     except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError) as exc:
