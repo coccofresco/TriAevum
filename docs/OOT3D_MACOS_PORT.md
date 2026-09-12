@@ -65,6 +65,38 @@ launcher, frozen Forge importer, title dylib and runtime dependencies are bundle
 This is an experimental local build, not a notarized release or a full-game
 compatibility claim. Work is on `port/macos-arm64`.
 
+## macOS continuous integration
+
+The `TriAevum macOS` workflow uses the pinned `macos-26` Apple Silicon runner.
+Relevant pull requests and pushes build the native runtime, shader compiler and
+AppKit launcher, validate Vulkan product information, and run the three public UI
+tests plus 14 pacing, grass-cache and framebuffer-readback checks. These checks
+need no ROM or GPU gameplay session. Other release-policy tests retain their
+Windows/Linux platform coverage.
+
+For a complete development app, open **Actions → TriAevum macOS → Run workflow**,
+select the Mac branch and leave **build_app** enabled. This manual run also builds
+the hash-verified alpha 2 title, freezes Forge and packages the app. Verification
+copies the app to a path containing spaces, checks architecture, dependency
+relocation and signing, loads the title ABI, and runs the frozen importer's help
+command without a ROM. Download the `TriAevum-macos-arm64-<commit>` artifact for
+the zipped `.app`; it is ad-hoc signed, not notarized. The workflow must exist on
+the repository's default branch before GitHub exposes the manual Run button.
+
+Run the isolated contract checks locally with:
+
+```sh
+cmake -S tools/triaevum_release/macos_checks -B build-macos/contract-tests -G Ninja
+cmake --build build-macos/contract-tests
+ctest --test-dir build-macos/contract-tests --output-on-failure
+python3 tools/triaevum_release/verify_macos_app.py build-macos/TriAevum.app \
+  --output build-macos/app-verification.json
+```
+
+Hosted CI does not run the Shadow2D GPU probe or game performance tests. Continue
+those checks on a physical Mac with the user's ROM and keep ROMs and ROM-derived
+captures out of CI artifacts.
+
 ## Reproduce the development probe
 
 Install Xcode Command Line Tools (or Xcode) and Homebrew, then:
