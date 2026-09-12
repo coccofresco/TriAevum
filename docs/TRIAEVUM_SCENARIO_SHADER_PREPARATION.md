@@ -307,3 +307,14 @@ The Windows diagnostic build used MSBuild's `video_core.vcxproj`, then
 Build root: `I:/oot3dre_work/azahar-oot3d-coverage-build`. `citra_qt` is a
 library here, not the final executable. No Qt, whole-AOT or title rebuild is
 needed to iterate on this capture mode.
+
+## Complete TAS acquisition (2026-09-12)
+
+[TAS collection report](TRIAEVUM_TAS_SHADER_COLLECTION.md) records a completed
+All Dungeons replay with native framebuffer milestones for all eight bosses and
+credits. It adds 150 canonical/NRI fragment modules absent from the retained
+887-module pack. The separate portable addon is compiled; catalog rebinding and
+new GPU pipeline qualification are not claimed. The report also preserves the
+single malformed CTM pair's audited repair and the remaining vertex/pairing
+import limits. This is complementary dynamic coverage, not a replacement for
+the location-injection corpus above.

@@ -131,9 +131,10 @@ use_vsync_new\\default=false
         while process.poll() is None:
             elapsed = time.monotonic() - started
             appended, log_offset = read_appended_log(app / 'user/log/azahar_log.txt', log_offset)
-            log_tail = (log_tail + appended)[-8192:]
-            if 'Your playback will be out of sync' in log_tail:
+            combined_log = log_tail + appended
+            if 'Your playback will be out of sync' in combined_log:
                 raise RuntimeError('Input-order desynchronization; corpus is not qualified')
+            log_tail = combined_log[-8192:]
             if elapsed > args.seconds:
                 raise TimeoutError('Replay exceeded its bounded observation window')
             if shutil.disk_usage(root).free < 256 * 1024 * 1024:
