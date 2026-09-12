@@ -1,7 +1,7 @@
 # TAS corpus activation
 
 2026-09-12. The collected cache is now used by the private Windows Forge package
-and its activated launch profile, not merely stored as a diagnostic artifact.
+and installed Linux Flatpak, including their activated launch profiles.
 See [collection evidence](TRIAEVUM_TAS_SHADER_COLLECTION.md) and
 [existing corpus contract](TRIAEVUM_SHADER_CORPUS_RECONNECTION.md).
 
@@ -79,12 +79,11 @@ The preserved 588 observed recipes are therefore unchanged. Missing combinations
 and effect variants still use the normal runtime cache; do not invent combinations
 or claim complete-game precompilation.
 
-This is a private Windows activation, not a public release or Linux/Android
+These are private Windows and Linux activations, not a public release or Android
 deployment. The portable pack is reusable with a matching renderer schema on
 other hosts, but their helper/compiler binding and GPU preparation must remain
 platform-specific. Never ship this GPU's driver cache to another machine.
-Linux tool transfer/activation remains pending as documented in the reconnection
-report; no new Linux, Android or Steam Deck result is claimed.
+No new Android or physical Steam Deck result is claimed.
 
 Public package allowlists still exclude game-derived shader caches. This change
 does not authorize publishing the collected payload or silently embedding it in
@@ -96,7 +95,7 @@ Windows activation was subsequently rechecked through
 `validate_installed_runtime`: executable/plugin/profile identities, pack hash
 and installation-local cache routing all pass.
 
-A verified private Linux handoff is staged at
+A verified private Linux handoff was transferred from
 `I:/TriAevum-private-tas/citra-1796-repaired/linux-corpus-handoff.zip`
 (2,369,757 bytes, SHA256
 `aef194af42995d9df85303834a57e2e470774048c293178a961183a18ab452e7`).
@@ -104,8 +103,91 @@ It contains portable packs, provenance, merge tools and instructions; no native
 executables or driver caches. Reproduce with the private
 `I:/TriAevum-private-tas/prepare-linux-corpus-handoff.py`.
 
-The Linux host responds to SSH, but authentication with the default identity
-failed. Automatic permission review denied listing the SSH identity directory;
-explicit user authorization to locate/use the dedicated TriAevum key was
-requested. The handoff has not been transferred or activated. Do not equate this
-staged archive with Linux parity or a successful Flatpak launch.
+The initial SSH authorization block was resolved with explicit user approval.
+
+## Linux activation and verification
+
+The existing Linux pack had 889 entries, including the two scanout shaders.
+Merging it with the TAS additions adds 150 entries and produces the exact
+1,039-module file used on Windows, byte-identical SHA256 above. Five pack-union
+tests pass on Linux.
+
+The private Flatpak catalog now binds the seed, existing two pipeline manifests
+and Linux helper for all three canonical execution recipes (baseline EUR,
+catalogue EUR and adapted USA). The exercised installation is baseline EUR;
+this does not claim new per-revision gameplay coverage.
+
+- Flatpak commit:
+  `0965383feba071f4afb2e2702bf837aac6bf3ef5b9bea167448347cdad4f4de4`.
+- Runtime unchanged:
+  `629afe741ca4ae262b5ed60c8385381ba62ee7becabc474c27b0702cfc88e5b6`.
+- Private binding:
+  `65b0dd193784f6e7a711969b4104898ba1a31e6a49374969f5bdbd5576ede4c1`.
+- Installed seed under `data/shader-seeds/`:
+  `40c246e437c57c8344fcbc36fe46d9cf685c8c9c0ce04d13ce3782ef827a47d6/portable.o3ps`.
+- User installation:
+  `~/.var/app/io.github.coccofresco.TriAevum/data/TriAevum/`.
+- Updated private installer:
+  `~/triaevum-flatpak-proof/TriAevum-Linux-tas-corpus.flatpak`, also copied to
+  `~/Scrivania/TriAevum-Linux-test.flatpak`. The previous desktop installer is
+  retained under the private evidence directory.
+
+The actual frozen Forge worker imported the already extracted user inputs,
+reused the prepared title and completed activation: **zero title objects
+compiled**, 22/22 renderer-pass cache hits, 588/588 GPU recipes prepared.
+No title or renderer rebuild was deployed. Profile and resource hashes pass
+`validate_installed_runtime` in the installed Flatpak.
+
+### Desktop context matters for GPU cache handoff
+
+The first worker invocation was launched through SSH without the user's display
+session. It produced a valid GPU cache with a different pipeline-cache UUID
+from the live Wayland game on the same RTX 4060/driver. The runtime correctly
+rejected it; shader-pack loading itself was already successful.
+
+A controlled comparison using the same packaged helper, pack, recipes and
+Flatpak runtime showed that importing the user's display-session environment
+produces the game's UUID. Changing application-instance creation order did NOT
+fix this: the experimental source change was removed, and the original packaged
+helper is retained. The driver-cache format and identity checks were not changed.
+
+Final GPU preparation used only the packaged developer GPU helper in the desktop
+context, not another ROM import or title build. A second full worker invocation
+was blocked by permission review; it was not bypassed. The narrower GPU-only
+preparation was approved and completed **588/588 recipes, zero failures**.
+`native_helper_environment` already preserves the caller's display/driver
+selection environment. A regression test now checks that helper and game inherit
+the same DISPLAY, WAYLAND_DISPLAY, runtime-directory, session-bus and driver
+selection values. Run remote qualification with the actual desktop environment,
+not an unrelated headless SSH environment.
+
+### Final game proof
+
+Two 180-presentation mounted Hyrule Field replays used the normal installed
+`flatpak run io.github.coccofresco.TriAevum` launcher under Wayland. Both exited
+0, produced native framebuffer captures and restored the permanent profile and
+activation receipt byte-for-byte after removing temporary probe arguments.
+
+- Both: 1,039 pack entries, 54 pack hits / 32 misses; 34 local SPIR-V cache hits
+  and 23 pass-cache hits, zero shader compilations or failures.
+- First final replay: **6,711,971 bytes of prepared pipeline cache accepted**,
+  55 pipeline creations taking 38.61 ms in aggregate.
+- Second: 7,033,849 cache bytes accepted; 55 creations taking 10.90 ms.
+- The two 1280x720 native framebuffer files have identical SHA256
+  `6b7605fc33d70463be4d0d5228993a2e0a9f3dbc51cfebaab94572d54810f645`.
+  They were inspected; these tests are not performance benchmarks.
+
+The local module cache was already warmed by earlier diagnostic runs: those had
+22 shader compilations. Zero compiles in the final runs does NOT mean Forge
+contains every variant. No new scenario/variant collection was added here.
+
+Private evidence: `~/triaevum-tas-corpus-20260912/final-result.json`,
+`final-gpu-preparation.json`, `game-verification.json`, and the installed
+`qualification/tas-corpus-final-game*` directories. The source-API activation
+probe lacked developer Python dependencies and was not used for installation;
+the distributed frozen Forge worker performed the real activation instead.
+
+Final test suites: Windows 46 tests, 44 passed / 2 optional skipped; Linux five
+merge tests plus seven process-environment tests (six passed, Windows-only test
+skipped). The isolated native pipeline-contract test also passed. No persistent
+LD_PRELOAD probe or test process remains.

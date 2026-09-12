@@ -1,7 +1,7 @@
 # TAS shader collection
 
-The resulting corpus is now connected to private Windows Forge and its launch
-profile: see [activation and measured reuse](TRIAEVUM_TAS_CORPUS_ACTIVATION.md).
+The resulting corpus is now connected to private Windows Forge and the installed
+Linux Flatpak: see [activation and measured reuse](TRIAEVUM_TAS_CORPUS_ACTIVATION.md).
 
 **2026-09-12: complete corrected-movie acquisition accepted for shader evidence.**
 All eight boss milestones and credits were inspected in native framebuffer

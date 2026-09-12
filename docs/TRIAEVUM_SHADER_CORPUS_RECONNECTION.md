@@ -1,8 +1,9 @@
 # Retained shader corpus: installation status
 
 Update: [TAS corpus activation](TRIAEVUM_TAS_CORPUS_ACTIVATION.md) supersedes the
-Windows 887-module snapshot below with a 1,039-module pack and an updated actual
-launch profile. The historical counts below remain evidence of the earlier test.
+Windows 887-module snapshot and pending Linux state below with the same
+1,039-module pack in both installed profiles. The historical counts remain
+evidence of the earlier test.
 
 2026-09-12. Steam Deck is a conformity target, not a physically tested device.
 
@@ -77,8 +78,9 @@ retained pack and pipeline recipes; other recipes are unchanged.
    do not substitute an old successful 889-module report for current results.
 2. Linux retained source corpus is at
    `/home/xander/triaevum-pipeline-live-proof/forge-pass-cache-effects/`.
-   New-tool transfer to the user Linux mirror was denied by automatic approval
-   review; explicit authorization was requested. Linux binding is NOT applied.
+   Transfer was initially denied. Following explicit user authorization, the TAS
+   union is now bound and active in the installed private Linux Flatpak; see the
+   activation report, including its desktop-context GPU-cache qualification.
 3. Public packages still exclude game-derived caches under the release policy.
    This private reconnection is not a public-release solution: a permitted
    ROM-derived reconstruction/import mechanism must be completed separately.

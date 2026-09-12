@@ -11,6 +11,25 @@ import native_process
 
 
 class NativeProcessTests(unittest.TestCase):
+    def test_frozen_linux_helper_preserves_game_display_context(self):
+        session = {"DISPLAY": ":0", "WAYLAND_DISPLAY": "wayland-0",
+                   "XDG_RUNTIME_DIR": "/run/user/1000",
+                   "DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus",
+                   "VK_DRIVER_FILES": "/drivers/selected.json"}
+        environment = {**session, "LD_LIBRARY_PATH": "/forge/_internal",
+                       "LD_LIBRARY_PATH_ORIG": "/app/lib/triaevum/lib"}
+        with patch.dict(os.environ, environment, clear=True), \
+             patch.object(native_process.sys, "platform", "linux"), \
+             patch.object(native_process.sys, "frozen", True, create=True), \
+             patch.object(native_process, "Path") as path:
+            path.return_value.resolve.return_value = PurePosixPath("/app/forge/prepare")
+            child = native_process.native_helper_environment("/app/forge/prepare")
+            game = native_process.native_process_environment()
+            for key, value in session.items():
+                self.assertEqual(child[key], value)
+                self.assertEqual(child[key], game[key])
+            self.assertEqual(dict(os.environ), environment)
+
     def test_linux_helper_uses_verified_siblings_not_python_libraries(self):
         with patch.dict(os.environ, {"LD_LIBRARY_PATH": "/python/private", "LD_LIBRARY_PATH_ORIG": "/steam/lib"}, clear=True), \
              patch.object(native_process.sys, "platform", "linux"), \
