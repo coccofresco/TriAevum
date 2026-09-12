@@ -82,5 +82,9 @@ files inside an already installed game or use an old title DLL.
 - GitHub workflow 34698471414 passes all three jobs on the source correction
   b1702ea: Windows Forge/native ABI, Linux native ABI and release/module policy.
 
-Public alpha.2 release assets have not yet been replaced. The source fix and
-private candidates do not repair existing user downloads by themselves.
+The correction is now distributed in
+[alpha.2b](https://github.com/coccofresco/TriAevum/releases/tag/v0.6.0-alpha.2b),
+published on 2026-09-12. Both final packages were rebuilt from explicit audited
+inventories; input contracts match the exercised candidates byte for byte.
+Alpha.2 assets remain unchanged for historical provenance: users must update
+to alpha.2b and retry Forge. See the [final artifact qualification](releases/v0.6.0-alpha.2b-preparation.md).
