@@ -1,9 +1,12 @@
 # Desktop Packaging Decision
 
-Decision updated: 2026-09-09, following the maintainer's Flatpak request.
-Windows releases are portable ZIPs. Linux desktop and Steam Deck share one
-x86-64 Flatpak containing Forge and the native game runtime.
-This defines the packaging target; it does not claim Linux release qualification.
+Decision updated: 2026-09-14. Windows releases remain portable ZIPs.
+The next Linux desktop / Steam Deck package is a single x86-64 AppImage,
+containing Forge and the native Vulkan runtime. See
+[AppImage packaging and qualification](TRIAEVUM_APPIMAGE.md).
+The Flatpak material below records the already released alpha.2c implementation,
+not the packaging target for new releases. Keep its storage adapter for legacy
+installations; do not delete user data or republish older release artifacts.
 
 ## Windows: Portable Is the Default
 

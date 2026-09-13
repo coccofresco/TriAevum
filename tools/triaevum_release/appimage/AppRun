@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+# Keep Steam Input, Gamescope and display selection in the inherited environment.
+APPDIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+export APPDIR
+package="$APPDIR/usr/lib/triaevum"
+export LD_LIBRARY_PATH="$package/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec "$package/TriAevumForge" --play "$@"

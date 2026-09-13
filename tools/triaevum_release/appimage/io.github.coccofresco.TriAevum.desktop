@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=TriAevum
+Comment=Prepare and play your personal Ocarina of Time 3D dump
+Exec=AppRun
+Icon=io.github.coccofresco.TriAevum
+Terminal=false
+Categories=Game;
+Actions=Forge;
+
+[Desktop Action Forge]
+Name=Prepare or repair game
+Exec=AppRun --forge
