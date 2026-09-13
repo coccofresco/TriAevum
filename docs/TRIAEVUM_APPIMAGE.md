@@ -58,6 +58,13 @@ record their SHA256 and license/source provenance in qualification. Do not
 download tools on the end user's machine. Provide the standard extract-and-run
 route for hosts without FUSE, and test it as well as mounted launch.
 
+`scripts/package-appimage.sh` enforces the two tool SHA256 values qualified in
+this tranche, limits compression to two workers, refuses existing destinations,
+and never fetches tools implicitly. Acquire `appimagetool-x86_64.AppImage` from
+AppImage/appimagetool and `runtime-x86_64` from AppImage/type2-runtime official
+GitHub releases. A replaced `continuous` asset must fail its digest check until
+the publisher deliberately reviews and updates the tool pin.
+
 Wrapping Flatpak payloads alone is **not** portability qualification. Current
 alpha.2c ELF runtime and frozen Python require GLIBC 2.38; verify the selected
 SteamOS baseline and document the Linux minimum. Bundle SDL2 and the required
@@ -78,6 +85,42 @@ test mounted and extract-and-run launches; qualify framebuffer output/audio,
 fullscreen/resize and SDL gamepad/hotplug in a Gamescope-compatible session.
 Use 1280x800 and 1280x720 without stretching. Steam Deck hardware is unavailable:
 report Linux-PC results and Deck conformance separately, never as a hardware pass.
+
+### Private Candidate Qualification, 2026-09-14
+
+- Source/runtime/Forge snapshot: `7b88099bbec37d3911526bec4b2e87ac500252bd`.
+  Native runtime rebuilt incrementally (product identity and link only); title
+  AOT unchanged. Frozen Forge rebuilt in the existing Steam Runtime 4 SDK.
+- Payload: 526 audited files, 248,816,671 bytes. Both SDL2-compat and SDL3 plus
+  their copyright notices are included; SDL3 is dynamically loaded by compat
+  and would be missed by an `ldd`-only dependency check.
+- Candidate: `TriAevum-x86_64.AppImage`, 100,076,024 bytes; SHA256
+  `8587b02574a1fab2bb1ca2e0d7c1cf7b5f4407b7bbe3053afb78de923f23136c`.
+  Private Linux workspace: `/home/xander/triaevum-appimage-r2-20260914`.
+- 24 Python tests pass on Windows and Linux. Real SDL regression executable
+  passes with the packaged libraries/database: initialization, mappings,
+  buttons, both sticks, refresh, hotplug and subsystem ownership. 491 mappings
+  loaded. These are virtual-controller tests, not a physical Deck test.
+- Frozen Forge real-widget import passes: 27.96 seconds, installation ready,
+  no clipped/unmapped widgets. ROM and generated data are outside AppDir.
+  The first candidate's missing Tk import was caught by this test; the rebuilt
+  candidate includes Python Tk, `_tkinter`, Tcl/Tk libraries and data. Preserve
+  all those SDK paths when freezing; CLI `doctor` alone cannot validate the GUI.
+- Mounted AppImage launches from the prepared activation with a changing mount
+  path. A bounded native exit returns 0, produces a framebuffer and 240 recorded
+  diagnostic frames. Extract-and-run also launches (956 recorded frames in its
+  bounded observation). A separate renderer probe returns 0 with 1,239 frames
+  and three framebuffer captures; title rendering was visually inspected.
+  These counts are evidence of rendering, **not FPS measurements**.
+- First unrestricted observations were stopped by the harness; mounted
+  diagnostics were not flushed then. The clean-exit framebuffer run above is
+  the reliable mounted-launch evidence. All test game processes were closed.
+
+Remaining release qualification: actual Gamescope session, Steam Input routing
+end-to-end, AMD/Mesa hardware, suspend/resume and a clean supported distribution;
+Flatpak-to-AppImage migration; full AppImage runtime redistribution/source
+notices. The Linux test PC is not Steam Deck. Do not publish this candidate as
+Deck-verified or claim those remaining cases passed. Alpha.2c stays unchanged.
 
 References: [AppDir](https://docs.appimage.org/reference/appdir.html),
 [FUSE fallback](https://docs.appimage.org/user-guide/troubleshooting/fuse.html),
