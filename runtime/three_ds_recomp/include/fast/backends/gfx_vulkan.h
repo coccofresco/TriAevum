@@ -780,6 +780,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     std::set<std::pair<Oot3d::PicaAotShaderStage, uint64_t>>
         mPicaAotShaderMissesLogged;
     uint64_t mPicaAotShaderHits = 0;
+    uint64_t mNativeFragmentArtifactHits = 0;
     uint64_t mPicaAotShaderMisses = 0;
     bool mPicaAotShaderStrict = false;
     bool mPicaAotShaderSummaryLogged = false;

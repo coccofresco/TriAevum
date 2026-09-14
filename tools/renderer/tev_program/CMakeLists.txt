@@ -82,6 +82,23 @@ target_include_directories(pica_pipeline_identity_tests PRIVATE "${runtime}/incl
 target_link_libraries(pica_pipeline_identity_tests PRIVATE Vulkan::Vulkan)
 add_test(NAME pica_pipeline_identity COMMAND pica_pipeline_identity_tests)
 
+add_executable(build_fragment_artifacts build_fragment_artifacts.cpp
+    "${frontend}/oot3d_native_pica_fragment_shader_gen.cpp"
+    "${frontend}/oot3d_native_pica_fragment_lighting_gen.cpp"
+    "${frontend}/oot3d_native_pica_proctex.cpp"
+    "${runtime}/src/fast/oot3d/pica_fragment_lighting.cpp"
+    "${runtime}/src/fast/renderer3ds/pica_nri_shader_contract.cpp")
+target_compile_features(build_fragment_artifacts PRIVATE cxx_std_20)
+target_include_directories(build_fragment_artifacts PRIVATE "${frontend}" "${runtime}/include"
+    "${SHADERC_INCLUDE_DIR}" "${CMAKE_CURRENT_LIST_DIR}/../../triaevum_release/vendor/include")
+target_link_libraries(build_fragment_artifacts PRIVATE pica_tev_program "${SHADERC_LIBRARY}")
+add_test(NAME pica_fragment_artifacts COMMAND build_fragment_artifacts --check)
+set_tests_properties(pica_fragment_artifacts PROPERTIES TIMEOUT 120)
+if(WIN32)
+    add_custom_command(TARGET build_fragment_artifacts POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${SHADERC_RUNTIME}" "$<TARGET_FILE_DIR:build_fragment_artifacts>")
+endif()
+
 find_package(spdlog CONFIG REQUIRED)
 add_executable(pica_vertex_program_tests vertex_program_tests.cpp)
 target_compile_features(pica_vertex_program_tests PRIVATE cxx_std_20)

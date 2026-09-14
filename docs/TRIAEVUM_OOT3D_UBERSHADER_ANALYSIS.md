@@ -1,8 +1,8 @@
 # OOT3D native shader surface and NRI migration
 
-Date: 2026-09-14. Status: implemented opt-in parametric fragment path and
-offline-translated native vertex family; not yet fully precompiled desktop
-shaders, a renderer replacement, or measured stutter elimination.
+Date: 2026-09-14. Status: implemented opt-in parametric fragment path with
+built-in SPIR-V and offline-translated native vertex family; not yet fully
+precompiled vertex/extension/pass shaders or measured stutter elimination.
 
 ## Decision
 
@@ -799,6 +799,95 @@ desktop shader artifacts directly and prepare bounded fixed-state pipeline
 families, not collect more gameplay variants. Shader-module ownership still
 uses material aliases and the fallback Vulkan/NRI creation duplication remains.
 No FPS improvement or complete elimination of shader stuttering is claimed here.
+
+## Built-in fragment SPIR-V family
+
+The native parametric fragment evaluator is now compiled in the developer
+workflow and embedded in the renderer. It is resolved BEFORE both the collected
+`.o3ps` pack and the application SPIR-V cache. No Forge operation, ROM input,
+gameplay recording, downloaded shader collection or driver-cache file is needed
+to build or use this family.
+
+The family has eight structural configurations, each in canonical combined-sampler
+and NRI separate-sampler form (16 modules total):
+
+- Normalized-color versus enabled integer Shadow2D texture 0.
+- Lighting LUT descriptor absent versus present.
+- Normal fragment output versus native shadow-buffer write pass.
+
+TEV operations, fog, alpha test, lighting controls, procedural texture values and
+material uniforms remain data, not variants. Both interfaces use the existing
+native generators and descriptor adapter; pass scheduling, GPU state, resources,
+native ordering, UI isolation and effect hooks are unchanged. The fixed programs
+retain the existing canonical multiplication/rounding semantics.
+
+Code ownership:
+
+- `tools/renderer/tev_program/build_fragment_artifacts.cpp` builds all eight
+  configurations from constructed valid PICA states, not captured states. It
+  verifies 128 material-data variations do not change those sources. Compilation
+  uses the existing Vulkan 1.1 / shaderc performance-optimization contract.
+- `fast/renderer3ds/pica_native_fragment_binaries.h` is the generated SPIR-V
+  artifact, with all corresponding maintained generator sources in this repo.
+  It contains neither GPU-specific driver caches nor original-game shader binary
+  payloads. Unlike the translated vertex artifact, these programs are compiled
+  from the renderer's maintained PICA equations. Donor notices remain applicable.
+- `fast/renderer3ds/pica_fragment_artifact.h` provides a small shared resolver.
+  Both source hashes, source size and sampler-interface kind must match; no
+  scene/material identity is consulted. An incompatible source is not replaced
+  by an approximately equivalent shader.
+- `GfxRenderingAPIVulkan::ResolveNativePicaShaderSpirv` selects built-ins first
+  and counts their uses independently. Legacy/instrumented programs not in this
+  family still use their existing resolver; this is deliberately not a claim
+  that all runtime compilation has been removed.
+
+Developer commands (never an end-user Forge step):
+
+```powershell
+build_fragment_artifacts.exe runtime/three_ds_recomp/include/fast/renderer3ds/pica_native_fragment_binaries.h
+build_fragment_artifacts.exe --check
+build_fragment_artifacts.exe --check-exact runtime/three_ds_recomp/include/fast/renderer3ds/pica_native_fragment_binaries.h
+```
+
+`--check` recompiles the family, checks all stored source/interface identities,
+walks stored SPIR-V instruction extents and verifies fragment entrypoints. It
+does not require a different platform's shaderc to produce byte-identical output.
+`--check-exact` additionally verifies exact reproducibility with the same toolchain.
+Both checks passed with Vulkan SDK 1.4.350.0 on Windows. Eight standalone suites
+pass; the shared resolver tests also reject wrong interface/source, empty source,
+truncated header and bad SPIR-V magic. These checks are not a full SPIR-V validator
+or evidence that every structural configuration has been exercised on a GPU.
+
+Real NRI validation, native30/no interpolation, optional effects off:
+
+| Fixture, no collected pack | Built-in fragment resolutions | Pack entries | Other SPIR-V compilations | Auxiliary pass compilations |
+| --- | ---: | ---: | ---: | ---: |
+| Early boot, 200 frames | 44 | 0 | 3 | 21 |
+| Hyrule Field, 200 frames | 48 | 0 | 5 | 21 |
+
+Six paired framebuffer captures are pixel-identical between specialized and
+parametric modes without the collected pack. Each run has a new application
+cache directory; no claim is made that the OS/driver cache was cold. The fragment
+counts are resolver requests, NOT distinct module or pipeline counts. Remaining
+NRI pipeline creations are 26 (boot) and 25 (Field). A preliminary Field run with
+the old pack retained also produced identical captures and 48 built-in resolutions.
+
+`run_native_comparison.py --no-shader-pack` removes the CLI pack and strict flag,
+clears pack/prewarm environment overrides in the child, and verifies both positive
+built-in use and zero pack entries. It still compares deterministic framebuffers,
+not FPS. Private evidence, never package:
+
+- `C:/Users/xander/AppData/Local/Temp/TriAevum-fragment-binary-nopack-boot-20260914`
+- `C:/Users/xander/AppData/Local/Temp/TriAevum-fragment-binary-nopack-field-20260914`
+
+Remaining work is concrete: precompile the vertex interface/interpolation families,
+the presentation/auxiliary passes and supported extension families; remove repeated
+source processing/material-alias shader-module creation; and initialize bounded
+pipeline states with correct NRI ownership. The current vertex translation is
+offline, but vertex desktop compilation is not yet entirely offline. The 21 pass
+compilations above must not be hidden behind the completed fragment work. Full
+cache independence, advanced-effect coverage and Linux/Android GPU verification
+are still pending. No new release or FPS/stutter-elimination claim is made.
 
 ## External Source Links
 

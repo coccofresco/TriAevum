@@ -3,6 +3,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -14,6 +15,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--timeout', type=float, default=120)
     parser.add_argument('--from-start', action='store_true', help='Ignore the fixture savestate and boot the game')
+    parser.add_argument('--no-shader-pack', action='store_true', help='Remove collected shader packs; verify built-in fragment artifact use')
     args = parser.parse_args()
     source = json.loads(args.invocation.read_text(encoding='utf-8-sig'))
     executable = Path(source['executable'])
@@ -29,10 +31,14 @@ def main():
                    '--save-state-frame', '--input-timeline', '--pica-semantic-trace'}
         if args.from_start:
             removed.add('--load-state')
+        if args.no_shader_pack:
+            removed.add('--pica-aot-shader-pack')
         copied = {'--config': 'config.json', '--topscreen-config': 'topscreen.json',
                   '--save-data': 'savedata'}
         for token in original:
             if token == '--pica-parametric-tev':
+                continue
+            if args.no_shader_pack and token == '--pica-aot-shader-strict':
                 continue
             if token in removed:
                 next(original)
@@ -55,6 +61,10 @@ def main():
             command.append('--pica-parametric-tev')
         (root/'invocation.json').write_text(json.dumps({'command': command}, indent=2))
         environment = os.environ.copy()
+        if args.no_shader_pack:
+            for name in ('OOT3D_PICA_AOT_SHADER_PACK', 'OOT3D_PICA_AOT_SHADER_STRICT',
+                         'OOT3D_PICA_PIPELINE_PREWARM', 'OOT3D_PICA_PIPELINE_MANIFEST'):
+                environment.pop(name, None)
         environment['OOT3D_VULKAN_DIAGNOSTICS_PATH'] = str((root/'renderer.json').resolve())
         environment['OOT3D_VULKAN_DIAGNOSTICS_MAX_FRAMES'] = '256'
         with (root/'stdout.log').open('w') as out, (root/'stderr.log').open('w') as err:
@@ -70,6 +80,13 @@ def main():
                                  for shader in inventory['shaders'])
         if (parametric_modules > 0) != (mode == 'parametric'):
             raise RuntimeError(f'{mode}: effective shader inventory contradicts requested mode')
+        if args.no_shader_pack and mode == 'parametric':
+            diagnostics = (root/'stderr.log').read_text(errors='replace')
+            hits = re.search(r'TRIAEVUM_NATIVE_FRAGMENT_ARTIFACTS hits=(\d+) modules=16', diagnostics)
+            if not hits or int(hits[1]) == 0:
+                raise RuntimeError('parametric: no built-in fragment artifact was used')
+            if not re.search(r'OOT3D_PICA_AOT_SHADER_RESOLUTION .*entries=0\b', diagnostics):
+                raise RuntimeError('parametric: collected shader pack was not proven absent')
         reports[mode] = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in captures}
         print(f'{mode}: {len(captures)} framebuffer captures', flush=True)
     if reports['specialized'].keys() != reports['parametric'].keys():
@@ -86,7 +103,7 @@ def main():
                                'mean_absolute_rgb': stats.mean,
                                'max_absolute_rgb': [v[1] for v in diff.getextrema()]})
     summary = {'executable_sha256': hashlib.sha256(executable.read_bytes()).hexdigest(),
-               'captures': reports, 'comparison': comparison,
+               'captures': reports, 'comparison': comparison, 'no_shader_pack': args.no_shader_pack,
                'note': 'Framebuffer parity test, not a performance measurement.'}
     (args.output/'comparison.json').write_text(json.dumps(summary, indent=2))
     print(json.dumps(comparison, indent=2))

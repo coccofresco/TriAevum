@@ -1,4 +1,5 @@
 #include "fast/renderer3ds/pica_vertex_program.h"
+#include "fast/renderer3ds/pica_fragment_artifact.h"
 #include <array>
 #include <iostream>
 #include <stdexcept>
@@ -6,6 +7,17 @@
 using namespace Fast::Renderer3ds;
 static void Check(bool ok) { if (!ok) throw std::runtime_error("vertex program contract"); }
 int main() try {
+    std::array<uint32_t, 5> binary{0x07230203U, 0x00010300, 0, 1, 0};
+    std::array<PicaFragmentArtifact, 1> artifacts{{{IdentifyPicaShaderSource("fragment"), true, binary}}};
+    Check(FindPicaFragmentArtifact(artifacts, "fragment", true).size() == 5);
+    Check(FindPicaFragmentArtifact(artifacts, "fragment", false).empty());
+    Check(FindPicaFragmentArtifact(artifacts, "fragment ", true).empty());
+    Check(FindPicaFragmentArtifact(artifacts, "", true).empty());
+    binary[0] = 0;
+    Check(FindPicaFragmentArtifact(artifacts, "fragment", true).empty());
+    binary[0] = 0x07230203U;
+    artifacts[0].Spirv = std::span(binary).first(4);
+    Check(FindPicaFragmentArtifact(artifacts, "fragment", true).empty());
     std::array<uint32_t, 4> code{0x12345678, 0x88000000, 0, 0};
     std::array<uint32_t, 2> swizzles{0x1b1b1b1b, 0};
     PicaTranslatedVertexProgram p{0, true, IdentifyPicaProgramWords(std::span(code).first(2)),

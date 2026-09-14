@@ -1,6 +1,7 @@
 #ifdef ENABLE_OOT3D_VULKAN
 
 #include "fast/backends/gfx_vulkan.h"
+#include "fast/renderer3ds/pica_native_fragment_binaries.h"
 #include "fast/renderer/framebuffer_readback.h"
 #include "fast/renderer/shaderc_compiler.h"
 #include "fast/renderer3ds/vulkan_pipeline_cache_store.h"
@@ -3631,6 +3632,7 @@ void GfxRenderingAPIVulkan::ConfigureNativePicaAotShaders() {
     mPicaPipelinePrewarmedProfiles.clear();
     mPicaAotShaderMissesLogged.clear();
     mPicaAotShaderHits = 0;
+    mNativeFragmentArtifactHits = 0;
     mPicaAotShaderMisses = 0;
     mPicaAotShaderSummaryLogged = false;
     mPicaPipelinePrewarmSummaryLogged = false;
@@ -3790,7 +3792,7 @@ void GfxRenderingAPIVulkan::FinishNativePicaAotShaders() {
         mPicaPipelinePrewarmSummaryLogged = true;
     }
     if (!mPicaAotShaderSummaryLogged &&
-        (mPicaAotShaderPack.Loaded() || mPicaAotShaderHits != 0U ||
+        (mNativeFragmentArtifactHits != 0U || mPicaAotShaderPack.Loaded() || mPicaAotShaderHits != 0U ||
          mPicaAotShaderMisses != 0U)) {
         SPDLOG_INFO("Native PICA AOT shader resolution: {} hits, {} misses",
                     mPicaAotShaderHits, mPicaAotShaderMisses);
@@ -3802,6 +3804,9 @@ void GfxRenderingAPIVulkan::FinishNativePicaAotShaders() {
                      mPicaAotShaderStrict ? 1U : 0U,
                      mPicaAotShaderPack.EntryCount());
         mPicaAotShaderSummaryLogged = true;
+        std::fprintf(stderr, "TRIAEVUM_NATIVE_FRAGMENT_ARTIFACTS hits=%llu modules=%zu\n",
+                     static_cast<unsigned long long>(mNativeFragmentArtifactHits),
+                     std::size(Renderer3ds::kNativeFragmentArtifacts));
     }
 }
 
@@ -3809,6 +3814,16 @@ std::vector<uint32_t>
 GfxRenderingAPIVulkan::ResolveNativePicaShaderSpirv(
     std::string_view source, Oot3d::PicaAotShaderStage stage,
     bool vertexShader, const char* sourceName) {
+    if (!vertexShader && (stage == Oot3d::PicaAotShaderStage::Fragment ||
+                          stage == Oot3d::PicaAotShaderStage::NriFragment)) {
+        const auto artifact = Renderer3ds::FindPicaFragmentArtifact(
+            Renderer3ds::kNativeFragmentArtifacts, source,
+            stage == Oot3d::PicaAotShaderStage::NriFragment);
+        if (!artifact.empty()) {
+            ++mNativeFragmentArtifactHits;
+            return {artifact.begin(), artifact.end()};
+        }
+    }
     if (!mPicaAotShaderPack.Loaded()) {
         return CompileShaderSpirv(std::string(source), vertexShader,
                                   sourceName);
