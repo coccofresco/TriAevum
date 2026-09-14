@@ -37,13 +37,19 @@ int main() {
         input.LightingProgram.Lights[7]={3,127,0,0};
         input.LightingProgram.Luts[6]={5,1,0.25F,1};
         input.FragmentControl={0x10005,0x31,0,0};
+        input.ProcTexProgram.Registers[1]={1,2,3,4};
+        for(unsigned i=0;i<224;++i) input.ProcTexProgram.Lut[i]={i,~i,i*17,0xFEDCBA98};
         Writer encoded; WriteFragmentUniforms(encoded,input);
         Reader reader{encoded.Bytes}; Oot3dPicaFragmentUniformState decoded;
-        Check(ReadFragmentUniforms(reader,decoded,true,true,true,true,true),"V11 decode failed");
+        Check(ReadFragmentUniforms(reader,decoded,true,true,true,true,true,true),"V12 decode failed");
         Check(reader.Offset==encoded.Bytes.size(),"unconsumed payload");
         Writer roundtrip; WriteFragmentUniforms(roundtrip,decoded);
         Check(roundtrip.Bytes==encoded.Bytes,"non-identical roundtrip");
-        auto v10=encoded.Bytes; v10.resize(v10.size()-272);
+        auto v11=encoded.Bytes; v11.resize(v11.size()-3616);
+        Reader last{v11}; Oot3dPicaFragmentUniformState lastDecoded;
+        Check(ReadFragmentUniforms(last,lastDecoded,true,true,true,true,true),"V11 decode failed");
+        Check(last.Offset==v11.size() && lastDecoded.FragmentControl==input.FragmentControl,"V11 prefix corrupted");
+        auto v10=v11; v10.resize(v10.size()-272);
         Reader previous{v10}; Oot3dPicaFragmentUniformState previousDecoded;
         Check(ReadFragmentUniforms(previous,previousDecoded,true,true,true,true),"V10 decode failed");
         Check(previous.Offset==v10.size() && previousDecoded.TevProgram.Control==input.TevProgram.Control,
@@ -56,11 +62,11 @@ int main() {
         for(size_t length=0;length<encoded.Bytes.size();++length) {
             Reader truncated{std::span(encoded.Bytes).first(length)};
             Oot3dPicaFragmentUniformState partial;
-            Check(!ReadFragmentUniforms(truncated,partial,true,true,true,true,true),"truncated payload accepted");
+            Check(!ReadFragmentUniforms(truncated,partial,true,true,true,true,true,true),"truncated payload accepted");
         }
         static_assert(Fast::Oot3d::kPicaPackedFragmentTevProgramOffset==2112);
-        static_assert(Fast::Oot3d::kPicaPackedFragmentUniformSize==2496);
-        std::cout<<"V11 uniform codec roundtrip, V9/V10 compatibility, "<<encoded.Bytes.size()<<" truncations passed\n";
+        static_assert(Fast::Oot3d::kPicaPackedFragmentUniformSize==6112);
+        std::cout<<"V12 uniform codec roundtrip, V9/V10/V11 compatibility, "<<encoded.Bytes.size()<<" truncations passed\n";
         return 0;
     } catch(const std::exception& e) {std::cerr<<e.what()<<'\n';return 1;}
 }

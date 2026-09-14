@@ -64,6 +64,7 @@ int main() {
                     CheckUniformOffset(result,"tev_program",2112);
                     CheckUniformOffset(result,"lighting_program",2224);
                     CheckUniformOffset(result,"fragment_control",2480);
+                    CheckUniformOffset(result,"proctex_program",2496);
                 }
             }
         }
@@ -163,7 +164,23 @@ int main() {
         auto textureSpv=compiler.CompileGlslToSpv(baseline,shaderc_fragment_shader,"texture_selection",options);
         Check(textureSpv.GetCompilationStatus()==shaderc_compilation_status_success,textureSpv.GetErrorMessage());
         std::cout << textureCases << " texture enable/reference/UV/type configurations share one source\n";
-        std::cout << "16 stable-source material programs; 8 sampler/lighting/fog/alpha cases; 48 SPIR-V compilations passed\n";
+        packet = std::make_unique<Oot3dPicaDrawPacket>(); state={}; baseline.clear();
+        for(unsigned n=0;n<120;++n) {
+            packet->Registers[0x80]=(n%4)<<8 | ((n&1)<<10);
+            packet->Registers[0xA8]=(n%5) | (((n/5)%5)<<3) | ((n%10)<<6) | (((n/3)%10)<<10) |
+                ((n&1)<<14) | (((n/2)&1)<<15) | ((n%3)<<16) | (((n/3)%3)<<18);
+            packet->Registers[0xAC]=(n%6) | (6<<7) | (128<<11);
+            packet->Registers[0xC0]=0x60006;
+            packet->ProcTexLuts.Color[n%256]=n*987654;
+            Oot3dPicaGeneratedFragmentShader dynamic; std::string error;
+            Check(GenerateOot3dPicaFragmentShader(*packet,state,dynamic,&error,
+                Oot3dPicaShaderBuildPurpose::OfflineSource,Oot3dPicaTevMode::Parametric),error);
+            if(baseline.empty())baseline=dynamic.Source;
+            Check(dynamic.Source==baseline,"procedural registers/LUT changed source");
+        }
+        auto procSpv=compiler.CompileGlslToSpv(baseline,shaderc_fragment_shader,"procedural",options);
+        Check(procSpv.GetCompilationStatus()==shaderc_compilation_status_success,procSpv.GetErrorMessage());
+        std::cout << "120 procedural register/LUT configurations share one source\n";
         return 0;
     } catch(const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
 }

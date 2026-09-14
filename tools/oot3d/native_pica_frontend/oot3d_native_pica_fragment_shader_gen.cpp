@@ -362,7 +362,7 @@ uint64_t ComputeOot3dPicaFragmentShaderStateKey(
     const Oot3dPicaDecodedDrawState& state, Oot3dPicaTevMode mode) {
     constexpr uint64_t kFnvOffset = 1469598103934665603ULL;
     // Version the compiler semantics, not just the input register values.
-    uint64_t key = HashWord(kFnvOffset, 0x54455604U);
+    uint64_t key = HashWord(kFnvOffset, 0x54455605U);
     key = HashWord(key, packet.Registers[0x080U]);
     key = HashWord(key, static_cast<uint32_t>(mode));
     key = HashWord(key, packet.Registers[0x08FU]);
@@ -455,6 +455,7 @@ Oot3dPicaFragmentUniformState BuildOot3dPicaFragmentUniformState(
         Fast::Oot3d::DecodePicaFragmentLighting(packet.Registers));
     uniforms.FragmentControl = {packet.Registers[0x0E0U], packet.Registers[0x104U],
                                packet.Registers[0x080U], packet.Registers[0x083U]};
+    uniforms.ProcTexProgram = BuildOot3dPicaProcTexProgram(packet);
     Fast::Renderer3ds::DecodePicaTevProgram(packet.Registers, uniforms.TevProgram);
     return uniforms;
 }
@@ -486,15 +487,20 @@ bool GenerateOot3dPicaFragmentShader(
     const bool procTexReferenced =
         Oot3dPicaReferencesProceduralTexture(packet) ||
         shadowProcTexReferenced;
-    // Procedural LUT values are embedded in source, unlike the dynamically
-    // bound lighting LUT image. A register-only cache cannot supply them.
-    if (purpose == Oot3dPicaShaderBuildPurpose::OfflineSource &&
+    // Only the legacy emitter embeds procedural LUT values in source. The
+    // parametric program receives them with the draw and can be built without them.
+    if (!parametric && purpose == Oot3dPicaShaderBuildPurpose::OfflineSource &&
         procTexReferenced && procTexEnabled) {
         SetError(error, "offline register-only shader input lacks procedural LUT payload");
         return false;
     }
     std::string procTexSource;
-    if (procTexReferenced && procTexEnabled &&
+    if (parametric && procTexReferenced && procTexEnabled &&
+        !Oot3dPicaProceduralTextureConfigurationSupported(packet)) {
+        SetError(error, "invalid native procedural texture configuration");
+        return false;
+    }
+    if (!parametric && procTexReferenced && procTexEnabled &&
         !GenerateOot3dPicaProceduralTextureSampler(
             packet, procTexSource, error)) {
         return false;
@@ -596,6 +602,7 @@ bool GenerateOot3dPicaFragmentShader(
               "layout(location=6) in vec3 pica_view;\n";
     if (parametric) source << Fast::Renderer3ds::PicaTevProgramGlsl();
     if (parametric) source << Fast::Renderer3ds::PicaLightingProgramDeclaration;
+    if (parametric) source << Fast::Renderer3ds::PicaProcTexDeclaration;
     source << (integerTexture0
                    ? "layout(set=0,binding=1) uniform usampler2D pica_texture0;\n"
                    : "layout(set=0,binding=1) uniform sampler2D pica_texture0;\n")
@@ -626,6 +633,7 @@ bool GenerateOot3dPicaFragmentShader(
     if (parametric) source << "    PicaTevProgram tev_program;\n";
     if (parametric) source << "    PicaLightingProgram lighting_program;\n";
     if (parametric) source << "    uvec4 fragment_control;\n";
+    if (parametric) source << "    PicaProcTexProgram proctex_program;\n";
     source << "} fragment_uniforms;\n";
     if (state.OutputMerger.FragmentOperationMode == 3U) {
         source << "layout(set=0,binding=5,r32ui) uniform uimage2D pica_shadow_buffer;\n";
@@ -658,11 +666,11 @@ bool GenerateOot3dPicaFragmentShader(
     source << ShadowWriteHelpers(state);
     source << procTexSource;
     if (parametric) {
+        source << Fast::Renderer3ds::PicaProcTexCode << Fast::Renderer3ds::PicaProcTexFragmentSampler;
         source << (integerTexture0
                        ? Fast::Renderer3ds::PicaIntegerTexture0Program
                        : Fast::Renderer3ds::PicaFloatTexture0Program);
-        source << "vec4 pica_native_texture3() { return "
-               << (procTexEnabled && procTexReferenced ? "pica_sample_proctex()" : "vec4(0.0)") << "; }\n";
+        source << "vec4 pica_native_texture3() { return pica_sample_proctex(); }\n";
         source << Fast::Renderer3ds::PicaTextureSelectionProgram;
     }
     source << lightingDeclarations;

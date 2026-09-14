@@ -3,6 +3,7 @@
 #include "oot3d_native_pica_draw_state.h"
 #include "fast/renderer3ds/pica_tev_program.h"
 #include "fast/renderer3ds/pica_lighting_program.h"
+#include "fast/renderer3ds/pica_proctex_program.h"
 #include "oot3d_native_pica_fragment_lighting_gen.h"
 #include "oot3d/renderer/pica_shader_hooks.h"
 #include "oot3d/renderer/pica_shader_source_identity.h"
@@ -30,6 +31,7 @@ struct Oot3dPicaFragmentUniformState {
     Fast::Renderer3ds::PicaTevProgram TevProgram;
     Fast::Renderer3ds::PicaLightingProgram LightingProgram;
     std::array<uint32_t, 4> FragmentControl{}; // native fog, alpha-test, texture main/config0
+    Fast::Renderer3ds::PicaProcTexProgram ProcTexProgram;
 };
 
 struct Oot3dPicaGeneratedFragmentShader {

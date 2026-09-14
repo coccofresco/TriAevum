@@ -23,6 +23,7 @@ constexpr uint32_t kVisualReplayMagicV8 = 0x38525650U; // PVR8
 constexpr uint32_t kVisualReplayMagicV9 = 0x39525650U; // PVR9
 constexpr uint32_t kVisualReplayMagicV10 = 0x41525650U; // PVRA
 constexpr uint32_t kVisualReplayMagicV11 = 0x42525650U; // PVRB
+constexpr uint32_t kVisualReplayMagicV12 = 0x43525650U; // PVRC
 constexpr uint32_t kMaximumPlans = 4096U;
 constexpr uint32_t kMaximumResources = 4096U;
 constexpr uint32_t kMaximumShaderBytes = 4U << 20U;
@@ -74,6 +75,7 @@ class Reader final {
   public:
     bool HasTevProgram = false;
     bool HasLightingProgram = false;
+    bool HasProcTexProgram = false;
     explicit Reader(std::span<const uint8_t> bytes) : mBytes(bytes) {}
 
     bool U8(uint8_t& value) {
@@ -769,7 +771,7 @@ bool ReadPlan(Reader& reader, Oot3dPicaVulkanDrawPlan& value,
         !reader.U64(value.FragmentShader.StateKey) ||
         !reader.String(value.FragmentShader.Source, kMaximumShaderBytes) ||
         !ReadFragmentUniforms(reader, value.FragmentShader.Uniforms,
-                              extended, fragmentLighting, shadowUniforms, reader.HasTevProgram, reader.HasLightingProgram) ||
+                              extended, fragmentLighting, shadowUniforms, reader.HasTevProgram, reader.HasLightingProgram, reader.HasProcTexProgram) ||
         !ReadDrawState(reader, value.State, extended)) {
         return false;
     }
@@ -1000,7 +1002,7 @@ bool ReadOptionalFrame(Reader& reader,
 void WriteReplayState(Writer& writer,
                       const Oot3dPicaVisualReplayState& value) {
     const auto lightingLuts = BuildLightingLutDictionary(value);
-    writer.U32(kVisualReplayMagicV11);
+    writer.U32(kVisualReplayMagicV12);
     WriteLightingLutDictionary(writer, lightingLuts);
     const auto& accumulator = value.Scheduler.Accumulator;
     writer.U64(accumulator.NextSequence);
@@ -1037,9 +1039,10 @@ bool ReadReplayState(Reader& reader, Oot3dPicaVisualReplayState& value) {
     uint32_t magic = 0U;
     auto& accumulator = value.Scheduler.Accumulator;
     if (!reader.U32(magic)) return false;
-    reader.HasLightingProgram = magic == kVisualReplayMagicV11;
+    reader.HasProcTexProgram = magic == kVisualReplayMagicV12;
+    reader.HasLightingProgram = magic == kVisualReplayMagicV11 || reader.HasProcTexProgram;
     reader.HasTevProgram = magic == kVisualReplayMagicV10 || reader.HasLightingProgram;
-    // V10 adds TEV data; V11 appends lighting/fog/alpha data. Both retain V9 features.
+    // V10 adds TEV, V11 lighting/fog/alpha, V12 packed procedural data; all retain V9 features.
     if (reader.HasTevProgram) magic = kVisualReplayMagicV9;
     if ((magic != kVisualReplayMagicV1 &&
          magic != kVisualReplayMagicV2 &&

@@ -410,6 +410,23 @@ void AppendMainSampler(std::ostringstream& source,
 
 } // namespace
 
+Fast::Renderer3ds::PicaProcTexProgram BuildOot3dPicaProcTexProgram(const Oot3dPicaDrawPacket& packet) {
+    Fast::Renderer3ds::PicaProcTexProgram result;
+    result.Registers[0] = {packet.Registers[0x80],packet.Registers[0xA8],packet.Registers[0xA9],packet.Registers[0xAA]};
+    result.Registers[1] = {packet.Registers[0xAB],packet.Registers[0xAC],packet.Registers[0xAD],0};
+    if ((packet.Registers[0x80] & 1024U) == 0U) return result;
+    size_t i=0;
+    const auto append = [&](const auto& table) {
+        for (uint32_t word : table) { result.Lut[i/4][i%4]=word; ++i; }
+    };
+    append(packet.ProcTexLuts.Noise);
+    append(packet.ProcTexLuts.ColorMap);
+    append(packet.ProcTexLuts.AlphaMap);
+    append(packet.ProcTexLuts.Color);
+    append(packet.ProcTexLuts.ColorDifference);
+    return result;
+}
+
 bool Oot3dPicaReferencesProceduralTexture(
     const Oot3dPicaDrawPacket& packet) {
     for (const uint16_t base : kTevStageRegisters) {

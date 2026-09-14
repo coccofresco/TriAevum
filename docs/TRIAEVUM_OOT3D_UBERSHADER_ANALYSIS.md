@@ -544,8 +544,8 @@ compiler during console-test configuration. This does not change the game build.
 | Surface | Actual remaining work |
 | --- | --- |
 | CMB/profile vertex programs | Implement and validate the recovered SHBIN behavior as the fixed native vertex family, including skinning, UV mapping, vertex lighting and billboard paths; the legacy vertex translator is still used. |
-| Texture interface | Regular sampler enable/reference masks, UV routing and bump/shadow selection are now data-driven (see below). Preserve float/integer descriptor families; procedural unit 3 remains pending. |
-| Procedural textures | Move the existing generator's native configurations into stable shader code and uniforms; preserve LUT/filter/noise semantics. |
+| Texture interface | Regular sampler enable/reference masks, UV routing and bump/shadow selection are data-driven. Procedural unit 3 now uses a stable program too. Preserve float/integer descriptor families. |
+| Procedural textures | Stable register/LUT-driven program implemented and GPU-tested below. Validate actual procedural draws against emulator evidence and profile the packed uniform transport on target platforms. |
 | Lighting resources | Current code retains LUT/no-LUT descriptor families. Bump/shadow sample selection is now data-driven. The no-LUT family's lookup functions are unreachable by its decoded flags, not a fallback for missing LUT data. |
 | Native output | Audit remaining shadow-write, depth/output and sampler helper specialization and define the bounded legitimate pipeline families. |
 | Delivery | Build the finite shader artifacts with the developer build, bind them directly in NRI, and initialize required pipelines without depending on collected or persistent shader caches. Runtime source generation is not yet removed. |
@@ -587,11 +587,75 @@ Verification on the final binary:
   fixtures still do not exercise fragment lighting; its GPU differential is a
   separate test, not an in-game validation claim.
 
-The replacement remains opt-in. Runtime vertex translation, procedural-texture
-source specialization, fragment wrapper generation and pipeline creation have
-not yet been eliminated. The next blocks are recovered fixed vertex programs,
-data-driven procedural LUT/filter/noise behavior and direct binding of finite
-developer-built shader artifacts. Do not replace those tasks with cache growth.
+At this sampler milestone, procedural source specialization was still present;
+the following milestone removes it. The replacement remains opt-in. Runtime
+vertex translation, fragment wrapper generation and pipeline creation have not
+yet been eliminated. Do not replace those tasks with cache growth.
+
+## Parametric Procedural Textures (2026-09-14)
+
+`fast/renderer3ds/pica_proctex_program.h` now owns the shared procedural shader
+and its typed data contract. The OOT3D frontend supplies native registers 0x80,
+0xA8-0xAD and 896 packed LUT words (noise, color map, alpha map, color and signed
+color differences). No title addresses, asset identifiers or scene exceptions
+are embedded in the shared implementation.
+
+Implemented: coordinate routing, five clamp modes, three shift modes, ten
+coordinate combiners, signed noise, separate alpha, six filters, native bias
+and mip selection. The terminal mip does not evaluate a nonexistent next level
+when its interpolation weight is zero. Lookup tables are draw data, not GLSL
+constants. The native packed representation uses 3,616 bytes including control,
+rather than expanding all LUT entries into float vectors. The fragment UBO is
+now 6,112 bytes; every earlier field offset is preserved. This increases per-draw
+transport versus the preceding milestone and is not a performance improvement
+claim; resource reuse/upload costs still need profiling.
+
+UNORM decode is integer-pattern based and correctly rounded to float, avoiding
+GPU reciprocal rounding differences from CPU-decoded canonical literals. An
+initial GPU test exposed two 8-bit output mismatches at a rounding boundary;
+the conversion fix eliminates them without relaxing the original 1e-5 float
+tolerance. No material-specific adjustment was used.
+
+Integration and verification:
+
+- Parametric generation accepts offline register-only shader input: LUT values
+  are required at draw time, not at shader-build time. The legacy specialized
+  emitter retains its old requirement and remains the differential reference.
+- 120 combinations of registers/LUT values, including enabled/disabled state,
+  produce identical parametric source. SPIR-V reflection checks the new block
+  at byte 2,496. Shader compiler revision is 0x54455605.
+- `pica_proctex_gpu_tests` checks every 8-bit and 12-bit UNORM value exactly
+  against CPU decode, plus the terminal mip. It compares 60 procedural
+  configurations and 1,920 samples against the existing canonical generator:
+  six filters, clamp/shift/combine modes, noise, alpha, zero/positive/negative/
+  fractional biases and synthetic signed LUT differences. Maximum float error
+  6.3777e-6, zero failures at 1e-5, zero clamped 8-bit differences.
+- The procedural differential supplies explicit UV derivatives to compute
+  shaders. It verifies equations, not fragment-quad derivative scheduling or
+  hardware PICA equivalence. Small groups avoid compiling one giant diagnostic
+  shader. The reusable two-buffer harness is `vulkan_compute_test.h`.
+- PVRC/V12 appends the packed procedural block. V1-V11 stay readable; older
+  executables cannot read V12. Codec tests cover exact nonzero LUT roundtrip,
+  V9/V10/V11 prefixes and every truncated payload. Real visual replay and Vulkan
+  bridge tests also pass. The full runtime builds without recompiling title AOT.
+
+All five standalone test targets pass. Final real-game comparisons produced six
+pixel-identical, nonuniform framebuffer pairs across Hyrule Field and early
+boot. Private reports (never package them):
+
+- `C:/Users/xander/AppData/Local/Temp/TriAevum-proctex-final-field-20260914/comparison.json`
+- `C:/Users/xander/AppData/Local/Temp/TriAevum-proctex-final-boot-20260914/comparison.json`
+
+Their specialized shader inventories contain zero procedural samplers: these
+fixtures are regression checks, not a claim that active procedural materials
+have been exercised in game. Neither full-game coverage, zero runtime
+compilation nor Linux/Android parity is claimed. The legacy material state keys
+and pipeline lookup still need separation from finite program identity; reducing
+source variability alone does not eliminate pipeline creation stutters.
+
+Next: fixed recovered CMB/profile vertex programs, bounded native output and
+pipeline families, then direct use of developer-built shader artifacts. The
+parametric path must not depend on collected shader caches or Forge warm-up.
 
 ## External Source Links
 

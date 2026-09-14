@@ -43,13 +43,18 @@ void WriteFragmentUniforms(Writer& writer,
     for (const auto& lut : value.LightingProgram.Luts)
         for (const auto component : lut) writer.Float(component);
     for (const auto word : value.FragmentControl) writer.U32(word);
+    for (const auto& vector : value.ProcTexProgram.Registers)
+        for (const auto word : vector) writer.U32(word);
+    for (const auto& vector : value.ProcTexProgram.Lut)
+        for (const auto word : vector) writer.U32(word);
 }
 
 template<class Reader>
 bool ReadFragmentUniforms(Reader& reader,
                           Oot3dPicaFragmentUniformState& value,
                           bool extended, bool fragmentLighting,
-                          bool shadowUniforms, bool tevProgram, bool lightingProgram = false) {
+                          bool shadowUniforms, bool tevProgram, bool lightingProgram = false,
+                          bool procTexProgram = false) {
     for (auto& vector : value.TevConstants) {
         for (auto& component : vector) {
             if (!reader.Float(component)) return false;
@@ -105,6 +110,12 @@ bool ReadFragmentUniforms(Reader& reader,
         for (auto& lut : value.LightingProgram.Luts)
             for (auto& component : lut) if (!reader.Float(component)) return false;
         for (auto& word : value.FragmentControl) if (!reader.U32(word)) return false;
+    }
+    if (procTexProgram) {
+        for (auto& vector : value.ProcTexProgram.Registers)
+            for (auto& word : vector) if (!reader.U32(word)) return false;
+        for (auto& vector : value.ProcTexProgram.Lut)
+            for (auto& word : vector) if (!reader.U32(word)) return false;
     }
     return true;
 }
