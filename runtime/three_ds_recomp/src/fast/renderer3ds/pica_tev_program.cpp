@@ -69,7 +69,10 @@ vec4 pica_tev_source(uint selector, int stage, PicaTevInputs inputs, vec4 combin
     case 0u: return inputs.primary;
     case 1u: return inputs.primary_fragment;
     case 2u: return inputs.secondary_fragment;
-    case 3u: case 4u: case 5u: case 6u: return inputs.textures[selector - 3u];
+    case 3u: return inputs.textures[0];
+    case 4u: return inputs.textures[1];
+    case 5u: return inputs.textures[2];
+    case 6u: return inputs.textures[3];
     case 13u: return combiner_buffer;
     case 14u: return inputs.constants[stage];
     case 15u: return previous;
@@ -106,6 +109,21 @@ vec4 pica_tev_operation(uint op, vec4 a, vec4 b, vec4 c) {
     }
     return result;
 }
+void pica_tev_input(uvec4 words, int stage, uint input_index,
+                    PicaTevInputs inputs, vec4 combiner_buffer, vec4 previous,
+                    out vec4 color, out vec4 alpha_value) {
+    uint rgb = (words.x >> (input_index * 4u)) & 15u;
+    uint alpha = (words.x >> (16u + input_index * 4u)) & 15u;
+    // Native stage-zero PREVIOUS aliases source C for A/B only.
+    if (stage == 0 && input_index < 2u) {
+        if (rgb == 15u) rgb = (words.x >> 8u) & 15u;
+        if (alpha == 15u) alpha = (words.x >> 24u) & 15u;
+    }
+    vec4 cv = pica_tev_source(rgb, stage, inputs, combiner_buffer, previous);
+    vec4 av = pica_tev_source(alpha, stage, inputs, combiner_buffer, previous);
+    color = vec4(pica_tev_color_operand(cv, (words.y >> (input_index * 4u)) & 15u), 0.0);
+    alpha_value = vec4(pica_tev_alpha_operand(av, (words.y >> (12u + input_index * 4u)) & 7u));
+}
 // Resolved primary includes native quantization and authorized lighting hooks.
 vec4 pica_evaluate_tev_resolved(PicaTevProgram program, PicaTevInputs inputs) {
     vec4 combiner_buffer = vec4(0.0);
@@ -115,19 +133,10 @@ vec4 pica_evaluate_tev_resolved(PicaTevProgram program, PicaTevInputs inputs) {
         uvec4 words = program.stages[stage];
         vec4 colors[3];
         vec4 alphas[3];
-        for (uint input_index = 0u; input_index < 3u; ++input_index) {
-            uint rgb = (words.x >> (input_index * 4u)) & 15u;
-            uint alpha = (words.x >> (16u + input_index * 4u)) & 15u;
-            // Native stage-zero PREVIOUS aliases source C for A/B only.
-            if (stage == 0 && input_index < 2u) {
-                if (rgb == 15u) rgb = (words.x >> 8u) & 15u;
-                if (alpha == 15u) alpha = (words.x >> 24u) & 15u;
-            }
-            vec4 cv = pica_tev_source(rgb, stage, inputs, combiner_buffer, previous);
-            vec4 av = pica_tev_source(alpha, stage, inputs, combiner_buffer, previous);
-            colors[input_index] = vec4(pica_tev_color_operand(cv, (words.y >> (input_index * 4u)) & 15u), 0.0);
-            alphas[input_index] = vec4(pica_tev_alpha_operand(av, (words.y >> (12u + input_index * 4u)) & 7u));
-        }
+        // Fixed operand slots must not become dynamically indexed local arrays.
+        pica_tev_input(words, stage, 0u, inputs, combiner_buffer, previous, colors[0], alphas[0]);
+        pica_tev_input(words, stage, 1u, inputs, combiner_buffer, previous, colors[1], alphas[1]);
+        pica_tev_input(words, stage, 2u, inputs, combiner_buffer, previous, colors[2], alphas[2]);
         uint color_op = words.z & 15u;
         vec4 color = pica_tev_round(clamp(pica_tev_operation(color_op, colors[0], colors[1], colors[2]), 0.0, 1.0));
         float alpha = color_op == 7u ? color.r : pica_tev_round(clamp(

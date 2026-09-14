@@ -813,10 +813,12 @@ bool GenerateOot3dPicaFragmentShader(
                   "    tev_inputs.secondary_fragment = secondary_fragment_color;\n"
                   "    tev_inputs.buffer_color = fragment_uniforms.combiner_buffer_color;\n"
                   "    for(int i=0;i<6;++i) tev_inputs.constants[i]=fragment_uniforms.tev_constants[i];\n";
-        source << "    for (uint texture_unit = 0u; texture_unit < 4u; ++texture_unit)\n"
-                  "        tev_inputs.textures[texture_unit] = (fragment_uniforms.tev_program.control.y & (1u << texture_unit)) != 0u\n"
-                  "            ? pica_native_texture(texture_unit) : vec4(0.0);\n"
-                  "    combiner_output = pica_evaluate_tev_resolved(fragment_uniforms.tev_program, tev_inputs);\n";
+        // Fixed unit dispatch lets the GPU compiler eliminate irrelevant sampler paths.
+        for (unsigned unit = 0; unit < 4; ++unit) {
+            source << "    tev_inputs.textures[" << unit << "] = (fragment_uniforms.tev_program.control.y & "
+                   << (1U << unit) << "u) != 0u ? pica_native_texture(" << unit << "u) : vec4(0.0);\n";
+        }
+        source << "    combiner_output = pica_evaluate_tev_resolved(fragment_uniforms.tev_program, tev_inputs);\n";
         if (!supported) { SetError(error, "parametric TEV texture interface unsupported"); return false; }
     }
 

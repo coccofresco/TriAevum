@@ -8,6 +8,25 @@
 
 using namespace Oot3dNativeGame;
 void Check(bool ok, const std::string& error) { if (!ok) throw std::runtime_error(error); }
+void CheckStaticTevSlots(const std::string& source) {
+    // Dynamic local operand/sampler arrays caused a measured GPU regression.
+    // Keep the register values dynamic, but lower their fixed slot domains offline.
+    for (unsigned slot = 0; slot < 3; ++slot) {
+        const auto index = std::to_string(slot);
+        Check(source.find("pica_tev_input(words, stage, " + index + "u,") != std::string::npos,
+              "TEV operand slot no longer lowered statically");
+    }
+    for (unsigned slot = 0; slot < 4; ++slot) {
+        const auto index = std::to_string(slot);
+        Check(source.find("pica_native_texture(" + index + "u)") != std::string::npos,
+              "native texture unit no longer lowered statically");
+    }
+    for (const char* dynamicIndex : {"colors[input_index]", "alphas[input_index]",
+                                    "inputs.textures[selector - 3u]", "pica_native_texture(texture_unit)"}) {
+        Check(source.find(dynamicIndex) == std::string::npos,
+              "dynamic indexing reintroduced into fixed TEV slots");
+    }
+}
 void CheckUniformOffset(const shaderc::SpvCompilationResult& result, const char* name, uint32_t expected) {
     std::vector<uint32_t> words(result.cbegin(),result.cend());
     uint32_t type=0, member=0;
@@ -55,7 +74,10 @@ int main() {
             Check(dynamic.Uniforms.TevProgram.Stages[0][2] == packet->Registers[0xC2],"draw program lost");
             Check(dynamic.Hooks.SampledTextureMask == specialized.Hooks.SampledTextureMask,"texture hooks changed");
             Check(dynamic.Hooks.Semantics == specialized.Hooks.Semantics,"effect semantics changed");
-            if (n==0) baseline=dynamic.Source;
+            if (n==0) {
+                baseline=dynamic.Source;
+                CheckStaticTevSlots(baseline);
+            }
             Check(dynamic.Source==baseline,"TEV values changed parametric source");
             for (const auto* shader : {&dynamic,&specialized}) {
                 auto result=compiler.CompileGlslToSpv(shader->Source,shaderc_fragment_shader,"consumer",options);
