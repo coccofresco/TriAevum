@@ -88,9 +88,17 @@ def main():
             raise RuntimeError(f'{mode}: effective shader inventory contradicts requested mode')
         if args.no_shader_pack and mode == 'parametric':
             diagnostics = (root/'stderr.log').read_text(errors='replace')
-            hits = re.search(r'TRIAEVUM_NATIVE_FRAGMENT_ARTIFACTS hits=(\d+) modules=16', diagnostics)
+            hits = re.search(r'TRIAEVUM_NATIVE_FRAGMENT_ARTIFACTS hits=(\d+) modules=56\b', diagnostics)
             if not hits or int(hits[1]) == 0:
                 raise RuntimeError('parametric: no built-in fragment artifact was used')
+            native_identities = {(shader['stage'], int(shader['source_id'], 16), shader['source_size'])
+                                 for shader in inventory['shaders']}
+            # The compatibility combiner also uses this resolver. Classify by
+            # the actual native draw inventory, never by a material ID allowlist.
+            for stage, source_id, size in re.findall(
+                    r'TRIAEVUM_FRAGMENT_ARTIFACT_MISS stage=(\w+) source=(\d+) bytes=(\d+)', diagnostics):
+                if (stage, int(source_id), int(size)) in native_identities:
+                    raise RuntimeError('parametric: a native fragment program still required a cache/compiler fallback')
             vertex_hits = re.search(r'TRIAEVUM_NATIVE_VERTEX_ARTIFACTS hits=(\d+)', diagnostics)
             if not vertex_hits or int(vertex_hits[1]) == 0:
                 raise RuntimeError('parametric: no built-in vertex artifact was used')

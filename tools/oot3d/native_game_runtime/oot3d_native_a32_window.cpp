@@ -1,4 +1,5 @@
 #include "oot3d_native_a32_window.h"
+#include "fast/renderer/frame_time_distribution.h"
 #include "oot3d_game_language_panel.h"
 #ifdef OOT3D_WHOLE_AOT_PRODUCT_MODE
 #include "oot3d_native_crash_diagnostics.h"
@@ -4668,6 +4669,8 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
   auto benchmarkMeasurementStart = std::chrono::steady_clock::now();
   auto benchmarkMeasurementEnd = benchmarkMeasurementStart;
   uint64_t benchmarkMeasuredFrames = 0U;
+  auto benchmarkFrameTimes = hostArgs.ThroughputBenchmark
+      ? std::make_unique<Fast::Renderer::FrameTimeDistribution>() : nullptr;
   bool benchmarkMeasurementStarted =
       hostArgs.BenchmarkWarmupFrames == 0U;
 
@@ -6119,6 +6122,11 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
       benchmarkMeasurementStarted = true;
     } else if (benchmarkMeasurementStarted &&
                runFrameCount > hostArgs.BenchmarkWarmupFrames) {
+      if (benchmarkFrameTimes) {
+        benchmarkFrameTimes->RecordMilliseconds(
+            std::chrono::duration<double, std::milli>(
+                completedFrameTime - benchmarkMeasurementEnd).count());
+      }
       benchmarkMeasurementEnd = completedFrameTime;
       ++benchmarkMeasuredFrames;
     }
@@ -6644,6 +6652,19 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                std::min<uint64_t>(runFrameCount,
                                   hostArgs.BenchmarkWarmupFrames)},
               {"measured_frames", benchmarkMeasuredFrames},
+              {"frame_times", [&]() -> nlohmann::json {
+                 if (!benchmarkFrameTimes || !benchmarkFrameTimes->Count()) return nullptr;
+                 const auto& times = *benchmarkFrameTimes;
+                 return {{"samples", times.Count()}, {"invalid_samples", times.Invalid()},
+                         {"quantile_resolution_ms", times.ResolutionMs},
+                         {"overflow_samples", times.Overflow()},
+                         {"p50_upper_ms", *times.QuantileUpperMs(0.50)},
+                         {"p95_upper_ms", *times.QuantileUpperMs(0.95)},
+                         {"p99_upper_ms", *times.QuantileUpperMs(0.99)},
+                         {"maximum_ms", times.MaximumMs()}, {"mean_ms", times.MeanMs()},
+                         {"over_60hz_budget", times.Over60Hz()},
+                         {"over_30hz_budget", times.Over30Hz()}};
+               }()},
               {"host_seconds",
                benchmarkMeasuredFrames == 0U
                    ? nlohmann::json(nullptr)

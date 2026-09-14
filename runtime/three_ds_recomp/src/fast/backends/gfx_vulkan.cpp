@@ -2,6 +2,7 @@
 
 #include "fast/backends/gfx_vulkan.h"
 #include "fast/renderer3ds/pica_native_fragment_binaries.h"
+#include "fast/oot3d/pica_temporal_fragment_binaries.h"
 #include "fast/renderer/framebuffer_readback.h"
 #include "fast/renderer/shaderc_compiler.h"
 #include "fast/renderer3ds/vulkan_pipeline_cache_store.h"
@@ -3818,7 +3819,8 @@ void GfxRenderingAPIVulkan::FinishNativePicaAotShaders() {
         mPicaAotShaderSummaryLogged = true;
         std::fprintf(stderr, "TRIAEVUM_NATIVE_FRAGMENT_ARTIFACTS hits=%llu modules=%zu\n",
                      static_cast<unsigned long long>(mNativeFragmentArtifactHits),
-                     std::size(Renderer3ds::kNativeFragmentArtifacts));
+                     std::size(Renderer3ds::kNativeFragmentArtifacts) +
+                         std::size(Oot3d::kTemporalFragmentArtifacts));
         std::fprintf(stderr, "TRIAEVUM_NATIVE_VERTEX_ARTIFACTS hits=%llu\n",
                      static_cast<unsigned long long>(mNativeVertexArtifactHits));
         std::fprintf(stderr, "TRIAEVUM_NATIVE_PROGRAM_OWNERS canonical=%zu instrumented=%zu\n",
@@ -3832,13 +3834,23 @@ GfxRenderingAPIVulkan::ResolveNativePicaShaderSpirv(
     bool vertexShader, const char* sourceName) {
     if (!vertexShader && (stage == Oot3d::PicaAotShaderStage::Fragment ||
                           stage == Oot3d::PicaAotShaderStage::NriFragment)) {
-        const auto artifact = Renderer3ds::FindPicaFragmentArtifact(
+        auto artifact = Renderer3ds::FindPicaFragmentArtifact(
             Renderer3ds::kNativeFragmentArtifacts, source,
             stage == Oot3d::PicaAotShaderStage::NriFragment);
+        if (artifact.empty()) {
+            artifact = Renderer3ds::FindPicaFragmentArtifact(
+                Oot3d::kTemporalFragmentArtifacts, source,
+                stage == Oot3d::PicaAotShaderStage::NriFragment);
+        }
         if (!artifact.empty()) {
             ++mNativeFragmentArtifactHits;
             return {artifact.begin(), artifact.end()};
         }
+        const auto identity = Renderer3ds::IdentifyPicaShaderSource(source);
+        const auto stageName = Oot3d::PicaAotShaderStageName(stage);
+        std::fprintf(stderr, "TRIAEVUM_FRAGMENT_ARTIFACT_MISS stage=%.*s source=%llu bytes=%zu\n",
+                     static_cast<int>(stageName.size()), stageName.data(),
+                     static_cast<unsigned long long>(identity.Id), source.size());
     }
     if (!mPicaAotShaderPack.Loaded()) {
         return CompileShaderSpirv(std::string(source), vertexShader,

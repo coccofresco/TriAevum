@@ -171,3 +171,6 @@ the remaining legacy/instrumented fragment compiler paths with bounded offline
 families, and profile the smaller residual cost before default promotion.
 Keep the precompiled pass work and correct program ownership; do not restore
 shader-cache dependence to conceal unfinished work.
+
+Follow-up: `TRIAEVUM_TEMPORAL_OFFLINE_STUTTER_PROGRESS.md` records the offline
+temporal family, remaining compiler paths and measured host-frame tails with TAA.

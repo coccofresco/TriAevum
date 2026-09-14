@@ -19,6 +19,7 @@ def main():
     parser.add_argument('--repeats', type=int, default=3)
     parser.add_argument('--frames', type=int, default=900)
     parser.add_argument('--warmup', type=int, default=180)
+    parser.add_argument('--taa', action='store_true', help='Exercise temporal shader outputs without frame interpolation')
     args = parser.parse_args()
     if args.repeats < 1 or not 0 < args.warmup < args.frames:
         parser.error('require repeats > 0 and 0 < warmup < frames')
@@ -62,6 +63,9 @@ def main():
                     if token == '--config':
                         config = json.loads(target.read_text(encoding='utf-8-sig'))
                         config['Graphics']['Presentation']['VSync'] = False
+                        if args.taa:
+                            config['Graphics']['Preset'] = 'Custom'
+                            config['Graphics']['AA']['Mode'] = 'TAA'
                         target.write_text(json.dumps(config, indent=2), encoding='utf-8')
                     command.extend((token, str(target.resolve())))
                 else:
@@ -92,6 +96,13 @@ def main():
             if (not window['throughput_mode'] or window['vsync'] or window['pacing_enabled']
                 or window['sdl_frame_limiter_enabled'] or window['measured_frames'] != args.frames - args.warmup):
                 raise RuntimeError(f'{arm}: invalid measurement window: {window}')
+            distribution = window.get('frame_times')
+            if arm != 'historical':
+                if (not distribution or distribution['samples'] != window['measured_frames']
+                    or distribution['invalid_samples'] != 0
+                    or abs(distribution['mean_ms'] * distribution['samples'] / 1000.0
+                           - window['host_seconds']) > 1e-6):
+                    raise RuntimeError(f'{arm}: frame-time distribution disagrees with benchmark window')
             timing = report['frame_rate']
             visual = report['visual_interpolation']
             if (timing['mode'] != 'native30_no_interpolation' or timing['visual_interpolation_active']
@@ -107,6 +118,9 @@ def main():
                 match = re.search(label + r' ([^\n]+)', log)
                 if match:
                     counters[label] = dict(re.findall(r'(\w+)=([\w.]+)', match[1]))
+            if args.taa and arm != 'historical':
+                if int(counters.get('TRIAEVUM_NATIVE_PROGRAM_OWNERS', {}).get('instrumented', 0)) == 0:
+                    raise RuntimeError(f'{arm}: TAA instrumentation was not exercised')
             row = {'arm': arm, 'repeat': repeat, 'application_cache_initially_empty': repeat == 0,
                 'wall_seconds_including_load': elapsed, 'benchmark': window,
                 'guest_refresh_frames': report['guest_refresh_frames'],
@@ -124,6 +138,15 @@ def main():
         samples = [r['benchmark']['frames_per_second'] for r in rows if r['arm'] == arm]
         summary[arm] = {'median_native_fps': statistics.median(samples),
                         'min_native_fps': min(samples), 'max_native_fps': max(samples)}
+        distributions = [r['benchmark'].get('frame_times') for r in rows if r['arm'] == arm]
+        if all(distributions):
+            summary[arm]['frame_times'] = {
+                'median_run_p95_upper_ms': statistics.median(d['p95_upper_ms'] for d in distributions),
+                'median_run_p99_upper_ms': statistics.median(d['p99_upper_ms'] for d in distributions),
+                'maximum_ms': max(d['maximum_ms'] for d in distributions),
+                'over_30hz_budget': sum(d['over_30hz_budget'] for d in distributions),
+                'samples': sum(d['samples'] for d in distributions)}
+    summary['taa'] = args.taa
     summary['method'] = ('Rotating arm order; same guest DLL/assets/state/config; native30 fixed delta; '
         'no interpolation, VSync, pacing, limiter, screenshots or effective shader inventory. '
         'Warmup excluded. First application cache empty, reused per arm thereafter. '

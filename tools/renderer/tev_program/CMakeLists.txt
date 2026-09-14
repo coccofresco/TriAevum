@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.24)
 project(TriAevumTevProgramTests LANGUAGES CXX)
 enable_testing()
+add_executable(frame_time_distribution_tests frame_time_distribution_tests.cpp)
+target_compile_features(frame_time_distribution_tests PRIVATE cxx_std_20)
+target_include_directories(frame_time_distribution_tests PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/../../../runtime/three_ds_recomp/include")
+add_test(NAME frame_time_distribution COMMAND frame_time_distribution_tests)
 find_package(Vulkan REQUIRED)
 find_path(SHADERC_INCLUDE_DIR shaderc/shaderc.hpp HINTS "$ENV{VULKAN_SDK}" PATH_SUFFIXES include Include REQUIRED)
 find_library(SHADERC_LIBRARY NAMES shaderc_shared shaderc HINTS "$ENV{VULKAN_SDK}" PATH_SUFFIXES lib Lib REQUIRED)
@@ -92,7 +97,18 @@ target_compile_features(build_fragment_artifacts PRIVATE cxx_std_20)
 target_include_directories(build_fragment_artifacts PRIVATE "${frontend}" "${runtime}/include"
     "${SHADERC_INCLUDE_DIR}" "${CMAKE_CURRENT_LIST_DIR}/../../triaevum_release/vendor/include")
 target_link_libraries(build_fragment_artifacts PRIVATE pica_tev_program "${SHADERC_LIBRARY}")
+target_sources(build_fragment_artifacts PRIVATE
+    "${runtime}/src/fast/oot3d/directional_shadows.cpp"
+    "${runtime}/src/fast/oot3d/pica_directional_shadow_caster.cpp"
+    "${runtime}/src/fast/oot3d/pica_directional_shadow_lighting.cpp"
+    "${runtime}/src/fast/oot3d/pica_directional_shadow_semantics.cpp"
+    "${runtime}/src/fast/oot3d/pica_reactive_mask.cpp"
+    "${runtime}/src/fast/oot3d/pica_reflection_material.cpp"
+    "${runtime}/src/fast/oot3d/pica_toon_shader.cpp"
+    "${runtime}/src/fast/oot3d/pica_shader_instrumentation.cpp")
 add_test(NAME pica_fragment_artifacts COMMAND build_fragment_artifacts --check)
+add_test(NAME pica_temporal_fragment_artifacts COMMAND build_fragment_artifacts --temporal --check)
+set_tests_properties(pica_temporal_fragment_artifacts PROPERTIES TIMEOUT 180)
 set_tests_properties(pica_fragment_artifacts PROPERTIES TIMEOUT 120)
 if(WIN32)
     add_custom_command(TARGET build_fragment_artifacts POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different
