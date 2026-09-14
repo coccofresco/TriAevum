@@ -272,8 +272,46 @@ PICA precision. Curves/tables belong in data resources, never shader source keys
   behavior and extension variants remain to be validated across Windows,
   Linux/Deck-compatible drivers and Android. No performance gain measured yet.
 
-Only the inventory tool/tests and this report were added. No runtime shader,
-draw scheduling, F1 setting, save, external decomp or release payload changed.
+The initial analysis added only the inventory tool/tests and this report.
+The subsequent TEV implementation is tracked below; it is not yet selected by
+the playable renderer.
+
+## Implementation checkpoint: immutable TEV core
+
+`runtime/three_ds_recomp/include/fast/renderer3ds/pica_tev_program.h` and
+`src/fast/renderer3ds/pica_tev_program.cpp` introduce a 112-byte std140/std430
+program decoded directly from the six native TEV register groups and buffer
+update bits. The shared `Renderer3dsPicaCore` target owns this module. It has
+no title addresses, scene exceptions, compiler dependency or scheduling policy.
+Unsupported encodings reject the complete program rather than silently fixing
+it. The immutable GLSL evaluator implements source/operand selection, RGB and
+alpha operations, byte rounding, scales and delayed combiner buffer updates.
+Textures, material constants and lighting results are inputs, not shader keys.
+
+`tools/renderer/tev_program` is a standalone, small CMake test project requiring
+Vulkan and shaderc from the developer SDK. Configure it in a separate build
+directory, build Release, and run `ctest --test-dir <build> -C Release
+--output-on-failure`. This does not build title logic/AOT. The test creates an
+offscreen RGBA32F framebuffer, compiles one fragment module during test setup,
+and renders 4,096 deterministic TEV configurations with one pipeline and draw.
+Six configurations isolate prefixes of a chained quantization case. Readback
+is compared against a scalar CPU implementation, and `pica_tev_gpu.ppm` is
+written in the test build directory. Invalid register encodings are also tested.
+
+Windows RTX 3060 result: 16,384 channels, zero mismatches, maximum error zero.
+The first scalar reference used floating-point division by 255; making the
+reciprocal multiplication explicit on both sides removed its rounding-boundary
+disagreements. This is CPU/GPU agreement for the new evaluator, **not proof of
+bit-identical original hardware arithmetic**, canonical-generator parity or
+cross-vendor GPU validation. No measured gameplay performance gain yet.
+
+Next integration boundary: compare against the existing specialized GPU path;
+then introduce a versioned per-draw program binding without breaking the current
+2,112-byte fragment uniform prefix or visual savestates. Preserve per-draw
+extension metadata even when material shader identities collapse. Move lighting,
+fog and procedural texture state to bounded modules/data, then precreate PSOs.
+The current game still uses its existing shader generator/cache. No F1 setting,
+save, external decomp or release payload was changed by this checkpoint.
 
 ## References
 

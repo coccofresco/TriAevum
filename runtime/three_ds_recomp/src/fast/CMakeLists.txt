@@ -81,6 +81,7 @@ set(Source_Files__Renderer3dsPica
     renderer3ds/pica_gl_shader_dialect.cpp
     renderer3ds/pica_scene_capabilities.cpp
     renderer3ds/pica_semantic_scene_view.cpp
+    renderer3ds/pica_tev_program.cpp
 )
 add_library(renderer_3ds_pica_core STATIC
     ${Source_Files__Renderer3dsPica})
