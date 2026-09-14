@@ -1,4 +1,5 @@
 #include "oot3d_native_pica_shader_gen.h"
+#include "oot3d_translated_vertex_programs.h"
 
 #include "nihstro/shader_bytecode.h"
 #include "video_core/shader/generator/glsl_shader_decompiler.h"
@@ -1046,20 +1047,39 @@ Oot3dPicaVertexUniformState BuildOot3dPicaVertexUniformState(
 bool GenerateOot3dPicaVertexShader(
     const Oot3dPicaDrawPacket& packet,
     const Oot3dPicaDecodedDrawState& state,
-    Oot3dPicaGeneratedVertexShader& shader, std::string* error) {
+    Oot3dPicaGeneratedVertexShader& shader, std::string* error,
+    bool requireTranslatedProgram) {
     shader = {};
     if (packet.VertexShader.ProgramWordCount == 0U ||
+        packet.VertexShader.ProgramWordCount > packet.VertexShader.Program.size() ||
+        packet.VertexShader.SwizzleWordCount > packet.VertexShader.Swizzles.size() ||
         state.ShaderInterface.VertexMainOffset >=
-            packet.VertexShader.Program.size()) {
+            packet.VertexShader.ProgramWordCount) {
         SetError(error, "PICA vertex program or entrypoint is invalid");
         return false;
     }
-    const std::string body =
-        Pica::Shader::Generator::GLSL::DecompileProgram(
+    std::string body;
+    if (requireTranslatedProgram) {
+        for (const auto& program : kTranslatedVertexPrograms) {
+            if (program.Matches(
+                    {packet.VertexShader.Program.data(), packet.VertexShader.ProgramWordCount},
+                    {packet.VertexShader.Swizzles.data(), packet.VertexShader.SwizzleWordCount},
+                    state.ShaderInterface.VertexMainOffset, kAccuratePicaMultiplication)) {
+                body = program.Body;
+                break;
+            }
+        }
+        if (body.empty()) {
+            SetError(error, "native vertex program is not in the translated title family; runtime translation is disabled");
+            return false;
+        }
+    } else {
+        body = Pica::Shader::Generator::GLSL::DecompileProgram(
             packet.VertexShader.Program.Values(),
             packet.VertexShader.Swizzles.Values(),
             state.ShaderInterface.VertexMainOffset, InputRegisterName,
             OutputRegisterName, kAccuratePicaMultiplication);
+    }
     if (body.empty()) {
         SetError(error, "PICA vertex program could not be decompiled");
         return false;

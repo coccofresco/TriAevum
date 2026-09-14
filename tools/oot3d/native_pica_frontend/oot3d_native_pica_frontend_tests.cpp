@@ -8,11 +8,14 @@
 #include <array>
 #include <bit>
 #include <cstdlib>
+#include <fstream>
+#include <iterator>
 #include <iostream>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
@@ -178,7 +181,75 @@ class MemoryFillSink final : public Oot3dNativeGame::Oot3dPicaPacketSink {
 
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    // Optional private SHBIN inputs exercise translated title code without
+    // publishing original binaries or requiring assets for the normal suite.
+    size_t translatedCases = 0;
+    for (int arg = 1; arg < argc; ++arg) {
+        std::ifstream input(argv[arg], std::ios::binary);
+        Require(bool(input), "cannot open vertex test SHBIN");
+        std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(input)), {});
+        const auto word = [&](size_t p) {
+            Require(p <= bytes.size() && bytes.size() - p >= 4, "truncated vertex test SHBIN");
+            return uint32_t(bytes[p]) | uint32_t(bytes[p+1]) << 8 |
+                   uint32_t(bytes[p+2]) << 16 | uint32_t(bytes[p+3]) << 24;
+        };
+        Require(word(0) == 0x424c5644, "not DVLB");
+        const size_t count = word(4), p = 8 + count * 4;
+        Require(word(p) == 0x504c5644, "not DVLP");
+        Oot3dNativeGame::Oot3dPicaDrawPacket packet{};
+        packet.VertexShader.ProgramWordCount = word(p+12);
+        packet.VertexShader.SwizzleWordCount = word(p+20);
+        Require(packet.VertexShader.ProgramWordCount <= packet.VertexShader.Program.size() &&
+                packet.VertexShader.SwizzleWordCount <= packet.VertexShader.Swizzles.size(), "program capacity");
+        for (size_t i = 0; i < packet.VertexShader.ProgramWordCount; ++i)
+            packet.VertexShader.Program[i] = word(p + word(p+8) + i*4);
+        for (size_t i = 0; i < packet.VertexShader.SwizzleWordCount; ++i)
+            packet.VertexShader.Swizzles[i] = word(p + word(p+16) + i*8);
+        for (size_t entry = 0; entry < count; ++entry) {
+            Oot3dNativeGame::Oot3dPicaDecodedDrawState state{};
+            state.ShaderInterface.VertexMainOffset = word(word(8 + entry*4) + 8);
+            state.ShaderInterface.OutputMask = 0x7f;
+            for (uint32_t variant = 0; variant < 8; ++variant) {
+                for (uint32_t row = 0; row < 7; ++row) {
+                    const uint32_t s = (row * 4 + variant) % 24;
+                    packet.Registers[0x50 + row] = s | ((s+1)%24)<<8 | ((s+2)%24)<<16 | ((s+3)%24)<<24;
+                }
+                packet.VertexShader.BooleanUniforms[variant] = true;
+                packet.VertexShader.FloatUniforms[variant] = {1.f, float(variant), -2.f, .5f};
+                packet.VertexShader.IntegerUniforms[variant%4] = {static_cast<uint8_t>(variant), 1, 2, 3};
+                Oot3dNativeGame::Oot3dPicaGeneratedVertexShader reference, translated;
+                std::string error;
+                Require(Oot3dNativeGame::GenerateOot3dPicaVertexShader(packet, state, reference, &error), error);
+                Require(Oot3dNativeGame::GenerateOot3dPicaVertexShader(packet, state, translated, &error, true), error);
+                Require(reference.Source == translated.Source && reference.StateKey == translated.StateKey &&
+                        reference.TemporalProgram->PreviousRegisterState == translated.TemporalProgram->PreviousRegisterState &&
+                        reference.TemporalProgram->PreviousMainBody == translated.TemporalProgram->PreviousMainBody &&
+                        reference.TemporalProgram->Hooks.Offsets == translated.TemporalProgram->Hooks.Offsets &&
+                        reference.Uniforms.BooleanMask == translated.Uniforms.BooleanMask &&
+                        reference.Uniforms.Floats == translated.Uniforms.Floats &&
+                        reference.Uniforms.Integers == translated.Uniforms.Integers,
+                        "offline vertex differs from legacy translation or temporal/uniform contract");
+                ++translatedCases;
+            }
+            std::string error;
+            Oot3dNativeGame::Oot3dPicaGeneratedVertexShader rejected;
+            packet.VertexShader.Program[0] ^= 1;
+            Require(!Oot3dNativeGame::GenerateOot3dPicaVertexShader(packet, state, rejected, &error, true),
+                    "changed program must not fall back to runtime translation");
+            packet.VertexShader.Program[0] ^= 1;
+            packet.VertexShader.Swizzles[0] ^= 1;
+            Require(!Oot3dNativeGame::GenerateOot3dPicaVertexShader(packet, state, rejected, &error, true),
+                    "changed swizzle must not match translated program");
+            packet.VertexShader.Swizzles[0] ^= 1;
+            const auto savedCount = packet.VertexShader.ProgramWordCount;
+            packet.VertexShader.ProgramWordCount = 1;
+            Require(!Oot3dNativeGame::GenerateOot3dPicaVertexShader(packet, state, rejected, &error, true),
+                    "truncated upload must not match translated program");
+            packet.VertexShader.ProgramWordCount = savedCount;
+        }
+    }
+    if (translatedCases) std::cout << "translated_vertex_differential_cases=" << translatedCases << '\n';
     auto frontendStorage =
         std::make_unique<Oot3dNativeGame::Oot3dNativePicaFrontend>();
     auto& frontend = *frontendStorage;

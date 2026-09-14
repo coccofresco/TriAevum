@@ -237,7 +237,7 @@ bool BuildOot3dPicaVulkanDrawPlanImpl(
     } else {
         if (!GenerateOot3dPicaVertexShader(
                 submission.Packet, submission.State, plan.VertexShader,
-                error)) {
+                error, shaderCache && shaderCache->TevMode == Oot3dPicaTevMode::Parametric)) {
             return false;
         }
         if (shaderCache != nullptr) {

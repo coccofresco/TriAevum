@@ -81,3 +81,19 @@ target_compile_definitions(pica_pipeline_identity_tests PRIVATE ENABLE_RENDERER3
 target_include_directories(pica_pipeline_identity_tests PRIVATE "${runtime}/include")
 target_link_libraries(pica_pipeline_identity_tests PRIVATE Vulkan::Vulkan)
 add_test(NAME pica_pipeline_identity COMMAND pica_pipeline_identity_tests)
+
+find_package(spdlog CONFIG REQUIRED)
+add_executable(pica_vertex_program_tests vertex_program_tests.cpp)
+target_compile_features(pica_vertex_program_tests PRIVATE cxx_std_20)
+target_include_directories(pica_vertex_program_tests PRIVATE "${runtime}/include")
+add_test(NAME pica_vertex_program COMMAND pica_vertex_program_tests)
+add_executable(export_vertex_programs export_vertex_programs.cpp
+    "${frontend}/../third_party/azahar_pica/video_core/shader/generator/glsl_shader_decompiler.cpp")
+target_compile_features(export_vertex_programs PRIVATE cxx_std_20)
+target_include_directories(export_vertex_programs PRIVATE "${runtime}/include"
+    "${frontend}/../third_party/azahar_pica"
+    "${CMAKE_CURRENT_LIST_DIR}/../../triaevum_release/vendor/include")
+target_link_libraries(export_vertex_programs PRIVATE spdlog::spdlog)
+if(MSVC)
+    set_property(TARGET export_vertex_programs PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()

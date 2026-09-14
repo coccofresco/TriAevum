@@ -1,7 +1,8 @@
 # OOT3D native shader surface and NRI migration
 
-Date: 2026-09-14. Status: source/asset investigation and executable census,
-not an implemented renderer replacement or a measured stutter elimination.
+Date: 2026-09-14. Status: implemented opt-in parametric fragment path and
+offline-translated native vertex family; not yet fully precompiled desktop
+shaders, a renderer replacement, or measured stutter elimination.
 
 ## Decision
 
@@ -723,6 +724,81 @@ Vulkan fallback and an NRI-owned pipeline; removing that duplication requires
 an explicit ownership change, not a fake Vulkan handle. Shader-program lookup
 itself still uses legacy material aliases. Full cache-independent operation and
 cross-platform/advanced-effect validation are not complete.
+
+## Offline native vertex family
+
+The opt-in `--pica-parametric-tev` path now selects developer-translated vertex
+code for all three entries in `CmbVShader.shbin` and `profile.shbin`. It no longer
+calls the PICA instruction decompiler for these vertex programs. The specialized
+path still translates instructions as the comparison reference. Unknown programs
+in the new path fail explicitly; they are not silently translated at runtime.
+
+Ownership and reproducibility:
+
+- Shared `fast/renderer3ds/pica_vertex_program.h` defines program identity and
+  selection, including entrypoint, multiplication semantics, instruction and
+  swizzle identities. Hashing is explicitly little-endian. It contains no title
+  addresses, asset names, uniforms, gameplay or output mapping assumptions.
+- Title-owned `oot3d_translated_vertex_programs.h` contains translated GLSL
+  bodies, not raw SHBIN data. Its adjacent provenance JSON records original
+  SHA256 identities, generated-source hash and the Citra/Azahar translator donor.
+  This is explicitly translated title code, not a title-neutral renderer module.
+  No release was prepared here; catalogue it and its corresponding source in
+  the release boundary before promotion. Do not distribute the original inputs.
+- `export_vertex_programs` in `tools/renderer/tev_program` is a developer tool,
+  NOT a Forge/user installation operation. It validates SHBIN capacities,
+  entrypoints and vertex stage; exports all entries; and compares translations
+  with altered unused instruction/swizzle tails before allowing prefix matching.
+  Trailing upload memory is not a new shader variant. Active instructions and
+  swizzles must match; uniform values and native output mapping stay dynamic.
+- `GenerateOot3dPicaVertexShader(..., requireTranslatedProgram=true)` retains the
+  existing composition wrapper, native depth/viewport conventions, transform,
+  skeleton and UV metadata, and previous-frame interpolation hooks. The planner
+  selects this policy only for the opt-in path. Invalid upload extents are rejected
+  before forming program spans. Draw order and effect scheduling are unchanged.
+
+Developer regeneration (private input directory supplied by the developer):
+
+```powershell
+export_vertex_programs.exe tools/oot3d/native_pica_frontend/oot3d_translated_vertex_programs.h <romfs>/CmbVShader.shbin <romfs>/profile.shbin
+oot3d_native_pica_frontend_tests.exe <romfs>/CmbVShader.shbin <romfs>/profile.shbin
+```
+
+The standalone CMake project now also requires the existing `spdlog` donor
+package for the developer translator; Windows validation uses
+`-DCMAKE_PREFIX_PATH=C:/vcpkg/installed/x64-windows-static`.
+
+Verification on Windows NRI:
+
+- Seven standalone suites pass, including a new vertex identity contract test
+  with changed instructions/swizzles, entrypoint, arithmetic mode, truncated
+  uploads, malformed identity lengths, empty bodies and little-endian encoding.
+- Twenty-four real-SHBIN differential cases (three entries, eight output maps
+  and uniform configurations) produce identical GLSL, state keys, previous-frame
+  bodies, hook offsets and uniform payloads. Altered/truncated programs reject
+  rather than falling back. The ordinary asset-free frontend suite also passes.
+- Planner, visual savestate and Vulkan bridge suites pass. Runtime was built incrementally
+  without recompiling title AOT. No external decompilation repository was modified.
+- Three framebuffer pairs from early boot and three from Field are pixel-identical;
+  final evidence is under the private Temp folders below. Each final parametric
+  report records two vertex source misses, exercising the translated-only selection,
+  followed by 11,196 (boot) and 18,998 (Field) vertex source reuses.
+  These are native30/no-interpolation/effects-off fixtures, not an advanced-effect,
+  Linux/Android or complete-game coverage claim.
+
+Private evidence, never package:
+
+- `C:/Users/xander/AppData/Local/Temp/TriAevum-fixed-vertex-final-boot-20260914`
+- `C:/Users/xander/AppData/Local/Temp/TriAevum-fixed-vertex-final-field-20260914`
+
+**Remaining distinction:** offline PICA-to-GLSL translation is now implemented;
+GLSL-to-SPIR-V compilation, interface/extension source assembly and driver PSO
+creation are NOT all offline yet. Existing SPIR-V/pass caches still report
+compilations in cold application runs. Next work must bind developer-built
+desktop shader artifacts directly and prepare bounded fixed-state pipeline
+families, not collect more gameplay variants. Shader-module ownership still
+uses material aliases and the fallback Vulkan/NRI creation duplication remains.
+No FPS improvement or complete elimination of shader stuttering is claimed here.
 
 ## External Source Links
 

@@ -42,6 +42,7 @@ bool GenerateOot3dPicaVertexShader(
     const Oot3dPicaDrawPacket& packet,
     const Oot3dPicaDecodedDrawState& state,
     Oot3dPicaGeneratedVertexShader& shader,
-    std::string* error = nullptr);
+    std::string* error = nullptr,
+    bool requireTranslatedProgram = false);
 
 } // namespace Oot3dNativeGame

@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "role": "translated_title_shader_source",
+  "title": "The Legend of Zelda: Ocarina of Time 3D",
+  "artifact": "oot3d_translated_vertex_programs.h",
+  "artifact_sha256": "a54a24ffdde9d3b263102d2325614578b1386b2f467075ec6d07a431c8723808",
+  "translator": "tools/renderer/tev_program/export_vertex_programs.cpp",
+  "translator_schema": 1,
+  "donor": "Citra/Azahar GLSL shader decompiler, GPL-2.0-or-later; preserve existing donor notices",
+  "accurate_pica_multiplication": true,
+  "entries": 3,
+  "inputs": [
+    {"name": "CmbVShader.shbin", "sha256": "1125cfb9193e6c605ae4a3f8a80accdae948af2fb35bbaf432ef426e66de076a", "entries": 1},
+    {"name": "profile.shbin", "sha256": "d5267731fde1a33d566de540d49bc531cdf0a72521bc5c6ad246938444857f55", "entries": 2}
+  ],
+  "publication": "Development source, not a new release. Catalogue this title-derived artifact and corresponding source explicitly before package promotion; never classify it as title-neutral. Original SHBIN files are not distributed."
+}
