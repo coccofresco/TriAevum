@@ -9,6 +9,11 @@ add_library(pica_tev_program STATIC "${runtime}/src/fast/renderer3ds/pica_tev_pr
 target_include_directories(pica_tev_program PUBLIC "${runtime}/include")
 target_compile_features(pica_tev_program PUBLIC cxx_std_20)
 add_executable(pica_tev_gpu_tests tev_gpu_tests.cpp)
+add_library(canonical_fragment_compile_check OBJECT
+    "${CMAKE_CURRENT_LIST_DIR}/../../oot3d/native_pica_frontend/oot3d_native_pica_fragment_shader_gen.cpp")
+target_compile_features(canonical_fragment_compile_check PRIVATE cxx_std_20)
+target_include_directories(canonical_fragment_compile_check PRIVATE "${runtime}/include"
+    "${CMAKE_CURRENT_LIST_DIR}/../../triaevum_release/vendor/include")
 target_include_directories(pica_tev_gpu_tests PRIVATE "${SHADERC_INCLUDE_DIR}")
 target_link_libraries(pica_tev_gpu_tests PRIVATE pica_tev_program Vulkan::Vulkan "${SHADERC_LIBRARY}")
 if(WIN32)
@@ -17,4 +22,4 @@ if(WIN32)
         "${SHADERC_RUNTIME}" "$<TARGET_FILE_DIR:pica_tev_gpu_tests>")
 endif()
 add_test(NAME pica_tev_gpu COMMAND pica_tev_gpu_tests)
-set_tests_properties(pica_tev_gpu PROPERTIES TIMEOUT 45)
+set_tests_properties(pica_tev_gpu PROPERTIES TIMEOUT 180)

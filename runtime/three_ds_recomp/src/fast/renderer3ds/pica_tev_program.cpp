@@ -47,9 +47,7 @@ struct PicaTevInputs {
     vec4 buffer_color;
 };
 vec4 pica_tev_round(vec4 v) {
-    precise vec4 scaled = v * 255.0;
-    precise vec4 biased = scaled + 0.5;
-    return floor(biased) * (1.0 / 255.0);
+    return floor(v * 255.0 + 0.5) / 255.0;
 }
 vec4 pica_tev_source(uint selector, int stage, PicaTevInputs inputs, vec4 combiner_buffer, vec4 previous) {
     switch (selector) {
@@ -78,14 +76,13 @@ float pica_tev_alpha_operand(vec4 v, uint op) {
     return (op & 1u) != 0u ? 1.0 - value : value;
 }
 vec4 pica_tev_operation(uint op, vec4 a, vec4 b, vec4 c) {
-    // Keep arithmetic ordering explicit around byte quantization boundaries.
-    precise vec4 result;
+    vec4 result;
     switch (op) {
     case 0u: result = a; break;
     case 1u: result = a * b; break;
     case 2u: result = a + b; break;
     case 3u: result = (a + b) - vec4(0.5); break;
-    case 4u: result = b * (vec4(1.0) - c) + a * c; break;
+    case 4u: result = mix(b, a, c); break;
     case 5u: result = a - b; break;
     case 6u: case 7u: result = vec4(dot(a.rgb - vec3(0.5), b.rgb - vec3(0.5)) * 4.0); break;
     case 8u: result = fma(a, b, c); break;

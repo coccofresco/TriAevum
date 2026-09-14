@@ -1,4 +1,5 @@
 #include "oot3d_native_pica_fragment_shader_gen.h"
+#include "oot3d_native_pica_tev_expressions.h"
 #include "oot3d_native_pica_proctex.h"
 #include "fast/oot3d/pica_fragment_lighting.h"
 
@@ -269,115 +270,10 @@ std::string SourceExpression(uint8_t source, size_t stage,
     }
 }
 
-std::string ColorModifier(const std::string& source, uint8_t modifier,
-                          bool& supported) {
-    switch (modifier) {
-    case 0x0:
-        return source + ".rgb";
-    case 0x1:
-        return "vec3(1.0) - " + source + ".rgb";
-    case 0x2:
-        return source + ".aaa";
-    case 0x3:
-        return "vec3(1.0) - " + source + ".aaa";
-    case 0x4:
-        return source + ".rrr";
-    case 0x5:
-        return "vec3(1.0) - " + source + ".rrr";
-    case 0x8:
-        return source + ".ggg";
-    case 0x9:
-        return "vec3(1.0) - " + source + ".ggg";
-    case 0xC:
-        return source + ".bbb";
-    case 0xD:
-        return "vec3(1.0) - " + source + ".bbb";
-    default:
-        supported = false;
-        return "vec3(0.0)";
-    }
-}
-
-std::string AlphaModifier(const std::string& source, uint8_t modifier,
-                          bool& supported) {
-    switch (modifier) {
-    case 0:
-        return source + ".a";
-    case 1:
-        return "1.0 - " + source + ".a";
-    case 2:
-        return source + ".r";
-    case 3:
-        return "1.0 - " + source + ".r";
-    case 4:
-        return source + ".g";
-    case 5:
-        return "1.0 - " + source + ".g";
-    case 6:
-        return source + ".b";
-    case 7:
-        return "1.0 - " + source + ".b";
-    default:
-        supported = false;
-        return "0.0";
-    }
-}
-
-std::string ColorOperation(uint8_t operation, const std::string& a,
-                           const std::string& b, const std::string& c,
-                           bool& supported) {
-    switch (operation) {
-    case 0:
-        return a;
-    case 1:
-        return a + " * " + b;
-    case 2:
-        return a + " + " + b;
-    case 3:
-        return a + " + " + b + " - vec3(0.5)";
-    case 4:
-        return "mix(" + b + ", " + a + ", " + c + ")";
-    case 5:
-        return a + " - " + b;
-    case 6:
-    case 7:
-        return "vec3(dot(" + a + " - vec3(0.5), " + b +
-               " - vec3(0.5)) * 4.0)";
-    case 8:
-        return "fma(" + a + ", " + b + ", " + c + ")";
-    case 9:
-        return "min(" + a + " + " + b + ", vec3(1.0)) * " + c;
-    default:
-        supported = false;
-        return "vec3(0.0)";
-    }
-}
-
-std::string AlphaOperation(uint8_t operation, const std::string& a,
-                           const std::string& b, const std::string& c,
-                           bool& supported) {
-    switch (operation) {
-    case 0:
-        return a;
-    case 1:
-        return a + " * " + b;
-    case 2:
-        return a + " + " + b;
-    case 3:
-        return a + " + " + b + " - 0.5";
-    case 4:
-        return "mix(" + b + ", " + a + ", " + c + ")";
-    case 5:
-        return a + " - " + b;
-    case 8:
-        return "fma(" + a + ", " + b + ", " + c + ")";
-    case 9:
-        return "min(" + a + " + " + b + ", 1.0) * " + c;
-    default:
-        supported = false;
-        return "0.0";
-    }
-}
+using TevExpressions::ColorModifier;
+using TevExpressions::AlphaModifier;
+using TevExpressions::ColorOperation;
+using TevExpressions::AlphaOperation;
 
 std::string AlphaDiscardCondition(uint8_t function) {
     switch (function) {
@@ -464,7 +360,9 @@ uint64_t ComputeOot3dPicaFragmentShaderStateKey(
     const Oot3dPicaDrawPacket& packet,
     const Oot3dPicaDecodedDrawState& state) {
     constexpr uint64_t kFnvOffset = 1469598103934665603ULL;
-    uint64_t key = HashWord(kFnvOffset, packet.Registers[0x080U]);
+    // Version the compiler semantics, not just the input register values.
+    uint64_t key = HashWord(kFnvOffset, 0x54455602U);
+    key = HashWord(key, packet.Registers[0x080U]);
     key = HashWord(key, packet.Registers[0x08FU]);
     const auto lighting =
         Fast::Oot3d::DecodePicaFragmentLighting(packet.Registers);
@@ -704,8 +602,7 @@ bool GenerateOot3dPicaFragmentShader(
         source << "layout(set=0,binding=5,r32ui) uniform uimage2D pica_shadow_buffer;\n";
     }
     source << "layout(location=0) out vec4 pica_color;\n"
-              "vec3 byteround3(vec3 value) { return floor(value * 255.0 + 0.5) / 255.0; }\n"
-              "float byteround1(float value) { return floor(value * 255.0 + 0.5) / 255.0; }\n"
+           << TevExpressions::ByteRoundHelpers <<
               "float pica_texture_lod(vec2 coord, vec2 size) {\n"
               "    vec2 scaled = coord * size;\n"
               "    vec2 delta = max(abs(dFdx(scaled)), abs(dFdy(scaled)));\n"
@@ -737,7 +634,7 @@ bool GenerateOot3dPicaFragmentShader(
     hooks.Offsets[static_cast<size_t>(
         Oot3d::Renderer::PicaShaderHook::MainPrologue)] =
         StreamOffset(source);
-    source << "    vec4 rounded_primary_color = vec4(byteround3(pica_primary_color.rgb), byteround1(pica_primary_color.a));\n"
+    source << "    precise vec4 rounded_primary_color = vec4(byteround3(pica_primary_color.rgb), byteround1(pica_primary_color.a));\n"
               "    vec4 primary_fragment_color = vec4(0.0);\n"
               "    vec4 secondary_fragment_color = vec4(0.0);\n"
               "    vec4 combiner_buffer = vec4(0.0);\n"
@@ -835,10 +732,10 @@ bool GenerateOot3dPicaFragmentShader(
         const uint32_t alphaScaleBits = (scales >> 16U) & 3U;
         const uint32_t colorScale = colorScaleBits < 3U ? 1U << colorScaleBits : 1U;
         const uint32_t alphaScale = alphaScaleBits < 3U ? 1U << alphaScaleBits : 1U;
-        source << "    vec3 color_output_" << stage
+        source << "    precise vec3 color_output_" << stage
                << " = byteround3(clamp(" << colorResult
                << ", vec3(0.0), vec3(1.0)));\n"
-               << "    float alpha_output_" << stage
+               << "    precise float alpha_output_" << stage
                << " = byteround1(clamp(" << alphaResult
                << ", 0.0, 1.0));\n"
                << "    combiner_output = vec4(clamp(color_output_" << stage

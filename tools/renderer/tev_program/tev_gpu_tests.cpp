@@ -216,7 +216,9 @@ struct Gpu {
     ~Gpu() { if (Device) vkDestroyDevice(Device, nullptr); if (Instance) vkDestroyInstance(Instance, nullptr); }
 };
 
-void RunGpu(const std::vector<Case>& tests) {
+#include "canonical_tev.h"
+
+std::vector<Color> RunGpu(const std::vector<Case>& tests, const std::vector<Color>* canonicalExpected = nullptr) {
     Gpu gpu;
     const auto device = gpu.Device;
     constexpr uint32_t width = 256, height = 16;
@@ -254,12 +256,14 @@ void RunGpu(const std::vector<Case>& tests) {
     VkFramebufferCreateInfo fi{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO}; fi.renderPass = renderPass; fi.attachmentCount = 1; fi.pAttachments = &view; fi.width = width; fi.height = height; fi.layers = 1;
     VkFramebuffer framebuffer{}; Check(vkCreateFramebuffer(device, &fi, nullptr, &framebuffer));
     auto vs = gpu.Shader("#version 450\nvoid main(){vec2 p=vec2((gl_VertexIndex<<1)&2,gl_VertexIndex&2);gl_Position=vec4(p*2.0-1.0,0.0,1.0);}", shaderc_vertex_shader);
-    auto fs = gpu.Shader(std::string("#version 450\n") + std::string(PicaTevProgramGlsl()) + R"(
+    auto fs = gpu.Shader(std::string("#version 450\n") + std::string(PicaTevProgramGlsl()) +
+        (canonicalExpected ? CanonicalTev(tests) : std::string()) + R"(
 struct TestCase { PicaTevProgram program; PicaTevInputs inputs; };
 layout(set=0,binding=0,std430) readonly buffer Cases { TestCase tests[]; };
 layout(location=0) out vec4 color;
-void main() { uint i=uint(gl_FragCoord.y)*256u+uint(gl_FragCoord.x); color=pica_evaluate_tev(tests[i].program,tests[i].inputs); }
-)", shaderc_fragment_shader);
+)" + (canonicalExpected ?
+        "void main(){uint i=uint(gl_FragCoord.y)*256u+uint(gl_FragCoord.x);color=canonical(i,tests[i].inputs);}" :
+        "void main(){uint i=uint(gl_FragCoord.y)*256u+uint(gl_FragCoord.x);color=pica_evaluate_tev(tests[i].program,tests[i].inputs);}"), shaderc_fragment_shader);
     std::array<VkPipelineShaderStageCreateInfo, 2> stages{};
     stages[0] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_VERTEX_BIT, vs, "main", nullptr};
     stages[1] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_FRAGMENT_BIT, fs, "main", nullptr};
@@ -291,9 +295,11 @@ void main() { uint i=uint(gl_FragCoord.y)*256u+uint(gl_FragCoord.x); color=pica_
     Check(vkQueueSubmit(gpu.Queue, 1, &submit, fence)); Check(vkWaitForFences(device, 1, &fence, VK_TRUE, 10000000000ULL));
     const auto* pixels = static_cast<const Color*>(output.Mapped);
     unsigned failures = 0; float maxError = 0;
-    std::ofstream capture("pica_tev_gpu.ppm", std::ios::binary); capture << "P6\n256 16\n255\n";
+    std::ofstream capture(canonicalExpected ? "pica_tev_canonical_gpu.ppm" : "pica_tev_gpu.ppm", std::ios::binary);
+    Require(capture.is_open(), "cannot open framebuffer capture");
+    capture << "P6\n256 16\n255\n";
     for (size_t i = 0; i < tests.size(); ++i) {
-        const auto expected = Reference(tests[i]);
+        const auto expected = canonicalExpected ? canonicalExpected->at(i) : Reference(tests[i]);
         for (unsigned c = 0; c < 4; ++c) {
             const float error = std::abs(expected[c] - pixels[i][c]);
             maxError = std::max(error, maxError);
@@ -305,6 +311,8 @@ void main() { uint i=uint(gl_FragCoord.y)*256u+uint(gl_FragCoord.x); color=pica_
         }
     }
     capture.close();
+    std::vector<Color> result(pixels, pixels + tests.size());
+    std::cout << (canonicalExpected ? "canonical GPU comparison: " : "scalar comparison: ");
     std::cout << "cases=" << tests.size() << " channels=" << tests.size()*4 << " mismatches=" << failures << " max_error=" << maxError << " fragment_modules=1 pipelines=1 draws=1\n";
     vkDestroyFence(device, fence, nullptr); vkDestroyCommandPool(device, commands, nullptr);
     vkDestroyPipeline(device, pipeline, nullptr); vkDestroyShaderModule(device, vs, nullptr); vkDestroyShaderModule(device, fs, nullptr);
@@ -312,10 +320,18 @@ void main() { uint i=uint(gl_FragCoord.y)*256u+uint(gl_FragCoord.x); color=pica_
     vkDestroyImageView(device, view, nullptr); vkDestroyImage(device, image, nullptr); vkFreeMemory(device, imageMemory, nullptr);
     vkDestroyPipelineLayout(device, pipelineLayout, nullptr); vkDestroyDescriptorPool(device, pool, nullptr); vkDestroyDescriptorSetLayout(device, layout, nullptr);
     gpu.Free(input); gpu.Free(output);
-    Require(failures == 0, "TEV framebuffer differs from scalar oracle");
+    Require(failures == 0, canonicalExpected ? "canonical and parametric TEV framebuffers differ" : "TEV framebuffer differs from scalar oracle");
+    return result;
 }
 
 int main() {
-    try { RunGpu(Cases()); return 0; }
+    try {
+        auto tests = Cases();
+        RunGpu(tests);
+        for (size_t i = 64; i < tests.size(); ++i) tests[i].Program = tests[i % 64].Program;
+        const auto dynamic = RunGpu(tests);
+        RunGpu(tests, &dynamic);
+        return 0;
+    }
     catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
 }

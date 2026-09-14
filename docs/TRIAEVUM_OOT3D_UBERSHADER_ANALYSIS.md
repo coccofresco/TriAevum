@@ -313,7 +313,51 @@ fog and procedural texture state to bounded modules/data, then precreate PSOs.
 The current game still uses its existing shader generator/cache. No F1 setting,
 save, external decomp or release payload was changed by this checkpoint.
 
-## References
+## Canonical expression differential and repairs
+
+Follow-up to `12b2c97`: the test now also executes 64 specialized six-stage
+programs with 64 independently randomized color inputs each (4,096 cases).
+`tools/renderer/tev_program/canonical_tev.h` assembles these test functions using
+the **same expression emitters** as the game's fragment generator, extracted
+into `oot3d_native_pica_tev_expressions.h`. It preserves inline modifiers,
+primary rounding, operation order, scales and delayed buffer updates. Programs
+share a test-only switch dispatch in one module. This is TEV expression parity,
+not an execution of the complete game fragment shader: textures and lighting
+are supplied colors, and fog, discard, attachments and composition are outside
+this harness. Do not describe this as Azahar/hardware or in-game validation.
+
+The comparison exposed two distinct problems:
+
+- Inverted RGB/alpha operands were emitted without parentheses. Combining
+  `1 - a` with multiplication/subtraction could change operator precedence.
+  The canonical shared emitters now parenthesize inverted operands. With the
+  production-style inline expressions, mismatching channels decreased from
+  2,304 to 55 out of 16,384; the initial maximum error was 1.0.
+- Remaining specialized/dynamic differences disappeared when quantization
+  boundaries and stage results used GLSL `precise`. The canonical generator
+  now uses precise byte-round intermediates and primary/stage results. Explicit
+  PICA multiply-add still uses `fma`; this does not disable that operation.
+
+Windows RTX 3060 final result: zero mismatches and zero maximum error for both
+scalar test batches and the canonical-versus-parametric GPU batch, at the
+unchanged 1e-5 rejection threshold. Full test about 12 seconds. An additional
+OBJECT target compiles the actual fragment generator with these changes without
+building/linking the game or AOT. Framebuffer readbacks are written separately
+as `pica_tev_gpu.ppm` and `pica_tev_canonical_gpu.ppm` in the build directory.
+
+The canonical shader state identity now includes compiler-semantics revision
+`0x54455602`. Previously prepared shader/pipeline caches must not silently stand
+in for the corrected source; reprepare the corpus for a future distribution.
+Existing visual savestates carrying old shader source are not automatically
+rewritten. No release/cache package was rebuilt in this step.
+
+Remaining: integrate the parametric program binding, dynamic lighting/fog and
+bounded sampler families, preserve extension hooks, regenerate preparation
+artifacts, precreate PSOs, and validate full frames on the supported devices.
+The playable executable was not rebuilt/launched here, and no reduction of
+in-game stutter is claimed.
+
+## Sources
 
 - [zeldaret loader placeholders](https://github.com/zeldaret/oot3d/blob/a87ddae43252cb3add71bf1003e7391bbe006033/src/functions/functions_410000s.cpp#L616)
 - [zeldaret renderer placeholders](https://github.com/zeldaret/oot3d/blob/a87ddae43252cb3add71bf1003e7391bbe006033/src/functions/functions_3E0000s.cpp#L458)
