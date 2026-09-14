@@ -71,6 +71,8 @@ int main() {
     draw.FragmentShader.Uniforms.ShadowOrthographic = 1;
     draw.FragmentShader.Uniforms.ShadowBiasConstant = 0.75F;
     draw.FragmentShader.Uniforms.ShadowBiasLinear = 0.125F;
+    draw.FragmentShader.Uniforms.TevProgram.Stages[5] = {0x000E000E, 0x1001, 0x40004, 0x20002};
+    draw.FragmentShader.Uniforms.TevProgram.Control[0] = 0xAB00;
     auto lightingLuts = std::make_shared<Oot3dPicaLightingLutState>();
     lightingLuts->Entry(0U, 0U) = 0x00123ABCU;
     lightingLuts->Entry(23U, 255U) = 0x00FEDCBAU;
@@ -117,6 +119,10 @@ int main() {
     Require(EncodeOot3dPicaVisualReplayState(state, encoded, &error), error);
     Oot3dPicaVisualReplayState decoded;
     Require(DecodeOot3dPicaVisualReplayState(encoded, decoded, &error), error);
+    Require(decoded.Scheduler.Accumulator.PendingDraws[0].FragmentShader.Uniforms.TevProgram.Stages ==
+                draw.FragmentShader.Uniforms.TevProgram.Stages &&
+            decoded.Scheduler.Accumulator.PendingDraws[0].FragmentShader.Uniforms.TevProgram.Control ==
+                draw.FragmentShader.Uniforms.TevProgram.Control, "TEV program lost in savestate round-trip");
     Require(decoded.Scheduler.Accumulator.NextSequence == 6U &&
                 decoded.Scheduler.Accumulator.PendingDraws.size() == 1U &&
                 decoded.Scheduler.Accumulator.PendingDraws[0].SubmissionId ==

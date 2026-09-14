@@ -186,6 +186,7 @@ struct Oot3dPicaVulkanCachedVertexStructuralState {
 };
 
 struct Oot3dPicaVulkanShaderSourceCache {
+    Oot3dPicaTevMode TevMode = Oot3dPicaTevMode::Specialized;
     std::unordered_map<uint64_t, Oot3dPicaVulkanCachedShaderSource>
         VertexSources;
     std::unordered_map<uint64_t, Oot3dPicaVulkanCachedShaderSource>

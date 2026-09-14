@@ -1,6 +1,7 @@
 #pragma once
 
 #include "oot3d_native_pica_draw_state.h"
+#include "fast/renderer3ds/pica_tev_program.h"
 #include "oot3d_native_pica_fragment_lighting_gen.h"
 #include "oot3d/renderer/pica_shader_hooks.h"
 #include "oot3d/renderer/pica_shader_source_identity.h"
@@ -10,6 +11,8 @@
 #include <string>
 
 namespace Oot3dNativeGame {
+
+enum class Oot3dPicaTevMode { Specialized, Parametric };
 
 struct Oot3dPicaFragmentUniformState {
     std::array<std::array<float, 4>, 6> TevConstants{};
@@ -23,6 +26,7 @@ struct Oot3dPicaFragmentUniformState {
     int32_t ShadowOrthographic = 0;
     float ShadowBiasConstant = 0.0F;
     float ShadowBiasLinear = 0.0F;
+    Fast::Renderer3ds::PicaTevProgram TevProgram;
 };
 
 struct Oot3dPicaGeneratedFragmentShader {
@@ -35,7 +39,8 @@ struct Oot3dPicaGeneratedFragmentShader {
 
 uint64_t ComputeOot3dPicaFragmentShaderStateKey(
     const Oot3dPicaDrawPacket& packet,
-    const Oot3dPicaDecodedDrawState& state);
+    const Oot3dPicaDecodedDrawState& state,
+    Oot3dPicaTevMode mode = Oot3dPicaTevMode::Specialized);
 
 Oot3dPicaFragmentUniformState BuildOot3dPicaFragmentUniformState(
     const Oot3dPicaDrawPacket& packet);
@@ -47,6 +52,7 @@ bool GenerateOot3dPicaFragmentShader(
     const Oot3dPicaDecodedDrawState& state,
     Oot3dPicaGeneratedFragmentShader& shader,
     std::string* error = nullptr,
-    Oot3dPicaShaderBuildPurpose purpose = Oot3dPicaShaderBuildPurpose::RuntimeDraw);
+    Oot3dPicaShaderBuildPurpose purpose = Oot3dPicaShaderBuildPurpose::RuntimeDraw,
+    Oot3dPicaTevMode mode = Oot3dPicaTevMode::Specialized);
 
 } // namespace Oot3dNativeGame

@@ -51,7 +51,7 @@ vec4 pica_tev_round(vec4 v) {
 }
 vec4 pica_tev_source(uint selector, int stage, PicaTevInputs inputs, vec4 combiner_buffer, vec4 previous) {
     switch (selector) {
-    case 0u: return pica_tev_round(inputs.primary);
+    case 0u: return inputs.primary;
     case 1u: return inputs.primary_fragment;
     case 2u: return inputs.secondary_fragment;
     case 3u: case 4u: case 5u: case 6u: return inputs.textures[selector - 3u];
@@ -91,7 +91,8 @@ vec4 pica_tev_operation(uint op, vec4 a, vec4 b, vec4 c) {
     }
     return result;
 }
-vec4 pica_evaluate_tev(PicaTevProgram program, PicaTevInputs inputs) {
+// Resolved primary includes native quantization and authorized lighting hooks.
+vec4 pica_evaluate_tev_resolved(PicaTevProgram program, PicaTevInputs inputs) {
     vec4 combiner_buffer = vec4(0.0);
     vec4 next_buffer = inputs.buffer_color;
     vec4 previous = vec4(0.0);
@@ -128,6 +129,10 @@ vec4 pica_evaluate_tev(PicaTevProgram program, PicaTevInputs inputs) {
         }
     }
     return previous;
+}
+vec4 pica_evaluate_tev(PicaTevProgram program, PicaTevInputs inputs) {
+    inputs.primary = pica_tev_round(inputs.primary);
+    return pica_evaluate_tev_resolved(program, inputs);
 }
 )glsl";
 }

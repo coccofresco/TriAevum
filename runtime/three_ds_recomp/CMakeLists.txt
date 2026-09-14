@@ -39,6 +39,11 @@ set_property(TARGET oot3d_renderer_fragment_lighting PROPERTY CXX_STANDARD 20)
 target_include_directories(oot3d_renderer_fragment_lighting PUBLIC
 	"${CMAKE_CURRENT_SOURCE_DIR}/include")
 
+add_library(renderer_3ds_tev_program STATIC src/fast/renderer3ds/pica_tev_program.cpp)
+add_library(ThreeDsRecomp::TevProgram ALIAS renderer_3ds_tev_program)
+target_compile_features(renderer_3ds_tev_program PUBLIC cxx_std_20)
+target_include_directories(renderer_3ds_tev_program PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+
 set(OOT3D_NATIVE_ASSET_RUNTIME_SOURCE_NAMES
 	Oot3dAssetCatalog.cpp
 	Oot3dCutsceneProvider.cpp

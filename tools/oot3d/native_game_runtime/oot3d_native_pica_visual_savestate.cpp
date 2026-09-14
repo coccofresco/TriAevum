@@ -1,4 +1,5 @@
 #include "oot3d_native_pica_visual_savestate.h"
+#include "oot3d_native_pica_fragment_uniform_codec.h"
 
 #include <bit>
 #include <cmath>
@@ -20,6 +21,7 @@ constexpr uint32_t kVisualReplayMagicV6 = 0x36525650U; // PVR6
 constexpr uint32_t kVisualReplayMagicV7 = 0x37525650U; // PVR7
 constexpr uint32_t kVisualReplayMagicV8 = 0x38525650U; // PVR8
 constexpr uint32_t kVisualReplayMagicV9 = 0x39525650U; // PVR9
+constexpr uint32_t kVisualReplayMagicV10 = 0x41525650U; // PVRA
 constexpr uint32_t kMaximumPlans = 4096U;
 constexpr uint32_t kMaximumResources = 4096U;
 constexpr uint32_t kMaximumShaderBytes = 4U << 20U;
@@ -69,6 +71,7 @@ class Writer final {
 
 class Reader final {
   public:
+    bool HasTevProgram = false;
     explicit Reader(std::span<const uint8_t> bytes) : mBytes(bytes) {}
 
     bool U8(uint8_t& value) {
@@ -471,88 +474,8 @@ bool ReadVertexUniforms(Reader& reader,
     return true;
 }
 
-void WriteFragmentUniforms(Writer& writer,
-                           const Oot3dPicaFragmentUniformState& value) {
-    for (const auto& vector : value.TevConstants) {
-        for (const float component : vector) writer.Float(component);
-    }
-    for (const float component : value.CombinerBufferColor) {
-        writer.Float(component);
-    }
-    writer.I32(value.AlphaReference);
-    for (const float component : value.FogColor) writer.Float(component);
-    for (const auto& pair : value.FogLut) {
-        writer.Float(pair[0]);
-        writer.Float(pair[1]);
-    }
-    for (const float bias : value.TextureLodBias) writer.Float(bias);
-    for (const auto& vectors :
-         {&value.Lighting.Specular0, &value.Lighting.Specular1,
-          &value.Lighting.Diffuse, &value.Lighting.Ambient,
-          &value.Lighting.Position, &value.Lighting.SpotDirection,
-          &value.Lighting.Attenuation}) {
-        for (const auto& vector : *vectors) {
-            for (const float component : vector) writer.Float(component);
-        }
-    }
-    for (const float component : value.Lighting.GlobalAmbient) {
-        writer.Float(component);
-    }
-    writer.I32(value.ShadowTextureBias);
-    writer.I32(value.ShadowOrthographic);
-    writer.Float(value.ShadowBiasConstant);
-    writer.Float(value.ShadowBiasLinear);
-}
-
-bool ReadFragmentUniforms(Reader& reader,
-                          Oot3dPicaFragmentUniformState& value,
-                          bool extended, bool fragmentLighting,
-                          bool shadowUniforms) {
-    for (auto& vector : value.TevConstants) {
-        for (auto& component : vector) {
-            if (!reader.Float(component)) return false;
-        }
-    }
-    for (auto& component : value.CombinerBufferColor) {
-        if (!reader.Float(component)) return false;
-    }
-    if (!reader.I32(value.AlphaReference)) return false;
-    for (auto& component : value.FogColor) {
-        if (!reader.Float(component)) return false;
-    }
-    for (auto& pair : value.FogLut) {
-        if (!reader.Float(pair[0]) || !reader.Float(pair[1])) return false;
-    }
-    if (!extended) return true;
-    for (auto& bias : value.TextureLodBias) {
-        if (!reader.Float(bias)) return false;
-    }
-    if (!fragmentLighting) return true;
-    for (auto* vectors : {&value.Lighting.Specular0,
-                          &value.Lighting.Specular1,
-                          &value.Lighting.Diffuse,
-                          &value.Lighting.Ambient,
-                          &value.Lighting.Position,
-                          &value.Lighting.SpotDirection,
-                          &value.Lighting.Attenuation}) {
-        for (auto& vector : *vectors) {
-            for (auto& component : vector) {
-                if (!reader.Float(component)) return false;
-            }
-        }
-    }
-    for (auto& component : value.Lighting.GlobalAmbient) {
-        if (!reader.Float(component)) return false;
-    }
-    if (!shadowUniforms) return true;
-    if (!reader.I32(value.ShadowTextureBias) ||
-        !reader.I32(value.ShadowOrthographic) ||
-        !reader.Float(value.ShadowBiasConstant) ||
-        !reader.Float(value.ShadowBiasLinear)) {
-        return false;
-    }
-    return true;
-}
+using FragmentUniformCodec::WriteFragmentUniforms;
+using FragmentUniformCodec::ReadFragmentUniforms;
 
 using LightingLutDictionary = std::map<
     uint64_t, std::shared_ptr<const Oot3dPicaLightingLutState>>;
@@ -844,7 +767,7 @@ bool ReadPlan(Reader& reader, Oot3dPicaVulkanDrawPlan& value,
         !reader.U64(value.FragmentShader.StateKey) ||
         !reader.String(value.FragmentShader.Source, kMaximumShaderBytes) ||
         !ReadFragmentUniforms(reader, value.FragmentShader.Uniforms,
-                              extended, fragmentLighting, shadowUniforms) ||
+                              extended, fragmentLighting, shadowUniforms, reader.HasTevProgram) ||
         !ReadDrawState(reader, value.State, extended)) {
         return false;
     }
@@ -1075,7 +998,7 @@ bool ReadOptionalFrame(Reader& reader,
 void WriteReplayState(Writer& writer,
                       const Oot3dPicaVisualReplayState& value) {
     const auto lightingLuts = BuildLightingLutDictionary(value);
-    writer.U32(kVisualReplayMagicV9);
+    writer.U32(kVisualReplayMagicV10);
     WriteLightingLutDictionary(writer, lightingLuts);
     const auto& accumulator = value.Scheduler.Accumulator;
     writer.U64(accumulator.NextSequence);
@@ -1111,8 +1034,11 @@ void WriteReplayState(Writer& writer,
 bool ReadReplayState(Reader& reader, Oot3dPicaVisualReplayState& value) {
     uint32_t magic = 0U;
     auto& accumulator = value.Scheduler.Accumulator;
-    if (!reader.U32(magic) ||
-        (magic != kVisualReplayMagicV1 &&
+    if (!reader.U32(magic)) return false;
+    reader.HasTevProgram = magic == kVisualReplayMagicV10;
+    // V10 adds only the trailing TEV uniform payload; all V9 features remain.
+    if (reader.HasTevProgram) magic = kVisualReplayMagicV9;
+    if ((magic != kVisualReplayMagicV1 &&
          magic != kVisualReplayMagicV2 &&
          magic != kVisualReplayMagicV3 &&
          magic != kVisualReplayMagicV4 &&

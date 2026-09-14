@@ -357,7 +357,55 @@ artifacts, precreate PSOs, and validate full frames on the supported devices.
 The playable executable was not rebuilt/launched here, and no reduction of
 in-game stutter is claimed.
 
-## Sources
+## Parametric draw consumer checkpoint
+
+The real fragment generator accepts `Oot3dPicaTevMode::Parametric`; the Vulkan
+draw planner selects it through `Oot3dPicaVulkanShaderSourceCache::TevMode`.
+Default remains `Specialized`. This is an explicit developer integration mode,
+not a new F1 setting or a claimed shipping migration. Both cache hits and misses
+populate the per-draw TEV program from native registers. The mode participates
+in state keys so switching it cannot return a shader from the other path.
+
+`Oot3dPicaFragmentUniformState::TevProgram` travels through the existing NRI draw
+bridge. The packed fragment UBO retains its entire 2,112-byte legacy prefix and
+appends the 112-byte program (total 2,224). GLSL uses the same append-only layout.
+Only referenced texture samples are populated; existing sampler/LOD, lighting,
+alpha, depth, fog and native output code remains in the real generator. Existing
+typed hook metadata is still computed per material. The resolved-primary TEV
+entry consumes `rounded_primary_color` after authorized lighting hooks without
+rounding again; using the raw primary would bypass directional-shadow hooks.
+
+Visual replay writes PVRA/V10 and reads V1-V9 as before. V10 adds the native
+program after the fragment uniform payload. The uniform codec is isolated in
+`oot3d_native_pica_fragment_uniform_codec.h` and used by the actual serializer,
+not duplicated in tests. Legacy states keep their embedded specialized sources;
+their absent program defaults to zero and is ignored by those shaders. The full
+V10 state format is not backwards-readable by older executables.
+
+Verification in the standalone TEV build:
+
+- Previous framebuffer differential tests still pass.
+- Real generator: 16 different material programs give identical parametric
+  source, different specialized/parametric keys, preserved semantic/texture
+  hooks, and correct program uniforms. SPIR-V reflection checks offset 2,112.
+- Another eight cases cover lit/unlit, ordinary/Shadow2D/projected/type-5
+  samplers, fog and alpha test: 48 total SPIR-V compilations pass. These are
+  compilation/interface tests, not complete-frame visual comparisons.
+- Production uniform codec: exact V10 byte round-trip, V9-prefix compatibility,
+  and rejection of all 2,212 truncated serialized payload lengths pass.
+- Actual generator, planner, bridge and visual serializer translation units
+  compile independently of the game/AOT. Full visual-savestate regression test
+  was extended but not run: the standalone link requires the wider frontend.
+
+Important remaining work: executable selection and real NRI-frame validation,
+full savestate and submission tests, then separating module identity from
+material/hook identity. For now the planner still uses conservative material
+keys; equal GLSL does **not** yet imply one PSO. Forge preparation, dynamic
+lighting/fog families and bounded PSO precreation remain pending. No game was
+launched, no package prepared and no gameplay stutter improvement measured in
+this checkpoint. External decompilation repositories were not changed.
+
+## Source Links
 
 - [zeldaret loader placeholders](https://github.com/zeldaret/oot3d/blob/a87ddae43252cb3add71bf1003e7391bbe006033/src/functions/functions_410000s.cpp#L616)
 - [zeldaret renderer placeholders](https://github.com/zeldaret/oot3d/blob/a87ddae43252cb3add71bf1003e7391bbe006033/src/functions/functions_3E0000s.cpp#L458)

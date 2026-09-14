@@ -258,7 +258,7 @@ bool BuildOot3dPicaVulkanDrawPlanImpl(
 
     const uint64_t fragmentShaderKey =
         ComputeOot3dPicaFragmentShaderStateKey(submission.Packet,
-                                               submission.State);
+            submission.State, shaderCache ? shaderCache->TevMode : Oot3dPicaTevMode::Specialized);
     const auto cachedFragment =
         shaderCache != nullptr
             ? shaderCache->FragmentSources.find(fragmentShaderKey)
@@ -279,7 +279,8 @@ bool BuildOot3dPicaVulkanDrawPlanImpl(
     } else {
         if (!GenerateOot3dPicaFragmentShader(
                 submission.Packet, submission.State, plan.FragmentShader,
-                error)) {
+                error, Oot3dPicaShaderBuildPurpose::RuntimeDraw,
+                shaderCache ? shaderCache->TevMode : Oot3dPicaTevMode::Specialized)) {
             return false;
         }
         if (shaderCache != nullptr) {

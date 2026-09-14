@@ -358,11 +358,12 @@ size_t StreamOffset(std::ostringstream& stream) {
 
 uint64_t ComputeOot3dPicaFragmentShaderStateKey(
     const Oot3dPicaDrawPacket& packet,
-    const Oot3dPicaDecodedDrawState& state) {
+    const Oot3dPicaDecodedDrawState& state, Oot3dPicaTevMode mode) {
     constexpr uint64_t kFnvOffset = 1469598103934665603ULL;
     // Version the compiler semantics, not just the input register values.
     uint64_t key = HashWord(kFnvOffset, 0x54455602U);
     key = HashWord(key, packet.Registers[0x080U]);
+    key = HashWord(key, static_cast<uint32_t>(mode));
     key = HashWord(key, packet.Registers[0x08FU]);
     const auto lighting =
         Fast::Oot3d::DecodePicaFragmentLighting(packet.Registers);
@@ -449,6 +450,7 @@ Oot3dPicaFragmentUniformState BuildOot3dPicaFragmentUniformState(
             static_cast<float>(difference) / 2047.0F};
     }
     uniforms.Lighting = BuildOot3dPicaFragmentLightingUniformState(packet);
+    Fast::Renderer3ds::DecodePicaTevProgram(packet.Registers, uniforms.TevProgram);
     return uniforms;
 }
 
@@ -456,8 +458,15 @@ bool GenerateOot3dPicaFragmentShader(
     const Oot3dPicaDrawPacket& packet,
     const Oot3dPicaDecodedDrawState& state,
     Oot3dPicaGeneratedFragmentShader& shader, std::string* error,
-    Oot3dPicaShaderBuildPurpose purpose) {
+    Oot3dPicaShaderBuildPurpose purpose, Oot3dPicaTevMode mode) {
     shader = {};
+    const bool parametric = mode == Oot3dPicaTevMode::Parametric;
+    Fast::Renderer3ds::PicaTevProgram program;
+    if (parametric && Fast::Renderer3ds::DecodePicaTevProgram(packet.Registers, program) !=
+            Fast::Renderer3ds::PicaTevDecodeError::None) {
+        SetError(error, DescribeUnsupportedTev(packet, state));
+        return false;
+    }
     const auto lighting =
         Fast::Oot3d::DecodePicaFragmentLighting(packet.Registers);
     const bool procTexEnabled =
@@ -570,6 +579,7 @@ bool GenerateOot3dPicaFragmentShader(
               "layout(location=4) in float pica_texcoord0_w;\n"
               "layout(location=5) in vec4 pica_normquat;\n"
               "layout(location=6) in vec3 pica_view;\n";
+    if (parametric) source << Fast::Renderer3ds::PicaTevProgramGlsl();
     source << (state.Textures[0].Type == 2U
                    ? "layout(set=0,binding=1) uniform usampler2D pica_texture0;\n"
                    : "layout(set=0,binding=1) uniform sampler2D pica_texture0;\n")
@@ -596,8 +606,9 @@ bool GenerateOot3dPicaFragmentShader(
                   "    int shadow_texture_bias;\n"
                   "    int shadow_orthographic;\n"
                   "    float shadow_bias_constant;\n"
-                  "    float shadow_bias_linear;\n"
-                  "} fragment_uniforms;\n";
+                  "    float shadow_bias_linear;\n";
+    if (parametric) source << "    PicaTevProgram tev_program;\n";
+    source << "} fragment_uniforms;\n";
     if (state.OutputMerger.FragmentOperationMode == 3U) {
         source << "layout(set=0,binding=5,r32ui) uniform uimage2D pica_shadow_buffer;\n";
     }
@@ -732,29 +743,48 @@ bool GenerateOot3dPicaFragmentShader(
         const uint32_t alphaScaleBits = (scales >> 16U) & 3U;
         const uint32_t colorScale = colorScaleBits < 3U ? 1U << colorScaleBits : 1U;
         const uint32_t alphaScale = alphaScaleBits < 3U ? 1U << alphaScaleBits : 1U;
-        source << "    precise vec3 color_output_" << stage
-               << " = byteround3(clamp(" << colorResult
-               << ", vec3(0.0), vec3(1.0)));\n"
-               << "    precise float alpha_output_" << stage
-               << " = byteround1(clamp(" << alphaResult
-               << ", 0.0, 1.0));\n"
-               << "    combiner_output = vec4(clamp(color_output_" << stage
-               << " * " << colorScale
-               << ".0, vec3(0.0), vec3(1.0)), clamp(alpha_output_" << stage
-               << " * " << alphaScale << ".0, 0.0, 1.0));\n"
-               << "    combiner_buffer = next_combiner_buffer;\n";
-        if (stage < 4U &&
-            (packet.Registers[0x0E0U] & (1U << (8U + stage))) != 0U) {
-            source << "    next_combiner_buffer.rgb = combiner_output.rgb;\n";
-        }
-        if (stage < 4U &&
-            (packet.Registers[0x0E0U] & (1U << (12U + stage))) != 0U) {
-            source << "    next_combiner_buffer.a = combiner_output.a;\n";
+        if (!parametric) {
+            source << "    precise vec3 color_output_" << stage
+                   << " = byteround3(clamp(" << colorResult
+                   << ", vec3(0.0), vec3(1.0)));\n"
+                   << "    precise float alpha_output_" << stage
+                   << " = byteround1(clamp(" << alphaResult
+                   << ", 0.0, 1.0));\n"
+                   << "    combiner_output = vec4(clamp(color_output_" << stage
+                   << " * " << colorScale
+                   << ".0, vec3(0.0), vec3(1.0)), clamp(alpha_output_" << stage
+                   << " * " << alphaScale << ".0, 0.0, 1.0));\n"
+                   << "    combiner_buffer = next_combiner_buffer;\n";
+            if (stage < 4U &&
+                (packet.Registers[0x0E0U] & (1U << (8U + stage))) != 0U) {
+                source << "    next_combiner_buffer.rgb = combiner_output.rgb;\n";
+            }
+            if (stage < 4U &&
+                (packet.Registers[0x0E0U] & (1U << (12U + stage))) != 0U) {
+                source << "    next_combiner_buffer.a = combiner_output.a;\n";
+            }
         }
     }
     if (!supported) {
         SetError(error, DescribeUnsupportedTev(packet, state));
         return false;
+    }
+
+    if (parametric) {
+        source << "    PicaTevInputs tev_inputs;\n"
+                  "    tev_inputs.primary = rounded_primary_color;\n"
+                  "    tev_inputs.primary_fragment = primary_fragment_color;\n"
+                  "    tev_inputs.secondary_fragment = secondary_fragment_color;\n"
+                  "    tev_inputs.buffer_color = fragment_uniforms.combiner_buffer_color;\n"
+                  "    for(int i=0;i<6;++i) tev_inputs.constants[i]=fragment_uniforms.tev_constants[i];\n";
+        for (size_t texture = 0; texture < 3; ++texture) {
+            source << "    tev_inputs.textures[" << texture << "] = "
+                   << (hooks.SamplesTexture(static_cast<uint8_t>(texture)) ? TextureSampleExpression(texture, state, supported) : "vec4(0.0)") << ";\n";
+        }
+        source << "    tev_inputs.textures[3] = "
+               << (procTexEnabled && procTexReferenced ? "pica_sample_proctex()" : "vec4(0.0)") << ";\n"
+                  "    combiner_output = pica_evaluate_tev_resolved(fragment_uniforms.tev_program, tev_inputs);\n";
+        if (!supported) { SetError(error, "parametric TEV texture interface unsupported"); return false; }
     }
 
     for (uint8_t texture = 0U;
@@ -833,7 +863,7 @@ bool GenerateOot3dPicaFragmentShader(
 
     if (purpose == Oot3dPicaShaderBuildPurpose::RuntimeDraw)
         shader.Uniforms = BuildOot3dPicaFragmentUniformState(packet);
-    shader.StateKey = ComputeOot3dPicaFragmentShaderStateKey(packet, state);
+    shader.StateKey = ComputeOot3dPicaFragmentShaderStateKey(packet, state, mode);
     shader.Source = source.str();
     shader.SourceIdentity =
         Oot3d::Renderer::IdentifyPicaShaderSource(shader.Source);

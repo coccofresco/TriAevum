@@ -23,6 +23,8 @@ PicaTevDecodeError DecodePicaTevProgram(std::span<const uint32_t> registers,
 // Immutable shader library: no per-draw generation, shaderc, texture sampling,
 // output attachments or composition policy. Call pica_evaluate_tev after the
 // native lighting and sampling stages and before alpha/depth/fog/composition.
+// pica_evaluate_tev_resolved accepts primary already quantized and processed by
+// authorized lighting hooks; it must not re-quantize those hook results.
 std::string_view PicaTevProgramGlsl() noexcept;
 
 } // namespace Fast::Renderer3ds

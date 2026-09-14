@@ -1664,6 +1664,7 @@ target_include_directories(oot3d_native_pica_frontend PUBLIC
     runtime/three_ds_recomp/include
 )
 target_link_libraries(oot3d_native_pica_frontend PUBLIC
+    ThreeDsRecomp::TevProgram
     oot3d_renderer_fragment_lighting
     spdlog::spdlog
     nlohmann_json::nlohmann_json)

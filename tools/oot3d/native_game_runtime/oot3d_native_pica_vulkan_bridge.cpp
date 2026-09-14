@@ -134,6 +134,9 @@ PackFragmentUniforms(
         bytes.data() +
             Fast::Oot3d::kPicaPackedFragmentShadowBiasLinearOffset,
         &uniforms.ShadowBiasLinear, sizeof(uniforms.ShadowBiasLinear));
+    static_assert(sizeof(uniforms.TevProgram) == 112U);
+    std::memcpy(bytes.data() + Fast::Oot3d::kPicaPackedFragmentTevProgramOffset,
+                &uniforms.TevProgram, sizeof(uniforms.TevProgram));
     return bytes;
 }
 
