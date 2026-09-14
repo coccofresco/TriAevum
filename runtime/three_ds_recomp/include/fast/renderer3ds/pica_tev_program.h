@@ -11,7 +11,7 @@ namespace Fast::Renderer3ds {
 // inputs, not part of a program/pipeline identity.
 struct alignas(16) PicaTevProgram {
     std::array<std::array<uint32_t, 4>, 6> Stages{};
-    std::array<uint32_t, 4> Control{};
+    std::array<uint32_t, 4> Control{}; // native buffer-update mask, effective texture-reference mask, reserved
 };
 static_assert(sizeof(PicaTevProgram) == 112);
 

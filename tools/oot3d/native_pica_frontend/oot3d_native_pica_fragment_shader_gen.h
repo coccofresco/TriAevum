@@ -29,7 +29,7 @@ struct Oot3dPicaFragmentUniformState {
     float ShadowBiasLinear = 0.0F;
     Fast::Renderer3ds::PicaTevProgram TevProgram;
     Fast::Renderer3ds::PicaLightingProgram LightingProgram;
-    std::array<uint32_t, 4> FragmentControl{}; // native fog, alpha-test registers; reserved
+    std::array<uint32_t, 4> FragmentControl{}; // native fog, alpha-test, texture main/config0
 };
 
 struct Oot3dPicaGeneratedFragmentShader {

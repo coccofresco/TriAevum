@@ -74,6 +74,7 @@ int main() {
             packet->Registers[0x104]=0x31;
             state.Textures[0].Enabled=true;
             state.Textures[0].Type=type;
+            packet->Registers[0x083]=uint32_t(type)<<28;
             state.Textures[0].Width=64;
             state.Textures[0].Height=64;
             for(auto base:bases) {
@@ -132,6 +133,36 @@ int main() {
         auto lightingSpv=compiler.CompileGlslToSpv(baseline,shaderc_fragment_shader,"parametric_lights",options);
         Check(lightingSpv.GetCompilationStatus()==shaderc_compilation_status_success,lightingSpv.GetErrorMessage());
         std::cout << lightingCases << " lighting/fog/alpha configurations share one source\n";
+        packet = std::make_unique<Oot3dPicaDrawPacket>();
+        state = {};
+        baseline.clear();
+        unsigned textureCases=0;
+        for(uint8_t type : {0,3,5,2}) for(unsigned mask=0;mask<8;++mask)
+        for(unsigned coordinate=0;coordinate<2;++coordinate) for(unsigned sourceIndex=0;sourceIndex<4;++sourceIndex) {
+            if(type==2 && (mask&1)!=0)continue; // active integer interface is a separate family
+            packet->Registers[0x080]=mask|(coordinate<<13);
+            packet->Registers[0x083]=uint32_t(type)<<28;
+            state.Textures[0].Type=type;
+            state.Texture2UsesCoordinate1=coordinate!=0;
+            for(unsigned t=0;t<3;++t)state.Textures[t].Enabled=(mask&(1u<<t))!=0;
+            for(auto base:bases)packet->Registers[base]=0x000F000F;
+            packet->Registers[0xC0]=sourceIndex==3 ? 0x00000000 : (sourceIndex+3)*0x00010001;
+            Oot3dPicaGeneratedFragmentShader dynamic,specialized;
+            std::string error;
+            Check(GenerateOot3dPicaFragmentShader(*packet,state,dynamic,&error,
+                Oot3dPicaShaderBuildPurpose::RuntimeDraw,Oot3dPicaTevMode::Parametric),error);
+            Check(GenerateOot3dPicaFragmentShader(*packet,state,specialized,&error),error);
+            if(baseline.empty())baseline=dynamic.Source;
+            Check(dynamic.Source==baseline,"texture selection changed float sampler source");
+            Check(dynamic.Hooks.SampledTextureMask==specialized.Hooks.SampledTextureMask,"texture hooks changed");
+            auto actual=dynamic.Uniforms.TevProgram.Control[1]&mask;
+            if(type==5)actual&=~1u;
+            Check(actual==specialized.Hooks.SampledTextureMask,"dynamic texture mask differs from native usage");
+            ++textureCases;
+        }
+        auto textureSpv=compiler.CompileGlslToSpv(baseline,shaderc_fragment_shader,"texture_selection",options);
+        Check(textureSpv.GetCompilationStatus()==shaderc_compilation_status_success,textureSpv.GetErrorMessage());
+        std::cout << textureCases << " texture enable/reference/UV/type configurations share one source\n";
         std::cout << "16 stable-source material programs; 8 sampler/lighting/fog/alpha cases; 48 SPIR-V compilations passed\n";
         return 0;
     } catch(const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }

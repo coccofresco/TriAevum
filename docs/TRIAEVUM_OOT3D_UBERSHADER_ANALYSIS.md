@@ -544,9 +544,9 @@ compiler during console-test configuration. This does not change the game build.
 | Surface | Actual remaining work |
 | --- | --- |
 | CMB/profile vertex programs | Implement and validate the recovered SHBIN behavior as the fixed native vertex family, including skinning, UV mapping, vertex lighting and billboard paths; the legacy vertex translator is still used. |
-| Texture interface | Move enabled/reference masks, UV selection and bump/shadow texture selection out of source specialization. Native typed sampler distinctions must remain correct. |
+| Texture interface | Regular sampler enable/reference masks, UV routing and bump/shadow selection are now data-driven (see below). Preserve float/integer descriptor families; procedural unit 3 remains pending. |
 | Procedural textures | Move the existing generator's native configurations into stable shader code and uniforms; preserve LUT/filter/noise semantics. |
-| Lighting resources | Current code retains LUT/no-LUT descriptor families and generated texture sample expressions. The no-LUT family's lookup functions are unreachable by its decoded flags, not a fallback for missing LUT data. |
+| Lighting resources | Current code retains LUT/no-LUT descriptor families. Bump/shadow sample selection is now data-driven. The no-LUT family's lookup functions are unreachable by its decoded flags, not a fallback for missing LUT data. |
 | Native output | Audit remaining shadow-write, depth/output and sampler helper specialization and define the bounded legitimate pipeline families. |
 | Delivery | Build the finite shader artifacts with the developer build, bind them directly in NRI, and initialize required pipelines without depending on collected or persistent shader caches. Runtime source generation is not yet removed. |
 | Validation | Execute fragment-lit materials in real game scenes, broader intro/gameplay/effect cases, and Linux/Android. |
@@ -554,6 +554,44 @@ compiler during console-test configuration. This does not change the game build.
 Do not mark the full cache-independent renderer complete based on this tranche.
 The next implementation priority is the fixed native vertex/texture contract,
 not repopulating a shader pack with the new runtime-generated variants.
+
+## Native Texture Selection Implemented (2026-09-14)
+
+`fast/renderer3ds/pica_texture_program.h` supplies immutable regular-texture
+selection code. Native registers 0x80 and 0x83 occupy the two formerly reserved
+fragment-control words; the UBO remains 2,496 bytes. The decoded TEV control
+contains an effective texture-reference mask respecting operation arity and
+stage-zero source resolution. Lighting flags carry bump/shadow texture units.
+Texture enable, unit-2 UV routing, projected sampling and disabled sampling
+therefore no longer generate material-specific source in the parametric path.
+
+Float sampling and active Shadow2D integer sampling retain distinct descriptor
+interfaces. A disabled Shadow2D slot uses the float family because the backend
+binds its normalized-color fallback there; the disabled branch returns zero.
+This is a resource-type contract, not an asset exception. Draw order, native
+metadata and pass scheduling are unchanged. Old replay shaders ignore the newly
+used reserved words; no replay format or UBO size change is required.
+
+Verification on the final binary:
+
+- 224 regular sampler configurations share one source, with native sampled-mask
+  parity. All four standalone tests pass, including TEV/lighting GPU differentials
+  and uniform codec compatibility. Runtime bridge and savestate executables pass.
+- Six paired framebuffer captures (early boot and Hyrule Field) are pixel-identical
+  to the specialized reference. Private evidence is under
+  `C:/Users/xander/AppData/Local/Temp/TriAevum-sampler-final-field-20260914`
+  and `TriAevum-sampler-final-boot-20260914`.
+- Initial sampler-run inventories decreased from 41/35 to 3 entries per fixture:
+  one vertex program, one canonical fragment program and its NRI adaptation.
+  This is not an FPS measurement or evidence of full-game coverage. These
+  fixtures still do not exercise fragment lighting; its GPU differential is a
+  separate test, not an in-game validation claim.
+
+The replacement remains opt-in. Runtime vertex translation, procedural-texture
+source specialization, fragment wrapper generation and pipeline creation have
+not yet been eliminated. The next blocks are recovered fixed vertex programs,
+data-driven procedural LUT/filter/noise behavior and direct binding of finite
+developer-built shader artifacts. Do not replace those tasks with cache growth.
 
 ## External Source Links
 

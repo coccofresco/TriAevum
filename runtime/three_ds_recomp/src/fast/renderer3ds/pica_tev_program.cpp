@@ -26,6 +26,21 @@ PicaTevDecodeError DecodePicaTevProgram(std::span<const uint32_t> registers,
         if (color > 9) return PicaTevDecodeError::ColorOperation;
         if (color != 7 && (alpha > 9 || alpha == 6 || alpha == 7))
             return PicaTevDecodeError::AlphaOperation;
+        const auto inputMask = [](uint32_t operation) {
+            return operation == 0 ? 1U :
+                   (operation == 4 || operation == 8 || operation == 9) ? 7U : 3U;
+        };
+        for (uint32_t channel = 0; channel < 2; ++channel) {
+            if (channel == 1 && color == 7) continue;
+            const auto mask = inputMask(channel == 0 ? color : alpha);
+            for (uint32_t input = 0; input < 3; ++input) {
+                if ((mask & (1U << input)) == 0) continue;
+                auto source = (words[0] >> (channel * 16 + input * 4)) & 15;
+                if (stage == 0 && input < 2 && source == 15)
+                    source = (words[0] >> (channel * 16 + 8)) & 15;
+                if (source >= 3 && source <= 6) candidate.Control[1] |= 1U << (source - 3);
+            }
+        }
     }
     candidate.Control[0] = registers[0xE0] & 0xFF00;
     output = candidate;

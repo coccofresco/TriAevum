@@ -21,7 +21,8 @@ inline PicaLightingProgram BuildPicaLightingProgram(const Oot3d::PicaFragmentLig
         uint32_t(state.ClampHighlights) | (uint32_t(state.ShadowPrimary) << 1) |
         (uint32_t(state.ShadowSecondary) << 2) | (uint32_t(state.ShadowAlpha) << 3) |
         (uint32_t(state.BumpMode) << 4) | (uint32_t(state.RecalculateBumpVectors) << 6) |
-        (uint32_t(state.ShadowFactorEnabled) << 7) | (uint32_t(state.InvertShadow) << 8)};
+        (uint32_t(state.ShadowFactorEnabled) << 7) | (uint32_t(state.InvertShadow) << 8) |
+        (uint32_t(state.BumpTextureUnit) << 9) | (uint32_t(state.ShadowTextureUnit) << 11)};
     for (size_t slot = 0; slot < p.Lights.size(); ++slot) {
         const auto index = state.LightPermutation[slot];
         const auto& light = state.Lights[index];

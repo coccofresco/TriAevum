@@ -2,6 +2,7 @@
 #include "oot3d_native_pica_tev_expressions.h"
 #include "oot3d_native_pica_proctex.h"
 #include "fast/oot3d/pica_fragment_lighting.h"
+#include "fast/renderer3ds/pica_texture_program.h"
 
 #include <cmath>
 #include <limits>
@@ -361,7 +362,7 @@ uint64_t ComputeOot3dPicaFragmentShaderStateKey(
     const Oot3dPicaDecodedDrawState& state, Oot3dPicaTevMode mode) {
     constexpr uint64_t kFnvOffset = 1469598103934665603ULL;
     // Version the compiler semantics, not just the input register values.
-    uint64_t key = HashWord(kFnvOffset, 0x54455603U);
+    uint64_t key = HashWord(kFnvOffset, 0x54455604U);
     key = HashWord(key, packet.Registers[0x080U]);
     key = HashWord(key, static_cast<uint32_t>(mode));
     key = HashWord(key, packet.Registers[0x08FU]);
@@ -452,7 +453,8 @@ Oot3dPicaFragmentUniformState BuildOot3dPicaFragmentUniformState(
     uniforms.Lighting = BuildOot3dPicaFragmentLightingUniformState(packet);
     uniforms.LightingProgram = Fast::Renderer3ds::BuildPicaLightingProgram(
         Fast::Oot3d::DecodePicaFragmentLighting(packet.Registers));
-    uniforms.FragmentControl = {packet.Registers[0x0E0U], packet.Registers[0x104U], 0U, 0U};
+    uniforms.FragmentControl = {packet.Registers[0x0E0U], packet.Registers[0x104U],
+                               packet.Registers[0x080U], packet.Registers[0x083U]};
     Fast::Renderer3ds::DecodePicaTevProgram(packet.Registers, uniforms.TevProgram);
     return uniforms;
 }
@@ -464,6 +466,10 @@ bool GenerateOot3dPicaFragmentShader(
     Oot3dPicaShaderBuildPurpose purpose, Oot3dPicaTevMode mode) {
     shader = {};
     const bool parametric = mode == Oot3dPicaTevMode::Parametric;
+    // Disabled texture slots receive the backend's normalized-color fallback.
+    // Only an enabled Shadow2D slot can require an integer image interface.
+    const bool integerTexture0 = state.Textures[0].Type == 2U &&
+                                 (!parametric || state.Textures[0].Enabled);
     Fast::Renderer3ds::PicaTevProgram program;
     if (parametric && Fast::Renderer3ds::DecodePicaTevProgram(packet.Registers, program) !=
             Fast::Renderer3ds::PicaTevDecodeError::None) {
@@ -494,7 +500,7 @@ bool GenerateOot3dPicaFragmentShader(
         return false;
     }
     bool bumpTextureSupported = true;
-    const std::string bumpTextureSample =
+    std::string bumpTextureSample =
         lighting.Enabled &&
                 lighting.BumpMode != Fast::Oot3d::PicaLightingBumpMode::None
             ? TextureSampleExpression(lighting.BumpTextureUnit, state,
@@ -520,6 +526,12 @@ bool GenerateOot3dPicaFragmentShader(
     }
     std::string lightingDeclarations;
     std::string lightingMainBody;
+    if (parametric) {
+        bumpTextureSample = "(((fragment_uniforms.lighting_program.control.w >> 4u) & 3u) != 0u ? "
+            "pica_native_texture((fragment_uniforms.lighting_program.control.w >> 9u) & 3u) : vec4(0.0))";
+        shadowTextureSample = "((fragment_uniforms.lighting_program.control.w & 128u) != 0u ? "
+            "pica_native_texture((fragment_uniforms.lighting_program.control.w >> 11u) & 3u) : vec4(1.0))";
+    }
     if (!GenerateOot3dPicaFragmentLightingSource(
             packet, bumpTextureSample, shadowTextureSample,
             lightingDeclarations,
@@ -584,7 +596,7 @@ bool GenerateOot3dPicaFragmentShader(
               "layout(location=6) in vec3 pica_view;\n";
     if (parametric) source << Fast::Renderer3ds::PicaTevProgramGlsl();
     if (parametric) source << Fast::Renderer3ds::PicaLightingProgramDeclaration;
-    source << (state.Textures[0].Type == 2U
+    source << (integerTexture0
                    ? "layout(set=0,binding=1) uniform usampler2D pica_texture0;\n"
                    : "layout(set=0,binding=1) uniform sampler2D pica_texture0;\n")
            << "layout(set=0,binding=2) uniform sampler2D pica_texture1;\n"
@@ -625,8 +637,10 @@ bool GenerateOot3dPicaFragmentShader(
               "    vec2 delta = max(abs(dFdx(scaled)), abs(dFdy(scaled)));\n"
               "    return log2(max(delta.x, delta.y));\n"
               "}\n";
-    if (state.Textures[0].Type == 2U) {
-        source << Shadow2dHelpers(state);
+    if (integerTexture0) {
+        auto samplerState = state;
+        if (parametric) samplerState.Textures[0].Enabled = true;
+        source << Shadow2dHelpers(samplerState);
     } else {
         source << "vec4 pica_sample_texture0(vec2 coord) {\n"
                   "    float lod = pica_texture_lod(coord, vec2(textureSize(pica_texture0, 0)));\n"
@@ -643,6 +657,14 @@ bool GenerateOot3dPicaFragmentShader(
               "}\n";
     source << ShadowWriteHelpers(state);
     source << procTexSource;
+    if (parametric) {
+        source << (integerTexture0
+                       ? Fast::Renderer3ds::PicaIntegerTexture0Program
+                       : Fast::Renderer3ds::PicaFloatTexture0Program);
+        source << "vec4 pica_native_texture3() { return "
+               << (procTexEnabled && procTexReferenced ? "pica_sample_proctex()" : "vec4(0.0)") << "; }\n";
+        source << Fast::Renderer3ds::PicaTextureSelectionProgram;
+    }
     source << lightingDeclarations;
     hooks.Offsets[static_cast<size_t>(
         Oot3d::Renderer::PicaShaderHook::GlobalDeclarations)] =
@@ -783,12 +805,9 @@ bool GenerateOot3dPicaFragmentShader(
                   "    tev_inputs.secondary_fragment = secondary_fragment_color;\n"
                   "    tev_inputs.buffer_color = fragment_uniforms.combiner_buffer_color;\n"
                   "    for(int i=0;i<6;++i) tev_inputs.constants[i]=fragment_uniforms.tev_constants[i];\n";
-        for (size_t texture = 0; texture < 3; ++texture) {
-            source << "    tev_inputs.textures[" << texture << "] = "
-                   << (hooks.SamplesTexture(static_cast<uint8_t>(texture)) ? TextureSampleExpression(texture, state, supported) : "vec4(0.0)") << ";\n";
-        }
-        source << "    tev_inputs.textures[3] = "
-               << (procTexEnabled && procTexReferenced ? "pica_sample_proctex()" : "vec4(0.0)") << ";\n"
+        source << "    for (uint texture_unit = 0u; texture_unit < 4u; ++texture_unit)\n"
+                  "        tev_inputs.textures[texture_unit] = (fragment_uniforms.tev_program.control.y & (1u << texture_unit)) != 0u\n"
+                  "            ? pica_native_texture(texture_unit) : vec4(0.0);\n"
                   "    combiner_output = pica_evaluate_tev_resolved(fragment_uniforms.tev_program, tev_inputs);\n";
         if (!supported) { SetError(error, "parametric TEV texture interface unsupported"); return false; }
     }
