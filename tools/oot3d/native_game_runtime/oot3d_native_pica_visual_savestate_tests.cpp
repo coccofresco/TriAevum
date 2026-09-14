@@ -73,6 +73,9 @@ int main() {
     draw.FragmentShader.Uniforms.ShadowBiasLinear = 0.125F;
     draw.FragmentShader.Uniforms.TevProgram.Stages[5] = {0x000E000E, 0x1001, 0x40004, 0x20002};
     draw.FragmentShader.Uniforms.TevProgram.Control[0] = 0xAB00;
+    draw.FragmentShader.Uniforms.LightingProgram.Control = {8,4,3,15};
+    draw.FragmentShader.Uniforms.LightingProgram.Luts[6] = {5,1,0.25F,1};
+    draw.FragmentShader.Uniforms.FragmentControl = {0x10005,0x31,0,0};
     auto lightingLuts = std::make_shared<Oot3dPicaLightingLutState>();
     lightingLuts->Entry(0U, 0U) = 0x00123ABCU;
     lightingLuts->Entry(23U, 255U) = 0x00FEDCBAU;
@@ -123,6 +126,10 @@ int main() {
                 draw.FragmentShader.Uniforms.TevProgram.Stages &&
             decoded.Scheduler.Accumulator.PendingDraws[0].FragmentShader.Uniforms.TevProgram.Control ==
                 draw.FragmentShader.Uniforms.TevProgram.Control, "TEV program lost in savestate round-trip");
+    Require(decoded.Scheduler.Accumulator.PendingDraws[0].FragmentShader.Uniforms.LightingProgram ==
+                draw.FragmentShader.Uniforms.LightingProgram &&
+            decoded.Scheduler.Accumulator.PendingDraws[0].FragmentShader.Uniforms.FragmentControl ==
+                draw.FragmentShader.Uniforms.FragmentControl, "lighting/fog/alpha program lost in savestate round-trip");
     Require(decoded.Scheduler.Accumulator.NextSequence == 6U &&
                 decoded.Scheduler.Accumulator.PendingDraws.size() == 1U &&
                 decoded.Scheduler.Accumulator.PendingDraws[0].SubmissionId ==

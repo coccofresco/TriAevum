@@ -466,10 +466,94 @@ python tools/renderer/tev_program/run_native_comparison.py --invocation <fixture
 python tools/renderer/tev_program/run_native_comparison.py --invocation <fixture.json> --output <another-new-directory> --from-start
 ```
 
-Next: separate normalized module/PSO identity from material/hook identity,
-prepare the selected modules and pipeline variants in Forge, and extend real
-frame comparisons to later intro clips, further materials and enabled effects.
-Linux/Android parity and full-intro coverage are still unverified for this path.
+Historical next-step proposal superseded below: expanding Forge/cache coverage
+is not the objective of the cache-independent native path. Linux/Android parity
+and full-intro coverage are still unverified for this path.
+
+## Cache-independent lighting, fog and alpha: 2026-09-14
+
+The mandate is to reconstruct the stable programs and native parameter
+contracts from the recovered game behavior, not collect additional shader
+variants or require a cache-preparation step in Forge. The legacy cache path
+remains available for comparison; it is not the architecture of the replacement.
+
+This implementation reuses the existing register decoder and its documented
+native material/LUT evidence; it does not claim new decompilation of external
+repositories. `fast/renderer3ds/pica_lighting_program.h` now owns a shared,
+256-byte std140 lighting program and stable GLSL equations. Per-draw data carries:
+
+- Native light count and permutation, directional/positional and two-sided flags.
+- Diffuse/ambient/specular accumulation, highlight clamp and geometric factors.
+- LUT input selectors, absolute/signed addressing and scales, environment
+  support masks, D0/D1, reflectance RGB, spot/distance attenuation and Fresnel.
+- Normal/tangent bump preparation and Z reconstruction, shadow factor inversion,
+  per-light shadow participation and primary/secondary/alpha application.
+
+Fog mode/flip and all eight alpha-test functions are also per-draw data, rather
+than generated expressions. Existing fog lookup arithmetic and native test
+ordering are preserved. The live frontend selects these implementations with
+the existing developer `--pica-parametric-tev` switch (now a broader fragment
+path). Default shipping behavior remains specialized during migration.
+
+The fragment UBO preserves the old prefix and TEV offset 2,112. Lighting begins
+at 2,224, fragment controls at 2,480; total size is 2,496 bytes. SPIR-V reflection
+checks these offsets. PVRB/V11 appends the 272 new bytes to the replay format;
+V1-V10 remain readable. V11 is not readable by older executables. Typed material
+and texture hooks remain per draw, including the normal/tangent variables and
+fog factor visible to authorized extensions. No pass ordering was changed.
+
+Verification:
+
+- 384 combinations of light count, permutation, environment, LUT selectors,
+  fog and alpha test produce one identical source for the fixed sampler family.
+- `pica_lighting_gpu_tests`: 64 register configurations with synthetic packed
+  24x256 PICA LUT entries, evaluated on Vulkan by both the actual canonical
+  generator and one parametric lighting body. Covers bump normal/tangent modes,
+  shadow inversion, geometric factors, LUTs and Fresnel. 512 float components,
+  zero failures at 1e-5 tolerance; measured maximum difference 5.96046e-8.
+  This is an equation differential, not an emulator-oracle comparison.
+- Existing 4,096-case TEV GPU differential remains passing. Uniform codec tests
+  cover exact V11 roundtrip, V9/V10 prefixes and every truncated V11 payload.
+- Full game bridge and visual-savestate tests pass. The current runtime was
+  incrementally rebuilt; no gameplay AOT compilation was required.
+- Paired NRI framebuffer checks use Hyrule Field and early boot. The initial
+  six pairs were identical; all six final current-binary pairs are also identical
+  and are stored separately below. Inventory
+  inspection found **no fragment-lighting draws in these fixtures**: they test
+  real TEV/fog/alpha integration and absence of regressions, not in-game LUT or
+  bump coverage. Effective module inventories went 41 -> 9 and 35 -> 9, but this
+  is neither an FPS measurement nor proof of stutter elimination.
+
+Private verification paths (never package these):
+
+- `J:/TriAevum-diagnostics/lighting-program-build`: standalone CMake/CTest.
+- `J:/TriAevum-diagnostics/lighting-native-field-20260914/comparison.json`.
+- `J:/TriAevum-diagnostics/lighting-native-boot-20260914/comparison.json`.
+- Final current-binary reruns: `I:/TriAevum-diagnostics/lighting-final-field-20260914`
+  and `I:/TriAevum-diagnostics/lighting-final-boot-20260914`. An initial final-run
+  attempt exhausted J: before inventory output; its two incomplete temporary
+  directories were removed. It is not counted as a successful comparison.
+
+The standalone Windows build uses Clang 22.1.6, Ninja and Vulkan SDK 1.4.350.0.
+On this machine, configure it with `CMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY`
+and `CMAKE_EXE_LINKER_FLAGS=/MANIFEST:NO` to avoid the absent Windows resource
+compiler during console-test configuration. This does not change the game build.
+
+### Remaining implementation, not cache work
+
+| Surface | Actual remaining work |
+| --- | --- |
+| CMB/profile vertex programs | Implement and validate the recovered SHBIN behavior as the fixed native vertex family, including skinning, UV mapping, vertex lighting and billboard paths; the legacy vertex translator is still used. |
+| Texture interface | Move enabled/reference masks, UV selection and bump/shadow texture selection out of source specialization. Native typed sampler distinctions must remain correct. |
+| Procedural textures | Move the existing generator's native configurations into stable shader code and uniforms; preserve LUT/filter/noise semantics. |
+| Lighting resources | Current code retains LUT/no-LUT descriptor families and generated texture sample expressions. The no-LUT family's lookup functions are unreachable by its decoded flags, not a fallback for missing LUT data. |
+| Native output | Audit remaining shadow-write, depth/output and sampler helper specialization and define the bounded legitimate pipeline families. |
+| Delivery | Build the finite shader artifacts with the developer build, bind them directly in NRI, and initialize required pipelines without depending on collected or persistent shader caches. Runtime source generation is not yet removed. |
+| Validation | Execute fragment-lit materials in real game scenes, broader intro/gameplay/effect cases, and Linux/Android. |
+
+Do not mark the full cache-independent renderer complete based on this tranche.
+The next implementation priority is the fixed native vertex/texture contract,
+not repopulating a shader pack with the new runtime-generated variants.
 
 ## External Source Links
 

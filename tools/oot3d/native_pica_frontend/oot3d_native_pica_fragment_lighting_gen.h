@@ -48,6 +48,7 @@ bool GenerateOot3dPicaFragmentLightingSource(const Oot3dPicaDrawPacket &packet,
                                              std::string &declarations,
                                              std::string &mainBody,
                                              std::string *error = nullptr,
-                                             Oot3dPicaShaderBuildPurpose purpose = Oot3dPicaShaderBuildPurpose::RuntimeDraw);
+                                             Oot3dPicaShaderBuildPurpose purpose = Oot3dPicaShaderBuildPurpose::RuntimeDraw,
+                                             bool parametric = false);
 
 } // namespace Oot3dNativeGame

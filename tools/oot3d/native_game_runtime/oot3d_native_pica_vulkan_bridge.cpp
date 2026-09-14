@@ -137,6 +137,11 @@ PackFragmentUniforms(
     static_assert(sizeof(uniforms.TevProgram) == 112U);
     std::memcpy(bytes.data() + Fast::Oot3d::kPicaPackedFragmentTevProgramOffset,
                 &uniforms.TevProgram, sizeof(uniforms.TevProgram));
+    static_assert(sizeof(uniforms.LightingProgram) == 256U);
+    std::memcpy(bytes.data() + Fast::Oot3d::kPicaPackedFragmentLightingProgramOffset,
+                &uniforms.LightingProgram, sizeof(uniforms.LightingProgram));
+    std::memcpy(bytes.data() + Fast::Oot3d::kPicaPackedFragmentControlOffset,
+                uniforms.FragmentControl.data(), sizeof(uniforms.FragmentControl));
     return bytes;
 }
 

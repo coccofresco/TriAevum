@@ -8,13 +8,13 @@
 
 using namespace Oot3dNativeGame;
 void Check(bool ok, const std::string& error) { if (!ok) throw std::runtime_error(error); }
-void CheckTevOffset(const shaderc::SpvCompilationResult& result) {
+void CheckUniformOffset(const shaderc::SpvCompilationResult& result, const char* name, uint32_t expected) {
     std::vector<uint32_t> words(result.cbegin(),result.cend());
     uint32_t type=0, member=0;
     for(size_t p=5;p<words.size();p+=words[p]>>16) {
         Check((words[p]>>16)>0,"invalid SPIR-V instruction");
         if((words[p]&0xffff)==6 && (words[p]>>16)>=4 &&
-            std::strcmp(reinterpret_cast<const char*>(&words[p+3]),"tev_program")==0) {
+            std::strcmp(reinterpret_cast<const char*>(&words[p+3]),name)==0) {
             type=words[p+1]; member=words[p+2];
         }
     }
@@ -22,10 +22,10 @@ void CheckTevOffset(const shaderc::SpvCompilationResult& result) {
     for(size_t p=5;p<words.size();p+=words[p]>>16)
         if((words[p]&0xffff)==72 && (words[p]>>16)==5 && words[p+1]==type &&
             words[p+2]==member && words[p+3]==35) {
-            Check(words[p+4]==2112,"SPIR-V TEV offset breaks legacy uniform prefix");
+            Check(words[p+4]==expected,"SPIR-V offset breaks uniform layout");
             matched=true;
         }
-    Check(matched,"missing TEV uniform member offset");
+    Check(matched,"missing uniform member offset");
 }
 int main() {
     try {
@@ -60,7 +60,11 @@ int main() {
             for (const auto* shader : {&dynamic,&specialized}) {
                 auto result=compiler.CompileGlslToSpv(shader->Source,shaderc_fragment_shader,"consumer",options);
                 Check(result.GetCompilationStatus()==shaderc_compilation_status_success,result.GetErrorMessage());
-                if(shader==&dynamic) CheckTevOffset(result);
+                if(shader==&dynamic) {
+                    CheckUniformOffset(result,"tev_program",2112);
+                    CheckUniformOffset(result,"lighting_program",2224);
+                    CheckUniformOffset(result,"fragment_control",2480);
+                }
             }
         }
         for (unsigned lit=0;lit<2;++lit) for (uint8_t type : {0,2,3,5}) {
@@ -87,6 +91,47 @@ int main() {
                 Check(result.GetCompilationStatus()==shaderc_compilation_status_success,result.GetErrorMessage());
             }
         }
+        // All structural lighting choices below must be uniform data, not
+        // newly compiled source. Sampler/bump interfaces are held fixed.
+        packet = std::make_unique<Oot3dPicaDrawPacket>();
+        state = {};
+        packet->Registers[0x08F] = 1;
+        baseline.clear();
+        unsigned lightingCases = 0;
+        for (unsigned environment : {0,1,2,3,4,5,6,8})
+        for (unsigned count=1; count<=8; ++count)
+        for (unsigned input=0; input<6; ++input) {
+            packet->Registers[0x1C2] = count-1;
+            packet->Registers[0x1C3] = (environment<<4) | ((input&3)<<2) | ((input&1)<<27);
+            packet->Registers[0x1C4] = input&1 ? 0x000000FF : 0xFF00;
+            packet->Registers[0x1D9] = input&1 ? 0x76543210 : 0x01234567;
+            packet->Registers[0x1D0] = input&1 ? 0x02222222 : 0;
+            packet->Registers[0x1D1] = input*0x01111111;
+            packet->Registers[0x1D2] = (input%4)*0x01111111;
+            for(unsigned light=0;light<8;++light) packet->Registers[0x149+light*16]=(input+light)&15;
+            packet->Registers[0xE0] = input&1 ? 0x10005 : 0;
+            packet->Registers[0x104] = ((count-1)<<4) | (input&1);
+            Oot3dPicaGeneratedFragmentShader dynamic, specialized;
+            std::string error;
+            Check(GenerateOot3dPicaFragmentShader(*packet,state,dynamic,&error,
+                Oot3dPicaShaderBuildPurpose::OfflineSource,Oot3dPicaTevMode::Parametric),error);
+            Check(GenerateOot3dPicaFragmentShader(*packet,state,specialized,&error,
+                Oot3dPicaShaderBuildPurpose::OfflineSource),error);
+            if(baseline.empty()) baseline=dynamic.Source;
+            Check(dynamic.Source==baseline,"lighting/fog/alpha values changed parametric source");
+            Check(dynamic.Hooks.Semantics==specialized.Hooks.Semantics,"lighting hooks changed");
+            auto uniforms=BuildOot3dPicaFragmentUniformState(*packet);
+            Check(uniforms.LightingProgram.Control[0]==count,"active lights lost");
+            Check(uniforms.LightingProgram.Control[1]==environment,"environment lost");
+            for(unsigned slot=0;slot<count;++slot) {
+                auto expected=(packet->Registers[0x1D9]>>(slot*4))&7;
+                Check(uniforms.LightingProgram.Lights[slot][0]==expected,"light permutation lost");
+            }
+            ++lightingCases;
+        }
+        auto lightingSpv=compiler.CompileGlslToSpv(baseline,shaderc_fragment_shader,"parametric_lights",options);
+        Check(lightingSpv.GetCompilationStatus()==shaderc_compilation_status_success,lightingSpv.GetErrorMessage());
+        std::cout << lightingCases << " lighting/fog/alpha configurations share one source\n";
         std::cout << "16 stable-source material programs; 8 sampler/lighting/fog/alpha cases; 48 SPIR-V compilations passed\n";
         return 0;
     } catch(const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }

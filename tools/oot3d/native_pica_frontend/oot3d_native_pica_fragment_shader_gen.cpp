@@ -361,7 +361,7 @@ uint64_t ComputeOot3dPicaFragmentShaderStateKey(
     const Oot3dPicaDecodedDrawState& state, Oot3dPicaTevMode mode) {
     constexpr uint64_t kFnvOffset = 1469598103934665603ULL;
     // Version the compiler semantics, not just the input register values.
-    uint64_t key = HashWord(kFnvOffset, 0x54455602U);
+    uint64_t key = HashWord(kFnvOffset, 0x54455603U);
     key = HashWord(key, packet.Registers[0x080U]);
     key = HashWord(key, static_cast<uint32_t>(mode));
     key = HashWord(key, packet.Registers[0x08FU]);
@@ -450,6 +450,9 @@ Oot3dPicaFragmentUniformState BuildOot3dPicaFragmentUniformState(
             static_cast<float>(difference) / 2047.0F};
     }
     uniforms.Lighting = BuildOot3dPicaFragmentLightingUniformState(packet);
+    uniforms.LightingProgram = Fast::Renderer3ds::BuildPicaLightingProgram(
+        Fast::Oot3d::DecodePicaFragmentLighting(packet.Registers));
+    uniforms.FragmentControl = {packet.Registers[0x0E0U], packet.Registers[0x104U], 0U, 0U};
     Fast::Renderer3ds::DecodePicaTevProgram(packet.Registers, uniforms.TevProgram);
     return uniforms;
 }
@@ -520,7 +523,7 @@ bool GenerateOot3dPicaFragmentShader(
     if (!GenerateOot3dPicaFragmentLightingSource(
             packet, bumpTextureSample, shadowTextureSample,
             lightingDeclarations,
-            lightingMainBody, error, purpose)) {
+            lightingMainBody, error, purpose, parametric)) {
         return false;
     }
     const bool fragmentLighting = Oot3dPicaFragmentLightingEnabled(packet);
@@ -580,6 +583,7 @@ bool GenerateOot3dPicaFragmentShader(
               "layout(location=5) in vec4 pica_normquat;\n"
               "layout(location=6) in vec3 pica_view;\n";
     if (parametric) source << Fast::Renderer3ds::PicaTevProgramGlsl();
+    if (parametric) source << Fast::Renderer3ds::PicaLightingProgramDeclaration;
     source << (state.Textures[0].Type == 2U
                    ? "layout(set=0,binding=1) uniform usampler2D pica_texture0;\n"
                    : "layout(set=0,binding=1) uniform sampler2D pica_texture0;\n")
@@ -608,6 +612,8 @@ bool GenerateOot3dPicaFragmentShader(
                   "    float shadow_bias_constant;\n"
                   "    float shadow_bias_linear;\n";
     if (parametric) source << "    PicaTevProgram tev_program;\n";
+    if (parametric) source << "    PicaLightingProgram lighting_program;\n";
+    if (parametric) source << "    uvec4 fragment_control;\n";
     source << "} fragment_uniforms;\n";
     if (state.OutputMerger.FragmentOperationMode == 3U) {
         source << "layout(set=0,binding=5,r32ui) uniform uimage2D pica_shadow_buffer;\n";
@@ -809,7 +815,15 @@ bool GenerateOot3dPicaFragmentShader(
     const uint32_t alphaTest = packet.Registers[0x104U];
     const bool alphaTestEnabled = (alphaTest & 1U) != 0U;
     const uint8_t alphaFunction = static_cast<uint8_t>((alphaTest >> 4U) & 7U);
-    if (alphaTestEnabled) {
+    if (parametric) {
+        source << "    if ((fragment_uniforms.fragment_control.y & 1u) != 0u) {\n"
+                  "        int alpha_byte = int(combiner_output.a * 255.0);\n"
+                  "        switch ((fragment_uniforms.fragment_control.y >> 4u) & 7u) {\n";
+        for (uint8_t function = 0; function < 8; ++function)
+            source << "        case " << unsigned(function) << "u: if ("
+                   << AlphaDiscardCondition(function) << ") discard; break;\n";
+        source << "        }\n    }\n";
+    } else if (alphaTestEnabled) {
         source << "    int alpha_byte = int(combiner_output.a * 255.0);\n"
                << "    if (" << AlphaDiscardCondition(alphaFunction)
                << ") discard;\n";
@@ -820,8 +834,20 @@ bool GenerateOot3dPicaFragmentShader(
     source << "    float pica_z_over_w = -gl_FragCoord.z;\n"
               "    float pica_depth = pica_z_over_w * fragment_uniforms.depth_scale + fragment_uniforms.depth_offset;\n"
               "    if (fragment_uniforms.w_buffering != 0) pica_depth /= gl_FragCoord.w;\n";
-    if (fogMode == 5U) {
+    if (fogMode == 5U)
         hooks.Semantics |= Oot3d::Renderer::PicaShaderSemantic::NativeFogFactor;
+    if (parametric) {
+        source << "    float fog_factor = 1.0;\n"
+                  "    if ((fragment_uniforms.fragment_control.x & 7u) == 5u) {\n"
+                  "    float fog_index = ((fragment_uniforms.fragment_control.x & 65536u) != 0u ? (1.0 - pica_depth) : pica_depth) * 128.0;\n"
+                  "    float fog_i = clamp(floor(fog_index), 0.0, 127.0);\n"
+                  "    int fog_entry_index = int(fog_i);\n"
+                  "    vec4 fog_pair = fragment_uniforms.fog_lut[fog_entry_index >> 1];\n"
+                  "    vec2 fog_entry = (fog_entry_index & 1) == 0 ? fog_pair.xy : fog_pair.zw;\n"
+                  "    fog_factor = clamp(fog_entry.x + fog_entry.y * (fog_index - fog_i), 0.0, 1.0);\n"
+                  "    combiner_output.rgb = mix(fragment_uniforms.fog_color.rgb, combiner_output.rgb, fog_factor);\n"
+                  "    }\n";
+    } else if (fogMode == 5U) {
         const bool fogFlip = (packet.Registers[0x0E0U] & (1U << 16U)) != 0U;
         source << "    float fog_index = "
                << (fogFlip ? "(1.0 - pica_depth)" : "pica_depth")

@@ -33,13 +33,22 @@ int main() {
         input.ShadowBiasLinear=0.125F;
         for(size_t s=0;s<6;++s) input.TevProgram.Stages[s]={uint32_t(s),0x1001,0x40004,0x20002};
         input.TevProgram.Control[0]=0xAB00;
+        input.LightingProgram.Control={8,4,3,15};
+        input.LightingProgram.Lights[7]={3,127,0,0};
+        input.LightingProgram.Luts[6]={5,1,0.25F,1};
+        input.FragmentControl={0x10005,0x31,0,0};
         Writer encoded; WriteFragmentUniforms(encoded,input);
         Reader reader{encoded.Bytes}; Oot3dPicaFragmentUniformState decoded;
-        Check(ReadFragmentUniforms(reader,decoded,true,true,true,true),"V10 decode failed");
+        Check(ReadFragmentUniforms(reader,decoded,true,true,true,true,true),"V11 decode failed");
         Check(reader.Offset==encoded.Bytes.size(),"unconsumed payload");
         Writer roundtrip; WriteFragmentUniforms(roundtrip,decoded);
         Check(roundtrip.Bytes==encoded.Bytes,"non-identical roundtrip");
-        auto legacy=encoded.Bytes; legacy.resize(legacy.size()-112);
+        auto v10=encoded.Bytes; v10.resize(v10.size()-272);
+        Reader previous{v10}; Oot3dPicaFragmentUniformState previousDecoded;
+        Check(ReadFragmentUniforms(previous,previousDecoded,true,true,true,true),"V10 decode failed");
+        Check(previous.Offset==v10.size() && previousDecoded.TevProgram.Control==input.TevProgram.Control,
+              "V10 prefix corrupted");
+        auto legacy=v10; legacy.resize(legacy.size()-112);
         Reader old{legacy}; Oot3dPicaFragmentUniformState oldDecoded;
         Check(ReadFragmentUniforms(old,oldDecoded,true,true,true,false),"V9 decode failed");
         Check(old.Offset==legacy.size() && oldDecoded.ShadowBiasLinear==input.ShadowBiasLinear &&
@@ -47,11 +56,11 @@ int main() {
         for(size_t length=0;length<encoded.Bytes.size();++length) {
             Reader truncated{std::span(encoded.Bytes).first(length)};
             Oot3dPicaFragmentUniformState partial;
-            Check(!ReadFragmentUniforms(truncated,partial,true,true,true,true),"truncated payload accepted");
+            Check(!ReadFragmentUniforms(truncated,partial,true,true,true,true,true),"truncated payload accepted");
         }
         static_assert(Fast::Oot3d::kPicaPackedFragmentTevProgramOffset==2112);
-        static_assert(Fast::Oot3d::kPicaPackedFragmentUniformSize==2224);
-        std::cout<<"V10 uniform codec roundtrip, V9 compatibility, "<<encoded.Bytes.size()<<" truncations passed\n";
+        static_assert(Fast::Oot3d::kPicaPackedFragmentUniformSize==2496);
+        std::cout<<"V11 uniform codec roundtrip, V9/V10 compatibility, "<<encoded.Bytes.size()<<" truncations passed\n";
         return 0;
     } catch(const std::exception& e) {std::cerr<<e.what()<<'\n';return 1;}
 }

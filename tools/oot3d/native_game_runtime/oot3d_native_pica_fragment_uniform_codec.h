@@ -37,13 +37,19 @@ void WriteFragmentUniforms(Writer& writer,
     for (const auto& stage : value.TevProgram.Stages)
         for (const auto word : stage) writer.U32(word);
     for (const auto word : value.TevProgram.Control) writer.U32(word);
+    for (const auto word : value.LightingProgram.Control) writer.U32(word);
+    for (const auto& light : value.LightingProgram.Lights)
+        for (const auto word : light) writer.U32(word);
+    for (const auto& lut : value.LightingProgram.Luts)
+        for (const auto component : lut) writer.Float(component);
+    for (const auto word : value.FragmentControl) writer.U32(word);
 }
 
 template<class Reader>
 bool ReadFragmentUniforms(Reader& reader,
                           Oot3dPicaFragmentUniformState& value,
                           bool extended, bool fragmentLighting,
-                          bool shadowUniforms, bool tevProgram) {
+                          bool shadowUniforms, bool tevProgram, bool lightingProgram = false) {
     for (auto& vector : value.TevConstants) {
         for (auto& component : vector) {
             if (!reader.Float(component)) return false;
@@ -91,6 +97,14 @@ bool ReadFragmentUniforms(Reader& reader,
         for (auto& stage : value.TevProgram.Stages)
             for (auto& word : stage) if (!reader.U32(word)) return false;
         for (auto& word : value.TevProgram.Control) if (!reader.U32(word)) return false;
+    }
+    if (lightingProgram) {
+        for (auto& word : value.LightingProgram.Control) if (!reader.U32(word)) return false;
+        for (auto& light : value.LightingProgram.Lights)
+            for (auto& word : light) if (!reader.U32(word)) return false;
+        for (auto& lut : value.LightingProgram.Luts)
+            for (auto& component : lut) if (!reader.Float(component)) return false;
+        for (auto& word : value.FragmentControl) if (!reader.U32(word)) return false;
     }
     return true;
 }

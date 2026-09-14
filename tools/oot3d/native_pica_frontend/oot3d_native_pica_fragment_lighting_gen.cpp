@@ -1,6 +1,7 @@
 #include "oot3d_native_pica_fragment_lighting_gen.h"
 
 #include "fast/oot3d/pica_fragment_lighting.h"
+#include "fast/renderer3ds/pica_lighting_program.h"
 
 #include <sstream>
 
@@ -283,7 +284,8 @@ bool GenerateOot3dPicaFragmentLightingSource(const Oot3dPicaDrawPacket &packet,
                                              std::string &declarations,
                                              std::string &mainBody,
                                              std::string *error,
-                                             Oot3dPicaShaderBuildPurpose purpose) {
+                                             Oot3dPicaShaderBuildPurpose purpose,
+                                             bool parametric) {
   declarations.clear();
   mainBody.clear();
   const auto lighting =
@@ -311,10 +313,24 @@ bool GenerateOot3dPicaFragmentLightingSource(const Oot3dPicaDrawPacket &packet,
       "}\n";
   if (LightingUsesLuts(lighting)) {
     declarations += LightingLutDeclarations();
+  } else if (parametric) {
+    // No-LUT family: no descriptor dependency, and decoded flags disable
+    // every lookup. These functions are unreachable for this family.
+    declarations += "float pica_lighting_lut_unsigned(int t, float p) { return 1.0; }\n"
+                    "float pica_lighting_lut_signed(int t, float p) { return 1.0; }\n";
   }
+  if (parametric) declarations += Fast::Renderer3ds::PicaLightingProgramFunctions;
   std::ostringstream source;
   source << "    vec4 pica_diffuse_sum = vec4(0.0, 0.0, 0.0, 1.0);\n"
             "    vec4 pica_specular_sum = vec4(0.0, 0.0, 0.0, 1.0);\n";
+  if (parametric) {
+    source << "    vec3 pica_surface_normal, pica_surface_tangent;\n"
+              "    vec4 pica_shadow_factor;\n"
+              "    pica_program_surface(fragment_uniforms.lighting_program, "
+           << (bumpTextureSample.empty() ? "vec4(0.0)" : bumpTextureSample) << ", "
+           << (shadowTextureSample.empty() ? "vec4(1.0)" : shadowTextureSample)
+           << ", pica_surface_normal, pica_surface_tangent, pica_shadow_factor);\n";
+  } else {
   if (lighting.ShadowFactorEnabled) {
     source << "    vec4 pica_shadow_factor = ";
     if (lighting.InvertShadow) {
@@ -347,6 +363,7 @@ bool GenerateOot3dPicaFragmentLightingSource(const Oot3dPicaDrawPacket &packet,
               "    vec3 pica_surface_tangent = vec3(1.0, 0.0, 0.0);\n";
     break;
   }
+  }
   source << "    vec4 pica_normal_quaternion = normalize(pica_normquat);\n"
             "    vec3 pica_lighting_normal = pica_quaternion_rotate("
             "pica_normal_quaternion, pica_surface_normal);\n"
@@ -355,6 +372,9 @@ bool GenerateOot3dPicaFragmentLightingSource(const Oot3dPicaDrawPacket &packet,
             "    vec3 normal = pica_lighting_normal;\n"
             "    vec3 tangent = pica_lighting_tangent;\n"
             "    vec3 pica_normalized_view = normalize(pica_view);\n";
+  if (parametric) {
+    source << Fast::Renderer3ds::PicaLightingProgramBody;
+  } else {
   for (size_t slot = 0; slot < lighting.ActiveLightCount; ++slot) {
     const uint32_t lightIndex = lighting.LightPermutation[slot];
     const auto &light = lighting.Lights[lightIndex];
@@ -526,6 +546,7 @@ bool GenerateOot3dPicaFragmentLightingSource(const Oot3dPicaDrawPacket &packet,
     if ((lighting.FresnelSelector & 2U) != 0U) {
       source << "    pica_specular_sum.a *= pica_shadow_factor.a;\n";
     }
+  }
   }
   source << "    pica_diffuse_sum.rgb += "
             "fragment_uniforms.lighting_global_ambient.rgb;\n"

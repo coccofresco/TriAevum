@@ -51,3 +51,16 @@ target_include_directories(tev_uniform_codec_tests PRIVATE "${frontend}" "${game
     "${CMAKE_CURRENT_LIST_DIR}/../../triaevum_release/vendor/include")
 add_test(NAME tev_uniform_codec COMMAND tev_uniform_codec_tests)
 set_tests_properties(pica_tev_gpu PROPERTIES TIMEOUT 180)
+add_executable(pica_lighting_gpu_tests lighting_gpu_tests.cpp
+    "${frontend}/oot3d_native_pica_fragment_lighting_gen.cpp"
+    "${runtime}/src/fast/oot3d/pica_fragment_lighting.cpp")
+target_compile_features(pica_lighting_gpu_tests PRIVATE cxx_std_20)
+target_include_directories(pica_lighting_gpu_tests PRIVATE "${frontend}" "${runtime}/include"
+    "${SHADERC_INCLUDE_DIR}" "${CMAKE_CURRENT_LIST_DIR}/../../triaevum_release/vendor/include")
+target_link_libraries(pica_lighting_gpu_tests PRIVATE Vulkan::Vulkan "${SHADERC_LIBRARY}")
+if(WIN32)
+    add_custom_command(TARGET pica_lighting_gpu_tests POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${SHADERC_RUNTIME}" "$<TARGET_FILE_DIR:pica_lighting_gpu_tests>")
+endif()
+add_test(NAME pica_lighting_gpu COMMAND pica_lighting_gpu_tests)
+set_tests_properties(pica_lighting_gpu PROPERTIES TIMEOUT 180)

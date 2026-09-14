@@ -35,6 +35,13 @@ Native ordered surfaces --------------> Native Frame Composer
 
 - **PICA Canonical Frontend** decodes native registers, TEV, lighting, LUTs, procedural textures, fog, Shadow2D and fixed-function state.
 - **Native Shader Compiler** emits and caches only shaders required by canonical PICA semantics.
+- **Cache-independent native path (migration)** moves recovered native material
+  behavior into stable shader programs with per-draw register-derived data.
+  Collected shader caches and Forge cache preparation are not the solution or
+  a runtime requirement of this path. Keep the legacy specialized path as a
+  comparison oracle until the replacement is verified. Track remaining vertex,
+  sampler, procedural-texture and pipeline work explicitly; a parametric TEV
+  alone is not completion. See `TRIAEVUM_OOT3D_UBERSHADER_ANALYSIS.md`.
 - **NRI Native Render Core** performs the faithful world render and remains usable without any extension system.
 - **PicaSceneFrame** is a passive, low-level, read-only view of resolved draws and GPU resources. It is never the rendering source of truth.
 - **NativeSceneView** joins stable draw IDs with camera, lights, transforms, current/previous skeleton state, geometry, materials, textures and object identity when those semantics are available.
