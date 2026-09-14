@@ -3821,6 +3821,8 @@ void GfxRenderingAPIVulkan::FinishNativePicaAotShaders() {
                      std::size(Renderer3ds::kNativeFragmentArtifacts));
         std::fprintf(stderr, "TRIAEVUM_NATIVE_VERTEX_ARTIFACTS hits=%llu\n",
                      static_cast<unsigned long long>(mNativeVertexArtifactHits));
+        std::fprintf(stderr, "TRIAEVUM_NATIVE_PROGRAM_OWNERS canonical=%zu instrumented=%zu\n",
+                     mCanonicalNativePicaShaders.size(), mInstrumentedNativePicaShaders.size());
     }
 }
 

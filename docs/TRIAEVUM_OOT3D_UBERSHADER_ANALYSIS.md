@@ -996,6 +996,57 @@ platform/effect validation. The boot fixture has zero measured GLSL/SPIR-V
 compilations, but still creates 26 NRI pipelines; Field creates 25. This does not
 establish universal stutter elimination or an FPS gain. No release is produced.
 
+## Effective Program Ownership (2026-09-14)
+
+`pica_shader_module_identity.h` now keys GPU program ownership by both complete
+source identities, descriptor schema, NRI interface availability and typed
+fragment output layout. Canonical and instrumented programs remain in separate
+owning maps. Material/command aliases no longer create duplicate shader modules
+and SPIR-V vectors. Draw and legacy manifest prewarm use the same key; prewarm
+still checks its NRI source and output contracts. Insertion moves the program
+instead of copying its SPIR-V vectors. Resource destruction order is unchanged.
+
+The draw reuses identities already computed by the variant cache after typed
+instrumentation, without adding a per-draw source hash. The shared key accepts
+the output layout as a type parameter, with no title-specific addresses or
+effect scheduling logic. Unit tests exercise 100 aliases sharing one owner,
+different source hashes/sizes, descriptor schemas, NRI contracts, output layouts,
+and missing source rejection.
+
+Windows/NRI Field, native30/effects Off/no pack/fresh application cache:
+
+- Program creations: 24 previously, now 1 canonical owner.
+- Vertex artifact resolutions: 24 -> 1; fragment resolutions: 48 -> 2
+  (canonical and separate-sampler representations).
+- NRI pipelines: still 25; these include real fixed-function differences.
+- Three framebuffer captures are pixel-identical between modes and against the
+  previous `TriAevum-pass24-field-20260914` build. Nine standalone suites pass.
+- The two legacy combiner compilations remain; this change does not replace
+  that family or establish a measured FPS gain.
+
+The harness now offers `--taa`, modifying only the isolated copied config
+(Custom preset, AA=TAA), and requires instrumented-owner evidence. Two repeated
+Field comparisons produced the same strict failure: frames 120/180 match;
+frame 150 differs at one pixel, red only, maximum 8/255. This is NOT reported
+as a passed TAA parity test, nor attributed to the ownership change without
+a pre-change TAA baseline. Keep the strict test; do not add a tolerance or a
+scene-specific correction to conceal it.
+
+TAA exercised 1 canonical + 3 instrumented program owners and 4 vertex artifact
+resolutions, with no vertex compilation. Six fragment compilations remain
+(three instrumented programs, canonical and NRI forms), plus the legacy pair.
+The first TAA run created 28 NRI pipelines, reporting 4.12 seconds total creation
+time. This is evidence of remaining driver pipeline preparation work, not a
+steady-state FPS benchmark or proof of cold driver caches.
+
+Private diagnostics:
+`C:/Users/xander/AppData/Local/Temp/TriAevum-module-owners-{field,taa,taa-repeat}-20260914`.
+
+Next work must cover the legacy combiner as a semantic family, instrumented
+fragment interfaces from the typed generators, and pipeline preparation/lifetime.
+Do not confuse the smaller program-owner count with fewer required raster states
+or declare the TAA discrepancy solved. Linux/Android GPU verification is pending.
+
 ## External Source Links
 
 - [zeldaret loader placeholders](https://github.com/zeldaret/oot3d/blob/a87ddae43252cb3add71bf1003e7391bbe006033/src/functions/functions_410000s.cpp#L616)

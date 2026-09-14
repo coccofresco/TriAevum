@@ -3408,8 +3408,10 @@ void GfxRenderingAPIVulkan::PrewarmNativePicaPipelines() {
             entry.Domain == Oot3d::PicaGraphicsPipelineDomain::Canonical
                 ? mCanonicalNativePicaShaders
                 : mInstrumentedNativePicaShaders;
-        const auto shaderKey = std::pair{
-            entry.VertexShaderKey, entry.FragmentShaderKey};
+        const auto shaderKey = Renderer3ds::BuildPicaShaderModuleIdentity(
+            {entry.VertexSource.Id, entry.VertexSource.SecondaryHash, entry.VertexSource.Size},
+            {entry.FragmentSource.Id, entry.FragmentSource.SecondaryHash, entry.FragmentSource.Size},
+            entry.DescriptorSchemaVersion, mNriPicaPipelineBridge.Available(), entry.ShaderOutputs);
         if (mNriPicaPipelineBridge.Available() &&
             !entry.NriFragmentAvailable) {
             ++mPicaPipelinePrewarmSkipped;
@@ -4018,8 +4020,11 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         }
         finishCpuStage(cpuTimings.ShaderVariantMilliseconds);
 
-        const auto shaderKey = std::make_pair(
-            effectiveDraw.VertexShaderKey, effectiveDraw.FragmentShaderKey);
+        const auto shaderKey = Renderer3ds::BuildPicaShaderModuleIdentity(
+            effectiveDraw.VertexShaderSourceIdentity,
+            effectiveDraw.FragmentShaderSourceIdentity,
+            effectiveDraw.CanonicalDescriptorSchemaVersion,
+            mNriPicaPipelineBridge.Available(), shaderVariant.FragmentOutputs);
         auto& nativeShaderCache = shaderVariant.IsCanonical()
             ? mCanonicalNativePicaShaders
             : mInstrumentedNativePicaShaders;
@@ -4104,7 +4109,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             } else {
                 shader.NriVertexSpirv.clear();
             }
-            shaderIt = nativeShaderCache.emplace(shaderKey, shader).first;
+            shaderIt = nativeShaderCache.emplace(shaderKey, std::move(shader)).first;
         }
         mDiagnostics.RecordNriPicaShaderContract(
             shaderIt->second.NriDescriptorContract,

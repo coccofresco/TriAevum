@@ -8,6 +8,7 @@
 
 #include "fast/backends/gfx_rendering_api.h"
 #include "fast/renderer/spirv_cache.h"
+#include "fast/renderer3ds/pica_shader_module_identity.h"
 #include "fast/backends/oot3d_vulkan_diagnostics.h"
 #include "fast/backends/oot3d_vulkan_gpu_profiler.h"
 #include "fast/backends/oot3d_vulkan_validation.h"
@@ -325,6 +326,8 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         uint32_t LastUsedFrame = 0;
     };
 
+    using NativePicaShaderModuleKey = Renderer3ds::PicaShaderModuleIdentity<
+        Oot3d::PicaGraphicsPipelineShaderOutputs>;
     struct NativePicaShaderProgram {
         VkShaderModule VertexShader = VK_NULL_HANDLE;
         VkShaderModule FragmentShader = VK_NULL_HANDLE;
@@ -757,9 +760,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     VkPipeline mNativePicaScanoutPipeline = VK_NULL_HANDLE;
     VkPipeline mNativePicaScanoutOverlayPipeline = VK_NULL_HANDLE;
     VkSampler mNativePicaScanoutSampler = VK_NULL_HANDLE;
-    std::map<std::pair<uint64_t, uint64_t>, NativePicaShaderProgram>
+    std::map<NativePicaShaderModuleKey, NativePicaShaderProgram>
         mCanonicalNativePicaShaders;
-    std::map<std::pair<uint64_t, uint64_t>, NativePicaShaderProgram>
+    std::map<NativePicaShaderModuleKey, NativePicaShaderProgram>
         mInstrumentedNativePicaShaders;
     Oot3d::PicaGeometryRegistry mPicaGeometryRegistry;
     Oot3d::PicaCompositionSchedule mNativePicaCompositionSchedule;

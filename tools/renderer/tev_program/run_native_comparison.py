@@ -15,6 +15,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--timeout', type=float, default=120)
     parser.add_argument('--from-start', action='store_true', help='Ignore the fixture savestate and boot the game')
+    parser.add_argument('--taa', action='store_true', help='Enable TAA in the isolated copied configuration to exercise typed temporal programs')
     parser.add_argument('--no-shader-pack', action='store_true', help='Remove collected shader packs; verify built-in fragment artifact use')
     args = parser.parse_args()
     source = json.loads(args.invocation.read_text(encoding='utf-8-sig'))
@@ -50,6 +51,11 @@ def main():
                     shutil.copytree(path, target)
                 else:
                     shutil.copy2(path, target)
+                if token == '--config' and args.taa:
+                    configuration = json.loads(target.read_text(encoding='utf-8-sig'))
+                    configuration['Graphics']['Preset'] = 'Custom'
+                    configuration['Graphics']['AA']['Mode'] = 'TAA'
+                    target.write_text(json.dumps(configuration, indent=2), encoding='utf-8')
                 command.extend([token, str(target.resolve())])
             else:
                 command.append(token)
@@ -95,6 +101,10 @@ def main():
                 raise RuntimeError('parametric: fixed passes still requested compiler/cache resolution')
             if not re.search(r'OOT3D_PICA_AOT_SHADER_RESOLUTION .*entries=0\b', diagnostics):
                 raise RuntimeError('parametric: collected shader pack was not proven absent')
+            if args.taa:
+                owners = re.search(r'TRIAEVUM_NATIVE_PROGRAM_OWNERS canonical=(\d+) instrumented=(\d+)', diagnostics)
+                if not owners or int(owners[2]) == 0:
+                    raise RuntimeError('TAA: instrumented shader program use was not proven')
         reports[mode] = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in captures}
         print(f'{mode}: {len(captures)} framebuffer captures', flush=True)
     if reports['specialized'].keys() != reports['parametric'].keys():
@@ -112,7 +122,7 @@ def main():
                                'max_absolute_rgb': [v[1] for v in diff.getextrema()]})
     summary = {'executable_sha256': hashlib.sha256(executable.read_bytes()).hexdigest(),
                'captures': reports, 'comparison': comparison, 'no_shader_pack': args.no_shader_pack,
-               'note': 'Framebuffer parity test, not a performance measurement.'}
+               'taa': args.taa, 'note': 'Framebuffer parity test, not a performance measurement.'}
     (args.output/'comparison.json').write_text(json.dumps(summary, indent=2))
     print(json.dumps(comparison, indent=2))
     if not all(frame['identical_pixels'] for frame in comparison):

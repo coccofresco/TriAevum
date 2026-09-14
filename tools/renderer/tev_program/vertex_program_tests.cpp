@@ -1,6 +1,8 @@
 #include "fast/renderer3ds/pica_vertex_program.h"
 #include "fast/renderer3ds/pica_fragment_artifact.h"
 #include "fast/renderer3ds/pica_vertex_artifact.h"
+#include "fast/renderer3ds/pica_shader_module_identity.h"
+#include <map>
 #include <array>
 #include <iostream>
 #include <stdexcept>
@@ -25,6 +27,23 @@ int main() try {
     Check(!vertexArtifact.Matches("instrumented vertex"));
     Check(!FindPicaVertexArtifact(vertexArtifacts,"different outputs").Matches("different outputs"));
     Check(!PicaVertexArtifact{}.Matches("vertex"));
+    auto module = BuildPicaShaderModuleIdentity(IdentifyPicaShaderSource("vertex"),
+        IdentifyPicaShaderSource("fragment"), 3U, true, std::array<bool, 7>{});
+    std::map<decltype(module), int> owners;
+    for (int material = 0; material < 100; ++material) owners.try_emplace(module, material);
+    Check(owners.size() == 1);
+    auto changed = module;
+    changed.Vertex[1] ^= 1;
+    Check(changed != module);
+    changed = module; ++changed.Fragment[2]; Check(changed != module);
+    changed = module; ++changed.DescriptorSchema; Check(changed != module);
+    changed = module; changed.NriInterface = false; Check(changed != module);
+    changed = module; changed.Outputs[0] = true; Check(changed != module);
+    bool rejectedMissingIdentity = false;
+    try { (void)BuildPicaShaderModuleIdentity(PicaShaderSourceIdentity{},
+        IdentifyPicaShaderSource("fragment"), 3U, true, std::array<bool, 7>{}); }
+    catch (const std::invalid_argument&) { rejectedMissingIdentity = true; }
+    Check(rejectedMissingIdentity);
     std::array<uint32_t, 4> code{0x12345678, 0x88000000, 0, 0};
     std::array<uint32_t, 2> swizzles{0x1b1b1b1b, 0};
     PicaTranslatedVertexProgram p{0, true, IdentifyPicaProgramWords(std::span(code).first(2)),
