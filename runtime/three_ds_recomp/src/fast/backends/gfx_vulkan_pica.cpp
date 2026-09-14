@@ -31,6 +31,7 @@
 #include "fast/oot3d/pica_nri_shader_contract.h"
 #include "fast/oot3d/pica_nri_vertex_input.h"
 #include "fast/oot3d/pica_nri_pipeline_state.h"
+#include "fast/renderer3ds/pica_pipeline_identity.h"
 #include "fast/oot3d/pica_nri_draw_ownership.h"
 #include "fast/oot3d/pica_directional_shadow_lighting.h"
 #include "fast/oot3d/pica_scene_semantics.h"
@@ -78,14 +79,6 @@ void SetNativeError(std::string* error, std::string message) {
     if (error != nullptr) {
         *error = std::move(message);
     }
-}
-
-template <typename T>
-void AppendKey(std::vector<uint8_t>& bytes, const T& value) {
-    static_assert(std::is_trivially_copyable_v<T>);
-    const size_t offset = bytes.size();
-    bytes.resize(offset + sizeof(value));
-    std::memcpy(bytes.data() + offset, &value, sizeof(value));
 }
 
 template <typename Handle>
@@ -3191,48 +3184,17 @@ VkPipeline GfxRenderingAPIVulkan::GetOrCreateNativePicaPipeline(
             std::move(entry), draw.CanonicalPipelineId,
             mFrameGraphicsSettingsRevision);
     }
-    std::vector<uint8_t> key;
-    AppendKey(key, static_cast<uint8_t>(outlineOcclusionOnly));
-    AppendKey(key, draw.VertexShaderKey);
-    AppendKey(key, draw.FragmentShaderKey);
-    AppendKey(key, static_cast<uint8_t>(writesReactiveMask));
-    AppendKey(key, mFramePicaAttachmentRequirements.Key());
-    AppendKey(key, draw.Topology);
-    AppendKey(key, draw.CullMode);
-    AppendKey(key, static_cast<uint8_t>(draw.FramebufferFlipped));
-    for (const auto& binding : draw.VertexBindings) {
-        AppendKey(key, binding.Binding);
-        AppendKey(key, binding.ByteStride);
-        AppendKey(key, static_cast<uint8_t>(binding.PerInstance));
-    }
-    for (const auto& attribute : draw.VertexAttributes) {
-        AppendKey(key, attribute.Location);
-        AppendKey(key, attribute.Binding);
-        AppendKey(key, attribute.Format);
-        AppendKey(key, attribute.ComponentCount);
-        AppendKey(key, attribute.ByteOffset);
-    }
-    AppendKey(key, draw.ColorWriteMask);
-    AppendKey(key, draw.FragmentOperationMode);
-    AppendKey(key, draw.LogicOperation);
-    AppendKey(key, static_cast<uint8_t>(draw.Blend.Enabled));
-    AppendKey(key, draw.Blend.EquationRgb);
-    AppendKey(key, draw.Blend.EquationAlpha);
-    AppendKey(key, draw.Blend.SourceRgb);
-    AppendKey(key, draw.Blend.DestRgb);
-    AppendKey(key, draw.Blend.SourceAlpha);
-    AppendKey(key, draw.Blend.DestAlpha);
-    AppendKey(key, static_cast<uint8_t>(draw.DepthTestEnabled));
-    AppendKey(key, static_cast<uint8_t>(draw.DepthWriteEnabled));
-    AppendKey(key, draw.DepthCompare);
-    AppendKey(key, static_cast<uint8_t>(draw.Stencil.Enabled));
-    AppendKey(key, draw.Stencil.Compare);
-    AppendKey(key, draw.Stencil.Reference);
-    AppendKey(key, draw.Stencil.CompareMask);
-    AppendKey(key, draw.Stencil.WriteMask);
-    AppendKey(key, draw.Stencil.Fail);
-    AppendKey(key, draw.Stencil.DepthFail);
-    AppendKey(key, draw.Stencil.Pass);
+    const auto resolvedState = Oot3d::BuildPicaNriPipelineState(
+        draw, shader.FragmentOutputs, mFramePicaAttachmentRequirements,
+        mNativePicaSampleCount, mDepthFormat, writesReactiveMask, outlineOcclusionOnly);
+    const auto sourceIdentity = [](const Oot3d::PicaAotShaderSourceIdentity& value) {
+        return std::array<uint64_t, 3>{value.Id, value.SecondaryHash, value.Size};
+    };
+    const Renderer3ds::PicaPipelineProgramIdentity programs{
+        sourceIdentity(shader.VertexSource), sourceIdentity(shader.FragmentSource),
+        sourceIdentity(shader.NriFragmentSource), shader.NriDescriptorContract};
+    auto key = Renderer3ds::BuildPicaPipelineIdentity(
+        programs, draw, resolvedState, mPicaDynamicRenderingScope.Available());
     const auto found = mNativePicaPipelines.find(key);
     if (found != mNativePicaPipelines.end()) {
         return found->second;
@@ -3320,9 +3282,6 @@ VkPipeline GfxRenderingAPIVulkan::GetOrCreateNativePicaPipeline(
         VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};
     viewport.viewportCount = 1;
     viewport.scissorCount = 1;
-    const auto resolvedState = Oot3d::BuildPicaNriPipelineState(
-        draw, shader.FragmentOutputs, mFramePicaAttachmentRequirements,
-        mNativePicaSampleCount, mDepthFormat, writesReactiveMask, outlineOcclusionOnly);
     VkPipelineRasterizationStateCreateInfo rasterization{
         VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
     rasterization.polygonMode = VK_POLYGON_MODE_FILL;
@@ -4331,11 +4290,15 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             cpuTimings.GrassSurfaceMilliseconds +
             cpuTimings.SceneStateMilliseconds +
             cpuTimings.TemporalStateMilliseconds;
+        const size_t previousPipelineCount = mNativePicaPipelines.size();
         const VkPipeline pipeline =
             GetOrCreateNativePicaPipeline(
                 effectiveDraw, shaderIt->second, shaderVariant.Reactive,
                 shaderVariant.Domain, shaderVariant.RequestedFeatures,
                 shaderVariant.AppliedFeatures);
+        cpuTimings.PipelineLookupHits = mNativePicaPipelines.size() == previousPipelineCount ? 1U : 0U;
+        cpuTimings.PipelineCreations = mNativePicaPipelines.size() != previousPipelineCount ? 1U : 0U;
+        cpuTimings.PipelineEntries = static_cast<uint32_t>(mNativePicaPipelines.size());
         finishCpuStage(cpuTimings.PipelineMilliseconds);
         const bool nriOwnedDrawsEnabled =
             mNriPicaPipelineBridge.OwnedDrawsEnabled();

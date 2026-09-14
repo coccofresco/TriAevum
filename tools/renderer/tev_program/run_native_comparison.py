@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -53,9 +54,12 @@ def main():
         if mode == 'parametric':
             command.append('--pica-parametric-tev')
         (root/'invocation.json').write_text(json.dumps({'command': command}, indent=2))
+        environment = os.environ.copy()
+        environment['OOT3D_VULKAN_DIAGNOSTICS_PATH'] = str((root/'renderer.json').resolve())
+        environment['OOT3D_VULKAN_DIAGNOSTICS_MAX_FRAMES'] = '256'
         with (root/'stdout.log').open('w') as out, (root/'stderr.log').open('w') as err:
             result = subprocess.run(command, cwd=executable.parent, stdout=out,
-                                    stderr=err, timeout=args.timeout, check=False)
+                                    stderr=err, timeout=args.timeout, check=False, env=environment)
         if result.returncode:
             raise RuntimeError(f'{mode}: exit {result.returncode}; see {root}')
         captures = sorted(root.glob('*.bmp'))

@@ -70,6 +70,9 @@ struct Oot3dVulkanNativePicaCpuTimings {
     double ReflectionEnvironmentMilliseconds = 0.0;
     double TemporalStateMilliseconds = 0.0;
     double PipelineMilliseconds = 0.0;
+    uint32_t PipelineLookupHits = 0;
+    uint32_t PipelineCreations = 0;
+    uint32_t PipelineEntries = 0;
     double UploadMilliseconds = 0.0;
     double DescriptorMilliseconds = 0.0;
     double CommandMilliseconds = 0.0;

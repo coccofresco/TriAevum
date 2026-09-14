@@ -377,6 +377,9 @@ nlohmann::json FrameToJson(const Oot3dVulkanFrameDiagnostics& frame) {
               { "temporal_state_ms",
                 frame.NativePicaCpu.TemporalStateMilliseconds },
               { "pipeline_ms", frame.NativePicaCpu.PipelineMilliseconds },
+              { "pipeline_lookup_hits", frame.NativePicaCpu.PipelineLookupHits },
+              { "pipeline_creations", frame.NativePicaCpu.PipelineCreations },
+              { "pipeline_entries", frame.NativePicaCpu.PipelineEntries },
               { "upload_ms", frame.NativePicaCpu.UploadMilliseconds },
               { "descriptor_ms",
                 frame.NativePicaCpu.DescriptorMilliseconds },
@@ -1004,6 +1007,9 @@ void Oot3dVulkanDiagnostics::RecordNativePicaCpuTimings(
     destination.TemporalStateMilliseconds +=
         timings.TemporalStateMilliseconds;
     destination.PipelineMilliseconds += timings.PipelineMilliseconds;
+    destination.PipelineLookupHits += timings.PipelineLookupHits;
+    destination.PipelineCreations += timings.PipelineCreations;
+    destination.PipelineEntries = std::max(destination.PipelineEntries, timings.PipelineEntries);
     destination.UploadMilliseconds += timings.UploadMilliseconds;
     destination.DescriptorMilliseconds += timings.DescriptorMilliseconds;
     destination.CommandMilliseconds += timings.CommandMilliseconds;

@@ -649,13 +649,80 @@ boot. Private reports (never package them):
 Their specialized shader inventories contain zero procedural samplers: these
 fixtures are regression checks, not a claim that active procedural materials
 have been exercised in game. Neither full-game coverage, zero runtime
-compilation nor Linux/Android parity is claimed. The legacy material state keys
-and pipeline lookup still need separation from finite program identity; reducing
-source variability alone does not eliminate pipeline creation stutters.
+compilation nor Linux/Android parity is claimed. At this milestone, pipeline
+lookup still used material keys; the following milestone removes that coupling.
 
 Next: fixed recovered CMB/profile vertex programs, bounded native output and
 pipeline families, then direct use of developer-built shader artifacts. The
 parametric path must not depend on collected shader caches or Forge warm-up.
+
+## Effective Program and Pipeline Identity (2026-09-14)
+
+The live Vulkan/NRI owner now uses
+`fast/renderer3ds/pica_pipeline_identity.h` instead of material vertex/fragment
+state keys for pipeline lookup. The identity combines:
+
+- Effective vertex, fragment and NRI-fragment source identities (primary hash,
+  secondary hash, size), with the actual NRI descriptor contract.
+- Original vertex binding/attribute layout, including collection lengths. Both
+  the native Vulkan fallback and normalized NRI pipeline retain this ownership.
+- The exact fixed-function state returned by `BuildPicaNriPipelineState`, also
+  passed to creation: topology, culling/front face, sample count, alpha coverage,
+  depth, both stencil faces, logic operation, active attachment formats and blend/
+  write masks. Dynamic-rendering versus render-pass mode is explicit.
+
+Material IDs, texture/LUT values, geometry contents, target addresses, viewport
+and other dynamic data do not create pipeline variants. Original material and
+command identities remain in the diagnostic inventory; no draw sorting,
+composition-domain reassignment, resource lifetime or effect scheduling changed.
+Auxiliary outputs affect the key through the same resolved attachment state as
+creation, rather than a second interpretation of effect flags. New immutable
+pipeline state must extend this serializer and its mutation tests together.
+
+This is an in-memory registry of GPU objects, not a collected shader cache and
+not a Forge warm-up requirement. It removes duplicate pipeline creation for
+identical programs/state; it does not pre-create every possible pipeline.
+
+Verification:
+
+- `pica_pipeline_identity_tests`: 1,024 material/draw identities reuse one key;
+  36 fixed GPU-state mutations remain distinct, as do changes to source identity,
+  vertex layout, NRI contract and render-pass mode. Active auxiliary attachment
+  formats/write masks are distinguished; inactive attachment slots are ignored.
+- Six standalone suites pass. Current Windows NRI build completed incrementally
+  without rebuilding title AOT.
+- Six final framebuffer pairs (Hyrule Field and early boot) are pixel-identical
+  between specialized/parametric modes and also to the captures made before this
+  pipeline change. Optional-effect MRT behavior is covered structurally here,
+  not by a new full graphical-effects gameplay campaign.
+- With empty application device-pipeline caches, actual NRI creation counts are
+  36 specialized / 25 parametric in Field, and 37 / 26 in early boot. Both modes
+  use the NEW identity implementation; these numbers are not a before/after
+  measurement of this commit. Each run is 200 presentation frames. Their final
+  frames reuse 95 and 69 primary-draw pipelines respectively, with zero new
+  primary-draw pipeline creations.
+
+`native_pica_cpu` now reports `pipeline_lookup_hits`, `pipeline_creations`, and
+`pipeline_entries` through the existing renderer diagnostic service. The first
+two count primary-draw lookups; entries is the current registry size, including
+other owners/preparation. The existing `nri_pipeline_compilation` totals provide
+the actual NRI creation count. The comparison harness enables the existing
+diagnostic environment only for its isolated child processes and writes
+`renderer.json` alongside captures. No user configuration is changed.
+
+Private final evidence, never package:
+
+- `C:/Users/xander/AppData/Local/Temp/TriAevum-pipeline-final-field-20260914`
+- `C:/Users/xander/AppData/Local/Temp/TriAevum-pipeline-final-boot-20260914`
+
+These are structural and framebuffer tests, not FPS benchmarks. Remaining:
+fixed recovered vertex programs, direct binding of developer-built shader
+artifacts, avoiding repeated source/variant processing, and initialization of
+bounded immutable pipeline families. The current bridge still creates both a
+Vulkan fallback and an NRI-owned pipeline; removing that duplication requires
+an explicit ownership change, not a fake Vulkan handle. Shader-program lookup
+itself still uses legacy material aliases. Full cache-independent operation and
+cross-platform/advanced-effect validation are not complete.
 
 ## External Source Links
 
