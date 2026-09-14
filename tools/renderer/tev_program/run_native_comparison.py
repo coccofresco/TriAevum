@@ -88,6 +88,11 @@ def main():
             vertex_hits = re.search(r'TRIAEVUM_NATIVE_VERTEX_ARTIFACTS hits=(\d+)', diagnostics)
             if not vertex_hits or int(vertex_hits[1]) == 0:
                 raise RuntimeError('parametric: no built-in vertex artifact was used')
+            pass_hits = re.search(r'TRIAEVUM_BUILTIN_PASS_ARTIFACTS hits=(\d+)', diagnostics)
+            if not pass_hits or int(pass_hits[1]) == 0:
+                raise RuntimeError('parametric: no built-in pass artifact was used')
+            if not re.search(r'TRIAEVUM_PASS_SHADER_CACHE requests=0 hits=0 compiled=0\b', diagnostics):
+                raise RuntimeError('parametric: fixed passes still requested compiler/cache resolution')
             if not re.search(r'OOT3D_PICA_AOT_SHADER_RESOLUTION .*entries=0\b', diagnostics):
                 raise RuntimeError('parametric: collected shader pack was not proven absent')
         reports[mode] = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in captures}

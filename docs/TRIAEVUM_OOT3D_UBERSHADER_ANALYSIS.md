@@ -936,6 +936,66 @@ effective wrappers still take the existing resolver, never a mismatched binary.
 No FPS improvement, cross-platform GPU validation, complete interface coverage
 or release readiness is inferred from these parity tests.
 
+## Precompiled Renderer Passes (2026-09-14)
+
+The maintained `BuildBuiltinPassShaders()` catalogue is now compiled offline
+by `tools/renderer/tev_program/build_pass_artifacts.cpp`, not reconstructed from
+captures or prepared in Forge. It contains the existing 22 Vulkan 1.2 pass
+programs (including scanout, transfer, TAA, SMAA, grass and reflection helpers).
+Two Vulkan 1.1 compatibility-scanout programs are also emitted, for 24 artifacts.
+This keeps the old and NRI descriptor/target contracts explicit and separate.
+
+`fast/renderer/pass_shader_artifact.h` matches exact source, stage, ordered
+macro definitions and Vulkan target. `CachedPassShaderCompiler::Resolve`
+selects a built-in before compiler identification or disk-cache lookup.
+`FindBuiltinPassShaderSpirv` supplies the compatibility path without copying
+the generated catalogue into backend translation units. Unknown variants retain
+the existing resolver, not a visually similar replacement. No pass scheduling,
+draw order, effect parameters, depth/blend state or UI composition changes.
+
+Developer reproduction, no ROM or capture input:
+
+```text
+build_pass_artifacts runtime/three_ds_recomp/include/fast/renderer/builtin_pass_binaries.h
+# Rebuild the tool after generation, then:
+build_pass_artifacts --check
+```
+
+`--check` recompiles every source, checks stored SPIR-V extents and execution
+models, and exercises the actual runtime resolver with no cache directory.
+All 22 Vulkan 1.2 catalogue entries must resolve without compiler/cache requests.
+Source, macro, stage and unsupported-target mutations are rejected. This is
+not byte-for-byte cross-compiler equivalence or an exhaustive GPU-effect test.
+The generated header contains corresponding source and retains donor references;
+it is renderer-owned code, not game assets or a harvested shader cache.
+SHA256: `675702ab67c8218a1d533023f87b104a1107b2e089ca0971fd55e7858b7a956b`.
+
+Final Windows/NRI tests, 200-frame fixtures, native30, optional effects Off,
+fresh application cache directory, no collected shader pack:
+
+| Fixture | Pass compilations before/after | Other SPIR-V before/after | Built-in pass requests | Compatibility artifacts |
+| --- | ---: | ---: | ---: | ---: |
+| Early boot | 21 / 0 | 2 / 0 | 21 | 2 |
+| Hyrule Field | 21 / 0 | 4 / 2 | 21 | 2 |
+
+Six framebuffer pairs remain pixel-identical, including comparison with the
+pre-pass-change build, not only between two modes of the modified executable.
+Nine standalone suites pass. Private evidence (not distributed):
+`C:/Users/xander/AppData/Local/Temp/TriAevum-pass24-{boot,field}-20260914`.
+The comparison harness now fails if fixed passes touch the compiler/cache.
+
+The two Field compilations are precisely `oot3d_17301768_1.vert/.frag`, through
+the legacy `CreateAndLoadNewShader` combiner path, not the new PICA material
+family. An inventory-enabled run logs actual compiler misses by stage/name;
+normal gameplay does not gain per-draw diagnostic logging. Handle this legacy
+feature interface generally, not by adding a scene-specific shader-ID exception.
+
+Remaining: legacy combiner coverage, optional/instrumented PICA fragment variants,
+material-alias module duplication, first-use NRI pipeline creation and broader
+platform/effect validation. The boot fixture has zero measured GLSL/SPIR-V
+compilations, but still creates 26 NRI pipelines; Field creates 25. This does not
+establish universal stutter elimination or an FPS gain. No release is produced.
+
 ## External Source Links
 
 - [zeldaret loader placeholders](https://github.com/zeldaret/oot3d/blob/a87ddae43252cb3add71bf1003e7391bbe006033/src/functions/functions_410000s.cpp#L616)

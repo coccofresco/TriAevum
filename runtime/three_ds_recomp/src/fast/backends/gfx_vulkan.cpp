@@ -3609,8 +3609,16 @@ void main() {
 std::vector<uint32_t> GfxRenderingAPIVulkan::CompileShaderSpirv(
     const std::string& source, bool vertexShader, const char* sourceName) {
     const auto stage = vertexShader ? Renderer::SpirvStage::Vertex : Renderer::SpirvStage::Fragment;
+    if (const auto artifact = Renderer::FindBuiltinPassShaderSpirv(source, stage, {}, 1); !artifact.empty()) {
+        if (mPicaEffectiveShaderInventory.Enabled())
+            std::fprintf(stderr, "TRIAEVUM_COMPAT_SHADER_ARTIFACT name=%s\n", sourceName);
+        return {artifact.begin(), artifact.end()};
+    }
     const auto failures = mCompiledShaderCache.Stats().WriteFailures;
     auto spirv = mCompiledShaderCache.Resolve(source, stage, [&] {
+        if (mPicaEffectiveShaderInventory.Enabled())
+            std::fprintf(stderr, "TRIAEVUM_RUNTIME_SHADER_COMPILE stage=%s name=%s\n",
+                         vertexShader ? "vertex" : "fragment", sourceName);
         return Renderer::CompileShadercSpirv(source, stage, sourceName);
     });
     if (failures == 0 && mCompiledShaderCache.Stats().WriteFailures != 0)
@@ -3722,7 +3730,10 @@ void GfxRenderingAPIVulkan::ConfigureNativePicaAotShaders() {
 void GfxRenderingAPIVulkan::FinishNativePicaAotShaders() {
     const auto& cache = mCompiledShaderCache.Stats();
     const auto passes = mNriInterop.Shaders().Stats();
-    if ((cache.Requests || passes.Requests || mPicaAotShaderPack.Loaded()) && !mCompiledShaderCacheSummaryLogged) {
+    if ((cache.Requests || passes.Requests || mNriInterop.Shaders().BuiltinArtifactHits() ||
+         mPicaAotShaderPack.Loaded()) && !mCompiledShaderCacheSummaryLogged) {
+        std::fprintf(stderr, "TRIAEVUM_BUILTIN_PASS_ARTIFACTS hits=%llu\n",
+                     static_cast<unsigned long long>(mNriInterop.Shaders().BuiltinArtifactHits()));
         std::fprintf(stderr,
             "TRIAEVUM_PASS_SHADER_CACHE requests=%llu hits=%llu compiled=%llu compile_failed=%llu "
             "writes=%llu write_failed=%llu compile_ms=%.3f enabled=%d\n",

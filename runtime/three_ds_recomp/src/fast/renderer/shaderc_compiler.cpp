@@ -1,4 +1,5 @@
 #include "fast/renderer/shaderc_compiler.h"
+#include "fast/renderer/builtin_pass_binaries.h"
 #if defined(_WIN32) && !defined(SHADERC_SHAREDLIB)
 // The Windows backend links shaderc_shared. Without dllimport, taking a
 // function address identifies an EXE import thunk, incorrectly binding the
@@ -147,6 +148,12 @@ std::vector<uint32_t> CompileShadercSpirv(std::string_view source, SpirvStage st
 void CachedPassShaderCompiler::Configure(std::filesystem::path directory) {
     mDirectory = std::move(directory);
     mVariants.clear();
+    mBuiltinArtifactHits = 0;
+}
+
+std::span<const uint32_t> FindBuiltinPassShaderSpirv(std::string_view source,
+    SpirvStage stage, const ShaderDefines& defines, uint32_t vulkanMinor) {
+    return FindPassShaderArtifact(kBuiltinPassArtifacts, source, stage, defines, vulkanMinor);
 }
 
 bool CachedPassShaderCompiler::Enabled() const {
@@ -155,6 +162,11 @@ bool CachedPassShaderCompiler::Enabled() const {
 
 std::vector<uint32_t> CachedPassShaderCompiler::Resolve(
     std::string_view source, SpirvStage stage, const char* name, const ShaderDefines& defines) {
+    const auto artifact = FindBuiltinPassShaderSpirv(source, stage, defines);
+    if (!artifact.empty()) {
+        ++mBuiltinArtifactHits;
+        return {artifact.begin(), artifact.end()};
+    }
     std::string variant = "/pass-vulkan1.2/performance/main/v1";
     for (const auto& [key, value] : defines)
         variant += "/" + std::to_string(key.size()) + ":" + key +

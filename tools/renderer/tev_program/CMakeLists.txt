@@ -100,6 +100,18 @@ if(WIN32)
 endif()
 
 find_package(spdlog CONFIG REQUIRED)
+include("${runtime}/cmake/pass_shader_sources.cmake")
+add_executable(build_pass_artifacts build_pass_artifacts.cpp)
+triaevum_add_pass_shader_sources(build_pass_artifacts)
+target_compile_features(build_pass_artifacts PRIVATE cxx_std_20)
+target_include_directories(build_pass_artifacts PRIVATE "${runtime}/include" "${SHADERC_INCLUDE_DIR}")
+target_link_libraries(build_pass_artifacts PRIVATE "${SHADERC_LIBRARY}" ${CMAKE_DL_LIBS})
+if(WIN32)
+    add_custom_command(TARGET build_pass_artifacts POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${SHADERC_RUNTIME}" "$<TARGET_FILE_DIR:build_pass_artifacts>")
+endif()
+add_test(NAME builtin_pass_artifacts COMMAND build_pass_artifacts --check)
+set_tests_properties(builtin_pass_artifacts PROPERTIES TIMEOUT 120)
 add_executable(build_vertex_artifacts build_vertex_artifacts.cpp
     "${runtime}/src/fast/oot3d/pica_rigid_motion.cpp"
     "${frontend}/oot3d_native_pica_shader_gen.cpp"
