@@ -65,6 +65,7 @@ struct Oot3dNativeGameLaunch {
     bool ProfileA32Blocks = false;
     bool ProfileA32Runtime = false;
     bool PicaAotShaderStrict = false;
+    bool PicaParametricTev = false;
     bool PicaPipelinePrewarm = false;
     bool ScenarioStrict = false;
     bool ScenarioAutoExit = false;

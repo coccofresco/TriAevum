@@ -464,7 +464,7 @@ void PrintOot3dNativeGameUsage() {
                  "[--disable-visual-interpolation] "
                  "[--profile-a32-blocks] "
                  "[--trace-a32-blocks <trace.jsonl>] "
-                 "[--pica-semantic-trace <trace.jsonl>] "
+                 "[--pica-semantic-trace <trace.jsonl>] [--pica-parametric-tev] "
                  "[--pica-aot-shader-pack <pack.o3ps>] "
                  "[--renderer-cache-directory <directory>] "
                  "[--pica-aot-shader-strict] "
@@ -614,6 +614,8 @@ bool ParseOot3dNativeGameArgs(int argc, char** argv, Oot3dNativeGameLaunch& laun
             launch.A32BlockTracePath = argv[++index];
         } else if (arg == "--pica-semantic-trace" && index + 1 < argc) {
             launch.PicaSemanticTracePath = argv[++index];
+        } else if (arg == "--pica-parametric-tev") {
+            launch.PicaParametricTev = true;
         } else if (arg == "--renderer-cache-directory" && index + 1 < argc) {
             launch.RendererCacheDirectory =
                 std::filesystem::absolute(std::filesystem::u8path(argv[++index])).lexically_normal();
@@ -1217,6 +1219,7 @@ nlohmann::json Oot3dNativeGameBootstrapToJson(const Oot3dNativeGameLaunch& launc
               ? nlohmann::json(nullptr)
               : nlohmann::json(launch.PicaAotShaderPackPath.string()) },
         { "pica_aot_shader_strict", launch.PicaAotShaderStrict },
+        { "pica_parametric_tev", launch.PicaParametricTev },
         { "renderer_cache_directory", launch.RendererCacheDirectory.string() },
         { "pica_effective_shader_inventory",
           launch.PicaEffectiveShaderInventoryPath.empty()

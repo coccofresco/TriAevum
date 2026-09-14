@@ -405,7 +405,73 @@ lighting/fog families and bounded PSO precreation remain pending. No game was
 launched, no package prepared and no gameplay stutter improvement measured in
 this checkpoint. External decompilation repositories were not changed.
 
-## Source Links
+## Real NRI execution: 2026-09-14
+
+The launcher now accepts `--pica-parametric-tev` and applies the selection to
+the live draw planner cache. The default remains specialized. The bootstrap
+diagnostic representation also records the requested mode.
+
+The actual Windows runtime was incrementally rebuilt from this worktree in
+`J:/TriAevum-verify-20260910/runtime`, using its existing Clang 22.1.6/Ninja
+configuration and precompiled title module. The inspected build comprised 37
+actions, with **no gameplay AOT compilation**. The shader corpus preparation
+step is separate from gameplay AOT. Both complete tests now ran successfully:
+`oot3d_native_pica_visual_savestate_tests` and
+`oot3d_native_pica_vulkan_bridge_tests`. This supersedes the earlier limitation
+of only compiling their consumer translation units.
+
+`tools/renderer/tev_program/run_native_comparison.py` reuses an existing private
+invocation fixture, copies its configuration and savedata into separate run
+directories, removes input/save commands, and executes both TEV modes with a
+timeout. It preserves the fixture's explicit fixed timestep, frame cap and
+capture sequence. `--from-start` removes the load-state argument. The effective
+shader inventory must contain the parametric evaluator only in the parametric
+run; mismatching capture sets or pixels fail the comparison. Captures come
+from the runtime framebuffer, not the Windows desktop.
+
+Validated with NRI/Vulkan on RTX 3060, native-fidelity configuration, no frame
+interpolation, 1280x720, 200 presentation frames per run, captures at 120/150/180:
+
+| Fixture | Draws per run | Effective modules, specialized -> parametric | SPIR-V compilations | PSOs created |
+| --- | ---: | ---: | ---: | ---: |
+| Hyrule Field savestate | 19,000 | 41 -> 15 | 44 -> 18 | 37 -> 37 |
+| From boot, first 200 frames | 11,198 | 35 -> 17 | 36 -> 18 | 39 -> 39 |
+
+All six capture pairs are pixel-identical (zero mean/max RGB difference) and
+nonblank. Effective inventories confirm actual execution of the new evaluator.
+The run/frame/draw counts agree between modes. Guest process fingerprints do
+not agree, so this is not a claim of bit-identical whole-process state.
+
+Each run used a fresh application renderer-cache directory and the existing
+815-entry pack. Advanced pass shaders still compiled 21 times in each run.
+Driver-level cache state was not reset. These synchronous-capture runs are
+**not FPS benchmarks**: reduced module counts do not establish a frame-time
+gain. PSO creation remained and took longer in the parametric runs; this must
+be measured and addressed through preparation rather than hidden by shader
+count statistics. Neither zero runtime compilation nor zero stutter is achieved.
+
+Private evidence (not release inputs):
+
+- `J:/TriAevum-diagnostics/tev-native-20260914/comparison.json`
+- `J:/TriAevum-diagnostics/tev-native-boot-20260914/comparison.json`
+- Corresponding mode subdirectories contain invocation, runtime report,
+  effective shader inventory, stderr counters and framebuffer/temporal metadata.
+- Tested executable SHA-256:
+  `8a3be5a0746f4b07ad1eb0370922dfdc3c89643b686dc438797378f154900953`.
+
+Reproduction uses Python with Pillow and a user-owned invocation fixture:
+
+```powershell
+python tools/renderer/tev_program/run_native_comparison.py --invocation <fixture.json> --output <new-directory>
+python tools/renderer/tev_program/run_native_comparison.py --invocation <fixture.json> --output <another-new-directory> --from-start
+```
+
+Next: separate normalized module/PSO identity from material/hook identity,
+prepare the selected modules and pipeline variants in Forge, and extend real
+frame comparisons to later intro clips, further materials and enabled effects.
+Linux/Android parity and full-intro coverage are still unverified for this path.
+
+## External Source Links
 
 - [zeldaret loader placeholders](https://github.com/zeldaret/oot3d/blob/a87ddae43252cb3add71bf1003e7391bbe006033/src/functions/functions_410000s.cpp#L616)
 - [zeldaret renderer placeholders](https://github.com/zeldaret/oot3d/blob/a87ddae43252cb3add71bf1003e7391bbe006033/src/functions/functions_3E0000s.cpp#L458)

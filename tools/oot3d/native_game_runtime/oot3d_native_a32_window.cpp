@@ -3930,6 +3930,9 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
   NativeInputConsumerDiagnostics inputConsumerDiagnostics;
   NativeControlPollingState nativeControlPollingState;
   Oot3dNativeGame::Oot3dPicaVulkanShaderSourceCache shaderSourceCache;
+  shaderSourceCache.TevMode = launch.PicaParametricTev
+      ? Oot3dNativeGame::Oot3dPicaTevMode::Parametric
+      : Oot3dNativeGame::Oot3dPicaTevMode::Specialized;
   Oot3dNativeGame::Oot3dPicaSemanticTraceWriter picaSemanticTrace(
       launch.PicaSemanticTracePath);
   picaSemanticTrace.BeginSession(
