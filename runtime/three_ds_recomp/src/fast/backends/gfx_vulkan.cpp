@@ -3633,6 +3633,7 @@ void GfxRenderingAPIVulkan::ConfigureNativePicaAotShaders() {
     mPicaAotShaderMissesLogged.clear();
     mPicaAotShaderHits = 0;
     mNativeFragmentArtifactHits = 0;
+    mNativeVertexArtifactHits = 0;
     mPicaAotShaderMisses = 0;
     mPicaAotShaderSummaryLogged = false;
     mPicaPipelinePrewarmSummaryLogged = false;
@@ -3792,7 +3793,7 @@ void GfxRenderingAPIVulkan::FinishNativePicaAotShaders() {
         mPicaPipelinePrewarmSummaryLogged = true;
     }
     if (!mPicaAotShaderSummaryLogged &&
-        (mNativeFragmentArtifactHits != 0U || mPicaAotShaderPack.Loaded() || mPicaAotShaderHits != 0U ||
+        (mNativeVertexArtifactHits != 0U || mNativeFragmentArtifactHits != 0U || mPicaAotShaderPack.Loaded() || mPicaAotShaderHits != 0U ||
          mPicaAotShaderMisses != 0U)) {
         SPDLOG_INFO("Native PICA AOT shader resolution: {} hits, {} misses",
                     mPicaAotShaderHits, mPicaAotShaderMisses);
@@ -3807,6 +3808,8 @@ void GfxRenderingAPIVulkan::FinishNativePicaAotShaders() {
         std::fprintf(stderr, "TRIAEVUM_NATIVE_FRAGMENT_ARTIFACTS hits=%llu modules=%zu\n",
                      static_cast<unsigned long long>(mNativeFragmentArtifactHits),
                      std::size(Renderer3ds::kNativeFragmentArtifacts));
+        std::fprintf(stderr, "TRIAEVUM_NATIVE_VERTEX_ARTIFACTS hits=%llu\n",
+                     static_cast<unsigned long long>(mNativeVertexArtifactHits));
     }
 }
 

@@ -4034,10 +4034,17 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             const std::string stem =
                 "native_pica_" + std::to_string(effectiveDraw.VertexShaderKey) + "_" +
                 std::to_string(effectiveDraw.FragmentShaderKey);
-            shader.NriVertexSpirv = ResolveNativePicaShaderSpirv(
-                effectiveDraw.VertexShaderSource,
-                Oot3d::PicaAotShaderStage::Vertex, true,
-                (stem + ".vert").c_str());
+            const auto vertexArtifact = Renderer3ds::FindPicaVertexArtifact(
+                effectiveDraw.VertexArtifacts, effectiveDraw.VertexShaderSource);
+            if (!vertexArtifact.Spirv.empty()) {
+                shader.NriVertexSpirv.assign(vertexArtifact.Spirv.begin(), vertexArtifact.Spirv.end());
+                ++mNativeVertexArtifactHits;
+            } else {
+                shader.NriVertexSpirv = ResolveNativePicaShaderSpirv(
+                    effectiveDraw.VertexShaderSource,
+                    Oot3d::PicaAotShaderStage::Vertex, true,
+                    (stem + ".vert").c_str());
+            }
             shader.VertexShader =
                 CreateShaderModuleFromSpirv(shader.NriVertexSpirv);
             try {

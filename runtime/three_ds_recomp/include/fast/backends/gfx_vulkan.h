@@ -781,6 +781,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         mPicaAotShaderMissesLogged;
     uint64_t mPicaAotShaderHits = 0;
     uint64_t mNativeFragmentArtifactHits = 0;
+    uint64_t mNativeVertexArtifactHits = 0;
     uint64_t mPicaAotShaderMisses = 0;
     bool mPicaAotShaderStrict = false;
     bool mPicaAotShaderSummaryLogged = false;

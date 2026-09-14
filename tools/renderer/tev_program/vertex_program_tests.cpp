@@ -1,5 +1,6 @@
 #include "fast/renderer3ds/pica_vertex_program.h"
 #include "fast/renderer3ds/pica_fragment_artifact.h"
+#include "fast/renderer3ds/pica_vertex_artifact.h"
 #include <array>
 #include <iostream>
 #include <stdexcept>
@@ -18,6 +19,12 @@ int main() try {
     binary[0] = 0x07230203U;
     artifacts[0].Spirv = std::span(binary).first(4);
     Check(FindPicaFragmentArtifact(artifacts, "fragment", true).empty());
+    const std::array<PicaVertexArtifact,1> vertexArtifacts{{{IdentifyPicaShaderSource("vertex"), binary}}};
+    const auto vertexArtifact = FindPicaVertexArtifact(vertexArtifacts,"vertex");
+    Check(vertexArtifact.Matches("vertex"));
+    Check(!vertexArtifact.Matches("instrumented vertex"));
+    Check(!FindPicaVertexArtifact(vertexArtifacts,"different outputs").Matches("different outputs"));
+    Check(!PicaVertexArtifact{}.Matches("vertex"));
     std::array<uint32_t, 4> code{0x12345678, 0x88000000, 0, 0};
     std::array<uint32_t, 2> swizzles{0x1b1b1b1b, 0};
     PicaTranslatedVertexProgram p{0, true, IdentifyPicaProgramWords(std::span(code).first(2)),

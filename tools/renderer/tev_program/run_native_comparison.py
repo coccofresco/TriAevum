@@ -85,6 +85,9 @@ def main():
             hits = re.search(r'TRIAEVUM_NATIVE_FRAGMENT_ARTIFACTS hits=(\d+) modules=16', diagnostics)
             if not hits or int(hits[1]) == 0:
                 raise RuntimeError('parametric: no built-in fragment artifact was used')
+            vertex_hits = re.search(r'TRIAEVUM_NATIVE_VERTEX_ARTIFACTS hits=(\d+)', diagnostics)
+            if not vertex_hits or int(vertex_hits[1]) == 0:
+                raise RuntimeError('parametric: no built-in vertex artifact was used')
             if not re.search(r'OOT3D_PICA_AOT_SHADER_RESOLUTION .*entries=0\b', diagnostics):
                 raise RuntimeError('parametric: collected shader pack was not proven absent')
         reports[mode] = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in captures}

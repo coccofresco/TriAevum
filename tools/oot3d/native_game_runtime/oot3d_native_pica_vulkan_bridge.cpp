@@ -1,4 +1,5 @@
 #include "oot3d_native_pica_vulkan_bridge.h"
+#include "oot3d_native_vertex_binaries.h"
 
 #include "fast/oot3d/pica_uniform_layout.h"
 
@@ -263,6 +264,9 @@ bool SubmitOot3dPicaVulkanDrawPlan(
     draw.VertexShaderSource = plan.ResolvedVertexShaderSource();
     draw.FragmentShaderSource = plan.ResolvedFragmentShaderSource();
     draw.VertexShaderSourceIdentity = plan.VertexShader.SourceIdentity;
+    // Immutable title-owned family: the backend selects the effective program
+    // after applying typed instrumentation, never by a scene/material identity.
+    draw.VertexArtifacts = kTitleVertexArtifacts;
     draw.FragmentShaderSourceIdentity =
         plan.FragmentShader.SourceIdentity;
     if (plan.VertexShader.TemporalProgram != nullptr) {

@@ -5,6 +5,7 @@
 #include "fast/renderer3ds/pica_native_state.h"
 #include "fast/renderer3ds/pica_shader_hooks.h"
 #include "fast/renderer3ds/pica_shader_source_identity.h"
+#include "fast/renderer3ds/pica_vertex_artifact.h"
 
 #include <cmath>
 #include <cstdint>
@@ -88,6 +89,7 @@ struct PicaDrawView {
     bool DepthWriteEnabled = false;
     PicaCompareFunction DepthCompare = PicaCompareFunction::Always;
     PicaStencilState Stencil;
+    std::span<const PicaVertexArtifact> VertexArtifacts;
 };
 
 // Projects the full transient draw facade into the compact ordered metadata

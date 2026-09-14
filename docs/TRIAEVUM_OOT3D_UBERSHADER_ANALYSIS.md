@@ -889,6 +889,53 @@ compilations above must not be hidden behind the completed fragment work. Full
 cache independence, advanced-effect coverage and Linux/Android GPU verification
 are still pending. No new release or FPS/stutter-elimination claim is made.
 
+## Native Vertex Binaries (2026-09-14)
+
+The next implemented step removes desktop shader compilation for the three
+recovered native vertex interfaces. The title adapter supplies six immutable
+SPIR-V modules: canonical and typed temporal versions of CmbVShader entry 0 and
+profile entries 0/13. Output maps come from the original SHBIN tables, not from
+scene captures. Uniforms, transforms and material state remain draw-time data.
+
+Ownership and reproduction:
+
+- `tools/renderer/tev_program/build_vertex_artifacts.cpp` reads private SHBIN
+  inputs, verifies translated GLSL against the existing translator, applies the
+  existing typed temporal hooks and compiles at developer build time.
+- `oot3d_native_vertex_binaries.h` and its adjacent provenance JSON explicitly
+  identify translated title code. They are not a neutral shader cache.
+- `PicaDrawView::VertexArtifacts` borrows a title-owned immutable family.
+  `pica_vertex_artifact.h` is the shared source-identity lookup; the backend
+  selects against the effective source after instrumentation, only on module
+  creation. No per-draw source scanning or title-specific shared-core lookup.
+- `build_vertex_artifacts --check <CmbVShader.shbin> <profile.shbin>` verifies
+  all six source identities, stored instruction extents and vertex entrypoints.
+  `OOT3D_SHADER_TEST_ROMFS` optionally registers it in the standalone CTest suite.
+  Original files remain private. Regeneration is never a Forge task.
+
+Final Windows/NRI validation with fresh application caches and no collected pack:
+
+| 200-frame fixture | Vertex artifact requests | Fragment artifact requests | Other SPIR-V compilations | Auxiliary compilations |
+| --- | ---: | ---: | ---: | ---: |
+| Early boot | 22 | 44 | 2 | 21 |
+| Hyrule Field | 24 | 48 | 4 | 21 |
+
+Six deterministic framebuffer captures match specialized rendering pixel for
+pixel and also match the pre-change fragment-only build captures. Evidence is
+in private `C:/Users/xander/AppData/Local/Temp/TriAevum-vertex-six-{boot,field}-20260914`.
+Pack entries are zero. Counts are resolution requests, not unique modules.
+The direct six-module check passes, as do bridge, visual-savestate, planner and
+frontend tests. The temporal variants are compiled and structurally checked;
+these native30/effects-Off runs do not prove temporal GPU coverage.
+
+This supersedes the preceding statement that the canonical vertex interfaces
+still require runtime compilation. It does not close all shader stuttering:
+auxiliary/presentation and extension variants, repeated material-alias module
+creation, and first-use NRI pipeline creation remain separate work. Unmatched
+effective wrappers still take the existing resolver, never a mismatched binary.
+No FPS improvement, cross-platform GPU validation, complete interface coverage
+or release readiness is inferred from these parity tests.
+
 ## External Source Links
 
 - [zeldaret loader placeholders](https://github.com/zeldaret/oot3d/blob/a87ddae43252cb3add71bf1003e7391bbe006033/src/functions/functions_410000s.cpp#L616)

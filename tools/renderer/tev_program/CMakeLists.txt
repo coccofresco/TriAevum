@@ -100,6 +100,28 @@ if(WIN32)
 endif()
 
 find_package(spdlog CONFIG REQUIRED)
+add_executable(build_vertex_artifacts build_vertex_artifacts.cpp
+    "${runtime}/src/fast/oot3d/pica_rigid_motion.cpp"
+    "${frontend}/oot3d_native_pica_shader_gen.cpp"
+    "${frontend}/../third_party/azahar_pica/video_core/shader/generator/glsl_shader_decompiler.cpp")
+target_compile_features(build_vertex_artifacts PRIVATE cxx_std_20)
+target_include_directories(build_vertex_artifacts PRIVATE "${frontend}" "${runtime}/include"
+    "${frontend}/../third_party/azahar_pica" "${SHADERC_INCLUDE_DIR}"
+    "${CMAKE_CURRENT_LIST_DIR}/../../triaevum_release/vendor/include")
+target_link_libraries(build_vertex_artifacts PRIVATE spdlog::spdlog "${SHADERC_LIBRARY}")
+set(OOT3D_SHADER_TEST_ROMFS "" CACHE PATH "Private extracted ROMFS for offline vertex artifact validation")
+if(OOT3D_SHADER_TEST_ROMFS)
+    add_test(NAME pica_vertex_artifacts COMMAND build_vertex_artifacts --check
+        "${OOT3D_SHADER_TEST_ROMFS}/CmbVShader.shbin" "${OOT3D_SHADER_TEST_ROMFS}/profile.shbin")
+    set_tests_properties(pica_vertex_artifacts PROPERTIES TIMEOUT 120)
+endif()
+if(MSVC)
+    set_property(TARGET build_vertex_artifacts PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+if(WIN32)
+    add_custom_command(TARGET build_vertex_artifacts POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${SHADERC_RUNTIME}" "$<TARGET_FILE_DIR:build_vertex_artifacts>")
+endif()
 add_executable(pica_vertex_program_tests vertex_program_tests.cpp)
 target_compile_features(pica_vertex_program_tests PRIVATE cxx_std_20)
 target_include_directories(pica_vertex_program_tests PRIVATE "${runtime}/include")

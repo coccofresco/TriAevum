@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "role": "compiled_translated_title_shader",
+  "title": "The Legend of Zelda: Ocarina of Time 3D",
+  "artifact": "oot3d_native_vertex_binaries.h",
+  "artifact_sha256": "b8dcc4518d2713c9e3fc646619167f97fbad7da8b39d760c6a54e32a5b179ed5",
+  "generator": "tools/renderer/tev_program/build_vertex_artifacts.cpp",
+  "translated_source": "oot3d_translated_vertex_programs.h",
+  "wrapper_source": "oot3d_native_pica_shader_gen.cpp",
+  "temporal_source": "runtime/three_ds_recomp/src/fast/oot3d/pica_rigid_motion.cpp",
+  "donor": "Citra/Azahar GLSL shader decompiler, GPL-2.0-or-later; preserve donor notices",
+  "compiler": "shaderc from Vulkan SDK 1.4.350.0, Vulkan 1.1, performance optimization",
+  "modules": 6,
+  "variants": ["canonical", "typed_temporal"],
+  "inputs": [
+    {"name": "CmbVShader.shbin", "sha256": "1125cfb9193e6c605ae4a3f8a80accdae948af2fb35bbaf432ef426e66de076a", "entries": 1},
+    {"name": "profile.shbin", "sha256": "d5267731fde1a33d566de540d49bc531cdf0a72521bc5c6ad246938444857f55", "entries": 2}
+  ],
+  "publication": "Development artifact, not a new release. Explicitly catalogue this translated title artifact and corresponding source before package promotion. Original SHBIN files, captures and driver caches are not distributed. Generation is a developer task, never a Forge installation step."
+}
