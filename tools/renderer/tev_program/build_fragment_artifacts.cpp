@@ -21,6 +21,21 @@ using namespace Fast::Renderer3ds;
 
 static void Check(bool ok, const std::string& error) { if (!ok) throw std::runtime_error(error); }
 
+static constexpr Fast::Oot3d::PicaReactiveCoverage kTemporalCoverage[]{
+    Fast::Oot3d::PicaReactiveCoverage::None, Fast::Oot3d::PicaReactiveCoverage::SourceAlpha,
+    Fast::Oot3d::PicaReactiveCoverage::SourceColor, Fast::Oot3d::PicaReactiveCoverage::Full};
+
+static void ConfigureTemporal(Fast::Oot3d::PicaFragmentInstrumentationRequest& request, unsigned kind) {
+    using namespace Fast::Oot3d;
+    using Factor = ::Oot3d::Renderer::NativeBlendFactor;
+    request.RequestedFeatures |= PicaShaderInstrumentationFeature::RigidMotionGuide |
+        PicaShaderInstrumentationFeature::ReactiveMask;
+    request.Draw.Blend.Enabled = kind != 0;
+    request.Draw.Blend.SourceRgb = kind == 1 ? Factor::SourceAlpha :
+        kind == 2 ? Factor::SourceColor : Factor::One;
+    request.Draw.Blend.DestRgb = Factor::One;
+}
+
 int main(int argc, char** argv) try {
     const bool temporal = argc > 1 && std::string_view(argv[1]) == "--temporal";
     const bool toon = argc > 1 && std::string_view(argv[1]) == "--toon";
@@ -135,35 +150,49 @@ int main(int argc, char** argv) try {
                 const auto result = BuildPicaFragmentInstrumentationVariant(request);
                 Check(result.Applied() && result.UsedProvidedHooks, "toon family lacks typed hooks");
                 sources.push_back(result.Source);
+                for (unsigned kind = 0; kind < std::size(kTemporalCoverage); ++kind) {
+                    ConfigureTemporal(request, kind);
+                    const auto combined = BuildPicaFragmentInstrumentationVariant(request);
+                    Check(combined.UsedProvidedHooks && combined.RigidMotionApplied &&
+                          HasPicaShaderInstrumentationFeature(combined.AppliedFeatures,
+                              PicaShaderInstrumentationFeature::Toon),
+                          "toon/temporal family lost typed effect composition");
+                    Check(combined.ReactiveCoverage == kTemporalCoverage[kind],
+                          "toon/temporal family lost native reactive coverage");
+                    for (unsigned variation = 0; variation < 8; ++variation) {
+                        auto variedStyle = style;
+                        variedStyle.Saturation = float(variation) / 4;
+                        variedStyle.LightBands = 2 + variation % 5;
+                        variedStyle.CustomLightBands = (variation & 1) != 0;
+                        auto variedRequest = request;
+                        variedRequest.ToonStyle = &variedStyle;
+                        const auto varied = BuildPicaFragmentInstrumentationVariant(variedRequest);
+                        Check(varied.Source == combined.Source && varied.FragmentKey == combined.FragmentKey,
+                              "temporal composition reintroduced continuous toon variants");
+                        ++toonStyleCases;
+                    }
+                    sources.push_back(combined.Source);
+                }
             }
         } else if (!temporal) {
             sources.push_back(shader.Source);
         } else {
             using namespace Fast::Oot3d;
-            using Factor = ::Oot3d::Renderer::NativeBlendFactor;
             // Temporal-only rendering always requests rigid motion and reactivity.
             // All native blend states reduce to these four coverage equations.
-            constexpr PicaReactiveCoverage coverage[]{PicaReactiveCoverage::None,
-                PicaReactiveCoverage::SourceAlpha, PicaReactiveCoverage::SourceColor,
-                PicaReactiveCoverage::Full};
-            for (unsigned kind = 0; kind < std::size(coverage); ++kind) {
+            for (unsigned kind = 0; kind < std::size(kTemporalCoverage); ++kind) {
                 PicaFragmentInstrumentationRequest request;
                 request.Source = shader.Source;
                 request.Hooks = &shader.Hooks;
-                request.RequestedFeatures = PicaShaderInstrumentationFeature::RigidMotionGuide |
-                    PicaShaderInstrumentationFeature::ReactiveMask;
                 request.Draw.FragmentOperationMode = state.OutputMerger.FragmentOperationMode;
                 request.Draw.DepthTestEnabled = true;
                 request.Draw.ColorWriteMask = 15;
                 request.Draw.CompositionDomain = ::Oot3d::Renderer::PicaCompositionDomain::Scene;
-                request.Draw.Blend.Enabled = kind != 0;
-                request.Draw.Blend.SourceRgb = kind == 1 ? Factor::SourceAlpha :
-                    kind == 2 ? Factor::SourceColor : Factor::One;
-                request.Draw.Blend.DestRgb = Factor::One;
+                ConfigureTemporal(request, kind);
                 const auto instrumented = BuildPicaFragmentInstrumentationVariant(request);
                 Check(instrumented.Applied() && instrumented.UsedProvidedHooks && instrumented.RigidMotionApplied,
                       "temporal family did not use typed motion hooks");
-                Check(instrumented.ReactiveCoverage == (shadowWrite ? PicaReactiveCoverage::None : coverage[kind]),
+                Check(instrumented.ReactiveCoverage == (shadowWrite ? PicaReactiveCoverage::None : kTemporalCoverage[kind]),
                       "native reactive coverage no longer matches the finite family");
                 sources.push_back(instrumented.Source);
             }
@@ -205,7 +234,7 @@ int main(int argc, char** argv) try {
         }
         }
     }
-    Check(modules == (toon ? 12U : temporal ? 40U : 16U), "unexpected finite fragment family size");
+    Check(modules == (toon ? 60U : temporal ? 40U : 16U), "unexpected finite fragment family size");
     output << ((temporal || toon) ? "inline const Fast::Renderer3ds::PicaFragmentArtifact "
                         : "inline const PicaFragmentArtifact ")
            << symbol << "Artifacts[] = {\n" << table.str()

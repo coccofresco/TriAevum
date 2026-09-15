@@ -128,7 +128,7 @@ def main():
             if args.require_no_runtime_compilation and not re.search(
                     r'TRIAEVUM_SPIRV_CACHE requests=0 hits=0 misses=0 rejected=0 compiled=0\b', diagnostics):
                 raise RuntimeError('parametric: compiler/cache resolver was used or its evidence is missing')
-            hits = re.search(r'TRIAEVUM_NATIVE_FRAGMENT_ARTIFACTS hits=(\d+) modules=68\b', diagnostics)
+            hits = re.search(r'TRIAEVUM_NATIVE_FRAGMENT_ARTIFACTS hits=(\d+) modules=116\b', diagnostics)
             if not hits or int(hits[1]) == 0:
                 raise RuntimeError('parametric: no built-in fragment artifact was used')
             native_identities = {(shader['stage'], int(shader['source_id'], 16), shader['source_size'])

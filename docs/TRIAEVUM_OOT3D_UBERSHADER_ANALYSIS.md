@@ -1306,6 +1306,60 @@ instrumented program combinations and explicitly address immutable driver
 pipeline preparation. No FPS improvement, cold-driver result, Linux/Android GPU
 validation or total-stutter-elimination claim is made.
 
+### Toon with temporal composition (2026-09-15)
+
+The previous exclusion of toon + temporal instrumentation is now closed for
+the base toon family (no outline/AO/reflection/shadow extensions). The developer
+generator uses the same four native reactive coverage equations for temporal-only
+and toon/temporal requests. It composes typed toon, rigid motion and reactive
+hooks rather than collecting shaders from gameplay or rewriting pass scheduling.
+Both material and preview modes retain uniform appearance data.
+
+`--toon` now emits 60 distinct programs: the prior 12 base programs plus 48
+toon/temporal combinations. The complete built-in fragment set is 116 programs
+(16 canonical, 40 temporal-only, 60 toon). This is a finite developer-built family,
+not a harvested shader pack. Shadow-write cases and draws ineligible for toon
+continue using the already-existing canonical/temporal families.
+
+`ConfigureTemporal` is shared by the offline temporal and combined generators;
+the generator rejects changes in reactive coverage or loss of typed hooks.
+It checks 1,280 toon-style mutations, including combined temporal requests,
+without source or identity changes. Generated binary data is consumed through
+`ToonFragmentArtifacts()` in the toon module; `gfx_vulkan.cpp` no longer includes
+the large generated toon table. Backend edits therefore do not parse that table.
+
+Windows Field, same native30 fixture with toon and TAA:
+
+| Metric | Previous executable | New path, collected pack absent |
+| --- | --- | --- |
+| Runtime shader compilations | 2 | 0 |
+| Runtime SPIR-V resolver requests | 2 | 0 |
+| Shader compiler time in the observed run | 825.033 ms | 0 ms |
+| NRI PICA pipelines created | 27 | 27 |
+| Vulkan PICA copies | 0 | 0 |
+
+The old run had an 815-entry collected pack, which did not cover this combination.
+The new run has zero pack entries and zero shader/pass cache resolver requests.
+These compiler timings isolate source compilation, not overall frame-time or FPS
+improvement. Driver internal caches were not cleared, so the lower observed NRI
+pipeline creation time is explicitly not attributed to this change.
+
+All three specialized/parametric framebuffer pairs pass exactly. The three new
+parametric images also match the previous executable exactly. Forced Vulkan
+toon/TAA passes all three exact pairs with zero shader compilations, 28 Vulkan
+pipelines and zero NRI copies. Boot/Off passes all three pairs and matches the
+previous revision's native captures. Existing baked-toon and TAA-only discrepancies
+remain documented above; this combination passing does not resolve them.
+
+Twelve standalone suites pass (76.97 seconds serial); exact regeneration of the
+60-program header also passes. Private evidence in `%TEMP%`:
+`TriAevum-toon-temporal-{before,after,fallback,boot-off}-20260915`.
+
+Still open: instrumentation combinations involving outline/fog/normal guides,
+AO, reflections or directional shadows; first-use driver pipeline creation;
+Linux/Android GPU validation. Do not extrapolate this fixture to all gameplay,
+all effect settings, zero driver compilation, or total stutter elimination.
+
 ## External Source Links
 
 - [zeldaret loader placeholders](https://github.com/zeldaret/oot3d/blob/a87ddae43252cb3add71bf1003e7391bbe006033/src/functions/functions_410000s.cpp#L616)

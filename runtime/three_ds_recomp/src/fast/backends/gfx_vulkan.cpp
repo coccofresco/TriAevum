@@ -3,7 +3,7 @@
 #include "fast/backends/gfx_vulkan.h"
 #include "fast/renderer3ds/pica_native_fragment_binaries.h"
 #include "fast/oot3d/pica_temporal_fragment_binaries.h"
-#include "fast/oot3d/pica_toon_fragment_binaries.h"
+#include "fast/oot3d/pica_toon_fragment_artifact.h"
 #include "fast/renderer/framebuffer_readback.h"
 #include "fast/renderer/shaderc_compiler.h"
 #include "fast/renderer/compatibility_shader_sources.h"
@@ -3362,7 +3362,7 @@ void GfxRenderingAPIVulkan::FinishNativePicaAotShaders() {
                      static_cast<unsigned long long>(mNativeFragmentArtifactHits),
                      std::size(Renderer3ds::kNativeFragmentArtifacts) +
                          std::size(Oot3d::kTemporalFragmentArtifacts) +
-                         std::size(Oot3d::kToonFragmentArtifacts));
+                         Oot3d::ToonFragmentArtifacts().size());
         std::fprintf(stderr, "TRIAEVUM_NATIVE_VERTEX_ARTIFACTS hits=%llu\n",
                      static_cast<unsigned long long>(mNativeVertexArtifactHits));
         std::fprintf(stderr, "TRIAEVUM_NATIVE_PROGRAM_OWNERS canonical=%zu instrumented=%zu\n",
@@ -3386,7 +3386,7 @@ GfxRenderingAPIVulkan::ResolveNativePicaShaderSpirv(
         }
         if (artifact.empty()) {
             artifact = Renderer3ds::FindPicaFragmentArtifact(
-                Oot3d::kToonFragmentArtifacts, source,
+                Oot3d::ToonFragmentArtifacts(), source,
                 stage == Oot3d::PicaAotShaderStage::NriFragment);
         }
         if (!artifact.empty()) {
