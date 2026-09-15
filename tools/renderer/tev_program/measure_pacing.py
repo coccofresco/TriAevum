@@ -20,6 +20,7 @@ def main():
     parser.add_argument('--no-scenario', action='store_true', help='Load the checkpoint without scenario injection')
     parser.add_argument('--from-start', action='store_true', help='Boot without a savestate')
     parser.add_argument('--inventory', action='store_true', help='Diagnostic source inventory; adds CPU overhead')
+    parser.add_argument('--diagnostics', action='store_true', help='Bounded renderer phase attribution; not a clean timing run')
     parser.add_argument('--rates', type=int, nargs='+', choices=(30, 60, 90), default=[30, 60, 90])
     args = parser.parse_args()
     if args.seconds < 8:
@@ -87,6 +88,10 @@ def main():
         env.update(TRIAEVUM_PACING_TRACE='1', TRIAEVUM_NRI_PIPELINE_LIBRARIES='1',
                    OOT3D_VULKAN_VALIDATION='0', OOT3D_GRAPHICS_NRI_PICA_DRAWS='1',
                    OOT3D_GRAPHICS_PICA_DYNAMIC_RENDERING='1')
+        if args.diagnostics:
+            command.append('--extended-diagnostics')
+            env['OOT3D_VULKAN_DIAGNOSTICS_PATH'] = str((root/'renderer.json').resolve())
+            env['OOT3D_VULKAN_DIAGNOSTICS_MAX_FRAMES'] = str(args.seconds * rate + 8)
         (root/'invocation.json').write_text(json.dumps(command, indent=2))
         with (root/'stdout.log').open('w') as out, (root/'stderr.log').open('w') as err:
             subprocess.run(command, cwd=Path(base[0]).parent, env=env, stdout=out, stderr=err,
@@ -101,6 +106,8 @@ def main():
                         'pacing': report['realtime_pacing'], 'frame_rate': report['frame_rate'],
                         'warmup_basis': 'completed_presentations_not_wall_seconds',
                         'inventory_instrumentation': args.inventory,
+                        'renderer_instrumentation': args.diagnostics,
+                        'grass_instrumentation': 'OOT3D_GRASS_DIAGNOSTICS' in env,
                         'shader_diagnostics': re.findall(
                             r'^TRIAEVUM_(?:SPIRV_CACHE|PASS_SHADER_CACHE|NATIVE_PROGRAM_PREPARATION_END|NRI_GPL_LINK)[^\n]*',
                             diagnostics, re.MULTILINE)})

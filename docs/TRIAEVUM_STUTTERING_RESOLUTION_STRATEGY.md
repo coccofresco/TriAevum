@@ -834,3 +834,87 @@ Private evidence: `%TEMP%/TriAevum-castle-baseline`,
 `TriAevum-castle-steady-final`. Next work must retain this fixture, distinguish
 its legacy replay startup costs from ongoing waits, and extend the measurement
 to camera movement before treating static-camera results as scene-wide closure.
+
+### Castle checkpoint: Grass placement is the largest replay stall (2026-09-15)
+
+The previous multi-second residual is now attributed, not assumed to be shader
+compilation. `measure_pacing.py --diagnostics` enables bounded renderer phase
+timers; the report retains enough frames to include startup. The diagnostics
+buffer retains the LAST N frames, so a small fixed limit loses the critical
+initial samples. Diagnostic runs are explicitly labelled and are not clean
+performance measurements. `OOT3D_GRASS_DIAGNOSTICS=1` additionally enables the
+existing per-surface extraction/clustering/world-conversion timers.
+
+On the adult-Link castle checkpoint, one attributed replay takes 7688.7 ms:
+7662.4 ms is `grass_render_ms`, while pipeline creation is zero and shader cache
+lookup takes 0.017 ms. `InteractiveGrassPass::Prepare` waits for complete static
+placement through `GrassStaticPlacementCache::Resolve`; the expensive operation
+is CPU extraction, not the Grass draw call. The main surface generates
+4,208,763 anchors and 269,527 clusters. Its baseline extraction takes 5887.5 ms,
+clustering 721.6 ms, and world conversion 536.2 ms. Two smaller surfaces generate
+384,482 and 84,329 anchors. IDs in private logs are evidence, never runtime keys
+for special-case fixes.
+
+Implemented in `grass_surface_extractor.cpp`:
+
+- Replace 27 hashed 3D-cell lookups per candidate with nine X/Z-column lookups.
+  The first point is inline; overflow points are sorted by Y cell, restricting
+  comparisons to the exact same three vertical cells as before. Stacked floors
+  do not require scanning all points in the column.
+- Pool hash nodes within each extraction using a local standard C++ PMR pool.
+  No shared allocator state, persistent cache, new dependency or renderer API.
+- Preserve candidate quotas, random numbers, mask acceptance, strict spacing
+  predicate, accepted order, density and every anchor attribute. Keep complete
+  first-frame admission; do not remove the wait to hide the cost through pop-in.
+
+Diagnostic main-surface extraction: 5887.5 -> 3861.8 ms (-34.4%). Counts of all
+three surfaces and their clusters remain identical. A stronger hash experiment
+did not improve this fixture and was discarded.
+
+Clean 30-second runs, same checkpoint/full effects, empty application cache,
+no shader pack, no VSync, no captures or detailed renderer/Grass diagnostics:
+
+| Metric | Before | After |
+| --- | ---: | ---: |
+| Worst completed presentation | 7820.1 ms | 5733.0 ms |
+| All-window mean (includes startup) | 25.90 ms | 23.30 ms |
+| Completed presentations | 1159 | 1288 |
+| All-window p99 upper bound | 19.125 ms | 24.875 ms |
+
+The largest stall is reduced by 26.7%; it is NOT eliminated. The p99 did not
+improve in this pair: do not claim a steady-state pacing improvement or infer
+native simulation FPS from the 2x presentation count. The initial checkpoint
+replay still compiles 25 compatibility shaders (2488 ms in the final run) and
+two pass programs (333 ms). That separate problem remains open.
+
+Verification:
+
+- `grass_spacing_tests` checks 31,236 complete anchors in 36 cases against an
+  independent brute-force filter, including negative coordinates, stacked
+  floors, partial/black masks, three spacings, three randomness levels and
+  nonuniform world transforms. All 16 focused tests pass.
+- Rebuild the pre-change extractor from `b361f02` in the same runtime and compare
+  deterministic framebuffer 120 with the final extractor. Identical BMP SHA-256:
+  `3c23f514d880e168ee0cc5d1d9dfa9280243cdddb496f406878358fe3e631ed3`.
+  Both use the same interpolated checkpoint mode, 121 presentations, throughput
+  mode and fixed native step 1/30, not 1/60. These captures are correctness tests
+  only. Full Grass/toon settings are preserved; the image shows adult Link at
+  the bridge, terrain, Grass and HUD. No Windows screenshots were used.
+- The final executable is rebuilt with the optimization, not the oracle.
+  No AOT regeneration or shader artifact regeneration was required.
+
+Private evidence under `%TEMP%`: `TriAevum-castle-full-attribution`,
+`TriAevum-castle-grass-attribution`, `TriAevum-castle-column-pool`,
+`TriAevum-castle-spacing-final-clean`, `TriAevum-spacing-capture-before` and
+`TriAevum-spacing-capture-after3`. Capture arguments are retained with the files.
+
+Next priorities, based on measured impact:
+
+1. Further reduce static placement extraction/allocation work, then its
+   clustering and world-conversion costs. Preserve mask/spacing semantics and
+   first-frame completeness; the remaining five-second wait is unacceptable.
+2. Replace the saved visual replay's compatibility shader-source dependency
+   with the typed native-program path. Do not treat a warm cache as resolution.
+3. Measure controlled camera movement after startup and distinguish new surface
+   placement, simulation work, driver waits and software pacing. Static-camera
+   tests do not establish scene-wide or Linux/Android performance closure.

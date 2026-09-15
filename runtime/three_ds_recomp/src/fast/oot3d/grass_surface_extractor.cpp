@@ -7,6 +7,7 @@
 #include <cmath>
 #include <compare>
 #include <limits>
+#include <memory_resource>
 #include <numbers>
 #include <unordered_map>
 
@@ -161,6 +162,19 @@ struct SpatialCellHash {
     }
 };
 
+struct SpacingPoint {
+    std::array<float, 3> Position;
+    int32_t CellY;
+};
+
+// Flat terrain needs one allocation per occupied column, not a separately
+// allocated point vector per cell. Sorted overflow keeps stacked floors local.
+struct SpacingColumn {
+    SpacingPoint First;
+    std::vector<SpacingPoint> Extra;
+};
+using SpacingIndex = std::pmr::unordered_map<SpatialCell, SpacingColumn, SpatialCellHash>;
+
 SpatialCell CellFor(const std::array<float, 3>& position,
                     float cellSize) {
     return {
@@ -172,35 +186,33 @@ SpatialCell CellFor(const std::array<float, 3>& position,
 
 bool HasMinimumSpacing(
     const std::array<float, 3>& worldPosition, float spacing,
-    const std::unordered_map<
-        SpatialCell, std::vector<std::array<float, 3>>,
-        SpatialCellHash>& occupied) {
+    const SpacingIndex& occupied) {
     if (spacing <= 0.0F) {
         return true;
     }
     const auto center = CellFor(worldPosition, spacing);
     const float spacingSquared = spacing * spacing;
+    const auto overlaps = [&](const SpacingPoint& point) {
+        if (static_cast<int64_t>(point.CellY) < static_cast<int64_t>(center.Y) - 1 ||
+            static_cast<int64_t>(point.CellY) > static_cast<int64_t>(center.Y) + 1) return false;
+        const float dx = point.Position[0] - worldPosition[0];
+        const float dy = point.Position[1] - worldPosition[1];
+        const float dz = point.Position[2] - worldPosition[2];
+        return dx * dx + dy * dy + dz * dz < spacingSquared;
+    };
     for (int32_t z = -1; z <= 1; ++z) {
-        for (int32_t y = -1; y <= 1; ++y) {
-            for (int32_t x = -1; x <= 1; ++x) {
-                const SpatialCell neighbor{
-                    center.X + x, center.Y + y, center.Z + z};
-                const auto found = occupied.find(neighbor);
-                if (found == occupied.end()) {
-                    continue;
-                }
-                for (const auto& existing : found->second) {
-                    const float dx =
-                        existing[0] - worldPosition[0];
-                    const float dy =
-                        existing[1] - worldPosition[1];
-                    const float dz =
-                        existing[2] - worldPosition[2];
-                    if (dx * dx + dy * dy + dz * dz <
-                        spacingSquared) {
-                        return false;
-                    }
-                }
+        for (int32_t x = -1; x <= 1; ++x) {
+            const SpatialCell neighbor{center.X + x, 0, center.Z + z};
+            const auto found = occupied.find(neighbor);
+            if (found == occupied.end()) continue;
+            const auto& column = found->second;
+            if (overlaps(column.First)) return false;
+            auto point = std::lower_bound(column.Extra.begin(), column.Extra.end(),
+                static_cast<int64_t>(center.Y) - 1,
+                [](const SpacingPoint& p, int64_t y) { return p.CellY < y; });
+            for (; point != column.Extra.end() &&
+                   point->CellY <= static_cast<int64_t>(center.Y) + 1; ++point) {
+                if (overlaps(*point)) return false;
             }
         }
     }
@@ -330,10 +342,9 @@ static std::vector<GrassAnchor> ExtractAnchors(
         return anchors;
     const uint32_t limit = budget;
     anchors.reserve(std::min<uint32_t>(limit, 4096U));
-    std::unordered_map<
-        SpatialCell, std::vector<std::array<float, 3>>,
-        SpatialCellHash>
-        occupied;
+    // Each extraction owns its pool; parallel surface jobs never share it.
+    std::pmr::unsynchronized_pool_resource spacingStorage;
+    SpacingIndex occupied{&spacingStorage};
     const GrassTextureWrap wrapS = ResolveGrassTextureWrap(
         rule.Wrap, surface.MaterialWrapS);
     const GrassTextureWrap wrapT = ResolveGrassTextureWrap(
@@ -509,9 +520,16 @@ static std::vector<GrassAnchor> ExtractAnchors(
             }
             anchors.push_back(anchor);
             if (generation.MinimumSpacing > 0.0F) {
-                occupied[CellFor(
-                    worldPosition, generation.MinimumSpacing)]
-                    .push_back(worldPosition);
+                const auto cell = CellFor(worldPosition, generation.MinimumSpacing);
+                const SpacingPoint point{worldPosition, cell.Y};
+                auto [entry, inserted] = occupied.try_emplace(
+                    SpatialCell{cell.X, 0, cell.Z}, SpacingColumn{point, {}});
+                if (!inserted) {
+                    auto& extra = entry->second.Extra;
+                    const auto where = std::upper_bound(extra.begin(), extra.end(), cell.Y,
+                        [](int32_t y, const SpacingPoint& p) { return y < p.CellY; });
+                    extra.insert(where, point);
+                }
             }
         }
     }
