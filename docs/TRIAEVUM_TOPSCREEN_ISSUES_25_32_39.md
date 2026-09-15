@@ -2,8 +2,10 @@
 
 ## Scope and status
 
-Checkpoint: 2026-09-15. This is a verified implementation increment, not closure
-of all three reports. Issues: [25](https://github.com/coccofresco/TriAevum/issues/25),
+Checkpoint: 2026-09-15. The reported pause/HUD aspect, minimap, independent item
+input and Sheikah Stone playback/exit paths have now passed local Windows and
+Linux runtime checks. This is not a published release or exhaustive coverage of
+every UI page/item/movie. Issues: [25](https://github.com/coccofresco/TriAevum/issues/25),
 [32](https://github.com/coccofresco/TriAevum/issues/32),
 [39](https://github.com/coccofresco/TriAevum/issues/39).
 
@@ -19,8 +21,13 @@ of all three reports. Issues: [25](https://github.com/coccofresco/TriAevum/issue
   now persist with the already-transformed guest buffers. Fresh entry and reload
   framebuffer captures both retain the marker. Older states without these
   originals need a native scene re-entry; do not infer lost coordinates.
-- Sheikah Stone reaches the native Visions screen after the Y2R/TLS/scheduling
-  fixes below. Movie playback qualification is still pending; do not close #39.
+- Sheikah Stone plays a native movie, completes or cancels it, and returns to
+  controllable Kokiri gameplay on both platforms with the matching rebuilt title
+  module. See the final qualification section below; older pending notes are
+  retained as investigation history, not current playback status.
+- Additional aspect coverage remains for the deferred-model Visions menu itself.
+  The movie is centered at its native aspect; this does not prove that menu's
+  geometry is already classified UI. Do not broaden DrawViewPass to fix it.
 
 ## Evidence and ownership
 
@@ -216,9 +223,9 @@ zero slots as data, never as executable destinations, and trims trailing padding
 Program `c5df1b2c227fecd86bff4a0ba883932c37e2977266c7254db5ee4182b2cd1df5`
 has 138 recognized dispatch sites, 72 distinct relative tables and 648 distinct
 targets, with none of those targets missing from its block registry. This last
-program has passed structural selection/audit and tests, but has NOT yet been
-built and qualified through movie playback. Do not confuse it with the previous
-completed Windows/Linux modules.
+program initially passed structural selection/audit and tests only. It has now
+been built and qualified as recorded below. Do not confuse it with the previous
+Windows/Linux modules that still lack those entries.
 
 ### Read-only decompilation evidence and next validation boundary
 
@@ -256,4 +263,73 @@ movies (192 frames total). The unmodified core diverges from the third frame
 on both measured baseline movies. See
 [decoder qualification](TRIAEVUM_MOBICLIP_DECODER_VALIDATION.md) for the precise
 expression, repeatable harness and evidence. This correction has NOT yet been
-connected to the game; issue #39 movie playback remains open.
+connected to the game. Runtime movie playback was subsequently repaired through
+the existing translated decoder, as recorded below, not by importing this core.
+
+## Completed movie qualification (2026-09-15)
+
+The sparse-table translator fix removed the real `004B319C` dispatch failure.
+The remaining delay was a scheduling problem: the low-priority movie worker
+polls its mutex/status while the foreground waits for events. A foreground-sized
+one-million-block dispatch budget let this loop monopolize host execution.
+The diagnostic trace recorded about 1.8 billion block entries and only 135
+presentation frames before the 90-second run limit. This instrumented trace is
+causal evidence, not a comparable performance benchmark.
+
+`NativeA32Process::DispatchBlockBudget` now bounds a dispatch to 10,000 blocks
+only when the primary thread is waiting and no ready/running worker has equal
+or higher priority. It preserves smaller caller budgets. PC/registers survive
+the yield, host events are delivered, and execution resumes normally. Guest
+clock rates, thread priorities and foreground budgets are unchanged. The quantum
+is a host scheduling policy, not a recovered game constant or decoder-address
+exception. Both ordinary and product dispatch use the same policy.
+
+Owning files: `tools/oot3d/native_game_runtime/oot3d_native_a32_process.{h,cpp}`
+and `oot3d_native_a32_process_tests.cpp`. Boundary tests cover the bounded
+background quantum, preservation of smaller budgets and the full foreground
+budget. `--tls-only` passes on Windows and Linux.
+
+Actual NRI framebuffer verification, default dispatch budget (no CLI override):
+
+| Platform | Route | Frames | Observed result |
+| --- | --- | ---: | --- |
+| Windows | Play to completion, exit, move | 1501 | Movie at 230; menu after completion; Kokiri at 1310/1430 |
+| Linux Wayland | Same route | 1501 | Movie at 230; Kokiri at 1310, matching Windows |
+| Windows | Play, cancel with B, exit, move | 901 | Gameplay restored by 590 and retained afterward |
+| Linux Wayland | Same cancellation route | 901 | Gameplay restored by 590 |
+
+All four processes exited successfully. Both completion reports have 9,967
+total guest refresh frames; the Windows cancellation report has 8,767. These
+counts include the restored state's frame origin. Runs use native timing,
+fixed delta 1/30 and deterministic input/capture, not interpolated FPS claims.
+The tested movie is hint000 (Link carrying Ruto); not every hint was played.
+
+Private artifacts (never package these):
+
+- Windows: `%TEMP%/TriAevum-ui-canvas-ultrawide/stone-complete-runtime.json`,
+  `stone-cancel-runtime.json` and corresponding `*-framebuffer_*.bmp`.
+- Linux: `/home/xander/triaevum-linux-parity-20260911/ui-issues-20260915/movie/`,
+  `complete-runtime.json`, `cancel-runtime.json`, framebuffer sequences and logs.
+- Inputs: `%TEMP%/stone-complete-input.json` (A at 60/180, B at 900/1050/1200,
+  movement at 1350), `stone-cancel-input.json` (A at 60/180, B at 240/360/480,
+  movement at 650); button holds last six presentation frames.
+- Linux runner: private `triaevum_linux_stone_complete.py`, optional `--cancel`.
+
+The earlier Linux `stone-facing` fixture did not enter the Stone and is NOT a
+passing movie test. The final Linux run uses the Windows guest/kernel state with
+only the optional derived `native_pica_visual_replay_state` omitted: its host
+replay ABI was incompatible. Existing cold-replay restore handles the omission;
+the fixture checksum was regenerated. No production compatibility checks were
+disabled and no guest memory or game logic was changed for that conversion.
+
+Required title program:
+`c5df1b2c227fecd86bff4a0ba883932c37e2977266c7254db5ee4182b2cd1df5`.
+Qualified module SHA-256:
+
+- Windows DLL: `304dae27dde2d287f0d911efd2d66e194359ad9403f5bd9083b05fc16f5ffe6b`.
+- Linux SO: `fbf5291cc268d5162c58162319e625bba56877b5700ef0d26c937535592b4b69`.
+
+The runtime alone cannot fix an older title module's missing dispatch targets.
+Before release, rebuild/package the matching module through the normal
+allowlisted release process and rerun the package audit. No binaries, fixtures,
+movies, extracted data or private decoder copies are added to public source.

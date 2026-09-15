@@ -580,11 +580,16 @@ void TestPrioritySchedulerAndTls(bool testScheduler = true) {
     for (auto& thread : background["secondary_threads"]) thread["priority"] = 52U;
     Expect(process.RestoreState(background, &error) && process.OnlyBackgroundThreadsReady(),
            "background polling must not starve host event delivery");
+    Expect(process.DispatchBlockBudget(1'000'000U) == 10'000U &&
+               process.DispatchBlockBudget(128U) == 128U,
+           "background work uses a bounded quantum without enlarging a smaller caller budget");
     background["secondary_threads"][0]["priority"] = 24U;
     background["secondary_threads"][0]["status"] =
         static_cast<uint32_t>(Oot3dNativeGame::NativeA32ThreadStatus::Ready);
     Expect(process.RestoreState(background, &error) && !process.OnlyBackgroundThreadsReady(),
            "foreground-priority service work must complete before host yield");
+    Expect(process.DispatchBlockBudget(1'000'000U) == 1'000'000U,
+           "foreground service work must retain its full dispatch budget");
 }
 
 void TestProcessStateRoundTrip() {

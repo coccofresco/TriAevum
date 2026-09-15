@@ -181,6 +181,7 @@ class NativeA32Process {
     const oot3d::recomp::a32::GuestState& PrimaryThreadState() const;
     NativeA32ThreadStatus PrimaryThreadStatus() const;
     bool OnlyBackgroundThreadsReady() const;
+    uint32_t DispatchBlockBudget(uint32_t requested) const;
     size_t ThreadCount() const;
     const oot3d::recomp::a32::GuestState* ThreadState(uint32_t threadId) const;
     oot3d::recomp::a32::GuestState* ThreadState(uint32_t threadId);

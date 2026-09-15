@@ -405,6 +405,15 @@ bool NativeA32Process::OnlyBackgroundThreadsReady() const {
     return true;
 }
 
+uint32_t NativeA32Process::DispatchBlockBudget(uint32_t requested) const {
+    // Polling workers must not consume a foreground-sized quantum while all
+    // foreground work waits on host events. Preserve their PC and resume them
+    // after event delivery; this changes no guest clocks or thread priorities.
+    constexpr uint32_t backgroundQuantum = 10'000U;
+    return OnlyBackgroundThreadsReady() ? std::min(requested, backgroundQuantum)
+                                       : requested;
+}
+
 bool NativeA32Process::SelectReadyThread() {
     if (!HasReadyThread()) {
         return false;
@@ -543,13 +552,14 @@ NativeA32ProcessRunResult NativeA32Process::Run(
          ++transitions) {
         mPendingFallback = {};
         auto& state = CurrentThreadState();
+        const uint32_t dispatchBudget = DispatchBlockBudget(blockLimitPerDispatch);
         const auto dispatchStart = mTimingEnabled
                                        ? TimingClock::now()
                                        : TimingClock::time_point{};
         const auto exit =
 #if defined(OOT3D_WHOLE_AOT_PRODUCT_MODE)
             DispatchWholeAotProduct(
-                state, mMemory, blockLimitPerDispatch,
+                state, mMemory, dispatchBudget,
                 mBlockEntryCallback, mBlockEntryUser,
                 mBlockEntryFilterPcs.data(), mBlockEntryFilterPcs.size(), std::nullopt,
                 mNativeBlockCallback, mNativeBlockUser);
@@ -557,7 +567,7 @@ NativeA32ProcessRunResult NativeA32Process::Run(
             oot3d::recomp::a32::Dispatch(
             mRegistry, state.r[15], state, mMemory,
             &NativeA32Process::DispatchFallback, this,
-            blockLimitPerDispatch, mBlockEntryCallback, mBlockEntryUser,
+            dispatchBudget, mBlockEntryCallback, mBlockEntryUser,
             mBlockEntryFilterPcs.data(), mBlockEntryFilterPcs.size(),
             mNativeFunctionCallback, mNativeFunctionUser,
             mNativeFunctionPcs.data(), mNativeFunctionPcs.size(),
