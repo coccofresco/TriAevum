@@ -6,6 +6,12 @@ target_compile_features(frame_time_distribution_tests PRIVATE cxx_std_20)
 target_include_directories(frame_time_distribution_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/../../../runtime/three_ds_recomp/include")
 add_test(NAME frame_time_distribution COMMAND frame_time_distribution_tests)
+add_executable(presentation_pacer_tests presentation_pacer_tests.cpp
+    "${CMAKE_CURRENT_LIST_DIR}/../../oot3d/native_game_runtime/oot3d_native_presentation_pacer.cpp")
+target_compile_features(presentation_pacer_tests PRIVATE cxx_std_20)
+target_include_directories(presentation_pacer_tests PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/../../oot3d/native_game_runtime")
+add_test(NAME presentation_pacer COMMAND presentation_pacer_tests)
 find_package(Vulkan REQUIRED)
 find_path(SHADERC_INCLUDE_DIR shaderc/shaderc.hpp HINTS "$ENV{VULKAN_SDK}" PATH_SUFFIXES include Include REQUIRED)
 find_library(SHADERC_LIBRARY NAMES shaderc_shared shaderc HINTS "$ENV{VULKAN_SDK}" PATH_SUFFIXES lib Lib REQUIRED)

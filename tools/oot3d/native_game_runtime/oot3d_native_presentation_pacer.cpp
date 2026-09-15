@@ -6,6 +6,9 @@
 #include <thread>
 
 #ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -16,7 +19,6 @@ namespace Oot3dNativeGame {
 namespace {
 
 constexpr auto kMaximumSpinDuration = std::chrono::microseconds(500);
-constexpr auto kMaximumRecoverableDebt = std::chrono::milliseconds(250);
 
 #ifdef _WIN32
 #ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
@@ -129,13 +131,11 @@ void NativeRealtimeRefreshPacer::WaitForNextRefresh() {
         mStats.MaximumLatenessSeconds =
             std::max(mStats.MaximumLatenessSeconds, lateness);
         ++mStats.DeadlineMisses;
-        const auto maximumRecoverablePeriods = static_cast<uint32_t>(
-            std::max<int64_t>(
-                1, (kMaximumRecoverableDebt.count() * 1'000'000LL +
-                    period.count() - 1) /
-                       period.count()));
+        // Presentation debt is bounded in refresh periods, not wall seconds:
+        // a 250 ms window allowed 23 catch-up presentations at 90 Hz. Guest
+        // simulation has its own elapsed-time clock and must not be rebased here.
         if (ResolveNativePacerDeadlineAction(
-                latenessDuration, period, maximumRecoverablePeriods) ==
+                latenessDuration, period) ==
             NativePacerDeadlineAction::Resync) {
             ++mStats.DeadlineResyncs;
             mNextDeadline = now;

@@ -731,3 +731,54 @@ Next priority: attribute the remaining present/frame-start waits with this same
 bounded real-time harness, then replay transitions with the actual full default
 effects profile. Keep Linux/Android validation and legacy saved replay sources
 explicitly open. Do not substitute an unlimited average-FPS result for this work.
+
+### Presentation wait and catch-up debt (2026-09-15, follow-up to 8c4b6b1)
+
+`phase_timing.present` formerly combined GUI completion, the intentional software
+pacing wait and actual end-frame submission/presentation. A nested `pacing_wait`
+sample now exposes the wait independently, including in the bounded worst-frame
+list. Do not subtract average wait time from an individual slow frame or sum these
+overlapping phases.
+
+The new measurements attribute several ongoing 20-30 ms frames primarily to the
+pacer wait, not replay or source compilation. The final 30-second run spends
+20.509 s of 20.956 s total present time waiting at 60 Hz, and 17.964 s of 18.621 s
+at 90 Hz. Most of this is necessary rate limiting; the excessive individual waits
+are still unresolved. These counters do not establish physical scanout timing or
+identify the OS scheduler as the sole cause.
+
+Fixed a mismatch between tested policy and the real pacer: the pure function's
+two-period catch-up bound was overridden with a 250 ms window at runtime. At
+90 Hz this admitted approximately 23 periods of obsolete presentation debt.
+The actual caller now uses the tested two-period limit. A long stall rebases only
+the presentation deadline, not elapsed time, guest simulation or audio clocks.
+Short overruns still retain their phase; this is not a new interpolation algorithm.
+
+`presentation_pacer_tests` exercises both policy boundaries at 30/60/90 Hz and
+the actual pacer after an injected 60 ms stall. The latter would retain the debt
+under the old runtime override despite the existing pure-policy tests passing.
+It also checks that elapsed time is not reset and disabled pacing is inert.
+
+Paired 30-second intro runs, same scoped toon/outline profile as above:
+
+| Rate | Before max / p99 ms | After max / p99 ms | Carried debt before / after | Resyncs after |
+| --- | --- | --- | --- | --- |
+| 60 Hz | 50.47 / 17.50 | 61.18 / 17.125 | 19 / 9 | 1 |
+| 90 Hz | 48.75 / 11.75 | 51.36 / 12.875 | 39 / 38 | 2 |
+
+This is a bounded recovery correctness fix, NOT a measured overall performance
+win: p99 worsened at 90 Hz and neither peak improved. Both final runs still have
+zero shader source compilations. Timer wake jitter, initial replay work, default
+effects and cross-platform qualification remain open.
+
+Rejected experiment: submit GPU work before the pacing wait, retaining the wait
+before presentation. It did not produce a stable benefit (90 Hz p99 reached
+15.25 ms on repetition), so all scheduling/API changes and the experimental
+helper were removed. One run also experienced multi-second CPU/unattributed
+pauses while an unrelated Git command took tens of seconds; it is retained as
+an anomalous observation, not proof of a renderer regression or a hardware limit.
+
+Private evidence: `%TEMP%/TriAevum-submit-pacing-before`,
+`TriAevum-submit-pacing-after` and `TriAevum-submit-pacing-repeat` (rejected
+submission experiment), `TriAevum-bounded-debt-final` (retained implementation),
+and `TriAevum-bounded-debt-field-check` (framebuffer correctness).

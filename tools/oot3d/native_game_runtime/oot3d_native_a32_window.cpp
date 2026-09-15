@@ -544,11 +544,12 @@ struct NativeFramePhaseTiming {
   double VisualPresentationSeconds = 0.0;
   double VisualReplaySeconds = 0.0;
   double PresentSeconds = 0.0;
-  std::array<double, 14> Values() const {
+  double PacingWaitSeconds = 0.0;
+  std::array<double, 15> Values() const {
     return {GuestSeconds, FrameStartSeconds, HostFrameStartSeconds, InputPollSeconds,
       RendererFrameStartSeconds, DspMixSeconds, AudioOutputSeconds, PicaSubmitSeconds,
       PicaPlanSeconds, PicaBackendSeconds, PicaDiagnosticsSeconds,
-      VisualPresentationSeconds, VisualReplaySeconds, PresentSeconds};
+      VisualPresentationSeconds, VisualReplaySeconds, PresentSeconds, PacingWaitSeconds};
   }
 };
 
@@ -4681,7 +4682,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
   auto benchmarkMeasurementStart = std::chrono::steady_clock::now();
   auto benchmarkMeasurementEnd = benchmarkMeasurementStart;
   uint64_t benchmarkMeasuredFrames = 0U;
-  Fast::Renderer::SlowFrameSamples<14> slowFrames;
+  Fast::Renderer::SlowFrameSamples<15> slowFrames;
   const char* pacingTrace = std::getenv("TRIAEVUM_PACING_TRACE");
   const bool measurePacing = pacingTrace && std::string_view(pacingTrace) == "1";
   auto benchmarkFrameTimes = (hostArgs.ThroughputBenchmark || measurePacing)
@@ -6094,7 +6095,9 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
         static_cast<uint32_t>(presentationFrameCount), screenshotState,
         capturedTemporalSample ? &*capturedTemporalSample : nullptr);
     capturedTemporalSample.reset();
+    const auto waitStart = std::chrono::steady_clock::now();
     realtimePacer.WaitForNextRefresh();
+    phaseTiming.PacingWaitSeconds += SecondsSince(waitStart);
     window.EndFrame();
     picaSemanticTrace.RecordFrameBoundary(
         presentationFrameCount, frameCount, guestRefreshesDue != 0U);
@@ -8892,7 +8895,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
              {{"slow_frames", [&]() {
                  constexpr const char* names[]{"guest", "frame_start", "host_frame_start", "input_poll",
                    "renderer_frame_start", "dsp_mix", "audio_output", "pica_submit", "pica_plan",
-                   "pica_backend", "pica_diagnostics", "visual_presentation", "visual_replay", "present"};
+                   "pica_backend", "pica_diagnostics", "visual_presentation", "visual_replay", "present", "pacing_wait"};
                  auto samples = nlohmann::json::array();
                  for (const auto& sample : slowFrames.Samples()) {
                    nlohmann::json phases;
@@ -8916,7 +8919,8 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
               {"visual_presentation_seconds",
                phaseTiming.VisualPresentationSeconds},
               {"visual_replay_seconds", phaseTiming.VisualReplaySeconds},
-              {"present_seconds", phaseTiming.PresentSeconds}}},
+              {"present_seconds", phaseTiming.PresentSeconds},
+              {"pacing_wait_seconds", phaseTiming.PacingWaitSeconds}}},
             {"shader_source_cache",
              {{"vertex_entries", shaderSourceCache.VertexSources.size()},
               {"vertex_structural_entries",
