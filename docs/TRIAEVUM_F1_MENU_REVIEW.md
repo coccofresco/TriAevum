@@ -336,3 +336,15 @@ Windows build: `J:/TriAevum-verify-20260910/runtime/TriAevum.exe`.
 Live evidence (private, not packaged):
 `%TEMP%/TriAevum-standard-menu-live`, including native framebuffer captures.
 See `TRIAEVUM_DUSKLIGHT_UI_INPUT_DONOR.md` for attribution and remaining scope.
+
+## Retained F1 Frontend (2026-09-16, Supersedes Sidebar)
+
+F1 now uses RmlUi documents, not the earlier ImGui sidebar. F12 alone retains
+advanced ImGui widgets. Run both `triaevum_rml_settings_smoke` (actual retained
+document input/layout/modal tests) and `triaevum_f1_settings_smoke` (owning
+settings contracts and widget regressions). Both pass on Windows; the latter
+also checks every retained page and field. Public release audit: 11 tests pass.
+
+Native framebuffer verification passed with F1 open during a bounded Vulkan
+boot. See `TRIAEVUM_APPLICATION_MENU_FRONTEND.md` for the current executable,
+capture location, resource-pressure failures and platform qualification limits.

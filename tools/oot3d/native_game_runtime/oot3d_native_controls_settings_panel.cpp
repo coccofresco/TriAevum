@@ -206,6 +206,7 @@ class NativeControlsSettingsPanel final
     mControls->CancelBindingCapture();
     mControls->CancelMotionCalibration();
     mOpenCapture = false;
+    mRetainedCapture = false;
   }
   bool CapturingInput() const override {
     using Phase = ThreeDsRecomp::Input::BindingCapturePhase;
@@ -221,7 +222,125 @@ class NativeControlsSettingsPanel final
   void DrawPage(size_t page) override { DrawImpl(static_cast<int>(page)); }
   void Draw() override { DrawImpl(-1); }
 
+  void AppendSettingsPages(Fast::AppUi::Pages& pages) override {
+    using namespace Fast::AppUi;
+    const auto read=[r=mControls]{return r->Snapshot().Config;};
+    const auto write=[r=mControls](NativeControlConfig config){config.Profile=NativeControlProfile::Custom;std::string error;r->Apply(config,&error);return error;};
+    Page page{"devices","Devices",{}};
+    auto add=[&](auto member,const char* id,const char* label,double lo=0,double hi=1,double step=1,std::vector<Option> options={}) {
+      page.Fields.push_back(Member(id,label,member,read,write,lo,hi,step,std::move(options)));
+    };
+    add(&NativeControlConfig::KeyboardEnabled,"keyboard","Keyboard");
+    add(&NativeControlConfig::MouseEnabled,"mouse","Mouse");
+    add(&NativeControlConfig::ControllerEnabled,"controller","Controller");
+    add(&NativeControlConfig::CaptureMouseInGameplay,"capture","Capture mouse during gameplay");
+    Field devices{"preferred","Preferred controller",FieldKind::Choice,[read]{return read().PreferredControllerGuid;},
+      [read,write](const std::string& guid){auto c=read();c.PreferredControllerGuid=guid;return write(c);}};
+    devices.Options.push_back({"","Automatic"});
+    for(const auto& device:mControls->DevicesSnapshot()) devices.Options.push_back({device.Guid,device.Name});
+    if(!read().PreferredControllerGuid.empty() && std::none_of(devices.Options.begin(),devices.Options.end(),[&](const auto& option){return option.Value==read().PreferredControllerGuid;}))
+      devices.Options.push_back({read().PreferredControllerGuid,"Saved controller (disconnected)"});
+    page.Fields.push_back(std::move(devices));
+    for(auto profile:kProfiles) page.Fields.push_back({std::string("preset-")+NativeControlProfileName(profile),
+      std::string("Load preset: ")+NativeControlProfileName(profile),FieldKind::Action,[]{return "Apply preset";},
+      [read,r=mControls,profile](const std::string&){
+        const auto previous=read();auto c=NativeControlPreset(profile);
+        c.PreferredControllerGuid=previous.PreferredControllerGuid;
+        c.GyroscopeBiasDegreesPerSecond=previous.GyroscopeBiasDegreesPerSecond;c.AccelerometerNeutral=previous.AccelerometerNeutral;
+        std::string error;r->Apply(c,&error);return error;
+      }});
+    page.Fields.push_back({"reload","Reload saved controls",FieldKind::Action,{},[r=mControls](const std::string&){std::string error;r->Reload(&error);return error;}});
+    pages.push_back(std::move(page));page={"sticks","Analog sticks",{}};
+    std::vector<Option> sticks,motion;
+    for(auto value:kAnalogSticks) sticks.push_back({std::to_string(int(value)),NativeAnalogStickName(value)});
+    for(auto value:kMotionSources) motion.push_back({std::to_string(int(value)),NativeMotionSourceName(value)});
+    add(&NativeControlConfig::MovementStick,"movement","Movement stick",0,2,1,sticks);
+    add(&NativeControlConfig::MovementStickDeadZonePercent,"movezone","Movement dead zone (%)",0,90);
+    add(&NativeControlConfig::LookStickDeadZonePercent,"lookzone","Look dead zone (%)",0,90);
+    add(&NativeControlConfig::TriggerDeadZonePercent,"triggerzone","Trigger dead zone (%)",0,90);
+    pages.push_back(std::move(page));page={"aim","Aiming",{}};
+    add(&NativeControlConfig::NativeAimSource,"source","Aim source",0,7,1,motion);
+    add(&NativeControlConfig::MouseAimDegreesPerPixel,"sensitivity","Mouse degrees per pixel",.01,4,.01);
+    add(&NativeControlConfig::RightStickAimMaximumDegreesPerSecond,"stick","Stick degrees per second",1,720);
+    add(&NativeControlConfig::ControllerGyroscopeSensitivity,"gyro","Gyroscope sensitivity",.1,4,.1);
+    add(&NativeControlConfig::ControllerAccelerometerSensitivity,"accel","Accelerometer sensitivity",.1,4,.1);
+    add(&NativeControlConfig::NativeAimInvertX,"invertx","Invert aim X");
+    add(&NativeControlConfig::NativeAimInvertY,"inverty","Invert aim Y");
+    pages.push_back(std::move(page));page={"camera","Camera",{}};
+    add(&NativeControlConfig::FreeCameraSource,"source","Free-camera source",0,7,1,motion);
+    add(&NativeControlConfig::MouseFreeCameraUnitsPerPixel,"sensitivity","Free-camera mouse sensitivity",.25,16,.25);
+    add(&NativeControlConfig::FreeCameraMotionSensitivity,"motion","Free-camera motion sensitivity",.1,4,.1);
+    if(mTopScreen) {
+      const auto topRead=[r=mTopScreen]{return r->Snapshot().Config;};
+      const auto topWrite=[r=mTopScreen](const TopScreenUiConfig& c){std::string error;r->Apply(c,&error);return error;};
+      const auto top=[&](auto member,const char* id,const char* label,double lo=0,double hi=1,std::vector<Option> options={}) {
+        page.Fields.push_back(Member(id,label,member,topRead,topWrite,lo,hi,1,std::move(options)));
+      };
+      top(&TopScreenUiConfig::FreeCameraEnabled,"freecam","Free camera");
+      top(&TopScreenUiConfig::FreeCameraSpeedLevel,"speed","Free-camera speed",1,5);
+      top(&TopScreenUiConfig::FreeCameraSmoothing,"smoothing","Smoothing",0,4,{{"0","Off"},{"1","Light"},{"2","Medium"},{"3","Default"},{"4","Heavy"}});
+      top(&TopScreenUiConfig::FreeCameraInvertX,"invertx","Invert camera X");
+      top(&TopScreenUiConfig::FreeCameraInvertY,"inverty","Invert camera Y");
+      top(&TopScreenUiConfig::CameraZoomPercent,"zoom","Camera zoom (%)",75,170);
+      top(&TopScreenUiConfig::CameraFovPercent,"fov","Camera FOV (%)",70,140);
+      pages.push_back(std::move(page));page={"shortcuts","TopScreen shortcuts",{}};
+      top(&TopScreenUiConfig::CStickAimSpeedLevel,"aimspeed","C-stick aim speed",1,5);
+      top(&TopScreenUiConfig::CStickAimInvertX,"aimx","Invert C-stick aim X");
+      top(&TopScreenUiConfig::CStickAimInvertY,"aimy","Invert C-stick aim Y");
+      for(int age=0;age<2;++age) for(size_t direction=0;direction<4;++direction) {
+        const std::string name=std::string(age?"Adult ":"Child ")+std::array{"Up","Down","Left","Right"}[direction];
+        Field f{name,name,FieldKind::Choice,[topRead,age,direction]{const auto c=topRead();return std::to_string(int((age?c.AdultDpad:c.ChildDpad)[direction]));},
+          [topRead,topWrite,age,direction](const std::string& value){auto c=topRead();(age?c.AdultDpad:c.ChildDpad)[direction]=static_cast<TopScreenDpadAction>(std::stoi(value));return topWrite(c);}};
+        for(int action=0;action<=13;++action) f.Options.push_back({std::to_string(action),TopScreenDpadActionName(static_cast<TopScreenDpadAction>(action))});
+        page.Fields.push_back(std::move(f));
+      }
+    }
+    pages.push_back(std::move(page));page={"calibration","Motion calibration",{}};
+    page.Fields.push_back({"calibrate","Calibrate motion sensors",FieldKind::Action,[]{return "Start";},[r=mControls](const std::string&){r->BeginMotionCalibration();return std::string("Keep controller stationary");}});
+    page.Fields.back().Enabled=[r=mControls]{const auto devices=r->DevicesSnapshot();return std::any_of(devices.begin(),devices.end(),[](const auto& device){return device.HasGyroscope||device.HasAccelerometer;});};
+    page.Fields.push_back({"cancel","Cancel calibration",FieldKind::Action,{},[r=mControls](const std::string&){r->CancelMotionCalibration();return std::string();}});
+    page.Fields.push_back({"reset","Reset calibration",FieldKind::Action,{},[r=mControls](const std::string&){std::string error;r->ResetMotionCalibration(&error);return error;}});
+    page.Fields.push_back({"status","Calibration",FieldKind::Text,[r=mControls]{const auto s=r->CalibrationStatus();return s.Active?std::to_string(s.SamplesCollected)+" / "+std::to_string(s.SamplesRequired):s.LastCalibrationSucceeded?"Complete":"Idle";}});
+    pages.push_back(std::move(page));
+    for(int slot=0;slot<4;++slot) {
+      page={"bindings"+std::to_string(slot),std::array{"Keyboard bindings","Alternate keys","Mouse bindings","Controller bindings"}[slot],{}};
+      page.Fields.push_back({"capture-status","Assignment status",FieldKind::Text,[this]{return mRetainedCapture?std::string("Release inputs, then press the input to assign. Escape cancels."):mStatus;}});
+      for(size_t action=0;action<kActionLabels.size();++action) {
+        Field f{"binding"+std::to_string(action),kActionLabels[action],FieldKind::Choice,[read,action,slot]{const auto b=read().Bindings[action];return std::to_string(slot==0?int(b.KeyboardPrimary):slot==1?int(b.KeyboardSecondary):slot==2?int(b.Mouse):int(b.Gamepad));},
+          [read,write,action,slot](const std::string& value){auto c=read();const int v=std::stoi(value);auto& b=c.Bindings[action];if(slot==0)b.KeyboardPrimary=static_cast<NativeKeyboardKey>(v);else if(slot==1)b.KeyboardSecondary=static_cast<NativeKeyboardKey>(v);else if(slot==2)b.Mouse=static_cast<NativeMouseButton>(v);else b.Gamepad=static_cast<NativeGamepadButton>(v);return write(c);}};
+        if(slot<2)for(auto key:kKeyboardKeys) f.Options.push_back({std::to_string(int(key)),NativeKeyboardKeyName(key)});
+        if(slot==2)for(auto key:kMouseButtons) f.Options.push_back({std::to_string(int(key)),NativeMouseButtonName(key)});
+        if(slot==3)for(auto key:kGamepadButtons) f.Options.push_back({std::to_string(int(key)),NativeGamepadButtonName(key)});
+        page.Fields.push_back(std::move(f));
+        page.Fields.push_back({"listen"+std::to_string(action),std::string("Assign ")+kActionLabels[action],FieldKind::Action,[]{return "Listen";},
+          [this,action,slot](const std::string&){BeginBindingCapture(action,static_cast<BindingSlot>(slot));mRetainedCapture=true;return std::string("Release inputs, then press the input to assign. Escape cancels.");}});
+      }
+      pages.push_back(std::move(page));
+    }
+  }
+  void UpdateSettings() override {
+    if(!mRetainedCapture)return;
+    using Phase=ThreeDsRecomp::Input::BindingCapturePhase;
+    const auto status=mControls->BindingCaptureStatus();
+    if(status.Phase==Phase::Complete) {
+      auto config=mControls->Snapshot().Config; auto& binding=config.Bindings[mCaptureAction];
+      switch(mCaptureSlot) {
+      case BindingSlot::Primary:binding.KeyboardPrimary=status.Binding.KeyboardPrimary;break;
+      case BindingSlot::Alternate:binding.KeyboardSecondary=status.Binding.KeyboardPrimary;break;
+      case BindingSlot::Mouse:binding.Mouse=status.Binding.Mouse;break;
+      case BindingSlot::Gamepad:binding.Gamepad=status.Binding.Gamepad;break;
+      }
+      config.Profile=NativeControlProfile::Custom;
+      mStatus.clear();
+      if(mControls->Apply(config,&mStatus))mStatus="Binding saved";
+      mControls->CancelBindingCapture();mRetainedCapture=false;
+    } else if(status.Phase==Phase::Cancelled || ImGui::GetTime()-mCaptureStarted>20) {
+      mControls->CancelBindingCapture();mRetainedCapture=false;mStatus="Assignment cancelled";
+    }
+  }
+
  private:
+  bool mRetainedCapture=false;
   void DrawImpl(int page) {
     SynchronizeDrafts();
     const NativeControlConfig frameStartDraft = mControlDraft;

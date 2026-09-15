@@ -1,10 +1,9 @@
 # Dusklight UI and Input Donor Plan
 
-Status: dedicated standard F1 navigation and retained advanced F12 panels
-implemented on the existing ImGui/NRI backend. Selected Dusklight navigation
-and capture behaviors are adapted, not its RmlUi frontend or controller backend.
-Windows actual-widget tests pass; live hardware menu navigation and other
-platform builds still require qualification.
+Current direction (2026-09-16): F1 is now a retained RmlUi frontend; F12 alone
+retains the advanced ImGui widgets. The earlier ImGui sidebar below is historical
+and was rejected as the final frontend. See
+`TRIAEVUM_APPLICATION_MENU_FRONTEND.md` for the actual integration and tests.
 Decision: use Dusklight as the primary product-level donor for standard,
 cross-platform application menus and controller configuration, preserving the
 shared 3DS input contract and NRI. This is not a wholesale F1 UI replacement.
@@ -78,7 +77,7 @@ window host, input service and TopScreen. No second profile database, duplicate
 setting variables, competing SDL event pumps or copied Twilight Princess logic.
 Keep saved profiles compatible through explicit schema migration where needed.
 
-The current implementation deliberately reuses the existing ImGui/NRI backend
+The superseded first implementation deliberately reused the existing ImGui/NRI backend
 for standard pages too: importing RmlUi/Aurora would introduce a second rendering
 integration without being needed for navigation and capture behavior. Advanced
 panels remain intact. All application UI stays at the existing UI boundary after
@@ -130,6 +129,8 @@ Related: `THREE_DS_RECOMP_INPUT_ARCHITECTURE.md`,
   Linux/Android/macOS builds remain unverified for these new changes.
 
 ## Standard Menu Implementation (2026-09-15)
+
+Historical tranche, superseded by the RmlUi frontend on 2026-09-16.
 
 The first-tranche results above are historical; the following supersedes its
 frontend plan without changing setting ownership or native game UI.

@@ -157,6 +157,87 @@ void NotifyApplicationSettingsHidden() {
     for (const auto& tab : SnapshotPanelTabs()) tab->OnHidden();
 }
 
+AppUi::Pages BuildApplicationSettingsPages() {
+    using namespace AppUi;
+    Pages pages;
+    const auto read=[] {return GraphicsSettingsRuntime::Instance().Snapshot();};
+    const auto normalize=[](GraphicsSettings& config) {
+        const auto capabilities=GraphicsSettingsRuntime::Instance().Capabilities();
+        if(config.AntiAliasing==AntiAliasingMode::Msaa && config.MsaaSamples<2)config.MsaaSamples=2;
+        if(config.AntiAliasing==AntiAliasingMode::Upscaler &&
+            GraphicsSettingsService::Validate(config,capabilities).Value.AntiAliasing!=AntiAliasingMode::Upscaler) {
+            for(auto provider:{UpscalerProvider::Nis,UpscalerProvider::Fsr,UpscalerProvider::Xess,UpscalerProvider::Dlss}) {
+                auto probe=config;probe.Upscaler=provider;
+                if(GraphicsSettingsService::Validate(probe,capabilities).Value.AntiAliasing==AntiAliasingMode::Upscaler){config.Upscaler=provider;break;}
+            }
+        }
+    };
+    const auto write=[](GraphicsSettings config) {
+        auto& runtime=GraphicsSettingsRuntime::Instance();
+        const auto result=runtime.Apply(config);
+        std::string errors;
+        for(const auto& issue:result.Issues) errors += issue.Field+": "+issue.Message+" ";
+        if(runtime.SaveState()==GraphicsSettingsSaveState::Failed) errors+="Could not save settings.";
+        return errors;
+    };
+    Page display{"display","Display",{}};
+    auto add=[&](auto member,const char* id,const char* label,double lo,double hi,double step=1,std::vector<Option> options={}) {
+        auto field=Member(id,label,member,read,[write,normalize](GraphicsSettings config){normalize(config);return write(config);},lo,hi,step,std::move(options));
+        if(!field.Options.empty())field.UnavailableReason=[read,member,normalize](const std::string& value) {
+            using Value=std::remove_cvref_t<decltype(read().*member)>;
+            auto probe=read();const auto requested=static_cast<Value>(std::stoi(value));probe.*member=requested;normalize(probe);
+            const auto checked=GraphicsSettingsService::Validate(probe,GraphicsSettingsRuntime::Instance().Capabilities());
+            if(checked.Value.*member==requested)return std::string();
+            std::string reason="Unavailable on this renderer";
+            for(const auto& issue:checked.Issues)reason+="; "+issue.Message;
+            return reason;
+        };
+        display.Fields.push_back(std::move(field));
+    };
+    add(&GraphicsSettings::Window,"window","Window mode",0,2,1,{{"0","Windowed"},{"1","Borderless"},{"2","Exclusive fullscreen"}});
+    add(&GraphicsSettings::DisplayIndex,"monitor","Display index",0,16);
+    add(&GraphicsSettings::OutputWidth,"width","Output width",320,16384);
+    add(&GraphicsSettings::OutputHeight,"height","Output height",240,16384);
+    add(&GraphicsSettings::RefreshRate,"refresh","Refresh rate",24,360);
+    add(&GraphicsSettings::InternalResolutionScale,"scale","Internal resolution scale",.25,8,.25);
+    add(&GraphicsSettings::FrameRate,"fps","Frame presentation",0,3,1,{{"0","Native 30"},{"1","Interpolated 60"},{"2","Interpolated 90"},{"3","Uncapped"}});
+    add(&GraphicsSettings::VSync,"vsync","VSync",0,1);
+    add(&GraphicsSettings::FovMultiplier,"fov","Scene FOV multiplier",.5,2,.05);
+    display.Fields.push_back({"actual","Actual output / scene",FieldKind::Text,[]{
+        const auto s=GraphicsSettingsRuntime::Instance().DisplayMetrics();
+        return std::to_string(s.OutputWidth)+" x "+std::to_string(s.OutputHeight)+" / "+std::to_string(s.SceneWidth)+" x "+std::to_string(s.SceneHeight);
+    }});
+    display.Fields.push_back({"saved","Settings persistence",FieldKind::Text,[]{
+        return GraphicsSettingsRuntime::Instance().SaveState()==GraphicsSettingsSaveState::Failed
+            ? "Could not save settings. Check available disk space and file permissions." : "Automatic";
+    }});
+    display.Fields.push_back({"native","F2: toggle native presentation",FieldKind::Text,[]{
+        return GraphicsSettingsRuntime::Instance().NativePresentationOverrideActive()
+            ? "Active: configured scene effects are suspended" : "Inactive: configured scene effects are enabled";
+    }});
+    pages.push_back(std::move(display)); display={"aa","Antialiasing",{}};
+    add(&GraphicsSettings::AntiAliasing,"aa","Antialiasing",0,5,1,{{"0","Off"},{"1","FXAA"},{"2","SMAA"},{"3","MSAA"},{"4","TAA"},{"5","Upscaler"}});
+    add(&GraphicsSettings::MsaaSamples,"samples","MSAA samples",1,8,1,{{"1","1"},{"2","2"},{"4","4"},{"8","8"}});
+    add(&GraphicsSettings::TaaHistoryWeight,"history","TAA history weight",0,.99,.01);
+    add(&GraphicsSettings::TaaClampExpansion,"clamp","TAA clamp expansion",0,1,.01);
+    add(&GraphicsSettings::TaaSharpness,"sharpness","TAA sharpness",0,1,.01);
+    add(&GraphicsSettings::UpscalerSharpness,"upsharp","Upscaler sharpness",0,1,.01);
+    add(&GraphicsSettings::Upscaler,"provider","Upscaler provider",0,3,1,{{"0","NIS"},{"1","FSR"},{"2","XeSS"},{"3","DLSS"}});
+    add(&GraphicsSettings::UpscalerMode,"quality","Upscaler quality",0,5,1,{{"0","Native"},{"1","Ultra quality"},{"2","Quality"},{"3","Balanced"},{"4","Performance"},{"5","Ultra performance"}});
+    for(auto& field:display.Fields) {
+        if(field.Id=="samples")field.Enabled=[read]{return read().AntiAliasing==AntiAliasingMode::Msaa;};
+        if(field.Id=="history"||field.Id=="clamp"||field.Id=="sharpness")field.Enabled=[read]{return read().AntiAliasing==AntiAliasingMode::Taa;};
+        if(field.Id=="provider"||field.Id=="quality")field.Enabled=[read]{return read().AntiAliasing==AntiAliasingMode::Upscaler;};
+        if(field.Id=="upsharp")field.Enabled=[read]{auto s=read();return s.AntiAliasing==AntiAliasingMode::Upscaler&&(s.Upscaler==UpscalerProvider::Nis||s.Upscaler==UpscalerProvider::Fsr);};
+    }
+    pages.push_back(std::move(display));
+    for(const auto& tab:SnapshotPanelTabs()) tab->AppendSettingsPages(pages);
+    return pages;
+}
+void UpdateApplicationSettings() {
+    for(const auto& tab:SnapshotPanelTabs()) tab->UpdateSettings();
+}
+
 void GraphicsSettingsPanel::DrawAdvanced() {
     DrawContents(false, true);
 }

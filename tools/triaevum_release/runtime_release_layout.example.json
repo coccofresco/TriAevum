@@ -45,6 +45,7 @@
     {"source": "tools/oot3d/third_party/azahar_audio/LICENSE.txt", "path": "LICENSES/GPL-2.0-or-later.txt", "role": "license"},
     {"source": "tools/oot3d/third_party/azahar_pica/NIHSTRO_LICENSE.txt", "path": "LICENSES/nihstro-BSD-3-Clause.txt", "role": "license"},
     {"source": "LICENSES/NRI-MIT.txt", "path": "LICENSES/NRI-MIT.txt", "role": "license"},
+    {"source": "LICENSES/RmlUi-MIT.txt", "path": "LICENSES/RmlUi-MIT.txt", "role": "license"},
     {"source": "LICENSES/SDL2-zlib.txt", "path": "LICENSES/SDL2-zlib.txt", "role": "license"},
     {"source": "LICENSES/SDL-GameControllerDB-zlib.txt", "path": "LICENSES/SDL-GameControllerDB-zlib.txt", "role": "license"},
     {"source": "LICENSES/Microsoft-Visual-Cpp-Runtime.md", "path": "LICENSES/Microsoft-Visual-Cpp-Runtime.md", "role": "license"},

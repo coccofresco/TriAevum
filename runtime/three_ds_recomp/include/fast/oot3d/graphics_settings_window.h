@@ -1,5 +1,6 @@
 #pragma once
 #include "fast/ApplicationSettingsPanel.h"
+#include "fast/appui/SettingsModel.h"
 
 #include "fast/oot3d/azahar_texture_pack_panel.h"
 #include "fast/oot3d/grass_settings_panel.h"
@@ -25,6 +26,8 @@ class GraphicsSettingsPanelTab {
     [[nodiscard]] virtual const char* PageLabel(size_t) const noexcept { return Label(); }
     virtual void DrawPage(size_t) { Draw(); }
     virtual void OnHidden() {}
+    virtual void AppendSettingsPages(AppUi::Pages&) {}
+    virtual void UpdateSettings() {}
     [[nodiscard]] virtual bool CapturingInput() const { return false; }
     [[nodiscard]] virtual bool ReservesControllerBack() const { return false; }
 };
@@ -41,6 +44,8 @@ void InstallGraphicsSettingsPanelTab(
 bool ApplicationSettingsCapturingInput();
 bool ApplicationSettingsReservesControllerBack();
 void NotifyApplicationSettingsHidden();
+AppUi::Pages BuildApplicationSettingsPages();
+void UpdateApplicationSettings();
 
 class GraphicsSettingsPanel final {
   public:

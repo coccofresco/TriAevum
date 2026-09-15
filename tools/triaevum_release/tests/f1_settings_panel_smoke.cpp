@@ -878,6 +878,21 @@ int main() try {
         Oot3dNativeGame::CreateNativeControlsSettingsPanel(controls, topScreen),
         Oot3dNativeGame::CreateTopScreenSettingsPanel(topScreen),
         Oot3dNativeGame::CreateGameLanguagePanel(language)});
+    const auto applicationPages = BuildApplicationSettingsPages();
+    Check(applicationPages.size() == 14, "retained frontend is missing standard settings pages");
+    size_t applicationFieldCount = 0;
+    for (const auto& page : applicationPages) {
+        Check(!page.Id.empty() && !page.Label.empty(), "retained page has no stable identity");
+        for (size_t i = 0; i < page.Fields.size(); ++i) {
+            const auto& field = page.Fields[i];
+            ++applicationFieldCount;
+            Check(!field.Id.empty() && !field.Label.empty(), "retained field has no identity");
+            for (size_t j = 0; j < i; ++j) Check(field.Id != page.Fields[j].Id, "duplicate retained field identity");
+            if (field.Kind != Fast::AppUi::FieldKind::Text) Check(bool(field.Write), "retained field has no consumer");
+            if (field.Kind == Fast::AppUi::FieldKind::Number) Check(!field.Write("not-a-number").empty(), "retained numeric field accepted invalid text");
+        }
+    }
+    Check(applicationFieldCount >= 250, "standard field coverage unexpectedly decreased");
     for (float width : {760.0F, 520.0F, 1100.0F, 520.0F}) {
         size.x = width;
         Frame(); Frame();
