@@ -55,7 +55,7 @@ int main() {
     oot3d::recomp::a32::GuestState state{};
     const auto hooks =
         Oot3dNativeGame::Oot3dNativePicaCompositionHookPcs();
-    Require(hooks.size() == 59U &&
+    Require(hooks.size() == 67U &&
                 std::find(
                     hooks.begin(), hooks.end(),
                     Oot3dNativeGame::kOot3dPicaPrimitivePacketBuilderEntry) !=
@@ -223,6 +223,11 @@ int main() {
     tracker.ObserveBlockEntry(0x00300328U, state, memory);
     Require(tracker.Stats().UiScopeEntries == 0,
             "mixed world/UI container must not become a UI owner");
+    state.r[1] = 6U;
+    tracker.ObserveBlockEntry(0x002FEA30U, state, memory);
+    tracker.ObserveBlockEntry(0x0041AFACU, state, memory);
+    Require(tracker.Stats().UiScopeEntries == 0,
+            "shared queue executor or unrelated orthographic caller classified UI");
     state.r[14] = 0x12345678U;
     tracker.ObserveBlockEntry(0x0042B9F4U, state, memory);
     Require(tracker.Stats().UiScopeEntries == 0, "unrelated view caller classified UI");
@@ -242,6 +247,9 @@ int main() {
     for (const auto [entry, returnPc] : std::array{
              std::pair{0x0041F308U, 0x0041983CU},
              std::pair{0x00425930U, 0x0041EB14U},
+            std::pair{0x0041AFACU, 0x00419890U},
+            std::pair{0x00471F60U, 0x0030051CU},
+            std::pair{0x00477E30U, 0x0041984CU},
             std::pair{0x002FFF7CU, 0x00419824U},
             std::pair{0x0042CB54U, 0x00300530U},
             std::pair{0x0042A278U, 0x0030053CU},
@@ -258,6 +266,21 @@ int main() {
                     spans[0].Attribution.Layer == Oot3dNativeGame::Oot3dPicaCompositionLayer::Ui,
                 "pause backdrop/map/overlay lost UI command ownership");
     }
+    tracker.Reset();
+    memory.Write32(0x0054CC4CU, 0x14001000U);
+    state.r[14] = 0x00300524U;
+    tracker.ObserveBlockEntry(0x004228E4U, state, memory);
+    state.r[14] = 0x003FBC5CU;
+    tracker.ObserveBlockEntry(
+        Oot3dNativeGame::kOot3dKankyoEffectPrimitiveDrawEntry, state, memory);
+    emitPrimitive(0x14002000U, 0x14002040U, 0x003FB984U);
+    tracker.ObserveBlockEntry(0x003FBC5CU, state, memory);
+    tracker.ObserveBlockEntry(0x00300524U, state, memory);
+    Require(tracker.TakeCommandListCompositionSpans(0x14002000U, 0x40U, spans, &error) &&
+                spans.size() == 1 && spans[0].Attribution.SourcePc == 0x004228E4U &&
+                spans[0].Attribution.Layer == Oot3dNativeGame::Oot3dPicaCompositionLayer::Ui &&
+                tracker.Stats().OverlappingPacketSpans == 0,
+            "deferred UI primitive lost ownership to the shared environment writer");
     std::cout << "oot3d_native_pica_composition_tests: ok\n";
     return 0;
 }

@@ -25,9 +25,10 @@ every UI page/item/movie. Issues: [25](https://github.com/coccofresco/TriAevum/i
   controllable Kokiri gameplay on both platforms with the matching rebuilt title
   module. See the final qualification section below; older pending notes are
   retained as investigation history, not current playback status.
-- Additional aspect coverage remains for the deferred-model Visions menu itself.
-  The movie is centered at its native aspect; this does not prove that menu's
-  geometry is already classified UI. Do not broaden DrawViewPass to fix it.
+- Visions title/panel/model ownership is now corrected and framebuffer-verified
+  on Windows in ultrawide and 4:3. The latest adapter change still needs deployment
+  and smoke verification on Linux: the remote machine is currently unreachable.
+  Earlier cross-platform movie/input/minimap results remain separate evidence.
 
 ## Evidence and ownership
 
@@ -46,6 +47,10 @@ The copied `ui_native_workflow_closure.cpp` identifies these exact draw calls:
 | PauseOverlay_DrawAllGroups | 0041F308 | 0041983C |
 | PauseWorldMap_Draw | 00425930 | 0041EB14 |
 | Renderer-local orthographic backdrop | 002FFF7C | 00419824 |
+| Orthographic deferred model queue 6 | 0041AFAC | 00419890 |
+| Screen-space overlay queue 4 | 004228E4 | 00300524 |
+| Hint upper UI callback | 00471F60 | 0030051C |
+| Hint lower UI callback | 00477E30 | 0041984C |
 | Message backdrop/choice | 0042CB54 | 00300530 |
 | Auxiliary message glyphs | 0042A278 | 0030053C |
 | Contextual message glyphs | 00427A3C | 00300548 |
@@ -94,7 +99,7 @@ Runtime: `J:/TriAevum-verify-20260910/runtime/TriAevum.exe`.
 These are correctness captures, not performance measurements. Windows desktop
 screenshots were not used. Linux was not rerun in this increment.
 
-## Next validation
+## Original validation checklist (historical)
 
 1. Test pause inventory/map in ultrawide and 4:3, including inverse pointer hits.
 2. Reproduce the dungeon minimap screenshot from #32 and counters from #39.
@@ -333,3 +338,51 @@ The runtime alone cannot fix an older title module's missing dispatch targets.
 Before release, rebuild/package the matching module through the normal
 allowlisted release process and rerun the package audit. No binaries, fixtures,
 movies, extracted data or private decoder copies are added to public source.
+
+## Shared implementation alignment and Visions closure
+
+There is one composition adapter for Windows/Linux, one shared raster-canvas
+calculation and one existing inverse-pointer transform. No platform-specific
+UI scaling, second movie decoder, texture-name rule or duplicate TopScreen
+layout correction was introduced. The title module remains program `c5df1b2c...`;
+these last changes require only a runtime relink, not title recompilation.
+
+Read-only binary/decomp evidence identifies the missing owners:
+
+- `HintMovie_Init` at `00457518` installs callbacks `00471F60`/`00477E30`.
+  Literals `004577B4`/`004577B8` confirm their addresses; they populate
+  GraphRenderer+7440/+7444. The invocation continuations are `0030051C` and
+  `0041984C`. Their state dispatch draws UI, unlike unrelated renderer callbacks.
+- `0041AFAC` establishes an orthographic projection and consumes model queue 6.
+- `004228E4` consumes screen-space overlay queue 4, including the Hint header.
+- `0047087C` and `00483D10` enqueue UI work; classifying only those producers
+  does not cover later drawing. No ineffective producer hook was retained.
+- The shared primitive writer `003FB5EC` is also used by UI. An exact outer UI
+  owner now takes precedence over its environment classification, including
+  packets written into a deferred buffer. Scene calls retain their classification.
+
+Tests cover these exact entry/return pairs, reject unrelated callers and the
+mixed `DrawViewPass`, and preserve UI attribution through a deferred primitive
+writer without overlapping spans. No world-container blanket classification.
+
+Windows qualification after the complete change:
+
+- Composition, frontend, TopScreen profile, UI lifecycle and input suites pass.
+- `stone-final-framebuffer_000110.bmp`: 1720x720 Visions, header and panel centered
+  with uniform scale. `stone-fourthree-framebuffer_000110.bmp`: actual 960x720
+  framebuffer, UI fitted to 960x576 at y=72. Use `config-4x3`: the persisted
+  output size overrides bare CLI width; a CLI-only run was rejected as evidence.
+- `stone-qualified-runtime.json`: 1501 presentation frames, 9967 total guest
+  refreshes, successful exit. Movie at 230; gameplay at 1310 and movement after.
+  Zero composition overlap, partial-submission or read failures. The 143 empty/
+  invalid primitive ranges are unchanged from the baseline, not a new regression.
+- Private structural trace: `stone-final-pica.jsonl`, same temporary directory
+  as earlier Windows artifacts. All screenshots are framebuffer captures.
+
+Remaining deployment checkpoint: transfer only the two composition source/test
+changes to `/home/xander/triaevum-linux` with `git apply --check`, preserving its
+unrelated work; build `oot3d_native_game` and `oot3d_native_pica_composition_tests`,
+run the test and repeat the existing Stone fixture. SSH to `192.168.1.190`
+timed out during this increment. Do not label that machine updated until the
+transfer/build and framebuffer verification actually complete. Do not publish
+or close issues based on a stale packaged title module.

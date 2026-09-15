@@ -22,6 +22,17 @@ constexpr std::array kUiViews{
     std::pair{0x00425930U, 0x0041EB14U},
     // Orthographic renderer-local backdrop (single model at GraphRenderer+743C).
     std::pair{0x002FFF7CU, 0x00419824U},
+    // Renderer orthographic deferred-model queue 6 (including Hint/Visions).
+    // 0041AFAC installs its own UI projection before consuming the queue;
+    // neither the shared queue executor nor its update/enqueue callers own UI.
+    std::pair{0x0041AFACU, 0x00419890U},
+    // Screen-space overlay queue 4, consumed after DrawViewPass's UI projection.
+    // Includes Hint primitives enqueued earlier by 0047087C/00483D10.
+    std::pair{0x004228E4U, 0x00300524U},
+    // HintMovie_Init installs these two native UI dispatch callbacks in
+    // GraphRenderer+7440/+7444. Only their exact invocation sites are UI.
+    std::pair{0x00471F60U, 0x0030051CU},
+    std::pair{0x00477E30U, 0x0041984CU},
     // Message renderers in DrawViewPass: backdrop/choice, auxiliary glyphs,
     // contextual message glyphs and the main message context.
     std::pair{0x0042CB54U, 0x00300530U},
@@ -276,6 +287,9 @@ void Oot3dNativePicaCompositionTracker::ObserveBlockEntry(
     }
     if (const auto* descriptor = FindAtmosphereScope(pc);
         descriptor != nullptr) {
+        // The shared primitive writer services UI as well as environment draws.
+        // Preserve the outer owner instead of relabelling its packets atmosphere.
+        if (mActiveUiScope) return;
         if (mActiveAtmosphereScope.has_value()) {
             ++mStats.NestedAtmosphereScopeEntries;
             return;
@@ -426,7 +440,12 @@ void Oot3dNativePicaCompositionTracker::ObserveBlockEntry(
         if (!packet.BeginAddressValid) {
             ++mStats.ReadFailures;
         }
-        if (mActiveAtmosphereScope.has_value()) {
+        if (mActiveUiScope) {
+            packet.Attribution = {
+                Oot3dPicaCompositionLayer::Ui,
+                Oot3dPicaCompositionProvenance::NativeUiLifecycle,
+                mActiveUiScope->SourcePc, 0U};
+        } else if (mActiveAtmosphereScope.has_value()) {
             packet.Attribution = AttributionForAtmosphere(
                 mActiveAtmosphereScope->SourcePc,
                 mActiveAtmosphereScope->NativeValue);
