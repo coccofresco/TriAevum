@@ -863,7 +863,9 @@ bool GenerateOot3dPicaFragmentShader(
     source << "    float pica_z_over_w = -gl_FragCoord.z;\n"
               "    float pica_depth = pica_z_over_w * fragment_uniforms.depth_scale + fragment_uniforms.depth_offset;\n"
               "    if (fragment_uniforms.w_buffering != 0) pica_depth /= gl_FragCoord.w;\n";
-    if (fogMode == 5U)
+    // The parametric program always provides fog_factor (1 when disabled).
+    // Hooks describe its interface, not the first material cached with it.
+    if (parametric || fogMode == 5U)
         hooks.Semantics |= Oot3d::Renderer::PicaShaderSemantic::NativeFogFactor;
     if (parametric) {
         source << "    float fog_factor = 1.0;\n"

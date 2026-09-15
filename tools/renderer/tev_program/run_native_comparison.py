@@ -17,6 +17,7 @@ def main():
     parser.add_argument('--from-start', action='store_true', help='Ignore the fixture savestate and boot the game')
     parser.add_argument('--taa', action='store_true', help='Enable TAA in the isolated copied configuration to exercise typed temporal programs')
     parser.add_argument('--toon', action='store_true', help='Exercise material toon, without outline or other new effects')
+    parser.add_argument('--outline', action='store_true', help='Exercise material toon with its native ordered outline guides')
     parser.add_argument('--pipeline-libraries', action='store_true', help='Require real NRI graphics pipeline library draws')
     parser.add_argument('--validation', action='store_true', help='Enable Vulkan validation for correctness runs only')
     parser.add_argument('--require-prepared-native-programs', action='store_true',
@@ -29,6 +30,8 @@ def main():
     parser.add_argument('--require-no-runtime-compilation', action='store_true',
                         help='Fail if the parametric run invokes any shader compiler (including compatibility shaders)')
     args = parser.parse_args()
+    if args.outline:
+        args.toon = True
     if args.require_no_runtime_compilation and not args.no_shader_pack:
         parser.error('--require-no-runtime-compilation requires --no-shader-pack')
     if args.require_single_pipeline_owner and not args.no_shader_pack:
@@ -82,7 +85,7 @@ def main():
                         configuration['Graphics']['AA']['Mode'] = 'TAA'
                     if args.toon:
                         configuration['Graphics']['Effects']['Toon']['Mode'] = 'PicaMaterial'
-                        configuration['Graphics']['Effects']['Toon']['OutlineEnabled'] = False
+                        configuration['Graphics']['Effects']['Toon']['OutlineEnabled'] = args.outline
                     target.write_text(json.dumps(configuration, indent=2), encoding='utf-8')
                 command.extend([token, str(target.resolve())])
             else:
@@ -159,7 +162,7 @@ def main():
             if args.require_no_runtime_compilation and not re.search(
                     r'TRIAEVUM_SPIRV_CACHE requests=0 hits=0 misses=0 rejected=0 compiled=0\b', diagnostics):
                 raise RuntimeError('parametric: compiler/cache resolver was used or its evidence is missing')
-            hits = re.search(r'TRIAEVUM_NATIVE_FRAGMENT_ARTIFACTS hits=(\d+) modules=116\b', diagnostics)
+            hits = re.search(r'TRIAEVUM_NATIVE_FRAGMENT_ARTIFACTS hits=(\d+) modules=(\d+)\b', diagnostics)
             if not hits or int(hits[1]) == 0:
                 raise RuntimeError('parametric: no built-in fragment artifact was used')
             native_identities = {(shader['stage'], int(shader['source_id'], 16), shader['source_size'])

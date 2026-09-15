@@ -73,7 +73,8 @@ int main() {
                   "authorized primary lighting hook bypassed");
             Check(dynamic.Uniforms.TevProgram.Stages[0][2] == packet->Registers[0xC2],"draw program lost");
             Check(dynamic.Hooks.SampledTextureMask == specialized.Hooks.SampledTextureMask,"texture hooks changed");
-            Check(dynamic.Hooks.Semantics == specialized.Hooks.Semantics,"effect semantics changed");
+            Check(dynamic.Hooks.Semantics == (specialized.Hooks.Semantics |
+                Oot3d::Renderer::PicaShaderSemantic::NativeFogFactor),"effect semantics changed");
             if (n==0) {
                 baseline=dynamic.Source;
                 CheckStaticTevSlots(baseline);
@@ -143,7 +144,8 @@ int main() {
                 Oot3dPicaShaderBuildPurpose::OfflineSource),error);
             if(baseline.empty()) baseline=dynamic.Source;
             Check(dynamic.Source==baseline,"lighting/fog/alpha values changed parametric source");
-            Check(dynamic.Hooks.Semantics==specialized.Hooks.Semantics,"lighting hooks changed");
+            Check(dynamic.Hooks.Semantics==(specialized.Hooks.Semantics |
+                Oot3d::Renderer::PicaShaderSemantic::NativeFogFactor),"lighting hooks changed");
             auto uniforms=BuildOot3dPicaFragmentUniformState(*packet);
             Check(uniforms.LightingProgram.Control[0]==count,"active lights lost");
             Check(uniforms.LightingProgram.Control[1]==environment,"environment lost");

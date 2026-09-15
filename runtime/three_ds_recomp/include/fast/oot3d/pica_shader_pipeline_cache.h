@@ -120,6 +120,11 @@ ResolvePicaShaderProfileFeatures(
     const EffectsSettings& effects, bool temporalMotionEnabled,
     bool directionalShadowLightingEnabled) noexcept;
 
+// Shared by offline program preparation and runtime selection. UI exclusion
+// and auxiliary-output eligibility must never diverge between these consumers.
+[[nodiscard]] PicaShaderInstrumentationFeature ResolvePicaDrawInstrumentationFeatures(
+    const PicaShaderPipelineRequest& request, const EffectsSettings& effects) noexcept;
+
 // Owns two independent shader domains. Canonical entries are immutable copies
 // of the PICA frontend output and survive graphics-setting changes. Optional
 // instrumentation is built from those entries and invalidated only at a

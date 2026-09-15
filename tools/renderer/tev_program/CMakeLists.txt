@@ -119,6 +119,8 @@ target_sources(build_fragment_artifacts PRIVATE
     "${runtime}/src/fast/oot3d/pica_reactive_mask.cpp"
     "${runtime}/src/fast/oot3d/pica_reflection_material.cpp"
     "${runtime}/src/fast/oot3d/pica_toon_shader.cpp"
+    "${runtime}/src/fast/oot3d/pica_shader_pipeline_cache.cpp"
+    "${runtime}/src/fast/oot3d/pica_rigid_motion.cpp"
     "${runtime}/src/fast/oot3d/pica_shader_instrumentation.cpp")
 add_test(NAME pica_fragment_artifacts COMMAND build_fragment_artifacts --check)
 add_test(NAME pica_temporal_fragment_artifacts COMMAND build_fragment_artifacts --temporal --check)

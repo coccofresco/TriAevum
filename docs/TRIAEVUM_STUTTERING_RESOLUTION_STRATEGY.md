@@ -603,7 +603,11 @@ resource-consumer/lifetime change, not skipping allocations behind a profile fla
 
 ## First action on resumption
 
-Prioritize the measured first-replay and GPU stalls above. Then extend the actual startup/resource-preparation consumer to effect program families
+Prioritize ongoing inter-frame stalls at real-time x2/x3, with phase attribution
+and the selected effect profile recorded. An uncapped 30 Hz simulation benchmark
+does not establish smooth 60/90 Hz presentation. Keep cold-load and steady-state
+results separate, without deleting the former from the report.
+Then extend the actual startup/resource-preparation consumer to effect program families
 and sample-count/alpha-coverage profiles using their declared interfaces. Do not
 reintroduce shader inventories or prepare all combinations of material state.
 Profile transitions and device recreation need explicit preparation boundaries
@@ -612,3 +616,118 @@ Attribute the remaining >100 ms frames separately now that the canonical test
 proves no late shader-part creation. Preserve monolithic fallback and opt-in GPL
 until platform and default-profile qualification pass. Linux/Android GPU tests,
 M3 default effects and M4 transitions remain open.
+
+## Real-time pacing and outline audit (2026-09-15)
+
+Baseline for this tranche: `338454a`. `measure_pacing.py` now runs bounded,
+real-time 30/60/90 Hz sessions, with VSync disabled, audio unchanged, no captures,
+no collected shader pack and private copies of configuration/save data. It records
+the completed-frame distribution and the worst 16 phase samples using the optional
+`TRIAEVUM_PACING_TRACE=1` collector. `--warmup-frames` excludes completed
+presentations, NOT elapsed seconds; its default is zero so loading stalls remain
+visible. Frame timing describes host submission/presentation, not monitor scanout.
+The legacy SDL target-FPS field is nominal on Vulkan: SDL skips its GL limiter.
+
+Findings:
+
+- Static native Field at 30 Hz: steady p99 33.875 ms, maximum 33.9309 ms.
+  This is not evidence for all scenes, motion, interpolation or default effects.
+- A historical x2 fixture with toon/outline and expensive grass settings spent
+  4.696 seconds in source compilation. Its 180-frame warmup left only 43 measured
+  frames in a 20-second run. That sample must not be described as 17 steady seconds.
+- Historical x2 savestates also embed specialized shader sources in their visual
+  replay. With effects disabled, their first replay still compiled 20 programs
+  (about 2.0 seconds). This is a legacy snapshot issue, not evidence that newly
+  submitted canonical draws require those variants. Do not rewrite their timing
+  mode or silently discard saved visual state to make a test pass.
+- Two clock-snapping prototypes did not consistently improve real x2/x3 results;
+  both were removed. Simulation scheduling, interpolation and game speed are
+  unchanged by the retained patch.
+
+Retained repairs:
+
+1. Parametric `fog_factor` is an unconditional shader-interface capability (value
+   one when disabled). `GenerateOot3dPicaFragmentShader` formerly advertised it
+   only when the first material enabled fog, despite caching the same program
+   across both states. Its hook is now invariant. Generator tests exercise both
+   activation states without changing the canonical shader source.
+2. Offline outline preparation and runtime selection now share
+   `ResolvePicaDrawInstrumentationFeatures`. In particular, transparent draws
+   without depth writes do not request the fog/geometry outputs, and UI draws
+   receive no scene-effect instrumentation. No duplicate eligibility policy.
+3. The isolated toon artifact module includes finite output/coverage contracts
+   and both vertex-color consumption contracts (340 toon artifacts, 396 including the
+   existing native/temporal families). Texture identities, material values,
+   dimensions and scene addresses do not create this family. Canonical rendering
+   and the compatibility backend are unchanged; new outline binaries target NRI.
+4. `build_fragment_artifacts --check` verifies source/interface identities and
+   stored SPIR-V structure without recompiling every stored program. Developer
+   `--reuse-builtins` regeneration may retain exactly matching built-in sources;
+   `--check-exact` still recompiles all programs and rejects that shortcut.
+   `--sources <directory>` exports maintained source for exact mismatch diagnosis.
+
+Field toon+outline now passes three exact framebuffer comparisons against the
+specialized reference, Vulkan validation, single NRI ownership and zero runtime
+source compiler requests, with an empty application cache and no collected pack.
+The intermediate test still had three source compilations / 1.400 seconds; after
+the fog fix two / 0.892 seconds; after shared eligibility zero. These are scoped
+compiler measurements, NOT a whole-game FPS improvement or cold-driver claim.
+
+Rejected experiment: preparing all effect programs indiscriminately exceeded
+the 120-second test timeout before gameplay. It and its enlarged library-retention
+limit were removed. Do not reinstate this matrix as a startup solution. Next
+device preparation must select the actual enabled profile and supported output
+contracts, or reduce those programs through uniform data, with measured startup
+cost. Driver library creation, legacy snapshot migration, grass resource work,
+AO/reflection combinations and non-Windows hardware remain open.
+
+Private evidence: `%TEMP%/TriAevum-pacing-{before,x2-before,canonical,
+canonical-after,deadline-after}-20260915` and
+`%TEMP%/TriAevum-outline-{final-check,fog-final-check,shared-final-check}-20260915`.
+The `canonical-after` and `deadline-after` folders are rejected clock experiments,
+not release candidates. Never use their timings as a claimed improvement.
+
+### Ongoing intro stall reproduced and removed in the measured window
+
+Booting normally, without a checkpoint or scenario injection, exposed another
+stall about 18 seconds into the intro. It was not the initial loading interval:
+the worst 60 Hz frame spent 647.36 ms in replay. Its missing fragment program
+differed from the maintained offline family only in the typed toon response to
+whether native TEV consumes primary vertex color. The builder now enumerates both
+contracts for all eligible draw/effect combinations, not just the captured case.
+No texture identity, scene exception or collected shader cache is involved.
+
+Matched 24-second Windows/NRI runs, toon+outline, no grass, VSync off, audio on,
+empty application cache, no captures or inventory in timed runs:
+
+| Presentation | Before max / p99 (ms) | After max / p99 (ms) | After samples |
+| --- | --- | --- | --- |
+| 60 Hz | 649.53 / 19.75 | 52.90 / 17.25 | 1440 |
+| 90 Hz | 418.40 / 14.625 | 51.75 / 14.75 | 2159 |
+
+The 60 Hz source compiler cost fell from one request / 378.01 ms to zero;
+the 90 Hz run also reports zero. The 90 Hz p99 did NOT improve. Peak reduction is
+a paired-run observation, not a repeatability interval or cold-driver guarantee:
+driver-internal caches were not cleared. In the final runs the largest replay
+spikes occur in the first second (roughly 52 and 46 ms), while the previous
+18-second stall no longer appears among the worst frames. Later samples include
+present/wait time and occasional renderer frame-start waits, which need separate
+attribution; they must not be called shader compilation without evidence.
+
+Final correctness check: three exact Field framebuffer matches against the
+specialized path, Vulkan validation, single NRI pipeline ownership and zero
+source compilation. This does not validate every intro frame or every effect.
+Generated sources are developer-built into the isolated artifact module; adding
+the missing discrete contracts increases its generated C++ header to about
+93 MiB. Do not broaden it with continuous material values or indiscriminate
+startup pipeline preparation.
+
+Evidence: `%TEMP%/TriAevum-outline-paced-boot-20260915` (before),
+`TriAevum-outline-boot-source-20260915` (diagnostic inventory only),
+`TriAevum-outline-closed-boot-20260915` (after), and
+`TriAevum-outline-closed-field-20260915` (correctness).
+
+Next priority: attribute the remaining present/frame-start waits with this same
+bounded real-time harness, then replay transitions with the actual full default
+effects profile. Keep Linux/Android validation and legacy saved replay sources
+explicitly open. Do not substitute an unlimited average-FPS result for this work.

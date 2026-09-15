@@ -4682,7 +4682,9 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
   auto benchmarkMeasurementEnd = benchmarkMeasurementStart;
   uint64_t benchmarkMeasuredFrames = 0U;
   Fast::Renderer::SlowFrameSamples<14> slowFrames;
-  auto benchmarkFrameTimes = hostArgs.ThroughputBenchmark
+  const char* pacingTrace = std::getenv("TRIAEVUM_PACING_TRACE");
+  const bool measurePacing = pacingTrace && std::string_view(pacingTrace) == "1";
+  auto benchmarkFrameTimes = (hostArgs.ThroughputBenchmark || measurePacing)
       ? std::make_unique<Fast::Renderer::FrameTimeDistribution>() : nullptr;
   bool benchmarkMeasurementStarted =
       hostArgs.BenchmarkWarmupFrames == 0U;

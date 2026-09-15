@@ -98,7 +98,9 @@ struct InstrumentationKeyHash {
     }
 };
 
-PicaShaderInstrumentationFeature BuildRequestedFeatures(
+} // namespace
+
+PicaShaderInstrumentationFeature ResolvePicaDrawInstrumentationFeatures(
     const PicaShaderPipelineRequest& request,
     const EffectsSettings& effects) noexcept {
     PicaShaderInstrumentationFeature features =
@@ -155,6 +157,8 @@ PicaShaderInstrumentationFeature BuildRequestedFeatures(
     }
     return features;
 }
+
+namespace {
 
 InstrumentationKey BuildInstrumentationKey(
     uint64_t canonicalIdentity,
@@ -492,7 +496,7 @@ const PicaShaderPipelineResult& PicaShaderPipelineCache::Resolve(
     const auto [canonical, canonicalHit] =
         mImpl->ResolveCanonical(request);
     const PicaShaderInstrumentationFeature requestedFeatures =
-        BuildRequestedFeatures(request, effects);
+        ResolvePicaDrawInstrumentationFeatures(request, effects);
 
     if (HasPicaShaderInstrumentationFeature(
             requestedFeatures,

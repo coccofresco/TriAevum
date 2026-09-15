@@ -5,11 +5,13 @@
 #include "fast/renderer3ds/pica_native_fragment_binaries.h"
 #include "fast/renderer3ds/pica_nri_shader_contract.h"
 #include "fast/oot3d/pica_shader_instrumentation.h"
+#include "fast/oot3d/pica_shader_pipeline_cache.h"
 #include "fast/oot3d/toon_surface_response.h"
 #include "fast/oot3d/pica_temporal_fragment_binaries.h"
 #include "fast/oot3d/pica_toon_fragment_binaries.h"
 #include <shaderc/shaderc.hpp>
 #include <fstream>
+#include <filesystem>
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -40,9 +42,15 @@ int main(int argc, char** argv) try {
     const bool temporal = argc > 1 && std::string_view(argv[1]) == "--temporal";
     const bool toon = argc > 1 && std::string_view(argv[1]) == "--toon";
     if (temporal || toon) { --argc; ++argv; }
+    const bool reuseBuiltins = argc > 1 && std::string_view(argv[1]) == "--reuse-builtins";
+    if (reuseBuiltins) { --argc; ++argv; }
     const bool verify = argc == 2 && std::string_view(argv[1]) == "--check";
+    const bool dumpSources = argc == 3 && std::string_view(argv[1]) == "--sources";
+    const bool countOnly = dumpSources || (argc == 2 && std::string_view(argv[1]) == "--count");
     const bool exact = argc == 3 && std::string_view(argv[1]) == "--check-exact";
-    Check(argc == 2 || exact, "usage: build_fragment_artifacts [--temporal|--toon] output.h | --check | --check-exact output.h");
+    Check(!(exact && reuseBuiltins), "exact compiler verification must rebuild all programs");
+    Check(argc == 2 || exact || dumpSources, "usage: build_fragment_artifacts [--temporal|--toon] output.h | --check | --count | --sources directory | --check-exact output.h");
+    if (dumpSources) std::filesystem::create_directories(argv[2]);
     shaderc::Compiler compiler;
     shaderc::CompileOptions options;
     options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_1);
@@ -63,6 +71,7 @@ int main(int argc, char** argv) try {
     std::unordered_set<std::string> emittedSources;
     unsigned modules = 0;
     unsigned materialCases = 0, toonStyleCases = 0;
+    for (unsigned primaryColor = 0; primaryColor < (toon ? 2U : 1U); ++primaryColor)
     for (unsigned lighting = 0; lighting < 2; ++lighting)
     for (unsigned integerTexture = 0; integerTexture < 2; ++integerTexture)
     for (unsigned shadowWrite = 0; shadowWrite < 2; ++shadowWrite) {
@@ -91,8 +100,20 @@ int main(int argc, char** argv) try {
             Check(GenerateOot3dPicaFragmentShader(*packet, state, candidate, &error,
                   Oot3dPicaShaderBuildPurpose::OfflineSource, Oot3dPicaTevMode::Parametric), error);
             Check(candidate.Source == shader.Source, "material data changed finite fragment family");
+            Check(candidate.Hooks.Has(::Oot3d::Renderer::PicaShaderSemantic::NativeFogFactor) &&
+                  shader.Hooks.Has(::Oot3d::Renderer::PicaShaderSemantic::NativeFogFactor),
+                  "parametric fog hook changed with material activation");
+        }
+        if (toon && primaryColor != 0) {
+            // Native TEV may omit vertex color. It is a discrete toon response
+            // contract, independent of material identity and continuous style.
+            using Semantic = ::Oot3d::Renderer::PicaShaderSemantic;
+            shader.Hooks.Semantics = static_cast<Semantic>(
+                static_cast<uint32_t>(shader.Hooks.Semantics) &
+                ~static_cast<uint32_t>(Semantic::PrimaryColorConsumed));
         }
         std::vector<std::string> sources;
+        std::unordered_set<std::string> nriOnlySources;
         if (!temporal && !shadowWrite) {
             using namespace Fast::Oot3d;
             ToonStyleSettings style;
@@ -173,6 +194,48 @@ int main(int argc, char** argv) try {
                     }
                     sources.push_back(combined.Source);
                 }
+                // The outline consumes typed normal/fog/occlusion guides, not
+                // just toon color. Enumerate semantic eligibility predicates;
+                // dimensions, material colors, masks and texture identities do
+                // not belong to this program family.
+                for (unsigned bits = 0; bits < 32; ++bits)
+                for (unsigned blendKind = 0; blendKind < 5; ++blendKind)
+                for (bool motion : {false, true}) {
+                    auto outlined = request;
+                    outlined.SceneDomainFeatures.Outline = true;
+                    outlined.Draw.CompositionDomain = bits & 1 ? ::Oot3d::Renderer::PicaCompositionDomain::Scene
+                        : ::Oot3d::Renderer::PicaCompositionDomain::Ui;
+                    outlined.Draw.DepthTestEnabled = (bits & 2) != 0;
+                    outlined.Draw.DepthWriteEnabled = (bits & 4) != 0;
+                    outlined.Draw.ColorWriteMask = bits & 8 ? 15 : 0;
+                    outlined.Draw.DepthCompare = bits & 16 ? ::Oot3d::Renderer::PicaCompareFunction::Always
+                        : ::Oot3d::Renderer::PicaCompareFunction::Less;
+                    outlined.Draw.Blend = {};
+                    using Factor = ::Oot3d::Renderer::NativeBlendFactor;
+                    outlined.Draw.Blend.Enabled = blendKind != 0;
+                    outlined.Draw.Blend.SourceRgb = blendKind == 2 ? Factor::SourceAlpha :
+                        blendKind == 3 ? Factor::SourceColor : Factor::One;
+                    outlined.Draw.Blend.DestRgb = blendKind == 1 ? Factor::Zero : Factor::One;
+                    PicaShaderPipelineRequest drawRequest;
+                    drawRequest.Draw.CompositionDomain = outlined.Draw.CompositionDomain;
+                    drawRequest.Draw.DepthTestEnabled = outlined.Draw.DepthTestEnabled;
+                    drawRequest.Draw.DepthWriteEnabled = outlined.Draw.DepthWriteEnabled;
+                    drawRequest.Draw.ColorWriteMask = outlined.Draw.ColorWriteMask;
+                    drawRequest.Draw.DepthCompare = outlined.Draw.DepthCompare;
+                    drawRequest.Draw.Blend = outlined.Draw.Blend;
+                    drawRequest.TemporalMotionEnabled = motion;
+                    EffectsSettings effects;
+                    effects.Toon = mode;
+                    effects.ToonStyle.OutlineEnabled = true;
+                    outlined.RequestedFeatures = ResolvePicaDrawInstrumentationFeatures(drawRequest, effects);
+                    const auto outlinedShader = BuildPicaFragmentInstrumentationVariant(outlined);
+                    Check(outlinedShader.UsedProvidedHooks, "outline family lost typed hooks");
+                    if (outlined.Draw.CompositionDomain == ::Oot3d::Renderer::PicaCompositionDomain::Ui)
+                        Check(!outlinedShader.Applied(), "offline effect preparation instrumented the UI");
+                    if (!outlinedShader.Applied()) continue;
+                    sources.push_back(outlinedShader.Source);
+                    nriOnlySources.insert(outlinedShader.Source);
+                }
             }
         } else if (!temporal) {
             sources.push_back(shader.Source);
@@ -201,12 +264,18 @@ int main(int argc, char** argv) try {
         const auto nri = BuildPicaNriFragmentShaderVariant(canonicalSource);
         Check(nri.Applied, nri.Error);
         for (unsigned separate = 0; separate < 2; ++separate) {
+            // New outline binaries target the owned NRI Vulkan backend. The
+            // compatibility backend retains its existing source fallback.
+            if (!separate && nriOnlySources.contains(canonicalSource)) continue;
             const auto& source = separate ? nri.Source : canonicalSource;
             if (!emittedSources.insert(source).second) continue;
-            const auto binary = compiler.CompileGlslToSpv(source, shaderc_fragment_shader,
-                                                         "native_fragment", options);
-            Check(binary.GetCompilationStatus() == shaderc_compilation_status_success,
-                  binary.GetErrorMessage());
+            if (countOnly) {
+                if (dumpSources) {
+                    std::ofstream file(std::filesystem::path(argv[2]) / (std::to_string(modules) + ".glsl"));
+                    Check(bool(file << source), "cannot export generated program source");
+                }
+                ++modules; continue;
+            }
             const auto id = IdentifyPicaShaderSource(source);
             if (verify) {
                 const auto stored = FindPicaFragmentArtifact(storedArtifacts, source, separate != 0);
@@ -220,6 +289,20 @@ int main(int argc, char** argv) try {
                     pos += length;
                 }
                 Check(fragmentEntry, "stored artifact is not a fragment program");
+                ++modules;
+                continue;
+            }
+            std::vector<uint32_t> binary;
+            if (reuseBuiltins) {
+                const auto stored = FindPicaFragmentArtifact(storedArtifacts, source, separate != 0);
+                binary.assign(stored.begin(), stored.end());
+            }
+            if (binary.empty()) {
+                const auto compiled = compiler.CompileGlslToSpv(source, shaderc_fragment_shader,
+                                                               "native_fragment", options);
+                Check(compiled.GetCompilationStatus() == shaderc_compilation_status_success,
+                      compiled.GetErrorMessage());
+                binary.assign(compiled.begin(), compiled.end());
             }
             output << "inline constexpr uint32_t " << symbol << "Spirv" << modules << "[] = {\n";
             unsigned column = 0;
@@ -234,7 +317,8 @@ int main(int argc, char** argv) try {
         }
         }
     }
-    Check(modules == (toon ? 60U : temporal ? 40U : 16U), "unexpected finite fragment family size");
+    if (countOnly) { std::cout << "unique_modules=" << modules << '\n'; return 0; }
+    Check(modules == (toon ? 340U : temporal ? 40U : 16U), "unexpected finite fragment family size");
     output << ((temporal || toon) ? "inline const Fast::Renderer3ds::PicaFragmentArtifact "
                         : "inline const PicaFragmentArtifact ")
            << symbol << "Artifacts[] = {\n" << table.str()
