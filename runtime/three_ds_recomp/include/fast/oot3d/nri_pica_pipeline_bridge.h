@@ -29,6 +29,7 @@ namespace Fast::Oot3d {
 class NriInteropContext;
 
 using Renderer3ds::NriPicaGraphicsPipelineDesc;
+using Renderer3ds::NriPicaPipelineId;
 using Renderer3ds::NriPicaOwnedDrawDesc;
 using Renderer3ds::NriPicaTextureBindingDesc;
 using Renderer3ds::NriPicaUniformBindingDesc;
@@ -48,12 +49,13 @@ class NriPicaPipelineBridge final {
     [[nodiscard]] std::vector<uint8_t> GetPipelineCacheData() const;
     [[nodiscard]] Renderer3ds::NriPicaPipelineStatistics PipelineStatistics() const;
     bool CreateOwnedPipeline(
-        VkPipeline fallbackPipeline,
+        NriPicaPipelineId pipelineId,
         const NriPicaGraphicsPipelineDesc& desc);
     bool BindOwnedDraw(const NriPicaOwnedDrawDesc& desc);
     bool DrawBoundGeometry(const NriPicaOwnedDrawDesc& desc);
     bool Bind(uint32_t frameIndex, VkPipeline pipeline);
     void Forget(VkPipeline pipeline);
+    void ForgetOwned(NriPicaPipelineId pipelineId);
     void Reset();
     void Shutdown();
 
@@ -63,7 +65,7 @@ class NriPicaPipelineBridge final {
     [[nodiscard]] bool OwnedDrawsEnabled() const;
     [[nodiscard]] bool LastDrawUploadsOwnedByNri() const;
     [[nodiscard]] uint64_t LastDrawUploadedBytes() const;
-    [[nodiscard]] bool OwnedPipelineReady(VkPipeline fallbackPipeline) const;
+    [[nodiscard]] bool OwnedPipelineReady(NriPicaPipelineId pipelineId) const;
     [[nodiscard]] size_t OwnedPipelineCount() const;
     [[nodiscard]] size_t WrappedPipelineCount() const;
     [[nodiscard]] const std::string& UnavailableReason() const;

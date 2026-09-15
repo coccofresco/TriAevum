@@ -648,18 +648,20 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     void ConfigureNativePicaAotShaders();
     void FinishNativePicaAotShaders();
     void PrewarmNativePicaPipelines();
+    void DestroyNativePicaPipelines();
     std::vector<uint32_t> ResolveNativePicaShaderSpirv(
         std::string_view source, Oot3d::PicaAotShaderStage stage,
         bool vertexShader, const char* sourceName);
     VkShaderModule CreateShaderModuleFromSpirv(
         std::span<const uint32_t> spirv);
-    VkPipeline GetOrCreateNativePicaPipeline(
+    Renderer3ds::PicaDevicePipelineRecord& GetOrCreateNativePicaPipeline(
         const GfxNativePicaDrawView& draw,
         const NativePicaShaderProgram& shader, bool writesReactiveMask,
         Oot3d::PicaShaderDomain domain,
         Oot3d::PicaShaderInstrumentationFeature requestedFeatures,
         Oot3d::PicaShaderInstrumentationFeature appliedFeatures,
-        bool recordInventory = true, bool outlineOcclusionOnly = false);
+        bool recordInventory = true, bool outlineOcclusionOnly = false,
+        bool requireVulkan = false);
     void CreateNativePicaTextureImage(TextureRecord& texture,
                                       std::span<const uint8_t> pixels,
                                       uint32_t width, uint32_t height,
@@ -807,7 +809,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         mDirectionalShadowSchedulePlan;
     uint64_t mFrameAzaharTextureGeneration = 0;
     uint64_t mCustomTextureUploadBytesThisFrame = 0;
-    std::map<std::vector<uint8_t>, VkPipeline> mNativePicaPipelines;
+    std::map<std::vector<uint8_t>, Renderer3ds::PicaDevicePipelineRecord> mNativePicaPipelines;
+    uint64_t mNextPicaPipelineId = 1;
+    uint64_t mNativePicaVulkanPipelineCreations = 0;
     std::map<NativePicaTextureKey, TextureRecord> mNativePicaTextures;
     std::map<uint64_t, NativePicaLightingLutTexture>
         mNativePicaLightingLuts;

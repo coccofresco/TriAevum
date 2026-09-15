@@ -1128,6 +1128,66 @@ normalization above, nor solved by another shader cache.
 
 Private evidence: `%TEMP%/TriAevum-effective-pipelines-field-20260915`.
 
+## Independent Pipeline Ownership (2026-09-15)
+
+The ownership refactor identified above is now implemented. The shared 3DS
+renderer exposes `NriPicaPipelineId`, a logical ID which cannot convert to/from
+`VkPipeline`, and `PicaDevicePipelineRecord` with an independently optional
+Vulkan handle. NRI-owned maps use the logical ID; Vulkan wrappers still use real
+Vulkan handles. No fabricated handles or NRI objects disguised as Vulkan objects.
+
+`GetOrCreateNativePicaPipeline` first prepares the NRI representation when owned
+draws are enabled. It returns without calling `vkCreateGraphicsPipelines` when
+that representation is ready. The draw's ownership is still finalized after the
+render scope opens. Only an actual Vulkan submission requests the lazy Vulkan
+representation. Coverage draws resolve their own record and the same selected
+backend; their original ordering is preserved. Preparation/prewarm uses the same
+factory. `DestroyNativePicaPipelines` centralizes teardown for both invalidation
+and shutdown, using `ForgetOwned` for NRI and `Forget` plus `vkDestroyPipeline`
+only for an existing Vulkan representation. IDs are not reused across resets.
+
+The new `TRIAEVUM_PICA_VULKAN_PIPELINES` counter makes the previously invisible
+duplicate factory measurable separately from the NRI counter. Windows, fresh
+application caches, no collected shader pack, native30, effects Off:
+
+| Fixture | Previous PICA factories | Independent ownership |
+| --- | --- | --- |
+| Field | 25 NRI + 25 Vulkan | 25 NRI + 0 Vulkan |
+| Early boot | 26 NRI + 26 Vulkan | 26 NRI + 0 Vulkan |
+| Forced Vulkan Field | both representations previously prepared | 0 NRI + 25 Vulkan |
+
+The old duplicate count follows the unconditional Vulkan call preceding each
+NRI creation in the previous implementation; only the new counters separate
+both factories explicitly. These numbers concern PICA draw pipelines, not all
+postprocessing/presentation pipelines. A 50% reduction in these creations is not
+a claim of 50% lower frame times or a cold-driver benchmark.
+
+Boot and Field retain zero runtime shader compiler/cache requests. Their three
+framebuffer pairs each are pixel-identical. Field also matches the pre-change
+executable and the forced Vulkan path pixel-for-pixel. The comparison harness
+now supplies an explicit neutral input timeline: removing a fixture's input
+script previously allowed physical keyboard/controller input to alter gameplay
+during captures. An initial mismatch showed different gameplay (drawn sword and
+action prompt); it is retained as failed evidence, not reported as renderer parity.
+
+`--require-single-pipeline-owner` asserts the selected factory is used and the
+other is not. `--vulkan-fallback` pairs disabled NRI-owned draws with a Vulkan
+render-pass scope; disabling draws alone intentionally fails the pre-existing
+ownership guard in an NRI-owned scope. Neither option modifies shipping defaults.
+
+Private evidence: `%TEMP%/TriAevum-owned-pipelines-neutral-{field,boot}-20260915`
+and `%TEMP%/TriAevum-owned-pipelines-fallback-scope-field-20260915`.
+The final executable's TAA run creates 28 NRI pipelines, zero Vulkan copies and
+zero runtime shader compilations. All three parametric framebuffer captures
+match the previous `TriAevum-temporal-offline-taa-verified-20260914` executable.
+The specialized/parametric comparison still fails at frame 150 on the previously
+documented single red-channel pixel (8/255); frames 120/180 match. This is not a
+passed cross-mode TAA parity test. Evidence:
+`%TEMP%/TriAevum-owned-pipelines-final-taa-20260915`.
+Remaining work: first-use creation of genuinely distinct driver pipelines,
+broader effect coverage, and Linux/Android validation. No persistent cache is
+required to achieve the reduction above; no gameplay/decompilation changes.
+
 ## External Source Links
 
 - [zeldaret loader placeholders](https://github.com/zeldaret/oot3d/blob/a87ddae43252cb3add71bf1003e7391bbe006033/src/functions/functions_410000s.cpp#L616)

@@ -16,12 +16,18 @@ def main():
     parser.add_argument('--timeout', type=float, default=120)
     parser.add_argument('--from-start', action='store_true', help='Ignore the fixture savestate and boot the game')
     parser.add_argument('--taa', action='store_true', help='Enable TAA in the isolated copied configuration to exercise typed temporal programs')
+    parser.add_argument('--vulkan-fallback', action='store_true',
+                        help='Exercise non-owned Vulkan draws instead of NRI-owned draws')
+    parser.add_argument('--require-single-pipeline-owner', action='store_true',
+                        help='Require only the selected pipeline factory in the parametric run')
     parser.add_argument('--no-shader-pack', action='store_true', help='Remove collected shader packs; verify built-in fragment artifact use')
     parser.add_argument('--require-no-runtime-compilation', action='store_true',
                         help='Fail if the parametric run invokes any shader compiler (including compatibility shaders)')
     args = parser.parse_args()
     if args.require_no_runtime_compilation and not args.no_shader_pack:
         parser.error('--require-no-runtime-compilation requires --no-shader-pack')
+    if args.require_single_pipeline_owner and not args.no_shader_pack:
+        parser.error('--require-single-pipeline-owner requires --no-shader-pack')
     source = json.loads(args.invocation.read_text(encoding='utf-8-sig'))
     executable = Path(source['executable'])
     args.output.mkdir(parents=True, exist_ok=False)
@@ -29,6 +35,11 @@ def main():
     for mode in ('specialized', 'parametric'):
         root = args.output / mode
         root.mkdir()
+        neutral_input = root / 'neutral-input.json'
+        neutral_input.write_text(json.dumps({
+            'schema': 'oot3d.native_game.input_timeline.v1', 'frame_origin': 'run',
+            'segments': [{'start_frame': 0, 'end_frame_exclusive': 2147483647, 'buttons': []}]
+        }), encoding='utf-8')
         original = iter(source['arguments'])
         command = [str(executable)]
         removed = {'--output', '--screenshot', '--renderer-cache-directory',
@@ -64,6 +75,7 @@ def main():
             else:
                 command.append(token)
         command.extend(['--output', str((root/'runtime.json').resolve()),
+                        '--input-timeline', str(neutral_input.resolve()),
                         '--screenshot', str((root/'framebuffer.bmp').resolve()),
                         '--renderer-cache-directory', str((root/'cache').resolve()),
                         '--pica-effective-shader-inventory', str((root/'shaders.json').resolve())])
@@ -71,6 +83,8 @@ def main():
             command.append('--pica-parametric-tev')
         (root/'invocation.json').write_text(json.dumps({'command': command}, indent=2))
         environment = os.environ.copy()
+        environment['OOT3D_GRAPHICS_NRI_PICA_DRAWS'] = '0' if args.vulkan_fallback else '1'
+        environment['OOT3D_GRAPHICS_PICA_DYNAMIC_RENDERING'] = '0' if args.vulkan_fallback else '1'
         if args.no_shader_pack:
             for name in ('OOT3D_PICA_AOT_SHADER_PACK', 'OOT3D_PICA_AOT_SHADER_STRICT',
                          'OOT3D_PICA_PIPELINE_PREWARM', 'OOT3D_PICA_PIPELINE_MANIFEST'):
@@ -92,6 +106,18 @@ def main():
             raise RuntimeError(f'{mode}: effective shader inventory contradicts requested mode')
         if args.no_shader_pack and mode == 'parametric':
             diagnostics = (root/'stderr.log').read_text(errors='replace')
+            if args.require_single_pipeline_owner:
+                nri = re.search(r'TRIAEVUM_NRI_PIPELINE_CACHE (\{[^\n]+\})', diagnostics)
+                vk = re.search(r'TRIAEVUM_PICA_VULKAN_PIPELINES created=(\d+)', diagnostics)
+                if not nri or not vk:
+                    raise RuntimeError('missing pipeline ownership evidence')
+                nri_count, vk_count = json.loads(nri[1])['created'], int(vk[1])
+                if args.vulkan_fallback:
+                    valid = nri_count == 0 and vk_count > 0
+                else:
+                    valid = nri_count > 0 and vk_count == 0
+                if not valid:
+                    raise RuntimeError(f'pipeline factories overlap or selected factory unused: NRI={nri_count}, Vulkan={vk_count}')
             if args.require_no_runtime_compilation and 'TRIAEVUM_RUNTIME_SHADER_COMPILE ' in diagnostics:
                 raise RuntimeError('parametric: runtime shader compilation is still present')
             if args.require_no_runtime_compilation and not re.search(

@@ -2849,6 +2849,8 @@ void GfxRenderingAPIVulkan::StorePipelineCache() {
         {"creation_nanoseconds", statistics.CreationNanoseconds}}).dump();
     // Release/mobile hosts may suppress INFO and have no per-frame diagnostics enabled.
     std::fprintf(stderr, "TRIAEVUM_NRI_PIPELINE_CACHE %s\n", receipt.c_str());
+    std::fprintf(stderr, "TRIAEVUM_PICA_VULKAN_PIPELINES created=%llu\n",
+                 static_cast<unsigned long long>(mNativePicaVulkanPipelineCreations));
     const auto nriData = mNriPicaPipelineBridge.GetPipelineCacheData();
     if (!nriData.empty()) {
         VkPhysicalDeviceProperties properties{};
@@ -4357,16 +4359,23 @@ void GfxRenderingAPIVulkan::DestroyPresentationPipelines() {
 void GfxRenderingAPIVulkan::DestroyGraphicsPipelines() {
     DestroyPresentationPipelines();
     if (mDevice == VK_NULL_HANDLE) return;
-    for (const auto& [key, pipeline] : mNativePicaPipelines) {
-        mNriPicaPipelineBridge.Forget(pipeline);
-        vkDestroyPipeline(mDevice, pipeline, nullptr);
-    }
-    mNativePicaPipelines.clear();
-    mPicaPipelinePrewarmedProfiles.clear();
+    DestroyNativePicaPipelines();
     if (mOot3dShadow2dDepthEncodePipeline != VK_NULL_HANDLE) {
         vkDestroyPipeline(mDevice, mOot3dShadow2dDepthEncodePipeline, nullptr);
         mOot3dShadow2dDepthEncodePipeline = VK_NULL_HANDLE;
     }
+}
+
+void GfxRenderingAPIVulkan::DestroyNativePicaPipelines() {
+    for (const auto& [key, record] : mNativePicaPipelines) {
+        mNriPicaPipelineBridge.ForgetOwned(record.Id);
+        if (record.Vulkan != VK_NULL_HANDLE) {
+            mNriPicaPipelineBridge.Forget(record.Vulkan);
+            vkDestroyPipeline(mDevice, record.Vulkan, nullptr);
+        }
+    }
+    mNativePicaPipelines.clear();
+    mPicaPipelinePrewarmedProfiles.clear();
 }
 
 void GfxRenderingAPIVulkan::CreateSwapchainResources() {

@@ -8,6 +8,7 @@
 #include <vulkan/vulkan.h>
 
 #include <cstddef>
+#include <compare>
 #include <array>
 #include <memory>
 #include <span>
@@ -15,6 +16,19 @@
 #include <vector>
 
 namespace Fast::Renderer3ds {
+
+// Logical ownership identity, never a Vulkan handle or a driver object address.
+struct NriPicaPipelineId {
+    uint64_t Value = 0;
+    explicit operator bool() const { return Value != 0; }
+    auto operator<=>(const NriPicaPipelineId&) const = default;
+};
+
+struct PicaDevicePipelineRecord {
+    NriPicaPipelineId Id;
+    VkPipeline Vulkan = VK_NULL_HANDLE;
+    bool NriPreparationAttempted = false;
+};
 
 struct NriPicaExecutionConfig {
     uint32_t FrameSlotCount = 2U;
@@ -82,7 +96,7 @@ struct NriPicaVertexBufferBindingDesc {
 struct NriPicaOwnedDrawDesc {
     uint32_t FrameIndex = 0;
     uint64_t FrameId = 0;
-    VkPipeline FallbackPipeline = VK_NULL_HANDLE;
+    NriPicaPipelineId PipelineId;
     VkBuffer UniformBuffer = VK_NULL_HANDLE;
     uint64_t UniformBufferSize = 0;
     uint8_t* UniformMappedMemory = nullptr;
@@ -135,13 +149,14 @@ class NriPicaPipelineBridge final {
     // framebuffer, upload allocation or fake Vulkan pipeline handle is needed.
     bool PreparePipeline(const NriPicaGraphicsPipelineDesc& desc);
     bool CreateOwnedPipeline(
-        VkPipeline fallbackPipeline,
+        NriPicaPipelineId pipelineId,
         const NriPicaGraphicsPipelineDesc& desc);
     bool BindOwnedDraw(const NriPicaOwnedDrawDesc& desc);
     // Same layout/resources as the immediately preceding owned draw; no uploads.
     bool DrawBoundGeometry(const NriPicaOwnedDrawDesc& desc);
     bool Bind(uint32_t frameIndex, VkPipeline pipeline);
     void Forget(VkPipeline pipeline);
+    void ForgetOwned(NriPicaPipelineId pipelineId);
     void Reset();
     void Shutdown();
 
@@ -151,7 +166,7 @@ class NriPicaPipelineBridge final {
     [[nodiscard]] bool OwnedDrawsEnabled() const;
     [[nodiscard]] bool LastDrawUploadsOwnedByNri() const;
     [[nodiscard]] uint64_t LastDrawUploadedBytes() const;
-    [[nodiscard]] bool OwnedPipelineReady(VkPipeline fallbackPipeline) const;
+    [[nodiscard]] bool OwnedPipelineReady(NriPicaPipelineId pipelineId) const;
     [[nodiscard]] size_t OwnedPipelineCount() const;
     [[nodiscard]] size_t WrappedPipelineCount() const;
     [[nodiscard]] const std::string& UnavailableReason() const;

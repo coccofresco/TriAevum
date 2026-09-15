@@ -106,9 +106,9 @@ Renderer3ds::NriPicaPipelineStatistics NriPicaPipelineBridge::PipelineStatistics
     return mBridge.PipelineStatistics();
 }
 bool NriPicaPipelineBridge::CreateOwnedPipeline(
-    VkPipeline fallbackPipeline,
+    NriPicaPipelineId pipelineId,
     const NriPicaGraphicsPipelineDesc& desc) {
-    return mBridge.CreateOwnedPipeline(fallbackPipeline, desc);
+    return mBridge.CreateOwnedPipeline(pipelineId, desc);
 }
 bool NriPicaPipelineBridge::BindOwnedDraw(
     const NriPicaOwnedDrawDesc& desc) {
@@ -120,6 +120,9 @@ bool NriPicaPipelineBridge::DrawBoundGeometry(const NriPicaOwnedDrawDesc& desc) 
 bool NriPicaPipelineBridge::Bind(
     uint32_t frameIndex, VkPipeline pipeline) {
     return mBridge.Bind(frameIndex, pipeline);
+}
+void NriPicaPipelineBridge::ForgetOwned(NriPicaPipelineId pipelineId) {
+    mBridge.ForgetOwned(pipelineId);
 }
 void NriPicaPipelineBridge::Forget(VkPipeline pipeline) {
     mBridge.Forget(pipeline);
@@ -148,8 +151,8 @@ uint64_t NriPicaPipelineBridge::LastDrawUploadedBytes() const {
     return mBridge.LastDrawUploadedBytes();
 }
 bool NriPicaPipelineBridge::OwnedPipelineReady(
-    VkPipeline fallbackPipeline) const {
-    return mBridge.OwnedPipelineReady(fallbackPipeline);
+    NriPicaPipelineId pipelineId) const {
+    return mBridge.OwnedPipelineReady(pipelineId);
 }
 size_t NriPicaPipelineBridge::OwnedPipelineCount() const {
     return mBridge.OwnedPipelineCount();

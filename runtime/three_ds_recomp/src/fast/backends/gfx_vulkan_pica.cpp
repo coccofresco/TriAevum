@@ -824,12 +824,7 @@ void GfxRenderingAPIVulkan::ApplyNativePicaSampleCount(VkSampleCountFlagBits sam
     }
     mNativePicaRenderTargets.clear();
     mNativePicaDisplayDepthTargets.clear();
-    for (const auto& [key, pipeline] : mNativePicaPipelines) {
-        mNriPicaPipelineBridge.Forget(pipeline);
-        vkDestroyPipeline(mDevice, pipeline, nullptr);
-    }
-    mNativePicaPipelines.clear();
-    mPicaPipelinePrewarmedProfiles.clear();
+    DestroyNativePicaPipelines();
     if (mNativePicaRenderPass != VK_NULL_HANDLE) {
         vkDestroyRenderPass(mDevice, mNativePicaRenderPass, nullptr);
         mNativePicaRenderPass = VK_NULL_HANDLE;
@@ -3151,13 +3146,13 @@ void GfxRenderingAPIVulkan::CreateNativePicaTextureImage(
     RecreateSampler(texture);
 }
 
-VkPipeline GfxRenderingAPIVulkan::GetOrCreateNativePicaPipeline(
+Renderer3ds::PicaDevicePipelineRecord& GfxRenderingAPIVulkan::GetOrCreateNativePicaPipeline(
     const GfxNativePicaDrawView& draw,
     const NativePicaShaderProgram& shader, bool writesReactiveMask,
     Oot3d::PicaShaderDomain domain,
     Oot3d::PicaShaderInstrumentationFeature requestedFeatures,
     Oot3d::PicaShaderInstrumentationFeature appliedFeatures,
-    bool recordInventory, bool outlineOcclusionOnly) {
+    bool recordInventory, bool outlineOcclusionOnly, bool requireVulkan) {
     if (recordInventory && mPicaPipelineInventory.Enabled()) {
         auto entry = Oot3d::DescribePicaGraphicsPipelineDraw(draw);
         entry.DescriptorSchemaVersion =
@@ -3195,9 +3190,12 @@ VkPipeline GfxRenderingAPIVulkan::GetOrCreateNativePicaPipeline(
         sourceIdentity(shader.NriFragmentSource), shader.NriDescriptorContract};
     auto key = Renderer3ds::BuildPicaPipelineIdentity(
         programs, draw, resolvedState, mPicaDynamicRenderingScope.Available());
-    const auto found = mNativePicaPipelines.find(key);
-    if (found != mNativePicaPipelines.end()) {
-        return found->second;
+    auto [found, inserted] = mNativePicaPipelines.try_emplace(std::move(key));
+    auto& record = found->second;
+    if (inserted) record.Id = {mNextPicaPipelineId++};
+    if (record.Vulkan != VK_NULL_HANDLE ||
+        (!requireVulkan && mNriPicaPipelineBridge.OwnedPipelineReady(record.Id))) {
+        return record;
     }
 
     std::vector<VkVertexInputBindingDescription> bindings;
@@ -3260,6 +3258,24 @@ VkPipeline GfxRenderingAPIVulkan::GetOrCreateNativePicaPipeline(
             attribute.Location, attribute.Binding,
             VK_FORMAT_R32G32B32A32_SFLOAT, attribute.ByteOffset});
     }
+
+    if (!record.NriPreparationAttempted && shader.NriDescriptorContract &&
+        mNriPicaPipelineBridge.OwnedDrawsEnabled()) {
+        record.NriPreparationAttempted = true;
+        auto nriPipeline = resolvedState;
+        nriPipeline.VertexSpirv = shader.NriVertexSpirv;
+        nriPipeline.FragmentSpirv = shader.NriFragmentSpirv;
+        nriPipeline.VertexBindings = nriBindings;
+        nriPipeline.VertexAttributes = nriAttributes;
+        if (!mNriPicaPipelineBridge.CreateOwnedPipeline(
+                record.Id, nriPipeline)) {
+            SPDLOG_WARN(
+                "NRI PICA pipeline creation failed for shader {}:{}",
+                draw.VertexShaderKey, draw.FragmentShaderKey);
+        }
+    }
+    if (!requireVulkan && mNriPicaPipelineBridge.OwnedPipelineReady(record.Id))
+        return record;
 
     const VkPipelineShaderStageCreateInfo stages[] = {
         {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0,
@@ -3353,21 +3369,9 @@ VkPipeline GfxRenderingAPIVulkan::GetOrCreateNativePicaPipeline(
     CheckNativeVk(vkCreateGraphicsPipelines(mDevice, mPipelineCache, 1,
                                             &pipelineInfo, nullptr, &pipeline),
                   "vkCreateGraphicsPipelines(native PICA)");
-    if (shader.NriDescriptorContract) {
-        auto nriPipeline = resolvedState;
-        nriPipeline.VertexSpirv = shader.NriVertexSpirv;
-        nriPipeline.FragmentSpirv = shader.NriFragmentSpirv;
-        nriPipeline.VertexBindings = nriBindings;
-        nriPipeline.VertexAttributes = nriAttributes;
-        if (!mNriPicaPipelineBridge.CreateOwnedPipeline(
-                pipeline, nriPipeline)) {
-            SPDLOG_WARN(
-                "NRI PICA parallel pipeline creation failed for shader {}:{}",
-                draw.VertexShaderKey, draw.FragmentShaderKey);
-        }
-    }
-    mNativePicaPipelines.emplace(std::move(key), pipeline);
-    return pipeline;
+    record.Vulkan = pipeline;
+    ++mNativePicaVulkanPipelineCreations;
+    return record;
 }
 
 void GfxRenderingAPIVulkan::PrewarmNativePicaPipelines() {
@@ -4303,11 +4307,12 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             cpuTimings.SceneStateMilliseconds +
             cpuTimings.TemporalStateMilliseconds;
         const size_t previousPipelineCount = mNativePicaPipelines.size();
-        const VkPipeline pipeline =
+        auto& pipelineRecord =
             GetOrCreateNativePicaPipeline(
                 effectiveDraw, shaderIt->second, shaderVariant.Reactive,
                 shaderVariant.Domain, shaderVariant.RequestedFeatures,
                 shaderVariant.AppliedFeatures);
+        VkPipeline pipeline = pipelineRecord.Vulkan;
         cpuTimings.PipelineLookupHits = mNativePicaPipelines.size() == previousPipelineCount ? 1U : 0U;
         cpuTimings.PipelineCreations = mNativePicaPipelines.size() != previousPipelineCount ? 1U : 0U;
         cpuTimings.PipelineEntries = static_cast<uint32_t>(mNativePicaPipelines.size());
@@ -4315,7 +4320,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         const bool nriOwnedDrawsEnabled =
             mNriPicaPipelineBridge.OwnedDrawsEnabled();
         const bool nriOwnedPipelineReady =
-            mNriPicaPipelineBridge.OwnedPipelineReady(pipeline);
+            mNriPicaPipelineBridge.OwnedPipelineReady(pipelineRecord.Id);
         auto nriDrawOwnership = Oot3d::PreparePicaNriDrawOwnership(
             nriOwnedDrawsEnabled, nriOwnedPipelineReady);
         std::vector<Oot3d::PicaNriSourceVertexStream>
@@ -4700,7 +4705,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         if (nriOwnedDraw) {
             nriDraw.FrameIndex = mCurrentFrame;
             nriDraw.FrameId = mFrameCounter;
-            nriDraw.FallbackPipeline = pipeline;
+            nriDraw.PipelineId = pipelineRecord.Id;
             nriDraw.UniformBuffer = frame.UniformBuffer.Buffer;
             nriDraw.UniformBufferSize = frame.UniformBuffer.Size;
             nriDraw.UniformMappedMemory =
@@ -5090,15 +5095,15 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 .EffectiveFragmentSourceIdentity = effectiveDraw.FragmentShaderSourceIdentity,
             });
         }
-        const VkPipeline coveragePipeline = shaderVariant.FragmentOutputs.SceneDomainTransparentDepthOverlay
-            ? GetOrCreateNativePicaPipeline(
+        const auto* coveragePipeline = shaderVariant.FragmentOutputs.SceneDomainTransparentDepthOverlay
+            ? &GetOrCreateNativePicaPipeline(
                 effectiveDraw, shaderIt->second, shaderVariant.Reactive,
                 shaderVariant.Domain, shaderVariant.RequestedFeatures, shaderVariant.AppliedFeatures,
-                true, true)
-            : VK_NULL_HANDLE;
+                true, true, !nriOwnedDraw)
+            : nullptr;
         // Coverage runs before the native draw: stencil must still have its
         // original value if that draw modifies it. The auxiliary pass is read-only.
-        nriDraw.FallbackPipeline = coveragePipeline != VK_NULL_HANDLE ? coveragePipeline : pipeline;
+        nriDraw.PipelineId = coveragePipeline ? coveragePipeline->Id : pipelineRecord.Id;
         const bool nriOwnedDrawBound =
             nriOwnedDraw &&
             mNriPicaPipelineBridge.BindOwnedDraw(nriDraw);
@@ -5107,13 +5112,17 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 "NRI PICA draw binding failed in an NRI-owned "
                 "rendering scope");
         }
-        if (nriOwnedDrawBound && coveragePipeline != VK_NULL_HANDLE) {
-            nriDraw.FallbackPipeline = pipeline;
+        if (nriOwnedDrawBound && coveragePipeline != nullptr) {
+            nriDraw.PipelineId = pipelineRecord.Id;
             if (!mNriPicaPipelineBridge.DrawBoundGeometry(nriDraw))
                 throw std::runtime_error("NRI native draw after outline coverage failed");
         }
         bool nriPipelineBound = nriOwnedDrawBound;
         if (!nriOwnedDrawBound) {
+            pipeline = GetOrCreateNativePicaPipeline(
+                effectiveDraw, shaderIt->second, shaderVariant.Reactive,
+                shaderVariant.Domain, shaderVariant.RequestedFeatures,
+                shaderVariant.AppliedFeatures, false, false, true).Vulkan;
             nriPipelineBound =
                 mNriPicaPipelineBridge.Bind(
                     mCurrentFrame, pipeline);
@@ -5140,8 +5149,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 0, sizeof(nativeDrawPush), &nativeDrawPush);
             if (draw.Indexed) {
                 vkCmdBindIndexBuffer(commandBuffer, geometryBuffer, indexOffset, VK_INDEX_TYPE_UINT16);
-                if (coveragePipeline != VK_NULL_HANDLE) {
-                    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, coveragePipeline);
+                if (coveragePipeline != nullptr) {
+                    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, coveragePipeline->Vulkan);
                     vkCmdDrawIndexed(commandBuffer, indexCount, 1, 0, draw.BaseVertex, 0);
                     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
                 }
@@ -5149,8 +5158,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                     commandBuffer, indexCount, 1, 0,
                     draw.BaseVertex, 0);
             } else {
-                if (coveragePipeline != VK_NULL_HANDLE) {
-                    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, coveragePipeline);
+                if (coveragePipeline != nullptr) {
+                    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, coveragePipeline->Vulkan);
                     vkCmdDraw(commandBuffer, draw.VertexCount, 1, 0, 0);
                     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
                 }
@@ -5158,7 +5167,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                     commandBuffer, draw.VertexCount, 1, 0, 0);
             }
         }
-        if (coveragePipeline != VK_NULL_HANDLE) {
+        if (coveragePipeline != nullptr) {
             ++mDrawCallCountThisFrame;
             mDiagnostics.RecordOutlineOcclusionDraw();
         }
@@ -5172,7 +5181,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         mDiagnostics.RecordNriPicaPipelineBind(
             nriPipelineBound);
         mDiagnostics.RecordNriPicaOwnedPipeline(
-            mNriPicaPipelineBridge.OwnedPipelineReady(pipeline));
+            mNriPicaPipelineBridge.OwnedPipelineReady(pipelineRecord.Id));
         mDiagnostics.RecordNriPicaOwnedDraw(
             nriOwnedDrawBound,
             mNriPicaPipelineBridge.DescriptorsOwnedByNri(),

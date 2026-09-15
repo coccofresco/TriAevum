@@ -1,11 +1,18 @@
 #include "fast/renderer3ds/pica_pipeline_identity.h"
 #include "fast/renderer3ds/pica_render_backend.h"
 #include <iostream>
+#include <type_traits>
 
 using namespace Fast::Renderer3ds;
 void Check(bool value,const char* message){if(!value)throw std::runtime_error(message);}
 int main(){
     try {
+        static_assert(!std::is_convertible_v<NriPicaPipelineId, VkPipeline>);
+        static_assert(!std::is_convertible_v<VkPipeline, NriPicaPipelineId>);
+        PicaDevicePipelineRecord ownedOnly;
+        ownedOnly.Id={1};ownedOnly.NriPreparationAttempted=true;
+        Check(bool(ownedOnly.Id) && ownedOnly.Vulkan==VK_NULL_HANDLE,
+              "logical NRI identity requires a Vulkan object");
         PicaPipelineProgramIdentity program{{1,2,100},{3,4,200},{5,6,300},true};
         NriPicaGraphicsPipelineDesc state;
         state.ColorAttachmentCount=1;state.ColorFormats[0]=VK_FORMAT_R8G8B8A8_UNORM;

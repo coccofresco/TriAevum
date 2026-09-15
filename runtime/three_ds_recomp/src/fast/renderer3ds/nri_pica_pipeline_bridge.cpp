@@ -207,8 +207,8 @@ struct NriPicaPipelineBridge::Impl {
     std::string Reason = "NRI PICA pipeline bridge is not initialized";
 #ifdef ENABLE_RENDERER3DS_NRI
     std::unordered_map<VkPipeline, nri::Pipeline*> Pipelines;
-    std::unordered_map<VkPipeline, nri::Pipeline*> OwnedPipelines;
-    std::unordered_map<VkPipeline, bool> OwnedPipelineUsesBlendConstants;
+    std::map<NriPicaPipelineId, nri::Pipeline*> OwnedPipelines;
+    std::map<NriPicaPipelineId, bool> OwnedPipelineUsesBlendConstants;
     nri::PipelineLayout* DescriptorLayout = nullptr;
     nri::PipelineCache* PipelineCache = nullptr;
     bool PipelineCacheAttempted = false;
@@ -544,17 +544,17 @@ NriPicaPipelineStatistics NriPicaPipelineBridge::PipelineStatistics() const {
 }
 
 bool NriPicaPipelineBridge::CreateOwnedPipeline(
-    VkPipeline fallbackPipeline, const NriPicaGraphicsPipelineDesc& desc) {
+    NriPicaPipelineId pipelineId, const NriPicaGraphicsPipelineDesc& desc) {
 #ifndef ENABLE_RENDERER3DS_NRI
-    (void)fallbackPipeline;
+    (void)pipelineId;
     (void)desc;
     return false;
 #else
-    if (fallbackPipeline == VK_NULL_HANDLE || mImpl->OwnedPipelines.contains(fallbackPipeline))
+    if (!pipelineId || mImpl->OwnedPipelines.contains(pipelineId))
         return false;
     auto* owned = CreatePipeline(desc);
     if (!owned) return false;
-    mImpl->OwnedPipelines.emplace(fallbackPipeline, owned);
+    mImpl->OwnedPipelines.emplace(pipelineId, owned);
     const bool usesBlendConstants = std::any_of(
         desc.Colors.begin(), desc.Colors.end(),
         [](const VkPipelineColorBlendAttachmentState& color) {
@@ -568,7 +568,7 @@ bool NriPicaPipelineBridge::CreateOwnedPipeline(
                        color.dstAlphaBlendFactor);
         });
     mImpl->OwnedPipelineUsesBlendConstants.emplace(
-        fallbackPipeline, usesBlendConstants);
+        pipelineId, usesBlendConstants);
     return true;
 #endif
 }
@@ -582,7 +582,7 @@ bool NriPicaPipelineBridge::BindOwnedDraw(
     mImpl->LastDrawUploadsOwned = false;
     mImpl->LastDrawUploadBytes = 0;
     if (!Available() || !mImpl->OwnedDraws ||
-        desc.FallbackPipeline == VK_NULL_HANDLE ||
+        !desc.PipelineId ||
         desc.UniformBuffer == VK_NULL_HANDLE ||
         desc.UniformBufferSize == 0U ||
         desc.VertexBuffer == VK_NULL_HANDLE ||
@@ -594,7 +594,7 @@ bool NriPicaPipelineBridge::BindOwnedDraw(
         desc.StorageWidth == 0U || desc.StorageHeight == 0U)
         return false;
     const auto pipeline =
-        mImpl->OwnedPipelines.find(desc.FallbackPipeline);
+        mImpl->OwnedPipelines.find(desc.PipelineId);
     nri::CommandBuffer* command =
         mImpl->Interop->CommandBuffer(desc.FrameIndex);
     auto& frame = mImpl->Frames[
@@ -833,7 +833,7 @@ bool NriPicaPipelineBridge::BindOwnedDraw(
     core->CmdSetScissors(*command, &scissor, 1);
     const auto usesBlendConstants =
         mImpl->OwnedPipelineUsesBlendConstants.find(
-            desc.FallbackPipeline);
+            desc.PipelineId);
     if (usesBlendConstants !=
             mImpl->OwnedPipelineUsesBlendConstants.end() &&
         usesBlendConstants->second) {
@@ -877,7 +877,7 @@ bool NriPicaPipelineBridge::DrawBoundGeometry(const NriPicaOwnedDrawDesc& desc) 
     return false;
 #else
     if (!OwnedDrawsEnabled()) return false;
-    const auto pipeline = mImpl->OwnedPipelines.find(desc.FallbackPipeline);
+    const auto pipeline = mImpl->OwnedPipelines.find(desc.PipelineId);
     if (pipeline == mImpl->OwnedPipelines.end()) return false;
     auto* core = mImpl->Interop->Core();
     auto* command = mImpl->Interop->CommandBuffer(desc.FrameIndex);
@@ -913,14 +913,21 @@ bool NriPicaPipelineBridge::Bind(
 #endif
 }
 
-void NriPicaPipelineBridge::Forget(VkPipeline pipeline) {
+void NriPicaPipelineBridge::ForgetOwned(NriPicaPipelineId pipelineId) {
 #ifdef ENABLE_RENDERER3DS_NRI
-    if (const auto owned = mImpl->OwnedPipelines.find(pipeline);
+    if (const auto owned = mImpl->OwnedPipelines.find(pipelineId);
         owned != mImpl->OwnedPipelines.end()) {
         mImpl->Interop->Core()->DestroyPipeline(owned->second);
         mImpl->OwnedPipelines.erase(owned);
-        mImpl->OwnedPipelineUsesBlendConstants.erase(pipeline);
+        mImpl->OwnedPipelineUsesBlendConstants.erase(pipelineId);
     }
+#else
+    (void)pipelineId;
+#endif
+}
+
+void NriPicaPipelineBridge::Forget(VkPipeline pipeline) {
+#ifdef ENABLE_RENDERER3DS_NRI
     const auto found = mImpl->Pipelines.find(pipeline);
     if (found == mImpl->Pipelines.end()) return;
     mImpl->Interop->DestroyPipelineWrapper(found->second);
@@ -1015,11 +1022,11 @@ uint64_t NriPicaPipelineBridge::LastDrawUploadedBytes() const {
 #endif
 }
 bool NriPicaPipelineBridge::OwnedPipelineReady(
-    VkPipeline fallbackPipeline) const {
+    NriPicaPipelineId pipelineId) const {
 #ifdef ENABLE_RENDERER3DS_NRI
-    return mImpl->OwnedPipelines.contains(fallbackPipeline);
+    return mImpl->OwnedPipelines.contains(pipelineId);
 #else
-    (void)fallbackPipeline;
+    (void)pipelineId;
     return false;
 #endif
 }
