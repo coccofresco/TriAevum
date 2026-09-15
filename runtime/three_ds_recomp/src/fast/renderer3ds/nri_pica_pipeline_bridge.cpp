@@ -4,6 +4,7 @@
 #ifdef ENABLE_RENDERER3DS_VULKAN
 
 #include "fast/renderer3ds/pica_nri_shader_contract.h"
+#include "fast/renderer3ds/nri_pica_pipeline_identity.h"
 #include "fast/renderer3ds/pica_nri_upload.h"
 
 #ifdef ENABLE_RENDERER3DS_NRI
@@ -207,7 +208,9 @@ struct NriPicaPipelineBridge::Impl {
     std::string Reason = "NRI PICA pipeline bridge is not initialized";
 #ifdef ENABLE_RENDERER3DS_NRI
     std::unordered_map<VkPipeline, nri::Pipeline*> Pipelines;
-    std::map<NriPicaPipelineId, nri::Pipeline*> OwnedPipelines;
+    std::map<NriPicaPipelineId, std::shared_ptr<nri::Pipeline>> OwnedPipelines;
+    std::map<std::vector<uint8_t>, std::weak_ptr<nri::Pipeline>> OwnedPipelineObjects;
+    NriPicaPipelineIdentity OwnedPipelineIdentity;
     std::map<NriPicaPipelineId, bool> OwnedPipelineUsesBlendConstants;
     nri::PipelineLayout* DescriptorLayout = nullptr;
     nri::PipelineCache* PipelineCache = nullptr;
@@ -550,11 +553,28 @@ bool NriPicaPipelineBridge::CreateOwnedPipeline(
     (void)desc;
     return false;
 #else
-    if (!pipelineId || mImpl->OwnedPipelines.contains(pipelineId))
+    if (!pipelineId || mImpl->OwnedPipelines.contains(pipelineId) || !Available() ||
+        desc.VertexSpirv.empty() || desc.FragmentSpirv.empty() ||
+        desc.ColorAttachmentCount == 0 || desc.ColorAttachmentCount > kPicaColorAttachmentCount)
         return false;
-    auto* owned = CreatePipeline(desc);
-    if (!owned) return false;
-    mImpl->OwnedPipelines.emplace(pipelineId, owned);
+    auto key = mImpl->OwnedPipelineIdentity.Build(desc);
+    auto& entry = mImpl->OwnedPipelineObjects[key];
+    auto owned = entry.lock();
+    if (owned) {
+        ++mImpl->Statistics.OwnedReuses;
+    } else {
+        auto* pipeline = CreatePipeline(desc);
+        if (!pipeline) {
+            mImpl->OwnedPipelineObjects.erase(key);
+            return false;
+        }
+        owned = std::shared_ptr<nri::Pipeline>(pipeline,
+            [core = mImpl->Interop->Core()](nri::Pipeline* value) {
+                core->DestroyPipeline(value);
+            });
+        entry = owned;
+    }
+    mImpl->OwnedPipelines.emplace(pipelineId, std::move(owned));
     const bool usesBlendConstants = std::any_of(
         desc.Colors.begin(), desc.Colors.end(),
         [](const VkPipelineColorBlendAttachmentState& color) {
@@ -917,7 +937,6 @@ void NriPicaPipelineBridge::ForgetOwned(NriPicaPipelineId pipelineId) {
 #ifdef ENABLE_RENDERER3DS_NRI
     if (const auto owned = mImpl->OwnedPipelines.find(pipelineId);
         owned != mImpl->OwnedPipelines.end()) {
-        mImpl->Interop->Core()->DestroyPipeline(owned->second);
         mImpl->OwnedPipelines.erase(owned);
         mImpl->OwnedPipelineUsesBlendConstants.erase(pipelineId);
     }
@@ -942,11 +961,11 @@ void NriPicaPipelineBridge::Reset() {
     if (mImpl->Interop != nullptr) {
         for (auto& [_, pipeline] : mImpl->Pipelines)
             mImpl->Interop->DestroyPipelineWrapper(pipeline);
-        for (auto& [_, pipeline] : mImpl->OwnedPipelines)
-            mImpl->Interop->Core()->DestroyPipeline(pipeline);
     }
     mImpl->Pipelines.clear();
     mImpl->OwnedPipelines.clear();
+    mImpl->OwnedPipelineObjects.clear();
+    mImpl->OwnedPipelineIdentity.Clear();
     mImpl->OwnedPipelineUsesBlendConstants.clear();
 #endif
 }

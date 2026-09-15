@@ -1,4 +1,5 @@
 #include "fast/renderer3ds/pica_pipeline_identity.h"
+#include "fast/renderer3ds/nri_pica_pipeline_identity.h"
 #include "fast/renderer3ds/pica_render_backend.h"
 #include <iostream>
 #include <type_traits>
@@ -102,6 +103,36 @@ int main(){
         p=program;p.Vertex[2]=0;bool rejected=false;
         try{(void)BuildPicaPipelineIdentity(p,draw,state,true);}catch(const std::invalid_argument&){rejected=true;}
         Check(rejected,"missing program identity accepted");
+        NriPicaPipelineIdentity nriIdentity;
+        std::array<uint32_t, 3> vertex{1,2,3}, fragment{4,5,6};
+        std::array<VkVertexInputBindingDescription, 1> normalizedBindings{{{0,16,VK_VERTEX_INPUT_RATE_VERTEX}}};
+        std::array<VkVertexInputAttributeDescription, 1> normalizedAttributes{{{0,0,VK_FORMAT_R32G32B32A32_SFLOAT,0}}};
+        state.VertexSpirv=vertex;state.FragmentSpirv=fragment;
+        state.VertexBindings=normalizedBindings;state.VertexAttributes=normalizedAttributes;
+        const auto nriKey=nriIdentity.Build(state);
+        auto copiedVertex=vertex;
+        state.VertexSpirv=copiedVertex;
+        Check(nriKey==nriIdentity.Build(state),"identical shader bytes at another address create a pipeline");
+        Check(nriIdentity.ProgramCount()==2,"programs copied per pipeline alias");
+        state.FrontStencil.reference=123;state.BackStencil.reference=42;
+        Check(nriKey==nriIdentity.Build(state),"dynamic NRI stencil reference creates a pipeline");
+        const auto nriChanged=[&](auto mutate){auto s=state;mutate(s);
+            Check(nriKey!=nriIdentity.Build(s),"active NRI state omitted");};
+        nriChanged([](auto& s){s.CullMode=VK_CULL_MODE_BACK_BIT;});
+        nriChanged([](auto& s){s.Colors[0].colorWriteMask=3;});
+        nriChanged([](auto& s){s.DepthWrite=true;});
+        nriChanged([](auto& s){s.FrontStencil.writeMask=12;});
+        normalizedBindings[0].stride=32;
+        Check(nriKey!=nriIdentity.Build(state),"normalized stride ignored");
+        normalizedBindings[0].stride=16;
+        normalizedAttributes[0].format=VK_FORMAT_R32G32_SFLOAT;
+        Check(nriKey!=nriIdentity.Build(state),"normalized format ignored");
+        normalizedAttributes[0].format=VK_FORMAT_R32G32B32A32_SFLOAT;
+        copiedVertex[1]=99;
+        Check(nriKey!=nriIdentity.Build(state),"same-size different vertex program aliased");
+        copiedVertex=vertex;fragment[1]=99;
+        Check(nriKey!=nriIdentity.Build(state),"same-size different fragment program aliased");
+        nriIdentity.Clear();Check(nriIdentity.ProgramCount()==0,"device identity survives reset");
         std::cout<<"1024 material identities share a key; "<<changes<<" GPU state mutations, program and layout changes stay distinct\n";
         return 0;
     }catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}

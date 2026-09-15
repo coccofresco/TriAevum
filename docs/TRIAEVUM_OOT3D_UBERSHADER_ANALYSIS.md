@@ -1188,6 +1188,53 @@ Remaining work: first-use creation of genuinely distinct driver pipelines,
 broader effect coverage, and Linux/Android validation. No persistent cache is
 required to achieve the reduction above; no gameplay/decompilation changes.
 
+### NRI normalized device identity (2026-09-15)
+
+The logical draw key retains source vertex formats for Vulkan fallback, but it
+no longer forces a distinct NRI device object. Shared 3DS
+`nri_pica_pipeline_identity.h` builds an identity from the actual normalized
+vertex interface, effective SPIR-V programs and active fixed-function state.
+Programs are interned by exact word equality (not unchecked hashes) once per
+device lifetime; their bytes are not copied into every pipeline key. This work
+runs on initial pipeline preparation, not on each draw. Dynamic NRI stencil
+references are excluded; Vulkan's baked references remain significant.
+
+`NriPicaPipelineBridge` owns aliases through shared pipeline lifetimes and a weak
+device-object index. Forgetting one logical ID cannot destroy a pipeline used by
+another ID. Reset releases all aliases, then the weak index and program identities.
+No file cache, captured material allowlist, shader-source patch, draw reorder or
+new Vulkan object is involved. `owned_reuses` in the pipeline receipt reports
+actual aliases; `created` continues counting actual driver creations.
+
+Fresh application state, no collected shader pack, Windows/NRI:
+
+| Fixture | Before | After | Reuses |
+| --- | --- | --- | --- |
+| Field, native30 | 25 | 24 | 1 |
+| Early boot, native30 | 26 | 25 | 1 |
+| Field, TAA | 28 | 27 | 1 |
+
+All three have zero runtime shader compiler/cache resolver requests and zero
+Vulkan PICA copies. Forced Vulkan Field remains 25 Vulkan / 0 NRI pipelines.
+Field, boot and forced Vulkan each pass three exact cross-mode framebuffer
+comparisons. All nine new NRI parametric captures (Field, boot, TAA) also match
+the corresponding `fd9195a` captures exactly. TAA cross-mode comparison still
+fails on the previously documented single red pixel at frame 150 (8/255); this
+is not marked passed or hidden by a tolerance.
+
+Boundary tests cover exact SPIR-V interning, changed same-size programs,
+normalized format/stride, dynamic stencil references, active depth/blend/cull
+and reset. All 11 standalone suites pass (33.58 seconds, serial execution).
+Private evidence:
+`%TEMP%/TriAevum-normalized-pipelines-{field,boot,fallback,taa}-20260915`.
+
+This is a small, measured reduction in driver object count, not a frame-time
+improvement or elimination of stuttering. It closes the false source-layout
+distinction without sacrificing fixed-function fidelity. Do not spend subsequent
+tranches hunting similar aliases as the main solution: first-use creation of
+genuinely distinct pipelines remains the next structural boundary, alongside
+the already documented extension coverage and cross-platform validation.
+
 ## External Source Links
 
 - [zeldaret loader placeholders](https://github.com/zeldaret/oot3d/blob/a87ddae43252cb3add71bf1003e7391bbe006033/src/functions/functions_410000s.cpp#L616)

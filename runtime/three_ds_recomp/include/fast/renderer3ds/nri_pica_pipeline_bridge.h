@@ -130,6 +130,7 @@ struct NriPicaPipelineStatistics {
     uint64_t InitialCacheBytes = 0;
     uint64_t CreationAttempts = 0;
     uint64_t Created = 0;
+    uint64_t OwnedReuses = 0;
     uint64_t CreationNanoseconds = 0;
 };
 

@@ -14,8 +14,9 @@ struct PicaPipelineProgramIdentity {
 };
 
 // Uses the same resolved fixed-function state as pipeline creation. The source
-// vertex layout is retained too: the Vulkan fallback and normalized NRI layout
-// share an owning pipeline entry. Buffer contents and dynamic state are excluded.
+// vertex layout is retained for logical draw records and the Vulkan fallback.
+// NRI device objects use a separate normalized-layout identity. Buffer contents
+// and dynamic state are excluded.
 template<class Draw>
 std::vector<uint8_t> BuildPicaPipelineIdentity(
     const PicaPipelineProgramIdentity& programs, const Draw& draw,
