@@ -1092,6 +1092,42 @@ Optional effects beyond the covered temporal interfaces and Linux/Android GPU
 validation remain pending. The pre-existing one-pixel TAA comparison discrepancy
 is not declared solved by this work.
 
+## Effective Fixed-Function Identity (2026-09-15)
+
+`BuildPicaPipelineIdentity` now excludes retained blend equations/factors when
+blending is disabled, stencil state when stencil is disabled, logic operation
+when logic operations are disabled, and depth comparison when depth testing is
+disabled. Depth-write enable, attachment formats/write masks, vertex layout and
+all active state remain part of the key. No draw state is rewritten. Stencil
+reference is deliberately retained: the Vulkan fallback currently bakes it into
+the pipeline, even though the NRI path sets its reference dynamically.
+
+The owning-boundary test checks dormant-state equivalence as well as 36 active
+state changes and 1024 material aliases. The Windows Field fixture retains zero
+shader compiler/cache requests and exact framebuffer parity, but still creates
+25 NRI pipelines. This is a correctness-preserving reduction of the potential
+state space, NOT a measured improvement for this fixture.
+
+The next architectural bottleneck is now concrete:
+`GfxRenderingAPIVulkan::GetOrCreateNativePicaPipeline` always calls
+`vkCreateGraphicsPipelines`, then calls `CreateOwnedPipeline` for the NRI
+representation. Existing `TRIAEVUM_NRI_PIPELINE_CACHE` statistics count only the
+second factory; they do not count the Vulkan fallback creation. Reporting those
+statistics as the total device pipeline creation cost would be incorrect.
+
+Removing this duplication must replace the shared VkPipeline-as-identity
+contract with an explicit record containing independent NRI ownership and an
+optional Vulkan fallback. Final draw ownership is established only after opening
+the target scope (`FinalizePicaNriDrawOwnership`), so fallback materialization
+must occur only after that decision. Do not substitute a fabricated VkPipeline,
+bind an NRI-normalized vertex layout through the Vulkan fallback, or destroy the
+same pipeline through both owners. Both resource teardown and prewarm must use
+the record. Preserve coverage passes, canonical/instrumented separation and
+fallback correctness. This ownership refactor is not implemented by the key
+normalization above, nor solved by another shader cache.
+
+Private evidence: `%TEMP%/TriAevum-effective-pipelines-field-20260915`.
+
 ## External Source Links
 
 - [zeldaret loader placeholders](https://github.com/zeldaret/oot3d/blob/a87ddae43252cb3add71bf1003e7391bbe006033/src/functions/functions_410000s.cpp#L616)

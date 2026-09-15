@@ -10,6 +10,8 @@ int main(){
         NriPicaGraphicsPipelineDesc state;
         state.ColorAttachmentCount=1;state.ColorFormats[0]=VK_FORMAT_R8G8B8A8_UNORM;
         state.Colors[0].colorWriteMask=15;
+        state.DepthTest=true;state.StencilTest=true;state.LogicOpEnabled=true;
+        state.Colors[0].blendEnable=true;
         PicaDrawView draw;
         std::array<PicaVertexBindingView,1> bindings{};
         std::array<PicaVertexAttributeView,1> attributes{};
@@ -30,23 +32,23 @@ int main(){
         changed([](auto& s){s.FrontFace=VK_FRONT_FACE_CLOCKWISE;});
         changed([](auto& s){s.Samples=VK_SAMPLE_COUNT_4_BIT;});
         changed([](auto& s){s.AlphaToCoverage=true;});
-        changed([](auto& s){s.DepthTest=true;});
+        changed([](auto& s){s.DepthTest=false;});
         changed([](auto& s){s.DepthWrite=true;});
         changed([](auto& s){s.DepthCompare=VK_COMPARE_OP_LESS;});
-        changed([](auto& s){s.StencilTest=true;});
+        changed([](auto& s){s.StencilTest=false;});
         for(bool front:{false,true})for(unsigned field=0;field<7;++field)changed([&](auto& s){
             auto& v=front?s.FrontStencil:s.BackStencil;
             switch(field){case 0:v.failOp=VK_STENCIL_OP_REPLACE;break;case 1:v.passOp=VK_STENCIL_OP_REPLACE;break;
                 case 2:v.depthFailOp=VK_STENCIL_OP_REPLACE;break;case 3:v.compareOp=VK_COMPARE_OP_EQUAL;break;
                 case 4:v.compareMask=3;break;case 5:v.writeMask=3;break;case 6:v.reference=3;break;}
         });
-        changed([](auto& s){s.LogicOpEnabled=true;});
+        changed([](auto& s){s.LogicOpEnabled=false;});
         changed([](auto& s){s.LogicOp=VK_LOGIC_OP_XOR;});
         changed([](auto& s){s.DepthStencilFormat=VK_FORMAT_D24_UNORM_S8_UINT;});
         changed([](auto& s){s.ColorAttachmentCount=2;});
         changed([](auto& s){s.ColorFormats[0]=VK_FORMAT_R16G16B16A16_SFLOAT;});
         for(unsigned field=0;field<8;++field)changed([&](auto& s){auto& c=s.Colors[0];
-            switch(field){case 0:c.blendEnable=true;break;case 1:c.srcColorBlendFactor=VK_BLEND_FACTOR_ONE;break;
+            switch(field){case 0:c.blendEnable=false;break;case 1:c.srcColorBlendFactor=VK_BLEND_FACTOR_ONE;break;
                 case 2:c.dstColorBlendFactor=VK_BLEND_FACTOR_ONE;break;case 3:c.colorBlendOp=VK_BLEND_OP_SUBTRACT;break;
                 case 4:c.srcAlphaBlendFactor=VK_BLEND_FACTOR_ONE;break;case 5:c.dstAlphaBlendFactor=VK_BLEND_FACTOR_ONE;break;
                 case 6:c.alphaBlendOp=VK_BLEND_OP_SUBTRACT;break;case 7:c.colorWriteMask=3;break;}
@@ -56,6 +58,26 @@ int main(){
             Check(key!=BuildPicaPipelineIdentity(p,draw,state,true),"effective shader identity omitted");
         }
         auto p=program;p.NriDescriptorContract=false;
+        auto dormant=state;
+        dormant.DepthTest=false;dormant.StencilTest=false;dormant.LogicOpEnabled=false;
+        dormant.Colors[0].blendEnable=false;
+        const auto dormantKey=BuildPicaPipelineIdentity(program,draw,dormant,true);
+        dormant.DepthCompare=VK_COMPARE_OP_NEVER;
+        dormant.FrontStencil={VK_STENCIL_OP_REPLACE,VK_STENCIL_OP_INVERT,VK_STENCIL_OP_ZERO,
+                              VK_COMPARE_OP_EQUAL,17,23,31};
+        dormant.BackStencil=dormant.FrontStencil;
+        dormant.LogicOp=VK_LOGIC_OP_XOR;
+        dormant.Colors[0].srcColorBlendFactor=VK_BLEND_FACTOR_DST_ALPHA;
+        dormant.Colors[0].dstColorBlendFactor=VK_BLEND_FACTOR_SRC_ALPHA;
+        dormant.Colors[0].colorBlendOp=VK_BLEND_OP_REVERSE_SUBTRACT;
+        dormant.Colors[0].srcAlphaBlendFactor=VK_BLEND_FACTOR_ONE;
+        dormant.Colors[0].dstAlphaBlendFactor=VK_BLEND_FACTOR_ONE;
+        dormant.Colors[0].alphaBlendOp=VK_BLEND_OP_MAX;
+        Check(dormantKey==BuildPicaPipelineIdentity(program,draw,dormant,true),
+              "dormant register values introduced pipeline variants");
+        dormant.DepthWrite=true;
+        Check(dormantKey!=BuildPicaPipelineIdentity(program,draw,dormant,true),
+              "depth write was incorrectly discarded with depth comparison");
         auto unused=state;unused.Colors.back().colorWriteMask=7;
         Check(key==BuildPicaPipelineIdentity(program,draw,unused,true),"inactive attachment introduced a variant");
         auto mrt=state;mrt.ColorAttachmentCount=2;

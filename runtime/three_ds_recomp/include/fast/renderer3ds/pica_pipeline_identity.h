@@ -49,20 +49,26 @@ std::vector<uint8_t> BuildPicaPipelineIdentity(
     }
     word(state.Topology); word(state.CullMode); word(state.FrontFace);
     word(state.Samples); word(state.AlphaToCoverage);
-    word(state.DepthTest); word(state.DepthWrite); word(state.DepthCompare);
+    word(state.DepthTest); word(state.DepthWrite);
+    if (state.DepthTest) word(state.DepthCompare);
     word(state.StencilTest);
     const auto stencil = [&](const VkStencilOpState& value) {
         word(value.failOp); word(value.passOp); word(value.depthFailOp);
         word(value.compareOp); word(value.compareMask); word(value.writeMask); word(value.reference);
     };
-    stencil(state.FrontStencil); stencil(state.BackStencil);
-    word(state.LogicOpEnabled); word(state.LogicOp);
+    // Disabled units do not consume their retained register values. Do not
+    // compile new pipelines when only those dormant values change.
+    if (state.StencilTest) { stencil(state.FrontStencil); stencil(state.BackStencil); }
+    word(state.LogicOpEnabled);
+    if (state.LogicOpEnabled) word(state.LogicOp);
     word(state.DepthStencilFormat); word(state.ColorAttachmentCount);
     for (uint32_t i=0;i<state.ColorAttachmentCount;++i) {
         const auto& color=state.Colors[i];
         word(state.ColorFormats[i]); word(color.blendEnable);
-        word(color.srcColorBlendFactor); word(color.dstColorBlendFactor); word(color.colorBlendOp);
-        word(color.srcAlphaBlendFactor); word(color.dstAlphaBlendFactor); word(color.alphaBlendOp);
+        if (color.blendEnable) {
+            word(color.srcColorBlendFactor); word(color.dstColorBlendFactor); word(color.colorBlendOp);
+            word(color.srcAlphaBlendFactor); word(color.dstAlphaBlendFactor); word(color.alphaBlendOp);
+        }
         word(color.colorWriteMask);
     }
     return key;
