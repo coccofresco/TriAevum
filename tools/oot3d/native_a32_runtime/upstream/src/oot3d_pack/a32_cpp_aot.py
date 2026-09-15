@@ -692,7 +692,11 @@ def _base_relative_switch_tables(
         for word in range(base, base + 256 * 4, 4):
             if word not in slots or word in reachable:
                 break
-            target = (base + decoder.get(word).raw) & 0xFFFFFFFF
+            offset = decoder.get(word).raw
+            if offset == 0:
+                words.append(word)
+                continue
+            target = (base + offset) & 0xFFFFFFFF
             if target not in slots or target == word:
                 break
             decoded = decoder.get(target)
@@ -700,7 +704,11 @@ def _base_relative_switch_tables(
                     decoded.kind in {"unknown", "svc"}):
                 break
             words.append(word)
-        if 2 <= len(words) < 256:
+        # Sparse dispatch tables reserve zero slots for invalid selectors.
+        # They are data, not branches to the table base. Do not absorb padding.
+        while words and decoder.get(words[-1]).raw == 0:
+            words.pop()
+        if 2 <= sum(decoder.get(word).raw != 0 for word in words) and len(words) < 256:
             result[pc] = (base, tuple(words))
     return result
 
@@ -819,7 +827,8 @@ def _literal_targets(
     ).items():
         for word in words:
             record(word, site, 4)
-            dynamic_entries.add((table_base + decoder.get(word).raw) & 0xFFFFFFFF)
+            if decoder.get(word).raw != 0:
+                dynamic_entries.add((table_base + decoder.get(word).raw) & 0xFFFFFFFF)
 
     if classify_embedded_data:
         for word in sorted(_embedded_ascii_words(decoder, reachable, slots)):

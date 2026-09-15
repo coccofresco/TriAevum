@@ -59894,8 +59894,83 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 4874380,
+      "name": "direct_target_004A608C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4874864,
+      "name": "direct_target_004A6270",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4874932,
+      "name": "direct_target_004A62B4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4875392,
+      "name": "direct_target_004A6480",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 4875700,
       "name": "direct_target_004A65B4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4875992,
+      "name": "direct_target_004A66D8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4876260,
+      "name": "direct_target_004A67E4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4876552,
+      "name": "direct_target_004A6908",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4876860,
+      "name": "direct_target_004A6A3C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4877128,
+      "name": "direct_target_004A6B48",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4877436,
+      "name": "direct_target_004A6C7C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4877728,
+      "name": "direct_target_004A6DA0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4877996,
+      "name": "direct_target_004A6EAC",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4878264,
+      "name": "direct_target_004A6FB8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4878532,
+      "name": "direct_target_004A70C4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4878768,
+      "name": "direct_target_004A71B0",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60209,38 +60284,58 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4898180,
-      "name": "cfg_residue_004ABD84",
+      "entry": 4898164,
+      "name": "cfg_residue_004ABD74",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4898252,
-      "name": "cfg_residue_004ABDCC",
+      "entry": 4898248,
+      "name": "cfg_residue_004ABDC8",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4898320,
-      "name": "cfg_residue_004ABE10",
+      "entry": 4898300,
+      "name": "cfg_residue_004ABDFC",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4898448,
-      "name": "cfg_residue_004ABE90",
+      "entry": 4898444,
+      "name": "cfg_residue_004ABE8C",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4898504,
-      "name": "cfg_residue_004ABEC8",
+      "entry": 4898480,
+      "name": "cfg_residue_004ABEB0",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4898584,
-      "name": "cfg_residue_004ABF18",
+      "entry": 4898580,
+      "name": "cfg_residue_004ABF14",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4898664,
-      "name": "cfg_residue_004ABF68",
+      "entry": 4898636,
+      "name": "cfg_residue_004ABF4C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4898792,
+      "name": "cfg_residue_004ABFE8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4898812,
+      "name": "cfg_residue_004ABFFC",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4898872,
+      "name": "cfg_residue_004AC038",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4898908,
+      "name": "cfg_residue_004AC05C",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60269,8 +60364,83 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 4900492,
+      "name": "direct_target_004AC68C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4900976,
+      "name": "direct_target_004AC870",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4901044,
+      "name": "direct_target_004AC8B4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4901504,
+      "name": "direct_target_004ACA80",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 4901812,
       "name": "direct_target_004ACBB4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4902104,
+      "name": "direct_target_004ACCD8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4902372,
+      "name": "direct_target_004ACDE4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4902664,
+      "name": "direct_target_004ACF08",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4902972,
+      "name": "direct_target_004AD03C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4903240,
+      "name": "direct_target_004AD148",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4903548,
+      "name": "direct_target_004AD27C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4903840,
+      "name": "direct_target_004AD3A0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4904108,
+      "name": "direct_target_004AD4AC",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4904376,
+      "name": "direct_target_004AD5B8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4904644,
+      "name": "direct_target_004AD6C4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4904880,
+      "name": "direct_target_004AD7B0",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60584,38 +60754,58 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4924292,
-      "name": "cfg_residue_004B2384",
+      "entry": 4924276,
+      "name": "cfg_residue_004B2374",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4924364,
-      "name": "cfg_residue_004B23CC",
+      "entry": 4924360,
+      "name": "cfg_residue_004B23C8",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4924432,
-      "name": "cfg_residue_004B2410",
+      "entry": 4924412,
+      "name": "cfg_residue_004B23FC",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4924560,
-      "name": "cfg_residue_004B2490",
+      "entry": 4924556,
+      "name": "cfg_residue_004B248C",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4924616,
-      "name": "cfg_residue_004B24C8",
+      "entry": 4924592,
+      "name": "cfg_residue_004B24B0",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4924696,
-      "name": "cfg_residue_004B2518",
+      "entry": 4924692,
+      "name": "cfg_residue_004B2514",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4924776,
-      "name": "cfg_residue_004B2568",
+      "entry": 4924748,
+      "name": "cfg_residue_004B254C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4924904,
+      "name": "cfg_residue_004B25E8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4924924,
+      "name": "cfg_residue_004B25FC",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4924984,
+      "name": "cfg_residue_004B2638",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4925020,
+      "name": "cfg_residue_004B265C",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60644,8 +60834,83 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 4926604,
+      "name": "direct_target_004B2C8C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4927088,
+      "name": "direct_target_004B2E70",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4927156,
+      "name": "direct_target_004B2EB4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4927616,
+      "name": "direct_target_004B3080",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 4927924,
       "name": "direct_target_004B31B4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4928216,
+      "name": "direct_target_004B32D8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4928484,
+      "name": "direct_target_004B33E4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4928776,
+      "name": "direct_target_004B3508",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4929084,
+      "name": "direct_target_004B363C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4929352,
+      "name": "direct_target_004B3748",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4929660,
+      "name": "direct_target_004B387C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4929952,
+      "name": "direct_target_004B39A0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4930220,
+      "name": "direct_target_004B3AAC",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4930488,
+      "name": "direct_target_004B3BB8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4930756,
+      "name": "direct_target_004B3CC4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4930992,
+      "name": "direct_target_004B3DB0",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60959,38 +61224,58 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4950404,
-      "name": "cfg_residue_004B8984",
+      "entry": 4950388,
+      "name": "cfg_residue_004B8974",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4950476,
-      "name": "cfg_residue_004B89CC",
+      "entry": 4950472,
+      "name": "cfg_residue_004B89C8",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4950544,
-      "name": "cfg_residue_004B8A10",
+      "entry": 4950524,
+      "name": "cfg_residue_004B89FC",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4950672,
-      "name": "cfg_residue_004B8A90",
+      "entry": 4950668,
+      "name": "cfg_residue_004B8A8C",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4950728,
-      "name": "cfg_residue_004B8AC8",
+      "entry": 4950704,
+      "name": "cfg_residue_004B8AB0",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4950808,
-      "name": "cfg_residue_004B8B18",
+      "entry": 4950804,
+      "name": "cfg_residue_004B8B14",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4950888,
-      "name": "cfg_residue_004B8B68",
+      "entry": 4950860,
+      "name": "cfg_residue_004B8B4C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4951016,
+      "name": "cfg_residue_004B8BE8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4951036,
+      "name": "cfg_residue_004B8BFC",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4951096,
+      "name": "cfg_residue_004B8C38",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4951132,
+      "name": "cfg_residue_004B8C5C",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -64461,10 +64746,101 @@
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {
+      "entry": 4874864,
+      "name": "direct_target_004A6270",
+      "dispatch_entry": 4874492,
+      "selected_owner": 4874380,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4875392,
+      "name": "direct_target_004A6480",
+      "dispatch_entry": 4875044,
+      "selected_owner": 4874932,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
       "entry": 4875700,
       "name": "direct_target_004A65B4",
       "dispatch_entry": 4873216,
       "selected_owner": 4873104,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4875992,
+      "name": "direct_target_004A66D8",
+      "dispatch_entry": 4873216,
+      "selected_owner": 4873104,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4876260,
+      "name": "direct_target_004A67E4",
+      "dispatch_entry": 4873216,
+      "selected_owner": 4873104,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4876552,
+      "name": "direct_target_004A6908",
+      "dispatch_entry": 4873908,
+      "selected_owner": 4873796,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4876860,
+      "name": "direct_target_004A6A3C",
+      "dispatch_entry": 4873908,
+      "selected_owner": 4873796,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4877128,
+      "name": "direct_target_004A6B48",
+      "dispatch_entry": 4873908,
+      "selected_owner": 4873796,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4877436,
+      "name": "direct_target_004A6C7C",
+      "dispatch_entry": 4874492,
+      "selected_owner": 4874380,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4877728,
+      "name": "direct_target_004A6DA0",
+      "dispatch_entry": 4874492,
+      "selected_owner": 4874380,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4877996,
+      "name": "direct_target_004A6EAC",
+      "dispatch_entry": 4874492,
+      "selected_owner": 4874380,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4878264,
+      "name": "direct_target_004A6FB8",
+      "dispatch_entry": 4875044,
+      "selected_owner": 4874932,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4878532,
+      "name": "direct_target_004A70C4",
+      "dispatch_entry": 4875044,
+      "selected_owner": 4874932,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4878768,
+      "name": "direct_target_004A71B0",
+      "dispatch_entry": 4875044,
+      "selected_owner": 4874932,
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {
@@ -64503,10 +64879,101 @@
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {
+      "entry": 4900976,
+      "name": "direct_target_004AC870",
+      "dispatch_entry": 4900604,
+      "selected_owner": 4900492,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4901504,
+      "name": "direct_target_004ACA80",
+      "dispatch_entry": 4901156,
+      "selected_owner": 4901044,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
       "entry": 4901812,
       "name": "direct_target_004ACBB4",
       "dispatch_entry": 4899328,
       "selected_owner": 4899216,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4902104,
+      "name": "direct_target_004ACCD8",
+      "dispatch_entry": 4899328,
+      "selected_owner": 4899216,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4902372,
+      "name": "direct_target_004ACDE4",
+      "dispatch_entry": 4899328,
+      "selected_owner": 4899216,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4902664,
+      "name": "direct_target_004ACF08",
+      "dispatch_entry": 4900020,
+      "selected_owner": 4899908,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4902972,
+      "name": "direct_target_004AD03C",
+      "dispatch_entry": 4900020,
+      "selected_owner": 4899908,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4903240,
+      "name": "direct_target_004AD148",
+      "dispatch_entry": 4900020,
+      "selected_owner": 4899908,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4903548,
+      "name": "direct_target_004AD27C",
+      "dispatch_entry": 4900604,
+      "selected_owner": 4900492,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4903840,
+      "name": "direct_target_004AD3A0",
+      "dispatch_entry": 4900604,
+      "selected_owner": 4900492,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4904108,
+      "name": "direct_target_004AD4AC",
+      "dispatch_entry": 4900604,
+      "selected_owner": 4900492,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4904376,
+      "name": "direct_target_004AD5B8",
+      "dispatch_entry": 4901156,
+      "selected_owner": 4901044,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4904644,
+      "name": "direct_target_004AD6C4",
+      "dispatch_entry": 4901156,
+      "selected_owner": 4901044,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4904880,
+      "name": "direct_target_004AD7B0",
+      "dispatch_entry": 4901156,
+      "selected_owner": 4901044,
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {
@@ -64545,10 +65012,101 @@
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {
+      "entry": 4927088,
+      "name": "direct_target_004B2E70",
+      "dispatch_entry": 4926716,
+      "selected_owner": 4926604,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4927616,
+      "name": "direct_target_004B3080",
+      "dispatch_entry": 4927268,
+      "selected_owner": 4927156,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
       "entry": 4927924,
       "name": "direct_target_004B31B4",
       "dispatch_entry": 4925440,
       "selected_owner": 4925328,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4928216,
+      "name": "direct_target_004B32D8",
+      "dispatch_entry": 4925440,
+      "selected_owner": 4925328,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4928484,
+      "name": "direct_target_004B33E4",
+      "dispatch_entry": 4925440,
+      "selected_owner": 4925328,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4928776,
+      "name": "direct_target_004B3508",
+      "dispatch_entry": 4926132,
+      "selected_owner": 4926020,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4929084,
+      "name": "direct_target_004B363C",
+      "dispatch_entry": 4926132,
+      "selected_owner": 4926020,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4929352,
+      "name": "direct_target_004B3748",
+      "dispatch_entry": 4926132,
+      "selected_owner": 4926020,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4929660,
+      "name": "direct_target_004B387C",
+      "dispatch_entry": 4926716,
+      "selected_owner": 4926604,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4929952,
+      "name": "direct_target_004B39A0",
+      "dispatch_entry": 4926716,
+      "selected_owner": 4926604,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4930220,
+      "name": "direct_target_004B3AAC",
+      "dispatch_entry": 4926716,
+      "selected_owner": 4926604,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4930488,
+      "name": "direct_target_004B3BB8",
+      "dispatch_entry": 4927268,
+      "selected_owner": 4927156,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4930756,
+      "name": "direct_target_004B3CC4",
+      "dispatch_entry": 4927268,
+      "selected_owner": 4927156,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4930992,
+      "name": "direct_target_004B3DB0",
+      "dispatch_entry": 4927268,
+      "selected_owner": 4927156,
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {

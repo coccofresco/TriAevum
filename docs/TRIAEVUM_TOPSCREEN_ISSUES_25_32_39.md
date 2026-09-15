@@ -165,9 +165,9 @@ states. No issue has been marked resolved solely on unit tests.
   `data_processing_extended`, so accepting ordinary arithmetic alone was
   insufficient. Tests now cover actual program recovery through that pattern,
   as well as rejecting an overwritten base. No title-address exception is used.
-- Current structural program: 12,385 functions, 12,382 compiled functions,
-  161,912 blocks, 921,823 unique instructions; product audit passes. Translator
-  suites pass 60 tests, including 16 recovery tests and execution of generated
+- Current structural program: 12,442 functions, 12,439 compiled functions,
+  162,719 blocks, 924,535 unique instructions; product audit passes. Translator
+  suites pass 61 tests, including 17 recovery tests and execution of generated
   C++ computed-call continuations. These counts
   describe static coverage, NOT successful movie playback.
 
@@ -207,3 +207,44 @@ On September 15 the reporter of #39 commented that the latest version seems
 to fix the issue. This supports the independent item/HUD tests but does not
 explicitly confirm Sheikah Stone playback. Keep playback and exit pending until
 verified with the matching new module on the real runtime.
+
+The actual Windows movie probe of program `a652c617...` passed the previously
+missing continuations but stopped at `004B319C` (missing offline dispatch entry).
+The next investigation found **sparse relative tables**: reserved zero selectors
+were being interpreted as the end of a table. Recovery now preserves internal
+zero slots as data, never as executable destinations, and trims trailing padding.
+Program `c5df1b2c227fecd86bff4a0ba883932c37e2977266c7254db5ee4182b2cd1df5`
+has 138 recognized dispatch sites, 72 distinct relative tables and 648 distinct
+targets, with none of those targets missing from its block registry. This last
+program has passed structural selection/audit and tests, but has NOT yet been
+built and qualified through movie playback. Do not confuse it with the previous
+completed Windows/Linux modules.
+
+### Read-only decompilation evidence and next validation boundary
+
+Inspected external snapshot: `I:/oot3decomp`, commit `e0b6c5f7`.
+No external sources or metadata were modified.
+
+- `src/middleware/mobiclip.c`: structured portable decoder; bit reader,
+  quantization, inverse transforms, intra prediction, motion compensation,
+  frame/packet decoding. It explicitly attributes FFmpeg codec cross-checks.
+- `include/oot3d/mobiclip.h`: explicit decoder, plane, frame, motion and status
+  contracts; its host pointer-based structures are NOT guest-memory ABI layouts.
+- `tests/mobiclip_test.c`: 11 test groups including complete synthetic frame
+  decoding. Compiled with the existing Windows GCC and executed successfully;
+  outputs stayed in the private temporary directory. This does not establish
+  correctness on the actual Sheikah Stone movie packets.
+- `metadata/mobiclip_native_bindings.csv`: clone/role mapping and explicit
+  `non-aapcs` internal entries.
+- `docs/HANDOFF.md`, sections 7CD/7CE: nine bit-reader internal entries and six
+  continuations/trampolines must not become independent host C call boundaries;
+  they carry live state through multiple registers and internal fallthroughs.
+- `tools/audit_mobiclip_register_bitreader_contracts.py` and
+  `tools/audit_mobiclip_internal_jump_contracts.py`: existing binary-evidence
+  checks to consult or copy, not execute in place if they write metadata.
+
+Use this evidence to review the complete movie path and compare decoded planes
+on real packets. If adopting the portable core, do so at a complete packet/frame
+boundary with explicit guest-memory/state conversion and save/restore contracts.
+Do not substitute individual non-AAPCS fragments. UI queue ownership, Y2R,
+native timing and return-to-game handling remain separate responsibilities.

@@ -349,7 +349,8 @@ def _switch_targets(
     ).items():
         mutable[source] = {
             (base + decoder.get(word).raw) & 0xFFFFFFFF for word in words
-            if (base + decoder.get(word).raw) & 0xFFFFFFFF in valid_pcs
+            if decoder.get(word).raw != 0 and
+            (base + decoder.get(word).raw) & 0xFFFFFFFF in valid_pcs
         }
     for word, sources in literal_sources.items():
         offset = word - decoder.base

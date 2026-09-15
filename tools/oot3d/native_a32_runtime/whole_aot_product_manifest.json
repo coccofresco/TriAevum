@@ -24,22 +24,22 @@
     "path": "tools/oot3d/native_a32_runtime/whole_aot_functions.json",
     "format": "oot3d_whole_aot_function_selection_v1",
     "mode": "all_lowerable",
-    "sha256": "fb88088b799f7f4ecf3dba2531bc5fc33f8d56c0356842ec664e1b5bf21cbe66"
+    "sha256": "973c1bc506a505151da29bbe06782dc8a3a146d456c48ccbb516c06e56b23aac"
   },
   "closure": {
     "counts": {
-      "functions": 12385,
-      "selected_functions": 12382,
+      "functions": 12442,
+      "selected_functions": 12439,
       "host_boundaries": 3,
-      "blocks": 161912,
-      "unique_instructions": 921823,
-      "emitted_instructions": 958719,
+      "blocks": 162719,
+      "unique_instructions": 924535,
+      "emitted_instructions": 963498,
       "unclaimed_blocks": 0,
       "unresolved_static_edges": 0,
       "lowering_rejections": 0,
       "performance_exclusions": 0,
-      "dispatch_aliases": 382,
-      "dispatcher_entries": 161903,
+      "dispatch_aliases": 421,
+      "dispatcher_entries": 162710,
       "atomic_host_blocks": 9
     },
     "host_boundaries": [

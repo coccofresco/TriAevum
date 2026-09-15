@@ -5,8 +5,8 @@
     {
       "path": "src/oot3d_pack/a32_cpp_aot.py",
       "base_sha256": "64bff9da1febca4c8f9195bac6c0203343884c8a61c8a5f892326152362c829c",
-      "working_sha256": "11b7e54d505e2369e0a3f5ff7bfea57280a38c569444f516689a73bf0ab1287d",
-      "working_size": 61850,
+      "working_sha256": "39c42f8cca9049da848cf5495c9061b435a7f262c3d2d30e44e1d2d5321f285a",
+      "working_size": 62303,
       "purpose": "Bound AOT flow to ExHeader .text, recover initializer and constant/computed switch targets through proven linear register effects, preserve explicit nonadjacent LR continuations, emit disjoint core metadata, and configure manifest-selected true-AOT candidates without regenerating packed shards."
     },
     {

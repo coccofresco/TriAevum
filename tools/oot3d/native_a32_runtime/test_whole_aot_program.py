@@ -28,6 +28,19 @@ def branch(pc: int, target: int, *, condition: int = 0xE, link: bool = False) ->
 
 
 class WholeAotProgramTest(unittest.TestCase):
+    def test_sparse_relative_table_preserves_reserved_slots_without_executing_them(self):
+        words = [0xE28F5018, 0xE7956100, 0xE085F006, 0, 0, 0, 0, 0,
+                 0x20, 0, 0, 0x28, 0, 0, 0xFFFFFFFF, 0,
+                 0xE3A00001, 0xE12FFF1E, 0xE3A00002, 0xE12FFF1E]
+        with tempfile.TemporaryDirectory() as temporary:
+            inventory, audit = self._inputs(Path(temporary), [(BASE, 12, "sparse_jump")])
+            program = build_program(b"".join(w.to_bytes(4, "little") for w in words),
+                                    inventory, audit, base=BASE)
+        first = next(b for b in program.blocks if b.pc == BASE)
+        self.assertEqual({e.target for e in first.successors}, {BASE + 64, BASE + 72})
+        self.assertTrue({BASE + 32, BASE + 36, BASE + 40, BASE + 44} <= program.literal_data)
+        self.assertFalse({BASE + 32, BASE + 36, BASE + 40} & {b.pc for b in program.blocks})
+
     def test_explicit_link_accumulates_offsets_and_crosses_unrelated_shifted_alu(self):
         words = [0xE28FE010, 0xE28EE008, 0xE0851107, 0xE1A0F006,
                  0, 0, 0, 0, 0xE12FFF1E]
