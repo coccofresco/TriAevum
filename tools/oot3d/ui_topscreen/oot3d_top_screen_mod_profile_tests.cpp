@@ -2101,6 +2101,18 @@ int main() {
               mountedQuads[1][0].Y == 24.0F &&
               mountedQuads[2][0].X == 500.0F,
           "mounted HUD bypassed minimap/A/B relocation");
+  for (const float hudScale : {0.6F, 0.8F, 1.2F}) {
+    auto scaledContext = decodedContext;
+    scaledContext.HudScale = hudScale;
+    scaledContext.HudMarginX = 12;
+    scaledContext.HudMarginY = 5;
+    std::array<std::array<TopScreenVec3, 4>, 1> mapQuad{};
+    mapQuad[0] = {{{46, 166, 0}, {54, 166, 0}, {54, 174, 0}, {46, 174, 0}}};
+    TransformTopScreenQuestGeometry(mapQuad, scaledContext);
+    Require(mapQuad[0][0].X == 53 && mapQuad[0][0].Y == 163 &&
+                mapQuad[0][1].X - mapQuad[0][0].X == 8,
+            "map marker was rescaled or inset independently of its native map");
+  }
   projectionState.NativeQuestGate = false;
   Require(questStateMemory.Write32(0x00504484U, 1U) &&
               ReadTopScreenQuestGeometryContext(questStateMemory,

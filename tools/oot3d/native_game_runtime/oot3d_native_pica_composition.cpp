@@ -13,6 +13,11 @@ namespace {
 
 constexpr uint32_t kPicaCommandListCursorAddress = 0x0054CC4CU;
 constexpr uint32_t kMeshPacketByteCountOffset = 0x10U;
+// Exact UI draw owners from ui_native_workflow_closure. The enclosing
+// DrawViewPass also executes scene callbacks and must NOT be classified UI.
+constexpr std::array kUiViews{
+    std::pair{0x0042B9F4U, 0x003004E0U},
+    std::pair{0x0041EC50U, 0x00419830U}};
 constexpr std::array kCmbReturnPcs{
     0x002FADDCU, 0x002FADF4U, 0x002FAEC0U, 0x002FAED8U,
     0x002FEA68U, 0x002FEA74U, 0x003FE408U, 0x003FE414U,
@@ -79,7 +84,7 @@ constexpr std::array kAtmosphereScopes{
 
 constexpr auto BuildCompositionHookPcs() {
     constexpr size_t count =
-        2U + kCmbReturnPcs.size() +
+        2U + kUiViews.size() * 2U + kCmbReturnPcs.size() +
         (kObjectKankyoReturnPcs.size() + kSceneRendererReturnPcs.size() +
          kGameplayFadeReturnPcs.size() +
          kRandomizedOverlayReturnPcs.size() +
@@ -92,6 +97,10 @@ constexpr auto BuildCompositionHookPcs() {
         kAtmosphereScopes.size() + 1U + kPrimitivePacketReturnPcs.size();
     std::array<uint32_t, count> hooks{};
     size_t cursor = 0;
+    for (const auto& [entry, returnPc] : kUiViews) {
+        hooks[cursor++] = entry;
+        hooks[cursor++] = returnPc;
+    }
     hooks[cursor++] = kOot3dCmbRendererSubmitDrawHandleEntry;
     hooks[cursor++] = kOot3dMeshCommandPacketSubmitEntry;
     for (const auto pc : kCmbReturnPcs) {
@@ -187,6 +196,12 @@ bool Oot3dNativePicaCompositionTracker::RecordPendingSpan(
                               it->BeginAddress < span.EndAddress;
         const bool adjacent = span.EndAddress == it->BeginAddress ||
                               it->EndAddress == span.BeginAddress;
+        if (span.Attribution.Layer == Oot3dPicaCompositionLayer::Ui &&
+            span.BeginAddress <= it->BeginAddress && span.EndAddress >= it->EndAddress) {
+            // A model inside a UI view is UI, not opaque world geometry.
+            it = mPendingSpans.erase(it);
+            continue;
+        }
         if (SameAttribution(span.Attribution, it->Attribution) &&
             (overlaps || adjacent)) {
             span.BeginAddress = std::min(span.BeginAddress, it->BeginAddress);
@@ -212,6 +227,29 @@ bool Oot3dNativePicaCompositionTracker::RecordPendingSpan(
 void Oot3dNativePicaCompositionTracker::ObserveBlockEntry(
     uint32_t pc, const oot3d::recomp::a32::GuestState& state,
     oot3d::recomp::a32::MemoryBus& memory) {
+    const auto ui = std::find(kUiViews.begin(), kUiViews.end(), std::pair{pc, state.r[14]});
+    if (ui != kUiViews.end() && !mActiveUiScope) {
+        ActiveAtmosphereScope scope{};
+        scope.SourcePc = pc;
+        scope.ReturnPc = state.r[14];
+        scope.BeginAddressValid = memory.Read32(kPicaCommandListCursorAddress, &scope.BeginAddress);
+        mActiveUiScope = std::move(scope);
+        ++mStats.UiScopeEntries;
+        return;
+    }
+    if (mActiveUiScope && pc == mActiveUiScope->ReturnPc) {
+        const auto scope = std::move(*mActiveUiScope);
+        mActiveUiScope.reset();
+        uint32_t end = 0;
+        if (scope.BeginAddressValid && memory.Read32(kPicaCommandListCursorAddress, &end) &&
+            end > scope.BeginAddress && !(end & 7U) && !(scope.BeginAddress & 7U)) {
+            if (RecordPendingSpan({scope.BeginAddress, end,
+                    {Oot3dPicaCompositionLayer::Ui, Oot3dPicaCompositionProvenance::NativeUiLifecycle,
+                     scope.SourcePc, 0U}})) ++mStats.UiCommandSpans;
+        }
+        ++mStats.UiScopeExits;
+        return;
+    }
     if (const auto* descriptor = FindAtmosphereScope(pc);
         descriptor != nullptr) {
         if (mActiveAtmosphereScope.has_value()) {
@@ -468,6 +506,7 @@ bool Oot3dNativePicaCompositionTracker::TakeCommandListCompositionSpans(
 }
 
 void Oot3dNativePicaCompositionTracker::Reset() noexcept {
+    mActiveUiScope.reset();
     mActiveCmbPass.reset();
     mActiveCmbReturnPc.reset();
     mActiveAtmosphereScope.reset();

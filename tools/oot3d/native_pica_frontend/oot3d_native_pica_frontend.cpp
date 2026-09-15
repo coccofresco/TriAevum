@@ -551,10 +551,6 @@ bool Oot3dNativePicaFrontend::SubmitGspCommand(
                     Oot3dPicaCompositionProvenance::NativeUiLifecycle,
                     0U, 0U};
         }
-        if (mCommandListCompositionDomain !=
-            Oot3dPicaCompositionDomain::Scene) {
-            return {};
-        }
         const uint64_t address = static_cast<uint64_t>(commandListAddress) +
                                  static_cast<uint64_t>(offsetWords) * 4U;
         const auto found = std::upper_bound(
@@ -622,10 +618,12 @@ bool Oot3dNativePicaFrontend::SubmitGspCommand(
                         ComputeOot3dPicaLightingLutContentHash(*mLightingLuts);
                     mLightingLuts->ContentHashAvailable = true;
                 }
+                const auto composition = resolveComposition(offsetWords);
+                const auto domain = composition.Layer == Oot3dPicaCompositionLayer::Ui
+                    ? Oot3dPicaCompositionDomain::Ui : mCommandListCompositionDomain;
                 Oot3dPicaDrawPacket draw(
                     commandListAddress, offsetWords,
-                    mCommandListCompositionDomain,
-                    resolveComposition(offsetWords),
+                    domain, composition,
                     id == kPicaTriggerDrawIndexed, mPicaRegisters,
                     mVertexShader, mGeometryShader, mFogLut, mProcTexLuts,
                     mLightingLuts, mDefaultAttributes);

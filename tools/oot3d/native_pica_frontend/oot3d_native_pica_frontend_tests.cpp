@@ -401,6 +401,25 @@ int main(int argc, char** argv) {
                 Oot3dNativeGame::Oot3dPicaCompositionLayer::Unknown,
             "command-list composition spans were not one-shot");
 
+    auto mixedSpans = compositionSpans;
+    mixedSpans[1].Attribution.Layer =
+        Oot3dNativeGame::Oot3dPicaCompositionLayer::Ui;
+    mixedSpans[1].Attribution.Provenance =
+        Oot3dNativeGame::Oot3dPicaCompositionProvenance::NativeUiLifecycle;
+    const auto mixedBegin = compositionFrontend.PendingDrawPackets().size();
+    Require(compositionFrontend.SetNextCommandListCompositionSpans(
+                compositionSubmit.Parameters[0], compositionSubmit.Parameters[1],
+                mixedSpans, &error), error);
+    Require(compositionFrontend.SubmitGspCommand(
+                compositionSubmit, compositionCommandList, &error), error);
+    Require(compositionFrontend.PendingDrawPackets()[mixedBegin].CompositionDomain ==
+                Oot3dNativeGame::Oot3dPicaCompositionDomain::Scene &&
+                compositionFrontend.PendingDrawPackets()[mixedBegin + 1].CompositionDomain ==
+                Oot3dNativeGame::Oot3dPicaCompositionDomain::Scene &&
+                compositionFrontend.PendingDrawPackets()[mixedBegin + 2].CompositionDomain ==
+                Oot3dNativeGame::Oot3dPicaCompositionDomain::Ui,
+            "UI command span changed the domain of adjacent world draws");
+
     Oot3dNativeGame::Oot3dGspCommandPacket shaderSubmit{};
     shaderSubmit.Control = 1;
     shaderSubmit.Parameters[0] = 0x14002400U;

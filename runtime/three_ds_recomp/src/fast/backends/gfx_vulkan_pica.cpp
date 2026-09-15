@@ -43,6 +43,7 @@
 #include "oot3d/renderer/azahar_texture_pack.h"
 #include <spdlog/spdlog.h>
 #include "fast/backends/gfx_native_pica_layout.h"
+#include "fast/renderer3ds/pica_ui_canvas.h"
 
 #include <algorithm>
 #include <array>
@@ -4677,14 +4678,13 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 std::to_string(draw.FragmentShaderKey) +
                 ", packed_error=" + geometry.PackedError + "]");
         }
-        const float framebufferScaleX =
-            static_cast<float>(renderTarget.Width) /
-            static_cast<float>(draw.FramebufferWidth);
-        const float framebufferScaleY =
-            static_cast<float>(renderTarget.Height) /
-            static_cast<float>(draw.FramebufferHeight);
-        mViewport = {draw.ViewportX * framebufferScaleX,
-                     draw.ViewportY * framebufferScaleY,
+        const auto rasterCanvas = Renderer3ds::ResolvePicaRasterCanvas(
+            draw.CompositionDomain, draw.FramebufferWidth, draw.FramebufferHeight,
+            renderTarget.Width, renderTarget.Height);
+        const float framebufferScaleX = rasterCanvas.ScaleX;
+        const float framebufferScaleY = rasterCanvas.ScaleY;
+        mViewport = {rasterCanvas.X + draw.ViewportX * framebufferScaleX,
+                     rasterCanvas.Y + draw.ViewportY * framebufferScaleY,
                      draw.ViewportWidth * framebufferScaleX,
                      draw.ViewportHeight * framebufferScaleY, 0.0F, 1.0F};
         if (draw.ScissorMode == 3U) {
@@ -4693,9 +4693,9 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             const uint32_t x2 = static_cast<uint32_t>(draw.ScissorX2) + 1U;
             const uint32_t y2 = static_cast<uint32_t>(draw.ScissorY2) + 1U;
             mScissor = {
-                {static_cast<int32_t>(static_cast<float>(x1) *
+                {static_cast<int32_t>(rasterCanvas.X + static_cast<float>(x1) *
                                       framebufferScaleX),
-                 static_cast<int32_t>(static_cast<float>(y1) *
+                 static_cast<int32_t>(rasterCanvas.Y + static_cast<float>(y1) *
                                       framebufferScaleY)},
                 {static_cast<uint32_t>(static_cast<float>(
                      x2 > x1 ? x2 - x1 : 0U) * framebufferScaleX),

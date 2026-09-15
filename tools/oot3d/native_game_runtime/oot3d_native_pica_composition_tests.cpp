@@ -55,7 +55,7 @@ int main() {
     oot3d::recomp::a32::GuestState state{};
     const auto hooks =
         Oot3dNativeGame::Oot3dNativePicaCompositionHookPcs();
-    Require(hooks.size() == 41U &&
+    Require(hooks.size() == 45U &&
                 std::find(
                     hooks.begin(), hooks.end(),
                     Oot3dNativeGame::kOot3dPicaPrimitivePacketBuilderEntry) !=
@@ -217,6 +217,28 @@ int main() {
                 0x14001000U, 0xC0U, spans, &error) && spans.empty(),
             "native composition spans were not consumed once");
 
+    tracker.Reset();
+    memory.Write32(0x0054CC4CU, 0x14001000U);
+    state.r[14] = 0x00419524U;
+    tracker.ObserveBlockEntry(0x00300328U, state, memory);
+    Require(tracker.Stats().UiScopeEntries == 0,
+            "mixed world/UI container must not become a UI owner");
+    state.r[14] = 0x12345678U;
+    tracker.ObserveBlockEntry(0x0042B9F4U, state, memory);
+    Require(tracker.Stats().UiScopeEntries == 0, "unrelated view caller classified UI");
+    state.r[14] = 0x003004E0U;
+    tracker.ObserveBlockEntry(0x0042B9F4U, state, memory);
+    memory.Write32(0x0054CC4CU, 0x14001080U);
+    tracker.ObserveBlockEntry(0x003004E0U, state, memory);
+    Require(tracker.TakeCommandListCompositionSpans(0x14001000U, 0x100U, spans, &error) &&
+                spans.size() == 1 && spans[0].BeginAddress == 0x14001000U &&
+                spans[0].EndAddress == 0x14001080U &&
+                spans[0].Attribution.Layer == Oot3dNativeGame::Oot3dPicaCompositionLayer::Ui &&
+                tracker.Stats().UiCommandSpans == 1,
+            "native UI view did not publish its exact command span");
+    tracker.Reset();
+    tracker.ObserveBlockEntry(0x003004E0U, state, memory);
+    Require(tracker.Stats().UiScopeExits == 0, "reset retained a UI view scope");
     std::cout << "oot3d_native_pica_composition_tests: ok\n";
     return 0;
 }

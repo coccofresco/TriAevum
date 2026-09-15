@@ -2163,6 +2163,9 @@ TopScreenQuestGeometryStats TransformTopScreenQuestGeometry(
       centerY += vertex.Y * 0.25F;
     }
 
+    // Original 005C7F48 relocates the map region by its owner's offset only.
+    // The map and its separate indicator streams do not use the button scale.
+    const bool mapRegion = centerX < 110.0F && centerY > 130.0F;
     if (context.PauseState < 12U) {
       if (centerX <= 330.0F) {
         if (centerX < 110.0F && centerY > 130.0F) {
@@ -2193,8 +2196,8 @@ TopScreenQuestGeometryStats TransformTopScreenQuestGeometry(
       translateTo(quad, centerX, centerY, 500.0F, 300.0F, true);
     }
 
-    if (context.HudScale != 1.0F || context.HudMarginX != 0.0F ||
-        context.HudMarginY != 0.0F) {
+    if (!mapRegion && (context.HudScale != 1.0F || context.HudMarginX != 0.0F ||
+        context.HudMarginY != 0.0F)) {
       centerX = 0.0F;
       centerY = 0.0F;
       for (const auto &vertex : quad) {

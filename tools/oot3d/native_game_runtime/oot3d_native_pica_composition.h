@@ -43,6 +43,9 @@ inline constexpr uint32_t kOot3dPicaPrimitivePacketBuilderEntry = 0x00313444U;
 std::span<const uint32_t> Oot3dNativePicaCompositionHookPcs() noexcept;
 
 struct Oot3dNativePicaCompositionStats {
+    uint64_t UiScopeEntries = 0;
+    uint64_t UiScopeExits = 0;
+    uint64_t UiCommandSpans = 0;
     uint64_t CmbOpaquePassEntries = 0;
     uint64_t CmbTransparentPassEntries = 0;
     uint64_t CmbPassExits = 0;
@@ -123,6 +126,7 @@ class Oot3dNativePicaCompositionTracker final
     std::optional<uint8_t> mActiveCmbPass;
     std::optional<uint32_t> mActiveCmbReturnPc;
     std::optional<ActiveAtmosphereScope> mActiveAtmosphereScope;
+    std::optional<ActiveAtmosphereScope> mActiveUiScope;
     std::optional<ActivePrimitivePacket> mActivePrimitivePacket;
     std::deque<Oot3dPicaCommandListCompositionSpan> mPendingSpans;
     Oot3dNativePicaCompositionStats mStats;
