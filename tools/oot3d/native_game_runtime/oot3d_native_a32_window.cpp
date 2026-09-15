@@ -1,5 +1,6 @@
 #include "oot3d_native_a32_window.h"
 #include "fast/renderer/frame_time_distribution.h"
+#include "fast/renderer3ds/pica_program_preparation.h"
 #include "oot3d_game_language_panel.h"
 #ifdef OOT3D_WHOLE_AOT_PRODUCT_MODE
 #include "oot3d_native_crash_diagnostics.h"
@@ -3876,6 +3877,10 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     window.SetTargetFps(0);
   }
   auto &api = GetActiveRenderingApiForDemo(window);
+  if (launch.PicaParametricTev) {
+    if (auto* preparation = dynamic_cast<Fast::Renderer3ds::PicaProgramPreparationBackend*>(&api))
+      preparation->PrepareNativePicaPrograms(Oot3dNativeGame::NativePicaVertexProgramFamily());
+  }
   api.SetNativePicaGeometryCacheEnabled(
       !launch.DisableOpenGlPicaGeometryCache);
   auto *const titleRenderBackend =

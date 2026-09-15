@@ -479,6 +479,7 @@ bool NriInteropContext::Initialize(VkInstance instance, VkPhysicalDevice physica
     if (graphicsPipelineLibrariesEnabled) {
         deviceExtensions.push_back(VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME);
         deviceExtensions.push_back(VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME);
+        deviceExtensions.push_back(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME);
         desc.vkExtensions.deviceExtensions = deviceExtensions.data();
     }
     desc.vkExtensions.deviceExtensionNum =

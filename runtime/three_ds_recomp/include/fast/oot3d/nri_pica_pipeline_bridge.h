@@ -46,6 +46,7 @@ class NriPicaPipelineBridge final {
 
     bool Initialize(NriInteropContext& interop, bool pipelineLibrariesEnabled = false);
     bool InitializePipelineCache(std::span<const uint8_t> data = {});
+    bool PreparePipeline(const NriPicaGraphicsPipelineDesc& desc);
     [[nodiscard]] std::vector<uint8_t> GetPipelineCacheData() const;
     [[nodiscard]] Renderer3ds::NriPicaPipelineStatistics PipelineStatistics() const;
     bool CreateOwnedPipeline(

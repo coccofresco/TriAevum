@@ -19,6 +19,8 @@ def main():
     parser.add_argument('--toon', action='store_true', help='Exercise material toon, without outline or other new effects')
     parser.add_argument('--pipeline-libraries', action='store_true', help='Require real NRI graphics pipeline library draws')
     parser.add_argument('--validation', action='store_true', help='Enable Vulkan validation for correctness runs only')
+    parser.add_argument('--require-prepared-native-programs', action='store_true',
+                        help='Require startup preparation and no shader-bearing library creation afterwards')
     parser.add_argument('--vulkan-fallback', action='store_true',
                         help='Exercise non-owned Vulkan draws instead of NRI-owned draws')
     parser.add_argument('--require-single-pipeline-owner', action='store_true',
@@ -33,6 +35,8 @@ def main():
         parser.error('--require-single-pipeline-owner requires --no-shader-pack')
     if args.pipeline_libraries and args.vulkan_fallback:
         parser.error('pipeline libraries require NRI-owned draws')
+    if args.require_prepared_native_programs and not (args.pipeline_libraries and args.no_shader_pack):
+        parser.error('prepared native programs require pipeline libraries and no collected pack')
     source = json.loads(args.invocation.read_text(encoding='utf-8-sig'))
     executable = Path(source['executable'])
     args.output.mkdir(parents=True, exist_ok=False)
@@ -130,6 +134,12 @@ def main():
                 links = re.findall(r'TRIAEVUM_NRI_GPL_LINK count=(\d+) ns=(\d+) max_ns=(\d+) rejected=(\d+)', diagnostics)
                 if not links or sum(int(item[0]) for item in links) == 0 or any(int(item[3]) for item in links):
                     raise RuntimeError('pipeline library execution absent or fell back to monolithic')
+            if args.require_prepared_native_programs:
+                prepared = re.search(r'TRIAEVUM_NATIVE_PROGRAM_PREPARATION_END vertices=(\d+) fragments=(\d+) samples=1 ns=(\d+)', diagnostics)
+                if not prepared or not int(prepared[1]) or not int(prepared[2]):
+                    raise RuntimeError('native startup program preparation did not execute')
+                if 'TRIAEVUM_NRI_GPL_SHADER_PART_CREATED ' in diagnostics[prepared.end():]:
+                    raise RuntimeError('an expensive shader library was first created after startup preparation')
             if args.require_single_pipeline_owner:
                 nri = re.search(r'TRIAEVUM_NRI_PIPELINE_CACHE (\{[^\n]+\})', diagnostics)
                 vk = re.search(r'TRIAEVUM_PICA_VULKAN_PIPELINES created=(\d+)', diagnostics)

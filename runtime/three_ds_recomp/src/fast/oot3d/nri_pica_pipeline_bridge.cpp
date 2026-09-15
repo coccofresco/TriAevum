@@ -75,6 +75,9 @@ class NriPicaPipelineBridge::InteropAdapter final
 
 NriPicaPipelineBridge::NriPicaPipelineBridge() = default;
 NriPicaPipelineBridge::~NriPicaPipelineBridge() { Shutdown(); }
+bool NriPicaPipelineBridge::PreparePipeline(const NriPicaGraphicsPipelineDesc& desc) {
+    return mBridge.PreparePipeline(desc);
+}
 
 bool NriPicaPipelineBridge::Initialize(NriInteropContext& interop, bool pipelineLibrariesEnabled) {
     Shutdown();

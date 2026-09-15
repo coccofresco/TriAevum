@@ -89,7 +89,7 @@ add_test(NAME pica_pipeline_identity COMMAND pica_pipeline_identity_tests)
 add_executable(pica_pipeline_library_tests pipeline_library_tests.cpp)
 target_compile_features(pica_pipeline_library_tests PRIVATE cxx_std_20)
 target_include_directories(pica_pipeline_library_tests PRIVATE
-    "${runtime}/cmake/patches/nri_pipeline_libraries")
+    "${runtime}/cmake/patches/nri_pipeline_libraries" "${runtime}/include")
 target_link_libraries(pica_pipeline_library_tests PRIVATE Vulkan::Vulkan)
 add_test(NAME pica_pipeline_libraries COMMAND pica_pipeline_library_tests)
 

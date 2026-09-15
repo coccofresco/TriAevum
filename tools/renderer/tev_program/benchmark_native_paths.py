@@ -152,6 +152,16 @@ def main():
                     raise RuntimeError('GPL draw execution missing or contains fallback')
                 if arm == 'current_parametric' and links:
                     raise RuntimeError('monolithic reference unexpectedly used GPL')
+                if arm == 'current_libraries':
+                    prepared = re.search(r'TRIAEVUM_NATIVE_PROGRAM_PREPARATION_END vertices=(\d+) fragments=(\d+) samples=(\d+) ns=(\d+)', log)
+                    if not prepared:
+                        raise RuntimeError('GPL startup preparation did not execute')
+                    counters['native_program_preparation'] = dict(zip(
+                        ('vertices', 'fragments', 'samples', 'ns'), map(int, prepared.groups())))
+                    counters['shader_parts_created_after_preparation'] = len(re.findall(
+                        r'TRIAEVUM_NRI_GPL_SHADER_PART_CREATED ', log[prepared.end():]))
+                    if not (args.toon or args.taa) and counters['shader_parts_created_after_preparation']:
+                        raise RuntimeError('canonical benchmark compiled a shader-bearing part after preparation')
             for label in ('TRIAEVUM_PASS_SHADER_CACHE', 'TRIAEVUM_SPIRV_CACHE',
                           'TRIAEVUM_NATIVE_PROGRAM_OWNERS'):
                 match = re.search(label + r' ([^\n]+)', log)

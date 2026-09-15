@@ -2,6 +2,7 @@
 #pragma once
 #include <vulkan/vulkan.h>
 #include <array>
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -51,6 +52,11 @@ class GraphicsPipelineLibraries {
         case VK_DYNAMIC_STATE_VIEWPORT: case VK_DYNAMIC_STATE_SCISSOR:
         case VK_DYNAMIC_STATE_VIEWPORT_WITH_COUNT: case VK_DYNAMIC_STATE_SCISSOR_WITH_COUNT:
         case VK_DYNAMIC_STATE_DEPTH_BIAS: return 1;
+        case VK_DYNAMIC_STATE_CULL_MODE: case VK_DYNAMIC_STATE_FRONT_FACE: return 1;
+        case VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE: case VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE:
+        case VK_DYNAMIC_STATE_DEPTH_COMPARE_OP: case VK_DYNAMIC_STATE_DEPTH_BOUNDS_TEST_ENABLE:
+        case VK_DYNAMIC_STATE_STENCIL_TEST_ENABLE: case VK_DYNAMIC_STATE_STENCIL_OP:
+        case VK_DYNAMIC_STATE_STENCIL_COMPARE_MASK: case VK_DYNAMIC_STATE_STENCIL_WRITE_MASK: return 2;
         case VK_DYNAMIC_STATE_DEPTH_BOUNDS: case VK_DYNAMIC_STATE_STENCIL_REFERENCE: return 2;
         case VK_DYNAMIC_STATE_BLEND_CONSTANTS: return 3;
         default: return -1;
@@ -109,11 +115,30 @@ class GraphicsPipelineLibraries {
         const auto& rendering = *Rendering(in);
         const auto& vi = *in.pVertexInputState;
         const auto& ia = *in.pInputAssemblyState;
-        const auto& raster = *in.pRasterizationState;
+        auto raster = *in.pRasterizationState;
         const auto& viewport = *in.pViewportState;
-        const auto& depth = *in.pDepthStencilState;
+        auto depth = *in.pDepthStencilState;
         const auto& blend = *in.pColorBlendState;
         const auto& ms = *in.pMultisampleState;
+        // Only states declared dynamic may leave a device-library identity.
+        // The executable retains their original values and applies them at bind.
+        if (HasDynamic(in, VK_DYNAMIC_STATE_CULL_MODE)) raster.cullMode = VK_CULL_MODE_NONE;
+        if (HasDynamic(in, VK_DYNAMIC_STATE_FRONT_FACE)) raster.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+        if (HasDynamic(in, VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE)) depth.depthTestEnable = VK_FALSE;
+        if (HasDynamic(in, VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE)) depth.depthWriteEnable = VK_FALSE;
+        if (HasDynamic(in, VK_DYNAMIC_STATE_DEPTH_COMPARE_OP)) depth.depthCompareOp = VK_COMPARE_OP_ALWAYS;
+        if (HasDynamic(in, VK_DYNAMIC_STATE_DEPTH_BOUNDS_TEST_ENABLE)) depth.depthBoundsTestEnable = VK_FALSE;
+        if (HasDynamic(in, VK_DYNAMIC_STATE_DEPTH_BOUNDS)) depth.minDepthBounds = depth.maxDepthBounds = 0;
+        if (HasDynamic(in, VK_DYNAMIC_STATE_STENCIL_TEST_ENABLE)) depth.stencilTestEnable = VK_FALSE;
+        for (auto* face : {&depth.front, &depth.back}) {
+            if (HasDynamic(in, VK_DYNAMIC_STATE_STENCIL_OP)) {
+                face->failOp = face->passOp = face->depthFailOp = VK_STENCIL_OP_KEEP;
+                face->compareOp = VK_COMPARE_OP_ALWAYS;
+            }
+            if (HasDynamic(in, VK_DYNAMIC_STATE_STENCIL_REFERENCE)) face->reference = 0;
+            if (HasDynamic(in, VK_DYNAMIC_STATE_STENCIL_COMPARE_MASK)) face->compareMask = 0;
+            if (HasDynamic(in, VK_DYNAMIC_STATE_STENCIL_WRITE_MASK)) face->writeMask = 0;
+        }
         std::array<Key, 4> keys;
         std::array<std::vector<VkDynamicState>, 4> dynamics;
         for (uint32_t i = 0; i < in.pDynamicState->dynamicStateCount; ++i) {
@@ -121,6 +146,7 @@ class GraphicsPipelineLibraries {
             dynamics[size_t(DynamicPart(state))].push_back(state);
         }
         for (size_t p = 0; p < 4; ++p) {
+            std::sort(dynamics[p].begin(), dynamics[p].end());
             keys[p].push_back(dynamics[p].size());
             for (auto state : dynamics[p]) keys[p].push_back(uint64_t(state));
         }
@@ -218,6 +244,8 @@ class GraphicsPipelineLibraries {
                 return result;
             }
             ++mCreated[p];
+            if (p == 1 || p == 2)
+                std::fprintf(stderr, "TRIAEVUM_NRI_GPL_SHADER_PART_CREATED part=%zu\n", p);
             entries.emplace(std::move(keys[p]), Part{libraries[p], ++mClock});
             // Final linked executables do not require the library handles to
             // survive. Bound retained libraries per subset; no in-flight draw

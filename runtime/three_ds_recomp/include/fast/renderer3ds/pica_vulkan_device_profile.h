@@ -23,6 +23,8 @@ inline VkPhysicalDeviceFeatures PicaVulkanCoreFeatures(const VkPhysicalDeviceFea
     enabled.shaderImageGatherExtended = supported.shaderImageGatherExtended;
     enabled.shaderStorageImageWriteWithoutFormat = supported.shaderStorageImageWriteWithoutFormat;
     enabled.shaderStorageImageExtendedFormats = supported.shaderStorageImageExtendedFormats;
+    // Native fragment-operation programs write the storage-image target.
+    enabled.fragmentStoresAndAtomics = supported.fragmentStoresAndAtomics;
     enabled.shaderInt16 = supported.shaderInt16;
     return enabled;
 }

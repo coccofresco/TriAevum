@@ -9,6 +9,7 @@
 #include "fast/backends/gfx_rendering_api.h"
 #include "fast/renderer/spirv_cache.h"
 #include "fast/renderer3ds/pica_shader_module_identity.h"
+#include "fast/renderer3ds/pica_program_preparation.h"
 #include "fast/backends/oot3d_vulkan_diagnostics.h"
 #include "fast/backends/oot3d_vulkan_gpu_profiler.h"
 #include "fast/backends/oot3d_vulkan_validation.h"
@@ -113,10 +114,12 @@ struct VulkanShaderProgram {
 };
 
 class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
-                                    public Oot3d::TitleRenderBackend {
+                                    public Oot3d::TitleRenderBackend,
+                                    public Renderer3ds::PicaProgramPreparationBackend {
   public:
     explicit GfxRenderingAPIVulkan(GfxWindowBackendSDL2* windowBackend);
     ~GfxRenderingAPIVulkan() override;
+    void PrepareNativePicaPrograms(std::span<const Renderer3ds::PicaVertexArtifact> vertices) override;
 
     const char* GetName() override;
     int GetMaxTextureSize() override;

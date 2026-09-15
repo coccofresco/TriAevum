@@ -691,6 +691,46 @@ void GfxRenderingAPIVulkan::DrawTrianglesFromBuffer(VkBuffer vertexBuffer,
     vkCmdDraw(commandBuffer, static_cast<uint32_t>(bufVboNumTris * 3), 1, 0, 0);
 }
 
+void GfxRenderingAPIVulkan::PrepareNativePicaPrograms(
+    std::span<const Renderer3ds::PicaVertexArtifact> vertices) {
+    if (!mGraphicsPipelineLibrariesEnabled || !mNriPicaPipelineBridge.OwnedDrawsEnabled()) return;
+    if (vertices.empty()) throw std::runtime_error("native program preparation has no vertex family");
+    const auto start = std::chrono::steady_clock::now();
+    std::fprintf(stderr, "TRIAEVUM_NATIVE_PROGRAM_PREPARATION_BEGIN\n");
+    // Compile each shader-bearing subset once, not the vertex/fragment product.
+    // These layouts are preparation interfaces, never geometry submitted to a draw.
+    VkVertexInputBindingDescription binding{0, 16U * 16U, VK_VERTEX_INPUT_RATE_VERTEX};
+    std::array<VkVertexInputAttributeDescription, 16> attributes{};
+    for (uint32_t i = 0; i < attributes.size(); ++i)
+        attributes[i] = {i, 0, VK_FORMAT_R32G32B32A32_SFLOAT, i * 16U};
+    Oot3d::NriPicaGraphicsPipelineDesc desc;
+    desc.VertexBindings = {&binding, 1}; desc.VertexAttributes = attributes;
+    desc.VertexSpirv = vertices.front().Spirv;
+    desc.ColorAttachmentCount = 1;
+    desc.ColorFormats[0] = VK_FORMAT_R8G8B8A8_UNORM;
+    desc.Colors[0].colorWriteMask = 15;
+    desc.DepthStencilFormat = mDepthFormat;
+    desc.Samples = VK_SAMPLE_COUNT_1_BIT;
+    uint32_t fragments = 0;
+    for (const auto& artifact : Renderer3ds::kNativeFragmentArtifacts) {
+        if (!artifact.SeparateSamplers) continue;
+        desc.FragmentSpirv = artifact.Spirv;
+        if (!mNriPicaPipelineBridge.PreparePipeline(desc))
+            throw std::runtime_error("native fragment program preparation failed");
+        ++fragments;
+    }
+    if (!fragments) throw std::runtime_error("native program preparation has no fragment family");
+    for (const auto& vertex : vertices.subspan(1)) {
+        desc.VertexSpirv = vertex.Spirv;
+        if (!mNriPicaPipelineBridge.PreparePipeline(desc))
+            throw std::runtime_error("native vertex program preparation failed");
+    }
+    const auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now() - start).count();
+    std::fprintf(stderr, "TRIAEVUM_NATIVE_PROGRAM_PREPARATION_END vertices=%zu fragments=%u samples=1 ns=%llu\n",
+        vertices.size(), fragments, static_cast<unsigned long long>(nanoseconds));
+}
+
 void GfxRenderingAPIVulkan::Init() {
     if (mInitialized) {
         return;
@@ -2696,6 +2736,9 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
     };
     VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT pipelineLibraries{
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT};
+    VkPhysicalDeviceExtendedDynamicStateFeaturesEXT extendedDynamic{
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT};
+    pipelineLibraries.pNext = &extendedDynamic;
     dynamicRendering.pNext = &pipelineLibraries;
     vulkan12.pNext = &synchronization2;
     synchronization2.pNext = &dynamicRendering;
@@ -2712,7 +2755,9 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
         hasVulkan12 && hasDynamicRenderingExtension &&
         dynamicRendering.dynamicRendering == VK_TRUE;
     const bool librarySupported = hasExtension(VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME) &&
-        hasExtension(VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME) && pipelineLibraries.graphicsPipelineLibrary;
+        hasExtension(VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME) && pipelineLibraries.graphicsPipelineLibrary &&
+        hasExtension(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME) && extendedDynamic.extendedDynamicState &&
+        supportedFeatures.features.fragmentStoresAndAtomics;
     VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT libraryProperties{
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_PROPERTIES_EXT};
     VkPhysicalDeviceProperties2 properties2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
@@ -2728,6 +2773,7 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
     if (mGraphicsPipelineLibrariesEnabled) {
         extensions.push_back(VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME);
         extensions.push_back(VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME);
+        extensions.push_back(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME);
     }
     if (mSynchronization2Enabled)
         extensions.push_back(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
@@ -2805,6 +2851,8 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
         featureChain = &dynamicRendering;
     }
     if (mGraphicsPipelineLibrariesEnabled) {
+        extendedDynamic.pNext = featureChain;
+        featureChain = &extendedDynamic;
         pipelineLibraries.pNext = featureChain;
         featureChain = &pipelineLibraries;
     }

@@ -9,6 +9,9 @@
 #include <cstring>
 
 namespace Oot3dNativeGame {
+std::span<const Fast::Renderer3ds::PicaVertexArtifact> NativePicaVertexProgramFamily() {
+    return kTitleVertexArtifacts;
+}
 namespace {
 
 template <typename Destination, typename Source>

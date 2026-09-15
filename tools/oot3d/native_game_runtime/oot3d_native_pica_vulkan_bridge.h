@@ -7,6 +7,7 @@
 #include <string>
 
 namespace Oot3dNativeGame {
+std::span<const Fast::Renderer3ds::PicaVertexArtifact> NativePicaVertexProgramFamily();
 
 struct Oot3dPicaVulkanDrawBridgeTiming {
     double UniformPackingSeconds = 0.0;

@@ -21,6 +21,30 @@ endfunction()
 
 configure_file("${CMAKE_CURRENT_LIST_DIR}/nri_pipeline_libraries/GraphicsPipelineLibrariesVK.h"
     "${NRI_SOURCE_DIR}/Source/VK/GraphicsPipelineLibrariesVK.h" COPYONLY)
+configure_file("${CMAKE_CURRENT_LIST_DIR}/nri_pipeline_libraries/DynamicPipelineStateVK.h"
+    "${NRI_SOURCE_DIR}/Source/VK/DynamicPipelineStateVK.h" COPYONLY)
+patch_nri("Source/VK/PipelineVK.h" "#pragma once"
+    "#pragma once\n#include \"DynamicPipelineStateVK.h\"")
+patch_nri("Source/VK/PipelineVK.h" "    ~PipelineVK();"
+    "    triaevum_nri::DynamicPipelineState m_LibraryDynamicState;\n\n    ~PipelineVK();")
+patch_nri("Source/VK/PipelineVK.hpp" "std::array<VkDynamicState, 16> dynamicStates;"
+    "std::array<VkDynamicState, 32> dynamicStates;")
+patch_nri("Source/VK/PipelineVK.hpp"
+    "    VkPipelineDynamicStateCreateInfo dynamicState = {VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};"
+    [=[    if ((graphicsPipelineDesc.flags & GraphicsPipelineBits::USE_GRAPHICS_PIPELINE_LIBRARY) &&
+        m_Device.GetDesc().features.extendedDynamicState) {
+        if (!m_LibraryDynamicState.Capture(m_Device, m_Device.GetDispatchTable().GetDeviceProcAddr, rasterizationState, depthStencilState))
+            return Result::UNSUPPORTED;
+        for (auto state : triaevum_nri::DynamicPipelineState::States) {
+            bool present = false;
+            for (uint32_t i = 0; i < dynamicStateNum; ++i) present |= dynamicStates[i] == state;
+            if (!present) dynamicStates[dynamicStateNum++] = state;
+        }
+    }
+    VkPipelineDynamicStateCreateInfo dynamicState = {VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};]=])
+patch_nri("Source/VK/CommandBufferVK.hpp"
+    "    vk.CmdBindPipeline(m_Handle, pipelineVK.GetBindPoint(), pipelineVK);"
+    "    vk.CmdBindPipeline(m_Handle, pipelineVK.GetBindPoint(), pipelineVK);\n    pipelineVK.m_LibraryDynamicState.Apply(m_Handle);")
 patch_nri("Include/NRIDescs.h" "#pragma once" "#pragma once\n#define TRIAEVUM_NRI_GPL_ABI 1")
 patch_nri("Include/NRIDescs.h"
     [=[    FAIL_ON_CACHE_MISS  = NriBit(0) // "CreateGraphicsPipeline" returns "FAILURE" if the pipeline is not found in the supplied cache (requires "features.pipelineCacheControl")]=]

@@ -398,13 +398,85 @@ Reproduction tools:
 - Private evidence: `%TEMP%/TriAevum-gpl-{field,monolithic,toon,boot,timing}-20260915`.
   Do not package these directories or their game-derived inputs.
 
+## M2 native startup preparation (2026-09-15)
+
+The native 1x-MSAA family now has an explicit startup consumer. This is partial
+M2 completion, not default-effect or full-platform completion.
+
+1. The opt-in GPL capability policy additionally requires and enables
+   `VK_EXT_extended_dynamic_state` and native fragment storage writes. The NRI
+   wrapper receives the actual enabled extension list.
+2. `DynamicPipelineStateVK.h`, carried by the reproducible NRI patch, preserves
+   each executable's original culling, front-face, depth and stencil values.
+   Every bind reapplies them through Vulkan commands. Only declared dynamic
+   fields leave library identities; sample count/output interfaces remain part
+   of their contracts. Declaration order is normalized, not pointer-hashed.
+3. The shared `PicaProgramPreparationBackend` interface receives a title-supplied
+   vertex artifact family. The native window calls it immediately after host
+   initialization, BEFORE the gameplay loop and first frame timing. This is
+   synchronous, bounded startup preparation; there are no borrowed queued draw
+   packets, synthetic gameplay frames or asynchronous lifetime assumptions.
+4. Six maintained SHBIN-derived vertex programs and eight native fragment
+   programs are prepared through the normal NRI factory. Thirteen preparation
+   pipelines cover their independent subsets, rather than 48 vertex/fragment
+   pairs or a Cartesian product of material registers. The preparation-only
+   input layout is never used for a draw. Temporary linked executables are
+   destroyed; expensive library parts stay with the real descriptor-layout
+   owner and are reused by native draws.
+5. Preparing all eight fragments exposed a missing device feature:
+   `fragmentStoresAndAtomics` had not been enabled for native storage-image
+   writes. The shared device profile now enables it when supported; unsupported
+   devices do not enter this complete-family preparation policy. The original
+   failing validation run is retained as evidence, not counted as a pass.
+
+Windows RTX 3060 evidence, no collected pack:
+
+- Field and boot: three exact framebuffer comparisons each, zero source
+  compilation, zero validation errors, zero GPL fallback, and **zero new
+  shader-bearing libraries after the startup preparation end marker**.
+- Field also matches the prior monolithic parametric framebuffer exactly.
+- Toon+TAA: three exact comparisons and zero validation errors/source compiler
+  requests; additional effect libraries are still created after preparation.
+  It is NOT counted as fully prepared. Outline/default-profile completeness
+  remains an M3 item.
+- Dynamic-state unit tests cover native bind values on both stencil faces,
+  repeated binds, inert disabled behavior, dynamic identity normalization,
+  unchanged MSAA separation and supported/unsupported fragment-write features.
+- The full local renderer suite passed 13/13 tests after these changes. The
+  pinned NRI patch was reapplied successfully to check idempotence.
+
+Matched first-use experiment: three rotating-order runs of 300 native frames,
+zero warmup, interpolation/VSync/pacing/capture disabled. Monolithic median
+93.85 FPS, prepared GPL 97.63 FPS; maximum 202.21 versus 158.16 ms, but median
+run p99 22.125 versus 31.0 ms. This mixed result is NOT a claim that all
+stuttering is solved. Both arms used identical parametric programs. Driver
+caches were not cleared. Preparation took 93.56 / 12.39 / 15.98 ms separately
+from gameplay timing; maximum link across these runs was 0.049 ms. All three
+GPL runs created zero shader-bearing parts after preparation. Remaining frame
+tails cannot be attributed to those shader parts without contrary evidence.
+
+Separate steady-state experiment (three 900-frame runs, 180 warmup): median
+114.27 FPS monolithic versus 116.53 FPS prepared GPL. GPL range 109.24-117.34
+FPS, maximum frame 19.13 ms, no frame above 33.33 ms across 2160 measured frames.
+This does not establish a material steady-state loss; the small median difference
+is not presented as a general speedup. Evidence:
+`%TEMP%/TriAevum-gpl-prepared-steady-20260915`.
+
+Reproduction: add `--require-prepared-native-programs` to the M1 canonical
+comparison command. It fails on missing preparation or any later vertex/fragment
+library creation. The benchmark's `--compare-pipeline-libraries` records startup
+cost separately and asserts this invariant for its canonical arms.
+Private evidence: `%TEMP%/TriAevum-gpl-prepared-{field-v2,boot,toon,timing}-20260915`.
+The failed feature-negotiation run is `TriAevum-gpl-prepared-field-20260915`.
+
 ## First action on resumption
 
-Continue M2 from the live M1 consumer, not from a new pipeline/cache design.
-Resolve the first-use penalty and move shader-bearing part creation to a
-genuine resource preparation boundary with owned requests. Preserve the
-separate steady-state safeguard when extending the supported surface.
-Keep expensive compilation out of interactive submission; preparation must not
-be disguised as work earlier in the same frame. Retain the correct monolithic
-path on unsupported devices and until the candidate passes the measured policy.
-M3 default-profile coverage and M4 platform/transition qualification remain open.
+Extend the actual startup/resource-preparation consumer to effect program families
+and sample-count/alpha-coverage profiles using their declared interfaces. Do not
+reintroduce shader inventories or prepare all combinations of material state.
+Profile transitions and device recreation need explicit preparation boundaries
+and ownership tests; they are not closed by the initial 1x preparation.
+Attribute the remaining >100 ms frames separately now that the canonical test
+proves no late shader-part creation. Preserve monolithic fallback and opt-in GPL
+until platform and default-profile qualification pass. Linux/Android GPU tests,
+M3 default effects and M4 transitions remain open.
