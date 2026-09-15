@@ -79,6 +79,18 @@ struct GrassClusterWork {
     const std::array<float, 3>& eye, const GrassLodPolicy& policy, float bladeRadiusScale,
     bool frustumCulling, std::vector<GrassClusterWork>& work);
 
+// Cull ancestors before splitting independent immutable subtrees. The caller
+// owns execution and scratch storage; merge and order all work before budgets.
+[[nodiscard]] uint32_t SplitGrassClusterSelection(
+    const GrassWorldPlacement& placement, const std::array<float, 16>& positionToClip,
+    const std::array<float, 3>& eye, const GrassLodPolicy& policy, float bladeRadiusScale,
+    bool frustumCulling, uint32_t maximumJobs, std::vector<uint32_t>& roots);
+
+[[nodiscard]] GrassClusterSelectionStats SelectGrassClusterSubtreeWork(
+    const GrassWorldPlacement& placement, const std::array<float, 16>& positionToClip,
+    const std::array<float, 3>& eye, const GrassLodPolicy& policy, float bladeRadiusScale,
+    bool frustumCulling, uint32_t root, std::vector<GrassClusterWork>& work);
+
 // Resolve the conservative LOD prefix once, before choosing worker count.
 // The sum bounds output size, unlike the unfiltered BVH candidate count.
 [[nodiscard]] uint64_t PrepareGrassClusterWork(const GrassWorldPlacement& placement,

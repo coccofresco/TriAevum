@@ -141,20 +141,21 @@ std::optional<std::array<float, 3>> GrassCameraFromProjection(
     return eye;
 }
 
-static GrassClusterSelectionStats SelectGrassVisibility(
-    const GrassWorldPlacement& placement, const std::array<float, 16>& positionToClip,
-    const std::array<float, 3>& eye, float drawDistance, float bladeRadiusScale,
-    bool frustumCulling, std::vector<uint32_t>* clusterIndices, const GrassLodPolicy* lodPolicy,
-    std::vector<GrassClusterWork>* clusterWork) {
-    if (clusterIndices) clusterIndices->clear();
-    if (clusterWork) clusterWork->clear();
-    GrassClusterSelectionStats stats;
-    const auto radiusScale = BuildGrassFrustumRadiusScale(positionToClip);
+namespace {
+struct GrassVisibilityQuery {
+    const std::array<float, 16>& positionToClip;
+    const std::array<float, 3>& eye;
+    float drawDistance;
+    float bladeRadiusScale;
+    bool frustumCulling;
+    const GrassLodPolicy* lodPolicy;
+    bool prefixWork;
+    GrassFrustumRadiusScale radiusScale;
     struct Visibility {
         GrassFrustumRelation Relation = GrassFrustumRelation::Outside;
         float Retention = 0;
     };
-    const auto visible = [&](const auto& bound) {
+    template<class Bound> Visibility Classify(const Bound& bound) const {
         const float radius = bound.Radius + bound.MaximumBladeHeight * std::max(0.0F, bladeRadiusScale - 1.0F);
         float distanceSquared = 0.0F;
         for (size_t axis = 0; axis < 3U; ++axis) {
@@ -164,13 +165,27 @@ static GrassClusterSelectionStats SelectGrassVisibility(
         const float limit = drawDistance + radius;
         if (distanceSquared > limit * limit) return Visibility{};
         const float nearest = std::max(0.0F, std::sqrt(distanceSquared) - radius);
-        if (clusterWork && nearest > drawDistance) return Visibility{};
+        if (prefixWork && nearest > drawDistance) return Visibility{};
         const float retention = lodPolicy ? GrassLodRetentionUpperBound(*lodPolicy, nearest) : 1.0F;
         if (lodPolicy && bound.MinimumStableVisibility > retention) return Visibility{};
         return Visibility{frustumCulling ?
             ClassifyGrassSphereInFrustum(positionToClip, radiusScale, bound.Center, radius) : GrassFrustumRelation::Inside,
             retention};
-    };
+    }
+};
+} // namespace
+
+static GrassClusterSelectionStats SelectGrassVisibility(
+    const GrassWorldPlacement& placement, const std::array<float, 16>& positionToClip,
+    const std::array<float, 3>& eye, float drawDistance, float bladeRadiusScale,
+    bool frustumCulling, std::vector<uint32_t>* clusterIndices, const GrassLodPolicy* lodPolicy,
+    std::vector<GrassClusterWork>* clusterWork, uint32_t root = 0, bool ordered = true) {
+    if (clusterIndices) clusterIndices->clear();
+    if (clusterWork) clusterWork->clear();
+    GrassClusterSelectionStats stats;
+    const GrassVisibilityQuery query{positionToClip, eye, drawDistance, bladeRadiusScale,
+        frustumCulling, lodPolicy, clusterWork != nullptr, BuildGrassFrustumRadiusScale(positionToClip)};
+    const auto visible = [&](const auto& bound) { return query.Classify(bound); };
     const auto append = [&](uint32_t index) {
         const auto& cluster = placement.Clusters[index];
         const auto visibility = visible(cluster);
@@ -193,7 +208,9 @@ static GrassClusterSelectionStats SelectGrassVisibility(
     if (placement.VisibilityNodes.empty()) {
         for (uint32_t i = 0; i < placement.Clusters.size(); ++i) append(i);
     } else {
-        for (uint32_t i = 0; i < placement.VisibilityNodes.size();) {
+        if (root >= placement.VisibilityNodes.size()) return stats;
+        const auto end = placement.VisibilityNodes[root].Escape;
+        for (uint32_t i = root; i < end;) {
             const auto& node = placement.VisibilityNodes[i];
             ++stats.TestedNodes;
             if (visible(node).Relation == GrassFrustumRelation::Outside) {
@@ -205,8 +222,10 @@ static GrassClusterSelectionStats SelectGrassVisibility(
             ++i;
         }
         // Budget decisions cannot depend on traversal order or camera motion.
-        if (clusterIndices) OrderGrassClusters(*clusterIndices, [](uint32_t index) { return index; });
-        else OrderGrassClusters(*clusterWork, [](const auto& work) { return work.ClusterIndex; });
+        if (ordered) {
+            if (clusterIndices) OrderGrassClusters(*clusterIndices, [](uint32_t index) { return index; });
+            else OrderGrassClusters(*clusterWork, [](const auto& work) { return work.ClusterIndex; });
+        }
     }
     stats.CandidateClusters = static_cast<uint32_t>(clusterIndices ? clusterIndices->size() : clusterWork->size());
     return stats;
@@ -226,6 +245,40 @@ GrassClusterSelectionStats SelectGrassClusterWork(
     bool frustumCulling, std::vector<GrassClusterWork>& work) {
     return SelectGrassVisibility(placement, positionToClip, eye, policy.DrawDistance, bladeRadiusScale,
         frustumCulling, nullptr, &policy, &work);
+}
+
+uint32_t SplitGrassClusterSelection(
+    const GrassWorldPlacement& placement, const std::array<float, 16>& positionToClip,
+    const std::array<float, 3>& eye, const GrassLodPolicy& policy, float bladeRadiusScale,
+    bool frustumCulling, uint32_t maximumJobs, std::vector<uint32_t>& roots) {
+    roots.clear();
+    if (placement.VisibilityNodes.empty() || maximumJobs == 0) return 0;
+    const GrassVisibilityQuery query{positionToClip, eye, policy.DrawDistance, bladeRadiusScale,
+        frustumCulling, &policy, true, BuildGrassFrustumRadiusScale(positionToClip)};
+    uint32_t tested = 0;
+    const auto split = [&](auto&& self, uint32_t index, uint32_t jobs) -> void {
+        const auto& node = placement.VisibilityNodes[index];
+        ++tested;
+        if (query.Classify(node).Relation == GrassFrustumRelation::Outside) return;
+        if (jobs <= 1 || node.ClusterCount != 0) {
+            roots.push_back(index);
+            return;
+        }
+        const auto left = index + 1;
+        const auto right = placement.VisibilityNodes[left].Escape;
+        self(self, left, jobs / 2);
+        self(self, right, jobs - jobs / 2);
+    };
+    split(split, 0, maximumJobs);
+    return tested;
+}
+
+GrassClusterSelectionStats SelectGrassClusterSubtreeWork(
+    const GrassWorldPlacement& placement, const std::array<float, 16>& positionToClip,
+    const std::array<float, 3>& eye, const GrassLodPolicy& policy, float bladeRadiusScale,
+    bool frustumCulling, uint32_t root, std::vector<GrassClusterWork>& work) {
+    return SelectGrassVisibility(placement, positionToClip, eye, policy.DrawDistance, bladeRadiusScale,
+        frustumCulling, nullptr, &policy, &work, root, false);
 }
 
 float GrassStableVisibilityValue(uint32_t stableId) noexcept {

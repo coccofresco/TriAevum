@@ -23,6 +23,7 @@
 #include "fast/oot3d/grass_texture_source_cache.h"
 #include "fast/oot3d/grass_visibility.h"
 #include "fast/oot3d/grass_cluster_selection.h"
+#include "fast/oot3d/grass_cluster_order.h"
 #include "fast/oot3d/outline_occlusion_pass.h"
 #include "fast/oot3d/visual_clock.h"
 
@@ -120,6 +121,7 @@ struct GrassPreparedPlacement {
 inline constexpr size_t kGrassLodBinCount =
     static_cast<size_t>(kMaximumGrassBladeSegments) * 2U + 1U;
 inline constexpr size_t kGrassAnchorsPerWorker = 8192U;
+inline constexpr size_t kGrassClustersForParallelSelection = 8192U;
 inline constexpr uint64_t kGrassIdentityFnvOffset =
     14695981039346656037ULL;
 inline constexpr uint64_t kGrassIdentityFnvPrime = 1099511628211ULL;
@@ -446,6 +448,8 @@ struct InteractiveGrassPass::Impl {
     std::vector<uint32_t> VisibleAnchorIndices;
     std::vector<GrassWorldAnchor> StaticAnchors;
     std::vector<GrassClusterWork> ClusterWork;
+    std::vector<uint32_t> SelectionRoots;
+    std::vector<std::vector<GrassClusterWork>> SelectionOutputs;
     struct ActivePlacement {
         uint64_t Identity = 0U;
         uint64_t ContentVersion = 0U;
@@ -484,6 +488,45 @@ struct InteractiveGrassPass::Impl {
         }
         return static_cast<size_t>(
             WorkerPool->get_thread_count());
+    }
+
+    GrassClusterSelectionStats SelectClusterWork(const GrassWorldPlacement& world,
+        const std::array<float, 16>& clip, const std::array<float, 3>& eye,
+        const GrassLodPolicy& policy, float bladeRadiusScale, bool frustumCulling) {
+        SelectionRoots.clear();
+        if (world.Clusters.size() < kGrassClustersForParallelSelection || world.VisibilityNodes.empty() || WorkerCount() < 2)
+            return SelectGrassClusterWork(world, clip, eye, policy, bladeRadiusScale, frustumCulling, ClusterWork);
+        GrassClusterSelectionStats stats;
+        stats.TestedNodes = SplitGrassClusterSelection(world, clip, eye, policy, bladeRadiusScale,
+            frustumCulling, static_cast<uint32_t>(WorkerCount()), SelectionRoots);
+        ClusterWork.clear();
+        SelectionOutputs.resize(SelectionRoots.size());
+        std::vector<std::future<GrassClusterSelectionStats>> tasks;
+        tasks.reserve(SelectionRoots.size());
+        // Immutable inputs and per-job output only. Admission and draw ordering
+        // happen after all jobs complete, never in completion order.
+        try {
+            for (size_t i = 0; i < SelectionRoots.size(); ++i) {
+                tasks.push_back(WorkerPool->submit_task([&, i] {
+                    return SelectGrassClusterSubtreeWork(world, clip, eye, policy, bladeRadiusScale,
+                        frustumCulling, SelectionRoots[i], SelectionOutputs[i]);
+                }));
+            }
+            for (auto& task : tasks) {
+                const auto result = task.get();
+                stats.TestedNodes += result.TestedNodes;
+                stats.CandidateClusters += result.CandidateClusters;
+                stats.CandidateAnchors += result.CandidateAnchors;
+            }
+        } catch (...) {
+            for (auto& task : tasks) if (task.valid()) task.wait();
+            throw;
+        }
+        ClusterWork.reserve(stats.CandidateClusters);
+        for (const auto& output : SelectionOutputs)
+            ClusterWork.insert(ClusterWork.end(), output.begin(), output.end());
+        OrderGrassClusters(ClusterWork, [](const auto& work) { return work.ClusterIndex; });
+        return stats;
     }
 
     void DestroyBuffer(BufferSlot& slot) {
@@ -1153,10 +1196,13 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                 const auto selectionStart = std::chrono::steady_clock::now();
                 auto& clusterWork = mImpl->ClusterWork;
                 const bool clusterOwned = settings.MidrangeClustersEnabled && !prepared.World->Midrange.Groups.empty();
-                const auto selection = clusterOwned ? GrassClusterSelectionStats{} : SelectGrassClusterWork(
+                const auto selection = clusterOwned ? GrassClusterSelectionStats{} : mImpl->SelectClusterWork(
                     *prepared.World, prepared.Push.PositionToClip, prepared.Eye, lodPolicy,
-                    bladeRadiusScale, settings.FrustumCulling, clusterWork);
+                    bladeRadiusScale, settings.FrustumCulling);
                 const auto clusterSelectionEnd = std::chrono::steady_clock::now();
+                if (!clusterOwned)
+                    telemetry.CullingWorkers = std::max(telemetry.CullingWorkers,
+                        static_cast<uint32_t>(mImpl->SelectionRoots.size()));
                 telemetry.VisibilityNodesTested += selection.TestedNodes;
                 telemetry.CandidateClusters += selection.CandidateClusters;
                 const auto retainedCandidates = selection.CandidateAnchors;
@@ -1567,6 +1613,9 @@ void InteractiveGrassPass::Shutdown() {
     mImpl->VisibleAnchorIndices.clear();
     mImpl->StaticAnchors.clear();
     mImpl->ActivePlacements.clear();
+    mImpl->ClusterWork.clear();
+    mImpl->SelectionRoots.clear();
+    mImpl->SelectionOutputs.clear();
     mImpl->StaticRevision = 0U;
     mImpl->PreparedInstanceBuffer = VK_NULL_HANDLE;
     mImpl->PreparedFrameSlot = 0U;

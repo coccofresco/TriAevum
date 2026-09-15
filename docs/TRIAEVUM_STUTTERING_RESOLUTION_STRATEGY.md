@@ -1008,3 +1008,69 @@ Private evidence in `%TEMP%`: `TriAevum-flow-control`,
 Continue with the remaining moving-view visibility traversal/evaluation cost
 and reproducible guest/frame-start/pacing spikes. Preparatory optimization is
 deferred. No Linux/Android performance claim from these Windows measurements.
+
+### Moving-frame visibility traversal: independent subtree jobs
+
+Continue the post-preparation scope above. The radix-order change did not remove
+the serial BVH traversal and LOD-prefix queries preceding parallel per-anchor
+evaluation. These queries run again on camera movement and are not asset or
+shader preparation.
+
+Implementation:
+
+- `GrassVisibilityQuery` shares the existing bound predicate between serial
+  selection and `SplitGrassClusterSelection`. The splitter first applies the
+  original ancestor culling, then emits disjoint subtree roots bounded by the
+  requested job count. It does not approximate the frustum or reuse old views.
+- `SelectGrassClusterSubtreeWork` traverses only its immutable subtree and
+  writes caller-owned scratch. It preserves every retained-anchor prefix and
+  individual-frustum-test flag. It performs no budget admission.
+- `InteractiveGrassPass::Impl::SelectClusterWork` uses the already existing
+  Grass worker pool for sufficiently large indexed surfaces. Small surfaces,
+  unindexed surfaces and single-worker execution retain the serial path.
+  All jobs finish before output is merged and radix-ordered. Existing density,
+  budget admission and draw batching then operate on the same ordered list.
+- Each task owns a separate output vector; immutable world/view inputs stay
+  alive until every task has finished, including exception paths. Scratch is
+  owned and cleared by the pass. No new thread pool, hidden global state,
+  shader variant, delayed frame admission or preparation optimization.
+
+Clean 40-second Windows/NRI runs, same full profile and movement timeline,
+first 180 completed presentations excluded, native30 with 2x presentation,
+VSync off, no fixed delta/captures/detailed diagnostics. The control was rebuilt
+with only the call site restored to serial selection, retaining radix ordering.
+The final call site and executable are restored to the parallel implementation.
+
+| Post-warmup metric | Serial control | Parallel run 1 | Parallel repeat |
+| --- | ---: | ---: | ---: |
+| p99 upper bound | 28.0 ms | 18.0 ms | 25.0 ms |
+| p95 upper bound | 19.875 ms | 16.875 ms | 18.625 ms |
+| Maximum | 31.6301 ms | 31.0068 ms | 30.4187 ms |
+| Mean | 17.0292 ms | 16.6667 ms | 16.8728 ms |
+| Frames above 33.33 ms | 0 | 0 | 0 |
+
+The p99 improvement is 10.7-35.7% in these runs, not a guaranteed 36%. Average
+throughput changes little; do not present interpolated frame counts as native
+simulation performance. Residual isolated ~30 ms frames remain. In the repeat,
+some combine guest and replay work; others spend 17-21 ms in pacing waits.
+
+A separate diagnostic run corroborates the owning phase: a matching work set
+of 94,180 candidate clusters / 265,556 evaluated anchors / 252,741 visible blades
+takes 11.532 ms selection and 12.973 ms total Grass CPU, versus 19.489 / 20.535 ms
+in the earlier serial diagnostic observation. Both retain three placement hits,
+zero static uploads and 12 draws. This is phase attribution, not a clean timing
+pair; run frame IDs differ as real-time simulation reacts to missed deadlines.
+
+Verification: all 18 focused tests pass. `grass_partition_tests` compares 90
+serial/partitioned combinations, including view/distance changes, frustum
+on/off, 1/2/3/10/64 jobs and reverse completion order, plus empty/zero-job cases.
+Complete work records and retained-anchor totals are identical. Full-profile
+framebuffer captures at 420 and 460 match the hashes in the previous section
+byte-for-byte. No image, density or preparation trade-off was introduced.
+
+Private evidence in `%TEMP%`: `TriAevum-flow-partition-clean`,
+`TriAevum-flow-partition-control`, `TriAevum-flow-partition-repeat`,
+`TriAevum-flow-partition-attribution`, and `TriAevum-flow-capture-partition`.
+Next work remains post-preparation: residual moving-view CPU selection/merge,
+guest/replay spikes and late presentation wakes. Do not claim all stuttering
+resolved or extend the Windows performance result to Linux/Android without tests.
