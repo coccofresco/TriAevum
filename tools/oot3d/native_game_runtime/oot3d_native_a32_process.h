@@ -180,6 +180,7 @@ class NativeA32Process {
     oot3d::recomp::a32::GuestState& PrimaryThreadState();
     const oot3d::recomp::a32::GuestState& PrimaryThreadState() const;
     NativeA32ThreadStatus PrimaryThreadStatus() const;
+    bool OnlyBackgroundThreadsReady() const;
     size_t ThreadCount() const;
     const oot3d::recomp::a32::GuestState* ThreadState(uint32_t threadId) const;
     oot3d::recomp::a32::GuestState* ThreadState(uint32_t threadId);

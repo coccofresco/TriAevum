@@ -866,6 +866,62 @@ int main() {
     Require(memory.Read32(0x1FF8208C, &dspSession) && dspSession != 0,
             "srv:GetServiceHandle dsp::DSP response has no session");
 
+    Require(memory.Write32(0x1FF82080, 0x00050100) &&
+                memory.Write32(0x1FF82084, 0x3A723279) &&
+                memory.Write32(0x1FF82088, 0x75) &&
+                memory.Write32(0x1FF8208C, 5),
+            "cannot write Y2R service request");
+    state.r[0] = srvSession;
+    Require(host.HandleSvc(0x32, state, memory, context).Action == NativeA32HostAction::Resume,
+            "Y2R service missing");
+    uint32_t y2rSession = 0;
+    Require(memory.Read32(0x1FF8208C, &y2rSession) && y2rSession,
+            "Y2R handle missing");
+    const auto y2rRequest = [&](uint16_t command, std::initializer_list<uint32_t> args) {
+        Require(memory.Write32(0x1FF82080, uint32_t(command) << 16 | uint32_t(args.size()) << 6),
+                "Y2R request header");
+        uint32_t address = 0x1FF82084;
+        for (const auto argument : args) {
+            Require(memory.Write32(address, argument), "Y2R request argument");
+            address += 4;
+        }
+        state.r[0] = y2rSession;
+        Require(host.HandleSvc(0x32, state, memory, context).Action == NativeA32HostAction::Resume,
+                "Y2R request did not resume");
+        uint32_t result = ~0U;
+        Require(memory.Read32(0x1FF82084, &result), "Y2R result absent");
+        return result;
+    };
+    Require(y2rRequest(0x2B, {}) == 0, "Y2R initialize failed");
+    Require(y2rRequest(0x0F, {}) == 0, "Y2R completion event failed");
+    uint32_t y2rEvent = 0;
+    Require(memory.Read32(0x1FF82080, &response) && response == 0x000F0042 &&
+                memory.Read32(0x1FF8208C, &y2rEvent) && y2rEvent,
+            "Y2R event IPC shape incorrect");
+    Require(y2rRequest(0x1A, {8}) == 0 && y2rRequest(0x1C, {8}) == 0 &&
+                y2rRequest(0x20, {0}) == 0 && y2rRequest(0x22, {255}) == 0,
+            "Y2R configuration failed");
+    std::array<uint8_t, 128> neutralYuv;
+    neutralYuv.fill(128);
+    Require(memory.WriteBytes(0x14001000, neutralYuv), "Y2R source memory");
+    Require(y2rRequest(0x10, {0x14001000, 64, 8, 0}) == 0 &&
+                y2rRequest(0x11, {0x14001040, 32, 4, 0}) == 0 &&
+                y2rRequest(0x12, {0x14001060, 32, 4, 0}) == 0 &&
+                y2rRequest(0x18, {0x14001100, 256, 32, 0}) == 0 &&
+                y2rRequest(0x26, {}) == 0,
+            "Y2R native conversion failed");
+    uint32_t pixel = 0;
+    Require(memory.Read32(0x14001100, &pixel) && pixel == 0x808180FF,
+            "Y2R fixed-point conversion or output byte order incorrect");
+    Require(memory.Write32(0x14001200, y2rEvent), "Y2R wait handle");
+    state.r[1] = 0x14001200; state.r[2] = 1; state.r[3] = 0;
+    Require(host.HandleSvc(0x25, state, memory, context).Action == NativeA32HostAction::Resume &&
+                state.r[0] == 0,
+            "Y2R completed transfer did not signal event");
+    Require(y2rRequest(0x1A, {7}) != 0, "Y2R accepted malformed width");
+    Require(y2rRequest(0x18, {0, 256, 32, 0}) == 0 && y2rRequest(0x26, {}) != 0,
+            "Y2R silently completed invalid output DMA");
+
     constexpr uint32_t dspComponentAddress = 0x14000100;
     constexpr std::array<uint8_t, 12> dspComponent{
         0x44, 0x53, 0x50, 0x31, 0x02, 0x03,
@@ -1613,6 +1669,9 @@ int main() {
                  host.TopFramebuffer()->AddressLeft ==
                      savedTopFramebuffer->AddressLeft),
             "CTR host state did not survive binary round-trip");
+    Require(host.CaptureState().at("y2r") ==
+                nlohmann::json::from_msgpack(hostStateBytes).at("y2r"),
+            "Y2R configuration did not survive binary round-trip");
 
     auto crossPlatformHostState = host.CaptureState();
     bool foundRomFsObject = false;

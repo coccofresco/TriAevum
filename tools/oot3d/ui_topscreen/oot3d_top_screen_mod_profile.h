@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "oot3d_top_screen_config.h"
+#include "oot3d_top_screen_projection_state.h"
 #include "oot3d_ui/ui_hud_content.h"
 #include "oot3d_ui/ui_primitives.h"
 
@@ -457,27 +458,6 @@ struct TopScreenQuestGeometryContext {
   float HudScale = 1.0F;
   float HudMarginX = 0.0F;
   float HudMarginY = 0.0F;
-};
-
-struct TopScreenPauseProjectionState {
-  struct TrackedPosition {
-    std::uint32_t Address = 0;
-    std::uint32_t OriginalBits = 0;
-    std::uint32_t LastWrittenBits = 0;
-    bool Valid = false;
-  };
-
-  // The host configuration replaces payload storage 0x005D66AC. The false
-  // state moves both the native minimap and its indicator streams outside the
-  // visible canvas.
-  bool AlternatePage = true;
-  float OffsetX = 0.0F;
-  float OffsetY = 0.0F;
-  bool NativeQuestGate = false;
-  bool QuestDrawModelAdjusted = false;
-  TrackedPosition MapX;
-  TrackedPosition MapY;
-  std::array<TrackedPosition, 4U * 64U> IconX;
 };
 
 struct TopScreenSystemMenuLayerStats {

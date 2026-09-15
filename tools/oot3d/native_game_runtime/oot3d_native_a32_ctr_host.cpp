@@ -1665,6 +1665,45 @@ NativeA32HostResult NativeA32CtrHostServices::HandleSvc(
             mSvcEvents.push_back(std::move(event));
             return {NativeA32HostAction::Wait};
         }
+        if (*sessionType == "client_session:y2r:u") {
+            const uint16_t command = static_cast<uint16_t>(event.Detail >> 16);
+            std::vector<uint32_t> arguments((event.Detail >> 6) & 63U);
+            bool valid = true;
+            for (size_t i = 0; i < arguments.size(); ++i)
+                valid &= memory.Read32(commandBuffer + 4U + static_cast<uint32_t>(i) * 4U,
+                                       &arguments[i]);
+            if (valid) {
+                auto reply = CtrServices::DispatchY2r(mY2r, command, arguments, memory);
+                if (reply.Handled) {
+                    if (!mY2rCompletionEvent) {
+                        mY2rCompletionEvent = std::make_shared<KernelObject>();
+                        mY2rCompletionEvent->Type = "event:y2r_completion";
+                        mY2rCompletionEvent->ResetType = 0U;
+                    }
+                    if (reply.Clear) mY2rCompletionEvent->AvailableCount = 0;
+                    if (reply.Signal) mY2rCompletionEvent->AvailableCount = 1;
+                    const uint32_t normalWords = static_cast<uint32_t>(reply.Words.size());
+                    if (reply.EventHandle) {
+                        reply.Words.push_back(0U); // Copy one kernel handle.
+                        reply.Words.push_back(CreateHandle(mY2rCompletionEvent));
+                    }
+                    valid = memory.Write32(commandBuffer, uint32_t(command) << 16 |
+                        normalWords << 6 | (reply.EventHandle ? 2U : 0U));
+                    for (size_t i = 0; i < reply.Words.size(); ++i)
+                        valid &= memory.Write32(commandBuffer + 4U + static_cast<uint32_t>(i) * 4U,
+                                                reply.Words[i]);
+                    if (valid) {
+                        state.r[0] = kResultSuccess;
+                        event.Handled = true;
+                        mSvcEvents.push_back(std::move(event));
+                        if (reply.Signal) WakeSynchronizationWaiters();
+                        return {NativeA32HostAction::Resume};
+                    }
+                }
+            }
+            mSvcEvents.push_back(std::move(event));
+            return {NativeA32HostAction::Wait};
+        }
         if (*sessionType == "client_session:dsp::DSP") {
             if (event.Detail == kDspLoadComponentRequest) {
                 uint32_t size = 0;
@@ -3539,7 +3578,7 @@ NativeA32HostResult NativeA32CtrHostServices::HandleSvc(
                 if (serviceName == "APT:U" || serviceName == "fs:USER" ||
                     serviceName == "gsp::Gpu" || serviceName == "dsp::DSP" ||
                     serviceName == "cfg:u" || serviceName == "hid:USER" ||
-                    serviceName == "ndm:u") {
+                    serviceName == "ndm:u" || serviceName == "y2r:u") {
                     const uint32_t session =
                         CreateHandle("client_session:" + serviceName);
                     if (memory.Write32(commandBuffer,
@@ -4085,7 +4124,7 @@ nlohmann::json NativeA32CtrHostServices::CaptureState() const {
     for (const auto& object :
          {mAptLock, mAptNotificationEvent, mAptParameterEvent, mGpuRightOwner,
           mGspInterruptEvent, mGspSharedMemory, mDspSemaphoreEvent,
-          mHidSharedMemory}) {
+          mHidSharedMemory, mY2rCompletionEvent}) {
         registerObject(object);
     }
     for (const auto& type : mDspInterruptEvents) {
@@ -4236,6 +4275,14 @@ nlohmann::json NativeA32CtrHostServices::CaptureState() const {
         {"pending_dsp_audio_frames", mPendingDspAudioFrames},
         {"dsp_interrupt_events", std::move(dspInterruptEvents)},
         {"dsp_semaphore_event", objectId(mDspSemaphoreEvent)},
+        {"y2r_completion_event", objectId(mY2rCompletionEvent)},
+        {"y2r", {{"input", mY2r.Input}, {"output", mY2r.Output},
+                 {"rotation", mY2r.Rotation}, {"tiled", mY2r.Tiled},
+                 {"width", mY2r.Width}, {"height", mY2r.Height},
+                 {"alpha", mY2r.Alpha}, {"spatial_dither", mY2r.SpatialDither},
+                 {"temporal_dither", mY2r.TemporalDither}, {"interrupt", mY2r.Interrupt},
+                 {"coefficients", mY2r.Coefficients}, {"weights", mY2r.DitherWeights},
+                 {"buffers", mY2r.Buffers}}},
         {"dsp_pipe_output", std::move(dspPipeOutput)},
         {"hid_shared_memory", objectId(mHidSharedMemory)},
         {"hid_events", std::move(hidEvents)},
@@ -4586,6 +4633,19 @@ bool NativeA32CtrHostServices::RestoreState(const nlohmann::json& state,
         }
         staged.mDspSemaphoreEvent =
             object(state.at("dsp_semaphore_event").get<uint32_t>());
+        staged.mY2rCompletionEvent = object(state.value("y2r_completion_event", 0U));
+        if (state.contains("y2r")) {
+            const auto& y2r = state.at("y2r");
+            auto& s = staged.mY2r;
+            s.Input = y2r.at("input"); s.Output = y2r.at("output");
+            s.Rotation = y2r.at("rotation"); s.Tiled = y2r.at("tiled");
+            s.Width = y2r.at("width"); s.Height = y2r.at("height");
+            s.Alpha = y2r.at("alpha"); s.SpatialDither = y2r.at("spatial_dither");
+            s.TemporalDither = y2r.at("temporal_dither"); s.Interrupt = y2r.at("interrupt");
+            s.Coefficients = y2r.at("coefficients").get<decltype(s.Coefficients)>();
+            s.DitherWeights = y2r.at("weights").get<decltype(s.DitherWeights)>();
+            s.Buffers = y2r.at("buffers").get<decltype(s.Buffers)>();
+        }
         const auto& pipes = state.at("dsp_pipe_output");
         if (pipes.size() != staged.mDspPipeOutput.size()) {
             throw std::runtime_error("DSP pipe count is invalid");

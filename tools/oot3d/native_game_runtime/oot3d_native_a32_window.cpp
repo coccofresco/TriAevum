@@ -2490,11 +2490,28 @@ void ApplyNativeWidescreenProjectionPolicy(
 Oot3dNativeGame::NativeA32ProcessRunResult
 RunUntilGuestWait(Oot3dNativeGame::NativeA32Process &process,
                   uint32_t wholeAotBlockBudget) {
+  static const bool diagnoseWait = std::getenv("TRIAEVUM_DIAGNOSE_GUEST_WAIT") != nullptr;
+  const auto waitStart = diagnoseWait ? std::chrono::steady_clock::now()
+                                    : std::chrono::steady_clock::time_point{};
   // A block-limit exit unwinds the native whole-AOT call chain. The caller
   // resumes it immediately: this is a stack-safety boundary, not an SDL event
   // pump or guest scheduling boundary.
   auto result = process.Run(wholeAotBlockBudget);
   while (result.Kind == Oot3dNativeGame::NativeA32ProcessRunKind::Yielded) {
+    // Low-priority workers may poll indefinitely. Once the foreground is
+    // waiting, let the host deliver its timers, HID and GPU completions.
+    // The worker stays Ready and resumes after those events, not next boot.
+    if (process.OnlyBackgroundThreadsReady()) return result;
+    if (diagnoseWait && std::chrono::steady_clock::now() - waitStart > std::chrono::seconds(20)) {
+      for (uint32_t id = 0; id < process.ThreadCount(); ++id) {
+        const auto* thread = process.ThreadState(id);
+        if (thread != nullptr)
+          std::fprintf(stderr, "GUEST_WAIT_TIMEOUT thread=%u pc=%08x lr=%08x sp=%08x r0=%08x r1=%08x r2=%08x\n",
+                       id, thread->r[15], thread->r[14], thread->r[13],
+                       thread->r[0], thread->r[1], thread->r[2]);
+      }
+      throw std::runtime_error("guest did not reach a wait boundary within diagnostic deadline");
+    }
     result = process.Run(wholeAotBlockBudget);
   }
   return result;
@@ -4082,6 +4099,11 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
           return;
         }
         const auto &state = runtime.TopScreenTemporalState;
+        if (state.ProjectionAvailable) {
+          uiLifecycleBridge.TopScreenPauseProjection() = state.Projection;
+          uiLifecycleBridge.TopScreenPauseProjection().AlternatePage =
+              activeTopScreenConfig.MinimapVisible;
+        }
         widescreenProjection.TopScreenPausePageRedrawActive =
             state.PausePageRedrawActive;
         widescreenProjection.TopScreenPausePageRedraw.DelayCalls =
@@ -4451,6 +4473,8 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
         frameRatePolicy.CaptureTemporalState();
     runtime.TopScreenTemporalStateAvailable = true;
     auto &topScreenState = runtime.TopScreenTemporalState;
+    topScreenState.ProjectionAvailable = true;
+    topScreenState.Projection = uiLifecycleBridge.TopScreenPauseProjection();
     topScreenState.ProfileActive =
         launch.UiProfile == Oot3dNativeGame::Oot3dUiProfile::TopScreen;
     topScreenState.PausePageRedrawActive =

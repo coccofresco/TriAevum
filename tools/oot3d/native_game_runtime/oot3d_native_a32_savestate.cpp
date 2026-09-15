@@ -16,6 +16,7 @@
 #include <optional>
 #include <set>
 #include <span>
+#include <stdexcept>
 #include <tuple>
 #include <type_traits>
 #include <vector>
@@ -29,6 +30,46 @@
 
 namespace Oot3dNativeGame {
 namespace {
+
+nlohmann::json EncodeProjection(const TopScreenPauseProjectionState& state) {
+    const auto word = [](const TopScreenPauseProjectionState::TrackedPosition& p) {
+        return nlohmann::json::array({p.Address, p.OriginalBits, p.LastWrittenBits, p.Valid});
+    };
+    auto icons = nlohmann::json::array();
+    for (const auto& p : state.IconX) icons.push_back(word(p));
+    return {{"visible", state.AlternatePage}, {"offset_x", state.OffsetX},
+            {"offset_y", state.OffsetY}, {"quest_gate", state.NativeQuestGate},
+            {"model_adjusted", state.QuestDrawModelAdjusted},
+            {"map_x", word(state.MapX)}, {"map_y", word(state.MapY)},
+            {"icons", std::move(icons)}};
+}
+
+TopScreenPauseProjectionState DecodeProjection(const nlohmann::json& encoded) {
+    const auto word = [](const nlohmann::json& p) {
+        if (!p.is_array() || p.size() != 4) throw std::runtime_error("invalid TopScreen position state");
+        TopScreenPauseProjectionState::TrackedPosition result{
+            p.at(0).get<uint32_t>(), p.at(1).get<uint32_t>(),
+            p.at(2).get<uint32_t>(), p.at(3).get<bool>()};
+        if (result.Valid && (result.Address == 0 || result.Address % 4))
+            throw std::runtime_error("invalid TopScreen position address");
+        return result;
+    };
+    TopScreenPauseProjectionState state;
+    state.AlternatePage = encoded.at("visible").get<bool>();
+    state.OffsetX = encoded.at("offset_x").get<float>();
+    state.OffsetY = encoded.at("offset_y").get<float>();
+    if (!std::isfinite(state.OffsetX) || !std::isfinite(state.OffsetY))
+        throw std::runtime_error("invalid TopScreen projection offset");
+    state.NativeQuestGate = encoded.at("quest_gate").get<bool>();
+    state.QuestDrawModelAdjusted = encoded.at("model_adjusted").get<bool>();
+    state.MapX = word(encoded.at("map_x"));
+    state.MapY = word(encoded.at("map_y"));
+    const auto& icons = encoded.at("icons");
+    if (!icons.is_array() || icons.size() != state.IconX.size())
+        throw std::runtime_error("invalid TopScreen indicator state");
+    for (size_t i = 0; i < icons.size(); ++i) state.IconX[i] = word(icons[i]);
+    return state;
+}
 
 constexpr std::array<uint8_t, 8> kStateMagic{
     'O', 'O', 'T', '3', 'D', 'S', 'V', 0};
@@ -543,6 +584,9 @@ bool SaveNativeA32State(
                      .FramePacingDecisionPending}}},
               {"topscreen_temporal_state",
                {{"available", runtime.TopScreenTemporalStateAvailable},
+                {"projection", runtime.TopScreenTemporalState.ProjectionAvailable
+                    ? EncodeProjection(runtime.TopScreenTemporalState.Projection)
+                    : nlohmann::json(nullptr)},
                 {"profile_active",
                  runtime.TopScreenTemporalState.ProfileActive},
                 {"pause_page_redraw_active",
@@ -825,6 +869,11 @@ bool LoadNativeA32State(
             encodedRuntime.find("topscreen_temporal_state");
         if (encodedTopScreenTemporalState != encodedRuntime.end()) {
             auto& state = restoredRuntime.TopScreenTemporalState;
+            const auto projection = encodedTopScreenTemporalState->find("projection");
+            if (projection != encodedTopScreenTemporalState->end() && !projection->is_null()) {
+                state.Projection = DecodeProjection(*projection);
+                state.ProjectionAvailable = true;
+            }
             restoredRuntime.TopScreenTemporalStateAvailable =
                 encodedTopScreenTemporalState->value("available", false);
             state.ProfileActive = encodedTopScreenTemporalState->value(

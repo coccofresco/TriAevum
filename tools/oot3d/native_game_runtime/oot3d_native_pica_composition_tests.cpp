@@ -55,7 +55,7 @@ int main() {
     oot3d::recomp::a32::GuestState state{};
     const auto hooks =
         Oot3dNativeGame::Oot3dNativePicaCompositionHookPcs();
-    Require(hooks.size() == 45U &&
+    Require(hooks.size() == 59U &&
                 std::find(
                     hooks.begin(), hooks.end(),
                     Oot3dNativeGame::kOot3dPicaPrimitivePacketBuilderEntry) !=
@@ -239,6 +239,25 @@ int main() {
     tracker.Reset();
     tracker.ObserveBlockEntry(0x003004E0U, state, memory);
     Require(tracker.Stats().UiScopeExits == 0, "reset retained a UI view scope");
+    for (const auto [entry, returnPc] : std::array{
+             std::pair{0x0041F308U, 0x0041983CU},
+             std::pair{0x00425930U, 0x0041EB14U},
+            std::pair{0x002FFF7CU, 0x00419824U},
+            std::pair{0x0042CB54U, 0x00300530U},
+            std::pair{0x0042A278U, 0x0030053CU},
+            std::pair{0x00427A3CU, 0x00300548U},
+            std::pair{0x0042CBCCU, 0x00300554U}}) {
+        tracker.Reset();
+        memory.Write32(0x0054CC4CU, 0x14001000U);
+        state.r[14] = returnPc;
+        tracker.ObserveBlockEntry(entry, state, memory);
+        memory.Write32(0x0054CC4CU, 0x14001040U);
+        tracker.ObserveBlockEntry(returnPc, state, memory);
+        Require(tracker.TakeCommandListCompositionSpans(0x14001000U, 0x100U, spans, &error) &&
+                    spans.size() == 1 && spans[0].Attribution.SourcePc == entry &&
+                    spans[0].Attribution.Layer == Oot3dNativeGame::Oot3dPicaCompositionLayer::Ui,
+                "pause backdrop/map/overlay lost UI command ownership");
+    }
     std::cout << "oot3d_native_pica_composition_tests: ok\n";
     return 0;
 }

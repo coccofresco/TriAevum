@@ -12,9 +12,15 @@ of all three reports. Issues: [25](https://github.com/coccofresco/TriAevum/issue
 - Minimap marker geometry no longer receives the independent button/HUD scale.
 - ZR bow use is demonstrated in a real checkpoint, including ammunition
   decreasing from 50 to 49. This does not establish every item/context works.
-- Pause/map screens, the reported dungeon marker case, independent ZL item use
-  and the Sheikah Stone crash still need scenario-specific verification.
-  Do not close the issues based on this checkpoint alone.
+- Pause/map/inventory and message backdrops now share the centered canvas and
+  are clipped to it. Independent ZL hookshot use was captured from gameplay.
+- Jabu-Jabu with the native map/compass flags shows its marker on the map.
+  A second defect on savestate reload is fixed: original map/indicator positions
+  now persist with the already-transformed guest buffers. Fresh entry and reload
+  framebuffer captures both retain the marker. Older states without these
+  originals need a native scene re-entry; do not infer lost coordinates.
+- Sheikah Stone reaches the native Visions screen after the Y2R/TLS/scheduling
+  fixes below. Movie playback qualification is still pending; do not close #39.
 
 ## Evidence and ownership
 
@@ -30,6 +36,13 @@ The copied `ui_native_workflow_closure.cpp` identifies these exact draw calls:
 | --- | --- | --- |
 | PauseQuestPage_Draw | 0042B9F4 | 003004E0 |
 | PauseUi_Draw | 0041EC50 | 00419830 |
+| PauseOverlay_DrawAllGroups | 0041F308 | 0041983C |
+| PauseWorldMap_Draw | 00425930 | 0041EB14 |
+| Renderer-local orthographic backdrop | 002FFF7C | 00419824 |
+| Message backdrop/choice | 0042CB54 | 00300530 |
+| Auxiliary message glyphs | 0042A278 | 0030053C |
+| Contextual message glyphs | 00427A3C | 00300548 |
+| Main message glyphs | 0042CBCC | 00300554 |
 
 The OOT3D composition adapter tracks command cursor 0054CC4C across these calls.
 It publishes exact UI command spans, including models emitted inside the UI.
@@ -84,3 +97,52 @@ screenshots were not used. Linux was not rerun in this increment.
 4. Reproduce Sheikah Stone entry/exit with a suitable checkpoint and trace native
    UI ownership/lifecycle before changing routing. No speculative crash fix.
 5. Run Linux smoke verification before publishing or marking reports resolved.
+
+## Extended qualification (2026-09-15)
+
+- `0b2d848`: initial centered native canvas and marker scale correction.
+- `pages-four-three-framebuffer_000200.bmp` / `_000560.bmp`: actual NRI 960x720
+  map/inventory; logical UI canvas is 960x576 centered vertically, with native
+  proportions. Ultrawide map/backdrop and message captures also pass inspection.
+- `qualification-framebuffer_000170.bmp`: independent ZL hookshot chain.
+  ZR bow use previously consumed one arrow (50 -> 49).
+- `jabu-persist.oot3dsav` and `jabu-reload-framebuffer_000150.bmp`: real scene
+  entry, map/compass marker, then reload with original projection state preserved.
+  The fixture changes only the private save inventory flags before scene entry.
+- Windows: composition, frontend, TopScreen profile, UI lifecycle, CTR host,
+  TLS-only process and full savestate round-trip tests pass. TLS restoration
+  accepts the unallocated initial state as well as multiple allocated pages.
+- The full synthetic process suite is not runnable against the frozen product
+  registry; use `oot3d_native_a32_process_tests --tls-only` for this boundary.
+  This limitation does not replace the actual movie/scene verification.
+
+### Sheikah Stone runtime dependencies
+
+The failures were observed in actual guest execution, not inferred from HUD
+appearance. Keep the fixes in their generic owners:
+
+1. `tools/ctr_services/y2r_service.h`: synchronous YUV conversion with native
+   fixed-point coefficients, DMA strides/gaps, rotation, Morton output and
+   conversion completion. `oot3d_native_a32_ctr_host.cpp` owns IPC/event handles
+   and persistence. Azahar provenance is in `THIRD_PARTY_NOTICES.md`.
+2. `NativeA32Process::CreateThread`: allocate another TLS page when eight slots
+   are exhausted. The movie creates a ninth thread. Existing addresses remain
+   stable, and multi-page TLS restores correctly.
+3. `OnlyBackgroundThreadsReady` / `RunUntilGuestWait`: yield to host event
+   delivery when the foreground waits and only lower-priority poll workers are
+   ready. The movie worker otherwise prevented timers and input from advancing.
+4. AOT recovery: an internal switch case is executable even when it is not a
+   public callable ABI root. Base-relative jump tables also differ from
+   self-relative pointer tables; recognize their ADR/LDR/ADD-pc structure.
+   The translator tests cover this independently of title addresses. The product
+   selection/manifest must match the newly generated program before release.
+
+Y2R dithering flags are stored but not applied, matching the inspected donor;
+this is not a claim of complete physical Y2R hardware emulation. The first new
+decoder build reached an additional base-relative dispatch gap, so reaching
+Visions alone is explicitly NOT proof of working playback or exit.
+
+Private decoder diagnostics are under `J:/TriAevum-diagnostics/y2r-codec-relative`;
+UI captures/checkpoints are under `%TEMP%/TriAevum-ui-canvas-ultrawide`.
+Never package these artifacts. Keep original game saves separate from diagnostic
+states. No issue has been marked resolved solely on unit tests.

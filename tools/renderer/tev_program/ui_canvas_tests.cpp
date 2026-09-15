@@ -38,5 +38,14 @@ int main() {
             }
         }
     }
+    const auto canvas = ResolvePicaRasterCanvas(PicaCompositionDomain::Ui, 480, 400, 1440, 1720);
+    const auto full = ClipToPicaCanvas({0, 0, 1440, 1720}, canvas, 480, 400);
+    if (full.X != 0 || full.Y != 260 || full.Width != 1440 || full.Height != 1200)
+        throw std::runtime_error("unscissored UI escaped its native canvas");
+    const auto partial = ClipToPicaCanvas({10, 270, 100, 30}, canvas, 480, 400);
+    if (partial.X != 10 || partial.Y != 270 || partial.Width != 100 || partial.Height != 30)
+        throw std::runtime_error("canvas expanded a native subregion scissor");
+    const auto outside = ClipToPicaCanvas({0, 0, 30, 20}, canvas, 480, 400);
+    if (outside.Height != 0) throw std::runtime_error("disjoint UI scissor was not empty");
     std::cout << "UI native/host canvas and touch parity: passed\n";
 }

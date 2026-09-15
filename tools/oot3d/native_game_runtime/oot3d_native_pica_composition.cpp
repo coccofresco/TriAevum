@@ -17,7 +17,17 @@ constexpr uint32_t kMeshPacketByteCountOffset = 0x10U;
 // DrawViewPass also executes scene callbacks and must NOT be classified UI.
 constexpr std::array kUiViews{
     std::pair{0x0042B9F4U, 0x003004E0U},
-    std::pair{0x0041EC50U, 0x00419830U}};
+    std::pair{0x0041EC50U, 0x00419830U},
+    std::pair{0x0041F308U, 0x0041983CU},
+    std::pair{0x00425930U, 0x0041EB14U},
+    // Orthographic renderer-local backdrop (single model at GraphRenderer+743C).
+    std::pair{0x002FFF7CU, 0x00419824U},
+    // Message renderers in DrawViewPass: backdrop/choice, auxiliary glyphs,
+    // contextual message glyphs and the main message context.
+    std::pair{0x0042CB54U, 0x00300530U},
+    std::pair{0x0042A278U, 0x0030053CU},
+    std::pair{0x00427A3CU, 0x00300548U},
+    std::pair{0x0042CBCCU, 0x00300554U}};
 constexpr std::array kCmbReturnPcs{
     0x002FADDCU, 0x002FADF4U, 0x002FAEC0U, 0x002FAED8U,
     0x002FEA68U, 0x002FEA74U, 0x003FE408U, 0x003FE414U,
@@ -191,6 +201,20 @@ std::span<const uint32_t> Oot3dNativePicaCompositionHookPcs() noexcept {
 
 bool Oot3dNativePicaCompositionTracker::RecordPendingSpan(
     Oot3dPicaCommandListCompositionSpan span) {
+    // Reject a crossing owner before erasing nested spans. Otherwise an invalid
+    // UI range could destroy valid scene attribution even though it is rejected.
+    if (span.Attribution.Layer == Oot3dPicaCompositionLayer::Ui) {
+        for (const auto& pending : mPendingSpans) {
+            const bool overlaps = span.BeginAddress < pending.EndAddress &&
+                                  pending.BeginAddress < span.EndAddress;
+            const bool contains = span.BeginAddress <= pending.BeginAddress &&
+                                  span.EndAddress >= pending.EndAddress;
+            if (overlaps && !contains && !SameAttribution(span.Attribution, pending.Attribution)) {
+                ++mStats.OverlappingPacketSpans;
+                return false;
+            }
+        }
+    }
     for (auto it = mPendingSpans.begin(); it != mPendingSpans.end();) {
         const bool overlaps = span.BeginAddress < it->EndAddress &&
                               it->BeginAddress < span.EndAddress;

@@ -7,6 +7,7 @@
 
 #include "oot3d/renderer/pica_render_backend.h"
 #include "oot3d_native_frame_rate.h"
+#include "../ui_topscreen/oot3d_top_screen_projection_state.h"
 
 namespace Oot3dNativeGame {
 
@@ -43,6 +44,8 @@ struct NativeTopScreenTemporalState {
     uint8_t AotPauseRouteTransitionPhase = 0;
     uint16_t AotPauseRouteRemainingCalls = 0;
     bool TouchCoordinateRuntimeSceneLatch = false;
+    bool ProjectionAvailable = false;
+    TopScreenPauseProjectionState Projection;
 };
 
 struct NativeA32SavestateRuntimeState {

@@ -525,7 +525,7 @@ void TestNativeFunctionAtDispatchEntry() {
            "dispatch-entry native function did not bypass packed execution");
 }
 
-void TestPrioritySchedulerAndTls() {
+void TestPrioritySchedulerAndTls(bool testScheduler = true) {
     const auto registry = MakeTestRegistry();
     TestHostServices services;
     Oot3dNativeGame::NativeA32Process process(registry, services);
@@ -554,13 +554,37 @@ void TestPrioritySchedulerAndTls() {
                workerState->thread_pointer == kTls + 0x200U,
            "secondary registers, stack and TLS initialization");
 
-    const auto result = process.Run();
-    Expect(services.FirstSvc == 3U &&
+    if (testScheduler) {
+      const auto result = process.Run();
+      Expect(services.FirstSvc == 3U &&
                process.ThreadStatus(*worker) ==
                    Oot3dNativeGame::NativeA32ThreadStatus::Terminated &&
                result.Kind ==
                    Oot3dNativeGame::NativeA32ProcessRunKind::Waiting,
            "higher-priority worker must run before the primary thread");
+    }
+    // Movie services exceed the first page's eight TLS entries.
+    for (uint32_t id = 2; id <= 17; ++id) {
+        const auto extra = process.CreateThread(
+            {kEntry + 0x10U, id, kData + 0x100U, 0x10U, 0x03C00000U, 24U}, &error);
+        Expect(extra == id && process.ThreadState(id)->thread_pointer == kTls + id * 0x200U,
+               "TLS must grow by pages without moving existing threads");
+    }
+    const auto grown = process.CaptureState();
+    Expect(process.RestoreState(grown, &error), error.c_str());
+    Expect(process.ThreadState(17)->thread_pointer == kTls + 17U * 0x200U,
+           "extended TLS pages must survive savestate restore");
+    auto background = grown;
+    background["primary_thread_status"] =
+        static_cast<uint32_t>(Oot3dNativeGame::NativeA32ThreadStatus::Waiting);
+    for (auto& thread : background["secondary_threads"]) thread["priority"] = 52U;
+    Expect(process.RestoreState(background, &error) && process.OnlyBackgroundThreadsReady(),
+           "background polling must not starve host event delivery");
+    background["secondary_threads"][0]["priority"] = 24U;
+    background["secondary_threads"][0]["status"] =
+        static_cast<uint32_t>(Oot3dNativeGame::NativeA32ThreadStatus::Ready);
+    Expect(process.RestoreState(background, &error) && !process.OnlyBackgroundThreadsReady(),
+           "foreground-priority service work must complete before host yield");
 }
 
 void TestProcessStateRoundTrip() {
@@ -1697,8 +1721,13 @@ void TestTrueAotNativeCurveType2Scan() {
 
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
     try {
+        if (argc == 2 && std::string_view(argv[1]) == "--tls-only") {
+            TestPrioritySchedulerAndTls(false);
+            std::cout << "oot3d_native_a32_process_tests: TLS ok\n";
+            return 0;
+        }
         TestMemoryContract();
 #if defined(OOT3D_NATIVE_A32_AOT_TESTS)
         TestWholeAotShiftAndFlagSemantics();

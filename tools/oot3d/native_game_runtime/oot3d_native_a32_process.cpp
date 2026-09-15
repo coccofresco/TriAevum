@@ -331,8 +331,18 @@ std::optional<uint32_t> NativeA32Process::CreateThread(
     constexpr size_t kTlsEntrySize = 0x200U;
     if (mNextTlsOffset > mTlsSize ||
         kTlsEntrySize > mTlsSize - mNextTlsOffset) {
-        SetError(error, "native A32 process has no free TLS entry");
-        return std::nullopt;
+        // CTR allocates another page when its eight TLS slots are exhausted.
+        // Keep old slots at stable addresses, including restored checkpoints.
+        constexpr size_t kTlsPageSize = 0x1000U;
+        const uint64_t nextPage = uint64_t(mTlsBaseAddress) + mTlsSize;
+        if (mNextTlsOffset != mTlsSize || mTlsSize % kTlsPageSize != 0 ||
+            nextPage + kTlsPageSize > uint64_t(UINT32_MAX) + 1 ||
+            !mMemory.MapRegion({"thread_tls", static_cast<uint32_t>(nextPage),
+                                kTlsPageSize, true, false, {}}, error)) {
+            SetError(error, "native A32 process cannot allocate another TLS page");
+            return std::nullopt;
+        }
+        mTlsSize += kTlsPageSize;
     }
     const uint32_t threadPointer =
         mTlsBaseAddress + static_cast<uint32_t>(mNextTlsOffset);
@@ -383,6 +393,16 @@ bool NativeA32Process::HasReadyThread() const {
         }
     }
     return false;
+}
+
+bool NativeA32Process::OnlyBackgroundThreadsReady() const {
+    if (mPrimaryThreadStatus != NativeA32ThreadStatus::Waiting) return false;
+    for (const auto& thread : mSecondaryThreads) {
+        if ((thread.Status == NativeA32ThreadStatus::Ready ||
+             thread.Status == NativeA32ThreadStatus::Running) &&
+            thread.Priority <= mPrimaryThreadPriority) return false;
+    }
+    return true;
 }
 
 bool NativeA32Process::SelectReadyThread() {
@@ -1023,9 +1043,11 @@ bool NativeA32Process::RestoreState(const nlohmann::json& state,
         const size_t tlsSize = state.at("tls_size").get<size_t>();
         const size_t nextTlsOffset =
             state.at("next_tls_offset").get<size_t>();
-        if (nextTlsOffset > tlsSize ||
-            (tlsSize != 0U &&
-             !stagedMemory.IsMapped(tlsBaseAddress, tlsSize))) {
+        bool tlsMapped = tlsSize == 0U || RangeFits(tlsBaseAddress, tlsSize);
+        for (size_t offset = 0; tlsMapped && offset < tlsSize; offset += 0x200U)
+            tlsMapped = stagedMemory.IsWritable(tlsBaseAddress + static_cast<uint32_t>(offset),
+                                                std::min(size_t(0x200U), tlsSize - offset));
+        if (nextTlsOffset > tlsSize || !tlsMapped) {
             SetError(error, "native A32 TLS state is invalid");
             return false;
         }

@@ -85,6 +85,10 @@ int main() {
     runtime.TopScreenTemporalState = {
         true, true, 7U, true, true, 11U, 4U, 2U, 13U,
         2U, 1U, 17U, true};
+    runtime.TopScreenTemporalState.ProjectionAvailable = true;
+    runtime.TopScreenTemporalState.Projection.OffsetX = 280.0F;
+    runtime.TopScreenTemporalState.Projection.MapX = {0x1000U, 0x42400000U, 0x43a40000U, true};
+    runtime.TopScreenTemporalState.Projection.IconX[255] = {0x1004U, 0x42000000U, 0x439c0000U, true};
     runtime.PicaVisualReplayStateAvailable = true;
     runtime.PicaVisualReplayState = {0x50U, 0x56U, 0x52U, 0x31U};
     runtime.PicaTextureCacheAvailable = true;
@@ -178,10 +182,10 @@ int main() {
     Require(process.Memory().Write32(0x00100020U, 0xDEADBEEFU),
             "cannot mutate guest memory");
     runtime = {};
-    Require(LoadNativeA32State(
+    const bool loaded = LoadNativeA32State(
                 statePath, compatibility, runtime, process, host,
-                picaFrontend, submissionQueue, dspHle, &io, &error),
-            error);
+                picaFrontend, submissionQueue, dspHle, &io, &error);
+    Require(loaded, error);
     uint32_t restoredWord = 0;
     Require(process.Memory().Read32(0x00100020U, &restoredWord) &&
                 restoredWord == 0x12345678U && runtime.FrameCount == 321U &&
@@ -226,6 +230,12 @@ int main() {
                         .AotPauseRouteRemainingCalls == 17U &&
                 runtime.TopScreenTemporalState
                     .TouchCoordinateRuntimeSceneLatch &&
+                runtime.TopScreenTemporalState.ProjectionAvailable &&
+                runtime.TopScreenTemporalState.Projection.OffsetX == 280.0F &&
+                runtime.TopScreenTemporalState.Projection.MapX ==
+                    TopScreenPauseProjectionState::TrackedPosition{0x1000U, 0x42400000U, 0x43a40000U, true} &&
+                runtime.TopScreenTemporalState.Projection.IconX[255] ==
+                    TopScreenPauseProjectionState::TrackedPosition{0x1004U, 0x42000000U, 0x439c0000U, true} &&
                 runtime.PicaVisualReplayStateAvailable &&
                 runtime.PicaVisualReplayState ==
                     std::vector<uint8_t>({0x50U, 0x56U, 0x52U, 0x31U}) &&

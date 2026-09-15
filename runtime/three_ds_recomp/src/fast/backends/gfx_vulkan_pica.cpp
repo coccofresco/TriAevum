@@ -4707,6 +4707,13 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         }
         mViewportSet = true;
         mScissorSet = true;
+        if (draw.CompositionDomain == Renderer3ds::PicaCompositionDomain::Ui) {
+            const auto clip = Renderer3ds::ClipToPicaCanvas(
+                {mScissor.offset.x, mScissor.offset.y,
+                 mScissor.extent.width, mScissor.extent.height},
+                rasterCanvas, draw.FramebufferWidth, draw.FramebufferHeight);
+            mScissor = {{clip.X, clip.Y}, {clip.Width, clip.Height}};
+        }
         struct NativeDrawPush {
             std::array<float, 4> RigidMotion{};
             std::array<float, 4> Jitter{};

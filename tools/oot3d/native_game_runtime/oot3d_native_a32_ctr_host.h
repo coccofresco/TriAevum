@@ -3,6 +3,7 @@
 #include "oot3d_native_a32_ctr_pica_bridge.h"
 #include "oot3d_native_a32_input.h"
 #include "oot3d_native_a32_process.h"
+#include "../../ctr_services/y2r_service.h"
 
 #include <array>
 #include <cstdint>
@@ -454,6 +455,8 @@ class NativeA32CtrHostServices final : public NativeA32HostServices {
     std::array<std::array<std::shared_ptr<KernelObject>, 8>, 3>
         mDspInterruptEvents{};
     std::shared_ptr<KernelObject> mDspSemaphoreEvent;
+    CtrServices::Y2rState mY2r;
+    std::shared_ptr<KernelObject> mY2rCompletionEvent;
     std::array<std::vector<uint8_t>, 8> mDspPipeOutput;
     std::shared_ptr<KernelObject> mHidSharedMemory;
     std::array<std::shared_ptr<KernelObject>, 5> mHidEvents{};

@@ -1,0 +1,10 @@
+{
+  "schema": "oot3d.native_game.input_timeline.v1",
+  "frame_origin": "run",
+  "segments": [
+    {"start_frame": 120, "end_frame_exclusive": 126, "touch": {"pressed": true, "x": 160, "y": 221}},
+    {"start_frame": 300, "end_frame_exclusive": 306, "touch": {"pressed": true, "x": 100, "y": 221}},
+    {"start_frame": 480, "end_frame_exclusive": 486, "touch": {"pressed": true, "x": 224, "y": 221}},
+    {"start_frame": 660, "end_frame_exclusive": 664, "buttons": ["start"]}
+  ]
+}

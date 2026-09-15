@@ -2996,6 +2996,12 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
 endif()
 set_property(TARGET oot3d_native_a32_ctr_host_tests PROPERTY FOLDER Tests)
 
+add_executable(ctr_y2r_service_tests EXCLUDE_FROM_ALL
+    tools/ctr_services/y2r_service_tests.cpp
+)
+target_compile_features(ctr_y2r_service_tests PRIVATE cxx_std_20)
+set_property(TARGET ctr_y2r_service_tests PROPERTY FOLDER Tests)
+
 add_library(oot3d_native_a32_savestate STATIC EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_a32_savestate.cpp
 )

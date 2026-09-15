@@ -42,6 +42,12 @@ or was adapted against [Azahar Emulator](https://github.com/azahar-emu/azahar).
   GPL-2.0-or-later and retain their headers.
 - The same directory imports nihstro definitions under the BSD 3-Clause
   License; its text is in `NIHSTRO_LICENSE.txt`.
+- `tools/ctr_services/y2r_service.h` adapts the Y2R fixed-point conversion,
+  rotation, tiled output and service contracts from Azahar's
+  `src/core/hw/y2r.cpp` and `src/core/hle/service/cam/y2r_u.cpp` at revision
+  `beb5681ee7f85586501b16b083a961b707092cd7`, under GPL-2.0-or-later.
+  The portable service has its own memory/IPC boundary and regression tests;
+  source-file attribution is retained.
 - `tools/oot3d/third_party/azahar_audio` contains an adapted audio subset under
   GPL-2.0-or-later. The applicable text is in its `LICENSE.txt`. It entered this
   repository in commit `c3313fb20796522f43c177fbd071b069384bc2aa` from Azahar
