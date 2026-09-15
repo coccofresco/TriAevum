@@ -326,10 +326,85 @@ remain for compatibility during migration, without becoming a requirement of the
 new path. Do not publish private ROMs, extracted assets, saves, captures or driver
 caches with test evidence.
 
+## M1 implementation and measured limits (2026-09-15)
+
+M1 now has a real Vulkan/NRI consumer, not just a proposed key or mock library.
+The reproducible donor patch is
+`runtime/three_ds_recomp/cmake/patches/nri_graphics_pipeline_libraries.cmake`;
+its layout-owned implementation is
+`nri_pipeline_libraries/GraphicsPipelineLibrariesVK.h` beside that patch.
+The CMake source-checkout and FetchContent paths both apply it. ABI version 1
+is required by the shared renderer bridge. No title code was regenerated.
+
+The opt-in `TRIAEVUM_NRI_PIPELINE_LIBRARIES=1` negotiates both Vulkan library
+extensions and the feature on the actual device, including the NRI wrapper.
+It preserves shader bytes, descriptors, draw commands and native fixed state.
+Four exact-state subsets are retained independently, bounded to 128 entries
+per subset per layout, and destroyed before their layout/device. Executable
+pipelines retain the existing NRI identity and lifetime ownership. Unknown
+extension/state contracts explicitly fall back and increment a rejection count.
+This first implementation accepts the existing vertex+fragment dynamic-rendering
+contract, not arbitrary mesh/tessellation/specialization/pNext contracts.
+
+Windows RTX 3060 validation, without a collected shader pack:
+
+| Case | Executables linked | Parts created (input/pre-raster/fragment/output) | Maximum link |
+| --- | ---: | --- | ---: |
+| Field canonical | 24 | 8 / 3 / 4 / 6 | 0.163 ms |
+| Field toon + TAA, outline off | 27 | 8 / 5 / 7 / 8 | 0.161 ms |
+| Boot, effects off | 25 | 10 / 2 / 4 / 7 | 0.197 ms |
+
+All three cases produced three pixel-identical framebuffer comparisons against the
+specialized path, zero runtime source compilations and zero library rejections.
+Canonical GPL also matched the same executable's monolithic parametric output
+exactly at all three frames. Vulkan and NRI validation reported zero errors.
+Validation warnings are not claimed absent; these remain recorded in the private
+renderer reports. The focused mock test verifies subset reuse, equal shader
+bytes at different addresses, depth/output separation, unknown-state rejection
+and bounded retirement. It is supplementary to the actual draw tests.
+The complete local TEV/lighting/procedural-texture/artifact/identity suite passed
+13/13 tests. Linux and Android GPU qualification have not been run for GPL.
+
+Important: fragment-part creation still ran synchronously and cost 327.5 ms
+cumulatively for canonical and 1083.2 ms for toon+TAA on those correctness runs.
+Those runs include validation and are not throughput benchmarks. Fast final
+links do NOT mean expensive work has left the interactive path.
+
+Three rotating-order, 300-native-frame runs including first use measured median
+101.33 FPS monolithic versus 95.91 FPS GPL (about 5.3% lower throughput).
+VSync, interpolation, pacing, limiter and captures were disabled; both arms
+used the same parametric programs with zero source compiler requests. Driver
+caches were not cleared. This is NOT a speedup or a cold-driver claim.
+Keep GPL opt-in until the throughput safeguard and preparation boundary are
+resolved. Do not make it the default merely because final links are cheap.
+
+The separate steady-state experiment (three runs of 900 frames, first 180
+excluded) measured medians 114.73 FPS monolithic and 116.67 FPS GPL, with GPL
+runs ranging 112.57-118.01 FPS. This does not establish a material steady-state
+regression; nor does the small median gain establish a general speedup. GPL
+p99 median was 11.625 ms, maximum 17.078 ms, with zero frames over 33.33 ms
+across 2160 measured frames. The priority remains first-use preparation, not
+an assumed permanent shader-execution penalty. Evidence is in
+`%TEMP%/TriAevum-gpl-steady-20260915`.
+
+Reproduction tools:
+
+- `run_native_comparison.py --pipeline-libraries --validation --no-shader-pack
+  --require-no-runtime-compilation --require-single-pipeline-owner`, with the
+  existing `--invocation` and a new `--output`; add `--toon --taa` as needed.
+- `benchmark_native_paths.py --compare-pipeline-libraries --frames 300
+  --warmup 0 --repeats 3`, with that invocation and a separate output. This
+  compares the same parametric programs, not specialized versus parametric.
+- Private evidence: `%TEMP%/TriAevum-gpl-{field,monolithic,toon,boot,timing}-20260915`.
+  Do not package these directories or their game-derived inputs.
+
 ## First action on resumption
 
-Implement M1 at the real NRI factory: query capabilities, introduce the minimal
-versioned library interface, draw one supported family through it, and compare
-output and device work with the current monolithic path. Keep unsupported devices
-on the correct existing factory. Do not begin with another retention tweak or
-another shader-cache collection campaign.
+Continue M2 from the live M1 consumer, not from a new pipeline/cache design.
+Resolve the first-use penalty and move shader-bearing part creation to a
+genuine resource preparation boundary with owned requests. Preserve the
+separate steady-state safeguard when extending the supported surface.
+Keep expensive compilation out of interactive submission; preparation must not
+be disguised as work earlier in the same frame. Retain the correct monolithic
+path on unsupported devices and until the candidate passes the measured policy.
+M3 default-profile coverage and M4 platform/transition qualification remain open.

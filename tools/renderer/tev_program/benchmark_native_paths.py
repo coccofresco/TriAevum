@@ -22,17 +22,24 @@ def main():
     parser.add_argument('--taa', action='store_true', help='Exercise temporal shader outputs without frame interpolation')
     parser.add_argument('--toon', action='store_true', help='Exercise material toon without outline')
     parser.add_argument('--from-start', action='store_true', help='Boot instead of loading the fixture state')
+    parser.add_argument('--compare-pipeline-libraries', action='store_true',
+                        help='Compare monolithic and GPL with the same parametric programs, no collected pack')
     args = parser.parse_args()
     if args.repeats < 1 or not 0 <= args.warmup < args.frames:
         parser.error('require repeats > 0 and 0 <= warmup < frames')
+    if args.compare_pipeline_libraries and args.baseline:
+        parser.error('pipeline comparison uses the same current executable only')
     fixture = json.loads(args.invocation.read_text(encoding='utf-8-sig'))
     current = Path(fixture['executable'])
     args.output.mkdir(parents=True, exist_ok=False)
     arms = (('historical',) if args.baseline else ()) + ('current_specialized', 'current_parametric')
+    if args.compare_pipeline_libraries:
+        arms = ('current_parametric', 'current_libraries')
     rows = []
     for repeat in range(args.repeats):
         order = arms[repeat % len(arms):] + arms[:repeat % len(arms)]
         for arm in order:
+            parametric = arm in ('current_parametric', 'current_libraries')
             root = args.output / f'{repeat}-{arm}'
             root.mkdir()
             neutral_input = root / 'neutral-input.json'
@@ -52,7 +59,7 @@ def main():
                 '--throughput-benchmark', '--pica-parametric-tev'}
             if args.from_start:
                 removed_values.add('--load-state')
-            if arm == 'current_parametric':
+            if parametric:
                 removed_values.add('--pica-aot-shader-pack')
                 removed_flags.add('--pica-aot-shader-strict')
             copies = {'--config': 'config.json', '--topscreen-config': 'topscreen.json',
@@ -89,9 +96,11 @@ def main():
                 '--input-timeline', str(neutral_input.resolve()),
                 '--output', str((root/'runtime.json').resolve()),
                 '--renderer-cache-directory', str(cache.resolve())))
-            if arm == 'current_parametric':
+            if parametric:
                 command.append('--pica-parametric-tev')
             environment = os.environ.copy()
+            environment['OOT3D_VULKAN_VALIDATION'] = '0'
+            environment['TRIAEVUM_NRI_PIPELINE_LIBRARIES'] = '1' if arm == 'current_libraries' else '0'
             environment['OOT3D_GRAPHICS_NRI_PICA_DRAWS'] = '1'
             environment['OOT3D_GRAPHICS_PICA_DYNAMIC_RENDERING'] = '1'
             for name in ('OOT3D_PICA_AOT_SHADER_PACK', 'OOT3D_PICA_AOT_SHADER_STRICT',
@@ -129,6 +138,20 @@ def main():
                 raise RuntimeError(f'{arm}: native visual/update accounting differs')
             log = (root/'stderr.log').read_text(errors='replace')
             counters = {}
+            if args.compare_pipeline_libraries:
+                if 'TRIAEVUM_RUNTIME_SHADER_COMPILE ' in log or not re.search(
+                    r'TRIAEVUM_SPIRV_CACHE requests=0 hits=0 misses=0 rejected=0 compiled=0\b', log):
+                    raise RuntimeError(f'{arm}: shader compilation invalidates pipeline-only comparison')
+                links = [dict(zip(('count', 'ns', 'max_ns', 'rejected'), map(int, values)))
+                         for values in re.findall(r'TRIAEVUM_NRI_GPL_LINK count=(\d+) ns=(\d+) max_ns=(\d+) rejected=(\d+)', log)]
+                counters['pipeline_library_links'] = links
+                counters['pipeline_library_parts'] = [dict(zip(('part', 'created', 'reused', 'ns'), map(int, values)))
+                    for values in re.findall(r'TRIAEVUM_NRI_GPL_PART part=(\d+) created=(\d+) reused=(\d+) ns=(\d+)', log)]
+                if arm == 'current_libraries' and (not links or any(item['rejected'] for item in links)
+                        or not sum(item['count'] for item in links)):
+                    raise RuntimeError('GPL draw execution missing or contains fallback')
+                if arm == 'current_parametric' and links:
+                    raise RuntimeError('monolithic reference unexpectedly used GPL')
             for label in ('TRIAEVUM_PASS_SHADER_CACHE', 'TRIAEVUM_SPIRV_CACHE',
                           'TRIAEVUM_NATIVE_PROGRAM_OWNERS'):
                 match = re.search(label + r' ([^\n]+)', log)
@@ -177,6 +200,7 @@ def main():
                 'samples': sum(d['samples'] for d in distributions)}
     summary['taa'] = args.taa
     summary['toon'] = args.toon
+    summary['compare_pipeline_libraries'] = args.compare_pipeline_libraries
     summary['from_start'] = args.from_start
     summary['warmup_frames'] = args.warmup
     summary['method'] = ('Rotating arm order; same guest DLL/assets/state/config; native30 fixed delta; '

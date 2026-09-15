@@ -82,7 +82,8 @@ class NriInteropContext final {
                     bool nisDeviceFeaturesEnabled,
                     bool fsrDeviceFeaturesEnabled,
                     bool swapchainExtensionsEnabled = false,
-                    RendererValidationTelemetry* validationTelemetry = nullptr);
+                    RendererValidationTelemetry* validationTelemetry = nullptr,
+                    bool graphicsPipelineLibrariesEnabled = false);
     void Shutdown();
     Renderer::CachedPassShaderCompiler& Shaders() { return mShaders; }
 

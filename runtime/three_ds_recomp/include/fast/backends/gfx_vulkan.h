@@ -703,6 +703,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     uint32_t mVulkanAdapterDeviceId = 0;
     bool mSynchronization2Enabled = false;
     bool mDynamicRenderingEnabled = false;
+    bool mGraphicsPipelineLibrariesEnabled = false;
     bool mNisVulkanFeaturesEnabled = false;
     bool mFsrVulkanFeaturesEnabled = false;
     bool mD3d12InteropExtensionsEnabled = false;

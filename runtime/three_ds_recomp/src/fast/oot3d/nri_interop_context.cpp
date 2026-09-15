@@ -436,7 +436,8 @@ bool NriInteropContext::Initialize(VkInstance instance, VkPhysicalDevice physica
                                    bool fsrDeviceFeaturesEnabled,
                                    bool swapchainExtensionsEnabled,
                                    RendererValidationTelemetry*
-                                       validationTelemetry) {
+                                       validationTelemetry,
+                                   bool graphicsPipelineLibrariesEnabled) {
     Shutdown();
     mImpl->ValidationTelemetry = validationTelemetry;
 #ifdef ENABLE_OOT3D_NRI
@@ -475,6 +476,11 @@ bool NriInteropContext::Initialize(VkInstance instance, VkPhysicalDevice physica
         deviceExtensions.push_back(
             VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
     desc.vkExtensions.deviceExtensions = deviceExtensions.data();
+    if (graphicsPipelineLibrariesEnabled) {
+        deviceExtensions.push_back(VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME);
+        deviceExtensions.push_back(VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME);
+        desc.vkExtensions.deviceExtensions = deviceExtensions.data();
+    }
     desc.vkExtensions.deviceExtensionNum =
         static_cast<uint32_t>(deviceExtensions.size());
     std::vector<const char*> instanceExtensions;
@@ -534,6 +540,7 @@ bool NriInteropContext::Initialize(VkInstance instance, VkPhysicalDevice physica
     (void)dynamicRenderingEnabled; (void)nisDeviceFeaturesEnabled;
     (void)fsrDeviceFeaturesEnabled;
     (void)swapchainExtensionsEnabled;
+    (void)graphicsPipelineLibrariesEnabled;
     return false;
 #endif
 }

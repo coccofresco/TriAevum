@@ -35,6 +35,7 @@ struct NriPicaExecutionConfig {
     uint32_t MaxDrawsPerFrame = 512U;
     bool OwnedDraws = true;
     bool PreferOwnedUploads = false;
+    bool PipelineLibrariesEnabled = false;
 };
 
 struct NriPicaGraphicsPipelineDesc {

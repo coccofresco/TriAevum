@@ -12,6 +12,9 @@
 #include "nri_pica_upload_arena.h"
 #include <Extensions/NRIHelper.h>
 #include <NRI.h>
+#if !defined(TRIAEVUM_NRI_GPL_ABI) || TRIAEVUM_NRI_GPL_ABI != 1
+#error "Apply the pinned TriAevum NRI graphics pipeline library ABI patch before building"
+#endif
 #endif
 
 #include <algorithm>
@@ -228,6 +231,7 @@ struct NriPicaPipelineBridge::Impl {
     std::map<NriPicaSamplerKey, nri::Descriptor*> Samplers;
     bool OwnedDraws = false;
     bool PreferOwnedUploads = false;
+    bool PipelineLibrariesEnabled = false;
     bool LastDrawUploadsOwned = false;
     uint64_t LastDrawUploadBytes = 0;
 #endif
@@ -314,6 +318,7 @@ bool NriPicaPipelineBridge::Initialize(
     }
     mImpl->OwnedDraws = config.OwnedDraws;
     mImpl->PreferOwnedUploads = config.PreferOwnedUploads;
+    mImpl->PipelineLibrariesEnabled = config.PipelineLibrariesEnabled;
     if (mImpl->OwnedDraws) {
         for (auto& frame : mImpl->Frames) {
             nri::DescriptorPoolDesc pool{};
@@ -513,6 +518,8 @@ nri::Pipeline* NriPicaPipelineBridge::CreatePipeline(const NriPicaGraphicsPipeli
     }
     pipeline.shaders = shaders.data();
     pipeline.shaderNum = static_cast<uint32_t>(shaders.size());
+    if (mImpl->PipelineLibrariesEnabled)
+        pipeline.flags = nri::GraphicsPipelineBits::USE_GRAPHICS_PIPELINE_LIBRARY;
     // Reuse driver compilation across layout/raster variants and Reset().
     // Cache failure is non-fatal: the same canonical pipeline remains valid.
     InitializePipelineCache();

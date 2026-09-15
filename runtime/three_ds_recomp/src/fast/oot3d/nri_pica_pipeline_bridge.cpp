@@ -76,7 +76,7 @@ class NriPicaPipelineBridge::InteropAdapter final
 NriPicaPipelineBridge::NriPicaPipelineBridge() = default;
 NriPicaPipelineBridge::~NriPicaPipelineBridge() { Shutdown(); }
 
-bool NriPicaPipelineBridge::Initialize(NriInteropContext& interop) {
+bool NriPicaPipelineBridge::Initialize(NriInteropContext& interop, bool pipelineLibrariesEnabled) {
     Shutdown();
     mInteropAdapter = std::make_unique<InteropAdapter>(interop);
     const char* ownedDraws =
@@ -88,6 +88,7 @@ bool NriPicaPipelineBridge::Initialize(NriInteropContext& interop) {
         512U,
         ownedDraws == nullptr || std::string_view(ownedDraws) != "0",
         ownedUploads != nullptr && std::string_view(ownedUploads) == "1",
+        pipelineLibrariesEnabled,
     };
     if (!mBridge.Initialize(*mInteropAdapter, config)) {
         mInteropAdapter.reset();

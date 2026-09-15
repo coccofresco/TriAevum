@@ -44,7 +44,7 @@ class NriPicaPipelineBridge final {
     NriPicaPipelineBridge(const NriPicaPipelineBridge&) = delete;
     NriPicaPipelineBridge& operator=(const NriPicaPipelineBridge&) = delete;
 
-    bool Initialize(NriInteropContext& interop);
+    bool Initialize(NriInteropContext& interop, bool pipelineLibrariesEnabled = false);
     bool InitializePipelineCache(std::span<const uint8_t> data = {});
     [[nodiscard]] std::vector<uint8_t> GetPipelineCacheData() const;
     [[nodiscard]] Renderer3ds::NriPicaPipelineStatistics PipelineStatistics() const;

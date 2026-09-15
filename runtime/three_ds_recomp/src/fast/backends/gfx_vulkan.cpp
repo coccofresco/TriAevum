@@ -719,7 +719,8 @@ void GfxRenderingAPIVulkan::Init() {
                                mFsrVulkanFeaturesEnabled,
                                mNriSwapchainExtensionsEnabled,
                                mVulkanValidation.Enabled()
-                                   ? &mValidationTelemetry : nullptr)) {
+                                   ? &mValidationTelemetry : nullptr,
+                               mGraphicsPipelineLibrariesEnabled)) {
         SPDLOG_INFO("OOT3D Vulkan NRI v180 interop enabled");
     } else {
         SPDLOG_INFO("OOT3D Vulkan NRI interop unavailable: {}",
@@ -794,7 +795,7 @@ void GfxRenderingAPIVulkan::Init() {
         nriPicaPipelines == nullptr ||
         std::string_view(nriPicaPipelines) != "0";
     if (!nriPicaPipelinesEnabled ||
-        !mNriPicaPipelineBridge.Initialize(mNriInterop)) {
+        !mNriPicaPipelineBridge.Initialize(mNriInterop, mGraphicsPipelineLibrariesEnabled)) {
         SPDLOG_INFO("OOT3D Vulkan NRI PICA pipeline bridge unavailable: {}",
                     nriPicaPipelinesEnabled
                         ? mNriPicaPipelineBridge.UnavailableReason()
@@ -2693,6 +2694,9 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
     VkPhysicalDeviceVulkan12Features vulkan12{
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES
     };
+    VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT pipelineLibraries{
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT};
+    dynamicRendering.pNext = &pipelineLibraries;
     vulkan12.pNext = &synchronization2;
     synchronization2.pNext = &dynamicRendering;
     VkPhysicalDeviceFeatures2 supportedFeatures{
@@ -2707,6 +2711,24 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
     mDynamicRenderingEnabled =
         hasVulkan12 && hasDynamicRenderingExtension &&
         dynamicRendering.dynamicRendering == VK_TRUE;
+    const bool librarySupported = hasExtension(VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME) &&
+        hasExtension(VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME) && pipelineLibraries.graphicsPipelineLibrary;
+    VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT libraryProperties{
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_PROPERTIES_EXT};
+    VkPhysicalDeviceProperties2 properties2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+    properties2.pNext = &libraryProperties;
+    vkGetPhysicalDeviceProperties2(mPhysicalDevice, &properties2);
+    const char* libraryMode = std::getenv("TRIAEVUM_NRI_PIPELINE_LIBRARIES");
+    const bool libraryRequested = libraryMode && std::string_view(libraryMode) == "1";
+    mGraphicsPipelineLibrariesEnabled = libraryRequested && librarySupported && mDynamicRenderingEnabled;
+    std::fprintf(stderr, "TRIAEVUM_NRI_GPL_CAPABILITY supported=%u requested=%u enabled=%u fast_link=%u independent_interpolation=%u\n",
+        unsigned(librarySupported), unsigned(libraryRequested), unsigned(mGraphicsPipelineLibrariesEnabled),
+        unsigned(libraryProperties.graphicsPipelineLibraryFastLinking),
+        unsigned(libraryProperties.graphicsPipelineLibraryIndependentInterpolationDecoration));
+    if (mGraphicsPipelineLibrariesEnabled) {
+        extensions.push_back(VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME);
+        extensions.push_back(VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME);
+    }
     if (mSynchronization2Enabled)
         extensions.push_back(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
     if (mDynamicRenderingEnabled)
@@ -2781,6 +2803,10 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
         dynamicRendering.dynamicRendering = VK_TRUE;
         dynamicRendering.pNext = featureChain;
         featureChain = &dynamicRendering;
+    }
+    if (mGraphicsPipelineLibrariesEnabled) {
+        pipelineLibraries.pNext = featureChain;
+        featureChain = &pipelineLibraries;
     }
     createInfo.pNext = featureChain;
     CheckVk(vkCreateDevice(mPhysicalDevice, &createInfo, nullptr, &mDevice), "vkCreateDevice");

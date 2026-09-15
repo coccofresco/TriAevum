@@ -17,6 +17,8 @@ def main():
     parser.add_argument('--from-start', action='store_true', help='Ignore the fixture savestate and boot the game')
     parser.add_argument('--taa', action='store_true', help='Enable TAA in the isolated copied configuration to exercise typed temporal programs')
     parser.add_argument('--toon', action='store_true', help='Exercise material toon, without outline or other new effects')
+    parser.add_argument('--pipeline-libraries', action='store_true', help='Require real NRI graphics pipeline library draws')
+    parser.add_argument('--validation', action='store_true', help='Enable Vulkan validation for correctness runs only')
     parser.add_argument('--vulkan-fallback', action='store_true',
                         help='Exercise non-owned Vulkan draws instead of NRI-owned draws')
     parser.add_argument('--require-single-pipeline-owner', action='store_true',
@@ -29,6 +31,8 @@ def main():
         parser.error('--require-no-runtime-compilation requires --no-shader-pack')
     if args.require_single_pipeline_owner and not args.no_shader_pack:
         parser.error('--require-single-pipeline-owner requires --no-shader-pack')
+    if args.pipeline_libraries and args.vulkan_fallback:
+        parser.error('pipeline libraries require NRI-owned draws')
     source = json.loads(args.invocation.read_text(encoding='utf-8-sig'))
     executable = Path(source['executable'])
     args.output.mkdir(parents=True, exist_ok=False)
@@ -88,6 +92,8 @@ def main():
             command.append('--pica-parametric-tev')
         (root/'invocation.json').write_text(json.dumps({'command': command}, indent=2))
         environment = os.environ.copy()
+        environment['TRIAEVUM_NRI_PIPELINE_LIBRARIES'] = '1' if args.pipeline_libraries else '0'
+        environment['OOT3D_VULKAN_VALIDATION'] = '1' if args.validation else '0'
         environment['OOT3D_GRAPHICS_NRI_PICA_DRAWS'] = '0' if args.vulkan_fallback else '1'
         environment['OOT3D_GRAPHICS_PICA_DYNAMIC_RENDERING'] = '0' if args.vulkan_fallback else '1'
         if args.no_shader_pack:
@@ -104,6 +110,13 @@ def main():
         captures = sorted(root.glob('*.bmp'))
         if not captures or not (root/'runtime.json').exists():
             raise RuntimeError(f'{mode}: missing framebuffer/report')
+        if args.validation:
+            frames = json.loads((root/'renderer.json').read_text())['frames']
+            for owner in ('vulkan', 'nri'):
+                if not frames or not all(frame.get(f'{owner}_validation_enabled') for frame in frames):
+                    raise RuntimeError(f'{mode}: {owner} validation was not active')
+                if any(frame.get(f'{owner}_validation_error_count', 0) for frame in frames):
+                    raise RuntimeError(f'{mode}: {owner} validation errors; see renderer.json')
         inventory = json.loads((root/'shaders.json').read_text())
         parametric_modules = sum('pica_evaluate_tev_resolved' in shader['source']
                                  for shader in inventory['shaders'])
@@ -111,6 +124,12 @@ def main():
             raise RuntimeError(f'{mode}: effective shader inventory contradicts requested mode')
         if args.no_shader_pack and mode == 'parametric':
             diagnostics = (root/'stderr.log').read_text(errors='replace')
+            if args.pipeline_libraries:
+                if not re.search(r'TRIAEVUM_NRI_GPL_CAPABILITY supported=1 requested=1 enabled=1\b', diagnostics):
+                    raise RuntimeError('pipeline library capability was not enabled')
+                links = re.findall(r'TRIAEVUM_NRI_GPL_LINK count=(\d+) ns=(\d+) max_ns=(\d+) rejected=(\d+)', diagnostics)
+                if not links or sum(int(item[0]) for item in links) == 0 or any(int(item[3]) for item in links):
+                    raise RuntimeError('pipeline library execution absent or fell back to monolithic')
             if args.require_single_pipeline_owner:
                 nri = re.search(r'TRIAEVUM_NRI_PIPELINE_CACHE (\{[^\n]+\})', diagnostics)
                 vk = re.search(r'TRIAEVUM_PICA_VULKAN_PIPELINES created=(\d+)', diagnostics)
@@ -173,6 +192,7 @@ def main():
     summary = {'executable_sha256': hashlib.sha256(executable.read_bytes()).hexdigest(),
                'captures': reports, 'comparison': comparison, 'no_shader_pack': args.no_shader_pack,
                'taa': args.taa, 'toon': args.toon,
+               'pipeline_libraries': args.pipeline_libraries, 'validation': args.validation,
                'note': 'Framebuffer parity test, not a performance measurement.'}
     (args.output/'comparison.json').write_text(json.dumps(summary, indent=2))
     print(json.dumps(comparison, indent=2))
