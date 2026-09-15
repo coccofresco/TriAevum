@@ -1433,6 +1433,43 @@ Private evidence: `%TEMP%/TriAevum-impact-first-use-20260915`,
 `TriAevum-impact-lazy-modules-20260915`, and
 `TriAevum-lazy-shader-{modules,fallback,boot}-20260915`.
 
+### Device pipeline lifetime, before stage-library integration (2026-09-15)
+
+The NRI factory still builds monolithic graphics pipelines. Its public core API
+does not expose graphics pipeline libraries or a native pipeline-layout handle.
+Simply wrapping a separately created VkPipeline would also require preserving
+NRI's descriptor layout and dynamic-state contracts, not just its native handle.
+The appropriate first-use direction is a shared device-level implementation of
+[graphics pipeline libraries](https://docs.vulkan.org/features/latest/features/proposals/VK_EXT_graphics_pipeline_library.html),
+with capability negotiation, independent stage ownership and final linking.
+This is **not yet implemented or enabled**, and no fast-link support is claimed
+for the current GPU without an actual device query.
+
+A separate invalidation problem is corrected now. `ApplyNativePicaSampleCount`
+retires logical pipelines after waiting for GPU idle. The prior weak object index
+then destroyed the last NRI owner, although the device and descriptor layout
+survive. Returning to a prior sample configuration recreated its driver objects.
+
+`PicaDevicePipelinePool` now retains live device pipelines using the existing exact
+normalized SPIR-V/layout/state identity. Active logical aliases pin their object;
+at most 128 idle objects remain, with least-recently-used eviction. Eviction runs
+at existing safe retirement boundaries. Reset/shutdown still release everything
+before the descriptor layout/device. This is neither a collected shader pack nor
+a persistent driver cache, and does not change native render state or pass order.
+The Vulkan fallback retains its existing lifetime policy.
+
+Tests cover alias retirement/reuse, active pinning, idle eviction, zero retention,
+and complete teardown, alongside 1,024 material identities and 36 fixed-state
+mutations. The game comparison in `%TEMP%/TriAevum-retained-pipelines-field-20260915`
+passes three exact toon/TAA framebuffer pairs with zero runtime compilation and
+zero Vulkan fallback shader pairs. This is a steady-configuration regression
+check; boot also passes all three exact pairs in
+`TriAevum-retained-pipelines-boot-20260915`. These are **not yet a timed in-game
+repeated-MSAA transition test**. No FPS or
+first-use latency improvement is claimed from this change. Stage-library
+integration remains the higher-impact unresolved work; effect-family coverage
+and cross-platform hardware verification remain open too.
+
 ## External Source Links
 
 - [zeldaret loader placeholders](https://github.com/zeldaret/oot3d/blob/a87ddae43252cb3add71bf1003e7391bbe006033/src/functions/functions_410000s.cpp#L616)

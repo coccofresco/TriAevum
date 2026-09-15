@@ -5,6 +5,7 @@
 
 #include "fast/renderer3ds/pica_nri_shader_contract.h"
 #include "fast/renderer3ds/nri_pica_pipeline_identity.h"
+#include "fast/renderer3ds/pica_device_pipeline_pool.h"
 #include "fast/renderer3ds/pica_nri_upload.h"
 
 #ifdef ENABLE_RENDERER3DS_NRI
@@ -209,7 +210,7 @@ struct NriPicaPipelineBridge::Impl {
 #ifdef ENABLE_RENDERER3DS_NRI
     std::unordered_map<VkPipeline, nri::Pipeline*> Pipelines;
     std::map<NriPicaPipelineId, std::shared_ptr<nri::Pipeline>> OwnedPipelines;
-    std::map<std::vector<uint8_t>, std::weak_ptr<nri::Pipeline>> OwnedPipelineObjects;
+    PicaDevicePipelinePool<nri::Pipeline> OwnedPipelineObjects;
     NriPicaPipelineIdentity OwnedPipelineIdentity;
     std::map<NriPicaPipelineId, bool> OwnedPipelineUsesBlendConstants;
     nri::PipelineLayout* DescriptorLayout = nullptr;
@@ -558,21 +559,19 @@ bool NriPicaPipelineBridge::CreateOwnedPipeline(
         desc.ColorAttachmentCount == 0 || desc.ColorAttachmentCount > kPicaColorAttachmentCount)
         return false;
     auto key = mImpl->OwnedPipelineIdentity.Build(desc);
-    auto& entry = mImpl->OwnedPipelineObjects[key];
-    auto owned = entry.lock();
+    auto owned = mImpl->OwnedPipelineObjects.Find(key);
     if (owned) {
         ++mImpl->Statistics.OwnedReuses;
     } else {
         auto* pipeline = CreatePipeline(desc);
         if (!pipeline) {
-            mImpl->OwnedPipelineObjects.erase(key);
             return false;
         }
         owned = std::shared_ptr<nri::Pipeline>(pipeline,
             [core = mImpl->Interop->Core()](nri::Pipeline* value) {
                 core->DestroyPipeline(value);
             });
-        entry = owned;
+        mImpl->OwnedPipelineObjects.Retain(std::move(key), owned);
     }
     mImpl->OwnedPipelines.emplace(pipelineId, std::move(owned));
     const bool usesBlendConstants = std::any_of(
@@ -950,6 +949,7 @@ void NriPicaPipelineBridge::ForgetOwned(NriPicaPipelineId pipelineId) {
         owned != mImpl->OwnedPipelines.end()) {
         mImpl->OwnedPipelines.erase(owned);
         mImpl->OwnedPipelineUsesBlendConstants.erase(pipelineId);
+        mImpl->OwnedPipelineObjects.Prune();
     }
 #else
     (void)pipelineId;
@@ -975,7 +975,7 @@ void NriPicaPipelineBridge::Reset() {
     }
     mImpl->Pipelines.clear();
     mImpl->OwnedPipelines.clear();
-    mImpl->OwnedPipelineObjects.clear();
+    mImpl->OwnedPipelineObjects.Clear();
     mImpl->OwnedPipelineIdentity.Clear();
     mImpl->OwnedPipelineUsesBlendConstants.clear();
 #endif

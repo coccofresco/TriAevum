@@ -1,5 +1,6 @@
 #include "fast/renderer3ds/pica_pipeline_identity.h"
 #include "fast/renderer3ds/nri_pica_pipeline_identity.h"
+#include "fast/renderer3ds/pica_device_pipeline_pool.h"
 #include "fast/renderer3ds/pica_render_backend.h"
 #include <iostream>
 #include <type_traits>
@@ -8,6 +9,39 @@ using namespace Fast::Renderer3ds;
 void Check(bool value,const char* message){if(!value)throw std::runtime_error(message);}
 int main(){
     try {
+        unsigned destroyed = 0;
+        const auto makeObject = [&](int value) {
+            return std::shared_ptr<int>(new int(value), [&](int* p) { ++destroyed; delete p; });
+        };
+        PicaDevicePipelinePool<int> pool(1);
+        auto active = makeObject(10);
+        pool.Retain({1}, active);
+        active.reset();
+        auto reused = pool.Find({1});
+        Check(reused && *reused == 10 && destroyed == 0, "retiring an alias destroyed reusable pipeline");
+        auto second = makeObject(20);
+        pool.Retain({2}, second);
+        second.reset();
+        pool.Prune();
+        Check(pool.Size() == 2 && destroyed == 0, "active object counted against idle budget");
+        auto third = makeObject(30);
+        pool.Retain({3}, third);
+        third.reset();
+        pool.Prune();
+        Check(!pool.Find({2}) && destroyed == 1 && pool.Find({1}) == reused,
+              "idle LRU eviction removed an active object");
+        reused.reset();
+        pool.Prune();
+        Check(pool.Size() == 1 && destroyed == 2, "idle pipeline limit not enforced");
+        pool.Clear();
+        Check(pool.Size() == 0 && destroyed == 3, "device teardown leaked retained pipelines");
+        PicaDevicePipelinePool<int> noRetention(0);
+        auto pinned = makeObject(40);
+        noRetention.Retain({4}, pinned);
+        noRetention.Prune();
+        Check(noRetention.Size() == 1, "zero idle budget invalidated active pipeline");
+        pinned.reset(); noRetention.Prune();
+        Check(noRetention.Size() == 0 && destroyed == 4, "zero idle budget retained idle pipeline");
         static_assert(!std::is_convertible_v<NriPicaPipelineId, VkPipeline>);
         static_assert(!std::is_convertible_v<VkPipeline, NriPicaPipelineId>);
         PicaDevicePipelineRecord ownedOnly;
