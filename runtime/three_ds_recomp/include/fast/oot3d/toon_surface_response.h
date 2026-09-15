@@ -9,7 +9,8 @@
 
 namespace Fast::Oot3d {
 
-// Shared std430 payload. Only appearance belongs here, never outline policy.
+// Shared std140/std430 payload (vec4 members and arrays have the same layout).
+// Only appearance belongs here, never outline policy.
 struct alignas(16) ToonSurfaceParameters {
     std::array<float, 4> Control{}; // band span, softness, saturation, custom bands
     std::array<float, 4> Shadow{}; // RGB tint, strength

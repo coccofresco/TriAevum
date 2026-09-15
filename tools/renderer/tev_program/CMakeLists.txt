@@ -108,6 +108,8 @@ target_sources(build_fragment_artifacts PRIVATE
     "${runtime}/src/fast/oot3d/pica_shader_instrumentation.cpp")
 add_test(NAME pica_fragment_artifacts COMMAND build_fragment_artifacts --check)
 add_test(NAME pica_temporal_fragment_artifacts COMMAND build_fragment_artifacts --temporal --check)
+add_test(NAME pica_toon_fragment_artifacts COMMAND build_fragment_artifacts --toon --check)
+set_tests_properties(pica_toon_fragment_artifacts PROPERTIES TIMEOUT 120)
 set_tests_properties(pica_temporal_fragment_artifacts PROPERTIES TIMEOUT 180)
 set_tests_properties(pica_fragment_artifacts PROPERTIES TIMEOUT 120)
 if(WIN32)

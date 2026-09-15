@@ -75,6 +75,7 @@ struct PicaFragmentInstrumentationRequest {
     const PicaShaderHookLayout* Hooks = nullptr;
     ToonMode Toon = ToonMode::Off;
     const ToonStyleSettings* ToonStyle = nullptr;
+    bool ToonParametersUniform = false;
 };
 
 struct PicaFragmentInstrumentationOutputLayout {

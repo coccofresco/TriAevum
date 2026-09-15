@@ -65,6 +65,7 @@ struct PicaToonInstrumentation {
 [[nodiscard]] PicaToonInstrumentation BuildPicaToonInstrumentation(
     uint64_t originalFragmentKey, const PicaToonDrawInfo& draw,
     ToonMode mode, const ToonStyleSettings& style,
-    const ::Oot3d::Renderer::PicaShaderHookLayout& hooks);
+    const ::Oot3d::Renderer::PicaShaderHookLayout& hooks,
+    bool uniformParameters = false);
 
 } // namespace Fast::Oot3d

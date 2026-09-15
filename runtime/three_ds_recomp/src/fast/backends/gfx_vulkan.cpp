@@ -3,6 +3,7 @@
 #include "fast/backends/gfx_vulkan.h"
 #include "fast/renderer3ds/pica_native_fragment_binaries.h"
 #include "fast/oot3d/pica_temporal_fragment_binaries.h"
+#include "fast/oot3d/pica_toon_fragment_binaries.h"
 #include "fast/renderer/framebuffer_readback.h"
 #include "fast/renderer/shaderc_compiler.h"
 #include "fast/renderer/compatibility_shader_sources.h"
@@ -3360,7 +3361,8 @@ void GfxRenderingAPIVulkan::FinishNativePicaAotShaders() {
         std::fprintf(stderr, "TRIAEVUM_NATIVE_FRAGMENT_ARTIFACTS hits=%llu modules=%zu\n",
                      static_cast<unsigned long long>(mNativeFragmentArtifactHits),
                      std::size(Renderer3ds::kNativeFragmentArtifacts) +
-                         std::size(Oot3d::kTemporalFragmentArtifacts));
+                         std::size(Oot3d::kTemporalFragmentArtifacts) +
+                         std::size(Oot3d::kToonFragmentArtifacts));
         std::fprintf(stderr, "TRIAEVUM_NATIVE_VERTEX_ARTIFACTS hits=%llu\n",
                      static_cast<unsigned long long>(mNativeVertexArtifactHits));
         std::fprintf(stderr, "TRIAEVUM_NATIVE_PROGRAM_OWNERS canonical=%zu instrumented=%zu\n",
@@ -3380,6 +3382,11 @@ GfxRenderingAPIVulkan::ResolveNativePicaShaderSpirv(
         if (artifact.empty()) {
             artifact = Renderer3ds::FindPicaFragmentArtifact(
                 Oot3d::kTemporalFragmentArtifacts, source,
+                stage == Oot3d::PicaAotShaderStage::NriFragment);
+        }
+        if (artifact.empty()) {
+            artifact = Renderer3ds::FindPicaFragmentArtifact(
+                Oot3d::kToonFragmentArtifacts, source,
                 stage == Oot3d::PicaAotShaderStage::NriFragment);
         }
         if (!artifact.empty()) {
@@ -3500,7 +3507,7 @@ void GfxRenderingAPIVulkan::CreateFrameResources() {
         const std::array<VkDescriptorPoolSize, 4> poolSizes = {
             VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4096 * 5 },
             VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 4096 },
-            VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 4096 * 4 },
+            VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 4096 * 5 },
             VkDescriptorPoolSize{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 4096 },
         };
         VkDescriptorPoolCreateInfo poolInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };

@@ -338,7 +338,7 @@ bool BuildNativePicaMemoryFillSmoke(
 
 void GfxRenderingAPIVulkan::CreateNativePicaShaderResources() {
     CreateNativePicaRenderPass();
-    std::array<VkDescriptorSetLayoutBinding, 10> bindings{};
+    std::array<VkDescriptorSetLayoutBinding, 11> bindings{};
     bindings[0] = {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
                    VK_SHADER_STAGE_VERTEX_BIT, nullptr};
     for (uint32_t binding = 1; binding <= 3; ++binding) {
@@ -357,6 +357,8 @@ void GfxRenderingAPIVulkan::CreateNativePicaShaderResources() {
     bindings[8] = {12, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
                    VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
     bindings[9] = {13, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1,
+                  VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
+    bindings[10] = {15, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
                    VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
     VkDescriptorSetLayoutCreateInfo descriptorInfo{
         VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
@@ -4507,6 +4509,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             directionalShadowHistoryBound);
         const auto& directionalShadowUniforms =
             directionalShadowBinding.Uniforms;
+        const auto toonUniforms = Oot3d::PackToonSurfaceParameters(
+            graphicsSettings.Effects.Toon, graphicsSettings.Effects.ToonStyle, false);
 
         const auto uploadUniform = [&](std::span<const uint8_t> bytes) {
             const VkDeviceSize offset =
@@ -4534,6 +4538,16 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 reinterpret_cast<const uint8_t*>(
                     &directionalShadowUniforms),
                 sizeof(directionalShadowUniforms)));
+        const bool uniformToon = Oot3d::HasPicaShaderInstrumentationFeature(
+            shaderVariant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::Toon);
+        // Disabled extensions consume no additional upload space. Binding 15
+        // is unused by canonical programs and can reference a valid existing range.
+        const VkDeviceSize toonUniformOffset = uniformToon
+            ? uploadUniform(std::span<const uint8_t>(
+                reinterpret_cast<const uint8_t*>(&toonUniforms), sizeof(toonUniforms)))
+            : directionalShadowUniformOffset;
+        const VkDeviceSize toonUniformSize = uniformToon
+            ? sizeof(toonUniforms) : sizeof(directionalShadowUniforms);
         finishCpuStage(cpuTimings.UploadMilliseconds);
 
         const VkDescriptorSet descriptor = AllocateNativePicaDescriptorSet();
@@ -4550,6 +4564,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             frame.UniformBuffer.Buffer,
             directionalShadowUniformOffset,
             sizeof(directionalShadowUniforms)};
+        const VkDescriptorBufferInfo toonUniform{
+            frame.UniformBuffer.Buffer, toonUniformOffset, toonUniformSize};
         std::array<VkDescriptorImageInfo, 3> imageInfos{};
         for (size_t slot = 0; slot < imageInfos.size(); ++slot) {
             imageInfos[slot] = {textures[slot]->Sampler, textures[slot]->View,
@@ -4571,7 +4587,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             lightingLutTexture->Sampler,
             lightingLutTexture->View,
             lightingLutTexture->ImageLayout};
-        std::array<VkWriteDescriptorSet, 10> writes{};
+        std::array<VkWriteDescriptorSet, 11> writes{};
         writes[0] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr,
                      descriptor, 0, 0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                      nullptr, &vertexUniform, nullptr};
@@ -4605,6 +4621,9 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             descriptor, 13, 0, 1,
             VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             &lightingLutImage, nullptr, nullptr};
+        writes[10] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr,
+                      descriptor, 15, 0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                      nullptr, &toonUniform, nullptr};
         vkUpdateDescriptorSets(mDevice, static_cast<uint32_t>(writes.size()),
                                writes.data(), 0, nullptr);
         finishCpuStage(cpuTimings.DescriptorMilliseconds);
@@ -4719,6 +4738,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                  previousVertexUniformBytes.size()},
                 {directionalShadowUniformOffset,
                  sizeof(directionalShadowUniforms)},
+                {toonUniformOffset, toonUniformSize},
             }};
             nriDraw.VertexBuffer = geometryBuffer;
             nriDraw.VertexBufferSize = geometryBufferSize;

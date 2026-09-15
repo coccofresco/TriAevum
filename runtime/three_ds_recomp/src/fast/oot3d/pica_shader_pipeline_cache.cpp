@@ -254,6 +254,7 @@ PicaShaderPipelineResult BuildInstrumentedVariant(
         &canonical.CanonicalFragmentHooks,
         effects.Toon,
         &effects.ToonStyle,
+        true,
     });
     result.ToonEligibility = fragment.ToonEligibility;
     result.ToonMaterialPath = fragment.ToonMaterialPath;

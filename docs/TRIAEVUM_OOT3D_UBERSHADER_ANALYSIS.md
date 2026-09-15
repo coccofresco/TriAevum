@@ -1235,6 +1235,77 @@ tranches hunting similar aliases as the main solution: first-use creation of
 genuinely distinct pipelines remains the next structural boundary, alongside
 the already documented extension coverage and cross-platform validation.
 
+### Uniform toon appearance and offline programs (2026-09-15)
+
+Further inspection found an unbounded program dimension outside canonical PICA:
+`pica_toon_shader.cpp::Declarations` embedded band levels/thresholds, softness,
+saturation, shadow tint/strength and rim parameters as GLSL literals. Changing
+these settings changed both source and shader identity. A finite cache or a few
+extra aliases cannot cover that continuous space.
+
+The live instrumented path now uses a dedicated optional surface-style UBO at
+binding 15. `ToonSurfaceParameters` is the existing 128-byte, vec4-aligned shared
+surface-response payload; its std140/std430 offsets agree. The backend uploads
+appearance data; the shader retains only the structural material/vertex-lighting
+choice. NRI and Vulkan descriptor layouts, pools, uploads and bindings agree on
+the fifth constant buffer. Native PICA and shadow receiver payloads are unchanged.
+When toon is not applied, binding 15 references an existing valid unused range:
+no toon upload is performed, and NRI reuses identical buffer views rather than
+allocating a duplicate. Unique views are still destroyed exactly once.
+
+The legacy baked generator remains an explicit reference path at the helper
+boundary. The live `PicaShaderPipelineCache` requests uniform parameters. Its
+source and program identity no longer depend on continuous toon appearance.
+Settings persistence, F1 ownership, classifier eligibility, insertion hooks,
+draw order and outline policy are not changed.
+
+`build_fragment_artifacts --toon` generates 12 maintained-equation programs for
+material/preview modes, lighting and integer texture interfaces, with combined
+and NRI separate samplers. No captured shaders or ROM input is used. The backend
+resolves this family directly before considering the legacy compiler/cache path.
+The built-in fragment families now contain 16 canonical + 40 temporal + 12 toon
+programs. This does NOT cover toon combined with temporal, outline, AO, reflection
+or shadow instrumentation yet; these combinations retain the existing fallback.
+
+Validation on Windows:
+
+- Twelve standalone suites passed. The generator additionally verifies 1,024
+  style mutations across four base families without any change in shader source
+  or identity, and compiles the resulting GLSL. This is structural coverage, not
+  1,024 separate in-game image comparisons.
+- Exact regeneration of `pica_toon_fragment_binaries.h` passed.
+- Field/material-toon, with no collected shader pack: zero shader compiler/cache
+  resolver requests, 25 NRI PICA pipelines, zero Vulkan copies. Three specialized
+  versus parametric framebuffer pairs are identical.
+- Forced Vulkan/material-toon also passes all three exact pairs and zero runtime
+  shader compilations. The final executable exercises the added descriptor layout.
+- Native Off Field and boot still pass and all six captures match `aaa3530`.
+- Baked-vs-uniform toon reference: frame 150 identical; frames 120 and 180 each
+  differ in one pixel, respectively blue and green by 8/255. No visual tolerance,
+  per-scene repair or quantization adjustment was added. This is not exact parity
+  with the old baked toon, and is separate from the prior TAA one-pixel discrepancy.
+
+Private evidence in `%TEMP%`:
+`TriAevum-uniform-toon-offline-field-20260915`,
+`TriAevum-uniform-toon-final-fallback-20260915`,
+`TriAevum-toon-uniform-canonical-20260915`,
+`TriAevum-toon-uniform-final-boot-20260915`, and
+`TriAevum-baked-toon-reference-field-20260915`.
+The baked reference executable differed only by the final boolean argument in
+`BuildInstrumentedVariant`'s `BuildPicaFragmentInstrumentationVariant` call being false;
+it was rebuilt and captured using `run_native_comparison.py --toon`. The live
+source and final executable restore true. This reference is not a shipping mode.
+
+The driver boundary remains open. The pinned NRI implementation's extended
+dynamic state currently covers vertex stride and viewport/scissor counts, not
+arbitrary PICA blend/depth/raster state. Ignoring those fields would be incorrect;
+simply creating the same objects earlier within the draw frame is not a fix.
+This tranche removes an unbounded shader dimension and compiler dependence for
+basic toon, not all driver first-use stalls. Next work must cover the remaining
+instrumented program combinations and explicitly address immutable driver
+pipeline preparation. No FPS improvement, cold-driver result, Linux/Android GPU
+validation or total-stutter-elimination claim is made.
+
 ## External Source Links
 
 - [zeldaret loader placeholders](https://github.com/zeldaret/oot3d/blob/a87ddae43252cb3add71bf1003e7391bbe006033/src/functions/functions_410000s.cpp#L616)

@@ -16,6 +16,7 @@ def main():
     parser.add_argument('--timeout', type=float, default=120)
     parser.add_argument('--from-start', action='store_true', help='Ignore the fixture savestate and boot the game')
     parser.add_argument('--taa', action='store_true', help='Enable TAA in the isolated copied configuration to exercise typed temporal programs')
+    parser.add_argument('--toon', action='store_true', help='Exercise material toon, without outline or other new effects')
     parser.add_argument('--vulkan-fallback', action='store_true',
                         help='Exercise non-owned Vulkan draws instead of NRI-owned draws')
     parser.add_argument('--require-single-pipeline-owner', action='store_true',
@@ -66,10 +67,14 @@ def main():
                     shutil.copytree(path, target)
                 else:
                     shutil.copy2(path, target)
-                if token == '--config' and args.taa:
+                if token == '--config' and (args.taa or args.toon):
                     configuration = json.loads(target.read_text(encoding='utf-8-sig'))
                     configuration['Graphics']['Preset'] = 'Custom'
-                    configuration['Graphics']['AA']['Mode'] = 'TAA'
+                    if args.taa:
+                        configuration['Graphics']['AA']['Mode'] = 'TAA'
+                    if args.toon:
+                        configuration['Graphics']['Effects']['Toon']['Mode'] = 'PicaMaterial'
+                        configuration['Graphics']['Effects']['Toon']['OutlineEnabled'] = False
                     target.write_text(json.dumps(configuration, indent=2), encoding='utf-8')
                 command.extend([token, str(target.resolve())])
             else:
@@ -123,7 +128,7 @@ def main():
             if args.require_no_runtime_compilation and not re.search(
                     r'TRIAEVUM_SPIRV_CACHE requests=0 hits=0 misses=0 rejected=0 compiled=0\b', diagnostics):
                 raise RuntimeError('parametric: compiler/cache resolver was used or its evidence is missing')
-            hits = re.search(r'TRIAEVUM_NATIVE_FRAGMENT_ARTIFACTS hits=(\d+) modules=56\b', diagnostics)
+            hits = re.search(r'TRIAEVUM_NATIVE_FRAGMENT_ARTIFACTS hits=(\d+) modules=68\b', diagnostics)
             if not hits or int(hits[1]) == 0:
                 raise RuntimeError('parametric: no built-in fragment artifact was used')
             native_identities = {(shader['stage'], int(shader['source_id'], 16), shader['source_size'])
@@ -165,7 +170,8 @@ def main():
                                'max_absolute_rgb': [v[1] for v in diff.getextrema()]})
     summary = {'executable_sha256': hashlib.sha256(executable.read_bytes()).hexdigest(),
                'captures': reports, 'comparison': comparison, 'no_shader_pack': args.no_shader_pack,
-               'taa': args.taa, 'note': 'Framebuffer parity test, not a performance measurement.'}
+               'taa': args.taa, 'toon': args.toon,
+               'note': 'Framebuffer parity test, not a performance measurement.'}
     (args.output/'comparison.json').write_text(json.dumps(summary, indent=2))
     print(json.dumps(comparison, indent=2))
     if not all(frame['identical_pixels'] for frame in comparison):

@@ -44,7 +44,8 @@ struct PicaNriFragmentShaderExtensions {
 // samplers for NRI. Bindings 10-12 are the stable, optional directional-shadow
 // lighting extension: history texture, split sampler and receiver state.
 // Bindings 13-14 are the native fragment-lighting LUT image and sampler.
-constexpr std::array<PicaNriDescriptorBinding, 15>
+// Binding 15 is an optional surface-style constant buffer, not native PICA state.
+constexpr std::array<PicaNriDescriptorBinding, 16>
     kPicaNriDescriptorBindings{{
         {0U, PicaNriDescriptorKind::ConstantBuffer,
          PicaNriShaderStage::Vertex},
@@ -75,6 +76,8 @@ constexpr std::array<PicaNriDescriptorBinding, 15>
         {13U, PicaNriDescriptorKind::Texture,
          PicaNriShaderStage::Fragment},
         {14U, PicaNriDescriptorKind::Sampler,
+         PicaNriShaderStage::Fragment},
+        {15U, PicaNriDescriptorKind::ConstantBuffer,
          PicaNriShaderStage::Fragment},
     }};
 

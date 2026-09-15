@@ -100,8 +100,8 @@ struct NriPicaOwnedDrawDesc {
     VkBuffer UniformBuffer = VK_NULL_HANDLE;
     uint64_t UniformBufferSize = 0;
     uint8_t* UniformMappedMemory = nullptr;
-    // Vertex, fragment, previous-vertex and directional-shadow receiver UBOs.
-    std::array<NriPicaUniformBindingDesc, 4> Uniforms{};
+    // Vertex, fragment, previous-vertex, shadow receiver and surface-style UBOs.
+    std::array<NriPicaUniformBindingDesc, 5> Uniforms{};
     VkBuffer VertexBuffer = VK_NULL_HANDLE;
     uint64_t VertexBufferSize = 0;
     uint8_t* VertexMappedMemory = nullptr;

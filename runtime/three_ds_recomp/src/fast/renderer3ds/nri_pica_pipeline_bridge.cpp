@@ -318,7 +318,7 @@ bool NriPicaPipelineBridge::Initialize(
             nri::DescriptorPoolDesc pool{};
             pool.descriptorSetMaxNum = config.MaxDrawsPerFrame;
             pool.constantBufferMaxNum =
-                4U * config.MaxDrawsPerFrame;
+                5U * config.MaxDrawsPerFrame;
             pool.textureMaxNum = 5U * config.MaxDrawsPerFrame;
             pool.storageTextureMaxNum = config.MaxDrawsPerFrame;
             pool.samplerMaxNum = 5U * config.MaxDrawsPerFrame;
@@ -656,7 +656,7 @@ bool NriPicaPipelineBridge::BindOwnedDraw(
         frame.UploadArena->Configure(
             *core, *device, desc.UniformBufferSize,
             desc.VertexBufferSize)) {
-        std::array<PicaNriUploadRange, 4> uniformRanges{};
+        std::array<PicaNriUploadRange, 5> uniformRanges{};
         for (size_t index = 0; index < uniformRanges.size(); ++index) {
             uniformRanges[index] = {
                 desc.Uniforms[index].Offset,
@@ -703,12 +703,22 @@ bool NriPicaPipelineBridge::BindOwnedDraw(
             return false;
     }
 
-    std::array<nri::Descriptor*, 4> constantBuffers{};
+    std::array<nri::Descriptor*, 5> constantBuffers{};
     for (size_t index = 0; index < constantBuffers.size(); ++index) {
         const auto& source = desc.Uniforms[index];
         if (source.Size == 0U ||
             source.Offset + source.Size > desc.UniformBufferSize)
             return false;
+        // Optional, unused bindings may alias an existing uniform range.
+        // Reuse its view too; only unique descriptors enter TransientViews.
+        for (size_t previous = 0; previous < index; ++previous) {
+            if (desc.Uniforms[previous].Offset == source.Offset &&
+                desc.Uniforms[previous].Size == source.Size) {
+                constantBuffers[index] = constantBuffers[previous];
+                break;
+            }
+        }
+        if (constantBuffers[index]) continue;
         nri::BufferViewDesc view{};
         view.buffer = uniformBuffer;
         view.type = nri::BufferView::CONSTANT_BUFFER;
@@ -787,7 +797,7 @@ bool NriPicaPipelineBridge::BindOwnedDraw(
         return false;
 
     nri::DescriptorSet* set = frame.Sets[frame.Used++];
-    const std::array<nri::UpdateDescriptorRangeDesc, 15> updates{{
+    const std::array<nri::UpdateDescriptorRangeDesc, 16> updates{{
         {set, 0, 0, &constantBuffers[0], 1},
         {set, 1, 0, &textures[0], 1},
         {set, 2, 0, &textures[1], 1},
@@ -803,6 +813,7 @@ bool NriPicaPipelineBridge::BindOwnedDraw(
         {set, 12, 0, &constantBuffers[3], 1},
         {set, 13, 0, &textures[4], 1},
         {set, 14, 0, &samplers[4], 1},
+        {set, 15, 0, &constantBuffers[4], 1},
     }};
     core->UpdateDescriptorRanges(
         updates.data(), static_cast<uint32_t>(updates.size()));

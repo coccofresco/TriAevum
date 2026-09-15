@@ -5,7 +5,9 @@
 #include "fast/renderer3ds/pica_native_fragment_binaries.h"
 #include "fast/renderer3ds/pica_nri_shader_contract.h"
 #include "fast/oot3d/pica_shader_instrumentation.h"
+#include "fast/oot3d/toon_surface_response.h"
 #include "fast/oot3d/pica_temporal_fragment_binaries.h"
+#include "fast/oot3d/pica_toon_fragment_binaries.h"
 #include <shaderc/shaderc.hpp>
 #include <fstream>
 #include <iostream>
@@ -21,10 +23,11 @@ static void Check(bool ok, const std::string& error) { if (!ok) throw std::runti
 
 int main(int argc, char** argv) try {
     const bool temporal = argc > 1 && std::string_view(argv[1]) == "--temporal";
-    if (temporal) { --argc; ++argv; }
+    const bool toon = argc > 1 && std::string_view(argv[1]) == "--toon";
+    if (temporal || toon) { --argc; ++argv; }
     const bool verify = argc == 2 && std::string_view(argv[1]) == "--check";
     const bool exact = argc == 3 && std::string_view(argv[1]) == "--check-exact";
-    Check(argc == 2 || exact, "usage: build_fragment_artifacts [--temporal] output.h | --check | --check-exact output.h");
+    Check(argc == 2 || exact, "usage: build_fragment_artifacts [--temporal|--toon] output.h | --check | --check-exact output.h");
     shaderc::Compiler compiler;
     shaderc::CompileOptions options;
     options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_1);
@@ -33,19 +36,22 @@ int main(int argc, char** argv) try {
     output << "// Generated from maintained PICA equations, not captured game shaders.\n"
               "// Regenerate with tools/renderer/tev_program/build_fragment_artifacts.\n"
               "// Vulkan 1.1, shaderc performance optimization; canonical and NRI interfaces.\n";
-    output << (temporal ? "// Temporal-only effects: typed motion and native reactive coverage.\n"
+    output << ((temporal || toon) ? "// Optional effect family, isolated from canonical programs.\n"
                           "#pragma once\n#include \"fast/renderer3ds/pica_fragment_artifact.h\"\n"
                         : "#pragma once\n#include \"pica_fragment_artifact.h\"\n");
-    output << (temporal ? "namespace Fast::Oot3d {\n" : "namespace Fast::Renderer3ds {\n");
-    const char* symbol = temporal ? "kTemporalFragment" : "kNativeFragment";
-    const std::span<const PicaFragmentArtifact> storedArtifacts = temporal
+    output << ((temporal || toon) ? "namespace Fast::Oot3d {\n" : "namespace Fast::Renderer3ds {\n");
+    const char* symbol = toon ? "kToonFragment" : temporal ? "kTemporalFragment" : "kNativeFragment";
+    const std::span<const PicaFragmentArtifact> storedArtifacts = toon
+        ? std::span<const PicaFragmentArtifact>(Fast::Oot3d::kToonFragmentArtifacts) : temporal
         ? std::span<const PicaFragmentArtifact>(Fast::Oot3d::kTemporalFragmentArtifacts)
         : std::span<const PicaFragmentArtifact>(kNativeFragmentArtifacts);
     std::unordered_set<std::string> emittedSources;
     unsigned modules = 0;
+    unsigned materialCases = 0, toonStyleCases = 0;
     for (unsigned lighting = 0; lighting < 2; ++lighting)
     for (unsigned integerTexture = 0; integerTexture < 2; ++integerTexture)
     for (unsigned shadowWrite = 0; shadowWrite < 2; ++shadowWrite) {
+        if (toon && shadowWrite) continue;
         auto packet = std::make_unique<Oot3dPicaDrawPacket>();
         Oot3dPicaDecodedDrawState state{};
         packet->Registers[0x8f] = lighting;
@@ -60,6 +66,7 @@ int main(int argc, char** argv) try {
               Oot3dPicaShaderBuildPurpose::OfflineSource, Oot3dPicaTevMode::Parametric), error);
         // Check that material data does not silently introduce another program.
         for (unsigned variant = 0; variant < 16; ++variant) {
+            ++materialCases;
             packet->Registers[0xe0] = (variant & 1) ? 5 : 0;
             packet->Registers[0x104] = (variant & 7) << 4 | 1;
             packet->Registers[0xc0] = (variant & 1) ? 0x00030003 : 0;
@@ -71,7 +78,65 @@ int main(int argc, char** argv) try {
             Check(candidate.Source == shader.Source, "material data changed finite fragment family");
         }
         std::vector<std::string> sources;
-        if (!temporal) {
+        if (!temporal && !shadowWrite) {
+            using namespace Fast::Oot3d;
+            ToonStyleSettings style;
+            PicaFragmentInstrumentationRequest request;
+            request.Source = shader.Source;
+            request.Hooks = &shader.Hooks;
+            request.RequestedFeatures = PicaShaderInstrumentationFeature::Toon;
+            request.Draw.DepthTestEnabled = request.Draw.DepthWriteEnabled = true;
+            request.Draw.ColorWriteMask = 15;
+            request.Draw.CompositionDomain = ::Oot3d::Renderer::PicaCompositionDomain::Scene;
+            request.Toon = ToonMode::PicaMaterial;
+            request.ToonStyle = &style;
+            request.ToonParametersUniform = true;
+            const auto uniform = BuildPicaFragmentInstrumentationVariant(request);
+            Check(uniform.Applied() && uniform.UsedProvidedHooks, "uniform toon missing typed instrumentation");
+            for (unsigned variant = 0; variant < 256; ++variant) {
+                ++toonStyleCases;
+                style.LightBands = 2 + variant % 5;
+                style.CustomLightBands = (variant & 1) != 0;
+                style.BandSoftness = float(variant) / 255;
+                style.Saturation = float(variant) / 128;
+                style.RimWidth = float(variant + 1) / 256;
+                style.RimStrength = float(variant) / 256;
+                style.ShadowStrength = float(variant) / 255;
+                style.ShadowTint = {0.1f, float(variant) / 256, 0.4f};
+                style.RimTint = {float(variant) / 256, 0.3f, 0.7f};
+                style.LightBandLevels[1] = float(variant) / 512;
+                style.LightBandThresholds[0] = float(variant) / 768;
+                const auto candidate = BuildPicaFragmentInstrumentationVariant(request);
+                Check(candidate.Source == uniform.Source && candidate.FragmentKey == uniform.FragmentKey,
+                      "continuous toon style still creates shader variants");
+            }
+            const auto binary = compiler.CompileGlslToSpv(uniform.Source, shaderc_fragment_shader,
+                                                         "uniform_toon", options);
+            Check(binary.GetCompilationStatus() == shaderc_compilation_status_success,
+                  binary.GetErrorMessage());
+            request.Toon = ToonMode::Off;
+            const auto off = BuildPicaFragmentInstrumentationVariant(request);
+            Check(!off.Applied(), "disabled toon changed the canonical shader");
+        }
+        if (toon) {
+            using namespace Fast::Oot3d;
+            ToonStyleSettings style;
+            for (auto mode : {ToonMode::PicaMaterial, ToonMode::PostProcessPreview}) {
+                PicaFragmentInstrumentationRequest request;
+                request.Source = shader.Source;
+                request.Hooks = &shader.Hooks;
+                request.RequestedFeatures = PicaShaderInstrumentationFeature::Toon;
+                request.Draw.DepthTestEnabled = request.Draw.DepthWriteEnabled = true;
+                request.Draw.ColorWriteMask = 15;
+                request.Draw.CompositionDomain = ::Oot3d::Renderer::PicaCompositionDomain::Scene;
+                request.Toon = mode;
+                request.ToonStyle = &style;
+                request.ToonParametersUniform = true;
+                const auto result = BuildPicaFragmentInstrumentationVariant(request);
+                Check(result.Applied() && result.UsedProvidedHooks, "toon family lacks typed hooks");
+                sources.push_back(result.Source);
+            }
+        } else if (!temporal) {
             sources.push_back(shader.Source);
         } else {
             using namespace Fast::Oot3d;
@@ -140,11 +205,11 @@ int main(int argc, char** argv) try {
         }
         }
     }
-    Check(modules == (temporal ? 40U : 16U), "unexpected finite fragment family size");
-    output << (temporal ? "inline const Fast::Renderer3ds::PicaFragmentArtifact "
+    Check(modules == (toon ? 12U : temporal ? 40U : 16U), "unexpected finite fragment family size");
+    output << ((temporal || toon) ? "inline const Fast::Renderer3ds::PicaFragmentArtifact "
                         : "inline const PicaFragmentArtifact ")
            << symbol << "Artifacts[] = {\n" << table.str()
-           << (temporal ? "};\n} // namespace Fast::Oot3d\n"
+           << ((temporal || toon) ? "};\n} // namespace Fast::Oot3d\n"
                         : "};\n} // namespace Fast::Renderer3ds\n");
     if (exact) {
         std::ifstream file(argv[2], std::ios::binary);
@@ -155,6 +220,7 @@ int main(int argc, char** argv) try {
         std::ofstream file(argv[1], std::ios::binary | std::ios::trunc);
         Check(bool(file) && bool(file << output.str()), "cannot write fragment artifacts");
     }
-    std::cout << (temporal ? "temporal_fragment_artifacts=" : "native_fragment_artifacts=")
-              << modules << " material_invariance_cases=128\n";
+    std::cout << (toon ? "toon_fragment_artifacts=" : temporal ? "temporal_fragment_artifacts=" : "native_fragment_artifacts=")
+              << modules << " material_invariance_cases=" << materialCases
+              << " toon_style_invariance_cases=" << toonStyleCases << '\n';
 } catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }

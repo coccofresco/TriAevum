@@ -721,7 +721,7 @@ vec3 oot3d_normal_guide_surface(vec4 q, vec3 to_eye) {
             };
             auto toon = BuildPicaToonInstrumentation(
                 result.FragmentKey, toonDraw, request.Toon,
-                *request.ToonStyle, result.Hooks);
+                *request.ToonStyle, result.Hooks, request.ToonParametersUniform);
             result.ToonEligibility = toon.Eligibility;
             result.ToonMaterialPath = toon.MaterialPath;
             if (toon.Applied()) {
