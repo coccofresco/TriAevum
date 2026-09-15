@@ -1047,6 +1047,51 @@ fragment interfaces from the typed generators, and pipeline preparation/lifetime
 Do not confuse the smaller program-owner count with fewer required raster states
 or declare the TAA discrepancy solved. Linux/Android GPU verification is pending.
 
+## Compatibility Combiner Offline Family (2026-09-15)
+
+The remaining Field pair was a real compatibility draw, not an unused shader
+selection. A temporary demand-materialization experiment preserved all three
+captures but still compiled both stages; that experiment was removed. Delaying
+compilation until a draw is not the cache-independent solution.
+
+`fast/renderer/compatibility_combiner.h` now owns the lightweight decoded
+combiner contract previously embedded in `interpreter.h/.cpp`.
+`compatibility_shader_sources.h` owns the corresponding pure GLSL generators,
+shared by the Vulkan compatibility consumer and the offline developer tool.
+The decoder, equations, vertex interfaces and color conversion are preserved.
+No scene IDs, asset names, captured shaders or external decompilation are used.
+
+`build_pass_artifacts` enumerates a Cartesian family of direct vertex color,
+direct texture and texture/vertex modulation, independently for RGB and alpha,
+with alpha-enabled/disabled and linear/sRGB output. Identical generated sources
+are deduplicated. This adds 33 artifacts to the previous 24, for 57 total.
+Resolution uses the existing exact source/stage/defines/Vulkan-target contract
+before compiler or disk-cache access. This is maintained renderer code compiled
+at developer build time, not a collected shader cache or Forge requirement.
+
+Validation: the offline catalogue check and all 11 standalone suites pass.
+The Windows/NRI Field comparison with no collected pack and a fresh application
+cache reduces runtime shader compilations from 2 to 0; all three framebuffer
+pairs are pixel-identical. `--require-no-runtime-compilation` adds an explicit
+regression assertion, including the compatibility backend, to the comparison
+harness. It requires `--no-shader-pack` and applies to the parametric arm only.
+The final executable also passes early boot with zero compiler/cache requests.
+Six framebuffer pairs match between modes; the three Field captures also match
+the pre-change `TriAevum-temporal-offline-canonical-verified-20260914` executable.
+Private final evidence:
+`%TEMP%/TriAevum-compat-offline-final-{field,boot}-20260915`.
+
+Limits: this finite family is not all legacy combiner operations. Unsupported
+families retain the existing fallback; the new test must expose them when a
+fixture exercises them. Source assembly and exact-source artifact lookup still
+occur for compatibility programs. Eliminating those through a typed family key
+is separate from eliminating compiler calls. Driver pipeline creation also
+remains (25 pipelines in Field); zero application compiler calls does not imply
+zero first-use driver work, cold-driver parity or a measured FPS improvement.
+Optional effects beyond the covered temporal interfaces and Linux/Android GPU
+validation remain pending. The pre-existing one-pixel TAA comparison discrepancy
+is not declared solved by this work.
+
 ## External Source Links
 
 - [zeldaret loader placeholders](https://github.com/zeldaret/oot3d/blob/a87ddae43252cb3add71bf1003e7391bbe006033/src/functions/functions_410000s.cpp#L616)

@@ -2,6 +2,7 @@
 #include "fast/oot3d/builtin_pass_shaders.h"
 #include "fast/oot3d/pica_scanout_effects.h"
 #include "fast/renderer/builtin_pass_binaries.h"
+#include "fast/renderer/compatibility_shader_sources.h"
 #include <shaderc/shaderc.hpp>
 #include <algorithm>
 #include <fstream>
@@ -22,6 +23,30 @@ int main(int argc, char** argv) try {
     // The compatibility scanout uses the older Vulkan 1.1 descriptor contract.
     passes.push_back({"compat_scanout.vert", SpirvStage::Vertex, Fast::Oot3d::BuildPicaScanoutVertexShader(), {}});
     passes.push_back({"compat_scanout.frag", SpirvStage::Fragment, Fast::Oot3d::BuildPicaScanoutFragmentShader(false, 0), {}});
+    // Cartesian family of direct color, direct texture and texture modulation.
+    // RGB and alpha are independent; enumerate the contract, not observed IDs.
+    const uint64_t terms[] = {
+        uint64_t(SHADER_INPUT_1) << 12,
+        uint64_t(SHADER_TEXEL0) << 12,
+        uint64_t(SHADER_TEXEL0) | (uint64_t(SHADER_INPUT_1) << 8),
+    };
+    const auto addCompatibility = [&](const char* name, SpirvStage stage, std::string source) {
+        const auto duplicate = std::find_if(passes.begin() + nativePassCount, passes.end(),
+            [&](const auto& pass) { return pass.Stage == stage && pass.Source == source; });
+        if (duplicate == passes.end()) passes.push_back({name, stage, std::move(source), {}});
+    };
+    for (uint64_t rgb : terms) for (uint64_t alpha : terms) {
+        for (bool hasAlpha : {false, true}) {
+            CCFeatures features{};
+            DecodeCompatibilityCombiner(rgb | (alpha << 16), hasAlpha ? SHADER_OPT(ALPHA) : 0, &features);
+            addCompatibility("compat_combiner.vert", SpirvStage::Vertex,
+                             BuildCompatibilityVertexShader(features));
+            for (bool srgb : {false, true}) {
+                addCompatibility("compat_combiner.frag", SpirvStage::Fragment,
+                                 BuildCompatibilityFragmentShader(features, srgb));
+            }
+        }
+    }
     std::ostringstream output, table;
     output << "// Generated from maintained renderer pass sources; no game assets or captures.\n"
               "// Explicit Vulkan target per artifact, main, performance. Preserve source donor notices.\n"

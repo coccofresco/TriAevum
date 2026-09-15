@@ -17,7 +17,11 @@ def main():
     parser.add_argument('--from-start', action='store_true', help='Ignore the fixture savestate and boot the game')
     parser.add_argument('--taa', action='store_true', help='Enable TAA in the isolated copied configuration to exercise typed temporal programs')
     parser.add_argument('--no-shader-pack', action='store_true', help='Remove collected shader packs; verify built-in fragment artifact use')
+    parser.add_argument('--require-no-runtime-compilation', action='store_true',
+                        help='Fail if the parametric run invokes any shader compiler (including compatibility shaders)')
     args = parser.parse_args()
+    if args.require_no_runtime_compilation and not args.no_shader_pack:
+        parser.error('--require-no-runtime-compilation requires --no-shader-pack')
     source = json.loads(args.invocation.read_text(encoding='utf-8-sig'))
     executable = Path(source['executable'])
     args.output.mkdir(parents=True, exist_ok=False)
@@ -88,6 +92,11 @@ def main():
             raise RuntimeError(f'{mode}: effective shader inventory contradicts requested mode')
         if args.no_shader_pack and mode == 'parametric':
             diagnostics = (root/'stderr.log').read_text(errors='replace')
+            if args.require_no_runtime_compilation and 'TRIAEVUM_RUNTIME_SHADER_COMPILE ' in diagnostics:
+                raise RuntimeError('parametric: runtime shader compilation is still present')
+            if args.require_no_runtime_compilation and not re.search(
+                    r'TRIAEVUM_SPIRV_CACHE requests=0 hits=0 misses=0 rejected=0 compiled=0\b', diagnostics):
+                raise RuntimeError('parametric: compiler/cache resolver was used or its evidence is missing')
             hits = re.search(r'TRIAEVUM_NATIVE_FRAGMENT_ARTIFACTS hits=(\d+) modules=56\b', diagnostics)
             if not hits or int(hits[1]) == 0:
                 raise RuntimeError('parametric: no built-in fragment artifact was used')

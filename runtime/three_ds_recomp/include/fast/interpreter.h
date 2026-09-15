@@ -43,89 +43,7 @@
     CC_LOD
 };*/
 
-enum {
-    SHADER_0,
-    SHADER_INPUT_1,
-    SHADER_INPUT_2,
-    SHADER_INPUT_3,
-    SHADER_INPUT_4,
-    SHADER_INPUT_5,
-    SHADER_INPUT_6,
-    SHADER_INPUT_7,
-    SHADER_TEXEL0,
-    SHADER_TEXEL0A,
-    SHADER_TEXEL1,
-    SHADER_TEXEL1A,
-    SHADER_1,
-    SHADER_COMBINED,
-    SHADER_NOISE
-};
-
-#ifdef __cplusplus
-enum class ShaderOpts {
-    ALPHA,
-    FOG,
-    TEXTURE_EDGE,
-    NOISE,
-    _2CYC,
-    ALPHA_THRESHOLD,
-    INVISIBLE,
-    GRAYSCALE,
-    TEXEL0_CLAMP_S,
-    TEXEL0_CLAMP_T,
-    TEXEL1_CLAMP_S,
-    TEXEL1_CLAMP_T,
-    TEXEL0_MASK,
-    TEXEL1_MASK,
-    TEXEL0_BLEND,
-    TEXEL1_BLEND,
-    PRIM_DEPTH,
-    PRISM_SHADER, // 16-bit width
-    MAX
-};
-
-#define SHADER_OPT(opt) ((uint64_t)(1 << static_cast<int>(ShaderOpts::opt)))
-#endif
-
-struct ColorCombinerKey {
-    uint64_t combine_mode;
-    uint64_t options;
-    uint64_t shader_id;
-
-#ifdef __cplusplus
-    auto operator<=>(const ColorCombinerKey&) const = default;
-#endif
-};
-
-#define SHADER_MAX_TEXTURES 6
-#define SHADER_FIRST_TEXTURE 0
-#define SHADER_FIRST_MASK_TEXTURE 2
-#define SHADER_FIRST_REPLACEMENT_TEXTURE 4
-
-struct CCFeatures {
-    int c[2][2][4];
-    bool opt_alpha;
-    bool opt_fog;
-    bool opt_texture_edge;
-    bool opt_noise;
-    bool opt_2cyc;
-    bool opt_alpha_threshold;
-    bool opt_invisible;
-    bool opt_grayscale;
-    bool opt_prim_depth;
-    bool usedTextures[2];
-    bool used_masks[2];
-    bool used_blend[2];
-    bool clamp[2][2];
-    int numInputs;
-    bool do_single[2][2];
-    bool do_multiply[2][2];
-    bool do_mix[2][2];
-    bool color_alpha_same[2];
-    int16_t shader_id;
-};
-
-void gfx_cc_get_features(uint64_t shader_id0, uint64_t shader_id1, struct CCFeatures* cc_features);
+#include "fast/renderer/compatibility_combiner.h"
 
 union Gfx;
 
@@ -135,21 +53,6 @@ class GfxRenderingAPI;
 class GfxWindowBackend;
 
 constexpr size_t MAX_SEGMENT_POINTERS = 16;
-constexpr size_t SHADER_ID_SHIFT = 17;
-constexpr int16_t SHADER_ID_DEFAULT = -1;
-constexpr int16_t SHADER_ID_PICA_TEXTURE_ENV = -2;
-constexpr int16_t SHADER_ID_PICA_TEXTURE_ENV_SHADOW2D = -3;
-constexpr int16_t SHADER_ID_PICA_TEXTURE_ENV_POST_MULTIPLY = -4;
-constexpr int16_t SHADER_ID_PICA_FOG = -5;
-constexpr int16_t SHADER_ID_PICA_ALPHA_TEST = -6;
-constexpr int16_t SHADER_ID_PICA_TEXTURE2_MULT_ADD = -7;
-constexpr int16_t SHADER_ID_OOT3D_NATIVE_DEFAULT = -8;
-constexpr int16_t ShaderIdUnmask(uint64_t id) {
-    return (id >> SHADER_ID_SHIFT) & 0xFFFF;
-}
-constexpr uint64_t ShaderIdMask(int16_t id) {
-    return static_cast<uint64_t>(static_cast<uint16_t>(id)) << SHADER_ID_SHIFT;
-}
 
 struct GfxExecStack {
     // This is a dlist stack used to handle dlist calls.
