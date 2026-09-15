@@ -248,3 +248,12 @@ on real packets. If adopting the portable core, do so at a complete packet/frame
 boundary with explicit guest-memory/state conversion and save/restore contracts.
 Do not substitute individual non-AAPCS fragments. UI queue ownership, Y2R,
 native timing and return-to-game handling remain separate responsibilities.
+
+The real-packet test now identifies a concrete defect in that portable core:
+8x8 planar prediction used shift 2 instead of 3. A guarded correction on a
+private copy produces byte-exact FFmpeg output for 64 frames each of three real
+movies (192 frames total). The unmodified core diverges from the third frame
+on both measured baseline movies. See
+[decoder qualification](TRIAEVUM_MOBICLIP_DECODER_VALIDATION.md) for the precise
+expression, repeatable harness and evidence. This correction has NOT yet been
+connected to the game; issue #39 movie playback remains open.
