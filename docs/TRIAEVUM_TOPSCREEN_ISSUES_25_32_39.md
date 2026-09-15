@@ -25,10 +25,10 @@ every UI page/item/movie. Issues: [25](https://github.com/coccofresco/TriAevum/i
   controllable Kokiri gameplay on both platforms with the matching rebuilt title
   module. See the final qualification section below; older pending notes are
   retained as investigation history, not current playback status.
-- Visions title/panel/model ownership is now corrected and framebuffer-verified
-  on Windows in ultrawide and 4:3. The latest adapter change still needs deployment
-  and smoke verification on Linux: the remote machine is currently unreachable.
-  Earlier cross-platform movie/input/minimap results remain separate evidence.
+- Visions title/panel/model ownership is corrected and framebuffer-verified
+  on Windows and Linux in ultrawide and 4:3. Linux deployment and regression
+  verification are complete for these issue fixes; see the alignment record below
+  for unrelated renderer differences that remain outside this qualification.
 
 ## Evidence and ownership
 
@@ -379,10 +379,47 @@ Windows qualification after the complete change:
 - Private structural trace: `stone-final-pica.jsonl`, same temporary directory
   as earlier Windows artifacts. All screenshots are framebuffer captures.
 
-Remaining deployment checkpoint: transfer only the two composition source/test
-changes to `/home/xander/triaevum-linux` with `git apply --check`, preserving its
-unrelated work; build `oot3d_native_game` and `oot3d_native_pica_composition_tests`,
-run the test and repeat the existing Stone fixture. SSH to `192.168.1.190`
-timed out during this increment. Do not label that machine updated until the
-transfer/build and framebuffer verification actually complete. Do not publish
-or close issues based on a stale packaged title module.
+The initial Linux deployment attempt was blocked by an offline machine. The
+following alignment record supersedes that pending checkpoint. Do not publish
+or close issues based on an older packaged title module.
+
+### Linux alignment verified
+
+After the machine returned online, the shared composition patch was applied
+with `git apply --check`, retaining unrelated work. Developer AOT recovery,
+selection/manifests, notices, diagnostic scripts and input timelines from this
+issue tranche were also brought across through checked patches.
+
+- 41 of 45 files changed since `0435bb4` matched after LF normalization (before
+  this documentation update). For the nonidentical window/backend files, reverse
+  patch checks confirm that all changes from this UI tranche are present.
+- A stale shader-generator interface prevented the updated frontend tests from
+  compiling. The shared generator/header, translated vertex family and matching
+  program identity header were aligned to the existing Windows sources, without
+  adding a Linux-only signature or weakening the tests.
+- Linux build and tests pass: composition, process `--tls-only`, input,
+  frontend, TopScreen profile, UI lifecycle, Y2R and UI canvas/touch parity.
+  The canvas test was built directly from the identical source, because Linux
+  does not yet have the standalone `tools/renderer/tev_program` CMake project.
+- Wayland framebuffer runs: 1501-frame completion route, 901-frame cancellation
+  route, and 121-frame 960x720 Visions route. All exited 0. Menu, movie and return
+  to Kokiri were inspected from actual captures, not desktop screenshots.
+- Updated `/home/xander/triaevum-linux-play/TriAevum.linux.launch.json` to select
+  the qualified module in `/home/xander/triaevum-ui-movie-title-build/`; it had
+  still pointed to the older `/home/xander/triaevum-linux-title-build/` module.
+- Updated executable: `/home/xander/triaevum-linux-build/TriAevum`, SHA-256
+  `3f66d41bbdd80143dfa543069f004e1ac769b4a48acf5380590d201486133470`.
+  The qualified title module hash remains `fbf5291c...` above.
+
+Private check artifacts: `triaevum-ui-alignment.json`,
+`triaevum_check_ui_alignment.py`, and checked patch files in the Windows temp
+directory and `/home/xander/`. Capture root remains the Linux movie directory
+above (`complete-*`, `cancel-*`, `fourthree-*`).
+
+This is issue-fix parity, NOT full renderer/performance parity. The remaining
+source differences include NRI-owned pipeline identity/lifetime, lazy fallback
+shader creation, uniform-driven toon instrumentation, and window pacing/native
+program preparation from the earlier anti-stuttering work. Root CMake also lacks
+the corresponding TEV target link and standalone presentation-clock test. These
+need a dependency-complete renderer alignment, not copying the two differing
+large files alone. No release package was updated by these development checks.
