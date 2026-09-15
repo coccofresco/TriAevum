@@ -918,3 +918,93 @@ Next priorities, based on measured impact:
 3. Measure controlled camera movement after startup and distinguish new surface
    placement, simulation work, driver waits and software pacing. Static-camera
    tests do not establish scene-wide or Linux/Android performance closure.
+
+### Active scope: frame flow AFTER preparation (2026-09-15)
+
+The user has explicitly deferred preparatory work. The next work must target
+interruptions during normal play, not the initial Grass build, replay restore,
+startup compilation or an all-window average dominated by those costs. This
+overrides the ordering of the three priorities immediately above.
+
+Use `tools/renderer/tev_program/castle_field_motion.json` with the same adult-Link
+checkpoint. The timeline waits 240 run frames, then moves Link away from the
+bridge and laterally; it also supplies right-stick input, whose effect remains
+subject to the existing TopScreen camera ownership/configuration. Do not assume
+that the free-camera portion is active without checking it. Framebuffer 420
+confirms actual movement, with Link running and a much wider grassy view.
+
+The pacing harness now accepts `--input-timeline`, `--frame-start-diagnostics`
+and `--guest-diagnostics`. Each is recorded in the result; runtime profiling
+cannot accidentally remain enabled through a fixture flag. Diagnostic runs
+are for attribution; clean runs omit these diagnostics and retain the timeline.
+
+Measurements use 40 seconds, `--warmup-frames 180`, 60 Hz interpolated native30,
+no VSync/fixed delta/captures, the full unchanged graphics profile and private
+copies of configuration/save data. Statistics exclude the first 180 completed
+presentations. They are presentation intervals, NOT native simulation FPS.
+
+Attribution before optimization:
+
+- A stationary run had an isolated 96 ms frame, with 90 ms in renderer frame
+  start. Later frame-start tracing did not reproduce this late spike. Most
+  other stationary outliers were pacing waits, not draw work.
+- First movement produced 140-174 ms guest-dominated frames; a repeat with
+  guest/service profiling did not reproduce them. Their cause is unresolved;
+  do not claim a guest fix or assume hardware, paging or shader compilation.
+- The reproducible moving-view problem is CPU Grass visibility/selection:
+  approximately 19 ms per frame, versus ~0.05 ms placement and ~0.2 ms upload.
+  All three placements are cache hits, static upload bytes are zero, pipeline
+  creations are zero and shader variants are hits. This is per-frame work, not
+  the preparatory bottleneck addressed in the preceding section.
+- At frame 420, the largest surface visits 66,531 candidate clusters; cluster
+  selection/order costs 9.956 ms and subsequent anchor evaluation 1.736 ms.
+
+Implemented: `grass_cluster_order.h` provides bounded integer radix ordering
+for large visibility lists, retaining comparison sort for small lists. Both
+cluster-index lists and complete `GrassClusterWork` records use it. Original
+ascending cluster order remains authoritative for budget admission; no camera
+tolerance, stale visibility reuse, density reduction, pass reordering or native
+shader change. Scratch storage is local and released by its owner; no hidden
+thread-local state or new external dependency.
+
+Paired clean test (new code, then a control rebuilt with ONLY the old sort):
+
+| Post-warmup presentation metric | Old sort | New ordering |
+| --- | ---: | ---: |
+| Maximum | 36.3041 ms | 30.2499 ms |
+| p99 upper bound | 30.875 ms | 27.375 ms |
+| p95 upper bound | 20.625 ms | 18.375 ms |
+| Mean | 17.1698 ms | 16.9644 ms |
+| Frames exceeding 33.33 ms | 2 | 0 |
+
+This is a targeted reduction of moving-view spikes, not a claim that all frame
+pacing is solved. Average throughput improvement is small; the relevant result
+is the tail, with p99 lower by 11.3% and maximum lower by 16.7% in this pair.
+
+A second clean run of the final executable measured p99 29.25 ms, p95 20.875 ms,
+mean 17.0944 ms, maximum 39.1415 ms, and four frames above 33.33 ms. Thus the p99
+improvement repeated (5.3-11.3% across the two new-code runs), but the maximum
+and p95 improvements did NOT. The 39 ms sample still contains 25.53 ms replay;
+other outliers combine guest and replay work. Do not report the first pair as
+proof of universal maximum-stall reduction or stutter-free gameplay.
+
+Correctness: all 17 focused tests pass. Ordering tests compare 24 distributions against `std::sort`,
+including empty/small/large lists, full 32-bit keys and work payload preservation.
+Deterministic full-profile captures before/after at frames 420 and 460 are
+byte-identical. SHA-256 respectively:
+`342da12b4d456abc9ca7404f4cb59fd7aca80f78c0e3f772abcdf22471f58beb` and
+`1b9c830329176b3d7e34f2ad70a995ca9e4968fdb31bb24ce5ddc4e0f9d74ba9`.
+Capture runs use 461 presentations, fixed native step 1/30, throughput mode,
+and the checkpoint's interpolated timing contract; never mix these with timing
+results. The final runtime is rebuilt with the new ordering.
+
+Private evidence in `%TEMP%`: `TriAevum-flow-control`,
+`TriAevum-flow-motion-attribution`, `TriAevum-flow-guest-attribution`,
+`TriAevum-flow-renderer-attribution`, `TriAevum-flow-selection-attribution`,
+`TriAevum-flow-order-clean`, `TriAevum-flow-order-control-clean`, and
+`TriAevum-flow-order-final-repeat`, plus
+`TriAevum-flow-capture-before` / `TriAevum-flow-capture-after`.
+
+Continue with the remaining moving-view visibility traversal/evaluation cost
+and reproducible guest/frame-start/pacing spikes. Preparatory optimization is
+deferred. No Linux/Android performance claim from these Windows measurements.

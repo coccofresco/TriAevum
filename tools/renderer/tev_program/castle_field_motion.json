@@ -1,0 +1,13 @@
+{
+  "schema": "oot3d.native_game.input_timeline.v1",
+  "frame_origin": "run",
+  "segments": [
+    {"start_frame": 0, "end_frame_exclusive": 240},
+    {"start_frame": 240, "end_frame_exclusive": 330, "circle_y": -1},
+    {"start_frame": 330, "end_frame_exclusive": 420, "circle_x": 1},
+    {"start_frame": 420, "end_frame_exclusive": 510, "circle_x": -1},
+    {"start_frame": 510, "end_frame_exclusive": 600, "right_x": 1},
+    {"start_frame": 600, "end_frame_exclusive": 690, "right_x": -1},
+    {"start_frame": 690, "end_frame_exclusive": 2147483647}
+  ]
+}

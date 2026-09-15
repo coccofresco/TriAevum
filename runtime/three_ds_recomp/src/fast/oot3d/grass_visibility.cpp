@@ -1,6 +1,7 @@
 #include "fast/oot3d/grass_visibility.h"
 #include "fast/oot3d/grass_world_placement_cache.h"
 #include "fast/oot3d/grass_distant_tuft.h"
+#include "fast/oot3d/grass_cluster_order.h"
 
 #include <algorithm>
 #include <cmath>
@@ -204,9 +205,8 @@ static GrassClusterSelectionStats SelectGrassVisibility(
             ++i;
         }
         // Budget decisions cannot depend on traversal order or camera motion.
-        if (clusterIndices) std::sort(clusterIndices->begin(), clusterIndices->end());
-        else std::sort(clusterWork->begin(), clusterWork->end(),
-            [](const auto& a, const auto& b) { return a.ClusterIndex < b.ClusterIndex; });
+        if (clusterIndices) OrderGrassClusters(*clusterIndices, [](uint32_t index) { return index; });
+        else OrderGrassClusters(*clusterWork, [](const auto& work) { return work.ClusterIndex; });
     }
     stats.CandidateClusters = static_cast<uint32_t>(clusterIndices ? clusterIndices->size() : clusterWork->size());
     return stats;

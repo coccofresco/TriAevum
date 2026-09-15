@@ -21,6 +21,9 @@ def main():
     parser.add_argument('--from-start', action='store_true', help='Boot without a savestate')
     parser.add_argument('--inventory', action='store_true', help='Diagnostic source inventory; adds CPU overhead')
     parser.add_argument('--diagnostics', action='store_true', help='Bounded renderer phase attribution; not a clean timing run')
+    parser.add_argument('--frame-start-diagnostics', action='store_true', help='Attribute slow acquisition/fence/resource-retirement frames')
+    parser.add_argument('--input-timeline', type=Path, help='Deterministic native controls, applied after loading the fixture')
+    parser.add_argument('--guest-diagnostics', action='store_true', help='Profile guest execution and host-service work; not clean timing')
     parser.add_argument('--rates', type=int, nargs='+', choices=(30, 60, 90), default=[30, 60, 90])
     args = parser.parse_args()
     if args.seconds < 8:
@@ -44,9 +47,12 @@ def main():
                   '--screenshot-interval', '--pica-aot-shader-pack', '--save-state', '--save-state-frame',
                   '--pica-effective-shader-inventory', '--pica-semantic-trace'}
         flags = {'--throughput-benchmark', '--extended-diagnostics', '--screenshot-sequence',
-                 '--pica-aot-shader-strict', '--pica-parametric-tev', '--disable-visual-interpolation'}
+                 '--pica-aot-shader-strict', '--pica-parametric-tev', '--disable-visual-interpolation',
+                 '--profile-a32-runtime'}
         if args.load_state or args.from_start:
             values.add('--load-state')
+        if args.input_timeline:
+            values.add('--input-timeline')
         if args.no_scenario:
             values.update(('--scenario', '--scenario-catalog'))
         for token in tokens:
@@ -81,6 +87,11 @@ def main():
             command.extend(('--load-state', str(args.load_state.resolve())))
         if args.inventory:
             command.extend(('--pica-effective-shader-inventory', str((root/'shaders.json').resolve())))
+        if args.guest_diagnostics:
+            command.append('--profile-a32-runtime')
+        if args.input_timeline:
+            shutil.copy2(args.input_timeline, root/'input.json')
+            command.extend(('--input-timeline', str((root/'input.json').resolve())))
         env = os.environ.copy()
         for key in ('OOT3D_VULKAN_DIAGNOSTICS_PATH', 'OOT3D_PICA_AOT_SHADER_PACK',
                     'OOT3D_PICA_EFFECTIVE_SHADER_INVENTORY', 'TRIAEVUM_FRAME_START_TIMING'):
@@ -92,6 +103,8 @@ def main():
             command.append('--extended-diagnostics')
             env['OOT3D_VULKAN_DIAGNOSTICS_PATH'] = str((root/'renderer.json').resolve())
             env['OOT3D_VULKAN_DIAGNOSTICS_MAX_FRAMES'] = str(args.seconds * rate + 8)
+        if args.frame_start_diagnostics:
+            env['TRIAEVUM_FRAME_START_TIMING'] = '1'
         (root/'invocation.json').write_text(json.dumps(command, indent=2))
         with (root/'stdout.log').open('w') as out, (root/'stderr.log').open('w') as err:
             subprocess.run(command, cwd=Path(base[0]).parent, env=env, stdout=out, stderr=err,
@@ -108,6 +121,9 @@ def main():
                         'inventory_instrumentation': args.inventory,
                         'renderer_instrumentation': args.diagnostics,
                         'grass_instrumentation': 'OOT3D_GRASS_DIAGNOSTICS' in env,
+                        'frame_start_instrumentation': args.frame_start_diagnostics,
+                        'guest_instrumentation': args.guest_diagnostics,
+                        'input_timeline': str(args.input_timeline) if args.input_timeline else None,
                         'shader_diagnostics': re.findall(
                             r'^TRIAEVUM_(?:SPIRV_CACHE|PASS_SHADER_CACHE|NATIVE_PROGRAM_PREPARATION_END|NRI_GPL_LINK)[^\n]*',
                             diagnostics, re.MULTILINE)})
