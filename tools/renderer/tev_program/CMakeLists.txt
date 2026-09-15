@@ -10,6 +10,14 @@ find_package(Vulkan REQUIRED)
 find_path(SHADERC_INCLUDE_DIR shaderc/shaderc.hpp HINTS "$ENV{VULKAN_SDK}" PATH_SUFFIXES include Include REQUIRED)
 find_library(SHADERC_LIBRARY NAMES shaderc_shared shaderc HINTS "$ENV{VULKAN_SDK}" PATH_SUFFIXES lib Lib REQUIRED)
 get_filename_component(runtime "${CMAKE_CURRENT_LIST_DIR}/../../../runtime/three_ds_recomp" ABSOLUTE)
+add_executable(texture_source_cache_tests texture_source_cache_tests.cpp
+    "${runtime}/src/fast/oot3d/grass_texture_source_cache.cpp"
+    "${runtime}/src/fast/oot3d/texture_preview_artifact.cpp"
+    "${runtime}/src/fast/oot3d/grass_surface_extractor.cpp"
+    "${runtime}/src/fast/oot3d/grass_visibility.cpp")
+target_compile_features(texture_source_cache_tests PRIVATE cxx_std_20)
+target_include_directories(texture_source_cache_tests PRIVATE "${runtime}/include")
+add_test(NAME texture_source_cache COMMAND texture_source_cache_tests)
 add_library(pica_tev_program STATIC "${runtime}/src/fast/renderer3ds/pica_tev_program.cpp")
 target_include_directories(pica_tev_program PUBLIC "${runtime}/include")
 target_compile_features(pica_tev_program PUBLIC cxx_std_20)

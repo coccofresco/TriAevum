@@ -84,18 +84,40 @@ GrassTextureSourceCache& GrassTextureSourceCache::Instance() {
     return cache;
 }
 
+void GrassTextureSourceCache::RecordDecodedAlias(
+    uint64_t alias, uint64_t nativeHash, uint64_t observation) const {
+    auto& entry = mDecodedToObserved[alias];
+    if (observation >= entry.LastObservation)
+        entry = {nativeHash, observation};
+}
+
 void GrassTextureSourceCache::ObserveDecoded(
     uint64_t rgba8Hash, uint16_t width, uint16_t height,
     std::span<const uint8_t> rgba8) {
     if (rgba8Hash == 0 || rgba8.size() !=
             static_cast<size_t>(width) * height * 4U) return;
     std::scoped_lock lock(mMutex);
-    if (!mSources.contains(rgba8Hash)) {
+    const bool inserted = !mSources.contains(rgba8Hash);
+    if (inserted) {
         mSources.emplace(rgba8Hash, Source{width, height,
             std::make_shared<const std::vector<uint8_t>>(rgba8.begin(), rgba8.end())});
     }
-    mDecodedToObserved.insert_or_assign(
-        AliasKey(Fnv1a64(rgba8), width, height), rgba8Hash);
+    auto& source = mSources.at(rgba8Hash);
+    const auto observation = ++mObservationSerial;
+    const uint32_t dimensions = (static_cast<uint32_t>(width) << 16U) | height;
+    if (!inserted && (source.Width != width || source.Height != height ||
+        !std::equal(rgba8.begin(), rgba8.end(), source.Rgba8->begin(), source.Rgba8->end()))) {
+        // Preserve aliases for alternate interpretations without replacing the
+        // original immutable mask/color source or retaining duplicate payloads.
+        RecordDecodedAlias(AliasKey(Fnv1a64(rgba8), width, height), rgba8Hash, observation);
+    } else {
+        source.LastObservation = observation;
+        if (mDecodedAliasDimensions.contains(dimensions)) {
+            if (!source.DecodedAliasKey)
+                source.DecodedAliasKey = AliasKey(Fnv1a64(rgba8), width, height);
+            RecordDecodedAlias(*source.DecodedAliasKey, rgba8Hash, observation);
+        }
+    }
     ExportTexturePreviewArtifact(
         rgba8Hash, width, height, rgba8);
 }
@@ -103,10 +125,29 @@ void GrassTextureSourceCache::ObserveDecoded(
 uint64_t GrassTextureSourceCache::ResolveObservedHash(
     uint64_t decodedRgba8Hash, uint16_t width, uint16_t height) const {
     std::scoped_lock lock(mMutex);
+    const uint32_t dimensions = (static_cast<uint32_t>(width) << 16U) | height;
+    if (!mDecodedAliasDimensions.contains(dimensions)) {
+        // Native rendering already has encoded-content identities. Build this
+        // compatibility index only on demand, in last-observation order.
+        std::vector<std::pair<uint64_t, uint64_t>> observed;
+        observed.reserve(mSources.size());
+        for (const auto& [nativeHash, source] : mSources) {
+            if (source.Width == width && source.Height == height)
+                observed.emplace_back(source.LastObservation, nativeHash);
+        }
+        std::sort(observed.begin(), observed.end());
+        for (const auto& [serial, nativeHash] : observed) {
+            const auto& source = mSources.at(nativeHash);
+            source.DecodedAliasKey = AliasKey(
+                Fnv1a64(*source.Rgba8), source.Width, source.Height);
+            RecordDecodedAlias(*source.DecodedAliasKey, nativeHash, serial);
+        }
+        mDecodedAliasDimensions.insert(dimensions);
+    }
     const auto found = mDecodedToObserved.find(
         AliasKey(decodedRgba8Hash, width, height));
     return found == mDecodedToObserved.end() ? decodedRgba8Hash
-                                             : found->second;
+                                             : found->second.NativeHash;
 }
 
 GrassScalarMask GrassTextureSourceCache::AcquireMask(
@@ -249,6 +290,8 @@ void GrassTextureSourceCache::Clear() {
     std::scoped_lock lock(mMutex);
     mSources.clear();
     mDecodedToObserved.clear();
+    mObservationSerial = 0;
+    mDecodedAliasDimensions.clear();
 }
 
 } // namespace Fast::Oot3d

@@ -535,6 +535,72 @@ resource allocation, upload, draw preparation and execution before selecting a
 fix; do not call these shader compilation without evidence. Preserve complete
 native output and synchronization. Linux/Android qualification is still pending.
 
+## Replay texture side work (2026-09-15)
+
+The existing per-draw timers were sufficient to split the first replay. The
+benchmark now accepts `--diagnostics`, retaining the renderer report and scheduler
+timers without enabling Vulkan validation or framebuffer capture. Reports flag
+these runs as instrumented; use the default mode for performance comparisons.
+
+Canonical Field attribution before this change: texture phase 24.33 ms, geometry
+and uniform upload phase 9.84 ms, pipeline phase 5.95 ms, total draw CPU work
+47.94 ms on frame 1. This is NOT the full scheduler/replay time. Temporary tracing
+showed the fixture restored decoded pixels: no live texture decoding occurred.
+Across 80 image creations, allocation took 7.62 ms and GPU upload recording
+1.57 ms. Optimizing the ETC decoder would not address this fixture's stall.
+The temporary texture trace was removed after attribution.
+
+`GrassTextureSourceCache::ObserveDecoded` was hashing all decoded RGBA pixels to
+build aliases for older decoded-model consumers, even when rendering and effects
+used encoded/native content identities only. That compatibility index is now
+materialized per dimension pair on its first actual query. Native-key masks,
+previews, average colors and the 4x4 color grid remain immediately available.
+Source pixels and identifiers are unchanged. Last-observation ordering remains
+deterministic when different native keys resolve to identical decoded pixels;
+subsequent observations reuse the already calculated alias hash after validating
+the retained pixels. There is no growing per-observation pending-list scan.
+Alternate dimensions/pixel interpretations retain the original eager alias
+behavior and observation ordering, without replacing existing mask/color data.
+Clearing the cache clears both sources and index activation.
+
+Matched diagnostic check after the repair: texture phase 10.41 ms, upload
+7.56 ms, pipeline 5.29 ms, total draw CPU work 30.16 ms. Both runs execute 95
+draws and upload 1,506,272 bytes of persistent geometry on frame 1. The texture
+phase reduction is approximately 14 ms / 57%; it is not a whole-game FPS claim.
+The final version with alternate-interpretation safeguards measured 15.84 ms
+for textures, 12.61 ms for upload, 7.96 ms for pipeline and 46.30 ms draw CPU
+total in a later diagnostic run. All phases varied; retain both results rather
+than claiming that the earlier best component reduction is guaranteed.
+
+Separate uninstrumented 3x300-frame experiment, zero warmup and the usual native
+update accounting: prepared GPL first replay 58.30 / 36.01 / 30.98 ms; median
+97.14 native FPS, median-run p99 19.875 ms, maximum 118.83 ms. Compare with the
+preceding tranche's 62.00 / 36.75 / 41.00 ms, 100.33 FPS, p99 24.125 ms and
+maximum 123.31 ms. These are mixed whole-frame results, not a general speedup.
+Driver state and other phases remain variable. The final dimension-scoped
+refinement affects alias queries, which the canonical timing path does not use.
+
+Regression tests in `tools/renderer/tev_program/texture_source_cache_tests.cpp`
+cover native masks/color before any alias request, repeated observations, two
+different native keys with identical pixels, dimensional separation, additions
+after an empty lookup, cache clearing and retained mask identity. The per-dimension
+compatibility lookup can still incur hashing when a legacy consumer really asks
+for it; this is deliberately NOT advertised as eliminating all grass-on stalls.
+The local suite passes 14/14 tests; the final alternate-interpretation safeguards
+also pass the focused cache test. Final Field and boot comparisons pass three
+exact framebuffer matches each, zero Vulkan validation errors, zero runtime
+shader compilation and zero shader-bearing libraries created after preparation.
+Field frames also match the pre-change captures byte for byte. Linux/Android
+hardware qualification and full default-effects performance remain open.
+
+Private evidence: `%TEMP%/TriAevum-{replay-before,upload-before,alias-after,
+replay-fixed-timing,replay-fixed-correctness,replay-final-diagnostics,
+replay-final-correctness,replay-final-boot}-20260915`.
+Next: isolate geometry allocation/upload and actual GPU execution. CPU staging
+geometry currently feeds both NRI and scene-resource consumers; do not remove
+those buffers just because the native draw owner is NRI. This requires a typed
+resource-consumer/lifetime change, not skipping allocations behind a profile flag.
+
 ## First action on resumption
 
 Prioritize the measured first-replay and GPU stalls above. Then extend the actual startup/resource-preparation consumer to effect program families

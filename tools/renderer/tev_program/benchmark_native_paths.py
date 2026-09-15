@@ -22,9 +22,13 @@ def main():
     parser.add_argument('--taa', action='store_true', help='Exercise temporal shader outputs without frame interpolation')
     parser.add_argument('--toon', action='store_true', help='Exercise material toon without outline')
     parser.add_argument('--from-start', action='store_true', help='Boot instead of loading the fixture state')
+    parser.add_argument('--diagnostics', action='store_true',
+                        help='Attribute replay costs; diagnostic timing is not a clean throughput measurement')
     parser.add_argument('--compare-pipeline-libraries', action='store_true',
                         help='Compare monolithic and GPL with the same parametric programs, no collected pack')
     args = parser.parse_args()
+    if args.diagnostics:
+        print('Diagnostic attribution enabled: timings include instrumentation overhead.', flush=True)
     if args.repeats < 1 or not 0 <= args.warmup < args.frames:
         parser.error('require repeats > 0 and 0 <= warmup < frames')
     if args.compare_pipeline_libraries and args.baseline:
@@ -108,6 +112,10 @@ def main():
                 'OOT3D_PICA_EFFECTIVE_SHADER_INVENTORY', 'OOT3D_VULKAN_DIAGNOSTICS_PATH',
                 'OOT3D_VULKAN_DIAGNOSTICS_MAX_FRAMES'):
                 environment.pop(name, None)
+            if args.diagnostics:
+                command.append('--extended-diagnostics')
+                environment['OOT3D_VULKAN_DIAGNOSTICS_PATH'] = str((root/'renderer.json').resolve())
+                environment['OOT3D_VULKAN_DIAGNOSTICS_MAX_FRAMES'] = str(args.frames)
             (root/'invocation.json').write_text(json.dumps(command, indent=2))
             start = time.perf_counter()
             with (root/'stdout.log').open('w') as out, (root/'stderr.log').open('w') as err:
@@ -213,6 +221,7 @@ def main():
     summary['compare_pipeline_libraries'] = args.compare_pipeline_libraries
     summary['from_start'] = args.from_start
     summary['warmup_frames'] = args.warmup
+    summary['diagnostics_enabled'] = args.diagnostics
     summary['method'] = ('Rotating arm order; same guest DLL/assets/state/config; native30 fixed delta; '
         'no interpolation, VSync, pacing, limiter, screenshots or effective shader inventory. '
         'Neutral input. Configured warmup excluded (zero includes first native frame). '

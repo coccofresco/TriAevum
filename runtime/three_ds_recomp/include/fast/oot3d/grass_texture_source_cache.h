@@ -9,6 +9,7 @@
 #include <optional>
 #include <span>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace Fast::Oot3d {
@@ -49,6 +50,8 @@ class GrassTextureSourceCache final {
     // The PICA catalog identifies the encoded texture payload, while decoded
     // room models identify its RGBA8 payload. Resolve the latter back to the
     // catalog key so placement rules remain stable across both producers.
+    // The decoded index is built on first lookup for each dimension pair;
+    // native-key previews, masks and colors do not require it.
     [[nodiscard]] uint64_t ResolveObservedHash(
         uint64_t decodedRgba8Hash, uint16_t width, uint16_t height) const;
     [[nodiscard]] GrassScalarMask AcquireMask(
@@ -76,10 +79,19 @@ class GrassTextureSourceCache final {
         mutable std::optional<std::array<float, 3>> AverageColor;
         mutable bool AverageColorComputed = false;
         mutable std::shared_ptr<const GrassTextureColorGrid> ColorGrid;
+        mutable std::optional<uint64_t> DecodedAliasKey;
+        uint64_t LastObservation = 0;
     };
     mutable std::mutex mMutex;
     std::unordered_map<uint64_t, Source> mSources;
-    std::unordered_map<uint64_t, uint64_t> mDecodedToObserved;
+    struct DecodedAlias {
+        uint64_t NativeHash = 0;
+        uint64_t LastObservation = 0;
+    };
+    void RecordDecodedAlias(uint64_t alias, uint64_t nativeHash, uint64_t observation) const;
+    mutable std::unordered_map<uint64_t, DecodedAlias> mDecodedToObserved;
+    uint64_t mObservationSerial = 0;
+    mutable std::unordered_set<uint32_t> mDecodedAliasDimensions;
 };
 
 } // namespace Fast::Oot3d
