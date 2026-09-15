@@ -1,5 +1,9 @@
 # OOT3D native shader surface and NRI migration
 
+Forward implementation plan as of `a9d9441`:
+[Structural stuttering resolution](TRIAEVUM_STUTTERING_RESOLUTION_STRATEGY.md).
+This analysis retains the historical evidence and per-tranche limitations.
+
 Date: 2026-09-14. Status: implemented opt-in parametric fragment path with
 built-in SPIR-V and offline-translated native vertex family; not yet fully
 precompiled vertex/extension/pass shaders or measured stutter elimination.
