@@ -654,9 +654,11 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         bool vertexShader, const char* sourceName);
     VkShaderModule CreateShaderModuleFromSpirv(
         std::span<const uint32_t> spirv);
+    void EnsureNativePicaVulkanShaderModules(
+        const GfxNativePicaDrawView& draw, NativePicaShaderProgram& shader);
     Renderer3ds::PicaDevicePipelineRecord& GetOrCreateNativePicaPipeline(
         const GfxNativePicaDrawView& draw,
-        const NativePicaShaderProgram& shader, bool writesReactiveMask,
+        NativePicaShaderProgram& shader, bool writesReactiveMask,
         Oot3d::PicaShaderDomain domain,
         Oot3d::PicaShaderInstrumentationFeature requestedFeatures,
         Oot3d::PicaShaderInstrumentationFeature appliedFeatures,
@@ -812,6 +814,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     std::map<std::vector<uint8_t>, Renderer3ds::PicaDevicePipelineRecord> mNativePicaPipelines;
     uint64_t mNextPicaPipelineId = 1;
     uint64_t mNativePicaVulkanPipelineCreations = 0;
+    uint64_t mNativePicaVulkanShaderPairCreations = 0;
     std::map<NativePicaTextureKey, TextureRecord> mNativePicaTextures;
     std::map<uint64_t, NativePicaLightingLutTexture>
         mNativePicaLightingLuts;

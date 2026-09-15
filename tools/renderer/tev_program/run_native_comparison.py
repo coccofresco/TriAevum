@@ -114,15 +114,17 @@ def main():
             if args.require_single_pipeline_owner:
                 nri = re.search(r'TRIAEVUM_NRI_PIPELINE_CACHE (\{[^\n]+\})', diagnostics)
                 vk = re.search(r'TRIAEVUM_PICA_VULKAN_PIPELINES created=(\d+)', diagnostics)
-                if not nri or not vk:
+                modules = re.search(r'TRIAEVUM_PICA_VULKAN_SHADER_PAIRS created=(\d+)', diagnostics)
+                if not nri or not vk or not modules:
                     raise RuntimeError('missing pipeline ownership evidence')
                 nri_count, vk_count = json.loads(nri[1])['created'], int(vk[1])
                 if args.vulkan_fallback:
-                    valid = nri_count == 0 and vk_count > 0
+                    valid = nri_count == 0 and vk_count > 0 and int(modules[1]) > 0
                 else:
-                    valid = nri_count > 0 and vk_count == 0
+                    valid = nri_count > 0 and vk_count == 0 and int(modules[1]) == 0
                 if not valid:
-                    raise RuntimeError(f'pipeline factories overlap or selected factory unused: NRI={nri_count}, Vulkan={vk_count}')
+                    raise RuntimeError(f'pipeline/module factories overlap or selected factory unused: '
+                                       f'NRI={nri_count}, Vulkan={vk_count}, Vulkan shader pairs={modules[1]}')
             if args.require_no_runtime_compilation and 'TRIAEVUM_RUNTIME_SHADER_COMPILE ' in diagnostics:
                 raise RuntimeError('parametric: runtime shader compilation is still present')
             if args.require_no_runtime_compilation and not re.search(

@@ -14,25 +14,32 @@ import time
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--invocation', type=Path, required=True)
-    parser.add_argument('--baseline', type=Path, required=True)
+    parser.add_argument('--baseline', type=Path, help='Optional historical executable; omitted compares current paths only')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--repeats', type=int, default=3)
     parser.add_argument('--frames', type=int, default=900)
     parser.add_argument('--warmup', type=int, default=180)
     parser.add_argument('--taa', action='store_true', help='Exercise temporal shader outputs without frame interpolation')
+    parser.add_argument('--toon', action='store_true', help='Exercise material toon without outline')
+    parser.add_argument('--from-start', action='store_true', help='Boot instead of loading the fixture state')
     args = parser.parse_args()
-    if args.repeats < 1 or not 0 < args.warmup < args.frames:
-        parser.error('require repeats > 0 and 0 < warmup < frames')
+    if args.repeats < 1 or not 0 <= args.warmup < args.frames:
+        parser.error('require repeats > 0 and 0 <= warmup < frames')
     fixture = json.loads(args.invocation.read_text(encoding='utf-8-sig'))
     current = Path(fixture['executable'])
     args.output.mkdir(parents=True, exist_ok=False)
-    arms = ('historical', 'current_specialized', 'current_parametric')
+    arms = (('historical',) if args.baseline else ()) + ('current_specialized', 'current_parametric')
     rows = []
     for repeat in range(args.repeats):
-        order = arms[repeat % 3:] + arms[:repeat % 3]
+        order = arms[repeat % len(arms):] + arms[:repeat % len(arms)]
         for arm in order:
             root = args.output / f'{repeat}-{arm}'
             root.mkdir()
+            neutral_input = root / 'neutral-input.json'
+            neutral_input.write_text(json.dumps({
+                'schema': 'oot3d.native_game.input_timeline.v1', 'frame_origin': 'run',
+                'segments': [{'start_frame': 0, 'end_frame_exclusive': 2147483647, 'buttons': []}]
+            }), encoding='utf-8')
             executable = args.baseline if arm == 'historical' else current
             command = [str(executable.resolve())]
             tokens = iter(fixture['arguments'])
@@ -43,6 +50,8 @@ def main():
                 '--pica-semantic-trace'}
             removed_flags = {'--screenshot-sequence', '--extended-diagnostics',
                 '--throughput-benchmark', '--pica-parametric-tev'}
+            if args.from_start:
+                removed_values.add('--load-state')
             if arm == 'current_parametric':
                 removed_values.add('--pica-aot-shader-pack')
                 removed_flags.add('--pica-aot-shader-strict')
@@ -63,9 +72,13 @@ def main():
                     if token == '--config':
                         config = json.loads(target.read_text(encoding='utf-8-sig'))
                         config['Graphics']['Presentation']['VSync'] = False
-                        if args.taa:
+                        if args.taa or args.toon:
                             config['Graphics']['Preset'] = 'Custom'
+                        if args.taa:
                             config['Graphics']['AA']['Mode'] = 'TAA'
+                        if args.toon:
+                            config['Graphics']['Effects']['Toon']['Mode'] = 'PicaMaterial'
+                            config['Graphics']['Effects']['Toon']['OutlineEnabled'] = False
                         target.write_text(json.dumps(config, indent=2), encoding='utf-8')
                     command.extend((token, str(target.resolve())))
                 else:
@@ -73,11 +86,14 @@ def main():
             cache = args.output / f'cache-{arm}'
             command.extend(('--throughput-benchmark', '--benchmark-warmup-frames', str(args.warmup),
                 '--frames', str(args.frames), '--max-seconds', '120',
+                '--input-timeline', str(neutral_input.resolve()),
                 '--output', str((root/'runtime.json').resolve()),
                 '--renderer-cache-directory', str(cache.resolve())))
             if arm == 'current_parametric':
                 command.append('--pica-parametric-tev')
             environment = os.environ.copy()
+            environment['OOT3D_GRAPHICS_NRI_PICA_DRAWS'] = '1'
+            environment['OOT3D_GRAPHICS_PICA_DYNAMIC_RENDERING'] = '1'
             for name in ('OOT3D_PICA_AOT_SHADER_PACK', 'OOT3D_PICA_AOT_SHADER_STRICT',
                 'OOT3D_PICA_PIPELINE_PREWARM', 'OOT3D_PICA_PIPELINE_MANIFEST',
                 'OOT3D_PICA_EFFECTIVE_SHADER_INVENTORY', 'OOT3D_VULKAN_DIAGNOSTICS_PATH',
@@ -118,6 +134,15 @@ def main():
                 match = re.search(label + r' ([^\n]+)', log)
                 if match:
                     counters[label] = dict(re.findall(r'(\w+)=([\w.]+)', match[1]))
+            match = re.search(r'TRIAEVUM_NRI_PIPELINE_CACHE (\{[^\n]+\})', log)
+            if match:
+                counters['TRIAEVUM_NRI_PIPELINE_CACHE'] = json.loads(match[1])
+            match = re.search(r'TRIAEVUM_PICA_VULKAN_PIPELINES created=(\d+)', log)
+            if match:
+                counters['TRIAEVUM_PICA_VULKAN_PIPELINES'] = {'created': int(match[1])}
+            match = re.search(r'TRIAEVUM_PICA_VULKAN_SHADER_PAIRS created=(\d+)', log)
+            if match:
+                counters['TRIAEVUM_PICA_VULKAN_SHADER_PAIRS'] = {'created': int(match[1])}
             if args.taa and arm != 'historical':
                 if int(counters.get('TRIAEVUM_NATIVE_PROGRAM_OWNERS', {}).get('instrumented', 0)) == 0:
                     raise RuntimeError(f'{arm}: TAA instrumentation was not exercised')
@@ -138,6 +163,10 @@ def main():
         samples = [r['benchmark']['frames_per_second'] for r in rows if r['arm'] == arm]
         summary[arm] = {'median_native_fps': statistics.median(samples),
                         'min_native_fps': min(samples), 'max_native_fps': max(samples)}
+        summary[arm]['cache_windows'] = {
+            name: [r['benchmark'] for r in rows if r['arm'] == arm
+                   and r['application_cache_initially_empty'] == initially_empty]
+            for name, initially_empty in (('application_empty', True), ('application_reused', False))}
         distributions = [r['benchmark'].get('frame_times') for r in rows if r['arm'] == arm]
         if all(distributions):
             summary[arm]['frame_times'] = {
@@ -147,9 +176,14 @@ def main():
                 'over_30hz_budget': sum(d['over_30hz_budget'] for d in distributions),
                 'samples': sum(d['samples'] for d in distributions)}
     summary['taa'] = args.taa
+    summary['toon'] = args.toon
+    summary['from_start'] = args.from_start
+    summary['warmup_frames'] = args.warmup
     summary['method'] = ('Rotating arm order; same guest DLL/assets/state/config; native30 fixed delta; '
         'no interpolation, VSync, pacing, limiter, screenshots or effective shader inventory. '
-        'Warmup excluded. First application cache empty, reused per arm thereafter. '
+        'Neutral input. Configured warmup excluded (zero includes first native frame). '
+        'Pipeline/compiler counters span the full process, not just the timing window. '
+        'First application cache empty, reused per arm thereafter. '
         'Driver/OS cache not cleared. Historical executable may include unrelated differences.')
     (args.output/'summary.json').write_text(json.dumps(summary, indent=2))
     print(json.dumps(summary, indent=2))

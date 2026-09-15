@@ -1360,6 +1360,79 @@ AO, reflections or directional shadows; first-use driver pipeline creation;
 Linux/Android GPU validation. Do not extrapolate this fixture to all gameplay,
 all effect settings, zero driver compilation, or total stutter elimination.
 
+### Impact-ordered work and lazy fallback shader ownership (2026-09-15)
+
+The measurement harness now accepts zero warmup to include first-use stalls,
+injects neutral input, forces the selected NRI execution path, and records driver
+pipeline receipts alongside shader compiler receipts. Historical executables are
+optional; comparisons between two current paths must not masquerade as a commit
+speedup. Empty/reused application-cache windows are reported separately. No
+screenshots, interpolation, VSync, pacing or frame limiter run during timing.
+Driver internal caches are NOT cleared; application-empty is not driver-cold.
+
+Inspection found a remaining ownership error: an NRI-only draw still resolved
+the combined-sampler fragment shader and created Vulkan shader modules, although
+only its separate-sampler NRI program could be submitted. Pipeline ownership had
+been separated earlier, but shader ownership had not.
+
+`EnsureNativePicaVulkanShaderModules` now creates the pair only at the actual
+Vulkan fallback boundary. Vertex SPIR-V remains available for either owner;
+failed pair construction releases temporary handles before publishing ownership.
+The maintained legacy manifest-preparation path still owns its explicitly
+prepared modules. No new scene list, harvested pack or runtime shader patching
+is involved. `TRIAEVUM_PICA_VULKAN_SHADER_PAIRS` and the framebuffer harness check
+that NRI-only draws create zero fallback pairs and forced fallback creates them.
+
+Windows Field, toon + TAA, same native30 state and 300 updates including first use:
+
+| Measurement | Before lazy modules | After lazy modules |
+| --- | --- | --- |
+| Specialized runtime shader compilations | 50 | 25 |
+| Parametric runtime shader compilations | 0 | 0 |
+| Specialized maximum native-frame time, empty app cache | 5097.78 ms | 2925.26 ms |
+| Parametric maximum native-frame time, empty app cache | 241.52 ms | 236.10 ms |
+| Parametric NRI pipelines | 27 | 27 |
+| Parametric Vulkan fallback shader pairs | eagerly created, no counter | 0 |
+
+These short runs demonstrate removal of duplicate compilation, NOT a meaningful
+steady-state FPS improvement in the already compiler-free parametric case. The
+new parametric path measured 98.74 and 100.70 native frames/s in two runs; the
+prior run measured 96.57. This small spread is not claimed as a speedup. Guest
+logic still runs at fixed 30 Hz simulation delta; throughput is execution
+capacity, not an instruction to accelerate gameplay.
+
+Priorities for subsequent implementation:
+
+1. **Driver first-use pipeline creation.** The earlier new toon/temporal program
+   run spent 3.153 s cumulatively in NRI pipeline creation; warm-driver runs take
+   roughly 0.06 s. This is not solved by supplying SPIR-V or moving creation to
+   another point in the same frame. Investigate reusable pipeline-stage ownership
+   and the precise dynamic-state capabilities at the shared NRI/device boundary.
+   The pinned NRI Vulkan factory currently creates monolithic pipelines; its
+   dynamic-state list does not make arbitrary blend/depth/cull state dynamic.
+   Preserve those states until the real command/capability contract supports them.
+2. **Remaining effect combinations.** Outline/fog/normal guides, AO, reflections
+   and directional shadows still require native program coverage. The duplicate
+   fallback elimination applies generally to these too, but does not make their
+   actual NRI shader compilation disappear. Numerical settings must become data,
+   not multiply program variants.
+3. **Steady-state submission and gameplay cost.** In the compiler-free 300-frame
+   reference, guest execution took 1.645 s and backend replay 0.593 s. These are
+   distinct from shader compilation. Do not chase tiny pipeline-key aliases or
+   inflate apparent FPS with interpolated presentations.
+
+Validation: 12 standalone suites pass (74.42 s). Toon/TAA NRI and forced Vulkan
+each pass three exact specialized/parametric framebuffer comparisons. The NRI
+images also exactly match the previous committed parametric images. Forced
+fallback retains its original native state/order. Boot/Off also passes all three
+exact comparisons with zero runtime compilation and zero fallback module pairs.
+Linux/Android hardware tests
+remain outstanding; this is not a claim of total stutter elimination.
+
+Private evidence: `%TEMP%/TriAevum-impact-first-use-20260915`,
+`TriAevum-impact-lazy-modules-20260915`, and
+`TriAevum-lazy-shader-{modules,fallback,boot}-20260915`.
+
 ## External Source Links
 
 - [zeldaret loader placeholders](https://github.com/zeldaret/oot3d/blob/a87ddae43252cb3add71bf1003e7391bbe006033/src/functions/functions_410000s.cpp#L616)

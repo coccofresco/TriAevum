@@ -2853,6 +2853,8 @@ void GfxRenderingAPIVulkan::StorePipelineCache() {
     std::fprintf(stderr, "TRIAEVUM_NRI_PIPELINE_CACHE %s\n", receipt.c_str());
     std::fprintf(stderr, "TRIAEVUM_PICA_VULKAN_PIPELINES created=%llu\n",
                  static_cast<unsigned long long>(mNativePicaVulkanPipelineCreations));
+    std::fprintf(stderr, "TRIAEVUM_PICA_VULKAN_SHADER_PAIRS created=%llu\n",
+                 static_cast<unsigned long long>(mNativePicaVulkanShaderPairCreations));
     const auto nriData = mNriPicaPipelineBridge.GetPipelineCacheData();
     if (!nriData.empty()) {
         VkPhysicalDeviceProperties properties{};

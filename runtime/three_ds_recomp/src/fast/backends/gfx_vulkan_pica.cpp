@@ -3148,9 +3148,32 @@ void GfxRenderingAPIVulkan::CreateNativePicaTextureImage(
     RecreateSampler(texture);
 }
 
+void GfxRenderingAPIVulkan::EnsureNativePicaVulkanShaderModules(
+    const GfxNativePicaDrawView& draw, NativePicaShaderProgram& shader) {
+    if (shader.VertexShader != VK_NULL_HANDLE && shader.FragmentShader != VK_NULL_HANDLE)
+        return;
+    if (shader.VertexShader != VK_NULL_HANDLE || shader.FragmentShader != VK_NULL_HANDLE)
+        throw std::logic_error("partial native PICA Vulkan shader ownership");
+    // NRI consumes SPIR-V directly. The combined-sampler program and Vulkan
+    // modules belong exclusively to a draw that actually needs the fallback.
+    const auto fragment = ResolveNativePicaShaderSpirv(draw.FragmentShaderSource,
+        Oot3d::PicaAotShaderStage::Fragment, false, "native_pica_fallback.frag");
+    const auto vertex = CreateShaderModuleFromSpirv(shader.NriVertexSpirv);
+    VkShaderModule fragmentModule = VK_NULL_HANDLE;
+    try {
+        fragmentModule = CreateShaderModuleFromSpirv(fragment);
+    } catch (...) {
+        vkDestroyShaderModule(mDevice, vertex, nullptr);
+        throw;
+    }
+    shader.VertexShader = vertex;
+    shader.FragmentShader = fragmentModule;
+    ++mNativePicaVulkanShaderPairCreations;
+}
+
 Renderer3ds::PicaDevicePipelineRecord& GfxRenderingAPIVulkan::GetOrCreateNativePicaPipeline(
     const GfxNativePicaDrawView& draw,
-    const NativePicaShaderProgram& shader, bool writesReactiveMask,
+    NativePicaShaderProgram& shader, bool writesReactiveMask,
     Oot3d::PicaShaderDomain domain,
     Oot3d::PicaShaderInstrumentationFeature requestedFeatures,
     Oot3d::PicaShaderInstrumentationFeature appliedFeatures,
@@ -3279,6 +3302,7 @@ Renderer3ds::PicaDevicePipelineRecord& GfxRenderingAPIVulkan::GetOrCreateNativeP
     if (!requireVulkan && mNriPicaPipelineBridge.OwnedPipelineReady(record.Id))
         return record;
 
+    EnsureNativePicaVulkanShaderModules(draw, shader);
     const VkPipelineShaderStageCreateInfo stages[] = {
         {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0,
          VK_SHADER_STAGE_VERTEX_BIT, shader.VertexShader, "main", nullptr},
@@ -3471,6 +3495,7 @@ void GfxRenderingAPIVulkan::PrewarmNativePicaPipelines() {
                     CreateShaderModuleFromSpirv(vertexSpirv);
                 shader.FragmentShader =
                     CreateShaderModuleFromSpirv(fragmentSpirv);
+                ++mNativePicaVulkanShaderPairCreations;
                 if (!nriFragmentSpirv.empty()) {
                     shader.NriFragmentSpirv.assign(
                         nriFragmentSpirv.begin(), nriFragmentSpirv.end());
@@ -4056,19 +4081,6 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                     Oot3d::PicaAotShaderStage::Vertex, true,
                     (stem + ".vert").c_str());
             }
-            shader.VertexShader =
-                CreateShaderModuleFromSpirv(shader.NriVertexSpirv);
-            try {
-                const auto fragmentSpirv = ResolveNativePicaShaderSpirv(
-                    effectiveDraw.FragmentShaderSource,
-                    Oot3d::PicaAotShaderStage::Fragment, false,
-                    (stem + ".frag").c_str());
-                shader.FragmentShader =
-                    CreateShaderModuleFromSpirv(fragmentSpirv);
-            } catch (...) {
-                vkDestroyShaderModule(mDevice, shader.VertexShader, nullptr);
-                throw;
-            }
             if (mNriPicaPipelineBridge.Available()) {
                 const auto nriVariant =
                     Oot3d::BuildPicaNriFragmentShaderVariant(
@@ -4094,26 +4106,18 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                         shader.NriDescriptorContract = true;
                     } catch (const std::exception& exception) {
                         if (mPicaAotShaderStrict) {
-                            vkDestroyShaderModule(
-                                mDevice, shader.FragmentShader, nullptr);
-                            vkDestroyShaderModule(
-                                mDevice, shader.VertexShader, nullptr);
                             throw;
                         }
-                        shader.NriVertexSpirv.clear();
                         shader.NriFragmentSpirv.clear();
                         SPDLOG_WARN(
                             "NRI PICA shader contract compile failed for {}: {}",
                             stem, exception.what());
                     }
                 } else {
-                    shader.NriVertexSpirv.clear();
                     SPDLOG_WARN(
                         "NRI PICA shader contract unavailable for {}: {}",
                         stem, nriVariant.Error);
                 }
-            } else {
-                shader.NriVertexSpirv.clear();
             }
             shaderIt = nativeShaderCache.emplace(shaderKey, std::move(shader)).first;
         }
