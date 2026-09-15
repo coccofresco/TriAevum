@@ -1,7 +1,10 @@
 # Structural stuttering resolution
 
 Date: 2026-09-15. Baseline: `a9d9441`, branch `port/linux-nri`.
-Status: executable strategy; the remaining implementation is NOT complete.
+Status: current optimization phase closed by user decision on 2026-09-15.
+The measured result is sufficient for this phase, not proof of zero stuttering
+or full-plan completion. Remaining work is deferred to future optimization;
+the closure note at the end supersedes earlier immediate next-step instructions.
 
 This is the forward plan. Historical evidence remains in
 [the native shader analysis](TRIAEVUM_OOT3D_UBERSHADER_ANALYSIS.md).
@@ -1074,3 +1077,50 @@ Private evidence in `%TEMP%`: `TriAevum-flow-partition-clean`,
 Next work remains post-preparation: residual moving-view CPU selection/merge,
 guest/replay spikes and late presentation wakes. Do not claim all stuttering
 resolved or extend the Windows performance result to Linux/Android without tests.
+
+## Phase closure and future optimization handoff (2026-09-15)
+
+The user considers this phase sufficient and requests no further optimization
+in this phase. Preserve the implemented improvements; do not interpret this
+closure as a rollback or as resolution of the outstanding causes.
+
+Committed implementation checkpoints:
+
+| Commit | Retained work |
+| --- | --- |
+| `b361f02` | Castle checkpoint pacing qualification and scoped Windows multimedia scheduling |
+| `80ee461` | Exact pooled Grass spacing columns reducing preparatory placement cost |
+| `33d241f` | Recurring Grass visibility radix ordering and moving-frame profiling harness |
+| `d619428` | Parallel immutable visibility-subtree selection using the existing worker pool |
+
+The latest post-preparation Windows comparison is the table above: p99 falls
+from 28 ms serial to 18-25 ms in two parallel runs, with isolated maxima still
+around 30 ms. These are paced 60 Hz presentation intervals over native30 with
+2x interpolation, not unlocked native simulation throughput. Eighteen focused
+tests pass, and deterministic framebuffer captures at 420/460 are byte-identical
+to the serial reference. No density, image-quality or gameplay-speed concession
+was used. No Linux/Android performance conclusion follows from these tests.
+
+Revisit in a future explicitly requested optimization phase:
+
+1. Remaining per-frame Grass visibility traversal, result merge and evaluation
+   cost on wide moving views; preserve exact masks, admission and draw order.
+2. Late pacing wakes and guest/replay/frame-start spikes. The earlier isolated
+   140-174 ms guest and ~90 ms frame-start observations remain unexplained and
+   not reliably reproduced; do not classify them as fixed or assume a cause.
+3. Independently attributed upload, allocation, synchronization and GPU costs,
+   ranked by their contribution to bad frames rather than average FPS alone.
+4. Full supported-profile program coverage and pipeline lifetime tests across
+   AA/effect/resolution/fullscreen/scene transitions, plus Linux/Android checks.
+5. Separately deferred preparation work: initial Grass construction and the
+   saved-replay compatibility shader path / remaining device preparation.
+
+Resume from this implementation, not from a fresh renderer migration. Reuse
+`tools/renderer/tev_program/measure_pacing.py` and `castle_field_motion.json`
+with the adult-Link castle checkpoint documented above. Re-establish a clean
+baseline on the then-current build; keep startup, diagnostic and deterministic
+capture runs separate from normal-flow timing. Temporary private evidence may
+expire, so the commands, fixture identity, hashes and measured limits recorded
+here are the handoff, not an assumption that `%TEMP%` remains available.
+
+Do not restart this backlog automatically during unrelated feature work.
