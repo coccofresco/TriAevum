@@ -1,5 +1,6 @@
 #include "oot3d_native_a32_window.h"
 #include "fast/renderer/frame_time_distribution.h"
+#include "fast/renderer/slow_frame_samples.h"
 #include "fast/renderer3ds/pica_program_preparation.h"
 #include "oot3d_game_language_panel.h"
 #ifdef OOT3D_WHOLE_AOT_PRODUCT_MODE
@@ -543,6 +544,12 @@ struct NativeFramePhaseTiming {
   double VisualPresentationSeconds = 0.0;
   double VisualReplaySeconds = 0.0;
   double PresentSeconds = 0.0;
+  std::array<double, 14> Values() const {
+    return {GuestSeconds, FrameStartSeconds, HostFrameStartSeconds, InputPollSeconds,
+      RendererFrameStartSeconds, DspMixSeconds, AudioOutputSeconds, PicaSubmitSeconds,
+      PicaPlanSeconds, PicaBackendSeconds, PicaDiagnosticsSeconds,
+      VisualPresentationSeconds, VisualReplaySeconds, PresentSeconds};
+  }
 };
 
 struct NativeAudioOutputDiagnostics {
@@ -4674,6 +4681,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
   auto benchmarkMeasurementStart = std::chrono::steady_clock::now();
   auto benchmarkMeasurementEnd = benchmarkMeasurementStart;
   uint64_t benchmarkMeasuredFrames = 0U;
+  Fast::Renderer::SlowFrameSamples<14> slowFrames;
   auto benchmarkFrameTimes = hostArgs.ThroughputBenchmark
       ? std::make_unique<Fast::Renderer::FrameTimeDistribution>() : nullptr;
   bool benchmarkMeasurementStarted =
@@ -4685,6 +4693,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
   while (window.IsRunning() &&
          processResult.Kind !=
              Oot3dNativeGame::NativeA32ProcessRunKind::Terminated) {
+    const auto phaseBeforeFrame = phaseTiming.Values();
     widescreenProjection.CurrentHostFrame =
         static_cast<uint32_t>(presentationFrameCount);
     WindowDemoFrameTiming frameTiming;
@@ -6128,6 +6137,11 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     } else if (benchmarkMeasurementStarted &&
                runFrameCount > hostArgs.BenchmarkWarmupFrames) {
       if (benchmarkFrameTimes) {
+        auto phases = phaseTiming.Values();
+        for (size_t i = 0; i < phases.size(); ++i)
+          phases[i] = (phases[i] - phaseBeforeFrame[i]) * 1000.0;
+        slowFrames.Record(runFrameCount, std::chrono::duration<double, std::milli>(
+            completedFrameTime - benchmarkMeasurementEnd).count(), phases);
         benchmarkFrameTimes->RecordMilliseconds(
             std::chrono::duration<double, std::milli>(
                 completedFrameTime - benchmarkMeasurementEnd).count());
@@ -8873,7 +8887,20 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                };
              }()},
             {"phase_timing",
-             {{"guest_seconds", phaseTiming.GuestSeconds},
+             {{"slow_frames", [&]() {
+                 constexpr const char* names[]{"guest", "frame_start", "host_frame_start", "input_poll",
+                   "renderer_frame_start", "dsp_mix", "audio_output", "pica_submit", "pica_plan",
+                   "pica_backend", "pica_diagnostics", "visual_presentation", "visual_replay", "present"};
+                 auto samples = nlohmann::json::array();
+                 for (const auto& sample : slowFrames.Samples()) {
+                   nlohmann::json phases;
+                   for (size_t i = 0; i < std::size(names); ++i) phases[names[i]] = sample.PhaseMilliseconds[i];
+                   samples.push_back({{"frame", sample.Frame}, {"total_ms", sample.Milliseconds}, {"phases_ms", phases}});
+                 }
+                 return samples;
+               }()},
+              {"slow_frame_note", "Nested phases overlap; do not sum parent and child timers. Measured benchmark frames only."},
+              {"guest_seconds", phaseTiming.GuestSeconds},
               {"frame_start_seconds", phaseTiming.FrameStartSeconds},
               {"host_frame_start_seconds", phaseTiming.HostFrameStartSeconds},
               {"input_poll_seconds", phaseTiming.InputPollSeconds},

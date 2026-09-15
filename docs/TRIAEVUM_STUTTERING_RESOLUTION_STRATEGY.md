@@ -469,9 +469,75 @@ cost separately and asserts this invariant for its canonical arms.
 Private evidence: `%TEMP%/TriAevum-gpl-prepared-{field-v2,boot,toon,timing}-20260915`.
 The failed feature-negotiation run is `TriAevum-gpl-prepared-field-20260915`.
 
+## Residual stall attribution and synchronization repair (2026-09-15)
+
+Priority is now residual frame time, not more shader inventories. A fixed-storage
+`SlowFrameSamples` collector retains the worst 16 measured frames with deltas of
+the existing host/guest/replay timers. It performs no per-frame allocation or I/O.
+The report explicitly identifies nested phases: they must NOT be added together.
+An opt-in `TRIAEVUM_FRAME_START_TIMING=1` trace separates presentation settings,
+present completion, transitions, frame fence, retirement, acquisition and finish.
+Use that diagnostic only for attribution, not uninstrumented throughput claims.
+
+The canonical Field fixture exposed two avoidable costs, both now corrected:
+
+- The first swapchain used a default VSync value, then the first display-settings
+  transaction recreated it even when the host window already matched. Init now
+  uses the configured VSync value. The initial transaction adopts an existing
+  healthy, matching window/swapchain; different settings, dirty surfaces and
+  subsequent candidate/rollback transactions retain the normal apply path.
+- Image ownership retained fence handles after their submission completed. When
+  a frame slot reused the handle, acquiring an old image could wait on unrelated
+  newer work. After the slot fence completes, its image references are retired
+  BEFORE reuse. The slot wait, acquisition semaphore and waits for genuinely
+  outstanding image submissions remain. No native draw or visibility is changed.
+
+The fixes are in `GfxRenderingAPIVulkan::Init`, `ApplyPresentationSettings` and
+`StartFrame`, not in an OOT3D scene adapter. Shared bounded attribution lives in
+`runtime/three_ds_recomp/include/fast/renderer/slow_frame_samples.h`; the native
+benchmark consumer writes `phase_timing.slow_frames` only for measured frames.
+
+Windows RTX 3060 evidence (same Field fixture; 300 native updates, zero warmup,
+no interpolation/VSync/pacing/limiter/captures; driver cache NOT cleared):
+
+- Before, attribution run: first GPL frame 194.93 ms, renderer start 63.98 ms,
+  replay 62.40 ms. Separate stage run: first-frame settings 67.37 ms; later
+  finish phases included 21.24/23.28 ms in addition to frame-fence waits.
+- After, three rotating-order repetitions: first GPL frames
+  123.31 / 94.92 / 102.51 ms; renderer start 0.48 / 0.43 / 0.62 ms;
+  replay 62.00 / 36.75 / 41.00 ms. Late finish phases in the traced slow frames
+  are now sub-millisecond. Actual frame-slot GPU waits remain and are not hidden.
+- Prepared GPL median 100.33 native frames/s (98.79-102.78), median-run p99
+  24.125 ms, maximum 123.31 ms, four frames >33.33 ms out of 900. The earlier
+  three-run preparation experiment had 97.63 FPS / p99 31.0 / max 158.16 ms.
+  These historical comparisons are indicative, not an isolated speedup claim:
+  run order and driver state can affect tails. The attributable removed work
+  is the redundant display transaction and stale image-fence ownership.
+- Canonical comparison: three exact framebuffer matches, including against the
+  previous monolithic captures; zero validation errors, runtime shader compiler
+  requests or shader-bearing library creation after preparation.
+- Boot-from-start comparison also passes three exact captures with the same
+  structural invariants. The local renderer suite passes 13/13 tests, including
+  invalid samples, bounded eviction and stable ties for slow-frame attribution.
+- Separate steady-state run with stage tracing OFF (three 900-frame runs,
+  180 warmup): prepared GPL median 114.58 FPS (108.42-116.90), median-run p99
+  12.0 ms, maximum 23.51 ms, zero >33.33 ms across 2160 samples. Monolithic
+  median 114.43 FPS, p99 12.875 ms, maximum 18.10 ms, also zero >33.33 ms.
+  This is comparable to the prior steady-state range, not a large mean-FPS gain.
+
+Private reproduction evidence: `%TEMP%/TriAevum-tail-{attribution,stage,fixed,
+correctness,boot,steady}-20260915`. Build remains the frozen `J:/TriAevum-verify-20260910/runtime`
+lane with `ninja -f .tev-validation.ninja -j 2 TriAevum.exe`; no title-AOT rebuild.
+
+This does NOT close stuttering. The next measured target is first replay
+resource/setup work (37-62 ms here), then genuine GPU execution tails. Split
+resource allocation, upload, draw preparation and execution before selecting a
+fix; do not call these shader compilation without evidence. Preserve complete
+native output and synchronization. Linux/Android qualification is still pending.
+
 ## First action on resumption
 
-Extend the actual startup/resource-preparation consumer to effect program families
+Prioritize the measured first-replay and GPU stalls above. Then extend the actual startup/resource-preparation consumer to effect program families
 and sample-count/alpha-coverage profiles using their declared interfaces. Do not
 reintroduce shader inventories or prepare all combinations of material state.
 Profile transitions and device recreation need explicit preparation boundaries

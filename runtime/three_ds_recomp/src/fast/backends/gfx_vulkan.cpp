@@ -1070,6 +1070,7 @@ void GfxRenderingAPIVulkan::Init() {
                                   mWindowBackend->CanDisableVsync());
     settingsRuntime.SetCapability(Oot3d::GraphicsCapability::ExclusiveFullscreen,
                                   true);
+    mVsyncEnabled = settingsRuntime.Snapshot().VSync;
     CreateSyncObjects();
     CreateSwapchainResources();
     if (!mNriPicaScanoutPass.Initialize(mDevice, mNriInterop) ||
@@ -1344,6 +1345,24 @@ bool GfxRenderingAPIVulkan::ApplyPresentationSettings(
             settings.TransactionKind, false, true);
         return false;
     }
+    // The host may already have created the requested window. Adopt that state
+    // instead of destroying a usable swapchain on the first gameplay frame.
+    if (!mPresentationSettingsApplied && !mSwapchainDirty &&
+        mSwapchainImages.size() >= 2U && mVsyncEnabled == settings.VSync) {
+        uint32_t width = 0, height = 0;
+        int32_t x = 0, y = 0;
+        mWindowBackend->GetDimensions(&width, &height, &x, &y);
+        const uint8_t mode = !mWindowBackend->IsFullscreen() ? 0U
+            : mWindowBackend->IsWindowedFullscreen() ? 1U : 2U;
+        if (mode == settings.WindowMode && width == settings.Width &&
+            height == settings.Height) {
+            mAppliedWindowMode = mode;
+            mAppliedOutputWidth = width;
+            mAppliedOutputHeight = height;
+            mAppliedVsync = settings.VSync;
+            mPresentationSettingsApplied = true;
+        }
+    }
     if (mPresentationSettingsApplied &&
         mAppliedWindowMode == settings.WindowMode &&
         mAppliedOutputWidth == settings.Width &&
@@ -1511,6 +1530,16 @@ bool GfxRenderingAPIVulkan::ApplyPresentationSettings(
 }
 
 void GfxRenderingAPIVulkan::StartFrame() {
+    const char* traceEnvironment = std::getenv("TRIAEVUM_FRAME_START_TIMING");
+    const bool traceStart = traceEnvironment != nullptr && std::string_view(traceEnvironment) == "1";
+    auto startMark = traceStart ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    std::array<double, 7> startTimes{};
+    const auto markStart = [&](size_t index) {
+        if (!traceStart) return;
+        const auto now = std::chrono::steady_clock::now();
+        startTimes[index] = std::chrono::duration<double, std::milli>(now - startMark).count();
+        startMark = now;
+    };
     if (!mInitialized || mFrameActive || mFrameSubmitted) {
         return;
     }
@@ -1803,7 +1832,9 @@ void GfxRenderingAPIVulkan::StartFrame() {
         mVsyncEnabled = graphicsSettings.VSync;
         mSwapchainDirty = true;
     }
+    markStart(0);
     WaitForFramePresent(mCurrentFrame);
+    markStart(1);
     const VkSampleCountFlagBits requestedSampleCount =
         aaPolicy.MsaaSamples >= 8U ? VK_SAMPLE_COUNT_8_BIT
         : aaPolicy.MsaaSamples >= 4U ? VK_SAMPLE_COUNT_4_BIT
@@ -1833,10 +1864,17 @@ void GfxRenderingAPIVulkan::StartFrame() {
         }
     }
     PrewarmNativePicaPipelines();
+    markStart(2);
 
     CheckVk(vkWaitForFences(mDevice, 1, &mInFlightFences[mCurrentFrame], VK_TRUE,
                             std::numeric_limits<uint64_t>::max()),
             "vkWaitForFences");
+    markStart(3);
+    // A fence handle is reused for another submission below. Retire all image
+    // references to its completed submission before resetting it; otherwise a
+    // later acquisition can wait for unrelated work using the same handle.
+    std::replace(mImagesInFlight.begin(), mImagesInFlight.end(),
+                 mInFlightFences[mCurrentFrame], VkFence{VK_NULL_HANDLE});
     mScanoutProbe.Consume(mCurrentFrame);
     ReleaseRetiredNativePicaGeometryBuffers(mCurrentFrame);
     auto& frame = mFrameResources[mCurrentFrame];
@@ -1844,6 +1882,7 @@ void GfxRenderingAPIVulkan::StartFrame() {
                                    frame.NativePicaCompletionIds.begin(),
                                    frame.NativePicaCompletionIds.end());
     frame.NativePicaCompletionIds.clear();
+    markStart(4);
     bool nriAcquire = false;
     VkResult acquire = VK_NOT_READY;
     for (;;) {
@@ -1889,6 +1928,7 @@ void GfxRenderingAPIVulkan::StartFrame() {
         mSwapchainSuboptimal.store(true);
     }
 
+    markStart(5);
     // Validate targets against the successfully acquired swapchain's extent,
     // not the requested window size or the previous swapchain. Mode/present-only
     // changes retain targets; saved display pixels bridge presentation-only frames.
@@ -1987,6 +2027,16 @@ void GfxRenderingAPIVulkan::StartFrame() {
     mScissor = { { 0, 0 }, mSwapchainExtent };
     mViewportSet = true;
     mScissorSet = true;
+    markStart(6);
+    if (traceStart) {
+        double total = 0;
+        for (double ms : startTimes) total += ms;
+        if (total >= 10.0) {
+            std::fprintf(stderr, "TRIAEVUM_SLOW_FRAME_START frame=%llu settings_ms=%.3f present_wait_ms=%.3f transitions_ms=%.3f fence_ms=%.3f retire_ms=%.3f acquire_ms=%.3f finish_ms=%.3f\n",
+                static_cast<unsigned long long>(mFrameCounter), startTimes[0], startTimes[1],
+                startTimes[2], startTimes[3], startTimes[4], startTimes[5], startTimes[6]);
+        }
+    }
 }
 
 void GfxRenderingAPIVulkan::EndFrame() {

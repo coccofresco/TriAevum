@@ -1,4 +1,5 @@
 #include "fast/renderer/frame_time_distribution.h"
+#include "fast/renderer/slow_frame_samples.h"
 #include <iostream>
 #include <limits>
 #include <stdexcept>
@@ -8,6 +9,21 @@ void Check(bool value, const char* message) {
     if (!value) throw std::runtime_error(message);
 }
 int main() try {
+    Fast::Renderer::SlowFrameSamples<2, 2> slow;
+    slow.Record(1, 10, {1, 2}); slow.Record(2, 30, {3, 4}); slow.Record(3, 20, {5, 6});
+    slow.Record(4, -1, {});
+    slow.Record(5, std::numeric_limits<double>::infinity(), {});
+    slow.Record(6, std::numeric_limits<double>::quiet_NaN(), {});
+    Check(slow.Samples().size() == 2 && slow.Samples()[0].Frame == 2 && slow.Samples()[1].Frame == 3
+        && slow.Samples()[1].PhaseMilliseconds[1] == 6, "bounded slow-frame phase attribution");
+    slow.Record(7, 40, {7, 8});
+    Check(slow.Samples()[0].Frame == 7 && slow.Samples()[1].Frame == 2,
+          "new worst frame evicts the smallest retained sample");
+    Fast::Renderer::SlowFrameSamples<1, 1> singleton;
+    Check(singleton.Samples().empty(), "empty slow-frame collector");
+    singleton.Record(1, 0, {0}); singleton.Record(2, 0, {1});
+    Check(singleton.Samples().size() == 1 && singleton.Samples()[0].Frame == 1,
+          "zero-duration frame and stable ties at capacity one");
     FrameTimeDistribution times;
     Check(!times.QuantileUpperMs(0.95), "empty quantile");
     times.RecordMilliseconds(-1.0);
