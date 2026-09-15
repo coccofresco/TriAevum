@@ -852,6 +852,24 @@ class WholeAotCppTests(unittest.TestCase):
             self.assertIn("(r8 + r3), frame, context, state", source)
             self.assertNotIn("r14 = 0x00001004U", source)
 
+            # A manually established LR need not name the next instruction.
+            # A failed predicate still falls through, not to that return site.
+            code = words(0x1088F003, 0xE12FFF1E, 0xE12FFF1E)
+            code_path.write_bytes(code)
+            program = json.loads(program_path.read_text())
+            program["code_sha256"] = hashlib.sha256(code).hexdigest()
+            program["blocks"][0]["successors"][1]["target"] = 0x1008
+            program["blocks"][0]["successors"].append(
+                {"site": 0x1000, "kind": "fallthrough", "target": 0x1004})
+            program["blocks"].append({"id": 2, "pc": 0x1008, "end_pc": 0x100C,
+                                      "successors": [{"site": 0x1008, "kind": "return"}]})
+            program["functions"][0]["blocks"].append(2)
+            program_path.write_text(json.dumps(program))
+            generate(program_path, selection_path, code_path, output)
+            source = (output / SOURCE_NAME).read_text()
+            self.assertIn("callFlow.Pc != 0x00001008U", source)
+            self.assertRegex(source, r"goto block_00001008;\s*}\s*goto block_00001004;")
+
     def test_emits_program_status_vmsr_and_binary64_semantics(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

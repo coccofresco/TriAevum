@@ -59879,43 +59879,13 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4873464,
-      "name": "cfg_residue_004A5CF8",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4873508,
-      "name": "cfg_residue_004A5D24",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4873536,
-      "name": "cfg_residue_004A5D40",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4873564,
-      "name": "cfg_residue_004A5D5C",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4873592,
-      "name": "cfg_residue_004A5D78",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4873620,
-      "name": "cfg_residue_004A5D94",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4873656,
-      "name": "cfg_residue_004A5DB8",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
       "entry": 4873680,
       "name": "direct_target_004A5DD0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4873796,
+      "name": "direct_target_004A5E44",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -59924,38 +59894,13 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 4875700,
+      "name": "direct_target_004A65B4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 4878820,
       "name": "FUN_004a71e4",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4879388,
-      "name": "cfg_residue_004A741C",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4879588,
-      "name": "cfg_residue_004A74E4",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4879608,
-      "name": "cfg_residue_004A74F8",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4879636,
-      "name": "cfg_residue_004A7514",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4879668,
-      "name": "cfg_residue_004A7534",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4879696,
-      "name": "cfg_residue_004A7550",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60004,83 +59949,8 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4882360,
-      "name": "cfg_residue_004A7FB8",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4882440,
-      "name": "cfg_residue_004A8008",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
       "entry": 4882636,
       "name": "direct_target_004A80CC",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4883796,
-      "name": "cfg_residue_004A8554",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4883836,
-      "name": "cfg_residue_004A857C",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4884260,
-      "name": "cfg_residue_004A8724",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4884864,
-      "name": "cfg_residue_004A8980",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4885720,
-      "name": "cfg_residue_004A8CD8",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4886292,
-      "name": "cfg_residue_004A8F14",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4887132,
-      "name": "cfg_residue_004A925C",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4887240,
-      "name": "cfg_residue_004A92C8",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4887856,
-      "name": "cfg_residue_004A9530",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4888060,
-      "name": "cfg_residue_004A95FC",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4888324,
-      "name": "cfg_residue_004A9704",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4888592,
-      "name": "cfg_residue_004A9810",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4888828,
-      "name": "cfg_residue_004A98FC",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60099,13 +59969,13 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4891996,
-      "name": "cfg_residue_004AA55C",
+      "entry": 4891964,
+      "name": "cfg_residue_004AA53C",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4892112,
-      "name": "cfg_residue_004AA5D0",
+      "entry": 4892108,
+      "name": "cfg_residue_004AA5CC",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60114,8 +59984,8 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4892508,
-      "name": "cfg_residue_004AA75C",
+      "entry": 4892504,
+      "name": "cfg_residue_004AA758",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60124,8 +59994,8 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4892832,
-      "name": "cfg_residue_004AA8A0",
+      "entry": 4892824,
+      "name": "cfg_residue_004AA898",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60134,8 +60004,8 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4893360,
-      "name": "cfg_residue_004AAAB0",
+      "entry": 4893356,
+      "name": "cfg_residue_004AAAAC",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60144,8 +60014,8 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4893684,
-      "name": "cfg_residue_004AABF4",
+      "entry": 4893676,
+      "name": "cfg_residue_004AABEC",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60154,8 +60024,8 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4894196,
-      "name": "cfg_residue_004AADF4",
+      "entry": 4894192,
+      "name": "cfg_residue_004AADF0",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60164,8 +60034,8 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4894504,
-      "name": "cfg_residue_004AAF28",
+      "entry": 4894496,
+      "name": "cfg_residue_004AAF20",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60179,38 +60049,38 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4894952,
-      "name": "cfg_residue_004AB0E8",
+      "entry": 4894932,
+      "name": "cfg_residue_004AB0D4",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4895040,
-      "name": "cfg_residue_004AB140",
+      "entry": 4895036,
+      "name": "cfg_residue_004AB13C",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4895136,
-      "name": "cfg_residue_004AB1A0",
+      "entry": 4895100,
+      "name": "cfg_residue_004AB17C",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4895304,
-      "name": "cfg_residue_004AB248",
+      "entry": 4895300,
+      "name": "cfg_residue_004AB244",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4895392,
-      "name": "cfg_residue_004AB2A0",
+      "entry": 4895352,
+      "name": "cfg_residue_004AB278",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4895528,
-      "name": "cfg_residue_004AB328",
+      "entry": 4895520,
+      "name": "cfg_residue_004AB320",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4895648,
-      "name": "cfg_residue_004AB3A0",
+      "entry": 4895604,
+      "name": "cfg_residue_004AB374",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60219,38 +60089,118 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4895944,
-      "name": "cfg_residue_004AB4C8",
+      "entry": 4895904,
+      "name": "cfg_residue_004AB4A0",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4896076,
-      "name": "cfg_residue_004AB54C",
+      "entry": 4896068,
+      "name": "cfg_residue_004AB544",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4896200,
-      "name": "cfg_residue_004AB5C8",
+      "entry": 4896148,
+      "name": "cfg_residue_004AB594",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4896392,
-      "name": "cfg_residue_004AB688",
+      "entry": 4896388,
+      "name": "cfg_residue_004AB684",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4896476,
-      "name": "cfg_residue_004AB6DC",
+      "entry": 4896436,
+      "name": "cfg_residue_004AB6B4",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4896600,
-      "name": "cfg_residue_004AB758",
+      "entry": 4896592,
+      "name": "cfg_residue_004AB750",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4896716,
-      "name": "cfg_residue_004AB7CC",
+      "entry": 4896660,
+      "name": "cfg_residue_004AB794",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4896864,
+      "name": "cfg_residue_004AB860",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4896884,
+      "name": "cfg_residue_004AB874",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4896948,
+      "name": "cfg_residue_004AB8B4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4896996,
+      "name": "cfg_residue_004AB8E4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4897132,
+      "name": "cfg_residue_004AB96C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4897172,
+      "name": "cfg_residue_004AB994",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4897288,
+      "name": "cfg_residue_004ABA08",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4897348,
+      "name": "cfg_residue_004ABA44",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4897512,
+      "name": "cfg_residue_004ABAE8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4897544,
+      "name": "cfg_residue_004ABB08",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4897644,
+      "name": "cfg_residue_004ABB6C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4897696,
+      "name": "cfg_residue_004ABBA0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4897836,
+      "name": "cfg_residue_004ABC2C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4897868,
+      "name": "cfg_residue_004ABC4C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4897960,
+      "name": "cfg_residue_004ABCA8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4898008,
+      "name": "cfg_residue_004ABCD8",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60304,43 +60254,13 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4899576,
-      "name": "cfg_residue_004AC2F8",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4899620,
-      "name": "cfg_residue_004AC324",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4899648,
-      "name": "cfg_residue_004AC340",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4899676,
-      "name": "cfg_residue_004AC35C",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4899704,
-      "name": "cfg_residue_004AC378",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4899732,
-      "name": "cfg_residue_004AC394",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4899768,
-      "name": "cfg_residue_004AC3B8",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
       "entry": 4899792,
       "name": "direct_target_004AC3D0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4899908,
+      "name": "direct_target_004AC444",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60349,38 +60269,13 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 4901812,
+      "name": "direct_target_004ACBB4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 4904932,
       "name": "FUN_004ad7e4",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4905500,
-      "name": "cfg_residue_004ADA1C",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4905700,
-      "name": "cfg_residue_004ADAE4",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4905720,
-      "name": "cfg_residue_004ADAF8",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4905748,
-      "name": "cfg_residue_004ADB14",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4905780,
-      "name": "cfg_residue_004ADB34",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4905808,
-      "name": "cfg_residue_004ADB50",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60429,83 +60324,8 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4908472,
-      "name": "cfg_residue_004AE5B8",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4908552,
-      "name": "cfg_residue_004AE608",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
       "entry": 4908748,
       "name": "direct_target_004AE6CC",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4909908,
-      "name": "cfg_residue_004AEB54",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4909948,
-      "name": "cfg_residue_004AEB7C",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4910372,
-      "name": "cfg_residue_004AED24",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4910976,
-      "name": "cfg_residue_004AEF80",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4911832,
-      "name": "cfg_residue_004AF2D8",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4912404,
-      "name": "cfg_residue_004AF514",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4913244,
-      "name": "cfg_residue_004AF85C",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4913352,
-      "name": "cfg_residue_004AF8C8",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4913968,
-      "name": "cfg_residue_004AFB30",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4914172,
-      "name": "cfg_residue_004AFBFC",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4914436,
-      "name": "cfg_residue_004AFD04",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4914704,
-      "name": "cfg_residue_004AFE10",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4914940,
-      "name": "cfg_residue_004AFEFC",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60524,13 +60344,13 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4918108,
-      "name": "cfg_residue_004B0B5C",
+      "entry": 4918076,
+      "name": "cfg_residue_004B0B3C",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4918224,
-      "name": "cfg_residue_004B0BD0",
+      "entry": 4918220,
+      "name": "cfg_residue_004B0BCC",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60539,8 +60359,8 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4918620,
-      "name": "cfg_residue_004B0D5C",
+      "entry": 4918616,
+      "name": "cfg_residue_004B0D58",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60549,8 +60369,8 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4918944,
-      "name": "cfg_residue_004B0EA0",
+      "entry": 4918936,
+      "name": "cfg_residue_004B0E98",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60559,8 +60379,8 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4919472,
-      "name": "cfg_residue_004B10B0",
+      "entry": 4919468,
+      "name": "cfg_residue_004B10AC",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60569,8 +60389,8 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4919796,
-      "name": "cfg_residue_004B11F4",
+      "entry": 4919788,
+      "name": "cfg_residue_004B11EC",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60579,8 +60399,8 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4920308,
-      "name": "cfg_residue_004B13F4",
+      "entry": 4920304,
+      "name": "cfg_residue_004B13F0",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60589,8 +60409,8 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4920616,
-      "name": "cfg_residue_004B1528",
+      "entry": 4920608,
+      "name": "cfg_residue_004B1520",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60604,38 +60424,38 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4921064,
-      "name": "cfg_residue_004B16E8",
+      "entry": 4921044,
+      "name": "cfg_residue_004B16D4",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4921152,
-      "name": "cfg_residue_004B1740",
+      "entry": 4921148,
+      "name": "cfg_residue_004B173C",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4921248,
-      "name": "cfg_residue_004B17A0",
+      "entry": 4921212,
+      "name": "cfg_residue_004B177C",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4921416,
-      "name": "cfg_residue_004B1848",
+      "entry": 4921412,
+      "name": "cfg_residue_004B1844",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4921504,
-      "name": "cfg_residue_004B18A0",
+      "entry": 4921464,
+      "name": "cfg_residue_004B1878",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4921640,
-      "name": "cfg_residue_004B1928",
+      "entry": 4921632,
+      "name": "cfg_residue_004B1920",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4921760,
-      "name": "cfg_residue_004B19A0",
+      "entry": 4921716,
+      "name": "cfg_residue_004B1974",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60644,73 +60464,118 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4922056,
-      "name": "cfg_residue_004B1AC8",
+      "entry": 4922016,
+      "name": "cfg_residue_004B1AA0",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4922188,
-      "name": "cfg_residue_004B1B4C",
+      "entry": 4922180,
+      "name": "cfg_residue_004B1B44",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4922312,
-      "name": "cfg_residue_004B1BC8",
+      "entry": 4922260,
+      "name": "cfg_residue_004B1B94",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4922504,
-      "name": "cfg_residue_004B1C88",
+      "entry": 4922500,
+      "name": "cfg_residue_004B1C84",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4922588,
-      "name": "cfg_residue_004B1CDC",
+      "entry": 4922548,
+      "name": "cfg_residue_004B1CB4",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4922712,
-      "name": "cfg_residue_004B1D58",
+      "entry": 4922704,
+      "name": "cfg_residue_004B1D50",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4922828,
-      "name": "cfg_residue_004B1DCC",
+      "entry": 4922772,
+      "name": "cfg_residue_004B1D94",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4923144,
-      "name": "cfg_residue_004B1F08",
+      "entry": 4922976,
+      "name": "cfg_residue_004B1E60",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4923308,
-      "name": "cfg_residue_004B1FAC",
+      "entry": 4922996,
+      "name": "cfg_residue_004B1E74",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4923408,
-      "name": "cfg_residue_004B2010",
+      "entry": 4923060,
+      "name": "cfg_residue_004B1EB4",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4923488,
-      "name": "cfg_residue_004B2060",
+      "entry": 4923108,
+      "name": "cfg_residue_004B1EE4",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4923680,
-      "name": "cfg_residue_004B2120",
+      "entry": 4923244,
+      "name": "cfg_residue_004B1F6C",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4923812,
-      "name": "cfg_residue_004B21A4",
+      "entry": 4923284,
+      "name": "cfg_residue_004B1F94",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4924004,
-      "name": "cfg_residue_004B2264",
+      "entry": 4923400,
+      "name": "cfg_residue_004B2008",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4923460,
+      "name": "cfg_residue_004B2044",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4923624,
+      "name": "cfg_residue_004B20E8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4923656,
+      "name": "cfg_residue_004B2108",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4923756,
+      "name": "cfg_residue_004B216C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4923808,
+      "name": "cfg_residue_004B21A0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4923948,
+      "name": "cfg_residue_004B222C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4923980,
+      "name": "cfg_residue_004B224C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4924072,
+      "name": "cfg_residue_004B22A8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4924120,
+      "name": "cfg_residue_004B22D8",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60764,43 +60629,13 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4925688,
-      "name": "cfg_residue_004B28F8",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4925732,
-      "name": "cfg_residue_004B2924",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4925760,
-      "name": "cfg_residue_004B2940",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4925788,
-      "name": "cfg_residue_004B295C",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4925816,
-      "name": "cfg_residue_004B2978",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4925844,
-      "name": "cfg_residue_004B2994",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4925880,
-      "name": "cfg_residue_004B29B8",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
       "entry": 4925904,
       "name": "direct_target_004B29D0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4926020,
+      "name": "direct_target_004B2A44",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60809,38 +60644,13 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 4927924,
+      "name": "direct_target_004B31B4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 4931044,
       "name": "FUN_004b3de4",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4931612,
-      "name": "cfg_residue_004B401C",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4931812,
-      "name": "cfg_residue_004B40E4",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4931832,
-      "name": "cfg_residue_004B40F8",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4931860,
-      "name": "cfg_residue_004B4114",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4931892,
-      "name": "cfg_residue_004B4134",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4931920,
-      "name": "cfg_residue_004B4150",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60889,83 +60699,8 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4934584,
-      "name": "cfg_residue_004B4BB8",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4934664,
-      "name": "cfg_residue_004B4C08",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
       "entry": 4934860,
       "name": "direct_target_004B4CCC",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4936020,
-      "name": "cfg_residue_004B5154",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4936060,
-      "name": "cfg_residue_004B517C",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4936484,
-      "name": "cfg_residue_004B5324",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4937088,
-      "name": "cfg_residue_004B5580",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4937944,
-      "name": "cfg_residue_004B58D8",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4938516,
-      "name": "cfg_residue_004B5B14",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4939356,
-      "name": "cfg_residue_004B5E5C",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4939464,
-      "name": "cfg_residue_004B5EC8",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4940080,
-      "name": "cfg_residue_004B6130",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4940284,
-      "name": "cfg_residue_004B61FC",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4940548,
-      "name": "cfg_residue_004B6304",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4940816,
-      "name": "cfg_residue_004B6410",
-      "reason": "whole-program closed-CFG lowering"
-    },
-    {
-      "entry": 4941052,
-      "name": "cfg_residue_004B64FC",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60984,13 +60719,13 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4944220,
-      "name": "cfg_residue_004B715C",
+      "entry": 4944188,
+      "name": "cfg_residue_004B713C",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4944336,
-      "name": "cfg_residue_004B71D0",
+      "entry": 4944332,
+      "name": "cfg_residue_004B71CC",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -60999,8 +60734,8 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4944732,
-      "name": "cfg_residue_004B735C",
+      "entry": 4944728,
+      "name": "cfg_residue_004B7358",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -61009,8 +60744,8 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4945056,
-      "name": "cfg_residue_004B74A0",
+      "entry": 4945048,
+      "name": "cfg_residue_004B7498",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -61019,8 +60754,8 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4945584,
-      "name": "cfg_residue_004B76B0",
+      "entry": 4945580,
+      "name": "cfg_residue_004B76AC",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -61029,8 +60764,8 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4945908,
-      "name": "cfg_residue_004B77F4",
+      "entry": 4945900,
+      "name": "cfg_residue_004B77EC",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -61039,8 +60774,8 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4946420,
-      "name": "cfg_residue_004B79F4",
+      "entry": 4946416,
+      "name": "cfg_residue_004B79F0",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -61049,8 +60784,8 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4946728,
-      "name": "cfg_residue_004B7B28",
+      "entry": 4946720,
+      "name": "cfg_residue_004B7B20",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -61064,38 +60799,38 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4947176,
-      "name": "cfg_residue_004B7CE8",
+      "entry": 4947156,
+      "name": "cfg_residue_004B7CD4",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4947264,
-      "name": "cfg_residue_004B7D40",
+      "entry": 4947260,
+      "name": "cfg_residue_004B7D3C",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4947360,
-      "name": "cfg_residue_004B7DA0",
+      "entry": 4947324,
+      "name": "cfg_residue_004B7D7C",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4947528,
-      "name": "cfg_residue_004B7E48",
+      "entry": 4947524,
+      "name": "cfg_residue_004B7E44",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4947616,
-      "name": "cfg_residue_004B7EA0",
+      "entry": 4947576,
+      "name": "cfg_residue_004B7E78",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4947752,
-      "name": "cfg_residue_004B7F28",
+      "entry": 4947744,
+      "name": "cfg_residue_004B7F20",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4947872,
-      "name": "cfg_residue_004B7FA0",
+      "entry": 4947828,
+      "name": "cfg_residue_004B7F74",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -61104,38 +60839,118 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4948168,
-      "name": "cfg_residue_004B80C8",
+      "entry": 4948128,
+      "name": "cfg_residue_004B80A0",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4948300,
-      "name": "cfg_residue_004B814C",
+      "entry": 4948292,
+      "name": "cfg_residue_004B8144",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4948424,
-      "name": "cfg_residue_004B81C8",
+      "entry": 4948372,
+      "name": "cfg_residue_004B8194",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4948616,
-      "name": "cfg_residue_004B8288",
+      "entry": 4948612,
+      "name": "cfg_residue_004B8284",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4948700,
-      "name": "cfg_residue_004B82DC",
+      "entry": 4948660,
+      "name": "cfg_residue_004B82B4",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4948824,
-      "name": "cfg_residue_004B8358",
+      "entry": 4948816,
+      "name": "cfg_residue_004B8350",
       "reason": "whole-program closed-CFG lowering"
     },
     {
-      "entry": 4948940,
-      "name": "cfg_residue_004B83CC",
+      "entry": 4948884,
+      "name": "cfg_residue_004B8394",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4949088,
+      "name": "cfg_residue_004B8460",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4949108,
+      "name": "cfg_residue_004B8474",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4949172,
+      "name": "cfg_residue_004B84B4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4949220,
+      "name": "cfg_residue_004B84E4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4949356,
+      "name": "cfg_residue_004B856C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4949396,
+      "name": "cfg_residue_004B8594",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4949512,
+      "name": "cfg_residue_004B8608",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4949572,
+      "name": "cfg_residue_004B8644",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4949736,
+      "name": "cfg_residue_004B86E8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4949768,
+      "name": "cfg_residue_004B8708",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4949868,
+      "name": "cfg_residue_004B876C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4949920,
+      "name": "cfg_residue_004B87A0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4950060,
+      "name": "cfg_residue_004B882C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4950092,
+      "name": "cfg_residue_004B884C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4950184,
+      "name": "cfg_residue_004B88A8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 4950232,
+      "name": "cfg_residue_004B88D8",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -64632,108 +64447,129 @@
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {
-      "entry": 4873464,
-      "name": "cfg_residue_004A5CF8",
+      "entry": 4873680,
+      "name": "direct_target_004A5DD0",
       "dispatch_entry": 4873216,
       "selected_owner": 4873104,
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {
-      "entry": 4879608,
-      "name": "cfg_residue_004A74F8",
-      "dispatch_entry": 4880004,
-      "selected_owner": 4879588,
+      "entry": 4874296,
+      "name": "direct_target_004A6038",
+      "dispatch_entry": 4873908,
+      "selected_owner": 4873796,
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {
-      "entry": 4879636,
-      "name": "cfg_residue_004A7514",
-      "dispatch_entry": 4880004,
-      "selected_owner": 4879588,
+      "entry": 4875700,
+      "name": "direct_target_004A65B4",
+      "dispatch_entry": 4873216,
+      "selected_owner": 4873104,
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {
-      "entry": 4879668,
-      "name": "cfg_residue_004A7534",
-      "dispatch_entry": 4880004,
-      "selected_owner": 4879588,
+      "entry": 4880684,
+      "name": "direct_target_004A792C",
+      "dispatch_entry": 4880780,
+      "selected_owner": 4873680,
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {
-      "entry": 4879696,
-      "name": "cfg_residue_004A7550",
-      "dispatch_entry": 4880976,
-      "selected_owner": 4879388,
+      "entry": 4881128,
+      "name": "direct_target_004A7AE8",
+      "dispatch_entry": 4881184,
+      "selected_owner": 4873680,
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {
-      "entry": 4899576,
-      "name": "cfg_residue_004AC2F8",
+      "entry": 4882636,
+      "name": "direct_target_004A80CC",
+      "dispatch_entry": 4882644,
+      "selected_owner": 4873680,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4899792,
+      "name": "direct_target_004AC3D0",
       "dispatch_entry": 4899328,
       "selected_owner": 4899216,
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {
-      "entry": 4905720,
-      "name": "cfg_residue_004ADAF8",
-      "dispatch_entry": 4906116,
-      "selected_owner": 4905700,
+      "entry": 4900408,
+      "name": "direct_target_004AC638",
+      "dispatch_entry": 4900020,
+      "selected_owner": 4899908,
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {
-      "entry": 4905748,
-      "name": "cfg_residue_004ADB14",
-      "dispatch_entry": 4906116,
-      "selected_owner": 4905700,
+      "entry": 4901812,
+      "name": "direct_target_004ACBB4",
+      "dispatch_entry": 4899328,
+      "selected_owner": 4899216,
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {
-      "entry": 4905780,
-      "name": "cfg_residue_004ADB34",
-      "dispatch_entry": 4906116,
-      "selected_owner": 4905700,
+      "entry": 4906796,
+      "name": "direct_target_004ADF2C",
+      "dispatch_entry": 4906892,
+      "selected_owner": 4899792,
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {
-      "entry": 4905808,
-      "name": "cfg_residue_004ADB50",
-      "dispatch_entry": 4907088,
-      "selected_owner": 4905500,
+      "entry": 4907240,
+      "name": "direct_target_004AE0E8",
+      "dispatch_entry": 4907296,
+      "selected_owner": 4899792,
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {
-      "entry": 4925688,
-      "name": "cfg_residue_004B28F8",
+      "entry": 4908748,
+      "name": "direct_target_004AE6CC",
+      "dispatch_entry": 4908756,
+      "selected_owner": 4899792,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4925904,
+      "name": "direct_target_004B29D0",
       "dispatch_entry": 4925440,
       "selected_owner": 4925328,
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {
-      "entry": 4931832,
-      "name": "cfg_residue_004B40F8",
-      "dispatch_entry": 4932228,
-      "selected_owner": 4931812,
+      "entry": 4926520,
+      "name": "direct_target_004B2C38",
+      "dispatch_entry": 4926132,
+      "selected_owner": 4926020,
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {
-      "entry": 4931860,
-      "name": "cfg_residue_004B4114",
-      "dispatch_entry": 4932228,
-      "selected_owner": 4931812,
+      "entry": 4927924,
+      "name": "direct_target_004B31B4",
+      "dispatch_entry": 4925440,
+      "selected_owner": 4925328,
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {
-      "entry": 4931892,
-      "name": "cfg_residue_004B4134",
-      "dispatch_entry": 4932228,
-      "selected_owner": 4931812,
+      "entry": 4932908,
+      "name": "direct_target_004B452C",
+      "dispatch_entry": 4933004,
+      "selected_owner": 4925904,
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {
-      "entry": 4931920,
-      "name": "cfg_residue_004B4150",
-      "dispatch_entry": 4933200,
-      "selected_owner": 4931612,
+      "entry": 4933352,
+      "name": "direct_target_004B46E8",
+      "dispatch_entry": 4933408,
+      "selected_owner": 4925904,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 4934860,
+      "name": "direct_target_004B4CCC",
+      "dispatch_entry": 4934868,
+      "selected_owner": 4925904,
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {

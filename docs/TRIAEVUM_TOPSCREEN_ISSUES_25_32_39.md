@@ -146,3 +146,64 @@ Private decoder diagnostics are under `J:/TriAevum-diagnostics/y2r-codec-relativ
 UI captures/checkpoints are under `%TEMP%/TriAevum-ui-canvas-ultrawide`.
 Never package these artifacts. Keep original game saves separate from diagnostic
 states. No issue has been marked resolved solely on unit tests.
+
+### Continued qualification
+
+- `1f5ef90` commits the UI composition, minimap projection persistence and
+  portable movie host services described above.
+- `jabu-motion-framebuffer_000150.bmp` separates the moving yellow player arrow
+  from the red entry marker, both positioned on the minimap after movement.
+- `linux-jabu-compass-framebuffer.bmp` verifies the same native compass owner
+  on Linux/Wayland at 1720x720. Linux composition, TopScreen profile, CTR host
+  and savestate tests pass. This supersedes the earlier Linux-not-rerun note
+  for those boundaries, not for movie decoding.
+- Windows physical-binding tests also pass all 24 shoulder/trigger permutations:
+  held/released ZL/ZR survive configuration serialization and do not inject X/Y.
+  This is boundary coverage, not a claim to reproduce the reporter's exact save.
+- The movie decoder exposed a base-relative jump table with index arithmetic
+  including an ARM shift alias. The decoder labels that shift
+  `data_processing_extended`, so accepting ordinary arithmetic alone was
+  insufficient. Tests now cover actual program recovery through that pattern,
+  as well as rejecting an overwritten base. No title-address exception is used.
+- Current structural program: 12,385 functions, 12,382 compiled functions,
+  161,912 blocks, 921,823 unique instructions; product audit passes. Translator
+  suites pass 60 tests, including 16 recovery tests and execution of generated
+  C++ computed-call continuations. These counts
+  describe static coverage, NOT successful movie playback.
+
+Movie qualification must use the matching newly generated title module as well
+as the runtime. Reusing an older packaged module preserves its missing dispatch
+targets even when the host services and HUD are corrected. No release recipe is
+promoted until playback and return to gameplay have actually passed.
+
+The local-extension provenance now records the modified relative-table recovery
+source. Its validation also exposed two stale working-file hashes already present
+in public snapshot `034820c` (`recomp/a32_runtime.cpp` and `recomp/a32_core.cpp`).
+Those metadata records were reconciled with the unchanged tracked files; their
+original donor hashes remain intact. `validate_local_extensions` now passes.
+
+### Decoder continuation audit
+
+The first movie probes exposed more than a missing IPC service. The offline
+translator did not preserve several handwritten ARM control-flow idioms:
+
+- `ADR lr,continuation; B/Bcc callee` requires a resume entry even though the
+  branch instruction does not set LR.
+- The continuation can differ from the instruction immediately after the
+  branch, and can be constructed with several immediate additions.
+- Relative jump-table loads can be separated from the PC write by unrelated
+  arithmetic, shifted operands, or LR restoration.
+
+Recovery lives in the pinned frontend's documented local extension, with
+structured resume edges in `whole_aot_program.py`; conditional lowering keeps
+the condition-failed fallthrough distinct from the successful return path.
+No decoder-address whitelist or runtime instruction fallback was added.
+An all-reachable-code preflight found 101 provable explicit continuations and
+zero missing block entries in program
+`a652c6178d73b099845046c7688691ab6eab3e7b44975754d27b6cc0bf7229d4`.
+This is static evidence, not proof that all dynamic movie paths are covered.
+
+On September 15 the reporter of #39 commented that the latest version seems
+to fix the issue. This supports the independent item/HUD tests but does not
+explicitly confirm Sheikah Stone playback. Keep playback and exit pending until
+verified with the matching new module on the real runtime.

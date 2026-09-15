@@ -10,6 +10,7 @@ the recovery pass.
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 import sys
@@ -339,7 +340,17 @@ def _switch_targets(
 ) -> dict[int, tuple[int, ...]]:
     """Recover dispatch-to-case edges from the literal table evidence."""
 
-    mutable: dict[int, set[int]] = {}
+    mutable: dict[int, set[int]] = {
+        source: {target} for source, target in
+        pinned._constant_pc_targets(decoder, valid_pcs, valid_pcs).items()
+    }
+    for source, (base, words) in pinned._base_relative_switch_tables(
+        decoder, valid_pcs, set(literal_sources) | valid_pcs
+    ).items():
+        mutable[source] = {
+            (base + decoder.get(word).raw) & 0xFFFFFFFF for word in words
+            if (base + decoder.get(word).raw) & 0xFFFFFFFF in valid_pcs
+        }
     for word, sources in literal_sources.items():
         offset = word - decoder.base
         if offset < 0 or offset + 4 > len(decoder.code):
@@ -368,7 +379,7 @@ def _edge_target(
 
 def _successors(
     item: DecodedInstruction,
-    explicit_lr_calls: set[int],
+    explicit_lr_calls: dict[int, int],
     switch_targets: dict[int, tuple[int, ...]],
 ) -> tuple[AotEdge, ...]:
     pc = item.pc
@@ -378,6 +389,8 @@ def _successors(
     if item.kind == "branch":
         if item.target is not None:
             edges.append(_edge_target(pc, "branch", item.target, condition))
+        if pc in explicit_lr_calls:
+            edges.append(_edge_target(pc, "resume", explicit_lr_calls[pc], condition))
         if condition is not None:
             edges.append(_edge_target(pc, "fallthrough", fallthrough, condition))
         return tuple(edges)
@@ -395,7 +408,7 @@ def _successors(
                 )
         elif _is_register_call(item) or pc in explicit_lr_calls:
             edges.append(AotEdge(pc, "indirect_call", condition=condition))
-            edges.append(_edge_target(pc, "resume", fallthrough, condition))
+            edges.append(_edge_target(pc, "resume", explicit_lr_calls.get(pc, fallthrough), condition))
         else:
             targets = switch_targets.get(pc, ())
             if targets:
@@ -425,7 +438,7 @@ def _successors(
                 )
         elif pc in explicit_lr_calls:
             edges.append(AotEdge(pc, "indirect_call", condition=condition))
-            edges.append(_edge_target(pc, "resume", fallthrough, condition))
+            edges.append(_edge_target(pc, "resume", explicit_lr_calls[pc], condition))
         else:
             targets = switch_targets.get(pc, ())
             if targets:
@@ -447,7 +460,7 @@ def _make_blocks(
     decoder: pinned._Decoder,
     reachable: set[int],
     block_starts: set[int],
-    explicit_lr_calls: set[int],
+    explicit_lr_calls: dict[int, int],
     switch_targets: dict[int, tuple[int, ...]],
 ) -> tuple[AotBlock, ...]:
     groups: list[list[int]] = []
@@ -720,13 +733,33 @@ def build_program(
         (function.entry for function in callable_functions),
         flow_slots,
     )
+    # "Not an independent callable" does not mean "not executable". Audited
+    # switch cases retain the caller's registers and may use relative tables
+    # that the pointer-root pass cannot recognize (notably movie codecs).
+    # Seed only missing, explicitly classified internal cases, never data or
+    # arbitrary excluded intervals. Keep them distinct from public ABI roots.
+    with boundary_audit_path.open(newline="", encoding="utf-8-sig") as source:
+        internal_cases = {
+            int(row["entry"], 0)
+            for row in csv.DictReader(source)
+            if row.get("classification") == "switch_owned_case"
+        }
+    internal_cases -= flow.decoded_reachable | flow.unknown_stops
+    internal_cases &= flow_slots - literal_data
+    if internal_cases:
+        flow, literal_data, literal_sources, extra_iterations = pinned._address_aware_flow(
+            decoder, flow_slots,
+            (*[function.entry for function in callable_functions], *sorted(internal_cases)),
+            flow_slots,
+        )
+        iterations += extra_iterations
     reachable = flow.decoded_reachable | flow.unknown_stops
     dynamic_targets = _switch_targets(decoder, literal_sources, reachable)
     blocks = _make_blocks(
         decoder,
         reachable,
         flow.block_starts,
-        flow.explicit_lr_calls,
+        flow.explicit_lr_returns,
         dynamic_targets,
     )
     entry_to_block = {block.pc: block.index for block in blocks}
@@ -740,7 +773,7 @@ def build_program(
         for edge in block.successors
         if edge.kind == "direct_call" and edge.target in entry_to_block
     }
-    roots = set(inventory_by_entry) | set(flow.pointer_roots) | direct_targets
+    roots = set(inventory_by_entry) | set(flow.pointer_roots) | direct_targets | internal_cases
     roots &= set(entry_to_block)
     blocks = _normalize_complementary_branch_chains(blocks, roots)
 
@@ -748,6 +781,8 @@ def build_program(
         record = inventory_by_entry.get(entry)
         if record is not None:
             return record.end, record.name, "inventory"
+        if entry in internal_cases:
+            return None, f"internal_switch_{entry:08X}", "internal_dispatch"
         if entry in flow.pointer_roots:
             return None, f"address_taken_{entry:08X}", "address_taken"
         return None, f"direct_target_{entry:08X}", "direct_target"

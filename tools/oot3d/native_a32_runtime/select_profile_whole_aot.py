@@ -439,7 +439,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     for function in verified_functions:
         _render_function(function, verified_symbols, verified_external)
     output.write_text(
-        json.dumps(final_selection, indent=2) + "\n", encoding="utf-8"
+        json.dumps(final_selection, indent=2) + "\n", encoding="utf-8", newline="\n"
     )
     selected_coverage = sum(
         float(profile_records[entry]["total_profile_coverage"])

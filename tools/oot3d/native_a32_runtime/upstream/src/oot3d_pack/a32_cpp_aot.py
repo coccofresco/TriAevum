@@ -103,6 +103,7 @@ class FlowResult:
     pointer_roots: set[int] = field(default_factory=set)
     pointer_sources: dict[int, tuple[int, ...]] = field(default_factory=dict)
     explicit_lr_calls: set[int] = field(default_factory=set)
+    explicit_lr_returns: dict[int, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -270,39 +271,36 @@ def _writes_lr(item: DecodedInstruction) -> bool:
     if item.kind == "call" or item.rd == 14:
         return True
     raw = item.raw
+    if item.state == "arm" and item.kind == "data_processing_extended":
+        # Cross known shift aliases only; other extended ALU destinations need
+        # their own decoder contract before they can prove LR preservation.
+        return ((raw & 0x0FE00000) != 0x01A00000 or (raw >> 12) & 15 == 14)
+    if item.state == "arm" and (raw & 0x0C000000) == 0x04000000:
+        return bool((raw & (1 << 20) and (raw >> 12) & 15 == 14) or
+                    ((raw & (1 << 21) or not raw & (1 << 24)) and
+                     (raw >> 16) & 15 == 14))
     return bool(
         item.state == "arm"
         and (raw & 0x0E000000) == 0x08000000
-        and raw & (1 << 20)
-        and raw & (1 << 14)
+        and ((raw & (1 << 20) and raw & (1 << 14)) or
+             (raw & (1 << 21) and (raw >> 16) & 15 == 14))
     )
 
 
-def _has_explicit_lr_call_setup(
+def _explicit_lr_call_return_site(
     decoder: _Decoder,
     slots: set[int],
     pc: int,
     literal_data: set[int],
-) -> bool:
+) -> int | None:
     """Recognize the pre-BLX ARM idiom that writes LR then branches via PC/BX."""
 
-    expected_return = pc + 4
-    for distance in range(1, 17):
-        candidate_pc = pc - distance * 4
-        if candidate_pc not in slots or candidate_pc in literal_data:
-            return False
-        candidate = decoder.get(candidate_pc)
-        return_site = _lr_setup_return_site(candidate)
-        if return_site is not None:
-            return return_site == expected_return
-        if _writes_lr(candidate):
-            return False
-        if (
-            candidate.kind in {"branch", "call", "indirect_branch"}
-            or _writes_pc(candidate)
-        ):
-            return False
-    return False
+    return_site = _static_register_before(decoder, slots, pc, 14, literal_data)
+    return return_site if return_site in slots and return_site not in literal_data else None
+
+
+def _has_explicit_lr_call_setup(decoder, slots, pc, literal_data) -> bool:
+    return _explicit_lr_call_return_site(decoder, slots, pc, literal_data) == pc + 4
 
 
 def _walk_cfg(
@@ -319,6 +317,7 @@ def _walk_cfg(
     control_targets = set(queue)
     block_starts = set(queue)
     explicit_lr_calls: set[int] = set()
+    explicit_lr_returns: dict[int, int] = {}
 
     def enqueue(pc: int, *, block_start: bool = False) -> None:
         if pc in slots and pc not in literal_data:
@@ -339,6 +338,14 @@ def _walk_cfg(
         fallthrough = pc + 4
 
         if item.kind == "branch":
+            # Handwritten ARM also uses ADR lr,continuation; B/Bcc callee.
+            # The continuation is independent of both the branch target and
+            # its fallthrough. Preserve it without changing the branch opcode.
+            return_site = (_explicit_lr_call_return_site(decoder, slots, pc, literal_data)
+                           if follow_explicit_lr_calls else None)
+            if return_site is not None and return_site != item.target:
+                explicit_lr_returns[pc] = return_site
+                enqueue(return_site, block_start=True)
             if item.target is not None and item.target % 4 == 0:
                 control_targets.add(item.target)
                 enqueue(item.target, block_start=True)
@@ -361,22 +368,25 @@ def _walk_cfg(
             # itself is unconditional.  A predicated BX/BLX also needs the
             # fallthrough for the condition-failed path.
             is_register_call = (item.raw & 0x0FFFFFF0) == 0x012FFF30
-            has_explicit_link = follow_explicit_lr_calls and (
-                _has_explicit_lr_call_setup(decoder, slots, pc, literal_data)
-            )
+            return_site = (_explicit_lr_call_return_site(decoder, slots, pc, literal_data)
+                           if follow_explicit_lr_calls and not is_register_call else None)
+            has_explicit_link = return_site is not None
             if has_explicit_link:
                 explicit_lr_calls.add(pc)
-            if is_register_call or has_explicit_link or not _is_always(item):
+                explicit_lr_returns[pc] = return_site
+                enqueue(return_site, block_start=True)
+            if is_register_call or not _is_always(item):
                 enqueue(fallthrough, block_start=True)
             continue
         if _writes_pc(item):
-            has_explicit_link = (
-                follow_explicit_lr_calls
-                and _has_explicit_lr_call_setup(decoder, slots, pc, literal_data)
-            )
+            return_site = (_explicit_lr_call_return_site(decoder, slots, pc, literal_data)
+                           if follow_explicit_lr_calls else None)
+            has_explicit_link = return_site is not None
             if has_explicit_link:
                 explicit_lr_calls.add(pc)
-            if has_explicit_link or not _is_always(item):
+                explicit_lr_returns[pc] = return_site
+                enqueue(return_site, block_start=True)
+            if not _is_always(item):
                 enqueue(fallthrough, block_start=True)
             continue
 
@@ -388,6 +398,7 @@ def _walk_cfg(
         control_targets,
         block_starts,
         explicit_lr_calls=explicit_lr_calls,
+        explicit_lr_returns=explicit_lr_returns,
     )
 
 
@@ -555,6 +566,145 @@ def _relative_pointer_table_words(
     return result
 
 
+def _linear_register_writes(item: DecodedInstruction) -> set[int] | None:
+    """Conservative register effects for the linear address-construction subset."""
+    raw = item.raw
+    if item.kind == "data_processing":
+        return set() if item.opcode in {"cmp", "cmn", "tst", "teq"} else {item.rd}
+    if item.kind == "data_processing_extended":
+        opcode = (raw >> 21) & 15
+        # ARM data-processing operand2: immediate, immediate shift, or
+        # register shift. Exclude miscellaneous/multiply encodings and MSR.
+        operand2 = bool(raw & (1 << 25) or not raw & 0x10 or not raw & 0x80)
+        if (raw & 0x0C000000) == 0 and operand2:
+            if opcode in {8, 9, 10, 11}:
+                return set() if raw & (1 << 20) else None
+            return {(raw >> 12) & 15}
+        return None
+    if item.kind in {"memory", "memory_extended"} and (raw & 0x0C000000) == 0x04000000:
+        writes = {(raw >> 12) & 15} if raw & (1 << 20) else set()
+        if raw & (1 << 21) or not raw & (1 << 24):
+            writes.add((raw >> 16) & 15)
+        return writes
+    if item.kind == "block_memory":
+        writes = {reg for reg in range(16) if raw & (1 << reg)} if raw & (1 << 20) else set()
+        if raw & (1 << 21):
+            writes.add((raw >> 16) & 15)
+        return writes
+    return None
+
+
+def _static_register_before(decoder: _Decoder, reachable: set[int], pc: int,
+                            register: int, literal_data: set[int] | None = None) -> int | None:
+    """Resolve a constant through MOV/ADR/immediate ADD/SUB, never across calls."""
+    adjustment = 0
+    for candidate_pc in range(pc - 4, pc - 68, -4):
+        if candidate_pc not in reachable or (literal_data is not None and candidate_pc in literal_data):
+            break
+        item = decoder.get(candidate_pc)
+        writes = _linear_register_writes(item)
+        if writes is None or 15 in writes:
+            break
+        if register not in writes:
+            continue
+        if not _is_always(item) or item.kind != "data_processing":
+            break
+        if item.opcode == "mov":
+            if item.imm is not None:
+                return (item.imm + adjustment) & 0xFFFFFFFF
+            if item.raw & 0xFF0:
+                break
+            if item.rm == 15:
+                return (candidate_pc + 8 + adjustment) & 0xFFFFFFFF
+            register = item.rm
+        elif item.opcode in {"add", "sub"} and item.imm is not None:
+            adjustment += item.imm if item.opcode == "add" else -item.imm
+            if item.rn == 15:
+                return (candidate_pc + 8 + adjustment) & 0xFFFFFFFF
+            register = item.rn
+        else:
+            break
+    return None
+
+
+def _constant_pc_targets(decoder: _Decoder, reachable: set[int], slots: set[int]) -> dict[int, int]:
+    result = {}
+    for pc in reachable:
+        item = decoder.get(pc)
+        if (item.kind == "data_processing" and item.opcode == "mov" and
+                item.rd == 15 and item.imm is None and not item.raw & 0xFF0):
+            register = item.rm
+        elif (item.raw & 0x0FFFFFF0) == 0x012FFF10:
+            register = item.raw & 15
+        else:
+            continue
+        target = _static_register_before(decoder, reachable, pc, register)
+        if target in slots and decoder.get(target).kind not in {"unknown", "svc"}:
+            result[pc] = target
+    return result
+
+
+def _base_relative_switch_tables(
+    decoder: _Decoder, reachable: set[int], slots: set[int]
+) -> dict[int, tuple[int, tuple[int, ...]]]:
+    """Recognize ADR base; LDR offset,[base,index]; ADD pc,base,offset.
+
+    Unlike self-relative pointer arrays, each signed entry is relative to the
+    same explicit ADR base. Recover only contiguous aligned in-image targets
+    of a referenced table, stopping at code or a non-target word.
+    """
+    result: dict[int, tuple[int, tuple[int, ...]]] = {}
+    for pc in sorted(reachable):
+        branch = decoder.get(pc)
+        if (branch.kind != "data_processing" or branch.opcode != "add" or
+                branch.rd != 15 or branch.imm is not None or
+                not _is_always(branch) or branch.raw & 0xFF0):
+            continue
+        load = None
+        # LR restoration or unrelated arithmetic may occur after the load.
+        for load_pc in range(pc - 4, pc - 36, -4):
+            if load_pc not in reachable:
+                break
+            candidate = decoder.get(load_pc)
+            raw = candidate.raw
+            if ((raw & 0x0FF00000) == 0x07900000 and not raw & 0x10 and
+                    not (raw >> 5) & 3 and _is_always(candidate)):
+                load = candidate
+                break
+            writes = _linear_register_writes(candidate)
+            if writes is None or writes & {branch.rn, branch.rm, 15}:
+                break
+        if load is None:
+            continue
+        raw = load.raw
+        if ((raw & 0x0FF00000) != 0x07900000 or raw & 0x10 or
+                (raw >> 5) & 3 or not _is_always(load)):
+            continue
+        base_register, value_register = (raw >> 16) & 15, (raw >> 12) & 15
+        if {branch.rn, branch.rm} != {base_register, value_register}:
+            continue
+        if base_register == value_register:
+            continue
+        base = _static_register_before(decoder, reachable, load.pc, base_register)
+        if base is None:
+            continue
+        words = []
+        for word in range(base, base + 256 * 4, 4):
+            if word not in slots or word in reachable:
+                break
+            target = (base + decoder.get(word).raw) & 0xFFFFFFFF
+            if target not in slots or target == word:
+                break
+            decoded = decoder.get(target)
+            if (decoded.state != "arm" or decoded.raw >> 28 != 0xE or
+                    decoded.kind in {"unknown", "svc"}):
+                break
+            words.append(word)
+        if 2 <= len(words) < 256:
+            result[pc] = (base, tuple(words))
+    return result
+
+
 def _literal_targets(
     decoder: _Decoder,
     reachable: set[int],
@@ -563,6 +713,7 @@ def _literal_targets(
 ) -> tuple[set[int], dict[int, tuple[int, ...]], set[int]]:
     mutable_sources: dict[int, list[int]] = {}
     dynamic_entries: set[int] = set()
+    dynamic_entries.update(_constant_pc_targets(decoder, reachable, slots).values())
     image_start = decoder.base
     image_end = decoder.base + len(decoder.code)
 
@@ -662,6 +813,13 @@ def _literal_targets(
         for word in table_words:
             record(word, pc, 4)
         dynamic_entries.update(target for target in table_targets if target in slots)
+
+    for site, (table_base, words) in _base_relative_switch_tables(
+        decoder, reachable, slots
+    ).items():
+        for word in words:
+            record(word, site, 4)
+            dynamic_entries.add((table_base + decoder.get(word).raw) & 0xFFFFFFFF)
 
     if classify_embedded_data:
         for word in sorted(_embedded_ascii_words(decoder, reachable, slots)):

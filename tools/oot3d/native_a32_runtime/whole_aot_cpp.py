@@ -1758,7 +1758,10 @@ def _emit_terminal(
                 "    return callFlow;",
                 "}",
             ]
-            return [*_conditional(raw, body), _goto(return_pc, block_pcs)]
+            if ((raw >> 28) & 0xF) == 0xE:
+                return [*body, _goto(return_pc, block_pcs)]
+            return [*_conditional(raw, [*body, _goto(return_pc, block_pcs)]),
+                    _goto(pc + 4, block_pcs)]
         transfer = f"return Oot3dAotBranch({target});"
         if ((raw >> 28) & 0xF) == 0xE:
             return [transfer]

@@ -5,9 +5,9 @@
     {
       "path": "src/oot3d_pack/a32_cpp_aot.py",
       "base_sha256": "64bff9da1febca4c8f9195bac6c0203343884c8a61c8a5f892326152362c829c",
-      "working_sha256": "b83c8eebf5d6b3039c67b385c9fd1a2a5f71636ae5441f0c302136185d7dbe90",
-      "working_size": 54167,
-      "purpose": "Bound AOT flow to ExHeader .text, recover initializer targets, emit disjoint core metadata, and configure manifest-selected true-AOT candidates without regenerating packed shards."
+      "working_sha256": "11b7e54d505e2369e0a3f5ff7bfea57280a38c569444f516689a73bf0ab1287d",
+      "working_size": 61850,
+      "purpose": "Bound AOT flow to ExHeader .text, recover initializer and constant/computed switch targets through proven linear register effects, preserve explicit nonadjacent LR continuations, emit disjoint core metadata, and configure manifest-selected true-AOT candidates without regenerating packed shards."
     },
     {
       "path": "src/oot3d_pack/arm_ir.py",
@@ -26,8 +26,8 @@
     {
       "path": "recomp/a32_runtime.cpp",
       "base_sha256": "b96890bae8eb9d8d364f33506a80c3f0851da593a1d2af9ceaffb774feb1e6b0",
-      "working_sha256": "f55e7097583056007db63144b321f5327a941250f22800c45fb7a09791527f07",
-      "working_size": 30330,
+      "working_sha256": "c1ff86cb41aaa857c2c2ca4fc36a20c8dc852f716e164936271e283ee28d9bb0",
+      "working_size": 30364,
       "purpose": "Dispatch classified core operations, compiled functions reached by calls or direct/tail entries, and budgeted multi-block true-AOT regions while materializing the guest PC only at observable boundaries."
     },
     {
@@ -54,9 +54,9 @@
     {
       "path": "recomp/a32_core.cpp",
       "base_sha256": "7112fc86359b1f6cd8b040f3f10036616898938a3a24e70a25c0e69e8b5c370c",
-      "working_sha256": "db60a1a09ec9174ef3e9eb1707c214b5240fb13ad46dc05dba3f08a186096788",
-      "working_size": 2066,
-      "purpose": "Provide the system decoder entry while retaining the compatibility Core chain."
+      "working_sha256": "3d5714de52f40746a99831e079d02c34ed7c958ccde982727d0626d3734bcaa3",
+      "working_size": 2997,
+      "purpose": "Provide the system decoder entry, including APSR transfer instructions present in the public source snapshot, while retaining the compatibility Core chain."
     }
   ],
   "files": [
