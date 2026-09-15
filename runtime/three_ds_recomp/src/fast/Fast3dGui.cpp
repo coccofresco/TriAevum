@@ -3,6 +3,8 @@
 
 #include "fast/Fast3dWindow.h"
 #include "ship/Context.h"
+#include "ship/controller/controldeck/ControlDeck.h"
+#include "ship/controller/physicaldevice/ConnectedPhysicalDeviceManager.h"
 #include "ship/config/Config.h"
 #include "ship/config/ConsoleVariable.h"
 #include "fast/backends/gfx_metal.h"
@@ -75,10 +77,11 @@ class Oot3dGraphicsSettingsPersistence final
 
 class Oot3dGraphicsSettingsWindow final : public Ship::GuiWindow {
   public:
-    explicit Oot3dGraphicsSettingsWindow(ApplicationMenu surface)
+    Oot3dGraphicsSettingsWindow(ApplicationMenu surface, std::function<void(ApplicationMenu)> navigate)
         : GuiWindow("", false,
                     surface == ApplicationMenu::Standard ? "Settings (F1)" : "Advanced graphics (F12)",
-                    ImVec2(560.0F, 760.0F)), mSurface(surface) {
+                    surface == ApplicationMenu::Standard ? ImVec2(960.0F, 720.0F) : ImVec2(560.0F, 760.0F)),
+          mSurface(surface), mNavigate(std::move(navigate)) {
         // A previous session may have saved the window open. Always start closed.
         SetVisibility(false);
     }
@@ -102,12 +105,16 @@ class Oot3dGraphicsSettingsWindow final : public Ship::GuiWindow {
     void InitElement() override {}
     void UpdateElement() override {}
     void DrawElement() override {
+        if (ImGui::Button(mSurface == ApplicationMenu::Standard ? "Advanced graphics (F12)" : "Settings (F1)"))
+            mNavigate(mSurface == ApplicationMenu::Standard ? ApplicationMenu::Advanced : ApplicationMenu::Standard);
+        ImGui::Separator();
         if (mSurface == ApplicationMenu::Standard) mPanel.DrawStandard();
         else mPanel.DrawAdvanced();
     }
 
   private:
     ApplicationMenu mSurface;
+    std::function<void(ApplicationMenu)> mNavigate;
     Oot3d::GraphicsSettingsPanel mPanel;
 };
 
@@ -214,8 +221,9 @@ void Fast3dGui::Init(GuiWindowInitData windowImpl) {
     if (mImpl.Backend == WindowBackend::FAST3D_SDL_OOT3D_VULKAN) {
         Oot3d::InstallGraphicsSettingsPersistencePort(
             std::make_shared<Oot3dGraphicsSettingsPersistence>());
-        AddGuiWindow(std::make_shared<Oot3dGraphicsSettingsWindow>(ApplicationMenu::Standard));
-        AddGuiWindow(std::make_shared<Oot3dGraphicsSettingsWindow>(ApplicationMenu::Advanced));
+        const auto navigate = [this](ApplicationMenu surface) { ToggleApplicationMenu(surface); };
+        AddGuiWindow(std::make_shared<Oot3dGraphicsSettingsWindow>(ApplicationMenu::Standard, navigate));
+        AddGuiWindow(std::make_shared<Oot3dGraphicsSettingsWindow>(ApplicationMenu::Advanced, navigate));
         AddGuiWindow(std::make_shared<Oot3dDisplayConfirmationWindow>());
     }
 #endif
@@ -299,20 +307,9 @@ void Fast3dGui::HandleWindowEvents(Fast::WindowEvent event) {
                 case SDL_KEYUP:
                     if (sdlEvent.key.keysym.scancode == SDL_SCANCODE_F1 ||
                         sdlEvent.key.keysym.scancode == SDL_SCANCODE_F12) {
-                        const auto standard = GetGuiWindow("Settings (F1)");
-                        const auto advanced = GetGuiWindow("Advanced graphics (F12)");
-                        if (standard && advanced) {
-                            const auto current = standard->IsVisible() ? ApplicationMenu::Standard :
-                                advanced->IsVisible() ? ApplicationMenu::Advanced : ApplicationMenu::Closed;
-                            const auto requested = sdlEvent.key.keysym.scancode == SDL_SCANCODE_F1 ?
-                                ApplicationMenu::Standard : ApplicationMenu::Advanced;
-                            const auto next = RouteApplicationMenuKey(current, requested,
-                                sdlEvent.type == SDL_KEYDOWN, sdlEvent.key.repeat != 0);
-                            if (standard->IsVisible() != (next == ApplicationMenu::Standard))
-                                standard->ToggleVisibility();
-                            if (advanced->IsVisible() != (next == ApplicationMenu::Advanced))
-                                advanced->ToggleVisibility();
-                        }
+                        if (sdlEvent.type == SDL_KEYDOWN && !sdlEvent.key.repeat)
+                            ToggleApplicationMenu(sdlEvent.key.keysym.scancode == SDL_SCANCODE_F1 ?
+                                ApplicationMenu::Standard : ApplicationMenu::Advanced);
                         break;
                     }
                     // Host renderer shortcuts must not also reach ImGui bindings.
@@ -320,6 +317,21 @@ void Fast3dGui::HandleWindowEvents(Fast::WindowEvent event) {
                         sdlEvent.key.keysym.scancode != SDL_SCANCODE_F2) {
                         ImGui_ImplSDL2_ProcessEvent(&sdlEvent);
                     }
+                    break;
+                case SDL_CONTROLLERBUTTONDOWN:
+                    mApplicationController = sdlEvent.cbutton.which;
+                    if (sdlEvent.cbutton.button == SDL_CONTROLLER_BUTTON_BACK &&
+                        !Oot3d::ApplicationSettingsCapturingInput() &&
+                        !Oot3d::ApplicationSettingsReservesControllerBack()) {
+                        ToggleApplicationMenu(ApplicationMenu::Standard);
+                        break;
+                    }
+                    ImGui_ImplSDL2_ProcessEvent(&sdlEvent);
+                    break;
+                case SDL_CONTROLLERAXISMOTION:
+                    if (std::abs(int(sdlEvent.caxis.value)) > 16384)
+                        mApplicationController = sdlEvent.caxis.which;
+                    ImGui_ImplSDL2_ProcessEvent(&sdlEvent);
                     break;
                 default:
                     ImGui_ImplSDL2_ProcessEvent(&sdlEvent);
@@ -343,6 +355,18 @@ void Fast3dGui::DrawMenu() {
     Ship::Gui::DrawMenu();
 #ifdef ENABLE_OOT3D_VULKAN
     if (mImpl.Backend == WindowBackend::FAST3D_SDL_OOT3D_VULKAN) {
+        const auto standard = GetGuiWindow("Settings (F1)");
+        const auto advanced = GetGuiWindow("Advanced graphics (F12)");
+        const auto surface = standard && standard->IsVisible() ? ApplicationMenu::Standard :
+            advanced && advanced->IsVisible() ? ApplicationMenu::Advanced : ApplicationMenu::Closed;
+        if (surface != mPreviousApplicationMenu) {
+            if (mPreviousApplicationMenu == ApplicationMenu::Standard)
+                Oot3d::NotifyApplicationSettingsHidden();
+            // Close stale page popups before floating windows are drawn. The
+            // independent display-confirmation owner can then reopen its modal.
+            ImGui::ClosePopupsOverWindow(nullptr, false);
+            mPreviousApplicationMenu = surface;
+        }
         const bool hostUiVisible = GetAnyGuiWindowVisible();
         if (hostUiVisible != mOot3dGraphicsWindowVisible) {
             mOot3dGraphicsWindowVisible = hostUiVisible;
@@ -362,6 +386,59 @@ void Fast3dGui::DrawMenu() {
 #endif
 }
 
+void Fast3dGui::ToggleApplicationMenu(ApplicationMenu requested) {
+    const auto standard = GetGuiWindow("Settings (F1)");
+    const auto advanced = GetGuiWindow("Advanced graphics (F12)");
+    if (!standard || !advanced) return;
+    const auto current = standard->IsVisible() ? ApplicationMenu::Standard :
+        advanced->IsVisible() ? ApplicationMenu::Advanced : ApplicationMenu::Closed;
+    const auto next = RouteApplicationMenuKey(current, requested, true, false);
+    if (standard->IsVisible() != (next == ApplicationMenu::Standard)) standard->ToggleVisibility();
+    if (advanced->IsVisible() != (next == ApplicationMenu::Advanced)) advanced->ToggleVisibility();
+    mApplicationInputGate.Update(true, false);
+}
+
+void Fast3dGui::SyncApplicationMenuInput() {
+#ifdef ENABLE_OOT3D_VULKAN
+    if (mImpl.Backend != WindowBackend::FAST3D_SDL_OOT3D_VULKAN) return;
+    auto& io = ImGui::GetIO();
+    auto manager = Ship::Context::GetRawInstance()->GetControlDeck()->GetConnectedPhysicalDeviceManager();
+    const auto devices = manager->GetConnectedSDLGamepadsForPort(0);
+    auto selected = devices.find(mApplicationController);
+    if (selected == devices.end() && !devices.empty())
+        selected = std::min_element(devices.begin(), devices.end(), [](const auto& a, const auto& b) {
+            return a.first < b.first;
+        });
+    SDL_GameController* controller = selected == devices.end() ? nullptr : selected->second;
+    mApplicationController = selected == devices.end() ? -1 : selected->first;
+    ImGui_ImplSDL2_SetGamepadMode(ImGui_ImplSDL2_GamepadMode_Manual, controller ? &controller : nullptr,
+                                controller ? 1 : 0);
+    if (!controller) {
+        for (int key = ImGuiKey_GamepadStart; key <= ImGuiKey_GamepadRStickDown; ++key)
+            io.AddKeyEvent(static_cast<ImGuiKey>(key), false);
+    }
+    bool neutral = SDL_GetMouseState(nullptr, nullptr) == 0;
+    int keyCount = 0;
+    const auto* keys = SDL_GetKeyboardState(&keyCount);
+    for (int i = 0; i < keyCount; ++i) neutral &= keys[i] == 0;
+    for (const auto& [id, device] : devices) {
+        if (!device) continue;
+        for (int button = 0; button < SDL_CONTROLLER_BUTTON_MAX; ++button)
+            neutral &= SDL_GameControllerGetButton(device, static_cast<SDL_GameControllerButton>(button)) == 0;
+        for (int axis = 0; axis < SDL_CONTROLLER_AXIS_MAX; ++axis)
+            neutral &= std::abs(int(SDL_GameControllerGetAxis(device, static_cast<SDL_GameControllerAxis>(axis)))) < 12000;
+    }
+    const bool visible = Gui::BlocksGameInput();
+    mApplicationInputGate.Update(visible, neutral);
+    const bool binding = mBindingNavigationGate.Update(Oot3d::ApplicationSettingsCapturingInput(), neutral);
+    const bool focused = SDL_GetKeyboardFocus() == static_cast<SDL_Window*>(mImpl.Vulkan.Window);
+    if (visible && focused && !binding)
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad;
+    else
+        io.ConfigFlags &= ~(ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad);
+#endif
+}
+
 void Fast3dGui::ImGuiWMInit() {
     switch (mImpl.Backend) {
         case WindowBackend::FAST3D_SDL_OPENGL:
@@ -374,6 +451,7 @@ void Fast3dGui::ImGuiWMInit() {
 #ifdef ENABLE_OOT3D_VULKAN
         case WindowBackend::FAST3D_SDL_OOT3D_VULKAN:
             ImGui_ImplSDL2_InitForVulkan(static_cast<SDL_Window*>(mImpl.Vulkan.Window));
+            ImGui_ImplSDL2_SetGamepadMode(ImGui_ImplSDL2_GamepadMode_Manual, nullptr, 0);
             break;
 #endif
 #if __APPLE__
@@ -554,6 +632,7 @@ void Fast3dGui::ImGuiWMNewFrame() {
 #ifdef ENABLE_OOT3D_VULKAN
         case WindowBackend::FAST3D_SDL_OOT3D_VULKAN:
 #endif
+            SyncApplicationMenuInput();
             ImGui_ImplSDL2_NewFrame();
 #ifdef ENABLE_OOT3D_VULKAN
             if (mImpl.Backend == WindowBackend::FAST3D_SDL_OOT3D_VULKAN) {

@@ -1,8 +1,10 @@
 # Dusklight UI and Input Donor Plan
 
-Status: F1/F12 ownership split implemented and Windows widget-tested. Standard
-pages still use the existing ImGui widgets as a migration bridge; the Dusklight
-frontend/controller import and RmlUi/NRI adapter are not implemented yet.
+Status: dedicated standard F1 navigation and retained advanced F12 panels
+implemented on the existing ImGui/NRI backend. Selected Dusklight navigation
+and capture behaviors are adapted, not its RmlUi frontend or controller backend.
+Windows actual-widget tests pass; live hardware menu navigation and other
+platform builds still require qualification.
 Decision: use Dusklight as the primary product-level donor for standard,
 cross-platform application menus and controller configuration, preserving the
 shared 3DS input contract and NRI. This is not a wholesale F1 UI replacement.
@@ -76,11 +78,12 @@ window host, input service and TopScreen. No second profile database, duplicate
 setting variables, competing SDL event pumps or copied Twilight Princess logic.
 Keep saved profiles compatible through explicit schema migration where needed.
 
-RmlUi is a candidate for substantial UI reuse, not an already approved dependency
-import. Prove one NRI-rendered, controller-navigable settings page before moving
-the selected standard pages. Keep the existing advanced panels intact and all
-application UI rendering after scene effects at the declared UI boundary.
-The donor uses SDL3 directly; SDL2-compat in our packages is not an API migration.
+The current implementation deliberately reuses the existing ImGui/NRI backend
+for standard pages too: importing RmlUi/Aurora would introduce a second rendering
+integration without being needed for navigation and capture behavior. Advanced
+panels remain intact. All application UI stays at the existing UI boundary after
+scene effects. The donor uses SDL3 directly; SDL2-compat in our packages is not
+an API migration. No donor game assets, fonts, backend or SDK are imported.
 
 ## Delivery Order
 
@@ -126,6 +129,41 @@ Related: `THREE_DS_RECOMP_INPUT_ARCHITECTURE.md`,
   framebuffer or physical controller qualification performed for this tranche;
   Linux/Android/macOS builds remain unverified for these new changes.
 
-Next: license-audit/import the minimal Dusklight UI dependency closure and add
-the actual standard frontend through an NRI adapter. Do not describe the current
-ImGui migration bridge as a completed Dusklight port or controller rewrite.
+## Standard Menu Implementation (2026-09-15)
+
+The first-tranche results above are historical; the following supersedes its
+frontend plan without changing setting ownership or native game UI.
+
+- `fast/ApplicationSettingsPanel.h`: title-neutral navigation/content shell,
+  selected-page retention, independent page scroll, 190-pixel sidebar, compact
+  page selector below 640 pixels. No second renderer, settings store or event pump.
+- F1 pages: Display, Antialiasing, Bindings, Devices, Analog sticks, Camera,
+  Aiming, Motion calibration, Shortcuts, TopScreen and Game language. They call
+  existing typed consumers and persistence, not copied configuration state.
+- F12 retains Lighting, CACAO, shadows, Reflections, Toon/outline, Grass,
+  Textures and renderer presets. Both surfaces include a switch to the other.
+- `ApplicationInputReleaseGate` blocks gameplay until the menu-closing gesture
+  is released. Legacy menubar F1/Back handling is disabled for this host.
+- Standard-menu closure cancels binding capture and calibration. Switching
+  surfaces closes orphan popups; display confirmation remains outside pages.
+- ImGui uses manually supplied, already-open SDL controllers from the existing
+  physical-device owner. Last active device drives menu navigation; disconnected
+  input is cleared. Binding capture suppresses UI navigation until neutral.
+- Controller Back opens F1 only when not assigned to a game action and not
+  capturing a binding. Existing Select mappings are preserved. F1 remains the
+  unconditional keyboard shortcut; F12 and F2 retain their respective roles.
+
+Reference patterns: Dusklight `src/dusk/ui/nav_types.hpp`, `nav_group.cpp`,
+`input.cpp`, `controller_config.cpp`, `settings.cpp` at the pinned revision.
+This is independently adapted behavior, not a source-file import or a complete
+Dusklight port. In particular it does not import Aurora controller mappings,
+rumble, a new audio-settings service or a global named-profile manager.
+
+Validation: real-widget smoke covers all eleven pages at widths 520, 760 and
+1100, retained advanced widgets, capture cancellation, release gates and Back
+binding ownership. Windows runtime builds without rebuilding the title module.
+A bounded native NRI run from the adult castle-bridge savestate exited with code
+0 and produced a coherent native framebuffer. The Windows automation bridge was
+unavailable, so this run establishes closed-menu rendering only, not physical
+F1/F12/controller navigation. Linux, Android, macOS and unplug/replug hardware
+qualification are still outstanding; do not infer them from shared code tests.

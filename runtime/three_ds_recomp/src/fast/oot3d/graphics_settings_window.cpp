@@ -20,6 +20,14 @@ std::vector<std::shared_ptr<GraphicsSettingsPanelTab>> SnapshotPanelTabs() {
     return PanelTabs();
 }
 } // namespace
+bool ApplicationSettingsCapturingInput() {
+    for (const auto& tab : SnapshotPanelTabs()) if (tab->CapturingInput()) return true;
+    return false;
+}
+bool ApplicationSettingsReservesControllerBack() {
+    for (const auto& tab : SnapshotPanelTabs()) if (tab->ReservesControllerBack()) return true;
+    return false;
+}
 void InstallGraphicsSettingsPanelTabs(
     std::vector<std::shared_ptr<GraphicsSettingsPanelTab>> tabs) {
     std::erase(tabs, nullptr);
@@ -107,7 +115,46 @@ void GraphicsSettingsPanel::Draw() {
 }
 
 void GraphicsSettingsPanel::DrawStandard() {
-    DrawContents(true, false);
+    auto& runtime = GraphicsSettingsRuntime::Instance();
+    const bool native = runtime.NativePresentationOverrideActive();
+    ImGui::TextColored(native ? ImVec4(1.0F, 0.78F, 0.25F, 1.0F) :
+                       ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled),
+                       "F2: native presentation %s", native ? "ON" : "OFF");
+    DrawPresentationStatus();
+    std::vector<Fast::ApplicationSettingsPage> pages;
+    const auto rendererPage = [&](const char* id, const char* label, auto draw) {
+        pages.push_back({id, label, "Graphics", [this, draw] {
+            auto& runtime = GraphicsSettingsRuntime::Instance();
+            auto settings = runtime.Snapshot();
+            if (draw(settings, runtime.Capabilities())) {
+                settings.Preset = GraphicsPreset::Custom;
+                mRendererStatus = SettingsUi::DescribeApply(runtime.Apply(settings, !ImGui::IsAnyItemActive()));
+            }
+            if (!mRendererStatus.empty()) ImGui::TextWrapped("%s", mRendererStatus.c_str());
+        }});
+    };
+    rendererPage("display", "Display", [this](auto& settings, const auto& caps) {
+        return DrawDisplaySettings(settings, caps);
+    });
+    rendererPage("antialiasing", "Antialiasing", [this](auto& settings, const auto& caps) {
+        return DrawAntialiasingSettings(settings, caps);
+    });
+    for (const auto& tab : SnapshotPanelTabs()) {
+        for (size_t index = 0; index < tab->PageCount(); ++index) {
+            pages.push_back({std::string(tab->Label()) + "/" + std::to_string(index),
+                             tab->PageLabel(index), tab->Label(),
+                             [tab, index] { tab->DrawPage(index); }});
+        }
+    }
+    mStandardMenu.Draw(pages);
+}
+
+void GraphicsSettingsPanel::OnHidden() {
+    NotifyApplicationSettingsHidden();
+}
+
+void NotifyApplicationSettingsHidden() {
+    for (const auto& tab : SnapshotPanelTabs()) tab->OnHidden();
 }
 
 void GraphicsSettingsPanel::DrawAdvanced() {

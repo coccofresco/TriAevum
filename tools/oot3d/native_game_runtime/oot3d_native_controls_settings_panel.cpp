@@ -197,14 +197,55 @@ class NativeControlsSettingsPanel final
     return "Controls";
   }
 
-  void Draw() override {
+  size_t PageCount() const noexcept override { return 7; }
+  const char* PageLabel(size_t page) const noexcept override {
+    static constexpr const char* labels[]{"Bindings", "Devices", "Analog sticks", "Camera", "Aiming", "Motion calibration", "Shortcuts"};
+    return page < 7 ? labels[page] : "Controls";
+  }
+  void OnHidden() override {
+    mControls->CancelBindingCapture();
+    mControls->CancelMotionCalibration();
+    mOpenCapture = false;
+  }
+  bool CapturingInput() const override {
+    using Phase = ThreeDsRecomp::Input::BindingCapturePhase;
+    const auto phase = mControls->BindingCaptureStatus().Phase;
+    return phase == Phase::Release || phase == Phase::Listening;
+  }
+  bool ReservesControllerBack() const override {
+    const auto config = mControls->Snapshot().Config;
+    return std::any_of(config.Bindings.begin(), config.Bindings.end(), [](const auto& binding) {
+      return binding.Gamepad == NativeGamepadButton::Back;
+    });
+  }
+  void DrawPage(size_t page) override { DrawImpl(static_cast<int>(page)); }
+  void Draw() override { DrawImpl(-1); }
+
+ private:
+  void DrawImpl(int page) {
     SynchronizeDrafts();
     const NativeControlConfig frameStartDraft = mControlDraft;
     if (mTopScreen) mTopDraft = mTopScreen->Snapshot().Config;
     const auto frameStartTopDraft = mTopDraft;
 
     DrawProfile();
-    if (ImGui::BeginTabBar("##ControlSections")) {
+    if (page >= 0) {
+      ImGui::BeginChild("##ControlsBody", ImVec2(0.0F, std::max(1.0F,
+          ImGui::GetContentRegionAvail().y - ImGui::GetFrameHeightWithSpacing() * 3.0F)));
+      switch (page) {
+        case 0: DrawBindings(); break;
+        case 1: DrawDevices(); DrawControllerSelection(); break;
+        case 2: DrawAnalog(); break;
+        case 3: DrawFreeCamera(); break;
+        case 4: DrawNativeAim(); if (mTopScreen) DrawTopScreenStickAiming(mTopDraft); break;
+        case 5: DrawCalibration(); break;
+        case 6:
+          if (mTopScreen) DrawTopScreenActionBindings(mTopDraft);
+          else ImGui::TextDisabled("TopScreen profile is not active");
+          break;
+      }
+      ImGui::EndChild();
+    } else if (ImGui::BeginTabBar("##ControlSections")) {
       const auto section = [&](const char* label, auto draw) {
         if (ImGui::BeginTabItem(label)) {
           // A single scrolling body; persistence never scrolls with the fields.

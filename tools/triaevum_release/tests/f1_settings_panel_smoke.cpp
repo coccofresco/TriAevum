@@ -846,6 +846,11 @@ int main() try {
     Check(differentRom.SystemId() == 1, "unsupported old language leaked into another ROM");
     std::filesystem::remove(languagePath);
     // Exercise the actual production surfaces, not just the combined fixture.
+    Fast::ApplicationInputReleaseGate gate;
+    Check(!gate.Update(false, false), "release gate captured ordinary gameplay");
+    Check(gate.Update(true, true), "visible UI did not capture input");
+    Check(gate.Update(false, false), "closing gesture leaked to gameplay");
+    Check(!gate.Update(false, true), "neutral release did not return gameplay");
     for (const auto current : {Fast::ApplicationMenu::Closed, Fast::ApplicationMenu::Standard,
                               Fast::ApplicationMenu::Advanced}) {
         for (const auto requested : {Fast::ApplicationMenu::Standard, Fast::ApplicationMenu::Advanced}) {
@@ -860,7 +865,7 @@ int main() try {
     }
     panelSurface = Fast::ApplicationMenu::Standard;
     Frame(); Frame();
-    Click("Renderer"); Frame();
+    Click("Display"); Frame();
     const auto hasItem = [](const char* label) {
         return std::any_of(items.begin(), items.end(), [label](const auto& entry) {
             return entry.second.Label == label;
@@ -869,6 +874,37 @@ int main() try {
     Check(hasItem("Display") && hasItem("Game"), "standard pages missing from F1");
     Check(!hasItem("Grass") && !hasItem("Toon") && !hasItem("Textures") && !hasItem("Preset"),
           "advanced controls leaked into F1");
+    InstallGraphicsSettingsPanelTabs({
+        Oot3dNativeGame::CreateNativeControlsSettingsPanel(controls, topScreen),
+        Oot3dNativeGame::CreateTopScreenSettingsPanel(topScreen),
+        Oot3dNativeGame::CreateGameLanguagePanel(language)});
+    for (float width : {760.0F, 520.0F, 1100.0F, 520.0F}) {
+        size.x = width;
+        Frame(); Frame();
+        for (const char* page : {"Display", "Antialiasing", "Bindings", "Devices", "Analog sticks",
+                                 "Camera", "Aiming", "Motion calibration", "Shortcuts", "TopScreen 2.1.1", "Game"}) {
+            if (width < 640.0F) Select("##SettingsPage", page);
+            else Click(page);
+            for (int stable = 0; stable < 8; ++stable) Frame();
+            Check(!hasItem("Grass"), "advanced page leaked into standard navigation");
+        }
+    }
+    const auto beforeBackPolicy = controls->Snapshot().Config;
+    auto backPolicy = beforeBackPolicy;
+    backPolicy.Bindings.front().Gamepad = Oot3dNativeGame::NativeGamepadButton::Back;
+    controls->Preview(backPolicy);
+    Check(ApplicationSettingsReservesControllerBack(), "application menu stole a mapped Back button");
+    for (auto& binding : backPolicy.Bindings)
+        if (binding.Gamepad == Oot3dNativeGame::NativeGamepadButton::Back)
+            binding.Gamepad = Oot3dNativeGame::NativeGamepadButton::None;
+    controls->Preview(backPolicy);
+    Check(!ApplicationSettingsReservesControllerBack(), "unused Back button unavailable to application menu");
+    controls->Preview(beforeBackPolicy);
+    controls->BeginBindingCapture(ThreeDsRecomp::Input::BindingDevice::Gamepad);
+    Check(ApplicationSettingsCapturingInput(), "capture ownership not published");
+    panel.OnHidden();
+    Check(!ApplicationSettingsCapturingInput(), "binding capture survived closing standard settings");
+    size.x = 760.0F;
     panelSurface = Fast::ApplicationMenu::Advanced;
     Frame(); Frame();
     Click("Renderer"); Frame();

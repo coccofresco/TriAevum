@@ -1,5 +1,6 @@
 #pragma once
 #include <SDL2/SDL.h>
+#include "fast/ApplicationMenuRouting.h"
 
 #include "Fast3dWindow.h"
 #include "ship/window/gui/Gui.h"
@@ -62,6 +63,8 @@ typedef struct {
  */
 class Fast3dGui : public Ship::Gui {
   public:
+    bool BlocksGameInput() override { return Gui::BlocksGameInput() || mApplicationInputGate.Blocked(); }
+    bool OwnsApplicationShortcuts() const override { return mImpl.Backend == WindowBackend::FAST3D_SDL_OOT3D_VULKAN; }
     Fast3dGui();
     Fast3dGui(std::vector<std::shared_ptr<Ship::GuiWindow>> guiWindows);
     ~Fast3dGui() override = default;
@@ -164,6 +167,12 @@ class Fast3dGui : public Ship::Gui {
 
   private:
     void SyncOot3dVulkanMousePosition();
+    void SyncApplicationMenuInput();
+    void ToggleApplicationMenu(ApplicationMenu requested);
+    ApplicationInputReleaseGate mApplicationInputGate;
+    ApplicationInputReleaseGate mBindingNavigationGate;
+    int32_t mApplicationController = -1;
+    ApplicationMenu mPreviousApplicationMenu = ApplicationMenu::Closed;
     bool mOot3dGraphicsWindowVisible = false;
 
     /** @brief Applies any pending resolution or MSAA changes to the render target. */
