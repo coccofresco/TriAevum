@@ -1,5 +1,12 @@
 # F1 settings rationalization
 
+2026-09-15: F1 now contains standard settings and application tabs; F12 contains
+the existing advanced ImGui effect panels. See
+`TRIAEVUM_DUSKLIGHT_UI_INPUT_DONOR.md`. Historical F1 references to Grass, Toon,
+CACAO, reflections and texture panels below now refer to F12. Display confirmation
+still operates independently of either menu. The widget runner also exercises
+the two production surfaces and their exclusive hotkey policy (3,969 assertions).
+
 Date: 2026-09-06. Worktree: `triaevum-release`.
 
 2026-09-10: [Game language selection](TRIAEVUM_GAME_LANGUAGE.md) adds the

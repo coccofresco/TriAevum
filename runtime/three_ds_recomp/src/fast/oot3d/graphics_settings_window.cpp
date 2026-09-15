@@ -103,6 +103,18 @@ void GraphicsSettingsPanel::DrawPresentationStatus() {
 }
 
 void GraphicsSettingsPanel::Draw() {
+    DrawContents(true, true);
+}
+
+void GraphicsSettingsPanel::DrawStandard() {
+    DrawContents(true, false);
+}
+
+void GraphicsSettingsPanel::DrawAdvanced() {
+    DrawContents(false, true);
+}
+
+void GraphicsSettingsPanel::DrawContents(bool standard, bool advanced) {
     const bool nativeRequired = GraphicsSettingsRuntime::Instance().NativePresentationOverrideRequired();
     if (nativeRequired) {
         ImGui::TextWrapped("Native presentation: Grass, Toon/outline, CACAO and reflections are unavailable in this build.");
@@ -122,20 +134,20 @@ void GraphicsSettingsPanel::Draw() {
     ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.48F);
     if (ImGui::BeginTabBar("##Oot3dSettingsTabs", ImGuiTabBarFlags_FittingPolicyScroll)) {
         if (ImGui::BeginTabItem("Renderer")) {
-            DrawRendererSettings();
+            DrawRendererSettings(standard, advanced);
             ImGui::EndTabItem();
         }
-        if (!nativeRequired && ImGui::BeginTabItem("Grass")) {
+        if (advanced && !nativeRequired && ImGui::BeginTabItem("Grass")) {
             DrawGrassSettings();
             ImGui::EndTabItem();
         }
-        if (ImGui::BeginTabItem("Textures")) {
+        if (advanced && ImGui::BeginTabItem("Textures")) {
             ImGui::BeginChild("##TextureContent");
             DrawTextureSettings();
             ImGui::EndChild();
             ImGui::EndTabItem();
         }
-        for (const auto& tab : applicationTabs) {
+        if (standard) for (const auto& tab : applicationTabs) {
             if (tab != nullptr && ImGui::BeginTabItem(tab->Label())) {
                 ImGui::PushID(tab->Label());
                 tab->Draw();
@@ -167,13 +179,13 @@ void GraphicsSettingsPanel::DrawTextureSettings() {
     }
 }
 
-void GraphicsSettingsPanel::DrawRendererSettings() {
+void GraphicsSettingsPanel::DrawRendererSettings(bool standard, bool advanced) {
     auto& runtime = GraphicsSettingsRuntime::Instance();
     auto settings = runtime.Snapshot();
     const auto capabilities = runtime.Capabilities();
     const char* const presets[] = {"Authentic", "Enhanced", "Toon", "Custom"};
     GraphicsPreset preset = settings.Preset;
-    if (SettingsUi::EnumCombo("Preset", preset, presets)) {
+    if (advanced && SettingsUi::EnumCombo("Preset", preset, presets)) {
         settings = GraphicsSettingsService::PresetForCurrent(preset, settings);
         mRendererStatus = SettingsUi::DescribeApply(runtime.Apply(settings));
         settings = runtime.Snapshot();
@@ -197,11 +209,15 @@ void GraphicsSettingsPanel::DrawRendererSettings() {
                 ImGui::EndTabItem();
             }
         };
-        section("Display", [&] { return DrawDisplaySettings(settings, capabilities); });
-        section("Antialiasing", [&] { return DrawAntialiasingSettings(settings, capabilities); });
-        section("Lighting", [&] { return DrawLightingSettings(settings, capabilities); });
-        section("Reflections", [&] { return DrawReflectionSettings(settings, capabilities); });
-        section("Toon", [&] { return DrawToonSettings(settings); });
+        if (standard) {
+            section("Display", [&] { return DrawDisplaySettings(settings, capabilities); });
+            section("Antialiasing", [&] { return DrawAntialiasingSettings(settings, capabilities); });
+        }
+        if (advanced) {
+            section("Lighting", [&] { return DrawLightingSettings(settings, capabilities); });
+            section("Reflections", [&] { return DrawReflectionSettings(settings, capabilities); });
+            section("Toon", [&] { return DrawToonSettings(settings); });
+        }
         ImGui::EndTabBar();
     }
     if (changed) {

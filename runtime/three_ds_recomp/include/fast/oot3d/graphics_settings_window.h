@@ -33,10 +33,14 @@ void InstallGraphicsSettingsPanelTab(
 
 class GraphicsSettingsPanel final {
   public:
+    // Combined entry retained for existing diagnostic widget callers only.
     void Draw();
+    void DrawStandard();
+    void DrawAdvanced();
 
   private:
-    void DrawRendererSettings();
+    void DrawContents(bool standard, bool advanced);
+    void DrawRendererSettings(bool standard, bool advanced);
     void DrawPresentationStatus();
     bool DrawDisplaySettings(GraphicsSettings&, const GraphicsCapabilities&);
     bool DrawAntialiasingSettings(GraphicsSettings&, const GraphicsCapabilities&);

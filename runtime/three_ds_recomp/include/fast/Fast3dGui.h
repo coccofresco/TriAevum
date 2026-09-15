@@ -165,7 +165,6 @@ class Fast3dGui : public Ship::Gui {
   private:
     void SyncOot3dVulkanMousePosition();
     bool mOot3dGraphicsWindowVisible = false;
-    bool mOot3dGraphicsToggleKeyWasDown = false;
 
     /** @brief Applies any pending resolution or MSAA changes to the render target. */
     void ApplyResolutionChanges();
