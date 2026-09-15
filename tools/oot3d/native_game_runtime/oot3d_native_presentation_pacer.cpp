@@ -73,6 +73,7 @@ void NativeRealtimeRefreshPacer::Configure(
         return;
     }
     mEnabled = resolvedEnabled;
+    mThreadScheduling.Configure(mEnabled);
     mTargetRateHz = targetRateHz;
     ResetDeadline();
 }

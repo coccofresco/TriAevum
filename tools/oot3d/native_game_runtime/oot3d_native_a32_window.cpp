@@ -6629,6 +6629,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                savestatePicaDisplayImageBytesRestored}}},
              {"realtime_pacing",
              {{"enabled", realtimePacer.Enabled()},
+              {"multimedia_scheduling_active", realtimePacer.MultimediaSchedulingActive()},
               {"high_resolution_wait_available",
                realtimePacer.HighResolutionWaitAvailable()},
               {"basis", "realtime_when_no_frame_limit"},

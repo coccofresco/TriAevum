@@ -15,6 +15,7 @@ int main() {
     // Exercise the real caller: the old 250 ms override passed the pure-policy
     // tests but retained this entire stall as presentation catch-up debt.
     NativeRealtimeRefreshPacer pacer(true, 90);
+    const bool schedulingAvailable = pacer.MultimediaSchedulingActive();
     pacer.WaitForNextRefresh();
     std::this_thread::sleep_for(60ms);
     const double elapsedBefore = pacer.ElapsedSeconds();
@@ -24,5 +25,10 @@ int main() {
     pacer.Configure(false, 90);
     pacer.WaitForNextRefresh();
     if (pacer.Stats().DeadlineResyncs != 1) return 7;
+    if (pacer.MultimediaSchedulingActive()) return 8;
+    pacer.Configure(true, 90);
+    if (schedulingAvailable && !pacer.MultimediaSchedulingActive()) return 9;
+    NativeRealtimeRefreshPacer unpaced(false, 90);
+    if (unpaced.MultimediaSchedulingActive()) return 10;
     return 0;
 }

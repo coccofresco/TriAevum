@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include "native_presentation_thread_scope.h"
 
 namespace Oot3dNativeGame {
 
@@ -55,6 +56,7 @@ class NativeRealtimeRefreshPacer final {
 
     [[nodiscard]] bool Enabled() const noexcept;
     [[nodiscard]] bool HighResolutionWaitAvailable() const noexcept;
+    [[nodiscard]] bool MultimediaSchedulingActive() const noexcept { return mThreadScheduling.Active(); }
     [[nodiscard]] uint32_t TargetRateHz() const noexcept;
     [[nodiscard]] double ElapsedSeconds() const noexcept;
     [[nodiscard]] double MeanIntervalSeconds() const noexcept;
@@ -67,6 +69,7 @@ class NativeRealtimeRefreshPacer final {
         std::chrono::steady_clock::time_point deadline) noexcept;
 
     bool mPacingAllowed = false;
+    NativePresentationThreadScope mThreadScheduling;
     bool mEnabled = false;
     uint32_t mTargetRateHz = 0;
     bool mStarted = false;

@@ -782,3 +782,55 @@ Private evidence: `%TEMP%/TriAevum-submit-pacing-before`,
 `TriAevum-submit-pacing-after` and `TriAevum-submit-pacing-repeat` (rejected
 submission experiment), `TriAevum-bounded-debt-final` (retained implementation),
 and `TriAevum-bounded-debt-field-check` (framebuffer correctness).
+
+### Adult Link outside the castle: timed checkpoint qualification
+
+Use `J:/TriAevum-verify-20260910/win-field-x2/checkpoint.oot3dsav`, SHA-256
+`73a3d5e8ffe35a9048a07b909e50ced5cddb532b00a7b3ffe9d6c1156061af0d`.
+The corresponding fixture framebuffer shows adult Link on foot facing the
+castle-town bridge from Hyrule Field. This is NOT the mounted Epona fixture.
+Run `measure_pacing.py` with the `win-field-x2/invocation.json`, this explicit
+`--load-state`, `--no-scenario`, and no graphics-config override: Grass and toon
+remain enabled. Preserve the original checkpoint and user configuration.
+
+Baseline `6891f89`, 30 s, 60 Hz, no VSync/captures/inventory/collected shader pack:
+frames 1 and 3 stall for 2795.9 and 7820.1 ms, almost entirely in replay. There
+are 25 source compilations totaling 2376.5 ms; this is NOT a zero-compilation
+checkpoint. Historical visual snapshots retain specialized shader sources.
+Do not infer that all 25 requests or the entire replay delay have that cause:
+remaining effect programs and driver creation must be classified separately.
+After frame 180 the recorded worst samples instead peak at 28.0 ms, with the
+largest wait-dominated sample spending 22.57 ms in the pacer.
+
+The Windows host now optionally joins the OS MMCSS `Games` task while software
+pacing is enabled, using the isolated `native_presentation_thread_scope.h` RAII
+owner. It modifies only the calling thread's scheduling, not process priority,
+registry values, GPU state or game timing. It loads the system `avrt.dll` only,
+falls back normally if unavailable, unregisters when pacing is disabled or the
+scope ends, and re-registers on reactivation. Non-Windows is an inert adapter;
+unlimited throughput does not register. Runtime JSON exposes
+`realtime_pacing.multimedia_scheduling_active`, rather than assuming success.
+Reference: [Microsoft MMCSS task scheduling](https://learn.microsoft.com/en-us/windows/win32/procthread/multimedia-class-scheduler-service).
+
+Two same-checkpoint 40-second runs exclude the first 180 completed presentations
+from the statistics (not a fixed number of seconds). Baseline here is the same
+new binary with MMCSS attachment temporarily disabled, then rebuilt with the
+final enabled implementation; no temporary switch remains in the source.
+
+| State | Measured frames | Maximum ms | p99 upper ms | Mean ms |
+| --- | --- | --- | --- | --- |
+| MMCSS disabled | 1579 | 40.8883 | 17.125 | 16.66664 |
+| MMCSS active | 1581 | 31.0742 | 17.000 | 16.66668 |
+
+This paired observation is a modest steady-state improvement, not statistical
+proof of universal benefit: the p99 difference is one histogram bucket. The
+initial multi-second replay stalls remain essentially unchanged. All 15 focused
+tests pass, including registration disable/re-enable and inactive unpaced mode.
+No new framebuffer equivalence or Linux/Android performance claim for this patch;
+canonical rendering, effects, density and resource scheduling were not modified.
+
+Private evidence: `%TEMP%/TriAevum-castle-baseline`,
+`TriAevum-castle-scheduling`, `TriAevum-castle-steady-control`, and
+`TriAevum-castle-steady-final`. Next work must retain this fixture, distinguish
+its legacy replay startup costs from ongoing waits, and extend the measurement
+to camera movement before treating static-camera results as scene-wide closure.
