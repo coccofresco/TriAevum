@@ -37,12 +37,15 @@ def main():
     parser.add_argument("--comparison-plugin", type=Path, help="Unsampled baseline/candidate ABBA runs, sharing a private cache")
     parser.add_argument("--baseline-plugin", type=Path, help="Explicit control module for matched-source comparisons")
     parser.add_argument("--sample-map", type=Path, help="Link map belonging exactly to diagnostic-plugin")
+    parser.add_argument("--stack-sampler", type=Path, help="External Windows stack sampler (diagnostic only)")
     parser.add_argument("--sample-delay", type=float, default=10, help="Seconds before diagnostic sampling")
     args = parser.parse_args()
     if args.sample_map and (not args.diagnostic_plugin or not 0 <= args.sample_delay <= 60):
         parser.error("Sampling requires --diagnostic-plugin and a delay between 0 and 60 seconds")
     if args.comparison_plugin and (args.diagnostic_plugin or args.sample_map or args.profile_runtime):
         parser.error("A/B timing must not be combined with diagnostics")
+    if args.stack_sampler and (not args.sample_map or not args.diagnostic_plugin):
+        parser.error("Stack sampling requires the diagnostic module and matching map")
     original = json.loads(args.invocation.read_text(encoding="utf-8"))
     if not isinstance(original, list):
         original = [str(args.executable), *original["arguments"]]
@@ -97,11 +100,13 @@ def main():
             try:
                 if args.sample_map:
                     time.sleep(args.sample_delay)
-                    subprocess.run([sys.executable, str(Path(__file__).with_name("sample_aot_windows.py")),
+                    sampling = ([str(args.stack_sampler), str(process.pid), "25",
+                                 str(root / "native-stacks.json")] if args.stack_sampler else
+                                [sys.executable, str(Path(__file__).with_name("sample_aot_windows.py")),
                                     "--pid", str(process.pid), "--seconds", "25",
                                     "--output", str(root / "native-samples.json"),
-                                    "--module", str(args.diagnostic_plugin), "--map", str(args.sample_map)],
-                                   timeout=40, check=True)
+                                    "--module", str(args.diagnostic_plugin), "--map", str(args.sample_map)])
+                    subprocess.run(sampling, timeout=60, check=True)
                 code = process.wait(timeout=120)
                 cpu_seconds = windows_process_cpu_seconds(process)
             finally:

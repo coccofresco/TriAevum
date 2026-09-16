@@ -1,5 +1,10 @@
 # AOT hotspot diagnosis - 2026-09-16
 
+**Follow-up:** [caller-cost analysis](TRIAEVUM_AOT_CALLER_COST_ANALYSIS.md)
+adds three real stack profiles and instruction-level evidence. Its priorities
+supersede the initial helper-only ranking below; do not choose pilots from block
+entry frequency or infer a memory-stall cause from rejected experiments.
+
 ## Scope and result
 
 Goal: reduce the CPU cost of each independent native update, including original
