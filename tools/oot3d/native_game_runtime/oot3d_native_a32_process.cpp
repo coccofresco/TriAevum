@@ -1,4 +1,5 @@
 #include "oot3d_native_a32_process.h"
+#include "oot3d_cpu_phase_probe.h"
 
 #include "oot3d_native_compiled_functions.h"
 
@@ -529,6 +530,7 @@ NativeA32ProcessRunResult NativeA32Process::ApplyHostResult(
 
 NativeA32ProcessRunResult NativeA32Process::Run(
     uint32_t blockLimitPerDispatch, uint32_t maxHostTransitions) {
+    CpuPhaseProbe::Scope cpuRun(CpuPhaseProbe::Phase::GuestScheduler);
     if (mTimingEnabled) {
         ++mTimingStats.ProcessRunCalls;
     }
@@ -556,6 +558,7 @@ NativeA32ProcessRunResult NativeA32Process::Run(
         const auto dispatchStart = mTimingEnabled
                                        ? TimingClock::now()
                                        : TimingClock::time_point{};
+        CpuPhaseProbe::Scope cpuDispatch(CpuPhaseProbe::Phase::Aot);
         const auto exit =
 #if defined(OOT3D_WHOLE_AOT_PRODUCT_MODE)
             DispatchWholeAotProduct(
@@ -573,6 +576,7 @@ NativeA32ProcessRunResult NativeA32Process::Run(
             mNativeFunctionPcs.data(), mNativeFunctionPcs.size(),
             mNativeBlockCallback, mNativeBlockUser);
 #endif
+        cpuDispatch.Stop();
         if (mTimingEnabled) {
             ++mTimingStats.DispatchCalls;
             mTimingStats.DispatchNanoseconds +=
@@ -605,8 +609,10 @@ NativeA32ProcessRunResult NativeA32Process::Run(
             const auto svcStart = mTimingEnabled
                                       ? TimingClock::now()
                                       : TimingClock::time_point{};
+            CpuPhaseProbe::Scope cpuSvc(CpuPhaseProbe::Phase::Svc);
             auto hostResult =
                 mHostServices.HandleSvc(exit.detail, state, mMemory, context);
+            cpuSvc.Stop();
             if (mTimingEnabled) {
                 ++mTimingStats.SvcCalls;
                 const uint64_t nanoseconds = ElapsedNanoseconds(svcStart);

@@ -1,5 +1,6 @@
 #include "oot3d_native_a32_window.h"
 #include "oot3d_prebackend_budget.h"
+#include "oot3d_cpu_phase_probe.h"
 #include "fast/renderer/frame_time_distribution.h"
 #include "fast/renderer/slow_frame_samples.h"
 #include "fast/renderer3ds/pica_program_preparation.h"
@@ -124,6 +125,7 @@
 #endif
 
 namespace {
+namespace CpuProbe = Oot3dNativeGame::CpuPhaseProbe;
 
 #if defined(__SWITCH__)
 size_t gSwitchBlockHookCount = 0U;
@@ -4723,6 +4725,12 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
       ? std::make_unique<Fast::Renderer::FrameTimeDistribution>() : nullptr;
   bool benchmarkMeasurementStarted =
       hostArgs.BenchmarkWarmupFrames == 0U;
+  const char* cpuProbeEnvironment = std::getenv("TRIAEVUM_PROFILE_CPU_LEDGER");
+  const bool cpuProbeRequested = CpuProbe::BuildEnabled && cpuProbeEnvironment &&
+      std::string_view(cpuProbeEnvironment) == "1";
+  CpuProbe::Totals benchmarkCpuPhases{};
+  if (cpuProbeRequested && benchmarkMeasurementStarted)
+    CpuProbe::Thread.StartAt(CpuProbe::Read());
 
 #if defined(__SWITCH__)
   WriteSwitchBootStage("runtime_loop");
@@ -4872,6 +4880,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     Oot3dNativeGame::NativeA32InputFrame inputFrame;
     phaseTiming.InputPollSeconds += SecondsSince(inputPhaseStart);
     const auto rendererFrameStart = std::chrono::steady_clock::now();
+    CpuProbe::Scope cpuRendererStart(CpuProbe::Phase::RendererStart);
     api.UpdateFramebufferParameters(0, width, height, 1, false, true, true,
                                     true);
     api.StartFrame();
@@ -4895,6 +4904,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     api.SetViewport(0, 0, static_cast<int>(width), static_cast<int>(height));
     api.SetScissor(0, 0, static_cast<int>(width), static_cast<int>(height));
     phaseTiming.RendererFrameStartSeconds += SecondsSince(rendererFrameStart);
+    cpuRendererStart.Stop();
     phaseTiming.FrameStartSeconds += SecondsSince(phaseStart);
     const uint32_t guestRefreshIterations =
         std::max<uint32_t>(1U, guestRefreshesDue);
@@ -5244,10 +5254,12 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
              ++audioFrame) {
           const size_t frameSampleOffset = audioSamples.size();
           const auto dspMixStart = std::chrono::steady_clock::now();
+          CpuProbe::Scope cpuDsp(CpuProbe::Phase::Dsp);
           if (!dspHle.ProcessFrame(process.Memory(), audioSamples, &error)) {
             throw std::runtime_error("native DSP HLE mix failed: " + error);
           }
           phaseTiming.DspMixSeconds += SecondsSince(dspMixStart);
+          cpuDsp.Stop();
           pcmContinuityDiagnostics.ObserveFrame(
               dspFramesMixed, std::span<const int16_t>(audioSamples)
                                   .subspan(frameSampleOffset));
@@ -5280,6 +5292,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
         if (!launch.DisableAudio && audioPlayer != nullptr &&
             audioPlayer->IsInitialized() && !audioSamples.empty()) {
           const auto audioOutputStart = std::chrono::steady_clock::now();
+          CpuProbe::Scope cpuAudio(CpuProbe::Phase::AudioOutput);
           const int32_t bufferedBefore = audioPlayer->Buffered();
           audioPlayer->Play(
               reinterpret_cast<const uint8_t *>(audioSamples.data()),
@@ -5296,6 +5309,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
         ++vblankCount;
       }
       if (presentHostFrame) {
+        CpuProbe::Scope cpuVisual(CpuProbe::Phase::VisualPresentation);
         const auto visualPresentationStart = std::chrono::steady_clock::now();
         const bool lcdForceBlack = hostServices.LcdForceBlack();
         const auto topFramebuffer = hostServices.TopFramebuffer();
@@ -5638,6 +5652,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
 
         phaseStart = std::chrono::steady_clock::now();
         const auto picaSubmitStart = phaseStart;
+        CpuProbe::Scope cpuQueue(CpuProbe::Phase::PicaQueue);
         size_t drainPassesThisRefresh = 0;
         bool refreshHadNativeDraws = false;
         while (drainPassesThisRefresh < kMaximumPicaDrainPassesPerRefresh) {
@@ -6131,6 +6146,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     }
 
     phaseStart = std::chrono::steady_clock::now();
+    CpuProbe::Scope cpuPresent(CpuProbe::Phase::Present);
     gui->EndDraw();
     MaybeWriteFramebufferScreenshot(
         hostArgs, api, width, height,
@@ -6138,12 +6154,15 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
         capturedTemporalSample ? &*capturedTemporalSample : nullptr);
     capturedTemporalSample.reset();
     const auto waitStart = std::chrono::steady_clock::now();
+    CpuProbe::Scope cpuPacing(CpuProbe::Phase::Pacing);
     realtimePacer.WaitForNextRefresh();
+    cpuPacing.Stop();
     phaseTiming.PacingWaitSeconds += SecondsSince(waitStart);
     window.EndFrame();
     picaSemanticTrace.RecordFrameBoundary(
         presentationFrameCount, frameCount, guestRefreshesDue != 0U);
     phaseTiming.PresentSeconds += SecondsSince(phaseStart);
+    cpuPresent.Stop();
     ++presentationFrameCount;
     ++runFrameCount;
 #if defined(__SWITCH__)
@@ -6181,6 +6200,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
       benchmarkMeasurementStart = completedFrameTime;
       benchmarkMeasurementEnd = completedFrameTime;
       benchmarkMeasurementStarted = true;
+      if (cpuProbeRequested) CpuProbe::Thread.StartAt(CpuProbe::Read());
     } else if (benchmarkMeasurementStarted &&
                runFrameCount > hostArgs.BenchmarkWarmupFrames) {
       const auto currentPhases = phaseTiming.Values();
@@ -6214,6 +6234,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
       }
       benchmarkMeasurementEnd = completedFrameTime;
       ++benchmarkMeasuredFrames;
+      if (cpuProbeRequested) benchmarkCpuPhases = CpuProbe::Thread.Snapshot();
     }
     if (quickLoadRequested) {
       if (loadState(quickStatePath)) {
@@ -6234,6 +6255,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     }
     ApplyWindowDemoFrameLimit(hostArgs, window, runFrameCount);
   }
+  CpuProbe::Thread.Active = false;
 
 #if defined(__SWITCH__)
   WriteSwitchBootStage(
@@ -6741,6 +6763,25 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                std::min<uint64_t>(runFrameCount,
                                   hostArgs.BenchmarkWarmupFrames)},
               {"measured_frames", benchmarkMeasuredFrames},
+              {"thread_cpu_ledger", [&]() -> nlohmann::json {
+                nlohmann::json phases = nlohmann::json::object();
+                double windowCpu = 0.0;
+                for (size_t i = 0; i < benchmarkCpuPhases.size(); ++i) {
+                  const auto& p = benchmarkCpuPhases[i];
+                  windowCpu += p.User + p.Kernel;
+                  phases[CpuProbe::Names[i]] = {
+                      {"wall_seconds", p.Wall}, {"thread_cycles", p.Cycles},
+                      {"intervals", p.Intervals}};
+                }
+                return {{"requested", cpuProbeRequested},
+                    {"available_in_build", CpuProbe::BuildEnabled},
+                    {"clock", "GetThreadTimes_and_QueryThreadCycleTime"},
+                    {"read_failures", CpuProbe::Thread.ReadFailures},
+                    {"window_thread_cpu_seconds", windowCpu},
+                    {"scope", "exclusive_main_thread_same_post_warmup_window"},
+                    {"warning", "quantized_CPU_valid_only_for_whole_window; off_CPU_includes_preemption_not_just_waits; phase_cycles_are_not_seconds"},
+                    {"phases", std::move(phases)}};
+              }()},
               {"pre_backend_cpu", [&]() -> nlohmann::json {
                 const auto& p=benchmarkPhaseSeconds;
                 const Oot3dNativeGame::PreBackendBudget b{

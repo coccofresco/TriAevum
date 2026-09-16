@@ -1,4 +1,5 @@
 #include "oot3d_native_a32_ctr_host.h"
+#include "oot3d_cpu_phase_probe.h"
 
 #if !defined(OOT3D_CTR_HOST_SERVICE_PICA_ONLY)
 #include "oot3d_native_pica_frontend.h"
@@ -2508,6 +2509,7 @@ NativeA32HostResult NativeA32CtrHostServices::HandleSvc(
                         }
 #endif
                         if (submitted) {
+                            CpuPhaseProbe::Scope cpuFrontend(CpuPhaseProbe::Phase::PicaFrontend);
                             const auto submitStart =
                                 mConfig.ProfileRuntime
                                     ? RuntimeProfileClock::now()

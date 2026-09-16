@@ -1,6 +1,10 @@
 # Real F1 widgets, with a private instrumented ImGui and no window or ROM.
 add_executable(triaevum_prebackend_budget_tests EXCLUDE_FROM_ALL prebackend_budget_tests.cpp)
 target_compile_features(triaevum_prebackend_budget_tests PRIVATE cxx_std_20)
+add_executable(triaevum_cpu_phase_probe_tests EXCLUDE_FROM_ALL
+    ../../oot3d/native_game_runtime/oot3d_cpu_phase_probe_tests.cpp)
+target_compile_features(triaevum_cpu_phase_probe_tests PRIVATE cxx_std_20)
+target_compile_definitions(triaevum_cpu_phase_probe_tests PRIVATE TRIAEVUM_ENABLE_CPU_PHASE_PROBE=1)
 
 FetchContent_GetProperties(ImGui SOURCE_DIR _f1_imgui_source)
 add_executable(triaevum_f1_settings_smoke EXCLUDE_FROM_ALL

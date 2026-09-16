@@ -1,4 +1,5 @@
 #include "oot3d_native_pica_vulkan_plan.h"
+#include "oot3d_cpu_phase_probe.h"
 
 #include <array>
 #include <cstring>
@@ -572,6 +573,7 @@ bool BuildOot3dPicaVulkanDrawPlanAndConsumeResources(
     Oot3dPicaDrawSubmission& submission,
     Oot3dPicaVulkanDrawPlan& plan, std::string* error,
     Oot3dPicaVulkanShaderSourceCache* shaderCache) {
+    CpuPhaseProbe::Scope cpuPlan(CpuPhaseProbe::Phase::PicaPlan);
     return BuildOot3dPicaVulkanDrawPlanImpl<true>(
         submission, plan, error, shaderCache);
 }

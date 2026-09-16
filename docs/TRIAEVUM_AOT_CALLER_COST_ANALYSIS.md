@@ -1,5 +1,11 @@
 # AOT caller-cost analysis
 
+**Later decision:** the implementation recommendations below are not approval to
+extend the unsuccessful small-region pilot. See
+[the measured pre-NRI 20% decision](TRIAEVUM_PRE_NRI_20_PERCENT_DECISION.md).
+The new budget investigation found no sufficiently demonstrated 20% candidate;
+no AOT optimization was promoted.
+
 Date: 2026-09-16. Starting revision: `5207181`.
 Scope: identify the next AOT optimizations, not implement another speculative
 emitter change. No game/runtime/renderer/module was rebuilt or replaced.

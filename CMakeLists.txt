@@ -3408,6 +3408,17 @@ if (OOT3D_WHOLE_AOT_PRODUCT_MODE)
             "/OPT:NOICF")
     endif()
 endif()
+option(TRIAEVUM_ENABLE_CPU_PHASE_PROBE
+    "Developer-only Windows main-thread CPU/wall accounting (not clean performance timing)" OFF)
+if(TRIAEVUM_ENABLE_CPU_PHASE_PROBE)
+    foreach(_cpu_probe_target IN ITEMS oot3d_native_a32_process
+            oot3d_native_a32_ctr_host oot3d_native_pica_submission
+            oot3d_native_pica_vulkan_plan oot3d_native_game)
+        target_compile_definitions(${_cpu_probe_target} PRIVATE TRIAEVUM_ENABLE_CPU_PHASE_PROBE=1)
+    endforeach()
+    unset(_cpu_probe_target)
+endif()
+
 set(_oot3d_vulkan_hosts
     triaevum_oot3d_module_host
     oot3d_native_fast3d_demo

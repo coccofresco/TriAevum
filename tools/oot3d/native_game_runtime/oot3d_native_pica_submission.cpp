@@ -1,4 +1,5 @@
 #include "oot3d_native_pica_submission.h"
+#include "oot3d_cpu_phase_probe.h"
 
 #include <algorithm>
 #include <chrono>
@@ -498,7 +499,9 @@ bool Oot3dNativePicaSubmissionQueue::CaptureTextureResources(
 
 bool Oot3dNativePicaSubmissionQueue::SubmitDrawPacket(
     const Oot3dPicaDrawPacket& packet, std::string* error) {
+    CpuPhaseProbe::Scope cpuLock(CpuPhaseProbe::Phase::QueueLock);
     std::lock_guard guard(mQueueMutex);
+    cpuLock.Stop();
     const auto totalStart =
         mRuntimeProfilingEnabled ? RuntimeProfileClock::now()
                                  : RuntimeProfileClock::time_point{};
@@ -529,19 +532,23 @@ bool Oot3dNativePicaSubmissionQueue::SubmitDrawPacket(
             RuntimeProfileElapsedNanoseconds(phaseStart);
         phaseStart = RuntimeProfileClock::now();
     }
+    CpuPhaseProbe::Scope cpuVertex(CpuPhaseProbe::Phase::VertexCapture);
     if (!CaptureIndexAndVertexResources(submission, error)) {
         mPendingDraws.pop_back();
         return false;
     }
+    cpuVertex.Stop();
     if (mRuntimeProfilingEnabled) {
         mRuntimeProfile.VertexCaptureNanoseconds +=
             RuntimeProfileElapsedNanoseconds(phaseStart);
         phaseStart = RuntimeProfileClock::now();
     }
+    CpuPhaseProbe::Scope cpuTexture(CpuPhaseProbe::Phase::TextureCapture);
     if (!CaptureTextureResources(submission, error)) {
         mPendingDraws.pop_back();
         return false;
     }
+    cpuTexture.Stop();
     if (mRuntimeProfilingEnabled) {
         mRuntimeProfile.TextureCaptureNanoseconds +=
             RuntimeProfileElapsedNanoseconds(phaseStart);
