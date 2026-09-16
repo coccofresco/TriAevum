@@ -1,4 +1,7 @@
 # Real F1 widgets, with a private instrumented ImGui and no window or ROM.
+add_executable(triaevum_prebackend_budget_tests EXCLUDE_FROM_ALL prebackend_budget_tests.cpp)
+target_compile_features(triaevum_prebackend_budget_tests PRIVATE cxx_std_20)
+
 FetchContent_GetProperties(ImGui SOURCE_DIR _f1_imgui_source)
 add_executable(triaevum_f1_settings_smoke EXCLUDE_FROM_ALL
     f1_settings_panel_smoke.cpp

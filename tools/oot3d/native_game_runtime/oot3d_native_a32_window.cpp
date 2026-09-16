@@ -1,4 +1,5 @@
 #include "oot3d_native_a32_window.h"
+#include "oot3d_prebackend_budget.h"
 #include "fast/renderer/frame_time_distribution.h"
 #include "fast/renderer/slow_frame_samples.h"
 #include "fast/renderer3ds/pica_program_preparation.h"
@@ -531,6 +532,8 @@ double SecondsSince(std::chrono::steady_clock::time_point start) {
 
 struct NativeFramePhaseTiming {
   double GuestSeconds = 0.0;
+  double GuestInsidePicaSubmitSeconds = 0.0;
+  double GuestClockSeconds = 0.0;
   double FrameStartSeconds = 0.0;
   double HostFrameStartSeconds = 0.0;
   double InputPollSeconds = 0.0;
@@ -4706,6 +4709,13 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
   auto benchmarkMeasurementStart = std::chrono::steady_clock::now();
   auto benchmarkMeasurementEnd = benchmarkMeasurementStart;
   uint64_t benchmarkMeasuredFrames = 0U;
+  std::array<double, 15> benchmarkPhaseSeconds{};
+  double benchmarkNestedGuestSeconds = 0.0;
+  double benchmarkGuestClockSeconds = 0.0;
+  double benchmarkUnattributedSeconds = 0.0;
+  Fast::Renderer::FrameTimeDistribution preBackendTimes;
+  Fast::Renderer::FrameTimeDistribution preBackendEnvelopeTimes;
+  uint64_t invalidPreBackendIntervals = 0;
   Fast::Renderer::SlowFrameSamples<15> slowFrames;
   const char* pacingTrace = std::getenv("TRIAEVUM_PACING_TRACE");
   const bool measurePacing = pacingTrace && std::string_view(pacingTrace) == "1";
@@ -4721,6 +4731,8 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
          processResult.Kind !=
              Oot3dNativeGame::NativeA32ProcessRunKind::Terminated) {
     const auto phaseBeforeFrame = phaseTiming.Values();
+    const double nestedGuestBeforeFrame = phaseTiming.GuestInsidePicaSubmitSeconds;
+    const double guestClockBeforeFrame = phaseTiming.GuestClockSeconds;
     widescreenProjection.CurrentHostFrame =
         static_cast<uint32_t>(presentationFrameCount);
     WindowDemoFrameTiming frameTiming;
@@ -5195,9 +5207,13 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
         refreshTickRemainder += kCtrArm11TicksPerSecond;
         nextVblankTick += refreshTickRemainder / kGuestDisplayRefreshRate;
         refreshTickRemainder %= kGuestDisplayRefreshRate;
+        const auto clockStart = std::chrono::steady_clock::now();
         const auto clockResolution = AdvanceGuestClockTo(
             process, hostServices, processResult, nextVblankTick,
             launch.WholeAotBlockBudget);
+        const double clockSeconds = SecondsSince(clockStart);
+        phaseTiming.GuestClockSeconds += clockSeconds;
+        phaseTiming.GuestSeconds += clockSeconds;
         if (clockResolution.OvershootTicks != 0U) {
           ++lateVblankDeadlineCount;
           maximumVblankDeadlineOvershootTicks =
@@ -6046,7 +6062,9 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
           phaseStart = std::chrono::steady_clock::now();
           processResult =
               RunUntilGuestWait(process, launch.WholeAotBlockBudget);
-          phaseTiming.GuestSeconds += SecondsSince(phaseStart);
+          const double resumedGuestSeconds = SecondsSince(phaseStart);
+          phaseTiming.GuestSeconds += resumedGuestSeconds;
+          phaseTiming.GuestInsidePicaSubmitSeconds += resumedGuestSeconds;
           RequireRunnableGuest(processResult);
         }
         if (drainPassesThisRefresh == kMaximumPicaDrainPassesPerRefresh &&
@@ -6165,6 +6183,25 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
       benchmarkMeasurementStarted = true;
     } else if (benchmarkMeasurementStarted &&
                runFrameCount > hostArgs.BenchmarkWarmupFrames) {
+      const auto currentPhases = phaseTiming.Values();
+      std::array<double, 15> delta{};
+      for (size_t i=0; i<delta.size(); ++i) {
+        delta[i]=currentPhases[i]-phaseBeforeFrame[i];
+        benchmarkPhaseSeconds[i]+=delta[i];
+      }
+      const double nestedGuest=phaseTiming.GuestInsidePicaSubmitSeconds-nestedGuestBeforeFrame;
+      benchmarkNestedGuestSeconds+=nestedGuest;
+      benchmarkGuestClockSeconds+=phaseTiming.GuestClockSeconds-guestClockBeforeFrame;
+      const Oot3dNativeGame::PreBackendBudget budget{
+        delta[0],delta[7],nestedGuest,delta[8],delta[2],delta[3],delta[5],delta[6]};
+      if(budget.Valid()) preBackendTimes.RecordMilliseconds(budget.Total()*1000.0);
+      else ++invalidPreBackendIntervals;
+      // Present includes pacing. Visual presentation includes backend/replay.
+      // Remove each inclusive scope once; keep unclassified host/UI work visible.
+      const double envelope=std::chrono::duration<double>(completedFrameTime-benchmarkMeasurementEnd).count()
+          -delta[4]-delta[11]-delta[13];
+      preBackendEnvelopeTimes.RecordMilliseconds(envelope*1000.0);
+      benchmarkUnattributedSeconds+=envelope-budget.Total();
       if (benchmarkFrameTimes) {
         auto phases = phaseTiming.Values();
         for (size_t i = 0; i < phases.size(); ++i)
@@ -6704,6 +6741,26 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                std::min<uint64_t>(runFrameCount,
                                   hostArgs.BenchmarkWarmupFrames)},
               {"measured_frames", benchmarkMeasuredFrames},
+              {"pre_backend_cpu", [&]() -> nlohmann::json {
+                const auto& p=benchmarkPhaseSeconds;
+                const Oot3dNativeGame::PreBackendBudget b{
+                  p[0],p[7],benchmarkNestedGuestSeconds,p[8],p[2],p[3],p[5],p[6]};
+                return {{"scope","guest_including_gsp_pica_plus_plan_capture_host_audio_before_nri_execute"},
+                  {"samples",preBackendTimes.Count()}, {"invalid_intervals",invalidPreBackendIntervals},
+                  {"guest_seconds",b.Guest}, {"plan_seconds",b.Plan},
+                  {"guest_clock_included_seconds",benchmarkGuestClockSeconds},
+                  {"queue_capture_seconds",b.QueueAndCapture()},
+                  {"nested_guest_subtracted_seconds",b.GuestInsideSubmission},
+                  {"host_seconds",b.Host}, {"input_seconds",b.Input},
+                  {"dsp_seconds",b.Dsp}, {"audio_output_seconds",b.AudioOutput},
+                  {"total_seconds",b.Total()},
+                  {"mean_ms",preBackendTimes.MeanMs()},
+                  {"host_envelope_mean_ms",preBackendEnvelopeTimes.MeanMs()},
+                  {"host_envelope_p95_upper_ms",preBackendEnvelopeTimes.Count()?nlohmann::json(*preBackendEnvelopeTimes.QuantileUpperMs(.95)):nlohmann::json(nullptr)},
+                  {"unattributed_host_ui_seconds",benchmarkUnattributedSeconds},
+                  {"p95_upper_ms",preBackendTimes.Count()?nlohmann::json(*preBackendTimes.QuantileUpperMs(.95)):nlohmann::json(nullptr)},
+                  {"maximum_ms",preBackendTimes.MaximumMs()}};
+              }()},
               {"frame_times", [&]() -> nlohmann::json {
                  if (!benchmarkFrameTimes || !benchmarkFrameTimes->Count()) return nullptr;
                  const auto& times = *benchmarkFrameTimes;
