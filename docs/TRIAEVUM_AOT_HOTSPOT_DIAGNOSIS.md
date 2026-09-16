@@ -313,7 +313,86 @@ envelope in this fixture. The sampled categories identify where to attack that
 gap; they do not prove it can all be removed. The PICA preparation costs from
 `TRIAEVUM_NON_RENDERER_200FPS_ASSESSMENT.md` remain additional, separate work.
 
-## Initial Investigation Verification
+## Call-Free Region Pilot (2026-09-16)
+
+The emitter now accepts repeatable `--callback-free-region 0xENTRY` options.
+Default output remains unchanged. The pilot selects `0x004A022C` and
+`0x004A0338`, not a title-specific replacement implementation.
+
+For a closed call-free CFG, a wrapper tests the sorted callback-PC interval once
+per invocation/resume. When no callback can apply, the identical translated
+instructions execute with `Oot3dAotConsumeBlock`, without repeated hook lookup,
+architectural flush/reload or an `EnterBlock` call. Any possible hook, including
+full tracing, selects the original body. Calls, SVC and external CFG edges are
+rejected. Budget counters remain updated per block; this pilot does NOT defer
+observable state or bypass checked memory, writes, faults, flags or stack stores.
+
+Validation tools:
+
+- `tools/oot3d/native_a32_runtime/test_whole_aot_cpp.py`: 36 tests, including
+  opt-in isolation, cache identity, unknown entries and rejected observable edges.
+  Full `test_whole_aot*.py` discovery: 60 tests passed.
+- `run_region_probe.py` / `region_probe.cpp`: 624 compiled differential cases
+  against the original body. Covers budgets 0..12, loop/return/invalid entry,
+  memory faults, write fingerprints, no/full/sparse hooks, register/flag-mutating
+  callbacks and first-block suppression. These are synthetic correctness tests,
+  not in-game performance evidence.
+- Generated pilot changes only shards 243/244 relative to the frozen original
+  12,439-function source set (affinity placement, 256 shards). Headers and all
+  other source hashes match. Reused 255 objects, compiled 2 in 9.10 seconds;
+  ThinLTO linking is separate from that timing.
+- `build_aot_header_experiment.py --object-cache ... --max-new-objects 2`
+  prevents an accidental full compilation when iterating this emitter-only pilot.
+
+Private artifacts: `C:/Users/xander/triaevum-aot-region-probe/`.
+The installed title module is not replaced. The in-game pilot does not establish
+a gain and is NOT enabled in the normal build.
+
+Reproduction (developer-only): generate from the frozen `aot_program.json`,
+matching code/selection, with `--shards 256 --shard-strategy affinity
+--callback-free-region 0x004A022C --callback-free-region 0x004A0338`.
+Use the same runtime headers and compiler as the baseline, then compare with
+`measure_prebackend.py --baseline-plugin <control> --comparison-plugin <pilot>
+--runs 8 --frames 900`. Do not compare against the other lab's CMP-fused module:
+this pilot uses the original source set. The original archive
+`1110f696...` and pilot archive `4f9206f9...` share exactly 255 object identities.
+
+Eight real-game ABBA runs completed: 900 updates each, 180 warmup and 720
+measured, same checkpoint, no interpolation/limiter/vsync/capture/profiler.
+All final memory fingerprints: `15598764887955759453`.
+Paired candidate/control ratios, pairing (A0,B1), (A3,B2), (A4,B5), (A7,B6):
+
+| Metric | Pair ratios | Median ratio |
+| --- | --- | --- |
+| Process CPU, including startup | 1.0614 / 0.9877 / 1.0188 / 1.0113 | 1.0151 |
+| Guest measured time | 1.0330 / 0.9609 / 1.0152 / 1.0052 | 1.0102 |
+| Pre-backend envelope | 1.0327 / 0.9649 / 1.0174 / 1.0104 | 1.0139 |
+| Pre-backend p95 upper bound | 1.0341 / 0.9775 / 1.0233 / 1.0000 | 1.0116 |
+
+No demonstrated benefit: the median is slightly worse, with pair-to-pair noise.
+These measurements do not establish a statistically precise regression size.
+Pilot DLL: 86,876,672 bytes (+16,896), SHA-256
+`255868fb2a71524c41e002eb52c266271641d01b2e52f76a0507ae7447661924`.
+Raw runs: private `abba/measurements.json` and per-run `runtime.json`.
+
+This rejects hoisting callback membership alone as a retained optimization for
+this cohort. It does not test direct host memory windows, elimination of repeated
+guest-address translation, or local register ownership across a complete loop.
+Those would be separate changes, not benefits to attribute to this pilot.
+
+A separate intrusive 4,200-update run confirms the fast bodies really execute:
+44 RIP observations in `004A0338_Unobserved`, 25 in `004A022C_Unobserved`.
+No observations in their observed bodies (not proof of zero executions).
+Final fingerprint `14624622702799942933` matches the earlier 4,200-update control.
+Among 2,478 observations inside the DLL, 668 land in read helpers, 143 in write
+helpers, 343 in block-entry helpers and 382 in scalar floating-point helpers.
+These are sampled locations, not exclusive timings. Do not use this diagnostic
+run's FPS as performance evidence. The unchanged broad profile and unsuccessful
+ABBA pilot argue against expanding callback-only specialization to all functions.
+Next region work must address repeated memory translation and/or architectural
+register reloads together, with exact fault, write, callback and budget contracts.
+
+## Initial Profiling Checks
 
 - Four unit tests cover link-map image-base handling, folded aliases, invalid
   maps and helper classification; all pass.

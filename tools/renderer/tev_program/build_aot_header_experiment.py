@@ -12,6 +12,7 @@ import sys
 TOOLS = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(TOOLS))
 from triaevum_release.whole_aot_object_cache import NativeToolchain, build_generated_cpp_archive
+from triaevum_release import whole_aot_object_cache as cache
 
 
 def main():
@@ -19,13 +20,37 @@ def main():
     for name in ("generated", "output", "compiler", "archiver", "support", "include"):
         p.add_argument("--" + name, type=Path, required=True)
     p.add_argument("--jobs", type=int, default=2)
+    p.add_argument("--object-cache", type=Path)
+    p.add_argument("--max-new-objects", type=int)
     args = p.parse_args()
     repo = TOOLS.parent
     args.output.mkdir(parents=True, exist_ok=True)
+    cache_root = args.object_cache or args.output / "objects"
+    toolchain = NativeToolchain(compiler=args.compiler, archiver=args.archiver)
+    if args.max_new_objects is not None:
+        # Preflight uses the same identities as the builder. Refuse accidental
+        # full rebuilds when measuring a small emitter-only experiment.
+        sysroot = cache.compiler_sysroot(toolchain.compiler, toolchain.sysroot)
+        tool_id, checked_toolchain = cache._toolchain_identity(toolchain, sysroot)
+        dep_id, _ = cache._dependency_identity(cache.default_dependency_files(
+            repo, args.generated, args.include))
+        arguments = cache._compile_arguments(checked_toolchain, args.generated,
+                                             repo, args.include, sysroot)
+        _, sources = cache._load_generated_sources(args.generated)
+        missing = []
+        for source in sources:
+            key = cache.source_object_key(source.sha256, dep_id, tool_id, arguments)
+            path = cache_root / "objects" / key[:2] / f"{key}.obj"
+            if not path.is_file() or not path.with_suffix(".json").is_file():
+                missing.append(source.name)
+        print(json.dumps({"new_object_count": len(missing),
+                          "first_new_objects": missing[:10]}), flush=True)
+        if len(missing) > args.max_new_objects:
+            raise RuntimeError(f"Refusing {len(missing)} new objects; limit {args.max_new_objects}")
     archive = build_generated_cpp_archive(
         generated_directory=args.generated, repo_root=repo,
-        nlohmann_include=args.include, cache_root=args.output / "objects",
-        toolchain=NativeToolchain(compiler=args.compiler, archiver=args.archiver),
+        nlohmann_include=args.include, cache_root=cache_root,
+        toolchain=toolchain,
         jobs=args.jobs)
     print(json.dumps(archive), flush=True)
     (args.output / "archive.json").write_text(json.dumps(archive, indent=2))

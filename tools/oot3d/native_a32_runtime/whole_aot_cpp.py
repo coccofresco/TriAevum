@@ -1841,8 +1841,11 @@ def _render_function(
     function: Function,
     function_symbols: dict[int, str],
     external_entries: frozenset[int],
+    *,
+    callback_free: bool = False,
+    symbol_suffix: str = "",
 ) -> list[str]:
-    symbol = _symbol(function.name, function.entry)
+    symbol = _symbol(function.name, function.entry) + symbol_suffix
     block_pcs = {block.pc for block in function.blocks}
     optimization = analyze_function(function)
     instruction_optimization = {
@@ -1906,9 +1909,13 @@ def _render_function(
     for block in function.blocks:
         lines.append(f"block_{block.pc:08X}:")
         lines.append("    {")
+        enter = (
+            "Oot3dAotConsumeBlock(context)" if callback_free else
+            f"Oot3dAotEnterBlock(context, frame, state, 0x{block.pc:08X}U, commitState, reloadState)"
+        )
         lines.extend(
             [
-                f"        if (!Oot3dAotEnterBlock(context, frame, state, 0x{block.pc:08X}U, commitState, reloadState)) {{",
+                f"        if (!{enter}) {{",
                 f"            return Oot3dAotBlockLimit(context, 0x{block.pc:08X}U);",
                 "        }",
             ]
@@ -1965,6 +1972,53 @@ def _render_function(
     return lines
 
 
+def _render_region_function(
+    function: Function,
+    symbols: dict[int, str],
+    external_entries: frozenset[int],
+    region_entries: frozenset[int],
+) -> list[str]:
+    if function.entry not in region_entries:
+        return _render_function(function, symbols, external_entries)
+    pcs = {block.pc for block in function.blocks}
+    # No guest call may change the callback configuration inside this region.
+    if function.direct_calls or not function.blocks or any(
+        edge.get("kind") not in {"return", "branch", "fallthrough"}
+        or (edge.get("kind") != "return" and int(edge.get("target", -1)) not in pcs)
+        for block in function.blocks for edge in block.successors
+    ) or any(
+        (item.raw & 0x0F000000) == 0x0F000000  # SVC
+        or (item.raw & 0x0F000000) == 0x0B000000  # BL
+        or (item.raw & 0x0FFFFFF0) == 0x012FFF30  # BLX register
+        for block in function.blocks for item in block.instructions
+    ):
+        raise LoweringError(f"region 0x{function.entry:08X} is not a closed call-free CFG")
+    symbol = _symbol(function.name, function.entry)
+    lines = _render_function(function, symbols, external_entries,
+                             symbol_suffix="_Observed")
+    lines += _render_function(function, symbols, external_entries,
+                              callback_free=True, symbol_suffix="_Unobserved")
+    # A conservative address interval is sufficient: false positives use the
+    # unchanged path. Full tracing (an empty hook list) always uses that path.
+    begin = min(pcs)
+    end = max(item.pc for block in function.blocks for item in block.instructions)
+    lines += [
+        f"Oot3dWholeAotFlow Execute_{symbol}(",
+        "    Oot3dWholeAotFrame& frame, Oot3dWholeAotContext& context,",
+        "    Oot3dAotArchitecturalState& state, uint32_t entryPc) {",
+        "    bool observed = context.BlockEntry != nullptr;",
+        "    if (observed && context.BlockEntryPcCount != 0U) {",
+        "        const auto end = context.BlockEntryPcs + context.BlockEntryPcCount;",
+        f"        const auto hook = std::lower_bound(context.BlockEntryPcs, end, 0x{begin:08X}U);",
+        f"        observed = hook != end && *hook <= 0x{end:08X}U;",
+        "    }",
+        f"    return observed ? Execute_{symbol}_Observed(frame, context, state, entryPc)",
+        f"                    : Execute_{symbol}_Unobserved(frame, context, state, entryPc);",
+        "}", "",
+    ]
+    return lines
+
+
 def _render_header() -> str:
     return """#pragma once
 
@@ -1998,7 +2052,8 @@ bool ExecuteOot3dWholeAotFunction(
 
 
 def _render_source(
-    functions: tuple[Function, ...], external_entries: frozenset[int]
+    functions: tuple[Function, ...], external_entries: frozenset[int],
+    region_entries: frozenset[int] = frozenset(),
 ) -> str:
     functions_by_entry = {function.entry: function for function in functions}
     function_symbols = {
@@ -2034,7 +2089,7 @@ def _render_source(
     lines.append("")
     for function in functions:
         lines.extend(
-            _render_function(function, function_symbols, external_entries)
+            _render_region_function(function, function_symbols, external_entries, region_entries)
         )
     lines.extend(
         [
@@ -2216,6 +2271,7 @@ def _render_shard_source(
     all_symbols: dict[int, str],
     external_entries: frozenset[int],
     declarations: tuple[Function, ...],
+    region_entries: frozenset[int] = frozenset(),
 ) -> str:
     lines = [
         f'#include "{INTERNAL_HEADER_NAME}"',
@@ -2230,7 +2286,7 @@ def _render_shard_source(
     lines.extend(_render_function_declarations(declarations))
     lines.append("")
     for function in functions:
-        lines.extend(_render_function(function, all_symbols, external_entries))
+        lines.extend(_render_region_function(function, all_symbols, external_entries, region_entries))
     lines.extend(["} // namespace Oot3dNativeGame::GeneratedWholeAot", ""])
     return "\n".join(lines)
 
@@ -2747,6 +2803,7 @@ def generate(
     output: Path,
     shard_count: int = 1,
     shard_strategy: str = "stable",
+    region_entries: frozenset[int] = frozenset(),
 ) -> dict[str, object]:
     if shard_count <= 0:
         raise ValueError("whole-AOT shard count must be positive")
@@ -2776,6 +2833,7 @@ def generate(
             "generator_sha256": generator_sha256,
             "shard_count": shard_count,
             "shard_strategy": shard_strategy,
+            "callback_free_regions": sorted(region_entries),
         }
         files = cached.get("files", {})
         cached_shards = {
@@ -2795,12 +2853,14 @@ def generate(
         raise ValueError("code.bin does not match the structural AOT program")
     selection = json.loads(selection_bytes)
     functions, external_entries = _load_functions(program, selection, code)
+    if region_entries - {function.entry for function in functions}:
+        raise ValueError("callback-free regions must be selected function entries")
     header = _render_header().encode("utf-8")
     generated_files: dict[str, bytes] = {HEADER_NAME: header}
     shard_records: list[dict[str, object]] = []
     if shard_count == 1:
         generated_files[SOURCE_NAME] = _render_source(
-            functions, external_entries
+            functions, external_entries, region_entries
         ).encode("utf-8")
     else:
         function_symbols = {
@@ -2842,6 +2902,7 @@ def generate(
                 function_symbols,
                 external_entries,
                 declarations,
+                region_entries,
             ).encode("utf-8")
             shard_records.append(
                 {
@@ -2868,6 +2929,7 @@ def generate(
         "generator_sha256": generator_sha256,
         "shard_count": shard_count,
         "shard_strategy": shard_strategy,
+        "callback_free_regions": sorted(region_entries),
         "shards": shard_records,
         "functions": [
             {

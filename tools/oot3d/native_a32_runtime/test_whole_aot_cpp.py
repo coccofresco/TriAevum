@@ -23,6 +23,52 @@ def words(*values: int) -> bytes:
 
 
 class WholeAotCppTests(unittest.TestCase):
+    def test_callback_free_region_is_opt_in_and_cache_distinct(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            inputs = self.write_inputs(root, words(0xE2800002, 0xE12FFF1E))
+            output = root / "output"
+            generate(*inputs, output)
+            original = (output / SOURCE_NAME).read_bytes()
+            header = (output / HEADER_NAME).read_bytes()
+            manifest = generate(*inputs, output, region_entries=frozenset({0x1000}))
+            source = (output / SOURCE_NAME).read_text()
+            self.assertEqual(manifest["callback_free_regions"], [0x1000])
+            self.assertIn("_Unobserved", source)
+            self.assertIn("Oot3dAotConsumeBlock(context)", source)
+            self.assertIn("Oot3dAotEnterBlock(context", source)
+            self.assertIn("std::lower_bound", source)
+            self.assertEqual(header, (output / HEADER_NAME).read_bytes())
+            generate(*inputs, output)
+            self.assertEqual(original, (output / SOURCE_NAME).read_bytes())
+
+    def test_callback_free_region_rejects_unknown_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            inputs = self.write_inputs(root, words(0xE12FFF1E))
+            with self.assertRaisesRegex(ValueError, "selected function"):
+                generate(*inputs, root / "out", region_entries=frozenset({0x2000}))
+
+    def test_callback_free_region_rejects_external_and_observable_edges(self) -> None:
+        for edge in ({"kind": "branch", "target": 0x9000},
+                     {"kind": "indirect_call"}, {"kind": "resume"}):
+            with self.subTest(edge=edge), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                inputs = self.write_inputs(root, words(0xE12FFF1E))
+                program = json.loads(inputs[0].read_text())
+                program["blocks"][0]["successors"] = [edge]
+                inputs[0].write_text(json.dumps(program))
+                with self.assertRaisesRegex(LoweringError, "closed call-free"):
+                    generate(*inputs, root / "out", region_entries=frozenset({0x1000}))
+
+    def test_callback_free_region_rejects_observable_instructions(self) -> None:
+        for instruction in (0xEF000001, 0xEB000000, 0xE12FFF33):
+            with self.subTest(instruction=instruction), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                inputs = self.write_inputs(root, words(instruction, 0xE12FFF1E))
+                with self.assertRaisesRegex(LoweringError, "closed call-free"):
+                    generate(*inputs, root / "out", region_entries=frozenset({0x1000}))
+
     def write_inputs(
         self, root: Path, code: bytes, *, direct_calls: list[dict] | None = None
     ) -> tuple[Path, Path, Path]:
