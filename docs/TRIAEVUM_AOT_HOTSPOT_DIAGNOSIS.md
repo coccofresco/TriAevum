@@ -203,10 +203,100 @@ by present evidence than memory-region and callback-membership work.
 
 ## Execution order and acceptance
 
+### Subsequent evidence from the independent lab
+
+After the original diagnosis, the lab reported experiments 10 and 11 in its
+`docs/TRIAEVUM_AOT_OPTIMIZATION_RESULTS.md` (read-only evidence): a per-block read
+page cache increased code size by 27% and median process CPU by 3.4%; a 64 KiB
+open-addressed exact hook table increased median process CPU by 7.4%. Both were
+reverted there. Those specific implementations should not be repeated. The
+measurements reject those variants; they do not prove that memory latency is
+the root cause or that every possible region/filter representation is optimal.
+
+The next isolated experiment split `ReadFast` fault and diagnostic
+handling into non-inlined tail-call targets. It adds no state and does not change
+the page table, membership filtering, floating-point behavior or module ABI.
+The ordinary 32-bit load probe compiles without a stack frame or nonvolatile
+register saves, unlike the previous helper. 2,376 comparisons against checked
+reads cover 8/16/32/64-bit loads, mapped/read-only/partial/unmapped pages,
+unaligned and crossing accesses, wraparound, tracing on/off, fault addresses,
+unchanged destination on failure, null destination, and unchanged write state.
+This was a code-generation/correctness result, not a speedup. The production
+header was restored after the in-game result below.
+
+Build/reproduction tool: `build_aot_header_experiment.py` next to the benchmark
+runner. It builds an existing generated source set against this repository's
+headers in a private cache. `measure_prebackend.py --comparison-plugin ...
+--baseline-plugin ... --runs 8` selects A-B-B-A order and records process CPU
+time including startup as an additional metric. No runtime profiling or
+instruction-pointer sampling is permitted in this comparison mode.
+
+The chosen generated source set includes the lab's earlier consumed-compare
+fusion. Its matched existing control is plugin `330145eb...`, SHA256
+`30c1ae5c28526ef6e7821242bfa01ee428cd02768114845ba25a4ce8756fde79`;
+using only the older shipped module would confound the two changes.
+
+### Cold-read split: completed, not retained
+
+Private evidence: `C:/Users/xander/triaevum-aot-cold-read/`.
+The candidate header is preserved as `candidate-memory.h`, the compiled module
+and map in `plugin/`, and eight runs in `abba/`. These are developer experiments,
+not user installation or release inputs. The working game module was never
+replaced.
+
+- All eight runs completed 900 native updates with the same final memory
+  fingerprint `15598764887955759453`; 720 updates/run were timed after warmup.
+- No interpolation, VSync, limiter, runtime profiling or RIP sampling.
+- Shared warmed private shader cache; separately copied writable save/configs.
+- Candidate size 87,911,936 bytes versus matched control 86,794,240 (+1.29%).
+- 257 C++ units compiled in 374.6 seconds at two workers, followed by ThinLTO.
+  A smaller probe is not a substitute for this full-module game verification.
+
+Candidate/control ratios below use adjacent pairs with reversed execution order
+in every second pair. Lower is better. The CPU metric includes startup; guest
+and pre-backend metrics use only the post-warmup window.
+
+| Pair (control, candidate) | Process CPU | Guest time | Pre-backend envelope |
+| --- | ---: | ---: | ---: |
+| 0, 1 | 1.2834 | 1.3080 | 1.3144 |
+| 3, 2 | 1.0207 | 1.0323 | 1.0362 |
+| 4, 5 | 0.9345 | 0.9484 | 0.9527 |
+| 7, 6 | 0.9925 | 0.9560 | 0.9664 |
+| Median | **1.0066** | **0.9941** | **1.0013** |
+
+The host load visibly changed after the first run: even control throughput fell
+from 92.3 to approximately 70 FPS. Do not cherry-pick the last pair's apparent
+gain or the first pair's loss. This batch does not establish an improvement.
+Decision: **do not promote; restore the original ReadFast implementation**.
+Keep correctness tests and the reproducible comparison tools. In particular,
+do not label the ordinary helper's simpler assembly as a game-level speedup.
+
+### Updated direction
+
+The helper-level variants have not recovered the roughly 2.7 ms/update required
+by the quiet control's 5 ms pre-backend target. The next experiment must remove
+repeated work across a substantial region, not just rearrange the same scalar
+accesses or introduce another cache at each access. Two distinct candidates
+remain, neither is implemented or performance-qualified by this tranche:
+
+- A bounded hot-loop kernel using resolved spans once per invocation, with an
+  exact fallback for insufficient block budget, interior callbacks, tracing,
+  aliasing, faults and unexpected mappings. Begin with a small cohort rather
+  than the rejected global 82,000-site page-cache rewrite. Final architectural
+  state and observable guest-stack writes must also match, not just output data.
+- A host-owned direct guest-memory mapping with a versioned module contract,
+  eliminating the translation walk itself. This is a coordinated memory/ABI
+  change, not the already-rejected per-access flat-window check. Protection,
+  remapping, savestates and host/PICA access must remain coherent on all targets.
+
+Do not restart the rejected all-site page cache, 64 KiB hook table, force-inline
+or cold-read split without genuinely new evidence. The hot-loop and mapping
+proposals require their own measured pilots; a 200-update/s result is not proven.
+
 1. Pilot guarded memory-region lowering on a small hot cohort; compare exact
    state, memory, faults, callbacks and budget exits with the existing module.
-2. Independently replace hash-plus-search hook membership with an exact reusable
-   structure, retaining generic fallback for unusual hook ranges.
+2. If the bounded region pilot cannot recover meaningful time, evaluate the
+   host-owned mapping contract before another all-site helper rewrite.
 3. Measure VFP fast-path eligibility before expanding it. Integrate work from the
    parallel AOT agent rather than duplicate its experiments.
 4. Only then combine retained improvements; inspect real assembly and repeat the
@@ -223,7 +313,7 @@ envelope in this fixture. The sampled categories identify where to attack that
 gap; they do not prove it can all be removed. The PICA preparation costs from
 `TRIAEVUM_NON_RENDERER_200FPS_ASSESSMENT.md` remain additional, separate work.
 
-## Verification of investigation tools
+## Initial Investigation Verification
 
 - Four unit tests cover link-map image-base handling, folded aliases, invalid
   maps and helper classification; all pass.

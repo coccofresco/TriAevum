@@ -9,6 +9,21 @@ import sys
 import time
 
 
+def windows_process_cpu_seconds(process):
+    if sys.platform != "win32":
+        return None
+    import ctypes
+    from ctypes import wintypes
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    fn = kernel.GetProcessTimes
+    fn.argtypes = [wintypes.HANDLE, *([ctypes.POINTER(wintypes.FILETIME)] * 4)]
+    fn.restype = wintypes.BOOL
+    times = [wintypes.FILETIME() for _ in range(4)]
+    if not fn(int(process._handle), *(ctypes.byref(t) for t in times)):
+        raise ctypes.WinError(ctypes.get_last_error())
+    return sum((t.dwHighDateTime << 32) | t.dwLowDateTime for t in times[2:]) / 1e7
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--invocation", type=Path, required=True)
@@ -19,11 +34,15 @@ def main():
     parser.add_argument("--allow-legacy", action="store_true", help="Control run without the new phase accounting")
     parser.add_argument("--profile-runtime", action="store_true", help="Diagnostic attribution run, not a clean performance comparison")
     parser.add_argument("--diagnostic-plugin", type=Path, help="Symbol-bearing diagnostic module; not a performance baseline")
+    parser.add_argument("--comparison-plugin", type=Path, help="Unsampled baseline/candidate ABBA runs, sharing a private cache")
+    parser.add_argument("--baseline-plugin", type=Path, help="Explicit control module for matched-source comparisons")
     parser.add_argument("--sample-map", type=Path, help="Link map belonging exactly to diagnostic-plugin")
     parser.add_argument("--sample-delay", type=float, default=10, help="Seconds before diagnostic sampling")
     args = parser.parse_args()
     if args.sample_map and (not args.diagnostic_plugin or not 0 <= args.sample_delay <= 60):
         parser.error("Sampling requires --diagnostic-plugin and a delay between 0 and 60 seconds")
+    if args.comparison_plugin and (args.diagnostic_plugin or args.sample_map or args.profile_runtime):
+        parser.error("A/B timing must not be combined with diagnostics")
     original = json.loads(args.invocation.read_text(encoding="utf-8"))
     if not isinstance(original, list):
         original = [str(args.executable), *original["arguments"]]
@@ -33,13 +52,16 @@ def main():
         root = args.output / str(run)
         root.mkdir(exist_ok=False)
         command = [str(args.executable)]
+        selected_plugin = args.diagnostic_plugin or (
+            args.comparison_plugin if args.comparison_plugin and run % 4 in (1, 2)
+            else args.baseline_plugin)
         skip_values = {"--frames", "--max-seconds", "--output", "--renderer-cache-directory",
                        "--screenshot", "--screenshot-start-frame", "--screenshot-interval"}
         i = 1
         while i < len(original):
             key = original[i]
-            if key == "--title-plugin" and args.diagnostic_plugin:
-                command.extend((key, str(args.diagnostic_plugin)))
+            if key == "--title-plugin" and selected_plugin:
+                command.extend((key, str(selected_plugin)))
                 i += 2
                 continue
             if key in skip_values:
@@ -81,6 +103,7 @@ def main():
                                     "--module", str(args.diagnostic_plugin), "--map", str(args.sample_map)],
                                    timeout=40, check=True)
                 code = process.wait(timeout=120)
+                cpu_seconds = windows_process_cpu_seconds(process)
             finally:
                 if process.poll() is None:
                     process.kill()
@@ -98,6 +121,8 @@ def main():
                 or data["run_frames"] != args.frames or (budget and budget["samples"] != window["measured_frames"])):
             raise RuntimeError(f"Invalid timing conditions: {root}")
         results.append({"run": run, "benchmark": window,
+                        "title_plugin": command[command.index("--title-plugin") + 1],
+                        "process_cpu_seconds_including_startup": cpu_seconds,
                         "diagnostic_plugin": str(args.diagnostic_plugin) if args.diagnostic_plugin else None,
                         "intrusive_native_sampling": args.sample_map is not None,
                         "memory_fingerprint": data["memory_content_fingerprint"]})
