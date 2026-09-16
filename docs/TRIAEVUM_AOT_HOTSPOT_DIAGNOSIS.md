@@ -1,0 +1,235 @@
+# AOT hotspot diagnosis - 2026-09-16
+
+## Scope and result
+
+Goal: reduce the CPU cost of each independent native update, including original
+graphics/GSP/PICA preparation and excluding NRI/Vulkan execution. 200 updates/s
+means a 5 ms budget, not counting interpolated frames or accelerating gameplay.
+
+This investigation identifies concrete costs INSIDE the compiled AOT module.
+It does not claim an implemented speedup. No title logic, renderer, audio,
+callbacks, guest timing or published module was changed. The independent AOT
+worktree and external decompilation were read only.
+
+The strongest candidates are memory-access helpers, per-block callback routing,
+and scalar floating-point helpers. Merely increasing compiler optimization,
+inlining everything, or changing indirect dispatch is not the indicated fix.
+
+## Evidence and reproducibility
+
+Added `tools/renderer/tev_program/sample_aot_windows.py`, a bounded user-mode
+x64 instruction-pointer sampler. It briefly suspends only threads belonging to
+the explicitly selected process, always resumes them in a finally block, and
+chooses the thread with the largest cycle increase since the previous poll.
+It does not require the WPR profiling privilege, which was unavailable.
+
+IMPORTANT measurement limits:
+
+- This is intrusive instruction-pointer observation, NOT ETW/PMU exclusive CPU
+  timing. The percentages below are shares of samples **inside the DLL**, not
+  shares of total frame time or attainable speedups.
+- Thread selection, scheduler timing and polling can bias observations. Two
+  matching stationary runs are useful evidence, not coverage of the whole game.
+- Shared helpers can be folded by the linker. An EnterBlock symbol containing
+  a particular function name does NOT attribute that cost to that function.
+- Translated-body samples include any inlined memory/float work. Helper costs
+  are therefore not a complete classification of all memory/float activity.
+- The symbol-bearing DLL is diagnostic, not a replacement performance baseline.
+  A link map must belong to precisely the module supplied to the sampler.
+
+Fixture: adult-Link field checkpoint used by the existing AOT benchmark,
+neutral input, native 30 Hz simulation delta, throughput mode, no interpolation,
+no VSync, no limiter, no screenshots. Each steady run: 4,200 updates, first 180
+excluded from timing, sampler delayed 10 seconds and active for 25 seconds.
+Both warm runs report zero SPIR-V compilations. No shader preparation is used
+to explain their AOT samples.
+
+Private artifacts, not release payloads:
+
+| Evidence | Location |
+| --- | --- |
+| Initial cold diagnostic | `I:/TriAevum-public/aot-native-sampling-20260916/0/` |
+| Two steady diagnostic runs | `I:/TriAevum-public/aot-native-steady-20260916/{0,1}/` |
+| Unmodified DLL control | `I:/TriAevum-public/aot-native-baseline-check-20260916/0/` |
+| Symbol DLL and map | `I:/TriAevum-aot-lab-debug/plugin/` |
+| Original invocation | `I:/TriAevum-aot-lab-runs/host-ab2/0-shipped/command.json` |
+
+Symbol DLL SHA256:
+`2e91d80b432354886fd89145c18ef4118d6c655066c26d973786e3ca78c7a38c`
+
+Link map SHA256:
+`f9dc158e1d0b29713de291a5bfc30698114a8afa0fa4a6c5edec29573523e453`
+
+Both 4,200-update diagnostic runs and the control end with memory fingerprint
+`14624622702799942933`. This checks consistency of this workload, not complete
+semantic equivalence. All runs finished normally and were closed.
+
+The control reports 104.94 whole-loop FPS and 7.73 ms/update of pre-backend host
+envelope (7.50 ms accounted). These are different scopes: 104.94 includes the
+renderer; 7.73 ms is about 129 updates/s capacity before it. Do not compare the
+earlier loaded-machine 40 FPS runs against this as an optimization result.
+
+To repeat, use a NEW output directory; the benchmark copies writable configs
+and save data. Reuse/warm its private shader cache before interpreting steady
+samples. Do not use a sampled run as a clean A/B timing result.
+
+```powershell
+python tools/renderer/tev_program/measure_prebackend.py `
+  --invocation I:/TriAevum-aot-lab-runs/host-ab2/0-shipped/command.json `
+  --executable I:/TriAevum-public/ui-dependencies/bin/TriAevum.exe `
+  --output I:/TriAevum-public/aot-investigation-new `
+  --runs 2 --frames 4200 `
+  --diagnostic-plugin I:/TriAevum-aot-lab-debug/plugin/triaevum_title_aot.dll `
+  --sample-map I:/TriAevum-aot-lab-debug/plugin/title.map
+```
+
+## Ranked observations
+
+5,468 and 5,467 total observations; respectively 2,618 and 2,581 inside AOT.
+5,467 observations in each run were on the dominant execution thread; the
+remaining single observation in the first run was another thread.
+
+| Category inside AOT | Run A samples/share | Run B samples/share |
+| --- | ---: | ---: |
+| ReadFast helpers | 712 / 27.20% | 675 / 26.15% |
+| WriteFast helpers | 141 / 5.39% | 141 / 5.46% |
+| EnterBlock routing/accounting | 380 / 14.51% | 357 / 13.83% |
+| Scalar float helpers | 426 / 16.27% | 404 / 15.65% |
+| Whole-AOT dispatch helpers | 63 / 2.41% | 84 / 3.25% |
+| Translated bodies, including inlined helpers | 885 / 33.80% | 909 / 35.22% |
+| Other/unresolved | 11 / 0.42% | 11 / 0.43% |
+
+### 1. Repeated scalar guest memory access
+
+Owner: `tools/oot3d/native_game_runtime/oot3d_native_a32_memory.h`,
+`ReadFast<T>` / `WriteFast<T>`; generated loads/stores in
+`tools/oot3d/native_a32_runtime/whole_aot_cpp.py`.
+
+The native disassembly of `ReadFast<uint32_t>` (diagnostic RVA `0xA1A0`)
+contains a real function prologue/epilogue, page-boundary check, two dependent
+page-table loads, null checks, scalar load, result-pointer store and diagnostic
+flag test. The caller then loads the result and checks success. This sequence
+repeats for adjacent elements and guest stack accesses. The most sampled
+instructions include the scalar result store and function boundary; this does
+NOT prove DRAM latency is the cause.
+
+The old entry-frequency profile reports about 523,426 guest memory instructions
+per update. That explains why modest per-access machinery can dominate. It is
+a separate earlier profile, not an instruction count derived from RIP samples.
+
+Best targeted experiment: guarded span/page reuse for proven contiguous loads
+and stores in closed regions, starting with a few measured hot loops. Resolve
+the mapping once, then perform exact scalar operations through that span.
+Keep the slow path for crossing pages, permission/fault cases, tracing, unknown
+aliasing or remapping. Preserve partial-write/fault order and write-generation
+semantics; invalidate cached pointers at observable calls that can change maps.
+
+Do NOT repeat global force-inline or the single flat-heap window experiment:
+the parallel lab already measured those as neutral/worse in-game. Fewer repeated
+translations per region is distinct from merely making each translation inline.
+
+Useful pilot loop entries are `0x004A022C` and `0x004A0338`: fixed-length 160-
+element loops with many indexed reads, writes and guest-stack temporaries.
+Read-only decomp evidence is in
+`I:/oot3decomp/src/runtime/owner_runtime/z_owner_runtime_accel_long_tail_14.c`.
+Its generic semantic labels do not establish a gameplay owner or justify blindly
+substituting those C bodies. The emitted ARM semantics remain the differential
+oracle. Mesh command and transform routines are additional pilot candidates.
+
+### 2. Callback membership work at every basic block
+
+Owner: `oot3d_native_whole_aot_runtime.h`, `Oot3dAotEnterBlock`,
+`Oot3dAotShouldNotifyBlock`, `Oot3dAotBlockEntryFilter`.
+Emitter: `_render_function` in `whole_aot_cpp.py`.
+
+The existing filter is a 4,096-bit hash bitmap followed by exact binary search.
+Every basic block decrements budget, increments consumed count, checks callback
+state, hashes the PC and sometimes searches the hook list. The translated body
+contains an out-of-line call for this even for very small blocks.
+
+The shared EnterBlock implementation has diagnostic RVA `0x6F90`. In its exact
+search range `0x700C..0x705C`, the two steady runs captured 122 and 105 samples:
+roughly a third of this helper's samples. This proves search executes in the hot
+path; it does NOT yet quantify how many searches are hash false positives.
+
+Best targeted experiment: exact sparse instruction-PC membership pages, or
+region-specialized hook tests, to avoid hashing plus binary search for every
+block. Keep title addresses in the adapter. Preserve dynamically requested
+hooks, first-block suppression, all-block tracing, callback state flush/reload,
+and exact block-limit resume behavior. Do NOT disable hooks, profiling contracts
+or budgets to manufacture a speedup.
+
+This differs from the lab's already-unhelpful EnterBlock force-inline experiment:
+the objective is less membership work, not the same work duplicated everywhere.
+
+### 3. Software floating-point rounding on common arithmetic
+
+Owners: `oot3d_native_a32_vfp_ops.cpp` and pinned
+`upstream/recomp/a32_vfp_scalar.cpp`: `F32Add`, `F32Mul`, `RoundFinite`,
+multiply-accumulate and conversion helpers.
+
+RoundFinite alone has 193 and 184 observations. Together the float helpers
+account for approximately 16% of DLL observations. Guest floating-point is
+being implemented through substantial integer/rounding machinery, not just a
+native host add/multiply.
+
+The independent lab's guarded hardware path (`2c3a755`, documented at `f788150`)
+was bit/exception tested but did not demonstrate a statistically convincing
+game speedup. Therefore do not promise its microbenchmark gain in this scene.
+First measure per-operation eligibility/rejection and actual FPSCR modes;
+then expand only the frequently reached exact cases. Preserve denormals, NaNs,
+rounding modes, signed zero, accumulated exceptions and non-fused multiply-add.
+Neither fast-math nor deleting FPSCR behavior is acceptable.
+
+### 4. Shared architectural state and oversized translated regions
+
+`_render_function` currently promotes GPRs as references to `state.R[]`, not
+independent host values across the complete region. Generated callback and
+memory helper boundaries limit LLVM's ability to retain those values. Native
+disassembly of `0x004A0338` shows repeated shared-state loads/stores.
+
+The remaining body sample share is not all useful arithmetic, but this run
+cannot separately quantify state traffic. Inspect optimized IR and assembly for
+the selected memory-region pilots; promote live values within those regions and
+flush only at required observable exits. Do not restart an all-function register
+rewrite: the previous local-register microexperiment was not a game-level win.
+
+### Not the first priority: top-level dispatcher
+
+Only about 2-3% of the observed DLL positions are in named top-level dispatch
+helpers. Calls and transitions can also cost time elsewhere, so this is not an
+absolute upper bound. Still, a wholesale dispatcher rewrite is less supported
+by present evidence than memory-region and callback-membership work.
+
+## Execution order and acceptance
+
+1. Pilot guarded memory-region lowering on a small hot cohort; compare exact
+   state, memory, faults, callbacks and budget exits with the existing module.
+2. Independently replace hash-plus-search hook membership with an exact reusable
+   structure, retaining generic fallback for unusual hook ranges.
+3. Measure VFP fast-path eligibility before expanding it. Integrate work from the
+   parallel AOT agent rather than duplicate its experiments.
+4. Only then combine retained improvements; inspect real assembly and repeat the
+   same checkpoint plus another workload with different gameplay/graphics load.
+
+Each experiment needs unsampled alternating A/B runs on the same executable,
+cache, settings and machine conditions, reporting guest time, whole pre-backend
+time, p95, code size and final fingerprints. Reject gains that vanish outside a
+microbenchmark. Keep audio and original graphics active. Compile only the pilot
+shards/support first; a full AOT rebuild is justified only for retained changes.
+
+Current control leaves about 2.73 ms/update to remove to reach a 5 ms pre-backend
+envelope in this fixture. The sampled categories identify where to attack that
+gap; they do not prove it can all be removed. The PICA preparation costs from
+`TRIAEVUM_NON_RENDERER_200FPS_ASSESSMENT.md` remain additional, separate work.
+
+## Verification of investigation tools
+
+- Four unit tests cover link-map image-base handling, folded aliases, invalid
+  maps and helper classification; all pass.
+- Three diagnostic game runs completed without sampling API errors.
+- Two steady runs plus unmodified-module control matched final memory state.
+- Runtime binaries and AOT output were not rebuilt or changed for profiling.
+- Existing diagnostic results predate automatic hash/category fields added to
+  the sampler; the hashes and aggregated counts are recorded above. Raw RVAs,
+  symbols and counts remain in their `native-samples.json` files.
