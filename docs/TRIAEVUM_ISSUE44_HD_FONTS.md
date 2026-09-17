@@ -6,8 +6,9 @@ no runtime fix or issue closure claimed.
 ## Implementation Checkpoint: Coverage Import
 
 Implemented `tools/oot3d/decomp_support/scripts/qbf_font.py` and
-`prepare_qbf_font_pack.py`. This is a **developer preparation tool, not yet
-a rendered HD-font feature**. Forge and the runtime are intentionally unchanged
+`prepare_qbf_font_pack.py`. This is **coverage preparation, not yet
+a rendered HD-font feature**. Forge now invokes the same importer automatically
+from its already-verified TopScreen archive. The runtime remains unchanged
 until the native atlas consumer exists. The manifest explicitly records
 `runtime_enabled: false`; neither a successful import nor the tests close #44.
 
@@ -24,8 +25,9 @@ until the native atlas consumer exists. The manifest explicitly records
   records, 208 bitmap slots, 16x16 -> 64x64, density 4, zero metric differences**.
   Native SHA256 `b833f9ff04a3775056a8702eb5da06da4a9d4c51a6015c59a8fcce7ba134191d`;
   replacement SHA256 `7006cd33c5bac44acda1c09eba9a39fbfa44014e2ae9ffe11afeeb2f7fe45aa8`.
-- Windows verification: 10 new focused tests; complete focused Forge suite
-  **88 tests passed**. No HD runtime framebuffer or Linux runtime validation yet.
+- Windows verification: 10 focused parser/import tests plus Forge cache upgrade,
+  corruption, retry and offline reuse tests; complete focused Forge suite
+  **91 tests passed**. No HD runtime framebuffer or Linux runtime validation yet.
 
 Reproduce preparation from the repository root (local user inputs only):
 
@@ -46,8 +48,8 @@ Next: introduce an isolated title-owned glyph-atlas consumer with exact native
 blit provenance, independent logical/source extents, generation-aware lifecycle
 and a sized replacement publication path. Preserve the native layout execution;
 do not enlarge its cells or silently patch the fixed-size CTXB replacement API.
-Validate clears, partial updates, shadows and quickload before activating it in
-Forge. System fonts and other encodings remain explicitly outside this first
+Validate clears, partial updates, shadows and quickload before activating runtime
+consumption of the Forge-prepared fonts. System fonts and other encodings remain explicitly outside this first
 Latin-font import, not implicitly covered.
 
 ## Findings

@@ -1,4 +1,4 @@
-"""Developer-only preparation of HD coverage; not a runtime activation switch.
+"""Forge and developer preparation of HD coverage; not a runtime activation switch.
 
 Output is local, ROM/mod-derived user data, never a public release artifact.
 Reads only exact font entries; never extracts executable patches from the mod.

@@ -1,5 +1,6 @@
 import hashlib
 import io
+import json
 import struct
 import tempfile
 import unittest
@@ -25,10 +26,20 @@ class TopScreenAssetsTests(unittest.TestCase):
         self.recipe = {"inputs": {"romfs": {"sha256": "a" * 64}},
                        "optional_inputs": {"topscreen_2_1_1_archive": self.contract}}
 
+    def prepare(self):
+        return prepare_topscreen_assets(root=self.root, data_root=self.data,
+                                       recipe=self.recipe, romfs=self.root / "romfs.bin")
+
+    @staticmethod
+    def fake_font_pack(*, archive, romfs, output):
+        output.write_bytes(b"validated font fixture")
+        return {"fonts": [{"romfs_path": "message/eu/ltn16.qbf"}]}
+
     def test_local_import_then_verified_cache_without_archive_or_network(self):
         archive = self.root / "topscreen211.zip"
         archive.write_bytes(self.archive_bytes)
         with patch("topscreen_assets.build_texture_pack", return_value=b"O3TU fixture") as build, \
+                patch("topscreen_assets.prepare_font_pack", side_effect=self.fake_font_pack) as fonts, \
                 patch("verified_download.urllib.request.urlopen") as network:
             pack = prepare_topscreen_assets(root=self.root, data_root=self.data,
                                            recipe=self.recipe, romfs=self.root / "romfs.bin")
@@ -37,7 +48,51 @@ class TopScreenAssetsTests(unittest.TestCase):
             self.assertEqual(prepare_topscreen_assets(root=self.root, data_root=self.data,
                              recipe=self.recipe, romfs=self.root / "romfs.bin"), pack)
             self.assertEqual(build.call_count, 1)
+            self.assertEqual(fonts.call_count, 1)
             network.assert_not_called()
+
+    def test_old_texture_receipt_upgrades_only_fonts_using_cached_download(self):
+        cache = self.data / "downloads/topscreen211.zip"
+        cache.parent.mkdir(parents=True)
+        cache.write_bytes(self.archive_bytes)
+        with patch("topscreen_assets.build_texture_pack", return_value=b"O3TU fixture") as build, \
+                patch("topscreen_assets.prepare_font_pack", side_effect=self.fake_font_pack) as fonts, \
+                patch("verified_download.urllib.request.urlopen") as network:
+            pack = self.prepare()
+            old_receipt = (pack.parent / "import.json").read_bytes()
+            (pack.parent / "font_coverage.zip").unlink()
+            (pack.parent / "fonts_import.json").unlink()
+            self.assertEqual(self.prepare(), pack)
+            self.assertEqual(build.call_count, 1)
+            self.assertEqual(fonts.call_count, 2)
+            self.assertEqual((pack.parent / "import.json").read_bytes(), old_receipt)
+            network.assert_not_called()
+
+    def test_corrupt_font_and_new_import_version_are_reprepared(self):
+        (self.root / "topscreen211.zip").write_bytes(self.archive_bytes)
+        with patch("topscreen_assets.build_texture_pack", return_value=b"O3TU fixture") as build, \
+                patch("topscreen_assets.prepare_font_pack", side_effect=self.fake_font_pack) as fonts:
+            pack = self.prepare()
+            (pack.parent / "font_coverage.zip").write_bytes(b"corrupt")
+            self.prepare()
+            with patch("topscreen_assets.FONT_IMPORT_VERSION", 2):
+                self.prepare()
+            self.assertEqual(build.call_count, 1)
+            self.assertEqual(fonts.call_count, 3)
+            receipt = json.loads((pack.parent / "fonts_import.json").read_text())
+            self.assertEqual(receipt["source"]["font_import_version"], 2)
+            self.assertFalse(receipt["runtime_enabled"])
+
+    def test_font_failure_is_not_cached_as_success_and_can_be_retried(self):
+        (self.root / "topscreen211.zip").write_bytes(self.archive_bytes)
+        with patch("topscreen_assets.build_texture_pack", return_value=b"O3TU fixture") as build:
+            with patch("topscreen_assets.prepare_font_pack", side_effect=ValueError("invalid QBF")):
+                with self.assertRaisesRegex(ValueError, "invalid QBF"):
+                    self.prepare()
+            self.assertFalse(list(self.data.rglob("fonts_import.json")))
+            with patch("topscreen_assets.prepare_font_pack", side_effect=self.fake_font_pack):
+                self.prepare()
+            self.assertEqual(build.call_count, 1)
 
     def test_corrupt_local_archive_rejected_before_import(self):
         (self.root / "topscreen211.zip").write_bytes(b"bad")

@@ -1,4 +1,4 @@
-"""Install pinned TopScreen textures locally, never its executable patches."""
+"""Install pinned TopScreen textures and font coverage, never executable patches."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Callable
 
 from tools.oot3d.decomp_support.scripts.build_topscreen_texture_override_pack import build_texture_pack
+from tools.oot3d.decomp_support.scripts.prepare_qbf_font_pack import prepare_font_pack
 
 try:
     from .common import atomic_write_bytes, atomic_write_json, load_json_object, sha256_file
@@ -20,6 +21,7 @@ except ImportError:
 
 
 IMPORT_VERSION = 1
+FONT_IMPORT_VERSION = 1
 ARCHIVE_NAME = "topscreen211.zip"
 
 
@@ -56,18 +58,40 @@ def prepare_topscreen_assets(*, root: Path, data_root: Path, recipe: dict,
     key = hashlib.sha256(repr(sorted(identity.items())).encode("ascii")).hexdigest()
     directory = data_root / "mods" / "topscreen" / key
     pack = directory / "atlas_overrides.o3tu"
+    font_pack = directory / "font_coverage.zip"
+    font_receipt_path = directory / "fonts_import.json"
     receipt_path = directory / "import.json"
+    textures_valid = False
     if pack.is_file() and receipt_path.is_file():
         receipt = load_json_object(receipt_path)
-        if receipt.get("source") == identity and receipt.get("pack_sha256") == sha256_file(pack):
-            return pack
+        textures_valid = (receipt.get("source") == identity and
+                          receipt.get("pack_sha256") == sha256_file(pack))
+    font_identity = {**identity, "font_import_version": FONT_IMPORT_VERSION}
+    fonts_valid = False
+    if font_pack.is_file() and font_receipt_path.is_file():
+        receipt = load_json_object(font_receipt_path)
+        fonts_valid = (receipt.get("source") == font_identity and
+                       receipt.get("pack_sha256") == sha256_file(font_pack))
+    if textures_valid and fonts_valid:
+        return pack
 
     archive = acquire_archive(root, data_root, contract, report)
-    report("topscreen", "Importing native TopScreen UI textures...")
-    payload = build_texture_pack(archive=archive, original_romfs_image=romfs)
     directory.mkdir(parents=True, exist_ok=True)
-    atomic_write_bytes(pack, payload)
-    atomic_write_json(receipt_path, {"source": identity, "pack_sha256": sha256_file(pack),
-                                   "attribution": "TopScreen / Single Screen Experience by M-1",
-                                   "source_url": "https://gamebanana.com/mods/695893"})
+    if not textures_valid:
+        report("topscreen", "Importing native TopScreen UI textures...")
+        payload = build_texture_pack(archive=archive, original_romfs_image=romfs)
+        atomic_write_bytes(pack, payload)
+        atomic_write_json(receipt_path, {"source": identity, "pack_sha256": sha256_file(pack),
+                                       "attribution": "TopScreen / Single Screen Experience by M-1",
+                                       "source_url": "https://gamebanana.com/mods/695893"})
+    if not fonts_valid:
+        report("topscreen", "Preparing TopScreen font coverage...")
+        manifest = prepare_font_pack(archive=archive, romfs=romfs, output=font_pack)
+        atomic_write_json(font_receipt_path, {
+            "source": font_identity, "pack_sha256": sha256_file(font_pack),
+            "runtime_enabled": False,
+            "status": "prepared_only_pending_native_atlas_consumer",
+            "font_count": len(manifest["fonts"]),
+            "attribution": "TopScreen / Single Screen Experience by M-1 / rlgcarrot",
+            "source_url": "https://gamebanana.com/mods/695893"})
     return pack

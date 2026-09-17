@@ -9,6 +9,8 @@ replace the title adapter with the mod's executable patch.
 1. Select the supported decrypted `.3ds` or `.cci` ROM in Forge as before.
 2. Forge verifies the precompiled module and the original game data.
 3. Forge imports the official TopScreen 2.1.1 texture changes automatically.
+   It also prepares the archive's HD Latin font coverage for the ROM's region,
+   without a second download, selector or installation step.
 4. The launch profile receives the verified local pack and the game is ready.
 
 Only the ROM is requested through the normal UI. First installation needs
@@ -56,6 +58,31 @@ texture-incomplete replacement. Saves and valid user configurations are preserve
 Private outputs live in `data/mods/topscreen/<source-key>/`: `atlas_overrides.o3tu`
 and `import.json`. The latter records archive/RomFS identities, importer version,
 pack hash and attribution. Download temporaries are removed on failure.
+
+### HD font preparation
+
+The same directory also contains `font_coverage.zip` and `fonts_import.json`.
+The latter has an independent font-import version and pack hash. Existing
+texture receipts remain valid: reinstalling/preparing with the updated Forge
+adds missing fonts without rebuilding valid CTXB packs, reusing the verified
+download/local archive. If the archive was removed, it must be acquired again
+once to extract the previously unused fonts. Once both packs are valid, neither
+the archive nor network access is needed for cache reuse. Missing, modified or
+outdated font packs are regenerated; failed imports do not get a success receipt.
+
+This currently prepares `message/eu/ltn16.qbf` or `message/us/ltn16.qbf` from
+the archive's `4K Textures` RomFS subtree, preserving the native ROM's layout
+metrics. It does not import the whole 4K texture pack or apply executable patches.
+Font assets remain private installation data, never bundled release content.
+
+**Preparation is not activation:** `runtime_enabled: false` in the font manifest
+and receipt explicitly records the missing native HD-atlas consumer. Existing
+dialogue rendering is unchanged; see [issue 44 status](TRIAEVUM_ISSUE44_HD_FONTS.md).
+
+2026-09-17 source-path verification on Windows with the real EU RomFS and verified
+official archive: textures plus fonts prepared in 3.089 s; warm reuse 0.010 s.
+These timings exclude network download and ROM extraction. Focused Forge suite:
+91 tests passed. This check did not rebuild the distributed frozen Forge binary.
 
 ## Verification
 
