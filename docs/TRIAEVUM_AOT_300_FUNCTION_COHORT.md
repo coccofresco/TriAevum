@@ -5,6 +5,8 @@
 This is specialization of translated AOT groups, not replacement with semantic
 decompiled gameplay. No production executable, renderer or release was changed.
 
+Follow-up: [actual call-chain activation and its performance limit](TRIAEVUM_AOT_LIVE_COHORT_ACTIVATION.md).
+
 ## Scope and selection
 
 The existing three field stack profiles contain observed callers whose eligible

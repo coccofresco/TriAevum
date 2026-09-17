@@ -70,6 +70,12 @@ bool FamilyExecute(uint32_t pc,a32::GuestState& guest,NativeA32Memory& memory,
 }
 }
 extern "C" __declspec(dllexport) uint64_t triaevum_invocation_candidate_hits() noexcept { return familyHits; }
+extern "C" __declspec(dllexport) bool triaevum_family_eligible(
+    uint32_t pc,const a32::GuestState* state,bool hasCallback,
+    const uint32_t* pcs,size_t count) noexcept {
+    return state && FamilySupportsRoot(pc) && !FamilyObserved(pc,&state->r[14],1) &&
+        (!hasCallback || (count && !FamilyObserved(pc,pcs,count)));
+}
 extern "C" __declspec(dllexport) uint64_t triaevum_invocation_native_leaf_hits() noexcept { return acceptedInvocations; }
 extern "C" __declspec(dllexport) uint32_t triaevum_invocation_coverage_entry(uint32_t index) noexcept {
     return index<std::size(kFamilyEntries)?kFamilyEntries[index]:0;
