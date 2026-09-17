@@ -40,6 +40,8 @@ and the Quest materialized hook. Tests cover scales 0.6/0.8/1.0, consistent
 digit/clock displacement and the upper-position boundary.
 Live race-timer verification remains pending; a manually seeded timer did
 not become visible and is not evidence of a successful in-game fix.
+This earlier gap was subsequently covered by the user-created race checkpoint
+and replay documented below; the synthetic timer attempt remains invalid evidence.
 The added guest-memory fixture verifies the real counter/renderer indirection,
 two active digit quads out of three allocated quads, preserved Z, empty
 counters, absent bindings and rejection of invalid counts.
@@ -78,6 +80,10 @@ Quest hook failures.
 
 User reports black with effects bypassed and a light gradient with the advanced
 pipeline active, both here and during loading. The private checkpoint is saved.
+The user explicitly reconfirmed that the initial black loading screen with the
+Triforce exhibits the same #41 defect. Keep cold boot as a primary reproduction;
+the isolated Off/toon probes below do not invalidate that report or cover the
+full advanced pipeline.
 IMPORTANT: the initial automated A/B runs were INVALID: Preset=Authentic
 normalized the requested Toon mode back to Off. Their framebuffer SHA256 is
 identical (820B5E504ECDDBFD33B7FC714A8B8CA98702E449F0A5FE20DECF0CCAE114C4DA).
@@ -126,9 +132,24 @@ GPU test reports Vulkan error -13; the full GPU suite is therefore not green.
 
 Next verification boundaries: live Lon Lon race for #40; compare restored
 native target output against final scanout for #41. Neither issue is closed.
+The #40 live boundary was subsequently verified below; #41 remains unresolved.
 Final regression run after removing the classifier experiment: shader pipeline
 suite 40/40 passed; TopScreen profile, item, ocarina and mapped D-pad tests
 passed. The consolidated F1 widget smoke remains at 3896 passing assertions.
+
+## User race checkpoint verification (2026-09-17)
+
+The user started the actual Lon Lon Ranch obstacle race and saved it using F5.
+Private checkpoint: `C:/Users/xander/triaevum-issues-40-43/ranch-user/savedata/quick.oot3dsav`.
+Replay: `race-user-verification`, 150 frames, `native30_no_interpolation`,
+TopScreen HUD scale 0.8, current executable after commit `71a654e`.
+Framebuffer captures at frames 30 and 90 show the clock and timer reading
+00:01 and 00:03 above the six stamina carrots, with no overlap. Both digit and
+clock positioning stay stable while the timer advances. Diagnostics report
+450 Quest hook calls, 300 transformations and zero failures; process exit 0.
+This validates the #40 correction in the actual race at the user's HUD scale.
+Other scales retain unit coverage, not equivalent live race coverage. No
+timer injection, gameplay patch or scene-specific rendering exception was used.
 
 ## Private evidence (not distributed)
 
