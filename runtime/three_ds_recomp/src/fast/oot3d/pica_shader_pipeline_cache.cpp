@@ -246,6 +246,7 @@ PicaShaderPipelineResult BuildInstrumentedVariant(
             request.Draw.ColorWriteMask,
             request.Draw.CompositionDomain,
             request.Draw.DepthCompare,
+            request.Draw.PerspectiveProjection,
         },
         {
             effects.AmbientOcclusion == AmbientOcclusionMode::Cacao,

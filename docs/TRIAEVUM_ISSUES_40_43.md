@@ -151,6 +151,36 @@ This validates the #40 correction in the actual race at the user's HUD scale.
 Other scales retain unit coverage, not equivalent live race coverage. No
 timer injection, gameplay patch or scene-specific rendering exception was used.
 
+## Verified loading-background correction (2026-09-17)
+
+The earlier cold-boot comparison used PicaMaterial, not PostProcessPreview.
+Repeating it with PostProcessPreview reproduces the reported full-screen
+brown/gray gradient behind the loading triforce. Do not generalize the earlier
+negative result to all toon modes.
+
+The shared fragment instrumentation now receives the native projection class.
+An orthographic, destination-replacing color pass with depth test/write enabled,
+Always comparison and ordinary fragment operations is not a toon lighting
+surface. It retains the canonical fragment shader. This is deliberately narrower
+than the rejected Always-only exclusion; perspective draws remain eligible.
+The shader pipeline key already contains projection and depth comparison.
+
+Verification with the rebuilt executable:
+
+- Shader pipeline tests: 40/40 passed, including both toon modes, canonical
+  source/key preservation for canvas initialization and perspective eligibility.
+- Cold boot, frame 9: before the fix, 5,934 of 5,940 background samples are
+  nonblack; after the fix, all 5,940 are RGB 0/0/0, matching the Off reference.
+  The loading triforce remains visible. Sampling excludes its screen region.
+- Private evidence: `issue41-preview-boot` and `issue41-fixed-preview-boot`.
+- Sages checkpoint replay: `issue41-fixed-preview-sages`, 150 frames, exit 0.
+  The gray rectangle remains, as it does in the earlier Off replay. Issue #41
+  is therefore NOT fully resolved. Native initialization is not suppressed by
+  the TopScreen frontend backdrop rule. The remaining investigation must trace
+  native target/composition contributions independently of this toon fix.
+
+No color thresholds, scene IDs, texture names or black-pixel masking are used.
+
 ## Private evidence (not distributed)
 
 `C:/Users/xander/triaevum-issues-40-43/` contains bounded run arguments,

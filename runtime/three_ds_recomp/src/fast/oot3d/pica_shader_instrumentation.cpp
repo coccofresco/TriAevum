@@ -708,7 +708,14 @@ vec3 oot3d_normal_guide_surface(vec4 q, vec3 to_eye) {
     if (HasPicaShaderInstrumentationFeature(
             request.RequestedFeatures,
             PicaShaderInstrumentationFeature::Toon)) {
-        if (request.ToonStyle == nullptr) {
+        if (!request.Draw.PerspectiveProjection && replacesDestinationRgb &&
+            request.Draw.FragmentOperationMode == 0U &&
+            request.Draw.DepthTestEnabled && request.Draw.DepthWriteEnabled &&
+            request.Draw.DepthCompare == ::Oot3d::Renderer::PicaCompareFunction::Always) {
+            // Orthographic color/depth replacement initializes a raster canvas;
+            // its placeholder normal/view varyings are not a lighting surface.
+            result.ToonEligibility = PicaToonEligibility::NoDepth;
+        } else if (request.ToonStyle == nullptr) {
             result.ToonEligibility =
                 PicaToonEligibility::UnsupportedShader;
         } else {

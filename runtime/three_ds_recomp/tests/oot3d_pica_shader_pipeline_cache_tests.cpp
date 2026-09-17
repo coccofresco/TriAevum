@@ -784,6 +784,18 @@ void main() {
     request.Draw.DepthWriteEnabled = true;
     const auto& geometry = cache.Resolve(request, effects);
     EXPECT_EQ(geometry.ToonEligibility, PicaToonEligibility::Eligible);
+    request.Draw.DepthCompare = Oot3d::Renderer::PicaCompareFunction::Always;
+    request.Draw.PerspectiveProjection = false;
+    for (auto mode : {ToonMode::PostProcessPreview, ToonMode::PicaMaterial}) {
+        effects.Toon = mode;
+        const auto& initialization = cache.Resolve(request, effects);
+        EXPECT_EQ(initialization.ToonEligibility, PicaToonEligibility::NoDepth);
+        EXPECT_EQ(initialization.FragmentShaderSource, kFragmentShader);
+        EXPECT_EQ(initialization.FragmentShaderKey, request.FragmentShaderKey);
+        request.Draw.PerspectiveProjection = true;
+        EXPECT_EQ(cache.Resolve(request, effects).ToonEligibility, PicaToonEligibility::Eligible);
+        request.Draw.PerspectiveProjection = false;
+    }
 }
 
 TEST(Oot3dPicaShaderPipelineCache,
