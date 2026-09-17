@@ -25,6 +25,7 @@ def main():
                  'invocation', 'output'):
         p.add_argument('--' + name, type=Path, required=True)
     p.add_argument('--candidate', type=Path)
+    p.add_argument('--oracle', type=Path, help='Frozen fallback for closed-family control/candidate modules')
     p.add_argument('--entry', required=True, type=lambda s: int(s, 16))
     p.add_argument('--occurrence', type=int, default=64)
     args = p.parse_args()
@@ -58,13 +59,18 @@ def main():
     env.pop('TRIAEVUM_INVOCATION_CANDIDATE', None)
     if args.candidate:
         env['TRIAEVUM_INVOCATION_CANDIDATE'] = str(args.candidate.resolve())
+    env.pop('TRIAEVUM_FAMILY_ORACLE', None)
+    if args.oracle:
+        env['TRIAEVUM_FAMILY_ORACLE'] = str(args.oracle.resolve())
     files = [source, args.baseline, args.support, args.executable, args.invocation, dll,
              runtime / 'oot3d_native_a32_memory.h', runtime / 'triaevum_title_whole_aot_abi.h']
     if args.candidate:
         files.append(args.candidate)
+    if args.oracle:
+        files.append(args.oracle)
     metadata = {'diagnostic_only': True, 'a_a_control': not args.candidate,
                 'diagnostic_selection_env': {k: v for k, v in env.items()
-                    if k.startswith('TRIAEVUM_SKELETON_')},
+                    if k.startswith(('TRIAEVUM_SKELETON_', 'TRIAEVUM_FAMILY_'))},
                 'entry': f'{args.entry:08X}', 'occurrence': args.occurrence, 'build_seconds': build_seconds,
                 'build_commands': commands,
                 'sha256': {str(f): digest(f) for f in files}}

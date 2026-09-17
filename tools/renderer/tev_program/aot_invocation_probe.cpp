@@ -78,6 +78,9 @@ void Replay(a32::GuestState input, const Route& route) {
     auto hitCounter = candidateModule ? reinterpret_cast<HitCounter>(
         GetProcAddress(candidateModule, "triaevum_invocation_candidate_hits")) : nullptr;
     const auto hitsBefore = hitCounter ? hitCounter() : 0;
+    auto leafCounter = candidateModule ? reinterpret_cast<HitCounter>(
+        GetProcAddress(candidateModule,"triaevum_invocation_native_leaf_hits")) : nullptr;
+    const auto leavesBefore = leafCounter ? leafCounter() : 0;
     for (unsigned trial = 0; trial < 16; ++trial) {
         memory = *route.Memory; // Copy/reset and fingerprints are outside timing.
         auto state = input;
@@ -119,6 +122,7 @@ void Replay(a32::GuestState input, const Route& route) {
     const bool untouched = originalMemory == route.Memory->ContentFingerprint() &&
         originalGeneration == route.Memory->WriteGeneration();
     if (hitCounter) out << "candidate_fast_hits," << hitCounter() - hitsBefore << '\n';
+    if (leafCounter) out << "candidate_native_leaf_hits," << leafCounter() - leavesBefore << '\n';
     out << "summary," << allValid << ",original_memory_untouched," << untouched << '\n';
     out.flush();
     if (!untouched) throw std::runtime_error("Invocation probe changed live memory");

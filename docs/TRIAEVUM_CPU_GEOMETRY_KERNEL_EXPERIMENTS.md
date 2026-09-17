@@ -5,6 +5,9 @@ and baseline commit `18a0b56`. Developer-only Windows/x64 experiments, **not
 registered in the production runtime or release**. These title-derived algorithms
 are not title-neutral renderer code. External decomp was read only.
 
+Larger-family follow-up: `TRIAEVUM_AOT_CLOSED_FAMILY_EXPERIMENT.md` covers
+6- and 21-function groups and distinguishes their controlled results.
+
 ## Implementation
 
 `tools/oot3d/native_a32_runtime/oot3d_cpu_geometry_kernel_probe.cpp` contains
