@@ -734,7 +734,7 @@ TopScreenVerifiedItemQueryContracts() noexcept {
 std::array<bool, 4> BuildTopScreenItemCompatibilityOverrides(
     const TopScreenExtendedInputFrame &input, std::uint8_t itemISlotIdentity,
     std::uint8_t itemIISlotIdentity) noexcept {
-  if (input.RestorationLayout) {
+  if (input.RestorationLayout || input.GameplayDpadActionsOwned) {
     return {};
   }
   const bool itemI = input.DpadLeftHeld && itemISlotIdentity == 0x45U;
@@ -744,7 +744,7 @@ std::array<bool, 4> BuildTopScreenItemCompatibilityOverrides(
 
 bool HasTopScreenSlotItemOverrideInput(
     const TopScreenExtendedInputFrame &input) noexcept {
-  return !input.RestorationLayout &&
+  return !input.RestorationLayout && !input.GameplayDpadActionsOwned &&
          (input.DpadLeftHeld || input.DpadRightHeld);
 }
 
@@ -2136,6 +2136,65 @@ void ApplyTopScreenHudScale(
   }
 }
 
+bool RelocateTopScreenTimerQuad(std::array<TopScreenVec3, 4> &quad,
+                               float hudScale) noexcept {
+  float centerY = 0.0F;
+  for (const auto &vertex : quad)
+    centerY += vertex.Y * 0.25F;
+  if (centerY <= 205.0F)
+    return false;
+  const float offsetY = 18.0F + (hudScale - 0.6F) * 30.0F;
+  for (auto &vertex : quad) {
+    vertex.X -= 9.0F;
+    vertex.Y -= offsetY;
+  }
+  return true;
+}
+
+bool ApplyTopScreenTimerCounterLayout(NativeA32Memory &memory, float hudScale,
+                                     std::string *error) {
+  constexpr std::uint32_t kTimerCounterBinding = 0x004FC674U;
+  std::uint32_t counter = 0U, renderer = 0U, digits = 0U, count = 0U,
+                positions = 0U;
+  if (!memory.Read32(kTimerCounterBinding, &counter)) {
+    SetError(error, "cannot read TopScreen timer counter binding");
+    return false;
+  }
+  if (counter == 0U)
+    return true;
+  if (!memory.Read32(counter + 8U, &renderer) ||
+      !memory.Read32(counter + 4U, &digits)) {
+    SetError(error, "cannot read TopScreen timer counter");
+    return false;
+  }
+  if (renderer == 0U || digits == 0U)
+    return true;
+  if (!memory.Read32(renderer, &count) ||
+      !memory.Read32(renderer + 0x0CU, &positions) || count > 0xFFU) {
+    SetError(error, "invalid TopScreen timer geometry");
+    return false;
+  }
+  if (count == 0U)
+    return true;
+  std::vector<std::array<TopScreenVec3, 4>> quads(std::min(digits, count));
+  auto bytes = std::as_writable_bytes(std::span(quads));
+  if (positions == 0U || !memory.IsWritable(positions, bytes.size()) ||
+      !memory.ReadBytes(positions,
+          {reinterpret_cast<std::uint8_t *>(bytes.data()), bytes.size()})) {
+    SetError(error, "cannot read TopScreen timer positions");
+    return false;
+  }
+  bool changed = false;
+  for (auto &quad : quads)
+    changed |= RelocateTopScreenTimerQuad(quad, hudScale);
+  if (changed && !memory.WriteBytes(positions,
+          {reinterpret_cast<const std::uint8_t *>(bytes.data()), bytes.size()})) {
+    SetError(error, "cannot write TopScreen timer positions");
+    return false;
+  }
+  return true;
+}
+
 TopScreenQuestGeometryStats TransformTopScreenQuestGeometry(
     std::span<std::array<TopScreenVec3, 4>> quads,
     const TopScreenQuestGeometryContext &context) noexcept {
@@ -2156,6 +2215,11 @@ TopScreenQuestGeometryStats TransformTopScreenQuestGeometry(
 
   for (auto &quad : quads) {
     ++stats.QuadsVisited;
+    // The native Quest clock occupies quad 5; digits have their own renderer.
+    if (quads.size() > 5U && &quad == &quads[5]) {
+      stats.QuadsTranslated += RelocateTopScreenTimerQuad(quad, context.HudScale) ? 1U : 0U;
+      continue;
+    }
     float centerX = 0.0F;
     float centerY = 0.0F;
     for (const auto &vertex : quad) {

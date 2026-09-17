@@ -2023,6 +2023,35 @@ int main() {
           modelPositionXBits == oneShotPositionX,
       "TopScreen 1.2 Quest draw-model one-shot transform accumulated");
 
+  Require(seedQuestModelBuffer(questChildModelBuffer, questChildModelPositions,
+                               questChildModelTranslations),
+          "cannot rebuild native counter geometry");
+  questDrawProjection.QuestDrawModelAdjusted = false;
+  Require(ApplyTopScreenQuestDrawModelTransform(
+              questModelMemory, questDrawScene, restorationScaledConfig,
+              questDrawProjection, &questModelStats, &error) &&
+              questModelStats.DrawModelsTransformed == 1U &&
+              questModelMemory.Read32(questChildModelPositions,
+                                      &modelPositionXBits) &&
+              modelPositionXBits == oneShotPositionX,
+          "refreshed native counter lost its layout on the next update");
+
+  for (const float scale : {0.6F, 0.8F, 1.0F}) {
+    std::array<TopScreenVec3, 4> timer{{
+        {120, 210, 1}, {140, 210, 1}, {140, 230, 1}, {120, 230, 1}}};
+    auto digits = timer;
+    for (auto &v : digits) v.X += 30;
+    Require(RelocateTopScreenTimerQuad(timer, scale) &&
+                RelocateTopScreenTimerQuad(digits, scale) &&
+                timer[0].X == 111 && digits[0].X - timer[0].X == 30 &&
+                std::abs(timer[0].Y - (210 - 18 - (scale - 0.6F) * 30)) < 0.0001F &&
+                digits[0].Y == timer[0].Y && timer[0].Z == 1,
+            "timer clock/digits must move together using native scale formula");
+    for (auto &v : timer) v.Y = 205;
+    Require(!RelocateTopScreenTimerQuad(timer, scale) && timer[0].Y == 205,
+            "upper timer layout must remain untouched");
+  }
+
   bool ocarinaUiActive = false;
   Require(
       questModelMemory.Write32(0x005043E0U, questDrawScene) &&

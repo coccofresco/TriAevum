@@ -182,6 +182,9 @@ void Oot3dNativeUiLifecycleBridge::ObserveGameplayComposition() noexcept {
 bool Oot3dNativeUiLifecycleBridge::ApplyTopScreenGuestHook(uint32_t guestPc,
                                                            uint32_t guestR0) {
   if (guestPc == kTopScreenQuestSubmitModelsHook) {
+    // Native submit refreshes counter geometry before the next draw.
+    // TopScreen 2.1.1 resets its guard (005E3D1C) in update 005D4A8C.
+    mTopScreenPauseProjection.QuestDrawModelAdjusted = false;
     ++mStats.topscreen_quest_hook_calls;
     TopScreenQuestModelTransformStats stats;
     std::string error;
@@ -231,6 +234,10 @@ bool Oot3dNativeUiLifecycleBridge::ApplyTopScreenGuestHook(uint32_t guestPc,
   TopScreenQuestRenderBufferStats stats;
   if (!TransformTopScreenQuestRenderBuffer(mMemory, renderBuffer, context,
                                            &stats, &error)) {
+    ++mStats.topscreen_quest_hook_failures;
+    return true;
+  }
+  if (!ApplyTopScreenTimerCounterLayout(mMemory, context.HudScale, &error)) {
     ++mStats.topscreen_quest_hook_failures;
     return true;
   }

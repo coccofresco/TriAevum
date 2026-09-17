@@ -120,6 +120,9 @@ struct TopScreenExtendedInputFrame {
   bool XHeld = false;
   bool YHeld = false;
   bool RestorationLayout = false;
+  // The mapped consumer owns equipment changes; do not also synthesize
+  // held D-pad input as repeated native item-slot presses.
+  bool GameplayDpadActionsOwned = false;
   bool DpadLeftPressed = false;
   bool DpadRightPressed = false;
   bool DpadUpHeld = false;
@@ -448,6 +451,11 @@ struct TopScreenVec3 {
   float Y = 0.0F;
   float Z = 0.0F;
 };
+
+bool RelocateTopScreenTimerQuad(std::array<TopScreenVec3, 4> &quad,
+                               float hudScale) noexcept;
+bool ApplyTopScreenTimerCounterLayout(NativeA32Memory &memory, float hudScale,
+                                     std::string *error = nullptr);
 
 struct TopScreenQuestGeometryContext {
   std::uint32_t PauseState = 0;

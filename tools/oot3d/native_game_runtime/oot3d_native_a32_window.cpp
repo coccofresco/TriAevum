@@ -5021,6 +5021,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
         sampledTopScreenInput.YHeld =
             (topScreenButtons &
              topScreenButton(Oot3dNativeGame::NativeA32HidButton::Y)) != 0U;
+        sampledTopScreenInput.GameplayDpadActionsOwned = true;
         sampledTopScreenInput.RestorationLayout =
             activeTopScreenConfig.HudLayout ==
             Oot3dNativeGame::TopScreenHudLayout::Restoration;
@@ -7614,6 +7615,9 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                    {"backend_profile",
                     uiLifecycleBridge.Runtime().Profile().id},
                    {"matched_entries", bridge.matched_entries},
+                   {"topscreen_quest_hook_calls", bridge.topscreen_quest_hook_calls},
+                   {"topscreen_quest_transforms", bridge.topscreen_quest_transforms},
+                   {"topscreen_quest_hook_failures", bridge.topscreen_quest_hook_failures},
                    {"guest_routed_entries", bridge.guest_routed_entries},
                    {"host_routed_entries", bridge.host_routed_entries},
                    {"state_captures", bridge.state_captures},

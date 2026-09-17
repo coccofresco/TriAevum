@@ -343,6 +343,14 @@ int main() {
               bridge.Stats().topscreen_quest_hook_failures == 0U,
           "live TopScreen Quest hook did not transform native geometry");
 
+  bridge.TopScreenPauseProjection().QuestDrawModelAdjusted = true;
+  bridge.BeginHostFrame(30U);
+  Require(bridge.TopScreenPauseProjection().QuestDrawModelAdjusted,
+          "presentation must not reset native counter geometry guards");
+  Require(bridge.ApplyTopScreenGuestHook(kTopScreenQuestSubmitModelsHook) &&
+              !bridge.TopScreenPauseProjection().QuestDrawModelAdjusted,
+          "native counter refresh must rearm its draw transform");
+
   std::cout << "oot3d_native_ui_lifecycle_bridge_tests: ok\n";
   return 0;
 }

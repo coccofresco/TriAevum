@@ -160,6 +160,26 @@ void RunTopScreenItemDispatchTests() {
         Check(state.r[0] == (held ? 1U : 0U), "pressed state leaked into next tick");
     }
     input = {.DpadLeftHeld = true, .DpadRightHeld = true};
+    input.GameplayDpadActionsOwned = true;
+    TopScreenInputCadence equipmentClock;
+    for (unsigned tick = 0; tick < 120; ++tick) {
+        equipmentClock.ObserveGuest(input);
+        const auto sampled = equipmentClock.Advance();
+        Check(sampled.DpadLeftHeld && sampled.DpadRightHeld &&
+                  sampled.GameplayDpadActionsOwned,
+              "mapped equipment ownership lost across input cadence");
+        Check(BuildTopScreenItemCompatibilityOverrides(sampled, 0x45, 0x46) ==
+                  std::array<bool, 4>{},
+              "mapped D-pad leaked held input into native item presses");
+        Check(!HasTopScreenSlotItemOverrideInput(sampled),
+              "mapped D-pad replaced native equipment slots");
+        for (const auto& query : TopScreenVerifiedItemQueryContracts()) {
+            Check(!ShouldObserveTopScreenItemDispatch(query.OriginalEntry,
+                      memory, state, sampled, runtime),
+                  "mapped equipment also intercepted legacy item query");
+        }
+    }
+    input.GameplayDpadActionsOwned = false;
     for (uint32_t slot = 2; slot <= 4; ++slot) {
         state.r[0] = global;
         state.r[1] = slot;
