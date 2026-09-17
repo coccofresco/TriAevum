@@ -32,7 +32,8 @@ bool FamilyExecute(uint32_t pc,a32::GuestState& guest,NativeA32Memory& memory,
     a32::BlockEntryCallback callback,void* user,const uint32_t* pcs,size_t count,
     const Oot3dAotBlockEntryFilter* filter,bool skipFirst,uint32_t stop) {
     if (!FamilySupportsRoot(pc) || stop!=guest.r[14] || !result || !stats || !budget ||
-        (callback && (!count || FamilyObserved(pcs,count))))
+        FamilyObserved(pc,&stop,1) ||
+        (callback && (!count || FamilyObserved(pc,pcs,count))))
         return original->Execute(pc,guest,memory,result,stats,external,budget,consumed,
             callback,user,pcs,count,filter,skipFirst,stop);
     Oot3dWholeAotFrame frame(guest);Oot3dAotArchitecturalState state(guest);
@@ -70,6 +71,12 @@ bool FamilyExecute(uint32_t pc,a32::GuestState& guest,NativeA32Memory& memory,
 }
 extern "C" __declspec(dllexport) uint64_t triaevum_invocation_candidate_hits() noexcept { return familyHits; }
 extern "C" __declspec(dllexport) uint64_t triaevum_invocation_native_leaf_hits() noexcept { return acceptedInvocations; }
+extern "C" __declspec(dllexport) uint32_t triaevum_invocation_coverage_entry(uint32_t index) noexcept {
+    return index<std::size(kFamilyEntries)?kFamilyEntries[index]:0;
+}
+extern "C" __declspec(dllexport) uint64_t triaevum_invocation_coverage_hits(uint32_t index) noexcept {
+    return index<std::size(familyVisits)?familyVisits[index]:0;
+}
 extern "C" __declspec(dllexport) const Oot3dWholeAotProgramV2*
 triaevum_title_whole_aot_query(uint32_t abi) noexcept {
     if(abi!=kOot3dWholeAotPluginAbiV2) return nullptr;

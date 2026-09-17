@@ -8,6 +8,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <vector>
+#include <sstream>
 
 using namespace Oot3dNativeGame;
 namespace a32 = oot3d::recomp::a32;
@@ -18,6 +19,12 @@ uint32_t target;
 unsigned occurrences;
 unsigned captureOccurrence = 64;
 bool completed;
+struct Target { uint32_t Pc; unsigned Seen=0; bool Done=false; };
+std::vector<Target> batchTargets;
+void Lifecycle(const char* phase) {
+    if(const char* path=std::getenv("TRIAEVUM_INVOCATION_OUTPUT"))
+        std::ofstream(std::string(path)+".lifecycle",std::ios::app) << phase << '\n';
+}
 using InputSelector = bool (*)(const a32::GuestState*, const NativeA32Memory*) noexcept;
 InputSelector inputSelector;
 struct Route {
@@ -54,7 +61,9 @@ Oot3dWholeAotFlow RejectExternal(uint32_t pc, Oot3dWholeAotFrame&, NativeA32Memo
 void Replay(a32::GuestState input, const Route& route) {
     const char* path = std::getenv("TRIAEVUM_INVOCATION_OUTPUT");
     if (!path) return;
-    std::ofstream out(path, std::ios::trunc);
+    std::string outputPath(path);
+    if (!batchTargets.empty()) outputPath += "." + std::to_string(target) + ".csv";
+    std::ofstream out(outputPath, std::ios::trunc);
     if (!out) throw std::runtime_error("Cannot write invocation diagnostic");
     out << "diagnostic_only,not_game_timing\n";
     out << "original_callback," << (route.Callback != nullptr) << ",hook_count," << route.Count << '\n';
@@ -81,7 +90,18 @@ void Replay(a32::GuestState input, const Route& route) {
     auto leafCounter = candidateModule ? reinterpret_cast<HitCounter>(
         GetProcAddress(candidateModule,"triaevum_invocation_native_leaf_hits")) : nullptr;
     const auto leavesBefore = leafCounter ? leafCounter() : 0;
-    for (unsigned trial = 0; trial < 16; ++trial) {
+    using CoverageEntry = uint32_t (*)(uint32_t) noexcept;
+    using CoverageHits = uint64_t (*)(uint32_t) noexcept;
+    auto coverageEntry=candidateModule?reinterpret_cast<CoverageEntry>(
+        GetProcAddress(candidateModule,"triaevum_invocation_coverage_entry")):nullptr;
+    auto coverageHits=candidateModule?reinterpret_cast<CoverageHits>(
+        GetProcAddress(candidateModule,"triaevum_invocation_coverage_hits")):nullptr;
+    std::vector<uint64_t> visitsBefore;
+    if(coverageEntry && coverageHits)
+        for(uint32_t i=0; i<10000 && coverageEntry(i); ++i) visitsBefore.push_back(coverageHits(i));
+    // Batch mode qualifies real inputs, never performance: one A/B pair per root.
+    const unsigned trials=batchTargets.empty()?16:2;
+    for (unsigned trial = 0; trial < trials; ++trial) {
         memory = *route.Memory; // Copy/reset and fingerprints are outside timing.
         auto state = input;
         Oot3dWholeAotStats stats{};
@@ -116,6 +136,9 @@ void Replay(a32::GuestState input, const Route& route) {
             << (end.QuadPart - begin.QuadPart) * 1e9 / frequency.QuadPart << ','
             << cyclesEnd - cyclesBegin << ',' << valid << ',' << match << ','
             << blocks << ',' << result.pc << '\n';
+        out << "exit_detail," << trial << ',' << static_cast<unsigned>(result.kind) << ','
+            << result.detail << ',' << stats.MemoryFaults << ',' << stats.UnsupportedExits << ','
+            << stats.ExternalCalls << ',' << guard.Observed << '\n';
         allValid = allValid && valid && match;
         if (!allValid) break;
     }
@@ -123,6 +146,9 @@ void Replay(a32::GuestState input, const Route& route) {
         originalGeneration == route.Memory->WriteGeneration();
     if (hitCounter) out << "candidate_fast_hits," << hitCounter() - hitsBefore << '\n';
     if (leafCounter) out << "candidate_native_leaf_hits," << leafCounter() - leavesBefore << '\n';
+    for(uint32_t i=0;i<visitsBefore.size();++i)
+        if(coverageHits(i)>visitsBefore[i])
+            out << "visited_function," << coverageEntry(i) << ',' << coverageHits(i)-visitsBefore[i] << '\n';
     out << "summary," << allValid << ",original_memory_untouched," << untouched << '\n';
     out.flush();
     if (!untouched) throw std::runtime_error("Invocation probe changed live memory");
@@ -130,6 +156,17 @@ void Replay(a32::GuestState input, const Route& route) {
 void Observe(uint32_t pc, a32::GuestState& state, a32::MemoryBus& bus, void* user) {
     auto& route = *static_cast<Route*>(user);
     if (Notifies(route, pc)) route.Callback(pc, state, bus, route.User);
+    if (!batchTargets.empty()) {
+        for(auto& item:batchTargets) {
+            if(item.Pc!=pc || item.Done || ++item.Seen!=captureOccurrence) continue;
+            item.Done=true;
+            target=pc;
+            Replay(state,route);
+            completed=std::all_of(batchTargets.begin(),batchTargets.end(),[](const auto& t){return t.Done;});
+            break;
+        }
+        return;
+    }
     if (!completed && pc == target && (!inputSelector || inputSelector(&state,route.Memory)) &&
         ++occurrences == captureOccurrence) {
         completed = true;
@@ -141,12 +178,15 @@ bool Execute(uint32_t pc, a32::GuestState& state, NativeA32Memory& memory,
     Oot3dWholeAotExternalCall external, uint32_t budget, uint32_t* consumed,
     a32::BlockEntryCallback callback, void* user, const uint32_t* pcs, size_t count,
     const Oot3dAotBlockEntryFilter* filter, bool skipFirst, uint32_t stop) {
+    static bool entered=false;
+    if(!entered) { entered=true; Lifecycle("first_execute"); }
     if (completed) return baseline->Execute(pc, state, memory, result, stats, external,
         budget, consumed, callback, user, pcs, count, filter, skipFirst, stop);
     Route route{callback, user, pcs, count, filter, &memory};
     std::vector<uint32_t> hooks;
     if (count) hooks.assign(pcs, pcs + count);
-    hooks.push_back(target);
+    if(batchTargets.empty()) hooks.push_back(target);
+    else for(const auto& item:batchTargets) if(!item.Done) hooks.push_back(item.Pc);
     std::sort(hooks.begin(), hooks.end());
     hooks.erase(std::unique(hooks.begin(), hooks.end()), hooks.end());
     Oot3dAotBlockEntryFilter merged;
@@ -174,6 +214,7 @@ triaevum_title_whole_aot_query(uint32_t abi) noexcept {
     if (abi != kOot3dWholeAotPluginAbiV2) return nullptr;
     static Oot3dWholeAotProgramV2 proxy{};
     if (!proxy.Execute) {
+        Lifecycle("query_begin");
         baseline = Load(std::getenv("TRIAEVUM_INVOCATION_BASELINE"));
         const char* other = std::getenv("TRIAEVUM_INVOCATION_CANDIDATE");
         candidate = other ? Load(other) : baseline;
@@ -187,6 +228,15 @@ triaevum_title_whole_aot_query(uint32_t abi) noexcept {
         const char* entry = std::getenv("TRIAEVUM_INVOCATION_ENTRY");
         if (!baseline || !candidate || !entry) return nullptr;
         target = static_cast<uint32_t>(std::strtoul(entry, nullptr, 16));
+        if(const char* targets=std::getenv("TRIAEVUM_INVOCATION_TARGETS")) {
+            std::istringstream stream(targets);
+            std::string value;
+            while(std::getline(stream,value,',')) {
+                const auto pc=static_cast<uint32_t>(std::strtoul(value.c_str(),nullptr,16));
+                if(!pc || pc%4 || batchTargets.size()>=1024) return nullptr;
+                batchTargets.push_back({pc});
+            }
+        }
         if (const char* occurrence = std::getenv("TRIAEVUM_INVOCATION_OCCURRENCE")) {
             auto requested = std::strtoul(occurrence, nullptr, 10);
             if (!requested || requested > 8192) return nullptr;
@@ -194,6 +244,7 @@ triaevum_title_whole_aot_query(uint32_t abi) noexcept {
         }
         proxy = *baseline;
         proxy.Execute = Execute;
+        Lifecycle("query_ready");
     }
     return &proxy;
 }

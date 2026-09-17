@@ -51,16 +51,28 @@ def main():
     p = argparse.ArgumentParser(__doc__)
     for name in ('program', 'code', 'compiler', 'support', 'include', 'output'):
         p.add_argument('--'+name, type=Path, required=True)
-    p.add_argument('--root', type=lambda x: int(x,16), action='append', required=True)
+    p.add_argument('--root', type=lambda x: int(x,16), action='append', default=[])
+    p.add_argument('--selection', type=Path, help='Hashed selection from select_aot_cohort.py')
     p.add_argument('--optimized', action='store_true')
+    p.add_argument('--coverage', action='store_true', help='Instrument function entries; not for timing')
     p.add_argument('--max-functions', type=int, default=16)
     args = p.parse_args()
     program = json.loads(args.program.read_text())
     code = args.code.read_bytes()
     if hashlib.sha256(code).hexdigest() != program['code_sha256']:
         raise ValueError('Code/program mismatch')
+    if args.selection:
+        selection = json.loads(args.selection.read_text())
+        if (selection['program_sha256'] != hashlib.sha256(args.program.read_bytes()).hexdigest()
+                or selection['code_sha256'] != program['code_sha256']):
+            raise ValueError('Selection input mismatch')
+        if args.root:
+            raise ValueError('Use either selection or explicit roots')
+        args.root = [int(e,16) for e in selection['roots']]
     roots = sorted(set(args.root))
     entries = cohort(program,roots,args.max_functions)
+    if args.selection and entries != sorted(int(e,16) for e in selection['functions']):
+        raise ValueError('Selection closure mismatch')
     functions, external = aot._load_functions(program, {
         'format': aot.SELECTION_FORMAT, 'functions': [{'entry':e} for e in entries]}, code)
     if external:
@@ -79,22 +91,45 @@ def main():
     lines = ['bool FamilySupportsRoot(uint32_t pc) { return ' +
              ' || '.join(f'pc==0x{e:08X}U' for e in roots) + '; }',
              f'constexpr bool kFamilyOptimized={str(args.optimized).lower()};']
+    lines += ['constexpr uint32_t kFamilyEntries[]={' + ','.join(f'0x{f.entry:08X}U' for f in functions) + '};',
+              f'uint64_t familyVisits[{len(functions)}]={{}};']
     lines += aot._render_function_declarations(functions)
-    for f in functions:
-        suffix = '_fallback' if args.optimized and f.entry == 0x2BFCB4 else ''
+    original_functions = {f['entry']:f for f in program['functions']}
+    for index, f in enumerate(functions):
+        triangle = args.optimized and f.entry == 0x2BFCB4
+        tails = sorted({c['target'] for c in original_functions[f.entry]['tail_calls']})
+        suffix = '_body' if args.coverage or triangle or tails else ''
         lines += aot._render_function(f,symbols,frozenset(),
             callback_free=args.optimized,symbol_suffix=suffix)
         if suffix:
             lines += [f'Oot3dWholeAotFlow Execute_{symbols[f.entry]}(',
-                'Oot3dWholeAotFrame& f,Oot3dWholeAotContext& c,Oot3dAotArchitecturalState& s,uint32_t pc) {',
-                'return FamilyTriangle(f,c,s,pc);','}']
-    lines += ['bool FamilyObserved(const uint32_t* pcs,size_t count) {']
-    for f in functions:
-        lo=min(b.pc for b in f.blocks)
-        hi=max(b.instructions[-1].pc+4 for b in f.blocks)
-        lines += [f'{{ auto p=std::lower_bound(pcs,pcs+count,0x{lo:08X}U);',
-                  f'if(p!=pcs+count && *p<0x{hi:08X}U) return true; }}']
-    lines += ['return false;}',
+                'Oot3dWholeAotFrame& f,Oot3dWholeAotContext& c,Oot3dAotArchitecturalState& s,uint32_t pc) {']
+            if args.coverage:
+                lines += [f'++familyVisits[{index}];']
+            if triangle:
+                lines += ['return FamilyTriangle(f,c,s,pc);']
+            else:
+                lines += [f'auto flow=Execute_{symbols[f.entry]}_body(f,c,s,pc);']
+                if tails:
+                    lines += ['if(flow.Kind==Oot3dWholeAotFlowKind::Branch) { switch(flow.Pc) {']
+                    for tail in tails:
+                        lines += [f'case 0x{tail:08X}U: return Execute_{symbols[tail]}(f,c,s,flow.Pc);']
+                    lines += ['default: break;','}}']
+                lines += ['return flow;']
+            lines += ['}']
+    by_entry = {f.entry:f for f in functions}
+    lines += ['bool FamilyObserved(uint32_t root,const uint32_t* pcs,size_t count) {',
+              'switch(root) {']
+    for root in roots:
+        lines += [f'case 0x{root:08X}U: {{']
+        for entry in closure(program,root,args.max_functions):
+            f = by_entry[entry]
+            lo=min(b.pc for b in f.blocks)
+            hi=max(b.instructions[-1].pc+4 for b in f.blocks)
+            lines += [f'{{ auto p=std::lower_bound(pcs,pcs+count,0x{lo:08X}U);',
+                      f'if(p!=pcs+count && *p<0x{hi:08X}U) return true; }}']
+        lines += ['return false; }']
+    lines += ['default: return true;','}','}',
         'Oot3dWholeAotFlow RunFamily(Oot3dWholeAotFrame& f,Oot3dWholeAotContext& c,Oot3dAotArchitecturalState& s,uint32_t pc) {',
         'switch(pc) {']
     for root in roots:
@@ -118,11 +153,13 @@ def main():
     for command in commands:
         subprocess.run(command,check=True,timeout=120)
     report={'developer_only':True,'roots':[f'{e:08X}' for e in roots],
-        'functions':[f'{e:08X}' for e in entries],'optimized':args.optimized,
+        'functions':[f'{e:08X}' for e in entries],'optimized':args.optimized,'coverage':args.coverage,
         'build_seconds':time.monotonic()-start,'commands':commands,
         'hashes':{str(f):hashlib.sha256(f.read_bytes()).hexdigest() for f in
             (args.program,args.code,args.support,source,generated,Path(aot.__file__),
              a32/'oot3d_cpu_geometry_kernel_probe.cpp',dll)}}
+    if args.selection:
+        report['hashes'][str(args.selection)] = hashlib.sha256(args.selection.read_bytes()).hexdigest()
     (args.output/'build.json').write_text(json.dumps(report,indent=2))
     print(json.dumps({'functions':len(entries),'build_seconds':report['build_seconds'],'dll':str(dll)}))
 

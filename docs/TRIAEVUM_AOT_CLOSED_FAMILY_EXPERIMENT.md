@@ -4,6 +4,8 @@
 Developer-only, no production/release registration or NRI changes. This specializes
 whole-AOT call families; it is not a new semantic decompilation of 21 functions.
 
+Later extension: [303-function cohort and batch qualification](TRIAEVUM_AOT_300_FUNCTION_COHORT.md).
+
 ## Structural change
 
 `build_aot_family_probe.py` walks direct calls and tail calls from a root, rejects
