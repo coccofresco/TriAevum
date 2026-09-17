@@ -126,9 +126,9 @@ int main(int argc, char** argv) {
     Require(mousePreset.NativeAimSource == NativeMotionSource::Mouse &&
             mousePreset.FreeCameraSource == NativeMotionSource::Mouse && mousePreset.CaptureMouseInGameplay,
             "keyboard/mouse preset must use mouse for aim and free camera");
-    Require(controllerPreset.NativeAimSource == NativeMotionSource::RightStick &&
+    Require(controllerPreset.NativeAimSource == NativeMotionSource::Automatic &&
             controllerPreset.FreeCameraSource == NativeMotionSource::RightStick,
-            "controller preset must use the right stick for aim and free camera");
+            "controller preset must discover aiming sensors without changing free camera");
     NativeControlHostInputState controllerMotion;
     controllerMotion.RightStickX = 28000;
     controllerMotion.ControllerMotion.GyroscopeValid = true;
@@ -138,6 +138,20 @@ int main(int argc, char** argv) {
     const auto withoutSensor = MapNativeControlInput(controllerPreset, controllerMotion);
     Require(controllerMapped.CStick.X > 0 && controllerMapped.Hid.GyroscopeDegreesPerSecond == withoutSensor.Hid.GyroscopeDegreesPerSecond,
             "controller preset mixed motion sensors into right-stick aiming");
+    controllerMotion.RightStickX = 0;
+    controllerMotion.ControllerMotion.GyroscopeValid = true;
+    controllerMotion.ControllerMotion.AccelerometerValid = true;
+    controllerMotion.ControllerMotion.GyroscopeDegreesPerSecond = {-12, 23, 5};
+    controllerMotion.ControllerMotion.Accelerometer = {0.1F, -0.95F, 0.2F};
+    const auto automaticMotion = MapNativeControlInput(controllerPreset, controllerMotion);
+    Require(automaticMotion.Hid.GyroscopeDegreesPerSecond == controllerMotion.ControllerMotion.GyroscopeDegreesPerSecond &&
+            automaticMotion.Hid.Accelerometer == controllerMotion.ControllerMotion.Accelerometer &&
+            automaticMotion.CStick.X == 0 && automaticMotion.CStick.Y == 0,
+            "factory controller preset requires manual setup/calibration for motion aiming");
+    auto explicitStick = controllerPreset;
+    explicitStick.NativeAimSource = NativeMotionSource::RightStick;
+    Require(MapNativeControlInput(explicitStick, controllerMotion).Hid.GyroscopeDegreesPerSecond == std::array<float, 3>{},
+            "automatic motion overrides explicit stick-only choice");
     const auto defaults = NativeControlDefaults();
     Require(defaults.ControllerEnabled && defaults.KeyboardEnabled && defaults.MouseEnabled &&
                 defaults.MovementStick == NativeAnalogStick::Left &&

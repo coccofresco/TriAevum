@@ -184,3 +184,40 @@ motion sources (camera neutral with moving sensors; stick still works; native
 aim sensors remain valid), config migration and serialization. Actual F1 widget
 smoke passes 3,978 assertions. Windows executable rebuilt and module-host input
 consumer compiled. No new physical-controller or other-platform run is claimed.
+
+## Plug-And-Play Motion Review (2026-09-17)
+
+Found and fixed: the Controller preset forced `right_stick` for aiming, bypassing
+motion regardless of capabilities. It now uses `automatic`; free camera remains
+stick-only. Combined defaults already use automatic. Existing explicit saved
+stick-only/mouse-only/disabled settings are respected, not silently rewritten.
+New preset tests verify uncalibrated sensor pass-through, absence of camera motion,
+stick fallback and explicit opt-out. Windows build and native input tests pass;
+F1 smoke remains at 3,978 assertions.
+
+Calibration is optional. SDL's device drivers already read/apply factory IMU
+calibration where supported; see [PS5 driver calibration](https://github.com/libsdl-org/SDL/blob/SDL2/src/joystick/hidapi/SDL_hidapi_ps5.c)
+and the Switch driver referenced above. Do not add mandatory user calibration
+or blindly learn bias from a slow deliberate turn. Clone/driver behavior still
+requires hardware verification, and factory calibration is not a guarantee of
+zero residual drift on every unit.
+
+Added `three_ds_sdl_controller_tests --probe-physical`: bounded real-device
+enumeration and polling through the same setup/sampler, logging successful sensor
+polls, fresh timestamps and native-unit samples. A timestamp-less driver can
+produce valid polls with zero fresh timestamps. Probe on this host opened **zero
+controllers**; no physical PS/Switch support qualification is inferred from it.
+
+Remaining findings, not claimed fixed:
+
+- Automatic currently prioritizes active mouse, then stick, then sensors. Stick
+  and gyro are **not simultaneous**; resuming physical gravity after synthetic
+  stick tilt can cause a reference discontinuity. A combined motion model must
+  transform gravity and angular rates consistently and be tested on a physical
+  controller, not implemented as a naked gyro sum.
+- An idle connected sensor-capable pad can reclaim automatic aim after mouse
+  movement stops. Explicit Mouse profile avoids this, but mixed-device automatic
+  ownership needs a deliberate activity/ownership policy and regression tests.
+- Native game motion-option gating and user comfort with actual USB/Bluetooth
+  controllers still require an in-game aiming test. Menu/unit tests alone cannot
+  establish natural aiming or full plug-and-play across hardware.

@@ -3,6 +3,7 @@
 #include "../../../runtime/three_ds_recomp/include/ship/controller/physicaldevice/SDLControllerSetup.h"
 #include <iostream>
 #include <stdexcept>
+#include <string_view>
 
 namespace {
 void Require(bool condition, const char* message) {
@@ -10,10 +11,50 @@ void Require(bool condition, const char* message) {
 }
 }
 
-int main() try {
+int main(int argc, char** argv) try {
     using namespace ThreeDsRecomp::Input;
     SDL_SetMainReady();
     Ship::ConfigureSDLControllerCapabilities();
+    if (argc == 2 && std::string_view(argv[1]) == "--probe-physical") {
+        Require(SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) == 0, "SDL initialization");
+        unsigned opened = 0;
+        for (int index = 0; index < SDL_NumJoysticks(); ++index) {
+            if (!SDL_IsGameController(index)) continue;
+            auto* pad = SDL_GameControllerOpen(index);
+            if (!pad) continue;
+            ++opened;
+            unsigned gyroSamples = 0, accelSamples = 0, gyroFresh = 0, accelFresh = 0;
+            std::uint64_t lastGyro = 0, lastAccel = 0;
+            PhysicalInputState state;
+            for (int i = 0; i < 100; ++i) {
+                SDL_PumpEvents();
+                SDL_GameControllerUpdate();
+                SampleSdlController(pad, state);
+                const auto& motion = state.ControllerMotion;
+                gyroSamples += motion.GyroscopeValid;
+                accelSamples += motion.AccelerometerValid;
+                gyroFresh += motion.GyroscopeValid && motion.GyroscopeTimestampMicroseconds > lastGyro;
+                accelFresh += motion.AccelerometerValid && motion.AccelerometerTimestampMicroseconds > lastAccel;
+                lastGyro = motion.GyroscopeTimestampMicroseconds;
+                lastAccel = motion.AccelerometerTimestampMicroseconds;
+                SDL_Delay(10);
+            }
+            std::cout << "Controller: " << SDL_GameControllerName(pad)
+                      << " gyro_polls=" << gyroSamples << " accel_polls=" << accelSamples
+                      << " fresh_gyro=" << gyroFresh << " fresh_accel=" << accelFresh
+                      << " touchpads=" << SDL_GameControllerGetNumTouchpads(pad) << '\n';
+            std::cout << "Last native sample: gyro=";
+            for (const auto value : state.ControllerMotion.GyroscopeDegreesPerSecond) std::cout << value << ' ';
+            std::cout << " accel=";
+            for (const auto value : state.ControllerMotion.Accelerometer) std::cout << value << ' ';
+            std::cout << '\n';
+            SDL_GameControllerClose(pad);
+        }
+        std::cout << "Physical probe: " << opened << " controllers opened (not a gameplay qualification)\n";
+        SDL_Quit();
+        return 0;
+    }
+    Require(argc == 1, "usage: [--probe-physical]");
     Require(SDL_GetHintBoolean(SDL_HINT_JOYSTICK_HIDAPI_PS4_RUMBLE, SDL_FALSE) &&
             SDL_GetHintBoolean(SDL_HINT_JOYSTICK_HIDAPI_PS5_RUMBLE, SDL_FALSE),
             "extended PlayStation sensor reports not enabled");

@@ -465,7 +465,7 @@ NativeControlConfig NativeControlPreset(NativeControlProfile profile) {
       profile == NativeControlProfile::Keyboard
           ? NativeMotionSource::DigitalLook
           : (profile == NativeControlProfile::Controller
-                 ? NativeMotionSource::RightStick
+                 ? NativeMotionSource::Automatic
                  : NativeMotionSource::Mouse);
   config.FreeCameraSource =
       profile == NativeControlProfile::Keyboard
