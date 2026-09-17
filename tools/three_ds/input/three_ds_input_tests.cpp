@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdint>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 
 namespace {
@@ -126,6 +127,65 @@ void TestVirtualMotion() {
 } // namespace
 
 int main() try {
+    {
+        using namespace ThreeDsRecomp::Input;
+        const auto motion = ConvertSdlMotion({9.80665F, 9.80665F, -9.80665F}, true,
+                                             {1, 2, 3}, true);
+        Require(motion.Accelerometer == std::array<float, 3>{1, -1, -1} &&
+                std::abs(motion.GyroscopeDegreesPerSecond[0] + 57.29578F) < 0.001F &&
+                std::abs(motion.GyroscopeDegreesPerSecond[1] - 114.59156F) < 0.001F &&
+                std::abs(motion.GyroscopeDegreesPerSecond[2] + 171.88734F) < 0.001F,
+                "SDL sensors must match Azahar native 3DS coordinates/units");
+        const float nan = std::numeric_limits<float>::quiet_NaN();
+        const auto invalid = ConvertSdlMotion({nan, 0, 0}, true, {0, 0, 0}, false);
+        Require(!invalid.AccelerometerValid && !invalid.GyroscopeValid, "invalid sensor accepted");
+        MappingConfig gyroConfig;
+        gyroConfig.CStickSource = MotionSource::ControllerGyroscope;
+        gyroConfig.NativeMotionSource = MotionSource::ControllerMotion;
+        PhysicalInputState gyroInput;
+        gyroInput.ControllerMotion.GyroscopeValid = true;
+        gyroInput.ControllerMotion.GyroscopeDegreesPerSecond = {0, -30, 0};
+        const auto yaw = ResolveInput(gyroConfig, gyroInput, {});
+        Require(yaw.CStick.X > 0 && yaw.CStick.Y == 0, "motion camera uses roll instead of yaw");
+        gyroConfig.NativeMotionInvertX = true;
+        Require(ResolveInput(gyroConfig, gyroInput, {}).Hid.GyroscopeDegreesPerSecond[1] == 30,
+                "native motion horizontal inversion omitted yaw");
+        gyroInput.ControllerMotion.GyroscopeDegreesPerSecond = {0, 0, 30};
+        Require(ResolveInput(gyroConfig, gyroInput, {}).CStick.X == 0, "roll steers camera yaw");
+        const auto edge = MapNormalizedTouch({1, 1, true});
+        const auto center = MapNormalizedTouch({0.5F, 0.5F, true});
+        Require(edge.X == 319 && edge.Y == 239 && edge.Pressed &&
+                center.X == 160 && center.Y == 120 &&
+                !MapNormalizedTouch({nan, 0, true}).Pressed &&
+                !MapNormalizedTouch({-0.1F, 0, true}).Pressed &&
+                !MapNormalizedTouch({0.5F, 0.5F, false}).Pressed,
+                "normalized touch bounds/release");
+        MotionCalibrationAccumulator calibration;
+        MotionObservation sample;
+        sample.GyroscopeValid = sample.AccelerometerValid = true;
+        sample.GyroscopeDegreesPerSecond = {1, -2, 3};
+        sample.Accelerometer = {0, -1, 0};
+        sample.GyroscopeTimestampMicroseconds = sample.AccelerometerTimestampMicroseconds = 1;
+        for (int i = 0; i < 120; ++i) Require(!calibration.Observe(sample), "duplicate sensor completed calibration");
+        Require(calibration.SamplesCollected() == 1, "duplicate sensor counted repeatedly");
+        sample.GyroscopeDegreesPerSecond = {100, 0, 0};
+        Require(!calibration.Observe(sample) && calibration.WaitingForStillness() &&
+                calibration.SamplesCollected() == 0, "moving controller accepted for calibration");
+        sample.GyroscopeDegreesPerSecond = {1, -2, 3};
+        for (unsigned i = 1; i <= MotionCalibrationAccumulator::SamplesRequired; ++i) {
+            sample.GyroscopeTimestampMicroseconds = sample.AccelerometerTimestampMicroseconds = i + 1;
+            Require(calibration.Observe(sample) == (i == MotionCalibrationAccumulator::SamplesRequired),
+                    "fresh calibration completion mismatch");
+        }
+        Require(calibration.Mean().GyroscopeDegreesPerSecond == sample.GyroscopeDegreesPerSecond,
+                "calibration bias incorrect");
+        calibration.Reset();
+        sample.GyroscopeValid = false;
+        sample.AccelerometerTimestampMicroseconds = 0;
+        for (unsigned i = 1; i <= MotionCalibrationAccumulator::SamplesRequired; ++i)
+            Require(calibration.Observe(sample) == (i == MotionCalibrationAccumulator::SamplesRequired),
+                    "accelerometer-only timestamp-less calibration");
+    }
     {
         using namespace ThreeDsRecomp::Input;
         const std::array<DeviceDescriptor, 3> devices{{

@@ -317,6 +317,10 @@ class NativeControlsSettingsPanel final
         mControlDraft.PreferredControllerSerial = previous.PreferredControllerSerial;
         mControlDraft.GyroscopeBiasDegreesPerSecond = previous.GyroscopeBiasDegreesPerSecond;
         mControlDraft.AccelerometerNeutral = previous.AccelerometerNeutral;
+        mControlDraft.CalibrationControllerGuid = previous.CalibrationControllerGuid;
+        mControlDraft.CalibrationControllerSerial = previous.CalibrationControllerSerial;
+        mControlDraft.ControllerTouchpadEnabled = previous.ControllerTouchpadEnabled;
+        mControlDraft.ControllerTouchpadIndex = previous.ControllerTouchpadIndex;
         mControlDirty = true;
         ImGui::CloseCurrentPopup();
       }
@@ -360,6 +364,13 @@ class NativeControlsSettingsPanel final
 
   void DrawControllerSelection() {
     ImGui::SeparatorText("Controller");
+    if (ImGui::Checkbox("Controller touchpad", &mControlDraft.ControllerTouchpadEnabled)) {
+      MarkCustom(mControlDraft, mControlDirty);
+    }
+    if (mControlDraft.ControllerTouchpadEnabled &&
+        ImGui::SliderInt("Touchpad index", &mControlDraft.ControllerTouchpadIndex, 0, 15)) {
+      MarkCustom(mControlDraft, mControlDirty);
+    }
     const auto devices = mControls->DevicesSnapshot();
     std::int32_t activeInstance = -1;
     for (const auto& device : devices) if (device.Selected) activeInstance = device.InstanceId;
@@ -407,10 +418,11 @@ class NativeControlsSettingsPanel final
     } else {
       for (const auto& device : devices) {
         ImGui::TextWrapped(
-            "%s%s%s%s", device.Name.c_str(),
+            "%s%s%s%s%s", device.Name.c_str(),
             device.Selected && mControlDraft.ControllerEnabled ? " | active" : "",
             device.HasGyroscope ? " | gyro" : "",
-            device.HasAccelerometer ? " | accelerometer" : "");
+            device.HasAccelerometer ? " | accelerometer" : "",
+            device.TouchpadCount > 0 ? " | touchpad" : "");
         if (device.InstanceId == draftInstance && device.Serial.empty()) {
           ImGui::TextDisabled("No serial available: preference identifies the controller model.");
         }
@@ -630,10 +642,16 @@ class NativeControlsSettingsPanel final
 
   void DrawCalibration() {
     const auto calibration = mControls->CalibrationStatus();
+    const auto motion = mControls->MotionStatus();
+    ImGui::TextDisabled("Sensor samples: gyro %s | accelerometer %s",
+        motion.GyroscopeValid ? "received" : "unavailable",
+        motion.AccelerometerValid ? "received" : "unavailable");
     if (!calibration.Active) {
+      ImGui::BeginDisabled(!motion.GyroscopeValid && !motion.AccelerometerValid);
       if (ImGui::Button("Calibrate controller motion")) {
         mControls->BeginMotionCalibration();
       }
+      ImGui::EndDisabled();
     } else {
       ImGui::ProgressBar(
           static_cast<float>(calibration.SamplesCollected) /
@@ -643,7 +661,9 @@ class NativeControlsSettingsPanel final
       if (ImGui::Button("Cancel calibration")) {
         mControls->CancelMotionCalibration();
       }
+      if (calibration.WaitingForStillness) ImGui::TextDisabled("Waiting for a stationary controller");
     }
+    if (!calibration.Error.empty()) ImGui::TextWrapped("%s", calibration.Error.c_str());
     if (ImGui::Button("Reset motion calibration")) {
       std::string error;
       if (!mControls->ResetMotionCalibration(&error)) {

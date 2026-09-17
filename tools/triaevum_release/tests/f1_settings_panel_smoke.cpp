@@ -633,6 +633,10 @@ int main() try {
     Click("Devices");
     Click("Keyboard");
     Check(!controls->Snapshot().Config.KeyboardEnabled, "control preview not connected");
+    Click("Controller touchpad");
+    Check(!controls->Snapshot().Config.ControllerTouchpadEnabled, "touchpad disable not connected");
+    Click("Controller touchpad");
+    Check(controls->Snapshot().Config.ControllerTouchpadEnabled, "touchpad enable not connected");
     controls->ObserveDevices({
         {11, "same-model", "Twin pad", false, false, "first", true},
         {12, "same-model", "Twin pad", false, false, "second", false},

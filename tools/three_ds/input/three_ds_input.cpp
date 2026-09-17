@@ -37,6 +37,92 @@ std::int32_t SelectControllerDevice(std::span<const DeviceDescriptor> devices,
 
 namespace {
 
+bool FiniteVector(const std::array<float, 3>& value) noexcept {
+    return std::all_of(value.begin(), value.end(), [](float v) { return std::isfinite(v); });
+}
+
+} // namespace
+
+MotionObservation ConvertSdlMotion(const std::array<float, 3>& accel, bool accelValid,
+                                   const std::array<float, 3>& gyro, bool gyroValid) noexcept {
+    // Citra/Azahar SDL sensor mapping, GPL-2.0-or-later; see THIRD_PARTY_NOTICES.md.
+    MotionObservation result;
+    constexpr float gravity = 9.80665F;
+    constexpr float toDegrees = 57.2957795130823208768F;
+    if (accelValid && FiniteVector(accel)) {
+        result.Accelerometer = {accel[0] / gravity, -accel[1] / gravity, accel[2] / gravity};
+        result.AccelerometerValid = FiniteVector(result.Accelerometer);
+    }
+    if (gyroValid && FiniteVector(gyro)) {
+        result.GyroscopeDegreesPerSecond = {-gyro[0] * toDegrees, gyro[1] * toDegrees, -gyro[2] * toDegrees};
+        result.GyroscopeValid = FiniteVector(result.GyroscopeDegreesPerSecond);
+    }
+    return result;
+}
+
+void MotionCalibrationAccumulator::Reset() noexcept { *this = {}; }
+
+bool MotionCalibrationAccumulator::Observe(const MotionObservation& observation) noexcept {
+    const auto magnitudeSquared = [](const auto& vector) {
+        return vector[0] * vector[0] + vector[1] * vector[1] + vector[2] * vector[2];
+    };
+    const bool gyro = observation.GyroscopeValid;
+    const bool accel = observation.AccelerometerValid;
+    if (!gyro && !accel) return false;
+    // Manual calibration only. Reject motion/free fall, not ordinary gameplay
+    // samples. Low-rate intentional rotation cannot be distinguished from bias.
+    const float gravitySquared = magnitudeSquared(observation.Accelerometer);
+    if ((gyro && (!FiniteVector(observation.GyroscopeDegreesPerSecond) ||
+                  magnitudeSquared(observation.GyroscopeDegreesPerSecond) > 64.0F)) ||
+        (accel && (!FiniteVector(observation.Accelerometer) ||
+                   gravitySquared < 0.64F || gravitySquared > 1.44F))) {
+        mGyroscopeSum = {}; mAccelerometerSum = {};
+        mGyroscopeCount = mAccelerometerCount = 0;
+        mWaitingForStillness = true;
+        return false;
+    }
+    mWaitingForStillness = false;
+    const auto fresh = [](std::uint64_t timestamp, std::uint64_t& last) {
+        if (timestamp != 0 && timestamp <= last) return false;
+        last = timestamp;
+        return true;
+    };
+    if (gyro && fresh(observation.GyroscopeTimestampMicroseconds, mGyroscopeTimestamp)) {
+        for (std::size_t i = 0; i < 3; ++i) mGyroscopeSum[i] += observation.GyroscopeDegreesPerSecond[i];
+        ++mGyroscopeCount;
+    }
+    if (accel && fresh(observation.AccelerometerTimestampMicroseconds, mAccelerometerTimestamp)) {
+        for (std::size_t i = 0; i < 3; ++i) mAccelerometerSum[i] += observation.Accelerometer[i];
+        ++mAccelerometerCount;
+    }
+    return SamplesCollected() >= SamplesRequired;
+}
+
+std::uint32_t MotionCalibrationAccumulator::SamplesCollected() const noexcept {
+    return mGyroscopeCount && mAccelerometerCount ? std::min(mGyroscopeCount, mAccelerometerCount)
+                                                 : std::max(mGyroscopeCount, mAccelerometerCount);
+}
+
+MotionObservation MotionCalibrationAccumulator::Mean() const noexcept {
+    MotionObservation result;
+    result.GyroscopeValid = mGyroscopeCount != 0;
+    result.AccelerometerValid = mAccelerometerCount != 0;
+    for (std::size_t i = 0; i < 3; ++i) {
+        if (mGyroscopeCount) result.GyroscopeDegreesPerSecond[i] = static_cast<float>(mGyroscopeSum[i] / mGyroscopeCount);
+        if (mAccelerometerCount) result.Accelerometer[i] = static_cast<float>(mAccelerometerSum[i] / mAccelerometerCount);
+    }
+    return result;
+}
+
+TouchMapping MapNormalizedTouch(const NormalizedTouch& touch) noexcept {
+    if (!touch.Pressed || !std::isfinite(touch.X) || !std::isfinite(touch.Y) ||
+        touch.X < 0.0F || touch.X > 1.0F || touch.Y < 0.0F || touch.Y > 1.0F) return {};
+    return {static_cast<std::uint16_t>(std::min(touch.X * kTouchWidth, float(kTouchWidth - 1))),
+            static_cast<std::uint16_t>(std::min(touch.Y * kTouchHeight, float(kTouchHeight - 1))), true, true};
+}
+
+namespace {
+
 template <typename Enum>
 struct NamedValue {
     Enum Value;
@@ -460,6 +546,7 @@ ResolvedMotion ResolveMotion(const MappingConfig& config,
                 config.ControllerGyroscopeSensitivity;
         }
         result.Gyroscope[0] *= invertY;
+        result.Gyroscope[1] *= invertX;
         result.Gyroscope[2] *= invertX;
         result.GyroscopeValid = true;
         return true;
@@ -601,8 +688,9 @@ AxisInputSample ResolveCStick(const MappingConfig& config,
     case MotionSource::ControllerGyroscope:
     case MotionSource::ControllerMotion:
         if (physical.ControllerMotion.GyroscopeValid) {
-            x = (physical.ControllerMotion.GyroscopeDegreesPerSecond[2] -
-                 config.GyroscopeBiasDegreesPerSecond[2]) *
+            // Native Y is yaw in the neutral controller pose; Z is roll.
+            x = -(physical.ControllerMotion.GyroscopeDegreesPerSecond[1] -
+                 config.GyroscopeBiasDegreesPerSecond[1]) *
                 config.CStickSensorSensitivity;
             y = -(physical.ControllerMotion.GyroscopeDegreesPerSecond[0] -
                   config.GyroscopeBiasDegreesPerSecond[0]) *

@@ -1,4 +1,5 @@
 #include "ship/controller/physicaldevice/ConnectedPhysicalDeviceManager.h"
+#include "ship/controller/physicaldevice/SDLControllerSetup.h"
 #include <spdlog/spdlog.h>
 
 namespace Ship {
@@ -14,6 +15,7 @@ bool ConnectedPhysicalDeviceManager::Initialize(const std::string& mappingDataba
         return true;
     }
     SDL_SetHint(SDL_HINT_JOYSTICK_THREAD, "1");
+    ConfigureSDLControllerCapabilities();
     if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) != 0) {
         SPDLOG_ERROR("SDL controller initialization failed: {}", SDL_GetError());
         return false;

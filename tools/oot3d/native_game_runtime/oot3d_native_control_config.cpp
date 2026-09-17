@@ -157,9 +157,9 @@ bool DecodeNativeControlConfig(const nlohmann::json& document,
     SetError(error, "native control config root/output is invalid");
     return false;
   }
-  constexpr std::array<std::string_view, 11> kAllowedFields{
+  constexpr std::array<std::string_view, 12> kAllowedFields{
       "schema", "profile", "devices", "bindings", "analog", "aim",
-      "free_camera", "controller_guid", "controller_serial", "calibration", "capture_mouse"};
+      "free_camera", "controller_guid", "controller_serial", "calibration", "capture_mouse", "controller_touchpad"};
   const std::set<std::string_view> allowed(kAllowedFields.begin(),
                                            kAllowedFields.end());
   for (const auto& [key, value] : document.items()) {
@@ -235,6 +235,22 @@ bool DecodeNativeControlConfig(const nlohmann::json& document,
     }
     parsed.PreferredControllerSerial = ThreeDsRecomp::Input::NormalizeControllerSerial(
         document.at("controller_serial").get<std::string>());
+  }
+
+  if (document.contains("controller_touchpad")) {
+    const auto& touch = document.at("controller_touchpad");
+    if (!touch.is_object() || (touch.contains("enabled") && !touch.at("enabled").is_boolean()) ||
+        (touch.contains("index") && !touch.at("index").is_number_integer())) {
+      SetError(error, "controller_touchpad requires boolean enabled and integer index");
+      return false;
+    }
+    parsed.ControllerTouchpadEnabled = touch.value("enabled", true);
+    const auto index = touch.value("index", std::int64_t{0});
+    if (index < 0 || index > 15) {
+      SetError(error, "controller_touchpad.index must be in [0,15]");
+      return false;
+    }
+    parsed.ControllerTouchpadIndex = static_cast<std::int32_t>(index);
   }
 
   if (document.contains("bindings")) {
@@ -356,6 +372,12 @@ bool DecodeNativeControlConfig(const nlohmann::json& document,
                           : "native control calibration must be an object");
       return false;
     }
+  }
+  if (document.contains("calibration")) {
+    const auto& calibration = document.at("calibration");
+    parsed.CalibrationControllerGuid = calibration.value("controller_guid", std::string{});
+    parsed.CalibrationControllerSerial = ThreeDsRecomp::Input::NormalizeControllerSerial(
+        calibration.value("controller_serial", std::string{}));
   }
   if (!ValidateNativeControlConfig(parsed, error)) {
     return false;
@@ -556,6 +578,10 @@ NativeControlConfig NativeControlDefaults() {
 
 bool ValidateNativeControlConfig(const NativeControlConfig& config,
                                  std::string* error) {
+  if (config.ControllerTouchpadIndex < 0 || config.ControllerTouchpadIndex > 15) {
+    SetError(error, "controller touchpad index must be in [0, 15]");
+    return false;
+  }
   if (config.MovementStickDeadZonePercent < 0 ||
       config.MovementStickDeadZonePercent > 95 ||
       config.LookStickDeadZonePercent < 0 ||
@@ -649,6 +675,7 @@ bool SerializeNativeControlConfigText(const NativeControlConfig& config,
       {"capture_mouse", config.CaptureMouseInGameplay},
       {"controller_guid", config.PreferredControllerGuid},
       {"controller_serial", config.PreferredControllerSerial},
+      {"controller_touchpad", {{"enabled", config.ControllerTouchpadEnabled}, {"index", config.ControllerTouchpadIndex}}},
       {"bindings", std::move(bindings)},
       {"analog",
        {{"movement_stick", NativeAnalogStickName(config.MovementStick)},
@@ -675,7 +702,9 @@ bool SerializeNativeControlConfigText(const NativeControlConfig& config,
          config.FreeCameraMotionSensitivity}}},
       {"calibration",
        {{"gyroscope_bias_dps", config.GyroscopeBiasDegreesPerSecond},
-        {"accelerometer_neutral", config.AccelerometerNeutral}}},
+        {"accelerometer_neutral", config.AccelerometerNeutral},
+        {"controller_guid", config.CalibrationControllerGuid},
+        {"controller_serial", config.CalibrationControllerSerial}}},
   };
   NativeControlConfig validated;
   if (!DecodeNativeControlConfig(document, &validated, error)) {
@@ -812,6 +841,15 @@ void NativeControlConfigRuntime::ObserveDevices(
               return lhs.InstanceId < rhs.InstanceId;
             });
   std::scoped_lock lock(mMutex);
+  const auto selected = [](const auto& list) {
+    for (const auto& device : list) if (device.Selected) return device.InstanceId;
+    return std::int32_t{-1};
+  };
+  if (mCalibration.Active && selected(mDevices) != selected(devices)) {
+    mCalibration.Active = false;
+    mCalibration.Error = "Calibration cancelled: selected controller changed or disconnected";
+    mCalibrationSamples.Reset();
+  }
   mDevices = std::move(devices);
 }
 
@@ -827,54 +865,39 @@ void NativeControlConfigRuntime::ObserveMotion(
   bool saveCompleted = false;
   {
     std::scoped_lock lock(mMutex);
+    mLastMotion = observation;
     if (!mCalibration.Active) {
       return;
     }
-    if (observation.GyroscopeValid) {
-      for (std::size_t axis = 0; axis < 3U; ++axis) {
-        mCalibrationGyroscopeSum[axis] +=
-            observation.GyroscopeDegreesPerSecond[axis];
-      }
-      ++mCalibrationGyroscopeSamples;
+    const bool complete = mCalibrationSamples.Observe(observation);
+    mCalibration.SamplesCollected = mCalibrationSamples.SamplesCollected();
+    mCalibration.WaitingForStillness = mCalibrationSamples.WaitingForStillness();
+    if (!complete) return;
+    const auto mean = mCalibrationSamples.Mean();
+    mConfig.CalibrationControllerGuid.clear();
+    mConfig.CalibrationControllerSerial.clear();
+    for (const auto& device : mDevices) {
+      if (!device.Selected) continue;
+      mConfig.CalibrationControllerGuid = device.Guid;
+      mConfig.CalibrationControllerSerial = device.Serial;
+      break;
     }
-    if (observation.AccelerometerValid) {
-      for (std::size_t axis = 0; axis < 3U; ++axis) {
-        mCalibrationAccelerometerSum[axis] +=
-            observation.Accelerometer[axis];
-      }
-      ++mCalibrationAccelerometerSamples;
-    }
-    mCalibration.SamplesCollected =
-        std::max(mCalibrationGyroscopeSamples,
-                 mCalibrationAccelerometerSamples);
-    if (mCalibration.SamplesCollected < mCalibration.SamplesRequired) {
-      return;
-    }
-    if (mCalibrationGyroscopeSamples != 0U) {
-      for (std::size_t axis = 0; axis < 3U; ++axis) {
-        mConfig.GyroscopeBiasDegreesPerSecond[axis] =
-            static_cast<float>(mCalibrationGyroscopeSum[axis] /
-                               mCalibrationGyroscopeSamples);
-      }
-    }
-    if (mCalibrationAccelerometerSamples != 0U) {
-      for (std::size_t axis = 0; axis < 3U; ++axis) {
-        mConfig.AccelerometerNeutral[axis] =
-            static_cast<float>(mCalibrationAccelerometerSum[axis] /
-                               mCalibrationAccelerometerSamples);
-      }
-    }
+    mConfig.GyroscopeBiasDegreesPerSecond = mean.GyroscopeValid
+        ? mean.GyroscopeDegreesPerSecond : std::array<float, 3>{};
+    mConfig.AccelerometerNeutral = mean.AccelerometerValid
+        ? mean.Accelerometer : std::array<float, 3>{0.0F, -1.0F, 0.0F};
     mCalibration.Active = false;
-    mCalibration.LastCalibrationSucceeded =
-        mCalibrationGyroscopeSamples != 0U ||
-        mCalibrationAccelerometerSamples != 0U;
+    mCalibration.LastCalibrationSucceeded = true;
     ++mRevision;
     completed = mConfig;
     saveCompleted = Persistent() && mCalibration.LastCalibrationSucceeded;
   }
   if (saveCompleted) {
-    std::string ignored;
-    SaveNativeControlConfig(mPath, completed, &ignored);
+    std::string error;
+    if (!SaveNativeControlConfig(mPath, completed, &error)) {
+      std::scoped_lock lock(mMutex);
+      mCalibration.Error = "Calibration is active in memory but could not be saved: " + error;
+    }
   }
 }
 
@@ -882,11 +905,8 @@ void NativeControlConfigRuntime::BeginMotionCalibration() noexcept {
   std::scoped_lock lock(mMutex);
   mCalibration = {};
   mCalibration.Active = true;
-  mCalibration.SamplesRequired = 60U;
-  mCalibrationGyroscopeSum = {};
-  mCalibrationAccelerometerSum = {};
-  mCalibrationGyroscopeSamples = 0U;
-  mCalibrationAccelerometerSamples = 0U;
+  mCalibration.SamplesRequired = ThreeDsRecomp::Input::MotionCalibrationAccumulator::SamplesRequired;
+  mCalibrationSamples.Reset();
 }
 
 void NativeControlConfigRuntime::CancelMotionCalibration() noexcept {
@@ -901,8 +921,14 @@ bool NativeControlConfigRuntime::ResetMotionCalibration(std::string* error) {
     reset = mConfig;
   }
   reset.GyroscopeBiasDegreesPerSecond = {};
+  reset.CalibrationControllerGuid.clear();
+  reset.CalibrationControllerSerial.clear();
   reset.AccelerometerNeutral = {0.0F, -1.0F, 0.0F};
-  return Apply(reset, error);
+  if (!Apply(reset, error)) return false;
+  std::scoped_lock lock(mMutex);
+  mCalibration = {};
+  mCalibrationSamples.Reset();
+  return true;
 }
 
 void NativeControlConfigRuntime::BeginBindingCapture(ThreeDsRecomp::Input::BindingDevice device) {
@@ -929,6 +955,25 @@ NativeControlCalibrationStatus
 NativeControlConfigRuntime::CalibrationStatus() const {
   std::scoped_lock lock(mMutex);
   return mCalibration;
+}
+
+NativeControlMotionObservation NativeControlConfigRuntime::MotionStatus() const {
+  std::scoped_lock lock(mMutex);
+  return mLastMotion;
+}
+
+NativeControlConfig ControlsForDevice(const NativeControlConfig& config,
+    const NativeControlDeviceDescriptor* device) {
+  auto effective = config;
+  // Unbound calibration is retained for legacy profiles. New calibrations are
+  // scoped to the device (or its model when SDL cannot provide a serial).
+  if ((!config.CalibrationControllerGuid.empty() || !config.CalibrationControllerSerial.empty()) &&
+      (!device || !ThreeDsRecomp::Input::MatchesController(*device,
+          config.CalibrationControllerGuid, config.CalibrationControllerSerial))) {
+    effective.GyroscopeBiasDegreesPerSecond = {};
+    effective.AccelerometerNeutral = {0.0F, -1.0F, 0.0F};
+  }
+  return effective;
 }
 
 } // namespace Oot3dNativeGame

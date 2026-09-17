@@ -661,6 +661,8 @@ int main(int argc, char** argv) {
                     runtime.Snapshot().Config == preview &&
                     !std::filesystem::exists(controlsPath),
                 "control live preview was not isolated from persistence");
+        NativeControlDeviceDescriptor calibratedDevice{1, "gyro-pad", "Motion pad", true, true, "unit1", true};
+        runtime.ObserveDevices({calibratedDevice});
         runtime.BeginMotionCalibration();
         NativeControlMotionObservation observation;
         observation.GyroscopeDegreesPerSecond = {1.0F, -2.0F, 3.0F};
@@ -680,6 +682,34 @@ int main(int argc, char** argv) {
                         observation.Accelerometer &&
                     std::filesystem::is_regular_file(controlsPath),
                 "motion calibration did not average and persist samples");
+        Require(calibrated.CalibrationControllerGuid == "gyro-pad" &&
+                calibrated.CalibrationControllerSerial == "unit1" &&
+                ControlsForDevice(calibrated, &calibratedDevice).GyroscopeBiasDegreesPerSecond ==
+                    observation.GyroscopeDegreesPerSecond,
+                "calibration was not associated with selected device");
+        calibratedDevice.Serial = "unit2";
+        Require(ControlsForDevice(calibrated, &calibratedDevice).GyroscopeBiasDegreesPerSecond ==
+                    std::array<float, 3>{}, "calibration leaked to another physical controller");
+        NativeControlConfig reloaded;
+        Require(LoadNativeControlConfig(controlsPath, &reloaded, &controlsError) && reloaded == calibrated,
+                "device-scoped calibration round trip");
+        runtime.BeginMotionCalibration();
+        runtime.ObserveDevices({});
+        Require(!runtime.CalibrationStatus().Active && !runtime.CalibrationStatus().Error.empty(),
+                "disconnect did not cancel calibration");
+        runtime.ObserveDevices({calibratedDevice});
+        observation.GyroscopeValid = false;
+        runtime.BeginMotionCalibration();
+        for (uint32_t sample = 0; sample < 60U; ++sample) runtime.ObserveMotion(observation);
+        Require(runtime.Snapshot().Config.GyroscopeBiasDegreesPerSecond == std::array<float, 3>{},
+                "partial calibration reused the previous controller's unavailable sensor bias");
+        runtime.BeginMotionCalibration();
+        Require(runtime.ResetMotionCalibration(&controlsError) && !runtime.CalibrationStatus().Active &&
+                runtime.Snapshot().Config.CalibrationControllerGuid.empty(),
+                "reset left pending calibration able to overwrite neutral values");
+        auto invalidTouch = calibrated;
+        invalidTouch.ControllerTouchpadIndex = -1;
+        Require(!ValidateNativeControlConfig(invalidTouch, &controlsError), "invalid touchpad index accepted");
     }
     WriteText(path, R"json({
   "schema": "oot3d.native_game.input_timeline.v1",

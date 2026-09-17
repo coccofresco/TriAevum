@@ -2612,7 +2612,7 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
                    bool guestRefreshWillConsume,
                    NativeControlPollingState &pollingState) {
   using namespace Oot3dNativeGame;
-  const auto config = controls.Snapshot().Config;
+  auto config = controls.Snapshot().Config;
   NativeControlHostInputState host;
   host.SamplePeriodSeconds = samplePeriodSeconds;
   const auto &io = ImGui::GetIO();
@@ -2634,6 +2634,9 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
     pollingState.RightStickProfile = {};
   }
   pollingState.ControllerInstance = selectedController.InstanceId;
+  const auto selectedDevice = std::find_if(selectedController.Devices.begin(), selectedController.Devices.end(),
+      [](const auto& device) { return device.Selected; });
+  config = ControlsForDevice(config, selectedDevice != selectedController.Devices.end() ? &*selectedDevice : nullptr);
   controls.ObserveDevices(std::move(selectedController.Devices));
 
   const int16_t triggerThreshold = static_cast<int16_t>(
@@ -2719,7 +2722,8 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
   }
 
   ThreeDsRecomp::Input::SampleSdlController(
-      config.ControllerEnabled ? selectedController.Controller : nullptr, host, !hostGuiVisible);
+      config.ControllerEnabled ? selectedController.Controller : nullptr, host, !hostGuiVisible,
+      config.ControllerTouchpadEnabled ? config.ControllerTouchpadIndex : -1);
   controls.ObserveMotion(host.ControllerMotion);
   if (hostGuiVisible) {
     host.ControllerMotion = {};
@@ -2793,6 +2797,14 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
     frame.Hid.TouchX = touch.X;
     frame.Hid.TouchY = touch.Y;
     frame.Hid.TouchPressed = touch.Pressed;
+    if (!frame.Hid.TouchPressed) {
+      const auto pad = ThreeDsRecomp::Input::MapNormalizedTouch(host.ControllerTouch);
+      if (pad.Pressed) {
+        frame.Hid.TouchX = pad.X;
+        frame.Hid.TouchY = pad.Y;
+        frame.Hid.TouchPressed = true;
+      }
+    }
   }
   ApplyNativeControlShortcutTouch(host, frame);
   return frame;

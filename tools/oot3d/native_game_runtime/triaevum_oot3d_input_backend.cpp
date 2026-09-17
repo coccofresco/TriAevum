@@ -94,14 +94,19 @@ bool TriAevumOot3dInputBackend::Poll(Fast::Fast3dWindow &window,
         mConfig.Bindings[index], enabled, buttonSource);
   }
 
-  ThreeDsRecomp::Input::SampleSdlController(controller, host);
+  ThreeDsRecomp::Input::SampleSdlController(controller, host, true,
+      mConfig.ControllerTouchpadEnabled ? mConfig.ControllerTouchpadIndex : -1);
 
   const auto mouseDelta = window.GetMouseDelta();
   const bool mouseOwned = mConfig.MouseEnabled && !window.IsMouseCaptureReleased();
   host.MouseDeltaX = mouseOwned ? mouseDelta.x : 0;
   host.MouseDeltaY = mouseOwned ? mouseDelta.y : 0;
+  const auto selectedDevice = std::find_if(selected.Devices.begin(), selected.Devices.end(),
+      [](const auto& device) { return device.Selected; });
+  const auto effective = ControlsForDevice(mConfig,
+      selectedDevice != selected.Devices.end() ? &*selectedDevice : nullptr);
   auto frame =
-      MapNativeControlInput(mConfig, host, {}, &mRightStickProfile, true, &mVirtualMotion);
+      MapNativeControlInput(effective, host, {}, &mRightStickProfile, true, &mVirtualMotion);
   ApplyNativeControlShortcutTouch(host, frame);
   const auto pointer = window.GetMousePos();
   const auto touch = MapHostPointerToNativeA32Touch(
@@ -112,6 +117,15 @@ bool TriAevumOot3dInputBackend::Poll(Fast::Fast3dWindow &window,
     frame.Hid.TouchX = touch.X;
     frame.Hid.TouchY = touch.Y;
     frame.Hid.TouchPressed = touch.Pressed;
+  }
+
+  if (!frame.Hid.TouchPressed) {
+    const auto pad = ThreeDsRecomp::Input::MapNormalizedTouch(host.ControllerTouch);
+    if (pad.Pressed) {
+      frame.Hid.TouchX = pad.X;
+      frame.Hid.TouchY = pad.Y;
+      frame.Hid.TouchPressed = true;
+    }
   }
 
   ++mStats.HostPolls;

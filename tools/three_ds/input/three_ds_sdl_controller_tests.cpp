@@ -1,5 +1,6 @@
 #define SDL_MAIN_HANDLED
 #include "three_ds_sdl_controller.h"
+#include "../../../runtime/three_ds_recomp/include/ship/controller/physicaldevice/SDLControllerSetup.h"
 #include <iostream>
 #include <stdexcept>
 
@@ -12,6 +13,14 @@ void Require(bool condition, const char* message) {
 int main() try {
     using namespace ThreeDsRecomp::Input;
     SDL_SetMainReady();
+    Ship::ConfigureSDLControllerCapabilities();
+    Require(SDL_GetHintBoolean(SDL_HINT_JOYSTICK_HIDAPI_PS4_RUMBLE, SDL_FALSE) &&
+            SDL_GetHintBoolean(SDL_HINT_JOYSTICK_HIDAPI_PS5_RUMBLE, SDL_FALSE),
+            "extended PlayStation sensor reports not enabled");
+    SDL_SetHintWithPriority(SDL_HINT_JOYSTICK_HIDAPI_PS4_RUMBLE, "0", SDL_HINT_OVERRIDE);
+    Ship::ConfigureSDLControllerCapabilities();
+    Require(!SDL_GetHintBoolean(SDL_HINT_JOYSTICK_HIDAPI_PS4_RUMBLE, SDL_TRUE),
+            "controller setup overwrote explicit user preference");
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
     Require(SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) == 0, "SDL initialization");
     const int index = SDL_JoystickAttachVirtual(SDL_JOYSTICK_TYPE_GAMECONTROLLER,
@@ -53,13 +62,15 @@ int main() try {
             "UI-owned analog axes leak to gameplay");
     Require(!state.ControllerMotion.GyroscopeValid && !state.ControllerMotion.AccelerometerValid,
             "unavailable sensors synthesized valid samples");
+    Require(!state.ControllerTouch.Pressed, "unavailable touchpad synthesized a touch");
     Require(SDL_JoystickDetachVirtual(index) == 0, "virtual disconnect");
     Require(ResolveSdlController(connected, "", "", id).Controller == nullptr,
             "detached handle remains selected");
     state.LeftStickX = 20000;
     state.ControllerMotion.GyroscopeValid = true;
+    state.ControllerTouch = {0.5F, 0.5F, true};
     SampleSdlController(controller, state);
-    Require(state.LeftStickX == 0 && !state.ControllerMotion.GyroscopeValid &&
+    Require(state.LeftStickX == 0 && !state.ControllerMotion.GyroscopeValid && !state.ControllerTouch.Pressed &&
             !IsSdlControllerButtonHeld(controller, GamepadButton::A, 0),
             "disconnect leaves stuck physical input");
     SDL_GameControllerClose(controller);

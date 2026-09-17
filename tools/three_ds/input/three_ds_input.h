@@ -327,6 +327,7 @@ struct DeviceDescriptor {
     bool HasAccelerometer = false;
     std::string Serial;
     bool Selected = false;
+    std::int32_t TouchpadCount = 0;
 };
 
 // Session IDs are never persisted. A GUID identifies a model; a serial, when
@@ -343,6 +344,34 @@ struct MotionObservation {
     std::array<float, 3> Accelerometer{0.0F, -1.0F, 0.0F};
     bool GyroscopeValid = false;
     bool AccelerometerValid = false;
+    std::uint64_t GyroscopeTimestampMicroseconds = 0;
+    std::uint64_t AccelerometerTimestampMicroseconds = 0;
+};
+
+// Azahar's SDL -> native 3DS orientation and units, independent of pad brand.
+[[nodiscard]] MotionObservation ConvertSdlMotion(
+    const std::array<float, 3>& accelerationMetersPerSecondSquared, bool accelerationValid,
+    const std::array<float, 3>& gyroscopeRadiansPerSecond, bool gyroscopeValid) noexcept;
+
+class MotionCalibrationAccumulator {
+public:
+    void Reset() noexcept;
+    bool Observe(const MotionObservation& observation) noexcept;
+    [[nodiscard]] std::uint32_t SamplesCollected() const noexcept;
+    [[nodiscard]] MotionObservation Mean() const noexcept;
+    [[nodiscard]] bool WaitingForStillness() const noexcept { return mWaitingForStillness; }
+    static constexpr std::uint32_t SamplesRequired = 60;
+private:
+    std::array<double, 3> mGyroscopeSum{}, mAccelerometerSum{};
+    std::uint32_t mGyroscopeCount = 0, mAccelerometerCount = 0;
+    std::uint64_t mGyroscopeTimestamp = 0, mAccelerometerTimestamp = 0;
+    bool mWaitingForStillness = false;
+};
+
+struct NormalizedTouch {
+    float X = 0.0F;
+    float Y = 0.0F;
+    bool Pressed = false;
 };
 
 struct PhysicalInputState {
@@ -354,6 +383,7 @@ struct PhysicalInputState {
     std::int32_t MouseDeltaY = 0;
     double SamplePeriodSeconds = 1.0 / 60.0;
     MotionObservation ControllerMotion;
+    NormalizedTouch ControllerTouch;
 };
 
 struct MappingConfig {
@@ -425,6 +455,8 @@ struct TouchMapping {
     bool Inside = false;
     bool Pressed = false;
 };
+
+[[nodiscard]] TouchMapping MapNormalizedTouch(const NormalizedTouch& touch) noexcept;
 
 [[nodiscard]] TouchMapping MapPresentationPointToTouch(
     float pointX, float pointY, float presentationWidth,

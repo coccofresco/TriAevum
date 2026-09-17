@@ -52,7 +52,7 @@ and the full MIT notice. No game code is imported here.
 
 ## Deliberate Limits
 
-This is not full feature parity with Dusklight. Per-device mapping/calibration
+This is not full feature parity with Dusklight. Multiple per-device mapping/calibration
 profiles, transport fallback, native button glyphs, rumble UI and post-bind
 navigation-release suppression still need their own integration/verification.
 Without a serial, a persisted preference identifies a model, not one physical
@@ -90,3 +90,76 @@ Completed Windows verification:
   This checks startup/polling integration, not a physical-controller playthrough.
 
 Hardware behavior must not be inferred from the existence of a test target.
+
+## Azahar Motion And Touch Extension
+
+The shared input path now also adapts Azahar's SDL sensor/touchpad boundary,
+not its event thread. Reference: [sdl_impl.cpp at c2237de](https://github.com/azahar-emu/azahar/blob/c2237de04d8c08cb5ad0ba3fb98e5a9640203257/src/input_common/sdl/sdl_impl.cpp).
+
+- SDL acceleration in m/s^2 becomes native gravity units `(x,-y,z)/9.80665`;
+  angular velocity in rad/s becomes native degrees/s `(-x,y,-z)*180/pi`.
+  Nonfinite values and unavailable sensors are not valid samples.
+- Enable HIDAPI and extended PS4/PS5 Bluetooth reports before opening devices.
+  Defaults have SDL default priority: environment/application overrides win.
+  Switch and Joy-Con drivers inherit the global HIDAPI preference. SDL owns
+  their model/transport orientation; no title-specific brand axis fixes.
+- SDL's standard motion channels for a combined Joy-Con pair use the right
+  controller; do not sum both controllers. See [SDL Switch driver](https://github.com/libsdl-org/SDL/blob/SDL2/src/joystick/hidapi/SDL_hidapi_switch.c).
+- The chosen pad alone provides buttons, sticks, motion and optional touchpad.
+  Touchpad coordinates map directly to native 320x240 touch space, independent
+  of the window aspect ratio. Native UI eligibility and host menu capture still
+  apply. A pressed mouse touch or explicit shortcut takes precedence. Release
+  and disconnect clear touch; a touchpad click is not required for contact.
+- F1 Devices owns touchpad enable/index, capability display and calibration.
+  No new TopScreen or renderer input settings are introduced.
+- Motion camera horizontal input uses native Y (yaw), not native Z (roll).
+  Native horizontal aim inversion covers both yaw components, matching the
+  existing virtual-mouse sensor convention. Native sensor samples otherwise
+  remain full three-axis observations for the game's own motion processing.
+- Manual calibration rejects strong movement/free fall and counts fresh sensor
+  timestamps, not repeated render polls. Older/timestamp-less drivers retain
+  poll-based sampling. Sixty accepted samples complete the calibration;
+  holding still is required, and slow intentional rotation can look like bias.
+- Calibration aborts on selected-device change/disconnect. New results are
+  scoped to GUID plus serial when available; another controller receives neutral
+  calibration without erasing the saved result. One calibration is stored, not
+  an unlimited device database. Legacy unbound calibration remains compatible.
+  Save failures remain visible in F1 instead of being discarded.
+
+### Compatibility Boundaries
+
+DualShock 4, DualSense, Switch Pro, Joy-Con and compatible pads use capabilities
+reported by SDL, not a product-name whitelist. A compatible pad exposing only
+XInput cannot supply motion merely because its case contains an IMU. Steam
+Input/remapping software can expose a virtual pad without physical sensors;
+select an exposed sensor-capable device or configure the upstream remapper.
+Serial-less calibration/preferences identify a model rather than an individual
+unit. Changing USB/Bluetooth GUID may require selecting/calibrating again.
+
+[Extended PlayStation reports](https://wiki.libsdl.org/SDL2/SDL_HINT_JOYSTICK_HIDAPI_PS4_RUMBLE)
+can affect compatibility with non-SDL DirectInput software until power cycling
+the controller. Users can opt out through the SDL environment hints. Missing
+sensor support does not disable ordinary buttons/sticks.
+
+Existing Circle Pad, C-stick, ZL/ZR, keyboard/mouse virtual aiming and Android
+overlay paths are retained. Microphone, cameras, lid events and NFC are separate
+3DS services and are **not** implemented by this controller extension. Android
+device IMU integration and physical hardware qualification on other platforms
+remain separate tasks; desktop SDL tests cannot establish those guarantees.
+
+### Extension Verification (Windows, 2026-09-17)
+
+- Shared input tests pass: native axes/units, yaw versus roll, touch bounds,
+  nonfinite samples, duplicate timestamps, stationary restart and partial sensors.
+- SDL virtual-device tests pass: report setup/explicit override precedence,
+  unavailable sensors/touch, button/axis routing and disconnect neutralization.
+- Native input tests pass: config compatibility, calibration persistence/device
+  isolation, disconnect cancellation, partial calibration and reset while active.
+- Consolidated F1 real-widget smoke passes 3,950 assertions. Release audit unit
+  suite passes 11 tests. Game builds and the source-module consumer compiles.
+- Vulkan game probe from the existing Sages state completes 60 frames and exits
+  0, using real host polling with no injected timeline. Private logs:
+  `C:/Users/xander/triaevum-issues-40-43/motion-touch-alignment/`.
+  This is an integration smoke, not physical motion/touchpad qualification.
+- No PS4/PS5/Switch USB/Bluetooth hardware matrix, Linux, Android or macOS
+  execution was completed for this extension. Test those before claiming parity.

@@ -1,5 +1,11 @@
 # F1 settings rationalization
 
+2026-09-17 Azahar motion/touch extension: consolidated Devices owns the controller
+touchpad switch/index, reported capabilities and sensor calibration status.
+Calibration requires received sensor data, reports movement/cancellation/save
+errors and persists device identity. Actual-widget smoke: 3,950 assertions,
+including live touchpad enable/disable. No second control surface was introduced.
+
 2026-09-17 controller alignment: the consolidated Devices panel now shares
 runtime controller selection semantics, preserves optional serial identity,
 shows the active device and labels serial-less choices as model preferences.

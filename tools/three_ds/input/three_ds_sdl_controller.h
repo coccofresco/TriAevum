@@ -35,6 +35,7 @@ inline SdlControllerSelection ResolveSdlController(
         if (deviceSerial) device.Serial = NormalizeControllerSerial(deviceSerial);
         device.HasGyroscope = SDL_GameControllerHasSensor(controller, SDL_SENSOR_GYRO) == SDL_TRUE;
         device.HasAccelerometer = SDL_GameControllerHasSensor(controller, SDL_SENSOR_ACCEL) == SDL_TRUE;
+        device.TouchpadCount = std::max(0, SDL_GameControllerGetNumTouchpads(controller));
 #endif
         result.Devices.push_back(std::move(device));
     }
@@ -71,9 +72,11 @@ inline bool IsSdlControllerButtonHeld(SDL_GameController* controller,
 // Convert SDL's down-positive axes, rad/s and m/s^2 once at the shared 3DS
 // boundary. UI capture can mute axes while retaining sensor calibration.
 inline void SampleSdlController(SDL_GameController* controller,
-                                PhysicalInputState& state, bool readAxes = true) {
+                                PhysicalInputState& state, bool readAxes = true,
+                                std::int32_t touchpadIndex = 0) {
     state.LeftStickX = state.LeftStickY = state.RightStickX = state.RightStickY = 0;
     state.ControllerMotion = {};
+    state.ControllerTouch = {};
     if (!controller || SDL_GameControllerGetAttached(controller) != SDL_TRUE) return;
     if (readAxes) {
         const auto invert = [](std::int16_t value) {
@@ -85,23 +88,37 @@ inline void SampleSdlController(SDL_GameController* controller,
         state.RightStickY = invert(SDL_GameControllerGetAxis(controller, SDL_CONTROLLER_AXIS_RIGHTY));
     }
 #if SDL_VERSION_ATLEAST(2, 0, 14)
-    const auto sample = [controller](SDL_SensorType type, std::array<float, 3>& data) {
+    const auto sample = [controller](SDL_SensorType type, std::array<float, 3>& data, std::uint64_t& timestamp) {
         if (SDL_GameControllerHasSensor(controller, type) != SDL_TRUE) return false;
         if (SDL_GameControllerIsSensorEnabled(controller, type) != SDL_TRUE &&
             SDL_GameControllerSetSensorEnabled(controller, type, SDL_TRUE) != 0) return false;
-        return SDL_GameControllerGetSensorData(controller, type, data.data(), data.size()) == 0;
+#if SDL_VERSION_ATLEAST(2, 26, 0)
+        Uint64 nativeTimestamp = 0;
+        const bool ok = SDL_GameControllerGetSensorDataWithTimestamp(
+            controller, type, &nativeTimestamp, data.data(), static_cast<int>(data.size())) == 0;
+        timestamp = nativeTimestamp;
+        return ok;
+#else
+        timestamp = 0;
+        return SDL_GameControllerGetSensorData(controller, type, data.data(), static_cast<int>(data.size())) == 0;
+#endif
     };
-    std::array<float, 3> data{};
-    if (sample(SDL_SENSOR_ACCEL, data)) {
-        constexpr float gravity = 9.80665F;
-        state.ControllerMotion.Accelerometer = {data[0] / gravity, -data[1] / gravity, data[2] / gravity};
-        state.ControllerMotion.AccelerometerValid = true;
-    }
-    if (sample(SDL_SENSOR_GYRO, data)) {
-        constexpr float toDegrees = 57.2957795130823208768F;
-        state.ControllerMotion.GyroscopeDegreesPerSecond =
-            {-data[0] * toDegrees, data[1] * toDegrees, -data[2] * toDegrees};
-        state.ControllerMotion.GyroscopeValid = true;
+    std::array<float, 3> accel{}, gyro{};
+    std::uint64_t accelTimestamp = 0, gyroTimestamp = 0;
+    const bool accelValid = sample(SDL_SENSOR_ACCEL, accel, accelTimestamp);
+    const bool gyroValid = sample(SDL_SENSOR_GYRO, gyro, gyroTimestamp);
+    state.ControllerMotion = ConvertSdlMotion(accel, accelValid, gyro, gyroValid);
+    state.ControllerMotion.AccelerometerTimestampMicroseconds = accelTimestamp;
+    state.ControllerMotion.GyroscopeTimestampMicroseconds = gyroTimestamp;
+    if (readAxes && touchpadIndex >= 0 && touchpadIndex < SDL_GameControllerGetNumTouchpads(controller)) {
+        for (int finger = 0; finger < SDL_GameControllerGetNumTouchpadFingers(controller, touchpadIndex); ++finger) {
+            Uint8 pressed = 0;
+            float x = 0, y = 0, pressure = 0;
+            if (SDL_GameControllerGetTouchpadFinger(controller, touchpadIndex, finger, &pressed, &x, &y, &pressure) == 0 && pressed) {
+                const NormalizedTouch touch{x, y, true};
+                if (MapNormalizedTouch(touch).Pressed) { state.ControllerTouch = touch; break; }
+            }
+        }
     }
 #endif
 }

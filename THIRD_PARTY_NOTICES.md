@@ -73,6 +73,14 @@ or was adapted against [Azahar Emulator](https://github.com/azahar-emu/azahar).
   semantics of Azahar's NCSD/NCCH loader at the same revision for Forge's
   decrypted cartridge-image importer. It is GPL-2.0-or-later and retains an
   explicit source-file notice.
+- `tools/three_ds/input/three_ds_input.cpp`, `three_ds_sdl_controller.h` and
+  `runtime/three_ds_recomp/include/ship/controller/physicaldevice/SDLControllerSetup.h`
+  adapt the SDL motion coordinate/unit mapping, normalized touchpad input and
+  extended PlayStation report setup from `src/input_common/sdl/sdl_impl.cpp`
+  at Azahar revision `c2237de04d8c08cb5ad0ba3fb98e5a9640203257`
+  (Citra/Azahar contributors, GPL-2.0-or-later). Device selection and event
+  ownership remain in TriAevum's shared input layer; no donor event thread
+  or renderer is imported.
 
 Azahar's license text and source availability requirements apply to combined
 distributions that consume these files.
