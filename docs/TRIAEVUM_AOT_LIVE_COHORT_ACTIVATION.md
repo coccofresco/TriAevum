@@ -99,6 +99,10 @@ was deliberately left running.
 
 ## Next implementation boundary
 
+Follow-up implemented and tested in
+[the direct-link pilot](TRIAEVUM_AOT_DIRECT_COHORT.md). It removes the ABI handoff,
+but has not demonstrated repeatable total savings and remains developer-only.
+
 To obtain speed rather than only qualification, integrate the cohort at the
 **generated direct-call boundary inside the AOT module**:
 
