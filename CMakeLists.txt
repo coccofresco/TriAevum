@@ -2597,6 +2597,18 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
 endif()
 set_property(TARGET three_ds_recomp_input_tests PROPERTY FOLDER Tests)
 
+if (TARGET SDL2::SDL2)
+    add_executable(three_ds_sdl_controller_tests EXCLUDE_FROM_ALL
+        tools/three_ds/input/three_ds_sdl_controller_tests.cpp)
+    target_link_libraries(three_ds_sdl_controller_tests PRIVATE three_ds_recomp_input SDL2::SDL2)
+    if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+        target_compile_definitions(three_ds_sdl_controller_tests PRIVATE NOMINMAX)
+        set_property(TARGET three_ds_sdl_controller_tests PROPERTY
+            MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+    set_property(TARGET three_ds_sdl_controller_tests PROPERTY FOLDER Tests)
+endif()
+
 add_library(oot3d_native_control_config STATIC EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_control_config.cpp
 )

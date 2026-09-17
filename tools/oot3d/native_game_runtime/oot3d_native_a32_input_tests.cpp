@@ -373,14 +373,24 @@ int main(int argc, char** argv) {
 
     std::string serializedControls;
     std::string controlsError;
+    controllerConfig.PreferredControllerGuid = "test-pad";
+    controllerConfig.PreferredControllerSerial = "aa01";
     Require(SerializeNativeControlConfigText(
                 controllerConfig, &serializedControls, &controlsError),
             controlsError);
     NativeControlConfig parsedControls;
     Require(ParseNativeControlConfigText(
+                R"({"schema":"oot3d_native_controls_v1","profile":"controller","controller_guid":"legacy"})",
+                &parsedControls, &controlsError) &&
+                parsedControls.PreferredControllerGuid == "legacy" &&
+                parsedControls.PreferredControllerSerial.empty(),
+            "legacy GUID-only configuration did not load");
+    Require(ParseNativeControlConfigText(
                 serializedControls, &parsedControls, &controlsError) &&
                 parsedControls.Profile ==
                     NativeControlProfile::Controller &&
+                parsedControls.PreferredControllerGuid == "test-pad" &&
+                parsedControls.PreferredControllerSerial == "aa01" &&
                 parsedControls.GyroscopeBiasDegreesPerSecond ==
                     controllerConfig.GyroscopeBiasDegreesPerSecond,
             "native control JSON did not round-trip");

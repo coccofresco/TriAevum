@@ -325,7 +325,18 @@ struct DeviceDescriptor {
     std::string Name;
     bool HasGyroscope = false;
     bool HasAccelerometer = false;
+    std::string Serial;
+    bool Selected = false;
 };
+
+// Session IDs are never persisted. A GUID identifies a model; a serial, when
+// available, distinguishes two physical pads of that model.
+[[nodiscard]] std::string NormalizeControllerSerial(std::string_view serial);
+[[nodiscard]] bool MatchesController(const DeviceDescriptor& device,
+    std::string_view guid, std::string_view serial);
+[[nodiscard]] std::int32_t SelectControllerDevice(
+    std::span<const DeviceDescriptor> devices, std::string_view guid,
+    std::string_view serial, std::int32_t previousInstance = -1);
 
 struct MotionObservation {
     std::array<float, 3> GyroscopeDegreesPerSecond{};

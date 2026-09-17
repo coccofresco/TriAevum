@@ -126,6 +126,33 @@ void TestVirtualMotion() {
 } // namespace
 
 int main() try {
+    {
+        using namespace ThreeDsRecomp::Input;
+        const std::array<DeviceDescriptor, 3> devices{{
+            {7, "pad", "Same model", false, false, "AA:01"},
+            {3, "pad", "Same model", false, false, "AA:02"},
+            {1, "virtual", "Steam Input", false, false, ""},
+        }};
+        Require(SelectControllerDevice(devices, "", "") == 1,
+                "automatic selection must be independent of enumeration order");
+        Require(SelectControllerDevice(devices, "", "", 7) == 7,
+                "automatic selection switched an attached active device");
+        Require(SelectControllerDevice(devices, "pad", "") == 3 &&
+                SelectControllerDevice(devices, "pad", "", 7) == 7,
+                "legacy GUID preference is not deterministic and sticky");
+        Require(SelectControllerDevice(devices, "pad", "aa-01", 3) == 7,
+                "serial preference ignored or not normalized");
+        Require(SelectControllerDevice(devices, "pad", "missing", 7) == -1 &&
+                SelectControllerDevice(devices, "missing", "", 7) == -1,
+                "explicit missing preference silently routes another controller");
+        Require(SelectControllerDevice({}, "", "", 7) == -1 &&
+                SelectControllerDevice(devices, "", "", 99) == 1,
+                "disconnect did not clear selection or choose automatic replacement");
+        auto reconnected = devices;
+        reconnected[0].InstanceId = 50;
+        Require(SelectControllerDevice(reconnected, "pad", "aa01", 7) == 50,
+                "reconnect persisted an obsolete session ID");
+    }
     using namespace ThreeDsRecomp::Input;
     TestVirtualMotion();
 

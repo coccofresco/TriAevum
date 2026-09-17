@@ -79,6 +79,7 @@ struct NativeControlConfig {
   bool NativeAimInvertX = false;
   bool NativeAimInvertY = false;
   std::string PreferredControllerGuid;
+  std::string PreferredControllerSerial;
   std::array<float, 3> GyroscopeBiasDegreesPerSecond{};
   std::array<float, 3> AccelerometerNeutral{0.0F, -1.0F, 0.0F};
 

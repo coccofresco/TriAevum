@@ -24,6 +24,20 @@ copy; that precedent is not legal advice or permission for TriAevum content.
 The upstream project is commonly named Ship of Harkinian / Shipwright. That is
 the donor referred to in project discussions as "Ship of Arkanian."
 
+## Dusklight / Aurora controller architecture
+
+The shared controller identity and routing work references
+[TwilitRealm/Dusklight](https://github.com/TwilitRealm/dusklight) at
+`97d46baec1c9b1af11b9c9d52314ef1d234911be` (CC0-1.0) and its pinned
+[encounter/Aurora](https://github.com/encounter/aurora) at
+`7f2801cd0133c9333eadb4e2e6b24100c328d328` (MIT, Luke Street).
+Serial normalization in `tools/three_ds/input/three_ds_input.cpp` is adapted
+from Aurora's `lib/input.cpp`; the MIT notice is retained in
+`LICENSES/Aurora-MIT.txt`. TriAevum keeps its own SDL lifecycle, 3DS mappings
+and consolidated ImGui controls rather than importing Aurora's PAD frontend
+or Dusklight's game-specific controls. See
+`docs/TRIAEVUM_DUSKLIGHT_CONTROL_ALIGNMENT.md` for scope and verification.
+
 ## libultraship
 
 `runtime/three_ds_recomp` descends from

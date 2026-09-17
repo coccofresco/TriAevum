@@ -1,4 +1,5 @@
 #include "triaevum_oot3d_input_backend.h"
+#include "three_ds_sdl_controller.h"
 
 #include "fast/Fast3dWindow.h"
 #include "ship/Context.h"
@@ -20,47 +21,19 @@
 namespace Oot3dNativeGame {
 namespace {
 
-struct SelectedController {
-  SDL_GameController *Controller = nullptr;
-  std::string Guid;
-};
-
-std::optional<SelectedController>
-SelectController(const NativeControlConfig &config) {
+ThreeDsRecomp::Input::SdlControllerSelection
+SelectController(const NativeControlConfig &config, std::int32_t previousInstance) {
   auto *context = Ship::Context::GetRawInstance();
   auto controlDeck = context != nullptr ? context->GetControlDeck() : nullptr;
   auto devices = controlDeck != nullptr
                      ? controlDeck->GetConnectedPhysicalDeviceManager()
                      : nullptr;
   if (devices == nullptr) {
-    return std::nullopt;
+    return {};
   }
-  auto connected = devices->GetConnectedSDLGamepadsForPort(0);
-  std::vector<std::pair<std::int32_t, SDL_GameController *>> ordered(
-      connected.begin(), connected.end());
-  std::sort(ordered.begin(), ordered.end(),
-            [](const auto &left, const auto &right) {
-              return left.first < right.first;
-            });
-  std::optional<SelectedController> selected;
-  for (const auto &[instanceId, controller] : ordered) {
-    static_cast<void>(instanceId);
-    if (controller == nullptr ||
-        SDL_GameControllerGetAttached(controller) != SDL_TRUE) {
-      continue;
-    }
-    SDL_Joystick *joystick = SDL_GameControllerGetJoystick(controller);
-    char guidText[33]{};
-    SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(joystick), guidText,
-                              static_cast<int>(sizeof(guidText)));
-    const bool preferred = !config.PreferredControllerGuid.empty() &&
-                           config.PreferredControllerGuid == guidText;
-    if (preferred ||
-        (config.PreferredControllerGuid.empty() && !selected.has_value())) {
-      selected = SelectedController{controller, guidText};
-    }
-  }
-  return selected;
+  return ThreeDsRecomp::Input::ResolveSdlController(
+      devices->GetConnectedSDLGamepadsForPort(0), config.PreferredControllerGuid,
+      config.PreferredControllerSerial, previousInstance);
 }
 
 class WindowButtonSource final : public ThreeDsRecomp::Input::HostButtonSource {
@@ -82,55 +55,7 @@ public:
 
   bool
   IsGamepadButtonHeld(NativeGamepadButton binding) const noexcept override {
-    if (mController == nullptr || binding == NativeGamepadButton::None) {
-      return false;
-    }
-    const auto button = [&](SDL_GameControllerButton value) {
-      return SDL_GameControllerGetButton(mController, value) != 0;
-    };
-    switch (binding) {
-    case NativeGamepadButton::A:
-      return button(SDL_CONTROLLER_BUTTON_A);
-    case NativeGamepadButton::B:
-      return button(SDL_CONTROLLER_BUTTON_B);
-    case NativeGamepadButton::X:
-      return button(SDL_CONTROLLER_BUTTON_X);
-    case NativeGamepadButton::Y:
-      return button(SDL_CONTROLLER_BUTTON_Y);
-    case NativeGamepadButton::Back:
-      return button(SDL_CONTROLLER_BUTTON_BACK);
-    case NativeGamepadButton::Guide:
-      return button(SDL_CONTROLLER_BUTTON_GUIDE);
-    case NativeGamepadButton::Start:
-      return button(SDL_CONTROLLER_BUTTON_START);
-    case NativeGamepadButton::LeftStick:
-      return button(SDL_CONTROLLER_BUTTON_LEFTSTICK);
-    case NativeGamepadButton::RightStick:
-      return button(SDL_CONTROLLER_BUTTON_RIGHTSTICK);
-    case NativeGamepadButton::LeftShoulder:
-      return button(SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
-    case NativeGamepadButton::RightShoulder:
-      return button(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
-    case NativeGamepadButton::DpadUp:
-      return button(SDL_CONTROLLER_BUTTON_DPAD_UP);
-    case NativeGamepadButton::DpadDown:
-      return button(SDL_CONTROLLER_BUTTON_DPAD_DOWN);
-    case NativeGamepadButton::DpadLeft:
-      return button(SDL_CONTROLLER_BUTTON_DPAD_LEFT);
-    case NativeGamepadButton::DpadRight:
-      return button(SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
-    case NativeGamepadButton::LeftTrigger:
-      return SDL_GameControllerGetAxis(mController,
-                                       SDL_CONTROLLER_AXIS_TRIGGERLEFT) >
-             mTriggerThreshold;
-    case NativeGamepadButton::RightTrigger:
-      return SDL_GameControllerGetAxis(mController,
-                                       SDL_CONTROLLER_AXIS_TRIGGERRIGHT) >
-             mTriggerThreshold;
-    case NativeGamepadButton::None:
-      return false;
-    }
-    return false;
+    return ThreeDsRecomp::Input::IsSdlControllerButtonHeld(mController, binding, mTriggerThreshold);
   }
 
 private:
@@ -155,10 +80,10 @@ bool TriAevumOot3dInputBackend::Poll(Fast::Fast3dWindow &window,
                                      double samplePeriodSeconds) {
   NativeControlHostInputState host;
   host.SamplePeriodSeconds = std::clamp(samplePeriodSeconds, 0.001, 0.25);
-  const auto selected =
-      mConfig.ControllerEnabled ? SelectController(mConfig) : std::nullopt;
-  SDL_GameController *controller =
-      selected.has_value() ? selected->Controller : nullptr;
+  const auto selected = SelectController(mConfig, mControllerInstance);
+  if (mControllerInstance != selected.InstanceId) mRightStickProfile = {};
+  mControllerInstance = selected.InstanceId;
+  SDL_GameController *controller = mConfig.ControllerEnabled ? selected.Controller : nullptr;
   const std::int16_t triggerThreshold = static_cast<std::int16_t>(
       32767 * std::clamp(mConfig.TriggerDeadZonePercent, 0, 95) / 100);
   WindowButtonSource buttonSource(window, controller, triggerThreshold);
@@ -169,56 +94,7 @@ bool TriAevumOot3dInputBackend::Poll(Fast::Fast3dWindow &window,
         mConfig.Bindings[index], enabled, buttonSource);
   }
 
-  if (controller != nullptr) {
-    const auto axis = [&](SDL_GameControllerAxis value) {
-      return SDL_GameControllerGetAxis(controller, value);
-    };
-    const auto invertedAxis = [&](SDL_GameControllerAxis value) {
-      return static_cast<std::int16_t>(
-          std::clamp(-static_cast<std::int32_t>(axis(value)), -32767, 32767));
-    };
-    host.LeftStickX = axis(SDL_CONTROLLER_AXIS_LEFTX);
-    host.LeftStickY = invertedAxis(SDL_CONTROLLER_AXIS_LEFTY);
-    host.RightStickX = axis(SDL_CONTROLLER_AXIS_RIGHTX);
-    host.RightStickY = invertedAxis(SDL_CONTROLLER_AXIS_RIGHTY);
-#if SDL_VERSION_ATLEAST(2, 0, 14)
-    constexpr float kGravityMetersPerSecondSquared = 9.80665F;
-    constexpr float kRadiansToDegrees = 57.2957795130823208768F;
-    if (SDL_GameControllerHasSensor(controller, SDL_SENSOR_ACCEL) == SDL_TRUE) {
-      if (SDL_GameControllerIsSensorEnabled(controller, SDL_SENSOR_ACCEL) !=
-          SDL_TRUE) {
-        SDL_GameControllerSetSensorEnabled(controller, SDL_SENSOR_ACCEL,
-                                           SDL_TRUE);
-      }
-      std::array<float, 3> sample{};
-      if (SDL_GameControllerGetSensorData(
-              controller, SDL_SENSOR_ACCEL, sample.data(),
-              static_cast<int>(sample.size())) == 0) {
-        host.ControllerMotion.Accelerometer = {
-            sample[0] / kGravityMetersPerSecondSquared,
-            -sample[1] / kGravityMetersPerSecondSquared,
-            sample[2] / kGravityMetersPerSecondSquared};
-        host.ControllerMotion.AccelerometerValid = true;
-      }
-    }
-    if (SDL_GameControllerHasSensor(controller, SDL_SENSOR_GYRO) == SDL_TRUE) {
-      if (SDL_GameControllerIsSensorEnabled(controller, SDL_SENSOR_GYRO) !=
-          SDL_TRUE) {
-        SDL_GameControllerSetSensorEnabled(controller, SDL_SENSOR_GYRO,
-                                           SDL_TRUE);
-      }
-      std::array<float, 3> sample{};
-      if (SDL_GameControllerGetSensorData(
-              controller, SDL_SENSOR_GYRO, sample.data(),
-              static_cast<int>(sample.size())) == 0) {
-        host.ControllerMotion.GyroscopeDegreesPerSecond = {
-            -sample[0] * kRadiansToDegrees, sample[1] * kRadiansToDegrees,
-            -sample[2] * kRadiansToDegrees};
-        host.ControllerMotion.GyroscopeValid = true;
-      }
-    }
-#endif
-  }
+  ThreeDsRecomp::Input::SampleSdlController(controller, host);
 
   const auto mouseDelta = window.GetMouseDelta();
   const bool mouseOwned = mConfig.MouseEnabled && !window.IsMouseCaptureReleased();

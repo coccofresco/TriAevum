@@ -1,4 +1,5 @@
 #include "oot3d_native_a32_window.h"
+#include "three_ds_sdl_controller.h"
 #include "oot3d_prebackend_budget.h"
 #include "oot3d_cpu_phase_probe.h"
 #include "fast/renderer/frame_time_distribution.h"
@@ -2579,6 +2580,7 @@ BuildPicaMemoryRegions(
 }
 
 struct NativeControlPollingState {
+  int32_t ControllerInstance = -1;
   std::array<bool, Oot3dNativeGame::kNativeControlActionCount>
       PhysicalActions{};
   std::array<bool, Oot3dNativeGame::kNativeControlActionCount>
@@ -2617,63 +2619,22 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
   const bool keyboardCaptured = hostGuiVisible || io.WantCaptureKeyboard;
   const bool mouseCaptured = hostGuiVisible;
 
-  struct SelectedController {
-    int32_t InstanceId = -1;
-    SDL_GameController *Controller = nullptr;
-    std::string Guid;
-  };
-  std::optional<SelectedController> selectedController;
-  std::vector<NativeControlDeviceDescriptor> deviceDescriptors;
+  ThreeDsRecomp::Input::SdlControllerSelection selectedController;
   auto *context = Ship::Context::GetRawInstance();
   auto controlDeck = context != nullptr ? context->GetControlDeck() : nullptr;
   if (controlDeck != nullptr) {
     auto devices = controlDeck->GetConnectedPhysicalDeviceManager();
     if (devices != nullptr) {
-      auto connected = devices->GetConnectedSDLGamepadsForPort(0);
-      std::vector<std::pair<int32_t, SDL_GameController *>> ordered(
-          connected.begin(), connected.end());
-      std::sort(ordered.begin(), ordered.end(),
-                [](const auto &lhs, const auto &rhs) {
-                  return lhs.first < rhs.first;
-                });
-      for (const auto &[instanceId, controller] : ordered) {
-        if (controller == nullptr ||
-            SDL_GameControllerGetAttached(controller) != SDL_TRUE) {
-          continue;
-        }
-        SDL_Joystick *joystick = SDL_GameControllerGetJoystick(controller);
-        char guidText[33]{};
-        SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(joystick), guidText,
-                                  static_cast<int>(sizeof(guidText)));
-        const char *name = SDL_GameControllerName(controller);
-        NativeControlDeviceDescriptor descriptor;
-        descriptor.InstanceId = instanceId;
-        descriptor.Guid = guidText;
-        descriptor.Name =
-            name != nullptr ? name : descriptor.Guid;
-#if SDL_VERSION_ATLEAST(2, 0, 14)
-        descriptor.HasGyroscope =
-            SDL_GameControllerHasSensor(controller, SDL_SENSOR_GYRO) ==
-            SDL_TRUE;
-        descriptor.HasAccelerometer =
-            SDL_GameControllerHasSensor(controller, SDL_SENSOR_ACCEL) ==
-            SDL_TRUE;
-#endif
-        deviceDescriptors.push_back(descriptor);
-        const bool preferred =
-            !config.PreferredControllerGuid.empty() &&
-            config.PreferredControllerGuid == descriptor.Guid;
-        const bool automatic =
-            config.PreferredControllerGuid.empty() &&
-            !selectedController.has_value();
-        if (preferred || automatic) {
-          selectedController =
-              SelectedController{instanceId, controller, descriptor.Guid};
-        }
-      }
+      selectedController = ThreeDsRecomp::Input::ResolveSdlController(
+          devices->GetConnectedSDLGamepadsForPort(0), config.PreferredControllerGuid,
+          config.PreferredControllerSerial, pollingState.ControllerInstance);
     }
   }
-  controls.ObserveDevices(std::move(deviceDescriptors));
+  if (pollingState.ControllerInstance != selectedController.InstanceId) {
+    pollingState.RightStickProfile = {};
+  }
+  pollingState.ControllerInstance = selectedController.InstanceId;
+  controls.ObserveDevices(std::move(selectedController.Devices));
 
   const int16_t triggerThreshold = static_cast<int16_t>(
       32767 * std::clamp(config.TriggerDeadZonePercent, 0, 95) / 100);
@@ -2703,55 +2664,7 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
 
     bool IsGamepadButtonHeld(
         NativeGamepadButton binding) const noexcept override {
-      if (mController == nullptr || binding == NativeGamepadButton::None) {
-        return false;
-      }
-      const auto button = [&](SDL_GameControllerButton value) {
-        return SDL_GameControllerGetButton(mController, value) != 0;
-      };
-      switch (binding) {
-      case NativeGamepadButton::A:
-        return button(SDL_CONTROLLER_BUTTON_A);
-      case NativeGamepadButton::B:
-        return button(SDL_CONTROLLER_BUTTON_B);
-      case NativeGamepadButton::X:
-        return button(SDL_CONTROLLER_BUTTON_X);
-      case NativeGamepadButton::Y:
-        return button(SDL_CONTROLLER_BUTTON_Y);
-      case NativeGamepadButton::Back:
-        return button(SDL_CONTROLLER_BUTTON_BACK);
-      case NativeGamepadButton::Guide:
-        return button(SDL_CONTROLLER_BUTTON_GUIDE);
-      case NativeGamepadButton::Start:
-        return button(SDL_CONTROLLER_BUTTON_START);
-      case NativeGamepadButton::LeftStick:
-        return button(SDL_CONTROLLER_BUTTON_LEFTSTICK);
-      case NativeGamepadButton::RightStick:
-        return button(SDL_CONTROLLER_BUTTON_RIGHTSTICK);
-      case NativeGamepadButton::LeftShoulder:
-        return button(SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
-      case NativeGamepadButton::RightShoulder:
-        return button(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
-      case NativeGamepadButton::DpadUp:
-        return button(SDL_CONTROLLER_BUTTON_DPAD_UP);
-      case NativeGamepadButton::DpadDown:
-        return button(SDL_CONTROLLER_BUTTON_DPAD_DOWN);
-      case NativeGamepadButton::DpadLeft:
-        return button(SDL_CONTROLLER_BUTTON_DPAD_LEFT);
-      case NativeGamepadButton::DpadRight:
-        return button(SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
-      case NativeGamepadButton::LeftTrigger:
-        return SDL_GameControllerGetAxis(
-                   mController, SDL_CONTROLLER_AXIS_TRIGGERLEFT) >
-               mTriggerThreshold;
-      case NativeGamepadButton::RightTrigger:
-        return SDL_GameControllerGetAxis(
-                   mController, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) >
-               mTriggerThreshold;
-      case NativeGamepadButton::None:
-        return false;
-      }
-      return false;
+      return ThreeDsRecomp::Input::IsSdlControllerButtonHeld(mController, binding, mTriggerThreshold);
     }
 
    private:
@@ -2764,7 +2677,7 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
   // Remapping observes the same physical source, before gameplay's device and
   // UI filters. It works even for a currently disabled device.
   LusHostButtonSource rawButtonSource(window, false, false,
-      selectedController.has_value() ? selectedController->Controller : nullptr,
+      selectedController.Controller,
       triggerThreshold);
   if (hostGuiVisible) {
     controls.ObserveBindingCapture(rawButtonSource, window.IsKeyDown(Ship::LUS_KB_ESCAPE));
@@ -2776,8 +2689,7 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
   }
   LusHostButtonSource buttonSource(
       window, keyboardCaptured, mouseCaptured,
-      !hostGuiVisible && selectedController.has_value() ? selectedController->Controller
-                                     : nullptr,
+      !hostGuiVisible ? selectedController.Controller : nullptr,
       triggerThreshold);
   const ThreeDsRecomp::Input::HostDeviceEnablement enabledDevices{
       config.KeyboardEnabled,
@@ -2806,63 +2718,8 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
     }
   }
 
-  if (config.ControllerEnabled && selectedController.has_value()) {
-    SDL_GameController *controller = selectedController->Controller;
-    const auto axis = [&](SDL_GameControllerAxis value) {
-      return SDL_GameControllerGetAxis(controller, value);
-    };
-    const auto invertedAxis = [&](SDL_GameControllerAxis value) {
-      return static_cast<int16_t>(std::clamp(
-          -static_cast<int32_t>(axis(value)), -32767, 32767));
-    };
-    if (!hostGuiVisible) {
-      host.LeftStickX = axis(SDL_CONTROLLER_AXIS_LEFTX);
-      host.LeftStickY = invertedAxis(SDL_CONTROLLER_AXIS_LEFTY);
-      host.RightStickX = axis(SDL_CONTROLLER_AXIS_RIGHTX);
-      host.RightStickY = invertedAxis(SDL_CONTROLLER_AXIS_RIGHTY);
-    }
-#if SDL_VERSION_ATLEAST(2, 0, 14)
-    constexpr float kGravityMetersPerSecondSquared = 9.80665F;
-    constexpr float kRadiansToDegrees =
-        57.2957795130823208768F;
-    if (SDL_GameControllerHasSensor(controller, SDL_SENSOR_ACCEL) ==
-        SDL_TRUE) {
-      if (SDL_GameControllerIsSensorEnabled(
-              controller, SDL_SENSOR_ACCEL) != SDL_TRUE) {
-        SDL_GameControllerSetSensorEnabled(controller, SDL_SENSOR_ACCEL,
-                                           SDL_TRUE);
-      }
-      std::array<float, 3> sample{};
-      if (SDL_GameControllerGetSensorData(
-              controller, SDL_SENSOR_ACCEL, sample.data(),
-              static_cast<int>(sample.size())) == 0) {
-        host.ControllerMotion.Accelerometer = {
-            sample[0] / kGravityMetersPerSecondSquared,
-            -sample[1] / kGravityMetersPerSecondSquared,
-            sample[2] / kGravityMetersPerSecondSquared};
-        host.ControllerMotion.AccelerometerValid = true;
-      }
-    }
-    if (SDL_GameControllerHasSensor(controller, SDL_SENSOR_GYRO) ==
-        SDL_TRUE) {
-      if (SDL_GameControllerIsSensorEnabled(
-              controller, SDL_SENSOR_GYRO) != SDL_TRUE) {
-        SDL_GameControllerSetSensorEnabled(controller, SDL_SENSOR_GYRO,
-                                           SDL_TRUE);
-      }
-      std::array<float, 3> sample{};
-      if (SDL_GameControllerGetSensorData(
-              controller, SDL_SENSOR_GYRO, sample.data(),
-              static_cast<int>(sample.size())) == 0) {
-        host.ControllerMotion.GyroscopeDegreesPerSecond = {
-            -sample[0] * kRadiansToDegrees,
-            sample[1] * kRadiansToDegrees,
-            -sample[2] * kRadiansToDegrees};
-        host.ControllerMotion.GyroscopeValid = true;
-      }
-    }
-#endif
-  }
+  ThreeDsRecomp::Input::SampleSdlController(
+      config.ControllerEnabled ? selectedController.Controller : nullptr, host, !hostGuiVisible);
   controls.ObserveMotion(host.ControllerMotion);
   if (hostGuiVisible) {
     host.ControllerMotion = {};

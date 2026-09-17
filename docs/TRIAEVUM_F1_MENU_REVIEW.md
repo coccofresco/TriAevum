@@ -1,5 +1,12 @@
 # F1 settings rationalization
 
+2026-09-17 controller alignment: the consolidated Devices panel now shares
+runtime controller selection semantics, preserves optional serial identity,
+shows the active device and labels serial-less choices as model preferences.
+Real-widget smoke passes 3,924 assertions, including selecting between two
+same-model devices and preserving identity when applying a preset. See
+`TRIAEVUM_DUSKLIGHT_CONTROL_ALIGNMENT.md` for donor provenance and hardware limits.
+
 2026-09-17: the current branch restores the consolidated ImGui F1 surface.
 The deferred retained F1 / advanced F12 split is preserved on
 `feature/deferred-f1-f12-menus` at `a144833`; commits `0b30a6e`, `9892379`

@@ -34,6 +34,7 @@ public:
 
 private:
   NativeControlConfig mConfig;
+  std::int32_t mControllerInstance = -1;
   NativeRightStickProfileState mRightStickProfile;
   ThreeDsRecomp::Input::VirtualMotionState mVirtualMotion;
   triaevum::module::InputStateV1 mState;

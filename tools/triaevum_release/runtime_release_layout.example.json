@@ -47,6 +47,7 @@
     {"source": "LICENSES/NRI-MIT.txt", "path": "LICENSES/NRI-MIT.txt", "role": "license"},
     {"source": "LICENSES/SDL2-zlib.txt", "path": "LICENSES/SDL2-zlib.txt", "role": "license"},
     {"source": "LICENSES/SDL-GameControllerDB-zlib.txt", "path": "LICENSES/SDL-GameControllerDB-zlib.txt", "role": "license"},
+    {"source": "LICENSES/Aurora-MIT.txt", "path": "LICENSES/Aurora-MIT.txt", "role": "license"},
     {"source": "LICENSES/Microsoft-Visual-Cpp-Runtime.md", "path": "LICENSES/Microsoft-Visual-Cpp-Runtime.md", "role": "license"},
     {"source": "LICENSES/nlohmann-json-MIT.txt", "path": "LICENSES/nlohmann-json-MIT.txt", "role": "license"},
     {"source": "LICENSES/shaderc-Apache-2.0.txt", "path": "LICENSES/shaderc-Apache-2.0.txt", "role": "license"},

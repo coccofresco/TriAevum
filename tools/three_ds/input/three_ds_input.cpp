@@ -5,6 +5,36 @@
 #include <limits>
 
 namespace ThreeDsRecomp::Input {
+
+// Adapted from encounter/aurora lib/input.cpp (MIT, Luke Street).
+// Pinned provenance and retained license: LICENSES/Aurora-MIT.txt.
+std::string NormalizeControllerSerial(std::string_view serial) {
+    std::string result;
+    for (char c : serial) {
+        if (c == ':' || c == '-') continue;
+        result += c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c;
+    }
+    return result;
+}
+
+bool MatchesController(const DeviceDescriptor& device, std::string_view guid,
+                       std::string_view serial) {
+    return (guid.empty() || device.Guid == guid) &&
+        (serial.empty() || (!device.Serial.empty() &&
+         NormalizeControllerSerial(serial) == NormalizeControllerSerial(device.Serial)));
+}
+
+std::int32_t SelectControllerDevice(std::span<const DeviceDescriptor> devices,
+    std::string_view guid, std::string_view serial, std::int32_t previousInstance) {
+    std::int32_t selected = -1;
+    for (const auto& device : devices) {
+        if (device.InstanceId < 0 || !MatchesController(device, guid, serial)) continue;
+        if (device.InstanceId == previousInstance) return previousInstance;
+        if (selected < 0 || device.InstanceId < selected) selected = device.InstanceId;
+    }
+    return selected;
+}
+
 namespace {
 
 template <typename Enum>

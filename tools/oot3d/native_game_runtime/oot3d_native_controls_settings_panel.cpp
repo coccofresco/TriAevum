@@ -314,6 +314,7 @@ class NativeControlsSettingsPanel final
         const auto previous = mControlDraft;
         mControlDraft = NativeControlPreset(mPresetSelection);
         mControlDraft.PreferredControllerGuid = previous.PreferredControllerGuid;
+        mControlDraft.PreferredControllerSerial = previous.PreferredControllerSerial;
         mControlDraft.GyroscopeBiasDegreesPerSecond = previous.GyroscopeBiasDegreesPerSecond;
         mControlDraft.AccelerometerNeutral = previous.AccelerometerNeutral;
         mControlDirty = true;
@@ -360,11 +361,15 @@ class NativeControlsSettingsPanel final
   void DrawControllerSelection() {
     ImGui::SeparatorText("Controller");
     const auto devices = mControls->DevicesSnapshot();
+    std::int32_t activeInstance = -1;
+    for (const auto& device : devices) if (device.Selected) activeInstance = device.InstanceId;
+    const auto draftInstance = ThreeDsRecomp::Input::SelectControllerDevice(
+        devices, mControlDraft.PreferredControllerGuid,
+        mControlDraft.PreferredControllerSerial, activeInstance);
     std::string preview = mControlDraft.PreferredControllerGuid.empty()
         ? "Automatic" : "Configured controller (disconnected)";
     for (const auto& device : devices) {
-      if (!mControlDraft.PreferredControllerGuid.empty() &&
-          device.Guid == mControlDraft.PreferredControllerGuid) {
+      if (!mControlDraft.PreferredControllerGuid.empty() && device.InstanceId == draftInstance) {
         preview = device.Name;
         break;
       }
@@ -374,15 +379,24 @@ class NativeControlsSettingsPanel final
           mControlDraft.PreferredControllerGuid.empty();
       if (ImGui::Selectable("Automatic", automatic)) {
         mControlDraft.PreferredControllerGuid.clear();
+        mControlDraft.PreferredControllerSerial.clear();
         MarkCustom(mControlDraft, mControlDirty);
       }
+      std::vector<std::string> listedModels;
       for (const auto& device : devices) {
-        const bool selected =
-            device.Guid == mControlDraft.PreferredControllerGuid;
-        std::string label = device.Name + "##" +
+        if (device.Serial.empty()) {
+          if (std::find(listedModels.begin(), listedModels.end(), device.Guid) != listedModels.end()) continue;
+          listedModels.push_back(device.Guid);
+        }
+        const bool selected = !mControlDraft.PreferredControllerGuid.empty() &&
+            (device.Serial.empty()
+                 ? mControlDraft.PreferredControllerGuid == device.Guid && mControlDraft.PreferredControllerSerial.empty()
+                 : device.InstanceId == draftInstance);
+        std::string label = device.Name + (device.Serial.empty() ? " (model)" : " [" + std::to_string(device.InstanceId) + "]") + "##" +
                             std::to_string(device.InstanceId);
         if (ImGui::Selectable(label.c_str(), selected)) {
           mControlDraft.PreferredControllerGuid = device.Guid;
+          mControlDraft.PreferredControllerSerial = device.Serial;
           MarkCustom(mControlDraft, mControlDirty);
         }
       }
@@ -393,9 +407,13 @@ class NativeControlsSettingsPanel final
     } else {
       for (const auto& device : devices) {
         ImGui::TextWrapped(
-            "%s%s%s", device.Name.c_str(),
+            "%s%s%s%s", device.Name.c_str(),
+            device.Selected && mControlDraft.ControllerEnabled ? " | active" : "",
             device.HasGyroscope ? " | gyro" : "",
             device.HasAccelerometer ? " | accelerometer" : "");
+        if (device.InstanceId == draftInstance && device.Serial.empty()) {
+          ImGui::TextDisabled("No serial available: preference identifies the controller model.");
+        }
       }
     }
   }

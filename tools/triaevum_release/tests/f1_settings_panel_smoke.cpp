@@ -633,6 +633,15 @@ int main() try {
     Click("Devices");
     Click("Keyboard");
     Check(!controls->Snapshot().Config.KeyboardEnabled, "control preview not connected");
+    controls->ObserveDevices({
+        {11, "same-model", "Twin pad", false, false, "first", true},
+        {12, "same-model", "Twin pad", false, false, "second", false},
+    });
+    Frame();
+    Select("##Active controller", "Twin pad [12]##12");
+    Check(controls->Snapshot().Config.PreferredControllerGuid == "same-model" &&
+          controls->Snapshot().Config.PreferredControllerSerial == "second",
+          "controller selection discarded physical identity");
     auto external = controls->Snapshot().Config;
     external.MouseAimDegreesPerPixel = 0.77F;
     controls->Preview(external);
@@ -754,6 +763,7 @@ int main() try {
     Check(controls->Snapshot().Config.Profile == Oot3dNativeGame::NativeControlProfile::Controller,
           "confirmed preset not applied");
     Check(controls->Snapshot().Config.PreferredControllerGuid == beforePreset.PreferredControllerGuid &&
+          controls->Snapshot().Config.PreferredControllerSerial == beforePreset.PreferredControllerSerial &&
           controls->Snapshot().Config.GyroscopeBiasDegreesPerSecond == beforePreset.GyroscopeBiasDegreesPerSecond &&
           controls->Snapshot().Config.AccelerometerNeutral == beforePreset.AccelerometerNeutral,
           "preset discarded controller identity or calibration");

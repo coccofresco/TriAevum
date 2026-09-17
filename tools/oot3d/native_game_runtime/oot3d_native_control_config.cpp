@@ -157,9 +157,9 @@ bool DecodeNativeControlConfig(const nlohmann::json& document,
     SetError(error, "native control config root/output is invalid");
     return false;
   }
-  constexpr std::array<std::string_view, 10> kAllowedFields{
+  constexpr std::array<std::string_view, 11> kAllowedFields{
       "schema", "profile", "devices", "bindings", "analog", "aim",
-      "free_camera", "controller_guid", "calibration", "capture_mouse"};
+      "free_camera", "controller_guid", "controller_serial", "calibration", "capture_mouse"};
   const std::set<std::string_view> allowed(kAllowedFields.begin(),
                                            kAllowedFields.end());
   for (const auto& [key, value] : document.items()) {
@@ -226,6 +226,15 @@ bool DecodeNativeControlConfig(const nlohmann::json& document,
     }
     parsed.PreferredControllerGuid =
         document.at("controller_guid").get<std::string>();
+  }
+
+  if (document.contains("controller_serial")) {
+    if (!document.at("controller_serial").is_string()) {
+      SetError(error, "controller_serial must be a string");
+      return false;
+    }
+    parsed.PreferredControllerSerial = ThreeDsRecomp::Input::NormalizeControllerSerial(
+        document.at("controller_serial").get<std::string>());
   }
 
   if (document.contains("bindings")) {
@@ -639,6 +648,7 @@ bool SerializeNativeControlConfigText(const NativeControlConfig& config,
         {"controller", config.ControllerEnabled}}},
       {"capture_mouse", config.CaptureMouseInGameplay},
       {"controller_guid", config.PreferredControllerGuid},
+      {"controller_serial", config.PreferredControllerSerial},
       {"bindings", std::move(bindings)},
       {"analog",
        {{"movement_stick", NativeAnalogStickName(config.MovementStick)},
