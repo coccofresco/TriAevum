@@ -8,6 +8,9 @@ evidence, including regression tests. #41 remains investigation only: neither
 the rim experiment nor the unverified classifier change is reinstated.
 Fresh validation is required; earlier mixed-worktree build results do not count.
 
+Recovered implementations are committed in `3f84692`. The fresh replay and
+test results below supersede the pre-recovery validation where stated.
+
 At the end of the investigation, `git status` showed ALL tracked changes
 removed without HEAD moving from a946f34, including unrelated pre-existing
 AOT changes. The issue implementations below were subsequently recovered
@@ -37,6 +40,9 @@ and the Quest materialized hook. Tests cover scales 0.6/0.8/1.0, consistent
 digit/clock displacement and the upper-position boundary.
 Live race-timer verification remains pending; a manually seeded timer did
 not become visible and is not evidence of a successful in-game fix.
+The added guest-memory fixture verifies the real counter/renderer indirection,
+two active digit quads out of three allocated quads, preserved Z, empty
+counters, absent bindings and rejection of invalid counts.
 
 ## #42: mounted B counter
 
@@ -50,6 +56,9 @@ Tests cover the refresh boundary and rebuilt counter geometry. Mounted
 framebuffer replay before recovery placed the native B ammunition beneath B at the
 intended scale; the separate ZR count remains legitimate and visible.
 Live diagnostics: 360 Quest hooks, zero failures, 240 transformations.
+The recovered executable reproduced these counts in `recovery-mounted`
+(240 presentation frames). Framebuffer 120 confirms separated B and ZR
+ammunition counts in the mounted scene.
 
 ## #43: boot hotkey repeat
 
@@ -61,6 +70,9 @@ mapped consumer owns the input. Ocarina D-pad and ZR/ZL semantics remain.
 Before recovery, dispatch regression tests passed. A 100-frame held-left gameplay run recorded
 one equipment change and one player refresh. The exact underwater scenario
 has not yet been replayed.
+Fresh `recovery-boots` replay (220 frames, including sustained input) also
+records exactly one equipment change and one player refresh, with zero
+Quest hook failures.
 
 ## #41: advanced toon rim on black backgrounds
 
@@ -90,6 +102,33 @@ This has NOT resolved or validated issue #41. A controlled live F2 comparison
 is still required. The lost classifier test covered both toon modes and
 restoring an ordinary depth comparison. The separate existing grass topology
 GPU test reports Vulkan error -13; the full GPU suite is therefore not green.
+
+### Fresh isolation after recovery
+
+- `recovered-sages-on-native` and `recovered-sages-off-native` each completed
+  150 frames using the checkpoint's actual `native30_no_interpolation` timing.
+  The background remains RGB 66/66/66 in both. Diagnostics confirm eight
+  instrumented programs with toon and zero with Off; the preset is Custom.
+- Read-only inspection of `sages-user/issue41.oot3dsav` finds black in the
+  stored top color target and both stored top display images. The gray is
+  therefore not simply a gray image baked into the checkpoint. Trace current
+  native draws, restored state and scanout/composition before blaming toon.
+- `recovery-boot-off` and `recovery-boot-on` each completed 35 cold-boot frames.
+  Framebuffer 9 shows the loading triforce on black in both. This does not
+  validate every advanced-effect combination reported by the user.
+- The `DepthCompare::Always` toon exclusion was temporarily rebuilt and tested,
+  but did not fix the Sages replay. It was removed rather than shipped as a
+  speculative scene repair. Always comparison alone is not proof of a canvas.
+- The shader pipeline regression test now checks the existing uniform-backed
+  toon contract instead of expecting obsolete per-style literal shader source.
+  Style updates must preserve shader source/key, while raster eligibility
+  changes must still be reflected in cached variants.
+
+Next verification boundaries: live Lon Lon race for #40; compare restored
+native target output against final scanout for #41. Neither issue is closed.
+Final regression run after removing the classifier experiment: shader pipeline
+suite 40/40 passed; TopScreen profile, item, ocarina and mapped D-pad tests
+passed. The consolidated F1 widget smoke remains at 3896 passing assertions.
 
 ## Private evidence (not distributed)
 

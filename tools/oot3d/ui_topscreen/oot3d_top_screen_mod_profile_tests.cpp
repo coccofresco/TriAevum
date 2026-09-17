@@ -2052,6 +2052,45 @@ int main() {
             "upper timer layout must remain untouched");
   }
 
+  // Exercise the native counter binding and digit limit, not only the formula.
+  {
+    auto memory = BuildLayoutFixture();
+    constexpr uint32_t binding = 0x004FC674U;
+    constexpr uint32_t counter = 0x004FD000U;
+    constexpr uint32_t renderer = 0x004FD100U;
+    constexpr uint32_t positions = 0x004FE000U;
+    Require(memory.Write32(binding, 0U) &&
+                ApplyTopScreenTimerCounterLayout(memory, 0.8F, &error),
+            "absent timer must not fail HUD materialization");
+    Require(memory.Write32(binding, counter) &&
+                memory.Write32(counter + 8U, renderer) &&
+                memory.Write32(counter + 4U, 2U) &&
+                memory.Write32(renderer, 3U) &&
+                memory.Write32(renderer + 0x0CU, positions),
+            "cannot seed native timer binding");
+    std::array<std::array<TopScreenVec3, 4>, 3> quads{};
+    for (size_t i = 0; i < quads.size(); ++i) {
+      for (auto &vertex : quads[i])
+        vertex = {150.0F + 12.0F * static_cast<float>(i), 220.0F, 0.5F};
+    }
+    Require(memory.WriteBytes(positions,
+                {reinterpret_cast<const uint8_t *>(quads.data()), sizeof(quads)}) &&
+                ApplyTopScreenTimerCounterLayout(memory, 0.8F, &error) &&
+                memory.ReadBytes(positions,
+                {reinterpret_cast<uint8_t *>(quads.data()), sizeof(quads)}),
+            "native timer digit relocation failed");
+    Require(quads[0][0].X == 141.0F && quads[1][0].X == 153.0F &&
+                quads[0][0].Y == 196.0F && quads[1][0].Y == 196.0F &&
+                quads[2][0].Y == 220.0F && quads[0][0].Z == 0.5F,
+            "timer adapter must move active digits only and preserve depth");
+    Require(memory.Write32(renderer, 0U) &&
+                ApplyTopScreenTimerCounterLayout(memory, 0.8F, &error),
+            "empty timer renderer must be a no-op");
+    Require(memory.Write32(renderer, 0x100U) &&
+                !ApplyTopScreenTimerCounterLayout(memory, 0.8F, &error),
+            "invalid timer geometry must be rejected");
+  }
+
   bool ocarinaUiActive = false;
   Require(
       questModelMemory.Write32(0x005043E0U, questDrawScene) &&

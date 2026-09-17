@@ -722,7 +722,7 @@ TEST(Oot3dPicaShaderPipelineCache,
 }
 
 TEST(Oot3dPicaShaderPipelineCache,
-     TypedToonCompositionPreservesLegacySourceAndKey) {
+     TypedToonCompositionUsesUniformParametersAndRasterEligibility) {
     using namespace Fast::Oot3d;
     static constexpr std::string_view kFragmentShader = R"glsl(#version 450
 layout(location=0) in vec4 pica_primary_color;
@@ -755,18 +755,35 @@ void main() {
         request.Draw.Blend.Enabled,
         request.Draw.ColorWriteMask,
     };
-    const auto legacy = BuildPicaToonShaderVariant(
-        kFragmentShader, request.FragmentShaderKey, toonDraw,
-        effects.Toon, effects.ToonStyle);
-    ASSERT_TRUE(legacy.Applied());
+    const auto expected = BuildPicaToonInstrumentation(
+        request.FragmentShaderKey, toonDraw, effects.Toon, effects.ToonStyle,
+        request.FragmentShaderHooks, true);
+    ASSERT_TRUE(expected.Applied());
 
     const auto& composed = cache.Resolve(request, effects);
 
     EXPECT_TRUE(composed.DirectFragmentHooksUsed);
     EXPECT_EQ(composed.ToonEligibility,
               PicaToonEligibility::Eligible);
-    EXPECT_EQ(composed.FragmentShaderSource, legacy.Source);
-    EXPECT_EQ(composed.FragmentShaderKey, legacy.FragmentKey);
+    EXPECT_NE(composed.FragmentShaderSource.find(expected.Declarations), std::string::npos);
+    EXPECT_NE(composed.FragmentShaderSource.find(expected.Body), std::string::npos);
+    EXPECT_NE(composed.FragmentShaderSource.find("binding=15,std140"), std::string::npos);
+    EXPECT_EQ(composed.FragmentShaderKey, expected.FragmentKey);
+    const auto originalSource = composed.FragmentShaderSource;
+    const auto originalKey = composed.FragmentShaderKey;
+    effects.ToonStyle.RimStrength = 0.1F;
+    const auto& restyled = cache.Resolve(request, effects);
+    EXPECT_EQ(restyled.FragmentShaderSource, originalSource);
+    EXPECT_EQ(restyled.FragmentShaderKey, originalKey);
+
+    // Eligibility must follow raster state, not the prior cache hit.
+    request.Draw.DepthWriteEnabled = false;
+    const auto& canvas = cache.Resolve(request, effects);
+    EXPECT_EQ(canvas.ToonEligibility, PicaToonEligibility::NoDepth);
+    EXPECT_EQ(canvas.FragmentShaderSource, kFragmentShader);
+    request.Draw.DepthWriteEnabled = true;
+    const auto& geometry = cache.Resolve(request, effects);
+    EXPECT_EQ(geometry.ToonEligibility, PicaToonEligibility::Eligible);
 }
 
 TEST(Oot3dPicaShaderPipelineCache,
