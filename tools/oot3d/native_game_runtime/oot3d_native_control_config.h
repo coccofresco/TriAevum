@@ -75,7 +75,6 @@ struct NativeControlConfig {
   float RightStickAimMaximumDegreesPerSecond = 180.0F;
   float ControllerGyroscopeSensitivity = 1.0F;
   float ControllerAccelerometerSensitivity = 1.0F;
-  float FreeCameraMotionSensitivity = 1.0F;
   bool NativeAimInvertX = false;
   bool NativeAimInvertY = false;
   std::string PreferredControllerGuid;

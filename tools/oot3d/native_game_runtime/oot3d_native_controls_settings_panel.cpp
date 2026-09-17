@@ -142,6 +142,12 @@ constexpr std::array<NativeMotionSource, 8> kMotionSources{
     NativeMotionSource::Automatic,
 };
 
+constexpr std::array kCameraSources{
+    NativeMotionSource::Disabled, NativeMotionSource::DigitalLook,
+    NativeMotionSource::Mouse, NativeMotionSource::RightStick,
+    NativeMotionSource::Automatic,
+};
+
 constexpr std::array<const char*, kNativeControlActionCount> kActionLabels{
     "Move forward", "Move backward", "Move left", "Move right",
     "A", "B", "X", "Y", "L", "R", "ZL", "ZR", "Select", "Start",
@@ -612,7 +618,7 @@ class NativeControlsSettingsPanel final
     bool controlChanged =
         EnumCombo("Free-camera source",
                   &mControlDraft.FreeCameraSource,
-                  kMotionSources, NativeMotionSourceName);
+                  kCameraSources, NativeMotionSourceName);
     if (SourceUses(mControlDraft.FreeCameraSource,
                    NativeMotionSource::Mouse)) {
       controlChanged |= ControlWidgets::SliderFloat(
@@ -620,17 +626,6 @@ class NativeControlsSettingsPanel final
           &mControlDraft.MouseFreeCameraUnitsPerPixel,
           0.25F, 16.0F, "%.2f",
           ImGuiSliderFlags_Logarithmic);
-    }
-    if (SourceUses(mControlDraft.FreeCameraSource,
-                   NativeMotionSource::ControllerGyroscope) ||
-        SourceUses(mControlDraft.FreeCameraSource,
-                   NativeMotionSource::ControllerAccelerometer) ||
-        mControlDraft.FreeCameraSource ==
-            NativeMotionSource::ControllerMotion) {
-      controlChanged |= ControlWidgets::SliderFloat(
-          "Free-camera motion sensitivity",
-          &mControlDraft.FreeCameraMotionSensitivity,
-          0.1F, 4.0F, "%.2fx");
     }
     if (controlChanged) {
       MarkCustom(mControlDraft, mControlDirty);

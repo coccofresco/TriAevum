@@ -1,5 +1,13 @@
 # F1 settings rationalization
 
+2026-09-17 camera/motion separation: free camera offers only disabled, digital
+look, mouse, right stick and automatic. Sensor sources and their camera-only
+sensitivity are removed; aiming keeps its sensor controls. Legacy motion-camera
+profiles migrate to right stick. Shared/native input tests pass, Windows game
+build succeeds, and actual-widget smoke passes 3,978 assertions, including the
+real source dropdown and stick selection. No physical-controller playthrough
+was repeated for this change.
+
 2026-09-17 Azahar motion/touch extension: consolidated Devices owns the controller
 touchpad switch/index, reported capabilities and sensor calibration status.
 Calibration requires received sensor data, reports movement/cancellation/save

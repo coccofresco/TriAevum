@@ -355,9 +355,7 @@ bool DecodeNativeControlConfig(const nlohmann::json& document,
     parsed.MouseFreeCameraUnitsPerPixel =
         camera.value("mouse_units_per_pixel",
                      parsed.MouseFreeCameraUnitsPerPixel);
-    parsed.FreeCameraMotionSensitivity =
-        camera.value("motion_sensitivity",
-                     parsed.FreeCameraMotionSensitivity);
+    parsed.FreeCameraSource = ThreeDsRecomp::Input::NormalizeCameraSource(parsed.FreeCameraSource);
   }
 
   if (document.contains("calibration")) {
@@ -597,8 +595,7 @@ bool ValidateNativeControlConfig(const NativeControlConfig& config,
                      1080.0F) ||
       !FiniteInRange(config.ControllerGyroscopeSensitivity, 0.01F, 10.0F) ||
       !FiniteInRange(config.ControllerAccelerometerSensitivity, 0.01F,
-                     10.0F) ||
-      !FiniteInRange(config.FreeCameraMotionSensitivity, 0.01F, 10.0F)) {
+                     10.0F)) {
     SetError(error, "native control sensitivity is outside its valid range");
     return false;
   }
@@ -695,11 +692,9 @@ bool SerializeNativeControlConfigText(const NativeControlConfig& config,
         {"invert_x", config.NativeAimInvertX},
         {"invert_y", config.NativeAimInvertY}}},
       {"free_camera",
-       {{"source", NativeMotionSourceName(config.FreeCameraSource)},
+       {{"source", NativeMotionSourceName(ThreeDsRecomp::Input::NormalizeCameraSource(config.FreeCameraSource))},
         {"mouse_units_per_pixel",
-         config.MouseFreeCameraUnitsPerPixel},
-        {"motion_sensitivity",
-         config.FreeCameraMotionSensitivity}}},
+         config.MouseFreeCameraUnitsPerPixel}}},
       {"calibration",
        {{"gyroscope_bias_dps", config.GyroscopeBiasDegreesPerSecond},
         {"accelerometer_neutral", config.AccelerometerNeutral},
@@ -778,7 +773,9 @@ bool SaveNativeControlConfig(const std::filesystem::path& path,
 
 NativeControlConfigRuntime::NativeControlConfigRuntime(
     std::filesystem::path path, NativeControlConfig initial)
-    : mPath(std::move(path)), mConfig(std::move(initial)) {}
+    : mPath(std::move(path)), mConfig(std::move(initial)) {
+  mConfig.FreeCameraSource = ThreeDsRecomp::Input::NormalizeCameraSource(mConfig.FreeCameraSource);
+}
 
 NativeControlConfigSnapshot NativeControlConfigRuntime::Snapshot() const {
   std::scoped_lock lock(mMutex);
@@ -798,11 +795,13 @@ bool NativeControlConfigRuntime::Preview(const NativeControlConfig& config,
   if (!ValidateNativeControlConfig(config, error)) {
     return false;
   }
+  auto normalized = config;
+  normalized.FreeCameraSource = ThreeDsRecomp::Input::NormalizeCameraSource(normalized.FreeCameraSource);
   std::scoped_lock lock(mMutex);
-  if (mConfig == config) {
+  if (mConfig == normalized) {
     return true;
   }
-  mConfig = config;
+  mConfig = std::move(normalized);
   ++mRevision;
   return true;
 }

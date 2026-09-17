@@ -401,6 +401,20 @@ int main(int argc, char** argv) {
                 "control persistence changed combined defaults or an explicit keyboard-only preference");
     }
 
+    Require(ParseNativeControlConfigText(
+                R"({"schema":"oot3d_native_controls_v1","profile":"controller","free_camera":{"source":"controller_motion","motion_sensitivity":4}})",
+                &parsedControls, &controlsError) &&
+                parsedControls.FreeCameraSource == NativeMotionSource::RightStick,
+            "legacy motion camera profile was not migrated");
+    parsedControls.FreeCameraSource = NativeMotionSource::ControllerAccelerometer;
+    NativeControlConfigRuntime migratedCamera({}, parsedControls);
+    Require(migratedCamera.Snapshot().Config.FreeCameraSource == NativeMotionSource::RightStick &&
+                migratedCamera.Preview(parsedControls, &controlsError) &&
+                migratedCamera.Snapshot().Config.FreeCameraSource == NativeMotionSource::RightStick &&
+                SerializeNativeControlConfigText(parsedControls, &serializedControls, &controlsError) &&
+                serializedControls.find("motion_sensitivity") == std::string::npos,
+            "programmatic camera profile or serialization retained motion routing");
+
     RequireTouch(MapHostPointerToNativeA32Touch(160, 0, 1280, 720, true),
                  true, true, 0, 0,
                  "720p presentation origin did not map to native touch");

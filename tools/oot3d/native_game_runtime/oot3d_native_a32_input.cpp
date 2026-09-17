@@ -228,7 +228,6 @@ ThreeDsRecomp::Input::MappingConfig BuildThreeDsMappingConfig(
         config.RightStickAimMaximumDegreesPerSecond,
         config.ControllerGyroscopeSensitivity,
         config.ControllerAccelerometerSensitivity,
-        config.FreeCameraMotionSensitivity,
         config.NativeAimInvertX,
         config.NativeAimInvertY,
         config.GyroscopeBiasDegreesPerSecond,

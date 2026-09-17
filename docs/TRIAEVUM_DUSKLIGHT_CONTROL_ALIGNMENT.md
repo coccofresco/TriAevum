@@ -112,10 +112,11 @@ not its event thread. Reference: [sdl_impl.cpp at c2237de](https://github.com/az
   and disconnect clear touch; a touchpad click is not required for contact.
 - F1 Devices owns touchpad enable/index, capability display and calibration.
   No new TopScreen or renderer input settings are introduced.
-- Motion camera horizontal input uses native Y (yaw), not native Z (roll).
-  Native horizontal aim inversion covers both yaw components, matching the
-  existing virtual-mouse sensor convention. Native sensor samples otherwise
-  remain full three-axis observations for the game's own motion processing.
+- Motion sensors are exclusive to native aiming. The shared camera/C-stick
+  routing accepts mouse, right stick, digital look, automatic or disabled;
+  automatic never falls through to a sensor. Native horizontal aim inversion
+  covers both yaw components, matching the virtual-mouse sensor convention.
+  Native sensor samples remain full three-axis observations for game processing.
 - Manual calibration rejects strong movement/free fall and counts fresh sensor
   timestamps, not repeated render polls. Older/timestamp-less drivers retain
   poll-based sampling. Sixty accepted samples complete the calibration;
@@ -163,3 +164,23 @@ remain separate tasks; desktop SDL tests cannot establish those guarantees.
   This is an integration smoke, not physical motion/touchpad qualification.
 - No PS4/PS5/Switch USB/Bluetooth hardware matrix, Linux, Android or macOS
   execution was completed for this extension. Test those before claiming parity.
+
+## Camera/Motion Separation (2026-09-17)
+
+Supersedes the motion-camera feature in `46c8132`: gyro/accelerometer never
+control free camera. `NormalizeCameraSource` is enforced by the shared routing,
+configuration loading, runtime preview/initialization and serialization. Legacy
+camera sources `controller_gyroscope`, `controller_accelerometer` and
+`controller_motion` migrate to `right_stick`, without changing aim configuration.
+Legacy `free_camera.motion_sensitivity` is accepted but ignored and no longer
+written. Its C++ setting and F1 slider are removed, not merely hidden.
+
+F1 offers distinct source lists for aim and camera. Existing native aim settings,
+TopScreen gameplay/cutscene eligibility and UI capture keep their existing owners.
+This change does not introduce a second camera or change the title's aim logic.
+
+Verification: shared/native input tests pass for automatic and all three legacy
+motion sources (camera neutral with moving sensors; stick still works; native
+aim sensors remain valid), config migration and serialization. Actual F1 widget
+smoke passes 3,978 assertions. Windows executable rebuilt and module-host input
+consumer compiled. No new physical-controller or other-platform run is claimed.

@@ -6,6 +6,17 @@
 
 namespace ThreeDsRecomp::Input {
 
+MotionSource NormalizeCameraSource(MotionSource source) noexcept {
+    switch (source) {
+    case MotionSource::ControllerGyroscope:
+    case MotionSource::ControllerAccelerometer:
+    case MotionSource::ControllerMotion:
+        return MotionSource::RightStick;
+    default:
+        return source;
+    }
+}
+
 // Adapted from encounter/aurora lib/input.cpp (MIT, Luke Street).
 // Pinned provenance and retained license: LICENSES/Aurora-MIT.txt.
 std::string NormalizeControllerSerial(std::string_view serial) {
@@ -651,14 +662,10 @@ AxisInputSample ResolveCStick(const MappingConfig& config,
                               std::int16_t digitalCStickX,
                               std::int16_t digitalCStickY,
                               const std::array<float, 2>& rawCStick) noexcept {
-    MotionSource source = config.CStickSource;
+    MotionSource source = NormalizeCameraSource(config.CStickSource);
     if (source == MotionSource::Automatic) {
         if (physical.MouseDeltaX != 0 || physical.MouseDeltaY != 0) {
             source = MotionSource::Mouse;
-        } else if (rawCStick[0] != 0.0F || rawCStick[1] != 0.0F) {
-            source = MotionSource::RightStick;
-        } else if (physical.ControllerMotion.GyroscopeValid) {
-            source = MotionSource::ControllerGyroscope;
         } else {
             source = MotionSource::RightStick;
         }
@@ -687,27 +694,7 @@ AxisInputSample ResolveCStick(const MappingConfig& config,
         break;
     case MotionSource::ControllerGyroscope:
     case MotionSource::ControllerMotion:
-        if (physical.ControllerMotion.GyroscopeValid) {
-            // Native Y is yaw in the neutral controller pose; Z is roll.
-            x = -(physical.ControllerMotion.GyroscopeDegreesPerSecond[1] -
-                 config.GyroscopeBiasDegreesPerSecond[1]) *
-                config.CStickSensorSensitivity;
-            y = -(physical.ControllerMotion.GyroscopeDegreesPerSecond[0] -
-                  config.GyroscopeBiasDegreesPerSecond[0]) *
-                config.CStickSensorSensitivity;
-        }
-        break;
     case MotionSource::ControllerAccelerometer:
-        if (physical.ControllerMotion.AccelerometerValid) {
-            x = (physical.ControllerMotion.Accelerometer[0] -
-                 config.AccelerometerNeutral[0]) *
-                static_cast<float>(kNativeStickMaximum) *
-                config.CStickSensorSensitivity;
-            y = -(physical.ControllerMotion.Accelerometer[2] -
-                  config.AccelerometerNeutral[2]) *
-                static_cast<float>(kNativeStickMaximum) *
-                config.CStickSensorSensitivity;
-        }
         break;
     case MotionSource::Automatic:
         break;

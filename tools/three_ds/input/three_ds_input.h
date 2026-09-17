@@ -397,7 +397,6 @@ struct MappingConfig {
     float CStickMotionMaximumDegreesPerSecond = 180.0F;
     float ControllerGyroscopeSensitivity = 1.0F;
     float ControllerAccelerometerSensitivity = 1.0F;
-    float CStickSensorSensitivity = 1.0F;
     bool NativeMotionInvertX = false;
     bool NativeMotionInvertY = false;
     std::array<float, 3> GyroscopeBiasDegreesPerSecond{};
@@ -448,6 +447,9 @@ struct HidState {
     bool AccelerometerValid = false;
     bool GyroscopeValid = false;
 };
+
+// Camera control never consumes motion sensors, including legacy profiles.
+[[nodiscard]] MotionSource NormalizeCameraSource(MotionSource source) noexcept;
 
 struct TouchMapping {
     std::uint16_t X = 0;

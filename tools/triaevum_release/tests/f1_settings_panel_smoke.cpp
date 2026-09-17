@@ -617,6 +617,17 @@ int main() try {
     for (const char* section : {"Bindings", "Shortcuts", "Camera"}) Click(section);
     Click("Enabled##freecam");
     Check(topScreen->Snapshot().Config.FreeCameraEnabled, "central camera control not connected");
+    Click("##Free-camera source");
+    Frame(true);
+    Check(std::none_of(items.begin(), items.end(), [](const auto& pair) {
+              return pair.second.Popup && (pair.second.Label == "Controller Gyroscope" ||
+                  pair.second.Label == "Controller Accelerometer" ||
+                  pair.second.Label == "Controller gyro + accelerometer");
+          }),
+          "free-camera source exposes motion sensors");
+    Click("Right Stick");
+    Check(controls->Snapshot().Config.FreeCameraSource == Oot3dNativeGame::NativeMotionSource::RightStick,
+          "free-camera stick choice not connected");
     auto cameraExternal = topScreen->Snapshot().Config;
     cameraExternal.HudMarginX = 7;
     topScreen->Preview(cameraExternal);

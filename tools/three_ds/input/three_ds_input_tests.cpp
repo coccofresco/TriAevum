@@ -146,12 +146,25 @@ int main() try {
         gyroInput.ControllerMotion.GyroscopeValid = true;
         gyroInput.ControllerMotion.GyroscopeDegreesPerSecond = {0, -30, 0};
         const auto yaw = ResolveInput(gyroConfig, gyroInput, {});
-        Require(yaw.CStick.X > 0 && yaw.CStick.Y == 0, "motion camera uses roll instead of yaw");
+        Require(yaw.CStick.X == 0 && yaw.CStick.Y == 0, "motion leaked into camera");
         gyroConfig.NativeMotionInvertX = true;
         Require(ResolveInput(gyroConfig, gyroInput, {}).Hid.GyroscopeDegreesPerSecond[1] == 30,
                 "native motion horizontal inversion omitted yaw");
         gyroInput.ControllerMotion.GyroscopeDegreesPerSecond = {0, 0, 30};
         Require(ResolveInput(gyroConfig, gyroInput, {}).CStick.X == 0, "roll steers camera yaw");
+        gyroInput.ControllerMotion.AccelerometerValid = true;
+        gyroInput.ControllerMotion.Accelerometer = {0.5F, -0.8F, 0.4F};
+        for (const auto source : {MotionSource::Automatic, MotionSource::ControllerGyroscope,
+                MotionSource::ControllerAccelerometer, MotionSource::ControllerMotion}) {
+            gyroConfig.CStickSource = source;
+            const auto still = ResolveInput(gyroConfig, gyroInput, {});
+            Require(still.CStick.X == 0 && still.CStick.Y == 0 && still.Hid.GyroscopeValid &&
+                    still.Hid.AccelerometerValid, "camera isolation disabled aim or leaked sensors");
+            gyroInput.RightStickX = 16000;
+            Require(ResolveInput(gyroConfig, gyroInput, {}).CStick.X > 0,
+                    "legacy motion camera did not fall back to stick");
+            gyroInput.RightStickX = 0;
+        }
         const auto edge = MapNormalizedTouch({1, 1, true});
         const auto center = MapNormalizedTouch({0.5F, 0.5F, true});
         Require(edge.X == 319 && edge.Y == 239 && edge.Pressed &&
