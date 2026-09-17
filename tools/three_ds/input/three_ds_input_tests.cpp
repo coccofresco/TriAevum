@@ -124,9 +124,129 @@ void TestVirtualMotion() {
             "virtual motion changed physical controller sensors");
 }
 
+bool NearVector(const std::array<float, 3>& a, const std::array<float, 3>& b, float tolerance = 1e-5F) {
+    for (int i = 0; i < 3; ++i) if (std::abs(a[i] - b[i]) > tolerance) return false;
+    return true;
+}
+
+void TestAutomaticMotionComposition() {
+    using namespace ThreeDsRecomp::Input;
+    MappingConfig config;
+    config.NativeMotionSource = MotionSource::Automatic;
+    config.CStickSource = MotionSource::Automatic;
+    VirtualMotionState state;
+    PhysicalInputState input;
+    input.ControllerMotion.GyroscopeValid = input.ControllerMotion.AccelerometerValid = true;
+    input.ControllerMotion.Accelerometer = {0, -1, 0};
+    input.ControllerMotion.GyroscopeDegreesPerSecond = {12, 0, 0};
+    input.RightStickY = 20000;
+    const auto mixed = ResolveInput(config, input, {}, {}, nullptr, true, &state);
+    auto justStickInput = input;
+    justStickInput.ControllerMotion.GyroscopeDegreesPerSecond = {};
+    VirtualMotionState justStickState;
+    const auto justStick = ResolveInput(config, justStickInput, {}, {}, nullptr, true, &justStickState);
+    Require(std::abs(mixed.Hid.GyroscopeDegreesPerSecond[0] - justStick.Hid.GyroscopeDegreesPerSecond[0] - 12) < 1e-4F,
+            "stick swallowed gyro instead of composing rates");
+    input.RightStickY = 0;
+    input.ControllerMotion.GyroscopeDegreesPerSecond = {};
+    for (int i = 0; i < 300; ++i) {
+        const auto idle = ResolveInput(config, input, {}, {}, nullptr, true, &state);
+        Require(NearVector(idle.Hid.Accelerometer, mixed.Hid.Accelerometer) &&
+                idle.Hid.GyroscopeDegreesPerSecond == std::array<float, 3>{},
+                "stick release reverted to unrelated physical gravity");
+    }
+    input.MouseDeltaY = 7;
+    ResolveInput(config, input, {}, {}, nullptr, true, &state);
+    input.MouseDeltaY = 0;
+    const auto mouseGravity = state.Composition.LastGravity;
+    for (int i = 0; i < 300; ++i) {
+        input.ControllerMotion.GyroscopeDegreesPerSecond = {3, -8, 2};
+        input.ControllerMotion.Accelerometer = {0.4F, -0.8F, 0.3F};
+        const auto idle = ResolveInput(config, input, {}, {}, nullptr, true, &state);
+        Require(state.AutomaticOwner == VirtualMotionState::Owner::Mouse &&
+                NearVector(idle.Hid.Accelerometer, mouseGravity) &&
+                idle.Hid.GyroscopeDegreesPerSecond == std::array<float, 3>{},
+                "idle mouse lost ownership to sensors");
+    }
+    input.ControllerMotion.Accelerometer = {0.6F, -0.8F, 0};
+    input.ControllerMotion.GyroscopeDegreesPerSecond = {};
+    input.ControllerButtons = 1;
+    const auto handoff = ResolveInput(config, input, {}, {}, nullptr, true, &state);
+    Require(state.AutomaticOwner == VirtualMotionState::Owner::Controller &&
+            NearVector(handoff.Hid.Accelerometer, mouseGravity), "device handoff snapped gravity");
+    input.MouseDeltaX = 4;
+    ResolveInput(config, input, {}, {}, nullptr, true, &state);
+    input.MouseDeltaX = 0;
+    ResolveInput(config, input, {}, {}, nullptr, true, &state);
+    Require(state.AutomaticOwner == VirtualMotionState::Owner::Mouse, "held button repeatedly reclaimed aim");
+    input.ControllerButtons = 0;
+    input.RightStickX = 100;
+    ResolveInput(config, input, {}, {}, nullptr, true, &state);
+    Require(state.AutomaticOwner == VirtualMotionState::Owner::Mouse, "stick deadzone noise reclaimed aim");
+    input.ControllerPressed = 1;
+    ResolveInput(config, input, {}, {}, nullptr, true, &state);
+    Require(state.AutomaticOwner == VirtualMotionState::Owner::Controller,
+            "buffered short controller tap did not reclaim aim");
+    input.ControllerPressed = 0;
+    input.MouseDeltaX = 2;
+    ResolveInput(config, input, {}, {}, nullptr, true, &state);
+    input.MouseDeltaX = 0;
+    input.RightStickX = 20000;
+    const auto before = state.Composition;
+    ResolveInput(config, input, {}, {}, nullptr, false, &state);
+    Require(state.Composition.SensorToVirtual == before.SensorToVirtual &&
+            state.AutomaticOwner == VirtualMotionState::Owner::Mouse,
+            "presentation-only frame advanced motion state");
+    ResolveInput(config, input, {}, {}, nullptr, true, &state);
+    Require(state.AutomaticOwner == VirtualMotionState::Owner::Controller, "stick did not reclaim aim");
+    input.RightStickX = 0;
+    const auto beforeDetach = state.Composition.LastGravity;
+    state.ResetController();
+    input.ControllerMotion = {};
+    const auto detached = ResolveInput(config, input, {}, {}, nullptr, true, &state);
+    Require(NearVector(detached.Hid.Accelerometer, beforeDetach), "disconnect snapped aim");
+
+    for (const int hz : {30, 60, 90, 120}) {
+        MotionCompositionState composition;
+        ComposedMotion sample;
+        for (int i = 0; i < hz; ++i)
+            sample = composition.Sample({0,-1,0}, true, {}, 60, 0, 1.0/hz, true, true);
+        Require(NearVector(sample.Gravity, {0,-0.5F,0.8660254F}), "composition changed speed with cadence");
+        const auto rotated = composition.Sample({0,-1,0}, true, {0,60,0}, 0,0,1.0/hz,true,true);
+        Require(NearVector(rotated.AngularVelocity, {0,30,-51.961524F}, 1e-4F),
+                "physical gyro not transformed with gravity after virtual pitch");
+        VirtualMotionState paced;
+        PhysicalInputState pad;
+        pad.RightStickY = -32767;
+        pad.ControllerMotion.AccelerometerValid = pad.ControllerMotion.GyroscopeValid = true;
+        double pending = 0;
+        for (int i = 0; i < hz; ++i) {
+            const bool consume = (i + 1) % (hz / 30) == 0;
+            pad.SamplePeriodSeconds = ConsumeInputPeriod(1.0 / hz, consume, pending);
+            ResolveInput(config, pad, {}, {}, nullptr, consume, &paced);
+        }
+        Require(NearVector(paced.Composition.LastGravity, {0,1,0}) && pending == 0,
+                "controller integration depends on interpolated presentation frequency");
+        MotionCompositionState diagonal;
+        for (int i = 0; i < hz; ++i)
+            sample = diagonal.Sample({0,-1,0}, true, {}, 60, 100, 1.0/hz, true, true);
+        Require(NearVector(sample.Gravity, {0,-0.5F,0.8660254F}),
+                "simultaneous yaw corrupted pitch gravity or introduced cadence dependence");
+    }
+    MotionCompositionState rolled;
+    for (int i = 0; i < 120; ++i)
+        Require(NearVector(rolled.Sample({0.6F,-0.8F,0}, true, {}, 0,120,1.0/60,true,true).Gravity,
+                           {0.6F,-0.8F,0}), "world yaw tilts a rolled controller");
+    MotionCompositionState upsideDown;
+    upsideDown.RestoreGravity({0,1,0});
+    Require(NearVector(upsideDown.Sample({0,-1,0}, true, {}, 0,0,1.0/60,true,true).Gravity, {0,1,0}),
+            "opposite gravity handoff is singular");
+}
+
 } // namespace
 
 int main() try {
+    TestAutomaticMotionComposition();
     {
         using namespace ThreeDsRecomp::Input;
         const auto motion = ConvertSdlMotion({9.80665F, 9.80665F, -9.80665F}, true,

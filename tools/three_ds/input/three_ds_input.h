@@ -1,5 +1,7 @@
 #pragma once
 
+#include "three_ds_motion_composition.h"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -375,6 +377,8 @@ struct NormalizedTouch {
 };
 
 struct PhysicalInputState {
+    std::uint32_t ControllerButtons = 0;
+    std::uint32_t ControllerPressed = 0;
     std::int16_t LeftStickX = 0;
     std::int16_t LeftStickY = 0;
     std::int16_t RightStickX = 0;
@@ -421,8 +425,16 @@ struct CStickFilterState {
 struct VirtualMotionState {
     double PitchRadians = 0.0;
     bool Active = false;
+    enum class Owner { None, Mouse, Controller };
+    Owner AutomaticOwner = Owner::None;
+    std::uint32_t PreviousControllerButtons = 0;
+    MotionCompositionState Composition;
+    void ResetController() noexcept;
     void RestoreGravity(const std::array<float, 3>& gravity) noexcept;
 };
+
+// Host presentation can poll several times before the guest consumes input.
+double ConsumeInputPeriod(double pollSeconds, bool consume, double& pendingSeconds) noexcept;
 
 enum class AxisInputKind : std::uint8_t {
     Absolute,

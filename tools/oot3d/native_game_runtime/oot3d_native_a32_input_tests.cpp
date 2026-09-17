@@ -136,8 +136,10 @@ int main(int argc, char** argv) {
     const auto controllerMapped = MapNativeControlInput(controllerPreset, controllerMotion);
     controllerMotion.ControllerMotion = {};
     const auto withoutSensor = MapNativeControlInput(controllerPreset, controllerMotion);
-    Require(controllerMapped.CStick.X > 0 && controllerMapped.Hid.GyroscopeDegreesPerSecond == withoutSensor.Hid.GyroscopeDegreesPerSecond,
-            "controller preset mixed motion sensors into right-stick aiming");
+    Require(controllerMapped.CStick.X > 0 && controllerMapped.CStick.X == withoutSensor.CStick.X &&
+            controllerMapped.Hid.GyroscopeDegreesPerSecond[0] < -89.0F &&
+            std::abs(controllerMapped.Hid.GyroscopeDegreesPerSecond[1]) > 1.0F,
+            "controller preset must combine stick and gyro in aim, but not in camera");
     controllerMotion.RightStickX = 0;
     controllerMotion.ControllerMotion.GyroscopeValid = true;
     controllerMotion.ControllerMotion.AccelerometerValid = true;
@@ -273,11 +275,12 @@ int main(int argc, char** argv) {
                 mappedController.Hid.AccelerometerValid &&
                 std::abs(
                     mappedController.Hid.GyroscopeDegreesPerSecond[0] -
-                    -180.0F) < 0.001F &&
+                    -170.0F) < 0.001F &&
                 std::abs(
                     mappedController.Hid.GyroscopeDegreesPerSecond[2] -
-                    0.0F) < 0.001F,
-            "automatic controller profile did not prioritize active C-stick");
+                    (20.0F * std::sin(3.14159265358979323846 / 120.0) +
+                     30.0F * std::cos(3.14159265358979323846 / 120.0))) < 0.001F,
+            "automatic controller profile did not compose calibrated motion with C-stick");
     auto motionOnlyControllerHost = controllerHost;
     motionOnlyControllerHost.RightStickY = 0;
     auto automaticControllerConfig = controllerConfig;

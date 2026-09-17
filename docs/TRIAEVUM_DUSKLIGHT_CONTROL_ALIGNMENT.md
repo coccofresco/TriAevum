@@ -208,7 +208,7 @@ polls, fresh timestamps and native-unit samples. A timestamp-less driver can
 produce valid polls with zero fresh timestamps. Probe on this host opened **zero
 controllers**; no physical PS/Switch support qualification is inferred from it.
 
-Remaining findings, not claimed fixed:
+Findings from that review (first two addressed by the composition work below):
 
 - Automatic currently prioritizes active mouse, then stick, then sensors. Stick
   and gyro are **not simultaneous**; resuming physical gravity after synthetic
@@ -221,3 +221,49 @@ Remaining findings, not claimed fixed:
 - Native game motion-option gating and user comfort with actual USB/Bluetooth
   controllers still require an in-game aiming test. Menu/unit tests alone cannot
   establish natural aiming or full plug-and-play across hardware.
+
+## Combined Aim And Device Ownership
+
+`three_ds_motion_composition.{h,cpp}` is a title-neutral input component, not a
+renderer effect or title patch. Automatic controller aim composes physical gyro
+with stick pitch/yaw through a persistent sensor-to-virtual rotation. Both the
+body-space rates and acceleration vector use that rotation. Releasing the stick
+retains its orientation offset instead of restoring unrelated physical gravity.
+Local pitch and gravity-axis yaw are factored separately to preserve gravity
+under simultaneous yaw/pitch. Explicit mouse-only/stick-only/sensor-only choices
+retain their semantics. No sensor can enter the free-camera/C-stick route.
+
+Automatic aim ownership persists. Mouse movement selects mouse; controller
+button/trigger press edges or either stick outside its configured dead zone
+select controller. Mouse movement wins simultaneous input. Idle gyro/acceleration
+and held buttons never reclaim mouse ownership. Deliberate controller rotation
+alone does not steal ownership after mouse use: press a controller control first.
+Physical button/trigger edges are retained across presentation-only polls in the
+window host, without changing gameplay button delivery or Start semantics.
+
+The same composition state is used by both window and module-host input paths.
+Controller change clears its sensor reference while preserving the last output
+orientation. Mouse/controller handoff aligns gravity before accepting new rates;
+it does not recenter the camera. Save-state restore resets the host-only relative
+reference from native gravity, with no change to the save format.
+
+`ConsumeInputPeriod` accumulates presentation time until guest consumption for
+all input devices, not only captured mouse. Interpolated presentations do not
+advance the orientation. Host UI capture and state load clear pending elapsed
+time, avoiding deferred rotation after a menu or state change.
+
+Regression coverage includes simultaneous gyro/stick, stick release, idle mouse
+against changing sensors, held-button and dead-zone noise, deliberate handoff,
+disconnect, rotated body rates, opposite/rolled gravity, simultaneous yaw/pitch,
+and 30/60/90/120 Hz presentation with 30 Hz consumption. Physical-controller
+comfort, USB/Bluetooth parity and native game motion-option gating still need
+actual in-game hardware checks; mathematical/input tests are not that guarantee.
+
+Validation for combined aim: shared math/input, SDL virtual-controller and native
+input suites pass; actual F1 widget smoke passes 3,978 assertions; release audit
+unit suite passes 11 tests. Windows game builds and the module-host consumer
+compiles. A bounded 60-frame Vulkan run from the Sages checkpoint exits 0 with
+real host polling (no injected timeline); private evidence is under
+`C:/Users/xander/triaevum-issues-40-43/combined-motion-aim/`. This last check proves
+startup/poll integration only, not physical aiming. No attached motion controller
+was available for a hardware aiming test in this session.

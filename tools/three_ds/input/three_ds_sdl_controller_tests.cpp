@@ -81,6 +81,10 @@ int main(int argc, char** argv) try {
         SDL_GameControllerUpdate();
         Require(IsSdlControllerButtonHeld(controller, static_cast<GamepadButton>(button), 6000),
                 "normalized SDL button mapping");
+        PhysicalInputState intent;
+        SampleSdlController(controller, intent);
+        Require((intent.ControllerButtons & (std::uint32_t{1} << button)) != 0,
+                "pressed button missing from device ownership input");
         SDL_JoystickSetVirtualButton(joystick, button, 0);
         SDL_GameControllerUpdate();
         Require(!IsSdlControllerButtonHeld(controller, static_cast<GamepadButton>(button), 6000),
@@ -99,7 +103,7 @@ int main(int argc, char** argv) try {
             !IsSdlControllerButtonHeld(controller, GamepadButton::RightTrigger, 6000),
             "trigger normalization/threshold");
     SampleSdlController(controller, state, false);
-    Require(state.LeftStickX == 0 && state.RightStickY == 0,
+    Require(state.LeftStickX == 0 && state.RightStickY == 0 && state.ControllerButtons == 0,
             "UI-owned analog axes leak to gameplay");
     Require(!state.ControllerMotion.GyroscopeValid && !state.ControllerMotion.AccelerometerValid,
             "unavailable sensors synthesized valid samples");

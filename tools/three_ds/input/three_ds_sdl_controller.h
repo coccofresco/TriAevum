@@ -73,12 +73,22 @@ inline bool IsSdlControllerButtonHeld(SDL_GameController* controller,
 // boundary. UI capture can mute axes while retaining sensor calibration.
 inline void SampleSdlController(SDL_GameController* controller,
                                 PhysicalInputState& state, bool readAxes = true,
-                                std::int32_t touchpadIndex = 0) {
+                                std::int32_t touchpadIndex = 0,
+                                std::int16_t triggerThreshold = 8192) {
     state.LeftStickX = state.LeftStickY = state.RightStickX = state.RightStickY = 0;
     state.ControllerMotion = {};
     state.ControllerTouch = {};
+    state.ControllerButtons = 0;
+    state.ControllerPressed = 0;
     if (!controller || SDL_GameControllerGetAttached(controller) != SDL_TRUE) return;
     if (readAxes) {
+        for (int i = 0; i < SDL_CONTROLLER_BUTTON_MAX && i < 32; ++i)
+            if (SDL_GameControllerGetButton(controller, static_cast<SDL_GameControllerButton>(i)))
+                state.ControllerButtons |= std::uint32_t{1} << i;
+        if (SDL_GameControllerGetAxis(controller, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > triggerThreshold)
+            state.ControllerButtons |= std::uint32_t{1} << 30;
+        if (SDL_GameControllerGetAxis(controller, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > triggerThreshold)
+            state.ControllerButtons |= std::uint32_t{1} << 31;
         const auto invert = [](std::int16_t value) {
             return static_cast<std::int16_t>(std::clamp(-static_cast<std::int32_t>(value), -32767, 32767));
         };

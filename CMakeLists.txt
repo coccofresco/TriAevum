@@ -2571,6 +2571,7 @@ set_property(TARGET oot3d_top_screen_texture_runtime_tests PROPERTY FOLDER Tests
 
 add_library(three_ds_recomp_input STATIC EXCLUDE_FROM_ALL
     tools/three_ds/input/three_ds_input.cpp
+    tools/three_ds/input/three_ds_motion_composition.cpp
 )
 target_include_directories(three_ds_recomp_input PUBLIC
     tools/three_ds/input

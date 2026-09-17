@@ -2587,7 +2587,7 @@ struct NativeControlPollingState {
       PendingPressedActions{};
   int64_t PendingMouseDeltaX = 0;
   int64_t PendingMouseDeltaY = 0;
-  double PendingMouseSeconds = 0.0;
+  double PendingInputSeconds = 0.0;
   bool GameplayMouseOwned = false;
   uint64_t MouseEligiblePolls = 0;
   uint64_t MouseReleasedPolls = 0;
@@ -2597,6 +2597,8 @@ struct NativeControlPollingState {
   uint64_t MouseMovementPolls = 0;
   Oot3dNativeGame::NativeRightStickProfileState RightStickProfile;
   ThreeDsRecomp::Input::VirtualMotionState VirtualMotion;
+  uint32_t PreviousControllerButtons = 0;
+  uint32_t PendingControllerButtons = 0;
 };
 
 Oot3dNativeGame::NativeA32InputFrame
@@ -2614,7 +2616,9 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
   using namespace Oot3dNativeGame;
   auto config = controls.Snapshot().Config;
   NativeControlHostInputState host;
-  host.SamplePeriodSeconds = samplePeriodSeconds;
+  if (hostGuiVisible) pollingState.PendingInputSeconds = 0.0;
+  host.SamplePeriodSeconds = ThreeDsRecomp::Input::ConsumeInputPeriod(
+      samplePeriodSeconds, guestRefreshWillConsume || hostGuiVisible, pollingState.PendingInputSeconds);
   const auto &io = ImGui::GetIO();
   const bool keyboardCaptured = hostGuiVisible || io.WantCaptureKeyboard;
   const bool mouseCaptured = hostGuiVisible;
@@ -2632,6 +2636,8 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
   }
   if (pollingState.ControllerInstance != selectedController.InstanceId) {
     pollingState.RightStickProfile = {};
+    pollingState.VirtualMotion.ResetController();
+    pollingState.PreviousControllerButtons = pollingState.PendingControllerButtons = 0;
   }
   pollingState.ControllerInstance = selectedController.InstanceId;
   const auto selectedDevice = std::find_if(selectedController.Devices.begin(), selectedController.Devices.end(),
@@ -2723,9 +2729,16 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
 
   ThreeDsRecomp::Input::SampleSdlController(
       config.ControllerEnabled ? selectedController.Controller : nullptr, host, !hostGuiVisible,
-      config.ControllerTouchpadEnabled ? config.ControllerTouchpadIndex : -1);
+      config.ControllerTouchpadEnabled ? config.ControllerTouchpadIndex : -1, triggerThreshold);
   controls.ObserveMotion(host.ControllerMotion);
+  pollingState.PendingControllerButtons |= host.ControllerButtons & ~pollingState.PreviousControllerButtons;
+  pollingState.PreviousControllerButtons = host.ControllerButtons;
+  if (guestRefreshWillConsume) {
+    host.ControllerPressed = pollingState.PendingControllerButtons;
+    pollingState.PendingControllerButtons = 0;
+  }
   if (hostGuiVisible) {
+    pollingState.PendingControllerButtons = 0;
     host.ControllerMotion = {};
     pollingState.RightStickProfile = {};
   }
@@ -2758,23 +2771,17 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
   if (gameplayMouseOwned && !mouseCaptureChanged) {
     pollingState.PendingMouseDeltaX += mouseDelta.x;
     pollingState.PendingMouseDeltaY += mouseDelta.y;
-    pollingState.PendingMouseSeconds +=
-        std::clamp(samplePeriodSeconds, 0.0, 0.25);
     if (guestRefreshWillConsume) {
       host.MouseDeltaX = static_cast<int32_t>(std::clamp<int64_t>(
           pollingState.PendingMouseDeltaX, INT32_MIN, INT32_MAX));
       host.MouseDeltaY = static_cast<int32_t>(std::clamp<int64_t>(
           pollingState.PendingMouseDeltaY, INT32_MIN, INT32_MAX));
-      host.SamplePeriodSeconds =
-          std::max(pollingState.PendingMouseSeconds, 1.0 / 1000.0);
       pollingState.PendingMouseDeltaX = 0;
       pollingState.PendingMouseDeltaY = 0;
-      pollingState.PendingMouseSeconds = 0.0;
     }
   } else {
     pollingState.PendingMouseDeltaX = 0;
     pollingState.PendingMouseDeltaY = 0;
-    pollingState.PendingMouseSeconds = 0.0;
   }
 
   auto frame = MapNativeControlInput(config, host, aimTransform,
@@ -4135,7 +4142,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
          static_cast<float>(restoredGravity[2])});
     nativeControlPollingState.PendingMouseDeltaX = 0;
     nativeControlPollingState.PendingMouseDeltaY = 0;
-    nativeControlPollingState.PendingMouseSeconds = 0.0;
+    nativeControlPollingState.PendingInputSeconds = 0.0;
     picaCompositionTracker.Reset();
     frameCount = restoredRuntime.FrameCount;
     refreshTickRemainder = restoredRuntime.RefreshTickRemainder;
@@ -4480,7 +4487,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
          static_cast<float>(restoredGravity[2])});
     nativeControlPollingState.PendingMouseDeltaX = 0;
     nativeControlPollingState.PendingMouseDeltaY = 0;
-    nativeControlPollingState.PendingMouseSeconds = 0.0;
+    nativeControlPollingState.PendingInputSeconds = 0.0;
     applySelectedUiProfile();
     if (!api.ResetPicaState(&error)) {
       throw std::runtime_error(

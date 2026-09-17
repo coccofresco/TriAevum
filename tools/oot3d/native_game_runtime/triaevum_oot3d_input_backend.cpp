@@ -81,7 +81,10 @@ bool TriAevumOot3dInputBackend::Poll(Fast::Fast3dWindow &window,
   NativeControlHostInputState host;
   host.SamplePeriodSeconds = std::clamp(samplePeriodSeconds, 0.001, 0.25);
   const auto selected = SelectController(mConfig, mControllerInstance);
-  if (mControllerInstance != selected.InstanceId) mRightStickProfile = {};
+  if (mControllerInstance != selected.InstanceId) {
+    mRightStickProfile = {};
+    mVirtualMotion.ResetController();
+  }
   mControllerInstance = selected.InstanceId;
   SDL_GameController *controller = mConfig.ControllerEnabled ? selected.Controller : nullptr;
   const std::int16_t triggerThreshold = static_cast<std::int16_t>(
@@ -95,7 +98,7 @@ bool TriAevumOot3dInputBackend::Poll(Fast::Fast3dWindow &window,
   }
 
   ThreeDsRecomp::Input::SampleSdlController(controller, host, true,
-      mConfig.ControllerTouchpadEnabled ? mConfig.ControllerTouchpadIndex : -1);
+      mConfig.ControllerTouchpadEnabled ? mConfig.ControllerTouchpadIndex : -1, triggerThreshold);
 
   const auto mouseDelta = window.GetMouseDelta();
   const bool mouseOwned = mConfig.MouseEnabled && !window.IsMouseCaptureReleased();

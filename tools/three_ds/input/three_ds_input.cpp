@@ -6,6 +6,14 @@
 
 namespace ThreeDsRecomp::Input {
 
+double ConsumeInputPeriod(double pollSeconds, bool consume, double& pendingSeconds) noexcept {
+    const double elapsed = std::isfinite(pollSeconds) ? std::clamp(pollSeconds, 0.0, 0.25) : 0.0;
+    pendingSeconds = std::min(0.25, pendingSeconds + elapsed);
+    const double period = std::max(0.001, consume ? pendingSeconds : elapsed);
+    if (consume) pendingSeconds = 0.0;
+    return period;
+}
+
 MotionSource NormalizeCameraSource(MotionSource source) noexcept {
     switch (source) {
     case MotionSource::ControllerGyroscope:
@@ -603,20 +611,44 @@ ResolvedMotion ResolveMotion(const MappingConfig& config,
         static_cast<void>(useControllerAccelerometer());
         break;
     case MotionSource::Automatic:
-        if (physical.MouseDeltaX != 0 || physical.MouseDeltaY != 0) {
-            useMouse();
-        } else if (cStick[0] != 0.0F || cStick[1] != 0.0F) {
-            useCStick();
-        } else if (physical.ControllerMotion.GyroscopeValid ||
-                   physical.ControllerMotion.AccelerometerValid) {
-            static_cast<void>(useControllerGyroscope());
-            static_cast<void>(useControllerAccelerometer());
-        } else if (virtualMotion != nullptr && virtualMotion->Active) {
-            result.GyroscopeValid = true;
-            result.AccelerometerValid = true;
-            synthetic = true;
+        {
+            VirtualMotionState temporary;
+            auto& state = virtualMotion ? *virtualMotion : temporary;
+            auto owner = state.AutomaticOwner;
+            const bool controllerIntent =
+                (physical.ControllerPressed | (physical.ControllerButtons & ~state.PreviousControllerButtons)) != 0 ||
+                ConvertHostAxisToNative(physical.RightStickX, config.CStickDeadZonePercent) != 0 ||
+                ConvertHostAxisToNative(physical.RightStickY, config.CStickDeadZonePercent) != 0 ||
+                ConvertHostAxisToNative(physical.LeftStickX, config.CirclePadDeadZonePercent) != 0 ||
+                ConvertHostAxisToNative(physical.LeftStickY, config.CirclePadDeadZonePercent) != 0;
+            if (physical.MouseDeltaX != 0 || physical.MouseDeltaY != 0) owner = VirtualMotionState::Owner::Mouse;
+            else if (controllerIntent) owner = VirtualMotionState::Owner::Controller;
+            else if (owner == VirtualMotionState::Owner::None)
+                owner = state.Active ? VirtualMotionState::Owner::Mouse : VirtualMotionState::Owner::Controller;
+
+            const bool controller = owner == VirtualMotionState::Owner::Controller;
+            if (controller) useCStick(); else useMouse();
+            const float pitch = result.Gyroscope[0], yaw = result.Gyroscope[1];
+            result = {};
+            if (controller) {
+                useControllerGyroscope();
+                useControllerAccelerometer();
+            }
+            const bool physicalBase = controller && (result.GyroscopeValid || result.AccelerometerValid ||
+                (state.Composition.Initialized && state.Composition.PhysicalBase));
+            const auto composed = state.Composition.Sample(result.Accelerometer, result.AccelerometerValid,
+                result.Gyroscope, pitch, yaw, seconds, physicalBase, advanceState);
+            result.Gyroscope = composed.AngularVelocity;
+            result.Accelerometer = composed.Gravity;
+            result.GyroscopeValid = result.AccelerometerValid = true;
+            if (advanceState) {
+                state.AutomaticOwner = owner;
+                state.PreviousControllerButtons = physical.ControllerButtons;
+                state.PitchRadians = std::atan2(double(result.Accelerometer[2]), -double(result.Accelerometer[1]));
+                state.Active = !physicalBase;
+            }
+            return result;
         }
-        break;
     }
     if (synthetic) {
         constexpr double radiansPerDegree = 3.14159265358979323846 / 180.0;
@@ -634,6 +666,8 @@ ResolvedMotion ResolveMotion(const MappingConfig& config,
         if (virtualMotion != nullptr && advanceState) {
             virtualMotion->PitchRadians = nextPitch;
             virtualMotion->Active = true;
+            virtualMotion->Composition.RestoreGravity(result.Accelerometer);
+            virtualMotion->AutomaticOwner = VirtualMotionState::Owner::None;
         }
     } else if (virtualMotion != nullptr && advanceState) {
         // A physical sensor owns both vectors. Rebase a later virtual source
@@ -709,10 +743,18 @@ AxisInputSample ResolveCStick(const MappingConfig& config,
 } // namespace
 
 void VirtualMotionState::RestoreGravity(const std::array<float, 3>& gravity) noexcept {
+    *this = {};
     PitchRadians = std::isfinite(gravity[1]) && std::isfinite(gravity[2]) &&
                            (gravity[1] != 0.0F || gravity[2] != 0.0F) ?
         std::atan2(static_cast<double>(gravity[2]), -static_cast<double>(gravity[1])) : 0.0;
     Active = true;
+    Composition.RestoreGravity(gravity);
+}
+
+void VirtualMotionState::ResetController() noexcept {
+    PreviousControllerButtons = 0;
+    if (AutomaticOwner == Owner::Controller) AutomaticOwner = Owner::None;
+    Composition.ResetReference();
 }
 
 void HostBindingCapture::Begin(BindingDevice device) noexcept {
