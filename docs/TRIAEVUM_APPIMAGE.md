@@ -126,3 +126,62 @@ References: [AppDir](https://docs.appimage.org/reference/appdir.html),
 [FUSE fallback](https://docs.appimage.org/user-guide/troubleshooting/fuse.html),
 [Valve controller requirements](https://partner.steamgames.com/doc/steamhardware/compat),
 [Deck input FAQ](https://partner.steamgames.com/doc/steamhardware/steamdeck/faq).
+
+### Post-alpha.2c Parity Candidate, 2026-09-17
+
+Built from `6ad3d832ca594442d009b619dcfc66cd08561799`, following
+[the Windows/Linux regression review](TRIAEVUM_POST_ALPHA2C_REGRESSION_REVIEW.md).
+This is a local test AppImage, not a newly published release or Deck certification.
+
+- `TriAevum-6ad3d83-x86_64.AppImage`: 126,798,328 bytes; SHA256
+  `fd8b2ce4940efddd32f7605717d22a8b6469125b32874ccef8fbca46fd05f7c7`.
+- Runtime incrementally rebuilt inside Steam Runtime 4 from the exported source
+  snapshot, not the stale Git identity of the Linux development mirror. Frozen
+  Forge rebuilt with the same SDK and explicit Tcl/Tk discovery. GLIBC ceiling
+  remains 2.38. NRI, consolidated F1 and TopScreen capabilities verified.
+- Retained the movie-capable title module verified by the preceding review;
+  its translated-source files were checked against their inventory and packaged
+  with paired build source. The existing title build reports no pending work.
+  Catalog hashes were refreshed for runtime, neutral module and title module.
+- Retained the previously qualified EUR/USA input recipes and COPY adapter,
+  bundled portable shader corpus, pipeline recipes and dependency notices.
+  Added the newly required Aurora notice. The audit initially caught a missing
+  notice and loss of USA coverage when substituting the unexpanded base recipe;
+  both were corrected before producing the AppImage. No audit bypass was used.
+- Audit passed for 527 allowlisted files / 362,442,925 payload bytes, both before
+  and after AppDir staging. No personal ROM, extracted assets, saves, captures,
+  downloaded TopScreen payload or driver cache was included.
+- Real frozen Forge GUI imported a personal USA ROM in **12.81 seconds**, with
+  no clipped/unmapped widgets and installation ready. This used a previously
+  downloaded TopScreen archive in private user storage, outside the package;
+  the number is not a fresh-network-download guarantee.
+- Mounted AppImage playback: 794 presentations / 25,270 submitted draws, zero
+  guest memory faults, native 30 Hz simulation with x2 presentation active.
+  `APPIMAGE_EXTRACT_AND_RUN=1` playback: 1,101 presentations / 38,884 draws,
+  zero faults. Both exited normally and produced framebuffer captures; the
+  mounted capture was visually inspected. These are bounded functionality
+  checks, not FPS benchmarks. No SDK/Python/library path was inherited by play.
+- Packaged-library SDL virtual-device regression passed. `ldd` found no missing
+  runtime dependencies. Actual Steam Input/Gamescope, AMD/Mesa, suspend/resume
+  and physical Steam Deck remain the earlier qualification limits.
+
+The packaged default shader path was deliberately preserved: these runs used
+the legacy specialized path, not the review's opt-in `--pica-parametric-tev`.
+They logged 25 cold runtime compilations and 12 additional variants in the
+longer fallback observation. The package must not be described as eliminating
+all first-use shader compilation. The opt-in path and its separate limits are
+documented in the regression review.
+
+Private Linux evidence: `~/triaevum-appimage-20260917/` contains package audit,
+GUI import report, invocation logs, bounded runtime reports and framebuffers.
+Publisher drivers: `~/triaevum_appimage_refresh.py` and
+`~/triaevum_appimage_check.py`. Tests used an isolated XDG root and restored
+their temporary diagnostic launch-profile/receipt changes before completion.
+
+Available for local testing on the Linux desktop as
+`~/Scrivania/TriAevum-6ad3d83-x86_64.AppImage`, with a separate applications entry
+**TriAevum (AppImage)**. It uses the normal XDG storage contract above; existing
+Flatpak storage and the separate development launcher were left intact.
+The first ordinary launch requests a ROM if this XDG installation is unprepared.
+The same artifact is retained on the Windows publisher under
+`I:/TriAevum-public/artifacts/appimage-20260917/`.
