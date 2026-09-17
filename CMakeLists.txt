@@ -2290,6 +2290,7 @@ set_property(TARGET oot3d_native_pica_texture_tests PROPERTY FOLDER Tests)
 add_subdirectory(tools/oot3d/ui_contract EXCLUDE_FROM_ALL)
 
 add_library(oot3d_ui_topscreen STATIC EXCLUDE_FROM_ALL
+    tools/oot3d/ui_topscreen/oot3d_native_font_coverage.cpp
     tools/oot3d/ui_topscreen/oot3d_top_screen_config.cpp
     tools/oot3d/ui_topscreen/oot3d_top_screen_controls.cpp
     tools/oot3d/ui_topscreen/oot3d_top_screen_gameplay_actions.cpp
@@ -2317,6 +2318,12 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set_property(TARGET oot3d_ui_topscreen PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 set_property(TARGET oot3d_ui_topscreen PROPERTY FOLDER Tools)
+
+add_executable(oot3d_native_font_coverage_tests EXCLUDE_FROM_ALL
+    tools/oot3d/ui_topscreen/oot3d_native_font_coverage.cpp
+    tools/oot3d/ui_topscreen/oot3d_native_font_coverage_tests.cpp)
+target_compile_features(oot3d_native_font_coverage_tests PRIVATE cxx_std_20)
+set_property(TARGET oot3d_native_font_coverage_tests PROPERTY FOLDER Tests)
 
 add_executable(oot3d_top_screen_mod_profile_tests EXCLUDE_FROM_ALL
     tools/oot3d/ui_topscreen/oot3d_top_screen_mod_profile_tests.cpp

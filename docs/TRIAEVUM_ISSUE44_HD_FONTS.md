@@ -95,6 +95,40 @@ it is not a claim that Azahar cannot display HD fonts.
 
 ## Native Evidence Already Available
 
+### C++ Coverage Consumer and Linux Parity (2026-09-17)
+
+`tools/oot3d/ui_topscreen/oot3d_native_font_coverage.{h,cpp}` now implements
+bounded native/replacement QBF pairing and a host coverage atlas. It accepts
+exact native glyph offsets, keeps logical and physical extents independent,
+supports partial clears, and publishes immutable copy-on-write snapshots with
+an owner epoch and content generation. Identical blits/clears reuse the snapshot;
+allocation/restore reset discards old contents without corrupting queued draws.
+It does not change native text metrics or shader/material state.
+
+The module is included in `oot3d_ui_topscreen`. Its standalone test target is
+`oot3d_native_font_coverage_tests`; Windows Clang-CL/CMake and Linux GCC
+(`-std=c++20 -O2 -Wall -Wextra -Werror`) both pass. Tests cover malformed input,
+ambiguous aliases, nibble order, scaled placement, bounds, partial clears,
+snapshot immutability, no-op reuse and epoch reset. The module is **not yet
+called by the live native font blitter or NRI upload path**. Do not describe it
+as a working HD dialogue feature.
+
+Linux mirror `/home/xander/triaevum-linux` now has the same font importer,
+Forge integration, tests, C++ module and CMake target. Existing tracked files
+were compared against their Windows baseline before replacement. No reset of
+the independently dirty mirror was performed. The focused Forge suite passes
+91 tests (two Windows-only tests skipped), using the diagnostic venv with
+`capstone==5.0.7`; system Python lacked that existing development dependency.
+The actual Linux RomFS plus cached official TopScreen archive produces the same
+native/replacement font hashes and zero metric differences recorded above.
+Neither the distributed AppImage nor Windows Forge binary was rebuilt here.
+
+Remaining live integration: authenticated font-pack loading, observer hooks for
+both native atlas builders, lifecycle invalidation on clear/reuse/quickload,
+and sized immutable texture publication through submission/replay/NRI. All
+title-specific provenance stays in this adapter; then compare deterministic
+dialogue framebuffers on both platforms before enabling runtime consumption.
+
 Read-only `I:/oot3decomp/ghidra_export/decompiled/`:
 
 | Native function | Relevant evidence |
