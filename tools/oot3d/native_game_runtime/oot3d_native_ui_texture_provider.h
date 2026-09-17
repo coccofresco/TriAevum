@@ -65,11 +65,15 @@ class Oot3dNativeA32UiTextureProvider final
                  std::string* error = nullptr) const override;
 
     const Oot3dNativeUiTextureProviderStats& Stats() const noexcept;
+    void SetGeneratedTextureTransform(Oot3dNativePicaSubmissionQueue::TextureSnapshotTransform transform) {
+        mGeneratedTextureTransform = std::move(transform);
+    }
 
   private:
     const Oot3dPicaPhysicalMemoryView& mMemory;
     const TopScreenTextureOverridePack* mTextureOverrides = nullptr;
     mutable Oot3dNativeUiTextureProviderStats mStats;
+    Oot3dNativePicaSubmissionQueue::TextureSnapshotTransform mGeneratedTextureTransform;
 };
 
 } // namespace Oot3dNativeGame

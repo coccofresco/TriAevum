@@ -17,6 +17,12 @@
 
 namespace Oot3dNativeGame {
 
+inline uint64_t HashOot3dPicaSnapshot(std::span<const uint8_t> bytes) {
+    uint64_t hash = 1469598103934665603ULL;
+    for (const auto value : bytes) hash = (hash ^ value) * 1099511628211ULL;
+    return hash;
+}
+
 class NativeA32Memory;
 
 struct Oot3dPicaPhysicalMemoryRegion {
@@ -50,6 +56,11 @@ class Oot3dPicaPhysicalMemoryView {
     bool Read(uint32_t physicalAddress, std::span<uint8_t> output) const;
     bool ReadGuest(uint32_t guestAddress,
                    std::span<uint8_t> output) const;
+    std::span<const uint8_t> ViewGuest(uint32_t address, size_t size) const {
+        if (!mReadView) return {};
+        const auto view = mReadView(address, size);
+        return view.size() == size ? view : std::span<const uint8_t>{};
+    }
 
   private:
     std::vector<Oot3dPicaPhysicalMemoryRegion> mRegions;
@@ -76,6 +87,9 @@ struct Oot3dPicaResourceSnapshot {
     bool ContentVersionAvailable = false;
     uint64_t BaseLevelContentHash = 0;
     bool BaseLevelContentHashAvailable = false;
+    // Optional presentation texture extent; native decoded PICA state stays intact.
+    uint16_t ReplacementWidth = 0;
+    uint16_t ReplacementHeight = 0;
 
     [[nodiscard]] std::span<const uint8_t> ResolvedBytes() const {
         return SharedBytes != nullptr
@@ -167,6 +181,11 @@ class Oot3dNativePicaSubmissionQueue final : public Oot3dPicaPacketSink {
     using TexturePayloadTransform =
         std::function<void(const Oot3dPicaTextureState&,
                            std::span<std::uint8_t>)>;
+    using TextureSnapshotTransform = std::function<void(
+        const Oot3dPicaTextureState&, Oot3dPicaResourceSnapshot&)>;
+    void SetTextureSnapshotTransform(TextureSnapshotTransform transform) {
+        mTextureSnapshotTransform = std::move(transform);
+    }
 
     explicit Oot3dNativePicaSubmissionQueue(
         Oot3dPicaPhysicalMemoryView memory,
@@ -287,6 +306,7 @@ class Oot3dNativePicaSubmissionQueue final : public Oot3dPicaPacketSink {
     bool mDeferGpuBackedDisplayTransfers = false;
     bool mRuntimeProfilingEnabled = false;
     TexturePayloadTransform mTexturePayloadTransform;
+    TextureSnapshotTransform mTextureSnapshotTransform;
     std::unordered_map<TextureSnapshotKey, TextureSnapshotCacheEntry,
                        TextureSnapshotKeyHash>
         mTextureSnapshotCache;

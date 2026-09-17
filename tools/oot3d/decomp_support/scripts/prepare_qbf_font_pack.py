@@ -37,16 +37,20 @@ def prepare_font_pack(*, archive: Path, romfs: Path, output: Path) -> dict:
             replacement = parse_qbf(source.read(entries[0]))
             contract = pair_font_coverage(native, replacement)
             asset = f"coverage/{replacement.sha256}.qbf"
+            original_asset = f"native/{native.sha256}.qbf"
             assets[asset] = replacement.data
-            fonts.append({"romfs_path": native_path, "coverage_file": asset, **contract})
+            assets[original_asset] = native.data
+            fonts.append({"romfs_path": native_path, "coverage_file": asset,
+                          "native_file": original_asset, **contract})
     if not fonts:
         raise ValueError("ROM contains no supported Latin QBF font")
     archive_hash = hashlib.sha256()
     with archive.open("rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             archive_hash.update(chunk)
-    manifest = {"format": "oot3d_qbf_coverage_v1", "runtime_enabled": False,
-                "status": "prepared_only_pending_native_atlas_consumer",
+    manifest = {"format": "oot3d_qbf_coverage_v1", "runtime_enabled": True,
+                "minimum_output_height": 480,
+                "status": "native_atlas_coverage_ready",
                 "fonts": fonts,
                 "source_archive_sha256": archive_hash.hexdigest(),
                 "attribution": "TopScreen / Single Screen Experience by M-1 / rlgcarrot"}
@@ -73,7 +77,7 @@ def main() -> int:
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
     manifest = prepare_font_pack(archive=args.archive, romfs=args.romfs, output=args.output)
-    print(json.dumps({"output": str(args.output), "runtime_enabled": False,
+    print(json.dumps({"output": str(args.output), "runtime_enabled": True,
                       "fonts": [{k: v for k, v in font.items() if k != "characters"}
                                 for font in manifest["fonts"]]}, indent=2))
     return 0

@@ -75,9 +75,13 @@ the archive's `4K Textures` RomFS subtree, preserving the native ROM's layout
 metrics. It does not import the whole 4K texture pack or apply executable patches.
 Font assets remain private installation data, never bundled release content.
 
-**Preparation is not activation:** `runtime_enabled: false` in the font manifest
-and receipt explicitly records the missing native HD-atlas consumer. Existing
-dialogue rendering is unchanged; see [issue 44 status](TRIAEVUM_ISSUE44_HD_FONTS.md).
+Font import version 2 also stores a native QBF provenance reference in this local
+pack. The runtime automatically uses its HD coverage from 480 output pixels high;
+below that threshold it uses native coverage. The launch adapter finds the font
+pack beside `atlas_overrides.o3tu`, without a second user-selected path. Old
+font receipts trigger reimport from the existing verified archive. Missing or
+incompatible packs retain native text with a diagnostic requesting a Forge
+refresh. See [implementation and verification](TRIAEVUM_ISSUE44_HD_FONTS.md).
 
 2026-09-17 source-path verification on Windows with the real EU RomFS and verified
 official archive: textures plus fonts prepared in 3.089 s; warm reuse 0.010 s.

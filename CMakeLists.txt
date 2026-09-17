@@ -2548,16 +2548,26 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
 endif()
 set_property(TARGET oot3d_top_screen_ocarina_text_runtime_tests PROPERTY FOLDER Tests)
 
+find_package(libzip REQUIRED)
 add_library(oot3d_top_screen_texture_runtime STATIC EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_top_screen_texture_runtime.cpp
+    tools/oot3d/native_game_runtime/oot3d_native_hd_font_runtime.cpp
 )
 target_include_directories(oot3d_top_screen_texture_runtime PUBLIC
     tools/oot3d/native_game_runtime
 )
 target_link_libraries(oot3d_top_screen_texture_runtime PUBLIC
+    libzip::zip
     oot3d_native_ui_lifecycle_bridge
     oot3d_native_ui_texture_provider)
 target_compile_options(oot3d_top_screen_texture_runtime PRIVATE "${WARNING_OVERRIDE}")
+add_executable(oot3d_native_hd_font_runtime_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/oot3d_native_hd_font_runtime_tests.cpp)
+target_link_libraries(oot3d_native_hd_font_runtime_tests PRIVATE oot3d_top_screen_texture_runtime)
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set_property(TARGET oot3d_native_hd_font_runtime_tests PROPERTY MSVC_RUNTIME_LIBRARY
+        "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     target_compile_definitions(oot3d_top_screen_texture_runtime PRIVATE NOMINMAX)
     set_property(TARGET oot3d_top_screen_texture_runtime PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")

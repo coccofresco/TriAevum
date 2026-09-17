@@ -442,9 +442,27 @@ bool Oot3dNativeA32UiTextureProvider::Resolve(
 
     pixels.width = descriptor->width;
     pixels.height = descriptor->height;
+    Oot3dPicaResourceSnapshot transformed;
+    std::span<const std::uint8_t> coverageBytes = encoded;
+    if (generatedText && mGeneratedTextureTransform) {
+        Oot3dPicaTextureState state{};
+        state.Enabled = true;
+        state.Width = descriptor->width;
+        state.Height = descriptor->height;
+        state.Format = encoding->native_pica_format;
+        state.PhysicalAddress = mMemory.Translate(runtimeSurface, encoded.size())
+            ? runtimeSurface : mMemory.TranslateGuest(runtimeSurface, encoded.size()).value_or(0);
+        transformed.Bytes = std::move(encoded);
+        mGeneratedTextureTransform(state, transformed);
+        if (transformed.ReplacementWidth && transformed.ReplacementHeight) {
+            pixels.width = transformed.ReplacementWidth;
+            pixels.height = transformed.ReplacementHeight;
+        }
+        coverageBytes = transformed.ResolvedBytes();
+    }
     if (!Oot3d::Renderer::DecodePicaTextureRgba8(
-            encoding->native_pica_format, descriptor->width,
-            descriptor->height, encoded, pixels.rgba8, error)) {
+            encoding->native_pica_format, pixels.width,
+            pixels.height, coverageBytes, pixels.rgba8, error)) {
         ++mStats.decode_failures;
         pixels = {};
         return false;

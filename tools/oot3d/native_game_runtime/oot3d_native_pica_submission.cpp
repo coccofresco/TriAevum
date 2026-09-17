@@ -40,12 +40,7 @@ bool RangeFits(uint32_t baseAddress, size_t size) {
 }
 
 uint64_t HashSnapshotBytes(std::span<const uint8_t> bytes) {
-    uint64_t hash = 1469598103934665603ULL;
-    for (const uint8_t value : bytes) {
-        hash ^= value;
-        hash *= 1099511628211ULL;
-    }
-    return hash;
+    return HashOot3dPicaSnapshot(bytes);
 }
 
 void HashCombine(size_t& hash, uint64_t value) {
@@ -492,6 +487,7 @@ bool Oot3dNativePicaSubmissionQueue::CaptureTextureResources(
         resource.ContentHashAvailable = true;
         resource.BaseLevelContentHash = cached->second.BaseLevelContentHash;
         resource.BaseLevelContentHashAvailable = true;
+        if (mTextureSnapshotTransform) mTextureSnapshotTransform(texture, resource);
         submission.Resources.push_back(std::move(resource));
     }
     return true;

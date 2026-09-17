@@ -495,6 +495,10 @@ bool BuildOot3dPicaVulkanDrawPlanImpl(
         Oot3dPicaVulkanTextureBinding textureBinding{
             static_cast<uint8_t>(texture),
             submission.State.Textures[texture], {}};
+        if (resource->ReplacementWidth && resource->ReplacementHeight) {
+            textureBinding.State.Width = resource->ReplacementWidth;
+            textureBinding.State.Height = resource->ReplacementHeight;
+        }
         if (resource->SharedBytes != nullptr) {
             if constexpr (ConsumeResources) {
                 textureBinding.SharedNativeBytes =

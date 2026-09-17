@@ -21,7 +21,7 @@ except ImportError:
 
 
 IMPORT_VERSION = 1
-FONT_IMPORT_VERSION = 1
+FONT_IMPORT_VERSION = 2
 ARCHIVE_NAME = "topscreen211.zip"
 
 
@@ -89,8 +89,9 @@ def prepare_topscreen_assets(*, root: Path, data_root: Path, recipe: dict,
         manifest = prepare_font_pack(archive=archive, romfs=romfs, output=font_pack)
         atomic_write_json(font_receipt_path, {
             "source": font_identity, "pack_sha256": sha256_file(font_pack),
-            "runtime_enabled": False,
-            "status": "prepared_only_pending_native_atlas_consumer",
+            "runtime_enabled": True,
+            "minimum_output_height": 480,
+            "status": "native_atlas_coverage_ready",
             "font_count": len(manifest["fonts"]),
             "attribution": "TopScreen / Single Screen Experience by M-1 / rlgcarrot",
             "source_url": "https://gamebanana.com/mods/695893"})

@@ -88,10 +88,11 @@ class QbfFontTests(unittest.TestCase):
                 first = output.read_bytes()
                 prepare_font_pack(archive=archive, romfs=root / "romfs", output=output)
             self.assertEqual(first, output.read_bytes())
-            self.assertFalse(manifest["runtime_enabled"])
+            self.assertTrue(manifest["runtime_enabled"])
+            self.assertEqual(manifest["minimum_output_height"], 480)
             self.assertEqual(len(manifest["fonts"]), 1)
             with zipfile.ZipFile(output) as prepared:
-                self.assertEqual(len(prepared.namelist()), 2)
+                self.assertEqual(len(prepared.namelist()), 3)
                 self.assertEqual(json.loads(prepared.read("manifest.json")), manifest)
             self.assertNotIn(b"DO NOT IMPORT", first)
 

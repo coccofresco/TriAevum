@@ -74,6 +74,7 @@
 #include "oot3d_top_screen_items_hint.h"
 #include "oot3d_top_screen_settings_panel.h"
 #include "oot3d_top_screen_texture_overrides.h"
+#include "oot3d_native_hd_font_runtime.h"
 #include "oot3d_top_screen_texture_runtime.h"
 #include "oot3d_typed_gameplay_bridge.h"
 
@@ -391,6 +392,7 @@ struct NativeWidescreenProjectionState {
   bool BlockTraceTruncated = false;
   uint64_t BlockTraceRecordsObserved = 0;
   Oot3dNativeGame::NativeA32Memory *TraceMemory = nullptr;
+  Oot3dNativeGame::NativeHdFontRuntime *HdFonts = nullptr;
   std::deque<A32BlockTraceRecord> BlockTrace;
   Oot3dNativeGame::Oot3dNativeUiLifecycleBridge *UiLifecycleBridge = nullptr;
   Oot3dNativeGame::TopScreenOcarinaTextRuntime *OcarinaText = nullptr;
@@ -1761,6 +1763,8 @@ void ApplyNativeWidescreenProjectionPolicy(
     uint32_t pc, oot3d::recomp::a32::GuestState &state,
     oot3d::recomp::a32::MemoryBus &memory, void *user) {
   auto &runtime = *static_cast<NativeWidescreenProjectionState *>(user);
+  if (pc == Oot3dNativeGame::kNativeQbfA4Blit && runtime.HdFonts && runtime.TraceMemory)
+    runtime.HdFonts->ObserveBlit(state, *runtime.TraceMemory);
   if (runtime.TopScreenUiProfile &&
       pc == Oot3dNativeGame::kTopScreenInputUpdateBoundary &&
       (runtime.OcarinaText == nullptr || !runtime.OcarinaText->Pending()) &&
@@ -3018,6 +3022,15 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
   }
 
   Oot3dNativeGame::TopScreenTextureOverridePack topScreenTextureOverridePack;
+  Oot3dNativeGame::NativeHdFontRuntime hdFonts;
+  bool hdFontsLoaded = false;
+  if (!launch.TopScreenTextureOverridePackPath.empty()) {
+    const auto fontPath = launch.TopScreenTextureOverridePackPath.parent_path() / "font_coverage.zip";
+    if (std::filesystem::is_regular_file(fontPath)) {
+      hdFontsLoaded = hdFonts.Load(fontPath, &error);
+      if (!hdFontsLoaded) std::cerr << "HD font coverage unavailable; re-run Forge: " << error << '\n';
+    }
+  }
   const Oot3dNativeGame::TopScreenTextureOverridePack
       *topScreenTextureOverridePackPointer = nullptr;
   if (!launch.TopScreenTextureOverridePackPath.empty()) {
@@ -3186,6 +3199,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
   Oot3dNativeGame::NativeTemporalEventLedger temporalEventLedger;
   Oot3dNativeGame::NativeA32PlayerTemporalBridge playerTemporalBridge;
   NativeWidescreenProjectionState widescreenProjection;
+  widescreenProjection.HdFonts = hdFontsLoaded ? &hdFonts : nullptr;
   widescreenProjection.FrameRatePolicy = &frameRatePolicy;
   widescreenProjection.SceneViewProbe = &sceneViewProbe;
   widescreenProjection.PlayerTimingProbe = &playerTimingProbe;
@@ -3314,6 +3328,8 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     blockEntryHooks.insert(blockEntryHooks.end(), diagnosticHooks.begin(),
                            diagnosticHooks.end());
   }
+  std::sort(blockEntryHooks.begin(), blockEntryHooks.end());
+  if (hdFontsLoaded) blockEntryHooks.push_back(Oot3dNativeGame::kNativeQbfA4Blit);
   std::sort(blockEntryHooks.begin(), blockEntryHooks.end());
   blockEntryHooks.erase(
       std::unique(blockEntryHooks.begin(), blockEntryHooks.end()),
@@ -3728,6 +3744,11 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
   }
   Oot3dNativeGame::Oot3dNativePicaSubmissionQueue submissionQueue(
       picaMemoryView, true);
+  if (hdFontsLoaded) submissionQueue.SetTextureSnapshotTransform(
+      [&](const Oot3dNativeGame::Oot3dPicaTextureState& texture,
+          Oot3dNativeGame::Oot3dPicaResourceSnapshot& resource) {
+        hdFonts.Resolve(picaMemoryView, texture, resource);
+      });
   if (topScreenTextureOverrideRuntime.has_value()) {
     submissionQueue.SetTexturePayloadTransform(
         [&](const Oot3dNativeGame::Oot3dPicaTextureState &texture,
@@ -3801,6 +3822,11 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
 #endif
   Oot3dNativeGame::Oot3dNativeA32UiTextureProvider nativeUiTextureProvider(
       picaMemoryView, topScreenTextureOverridePackPointer);
+  if (hdFontsLoaded) nativeUiTextureProvider.SetGeneratedTextureTransform(
+      [&](const Oot3dNativeGame::Oot3dPicaTextureState& texture,
+          Oot3dNativeGame::Oot3dPicaResourceSnapshot& resource) {
+        hdFonts.Resolve(picaMemoryView, texture, resource);
+      });
   Oot3dNativeGame::TopScreenOcarinaTextRuntime ocarinaText(process.Memory(), nativeUiTextureProvider);
   nativeCandidateDispatch.OcarinaText = &ocarinaText;
   widescreenProjection.OcarinaText = &ocarinaText;
@@ -4136,6 +4162,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
       throw std::runtime_error("native savestate load failed: " + error);
     }
     Oot3dNativeGame::ResetOot3dTypedGameplayTransientState();
+    hdFonts.Reset();
     const auto restoredGravity = hostServices.HidRuntimeProfile().LastAccelerometer;
     nativeControlPollingState.VirtualMotion.RestoreGravity(
         {static_cast<float>(restoredGravity[0]), static_cast<float>(restoredGravity[1]),
@@ -4513,6 +4540,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     restoreSavestateTiming(runtime);
     picaFrontend.SetPacketSink(&submissionQueue);
     uiLifecycleBridge.ResetAfterStateLoad(frameCount);
+    hdFonts.Reset();
     ocarinaText.Reset();
     uiLifecycleBridge.SetTopScreenConfig(activeTopScreenConfig);
     widescreenProjection.TopScreenPauseDrawRouting = {};
@@ -4688,6 +4716,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
 
     const uint32_t width = std::max<uint32_t>(1, window.GetWidth());
     const uint32_t height = std::max<uint32_t>(1, window.GetHeight());
+    hdFonts.SetOutputHeight(height);
     updateScenePresentation();
     phaseStart = std::chrono::steady_clock::now();
     window.GetMouseStateManager()->StartFrame();
@@ -7595,6 +7624,10 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
                     nativeTextures.override_no_matches},
                    {"topscreen_texture_override_pack_loaded",
                     topScreenTextureOverridePackPointer != nullptr},
+                   {"hd_font_pack_loaded", hdFontsLoaded},
+                   {"hd_font_native_blits", hdFonts.Blits},
+                   {"hd_font_atlas_rebuilds", hdFonts.Rebuilds},
+                   {"hd_font_texture_replacements", hdFonts.Replacements},
                    {"topscreen_texture_override_pica",
                     [&]() {
                       if (!topScreenTextureOverrideRuntime.has_value()) {

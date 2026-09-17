@@ -75,13 +75,14 @@ class TopScreenAssetsTests(unittest.TestCase):
             pack = self.prepare()
             (pack.parent / "font_coverage.zip").write_bytes(b"corrupt")
             self.prepare()
-            with patch("topscreen_assets.FONT_IMPORT_VERSION", 2):
+            with patch("topscreen_assets.FONT_IMPORT_VERSION", 3):
                 self.prepare()
             self.assertEqual(build.call_count, 1)
             self.assertEqual(fonts.call_count, 3)
             receipt = json.loads((pack.parent / "fonts_import.json").read_text())
-            self.assertEqual(receipt["source"]["font_import_version"], 2)
-            self.assertFalse(receipt["runtime_enabled"])
+            self.assertEqual(receipt["source"]["font_import_version"], 3)
+            self.assertTrue(receipt["runtime_enabled"])
+            self.assertEqual(receipt["minimum_output_height"], 480)
 
     def test_font_failure_is_not_cached_as_success_and_can_be_retried(self):
         (self.root / "topscreen211.zip").write_bytes(self.archive_bytes)

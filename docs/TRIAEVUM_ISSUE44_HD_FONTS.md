@@ -1,7 +1,65 @@
 # Issue 44: High-Resolution Native Fonts
 
-Research: 2026-09-17. Status: cause and implementation route identified;
-no runtime fix or issue closure claimed.
+Updated: 2026-09-17. Current status: the TopScreen Latin HD font is connected
+to native runtime rendering, automatically enabled from 480 output pixels high.
+Earlier implementation checkpoints below are historical, not the current status.
+
+## Live Runtime Implementation
+
+- Forge font importer version 2 includes the native QBF as a local provenance
+  reference alongside HD coverage. No ROM/mod payload enters public packages.
+- `oot3d_native_hd_font_runtime.{h,cpp}` loads the adjacent `font_coverage.zip`,
+  validates both fonts, and observes native A4 glyph blits at `002d2504`.
+  Both static and dynamic native atlas builders reach this function. The native
+  font image must match exactly in guest memory; characters are never inferred
+  from finished pixels.
+- The native atlas is uploaded through a staging copy. The adapter recognizes
+  that copy by full byte identity with the observed source atlas. Each HD glyph
+  additionally requires the current native cell to still match its observed
+  source glyph. Clears/overwrites cannot retain old HD coverage. Unobserved or
+  modified regions preserve native coverage rather than inventing replacement
+  text. Savestate loads clear provenance and restart observation.
+- Immutable texture snapshots carry replacement dimensions into the existing
+  Vulkan/NRI upload. Native PICA state, text geometry, UVs, metrics, control codes,
+  order, color and timing remain unchanged. The generated-text UI provider uses
+  the same adapter for separately captured text such as song labels.
+- The output window image height selects the native path below 480 and HD at
+  480 or above, without an F1 switch. It is not driven by the original 240-line
+  guest framebuffer or a per-scene exception. Already queued snapshots remain
+  immutable. Identical atlas contents share storage and a cached content hash.
+- Missing/old packs retain native text and request a Forge refresh in the log.
+  The default applies to the Latin font actually supplied in TopScreen; absent
+  HD system/Japanese fonts, unsupported encodings and unobserved glyphs remain
+  native. This is not a claim of newly invented artwork for every font.
+
+### Verification
+
+`tools/triaevum_release/tests/verify_hd_fonts.py` captures deterministic NRI
+framebuffers with the existing portable stone/Visions savestate. Windows and
+Linux Wayland both passed native 720p, HD 720p, HD 480p and native 360p cases:
+
+| Case | Observed native blits | HD rebuilds | HD texture uses |
+| --- | ---: | ---: | ---: |
+| HD 720p / 480p | 144 | 1 | 148 |
+| Native 360p, pack present | 144 | 0 | 0 |
+| Native 720p, pack absent | 0 | 0 | 0 |
+
+At frame 120, native vs HD 720p differs in 2,591 pixels, entirely inside
+`[571,549]-[708,632]` (the text). Nothing outside the text panel changes. The
+text ROI is pixel-identical between Windows and Linux HD captures. Fixtures and
+captures stay private (`J:/TriAevum-diagnostics/issue44/live4` and Linux
+`/home/xander/triaevum-hd-font-live`). This is a verified generated-text scenario,
+not a claim that every dialogue/language/song has been exhaustively played.
+
+`oot3d_native_hd_font_runtime_tests` exercises the real adapter with synthetic
+QBF/ZIP/guest-memory data: 479/480 threshold, exact upload-copy matching, extent,
+unchanged native state, cached hashes, clear/restore invalidation and immutable
+queued draws. The parser/atlas tests and focused Forge suite also pass (91 Forge
+tests; two Windows-specific tests skipped on Linux). Existing submission, Vulkan
+plan and native UI texture-provider tests pass on Windows.
+
+Development runtimes are rebuilt on both platforms; released archives and the
+frozen Forge/AppImage distributions have not been republished in this change.
 
 ## Implementation Checkpoint: Coverage Import
 
