@@ -198,7 +198,7 @@ int main(int argc, char** argv) try {
                 // just toon color. Enumerate semantic eligibility predicates;
                 // dimensions, material colors, masks and texture identities do
                 // not belong to this program family.
-                for (unsigned bits = 0; bits < 32; ++bits)
+                for (unsigned bits = 0; bits < 64; ++bits)
                 for (unsigned blendKind = 0; blendKind < 5; ++blendKind)
                 for (bool motion : {false, true}) {
                     auto outlined = request;
@@ -210,6 +210,7 @@ int main(int argc, char** argv) try {
                     outlined.Draw.ColorWriteMask = bits & 8 ? 15 : 0;
                     outlined.Draw.DepthCompare = bits & 16 ? ::Oot3d::Renderer::PicaCompareFunction::Always
                         : ::Oot3d::Renderer::PicaCompareFunction::Less;
+                    outlined.Draw.PerspectiveProjection = (bits & 32) != 0;
                     outlined.Draw.Blend = {};
                     using Factor = ::Oot3d::Renderer::NativeBlendFactor;
                     outlined.Draw.Blend.Enabled = blendKind != 0;
@@ -318,7 +319,7 @@ int main(int argc, char** argv) try {
         }
     }
     if (countOnly) { std::cout << "unique_modules=" << modules << '\n'; return 0; }
-    Check(modules == (toon ? 340U : temporal ? 40U : 16U), "unexpected finite fragment family size");
+    Check(modules == (toon ? 348U : temporal ? 40U : 16U), "unexpected finite fragment family size");
     output << ((temporal || toon) ? "inline const Fast::Renderer3ds::PicaFragmentArtifact "
                         : "inline const PicaFragmentArtifact ")
            << symbol << "Artifacts[] = {\n" << table.str()

@@ -2598,6 +2598,10 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
 endif()
 set_property(TARGET three_ds_recomp_input_tests PROPERTY FOLDER Tests)
 
+# Imported dependencies found in the renderer directory are not visible here.
+if (NOT TARGET SDL2::SDL2 AND CMAKE_SYSTEM_NAME MATCHES "^(Linux|Darwin)$")
+    find_package(SDL2 REQUIRED)
+endif()
 if (TARGET SDL2::SDL2)
     add_executable(three_ds_sdl_controller_tests EXCLUDE_FROM_ALL
         tools/three_ds/input/three_ds_sdl_controller_tests.cpp)

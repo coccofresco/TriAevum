@@ -560,7 +560,11 @@ add_executable(oot3d_graphics_foundation_tests
 )
 set_property(TARGET oot3d_graphics_foundation_tests PROPERTY CXX_STANDARD 20)
 target_include_directories(oot3d_graphics_foundation_tests PRIVATE ../include)
+if(NOT TARGET Vulkan::Headers)
+    find_package(Vulkan REQUIRED)
+endif()
 target_link_libraries(oot3d_graphics_foundation_tests PRIVATE
+    Vulkan::Headers
     gtest_main
     nlohmann_json::nlohmann_json
     ThreeDsRecomp::RendererExtensionCore

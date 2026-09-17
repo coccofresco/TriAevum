@@ -34,8 +34,13 @@ TEST(GraphicsSettingsRuntimeTest, UsesInjectedPersistencePort) {
     auto initial = Fast::Oot3d::GraphicsSettingsService::Preset(
         Fast::Oot3d::GraphicsPreset::Custom);
     initial.FovMultiplier = 1.25F;
+    // This test counts user saves, not schema/default normalization writes.
+    // An unset grass LOD reference is resolved even when grass is disabled.
+    initial = Fast::Oot3d::GraphicsSettingsService::Validate(initial, {}).Value;
     persistence->Root["Graphics"] =
         Fast::Oot3d::SerializeGraphicsSettings(initial);
+    EXPECT_FALSE(Fast::Oot3d::LoadGraphicsSettingsConfig(
+        persistence->Root, initial).NeedsRewrite);
 
     Fast::Oot3d::InstallGraphicsSettingsPersistencePort(persistence);
     auto& runtime = Fast::Oot3d::GraphicsSettingsRuntime::Instance();
