@@ -36,11 +36,22 @@ def closure(program, root, maximum):
     return sorted(found)
 
 
+def cohort(program, roots, maximum):
+    if not roots:
+        raise ValueError('At least one family root is required')
+    entries = set()
+    for root in sorted(set(roots)):
+        entries.update(closure(program, root, maximum))
+        if len(entries) > maximum:
+            raise ValueError('Cohort exceeds build budget')
+    return sorted(entries)
+
+
 def main():
     p = argparse.ArgumentParser(__doc__)
     for name in ('program', 'code', 'compiler', 'support', 'include', 'output'):
         p.add_argument('--'+name, type=Path, required=True)
-    p.add_argument('--root', type=lambda x: int(x,16), required=True)
+    p.add_argument('--root', type=lambda x: int(x,16), action='append', required=True)
     p.add_argument('--optimized', action='store_true')
     p.add_argument('--max-functions', type=int, default=16)
     args = p.parse_args()
@@ -48,7 +59,8 @@ def main():
     code = args.code.read_bytes()
     if hashlib.sha256(code).hexdigest() != program['code_sha256']:
         raise ValueError('Code/program mismatch')
-    entries = closure(program,args.root,args.max_functions)
+    roots = sorted(set(args.root))
+    entries = cohort(program,roots,args.max_functions)
     functions, external = aot._load_functions(program, {
         'format': aot.SELECTION_FORMAT, 'functions': [{'entry':e} for e in entries]}, code)
     if external:
@@ -64,7 +76,8 @@ def main():
             if hashlib.sha256(code[begin:begin+192]).hexdigest()!=expected:
                 raise ValueError('Unqualified native triangle body; address alone is insufficient')
     symbols = {f.entry:aot._symbol(f.name,f.entry) for f in functions}
-    lines = [f'constexpr uint32_t kFamilyRoot=0x{args.root:08X};',
+    lines = ['bool FamilySupportsRoot(uint32_t pc) { return ' +
+             ' || '.join(f'pc==0x{e:08X}U' for e in roots) + '; }',
              f'constexpr bool kFamilyOptimized={str(args.optimized).lower()};']
     lines += aot._render_function_declarations(functions)
     for f in functions:
@@ -83,7 +96,10 @@ def main():
                   f'if(p!=pcs+count && *p<0x{hi:08X}U) return true; }}']
     lines += ['return false;}',
         'Oot3dWholeAotFlow RunFamily(Oot3dWholeAotFrame& f,Oot3dWholeAotContext& c,Oot3dAotArchitecturalState& s,uint32_t pc) {',
-        f'return Execute_{symbols[args.root]}(f,c,s,pc);','}']
+        'switch(pc) {']
+    for root in roots:
+        lines += [f'case 0x{root:08X}U: return Execute_{symbols[root]}(f,c,s,pc);']
+    lines += ['default: return Oot3dAotBranch(pc);','}','}']
     args.output.mkdir(parents=True,exist_ok=False)
     args.output=args.output.resolve()
     generated=args.output/'family_generated.inc'
@@ -101,7 +117,7 @@ def main():
     start=time.monotonic()
     for command in commands:
         subprocess.run(command,check=True,timeout=120)
-    report={'developer_only':True,'root':f'{args.root:08X}',
+    report={'developer_only':True,'roots':[f'{e:08X}' for e in roots],
         'functions':[f'{e:08X}' for e in entries],'optimized':args.optimized,
         'build_seconds':time.monotonic()-start,'commands':commands,
         'hashes':{str(f):hashlib.sha256(f.read_bytes()).hexdigest() for f in

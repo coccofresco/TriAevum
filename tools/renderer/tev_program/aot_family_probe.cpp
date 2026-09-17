@@ -31,7 +31,7 @@ bool FamilyExecute(uint32_t pc,a32::GuestState& guest,NativeA32Memory& memory,
     Oot3dWholeAotExternalCall external,uint32_t budget,uint32_t* consumed,
     a32::BlockEntryCallback callback,void* user,const uint32_t* pcs,size_t count,
     const Oot3dAotBlockEntryFilter* filter,bool skipFirst,uint32_t stop) {
-    if (pc!=kFamilyRoot || stop!=guest.r[14] || !result || !stats || !budget ||
+    if (!FamilySupportsRoot(pc) || stop!=guest.r[14] || !result || !stats || !budget ||
         (callback && (!count || FamilyObserved(pcs,count))))
         return original->Execute(pc,guest,memory,result,stats,external,budget,consumed,
             callback,user,pcs,count,filter,skipFirst,stop);

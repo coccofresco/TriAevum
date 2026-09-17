@@ -1,5 +1,5 @@
 import unittest
-from build_aot_family_probe import closure
+from build_aot_family_probe import closure, cohort
 
 
 def function(entry, callees=(), **changes):
@@ -11,6 +11,22 @@ def function(entry, callees=(), **changes):
 
 
 class FamilyTests(unittest.TestCase):
+    def test_cohort_deduplicates_roots_and_shared_callees(self):
+        p={'functions':[function(1,[3]),function(2,[3]),function(3)]}
+        self.assertEqual(cohort(p,[2,1,2],3),[1,2,3])
+
+    def test_cohort_budget_is_global(self):
+        p={'functions':[function(1,[3]),function(2,[4]),function(3),function(4)]}
+        with self.assertRaisesRegex(ValueError,'Cohort exceeds'):
+            cohort(p,[1,2],3)
+
+    def test_cohort_rejects_empty_and_open_member(self):
+        p={'functions':[function(1),function(2,indirect_sites=[3])]}
+        with self.assertRaisesRegex(ValueError,'At least'):
+            cohort(p,[],3)
+        with self.assertRaisesRegex(ValueError,'Open'):
+            cohort(p,[1,2],3)
+
     def test_shared_callee_is_included_once(self):
         p={'functions':[function(1,[2,3]),function(2,[4]),function(3,[4]),function(4)]}
         self.assertEqual(closure(p,1,4),[1,2,3,4])

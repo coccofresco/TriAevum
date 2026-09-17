@@ -123,3 +123,78 @@ Private evidence: `C:/Users/xander/triaevum-aot-causal-analysis/`, directories
 the later wrapper also preserves unsupported/SVC exit reporting explicitly.
 External decomp, original code, the frozen game executable and release files were
 not modified. Pre-existing generator/memory-region work remains separate.
+
+## Multi-root extension: 33 distinct functions
+
+Later on 2026-09-17, the builder was extended to accept repeated `--root` arguments.
+It emits the union of their transitive closures once, sharing direct callees and
+architectural-state passing. The build budget applies to the deduplicated union,
+not separately to each root. Empty cohorts and any open/recursive member are
+rejected. The module dispatches only declared roots; unrelated entries still use
+the original. Observer exclusion conservatively covers the entire union.
+
+Tested roots in one module:
+
+| Root | Own closure | Purpose |
+| --- | ---: | --- |
+| `002BB780` | 30 | `BgCheck_EntitySphVsWall3`, including wall collision traversal |
+| `003723C0` | 22 | Caller that prepares flags and invokes `BgCheck_LineTestImpl` |
+| `002BBF74` | 6 | Existing floor-polygon traversal |
+
+The union contains **33**, not 58 functions. This adds ten distinct functions to
+the previous 23-function coverage. The line caller's role is also visible in the
+read-only decomp `src/genuine/z_genuine_cohort_24.c`, function `003723c0`.
+Generated code still comes from the hashed ARM/program pair, not unverified C casts.
+
+Build command: use the same inputs above and
+`--root 002BB780 --root 003723C0 --root 002BBF74 --max-functions 64`, with and without
+`--optimized`. `build.json` now records a `roots` array. Build-only times were
+3.49 seconds (candidate) and 3.43 seconds (control). No whole-title build.
+
+### Results and disposition
+
+Same real-input ABBA protocol, excluding the first complete quartet:
+
+| Entry / occurrence | Reference | Blocks | A median us | B median us | Median quartet B/A |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Line caller / 64 | Matched cohort control | 4,239 | 69.00 | 39.95 | 0.691 |
+| Line caller / 128 | Frozen original DLL | 4,238 | 68.20 | 46.95 | 0.659 |
+| Wall / 64 | Matched cohort control | 367 | 21.65 | 20.20 | 0.935 |
+| Wall / 128 | Matched cohort control | 367 | 21.25 | 23.55 | 0.968 |
+| Floor / 64 | Matched cohort control | 158 | 10.30 | 9.00 | 0.887 |
+
+The line caller retains a roughly 31..34% local elapsed reduction by paired-quartet
+ratios; corresponding cycle ratios are 0.698 and 0.666. It includes an additional
+caller, but does not establish an incremental speedup over the previous 21-function
+specialization. The wall result is **not promoted**: warm quartets cross parity,
+and median individual times even regress at occurrence 128. The floor result alone
+does not overturn the prior noisy repeats. Larger groups are not automatically
+faster, nor are statically included functions necessarily executed on each input.
+
+Five runs yielded **80 matching replicas**, including 40 candidate-root hits.
+All three roots were exercised. Only the floor run executed the native triangle
+leaf (104 hits); the wall and line inputs recorded zero. Memory/register/FP/exit
+and block-count comparisons passed, with unchanged live-game fingerprints listed
+above. These remain private-memory replays, **not activation in normal gameplay**
+or a framebuffer qualification. Diagnostic FPS must not be used as a speedup.
+The diagnostic Python suite now has 32 passing tests, including three new cohort
+tests for sharing, total build budget and rejection of empty/open groups.
+
+Existing stack evidence covers 189/2,214 AOT observations (8.5%) under these roots,
+deduplicated, versus 179 previously. This is a sampling scope estimate, not CPU
+time saved. It does not substantiate the requested 20% total pre-NRI reduction.
+
+### Why native-boundary groups remain separate
+
+The existing `ExecuteWholeAotExternalCall` first tries a source overlay and also
+updates runtime profiling state. Calling it on cloned guest memory is therefore
+not sufficient to prove replay isolation. The floor-raycast/matrix family remains
+outside this cohort; no native matrix owner was duplicated, recompiled or replaced.
+Extending across that boundary requires an explicitly replay-safe contract for the
+existing native implementation, not a blanket permission for external callbacks.
+
+Private evidence under `C:/Users/xander/triaevum-aot-causal-analysis/`:
+`collision-cohort-opt`, `collision-cohort-control`, `cohort-line64`,
+`cohort-line-frozen128`, `cohort-wall64`, `cohort-wall128`, `cohort-floor64`.
+Each build/run records provenance and hashes. Game processes exited after testing.
+No renderer, release package, external decomp or production executable was changed.
