@@ -3,6 +3,53 @@
 Research: 2026-09-17. Status: cause and implementation route identified;
 no runtime fix or issue closure claimed.
 
+## Implementation Checkpoint: Coverage Import
+
+Implemented `tools/oot3d/decomp_support/scripts/qbf_font.py` and
+`prepare_qbf_font_pack.py`. This is a **developer preparation tool, not yet
+a rendered HD-font feature**. Forge and the runtime are intentionally unchanged
+until the native atlas consumer exists. The manifest explicitly records
+`runtime_enabled: false`; neither a successful import nor the tests close #44.
+
+- QBF format-2/A4 parsing validates the directory, sorted character codes,
+  fallback, glyph indices, dimensions and exact bitmap extent. Other encodings
+  are rejected rather than decoded speculatively.
+- Associations use character codes, not presumed matching bitmap indices.
+  Logical cells and all metric bytes come from the original ROM font. Coverage
+  dimensions remain separate. Conflicting aliases of a native glyph are rejected.
+- Import selects EU/US fonts actually present in the ROM. It reads only exact
+  QBF archive entries, does not extract executable patches, and produces a
+  reproducible local ZIP containing coverage and a provenance manifest.
+- Verified against the real European native `ltn16.qbf`: **199 character
+  records, 208 bitmap slots, 16x16 -> 64x64, density 4, zero metric differences**.
+  Native SHA256 `b833f9ff04a3775056a8702eb5da06da4a9d4c51a6015c59a8fcce7ba134191d`;
+  replacement SHA256 `7006cd33c5bac44acda1c09eba9a39fbfa44014e2ae9ffe11afeeb2f7fe45aa8`.
+- Windows verification: 10 new focused tests; complete focused Forge suite
+  **88 tests passed**. No HD runtime framebuffer or Linux runtime validation yet.
+
+Reproduce preparation from the repository root (local user inputs only):
+
+```powershell
+python -m tools.oot3d.decomp_support.scripts.prepare_qbf_font_pack --archive <topscreen211.zip> --romfs <romfs.bin> --output <local-font-coverage.zip>
+python -m unittest tools.triaevum_release.test_qbf_font -v
+```
+
+Additional consumer evidence for the next implementation:
+`002b7498` allocates/caches dynamic character cells, blits via `002d2504`, then
+emits the quad via `002b7234`. `0046a758` builds the static 256-character atlas
+using the same blitter. Observing only the static builder would miss dialogue.
+Native atlas surface/width/height are at owner offsets `0x3dc/0x3e0/0x3e4`.
+The existing `TopScreenTextureOverrideRuntime::Transform` operates in-place on
+fixed-size payloads, so it **cannot** publish larger font surfaces as-is.
+
+Next: introduce an isolated title-owned glyph-atlas consumer with exact native
+blit provenance, independent logical/source extents, generation-aware lifecycle
+and a sized replacement publication path. Preserve the native layout execution;
+do not enlarge its cells or silently patch the fixed-size CTXB replacement API.
+Validate clears, partial updates, shadows and quickload before activating it in
+Forge. System fonts and other encodings remain explicitly outside this first
+Latin-font import, not implicitly covered.
+
 ## Findings
 
 [Issue 44](https://github.com/coccofresco/TriAevum/issues/44) requests higher

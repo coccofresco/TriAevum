@@ -13,7 +13,7 @@ def main():
         "test_release_platform", "test_precompiled_titles", "test_forge_gui",
         "test_installed_runtime", "test_installation_context", "test_tam_builder",
         "test_linux_precompiled_catalog", "test_worker_job", "test_ctr_rom",
-        "test_input_adapters", "test_topscreen_assets", "test_activation_transaction",
+        "test_input_adapters", "test_topscreen_assets", "test_qbf_font", "test_activation_transaction",
         "test_native_process", "test_product_contract",
         "test_https_transport",
         "test_linux_forge_qualification",
