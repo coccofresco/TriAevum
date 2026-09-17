@@ -140,8 +140,6 @@ class Gui {
 
     /** @brief Returns true while any registered floating GUI window is visible. */
     bool GetAnyGuiWindowVisible();
-    virtual bool BlocksGameInput() { return GetMenuOrMenubarVisible() || GetAnyGuiWindowVisible(); }
-    virtual bool OwnsApplicationShortcuts() const { return false; }
 
     /** @brief Returns true if the mouse cursor is currently over any ImGui item. */
     bool IsMouseOverAnyGuiItem();

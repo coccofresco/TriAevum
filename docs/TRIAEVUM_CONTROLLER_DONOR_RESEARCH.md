@@ -1,12 +1,5 @@
 # Controller Donor Assessment
 
-Direction update: Dusklight is now the primary product-level donor candidate for
-standard cross-platform application menus and controller configuration, not
-the existing advanced effect panels (Grass, CACAO, Toon, reflections). See
-`TRIAEVUM_DUSKLIGHT_UI_INPUT_DONOR.md` for pinned evidence, license boundaries and
-the integration sequence. The candidates below remain secondary references;
-this does not authorize parallel input stacks or imply donor code was imported.
-
 Research date: 2026-09-14. Source review, not integration or hardware qualification.
 Goal: simpler, reliable Windows/Linux/Steam Deck/Android controls without another
 competing input stack. Keep host device normalization separate from 3DS input

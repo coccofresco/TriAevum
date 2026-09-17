@@ -39,7 +39,6 @@ FILES = {
     "LICENSES/GPL-2.0-or-later.txt": ("license", b"GPL test fixture\n"),
     "LICENSES/SDL2-zlib.txt": ("license", b"SDL zlib test fixture\n"),
     "LICENSES/SDL-GameControllerDB-zlib.txt": ("license", b"Controller DB zlib test fixture\n"),
-    "LICENSES/RmlUi-MIT.txt": ("license", b"RmlUi MIT test fixture\n"),
     "resources/gamecontrollerdb.txt": ("title_neutral_resource", b"# Controller DB fixture\n"),
     "msvcp140.dll": ("runtime_library", b"MZ C++ library fixture"),
     "vcruntime140.dll": ("runtime_library", b"MZ runtime fixture"),

@@ -11,23 +11,6 @@ Linux infrastructure contribution by [999sian](https://github.com/999sian)
 in [PR #6](https://github.com/coccofresco/TriAevum/pull/6). Partial/adapted
 integrations retain their original provenance and Git coauthor credit.
 
-## Dusklight / TwilitRealm
-
-[Dusklight](https://github.com/TwilitRealm/dusklight) by TwilitRealm is the
-reference for the standard settings navigation and input-capture lifecycle.
-The reference revision is `158abde3816042eeb52f9bda5a7fac50487d4451`, whose
-root `LICENSE.md` is CC0-1.0. TriAevum independently adapts selected behaviors
-to its existing NRI settings and input services; it does not import the
-donor's frontend documents, Aurora, game assets or controller backend. Selected reference
-files and adaptation scope are recorded in
-[the donor plan](docs/TRIAEVUM_DUSKLIGHT_UI_INPUT_DONOR.md).
-
-The integrated F1 frontend now uses RmlUi 6.1 itself (MIT), with TriAevum-owned
-documents and a final-overlay adapter. The donor's RmlUi documents and Aurora
-backend are not imported. RmlUi copyright belongs to CodePoint Ltd, Shift
-Technology Ltd, the RmlUi Team and contributors; retain the full notice in
-`LICENSES/RmlUi-MIT.txt`. See [the frontend architecture](docs/TRIAEVUM_APPLICATION_MENU_FRONTEND.md).
-
 ## Shipwright / Ship of Harkinian
 
 This repository originated as a fork of

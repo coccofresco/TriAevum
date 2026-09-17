@@ -4853,7 +4853,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
       aimProfileTransform.RightStickInvertY = topScreenAim.InvertY;
     }
     const bool hostGuiVisible =
-        gui->BlocksGameInput();
+        gui->GetMenuOrMenubarVisible() || gui->GetAnyGuiWindowVisible();
     auto physicalInputFrame =
         PollNativeA32Input(window, nativeFrontendTouchEnabled,
                            hostGuiVisible,

@@ -1,11 +1,11 @@
 # F1 settings rationalization
 
-2026-09-15: F1 now contains standard settings and application tabs; F12 contains
-the existing advanced ImGui effect panels. See
-`TRIAEVUM_DUSKLIGHT_UI_INPUT_DONOR.md`. Historical F1 references to Grass, Toon,
-CACAO, reflections and texture panels below now refer to F12. Display confirmation
-still operates independently of either menu. The widget runner also exercises
-the two production surfaces and their exclusive hotkey policy (3,969 assertions).
+2026-09-17: the current branch restores the consolidated ImGui F1 surface.
+The deferred retained F1 / advanced F12 split is preserved on
+`feature/deferred-f1-f12-menus` at `a144833`; commits `0b30a6e`, `9892379`
+and `23961d8` are reverted here without discarding that work. The rebuilt
+actual-widget smoke passes 3,896 assertions. Reintegrate through that branch,
+not by adding a second settings owner to this one.
 
 Date: 2026-09-06. Worktree: `triaevum-release`.
 
@@ -308,43 +308,3 @@ under Nearby toon rim. Distances use meters in the UI and world units in storage
 disabled rim disables its distance widgets. The real-widget smoke edits start
 to 3 m and end to 12 m, checks 300/1200 world units, and toggles off/on. Global
 toon rim strength/color remain shared rather than duplicated in Grass settings.
-
-## Standard F1 / Advanced F12 Navigation (2026-09-15)
-
-F1 now uses the shared `ApplicationSettingsPanel` navigation shell. Display,
-Antialiasing, seven Controls pages, TopScreen and Game language retain their
-existing owners and persistence. F12 retains the advanced ImGui panels. Both
-start hidden and are mutually exclusive; F2 is unchanged. Display confirmation
-and persistence errors are not confined to a selected page.
-
-The actual-widget fixture exercises all eleven pages at compact and wide sizes,
-advanced/standard segregation, capture cancellation on close, closing-gesture
-release and preservation of native controller Back bindings. Back can open the
-application menu only when no game binding reserves it. Device navigation uses
-the existing SDL controller owner, not a second device discovery subsystem.
-
-Final Windows incremental build passed. The real-widget smoke passed 5,555
-assertions, including per-frame invariants (not 5,555 independent test cases).
-
-Validation boundary: the bounded Windows NRI run passed with a coherent native
-framebuffer and exit code 0. It did not exercise live menu input because the
-Windows automation bridge was unavailable. Physical F1/F12/controller input,
-hotplug and platform parity require follow-up validation. No AOT, save format,
-effect scheduling or native HUD changes are part of this menu implementation.
-
-Windows build: `J:/TriAevum-verify-20260910/runtime/TriAevum.exe`.
-Live evidence (private, not packaged):
-`%TEMP%/TriAevum-standard-menu-live`, including native framebuffer captures.
-See `TRIAEVUM_DUSKLIGHT_UI_INPUT_DONOR.md` for attribution and remaining scope.
-
-## Retained F1 Frontend (2026-09-16, Supersedes Sidebar)
-
-F1 now uses RmlUi documents, not the earlier ImGui sidebar. F12 alone retains
-advanced ImGui widgets. Run both `triaevum_rml_settings_smoke` (actual retained
-document input/layout/modal tests) and `triaevum_f1_settings_smoke` (owning
-settings contracts and widget regressions). Both pass on Windows; the latter
-also checks every retained page and field. Public release audit: 11 tests pass.
-
-Native framebuffer verification passed with F1 open during a bounded Vulkan
-boot. See `TRIAEVUM_APPLICATION_MENU_FRONTEND.md` for the current executable,
-capture location, resource-pressure failures and platform qualification limits.

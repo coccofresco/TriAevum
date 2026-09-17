@@ -7,14 +7,6 @@ public:
   explicit LanguagePanel(std::shared_ptr<GameLanguageSettings> settings)
       : mSettings(std::move(settings)) {}
   const char *Label() const noexcept override { return "Game"; }
-  void AppendSettingsPages(Fast::AppUi::Pages& pages) override {
-    using namespace Fast::AppUi;
-    Field language{"language","Game language",FieldKind::Choice,
-      [s=mSettings]{return s->Selected();},[s=mSettings](const std::string& code){s->Select(code);return s->Error();}};
-    for(const auto& lang:mSettings->Available()) language.Options.push_back({lang.Code,lang.Label});
-    pages.push_back({"game","Game",{std::move(language),
-      {"restart","Language changes",FieldKind::Text,[]{return "Apply on the next full game start, not a save-state load.";}}}});
-  }
   void Draw() override {
     const char *label = mSettings->Selected().c_str();
     for (const auto &lang : mSettings->Available())

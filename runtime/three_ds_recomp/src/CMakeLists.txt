@@ -47,9 +47,6 @@ endif()
 #=================== Fast ===================
 
 add_subdirectory("fast")
-if(THREE_DS_RECOMP_ENABLE_VULKAN)
-    include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/ApplicationUi.cmake)
-endif()
 
 #=================== Legacy compatibility ===================
 

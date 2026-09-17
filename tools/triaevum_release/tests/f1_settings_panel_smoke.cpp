@@ -5,7 +5,6 @@
 #include "oot3d_top_screen_settings_panel.h"
 #include "oot3d_game_language_panel.h"
 #include "fast/MouseCapturePolicy.h"
-#include "fast/ApplicationMenuRouting.h"
 #include <imgui_internal.h>
 #include <nlohmann/json.hpp>
 #include <cmath>
@@ -48,7 +47,6 @@ GraphicsSettingsPanel panel;
 std::string loggedPanelText;
 bool updateTextureObservations = false;
 bool showPanel = true;
-Fast::ApplicationMenu panelSurface = Fast::ApplicationMenu::Closed; // Combined diagnostic view.
 constexpr uint64_t firstTextureHash = 0xA100U;
 constexpr uint64_t secondTextureHash = 0xB200U;
 ImVec2 size(760.0F, 680.0F);
@@ -69,9 +67,7 @@ void Frame(bool logText = false) {
         ImGui::SetNextWindowSize(size);
         ImGui::Begin("F1 test", nullptr, ImGuiWindowFlags_NoSavedSettings);
         if (logText) ImGui::LogToBuffer(0);
-        if (panelSurface == Fast::ApplicationMenu::Standard) panel.DrawStandard();
-        else if (panelSurface == Fast::ApplicationMenu::Advanced) panel.DrawAdvanced();
-        else panel.Draw();
+        panel.Draw();
         if (logText) {
             loggedPanelText = GImGui->LogBuffer.c_str();
             ImGui::LogFinish();
@@ -845,90 +841,6 @@ int main() try {
     Oot3dNativeGame::GameLanguageSettings differentRom(languagePath,{{"en","English",1}});
     Check(differentRom.SystemId() == 1, "unsupported old language leaked into another ROM");
     std::filesystem::remove(languagePath);
-    // Exercise the actual production surfaces, not just the combined fixture.
-    Fast::ApplicationInputReleaseGate gate;
-    Check(!gate.Update(false, false), "release gate captured ordinary gameplay");
-    Check(gate.Update(true, true), "visible UI did not capture input");
-    Check(gate.Update(false, false), "closing gesture leaked to gameplay");
-    Check(!gate.Update(false, true), "neutral release did not return gameplay");
-    for (const auto current : {Fast::ApplicationMenu::Closed, Fast::ApplicationMenu::Standard,
-                              Fast::ApplicationMenu::Advanced}) {
-        for (const auto requested : {Fast::ApplicationMenu::Standard, Fast::ApplicationMenu::Advanced}) {
-            Check(Fast::RouteApplicationMenuKey(current, requested, false, false) == current,
-                  "menu key release changed visibility");
-            Check(Fast::RouteApplicationMenuKey(current, requested, true, true) == current,
-                  "menu key repeat changed visibility");
-            Check(Fast::RouteApplicationMenuKey(current, requested, true, false) ==
-                      (current == requested ? Fast::ApplicationMenu::Closed : requested),
-                  "menu toggle or exclusive switch failed");
-        }
-    }
-    panelSurface = Fast::ApplicationMenu::Standard;
-    Frame(); Frame();
-    Click("Display"); Frame();
-    const auto hasItem = [](const char* label) {
-        return std::any_of(items.begin(), items.end(), [label](const auto& entry) {
-            return entry.second.Label == label;
-        });
-    };
-    Check(hasItem("Display") && hasItem("Game"), "standard pages missing from F1");
-    Check(!hasItem("Grass") && !hasItem("Toon") && !hasItem("Textures") && !hasItem("Preset"),
-          "advanced controls leaked into F1");
-    InstallGraphicsSettingsPanelTabs({
-        Oot3dNativeGame::CreateNativeControlsSettingsPanel(controls, topScreen),
-        Oot3dNativeGame::CreateTopScreenSettingsPanel(topScreen),
-        Oot3dNativeGame::CreateGameLanguagePanel(language)});
-    const auto applicationPages = BuildApplicationSettingsPages();
-    Check(applicationPages.size() == 14, "retained frontend is missing standard settings pages");
-    size_t applicationFieldCount = 0;
-    for (const auto& page : applicationPages) {
-        Check(!page.Id.empty() && !page.Label.empty(), "retained page has no stable identity");
-        for (size_t i = 0; i < page.Fields.size(); ++i) {
-            const auto& field = page.Fields[i];
-            ++applicationFieldCount;
-            Check(!field.Id.empty() && !field.Label.empty(), "retained field has no identity");
-            for (size_t j = 0; j < i; ++j) Check(field.Id != page.Fields[j].Id, "duplicate retained field identity");
-            if (field.Kind != Fast::AppUi::FieldKind::Text) Check(bool(field.Write), "retained field has no consumer");
-            if (field.Kind == Fast::AppUi::FieldKind::Number) Check(!field.Write("not-a-number").empty(), "retained numeric field accepted invalid text");
-        }
-    }
-    Check(applicationFieldCount >= 250, "standard field coverage unexpectedly decreased");
-    for (float width : {760.0F, 520.0F, 1100.0F, 520.0F}) {
-        size.x = width;
-        Frame(); Frame();
-        for (const char* page : {"Display", "Antialiasing", "Bindings", "Devices", "Analog sticks",
-                                 "Camera", "Aiming", "Motion calibration", "Shortcuts", "TopScreen 2.1.1", "Game"}) {
-            if (width < 640.0F) Select("##SettingsPage", page);
-            else Click(page);
-            for (int stable = 0; stable < 8; ++stable) Frame();
-            Check(!hasItem("Grass"), "advanced page leaked into standard navigation");
-        }
-    }
-    const auto beforeBackPolicy = controls->Snapshot().Config;
-    auto backPolicy = beforeBackPolicy;
-    backPolicy.Bindings.front().Gamepad = Oot3dNativeGame::NativeGamepadButton::Back;
-    controls->Preview(backPolicy);
-    Check(ApplicationSettingsReservesControllerBack(), "application menu stole a mapped Back button");
-    for (auto& binding : backPolicy.Bindings)
-        if (binding.Gamepad == Oot3dNativeGame::NativeGamepadButton::Back)
-            binding.Gamepad = Oot3dNativeGame::NativeGamepadButton::None;
-    controls->Preview(backPolicy);
-    Check(!ApplicationSettingsReservesControllerBack(), "unused Back button unavailable to application menu");
-    controls->Preview(beforeBackPolicy);
-    controls->BeginBindingCapture(ThreeDsRecomp::Input::BindingDevice::Gamepad);
-    Check(ApplicationSettingsCapturingInput(), "capture ownership not published");
-    panel.OnHidden();
-    Check(!ApplicationSettingsCapturingInput(), "binding capture survived closing standard settings");
-    size.x = 760.0F;
-    panelSurface = Fast::ApplicationMenu::Advanced;
-    Frame(); Frame();
-    Click("Renderer"); Frame();
-    Check(hasItem("Grass") && hasItem("Toon") && hasItem("Textures"), "advanced pages missing from F12");
-    Check(!hasItem("Display") && !hasItem("Antialiasing") && !hasItem("Game"),
-          "standard controls duplicated in F12");
-    Click("Toon"); Frame();
-    Check(hasItem("Custom light band profile"), "retained toon widget missing");
-    panelSurface = Fast::ApplicationMenu::Closed;
     InstallGraphicsSettingsPanelTabs({});
     ImGui::DestroyContext();
     std::cout << "F1 UI smoke passed: " << assertions << " assertions, real renderer/Controls/TopScreen widgets\n";

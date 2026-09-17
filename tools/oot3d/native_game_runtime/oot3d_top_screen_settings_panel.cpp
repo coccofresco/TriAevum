@@ -110,29 +110,6 @@ public:
     }
   }
 
-  void AppendSettingsPages(Fast::AppUi::Pages& pages) override {
-    using namespace Fast::AppUi;
-    Page page{"topscreen","TopScreen",{}};
-    const auto read=[r=mRuntime]{return r->Snapshot().Config;};
-    const auto write=[r=mRuntime](const TopScreenUiConfig& config){std::string error;r->Apply(config,&error);return error;};
-    const auto add=[&](auto member,const char* id,const char* label,double lo=0,double hi=1,double step=1,std::vector<Option> options={}) {
-      page.Fields.push_back(Member(id,label,member,read,write,lo,hi,step,std::move(options)));
-    };
-    add(&TopScreenUiConfig::HudLayout,"layout","HUD layout",0,1,1,{{"0","Normal"},{"1","Restoration"}});
-    add(&TopScreenUiConfig::HudScale,"scale","HUD scale",.6,1.2,.05);
-    add(&TopScreenUiConfig::HudMarginX,"marginx","Horizontal margin",-3,16);
-    add(&TopScreenUiConfig::HudMarginY,"marginy","Vertical margin",-3,16);
-    add(&TopScreenUiConfig::MagicBarY,"magic","Magic bar offset",0,255);
-    add(&TopScreenUiConfig::RenderHud,"hud","Show HUD");
-    add(&TopScreenUiConfig::MinimapVisible,"minimap","Show minimap");
-    add(&TopScreenUiConfig::RenderDpadIcons,"dpad","Show D-pad icons");
-    add(&TopScreenUiConfig::RenderItemsHint,"hint","Show items hint");
-    add(&TopScreenUiConfig::SelectAction,"select","Select action",0,1,1,{{"0","Save screen"},{"1","Toggle minimap"}});
-    add(&TopScreenUiConfig::ExitItemsToSaveScreen,"save","Exit items to save screen");
-    page.Fields.push_back({"reload","Reload saved TopScreen settings",FieldKind::Action,{},[r=mRuntime](const std::string&){std::string error;r->Reload(&error);return error;}});
-    pages.push_back(std::move(page));
-  }
-
 private:
   void DrawHud() {
     ImGui::SeparatorText("HUD");
