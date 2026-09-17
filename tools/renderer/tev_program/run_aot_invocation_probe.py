@@ -63,6 +63,8 @@ def main():
     if args.candidate:
         files.append(args.candidate)
     metadata = {'diagnostic_only': True, 'a_a_control': not args.candidate,
+                'diagnostic_selection_env': {k: v for k, v in env.items()
+                    if k.startswith('TRIAEVUM_SKELETON_')},
                 'entry': f'{args.entry:08X}', 'occurrence': args.occurrence, 'build_seconds': build_seconds,
                 'build_commands': commands,
                 'sha256': {str(f): digest(f) for f in files}}
@@ -78,6 +80,9 @@ def main():
     if len(trials) != 16 or any(r[4:6] != ['1', '1'] for r in trials) or (
             rows[-1] != ['summary', '1', 'original_memory_untouched', '1']):
         raise RuntimeError('Invocation replay rejected; inspect diagnostic output')
+    hits = [int(r[1]) for r in rows if r and r[0] == 'candidate_fast_hits']
+    if args.candidate and hits and hits != [8]:
+        raise RuntimeError(f'Candidate fast path ran {hits}, expected 8; equivalence may only validate fallback')
     print('16 matching real-input replays; not a whole-game speedup measurement.')
 
 

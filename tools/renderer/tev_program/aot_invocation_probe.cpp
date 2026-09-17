@@ -18,6 +18,8 @@ uint32_t target;
 unsigned occurrences;
 unsigned captureOccurrence = 64;
 bool completed;
+using InputSelector = bool (*)(const a32::GuestState*, const NativeA32Memory*) noexcept;
+InputSelector inputSelector;
 struct Route {
     a32::BlockEntryCallback Callback;
     void* User;
@@ -124,7 +126,8 @@ void Replay(a32::GuestState input, const Route& route) {
 void Observe(uint32_t pc, a32::GuestState& state, a32::MemoryBus& bus, void* user) {
     auto& route = *static_cast<Route*>(user);
     if (Notifies(route, pc)) route.Callback(pc, state, bus, route.User);
-    if (!completed && pc == target && ++occurrences == captureOccurrence) {
+    if (!completed && pc == target && (!inputSelector || inputSelector(&state,route.Memory)) &&
+        ++occurrences == captureOccurrence) {
         completed = true;
         Replay(state, route);
     }
@@ -170,6 +173,13 @@ triaevum_title_whole_aot_query(uint32_t abi) noexcept {
         baseline = Load(std::getenv("TRIAEVUM_INVOCATION_BASELINE"));
         const char* other = std::getenv("TRIAEVUM_INVOCATION_CANDIDATE");
         candidate = other ? Load(other) : baseline;
+        if (candidate) {
+            HMODULE module=nullptr;
+            GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                reinterpret_cast<LPCSTR>(candidate->Execute), &module);
+            inputSelector=module ? reinterpret_cast<InputSelector>(
+                GetProcAddress(module,"triaevum_invocation_select_input")) : nullptr;
+        }
         const char* entry = std::getenv("TRIAEVUM_INVOCATION_ENTRY");
         if (!baseline || !candidate || !entry) return nullptr;
         target = static_cast<uint32_t>(std::strtoul(entry, nullptr, 16));

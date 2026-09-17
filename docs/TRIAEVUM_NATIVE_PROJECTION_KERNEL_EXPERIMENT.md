@@ -3,6 +3,9 @@
 2026-09-17. Developer-only prototype, not enabled in the shipped game and not a
 20% total pre-NRI performance result.
 
+Follow-up: `TRIAEVUM_CPU_GEOMETRY_KERNEL_EXPERIMENTS.md` extends the experiment
+to whole skeleton poses and indexed collision triangles, without production promotion.
+
 ## Boundary and evidence
 
 The translated GPU vertex family is already present in
