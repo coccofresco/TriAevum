@@ -174,12 +174,28 @@ Verification with the rebuilt executable:
   The loading triforce remains visible. Sampling excludes its screen region.
 - Private evidence: `issue41-preview-boot` and `issue41-fixed-preview-boot`.
 - Sages checkpoint replay: `issue41-fixed-preview-sages`, 150 frames, exit 0.
-  The gray rectangle remains, as it does in the earlier Off replay. Issue #41
-  is therefore NOT fully resolved. Native initialization is not suppressed by
-  the TopScreen frontend backdrop rule. The remaining investigation must trace
-  native target/composition contributions independently of this toon fix.
+  The captured gray rectangle also occurs in the earlier Off replay. It was
+  initially classified as an unresolved defect; the subsequent live user
+  verification below supersedes that interpretation. Native initialization is
+  not suppressed by the TopScreen frontend backdrop rule.
 
 No color thresholds, scene IDs, texture names or black-pixel masking are used.
+
+## Issue #41 live user acceptance (2026-09-17)
+
+Fix: `ebd6ba6` (native raster initialization excluded from toon lighting).
+The user replayed `sages-user/issue41.oot3dsav` and confirmed that the reported
+background defect no longer appears. The user identified the subsequent native
+fade to white as the likely source of the gray-frame misinterpretation.
+The same checkpoint was then relaunched explicitly with PostProcessPreview
+toon enabled, preserving the remaining session settings. The user confirmed
+correct behavior again. Logs: `sages-user/toon-user-{stdout,stderr}.log`.
+
+Issue #41 is resolved within the verified Windows Vulkan configuration, together
+with the deterministic loading-background check above. No extra correction to
+the native fade is warranted. This does not claim a new Linux verification or
+an exhaustive test of every optional-effect combination. Earlier unresolved
+status statements in this chronological investigation are superseded here.
 
 ## Private evidence (not distributed)
 
