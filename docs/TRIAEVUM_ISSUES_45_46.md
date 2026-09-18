@@ -277,11 +277,65 @@ mid-flashback state.
 ## Remaining Qualification
 
 - The reproduced #45 stall is fixed and the full sequence returns to gameplay
-  on Windows/native-30 presentation. Qualify interpolation 2x, Linux and
+  on Windows and Linux/native-30 presentation. Qualify interpolation 2x and
   pending dependency restoration in mid-TextureCopy savestates before closing the
   wider issue.
 - Validate save-yes and mouse/touch Game Over choices in addition to the
   tested directional/A paths.
-- Linux mirror is not updated yet: SSH timed out, including after Wake-on-LAN.
+- Linux synchronization and qualification are recorded below; earlier SSH
+  unavailability no longer applies.
 - No issue has been closed, no release has been published, and no ROM,
   reference mod, save, capture or translated donor payload is added here.
+
+## Linux Alignment (2026-09-18)
+
+Source baseline: `0bcd22d`, including the preceding #46 changes. Compared all
+archived tracked files with `/home/xander/triaevum-linux`, normalizing line
+endings only: 32 missing/different files were updated, then a second comparison
+reported zero differences. Existing overwritten files are backed up privately
+under `/home/xander/triaevum-before-0bcd22d`. Untracked parallel AOT experiments
+were not imported, and the independently dirty mirror was not reset.
+
+Both existing build paths compile successfully with three jobs:
+
+- Native Clang: `/home/xander/triaevum-linux-build/TriAevum`.
+- Steam Runtime SDK: `/home/xander/triaevum-steamrt4-build/runtime/TriAevum`
+  and `oot3d_game_module.so`, using `scripts/run-in-steamrt4.sh` with
+  `/home/xander/triaevum-steamrt4-qualified-sdk`.
+
+The five focused Linux suites pass: PICA transfer, submission, visual replay
+serialization, Vulkan bridge/scheduler and TopScreen mod profile (including
+item dispatch, ocarina and D-pad contracts). No platform-specific source fix
+was needed. The movie-capable title module was not recompiled or replaced:
+`/home/xander/triaevum-ui-movie-title-build/triaevum_title_aot.so`.
+
+Binary SHA-256 identities:
+
+| Artifact | SHA-256 |
+| --- | --- |
+| Native runtime | `0ff43bf73a1de6941283ece011a3a970c6d1c060eb9142e64ce8d336e968f490` |
+| SDK runtime | `351323a7b58741b2fa7a7386256bda19fce8e76cc2da99ad2396e60f2ab34f42` |
+| SDK game module | `ac1957954ebaa5dcbbe839adf6433bc252b32fb7a188458db613eb9c0bae3a66` |
+
+The existing **TriAevum - Updated Development Build** desktop entry points
+directly to the updated SDK runtime. No AppImage or public release has been
+repackaged; the separately installed published AppImage remains unchanged.
+No actual Steam Deck hardware qualification is claimed.
+
+The native Linux Vulkan/Wayland replay uses the unchanged Windows pre-stall
+checkpoint and the same dialogue input timeline. It completes all 8,000 host
+frames with exit 0, no pending draws/transfers, and returns to Temple gameplay
+(framebuffer capture at frame 7,200). Private evidence:
+`/home/xander/triaevum-issue45-20260918/{runtime.json,run.log,frame_007200.bmp}`.
+It is a functional test, not a performance comparison: a concurrent SDK build,
+framebuffer captures and platform profile differences invalidate timing or
+pixel-identity claims. The mid-flashback savestate limitation remains open.
+
+Native run totals: 688 dependency flushes, 714,805 executed draws, zero duplicate
+draw attempts and zero guest memory faults. The SDK-built runtime independently
+passes a 1,500-frame replay of the transfer-heavy flashback: exit 0, 664
+dependency flushes, 90,474 draws, zero duplicates and zero memory faults.
+Evidence: `/home/xander/triaevum-issue45-sdk-20260918/`. Captures show the
+monochrome framebuffer-copy effect progressing. Widescreen side regions and
+optional grass remain visible outside that native image; this qualification
+establishes forward progress, not complete visual equivalence to the 3DS.
