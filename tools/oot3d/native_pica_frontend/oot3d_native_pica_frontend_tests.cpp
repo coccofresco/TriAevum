@@ -420,6 +420,49 @@ int main(int argc, char** argv) {
                 Oot3dNativeGame::Oot3dPicaCompositionDomain::Ui,
             "UI command span changed the domain of adjacent world draws");
 
+    // Non-gameplay lists have no scene-wide hint; typed spans still own draws.
+    compositionFrontend.SetCommandListCompositionDomain(
+        Oot3dNativeGame::Oot3dPicaCompositionDomain::Unknown);
+    for (const auto layer : {
+             Oot3dNativeGame::Oot3dPicaCompositionLayer::OpaqueWorld,
+             Oot3dNativeGame::Oot3dPicaCompositionLayer::TransparentWorld,
+             Oot3dNativeGame::Oot3dPicaCompositionLayer::Atmosphere}) {
+        mixedSpans[0].Attribution.Layer = layer;
+        const auto begin = compositionFrontend.PendingDrawPackets().size();
+        Require(compositionFrontend.SetNextCommandListCompositionSpans(
+                    compositionSubmit.Parameters[0], compositionSubmit.Parameters[1],
+                    mixedSpans, &error), error);
+        Require(compositionFrontend.SubmitGspCommand(
+                    compositionSubmit, compositionCommandList, &error), error);
+        const auto& draws = compositionFrontend.PendingDrawPackets();
+        Require(draws[begin].CompositionDomain ==
+                    Oot3dNativeGame::Oot3dPicaCompositionDomain::Scene &&
+                    draws[begin].Composition.Layer == layer &&
+                    draws[begin + 1].CompositionDomain ==
+                    Oot3dNativeGame::Oot3dPicaCompositionDomain::Unknown &&
+                    draws[begin + 2].CompositionDomain ==
+                    Oot3dNativeGame::Oot3dPicaCompositionDomain::Ui,
+                "typed spans must resolve domains without a gameplay hint");
+    }
+
+    compositionFrontend.SetCommandListCompositionDomain(
+        Oot3dNativeGame::Oot3dPicaCompositionDomain::Ui);
+    const auto uiBegin = compositionFrontend.PendingDrawPackets().size();
+    Require(compositionFrontend.SetNextCommandListCompositionSpans(
+                compositionSubmit.Parameters[0], compositionSubmit.Parameters[1],
+                compositionSpans, &error), error);
+    Require(compositionFrontend.SubmitGspCommand(
+                compositionSubmit, compositionCommandList, &error), error);
+    for (size_t index = uiBegin;
+         index < compositionFrontend.PendingDrawPackets().size(); ++index) {
+        const auto& draw = compositionFrontend.PendingDrawPackets()[index];
+        Require(draw.CompositionDomain ==
+                    Oot3dNativeGame::Oot3dPicaCompositionDomain::Ui &&
+                    draw.Composition.Layer ==
+                    Oot3dNativeGame::Oot3dPicaCompositionLayer::Ui,
+                "native UI lifecycle must preserve UI ownership of its list");
+    }
+
     Oot3dNativeGame::Oot3dGspCommandPacket shaderSubmit{};
     shaderSubmit.Control = 1;
     shaderSubmit.Parameters[0] = 0x14002400U;

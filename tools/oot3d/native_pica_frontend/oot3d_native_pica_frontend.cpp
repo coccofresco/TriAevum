@@ -634,8 +634,19 @@ bool Oot3dNativePicaFrontend::SubmitGspCommand(
                     mLightingLuts->ContentHashAvailable = true;
                 }
                 const auto composition = resolveComposition(offsetWords);
-                const auto domain = composition.Layer == Oot3dPicaCompositionLayer::Ui
-                    ? Oot3dPicaCompositionDomain::Ui : mCommandListCompositionDomain;
+                auto domain = mCommandListCompositionDomain;
+                switch (composition.Layer) {
+                    case Oot3dPicaCompositionLayer::OpaqueWorld:
+                    case Oot3dPicaCompositionLayer::TransparentWorld:
+                    case Oot3dPicaCompositionLayer::Atmosphere:
+                        domain = Oot3dPicaCompositionDomain::Scene;
+                        break;
+                    case Oot3dPicaCompositionLayer::Ui:
+                        domain = Oot3dPicaCompositionDomain::Ui;
+                        break;
+                    case Oot3dPicaCompositionLayer::Unknown:
+                        break;
+                }
                 Oot3dPicaDrawPacket draw(
                     commandListAddress, offsetWords,
                     domain, composition,
