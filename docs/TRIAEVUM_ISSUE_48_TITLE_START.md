@@ -42,6 +42,40 @@ exception, guest/AOT change, or optional-effect workaround is introduced.
   `I:/TriAevum-public/issue48-verification`; the failing release log remains in
   the alpha.3 qualification directory. No private evidence is committed.
 
-The shared correction is platform-independent, but these live runs qualify
-Windows only. Existing published alpha.3 assets are not silently replaced;
-the fix requires a subsequent release or a build containing this change.
+The initial live runs above qualify Windows. Subsequent alpha.3b qualification
+also passes on Linux/Wayland; see the release record below. Published alpha.3
+assets are not silently replaced: alpha.3b carries the correction.
+
+## Alpha.3b Windows/Linux Qualification
+
+Runtime/source freeze: `6863881315843991d2ffe754831b75281056f2ce`.
+Linux was rebuilt in the pinned Steam Runtime SDK from the matching exported
+source, with no platform-specific workaround. Frontend and Vulkan bridge tests
+pass on both platforms. Forge, title modules, corresponding translated sources,
+shader corpus and other unchanged alpha.3 dependencies retain their identities.
+
+Both new packages pass the allowlist/source/hash audit: Windows 65 files,
+Linux 531 files. Frozen Forge successfully updates private alpha.3 installations,
+preserves user configuration and reuses imported data/cache; no title compilation.
+Renderer preparation reports all 22 embedded artifacts available.
+
+| Final packaged runtime | Early Start | Late Start |
+| --- | --- | --- |
+| Windows | 1,800 presentations, 38,530 guest draws | 2,400 presentations, 75,802 guest draws |
+| Linux/Wayland | 1,800 presentations, 38,796 guest draws | 2,400 presentations, 77,015 guest draws |
+
+All four runs exit zero, produce framebuffer captures showing file selection,
+and report zero pending draws and zero composition publication failures. These
+are functional checks, not frame-rate or cross-platform pixel parity claims.
+The final mounted AppImage also passes a 900-presentation early-Start run through
+its normal AppRun/Forge launcher. Only the private test profile and its matching
+receipt were temporarily bounded for capture and restored afterwards.
+
+Final asset SHA-256:
+
+- Windows ZIP: `686082b1bf1a2d519a2380065f40dce4fb88fee404661a8113f7032727d55be1`.
+- Linux AppImage: `f1d1917c9dd1048b3cf045b730fa1689af6110918d3ed65fc0ba3aebe3f6ace1`.
+
+Private evidence is under the respective `releases/v0.6.0-alpha.3b` (Windows)
+and `/home/xander/triaevum-alpha3b-20260918` (Linux) directories. Steam Deck
+hardware is unavailable; no new hardware certification is claimed.
