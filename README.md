@@ -16,7 +16,7 @@ Just as essential are **Azahar, Ship of Harkinian, libultraship, NVIDIA NRI**,
 and the SDL controller-mapping community. And, of course, **Nintendo and
 Grezzo**, who created the original game. [Full credits and licenses](THIRD_PARTY_NOTICES.md).
 
-**[Download v0.6.0-alpha.3: Windows portable and Linux AppImage](https://github.com/coccofresco/TriAevum/releases/tag/v0.6.0-alpha.3)**
+**[Download v0.6.0-alpha.3b: Windows portable and Linux AppImage](https://github.com/coccofresco/TriAevum/releases/tag/v0.6.0-alpha.3b)**
 
 ## About
 
@@ -51,7 +51,7 @@ See [ROM compatibility details](docs/TRIAEVUM_CONTENT_FAMILY_IMPORT.md).
 ### Linux and Steam Deck
 
 1. Download the **Linux-x86_64.AppImage** and make it executable in your file
-   manager, or with `chmod +x TriAevum-v0.6.0-alpha.3-Linux-x86_64.AppImage`.
+   manager, or with `chmod +x TriAevum-v0.6.0-alpha.3b-Linux-x86_64.AppImage`.
 2. Open the AppImage and select your decrypted ROM in Forge.
 3. Choose **Launch game** when preparation finishes.
 
