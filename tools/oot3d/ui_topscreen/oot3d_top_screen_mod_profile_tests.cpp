@@ -2456,6 +2456,34 @@ int main() {
           "cannot restore page-redraw child state");
 
   TopScreenPauseDrawInputs drawInputs;
+  {
+    TopScreenPauseDrawInputs gameOver;
+    gameOver.HasScene = true;
+    gameOver.SceneMode = 3U;
+    gameOver.SceneVariant = 2U;
+    for (std::uint16_t phase = 0; phase < 10; ++phase) {
+      gameOver.SceneSequence = phase;
+      Require(IsTopScreenGameOverPresentation(gameOver) ==
+                  (phase >= 3 && phase <= 6),
+              "GameOver presentation must follow the native phase interval");
+    }
+    gameOver.SceneSequence = 5;
+    gameOver.NativeTransitionActive = true;
+    Require(!IsTopScreenGameOverPresentation(gameOver),
+            "native transitions retain ownership over GameOver presentation");
+    gameOver.NativeTransitionActive = false;
+    gameOver.SceneVariant = 1;
+    Require(!IsTopScreenGameOverPresentation(gameOver),
+            "non-gameplay variants must not acquire GameOver presentation");
+    gameOver.SceneVariant = 2;
+    gameOver.SceneMode = 5;
+    Require(!IsTopScreenGameOverPresentation(gameOver),
+            "frontend scenes must not acquire GameOver presentation");
+    gameOver.SceneMode = 3;
+    gameOver.HasScene = false;
+    Require(!IsTopScreenGameOverPresentation(gameOver),
+            "missing scenes must not acquire GameOver presentation");
+  }
   drawInputs.HasScene = true;
   drawInputs.SceneMode = 3U;
   drawInputs.SceneVariant = 1U;
@@ -2801,6 +2829,56 @@ int main() {
           "record-41 renderer ownership conflict was not preserved");
 
   TopScreenPauseControllerInputs controllerInputs;
+  TopScreenPauseDrawInputs gameOverDraw;
+  gameOverDraw.HasScene = true;
+  gameOverDraw.SceneMode = 3U;
+  gameOverDraw.SceneVariant = 2U;
+  gameOverDraw.SceneSequence = 5U;
+  visibilityState = {};
+  Require(visibilityMemory.Write32(visibilityOwnerSlot, 0U) &&
+              visibilityMemory.Write8(visibilityRenderer + 0x6CU, 1U),
+          "cannot seed GameOver product draw fixture");
+  for (unsigned frame = 0; frame < 85U; ++frame) {
+    Require(PrepareTopScreenGameOverDraw(
+                visibilityMemory, visibilityController, gameOverDraw, false,
+                &visibilityState, &error),
+            "GameOver product draw failed");
+  }
+  Require(visibilityState.DelayCalls == 60 && visibilityState.FadeStep == 24 &&
+              visibilityMemory.Read32(visibilityOwnerSlot, &reconciledOwner) &&
+              reconciledOwner == visibilityRenderer,
+          "GameOver did not migrate native choices after delay/fade");
+  for (const auto phase : {0U, 2U, 7U}) {
+    gameOverDraw.SceneSequence = static_cast<std::uint16_t>(phase);
+    visibilityState.FadeStep = 24;
+    Require(visibilityMemory.Write32(visibilityOwnerSlot, 0U) &&
+                PrepareTopScreenGameOverDraw(
+                    visibilityMemory, visibilityController, gameOverDraw, false,
+                    &visibilityState, &error) &&
+                visibilityState.FadeStep == 0 &&
+                visibilityMemory.Read32(visibilityOwnerSlot, &reconciledOwner) &&
+                reconciledOwner == 0U,
+            "non-GameOver phase migrated native choices");
+  }
+  gameOverDraw.SceneSequence = 5U;
+  visibilityState.FadeStep = 24;
+  Require(PrepareTopScreenGameOverDraw(
+              visibilityMemory, visibilityController, gameOverDraw, true,
+              &visibilityState, &error) && visibilityState.FadeStep == 0,
+          "GameOver ignored runtime scene latch");
+  constexpr std::uint32_t resumedChoice = 0x00701800U;
+  Require(visibilityMemory.Write32(visibilityController + 0xAF8U, resumedChoice) &&
+              visibilityMemory.Write32(visibilityOwnerSlot, resumedChoice) &&
+              visibilityMemory.Write8(resumedChoice + 0x6CU, 1U) &&
+              visibilityMemory.Write8(visibilityRenderer + 0x6CU, 0U),
+          "cannot seed resumed GameOver choices");
+  visibilityState = {};
+  Require(PrepareTopScreenGameOverDraw(
+              visibilityMemory, visibilityController, gameOverDraw, false,
+              &visibilityState, &error) && visibilityState.FadeStep == 24 &&
+              visibilityState.DelayCalls == 60,
+          "resumed choices must use the centered draw on their first frame");
+
   controllerInputs.Pause.HasScene = true;
   controllerInputs.Pause.SceneMode = 3U;
   controllerInputs.RendererAddress = visibilityRenderer;

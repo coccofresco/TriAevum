@@ -1,0 +1,286 @@
+{
+  "schema": "oot3d.native_game.input_timeline.v1",
+  "frame_origin": "run",
+  "segments": [
+    {
+      "start_frame": 120,
+      "end_frame_exclusive": 124,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 240,
+      "end_frame_exclusive": 244,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 360,
+      "end_frame_exclusive": 364,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 480,
+      "end_frame_exclusive": 484,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 600,
+      "end_frame_exclusive": 604,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 720,
+      "end_frame_exclusive": 724,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 840,
+      "end_frame_exclusive": 844,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 960,
+      "end_frame_exclusive": 964,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 1080,
+      "end_frame_exclusive": 1084,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 1200,
+      "end_frame_exclusive": 1204,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 1320,
+      "end_frame_exclusive": 1324,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 1440,
+      "end_frame_exclusive": 1444,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 1560,
+      "end_frame_exclusive": 1564,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 1680,
+      "end_frame_exclusive": 1684,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 1800,
+      "end_frame_exclusive": 1804,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 1920,
+      "end_frame_exclusive": 1924,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 2040,
+      "end_frame_exclusive": 2044,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 2160,
+      "end_frame_exclusive": 2164,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 2280,
+      "end_frame_exclusive": 2284,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 2400,
+      "end_frame_exclusive": 2404,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 2520,
+      "end_frame_exclusive": 2524,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 2640,
+      "end_frame_exclusive": 2644,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 2760,
+      "end_frame_exclusive": 2764,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 2880,
+      "end_frame_exclusive": 2884,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 3000,
+      "end_frame_exclusive": 3004,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 3120,
+      "end_frame_exclusive": 3124,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 3240,
+      "end_frame_exclusive": 3244,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 3360,
+      "end_frame_exclusive": 3364,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 3480,
+      "end_frame_exclusive": 3484,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 3600,
+      "end_frame_exclusive": 3604,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 3720,
+      "end_frame_exclusive": 3724,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 3840,
+      "end_frame_exclusive": 3844,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 3960,
+      "end_frame_exclusive": 3964,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 4080,
+      "end_frame_exclusive": 4084,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 4200,
+      "end_frame_exclusive": 4204,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 4320,
+      "end_frame_exclusive": 4324,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 4440,
+      "end_frame_exclusive": 4444,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 4560,
+      "end_frame_exclusive": 4564,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 4680,
+      "end_frame_exclusive": 4684,
+      "buttons": [
+        "a"
+      ]
+    },
+    {
+      "start_frame": 4800,
+      "end_frame_exclusive": 4804,
+      "buttons": [
+        "a"
+      ]
+    }
+  ]
+}

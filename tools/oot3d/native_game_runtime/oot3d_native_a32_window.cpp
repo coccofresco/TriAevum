@@ -747,6 +747,9 @@ struct NativeCandidateDispatchState {
       TopScreenTouchCoordinateRoute;
   Oot3dNativeGame::TopScreenRendererVisibilityRouteState
       TopScreenRendererVisibilityRoute;
+  uint32_t TopScreenGameOverDrawPhase = 0U;
+  std::array<uint32_t, 5> TopScreenGameOverDrawRegisters{};
+  Oot3dNativeGame::TopScreenPauseChildState TopScreenGameOverChildRestore{};
   Oot3dNativeGame::TopScreenPauseControllerState TopScreenPauseController;
   uint8_t TopScreenPauseControllerDrawPhase = 0U;
   std::array<uint32_t, 2> TopScreenPauseControllerVisibleRenderers{};
@@ -1534,7 +1537,72 @@ bool ExecuteProductTopScreenHook(uint32_t pc, oot3d::recomp::a32::GuestState &st
       (pc != kTopScreenCameraUpdateEntry && pc != kTopScreenCameraUpdatePatchSite &&
        pc != kTopScreenCameraNormal1Scalar &&
        pc != Oot3dNativeGame::kTopScreenInputUpdateBoundary &&
+       pc != kPauseRendererVisibilityNativeDraw &&
        !Oot3dNativeGame::IsTopScreenItemDispatchEntry(pc))) return false;
+  if (pc == kPauseRendererVisibilityNativeDraw) {
+    auto &phase = dispatch.TopScreenGameOverDrawPhase;
+    auto &saved = dispatch.TopScreenGameOverDrawRegisters;
+    auto branch = [&](uint32_t target) {
+      state.r[14] = pc;
+      state.r[15] = target;
+      *result = {oot3d::recomp::a32::ExitKind::Branch, target,
+                 oot3d::recomp::a32::FallbackReason::None, pc};
+      if (blocksConsumed) *blocksConsumed = 1U;
+      return true;
+    };
+    std::string error;
+    if (phase == 0U) {
+      Oot3dNativeGame::TopScreenPauseDrawInputs inputs;
+      if (!Oot3dNativeGame::ReadTopScreenPauseDrawInputs(*dispatch.Memory, &inputs, &error) ||
+          !Oot3dNativeGame::PrepareTopScreenGameOverDraw(
+              *dispatch.Memory, state.r[0], inputs,
+              dispatch.TopScreenTouchCoordinateRoute.RuntimeSceneLatch,
+              &dispatch.TopScreenRendererVisibilityRoute, &error)) {
+        throw std::runtime_error("TopScreen GameOver prepare: " + error);
+      }
+      if (dispatch.TopScreenRendererVisibilityRoute.FadeStep == 24) {
+        saved = {state.r[0], state.r[1], state.r[2], state.r[3], state.r[14]};
+        // 2.1.1 compositor: native auxiliary redraw establishes the 2D
+        // material state before drawing the reconciled native choices.
+        if (!Oot3dNativeGame::BeginTopScreenPauseChildSuppression(
+                *dispatch.Memory, Oot3dNativeGame::TopScreenPauseChildSuppressionSet::AuxiliaryRedraw,
+                &dispatch.TopScreenGameOverChildRestore, &error)) {
+          throw std::runtime_error("TopScreen GameOver auxiliary draw: " + error);
+        }
+        phase = 1U;
+        state.r[0] = 0U; state.r[1] = 40U;
+        state.r[2] = 480U; state.r[3] = 320U;
+        return branch(kGlViewportEntry);
+      }
+    } else if (phase == 1U) {
+      phase = 2U;
+      return branch(kPauseUiDraw);
+    } else if (phase == 2U) {
+      if (!Oot3dNativeGame::EndTopScreenPauseChildSuppression(
+              *dispatch.Memory, dispatch.TopScreenGameOverChildRestore, &error)) {
+        throw std::runtime_error("TopScreen GameOver restore: " + error);
+      }
+      phase = 3U;
+      std::copy_n(saved.begin(), 4U, state.r.begin());
+      state.r[14] = pc;
+      // Fall through to native draw, bypassing this entry hook once.
+    } else if (phase == 3U) {
+      phase = 4U;
+      state.r[0] = 0U; state.r[1] = 0U;
+      state.r[2] = 480U; state.r[3] = 400U;
+      return branch(kGlViewportEntry);
+    } else {
+      phase = 0U;
+      std::copy_n(saved.begin(), 4U, state.r.begin());
+      const auto handled = branch(saved[4]);
+      state.r[14] = saved[4];
+      return handled;
+    }
+    return Oot3dNativeGame::ExecuteOot3dCompiledFunction(
+        pc, state, *dispatch.Memory, result, blockBudget, blocksConsumed,
+        dispatch.BlockEntry, dispatch.BlockEntryUser,
+        dispatch.BlockEntryPcs.data(), dispatch.BlockEntryPcs.size(), true, true, true);
+  }
   const bool handled = ExecuteTopScreenUiSourcePortBlock(pc, state, dispatch, result, blocksConsumed);
   if (handled) return true;
   // This entry was already observed before returning to the dispatcher. If
@@ -3256,6 +3324,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
         kPauseProjectionPrepare,
         kPauseUiDraw,
         kPauseUiDrawReturn,
+        kPauseRendererVisibilityNativeDraw,
         kPauseIconBuild};
     // Texture payloads are patched when the native pause owner has loaded
     // them, before its update can submit HUD or pause draws.
@@ -3546,6 +3615,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     wholeAotObservableExitBlocks.push_back(kTopScreenCameraNormal1Scalar);
 #endif
     wholeAotObservableExitBlocks.push_back(Oot3dNativeGame::kTopScreenInputUpdateBoundary);
+    wholeAotObservableExitBlocks.push_back(kPauseRendererVisibilityNativeDraw);
     wholeAotObservableExitBlocks.insert(wholeAotObservableExitBlocks.end(),
                                        itemEntries.begin(), itemEntries.end());
     nativeCandidateEntries.insert(nativeCandidateEntries.end(),
@@ -4567,6 +4637,7 @@ void RunOot3dNativeA32Window(const Oot3dNativeGameLaunch &launch) {
     nativeCandidateDispatch.TopScreenPauseRoute = {};
     nativeCandidateDispatch.TopScreenTouchCoordinateRoute = {};
     nativeCandidateDispatch.TopScreenRendererVisibilityRoute = {};
+    nativeCandidateDispatch.TopScreenGameOverDrawPhase = 0U;
     nativeCandidateDispatch.TopScreenPauseController = {};
     nativeCandidateDispatch.TopScreenPauseControllerDrawPhase = 0U;
     nativeCandidateDispatch.TopScreenPauseControllerVisibleRenderers = {};

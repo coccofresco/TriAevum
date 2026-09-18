@@ -629,6 +629,10 @@ struct TopScreenPauseDrawInputs {
   std::array<std::uint32_t, 6> ChildStates{};
 };
 
+// TopScreen 2.1.1 FUN_005CF75C: native GameOver phases, not a scene ID.
+bool IsTopScreenGameOverPresentation(
+    const TopScreenPauseDrawInputs &inputs) noexcept;
+
 enum class TopScreenPauseClosePage : std::uint8_t {
   None,
   Items,
@@ -771,6 +775,10 @@ bool ResolveTopScreenRendererVisibilityRoute(
     NativeA32Memory &memory, const TopScreenRendererVisibilityInputs &inputs,
     TopScreenRendererVisibilityRouteState *state,
     TopScreenRendererVisibilityAction *action, std::string *error = nullptr);
+bool PrepareTopScreenGameOverDraw(
+    NativeA32Memory &memory, std::uint32_t controller,
+    const TopScreenPauseDrawInputs &inputs, bool runtimeSceneLatch,
+    TopScreenRendererVisibilityRouteState *state, std::string *error = nullptr);
 bool ReadTopScreenPauseControllerInputs(NativeA32Memory &memory,
                                         TopScreenPauseControllerInputs *inputs,
                                         std::string *error = nullptr);

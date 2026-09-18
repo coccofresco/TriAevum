@@ -3322,6 +3322,13 @@ bool UseTopScreenAlternatePauseViewport(
          inputs.AlternatePathReady && inputs.AlternatePathVisible;
 }
 
+bool IsTopScreenGameOverPresentation(
+    const TopScreenPauseDrawInputs &inputs) noexcept {
+  return !inputs.NativeTransitionActive && inputs.HasScene &&
+         inputs.SceneMode == 3U && inputs.SceneVariant == 2U &&
+         inputs.SceneSequence >= 3U && inputs.SceneSequence <= 6U;
+}
+
 bool IsTopScreenTitleDemoRuntime(
     const TopScreenPauseDrawInputs &inputs) noexcept {
   // TopScreen 1.2 helper 0x005C8FA0 adds the SaveContext entrance-index gate
@@ -3608,7 +3615,7 @@ bool ResolveTopScreenRendererVisibilityRoute(
     return ApplyTopScreenRendererFade(memory, state->FadeStep, error);
   }
   const bool reconcile =
-      inputs.CallSceneSequence >= 4U && inputs.CallSceneSequence <= 7U;
+      inputs.CallSceneSequence >= 4U && inputs.CallSceneSequence <= 6U;
   if (!ReconcileAndHideTopScreenRenderer(memory, inputs.ControllerAddress,
                                          reconcile, &state->RendererConflict,
                                          error)) {
@@ -3616,6 +3623,60 @@ bool ResolveTopScreenRendererVisibilityRoute(
   }
   *action = TopScreenRendererVisibilityAction::SuppressNativeDraw;
   return true;
+}
+
+bool PrepareTopScreenGameOverDraw(
+    NativeA32Memory &memory, std::uint32_t controller,
+    const TopScreenPauseDrawInputs &inputs, bool runtimeSceneLatch,
+    TopScreenRendererVisibilityRouteState *state, std::string *error) {
+  if (state == nullptr) {
+    SetError(error, "missing TopScreen GameOver presentation state");
+    return false;
+  }
+  if (!IsTopScreenGameOverPresentation(inputs) || runtimeSceneLatch ||
+      IsTopScreenTitleDemoRuntime(inputs)) {
+    *state = {};
+    return true;
+  }
+  // Savestates retain the native migrated tables, not host fade counters.
+  // Resume their already-visible choice screen immediately on the first draw.
+  if (controller != 0U && inputs.SceneSequence > 3U &&
+      state->DelayCalls == 0 && state->FadeStep == 0) {
+    std::uint32_t terminal = 0U;
+    std::uint8_t terminalVisible = 1U;
+    if (!memory.Read32(controller + 0x6FCU, &terminal) ||
+        (terminal != 0U && !memory.Read8(terminal + 0x6CU, &terminalVisible))) {
+      SetError(error, "cannot read GameOver resume state");
+      return false;
+    }
+    if (terminal != 0U && terminalVisible == 0U) {
+      for (std::uint32_t offset = 0xAF8U; offset <= 0xEF4U; offset += 4U) {
+        std::uint32_t source = 0U, destination = 0U;
+        std::uint8_t visible = 0U;
+        if (!memory.Read32(controller + offset, &source) ||
+            !memory.Read32(controller + offset - 0x400U, &destination) ||
+            (source != 0U && !memory.Read8(source + 0x6CU, &visible))) {
+          SetError(error, "cannot read GameOver resumed choices");
+          return false;
+        }
+        if (source != 0U && source == destination && visible == 1U) {
+          state->DelayCalls = 60;
+          state->FadeStep = 24;
+          break;
+        }
+      }
+    }
+  }
+  TopScreenRendererVisibilityInputs visibility;
+  visibility.ControllerAddress = controller;
+  visibility.HasCallScene = true;
+  visibility.CallSceneMode = inputs.SceneMode;
+  visibility.CallSceneSequence = inputs.SceneSequence;
+  TopScreenRendererVisibilityAction action;
+  // Reuse the mod's native renderer-table migration and fade. The product
+  // observes the upper native draw itself, not the mod's suppressed callsite.
+  return ResolveTopScreenRendererVisibilityRoute(memory, visibility, state,
+                                                  &action, error);
 }
 
 bool ReadTopScreenPauseControllerInputs(NativeA32Memory &memory,
