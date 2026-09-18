@@ -1837,6 +1837,8 @@ add_executable(oot3d_native_pica_transfer_tests EXCLUDE_FROM_ALL
 )
 target_link_libraries(oot3d_native_pica_transfer_tests PRIVATE
     oot3d_native_pica_transfer)
+target_include_directories(oot3d_native_pica_transfer_tests PRIVATE
+    runtime/three_ds_recomp/include)
 target_compile_options(oot3d_native_pica_transfer_tests PRIVATE "${WARNING_OVERRIDE}")
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     target_compile_definitions(oot3d_native_pica_transfer_tests PRIVATE NOMINMAX)

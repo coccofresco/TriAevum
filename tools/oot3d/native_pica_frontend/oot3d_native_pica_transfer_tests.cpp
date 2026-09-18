@@ -1,4 +1,5 @@
 #include "oot3d_native_pica_transfer.h"
+#include "fast/renderer3ds/pica_texture_copy_plan.h"
 
 #include <array>
 #include <cstdlib>
@@ -17,6 +18,44 @@ void Require(bool condition, std::string_view message) {
     if (!condition) {
         Fail(message);
     }
+}
+
+uint32_t TiledPixelOffset(uint32_t x, uint32_t y, uint32_t width) {
+    uint32_t morton = 0;
+    for (uint32_t bit = 0; bit < 3; ++bit) {
+        morton |= ((x >> bit) & 1U) << (2U * bit);
+        morton |= ((y >> bit) & 1U) << (2U * bit + 1U);
+    }
+    return ((y / 8) * (width / 8) + x / 8) * 64 + morton;
+}
+
+void VerifyImageRegions(const Oot3dNativeGame::Oot3dPicaTextureCopyPlan& plan) {
+    using namespace Oot3d::Renderer;
+    std::vector<PicaRawCopySpan> spans;
+    std::array<uint32_t, 1600> expected{}, actual{};
+    expected.fill(UINT32_MAX);
+    actual.fill(UINT32_MAX);
+    for (const auto& span : plan.Spans) {
+        spans.push_back({span.InputAddress, span.OutputAddress, span.Size});
+        for (uint32_t byte = 0; byte < span.Size; byte += 4) {
+            expected.at((span.OutputAddress - 0x10001000U + byte) / 4) =
+                (span.InputAddress - 0x10000000U + byte) / 4;
+        }
+    }
+    std::string error;
+    std::vector<PicaTextureCopyRegion> regions;
+    Require(BuildPicaTiledTextureCopyRegions(spans, {0x10000000U, 32, 32, 4},
+                                            {0x10001000U, 40, 40, 4}, regions, &error), error);
+    for (const auto& r : regions) {
+        for (uint32_t y = 0; y < r.Height; ++y) {
+            for (uint32_t x = 0; x < r.Width; ++x) {
+                auto& dst = actual.at(TiledPixelOffset(r.DestinationX + x, r.DestinationY + y, 40));
+                Require(dst == UINT32_MAX, "GPU copy regions overlap");
+                dst = TiledPixelOffset(r.SourceX + x, r.SourceY + y, 32);
+            }
+        }
+    }
+    Require(actual == expected, "GPU image copy differs from raw bytes or modifies padding");
 }
 
 } // namespace
@@ -99,6 +138,18 @@ int main() {
                 plan.Spans[1].OutputAddress == 0x1F3E7300U,
             "captured TextureCopy row spans decoded incorrectly");
 
+    std::vector<Oot3d::Renderer::PicaRawCopySpan> rawSpans;
+    for (const auto& span : plan.Spans)
+        rawSpans.push_back({span.InputAddress, span.OutputAddress, span.Size});
+    std::vector<Oot3d::Renderer::PicaTextureCopyRegion> regions;
+    Require(Oot3d::Renderer::BuildPicaTiledTextureCopyRegions(
+                rawSpans, {0x1F2447C0U, 480U, 400U, 4U},
+                {0x1F3E3300U, 512U, 512U, 4U}, regions, &error), error);
+    Require(regions.size() == 1 && regions[0].SourceX == 0 && regions[0].SourceY == 0 &&
+                regions[0].DestinationX == 0 && regions[0].DestinationY == 0 &&
+                regions[0].Width == 480 && regions[0].Height == 400,
+            "raw copy should preserve padding, not stretch the image to 512 pixels");
+
     // A bad later row must not leave a partially copied destination.
     plan = {32U, {{0x10000000U, 0x10001000U, 16U},
                   {0xDEAD0000U, 0x10001010U, 16U}}};
@@ -133,11 +184,17 @@ int main() {
                             copied += span.Size;
                         }
                         Require(copied == blocks * 16U, "raw copy lost or duplicated bytes");
+                        VerifyImageRegions(plan);
                     }
                 }
             }
         }
     }
+
+    const std::array<Oot3d::Renderer::PicaRawCopySpan, 1> partialTexel{{{0x10000001U, 0x10001000U, 16U}}};
+    Require(!Oot3d::Renderer::BuildPicaTiledTextureCopyRegions(
+                partialTexel, {0x10000000U, 32, 32, 4}, {0x10001000U, 40, 40, 4}, regions, &error) && regions.empty(),
+            "GPU image path must not round away partial texels");
 
     std::cout << "oot3d_native_pica_transfer_tests: ok\n";
     return 0;

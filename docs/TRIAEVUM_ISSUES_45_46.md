@@ -175,6 +175,45 @@ and GPU surface ownership path; only then deliver PPF and replay
 display transfers, which perform color conversion and may invoke scene
 effects/presentation. Neither behavior belongs to a raw byte copy.
 
+### Tiled Image Mapping and Coherence Findings
+
+`runtime/three_ds_recomp/include/fast/renderer3ds/pica_texture_copy_plan.h`
+adds a backend-independent mapping from physical byte spans to native tiled
+image rectangles. Surface dimensions and formats are explicit inputs, not
+inferred from this scene. Full Morton tiles and adjacent equal translations
+coalesce; partial tiles retain exact texel coordinates. Format reinterpretation,
+partial texels, out-of-range accesses and overlapping destination spans are
+rejected rather than approximated. Coordinates remain in native image axes;
+the backend must apply its orientation and resolution mapping separately.
+
+The captured packet maps to one 480x400 rectangle when supplied a 480x400
+source and 512-wide destination. The test uses a 512x512 destination fixture;
+this is not a runtime assumption about the consumer's declared height.
+The existing 3,600 parameter combinations now additionally check all valid
+image mappings against independent Morton encoding and raw byte writes,
+including untouched padding. Windows test passes; no full game build or
+Linux test was run for this isolated header-only planner.
+
+Important integration finding: `CaptureTextureResources` in
+`oot3d_native_pica_submission.cpp` creates immutable CPU-memory texture
+snapshots, and `GetOrCreateNativePicaTexture` in `gfx_vulkan_pica.cpp` caches
+ordinary textures from those bytes. Only the Shadow2D path currently has an
+explicit live render-target alias in that function. Therefore a GPU copy
+alone is insufficient: subsequent samplers must resolve the copied GPU
+version, or coherent writeback must precede their snapshot capture. Do not
+announce completion while allowing the consumer to sample stale CPU data.
+The source version must also be captured at the copy's native command position,
+before later draws can overwrite it.
+
+The existing `CapturePicaColorTargets` requires an idle frame boundary and
+captures all targets. It cannot safely be called in the middle of recording
+as a shortcut. Ordinary display transfer also runs scene-effect hooks and
+stores scanout images, not ordinary sampled textures; reusing it unchanged
+would introduce both composition and ownership bugs.
+
+Issue 45 remains open. Neither planner is connected to production GPU
+execution yet; no new successful cutscene replay is claimed.
+
 ## Remaining Qualification
 
 - Implement and test the missing TextureCopy transfer, then replay the
