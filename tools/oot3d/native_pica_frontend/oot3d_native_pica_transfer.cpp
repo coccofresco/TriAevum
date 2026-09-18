@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <array>
 #include <limits>
+#include <span>
+#include <utility>
 #include <vector>
 
 namespace Oot3dNativeGame {
@@ -140,6 +142,101 @@ bool MultiplyFits(uint32_t left, uint32_t right, uint32_t factor,
 }
 
 } // namespace
+
+bool BuildOot3dPicaTextureCopyPlan(
+    const Oot3dGspCommandPacket& command, Oot3dPicaTextureCopyPlan& plan,
+    std::string* error) {
+    plan = {};
+    if ((command.Control & 0xFFU) !=
+        static_cast<uint32_t>(Oot3dGspCommandId::TextureCopy)) {
+        SetError(error, "PICA texture copy requires a TextureCopy command");
+        return false;
+    }
+    const auto& p = command.Parameters;
+    const uint32_t size = p[2] & ~15U;
+    const uint32_t inputGap = (p[3] >> 16U) * 16U;
+    const uint32_t outputGap = (p[4] >> 16U) * 16U;
+    const uint32_t inputWidth = inputGap == 0U ? size : (p[3] & 0xFFFFU) * 16U;
+    const uint32_t outputWidth = outputGap == 0U ? size : (p[4] & 0xFFFFU) * 16U;
+    if (size == 0U || inputWidth == 0U || outputWidth == 0U) {
+        SetError(error, "PICA texture copy has zero size or a zero strided width");
+        return false;
+    }
+    const auto endAddress = [size](uint32_t address, uint32_t width, uint32_t gap) {
+        return uint64_t{address} + size + uint64_t{(size - 1U) / width} * gap;
+    };
+    constexpr uint64_t addressSpaceEnd = uint64_t{1} << 32U;
+    if (endAddress(p[0], inputWidth, inputGap) > addressSpaceEnd ||
+        endAddress(p[1], outputWidth, outputGap) > addressSpaceEnd) {
+        SetError(error, "PICA texture copy wraps its address space");
+        return false;
+    }
+    Oot3dPicaTextureCopyPlan result;
+    result.Size = size;
+    uint64_t input = p[0], output = p[1];
+    uint32_t remaining = size, inputLeft = inputWidth, outputLeft = outputWidth;
+    while (remaining != 0U) {
+        const uint32_t count = std::min({remaining, inputLeft, outputLeft});
+        result.Spans.push_back({static_cast<uint32_t>(input),
+                               static_cast<uint32_t>(output), count});
+        remaining -= count;
+        input += count;
+        output += count;
+        inputLeft -= count;
+        outputLeft -= count;
+        if (inputLeft == 0U) {
+            input += inputGap;
+            inputLeft = inputWidth;
+        }
+        if (outputLeft == 0U) {
+            output += outputGap;
+            outputLeft = outputWidth;
+        }
+    }
+    plan = std::move(result);
+    return true;
+}
+
+bool ExecuteOot3dPicaTextureCopy(
+    const Oot3dPicaTextureCopyPlan& plan, NativeA32Memory& memory,
+    std::string* error) {
+    uint64_t total = 0;
+    for (const auto& span : plan.Spans) {
+        if (span.Size == 0U || !memory.IsMapped(span.InputAddress, span.Size) ||
+            !memory.IsWritable(span.OutputAddress, span.Size)) {
+            SetError(error, "PICA texture copy range is not mapped or writable");
+            return false;
+        }
+        total += span.Size;
+    }
+    if (total == 0U || total != plan.Size) {
+        SetError(error, "PICA texture copy plan has an inconsistent size");
+        return false;
+    }
+    // Validate all ranges before mutation; keep destination gaps untouched.
+    // Source bytes are snapshotted before writes so aliases cannot invalidate
+    // the storage used by this portable copy implementation.
+    std::vector<uint8_t> source(plan.Size);
+    size_t offset = 0;
+    for (const auto& span : plan.Spans) {
+        if (!memory.ReadBytes(span.InputAddress,
+                              std::span<uint8_t>(source).subspan(offset, span.Size))) {
+            SetError(error, "PICA texture copy source read failed");
+            return false;
+        }
+        offset += span.Size;
+    }
+    offset = 0;
+    for (const auto& span : plan.Spans) {
+        if (!memory.WriteBytes(span.OutputAddress,
+                               std::span<const uint8_t>(source).subspan(offset, span.Size))) {
+            SetError(error, "PICA texture copy destination write failed");
+            return false;
+        }
+        offset += span.Size;
+    }
+    return true;
+}
 
 bool ExecuteOot3dPicaMemoryFill(const Oot3dPicaMemoryFill& fill,
                                 NativeA32Memory& memory,

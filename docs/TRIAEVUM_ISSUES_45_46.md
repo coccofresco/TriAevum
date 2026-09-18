@@ -147,6 +147,34 @@ addresses or sizes. Do not simply signal PPF, copy stale guest framebuffer
 bytes, or map this to an ordinary scaling/color-converting display transfer.
 No production TextureCopy workaround has been installed yet.
 
+### Raw Copy Contract Implemented (Not Yet Connected to GPU Execution)
+
+`oot3d_native_pica_transfer.{h,cpp}` now provides
+`BuildOot3dPicaTextureCopyPlan` and `ExecuteOot3dPicaTextureCopy`.
+The planner consumes the GSP packet, aligns length down to 16 bytes, decodes
+independent width/gap fields, treats zero-gap sides as contiguous even with
+zero width, and rejects zero strided widths and address-space overflow.
+Its explicit byte spans are independent of texture formats and scenes.
+The portable executor validates every span before mutation and preserves
+destination gaps. It requires coherent CPU memory: it is NOT a substitute
+for flushing GPU-owned surfaces and does not send a completion interrupt.
+Overlapping source/destination storage is snapshotted by this executor;
+hardware overlap behavior remains unqualified.
+
+Windows contract test `oot3d_native_pica_transfer_tests` passes, including
+the captured #45 packet (50 spans, 768,000 copied bytes), partial lengths,
+unequal gaps, unmapped later spans without partial writes, overflow, and
+3,600 width/gap/length combinations checked against an independent byte-index
+oracle. Incremental test build takes about two seconds on this machine.
+
+This is a tested transfer primitive, not an in-game fix. No new replay or
+Linux validation has been performed for it. Next: add the typed operation
+through the frontend sink, submission queue, ordered presentation scheduler
+and GPU surface ownership path; only then deliver PPF and replay
+`sheik-wait-diagnostic/checkpoint.oot3dsav`. Keep this separate from ordinary
+display transfers, which perform color conversion and may invoke scene
+effects/presentation. Neither behavior belongs to a raw byte copy.
+
 ## Remaining Qualification
 
 - Implement and test the missing TextureCopy transfer, then replay the
