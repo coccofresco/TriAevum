@@ -9,10 +9,12 @@
 
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace Fast::Renderer3ds {
@@ -129,6 +131,14 @@ struct PicaDisplayTransferView {
     uint32_t Flags = 0;
     bool Present = false;
     PicaPresentationMode PresentationMode = PicaPresentationMode::Replace;
+    uint32_t TextureCopyBytes = 0;
+    uint64_t AfterDrawSubmissionId = 0;
+};
+
+struct PicaPhysicalMemoryWrite {
+    uint32_t Address = 0;
+    std::vector<uint8_t> Before;
+    std::vector<uint8_t> Bytes;
 };
 
 struct PicaMemoryFillView {
@@ -231,6 +241,12 @@ struct PicaPresentationStateSnapshot {
 // contains no title gameplay, actor, camera or effect-activation policy.
 class PicaRenderBackend {
   public:
+    using PhysicalMemoryRead = std::function<bool(uint32_t, std::span<uint8_t>)>;
+    using PhysicalMemoryCommit = std::function<bool(uint64_t, std::span<const PicaPhysicalMemoryWrite>)>;
+    void SetPicaPhysicalMemoryAccess(PhysicalMemoryRead read, PhysicalMemoryCommit commit) {
+        mPhysicalMemoryRead = std::move(read);
+        mPhysicalMemoryCommit = std::move(commit);
+    }
     virtual ~PicaRenderBackend() = default;
 
     virtual bool PublishPicaCompositionSequence(
@@ -344,6 +360,9 @@ class PicaRenderBackend {
         const PicaFrameTemporalSample&) {
         return false;
     }
+  protected:
+    PhysicalMemoryRead mPhysicalMemoryRead;
+    PhysicalMemoryCommit mPhysicalMemoryCommit;
 };
 
 } // namespace Fast::Renderer3ds

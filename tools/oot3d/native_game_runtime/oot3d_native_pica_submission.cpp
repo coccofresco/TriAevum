@@ -1,5 +1,6 @@
 #include "oot3d_native_pica_submission.h"
 #include "oot3d_cpu_phase_probe.h"
+#include "oot3d_native_pica_transfer.h"
 
 #include <algorithm>
 #include <chrono>
@@ -597,8 +598,22 @@ bool Oot3dNativePicaSubmissionQueue::SubmitDisplayTransfer(
         *cpuCopySuppressed = false;
     }
     const auto inputPhysical = mMemory.TranslateGuest(transfer.InputAddress, 1U);
+    if (transfer.TextureCopyBytes != 0U) {
+        Oot3dPicaTextureCopyPlan plan;
+        if (!BuildOot3dPicaTextureCopyPlan(
+                {4U, {transfer.InputAddress, transfer.OutputAddress,
+                      transfer.TextureCopyBytes, transfer.InputSize, transfer.OutputSize, transfer.Flags}},
+                plan, error)) return false;
+        for (const auto& span : plan.Spans) {
+            if (!mMemory.TranslateGuest(span.InputAddress, span.Size).has_value() ||
+                !mMemory.TranslateGuest(span.OutputAddress, span.Size).has_value()) {
+                SetError(error, "PICA raw copy contains an unmapped range");
+                return false;
+            }
+        }
+    }
     if (mDeferGpuBackedDisplayTransfers && inputPhysical.has_value() &&
-        mInvalidatedColorRenderTargets.contains(*inputPhysical)) {
+        mInvalidatedColorRenderTargets.contains(*inputPhysical) && transfer.TextureCopyBytes == 0U) {
         const auto outputPhysical =
             mMemory.TranslateGuest(transfer.OutputAddress, 1U);
         if (!outputPhysical.has_value()) {
@@ -625,7 +640,8 @@ bool Oot3dNativePicaSubmissionQueue::SubmitDisplayTransfer(
         return true;
     }
     if (!mDeferGpuBackedDisplayTransfers || !inputPhysical.has_value() ||
-        !mKnownColorRenderTargets.contains(*inputPhysical)) {
+        (!mKnownColorRenderTargets.contains(*inputPhysical) &&
+         !(transfer.TextureCopyBytes != 0U && mInvalidatedColorRenderTargets.contains(*inputPhysical)))) {
         return true;
     }
     const auto outputPhysical =

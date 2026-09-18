@@ -182,6 +182,9 @@ struct Oot3dPicaDisplayTransfer {
     uint32_t InputSize = 0;
     uint32_t OutputSize = 0;
     uint32_t Flags = 0;
+    // Nonzero selects the raw TextureCopy operation of the same GSP engine.
+    // InputSize/OutputSize then contain native width/gap pairs, not extents.
+    uint32_t TextureCopyBytes = 0;
 };
 
 struct Oot3dPicaMemoryFill {

@@ -1856,6 +1856,7 @@ target_include_directories(oot3d_native_pica_submission PUBLIC
 )
 target_link_libraries(oot3d_native_pica_submission PUBLIC
     oot3d_native_a32_process
+    oot3d_native_pica_transfer
     oot3d_native_pica_frontend)
 target_compile_options(oot3d_native_pica_submission PRIVATE "${WARNING_OVERRIDE}")
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")

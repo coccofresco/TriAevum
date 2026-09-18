@@ -78,6 +78,9 @@ public:
 
   std::optional<Oot3dPicaVisualFrame>
   FinishFrame(const Oot3dPicaDisplayTransferSubmission &topTransfer);
+  // GPU completion may be required before the guest can swap scanout buffers.
+  // This drains ordered offscreen work without manufacturing a presentation.
+  std::optional<Oot3dPicaVisualFrame> TakeDependencyWork();
 
   void BeginPresentation(uint64_t presentationSerial);
 

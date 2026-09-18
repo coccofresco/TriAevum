@@ -2590,17 +2590,22 @@ NativeA32HostResult NativeA32CtrHostServices::HandleSvc(
                             }
                         }
                         if (submitted &&
-                            (packet.Control & 0xFFU) ==
-                                static_cast<uint32_t>(
-                                    Oot3dGspCommandId::DisplayTransfer) &&
+                            ((packet.Control & 0xFFU) == static_cast<uint32_t>(Oot3dGspCommandId::DisplayTransfer) ||
+                             (packet.Control & 0xFFU) == static_cast<uint32_t>(Oot3dGspCommandId::TextureCopy)) &&
                             !submissionResult.DisplayTransferDeferredToGpu) {
                             if (!submissionResult
                                      .DisplayTransferCpuCopySuppressed) {
+                                if ((packet.Control & 0xFFU) == static_cast<uint32_t>(Oot3dGspCommandId::TextureCopy)) {
+                                    Oot3dPicaTextureCopyPlan copy;
+                                    submitted = BuildOot3dPicaTextureCopyPlan(packet, copy, &picaError) &&
+                                                ExecuteOot3dPicaTextureCopy(copy, memory, &picaError);
+                                } else {
                                 submitted = ExecuteOot3dPicaDisplayTransfer(
                                     {packet.Parameters[0], packet.Parameters[1],
                                      packet.Parameters[2], packet.Parameters[3],
                                      packet.Parameters[4]},
                                     memory, &picaError);
+                                }
                             }
                             if (submitted) {
                                 submitted = QueueGspInterrupt(

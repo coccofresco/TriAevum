@@ -492,6 +492,21 @@ bool Oot3dNativePicaFrontend::SubmitGspCommand(
             SetError(error, "non-submit GSP command has command-list data");
             return false;
         }
+        if (commandId == static_cast<uint32_t>(Oot3dGspCommandId::TextureCopy) &&
+            (command.Parameters[2] & ~15U) == 0U) {
+            SetError(error, "GSP texture copy has zero aligned length");
+            return false;
+        }
+        if (commandId == static_cast<uint32_t>(Oot3dGspCommandId::TextureCopy) &&
+            mPacketSink != nullptr &&
+            !mPacketSink->SubmitDisplayTransfer(
+                {command.Parameters[0], command.Parameters[1],
+                 command.Parameters[3], command.Parameters[4],
+                 command.Parameters[5], command.Parameters[2]},
+                displayTransferDeferredToGpu, error,
+                displayTransferCpuCopySuppressed)) {
+            return false;
+        }
         if (commandId ==
                 static_cast<uint32_t>(Oot3dGspCommandId::DisplayTransfer) &&
             mPacketSink != nullptr &&

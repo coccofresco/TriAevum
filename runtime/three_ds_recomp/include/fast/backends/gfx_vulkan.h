@@ -820,6 +820,15 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     uint64_t mNativePicaVulkanPipelineCreations = 0;
     uint64_t mNativePicaVulkanShaderPairCreations = 0;
     std::map<NativePicaTextureKey, TextureRecord> mNativePicaTextures;
+    struct RawTextureCopyWriteback {
+        uint64_t CompletionId = 0;
+        uint64_t AfterDrawSubmissionId = 0;
+        std::vector<Renderer3ds::PicaPhysicalMemoryWrite> Writes;
+    };
+    std::map<std::pair<uint64_t, uint32_t>, RawTextureCopyWriteback> mRawTextureCopyWritebacks;
+    bool SubmitNativePicaTextureCopy(const GfxNativePicaDisplayTransferView& transfer, std::string* error);
+    GfxNativePicaTextureView ResolveNativePicaCopiedTexture(const GfxNativePicaTextureView& texture,
+        uint64_t renderTargetNamespace, uint64_t drawId, std::vector<uint8_t>& coherentBytes);
     std::map<uint64_t, NativePicaLightingLutTexture>
         mNativePicaLightingLuts;
     std::map<NativePicaRenderTargetKey, NativePicaRenderTarget>

@@ -80,6 +80,10 @@ void Oot3dPicaPresentationScheduler::BeginPresentation(
   mExecutedDrawsThisPresentation.clear();
 }
 
+std::optional<Oot3dPicaVisualFrame> Oot3dPicaPresentationScheduler::TakeDependencyWork() {
+  return mAccumulator.Finish({}, true);
+}
+
 Oot3dPicaPresentationSchedulerState
 Oot3dPicaPresentationScheduler::CaptureState() const {
   return {mAccumulator.CaptureState(), mSnapshotCompletions};
@@ -107,7 +111,7 @@ bool Oot3dPicaPresentationScheduler::Execute(
     return false;
   }
   if (sample.MemoryFills == nullptr || sample.DisplayTransfers == nullptr ||
-      sample.Draws.empty()) {
+      (sample.Draws.empty() && kind != Oot3dPicaPresentationExecutionKind::DependencyFlush)) {
     SetError(error, "PICA presentation sample is incomplete");
     return false;
   }
@@ -284,6 +288,13 @@ bool Oot3dPicaPresentationScheduler::Execute(
     }
   }
 
+  if (kind == Oot3dPicaPresentationExecutionKind::DependencyFlush) {
+    if (present) {
+      SetError(error, "PICA dependency flush cannot present a scanout");
+      return false;
+    }
+    return true;
+  }
   if (!topSnapshotExecuted) {
     if (!submitTransfer(sample.TopTransfer)) {
       return false;

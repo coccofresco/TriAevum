@@ -24,6 +24,7 @@ constexpr uint32_t kVisualReplayMagicV9 = 0x39525650U; // PVR9
 constexpr uint32_t kVisualReplayMagicV10 = 0x41525650U; // PVRA
 constexpr uint32_t kVisualReplayMagicV11 = 0x42525650U; // PVRB
 constexpr uint32_t kVisualReplayMagicV12 = 0x43525650U; // PVRC
+constexpr uint32_t kVisualReplayMagicV13 = 0x44525650U; // PVRD: raw transfers
 constexpr uint32_t kMaximumPlans = 4096U;
 constexpr uint32_t kMaximumResources = 4096U;
 constexpr uint32_t kMaximumShaderBytes = 4U << 20U;
@@ -76,6 +77,7 @@ class Reader final {
     bool HasTevProgram = false;
     bool HasLightingProgram = false;
     bool HasProcTexProgram = false;
+    bool HasTextureCopy = false;
     explicit Reader(std::span<const uint8_t> bytes) : mBytes(bytes) {}
 
     bool U8(uint8_t& value) {
@@ -188,6 +190,7 @@ void WriteTransfer(Writer& writer,
     writer.U32(value.Transfer.OutputSize);
     writer.U32(value.Transfer.Flags);
     writer.Bool(value.SignalInterrupt);
+    writer.U32(value.Transfer.TextureCopyBytes);
 }
 
 bool ReadTransfer(Reader& reader,
@@ -201,7 +204,8 @@ bool ReadTransfer(Reader& reader,
            reader.U32(value.Transfer.InputSize) &&
            reader.U32(value.Transfer.OutputSize) &&
            reader.U32(value.Transfer.Flags) &&
-           reader.Bool(value.SignalInterrupt);
+           reader.Bool(value.SignalInterrupt) &&
+           (!reader.HasTextureCopy || reader.U32(value.Transfer.TextureCopyBytes));
 }
 
 void WriteFill(Writer& writer, const Oot3dPicaMemoryFillSubmission& value) {
@@ -1002,7 +1006,7 @@ bool ReadOptionalFrame(Reader& reader,
 void WriteReplayState(Writer& writer,
                       const Oot3dPicaVisualReplayState& value) {
     const auto lightingLuts = BuildLightingLutDictionary(value);
-    writer.U32(kVisualReplayMagicV12);
+    writer.U32(kVisualReplayMagicV13);
     WriteLightingLutDictionary(writer, lightingLuts);
     const auto& accumulator = value.Scheduler.Accumulator;
     writer.U64(accumulator.NextSequence);
@@ -1039,7 +1043,8 @@ bool ReadReplayState(Reader& reader, Oot3dPicaVisualReplayState& value) {
     uint32_t magic = 0U;
     auto& accumulator = value.Scheduler.Accumulator;
     if (!reader.U32(magic)) return false;
-    reader.HasProcTexProgram = magic == kVisualReplayMagicV12;
+    reader.HasTextureCopy = magic == kVisualReplayMagicV13;
+    reader.HasProcTexProgram = magic == kVisualReplayMagicV12 || reader.HasTextureCopy;
     reader.HasLightingProgram = magic == kVisualReplayMagicV11 || reader.HasProcTexProgram;
     reader.HasTevProgram = magic == kVisualReplayMagicV10 || reader.HasLightingProgram;
     // V10 adds TEV, V11 lighting/fog/alpha, V12 packed procedural data; all retain V9 features.

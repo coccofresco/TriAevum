@@ -424,6 +424,7 @@ void GfxRenderingAPIVulkan::CreateNativePicaShaderResources() {
 }
 
 void GfxRenderingAPIVulkan::DestroyNativePicaShaderResources() {
+    mRawTextureCopyWritebacks.clear();
     EndNativePicaRenderPass();
     for (auto& [key, texture] : mNativePicaTextures) {
         DestroyTexture(texture);
@@ -4143,11 +4144,14 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 throw std::runtime_error(
                     "native PICA texture type is unsupported by sampler2D");
             }
+            std::vector<uint8_t> coherentBytes;
+            const auto coherentTexture = ResolveNativePicaCopiedTexture(
+                texture, draw.RenderTargetNamespace, draw.SubmissionId, coherentBytes);
             TextureRecord* record =
                 GetOrCreateNativePicaTexture(
-                    texture, error, azaharTextureGeneration,
-                    texture.NativeContentHashAvailable
-                        ? &texture.NativeContentHash
+                    coherentTexture, error, azaharTextureGeneration,
+                    coherentTexture.NativeContentHashAvailable
+                        ? &coherentTexture.NativeContentHash
                         : nullptr);
             if (record == nullptr) {
                 return false;
@@ -5515,6 +5519,7 @@ bool GfxRenderingAPIVulkan::TryRenderDirectionalShadowMap(
 
 bool GfxRenderingAPIVulkan::SubmitPicaDisplayTransfer(
     const GfxNativePicaDisplayTransferView& transfer, std::string* error) {
+    if (transfer.TextureCopyBytes != 0U) return SubmitNativePicaTextureCopy(transfer, error);
     try {
         if (!mFrameActive || transfer.CompletionId == 0U ||
             transfer.InputWidth == 0U || transfer.InputHeight == 0U ||
@@ -8957,6 +8962,7 @@ bool GfxRenderingAPIVulkan::ResetPicaState(
         CheckNativeVk(vkDeviceWaitIdle(mDevice),
                       "vkDeviceWaitIdle(native PICA state reset)");
         DestroyNativePicaGeometryResources();
+        mRawTextureCopyWritebacks.clear();
         ForgetNativePicaEffectNriTextures();
         mCacaoPass.InvalidateScreenResources();
         mFidelityFxSssrPass.InvalidateScreenResources();

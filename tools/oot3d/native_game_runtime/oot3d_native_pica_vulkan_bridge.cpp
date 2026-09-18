@@ -431,6 +431,12 @@ bool SubmitOot3dPicaVulkanDisplayTransfer(
     view.OutputHeight = static_cast<uint16_t>(
         declaredOutputHeight >> (scaling == 2U ? 1U : 0U));
     view.Flags = transfer.Flags;
+    view.TextureCopyBytes = transfer.TextureCopyBytes;
+    view.AfterDrawSubmissionId = submission.AfterDrawSubmissionId;
+    if (transfer.TextureCopyBytes != 0U) {
+        view.OutputWidth = declaredOutputWidth;
+        view.OutputHeight = declaredOutputHeight;
+    }
     view.Present = present;
     view.PresentationMode = presentationMode;
     return renderingApi.SubmitPicaDisplayTransfer(view, error);

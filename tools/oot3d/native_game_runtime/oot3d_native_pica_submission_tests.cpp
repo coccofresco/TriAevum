@@ -379,6 +379,18 @@ int main() {
     Require(mipQueue.PendingDraws().front().Resources.back().BaseLevelContentHash != baseHash,
             "changed mip payload retained a stale base identity");
 
+    Oot3dNativeGame::Oot3dNativePicaSubmissionQueue copyQueue(
+        Oot3dNativeGame::Oot3dPicaPhysicalMemoryView(memory, {{0x20000000U, 0x14000000U, 0x2000U}}), true);
+    Require(copyQueue.SubmitDrawPacket(packet, &error), error);
+    Oot3dNativeGame::Oot3dNativePicaFrontend copyFrontend(&copyQueue);
+    const Oot3dNativeGame::Oot3dGspCommandPacket rawCopy{
+        4U, {0x14000200U, 0x14000500U, 64U, 0U, 0x00010002U, 12U, 0U}};
+    Require(copyFrontend.SubmitGspCommand(rawCopy, {}, &error, &deferredToGpu) && deferredToGpu, error);
+    const auto rawTransfers = copyQueue.TakePendingDisplayTransfers();
+    Require(rawTransfers.size() == 1 && rawTransfers[0].Transfer.TextureCopyBytes == 64U &&
+                rawTransfers[0].Transfer.InputSize == 0U && rawTransfers[0].Transfer.OutputSize == 0x00010002U &&
+                rawTransfers[0].AfterDrawSubmissionId == copyQueue.PendingDraws().front().Id,
+            "raw copy lost its operation or command ordering");
     std::cout << "oot3d_native_pica_submission_tests: ok\n";
     return 0;
 }

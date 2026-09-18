@@ -7,7 +7,7 @@
 #include <tuple>
 #include <vector>
 
-namespace Oot3d::Renderer {
+namespace Fast::Renderer3ds {
 
 struct PicaRawCopySpan {
     uint32_t SourceAddress = 0;
@@ -128,4 +128,4 @@ inline bool BuildPicaTiledTextureCopyRegions(
     return true;
 }
 
-} // namespace Oot3d::Renderer
+} // namespace Fast::Renderer3ds

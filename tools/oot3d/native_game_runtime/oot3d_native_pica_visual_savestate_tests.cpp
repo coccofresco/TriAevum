@@ -106,6 +106,10 @@ int main() {
     frame.TopTransfer.Transfer.OutputAddress = 0x20002000U;
     frame.Draws.push_back(draw);
     frame.StrictDrawIdentities.push_back(29U);
+    Oot3dPicaDisplayTransferSubmission rawCopy;
+    rawCopy.CompletionId = 24U;
+    rawCopy.Transfer = {0x20003000U, 0x20004000U, 0x3C0U, 0x4003C0U, 12U, 768000U};
+    frame.DisplayTransfers.push_back(rawCopy);
 
     Oot3dPicaVisualReplayState state;
     state.Scheduler.Accumulator.NextSequence = 6U;
@@ -217,6 +221,10 @@ int main() {
                 decoded.LastSelectedTopTransferCompletionId == 23U &&
                 decoded.LastSubmittedDrawId == 7U,
             "visual replay state did not round-trip");
+    Require(decoded.LatestFrame->DisplayTransfers.size() == 1 &&
+                decoded.LatestFrame->DisplayTransfers[0].Transfer.TextureCopyBytes == 768000U &&
+                decoded.LatestFrame->DisplayTransfers[0].Transfer.OutputSize == 0x4003C0U,
+            "raw copy operation lost its fields on savestate round-trip");
     Require(decoded.Scheduler.Accumulator.PendingDraws[0].LightingLuts ==
                 decoded.PreviousFrame->Draws[0].LightingLuts &&
                 decoded.PreviousFrame->Draws[0].LightingLuts ==

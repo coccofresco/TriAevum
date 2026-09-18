@@ -1552,8 +1552,8 @@ void Oot3dPicaVisualFrameAccumulator::Append(
 }
 
 std::optional<Oot3dPicaVisualFrame> Oot3dPicaVisualFrameAccumulator::Finish(
-    const Oot3dPicaDisplayTransferSubmission& topTransfer) {
-    if (mPendingDraws.empty()) {
+    const Oot3dPicaDisplayTransferSubmission& topTransfer, bool allowTransferOnly) {
+    if (mPendingDraws.empty() && (!allowTransferOnly || (mPendingMemoryFills.empty() && mPendingDisplayTransfers.empty()))) {
         return std::nullopt;
     }
     Oot3dPicaVisualFrame frame;

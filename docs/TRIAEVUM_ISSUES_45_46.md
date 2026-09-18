@@ -214,10 +214,72 @@ would introduce both composition and ownership bugs.
 Issue 45 remains open. Neither planner is connected to production GPU
 execution yet; no new successful cutscene replay is claimed.
 
+### Operational TextureCopy and Cutscene Completion (2026-09-18)
+
+The preceding entries describe earlier milestones, not the current state.
+TextureCopy is now connected through the frontend, submission queue, Vulkan
+bridge and shared backend. `TextureCopyBytes` distinguishes raw width/gap
+copies from pixel display transfers. The isolated backend implementation is
+`gfx_vulkan_pica_texture_copy.cpp`; `pica_framebuffer_encode.h` restores native
+tiling, channels and resolution from the authoritative GPU color surface.
+Guest destination gaps remain untouched and PPF is delivered after writeback.
+No title logic, cutscene state, AOT module or scene-specific address was patched.
+
+The first connected test still froze: the guest waited for TextureCopy before
+swapping, while the presentation scheduler waited for a swap before executing
+the copy. `TakeDependencyWork()` and `DependencyFlush` now execute the ordered
+offscreen prefix without inventing a scanout or presenting unfinished work.
+The previously completed scanout remains available during that dependency.
+Immutable sampled-texture snapshots are refreshed only when both their old
+bytes and current guest memory establish that the completed copy owns them.
+Visual replay format V13 records raw copies; readers retain V1-V12 support.
+
+Windows framebuffer evidence is under private diagnostics
+`issues45-46/sheik-texture-copy-final`: frame 7200 shows normal Temple gameplay
+after the full revelation/flashback/Light Arrow sequence. The run completed
+7,534 host frames, 688 dependency flushes and 675,919 draw executions, with zero
+duplicate-draw attempts and zero memory faults. Its loaded checkpoint is the
+same pre-stall checkpoint used by the failing baseline. Four focused suites
+cover transfers, submission, visual serialization and bridge scheduling;
+the transfer suite includes 3,600 width/gap/length combinations.
+
+This is a conservative synchronous GPU readback/writeback implementation,
+not a performance optimization: the complete run spent about 25.65 seconds
+in transfer submission, predominantly across the animated copies. GPU-only
+copy/resolution is a future optimization. Ambiguous source ownership and
+destinations aliasing active attachments fail explicitly, rather than silently
+claiming unsupported completion. Off-base source ownership and general chained
+copy coherence still need broader qualification.
+
+The first cache-retirement implementation checked texture start addresses,
+missing a sampled texture containing the written subregion. The diagnostic
+run `sheik-copy-save-diagnostic` established aggregate decoded cache bytes
+exceeding the existing 512 MiB limit. Retirement now checks overlapping
+storage intervals after queue synchronization, conservatively bounding native
+mip storage by RGBA8 (extra invalidations are safe uploads, not lost content).
+`sheik-copy-overlap-save` successfully saves during the flashback at native
+frame 14207: 292,740,633 bytes, without raising any limit. Error messages now
+include texture dimensions, address and aggregate bytes for future diagnosis.
+
+Attempting to load that native-30 state as interpolated-60 was rejected by
+the existing savestate timing-mode contract, before rendering. This is NOT a
+2x renderer result and the compatibility check was not bypassed.
+
+The same-mode reload (`sheik-copy-reload`) decoded/restored the new save,
+including 298 sampled textures / 133,749,504 decoded bytes, but produced
+zero new draws or transfers in 600 run frames. Therefore writing the save
+is verified; resuming mid-flashback is NOT. Investigate outstanding GPU
+completion/dependency ownership at save/restore rather than treating a
+successful file decode as successful gameplay. The uninterrupted full-sequence
+result above was obtained from the existing pre-stall checkpoint, not this new
+mid-flashback state.
+
 ## Remaining Qualification
 
-- Implement and test the missing TextureCopy transfer, then replay the
-  pre-stall checkpoint and complete the cutscene. Issue 45 remains open.
+- The reproduced #45 stall is fixed and the full sequence returns to gameplay
+  on Windows/native-30 presentation. Qualify interpolation 2x, Linux and
+  pending dependency restoration in mid-TextureCopy savestates before closing the
+  wider issue.
 - Validate save-yes and mouse/touch Game Over choices in addition to the
   tested directional/A paths.
 - Linux mirror is not updated yet: SSH timed out, including after Wake-on-LAN.

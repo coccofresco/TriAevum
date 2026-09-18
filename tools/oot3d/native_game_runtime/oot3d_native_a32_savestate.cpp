@@ -287,7 +287,14 @@ bool SaveNativeA32State(
                               texture.CustomReplacement})
                      .second) {
                 SetError(error,
-                         "savestate native PICA cached texture is invalid");
+                         "savestate native PICA cached texture is invalid: address=" +
+                         std::to_string(texture.PhysicalAddress) +
+                         " source=" + std::to_string(texture.SourceWidth) + "x" + std::to_string(texture.SourceHeight) +
+                         " image=" + std::to_string(texture.ImageWidth) + "x" + std::to_string(texture.ImageHeight) +
+                         " mips=" + std::to_string(texture.MipLevels) +
+                         " bytes=" + std::to_string(texture.PixelBytes.size()) +
+                         " total_bytes=" + std::to_string(picaTextureCacheBytes) +
+                         " entries=" + std::to_string(picaTextureCacheIdentities.size()));
                 return false;
             }
             encodedPicaTextureCache.push_back(

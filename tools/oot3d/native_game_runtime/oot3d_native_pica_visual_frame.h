@@ -172,7 +172,7 @@ class Oot3dPicaVisualFrameAccumulator final {
     void Append(Oot3dPicaMemoryFillSubmission fill);
     void Append(Oot3dPicaDisplayTransferSubmission transfer);
     std::optional<Oot3dPicaVisualFrame>
-    Finish(const Oot3dPicaDisplayTransferSubmission& topTransfer);
+    Finish(const Oot3dPicaDisplayTransferSubmission& topTransfer, bool allowTransferOnly = false);
     size_t PendingDrawCount() const;
     Oot3dPicaVisualFrameAccumulatorState CaptureState() const;
     bool RestoreState(Oot3dPicaVisualFrameAccumulatorState state);

@@ -439,6 +439,26 @@ int main() {
                 schedulerStats.CompositionPublicationFailures == 0U,
             "presentation scheduler exactly-once counters are incorrect");
 
+    Oot3dNativeGame::Oot3dPicaPresentationScheduler dependencyScheduler;
+    auto copy = topTransfer;
+    copy.CompletionId = 51U;
+    copy.Transfer = {0x1F2447C0U, 0x1F3E3300U, 0x3C0U, 0x4003C0U, 12U, 768000U};
+    dependencyScheduler.Capture(copy);
+    auto dependency = dependencyScheduler.TakeDependencyWork();
+    Require(dependency.has_value() && dependency->Draws.empty() && dependency->DisplayTransfers.size() == 1,
+            "transfer-only GPU dependency was lost while awaiting scanout");
+    Oot3dNativeGame::Oot3dPicaVisualFrameViewSample dependencySample;
+    (void)Oot3dNativeGame::ViewOot3dPicaVisualFrame(*dependency, dependencySample);
+    dependencyScheduler.BeginPresentation(1U);
+    backend.Operations.clear();
+    Require(dependencyScheduler.Execute(backend, dependencySample, 7U,
+                Oot3dNativeGame::Oot3dPicaPresentationExecutionKind::DependencyFlush, false, &error), error);
+    Require(backend.Operations == std::vector<std::string>{"composition:1:0", "transfer:51"} &&
+                backend.Transfer.TextureCopyBytes == 768000U && backend.Transfer.InputWidth == 960U &&
+                backend.Transfer.InputHeight == 0U && backend.Transfer.OutputWidth == 960U &&
+                backend.Transfer.OutputHeight == 64U && !backend.Transfer.Present,
+            "dependency flush invented a scanout or changed raw width/gap fields");
+    Require(!dependencyScheduler.TakeDependencyWork().has_value(), "dependency executed twice");
     std::cout << "oot3d_native_pica_vulkan_bridge_tests: ok\n";
     return 0;
 }
