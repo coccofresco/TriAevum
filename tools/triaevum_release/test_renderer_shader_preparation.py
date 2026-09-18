@@ -43,6 +43,20 @@ class RendererShaderPreparationTests(unittest.TestCase):
             self.assertIsNone(self.prepare())
             run.assert_not_called()
 
+    def test_embedded_artifact_hits_need_no_disk_writes(self):
+        def embedded(command, root):
+            self.complete(command, root)
+            manifest = Path(command[command.index("--manifest") + 1])
+            import json
+            result = json.loads(manifest.read_text())
+            result["builtin_hits"] = result["hits"]
+            atomic_write_json(manifest, result)
+        with patch("shader_preparation._run", side_effect=embedded):
+            result = self.prepare()
+            self.assertEqual(result["renderer_shader_preparation"], "complete")
+            self.assertEqual(result["builtin_hits"], 22)
+            self.assertEqual(result["writes"], 0)
+
     def test_public_renderer_contract_without_private_seed(self):
         seed = self.title.pop("shader_preparation")
         seed["format"] = RENDERER_CONTRACT

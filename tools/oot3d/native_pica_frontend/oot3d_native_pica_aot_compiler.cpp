@@ -148,7 +148,9 @@ int main(int argc, char** argv) {
             const auto stats = compiler.Stats();
             WriteJsonAtomically(options.Manifest, {
                 {"format", "triaevum_renderer_shader_preparation_v1"},
-                {"modules", shaders.size()}, {"hits", stats.Hits}, {"compiled", stats.Compilations},
+                {"modules", shaders.size()},
+                {"hits", stats.Hits + compiler.BuiltinArtifactHits()},
+                {"builtin_hits", compiler.BuiltinArtifactHits()}, {"compiled", stats.Compilations},
                 {"compile_failed", stats.CompilationFailures}, {"writes", stats.Writes},
                 {"write_failed", stats.WriteFailures}, {"compile_ms", stats.CompileNanoseconds / 1e6},
                 {"cache_directory", std::filesystem::absolute(options.RendererCache).string()},
