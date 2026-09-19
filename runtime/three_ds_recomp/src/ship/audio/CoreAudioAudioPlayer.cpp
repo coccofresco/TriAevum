@@ -5,7 +5,9 @@
 
 namespace Ship {
 
-CoreAudioAudioPlayer::CoreAudioAudioPlayer(AudioSettings settings) : AudioPlayer(settings), mInitialized(false) {
+CoreAudioAudioPlayer::CoreAudioAudioPlayer(AudioSettings settings)
+    : AudioPlayer(settings), mAudioUnit(nullptr), mNumChannels(2), mRingBuffer(nullptr), mRingBufferSize(0),
+      mRingBufferReadPos(0), mRingBufferWritePos(0), mInitialized(false) {
     pthread_mutex_init(&mMutex, NULL);
 }
 
@@ -42,9 +44,12 @@ bool CoreAudioAudioPlayer::DoInit() {
     mRingBufferReadPos = 0;
     mRingBufferWritePos = 0;
 
-    AudioComponentDescription desc;
+    AudioComponentDescription desc = {};
     desc.componentType = kAudioUnitType_Output;
-    desc.componentSubType = kAudioUnitSubType_HALOutput;
+    // DefaultOutput owns the system's current output device. HALOutput is
+    // intended for callers that explicitly manage a device and can otherwise
+    // initialize successfully while producing silence.
+    desc.componentSubType = kAudioUnitSubType_DefaultOutput;
     desc.componentManufacturer = kAudioUnitManufacturer_Apple;
     desc.componentFlags = 0;
     desc.componentFlagsMask = 0;
@@ -52,24 +57,18 @@ bool CoreAudioAudioPlayer::DoInit() {
     AudioComponent component = AudioComponentFindNext(NULL, &desc);
     if (component == NULL) {
         SPDLOG_ERROR("CoreAudio: Failed to find audio component");
+        DoClose();
         return false;
     }
 
     status = AudioComponentInstanceNew(component, &mAudioUnit);
     if (status != noErr) {
         SPDLOG_ERROR("CoreAudio: Failed to create audio component instance: {}", status);
+        DoClose();
         return false;
     }
 
-    UInt32 flag = 1;
-    status = AudioUnitSetProperty(mAudioUnit, kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Output, 0, &flag,
-                                  sizeof(flag));
-    if (status != noErr) {
-        SPDLOG_ERROR("CoreAudio: Failed to enable output: {}", status);
-        return false;
-    }
-
-    AudioStreamBasicDescription format;
+    AudioStreamBasicDescription format = {};
     format.mSampleRate = this->GetSampleRate();
     format.mFormatID = kAudioFormatLinearPCM;
     format.mFormatFlags = kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked;
@@ -83,6 +82,7 @@ bool CoreAudioAudioPlayer::DoInit() {
                                   sizeof(format));
     if (status != noErr) {
         SPDLOG_ERROR("CoreAudio: Failed to set stream format: {}", status);
+        DoClose();
         return false;
     }
 
@@ -94,22 +94,26 @@ bool CoreAudioAudioPlayer::DoInit() {
                                   &callbackStruct, sizeof(callbackStruct));
     if (status != noErr) {
         SPDLOG_ERROR("CoreAudio: Failed to set render callback: {}", status);
+        DoClose();
         return false;
     }
 
     status = AudioUnitInitialize(mAudioUnit);
     if (status != noErr) {
         SPDLOG_ERROR("CoreAudio: Failed to initialize audio unit: {}", status);
+        DoClose();
         return false;
     }
 
     status = AudioOutputUnitStart(mAudioUnit);
     if (status != noErr) {
         SPDLOG_ERROR("CoreAudio: Failed to start audio unit: {}", status);
+        DoClose();
         return false;
     }
 
     mInitialized = true;
+    SPDLOG_INFO("CoreAudio audio initialized: {} channels, {} Hz", mNumChannels, this->GetSampleRate());
     return true;
 }
 

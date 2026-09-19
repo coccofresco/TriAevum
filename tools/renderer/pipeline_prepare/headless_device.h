@@ -9,6 +9,7 @@
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
+#include <vector>
 
 namespace TriAevum::Tools {
 
@@ -22,20 +23,25 @@ class HeadlessDevice final : public Fast::Renderer3ds::NriPicaInterop {
         if (mInstance) vkDestroyInstance(mInstance, nullptr);
     }
     bool Initialize(uint32_t index, bool validation) {
-        uint32_t count = 0;
-        if (nri::nriEnumerateAdapters(nullptr, count) != nri::Result::SUCCESS || !count || count > 64 || index >= count)
-            return false;
-        std::vector<nri::AdapterDesc> adapters(count);
-        if (nri::nriEnumerateAdapters(adapters.data(), count) != nri::Result::SUCCESS || index >= count) return false;
         const auto app = Fast::Renderer3ds::PicaVulkanApplicationInfo();
         const char* layer = "VK_LAYER_KHRONOS_validation";
-        const char* debugExtension = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+        std::vector<const char*> instanceExtensions;
+        if (validation) instanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+#if defined(__APPLE__)
+        // MoltenVK exposes physical devices only to instances which explicitly
+        // opt into Vulkan portability enumeration.  The desktop helper creates
+        // its own headless instance, so it cannot rely on SDL to provide this.
+        instanceExtensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+#endif
         VkInstanceCreateInfo instance{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
         instance.pApplicationInfo = &app;
         instance.enabledLayerCount = validation ? 1 : 0;
         instance.ppEnabledLayerNames = &layer;
-        instance.enabledExtensionCount = validation ? 1 : 0;
-        instance.ppEnabledExtensionNames = &debugExtension;
+        instance.enabledExtensionCount = static_cast<uint32_t>(instanceExtensions.size());
+        instance.ppEnabledExtensionNames = instanceExtensions.data();
+#if defined(__APPLE__)
+        instance.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#endif
         const auto instanceResult = vkCreateInstance(&instance, nullptr, &mInstance);
         if (instanceResult != VK_SUCCESS)
             throw std::runtime_error("vkCreateInstance failed (" + std::to_string(instanceResult) +
@@ -54,18 +60,12 @@ class HeadlessDevice final : public Fast::Renderer3ds::NriPicaInterop {
         if (vkEnumeratePhysicalDevices(mInstance, &physicalCount, nullptr) != VK_SUCCESS || physicalCount > 64) return false;
         std::vector<VkPhysicalDevice> physicals(physicalCount);
         if (vkEnumeratePhysicalDevices(mInstance, &physicalCount, physicals.data()) != VK_SUCCESS) return false;
-        VkPhysicalDevice physical = VK_NULL_HANDLE;
-        for (auto candidate : physicals) {
-            VkPhysicalDeviceIDProperties id{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES};
-            VkPhysicalDeviceProperties2 props{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
-            props.pNext = &id;
-            vkGetPhysicalDeviceProperties2(candidate, &props);
-            nri::Uid_t uid{};
-            std::memcpy(&uid.low, id.deviceLUIDValid ? id.deviceLUID : id.deviceUUID, 8);
-            if (!id.deviceLUIDValid) std::memcpy(&uid.high, id.deviceUUID + 8, 8);
-            if (uid.low == adapters[index].uid.low && uid.high == adapters[index].uid.high) { physical = candidate; break; }
-        }
-        if (!physical) return false;
+        if (!physicalCount || index >= physicalCount) return false;
+        // NRI's standalone adapter enumeration creates an independent Vulkan
+        // instance. On MoltenVK that instance is not portability-enumerated,
+        // so it cannot be used to identify the device we created above.
+        // Select from this explicitly portability-enabled instance instead.
+        VkPhysicalDevice physical = physicals[index];
         uint32_t queueCount = 0;
         vkGetPhysicalDeviceQueueFamilyProperties(physical, &queueCount, nullptr);
         std::vector<VkQueueFamilyProperties> queues(queueCount);
@@ -86,18 +86,33 @@ class HeadlessDevice final : public Fast::Renderer3ds::NriPicaInterop {
         const auto coreFeatures = Fast::Renderer3ds::PicaVulkanCoreFeatures(supported.features);
         v12 = Fast::Renderer3ds::PicaVulkan12Features(v12);
         v12.pNext = &sync;
-        const char* extensions[] = {VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME};
+        std::vector<const char*> extensions = {VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
+                                               VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME};
+        uint32_t extensionCount = 0;
+        vkEnumerateDeviceExtensionProperties(physical, nullptr, &extensionCount, nullptr);
+        std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+        vkEnumerateDeviceExtensionProperties(physical, nullptr, &extensionCount, availableExtensions.data());
+        const auto hasExtension = [&](const char* name) {
+            for (const auto& extension : availableExtensions) {
+                if (std::strcmp(extension.extensionName, name) == 0) return true;
+            }
+            return false;
+        };
+        if (hasExtension("VK_KHR_portability_subset"))
+            extensions.push_back("VK_KHR_portability_subset");
         VkDeviceCreateInfo device{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
         device.pNext = &v12; device.pEnabledFeatures = &coreFeatures;
         device.queueCreateInfoCount = 1; device.pQueueCreateInfos = &queue;
-        device.enabledExtensionCount = 2; device.ppEnabledExtensionNames = extensions;
+        device.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+        device.ppEnabledExtensionNames = extensions.data();
         if (vkCreateDevice(physical, &device, nullptr, &mVkDevice) != VK_SUCCESS) return false;
         nri::QueueFamilyVKDesc nriQueue{1, nri::QueueType::GRAPHICS, family};
         nri::DeviceCreationVKDesc create{};
         create.vkInstance = mInstance; create.vkDevice = mVkDevice; create.vkPhysicalDevice = physical;
         create.minorVersion = VK_API_VERSION_MINOR(app.apiVersion);
         create.queueFamilies = &nriQueue; create.queueFamilyNum = 1;
-        create.vkExtensions.deviceExtensions = extensions; create.vkExtensions.deviceExtensionNum = 2;
+        create.vkExtensions.deviceExtensions = extensions.data();
+        create.vkExtensions.deviceExtensionNum = static_cast<uint32_t>(extensions.size());
         create.enableNRIValidation = validation;
         create.callbackInterface.MessageCallback = Message;
         create.callbackInterface.userArg = this;

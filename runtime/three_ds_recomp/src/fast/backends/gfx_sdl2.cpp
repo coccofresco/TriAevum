@@ -961,12 +961,23 @@ bool GfxWindowBackendSDL2::IsWindowedFullscreen() const {
     if (mWnd == nullptr) {
         return false;
     }
+#if defined(__APPLE__)
+    // macOS switches an NSWindow into its native fullscreen space instead of
+    // assigning SDL's desktop-fullscreen flag. The presentation transaction
+    // still needs its requested flavor to survive the asynchronous Cocoa
+    // transition and to roll back consistently.
+    return mMacWindowedFullscreen;
+#else
     const Uint32 fullscreenFlags =
         SDL_GetWindowFlags(mWnd) & SDL_WINDOW_FULLSCREEN_DESKTOP;
     return fullscreenFlags == SDL_WINDOW_FULLSCREEN_DESKTOP;
+#endif
 }
 
 void GfxWindowBackendSDL2::SetWindowedFullscreen(bool enabled) {
+#if defined(__APPLE__)
+    mMacWindowedFullscreen = enabled;
+#endif
     Ship::Context::GetRawInstance()
         ->GetConsoleVariables()
         ->SetInteger(CVAR_SDL_WINDOWED_FULLSCREEN, enabled ? 1 : 0);

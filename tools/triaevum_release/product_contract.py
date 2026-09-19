@@ -16,16 +16,18 @@ except ImportError:
     from native_process import run_native, describe_exit_status
 
 
-def validate_product_info(info: dict[str, Any], source_commit: str = "") -> None:
+def validate_product_info(info: dict[str, Any], source_commit: str = "", *, renderer: str = "nri") -> None:
     if (info.get("format") != "triaevum_product_info_v1"
             or info.get("runtime") != "oot3d_native_game"
             or info.get("whole_aot_plugin_abi") != 2):
         raise ValueError("This is not the playable TriAevum ABI-v2 runtime")
+    if renderer not in ("nri", "vulkan"):
+        raise ValueError("Unsupported product renderer")
     capabilities = info.get("capabilities", {})
     if not isinstance(capabilities, dict) or any(
-        capabilities.get(name) is not True for name in ("nri", "f1", "topscreen")
+        capabilities.get(name) is not True for name in (renderer, "f1", "topscreen")
     ):
-        raise ValueError("TriAevum is missing NRI, F1 or TopScreen support")
+        raise ValueError(f"TriAevum is missing {renderer.upper()}, F1 or TopScreen support")
     if source_commit and info.get("source_commit") != source_commit:
         raise ValueError("Runtime source commit does not match the release")
     defaults = info.get("default_config")
@@ -37,7 +39,8 @@ def validate_product_info(info: dict[str, Any], source_commit: str = "") -> None
         raise ValueError("Runtime defaults do not enable visual interpolation x2")
 
 
-def query_product(executable: Path, source_commit: str = "", *, plugin: Path | None = None) -> dict[str, Any]:
+def query_product(executable: Path, source_commit: str = "", *, plugin: Path | None = None,
+                  renderer: str = "nri") -> dict[str, Any]:
     executable = executable.resolve(strict=True)
     try:
         result = run_native(
@@ -73,15 +76,15 @@ def query_product(executable: Path, source_commit: str = "", *, plugin: Path | N
         raise ValueError(f"Cannot query the playable runtime: {exc}") from exc
     if not isinstance(info, dict):
         raise ValueError("Runtime product information is not an object")
-    validate_product_info(info, source_commit)
+    validate_product_info(info, source_commit, renderer=renderer)
     if plugin is not None and info.get("private_title_loaded") is not True:
         raise ValueError("The selected private title failed its native ABI preflight")
     return {"runtime_sha256": sha256_file(executable), "product": info}
 
 
-def ensure_runtime_config(path: Path, product: dict[str, Any]) -> bool:
+def ensure_runtime_config(path: Path, product: dict[str, Any], *, renderer: str = "nri") -> bool:
     """Keep every existing graphics/profile choice, including legacy settings."""
-    validate_product_info(product)
+    validate_product_info(product, renderer=renderer)
     if path.exists():
         # A malformed user file must not be silently replaced either.
         load_json_object(path)

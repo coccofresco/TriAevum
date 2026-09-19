@@ -61,6 +61,23 @@
       "required_paths": ["TriAevum", "TriAevumForge", "forge/oot3d_game_module.so", "triaevum_title_aot.so", "_internal/base_library.zip", "LICENSES/Python-3.13.txt"],
       "forbidden_basenames": ["libc.so.6", "libpthread.so.0", "libdl.so.2", "ld-linux-x86-64.so.2", "libvulkan.so.1"],
       "forbidden_extensions": [".dll", ".exe", ".lib"]
+    },
+    "aarch64-apple-darwin": {
+      "path_prefix": "Contents/Resources/runtime",
+      "allowed_roles": {
+        "runtime_executable": ["Contents/Resources/runtime/TriAevum"],
+        "forge_executable": ["Contents/Resources/forge/TriAevumForge"],
+        "forge_runtime_module": ["Contents/Resources/runtime/forge/oot3d_game_module.dylib"],
+        "shader_preparation_tool": ["Contents/Resources/runtime/forge/oot3d_native_pica_aot_compiler", "Contents/Resources/runtime/forge/oot3d_native_nri_pipeline_prepare"],
+        "runtime_library": ["Contents/Resources/runtime/*.dylib", "Contents/Resources/runtime/lib/*.dylib"],
+        "forge_frozen_resource": ["Contents/Resources/forge/_internal/*", "Contents/Resources/forge/_internal/**/*"],
+        "precompiled_title": ["Contents/Resources/runtime/titles/*/triaevum_title_aot.dylib"],
+        "macos_launcher": ["Contents/MacOS/TriAevum"],
+        "macos_metadata": ["Contents/Info.plist", "Contents/Resources/macos-build.json", "Contents/_CodeSignature/CodeResources"],
+        "macos_notice": ["Contents/Resources/LICENSE", "Contents/Resources/LICENSE_SCOPE.md", "Contents/Resources/THIRD_PARTY_NOTICES.md", "Contents/Resources/LICENSES/*", "Contents/Resources/LICENSES/**/*"],
+        "macos_icd": ["Contents/Resources/runtime/lib/MoltenVK_icd.json"]
+      },
+      "required_paths": ["Contents/Info.plist", "Contents/MacOS/TriAevum", "Contents/Resources/runtime/TriAevum", "Contents/Resources/forge/TriAevumForge", "Contents/Resources/runtime/forge/oot3d_game_module.dylib", "Contents/Resources/LICENSE", "Contents/Resources/LICENSE_SCOPE.md", "Contents/Resources/THIRD_PARTY_NOTICES.md"]
     }
   },
   "required_roles": [

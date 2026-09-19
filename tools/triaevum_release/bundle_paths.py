@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import os
 from pathlib import Path
 
 try:
@@ -24,6 +25,12 @@ def distribution_path(relative: str) -> Path:
 
 def installation_root() -> Path:
     """Return the public package root beside a frozen Forge executable."""
+    override = os.environ.get("TRIAEVUM_INSTALLATION_ROOT")
+    if override:
+        path = Path(override)
+        if not path.is_absolute():
+            raise ValueError("TRIAEVUM_INSTALLATION_ROOT must be absolute")
+        return path.resolve()
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
     return distribution_root()
@@ -38,4 +45,10 @@ def installation_layout() -> HostLayout:
 
 
 def activation_path(relative: str) -> Path:
+    override = os.environ.get("TRIAEVUM_ACTIVATION_ROOT")
+    if override:
+        root = Path(override)
+        if not root.is_absolute():
+            raise ValueError("TRIAEVUM_ACTIVATION_ROOT must be absolute")
+        return root.resolve() / Path(relative)
     return installation_layout().activation / Path(relative)

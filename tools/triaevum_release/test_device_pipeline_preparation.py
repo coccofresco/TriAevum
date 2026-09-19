@@ -1,4 +1,5 @@
 import os
+import json
 import shutil
 import sys
 import tempfile
@@ -51,6 +52,22 @@ class DevicePreparationTests(unittest.TestCase):
         with patch("device_pipeline_preparation._run") as run:
             self.assertIsNone(prepare_device_pipelines(root=self.root, data_root=self.root, title={}, pack=None))
             run.assert_not_called()
+
+    def test_direct_vulkan_backend_records_an_explicit_unsupported_receipt(self):
+        title = {"device_pipeline_preparation": {
+            "format": FORMAT, "backend": "direct_vulkan_no_nri_preparer"}}
+        messages = []
+        with patch("device_pipeline_preparation._run") as run:
+            result = prepare_device_pipelines(
+                root=self.root, data_root=self.root / "data", title=title,
+                pack=None, report=lambda *message: messages.append(message))
+        self.assertEqual(result["device_pipeline_prewarm"], "unsupported_backend")
+        self.assertFalse(result["game_booted"])
+        self.assertFalse(result["game_coverage_proven"])
+        self.assertEqual(result, json.loads(
+            (self.root / "data/shader-seeds/device-preparation/latest.json").read_text()))
+        self.assertEqual(messages, [("pipelines", "GPU pipeline preparation: unsupported on the direct Vulkan backend")])
+        run.assert_not_called()
 
     def test_device_is_checked_again_on_every_install(self):
         with patch("device_pipeline_preparation._run", side_effect=self.fake_run) as run:

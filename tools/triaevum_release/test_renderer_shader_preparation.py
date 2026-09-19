@@ -11,7 +11,7 @@ class RendererShaderPreparationTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        self.root = Path(self.temp.name).resolve()
         compiler = self.root / "compiler"
         compiler.write_bytes(b"fixture")
         self.title = {"shader_preparation": {"format": FORMAT,

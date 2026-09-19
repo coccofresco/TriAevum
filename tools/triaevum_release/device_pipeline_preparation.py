@@ -155,6 +155,15 @@ def prepare_device_pipelines(*, root: Path, data_root: Path, title: dict,
         return None
     if not isinstance(contract, dict) or contract.get("format") != FORMAT:
         raise ValueError("Unsupported device pipeline preparation contract")
+    if contract.get("backend") == "direct_vulkan_no_nri_preparer":
+        result = {"format": FORMAT, "device_pipeline_prewarm": "unsupported_backend",
+                  "backend": contract["backend"], "game_booted": False,
+                  "game_coverage_proven": False}
+        receipts = data_root.resolve() / "shader-seeds" / "device-preparation"
+        receipts.mkdir(parents=True, exist_ok=True)
+        atomic_write_json(receipts / "latest.json", result)
+        report("pipelines", "GPU pipeline preparation: unsupported on the direct Vulkan backend")
+        return result
     if pack is None or not pack.is_file():
         raise ValueError("Device pipeline preparation requires prepared portable shaders")
     helper = checked_file(root, contract["helper"])

@@ -59,7 +59,10 @@ def validate_bundled_corpus(root: Path, catalog: dict, declared: dict):
     for title in catalog['titles']:
         seed = title.get('shader_preparation', {})
         device = title.get('device_pipeline_preparation', {})
-        if seed.get('mode') != 'portable_pack' or device.get('format') != DEVICE_FORMAT:
+        platform = for_target(catalog['target'])
+        direct_vulkan = (platform.target == 'aarch64-apple-darwin'
+                         and device.get('backend') == 'direct_vulkan_no_nri_preparer')
+        if seed.get('mode') != 'portable_pack' or (device.get('format') != DEVICE_FORMAT and not direct_vulkan):
             raise ValueError('Every title requires the bundled corpus and GPU preparation')
         pack = seed['pack']
         if declared.get(pack['path'], {}).get('role') != 'portable_shader_corpus':
@@ -68,6 +71,8 @@ def validate_bundled_corpus(root: Path, catalog: dict, declared: dict):
         if schema != seed['descriptor_schema_version']:
             raise ValueError('Portable corpus descriptor schema mismatch')
         expected.add(pack['path'])
+        if direct_vulkan:
+            continue
         helper = device['helper']
         checked_file(root, helper)
         if declared.get(helper['path'], {}).get('role') != 'shader_preparation_tool':

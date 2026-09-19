@@ -57,7 +57,7 @@ double MeasureGrassSurfaceCandidates(const GrassAsyncPlacementRequest& request) 
 }
 
 std::vector<GrassAsyncPlacementResult>
-GrassStaticPlacementCache::Resolve(std::span<const GrassAsyncPlacementRequest> requests) {
+GrassStaticPlacementCache::Resolve(std::span<const GrassAsyncPlacementRequest> requests, bool waitUntilReady) {
     std::vector<GrassBudgetDemand> demands;
     std::vector<uint64_t> activeKeys;
     const auto demandKey = [](const auto& request) {
@@ -86,7 +86,10 @@ GrassStaticPlacementCache::Resolve(std::span<const GrassAsyncPlacementRequest> r
     // Admit the scene only when its requested geometry exists. Queue the whole
     // batch first so construction remains parallel. Tickets pin results even
     // when the resident cache evicts an entry before the batch finishes.
-    for (auto& result : results) result.WaitUntilReady();
+    if (waitUntilReady) {
+        for (auto& result : results)
+            result.WaitUntilReady();
+    }
     while (mDemands.size() > std::max<size_t>(32U, activeKeys.size())) {
         auto oldest = mDemands.end();
         for (auto entry = mDemands.begin(); entry != mDemands.end(); ++entry) {

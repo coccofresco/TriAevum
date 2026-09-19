@@ -10,12 +10,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 2
+          fetch-depth: 0
       - name: Install clang-format
         run: |
           sudo apt-get update
           sudo apt-get install -y clang-format-14
       - name: Run clang-format
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha }}
         run: |
-          ./run-clang-format.sh
+          FORMAT_BASE=$(git log --merges -1 --format='%P' | awk '{print $1}')
+          if [ -z "$FORMAT_BASE" ]; then FORMAT_BASE=$(git merge-base HEAD "$BASE_REF"); fi
+          ./run-clang-format.sh "$FORMAT_BASE"
           git diff --exit-code

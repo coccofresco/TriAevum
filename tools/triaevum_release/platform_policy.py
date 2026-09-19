@@ -18,6 +18,13 @@ def resolve_policy(policy: dict, target: str) -> dict:
     if not isinstance(platform, dict):
         raise ValueError(f"Release policy has no platform contract for {target}")
     result = deepcopy(policy)
+    prefix = str(platform.get("path_prefix", "")).strip("/")
+    if prefix:
+        result["allowed_roles"] = {
+            role: [f"{prefix}/{path}" for path in paths]
+            for role, paths in result["allowed_roles"].items()
+        }
+        result["required_paths"] = [f"{prefix}/{path}" for path in result.get("required_paths", [])]
     allowed = result["allowed_roles"]
     for role, paths in platform.get("allowed_roles", {}).items():
         if role in allowed:

@@ -76,6 +76,12 @@ class GfxWindowBackendSDL2 final : public GfxWindowBackend {
     int mWindowWidth = 640;
     int mWindowHeight = 480;
     bool mExclusiveDisplayModeConfigured = false;
+#if defined(__APPLE__)
+    // Native macOS fullscreen does not set SDL_WINDOW_FULLSCREEN_DESKTOP.
+    // Retain the requested presentation flavor so the settings transaction can
+    // distinguish the supported borderless policy from exclusive mode.
+    bool mMacWindowedFullscreen = false;
+#endif
     void (*mOnAllKeysUp)();
 };
 } // namespace Fast

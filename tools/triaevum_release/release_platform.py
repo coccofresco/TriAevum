@@ -27,6 +27,11 @@ LINUX = ReleasePlatform("x86_64-unknown-linux-gnu", "TriAevum",
                         "TriAevumForge", "forge/oot3d_game_module.so",
                         "triaevum_title_aot.so", "x86_64-linux-thinlto-release-v1",
                         "clang++", "llvm-ar", "libtriaevum_title_whole_aot_support.a", ".tar.gz")
+MACOS = ReleasePlatform("aarch64-apple-darwin", "Contents/Resources/runtime/TriAevum",
+                        "Contents/Resources/forge/TriAevumForge",
+                        "Contents/Resources/runtime/forge/oot3d_game_module.dylib",
+                        "triaevum_title_aot.dylib", "arm64-macos-whole-aot-release-v1",
+                        "clang++", "llvm-ar", "libtriaevum_title_whole_aot_support.a", ".zip")
 
 
 def is_windows(value: ReleasePlatform) -> bool:
@@ -34,7 +39,7 @@ def is_windows(value: ReleasePlatform) -> bool:
 
 
 def for_target(target: str) -> ReleasePlatform:
-    for item in (WINDOWS, LINUX):
+    for item in (WINDOWS, LINUX, MACOS):
         if target == item.target:
             return item
     raise ValueError(f"Unsupported release target: {target}")
@@ -42,6 +47,8 @@ def for_target(target: str) -> ReleasePlatform:
 
 def host_platform() -> ReleasePlatform:
     machine = platform.machine().lower()
+    if sys.platform == "darwin" and machine in ("arm64", "aarch64"):
+        return MACOS
     if machine not in ("amd64", "x86_64"):
         raise ValueError(f"This release requires an x86-64 host, not {machine}")
     if sys.platform == "win32":

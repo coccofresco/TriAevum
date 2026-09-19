@@ -52,6 +52,17 @@ def native_helper_environment(executable) -> dict[str, str]:
             raise ValueError("Native helper path cannot contain a Linux loader separator")
         original = environment.get("LD_LIBRARY_PATH", "")
         environment["LD_LIBRARY_PATH"] = directory + (":" + original if original else "")
+    elif sys.platform == "darwin":
+        # The NRI helper opens the Vulkan loader by name. The signed app ships
+        # that loader beside the runtime, so keep this child on the bundle's
+        # audited MoltenVK path rather than requiring a Homebrew installation.
+        runtime = Path(executable).resolve().parent.parent
+        library = runtime / "lib"
+        icd = library / "MoltenVK_icd.json"
+        if library.is_dir() and icd.is_file():
+            original = environment.get("DYLD_LIBRARY_PATH", "")
+            environment["DYLD_LIBRARY_PATH"] = str(library) + (":" + original if original else "")
+            environment["VK_DRIVER_FILES"] = str(icd)
     return environment
 
 

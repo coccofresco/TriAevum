@@ -41,7 +41,10 @@ def load_catalog(root: Path) -> dict:
     if payload.get("format") != FORMAT or payload.get("install_model") != MODEL:
         raise ValueError("Unsupported precompiled-title catalog")
     platform = catalog_platform(payload)
-    for field, expected in (("runtime", platform.runtime), ("native_module", platform.native_module)):
+    expected_paths = (("runtime", platform.runtime), ("native_module", platform.native_module))
+    if platform.target == "aarch64-apple-darwin":
+        expected_paths = (("runtime", "TriAevum"), ("native_module", "forge/oot3d_game_module.dylib"))
+    for field, expected in expected_paths:
         if not isinstance(payload.get(field), dict) or payload[field].get("path") != expected:
             raise ValueError(f"Invalid catalog {field} binding")
     titles = payload.get("titles")

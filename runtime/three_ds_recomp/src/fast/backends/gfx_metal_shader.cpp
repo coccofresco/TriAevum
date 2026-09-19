@@ -244,7 +244,7 @@ MTL::VertexDescriptor* gfx_metal_build_shader(std::string& result, size_t& numFl
         { "o_do_single", M_ARRAY(cc_features.do_single, bool, 2, 2) },
         { "o_do_multiply", M_ARRAY(cc_features.do_multiply, bool, 2, 2) },
         { "o_color_alpha_same", M_ARRAY(cc_features.color_alpha_same, bool, 2) },
-        { "o_pica_texture_env_clamp", cc_features.shader_id == SHADER_ID_PICA_TEXTURE_ENV },
+        { "o_pica_texture_env_clamp", cc_features.shader_id == Fast::SHADER_ID_PICA_TEXTURE_ENV },
         { "o_three_point_filtering", three_point_filtering },
         { "get_vertex_index", (InvokeFunc)get_vertex_index },
         { "append_formula", (InvokeFunc)p_append_formula },
