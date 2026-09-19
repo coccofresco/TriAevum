@@ -80,7 +80,7 @@ and is not migrated automatically.
 - Cel/toon shading and outlines.
 - Ambient occlusion, plus optional reflections, shadows and anti-aliasing.
 - Real widescreen framing and configurable field of view.
-- **60/90 FPS visual interpolation** of the original 30 Hz game state.
+- **60/90/120/180/240/360 FPS visual interpolation** of the original 30 Hz game state.
   Game logic and gameplay speed remain unchanged; this is not 60/90 Hz physics.
 - Azahar-compatible custom textures and texture dumping.
 - Reimplemented **TopScreen** single-screen HUD and menus.

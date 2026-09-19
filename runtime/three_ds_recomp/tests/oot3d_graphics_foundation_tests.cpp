@@ -1663,6 +1663,30 @@ TEST(Oot3dPresentationPacing,
     EXPECT_EQ(interpolated3x.Composition.Interpolation, NativeVisualInterpolationMode::Fixed3x);
     EXPECT_EQ(interpolated3x.Composition.FixedSampleMultiplier, 3U);
 
+    const auto interpolated4x = ResolvePresentationPacingPolicy(FrameRateMode::Interpolated4x);
+    EXPECT_TRUE(interpolated4x.Enabled);
+    EXPECT_EQ(interpolated4x.TargetRateHz, 120U);
+    EXPECT_EQ(interpolated4x.Composition.Interpolation, NativeVisualInterpolationMode::Fixed4x);
+    EXPECT_EQ(interpolated4x.Composition.FixedSampleMultiplier, 4U);
+
+    const auto interpolated6x = ResolvePresentationPacingPolicy(FrameRateMode::Interpolated6x);
+    EXPECT_TRUE(interpolated6x.Enabled);
+    EXPECT_EQ(interpolated6x.TargetRateHz, 180U);
+    EXPECT_EQ(interpolated6x.Composition.Interpolation, NativeVisualInterpolationMode::Fixed6x);
+    EXPECT_EQ(interpolated6x.Composition.FixedSampleMultiplier, 6U);
+
+    const auto interpolated8x = ResolvePresentationPacingPolicy(FrameRateMode::Interpolated8x);
+    EXPECT_TRUE(interpolated8x.Enabled);
+    EXPECT_EQ(interpolated8x.TargetRateHz, 240U);
+    EXPECT_EQ(interpolated8x.Composition.Interpolation, NativeVisualInterpolationMode::Fixed8x);
+    EXPECT_EQ(interpolated8x.Composition.FixedSampleMultiplier, 8U);
+
+    const auto interpolated12x = ResolvePresentationPacingPolicy(FrameRateMode::Interpolated12x);
+    EXPECT_TRUE(interpolated12x.Enabled);
+    EXPECT_EQ(interpolated12x.TargetRateHz, 360U);
+    EXPECT_EQ(interpolated12x.Composition.Interpolation, NativeVisualInterpolationMode::Fixed12x);
+    EXPECT_EQ(interpolated12x.Composition.FixedSampleMultiplier, 12U);
+
     const auto uncapped =
         ResolvePresentationPacingPolicy(FrameRateMode::Uncapped);
     EXPECT_FALSE(uncapped.Enabled);
@@ -1673,7 +1697,8 @@ TEST(Oot3dPresentationPacing,
     EXPECT_FALSE(PresentationPacingPolicyChanged(original, original));
     EXPECT_TRUE(PresentationPacingPolicyChanged(original, interpolated2x));
     EXPECT_TRUE(PresentationPacingPolicyChanged(interpolated2x, interpolated3x));
-    EXPECT_TRUE(PresentationPacingPolicyChanged(interpolated3x, uncapped));
+    EXPECT_TRUE(PresentationPacingPolicyChanged(interpolated3x, interpolated4x));
+    EXPECT_TRUE(PresentationPacingPolicyChanged(interpolated4x, uncapped));
 
     const auto x2Sample = BuildNativeFrameTemporalSample(interpolated2x.Composition,
                                                          NativeFrameTemporalSampleKind::Transition, 10U, 11U, 2U, 0.5F);
