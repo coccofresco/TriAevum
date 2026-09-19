@@ -155,6 +155,22 @@ GraphicsSettingsRuntime::GraphicsSettingsRuntime() {
                    mode == "90") {
             initial.FrameRate = FrameRateMode::Interpolated3x;
             customized = true;
+        } else if (mode == "Interpolated4x" || mode == "4x" ||
+                   mode == "120") {
+            initial.FrameRate = FrameRateMode::Interpolated4x;
+            customized = true;
+        } else if (mode == "Interpolated6x" || mode == "6x" ||
+                   mode == "180") {
+            initial.FrameRate = FrameRateMode::Interpolated6x;
+            customized = true;
+        } else if (mode == "Interpolated8x" || mode == "8x" ||
+                   mode == "240") {
+            initial.FrameRate = FrameRateMode::Interpolated8x;
+            customized = true;
+        } else if (mode == "Interpolated12x" || mode == "12x" ||
+                   mode == "360") {
+            initial.FrameRate = FrameRateMode::Interpolated12x;
+            customized = true;
         } else if (mode == "Uncapped" || mode == "0") {
             initial.FrameRate = FrameRateMode::Uncapped;
             customized = true;
