@@ -348,6 +348,46 @@ entries the compiled code reports them as hooks. `tools/ctr_title/
 match_functions.py` pairs functions of two titles by normalized body and
 call graph (OoT3D to MM3D: few pairs; the engines diverged).
 
+## Loading a save: ir:USER, ptm:u (2026-10-08)
+
+Standard MM3D saves load: a 100% EUR save published online (`MJR` header,
+CRC-16/ARC at `0x1A88`) copied into the save-data directory appears in file
+select and starts in South Clock Town. Getting from "Start playing on this
+file?" to gameplay needed four host services:
+
+- After the file is chosen, the file-select object (`0x602AC0`) runs the
+  Circle Pad Pro dialog on the lower screen (messages `0x5741` "This game
+  supports the Circle Pad Pro...", `0x5742`/`0x5743` "Set Circle Pad Pro to
+  Don't Use", `0x5744` "Use"). Every 64 frames it starts the accessory
+  library (`0x1B424C`), whose connect loop (`0x1D55F0`) issues
+  `RequireConnection(1)` and waits on the connection-status event with a
+  14 ms timeout, retrying four times. The title never asks whether it runs on
+  a New 3DS.
+- That needed `svcCreateMemoryBlock` (the receive buffer), finite
+  `WaitSynchronization1` timeouts and event release on the last
+  `CloseHandle` (commit c98e981).
+- With no accessory the dialog never ends on our host, and the top screen
+  stays black. The host now behaves as a New 3DS, whose ir module presents
+  the built-in C-stick and ZL/ZR as a connected Circle Pad Pro (as Citra and
+  Azahar do). `RequireConnection(1)` sets the connection fields of the shared
+  header and signals the event. The Extra HID device answers
+  `ReadCalibrationData` and `ConfigureHIDPolling`. Afterwards it puts one
+  6-byte input report per requested period into the receive ring, as
+  `0xA5`-framed packets with CRC-8. The report carries the 12-bit C-stick,
+  ZL, ZR and a full battery. The window host projects
+  `ThreeDsRecomp::Input::ProjectExtraHid` (New 3DS profile, absolute stick
+  samples only) into it every frame; the module ABI has no C-stick yet.
+  `SetIrExtraHidAttached(false)` gives the Old 3DS behaviour.
+- Once connected, the title opens `ptm:u` (battery level, shell and adapter
+  state, `GetStepHistory`). The host answers as a charged, open console with
+  an empty pedometer.
+
+With these the developer launch reaches gameplay deterministically:
+`inputs/save100_play.json` plus `SAVE_SEED=saves/eur-100` (both in the work
+directory) loads the save, enters the Clock Tower and walks. Tests:
+`TestIrUserCirclePadPro`, `TestPtmUser`, `TestEventResourceRelease` and the
+finite-timeout case of `TestWaitSynchronization1`.
+
 ## Next steps
 
 1. Continue past the intro to the title screen and file select, one missing

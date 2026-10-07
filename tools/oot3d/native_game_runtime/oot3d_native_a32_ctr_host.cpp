@@ -1181,6 +1181,10 @@ NativeA32HostResult NativeA32CtrHostServices::HandleSvc(
             return HandleNdmRequest(state, memory, context, sessionType,
                                     commandBuffer, std::move(event));
         }
+        if (*sessionType == "client_session:ptm:u") {
+            return HandlePtmRequest(state, memory, context, sessionType,
+                                    commandBuffer, std::move(event));
+        }
         if (*sessionType == "client_session:ir:USER") {
             return HandleIrRequest(state, memory, context, sessionType,
                                    commandBuffer, std::move(event));
@@ -1271,7 +1275,7 @@ NativeA32HostResult NativeA32CtrHostServices::HandleSvc(
                     serviceName == "gsp::Gpu" || serviceName == "dsp::DSP" ||
                     serviceName == "cfg:u" || serviceName == "hid:USER" ||
                     serviceName == "ndm:u" || serviceName == "y2r:u" ||
-                    serviceName == "ir:USER") {
+                    serviceName == "ir:USER" || serviceName == "ptm:u") {
                     const uint32_t session =
                         CreateHandle("client_session:" + serviceName);
                     if (memory.Write32(commandBuffer,

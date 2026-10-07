@@ -277,6 +277,14 @@ class NativeA32CtrHostServices final : public NativeA32HostServices {
     AdvanceHidToCurrentTick(NativeA32Memory& memory,
                             const NativeA32HidState& state);
     NativeA32CtrHidRuntimeProfile HidRuntimeProfile() const noexcept;
+    // ir:USER: whether a Circle Pad Pro (Extra HID: C-stick, ZL, ZR) answers
+    // RequireConnection. On by default, as on a New 3DS, whose ir module
+    // presents the built-in C-stick and ZL/ZR as a connected Circle Pad Pro.
+    void SetIrExtraHidAttached(bool attached) noexcept;
+    // Puts the Circle Pad Pro input reports due by the current tick into the
+    // ir:USER receive buffer; true when the receive event was signalled.
+    bool AdvanceIrToCurrentTick(NativeA32Memory& memory,
+                                const ThreeDsRecomp::Input::ExtraHidState& state);
     uint64_t SystemTicks() const;
     uint32_t FallbackPc() const;
     oot3d::recomp::a32::FallbackReason FallbackReason() const;
@@ -417,6 +425,13 @@ class NativeA32CtrHostServices final : public NativeA32HostServices {
         oot3d::recomp::a32::GuestState& state, NativeA32Memory& memory,
         NativeA32HostContext& context, const std::optional<std::string>& sessionType,
         uint32_t commandBuffer, NativeA32CtrSvcEvent event);
+    bool PutIrReceivePacket(NativeA32Memory& memory, std::span<const uint8_t> payload);
+    void HandleExtraHidRequest(NativeA32Memory& memory, std::span<const uint8_t> request);
+    void SetIrConnection(NativeA32Memory& memory, bool connected);
+    NativeA32HostResult HandlePtmRequest(
+        oot3d::recomp::a32::GuestState& state, NativeA32Memory& memory,
+        NativeA32HostContext& context, const std::optional<std::string>& sessionType,
+        uint32_t commandBuffer, NativeA32CtrSvcEvent event);
     NativeA32HostResult HandleNdmRequest(
         oot3d::recomp::a32::GuestState& state, NativeA32Memory& memory,
         NativeA32HostContext& context, const std::optional<std::string>& sessionType,
@@ -510,10 +525,23 @@ class NativeA32CtrHostServices final : public NativeA32HostServices {
     std::array<std::vector<uint8_t>, 8> mDspPipeOutput;
     std::shared_ptr<KernelObject> mHidSharedMemory;
     std::array<std::shared_ptr<KernelObject>, 5> mHidEvents{};
-    // ir:USER receive, send and connection-status events (never signalled:
-    // no infrared accessory is connected).
+    // ir:USER receive, send and connection-status events.
     std::array<std::shared_ptr<KernelObject>, 3> mIrEvents{};
     bool mIrInitialized = false;
+    // The block given to InitializeIrNopShared and its receive ring
+    // (3dbrew "IRUSER Shared Memory": packet table at 0x20, then data).
+    std::shared_ptr<KernelObject> mIrSharedMemory;
+    uint32_t mIrReceiveBufferSize = 0;
+    uint32_t mIrReceivePacketCapacity = 0;
+    uint32_t mIrReceiveBegin = 0;
+    uint32_t mIrReceiveEnd = 0;
+    uint32_t mIrReceiveCount = 0;
+    bool mIrExtraHidAttached = true;
+    bool mIrExtraHidConnected = false;
+    // Input report period requested by the title (0: not polling).
+    uint64_t mIrExtraHidPeriodTicks = 0;
+    uint64_t mIrNextExtraHidReportTick = 0;
+    uint64_t mIrExtraHidReportsSent = 0;
     NativeA32CtrHidRuntimeProfile mHidRuntimeProfile;
     uint64_t mNextHidPadTick = 0;
     uint64_t mNextHidAccelerometerTick = 0;

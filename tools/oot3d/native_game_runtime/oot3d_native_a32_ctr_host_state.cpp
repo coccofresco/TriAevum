@@ -45,6 +45,10 @@ nlohmann::json NativeA32CtrHostServices::CaptureState() const {
     for (const auto& object : mHidEvents) {
         registerObject(object);
     }
+    for (const auto& object : mIrEvents) {
+        registerObject(object);
+    }
+    registerObject(mIrSharedMemory);
     const auto objectId = [&](const std::shared_ptr<KernelObject>& object) {
         return object ? objectIds.at(object.get()) : 0U;
     };
@@ -233,6 +237,20 @@ nlohmann::json NativeA32CtrHostServices::CaptureState() const {
          mHidGyroscopeScheduleInitialized},
         {"hid_accelerometer_enable_count", mHidAccelerometerEnableCount},
         {"hid_gyroscope_enable_count", mHidGyroscopeEnableCount},
+        {"ir",
+         {{"events", {objectId(mIrEvents[0]), objectId(mIrEvents[1]), objectId(mIrEvents[2])}},
+          {"initialized", mIrInitialized},
+          {"shared_memory", objectId(mIrSharedMemory)},
+          {"receive_buffer_size", mIrReceiveBufferSize},
+          {"receive_packet_capacity", mIrReceivePacketCapacity},
+          {"receive_begin", mIrReceiveBegin},
+          {"receive_end", mIrReceiveEnd},
+          {"receive_count", mIrReceiveCount},
+          {"extra_hid_attached", mIrExtraHidAttached},
+          {"extra_hid_connected", mIrExtraHidConnected},
+          {"extra_hid_period_ticks", mIrExtraHidPeriodTicks},
+          {"next_extra_hid_report_tick", mIrNextExtraHidReportTick},
+          {"extra_hid_reports_sent", mIrExtraHidReportsSent}}},
         {"ndm_scheduler_suspended", mNdmSchedulerSuspended},
         {"ndm_scheduler_runs_in_background", mNdmSchedulerRunsInBackground},
         {"ndm_default_daemons", mNdmDefaultDaemons},
@@ -648,6 +666,28 @@ bool NativeA32CtrHostServices::RestoreState(const nlohmann::json& state,
             state.at("hid_accelerometer_enable_count").get<uint32_t>();
         staged.mHidGyroscopeEnableCount =
             state.at("hid_gyroscope_enable_count").get<uint32_t>();
+        // States written before ir:USER was emulated have no "ir" entry.
+        if (const auto ir = state.find("ir"); ir != state.end()) {
+            const auto& events = ir->at("events");
+            if (events.size() != staged.mIrEvents.size()) {
+                throw std::runtime_error("ir:USER event count is invalid");
+            }
+            for (size_t index = 0; index < staged.mIrEvents.size(); ++index) {
+                staged.mIrEvents[index] = object(events[index].get<uint32_t>());
+            }
+            staged.mIrInitialized = ir->at("initialized").get<bool>();
+            staged.mIrSharedMemory = object(ir->at("shared_memory").get<uint32_t>());
+            staged.mIrReceiveBufferSize = ir->at("receive_buffer_size").get<uint32_t>();
+            staged.mIrReceivePacketCapacity = ir->at("receive_packet_capacity").get<uint32_t>();
+            staged.mIrReceiveBegin = ir->at("receive_begin").get<uint32_t>();
+            staged.mIrReceiveEnd = ir->at("receive_end").get<uint32_t>();
+            staged.mIrReceiveCount = ir->at("receive_count").get<uint32_t>();
+            staged.mIrExtraHidAttached = ir->at("extra_hid_attached").get<bool>();
+            staged.mIrExtraHidConnected = ir->at("extra_hid_connected").get<bool>();
+            staged.mIrExtraHidPeriodTicks = ir->at("extra_hid_period_ticks").get<uint64_t>();
+            staged.mIrNextExtraHidReportTick = ir->at("next_extra_hid_report_tick").get<uint64_t>();
+            staged.mIrExtraHidReportsSent = ir->at("extra_hid_reports_sent").get<uint64_t>();
+        }
         staged.mNdmSchedulerSuspended =
             state.at("ndm_scheduler_suspended").get<bool>();
         staged.mNdmSchedulerRunsInBackground =

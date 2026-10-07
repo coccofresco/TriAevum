@@ -969,7 +969,18 @@ bool NativeA32WindowSession::UpdateGuestServicesForRefresh(
     throw std::runtime_error(
         "native HID sample could not be written to shared memory");
   }
-  if (hidUpdate.EventsSignaled &&
+  // The Circle Pad Pro / New 3DS channel (ir:USER): ZL, ZR and an absolute
+  // C-stick; a relative (mouse) camera sample is not a stick position.
+  auto extraHid = ThreeDsRecomp::Input::ProjectExtraHid(
+      inputFrame, ThreeDsRecomp::Input::HardwareProfile::New3ds);
+  if (inputFrame.CStick.Kind !=
+      Oot3dNativeGame::NativeFreeCameraInputKind::Absolute) {
+    extraHid.CStickX = 0;
+    extraHid.CStickY = 0;
+  }
+  const bool irSignaled =
+      hostServices.AdvanceIrToCurrentTick(process.Memory(), extraHid);
+  if ((hidUpdate.EventsSignaled || irSignaled) &&
       processResult.Kind !=
           Oot3dNativeGame::NativeA32ProcessRunKind::Terminated) {
     phaseStart = std::chrono::steady_clock::now();

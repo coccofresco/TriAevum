@@ -98,6 +98,61 @@ NativeA32HostResult NativeA32CtrHostServices::HandleNdmRequest(
 }
 
 // SendSyncRequest on a client session of cfg:u.
+// ptm:u (power and pedometer, 3dbrew "PTM Services"): a console on its
+// charger with the shell open, a full battery and no steps walked.
+NativeA32HostResult NativeA32CtrHostServices::HandlePtmRequest(
+    oot3d::recomp::a32::GuestState& state, NativeA32Memory& memory,
+    NativeA32HostContext&, const std::optional<std::string>&,
+    uint32_t commandBuffer, NativeA32CtrSvcEvent event) {
+    struct PtmValue {
+        uint32_t Command;
+        const char* Name;
+        uint32_t Value;
+    };
+    constexpr std::array<PtmValue, 6> kValues{{
+        {0x0005U, "GetAdapterState", 1U},
+        {0x0006U, "GetShellState", 1U},
+        {0x0007U, "GetBatteryLevel", 5U},
+        {0x0008U, "GetBatteryChargeState", 0U},
+        {0x0009U, "GetPedometerState", 0U},
+        {0x000CU, "GetTotalStepCount", 0U},
+    }};
+    const uint32_t command = event.Detail >> 16U;
+    if (event.Detail == 0x000B00C2U) {
+        // GetStepHistory(hours, start time, mapped buffer of u16 per hour).
+        uint32_t descriptor = 0, address = 0;
+        if (memory.Read32(commandBuffer + 16U, &descriptor) &&
+            memory.Read32(commandBuffer + 20U, &address) && (descriptor & 0xEU) == 0xCU) {
+            const std::vector<uint8_t> steps(descriptor >> 4U);
+            if (memory.WriteBytes(address, steps) &&
+                memory.Write32(commandBuffer, 0x000B0042U) &&
+                memory.Write32(commandBuffer + 4U, kResultSuccess) &&
+                memory.Write32(commandBuffer + 8U, descriptor) &&
+                memory.Write32(commandBuffer + 12U, address)) {
+                state.r[0] = kResultSuccess;
+                event.Name += ":GetStepHistory";
+                event.Handled = true;
+                mSvcEvents.push_back(std::move(event));
+                return {NativeA32HostAction::Resume};
+            }
+        }
+    }
+    for (const auto& entry : kValues) {
+        if (entry.Command == command &&
+            memory.Write32(commandBuffer, (command << 16U) | 0x80U) &&
+            memory.Write32(commandBuffer + 4U, kResultSuccess) &&
+            memory.Write32(commandBuffer + 8U, entry.Value)) {
+            state.r[0] = kResultSuccess;
+            event.Name += std::string(":") + entry.Name;
+            event.Handled = true;
+            mSvcEvents.push_back(std::move(event));
+            return {NativeA32HostAction::Resume};
+        }
+    }
+    mSvcEvents.push_back(std::move(event));
+    return {NativeA32HostAction::Wait};
+}
+
 NativeA32HostResult NativeA32CtrHostServices::HandleCfgRequest(
     oot3d::recomp::a32::GuestState& state, NativeA32Memory& memory,
     NativeA32HostContext& context, const std::optional<std::string>& sessionType,

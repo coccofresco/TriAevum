@@ -10,6 +10,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <span>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -500,6 +501,13 @@ void TestWaitSynchronization1() {
     NativeA32CtrHostServices host(MakeConfig());
     const oot3d::recomp::a32::Registry registry{};
     NativeA32Process process(registry, host);
+    // A primary thread receives the result of a timed-out wait.
+    std::string error;
+    Require(process.MapRegion({"text", 0x00100000U, 0x1000U, false, true, {}}, &error) &&
+                process.CreatePrimaryThread(
+                    {0x00100000U, 0x0FFC0000U, 0x1000U, 0x1FF82000U, 0x1000U, 0, 0, 0, 0},
+                    &error),
+            error);
     NativeA32HostContext context{process, 0};
     GuestState state{};
     state.r[1] = 0;  // one-shot event
@@ -523,8 +531,14 @@ void TestWaitSynchronization1() {
             "cannot signal the event");
     Require(wait(~uint64_t{0}) == NativeA32HostAction::Resume && state.r[0] == 0,
             "WaitSynchronization1 on a signaled event did not succeed");
+    // A finite timeout waits; the deadline resumes the thread with the
+    // kernel's timeout result.
     Require(wait(1000) == NativeA32HostAction::Wait,
-            "WaitSynchronization1 accepted an unmodelled finite timeout");
+            "WaitSynchronization1 with a finite timeout did not wait");
+    host.AdvanceSystemTicks(1000);
+    const GuestState* waiter = process.ThreadState(0);
+    Require(waiter != nullptr && waiter->r[0] == 0x09401BFEU,
+            "WaitSynchronization1 deadline did not report a timeout");
     state = {};
     state.r[0] = 0x12345678U;
     Require(host.HandleSvc(0x24, state, memory, context).Action ==
@@ -532,10 +546,242 @@ void TestWaitSynchronization1() {
             "WaitSynchronization1 accepted an unknown handle");
 }
 
+// Closing the last handle of an event returns it to the resource limit, so a
+// title that creates and closes events in a loop never exhausts it.
+void TestEventResourceRelease() {
+    NativeA32Memory memory;
+    NativeA32CtrHostServices host(MakeConfig());
+    const oot3d::recomp::a32::Registry registry{};
+    NativeA32Process process(registry, host);
+    NativeA32HostContext context{process, 0};
+    for (int round = 0; round < 0x60; ++round) {
+        GuestState state{};
+        Require(host.HandleSvc(0x17, state, memory, context).Action ==
+                        NativeA32HostAction::Resume &&
+                    state.r[0] == 0,
+                "CreateEvent failed after closed events");
+        const uint32_t event = state.r[1];
+        state = {};
+        state.r[0] = event;
+        Require(host.HandleSvc(0x23, state, memory, context).Action ==
+                        NativeA32HostAction::Resume &&
+                    state.r[0] == 0,
+                "CloseHandle on an event failed");
+    }
+}
+
+uint8_t IrCrc8ForTest(std::span<const uint8_t> bytes) {
+    uint8_t crc = 0;
+    for (const uint8_t byte : bytes) {
+        crc ^= byte;
+        for (int bit = 0; bit < 8; ++bit) {
+            crc = static_cast<uint8_t>((crc & 0x80U) != 0U ? (crc << 1U) ^ 0x07U : crc << 1U);
+        }
+    }
+    return crc;
+}
+
+// ir:USER with the default New 3DS behaviour: a CreateMemoryBlock buffer, a
+// Circle Pad Pro that connects on RequireConnection(1), answers calibration
+// and polling requests through the receive ring, and stops on Disconnect.
+void TestIrUserCirclePadPro() {
+    NativeA32Memory memory;
+    std::string error;
+    constexpr uint32_t kBlock = 0x08000000U;
+    constexpr uint32_t kCommand = 0x1FF82080U;
+    Require(memory.MapRegion({"tls", 0x1FF82000, 0x1000, true, false, {}}, &error) &&
+                memory.MapRegion({"ir", kBlock, 0x1000, true, false, {}}, &error),
+            error);
+    NativeA32CtrHostServices host(MakeConfig());
+    const oot3d::recomp::a32::Registry registry{};
+    NativeA32Process process(registry, host);
+    NativeA32HostContext context{process, 0};
+    GuestState state{};
+    state.thread_pointer = 0x1FF82000;
+    const auto request = [&](uint32_t session, std::initializer_list<uint32_t> words) {
+        uint32_t address = kCommand;
+        for (const uint32_t word : words) {
+            Require(memory.Write32(address, word), "cannot write an IPC request");
+            address += 4U;
+        }
+        state.r[0] = session;
+        state.thread_pointer = 0x1FF82000;
+        if (host.HandleSvc(0x32, state, memory, context).Action !=
+            NativeA32HostAction::Resume) {
+            std::ostringstream message;
+            message << "IPC request 0x" << std::hex << *words.begin() << " did not resume";
+            Fail(message.str());
+        }
+        uint32_t result = 1;
+        Require(memory.Read32(kCommand + 4U, &result), "cannot read an IPC result");
+        return result;
+    };
+    const auto read8 = [&](uint32_t address) {
+        uint8_t value = 0xFF;
+        Require(memory.Read8(address, &value), "cannot read IR shared memory");
+        return value;
+    };
+    const auto read32 = [&](uint32_t address) {
+        uint32_t value = 0xFFFFFFFFU;
+        Require(memory.Read32(address, &value), "cannot read IR shared memory");
+        return value;
+    };
+    const auto signalled = [&](uint32_t handle) {
+        state = {};
+        state.r[0] = handle;
+        return host.HandleSvc(0x24, state, memory, context).Action ==
+                   NativeA32HostAction::Resume &&
+               state.r[0] == 0;
+    };
+
+    constexpr std::array<uint8_t, 5> portName{'s', 'r', 'v', ':', 0};
+    Require(memory.WriteBytes(0x1FF82100, portName), "cannot write named port");
+    state.r[1] = 0x1FF82100;
+    Require(host.HandleSvc(0x2D, state, memory, context).Action == NativeA32HostAction::Resume,
+            "ConnectToPort did not open srv:");
+    const uint32_t srv = state.r[1];
+    Require(request(srv, {0x00050100, 0x553A7269, 0x00524553, 7}) == 0,
+            "srv:GetServiceHandle did not open ir:USER");
+    const uint32_t ir = read32(kCommand + 12U);
+
+    state = {};
+    state.r[0] = 0;
+    state.r[1] = kBlock;
+    state.r[2] = 0x1000;
+    state.r[3] = 3;
+    Require(host.HandleSvc(0x1E, state, memory, context).Action == NativeA32HostAction::Resume &&
+                state.r[0] == 0,
+            "CreateMemoryBlock did not share the IR buffer");
+    const uint32_t block = state.r[1];
+    Require(memory.Write32(kBlock + 8U, 0xFFFFFFFFU), "cannot dirty the IR header");
+    // (shared size, receive size, packets, send size, packets, baud, handle)
+    Require(request(ir, {0x00180182, 0x1000, 0x800, 8, 0x400, 8, 4, 0, block}) == 0 &&
+                read8(kBlock + 0x08U) == 0 && read8(kBlock + 0x0EU) == 1,
+            "InitializeIrNopShared did not reset the shared header");
+    Require(request(ir, {0x000C0000}) == 0, "GetConnectionStatusEvent failed");
+    const uint32_t connectionEvent = read32(kCommand + 12U);
+    Require(request(ir, {0x000A0000}) == 0, "GetReceiveEvent failed");
+    const uint32_t receiveEvent = read32(kCommand + 12U);
+    Require(!signalled(connectionEvent), "connection event signalled before a request");
+
+    Require(request(ir, {0x00060040, 1}) == 0 && read8(kBlock + 0x08U) == 2 &&
+                read8(kBlock + 0x0AU) == 2 && read8(kBlock + 0x0CU) == 1 &&
+                signalled(connectionEvent),
+            "RequireConnection(1) did not connect the Circle Pad Pro");
+
+    // ReadCalibrationData(offset 0x10, size 0x10) answers at once.
+    constexpr std::array<uint8_t, 6> calibration{2, 0, 0x10, 0, 0x10, 0};
+    Require(memory.WriteBytes(0x1FF82200, calibration), "cannot write the IR payload");
+    Require(request(ir, {0x000D0042, 6, (6U << 14U) | 2U, 0x1FF82200}) == 0 &&
+                signalled(receiveEvent),
+            "ReadCalibrationData did not answer");
+    constexpr uint32_t kTable = kBlock + 0x20U;
+    constexpr uint32_t kData = kTable + 8U * 8U;
+    Require(read32(kBlock + 0x10U) == 0 && read32(kBlock + 0x14U) == 1 &&
+                read32(kBlock + 0x18U) == 1 && read32(kTable) == 0 && read32(kTable + 4U) == 25,
+            "calibration packet is not queued");
+    std::array<uint8_t, 25> packet{};
+    Require(memory.ReadBytes(kData, packet), "cannot read the calibration packet");
+    Require(packet[0] == 0xA5 && packet[1] == 0 && packet[2] == 21 && packet[3] == 0x11 &&
+                packet[4] == 0x10 && packet[6] == 0x10 && packet[8] == 0xFF &&
+                packet[24] == IrCrc8ForTest(std::span<const uint8_t>(packet).first(24)),
+            "calibration packet framing is wrong");
+    Require(request(ir, {0x00190040, 1}) == 0 && read32(kBlock + 0x18U) == 0,
+            "ReleaseReceivedData did not free the packet");
+    Require(request(ir, {0x00190040, 1}) != 0, "ReleaseReceivedData accepted an empty ring");
+
+    // ConfigureHIDPolling(8 ms): one report per elapsed period.
+    constexpr std::array<uint8_t, 3> polling{1, 8, 0};
+    Require(memory.WriteBytes(0x1FF82200, polling), "cannot write the IR payload");
+    Require(request(ir, {0x000D0042, 3, (3U << 14U) | 2U, 0x1FF82200}) == 0,
+            "ConfigureHIDPolling failed");
+    const ThreeDsRecomp::Input::ExtraHidState input{
+        ThreeDsRecomp::Input::ButtonMask(ThreeDsRecomp::Input::Button::Zr),
+        ThreeDsRecomp::Input::kNativeStickMaximum, 0};
+    Require(!host.AdvanceIrToCurrentTick(memory, input), "report sent before its period");
+    host.AdvanceSystemTicks(268111856ULL * 8U / 1000U);
+    Require(host.AdvanceIrToCurrentTick(memory, input) && signalled(receiveEvent) &&
+                read32(kBlock + 0x18U) == 1 && read32(kTable + 8U) == 0 &&
+                read32(kTable + 12U) == 10,
+            "polling did not queue one input report");
+    std::array<uint8_t, 10> report{};
+    Require(memory.ReadBytes(kData, report), "cannot read the input report");
+    // x = 0xFFF (full right), y = 0x800 (centre); ZR held, ZL and R not held.
+    Require(report[0] == 0xA5 && report[2] == 6 && report[3] == 0x10 && report[4] == 0xFF &&
+                report[5] == 0x0F && report[6] == 0x80 && report[7] == 0xBF &&
+                report[9] == IrCrc8ForTest(std::span<const uint8_t>(report).first(9)),
+            "input report encoding is wrong");
+    Require(host.CaptureState().at("ir").at("extra_hid_reports_sent").get<uint64_t>() == 1,
+            "IR state is missing from the host state");
+
+    Require(request(ir, {0x00090000}) == 0 && read8(kBlock + 0x08U) == 0 &&
+                read8(kBlock + 0x0CU) == 0 && signalled(connectionEvent),
+            "Disconnect did not drop the connection");
+    host.AdvanceSystemTicks(268111856ULL);
+    Require(!host.AdvanceIrToCurrentTick(memory, input), "reports continued after Disconnect");
+
+    // An Old 3DS without the accessory: the request never connects.
+    host.SetIrExtraHidAttached(false);
+    Require(request(ir, {0x00060040, 1}) == 0 && read8(kBlock + 0x08U) == 0 &&
+                !signalled(connectionEvent),
+            "a detached Circle Pad Pro connected");
+}
+
+// ptm:u answers as a charged, open console with an empty pedometer.
+void TestPtmUser() {
+    NativeA32Memory memory;
+    std::string error;
+    Require(memory.MapRegion({"tls", 0x1FF82000, 0x1000, true, false, {}}, &error), error);
+    NativeA32CtrHostServices host(MakeConfig());
+    const oot3d::recomp::a32::Registry registry{};
+    NativeA32Process process(registry, host);
+    NativeA32HostContext context{process, 0};
+    GuestState state{};
+    const auto request = [&](uint32_t session, std::initializer_list<uint32_t> words) {
+        uint32_t address = 0x1FF82080U;
+        for (const uint32_t word : words) {
+            Require(memory.Write32(address, word), "cannot write a ptm:u request");
+            address += 4U;
+        }
+        state = {};
+        state.thread_pointer = 0x1FF82000;
+        state.r[0] = session;
+        return host.HandleSvc(0x32, state, memory, context).Action ==
+               NativeA32HostAction::Resume;
+    };
+    const auto word = [&](uint32_t offset) {
+        uint32_t value = 0xFFFFFFFFU;
+        Require(memory.Read32(0x1FF82080U + offset, &value), "cannot read a ptm:u response");
+        return value;
+    };
+    constexpr std::array<uint8_t, 5> portName{'s', 'r', 'v', ':', 0};
+    Require(memory.WriteBytes(0x1FF82100, portName), "cannot write named port");
+    state.r[1] = 0x1FF82100;
+    Require(host.HandleSvc(0x2D, state, memory, context).Action == NativeA32HostAction::Resume,
+            "ConnectToPort did not open srv:");
+    const uint32_t srv = state.r[1];
+    Require(request(srv, {0x00050100, 0x3A6D7470, 0x00000075, 5}) && word(4) == 0,
+            "srv:GetServiceHandle did not open ptm:u");
+    const uint32_t ptm = word(12);
+    Require(request(ptm, {0x00070000}) && word(0) == 0x00070080 && word(4) == 0 && word(8) == 5,
+            "GetBatteryLevel is not full");
+    Require(request(ptm, {0x00060000}) && word(8) == 1, "GetShellState is not open");
+    Require(memory.Write32(0x1FF82300, 0xFFFFFFFFU), "cannot dirty the step buffer");
+    Require(request(ptm, {0x000B00C2, 2, 0, 0, (4U << 4U) | 0xCU, 0x1FF82300}) &&
+                word(0) == 0x000B0042 && word(4) == 0 && word(12) == 0x1FF82300,
+            "GetStepHistory failed");
+    uint32_t steps = 1;
+    Require(memory.Read32(0x1FF82300, &steps) && steps == 0, "GetStepHistory left steps");
+    Require(!request(ptm, {0x00010042, 0, 0, 0}), "an unmodelled ptm:u command resumed");
+}
+
 int main() {
     TestQueryMemory();
     TestGetThreadId();
     TestWaitSynchronization1();
+    TestEventResourceRelease();
+    TestIrUserCirclePadPro();
+    TestPtmUser();
     TestDeferredDeviceMemory();
     TestDeferredDeviceFailureAndOverwrite();
     TestGpuMemoryWriteOwnership();

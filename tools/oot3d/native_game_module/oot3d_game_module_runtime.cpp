@@ -570,7 +570,12 @@ Oot3dGameModuleRuntime::RunFrame(const TriAevumFrameInputV1 &input,
       SetError(error, "native HID state could not be updated");
       return TRIAEVUM_MODULE_TITLE_ERROR_V1;
     }
-    if (hid.EventsSignaled && !mImpl->RunUntilWait(error)) {
+    // The module ABI carries no C-stick: the Circle Pad Pro channel reports
+    // ZL/ZR with a centred stick.
+    const bool irSignaled = mImpl->HostServices.AdvanceIrToCurrentTick(
+        mImpl->Process.Memory(),
+        {inputState.Buttons & ThreeDsRecomp::Input::kExtraHidButtonMask, 0, 0});
+    if ((hid.EventsSignaled || irSignaled) && !mImpl->RunUntilWait(error)) {
       return TRIAEVUM_MODULE_TITLE_ERROR_V1;
     }
     if (!mImpl->HostServices.SignalVBlank(mImpl->Process.Memory()) ||
