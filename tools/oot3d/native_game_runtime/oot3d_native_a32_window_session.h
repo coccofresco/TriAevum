@@ -5,6 +5,7 @@
 // _frame.cpp (frame loop and renderer side) and _savestate.cpp.
 
 #include "three_ds_sdl_controller.h"
+#include "triaevum_title_adapter.h"
 #include "oot3d_prebackend_budget.h"
 #include "oot3d_cpu_phase_probe.h"
 #include "fast/renderer/frame_time_distribution.h"
@@ -338,6 +339,8 @@ private:
   std::vector<uint32_t> blockEntryHooks{};
   std::span<const uint32_t> picaCompositionHooks{};
   std::span<const uint32_t> typedGameplayObservableExitHooks{};
+  // Resolved from the process image's code.bin (triaevum_title_adapter.h).
+  Oot3dNativeGame::TitleAdapter titleAdapter{Oot3dNativeGame::TitleAdapter::Generic};
   bool enableCompiledFunctions{};
   bool wholeAotAvailable{};
   bool enableWholeAot{};

@@ -54,6 +54,14 @@ void NativeA32WindowSession::Setup() {
   if (!manifest.has_value()) {
     throw std::runtime_error(error);
   }
+  titleAdapter = Oot3dNativeGame::ResolveTitleAdapter(manifest->CodeBinSha256);
+  if (titleAdapter != Oot3dNativeGame::TitleAdapter::Oot3dEur &&
+      launch.UiProfile == Oot3dNativeGame::Oot3dUiProfile::TopScreen) {
+    throw std::runtime_error(
+        "the TopScreen UI profile belongs to OoT3D EUR; run this title with --ui-profile oot3d");
+  }
+  std::cerr << "TRIAEVUM_TITLE_ADAPTER " << Oot3dNativeGame::TitleAdapterName(titleAdapter)
+            << " code_sha256=" << manifest->CodeBinSha256 << '\n';
 #if defined(__SWITCH__)
   WriteSwitchBootStage("manifest_loaded");
 #endif
@@ -283,6 +291,12 @@ void NativeA32WindowSession::Setup() {
   blockEntryHooks.erase(
       std::unique(blockEntryHooks.begin(), blockEntryHooks.end()),
       blockEntryHooks.end());
+  if (titleAdapter != Oot3dNativeGame::TitleAdapter::Oot3dEur) {
+    // Every hook above names OoT3D EUR code: another title has none.
+    blockEntryHooks.clear();
+    picaCompositionHooks = {};
+    typedGameplayObservableExitHooks = {};
+  }
 #if defined(__SWITCH__)
   gSwitchBlockHookCount = blockEntryHooks.size();
   gSwitchBlockHooksSorted =
@@ -333,13 +347,22 @@ void NativeA32WindowSession::Setup() {
   enableManualCompiledFunctions =
       !launch.DisableManualCompiledFunctions;
 #endif
-  trueAotEntries = Oot3dNativeGame::Oot3dTrueAotBlockEntryPoints();
+  const bool oot3dAdapter = titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur;
+  if (!oot3dAdapter) {
+    // Hand-written replacements, typed gameplay and the mass/true-AOT
+    // block sets are OoT3D code; another title runs its own whole AOT.
+    enableManualCompiledFunctions = false;
+    enableMassAot = false;
+    enableTrueAot = false;
+  }
+  trueAotEntries = oot3dAdapter ? Oot3dNativeGame::Oot3dTrueAotBlockEntryPoints()
+                                : std::span<const uint32_t>{};
   compiledFunctionEntries =
       Oot3dNativeGame::Oot3dCompiledFunctionEntryPoints(
           enableWholeAot,
           enableCompiledFunctions && enableManualCompiledFunctions);
-  typedGameplayEntries =
-      Oot3dNativeGame::Oot3dTypedGameplayEntryPoints();
+  typedGameplayEntries = oot3dAdapter ? Oot3dNativeGame::Oot3dTypedGameplayEntryPoints()
+                                      : std::span<const uint32_t>{};
   if (enableMassAot) {
     const auto massAotEntries = Oot3dNativeGame::Oot3dMassAotBlockEntryPoints();
     nativeCandidateEntries.insert(nativeCandidateEntries.end(),

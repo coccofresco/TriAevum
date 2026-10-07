@@ -17,6 +17,23 @@ Decompressed code.bin SHA-256
 `0x00100000` (0x51CFB4 bytes), rodata `0x0061D000`, data `0x0064B000`, BSS to
 `0x007CF000`. Same Grezzo engine generation as OoT3D.
 
+## N64 evidence
+
+As OoT N64 was for OoT3D ([offline semantic source](OOT3D_OFFLINE_SEMANTIC_SOURCE.md),
+[rehosting plan](OOT3D_SEMANTIC_REHOSTING_PLAN.md)), Majora's Mask N64 is
+read-only, offline evidence: the US ROM (SHA-1
+`d6133ace5afaa0882cf214cf88daba39e266c078`, the baserom `zeldaret/mm`
+expects), the `zeldaret/mm` decompilation (`56fa21dd0031a17cfc9e355f609542617598a265`)
+and the 2Ship2Harkinian PC port (`e8757c14a0fc8701461b0458c9ed72c118bcfc67`),
+downloaded at those commits outside the repository (`W/external`, with
+`provenance.txt`). They name and explain MM3D's
+code (actor, scene, save-context and message structures, game states, the
+three-day clock, mask transformations, event flags) and describe the intent
+of events, entrances and progression. They never supply MM3D values: setup
+and actor lists, parameters, transforms, camera, timing, assets and rendering
+come from MM3D's code.bin and RomFS, which win every conflict. No N64 source
+or asset is copied into the repository or the runtime.
+
 ## Pipeline (reproducible, outside the repository)
 
 Work directory `I:/_triaevum_work/mm3d-port` (`W` below).
