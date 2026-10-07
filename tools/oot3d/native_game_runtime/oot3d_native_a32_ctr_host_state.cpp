@@ -68,6 +68,7 @@ nlohmann::json NativeA32CtrHostServices::CaptureState() const {
             {"file_offset", object.FileOffset},
             {"file_size", object.FileSize},
             {"file_open_mode", object.FileOpenMode},
+            {"file_priority", object.FilePriority},
             {"mapped_address", object.MappedAddress.has_value()
                                    ? nlohmann::json(*object.MappedAddress)
                                    : nlohmann::json(nullptr)},
@@ -332,6 +333,7 @@ bool NativeA32CtrHostServices::RestoreState(const nlohmann::json& state,
             object->FileOffset = encoded.at("file_offset").get<uint64_t>();
             object->FileSize = encoded.at("file_size").get<uint64_t>();
             object->FileOpenMode = encoded.at("file_open_mode").get<uint32_t>();
+            object->FilePriority = encoded.value("file_priority", 0U);
             if (mConfig.Filesystem != nullptr && (isRomFsFile || isSaveFile)) {
                 uint32_t openFlags = 0U;
                 if (isRomFsFile || (object->FileOpenMode & 1U) != 0U) {

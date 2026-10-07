@@ -248,6 +248,58 @@ NativeA32HostResult NativeA32CtrHostServices::HandleRomFsRequest(
             }
         }
     }
+    // Set/GetPriority: the session's I/O priority. Reads complete
+    // synchronously here, so it is only kept and reported back.
+    if (event.Detail == kFileSetPriorityRequest) {
+        uint32_t priority = 0;
+        if (memory.Read32(commandBuffer + 4U, &priority) &&
+            memory.Write32(commandBuffer, kFileSetPriorityResponse) &&
+            memory.Write32(commandBuffer + 4U, kResultSuccess)) {
+            fileHandle->Object->FilePriority = priority;
+            state.r[0] = kResultSuccess;
+            event.Name += ":SetPriority:" + std::to_string(priority);
+            event.Handled = true;
+            mSvcEvents.push_back(std::move(event));
+            return {NativeA32HostAction::Resume};
+        }
+    }
+    if (event.Detail == kFileGetPriorityRequest &&
+        memory.Write32(commandBuffer, kFileGetPriorityResponse) &&
+        memory.Write32(commandBuffer + 4U, kResultSuccess) &&
+        memory.Write32(commandBuffer + 8U, fileHandle->Object->FilePriority)) {
+        state.r[0] = kResultSuccess;
+        event.Name += ":GetPriority";
+        event.Handled = true;
+        mSvcEvents.push_back(std::move(event));
+        return {NativeA32HostAction::Resume};
+    }
+    if (event.Detail == kFileOpenLinkFileRequest) {
+        // Another session on the same file. A file session here holds no
+        // state of its own (reads carry their offset), so the link shares
+        // the file and its backing stream. The fields are copied before
+        // CreateHandle, which may reallocate the handle table.
+        auto link = std::make_shared<KernelObject>();
+        link->Type = fileHandle->Object->Type;
+        link->FilePath = fileHandle->Object->FilePath;
+        link->FileOffset = fileHandle->Object->FileOffset;
+        link->FileSize = fileHandle->Object->FileSize;
+        link->FileOpenMode = fileHandle->Object->FileOpenMode;
+        link->FilePriority = fileHandle->Object->FilePriority;
+        link->FileBackend = fileHandle->Object->FileBackend;
+        link->RomFsBacking = fileHandle->Object->RomFsBacking;
+        const uint32_t handle = CreateHandle(std::move(link));
+        if (handle != 0U &&
+            memory.Write32(commandBuffer, kFileOpenLinkFileResponse) &&
+            memory.Write32(commandBuffer + 4U, kResultSuccess) &&
+            memory.Write32(commandBuffer + 8U, kMoveHandleDescriptor) &&
+            memory.Write32(commandBuffer + 12U, handle)) {
+            state.r[0] = kResultSuccess;
+            event.Name += ":OpenLinkFile";
+            event.Handled = true;
+            mSvcEvents.push_back(std::move(event));
+            return {NativeA32HostAction::Resume};
+        }
+    }
     if (event.Detail == kFileFlushRequest &&
         memory.Write32(commandBuffer, kFileFlushResponse) &&
         memory.Write32(commandBuffer + 4U, kResultSuccess)) {

@@ -1059,6 +1059,64 @@ int main() {
                 host.RuntimeProfile().RomFsReadCalls == 3U,
             "rejected over-EOF read touched memory or the backing stream");
 
+    // File:OpenLinkFile: a second session reading the same RomFS image.
+    Require(memory.Write32(0x1FF82080, 0x080C0000),
+            "cannot write File:OpenLinkFile request");
+    state.r[0] = romFsFile;
+    uint32_t linkFile = 0;
+    uint32_t linkDescriptor = 0;
+    Require(host.HandleSvc(0x32, state, memory, context).Action ==
+                    NativeA32HostAction::Resume &&
+                memory.Read32(0x1FF82080, &response) &&
+                response == 0x080C0042 &&
+                memory.Read32(0x1FF82088, &linkDescriptor) &&
+                linkDescriptor == 0x10U &&
+                memory.Read32(0x1FF8208C, &linkFile) && linkFile != 0U &&
+                linkFile != romFsFile,
+            "File:OpenLinkFile did not return a new file session");
+    // File:Set/GetPriority keep the linked session's priority.
+    Require(memory.Write32(0x1FF82080, 0x080A0040) &&
+                memory.Write32(0x1FF82084, 2U),
+            "cannot write File:SetPriority request");
+    state.r[0] = linkFile;
+    Require(host.HandleSvc(0x32, state, memory, context).Action ==
+                    NativeA32HostAction::Resume &&
+                memory.Read32(0x1FF82080, &response) &&
+                response == 0x080A0040,
+            "File:SetPriority response is wrong");
+    uint32_t filePriority = 0;
+    Require(memory.Write32(0x1FF82080, 0x080B0000),
+            "cannot write File:GetPriority request");
+    state.r[0] = linkFile;
+    Require(host.HandleSvc(0x32, state, memory, context).Action ==
+                    NativeA32HostAction::Resume &&
+                memory.Read32(0x1FF82080, &response) &&
+                response == 0x080B0080 &&
+                memory.Read32(0x1FF82088, &filePriority) &&
+                filePriority == 2U,
+            "File:GetPriority did not report the priority set");
+    Require(memory.Fill(readAddress, readSize, 0xFF) &&
+                memory.Write32(0x1FF82080, 0x080200C2) &&
+                memory.Write64(0x1FF82084, readOffset, &faultAddress) &&
+                memory.Write32(0x1FF8208C, readSize) &&
+                memory.Write32(0x1FF82090, (readSize << 4U) | 0xCU) &&
+                memory.Write32(0x1FF82094, readAddress),
+            "cannot write the linked File:Read request");
+    state.r[0] = linkFile;
+    Require(host.HandleSvc(0x32, state, memory, context).Action ==
+                    NativeA32HostAction::Resume &&
+                memory.ReadBytes(readAddress, readBytes) &&
+                std::equal(readBytes.begin(), readBytes.end(),
+                           romFsBytes.begin() + config.RomFsImageOffset +
+                               readOffset),
+            "the linked file session did not read the same RomFS image");
+    Require(memory.Write32(0x1FF82080, 0x08080000),
+            "cannot write the linked File:Close request");
+    state.r[0] = linkFile;
+    Require(host.HandleSvc(0x32, state, memory, context).Action ==
+                NativeA32HostAction::Resume,
+            "the linked File:Close did not resume");
+
     Require(memory.Write32(0x1FF82080, 0x08080000),
             "cannot write File:Close request");
     state.r[0] = romFsFile;

@@ -156,8 +156,8 @@ What MM3D needed beyond OoT3D, all title-neutral:
 - Services: `APT:A` (MM3D's ExHeader grants APT:A, not APT:U),
   `APT:GlanceParameter`, `APT:Set/GetScreenCapPostPermission`,
   `ndm:u` Suspend/ResumeDaemons and Override/Reset/GetDefaultDaemons,
-  `fs:USER` InitializeWithSdkVersion and Set/GetPriority, `dsp::DSP`
-  Flush/InvalidateDataCache.
+  `fs:USER` InitializeWithSdkVersion and Set/GetPriority, file sessions'
+  OpenLinkFile and Set/GetPriority, `dsp::DSP` Flush/InvalidateDataCache.
 - A use-after-free in GSP `RegisterInterruptRelayQueue`: the event's handle
   record was read after `CreateHandle` could reallocate the handle table.
 - PICA command buffer jumps (`GPUREG_CMDBUF_SIZE/ADDR/JUMP`, registers

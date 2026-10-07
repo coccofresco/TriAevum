@@ -321,6 +321,7 @@ class NativeA32CtrHostServices final : public NativeA32HostServices {
         uint64_t FileOffset = 0;
         uint64_t FileSize = 0;
         uint32_t FileOpenMode = 0;
+        uint32_t FilePriority = 0;
         std::shared_ptr<NativeA32CtrFile> FileBackend;
         std::shared_ptr<RomFsBackingFile> RomFsBacking;
         std::optional<uint32_t> MappedAddress;
