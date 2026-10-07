@@ -102,10 +102,23 @@ Work directory `I:/_triaevum_work/mm3d-port` (`W` below).
    `ghidra_scripts/CreateFunctionsAt.java` seeds them before analysis, which
    then follows their callees: 13,827 functions, 13,601 kept (223 Thumb
    functions, 21.3 KB), 87.3% of text.
+   Virtual and callback tables name functions Ghidra never reaches either.
+   `tools/ctr_title/data_pointer_entries.py` scans code.bin for words naming a
+   word-aligned text address outside the inventory, keeps those that decode
+   as a function (valid A32 up to a return or tail branch) and sit at a
+   function boundary (after a return, padding or a literal pool), and writes
+   seeds for `CreateFunctionsAt.java`; repeated until it finds nothing new.
+   Two passes (3,497 then 37 seeds, 3,479 created) give 17,335 functions,
+   17,108 kept, 92.5% of text. With `--interior-entries` it also lists the
+   data pointers naming an address inside a function (a second entry, such as
+   a `this`-adjusting virtual method falling into the next): 448, passed to
+   the A32 generator as `--supplemental-entries`.
 4. A32 registry: `generate_aot.py` with `--code --exheader --inventory
-   --boundary-audit --supplemental-entries --true-aot-blocks` (the last three
-   from `tools/mm3d/a32/`, empty for now). 1,143,835 of 1,170,061 slots reachable;
-   6 unsupported operations left, all data words decoded as code.
+   --boundary-audit --supplemental-entries --true-aot-blocks` (boundary audit
+   and true-AOT blocks from `tools/mm3d/a32/`, empty for now; supplemental
+   entries are the interior entries above). 17,556 callable entries,
+   1,213,315 of 1,240,404 slots reachable; 6 unsupported operations left, all
+   data words decoded as code.
 5. Whole-AOT program (from the first inventory; not yet regenerated):
    `generate_whole_aot.py` with the same title inputs: 17,753 functions, 237,599 blocks, 1,245,442 instructions, none unclaimed.
 6. Selection: `select_profile_whole_aot.py --all-lowerable --code` from the
@@ -171,19 +184,23 @@ What MM3D needed beyond OoT3D, all title-neutral:
   Another title's draws never match it, so preparing it only held MM3D's
   guest for 83 s at startup; MM3D's draws prepare their own programs.
 
-Current state (developer launch, development build, 1800 frames): eight
+Current state (developer launch, development build, 5400 frames): eight
 guest threads; APT, NDM, FS, GSP, HID, CFG and DSP initialize, RomFS archives
-load, and the intro sequence renders (Majora's Mask, then the Happy Mask
-Salesman): 54,764 PICA draws, 2,748 display transfers, 5,030 P3D completions,
-the LCD no longer force-black. The renderer runs MM3D's draws on the
-canonical path with Authentic settings; OoT3D's optional effects have no MM3D
-composition metadata yet.
+load, and the attract sequence plays: the intro (Majora's Mask, the Happy
+Mask Salesman), then the Clock Town demo scenes. 333,842 PICA draws, 4,854
+display transfers, no fault. The renderer runs MM3D's draws on the
+canonical path; the F1 panel is still OoT3D's ("OOT3D Graphics", grass and
+material tabs) and OoT3D's optional effects have no MM3D composition
+metadata yet.
 
-The previous stall (the main thread waiting for byte `0x007B2711`, the GX
-command scheduler's busy flag at `0x007B2700`) was the missing jumps above:
-the scheduler counts one completion per command (GSP handler table at
+Earlier stalls, in order. First the main thread waited for byte
+`0x007B2711` (the busy flag of the GX command scheduler at `0x007B2700`)
+because of the missing jumps above: the scheduler counts one completion per
+command (GSP handler table at
 `0x0011BB48`: PSC0, PSC1, VBlank0, VBlank1, PPF, P3D, DMA) and two never
-arrived.
+arrived. Then `File:OpenLinkFile` and `File:SetPriority` on the RomFS file,
+then calls through vtables into functions (and second entries) the
+inventory lacked, fixed by the data-pointer discovery above.
 
 Diagnostics: with `--extended-diagnostics` the host keeps the full SVC
 history, runtime.json lists the last 4096 events and GSP command lists of up
@@ -198,8 +215,8 @@ registers when the guest does not reach a wait.
    kernel, service or PICA behaviour at a time, each tested at its boundary.
 2. Thumb lowering in whole AOT and the MM3D title module from the current
    inventory, for a zero-residual product.
-3. Function discovery from data pointers (vtables, callbacks), as
-   `fearkov/3dsrecomp` does, before indirect calls reach unseen code.
+3. Function discovery from code pointers built at run time (ADR/ADD-PC
+   sequences), the remaining 7.5% of text, before indirect calls reach it.
 4. MM3D adapter: camera/projection and composition metadata for the
    extension effects, frame pacing, HUD; then the single-screen mode from
    dekui and Project Restoration.
