@@ -683,6 +683,34 @@ int main() {
                 memory.Read32(0x1FF82080, &response) &&
                 response == 0x08010040,
             "FS:Initialize response is wrong");
+    Require(memory.Write32(0x1FF82080, 0x08610042) &&
+                memory.Write32(0x1FF82084, 0x070101C8) &&
+                memory.Write32(0x1FF82088, 0x20) &&
+                memory.Write32(0x1FF8208C, 0),
+            "cannot write FS:InitializeWithSdkVersion request");
+    state.r[0] = fsSession;
+    Require(host.HandleSvc(0x32, state, memory, context).Action ==
+                    NativeA32HostAction::Resume &&
+                memory.Read32(0x1FF82080, &response) &&
+                response == 0x08610040,
+            "FS:InitializeWithSdkVersion response is wrong");
+    Require(memory.Write32(0x1FF82080, 0x08620040) &&
+                memory.Write32(0x1FF82084, 3),
+            "cannot write FS:SetPriority request");
+    state.r[0] = fsSession;
+    Require(host.HandleSvc(0x32, state, memory, context).Action ==
+                    NativeA32HostAction::Resume &&
+                memory.Read32(0x1FF82080, &response) && response == 0x08620040,
+            "FS:SetPriority response is wrong");
+    Require(memory.Write32(0x1FF82080, 0x08630000),
+            "cannot write FS:GetPriority request");
+    state.r[0] = fsSession;
+    uint32_t fsPriority = 0;
+    Require(host.HandleSvc(0x32, state, memory, context).Action ==
+                    NativeA32HostAction::Resume &&
+                memory.Read32(0x1FF82080, &response) && response == 0x08630080 &&
+                memory.Read32(0x1FF82088, &fsPriority) && fsPriority == 3,
+            "FS:GetPriority did not return the set priority");
 
     Require(memory.Fill(0x1FF82120, 1, 0) &&
                 memory.Write32(0x1FF82080, 0x080C00C2) &&
@@ -1157,6 +1185,25 @@ int main() {
     Require(parameterRequest(0x000E0080) == NativeA32HostAction::Wait,
             "APT:GlanceParameter returned a consumed parameter");
 
+    Require(memory.Write32(0x1FF82080, 0x00550040) &&
+                memory.Write32(0x1FF82084, 2),
+            "cannot write APT:SetScreenCapPostPermission request");
+    state.r[0] = aptSession;
+    Require(host.HandleSvc(0x32, state, memory, context).Action ==
+                    NativeA32HostAction::Resume &&
+                memory.Read32(0x1FF82080, &response) && response == 0x00550040,
+            "APT:SetScreenCapPostPermission response is wrong");
+    Require(memory.Write32(0x1FF82080, 0x00560000),
+            "cannot write APT:GetScreenCapPostPermission request");
+    state.r[0] = aptSession;
+    uint32_t capturePermission = 0;
+    Require(host.HandleSvc(0x32, state, memory, context).Action ==
+                    NativeA32HostAction::Resume &&
+                memory.Read32(0x1FF82080, &response) && response == 0x00560080 &&
+                memory.Read32(0x1FF82088, &capturePermission) &&
+                capturePermission == 2,
+            "APT:GetScreenCapPostPermission did not return the set value");
+
     constexpr uint32_t transition = 0x62;
     Require(memory.Write32(0x1FF82140, transition) &&
                 memory.Fill(0x1FF82150, 1, 0xFF) &&
@@ -1266,6 +1313,22 @@ int main() {
             "srv:GetServiceHandle did not open dsp::DSP");
     uint32_t dspSession = 0;
     Require(memory.Read32(0x1FF8208C, &dspSession) && dspSession != 0,
+            "srv:GetServiceHandle dsp::DSP response has no session");
+    for (const uint32_t header : {0x00130082U, 0x00140082U}) {
+        Require(memory.Write32(0x1FF82080, header) &&
+                    memory.Write32(0x1FF82084, 0x1FF82000) &&
+                    memory.Write32(0x1FF82088, 0x100) &&
+                    memory.Write32(0x1FF8208C, 0) &&
+                    memory.Write32(0x1FF82090, 0xFFFF8001),
+                "cannot write DSP cache maintenance request");
+        state.r[0] = dspSession;
+        Require(host.HandleSvc(0x32, state, memory, context).Action ==
+                        NativeA32HostAction::Resume &&
+                    memory.Read32(0x1FF82080, &response) &&
+                    response == (header & 0xFFFF0000U) + 0x40U,
+                "DSP Flush/InvalidateDataCache response is wrong");
+    }
+    Require(dspSession != 0,
             "srv:GetServiceHandle dsp::DSP response has no session");
 
     Require(memory.Write32(0x1FF82080, 0x00050100) &&
@@ -1837,6 +1900,48 @@ int main() {
                 !host.NdmSchedulerSuspended() &&
                 !host.NdmSchedulerRunsInBackground(),
             "NDM:ResumeScheduler did not restore its native state");
+    const auto ndmDaemons = [&]() {
+        uint32_t daemons = 0xFFFFFFFFU;
+        Require(memory.Write32(0x1FF82080, 0x00160000),
+                "cannot write NDM:GetDefaultDaemons request");
+        state.r[0] = ndmSession;
+        Require(host.HandleSvc(0x32, state, memory, context).Action ==
+                        NativeA32HostAction::Resume &&
+                    memory.Read32(0x1FF82080, &response) &&
+                    response == 0x00160080 &&
+                    memory.Read32(0x1FF82088, &daemons),
+                "NDM:GetDefaultDaemons response is wrong");
+        return daemons;
+    };
+    Require(ndmDaemons() == 0xFU, "NDM default daemons are not all four");
+    Require(memory.Write32(0x1FF82080, 0x00140040) &&
+                memory.Write32(0x1FF82084, 0x5),
+            "cannot write NDM:OverrideDefaultDaemons request");
+    state.r[0] = ndmSession;
+    Require(host.HandleSvc(0x32, state, memory, context).Action ==
+                    NativeA32HostAction::Resume &&
+                ndmDaemons() == 0x5U,
+            "NDM:OverrideDefaultDaemons did not keep its mask");
+    Require(memory.Write32(0x1FF82080, 0x00150000),
+            "cannot write NDM:ResetDefaultDaemons request");
+    state.r[0] = ndmSession;
+    Require(host.HandleSvc(0x32, state, memory, context).Action ==
+                    NativeA32HostAction::Resume &&
+                ndmDaemons() == 0xFU,
+            "NDM:ResetDefaultDaemons did not restore all four");
+    const auto ndmDaemonRequest = [&](uint32_t header, uint32_t daemons) {
+        Require(memory.Write32(0x1FF82080, header) &&
+                    memory.Write32(0x1FF82084, daemons),
+                "cannot write NDM daemon request");
+        state.r[0] = ndmSession;
+        return host.HandleSvc(0x32, state, memory, context).Action ==
+                   NativeA32HostAction::Resume &&
+               memory.Read32(0x1FF82080, &response) && response == header;
+    };
+    Require(ndmDaemonRequest(0x00060040, 0x6) && host.NdmSuspendedDaemons() == 0x6U &&
+                ndmDaemonRequest(0x00060040, 0x1) && host.NdmSuspendedDaemons() == 0x7U &&
+                ndmDaemonRequest(0x00070040, 0x2) && host.NdmSuspendedDaemons() == 0x5U,
+            "NDM:SuspendDaemons/ResumeDaemons did not track the suspended mask");
 
     Require(memory.Write32(0x1FF82080, 0x00160042) &&
                 memory.Write32(0x1FF82084, 0) &&

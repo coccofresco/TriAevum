@@ -101,12 +101,24 @@ constexpr uint32_t kAptReceiveParameterResponse = 0x000D0104U;
 // GlanceParameter reads the pending parameter without consuming it.
 constexpr uint32_t kAptGlanceParameterRequest = 0x000E0080U;
 constexpr uint32_t kAptGlanceParameterResponse = 0x000E0104U;
+// Whether the application lets the HOME Menu post its screenshots.
+constexpr uint32_t kAptSetScreenCapPostPermissionRequest = 0x00550040U;
+constexpr uint32_t kAptSetScreenCapPostPermissionResponse = 0x00550040U;
+constexpr uint32_t kAptGetScreenCapPostPermissionRequest = 0x00560000U;
+constexpr uint32_t kAptGetScreenCapPostPermissionResponse = 0x00560080U;
 constexpr uint32_t kAptAppletUtilityRequest = 0x004B00C2U;
 constexpr uint32_t kAptAppletUtilityResponse = 0x004B0082U;
 constexpr uint32_t kAptUtilitySleepIfShellClosed = 4U;
 constexpr uint32_t kAptUtilityUnlockTransition = 7U;
 constexpr uint32_t kFsInitializeRequest = 0x08010002U;
 constexpr uint32_t kFsInitializeResponse = 0x08010040U;
+// Later SDKs pass their version before the calling-PID descriptor.
+constexpr uint32_t kFsInitializeWithSdkVersionRequest = 0x08610042U;
+constexpr uint32_t kFsInitializeWithSdkVersionResponse = 0x08610040U;
+constexpr uint32_t kFsSetPriorityRequest = 0x08620040U;
+constexpr uint32_t kFsSetPriorityResponse = 0x08620040U;
+constexpr uint32_t kFsGetPriorityRequest = 0x08630000U;
+constexpr uint32_t kFsGetPriorityResponse = 0x08630080U;
 constexpr uint32_t kFsOpenFileRequest = 0x080201C2U;
 constexpr uint32_t kFsOpenFileResponse = 0x08020042U;
 constexpr uint32_t kFsOpenFileDirectlyRequest = 0x08030204U;
@@ -177,6 +189,12 @@ constexpr uint32_t kDspReadPipeIfPossibleResponse = 0x00100082U;
 constexpr uint32_t kDspConvertProcessAddressRequest = 0x000C0040U;
 constexpr uint32_t kDspConvertProcessAddressResponse = 0x000C0080U;
 constexpr uint32_t kDspGetHeadphoneStatusRequest = 0x001F0000U;
+// Cache maintenance on buffers the DSP reads or writes; host memory is
+// coherent with the emulated DSP.
+constexpr uint32_t kDspFlushDataCacheRequest = 0x00130082U;
+constexpr uint32_t kDspFlushDataCacheResponse = 0x00130040U;
+constexpr uint32_t kDspInvalidateDataCacheRequest = 0x00140082U;
+constexpr uint32_t kDspInvalidateDataCacheResponse = 0x00140040U;
 constexpr uint32_t kDspGetHeadphoneStatusResponse = 0x001F0080U;
 constexpr uint32_t kDspRamVirtualAddress = 0x1FF00000U;
 constexpr uint32_t kDspRamArmWindowOffset = 0x00040000U;
@@ -248,6 +266,18 @@ constexpr uint32_t kNdmSuspendSchedulerRequest = 0x00080040U;
 constexpr uint32_t kNdmSuspendSchedulerResponse = 0x00080040U;
 constexpr uint32_t kNdmResumeSchedulerRequest = 0x00090000U;
 constexpr uint32_t kNdmResumeSchedulerResponse = 0x00090040U;
+// The background daemons NDM keeps running: CEC, BOSS, NIM and friends.
+constexpr uint32_t kNdmAllDaemons = 0xFU;
+constexpr uint32_t kNdmSuspendDaemonsRequest = 0x00060040U;
+constexpr uint32_t kNdmSuspendDaemonsResponse = 0x00060040U;
+constexpr uint32_t kNdmResumeDaemonsRequest = 0x00070040U;
+constexpr uint32_t kNdmResumeDaemonsResponse = 0x00070040U;
+constexpr uint32_t kNdmOverrideDefaultDaemonsRequest = 0x00140040U;
+constexpr uint32_t kNdmOverrideDefaultDaemonsResponse = 0x00140040U;
+constexpr uint32_t kNdmResetDefaultDaemonsRequest = 0x00150000U;
+constexpr uint32_t kNdmResetDefaultDaemonsResponse = 0x00150040U;
+constexpr uint32_t kNdmGetDefaultDaemonsRequest = 0x00160000U;
+constexpr uint32_t kNdmGetDefaultDaemonsResponse = 0x00160080U;
 
 uint32_t ApplyCirclePadDirections(uint32_t buttons, int16_t x, int16_t y) {
     constexpr int32_t kDirectionThresholdSquared = 40 * 40;

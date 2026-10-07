@@ -175,6 +175,7 @@ nlohmann::json NativeA32CtrHostServices::CaptureState() const {
         {"lcd_force_black", mLcdForceBlack},
         {"apt_application_id", mAptApplicationId},
         {"apt_wakeup_pending", mAptWakeupPending},
+        {"apt_screen_cap_post_permission", mAptScreenCapPostPermission},
         {"dsp_component", nlohmann::json::binary(mDspComponent)},
         {"dsp_program_mask", mDspProgramMask},
         {"dsp_data_mask", mDspDataMask},
@@ -232,6 +233,9 @@ nlohmann::json NativeA32CtrHostServices::CaptureState() const {
         {"hid_gyroscope_enable_count", mHidGyroscopeEnableCount},
         {"ndm_scheduler_suspended", mNdmSchedulerSuspended},
         {"ndm_scheduler_runs_in_background", mNdmSchedulerRunsInBackground},
+        {"ndm_default_daemons", mNdmDefaultDaemons},
+        {"ndm_suspended_daemons", mNdmSuspendedDaemons},
+        {"fs_priority", mFsPriority},
     };
 }
 
@@ -507,6 +511,9 @@ bool NativeA32CtrHostServices::RestoreState(const nlohmann::json& state,
         staged.mAptApplicationId =
             state.at("apt_application_id").get<uint32_t>();
         staged.mAptWakeupPending = state.at("apt_wakeup_pending").get<bool>();
+        // Absent from states saved before the command was modelled.
+        staged.mAptScreenCapPostPermission =
+            state.value("apt_screen_cap_post_permission", uint32_t{0});
         const auto& dspComponent = state.at("dsp_component");
         if (!dspComponent.is_binary()) {
             throw std::runtime_error("DSP component state is invalid");
@@ -641,6 +648,16 @@ bool NativeA32CtrHostServices::RestoreState(const nlohmann::json& state,
             state.at("ndm_scheduler_suspended").get<bool>();
         staged.mNdmSchedulerRunsInBackground =
             state.at("ndm_scheduler_runs_in_background").get<bool>();
+        // Absent from states saved before the command was modelled.
+        staged.mNdmDefaultDaemons =
+            state.value("ndm_default_daemons", kNdmAllDaemons);
+        staged.mNdmSuspendedDaemons =
+            state.value("ndm_suspended_daemons", uint32_t{0});
+        staged.mFsPriority = state.value("fs_priority", uint32_t{0});
+        if (((staged.mNdmDefaultDaemons | staged.mNdmSuspendedDaemons) &
+             ~kNdmAllDaemons) != 0U) {
+            throw std::runtime_error("NDM daemon mask is invalid");
+        }
 
         *this = std::move(staged);
         return true;

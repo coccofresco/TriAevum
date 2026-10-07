@@ -37,6 +37,62 @@ NativeA32HostResult NativeA32CtrHostServices::HandleNdmRequest(
         mSvcEvents.push_back(std::move(event));
         return {NativeA32HostAction::Resume};
     }
+    const bool suspendDaemons = event.Detail == kNdmSuspendDaemonsRequest;
+    if (suspendDaemons || event.Detail == kNdmResumeDaemonsRequest) {
+        uint32_t daemons = 0;
+        if (memory.Read32(commandBuffer + 4U, &daemons) &&
+            (daemons & ~kNdmAllDaemons) == 0U &&
+            memory.Write32(commandBuffer, suspendDaemons
+                                              ? kNdmSuspendDaemonsResponse
+                                              : kNdmResumeDaemonsResponse) &&
+            memory.Write32(commandBuffer + 4U, kResultSuccess)) {
+            mNdmSuspendedDaemons = suspendDaemons
+                                       ? mNdmSuspendedDaemons | daemons
+                                       : mNdmSuspendedDaemons & ~daemons;
+            state.r[0] = kResultSuccess;
+            event.Name += (suspendDaemons ? ":SuspendDaemons:"
+                                          : ":ResumeDaemons:") +
+                          std::to_string(daemons);
+            event.Handled = true;
+            mSvcEvents.push_back(std::move(event));
+            return {NativeA32HostAction::Resume};
+        }
+    }
+    if (event.Detail == kNdmOverrideDefaultDaemonsRequest) {
+        uint32_t daemons = 0;
+        if (memory.Read32(commandBuffer + 4U, &daemons) &&
+            (daemons & ~kNdmAllDaemons) == 0U &&
+            memory.Write32(commandBuffer,
+                           kNdmOverrideDefaultDaemonsResponse) &&
+            memory.Write32(commandBuffer + 4U, kResultSuccess)) {
+            mNdmDefaultDaemons = daemons;
+            state.r[0] = kResultSuccess;
+            event.Name += ":OverrideDefaultDaemons:" + std::to_string(daemons);
+            event.Handled = true;
+            mSvcEvents.push_back(std::move(event));
+            return {NativeA32HostAction::Resume};
+        }
+    }
+    if (event.Detail == kNdmResetDefaultDaemonsRequest &&
+        memory.Write32(commandBuffer, kNdmResetDefaultDaemonsResponse) &&
+        memory.Write32(commandBuffer + 4U, kResultSuccess)) {
+        mNdmDefaultDaemons = kNdmAllDaemons;
+        state.r[0] = kResultSuccess;
+        event.Name += ":ResetDefaultDaemons";
+        event.Handled = true;
+        mSvcEvents.push_back(std::move(event));
+        return {NativeA32HostAction::Resume};
+    }
+    if (event.Detail == kNdmGetDefaultDaemonsRequest &&
+        memory.Write32(commandBuffer, kNdmGetDefaultDaemonsResponse) &&
+        memory.Write32(commandBuffer + 4U, kResultSuccess) &&
+        memory.Write32(commandBuffer + 8U, mNdmDefaultDaemons)) {
+        state.r[0] = kResultSuccess;
+        event.Name += ":GetDefaultDaemons";
+        event.Handled = true;
+        mSvcEvents.push_back(std::move(event));
+        return {NativeA32HostAction::Resume};
+    }
     mSvcEvents.push_back(std::move(event));
     return {NativeA32HostAction::Wait};
 }
@@ -231,6 +287,32 @@ NativeA32HostResult NativeA32CtrHostServices::HandleAptRequest(
         memory.Write32(commandBuffer + 4U, kResultSuccess)) {
         state.r[0] = kResultSuccess;
         event.Name += ":NotifyToWait";
+        event.Handled = true;
+        mSvcEvents.push_back(std::move(event));
+        return {NativeA32HostAction::Resume};
+    }
+    if (event.Detail == kAptSetScreenCapPostPermissionRequest) {
+        uint32_t permission = 0;
+        if (memory.Read32(commandBuffer + 4U, &permission) &&
+            memory.Write32(commandBuffer,
+                           kAptSetScreenCapPostPermissionResponse) &&
+            memory.Write32(commandBuffer + 4U, kResultSuccess)) {
+            mAptScreenCapPostPermission = permission;
+            state.r[0] = kResultSuccess;
+            event.Name += ":SetScreenCapPostPermission:" +
+                          std::to_string(permission);
+            event.Handled = true;
+            mSvcEvents.push_back(std::move(event));
+            return {NativeA32HostAction::Resume};
+        }
+    }
+    if (event.Detail == kAptGetScreenCapPostPermissionRequest &&
+        memory.Write32(commandBuffer,
+                       kAptGetScreenCapPostPermissionResponse) &&
+        memory.Write32(commandBuffer + 4U, kResultSuccess) &&
+        memory.Write32(commandBuffer + 8U, mAptScreenCapPostPermission)) {
+        state.r[0] = kResultSuccess;
+        event.Name += ":GetScreenCapPostPermission";
         event.Handled = true;
         mSvcEvents.push_back(std::move(event));
         return {NativeA32HostAction::Resume};

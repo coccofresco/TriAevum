@@ -8,6 +8,31 @@ NativeA32HostResult NativeA32CtrHostServices::HandleDspRequest(
     oot3d::recomp::a32::GuestState& state, NativeA32Memory& memory,
     NativeA32HostContext& context, const std::optional<std::string>& sessionType,
     uint32_t commandBuffer, NativeA32CtrSvcEvent event) {
+    const bool flush = event.Detail == kDspFlushDataCacheRequest;
+    if (flush || event.Detail == kDspInvalidateDataCacheRequest) {
+        uint32_t address = 0;
+        uint32_t size = 0;
+        uint32_t descriptor = 0;
+        uint32_t processHandle = 0;
+        if (memory.Read32(commandBuffer + 4U, &address) &&
+            memory.Read32(commandBuffer + 8U, &size) &&
+            memory.Read32(commandBuffer + 12U, &descriptor) &&
+            memory.Read32(commandBuffer + 16U, &processHandle) &&
+            descriptor == kCopyHandleDescriptor &&
+            processHandle == kCurrentProcessHandle &&
+            (size == 0U || memory.IsMapped(address, size)) &&
+            memory.Write32(commandBuffer,
+                           flush ? kDspFlushDataCacheResponse
+                                 : kDspInvalidateDataCacheResponse) &&
+            memory.Write32(commandBuffer + 4U, kResultSuccess)) {
+            state.r[0] = kResultSuccess;
+            event.Name += flush ? ":FlushDataCache" : ":InvalidateDataCache";
+            event.Detail = size;
+            event.Handled = true;
+            mSvcEvents.push_back(std::move(event));
+            return {NativeA32HostAction::Resume};
+        }
+    }
     if (event.Detail == kDspLoadComponentRequest) {
         uint32_t size = 0;
         uint32_t programMask = 0;

@@ -142,14 +142,29 @@ What MM3D needed beyond OoT3D, all title-neutral:
   UQSUB8), and MRS/MSR APSR classified as core operations.
 - CTR kernel: `QueryMemory` over typed kernel memory states,
   `GetThreadId` (nonzero kernel IDs), `WaitSynchronization1` (zero and
-  infinite timeouts), VBlanks before the GSP relay queue is registered.
-- Services: `APT:A` (MM3D's ExHeader grants APT:A, not APT:U) and
-  `APT:GlanceParameter`.
+  infinite timeouts), VBlanks before the GSP relay queue is registered, and
+  `SleepThread(0)` as a yield that passes the CPU to the next ready thread of
+  the same priority (MM3D has 20 explicit yields, OoT3D none; without it the
+  main thread starved an equal-priority worker).
+- Services: `APT:A` (MM3D's ExHeader grants APT:A, not APT:U),
+  `APT:GlanceParameter`, `APT:Set/GetScreenCapPostPermission`,
+  `ndm:u` Suspend/ResumeDaemons and Override/Reset/GetDefaultDaemons,
+  `fs:USER` InitializeWithSdkVersion and Set/GetPriority, `dsp::DSP`
+  Flush/InvalidateDataCache.
 - A use-after-free in GSP `RegisterInterruptRelayQueue`: the event's handle
   record was read after `CreateHandle` could reallocate the handle table.
 
-Current state (developer launch, development build, 300 frames): three guest
-threads run through APT initialization; no frame is drawn yet.
+Current state (developer launch, development build, 1800 frames): eight
+guest threads; APT, NDM, FS, GSP (hardware registers, command queue), HID,
+CFG and DSP (component loaded, audio frames processed) initialize; the first
+RomFS archives load; 2 PICA draws and a display transfer complete; the LCD
+stays force-black. The main thread then loops once per VBlank (GSP
+interrupt thread, worker thread, address arbiter) while the byte at
+`0x007B2711` stays set: the next step is finding which subsystem should clear
+it. With `--extended-diagnostics` the host keeps the full SVC history and
+runtime.json lists the last 4096 events; `TRIAEVUM_DIAGNOSE_GUEST_WAIT`
+reports every thread's priority, status and registers when the guest does
+not reach a wait.
 
 ## Next steps
 

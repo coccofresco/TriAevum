@@ -301,6 +301,7 @@ class NativeA32CtrHostServices final : public NativeA32HostServices {
     bool HidGyroscopeEnabled() const;
     bool NdmSchedulerSuspended() const;
     bool NdmSchedulerRunsInBackground() const;
+    uint32_t NdmSuspendedDaemons() const;
     NativeA32CtrRuntimeProfile RuntimeProfile() const noexcept;
     nlohmann::json CaptureState() const;
     bool RestoreState(const nlohmann::json& state, NativeA32Process& process,
@@ -484,6 +485,7 @@ class NativeA32CtrHostServices final : public NativeA32HostServices {
     bool mLcdForceBlack = true;
     uint32_t mAptApplicationId = 0;
     bool mAptWakeupPending = false;
+    uint32_t mAptScreenCapPostPermission = 0;
     std::vector<uint8_t> mDspComponent;
     uint16_t mDspProgramMask = 0;
     uint16_t mDspDataMask = 0;
@@ -515,6 +517,9 @@ class NativeA32CtrHostServices final : public NativeA32HostServices {
     uint32_t mHidGyroscopeEnableCount = 0;
     bool mNdmSchedulerSuspended = false;
     bool mNdmSchedulerRunsInBackground = false;
+    uint32_t mNdmDefaultDaemons = 0xFU;
+    uint32_t mNdmSuspendedDaemons = 0;
+    uint32_t mFsPriority = 0;
 };
 
 } // namespace Oot3dNativeGame

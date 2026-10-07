@@ -733,7 +733,9 @@ NativeA32HostResult NativeA32CtrHostServices::HandleSvc(
         }
         event.Handled = true;
         mSvcEvents.push_back(std::move(event));
-        return {NativeA32HostAction::Resume};
+        NativeA32HostResult yielded{NativeA32HostAction::Resume};
+        yielded.Yield = true;
+        return yielded;
     }
     case 0x09:
         event.Name = "ExitThread";
@@ -1446,6 +1448,10 @@ bool NativeA32CtrHostServices::NdmSchedulerSuspended() const {
 
 bool NativeA32CtrHostServices::NdmSchedulerRunsInBackground() const {
     return mNdmSchedulerRunsInBackground;
+}
+
+uint32_t NativeA32CtrHostServices::NdmSuspendedDaemons() const {
+    return mNdmSuspendedDaemons;
 }
 
 NativeA32CtrRuntimeProfile

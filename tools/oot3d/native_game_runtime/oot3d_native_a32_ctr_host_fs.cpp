@@ -288,6 +288,46 @@ NativeA32HostResult NativeA32CtrHostServices::HandleFsRequest(
             return {NativeA32HostAction::Resume};
         }
     }
+    if (event.Detail == kFsInitializeWithSdkVersionRequest) {
+        uint32_t sdkVersion = 0;
+        uint32_t descriptor = 0;
+        if (memory.Read32(commandBuffer + 4U, &sdkVersion) &&
+            memory.Read32(commandBuffer + 8U, &descriptor) &&
+            descriptor == kCallingPidDescriptor &&
+            memory.Write32(commandBuffer,
+                           kFsInitializeWithSdkVersionResponse) &&
+            memory.Write32(commandBuffer + 4U, kResultSuccess)) {
+            state.r[0] = kResultSuccess;
+            event.Name += ":InitializeWithSdkVersion:0x";
+            AppendHex8(event.Name, sdkVersion);
+            event.Handled = true;
+            mSvcEvents.push_back(std::move(event));
+            return {NativeA32HostAction::Resume};
+        }
+    }
+    if (event.Detail == kFsSetPriorityRequest) {
+        uint32_t priority = 0;
+        if (memory.Read32(commandBuffer + 4U, &priority) &&
+            memory.Write32(commandBuffer, kFsSetPriorityResponse) &&
+            memory.Write32(commandBuffer + 4U, kResultSuccess)) {
+            mFsPriority = priority;
+            state.r[0] = kResultSuccess;
+            event.Name += ":SetPriority:" + std::to_string(priority);
+            event.Handled = true;
+            mSvcEvents.push_back(std::move(event));
+            return {NativeA32HostAction::Resume};
+        }
+    }
+    if (event.Detail == kFsGetPriorityRequest &&
+        memory.Write32(commandBuffer, kFsGetPriorityResponse) &&
+        memory.Write32(commandBuffer + 4U, kResultSuccess) &&
+        memory.Write32(commandBuffer + 8U, mFsPriority)) {
+        state.r[0] = kResultSuccess;
+        event.Name += ":GetPriority";
+        event.Handled = true;
+        mSvcEvents.push_back(std::move(event));
+        return {NativeA32HostAction::Resume};
+    }
     if (event.Detail == kFsOpenFileDirectlyRequest) {
         std::array<uint32_t, 12> words{};
         bool readable = true;

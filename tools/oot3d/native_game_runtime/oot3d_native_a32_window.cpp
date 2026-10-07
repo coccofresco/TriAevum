@@ -117,8 +117,10 @@ RunUntilGuestWait(Oot3dNativeGame::NativeA32Process &process,
       for (uint32_t id = 0; id < process.ThreadCount(); ++id) {
         const auto* thread = process.ThreadState(id);
         if (thread != nullptr)
-          std::fprintf(stderr, "GUEST_WAIT_TIMEOUT thread=%u pc=%08x lr=%08x sp=%08x r0=%08x r1=%08x r2=%08x\n",
-                       id, thread->r[15], thread->r[14], thread->r[13],
+          std::fprintf(stderr, "GUEST_WAIT_TIMEOUT thread=%u priority=%u status=%u pc=%08x lr=%08x sp=%08x r0=%08x r1=%08x r2=%08x\n",
+                       id, process.ThreadPriority(id).value_or(0xFFU),
+                       static_cast<unsigned>(process.ThreadStatus(id)),
+                       thread->r[15], thread->r[14], thread->r[13],
                        thread->r[0], thread->r[1], thread->r[2]);
       }
       throw std::runtime_error("guest did not reach a wait boundary within diagnostic deadline");

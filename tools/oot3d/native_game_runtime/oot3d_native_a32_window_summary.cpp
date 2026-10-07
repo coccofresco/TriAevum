@@ -106,8 +106,10 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
     nlohmann::json filesystemSvcEvents = nlohmann::json::array();
     nlohmann::json ipcSvcEvents = nlohmann::json::array();
     const auto &svcEvents = hostServices.SvcEvents();
-    const size_t firstSvcEvent =
-        svcEvents.size() > 32U ? svcEvents.size() - 32U : 0U;
+    const size_t recentSvcWindow = launch.ExtendedDiagnostics ? 4096U : 32U;
+    const size_t firstSvcEvent = svcEvents.size() > recentSvcWindow
+                                     ? svcEvents.size() - recentSvcWindow
+                                     : 0U;
     for (size_t index = firstSvcEvent; index < svcEvents.size(); ++index) {
       const auto &event = svcEvents[index];
       recentSvcEvents.push_back({

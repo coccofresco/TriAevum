@@ -145,6 +145,9 @@ void NativeA32WindowSession::Setup() {
       std::string(oot3d::recomp::kA32SourceSnapshotId),
   };
   hostConfig.DetailedSvcDiagnostics = launch.ExtendedDiagnostics;
+  // Extended diagnostics keep every SVC event; runtime.json then lists the
+  // last 4096 instead of 32 (bring-up of a title's boot sequence).
+  hostConfig.RetainFullSvcHistory = launch.ExtendedDiagnostics;
   hostConfig.ProfileRuntime = launch.ProfileA32Runtime;
   auto &hostServices = hostServicesStorage.emplace(std::move(hostConfig));
   frameRateContract =
