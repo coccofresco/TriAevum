@@ -3,6 +3,7 @@
 #include "oot3d_native_pica_frontend.h"
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -53,10 +54,16 @@ struct Mm3dNativePicaCompositionStats {
     uint64_t ExpiredSpans = 0;
     uint64_t SceneFrames = 0;
     uint64_t ReadFailures = 0;
+    // Scene frames whose world passes carry the camera's world-to-view, and
+    // the environment's directional lights the last of them carried.
+    uint64_t LightBindings = 0;
+    uint32_t SceneDirectionalLights = 0;
 };
 
 // Records the command-list byte range each native pass writes, with its
-// layer. A list is built one guest frame before the GPU runs it, and the GPU
+// layer, and with the world passes, the scene's lighting: the current View's
+// world-to-view and the environment's directional lights still linked in the
+// play state's LightContext (mm3d_title_contracts.h). A list is built one guest frame before the GPU runs it, and the GPU
 // reaches it through jumps from the submitted list, so the recorded ranges
 // are offered with every submission until a later frame writes the same
 // bytes again or they are two scene frames old.
@@ -82,6 +89,7 @@ class Mm3dNativePicaCompositionTracker final
         uint32_t ReturnPc = 0;
         uint32_t BeginAddress = 0;
         Oot3dPicaCompositionAttribution Attribution;
+        Fast::Renderer3ds::PicaNativeLightBinding LightBinding;
     };
     struct RecordedSpan {
         Oot3dPicaCommandListCompositionSpan Span;
@@ -89,9 +97,14 @@ class Mm3dNativePicaCompositionTracker final
     };
 
     void Record(uint32_t begin, uint32_t end,
-                const Oot3dPicaCompositionAttribution& attribution);
+                const Oot3dPicaCompositionAttribution& attribution,
+                const Fast::Renderer3ds::PicaNativeLightBinding& lightBinding);
+    void CaptureSceneLighting(oot3d::recomp::a32::MemoryBus& memory);
 
     std::optional<ActiveScope> mActive;
+    // The scene frame's lighting, captured when its opaque pass begins.
+    Fast::Renderer3ds::PicaNativeLightBinding mSceneLighting;
+    std::shared_ptr<const Fast::Renderer3ds::PicaSceneDirectionalLights> mSceneDirectionals;
     std::vector<RecordedSpan> mSpans; // sorted by BeginAddress, disjoint
     Mm3dNativePicaCompositionStats mStats;
 };

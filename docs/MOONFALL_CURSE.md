@@ -296,19 +296,46 @@ memory between savestates for (at, eye, up) triples whose up is
 perpendicular to the view direction. In the attract demo the camera moves
 with the cutscene (fovy 45, then 35 indoors).
 
-Open: the renderer corrects the guest projection with the one decoded from
-the draws' vertex uniforms on frames that draw; for MM3D that one is
-constant across scenes (1.22 x 2.17 with FOV x1.1), so on frames without
-draws (frame interpolation) the temporal history sees two projections and
-resets every frame.
+The draws' own projection (GzwShader `uProjection`, c0..c3) does not follow
+the View's fovy (1.22 x 2.17 in both demo scenes, with FOV x1.1); the
+renderer applies it to the published view on frames that draw.
+
+Scene lighting. MM3D's vertex shader is `rom:/shaders/GzwShader.shbin`
+(RomFS), not OoT3D's `CmbVShader`. Its symbol table: uProjection c0..3,
+uModelView c4..7, MatDiffuseColor c8, MatAmbientColor c9, TexMtx0..2
+c10..19, uMatrixPallet c20..49, uInvView c70..73, GlobalAmbient c74,
+LightEnabled c75 (one component per light), LightType c76, then four
+lights of LightDir/LightDiffuseColor/LightAmbientColor at c77, c80, c83,
+c86; TexCoordSlot/ShaderMode c89, attribute scales c90..91,
+TexMappingMethod c92; booleans b0..b10 (HasTangent, IsTexture,
+IsSkinning, IsSmoothSkinning, IsOrthoStereo, HasColor, HasTexcoord0..2,
+IsVertexLighting, IsFragmentLighting). Its outputs include the
+normal quaternion (o5) and the view vector (o6) for PICA fragment
+lighting. Every opaque scene draw of the demo lights per pixel with two
+directional fragment lights, the environment's two lights (N64 MM's
+envCtx.dirLight1/dirLight2): the LightInfo records at play + 0x86D0 and
+play + 0x86E8, linked in the LightContext list at play + 0xA88 (Play_Init,
+`0x0012AA40`, calls View_Init on play + 0x1F8). The MM3D composition
+tracker attaches to the world passes' spans the current View's
+world-to-view (View + 0x17C) and those lights. Verified against the GPU:
+the fragment light registers are these directions in view space and these
+colors. In the attract demo the light is horizontal ((1, 0, 0)), so by the
+horizon rule no shadow is cast; with the world-to-view the temporal
+history is now valid (it reset every frame before) and the directional
+shadow pass renders its map from the native light.
+
+Open: no receiver applies the shadow. Receivers need the surface program
+the frontend recognizes in the vertex shader (DecodeCmbSurface), written
+for CmbVShader's three-light block; GzwShader's block (diffuse/ambient
+moves, four `dp3 LightDirN, normal`, LightEnabled per component) is not
+recognized, so neither per-pixel lighting nor shadow receivers apply.
 
 Result (developer launch, Clock Town attract demo): 96 opaque, 8
 translucent and 4 sky draws classified; ambient occlusion composes on the
 scene (without the streaks the stereo frustum gave), directional shadows
-prepare their 96 casters. Not yet: MM3D's scene lights (Modern lighting
-and the shadow direction: no light candidate yet, so no shadow is cast),
-temporal history (see above), grass sources for MM3D's textures, the HUD
-in gameplay.
+prepare their 96 casters. Not yet: GzwShader's surface program (per-pixel
+Modern lighting and shadow receivers, see Scene lighting), grass sources
+for MM3D's textures, the HUD in gameplay.
 
 Bring-up tooling: `TRIAEVUM_A32_CALL_TRACE=PATH,FIRST,LAST[,WORD[,ENTRIES]]`
 writes a record per observed block entry (pc, lr, sp, r0-r3, thread, a

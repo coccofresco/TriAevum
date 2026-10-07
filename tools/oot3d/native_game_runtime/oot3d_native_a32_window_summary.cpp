@@ -1654,7 +1654,9 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                            {"replaced_spans", stats.ReplacedSpans},
                            {"expired_spans", stats.ExpiredSpans},
                            {"scene_frames", stats.SceneFrames},
-                           {"read_failures", stats.ReadFailures}};
+                           {"read_failures", stats.ReadFailures},
+                           {"light_bindings", stats.LightBindings},
+                           {"scene_directional_lights", stats.SceneDirectionalLights}};
                      }()},
               {"orthographic_calls",
                widescreenProjection.Projection.OrthographicCalls},

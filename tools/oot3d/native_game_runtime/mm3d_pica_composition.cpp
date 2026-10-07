@@ -1,9 +1,13 @@
 #include "mm3d_pica_composition.h"
 
+#include "mm3d_title_contracts.h"
 #include "recomp/a32_runtime.h"
 
 #include <algorithm>
 #include <array>
+#include <bit>
+#include <cmath>
+#include <limits>
 
 namespace Oot3dNativeGame {
 namespace {
@@ -62,6 +66,45 @@ constexpr auto kHookPcs = BuildHookPcs();
 // one guest frame after it is built.
 constexpr uint64_t kSpanLifetimeSceneFrames = 2U;
 
+bool WorldLayer(Oot3dPicaCompositionLayer layer) {
+    return layer == Oot3dPicaCompositionLayer::OpaqueWorld ||
+           layer == Oot3dPicaCompositionLayer::TransparentWorld;
+}
+
+// Column-major world-to-view from the View's Mtx34 rows.
+std::optional<std::array<float, 16>> ReadWorldToView(
+    oot3d::recomp::a32::MemoryBus& memory, uint32_t view) {
+    std::array<float, 16> worldToView{};
+    worldToView[15] = 1.0F;
+    for (uint32_t row = 0; row < 3U; ++row) {
+        for (uint32_t column = 0; column < 4U; ++column) {
+            uint32_t word = 0;
+            if (!memory.Read32(view + kMm3dViewWorldToViewOffset + (row * 4U + column) * 4U, &word))
+                return std::nullopt;
+            const float value = std::bit_cast<float>(word);
+            if (!std::isfinite(value)) return std::nullopt;
+            worldToView[column * 4U + row] = value;
+        }
+    }
+    return worldToView;
+}
+
+// A directional LightInfo record of the environment.
+bool ReadDirectionalLight(oot3d::recomp::a32::MemoryBus& memory, uint32_t info,
+                          Fast::Renderer3ds::PicaSceneDirectionalLight& light) {
+    uint8_t kind = 0;
+    if (!memory.Read8(info, &kind) || kind != 1U) return false;
+    for (uint32_t axis = 0; axis < 3U; ++axis) {
+        uint8_t direction = 0, color = 0;
+        if (!memory.Read8(info + 4U + axis, &direction) || !memory.Read8(info + 7U + axis, &color))
+            return false;
+        light.DirectionTowardSource[axis] = static_cast<float>(std::bit_cast<int8_t>(direction)) / 127.0F;
+        light.Color[axis] = static_cast<float>(color) / 255.0F;
+    }
+    light.SourceIdentity = info;
+    return true;
+}
+
 } // namespace
 
 std::span<const uint32_t> Mm3dNativePicaCompositionHookPcs() noexcept {
@@ -89,7 +132,7 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
             // The pass ended in another list than it began in.
             ++mStats.InvalidRanges;
         } else {
-            Record(scope.BeginAddress, end, scope.Attribution);
+            Record(scope.BeginAddress, end, scope.Attribution, scope.LightBinding);
         }
         return Event::None;
     }
@@ -110,9 +153,15 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
         return Event::None;
     }
     ++mStats.ScopeEntries;
+    if (scope->Layer == Oot3dPicaCompositionLayer::OpaqueWorld) {
+        CaptureSceneLighting(memory);
+    }
     mActive = ActiveScope{scope->ReturnPc, begin,
                           {scope->Layer, scope->Provenance, scope->EntryPc,
-                           scope->ReturnPc}};
+                           scope->ReturnPc},
+                          WorldLayer(scope->Layer)
+                              ? mSceneLighting
+                              : Fast::Renderer3ds::PicaNativeLightBinding{}};
     if (scope->Layer == Oot3dPicaCompositionLayer::OpaqueWorld) {
         ++mStats.SceneFrames;
         const uint64_t frame = mStats.SceneFrames;
@@ -127,9 +176,57 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
     return Event::None;
 }
 
+void Mm3dNativePicaCompositionTracker::CaptureSceneLighting(
+    oot3d::recomp::a32::MemoryBus& memory) {
+    using namespace Fast::Renderer3ds;
+    PicaNativeLightBinding binding;
+    uint32_t view = 0;
+    if (memory.Read32(kMm3dCurrentViewPointer, &view) && view != 0U &&
+        view > kMm3dPlayViewOffset &&
+        view <= std::numeric_limits<uint32_t>::max() - 0x200U) {
+        binding.WorldToView = ReadWorldToView(memory, view);
+        // Lights still linked in the play state's LightContext: a View that
+        // is not a play state's links none of these records.
+        const uint32_t play = view - kMm3dPlayViewOffset;
+        PicaSceneDirectionalLights directionals;
+        uint32_t node = 0;
+        if (play <= std::numeric_limits<uint32_t>::max() - kMm3dPlayEnvironmentLight2Offset - 0x10U &&
+            memory.Read32(play + kMm3dPlayLightListHeadOffset, &node)) {
+            for (uint32_t visited = 0; node != 0U && visited < 32U; ++visited) {
+                uint32_t info = 0, next = 0;
+                if (node > std::numeric_limits<uint32_t>::max() - 12U ||
+                    !memory.Read32(node, &info) || !memory.Read32(node + 8U, &next))
+                    break;
+                PicaSceneDirectionalLight light;
+                if ((info == play + kMm3dPlayEnvironmentLight1Offset ||
+                     info == play + kMm3dPlayEnvironmentLight2Offset) &&
+                    directionals.Count < directionals.Lights.size() &&
+                    ReadDirectionalLight(memory, info, light))
+                    directionals.Lights[directionals.Count++] = light;
+                node = next;
+            }
+        }
+        // Light 1 first, as the environment orders them.
+        std::sort(directionals.Lights.begin(), directionals.Lights.begin() + directionals.Count,
+                  [](const auto& a, const auto& b) { return a.SourceIdentity < b.SourceIdentity; });
+        mStats.SceneDirectionalLights = directionals.Count;
+        if (directionals.Count == 0U) {
+            mSceneDirectionals.reset();
+        } else if (!mSceneDirectionals || *mSceneDirectionals != directionals) {
+            mSceneDirectionals = std::make_shared<const PicaSceneDirectionalLights>(directionals);
+        }
+        binding.SceneDirectionals = mSceneDirectionals;
+    }
+    if (binding.WorldToView.has_value()) {
+        ++mStats.LightBindings;
+    }
+    mSceneLighting = std::move(binding);
+}
+
 void Mm3dNativePicaCompositionTracker::Record(
     uint32_t begin, uint32_t end,
-    const Oot3dPicaCompositionAttribution& attribution) {
+    const Oot3dPicaCompositionAttribution& attribution,
+    const Fast::Renderer3ds::PicaNativeLightBinding& lightBinding) {
     // A later frame writing the same bytes replaces what was recorded there.
     const auto overlapped = std::remove_if(
         mSpans.begin(), mSpans.end(), [begin, end](const RecordedSpan& span) {
@@ -142,7 +239,7 @@ void Mm3dNativePicaCompositionTracker::Record(
         [](const RecordedSpan& span, uint32_t address) {
             return span.Span.BeginAddress < address;
         });
-    mSpans.insert(at, {{begin, end, attribution}, mStats.SceneFrames});
+    mSpans.insert(at, {{begin, end, attribution, lightBinding}, mStats.SceneFrames});
     ++mStats.RecordedSpans;
 }
 
@@ -160,6 +257,8 @@ bool Mm3dNativePicaCompositionTracker::TakeCommandListCompositionSpans(
 void Mm3dNativePicaCompositionTracker::Reset() noexcept {
     mActive.reset();
     mSpans.clear();
+    mSceneLighting = {};
+    mSceneDirectionals.reset();
     mStats = {};
 }
 

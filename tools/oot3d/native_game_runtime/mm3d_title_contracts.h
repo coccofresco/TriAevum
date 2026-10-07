@@ -33,5 +33,23 @@ inline constexpr uint32_t kMm3dViewNearOffset = 0x1CU;
 inline constexpr uint32_t kMm3dViewFarOffset = 0x20U;
 inline constexpr uint32_t kMm3dViewEyeOffset = 0x28U;
 inline constexpr uint32_t kMm3dViewAtOffset = 0x34U;
+// The View's world-to-view matrix (Mtx34, rows): it maps the eye to the
+// origin and the view direction to -Z.
+inline constexpr uint32_t kMm3dViewWorldToViewOffset = 0x17CU;
+
+// The play state (N64 MM's PlayState): Play_Init calls View_Init on
+// play + 0x1F8 (0x0012AA40), so the play state's View is the current View
+// during gameplay. Its LightContext list head is at play + 0xA88: nodes
+// {LightInfo* info, prev, next}, as N64 MM's LightNode. The environment's
+// two directional lights (N64 MM's envCtx.dirLight1 and dirLight2) are the
+// LightInfo records at play + 0x86D0 and play + 0x86E8, laid out as OoT3D's:
+// type u8 at +0 (1 = directional), direction s8 x, y, z at +4 (toward the
+// light, scaled by 127), color u8 r, g, b at +7. The scene draws light them
+// per pixel: every opaque scene draw enables PICA fragment lighting with two
+// directional lights.
+inline constexpr uint32_t kMm3dPlayViewOffset = 0x1F8U;
+inline constexpr uint32_t kMm3dPlayLightListHeadOffset = 0xA88U;
+inline constexpr uint32_t kMm3dPlayEnvironmentLight1Offset = 0x86D0U;
+inline constexpr uint32_t kMm3dPlayEnvironmentLight2Offset = 0x86E8U;
 
 } // namespace Oot3dNativeGame
