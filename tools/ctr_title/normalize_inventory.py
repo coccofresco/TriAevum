@@ -4,10 +4,13 @@ the A32 generators accept: one contiguous, disjoint, word-aligned interval
 per function inside the executable text.
 
 Each interval runs from the entry to the body's last address, cut at the next
-function's entry. Entries outside the text, not word-aligned (Thumb) or
-duplicated are dropped and reported.
+function's entry or Thumb range. Entries outside the text, not word-aligned,
+inside Ghidra's Thumb code (--thumb-ranges, from
+ghidra_scripts/ExportThumbRanges.java) or duplicated are dropped and reported:
+the A32 generators decode only A32, and the runtime executes Thumb itself.
 
 usage: normalize_inventory.py raw.csv manifest.json output.csv [--prefix mm3d]
+       [--thumb-ranges thumb.csv]
 """
 
 from __future__ import annotations
@@ -32,6 +35,7 @@ def main() -> int:
     parser.add_argument("manifest", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--prefix", default="title")
+    parser.add_argument("--thumb-ranges", type=Path)
     args = parser.parse_args()
 
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
@@ -53,6 +57,17 @@ def main() -> int:
         row.setdefault("evidence", "ghidra_auto_analysis")
         row.setdefault("status", "ghidra_auto")
 
+    # Contiguous Thumb ranges as (start, exclusive end).
+    thumb: list[tuple[int, int]] = []
+    if args.thumb_ranges:
+        with args.thumb_ranges.open(newline="", encoding="utf-8") as source:
+            thumb = sorted(
+                (int(row["start"], 16), int(row["end"], 16) + 1)
+                for row in csv.DictReader(source) if row["kind"] == "range")
+
+    def in_thumb(address: int) -> bool:
+        return any(start <= address < end for start, end in thumb)
+
     dropped: dict[str, int] = {}
     kept: dict[int, dict[str, str]] = {}
     for row in rows:
@@ -63,6 +78,8 @@ def main() -> int:
             reason = "outside text"
         elif entry % 4:
             reason = "not word-aligned (Thumb)"
+        elif in_thumb(entry):
+            reason = "Thumb code"
         elif entry in kept:
             reason = "duplicate entry"
         if reason:
@@ -78,6 +95,7 @@ def main() -> int:
         row = kept[entry]
         end = int(row.pop("_last")) + 1
         following = entries[index + 1] if index + 1 < len(entries) else text_end
+        following = min([following] + [start for start, _ in thumb if entry < start < following])
         if end > following:
             end = following
             truncated += 1

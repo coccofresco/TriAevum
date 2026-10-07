@@ -26,9 +26,9 @@ EUR has `layout/EU_<Language>/` and `message/eu/eu?.gmsg` (English, French,
 German, Italian, Spanish; Dutch layouts are present but empty), USA has
 `US_*` and `message/us/` (English, French, Spanish). The title adapter is
 therefore keyed by the code hash (`mm3d`), and the region by program ID and
-RomFS. MM3D's code contains Thumb (150 functions, about 16.7 KB, in the SDK
-runtime at `0x00100000-0x00103600` and `0x002FF000-0x00303000`) entered from
-the process entry by `BLX`; OoT3D's contains none.
+RomFS. MM3D's code contains Thumb (223 functions, about 21 KB, mostly in the
+SDK runtime at `0x00100000-0x00103600` and `0x002FF000-0x00303000`) entered
+from the process entry by `BLX`; OoT3D's contains none.
 
 ## N64 evidence
 
@@ -83,17 +83,24 @@ Work directory `I:/_triaevum_work/mm3d-port` (`W` below).
 3. Function inventory: `tools/ctr_title/ghidra_inventory.py` (headless Ghidra,
    code-set layout from the manifest, `ghidra_scripts/ImportCtrCodeSet.java` and
    `ExportFunctionInventory.java`), then `tools/ctr_title/normalize_inventory.py`
-   (contiguous disjoint word-aligned intervals in text). 12,652 functions found,
-   12,631 kept (18 Thumb entries and 3 outside text dropped), 80.9% of text.
-   The inventory does not yet record the instruction set: 132 word-aligned
-   Thumb functions are among the kept entries and are decoded as A32 by the
-   later steps. `ghidra_scripts/ExportThumbRanges.java` lists Ghidra's Thumb
-   ranges and functions (run on the kept project, read-only).
+   (contiguous disjoint word-aligned intervals in text). A first pass found
+   12,652 functions, 80.9% of text.
+   `normalize_inventory.py --thumb-ranges` drops the functions inside Ghidra's
+   Thumb ranges (`ghidra_scripts/ExportThumbRanges.java`) and cuts A32
+   intervals at them: the generators decode only A32, the runtime executes
+   Thumb itself. The C++ static constructors are reached only through a
+   self-relative table that Ghidra cannot follow: the Thumb initializer loop at
+   `0x001009E0` walks `0x0064AAE8-0x0064AD28` (144 entries, entry = word +
+   its address). `tools/ctr_title/init_array_entries.py` lists them and
+   `ghidra_scripts/CreateFunctionsAt.java` seeds them before analysis, which
+   then follows their callees: 13,827 functions, 13,601 kept (223 Thumb
+   functions, 21.3 KB), 87.3% of text.
 4. A32 registry: `generate_aot.py` with `--code --exheader --inventory
    --boundary-audit --supplemental-entries --true-aot-blocks` (the last three
-   from `tools/mm3d/a32/`, empty for now). 1,058,521 of 1,084,865 slots reachable.
-5. Whole-AOT program: `generate_whole_aot.py` with the same title inputs:
-   17,753 functions, 237,599 blocks, 1,245,442 instructions, none unclaimed.
+   from `tools/mm3d/a32/`, empty for now). 1,143,835 of 1,170,061 slots reachable;
+   6 unsupported operations left, all data words decoded as code.
+5. Whole-AOT program (from the first inventory; not yet regenerated):
+   `generate_whole_aot.py` with the same title inputs: 17,753 functions, 237,599 blocks, 1,245,442 instructions, none unclaimed.
 6. Selection: `select_profile_whole_aot.py --all-lowerable --code` from the
    empty profile/selection in `tools/mm3d/a32/`: 16,522 functions (1,063
    lowering rejections, 905 ownership conflicts).
@@ -116,24 +123,42 @@ renderer. Stderr reports `TRIAEVUM_TITLE_ADAPTER`.
 
 ## Bring-up status
 
-First boot (developer launch, product-mode host build, MM3D title module):
-adapter `mm3d`, languages EN/FR/DE/IT/ES, then the process stops at its first
-instruction. `0x00100000` (the CRT entry) was rejected by whole-AOT lowering
-because `0x00100010` is `BLX` into Thumb (`0x001009E0`), and product mode
-has no residual path. Neither the A32 core nor the whole-AOT lowering executes
-Thumb.
+A product-mode build stops at the first instruction: `0x00100000` (the CRT
+entry) was rejected by whole-AOT lowering because `0x00100010` is `BLX` into
+Thumb (`0x001009E0`), and product mode has no residual path. Bring-up
+therefore uses a development build (no product mode, no title module): the
+MM3D A32 registry, the A32 core and the Thumb interpreter.
+
+What MM3D needed beyond OoT3D, all title-neutral:
+
+- Thumb (`tools/oot3d/native_a32_runtime/a32_thumb.cpp`): ARMv6K Thumb-1 with
+  the BL/BLX pairs, executed from guest memory. Thumb state is an odd PC, the
+  interworking form BX/BLX/POP/LDR already produce; the A32 runtime runs
+  `BLX #imm` and sends odd PCs to the Thumb interpreter. OoT3D has no Thumb
+  code.
+- ARMv6 SIMD media instructions in the A32 core: parallel add/subtract with
+  the GE flags, SEL, SSAT16/USAT16, SXTAB16/UXTAB16 and SMLAD/SMLSD/SMUAD/
+  SMUSD (540 such operations in MM3D's reachable code; OoT3D only used
+  UQSUB8), and MRS/MSR APSR classified as core operations.
+- CTR kernel: `QueryMemory` over typed kernel memory states,
+  `GetThreadId` (nonzero kernel IDs), `WaitSynchronization1` (zero and
+  infinite timeouts), VBlanks before the GSP relay queue is registered.
+- Services: `APT:A` (MM3D's ExHeader grants APT:A, not APT:U) and
+  `APT:GlanceParameter`.
+- A use-after-free in GSP `RegisterInterruptRelayQueue`: the event's handle
+  record was read after `CreateHandle` could reallocate the handle table.
+
+Current state (developer launch, development build, 300 frames): three guest
+threads run through APT initialization; no frame is drawn yet.
 
 ## Next steps
 
-1. Record the instruction set per function in the inventory and keep Thumb
-   functions out of the A32 registry and whole-AOT lowering.
-2. Thumb execution (ARMv6K Thumb-1 with BL/BLX pairs) in the title-neutral A32
-   core with A32/Thumb interworking, first for a development (non-product)
-   build, then Thumb lowering in whole AOT for the zero-residual product.
-3. In product mode `DispatchWholeAotProduct` enables hand-written compiled
-   functions unconditionally; gate them by the adapter like the window setup.
-4. Boot to the title screen: CTR services and SVCs beyond OoT3D's,
-   runtime-discovered entries (`tools/mm3d/a32/runtime_discovered_entries.csv`).
-5. MM3D adapter: camera/projection and composition metadata for the
+1. Continue the boot to the title screen, one missing kernel or service
+   behaviour at a time, each tested at the CTR host boundary.
+2. Thumb lowering in whole AOT and the MM3D title module from the current
+   inventory, for a zero-residual product.
+3. Function discovery from data pointers (vtables, callbacks), as
+   `fearkov/3dsrecomp` does, before indirect calls reach unseen code.
+4. MM3D adapter: camera/projection and composition metadata for the
    extension effects, frame pacing, HUD; then the single-screen mode from
    dekui and Project Restoration.
