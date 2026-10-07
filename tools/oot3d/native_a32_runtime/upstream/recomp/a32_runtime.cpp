@@ -3,6 +3,7 @@
 #include "a32_core_internal.h"
 #include "a32_vfp_scalar.h"
 #include "a32_vfp_transport.h"
+#include "a32_thumb.h"
 
 #include <algorithm>
 #include <array>
@@ -682,12 +683,18 @@ ExecutionResult ExecuteBlock(
         }
 
         case Opcode::Branch: {
-            const bool link =
-                HasFlag(flags, Link) || (op.raw & (1U << 24U)) != 0U;
+            // cond=0xF is BLX #imm: a call into Thumb, H (bit 24) adding a
+            // halfword. Thumb targets carry bit 0 (see a32_thumb.h).
+            const bool exchange = (op.raw >> 28U) == 0xFU;
+            const bool link = exchange || HasFlag(flags, Link) ||
+                              (op.raw & (1U << 24U)) != 0U;
             if (link) {
                 state.r[14] = pc + 4U;
             }
-            const std::uint32_t target = DecodeBranchTarget(op.raw, pc);
+            const std::uint32_t target =
+                exchange ? (DecodeBranchTarget(op.raw, pc) +
+                            ((op.raw >> 23U) & 2U)) | 1U
+                         : DecodeBranchTarget(op.raw, pc);
             ExecutionResult native_result{};
             if (link && TryExecuteNativeFunction(
                             target, state, memory, native_function,
@@ -877,6 +884,17 @@ ExecutionResult Dispatch(
                 continue;
             }
             return native_function_result;
+        }
+        if (IsThumbPc(pc)) {
+            // Thumb code has no registry blocks; it executes from guest
+            // memory up to its next PC write.
+            ExecutionResult result = ExecuteThumbBlock(pc, state, memory);
+            if (result.kind != ExitKind::Fallthrough &&
+                result.kind != ExitKind::Branch) {
+                return result;
+            }
+            pc = result.pc;
+            continue;
         }
         const Block* block = FindBlock(registry, pc);
         if (native_block != nullptr &&

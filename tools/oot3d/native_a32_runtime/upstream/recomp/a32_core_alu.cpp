@@ -528,6 +528,32 @@ bool ExecuteMultiply(
         return true;
     }
 
+    // SMLAD/SMLSD{X} and SMUAD/SMUSD{X} (Ra = 15): two signed halfword
+    // products summed or differenced, plus Ra; Q flags a 32-bit overflow.
+    const std::uint32_t dual32 = raw & 0x0FF000D0U;
+    if (dual32 == 0x07000010U || dual32 == 0x07000050U) {
+        const std::uint32_t left = ReadRegister(state, rm, pc);
+        const std::uint32_t right = ReadRegister(state, rs, pc);
+        const bool exchange = (raw & (1U << 5U)) != 0U;
+        const std::int64_t low_product =
+            static_cast<std::int64_t>(SignedHalf(left, false)) *
+            SignedHalf(right, exchange);
+        const std::int64_t high_product =
+            static_cast<std::int64_t>(SignedHalf(left, true)) *
+            SignedHalf(right, !exchange);
+        std::int64_t value = dual32 == 0x07000050U ? low_product - high_product
+                                                   : low_product + high_product;
+        if (ra_or_lo != 15U) {
+            value += Signed32(ReadRegister(state, ra_or_lo, pc));
+        }
+        if (value != static_cast<std::int32_t>(value)) {
+            state.cpsr |= kFlagQ;
+        }
+        *execution = WriteDestination(
+            rd, static_cast<std::uint32_t>(value), pc, state);
+        return true;
+    }
+
     return false;
 }
 
@@ -596,10 +622,6 @@ bool ExecuteMedia(
     if (signed_extension || unsigned_extension) {
         const bool byte16 =
             extension == 0x06800070U || extension == 0x06C00070U;
-        if (byte16 && rn != 15U) {
-            // SXTAB16/UXTAB16 are intentionally outside _CORE_MEDIA_OPS.
-            return false;
-        }
         const bool byte = byte16 || extension == 0x06A00070U ||
                           extension == 0x06E00070U;
         const unsigned rotate = ((raw >> 10U) & 3U) * 8U;
@@ -612,6 +634,11 @@ bool ExecuteMedia(
             if (signed_extension) {
                 low = (low & 0x80U) != 0U ? low | 0xFFFFFF00U : low;
                 high = (high & 0x80U) != 0U ? high | 0xFFFFFF00U : high;
+            }
+            if (rn != 15U) {  // SXTAB16/UXTAB16 add halfword by halfword
+                const std::uint32_t addend = ReadRegister(state, rn, pc);
+                low += addend & 0xFFFFU;
+                high += addend >> 16U;
             }
             value = (low & 0xFFFFU) | ((high & 0xFFFFU) << 16U);
         } else {
@@ -709,15 +736,107 @@ bool ExecuteMedia(
         return true;
     }
 
-    if ((raw & 0x0FF000F0U) == 0x066000F0U) {  // UQSUB8
+    // Parallel add/subtract: cond 0110 0 op1 Rn Rd 1111 op2 1 Rm. op1 picks
+    // the arithmetic (S/U set the GE flags, Q/UQ saturate, SH/UH halve),
+    // op2 the lanes (ADD16, ASX, SAX, SUB16, ADD8, SUB8).
+    if ((raw & 0x0F800F10U) == 0x06000F10U) {
+        const unsigned op1 = (raw >> 20U) & 7U;
+        const unsigned op2 = (raw >> 5U) & 7U;
+        if (op1 == 0U || op1 == 4U || op2 == 5U || op2 == 6U) {
+            return false;
+        }
+        const bool is_unsigned = op1 >= 5U;
+        const unsigned kind = op1 & 3U;  // 1 plain, 2 saturating, 3 halving
+        const bool bytes = op2 >= 4U;
+        const unsigned lanes = bytes ? 4U : 2U;
+        const unsigned bits = bytes ? 8U : 16U;
+        const std::uint32_t mask = bytes ? 0xFFU : 0xFFFFU;
+        const std::uint32_t left = ReadRegister(state, rn, pc);
+        const std::uint32_t right = ReadRegister(state, rm, pc);
+        const auto lane_value = [&](std::uint32_t value, unsigned lane) {
+            const std::uint32_t field = (value >> (lane * bits)) & mask;
+            if (is_unsigned) {
+                return static_cast<std::int32_t>(field);
+            }
+            return static_cast<std::int32_t>(
+                (field ^ (1U << (bits - 1U))) - (1U << (bits - 1U)));
+        };
+        std::uint32_t value = 0U;
+        std::uint32_t ge = 0U;
+        for (unsigned lane = 0U; lane < lanes; ++lane) {
+            // ASX: low lane subtracts the high right lane, high lane adds the
+            // low one; SAX the reverse.
+            const bool subtract = op2 == 3U || op2 == 7U ||
+                                  (op2 == 1U && lane == 0U) ||
+                                  (op2 == 2U && lane == 1U);
+            const unsigned right_lane =
+                (op2 == 1U || op2 == 2U) ? 1U - lane : lane;
+            const std::int32_t a = lane_value(left, lane);
+            const std::int32_t b = lane_value(right, right_lane);
+            std::int32_t result = subtract ? a - b : a + b;
+            bool lane_ge = false;
+            if (kind == 1U) {
+                lane_ge = is_unsigned
+                              ? (subtract ? result >= 0
+                                          : result >= static_cast<std::int32_t>(mask + 1U))
+                              : result >= 0;
+            } else if (kind == 2U) {
+                const std::int32_t low =
+                    is_unsigned ? 0 : -static_cast<std::int32_t>(1U << (bits - 1U));
+                const std::int32_t high = is_unsigned
+                                              ? static_cast<std::int32_t>(mask)
+                                              : static_cast<std::int32_t>(
+                                                    (1U << (bits - 1U)) - 1U);
+                result = result < low ? low : (result > high ? high : result);
+            } else {
+                result >>= 1;  // arithmetic: the sum keeps its sign
+            }
+            value |= (static_cast<std::uint32_t>(result) & mask) << (lane * bits);
+            if (lane_ge) {
+                ge |= (bytes ? 1U : 3U) << (lane * (bytes ? 1U : 2U));
+            }
+        }
+        if (kind == 1U) {
+            state.cpsr = (state.cpsr & ~0x000F0000U) | (ge << 16U);
+        }
+        *execution = WriteDestination(rd, value, pc, state);
+        return true;
+    }
+
+    if ((raw & 0x0FF00FF0U) == 0x06800FB0U) {  // SEL by the GE flags
         const std::uint32_t left = ReadRegister(state, rn, pc);
         const std::uint32_t right = ReadRegister(state, rm, pc);
         std::uint32_t value = 0U;
         for (unsigned lane = 0U; lane < 4U; ++lane) {
-            const unsigned shift = lane * 8U;
-            const unsigned a = (left >> shift) & 0xFFU;
-            const unsigned b = (right >> shift) & 0xFFU;
-            value |= (a > b ? a - b : 0U) << shift;
+            const std::uint32_t lane_mask = 0xFFU << (lane * 8U);
+            value |= ((state.cpsr >> (16U + lane)) & 1U) != 0U
+                         ? left & lane_mask
+                         : right & lane_mask;
+        }
+        *execution = WriteDestination(rd, value, pc, state);
+        return true;
+    }
+
+    // SSAT16/USAT16: saturate each halfword of Rm to bits 19:16 (+1 signed).
+    const std::uint32_t saturation16 = raw & 0x0FF00FF0U;
+    if (saturation16 == 0x06A00F30U || saturation16 == 0x06E00F30U) {
+        const bool is_signed = saturation16 == 0x06A00F30U;
+        const unsigned bits = ((raw >> 16U) & 0xFU) + (is_signed ? 1U : 0U);
+        const std::int32_t low =
+            is_signed ? -static_cast<std::int32_t>(1U << (bits - 1U)) : 0;
+        const std::int32_t high =
+            is_signed ? static_cast<std::int32_t>((1U << (bits - 1U)) - 1U)
+                      : static_cast<std::int32_t>((1U << bits) - 1U);
+        const std::uint32_t source = ReadRegister(state, rm, pc);
+        std::uint32_t value = 0U;
+        for (unsigned lane = 0U; lane < 2U; ++lane) {
+            const std::int32_t half = SignedHalf(source, lane == 1U);
+            const std::int32_t clamped =
+                half < low ? low : (half > high ? high : half);
+            if (clamped != half) {
+                state.cpsr |= kFlagQ;
+            }
+            value |= (static_cast<std::uint32_t>(clamped) & 0xFFFFU) << (lane * 16U);
         }
         *execution = WriteDestination(rd, value, pc, state);
         return true;

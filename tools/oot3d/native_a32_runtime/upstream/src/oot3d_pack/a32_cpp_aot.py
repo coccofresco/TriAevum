@@ -353,7 +353,10 @@ def _walk_cfg(
                 enqueue(fallthrough, block_start=True)
             continue
         if item.kind == "call":
-            if item.target is not None and item.target % 4 == 0:
+            # BLX #imm enters Thumb, which the runtime executes from guest
+            # memory; its destination is not A32 code.
+            if (item.target is not None and item.target % 4 == 0
+                    and not item.thumb_target):
                 # A direct call proves its destination is code.  Callable
                 # callees are already roots, while this enqueue also preserves
                 # audited internal destinations that are not standalone roots.
@@ -985,6 +988,9 @@ def _opcode_and_category(item: DecodedInstruction) -> tuple[str, str]:
         return ("Ldr32" if item.load else "Str32", "fast_path")
     if item.kind in {"branch", "call"} and item.target is not None:
         if not item.thumb_target:
+            return "Branch", "fast_path"
+        if item.kind == "call" and item.state == "arm" and (item.raw >> 28) == 0xF:
+            # BLX #imm; the runtime's Branch decodes H and the Thumb state.
             return "Branch", "fast_path"
     if item.kind == "indirect_branch":
         opcode = item.raw & 0x0FFFFFF0

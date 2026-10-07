@@ -272,7 +272,6 @@ _CORE_MEDIA_OPS = {
     "sxtb",
     "sxtb16",
     "sxth",
-    "uqsub8",
     "usat",
     "uxtab",
     "uxtah",
@@ -280,6 +279,13 @@ _CORE_MEDIA_OPS = {
     "uxtb16",
     "uxth",
 }
+# ARMv6 SIMD: parallel add/subtract (S/Q/SH/U/UQ/UH x ADD16/ASX/SAX/SUB16/
+# ADD8/SUB8), SEL, halfword saturation and halfword extend-add.
+_CORE_MEDIA_OPS |= {
+    prefix + op
+    for prefix in ("s", "q", "sh", "u", "uq", "uh")
+    for op in ("add16", "asx", "sax", "sub16", "add8", "sub8")
+} | {"sel", "ssat16", "usat16", "sxtab16", "uxtab16"}
 _CORE_MULTIPLY_OPS = {
     "mla",
     "mls",
@@ -289,6 +295,14 @@ _CORE_MULTIPLY_OPS = {
     "smlaldx",
     "smlsld",
     "smlsldx",
+    "smlad",
+    "smladx",
+    "smlsd",
+    "smlsdx",
+    "smuad",
+    "smuadx",
+    "smusd",
+    "smusdx",
     "smull",
     "umaal",
     "umlal",
@@ -315,8 +329,15 @@ def _decode_arm_core(raw: int, pc: int):
 def _classify_arm_system(raw: int) -> str | None:
     """Return the exact CP15 forms present in the OoT3D callable corpus."""
 
-    if raw >> 28 == 0xF or ((raw >> 12) & 0xF) == 15:
+    if raw >> 28 == 0xF:
         return None
+    # MSR APSR_nzcvq, Rm (its Rd field is 1111) and MRS Rd, APSR.
+    if (raw & 0x0FFFFFF0) == 0x0128F000:
+        return "msr_apsr_nzcvq"
+    if ((raw >> 12) & 0xF) == 15:
+        return None
+    if (raw & 0x0FBF0FFF) == 0x010F0000:
+        return "mrs_apsr"
     fixed = raw & 0x0FFF0FFF
     if fixed == 0x0E1D0F70:
         return "mrc_tpidrurw"

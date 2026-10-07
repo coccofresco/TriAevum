@@ -5,16 +5,16 @@
     {
       "path": "src/oot3d_pack/a32_cpp_aot.py",
       "base_sha256": "64bff9da1febca4c8f9195bac6c0203343884c8a61c8a5f892326152362c829c",
-      "working_sha256": "39c42f8cca9049da848cf5495c9061b435a7f262c3d2d30e44e1d2d5321f285a",
-      "working_size": 62303,
-      "purpose": "Bound AOT flow to ExHeader .text, recover initializer and constant/computed switch targets through proven linear register effects, preserve explicit nonadjacent LR continuations, emit disjoint core metadata, and configure manifest-selected true-AOT candidates without regenerating packed shards."
+      "working_sha256": "005bc7c2bd67f3b47524ecd34404de29e4ad1ca5508356edcb45f4fcdd1e1612",
+      "working_size": 62682,
+      "purpose": "Bound AOT flow to ExHeader .text, recover initializer and constant/computed switch targets through proven linear register effects, preserve explicit nonadjacent LR continuations, emit disjoint core metadata, and configure manifest-selected true-AOT candidates without regenerating packed shards. Emit BLX #imm as Branch and keep its Thumb destination out of A32 flow."
     },
     {
       "path": "src/oot3d_pack/arm_ir.py",
       "base_sha256": "88c7a2287a0da12bd6edb5b7f43237d9f9eb88933448c3a91c90d85c4c7c260f",
-      "working_sha256": "e28570a1b61f80dc56cf965fe39eb1ffddc30202dc7891c81a5afd5cfdffe245",
-      "working_size": 65986,
-      "purpose": "Classify supported native core instructions into disjoint system, ALU, and memory runtime decoders."
+      "working_sha256": "e06103fcf914e770a84f2195038c9475ca271429122ff8b6c638fa4c42fb704c",
+      "working_size": 66656,
+      "purpose": "Classify supported native core instructions into disjoint system, ALU, and memory runtime decoders. Classify the ARMv6 SIMD media family and MRS/MSR APSR as core operations."
     },
     {
       "path": "recomp/a32_runtime.h",
@@ -26,9 +26,9 @@
     {
       "path": "recomp/a32_runtime.cpp",
       "base_sha256": "b96890bae8eb9d8d364f33506a80c3f0851da593a1d2af9ceaffb774feb1e6b0",
-      "working_sha256": "c1ff86cb41aaa857c2c2ca4fc36a20c8dc852f716e164936271e283ee28d9bb0",
-      "working_size": 30364,
-      "purpose": "Dispatch classified core operations, compiled functions reached by calls or direct/tail entries, and budgeted multi-block true-AOT regions while materializing the guest PC only at observable boundaries."
+      "working_sha256": "31775a316fa776e03e1f608818906ec693f8ed052d3e03e9a4af520b3d52f53b",
+      "working_size": 31199,
+      "purpose": "Dispatch classified core operations, compiled functions reached by calls or direct/tail entries, and budgeted multi-block true-AOT regions while materializing the guest PC only at observable boundaries. Execute BLX #imm into Thumb and run odd (Thumb) PCs through a32_thumb.cpp from guest memory."
     },
     {
       "path": "recomp/a32_vfp_scalar.cpp",
@@ -57,6 +57,13 @@
       "working_sha256": "3d5714de52f40746a99831e079d02c34ed7c958ccde982727d0626d3734bcaa3",
       "working_size": 2997,
       "purpose": "Provide the system decoder entry, including APSR transfer instructions present in the public source snapshot, while retaining the compatibility Core chain."
+    },
+    {
+      "path": "recomp/a32_core_alu.cpp",
+      "base_sha256": "8c3e68ee76f599ea9e4338c2101ce9e056a81dbab55a24ce52c00a8583a43026",
+      "working_sha256": "3680157c1646afebfc12b922f121cdc3fed11d85e5651e3326d1029ba39d56d0",
+      "working_size": 35471,
+      "purpose": "Execute the ARMv6 SIMD media family: parallel add/subtract with GE flags, SEL, SSAT16/USAT16, SXTAB16/UXTAB16 and the SMLAD/SMLSD/SMUAD/SMUSD dual multiplies."
     }
   ],
   "files": [

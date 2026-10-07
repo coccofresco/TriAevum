@@ -97,6 +97,7 @@ add_library(oot3d_native_a32_runtime STATIC EXCLUDE_FROM_ALL
     ${OOT3D_PINNED_A32_ROOT}/recomp/a32_runtime.cpp
     ${OOT3D_PINNED_A32_ROOT}/recomp/a32_vfp_binary64.cpp
     tools/oot3d/native_a32_runtime/mass_cpp/recomp/a32_direct_runtime.cpp
+    tools/oot3d/native_a32_runtime/a32_thumb.cpp
     tools/oot3d/native_a32_runtime/oot3d_native_a32_vfp_ops.cpp
     ${OOT3D_PINNED_A32_ROOT}/recomp/a32_vfp_transport.cpp
 )
@@ -180,6 +181,20 @@ add_executable(oot3d_native_a32_runtime_tests EXCLUDE_FROM_ALL
 target_link_libraries(oot3d_native_a32_runtime_tests PRIVATE
     oot3d_native_a32_runtime)
 oot3d_target_defaults(oot3d_native_a32_runtime_tests FOLDER Tests)
+
+add_executable(oot3d_native_a32_thumb_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_a32_runtime/a32_thumb_tests.cpp
+)
+target_link_libraries(oot3d_native_a32_thumb_tests PRIVATE
+    oot3d_native_a32_runtime)
+oot3d_target_defaults(oot3d_native_a32_thumb_tests FOLDER Tests)
+
+add_executable(oot3d_native_a32_media_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_a32_runtime/a32_media_tests.cpp
+)
+target_link_libraries(oot3d_native_a32_media_tests PRIVATE
+    oot3d_native_a32_runtime)
+oot3d_target_defaults(oot3d_native_a32_media_tests FOLDER Tests)
 
 add_executable(oot3d_native_a32_vfp_fast_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_a32_runtime/oot3d_native_a32_vfp_fast_tests.cpp
