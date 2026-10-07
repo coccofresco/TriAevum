@@ -55,6 +55,21 @@ def option_value(arguments: list[str], option: str) -> str | None:
     return None
 
 
+def take_option(arguments: list[str], option: str) -> str | None:
+    """Removes the option (and its value) and returns the value, if present."""
+    for index, value in enumerate(arguments):
+        if value == option:
+            if index + 1 >= len(arguments):
+                raise ValueError(f"{option} requires a value")
+            taken = arguments[index + 1]
+            del arguments[index:index + 2]
+            return taken
+        if value.startswith(option + "="):
+            del arguments[index]
+            return value.split("=", 1)[1]
+    return None
+
+
 def replace_option(arguments: list[str], option: str, value: Path) -> None:
     for index, current in enumerate(arguments):
         if current == option:
@@ -231,6 +246,11 @@ def main() -> int:
         raise ValueError("the pinned A32 runtime provenance is missing or invalid")
     validate_local_extensions(provenance)
     arguments = list(sys.argv[1:])
+    # Title inputs this wrapper reads itself (the generator never sees them).
+    # Their defaults are OoT3D's; another title passes its own.
+    exheader_path = Path(take_option(arguments, "--exheader") or operational_path("oot3d_exheader"))
+    supplemental_entries = Path(take_option(arguments, "--supplemental-entries") or SUPPLEMENTAL_ENTRIES)
+    true_aot_blocks = Path(take_option(arguments, "--true-aot-blocks") or TRUE_AOT_BLOCKS)
     defaults = {
         "--code": operational_path("oot3d_code_bin"),
         "--inventory": UPSTREAM / "analysis/codebin_function_inventory.csv",
@@ -252,7 +272,6 @@ def main() -> int:
     inventory_path = Path(
         option_value(arguments, "--inventory") or defaults["--inventory"]
     )
-    exheader_path = operational_path("oot3d_exheader")
     exheader = exheader_path.read_bytes()
     if len(exheader) < 0x18:
         raise ValueError("OOT3D ExHeader is truncated")
@@ -267,8 +286,8 @@ def main() -> int:
         exheader_path,
         Path(option_value(arguments, "--code") or defaults["--code"]),
         inventory_path,
-        SUPPLEMENTAL_ENTRIES,
-        TRUE_AOT_BLOCKS,
+        supplemental_entries,
+        true_aot_blocks,
         TRUE_AOT_GENERATOR,
         Path(
             option_value(arguments, "--boundary-audit")
@@ -282,7 +301,7 @@ def main() -> int:
         return 0
     generated_inventory = add_local_entry_intervals(
         inventory_path,
-        SUPPLEMENTAL_ENTRIES,
+        supplemental_entries,
         output_path / "inventory_with_process_entry.csv",
         entrypoint,
     )
@@ -297,7 +316,7 @@ def main() -> int:
 
         generate_true_aot(
             Path(option_value(arguments, "--code") or defaults["--code"]),
-            TRUE_AOT_BLOCKS,
+            true_aot_blocks,
             output_path,
             int(option_value(arguments, "--base") or "0x00100000", 0),
         )

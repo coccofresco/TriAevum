@@ -166,6 +166,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--code", type=Path, help="the title's code.bin (default: OoT3D's)")
     args = parser.parse_args(argv)
     if args.max_new_functions < 0:
         parser.error("--max-new-functions must be non-negative")
@@ -178,7 +179,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     program = json.loads(args.program.read_text(encoding="utf-8"))
     profile = json.loads(args.profile.read_text(encoding="utf-8"))
     previous = json.loads(args.selection.read_text(encoding="utf-8"))
-    code = operational_path("oot3d_code_bin").read_bytes()
+    code = (args.code or operational_path("oot3d_code_bin")).read_bytes()
     records = {int(item["entry"]): item for item in program["functions"]}
     blocks = {int(item["id"]): item for item in program["blocks"]}
     profile_records = {

@@ -39,13 +39,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--include-instructions", action="store_true")
     parser.add_argument("--force", action="store_true")
+    # Title inputs; the defaults are OoT3D's.
+    parser.add_argument("--code", type=Path)
+    parser.add_argument("--exheader", type=Path)
+    parser.add_argument(
+        "--inventory", type=Path,
+        default=UPSTREAM / "analysis/codebin_function_inventory.csv")
+    parser.add_argument("--supplemental-entries", type=Path, default=SUPPLEMENTAL_ENTRIES)
+    parser.add_argument(
+        "--boundary-audit", type=Path,
+        default=UPSTREAM / "analysis/codebin_callable_boundary_residue_audit_166.csv")
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    code_path = operational_path("oot3d_code_bin")
-    exheader_path = operational_path("oot3d_exheader")
+    code_path = args.code or operational_path("oot3d_code_bin")
+    exheader_path = args.exheader or operational_path("oot3d_exheader")
     exheader = exheader_path.read_bytes()
     if len(exheader) < 0x18:
         raise ValueError("OOT3D ExHeader is truncated")
@@ -55,8 +65,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise ValueError("OOT3D ExHeader has an empty text segment")
 
     inventory = add_local_entry_intervals(
-        UPSTREAM / "analysis/codebin_function_inventory.csv",
-        SUPPLEMENTAL_ENTRIES,
+        args.inventory,
+        args.supplemental_entries,
         args.inventory_output,
         entrypoint,
     )
@@ -66,7 +76,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--inventory",
         str(inventory),
         "--boundary-audit",
-        str(UPSTREAM / "analysis/codebin_callable_boundary_residue_audit_166.csv"),
+        str(args.boundary_audit),
         "--base",
         hex(DEFAULT_BASE),
         "--executable-size",
