@@ -115,15 +115,17 @@ bool GfxRenderingAPIVulkan::SubmitPicaDisplayTransfer(
                     // swapchain (stale targets are rebuilt at frame start).
                     Oot3d::IsNativeTopScreenTarget({source->Key.Width, source->Key.Height}) &&
                         Oot3d::NativeTopScreenAtPresentedDensity(
-                            {mSwapchainExtent.width, mSwapchainExtent.height}),
+                            NativeTopScreenOutputExtent()),
                 }, &transferPlanError);
             if (!transferPlan.has_value()) {
                 throw std::runtime_error(
                     "native PICA display transfer plan failed: " +
                     transferPlanError);
             }
-            if (source->Key.Width == Oot3d::kNativeTopScreenPhysicalWidth &&
-                source->Key.Height == Oot3d::kNativeTopScreenPhysicalHeight) {
+            // The presentation transfer (the 2:1 line filter) publishes the
+            // scene extent; reduced or raw copies of the same target do not.
+            if (Oot3d::IsNativeTopScreenTarget({source->Key.Width, source->Key.Height}) &&
+                transferPlan->ScalingMode == 1U) {
                 Oot3d::GraphicsSettingsRuntime::Instance().PublishSceneExtent(
                     transferPlan->DestinationHeight, transferPlan->DestinationWidth);
             }

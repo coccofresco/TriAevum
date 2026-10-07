@@ -51,8 +51,11 @@ std::optional<PicaDisplayTransferPlan> BuildPicaDisplayTransferPlan(
         return std::nullopt;
     }
 
+    // Only the source's X (the top screen's doubled line axis) is at the
+    // presented density; its other axis already had one sample per presented
+    // pixel, so a 2x2 filter there is a real halving (MM3D's reduced copies).
     const uint32_t collapsedH = input.SourceAtPresentedDensity ? horizontalSamples : 1U;
-    const uint32_t collapsedV = input.SourceAtPresentedDensity ? verticalSamples : 1U;
+    const uint32_t collapsedV = 1U;
     const auto destinationWidth = ScaleNativeExtent(
         input.NativeOutputWidth * collapsedH, input.SourceWidth,
         input.NativeInputWidth);

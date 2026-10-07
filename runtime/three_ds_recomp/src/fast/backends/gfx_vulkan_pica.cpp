@@ -589,7 +589,7 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
         ? Oot3d::RenderExtent{restoredWidth, restoredHeight}
         : Oot3d::ResolveNativePicaRenderExtent(
               {key.Width, key.Height},
-              {mSwapchainExtent.width, mSwapchainExtent.height},
+              NativeTopScreenOutputExtent(),
               mInternalResolutionScale);
     if (const auto found = mNativePicaRenderTargets.find(key);
         found != mNativePicaRenderTargets.end()) {
@@ -1739,7 +1739,16 @@ void GfxRenderingAPIVulkan::ApplyPendingNativePicaMemoryFills(NativePicaRenderTa
         bool nriShadowClear = false;
         uint32_t shadowBarrierCount = 0;
         if (coversColor && target.ShadowImage != VK_NULL_HANDLE) {
+            // The shadow clear is transfer/compute work: no render pass may be
+            // active, neither the PICA one nor the swapchain/overlay pass. A
+            // clear recorded inside the latter is invalid; on NVIDIA it wrote
+            // past another image once targets were scaled (device lost).
             EndNativePicaRenderPass();
+            if (mRenderPassActive) {
+                vkCmdEndRenderPass(mCommandBuffers[mCurrentFrame]);
+                mRenderPassActive = false;
+                mOverlayRenderPassActive = false;
+            }
             const uint32_t shadowClearValue = static_cast<uint32_t>(NativePicaFillByte(*fill, 0U)) |
                                               (static_cast<uint32_t>(NativePicaFillByte(*fill, 1U)) << 8U) |
                                               (static_cast<uint32_t>(NativePicaFillByte(*fill, 2U)) << 16U) |

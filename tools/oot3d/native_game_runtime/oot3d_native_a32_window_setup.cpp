@@ -691,6 +691,10 @@ void NativeA32WindowSession::Setup() {
       std::chrono::steady_clock::now());
   api.SetNativePicaGeometryCacheEnabled(
       !launch.DisableOpenGlPicaGeometryCache);
+  // Only OoT3D's adapter widens the scene projection to the output aspect;
+  // another title's top screen keeps its native view, letterboxed.
+  api.SetNativeTopScreenExtendsToOutput(
+      titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur);
   titleRenderBackend =
       dynamic_cast<Fast::Oot3d::TitleRenderBackend *>(&api);
   gui =

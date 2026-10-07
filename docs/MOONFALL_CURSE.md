@@ -179,6 +179,21 @@ What MM3D needed beyond OoT3D, all title-neutral:
   buffers. The PICA frontend now continues in the jumped buffer (the rest of
   the jumping buffer is not executed), read through the PICA physical memory
   view by the window and by the module PICA host. OoT3D never jumps.
+- Resolution: the top-screen target was recognized only at OoT3D's exact
+  480x400; MM3D pads it to 512 (480-sample viewport), so it stayed at native
+  size and was only magnified. A top-screen target is now 400 lines by 480 to
+  512 samples, its padding scaled at the visible samples' density. A title
+  whose adapter does not widen the projection (all but OoT3D, so far) keeps
+  the native 400:240 view fitted inside the output (letterboxed) instead of
+  being stretched. At the presented density only the line axis collapses the
+  guest's 2:1 filter; MM3D's 2x2 reduced copies of the frame halve the other
+  axis.
+- A device lost at any internal scale above native (also with the original
+  code): the memory fill's shadow clear was recorded inside the active
+  swapchain/overlay render pass (invalid; on NVIDIA it wrote past another
+  image once targets were scaled). It now ends that pass first, as the
+  display transfer already did. Found with the Vulkan SDK's crash diagnostic
+  layer.
 - Startup shader preparation: the startup program family (OoT3D's vertex
   programs and effect supersets) is prepared only for the OoT3D adapter.
   Another title's draws never match it, so preparing it only held MM3D's

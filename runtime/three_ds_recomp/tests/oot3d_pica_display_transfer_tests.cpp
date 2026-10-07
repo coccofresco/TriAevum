@@ -82,6 +82,16 @@ TEST(Oot3dPicaDisplayTransfer, CopiesASourceAtPresentedDensity) {
         480U, 400U, 120U, 400U, 2160U, 3840U, 0x01001000U, true});
     ASSERT_TRUE(crop.has_value());
     EXPECT_EQ(crop->DestinationWidth, 1080U);
+    // A 2x2 reduction of that source (MM3D's half-size copies): X collapses,
+    // the 400-line axis is really halved.
+    const auto reduced = Fast::Oot3d::BuildPicaDisplayTransferPlan({
+        512U, 400U, 256U, 200U, 2304U, 3840U, 0x02000000U, true});
+    ASSERT_TRUE(reduced.has_value());
+    EXPECT_EQ(reduced->DestinationWidth, 2304U);
+    EXPECT_EQ(reduced->DestinationHeight, 1920U);
+    EXPECT_EQ(reduced->HorizontalSamples, 1U);
+    EXPECT_EQ(reduced->VerticalSamples, 2U);
+    EXPECT_TRUE(reduced->SamplingFitsSource());
 }
 
 TEST(Oot3dPicaDisplayTransfer, RejectsSamplingPastSource) {

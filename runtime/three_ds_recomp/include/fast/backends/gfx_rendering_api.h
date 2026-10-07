@@ -207,6 +207,11 @@ class GfxRenderingAPI : public ::Fast::Renderer3ds::PicaRenderBackend {
     }
     virtual void SetNativePicaGeometryCacheEnabled(bool) noexcept {
     }
+    // Whether the title widens its top-screen scene to the output's aspect
+    // (its adapter extends the projection). Otherwise the top-screen target
+    // keeps the native 400:240 view, fitted inside the output.
+    virtual void SetNativeTopScreenExtendsToOutput(bool) noexcept {
+    }
     bool SubmitPicaDraw(const GfxNativePicaDrawView&,
                         std::string* error = nullptr) override {
         if (error != nullptr) {

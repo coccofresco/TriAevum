@@ -21,6 +21,7 @@
 #include "fast/backends/oot3d_vulkan_gpu_profiler.h"
 #include "fast/backends/oot3d_vulkan_validation.h"
 #include "fast/backends/vulkan_scanout_probe.h"
+#include "fast/oot3d/render_resolution_policy.h"
 #include "fast/oot3d/nri_interop_context.h"
 #include "fast/oot3d/brixelizer_gi_pass.h"
 #include "fast/oot3d/brixelizer_scene.h"
@@ -150,6 +151,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     [[nodiscard]] bool UsesAlwaysAvailablePrograms() const override;
     void RegisterTitlePassPrograms(std::span<const Renderer::PassShaderArtifact> programs) override;
     [[nodiscard]] Renderer3ds::PicaPreparationStatus PreparationStatus() const override;
+    void SetNativeTopScreenExtendsToOutput(bool extends) noexcept override {
+        mNativeTopScreenExtendsToOutput = extends;
+    }
 
     const char* GetName() override;
     int GetMaxTextureSize() override;
@@ -850,6 +854,12 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         std::span<const uint8_t> stencilValues);
     void BeginNativePicaRenderPass(NativePicaRenderTarget& target);
     void EndNativePicaRenderPass();
+    // The output extent the top-screen target is resolved against: the
+    // swapchain, or its native-aspect fit for a title that does not widen.
+    [[nodiscard]] Oot3d::RenderExtent NativeTopScreenOutputExtent() const noexcept {
+        const Oot3d::RenderExtent output{mSwapchainExtent.width, mSwapchainExtent.height};
+        return mNativeTopScreenExtendsToOutput ? output : Oot3d::FitNativeTopScreenAspect(output);
+    }
     void ExecuteNativePicaBeforeDrawAnchors(
         NativePicaRenderTarget& target, const GfxNativePicaDrawView& draw,
         double& shadowMilliseconds, double& grassMilliseconds);
@@ -1056,6 +1066,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     VkSwapchainKHR mSwapchain = VK_NULL_HANDLE;
     VkFormat mSwapchainFormat = VK_FORMAT_UNDEFINED;
     VkExtent2D mSwapchainExtent{};
+    bool mNativeTopScreenExtendsToOutput = true;
     VkSurfaceCapabilitiesKHR mSwapchainSurfaceCapabilities{};
     VkSurfaceFormatKHR mSwapchainSurfaceFormat{};
     std::vector<VkImage> mSwapchainImages;

@@ -706,7 +706,7 @@ void GfxRenderingAPIVulkan::StartFrame() {
             const auto& [key, target] = entry;
             const auto expected = Oot3d::ResolveNativePicaRenderExtent(
                 {key.Width, key.Height},
-                {mSwapchainExtent.width, mSwapchainExtent.height},
+                NativeTopScreenOutputExtent(),
                 mInternalResolutionScale);
             return target.Width != expected.Width || target.Height != expected.Height;
         });

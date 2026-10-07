@@ -2167,6 +2167,34 @@ TEST(Oot3dRenderResolution,
         {480U, 400U}, {400U, 240U}, 1.0F);
     EXPECT_EQ(nativeTopScreen.Width, 480U);
     EXPECT_EQ(nativeTopScreen.Height, 400U);
+
+    // A padded top target (MM3D: 512 storage samples, 480 drawn) scales with
+    // the output like the 480-sample one, its padding at the same density.
+    const auto paddedTopScreen = ResolveNativePicaRenderExtent(
+        {512U, 400U}, {1920U, 1080U}, 1.0F);
+    EXPECT_EQ(paddedTopScreen.Width, 1152U);
+    EXPECT_EQ(paddedTopScreen.Height, 1920U);
+    const auto paddedStandard = ResolveNativePicaRenderExtent(
+        {512U, 400U}, {1280U, 720U}, 1.0F);
+    EXPECT_EQ(paddedStandard.Width, 768U);
+    EXPECT_EQ(paddedStandard.Height, 1280U);
+    const auto paddedNative = ResolveNativePicaRenderExtent(
+        {512U, 400U}, {400U, 240U}, 1.0F);
+    EXPECT_EQ(paddedNative.Width, 512U);
+    EXPECT_EQ(paddedNative.Height, 400U);
+    EXPECT_TRUE(IsNativeTopScreenTarget({512U, 400U}));
+    // A title that does not widen keeps 400:240 inside the output.
+    EXPECT_EQ(FitNativeTopScreenAspect({1920U, 1080U}).Width, 1800U);
+    EXPECT_EQ(FitNativeTopScreenAspect({1920U, 1080U}).Height, 1080U);
+    EXPECT_EQ(FitNativeTopScreenAspect({1600U, 1200U}).Width, 1600U);
+    EXPECT_EQ(FitNativeTopScreenAspect({1600U, 1200U}).Height, 960U);
+    EXPECT_EQ(FitNativeTopScreenAspect({400U, 240U}).Width, 400U);
+    const auto fittedTopScreen = ResolveNativePicaRenderExtent(
+        {512U, 400U}, FitNativeTopScreenAspect({1920U, 1080U}), 1.0F);
+    EXPECT_EQ(fittedTopScreen.Width, 1152U);
+    EXPECT_EQ(fittedTopScreen.Height, 1800U);
+    EXPECT_FALSE(IsNativeTopScreenTarget({1024U, 400U}));
+    EXPECT_FALSE(IsNativeTopScreenTarget({512U, 512U}));
 }
 
 TEST(Oot3dRenderResolution,

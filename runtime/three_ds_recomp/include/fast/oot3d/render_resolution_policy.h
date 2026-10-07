@@ -47,9 +47,29 @@ inline constexpr float kMinimumUpscalerRenderScale = 1.0F / 3.0F;
 // sample per output pixel on both axes) and the transfer copies
 // (SourceAtPresentedDensity); a render scale above 1 supersamples both axes
 // evenly. Below 480 lines the game's 2x sampling and filter are kept.
+// A title may pad the target's storage width past its 480 samples (MM3D
+// allocates 512 and draws a 480-sample viewport): the padding is scaled at the
+// density of the visible samples, so the transfer and the draws keep their
+// native proportions.
+inline constexpr std::uint32_t kNativeTopScreenMaximumStorageWidth = 512U;
+
 [[nodiscard]] inline bool IsNativeTopScreenTarget(RenderExtent guestExtent) noexcept {
-    return guestExtent.Width == kNativeTopScreenPhysicalWidth &&
+    return guestExtent.Width >= kNativeTopScreenPhysicalWidth &&
+           guestExtent.Width <= kNativeTopScreenMaximumStorageWidth &&
            guestExtent.Height == kNativeTopScreenPhysicalHeight;
+}
+
+// The largest native-aspect (400:240) extent inside an output: the top
+// screen of a title that does not widen its projection is presented there.
+[[nodiscard]] inline RenderExtent FitNativeTopScreenAspect(RenderExtent output) noexcept {
+    if (output.Width == 0U || output.Height == 0U) return output;
+    const uint64_t widthAtHeight = (static_cast<uint64_t>(output.Height) * kNativeTopScreenLogicalWidth +
+                                    kNativeTopScreenLogicalHeight / 2U) / kNativeTopScreenLogicalHeight;
+    if (widthAtHeight <= output.Width)
+        return {std::max<uint32_t>(1U, static_cast<uint32_t>(widthAtHeight)), output.Height};
+    const uint64_t heightAtWidth = (static_cast<uint64_t>(output.Width) * kNativeTopScreenLogicalHeight +
+                                    kNativeTopScreenLogicalWidth / 2U) / kNativeTopScreenLogicalWidth;
+    return {output.Width, std::max<uint32_t>(1U, static_cast<uint32_t>(heightAtWidth))};
 }
 
 [[nodiscard]] inline bool NativeTopScreenAtPresentedDensity(RenderExtent outputExtent) noexcept {
@@ -62,8 +82,13 @@ inline constexpr float kMinimumUpscalerRenderScale = 1.0F / 3.0F;
     RenderExtent base = guestExtent;
     if (IsNativeTopScreenTarget(guestExtent) &&
         outputExtent.Width != 0U && outputExtent.Height != 0U) {
-        // Stored rotated: physical X spans the output's height.
-        base = {outputExtent.Height * (NativeTopScreenAtPresentedDensity(outputExtent) ? 1U : 2U),
+        // Stored rotated: physical X spans the output's height. The visible
+        // 480 samples take it; storage padding follows at the same density.
+        const uint64_t visibleWidth = static_cast<uint64_t>(outputExtent.Height) *
+            (NativeTopScreenAtPresentedDensity(outputExtent) ? 1U : 2U);
+        base = {static_cast<uint32_t>(
+                    (visibleWidth * guestExtent.Width + kNativeTopScreenPhysicalWidth / 2U) /
+                    kNativeTopScreenPhysicalWidth),
                 outputExtent.Width};
     }
     return ScaleRenderExtent(base, internalScale);
