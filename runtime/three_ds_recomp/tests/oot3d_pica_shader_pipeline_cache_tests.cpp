@@ -1944,6 +1944,55 @@ TEST(Oot3dPicaShaderInstrumentation, AuthoredLightStaysWorldFixedWithCameraFolde
     EXPECT_TRUE(BuildPicaSurfaceLightingUniforms(hooks, 0, bytes, {}, environment, nullptr));
 }
 
+// A four-light vertex program (MM3D's GzwShader) supplies the normal and
+// material without its vertex lights: a draw lit per vertex keeps its native
+// lighting, and a scene light the draw's native fragment lights already
+// apply is not added again (its shadow applies to the native light).
+TEST(Oot3dPicaShaderInstrumentation, FourLightSurfaceKeepsNativeLightsAndLightsFragmentDrawsOnce) {
+    using namespace Fast::Renderer3ds;
+    auto hooks = ShadowCasterHooks();
+    hooks.Transform = {PicaVertexTransformOperation::ModelViewProjection3x4,
+                       0, 4, 4, 3, 20, 3, 0, 1};
+    hooks.Surface.ViewNormalTemporary = 14;
+    hooks.Surface.LightingBooleanUniform = 9;
+    hooks.Surface.DiffuseUniform = 8;
+    hooks.Surface.AmbientUniform = 9;
+    hooks.Surface.TintBooleanUniform = 5;
+    hooks.Surface.TintInputRegister = 3;
+    hooks.Surface.TintScale = {90, 2};
+    EXPECT_FALSE(hooks.Surface.Available());
+    hooks.Surface.VertexLightsReconstructed = false;
+    ASSERT_TRUE(hooks.Surface.Available());
+    std::array<std::array<float, 4>, 96> uniforms{};
+    uniforms[8] = {1.0F, 1.0F, 1.0F, 1.0F};
+    const std::span<const uint8_t> bytes{
+        reinterpret_cast<const uint8_t*>(uniforms.data()), sizeof(uniforms)};
+    PicaNativeLightBinding binding;
+    PicaSceneDirectionalLights directionals;
+    directionals.Lights[0] = {1, {1.0F, 0.0F, 0.0F}, {0.8F, 0.7F, 0.6F}};
+    directionals.Lights[1] = {2, {0.0F, 1.0F, 0.0F}, {0.3F, 0.3F, 0.3F}};
+    directionals.Count = 2;
+    binding.SceneDirectionals = std::make_shared<const PicaSceneDirectionalLights>(directionals);
+    const auto view = BuildPicaSurfaceLightingView(Fast::Oot3d::IdentityDirectionalShadowMatrix());
+    ASSERT_TRUE(view);
+    PicaEnvironmentLighting environment;
+    EXPECT_FALSE(BuildPicaSurfaceLightingUniforms(hooks, 1U << 9, bytes, binding, environment, &*view))
+        << "a draw lit per vertex by four lights must stay native";
+    auto light = BuildPicaSurfaceLightingUniforms(hooks, 0, bytes, binding, environment, &*view);
+    ASSERT_TRUE(light);
+    EXPECT_EQ(light->Control[0], 0U);
+    ASSERT_EQ(light->Control[2], 2U);
+    // The native fragment light toward +X (half-float, not unit length).
+    const std::array<std::array<float, 3>, 1> native{{{0.937F, 0.004F, -0.01F}}};
+    EXPECT_EQ(ExcludePicaSceneDirectionalsLitNatively(*light, native), 1U);
+    ASSERT_EQ(light->Control[2], 1U);
+    EXPECT_FLOAT_EQ(light->SceneDirections[0][1], 1.0F);
+    EXPECT_FLOAT_EQ(light->SceneDirectionalColors[0][0], 0.3F);
+    EXPECT_EQ(light->SceneDirections[1], (std::array<float, 4>{}));
+    EXPECT_NE(std::string_view(PicaSurfaceLightingBody()).find("fragment_uniforms.lighting_diffuse[pica_light]"),
+              std::string_view::npos);
+}
+
 TEST(Oot3dPicaShaderInstrumentation, AuthoredLightingPreservesNativeMaterialReflectance) {
     using namespace Fast::Renderer3ds;
     auto hooks = ShadowCasterHooks();

@@ -3580,3 +3580,39 @@ early, because unsigned-byte vertex attributes are not interpolated; the step
 itself is native (native 30 shows it too). Composition tests cover the selector
 staying constant while the blend steps.
 
+## Four-light vertex programs and native fragment-lit receivers (2026-10-08)
+
+The frontend recognizes a second vertex-lighting shape besides CMB's
+three-light block (`DecodeCmbSurface`): under a boolean uniform, MOV material
+diffuse and ambient, then four DP3 of light-direction uniforms with the
+view-space normal into the components of one temporary, each light enabled by
+a component of a uniform vector (MM3D's `GzwShader`,
+`DecodeFourLightSurface`). The surface rows hold three vertex lights, so that
+layout is published with `VertexLightsReconstructed = false`: it supplies the
+normal, material and tint; a draw that lights per vertex
+(`LightingBooleanUniform` set) keeps its native shader
+(`BuildPicaSurfaceLightingUniforms` returns no uniforms).
+
+Draws lit by native fragment lights (and not per vertex) keep their native
+per-pixel result. A scene directional light with the view-space direction of
+one of the draw's native directional fragment lights
+(`ExcludePicaSceneDirectionalsLitNatively`, within ~5 degrees for the
+half-float light vector) is not added again; the shadow receivers list the
+native fragment lights (slots 0-7, as the PBR native loop does), and
+`PicaSurfaceLightingBody`, without per-vertex lighting, removes the shadowed
+diffuse share `diffuse_i * max(n . l_i, 0) * (1 - shadow_i)` of a selected
+native light from the native primary fragment color. Lights the shadow does
+not select read 1 and leave the result unchanged. A draw whose fragment
+lights match no scene light keeps the previous behaviour.
+
+Verified on MM3D (developer launch, Clock Town attract demo, deterministic):
+with directional shadows and PerPixelPBR, the 96 opaque scene draws bind as
+matched receivers and the frames equal the effects-off frames byte for byte
+(the demo's light is horizontal, so no shadow); with the guest's directional
+light raised in guest memory (a local experiment, not committed), the shadow
+of the building and of the characters darkens the native per-pixel light
+(18% of the pixels of frame 2390 against the same light without shadows).
+Tests: frontend (four-light surface program), pipeline cache 53/53 (layout,
+per-vertex fallback, exclusion), foundation 340/340, effect graph 59/59,
+scene frame 20/20. Not re-run: an OoT3D capture; OoT3D changes only where a
+fragment-lit material's native light matches a scene light.

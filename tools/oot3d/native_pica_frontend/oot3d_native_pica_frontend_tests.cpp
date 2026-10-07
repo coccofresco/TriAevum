@@ -156,6 +156,57 @@ Oot3dNativeGame::Oot3dPicaDrawPacket BuildCmbTransformPacket() {
     return packet;
 }
 
+// A rigid program with a four-light vertex-lighting block, shaped as MM3D's
+// GzwShader: under b9, MOV diffuse (c8) and ambient (c9), four DP3 of
+// c77/c80/c83/c86 with the view-space normal r14, and a vertex-color tint
+// (v3 * c90.z) under b5.
+Oot3dNativeGame::Oot3dPicaDrawPacket BuildFourLightSurfacePacket() {
+    using nihstro::DestRegister;
+    using nihstro::OpCode;
+    using nihstro::SourceRegister;
+    Oot3dNativeGame::Oot3dPicaDrawPacket packet{};
+    packet.Registers[0x4FU] = 2U;
+    packet.Registers[0x50U] = 0x03020100U;
+    packet.Registers[0x51U] = 0x1F141312U;
+    packet.Registers[0x2B9U] = 7U;
+    packet.Registers[0x2BDU] = 3U;
+    for (uint8_t component = 0U; component < 4U; ++component)
+        packet.VertexShader.Swizzles[component] = Swizzle(static_cast<uint8_t>(0x8U >> component));
+    packet.VertexShader.Swizzles[4U] = Swizzle(0xFU);
+    packet.VertexShader.Swizzles[5U] = Swizzle(0xFU, 2U);
+    packet.VertexShader.SwizzleWordCount = 6U;
+    auto& program = packet.VertexShader.Program;
+    for (uint8_t row = 0U; row < 3U; ++row) {
+        program[row] = ArithmeticInstruction(OpCode::Id::DP3, DestRegister::MakeTemporary(11),
+                                             SourceRegister::MakeFloat(20 + row), SourceRegister::MakeInput(1), row);
+        program[3U + row] = ArithmeticInstruction(OpCode::Id::DP4, DestRegister::MakeTemporary(8),
+                                                  SourceRegister::MakeFloat(20 + row), SourceRegister::MakeInput(0), row);
+        program[6U + row] = ArithmeticInstruction(OpCode::Id::DP4, DestRegister::MakeTemporary(15),
+                                                  SourceRegister::MakeFloat(4 + row), SourceRegister::MakeTemporary(8), row);
+        program[9U + row] = ArithmeticInstruction(OpCode::Id::DP3, DestRegister::MakeTemporary(14),
+                                                  SourceRegister::MakeFloat(4 + row), SourceRegister::MakeTemporary(11), row);
+    }
+    program[12U] = UniformBranchInstruction(9U, 22U, 0U);
+    program[13U] = ArithmeticInstruction(OpCode::Id::MOV, DestRegister::MakeTemporary(0), SourceRegister::MakeFloat(8),
+                                         SourceRegister::MakeFloat(0), 4U);
+    program[14U] = ArithmeticInstruction(OpCode::Id::MOV, DestRegister::MakeTemporary(1), SourceRegister::MakeFloat(9),
+                                         SourceRegister::MakeFloat(0), 4U);
+    for (uint8_t light = 0U; light < 4U; ++light)
+        program[15U + light] = ArithmeticInstruction(OpCode::Id::DP3, DestRegister::MakeTemporary(3),
+                                                     SourceRegister::MakeFloat(77 + 3 * light),
+                                                     SourceRegister::MakeTemporary(14), light);
+    program[19U] = UniformBranchInstruction(5U, 21U, 0U);
+    program[20U] = ArithmeticInstruction(OpCode::Id::MUL, DestRegister::MakeTemporary(9), SourceRegister::MakeFloat(90),
+                                         SourceRegister::MakeInput(3), 5U);
+    program[21U] = TrivialInstruction(OpCode::Id::NOP);
+    for (uint8_t row = 0U; row < 4U; ++row)
+        program[22U + row] = ArithmeticInstruction(OpCode::Id::DP4, DestRegister::MakeOutput(0),
+                                                   SourceRegister::MakeFloat(row), SourceRegister::MakeTemporary(15), row);
+    program[26U] = TrivialInstruction(OpCode::Id::END);
+    packet.VertexShader.ProgramWordCount = 27U;
+    return packet;
+}
+
 class MemoryFillSink final : public Oot3dNativeGame::Oot3dPicaPacketSink {
   public:
     bool SubmitHardwareRegisterWrite(
@@ -704,6 +755,22 @@ int main(int argc, char** argv) {
                 transformHooks.Skeleton.BoneWeightInputRegister == 7U &&
                 transformHooks.Skeleton.MaximumInfluences == 4U,
             "CMB matrix-palette program was not structurally decoded");
+
+    auto fourLightPacket = BuildFourLightSurfacePacket();
+    Oot3dNativeGame::Oot3dPicaDecodedDrawState fourLightState;
+    Require(Oot3dNativeGame::DecodeOot3dPicaDrawState(fourLightPacket, fourLightState, &error), error);
+    Oot3dNativeGame::Oot3dPicaGeneratedVertexShader fourLightShader;
+    Require(Oot3dNativeGame::GenerateOot3dPicaVertexShader(fourLightPacket, fourLightState, fourLightShader, &error),
+            error);
+    const auto& fourLightHooks = fourLightShader.TemporalProgram->Hooks;
+    const auto* fourLightSurface = fourLightHooks.SurfaceProgram();
+    Require(fourLightHooks.TransformProgram() != nullptr && fourLightSurface != nullptr &&
+                !fourLightSurface->VertexLightsReconstructed && fourLightSurface->ViewNormalTemporary == 14U &&
+                fourLightSurface->LightingBooleanUniform == 9U && fourLightSurface->DiffuseUniform == 8U &&
+                fourLightSurface->AmbientUniform == 9U && fourLightSurface->TintBooleanUniform == 5U &&
+                fourLightSurface->TintInputRegister == 3U &&
+                fourLightSurface->TintScale == Fast::Renderer3ds::PicaVertexUniformComponent{90U, 2U},
+            "four-light surface program was not structurally decoded");
     Oot3dNativeGame::Oot3dPicaDrawPacket fragmentPacket{};
     fragmentPacket.Registers[0x0C0] = 0x0E300E30U;
     fragmentPacket.Registers[0x0C2] = 0x00010001U;

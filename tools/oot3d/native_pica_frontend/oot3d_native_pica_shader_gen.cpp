@@ -1173,6 +1173,88 @@ std::optional<Fast::Renderer3ds::PicaVertexSurfaceLayout> DecodeCmbSurface(
     return surface;
 }
 
+// A vertex-lighting block of four directional lights (MM3D's GzwShader):
+// under a boolean uniform, MOV material diffuse and ambient, then four DP3 of
+// a light-direction uniform with the view-space normal, one per component of
+// one temporary, each light enabled by a component of a uniform vector. Its
+// native vertex lighting is not reconstructed per pixel (the surface lighting
+// rows hold three lights); the layout supplies the normal, material and
+// tint, so a draw that does not light per vertex can be lit and shadowed per
+// pixel.
+std::optional<Fast::Renderer3ds::PicaVertexSurfaceLayout> DecodeFourLightSurface(
+    const Oot3dPicaDrawPacket& packet, const CmbTransformPrograms& transforms) {
+    using namespace Fast::Renderer3ds;
+    using Op = nihstro::OpCode::Id;
+    using Reg = nihstro::RegisterType;
+    if (!transforms.Transform || transforms.Skeleton) return std::nullopt;
+    const auto& transform = *transforms.Transform;
+    std::optional<UniformBranch> lighting;
+    PicaVertexSurfaceLayout surface;
+    for (size_t offset = 0; offset < packet.VertexShader.ProgramWordCount; ++offset) {
+        const auto branch = DecodeUniformBranch(packet, offset);
+        if (!branch || branch->ThenBegin + 6U >= branch->ElseBegin) continue;
+        const auto diffuse = DecodeArithmeticInstruction(packet, branch->ThenBegin);
+        const auto ambient = DecodeArithmeticInstruction(packet, branch->ThenBegin + 1U);
+        if (!diffuse || !ambient || diffuse->Opcode != Op::MOV || ambient->Opcode != Op::MOV ||
+            diffuse->Source1.GetRegisterType() != Reg::FloatUniform ||
+            ambient->Source1.GetRegisterType() != Reg::FloatUniform ||
+            diffuse->AddressRegister != 0U || ambient->AddressRegister != 0U ||
+            SourceNegated(*diffuse, 1U) || SourceNegated(*ambient, 1U) ||
+            !SourceIdentity(*diffuse, 1U) || !SourceIdentity(*ambient, 1U)) continue;
+        std::optional<uint8_t> normal;
+        std::optional<int> dots;
+        bool valid = true;
+        for (uint8_t slot = 0; slot < 4U && valid; ++slot) {
+            const auto dot = DecodeArithmeticInstruction(packet, branch->ThenBegin + 2U + slot);
+            const auto component = dot ? SingleDestinationComponent(*dot) : std::nullopt;
+            valid = dot && dot->Opcode == Op::DP3 && dot->AddressRegister == 0U && component == slot &&
+                    dot->Source1.GetRegisterType() == Reg::FloatUniform &&
+                    dot->Source2.GetRegisterType() == Reg::Temporary &&
+                    dot->Destination.GetRegisterType() == Reg::Temporary &&
+                    !SourceNegated(*dot, 1U) && !SourceNegated(*dot, 2U) &&
+                    SourceIdentity(*dot, 1U) && SourceIdentity(*dot, 2U) &&
+                    (!normal || IsRegister(dot->Source2, Reg::Temporary, *normal)) &&
+                    (!dots || *dots == dot->Destination.GetIndex());
+            if (!valid) break;
+            normal = static_cast<uint8_t>(dot->Source2.GetIndex());
+            dots = dot->Destination.GetIndex();
+        }
+        if (!valid || !normal) continue;
+        // The normal the lights read is the view transform of a normal.
+        const auto viewNormal = FindConsistentDotMatrixChain(packet, Op::DP3, 3U,
+            [&](const DotMatrixChain& chain) {
+                return chain.AddressRegister == 0U && chain.FirstUniform == transform.ViewFirstUniform &&
+                       IsRegister(chain.Destination, Reg::Temporary, *normal) &&
+                       chain.Value.GetRegisterType() == Reg::Temporary;
+            });
+        if (!viewNormal) continue;
+        if (lighting) return std::nullopt;
+        lighting = branch;
+        surface.ViewNormalTemporary = *normal;
+        surface.LightingBooleanUniform = branch->BooleanUniform;
+        surface.DiffuseUniform = static_cast<uint8_t>(diffuse->Source1.GetIndex());
+        surface.AmbientUniform = static_cast<uint8_t>(ambient->Source1.GetIndex());
+    }
+    if (!lighting) return std::nullopt;
+    for (size_t offset = lighting->ThenBegin; offset < lighting->ElseBegin; ++offset) {
+        const auto branch = DecodeUniformBranch(packet, offset);
+        if (!branch || branch->ThenBegin >= branch->ElseBegin) continue;
+        const auto multiply = DecodeArithmeticInstruction(packet, branch->ThenBegin);
+        if (!multiply || multiply->Opcode != Op::MUL) continue;
+        const uint8_t inputSource = multiply->Source1.GetRegisterType() == Reg::Input ? 1U : 2U;
+        const auto& input = inputSource == 1U ? multiply->Source1 : multiply->Source2;
+        if (input.GetRegisterType() != Reg::Input || !SourceIdentity(*multiply, inputSource)) continue;
+        const auto scale = DecodeInputScale(*multiply, static_cast<uint8_t>(input.GetIndex()));
+        if (!scale || surface.TintScale.Available()) return std::nullopt;
+        surface.TintScale = *scale;
+        surface.TintBooleanUniform = branch->BooleanUniform;
+        surface.TintInputRegister = static_cast<uint8_t>(input.GetIndex());
+    }
+    surface.VertexLightsReconstructed = false;
+    if (!surface.Available()) return std::nullopt;
+    return surface;
+}
+
 } // namespace
 
 uint64_t ComputeOot3dPicaVertexShaderStateKey(
@@ -1315,6 +1397,9 @@ bool GenerateOot3dPicaVertexShader(
     }
     if (const auto surface = DecodeCmbSurface(packet, transformPrograms)) {
         hooks.Surface = *surface;
+        hooks.Semantics |= PicaVertexShaderSemantic::SurfaceProgram;
+    } else if (const auto fourLights = DecodeFourLightSurface(packet, transformPrograms)) {
+        hooks.Surface = *fourLights;
         hooks.Semantics |= PicaVertexShaderSemantic::SurfaceProgram;
     }
 

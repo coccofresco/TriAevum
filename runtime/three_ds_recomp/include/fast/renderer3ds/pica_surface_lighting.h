@@ -84,6 +84,16 @@ std::optional<PicaSurfaceLightingView> BuildPicaSurfaceLightingView(
     const PicaSurfaceLightingView* cameraView,
     const PicaPointShadowAssignment* pointShadows = nullptr) noexcept;
 
+// Removes the scene directional lights a draw's native per-pixel (fragment)
+// lighting already applies: those with the direction (view space, toward
+// the light) of one of its native directional lights. They are not added
+// again; a shadow covering one applies to the native light instead
+// (PicaSurfaceLightingBody, receiver slots 0-7 = native lights). Returns how
+// many were removed.
+uint32_t ExcludePicaSceneDirectionalsLitNatively(
+    PicaSurfaceLightingUniforms& uniforms,
+    std::span<const std::array<float, 3>> nativeDirectionalViewDirections) noexcept;
+
 [[nodiscard]] std::string_view PicaSurfaceLightingDeclarations() noexcept;
 [[nodiscard]] std::string_view PicaSurfaceLightingBody() noexcept;
 

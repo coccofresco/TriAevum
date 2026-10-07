@@ -754,6 +754,21 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                     ? std::array<float, 4>{}
                     : std::array<float, 4>{sources.Weights[0], sources.Weights[1], sources.Weights[2], 0.0F};
             }
+            // A draw lit per pixel by native fragment lights already applies
+            // the scene lights among them: they are not added a second time.
+            if (surfaceLighting && surfaceLighting->Control[0] == 0U &&
+                draw.FragmentFeatures.FragmentLightingEnabled) {
+                const auto native = Oot3d::DecodePicaNativeDrawEnvironment(
+                    draw.VertexUniformBytes, draw.FragmentUniformBytes, draw.FragmentFeatures).FragmentLighting;
+                std::array<std::array<float, 3>, std::tuple_size_v<decltype(native.Lights)>> directions{};
+                size_t directionCount = 0;
+                for (size_t index = 0; index < native.Lights.size(); ++index)
+                    if (native.Lights[index].Active && native.Lights[index].ValuesAvailable &&
+                        native.Layout.Lights[index].Directional)
+                        directions[directionCount++] = native.Lights[index].PositionOrDirectionView;
+                (void)Renderer3ds::ExcludePicaSceneDirectionalsLitNatively(
+                    *surfaceLighting, std::span(directions.data(), directionCount));
+            }
             if (surfaceLighting && environmentWorldToView && directionalShadowReceiver &&
                 !Oot3d::InvertDirectionalShadowMatrix(*environmentWorldToView, environmentViewToWorld))
                 surfaceLighting.reset();
@@ -1679,15 +1694,22 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 Oot3d::DirectionalShadowMatrix receiverViewToWorld;
                 if (draw.LightBinding.WorldToView &&
                     Oot3d::InvertDirectionalShadowMatrix(*draw.LightBinding.WorldToView, receiverViewToWorld)) {
+                    // Native fragment lights receive the shadow as themselves:
+                    // through the PBR material's native loop, or, without
+                    // per-vertex lighting, in the native per-pixel result.
+                    const bool nativeFragmentLights =
+                        (pbrMaterial != nullptr && pbrOptions.NativeFragmentLighting) ||
+                        (surfaceLighting && surfaceLighting->Control[0] == 0U &&
+                         draw.FragmentFeatures.FragmentLightingEnabled);
                     if (surfaceLighting &&
                         Oot3d::HasPicaShaderInstrumentationFeature(drawVariant.AppliedFeatures,
                             Oot3d::PicaShaderInstrumentationFeature::NativePerPixelLighting) &&
                         (surfaceLighting->EnvironmentParameters[3] != 0.0F ||
                          surfaceLighting->Control[0] != 0U ||
                          surfaceLighting->Control[2] != 0U ||
-                         (pbrMaterial != nullptr && pbrOptions.NativeFragmentLighting))) {
+                         nativeFragmentLights)) {
                         std::array<Oot3d::PicaSurfaceShadowLight, 12> lights{};
-                        if (pbrMaterial != nullptr && pbrOptions.NativeFragmentLighting) {
+                        if (nativeFragmentLights) {
                             const auto& native = nativeEnvironment.FragmentLighting;
                             for (size_t index = 0; index < native.Lights.size(); ++index) {
                                 const auto& source = native.Lights[index];

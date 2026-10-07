@@ -324,18 +324,22 @@ horizon rule no shadow is cast; with the world-to-view the temporal
 history is now valid (it reset every frame before) and the directional
 shadow pass renders its map from the native light.
 
-Open: no receiver applies the shadow. Receivers need the surface program
-the frontend recognizes in the vertex shader (DecodeCmbSurface), written
-for CmbVShader's three-light block; GzwShader's block (diffuse/ambient
-moves, four `dp3 LightDirN, normal`, LightEnabled per component) is not
-recognized, so neither per-pixel lighting nor shadow receivers apply.
+Shadow receivers: the frontend now recognizes GzwShader's four-light block
+(`DecodeFourLightSurface`; see "Four-light vertex programs and native
+fragment-lit receivers" in OOT3D_NRI_FIDELITY_EXTENSION_ARCHITECTURE.md).
+The scene draws, lit by native fragment lights, keep their native per-pixel
+lighting; the environment lights they already apply are not added again,
+and the directional shadow darkens the matching native light. No MM3D draw
+of the demo lights per vertex (b9 never set); one that did would stay
+native.
 
 Result (developer launch, Clock Town attract demo): 96 opaque, 8
 translucent and 4 sky draws classified; ambient occlusion composes on the
 scene (without the streaks the stereo frustum gave), directional shadows
-prepare their 96 casters. Not yet: GzwShader's surface program (per-pixel
-Modern lighting and shadow receivers, see Scene lighting), grass sources
-for MM3D's textures, the HUD in gameplay.
+prepare their 96 casters, and the 96 opaque draws receive the shadow
+(none is cast in the demo: its light is horizontal). Not yet: grass sources
+for MM3D's textures, the HUD in gameplay, a daytime gameplay scene to see
+the shadows at native light.
 
 Bring-up tooling: `TRIAEVUM_A32_CALL_TRACE=PATH,FIRST,LAST[,WORD[,ENTRIES]]`
 writes a record per observed block entry (pc, lr, sp, r0-r3, thread, a

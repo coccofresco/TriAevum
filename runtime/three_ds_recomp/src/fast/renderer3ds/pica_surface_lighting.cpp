@@ -66,9 +66,12 @@ std::optional<PicaSurfaceLightingUniforms> BuildPicaSurfaceLightingUniforms(
     if (!ReadUniform(floatUniformBytes, surface->DiffuseUniform, result.MaterialDiffuse) ||
         !ReadUniform(floatUniformBytes, surface->AmbientUniform, result.MaterialAmbient)) return std::nullopt;
     result.Control[0] = (booleanUniforms >> surface->LightingBooleanUniform) & 1U;
+    // A vertex-lighting block the rows cannot hold keeps a lit draw native.
+    if (!surface->VertexLightsReconstructed && result.Control[0] != 0U) return std::nullopt;
     Vec4 enabledValue{};
-    if (!ReadUniform(floatUniformBytes, surface->LightEnabledValue.Uniform, enabledValue)) return std::nullopt;
-    for (size_t slot = 0; slot < result.Lights.size(); ++slot) {
+    if (surface->VertexLightsReconstructed &&
+        !ReadUniform(floatUniformBytes, surface->LightEnabledValue.Uniform, enabledValue)) return std::nullopt;
+    for (size_t slot = 0; surface->VertexLightsReconstructed && slot < result.Lights.size(); ++slot) {
         auto& light = result.Lights[slot];
         const uint8_t first = surface->LightDirectionUniforms[slot];
         Vec4 ambient{};
@@ -211,6 +214,44 @@ std::optional<PicaSurfaceLightingUniforms> BuildPicaSurfaceLightingUniforms(
         result.PointShadowAtlas = pointShadows->Atlas;
     }
     return result;
+}
+
+uint32_t ExcludePicaSceneDirectionalsLitNatively(
+    PicaSurfaceLightingUniforms& uniforms,
+    std::span<const std::array<float, 3>> nativeDirectionalViewDirections) noexcept {
+    // The same direction within the native light vector's half-float
+    // precision (about 5 degrees).
+    constexpr float kSameDirection = 0.995F;
+    const auto unit = [](std::array<float, 3> value) {
+        const float length = std::sqrt(value[0] * value[0] + value[1] * value[1] + value[2] * value[2]);
+        if (!std::isfinite(length) || length <= 1.0e-6F) return std::array<float, 3>{};
+        for (float& component : value) component /= length;
+        return value;
+    };
+    uint32_t kept = 0, removed = 0;
+    const uint32_t count = std::min<uint32_t>(uniforms.Control[2], kMaximumPicaSceneDirectionalLights);
+    for (uint32_t slot = 0; slot < count; ++slot) {
+        const auto scene = unit({uniforms.SceneDirections[slot][0], uniforms.SceneDirections[slot][1],
+                                 uniforms.SceneDirections[slot][2]});
+        const bool native = std::any_of(nativeDirectionalViewDirections.begin(),
+            nativeDirectionalViewDirections.end(), [&](const auto& direction) {
+                const auto light = unit(direction);
+                return scene[0] * light[0] + scene[1] * light[1] + scene[2] * light[2] >= kSameDirection;
+            });
+        if (native) {
+            ++removed;
+            continue;
+        }
+        uniforms.SceneDirections[kept] = uniforms.SceneDirections[slot];
+        uniforms.SceneDirectionalColors[kept] = uniforms.SceneDirectionalColors[slot];
+        ++kept;
+    }
+    for (uint32_t slot = kept; slot < count; ++slot) {
+        uniforms.SceneDirections[slot] = {};
+        uniforms.SceneDirectionalColors[slot] = {};
+    }
+    uniforms.Control[2] = kept;
+    return removed;
 }
 
 std::string_view PicaSurfaceLightingDeclarations() noexcept {
@@ -401,6 +442,21 @@ std::string_view PicaSurfaceLightingBody() noexcept {
         pica_surface.control.y != 0u || pica_surface.control.z != 0u) {
         rounded_primary_color.rgb = byteround3(pica_surface_primary(rounded_primary_color.rgb,
             pica_surface_unit(pica_surface_normal)));
+    }
+    if (pica_surface.control.x == 0u) {
+        // Native per-pixel lights a scene shadow covers (receiver slots 0-7
+        // are native fragment lights here): their shadowed diffuse share
+        // leaves the native result.
+        vec3 pica_shadow_normal = pica_surface_unit(pica_surface_normal);
+        for (int pica_light = 0; pica_light < 8; ++pica_light) {
+            vec3 pica_light_shadow = pica_surface_shadow(pica_light);
+            if (all(equal(pica_light_shadow, vec3(1.0)))) continue;
+            float pica_light_facing = max(dot(pica_shadow_normal,
+                pica_surface_unit(fragment_uniforms.lighting_position[pica_light].xyz)), 0.0);
+            primary_fragment_color.rgb = max(primary_fragment_color.rgb -
+                fragment_uniforms.lighting_diffuse[pica_light].rgb * pica_light_facing *
+                (vec3(1.0) - pica_light_shadow), vec3(0.0));
+        }
     }
 )glsl";
 }

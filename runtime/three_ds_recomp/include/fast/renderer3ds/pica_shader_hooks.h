@@ -363,13 +363,20 @@ struct PicaVertexSurfaceLayout {
     PicaVertexUniformComponent SkinnedPositionScale;
     PicaVertexUniformComponent InfluenceCount;
     std::array<PicaVertexUniformComponent, 2> AdditionalInfluenceThresholds{};
+    // False for a vertex-lighting block the surface rows cannot hold (more
+    // than three lights, or other enable semantics): such a program supplies
+    // the normal, material and tint, and a draw that lights per vertex keeps
+    // its native lighting.
+    bool VertexLightsReconstructed = true;
 
     bool operator==(const PicaVertexSurfaceLayout&) const = default;
     [[nodiscard]] bool Available() const noexcept {
         if (ViewNormalTemporary >= 16U || LightingBooleanUniform >= 16U ||
             DiffuseUniform >= 96U || AmbientUniform >= 96U ||
             TintBooleanUniform >= 16U || TintInputRegister >= 16U ||
-            !TintScale.Available() || !LightEnabledValue.Available()) return false;
+            !TintScale.Available()) return false;
+        if (!VertexLightsReconstructed) return true;
+        if (!LightEnabledValue.Available()) return false;
         for (auto uniform : LightDirectionUniforms)
             if (uniform >= 94U) return false;
         return true;
