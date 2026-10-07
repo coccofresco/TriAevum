@@ -21,6 +21,22 @@
 
 namespace Oot3dNativeGame {
 
+// CTR kernel MemoryState of a mapping, as svcQueryMemory reports it.
+enum class NativeA32KernelMemoryState : uint8_t {
+    Free = 0,
+    Reserved = 1,
+    Io = 2,
+    Static = 3,
+    Code = 4,
+    Private = 5,
+    Shared = 6,
+    Continuous = 7,
+    Aliased = 8,
+    Alias = 9,
+    AliasCode = 10,
+    Locked = 11,
+};
+
 struct NativeA32MemoryRegionConfig {
     std::string Name;
     uint32_t BaseAddress = 0;
@@ -28,6 +44,15 @@ struct NativeA32MemoryRegionConfig {
     bool Writable = false;
     bool Executable = false;
     std::span<const uint8_t> InitialBytes;
+    NativeA32KernelMemoryState KernelState = NativeA32KernelMemoryState::Private;
+};
+
+struct NativeA32MemoryRegionInfo {
+    uint32_t BaseAddress = 0;
+    uint64_t Size = 0;
+    bool Writable = false;
+    bool Executable = false;
+    NativeA32KernelMemoryState KernelState = NativeA32KernelMemoryState::Private;
 };
 
 class NativeA32Memory final : public oot3d::recomp::a32::MemoryBus {
@@ -44,6 +69,8 @@ class NativeA32Memory final : public oot3d::recomp::a32::MemoryBus {
     bool IsWritable(uint32_t address, size_t size) const;
     bool IsExecutable(uint32_t address, size_t size) const;
     size_t RegionCount() const;
+    // Mapped regions in address order.
+    std::vector<NativeA32MemoryRegionInfo> RegionInfos() const;
     uint64_t WriteGeneration() const;
     std::optional<uint64_t> RangeWriteGeneration(uint32_t address,
                                                  size_t size) const noexcept;
@@ -301,6 +328,8 @@ class NativeA32Memory final : public oot3d::recomp::a32::MemoryBus {
         std::vector<uint8_t> Bytes;
         bool Writable = false;
         bool Executable = false;
+        NativeA32KernelMemoryState KernelState =
+            NativeA32KernelMemoryState::Private;
     };
 
     struct FastPage {

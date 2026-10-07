@@ -372,9 +372,15 @@ void NativeA32CtrHostServices::WakeSynchronizationWaiters() {
 
 bool NativeA32CtrHostServices::QueueGspInterrupt(NativeA32Memory& memory,
                                                  uint8_t interruptId) {
+    const bool isPdc =
+        interruptId == static_cast<uint8_t>(Oot3dPicaInterruptId::Pdc0) ||
+        interruptId == static_cast<uint8_t>(Oot3dPicaInterruptId::Pdc1);
     if (!mGspSharedMemory || !mGspSharedMemory->MappedAddress.has_value() ||
         !mGspInterruptEvent) {
-        return false;
+        // GSP relays interrupts only to a registered queue: VBlanks before a
+        // title registers one are not delivered. A PICA completion without
+        // a queue is an error.
+        return isPdc;
     }
     const uint32_t relay =
         *mGspSharedMemory->MappedAddress + mGspThreadId * 0x40U;
@@ -383,9 +389,6 @@ bool NativeA32CtrHostServices::QueueGspInterrupt(NativeA32Memory& memory,
     if (!memory.Read8(relay, &index) || !memory.Read8(relay + 1U, &count)) {
         return false;
     }
-    const bool isPdc =
-        interruptId == static_cast<uint8_t>(Oot3dPicaInterruptId::Pdc0) ||
-        interruptId == static_cast<uint8_t>(Oot3dPicaInterruptId::Pdc1);
     if (isPdc) {
         uint8_t config = 0;
         if (!memory.Read8(relay + 3U, &config)) {
@@ -523,6 +526,77 @@ NativeA32HostResult NativeA32CtrHostServices::HandleResourceLimitValues(
     return {NativeA32HostAction::Resume};
 }
 
+// svcQueryMemory: r2 = address; r0 = result, r1 = base, r2 = size,
+// r3 = permissions, r4 = MemoryState, r5 = page flags. The kernel reports the
+// memory area holding the address: touching mappings of equal state and
+// permissions form one area, and the gaps between mappings are Free.
+NativeA32HostResult NativeA32CtrHostServices::HandleQueryMemory(
+    oot3d::recomp::a32::GuestState& state, NativeA32Memory& memory,
+    NativeA32CtrSvcEvent event) {
+    event.Name = "QueryMemory";
+    const uint32_t address = state.r[2];
+    event.Detail = address;
+    const auto regions = memory.RegionInfos();
+    const auto permissions = [](const NativeA32MemoryRegionInfo& region) {
+        return 1U | (region.Writable ? 2U : 0U) | (region.Executable ? 4U : 0U);
+    };
+    const auto end = [](const NativeA32MemoryRegionInfo& region) {
+        return uint64_t(region.BaseAddress) + region.Size;
+    };
+    uint64_t areaBase = 0U;
+    uint64_t areaEnd = uint64_t(1) << 32U;
+    uint32_t areaPermissions = 0U;
+    auto areaState = NativeA32KernelMemoryState::Free;
+    size_t hit = regions.size();
+    for (size_t index = 0; index < regions.size(); ++index) {
+        const auto& region = regions[index];
+        if (address >= region.BaseAddress && address < end(region)) {
+            hit = index;
+            break;
+        }
+        if (end(region) <= address) {
+            areaBase = std::max(areaBase, end(region));
+        } else {
+            areaEnd = std::min<uint64_t>(areaEnd, region.BaseAddress);
+        }
+    }
+    if (hit != regions.size()) {
+        const auto& region = regions[hit];
+        areaPermissions = permissions(region);
+        areaState = region.KernelState;
+        areaBase = region.BaseAddress;
+        areaEnd = end(region);
+        const auto same = [&](const NativeA32MemoryRegionInfo& other) {
+            return permissions(other) == areaPermissions &&
+                   other.KernelState == areaState;
+        };
+        for (size_t index = hit; index > 0U; --index) {
+            const auto& previous = regions[index - 1U];
+            if (end(previous) != areaBase || !same(previous)) {
+                break;
+            }
+            areaBase = previous.BaseAddress;
+        }
+        for (size_t index = hit + 1U; index < regions.size(); ++index) {
+            const auto& next = regions[index];
+            if (next.BaseAddress != areaEnd || !same(next)) {
+                break;
+            }
+            areaEnd = end(next);
+        }
+    }
+    state.r[0] = kResultSuccess;
+    state.r[1] = static_cast<uint32_t>(areaBase);
+    state.r[2] = static_cast<uint32_t>(
+        std::min<uint64_t>(areaEnd - areaBase, 0xFFFFF000U));
+    state.r[3] = areaPermissions;
+    state.r[4] = static_cast<uint32_t>(areaState);
+    state.r[5] = 0U;
+    event.Handled = true;
+    mSvcEvents.push_back(std::move(event));
+    return {NativeA32HostAction::Resume};
+}
+
 NativeA32HostResult NativeA32CtrHostServices::HandleControlMemory(
     oot3d::recomp::a32::GuestState& state, NativeA32Memory& memory,
     NativeA32CtrSvcEvent event) {
@@ -563,7 +637,9 @@ NativeA32HostResult NativeA32CtrHostServices::HandleControlMemory(
              size,
              (permissions & 2U) != 0,
              false,
-             {}},
+             {},
+             linear ? NativeA32KernelMemoryState::Continuous
+                    : NativeA32KernelMemoryState::Private},
             &mapError)) {
         mSvcEvents.push_back(std::move(event));
         return {NativeA32HostAction::Wait};
@@ -590,6 +666,8 @@ NativeA32HostResult NativeA32CtrHostServices::HandleSvc(
     switch (immediate) {
     case 0x01:
         return HandleControlMemory(state, memory, std::move(event));
+    case 0x02:
+        return HandleQueryMemory(state, memory, std::move(event));
     case 0x08: {
         event.Name = "CreateThread";
         const uint32_t priority = state.r[0];
@@ -746,7 +824,8 @@ NativeA32HostResult NativeA32CtrHostServices::HandleSvc(
                  static_cast<size_t>(memoryBlock->Object->FileSize),
                  (permissions & 2U) != 0,
                  (permissions & 4U) != 0,
-                 {}},
+                 {},
+                 NativeA32KernelMemoryState::Shared},
                 &mapError)) {
             event.Name += ":" + mapError;
             mSvcEvents.push_back(std::move(event));
@@ -867,6 +946,40 @@ NativeA32HostResult NativeA32CtrHostServices::HandleSvc(
         state.r[0] = kResultSuccess;
         mSvcEvents.push_back(std::move(event));
         return {NativeA32HostAction::Resume};
+    case 0x24: {
+        // WaitSynchronization1: r0 = handle, r2:r3 = timeout in ns (negative
+        // waits forever). Finite non-zero timeouts are not modelled yet and
+        // stop as unhandled.
+        event.Name = "WaitSynchronization1";
+        event.Detail = state.r[0];
+        const auto* record = LookupHandle(state.r[0]);
+        const auto timeout = static_cast<int64_t>(
+            uint64_t(state.r[2]) | uint64_t(state.r[3]) << 32U);
+        if (record == nullptr) {
+            mSvcEvents.push_back(std::move(event));
+            return {NativeA32HostAction::Wait};
+        }
+        event.Name += ":" + record->Object->Type;
+        if (IsKernelObjectReady(*record->Object, context.ThreadId,
+                                context.Process)) {
+            AcquireKernelObject(*record->Object, context.ThreadId);
+            state.r[0] = kResultSuccess;
+        } else if (timeout == 0) {
+            state.r[0] = kResultTimeout;
+        } else if (timeout > 0) {
+            mSvcEvents.push_back(std::move(event));
+            return {NativeA32HostAction::Wait};
+        } else {
+            mSynchronizationWaiters.push_back(
+                {{record->Object}, &context.Process, context.ThreadId, true});
+            event.Handled = true;
+            mSvcEvents.push_back(std::move(event));
+            return {NativeA32HostAction::Wait};
+        }
+        event.Handled = true;
+        mSvcEvents.push_back(std::move(event));
+        return {NativeA32HostAction::Resume};
+    }
     case 0x25: {
         event.Name = "WaitSynchronizationN";
         const uint32_t handlesAddress = state.r[1];
@@ -953,6 +1066,29 @@ NativeA32HostResult NativeA32CtrHostServices::HandleSvc(
         event.Handled = true;
         mSvcEvents.push_back(std::move(event));
         return {NativeA32HostAction::Resume};
+    case 0x37: {
+        // GetThreadId: r1 = thread handle; r1 = kernel thread ID. Kernel IDs
+        // start at 1 (titles may treat 0 as "no thread"), so host thread n
+        // reports n + 1.
+        event.Name = "GetThreadId";
+        std::optional<uint32_t> threadId;
+        if (state.r[1] == kCurrentThreadHandle) {
+            threadId = context.ThreadId;
+        } else if (const auto* handle = LookupHandle(state.r[1]);
+                   handle != nullptr && handle->Object->Type == "thread") {
+            threadId = handle->Object->ThreadId;
+        }
+        if (!threadId.has_value()) {
+            mSvcEvents.push_back(std::move(event));
+            return {NativeA32HostAction::Wait};
+        }
+        state.r[0] = kResultSuccess;
+        state.r[1] = *threadId + 1U;
+        event.Detail = *threadId;
+        event.Handled = true;
+        mSvcEvents.push_back(std::move(event));
+        return {NativeA32HostAction::Resume};
+    }
     case 0x28:
         event.Name = "GetSystemTick";
         event.Handled = true;
@@ -1017,7 +1153,10 @@ NativeA32HostResult NativeA32CtrHostServices::HandleSvc(
             return HandleGspRequest(state, memory, context, sessionType,
                                     commandBuffer, std::move(event));
         }
-        if (*sessionType == "client_session:APT:U") {
+        // APT:A is the applications' APT port of later SDKs (Majora's Mask
+        // 3D), with APT:U's commands.
+        if (*sessionType == "client_session:APT:U" ||
+            *sessionType == "client_session:APT:A") {
             return HandleAptRequest(state, memory, context, sessionType,
                                     commandBuffer, std::move(event));
         }
@@ -1070,7 +1209,8 @@ NativeA32HostResult NativeA32CtrHostServices::HandleSvc(
                 event.Name += ":GetServiceHandle:" +
                               std::string(bytes.data(), nameLength);
                 const std::string serviceName(bytes.data(), nameLength);
-                if (serviceName == "APT:U" || serviceName == "fs:USER" ||
+                if (serviceName == "APT:U" || serviceName == "APT:A" ||
+                    serviceName == "fs:USER" ||
                     serviceName == "gsp::Gpu" || serviceName == "dsp::DSP" ||
                     serviceName == "cfg:u" || serviceName == "hid:USER" ||
                     serviceName == "ndm:u" || serviceName == "y2r:u") {

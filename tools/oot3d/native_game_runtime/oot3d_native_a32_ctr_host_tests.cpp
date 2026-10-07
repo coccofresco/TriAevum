@@ -426,7 +426,116 @@ void TestDeferredDeviceFailureAndOverwrite() {
             "a complete overwrite discards obsolete work without reading it");
 }
 
+void TestQueryMemory() {
+    using State = NativeA32KernelMemoryState;
+    NativeA32Memory memory;
+    std::string error;
+    for (const NativeA32MemoryRegionConfig& region :
+         {NativeA32MemoryRegionConfig{"text", 0x00100000, 0x1000, false, true, {}, State::Code},
+          NativeA32MemoryRegionConfig{"rodata", 0x00101000, 0x1000, false, false, {}, State::Code},
+          NativeA32MemoryRegionConfig{"heap_0", 0x08000000, 0x1000, true, false, {}, State::Private},
+          NativeA32MemoryRegionConfig{"heap_1", 0x08001000, 0x1000, true, false, {}, State::Private},
+          NativeA32MemoryRegionConfig{"stack", 0x0FFFC000, 0x4000, true, false, {}, State::Locked}}) {
+        Require(memory.MapRegion(region, &error), error);
+    }
+    NativeA32CtrHostServices host(MakeConfig());
+    const oot3d::recomp::a32::Registry registry{};
+    NativeA32Process process(registry, host);
+    NativeA32HostContext context{process, 0};
+    const auto query = [&](uint32_t address) {
+        GuestState state{};
+        state.r[2] = address;
+        Require(host.HandleSvc(0x02, state, memory, context).Action ==
+                        NativeA32HostAction::Resume &&
+                    state.r[0] == 0,
+                "QueryMemory did not succeed");
+        return std::array<uint32_t, 5>{state.r[1], state.r[2], state.r[3],
+                                       state.r[4], state.r[5]};
+    };
+    Require(query(0x0FFFFFFF) ==
+                std::array<uint32_t, 5>{0x0FFFC000, 0x4000, 3, 11, 0},
+            "QueryMemory of the stack top is wrong");
+    Require(query(0x08001800) ==
+                std::array<uint32_t, 5>{0x08000000, 0x2000, 3, 5, 0},
+            "QueryMemory did not merge touching heap mappings");
+    Require(query(0x00100800) ==
+                std::array<uint32_t, 5>{0x00100000, 0x1000, 5, 4, 0},
+            "QueryMemory merged code areas of different permissions");
+    Require(query(0x00200000) ==
+                std::array<uint32_t, 5>{0x00102000, 0x08000000 - 0x00102000, 0, 0, 0},
+            "QueryMemory of a free gap is wrong");
+}
+
+void TestGetThreadId() {
+    NativeA32Memory memory;
+    NativeA32CtrHostServices host(MakeConfig());
+    const oot3d::recomp::a32::Registry registry{};
+    NativeA32Process process(registry, host);
+    NativeA32HostContext context{process, 0};
+    GuestState state{};
+    state.r[1] = 0xFFFF8000U;
+    Require(host.HandleSvc(0x37, state, memory, context).Action ==
+                    NativeA32HostAction::Resume &&
+                state.r[0] == 0 && state.r[1] == 1U,
+            "GetThreadId of the current thread is not the nonzero kernel ID");
+    state.r[1] = 0xFFFF8000U;
+    Require(host.HandleSvc(0x27, state, memory, context).Action ==
+                NativeA32HostAction::Resume,
+            "DuplicateHandle of the current thread failed");
+    const uint32_t handle = state.r[1];
+    state = {};
+    state.r[1] = handle;
+    Require(host.HandleSvc(0x37, state, memory, context).Action ==
+                    NativeA32HostAction::Resume &&
+                state.r[1] == 1U,
+            "GetThreadId of a thread handle is wrong");
+    state.r[1] = 0x12345678U;
+    Require(host.HandleSvc(0x37, state, memory, context).Action ==
+                NativeA32HostAction::Wait,
+            "GetThreadId accepted an unknown handle");
+}
+
+void TestWaitSynchronization1() {
+    NativeA32Memory memory;
+    NativeA32CtrHostServices host(MakeConfig());
+    const oot3d::recomp::a32::Registry registry{};
+    NativeA32Process process(registry, host);
+    NativeA32HostContext context{process, 0};
+    GuestState state{};
+    state.r[1] = 0;  // one-shot event
+    Require(host.HandleSvc(0x17, state, memory, context).Action ==
+                NativeA32HostAction::Resume,
+            "cannot create an event");
+    const uint32_t event = state.r[1];
+    const auto wait = [&](uint64_t timeout) {
+        state = {};
+        state.r[0] = event;
+        state.r[2] = static_cast<uint32_t>(timeout);
+        state.r[3] = static_cast<uint32_t>(timeout >> 32U);
+        return host.HandleSvc(0x24, state, memory, context).Action;
+    };
+    Require(wait(0) == NativeA32HostAction::Resume && state.r[0] == 0x09401BFEU,
+            "WaitSynchronization1 with a zero timeout did not time out");
+    state = {};
+    state.r[0] = event;
+    Require(host.HandleSvc(0x18, state, memory, context).Action ==
+                NativeA32HostAction::Resume,
+            "cannot signal the event");
+    Require(wait(~uint64_t{0}) == NativeA32HostAction::Resume && state.r[0] == 0,
+            "WaitSynchronization1 on a signaled event did not succeed");
+    Require(wait(1000) == NativeA32HostAction::Wait,
+            "WaitSynchronization1 accepted an unmodelled finite timeout");
+    state = {};
+    state.r[0] = 0x12345678U;
+    Require(host.HandleSvc(0x24, state, memory, context).Action ==
+                NativeA32HostAction::Wait,
+            "WaitSynchronization1 accepted an unknown handle");
+}
+
 int main() {
+    TestQueryMemory();
+    TestGetThreadId();
+    TestWaitSynchronization1();
     TestDeferredDeviceMemory();
     TestDeferredDeviceFailureAndOverwrite();
     TestGpuMemoryWriteOwnership();
@@ -538,6 +647,19 @@ int main() {
                 response == 0x00050042 &&
                 memory.Read32(0x1FF8208C, &aptSession),
             "srv:GetServiceHandle APT:U response is wrong");
+
+    // APT:A, the applications' APT port of later SDKs, opens the same service.
+    Require(memory.Write32(0x1FF82080, 0x00050100) &&
+                memory.Write32(0x1FF82084, 0x3A545041) &&
+                memory.Write32(0x1FF82088, 0x00000041) &&
+                memory.Write32(0x1FF8208C, 5),
+            "cannot write srv:GetServiceHandle APT:A request");
+    state.r[0] = srvSession;
+    Require(host.HandleSvc(0x32, state, memory, context).Action ==
+                    NativeA32HostAction::Resume &&
+                memory.Read32(0x1FF82080, &response) &&
+                response == 0x00050042,
+            "srv:GetServiceHandle did not open APT:A");
 
     Require(memory.Write32(0x1FF82080, 0x00050100) &&
                 memory.Write32(0x1FF82084, 0x553A7366) &&
@@ -1006,6 +1128,34 @@ int main() {
     Require(host.HandleSvc(0x25, state, memory, context).Action ==
                 NativeA32HostAction::Resume && state.r[1] == 1,
             "APT wakeup parameter event was not initially signaled");
+
+    // GlanceParameter reads the pending Wakeup without consuming it;
+    // ReceiveParameter consumes it.
+    const auto parameterRequest = [&](uint32_t header) {
+        Require(memory.Write32(0x1FF82000 + 0x180, (0x10U << 14U) | 2U) &&
+                    memory.Write32(0x1FF82000 + 0x184, 0x1FF82200) &&
+                    memory.Write32(0x1FF82080, header) &&
+                    memory.Write32(0x1FF82084, 0x300) &&
+                    memory.Write32(0x1FF82088, 0x10),
+                "cannot write APT parameter request");
+        state.r[0] = aptSession;
+        return host.HandleSvc(0x32, state, memory, context).Action;
+    };
+    uint32_t parameterCommand = 0;
+    for (int glance = 0; glance < 2; ++glance) {
+        Require(parameterRequest(0x000E0080) == NativeA32HostAction::Resume &&
+                    memory.Read32(0x1FF82080, &response) &&
+                    response == 0x000E0104 &&
+                    memory.Read32(0x1FF8208C, &parameterCommand) &&
+                    parameterCommand == 1,
+                "APT:GlanceParameter did not return the pending Wakeup");
+    }
+    Require(parameterRequest(0x000D0080) == NativeA32HostAction::Resume &&
+                memory.Read32(0x1FF82080, &response) &&
+                response == 0x000D0104,
+            "APT:ReceiveParameter did not return the pending Wakeup");
+    Require(parameterRequest(0x000E0080) == NativeA32HostAction::Wait,
+            "APT:GlanceParameter returned a consumed parameter");
 
     constexpr uint32_t transition = 0x62;
     Require(memory.Write32(0x1FF82140, transition) &&
@@ -1699,6 +1849,14 @@ int main() {
                 memory.Read32(0x1FF82080, &response) &&
                 response == 0x00160040,
             "GSP:AcquireRight response is wrong");
+
+    // Before a relay queue is registered, VBlank has nowhere to go and is
+    // not an error; a PICA completion is.
+    Require(host.SignalVBlank(memory),
+            "VBlank before RegisterInterruptRelayQueue failed");
+    Require(!host.SignalPicaInterrupt(
+                memory, Oot3dNativeGame::Oot3dPicaInterruptId::P3d),
+            "PICA completion without a relay queue was accepted");
 
     state.r[1] = 0;
     Require(host.HandleSvc(0x17, state, memory, context).Action ==

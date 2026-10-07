@@ -404,6 +404,9 @@ class NativeA32CtrHostServices final : public NativeA32HostServices {
     NativeA32HostResult
     HandleControlMemory(oot3d::recomp::a32::GuestState& state,
                         NativeA32Memory& memory, NativeA32CtrSvcEvent event);
+    NativeA32HostResult
+    HandleQueryMemory(oot3d::recomp::a32::GuestState& state,
+                      NativeA32Memory& memory, NativeA32CtrSvcEvent event);
     // SendSyncRequest, one method per service (oot3d_native_a32_ctr_host_*.cpp).
     NativeA32HostResult HandleNdmRequest(
         oot3d::recomp::a32::GuestState& state, NativeA32Memory& memory,

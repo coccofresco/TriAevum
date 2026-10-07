@@ -278,9 +278,15 @@ bool MountNativeA32ProcessImageBytes(
         }
         for (const auto& region : manifest.SystemRegions) {
             std::string mapError;
+            // The CTR's fixed mappings: VRAM and DSP RAM are device
+            // memory, the configuration and shared pages kernel-shared.
+            const bool device = region.Address == 0x1F000000U ||
+                                region.Address == 0x1FF00000U;
             if (!process.MapRegion({region.Name, region.Address,
                                     region.MappedSize, region.Writable,
-                                    region.Executable, region.InitialBytes},
+                                    region.Executable, region.InitialBytes,
+                                    device ? NativeA32KernelMemoryState::Io
+                                           : NativeA32KernelMemoryState::Shared},
                                    &mapError)) {
                 throw std::runtime_error("cannot map " + region.Name + ": " +
                                          mapError);
@@ -290,9 +296,13 @@ bool MountNativeA32ProcessImageBytes(
             const auto initial =
                 code.subspan(segment.FileOffset, segment.FileSize);
             std::string mapError;
+            // Text and read-only data are Code; data and BSS Private.
             if (!process.MapRegion({segment.Name, segment.Address,
                                     segment.MappedSize, segment.Writable,
-                                    segment.Executable, initial},
+                                    segment.Executable, initial,
+                                    segment.Writable
+                                        ? NativeA32KernelMemoryState::Private
+                                        : NativeA32KernelMemoryState::Code},
                                    &mapError)) {
                 throw std::runtime_error("cannot map " + segment.Name + ": " +
                                          mapError);

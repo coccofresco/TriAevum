@@ -529,6 +529,7 @@ void NativeA32WindowSession::Setup() {
   widescreenProjection.WholeAotObservableExitPcs =
       wholeAotObservableExitBlocks;
   process.SetTimingEnabled(launch.ProfileA32Runtime);
+  process.SetManualCompiledFunctionsEnabled(enableManualCompiledFunctions);
 #if !defined(OOT3D_WHOLE_AOT_PRODUCT_MODE)
   // Native candidates are experimental reconstruction aids.  The product
   // executes the audited whole-AOT graph and never substitutes source-native

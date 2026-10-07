@@ -40,6 +40,8 @@ void AppendHex8(std::string& out, uint32_t value) {
 }
 
 constexpr uint32_t kResultSuccess = 0;
+// The kernel's result for a synchronization wait that timed out.
+constexpr uint32_t kResultTimeout = 0x09401BFEU;
 using RuntimeProfileClock = std::chrono::steady_clock;
 
 uint64_t
@@ -96,6 +98,9 @@ constexpr uint32_t kAptNotifyToWaitRequest = 0x00430040U;
 constexpr uint32_t kAptNotifyToWaitResponse = 0x00430040U;
 constexpr uint32_t kAptReceiveParameterRequest = 0x000D0080U;
 constexpr uint32_t kAptReceiveParameterResponse = 0x000D0104U;
+// GlanceParameter reads the pending parameter without consuming it.
+constexpr uint32_t kAptGlanceParameterRequest = 0x000E0080U;
+constexpr uint32_t kAptGlanceParameterResponse = 0x000E0104U;
 constexpr uint32_t kAptAppletUtilityRequest = 0x004B00C2U;
 constexpr uint32_t kAptAppletUtilityResponse = 0x004B0082U;
 constexpr uint32_t kAptUtilitySleepIfShellClosed = 4U;

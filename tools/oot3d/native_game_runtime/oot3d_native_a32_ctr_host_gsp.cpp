@@ -536,6 +536,9 @@ NativeA32HostResult NativeA32CtrHostServices::HandleGspRequest(
                 mGspSharedMemory->Type = "shared_memory:gsp";
                 mGspSharedMemory->FileSize = 0x1000U;
             }
+            // CreateHandle may reallocate mHandles, which interruptEvent
+            // points into: keep the object, not the record.
+            auto interruptEventObject = interruptEvent->Object;
             const uint32_t sharedMemory =
                 CreateHandle(mGspSharedMemory);
             if (memory.Write32(
@@ -547,7 +550,7 @@ NativeA32HostResult NativeA32CtrHostServices::HandleGspRequest(
                 memory.Write32(commandBuffer + 12U,
                                kCopyHandleDescriptor) &&
                 memory.Write32(commandBuffer + 16U, sharedMemory)) {
-                mGspInterruptEvent = interruptEvent->Object;
+                mGspInterruptEvent = std::move(interruptEventObject);
                 mGspThreadId = 0U;
                 state.r[0] = kResultSuccess;
                 event.Name += ":RegisterInterruptRelayQueue";

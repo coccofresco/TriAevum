@@ -170,6 +170,7 @@ bool NativeA32Memory::MapRegion(const NativeA32MemoryRegionConfig& config,
               region.Bytes.begin());
     region.Writable = config.Writable;
     region.Executable = config.Executable;
+    region.KernelState = config.KernelState;
     mRegions.push_back(std::move(region));
     std::sort(mRegions.begin(), mRegions.end(),
               [](const Region& left, const Region& right) {
@@ -292,6 +293,17 @@ bool NativeA32Memory::IsExecutable(uint32_t address, size_t size) const {
 
 size_t NativeA32Memory::RegionCount() const {
     return mRegions.size();
+}
+
+std::vector<NativeA32MemoryRegionInfo> NativeA32Memory::RegionInfos() const {
+    std::vector<NativeA32MemoryRegionInfo> infos;
+    infos.reserve(mRegions.size());
+    for (const auto& region : mRegions) {
+        infos.push_back({region.BaseAddress, region.Bytes.size(),
+                         region.Writable, region.Executable,
+                         region.KernelState});
+    }
+    return infos;
 }
 
 uint64_t NativeA32Memory::WriteGeneration() const {
@@ -433,6 +445,7 @@ nlohmann::json NativeA32Memory::CaptureState() const {
             {"base_address", region.BaseAddress},
             {"writable", region.Writable},
             {"executable", region.Executable},
+            {"kernel_state", static_cast<uint8_t>(region.KernelState)},
             {"bytes", nlohmann::json::binary(region.Bytes)},
         });
     }
@@ -467,6 +480,17 @@ bool NativeA32Memory::RestoreState(const nlohmann::json& state,
             config.Size = bytes.size();
             config.Writable = encoded.at("writable").get<bool>();
             config.Executable = encoded.at("executable").get<bool>();
+            // States saved before kernel states were recorded: Private.
+            const auto kernelState = encoded.value(
+                "kernel_state",
+                static_cast<uint8_t>(NativeA32KernelMemoryState::Private));
+            if (kernelState >
+                static_cast<uint8_t>(NativeA32KernelMemoryState::Locked)) {
+                SetError(error, "native A32 memory kernel state is invalid");
+                return false;
+            }
+            config.KernelState =
+                static_cast<NativeA32KernelMemoryState>(kernelState);
             config.InitialBytes = std::span<const uint8_t>(bytes.data(),
                                                            bytes.size());
             if (!staged.MapRegion(config, error)) {
