@@ -69,31 +69,45 @@ void ApplyNativeWidescreenProjectionPolicy(
           Oot3dNativeGame::Mm3dNativePicaCompositionTracker::Event::OpaqueWorldBegins &&
       runtime.SceneViewProbe != nullptr &&
       runtime.Projection.PendingSceneFrustum.has_value()) {
-    // The scene's projection for its opaque pass: the play View's field of
+    // The scene's camera for its opaque pass: the current View's field of
     // view and clip planes, at the aspect (and widening) of the frustum the
-    // pass draws with. The View's eye and target hold constant values, not
-    // the live camera's, so no camera is published yet.
+    // pass draws with, and its eye and target. The default View (no current
+    // one) has a placeholder eye and target, so it publishes no camera.
     const auto &frustum = *runtime.Projection.PendingSceneFrustum;
-    float view[3] = {};
-    bool read = true;
+    uint32_t currentView = 0;
+    bool read = memory.Read32(Oot3dNativeGame::kMm3dCurrentViewPointer, &currentView);
+    const uint32_t base =
+        currentView != 0U ? currentView : Oot3dNativeGame::kMm3dDefaultViewAddress;
     const auto readFloat = [&](uint32_t address, float &value) {
       uint32_t word = 0;
       read = read && memory.Read32(address, &word);
       value = std::bit_cast<float>(word);
     };
-    const uint32_t base = Oot3dNativeGame::kMm3dPlayViewAddress;
+    float view[3] = {};
+    std::array<float, 3> eye{}, at{};
     readFloat(base + Oot3dNativeGame::kMm3dViewFovyOffset, view[0]);
     readFloat(base + Oot3dNativeGame::kMm3dViewNearOffset, view[1]);
     readFloat(base + Oot3dNativeGame::kMm3dViewFarOffset, view[2]);
+    for (uint32_t axis = 0; axis < 3U; ++axis) {
+      readFloat(base + Oot3dNativeGame::kMm3dViewEyeOffset + axis * 4U, eye[axis]);
+      readFloat(base + Oot3dNativeGame::kMm3dViewAtOffset + axis * 4U, at[axis]);
+    }
     const float frustumHeight = frustum.Top - frustum.Bottom;
     if (read && view[0] > 1.0F && view[0] < 179.0F && view[1] > 0.0F &&
         view[2] > view[1] && frustumHeight > 0.0F) {
       const float top = view[1] * std::tan(view[0] * 0.5F * 3.14159265F / 180.0F);
       const float scale = 2.0F * top / frustumHeight;
-      runtime.SceneViewProbe->ObservePerspective(
-          frustum.Pc, frustum.ReturnAddress, frustum.Left * scale,
-          frustum.Right * scale, frustum.Bottom * scale, frustum.Top * scale,
-          view[1], view[2]);
+      if (currentView != 0U) {
+        runtime.SceneViewProbe->ObservePerspectiveCamera(
+            frustum.Pc, frustum.ReturnAddress, frustum.Left * scale,
+            frustum.Right * scale, frustum.Bottom * scale, frustum.Top * scale,
+            view[1], view[2], eye, at);
+      } else {
+        runtime.SceneViewProbe->ObservePerspective(
+            frustum.Pc, frustum.ReturnAddress, frustum.Left * scale,
+            frustum.Right * scale, frustum.Bottom * scale, frustum.Top * scale,
+            view[1], view[2]);
+      }
     }
   }
   if (runtime.CallTrace != nullptr &&

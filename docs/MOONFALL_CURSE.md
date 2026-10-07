@@ -282,19 +282,33 @@ over a target's whole color buffer restarts that target's composition
 (`PicaCompositionTargetReset`), since MM3D draws a layout into the top
 buffer and clears it before the scene.
 
-Projection: the hooked frustum builder makes the stereo camera's constant
-base frustum (object `0x006B35D4`), not the scene's field of view. The
-play View at `0x0072F5D0` (N64 View layout) gives fovy 60, near 5,
-far 12800; the scene view is published from it at the aspect and widening
-of the hooked frustum. Its eye and target hold constant values, so no
-camera is published yet.
+Projection and camera: the hooked frustum builder makes the stereo
+camera's constant base frustum (object `0x006B35D4`), not the scene's field
+of view. The scene camera is the current View (N64 View layout): the game's
+getter `0x001DD0C4` returns the pointer at `0x00656B5C` (set by
+`0x00170514`; the play state's View on the heap during gameplay) or, while
+it is null, the static View at `0x0072F5D0`, which View_Init
+(`0x001393E0`) leaves at fovy 60, near 5, far 12800 and a placeholder eye
+(60000, ...). The scene view is published from the current View's fovy,
+clip planes, eye and target, at the aspect and widening of the hooked
+frustum; the default View publishes no camera. Found by diffing guest
+memory between savestates for (at, eye, up) triples whose up is
+perpendicular to the view direction. In the attract demo the camera moves
+with the cutscene (fovy 45, then 35 indoors).
+
+Open: the renderer corrects the guest projection with the one decoded from
+the draws' vertex uniforms on frames that draw; for MM3D that one is
+constant across scenes (1.22 x 2.17 with FOV x1.1), so on frames without
+draws (frame interpolation) the temporal history sees two projections and
+resets every frame.
 
 Result (developer launch, Clock Town attract demo): 96 opaque, 8
 translucent and 4 sky draws classified; ambient occlusion composes on the
 scene (without the streaks the stereo frustum gave), directional shadows
-prepare their 96 casters. Not yet: the live camera (eye/at, for shadow
-fitting, temporal effects and grass), MM3D's scene lights (Modern
-lighting), grass sources for MM3D's textures, the HUD in gameplay.
+prepare their 96 casters. Not yet: MM3D's scene lights (Modern lighting
+and the shadow direction: no light candidate yet, so no shadow is cast),
+temporal history (see above), grass sources for MM3D's textures, the HUD
+in gameplay.
 
 Bring-up tooling: `TRIAEVUM_A32_CALL_TRACE=PATH,FIRST,LAST[,WORD[,ENTRIES]]`
 writes a record per observed block entry (pc, lr, sp, r0-r3, thread, a

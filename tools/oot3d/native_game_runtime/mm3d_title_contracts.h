@@ -20,14 +20,18 @@ inline constexpr uint32_t kMm3dMtx44FrustumFirstWord = 0xED9F3A23U;
 // That builder makes the stereo camera's base frustum (object 0x006B35D4:
 // a constant 0.08 x 0.048 window at near 80, far 1000), not the scene's
 // field of view, which the game's view matrix carries. The scene camera is
-// the play state's View, laid out as N64 MM's View (include/z64view.h):
-// fovy, zNear, zFar, scale at +0x18, eye at +0x28, at at +0x34, up at
-// +0x40. It is a static object (.bss) at this address. Its fovy and clip
-// planes give the scene's projection; its eye and target hold constant
-// values (60000, ...), not the live camera, which is still to be found.
-inline constexpr uint32_t kMm3dPlayViewAddress = 0x0072F5D0U;
+// the current View, laid out as N64 MM's View (include/z64view.h): fovy,
+// zNear, zFar, scale at +0x18, eye at +0x28, at at +0x34, up at +0x40.
+// 0x001DD0C4 returns it: the pointer at 0x00656B5C (set by 0x00170514; the
+// play state's View, on the heap, during gameplay) or, while that is null,
+// the static View at 0x0072F5D0, which View_Init (0x001393E0) leaves at
+// fovy 60, near 5, far 12800 and a placeholder eye and target (60000, ...).
+inline constexpr uint32_t kMm3dCurrentViewPointer = 0x00656B5CU;
+inline constexpr uint32_t kMm3dDefaultViewAddress = 0x0072F5D0U;
 inline constexpr uint32_t kMm3dViewFovyOffset = 0x18U;
 inline constexpr uint32_t kMm3dViewNearOffset = 0x1CU;
 inline constexpr uint32_t kMm3dViewFarOffset = 0x20U;
+inline constexpr uint32_t kMm3dViewEyeOffset = 0x28U;
+inline constexpr uint32_t kMm3dViewAtOffset = 0x34U;
 
 } // namespace Oot3dNativeGame

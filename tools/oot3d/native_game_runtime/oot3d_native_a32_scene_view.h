@@ -45,6 +45,15 @@ public:
   void ObservePerspective(uint32_t guestFunction, uint32_t guestReturnAddress,
                           float left, float right, float bottom, float top,
                           float nearPlane, float farPlane);
+  // A frustum with its camera, for a title whose camera is not read from an
+  // OoT3D PlayState. The camera is kept only when it is finite and its eye
+  // and target differ.
+  void ObservePerspectiveCamera(uint32_t guestFunction,
+                                uint32_t guestReturnAddress, float left,
+                                float right, float bottom, float top,
+                                float nearPlane, float farPlane,
+                                const std::array<float, 3> &eye,
+                                const std::array<float, 3> &at);
   std::optional<NativeA32SceneViewSnapshot>
   Capture(oot3d::recomp::a32::MemoryBus &memory);
   void Reset();

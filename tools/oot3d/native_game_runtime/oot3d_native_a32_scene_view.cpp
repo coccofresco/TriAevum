@@ -62,6 +62,29 @@ void NativeA32SceneViewProbe::ObservePerspective(
   mLastError.clear();
 }
 
+void NativeA32SceneViewProbe::ObservePerspectiveCamera(
+    uint32_t guestFunction, uint32_t guestReturnAddress, float left,
+    float right, float bottom, float top, float nearPlane, float farPlane,
+    const std::array<float, 3> &eye, const std::array<float, 3> &at) {
+  ObservePerspective(guestFunction, guestReturnAddress, left, right, bottom,
+                     top, nearPlane, farPlane);
+  if (!mPerspective.has_value()) {
+    return;
+  }
+  bool finite = true;
+  for (size_t axis = 0; axis < 3U; ++axis) {
+    finite = finite && std::isfinite(eye[axis]) && std::isfinite(at[axis]);
+  }
+  const float deltaX = at[0] - eye[0];
+  const float deltaY = at[1] - eye[1];
+  const float deltaZ = at[2] - eye[2];
+  if (finite && deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ > 1.0e-8F) {
+    mPerspective->Eye = eye;
+    mPerspective->At = at;
+    mPerspective->CameraAvailable = true;
+  }
+}
+
 std::optional<NativeA32SceneViewSnapshot>
 NativeA32SceneViewProbe::Capture(oot3d::recomp::a32::MemoryBus &memory) {
   if (!mPerspective.has_value()) {
