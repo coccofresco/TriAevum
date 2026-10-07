@@ -150,9 +150,13 @@ int main(int argc, char** argv) {
             return 0;
         }
 #endif
-        if (argc == 3 && std::string_view(argv[1]) == "--game-language-info") {
+        // --game-language-info ROMFS [CODE_BIN_SHA256]; without the hash the
+        // RomFS is read as OoT3D's.
+        if ((argc == 3 || argc == 4) && std::string_view(argv[1]) == "--game-language-info") {
+            const auto title = argc == 4 ? Oot3dNativeGame::ResolveTitleAdapter(argv[3])
+                                         : Oot3dNativeGame::TitleAdapter::Oot3dEur;
             std::cout << Oot3dNativeGame::GameLanguageDocument(
-                Oot3dNativeGame::DetectGameLanguages(argv[2])).dump() << '\n';
+                Oot3dNativeGame::DetectGameLanguages(argv[2], 0, 0, title)).dump() << '\n';
             return 0;
         }
         if (argc == 2 && std::string_view(argv[1]) == "--product-info") {

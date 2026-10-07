@@ -29,7 +29,12 @@
   French and Spanish; it does not create German or Italian translations.
 - `TriAevum --game-language-info ROMFS` exposes the same detector to Forge.
   It reads metadata/message tables only, not all texture payloads, and does
-  not initialize the game, title plugin, renderer or audio.
+  not initialize the game, title plugin, renderer or audio. An optional
+  third argument, the code.bin SHA-256, selects another title's layout
+  (`triaevum_title_adapter.h`). Majora's Mask 3D needs a GMSG message file
+  (`message/<region>/<region><letter>.gmsg`) and populated layout archives in
+  `layout/<REGION>_<Language>/`; the EUR card's Dutch archives are empty, so
+  Dutch is not offered.
 - At boot, `oot3d_native_a32_window.cpp` detects actual available languages
   (including older installations), loads the preference and supplies its CFG
   ID through `NativeA32CtrHostConfig.SystemLanguage`. Original title code then

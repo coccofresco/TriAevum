@@ -110,7 +110,7 @@ void NativeA32WindowSession::Setup() {
   languageSettings = std::make_shared<Oot3dNativeGame::GameLanguageSettings>(
       std::filesystem::path(launch.Host.ConfigurationPath).parent_path() / "game_language.json",
       Oot3dNativeGame::DetectGameLanguages(manifest->RomFsImagePath,
-          manifest->RomFsImageOffset, manifest->RomFsImageSize));
+          manifest->RomFsImageOffset, manifest->RomFsImageSize, titleAdapter));
   hostConfig.SystemLanguage = languageSettings->SystemId();
   hostConfig.ResourceLimitValues = manifest->ResourceLimitValues;
   hostConfig.ResourceCurrentValues = manifest->ResourceCurrentValues;

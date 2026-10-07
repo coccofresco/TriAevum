@@ -1,5 +1,7 @@
 #pragma once
 
+#include "triaevum_title_adapter.h"
+
 #include <cstdint>
 #include <filesystem>
 #include <nlohmann/json.hpp>
@@ -13,11 +15,13 @@ struct GameLanguage {
   uint8_t SystemId;
 };
 
-// Reads native menu resources and populated QM message slots, not ROM
-// filenames.
+// Reads the title's native menu/layout resources and populated message
+// tables, not ROM filenames: OoT3D's menu archives and QM slots, MM3D's
+// layout archives and GMSG files.
 std::vector<GameLanguage>
 DetectGameLanguages(const std::filesystem::path &romfs, uint64_t offset = 0,
-                    uint64_t size = 0);
+                    uint64_t size = 0,
+                    TitleAdapter title = TitleAdapter::Oot3dEur);
 nlohmann::json GameLanguageDocument(const std::vector<GameLanguage> &languages,
                                     const std::string &selected = "en");
 

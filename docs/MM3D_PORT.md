@@ -17,6 +17,19 @@ Decompressed code.bin SHA-256
 `0x00100000` (0x51CFB4 bytes), rodata `0x0061D000`, data `0x0064B000`, BSS to
 `0x007CF000`. Same Grezzo engine generation as OoT3D.
 
+The code is build 1.1.0 (`joker-1_1_0` source paths in rodata). The USA
+v1.1 card (`CTR-P-AJRE`, program `0004000000125500`, partition-0 SHA-256
+`9c756279e3ec00bb9009f92ca2e7b9ec8b1fcdfcd9de057658b209caa24323da`, the dump
+dekui requires) carries a byte-identical code.bin; the two ExHeaders differ
+only in the program ID and access descriptor. Region lives in the RomFS:
+EUR has `layout/EU_<Language>/` and `message/eu/eu?.gmsg` (English, French,
+German, Italian, Spanish; Dutch layouts are present but empty), USA has
+`US_*` and `message/us/` (English, French, Spanish). The title adapter is
+therefore keyed by the code hash (`mm3d`), and the region by program ID and
+RomFS. MM3D's code contains Thumb (150 functions, about 16.7 KB, in the SDK
+runtime at `0x00100000-0x00103600` and `0x002FF000-0x00303000`) entered from
+the process entry by `BLX`; OoT3D's contains none.
+
 ## N64 evidence
 
 As OoT N64 was for OoT3D ([offline semantic source](OOT3D_OFFLINE_SEMANTIC_SOURCE.md),
@@ -48,14 +61,16 @@ text boxes; widescreen and camera distance. It is an Azahar fork
 `resources/mm3d/project-restoration`), whose `source/game/*.h` describes
 MM3D's actor, context, camera, item, message and input structures.
 
-Both target the USA release: dekui accepts a USA v1.1 card and runs
-Project Restoration's patched code, which is built on USA v1.0 addresses.
-This port stays on EUR (maintainer's choice, for its languages including
-Italian). Each dekui or Project Restoration behaviour is therefore re-found
-in EUR's code by meaning, structure layouts, strings and code shape, and
-re-implemented as a typed source contract in the MM3D adapter, never by
-applying their binary patches or addresses. Structure layouts are checked
-against EUR code before use.
+dekui accepts only the USA v1.1 card and runs Project Restoration's `v110`
+build (its `code.bps` names source CRC32 `ffdf1ee8`, the CRC32 of the code.bin
+above). Because EUR and USA v1.1 share that code.bin, their code addresses,
+function knowledge and structure layouts hold for the EUR title this port
+runs (maintainer's choice, for its languages including Italian). Their
+RomFS-side work does not transfer as is: dekui overrides USA paths
+(`mods/0004000000125500/romfs/layout/...`), while EUR's localized layouts and
+messages live under `EU_<Language>` and `message/eu`. Behaviours are
+re-implemented as typed source contracts in the MM3D adapter, never by
+applying their binary patches.
 
 ## Pipeline (reproducible, outside the repository)
 
@@ -70,6 +85,10 @@ Work directory `I:/_triaevum_work/mm3d-port` (`W` below).
    `ExportFunctionInventory.java`), then `tools/ctr_title/normalize_inventory.py`
    (contiguous disjoint word-aligned intervals in text). 12,652 functions found,
    12,631 kept (18 Thumb entries and 3 outside text dropped), 80.9% of text.
+   The inventory does not yet record the instruction set: 132 word-aligned
+   Thumb functions are among the kept entries and are decoded as A32 by the
+   later steps. `ghidra_scripts/ExportThumbRanges.java` lists Ghidra's Thumb
+   ranges and functions (run on the kept project, read-only).
 4. A32 registry: `generate_aot.py` with `--code --exheader --inventory
    --boundary-audit --supplemental-entries --true-aot-blocks` (the last three
    from `tools/mm3d/a32/`, empty for now). 1,058,521 of 1,084,865 slots reachable.
@@ -86,22 +105,35 @@ is unchanged.
 ## Runtime title seam
 
 `triaevum_title_adapter.h` resolves the adapter from the process image's
-code.bin hash. Only OoT3D EUR gets the OoT3D adapter: guest block hooks,
-composition and UI-lifecycle hooks, hand-written compiled functions, typed
-gameplay, mass/true-AOT blocks and the TopScreen profile (refused for other
-titles). Any other title runs on the CTR host, the A32 runtime with its own
-whole AOT, and the canonical renderer. Stderr reports `TRIAEVUM_TITLE_ADAPTER`.
+code.bin hash: `oot3d_eur`, `mm3d` or `generic`. Only OoT3D EUR gets the
+OoT3D adapter: guest block hooks, composition and UI-lifecycle hooks,
+hand-written compiled functions, typed gameplay, mass/true-AOT blocks and the
+TopScreen profile (refused for other titles). MM3D's adapter so far only
+selects its RomFS language layout (`DetectGameLanguages`, also reachable as
+`TriAevum --game-language-info ROMFS CODE_SHA256`). Other titles run on the
+CTR host, the A32 runtime with their own whole AOT, and the canonical
+renderer. Stderr reports `TRIAEVUM_TITLE_ADAPTER`.
+
+## Bring-up status
+
+First boot (developer launch, product-mode host build, MM3D title module):
+adapter `mm3d`, languages EN/FR/DE/IT/ES, then the process stops at its first
+instruction. `0x00100000` (the CRT entry) was rejected by whole-AOT lowering
+because `0x00100010` is `BLX` into Thumb (`0x001009E0`), and product mode
+has no residual path. Neither the A32 core nor the whole-AOT lowering executes
+Thumb.
 
 ## Next steps
 
-1. MM3D host build in its own directory with `OOT3D_A32_AOT_GENERATED_DIR`
-   on the MM3D registry (the executable links the A32 registry statically),
-   and the MM3D title module from the C++ shards
-   (`tools/renderer/tev_program/build_aot_header_experiment.py` with the
-   build's `triaevum_title_whole_aot_support.lib`).
-2. First boot with `--ui-profile oot3d` and the Authentic preset: record the
-   CTR services and SVCs MM3D needs beyond OoT3D's, runtime-discovered entries
-   (fed back through `tools/mm3d/a32/runtime_discovered_entries.csv`), and
-   remaining per-frame reads of OoT3D addresses outside the hooks.
-3. Title screen, then the MM3D adapter: camera/projection and composition
-   metadata for the extension effects, frame pacing, HUD.
+1. Record the instruction set per function in the inventory and keep Thumb
+   functions out of the A32 registry and whole-AOT lowering.
+2. Thumb execution (ARMv6K Thumb-1 with BL/BLX pairs) in the title-neutral A32
+   core with A32/Thumb interworking, first for a development (non-product)
+   build, then Thumb lowering in whole AOT for the zero-residual product.
+3. In product mode `DispatchWholeAotProduct` enables hand-written compiled
+   functions unconditionally; gate them by the adapter like the window setup.
+4. Boot to the title screen: CTR services and SVCs beyond OoT3D's,
+   runtime-discovered entries (`tools/mm3d/a32/runtime_discovered_entries.csv`).
+5. MM3D adapter: camera/projection and composition metadata for the
+   extension effects, frame pacing, HUD; then the single-screen mode from
+   dekui and Project Restoration.
