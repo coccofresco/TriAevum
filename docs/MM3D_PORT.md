@@ -34,6 +34,29 @@ and actor lists, parameters, transforms, camera, timing, assets and rendering
 come from MM3D's code.bin and RomFS, which win every conflict. No N64 source
 or asset is copied into the repository or the runtime.
 
+## Single-screen experience (TopScreen equivalent)
+
+`tgacquin/mm3d-dekui` (GPL-2.0, documentation at
+`a49554f0c3c797f165539e3170ff671bb463569c`; source archive of release
+v1.0.0-beta.1, SHA-256 `E39E374B…3E6281`, in `W/external/dekui-source`) is
+the reference for MM3D's single-screen mode, as the TopScreen mod was for
+OoT3D: gear, masks, items and map, the Bomber's Notebook, song and give-item
+menus, file select and options on one screen; minimap; console-like HUD and
+text boxes; widescreen and camera distance. It is an Azahar fork
+(`src/mm3d`, about 15,800 lines) over bundled Project Restoration
+(`leoetlino/project-restoration` at `8bb2a7b8`, source in
+`resources/mm3d/project-restoration`), whose `source/game/*.h` describes
+MM3D's actor, context, camera, item, message and input structures.
+
+Both target the USA release: dekui accepts a USA v1.1 card and runs
+Project Restoration's patched code, which is built on USA v1.0 addresses.
+This port stays on EUR (maintainer's choice, for its languages including
+Italian). Each dekui or Project Restoration behaviour is therefore re-found
+in EUR's code by meaning, structure layouts, strings and code shape, and
+re-implemented as a typed source contract in the MM3D adapter, never by
+applying their binary patches or addresses. Structure layouts are checked
+against EUR code before use.
+
 ## Pipeline (reproducible, outside the repository)
 
 Work directory `I:/_triaevum_work/mm3d-port` (`W` below).
