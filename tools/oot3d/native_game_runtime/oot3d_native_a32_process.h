@@ -31,6 +31,9 @@ struct NativeA32HostResult {
     std::optional<uint32_t> ResumePc;
     uint32_t Detail = 0;
     std::string Error;
+    // With Resume: the thread yields (svcSleepThread(0)); another ready
+    // thread of the same priority runs first.
+    bool Yield = false;
 };
 
 class NativeA32HostServices {
@@ -236,6 +239,8 @@ class NativeA32Process {
     uint32_t mPrimaryThreadEntryAddress = 0;
     uint32_t mPrimaryThreadArgument = 0;
     uint32_t mCurrentThreadId = 0;
+    // The thread that just yielded, consumed by the next SelectReadyThread.
+    std::optional<uint32_t> mYieldingThreadId;
     uint32_t mTlsBaseAddress = 0;
     size_t mTlsSize = 0;
     size_t mNextTlsOffset = 0;

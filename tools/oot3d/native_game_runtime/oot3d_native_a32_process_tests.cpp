@@ -16,6 +16,7 @@
 #include <iostream>
 #include <span>
 #include <stdexcept>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
@@ -1904,6 +1905,79 @@ void TestTrueAotNativeCurveType2Scan() {
 
 } // namespace
 
+// svcSleepThread(0) yields: another ready thread of the same priority runs
+// before the yielding one continues; a lower-priority one does not.
+class YieldHostServices final
+    : public Oot3dNativeGame::NativeA32HostServices {
+  public:
+    Oot3dNativeGame::NativeA32HostResult HandleSvc(
+        uint32_t immediate, oot3d::recomp::a32::GuestState&,
+        Oot3dNativeGame::NativeA32Memory&,
+        Oot3dNativeGame::NativeA32HostContext& context) override {
+        if (immediate == 0x0AU) {
+            ++Yields;
+            Oot3dNativeGame::NativeA32HostResult result{
+                Oot3dNativeGame::NativeA32HostAction::Resume, kEntry};
+            result.Yield = true;
+            return result;
+        }
+        if (immediate == 3U) {
+            Finished.push_back(context.ThreadId);
+            return {Oot3dNativeGame::NativeA32HostAction::Terminate};
+        }
+        return {Oot3dNativeGame::NativeA32HostAction::Fault, std::nullopt,
+                immediate, "unexpected yield-test SVC"};
+    }
+
+    uint32_t Yields = 0U;
+    std::vector<uint32_t> Finished;
+};
+
+void TestYieldRotatesEqualPriority() {
+    static constexpr std::array<oot3d::recomp::a32::PackedOp, 2> operations{{
+        {0xEF00000AU, oot3d::recomp::a32::EncodeMetadata(
+                          oot3d::recomp::a32::Opcode::Svc,
+                          oot3d::recomp::a32::Condition::Al)},
+        {0xEF000003U, oot3d::recomp::a32::EncodeMetadata(
+                          oot3d::recomp::a32::Opcode::Svc,
+                          oot3d::recomp::a32::Condition::Al)},
+    }};
+    static const std::array<oot3d::recomp::a32::Block, 2> blocks{{
+        {kEntry, &operations[0], 1},
+        {kEntry + 0x10U, &operations[1], 1},
+    }};
+    static const oot3d::recomp::a32::BlockShard shard{
+        kEntry, kEntry + 0x10U, blocks.data(),
+        static_cast<uint32_t>(blocks.size())};
+    const oot3d::recomp::a32::Registry registry{&shard, 1, nullptr, 0};
+    YieldHostServices services;
+    Oot3dNativeGame::NativeA32Process process(registry, services);
+    const std::array<uint8_t, 0x20> code{};
+    std::string error;
+    Expect(process.MapRegion(
+               {"text", kEntry, code.size(), false, true, code}, &error) &&
+               process.MapRegion({"data", kData, 0x400U, true, false, {}},
+                                 &error) &&
+               process.CreatePrimaryThread(
+                   {kEntry, kStack, 0x1000U, kTls, 0x1000U, 0,
+                    0, 0x10U, 0x03C00010U, 48U},
+                   &error),
+           "create yield primary thread");
+    // The primary thread yields forever; worker 1 shares its priority,
+    // worker 2 has a lower one.
+    const auto equal = process.CreateThread(
+        {kEntry + 0x10U, 0, kData + 0x200U, 0x10U, 0x03C00000U, 48U}, &error);
+    const auto lower = process.CreateThread(
+        {kEntry + 0x10U, 0, kData + 0x400U, 0x10U, 0x03C00000U, 50U}, &error);
+    Expect(equal == 1U && lower == 2U, "create yield workers");
+    process.Run(1'000'000U, 64U);
+    Expect(services.Finished == std::vector<uint32_t>{1U} &&
+               services.Yields > 1U &&
+               process.ThreadStatus(*lower) ==
+                   Oot3dNativeGame::NativeA32ThreadStatus::Ready,
+           "a yield runs the equal-priority thread, never the lower one");
+}
+
 int main(int argc, char** argv) {
     try {
         if (argc == 2 && std::string_view(argv[1]) == "--memory-only") {
@@ -1937,6 +2011,7 @@ int main(int argc, char** argv) {
         TestSourceOwnerCallAdapterPerCallBudget();
         TestPersistentProcess();
         TestPrioritySchedulerAndTls();
+        TestYieldRotatesEqualPriority();
         TestProcessStateRoundTrip();
         TestFallbackBoundary();
         TestBlockEntryCallback();

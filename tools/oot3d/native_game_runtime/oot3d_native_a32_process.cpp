@@ -435,6 +435,31 @@ bool NativeA32Process::SelectReadyThread() {
             selectedPriority = thread.Priority;
         }
     }
+    // Strict priority; a yield passes the CPU to the next ready thread of the
+    // same priority, in thread order after the yielding one.
+    const auto yielding = std::exchange(mYieldingThreadId, std::nullopt);
+    if (yielding.has_value() && *yielding == selectedId) {
+        std::optional<uint32_t> after;
+        std::optional<uint32_t> first;
+        const auto consider = [&](uint32_t id, uint32_t priority,
+                                  NativeA32ThreadStatus status) {
+            if (status != NativeA32ThreadStatus::Ready ||
+                priority != selectedPriority || id == *yielding) {
+                return;
+            }
+            if (id > *yielding && (!after || id < *after)) {
+                after = id;
+            }
+            if (!first || id < *first) {
+                first = id;
+            }
+        };
+        consider(0U, mPrimaryThreadPriority, mPrimaryThreadStatus);
+        for (const auto& thread : mSecondaryThreads) {
+            consider(thread.Id, thread.Priority, thread.Status);
+        }
+        selectedId = after.value_or(first.value_or(selectedId));
+    }
     mCurrentThreadId = selectedId;
     CurrentThreadStatus() = NativeA32ThreadStatus::Running;
     return true;
@@ -514,6 +539,9 @@ NativeA32ProcessRunResult NativeA32Process::ApplyHostResult(
     case NativeA32HostAction::Resume:
         state.r[15] = resumePc;
         status = NativeA32ThreadStatus::Ready;
+        if (hostResult.Yield) {
+            mYieldingThreadId = mCurrentThreadId;
+        }
         return {NativeA32ProcessRunKind::Yielded, exit, hostTransitions, {}};
     case NativeA32HostAction::Wait:
         state.r[15] = resumePc;
