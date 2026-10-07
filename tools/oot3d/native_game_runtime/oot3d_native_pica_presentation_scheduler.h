@@ -146,6 +146,8 @@ private:
       mExecutedDrawsThisPresentation;
   std::vector<Oot3d::Renderer::PicaCompositionDrawReference>
       mCompositionDrawScratch;
+  std::vector<Oot3d::Renderer::PicaCompositionTargetReset>
+      mCompositionResetScratch;
   std::map<SnapshotTarget, uint64_t> mSnapshotCompletions;
 };
 

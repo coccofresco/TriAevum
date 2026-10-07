@@ -184,6 +184,30 @@ bool Oot3dPicaPresentationScheduler::Execute(
         },
     });
   }
+  // A memory fill over a draw target's whole color buffer clears it: the
+  // target's composition starts again at the draw after the fill.
+  mCompositionResetScratch.clear();
+  for (const auto &fill : sample.MemoryFills) {
+    for (const auto &draw : mCompositionDrawScratch) {
+      const auto &target = draw.Target;
+      const uint32_t bytesPerPixel = target.ColorFormat == 0U ? 4U
+                                     : target.ColorFormat == 1U ? 3U
+                                                                : 2U;
+      const uint64_t colorBytes = uint64_t{target.FramebufferWidth} *
+                                  target.FramebufferHeight * bytesPerPixel;
+      if (fill.StartPhysicalAddress != target.ColorPhysicalAddress ||
+          uint64_t{fill.EndPhysicalAddress} - fill.StartPhysicalAddress < colorBytes)
+        continue;
+      const bool known = std::any_of(
+          mCompositionResetScratch.begin(), mCompositionResetScratch.end(),
+          [&](const auto &reset) {
+            return reset.Target == target &&
+                   reset.BeforeSubmissionId == fill.BeforeDrawSubmissionId;
+          });
+      if (!known)
+        mCompositionResetScratch.push_back({target, fill.BeforeDrawSubmissionId});
+    }
+  }
   uint64_t compositionSequenceId = mNextCompositionSequenceId++;
   if (mNextCompositionSequenceId == 0U) {
     mNextCompositionSequenceId = 1U;
@@ -204,6 +228,7 @@ bool Oot3dPicaPresentationScheduler::Execute(
                     presentation
                         ? Oot3d::Renderer::PicaCompositionPurpose::Presentation
                         : Oot3d::Renderer::PicaCompositionPurpose::NativeMemory,
+                .TargetResets = mCompositionResetScratch,
             },
             error)) {
       ++mStats.CompositionPublicationFailures;

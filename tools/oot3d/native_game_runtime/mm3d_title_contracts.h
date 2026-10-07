@@ -17,4 +17,17 @@ namespace Oot3dNativeGame {
 inline constexpr uint32_t kMm3dMtx44Frustum = 0x00122FE8U;
 inline constexpr uint32_t kMm3dMtx44FrustumFirstWord = 0xED9F3A23U;
 
+// That builder makes the stereo camera's base frustum (object 0x006B35D4:
+// a constant 0.08 x 0.048 window at near 80, far 1000), not the scene's
+// field of view, which the game's view matrix carries. The scene camera is
+// the play state's View, laid out as N64 MM's View (include/z64view.h):
+// fovy, zNear, zFar, scale at +0x18, eye at +0x28, at at +0x34, up at
+// +0x40. It is a static object (.bss) at this address. Its fovy and clip
+// planes give the scene's projection; its eye and target hold constant
+// values (60000, ...), not the live camera, which is still to be found.
+inline constexpr uint32_t kMm3dPlayViewAddress = 0x0072F5D0U;
+inline constexpr uint32_t kMm3dViewFovyOffset = 0x18U;
+inline constexpr uint32_t kMm3dViewNearOffset = 0x1CU;
+inline constexpr uint32_t kMm3dViewFarOffset = 0x20U;
+
 } // namespace Oot3dNativeGame

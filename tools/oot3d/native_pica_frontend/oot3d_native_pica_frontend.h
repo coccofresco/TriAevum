@@ -284,6 +284,9 @@ struct Oot3dPicaDrawPacket {
 
     uint32_t CommandListAddress = 0;
     uint32_t CommandListOffsetWords = 0;
+    // The GPUREG_CMDBUF_JUMP write that entered the buffer holding this
+    // draw, as a call (0 in the submitted list itself).
+    uint32_t CommandListCallerAddress = 0;
     Oot3dPicaCompositionDomain CompositionDomain =
         Oot3dPicaCompositionDomain::Unknown;
     Oot3dPicaCompositionAttribution Composition;

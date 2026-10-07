@@ -45,6 +45,8 @@
 #include "oot3d_native_presentation_pacer.h"
 #include "oot3d_native_pica_frontend.h"
 #include "oot3d_native_pica_composition.h"
+#include "mm3d_pica_composition.h"
+#include "mm3d_title_contracts.h"
 #include "oot3d_native_pica_presentation_scheduler.h"
 #include "oot3d_native_render_command_stream.h"
 #include "oot3d_native_pica_semantic_trace.h"
@@ -404,9 +406,15 @@ struct NativeSceneProjectionState {
   // The title's perspective frustum builder (s0..s5 = left, right, bottom,
   // top, near, far), hooked at entry; OoT3D's by default.
   uint32_t PerspectiveFrustumEntry = kMtx4x4BuildFrustum;
-  // Whether its frusta are the scene view the renderer's effects consume.
-  // A title whose frusta also serve other views keeps them unpublished.
+  // Whether each frustum it builds is published as the scene view. A title
+  // whose frusta also serve other views holds the latest one until its
+  // composition tracker reaches the opaque world pass, and publishes that.
   bool FrustumIsSceneView = true;
+  struct PendingFrustum {
+    uint32_t Pc = 0, ReturnAddress = 0;
+    float Left = 0, Right = 0, Bottom = 0, Top = 0, NearPlane = 0, FarPlane = 0;
+  };
+  std::optional<PendingFrustum> PendingSceneFrustum;
   uint64_t FrustumCalls = 0;
   uint64_t OrthographicCalls = 0;
   std::map<std::pair<uint32_t, uint32_t>, CallsiteStats> Callsites;
@@ -461,6 +469,16 @@ struct NativeWidescreenProjectionState {
   std::unordered_map<uint32_t, uint64_t> BlockSamples;
   bool TraceA32Blocks = false;
   bool BlockTraceTruncated = false;
+  // Adapter bring-up: TRIAEVUM_A32_CALL_TRACE=PATH,FIRST_FRAME,LAST_FRAME,WORD
+  // (hex WORD: a guest word sampled at each record, such as the title's
+  // command-list cursor) writes one record per observed block entry in that
+  // host-frame range: frame, pc, lr, sp, r0..r3, thread pointer, the word
+  // (ten little-endian u32). Needs --trace-a32-blocks, which observes every
+  // block entry.
+  std::FILE *CallTrace = nullptr;
+  uint32_t CallTraceFirstFrame = 0;
+  uint32_t CallTraceLastFrame = 0;
+  uint32_t CallTraceWordAddress = 0;
   uint64_t BlockTraceRecordsObserved = 0;
   Oot3dNativeGame::NativeA32Memory *TraceMemory = nullptr;
   Oot3dNativeGame::NativeHdFontRuntime *HdFonts = nullptr;
@@ -471,6 +489,8 @@ struct NativeWidescreenProjectionState {
       nullptr;
   Oot3dNativeGame::Oot3dNativePicaCompositionTracker
       *PicaCompositionTracker = nullptr;
+  Oot3dNativeGame::Mm3dNativePicaCompositionTracker
+      *Mm3dCompositionTracker = nullptr;
   Oot3dNativeGame::TopScreenTextureOverrideRuntime *TopScreenTextureOverrides =
       nullptr;
   bool TopScreenUiProfile = false;

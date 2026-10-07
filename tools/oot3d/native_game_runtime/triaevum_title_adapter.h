@@ -56,11 +56,12 @@ inline constexpr std::string_view kMm3dCodeBinSha256 =
     return nullptr;
 }
 
-// The scene view (frustum, camera, scene) comes from the OoT3D adapter's
-// hooks. OoT3D's and MM3D's adapters hook the perspective frustum builder,
-// which widens the scene to the output aspect and applies the scene FOV.
+// The scene view (frustum, and for OoT3D also camera and scene) and the
+// native composition passes come from the title adapter's hooks; both
+// adapters hook the perspective frustum builder, which widens the scene to
+// the output aspect and applies the scene FOV.
 [[nodiscard]] inline bool TitlePublishesSceneView(TitleAdapter adapter) noexcept {
-    return adapter == TitleAdapter::Oot3dEur;
+    return adapter == TitleAdapter::Oot3dEur || adapter == TitleAdapter::Mm3d;
 }
 [[nodiscard]] inline bool TitleAppliesSceneFov(TitleAdapter adapter) noexcept {
     return adapter == TitleAdapter::Oot3dEur || adapter == TitleAdapter::Mm3d;

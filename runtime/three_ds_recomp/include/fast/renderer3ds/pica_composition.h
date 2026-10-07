@@ -157,11 +157,20 @@ enum class PicaCompositionPurpose : uint8_t {
 // Complete ordered metadata for one selected PICA visual sample. The title
 // frontend owns the span; a backend retaining the schedule copies only this
 // compact metadata surface.
+// A native clear of a target's whole color buffer, before the draw
+// BeforeSubmissionId: what the target held is gone, so its draws before the
+// clear take no part in the composition of its draws after it.
+struct PicaCompositionTargetReset {
+    PicaCompositionTargetReference Target;
+    uint64_t BeforeSubmissionId = 0;
+};
+
 struct PicaCompositionSequenceView {
     uint32_t SchemaVersion = kPicaCompositionSequenceSchemaVersion;
     uint64_t SequenceId = 0;
     std::span<const PicaCompositionDrawReference> Draws;
     PicaCompositionPurpose Purpose = PicaCompositionPurpose::Presentation;
+    std::span<const PicaCompositionTargetReset> TargetResets;
 };
 
 } // namespace Fast::Renderer3ds

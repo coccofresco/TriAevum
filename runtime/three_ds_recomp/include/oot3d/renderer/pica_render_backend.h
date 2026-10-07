@@ -42,6 +42,7 @@ using ::Fast::Renderer3ds::kPicaCompositionSequenceSchemaVersion;
 using ::Fast::Renderer3ds::PicaCompositionAttribution;
 using ::Fast::Renderer3ds::PicaCompositionDomain;
 using ::Fast::Renderer3ds::PicaCompositionDrawReference;
+using ::Fast::Renderer3ds::PicaCompositionTargetReset;
 using ::Fast::Renderer3ds::PicaCompositionLayer;
 using ::Fast::Renderer3ds::PicaCompositionProvenance;
 using ::Fast::Renderer3ds::PicaCompositionPurpose;

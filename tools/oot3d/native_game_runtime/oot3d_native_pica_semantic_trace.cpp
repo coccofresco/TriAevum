@@ -574,6 +574,8 @@ void Oot3dPicaSemanticTraceWriter::RecordDraw(
         {"command_list_address", submission.Packet.CommandListAddress},
         {"command_list_offset_words",
          submission.Packet.CommandListOffsetWords},
+        {"command_list_caller_address",
+         submission.Packet.CommandListCallerAddress},
         {"composition_domain",
          CompositionDomainName(plan.CompositionDomain)},
         {"composition_layer",

@@ -97,6 +97,32 @@ bool PicaCompositionSchedule::Compile(
     mSequenceId = sequence.SequenceId;
     mPurpose = sequence.Purpose;
 
+    // Where each reset target's composition begins: its draws before its
+    // last whole-target clear are executed in order but not analysed.
+    std::vector<std::pair<CompositionTarget, size_t>> compositionBegins;
+    for (const auto& reset : sequence.TargetResets) {
+        const auto at = std::find_if(
+            mDraws.begin(), mDraws.end(), [&reset](const auto& draw) {
+                return draw.SubmissionId == reset.BeforeSubmissionId;
+            });
+        if (at == mDraws.end()) continue;
+        const size_t position = static_cast<size_t>(at - mDraws.begin());
+        const auto known = std::find_if(
+            compositionBegins.begin(), compositionBegins.end(),
+            [&reset](const auto& entry) { return entry.first == reset.Target; });
+        if (known == compositionBegins.end())
+            compositionBegins.emplace_back(reset.Target, position);
+        else
+            known->second = std::max(known->second, position);
+    }
+    const auto composed = [&compositionBegins](const CompositionTarget& target,
+                                                size_t index) {
+        const auto found = std::find_if(
+            compositionBegins.begin(), compositionBegins.end(),
+            [&target](const auto& entry) { return entry.first == target; });
+        return found == compositionBegins.end() || index >= found->second;
+    };
+
     for (size_t index = 0U; index < mDraws.size(); ++index) {
         const auto& draw = mDraws[index];
         if (!mRuns.empty() && SameRun(mRuns.back(), draw)) {
@@ -113,6 +139,9 @@ bool PicaCompositionSchedule::Compile(
         if (target == mTargets.end()) {
             mTargets.push_back({.Target = draw.Target});
             target = std::prev(mTargets.end());
+        }
+        if (!composed(draw.Target, index)) {
+            continue;
         }
         ++target->DrawCount;
         switch (draw.Composition.Layer) {
@@ -150,7 +179,8 @@ bool PicaCompositionSchedule::Compile(
         std::vector<size_t> targetDraws;
         targetDraws.reserve(target.DrawCount);
         for (size_t index = 0U; index < mDraws.size(); ++index) {
-            if (mDraws[index].Target == target.Target) {
+            if (mDraws[index].Target == target.Target &&
+                composed(target.Target, index)) {
                 targetDraws.push_back(index);
             }
         }

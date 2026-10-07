@@ -251,6 +251,58 @@ to 16 words show their words. `TRIAEVUM_PROBE_GUEST_RANGES=ADDR:SIZE[,...]`
 `TRIAEVUM_DIAGNOSE_GUEST_WAIT` reports every thread's priority, status and
 registers when the guest does not reach a wait.
 
+## F1 effects: native composition (2026-10-07)
+
+The optional effects run on MM3D once the renderer knows which draws are the
+opaque world, translucency, atmosphere and UI, and the scene's projection.
+
+How MM3D draws a frame (recovered by tracing one frame's function entries
+against the command-list cursor and the PICA draws, and read against
+`Play_Draw` in the N64 decompilation, `zeldaret/mm` src/code/z_play.c):
+
+- Commands go through the cursor at `0x006A3A88` (limit `0x006A3A8C`) into
+  the bound command list; `0x001369F4` binds a list by id.
+- `0x001109F8` draws the frame: it binds list 9 and draws the sky
+  (`0x005B51D0`, Skybox_Draw's place), binds list 7 and draws the scene:
+  `0x0011EF14` visits the opaque render list (scene+4) and the translucent
+  one (scene+4+0x408) with `0x005EF054`; `0x0011EF60` visits both again with
+  another visitor (blended, no depth writes); `0x0011EFAC` draws the 2D
+  scene. Layouts are drawn by `0x001262E0` (from `0x001267E8`).
+- Prebuilt model buffers are called from the scene list through
+  `GPUREG_CMDBUF_JUMP` and jump back just past the call.
+
+`mm3d_pica_composition.{h,cpp}` records the command bytes each pass writes
+(its entry hook with the return address, then the return) and offers them
+with every submission (the GPU runs a list one guest frame after it is
+built; ranges expire after two scene frames or when rewritten). Title-
+neutral changes: the frontend keeps the stack of buffer calls made through
+jumps, and a draw takes the span of the innermost of its own place and its
+calling jumps; spans may lie outside the submitted list; and a memory fill
+over a target's whole color buffer restarts that target's composition
+(`PicaCompositionTargetReset`), since MM3D draws a layout into the top
+buffer and clears it before the scene.
+
+Projection: the hooked frustum builder makes the stereo camera's constant
+base frustum (object `0x006B35D4`), not the scene's field of view. The
+play View at `0x0072F5D0` (N64 View layout) gives fovy 60, near 5,
+far 12800; the scene view is published from it at the aspect and widening
+of the hooked frustum. Its eye and target hold constant values, so no
+camera is published yet.
+
+Result (developer launch, Clock Town attract demo): 96 opaque, 8
+translucent and 4 sky draws classified; ambient occlusion composes on the
+scene (without the streaks the stereo frustum gave), directional shadows
+prepare their 96 casters. Not yet: the live camera (eye/at, for shadow
+fitting, temporal effects and grass), MM3D's scene lights (Modern
+lighting), grass sources for MM3D's textures, the HUD in gameplay.
+
+Bring-up tooling: `TRIAEVUM_A32_CALL_TRACE=PATH,FIRST,LAST[,WORD[,ENTRIES]]`
+writes a record per observed block entry (pc, lr, sp, r0-r3, thread, a
+guest word such as the cursor); with an ENTRIES file of hex function
+entries the compiled code reports them as hooks. `tools/ctr_title/
+match_functions.py` pairs functions of two titles by normalized body and
+call graph (OoT3D to MM3D: few pairs; the engines diverged).
+
 ## Next steps
 
 1. Continue past the intro to the title screen and file select, one missing

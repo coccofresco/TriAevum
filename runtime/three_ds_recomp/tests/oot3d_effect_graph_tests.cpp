@@ -1436,6 +1436,40 @@ TEST(Oot3dCompositionSchedule,
     EXPECT_TRUE(resolved.SceneResolved);
 }
 
+TEST(Oot3dCompositionSchedule, AWholeTargetClearStartsTheTargetsComposition) {
+    using namespace ::Oot3d::Renderer;
+    const PicaCompositionTargetReference target{
+        5U, 0x18237FC0U, 0x18537FC0U, 512U, 400U, 0U, 3U};
+    // MM3D draws a layout into the target, clears it, then draws the scene.
+    const std::vector<PicaCompositionDrawReference> draws{
+        CompositionDraw(40U, target, PicaCompositionDomain::Ui,
+                        PicaCompositionLayer::Ui,
+                        PicaCompositionProvenance::NativeUiLifecycle, 0x001262E0U),
+        CompositionDraw(41U, target, PicaCompositionDomain::Scene,
+                        PicaCompositionLayer::OpaqueWorld,
+                        PicaCompositionProvenance::NativeControlFlow, 0x005EF054U),
+        CompositionDraw(42U, target, PicaCompositionDomain::Scene,
+                        PicaCompositionLayer::TransparentWorld,
+                        PicaCompositionProvenance::NativeControlFlow, 0x005EF054U),
+    };
+    PicaCompositionSchedule withoutClear;
+    std::string error;
+    ASSERT_TRUE(withoutClear.Compile({.SequenceId = 95U, .Draws = draws}, &error)) << error;
+    EXPECT_EQ(withoutClear.FindAnchor(EffectStage::SceneResolved, target), nullptr);
+
+    const std::vector<PicaCompositionTargetReset> resets{{target, 41U}};
+    PicaCompositionSchedule schedule;
+    ASSERT_TRUE(schedule.Compile({.SequenceId = 96U, .Draws = draws, .TargetResets = resets},
+                                 &error)) << error;
+    const auto* resolvedAnchor = schedule.FindAnchor(EffectStage::SceneResolved, target);
+    ASSERT_NE(resolvedAnchor, nullptr);
+    EXPECT_TRUE(resolvedAnchor->AtTargetEnd);
+    // Every draw, the cleared one included, is still consumed in order.
+    for (const auto& draw : draws)
+        EXPECT_TRUE(schedule.ConsumeDraw(BuildPicaCompositionDrawReference(DrawViewFor(draw)),
+                                         &error)) << error;
+}
+
 TEST(Oot3dCompositionSchedule,
      AdaptsOnlyTheExactNativeAnchorToThePortablePassContract) {
     using namespace ::Oot3d::Renderer;

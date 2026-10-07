@@ -221,6 +221,7 @@ oot3d_target_defaults(oot3d_native_pica_submission_tests FOLDER Tests)
 
 add_library(oot3d_native_pica_composition STATIC EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_pica_composition.cpp
+    tools/oot3d/native_game_runtime/mm3d_pica_composition.cpp
     tools/oot3d/native_game_runtime/oot3d_native_a32_lighting.cpp
 )
 set_source_files_properties(

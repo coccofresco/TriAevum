@@ -1021,6 +1021,62 @@ int main(int argc, char** argv) {
                     Oot3dNativeGame::Oot3dPicaInterruptId::P3d &&
                 frontend.ReadPicaRegister(0x010U) == 0x12345678U,
             "PICA command buffer jump did not continue in channel 0");
+
+    // A buffer called through a jump that jumps back just past it (MM3D's
+    // prebuilt model buffers): its draws belong to the calling jump's
+    // composition span, even outside the submitted list's range.
+    Oot3dNativeGame::Oot3dGspCommandPacket callSubmit{};
+    callSubmit.Control = 1;
+    callSubmit.Parameters[0] = 0x14000B00U;
+    callSubmit.Parameters[1] = 0x20U;
+    constexpr std::array<uint32_t, 8> callerList{
+        // SIZE0 = 4 (32 bytes), SIZE1, ADDR0 (0x20294600 >> 3), ADDR1, JUMP0
+        0x00000004U, 0x804F0238U, 0x00000000U, 0x040528C0U,
+        0x00000000U, 0x00000001U,
+        0x00000001U, 0x000F022EU}; // draw after the return
+    constexpr std::array<uint32_t, 8> calledBuffer{
+        0x00000001U, 0x000F022EU, // draw in the called buffer
+        // SIZE0 = 1, SIZE1, ADDR0 (0x20000B18 >> 3), ADDR1, JUMP0: return
+        0x00000001U, 0x804F0238U, 0x00000000U, 0x04000163U,
+        0x00000000U, 0x00000001U};
+    frontend.SetCommandBufferReader(
+        [&](uint32_t physicalAddress, uint32_t byteSize,
+            uint32_t* guestAddress, std::vector<uint32_t>* words) {
+            if (physicalAddress == 0x20294600U && byteSize == 32U) {
+                *guestAddress = 0x14294600U;
+                words->assign(calledBuffer.begin(), calledBuffer.end());
+                return true;
+            }
+            if (physicalAddress == 0x20000B18U && byteSize == 8U) {
+                *guestAddress = 0x14000B18U;
+                words->assign(callerList.begin() + 6, callerList.end());
+                return true;
+            }
+            return false;
+        });
+    const std::array<Oot3dNativeGame::Oot3dPicaCommandListCompositionSpan, 1>
+        callSpans{{{0x14000B14U, 0x14000B18U,
+                    {Oot3dNativeGame::Oot3dPicaCompositionLayer::OpaqueWorld,
+                     Oot3dNativeGame::Oot3dPicaCompositionProvenance::NativeControlFlow,
+                     0x005EF054U, 0x0011EF3CU}}}};
+    frontend.SetCommandListCompositionDomain(
+        Oot3dNativeGame::Oot3dPicaCompositionDomain::Unknown);
+    const size_t callDrawsBegin = frontend.PendingDrawPackets().size();
+    Require(frontend.SetNextCommandListCompositionSpans(
+                callSubmit.Parameters[0], callSubmit.Parameters[1], callSpans,
+                &error) &&
+                frontend.SubmitGspCommand(callSubmit, callerList, &error),
+            error);
+    const auto& callDraws = frontend.PendingDrawPackets();
+    Require(callDraws.size() == callDrawsBegin + 2U &&
+                callDraws[callDrawsBegin].CommandListCallerAddress == 0x14000B14U &&
+                callDraws[callDrawsBegin].Composition.Layer ==
+                    Oot3dNativeGame::Oot3dPicaCompositionLayer::OpaqueWorld &&
+                callDraws[callDrawsBegin + 1U].CommandListCallerAddress == 0U &&
+                callDraws[callDrawsBegin + 1U].Composition.Layer ==
+                    Oot3dNativeGame::Oot3dPicaCompositionLayer::Unknown,
+            "a called buffer's draws did not take the calling jump's span");
+
     frontend.SetCommandBufferReader({});
     Require(!frontend.SubmitGspCommand(jumpSubmit, jumpCommandList, &error),
             "PICA command buffer jump without a reader was accepted");

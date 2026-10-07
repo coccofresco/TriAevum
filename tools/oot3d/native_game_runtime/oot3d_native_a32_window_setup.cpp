@@ -123,7 +123,11 @@ void NativeA32WindowSession::Setup() {
   hostConfig.RomFsImageSize = manifest->RomFsImageSize;
   hostConfig.PicaFrontend = &picaFrontend;
   hostConfig.PicaCompositionDomain = &picaCompositionDomain;
-  hostConfig.PicaCompositionProvider = &picaCompositionTracker;
+  hostConfig.PicaCompositionProvider =
+      titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d
+          ? static_cast<Oot3dNativeGame::Oot3dPicaCommandListCompositionProvider *>(
+                &mm3dCompositionTracker)
+          : &picaCompositionTracker;
   hostConfig.SaveDataDirectory =
       launch.SaveDataDirectory.empty()
           ? launch.A32ProcessManifestPath.parent_path() /
@@ -170,6 +174,31 @@ void NativeA32WindowSession::Setup() {
   widescreenProjection.CollectExtendedDiagnostics = launch.ExtendedDiagnostics;
   widescreenProjection.ProfileA32Blocks = launch.ProfileA32Blocks;
   widescreenProjection.TraceA32Blocks = !launch.A32BlockTracePath.empty();
+  std::vector<uint32_t> callTraceEntries;
+  if (const char *callTrace = std::getenv("TRIAEVUM_A32_CALL_TRACE")) {
+    char path[512] = {};
+    char entries[512] = {};
+    unsigned first = 0, last = 0, word = 0;
+    const int fields = std::sscanf(callTrace, "%511[^,],%u,%u,%x,%511[^,]", path,
+                                   &first, &last, &word, entries);
+    // Optional fifth field: a file of hex code addresses (function entries)
+    // to observe as hooks, for code that runs compiled; without it, run with
+    // --trace-a32-blocks.
+    if (fields == 5) {
+      std::ifstream list(entries);
+      std::string line;
+      while (std::getline(list, line))
+        if (!line.empty()) callTraceEntries.push_back(static_cast<uint32_t>(std::stoul(line, nullptr, 16)));
+    }
+    if (fields >= 3) {
+      widescreenProjection.CallTrace = std::fopen(path, "wb");
+      widescreenProjection.CallTraceFirstFrame = first;
+      widescreenProjection.CallTraceLastFrame = last;
+      widescreenProjection.CallTraceWordAddress = word;
+    }
+    if (widescreenProjection.CallTrace == nullptr)
+      throw std::runtime_error("TRIAEVUM_A32_CALL_TRACE: expected PATH,FIRST,LAST[,WORD]");
+  }
   auto &blockTraceWriter = blockTraceWriterStorage.emplace(
       launch.A32BlockTracePath, widescreenProjection);
   blockEntryHooks = std::vector<uint32_t>{
@@ -305,9 +334,22 @@ void NativeA32WindowSession::Setup() {
     // and takes the scene FOV. Its frusta also serve views other than the
     // scene camera, so they are not published as the scene view.
     blockEntryHooks.push_back(Oot3dNativeGame::kMm3dMtx44Frustum);
+    const auto compositionHooks = Oot3dNativeGame::Mm3dNativePicaCompositionHookPcs();
+    blockEntryHooks.insert(blockEntryHooks.end(), compositionHooks.begin(),
+                           compositionHooks.end());
+    std::sort(blockEntryHooks.begin(), blockEntryHooks.end());
+    blockEntryHooks.erase(std::unique(blockEntryHooks.begin(), blockEntryHooks.end()),
+                          blockEntryHooks.end());
     widescreenProjection.Projection.PerspectiveFrustumEntry =
         Oot3dNativeGame::kMm3dMtx44Frustum;
     widescreenProjection.Projection.FrustumIsSceneView = false;
+    widescreenProjection.Mm3dCompositionTracker = &mm3dCompositionTracker;
+  }
+  if (!callTraceEntries.empty()) {
+    blockEntryHooks.insert(blockEntryHooks.end(), callTraceEntries.begin(), callTraceEntries.end());
+    std::sort(blockEntryHooks.begin(), blockEntryHooks.end());
+    blockEntryHooks.erase(std::unique(blockEntryHooks.begin(), blockEntryHooks.end()),
+                          blockEntryHooks.end());
   }
 #if defined(__SWITCH__)
   gSwitchBlockHookCount = blockEntryHooks.size();
@@ -845,6 +887,7 @@ void NativeA32WindowSession::Setup() {
     nativeControlPollingState.PendingMouseDeltaY = 0;
     nativeControlPollingState.PendingInputSeconds = 0.0;
     picaCompositionTracker.Reset();
+    mm3dCompositionTracker.Reset();
     frameCount = restoredRuntime.FrameCount;
     refreshTickRemainder = restoredRuntime.RefreshTickRemainder;
     nextVblankTick = restoredRuntime.NextVblankTick;

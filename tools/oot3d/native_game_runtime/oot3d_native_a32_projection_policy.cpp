@@ -64,6 +64,49 @@ void ApplyNativeWidescreenProjectionPolicy(
   if (runtime.PicaCompositionTracker != nullptr) {
     runtime.PicaCompositionTracker->ObserveBlockEntry(pc, state, memory);
   }
+  if (runtime.Mm3dCompositionTracker != nullptr &&
+      runtime.Mm3dCompositionTracker->ObserveBlockEntry(pc, state, memory) ==
+          Oot3dNativeGame::Mm3dNativePicaCompositionTracker::Event::OpaqueWorldBegins &&
+      runtime.SceneViewProbe != nullptr &&
+      runtime.Projection.PendingSceneFrustum.has_value()) {
+    // The scene's projection for its opaque pass: the play View's field of
+    // view and clip planes, at the aspect (and widening) of the frustum the
+    // pass draws with. The View's eye and target hold constant values, not
+    // the live camera's, so no camera is published yet.
+    const auto &frustum = *runtime.Projection.PendingSceneFrustum;
+    float view[3] = {};
+    bool read = true;
+    const auto readFloat = [&](uint32_t address, float &value) {
+      uint32_t word = 0;
+      read = read && memory.Read32(address, &word);
+      value = std::bit_cast<float>(word);
+    };
+    const uint32_t base = Oot3dNativeGame::kMm3dPlayViewAddress;
+    readFloat(base + Oot3dNativeGame::kMm3dViewFovyOffset, view[0]);
+    readFloat(base + Oot3dNativeGame::kMm3dViewNearOffset, view[1]);
+    readFloat(base + Oot3dNativeGame::kMm3dViewFarOffset, view[2]);
+    const float frustumHeight = frustum.Top - frustum.Bottom;
+    if (read && view[0] > 1.0F && view[0] < 179.0F && view[1] > 0.0F &&
+        view[2] > view[1] && frustumHeight > 0.0F) {
+      const float top = view[1] * std::tan(view[0] * 0.5F * 3.14159265F / 180.0F);
+      const float scale = 2.0F * top / frustumHeight;
+      runtime.SceneViewProbe->ObservePerspective(
+          frustum.Pc, frustum.ReturnAddress, frustum.Left * scale,
+          frustum.Right * scale, frustum.Bottom * scale, frustum.Top * scale,
+          view[1], view[2]);
+    }
+  }
+  if (runtime.CallTrace != nullptr &&
+      runtime.CurrentHostFrame >= runtime.CallTraceFirstFrame &&
+      runtime.CurrentHostFrame <= runtime.CallTraceLastFrame) {
+    uint32_t word = 0;
+    if (runtime.CallTraceWordAddress != 0U)
+      (void)memory.Read32(runtime.CallTraceWordAddress, &word);
+    const std::array<uint32_t, 10> record{
+        runtime.CurrentHostFrame, pc, state.r[14], state.r[13], state.r[0],
+        state.r[1], state.r[2], state.r[3], state.thread_pointer, word};
+    std::fwrite(record.data(), sizeof(uint32_t), record.size(), runtime.CallTrace);
+  }
   if (runtime.TraceA32Blocks) {
     ++runtime.BlockTraceRecordsObserved;
     if (runtime.BlockTrace.size() == kMaximumA32BlockTraceRecords) {
@@ -734,7 +777,12 @@ void ApplyNativeWidescreenProjectionPolicy(
     state.vfp[3] = std::bit_cast<uint32_t>(resolved.Frustum.Top);
     ++projection.FrustumCalls;
   }
-  if (runtime.SceneViewProbe != nullptr && projection.FrustumIsSceneView) {
+  if (!projection.FrustumIsSceneView) {
+    projection.PendingSceneFrustum = NativeSceneProjectionState::PendingFrustum{
+        pc, state.r[14], resolvedLeft, resolvedRight, resolved.Frustum.Bottom,
+        resolved.Frustum.Top, resolved.Frustum.NearPlane,
+        resolved.Frustum.FarPlane};
+  } else if (runtime.SceneViewProbe != nullptr) {
     runtime.SceneViewProbe->ObservePerspective(
         pc, state.r[14], resolvedLeft, resolvedRight,
         resolved.Frustum.Bottom, resolved.Frustum.Top,

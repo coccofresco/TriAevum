@@ -30,6 +30,9 @@ constexpr uint16_t kPicaCommandBufferAddress0 = 0x23AU;
 constexpr uint16_t kPicaCommandBufferJump0 = 0x23CU;
 constexpr uint16_t kPicaCommandBufferJump1 = 0x23DU;
 constexpr size_t kMaximumCommandBufferJumps = 4096U;
+// Nested buffer calls kept for composition ownership; deeper ones drop the
+// outermost.
+constexpr size_t kMaximumCommandBufferCallDepth = 64U;
 constexpr uint16_t kPicaGeometryShaderBase = 0x280U;
 constexpr uint16_t kPicaVertexShaderBase = 0x2B0U;
 constexpr uint16_t kPicaPipelineUseGeometryShader = 0x229U;
@@ -190,13 +193,14 @@ bool Oot3dNativePicaFrontend::SetNextCommandListCompositionSpans(
               [](const auto& left, const auto& right) {
                   return left.BeginAddress < right.BeginAddress;
               });
-    uint32_t previousEnd = commandListAddress;
+    // Spans may also lie in buffers the list reaches through
+    // GPUREG_CMDBUF_JUMP (a list written this frame, called from the
+    // submitted one); they must not overlap.
+    uint32_t previousEnd = 0U;
     for (const auto& span : validated) {
         if ((span.BeginAddress & 3U) != 0U ||
             (span.EndAddress & 3U) != 0U ||
-            span.BeginAddress < commandListAddress ||
             span.EndAddress <= span.BeginAddress ||
-            span.EndAddress > commandListEnd ||
             span.BeginAddress < previousEnd ||
             span.Attribution.Layer > Oot3dPicaCompositionLayer::Ui ||
             span.Attribution.Provenance >
@@ -573,15 +577,16 @@ bool Oot3dNativePicaFrontend::SubmitGspCommand(
     std::vector<uint32_t> jumpedWords;
     size_t jumps = 0;
     std::optional<uint32_t> jumpChannel;
+    uint32_t jumpWriteAddress = 0;
+    // Jumps between buffers form calls: a buffer that jumps back just past
+    // the jump that entered it returns there (a prebuilt model buffer called
+    // from a list written this frame). The jumps that entered the buffers
+    // now running, outermost first. A draw belongs to the innermost of its
+    // own place and these jumps that the title attributed.
+    std::vector<uint32_t> jumpCallers;
 
-    const auto resolveComposition =
-        [&](uint32_t offsetWords) -> const Oot3dPicaCommandListCompositionSpan* {
-        if (mCommandListCompositionDomain ==
-            Oot3dPicaCompositionDomain::Ui) {
-            return nullptr;
-        }
-        const uint64_t address = static_cast<uint64_t>(bufferAddress) +
-                                 static_cast<uint64_t>(offsetWords) * 4U;
+    const auto spanAt =
+        [&](uint64_t address) -> const Oot3dPicaCommandListCompositionSpan* {
         const auto found = std::upper_bound(
             compositionSpans.begin(), compositionSpans.end(), address,
             [](uint64_t value,
@@ -593,6 +598,19 @@ bool Oot3dNativePicaFrontend::SubmitGspCommand(
         }
         const auto& candidate = *std::prev(found);
         return address < candidate.EndAddress ? &candidate : nullptr;
+    };
+    const auto resolveComposition =
+        [&](uint32_t offsetWords) -> const Oot3dPicaCommandListCompositionSpan* {
+        if (mCommandListCompositionDomain ==
+            Oot3dPicaCompositionDomain::Ui) {
+            return nullptr;
+        }
+        if (const auto* own = spanAt(uint64_t{bufferAddress} + offsetWords * 4ULL))
+            return own;
+        for (auto caller = jumpCallers.rbegin(); caller != jumpCallers.rend(); ++caller)
+            if (const auto* span = spanAt(*caller))
+                return span;
+        return nullptr;
     };
 
     size_t cursor = 0;
@@ -641,6 +659,7 @@ bool Oot3dNativePicaFrontend::SubmitGspCommand(
             if (id == kPicaCommandBufferJump0 ||
                 id == kPicaCommandBufferJump1) {
                 jumpChannel = id - kPicaCommandBufferJump0;
+                jumpWriteAddress = bufferAddress + offsetWords * 4U;
             }
             if (id == kPicaTriggerDraw ||
                 id == kPicaTriggerDrawIndexed) {
@@ -676,6 +695,8 @@ bool Oot3dNativePicaFrontend::SubmitGspCommand(
                     id == kPicaTriggerDrawIndexed, mPicaRegisters,
                     mVertexShader, mGeometryShader, mFogLut, mProcTexLuts,
                     mLightingLuts, mDefaultAttributes);
+                draw.CommandListCallerAddress =
+                    jumpCallers.empty() ? 0U : jumpCallers.back();
                 if (metadata != nullptr && domain == Oot3dPicaCompositionDomain::Scene)
                     draw.LightBinding = metadata->LightBinding;
                 if (mPacketSink != nullptr &&
@@ -750,6 +771,19 @@ bool Oot3dNativePicaFrontend::SubmitGspCommand(
                                       &bufferAddress, &target)) {
                 SetError(error, "PICA command buffer jump target is not mapped");
                 return false;
+            }
+            const uint32_t destination = bufferAddress;
+            const auto returned = std::find_if(
+                jumpCallers.rbegin(), jumpCallers.rend(),
+                [destination](uint32_t caller) {
+                    return destination > caller && destination - caller <= 8U;
+                });
+            if (returned != jumpCallers.rend()) {
+                jumpCallers.erase(std::prev(returned.base()), jumpCallers.end());
+            } else {
+                if (jumpCallers.size() == kMaximumCommandBufferCallDepth)
+                    jumpCallers.erase(jumpCallers.begin());
+                jumpCallers.push_back(jumpWriteAddress);
             }
             jumpedWords = std::move(target);
             words = jumpedWords;

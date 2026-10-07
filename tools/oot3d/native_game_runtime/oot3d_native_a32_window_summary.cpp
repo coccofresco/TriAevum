@@ -1638,6 +1638,24 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                widescreenProjection.Projection.FovMultiplier},
               {"frustum_calls",
                widescreenProjection.Projection.FrustumCalls},
+              {"mm3d_composition",
+               widescreenProjection.Mm3dCompositionTracker == nullptr
+                   ? nlohmann::json(nullptr)
+                   : [&] {
+                       const auto &stats =
+                           widescreenProjection.Mm3dCompositionTracker->Stats();
+                       return nlohmann::json{
+                           {"scope_entries", stats.ScopeEntries},
+                           {"scope_exits", stats.ScopeExits},
+                           {"recorded_spans", stats.RecordedSpans},
+                           {"empty_scopes", stats.EmptyScopes},
+                           {"invalid_ranges", stats.InvalidRanges},
+                           {"nested_scope_entries", stats.NestedScopeEntries},
+                           {"replaced_spans", stats.ReplacedSpans},
+                           {"expired_spans", stats.ExpiredSpans},
+                           {"scene_frames", stats.SceneFrames},
+                           {"read_failures", stats.ReadFailures}};
+                     }()},
               {"orthographic_calls",
                widescreenProjection.Projection.OrthographicCalls},
               {"callsites", std::move(projectionCallsites)},

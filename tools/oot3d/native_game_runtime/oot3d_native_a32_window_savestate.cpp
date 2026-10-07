@@ -434,6 +434,8 @@ bool NativeA32WindowSession::LoadState(const std::filesystem::path &path,
   ApplyLoadedSavestateSettings(runtime, applySettings);
   Oot3dNativeGame::ResetOot3dTypedGameplayTransientState();
   picaCompositionTracker.Reset();
+  mm3dCompositionTracker.Reset();
+  widescreenProjection.Projection.PendingSceneFrustum.reset();
   const auto restoredGravity = hostServices.HidRuntimeProfile().LastAccelerometer;
   nativeControlPollingState.VirtualMotion.RestoreGravity(
       {static_cast<float>(restoredGravity[0]), static_cast<float>(restoredGravity[1]),
