@@ -693,11 +693,11 @@ void ApplyNativeWidescreenProjectionPolicy(
     runtime.EnMagEvents.push_back(std::move(event));
     return;
   }
-  if (pc != kMtx4x4BuildFrustum &&
+  auto &projection = runtime.Projection;
+  if (pc != projection.PerspectiveFrustumEntry &&
       pc != kMtx4x4BuildOrthographicProjectionRotated) {
     return;
   }
-  auto &projection = runtime.Projection;
   const float left = std::bit_cast<float>(state.vfp[0]);
   const float right = std::bit_cast<float>(state.vfp[1]);
   if (!std::isfinite(left) || !std::isfinite(right) || left == right) {
@@ -734,7 +734,7 @@ void ApplyNativeWidescreenProjectionPolicy(
     state.vfp[3] = std::bit_cast<uint32_t>(resolved.Frustum.Top);
     ++projection.FrustumCalls;
   }
-  if (runtime.SceneViewProbe != nullptr) {
+  if (runtime.SceneViewProbe != nullptr && projection.FrustumIsSceneView) {
     runtime.SceneViewProbe->ObservePerspective(
         pc, state.r[14], resolvedLeft, resolvedRight,
         resolved.Frustum.Bottom, resolved.Frustum.Top,

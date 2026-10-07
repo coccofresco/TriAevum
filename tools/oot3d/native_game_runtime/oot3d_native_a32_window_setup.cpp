@@ -300,6 +300,15 @@ void NativeA32WindowSession::Setup() {
     picaCompositionHooks = {};
     typedGameplayObservableExitHooks = {};
   }
+  if (titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d) {
+    // MM3D's perspective frustum builder: the scene widens to the output
+    // and takes the scene FOV. Its frusta also serve views other than the
+    // scene camera, so they are not published as the scene view.
+    blockEntryHooks.push_back(Oot3dNativeGame::kMm3dMtx44Frustum);
+    widescreenProjection.Projection.PerspectiveFrustumEntry =
+        Oot3dNativeGame::kMm3dMtx44Frustum;
+    widescreenProjection.Projection.FrustumIsSceneView = false;
+  }
 #if defined(__SWITCH__)
   gSwitchBlockHookCount = blockEntryHooks.size();
   gSwitchBlockHooksSorted =
@@ -551,6 +560,13 @@ void NativeA32WindowSession::Setup() {
           process, *manifest, std::filesystem::path{}, &error)) {
     throw std::runtime_error(error);
   }
+  if (titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d) {
+    uint32_t word = 0;
+    if (!process.Memory().Read32(Oot3dNativeGame::kMm3dMtx44Frustum, &word) ||
+        word != Oot3dNativeGame::kMm3dMtx44FrustumFirstWord) {
+      throw std::runtime_error("MM3D adapter: the perspective frustum builder is not at its address");
+    }
+  }
 #if defined(__SWITCH__)
   WriteSwitchBootStage("process_image_mounted");
 #endif
@@ -714,10 +730,11 @@ void NativeA32WindowSession::Setup() {
       std::chrono::steady_clock::now());
   api.SetNativePicaGeometryCacheEnabled(
       !launch.DisableOpenGlPicaGeometryCache);
-  // Only OoT3D's adapter widens the scene projection to the output aspect;
-  // another title's top screen keeps its native view, letterboxed.
+  // A title whose adapter widens the scene projection to the output aspect
+  // fills the output; another title's top screen keeps its native view,
+  // letterboxed.
   api.SetNativeTopScreenExtendsToOutput(
-      titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur);
+      Oot3dNativeGame::TitleAppliesSceneFov(titleAdapter));
   titleRenderBackend =
       dynamic_cast<Fast::Oot3d::TitleRenderBackend *>(&api);
   gui =

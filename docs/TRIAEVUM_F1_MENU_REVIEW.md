@@ -11,7 +11,8 @@ and `TitleSceneFov` (the title applies the global scene FOV). Without a
 scene view F1 shows, above the preset, which effects stay inactive and that
 their settings are kept; without FOV hooks **Global scene FOV** is disabled
 and shows the reason, keeping the stored value. OoT3D sets both; Majora's
-Mask 3D neither, for now. Actual-widget smoke (developer build of the MM3D
+Mask 3D applies the scene FOV (its frustum hook) but publishes no scene view
+yet. Actual-widget smoke (developer build of the MM3D
 fork): 8,444 assertions, including both capabilities lost and restored.
 
 ## User graphics presets (2026-10-07)

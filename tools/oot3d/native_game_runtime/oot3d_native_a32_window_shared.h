@@ -401,6 +401,12 @@ struct NativeSceneProjectionState {
 
   Fast::Oot3d::ScenePresentationPolicy Presentation{};
   float FovMultiplier = 1.0F;
+  // The title's perspective frustum builder (s0..s5 = left, right, bottom,
+  // top, near, far), hooked at entry; OoT3D's by default.
+  uint32_t PerspectiveFrustumEntry = kMtx4x4BuildFrustum;
+  // Whether its frusta are the scene view the renderer's effects consume.
+  // A title whose frusta also serve other views keeps them unpublished.
+  bool FrustumIsSceneView = true;
   uint64_t FrustumCalls = 0;
   uint64_t OrthographicCalls = 0;
   std::map<std::pair<uint32_t, uint32_t>, CallsiteStats> Callsites;

@@ -5,6 +5,7 @@
 // _frame.cpp (frame loop and renderer side) and _savestate.cpp.
 
 #include "three_ds_sdl_controller.h"
+#include "mm3d_title_contracts.h"
 #include "triaevum_title_adapter.h"
 #include "oot3d_prebackend_budget.h"
 #include "oot3d_cpu_phase_probe.h"

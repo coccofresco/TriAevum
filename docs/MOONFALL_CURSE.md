@@ -209,17 +209,31 @@ canonical path.
 F1 and the optional effects: the window is **Moonfall Curse Graphics**. The
 title frontend sets two title-owned capabilities from the adapter:
 `TitleSceneView` (the title publishes its frustum, camera and scene) and
-`TitleSceneFov` (the title applies the global scene FOV). MM3D has neither
-yet, so F1 says that grass, shadows, ambient occlusion, reflections and GI
-stay inactive (their settings are kept) and disables **Global scene FOV**
-with the reason; OoT3D's per-scene lights are not installed for MM3D. The
-effects were already inert: with the maintainer's play configuration (Modern
+`TitleSceneFov` (the title applies the global scene FOV). MM3D publishes no
+scene view yet, so F1 says that grass, shadows, ambient occlusion,
+reflections and GI stay inactive (their settings are kept); OoT3D's
+per-scene lights are not installed for MM3D. The effects were already inert: with the maintainer's play configuration (Modern
 lighting, virtual and cube shadows, MXAO, grass, FOV 1.10) the MM3D frames
 are bit-identical to the same run with every effect off, at frames 1800 and
 2400 (`--fixed-delta-seconds 1/60`, an empty `--input-timeline`; without
 them MM3D's runs are not reproducible). Frame interpolation (Interpolated
 2x/3x) is the renderer's own and runs for MM3D. Actual-widget smoke: 8,444
 assertions, including the title without scene hooks.
+
+Widescreen and scene FOV: the adapter hooks MM3D's perspective frustum
+builder, `0x00122FE8` (s0..s5 = left, right, bottom, top, near, far; the
+engine routine of OoT3D's `0x002FDE9C` without its rotation argument, found
+by its instruction pattern; its first word is checked at startup). The same
+presentation policy as OoT3D's widens each frustum to the output aspect
+(horizontally for wider outputs, vertically for narrower ones) and applies
+**Global scene FOV**; the top-screen target then fills the output. Its
+frusta are not published as the scene view, since they also serve views
+other than the scene camera. At 1280x720 the native part of the frame is
+unchanged (PSNR 88 dB against the letterboxed run over the same columns)
+and the sides show more of the scene; 1600x1200 extends vertically; FOV
+1.25 and 1.5 widen the view. Not yet checked: 2D drawn on the top screen
+during gameplay (the HUD), which has no composition metadata and so is
+scaled with the scene.
 
 Earlier stalls, in order. First the main thread waited for byte
 `0x007B2711` (the busy flag of the GX command scheduler at `0x007B2700`)
