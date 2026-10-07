@@ -1,5 +1,19 @@
 # F1 settings rationalization
 
+## Title-owned capabilities (2026-10-07)
+
+The window title comes from the game frontend
+(`InstallGraphicsSettingsWindowTitle`, before the GUI is created; the
+ImGui identity stays `OOT3D Graphics`, so saved layouts carry over). Two
+capabilities belong to the title, not the renderer, and the frontend sets
+them from its adapter: `TitleSceneView` (the title publishes its scene view)
+and `TitleSceneFov` (the title applies the global scene FOV). Without a
+scene view F1 shows, above the preset, which effects stay inactive and that
+their settings are kept; without FOV hooks **Global scene FOV** is disabled
+and shows the reason, keeping the stored value. OoT3D sets both; Majora's
+Mask 3D neither, for now. Actual-widget smoke (developer build of the MM3D
+fork): 8,444 assertions, including both capabilities lost and restored.
+
 ## User graphics presets (2026-10-07)
 
 **Graphics preset** lists the built-in presets (Authentic, Enhanced, Toon),

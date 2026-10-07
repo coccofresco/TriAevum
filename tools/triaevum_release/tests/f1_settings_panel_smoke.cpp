@@ -836,6 +836,33 @@ void CheckPbrMaterialEditor() {
     Frame(); Frame();
 }
 
+// A title without scene view or FOV hooks (MM3D): the FOV slider is disabled
+// with the title's reason, the panel says which effects stay inactive, and the
+// stored FOV is kept.
+void CheckTitleWithoutSceneHooks() {
+    auto& runtime = GraphicsSettingsRuntime::Instance();
+    const float storedFov = runtime.Snapshot().FovMultiplier;
+    runtime.SetCapability(GraphicsCapability::TitleSceneView, false,
+                          "Test title does not publish its scene view yet.");
+    runtime.SetCapability(GraphicsCapability::TitleSceneFov, false,
+                          "Test title has no scene projection hooks yet.");
+    Click("Display");
+    Frame(true);
+    Check(Find("Global scene FOV").Disabled, "FOV slider enabled without the title's FOV hooks");
+    Check(loggedPanelText.find("Test title has no scene projection hooks yet.") != std::string::npos,
+          "missing FOV reason");
+    Check(loggedPanelText.find("Test title does not publish its scene view yet. Grass, shadows") !=
+              std::string::npos,
+          "missing inactive-effects notice");
+    Check(runtime.Snapshot().FovMultiplier == storedFov, "stored FOV changed");
+    runtime.SetCapability(GraphicsCapability::TitleSceneView, true);
+    runtime.SetCapability(GraphicsCapability::TitleSceneFov, true);
+    Frame(true);
+    Check(!Find("Global scene FOV").Disabled, "FOV slider disabled with the title's FOV hooks");
+    Check(loggedPanelText.find("Grass, shadows, ambient occlusion") == std::string::npos,
+          "inactive-effects notice shown with a scene view");
+}
+
 void CheckGameSurfaceMouseResume() {
     Fast::MouseCapturePolicy policy;
     Check(policy.Request(true), "initial mouse capture denied");
@@ -1851,6 +1878,7 @@ int main() try {
     CheckSavestatePanel();
     CheckSceneEnvironment();
     InstallGraphicsSettingsPanelTabs({});
+    CheckTitleWithoutSceneHooks();
     ImGui::DestroyContext();
     std::cout << "F1 UI smoke passed: " << assertions << " assertions, real renderer/Controls/TopScreen widgets\n";
     return 0;

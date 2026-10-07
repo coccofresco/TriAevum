@@ -100,15 +100,23 @@ bool GraphicsSettingsPanel::DrawDisplaySettings(GraphicsSettings& settings, cons
     return changed;
 }
 
-bool GraphicsSettingsPanel::DrawMotionSettings(GraphicsSettings& settings, const GraphicsCapabilities&) {
+bool GraphicsSettingsPanel::DrawMotionSettings(GraphicsSettings& settings,
+                                               const GraphicsCapabilities& capabilities) {
     bool changed = false;
     ImGui::SeparatorText("Motion and camera");
     const char* const frameRates[] = {
         "Original 30 FPS", "Interpolated 2x (60 FPS)",
         "Interpolated 3x (90 FPS)", "Uncapped"};
     changed |= EnumCombo("Frame rate", settings.FrameRate, frameRates);
+    // The title applies the FOV to its own projection; without that, the
+    // stored value is kept and has no effect.
+    const bool sceneFov = capabilities.Has(GraphicsCapability::TitleSceneFov);
+    ImGui::BeginDisabled(!sceneFov);
     changed |= ImGui::SliderFloat("Global scene FOV", &settings.FovMultiplier,
                                   1.0F, 1.5F, "%.2fx");
+    ImGui::EndDisabled();
+    if (!sceneFov)
+        ImGui::TextDisabled("%s", capabilities.Get(GraphicsCapability::TitleSceneFov).Reason.c_str());
 
     return changed;
 }

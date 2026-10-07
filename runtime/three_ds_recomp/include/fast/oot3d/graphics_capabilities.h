@@ -45,11 +45,16 @@ enum class GraphicsCapability : uint8_t {
     ImmerseMxao,
     // Screen-space diffuse GI (fast/renderer/diffuse_gi_pass.h on this device).
     ScreenSpaceGlobalIllumination,
+    // Title-owned, set by the title frontend: the title publishes its scene
+    // view (frustum, camera, scene), which the view-dependent effects need.
+    TitleSceneView,
+    // Title-owned: the title applies the global scene FOV to its projection.
+    TitleSceneFov,
 };
 
 // Last enumerator, for code that visits every capability.
 inline constexpr GraphicsCapability kLastGraphicsCapability =
-    GraphicsCapability::ScreenSpaceGlobalIllumination;
+    GraphicsCapability::TitleSceneFov;
 
 struct GraphicsCapabilityState {
     bool Available = false;

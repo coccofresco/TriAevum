@@ -43,6 +43,28 @@ inline constexpr std::string_view kMm3dCodeBinSha256 =
     return adapter == TitleAdapter::Mm3d ? "TriAevum \xE2\x80\x94 Moonfall Curse" : nullptr;
 }
 
+// The F1 graphics window's title, or nullptr for the renderer's default.
+[[nodiscard]] inline const char* TitleGraphicsWindowTitle(TitleAdapter adapter) noexcept {
+    switch (adapter) {
+    case TitleAdapter::Mm3d:
+        return "Moonfall Curse Graphics";
+    case TitleAdapter::Generic:
+        return "Graphics";
+    case TitleAdapter::Oot3dEur:
+        break;
+    }
+    return nullptr;
+}
+
+// The scene view (frustum, camera, scene) and the scene FOV come from the
+// OoT3D adapter's hooks; another title has neither yet.
+[[nodiscard]] inline bool TitlePublishesSceneView(TitleAdapter adapter) noexcept {
+    return adapter == TitleAdapter::Oot3dEur;
+}
+[[nodiscard]] inline bool TitleAppliesSceneFov(TitleAdapter adapter) noexcept {
+    return adapter == TitleAdapter::Oot3dEur;
+}
+
 [[nodiscard]] inline const char* TitleAdapterName(TitleAdapter adapter) noexcept {
     switch (adapter) {
     case TitleAdapter::Oot3dEur:

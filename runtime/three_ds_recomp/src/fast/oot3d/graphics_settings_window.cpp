@@ -24,7 +24,22 @@ std::vector<std::shared_ptr<GraphicsSettingsPanelTab>> SnapshotPanelTabs() {
     std::scoped_lock lock(PanelTabMutex());
     return PanelTabs();
 }
+
+std::string& WindowTitle() {
+    static std::string title = "OOT3D Graphics";
+    return title;
+}
 } // namespace
+
+void InstallGraphicsSettingsWindowTitle(std::string title) {
+    std::scoped_lock lock(PanelTabMutex());
+    WindowTitle() = std::move(title);
+}
+
+std::string GraphicsSettingsWindowTitle() {
+    std::scoped_lock lock(PanelTabMutex());
+    return WindowTitle();
+}
 void InstallGraphicsSettingsPanelTabs(
     std::vector<std::shared_ptr<GraphicsSettingsPanelTab>> tabs) {
     std::erase(tabs, nullptr);
@@ -177,6 +192,7 @@ void GraphicsSettingsPanel::Draw() {
         ? "F2 override ACTIVE. Configured effects are suspended; press F2 to restore."
         : "F2 override inactive. Using configured effects.");
     ImGui::PopStyleColor();
+    DrawTitleSceneViewNotice();
     ImGui::Separator();
     DrawPresentationStatus();
     ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.48F);
@@ -243,6 +259,18 @@ void GraphicsSettingsPanel::Draw() {
         ImGui::EndTabBar();
     }
     ImGui::PopItemWidth();
+}
+
+void GraphicsSettingsPanel::DrawTitleSceneViewNotice() {
+    // Grass and the view-dependent effects keep their settings but stay
+    // inactive while the title publishes no scene view.
+    const auto capabilities = GraphicsSettingsRuntime::Instance().Capabilities();
+    if (capabilities.Has(GraphicsCapability::TitleSceneView)) return;
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0F, 0.78F, 0.25F, 1.0F));
+    ImGui::TextWrapped("%s Grass, shadows, ambient occlusion, reflections and global "
+                       "illumination stay inactive; their settings are kept.",
+                       capabilities.Get(GraphicsCapability::TitleSceneView).Reason.c_str());
+    ImGui::PopStyleColor();
 }
 
 void GraphicsSettingsPanel::DrawGrassSettings() {

@@ -53,6 +53,12 @@ IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARA
 namespace Fast {
 namespace {
 #ifdef ENABLE_OOT3D_VULKAN
+// The F1 window shows the running game's title; its ImGui identity (saved
+// layout) and the GUI lookup keep the original name.
+std::string Oot3dGraphicsWindowName() {
+    return Oot3d::GraphicsSettingsWindowTitle() + "###OOT3D Graphics";
+}
+
 class Oot3dGraphicsSettingsPersistence final
     : public Oot3d::GraphicsSettingsPersistencePort {
   public:
@@ -82,7 +88,7 @@ class Oot3dGraphicsSettingsWindow final : public Ship::GuiWindow {
   public:
     Oot3dGraphicsSettingsWindow()
         : GuiWindow("gOpenWindows.Oot3dGraphics", false,
-                    "OOT3D Graphics", ImVec2(560.0F, 760.0F)) {
+                    Oot3dGraphicsWindowName(), ImVec2(560.0F, 760.0F)) {
         // A previous session may have saved the window open. Always start closed.
         SetVisibility(false);
     }
@@ -349,7 +355,7 @@ void Fast3dGui::ToggleOot3dGraphicsWindow() {
     if (mImpl.Backend != WindowBackend::FAST3D_SDL_OOT3D_VULKAN) {
         return;
     }
-    const auto settingsWindow = GetGuiWindow("OOT3D Graphics");
+    const auto settingsWindow = GetGuiWindow(Oot3dGraphicsWindowName());
     if (settingsWindow != nullptr) {
         settingsWindow->ToggleVisibility();
     }

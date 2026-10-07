@@ -204,9 +204,22 @@ guest threads; APT, NDM, FS, GSP, HID, CFG and DSP initialize, RomFS archives
 load, and the attract sequence plays: the intro (Majora's Mask, the Happy
 Mask Salesman), then the Clock Town demo scenes. 333,842 PICA draws, 4,854
 display transfers, no fault. The renderer runs MM3D's draws on the
-canonical path; the F1 panel is still OoT3D's ("OOT3D Graphics", grass and
-material tabs) and OoT3D's optional effects have no MM3D composition
-metadata yet.
+canonical path.
+
+F1 and the optional effects: the window is **Moonfall Curse Graphics**. The
+title frontend sets two title-owned capabilities from the adapter:
+`TitleSceneView` (the title publishes its frustum, camera and scene) and
+`TitleSceneFov` (the title applies the global scene FOV). MM3D has neither
+yet, so F1 says that grass, shadows, ambient occlusion, reflections and GI
+stay inactive (their settings are kept) and disables **Global scene FOV**
+with the reason; OoT3D's per-scene lights are not installed for MM3D. The
+effects were already inert: with the maintainer's play configuration (Modern
+lighting, virtual and cube shadows, MXAO, grass, FOV 1.10) the MM3D frames
+are bit-identical to the same run with every effect off, at frames 1800 and
+2400 (`--fixed-delta-seconds 1/60`, an empty `--input-timeline`; without
+them MM3D's runs are not reproducible). Frame interpolation (Interpolated
+2x/3x) is the renderer's own and runs for MM3D. Actual-widget smoke: 8,444
+assertions, including the title without scene hooks.
 
 Earlier stalls, in order. First the main thread waited for byte
 `0x007B2711` (the busy flag of the GX command scheduler at `0x007B2700`)

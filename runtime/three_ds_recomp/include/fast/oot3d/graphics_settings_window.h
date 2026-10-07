@@ -48,6 +48,11 @@ void InstallGraphicsSettingsPanelTabs(
 void InstallGraphicsSettingsPanelTab(
     std::shared_ptr<GraphicsSettingsPanelTab> tab);
 
+// The F1 window's title, named for the running game. The game frontend
+// installs it before the GUI is created; the default is "OOT3D Graphics".
+void InstallGraphicsSettingsWindowTitle(std::string title);
+[[nodiscard]] std::string GraphicsSettingsWindowTitle();
+
 class GraphicsSettingsPanel final {
   public:
     void Draw();
@@ -64,6 +69,9 @@ class GraphicsSettingsPanel final {
     void DrawLightingTab(const std::vector<std::shared_ptr<GraphicsSettingsPanelTab>>& lightingTabs);
     void DrawMaterialsTab();
     void DrawPresentationStatus();
+    // Why the view-dependent effects are inactive, when the title publishes
+    // no scene view.
+    void DrawTitleSceneViewNotice();
     bool DrawDisplaySettings(GraphicsSettings&, const GraphicsCapabilities&);
     bool DrawAntialiasingSettings(GraphicsSettings&, const GraphicsCapabilities&);
     bool DrawMotionSettings(GraphicsSettings&, const GraphicsCapabilities&);

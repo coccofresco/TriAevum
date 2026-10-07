@@ -628,7 +628,10 @@ void NativeA32WindowSession::Setup() {
       });
   // F1 order: the scene lights join Lighting > Lights & Shadows; then
   // Controls, HUD and Game (Save states, Language) after the graphics tabs.
-  applicationSettingsTabs.push_back(Oot3dNativeGame::CreateSceneEnvironmentPanel(sceneEnvironment));
+  // Scene lights are profiles of OoT3D's scenes: another title has none.
+  if (titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur) {
+    applicationSettingsTabs.push_back(Oot3dNativeGame::CreateSceneEnvironmentPanel(sceneEnvironment));
+  }
   applicationSettingsTabs.push_back(
       Oot3dNativeGame::CreateNativeControlsSettingsPanel(
           controlConfigRuntime,
@@ -647,7 +650,27 @@ void NativeA32WindowSession::Setup() {
   applicationSettingsTabs.push_back(Oot3dNativeGame::CreateGameLanguagePanel(languageSettings));
   Fast::Oot3d::InstallGraphicsSettingsPanelTabs(
       std::move(applicationSettingsTabs));
+  if (const char* title = Oot3dNativeGame::TitleGraphicsWindowTitle(titleAdapter)) {
+    Fast::Oot3d::InstallGraphicsSettingsWindowTitle(title);
+  }
   InitContextForDemo(hostArgs);
+  // What the title itself provides to the graphics settings: the effects
+  // that need a scene view, and the scene FOV, stay inactive without it.
+  // After the context: it installs the settings' persistence first.
+  {
+    auto &settingsRuntime = Fast::Oot3d::GraphicsSettingsRuntime::Instance();
+    const std::string titleName = titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d
+                                      ? "Majora's Mask 3D"
+                                      : "This game";
+    settingsRuntime.SetCapability(
+        Fast::Oot3d::GraphicsCapability::TitleSceneView,
+        Oot3dNativeGame::TitlePublishesSceneView(titleAdapter),
+        titleName + " does not publish its scene view yet.");
+    settingsRuntime.SetCapability(
+        Fast::Oot3d::GraphicsCapability::TitleSceneFov,
+        Oot3dNativeGame::TitleAppliesSceneFov(titleAdapter),
+        titleName + " has no scene projection hooks yet; the FOV has no effect.");
+  }
 #if defined(__SWITCH__)
   WriteSwitchBootStage("host_context_initialized");
 #endif
