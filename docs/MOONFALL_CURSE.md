@@ -1,8 +1,15 @@
-# Majora's Mask 3D port
+# TriAevum — Moonfall Curse
 
-Fork of the OoT3D TriAevum line (`qual/windows-next` at `3eb16f1`, remote
-`oot3d`, push disabled) to bring The Legend of Zelda: Majora's Mask 3D to the
-same runtime, reusing the title-neutral layers: CTR host services, A32
+TriAevum — Moonfall Curse is the Majora's Mask 3D project of TriAevum
+(repository `I:/TriAevum-MoonfallCurse`, branch `moonfall-curse/main`). The
+runtime shows that name for this title (`TitleProductName` in
+`triaevum_title_adapter.h`; the log file name keeps ASCII,
+`TriAevum - Moonfall Curse.log`). Code and documents keep `mm3d` for the
+title itself: the adapter, the work directory and the inventory profile.
+
+It is a fork of the OoT3D TriAevum line (`qual/windows-next` at `3eb16f1`,
+remote `oot3d`, push disabled) that brings The Legend of Zelda: Majora's
+Mask 3D to the same runtime, reusing the title-neutral layers: CTR host services, A32
 runtime and whole-AOT pipeline, PICA frontend, NRI renderer and extension
 graph, F1, packaging and Forge. Improvements to those layers are shared with
 the OoT3D repository by cherry-pick. The same rules apply as in `AGENTS.md`:

@@ -603,6 +603,9 @@ void NativeA32WindowSession::Setup() {
   picaFrontend.SetPacketSink(&submissionQueue);
 
   hostArgs = launch.Host;
+  if (const char* productName = Oot3dNativeGame::TitleProductName(titleAdapter)) {
+    hostArgs.ApplicationName = productName;
+  }
   hostArgs.AudioSampleRate = Oot3dNativeGame::NativeA32DspHle::NativeSampleRate;
   hostArgs.AudioSampleLength =
       Oot3dNativeGame::NativeA32DspHle::SamplesPerFrame;

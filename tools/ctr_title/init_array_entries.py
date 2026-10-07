@@ -4,7 +4,7 @@
 ARM's C++ runtime walks the table with self-relative words: entry = word +
 address of the word, odd for Thumb. Ghidra cannot follow those, so the
 constructors (and code reached only from them) stay undiscovered. The table
-bounds come from the title's initializer loop (see docs/MM3D_PORT.md for
+bounds come from the title's initializer loop (see docs/MOONFALL_CURSE.md for
 MM3D's). The output is one address per line ("0x%08X", odd for Thumb), the
 seed list for ghidra_scripts/CreateFunctionsAt.java.
 

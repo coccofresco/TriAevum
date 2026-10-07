@@ -37,6 +37,12 @@ inline constexpr std::string_view kMm3dCodeBinSha256 =
     return TitleAdapter::Generic;
 }
 
+// The product name a title runs under (window title, log name), or nullptr to
+// keep the launch's own name. UTF-8.
+[[nodiscard]] inline const char* TitleProductName(TitleAdapter adapter) noexcept {
+    return adapter == TitleAdapter::Mm3d ? "TriAevum \xE2\x80\x94 Moonfall Curse" : nullptr;
+}
+
 [[nodiscard]] inline const char* TitleAdapterName(TitleAdapter adapter) noexcept {
     switch (adapter) {
     case TitleAdapter::Oot3dEur:

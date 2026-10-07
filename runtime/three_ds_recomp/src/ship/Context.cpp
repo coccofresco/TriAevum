@@ -170,7 +170,19 @@ bool Context::InitLogging(spdlog::level::level_enum debugBuildLogLevel,
         sinks.push_back(systemConsoleSink);
 #endif
 
-        auto logPath = GetPathRelativeToAppDirectory(("logs/" + GetName() + ".log"));
+        // The file name keeps ASCII: spdlog opens narrow paths, which Windows
+        // reads in the ANSI code page. A UTF-8 sequence in the application
+        // name (such as an em dash) becomes '-'.
+        std::string logName;
+        for (size_t index = 0; index < GetName().size(); ++index) {
+            const auto byte = static_cast<unsigned char>(GetName()[index]);
+            if (byte < 0x80U) {
+                logName += static_cast<char>(byte);
+            } else if ((byte & 0xC0U) != 0x80U) {
+                logName += '-';
+            }
+        }
+        auto logPath = GetPathRelativeToAppDirectory(("logs/" + logName + ".log"));
         auto fileSink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(logPath, 1024 * 1024 * 10, 10);
         sinks.push_back(fileSink);
 #ifdef _DEBUG
