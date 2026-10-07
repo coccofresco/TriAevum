@@ -324,6 +324,26 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
       }
       return words;
     };
+    // Bring-up probe: TRIAEVUM_PROBE_GUEST_RANGES=ADDR:SIZE[,ADDR:SIZE...]
+    // (hex) records those guest words at exit, e.g. a title's scheduler
+    // state while its boot is stalled.
+    nlohmann::json guestMemoryProbe = nlohmann::json::array();
+    if (const char* ranges = std::getenv("TRIAEVUM_PROBE_GUEST_RANGES")) {
+      for (const char* cursor = ranges; *cursor != '\0';) {
+        unsigned long long start = 0, size = 0;
+        int consumed = 0;
+        if (std::sscanf(cursor, "%llx:%llx%n", &start, &size, &consumed) != 2) break;
+        nlohmann::json words = nlohmann::json::array();
+        for (unsigned long long offset = 0; offset < std::min(size, 0x1000ULL); offset += 4U) {
+          uint32_t value = 0;
+          if (!process.Memory().Read32(static_cast<uint32_t>(start + offset), &value)) break;
+          words.push_back(value);
+        }
+        guestMemoryProbe.push_back({{"address", start}, {"words", std::move(words)}});
+        cursor += consumed;
+        if (*cursor == ',') ++cursor;
+      }
+    }
     const auto sceneViewSnapshot =
         sceneViewProbe.Capture(process.Memory());
     const auto playerTimingSnapshot =
@@ -1270,6 +1290,7 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
             {"display_transfer_events", std::move(displayTransferEvents)},
             {"draw_events", std::move(drawEvents)},
             {"recent_svc_events", std::move(recentSvcEvents)},
+            {"guest_memory_probe", std::move(guestMemoryProbe)},
             {"filesystem_svc_events", std::move(filesystemSvcEvents)},
             {"ipc_svc_events", std::move(ipcSvcEvents)},
             {"last_svc_by_thread", std::move(lastThreadSvcEvents)},

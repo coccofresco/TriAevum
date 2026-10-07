@@ -22,6 +22,14 @@ constexpr uint16_t kPicaIrqRequest = 0x010U;
 constexpr uint16_t kPicaIrqCompare = 0x020U;
 constexpr uint16_t kPicaIrqMask = 0x030U;
 constexpr uint16_t kPicaIrqAutoStop = 0x034U;
+// GPUREG_CMDBUF_SIZE0/1, ADDR0/1 (both in 8-byte units) and JUMP0/1: a write
+// to JUMPn continues execution in channel n's buffer; the rest of the
+// current buffer is not executed.
+constexpr uint16_t kPicaCommandBufferSize0 = 0x238U;
+constexpr uint16_t kPicaCommandBufferAddress0 = 0x23AU;
+constexpr uint16_t kPicaCommandBufferJump0 = 0x23CU;
+constexpr uint16_t kPicaCommandBufferJump1 = 0x23DU;
+constexpr size_t kMaximumCommandBufferJumps = 4096U;
 constexpr uint16_t kPicaGeometryShaderBase = 0x280U;
 constexpr uint16_t kPicaVertexShaderBase = 0x2B0U;
 constexpr uint16_t kPicaPipelineUseGeometryShader = 0x229U;
@@ -558,13 +566,21 @@ bool Oot3dNativePicaFrontend::SubmitGspCommand(
     mCompositionSpanCommandListSize = 0U;
     mNextCommandListCompositionSpans.clear();
 
+    // The buffer being executed: the submitted list, then each buffer a
+    // GPUREG_CMDBUF_JUMP write continues in.
+    uint32_t bufferAddress = commandListAddress;
+    std::span<const uint32_t> words = commandListWords;
+    std::vector<uint32_t> jumpedWords;
+    size_t jumps = 0;
+    std::optional<uint32_t> jumpChannel;
+
     const auto resolveComposition =
         [&](uint32_t offsetWords) -> const Oot3dPicaCommandListCompositionSpan* {
         if (mCommandListCompositionDomain ==
             Oot3dPicaCompositionDomain::Ui) {
             return nullptr;
         }
-        const uint64_t address = static_cast<uint64_t>(commandListAddress) +
+        const uint64_t address = static_cast<uint64_t>(bufferAddress) +
                                  static_cast<uint64_t>(offsetWords) * 4U;
         const auto found = std::upper_bound(
             compositionSpans.begin(), compositionSpans.end(), address,
@@ -582,23 +598,23 @@ bool Oot3dNativePicaFrontend::SubmitGspCommand(
     size_t cursor = 0;
     bool stopRequested = false;
     bool drawSubmitted = false;
-    while (cursor < commandListWords.size()) {
+    while (cursor < words.size()) {
         if (stopRequested) {
             break;
         }
         if ((cursor & 1U) != 0) {
             ++cursor;
         }
-        if (cursor == commandListWords.size()) {
+        if (cursor == words.size()) {
             break;
         }
-        if (cursor + 2U > commandListWords.size()) {
+        if (cursor + 2U > words.size()) {
             SetError(error, "PICA command list ends before its header");
             return false;
         }
         const uint32_t valueOffset = static_cast<uint32_t>(cursor);
-        const uint32_t value = commandListWords[cursor++];
-        const uint32_t header = commandListWords[cursor++];
+        const uint32_t value = words[cursor++];
+        const uint32_t header = words[cursor++];
         const uint16_t registerId = static_cast<uint16_t>(header);
         const uint8_t parameterMask =
             static_cast<uint8_t>((header >> 16U) & 0xFU);
@@ -619,8 +635,12 @@ bool Oot3dNativePicaFrontend::SubmitGspCommand(
             }
             if (mDiagnosticHistoryEnabled) {
                 mPendingRegisterWrites.push_back(
-                    {commandListAddress, offsetWords, id, parameterMask,
+                    {bufferAddress, offsetWords, id, parameterMask,
                      supported, writeValue, finalValue});
+            }
+            if (id == kPicaCommandBufferJump0 ||
+                id == kPicaCommandBufferJump1) {
+                jumpChannel = id - kPicaCommandBufferJump0;
             }
             if (id == kPicaTriggerDraw ||
                 id == kPicaTriggerDrawIndexed) {
@@ -651,7 +671,7 @@ bool Oot3dNativePicaFrontend::SubmitGspCommand(
                         break;
                 }
                 Oot3dPicaDrawPacket draw(
-                    commandListAddress, offsetWords,
+                    bufferAddress, offsetWords,
                     domain, composition,
                     id == kPicaTriggerDrawIndexed, mPicaRegisters,
                     mVertexShader, mGeometryShader, mFogLut, mProcTexLuts,
@@ -696,7 +716,7 @@ bool Oot3dNativePicaFrontend::SubmitGspCommand(
         if (!applyWrite(registerId, value, valueOffset)) {
             return false;
         }
-        if (extraDataLength > commandListWords.size() - cursor) {
+        if (extraDataLength > words.size() - cursor) {
             SetError(error, "PICA command list extra data is truncated");
             return false;
         }
@@ -704,16 +724,47 @@ bool Oot3dNativePicaFrontend::SubmitGspCommand(
             const uint32_t extraOffset = static_cast<uint32_t>(cursor);
             const uint16_t extraRegister = static_cast<uint16_t>(
                 registerId + (grouped ? index + 1U : 0U));
-            if (!applyWrite(extraRegister, commandListWords[cursor++],
+            if (!applyWrite(extraRegister, words[cursor++],
                             extraOffset)) {
                 return false;
             }
+        }
+        if (jumpChannel.has_value()) {
+            const uint32_t channel = *jumpChannel;
+            jumpChannel.reset();
+            const uint32_t physicalAddress =
+                mPicaRegisters[kPicaCommandBufferAddress0 + channel] << 3U;
+            const uint32_t byteSize =
+                mPicaRegisters[kPicaCommandBufferSize0 + channel] << 3U;
+            if (!mCommandBufferReader) {
+                SetError(error, "PICA command buffer jump has no buffer reader");
+                return false;
+            }
+            if (++jumps > kMaximumCommandBufferJumps ||
+                byteSize > kMaximumCommandListBytes) {
+                SetError(error, "PICA command buffer jump exceeds its limits");
+                return false;
+            }
+            std::vector<uint32_t> target;
+            if (!mCommandBufferReader(physicalAddress, byteSize,
+                                      &bufferAddress, &target)) {
+                SetError(error, "PICA command buffer jump target is not mapped");
+                return false;
+            }
+            jumpedWords = std::move(target);
+            words = jumpedWords;
+            cursor = 0;
         }
     }
     if (mDiagnosticHistoryEnabled) {
         mPendingGspCommands.push_back(command);
     }
     return true;
+}
+
+void Oot3dNativePicaFrontend::SetCommandBufferReader(
+    CommandBufferReader reader) {
+    mCommandBufferReader = std::move(reader);
 }
 
 std::optional<uint32_t> Oot3dNativePicaFrontend::ReadHardwareRegister(

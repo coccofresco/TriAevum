@@ -160,23 +160,42 @@ What MM3D needed beyond OoT3D, all title-neutral:
   Flush/InvalidateDataCache.
 - A use-after-free in GSP `RegisterInterruptRelayQueue`: the event's handle
   record was read after `CreateHandle` could reallocate the handle table.
+- PICA command buffer jumps (`GPUREG_CMDBUF_SIZE/ADDR/JUMP`, registers
+  `0x238`-`0x23D`): MM3D's GX command lists are short heads that set channel 0
+  and 1 and jump, so the draws and the closing IRQ request live in the jumped
+  buffers. The PICA frontend now continues in the jumped buffer (the rest of
+  the jumping buffer is not executed), read through the PICA physical memory
+  view by the window and by the module PICA host. OoT3D never jumps.
+- Startup shader preparation: the startup program family (OoT3D's vertex
+  programs and effect supersets) is prepared only for the OoT3D adapter.
+  Another title's draws never match it, so preparing it only held MM3D's
+  guest for 83 s at startup; MM3D's draws prepare their own programs.
 
 Current state (developer launch, development build, 1800 frames): eight
-guest threads; APT, NDM, FS, GSP (hardware registers, command queue), HID,
-CFG and DSP (component loaded, audio frames processed) initialize; the first
-RomFS archives load; 2 PICA draws and a display transfer complete; the LCD
-stays force-black. The main thread then loops once per VBlank (GSP
-interrupt thread, worker thread, address arbiter) while the byte at
-`0x007B2711` stays set: the next step is finding which subsystem should clear
-it. With `--extended-diagnostics` the host keeps the full SVC history and
-runtime.json lists the last 4096 events; `TRIAEVUM_DIAGNOSE_GUEST_WAIT`
-reports every thread's priority, status and registers when the guest does
-not reach a wait.
+guest threads; APT, NDM, FS, GSP, HID, CFG and DSP initialize, RomFS archives
+load, and the intro sequence renders (Majora's Mask, then the Happy Mask
+Salesman): 54,764 PICA draws, 2,748 display transfers, 5,030 P3D completions,
+the LCD no longer force-black. The renderer runs MM3D's draws on the
+canonical path with Authentic settings; OoT3D's optional effects have no MM3D
+composition metadata yet.
+
+The previous stall (the main thread waiting for byte `0x007B2711`, the GX
+command scheduler's busy flag at `0x007B2700`) was the missing jumps above:
+the scheduler counts one completion per command (GSP handler table at
+`0x0011BB48`: PSC0, PSC1, VBlank0, VBlank1, PPF, P3D, DMA) and two never
+arrived.
+
+Diagnostics: with `--extended-diagnostics` the host keeps the full SVC
+history, runtime.json lists the last 4096 events and GSP command lists of up
+to 16 words show their words. `TRIAEVUM_PROBE_GUEST_RANGES=ADDR:SIZE[,...]`
+(hex) records guest words at exit in runtime.json `guest_memory_probe`;
+`TRIAEVUM_DIAGNOSE_GUEST_WAIT` reports every thread's priority, status and
+registers when the guest does not reach a wait.
 
 ## Next steps
 
-1. Continue the boot to the title screen, one missing kernel or service
-   behaviour at a time, each tested at the CTR host boundary.
+1. Continue past the intro to the title screen and file select, one missing
+   kernel, service or PICA behaviour at a time, each tested at its boundary.
 2. Thumb lowering in whole AOT and the MM3D title module from the current
    inventory, for a zero-residual product.
 3. Function discovery from data pointers (vtables, callbacks), as

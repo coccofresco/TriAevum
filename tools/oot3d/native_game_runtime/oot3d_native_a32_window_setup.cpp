@@ -601,6 +601,12 @@ void NativeA32WindowSession::Setup() {
   }
   submissionQueue.SetRuntimeProfilingEnabled(launch.ProfileA32Runtime);
   picaFrontend.SetPacketSink(&submissionQueue);
+  picaFrontend.SetCommandBufferReader(
+      [&picaMemoryView](uint32_t physicalAddress, uint32_t byteSize,
+                        uint32_t *guestAddress, std::vector<uint32_t> *words) {
+        return picaMemoryView.ReadCommandBuffer(physicalAddress, byteSize,
+                                                guestAddress, words);
+      });
 
   hostArgs = launch.Host;
   if (const char* productName = Oot3dNativeGame::TitleProductName(titleAdapter)) {
@@ -670,7 +676,11 @@ void NativeA32WindowSession::Setup() {
   if (programPreparation != nullptr)
     programPreparation->RegisterTitlePassPrograms(
         Oot3dNativeGame::NativePicaTitlePassPrograms());
+  // The startup program family (vertex programs, effect supersets) is
+  // OoT3D's: another title's draws never match it, so preparing it would
+  // only hold that guest at startup. Its draws prepare their own programs.
   if (programPreparation != nullptr &&
+      titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur &&
       (launch.PicaParametricTev || alwaysAvailablePrograms)) {
     programPreparation->PrepareNativePicaPrograms(
         Oot3dNativeGame::NativePicaVertexProgramFamily());

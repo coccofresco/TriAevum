@@ -126,6 +126,14 @@ std::unique_ptr<TriAevumOot3dPicaHost> TriAevumOot3dPicaHost::Create(
     impl->Queue = std::make_unique<Oot3dNativePicaSubmissionQueue>(
         std::move(*memory), deferGpuBackedDisplayTransfers);
     impl->Frontend.SetPacketSink(impl->Queue.get());
+    impl->Frontend.SetCommandBufferReader(
+        [queue = impl->Queue.get()](uint32_t physicalAddress,
+                                    uint32_t byteSize,
+                                    uint32_t* guestAddress,
+                                    std::vector<uint32_t>* words) {
+            return queue->PhysicalMemory().ReadCommandBuffer(
+                physicalAddress, byteSize, guestAddress, words);
+        });
     auto* const leases = impl->Leases.get();
     callbacks.BeginSubmissionMemoryAccess = [leases]() {
         return leases->ReleaseAll();

@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <array>
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
@@ -341,6 +342,13 @@ class Oot3dNativePicaFrontend {
         Oot3dPicaPacketSink* packetSink = nullptr);
     void SetPacketSink(Oot3dPicaPacketSink* packetSink);
     void SetDiagnosticHistoryEnabled(bool enabled);
+    // Reads the buffer a GPUREG_CMDBUF_JUMP write continues in: its physical
+    // address and byte size in, its guest address and words out. A list that
+    // jumps without a reader is an error.
+    using CommandBufferReader = std::function<bool(
+        uint32_t physicalAddress, uint32_t byteSize, uint32_t* guestAddress,
+        std::vector<uint32_t>* words)>;
+    void SetCommandBufferReader(CommandBufferReader reader);
     void SetCommandListCompositionDomain(
         Oot3dPicaCompositionDomain domain) noexcept;
     bool SetNextCommandListCompositionSpans(
@@ -387,6 +395,7 @@ class Oot3dNativePicaFrontend {
         bool mirrorToGeometryShader);
 
     Oot3dPicaPacketSink* mPacketSink = nullptr;
+    CommandBufferReader mCommandBufferReader;
     std::unordered_map<uint32_t, uint32_t> mHardwareRegisters;
     std::vector<Oot3dPicaHardwareRegisterWrite> mPendingWrites;
     std::array<uint32_t, 0x300> mPicaRegisters{};

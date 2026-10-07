@@ -74,6 +74,11 @@ class Oot3dPicaPhysicalMemoryView {
     bool Read(uint32_t physicalAddress, std::span<uint8_t> output) const;
     bool ReadGuest(uint32_t guestAddress,
                    std::span<uint8_t> output) const;
+    // The buffer a PICA command list jumps to (GPUREG_CMDBUF_JUMP): its guest
+    // address and words. Shape of Oot3dNativePicaFrontend::CommandBufferReader.
+    bool ReadCommandBuffer(uint32_t physicalAddress, uint32_t byteSize,
+                           uint32_t* guestAddress,
+                           std::vector<uint32_t>* words) const;
     std::span<const uint8_t> ViewGuest(uint32_t address, size_t size) const {
         if (!mReadView) return {};
         const auto view = mReadView(address, size);
@@ -215,6 +220,9 @@ class Oot3dNativePicaSubmissionQueue final : public Oot3dPicaPacketSink {
     explicit Oot3dNativePicaSubmissionQueue(
         Oot3dPicaPhysicalMemoryView memory,
         bool deferGpuBackedDisplayTransfers = false);
+    const Oot3dPicaPhysicalMemoryView& PhysicalMemory() const noexcept {
+        return mMemory;
+    }
     void SetRuntimeProfilingEnabled(bool enabled);
     void SetTexturePayloadTransform(TexturePayloadTransform transform);
     Oot3dPicaSubmissionRuntimeProfile RuntimeProfile() const noexcept;

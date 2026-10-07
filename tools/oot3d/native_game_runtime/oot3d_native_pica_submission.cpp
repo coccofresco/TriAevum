@@ -193,6 +193,26 @@ Oot3dPicaPhysicalMemoryView::RangeWriteGeneration(uint32_t physicalAddress,
   return certified ? generation : std::nullopt;
 }
 
+bool Oot3dPicaPhysicalMemoryView::ReadCommandBuffer(
+    uint32_t physicalAddress, uint32_t byteSize, uint32_t* guestAddress,
+    std::vector<uint32_t>* words) const {
+    if ((byteSize & 3U) != 0U || guestAddress == nullptr || words == nullptr) {
+        return false;
+    }
+    const auto translated = Translate(physicalAddress, byteSize);
+    if (!translated.has_value()) {
+        return false;
+    }
+    words->resize(byteSize / 4U);
+    if (!Read(physicalAddress,
+              std::span<uint8_t>(reinterpret_cast<uint8_t*>(words->data()),
+                                 byteSize))) {
+        return false;
+    }
+    *guestAddress = *translated;
+    return true;
+}
+
 bool Oot3dPicaPhysicalMemoryView::Read(
     uint32_t physicalAddress, std::span<uint8_t> output) const {
     if (output.empty()) {

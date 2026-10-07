@@ -986,6 +986,46 @@ int main(int argc, char** argv) {
                     Oot3dNativeGame::Oot3dPicaInterruptId::P3d,
             "PICA IRQ request did not produce the native P3D interrupt");
 
+    // GPUREG_CMDBUF_JUMP0 continues in channel 0's buffer (MM3D's split
+    // lists): the IRQ request there raises P3D, and the rest of the
+    // jumping list is not executed.
+    Oot3dNativeGame::Oot3dGspCommandPacket jumpSubmit{};
+    jumpSubmit.Control = 1;
+    jumpSubmit.Parameters[0] = 0x14000A80U;
+    jumpSubmit.Parameters[1] = 0x20U;
+    constexpr std::array<uint32_t, 8> jumpCommandList{
+        // SIZE0 = 2 (16 bytes), then 4 grouped writes: SIZE1, ADDR0
+        // (0x202944C0 >> 3), ADDR1 and JUMP0.
+        0x00000002U, 0x804F0238U, 0x00000000U, 0x04052898U,
+        0x00000000U, 0x00000001U,
+        0xDEADBEEFU, 0x000F0010U}; // abandoned IRQ request
+    constexpr std::array<uint32_t, 4> jumpTarget{
+        0x12345678U, 0x000F0010U, 0x00000000U, 0x000F0011U};
+    std::vector<uint32_t> jumpReads;
+    frontend.SetCommandBufferReader(
+        [&](uint32_t physicalAddress, uint32_t byteSize,
+            uint32_t* guestAddress, std::vector<uint32_t>* words) {
+            jumpReads.push_back(physicalAddress);
+            if (physicalAddress != 0x202944C0U || byteSize != 16U) {
+                return false;
+            }
+            *guestAddress = 0x142944C0U;
+            words->assign(jumpTarget.begin(), jumpTarget.end());
+            return true;
+        });
+    Require(frontend.SubmitGspCommand(jumpSubmit, jumpCommandList, &error),
+            error);
+    const auto jumpInterrupts = frontend.TakePendingInterrupts();
+    Require(jumpReads.size() == 1U && jumpInterrupts.size() == 1U &&
+                jumpInterrupts[0] ==
+                    Oot3dNativeGame::Oot3dPicaInterruptId::P3d &&
+                frontend.ReadPicaRegister(0x010U) == 0x12345678U,
+            "PICA command buffer jump did not continue in channel 0");
+    frontend.SetCommandBufferReader({});
+    Require(!frontend.SubmitGspCommand(jumpSubmit, jumpCommandList, &error),
+            "PICA command buffer jump without a reader was accepted");
+    error.clear();
+
     MemoryFillSink runtimeSink;
     auto runtimeFrontendStorage =
         std::make_unique<Oot3dNativeGame::Oot3dNativePicaFrontend>(

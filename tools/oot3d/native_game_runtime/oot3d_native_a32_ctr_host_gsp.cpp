@@ -214,6 +214,17 @@ NativeA32HostResult NativeA32CtrHostServices::HandleGspRequest(
                                     readStart);
                         }
                     }
+                    // A short list is usually a synchronization split
+                    // (an IRQ request): its words name the interrupt the
+                    // guest will wait for.
+                    if (submitted && mConfig.DetailedSvcDiagnostics &&
+                        commandList.size() <= 16U) {
+                        commandDetail << ",words=";
+                        for (const uint32_t word : commandList) {
+                            commandDetail << std::hex << std::setw(8)
+                                          << word << ' ';
+                        }
+                    }
                 }
                 std::string picaError;
                 NativeA32CtrPicaSubmissionResult submissionResult;
