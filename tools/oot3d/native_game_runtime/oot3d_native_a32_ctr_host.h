@@ -350,6 +350,9 @@ class NativeA32CtrHostServices final : public NativeA32HostServices {
         NativeA32Process* Process = nullptr;
         uint32_t ThreadId = 0;
         uint64_t WakeTick = 0;
+        // The deadline of a timed WaitSynchronization: at WakeTick the thread,
+        // if it still waits, stops waiting with a timeout result.
+        bool SynchronizationTimeout = false;
     };
 
     struct ArchiveRecord {
@@ -410,6 +413,10 @@ class NativeA32CtrHostServices final : public NativeA32HostServices {
     HandleQueryMemory(oot3d::recomp::a32::GuestState& state,
                       NativeA32Memory& memory, NativeA32CtrSvcEvent event);
     // SendSyncRequest, one method per service (oot3d_native_a32_ctr_host_*.cpp).
+    NativeA32HostResult HandleIrRequest(
+        oot3d::recomp::a32::GuestState& state, NativeA32Memory& memory,
+        NativeA32HostContext& context, const std::optional<std::string>& sessionType,
+        uint32_t commandBuffer, NativeA32CtrSvcEvent event);
     NativeA32HostResult HandleNdmRequest(
         oot3d::recomp::a32::GuestState& state, NativeA32Memory& memory,
         NativeA32HostContext& context, const std::optional<std::string>& sessionType,
@@ -503,6 +510,10 @@ class NativeA32CtrHostServices final : public NativeA32HostServices {
     std::array<std::vector<uint8_t>, 8> mDspPipeOutput;
     std::shared_ptr<KernelObject> mHidSharedMemory;
     std::array<std::shared_ptr<KernelObject>, 5> mHidEvents{};
+    // ir:USER receive, send and connection-status events (never signalled:
+    // no infrared accessory is connected).
+    std::array<std::shared_ptr<KernelObject>, 3> mIrEvents{};
+    bool mIrInitialized = false;
     NativeA32CtrHidRuntimeProfile mHidRuntimeProfile;
     uint64_t mNextHidPadTick = 0;
     uint64_t mNextHidAccelerometerTick = 0;

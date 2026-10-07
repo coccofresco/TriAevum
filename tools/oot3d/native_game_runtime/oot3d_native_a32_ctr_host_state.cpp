@@ -104,6 +104,7 @@ nlohmann::json NativeA32CtrHostServices::CaptureState() const {
         sleepWaiters.push_back({
             {"thread_id", waiter.ThreadId},
             {"wake_tick", waiter.WakeTick},
+            {"synchronization_timeout", waiter.SynchronizationTimeout},
         });
     }
     nlohmann::json archives = nlohmann::json::array();
@@ -422,7 +423,8 @@ bool NativeA32CtrHostServices::RestoreState(const nlohmann::json& state,
                 throw std::runtime_error("sleep waiter thread is invalid");
             }
             staged.mSleepWaiters.push_back(
-                {&process, threadId, encoded.at("wake_tick").get<uint64_t>()});
+                {&process, threadId, encoded.at("wake_tick").get<uint64_t>(),
+                 encoded.value("synchronization_timeout", false)});
         }
         for (const auto& encoded : state.at("archives")) {
             ArchiveRecord archive{

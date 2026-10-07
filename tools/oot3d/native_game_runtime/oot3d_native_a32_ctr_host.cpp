@@ -366,6 +366,11 @@ void NativeA32CtrHostServices::WakeSynchronizationWaiters() {
             state->r[1] = selectedIndex;
             selected->Process->ResumeThread(selected->ThreadId);
         }
+        // A timed wait that the object ended has no deadline any more.
+        std::erase_if(mSleepWaiters, [&](const SleepWaiter& waiter) {
+            return waiter.SynchronizationTimeout && waiter.Process == selected->Process &&
+                   waiter.ThreadId == selected->ThreadId;
+        });
         mSynchronizationWaiters.erase(selected);
     }
 }
@@ -485,7 +490,13 @@ bool NativeA32CtrHostServices::ApplyGspFramebufferUpdate(
 bool NativeA32CtrHostServices::CloseHandle(uint32_t handle) {
     for (auto record = mHandles.begin(); record != mHandles.end(); ++record) {
         if (record->Value == handle) {
+            const auto object = record->Object;
             mHandles.erase(record);
+            // An event destroyed with its last handle returns to the
+            // resource limit, as the kernel frees it.
+            if (object && object->Type == "event:guest" && object.use_count() == 1 &&
+                mConfig.ResourceCurrentValues[kResourceEvent] > 0)
+                --mConfig.ResourceCurrentValues[kResourceEvent];
             return true;
         }
     }
@@ -803,6 +814,35 @@ NativeA32HostResult NativeA32CtrHostServices::HandleSvc(
         mSvcEvents.push_back(std::move(event));
         return {NativeA32HostAction::Resume};
     }
+    case 0x1E: {
+        // CreateMemoryBlock(other permissions, address, size, permissions):
+        // shares pages the caller already owns (such as the ir:USER buffer).
+        // The block stays the caller's memory; the object records where.
+        event.Name = "CreateMemoryBlock";
+        const uint32_t otherPermissions = state.r[0];
+        const uint32_t address = state.r[1];
+        const uint32_t size = state.r[2];
+        const uint32_t permissions = state.r[3];
+        event.Detail = size;
+        if (address == 0U || (address & 0xFFFU) != 0U || size == 0U ||
+            (size & 0xFFFU) != 0U || (permissions & ~7U) != 0U ||
+            (otherPermissions & ~7U) != 0U ||
+            !memory.IsMapped(address, size)) {
+            mSvcEvents.push_back(std::move(event));
+            return {NativeA32HostAction::Wait};
+        }
+        auto block = std::make_shared<KernelObject>();
+        block->Type = "shared_memory:block";
+        block->FileSize = size;
+        block->MappedAddress = address;
+        state.r[0] = kResultSuccess;
+        state.r[1] = CreateHandle(block);
+        event.Name += ":address=0x";
+        AppendHex8(event.Name, address);
+        event.Handled = true;
+        mSvcEvents.push_back(std::move(event));
+        return {NativeA32HostAction::Resume};
+    }
     case 0x1F: {
         event.Name = "MapMemoryBlock";
         const HandleRecord* memoryBlock = LookupHandle(state.r[0]);
@@ -969,6 +1009,17 @@ NativeA32HostResult NativeA32CtrHostServices::HandleSvc(
         } else if (timeout == 0) {
             state.r[0] = kResultTimeout;
         } else if (timeout > 0) {
+            // Wait for the object or the deadline, whichever comes first.
+            const uint64_t ticks = NanosecondsToCtrTicks(static_cast<uint64_t>(timeout));
+            const uint64_t wakeTick =
+                ticks > std::numeric_limits<uint64_t>::max() - mSystemTicks
+                    ? std::numeric_limits<uint64_t>::max()
+                    : mSystemTicks + ticks;
+            mSynchronizationWaiters.push_back(
+                {{record->Object}, &context.Process, context.ThreadId, true});
+            mSleepWaiters.push_back({&context.Process, context.ThreadId, wakeTick, true});
+            event.Name += ":timeout_ticks=" + std::to_string(ticks);
+            event.Handled = true;
             mSvcEvents.push_back(std::move(event));
             return {NativeA32HostAction::Wait};
         } else {
@@ -1130,6 +1181,10 @@ NativeA32HostResult NativeA32CtrHostServices::HandleSvc(
             return HandleNdmRequest(state, memory, context, sessionType,
                                     commandBuffer, std::move(event));
         }
+        if (*sessionType == "client_session:ir:USER") {
+            return HandleIrRequest(state, memory, context, sessionType,
+                                   commandBuffer, std::move(event));
+        }
         if (*sessionType == "client_session:cfg:u") {
             return HandleCfgRequest(state, memory, context, sessionType,
                                     commandBuffer, std::move(event));
@@ -1215,7 +1270,8 @@ NativeA32HostResult NativeA32CtrHostServices::HandleSvc(
                     serviceName == "fs:USER" ||
                     serviceName == "gsp::Gpu" || serviceName == "dsp::DSP" ||
                     serviceName == "cfg:u" || serviceName == "hid:USER" ||
-                    serviceName == "ndm:u" || serviceName == "y2r:u") {
+                    serviceName == "ndm:u" || serviceName == "y2r:u" ||
+                    serviceName == "ir:USER") {
                     const uint32_t session =
                         CreateHandle("client_session:" + serviceName);
                     if (memory.Write32(commandBuffer,
@@ -1337,6 +1393,15 @@ void NativeA32CtrHostServices::WakeSleepWaiters() {
         if (waiter->WakeTick > mSystemTicks) {
             ++waiter;
             continue;
+        }
+        if (waiter->SynchronizationTimeout) {
+            // The deadline passed before the object was signalled.
+            std::erase_if(mSynchronizationWaiters, [&](const SynchronizationWaiter& sync) {
+                return sync.Process == waiter->Process && sync.ThreadId == waiter->ThreadId;
+            });
+            if (waiter->Process != nullptr) {
+                if (auto* state = waiter->Process->ThreadState(waiter->ThreadId)) state->r[0] = kResultTimeout;
+            }
         }
         if (waiter->Process != nullptr &&
             waiter->Process->ThreadStatus(waiter->ThreadId) ==
