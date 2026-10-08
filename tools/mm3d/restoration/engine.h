@@ -20,7 +20,12 @@ namespace C=Layout::CommonData;
 namespace H=Layout::ui_MainScreen;
 template<class E> constexpr u32 Value(E value) {return static_cast<u32>(value);}
 constexpr u32 Code(u32 reference) {return Mm3dDekui::V110(reference);}
-constexpr u32 Common=0x7751d8,Static=0x7892d0,CommonLayouts=0x6b7b8c,Project=0x7cdca0;
+// Data and BSS addresses are the v1.1 ones: CommonData, StaticContext and
+// the layout project keep their v1.0 places, while ui::GetCommonLayouts()
+// (v1.0 0x6b7b8c) moved by 8 and the LayoutMgr instance guard (v1.0 0x6b0afc)
+// by 4; each is the literal v1.1's own code loads.
+constexpr u32 Common=0x7751d8,Static=0x7892d0,CommonLayouts=0x6b7b94,Project=0x7cdca0;
+constexpr u32 LayoutMgrInstanceGuard=0x6b0b00,LayoutMgrInstance=0x7cdc9c;
 // The resource id the project's lookups by name (0x16a014, 0x15a86c) return for
 // a name the mounted RomFS lacks.
 constexpr u32 kNoResource=0xffff;

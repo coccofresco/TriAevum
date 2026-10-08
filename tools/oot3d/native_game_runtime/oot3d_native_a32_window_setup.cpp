@@ -1,5 +1,6 @@
 // Native A32 window session: setup (process image, host services, renderer, UI, initial state).
 #include "oot3d_native_a32_window_session.h"
+#include "oot3d_native_a32_romfs_overlay.h"
 
 namespace Oot3dA32Window {
 
@@ -121,6 +122,31 @@ void NativeA32WindowSession::Setup() {
   hostConfig.RomFsImagePath = manifest->RomFsImagePath;
   hostConfig.RomFsImageOffset = manifest->RomFsImageOffset;
   hostConfig.RomFsImageSize = manifest->RomFsImageSize;
+  if (const char *overlay = std::getenv("TRIAEVUM_ROMFS_OVERLAY")) {
+    // Development: user-supplied RomFS files laid over the title's (a
+    // directory per layer mirroring RomFS paths, ';'-separated, later
+    // layers winning), until the launcher owns the user's mod folders.
+    std::vector<std::filesystem::path> layers;
+    for (std::string_view rest = overlay; !rest.empty();) {
+      const size_t separator = rest.find(';');
+      if (const auto layer = rest.substr(0, separator); !layer.empty()) {
+        layers.emplace_back(std::filesystem::u8path(layer));
+      }
+      rest = separator == std::string_view::npos ? std::string_view{} : rest.substr(separator + 1U);
+    }
+    std::string error;
+    auto base = Oot3dNativeGame::OpenNativeA32HostFileRange(
+        manifest->RomFsImagePath, manifest->RomFsImageOffset, manifest->RomFsImageSize, &error);
+    auto built = base != nullptr
+                     ? Oot3dNativeGame::BuildNativeA32RomFsOverlay(base, layers, &error)
+                     : std::nullopt;
+    if (!built.has_value()) {
+      throw std::runtime_error("RomFS overlay: " + error);
+    }
+    hostConfig.RomFsOverlay = built->File;
+    std::fprintf(stderr, "RomFS overlay: %zu layer(s), %zu file(s) replaced, %zu added, %zu directories added\n",
+                 layers.size(), built->ReplacedFiles, built->AddedFiles, built->AddedDirectories);
+  }
   hostConfig.PicaFrontend = &picaFrontend;
   hostConfig.PicaCompositionDomain = &picaCompositionDomain;
   hostConfig.PicaCompositionProvider =

@@ -337,7 +337,8 @@ bool NativeA32CtrHostServices::RestoreState(const nlohmann::json& state,
             const bool isSaveFile =
                 object->Type == "client_session:file:savedata";
             if (isRomFsFile) {
-                if (mConfig.Filesystem == nullptr &&
+                if (mConfig.RomFsOverlay == nullptr &&
+                    mConfig.Filesystem == nullptr &&
                     mConfig.RomFsImagePath.empty()) {
                     throw std::runtime_error(
                         "RomFS kernel object has no configured image");
@@ -360,7 +361,23 @@ bool NativeA32CtrHostServices::RestoreState(const nlohmann::json& state,
             object->FileSize = encoded.at("file_size").get<uint64_t>();
             object->FileOpenMode = encoded.at("file_open_mode").get<uint32_t>();
             object->FilePriority = encoded.value("file_priority", 0U);
-            if (mConfig.Filesystem != nullptr && (isRomFsFile || isSaveFile)) {
+            if (isRomFsFile) {
+                // The title caches the RomFS tables it read: a state taken
+                // over another RomFS (with or without an overlay, or another
+                // overlay) would read files at the wrong offsets.
+                const uint64_t expectedOffset =
+                    mConfig.RomFsOverlay != nullptr ? 0U : mConfig.RomFsImageOffset;
+                const uint64_t expectedSize = mConfig.RomFsOverlay != nullptr
+                                                  ? mConfig.RomFsOverlay->Size()
+                                                  : mConfig.RomFsImageSize;
+                if (object->FileOffset != expectedOffset || object->FileSize != expectedSize) {
+                    throw std::runtime_error(
+                        "the state was saved over another RomFS (overlay) than the configured one");
+                }
+            }
+            if (isRomFsFile && mConfig.RomFsOverlay != nullptr) {
+                object->FileBackend = mConfig.RomFsOverlay;
+            } else if (mConfig.Filesystem != nullptr && (isRomFsFile || isSaveFile)) {
                 uint32_t openFlags = 0U;
                 if (isRomFsFile || (object->FileOpenMode & 1U) != 0U) {
                     openFlags |= NativeA32CtrFileOpenRead;

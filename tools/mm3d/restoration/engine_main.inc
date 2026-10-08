@@ -51,13 +51,14 @@ Routine Engine::MakeLayout(std::string_view name) {
     // no layout, as the native index would read past its table.
     if(id==kNoResource)co_return 0;
     // util::GetInstance: initialize the existing native singleton lazily.
-    constexpr u32 manager=0x7cdc9c;
-    if(!g.Read8(0x6b0afc)) {
-        g.Write8(0x6b0afc,1);
+    constexpr u32 manager=LayoutMgrInstance;
+    if(!g.Read8(LayoutMgrInstanceGuard)) {
+        g.Write8(LayoutMgrInstanceGuard,1);
         co_await Call(0x16963c,{{manager}});
     }
     if(!manager)co_return 0;
-    co_return (co_await Call(0x16962c,{{manager,id,0x30000}})).R0;
+    const u32 made=(co_await Call(0x16962c,{{manager,id,0x30000}})).R0;
+    co_return made;
 }
 Routine Engine::Frame(u32 player,float frame) {
     if(player){CallMachine::Arguments a{{player}};a.S[0]=std::bit_cast<u32>(frame);co_await Call(0x192ae0,a);}co_return 0;

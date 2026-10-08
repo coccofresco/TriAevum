@@ -602,14 +602,51 @@ camera (dekui's calls reach the same Core through `SetDekuiBridge`), Link
 (Zora swim, fast transformation, Goron roll, arrows), inverted time, the
 Song of Time save, NPC and actor fixes and the four bosses. The data patches
 are written before the sites are checked, as dekui runs on the image
-Restoration patched. Restoration's own RomFS files (`Joker.Main.New.gar`
-with Hud2 and its common layouts) are not part of the user's game; when the
-mounted RomFS lacks a layout or package the port builds neither (the native
-lookups return 0xFFFF, which the native index would read past) and Hud2
-stays closed: no hearts or item buttons on the top screen until those files
-can be mounted (a RomFS overlay, not yet in the runtime). Message edits
-(prices, single-screen texts) are caller-owned, from the user's own
-messages; none are supplied yet.
+Restoration patched. Restoration's own RomFS files (`layout/Joker.Main.New.gar`
+with Hud2, its `Joker.Main.Play.gar` and the `Joker.mfpj` project naming the
+new package and layouts) are not part of the user's game: they are laid over
+it with the RomFS overlay below. Without them the port builds no layout or
+package (the native lookups return 0xFFFF, which the native index would read
+past) and Hud2 stays closed. Message edits (prices, single-screen texts) are
+caller-owned, from the user's own messages; none are supplied yet.
+
+Data addresses: Codex's address map treats the data and BSS segments as
+unchanged between v1.0 and v1.1, but its own cross-references show shifts
+(+4 at 0x6B0AA8-0x6B1DF4, +8 at 0x6B1E40-0x6BB364 and 0x6CB298-0x6F8178).
+Two port globals lay there: `ui::GetCommonLayouts()` (v1.0 0x6B7B8C, v1.1
+0x6B7B94) and the LayoutMgr instance guard (0x6B0AFC, v1.1 0x6B0B00), each
+confirmed by the literal v1.1's own code loads; with the v1.0 values Hud2's
+initialisation swapped the wrong field and the native touch panel was drawn
+on the top screen. dekui's own data references were already translated (its
+guards check them).
+
+### RomFS overlay
+
+`oot3d_native_a32_romfs_overlay.{h,cpp}` (title-neutral) serves the title's
+RomFS archive as its level 3 rebuilt with host files laid over it, as
+LayeredFS does: each layer is a directory mirroring RomFS paths, a file
+replaces or adds the one at its path, later layers win. The directory and
+file tables and their hash tables are rebuilt in the image's own order (a
+directory's children get consecutive entries before each child's subtree;
+files in depth-first order), so an empty overlay reproduces the image's
+tables byte for byte; file data is read from the image and the layer files
+on demand, never copied. The host serves it in place of the image
+(`NativeA32CtrHostConfig::RomFsOverlay`); a state saved over another RomFS
+is refused, since the title caches the tables it read. Development:
+`TRIAEVUM_ROMFS_OVERLAY=<dir>[;<dir>...]` until the launcher owns the user's
+mod folders. Mod files are the user's and are never packaged.
+
+Verified on the developer launch with Restoration's three RomFS files as the
+layer (1280x720, `save100_items.json`): Hud2 on the top screen in the 16:9
+frame (hearts and magic top left, D-pad items below, B/A and the X/Y/I/II
+items top right, rupees bottom left, clock centred, the map bottom right),
+the pause items page unchanged. dekui's own transformations of these files
+(its setup moves the Hud2 groups into the 16:9 margins, restores native
+action tracks, and edits Joker.Main/SubMenu/Joker layouts) are not applied
+yet. Tests: `oot3d_native_a32_romfs_overlay_tests` (layers, replacement,
+nested directories, re-layering, malformed base; with
+`OOT3D_ROMFS_OVERLAY_IMAGE` the image's tables are reproduced and its file
+data served).
 
 Verified on the developer launch (`save100_items.json`, 1280x720): all 122
 dekui and 113 Restoration sites enabled, 55 fired, no faults; dekui's A and

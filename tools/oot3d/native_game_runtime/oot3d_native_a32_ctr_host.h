@@ -218,6 +218,9 @@ struct NativeA32CtrHostConfig {
     uint64_t RomFsImageSize = 0;
     NativeA32CtrFilesystem* Filesystem = nullptr;
     std::string RomFsContentPath = "inputs/romfs";
+    // When set, the title's RomFS archive serves this level 3 instead of
+    // the image's (BuildNativeA32RomFsOverlay: files laid over the title's).
+    std::shared_ptr<NativeA32CtrFile> RomFsOverlay;
     Oot3dNativePicaFrontend* PicaFrontend = nullptr;
     NativeA32CtrPicaBridge* PicaBridge = nullptr;
     const Oot3dPicaCompositionDomain* PicaCompositionDomain = nullptr;
