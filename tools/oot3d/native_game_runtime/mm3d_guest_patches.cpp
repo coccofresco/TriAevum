@@ -46,6 +46,11 @@ std::size_t Mm3dGuestPatches::Verify(a32::MemoryBus& memory, const a32::Registry
                 break;
             }
         }
+        entry.Stats.Prepared = true;
+        if (entry.Stats.Enabled && entry.Site.Prepare && !entry.Site.Prepare(memory)) {
+            entry.Stats.Enabled = false;
+            entry.Stats.Prepared = false;
+        }
         enabled += entry.Stats.Enabled ? 1U : 0U;
     }
     return enabled;

@@ -125,6 +125,25 @@ void TestMissingBlock() {
             "a site starting a registry block was not enabled");
 }
 
+// A site's preparation decides, on the mounted image, whether it applies.
+void TestPrepare() {
+    int calls = 0;
+    Mm3dGuestPatches patches;
+    auto site = CompareSite(&calls);
+    site.Prepare = [](a32::MemoryBus& memory) {
+        std::uint32_t word = 0;
+        return memory.Read32(0x2000U, &word) && word == 1U;
+    };
+    patches.Add(std::move(site));
+    WordMemory memory;
+    memory.Words = {{kSite, kCmpR1R2}, {kSite + 4U, kBeq}, {0x2000U, 0U}};
+    Require(patches.Verify(memory) == 0U && !patches.Statistics()[0].Prepared,
+            "a site its preparation refused was enabled");
+    memory.Words[0x2000U] = 1U;
+    Require(patches.Verify(memory) == 1U && patches.Statistics()[0].Prepared,
+            "a prepared site was not enabled");
+}
+
 void TestInvalidSites() {
     int calls = 0;
     Mm3dGuestPatches patches;
@@ -161,6 +180,7 @@ int main() {
     TestReplacement();
     TestGuard();
     TestMissingBlock();
+    TestPrepare();
     TestInvalidSites();
     TestCondition();
     std::cout << "mm3d_guest_patches_tests: ok\n";

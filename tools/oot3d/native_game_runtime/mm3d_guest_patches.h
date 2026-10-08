@@ -34,6 +34,9 @@ struct Mm3dGuestPatchSite {
     std::function<std::optional<std::uint32_t>(oot3d::recomp::a32::GuestState&,
                                                oot3d::recomp::a32::MemoryBus&)>
         Handler;
+    // Optional: runs once the guards match, on the mounted image (a site
+    // that derives its replacement from the code there); false disables it.
+    std::function<bool(oot3d::recomp::a32::MemoryBus&)> Prepare;
 };
 
 class Mm3dGuestPatches {
@@ -46,6 +49,8 @@ class Mm3dGuestPatches {
         std::optional<std::uint32_t> MismatchAddress;
         // Disabled because the registry has no block at the site's PC.
         bool MissingBlock = false;
+        // Disabled by the site's own preparation.
+        bool Prepared = true;
         std::uint64_t Replacements = 0;
         std::uint64_t Declined = 0;
     };

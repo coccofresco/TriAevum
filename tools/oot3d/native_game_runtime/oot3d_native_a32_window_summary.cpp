@@ -1674,6 +1674,7 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                                    ? nlohmann::json(*site.MismatchAddress)
                                    : nlohmann::json(nullptr)},
                               {"missing_block", site.MissingBlock},
+                              {"prepared", site.Prepared},
                               {"replacements", site.Replacements},
                               {"declined", site.Declined}});
                        }
