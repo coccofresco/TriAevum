@@ -180,6 +180,25 @@ bool NativeA32Memory::MapRegion(const NativeA32MemoryRegionConfig& config,
     return true;
 }
 
+bool NativeA32Memory::UnmapRegion(uint32_t baseAddress, size_t size,
+                                  std::string* error) {
+    const auto region = std::find_if(
+        mRegions.begin(), mRegions.end(), [&](const Region& candidate) {
+            return candidate.BaseAddress == baseAddress && candidate.Bytes.size() == size;
+        });
+    if (region == mRegions.end()) {
+        SetError(error, "no guest memory region is mapped exactly there");
+        return false;
+    }
+    if (HasEscapedWritePointer(baseAddress, size)) {
+        SetError(error, "guest memory region is still referenced");
+        return false;
+    }
+    mRegions.erase(region);
+    RebuildPageTable();
+    return true;
+}
+
 void NativeA32Memory::RebuildPageTable() {
     mPageRegions.assign(PageCount, 0U);
     for (auto& group : mFastPageGroups) {

@@ -182,6 +182,13 @@ nlohmann::json NativeA32CtrHostServices::CaptureState() const {
         {"apt_application_id", mAptApplicationId},
         {"apt_wakeup_pending", mAptWakeupPending},
         {"apt_screen_cap_post_permission", mAptScreenCapPostPermission},
+        {"apt_library_applet", mAptLibraryApplet},
+        {"apt_parameter",
+         mAptParameter.has_value()
+             ? nlohmann::json{{"sender", mAptParameter->Sender},
+                              {"signal", mAptParameter->Signal},
+                              {"buffer", nlohmann::json::binary(mAptParameter->Buffer)}}
+             : nlohmann::json()},
         {"dsp_component", nlohmann::json::binary(mDspComponent)},
         {"dsp_program_mask", mDspProgramMask},
         {"dsp_data_mask", mDspDataMask},
@@ -536,6 +543,18 @@ bool NativeA32CtrHostServices::RestoreState(const nlohmann::json& state,
         // Absent from states saved before the command was modelled.
         staged.mAptScreenCapPostPermission =
             state.value("apt_screen_cap_post_permission", uint32_t{0});
+        // Absent from states saved before library applets were modelled.
+        staged.mAptLibraryApplet = state.value("apt_library_applet", uint32_t{0});
+        if (const auto parameter = state.find("apt_parameter");
+            parameter != state.end() && parameter->is_object()) {
+            const auto& buffer = parameter->at("buffer");
+            if (!buffer.is_binary()) {
+                throw std::runtime_error("APT parameter state is invalid");
+            }
+            staged.mAptParameter = AptParameter{
+                parameter->at("sender").get<uint32_t>(), parameter->at("signal").get<uint32_t>(),
+                std::vector<uint8_t>(buffer.get_binary().begin(), buffer.get_binary().end())};
+        }
         const auto& dspComponent = state.at("dsp_component");
         if (!dspComponent.is_binary()) {
             throw std::runtime_error("DSP component state is invalid");

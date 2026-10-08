@@ -394,6 +394,37 @@ directory) loads the save, enters the Clock Tower and walks. Tests:
 `TestIrUserCirclePadPro`, `TestPtmUser`, `TestEventResourceRelease` and the
 finite-timeout case of `TestWaitSynchronization1`.
 
+## Naming a new file: the software keyboard (2026-10-08)
+
+Choosing an empty file starts the system software keyboard (library applet
+0x401). On this host no applet runs: the APT service answers the
+application as the keyboard would, in the order MM3D uses:
+
+- `ReplySleepQuery` and `ReplySleepNotificationComplete` succeed.
+- `PrepareToStartLibraryApplet(0x401)` prepares the keyboard (other applets
+  stay unanswered) and `IsRegistered` reports it.
+- GSP: `SaveVramSysArea`, `ImportDisplayCaptureInfo` (the current
+  framebuffers), `ReleaseRight`, later `AcquireRight` and
+  `RestoreVramSysArea`.
+- `SendParameter(Request)` asks for the memory the application copies its
+  screens into (the first word of the request is its size): the keyboard
+  answers with a `Response` parameter carrying a new memory block, which the
+  application maps (`MapMemoryBlock`, also with explicit permissions for
+  others), fills and unmaps (`UnmapMemoryBlock`, which now removes the
+  mapped region). `SendCaptureBufferInfo` succeeds.
+- `StartLibraryApplet(0x401)` with the 0x400-byte configuration and a block
+  over the caller's memory: the host writes its text (UTF-16, terminated)
+  at the start of that block, sets `text_offset` 0, `text_length`, and the
+  return code of the confirming button (the only one, the right of two, the
+  right of three), and returns the configuration in a `WakeupByExit`
+  parameter that the application's APT thread receives.
+
+The text is "Link" by default; `TRIAEVUM_SWKBD_TEXT` (development, ASCII)
+changes it. Verified in the developer launch with
+`inputs/save100_new_file.json` (W): an empty slot, the keyboard, "Save
+completed.", the new `save1.bin` with the name at the file's name field, and
+the new game's opening text. Test: `TestSoftwareKeyboardApplet`.
+
 ## Next steps
 
 1. Continue past the intro to the title screen and file select, one missing

@@ -281,6 +281,8 @@ class NativeA32CtrHostServices final : public NativeA32HostServices {
     // RequireConnection. On by default, as on a New 3DS, whose ir module
     // presents the built-in C-stick and ZL/ZR as a connected Circle Pad Pro.
     void SetIrExtraHidAttached(bool attached) noexcept;
+    // The text the system software keyboard returns (a new file's name).
+    void SetSoftwareKeyboardText(std::u16string text);
     // Puts the Circle Pad Pro input reports due by the current tick into the
     // ir:USER receive buffer; true when the receive event was signalled.
     bool AdvanceIrToCurrentTick(NativeA32Memory& memory,
@@ -428,6 +430,11 @@ class NativeA32CtrHostServices final : public NativeA32HostServices {
     bool PutIrReceivePacket(NativeA32Memory& memory, std::span<const uint8_t> payload);
     void HandleExtraHidRequest(NativeA32Memory& memory, std::span<const uint8_t> request);
     void SetIrConnection(NativeA32Memory& memory, bool connected);
+    bool HandleAptLibraryAppletRequest(oot3d::recomp::a32::GuestState& state,
+                                       NativeA32Memory& memory, uint32_t commandBuffer,
+                                       NativeA32CtrSvcEvent& event);
+    void QueueAptParameter(uint32_t sender, uint32_t signal, std::vector<uint8_t> buffer,
+                           std::shared_ptr<KernelObject> object = nullptr);
     NativeA32HostResult HandlePtmRequest(
         oot3d::recomp::a32::GuestState& state, NativeA32Memory& memory,
         NativeA32HostContext& context, const std::optional<std::string>& sessionType,
@@ -508,6 +515,17 @@ class NativeA32CtrHostServices final : public NativeA32HostServices {
     bool mLcdForceBlack = true;
     uint32_t mAptApplicationId = 0;
     bool mAptWakeupPending = false;
+    struct AptParameter {
+        uint32_t Sender = 0;
+        uint32_t Signal = 0;
+        std::vector<uint8_t> Buffer;
+        // A memory block handed over with the parameter (moved on receipt).
+        std::shared_ptr<KernelObject> Object;
+    };
+    std::optional<AptParameter> mAptParameter;
+    // The library applet prepared and not yet started (0: none).
+    uint32_t mAptLibraryApplet = 0;
+    std::u16string mSoftwareKeyboardText = u"Link";
     uint32_t mAptScreenCapPostPermission = 0;
     std::vector<uint8_t> mDspComponent;
     uint16_t mDspProgramMask = 0;

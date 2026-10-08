@@ -1,6 +1,11 @@
 // CTR host services: the ndm:u, cfg:u, y2r:u and APT:U sessions.
 #include "oot3d_native_a32_ctr_host_internal.h"
 
+#include <algorithm>
+#include <array>
+#include <cstring>
+#include <span>
+
 namespace Oot3dNativeGame {
 
 // SendSyncRequest on a client session of ndm:u.
@@ -411,6 +416,57 @@ NativeA32HostResult NativeA32CtrHostServices::HandleAptRequest(
             return {NativeA32HostAction::Resume};
         }
     }
+    if ((event.Detail == kAptReceiveParameterRequest || glance) &&
+        mAptParameter.has_value()) {
+        uint32_t appletId = 0;
+        uint32_t bufferSize = 0;
+        uint32_t staticDescriptor = 0;
+        uint32_t staticAddress = 0;
+        const uint32_t staticBufferTable = state.thread_pointer + 0x180U;
+        const auto& parameter = *mAptParameter;
+        const uint32_t size = static_cast<uint32_t>(
+            std::min<size_t>(parameter.Buffer.size(), 0x1000U));
+        if (memory.Read32(commandBuffer + 4U, &appletId) &&
+            memory.Read32(commandBuffer + 8U, &bufferSize) &&
+            appletId == mAptApplicationId && bufferSize >= size &&
+            memory.Read32(staticBufferTable, &staticDescriptor) &&
+            memory.Read32(staticBufferTable + 4U, &staticAddress) &&
+            (staticDescriptor & 0xFU) == 2U &&
+            (staticDescriptor >> 14U) >= size &&
+            memory.WriteBytes(staticAddress,
+                              std::span<const uint8_t>(parameter.Buffer.data(), size)) &&
+            memory.Write32(commandBuffer,
+                           glance ? kAptGlanceParameterResponse
+                                  : kAptReceiveParameterResponse) &&
+            memory.Write32(commandBuffer + 4U, kResultSuccess) &&
+            memory.Write32(commandBuffer + 8U, parameter.Sender) &&
+            memory.Write32(commandBuffer + 12U, parameter.Signal) &&
+            memory.Write32(commandBuffer + 16U, size) &&
+            memory.Write32(commandBuffer + 20U, kMoveHandleDescriptor) &&
+            memory.Write32(commandBuffer + 28U, (size << 14U) | 2U) &&
+            memory.Write32(commandBuffer + 32U, staticAddress)) {
+            // Receiving moves the block's handle to the application.
+            const uint32_t handle =
+                !glance && parameter.Object ? CreateHandle(parameter.Object) : 0U;
+            if (!memory.Write32(commandBuffer + 24U, handle)) {
+                if (handle != 0U) {
+                    CloseHandle(handle);
+                }
+                mSvcEvents.push_back(std::move(event));
+                return {NativeA32HostAction::Wait};
+            }
+            state.r[0] = kResultSuccess;
+            event.Name += (glance ? ":GlanceParameter:signal=" : ":ReceiveParameter:signal=") +
+                          std::to_string(parameter.Signal);
+            event.Detail = parameter.Signal;
+            if (!glance) {
+                mAptParameter.reset();
+            }
+            event.Handled = true;
+            mSvcEvents.push_back(std::move(event));
+            return {NativeA32HostAction::Resume};
+        }
+    }
     if (event.Detail == kAptAppletUtilityRequest) {
         uint32_t utilityCommand = 0;
         uint32_t inputSize = 0;
@@ -474,8 +530,177 @@ NativeA32HostResult NativeA32CtrHostServices::HandleAptRequest(
             }
         }
     }
+    if (HandleAptLibraryAppletRequest(state, memory, commandBuffer, event)) {
+        mSvcEvents.push_back(std::move(event));
+        return {NativeA32HostAction::Resume};
+    }
     mSvcEvents.push_back(std::move(event));
     return {NativeA32HostAction::Wait};
+}
+
+// A parameter for the application from another applet (the HLE software
+// keyboard), delivered by ReceiveParameter / GlanceParameter.
+void NativeA32CtrHostServices::QueueAptParameter(uint32_t sender, uint32_t signal,
+                                                 std::vector<uint8_t> buffer,
+                                                 std::shared_ptr<KernelObject> object) {
+    mAptParameter = AptParameter{sender, signal, std::move(buffer), std::move(object)};
+    if (mAptParameterEvent) {
+        mAptParameterEvent->AvailableCount = 1;
+        WakeSynchronizationWaiters();
+    }
+}
+
+// Library applets as an application starts them: the system software
+// keyboard (applet 0x401) is answered at once with the host's text, as the
+// keyboard returns it (the 0x400-byte configuration back with a
+// WakeupByExit parameter, the text in the caller's shared memory). Sleep
+// queries are acknowledged; other applets stay unanswered.
+bool NativeA32CtrHostServices::HandleAptLibraryAppletRequest(
+    oot3d::recomp::a32::GuestState& state, NativeA32Memory& memory,
+    uint32_t commandBuffer, NativeA32CtrSvcEvent& event) {
+    const auto reply = [&](uint32_t header, const char* name) {
+        if (!memory.Write32(commandBuffer, header) ||
+            !memory.Write32(commandBuffer + 4U, kResultSuccess)) {
+            return false;
+        }
+        state.r[0] = kResultSuccess;
+        event.Name += name;
+        event.Handled = true;
+        return true;
+    };
+    uint32_t appletId = 0;
+    switch (event.Detail) {
+    case kAptReplySleepQueryRequest:
+        return reply(kAptReplySleepQueryResponse, ":ReplySleepQuery");
+    case kAptSendCaptureBufferInfoRequest:
+        // Where the caller's screens were captured for the applet: the
+        // keyboard draws nothing on this host.
+        return reply(kAptSendCaptureBufferInfoResponse, ":SendCaptureBufferInfo");
+    case kAptReplySleepNotificationCompleteRequest:
+        return reply(kAptReplySleepNotificationCompleteResponse,
+                     ":ReplySleepNotificationComplete");
+    case kAptPrepareToStartLibraryAppletRequest:
+        if (!memory.Read32(commandBuffer + 4U, &appletId) ||
+            appletId != kAptSoftwareKeyboardApplet) {
+            return false;
+        }
+        mAptLibraryApplet = appletId;
+        event.Detail = appletId;
+        return reply(kAptPrepareToStartLibraryAppletResponse,
+                     ":PrepareToStartLibraryApplet:swkbd");
+    case kAptIsRegisteredRequest: {
+        if (!memory.Read32(commandBuffer + 4U, &appletId)) {
+            return false;
+        }
+        const bool registered =
+            appletId == mAptApplicationId ||
+            (mAptLibraryApplet != 0U && appletId == mAptLibraryApplet);
+        event.Detail = appletId;
+        return reply(kAptIsRegisteredResponse, ":IsRegistered") &&
+               memory.Write32(commandBuffer + 8U, registered ? 1U : 0U);
+    }
+    case kAptSendParameterRequest: {
+        uint32_t destination = 0;
+        uint32_t signal = 0;
+        if (!memory.Read32(commandBuffer + 8U, &destination) ||
+            !memory.Read32(commandBuffer + 12U, &signal)) {
+            return false;
+        }
+        event.Detail = signal;
+        if (destination == mAptLibraryApplet && mAptLibraryApplet != 0U &&
+            signal == kAptSignalRequest) {
+            // The caller asks for the memory it copies its screens into
+            // (the first word of its request); the keyboard answers with a
+            // block of that size, which nothing on this host reads.
+            uint32_t size = 0;
+            uint32_t staticDescriptor = 0;
+            uint32_t requestAddress = 0;
+            uint32_t captureSize = 0;
+            if (!memory.Read32(commandBuffer + 16U, &size) ||
+                !memory.Read32(commandBuffer + 28U, &staticDescriptor) ||
+                !memory.Read32(commandBuffer + 32U, &requestAddress) || size < 4U ||
+                (staticDescriptor >> 14U) < 4U ||
+                !memory.Read32(requestAddress, &captureSize) || captureSize == 0U ||
+                captureSize > 0x01000000U) {
+                return false;
+            }
+            auto capture = std::make_shared<KernelObject>();
+            capture->Type = "shared_memory:applet_capture";
+            capture->FileSize = (captureSize + 0xFFFU) & ~0xFFFU;
+            QueueAptParameter(mAptLibraryApplet, kAptSignalResponse, {}, std::move(capture));
+        }
+        return reply(kAptSendParameterResponse, ":SendParameter");
+    }
+    case kAptStartLibraryAppletRequest: {
+        uint32_t size = 0;
+        uint32_t handle = 0;
+        uint32_t staticDescriptor = 0;
+        uint32_t configAddress = 0;
+        if (!memory.Read32(commandBuffer + 4U, &appletId) ||
+            !memory.Read32(commandBuffer + 8U, &size) ||
+            !memory.Read32(commandBuffer + 16U, &handle) ||
+            !memory.Read32(commandBuffer + 20U, &staticDescriptor) ||
+            !memory.Read32(commandBuffer + 24U, &configAddress) ||
+            appletId != kAptSoftwareKeyboardApplet || appletId != mAptLibraryApplet ||
+            size != kSoftwareKeyboardConfigSize ||
+            (staticDescriptor >> 14U) < size) {
+            return false;
+        }
+        const auto* block = LookupHandle(handle);
+        std::vector<uint8_t> config(size);
+        if (block == nullptr || !block->Object->MappedAddress.has_value() ||
+            !memory.ReadBytes(configAddress, config)) {
+            return false;
+        }
+        const auto field16 = [&](size_t offset) {
+            return static_cast<uint16_t>(config[offset] | (config[offset + 1U] << 8U));
+        };
+        const auto put32 = [&](size_t offset, uint32_t value) {
+            for (size_t index = 0; index < 4U; ++index) {
+                config[offset + index] = static_cast<uint8_t>(value >> (8U * index));
+            }
+        };
+        std::u16string text = mSoftwareKeyboardText;
+        const uint16_t maximum = field16(kSoftwareKeyboardMaxTextLengthOffset);
+        if (maximum != 0U && text.size() > maximum) {
+            text.resize(maximum);
+        }
+        // The text and its terminator at the start of the shared memory.
+        std::vector<uint8_t> encoded;
+        for (const char16_t character : text) {
+            encoded.push_back(static_cast<uint8_t>(character & 0xFFU));
+            encoded.push_back(static_cast<uint8_t>(character >> 8U));
+        }
+        encoded.push_back(0U);
+        encoded.push_back(0U);
+        if (encoded.size() > block->Object->FileSize ||
+            !memory.WriteBytes(*block->Object->MappedAddress, encoded)) {
+            return false;
+        }
+        // The confirming button of the configured layout: the only one, the
+        // right of two, the right of three.
+        uint32_t buttons = 0;
+        std::memcpy(&buttons, config.data() + kSoftwareKeyboardButtonsOffset, sizeof(buttons));
+        constexpr std::array<int32_t, 4> kConfirm{0, 2, 5, -1};
+        put32(kSoftwareKeyboardReturnCodeOffset,
+              static_cast<uint32_t>(kConfirm[std::min<uint32_t>(buttons, 3U)]));
+        put32(kSoftwareKeyboardTextOffsetOffset, 0U);
+        config[kSoftwareKeyboardTextLengthOffset] = static_cast<uint8_t>(text.size());
+        config[kSoftwareKeyboardTextLengthOffset + 1U] = static_cast<uint8_t>(text.size() >> 8U);
+        if (!reply(kAptStartLibraryAppletResponse, ":StartLibraryApplet:swkbd")) {
+            return false;
+        }
+        mAptLibraryApplet = 0U;
+        QueueAptParameter(kAptSoftwareKeyboardApplet, kAptSignalWakeupByExit, std::move(config));
+        return true;
+    }
+    default:
+        return false;
+    }
+}
+
+void NativeA32CtrHostServices::SetSoftwareKeyboardText(std::u16string text) {
+    mSoftwareKeyboardText = std::move(text);
 }
 
 } // namespace Oot3dNativeGame

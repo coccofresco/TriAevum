@@ -65,6 +65,9 @@ class NativeA32Memory final : public oot3d::recomp::a32::MemoryBus {
 
     bool MapRegion(const NativeA32MemoryRegionConfig& config,
                    std::string* error = nullptr);
+    // Removes exactly the region mapped at this base with this size (a
+    // memory block the guest unmaps); fails for any other range.
+    bool UnmapRegion(uint32_t baseAddress, size_t size, std::string* error = nullptr);
     bool IsMapped(uint32_t address, size_t size) const;
     bool IsWritable(uint32_t address, size_t size) const;
     bool IsExecutable(uint32_t address, size_t size) const;

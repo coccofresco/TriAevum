@@ -775,8 +775,134 @@ void TestPtmUser() {
     Require(!request(ptm, {0x00010042, 0, 0, 0}), "an unmodelled ptm:u command resumed");
 }
 
+// The system software keyboard as an application starts it (the order MM3D's
+// file select uses): a sleep reply, Prepare, the capture-memory Request and
+// its block (mapped, then unmapped), the capture info, Start with the
+// 0x400-byte configuration and the text block; the keyboard answers with a
+// WakeupByExit parameter carrying the configuration back and the host's text
+// in the block. The GPU right and VRAM calls around it succeed.
+void TestSoftwareKeyboardApplet() {
+    NativeA32Memory memory;
+    std::string error;
+    Require(memory.MapRegion({"tls", 0x1FF82000, 0x1000, true, false, {}}, &error), error);
+    Require(memory.MapRegion({"heap", 0x08000000, 0x2000, true, false, {}}, &error), error);
+    NativeA32CtrHostServices host(MakeConfig());
+    host.SetSoftwareKeyboardText(u"Kafei");
+    const oot3d::recomp::a32::Registry registry{};
+    NativeA32Process process(registry, host);
+    NativeA32HostContext context{process, 0};
+    GuestState state{};
+    const auto request = [&](uint32_t session, std::initializer_list<uint32_t> words) {
+        uint32_t address = 0x1FF82080U;
+        for (const uint32_t word : words) {
+            Require(memory.Write32(address, word), "cannot write a request");
+            address += 4U;
+        }
+        // One static receive buffer for parameters.
+        Require(memory.Write32(0x1FF82180U, (0x400U << 14U) | 2U) &&
+                    memory.Write32(0x1FF82184U, 0x1FF82800U),
+                "cannot write the static buffer table");
+        state = {};
+        state.thread_pointer = 0x1FF82000;
+        state.r[0] = session;
+        return host.HandleSvc(0x32, state, memory, context).Action ==
+               NativeA32HostAction::Resume;
+    };
+    const auto word = [&](uint32_t offset) {
+        uint32_t value = 0xFFFFFFFFU;
+        Require(memory.Read32(0x1FF82080U + offset, &value), "cannot read a response");
+        return value;
+    };
+    const auto svc = [&](uint32_t immediate, std::initializer_list<uint32_t> registers) {
+        state = {};
+        state.thread_pointer = 0x1FF82000;
+        size_t index = 0;
+        for (const uint32_t value : registers) {
+            state.r[index++] = value;
+        }
+        return host.HandleSvc(immediate, state, memory, context).Action ==
+               NativeA32HostAction::Resume;
+    };
+    constexpr std::array<uint8_t, 5> portName{'s', 'r', 'v', ':', 0};
+    Require(memory.WriteBytes(0x1FF82100, portName), "cannot write named port");
+    state.r[1] = 0x1FF82100;
+    Require(host.HandleSvc(0x2D, state, memory, context).Action == NativeA32HostAction::Resume,
+            "ConnectToPort did not open srv:");
+    const uint32_t srv = state.r[1];
+    Require(request(srv, {0x00050100, 0x3A545041, 0x00000041, 5}) && word(4) == 0,
+            "srv:GetServiceHandle did not open APT:A");
+    const uint32_t apt = word(12);
+    Require(request(srv, {0x00050100, 0x3A707367, 0x7570473A, 8}) && word(4) == 0,
+            "srv:GetServiceHandle did not open gsp::Gpu");
+    const uint32_t gsp = word(12);
+    Require(request(apt, {0x00020080, 0x300, 0}) && word(4) == 0, "APT:Initialize failed");
+    Require(request(apt, {0x000D0080, 0x300, 0x400}) && word(12) == 1,
+            "the start-up Wakeup was not received first");
+
+    Require(request(apt, {0x003E0080, 0x300, 0}) && word(0) == 0x003E0040 && word(4) == 0,
+            "ReplySleepQuery failed");
+    Require(!request(apt, {0x00180040, 0x402}), "an unmodelled library applet was prepared");
+    Require(request(apt, {0x00180040, 0x401}) && word(0) == 0x00180040 && word(4) == 0,
+            "PrepareToStartLibraryApplet(swkbd) failed");
+    Require(request(apt, {0x00090040, 0x401}) && word(0) == 0x00090080 && word(8) == 1,
+            "the prepared keyboard is not registered");
+
+    // GSP around the applet.
+    Require(request(gsp, {0x00160042, 0, 0, 0xFFFF8001}) && word(4) == 0, "AcquireRight failed");
+    Require(request(gsp, {0x00190000}) && word(0) == 0x00190040, "SaveVramSysArea failed");
+    Require(request(gsp, {0x00180000}) && word(0) == 0x00180240 && word(4) == 0,
+            "ImportDisplayCaptureInfo failed");
+    Require(request(gsp, {0x00170000}) && word(0) == 0x00170040, "ReleaseRight failed");
+    Require(!request(gsp, {0x00170000}), "a released right was released again");
+
+    // The capture memory: a Request with its size, a Response with a block.
+    Require(memory.Write32(0x1FF82400U, 0x1A000U), "cannot write the capture request");
+    Require(request(apt, {0x000C0104, 0x300, 0x401, 2, 4, 0, 0, (4U << 14U) | 2U, 0x1FF82400U}) &&
+                word(0) == 0x000C0040,
+            "SendParameter(Request) failed");
+    Require(request(apt, {0x000D0080, 0x300, 0x400}) && word(8) == 0x401 && word(12) == 3,
+            "the keyboard's Response was not received");
+    const uint32_t capture = word(24);
+    Require(capture != 0U, "the Response carried no capture block");
+    Require(svc(0x1F, {capture, 0x10000000U, 3U, 1U}) && memory.IsMapped(0x10000000U, 0x1A000U),
+            "the capture block was not mapped");
+    Require(svc(0x20, {capture, 0x10000000U}) && !memory.IsMapped(0x10000000U, 1U),
+            "the capture block was not unmapped");
+    Require(request(apt, {0x00400042, 0x20, (0x20U << 14U) | 2U, 0x1FF82400U}) &&
+                word(0) == 0x00400040,
+            "SendCaptureBufferInfo failed");
+
+    // Start: the text block over the caller's own memory and the configuration
+    // (two buttons, at most 8 characters).
+    Require(svc(0x1E, {0U, 0x08000000U, 0x1000U, 3U}), "CreateMemoryBlock failed");
+    const uint32_t textBlock = state.r[1];
+    std::vector<uint8_t> config(0x400, 0);
+    config[0x04] = 1;
+    config[0x20] = 8;
+    Require(memory.WriteBytes(0x1FF82400U, config), "cannot write the configuration");
+    Require(request(apt, {0x001E0084, 0x401, 0x400, 0, textBlock, (0x400U << 14U) | 2U,
+                          0x1FF82400U}) &&
+                word(0) == 0x001E0040 && word(4) == 0,
+            "StartLibraryApplet(swkbd) failed");
+    std::array<uint8_t, 12> text{};
+    Require(memory.ReadBytes(0x08000000U, text), "cannot read the keyboard text");
+    const std::array<uint8_t, 12> expected{'K', 0, 'a', 0, 'f', 0, 'e', 0, 'i', 0, 0, 0};
+    Require(text == expected, "the keyboard text is not the host's");
+    Require(request(apt, {0x000D0080, 0x300, 0x400}) && word(8) == 0x401 && word(12) == 0xA &&
+                word(16) == 0x400 && word(24) == 0,
+            "the WakeupByExit parameter was not received");
+    std::vector<uint8_t> result(0x400);
+    Require(memory.ReadBytes(0x1FF82800U, result), "cannot read the returned configuration");
+    Require(result[0x138] == 2 && result[0x144] == 0 && result[0x148] == 5 && result[0x04] == 1,
+            "the returned configuration does not confirm the text");
+    Require(!request(apt, {0x001E0084, 0x401, 0x400, 0, textBlock, (0x400U << 14U) | 2U,
+                           0x1FF82400U}),
+            "the keyboard started again without a Prepare");
+}
+
 int main() {
     TestQueryMemory();
+    TestSoftwareKeyboardApplet();
     TestGetThreadId();
     TestWaitSynchronization1();
     TestEventResourceRelease();

@@ -63,6 +63,38 @@ NativeA32HostResult NativeA32CtrHostServices::HandleGspRequest(
             return {NativeA32HostAction::Resume};
         }
     }
+    if (event.Detail == kGspImportDisplayCaptureInfoRequest) {
+        bool written = memory.Write32(commandBuffer, kGspImportDisplayCaptureInfoResponse) &&
+                       memory.Write32(commandBuffer + 4U, kResultSuccess);
+        for (uint32_t screen = 0; written && screen < 2U; ++screen) {
+            const auto framebuffer = Framebuffer(screen).value_or(NativeA32CtrFramebufferState{});
+            const uint32_t base = commandBuffer + 8U + screen * 16U;
+            written = memory.Write32(base, framebuffer.AddressLeft) &&
+                      memory.Write32(base + 4U, framebuffer.AddressRight) &&
+                      memory.Write32(base + 8U, framebuffer.Format) &&
+                      memory.Write32(base + 12U, framebuffer.Stride);
+        }
+        if (written) {
+            state.r[0] = kResultSuccess;
+            event.Name += ":ImportDisplayCaptureInfo";
+            event.Handled = true;
+            mSvcEvents.push_back(std::move(event));
+            return {NativeA32HostAction::Resume};
+        }
+    }
+    if ((event.Detail == kGspSaveVramSysAreaRequest ||
+         event.Detail == kGspRestoreVramSysAreaRequest) &&
+        memory.Write32(commandBuffer, event.Detail == kGspSaveVramSysAreaRequest
+                                          ? kGspSaveVramSysAreaResponse
+                                          : kGspRestoreVramSysAreaResponse) &&
+        memory.Write32(commandBuffer + 4U, kResultSuccess)) {
+        state.r[0] = kResultSuccess;
+        event.Name += event.Detail == kGspSaveVramSysAreaRequest ? ":SaveVramSysArea"
+                                                                 : ":RestoreVramSysArea";
+        event.Handled = true;
+        mSvcEvents.push_back(std::move(event));
+        return {NativeA32HostAction::Resume};
+    }
     if (event.Detail == kGspSetBufferSwapRequest) {
         std::array<uint32_t, 8> words{};
         bool readable = true;
@@ -527,6 +559,19 @@ NativeA32HostResult NativeA32CtrHostServices::HandleGspRequest(
             mSvcEvents.push_back(std::move(event));
             return {NativeA32HostAction::Resume};
         }
+    }
+    // Around a library applet the holder gives the GPU up and acquires it
+    // again.
+    if (event.Detail == kGspReleaseRightRequest && session != nullptr &&
+        mGpuRightOwner == session->Object &&
+        memory.Write32(commandBuffer, kGspReleaseRightResponse) &&
+        memory.Write32(commandBuffer + 4U, kResultSuccess)) {
+        mGpuRightOwner.reset();
+        state.r[0] = kResultSuccess;
+        event.Name += ":ReleaseRight";
+        event.Handled = true;
+        mSvcEvents.push_back(std::move(event));
+        return {NativeA32HostAction::Resume};
     }
     if (event.Detail == kGspRegisterInterruptRelayQueueRequest &&
         session != nullptr) {

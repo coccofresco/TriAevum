@@ -855,7 +855,17 @@ NativeA32HostResult NativeA32CtrHostServices::HandleSvc(
             memoryBlock->Object->FileSize > SIZE_MAX ||
             memoryBlock->Object->MappedAddress.has_value() ||
             (address & 0xFFFU) != 0 || (permissions & ~7U) != 0 ||
-            permissions == 0 || otherPermissions != 0x10000000U) {
+            permissions == 0 ||
+            // A block another applet created may also be mapped with explicit
+            // permissions for the others.
+            (otherPermissions != 0x10000000U &&
+             !(memoryBlock->Object->Type == "shared_memory:applet_capture" &&
+               (otherPermissions & ~7U) == 0U))) {
+            event.Name += ":handle=" + std::to_string(state.r[0]) + ":address=0x";
+            AppendHex8(event.Name, address);
+            event.Name += ":permissions=" + std::to_string(permissions) +
+                          ":other=0x";
+            AppendHex8(event.Name, otherPermissions);
             mSvcEvents.push_back(std::move(event));
             return {NativeA32HostAction::Wait};
         }
@@ -876,6 +886,36 @@ NativeA32HostResult NativeA32CtrHostServices::HandleSvc(
         memoryBlock->Object->MappedAddress = address;
         state.r[0] = kResultSuccess;
         event.Detail = address;
+        event.Handled = true;
+        mSvcEvents.push_back(std::move(event));
+        return {NativeA32HostAction::Resume};
+    }
+    case 0x20: {
+        // UnmapMemoryBlock(handle, address): a block mapped by
+        // MapMemoryBlock leaves the address space; a block the caller
+        // created over its own memory stays the caller's.
+        event.Name = "UnmapMemoryBlock";
+        const HandleRecord* memoryBlock = LookupHandle(state.r[0]);
+        const uint32_t address = state.r[1];
+        event.Detail = address;
+        if (memoryBlock == nullptr ||
+            !memoryBlock->Object->Type.starts_with("shared_memory:") ||
+            memoryBlock->Object->MappedAddress != address) {
+            mSvcEvents.push_back(std::move(event));
+            return {NativeA32HostAction::Wait};
+        }
+        if (memoryBlock->Object->Type != "shared_memory:block") {
+            std::string unmapError;
+            if (!memory.UnmapRegion(address,
+                                    static_cast<size_t>(memoryBlock->Object->FileSize),
+                                    &unmapError)) {
+                event.Name += ":" + unmapError;
+                mSvcEvents.push_back(std::move(event));
+                return {NativeA32HostAction::Wait};
+            }
+            memoryBlock->Object->MappedAddress.reset();
+        }
+        state.r[0] = kResultSuccess;
         event.Handled = true;
         mSvcEvents.push_back(std::move(event));
         return {NativeA32HostAction::Resume};
