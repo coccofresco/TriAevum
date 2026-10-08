@@ -80,6 +80,20 @@ addresses of the v1.0 code plus Restoration: of its 143 patch entries only
 spawn), the other 139 read different words in v1.1 or lie in Restoration's
 code.
 
+The two images differ by shifts, as the maintainer expected: v1.1's code is
+the reference code moved by a constant within long contiguous stretches (47
+stretches hold 11,606 of the 11,655 matched functions; about 25 distinct
+shifts between -0x230 and +0x228), and the data segment and BSS keep their
+addresses (every global the donors use). `tools/mm3d/a32/v110_address_map.py`
+turns the instruction correspondence (1,314,324 matched words, branch
+displacements, PC-relative loads and literal pools masked) into
+`tools/mm3d/dekui/v110_address.h`: 363 stretches of equal shift and
+`V110(address)` / `V110Branch(word, address)` (a B/BL re-encoded for its
+translated target). With it every one of dekui's 126 native patch entries
+finds its intercepted word in v1.1 (103 identical words, 19 re-encoded
+branches, 4 already v1.1); the other 17 lie in Restoration's appended code
+and follow Restoration's source port. Test: `oot3d_mm3d_v110_address_tests`.
+
 The port stays on the vanilla v1.1 code.bin (maintainer's decision,
 2026-10-08). Project Restoration is ported as source onto v1.1, and every
 dekui and Restoration address (patch sites, guard words, functions, globals)
