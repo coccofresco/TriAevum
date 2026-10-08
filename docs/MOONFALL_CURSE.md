@@ -525,6 +525,39 @@ still multiplies damage through the core. Tests:
 `oot3d_mm3d_dekui_core_tests` (with code.bin: 80 replacements, 20,818
 corrupted-guard checks), `oot3d_mm3d_single_screen_tests`.
 
+### Project Restoration
+
+Restoration supports v1.1 cards only by rewriting their code into its v1.0
+build (`make_release.sh`: the v101/v110 patches go from each version's
+code.bin to the one `patched_code.bin` built on v1.0, with the v1.0
+ExHeader). Its port onto v1.1 (`tools/mm3d/restoration/`, GPL notices kept,
+glue in `mm3d_restoration.cpp`) turns each `hooks/*.hks` record into a guest
+patch site at the translated v1.1 address, guarded by the v1.1 word.
+Magikoopa's softbranch saves r0-r12/lr, calls the function and then runs
+the displaced instruction, so its site runs the function and declines; a
+branch to a trampoline becomes what the trampoline leaves in registers or
+flags; a code patch is executed in place of the guest's word (branches
+re-encoded with `V110Branch`); a data patch is written after the image is
+mounted. Restoration reads the game's structures in place; the port uses
+their offsets, computed by compiling Restoration's headers for a 32-bit
+target (`usable_btns` at CommonData + 0x13740, ScreenContext's active and
+new screens at 0x72F5C4 and 0x72F5C8).
+
+Every PC a handler continues at must start a registry block, since the A32
+runtime does not interpret code outside the registry (a branch into the
+middle of a function faulted as a missing block): sites declare such
+targets (`Mm3dGuestPatches::AddTargets`) and they join the registry
+boundaries (266 with dekui's, `a32_generated_v6`).
+
+First slice, the controls that replace the lower-screen buttons
+(`rst/input.cpp`): with ZR held, A plays the ocarina and X/Y use the I/II
+items; ZL is the Pictograph Box; on the ocarina screen ZL/ZR also play L/R;
+X/Y assign the selected item directly; the native ZL/ZR checks are skipped
+(`decouple_trigger_btns`) and Start/Select are decoupled (data patch at
+0x6B083C). Verified on the developer launch: ZR+A takes out the ocarina and
+dekui's prompt appears (`inputs/save100_rst_ocarina.json`, W). Test:
+`oot3d_mm3d_restoration_tests`.
+
 ## Next steps
 
 1. Continue past the intro to the title screen and file select, one missing

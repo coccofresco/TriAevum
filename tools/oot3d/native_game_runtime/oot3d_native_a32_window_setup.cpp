@@ -371,6 +371,8 @@ void NativeA32WindowSession::Setup() {
         return static_cast<std::int64_t>(presentationFrameCount) * 1000000 / 60;
       });
       mm3dSingleScreen->Register(mm3dGuestPatches);
+      mm3dRestoration.emplace();
+      mm3dRestoration->Register(mm3dGuestPatches);
     }
   }
   if (const char *pcDump = std::getenv("TRIAEVUM_A32_PC_DUMP")) {
@@ -671,6 +673,9 @@ void NativeA32WindowSession::Setup() {
       // Each site whose code matches the mounted image replaces its
       // instruction; the registry starts a block at every site.
       mm3dGuestPatches.Verify(process.Memory(), &Oot3dNativeGame::Oot3dNativeA32Registry());
+      if (mm3dRestoration.has_value()) {
+        mm3dRestoration->ApplyDataPatches(process.Memory());
+      }
       process.SetNativeFunctionCallback(&Oot3dNativeGame::Mm3dGuestPatches::Execute,
                                         &mm3dGuestPatches, mm3dGuestPatches.EnabledPcs());
 #endif

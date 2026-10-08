@@ -46,6 +46,7 @@
 #include "oot3d_native_pica_frontend.h"
 #include "oot3d_native_pica_composition.h"
 #include "mm3d_guest_patches.h"
+#include "mm3d_restoration.h"
 #include "mm3d_single_screen.h"
 #include "mm3d_pica_composition.h"
 #include "mm3d_title_contracts.h"

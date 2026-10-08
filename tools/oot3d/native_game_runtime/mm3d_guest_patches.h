@@ -69,8 +69,13 @@ class Mm3dGuestPatches {
                        const oot3d::recomp::a32::Registry* registry = nullptr);
     // The enabled sites' PCs, sorted: the native-function filter.
     std::vector<std::uint32_t> EnabledPcs() const;
-    // The registry boundaries the sites need: each site's PC and the
-    // instruction after it, sorted and unique.
+    // Guest PCs a handler may continue at besides a site's next
+    // instruction (a branch into the middle of a function): each must start
+    // a registry block too, as the runtime does not interpret code outside
+    // the registry.
+    void AddTargets(const std::vector<std::uint32_t>& targets);
+    // The registry boundaries the sites need: each site's PC, the
+    // instruction after it and the declared targets, sorted and unique.
     std::vector<std::uint32_t> BlockBoundaries() const;
     std::vector<SiteStatistics> Statistics() const;
     bool Empty() const noexcept { return mSites.empty(); }
@@ -87,6 +92,7 @@ class Mm3dGuestPatches {
     };
     Entry* Find(std::uint32_t pc) noexcept;
     std::vector<Entry> mSites; // sorted by PC
+    std::vector<std::uint32_t> mTargets;
 };
 
 // Whether the condition field of an A32 instruction word passes for CPSR,

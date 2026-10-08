@@ -66,8 +66,12 @@ std::vector<std::uint32_t> Mm3dGuestPatches::EnabledPcs() const {
     return pcs;
 }
 
+void Mm3dGuestPatches::AddTargets(const std::vector<std::uint32_t>& targets) {
+    mTargets.insert(mTargets.end(), targets.begin(), targets.end());
+}
+
 std::vector<std::uint32_t> Mm3dGuestPatches::BlockBoundaries() const {
-    std::vector<std::uint32_t> boundaries;
+    std::vector<std::uint32_t> boundaries = mTargets;
     for (const auto& entry : mSites) {
         if (!entry.Site.InGuestCode) {
             continue;
