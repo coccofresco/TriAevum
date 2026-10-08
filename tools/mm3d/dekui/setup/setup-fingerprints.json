@@ -1,0 +1,179 @@
+{
+  "version": 1,
+  "private": false,
+  "title_id": "0004000000125500",
+  "files": [
+    {
+      "output": "code.bps",
+      "input_root": "restoration",
+      "input": "code.bps",
+      "input_sha256": "23adab85ddc9922a2e1c54749854db5e03fcce7316709c1332fe1a9366d10e11",
+      "output_sha256": "23adab85ddc9922a2e1c54749854db5e03fcce7316709c1332fe1a9366d10e11",
+      "size": 602299
+    },
+    {
+      "output": "exheader.bin",
+      "input_root": "restoration",
+      "input": "exheader.bin",
+      "input_sha256": "8ec1b20a0704b623e457edea53eaf483ab151915704e84c45ea142908d005fab",
+      "output_sha256": "8ec1b20a0704b623e457edea53eaf483ab151915704e84c45ea142908d005fab",
+      "size": 2048
+    },
+    {
+      "output": "romfs/layout/Joker.Main.New.gar",
+      "input_root": "restoration",
+      "input": "romfs/layout/Joker.Main.New.gar",
+      "input_sha256": "3b5918df9251366f3688965bed882e56d1056d5e6dee2a479a8596cb884fc639",
+      "output_sha256": "e08af793927b605e35021c1fc08b4bdb753b563e773dddc549caeb661db122ee",
+      "size": 169516
+    },
+    {
+      "output": "romfs/layout/Joker.Main.New.gar.mm3d-hud-source",
+      "input_root": "restoration",
+      "input": "romfs/layout/Joker.Main.New.gar",
+      "input_sha256": "3b5918df9251366f3688965bed882e56d1056d5e6dee2a479a8596cb884fc639",
+      "output_sha256": "3b5918df9251366f3688965bed882e56d1056d5e6dee2a479a8596cb884fc639",
+      "size": 169516
+    },
+    {
+      "output": "romfs/layout/Joker.Main.Play.SubMenu.gar",
+      "input_root": "original",
+      "input": "romfs/layout/Joker.Main.Play.SubMenu.gar",
+      "input_sha256": "5e1c5c95465f2792518555c9a37e426164985104fce429ea084d5455a4e2049d",
+      "output_sha256": "0f9b8727841ddd56d66fde99630b42d7bdfc469d68f951f50ecb51daba7c361b",
+      "size": 244596
+    },
+    {
+      "output": "romfs/layout/Joker.Main.Play.SubMenu.gar.mm3d-inventory-source",
+      "input_root": "original",
+      "input": "romfs/layout/Joker.Main.Play.SubMenu.gar",
+      "input_sha256": "5e1c5c95465f2792518555c9a37e426164985104fce429ea084d5455a4e2049d",
+      "output_sha256": "5e1c5c95465f2792518555c9a37e426164985104fce429ea084d5455a4e2049d",
+      "size": 244596
+    },
+    {
+      "output": "romfs/layout/Joker.Main.Play.gar",
+      "input_root": "restoration",
+      "input": "romfs/layout/Joker.Main.Play.gar",
+      "input_sha256": "5b143a1e033a409e6ee9272d4d04f1902f4b2a11cc443f9b6c8128471617a16c",
+      "output_sha256": "d997af366a32a8f04257e53b20932716c3f23a337ddef01e64dc5e6e7c9b58dc",
+      "size": 72048
+    },
+    {
+      "output": "romfs/layout/Joker.Main.gar",
+      "input_root": "original",
+      "input": "romfs/layout/Joker.Main.gar",
+      "input_sha256": "c89194586ee4d0b0616b28c9c9c0cfb87dac9850b34931c12fb75a1ddf2ab82c",
+      "output_sha256": "9114c419fc24f6993f0d71a51dac39710e1608d38822c6171b379a403e4f8f2e",
+      "size": 499736
+    },
+    {
+      "output": "romfs/layout/Joker.Main.gar.mm3d-header-source",
+      "input_root": "original",
+      "input": "romfs/layout/Joker.Main.gar",
+      "input_sha256": "c89194586ee4d0b0616b28c9c9c0cfb87dac9850b34931c12fb75a1ddf2ab82c",
+      "output_sha256": "a849ea3c9d7a1af040f0f684e5e74b53004317ec9d47a829450e4da69ff31d71",
+      "size": 499736
+    },
+    {
+      "output": "romfs/layout/Joker.Main.gar.mm3d-telop-source",
+      "input_root": "original",
+      "input": "romfs/layout/Joker.Main.gar",
+      "input_sha256": "c89194586ee4d0b0616b28c9c9c0cfb87dac9850b34931c12fb75a1ddf2ab82c",
+      "output_sha256": "c89194586ee4d0b0616b28c9c9c0cfb87dac9850b34931c12fb75a1ddf2ab82c",
+      "size": 499736
+    },
+    {
+      "output": "romfs/layout/Joker.gar",
+      "input_root": "original",
+      "input": "romfs/layout/Joker.gar",
+      "input_sha256": "857c4e41556d8cf1cbe0126dfc02b2430309713137324cd07a11b8e540e63964",
+      "output_sha256": "f7356ec27d9ff93618be57ab6752af5b85a5880fab0940ce053bb123fb37d355",
+      "size": 12468
+    },
+    {
+      "output": "romfs/layout/Joker.gar.mm3d-fade-source",
+      "input_root": "original",
+      "input": "romfs/layout/Joker.gar",
+      "input_sha256": "857c4e41556d8cf1cbe0126dfc02b2430309713137324cd07a11b8e540e63964",
+      "output_sha256": "857c4e41556d8cf1cbe0126dfc02b2430309713137324cd07a11b8e540e63964",
+      "size": 12468
+    },
+    {
+      "output": "romfs/layout/Joker.mfpj",
+      "input_root": "restoration",
+      "input": "romfs/layout/Joker.mfpj",
+      "input_sha256": "ab79c65145c39a24dab8bf795e923ef5a56c1a85670a92ab86819af50402b237",
+      "output_sha256": "ab79c65145c39a24dab8bf795e923ef5a56c1a85670a92ab86819af50402b237",
+      "size": 6624
+    }
+  ],
+  "settings": [
+    {
+      "path": "presentation.json",
+      "sha256": "7606a4657ba4edb7957ac1861eecaf047008c547e9cccc8179297e19af49b28b"
+    },
+    {
+      "path": "notebook.json",
+      "sha256": "2eec6780836b0a6ee2d8b413b98d64e6421269224973745a8ec70cc92eca0d40"
+    },
+    {
+      "path": "title-screen/copyright.json",
+      "sha256": "2cc2bb3cb28a98ae93aca104ae15b58b033a6982e8039fd28bb88c21d80cd6ba"
+    },
+    {
+      "path": "title-screen/press_start.json",
+      "sha256": "6f73c394fe2759c2ba1c2ec6d4e3d2608417d37ac35407d33045818a9f51604c"
+    },
+    {
+      "path": "title-screen/title_logo.json",
+      "sha256": "cb2f15fe77326f327529978d5d79c695e92a0db0a1775a68b1921965c3dc0576"
+    },
+    {
+      "path": "title-screen/title_logo_1.json",
+      "sha256": "d46ec3dd1335c594ca88debd9ef74ad2504196e0731fc79245cdbc00730d92c2"
+    },
+    {
+      "path": "title-screen/version.json",
+      "sha256": "b88f3593ac34151989590bd439405bced9d76f3ab73b5638f4362d0d26b5f65f"
+    },
+    {
+      "path": "notebook/event-notes-desc.json",
+      "sha256": "d8985beb2487230314239c8ec173341e3b98c0ec4f877780d8d7efbc6a8e385c"
+    },
+    {
+      "path": "notebook/event_notes_signal.json",
+      "sha256": "dff49b30d9baea19db097f7cbf22e0458f7367919ce3b913a2a243fa5772d28a"
+    },
+    {
+      "path": "notebook/notebook_bottom_bar.json",
+      "sha256": "b1ef908b57d62e6312ca6d0c8534ae17b6cf93e253e1cd5ed0ce1ae00d94b819"
+    },
+    {
+      "path": "notebook/notebook_events_context.json",
+      "sha256": "cfeb632a6a360a1b083440610e726aafb9a99f760275c4e8572b850072114810"
+    },
+    {
+      "path": "notebook/notebook_open_signal.json",
+      "sha256": "a8e6cff7ab7c039e0b3b73d6831e5b0e1bc40c35c5393a6415cf4ede2dc46340"
+    },
+    {
+      "path": "hud/clock.json",
+      "sha256": "c869d9cb82e9bb0c39d2ce3bfe5a9662087eb25de29c4bdf0812dc19abc6acfb"
+    },
+    {
+      "path": "hud/hearts.json",
+      "sha256": "c204f9ed35812bc0d3abfa1d4b432ad57bd6dc82cfd3398aaf6ce829aa9de00d"
+    },
+    {
+      "path": "hud/hide_hud_signal.json",
+      "sha256": "4f87999e6e3a0ee4fa663e7532e5f94c4bae9a1017fc0a5e79d9946a649f9415"
+    },
+    {
+      "path": "hud/loading.json",
+      "sha256": "ad27d1818e66dbef3d738e0988d8cfc1e21fc0d1f458743886af3f7e5f5c21b0"
+    }
+  ],
+  "description": "Fingerprint inventory only; reconstruction payload is private and not cleared for redistribution.",
+  "original_action_sha256": "b9f0f6461c9952c4b975eef99a27a76dbbe06d9faf1c0dd610e8e35247219cd0"
+}

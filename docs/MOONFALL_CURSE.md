@@ -640,10 +640,24 @@ Verified on the developer launch with Restoration's three RomFS files as the
 layer (1280x720, `save100_items.json`): Hud2 on the top screen in the 16:9
 frame (hearts and magic top left, D-pad items below, B/A and the X/Y/I/II
 items top right, rupees bottom left, clock centred, the map bottom right),
-the pause items page unchanged. dekui's own transformations of these files
-(its setup moves the Hud2 groups into the 16:9 margins, restores native
-action tracks, and edits Joker.Main/SubMenu/Joker layouts) are not applied
-yet. Tests: `oot3d_native_a32_romfs_overlay_tests` (layers, replacement,
+the pause items page unchanged.
+
+dekui's setup layer: `tools/mm3d/dekui/setup/prepare_romfs_layer.py` (ported
+from dekui's `build_release_assets.py`, GAR code in `dekui_gar.py`) prepares
+the layer dekui's first launch prepares, from the user's own files: the
+layouts it edits read from the user's RomFS (EUR's `layout/Joker.Main.gar`,
+`Joker.Main.Play.gar`, `Joker.Main.Play.SubMenu.gar` and `Joker.gar` are the
+USA files byte for byte), Restoration's three files from the user's
+Restoration folder. It applies dekui's edits (Hud2 groups moved into the
+16:9 margins, Restoration's A/B prompt tracks restored from the native
+archive, the map's slide tracks held, notebook rows, submenu title and
+telop poses) and checks every input and output against dekui's published
+fingerprints (`setup-fingerprints.json`): all 11 match on EUR. dekui's
+re-edit sources (`*.mm3d-*-source`) are written beside the layer, not in it.
+In W: `python tools/mm3d/dekui/setup/prepare_romfs_layer.py --romfs
+extract/romfs.bin --restoration <restoration> --layer mods/dekui-romfs
+--sources mods/dekui-sources`, then
+`TRIAEVUM_ROMFS_OVERLAY=<W>/mods/dekui-romfs`. Tests: `oot3d_native_a32_romfs_overlay_tests` (layers, replacement,
 nested directories, re-layering, malformed base; with
 `OOT3D_ROMFS_OVERLAY_IMAGE` the image's tables are reproduced and its file
 data served).
