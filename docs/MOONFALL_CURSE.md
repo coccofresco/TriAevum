@@ -125,7 +125,10 @@ Work directory `I:/_triaevum_work/mm3d-port` (`W` below).
 4. A32 registry: `generate_aot.py` with `--code --exheader --inventory
    --boundary-audit --supplemental-entries --true-aot-blocks` (boundary audit
    and true-AOT blocks from `tools/mm3d/a32/`, empty for now; supplemental
-   entries are the interior entries above). 17,556 callable entries,
+   entries are the interior entries above plus every guest patch boundary:
+   `oot3d_mm3d_single_screen_tests --block-boundaries` lists them and
+   `tools/mm3d/a32/guest_patch_entries.py --merge` adds them to the interior
+   entries; regenerate whenever a site is added). 17,556 callable entries,
    1,213,315 of 1,240,404 slots reachable; 6 unsupported operations left, all
    data words decoded as code.
 5. Whole-AOT program (from the first inventory; not yet regenerated):
@@ -451,7 +454,29 @@ given to the A32 generator as supplemental entries (a supplemental entry
 splits the block that contains it). runtime.json reports each site under
 `widescreen_projection.mm3d_guest_patches` (enabled, first mismatching
 guard word, replacements, declines). Product mode has no native-function
-dispatch yet and refuses sites. Test: `oot3d_mm3d_guest_patches_tests`.
+dispatch yet and refuses sites. A site is also enabled only if the registry
+has a block at its PC (otherwise it would run only when branched to).
+Tests: `oot3d_mm3d_guest_patches_tests`, `oot3d_mm3d_single_screen_tests`.
+
+The integrated features are registered by `mm3d_single_screen.cpp` from
+ports of dekui's modules (`tools/mm3d/dekui/`, GPL-2.0-or-later, with
+attribution), reading `Mm3dSingleScreenSettings` when they run. First, the
+two dekui sites already valid on v1.1 (dekui's "original" variants):
+
+- Damage multiplier (difficulty): ADD r2, r2, r4 of the health-change
+  routine at `0x0021E34C`, guarded by the whole routine; losses are
+  multiplied (1..16) and clamped to the current health.
+- Disabled drops (difficulty): the Actor_Spawn wrapper's entry
+  `0x0022053C`; recovery hearts, rupees, healing fairies, magic jars and
+  ammo can each be refused (the null-spawn result), anything else replays
+  the native prologue.
+
+Both default to the vanilla behaviour. `TRIAEVUM_MM3D_DAMAGE_MULTIPLIER`
+(development) sets the multiplier until the F1 menu owns these settings.
+Verified on the developer launch: from the 100% save with bombs
+(`inputs/save100_bomb_in_hand.json`, W), the bomb exploding in Link's hand
+at frame 1364 takes health 0x140 to 0x13C with multiplier 1 and to 0x130
+with 4; the play sequence is pixel-identical to the build without sites.
 
 ## Next steps
 

@@ -28,12 +28,17 @@ void Mm3dGuestPatches::Add(Mm3dGuestPatchSite site) {
     mSites.insert(at, Entry{std::move(site), std::move(stats)});
 }
 
-std::size_t Mm3dGuestPatches::Verify(a32::MemoryBus& memory) {
+std::size_t Mm3dGuestPatches::Verify(a32::MemoryBus& memory, const a32::Registry* registry) {
     std::size_t enabled = 0;
     for (auto& entry : mSites) {
-        entry.Stats.Enabled = true;
         entry.Stats.MismatchAddress.reset();
+        entry.Stats.MissingBlock =
+            registry != nullptr && a32::FindBlock(*registry, entry.Site.Pc) == nullptr;
+        entry.Stats.Enabled = !entry.Stats.MissingBlock;
         for (const auto& [address, expected] : entry.Site.Guard) {
+            if (!entry.Stats.Enabled) {
+                break;
+            }
             std::uint32_t word = 0;
             if (!memory.Read32(address, &word) || word != expected) {
                 entry.Stats.Enabled = false;

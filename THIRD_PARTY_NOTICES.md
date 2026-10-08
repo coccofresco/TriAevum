@@ -264,6 +264,22 @@ These references do not grant permission to redistribute the original mod
 archive. Project-authored reverse engineering and typed source changes remain
 traceable through this repository's Git history.
 
+## mm3d-dekui and Project Restoration (Majora's Mask 3D)
+
+Moonfall Curse integrates the single-screen mode of
+[tgacquin/mm3d-dekui](https://github.com/tgacquin/mm3d-dekui) (release
+v1.0.0-beta.1, source archive SHA-256 `E39E374B…3E6281`), whose `src/mm3d`
+files are GPL-2.0-or-later. Code ported from it lives in `tools/mm3d/dekui/`
+with its SPDX notice and a note of the dekui file it derives from; addresses
+are translated to the vanilla v1.1 code.bin and the hooks are expressed as
+typed guest patch sites (`docs/MOONFALL_CURSE.md`). dekui builds on
+[leoetlino/project-restoration](https://github.com/leoetlino/project-restoration)
+(GPL-2.0, commit `8bb2a7b8`), credited to leoetlino and contributors; code
+ported from it will carry the same kind of notice. Neither project's binary
+patches (`code.bps`, `exheader.bin`), RomFS layouts, text payloads or
+settings files are redistributed, and none is applied: Nintendo and Grezzo
+material inside them stays under the exclusions of `LICENSE_SCOPE.md`.
+
 ## Forge and runtime binary dependencies
 
 Windows `TriAevumForge.exe` embeds CPython 3.13; the initial Linux Forge build

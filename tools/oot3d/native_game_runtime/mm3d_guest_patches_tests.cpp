@@ -105,6 +105,26 @@ void TestGuard() {
             "the mismatch is not reported");
 }
 
+// A site must start a registry block: inside a block it would only run
+// when branched to.
+void TestMissingBlock() {
+    int calls = 0;
+    Mm3dGuestPatches patches;
+    patches.Add(CompareSite(&calls));
+    WordMemory memory;
+    memory.Words = {{kSite, kCmpR1R2}, {kSite + 4U, kBeq}};
+    static const a32::Block kBlocks[] = {{kSite - 8U, nullptr, 4U, false}};
+    static const a32::BlockShard kShards[] = {{kSite - 8U, kSite - 8U, kBlocks, 1U}};
+    const a32::Registry without{kShards, 1U, nullptr, 0U};
+    Require(patches.Verify(memory, &without) == 0U && patches.Statistics()[0].MissingBlock,
+            "a site inside a registry block was enabled");
+    static const a32::Block kSplit[] = {{kSite - 8U, nullptr, 2U, false}, {kSite, nullptr, 1U, false}};
+    static const a32::BlockShard kSplitShards[] = {{kSite - 8U, kSite, kSplit, 2U}};
+    const a32::Registry with{kSplitShards, 1U, nullptr, 0U};
+    Require(patches.Verify(memory, &with) == 1U && !patches.Statistics()[0].MissingBlock,
+            "a site starting a registry block was not enabled");
+}
+
 void TestInvalidSites() {
     int calls = 0;
     Mm3dGuestPatches patches;
@@ -140,6 +160,7 @@ void TestCondition() {
 int main() {
     TestReplacement();
     TestGuard();
+    TestMissingBlock();
     TestInvalidSites();
     TestCondition();
     std::cout << "mm3d_guest_patches_tests: ok\n";

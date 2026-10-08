@@ -322,7 +322,9 @@ private:
   Oot3dNativeGame::Oot3dNativePicaFrontend picaFrontend;
   Oot3dNativeGame::Oot3dNativePicaCompositionTracker picaCompositionTracker;
   Oot3dNativeGame::Mm3dNativePicaCompositionTracker mm3dCompositionTracker;
-  // MM3D's single-screen mode: typed replacements of guest instructions.
+  // MM3D's single-screen mode: its settings and the typed replacements of
+  // guest instructions that read them.
+  Oot3dNativeGame::Mm3dSingleScreenSettings mm3dSingleScreenSettings;
   Oot3dNativeGame::Mm3dGuestPatches mm3dGuestPatches;
   Oot3dNativeGame::Oot3dPicaCompositionDomain picaCompositionDomain{};
   Oot3dNativeGame::NativeA32CtrHostConfig hostConfig;

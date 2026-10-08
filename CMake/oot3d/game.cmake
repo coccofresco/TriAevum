@@ -225,6 +225,7 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
         oot3d_top_screen_runtime_consumer
         oot3d_native_pica_composition
         oot3d_mm3d_guest_patches
+        oot3d_mm3d_single_screen
         oot3d_native_pica_submission
         oot3d_native_pica_semantic_trace
         oot3d_native_pica_vulkan_bridge)

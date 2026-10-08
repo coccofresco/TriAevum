@@ -360,6 +360,14 @@ void NativeA32WindowSession::Setup() {
         Oot3dNativeGame::kMm3dMtx44Frustum;
     widescreenProjection.Projection.FrustumIsSceneView = false;
     widescreenProjection.Mm3dCompositionTracker = &mm3dCompositionTracker;
+    if (mm3dGuestPatches.Empty()) {
+      if (const char *multiplier = std::getenv("TRIAEVUM_MM3D_DAMAGE_MULTIPLIER")) {
+        // Development: dekui's damage multiplier until the F1 owns it.
+        mm3dSingleScreenSettings.Difficulty.DamageMultiplier = std::atoi(multiplier);
+      }
+      Oot3dNativeGame::RegisterMm3dSingleScreenSites(mm3dGuestPatches,
+                                                     mm3dSingleScreenSettings);
+    }
   }
   if (const char *pcDump = std::getenv("TRIAEVUM_A32_PC_DUMP")) {
     // PC,FRAME,DIR,ADDR:SIZE[;ADDR:SIZE...]
@@ -658,7 +666,7 @@ void NativeA32WindowSession::Setup() {
 #else
       // Each site whose code matches the mounted image replaces its
       // instruction; the registry starts a block at every site.
-      mm3dGuestPatches.Verify(process.Memory());
+      mm3dGuestPatches.Verify(process.Memory(), &Oot3dNativeGame::Oot3dNativeA32Registry());
       process.SetNativeFunctionCallback(&Oot3dNativeGame::Mm3dGuestPatches::Execute,
                                         &mm3dGuestPatches, mm3dGuestPatches.EnabledPcs());
 #endif

@@ -1673,6 +1673,7 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                                site.MismatchAddress.has_value()
                                    ? nlohmann::json(*site.MismatchAddress)
                                    : nlohmann::json(nullptr)},
+                              {"missing_block", site.MissingBlock},
                               {"replacements", site.Replacements},
                               {"declined", site.Declined}});
                        }

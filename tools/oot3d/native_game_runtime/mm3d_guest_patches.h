@@ -44,6 +44,8 @@ class Mm3dGuestPatches {
         bool Enabled = false;
         // The first guard word that did not match, when disabled.
         std::optional<std::uint32_t> MismatchAddress;
+        // Disabled because the registry has no block at the site's PC.
+        bool MissingBlock = false;
         std::uint64_t Replacements = 0;
         std::uint64_t Declined = 0;
     };
@@ -52,8 +54,11 @@ class Mm3dGuestPatches {
     // misaligned PC or a site without a handler.
     void Add(Mm3dGuestPatchSite site);
     // Checks every site's guard against the mounted image and enables the
-    // sites whose code matches; returns how many are enabled.
-    std::size_t Verify(oot3d::recomp::a32::MemoryBus& memory);
+    // sites whose code matches and, given the registry, that start a block
+    // in it (a site inside a block would only run when branched to);
+    // returns how many are enabled.
+    std::size_t Verify(oot3d::recomp::a32::MemoryBus& memory,
+                       const oot3d::recomp::a32::Registry* registry = nullptr);
     // The enabled sites' PCs, sorted: the native-function filter.
     std::vector<std::uint32_t> EnabledPcs() const;
     // The registry boundaries the sites need: each site's PC and the
