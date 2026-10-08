@@ -45,6 +45,7 @@
 #include "oot3d_native_presentation_pacer.h"
 #include "oot3d_native_pica_frontend.h"
 #include "oot3d_native_pica_composition.h"
+#include "mm3d_guest_patches.h"
 #include "mm3d_pica_composition.h"
 #include "mm3d_title_contracts.h"
 #include "oot3d_native_pica_presentation_scheduler.h"
@@ -501,6 +502,7 @@ struct NativeWidescreenProjectionState {
       *PicaCompositionTracker = nullptr;
   Oot3dNativeGame::Mm3dNativePicaCompositionTracker
       *Mm3dCompositionTracker = nullptr;
+  const Oot3dNativeGame::Mm3dGuestPatches *Mm3dGuestPatches = nullptr;
   Oot3dNativeGame::TopScreenTextureOverrideRuntime *TopScreenTextureOverrides =
       nullptr;
   bool TopScreenUiProfile = false;

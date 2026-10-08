@@ -652,6 +652,18 @@ void NativeA32WindowSession::Setup() {
         word != Oot3dNativeGame::kMm3dMtx44FrustumFirstWord) {
       throw std::runtime_error("MM3D adapter: the perspective frustum builder is not at its address");
     }
+    if (!mm3dGuestPatches.Empty()) {
+#if defined(OOT3D_WHOLE_AOT_PRODUCT_MODE)
+      throw std::runtime_error("MM3D adapter: guest patch sites need the A32 registry dispatch");
+#else
+      // Each site whose code matches the mounted image replaces its
+      // instruction; the registry starts a block at every site.
+      mm3dGuestPatches.Verify(process.Memory());
+      process.SetNativeFunctionCallback(&Oot3dNativeGame::Mm3dGuestPatches::Execute,
+                                        &mm3dGuestPatches, mm3dGuestPatches.EnabledPcs());
+#endif
+    }
+    widescreenProjection.Mm3dGuestPatches = &mm3dGuestPatches;
   }
 #if defined(__SWITCH__)
   WriteSwitchBootStage("process_image_mounted");

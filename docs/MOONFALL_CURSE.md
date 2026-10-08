@@ -69,15 +69,24 @@ text boxes; widescreen and camera distance. It is an Azahar fork
 MM3D's actor, context, camera, item, message and input structures.
 
 dekui accepts only the USA v1.1 card and runs Project Restoration's `v110`
-build (its `code.bps` names source CRC32 `ffdf1ee8`, the CRC32 of the code.bin
-above). Because EUR and USA v1.1 share that code.bin, their code addresses,
-function knowledge and structure layouts hold for the EUR title this port
-runs (maintainer's choice, for its languages including Italian). Their
-RomFS-side work does not transfer as is: dekui overrides USA paths
-(`mods/0004000000125500/romfs/layout/...`), while EUR's localized layouts and
-messages live under `EU_<Language>` and `message/eu`. Behaviours are
-re-implemented as typed source contracts in the MM3D adapter, never by
-applying their binary patches.
+build. Its `code.bps` accepts the code.bin above exactly (source CRC32
+`ffdf1ee8`) but does not patch it: Restoration is built once on v1.0, and its
+v1.1 patch rewrites the v1.1 code into that v1.0-derived image (7,835,648
+bytes, SHA-256 `dbb46a8b…2ef9`, with Restoration's code appended at
+`0x007CF000`; its ExHeader grows text and BSS). That image keeps every
+language layout (`EU_Italian` included). dekui's addresses are therefore
+addresses of the v1.0 code plus Restoration: of its 143 patch entries only
+4 match this port's code (CameraLive projection, Difficulty damage and
+spawn), the other 139 read different words in v1.1 or lie in Restoration's
+code.
+
+The port stays on the vanilla v1.1 code.bin (maintainer's decision,
+2026-10-08). Project Restoration is ported as source onto v1.1, and every
+dekui and Restoration address (patch sites, guard words, functions, globals)
+is translated from the v1.0-derived image to v1.1 through a map built from
+both images. Behaviours are typed source contracts in the MM3D adapter; no
+binary patch is applied and their RomFS payloads stay outside the
+repository and packages (EUR needs its own `EU_<Language>` equivalents).
 
 ## Pipeline (reproducible, outside the repository)
 
@@ -424,6 +433,25 @@ changes it. Verified in the developer launch with
 `inputs/save100_new_file.json` (W): an empty slot, the keyboard, "Save
 completed.", the new `save1.bin` with the name at the file's name field, and
 the new game's opening text. Test: `TestSoftwareKeyboardApplet`.
+
+## Guest patch sites (2026-10-08)
+
+dekui and Restoration change the game by replacing instructions at fixed
+addresses (dekui's emulator substitutes the fetched word, mostly with an SVC
+trap whose handler runs host code, when the surrounding words still match).
+The MM3D adapter expresses each one as a typed site
+(`mm3d_guest_patches.h`): its PC, the guard words it was written against,
+and a handler that runs on the guest thread's registers, VFP state and
+memory in place of that instruction and returns the PC to continue at (or
+declines, leaving the original instruction to run). After the process image
+is mounted, every site whose guard matches is enabled and the A32 runtime's
+native-function callback dispatches it; the guest image is never modified.
+A site must start a registry block, so its PC and the next instruction are
+given to the A32 generator as supplemental entries (a supplemental entry
+splits the block that contains it). runtime.json reports each site under
+`widescreen_projection.mm3d_guest_patches` (enabled, first mismatching
+guard word, replacements, declines). Product mode has no native-function
+dispatch yet and refuses sites. Test: `oot3d_mm3d_guest_patches_tests`.
 
 ## Next steps
 

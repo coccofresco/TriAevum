@@ -191,6 +191,22 @@ if (OOT3D_WHOLE_AOT_PRODUCT_MODE)
 endif()
 oot3d_target_defaults(oot3d_native_a32_process_tests FOLDER Tests)
 
+add_library(oot3d_mm3d_guest_patches STATIC EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/mm3d_guest_patches.cpp
+)
+target_include_directories(oot3d_mm3d_guest_patches PUBLIC
+    tools/oot3d/native_game_runtime)
+target_link_libraries(oot3d_mm3d_guest_patches PUBLIC
+    oot3d_native_a32_process)
+oot3d_target_defaults(oot3d_mm3d_guest_patches FOLDER Tools)
+
+add_executable(oot3d_mm3d_guest_patches_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/mm3d_guest_patches_tests.cpp
+)
+target_link_libraries(oot3d_mm3d_guest_patches_tests PRIVATE
+    oot3d_mm3d_guest_patches)
+oot3d_target_defaults(oot3d_mm3d_guest_patches_tests FOLDER Tests)
+
 add_executable(oot3d_native_a32_ctr_host_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_a32_ctr_host_tests.cpp
 )

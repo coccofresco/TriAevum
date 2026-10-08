@@ -1658,6 +1658,26 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                            {"light_bindings", stats.LightBindings},
                            {"scene_directional_lights", stats.SceneDirectionalLights}};
                      }()},
+              {"mm3d_guest_patches",
+               widescreenProjection.Mm3dGuestPatches == nullptr
+                   ? nlohmann::json(nullptr)
+                   : [&] {
+                       auto sites = nlohmann::json::array();
+                       for (const auto &site :
+                            widescreenProjection.Mm3dGuestPatches->Statistics()) {
+                         sites.push_back(
+                             {{"name", site.Name},
+                              {"pc", site.Pc},
+                              {"enabled", site.Enabled},
+                              {"mismatch_address",
+                               site.MismatchAddress.has_value()
+                                   ? nlohmann::json(*site.MismatchAddress)
+                                   : nlohmann::json(nullptr)},
+                              {"replacements", site.Replacements},
+                              {"declined", site.Declined}});
+                       }
+                       return sites;
+                     }()},
               {"orthographic_calls",
                widescreenProjection.Projection.OrthographicCalls},
               {"callsites", std::move(projectionCallsites)},
