@@ -91,6 +91,9 @@ struct Oot3dPicaVulkanDrawPlan {
     Oot3dPicaFragmentFeatureSet FragmentFeatures;
     Oot3dPicaGeneratedVertexShader VertexShader;
     Oot3dPicaGeneratedFragmentShader FragmentShader;
+    // The title's interface frame along native Y relative to the screen
+    // (Oot3d::Renderer::ResolvePicaRasterCanvas); 1 = the screen itself.
+    float UiFrameExtensionY = 1.0F;
     std::shared_ptr<const std::string> SharedVertexShaderSource;
     std::shared_ptr<const std::string> SharedFragmentShaderSource;
     // The parametric program of the same draw (hybrid preparation); no source

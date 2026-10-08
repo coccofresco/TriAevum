@@ -52,4 +52,18 @@ inline constexpr uint32_t kMm3dPlayLightListHeadOffset = 0xA88U;
 inline constexpr uint32_t kMm3dPlayEnvironmentLight1Offset = 0x86D0U;
 inline constexpr uint32_t kMm3dPlayEnvironmentLight2Offset = 0x86E8U;
 
+// The top screen's canvas: a 400x240 display drawn into a rotated 240x400
+// viewport (480x400 at the doubled resolution) at the colour buffer's
+// corner, its display width along native Y. Its interface is laid out
+// (mm3d-dekui's poses) for a 16:9 frame in which the 400:240 screen keeps its
+// proportions at the centre: the frame is 16/15 of the screen along native Y.
+inline constexpr float kMm3dTopScreenCanvasAspect = 400.0F / 240.0F;
+inline constexpr float kMm3dUiFrameAspect = 16.0F / 9.0F;
+inline constexpr float kMm3dUiFrameExtensionY = kMm3dUiFrameAspect / kMm3dTopScreenCanvasAspect;
+template <class Viewport>
+constexpr bool IsMm3dTopScreenCanvas(const Viewport& viewport) noexcept {
+    return viewport.CornerX == 0 && viewport.CornerY == 0 && viewport.HalfHeight == 200.0F &&
+           (viewport.HalfWidth == 120.0F || viewport.HalfWidth == 240.0F);
+}
+
 } // namespace Oot3dNativeGame

@@ -201,7 +201,7 @@ static PicaRigidMotionShaderVariant BuildTemporalVertexVariantImpl(
         "layout(location=7) out vec4 oot3d_current_clip;\n"
         "layout(location=8) out vec4 oot3d_previous_clip;\n"
         "layout(set=0,binding=6,std140) uniform PicaPreviousVertexUniforms {\n"
-        "    uint b; int flip_viewport; uvec4 i[4]; vec4 f[96];\n"
+        "    uint b; int flip_viewport; vec2 clip_scale_delta; uvec4 i[4]; vec4 f[96];\n"
         "} uniforms_previous;\n"
         "layout(push_constant) uniform Oot3dDrawState { vec4 rigid_motion; vec4 jitter; } oot3d_draw;\n");
     result.Source.append(currentState);

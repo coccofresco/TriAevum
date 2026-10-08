@@ -652,6 +652,24 @@ void TestMm3dSceneLighting() {
     Require(tracker.TakeCommandListCompositionSpans(0x14000000U, 0x300U, spans, &error), error);
     Require(spans.size() == 3U && !spans[2].LightBinding.WorldToView && !spans[2].LightBinding.SceneDirectionals,
             "a frame without a current View carried lighting");
+
+    // A 2D layout queue (its owners, from either loop, and its finishers)
+    // and the top screen's sprite queues are the interface.
+    (void)pass(kMm3dLayoutOwnerDrawEntry, 0x00126998U, 0x14000300U, 0x14000340U);
+    (void)pass(kMm3dLayoutOwnerDrawEntry, 0x00126A64U, 0x14000340U, 0x14000380U);
+    (void)pass(kMm3dLayoutDrawEntry, 0x001269DCU, 0x14000380U, 0x140003C0U);
+    (void)pass(kMm3dLayoutDrawEntry, 0x00126AA8U, 0x140003C0U, 0x14000400U);
+    // The frame draw's top-screen sprite queues.
+    (void)pass(kMm3dQuadQueueDrawEntry, 0x00110D88U, 0x14000400U, 0x14000440U);
+    (void)pass(kMm3dQuadQueueDrawEntry, 0x00110DB8U, 0x14000440U, 0x14000480U);
+    Require(tracker.TakeCommandListCompositionSpans(0x14000000U, 0x480U, spans, &error), error);
+    Require(spans.size() == 9U, "expected the four layout and two sprite spans");
+    for (size_t index = 3; index < spans.size(); ++index) {
+        Require(spans[index].Attribution.Layer == Oot3dPicaCompositionLayer::Ui &&
+                    spans[index].Attribution.Provenance == Oot3dPicaCompositionProvenance::NativeUiLifecycle &&
+                    !spans[index].LightBinding.WorldToView,
+                "a layout span is not the interface");
+    }
 }
 
 int main() {

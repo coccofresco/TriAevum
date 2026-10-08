@@ -30,8 +30,14 @@ namespace Oot3dNativeGame {
 //   lists again with another visitor (returning to 0x0011EF88 and
 //   0x0011EFA4): blended draws without depth writes, after translucency.
 //   0x0011EFAC visits the 2D scene (scene+8) the same way (0x0011EFD4,
-//   0x0011EFF4). 0x001262E0, called from 0x001267E8 (returning to
-//   0x001269DC) after it binds a layout list, draws a 2D layout.
+//   0x0011EFF4). 0x001267E8 draws one 2D layout queue (r1): for each
+//   enqueued owner it calls 0x00126294 (owner in r1; returning to 0x00126998
+//   or, in its second loop, 0x00126A64), then 0x001262E0 (returning to
+//   0x001269DC, or 0x00126AA8) finishes the queue. HUD, menus and dialogue
+//   are these layouts. After the 2D scene pass the frame draw also draws
+//   the quad manager's (0x00175A88) sprite queues 4 and 5 with 0x0012C6A8
+//   (manager, queue), returning to 0x00110D88 and 0x00110DB8: HUD sprites,
+//   among them the map and radar quads mm3d-dekui moves to the top screen.
 //
 // Each pass writes its commands through the cursor at 0x006A3A88 into the
 // bound list; prebuilt model buffers are called from there through
@@ -40,6 +46,8 @@ inline constexpr uint32_t kMm3dCommandListCursorAddress = 0x006A3A88U;
 inline constexpr uint32_t kMm3dRenderListVisitEntry = 0x005EF054U;
 inline constexpr uint32_t kMm3dSkyboxDrawEntry = 0x005B51D0U;
 inline constexpr uint32_t kMm3dLayoutDrawEntry = 0x001262E0U;
+inline constexpr uint32_t kMm3dLayoutOwnerDrawEntry = 0x00126294U;
+inline constexpr uint32_t kMm3dQuadQueueDrawEntry = 0x0012C6A8U;
 
 std::span<const uint32_t> Mm3dNativePicaCompositionHookPcs() noexcept;
 

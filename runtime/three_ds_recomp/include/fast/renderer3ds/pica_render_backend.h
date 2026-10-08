@@ -75,6 +75,10 @@ struct PicaDrawView {
     float ViewportY = 0.0F;
     float ViewportWidth = 0.0F;
     float ViewportHeight = 0.0F;
+    // The title's interface frame along native Y relative to the screen
+    // (ResolvePicaRasterCanvas): 1 keeps the native screen as the UI canvas.
+    // Only a whole-screen draw that stays UI uses it.
+    float UiFrameExtensionY = 1.0F;
     float DepthRange = 0.0F;
     float NearPlane = 0.0F;
     bool WBuffering = false;

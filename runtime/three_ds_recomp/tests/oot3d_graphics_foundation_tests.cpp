@@ -211,6 +211,62 @@ TEST(Oot3dPicaRasterCanvas, EachScreenContentHasItsMappingAndPlacedUiKeepsNative
     }
 }
 
+TEST(Oot3dPicaRasterCanvas, ExtendedUiFrameKeepsItsAspectAndTheScreenItsProportions) {
+    using Fast::Renderer3ds::PicaCompositionDomain;
+    using Fast::Renderer3ds::PicaScreenContent;
+    using ::Oot3d::Renderer::PicaUiFrameContentCanvas;
+    using ::Oot3d::Renderer::ResolvePicaRasterCanvas;
+
+    // A rotated 480x400 top target at the presented density (display width
+    // along native Y, storage X sampled at half), its interface laid out for
+    // a 16:9 frame: 16/15 of the 400:240 screen along native Y.
+    constexpr float kExtension = (16.0F / 9.0F) / (400.0F / 240.0F);
+    struct Case {
+        uint32_t OutputWidth;
+        float FrameWidth, FrameHeight;
+    };
+    for (const auto& [outputWidth, frameWidth, frameHeight] :
+         {Case{1280U, 1280.0F, 720.0F}, Case{1680U, 1280.0F, 720.0F},
+          Case{960U, 960.0F, 540.0F}}) {
+        const auto frame = ResolvePicaRasterCanvas(PicaCompositionDomain::Ui, PicaScreenContent::None,
+                                                   480U, 400U, 720U, outputWidth, 0.5F, kExtension);
+        // The frame: 16:9, centred, filling the output's height when wider
+        // and its width when narrower.
+        EXPECT_NEAR(frame.ScaleY * 400.0F, frameWidth, 1.0e-2F);
+        EXPECT_NEAR(frame.ScaleX * 480.0F, frameHeight, 1.0e-2F);
+        EXPECT_NEAR(frame.Y, (outputWidth - frameWidth) * 0.5F, 1.0e-2F);
+        EXPECT_NEAR(frame.X, (720.0F - frameHeight) * 0.5F, 1.0e-2F);
+        // The screen inside it at 400:240, centred: the frame's 15/16.
+        const auto content = PicaUiFrameContentCanvas(frame, 200.0F, kExtension);
+        EXPECT_NEAR(content.ScaleY * 400.0F / (content.ScaleX * 480.0F), 400.0F / 240.0F, 1.0e-4F);
+        EXPECT_NEAR(content.Y, frame.Y + frameWidth / 32.0F, 1.0e-2F);
+        EXPECT_FLOAT_EQ(content.X, frame.X);
+
+        // Only placed UI takes the frame: the scene, screen content and
+        // pictures keep their own mappings.
+        for (const auto [domain, screenContent] :
+             {std::pair{PicaCompositionDomain::Scene, PicaScreenContent::None},
+              std::pair{PicaCompositionDomain::Screen, PicaScreenContent::RenderedFrame},
+              std::pair{PicaCompositionDomain::Screen, PicaScreenContent::OwnPicture},
+              std::pair{PicaCompositionDomain::Screen, PicaScreenContent::PictureOverlay}}) {
+            const auto extended = ResolvePicaRasterCanvas(domain, screenContent, 480U, 400U, 720U,
+                                                          outputWidth, 0.5F, kExtension);
+            const auto native =
+                ResolvePicaRasterCanvas(domain, screenContent, 480U, 400U, 720U, outputWidth, 0.5F);
+            EXPECT_FLOAT_EQ(extended.X, native.X);
+            EXPECT_FLOAT_EQ(extended.Y, native.Y);
+            EXPECT_FLOAT_EQ(extended.ScaleX, native.ScaleX);
+            EXPECT_FLOAT_EQ(extended.ScaleY, native.ScaleY);
+        }
+    }
+    // No extension: the frame is the screen.
+    const auto ui = ResolvePicaRasterCanvas(PicaCompositionDomain::Ui, PicaScreenContent::None,
+                                            480U, 400U, 720U, 1280U, 0.5F);
+    const auto same = PicaUiFrameContentCanvas(ui, 200.0F, 1.0F);
+    EXPECT_FLOAT_EQ(same.Y, ui.Y);
+    EXPECT_FLOAT_EQ(same.ScaleY, ui.ScaleY);
+}
+
 TEST(Oot3dPicaRasterCanvas, PresentedDensityTopTargetKeepsThePresentedProportions) {
     using Fast::Renderer3ds::PicaCompositionDomain;
     using Fast::Renderer3ds::PicaScreenContent;

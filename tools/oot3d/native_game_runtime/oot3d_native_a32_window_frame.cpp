@@ -1301,6 +1301,12 @@ void NativeA32WindowSession::RunGuestRefresh() {
                                  error);
       }
       phaseTiming.PicaPlanSeconds += SecondsSince(drawPhaseStart);
+      if (titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d &&
+          Oot3dNativeGame::IsMm3dTopScreenCanvas(plan.State.Viewport)) {
+        // MM3D's interface keeps the 16:9 frame mm3d-dekui lays it out for,
+        // whatever the output's aspect; the scene fills the output.
+        plan.UiFrameExtensionY = Oot3dNativeGame::kMm3dUiFrameExtensionY;
+      }
       picaSemanticTrace.RecordDraw(
           presentationFrameCount, frameCount, draw, plan,
           suppressNativeFrontendBackdropDraw, usesCommonBackground,

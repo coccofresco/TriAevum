@@ -257,9 +257,29 @@ frusta are not published as the scene view, since they also serve views
 other than the scene camera. At 1280x720 the native part of the frame is
 unchanged (PSNR 88 dB against the letterboxed run over the same columns)
 and the sides show more of the scene; 1600x1200 extends vertically; FOV
-1.25 and 1.5 widen the view. Not yet checked: 2D drawn on the top screen
-during gameplay (the HUD), which has no composition metadata and so is
-scaled with the scene.
+1.25 and 1.5 widen the view.
+
+Interface at a fixed 16:9: as OoT3D's interface keeps its own aspect
+whatever the output's, MM3D's keeps the 16:9 frame mm3d-dekui lays it out
+for. The composition tracker attributes the top screen's 2D to the UI
+domain: the owners and finishers of the 2D layout queues (`0x001267E8`'s
+two loops, `0x00126294` and `0x001262E0`) and the frame draw's sprite
+queues 4 and 5 (`0x0012C6A8`, after the 2D scene pass; dekui moves the map
+and radar quads there). The adapter marks draws whose viewport is the top
+screen with a UI frame 16/15 of the screen along native Y; the shared
+renderer, for a draw that stays UI after frame-content resolution, fits
+that frame centred in the output (`ResolvePicaRasterCanvas`) and narrows
+the draw's clip Y by 15/16 (a vertex-uniform delta, zero for every other
+draw), so the 400:240 screen keeps its proportions at the frame's centre
+and dekui's margins stay drawable, as dekui's renderer does on Azahar.
+Partial scissors map through the screen's own proportions
+(`PicaUiFrameContentCanvas`). Fades and copies of the rendered frame keep
+the scene's mapping. Verified on the developer launch (`save100_items.json`,
+Restoration registration skipped for the run) at 1280x720, 1680x720 and
+960x720: the pause menu (items page, whole grid and tabs) and the gameplay
+HUD (clock, bars, A button, map) stay in a centred 16:9 frame, the scene
+fills the output. The A button overlaps the map until dekui's HUD-button
+and Restoration's large-screen sites are live.
 
 Earlier stalls, in order. First the main thread waited for byte
 `0x007B2711` (the busy flag of the GX command scheduler at `0x007B2700`)

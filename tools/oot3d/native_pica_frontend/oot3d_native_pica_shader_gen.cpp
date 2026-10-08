@@ -1419,6 +1419,7 @@ bool GenerateOot3dPicaVertexShader(
               "layout(set=0,binding=0,std140) uniform PicaVertexUniforms {\n"
               "    uint b;\n"
               "    int flip_viewport;\n"
+              "    vec2 clip_scale_delta;\n"
               "    uvec4 i[4];\n"
               "    vec4 f[96];\n"
               "} uniforms;\n";
@@ -1455,6 +1456,7 @@ bool GenerateOot3dPicaVertexShader(
               "pica_position.z = 0.0;\n"
               "    if (pica_ndc_z < -1.0 && pica_ndc_z > -1.00001) "
               "pica_position.z = -pica_position.w;\n"
+              "    pica_position.xy *= vec2(1.0) + uniforms.clip_scale_delta;\n"
               "    if (uniforms.flip_viewport != 0) pica_position.y = "
               "-pica_position.y;\n"
               "    gl_Position = vec4(pica_position.x, pica_position.y, "

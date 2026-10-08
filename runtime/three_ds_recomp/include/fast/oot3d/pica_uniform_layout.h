@@ -10,6 +10,11 @@ inline constexpr std::size_t kPicaPackedVec4Bytes = 4U * sizeof(float);
 inline constexpr std::size_t kPicaPackedVertexBooleanMaskOffset = 0U;
 inline constexpr std::size_t kPicaPackedVertexFlipViewportOffset =
     sizeof(std::uint32_t);
+// Clip-space x/y scales minus one (a zeroed block keeps every vertex): how
+// much a draw's clip coordinates are scaled before clipping, e.g. to keep a
+// title's interface at a fixed aspect in a wider or narrower output.
+inline constexpr std::size_t kPicaPackedVertexClipScaleDeltaOffset =
+    2U * sizeof(std::uint32_t);
 inline constexpr std::size_t kPicaPackedVertexIntegerOffset = 16U;
 inline constexpr std::size_t kPicaPackedVertexFloatOffset =
     kPicaPackedVertexIntegerOffset + 4U * kPicaPackedVec4Bytes;

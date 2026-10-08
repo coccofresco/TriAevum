@@ -45,8 +45,26 @@ constexpr std::array kScopes{
     ScopeDescriptor{kMm3dSkyboxDrawEntry, 0x00110DF8U,
                     Oot3dPicaCompositionLayer::Atmosphere,
                     Oot3dPicaCompositionProvenance::NativeControlFlow},
-    // A 2D layout, from 0x001267E8 after it binds the layout's list.
+    // A 2D layout queue (0x001267E8): each enqueued owner, from either of
+    // its loops, and the queue's finisher.
+    ScopeDescriptor{kMm3dLayoutOwnerDrawEntry, 0x00126998U,
+                    Oot3dPicaCompositionLayer::Ui,
+                    Oot3dPicaCompositionProvenance::NativeUiLifecycle},
+    ScopeDescriptor{kMm3dLayoutOwnerDrawEntry, 0x00126A64U,
+                    Oot3dPicaCompositionLayer::Ui,
+                    Oot3dPicaCompositionProvenance::NativeUiLifecycle},
     ScopeDescriptor{kMm3dLayoutDrawEntry, 0x001269DCU,
+                    Oot3dPicaCompositionLayer::Ui,
+                    Oot3dPicaCompositionProvenance::NativeUiLifecycle},
+    ScopeDescriptor{kMm3dLayoutDrawEntry, 0x00126AA8U,
+                    Oot3dPicaCompositionLayer::Ui,
+                    Oot3dPicaCompositionProvenance::NativeUiLifecycle},
+    // The frame draw's 2D quad queues 4 and 5, after the 2D scene pass
+    // (0x00110D84 and 0x00110DB4 tail-call 0x0012C6A8 with the queue).
+    ScopeDescriptor{kMm3dQuadQueueDrawEntry, 0x00110D88U,
+                    Oot3dPicaCompositionLayer::Ui,
+                    Oot3dPicaCompositionProvenance::NativeUiLifecycle},
+    ScopeDescriptor{kMm3dQuadQueueDrawEntry, 0x00110DB8U,
                     Oot3dPicaCompositionLayer::Ui,
                     Oot3dPicaCompositionProvenance::NativeUiLifecycle},
 };

@@ -141,22 +141,29 @@ struct UiPresentationPoint {
     Fast::Renderer3ds::PicaScreenContent screenContent,
     std::uint32_t nativeWidth, std::uint32_t nativeHeight,
     std::uint32_t targetWidth, std::uint32_t targetHeight,
-    float storageSamplingX = 1.0F) noexcept {
+    float storageSamplingX = 1.0F, float uiFrameExtensionY = 1.0F) noexcept {
     if (!nativeWidth || !nativeHeight || !targetWidth || !targetHeight ||
-        !(storageSamplingX > 0.0F)) {
+        !(storageSamplingX > 0.0F) || !(uiFrameExtensionY >= 1.0F)) {
         return {};
     }
     const float fittedNativeWidth = static_cast<float>(nativeWidth) * storageSamplingX;
     // Placed UI, and an opaque picture of its own (a movie frame): the whole
     // native screen at its own proportions, centred. Around a picture the
     // renderer shows black bars (`SurroundPicaCanvas`), never what was drawn
-    // behind it.
+    // behind it. A title whose interface is laid out for a frame longer along
+    // native Y than its screen (`uiFrameExtensionY`, > 1) stretches the UI
+    // canvas over that frame and narrows the draw's clip space by the same
+    // factor (`PicaUiFrameContentCanvas` maps its native coordinates): the
+    // native screen keeps its proportions at the frame's centre and the
+    // margins beside it stay drawable.
     if (domain == Fast::Renderer3ds::PicaCompositionDomain::Ui ||
         (domain == Fast::Renderer3ds::PicaCompositionDomain::Screen &&
          screenContent == Fast::Renderer3ds::PicaScreenContent::OwnPicture)) {
+        const float extension =
+            domain == Fast::Renderer3ds::PicaCompositionDomain::Ui ? uiFrameExtensionY : 1.0F;
         const auto fit = FitUiPresentation(
             targetWidth, targetHeight, fittedNativeWidth,
-            static_cast<float>(nativeHeight));
+            static_cast<float>(nativeHeight) * extension);
         return {fit.X, fit.Y, fit.Width / nativeWidth, fit.Height / nativeHeight};
     }
     if (domain == Fast::Renderer3ds::PicaCompositionDomain::Screen &&
@@ -175,6 +182,21 @@ struct UiPresentationPoint {
     // scene as this mapping rasterised it), and a wash reaches every pixel.
     return {0, 0, static_cast<float>(targetWidth) / nativeWidth,
             static_cast<float>(targetHeight) / nativeHeight};
+}
+
+// Where native coordinates land inside an extended UI frame (the canvas
+// ResolvePicaRasterCanvas stretched over it, `uiFrameExtensionY`): a draw
+// whose clip Y is narrowed by 1 / uiFrameExtensionY puts native Y at the
+// viewport's centre (`nativeCenterY`) plus its offset at the screen's own
+// proportions. Native scissors map through it.
+[[nodiscard]] inline Fast::Renderer3ds::PicaRasterCanvas PicaUiFrameContentCanvas(
+    const Fast::Renderer3ds::PicaRasterCanvas& frame, float nativeCenterY,
+    float uiFrameExtensionY) noexcept {
+    if (!(uiFrameExtensionY > 1.0F)) {
+        return frame;
+    }
+    return {frame.X, frame.Y + nativeCenterY * frame.ScaleY * (1.0F - 1.0F / uiFrameExtensionY),
+            frame.ScaleX, frame.ScaleY / uiFrameExtensionY};
 }
 
 } // namespace Oot3d::Renderer

@@ -2074,13 +2074,32 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 compositionDomain ==
                 Renderer3ds::PicaCompositionDomain::Screen);
         }
+        // A title's interface frame longer than its screen (UiFrameExtensionY,
+        // which the title sets on draws whose viewport is the screen) holds
+        // placed UI: the canvas stretches over the frame and the draw's clip
+        // Y narrows to match, so the screen keeps its proportions at the
+        // frame's centre. Screen content keeps its own canvas.
+        const float uiFrameExtensionY =
+            compositionDomain == Renderer3ds::PicaCompositionDomain::Ui &&
+                    draw.UiFrameExtensionY > 1.0F
+                ? draw.UiFrameExtensionY
+                : 1.0F;
         const auto rasterCanvas = ::Oot3d::Renderer::ResolvePicaRasterCanvas(
             compositionDomain, frameContentResolution.Content,
             draw.FramebufferWidth, draw.FramebufferHeight, renderTarget.Width,
             renderTarget.Height,
             Oot3d::NativeTopScreenStorageSamplingX(
                 {draw.FramebufferWidth, draw.FramebufferHeight},
-                NativeTopScreenOutputExtent()));
+                NativeTopScreenOutputExtent()),
+            uiFrameExtensionY);
+        if (uiFrameExtensionY > 1.0F) {
+            const std::array<float, 2> clipScaleDelta{0.0F, 1.0F / uiFrameExtensionY - 1.0F};
+            for (const VkDeviceSize offset : {vertexUniformOffset, previousVertexUniformOffset}) {
+                std::memcpy(static_cast<uint8_t*>(frame.UniformBuffer.Mapped) + offset +
+                                Oot3d::kPicaPackedVertexClipScaleDeltaOffset,
+                            clipScaleDelta.data(), sizeof(clipScaleDelta));
+            }
+        }
         const float framebufferScaleX = rasterCanvas.ScaleX;
         const float framebufferScaleY = rasterCanvas.ScaleY;
         mViewport = {rasterCanvas.X + draw.ViewportX * framebufferScaleX,
@@ -2092,15 +2111,27 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             const uint32_t y1 = draw.ScissorY1;
             const uint32_t x2 = static_cast<uint32_t>(draw.ScissorX2) + 1U;
             const uint32_t y2 = static_cast<uint32_t>(draw.ScissorY2) + 1U;
+            // A scissor of the whole viewport (the screen) spans the whole
+            // frame; a smaller one bounds content, which the narrowed clip
+            // space keeps at the screen's proportions around its centre.
+            const bool wholeScreenScissor =
+                static_cast<float>(x1) <= draw.ViewportX && static_cast<float>(y1) <= draw.ViewportY &&
+                static_cast<float>(x2) >= draw.ViewportX + draw.ViewportWidth &&
+                static_cast<float>(y2) >= draw.ViewportY + draw.ViewportHeight;
+            const auto scissorCanvas =
+                wholeScreenScissor
+                    ? rasterCanvas
+                    : ::Oot3d::Renderer::PicaUiFrameContentCanvas(
+                          rasterCanvas, draw.ViewportY + draw.ViewportHeight * 0.5F, uiFrameExtensionY);
             mScissor = {
-                {static_cast<int32_t>(rasterCanvas.X + static_cast<float>(x1) *
-                                      framebufferScaleX),
-                 static_cast<int32_t>(rasterCanvas.Y + static_cast<float>(y1) *
-                                      framebufferScaleY)},
+                {static_cast<int32_t>(scissorCanvas.X + static_cast<float>(x1) *
+                                      scissorCanvas.ScaleX),
+                 static_cast<int32_t>(scissorCanvas.Y + static_cast<float>(y1) *
+                                      scissorCanvas.ScaleY)},
                 {static_cast<uint32_t>(static_cast<float>(
-                     x2 > x1 ? x2 - x1 : 0U) * framebufferScaleX),
+                     x2 > x1 ? x2 - x1 : 0U) * scissorCanvas.ScaleX),
                  static_cast<uint32_t>(static_cast<float>(
-                     y2 > y1 ? y2 - y1 : 0U) * framebufferScaleY)}};
+                     y2 > y1 ? y2 - y1 : 0U) * scissorCanvas.ScaleY)}};
         } else {
             mScissor = {{0, 0},
                         {renderTarget.Width, renderTarget.Height}};

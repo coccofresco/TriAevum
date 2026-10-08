@@ -352,6 +352,7 @@ bool WithOot3dPicaVulkanDrawView(
     draw.ViewportY = static_cast<float>(viewport.CornerY);
     draw.ViewportWidth = viewport.HalfWidth * 2.0F;
     draw.ViewportHeight = viewport.HalfHeight * 2.0F;
+    draw.UiFrameExtensionY = plan.UiFrameExtensionY;
     draw.DepthRange = viewport.DepthRange;
     draw.NearPlane = viewport.NearPlane;
     draw.WBuffering = !viewport.ZBuffering;
