@@ -361,6 +361,14 @@ void NativeA32WindowSession::Setup() {
     widescreenProjection.Projection.FrustumIsSceneView = false;
     widescreenProjection.Mm3dCompositionTracker = &mm3dCompositionTracker;
     if (mm3dGuestPatches.Empty()) {
+      // dekui's settings: its shipped defaults, or (development) a
+      // presentation.json given by TRIAEVUM_MM3D_PRESENTATION, until the F1
+      // menu owns and persists them.
+      const char *presentation = std::getenv("TRIAEVUM_MM3D_PRESENTATION");
+      if (!Oot3dNativeGame::Mm3dSingleScreen::LoadSettings(
+              presentation != nullptr ? std::filesystem::path(presentation) : std::filesystem::path{}))
+        std::fprintf(stderr, "MM3D single-screen: %s is unreadable, using dekui's defaults\n",
+                     presentation != nullptr ? presentation : "dekui's settings");
       if (const char *multiplier = std::getenv("TRIAEVUM_MM3D_DAMAGE_MULTIPLIER")) {
         // Development: dekui's damage multiplier until the F1 owns it.
         Oot3dNativeGame::Mm3dSingleScreen::SetDamageMultiplier(std::atoi(multiplier));
@@ -371,7 +379,8 @@ void NativeA32WindowSession::Setup() {
         return static_cast<std::int64_t>(presentationFrameCount) * 1000000 / 60;
       });
       mm3dSingleScreen->Register(mm3dGuestPatches);
-      mm3dRestoration.emplace();
+      mm3dGuestCalls.Install(mm3dGuestPatches);
+      mm3dRestoration.emplace(mm3dGuestCalls);
       mm3dRestoration->Register(mm3dGuestPatches);
     }
   }

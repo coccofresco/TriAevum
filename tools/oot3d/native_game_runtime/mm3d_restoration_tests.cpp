@@ -1,4 +1,5 @@
 #include "input.h"
+#include "main.h"
 #include "mm3d_restoration.h"
 #include "v110_address.h"
 
@@ -94,10 +95,12 @@ void TestSites() {
     WordMemory memory;
     memory.Words = {{0x00116A08U, 0xE59D0014U}, {0x001168D8U, 0xE1CD70B2U}, {0x001166A0U, 0xE3100901U},
                     {0x005C1664U, 0xE3110B03U}, {0x005C178CU, 0x03A03002U}};
-    Mm3dRestorationPort port;
+    Mm3dGuestCalls calls;
+    Mm3dRestorationPort port(calls);
     Mm3dGuestPatches patches;
+    calls.Install(patches);
     port.Register(patches);
-    Require(patches.Verify(memory) == 5U, "the input hooks do not match v1.1");
+    Require(patches.Verify(memory) == 6U, "the input hooks do not match v1.1");
     a32::GuestState state;
     a32::ExecutionResult result;
     // The softbranch runs and leaves the guest's instruction to follow.
@@ -119,6 +122,50 @@ void TestSites() {
     Require(port.ApplyDataPatches(memory) == 0U, "a patched byte was patched again");
 }
 
+// rst::Calc: the first game state plays the initialisation jingle; in play,
+// Start on the ocarina screen closes the ocarina layout (opening the song
+// list) and plays the decide effect, then the site's instruction runs.
+void TestCalc() {
+    WordMemory memory;
+    memory.Words[0x00106740U] = 0xE5901138U;
+    Mm3dGuestCalls calls;
+    Mm3dRestorationPort port(calls);
+    Mm3dGuestPatches patches;
+    calls.Install(patches);
+    port.Register(patches);
+    (void)patches.Verify(memory);
+    Guest guest(memory);
+    constexpr std::uint32_t kState = 0x08100000U;
+    a32::GuestState state;
+    state.thread_pointer = 0x1000U;
+    state.r[0] = kState;
+    state.r[13] = 0x0FFF0000U;
+    a32::ExecutionResult result;
+    const auto run = [&](std::uint32_t pc) {
+        Require(Mm3dGuestPatches::Execute(pc, state, memory, &result, &patches), "the hook did not run");
+        return result.pc;
+    };
+    const auto returnFromGuest = [&] { return run(state.r[14]); };
+    guest.Write8(kState + kStateType, kStateFirstGame);
+    Require(run(0x00106740U) == kPlayEffect && state.r[0] == NA_SE_SY_QUEST_CLEAR, "no initialisation jingle");
+    Require(returnFromGuest() == 0x00106740U && state.r[0] == kState, "the state register was not restored");
+    Require(!Mm3dGuestPatches::Execute(0x00106740U, state, memory, &result, &patches),
+            "the displaced instruction did not follow");
+    // In play, on the ocarina screen with the ocarina layout current.
+    constexpr std::uint32_t kScreen = 0x08200000U;
+    guest.Write8(kState + kStateType, kStatePlay);
+    guest.Write32(kOcarinaScreen, kScreen);
+    guest.Write32(kScreenContext + 0x8U, kScreen);
+    guest.Write32(kScreen + kOcarinaLayout, 0x08300000U);
+    guest.Write8(kScreen + kOcarinaIsMenu, 1U);
+    guest.Write32(kState + kStateNewButtons, Button::Start);
+    Require(run(0x00106740U) == kCloseOcarinaLayout && state.r[0] == 0x08300000U &&
+                guest.Read8(kScreen + kOcarinaTransitioning) == 1U,
+            "Start did not close the ocarina layout");
+    Require(returnFromGuest() == kPlayEffect && state.r[0] == NA_SE_SY_DECIDE, "no decide effect");
+    Require(returnFromGuest() == 0x00106740U, "the hook did not resume the guest at itself");
+}
+
 } // namespace
 
 int main() {
@@ -126,6 +173,7 @@ int main() {
     TestOcarinaScreen();
     TestItemAssign();
     TestSites();
+    TestCalc();
     std::cout << "mm3d_restoration_tests: ok\n";
     return 0;
 }

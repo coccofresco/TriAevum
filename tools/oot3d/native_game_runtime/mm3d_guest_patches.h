@@ -79,6 +79,10 @@ class Mm3dGuestPatches {
     std::vector<std::uint32_t> BlockBoundaries() const;
     std::vector<SiteStatistics> Statistics() const;
     bool Empty() const noexcept { return mSites.empty(); }
+    // The next time the guest thread (its TLS pointer) reaches the site at
+    // pc, its own instruction runs: a site whose work ran elsewhere (a
+    // coroutine that called guest code) resumes the guest at itself.
+    void SkipOnce(std::uint32_t pc, std::uint32_t thread);
 
     // oot3d::recomp::a32::NativeFunctionCallback over a Mm3dGuestPatches.
     static bool Execute(std::uint32_t pc, oot3d::recomp::a32::GuestState& state,
@@ -89,6 +93,7 @@ class Mm3dGuestPatches {
     struct Entry {
         Mm3dGuestPatchSite Site;
         SiteStatistics Stats;
+        std::vector<std::uint32_t> SkipThreads;
     };
     Entry* Find(std::uint32_t pc) noexcept;
     std::vector<Entry> mSites; // sorted by PC

@@ -3,6 +3,7 @@
 #include "mm3d_guest_patches.h"
 
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <map>
 #include <memory>
@@ -35,6 +36,11 @@ class Mm3dSingleScreen {
     // Adds every candidate PC to patches; this object must outlive them.
     void Register(Mm3dGuestPatches& patches);
     static std::vector<std::uint32_t> CandidatePcs();
+    // dekui's settings (its presentation.json): the file at path, or
+    // dekui's shipped defaults when path is empty or missing. Applied as
+    // dekui applies them at startup; call before the guest runs. Returns
+    // false if a given file could not be read (the defaults apply then).
+    static bool LoadSettings(const std::filesystem::path& path);
     // dekui's difficulty option (1..16), until the F1 menu owns its settings.
     static void SetDamageMultiplier(int multiplier);
 

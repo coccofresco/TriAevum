@@ -558,6 +558,34 @@ X/Y assign the selected item directly; the native ZL/ZR checks are skipped
 dekui's prompt appears (`inputs/save100_rst_ocarina.json`, W). Test:
 `oot3d_mm3d_restoration_tests`.
 
+Second slice, `rst::Calc` (softbranch at the game state's update,
+`0x106740`): the first game state plays Restoration's initialisation jingle;
+in play, Start or Select leaves the Gear screen, and on the ocarina screen
+closes the current layout (the ocarina's, which opens the song list, or the
+song list's) and plays the decide effect. It calls guest functions through
+`Mm3dGuestCalls` and resumes the guest at the hook itself, whose own
+instruction then runs once (`Mm3dGuestPatches::SkipOnce`). The rest of
+`Calc` (camera, Link, the fixes) and the other hooks follow.
+
+### dekui's settings
+
+`tools/mm3d/dekui/settings.{h,cpp}` (ported by Codex from dekui's
+`settings.cpp` and the application in `overlay.cpp`, nlohmann::json instead
+of Qt) load dekui's `presentation.json` and apply it to the modules as dekui
+does at startup. The runtime applies dekui's shipped defaults
+(`tools/mm3d/dekui/defaults/presentation.json`, dekui-authored values, no
+game material), or a file named by `TRIAEVUM_MM3D_PRESENTATION`
+(development), until the F1 menu owns and persists them. The shipped
+defaults keep dekui's choices, e.g. `song_reset_top=false` and damage x1.
+
+Verified on the developer launch with Restoration's controls only
+(`inputs/save100_rst_song_list.json`, W): ZR+A takes out the ocarina, Start
+opens the song list in dekui's layout (the songs as a grid of three columns
+on the left, the selected song's staff below), B returns to play. dekui's
+prompt icons come from its renderer side, not yet integrated. Tests:
+`oot3d_mm3d_dekui_settings_tests` (shipped file and a scratch directory),
+`oot3d_mm3d_restoration_tests`, `oot3d_mm3d_guest_calls_tests`.
+
 ## Next steps
 
 1. Continue past the intro to the title screen and file select, one missing

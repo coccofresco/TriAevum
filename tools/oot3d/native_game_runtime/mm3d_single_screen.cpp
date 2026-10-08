@@ -1,6 +1,7 @@
 #include "mm3d_single_screen.h"
 
 #include "core.h"
+#include "settings.h"
 #include "mm3d_a32_substitute.h"
 
 #include <cstdio>
@@ -59,6 +60,21 @@ Mm3dSingleScreen::Mm3dSingleScreen(std::function<std::int64_t()> globalTimeUs)
     : mCore(std::make_unique<Mm3dDekui::Core>(Mm3dDekui::HostFacts{std::move(globalTimeUs), {}})) {}
 
 Mm3dSingleScreen::~Mm3dSingleScreen() = default;
+
+bool Mm3dSingleScreen::LoadSettings(const std::filesystem::path& path) {
+    Mm3dDekui::Settings settings;
+    bool loaded = true;
+    std::error_code error;
+    if (path.empty() || !std::filesystem::exists(path, error) || !settings.Load(path)) {
+        loaded = path.empty() || !std::filesystem::exists(path, error);
+        settings = Mm3dDekui::Settings{};
+        if (!settings.LoadFromString(Mm3dDekui::DefaultSettingsJson())) {
+            return false;
+        }
+    }
+    Mm3dDekui::ApplyStartupSettings(settings);
+    return loaded;
+}
 
 void Mm3dSingleScreen::SetDamageMultiplier(int multiplier) {
     Mm3dDekui::Difficulty::damage_multiplier = multiplier;

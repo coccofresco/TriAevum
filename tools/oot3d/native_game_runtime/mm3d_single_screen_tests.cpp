@@ -128,7 +128,8 @@ int main(int argc, char** argv) {
         // after it start a block (tools/mm3d/a32/guest_patch_entries.py).
         // dekui's sites and Project Restoration's hooks.
         Mm3dSingleScreen singleScreen;
-        Mm3dRestorationPort restoration;
+        Mm3dGuestCalls calls;
+        Mm3dRestorationPort restoration(calls);
         Mm3dGuestPatches patches;
         singleScreen.Register(patches);
         restoration.Register(patches);

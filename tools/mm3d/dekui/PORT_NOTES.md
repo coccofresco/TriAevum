@@ -174,3 +174,97 @@ outside the repository (`W/analysis/dekui/withheld/`). They become useful
 only with Project Restoration's message getter (the modules' guards need it)
 and should then be rebuilt as edits applied to the user's own messages,
 checked by hash, for each EUR language.
+
+## presentation.json settings port
+
+`settings.h` / `settings.cpp` port dekui's Settings and
+`overlay.cpp::ApplyPresentationSettings` with nlohmann/json. Add `settings.cpp`
+to the title component and use the existing `nlohmann_json` include dependency.
+No Qt, donor directory, asset installation or game process is required.
+
+```cpp
+namespace Mm3dDekui {
+// Members of Settings:
+// bool Load(const std::filesystem::path& path);
+// bool LoadFromString(std::string_view text);
+// bool Save(const std::filesystem::path& path) const;
+// bool SaveBlocked() const noexcept;
+std::string_view DefaultSettingsJson() noexcept;
+void ApplySettings(const Settings& settings);
+void ApplyStartupSettings(const Settings& settings);
+bool MigrateLegacyBanners(Settings& settings, const LegacyBannerSettings& old);
+}
+```
+
+Load the selected settings before guest execution and before the first
+`Prices::Initialize`. ApplyStartupSettings clears the pending minimap visibility
+request and calls ApplySettings in the donor order. Ordinary ApplySettings leaves
+that request intact. Application is not an atomic multi-setting transaction;
+subsequent calls require quiescent guest execution. Prices keeps the donor's
+one-time startup latch, so changing `double_prices` later requires a fresh session
+with that state reset by its owner.
+
+Load requires a version-1 JSON object of at most 1 MiB. Missing and wrong-type
+fields use the donor Load fallbacks, including conditional current-pose retention,
+derived inventory bar placement, old brown-background keys, mirrored map prompts,
+notebook prompt separation, HUD preset scale fallback and single fullscreen-draw
+migration. Draw rules retain 64-bit hex precision, validation, deduplication, the
+128-rule cap and exclusion of the built-in TransitionOverlay. Unknown keys are
+ignored and are not re-emitted, matching the donor. Load/LoadFromString only
+update settings data; they do not apply atomics.
+
+A missing file returns false with Save allowed. An existing unreadable/invalid
+file or failed LoadFromString blocks Save on that Settings object until a
+subsequent successful load (or missing-file Load), matching the donor. Invalid
+input leaves the prior values intact. For fallback after a damaged user file,
+use a separate Settings object loaded from DefaultSettingsJson and keep the
+failed object/status for persistence decisions: successfully loading defaults
+into the same object clears its save protection. Do not automatically overwrite
+the damaged user file. Save creates an exclusive sibling temporary file, flushes
+and closes it, then atomically replaces the destination; it never falls back to
+truncating the original or creates parent directories. Windows uses native wide
+paths and MoveFileExW; POSIX uses open/write/fsync/rename. Only the Windows path
+has been exercised here.
+
+`defaults/presentation.json` is the unchanged donor resource (19,930 bytes,
+520 keys, SHA-256 `2a5516c097a79db0779d3e79cc9f036869e6f49390dc64dac1dc3004168afa27`).
+The only string values are shader/swizzle signatures. No game text or assets
+are included. `DefaultSettingsJson()` embeds identical bytes using bounded
+adjacent literals, so deployment does not require a resource-copy rule.
+
+The shipped file explicitly has **song_reset_top=false**, **damage_multiplier=1**
+and **double_prices=false**. Its SongReset poses are configured even while that
+hook is disabled. Set intended Moonfall profile overrides on the selected Settings
+before applying; the faithful donor copy is not a Moonfall difficulty/profile
+policy. SongList and DoubleTime are enabled by the shipped file.
+
+Host consumers and retained boundaries:
+
+- `SettingsHost::accurate_hle_audio` holds the applied audio choice; the title's
+  audio adapter must consume it instead of Azahar's AudioCore::HLE atomic.
+- `BloomSampling::enabled` and `WidescreenProbe::{mutex,saved_draws}` receive the
+  donor values. Their pure renderer helpers are ported; renderer consumption
+  remains with the host. Minimap, widescreen, camera, dialogue, difficulty,
+  healing, drops, death, prices and every guest Options::Apply are applied here.
+- `SubmenuHeader` retains Options/Fields metadata, not the Qt GAR writer.
+  `restoration_hud_scale`, `magic_bar_y`, `dpad_y`, and submenu-header options are
+  archive/setup controls in the donor. Indicator/performance and overlay
+  scale/opacity/x/y belong to its overlay UI. These all roundtrip as data; they
+  do not acquire invented guest effects in ApplySettings.
+- The donor's legacy banner migration also needs notebook.json and successful
+  removal of an installed telop override. `MigrateLegacyBanners` exposes its
+  exact geometry/brightness formula and applies/marks it once. The host supplies
+  LegacyBannerSettings only after successful override removal, then saves the
+  Settings object. Startup backups, InventoryMenu legacy archive restoration,
+  Notebook/Profiles loading and archive mutation remain host setup tasks.
+- Withheld message tables remain empty. Applying `single_screen_text` or
+  `double_prices` does not weaken their existing guest guards or restore text.
+
+Standalone validation: `python -B W/analysis/dekui/test_settings.py`, and the same
+command with `--clang-cl` for the application's compiler. Each runner acquires
+`coord/build.lock` by exclusive mkdir and removes its owned lock in finally;
+all objects, executables, fixtures and receipts stay under W/analysis/dekui.
+Both toolchains pass 321 checks, including all shipped dialog poses, all 524
+serialized keys roundtripping, malformed-file protection, Unicode paths,
+atomic replacement failure cleanup, migrations, applied atomics and price-latch
+semantics. No game run or host build is part of these tests.

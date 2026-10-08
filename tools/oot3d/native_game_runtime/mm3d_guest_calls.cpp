@@ -22,6 +22,7 @@ bool Mm3dGuestTask::Step() {
 }
 
 void Mm3dGuestCalls::Install(Mm3dGuestPatches& patches) {
+    mPatches = &patches;
     Mm3dGuestPatchSite sentinel;
     sentinel.Pc = kReturnSentinel;
     sentinel.Name = "guest_call.return";
@@ -32,7 +33,7 @@ void Mm3dGuestCalls::Install(Mm3dGuestPatches& patches) {
     patches.Add(std::move(sentinel));
 }
 
-std::optional<std::uint32_t> Mm3dGuestCalls::Start(std::uint32_t, std::uint32_t resume,
+std::optional<std::uint32_t> Mm3dGuestCalls::Start(std::uint32_t pc, std::uint32_t resume,
                                                    const Body& body, a32::GuestState& state,
                                                    a32::MemoryBus& memory) {
     auto running = std::make_unique<Running>();
@@ -40,6 +41,7 @@ std::optional<std::uint32_t> Mm3dGuestCalls::Start(std::uint32_t, std::uint32_t 
     running->Context.Resume = resume;
     running->Context.Memory = &memory;
     running->CallerSp = state.r[13];
+    running->Site = pc;
     running->Task = body(running->Context);
     const std::uint32_t thread = state.thread_pointer;
     auto& stack = mRunning[thread];
@@ -84,6 +86,10 @@ std::optional<std::uint32_t> Mm3dGuestCalls::Advance(std::uint32_t thread, Runni
     // Finished: the guest resumes with the registers the body left.
     state = context.Saved;
     const std::uint32_t resume = context.Resume;
+    if (resume == running.Site && mPatches != nullptr) {
+        // Back at the site (a softbranch): its instruction runs now.
+        mPatches->SkipOnce(resume, thread);
+    }
     auto& stack = mRunning[thread];
     stack.pop_back();
     if (stack.empty()) {

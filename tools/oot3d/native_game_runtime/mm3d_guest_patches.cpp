@@ -107,6 +107,14 @@ bool Mm3dGuestPatches::Execute(std::uint32_t pc, a32::GuestState& state, a32::Me
     if (entry == nullptr || !entry->Stats.Enabled) {
         return false;
     }
+    if (!entry->SkipThreads.empty()) {
+        const auto skip = std::find(entry->SkipThreads.begin(), entry->SkipThreads.end(),
+                                    state.thread_pointer);
+        if (skip != entry->SkipThreads.end()) {
+            entry->SkipThreads.erase(skip);
+            return false;
+        }
+    }
     const auto next = entry->Site.Handler(state, memory);
     if (!next.has_value()) {
         ++entry->Stats.Declined;
@@ -116,6 +124,12 @@ bool Mm3dGuestPatches::Execute(std::uint32_t pc, a32::GuestState& state, a32::Me
     state.r[15] = *next;
     *result = {a32::ExitKind::Branch, *next, a32::FallbackReason::None, pc};
     return true;
+}
+
+void Mm3dGuestPatches::SkipOnce(std::uint32_t pc, std::uint32_t thread) {
+    if (auto* entry = Find(pc)) {
+        entry->SkipThreads.push_back(thread);
+    }
 }
 
 bool Mm3dConditionPassed(std::uint32_t instruction, std::uint32_t cpsr) noexcept {

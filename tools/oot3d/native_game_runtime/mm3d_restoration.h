@@ -1,5 +1,6 @@
 #pragma once
 
+#include "mm3d_guest_calls.h"
 #include "mm3d_guest_patches.h"
 
 #include <memory>
@@ -23,7 +24,9 @@ namespace Oot3dNativeGame {
 // - data patch: written once the image is mounted.
 class Mm3dRestorationPort {
   public:
-    Mm3dRestorationPort();
+    // Restoration's hooks that call guest functions run through calls,
+    // which must outlive this.
+    explicit Mm3dRestorationPort(Mm3dGuestCalls& calls);
     ~Mm3dRestorationPort();
     Mm3dRestorationPort(const Mm3dRestorationPort&) = delete;
     Mm3dRestorationPort& operator=(const Mm3dRestorationPort&) = delete;
@@ -34,7 +37,14 @@ class Mm3dRestorationPort {
     std::size_t ApplyDataPatches(oot3d::recomp::a32::MemoryBus& memory);
 
   private:
+    // rst::Calc (softbranch at the game state's update, r0 = the state).
+    Mm3dGuestTask Calc(Mm3dGuestCallContext& context);
+
+    Mm3dGuestCalls& mCalls;
     std::unique_ptr<Mm3dRestoration::Input> mInput;
+    // rst::Context: has_initialised and gctx (the Play state, or 0).
+    bool mInitialised = false;
+    std::uint32_t mGctx = 0;
     // rst::Context::is_swimming (set by the Zora swimming port; false until then).
     bool mIsSwimming = false;
 };

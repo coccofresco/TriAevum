@@ -123,7 +123,8 @@ class Mm3dGuestCalls {
     static constexpr std::uint32_t kReturnSentinel = 0x000FFFF0U;
     using Body = std::function<Mm3dGuestTask(Mm3dGuestCallContext&)>;
 
-    // Adds the return sentinel to patches. Call once.
+    // Adds the return sentinel to patches. Call once; patches must outlive
+    // this.
     void Install(Mm3dGuestPatches& patches);
     // A site handler body for Mm3dGuestPatchSite::Handler: starts body at
     // the site (pc) with the guest continuing at resume afterwards.
@@ -137,6 +138,7 @@ class Mm3dGuestCalls {
         Mm3dGuestCallContext Context;
         Mm3dGuestTask Task;
         std::uint32_t CallerSp = 0;
+        std::uint32_t Site = 0;
     };
     std::optional<std::uint32_t> Advance(std::uint32_t thread, Running& running,
                                          oot3d::recomp::a32::GuestState& state);
@@ -145,6 +147,7 @@ class Mm3dGuestCalls {
     // One suspended body per guest thread (its TLS pointer), nested calls
     // on a thread form a stack.
     std::map<std::uint32_t, std::vector<std::unique_ptr<Running>>> mRunning;
+    Mm3dGuestPatches* mPatches = nullptr;
 };
 
 } // namespace Oot3dNativeGame

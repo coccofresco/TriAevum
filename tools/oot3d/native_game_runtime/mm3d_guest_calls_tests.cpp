@@ -106,6 +106,34 @@ void TestCalls() {
             "the site did not resume with its own registers");
 }
 
+// A body that resumes the guest at its own site (a softbranch) lets the
+// site's instruction run once, then the site applies again.
+void TestResumeAtSite() {
+    Guest guest;
+    guest.Calls.Install(guest.Patches);
+    int runs = 0;
+    Mm3dGuestCalls::Body body = [&](Mm3dGuestCallContext& context) -> Mm3dGuestTask {
+        ++runs;
+        if (runs == 2) {
+            co_await context.Call(kAdd, {{1, 1}});
+        }
+    };
+    Mm3dGuestPatchSite site;
+    site.Pc = kSite;
+    site.Name = "softbranch";
+    site.Handler = [&](a32::GuestState& state, a32::MemoryBus& memory) {
+        return guest.Calls.Start(kSite, kSite, body, state, memory);
+    };
+    guest.Patches.Add(std::move(site));
+    (void)guest.Patches.Verify(guest.Memory);
+    guest.State.thread_pointer = 0x3000U;
+    Require(guest.Dispatch(kSite) && guest.Next == kSite && runs == 1, "the body did not run");
+    Require(!guest.Dispatch(kSite), "the site's own instruction did not follow");
+    Require(guest.Dispatch(kSite) && guest.Next == kAdd && runs == 2, "the site did not apply again");
+    guest.Return(2U);
+    Require(guest.Next == kSite && !guest.Dispatch(kSite), "after a guest call the instruction did not follow");
+}
+
 // A return to the sentinel that no body is waiting for is not handled.
 void TestStrayReturn() {
     Guest guest;
@@ -119,6 +147,7 @@ void TestStrayReturn() {
 
 int main() {
     TestCalls();
+    TestResumeAtSite();
     TestStrayReturn();
     std::cout << "mm3d_guest_calls_tests: ok\n";
     return 0;
