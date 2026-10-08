@@ -657,7 +657,29 @@ re-edit sources (`*.mm3d-*-source`) are written beside the layer, not in it.
 In W: `python tools/mm3d/dekui/setup/prepare_romfs_layer.py --romfs
 extract/romfs.bin --restoration <restoration> --layer mods/dekui-romfs
 --sources mods/dekui-sources`, then
-`TRIAEVUM_ROMFS_OVERLAY=<W>/mods/dekui-romfs`. Tests: `oot3d_native_a32_romfs_overlay_tests` (layers, replacement,
+`TRIAEVUM_ROMFS_OVERLAY=<W>/mods/dekui-romfs`.
+
+dekui's single-screen wording: `tools/mm3d/dekui/setup/prepare_message_edits.py`
+(from dekui's `single_screen_text.py`, reviewed English in
+`single-screen.json`) compiles dekui's edits against the user's own English
+messages (EUR `message/eu/eue.gmsg`, language bit 4) with dekui's checks
+(allocation, unchanged dialogue flow, control round trip) and writes guarded
+edits for the port's message getter; a message whose English differs is
+skipped, no wording is invented. On EUR English 11 of dekui's 12 messages
+apply (0x0E9B "Progress saved." differs); other languages keep their native
+text. The edits hold the user's text: they stay on the user's machine.
+Development: `TRIAEVUM_MM3D_MESSAGE_EDITS=<json>`
+(`Mm3dRestorationPort::ReadMessageEdits`, then `SetMessageEdits`). Loaded
+live (11 messages, no faults); a scene showing one of them is not yet
+captured. dekui's doubled prices (option, off by default) are not compiled
+yet.
+
+Screen sweep (developer launch, with the layer; `W/analysis/dekui/sweep`):
+gear, masks, items, notebook (Event Notes on the top screen), Song of Time
+(dekui's song prompt, staff, the dawn confirmation on the top screen),
+Double Time, shortcuts and file select run without faults. The map
+timeline from the archived branch drives the old lower-screen controls and
+does not open the map. Tests: `oot3d_native_a32_romfs_overlay_tests` (layers, replacement,
 nested directories, re-layering, malformed base; with
 `OOT3D_ROMFS_OVERLAY_IMAGE` the image's tables are reproduced and its file
 data served).

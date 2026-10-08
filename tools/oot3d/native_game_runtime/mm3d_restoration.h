@@ -5,6 +5,9 @@
 #include "session.h"
 
 #include <memory>
+#include <optional>
+#include <string>
+#include <string_view>
 
 namespace Mm3dRestoration {
 class Input;
@@ -38,6 +41,12 @@ class Mm3dRestorationPort {
     std::size_t ApplyDataPatches(oot3d::recomp::a32::MemoryBus& memory);
     void SetDekuiBridge(Mm3dRestoration::DekuiBridge bridge);
     bool SetMessageEdits(std::vector<Mm3dRestoration::MessageEdit> edits);
+    // Message edits as tools/mm3d/dekui/setup/prepare_message_edits.py
+    // writes them (triaevum_mm3d_message_edits_v1: the user's own text and
+    // dekui's wording, kept on the user's machine); nullopt and error set if
+    // the document is malformed. SetMessageEdits validates their hashes.
+    static std::optional<std::vector<Mm3dRestoration::MessageEdit>> ReadMessageEdits(
+        std::string_view json, std::string* error = nullptr);
     Mm3dRestoration::PortCapabilities Capabilities(oot3d::recomp::a32::MemoryBus& memory) const;
     static std::vector<std::uint32_t> RegistryBoundaries();
     // Dynamic equivalent of donor s_hud.heart_group, zero before HUD Init.

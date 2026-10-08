@@ -4,6 +4,7 @@
 #include "engine_impl.h"
 #include "sites.h"
 #include "substitute.h"
+#include <nlohmann/json.hpp>
 #include <set>
 
 namespace Oot3dNativeGame {
@@ -14,6 +15,50 @@ Mm3dRestorationPort::Mm3dRestorationPort(Mm3dGuestCalls& calls):mCalls(calls),mS
 Mm3dRestorationPort::~Mm3dRestorationPort()=default;
 void Mm3dRestorationPort::SetDekuiBridge(DekuiBridge bridge){mSession->dekui=std::move(bridge);}
 u32 Mm3dRestorationPort::HudHeartWidget() const noexcept{return mSession->hud_widgets[3];}
+
+std::optional<std::vector<MessageEdit>> Mm3dRestorationPort::ReadMessageEdits(std::string_view text,
+                                                                              std::string* error) {
+    const auto bytes = [](const std::string& hex, std::vector<u8>* out) {
+        if (hex.size() % 2U != 0U) return false;
+        out->clear();
+        for (size_t at = 0; at < hex.size(); at += 2U) {
+            unsigned value = 0;
+            for (const char c : hex.substr(at, 2U)) {
+                value <<= 4U;
+                if (c >= '0' && c <= '9') value |= unsigned(c - '0');
+                else if (c >= 'a' && c <= 'f') value |= unsigned(c - 'a' + 10);
+                else if (c >= 'A' && c <= 'F') value |= unsigned(c - 'A' + 10);
+                else return false;
+            }
+            out->push_back(static_cast<u8>(value));
+        }
+        return true;
+    };
+    try {
+        const auto document = nlohmann::json::parse(text);
+        if (document.at("format").get<std::string>() != "triaevum_mm3d_message_edits_v1") {
+            throw std::runtime_error("unsupported message edits format");
+        }
+        std::vector<MessageEdit> edits;
+        for (const auto& entry : document.at("edits")) {
+            MessageEdit edit;
+            edit.id = entry.at("id").get<u16>();
+            edit.language = entry.at("language").get<u8>();
+            edit.price = entry.value("price", false);
+            edit.original_hash = std::stoull(entry.at("original_hash").get<std::string>(), nullptr, 16);
+            edit.edited_hash = std::stoull(entry.at("edited_hash").get<std::string>(), nullptr, 16);
+            if (!bytes(entry.at("original").get<std::string>(), &edit.original) ||
+                !bytes(entry.at("edited").get<std::string>(), &edit.edited)) {
+                throw std::runtime_error("message bytes are not hexadecimal");
+            }
+            edits.push_back(std::move(edit));
+        }
+        return edits;
+    } catch (const std::exception& exception) {
+        if (error != nullptr) *error = exception.what();
+        return std::nullopt;
+    }
+}
 
 bool Mm3dRestorationPort::SetMessageEdits(std::vector<MessageEdit> edits) {
     const auto hash=[](const auto& bytes){u64 h=0xcbf29ce484222325ULL;for(u8 b:bytes)h=(h^b)*0x100000001b3ULL;return h;};

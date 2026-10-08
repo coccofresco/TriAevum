@@ -409,6 +409,19 @@ void NativeA32WindowSession::Setup() {
       mm3dRestoration.emplace(mm3dGuestCalls);
       mm3dRestoration->Register(mm3dGuestPatches);
       mm3dSingleScreen->BindRestoration(*mm3dRestoration);
+      if (const char *edits = std::getenv("TRIAEVUM_MM3D_MESSAGE_EDITS")) {
+        // Development: dekui's single-screen wording compiled against the
+        // user's own messages (tools/mm3d/dekui/setup/prepare_message_edits.py),
+        // until the launcher prepares and owns them.
+        std::ifstream stream(std::filesystem::u8path(edits), std::ios::binary);
+        const std::string text((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
+        std::string error;
+        const auto parsed = Oot3dNativeGame::Mm3dRestorationPort::ReadMessageEdits(text, &error);
+        if (!stream || !parsed.has_value() || !mm3dRestoration->SetMessageEdits(*parsed)) {
+          throw std::runtime_error(std::string("MM3D message edits: ") + edits + " is invalid " + error);
+        }
+        std::fprintf(stderr, "MM3D message edits: %zu message(s)\n", parsed->size());
+      }
     }
   }
   if (const char *pcDump = std::getenv("TRIAEVUM_A32_PC_DUMP")) {

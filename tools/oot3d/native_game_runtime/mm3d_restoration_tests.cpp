@@ -5,7 +5,9 @@
 #include "sites.h"
 #include "port_tests.inc"
 
+#include <cstdio>
 #include <cstdlib>
+#include <string>
 #include <iostream>
 #include <map>
 #include <string_view>
@@ -171,6 +173,39 @@ void TestCalc() {
     Require(returnFromGuest() == 0x00106740U, "the hook did not resume the guest at itself");
 }
 
+// The edits prepare_message_edits.py writes reach the port; their hashes
+// are checked when set.
+void TestReadMessageEdits() {
+    const auto fnv = [](std::string_view hex) {
+        std::uint64_t value = 0xcbf29ce484222325ULL;
+        for (size_t at = 0; at < hex.size(); at += 2U) {
+            value = (value ^ std::stoul(std::string(hex.substr(at, 2U)), nullptr, 16)) * 0x100000001b3ULL;
+        }
+        char text[17];
+        std::snprintf(text, sizeof(text), "%016llx", static_cast<unsigned long long>(value));
+        return std::string(text);
+    };
+    const auto document = [&](std::string_view format, const std::string& editedHash) {
+        return std::string("{\"format\":\"") + std::string(format) +
+               "\",\"edits\":[{\"id\":62,\"language\":4,\"original\":\"5461700000\",\"edited\":\"5072000000\","
+               "\"original_hash\":\"" + fnv("5461700000") + "\",\"edited_hash\":\"" + editedHash + "\"}]}";
+    };
+    std::string error;
+    auto edits = Mm3dRestorationPort::ReadMessageEdits(
+        document("triaevum_mm3d_message_edits_v1", fnv("5072000000")), &error);
+    Require(edits.has_value() && edits->size() == 1U && (*edits)[0].id == 62U && (*edits)[0].language == 4U &&
+                (*edits)[0].original.size() == 5U && (*edits)[0].edited[1] == 0x72U,
+            "message edits were not read");
+    Mm3dGuestCalls calls;
+    Mm3dRestorationPort port(calls);
+    Require(port.SetMessageEdits(*edits), "valid message edits were refused");
+    auto wrong = Mm3dRestorationPort::ReadMessageEdits(
+        document("triaevum_mm3d_message_edits_v1", fnv("5072000001")), &error);
+    Require(wrong.has_value() && !port.SetMessageEdits(*wrong), "an edit with a wrong hash was accepted");
+    Require(!Mm3dRestorationPort::ReadMessageEdits(document("other", fnv("5072000000")), &error).has_value(),
+            "an unknown format was read");
+}
+
 } // namespace
 
 int main(int argc,char** argv) {
@@ -180,6 +215,7 @@ int main(int argc,char** argv) {
     TestItemAssign();
     TestSites();
     TestCalc();
+    TestReadMessageEdits();
     RestorationPortTests::All(argc>1?argv[1]:nullptr);
     std::cout << "mm3d_restoration_tests: ok\n";
     return 0;

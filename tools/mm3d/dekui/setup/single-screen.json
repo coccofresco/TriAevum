@@ -1,0 +1,23 @@
+{
+  "language": "US English",
+  "edits": [
+    {"id": "003e", "start": "Tap ", "occurrence": 0, "text": "Press SELECT to open your inventory.\nUse {L}/{R} to choose the Map tab."},
+    {"id": "003e", "start": "When zoomed in, ", "text": "Use {Dpad} to move the cursor.\nChoose a floor from the floor list.\nPress {B} to return."},
+    {"id": "0043", "start": "Tap ", "text": "Press ZL to look through it.\nPress {A} to snap a picture."},
+    {"id": "0078", "start": "Tap ", "text": "Press SELECT to open your inventory.\nUse {L}/{R} to choose the Masks tab."},
+    {"id": "0078", "start": "Tap the corresponding icon", "text": "Press D-pad Down to wear this mask.\nPress it again to return to normal."},
+    {"id": "00ff", "start": "Select an item", "text": "Select an item and press {A}.\nPress {B} to cancel.{Color:11}"},
+    {"id": "026b", "start": "Tap ", "text": "Press SELECT to open your inventory.\nUse {L}/{R} to choose the Items tab."},
+    {"id": "026b", "start": "Select an item using ", "text": "Use {Stick} to select an item.\nPress {X} or {Y} to assign it."},
+    {"id": "026b", "start": "You can also ", "text": "For slots I and II, hold ZR\nand press {X} or {Y} to assign an item."},
+    {"id": "026b", "start": "Once you've assigned an item", "text": "Use the same button or button\ncombination to use the item.\nIt's easy!"},
+    {"id": "0270", "start": "Tap ", "text": "Press SELECT to open your inventory.\nUse {L}/{R} to choose Gear and view\nwhat you've collected."},
+    {"id": "033f", "start": "In ", "text": "In {Color:1}Event Notes{Color:11}, choose an event\nto read its details."},
+    {"id": "0e9b", "start": "Progress saved.", "text": "Progress saved.{Color:11}"},
+    {"id": "1bae", "start": "Items highlighted", "text": "Carried rupees{Color:11} and some items\nwill be {Color:1}lost{Color:11}."},
+    {"id": "1d18", "start": "Tap", "occurrence": 0, "text": "You can view the minimap{Color:11} in the\nbottom right corner. Press ZR +\nSELECT to toggle it on or off."},
+    {"id": "1d18", "start": "Tap ", "occurrence": 0, "text": "SELECT opens your inventory.\n{L}/{R}: Map tab."},
+    {"id": "2056", "start": "If you would like to restart your", "text": "To return to your last save,\nquit and restart the game,\nthen load your save file."},
+    {"id": "575b", "start": "Tap to enter a name.", "text": "Enter a name."}
+  ]
+}
