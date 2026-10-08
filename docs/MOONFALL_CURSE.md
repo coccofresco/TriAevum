@@ -486,25 +486,44 @@ coroutine; at the end the guest continues with the site's registers as the
 body left them. Bodies are kept per guest thread, nested calls stacked.
 Tests: `oot3d_mm3d_a32_substitute_tests`, `oot3d_mm3d_guest_calls_tests`.
 
-The integrated features are registered by `mm3d_single_screen.cpp` from
-ports of dekui's modules (`tools/mm3d/dekui/`, GPL-2.0-or-later, with
-attribution), reading `Mm3dSingleScreenSettings` when they run. First, the
-two dekui sites already valid on v1.1 (dekui's "original" variants):
+### dekui's guest side
 
-- Damage multiplier (difficulty): ADD r2, r2, r4 of the health-change
-  routine at `0x0021E34C`, guarded by the whole routine; losses are
-  multiplied (1..16) and clamped to the current health.
-- Disabled drops (difficulty): the Actor_Spawn wrapper's entry
-  `0x0022053C`; recovery hearts, rupees, healing fairies, magic jars and
-  ammo can each be refused (the null-spawn result), anything else replays
-  the native prologue.
+`tools/mm3d/dekui/` is a faithful port of dekui's guest side (56 of its
+`src/mm3d` headers, ported by Codex, GPL-2.0-or-later notices kept, every
+address translated to v1.1 with its reference in a comment) and of its
+emulator glue as `Mm3dDekui::Core`: `Instruction` is the ordered
+substitution chain of dekui's `MemoryReadCode` (every `CodeMatches` kept),
+`CallSvc` its SVC dispatch with all hook objects in their order (the shared
+NativeInventory pass/begin/end and DialogueScale before/after calls reach
+about twenty modules, with scratch-root stack frames unwound in reverse).
+`Mm3dSingleScreen` (`mm3d_single_screen.cpp`) runs it as dekui's emulator
+does: each of the 122 candidate PCs is a guest patch site; once the image is
+mounted the chain gives the word dekui would fetch there, and where that
+differs the site runs it: an SVC with its condition checked, r15 = pc + 4
+beforehand and the guest continuing at r15 (a CPSR Thumb bit becomes an odd
+PC); a plain instruction through the executor above. dekui's settings are
+its module atomics; its clock is the deterministic presentation clock (60
+Hz). The core stays behind a pointer so its headers never meet `windows.h`.
 
-Both default to the vanilla behaviour. `TRIAEVUM_MM3D_DAMAGE_MULTIPLIER`
-(development) sets the multiplier until the F1 menu owns these settings.
-Verified on the developer launch: from the 100% save with bombs
-(`inputs/save100_bomb_in_hand.json`, W), the bomb exploding in Link's hand
-at frame 1364 takes health 0x140 to 0x13C with multiplier 1 and to 0x130
-with 4; the play sequence is pixel-identical to the build without sites.
+On vanilla v1.1, 80 of the 122 sites apply. 42 stay off because their
+guards also check Project Restoration code (39 Prices through
+SingleScreenText's message getter, 3 FormCamera), and the 17 entries inside
+Restoration's appended code are excluded; all of them follow the
+Restoration port. dekui's two text tables (original US English messages and
+their edits) are withheld from the repository as game material
+(`tools/mm3d/dekui/PORT_NOTES.md`). The registry for these sites is
+`a32_generated_v5` (242 boundaries, three of them between inventory
+functions). `TRIAEVUM_MM3D_DAMAGE_MULTIPLIER` (development) sets dekui's
+damage multiplier until the F1 menu owns its settings.
+
+Verified on the developer launch (100% save, `inputs/save100_dekui_song_list.json`
+in W, touches standing in for the controls Restoration adds): the native
+minimap is drawn on the top screen; playing the ocarina shows dekui's
+prompt ("START Song list", "B Back"); the song list opens on the top screen
+(Song of Time panel and staff) and B returns to play. The bomb sequence
+still multiplies damage through the core. Tests:
+`oot3d_mm3d_dekui_core_tests` (with code.bin: 80 replacements, 20,818
+corrupted-guard checks), `oot3d_mm3d_single_screen_tests`.
 
 ## Next steps
 

@@ -363,10 +363,14 @@ void NativeA32WindowSession::Setup() {
     if (mm3dGuestPatches.Empty()) {
       if (const char *multiplier = std::getenv("TRIAEVUM_MM3D_DAMAGE_MULTIPLIER")) {
         // Development: dekui's damage multiplier until the F1 owns it.
-        mm3dSingleScreenSettings.Difficulty.DamageMultiplier = std::atoi(multiplier);
+        Oot3dNativeGame::Mm3dSingleScreen::SetDamageMultiplier(std::atoi(multiplier));
       }
-      Oot3dNativeGame::RegisterMm3dSingleScreenSites(mm3dGuestPatches,
-                                                     mm3dSingleScreenSettings);
+      // dekui animates with the emulated clock: here the deterministic
+      // presentation clock (a 60 Hz frame each).
+      mm3dSingleScreen.emplace([this] {
+        return static_cast<std::int64_t>(presentationFrameCount) * 1000000 / 60;
+      });
+      mm3dSingleScreen->Register(mm3dGuestPatches);
     }
   }
   if (const char *pcDump = std::getenv("TRIAEVUM_A32_PC_DUMP")) {

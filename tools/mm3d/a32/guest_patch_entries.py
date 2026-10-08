@@ -45,13 +45,20 @@ def main() -> int:
     boundaries = sorted({int(line, 0) for line in args.boundaries.read_text().split()})
     for pc in boundaries:
         containing = [(start, end) for start, end in functions if start <= pc < end]
-        if not containing:
-            print(f"guest patch boundary 0x{pc:08X} is outside every inventory function",
-                  file=sys.stderr)
-            return 1
         if pc in known:
             continue
-        end = min(end for _, end in containing)
+        if containing:
+            end = min(end for _, end in containing)
+        else:
+            # Code the inventory left between two functions: up to the next.
+            following = [start for start, _ in functions if start > pc]
+            if not following:
+                print(f"guest patch boundary 0x{pc:08X} follows every inventory function",
+                      file=sys.stderr)
+                return 1
+            end = min(following)
+            print(f"guest patch boundary 0x{pc:08X} lies between inventory functions;"
+                  f" bounded by 0x{end:08X}", file=sys.stderr)
         rows.append({
             "entry": f"0x{pc:08X}",
             "size": str(end - pc),

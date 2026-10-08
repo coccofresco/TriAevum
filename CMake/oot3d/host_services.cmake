@@ -204,6 +204,7 @@ oot3d_target_defaults(oot3d_mm3d_guest_patches FOLDER Tools)
 
 add_library(oot3d_mm3d_single_screen STATIC EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/mm3d_single_screen.cpp
+    tools/mm3d/dekui/core.cpp
 )
 target_include_directories(oot3d_mm3d_single_screen PUBLIC
     tools/oot3d/native_game_runtime
@@ -217,6 +218,13 @@ add_executable(oot3d_mm3d_v110_address_tests EXCLUDE_FROM_ALL
 )
 target_include_directories(oot3d_mm3d_v110_address_tests PRIVATE tools/mm3d/dekui)
 oot3d_target_defaults(oot3d_mm3d_v110_address_tests FOLDER Tests)
+
+add_executable(oot3d_mm3d_dekui_core_tests EXCLUDE_FROM_ALL
+    tools/mm3d/dekui/core_tests.cpp
+)
+target_link_libraries(oot3d_mm3d_dekui_core_tests PRIVATE
+    oot3d_mm3d_single_screen)
+oot3d_target_defaults(oot3d_mm3d_dekui_core_tests FOLDER Tests)
 
 add_executable(oot3d_mm3d_single_screen_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/mm3d_single_screen_tests.cpp
