@@ -345,6 +345,34 @@ void NativeA32WindowSession::Setup() {
     widescreenProjection.Projection.FrustumIsSceneView = false;
     widescreenProjection.Mm3dCompositionTracker = &mm3dCompositionTracker;
   }
+  if (const char *pcDump = std::getenv("TRIAEVUM_A32_PC_DUMP")) {
+    // PC,FRAME,DIR,ADDR:SIZE[;ADDR:SIZE...]
+    const std::string spec(pcDump);
+    const auto first = spec.find(',');
+    const auto second = first == std::string::npos ? first : spec.find(',', first + 1);
+    const auto third = second == std::string::npos ? second : spec.find(',', second + 1);
+    if (third == std::string::npos)
+      throw std::runtime_error("TRIAEVUM_A32_PC_DUMP: expected PC,FRAME,DIR,ADDR:SIZE[;...]");
+    widescreenProjection.PcDumpAddress =
+        static_cast<uint32_t>(std::stoul(spec.substr(0, first), nullptr, 16));
+    widescreenProjection.PcDumpFrame =
+        static_cast<uint32_t>(std::stoul(spec.substr(first + 1, second - first - 1)));
+    widescreenProjection.PcDumpDirectory = spec.substr(second + 1, third - second - 1);
+    std::string ranges = spec.substr(third + 1);
+    for (std::size_t start = 0; start <= ranges.size();) {
+      const auto end = std::min(ranges.find(';', start), ranges.size());
+      const auto range = ranges.substr(start, end - start);
+      const auto colon = range.find(':');
+      if (colon == std::string::npos)
+        throw std::runtime_error("TRIAEVUM_A32_PC_DUMP: range without ADDR:SIZE");
+      widescreenProjection.PcDumpRanges.emplace_back(
+          static_cast<uint32_t>(std::stoul(range.substr(0, colon), nullptr, 16)),
+          static_cast<uint32_t>(std::stoul(range.substr(colon + 1), nullptr, 16)));
+      start = end + 1;
+    }
+    widescreenProjection.PcDumpDone = false;
+    callTraceEntries.push_back(widescreenProjection.PcDumpAddress);
+  }
   if (!callTraceEntries.empty()) {
     blockEntryHooks.insert(blockEntryHooks.end(), callTraceEntries.begin(), callTraceEntries.end());
     std::sort(blockEntryHooks.begin(), blockEntryHooks.end());

@@ -479,6 +479,16 @@ struct NativeWidescreenProjectionState {
   uint32_t CallTraceFirstFrame = 0;
   uint32_t CallTraceLastFrame = 0;
   uint32_t CallTraceWordAddress = 0;
+  // Adapter bring-up: TRIAEVUM_A32_PC_DUMP=PC,FRAME,DIR,ADDR:SIZE[;ADDR:SIZE...]
+  // (hex PC/ADDR/SIZE) writes, once, the guest registers and the listed
+  // guest ranges at the first entry of block PC from host frame FRAME on:
+  // DIR/registers.txt and DIR/<ADDR>.bin. Memory mid-frame, at a native draw
+  // boundary, which a savestate at a frame boundary cannot show.
+  uint32_t PcDumpAddress = 0;
+  uint32_t PcDumpFrame = 0;
+  std::string PcDumpDirectory;
+  std::vector<std::pair<uint32_t, uint32_t>> PcDumpRanges;
+  bool PcDumpDone = true;
   uint64_t BlockTraceRecordsObserved = 0;
   Oot3dNativeGame::NativeA32Memory *TraceMemory = nullptr;
   Oot3dNativeGame::NativeHdFontRuntime *HdFonts = nullptr;

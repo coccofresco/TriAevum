@@ -250,6 +250,10 @@ to 16 words show their words. `TRIAEVUM_PROBE_GUEST_RANGES=ADDR:SIZE[,...]`
 (hex) records guest words at exit in runtime.json `guest_memory_probe`;
 `TRIAEVUM_DIAGNOSE_GUEST_WAIT` reports every thread's priority, status and
 registers when the guest does not reach a wait.
+`TRIAEVUM_A32_PC_DUMP=PC,FRAME,DIR,ADDR:SIZE[;...]` (hex PC, ranges) writes
+the registers and the listed guest ranges once, at the first entry of block
+PC from host frame FRAME on: memory at a native draw boundary inside a frame,
+which a savestate at a frame boundary cannot show.
 
 ## F1 effects: native composition (2026-10-07)
 

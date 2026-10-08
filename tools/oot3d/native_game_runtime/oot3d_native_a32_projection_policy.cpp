@@ -121,6 +121,31 @@ void ApplyNativeWidescreenProjectionPolicy(
         state.r[1], state.r[2], state.r[3], state.thread_pointer, word};
     std::fwrite(record.data(), sizeof(uint32_t), record.size(), runtime.CallTrace);
   }
+  if (!runtime.PcDumpDone && pc == runtime.PcDumpAddress &&
+      runtime.CurrentHostFrame >= runtime.PcDumpFrame && runtime.TraceMemory != nullptr) {
+    runtime.PcDumpDone = true;
+    std::filesystem::create_directories(runtime.PcDumpDirectory);
+    if (std::FILE *registers = std::fopen(
+            (std::filesystem::path(runtime.PcDumpDirectory) / "registers.txt").string().c_str(), "w")) {
+      std::fprintf(registers, "frame %u pc %08x thread_pointer %08x\n", runtime.CurrentHostFrame, pc,
+                   state.thread_pointer);
+      for (int index = 0; index < 16; ++index)
+        std::fprintf(registers, "r%d %08x\n", index, state.r[index]);
+      std::fclose(registers);
+    }
+    for (const auto &[address, size] : runtime.PcDumpRanges) {
+      std::vector<uint8_t> bytes(size);
+      if (!runtime.TraceMemory->ReadBytes(address, bytes))
+        continue;
+      char name[32];
+      std::snprintf(name, sizeof(name), "%08x.bin", address);
+      if (std::FILE *out = std::fopen(
+              (std::filesystem::path(runtime.PcDumpDirectory) / name).string().c_str(), "wb")) {
+        std::fwrite(bytes.data(), 1, bytes.size(), out);
+        std::fclose(out);
+      }
+    }
+  }
   if (runtime.TraceA32Blocks) {
     ++runtime.BlockTraceRecordsObserved;
     if (runtime.BlockTrace.size() == kMaximumA32BlockTraceRecords) {
