@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <map>
+#include <set>
 #include <string_view>
 
 namespace {
@@ -133,7 +134,16 @@ int main(int argc, char** argv) {
         Mm3dGuestPatches patches;
         singleScreen.Register(patches);
         restoration.Register(patches);
+        // With the port's own manifest: its calls' native entries and
+        // continuations.
+        std::set<std::uint32_t> boundaries;
         for (const auto pc : patches.BlockBoundaries()) {
+            boundaries.insert(pc);
+        }
+        for (const auto pc : Mm3dRestorationPort::RegistryBoundaries()) {
+            boundaries.insert(pc);
+        }
+        for (const auto pc : boundaries) {
             std::cout << "0x" << std::hex << std::uppercase << pc << '\n';
         }
         return 0;

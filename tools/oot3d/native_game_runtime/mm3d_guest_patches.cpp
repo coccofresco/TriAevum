@@ -29,7 +29,8 @@ void Mm3dGuestPatches::Add(Mm3dGuestPatchSite site) {
 }
 
 std::size_t Mm3dGuestPatches::Verify(a32::MemoryBus& memory, const a32::Registry* registry) {
-    std::size_t enabled = 0;
+    // Guards first, for every site; then the preparations, which may ask
+    // which sites are enabled (EnabledPcs) - every guard is settled by then.
     for (auto& entry : mSites) {
         entry.Stats.MismatchAddress.reset();
         entry.Stats.MissingBlock = entry.Site.InGuestCode && registry != nullptr &&
@@ -47,6 +48,9 @@ std::size_t Mm3dGuestPatches::Verify(a32::MemoryBus& memory, const a32::Registry
             }
         }
         entry.Stats.Prepared = true;
+    }
+    std::size_t enabled = 0;
+    for (auto& entry : mSites) {
         if (entry.Stats.Enabled && entry.Site.Prepare && !entry.Site.Prepare(memory)) {
             entry.Stats.Enabled = false;
             entry.Stats.Prepared = false;

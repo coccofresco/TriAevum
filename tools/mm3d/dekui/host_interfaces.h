@@ -18,6 +18,11 @@ using U32 = std::uint32_t;
 class Memory {
 public:
     virtual ~Memory() = default;
+    // Supplied only after the corresponding Restoration sites are verified
+    // and present in the registry. False is the default for all old adapters.
+    virtual bool RestorationMessagePort() const { return false; }
+    virtual bool RestorationCameraPort() const { return false; }
+    virtual U32 RestorationHeartWidget() const { return 0; }
     virtual std::optional<U32> Read(U32 address) = 0;
     virtual void Write(U32 address, U32 value) = 0;
     std::optional<U32> Read32OrNullopt(U32 address) { return Read(address); }

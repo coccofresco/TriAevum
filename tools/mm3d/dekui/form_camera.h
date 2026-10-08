@@ -23,11 +23,14 @@ template<class M> bool CodeMatches(M& m) {
     constexpr std::array<U32,8> code{0xeeb40ac9,0xeef1fa10,0xeef01a4b,0xeeb01a6a,
         0x3eb00a49,Word,0xeb02a152,0xed8d0a00}; // ref 0xeb02a14c
     for(unsigned i=0;i<code.size();++i)if(m.Read(0x0046ffb0+4*i)!=code[i])return false; // ref 0x46fe58
-    for(auto [at,word]:std::array<std::pair<U32,U32>,9>{{
+    for(auto [at,word]:std::array<std::pair<U32,U32>,7>{{
         {0x0046fc2c,0xe92d4ff0},{EntryPC,EntryWord},{0x0046fc34,0xe2805074}, // ref 0x46fad4, 0x46fadc
         {RadiusPC,RadiusWord},{0x004700a4,0xe1a0100a},{0x004700a8,0xe28d0044}, // ref 0x46ff4c, 0x46ff50
-        {0x004700ac,0xebf5007a},{LockPC,LockWord},{0x007cf188,0xe12fff1e}}}) // ref 0x46ff54, 0xebf50150, 0x7cf188 (Restoration source port)
+        {0x004700ac,0xebf5007a}}}) // ref 0x46ff54, 0xebf50150, 0x7cf188 (Restoration source port)
         if(m.Read(at)!=word)return false;
+    if constexpr(requires { m.RestorationCameraPort(); })
+        if(m.RestorationCameraPort())return true;
+    if(m.Read(LockPC)!=LockWord||m.Read(0x007cf188)!=0xe12fff1e)return false;
     return CameraLive::ChangeModeCodeMatches(m)&&CameraLive::DialogueCameraCodeMatches(m);
 }
 struct Hook {

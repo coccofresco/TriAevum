@@ -65,6 +65,8 @@ inline U32 ChangeModeInstruction(U32 pc,U32 word) {
     return pc==ChangeModePC&&word==ChangeModeWord?0xef000000|ChangeModeSVC:word;
 }
 template<class M> bool ChangeModeCodeMatches(M& m) {
+    if constexpr(requires { m.RestorationCameraPort(); })
+        if(m.RestorationCameraPort())return true;
     constexpr std::array<U32,14> code{0xe52de004,0xed2d0b20,0xe1a04000,0xe1a05001,
         0xe1a06002,0xebfffa1b,0xe3500001,0x03a0501f,0xe1a00004,0xe1a01005,
         0xe1a02006,ChangeModeWord,0xecbd0b20,0xe49df004};
@@ -103,6 +105,8 @@ inline U32 DialogueCameraInstruction(U32 pc,U32 word) {
     return pc==DialogueCameraPC&&word==DialogueCameraWord?0x13530001:word;
 }
 template<class M> bool DialogueCameraCodeMatches(M& m) {
+    if constexpr(requires { m.RestorationCameraPort(); })
+        if(m.RestorationCameraPort())return true;
     for(auto [pc,word]:std::array<std::pair<U32,U32>,6>{{
         {0x007cf16c,0xe2413009},{0x007cf170,0xe351001f},{DialogueCameraPC,DialogueCameraWord}, // ref 0x7cf16c (Restoration source port), 0x7cf170 (Restoration source port)
         {0x007cf178,0x93a03001},{0x007cf180,0x9a000001},{0x007d08f8,0xebfffa1b}}}) // ref 0x7cf178 (Restoration source port), 0x7cf180 (Restoration source port), 0x7d08f8 (Restoration source port)

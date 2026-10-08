@@ -42,9 +42,15 @@ constexpr U32 Priority(unsigned q, unsigned i) { return Manager + 0x3578 + q*0x6
 // Verified by the heart_g lookup/store at 0x7d3e68..0x7d3e90.
 // Widget::pos is +0x3c: color alpha +0x80, visibility flags +0x84.
 template<class Memory> float HeartsOpacity(Memory& m) {
-    if (m.Read(0x007cff70)!=std::optional<U32>(0x007f8100) || // ref 0x7cff70 (Restoration source port), 0x7f8100 (Restoration source port)
-        m.Read(0x007d3e90)!=std::optional<U32>(0xe58501fc)) return 1.f; // ref 0x7d3e90 (Restoration source port)
-    auto widget=m.Read(0x007f8300); // ref 0x7f8300 (Restoration source port)
+    std::optional<U32> widget;
+    if constexpr(requires { m.RestorationHeartWidget(); }) {
+        if(const auto heart=m.RestorationHeartWidget())widget=heart;
+    }
+    if(!widget) {
+        if (m.Read(0x007cff70)!=std::optional<U32>(0x007f8100) ||
+            m.Read(0x007d3e90)!=std::optional<U32>(0xe58501fc)) return 1.f;
+        widget=m.Read(0x007f8300);
+    }
     const auto valid=[](U32 p) { return p>=0x100000 && p<0x3fffff00 && !(p&3); };
     if (!widget || !valid(*widget)) return 1.f;
     auto name=m.Read(*widget+0x10);

@@ -36,6 +36,8 @@ struct Mm3dGuestPatchSite {
         Handler;
     // Optional: runs once the guards match, on the mounted image (a site
     // that derives its replacement from the code there); false disables it.
+    // Every site's guard is checked before any preparation runs, so a
+    // preparation may depend on which guarded sites are enabled.
     std::function<bool(oot3d::recomp::a32::MemoryBus&)> Prepare;
     // False for a PC outside guest code (a host return sentinel), which the
     // runtime dispatches without a registry block.

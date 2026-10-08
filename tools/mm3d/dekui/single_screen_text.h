@@ -12,6 +12,8 @@ using U32=std::uint32_t;
 constexpr U32 PC=0x007d1498,Word=0xe5903004,SVC=0xfffe90; // ref 0x7d1498 (Restoration source port)
 inline U32 Instruction(U32 pc,U32 word){return pc==PC&&word==Word?0xef000000|SVC:word;}
 template<class M> bool CodeMatches(M& m) {
+    if constexpr(requires { m.RestorationMessagePort(); })
+        if(m.RestorationMessagePort())return true;
     // Restoration's MessageData::Get implementation; retain the outer Odolwa
     // message remap and the original lookup, attributes and language handling.
     constexpr std::array<U32,8> words{Word,0xe92d47f0,0xe593e008,0xe25ee001,

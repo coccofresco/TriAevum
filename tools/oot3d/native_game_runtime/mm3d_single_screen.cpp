@@ -3,6 +3,7 @@
 #include "core.h"
 #include "settings.h"
 #include "mm3d_a32_substitute.h"
+#include "mm3d_restoration.h"
 
 #include <cstdio>
 
@@ -14,7 +15,20 @@ namespace {
 
 class BusMemory final : public Mm3dDekui::Memory {
   public:
-    explicit BusMemory(a32::MemoryBus& bus) noexcept : mBus(bus) {}
+    explicit BusMemory(a32::MemoryBus& bus,
+                       const Mm3dRestorationPort* restoration = nullptr) noexcept
+        : mBus(bus), mRestoration(restoration) {}
+    // Project Restoration's appended code, ported as source: dekui's checks
+    // of that code accept the port's verified sites instead.
+    bool RestorationMessagePort() const override {
+        return mRestoration != nullptr && mRestoration->Capabilities(mBus).message_getter;
+    }
+    bool RestorationCameraPort() const override {
+        return mRestoration != nullptr && mRestoration->Capabilities(mBus).camera_bridge;
+    }
+    Mm3dDekui::U32 RestorationHeartWidget() const override {
+        return mRestoration != nullptr ? mRestoration->HudHeartWidget() : 0U;
+    }
     std::optional<Mm3dDekui::U32> Read(Mm3dDekui::U32 address) override {
         std::uint32_t value = 0;
         if (!mBus.Read32(address, &value)) {
@@ -32,6 +46,7 @@ class BusMemory final : public Mm3dDekui::Memory {
 
   private:
     a32::MemoryBus& mBus;
+    const Mm3dRestorationPort* mRestoration;
 };
 
 // The guest thread's state in dynarmic's register view: S0..S31 are copied
@@ -76,6 +91,18 @@ bool Mm3dSingleScreen::LoadSettings(const std::filesystem::path& path) {
     return loaded;
 }
 
+void Mm3dSingleScreen::BindRestoration(Mm3dRestorationPort& restoration) {
+    mRestoration = &restoration;
+    // The port's calls into dekui (form camera, camera mode, message entry)
+    // reach this Core, which holds the state the native sites share.
+    restoration.SetDekuiBridge([this](std::uint32_t svc, a32::GuestState& state,
+                                      a32::MemoryBus& bus) {
+        StateCpu cpu(state);
+        BusMemory memory(bus, mRestoration);
+        mCore->CallSvc(svc, cpu, memory);
+    });
+}
+
 void Mm3dSingleScreen::SetDamageMultiplier(int multiplier) {
     Mm3dDekui::Difficulty::damage_multiplier = multiplier;
 }
@@ -112,7 +139,7 @@ void Mm3dSingleScreen::Register(Mm3dGuestPatches& patches) {
             if (!bus.Read32(pc, &word)) {
                 return false;
             }
-            BusMemory memory(bus);
+            BusMemory memory(bus, mRestoration);
             const std::uint32_t replacement = mCore->Instruction(memory, pc, word);
             if (replacement == word) {
                 return false;
@@ -132,7 +159,7 @@ void Mm3dSingleScreen::Register(Mm3dGuestPatches& patches) {
             state.r[15] = pc + 4U;
             {
                 StateCpu cpu(state);
-                BusMemory memory(bus);
+                BusMemory memory(bus, mRestoration);
                 mCore->CallSvc(replacement & 0x00FFFFFFU, cpu, memory);
             }
             // dekui leaves Thumb as the CPSR T bit; the A32 runtime keeps it

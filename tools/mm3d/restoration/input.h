@@ -13,6 +13,7 @@ namespace Mm3dRestoration {
 namespace Button {
 inline constexpr u32 A = 0x1, Select = 0x4, Start = 0x8, R = 0x100, L = 0x200, X = 0x400,
                      Y = 0x800, ZL = 0x4000, ZR = 0x8000;
+inline constexpr u32 Right=0x10,Left=0x20,Up=0x40,Down=0x80;
 }
 // game::pad::TouchscreenButton
 namespace TouchscreenButton {

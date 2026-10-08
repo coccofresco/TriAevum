@@ -1,5 +1,6 @@
 #include "mm3d_guest_patches.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
 #include <map>
@@ -142,6 +143,21 @@ void TestPrepare() {
     memory.Words[0x2000U] = 1U;
     Require(patches.Verify(memory) == 1U && patches.Statistics()[0].Prepared,
             "a prepared site was not enabled");
+
+    // A preparation sees every guard's outcome, also a later site's.
+    Mm3dGuestPatches ordered;
+    auto early = CompareSite(&calls);
+    early.Pc = 0x1000U;
+    early.Guard.clear();
+    early.Prepare = [&ordered](a32::MemoryBus&) {
+        const auto enabled = ordered.EnabledPcs();
+        return std::find(enabled.begin(), enabled.end(), kSite) != enabled.end();
+    };
+    ordered.Add(std::move(early));
+    ordered.Add(CompareSite(&calls));
+    Require(ordered.Verify(memory) == 2U, "a preparation ran before a later site's guard");
+    memory.Words[kSite] = 0U;
+    Require(ordered.Verify(memory) == 0U, "a preparation saw a disabled site as enabled");
 }
 
 void TestInvalidSites() {

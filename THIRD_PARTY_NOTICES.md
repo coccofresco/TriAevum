@@ -275,7 +275,9 @@ are translated to the vanilla v1.1 code.bin and the hooks are expressed as
 typed guest patch sites (`docs/MOONFALL_CURSE.md`). dekui builds on
 [leoetlino/project-restoration](https://github.com/leoetlino/project-restoration)
 (GPL-2.0, commit `8bb2a7b8`), credited to leoetlino and contributors; code
-ported from it will carry the same kind of notice. Neither project's binary
+ported from it lives in `tools/mm3d/restoration/` with its SPDX notice, a
+note of the Restoration file it derives from and the GPL text (`COPYING`).
+Neither project's binary
 patches (`code.bps`, `exheader.bin`), RomFS layouts, text payloads or
 settings files are redistributed, and none is applied: Nintendo and Grezzo
 material inside them stays under the exclusions of `LICENSE_SCOPE.md`.

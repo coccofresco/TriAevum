@@ -2,6 +2,8 @@
 #include "main.h"
 #include "mm3d_restoration.h"
 #include "v110_address.h"
+#include "sites.h"
+#include "port_tests.inc"
 
 #include <cstdlib>
 #include <iostream>
@@ -100,7 +102,8 @@ void TestSites() {
     Mm3dGuestPatches patches;
     calls.Install(patches);
     port.Register(patches);
-    Require(patches.Verify(memory) == 6U, "the input hooks do not match v1.1");
+    for(const auto& site:SourceSites)for(unsigned i=0;i<site.guard_count;++i)memory.Words[site.guards[i].first]=site.guards[i].second;
+    Require(patches.Verify(memory) == SourceSites.size()+6, "the hooks do not match v1.1");
     a32::GuestState state;
     a32::ExecutionResult result;
     // The softbranch runs and leaves the guest's instruction to follow.
@@ -118,7 +121,8 @@ void TestSites() {
     Require(Mm3dGuestPatches::Execute(0x005C178CU, state, memory, &result, &patches) && state.r[3] == 1U,
             "X does not assign to slot 1");
     // decouple_start_select.
-    Require(port.ApplyDataPatches(memory) == 1U && guest.Read8(0x006B083CU) == 1U, "the data patch was not written");
+    for(const auto& p:DataPatches)for(unsigned i=0;i<p.size;++i)guest.Write8(p.pc+i,p.original[i]);
+    Require(port.ApplyDataPatches(memory) == DataPatches.size() && guest.Read8(0x006B083CU) == 1U, "the data patch was not written");
     Require(port.ApplyDataPatches(memory) == 0U, "a patched byte was patched again");
 }
 
@@ -128,6 +132,7 @@ void TestSites() {
 void TestCalc() {
     WordMemory memory;
     memory.Words[0x00106740U] = 0xE5901138U;
+    for(const auto& site:SourceSites)if(site.action=="Calc")for(unsigned i=0;i<site.guard_count;++i)memory.Words[site.guards[i].first]=site.guards[i].second;
     Mm3dGuestCalls calls;
     Mm3dRestorationPort port(calls);
     Mm3dGuestPatches patches;
@@ -168,12 +173,15 @@ void TestCalc() {
 
 } // namespace
 
-int main() {
+int main(int argc,char** argv) {
+    try {
     TestPadState();
     TestOcarinaScreen();
     TestItemAssign();
     TestSites();
     TestCalc();
+    RestorationPortTests::All(argc>1?argv[1]:nullptr);
     std::cout << "mm3d_restoration_tests: ok\n";
     return 0;
+    } catch(const std::exception& e) {std::cerr<<"FAIL: "<<e.what()<<'\n';return 1;}
 }

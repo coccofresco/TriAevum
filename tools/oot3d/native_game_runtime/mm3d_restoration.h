@@ -2,6 +2,7 @@
 
 #include "mm3d_guest_calls.h"
 #include "mm3d_guest_patches.h"
+#include "session.h"
 
 #include <memory>
 
@@ -35,18 +36,19 @@ class Mm3dRestorationPort {
     // The data patches, after the image is mounted; returns how many applied
     // (one whose original byte differs is left alone).
     std::size_t ApplyDataPatches(oot3d::recomp::a32::MemoryBus& memory);
+    void SetDekuiBridge(Mm3dRestoration::DekuiBridge bridge);
+    bool SetMessageEdits(std::vector<Mm3dRestoration::MessageEdit> edits);
+    Mm3dRestoration::PortCapabilities Capabilities(oot3d::recomp::a32::MemoryBus& memory) const;
+    static std::vector<std::uint32_t> RegistryBoundaries();
+    // Dynamic equivalent of donor s_hud.heart_group, zero before HUD Init.
+    std::uint32_t HudHeartWidget() const noexcept;
 
   private:
-    // rst::Calc (softbranch at the game state's update, r0 = the state).
-    Mm3dGuestTask Calc(Mm3dGuestCallContext& context);
+    Mm3dGuestTask Run(Mm3dGuestCallContext& context, std::string_view action);
 
     Mm3dGuestCalls& mCalls;
-    std::unique_ptr<Mm3dRestoration::Input> mInput;
-    // rst::Context: has_initialised and gctx (the Play state, or 0).
-    bool mInitialised = false;
-    std::uint32_t mGctx = 0;
-    // rst::Context::is_swimming (set by the Zora swimming port; false until then).
-    bool mIsSwimming = false;
+    Mm3dGuestPatches* mPatches = nullptr; // Register's registry must outlive this.
+    std::unique_ptr<Mm3dRestoration::Session> mSession;
 };
 
 } // namespace Oot3dNativeGame

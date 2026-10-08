@@ -15,6 +15,8 @@ class Core;
 
 namespace Oot3dNativeGame {
 
+class Mm3dRestorationPort;
+
 // Majora's Mask 3D's single-screen mode: mm3d-dekui's guest side
 // (tools/mm3d/dekui, ported onto the vanilla v1.1 code.bin) run the way
 // dekui's emulator runs it. Every PC dekui may change is a guest patch site;
@@ -36,6 +38,11 @@ class Mm3dSingleScreen {
     // Adds every candidate PC to patches; this object must outlive them.
     void Register(Mm3dGuestPatches& patches);
     static std::vector<std::uint32_t> CandidatePcs();
+    // dekui runs on Project Restoration: its sites that check Restoration's
+    // appended code accept the port's verified sites instead, and the port's
+    // calls into dekui reach this object's Core. Bind before Verify; the port
+    // must outlive this object's sites.
+    void BindRestoration(Mm3dRestorationPort& restoration);
     // dekui's settings (its presentation.json): the file at path, or
     // dekui's shipped defaults when path is empty or missing. Applied as
     // dekui applies them at startup; call before the guest runs. Returns
@@ -48,6 +55,7 @@ class Mm3dSingleScreen {
     // dekui's headers stay out of the window's translation units.
     std::unique_ptr<Mm3dDekui::Core> mCore;
     std::map<std::uint32_t, std::uint32_t> mReplacements;
+    Mm3dRestorationPort* mRestoration = nullptr;
 };
 
 } // namespace Oot3dNativeGame

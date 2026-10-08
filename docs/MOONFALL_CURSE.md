@@ -525,15 +525,17 @@ PC); a plain instruction through the executor above. dekui's settings are
 its module atomics; its clock is the deterministic presentation clock (60
 Hz). The core stays behind a pointer so its headers never meet `windows.h`.
 
-On vanilla v1.1, 80 of the 122 sites apply. 42 stay off because their
-guards also check Project Restoration code (39 Prices through
-SingleScreenText's message getter, 3 FormCamera), and the 17 entries inside
-Restoration's appended code are excluded; all of them follow the
-Restoration port. dekui's two text tables (original US English messages and
-their edits) are withheld from the repository as game material
-(`tools/mm3d/dekui/PORT_NOTES.md`). The registry for these sites is
-`a32_generated_v5` (242 boundaries, three of them between inventory
-functions). `TRIAEVUM_MM3D_DAMAGE_MULTIPLIER` (development) sets dekui's
+On vanilla v1.1 all 122 sites apply with the Restoration port below. 42 of
+them also check Project Restoration's appended code (39 Prices through
+SingleScreenText's message getter, 3 FormCamera); dekui's Memory adapter
+answers those checks with the port's verified sites instead
+(`RestorationMessagePort`, `RestorationCameraPort`; every native guard is
+still checked), and its minimap reads the HUD's heart widget from the port
+(`RestorationHeartWidget`). The 17 entries inside Restoration's appended
+code are excluded from dekui's candidates and implemented in the port.
+Without the port, 80 apply. dekui's two text tables (original US English
+messages and their edits) are withheld from the repository as game material
+(`tools/mm3d/dekui/PORT_NOTES.md`). `TRIAEVUM_MM3D_DAMAGE_MULTIPLIER` (development) sets dekui's
 damage multiplier until the F1 menu owns its settings.
 
 Verified on the developer launch (100% save, `inputs/save100_dekui_song_list.json`
@@ -567,7 +569,11 @@ Every PC a handler continues at must start a registry block, since the A32
 runtime does not interpret code outside the registry (a branch into the
 middle of a function faulted as a missing block): sites declare such
 targets (`Mm3dGuestPatches::AddTargets`) and they join the registry
-boundaries (266 with dekui's, `a32_generated_v6`).
+boundaries: dekui's sites, Restoration's sites and the native entries and
+continuations its calls reach (`Mm3dRestorationPort::RegistryBoundaries`),
+520 in all (`oot3d_mm3d_single_screen_tests --block-boundaries`,
+`a32_generated_v8`). Every site's guard is checked before any site prepares,
+so dekui's preparations see which Restoration sites are enabled.
 
 First slice, the controls that replace the lower-screen buttons
 (`rst/input.cpp`): with ZR held, A plays the ocarina and X/Y use the I/II
@@ -584,8 +590,34 @@ in play, Start or Select leaves the Gear screen, and on the ocarina screen
 closes the current layout (the ocarina's, which opens the song list, or the
 song list's) and plays the decide effect. It calls guest functions through
 `Mm3dGuestCalls` and resumes the guest at the hook itself, whose own
-instruction then runs once (`Mm3dGuestPatches::SkipOnce`). The rest of
-`Calc` (camera, Link, the fixes) and the other hooks follow.
+instruction then runs once (`Mm3dGuestPatches::SkipOnce`).
+
+The rest of the port (Codex; `tools/mm3d/restoration/PORT_NOTES.md`) covers
+all 107 `hooks/*.hks` records: 108 instruction sites and 15 guarded data
+patches, each v1.1 position proved by instruction context
+(`W/analysis/dekui/RESTORATION_HOOK_PROOFS.md`): schedule and menu
+shortcuts (with dekui's MenuShortcuts and MinimapShortcut), the large-screen
+HUD (Hud2, with dekui's HudButtons), the message getter, camera and form
+camera (dekui's calls reach the same Core through `SetDekuiBridge`), Link
+(Zora swim, fast transformation, Goron roll, arrows), inverted time, the
+Song of Time save, NPC and actor fixes and the four bosses. The data patches
+are written before the sites are checked, as dekui runs on the image
+Restoration patched. Restoration's own RomFS files (`Joker.Main.New.gar`
+with Hud2 and its common layouts) are not part of the user's game; when the
+mounted RomFS lacks a layout or package the port builds neither (the native
+lookups return 0xFFFF, which the native index would read past) and Hud2
+stays closed: no hearts or item buttons on the top screen until those files
+can be mounted (a RomFS overlay, not yet in the runtime). Message edits
+(prices, single-screen texts) are caller-owned, from the user's own
+messages; none are supplied yet.
+
+Verified on the developer launch (`save100_items.json`, 1280x720): all 122
+dekui and 113 Restoration sites enabled, 55 fired, no faults; dekui's A and
+B buttons on the top screen, the pause items page with the X/Y/I/II slots.
+Tests: `oot3d_mm3d_restoration_tests` (with code.bin: 108 sites and 15 data
+guards match, 648 corrupted guards rejected, missing-layout lifecycle),
+`oot3d_mm3d_guest_patches_tests` (guards before preparations),
+`oot3d_mm3d_dekui_core_tests`.
 
 ### dekui's settings
 

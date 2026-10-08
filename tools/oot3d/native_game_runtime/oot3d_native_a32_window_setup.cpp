@@ -382,6 +382,7 @@ void NativeA32WindowSession::Setup() {
       mm3dGuestCalls.Install(mm3dGuestPatches);
       mm3dRestoration.emplace(mm3dGuestCalls);
       mm3dRestoration->Register(mm3dGuestPatches);
+      mm3dSingleScreen->BindRestoration(*mm3dRestoration);
     }
   }
   if (const char *pcDump = std::getenv("TRIAEVUM_A32_PC_DUMP")) {
@@ -681,10 +682,12 @@ void NativeA32WindowSession::Setup() {
 #else
       // Each site whose code matches the mounted image replaces its
       // instruction; the registry starts a block at every site.
-      mm3dGuestPatches.Verify(process.Memory(), &Oot3dNativeGame::Oot3dNativeA32Registry());
+      // dekui runs on the image Project Restoration patched: its data
+      // patches first, then every site's check.
       if (mm3dRestoration.has_value()) {
         mm3dRestoration->ApplyDataPatches(process.Memory());
       }
+      mm3dGuestPatches.Verify(process.Memory(), &Oot3dNativeGame::Oot3dNativeA32Registry());
       process.SetNativeFunctionCallback(&Oot3dNativeGame::Mm3dGuestPatches::Execute,
                                         &mm3dGuestPatches, mm3dGuestPatches.EnabledPcs());
 #endif
