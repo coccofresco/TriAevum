@@ -254,6 +254,8 @@ registers when the guest does not reach a wait.
 the registers and the listed guest ranges once, at the first entry of block
 PC from host frame FRAME on: memory at a native draw boundary inside a frame,
 which a savestate at a frame boundary cannot show.
+`TRIAEVUM_IR_NO_EXTRA_HID=1` presents an Old 3DS without a Circle Pad Pro,
+so the title's accessory prompts can be captured.
 
 ## F1 effects: native composition (2026-10-07)
 

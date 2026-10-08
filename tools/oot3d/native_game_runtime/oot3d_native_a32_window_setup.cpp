@@ -154,6 +154,12 @@ void NativeA32WindowSession::Setup() {
   hostConfig.RetainFullSvcHistory = launch.ExtendedDiagnostics;
   hostConfig.ProfileRuntime = launch.ProfileA32Runtime;
   auto &hostServices = hostServicesStorage.emplace(std::move(hostConfig));
+  // Development: TRIAEVUM_IR_NO_EXTRA_HID=1 presents an Old 3DS without a
+  // Circle Pad Pro (titles then run their accessory prompts).
+  if (const char *noExtraHid = std::getenv("TRIAEVUM_IR_NO_EXTRA_HID");
+      noExtraHid != nullptr && std::string_view(noExtraHid) == "1") {
+    hostServices.SetIrExtraHidAttached(false);
+  }
   frameRateContract =
       Oot3dNativeGame::ResolveNativeFrameRateContract(
           launch.GameplayTiming, launch.PresentationRateHz);
