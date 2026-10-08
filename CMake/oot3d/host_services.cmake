@@ -194,6 +194,7 @@ oot3d_target_defaults(oot3d_native_a32_process_tests FOLDER Tests)
 add_library(oot3d_mm3d_guest_patches STATIC EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/mm3d_guest_patches.cpp
     tools/oot3d/native_game_runtime/mm3d_a32_substitute.cpp
+    tools/oot3d/native_game_runtime/mm3d_guest_calls.cpp
 )
 target_include_directories(oot3d_mm3d_guest_patches PUBLIC
     tools/oot3d/native_game_runtime)
@@ -230,6 +231,13 @@ add_executable(oot3d_mm3d_a32_substitute_tests EXCLUDE_FROM_ALL
 target_link_libraries(oot3d_mm3d_a32_substitute_tests PRIVATE
     oot3d_mm3d_guest_patches)
 oot3d_target_defaults(oot3d_mm3d_a32_substitute_tests FOLDER Tests)
+
+add_executable(oot3d_mm3d_guest_calls_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/mm3d_guest_calls_tests.cpp
+)
+target_link_libraries(oot3d_mm3d_guest_calls_tests PRIVATE
+    oot3d_mm3d_guest_patches)
+oot3d_target_defaults(oot3d_mm3d_guest_calls_tests FOLDER Tests)
 
 add_executable(oot3d_mm3d_guest_patches_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/mm3d_guest_patches_tests.cpp

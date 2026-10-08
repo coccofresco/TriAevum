@@ -32,8 +32,8 @@ std::size_t Mm3dGuestPatches::Verify(a32::MemoryBus& memory, const a32::Registry
     std::size_t enabled = 0;
     for (auto& entry : mSites) {
         entry.Stats.MismatchAddress.reset();
-        entry.Stats.MissingBlock =
-            registry != nullptr && a32::FindBlock(*registry, entry.Site.Pc) == nullptr;
+        entry.Stats.MissingBlock = entry.Site.InGuestCode && registry != nullptr &&
+                                   a32::FindBlock(*registry, entry.Site.Pc) == nullptr;
         entry.Stats.Enabled = !entry.Stats.MissingBlock;
         for (const auto& [address, expected] : entry.Site.Guard) {
             if (!entry.Stats.Enabled) {
@@ -69,6 +69,9 @@ std::vector<std::uint32_t> Mm3dGuestPatches::EnabledPcs() const {
 std::vector<std::uint32_t> Mm3dGuestPatches::BlockBoundaries() const {
     std::vector<std::uint32_t> boundaries;
     for (const auto& entry : mSites) {
+        if (!entry.Site.InGuestCode) {
+            continue;
+        }
         boundaries.push_back(entry.Site.Pc);
         boundaries.push_back(entry.Site.Pc + 4U);
     }

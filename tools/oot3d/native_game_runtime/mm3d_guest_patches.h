@@ -37,6 +37,9 @@ struct Mm3dGuestPatchSite {
     // Optional: runs once the guards match, on the mounted image (a site
     // that derives its replacement from the code there); false disables it.
     std::function<bool(oot3d::recomp::a32::MemoryBus&)> Prepare;
+    // False for a PC outside guest code (a host return sentinel), which the
+    // runtime dispatches without a registry block.
+    bool InGuestCode = true;
 };
 
 class Mm3dGuestPatches {

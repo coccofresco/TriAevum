@@ -472,6 +472,20 @@ dispatch yet and refuses sites. A site is also enabled only if the registry
 has a block at its PC (otherwise it would run only when branched to).
 Tests: `oot3d_mm3d_guest_patches_tests`, `oot3d_mm3d_single_screen_tests`.
 
+Besides SVC traps dekui substitutes plain instructions (MOV/CMP/TST/ADD/SUB
+immediates, B, BX lr, LDMIA sp!); `mm3d_a32_substitute.h` executes exactly
+those forms, condition included, and refuses any other. A site can prepare
+itself once on the mounted image (to derive its replacement from the code
+there). Source ports that call the game's own functions (Project
+Restoration calls dozens) use `mm3d_guest_calls.h`: a site starts a C++20
+coroutine on the guest thread's state; `co_await context.Call(entry, args)`
+branches to the function with the return address at a host sentinel
+(`0x000FFFF0`, below the image, dispatched without a registry block), the
+runtime runs it as ordinary guest code, and the return resumes the
+coroutine; at the end the guest continues with the site's registers as the
+body left them. Bodies are kept per guest thread, nested calls stacked.
+Tests: `oot3d_mm3d_a32_substitute_tests`, `oot3d_mm3d_guest_calls_tests`.
+
 The integrated features are registered by `mm3d_single_screen.cpp` from
 ports of dekui's modules (`tools/mm3d/dekui/`, GPL-2.0-or-later, with
 attribution), reading `Mm3dSingleScreenSettings` when they run. First, the
