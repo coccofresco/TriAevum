@@ -1,5 +1,8 @@
 #include "fast/oot3d/pica_shader_instrumentation.h"
 #include "fast/renderer3ds/point_shadow_map.h"
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+#include "fast/renderer3ds/pica_shadow_probe.h"
+#endif
 #include "fast/renderer3ds/pica_surface_lighting.h"
 #include "fast/renderer3ds/pica_geometry_guide.h"
 #include "fast/renderer3ds/pica_material_guide.h"
@@ -634,14 +637,18 @@ BuildPicaFragmentInstrumentationVariant(const PicaFragmentInstrumentationRequest
     if (AnalyzePicaFragmentOutputContract(request.Source).Depth ==
         ::Oot3d::Renderer::PicaFragmentDepthOutput::ExplicitNative)
         decisions.Set(Decision::ExplicitDepth);
+    const bool fragmentOperand = surfaceLighting && !pbr &&
+        HasPicaShaderInstrumentationFeature(request.RequestedFeatures,
+            PicaShaderInstrumentationFeature::FragmentLightingOperand);
     if (surfaceLighting) {
+        decisions.FragmentLightingOperand = fragmentOperand;
         decisions.Set(Decision::SurfaceLighting);
-        declarations += Renderer3ds::PicaSurfaceLightingDeclarations();
+        declarations += Renderer3ds::PicaSurfaceLightingDeclarations(fragmentOperand);
         insertions.push_back({result.Hooks.Offset(PicaShaderHook::PicaLighting),
             "\n    vec4 surface_native_primary = rounded_primary_color;\n"
             "    vec4 surface_native_fragment = primary_fragment_color;\n"
             "    vec4 surface_native_secondary = secondary_fragment_color;\n" +
-            (pbr ? pbr->UnlitInputs : std::string(Renderer3ds::PicaSurfaceLightingBody()))});
+            (pbr ? pbr->UnlitInputs : std::string(Renderer3ds::PicaSurfaceLightingBody(fragmentOperand)))});
         // Native TEV alpha may read RGB operands or DOT3_RGBA. Re-evaluate
         // that dependency chain with the original lighting; never let an
         // extension change native coverage. Dead RGB outputs are eliminated
@@ -665,6 +672,10 @@ BuildPicaFragmentInstrumentationVariant(const PicaFragmentInstrumentationRequest
         if (!pbr) insertions.push_back({tevEnd, std::string(Renderer3ds::PicaSurfaceLightingWaterShading())});
         result.FragmentKey = SaltedVariantKey(result.FragmentKey, "PICA_NATIVE_PER_PIXEL_LIGHTING_V20_WATER_NATIVE_FOG");
         result.AppliedFeatures |= PicaShaderInstrumentationFeature::NativePerPixelLighting;
+        if (fragmentOperand) {
+            result.FragmentKey = SaltedVariantKey(result.FragmentKey, "PICA_FRAGMENT_IRRADIANCE_V1");
+            result.AppliedFeatures |= PicaShaderInstrumentationFeature::FragmentLightingOperand;
+        }
         if (pbr) {
             declarations += pbr->Declarations;
             insertions.push_back({tevEnd, pbr->ShadingBody});
@@ -1363,6 +1374,16 @@ vec3 pica_surface_shadow(int slot) {
     if (surfaceLighting && !pbr && materialAvailable)
         epilogue += Renderer3ds::PicaSurfaceLightingWaterMarker();
 
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+    if (surfaceShadow && result.Hooks.Has(PicaShaderSemantic::NativeColorOutput) &&
+        HasPicaShaderInstrumentationFeature(request.RequestedFeatures, PicaShaderInstrumentationFeature::ShadowProbe) &&
+        Renderer3ds::InstrumentPicaShadowProbe(declarations)) {
+        epilogue += Renderer3ds::kPicaShadowProbeEpilogue;
+        result.FragmentKey = SaltedVariantKey(result.FragmentKey, "TRIAEVUM_SHADOW_PROBE_V1");
+        decisions.ShadowProbe = true;
+        apply(PicaShaderInstrumentationFeature::ShadowProbe);
+    }
+#endif
     if (result.Applied()) {
         result.Source = Compose(
             request.Source, result.Hooks, declarations, epilogue,

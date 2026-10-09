@@ -92,7 +92,16 @@ struct hash_pair_ff {
 };
 
 class GfxRenderingAPI : public ::Fast::Renderer3ds::PicaRenderBackend {
+    bool mNativePicaFragmentLightingOperand = false;
   public:
+    // Adapter capability, fixed before title submissions; not a user setting.
+    // Default preserves the legacy primary-colour route and every shader key.
+    void SetNativePicaFragmentLightingOperand(bool supported) noexcept {
+        mNativePicaFragmentLightingOperand = supported;
+    }
+    [[nodiscard]] bool NativePicaFragmentLightingOperand() const noexcept {
+        return mNativePicaFragmentLightingOperand;
+    }
     virtual ~GfxRenderingAPI() = default;
     virtual const char* GetName() = 0;
     virtual int GetMaxTextureSize() = 0;

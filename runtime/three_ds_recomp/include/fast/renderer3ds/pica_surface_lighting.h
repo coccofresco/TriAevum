@@ -10,6 +10,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <string>
 
 namespace Fast::Renderer3ds {
 
@@ -32,7 +33,8 @@ struct alignas(16) PicaScenePointLightUniforms {
 struct alignas(16) PicaPlacedLightUniforms {
     // XYZ: view-space position; W: reach (world units).
     std::array<float, 4> PositionReach{};
-    // RGB colour times reflectance; W: point-shadow atlas row, negative for none.
+    // RGB irradiance when Control.w bit1 is set, otherwise colour times reflectance.
+    // W: point-shadow atlas row, negative for none.
     std::array<float, 4> Color{};
     // XYZ: world emission axis; W: PicaPlacedLightKind, plus 8 when two-sided.
     std::array<float, 4> AxisKind{};
@@ -54,11 +56,27 @@ struct PicaPointShadowAssignment {
 
 inline constexpr uint32_t kMaximumPicaSurfaceWaterBodies = 4U;
 
+// Bounds overlap only identifies a possibly mixed mesh. The surface shader
+// decides water per fragment (height, footprint and face normal) and keeps
+// its native colour there; dry fragments still use the fragment-light operand.
+// Require a complete water set for that decision. Unknown/oversized metadata
+// and whole-water draws retain their existing route. The legacy capability-
+// false path, including OoT's generated sources and keys, is unchanged.
+[[nodiscard]] inline bool PicaNativeFragmentOperandWaterEligible(
+    bool capability, uint32_t waterCount, bool boundsKnown, bool reachesWater, bool wholeWater) noexcept {
+    if (!capability || wholeWater || waterCount > kMaximumPicaSceneWaterBodies) return false;
+    if (waterCount == 0U) return !boundsKnown;
+    if (!boundsKnown) return false;
+    return !reachesWater || waterCount <= kMaximumPicaSurfaceWaterBodies;
+}
+
 struct alignas(16) PicaSurfaceLightingUniforms {
     std::array<float, 4> MaterialDiffuse{};
     std::array<float, 4> MaterialAmbient{};
-    // Material-weighted ambient with the environment policy already applied.
+    // Resolved ambient; material-weighted unless native primary owns material (W bit1).
     std::array<float, 4> ResolvedAmbient{};
+    // W: bit 0 preserve native brightness, bit 1 native primary owns material,
+    // bits 8-15 placed-light count. Bit 1 is only for fragment-lit Lambert.
     std::array<uint32_t, 4> Control{};
     std::array<std::array<float, 4>, 3> ViewToWorldLinear{};
     std::array<PicaSurfaceLightUniforms, 3> Lights{};
@@ -130,7 +148,12 @@ std::optional<PicaSurfaceLightingView> BuildPicaSurfaceLightingView(
     const PicaNativeLightBinding& binding,
     const PicaEnvironmentLighting& environment,
     const PicaSurfaceLightingView* cameraView,
-    const PicaPointShadowAssignment* pointShadows = nullptr) noexcept;
+    const PicaPointShadowAssignment* pointShadows = nullptr,
+    bool nativeFragmentLambert = false) noexcept;
+
+// Once the actual variant is known, restore the legacy material-weighted
+// inputs for PBR. A requested PBR mode with no material still uses Lambert.
+void FoldPicaSurfaceMaterialForPbr(PicaSurfaceLightingUniforms& uniforms) noexcept;
 
 // Removes the scene directional lights a draw's native per-pixel (fragment)
 // lighting already applies: those with the direction (view space, toward
@@ -153,13 +176,13 @@ void AssignPicaSurfaceWater(PicaSurfaceLightingUniforms& uniforms, const PicaSur
                             bool wholeDraw = false,
                             const std::array<PicaWaterRing, kPicaWaterRings>* rings = nullptr) noexcept;
 
-[[nodiscard]] std::string_view PicaSurfaceLightingDeclarations() noexcept;
+[[nodiscard]] std::string PicaSurfaceLightingDeclarations(bool fragmentOperand = false);
 // Last of the material guide writes: a water fragment marks the guide (B at
 // 1.0, a value reflection weights never take: pica_encode_reflection_weight
 // stops at 254/255), keeping the reactive alpha; the reflection trace frames
 // the drawn water's edges by it.
 [[nodiscard]] std::string_view PicaSurfaceLightingWaterMarker() noexcept;
-[[nodiscard]] std::string_view PicaSurfaceLightingBody() noexcept;
+[[nodiscard]] std::string PicaSurfaceLightingBody(bool fragmentOperand = false);
 // After the native TEV, before fog: water optics on a water fragment's
 // native colour (the body marks the fragment).
 [[nodiscard]] std::string_view PicaSurfaceLightingWaterShading() noexcept;

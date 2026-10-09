@@ -10,6 +10,8 @@
 
 #include "fast/renderer3ds/pica_tev_program.h"
 
+#include <cstdlib>
+#include <charconv>
 #include <cstdint>
 #include <cstdio>
 #include <mutex>
@@ -18,6 +20,27 @@
 #include <utility>
 
 namespace Fast::Renderer3ds {
+
+// Developer-only request. Parsing is strict; malformed/range-overflow input is inert.
+struct PicaShadowProbeRequest {
+    uint32_t Mode = 0, First = 0, Last = 0;
+    bool Valid = false;
+};
+inline PicaShadowProbeRequest ParsePicaShadowProbe(std::string_view text) {
+    PicaShadowProbeRequest result;
+    uint32_t* fields[] = { &result.Mode, &result.First, &result.Last };
+    for (unsigned index = 0; index < 3; ++index) {
+        const auto comma = text.find(',');
+        if ((index < 2) != (comma != std::string_view::npos)) return {};
+        const auto token = text.substr(0, comma);
+        if (token.empty()) return {};
+        const auto parsed = std::from_chars(token.data(), token.data() + token.size(), *fields[index]);
+        if (parsed.ec != std::errc{} || parsed.ptr != token.data() + token.size()) return {};
+        if (index < 2) text.remove_prefix(comma + 1);
+    }
+    result.Valid = result.Mode <= 9 && result.First <= result.Last && result.Last < 1024;
+    return result.Valid ? result : PicaShadowProbeRequest{};
+}
 
 class PicaSurfaceDebug {
 public:
@@ -77,6 +100,45 @@ public:
         std::fwrite(line.data(), 1, line.size(), mFile);
         std::fputc('\n', mFile);
         std::fflush(mFile);
+    }
+
+    // TRIAEVUM_SHADOW_PROBE=MODE,FIRST,LAST. Only active in a surface trace window.
+    // Mode0 adds evidence only;1 IDs;2 visibility;3 reason/level;4 page entry;
+    //5/6 comparison/atlas float low24;7 high bytes;8 calibration;9 gather texel.
+    static const PicaShadowProbeRequest& ShadowRequest() {
+        static const auto request = [] {
+            const char* value = std::getenv("TRIAEVUM_SHADOW_PROBE");
+            return value ? ParsePicaShadowProbe(value) : PicaShadowProbeRequest{};
+        }();
+        return request;
+    }
+    bool ShadowTracing() { return ShadowRequest().Valid && Tracing(); }
+    bool ShadowSelected(uint32_t ordinal) {
+        const auto& request = ShadowRequest();
+        return ShadowTracing() && ordinal >= request.First && ordinal <= request.Last;
+    }
+    uint32_t ShadowCode(uint32_t ordinal) {
+        return ShadowSelected(ordinal) && ShadowRequest().Mode != 0
+            ? ShadowRequest().Mode * 1024 + ordinal : 0;
+    }
+    void ShadowRecord(std::string_view event, uint64_t renderFrame, uint64_t submission,
+                      std::string_view fields) {
+        if (!ShadowTracing()) return;
+        Write("{\"event\":\"" + std::string(event) + "\",\"frame\":" + std::to_string(Frame()) +
+              ",\"render_frame\":" + std::to_string(renderFrame) +
+              ",\"submission\":" + std::to_string(submission) + std::string(fields) + "}");
+    }
+    bool ShadowBlob(uint64_t renderFrame, uint64_t submission, std::string_view label,
+                    const void* data, size_t size) {
+        std::scoped_lock lock(mMutex);
+        if (mFile == nullptr || size == 0) return false;
+        const auto path = mPath + "." + std::to_string(renderFrame) + "." +
+            std::to_string(submission) + "." + std::string(label) + ".bin";
+        auto* file = std::fopen(path.c_str(), "wb");
+        if (!file) return false;
+        const auto written = std::fwrite(data, 1, size, file);
+        const auto closed = std::fclose(file);
+        return written == size && closed == 0;
     }
 
     void WriteSource(uint32_t ordinal, std::string_view vertex, std::string_view fragment) {

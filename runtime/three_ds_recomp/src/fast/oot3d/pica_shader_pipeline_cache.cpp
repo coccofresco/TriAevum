@@ -129,6 +129,8 @@ PicaShaderInstrumentationFeature ResolvePicaDrawInstrumentationFeatures(
         request.FragmentShaderHooks.Has(PicaShaderSemantic::ViewVector) &&
         request.FragmentShaderHooks.Has(PicaShaderSemantic::PrimaryColorInput)) {
         features |= PicaShaderInstrumentationFeature::NativePerPixelLighting;
+        if (request.FragmentLightingOperand && UsesFullSceneLighting(effects.SurfaceLighting))
+            features |= PicaShaderInstrumentationFeature::FragmentLightingOperand;
         if (UsesPbrMaterials(effects.SurfaceLighting) && request.Pbr.TextureSlot < 3U)
             features |= PicaShaderInstrumentationFeature::PbrMaterial;
     }
@@ -156,6 +158,11 @@ PicaShaderInstrumentationFeature ResolvePicaDrawInstrumentationFeatures(
         features |=
             PicaShaderInstrumentationFeature::DirectionalShadowLighting;
     }
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+    if (request.ShadowProbe && !request.RequireNativeFidelity &&
+        HasPicaShaderInstrumentationFeature(features, PicaShaderInstrumentationFeature::DirectionalShadowLighting))
+        features |= PicaShaderInstrumentationFeature::ShadowProbe;
+#endif
     if (sceneDraw && request.Draw.PointShadowReceiver &&
         effects.PointShadows.Mode == PointShadowMode::CubeMaps &&
         UsesFullSceneLighting(effects.SurfaceLighting) &&

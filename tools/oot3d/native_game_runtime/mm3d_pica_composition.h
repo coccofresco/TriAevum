@@ -1,6 +1,7 @@
 #pragma once
 
 #include "oot3d_native_pica_frontend.h"
+#include "mm3d_native_a32_lighting.h"
 
 #include <cstdint>
 #include <memory>
@@ -12,11 +13,12 @@
 namespace oot3d::recomp::a32 {
 class MemoryBus;
 struct GuestState;
+struct Registry;
 } // namespace oot3d::recomp::a32
 
 namespace Oot3dNativeGame {
 
-// Majora's Mask 3D's native draw passes (code.bin 6eec27b1..., v1.0),
+// Majora's Mask 3D's native draw passes (code.bin 6eec27b1..., v1.1),
 // recovered by tracing one frame's function entries against the command
 // list cursor and the PICA draws they produced, and read against Play_Draw in
 // the N64 decompilation (zeldaret/mm src/code/z_play.c):
@@ -80,6 +82,12 @@ class Mm3dNativePicaCompositionTracker final
   public:
     enum class Event : uint8_t { None, OpaqueWorldBegins };
 
+    // Called after mount/registry verification; false fails adapter setup.
+    bool VerifyHooks(oot3d::recomp::a32::MemoryBus& memory,
+                     const oot3d::recomp::a32::Registry* registry = nullptr);
+    void SetSupplementalPublication(bool points, bool water) noexcept {
+        mLighting.SetSupplementalPublication(points, water);
+    }
     Event ObserveBlockEntry(uint32_t pc,
                             const oot3d::recomp::a32::GuestState& state,
                             oot3d::recomp::a32::MemoryBus& memory);
@@ -93,6 +101,17 @@ class Mm3dNativePicaCompositionTracker final
     [[nodiscard]] const Mm3dNativePicaCompositionStats& Stats() const noexcept;
 
   private:
+    struct QueueOwner {
+        uint32_t Model = 0; uint64_t Generation = 0;
+        uint64_t Actor = 0; bool Shadow = false;
+        uint32_t List = 0;
+    };
+    struct ModelSubmit { uint32_t Model = 0, ReturnPc = 0; bool Shadow = false; };
+    struct ModelScope {
+        uint32_t ReturnPc = 0, Slot = 0, Begin = 0;
+        Oot3dPicaCompositionAttribution Attribution;
+        Fast::Renderer3ds::PicaNativeLightBinding Lighting;
+    };
     struct ActiveScope {
         uint32_t ReturnPc = 0;
         uint32_t BeginAddress = 0;
@@ -109,10 +128,16 @@ class Mm3dNativePicaCompositionTracker final
                 const Fast::Renderer3ds::PicaNativeLightBinding& lightBinding);
     void CaptureSceneLighting(oot3d::recomp::a32::MemoryBus& memory);
 
+    bool mHooksVerified = false, mFineSuppressed = false;
+    uint64_t mQueueGeneration = 0;
+    std::vector<uint64_t> mActorDrawStack;
+    std::unordered_map<uint32_t, QueueOwner> mQueueOwners;
+    std::optional<ModelSubmit> mModelSubmit;
+    std::optional<ModelScope> mModelScope;
+    Mm3dNativeA32LightingProbe mLighting;
     std::optional<ActiveScope> mActive;
     // The scene frame's lighting, captured when its opaque pass begins.
     Fast::Renderer3ds::PicaNativeLightBinding mSceneLighting;
-    std::shared_ptr<const Fast::Renderer3ds::PicaSceneDirectionalLights> mSceneDirectionals;
     std::vector<RecordedSpan> mSpans; // sorted by BeginAddress, disjoint
     Mm3dNativePicaCompositionStats mStats;
 };

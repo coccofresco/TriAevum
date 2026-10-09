@@ -63,6 +63,11 @@ struct PicaShaderPipelineRequest {
     // The texture unit whose colour the draw's TEV passes to its output, when
     // exactly one does (AO texture relief); 0xff otherwise.
     uint8_t ReliefTexture = 0xffU;
+    // Typed per-draw eligibility after the adapter capability and UBO checks.
+    bool FragmentLightingOperand = false;
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+    bool ShadowProbe = false;
+#endif
 };
 
 struct PicaShaderPipelineResult {

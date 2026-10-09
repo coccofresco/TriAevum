@@ -1,6 +1,8 @@
 #include "mm3d_pica_composition.h"
 
 #include "mm3d_title_contracts.h"
+#include "mm3d_scene_environment.h"
+#include "mm3d_lighting_hook_sites.h"
 #include "recomp/a32_runtime.h"
 
 #include <algorithm>
@@ -70,12 +72,8 @@ constexpr std::array kScopes{
 };
 
 constexpr auto BuildHookPcs() {
-    std::array<uint32_t, kScopes.size() * 2U> pcs{};
-    size_t cursor = 0;
-    for (const auto& scope : kScopes) {
-        pcs[cursor++] = scope.EntryPc;
-        pcs[cursor++] = scope.ReturnPc;
-    }
+    std::array<uint32_t, kMm3dLightingHookSites.size()> pcs{};
+    for (size_t i = 0; i < pcs.size(); ++i) pcs[i] = kMm3dLightingHookSites[i].Pc;
     return pcs;
 }
 constexpr auto kHookPcs = BuildHookPcs();
@@ -89,51 +87,178 @@ bool WorldLayer(Oot3dPicaCompositionLayer layer) {
            layer == Oot3dPicaCompositionLayer::TransparentWorld;
 }
 
-// Column-major world-to-view from the View's Mtx34 rows.
-std::optional<std::array<float, 16>> ReadWorldToView(
-    oot3d::recomp::a32::MemoryBus& memory, uint32_t view) {
-    std::array<float, 16> worldToView{};
-    worldToView[15] = 1.0F;
-    for (uint32_t row = 0; row < 3U; ++row) {
-        for (uint32_t column = 0; column < 4U; ++column) {
-            uint32_t word = 0;
-            if (!memory.Read32(view + kMm3dViewWorldToViewOffset + (row * 4U + column) * 4U, &word))
-                return std::nullopt;
-            const float value = std::bit_cast<float>(word);
-            if (!std::isfinite(value)) return std::nullopt;
-            worldToView[column * 4U + row] = value;
-        }
-    }
-    return worldToView;
-}
-
-// A directional LightInfo record of the environment.
-bool ReadDirectionalLight(oot3d::recomp::a32::MemoryBus& memory, uint32_t info,
-                          Fast::Renderer3ds::PicaSceneDirectionalLight& light) {
-    uint8_t kind = 0;
-    if (!memory.Read8(info, &kind) || kind != 1U) return false;
-    for (uint32_t axis = 0; axis < 3U; ++axis) {
-        uint8_t direction = 0, color = 0;
-        if (!memory.Read8(info + 4U + axis, &direction) || !memory.Read8(info + 7U + axis, &color))
-            return false;
-        light.DirectionTowardSource[axis] = static_cast<float>(std::bit_cast<int8_t>(direction)) / 127.0F;
-        light.Color[axis] = static_cast<float>(color) / 255.0F;
-    }
-    light.SourceIdentity = info;
-    return true;
-}
-
 } // namespace
 
 std::span<const uint32_t> Mm3dNativePicaCompositionHookPcs() noexcept {
     return kHookPcs;
 }
 
+bool Mm3dNativePicaCompositionTracker::VerifyHooks(oot3d::recomp::a32::MemoryBus& memory,
+    const oot3d::recomp::a32::Registry* registry) {
+    mHooksVerified = false;
+    for (const auto& hook : kMm3dLightingHookSites) {
+        if (registry && !oot3d::recomp::a32::FindBlock(*registry, hook.Pc)) return false;
+        for (uint32_t i = 0; i < hook.Words.size(); ++i) {
+            uint32_t word = 0;
+            if (!memory.Read32(hook.Pc + 4U * i, &word) || word != hook.Words[i]) return false;
+        }
+    }
+    mHooksVerified = true;
+    return true;
+}
+
 Mm3dNativePicaCompositionTracker::Event
 Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
     uint32_t pc, const oot3d::recomp::a32::GuestState& state,
     oot3d::recomp::a32::MemoryBus& memory) {
+    if (!mHooksVerified) return Event::None;
+    mLighting.ObserveBlockEntry(pc, state, memory);
+    if (pc == 0x0015E9ECU) {
+        ++mQueueGeneration;
+        mQueueOwners.clear(); mActorDrawStack.clear(); mModelSubmit.reset(); mModelScope.reset();
+        mActive.reset(); mFineSuppressed = false;
+    }
+    if (pc == 0x00182C44U) {
+        // Exact main callback BLX, before the separate native shadow callback.
+        uint16_t id = 0;
+        uint32_t callback = 0;
+        uint64_t identity = 0;
+        if (state.r[0] != 0U && state.r[0] <= UINT32_MAX - 0x148U &&
+            memory.Read16(state.r[0], &id) && memory.Read32(state.r[0] + 0x144U, &callback) &&
+            callback != 0U && callback == state.r[2]) identity = (uint64_t{id} << 32U) | state.r[0];
+        mActorDrawStack.push_back(identity);
+    } else if (pc == 0x00182C48U && !mActorDrawStack.empty()) mActorDrawStack.pop_back();
+    if (pc == 0x0020A898U) {
+        const uint32_t lr = state.r[14];
+        mModelSubmit = ModelSubmit{state.r[0], lr, lr == 0x0021EFACU || lr == 0x001F3898U || lr == 0x001F3AB0U};
+    } else if (pc == 0x0020A8B8U) {
+        // The same scene-queue helper can also be entered directly.
+        if (!mModelSubmit || state.r[1] != mModelSubmit->Model || state.r[14] != mModelSubmit->ReturnPc)
+            mModelSubmit.reset();
+    } else if (pc == 0x00223EDCU) mModelSubmit.reset();
+    if (pc == 0x00224104U) {
+        uint32_t count = 0;
+        if (state.r[0] != 0U && state.r[0] <= UINT32_MAX - 0x408U &&
+            memory.Read32(state.r[0] + 4U, &count) && count < 256U) {
+            if (count == 0U) for (auto it = mQueueOwners.begin(); it != mQueueOwners.end();) {
+                if (it->second.List == state.r[0]) it = mQueueOwners.erase(it); else ++it;
+            }
+            const uint32_t slot = state.r[0] + 8U + count * 4U;
+            const bool producer = state.r[14] == 0x0020A8DCU || state.r[14] == 0x0020A8F8U || state.r[14] == 0x0020A918U;
+            const bool shadow = producer && mModelSubmit && mModelSubmit->Model == state.r[1] && mModelSubmit->Shadow;
+            // Always replace the slot, including unrelated producers; never key by model alone.
+            mQueueOwners[slot] = {state.r[1], mQueueGeneration,
+                shadow || mActorDrawStack.empty() ? 0U : mActorDrawStack.back(), shadow, state.r[0]};
+        }
+        return Event::None;
+    }
+    if (pc == kMm3dRenderListVisitEntry) {
+        if (mActive) {
+            // No proved nested-pass contract: drop the unclosed outer range.
+            ++mStats.NestedScopeEntries; mModelScope.reset(); mActive.reset();
+            mFineSuppressed = true;
+            return Event::None;
+        }
+        // MM reorders some lists before visiting them. Reconcile a complete
+        // same-list/same-generation permutation, never a global model lookup.
+        const uint32_t list = state.r[0];
+        uint32_t count = 0;
+        std::vector<QueueOwner> before;
+        for (const auto& [slot, owner] : mQueueOwners)
+            if (owner.List == list && owner.Generation == mQueueGeneration) before.push_back(owner);
+        bool complete = list != 0U && list <= UINT32_MAX - 0x408U &&
+            memory.Read32(list + 4U, &count) && count <= 256U && before.size() == count;
+        std::vector<QueueOwner> after;
+        for (uint32_t i = 0; complete && i < count; ++i) {
+            uint32_t model = 0;
+            if (!memory.Read32(list + 8U + i * 4U, &model)) { complete = false; break; }
+            const auto found = std::find_if(before.begin(), before.end(), [model](const auto& owner) { return owner.Model == model; });
+            if (found == before.end()) { complete = false; break; }
+            QueueOwner owner = *found;
+            // Identical model handles with different owners cannot establish a
+            // permutation by observation. Do not transfer either actor/shadow role.
+            if (std::any_of(before.begin(), before.end(), [&](const auto& other) {
+                return other.Model == model && (other.Actor != owner.Actor || other.Shadow != owner.Shadow);
+            })) {
+                for (auto& other : before) if (other.Model == model) { other.Actor = 0; other.Shadow = false; }
+                owner.Actor = 0; owner.Shadow = false;
+            }
+            after.push_back(owner); before.erase(found);
+        }
+        for (auto it = mQueueOwners.begin(); it != mQueueOwners.end();) {
+            if (it->second.List == list) it = mQueueOwners.erase(it); else ++it;
+        }
+        if (complete && before.empty()) for (uint32_t i = 0; i < after.size(); ++i)
+            mQueueOwners[list + 8U + i * 4U] = after[i];
+    }
+    if (mModelScope && pc == mModelScope->ReturnPc) {
+        const auto model = *mModelScope;
+        mModelScope.reset();
+        const uint64_t slot = pc == 0x005EF0D0U ? uint64_t{state.r[5]} : uint64_t{state.r[4]} + 8U + 4ULL * state.r[5];
+        uint32_t end = 0;
+        if (mActive && slot == model.Slot && memory.Read32(kMm3dCommandListCursorAddress, &end)) {
+            if (end >= model.Begin && end - model.Begin <= 0x00400000U && !(end & 7U) && !(model.Begin & 7U)) {
+                if (end != model.Begin) Record(model.Begin, end, model.Attribution, model.Lighting);
+                else ++mStats.EmptyScopes;
+                mActive->BeginAddress = end;
+            } else {
+                ++mStats.InvalidRanges; mActive.reset(); mFineSuppressed = true;
+            }
+        } else {
+            ++mStats.InvalidRanges;
+            // Never back-fill a failed child with possibly stale actor/light ownership.
+            mActive.reset();
+        }
+        return Event::None;
+    }
+    if ((pc == 0x005EF0CCU || pc == 0x005EF094U) && mActive && WorldLayer(mActive->Attribution.Layer)) {
+        if (mFineSuppressed) return Event::None;
+        if (mModelScope) {
+            ++mStats.NestedScopeEntries;
+            mModelScope.reset(); mFineSuppressed = true;
+            // Parent coarse metadata covers the unproved nested portion.
+            return Event::None;
+        }
+        const uint64_t slot = pc == 0x005EF0CCU ? uint64_t{state.r[5]} : uint64_t{state.r[4]} + 8U + 4ULL * state.r[5];
+        uint32_t model = 0, begin = 0;
+        if (slot > UINT32_MAX - 4U || !memory.Read32(uint32_t(slot), &model) || model != state.r[0] ||
+            !memory.Read32(kMm3dCommandListCursorAddress, &begin) || (begin & 7U)) return Event::None;
+        if (begin < mActive->BeginAddress || begin - mActive->BeginAddress > 0x00400000U ||
+            (mActive->BeginAddress & 7U)) {
+            ++mStats.InvalidRanges; mActive.reset(); mFineSuppressed = true;
+            return Event::None;
+        }
+        if (begin > mActive->BeginAddress)
+            Record(mActive->BeginAddress, begin, mActive->Attribution, mActive->LightBinding);
+        ModelScope child;
+        child.Begin = begin; child.Slot = uint32_t(slot);
+        child.ReturnPc = pc + 4U; child.Attribution = mActive->Attribution;
+        child.Attribution.SourcePc = pc;
+        child.Lighting = mLighting.CaptureRenderer(0U, memory);
+        const auto owner = mQueueOwners.find(uint32_t(slot));
+        if (owner != mQueueOwners.end() && owner->second.Generation == mQueueGeneration && owner->second.Model == model) {
+            child.Attribution.NativeActorIdentity = owner->second.Actor;
+            child.Attribution.NativeActorGeometry = owner->second.Actor != 0;
+            child.Attribution.NativeProjectedShadow = owner->second.Shadow;
+        }
+        // Proven model factory/vtable ABI. +90 is a resource/preparation object.
+        uint32_t vtable = 0, primary = 0, secondary = 0;
+        if (model && model <= UINT32_MAX - 0xACU && memory.Read32(model, &vtable) && vtable == 0x0063BED4U &&
+            memory.Read32(model + 0xA0U, &primary) && memory.Read32(model + 0xA4U, &secondary)) {
+            uint32_t a = 0, b = 0;
+            // If two renderers differ, a whole-model span cannot claim either
+            // one's selected native slots. Scene payloads and actor role survive.
+            if (primary && primary <= UINT32_MAX - 0x14U && memory.Read32(primary + 0x10U, &a) &&
+                (secondary == 0U || (secondary <= UINT32_MAX - 0x14U && memory.Read32(secondary + 0x10U, &b) && a == b)))
+                child.Lighting = mLighting.CaptureRenderer(primary, memory);
+        }
+        mActive->BeginAddress = begin;
+        mModelScope = std::move(child);
+        return Event::None;
+    }
+
     if (mActive.has_value() && pc == mActive->ReturnPc) {
+        mModelScope.reset(); // An unclosed child cannot survive its parent.
         const ActiveScope scope = *mActive;
         mActive.reset();
         ++mStats.ScopeExits;
@@ -174,6 +299,7 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
     if (scope->Layer == Oot3dPicaCompositionLayer::OpaqueWorld) {
         CaptureSceneLighting(memory);
     }
+    mFineSuppressed = false;
     mActive = ActiveScope{scope->ReturnPc, begin,
                           {scope->Layer, scope->Provenance, scope->EntryPc,
                            scope->ReturnPc},
@@ -196,69 +322,33 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
 
 void Mm3dNativePicaCompositionTracker::CaptureSceneLighting(
     oot3d::recomp::a32::MemoryBus& memory) {
-    using namespace Fast::Renderer3ds;
-    PicaNativeLightBinding binding;
-    uint32_t view = 0;
-    if (memory.Read32(kMm3dCurrentViewPointer, &view) && view != 0U &&
-        view > kMm3dPlayViewOffset &&
-        view <= std::numeric_limits<uint32_t>::max() - 0x200U) {
-        binding.WorldToView = ReadWorldToView(memory, view);
-        // Lights still linked in the play state's LightContext: a View that
-        // is not a play state's links none of these records.
-        const uint32_t play = view - kMm3dPlayViewOffset;
-        PicaSceneDirectionalLights directionals;
-        uint32_t node = 0;
-        if (play <= std::numeric_limits<uint32_t>::max() - kMm3dPlayEnvironmentLight2Offset - 0x10U &&
-            memory.Read32(play + kMm3dPlayLightListHeadOffset, &node)) {
-            for (uint32_t visited = 0; node != 0U && visited < 32U; ++visited) {
-                uint32_t info = 0, next = 0;
-                if (node > std::numeric_limits<uint32_t>::max() - 12U ||
-                    !memory.Read32(node, &info) || !memory.Read32(node + 8U, &next))
-                    break;
-                PicaSceneDirectionalLight light;
-                if ((info == play + kMm3dPlayEnvironmentLight1Offset ||
-                     info == play + kMm3dPlayEnvironmentLight2Offset) &&
-                    directionals.Count < directionals.Lights.size() &&
-                    ReadDirectionalLight(memory, info, light))
-                    directionals.Lights[directionals.Count++] = light;
-                node = next;
-            }
-        }
-        // Light 1 first, as the environment orders them.
-        std::sort(directionals.Lights.begin(), directionals.Lights.begin() + directionals.Count,
-                  [](const auto& a, const auto& b) { return a.SourceIdentity < b.SourceIdentity; });
-        mStats.SceneDirectionalLights = directionals.Count;
-        if (directionals.Count == 0U) {
-            mSceneDirectionals.reset();
-        } else if (!mSceneDirectionals || *mSceneDirectionals != directionals) {
-            mSceneDirectionals = std::make_shared<const PicaSceneDirectionalLights>(directionals);
-        }
-        binding.SceneDirectionals = mSceneDirectionals;
-    }
-    if (binding.WorldToView.has_value()) {
-        ++mStats.LightBindings;
-    }
-    mSceneLighting = std::move(binding);
+    const auto current = CaptureMm3dSceneEnvironment(memory);
+    mLighting.CaptureSceneLights(current.Play, memory);
+    mSceneLighting = mLighting.CaptureRenderer(0U, memory);
+    mStats.SceneDirectionalLights = mSceneLighting.SceneDirectionals ? mSceneLighting.SceneDirectionals->Count : 0U;
+    if (mSceneLighting.WorldToView) ++mStats.LightBindings;
 }
 
 void Mm3dNativePicaCompositionTracker::Record(
     uint32_t begin, uint32_t end,
     const Oot3dPicaCompositionAttribution& attribution,
     const Fast::Renderer3ds::PicaNativeLightBinding& lightBinding) {
-    // A later frame writing the same bytes replaces what was recorded there.
-    const auto overlapped = std::remove_if(
-        mSpans.begin(), mSpans.end(), [begin, end](const RecordedSpan& span) {
-            return span.Span.BeginAddress < end && begin < span.Span.EndAddress;
-        });
-    mStats.ReplacedSpans += static_cast<uint64_t>(mSpans.end() - overlapped);
-    mSpans.erase(overlapped, mSpans.end());
-    const auto at = std::lower_bound(
-        mSpans.begin(), mSpans.end(), begin,
-        [](const RecordedSpan& span, uint32_t address) {
-            return span.Span.BeginAddress < address;
-        });
-    mSpans.insert(at, {{begin, end, attribution, lightBinding}, mStats.SceneFrames});
+    // Clip old coverage around a precise child range. A model must neither
+    // erase the rest of its pass nor be erased by a closing parent scope.
+    if (begin >= end) return;
+    std::vector<RecordedSpan> kept;
+    for (const auto& old : mSpans) {
+        if (old.Span.EndAddress <= begin || old.Span.BeginAddress >= end) { kept.push_back(old); continue; }
+        ++mStats.ReplacedSpans;
+        if (old.Span.BeginAddress < begin) { auto left = old; left.Span.EndAddress = begin; kept.push_back(left); }
+        if (old.Span.EndAddress > end) { auto right = old; right.Span.BeginAddress = end; kept.push_back(right); }
+    }
+    kept.push_back({{begin, end, attribution, lightBinding}, mStats.SceneFrames});
+    std::sort(kept.begin(), kept.end(), [](const auto& a, const auto& b) { return a.Span.BeginAddress < b.Span.BeginAddress; });
+    mSpans = std::move(kept);
     ++mStats.RecordedSpans;
+    return;
+
 }
 
 bool Mm3dNativePicaCompositionTracker::TakeCommandListCompositionSpans(
@@ -276,7 +366,10 @@ void Mm3dNativePicaCompositionTracker::Reset() noexcept {
     mActive.reset();
     mSpans.clear();
     mSceneLighting = {};
-    mSceneDirectionals.reset();
+    mLighting.Reset();
+    mActorDrawStack.clear(); mQueueOwners.clear(); mModelSubmit.reset(); mModelScope.reset();
+    mFineSuppressed = false;
+    ++mQueueGeneration;
     mStats = {};
 }
 

@@ -158,6 +158,12 @@ std::string ReliefPrologue(bool integerTexture0) {
 
 bool PicaUberEffectSupports(const PicaEffectDecisions& decisions,
                             const PicaUberEffectProgramRequest& request) noexcept {
+    // Never bind a legacy superset to raw-irradiance uniforms. The backend
+    // already completes the specialized program when no superset covers it.
+    if (decisions.FragmentLightingOperand) return false;
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+    if (decisions.ShadowProbe) return false;
+#endif
     const auto& hooks = request.BaseHooks;
     if (!hooks.ValidFor(request.BaseSource)) return false;
     const auto base = Capabilities(request, hooks);

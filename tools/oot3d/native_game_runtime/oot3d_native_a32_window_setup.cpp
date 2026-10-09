@@ -1,3 +1,4 @@
+#include "mm3d_lighting_hook_sites.h"
 // Native A32 window session: setup (process image, host services, renderer, UI, initial state).
 #include "oot3d_native_a32_window_session.h"
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
@@ -412,6 +413,7 @@ void NativeA32WindowSession::Setup() {
         return static_cast<std::int64_t>(presentationFrameCount) * 1000000 / 60;
       });
       mm3dSingleScreen->Register(mm3dGuestPatches);
+      Oot3dNativeGame::RegisterMm3dLightingHooks(mm3dGuestPatches);
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
       Oot3dNativeGame::RegisterMm3dDevCamera(mm3dGuestPatches, devToolsTitle, nativeCandidateDispatch.DevFreeCamera);
 #endif
@@ -760,6 +762,16 @@ void NativeA32WindowSession::Setup() {
         mm3dRestoration->ApplyDataPatches(process.Memory());
       }
       mm3dGuestPatches.Verify(process.Memory(), &Oot3dNativeGame::Oot3dNativeA32Registry());
+      if (!mm3dCompositionTracker.VerifyHooks(process.Memory(), &Oot3dNativeGame::Oot3dNativeA32Registry()))
+        throw std::runtime_error("MM3D lighting: wrong image or missing observer block; regenerate registry boundaries");
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+      const auto adapterProofFlag = [](const char* name) {
+        const char* value = std::getenv(name);
+        return value && *value && *value != '0';
+      };
+      mm3dCompositionTracker.SetSupplementalPublication(
+          adapterProofFlag("TRIAEVUM_MM3D_ADAPTER_POINTS"), !adapterProofFlag("TRIAEVUM_MM3D_ADAPTER_NO_WATER"));
+#endif
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
       // Which sites stayed off, for agents reading the log.
       for (const auto &site : mm3dGuestPatches.Statistics())
@@ -896,6 +908,19 @@ void NativeA32WindowSession::Setup() {
     devEmitterLog = std::make_unique<Oot3dNativeGame::NativeEmitterInventoryLog>(emitters);
     std::fprintf(stderr, "TRIAEVUM_DEV_EMITTERS %s\n", emitters);
   }
+  if (const char *trace = std::getenv("TRIAEVUM_SURFACE_TRACE"); trace != nullptr && *trace != '\0') {
+    // PATH,HOST_FRAME[,FRAMES]: a surface-lighting trace of any title.
+    const std::string spec = trace;
+    const auto first = spec.find(',');
+    if (first == std::string::npos)
+      throw std::runtime_error("TRIAEVUM_SURFACE_TRACE must be PATH,HOST_FRAME[,FRAMES]");
+    const auto second = spec.find(',', first + 1);
+    devSurfaceTracePath = spec.substr(0, first);
+    devSurfaceTraceFrame = static_cast<uint32_t>(std::stoul(spec.substr(first + 1, second - first - 1)));
+    if (second != std::string::npos)
+      devSurfaceTraceFrames = static_cast<uint32_t>(std::stoul(spec.substr(second + 1)));
+    devSurfaceTraceFrame = std::max(devSurfaceTraceFrame, 1U);
+  }
   // Agents edit scene profiles on disk while the game runs.
   if (const char *reload = std::getenv("TRIAEVUM_ENVIRONMENT_HOT_RELOAD"); reload != nullptr && *reload != '0') {
     sceneEnvironment->SetHotReload(true);
@@ -1013,6 +1038,8 @@ void NativeA32WindowSession::Setup() {
   }
   apiPointer = &GetActiveRenderingApiForDemo(window);
   auto &api = *apiPointer;
+  api.SetNativePicaFragmentLightingOperand(
+      titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d);
   programPreparation =
       dynamic_cast<Fast::Renderer3ds::PicaProgramPreparationBackend *>(&api);
   alwaysAvailablePrograms =

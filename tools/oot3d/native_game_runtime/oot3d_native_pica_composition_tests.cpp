@@ -1,3 +1,4 @@
+#include "mm3d_lighting_hook_sites.h"
 #include "oot3d_native_pica_composition.h"
 #include "mm3d_pica_composition.h"
 #include "mm3d_title_contracts.h"
@@ -603,7 +604,14 @@ void TestMm3dSceneLighting() {
             "could not seed the LightContext");
     writeLight(0x08049000U, 0, 0, 127, 255, 255, 255);
 
+    Map(memory, 0x00100000U, 0x00540000U);
+    for (const auto& hook : kMm3dLightingHookSites)
+        for (uint32_t i = 0; i < 4U; ++i)
+            Require(memory.Write32(hook.Pc + i * 4U, hook.Words[i]), "seed MM hook guard");
+    Require(memory.Write8(kPlay + 0x13DU, 4U) && memory.Write32(kPlay + 0x4A8U, kPlay) &&
+            memory.Write32(kPlay + 0x138U, 1U), "seed verified MM play owner");
     Mm3dNativePicaCompositionTracker tracker;
+    Require(tracker.VerifyHooks(memory), "MM hook signatures");
     oot3d::recomp::a32::GuestState state{};
     const auto pass = [&](uint32_t entry, uint32_t returnPc, uint32_t begin, uint32_t end) {
         Require(memory.Write32(kMm3dCommandListCursorAddress, begin), "could not seed the cursor");
@@ -638,10 +646,10 @@ void TestMm3dSceneLighting() {
             "expected the two linked environment lights");
     const auto& first = opaque.LightBinding.SceneDirectionals->Lights[0];
     const auto& second = opaque.LightBinding.SceneDirectionals->Lights[1];
-    Require(first.SourceIdentity == light1 && first.DirectionTowardSource[1] == 1.0F &&
+    Require(first.SourceIdentity == light1 + 4U && first.DirectionTowardSource[1] == 1.0F &&
                 first.Color[0] == 1.0F && std::abs(first.Color[1] - 128.0F / 255.0F) < 1.0e-6F,
             "light 1 was not decoded first");
-    Require(second.SourceIdentity == light2 && second.DirectionTowardSource[0] == 1.0F,
+    Require(second.SourceIdentity == light2 + 4U && second.DirectionTowardSource[0] == 1.0F,
             "light 2 was not decoded");
     Require(tracker.Stats().LightBindings == 1U && tracker.Stats().SceneDirectionalLights == 2U,
             "the lighting statistics are wrong");

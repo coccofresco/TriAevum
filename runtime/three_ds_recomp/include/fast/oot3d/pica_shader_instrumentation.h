@@ -45,6 +45,10 @@ enum class PicaShaderInstrumentationFeature : uint32_t {
     // The face normal and kind of the visible surface in the geometry guide
     // (renderer3ds/pica_geometry_guide.h), from every depth-writing draw.
     FaceNormalGuide = 1U << 17U,
+    FragmentLightingOperand = 1U << 18U,
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+    ShadowProbe = 1U << 19U,
+#endif
 };
 
 constexpr PicaShaderInstrumentationFeature operator|(PicaShaderInstrumentationFeature left,

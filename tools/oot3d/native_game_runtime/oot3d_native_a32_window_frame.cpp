@@ -962,6 +962,14 @@ bool NativeA32WindowSession::UpdateGuestServicesForRefresh(
     UpdateDevFreeCameraTour(frameCount);
     if (devLab) UpdateDevLab(frameCount);
   }
+  // TRIAEVUM_SURFACE_TRACE=PATH,HOST_FRAME,FRAMES: the surface-lighting
+  // candidates of FRAMES frames from that host frame on (any title).
+  if (devSurfaceTraceFrame != 0U && widescreenProjection.CurrentHostFrame >= devSurfaceTraceFrame) {
+    Fast::Renderer3ds::PicaSurfaceDebug::Instance().RequestTrace(devSurfaceTracePath, devSurfaceTraceFrames);
+    std::fprintf(stderr, "TRIAEVUM_SURFACE_TRACE requested host_frame=%u frames=%u\n",
+                 widescreenProjection.CurrentHostFrame, devSurfaceTraceFrames);
+    devSurfaceTraceFrame = 0U;
+  }
 #endif
   refreshTickRemainder += kCtrArm11TicksPerSecond;
   nextVblankTick += refreshTickRemainder / kGuestDisplayRefreshRate;

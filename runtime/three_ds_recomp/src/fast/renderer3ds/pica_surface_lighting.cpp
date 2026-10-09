@@ -86,7 +86,8 @@ std::optional<PicaSurfaceLightingUniforms> BuildPicaSurfaceLightingUniforms(
     const PicaNativeLightBinding& binding,
     const PicaEnvironmentLighting& environment,
     const PicaSurfaceLightingView* cameraView,
-    const PicaPointShadowAssignment* pointShadows) noexcept {
+    const PicaPointShadowAssignment* pointShadows,
+    bool nativeFragmentLambert) noexcept {
     const auto pointShadowRow = [pointShadows](uint64_t identity) {
         if (pointShadows == nullptr || identity == 0U) return -1.0F;
         for (size_t row = 0; row < pointShadows->Identities.size(); ++row)
@@ -178,7 +179,14 @@ std::optional<PicaSurfaceLightingUniforms> BuildPicaSurfaceLightingUniforms(
     }
     const bool hasDiffuse = std::any_of(result.MaterialDiffuse.begin(),
         result.MaterialDiffuse.begin() + 3, [](float value) { return value != 0.0F; });
-    const auto& reflectance = hasDiffuse ? result.MaterialDiffuse : result.MaterialAmbient;
+    // Fragment-lit Lambert leaves native primary color (material or vertex
+    // color) in the TEV. Feed irradiance to its fragment-lighting operand;
+    // folding material here as well would square its response.
+    const bool nativePrimary = nativeFragmentLambert && result.Control[0] == 0U;
+    const Vec4 unitReflectance{1.0F, 1.0F, 1.0F, 1.0F};
+    const auto& reflectance = nativePrimary ? unitReflectance :
+        hasDiffuse ? result.MaterialDiffuse : result.MaterialAmbient;
+    if (nativePrimary) result.Control[3] |= 2U;
     const float sceneDirectStrength = environment.Enabled ? environment.NativeDirectStrength : 1.0F;
     if (sceneDirectStrength > 0.0F) {
         for (const auto& source : sceneDirectionals) {
@@ -247,7 +255,7 @@ std::optional<PicaSurfaceLightingUniforms> BuildPicaSurfaceLightingUniforms(
         // the new direct lights rather than acquiring an arbitrary white one.
         for (size_t channel = 0; channel < 3; ++channel)
             result.EnvironmentAmbient[channel] = environment.AmbientColor[channel] *
-                environment.AmbientIntensity * result.MaterialAmbient[channel];
+                environment.AmbientIntensity * (nativePrimary ? 1.0F : result.MaterialAmbient[channel]);
         for (size_t slot = 0; slot < environment.Lights.size(); ++slot) {
             const auto& source = environment.Lights[slot];
             if (source.Intensity <= 0.0F) continue;
@@ -273,6 +281,25 @@ std::optional<PicaSurfaceLightingUniforms> BuildPicaSurfaceLightingUniforms(
         result.PointShadowAtlas = pointShadows->Atlas;
     }
     return result;
+}
+
+void FoldPicaSurfaceMaterialForPbr(PicaSurfaceLightingUniforms& u) noexcept {
+    if ((u.Control[3] & 2U) == 0U) return;
+    const bool hasDiffuse = std::any_of(u.MaterialDiffuse.begin(), u.MaterialDiffuse.begin() + 3,
+        [](float value) { return value != 0.0F; });
+    const auto& reflectance = hasDiffuse ? u.MaterialDiffuse : u.MaterialAmbient;
+    const auto fold = [&](auto& color) {
+        for (size_t channel = 0; channel < 3; ++channel) color[channel] *= reflectance[channel];
+    };
+    for (uint32_t n = 0; n < u.Control[1]; ++n) fold(u.ScenePoints[n].Color);
+    for (uint32_t n = 0; n < u.Control[2]; ++n) fold(u.SceneDirectionalColors[n]);
+    for (uint32_t n = 0; n < ((u.Control[3] >> 8U) & 255U); ++n) fold(u.Placed[n].Color);
+    for (auto& color : u.EnvironmentColors) fold(color);
+    for (size_t channel = 0; channel < 3; ++channel) {
+        u.EnvironmentAmbient[channel] *= u.MaterialAmbient[channel];
+        u.ResolvedAmbient[channel] *= u.MaterialAmbient[channel];
+    }
+    u.Control[3] &= ~2U;
 }
 
 uint32_t ExcludePicaSceneDirectionalsLitNatively(
@@ -313,8 +340,8 @@ uint32_t ExcludePicaSceneDirectionalsLitNatively(
     return removed;
 }
 
-std::string_view PicaSurfaceLightingDeclarations() noexcept {
-    return R"glsl(
+std::string PicaSurfaceLightingDeclarations(bool fragmentOperand) {
+    return std::string(R"glsl(
 layout(location=9) in vec3 pica_surface_normal;
 layout(location=10) in vec4 pica_surface_tint;
 struct PicaSurfaceLight {
@@ -681,8 +708,13 @@ vec3 pica_surface_gi_direct(vec3 normal_view) {
     }
     color += pica_surface_scene_point_primary(normal_view) * weight.z;
     color += pica_surface_scene_directional_primary(normal_view) * weight.x;
-    return min(abs(color * pica_surface_tint.rgb), vec3(1.0));
-}
+)glsl") +
+        (fragmentOperand ? std::string(R"glsl(    vec3 material = (pica_surface.control.w & 2u) != 0u
+        ? pica_primary_color.rgb : pica_surface_tint.rgb;
+    return min(abs(color * material), vec3(1.0));
+)glsl") : std::string(R"glsl(    return min(abs(color * pica_surface_tint.rgb), vec3(1.0));
+)glsl")) +
+        std::string(R"glsl(}
 vec3 pica_surface_primary(vec3 native_color, vec3 normal_view) {
     if (pica_surface.control.x != 0u ||
         (pica_surface.environment_parameters.w != 0.0 && (pica_surface.control.w & 1u) == 0u))
@@ -867,7 +899,7 @@ vec3 pica_surface_water_shade(vec3 native_rgb, vec3 sky) {
     }
     return color + specular * pica_surface.water_optics.w;
 }
-)glsl";
+)glsl");
 }
 
 std::string_view PicaSurfaceLightingWaterShading() noexcept {
@@ -884,8 +916,8 @@ std::string_view PicaSurfaceLightingWaterMarker() noexcept {
 )glsl";
 }
 
-std::string_view PicaSurfaceLightingBody() noexcept {
-    return R"glsl(
+std::string PicaSurfaceLightingBody(bool fragmentOperand) {
+    return std::string(R"glsl(
     bool surface_water = pica_surface_water(cross(dFdx(pica_view), dFdy(pica_view)));
     pica_surface_water_fragment = surface_water;
     pica_surface_water_footprint = length(fwidth(pica_view)) * length(pica_surface.view_to_world_linear[0].xyz);
@@ -928,8 +960,23 @@ std::string_view PicaSurfaceLightingBody() noexcept {
             }
         }
     }
-    if ((pica_surface.control.x != 0u || pica_surface.environment_parameters.w != 0.0 ||
-         pica_surface.control.y != 0u || pica_surface.control.z != 0u) && !surface_water) {
+)glsl") +
+        (fragmentOperand ? std::string(R"glsl(    bool surface_fragment_operand = (pica_surface.control.w & 2u) != 0u && !surface_water;
+    // Exact all-native-off endpoint. Canonical inputs were saved before this
+    // body, so native TEV alpha replay still uses the original RGB/alpha.
+    // Unequal/fractional native ambient/direct gains need decomposition of
+    // the native contributions; do not approximate them with one multiplier.
+    if (surface_fragment_operand && pica_surface.environment_parameters.w != 0.0 &&
+        pica_surface.environment_parameters.x == 0.0 &&
+        pica_surface.environment_parameters.y == 0.0) {
+        primary_fragment_color.rgb = vec3(0.0);
+        secondary_fragment_color.rgb = vec3(0.0);
+    }
+    if (!surface_fragment_operand &&
+        (pica_surface.control.x != 0u || pica_surface.environment_parameters.w != 0.0 ||
+)glsl") : std::string(R"glsl(    if ((pica_surface.control.x != 0u || pica_surface.environment_parameters.w != 0.0 ||
+)glsl")) +
+        std::string(R"glsl(         pica_surface.control.y != 0u || pica_surface.control.z != 0u) && !surface_water) {
         rounded_primary_color.rgb = byteround3(pica_surface_primary(rounded_primary_color.rgb,
             pica_surface_unit(pica_surface_normal)));
     }
@@ -948,7 +995,15 @@ std::string_view PicaSurfaceLightingBody() noexcept {
                 (vec3(1.0) - pica_light_shadow), vec3(0.0));
         }
     }
-)glsl";
+)glsl") +
+        (fragmentOperand ? std::string(R"glsl(    // Shadow subtraction above belongs to native illumination. Add the new
+    // light afterwards so a native shadow cannot subtract a placed source.
+    if (surface_fragment_operand) {
+        vec3 unused;
+        vec3 added = pica_surface_native_response(pica_surface_unit(pica_surface_normal), 0u, unused);
+        primary_fragment_color.rgb = clamp(primary_fragment_color.rgb + added, vec3(0.0), vec3(1.0));
+    }
+)glsl") : std::string(R"glsl()glsl"));
 }
 
 } // namespace Fast::Renderer3ds

@@ -325,6 +325,10 @@ private:
   // F1 > Dev Tools warping (developer builds only).
   std::shared_ptr<Oot3dNativeGame::DevWarpTitleAbi> devToolsTitle;
   bool devFreeCameraOwnedInput = false;
+  // TRIAEVUM_SURFACE_TRACE: a surface-lighting trace requested at a host frame.
+  std::string devSurfaceTracePath;
+  uint32_t devSurfaceTraceFrame = 0;
+  uint32_t devSurfaceTraceFrames = 1;
   std::shared_ptr<Oot3dNativeGame::DevWarpRuntime> devWarp;
   std::unique_ptr<Oot3dNativeGame::DevWarpGuest> devWarpGuest;
   // TRIAEVUM_DEV_FREECAM_TOUR="f,r,u,yaw,pitch;...": free camera poses

@@ -377,6 +377,18 @@ bool GfxRenderingAPIVulkan::PreparePicaSequenceDraw(
             !draw.VertexAttributes.empty() && draw.VertexUniformBytes.size() >= Oot3d::kPicaPackedVertexFloatOffset &&
             Oot3d::UsesPicaPerspectiveProjection(draw.VertexUniformBytes) && draw.LightBinding.WorldToView &&
             Oot3d::InvertDirectionalShadowMatrix(*draw.LightBinding.WorldToView, viewToWorld);
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+        auto& shadowDebug = Renderer3ds::PicaSurfaceDebug::Instance();
+        if (shadowDebug.ShadowTracing()) {
+            char fields[256];
+            std::snprintf(fields, sizeof(fields),
+                ",\"admitted\":%u,\"geometry\":\"%016llx\",\"native_actor\":%u,\"owner\":%llu",
+                admitted ? 1U : 0U, static_cast<unsigned long long>(draw.GeometryIdentity),
+                draw.Composition.NativeActorGeometry ? 1U : 0U,
+                static_cast<unsigned long long>(draw.Composition.NativeActorIdentity));
+            shadowDebug.ShadowRecord("shadow_prepare", mFrameCounter, draw.SubmissionId, fields);
+        }
+#endif
         if (!admitted) {
             mDiagnostics.RecordNriDirectionalShadowPreparation(false, false);
             return true;
@@ -677,6 +689,14 @@ bool GfxRenderingAPIVulkan::PreparePicaSequenceDraw(
         if (caster) {
             mPreparedShadowCasters.insert_or_assign(draw.SubmissionId, shadowCaster);
         }
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+        if (shadowDebug.ShadowTracing()) {
+            char fields[256];
+            std::snprintf(fields, sizeof(fields), ",\"status\":%u,\"caster\":%u",
+                static_cast<unsigned>(status), caster ? 1U : 0U);
+            shadowDebug.ShadowRecord("shadow_prepared_record", mFrameCounter, draw.SubmissionId, fields);
+        }
+#endif
         mDiagnostics.RecordNriDirectionalShadowPreparation(caster, !resolution.Cacheable);
         return true;
     } catch (const std::exception& exception) {
@@ -923,7 +943,19 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 draw.VertexUniformBytes.subspan(Oot3d::kPicaPackedVertexFloatOffset),
                 draw.LightBinding, isolatedLighting ? isolatedEnvironment : mFrameEnvironment,
                 environmentWorldToView && mSurfaceLightingView ? &*mSurfaceLightingView : nullptr,
-                pointShadowHistory.Valid() ? &pointShadowAssignment : nullptr);
+                pointShadowHistory.Valid() ? &pointShadowAssignment : nullptr,
+                Renderer3ds::PicaNativeFragmentOperandWaterEligible(
+                    NativePicaFragmentLightingOperand(),
+                    draw.LightBinding.Water ? draw.LightBinding.Water->Count : 0U,
+                    waterSurface.WorldBounds.Available, waterSurface.ReachesWater, waterSurface.WholeDraw) &&
+                    !isolatedLighting &&
+                    Oot3d::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting) &&
+                    mFrameEnvironment.Enabled &&
+                    // Partial native fragment-light decomposition is a later step.
+                    (mFrameEnvironment.PreserveSceneBrightness ||
+                     (mFrameEnvironment.NativeLocalStrength == 0.0F &&
+                      mFrameEnvironment.NativeAmbientStrength == 0.0F)) &&
+                    draw.FragmentFeatures.FragmentLightingEnabled);
             if (surfaceLighting) {
                 // Relative source weights (the guide's 8-bit radiance would
                 // clip gains above one); the gain applies when GI is composed.
@@ -1221,6 +1253,10 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             surfaceLighting.has_value(),
             pbrOptions,
             reliefTexture,
+            surfaceLighting && (surfaceLighting->Control[3] & 2U) != 0U,
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+            surfaceCandidate && surfaceDebug.ShadowCode(surfaceOrdinal) != 0U,
+#endif
         };
         static const Oot3d::EffectsSettings nativeMemoryEffects;
         bool variantCacheHit = false;
@@ -1229,6 +1265,9 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 variantRequest,
                 nativeMemoryOnly ? nativeMemoryEffects : graphicsSettings.Effects,
                 &variantCacheHit);
+        if (surfaceLighting && !Oot3d::HasPicaShaderInstrumentationFeature(
+                shaderVariant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::FragmentLightingOperand))
+            Renderer3ds::FoldPicaSurfaceMaterialForPbr(*surfaceLighting);
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
         if (surfaceCandidate && surfaceDebug.Tracing()) {
             // One candidate: its native colour computation and what Modern did.
@@ -1292,6 +1331,22 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 }
                 record.pop_back();
                 record += shifts + "]}";
+            }
+            {
+                char route[384];
+                std::snprintf(route, sizeof(route),
+                    ",\"fragmentOperand\":%d,\"waterCount\":%u,\"waterBoundsKnown\":%d,"
+                    "\"waterClassifierMode\":%.0f,\"surfaceControl\":[%u,%u,%u,%u]}",
+                    Oot3d::HasPicaShaderInstrumentationFeature(shaderVariant.AppliedFeatures,
+                        Oot3d::PicaShaderInstrumentationFeature::FragmentLightingOperand) ? 1 : 0,
+                    draw.LightBinding.Water ? draw.LightBinding.Water->Count : 0U,
+                    waterSurface.WorldBounds.Available ? 1 : 0,
+                    surfaceLighting ? surfaceLighting->WaterViewTranslation[3] : 0.0F,
+                    surfaceLighting ? surfaceLighting->Control[0] : 0U,
+                    surfaceLighting ? surfaceLighting->Control[1] : 0U,
+                    surfaceLighting ? surfaceLighting->Control[2] : 0U,
+                    surfaceLighting ? surfaceLighting->Control[3] : 0U);
+                record.pop_back(); record += route;
             }
             if (waterSurface.WorldBounds.Available) {
                 const auto& b = waterSurface.WorldBounds;
@@ -2125,6 +2180,11 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             directionalShadowReceiverClass ==
                 Oot3d::PicaDirectionalShadowReceiverClass::DirectMatched,
             directionalShadowHistoryBound);
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+        if (surfaceCandidate && Oot3d::HasPicaShaderInstrumentationFeature(
+                drawVariant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::ShadowProbe))
+            directionalShadowBinding.Uniforms.Receiver[2] = float(surfaceDebug.ShadowCode(surfaceOrdinal));
+#endif
         const auto& directionalShadowUniforms =
             directionalShadowBinding.Uniforms;
         const auto toonUniforms = Oot3d::PackToonSurfaceParameters(
@@ -2154,6 +2214,44 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         // range ends before it.
         const VkDeviceSize directionalShadowUniformSize = uniformShadow
             ? directionalShadowUniforms.UsedBytes() : draw.FragmentUniformBytes.size();
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+        if (surfaceCandidate && surfaceDebug.ShadowSelected(surfaceOrdinal)) {
+            const bool shadowBlob = uniformShadow && surfaceDebug.ShadowBlob(
+                mFrameCounter, draw.SubmissionId, "b12", &directionalShadowUniforms,
+                static_cast<size_t>(directionalShadowUniformSize));
+            const bool surfaceBlob = uniformSurface && surfaceDebug.ShadowBlob(
+                mFrameCounter, draw.SubmissionId, "surface", &*surfaceLighting, sizeof(*surfaceLighting));
+            const bool vertexBlob = surfaceDebug.ShadowBlob(mFrameCounter, draw.SubmissionId,
+                "vertex", draw.VertexUniformBytes.data(), draw.VertexUniformBytes.size());
+            const bool sourceBlob = surfaceDebug.ShadowBlob(mFrameCounter, draw.SubmissionId, "fragment.glsl",
+                selectedDraw->FragmentShaderSource.data(), selectedDraw->FragmentShaderSource.size());
+            const auto prepared = mPreparedShadowCasters.find(draw.SubmissionId);
+            char fields[1536];
+            std::snprintf(fields, sizeof(fields),
+                ",\"ordinal\":%u,\"geometry\":\"%016llx\",\"target_namespace\":%llu,\"target_color\":%u"
+                ",\"receiver\":%u,\"shader_applied\":%u,\"class\":%u,\"history_valid\":%u"
+                ",\"history_frame\":%llu,\"bound\":%u,\"flags\":%u,\"slot_mask\":%u"
+                ",\"prepared_caster\":%u,\"debug_code\":%u,\"debug_applied\":%u"
+                ",\"requested_features\":%u,\"applied_features\":%u,\"fragment_key\":\"%016llx\""
+                ",\"b12_bytes\":%llu,\"b12_saved\":%u,\"surface_saved\":%u,\"vertex_saved\":%u"
+                ",\"source_saved\":%u,\"uses_uber\":%u",
+                surfaceOrdinal, static_cast<unsigned long long>(draw.GeometryIdentity),
+                static_cast<unsigned long long>(draw.RenderTargetNamespace), draw.FramebufferColorPhysicalAddress,
+                directionalShadowReceiver ? 1U : 0U, directionalShadowShaderApplied ? 1U : 0U,
+                static_cast<unsigned>(directionalShadowReceiverClass), directionalShadowHistory.Valid() ? 1U : 0U,
+                static_cast<unsigned long long>(directionalShadowHistory.State.ProducedFrameId),
+                directionalShadowHistoryBound ? 1U : 0U, directionalShadowUniforms.Extent[3],
+                static_cast<unsigned>(directionalShadowUniforms.Receiver[3]),
+                prepared != mPreparedShadowCasters.end() ? 1U : 0U, surfaceDebug.ShadowCode(surfaceOrdinal),
+                drawVariant.Decisions.ShadowProbe ? 1U : 0U,
+                static_cast<unsigned>(drawVariant.RequestedFeatures), static_cast<unsigned>(drawVariant.AppliedFeatures),
+                static_cast<unsigned long long>(drawVariant.FragmentShaderKey),
+                uniformShadow ? static_cast<unsigned long long>(directionalShadowUniformSize) : 0ULL,
+                shadowBlob ? 1U : 0U, surfaceBlob ? 1U : 0U, vertexBlob ? 1U : 0U,
+                sourceBlob ? 1U : 0U, effectBlock.has_value() ? 1U : 0U);
+            surfaceDebug.ShadowRecord("shadow_receiver", mFrameCounter, draw.SubmissionId, fields);
+        }
+#endif
         const std::array<VkDeviceSize, 7> uniformSizes{
             draw.VertexUniformBytes.size(), previousVertexUniformBytes.size(),
             draw.FragmentUniformBytes.size(), uniformShadow ? directionalShadowUniformSize : 0U,

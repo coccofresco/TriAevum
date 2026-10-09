@@ -222,6 +222,7 @@ oot3d_target_defaults(oot3d_native_pica_submission_tests FOLDER Tests)
 add_library(oot3d_native_pica_composition STATIC EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_pica_composition.cpp
     tools/oot3d/native_game_runtime/mm3d_pica_composition.cpp
+    tools/oot3d/native_game_runtime/mm3d_native_a32_lighting.cpp
     tools/oot3d/native_game_runtime/oot3d_native_a32_lighting.cpp
 )
 set_source_files_properties(
@@ -567,3 +568,8 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
         MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 set_property(TARGET oot3d_native_pica_vulkan_bridge_tests PROPERTY FOLDER Tests)
+
+add_executable(mm3d_native_lighting_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/mm3d_native_lighting_tests.cpp)
+target_link_libraries(mm3d_native_lighting_tests PRIVATE oot3d_native_pica_composition)
+oot3d_target_defaults(mm3d_native_lighting_tests FOLDER Tests)

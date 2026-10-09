@@ -2050,4 +2050,133 @@ TEST(Oot3dPicaShaderInstrumentation, AuthoredLightingPreservesNativeMaterialRefl
     EXPECT_EQ(evaluate(), (std::array<float, 3>{}));
 }
 
+
+TEST(Oot3dPicaShaderInstrumentation, FragmentLambertKeepsPrimaryMaterialAndPlacedCount) {
+    using namespace Fast::Renderer3ds;
+    auto hooks = ShadowCasterHooks();
+    hooks.Transform = {PicaVertexTransformOperation::ModelViewProjection3x4, 0, 4, 4, 3, 20, 3, 0, 1};
+    auto& s = hooks.Surface;
+    s.ViewNormalTemporary = 14; s.LightingBooleanUniform = 9;
+    s.DiffuseUniform = 8; s.AmbientUniform = 9;
+    s.TintBooleanUniform = 5; s.TintInputRegister = 3; s.TintScale = {90, 2};
+    s.VertexLightsReconstructed = false;
+    std::array<std::array<float, 4>, 96> uniforms{};
+    uniforms[8] = {0.5F, 0.25F, 0.0F, 1.0F};
+    uniforms[9] = {0.25F, 0.25F, 0.25F, 0.0F};
+    const std::span<const uint8_t> bytes{reinterpret_cast<const uint8_t*>(uniforms.data()), sizeof(uniforms)};
+    const auto view = BuildPicaSurfaceLightingView(Fast::Oot3d::IdentityDirectionalShadowMatrix());
+    ASSERT_TRUE(view);
+    PicaEnvironmentLighting e;
+    e.Enabled = true; e.PreserveSceneBrightness = true;
+    e.AmbientIntensity = 0.2F;
+    e.PlacedLightCount = 1;
+    e.PlacedLights[0].Kind = PicaPlacedLightKind::Point;
+    e.PlacedLights[0].Reach = 300.0F;
+    e.PlacedLights[0].Color = {0.8F, 0.4F, 0.2F};
+    e.PlacedLights[0].PositionWorld = {-280.0F, 170.0F, -1630.0F};
+    auto lambert = BuildPicaSurfaceLightingUniforms(hooks, 0, bytes, {}, e, &*view, nullptr, true);
+    ASSERT_TRUE(lambert);
+    EXPECT_EQ(lambert->Control[3], 0x103U); // count survives both low flags
+    EXPECT_FLOAT_EQ(lambert->Placed[0].Color[0], 0.8F);
+    EXPECT_FLOAT_EQ(lambert->Placed[0].Color[2], 0.2F); // primary owns black material channel
+    EXPECT_FLOAT_EQ(lambert->Placed[0].PositionReach[1], 170.0F);
+    EXPECT_FLOAT_EQ(lambert->Placed[0].AxisKind[3], 1.0F);
+    EXPECT_FALSE(BuildPicaSurfaceLightingUniforms(hooks, 1U << 9, bytes, {}, e, &*view, nullptr, true));
+    auto pbr = BuildPicaSurfaceLightingUniforms(hooks, 0, bytes, {}, e, &*view);
+    ASSERT_TRUE(pbr);
+    EXPECT_EQ(pbr->Control[3], 0x101U);
+    EXPECT_FLOAT_EQ(pbr->Placed[0].Color[0], 0.4F);
+    EXPECT_FLOAT_EQ(pbr->Placed[0].Color[2], 0.0F);
+    FoldPicaSurfaceMaterialForPbr(*lambert);
+    EXPECT_EQ(lambert->Control, pbr->Control);
+    EXPECT_EQ(lambert->EnvironmentAmbient, pbr->EnvironmentAmbient);
+    EXPECT_EQ(lambert->ResolvedAmbient, pbr->ResolvedAmbient);
+    EXPECT_EQ(lambert->EnvironmentColors, pbr->EnvironmentColors);
+    EXPECT_EQ(lambert->Placed[0].Color, pbr->Placed[0].Color);
+    FoldPicaSurfaceMaterialForPbr(*lambert); // idempotent, no second material multiplication
+    EXPECT_EQ(lambert->Placed[0].Color, pbr->Placed[0].Color);
+    e.Enabled = false;
+    auto off = BuildPicaSurfaceLightingUniforms(hooks, 0, bytes, {}, e, &*view, nullptr, true);
+    ASSERT_TRUE(off);
+    EXPECT_EQ(off->Control[3] >> 8U, 0U);
+    EXPECT_EQ(off->Placed[0].Color, (std::array<float, 4>{}));
+    e.Enabled = true;
+    EXPECT_FALSE(BuildPicaSurfaceLightingUniforms(hooks, 0, bytes, {}, e, nullptr, nullptr, true));
+}
+
+
+TEST(Oot3dPicaShaderInstrumentation, MixedWaterBoundsKeepDryFragmentIrradiance) {
+    using namespace Fast::Renderer3ds;
+    // Captured MM room-decal bounds: one draw contains separated wall/floor
+    // pieces. Its AABB reaches water, although its wall fragments are dry.
+    const std::array<float, 3> minimum{-963.284F, -18.10252F, -2039.396F};
+    const std::array<float, 3> maximum{487.968F, 995.0F, -264.2556F};
+    auto water = std::make_shared<PicaSceneWaterBodies>();
+    water->Count = 2U;
+    water->Bodies[0] = {{-924.0F, -1000.0F}, {-764.0F, -480.0F}, -20.0F, 257U};
+    water->Bodies[1] = {{207.0F, -1000.0F}, {367.0F, -480.0F}, -20.0F, 257U};
+    EXPECT_TRUE(PicaWaterSurfaceReaches(minimum, maximum, water->Bodies[0]));
+    EXPECT_TRUE(PicaWaterSurfaceReaches(minimum, maximum, water->Bodies[1]));
+    EXPECT_FALSE(MatchPicaWaterSurface(minimum, maximum, *water));
+    const bool operand = PicaNativeFragmentOperandWaterEligible(true, water->Count, true, true, false);
+    ASSERT_TRUE(operand); // Previously false: routed the whole draw to primary-colour replacement.
+
+    auto hooks = ShadowCasterHooks();
+    hooks.Transform = {PicaVertexTransformOperation::ModelViewProjection3x4, 0, 4, 4, 3, 20, 3, 0, 1};
+    auto& surface = hooks.Surface;
+    surface.ViewNormalTemporary = 14; surface.LightingBooleanUniform = 9;
+    surface.DiffuseUniform = 8; surface.AmbientUniform = 9;
+    surface.TintBooleanUniform = 5; surface.TintInputRegister = 3; surface.TintScale = {90, 2};
+    surface.VertexLightsReconstructed = false;
+    std::array<std::array<float, 4>, 96> uniforms{};
+    uniforms[8] = {0.498F, 0.498F, 0.498F, 1.0F};
+    uniforms[9] = {0.498F, 0.498F, 0.498F, 1.0F};
+    const std::span<const uint8_t> bytes{reinterpret_cast<const uint8_t*>(uniforms.data()), sizeof(uniforms)};
+    const auto view = BuildPicaSurfaceLightingView(Fast::Oot3d::IdentityDirectionalShadowMatrix());
+    ASSERT_TRUE(view);
+    PicaNativeLightBinding binding; binding.Water = water;
+    PicaEnvironmentLighting environment;
+    environment.Enabled = true; environment.PreserveSceneBrightness = false;
+    environment.NativeAmbientStrength = 0.0F; environment.NativeLocalStrength = 0.0F;
+    environment.NativeDirectStrength = 0.0F; environment.AmbientIntensity = 0.5F;
+    environment.AmbientColor = {1.0F, 1.0F, 1.0F};
+    auto resolved = BuildPicaSurfaceLightingUniforms(hooks, 0U, bytes, binding, environment, &*view, nullptr, operand);
+    ASSERT_TRUE(resolved);
+    AssignPicaSurfaceWater(*resolved, *view, *water, minimum, maximum, 0.0F, false);
+    EXPECT_EQ(resolved->Control[0], 0U);
+    EXPECT_EQ(resolved->Control[3] & 2U, 2U); // Native primary still owns the decal material.
+    EXPECT_FLOAT_EQ(resolved->ResolvedAmbient[0], 0.5F); // Irradiance, not 0.498 * irradiance.
+    EXPECT_FLOAT_EQ(resolved->WaterViewTranslation[3], 2.0F); // Both footprints reach the fragment classifier.
+    EXPECT_FLOAT_EQ(resolved->WaterHeights[0], -20.0F);
+    EXPECT_FLOAT_EQ(resolved->WaterHeights[1], -20.0F);
+    const auto body = PicaSurfaceLightingBody(true);
+    // These existing shader guards prevent native-off and added irradiance
+    // from reaching wet fragments, while dry fragments keep native primary.
+    EXPECT_NE(body.find("(pica_surface.control.w & 2u) != 0u && !surface_water"), std::string::npos);
+    EXPECT_NE(body.find("if (!surface_fragment_operand &&"), std::string::npos);
+    EXPECT_NE(body.find("if (surface_fragment_operand) {"), std::string::npos);
+    EXPECT_FALSE(PicaNativeFragmentOperandWaterEligible(true, 2U, false, false, false));
+    EXPECT_FALSE(PicaNativeFragmentOperandWaterEligible(true, 2U, true, true, true));
+    EXPECT_FALSE(PicaNativeFragmentOperandWaterEligible(true, kMaximumPicaSurfaceWaterBodies + 1U, true, true, false));
+    EXPECT_FALSE(PicaNativeFragmentOperandWaterEligible(false, 2U, true, true, false));
+}
+
+
+TEST(Oot3dPicaShaderInstrumentation, LegacySurfaceSourceIs9039d71ByteIdentical) {
+    using namespace Fast::Renderer3ds;
+    const auto hash = [](std::string_view text) {
+        uint64_t value = 14695981039346656037ULL;
+        for (const unsigned char byte : text) value = (value ^ byte) * 1099511628211ULL;
+        return value;
+    };
+    EXPECT_EQ(PicaSurfaceLightingDeclarations().size(), 30199U);
+    EXPECT_EQ(hash(PicaSurfaceLightingDeclarations()), 10437627254862936829ULL);
+    EXPECT_EQ(PicaSurfaceLightingBody().size(), 4238U);
+    EXPECT_EQ(hash(PicaSurfaceLightingBody()), 3389087660484655324ULL);
+    EXPECT_NE(PicaSurfaceLightingBody(true), PicaSurfaceLightingBody());
+    Fast::Oot3d::PicaEffectDecisions decisions;
+    decisions.FragmentLightingOperand = true;
+    EXPECT_FALSE(Fast::Oot3d::PicaUberEffectSupports(decisions, {}));
+}
+
 } // namespace

@@ -86,6 +86,11 @@ struct PicaEffectDecisions {
     // An undeclared output leaves its attachment untouched; the superset
     // program declares them all, so its pipeline masks the others.
     uint8_t Outputs = 0;
+    // This variant is not in the legacy built-in effect superset.
+    bool FragmentLightingOperand = false;
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+    bool ShadowProbe = false;
+#endif
 
     [[nodiscard]] constexpr bool Has(Bit bit) const noexcept { return (Bits & bit) != 0U; }
     constexpr void Set(Bit bit) noexcept { Bits |= bit; }

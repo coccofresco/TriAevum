@@ -204,7 +204,9 @@ inline constexpr float kDirectFull = 0.0F;
 }
 
 struct PicaNativeLightBinding {
-    std::array<PicaNativeLightSource, 3> Sources{};
+    // OoT selects three; MM's native fragment-light owner selects four.
+    // Metadata capacity only: vertex-light UBO/layouts remain title-program derived.
+    std::array<PicaNativeLightSource, 4> Sources{};
     // Column-major world-to-view captured with the native geometry commands.
     // Replayed/interpolated with this draw, never read from a live camera.
     std::optional<std::array<float, 16>> WorldToView;

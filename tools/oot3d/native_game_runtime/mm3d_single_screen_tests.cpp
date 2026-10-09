@@ -1,3 +1,4 @@
+#include "mm3d_lighting_hook_sites.h"
 #include "core.h"
 #include "mm3d_restoration.h"
 #include "mm3d_single_screen.h"
@@ -133,6 +134,7 @@ int main(int argc, char** argv) {
         Mm3dRestorationPort restoration(calls);
         Mm3dGuestPatches patches;
         singleScreen.Register(patches);
+        RegisterMm3dLightingHooks(patches);
         restoration.Register(patches);
         // With the port's own manifest: its calls' native entries and
         // continuations.

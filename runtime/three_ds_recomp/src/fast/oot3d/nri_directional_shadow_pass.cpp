@@ -9,6 +9,9 @@
 #include "fast/oot3d/pica_directional_shadow_semantics.h"
 #include "fast/oot3d/resource_state_tracker.h"
 #include "fast/renderer3ds/virtual_shadow_keyframes.h"
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+#include "fast/renderer3ds/pica_surface_debug.h"
+#endif
 
 #ifdef ENABLE_OOT3D_NRI
 #include "nri_interop_internal.h"
@@ -1204,6 +1207,9 @@ bool NriDirectionalShadowPass::ExecuteMap(const NriDirectionalShadowExecuteDesc&
         return false;
     mImpl->LastStage = NriDirectionalShadowExecutionStage::InputAccepted;
 
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+    auto& shadowDebug = Renderer3ds::PicaSurfaceDebug::Instance();
+#endif
     const auto& sceneFrame = *sceneView.PicaFrame();
     std::array<const PicaSceneDrawRecord*, kMaximumCasters> casterStorage{};
     size_t casterCount = 0;
@@ -1213,8 +1219,21 @@ bool NriDirectionalShadowPass::ExecuteMap(const NriDirectionalShadowExecuteDesc&
         if (!sceneFrame.DirectionalShadowCaster(index) || !caster.NativeTransform.CurrentViewToWorldAvailable ||
             !caster.NativeTransform.CurrentClipToWorldAvailable || !caster.LightingWorldToView ||
             caster.RenderTarget.RenderTargetNamespace != desc.RenderTargetNamespace ||
-            caster.RenderTarget.ColorPhysicalAddress != desc.ColorPhysicalAddress)
+            caster.RenderTarget.ColorPhysicalAddress != desc.ColorPhysicalAddress) {
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+            if (shadowDebug.ShadowTracing()) {
+                const unsigned rejected = (!sceneFrame.DirectionalShadowCaster(index) ? 1U : 0U) |
+                    (!caster.NativeTransform.CurrentViewToWorldAvailable ? 2U : 0U) |
+                    (!caster.NativeTransform.CurrentClipToWorldAvailable ? 4U : 0U) |
+                    (!caster.LightingWorldToView ? 8U : 0U) |
+                    (caster.RenderTarget.RenderTargetNamespace != desc.RenderTargetNamespace ? 16U : 0U) |
+                    (caster.RenderTarget.ColorPhysicalAddress != desc.ColorPhysicalAddress ? 32U : 0U);
+                shadowDebug.ShadowRecord("shadow_caster_reject_input", desc.FrameId, caster.SubmissionId,
+                    ",\"reason_bits\":" + std::to_string(rejected));
+            }
+#endif
             continue;
+        }
         if (casterCount == casterStorage.size())
             return false;
         casterStorage[casterCount++] = &caster;
@@ -1276,13 +1295,40 @@ bool NriDirectionalShadowPass::ExecuteMap(const NriDirectionalShadowExecuteDesc&
     std::array<nri::Pipeline*, kMaximumCasters> pipelines{};
     size_t drawableCount = 0;
     for (size_t index = 0; index < casterCount; ++index) {
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+        if (shadowDebug.ShadowTracing()) {
+            const auto& caster = *casterStorage[index];
+            const auto& bounds = caster.ShadowCaster.WorldBounds;
+            char fields[1024];
+            std::snprintf(fields, sizeof(fields),
+                ",\"geometry\":\"%016llx\",\"content_version\":\"%016llx\",\"dynamic\":%u"
+                ",\"owner\":%llu,\"bounds_available\":%u,\"bounds\":[%.9g,%.9g,%.9g,%.9g,%.9g,%.9g]"
+                ",\"target_namespace\":%llu,\"target_color\":%u,\"cull_casters\":%u,\"cull_mode\":%u",
+                static_cast<unsigned long long>(caster.GeometryIdentity),
+                static_cast<unsigned long long>(caster.ShadowCaster.ContentVersion), caster.ShadowCaster.Dynamic ? 1U : 0U,
+                static_cast<unsigned long long>(caster.ShadowCaster.OwnerIdentity), bounds.Available ? 1U : 0U,
+                bounds.Minimum[0], bounds.Minimum[1], bounds.Minimum[2],
+                bounds.Maximum[0], bounds.Maximum[1], bounds.Maximum[2],
+                static_cast<unsigned long long>(desc.RenderTargetNamespace), desc.ColorPhysicalAddress,
+                input.CullCasters ? 1U : 0U, static_cast<unsigned>(caster.Material.CullMode));
+            shadowDebug.ShadowRecord("shadow_caster", desc.FrameId, caster.SubmissionId, fields);
+        }
+#endif
         const auto& material = casterStorage[index]->Material;
         if (material.AlphaTestEnabled && material.AlphaCompare != PicaCompareFunction::Always &&
-            !UsesAlphaCasterProgram(*casterStorage[index]))
+            !UsesAlphaCasterProgram(*casterStorage[index])) {
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+            shadowDebug.ShadowRecord("shadow_caster_reject_alpha", desc.FrameId, casterStorage[index]->SubmissionId, "");
+#endif
             continue;
+        }
         auto* pipeline = mImpl->GetOrCreatePipeline(*casterStorage[index], plan);
-        if (pipeline == nullptr)
+        if (pipeline == nullptr) {
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+            shadowDebug.ShadowRecord("shadow_caster_reject_pipeline", desc.FrameId, casterStorage[index]->SubmissionId, "");
+#endif
             continue;
+        }
         pipelines[drawableCount] = pipeline;
         casterStorage[drawableCount++] = casterStorage[index];
     }
@@ -1376,6 +1422,19 @@ bool NriDirectionalShadowPass::ExecuteMap(const NriDirectionalShadowExecuteDesc&
             return false;
         slot.Layout = slotPlan.Virtual;
         slot.Cache.Prepare(slot.Layout, casterGeometry, desc.FrameId, construction);
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+        if (shadowDebug.ShadowTracing()) {
+            char fields[384];
+            const auto& stats = slot.Cache.Statistics();
+            std::snprintf(fields, sizeof(fields),
+                ",\"slot\":%d,\"construction\":%u,\"updates\":%zu,\"resident\":%u,\"reused\":%u"
+                ",\"empty\":%u,\"unmapped\":%u,\"static_reused\":%u,\"region_x\":%u",
+                slotIndex, construction ? 1U : 0U, slot.Cache.Updates().size(), stats.Resident, stats.Reused,
+                stats.Empty, stats.Unmapped, stats.StaticReused, regionOffset(slotIndex));
+            shadowDebug.ShadowRecord("shadow_layout", desc.FrameId, 0, fields);
+        }
+#endif
+
         const auto& statistics = slot.Cache.Statistics();
         pages.Requested += statistics.Requested;
         pages.Resident += statistics.Resident;
@@ -1478,6 +1537,19 @@ bool NriDirectionalShadowPass::ExecuteMap(const NriDirectionalShadowExecuteDesc&
                     const nri::DrawDesc nativeDraw{ caster.VertexOrIndexCount, 1, 0, 0 };
                     mImpl->Core->CmdDraw(*command, nativeDraw);
                 }
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+                if (shadowDebug.ShadowTracing()) {
+                    char fields[512];
+                    std::snprintf(fields, sizeof(fields),
+                        ",\"slot\":%d,\"static\":%u,\"level\":%u,\"cell\":[%d,%d]"
+                        ",\"physical\":%u,\"atlas_xy\":[%u,%u],\"geometry\":\"%016llx\""
+                        ",\"alpha_program\":%u",
+                        slotIndex, staticLayer ? 1U : 0U, page.Key.Level, page.Key.X, page.Key.Y,
+                        page.PhysicalPage, x, y, static_cast<unsigned long long>(caster.GeometryIdentity),
+                        UsesAlphaCasterProgram(caster) ? 1U : 0U);
+                    shadowDebug.ShadowRecord("shadow_issue", desc.FrameId, caster.SubmissionId, fields);
+                }
+#endif
                 ++mImpl->LastCasters;
                 if (UsesAlphaCasterProgram(caster))
                     ++mImpl->LastAlphaCasters;
