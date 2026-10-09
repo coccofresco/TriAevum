@@ -818,7 +818,11 @@ void NativeA32WindowSession::Setup() {
     applicationSettingsTabs.push_back(Oot3dNativeGame::CreateSceneEnvironmentPanel(sceneEnvironment));
   }
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
-  if (const char *tour = std::getenv("TRIAEVUM_DEV_FREECAM_TOUR"); tour != nullptr && *tour != '\0') {
+  // The developer tours, lab and emitter inventory drive OoT3D's guest
+  // (scenes, entrances, actors): unavailable for another title.
+  const bool oot3dDeveloperTools = titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur;
+  if (const char *tour = std::getenv("TRIAEVUM_DEV_FREECAM_TOUR");
+      oot3dDeveloperTools && tour != nullptr && *tour != '\0') {
     std::string text = tour;
     size_t start = 0;
     while (start < text.size()) {
@@ -842,11 +846,12 @@ void NativeA32WindowSession::Setup() {
     std::fprintf(stderr, "TRIAEVUM_DEV_FREECAM_TOUR poses=%zu out=%s\n", devTourPoses.size(),
                  devTourDirectory.string().c_str());
   }
-  if (const char *lab = std::getenv("TRIAEVUM_DEV_LAB"); lab != nullptr && *lab != '\0') {
+  if (const char *lab = std::getenv("TRIAEVUM_DEV_LAB"); oot3dDeveloperTools && lab != nullptr && *lab != '\0') {
     devLab = std::make_unique<Oot3dNativeGame::DevLabChannel>(lab);
     std::fprintf(stderr, "TRIAEVUM_DEV_LAB %s\n", lab);
   }
-  if (const char *emitters = std::getenv("TRIAEVUM_DEV_EMITTERS"); emitters != nullptr && *emitters != '\0') {
+  if (const char *emitters = std::getenv("TRIAEVUM_DEV_EMITTERS");
+      oot3dDeveloperTools && emitters != nullptr && *emitters != '\0') {
     devEmitterLog = std::make_unique<Oot3dNativeGame::NativeEmitterInventoryLog>(emitters);
     std::fprintf(stderr, "TRIAEVUM_DEV_EMITTERS %s\n", emitters);
   }
@@ -873,6 +878,8 @@ void NativeA32WindowSession::Setup() {
       Oot3dNativeGame::CreateSavestatePanel(savestateLibrary));
   applicationSettingsTabs.push_back(Oot3dNativeGame::CreateGameLanguagePanel(languageSettings));
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
+  // Warp menu and free camera: OoT3D's scenes and camera only.
+  if (titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur) {
   devWarp = std::make_shared<Oot3dNativeGame::DevWarpRuntime>(
       std::filesystem::path(launch.Host.ConfigurationPath).parent_path() / "developer-tools.json");
   applicationSettingsTabs.push_back(
@@ -905,6 +912,7 @@ void NativeA32WindowSession::Setup() {
                     std::string_view(age) == "adult" ? Oot3dNativeGame::DevWarpAge::Adult
                                                      : Oot3dNativeGame::DevWarpAge::Child,
                     std::string_view(time) == "night");
+  }
   }
 #endif
   Fast::Oot3d::InstallGraphicsSettingsPanelTabs(

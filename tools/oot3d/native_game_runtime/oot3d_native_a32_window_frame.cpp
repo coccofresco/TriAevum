@@ -2400,13 +2400,18 @@ void NativeA32WindowSession::PublishNativeSceneView() {
   auto snapshot = sceneViewProbe.Capture(process.Memory());
   // SaveContext nightFlag (+0x10): 1 at night; picks a scene's night profile.
   constexpr uint32_t kSaveContextNightFlag = 0x00587968U;
+  // OoT3D's SaveContext and actor layout: another title's memory there is
+  // something else, so its night and player stay unknown until its adapter
+  // provides them.
+  const bool oot3dTitle = titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur;
   uint32_t nightFlag = 0U;
-  const bool night =
+  const bool night = oot3dTitle &&
       process.Memory().Read32(kSaveContextNightFlag, &nightFlag) && nightFlag != 0U;
   // Where Link is (world position +0x28, shape yaw +0xBE: 0 faces +Z,
   // 0x4000 +X), for lights placed from F1.
   std::optional<Oot3dNativeGame::ScenePlayerPlacement> player;
-  if (const uint32_t actor = playerTimingProbe.Stats().LastPlayerAddress; actor != 0U) {
+  if (const uint32_t actor = oot3dTitle ? playerTimingProbe.Stats().LastPlayerAddress : 0U;
+      actor != 0U) {
     Oot3dNativeGame::ScenePlayerPlacement placement;
     uint32_t bits[3]{};
     uint16_t yaw = 0;
