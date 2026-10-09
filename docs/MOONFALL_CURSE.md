@@ -711,6 +711,18 @@ prompt icons come from its renderer side, not yet integrated. Tests:
 `oot3d_mm3d_dekui_settings_tests` (shipped file and a scratch directory),
 `oot3d_mm3d_restoration_tests`, `oot3d_mm3d_guest_calls_tests`.
 
+## Opening post effects: GPU-produced surfaces (2026-10-09)
+
+The opening's spinning mask leaves a motion-blur trail and glows; the
+Happy Mask Salesman has a halo. MM3D draws both with native feedback: a
+DisplayTransfer into texture memory (2x2 box downscale), a bloom ping-pong
+between small render targets that sample each other, and the previous frame
+blended back with constant alpha 200/255. Our renderer sampled stale guest
+memory for all of them. Tiled transfer results and sampled colour targets are
+now GPU producers in the shared renderer (TRIAEVUM_GPU_COPY_PATH_PLAN.md §9).
+Validated on the developer launch against the Azahar oracle
+(`W/tools/run_azahar_oracle.sh`, an isolated portable instrumented Azahar).
+
 ## Next steps
 
 1. Continue past the intro to the title screen and file select, one missing

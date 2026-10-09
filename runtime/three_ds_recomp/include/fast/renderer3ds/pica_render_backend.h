@@ -152,6 +152,12 @@ struct PicaDisplayTransferView {
     // plus guarded CPU materialization; it need not mean copying into RAM now.
     // Replays/restored transfers leave this false and never complete twice.
     bool MaterializeGuest = false;
+    // Not a GX operation: the ordered point at which a colour render target,
+    // written by earlier draws, is sampled as a texture by a later one. The
+    // backend captures the target as an immutable producer version for the
+    // copy references at InputPhysicalAddress (Input/Output name the target,
+    // the extents are its native size); no guest write or completion exists.
+    bool RenderTargetCapture = false;
 };
 
 struct PicaPhysicalMemoryWrite {
@@ -370,6 +376,10 @@ class PicaRenderBackend {
         }
         return false;
     }
+    // The render-target namespace whose execution is the canonical native
+    // one. A copy version another namespace never executed (a superseded
+    // visual frame) may be imported from it, never in the other direction.
+    virtual void SetCanonicalPicaRenderTargetNamespace(uint64_t) {}
     virtual bool CapturePicaTextureCache(
         std::vector<PicaTextureCacheEntrySnapshot>& snapshots,
         std::string* error = nullptr) {

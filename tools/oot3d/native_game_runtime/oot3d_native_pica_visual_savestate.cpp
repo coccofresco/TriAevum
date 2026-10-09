@@ -32,6 +32,7 @@ constexpr uint32_t kVisualReplayMagicV17 = 0x48525650U; // PVRH: native draw rol
 constexpr uint32_t kVisualReplayMagicV18 = 0x49525650U; // PVRI: native scene directionals
 constexpr uint32_t kVisualReplayMagicV19 = 0x4A525650U; // PVRJ: native actor geometry ownership
 constexpr uint32_t kVisualReplayMagicV20 = 0x4B525650U; // PVRK: continuous scene light
+constexpr uint32_t kVisualReplayMagicV21 = 0x4C525650U; // PVRL: colour-target captures
 constexpr uint32_t kMaximumCopyReferencesPerTexture = 4096U;
 constexpr uint32_t kMaximumPlans = 4096U;
 constexpr uint32_t kMaximumResources = 4096U;
@@ -95,6 +96,7 @@ class Reader final {
     bool HasSceneDirectionals = false;
     bool HasNativeActorGeometry = false;
     bool HasContinuousSceneLight = false;
+    bool HasRenderTargetCapture = false;
     std::vector<std::shared_ptr<const Fast::Renderer3ds::PicaScenePointLights>> ScenePoints;
     std::vector<std::shared_ptr<const Fast::Renderer3ds::PicaSceneDirectionalLights>> SceneDirectionals;
     explicit Reader(std::span<const uint8_t> bytes) : mBytes(bytes) {}
@@ -210,6 +212,7 @@ void WriteTransfer(Writer& writer,
     writer.U32(value.Transfer.Flags);
     writer.Bool(value.SignalInterrupt);
     writer.U32(value.Transfer.TextureCopyBytes);
+    writer.Bool(value.RenderTargetCapture);
 }
 
 bool ReadTransfer(Reader& reader,
@@ -224,7 +227,8 @@ bool ReadTransfer(Reader& reader,
            reader.U32(value.Transfer.OutputSize) &&
            reader.U32(value.Transfer.Flags) &&
            reader.Bool(value.SignalInterrupt) &&
-           (!reader.HasTextureCopy || reader.U32(value.Transfer.TextureCopyBytes));
+           (!reader.HasTextureCopy || reader.U32(value.Transfer.TextureCopyBytes)) &&
+           (!reader.HasRenderTargetCapture || reader.Bool(value.RenderTargetCapture));
 }
 
 void WriteFill(Writer& writer, const Oot3dPicaMemoryFillSubmission& value) {
@@ -1196,7 +1200,7 @@ bool ReadOptionalFrame(Reader& reader,
 void WriteReplayState(Writer& writer,
                       const Oot3dPicaVisualReplayState& value) {
     const auto lightingLuts = BuildLightingLutDictionary(value);
-    writer.U32(kVisualReplayMagicV20);
+    writer.U32(kVisualReplayMagicV21);
     WriteLightingLutDictionary(writer, lightingLuts);
     const auto& accumulator = value.Scheduler.Accumulator;
     writer.U64(accumulator.NextSequence);
@@ -1233,7 +1237,8 @@ bool ReadReplayState(Reader& reader, Oot3dPicaVisualReplayState& value) {
     uint32_t magic = 0U;
     auto& accumulator = value.Scheduler.Accumulator;
     if (!reader.U32(magic)) return false;
-    reader.HasContinuousSceneLight = magic == kVisualReplayMagicV20;
+    reader.HasRenderTargetCapture = magic == kVisualReplayMagicV21;
+    reader.HasContinuousSceneLight = magic == kVisualReplayMagicV20 || reader.HasRenderTargetCapture;
     reader.HasNativeActorGeometry = magic == kVisualReplayMagicV19 || reader.HasContinuousSceneLight;
     reader.HasSceneDirectionals = magic == kVisualReplayMagicV18 || reader.HasNativeActorGeometry;
     reader.HasNativeDrawRoles = magic == kVisualReplayMagicV17 || reader.HasSceneDirectionals;

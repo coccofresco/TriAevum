@@ -1596,6 +1596,9 @@ bool GfxRenderingAPIOGL::SubmitPicaDisplayTransfer(
     SetPicaGlError(error, "native PICA requires OpenGL 4.3");
     return false;
 #else
+    // The GL backend has no GPU producer register: a colour-target capture
+    // has nothing to version here, and its bytes keep their CPU owner.
+    if (transfer.RenderTargetCapture) return true;
     try {
         if (!mNativePica || transfer.InputPhysicalAddress == 0U ||
             transfer.OutputPhysicalAddress == 0U ||

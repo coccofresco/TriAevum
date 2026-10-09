@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -157,6 +158,11 @@ struct Oot3dPicaDisplayTransferSubmission {
     // A restored render target may need one GPU replay after its portable CPU
     // fallback already delivered the guest PPF interrupt.
     bool SignalInterrupt = true;
+    // An ordered capture of a draw-written colour target that a later draw
+    // samples (see PicaDisplayTransferView::RenderTargetCapture). Never a guest
+    // operation: SignalInterrupt is false and Transfer carries only the
+    // target's native extent and format.
+    bool RenderTargetCapture = false;
 };
 
 struct Oot3dPicaMemoryFillSubmission {
@@ -383,6 +389,34 @@ class Oot3dNativePicaSubmissionQueue final : public Oot3dPicaPacketSink {
     bool CaptureTextureResources(Oot3dPicaDrawSubmission &submission,
                                  std::string *error);
 
+    // A colour target draws write: its native geometry, and whether it was
+    // written since it last became a producer, so a later texture read over its
+    // bytes publishes the ordered capture that read must see.
+    struct ColorTargetVersion {
+        uint32_t Width = 0;
+        uint32_t Height = 0;
+        uint8_t Format = 0;
+        bool Dirty = false;
+        // The bytes the GPU wrote since the last capture and nothing has
+        // written since (guest writes, newer copies and transfers subtract
+        // theirs): what a capture of this version may own.
+        std::vector<RawCopySpan> Pending;
+        uint32_t ByteCount() const {
+            return Width * Height * (Format == 0U ? 4U : Format == 1U ? 3U : 2U);
+        }
+    };
+    // Publishes the captures the enabled textures of this draw read from dirty
+    // colour targets, before the draw's own texture provenance is taken.
+    void PublishSampledColorTargets(const Oot3dPicaDrawSubmission &submission);
+    // A draw's colour write: the target's bytes leave every older producer
+    // and become its pending, observed write.
+    void MarkColorTargetWritten(uint32_t address);
+    // A tiled DisplayTransfer result is a GPU producer of its output bytes.
+    void RegisterTiledTransferProducer(uint64_t completionId,
+                                       uint64_t afterDrawSubmissionId,
+                                       uint32_t outputPhysicalAddress,
+                                       const Oot3dPicaDisplayTransfer &transfer);
+
     Oot3dPicaPhysicalMemoryView mMemory;
     mutable std::mutex mQueueMutex;
     std::vector<Oot3dPicaHardwareRegisterWrite> mHardwareWrites;
@@ -395,6 +429,8 @@ class Oot3dNativePicaSubmissionQueue final : public Oot3dPicaPacketSink {
     std::vector<Oot3dPicaDisplayTransferSubmission>
         mRestoredDisplayTransfersAwaitingTarget;
     std::vector<RawCopyProducer> mRawCopyProducers;
+    std::map<uint32_t, ColorTargetVersion> mColorTargets;
+    uint64_t mColorTargetPreservedStaleWrites = 0;
     GuestWriteRegistrar mGuestWriteRegistrar;
     bool mDeferGpuBackedDisplayTransfers = false;
     bool mRuntimeProfilingEnabled = false;

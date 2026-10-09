@@ -1186,6 +1186,12 @@ void NativeA32WindowSession::RunGuestRefresh() {
           picaSemanticTrace.RecordDisplayTransfer(
               presentationFrameCount, frameCount, transfer,
               selectedForTop, suppressTopScreenFrontendBackdrop);
+          if (transfer.RenderTargetCapture) {
+            // Ordered GPU work only: no guest operation, completion or
+            // display output exists for a colour-target capture.
+            picaPresentationScheduler.Capture(transfer);
+            return;
+          }
           if (launch.ExtendedDiagnostics) {
             if (displayTransferEvents.size() == 64U) {
               displayTransferEvents.erase(displayTransferEvents.begin());
@@ -2114,6 +2120,9 @@ void NativeA32WindowSession::PinGpuCopyResources(const Oot3dNativeGame::Oot3dPic
           *draw.BasePlan, pinnedCopyReferences);
     }
   }
+  // Copy versions a superseded visual frame produced only natively are
+  // imported from the native dependency namespace, never the reverse.
+  api.SetCanonicalPicaRenderTargetNamespace(kNativeDependencyRenderTargetNamespace);
   if (!api.SetPinnedPicaTextureCopies(pinnedCopyReferences, &renderError)) {
     throw std::runtime_error("native PICA copy retention failed: " + renderError);
   }

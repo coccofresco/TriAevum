@@ -1009,3 +1009,69 @@ Decisioni ancora da risolvere con esperimento: presenza/ubicazione delle copie r
   era rosso su due file dello shared renderer, `oot3d_pica_scene_frame_tests`
   non era mai stato linkato, e lo smoke F1 linkava copie stale delle librerie.
   Dettaglio in `TRIAEVUM_ALPHA2C_TO_ALPHA3_RECONSTRUCTION.md` §3.4.
+
+## 9. Produttori GPU senza copia raw: transfer in texture e render target campionati (2026-10-09)
+
+Prima evidenza: l'apertura di Majora's Mask 3D (maschera che ruota verso la
+camera). Ogni frame il gioco riduce la scena con DisplayTransfer (flags
+`0x2000020`: uscita tiled, box 2x2) in texture, sfoca il risultato in ping-pong
+fra render target piccoli che si campionano a vicenda (bloom, sommato con
+ONE,ONE), fonde il frame precedente salvato da un altro transfer (SRC_ALPHA,
+alpha costante 200/255: la scia) e salva il frame corrente. Nessuna di queste
+letture era un produttore: il sampler leggeva memoria guest mai scritta (hash
+= byte nulli), quindi niente alone, niente scia e scena al 21,6% dopo la fusione
+col "frame precedente" nero. Registri di blend e TEV identici all'oracolo
+Azahar (dump PICA); il difetto era solo la coerenza delle superfici.
+
+- **Transfer verso memoria tiled.** `PlanPicaTiledTransferResult`
+  (`pica_texture_copy_plan.h`) dà la superficie che un DisplayTransfer scrive in
+  layout texture (estensione dopo la riduzione, formato d'uscita, righe di tile
+  complete); uscite lineari, ingressi lineari o capovolti e tile parziali non
+  sono produttori e lo dicono una volta (`TRIAEVUM_GPU_TILED_TRANSFER_UNSAMPLEABLE`).
+  La coda registra il produttore nello stesso registro delle copie raw; il
+  backend cattura l'immagine display già filtrata (`PublishTiledTransferProducer`)
+  con un percorso identità sulla propria superficie, così la derivazione
+  esistente serve anche una texture dichiarata più grande (256x256 su 256x200:
+  il resto resta della CPU).
+- **Render target campionati.** Ogni draw con scrittura colore rende il suo
+  target "sporco" e arma l'osservazione delle scritture guest sui suoi byte
+  (`Pending`). Scritture guest, copie raw e transfer più recenti tolgono i loro
+  byte da `Pending`. La prima lettura di una texture sopra un target sporco
+  pubblica un produttore per i byte rimasti e accoda un record ordinato
+  `RenderTargetCapture` (nessuna operazione guest: niente PPF, nessuna uscita
+  display). Il backend lo esegue catturando il target come le copie raw
+  (`SubmitNativePicaRenderTargetCapture`). I campionatori shadow non pubblicano.
+  Il caso che lo impone: al cambio scena il gioco carica un asset IA8 nella
+  memoria del target del bloom.
+- **Namespace.** Ogni frame visivo gira nel namespace nativo e poi in quello di
+  presentazione; un frame superato gira solo nel nativo, ma il frame successivo
+  ne campiona la history. Il runtime dichiara il namespace canonico
+  (`SetCanonicalPicaRenderTargetNamespace`): una lettura di presentazione può
+  importare la versione canonica della stessa operazione (completion, draw di
+  confine) che non ha eseguito; una lettura canonica non importa mai.
+- **Repliche.** Stessa durata delle copie raw: una cattura per operazione e
+  campione host, ricatturata quando un campione visivo successivo riesegue
+  l'operazione (`mHandledNativePicaTextureCopies`); la chiave della texture
+  derivata include le superfici risolte. Stato della coda:
+  `color_target_versions` (opzionale nel formato v4, ripristinato pulito perché
+  nessun attachment sopravvive al restore); replay visivo V21 con il flag di
+  cattura.
+- **Fill.** L'host esegue ogni fill anche sulla memoria guest, con scrittura
+  osservata: i byte riempiti tornano alla CPU (valori giusti) e una cattura
+  possiede solo i byte non toccati. Un fill che copre un intero target lo
+  rende pulito (la GPU pulisce anche l'attachment). Un transfer tiled senza
+  versione GPU revoca comunque la proprietà dei byte che sovrascrive; un draw
+  con maschera colore nulla non scrive.
+- **Limite noto.** Un draw parziale o con blending su un target la cui memoria
+  è stata scritta da altri dopo l'ultimo rendering conserva i pixel vecchi
+  dell'attachment fuori dalla sua copertura (l'attachment non viene
+  reimportato dalla memoria, limite preesistente anche per la presentazione).
+  Le catene di feedback osservate usano passate a copertura piena; il caso è
+  contato e segnalato una volta (`TRIAEVUM_GPU_COLOR_TARGET_PRESERVED_STALE`).
+- Test di confine: `oot3d_native_pica_submission_tests`
+  (`TestTiledDisplayAndRasterFeedback`, `TestColorTargetCaptureKeepsNewerProducers`,
+  `TestFeedbackOwnershipReviewRegressions`) e il round-trip V21 in
+  `oot3d_native_pica_visual_savestate_tests`.
+  Developer launch MM3D: avvio di 2700 frame senza errori, bit-identico fra due
+  run, scia, luminosità e alone come l'oracolo; menu dello sweep identici al
+  pixel a prima.

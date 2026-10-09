@@ -1,9 +1,11 @@
 #include "oot3d_native_pica_submission.h"
 #include "oot3d_cpu_phase_probe.h"
 #include "oot3d_native_pica_transfer.h"
+#include "fast/renderer3ds/pica_texture_copy_plan.h"
 
 #include <algorithm>
 #include <chrono>
+#include <cstdio>
 #include <cstring>
 #include <limits>
 #include <stdexcept>
@@ -490,7 +492,9 @@ void Oot3dNativePicaSubmissionQueue::NotifyGuestWrite(uint32_t guestAddress,
         return;
     }
     std::lock_guard guard(mQueueMutex);
-    if (mRawCopyProducers.empty()) {
+    if (mRawCopyProducers.empty() &&
+        std::none_of(mColorTargets.begin(), mColorTargets.end(),
+                     [](const auto& entry) { return !entry.second.Pending.empty(); })) {
         return;
     }
     // A write may cross the boundary of a mapped view: attribute every mapped
@@ -518,6 +522,7 @@ void Oot3dNativePicaSubmissionQueue::NotifyGuestWrite(uint32_t guestAddress,
         // cover an owned subrange: ownership that cannot be certified is
         // dropped instead of being assumed.
         mRawCopyProducers.clear();
+        for (auto& [address, target] : mColorTargets) target.Pending.clear();
         ResetSnapshotObservation();
     }
 }
@@ -602,6 +607,9 @@ void Oot3dNativePicaSubmissionQueue::InvalidateRawCopyOwnership(
     std::erase_if(mRawCopyProducers, [](const RawCopyProducer& producer) {
         return producer.Owned.empty();
     });
+    for (auto& [address, target] : mColorTargets) {
+        SubtractOwnedSpan(target.Pending, physicalAddress, byteCount);
+    }
 }
 
 bool Oot3dNativePicaSubmissionQueue::RegisterRawCopyProducer(
@@ -641,10 +649,16 @@ bool Oot3dNativePicaSubmissionQueue::RegisterRawCopyProducer(
         SetError(error, "raw PICA texture copy owns no destination bytes");
         return false;
     }
-    // The newest copy takes its bytes back from every older producer.
+    // The newest copy takes its bytes back from every older producer, and
+    // from every colour target's not yet captured write.
     for (auto& existing : mRawCopyProducers) {
         for (const auto& span : producer.Owned) {
             SubtractOwnedSpan(existing.Owned, span.Address, span.ByteCount);
+        }
+    }
+    for (auto& [address, target] : mColorTargets) {
+        for (const auto& span : producer.Owned) {
+            SubtractOwnedSpan(target.Pending, span.Address, span.ByteCount);
         }
     }
     std::erase_if(mRawCopyProducers, [](const RawCopyProducer& existing) {
@@ -652,6 +666,161 @@ bool Oot3dNativePicaSubmissionQueue::RegisterRawCopyProducer(
     });
     mRawCopyProducers.push_back(std::move(producer));
     return true;
+}
+
+void Oot3dNativePicaSubmissionQueue::RegisterTiledTransferProducer(
+    uint64_t completionId, uint64_t afterDrawSubmissionId,
+    uint32_t outputPhysicalAddress, const Oot3dPicaDisplayTransfer& transfer) {
+    // Only an output in tiled (texture) layout can be sampled; the linear
+    // output of a scanout transfer never is.
+    const bool outputTiled =
+        ((transfer.Flags & 2U) != 0U) != ((transfer.Flags & 0x20U) != 0U);
+    if (transfer.TextureCopyBytes != 0U || !outputTiled || !mGuestWriteRegistrar) {
+        return;
+    }
+    const auto report = [&](const std::string& reason) {
+        static bool reported = false;
+        if (!reported) {
+            reported = true;
+            std::fprintf(stderr,
+                         "TRIAEVUM_GPU_TILED_TRANSFER_UNSAMPLEABLE flags=0x%08X "
+                         "in=0x%08X out=0x%08X reason=%s\n",
+                         transfer.Flags, transfer.InputSize, transfer.OutputSize,
+                         reason.c_str());
+        }
+    };
+    const auto result = Fast::Renderer3ds::PlanPicaTiledTransferResult(
+        outputPhysicalAddress, transfer.InputSize, transfer.OutputSize,
+        transfer.Flags);
+    if (!result.has_value()) {
+        // No GPU version of this write exists; it still overwrites whatever
+        // older producer owned these bytes, so their ownership ends here and
+        // the bytes fall back to guest memory. Reported, never assumed.
+        const uint32_t outputFormat = (transfer.Flags >> 12U) & 7U;
+        const uint64_t bytes = uint64_t{transfer.OutputSize & 0xFFFFU} *
+                               (transfer.OutputSize >> 16U) *
+                               (outputFormat == 0U ? 4U : outputFormat == 1U ? 3U : 2U);
+        if (bytes != 0U && uint64_t{outputPhysicalAddress} + bytes <= (uint64_t{1} << 32U)) {
+            InvalidateRawCopyOwnership(outputPhysicalAddress, static_cast<size_t>(bytes));
+        }
+        report("layout");
+        return;
+    }
+    const RawCopySpan destination{
+        result->Address, result->Width * result->Height * result->BytesPerPixel};
+    std::string error;
+    if (!RegisterRawCopyProducer(completionId, afterDrawSubmissionId,
+                                 std::span(&destination, 1U), &error)) {
+        report(error);
+    }
+}
+
+void Oot3dNativePicaSubmissionQueue::PublishSampledColorTargets(
+    const Oot3dPicaDrawSubmission& submission) {
+    if (!mDeferGpuBackedDisplayTransfers || !mGuestWriteRegistrar ||
+        submission.Id <= 1U) {
+        return;
+    }
+    for (const auto& texture : submission.State.Textures) {
+        // Only colour samplers (2D and projection) read a target as RGBA; a
+        // shadow sampler reads its packed depth through the live alias.
+        if (!texture.Enabled || (texture.Type != 0U && texture.Type != 3U)) {
+            continue;
+        }
+        const auto byteCount = Oot3dPicaTextureMipChainByteSize(texture);
+        if (!byteCount.has_value() || *byteCount == 0U) {
+            continue;
+        }
+        const uint64_t low = texture.PhysicalAddress;
+        const uint64_t high = low + *byteCount;
+        for (auto& [address, target] : mColorTargets) {
+            if (!target.Dirty || high <= address ||
+                address + uint64_t{target.ByteCount()} <= low) {
+                continue;
+            }
+            // The read sees the target as the draws before it left it: one
+            // producer version per run of writes, captured right after the
+            // preceding draw and ordered like every other GPU producer. It
+            // owns only the bytes nothing wrote after the GPU (a guest load
+            // into reused memory, a newer transfer into the same range).
+            target.Dirty = false;
+            std::vector<RawCopySpan> owned = std::move(target.Pending);
+            target.Pending.clear();
+            if (owned.empty()) {
+                continue;
+            }
+            const uint64_t completionId = mNextCompletionId++;
+            const uint64_t afterDraw = submission.Id - 1U;
+            std::string error;
+            if (!RegisterRawCopyProducer(completionId, afterDraw, owned, &error)) {
+                static bool reported = false;
+                if (!reported) {
+                    reported = true;
+                    std::fprintf(stderr,
+                                 "TRIAEVUM_GPU_COLOR_TARGET_UNSAMPLEABLE "
+                                 "address=0x%08X reason=%s\n",
+                                 address, error.c_str());
+                }
+                continue;
+            }
+            Oot3dPicaDisplayTransferSubmission capture;
+            capture.CompletionId = completionId;
+            capture.AfterDrawSubmissionId = afterDraw;
+            capture.InputPhysicalAddress = address;
+            capture.OutputPhysicalAddress = address;
+            const uint32_t extent = (target.Height << 16U) | target.Width;
+            capture.Transfer.InputSize = extent;
+            capture.Transfer.OutputSize = extent;
+            // Tiled to tiled, unscaled, in the target's own format.
+            capture.Transfer.Flags = 0x20U | (uint32_t{target.Format} << 8U) |
+                                     (uint32_t{target.Format} << 12U);
+            capture.SignalInterrupt = false;
+            capture.RenderTargetCapture = true;
+            mPendingDisplayTransfers.push_back(capture);
+        }
+    }
+}
+
+void Oot3dNativePicaSubmissionQueue::MarkColorTargetWritten(uint32_t address) {
+    auto& target = mColorTargets.at(address);
+    const uint32_t byteCount = target.ByteCount();
+    // The common case, one more draw into a target whose whole write is
+    // already pending and observed: nothing else can own any of its bytes
+    // (every later producer or write would have taken some of them back).
+    if (target.Dirty && target.Pending.size() == 1U &&
+        target.Pending.front().Address == address &&
+        target.Pending.front().ByteCount == byteCount) {
+        return;
+    }
+    // A draw into a target whose memory something else wrote since its
+    // attachment was rendered (a transfer into it, a guest load) keeps the
+    // attachment's older pixels wherever it does not cover: the attachment is
+    // not re-imported from memory. Exact for full-coverage passes (the
+    // feedback chains seen so far); counted so the gap stays visible.
+    if (target.Dirty || !target.Pending.empty()) {
+        ++mColorTargetPreservedStaleWrites;
+        if (mColorTargetPreservedStaleWrites == 1U) {
+            std::fprintf(stderr,
+                         "TRIAEVUM_GPU_COLOR_TARGET_PRESERVED_STALE address=0x%08X\n",
+                         address);
+        }
+    }
+    InvalidateRawCopyOwnership(address, byteCount);
+    target.Dirty = true;
+    target.Pending.clear();
+    // The GPU owns the bytes from now on only while a guest write to them can
+    // be observed; otherwise they keep their (stale) guest owner.
+    if (mGuestWriteRegistrar && ObservePhysicalWriteSpan(address, byteCount)) {
+        target.Pending.push_back({address, byteCount});
+    } else {
+        static bool reported = false;
+        if (!reported) {
+            reported = true;
+            std::fprintf(stderr,
+                         "TRIAEVUM_GPU_COLOR_TARGET_UNOBSERVED address=0x%08X\n",
+                         address);
+        }
+    }
 }
 
 void Oot3dNativePicaSubmissionQueue::CollectCopyReferences(
@@ -903,6 +1072,7 @@ bool Oot3dNativePicaSubmissionQueue::SubmitDrawPacket(
         phaseStart = RuntimeProfileClock::now();
     }
     CpuPhaseProbe::Scope cpuTexture(CpuPhaseProbe::Phase::TextureCapture);
+    PublishSampledColorTargets(submission);
     if (!CaptureTextureResources(submission, error)) {
         mPendingDraws.pop_back();
         return false;
@@ -930,6 +1100,20 @@ bool Oot3dNativePicaSubmissionQueue::SubmitDrawPacket(
         submission.State.Framebuffer.ColorPhysicalAddress;
     mKnownColorRenderTargets.insert(colorTarget);
     mInvalidatedColorRenderTargets.erase(colorTarget);
+    if (const auto& framebuffer = submission.State.Framebuffer;
+        mDeferGpuBackedDisplayTransfers && colorTarget != 0U &&
+        framebuffer.ColorWriteEnabled &&
+        submission.State.OutputMerger.ColorWriteMask != 0U &&
+        framebuffer.Width != 0U &&
+        framebuffer.Height != 0U && framebuffer.ColorFormat <= 4U) {
+        // This draw writes the target on the GPU: a later texture read of its
+        // bytes must see this version, never the stale guest memory.
+        auto& target = mColorTargets[colorTarget];
+        target.Width = framebuffer.Width;
+        target.Height = framebuffer.Height;
+        target.Format = framebuffer.ColorFormat;
+        MarkColorTargetWritten(colorTarget);
+    }
     for (auto transfer = mRestoredDisplayTransfersAwaitingTarget.begin();
          transfer != mRestoredDisplayTransfersAwaitingTarget.end();) {
         if (transfer->InputPhysicalAddress != colorTarget) {
@@ -1046,6 +1230,11 @@ bool Oot3dNativePicaSubmissionQueue::SubmitDisplayTransfer(
                                      rawCopyDestinations, error)) {
             return false;
         }
+    } else {
+        // A DisplayTransfer into texture layout is a GPU producer as well:
+        // the downscaled copy a later draw samples (blur, bloom, history).
+        RegisterTiledTransferProducer(completionId, afterDrawSubmissionId,
+                                      *outputPhysical, transfer);
     }
     ++mNextCompletionId;
     mPendingDisplayTransfers.push_back(
@@ -1112,6 +1301,18 @@ bool Oot3dNativePicaSubmissionQueue::SubmitMemoryFill(
         mPendingMemoryFills.push_back(
             {completionId, mNextSubmissionId, item.Start, item.End,
              fill.Value, fill.Control, interrupt});
+        // No GPU ownership: the host performs every fill on guest memory as
+        // well, and that observed write takes the filled bytes back from any
+        // producer and uncaptured colour write, so a read sees the fill. A
+        // fill covering a whole target also clears its attachment, so memory
+        // and attachment agree again: the target starts clean.
+        for (auto& [address, target] : mColorTargets) {
+            if (item.Start <= address &&
+                uint64_t{address} + target.ByteCount() <= item.End) {
+                target.Dirty = false;
+                target.Pending.clear();
+            }
+        }
     }
     if (deferredToGpu != nullptr) {
         *deferredToGpu = true;
@@ -1325,8 +1526,24 @@ nlohmann::json Oot3dNativePicaSubmissionQueue::CaptureState() const {
              {"after_draw_submission_id", producer.AfterDrawSubmissionId},
              {"spans", std::move(spans)}});
     }
+    nlohmann::json colorTargets = nlohmann::json::array();
+    for (const auto& [address, target] : mColorTargets) {
+        colorTargets.push_back({{"address", address},
+                                {"width", target.Width},
+                                {"height", target.Height},
+                                {"format", target.Format},
+                                {"dirty", target.Dirty},
+                                {"pending", [&] {
+                                     nlohmann::json spans = nlohmann::json::array();
+                                     for (const auto& span : target.Pending)
+                                         spans.push_back({{"address", span.Address},
+                                                          {"byte_count", span.ByteCount}});
+                                     return spans;
+                                 }()}});
+    }
     return {
         {"format", "oot3d_native_pica_submission_state_v4"},
+        {"color_target_versions", std::move(colorTargets)},
         {"defer_gpu_backed_display_transfers",
          mDeferGpuBackedDisplayTransfers},
         {"next_submission_id", mNextSubmissionId},
@@ -1577,6 +1794,39 @@ bool Oot3dNativePicaSubmissionQueue::RestoreState(
                 rawCopyProducers.push_back(std::move(producer));
             }
         }
+        // Optional in v4: a state written before colour-target producers
+        // existed restores with no write pending, as that runtime left it.
+        std::map<uint32_t, ColorTargetVersion> colorTargets;
+        if (const auto encodedTargets = state.find("color_target_versions");
+            encodedTargets != state.end()) {
+            for (const auto& encoded : *encodedTargets) {
+                ColorTargetVersion target;
+                const uint32_t address = encoded.at("address").get<uint32_t>();
+                target.Width = encoded.at("width").get<uint32_t>();
+                target.Height = encoded.at("height").get<uint32_t>();
+                target.Format = encoded.at("format").get<uint8_t>();
+                target.Dirty = encoded.at("dirty").get<bool>();
+                for (const auto& span : encoded.at("pending")) {
+                    target.Pending.push_back({span.at("address").get<uint32_t>(),
+                                              span.at("byte_count").get<uint32_t>()});
+                }
+                if (address == 0U || target.Width == 0U || target.Height == 0U ||
+                    std::any_of(target.Pending.begin(), target.Pending.end(),
+                                [&](const auto& span) {
+                                    return span.ByteCount == 0U || span.Address < address ||
+                                           uint64_t{span.Address} + span.ByteCount >
+                                               uint64_t{address} + target.ByteCount();
+                                }) ||
+                    target.Width > 1024U || target.Height > 1024U ||
+                    target.Format > 4U) {
+                    if (error != nullptr) {
+                        *error = "native PICA colour target version is invalid";
+                    }
+                    return false;
+                }
+                colorTargets[address] = target;
+            }
+        }
         std::vector<Oot3dPicaDisplayTransferSubmission> restoredTransfers;
         const auto encodedRestoredTransfers =
             state.find("restored_display_transfers_awaiting_target");
@@ -1625,6 +1875,13 @@ bool Oot3dNativePicaSubmissionQueue::RestoreState(
                 }
             }
         }
+        // Render-target images are absent from a portable savestate (see
+        // below): an uncaptured colour write has no GPU version to capture
+        // after a restore, exactly like the invalidated targets themselves.
+        for (auto& [address, target] : colorTargets) {
+            target.Dirty = false;
+            target.Pending.clear();
+        }
         mHardwareWrites.clear();
         mPendingDraws.clear();
         mPendingCompletions.clear();
@@ -1650,6 +1907,7 @@ bool Oot3dNativePicaSubmissionQueue::RestoreState(
         mNextCompletionId = nextCompletionId;
         mRuntimeProfile = {};
         mRawCopyProducers = std::move(rawCopyProducers);
+        mColorTargets = std::move(colorTargets);
         return true;
     } catch (const std::exception& exception) {
         if (error != nullptr) {

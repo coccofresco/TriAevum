@@ -507,6 +507,7 @@ bool SubmitOot3dPicaVulkanDisplayTransfer(
         view.OutputWidth = declaredOutputWidth;
         view.OutputHeight = declaredOutputHeight;
     }
+    view.RenderTargetCapture = submission.RenderTargetCapture;
     view.Present = present;
     view.PresentationMode = presentationMode;
     return renderingApi.SubmitPicaDisplayTransfer(view, error);

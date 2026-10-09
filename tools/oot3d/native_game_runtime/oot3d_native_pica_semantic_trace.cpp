@@ -378,6 +378,9 @@ void Oot3dPicaSemanticTraceWriter::RecordDisplayTransfer(
         // whether it contained a raw copy at all.
         {"texture_copy_bytes", transfer.Transfer.TextureCopyBytes},
         {"signal_interrupt", transfer.SignalInterrupt},
+        // Not a guest operation: the ordered capture of a draw-written colour
+        // target that a later draw samples.
+        {"render_target_capture", transfer.RenderTargetCapture},
         {"selected_for_top_at_submission", selectedForTopAtSubmission},
         {"topscreen_backdrop_suppression_active",
          topScreenBackdropSuppressionActive},

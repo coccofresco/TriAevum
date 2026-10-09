@@ -279,6 +279,31 @@ int main() {
                 decoded.LatestFrame->DisplayTransfers[0].Transfer.OutputSize == 0x4003C0U,
             "raw copy operation lost its fields on savestate round-trip");
     {
+        Oot3dPicaVisualReplayState captureState = state;
+        auto capture = rawCopy;
+        capture.Transfer.TextureCopyBytes = 0U;
+        capture.Transfer.Flags = 0x20U;
+        capture.InputPhysicalAddress = capture.OutputPhysicalAddress = 0x20003000U;
+        capture.Transfer.InputSize = capture.Transfer.OutputSize = (64U << 16) | 64U;
+        capture.SignalInterrupt = false;
+        capture.RenderTargetCapture = true;
+        captureState.Scheduler.Accumulator.PendingDisplayTransfers = {capture};
+        captureState.LatestFrame->DisplayTransfers = {capture};
+        std::vector<uint8_t> bytes;
+        Require(EncodeOot3dPicaVisualReplayState(captureState, bytes, &error), error);
+        Oot3dPicaVisualReplayState restored;
+        Require(DecodeOot3dPicaVisualReplayState(bytes, restored, &error), error);
+        const auto checkCapture = [&](const auto& transfers) {
+            return transfers.size() == 1U && transfers.front().RenderTargetCapture &&
+                   !transfers.front().SignalInterrupt &&
+                   transfers.front().Transfer.TextureCopyBytes == 0U;
+        };
+        Require(checkCapture(restored.Scheduler.Accumulator.PendingDisplayTransfers) &&
+                    restored.LatestFrame && checkCapture(restored.LatestFrame->DisplayTransfers),
+                "V21 lost internal capture kind or invented a guest completion");
+    }
+
+    {
         // A raw copy still pending in the ordered replay state owes the guest
         // one PPF completion. That obligation must survive save and restore and
         // be discharged by the dependency boundary, never by host-local state

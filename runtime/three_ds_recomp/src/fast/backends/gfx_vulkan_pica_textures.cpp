@@ -189,6 +189,16 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaTexture(
         key.GpuCopyIdentity = derivesCopy
             ? GpuTextureCopyReferenceIdentity(texture, renderTargetNamespace)
             : 0U;
+        if (derivesCopy) {
+            // The same references resolve to a new immutable capture when a
+            // visual replay re-executes their producer (or a canonical version
+            // is imported): the derived image follows the capture it reads.
+            for (const auto& group : derivation.Groups) {
+                key.GpuCopyIdentity =
+                    (key.GpuCopyIdentity ^ group.SurfaceIdentity) * 1099511628211ULL;
+            }
+            if (key.GpuCopyIdentity == 0U) key.GpuCopyIdentity = 1U;
+        }
         key.ContentHash = derivesCopy && derivation.CoversDeclaredLayout
             ? 0U
             : (precomputedContentHash != nullptr

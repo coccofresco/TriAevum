@@ -111,9 +111,21 @@ bool GfxRenderingAPIVulkan::BuildGpuTextureCopyDerivation(
             return fail(GpuTextureCopyFallback::Layout,
                         "a producer reference lies outside the sampled texture");
         }
-        const auto producer = mGpuTextureCopyProducers.find(
+        auto producer = mGpuTextureCopyProducers.find(
             {renderTargetNamespace, reference.CompletionId,
              reference.AfterDrawSubmissionId});
+        if (producer == mGpuTextureCopyProducers.end() &&
+            mCanonicalRenderTargetNamespace.has_value() &&
+            *mCanonicalRenderTargetNamespace != renderTargetNamespace) {
+            // One guest operation that only the canonical namespace executed:
+            // a superseded frame runs its native work but is never presented,
+            // and a later presented frame (a feedback history) still samples
+            // its result. Only the canonical version may be imported; a
+            // canonical read never takes a presentation version.
+            producer = mGpuTextureCopyProducers.find(
+                {*mCanonicalRenderTargetNamespace, reference.CompletionId,
+                 reference.AfterDrawSubmissionId});
+        }
         if (producer == mGpuTextureCopyProducers.end()) {
             return fail(GpuTextureCopyFallback::UnknownProducer,
                         "the producer version is not registered in this "
@@ -1319,6 +1331,190 @@ bool GfxRenderingAPIVulkan::NativePicaSceneFullyResolvedForTarget(
                target.SceneEffectsResolvedSerial == target.ContentWriteSerial;
     }
     return false;
+}
+
+bool GfxRenderingAPIVulkan::GpuSurfaceProducerVersionExists(
+    const GfxNativePicaDisplayTransferView& transfer) const {
+    // The lifetime of a raw copy: one capture per operation and host sample
+    // (a repeated execution within the sample reuses it), a new one when a
+    // later visual sample re-executes the operation from its own source (the
+    // handled set drops unmaterialized entries at every frame start).
+    const auto handled = mHandledNativePicaTextureCopies.find(
+        {transfer.RenderTargetNamespace, transfer.OutputPhysicalAddress});
+    return handled != mHandledNativePicaTextureCopies.end() &&
+           handled->second.first == transfer.CompletionId &&
+           mGpuTextureCopyProducers.contains(
+               {transfer.RenderTargetNamespace, transfer.CompletionId,
+                transfer.AfterDrawSubmissionId});
+}
+
+bool GfxRenderingAPIVulkan::SubmitNativePicaRenderTargetCapture(
+    const GfxNativePicaDisplayTransferView& transfer, std::string* error) {
+    try {
+        if (GpuSurfaceProducerVersionExists(transfer)) {
+            return true;
+        }
+        if (!mFrameActive || transfer.Present || transfer.CompletionId == 0U) {
+            throw std::runtime_error(
+                "colour-target capture requires ordered offscreen work");
+        }
+        // Several targets may share the colour address (other depth buffers);
+        // the one written last holds the version the read sees.
+        NativePicaRenderTarget* source = nullptr;
+        for (auto& [key, target] : mNativePicaRenderTargets) {
+            if (key.RenderTargetNamespace == transfer.RenderTargetNamespace &&
+                key.ColorPhysicalAddress == transfer.InputPhysicalAddress &&
+                key.Width == transfer.InputWidth &&
+                key.Height == transfer.InputHeight &&
+                (source == nullptr ||
+                 target.ContentWriteSerial > source->ContentWriteSerial)) {
+                source = &target;
+            }
+        }
+        if (source == nullptr) {
+            // No GPU version exists (for example right after a restore): the
+            // sampler keeps the bytes' CPU owner. Reported once, never silent.
+            static bool reported = false;
+            if (!reported) {
+                reported = true;
+                std::fprintf(stderr,
+                             "TRIAEVUM_GPU_COLOR_TARGET_CAPTURE_MISSING "
+                             "address=0x%08X extent=%ux%u\n",
+                             transfer.InputPhysicalAddress, transfer.InputWidth,
+                             transfer.InputHeight);
+            }
+            return true;
+        }
+        const uint32_t bytesPerPixel = source->Key.ColorFormat == 0U   ? 4U
+                                       : source->Key.ColorFormat == 1U ? 3U
+                                                                       : 2U;
+        const uint32_t bytes =
+            uint32_t{source->Key.Width} * source->Key.Height * bytesPerPixel;
+        GpuTextureCopySurface surface;
+        surface.RenderTargetNamespace = transfer.RenderTargetNamespace;
+        surface.CompletionId = transfer.CompletionId;
+        surface.AfterDrawSubmissionId = transfer.AfterDrawSubmissionId;
+        surface.DestinationAddress = source->Key.ColorPhysicalAddress;
+        surface.DestinationBytes = bytes;
+        surface.TextureWidth = source->Key.Width;
+        surface.TextureHeight = source->Key.Height;
+        surface.TextureFormat = source->Key.ColorFormat;
+        // The sampled bytes are the target's own: an identity walk over it.
+        surface.SourceSurfaceAddress = source->Key.ColorPhysicalAddress;
+        surface.SourceWidth = source->Key.Width;
+        surface.SourceHeight = source->Key.Height;
+        surface.SourceFormat = source->Key.ColorFormat;
+        surface.Spans.push_back({source->Key.ColorPhysicalAddress,
+                                 source->Key.ColorPhysicalAddress, bytes});
+        surface.CapturedFrame = mFrameCounter;
+        EndNativePicaRenderPass();
+        if (mRenderPassActive) {
+            vkCmdEndRenderPass(mCommandBuffers[mCurrentFrame]);
+            mRenderPassActive = false;
+            mOverlayRenderPassActive = false;
+        }
+        // The same boundary composition a raw copy of this target samples.
+        GpuTextureCopySourceImport copySource;
+        std::string composeError;
+        if (!ComposeNativePicaSceneForCopy(*source, transfer.AfterDrawSubmissionId,
+                                           copySource, &composeError) ||
+            copySource.Image == VK_NULL_HANDLE ||
+            copySource.Format != VK_FORMAT_R8G8B8A8_UNORM ||
+            copySource.Width != source->Width || copySource.Height != source->Height) {
+            static bool reported = false;
+            if (!reported) {
+                reported = true;
+                std::fprintf(stderr,
+                             "TRIAEVUM_GPU_COLOR_TARGET_NATIVE_SOURCE address=0x%08X "
+                             "reason=%s\n",
+                             transfer.InputPhysicalAddress, composeError.c_str());
+            }
+            // The target's own colour is the native truth this read sees.
+            copySource = {};
+            copySource.Image = source->ColorImage;
+            copySource.Width = source->Width;
+            copySource.Height = source->Height;
+        }
+        if (!CaptureGpuTextureCopySource(copySource, surface)) {
+            throw std::runtime_error("colour-target capture failed: " +
+                                     (mNriPicaTextureCopyCapturePass.Available()
+                                          ? std::string("capture pass refused")
+                                          : mNriPicaTextureCopyCapturePass
+                                                .UnavailableReason()));
+        }
+        PublishGpuTextureCopySurface(surface);
+        mHandledNativePicaTextureCopies.insert_or_assign(
+            {transfer.RenderTargetNamespace, transfer.OutputPhysicalAddress},
+            std::pair{transfer.CompletionId, false});
+        return true;
+    } catch (const std::exception& exception) {
+        if (error) *error = exception.what();
+        return false;
+    }
+}
+
+void GfxRenderingAPIVulkan::PublishTiledTransferProducer(
+    const GfxNativePicaDisplayTransferView& transfer,
+    const NativePicaDisplayImage& display) {
+    if (GpuSurfaceProducerVersionExists(transfer)) {
+        return;
+    }
+    // The view's output extent is post-scale; the plan takes the GX words.
+    const uint32_t scaling = (transfer.Flags >> 24U) & 3U;
+    const uint32_t declaredWidth =
+        uint32_t{transfer.OutputWidth} << (scaling != 0U ? 1U : 0U);
+    const uint32_t declaredHeight =
+        uint32_t{transfer.OutputHeight} << (scaling == 2U ? 1U : 0U);
+    const auto layout = Renderer3ds::PlanPicaTiledTransferResult(
+        transfer.OutputPhysicalAddress,
+        (uint32_t{transfer.InputHeight} << 16U) | transfer.InputWidth,
+        (declaredHeight << 16U) | declaredWidth, transfer.Flags);
+    if (!layout.has_value() || layout->Width != transfer.OutputWidth ||
+        layout->Height != transfer.OutputHeight) {
+        return;
+    }
+    const uint32_t bytes = layout->Width * layout->Height * layout->BytesPerPixel;
+    GpuTextureCopySurface surface;
+    surface.RenderTargetNamespace = transfer.RenderTargetNamespace;
+    surface.CompletionId = transfer.CompletionId;
+    surface.AfterDrawSubmissionId = transfer.AfterDrawSubmissionId;
+    surface.DestinationAddress = layout->Address;
+    surface.DestinationBytes = bytes;
+    surface.TextureWidth = layout->Width;
+    surface.TextureHeight = layout->Height;
+    surface.TextureFormat = static_cast<uint8_t>(layout->NativeFormat);
+    // The derivation's source is the filtered, converted RESULT: an identity
+    // walk over it, so the transfer's scaling is never applied twice.
+    surface.SourceSurfaceAddress = layout->Address;
+    surface.SourceWidth = layout->Width;
+    surface.SourceHeight = layout->Height;
+    surface.SourceFormat = static_cast<uint8_t>(layout->NativeFormat);
+    surface.Spans.push_back({layout->Address, layout->Address, bytes});
+    surface.CapturedFrame = mFrameCounter;
+    GpuTextureCopySourceImport source;
+    source.Image = display.Image;
+    source.Width = display.Width;
+    source.Height = display.Height;
+    source.ShaderRead = true;
+    source.SceneEffectsResolved = display.SceneEffectsResolved;
+    // The display image keeps the source attachment's rows, as the capture of
+    // a raw copy does; it is mutable, so the version is captured now, before
+    // a later transfer to the same output overwrites it.
+    if (!CaptureGpuTextureCopySource(source, surface)) {
+        static bool reported = false;
+        if (!reported) {
+            reported = true;
+            std::fprintf(stderr,
+                         "TRIAEVUM_GPU_TILED_TRANSFER_CAPTURE_UNAVAILABLE "
+                         "output=0x%08X\n",
+                         transfer.OutputPhysicalAddress);
+        }
+        return;
+    }
+    PublishGpuTextureCopySurface(surface);
+    mHandledNativePicaTextureCopies.insert_or_assign(
+        {transfer.RenderTargetNamespace, transfer.OutputPhysicalAddress},
+        std::pair{transfer.CompletionId, false});
 }
 
 bool GfxRenderingAPIVulkan::SubmitNativePicaTextureCopy(

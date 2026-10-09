@@ -68,6 +68,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDisplayTransfer(
     Renderer3ds::SlowStepScope slowStep("display_transfer");
     if (mFrameActive) mGpuProfiler.Mark(mCurrentFrame, "display_transfer_submit", mCommandBuffers[mCurrentFrame]);
     if (transfer.TextureCopyBytes != 0U) return SubmitNativePicaTextureCopy(transfer, error);
+    if (transfer.RenderTargetCapture) return SubmitNativePicaRenderTargetCapture(transfer, error);
     try {
         if (!mFrameActive || transfer.CompletionId == 0U ||
             transfer.InputWidth == 0U || transfer.InputHeight == 0U ||
@@ -361,6 +362,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDisplayTransfer(
                 Oot3d::GpuProfileScope::DisplayTransfer,
                 mCommandBuffers[mCurrentFrame]);
             display.Initialized = true;
+            // A tiled (texture-layout) result is what a later draw samples.
+            PublishTiledTransferProducer(transfer, display);
             mDiagnostics.RecordDisplayTransfer(false);
             return true;
         }

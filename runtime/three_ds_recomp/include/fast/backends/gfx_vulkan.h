@@ -1325,6 +1325,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     // Both policies still require completed GPU frames and no deferred guest bytes.
     std::set<std::pair<uint64_t, uint64_t>> mGpuTextureCopyPins;
     bool mGpuTextureCopyPinsDeclared = false;
+    std::optional<uint64_t> mCanonicalRenderTargetNamespace;
     // Producer versions travel in the texture-cache snapshot vector, not in a
     // parallel one: an entry with copy-producer metadata carries the full
     // captured RGBA image, and restoring it rebuilds the immutable version so a
@@ -1536,6 +1537,20 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         GpuTextureCopySourceImport* copyOutput, std::string* error,
         bool beforeNativeUi = false);
     bool SubmitNativePicaTextureCopy(const GfxNativePicaDisplayTransferView& transfer, std::string* error);
+    // GPU producers a later draw samples without a raw copy: a colour target
+    // written by earlier draws, and the tiled result of a DisplayTransfer.
+    // Both become immutable identity-mapped producer versions on the raw-copy
+    // register, so the existing derivation serves them.
+    bool SubmitNativePicaRenderTargetCapture(const GfxNativePicaDisplayTransferView& transfer,
+                                             std::string* error);
+    void PublishTiledTransferProducer(const GfxNativePicaDisplayTransferView& transfer,
+                                      const NativePicaDisplayImage& display);
+    bool GpuSurfaceProducerVersionExists(const GfxNativePicaDisplayTransferView& transfer) const;
+  public:
+    void SetCanonicalPicaRenderTargetNamespace(uint64_t renderTargetNamespace) override {
+        mCanonicalRenderTargetNamespace = renderTargetNamespace;
+    }
+  private:
     std::map<uint64_t, NativePicaLightingLutTexture>
         mNativePicaLightingLuts;
     std::map<NativePicaRenderTargetKey, NativePicaRenderTarget>

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
 #include <tuple>
@@ -28,6 +29,36 @@ struct PicaTextureCopyRegion {
     uint32_t DestinationX = 0, DestinationY = 0;
     uint32_t Width = 0, Height = 0;
 };
+
+// The tiled surface a DisplayTransfer writes into texture memory: complete 8x8
+// tile rows of its post-scale extent in the output format. The GX words are
+// the native ones (InputSize/OutputSize as height << 16 | width, before the
+// 2x1 or 2x2 box downscale the scaling mode applies). A linear (scanout)
+// output, a flipped or linear input, a raw copy mode and partial tiles have no
+// such surface here: their bytes keep the owner they had.
+inline std::optional<PicaTiledCopySurface> PlanPicaTiledTransferResult(
+    uint32_t outputAddress, uint32_t inputSize, uint32_t outputSize, uint32_t flags) {
+    const uint32_t inputWidth = inputSize & 0xFFFFU, inputHeight = inputSize >> 16U;
+    const uint32_t outputWidth = outputSize & 0xFFFFU, outputHeight = outputSize >> 16U;
+    const uint32_t scaling = (flags >> 24U) & 3U;
+    const uint32_t inputFormat = (flags >> 8U) & 7U, outputFormat = (flags >> 12U) & 7U;
+    const bool outputTiled = ((flags & 2U) != 0U) != ((flags & 0x20U) != 0U);
+    if (!outputTiled || (flags & (1U | 2U | 8U | 0x10000U)) != 0U || scaling > 2U ||
+        inputFormat > 4U || outputFormat > 4U || inputWidth == 0U || inputHeight == 0U ||
+        outputWidth == 0U || outputHeight == 0U || outputWidth > inputWidth ||
+        outputHeight > inputHeight) {
+        return std::nullopt;
+    }
+    const uint32_t width = outputWidth >> (scaling != 0U ? 1U : 0U);
+    const uint32_t height = outputHeight >> (scaling == 2U ? 1U : 0U);
+    const uint32_t bytesPerPixel = outputFormat == 0U ? 4U : outputFormat == 1U ? 3U : 2U;
+    const uint64_t bytes = uint64_t{width} * height * bytesPerPixel;
+    if (width == 0U || height == 0U || width % 8U != 0U || height % 8U != 0U ||
+        uint64_t{outputAddress} + bytes > (uint64_t{1} << 32U)) {
+        return std::nullopt;
+    }
+    return PicaTiledCopySurface{outputAddress, width, height, bytesPerPixel, outputFormat};
+}
 
 // Coordinates use native tiled-image axes. Backend orientation and internal
 // resolution belong to a later image mapping, never to raw address decoding.
