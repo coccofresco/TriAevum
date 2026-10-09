@@ -386,6 +386,7 @@ void NativeA32WindowSession::Setup() {
         Oot3dNativeGame::kMm3dMtx44Frustum;
     widescreenProjection.Projection.FrustumIsSceneView = false;
     widescreenProjection.Mm3dCompositionTracker = &mm3dCompositionTracker;
+    sceneViewProbe.UseExternalSceneEnvironment();
     if (mm3dGuestPatches.Empty()) {
       // dekui's settings: its shipped defaults, or (development) a
       // presentation.json given by TRIAEVUM_MM3D_PRESENTATION, until the F1
@@ -807,14 +808,17 @@ void NativeA32WindowSession::Setup() {
                             999U) /
                            1000U));
   sceneEnvironment = std::make_shared<Oot3dNativeGame::SceneEnvironmentRuntime>(
-      std::filesystem::path(launch.Host.ConfigurationPath).parent_path() / "environments",
+      Oot3dNativeGame::TitleSceneEnvironmentDirectory(launch.Host.ConfigurationPath, titleAdapter),
       [](const Fast::Renderer3ds::PicaEnvironmentLighting& environment) {
         Fast::Oot3d::GraphicsSettingsRuntime::Instance().PublishSceneEnvironment(environment);
-      });
+      }, titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur
+             ? Oot3dNativeGame::BaseSceneEnvironmentProfile()
+             : Oot3dNativeGame::NativePreservingSceneEnvironmentProfile());
   // F1 order: the scene lights join Lighting > Lights & Shadows; then
   // Controls, HUD and Game (Save states, Language) after the graphics tabs.
-  // Scene lights are profiles of OoT3D's scenes: another title has none.
-  if (titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur) {
+  // Only adapters with a typed scene provider expose scene profiles.
+  if (titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur ||
+      titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d) {
     applicationSettingsTabs.push_back(Oot3dNativeGame::CreateSceneEnvironmentPanel(sceneEnvironment));
   }
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)

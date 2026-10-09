@@ -1,5 +1,6 @@
 // Native A32 window session: one frame of the loop and the renderer-side work it schedules.
 #include "oot3d_native_a32_window_session.h"
+#include "mm3d_scene_environment.h"
 #include "fast/renderer3ds/pica_surface_debug.h"
 
 namespace Oot3dA32Window {
@@ -2398,6 +2399,11 @@ void NativeA32WindowSession::PublishNativeSceneView() {
   // Guest memory is read here; the scene environment, the duplicate check
   // and the publish belong to the renderer and run in its order.
   auto snapshot = sceneViewProbe.Capture(process.Memory());
+  if (titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d && snapshot && snapshot->Environment &&
+      !Oot3dNativeGame::Mm3dSceneEnvironmentStillCurrent(process.Memory(), *snapshot->Environment)) {
+    sceneViewProbe.ObserveExternalSceneEnvironment(std::nullopt);
+    snapshot = sceneViewProbe.Capture(process.Memory());
+  }
   // SaveContext nightFlag (+0x10): 1 at night; picks a scene's night profile.
   constexpr uint32_t kSaveContextNightFlag = 0x00587968U;
   // OoT3D's SaveContext and actor layout: another title's memory there is
@@ -2405,8 +2411,9 @@ void NativeA32WindowSession::PublishNativeSceneView() {
   // provides them.
   const bool oot3dTitle = titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur;
   uint32_t nightFlag = 0U;
-  const bool night = oot3dTitle &&
-      process.Memory().Read32(kSaveContextNightFlag, &nightFlag) && nightFlag != 0U;
+  std::optional<bool> night;
+  if (oot3dTitle && process.Memory().Read32(kSaveContextNightFlag, &nightFlag))
+    night = nightFlag != 0U;
   // Where Link is (world position +0x28, shape yaw +0xBE: 0 faces +Z,
   // 0x4000 +X), for lights placed from F1.
   std::optional<Oot3dNativeGame::ScenePlayerPlacement> player;
@@ -2427,6 +2434,10 @@ void NativeA32WindowSession::PublishNativeSceneView() {
         player = placement;
     }
   }
+  if (titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d && snapshot && snapshot->Environment) {
+    night = snapshot->Environment->Night;
+    player = snapshot->Environment->Player;
+  }
   // Light gizmos also show while the developer free camera looks around.
   bool freeCamera = false;
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
@@ -2435,7 +2446,8 @@ void NativeA32WindowSession::PublishNativeSceneView() {
     devEmitterLog->Observe(++devEmitterFrames, snapshot->PlayStateAddress, snapshot->SceneId, process.Memory());
 #endif
   renderStream.Submit([&, snapshot, night, player, freeCamera] {
-  sceneEnvironment->ObserveScene(snapshot ? snapshot->SceneId : std::nullopt, night, player);
+  sceneEnvironment->ObserveScene(snapshot ? snapshot->SceneId : std::nullopt, night, player,
+                                 snapshot ? snapshot->WorldIdentity : 0);
   sceneEnvironment->PollProfileFiles();
   sceneEnvironment->PublishLightGizmo(
       snapshot && snapshot->CameraAvailable ? std::optional(snapshot->Eye) : std::nullopt, freeCamera);
@@ -2456,7 +2468,8 @@ void NativeA32WindowSession::PublishNativeSceneView() {
       snapshot->At,
       snapshot->CameraAvailable,
       // Rooms share their scene's coordinates; another scene is another world.
-      snapshot->SceneId.has_value() ? uint64_t{*snapshot->SceneId} + 1U : 0U,
+      snapshot->WorldIdentity != 0U ? snapshot->WorldIdentity :
+          snapshot->SceneId.has_value() ? uint64_t{*snapshot->SceneId} + 1U : 0U,
   };
   if (titleRenderBackend != nullptr &&
       titleRenderBackend->PublishSceneView(view)) {

@@ -2,6 +2,7 @@
 // while the game runs (built with TRIAEVUM_DEVELOPER_TOOLS).
 #include "oot3d_scene_environment.h"
 #include "oot3d_scene_environment_codec.h"
+#include "triaevum_title_adapter.h"
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
@@ -159,6 +160,57 @@ int main() try {
   }
 
   std::filesystem::remove_all(directory);
+  // Two titles share a configuration root and a scene number. The legacy
+  // file belongs to OoT only; MM3D missing/reload/error paths use its fallback.
+  {
+    const auto config=directory/"settings.json";
+    const auto oot=TitleSceneEnvironmentDirectory(config,TitleAdapter::Oot3dEur);
+    const auto mm=TitleSceneEnvironmentDirectory(config,TitleAdapter::Mm3d);
+    std::filesystem::create_directories(mm);
+    Write(oot/"scene-0055.environment.json",Profile(0.95F,false));
+    const auto fallback=NativePreservingSceneEnvironmentProfile();
+    Fast::Renderer3ds::PicaEnvironmentLighting published;
+    SceneEnvironmentRuntime runtime(mm,[&](const auto& v){published=v;},fallback);
+    runtime.ObserveScene(0x55,false,std::nullopt,10);
+    Check(runtime.Snapshot().Profile==fallback && !published.Enabled &&
+          runtime.Snapshot().Path.parent_path()==mm && !runtime.Snapshot().FileExists,
+          "MM3D inherited OoT's file or default");
+    Check(fallback.NativeDirectStrength==1 && fallback.NativeLocalStrength==1 &&
+          fallback.NativeAmbientStrength==1 && fallback.AmbientIntensity==0 &&
+          fallback.Lights[0].Intensity==0 && fallback.Lights[1].Intensity==0,
+          "MM3D base contains authored replacement illumination");
+    Check(runtime.Reload() && runtime.Snapshot().Profile==fallback,"missing reload used global OoT fallback");
+    Check(runtime.Save() && std::filesystem::exists(mm/"scene-0055.environment.json"),
+          "MM3D save did not use its namespace");
+    auto edited=fallback;edited.Enabled=true;edited.AmbientIntensity=0.7F;
+    Check(runtime.Preview(edited),"MM3D profile preview rejected");
+    const auto previousRevision=runtime.Snapshot().Revision;
+    runtime.ObserveScene(0x55,false,std::nullopt,11);
+    Check(runtime.Snapshot().Revision>previousRevision && runtime.Snapshot().Profile==fallback,
+          "same-scene restore retained stale preview");
+    Check(runtime.Preview(edited) && runtime.CreateNightProfile(),"night profile creation failed");
+    runtime.ObserveScene(0x55,true,std::nullopt,11);
+    Check(runtime.Snapshot().EditingNight && runtime.Snapshot().Profile==edited,"night profile not selected");
+    runtime.ObserveScene(0x55,std::nullopt,std::nullopt,11);
+    Check(!runtime.Snapshot().NightKnown && !runtime.Snapshot().EditingNight &&
+          runtime.Snapshot().Profile==fallback,"unknown night retained night profile or became known day");
+    runtime.ObserveScene(0x55,true,std::nullopt,11);
+    Check(runtime.RemoveNightProfile() && runtime.Snapshot().Profile==fallback,
+          "night removal did not return to MM3D day profile");
+    Write(mm/"scene-0056.environment.json","{invalid");
+    runtime.ObserveScene(0x56,false,std::nullopt,12);
+    Check(runtime.Snapshot().Profile==fallback && !published.Enabled && !runtime.Snapshot().Error.empty(),
+          "invalid new-scene file leaked old or OoT profile");
+    runtime.ObserveScene(std::nullopt,std::nullopt);
+    Check(!runtime.Snapshot().SceneId && !runtime.Snapshot().Player && !published.Enabled,
+          "lost context kept active environment");
+    SceneEnvironmentRuntime legacy(oot,[](const auto&){});
+    legacy.ObserveScene(0x55);
+    Check(legacy.Snapshot().Profile.AmbientIntensity==0.95F,"OoT legacy file stopped working");
+    legacy.ObserveScene(0x57);
+    Check(legacy.Snapshot().Profile==BaseSceneEnvironmentProfile(),"OoT default changed");
+    std::filesystem::remove_all(directory);
+  }
   std::printf("scene environment tests passed: %d checks\n", gChecks);
   return 0;
 } catch (const std::exception &error) {

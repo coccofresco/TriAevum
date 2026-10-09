@@ -1,5 +1,7 @@
 #pragma once
 
+#include "native_scene_environment_state.h"
+
 #include <array>
 #include <cstdint>
 #include <optional>
@@ -26,6 +28,8 @@ struct NativeA32SceneViewSnapshot {
   std::array<float, 3> At{};
   bool CameraAvailable = false;
   std::optional<uint16_t> SceneId;
+  std::optional<NativeSceneEnvironmentState> Environment;
+  uint64_t WorldIdentity = 0;
 };
 
 struct NativeA32SceneViewProbeStats {
@@ -42,6 +46,11 @@ struct NativeA32SceneViewProbeStats {
 class NativeA32SceneViewProbe {
 public:
   void ObservePlayState(uint32_t playStateAddress);
+  // A title-owned producer supplies already-decoded data. Never use the
+  // OoT PlayState memory layout in this mode, even after a savestate reset.
+  void UseExternalSceneEnvironment();
+  void BeginExternalSceneView();
+  void ObserveExternalSceneEnvironment(std::optional<NativeSceneEnvironmentState> state);
   void ObservePerspective(uint32_t guestFunction, uint32_t guestReturnAddress,
                           float left, float right, float bottom, float top,
                           float nearPlane, float farPlane);
@@ -66,6 +75,8 @@ private:
   std::optional<NativeA32SceneViewSnapshot> mPerspective;
   uint64_t mNextSerial = 1;
   std::string mLastError;
+  bool mExternalEnvironment = false;
+  NativeSceneEnvironmentContinuity mEnvironment;
 };
 
 } // namespace Oot3dNativeGame

@@ -42,6 +42,13 @@ add_executable(oot3d_native_game_runtime_tests EXCLUDE_FROM_ALL
 target_link_libraries(oot3d_native_game_runtime_tests PRIVATE oot3d_native_game_runtime)
 oot3d_target_defaults(oot3d_native_game_runtime_tests FOLDER Tests)
 
+# MM3D adapter read/lifetime guards; no process, renderer or ROM needed.
+add_executable(mm3d_scene_environment_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/mm3d_scene_environment_tests.cpp)
+target_include_directories(mm3d_scene_environment_tests PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/native_game_runtime")
+oot3d_target_defaults(mm3d_scene_environment_tests FOLDER Tests)
+
 # Clock verification must also work without the optional legacy cutscene host.
 add_executable(triaevum_presentation_clock_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_frame_rate_tests.cpp

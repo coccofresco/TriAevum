@@ -29,8 +29,10 @@ public:
     ImGui::Text("Native scene: 0x%04X (all rooms)", unsigned(*state.SceneId));
     ImGui::TextWrapped(state.FileExists
                            ? "Profile: %s"
-                           : "Base environment (the title intro's). Saving creates %s for this scene only.",
+                           : "Base environment. Saving creates %s for this scene only.",
                        state.Path.string().c_str());
+    if (!state.NightKnown)
+      ImGui::TextWrapped("Time of day is unavailable; using the scene profile.");
     DrawDayNight(state);
     auto value = state.Profile;
     auto &graphics = Fast::Oot3d::GraphicsSettingsRuntime::Instance();

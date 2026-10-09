@@ -1,6 +1,7 @@
 #pragma once
 
 #include "fast/oot3d/graphics_settings_window.h"
+#include "native_scene_environment_state.h"
 #include "fast/renderer3ds/pica_environment_lighting.h"
 #include <chrono>
 #include <filesystem>
@@ -85,15 +86,11 @@ struct SceneEnvironmentProfile {
   bool operator==(const SceneEnvironmentProfile &) const = default;
 };
 
-// Where Link is, for placing a light: world position and facing (degrees).
-struct ScenePlayerPlacement {
-  std::array<float, 3> Position{};
-  float Yaw = 0.0F;
-  bool operator==(const ScenePlayerPlacement &) const = default;
-};
 // The environment of every scene without its own profile: the title intro's
 // (scene 0x6B) tuned lights. Saving stores a profile for the current scene only.
 [[nodiscard]] SceneEnvironmentProfile BaseSceneEnvironmentProfile();
+// A title without authored tuning: disabled, native gains one, no added light.
+[[nodiscard]] SceneEnvironmentProfile NativePreservingSceneEnvironmentProfile();
 
 struct SceneEnvironmentSnapshot {
   std::optional<uint16_t> SceneId;
@@ -106,6 +103,8 @@ struct SceneEnvironmentSnapshot {
   bool FileExists = false;
   // The game's time of day (SaveContext nightFlag).
   bool Night = false;
+  bool NightKnown = true;
+  uint64_t WorldIdentity = 0;
   // The scene keeps a separate night profile (scene-XXXX.night.environment.json).
   bool NightProfileExists = false;
   // The night profile is the one in use.
@@ -122,11 +121,13 @@ class SceneEnvironmentRuntime final {
 public:
   using Publisher =
       std::function<void(const Fast::Renderer3ds::PicaEnvironmentLighting &)>;
-  SceneEnvironmentRuntime(std::filesystem::path directory, Publisher publish);
+  SceneEnvironmentRuntime(std::filesystem::path directory, Publisher publish,
+                          SceneEnvironmentProfile fallback = BaseSceneEnvironmentProfile());
   // A scene with a night profile switches to it while `night`; any unsaved
   // preview is dropped then, as when the scene changes.
-  void ObserveScene(std::optional<uint16_t> scene, bool night = false,
-                    std::optional<ScenePlayerPlacement> player = std::nullopt);
+  void ObserveScene(std::optional<uint16_t> scene, std::optional<bool> night = false,
+                    std::optional<ScenePlayerPlacement> player = std::nullopt,
+                    uint64_t worldIdentity = 0);
   [[nodiscard]] SceneEnvironmentSnapshot Snapshot() const;
   // False (and an error) when the profile does not validate, or when
   // `basedOnRevision` is older than the profile in use.
@@ -170,9 +171,11 @@ private:
   void AcknowledgeFilesLocked();
   void PublishLocked();
   [[nodiscard]] std::filesystem::path ProfilePathLocked(bool night) const;
-  void SelectLocked(std::optional<uint16_t> scene, bool night);
+  void SelectLocked(std::optional<uint16_t> scene, std::optional<bool> night,
+                    uint64_t worldIdentity);
   std::filesystem::path mDirectory;
   Publisher mPublish;
+  const SceneEnvironmentProfile mFallback;
   mutable std::mutex mMutex;
   SceneEnvironmentSnapshot mState;
   SceneEnvironmentProfile mSaved;

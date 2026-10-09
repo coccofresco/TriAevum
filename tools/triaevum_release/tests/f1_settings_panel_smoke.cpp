@@ -400,7 +400,7 @@ void CheckSceneEnvironment() {
     Frame(); Frame(); Click("Lighting"); Click("Lights & Shadows");
     Frame(true);
     Check(loggedPanelText.find("Scene lights") != std::string::npos &&
-              loggedPanelText.find("Base environment (the title intro's)") != std::string::npos &&
+              loggedPanelText.find("Base environment.") != std::string::npos &&
               loggedPanelText.find("Directional shadows") != std::string::npos,
           "Lights & Shadows does not show the scene lights, the base environment and the shadows");
     for (const char* old : {"Shadows", "Scene environment", "Occlusion"})
@@ -781,6 +781,47 @@ void CheckSceneEnvironment() {
           "capability loss prevented disabling Navi point lights");
     environment->ObserveScene(std::nullopt);
     AllCapabilities(true);
+}
+
+void CheckMm3dSceneEnvironment() {
+    using namespace Oot3dNativeGame;
+    const auto root=std::filesystem::temp_directory_path()/
+        ("triaevum-mm3d-environment-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    std::filesystem::create_directory(root);
+    struct Cleanup { std::filesystem::path Root; ~Cleanup() { std::error_code ec; std::filesystem::remove_all(Root,ec); } } cleanup{root};
+    auto& graphics=GraphicsSettingsRuntime::Instance();
+    AllCapabilities(true);
+    auto settings=graphics.Snapshot();
+    settings.Preset=GraphicsPreset::Custom;
+    settings.Effects.SurfaceLighting=SurfaceLightingMode::PerPixelPbr;
+    graphics.Apply(settings);
+    auto environment=std::make_shared<SceneEnvironmentRuntime>(root,[&](const auto& v){
+        graphics.PublishSceneEnvironment(v);
+    },NativePreservingSceneEnvironmentProfile());
+    environment->ObserveScene(0x2A,std::nullopt,std::nullopt,1);
+    InstallGraphicsSettingsPanelTabs({CreateSceneEnvironmentPanel(environment)});
+    size=ImVec2(760,2600);
+    Frame();Frame();Click("Lighting");Click("Lights & Shadows");Frame(true);
+    Check(!environment->Snapshot().Profile.Enabled && !graphics.SnapshotForRendering().Environment.Enabled,
+          "MM3D widget enabled a missing profile");
+    Check(loggedPanelText.find("Time of day is unavailable")!=std::string::npos,
+          "MM3D widget presented unknown time as known day");
+    Click("Use scene environment");
+    Check(environment->Snapshot().Profile.Enabled,"MM3D profile control did not enable explicit override");
+    graphics.SetCapability(GraphicsCapability::NativeSurfaceLighting,false,"test unavailable");
+    Frame();
+    Check(!Find("Use scene environment").Disabled,"unsupported active environment cannot be disabled");
+    Click("Use scene environment");
+    Check(!environment->Snapshot().Profile.Enabled,"unsupported MM3D environment did not switch Off");
+    Frame();
+    Check(Find("Use scene environment").Disabled,"unsupported inactive environment offered On");
+    environment->ObserveScene(std::nullopt,std::nullopt);
+    Frame(true);
+    Check(loggedPanelText.find("No native gameplay scene is available")!=std::string::npos &&
+          !graphics.SnapshotForRendering().Environment.Enabled,"lost MM3D scene did not deactivate widget/runtime");
+    AllCapabilities(true);
+    InstallGraphicsSettingsPanelTabs({});
+    size=ImVec2(760,1000);
 }
 
 void CheckPbrMaterialEditor() {
@@ -2070,6 +2111,7 @@ int main() try {
     CheckSavestatePanel();
     CheckSceneEnvironmentCodec();
     CheckSceneEnvironment();
+    CheckMm3dSceneEnvironment();
     InstallGraphicsSettingsPanelTabs({});
     CheckTitleWithoutSceneHooks();
     ImGui::DestroyContext();

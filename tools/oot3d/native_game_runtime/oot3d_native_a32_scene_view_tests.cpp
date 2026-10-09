@@ -12,7 +12,9 @@ namespace {
 
 class SceneViewMemoryBus final : public oot3d::recomp::a32::MemoryBus {
 public:
+  uint32_t Reads = 0;
   bool Read32(uint32_t address, uint32_t *value) override {
+    ++Reads;
     if (value == nullptr || address + sizeof(uint32_t) > Bytes.size()) {
       return false;
     }
@@ -106,4 +108,41 @@ void RunNativeA32SceneViewProbeTests() {
   if (probe.Capture(memory).has_value()) {
     throw std::runtime_error("scene-view probe survived reset");
   }
+
+  probe.UseExternalSceneEnvironment();
+  probe.ObservePlayState(playState); // OoT hooks cannot opt this title back in.
+  probe.BeginExternalSceneView();
+  probe.ObservePerspectiveCamera(0x123U, 0x456U, -1, 1, -1, 1, 1, 100,
+                                {100,200,300}, {100,200,301});
+  Oot3dNativeGame::NativeSceneEnvironmentState state;
+  state.ContextIdentity=0x10000000U; state.GuestFrame=100; state.SceneId=0x2A;
+  state.Night=true; state.Day=2; state.Clock=0xD000;
+  state.Player=Oot3dNativeGame::ScenePlayerPlacement{{1,2,3},90};
+  probe.ObserveExternalSceneEnvironment(state);
+  const auto reads=memory.Reads;
+  const auto external=probe.Capture(memory);
+  if (!external || !external->Environment || external->SceneId!=0x2A ||
+      external->Environment->Night!=true || external->WorldIdentity==0 ||
+      external->Eye!=std::array<float,3>{100,200,300} || memory.Reads!=reads ||
+      probe.Stats().LastPlayStateAddress!=0)
+    throw std::runtime_error("external title data read the OoT layout or replaced the camera");
+  const auto epoch=external->WorldIdentity;
+  const auto serial=external->Serial;
+  probe.ObserveExternalSceneEnvironment(std::nullopt);
+  const auto missing=probe.Capture(memory);
+  if (!missing || missing->Environment || missing->SceneId || missing->WorldIdentity!=0 ||
+      missing->Serial==serial)
+    throw std::runtime_error("invalid external context retained scene state or publication serial");
+  probe.Reset();
+  probe.ObservePlayState(playState);
+  probe.BeginExternalSceneView();
+  probe.ObservePerspectiveCamera(0x123U,0x456U,-1,1,-1,1,1,100,{1,2,3},{1,2,4});
+  probe.ObserveExternalSceneEnvironment(state);
+  const auto restored=probe.Capture(memory);
+  if (!restored || restored->WorldIdentity<=epoch || probe.Stats().LastPlayStateAddress!=0)
+    throw std::runtime_error("restore reused world identity or enabled OoT reads");
+  probe.BeginExternalSceneView();
+  probe.ObserveExternalSceneEnvironment(state);
+  if (probe.Capture(memory))
+    throw std::runtime_error("missing camera inherited a previous scene view");
 }

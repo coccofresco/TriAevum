@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <filesystem>
 #include <string_view>
 
 namespace Oot3dNativeGame {
@@ -77,6 +78,15 @@ inline constexpr std::string_view kMm3dCodeBinSha256 =
         break;
     }
     return "generic";
+}
+
+// The legacy directory is reserved to OoT3D so its existing profiles keep
+// working. MM3D never reads it, even when both titles share a config root.
+// New title namespaces go beneath environments/<stable adapter key>.
+[[nodiscard]] inline std::filesystem::path TitleSceneEnvironmentDirectory(
+    const std::filesystem::path& configuration, TitleAdapter adapter) {
+    auto root = configuration.parent_path() / "environments";
+    return adapter == TitleAdapter::Oot3dEur ? root : root / TitleAdapterName(adapter);
 }
 
 } // namespace Oot3dNativeGame

@@ -33,9 +33,32 @@ bool ValidFrustum(float left, float right, float bottom, float top,
 } // namespace
 
 void NativeA32SceneViewProbe::ObservePlayState(uint32_t playStateAddress) {
-  if (playStateAddress != 0U) {
+  if (!mExternalEnvironment && playStateAddress != 0U) {
     mStats.LastPlayStateAddress = playStateAddress;
   }
+}
+
+void NativeA32SceneViewProbe::UseExternalSceneEnvironment() {
+  mExternalEnvironment = true;
+  mStats.LastPlayStateAddress = 0;
+}
+
+void NativeA32SceneViewProbe::BeginExternalSceneView() {
+  UseExternalSceneEnvironment();
+  // Invalid camera/frustum data must not inherit the last scene's view.
+  mPerspective.reset();
+}
+
+void NativeA32SceneViewProbe::ObserveExternalSceneEnvironment(
+    std::optional<NativeSceneEnvironmentState> state) {
+  UseExternalSceneEnvironment();
+  if (!mPerspective || !mPerspective->CameraAvailable) state.reset();
+  mEnvironment.Observe(state);
+  if (!mPerspective) return;
+  mPerspective->Serial = mNextSerial++;
+  mPerspective->Environment = state;
+  mPerspective->SceneId = state ? std::optional(state->SceneId) : std::nullopt;
+  mPerspective->WorldIdentity = state ? mEnvironment.Epoch() : 0;
 }
 
 void NativeA32SceneViewProbe::ObservePerspective(
@@ -93,7 +116,7 @@ NativeA32SceneViewProbe::Capture(oot3d::recomp::a32::MemoryBus &memory) {
   }
 
   NativeA32SceneViewSnapshot snapshot = *mPerspective;
-  if (mStats.LastPlayStateAddress == 0U) {
+  if (mExternalEnvironment || mStats.LastPlayStateAddress == 0U) {
     ++mStats.SnapshotsCaptured;
     mLastError.clear();
     return snapshot;
@@ -131,6 +154,7 @@ NativeA32SceneViewProbe::Capture(oot3d::recomp::a32::MemoryBus &memory) {
 void NativeA32SceneViewProbe::Reset() {
   mStats.LastPlayStateAddress = 0U;
   mPerspective.reset();
+  mEnvironment.Reset();
   mLastError.clear();
 }
 

@@ -37,24 +37,42 @@ SceneEnvironmentProfile BaseSceneEnvironmentProfile() {
   return base;
 }
 
+SceneEnvironmentProfile NativePreservingSceneEnvironmentProfile() {
+  SceneEnvironmentProfile profile;
+  profile.Enabled = false;
+  profile.PreserveSceneBrightness = true;
+  profile.NativeDirectStrength = profile.NativeLocalStrength = profile.NativeAmbientStrength = 1.0F;
+  profile.AmbientIntensity = 0.0F;
+  for (auto& light : profile.Lights) light.Intensity = 0.0F;
+  return profile;
+}
+
 SceneEnvironmentRuntime::SceneEnvironmentRuntime(
-    std::filesystem::path directory, Publisher publish)
-    : mDirectory(std::move(directory)), mPublish(std::move(publish)) {}
+    std::filesystem::path directory, Publisher publish, SceneEnvironmentProfile fallback)
+    : mDirectory(std::move(directory)), mPublish(std::move(publish)), mFallback(std::move(fallback)) {
+  if (const auto errors = ValidateSceneEnvironment(mFallback); !errors.empty())
+    throw std::invalid_argument(DescribeSceneEnvironmentErrors(errors));
+  mSaved = mState.Profile = mFallback;
+}
 
 void SceneEnvironmentRuntime::ObserveScene(std::optional<uint16_t> scene,
-                                           bool night,
-                                           std::optional<ScenePlayerPlacement> player) {
+                                           std::optional<bool> night,
+                                           std::optional<ScenePlayerPlacement> player,
+                                           uint64_t worldIdentity) {
   std::scoped_lock lock(mMutex);
   mState.Player = scene ? player : std::nullopt;
-  if (mState.SceneId == scene && mState.Night == night)
+  const bool sameWorld = mState.WorldIdentity == worldIdentity;
+  if (sameWorld && mState.SceneId == scene && mState.Night == night.value_or(false) &&
+      mState.NightKnown == night.has_value())
     return;
   // The time changed: only a scene with a night profile changes profile.
-  if (mState.SceneId == scene && scene &&
-      (night && mState.NightProfileExists) == mState.EditingNight) {
-    mState.Night = night;
+  if (sameWorld && mState.SceneId == scene && scene &&
+      (night.value_or(false) && mState.NightProfileExists) == mState.EditingNight) {
+    mState.Night = night.value_or(false);
+    mState.NightKnown = night.has_value();
     return;
   }
-  SelectLocked(scene, night);
+  SelectLocked(scene, night, worldIdentity);
   mState.Player = scene ? player : std::nullopt;
 }
 std::filesystem::path
@@ -67,17 +85,28 @@ SceneEnvironmentRuntime::ProfilePathLocked(bool night) const {
   return mDirectory / name;
 }
 void SceneEnvironmentRuntime::SelectLocked(std::optional<uint16_t> scene,
-                                           bool night) {
+                                           std::optional<bool> night, uint64_t worldIdentity) {
+  // Inert until the selection loads: a scene whose profile is invalid keeps
+  // the title's fallback values but never draws them (only a missing
+  // profile takes the fallback as it is).
   mState = {};
-  mSaved = {};
+  mSaved = mFallback;
+  mSaved.Enabled = false;
+  mState.Profile = mSaved;
+  mGizmoSelected = 0;
+  mGizmoEdited = {};
+  if (mGizmoPublished) Fast::Oot3d::WorldDebugLineRuntime::Instance().Clear();
+  mGizmoPublished = false;
   mState.SceneId = scene;
-  mState.Night = night;
+  mState.Night = night.value_or(false);
+  mState.NightKnown = night.has_value();
+  mState.WorldIdentity = worldIdentity;
   mState.Revision = ++mRevision;
   if (scene) {
     std::error_code error;
     mState.NightProfileExists =
         std::filesystem::exists(ProfilePathLocked(true), error);
-    mState.EditingNight = night && mState.NightProfileExists;
+    mState.EditingNight = mState.Night && mState.NightProfileExists;
     mState.Path = ProfilePathLocked(mState.EditingNight);
     LoadSelectionLocked(mState.EditingNight, mState.NightProfileExists);
   }
@@ -86,10 +115,11 @@ void SceneEnvironmentRuntime::SelectLocked(std::optional<uint16_t> scene,
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
   // Which profile a scene took, for agents reading the log.
   if (scene)
-    std::fprintf(stderr, "TRIAEVUM_ENVIRONMENT_SELECT scene=0x%04X night=%d file=%s enabled=%d placed=%zu error=%s\n",
+    std::fprintf(stderr, "TRIAEVUM_ENVIRONMENT_SELECT scene=0x%04X night=%d file=%s enabled=%d placed=%zu error=%s night_known=%d world=%llu\n",
                  unsigned(*scene), mState.EditingNight ? 1 : 0, mState.FileExists ? mState.Path.string().c_str() : "-",
                  mState.Profile.Enabled ? 1 : 0, mState.Profile.PlacedLights.size(),
-                 mState.Error.empty() ? "-" : mState.Error.c_str());
+                 mState.Error.empty() ? "-" : mState.Error.c_str(), mState.NightKnown ? 1 : 0,
+                 static_cast<unsigned long long>(mState.WorldIdentity));
 #endif
 }
 void SceneEnvironmentRuntime::EditLightGizmo(uint32_t selectedLight, bool enabled) {
@@ -341,7 +371,7 @@ bool SceneEnvironmentRuntime::LoadSelectionLocked(bool editingNight, bool nightE
   const auto path = ProfilePathLocked(editingNight);
   auto file = LoadSceneEnvironmentFile(path, *mState.SceneId, editingNight);
   // A scene without its own profile takes the base environment.
-  auto candidate = BaseSceneEnvironmentProfile();
+  auto candidate = mFallback;
   if (file.Exists) {
     if (!file.Document.Profile) {
       mState.Error = DescribeSceneEnvironmentErrors(file.Document.Errors);

@@ -1,5 +1,6 @@
 // Block-entry policy of the A32 window: widescreen projection and guest observation hooks.
 #include "oot3d_native_a32_window_shared.h"
+#include "mm3d_scene_environment.h"
 
 namespace Oot3dA32Window {
 
@@ -68,8 +69,14 @@ void ApplyNativeWidescreenProjectionPolicy(
   if (runtime.Mm3dCompositionTracker != nullptr &&
       runtime.Mm3dCompositionTracker->ObserveBlockEntry(pc, state, memory) ==
           Oot3dNativeGame::Mm3dNativePicaCompositionTracker::Event::OpaqueWorldBegins &&
-      runtime.SceneViewProbe != nullptr &&
-      runtime.Projection.PendingSceneFrustum.has_value()) {
+      runtime.SceneViewProbe != nullptr) {
+    runtime.SceneViewProbe->BeginExternalSceneView();
+    // Capture once at the same native opaque boundary as the view/lights,
+    // before the guest advances. The renderer later receives values only.
+    const auto environment = Oot3dNativeGame::CaptureMm3dSceneEnvironment(memory);
+    Oot3dNativeGame::TraceMm3dSceneEnvironment(
+        environment, runtime.CurrentHostFrame, pc, state.r[14]);
+    if (runtime.Projection.PendingSceneFrustum.has_value()) {
     // The scene's camera for its opaque pass: the current View's field of
     // view and clip planes, at the aspect (and widening) of the frustum the
     // pass draws with, and its eye and target. The default View (no current
@@ -110,6 +117,8 @@ void ApplyNativeWidescreenProjectionPolicy(
             view[1], view[2]);
       }
     }
+    }
+    runtime.SceneViewProbe->ObserveExternalSceneEnvironment(environment.State);
   }
   if (runtime.CallTrace != nullptr &&
       runtime.CurrentHostFrame >= runtime.CallTraceFirstFrame &&
