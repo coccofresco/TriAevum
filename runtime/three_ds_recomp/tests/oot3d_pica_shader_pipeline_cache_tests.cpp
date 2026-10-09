@@ -1,3 +1,4 @@
+#include "fast/renderer3ds/pica_fragment_balance.h"
 #include "fast/oot3d/pica_attachment_contract.h"
 #include "fast/oot3d/pica_directional_shadow_caster.h"
 #include "fast/oot3d/pica_directional_shadow_lighting.h"
@@ -2161,6 +2162,131 @@ TEST(Oot3dPicaShaderInstrumentation, MixedWaterBoundsKeepDryFragmentIrradiance) 
     EXPECT_FALSE(PicaNativeFragmentOperandWaterEligible(false, 2U, true, true, false));
 }
 
+
+
+TEST(PicaFragmentBalance, SourceIdentityNotPermutationOrDirectionOwnsTheKey) {
+    using namespace Fast::Renderer3ds;
+    PicaFragmentLightingLayout layout;
+    layout.SchemaVersion=kPicaFragmentLightingLayoutSchemaVersion;
+    layout.ActiveLightCount=2;layout.LightPermutation={0,1};
+    layout.Lights[0].Directional=layout.Lights[1].Directional=true;
+    auto scene=std::make_shared<PicaSceneDirectionalLights>();
+    scene->Count=2;scene->ShadowCasterIdentity=134537748;
+    scene->Lights[0]={134537748,{-0.265F,0.907F,0.151F},{220/255.F,195/255.F,180/255.F},true};
+    scene->Lights[1]={134537772,{0.265F,-0.907F,-0.151F},{20/255.F,45/255.F,72/255.F},true};
+    PicaNativeLightBinding binding;binding.SceneDirectionals=scene;
+    binding.Sources[0].Kind=binding.Sources[1].Kind=PicaNativeLightSource::Type::Directional;
+    binding.Sources[0].SourceIdentity=134537772;binding.Sources[1].SourceIdentity=134537748;
+    PicaEnvironmentLighting e;e.Enabled=true;e.KeyDirection=PicaEnvironmentKeyDirection::SceneMain;
+    e.NativeDirectStrength=0;e.NativeLocalStrength=1;e.NativeAmbientStrength=.6F;
+    e.AmbientIntensity=0;e.Lights[0].Intensity=1;
+    const auto a=BuildPicaFragmentBalanceUniforms(true,layout,binding,e);ASSERT_TRUE(a);
+    EXPECT_EQ(a->Control[1],1U);EXPECT_EQ(a->Control[2],1U);
+    EXPECT_FLOAT_EQ(a->Gains[0][0],1); // Retain native opposite fill, even below horizon.
+    EXPECT_FLOAT_EQ(a->Gains[1][0],0); // No duplicate main direct.
+    EXPECT_FLOAT_EQ(a->Parameters[0],1); // Actual OoT preserve-ambient policy.
+    layout.LightPermutation={1,0};
+    const auto b=BuildPicaFragmentBalanceUniforms(true,layout,binding,e);ASSERT_TRUE(b);
+    EXPECT_EQ(a->Control,b->Control);EXPECT_EQ(a->Gains,b->Gains);
+    EXPECT_FALSE(BuildPicaFragmentBalanceUniforms(false,layout,binding,e));
+    e.PreserveSceneBrightness=false;
+    const auto fractional=BuildPicaFragmentBalanceUniforms(true,layout,binding,e);ASSERT_TRUE(fractional);
+    EXPECT_FLOAT_EQ(fractional->Parameters[0],.6F);
+    EXPECT_FLOAT_EQ(fractional->Gains[0][0],0);
+    EXPECT_FLOAT_EQ(fractional->Gains[0][2],.6F);
+    e.PreserveSceneBrightness=true;
+    binding.Sources[0].SourceIdentity=134537748;
+    EXPECT_FALSE(BuildPicaFragmentBalanceUniforms(true,layout,binding,e));
+    binding.Sources[0].SourceIdentity=134537772;
+    layout.LightPermutation={1,1};EXPECT_FALSE(BuildPicaFragmentBalanceUniforms(true,layout,binding,e));
+    layout.LightPermutation={1,0};binding.Sources[1]={};
+    EXPECT_FALSE(BuildPicaFragmentBalanceUniforms(true,layout,binding,e));
+    binding.Sources[1].Kind=PicaNativeLightSource::Type::Point;
+    binding.Sources[1].SourceIdentity=134537748;
+    EXPECT_FALSE(BuildPicaFragmentBalanceUniforms(true,layout,binding,e));
+}
+
+TEST(PicaFragmentBalance, ExplicitProfileAndFractionalAmbientEndpoints) {
+    using namespace Fast::Renderer3ds;
+    PicaEnvironmentLighting e;e.Enabled=true;e.KeyDirection=PicaEnvironmentKeyDirection::SceneMain;
+    e.AmbientIntensity=0;e.Lights[0].Intensity=1;
+    ASSERT_TRUE(PicaFragmentBalanceProfileSupported(e));
+    for(float fraction:{0.F,.25F,.6F,1.F}) {
+        e.NativeAmbientStrength=fraction;e.NativeLocalStrength=fraction;
+        EXPECT_TRUE(PicaFragmentBalanceProfileSupported(e));
+    }
+    const auto good=e;
+    e.NativeDirectStrength=1;EXPECT_FALSE(PicaFragmentBalanceProfileSupported(e));e=good;
+    e.AmbientIntensity=.5F;EXPECT_FALSE(PicaFragmentBalanceProfileSupported(e));e=good;
+    e.Lights[0].Intensity=2;EXPECT_FALSE(PicaFragmentBalanceProfileSupported(e));e=good;
+    e.Lights[0].Color[0]=.9F;EXPECT_FALSE(PicaFragmentBalanceProfileSupported(e));e=good;
+    e.KeyElevationOffset=.01F;EXPECT_FALSE(PicaFragmentBalanceProfileSupported(e));e=good;
+    e.NativeAmbientStrength=std::nanf("");EXPECT_FALSE(PicaFragmentBalanceProfileSupported(e));e=good;
+    e.Enabled=false;EXPECT_FALSE(PicaFragmentBalanceProfileSupported(e));
+}
+
+TEST(PicaFragmentBalance, LegacyDeclarationsAndWaterBodyAreUnchanged) {
+    using namespace Fast::Renderer3ds;
+    EXPECT_EQ(PicaSurfaceLightingDeclarations(false,false),PicaSurfaceLightingDeclarations());
+    EXPECT_EQ(PicaSurfaceLightingBody(false,false),PicaSurfaceLightingBody());
+    EXPECT_EQ(PicaSurfaceLightingDeclarations(true,false),PicaSurfaceLightingDeclarations(true));
+    EXPECT_EQ(PicaSurfaceLightingBody(true,false),PicaSurfaceLightingBody(true));
+    EXPECT_EQ(sizeof(PicaSurfaceLightingUniforms),2912U);
+    EXPECT_EQ(offsetof(PicaBalancedSurfaceUniforms,Balance),2912U);
+    EXPECT_EQ(sizeof(PicaBalancedSurfaceUniforms),3072U);
+    const auto body=PicaSurfaceLightingBody(true,true);
+    EXPECT_EQ(body.find("primary_fragment_color.rgb + added"),std::string::npos);
+    EXPECT_EQ(body.find("fragment_uniforms.lighting_diffuse[pica_light]"),std::string::npos);
+    EXPECT_NE(body.find("if (!surface_water)"),std::string::npos);
+    EXPECT_NE(body.find("pica_surface_shadow(8)"),std::string::npos);
+    EXPECT_NE(body.find("if (!identity)"),std::string::npos);
+    Fast::Oot3d::PicaEffectDecisions d;d.FragmentLightingOperand=true;
+    EXPECT_FALSE(Fast::Oot3d::PicaUberEffectSupports(d,{}));
+}
+
+TEST(PicaFragmentBalance, PreClampTransferLeavesAmbientFillAndAlphaAlone) {
+    // Independent ledger fixture: includes an unclipped sum over1, a fill
+    // term and secondary specular. Post-clamp Lambert subtraction gives a
+    // different answer; global output multiplication darkens ambient/fill.
+    const std::array<float,3> ambient{.6F,.2F,.1F}, fill{.3F,.1F,.2F}, key{.5F,.4F,.3F};
+    const std::array<float,3> fillSpec{.2F,.1F,.05F}, keySpec{.3F,.2F,.1F};
+    const auto clamp=[](float x){return std::clamp(x,0.F,1.F);};
+    for(size_t c=0;c<3;++c) {
+        const float native=clamp(ambient[c]+fill[c]+key[c]);
+        const float transferred=clamp(ambient[c]+fill[c]+key[c]*1.F);
+        EXPECT_FLOAT_EQ(native,transferred);
+        const float shadowed=clamp(ambient[c]+fill[c]+key[c]*.25F);
+        EXPECT_LE(shadowed,native);
+        EXPECT_FLOAT_EQ(fillSpec[c]+keySpec[c]*.25F,
+                        fillSpec[c]+keySpec[c]-(1.F-.25F)*keySpec[c]);
+    }
+    EXPECT_FLOAT_EQ(clamp(.6F+.3F+.5F*.25F),1.F);
+    EXPECT_NE(clamp(.6F+.3F+.5F*.25F),clamp(1.F-.5F*.75F));
+}
+
+TEST(PicaFragmentBalance, CapabilityFalseKeepsCanonicalKeysAndNativeMemoryInert) {
+    using namespace Fast::Oot3d;
+    auto request=BaseRequest();
+    EffectsSettings effects;
+    PicaShaderPipelineCache cache;
+    const auto before=cache.Resolve(request,effects);
+    request.FragmentShaderHooks.NativeLightingCapture={1,1,2,3,4};
+    request.FragmentLightingBalance=false;
+    const auto after=cache.Resolve(request,effects);
+    EXPECT_EQ(before.FragmentShaderSource,after.FragmentShaderSource);
+    EXPECT_EQ(before.FragmentShaderKey,after.FragmentShaderKey);
+    EXPECT_EQ(before.VertexShaderSource,after.VertexShaderSource);
+    EXPECT_EQ(before.VertexShaderKey,after.VertexShaderKey);
+    EXPECT_EQ(before.RequestedFeatures,after.RequestedFeatures);
+    request.RequireNativeFidelity=true;
+    request.SurfaceLightingAvailable=true;
+    request.FragmentLightingOperand=true;request.FragmentLightingBalance=true;
+    const auto native=cache.Resolve(request,effects);
+    EXPECT_EQ(native.FragmentShaderSource,request.FragmentShaderSource);
+    EXPECT_EQ(native.FragmentShaderKey,request.FragmentShaderKey);
+    EXPECT_FALSE(HasPicaShaderInstrumentationFeature(native.AppliedFeatures,
+        PicaShaderInstrumentationFeature::FragmentLightingBalance));
+}
 
 TEST(Oot3dPicaShaderInstrumentation, LegacySurfaceSourceIs9039d71ByteIdentical) {
     using namespace Fast::Renderer3ds;

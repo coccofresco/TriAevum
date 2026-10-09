@@ -2,6 +2,7 @@
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_pica_internal.h"
 #include "fast/renderer3ds/pica_draw_coverage.h"
+#include "fast/renderer3ds/pica_fragment_balance.h"
 #include "fast/renderer3ds/pica_surface_appearance.h"
 #include "fast/renderer3ds/pica_surface_debug.h"
 #include "fast/oot3d/grass_interaction_bridge.h"
@@ -909,6 +910,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             }
         }
         std::optional<Renderer3ds::PicaSurfaceLightingUniforms> surfaceLighting;
+        std::optional<Renderer3ds::PicaFragmentBalanceUniforms> fragmentBalance;
         const auto* environmentWorldToView = draw.LightBinding.WorldToView
             ? &*draw.LightBinding.WorldToView : nullptr;
         Oot3d::DirectionalShadowMatrix environmentViewToWorld{};
@@ -938,24 +940,31 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             // isolated draw.
             auto isolatedEnvironment = mFrameEnvironment;
             isolatedEnvironment.Enabled = false;
+            const bool balanceTitleDraw = NativePicaFragmentLightingOperand() &&
+                mFrameEnvironment.Enabled && !isolatedLighting;
+            const bool balanceWaterEligible = Renderer3ds::PicaNativeFragmentOperandWaterEligible(
+                NativePicaFragmentLightingOperand(),
+                draw.LightBinding.Water ? draw.LightBinding.Water->Count : 0U,
+                waterSurface.WorldBounds.Available, waterSurface.ReachesWater, waterSurface.WholeDraw);
+            if (balanceTitleDraw && draw.FragmentFeatures.FragmentLightingEnabled && balanceWaterEligible &&
+                Oot3d::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting) &&
+                draw.FragmentShaderHooks.ValidFor(draw.FragmentShaderSource) &&
+                draw.FragmentShaderHooks.NativeLightingCapture.Valid(draw.FragmentShaderSource.size(),
+                    draw.FragmentShaderHooks.Offset(Renderer3ds::PicaShaderHook::PicaLighting)))
+                fragmentBalance = Renderer3ds::BuildPicaFragmentBalanceUniforms(true,
+                    draw.FragmentFeatures.FragmentLighting, draw.LightBinding, mFrameEnvironment);
+            // An unqualified MM fragment profile must not fall back to adding
+            // the old demo key. Keep the no-profile native reference instead.
+            const auto& surfaceEnvironment = (isolatedLighting || (balanceTitleDraw && !fragmentBalance))
+                ? isolatedEnvironment : mFrameEnvironment;
             surfaceLighting = Renderer3ds::BuildPicaSurfaceLightingUniforms(
                 draw.TemporalVertexProgram.Hooks, booleanUniforms,
                 draw.VertexUniformBytes.subspan(Oot3d::kPicaPackedVertexFloatOffset),
-                draw.LightBinding, isolatedLighting ? isolatedEnvironment : mFrameEnvironment,
+                draw.LightBinding, surfaceEnvironment,
                 environmentWorldToView && mSurfaceLightingView ? &*mSurfaceLightingView : nullptr,
                 pointShadowHistory.Valid() ? &pointShadowAssignment : nullptr,
-                Renderer3ds::PicaNativeFragmentOperandWaterEligible(
-                    NativePicaFragmentLightingOperand(),
-                    draw.LightBinding.Water ? draw.LightBinding.Water->Count : 0U,
-                    waterSurface.WorldBounds.Available, waterSurface.ReachesWater, waterSurface.WholeDraw) &&
-                    !isolatedLighting &&
-                    Oot3d::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting) &&
-                    mFrameEnvironment.Enabled &&
-                    // Partial native fragment-light decomposition is a later step.
-                    (mFrameEnvironment.PreserveSceneBrightness ||
-                     (mFrameEnvironment.NativeLocalStrength == 0.0F &&
-                      mFrameEnvironment.NativeAmbientStrength == 0.0F)) &&
-                    draw.FragmentFeatures.FragmentLightingEnabled);
+                fragmentBalance.has_value());
+            if (!surfaceLighting || surfaceLighting->Control[0] != 0U) fragmentBalance.reset();
             if (surfaceLighting) {
                 // Relative source weights (the guide's 8-bit radiance would
                 // clip gains above one); the gain applies when GI is composed.
@@ -1257,6 +1266,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
             surfaceCandidate && surfaceDebug.ShadowCode(surfaceOrdinal) != 0U,
 #endif
+            fragmentBalance.has_value(),
         };
         static const Oot3d::EffectsSettings nativeMemoryEffects;
         bool variantCacheHit = false;
@@ -1265,6 +1275,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 variantRequest,
                 nativeMemoryOnly ? nativeMemoryEffects : graphicsSettings.Effects,
                 &variantCacheHit);
+        const bool fragmentBalanceApplied = fragmentBalance && Oot3d::HasPicaShaderInstrumentationFeature(
+            shaderVariant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::FragmentLightingBalance);
         if (surfaceLighting && !Oot3d::HasPicaShaderInstrumentationFeature(
                 shaderVariant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::FragmentLightingOperand))
             Renderer3ds::FoldPicaSurfaceMaterialForPbr(*surfaceLighting);
@@ -1391,6 +1403,14 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                     s.Lights[2].Diffuse[1], s.Lights[2].Diffuse[2], s.Lights[2].DirectionEnabled[3]);
                 record.pop_back();
                 record += material;
+            }
+            if (fragmentBalance) {
+                char balance[256];
+                std::snprintf(balance,sizeof(balance),
+                    ",\"fragmentBalance\":%u,\"balanceKeyIndex\":%u,\"referenceFillMask\":%u,\"balanceGlobalAmbientGain\":%.9g}",
+                    fragmentBalanceApplied?1U:0U,fragmentBalance->Control[1],fragmentBalance->Control[2],
+                    static_cast<double>(fragmentBalance->Parameters[0]));
+                record.pop_back();record+=balance;
             }
             surfaceDebug.Write(record);
             // An exempted candidate's native shaders, next to the trace.
@@ -2206,6 +2226,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             : std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(&toonUniforms), sizeof(toonUniforms));
         const bool uniformSurface = Oot3d::HasPicaShaderInstrumentationFeature(
             drawVariant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::NativePerPixelLighting);
+        const bool drawBalanceApplied=fragmentBalance && Oot3d::HasPicaShaderInstrumentationFeature(
+            drawVariant.AppliedFeatures,Oot3d::PicaShaderInstrumentationFeature::FragmentLightingBalance);
         const bool uniformPbr = Oot3d::HasPicaShaderInstrumentationFeature(
             drawVariant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::PbrMaterial);
         const bool uniformShadow = Oot3d::HasPicaShaderInstrumentationFeature(
@@ -2225,6 +2247,17 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 "vertex", draw.VertexUniformBytes.data(), draw.VertexUniformBytes.size());
             const bool sourceBlob = surfaceDebug.ShadowBlob(mFrameCounter, draw.SubmissionId, "fragment.glsl",
                 selectedDraw->FragmentShaderSource.data(), selectedDraw->FragmentShaderSource.size());
+            const bool nativeFragmentBlob=surfaceDebug.ShadowBlob(mFrameCounter,draw.SubmissionId,
+                "native-fragment",draw.FragmentUniformBytes.data(),draw.FragmentUniformBytes.size());
+            const bool balanceBlob=fragmentBalance && surfaceDebug.ShadowBlob(mFrameCounter,draw.SubmissionId,
+                "balance",&*fragmentBalance,sizeof(*fragmentBalance));
+            char balanceFields[192];
+            std::snprintf(balanceFields,sizeof(balanceFields),
+                ",\"native_fragment_saved\":%u,\"balance_saved\":%u,\"balance_applied\":%u",
+                nativeFragmentBlob?1U:0U,balanceBlob?1U:0U,
+                Oot3d::HasPicaShaderInstrumentationFeature(drawVariant.AppliedFeatures,
+                    Oot3d::PicaShaderInstrumentationFeature::FragmentLightingBalance)?1U:0U);
+            surfaceDebug.ShadowRecord("fragment_balance",mFrameCounter,draw.SubmissionId,balanceFields);
             const auto prepared = mPreparedShadowCasters.find(draw.SubmissionId);
             char fields[1536];
             std::snprintf(fields, sizeof(fields),
@@ -2301,7 +2334,11 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         const VkDeviceSize toonUniformSize = uniformToon
             ? toonBytes.size() : directionalShadowUniformSize;
         VkDeviceSize surfaceUniformOffset = directionalShadowUniformOffset;
-        if (uniformSurface) {
+        if (uniformSurface && drawBalanceApplied) {
+            const Renderer3ds::PicaBalancedSurfaceUniforms packed{*surfaceLighting, *fragmentBalance};
+            surfaceUniformOffset = uploadUniform(std::span<const uint8_t>(
+                reinterpret_cast<const uint8_t*>(&packed), sizeof(packed)));
+        } else if (uniformSurface) {
             // Compare host-cached state, not potentially write-combined mapped
             // upload memory. The offset belongs to this frame and arena only.
             if (!frame.SurfaceLightingUniformOffset ||
@@ -2313,7 +2350,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             surfaceUniformOffset = *frame.SurfaceLightingUniformOffset;
         }
         const VkDeviceSize surfaceUniformSize = uniformSurface
-            ? sizeof(*surfaceLighting) : directionalShadowUniformSize;
+            ? (drawBalanceApplied ? sizeof(Renderer3ds::PicaBalancedSurfaceUniforms) : sizeof(*surfaceLighting))
+            : directionalShadowUniformSize;
         const VkDeviceSize pbrUniformOffset = uniformPbr
             ? uploadUniform(std::span<const uint8_t>(
                 reinterpret_cast<const uint8_t*>(&pbrUniforms.value()), sizeof(*pbrUniforms)))

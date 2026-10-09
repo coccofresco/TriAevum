@@ -552,10 +552,11 @@ bool GenerateOot3dPicaFragmentShader(
             "pica_native_texture((fragment_uniforms.lighting_program.control.w >> 11u) & 3u, "
             "pica_texcoord0, pica_texcoord1, pica_texcoord2) : vec4(1.0))";
     }
+    Fast::Renderer3ds::PicaNativeLightingCaptureLayout lightingCapture;
     if (!GenerateOot3dPicaFragmentLightingSource(
             packet, bumpTextureSample, shadowTextureSample,
             lightingDeclarations,
-            lightingMainBody, error, purpose, parametric)) {
+            lightingMainBody, error, purpose, parametric, &lightingCapture)) {
         return false;
     }
     const bool fragmentLighting = Oot3dPicaFragmentLightingEnabled(packet);
@@ -701,6 +702,8 @@ bool GenerateOot3dPicaFragmentShader(
               "    vec4 combiner_buffer = vec4(0.0);\n"
               "    vec4 next_combiner_buffer = fragment_uniforms.combiner_buffer_color;\n"
               "    vec4 combiner_output = vec4(0.0);\n";
+    hooks.NativeLightingCapture = lightingCapture;
+    hooks.NativeLightingCapture.Rebase(StreamOffset(source));
     source << lightingMainBody;
     source << "    // OOT3D_PICA_LIGHTING_EXTENSION_POINT";
     hooks.Offsets[static_cast<size_t>(

@@ -176,13 +176,13 @@ void AssignPicaSurfaceWater(PicaSurfaceLightingUniforms& uniforms, const PicaSur
                             bool wholeDraw = false,
                             const std::array<PicaWaterRing, kPicaWaterRings>* rings = nullptr) noexcept;
 
-[[nodiscard]] std::string PicaSurfaceLightingDeclarations(bool fragmentOperand = false);
+[[nodiscard]] std::string PicaSurfaceLightingDeclarations(bool fragmentOperand = false, bool fragmentBalance = false);
 // Last of the material guide writes: a water fragment marks the guide (B at
 // 1.0, a value reflection weights never take: pica_encode_reflection_weight
 // stops at 254/255), keeping the reactive alpha; the reflection trace frames
 // the drawn water's edges by it.
 [[nodiscard]] std::string_view PicaSurfaceLightingWaterMarker() noexcept;
-[[nodiscard]] std::string PicaSurfaceLightingBody(bool fragmentOperand = false);
+[[nodiscard]] std::string PicaSurfaceLightingBody(bool fragmentOperand = false, bool fragmentBalance = false);
 // After the native TEV, before fog: water optics on a water fragment's
 // native colour (the body marks the fragment).
 [[nodiscard]] std::string_view PicaSurfaceLightingWaterShading() noexcept;

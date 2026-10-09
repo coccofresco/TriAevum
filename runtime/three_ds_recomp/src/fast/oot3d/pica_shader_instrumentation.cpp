@@ -1,3 +1,4 @@
+#include "fast/renderer3ds/pica_fragment_balance.h"
 #include "fast/oot3d/pica_shader_instrumentation.h"
 #include "fast/renderer3ds/point_shadow_map.h"
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
@@ -640,15 +641,20 @@ BuildPicaFragmentInstrumentationVariant(const PicaFragmentInstrumentationRequest
     const bool fragmentOperand = surfaceLighting && !pbr &&
         HasPicaShaderInstrumentationFeature(request.RequestedFeatures,
             PicaShaderInstrumentationFeature::FragmentLightingOperand);
+    const bool fragmentBalance = fragmentOperand &&
+        HasPicaShaderInstrumentationFeature(request.RequestedFeatures,
+            PicaShaderInstrumentationFeature::FragmentLightingBalance) &&
+        result.Hooks.NativeLightingCapture.Valid(request.Source.size(),
+            result.Hooks.Offset(PicaShaderHook::PicaLighting));
     if (surfaceLighting) {
         decisions.FragmentLightingOperand = fragmentOperand;
         decisions.Set(Decision::SurfaceLighting);
-        declarations += Renderer3ds::PicaSurfaceLightingDeclarations(fragmentOperand);
+        declarations += Renderer3ds::PicaSurfaceLightingDeclarations(fragmentOperand, fragmentBalance);
         insertions.push_back({result.Hooks.Offset(PicaShaderHook::PicaLighting),
             "\n    vec4 surface_native_primary = rounded_primary_color;\n"
             "    vec4 surface_native_fragment = primary_fragment_color;\n"
             "    vec4 surface_native_secondary = secondary_fragment_color;\n" +
-            (pbr ? pbr->UnlitInputs : std::string(Renderer3ds::PicaSurfaceLightingBody(fragmentOperand)))});
+            (pbr ? pbr->UnlitInputs : std::string(Renderer3ds::PicaSurfaceLightingBody(fragmentOperand, fragmentBalance)))});
         // Native TEV alpha may read RGB operands or DOT3_RGBA. Re-evaluate
         // that dependency chain with the original lighting; never let an
         // extension change native coverage. Dead RGB outputs are eliminated
@@ -675,6 +681,14 @@ BuildPicaFragmentInstrumentationVariant(const PicaFragmentInstrumentationRequest
         if (fragmentOperand) {
             result.FragmentKey = SaltedVariantKey(result.FragmentKey, "PICA_FRAGMENT_IRRADIANCE_V1");
             result.AppliedFeatures |= PicaShaderInstrumentationFeature::FragmentLightingOperand;
+        }
+        if (fragmentBalance) {
+            const auto& sites=result.Hooks.NativeLightingCapture;
+            insertions.push_back({sites.Begin, std::string(Renderer3ds::kPicaFragmentBalanceCaptureBegin)});
+            insertions.push_back({sites.Diffuse, std::string(Renderer3ds::kPicaFragmentBalanceCaptureDiffuse)});
+            insertions.push_back({sites.Specular, std::string(Renderer3ds::kPicaFragmentBalanceCaptureSpecular)});
+            result.FragmentKey=SaltedVariantKey(result.FragmentKey, "PICA_NATIVE_FRAGMENT_BALANCE_V1");
+            result.AppliedFeatures |= PicaShaderInstrumentationFeature::FragmentLightingBalance;
         }
         if (pbr) {
             declarations += pbr->Declarations;

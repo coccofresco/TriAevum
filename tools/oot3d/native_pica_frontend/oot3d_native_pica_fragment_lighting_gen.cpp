@@ -255,7 +255,8 @@ bool GenerateOot3dPicaFragmentLightingSource(const Oot3dPicaDrawPacket &packet,
                                              std::string &mainBody,
                                              std::string *error,
                                              Oot3dPicaShaderBuildPurpose purpose,
-                                             bool parametric) {
+                                             bool parametric, Fast::Renderer3ds::PicaNativeLightingCaptureLayout* capture) {
+  if (capture) *capture = {};
   declarations.clear();
   mainBody.clear();
   const auto lighting =
@@ -330,7 +331,17 @@ bool GenerateOot3dPicaFragmentLightingSource(const Oot3dPicaDrawPacket &packet,
   for (size_t at = body.find(uniformProgram); at != std::string::npos;
        at = body.find(uniformProgram, at + program.size()))
     body.replace(at, uniformProgram.size(), program);
+  if (capture) {
+    capture->Version = 1;
+    capture->Begin = static_cast<size_t>(source.tellp());
+    // Only the first statement changes length between literal/uniform programs.
+    const size_t beforeDiffuse = Fast::Renderer3ds::PicaLightingBodyBeforeDiffuse.size()
+        - uniformProgram.size() + program.size();
+    capture->Diffuse = capture->Begin + beforeDiffuse;
+    capture->Specular = capture->Diffuse + Fast::Renderer3ds::PicaLightingBodyBeforeSpecular.size();
+  }
   source << body;
+  if (capture) capture->End = static_cast<size_t>(source.tellp());
   source << "    pica_diffuse_sum.rgb += "
             "fragment_uniforms.lighting_global_ambient.rgb;\n"
             "    primary_fragment_color = clamp(pica_diffuse_sum, vec4(0.0), "

@@ -1,3 +1,5 @@
+#include "oot3d_native_pica_fragment_lighting_gen.h"
+#include "fast/renderer3ds/pica_lighting_program.h"
 #include "nihstro/shader_bytecode.h"
 #include "oot3d_native_pica_draw_state.h"
 #include "oot3d_native_pica_fragment_shader_gen.h"
@@ -1194,6 +1196,35 @@ int main(int argc, char** argv) {
                 restoredFrontend.PendingGspCommands().empty() &&
                 restoredFrontend.PendingDrawPackets().empty(),
             "native PICA frontend state did not survive binary round-trip");
+
+
+    {
+        using namespace Oot3dNativeGame;
+        auto packet=std::make_unique<Oot3dPicaDrawPacket>();
+        packet->Registers[0x08f]=1;packet->Registers[0x1c2]=1;
+        packet->Registers[0x1c4]=0xffffffffU;packet->Registers[0x1d9]=0x01;
+        packet->Registers[0x149]=1;packet->Registers[0x159]=1;
+        for (bool parametric:{false,true}) {
+            std::string d0,b0,d1,b1,error;
+            Fast::Renderer3ds::PicaNativeLightingCaptureLayout sites;
+            Require(GenerateOot3dPicaFragmentLightingSource(*packet,"vec4(0.0)","vec4(1.0)",
+                d0,b0,&error,Oot3dPicaShaderBuildPurpose::RuntimeDraw,parametric),error);
+            Require(GenerateOot3dPicaFragmentLightingSource(*packet,"vec4(0.0)","vec4(1.0)",
+                d1,b1,&error,Oot3dPicaShaderBuildPurpose::RuntimeDraw,parametric,&sites),error);
+            Require(d0==d1 && b0==b1,"capture metadata changed canonical GLSL bytes");
+            Require(sites.Valid(b1.size(),b1.size()),"native capture sites unavailable");
+            Require(b1.substr(sites.Diffuse,30).find("pica_diffuse_sum.rgb")!=std::string::npos,
+                "diffuse capture does not precede native accumulation");
+            Require(b1.substr(sites.Specular,31).find("pica_specular_sum.rgb")!=std::string::npos,
+                "specular capture does not follow LUT/attenuation/shadow evaluation");
+            const auto original=sites;sites.Rebase(37);
+            Require(sites.Diffuse==original.Diffuse+37 && sites.Begin==original.Begin+37,
+                "capture source rebase changed the contract");
+        }
+        uint64_t hash=14695981039346656037ULL;
+        for(unsigned char c:Fast::Renderer3ds::PicaLightingProgramBody) hash=(hash^c)*1099511628211ULL;
+        Require(hash==2600785150143357462ULL,"native lighting template differs from fixed5cf052e");
+    }
 
     std::cout << "oot3d_native_pica_frontend_tests: ok\n";
     return 0;

@@ -2,6 +2,7 @@
 
 #include "oot3d_native_pica_frontend.h"
 #include "oot3d/renderer/pica_render_backend.h"
+#include "fast/renderer3ds/pica_shader_hooks.h"
 
 #include <array>
 #include <string>
@@ -49,6 +50,7 @@ bool GenerateOot3dPicaFragmentLightingSource(const Oot3dPicaDrawPacket &packet,
                                              std::string &mainBody,
                                              std::string *error = nullptr,
                                              Oot3dPicaShaderBuildPurpose purpose = Oot3dPicaShaderBuildPurpose::RuntimeDraw,
-                                             bool parametric = false);
+                                             bool parametric = false,
+                                              Fast::Renderer3ds::PicaNativeLightingCaptureLayout* capture = nullptr);
 
 } // namespace Oot3dNativeGame

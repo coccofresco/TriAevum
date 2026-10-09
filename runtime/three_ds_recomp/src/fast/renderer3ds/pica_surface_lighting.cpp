@@ -1,3 +1,4 @@
+#include "fast/renderer3ds/pica_fragment_balance.h"
 #include "fast/renderer3ds/pica_surface_lighting.h"
 
 #include <algorithm>
@@ -340,7 +341,7 @@ uint32_t ExcludePicaSceneDirectionalsLitNatively(
     return removed;
 }
 
-std::string PicaSurfaceLightingDeclarations(bool fragmentOperand) {
+std::string PicaSurfaceLightingDeclarations(bool fragmentOperand, bool fragmentBalance) {
     return std::string(R"glsl(
 layout(location=9) in vec3 pica_surface_normal;
 layout(location=10) in vec4 pica_surface_tint;
@@ -384,7 +385,10 @@ layout(set=0,binding=16,std140) uniform PicaSurfaceLighting {
     vec4 water_ripples;
     vec4 water_flow;
     vec4 water_rings[16];
-} pica_surface;
+)glsl") + (fragmentBalance ? std::string(R"glsl(    uvec4 balance_control;
+    vec4 balance_gains[8];
+    vec4 balance_parameters;
+)glsl") : std::string{}) + std::string(R"glsl(} pica_surface;)glsl") + (fragmentBalance ? std::string("\nvec3 pica_balance_ambient = vec3(0.0);\n") : std::string{}) + std::string(R"glsl(
 vec3 pica_surface_water_world = vec3(0.0);
 float pica_surface_water_footprint = 0.0;
 // The water face: its world normal (up on a body's plane) and tangent frame
@@ -485,7 +489,7 @@ vec3 pica_surface_unit(vec3 value) {
     return squared > 1.0e-20 ? value * inversesqrt(squared) : vec3(0.0);
 }
 vec3 pica_surface_resolved_ambient(vec3 native_ambient) {
-    return native_ambient * pica_surface.environment_parameters.y + pica_surface.environment_ambient.rgb;
+)glsl") + (fragmentBalance ? std::string("    return pica_balance_ambient;\n") : std::string{}) + std::string(R"glsl(    return native_ambient * pica_surface.environment_parameters.y + pica_surface.environment_ambient.rgb;
 }
 vec3 pica_surface_shadow(int slot);
 float pica_point_shadow(float slot, vec3 light_to_fragment, float radius);
@@ -685,7 +689,7 @@ vec3 pica_surface_native_primary(vec3 normal_view) {
 // lights, Navi and fairies), shadowed. Ambient and the added fill are never
 // sources: OoT bakes its fill light into the native colour.
 vec3 pica_surface_gi_direct(vec3 normal_view) {
-    // PICA lighting is gamma encoded: a linear weight w is w^(1/2.2) here.
+)glsl") + (fragmentBalance ? std::string("    return vec3(0.0); // Preserve the native fragment route's unseeded GI.\n") : std::string{}) + std::string(R"glsl(    // PICA lighting is gamma encoded: a linear weight w is w^(1/2.2) here.
     vec3 weight = pow(max(pica_surface.gi_sources.xyz, vec3(0.0)), vec3(1.0 / 2.2));
     vec3 native_direct = vec3(0.0);
     bool native_enabled = pica_surface.environment_parameters.w == 0.0 ||
@@ -878,7 +882,7 @@ vec3 pica_surface_water_shade(vec3 native_rgb, vec3 sky) {
         specular += pica_surface_water_specular(normal, view_dir,
             pica_surface_unit(pica_surface.scene_directions[slot].xyz),
             pica_surface.scene_directional_colors[slot].rgb * pica_surface_shadow(10 + int(slot)));
-    if (pica_surface.environment_parameters.w != 0.0) {
+)glsl") + (fragmentBalance ? std::string{} : std::string(R"glsl(    if (pica_surface.environment_parameters.w != 0.0) {
         for (int slot = 0; slot < 2; ++slot) {
             if (pica_surface.environment_directions[slot].w <= 0.0) continue;
             specular += pica_surface_water_specular(normal, view_dir,
@@ -887,7 +891,7 @@ vec3 pica_surface_water_shade(vec3 native_rgb, vec3 sky) {
                     pica_surface_shadow(8 + slot));
         }
     }
-    for (uint slot = 0u; slot < pica_surface.control.y; ++slot) {
+)glsl")) + std::string(R"glsl(    for (uint slot = 0u; slot < pica_surface.control.y; ++slot) {
         vec3 direction, radiance;
         pica_surface_scene_point(int(slot), direction, radiance);
         specular += pica_surface_water_specular(normal, view_dir, direction, radiance);
@@ -916,8 +920,8 @@ std::string_view PicaSurfaceLightingWaterMarker() noexcept {
 )glsl";
 }
 
-std::string PicaSurfaceLightingBody(bool fragmentOperand) {
-    return std::string(R"glsl(
+std::string PicaSurfaceLightingBody(bool fragmentOperand, bool fragmentBalance) {
+    const std::string water = std::string(R"glsl(
     bool surface_water = pica_surface_water(cross(dFdx(pica_view), dFdy(pica_view)));
     pica_surface_water_fragment = surface_water;
     pica_surface_water_footprint = length(fwidth(pica_view)) * length(pica_surface.view_to_world_linear[0].xyz);
@@ -960,7 +964,9 @@ std::string PicaSurfaceLightingBody(bool fragmentOperand) {
             }
         }
     }
-)glsl") +
+)glsl");
+    if (fragmentBalance) return water + std::string(kPicaFragmentBalanceBody);
+    return water +
         (fragmentOperand ? std::string(R"glsl(    bool surface_fragment_operand = (pica_surface.control.w & 2u) != 0u && !surface_water;
     // Exact all-native-off endpoint. Canonical inputs were saved before this
     // body, so native TEV alpha replay still uses the original RGB/alpha.

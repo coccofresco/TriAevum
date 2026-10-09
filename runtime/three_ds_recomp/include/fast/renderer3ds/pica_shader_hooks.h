@@ -110,6 +110,22 @@ constexpr PicaShaderSemantic& operator|=(PicaShaderSemantic& left, PicaShaderSem
     return left;
 }
 
+// Versioned optional capture sites owned by the native lighting emitter.
+// Offsets name statement boundaries in the unchanged canonical source.
+// This extension is not part of the legacy schema/key; absent on old packs.
+struct PicaNativeLightingCaptureLayout {
+    uint32_t Version = 0;
+    size_t Begin = 0, Diffuse = 0, Specular = 0, End = 0;
+    bool Valid(size_t sourceSize, size_t lightingEnd) const noexcept {
+        return Version == 1 && Begin < Diffuse && Diffuse < Specular &&
+               Specular < End && End <= lightingEnd && lightingEnd <= sourceSize;
+    }
+    void Rebase(size_t offset) noexcept {
+        if (Version == 1) { Begin += offset; Diffuse += offset; Specular += offset; End += offset; }
+    }
+    bool operator==(const PicaNativeLightingCaptureLayout&) const = default;
+};
+
 struct PicaShaderHookLayout {
     static constexpr size_t Unavailable = static_cast<size_t>(-1);
 
@@ -120,6 +136,7 @@ struct PicaShaderHookLayout {
     uint8_t SampledTextureMask = 0U;
     std::array<PicaTextureSampleLayout, 3U> TextureSamples{};
     PicaFragmentOutputContract Outputs;
+    PicaNativeLightingCaptureLayout NativeLightingCapture;
 
     PicaShaderHookLayout() noexcept {
         Offsets.fill(Unavailable);

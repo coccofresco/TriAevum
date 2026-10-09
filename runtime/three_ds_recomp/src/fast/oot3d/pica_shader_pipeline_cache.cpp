@@ -131,6 +131,11 @@ PicaShaderInstrumentationFeature ResolvePicaDrawInstrumentationFeatures(
         features |= PicaShaderInstrumentationFeature::NativePerPixelLighting;
         if (request.FragmentLightingOperand && UsesFullSceneLighting(effects.SurfaceLighting))
             features |= PicaShaderInstrumentationFeature::FragmentLightingOperand;
+        if (request.FragmentLightingOperand && request.FragmentLightingBalance &&
+            UsesFullSceneLighting(effects.SurfaceLighting) && request.Pbr.TextureSlot >= 3U &&
+            request.FragmentShaderHooks.NativeLightingCapture.Valid(request.FragmentShaderSource.size(),
+                request.FragmentShaderHooks.Offset(PicaShaderHook::PicaLighting)))
+            features |= PicaShaderInstrumentationFeature::FragmentLightingBalance;
         if (UsesPbrMaterials(effects.SurfaceLighting) && request.Pbr.TextureSlot < 3U)
             features |= PicaShaderInstrumentationFeature::PbrMaterial;
     }
@@ -539,6 +544,18 @@ class PicaShaderPipelineCache::Impl final {
                         request.FragmentShaderHooks.SamplesTexture(0U);
                     // Re-key derived variants without invalidating references
                     // held by draws already recorded in the current frame.
+                    entry->Identity = NextCanonicalIdentity++;
+                }
+                if (request.FragmentLightingBalance &&
+                    request.FragmentShaderHooks.ValidFor(request.FragmentShaderSource) &&
+                    request.FragmentShaderHooks.NativeLightingCapture.Valid(request.FragmentShaderSource.size(),
+                        request.FragmentShaderHooks.Offset(PicaShaderHook::PicaLighting)) &&
+                    !entry->Result.CanonicalFragmentHooks.NativeLightingCapture.Valid(request.FragmentShaderSource.size(),
+                        entry->Result.CanonicalFragmentHooks.Offset(PicaShaderHook::PicaLighting))) {
+                    // An old pack can have valid legacy hooks but no component
+                    // sites. Upgrade this optional contract only for its user.
+                    entry->Result.CanonicalFragmentHooks.NativeLightingCapture =
+                        request.FragmentShaderHooks.NativeLightingCapture;
                     entry->Identity = NextCanonicalIdentity++;
                 }
                 ++CanonicalHits;

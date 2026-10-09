@@ -2,6 +2,7 @@
 #include <array>
 #include <cstdint>
 #include <string_view>
+#include <string>
 
 namespace Fast::Renderer3ds {
 // std140 payload. LUT support is resolved by the canonical register decoder,
@@ -89,7 +90,7 @@ float pica_program_lut(PicaLightingProgram p, int sampler_index, int table_index
 }
 )glsl";
 
-inline constexpr std::string_view PicaLightingProgramBody = R"glsl(
+inline constexpr std::string_view PicaLightingBodyBeforeDiffuse = R"glsl(
     PicaLightingProgram lp = fragment_uniforms.lighting_program;
     for (uint slot = 0u; slot < lp.control.x; ++slot) {
         uint i = lp.lights[slot].x;
@@ -145,14 +146,27 @@ inline constexpr std::string_view PicaLightingProgramBody = R"glsl(
         }
         vec3 diffuse = fragment_uniforms.lighting_diffuse[i].rgb * ndotl;
         if ((lp.control.w & 2u) != 0u && (flags & 16u) != 0u) diffuse *= pica_shadow_factor.rgb;
-        pica_diffuse_sum.rgb += diffuse * attenuation + fragment_uniforms.lighting_ambient[i].rgb * attenuation;
+)glsl";
+inline constexpr std::string_view PicaLightingBodyBeforeSpecular = R"glsl(        pica_diffuse_sum.rgb += diffuse * attenuation + fragment_uniforms.lighting_ambient[i].rgb * attenuation;
         vec3 specular = (s0 + s1) * highlight * attenuation;
         if ((lp.control.w & 4u) != 0u && (flags & 16u) != 0u) specular *= pica_shadow_factor.rgb;
-        pica_specular_sum.rgb += specular;
+)glsl";
+inline constexpr std::string_view PicaLightingBodyAfterSpecular = R"glsl(        pica_specular_sum.rgb += specular;
     }
     if ((lp.control.w & 8u) != 0u) {
         if ((lp.control.z & 1u) != 0u) pica_diffuse_sum.a *= pica_shadow_factor.a;
         if ((lp.control.z & 2u) != 0u) pica_specular_sum.a *= pica_shadow_factor.a;
     }
 )glsl";
+inline constexpr auto kPicaLightingBodyBytes = [] {
+    std::array<char, PicaLightingBodyBeforeDiffuse.size() + PicaLightingBodyBeforeSpecular.size() +
+        PicaLightingBodyAfterSpecular.size()> bytes{};
+    size_t cursor = 0;
+    for (auto part : std::array{PicaLightingBodyBeforeDiffuse, PicaLightingBodyBeforeSpecular,
+                               PicaLightingBodyAfterSpecular})
+        for (char byte : part) bytes[cursor++] = byte;
+    return bytes;
+}();
+inline constexpr std::string_view PicaLightingProgramBody{
+    kPicaLightingBodyBytes.data(), kPicaLightingBodyBytes.size()};
 } // namespace Fast::Renderer3ds

@@ -68,6 +68,7 @@ struct PicaShaderPipelineRequest {
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
     bool ShadowProbe = false;
 #endif
+    bool FragmentLightingBalance = false;
 };
 
 struct PicaShaderPipelineResult {

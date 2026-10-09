@@ -46,6 +46,7 @@ enum class PicaShaderInstrumentationFeature : uint32_t {
     // (renderer3ds/pica_geometry_guide.h), from every depth-writing draw.
     FaceNormalGuide = 1U << 17U,
     FragmentLightingOperand = 1U << 18U,
+    FragmentLightingBalance = 1U << 20U,
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
     ShadowProbe = 1U << 19U,
 #endif
