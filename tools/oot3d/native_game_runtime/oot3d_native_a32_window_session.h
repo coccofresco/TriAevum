@@ -323,6 +323,8 @@ private:
   std::optional<Oot3dNativeGame::NativeScenarioBootstrap> scenarioBootstrap;
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
   // F1 > Dev Tools warping (developer builds only).
+  std::shared_ptr<Oot3dNativeGame::DevWarpTitleAbi> devToolsTitle;
+  bool devFreeCameraOwnedInput = false;
   std::shared_ptr<Oot3dNativeGame::DevWarpRuntime> devWarp;
   std::unique_ptr<Oot3dNativeGame::DevWarpGuest> devWarpGuest;
   // TRIAEVUM_DEV_FREECAM_TOUR="f,r,u,yaw,pitch;...": free camera poses
@@ -394,6 +396,9 @@ private:
   NativeWidescreenProjectionState widescreenProjection;
   std::optional<ScopedA32BlockTraceWriter> blockTraceWriterStorage;
   std::vector<uint32_t> blockEntryHooks{};
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+  std::optional<Oot3dNativeGame::A32ReadProbeSet> readProbes;
+#endif
   std::span<const uint32_t> picaCompositionHooks{};
   std::span<const uint32_t> typedGameplayObservableExitHooks{};
   // Resolved from the process image's code.bin (triaevum_title_adapter.h).

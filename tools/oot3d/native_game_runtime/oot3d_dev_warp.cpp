@@ -84,7 +84,8 @@ std::string Hex4(uint32_t value) {
 
 } // namespace
 
-DevWarpRuntime::DevWarpRuntime(std::filesystem::path storage) : mStorage(std::move(storage)) { Load(); }
+DevWarpRuntime::DevWarpRuntime(std::filesystem::path storage, std::shared_ptr<DevWarpTitleAbi> title)
+    : mTitle(std::move(title)), mStorage(std::move(storage)) { Load(); }
 
 DevWarpStatus DevWarpRuntime::Status() const {
   std::scoped_lock lock(mMutex);
@@ -93,6 +94,7 @@ DevWarpStatus DevWarpRuntime::Status() const {
 
 DevWarpAvailability DevWarpRuntime::Check(const DevWarpEntrance &entrance) const {
   std::scoped_lock lock(mMutex);
+  if (mTitle) return mTitle->Check(entrance, mEntranceTable);
   DevWarpAvailability result;
   if (mEntranceTable.empty()) return result;
   result.Known = true;
@@ -232,6 +234,7 @@ void DevWarpRuntime::SetOptions(const DevWarpScreenOptions &options) {
 }
 
 bool DevWarpRuntime::Observe(DevWarpGuest &guest, uint32_t playState, int16_t *pendingEntrance) {
+  if (mTitle) return mTitle->Observe(guest, playState, mStatus.Observation, *pendingEntrance, mPlayerActor);
   DevWarpObservation observation;
   *pendingEntrance = -1;
   int32_t cutscene = 0;
@@ -274,6 +277,10 @@ bool DevWarpRuntime::Observe(DevWarpGuest &guest, uint32_t playState, int16_t *p
 }
 
 bool DevWarpRuntime::ReadEntranceTable(DevWarpGuest &guest) {
+  if (mTitle) {
+    mStatus.EntranceTableRead = mTitle->ReadEntranceTable(guest, mEntranceTable);
+    return mStatus.EntranceTableRead;
+  }
   std::vector<uint8_t> bytes(kEntranceCount * 4U);
   if (!guest.Read(kEntranceTable, bytes)) return false;
   // Row 0 is the Deku Tree entrance: scene 0, spawn 0. Anything else means
@@ -292,6 +299,12 @@ bool DevWarpRuntime::Apply(DevWarpGuest &guest, uint32_t playState, const Reques
     if (error != nullptr) *error = what;
     return false;
   };
+  if (mTitle) {
+    if (request.Type == Kind::Grotto) return fail("This title has no OoT grotto ABI");
+    return mTitle->Apply(guest, playState, request.Entrance,
+                        request.Type == Kind::WarpPoint ? &request.Point : nullptr,
+                        request.Age, request.Night, error);
+  }
   // SoH's Debug Warp Screen sets the age and the time of day it shows. In
   // play the age changes the native way, through the PlayState's
   // linkAgeOnLoad (as SoH's SwitchAge): the game applies it when the scene
@@ -346,6 +359,12 @@ bool DevWarpRuntime::Apply(DevWarpGuest &guest, uint32_t playState, const Reques
 }
 
 void DevWarpRuntime::Report(DevWarpGuest &guest, const char *event, uint64_t guestFrame) {
+  if (mTitle) {
+    const auto& o = mStatus.Observation;
+    std::fprintf(stderr, "TRIAEVUM_DEV_WARP %s frame=%llu scene=%d entrance=0x%04X player=%d\n",
+                 event, static_cast<unsigned long long>(guestFrame), o.Scene, o.Entrance, o.Player);
+    return;
+  }
   // Developer log: what the warp observed, for checking it outside the menu.
   // +0x10 is reported for the night state SoH also writes (N64 nightFlag).
   int16_t health = 0;
@@ -368,6 +387,7 @@ void DevWarpRuntime::Report(DevWarpGuest &guest, const char *event, uint64_t gue
 
 void DevWarpRuntime::Advance(DevWarpGuest &guest, uint32_t playState, uint64_t guestFrame) {
   std::scoped_lock lock(mMutex);
+  if (mTitle) playState = mTitle->PlayStateAddress(guest);
   int16_t pendingEntrance = -1;
   const bool observed = Observe(guest, playState, &pendingEntrance);
   if (observed && mEntranceTable.empty() && mStatus.Observation.Gameplay) ReadEntranceTable(guest);
@@ -410,7 +430,8 @@ void DevWarpRuntime::Advance(DevWarpGuest &guest, uint32_t playState, uint64_t g
     }
     if (!mArrived) {
       if (mSawTransition && pendingEntrance < 0 && observation.Scene == mActive->Scene &&
-          observation.Player) {
+          observation.Player && (!mTitle || mTitle->Arrived(observation, mActive->Entrance,
+              mActive->Type == Kind::WarpPoint && !mActive->Point.UseSceneEntrance))) {
         mStatus.Phase = DevWarpPhase::Arrived;
         mArrived = true;
         mReportFrames = kReportFrames;
@@ -453,7 +474,7 @@ void DevWarpRuntime::Advance(DevWarpGuest &guest, uint32_t playState, uint64_t g
   mRequestFrame = guestFrame;
   mSawTransition = false;
   mArrived = false;
-  mCancelVoidDamage = request.Type == Kind::WarpPoint && !request.Point.UseSceneEntrance;
+  mCancelVoidDamage = !mTitle && request.Type == Kind::WarpPoint && !request.Point.UseSceneEntrance;
   mStatus.Phase = DevWarpPhase::Requested;
   mStatus.Message = "Warping to " + request.Label + " (entrance " + Hex4(request.Entrance) + ")...";
   mActive = std::move(request);

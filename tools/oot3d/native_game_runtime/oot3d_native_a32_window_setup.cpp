@@ -1,5 +1,8 @@
 // Native A32 window session: setup (process image, host services, renderer, UI, initial state).
 #include "oot3d_native_a32_window_session.h"
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+#include "mm3d_dev_camera_hook.h"
+#endif
 #include "oot3d_native_a32_romfs_overlay.h"
 
 namespace Oot3dA32Window {
@@ -387,6 +390,9 @@ void NativeA32WindowSession::Setup() {
     widescreenProjection.Projection.FrustumIsSceneView = false;
     widescreenProjection.Mm3dCompositionTracker = &mm3dCompositionTracker;
     sceneViewProbe.UseExternalSceneEnvironment();
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+    if (!devToolsTitle) devToolsTitle = std::make_shared<Oot3dNativeGame::Mm3dDevTools>();
+#endif
     if (mm3dGuestPatches.Empty()) {
       // dekui's settings: its shipped defaults, or (development) a
       // presentation.json given by TRIAEVUM_MM3D_PRESENTATION, until the F1
@@ -406,6 +412,9 @@ void NativeA32WindowSession::Setup() {
         return static_cast<std::int64_t>(presentationFrameCount) * 1000000 / 60;
       });
       mm3dSingleScreen->Register(mm3dGuestPatches);
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+      Oot3dNativeGame::RegisterMm3dDevCamera(mm3dGuestPatches, devToolsTitle, nativeCandidateDispatch.DevFreeCamera);
+#endif
       mm3dGuestCalls.Install(mm3dGuestPatches);
       mm3dRestoration.emplace(mm3dGuestCalls);
       mm3dRestoration->Register(mm3dGuestPatches);
@@ -453,6 +462,23 @@ void NativeA32WindowSession::Setup() {
     widescreenProjection.PcDumpDone = false;
     callTraceEntries.push_back(widescreenProjection.PcDumpAddress);
   }
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+  if (const char *probe = std::getenv("TRIAEVUM_A32_PROBE"); probe != nullptr && *probe != '\0') {
+    const std::string spec = probe;
+    const auto comma = spec.rfind(',');
+    if (comma == std::string::npos)
+      throw std::runtime_error("TRIAEVUM_A32_PROBE: expected SPEC.json,OUT.jsonl");
+    std::ifstream file(spec.substr(0, comma));
+    if (!file) throw std::runtime_error("TRIAEVUM_A32_PROBE: cannot read " + spec.substr(0, comma));
+    const std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    readProbes = Oot3dNativeGame::A32ReadProbeSet::Parse(text);
+    widescreenProjection.ReadProbeOut = std::fopen(spec.substr(comma + 1).c_str(), "w");
+    if (widescreenProjection.ReadProbeOut == nullptr)
+      throw std::runtime_error("TRIAEVUM_A32_PROBE: cannot write " + spec.substr(comma + 1));
+    widescreenProjection.ReadProbes = &*readProbes;
+    for (const uint32_t pc : readProbes->Pcs()) callTraceEntries.push_back(pc);
+  }
+#endif
   if (!callTraceEntries.empty()) {
     blockEntryHooks.insert(blockEntryHooks.end(), callTraceEntries.begin(), callTraceEntries.end());
     std::sort(blockEntryHooks.begin(), blockEntryHooks.end());
@@ -648,6 +674,8 @@ void NativeA32WindowSession::Setup() {
       launch.ProfileA32Blocks || widescreenProjection.TraceA32Blocks
           ? std::span<const uint32_t>{}
           : std::span<const uint32_t>{blockEntryHooks};
+  // The free camera outlives this reset: MM3D's camera site already holds it.
+  auto devFreeCamera = std::move(nativeCandidateDispatch.DevFreeCamera);
   nativeCandidateDispatch = NativeCandidateDispatchState{
       &ApplyNativeWidescreenProjectionPolicy,
       &widescreenProjection,
@@ -667,6 +695,7 @@ void NativeA32WindowSession::Setup() {
       enableTrueAot,
       launch.ProfileA32Runtime,
   };
+  nativeCandidateDispatch.DevFreeCamera = std::move(devFreeCamera);
   nativeCandidateDispatch.TopScreenUiProfile =
       launch.UiProfile == Oot3dNativeGame::Oot3dUiProfile::TopScreen;
   widescreenProjection.TopScreenInput =
@@ -731,6 +760,14 @@ void NativeA32WindowSession::Setup() {
         mm3dRestoration->ApplyDataPatches(process.Memory());
       }
       mm3dGuestPatches.Verify(process.Memory(), &Oot3dNativeGame::Oot3dNativeA32Registry());
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+      // Which sites stayed off, for agents reading the log.
+      for (const auto &site : mm3dGuestPatches.Statistics())
+        if (!site.Enabled)
+          std::fprintf(stderr, "TRIAEVUM_MM3D_PATCH_DISABLED %s pc=0x%08X mismatch=0x%08X missing_block=%d prepared=%d\n",
+                       site.Name.c_str(), site.Pc, site.MismatchAddress.value_or(0U), site.MissingBlock ? 1 : 0,
+                       site.Prepared ? 1 : 0);
+#endif
       process.SetNativeFunctionCallback(&Oot3dNativeGame::Mm3dGuestPatches::Execute,
                                         &mm3dGuestPatches, mm3dGuestPatches.EnabledPcs());
 #endif
@@ -882,10 +919,11 @@ void NativeA32WindowSession::Setup() {
       Oot3dNativeGame::CreateSavestatePanel(savestateLibrary));
   applicationSettingsTabs.push_back(Oot3dNativeGame::CreateGameLanguagePanel(languageSettings));
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
-  // Warp menu and free camera: OoT3D's scenes and camera only.
-  if (titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur) {
+  // Shared developer tools; guest ABI and catalog are supplied by the title.
+  if (titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur || devToolsTitle) {
   devWarp = std::make_shared<Oot3dNativeGame::DevWarpRuntime>(
-      std::filesystem::path(launch.Host.ConfigurationPath).parent_path() / "developer-tools.json");
+      std::filesystem::path(launch.Host.ConfigurationPath).parent_path() /
+          (devToolsTitle ? "developer-tools-mm3d.json" : "developer-tools.json"), devToolsTitle);
   applicationSettingsTabs.push_back(
       Oot3dNativeGame::CreateDevToolsPanel(devWarp, nativeCandidateDispatch.DevFreeCamera,
                                            languageSettings->BootLanguage()));
@@ -902,7 +940,20 @@ void NativeA32WindowSession::Setup() {
     nativeCandidateDispatch.DevFreeCamera->SetPose(eye, yaw, pitch);
     std::fprintf(stderr, "TRIAEVUM_DEV_FREECAM pose=%.1f,%.1f,%.1f yaw=%.1f pitch=%.1f\n", eye[0], eye[1], eye[2], yaw, pitch);
   }
-  if (const char *script = std::getenv("TRIAEVUM_DEV_WARP")) {
+  if (devToolsTitle) {
+    if (const char* script = std::getenv("TRIAEVUM_DEV_WARP")) {
+      // Stable encoded entrance, e.g. mm3d:0xD600. No OoT list-index ambiguity.
+      const std::string spec(script);
+      if (!spec.starts_with("mm3d:")) throw std::runtime_error("MM3D TRIAEVUM_DEV_WARP must be mm3d:<encoded entrance>");
+      size_t used = 0;
+      const auto entrance = std::stoul(spec.substr(5), &used, 0);
+      if (used != spec.size()-5 || entrance > 0xFFFF) throw std::runtime_error("Invalid MM3D entrance");
+      const auto entries = devWarp->Entrances();
+      const auto found = std::find_if(entries.begin(), entries.end(), [&](const auto& e) { return e.Entrance == entrance; });
+      if (found == entries.end()) throw std::runtime_error("MM3D entrance is absent from the catalog");
+      devWarp->WarpTo(*found, Oot3dNativeGame::DevWarpAge::Child, std::nullopt);
+    }
+  } else if (const char *script = std::getenv("TRIAEVUM_DEV_WARP")) {
     int scene = -1, entrance = -1;
     char age[8]{}, time[8]{};
     const auto scenes = Oot3dNativeGame::DevWarpBetterScenes();

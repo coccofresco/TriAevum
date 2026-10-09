@@ -16,6 +16,9 @@
 #include "oot3d_game_language_panel.h"
 #include "oot3d_graphics_settings_schedule.h"
 #include "oot3d_scene_environment.h"
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+#include "native_a32_read_probe.h"
+#endif
 #ifdef OOT3D_WHOLE_AOT_PRODUCT_MODE
 #include "oot3d_native_crash_diagnostics.h"
 #endif
@@ -494,6 +497,12 @@ struct NativeWidescreenProjectionState {
   std::vector<std::pair<uint32_t, uint32_t>> PcDumpRanges;
   bool PcDumpDone = true;
   uint64_t BlockTraceRecordsObserved = 0;
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+  // TRIAEVUM_A32_PROBE=SPEC.json,OUT.jsonl: read probes at listed code
+  // addresses (native_a32_read_probe.h), for adapter bring-up.
+  Oot3dNativeGame::A32ReadProbeSet *ReadProbes = nullptr;
+  std::FILE *ReadProbeOut = nullptr;
+#endif
   Oot3dNativeGame::NativeA32Memory *TraceMemory = nullptr;
   Oot3dNativeGame::NativeHdFontRuntime *HdFonts = nullptr;
   std::deque<A32BlockTraceRecord> BlockTrace;

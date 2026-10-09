@@ -2349,7 +2349,8 @@ void NativeA32WindowSession::UpdateDevFreeCamera(Oot3dNativeGame::NativeA32Input
   const auto &io = ImGui::GetIO();
   const bool keyboard = keys != nullptr && !io.WantCaptureKeyboard;
   const bool toggle = keyboard && keys[SDL_SCANCODE_F6] != 0U;
-  if (toggle && !devFreeCameraToggleHeld) freeCamera.SetActive(!freeCamera.Active());
+  if (toggle && !devFreeCameraToggleHeld && (!devToolsTitle || devToolsTitle->CameraAvailable()))
+    freeCamera.SetActive(!freeCamera.Active());
   devFreeCameraToggleHeld = toggle;
   const auto now = std::chrono::steady_clock::now();
   const float seconds = devFreeCameraLastRefresh.time_since_epoch().count() == 0
@@ -2363,6 +2364,13 @@ void NativeA32WindowSession::UpdateDevFreeCamera(Oot3dNativeGame::NativeA32Input
   const float mouseY = static_cast<float>(sources.DevMouseDeltaY);
   sources.DevMouseDeltaX = sources.DevMouseDeltaY = 0;
   if (!freeCamera.Active()) return;
+  if (devToolsTitle) {
+    if (!devWarpGuest) devWarpGuest = Oot3dNativeGame::MakeDevWarpProcessGuest(*processStorage);
+    const bool owns = devToolsTitle->CameraOwnsInput(*devWarpGuest);
+    if (!owns && devFreeCameraOwnedInput) freeCamera.ResetToGame();
+    devFreeCameraOwnedInput = owns;
+    if (!owns) return;
+  }
   // Pad: left stick moves, right stick looks (120 degrees per second), L/R
   // shoulders down/up.
   float forward = sources.DevPadLeftStick[1];

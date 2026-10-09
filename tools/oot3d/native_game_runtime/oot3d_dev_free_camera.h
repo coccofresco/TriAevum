@@ -79,7 +79,7 @@ public:
   // Guest side, at the main camera's Camera_Update: the view to write, the
   // first time taken from the game's own eye and at.
   [[nodiscard]] std::optional<DevFreeCameraView> ResolveView(const std::array<float, 3> &gameEye,
-                                                             const std::array<float, 3> &gameAt) {
+                                                             const std::array<float, 3> &gameAt, bool commit = true) {
     std::scoped_lock lock(mMutex);
     if (!mActive) return std::nullopt;
     if (!mInitialized) {
@@ -96,9 +96,13 @@ public:
     for (size_t axis = 0; axis < 3; ++axis) view.At[axis] = mEye[axis] + f[axis] * kLookDistance;
     view.Yaw = static_cast<int16_t>(std::lround(mYaw * 32768.0F / 180.0F));
     view.Pitch = static_cast<int16_t>(std::lround(mPitch * 32768.0F / 180.0F));
+    if (commit) { mLast = view; ++mApplied; }
+    return view;
+  }
+  void MarkApplied(const DevFreeCameraView& view) {
+    std::scoped_lock lock(mMutex);
     mLast = view;
     ++mApplied;
-    return view;
   }
   // How many times the game took the free view (main camera updates): a
   // cutscene camera, such as a scene's intro, does not count.

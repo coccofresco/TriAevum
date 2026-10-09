@@ -36,6 +36,7 @@ class DevToolsPanel final : public Fast::Oot3d::GraphicsSettingsPanelTab {
  private:
   void DrawFreeCamera() {
     ImGui::SeparatorText("Free camera");
+    ImGui::BeginDisabled(!mWarp->CameraAvailable());
     bool active = mFreeCamera->Active();
     if (ImGui::Checkbox("Free camera (F6)", &active)) mFreeCamera->SetActive(active);
     Tooltip("A camera detached from Link: the game draws from it and Link stays still. "
@@ -48,6 +49,8 @@ class DevToolsPanel final : public Fast::Oot3d::GraphicsSettingsPanelTab {
     ImGui::BeginDisabled(!active);
     if (ImGui::Button("Back to the game's view")) mFreeCamera->ResetToGame();
     ImGui::EndDisabled();
+    ImGui::EndDisabled();
+    if (!mWarp->CameraAvailable()) ImGui::TextDisabled("Free camera is awaiting gameplay validation.");
     if (const auto view = mFreeCamera->LastView())
       ImGui::TextDisabled("Eye %.1f, %.1f, %.1f", view->Eye[0], view->Eye[1], view->Eye[2]);
   }
@@ -67,7 +70,7 @@ class DevToolsPanel final : public Fast::Oot3d::GraphicsSettingsPanelTab {
     const bool translate = options.Translation;
     const DevWarpEntrance *target = nullptr;
     if (options.Better) {
-      const auto scenes = DevWarpBetterScenes();
+      const auto scenes = mWarp->Scenes();
       options.BetterScene = std::clamp(options.BetterScene, 0, static_cast<int>(scenes.size()) - 1);
       const auto &scene = scenes[static_cast<size_t>(options.BetterScene)];
       if (ImGui::BeginListBox("##BetterScenes", ImVec2(-FLT_MIN, ImGui::GetTextLineHeightWithSpacing() * 12.0F))) {
@@ -81,7 +84,7 @@ class DevToolsPanel final : public Fast::Oot3d::GraphicsSettingsPanelTab {
         }
         ImGui::EndListBox();
       }
-      const auto entrances = DevWarpBetterEntrances().subspan(scene.First, scene.Count);
+      const auto entrances = mWarp->Entrances().subspan(scene.First, scene.Count);
       options.BetterEntrance = std::clamp(options.BetterEntrance, 0, static_cast<int>(entrances.size()) - 1);
       target = &entrances[static_cast<size_t>(options.BetterEntrance)];
       if (ImGui::BeginCombo("Entrance", Name(*target, translate))) {
@@ -98,18 +101,22 @@ class DevToolsPanel final : public Fast::Oot3d::GraphicsSettingsPanelTab {
         }
         ImGui::EndCombo();
       }
+      if (!mWarp->HasTitleAbi()) {
       int age = options.Age == DevWarpAge::Adult ? 0 : 1;
       ImGui::RadioButton("Child", &age, 1);
       ImGui::SameLine();
       ImGui::RadioButton("Adult", &age, 0);
       options.Age = age == 0 ? DevWarpAge::Adult : DevWarpAge::Child;
+      }
+      if (!mWarp->HasTitleAbi()) {
       int night = options.Night ? 1 : 0;
       ImGui::RadioButton("Day", &night, 0);
       ImGui::SameLine();
       ImGui::RadioButton("Night", &night, 1);
       options.Night = night != 0;
+      } else ImGui::TextDisabled("Current day, time and form are preserved.");
     } else {
-      const auto scenes = DevWarpVanillaEntrances();
+      const auto scenes = mWarp->VanillaEntrances();
       options.VanillaScene = std::clamp(options.VanillaScene, 0, static_cast<int>(scenes.size()) - 1);
       if (ImGui::BeginListBox("##VanillaScenes", ImVec2(-FLT_MIN, ImGui::GetTextLineHeightWithSpacing() * 12.0F))) {
         for (int index = 0; index < static_cast<int>(scenes.size()); ++index) {
@@ -124,18 +131,20 @@ class DevToolsPanel final : public Fast::Oot3d::GraphicsSettingsPanelTab {
         ImGui::EndListBox();
       }
       target = &scenes[static_cast<size_t>(options.VanillaScene)];
+      if (!mWarp->HasTitleAbi()) {
       int age = options.Age == DevWarpAge::Adult ? 0 : 1;
       ImGui::RadioButton("Child", &age, 1);
       ImGui::SameLine();
       ImGui::RadioButton("Adult", &age, 0);
       options.Age = age == 0 ? DevWarpAge::Adult : DevWarpAge::Child;
+      }
     }
     const auto availability = mWarp->Check(*target);
     const bool gameplay = status.Observation.Gameplay;
     ImGui::BeginDisabled(!gameplay || (availability.Known && !availability.Available));
     if (ImGui::Button("Warp")) {
       // The vanilla screen keeps the current time of day, as SoH's does.
-      mWarp->WarpTo(*target, options.Age, options.Better ? std::optional<bool>(options.Night) : std::nullopt);
+      mWarp->WarpTo(*target, options.Age, options.Better && !mWarp->HasTitleAbi() ? std::optional<bool>(options.Night) : std::nullopt);
     }
     ImGui::EndDisabled();
     if (!gameplay) Tooltip("Warps start from normal gameplay: load a file first.");
@@ -147,13 +156,17 @@ class DevToolsPanel final : public Fast::Oot3d::GraphicsSettingsPanelTab {
       ImGui::TextWrapped("%s", status.Message.c_str());
       ImGui::PopStyleColor();
     }
-    if (status.Observation.PlayState)
+    if (mWarp->HasTitleAbi() && status.Observation.PlayState)
+      ImGui::TextDisabled("Scene %d, room %u, entrance 0x%04X", status.Observation.Scene,
+                          status.Observation.Room, status.Observation.Entrance);
+    else if (status.Observation.PlayState)
       ImGui::TextDisabled("Scene %d, room %u, entrance 0x%04X, %s", status.Observation.Scene, status.Observation.Room,
                           status.Observation.Entrance, status.Observation.Age == 0 ? "adult" : "child");
   }
 
   void DrawWarpPoints(const DevWarpStatus &status) {
     ImGui::SeparatorText("Warp Points");
+    if (!mWarp->PointsAvailable()) { ImGui::TextDisabled("Warp points are awaiting gameplay validation."); return; }
     if (status.Observation.Gameplay && status.Observation.Player) {
       ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 50.0F);
       ImGui::InputTextWithHint("##WarpPointNameInput", "Enter warp point name...", mName.data(), mName.size());

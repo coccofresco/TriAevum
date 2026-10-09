@@ -120,6 +120,24 @@ void ApplyNativeWidescreenProjectionPolicy(
     }
     runtime.SceneViewProbe->ObserveExternalSceneEnvironment(environment.State);
   }
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+  if (runtime.ReadProbes != nullptr && runtime.ReadProbes->Watches(pc)) {
+    uint32_t registers[16];
+    for (size_t index = 0; index < 16U; ++index) registers[index] = state.r[index];
+    const auto line = runtime.ReadProbes->Observe(
+        pc, runtime.CurrentHostFrame, registers,
+        [&](uint32_t address, uint32_t *value) { return memory.Read32(address, value); },
+        [&](uint32_t address, uint8_t *bytes, uint32_t size) {
+          for (uint32_t i = 0; i < size; ++i)
+            if (!memory.Read8(address + i, &bytes[i])) return false;
+          return true;
+        });
+    if (line) {
+      std::fprintf(runtime.ReadProbeOut, "%s\n", line->c_str());
+      std::fflush(runtime.ReadProbeOut);
+    }
+  }
+#endif
   if (runtime.CallTrace != nullptr &&
       runtime.CurrentHostFrame >= runtime.CallTraceFirstFrame &&
       runtime.CurrentHostFrame <= runtime.CallTraceLastFrame) {

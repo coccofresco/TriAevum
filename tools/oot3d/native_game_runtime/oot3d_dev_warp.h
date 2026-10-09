@@ -98,11 +98,38 @@ struct DevWarpScreenOptions {
   bool Night = false;
 };
 
+class DevFreeCamera;
+// Title-specific guest ABI. A null ABI preserves the established OoT path.
+class DevWarpTitleAbi {
+ public:
+  virtual ~DevWarpTitleAbi() = default;
+  virtual std::span<const DevWarpEntrance> Entrances() const = 0;
+  virtual std::span<const DevWarpScene> Scenes() const = 0;
+  virtual bool CameraAvailable() const = 0;
+  virtual bool PointsAvailable() const = 0;
+  virtual uint32_t PlayStateAddress(DevWarpGuest&) const = 0;
+  virtual bool Observe(DevWarpGuest&, uint32_t, DevWarpObservation&, int16_t&, uint32_t&) const = 0;
+  virtual bool ReadEntranceTable(DevWarpGuest&, std::vector<uint32_t>&) const = 0;
+  virtual DevWarpAvailability Check(const DevWarpEntrance&, const std::vector<uint32_t>&) const = 0;
+  virtual bool Apply(DevWarpGuest&, uint32_t, uint16_t, const DevWarpPoint*,
+                     std::optional<DevWarpAge>, std::optional<bool>, std::string*) const = 0;
+  virtual bool Arrived(const DevWarpObservation&, uint16_t, bool) const = 0;
+  virtual bool CameraOwnsInput(DevWarpGuest&) const = 0;
+  virtual bool ApplyCamera(DevWarpGuest&, DevFreeCamera&, uint32_t, uint32_t) const = 0;
+};
+
 class DevWarpRuntime {
  public:
   // `storage` is the JSON file holding the warp points and the screen
   // choices; an empty path keeps them for the session only.
-  explicit DevWarpRuntime(std::filesystem::path storage);
+  explicit DevWarpRuntime(std::filesystem::path storage, std::shared_ptr<DevWarpTitleAbi> title = {});
+  [[nodiscard]] bool HasTitleAbi() const { return bool(mTitle); }
+  [[nodiscard]] bool CameraAvailable() const { return !mTitle || mTitle->CameraAvailable(); }
+  [[nodiscard]] bool PointsAvailable() const { return !mTitle || mTitle->PointsAvailable(); }
+  [[nodiscard]] std::span<const DevWarpScene> Scenes() const { return mTitle ? mTitle->Scenes() : DevWarpBetterScenes(); }
+  [[nodiscard]] std::span<const DevWarpEntrance> Entrances() const { return mTitle ? mTitle->Entrances() : DevWarpBetterEntrances(); }
+  [[nodiscard]] std::span<const DevWarpEntrance> VanillaEntrances() const { return mTitle ? mTitle->Entrances() : DevWarpVanillaEntrances(); }
+  bool CameraOwnsInput(DevWarpGuest& guest) const { return !mTitle || mTitle->CameraOwnsInput(guest); }
 
   // UI side.
   [[nodiscard]] DevWarpStatus Status() const;
@@ -147,6 +174,7 @@ class DevWarpRuntime {
   void Load();
   void SaveLocked();
 
+  std::shared_ptr<DevWarpTitleAbi> mTitle;
   mutable std::mutex mMutex;
   std::filesystem::path mStorage;
   std::string mStorageError;
