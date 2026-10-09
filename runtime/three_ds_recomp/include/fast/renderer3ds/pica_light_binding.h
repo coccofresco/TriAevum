@@ -1,5 +1,7 @@
 #pragma once
 
+#include "fast/renderer3ds/pica_scene_water.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -26,7 +28,9 @@ struct PicaNativeLightSource {
 };
 
 inline constexpr uint32_t kMaximumPicaScenePointLights = 32U;
-inline constexpr uint32_t kPicaScenePointLightGroups = 2U;
+// Scene point-light groups: 0 Navi, 1 fairies, 2 flames (lights the title
+// draws as flames but never registers: torches, fire objects).
+inline constexpr uint32_t kPicaScenePointLightGroups = 3U;
 
 struct PicaScenePointLight {
     uint64_t SourceIdentity = 0;
@@ -206,6 +210,7 @@ struct PicaNativeLightBinding {
     std::optional<std::array<float, 16>> WorldToView;
     std::shared_ptr<const PicaScenePointLights> ScenePoints;
     std::shared_ptr<const PicaSceneDirectionalLights> SceneDirectionals;
+    std::shared_ptr<const PicaSceneWaterBodies> Water;
 
     bool operator==(const PicaNativeLightBinding&) const = default;
 };

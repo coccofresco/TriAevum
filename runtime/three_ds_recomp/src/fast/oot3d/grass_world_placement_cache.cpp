@@ -375,7 +375,7 @@ GrassWorldPlacement BuildPlacement(const GrassWorldPlacementRequest& request, ui
                 // Grayscale probability already shaped the immutable roots.
                 // Only excluded texels mark a boundary for geometric grouping.
                 return EvaluateGrassMaskLevel(sample/255.0F,*request.MidrangeMaskRule) > 0.0F;
-            });
+            }, [&](float u, float v) { return GrassMaskPositionActive(*request.MidrangeMaskRule, u, v); });
             if (std::getenv("OOT3D_GRASS_DIAGNOSTICS")) {
                 std::array<uint64_t,256> histogram{};
                 for (uint8_t sample : mask.Samples) ++histogram[sample];

@@ -522,6 +522,7 @@ void GfxRenderingAPIVulkan::ApplyNativePicaSampleCount(VkSampleCountFlagBits sam
     mAmbientOcclusionOutputValid = false;
     mHiZOutputValid = false;
     mInteractiveGrassPass.Shutdown();
+    mWorldDebugLinePass.Shutdown();
     mTemporalHistory.Reset();
     mRigidMotionTracker.Reset();
     mPreviousPicaVertexUniforms.clear();
@@ -553,6 +554,10 @@ void GfxRenderingAPIVulkan::ApplyNativePicaSampleCount(VkSampleCountFlagBits sam
         SPDLOG_INFO("OOT3D Vulkan interactive grass unavailable after MSAA change: {}",
                     mInteractiveGrassPass.UnavailableReason());
     }
+    mWorldDebugLinePass.Initialize(mPhysicalDevice, mDevice, mNriInterop.Shaders(),
+                                   mNativePicaCanonicalRenderPass, mNativePicaRenderPass,
+                                   mNativePicaSampleCount, mPicaDynamicRenderingScope.Available(),
+                                   mDepthFormat, mPipelineCache);
     SPDLOG_INFO("OOT3D Vulkan native PICA MSAA changed to {} samples",
                 static_cast<uint32_t>(mNativePicaSampleCount));
 }

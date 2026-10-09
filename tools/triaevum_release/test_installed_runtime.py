@@ -163,6 +163,24 @@ class InstalledRuntimeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "TopScreen textures changed"):
             self.validate()
 
+    def test_water_texture_catalog_is_published_and_verified_with_launch_profile(self):
+        catalog = self.data / "cache/water/key/water_textures.txt"
+        catalog.parent.mkdir(parents=True)
+        catalog.write_bytes(b"triaevum-water-textures 1\n")
+        prepared = SimpleNamespace(directory=self.title, state={})
+        with (patch("forge.load_prepared_content", return_value=prepared),
+              patch("forge.ensure_runtime_config"),
+              patch("forge.query_product", return_value={
+                  "product": {}, "runtime_sha256": sha256_file(self.exe)})):
+            forge.publish_private_runtime(
+                self.title, plugin=self.plugin, runtime_plugin=self.plugin,
+                launch_profile=self.profile, data_root=self.data, water_texture_catalog=catalog)
+        self.receipt = prepared.state["runtime"]
+        self.assertEqual(self.validate(), self.profile)
+        catalog.write_bytes(b"corrupt")
+        with self.assertRaisesRegex(ValueError, "water texture catalog changed"):
+            self.validate()
+
     def test_launcher_refuses_pending_activation_before_loading_title(self):
         atomic_write_json(journal_path(self.root), {})
         with (patch("forge_gui.runtime_path", return_value=self.exe),

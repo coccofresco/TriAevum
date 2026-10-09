@@ -1,10 +1,12 @@
 #include "fast/renderer3ds/pica_surface_lighting.h"
 #include "fast/renderer3ds/pica_surface_lighting_shader.h"
 #include "vulkan_compute_test.h"
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <iostream>
 #include <regex>
+#include <vector>
 
 int main() {
     try {
@@ -201,6 +203,82 @@ void main() {
                     ++failures;
                 }
         std::cout << "Scene lighting: " << cases.size() << " GPU cases, " << failures << " failures\n";
+        // Placed lights over the fragment at the origin (normal +Y): native
+        // ambient 0.2, material diffuse 0.5, red light; each kind's term.
+        {
+            const auto window = [](float distance, float reach) {
+                const float ratio = distance / reach;
+                const float value = std::clamp(1.0F - ratio * ratio * ratio * ratio, 0.0F, 1.0F);
+                return value * value;
+            };
+            constexpr float kPi = 3.14159265F;
+            struct Placed { PicaPlacedLight Light; float Red; const char* Name; };
+            const auto light = [&](PicaPlacedLightKind kind, std::array<float, 3> position, std::array<float, 3> axis,
+                                   float reach) {
+                PicaPlacedLight value;
+                value.SourceIdentity = 7;
+                value.Kind = kind;
+                value.PositionWorld = position;
+                value.AxisWorld = axis;
+                value.TangentWorld = { 1, 0, 0 };
+                value.Color = { 1, 0, 0 };
+                value.Reach = reach;
+                value.HalfWidth = value.HalfHeight = 50;
+                value.CosOuter = std::cos(22.5F * kPi / 180.0F);
+                value.CosInner = std::cos(18.0F * kPi / 180.0F);
+                return value;
+            };
+            const float rectangleForm = 10000.0F / (kPi * 10000.0F + 10000.0F) * window(100, 1000);
+            const float discArea = kPi * 2500.0F;
+            const float discForm = discArea / (kPi * 10000.0F + discArea) * window(100, 1000);
+            auto twoSided = light(PicaPlacedLightKind::Rectangle, { 0, 100, 0 }, { 0, 1, 0 }, 1000);
+            twoSided.TwoSided = true;
+            const std::vector<Placed> placed{
+                { light(PicaPlacedLightKind::Omni, { 0, 10, 0 }, { 0, -1, 0 }, 20), .2F + .5F * .75F, "omni" },
+                { light(PicaPlacedLightKind::Point, { 0, 100, 0 }, { 0, -1, 0 }, 1000), .2F + .5F * window(100, 1000),
+                  "point at the reference distance" },
+                { light(PicaPlacedLightKind::Point, { 0, 50, 0 }, { 0, -1, 0 }, 1000), .2F + .5F * 4.0F * window(50, 1000),
+                  "point at half the reference distance" },
+                { light(PicaPlacedLightKind::Spot, { 0, 100, 0 }, { 0, -1, 0 }, 1000), .2F + .5F * window(100, 1000),
+                  "spot on its axis" },
+                { light(PicaPlacedLightKind::Spot, { 0, 100, 0 }, { 1, 0, 0 }, 1000), .2F, "spot outside its cone" },
+                { light(PicaPlacedLightKind::Rectangle, { 0, 100, 0 }, { 0, -1, 0 }, 1000), .2F + .5F * rectangleForm,
+                  "rectangle facing the fragment" },
+                { light(PicaPlacedLightKind::Rectangle, { 0, 100, 0 }, { 0, 1, 0 }, 1000), .2F,
+                  "one-sided rectangle facing away" },
+                { twoSided, .2F + .5F * rectangleForm, "two-sided rectangle facing away" },
+                { light(PicaPlacedLightKind::Disc, { 0, 100, 0 }, { 0, -1, 0 }, 1000), .2F + .5F * discForm, "disc" },
+                { light(PicaPlacedLightKind::Sun, { 0, 0, 0 }, { 0, -1, 0 }, 0), .7F, "sun from above" },
+                { light(PicaPlacedLightKind::Point, { 0, 2000, 0 }, { 0, -1, 0 }, 1000), .2F, "point beyond its reach" },
+            };
+            std::vector<Case> placedCases(placed.size());
+            const auto view = BuildPicaSurfaceLightingView({ 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 });
+            for (size_t i = 0; i < placed.size(); ++i) {
+                PicaEnvironmentLighting settings;
+                settings.Enabled = true;
+                settings.AmbientIntensity = 0;
+                settings.PlacedLights[0] = placed[i].Light;
+                settings.PlacedLightCount = 1;
+                const auto lighting = BuildPicaSurfaceLightingUniforms(
+                    hooks, 1U << 9U, { reinterpret_cast<const uint8_t*>(native.data()), sizeof(native) },
+                    PicaNativeLightBinding{}, settings, &*view);
+                if (!lighting) throw std::runtime_error("Placed-light surface rejected");
+                placedCases[i].Lighting = *lighting;
+            }
+            std::vector<Vec4> placedOutput(placed.size());
+            RunComputeTest(shader, std::as_bytes(std::span(placedCases)),
+                           std::as_writable_bytes(std::span(placedOutput)), placed.size());
+            for (size_t i = 0; i < placed.size(); ++i) {
+                const std::array<float, 3> expect{ std::min(placed[i].Red, 1.0F), .2F, .2F };
+                for (size_t c = 0; c < 3; ++c)
+                    if (!std::isfinite(placedOutput[i][c]) || std::abs(placedOutput[i][c] - expect[c]) > 2e-4F) {
+                        std::cerr << "placed case=" << placed[i].Name << " channel=" << c
+                                  << " actual=" << placedOutput[i][c] << " expected=" << expect[c] << '\n';
+                        ++failures;
+                    }
+            }
+            std::cout << "Placed lights: " << placed.size() << " GPU cases, " << failures << " total failures\n";
+        }
         // Execute the coefficient producer and consumer, not a CPU facsimile.
         // These cases distinguish selected sun from points/fill, preserve native
         // unlit appearance, and expose post-clamp shadowing and view-space bugs.

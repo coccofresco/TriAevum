@@ -4,6 +4,7 @@
 #include <bit>
 #include <cmath>
 #include <limits>
+#include <utility>
 
 namespace Fast::Oot3d {
 namespace {
@@ -12,6 +13,21 @@ constexpr float kNoInteractionHeight =
     std::numeric_limits<float>::quiet_NaN();
 
 float PlanarLength(float x, float z) { return std::sqrt(x * x + z * z); }
+
+// Holds a displacement at the maximum bend and drops the velocity that pushes
+// it further out: a pinned blade must not store outward speed that keeps it
+// pinned after the push ends.
+void ClampBend(std::array<float, 2>& displacement, std::array<float, 2>& velocity, float maximum) {
+    const float length = PlanarLength(displacement[0], displacement[1]);
+    if (length <= maximum || length <= 1.0e-6F) return;
+    const float ux = displacement[0] / length, uz = displacement[1] / length;
+    displacement = {ux * maximum, uz * maximum};
+    const float outward = velocity[0] * ux + velocity[1] * uz;
+    if (outward > 0.0F) {
+        velocity[0] -= outward * ux;
+        velocity[1] -= outward * uz;
+    }
+}
 
 } // namespace
 
@@ -146,10 +162,17 @@ void GrassInteractionField::UpdateActors(
         const auto snap = [cell](float value) {
             return std::round(value / cell) * cell;
         };
-        // Keep finite trail storage around motion, not the first (often static)
-        // scene object. Direct colliders remain active outside the trail field.
-        const auto focus = std::max_element(actors.begin(), actors.end(), [](const auto& a, const auto& b) {
-            return std::hypot(a.Velocity[0], a.Velocity[2]) < std::hypot(b.Velocity[0], b.Velocity[2]);
+        // Keep finite trail storage around Link, whose trail the camera follows;
+        // without him, around the fastest actor rather than the first (often
+        // static) scene object. Following whichever actor moved fastest moved
+        // the field away from a stopped Link and wiped his trail at once.
+        // Direct colliders remain active outside the trail field.
+        const auto rank = [](const GrassInteractor& actor) {
+            return std::pair(actor.Type == GrassInteractor::Kind::PlayerLink,
+                             std::hypot(actor.Velocity[0], actor.Velocity[2]));
+        };
+        const auto focus = std::max_element(actors.begin(), actors.end(), [&](const auto& a, const auto& b) {
+            return rank(a) < rank(b);
         });
         if (!mInitialized || std::hypot(focus->Velocity[0], focus->Velocity[2]) > 0.01F)
             ShiftTo({snap(focus->Position[0]), snap(focus->Position[2])});
@@ -182,9 +205,7 @@ void GrassInteractionField::UpdateActors(
                 const float length = PlanarLength(mDisplacement[index][0],
                                                   mDisplacement[index][1]);
                 if (length > settings.MaximumBend && length > 1.0e-6F) {
-                    const float scale = settings.MaximumBend / length;
-                    mDisplacement[index][0] *= scale;
-                    mDisplacement[index][1] *= scale;
+                    ClampBend(mDisplacement[index], mVelocity[index], settings.MaximumBend);
                 } else if (length < 1.0e-4F &&
                            PlanarLength(mVelocity[index][0],
                                         mVelocity[index][1]) < 1.0e-4F) {
@@ -296,13 +317,7 @@ void GrassInteractionField::Stamp(const InteractiveGrassSettings& settings, cons
             mVelocity[index][1] += dz * impulse * (2.0F / recovery);
             mInteractionHeight[index] =
                 link->PreviousPosition[1] + segmentY * t;
-            const float bend = PlanarLength(mDisplacement[index][0],
-                                            mDisplacement[index][1]);
-            if (bend > settings.MaximumBend && bend > 1.0e-6F) {
-                const float scale = settings.MaximumBend / bend;
-                mDisplacement[index][0] *= scale;
-                mDisplacement[index][1] *= scale;
-            }
+            ClampBend(mDisplacement[index], mVelocity[index], settings.MaximumBend);
         }
     }
 }

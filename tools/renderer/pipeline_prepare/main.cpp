@@ -133,7 +133,8 @@ int main(int argc, char** argv) {
         execution.PipelineLibrariesAvailable = device.PipelineLibraries;
         if (!bridge.Initialize(device, execution)) throw std::runtime_error(bridge.UnavailableReason());
         std::vector<uint8_t> cache;
-        const bool loaded = Renderer3ds::LoadPipelineCacheData(cachePath, identity, cache);
+        const bool loaded = Renderer3ds::LoadPipelineCacheData(cachePath, identity, cache,
+                                                               Renderer3ds::kMaximumNriPipelineCacheBytes);
         if (!bridge.InitializePipelineCache(cache)) throw std::runtime_error("NRI device pipeline cache unavailable");
         const auto cancelled = [&] { return args.contains("--cancel-file") && std::filesystem::exists(args.at("--cancel-file")); };
 
@@ -210,7 +211,9 @@ int main(int argc, char** argv) {
             }
         }
         cache = bridge.GetPipelineCacheData();
-        if (!Renderer3ds::StorePipelineCacheData(cachePath, identity, cache, &error)) throw std::runtime_error(error);
+        if (!Renderer3ds::StorePipelineCacheData(cachePath, identity, cache, &error,
+                                                 Renderer3ds::kMaximumNriPipelineCacheBytes))
+            throw std::runtime_error(error);
         const bool wasCancelled = startup.Cancelled || (job && job->Progress().Cancelled);
         const size_t attempted = startup.Attempted + (job ? job->Progress().Attempted : 0U);
         const size_t prepared = startup.Prepared + (job ? job->Progress().Prepared : 0U);

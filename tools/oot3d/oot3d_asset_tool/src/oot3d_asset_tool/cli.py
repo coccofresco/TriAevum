@@ -128,6 +128,8 @@ def main(argv: list[str] | None = None) -> int:
         description="Inspect, audit, and convert native OOT3D assets.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+    from .scene_facts import register_commands, run_command
+    register_commands(subparsers)
 
     inspect_parser = subparsers.add_parser("inspect", help="Inspect a CMB model, ZAR archive, or ZSI file.")
     inspect_parser.add_argument("input", type=Path)
@@ -1979,6 +1981,8 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     try:
+        if args.command in ("scene-facts", "collision-ray"):
+            return run_command(args)
         if args.command == "inspect":
             print(json.dumps(inspect_input(args.input), indent=2))
             return 0

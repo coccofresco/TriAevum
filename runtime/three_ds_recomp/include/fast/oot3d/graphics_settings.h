@@ -315,6 +315,10 @@ struct EffectsSettings {
     uint8_t ReflectionMaxSteps = 40;
     float ReflectionRoughnessBias = 0.0F;
     uint8_t ReflectionDebugView = 0;
+    // With Reflections Off, the per-pixel models still trace Hi-Z
+    // reflections on gameplay water only; the trace finds the water surfaces
+    // from the title's water bodies.
+    bool WaterReflections = true;
     std::vector<ReflectionMaterialRule> ReflectionMaterials;
     ToonMode Toon = ToonMode::Off;
     ToonStyleSettings ToonStyle;

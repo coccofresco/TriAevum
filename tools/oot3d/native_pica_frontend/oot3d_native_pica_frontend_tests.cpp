@@ -1038,6 +1038,24 @@ int main(int argc, char** argv) {
                 changedProcTexIdentity.FragmentProgramId !=
                     procTexIdentity.FragmentProgramId,
             "procedural texture LUT data was omitted from shader identity");
+    {
+        // Depth left to fixed function is another specialized program: two
+        // draws differing only in their depth mapping are two pipelines.
+        auto rasterState = fragmentState;
+        rasterState.OutputMerger.FragmentOperationMode = 0;
+        rasterState.Viewport.ZBuffering = true;
+        rasterState.Viewport.DepthRange = -1.0F;
+        rasterState.Viewport.NearPlane = 0.0F;
+        auto explicitState = rasterState;
+        explicitState.Viewport.DepthRange = -0.5F;
+        Require(Oot3dNativeGame::Oot3dPicaFragmentDepthIsRasterDepth(rasterState) &&
+                    !Oot3dNativeGame::Oot3dPicaFragmentDepthIsRasterDepth(explicitState) &&
+                    Oot3dNativeGame::BuildOot3dPicaCanonicalDrawIdentity(procTexPacket, rasterState)
+                            .FragmentProgramId !=
+                        Oot3dNativeGame::BuildOot3dPicaCanonicalDrawIdentity(procTexPacket, explicitState)
+                            .FragmentProgramId,
+                "fixed-function depth was omitted from the fragment program identity");
+    }
 
     Oot3dNativeGame::Oot3dGspCommandPacket irqSubmit{};
     irqSubmit.Control = 1;

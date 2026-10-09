@@ -373,6 +373,64 @@ void NativeA32LightingProbe::ContinueSceneLights(Fast::Renderer3ds::PicaSceneDir
     }
 }
 
+// A flame actor's light: En_Light (0x008, fire objects such as the Fire
+// Temple's great flames), Obj_Syokudai (0x05E, torches) and Bg_Po_Syokudai
+// (0x105, the Forest Temple's coloured torches). Neither registers
+// a LightContext record in OOT3D. Position: the actor's world position
+// (+0x28) raised to the flame; reach from its scale (+0x54); colour from the
+// flame's kind (OoT's En_Light table: 2 blue, 3 green, else orange). A torch
+// is lit while its timer (s16 +0x27C, OoT's litTimer: -1 for good, a count
+// down when the player lit it, 0 unlit) is non-zero: the same test
+// ObjSyokudai_Draw (00286590) makes before drawing its flame.
+static bool CaptureFlameEmitter(oot3d::recomp::a32::MemoryBus& memory, uint32_t playState, uint32_t actor,
+                                uint16_t id, uint16_t params, Fast::Renderer3ds::PicaScenePointLight& light) {
+    std::array<float, 3> position{};
+    float scale = 0.0F;
+    uint32_t bits = 0;
+    if (!ReadPosition(memory, actor + 0x28U, position) || !memory.Read32(actor + 0x54U, &bits)) return false;
+    scale = std::bit_cast<float>(bits);
+    if (!std::isfinite(scale) || scale <= 0.0F) return false;
+    light.SourceIdentity = actor + 0x28U;
+    light.Group = 2U;
+    light.PositionWorld = position;
+    if (id == 0x008U) {
+        // 0.0075 is the great flame (OoT table scale 75).
+        const float size = std::clamp(scale / 0.0075F, 0.2F, 3.0F);
+        light.PositionWorld[1] += 40.0F * size;
+        light.Radius = 1400.0F * size;
+        switch (params & 0xFU) {
+        case 2U: light.Color = {0.35F, 0.7F, 1.0F}; break;
+        case 3U: light.Color = {0.65F, 1.0F, 0.3F}; break;
+        default: light.Color = {1.0F, 0.62F, 0.28F}; break;
+        }
+        return true;
+    }
+    if (id == 0x105U) {
+        // Bg_Po_Syokudai (the Poe sisters' torches): BgPoSyokudai_Draw
+        // (0029D5A0) draws the flame while the room switch flag in params is
+        // set (Flags_GetSwitch 0036E864: PlayState +0x2228/+0x222C), coloured
+        // by the index at +0x1A4 into its table at 005134FC.
+        const uint32_t flag = static_cast<uint32_t>(static_cast<int16_t>(params));
+        uint32_t flags = 0;
+        uint8_t colour = 0;
+        if (flag >= 64U || !memory.Read32(playState + (flag < 32U ? 0x2228U : 0x222CU), &flags) ||
+            ((flags >> (flag & 31U)) & 1U) == 0U || !memory.Read8(actor + 0x1A4U, &colour))
+            return false;
+        static constexpr std::array<std::array<float, 3>, 4> kPoeFlames{{
+            {1.0F, 0.67F, 1.0F}, {1.0F, 0.78F, 0.0F}, {0.0F, 0.67F, 1.0F}, {0.67F, 1.0F, 0.0F}}};
+        light.Color = kPoeFlames[colour & 3U];
+        light.PositionWorld[1] += 90.0F;
+        light.Radius = 600.0F;
+        return true;
+    }
+    uint16_t litTimer = 0;
+    if (!memory.Read16(actor + 0x27CU, &litTimer) || litTimer == 0U) return false;
+    light.PositionWorld[1] += 55.0F;
+    light.Radius = 500.0F;
+    light.Color = {1.0F, 0.6F, 0.25F};
+    return true;
+}
+
 void NativeA32LightingProbe::CaptureSceneLights(uint32_t playState, oot3d::recomp::a32::MemoryBus& memory) {
     using namespace Fast::Renderer3ds;
     TraceSceneLights(++mSceneLightFrames, playState, memory, mSceneLightTrace);
@@ -466,6 +524,21 @@ void NativeA32LightingProbe::CaptureSceneLights(uint32_t playState, oot3d::recom
                             snapshot.Lights[snapshot.Count++] = light;
                     }
                 }
+                // Flames the title draws but never lights (group 2): their
+                // light is only baked into room vertex colours natively.
+                if ((id == 0x008U || id == 0x05EU || id == 0x105U) && update != 0 &&
+                    memory.Read16(actor + offsetof(Oot3dActor, params), &params)) {
+                    PicaScenePointLight light;
+                    if (CaptureFlameEmitter(memory, playState, actor, id, params, light)) {
+                        const auto end = snapshot.Lights.begin() + snapshot.Count;
+                        if (std::none_of(snapshot.Lights.begin(), end,
+                                         [&](const auto& existing) {
+                                             return existing.SourceIdentity == light.SourceIdentity;
+                                         }) &&
+                            snapshot.Count < snapshot.Lights.size())
+                            snapshot.Lights[snapshot.Count++] = light;
+                    }
+                }
                 actor = next;
             }
         }
@@ -474,6 +547,41 @@ void NativeA32LightingProbe::CaptureSceneLights(uint32_t playState, oot3d::recom
         mScenePoints.reset();
     else if (!mScenePoints || *mScenePoints != snapshot)
         mScenePoints = std::make_shared<const PicaScenePointLights>(std::move(snapshot));
+    auto water = CaptureNativeWaterBodies(playState, memory);
+    if (water.Count == 0)
+        mWater.reset();
+    else if (!mWater || *mWater != water)
+        mWater = std::make_shared<const PicaSceneWaterBodies>(std::move(water));
+}
+
+Fast::Renderer3ds::PicaSceneWaterBodies CaptureNativeWaterBodies(uint32_t playState,
+                                                               oot3d::recomp::a32::MemoryBus& memory) {
+    using namespace Fast::Renderer3ds;
+    PicaSceneWaterBodies result;
+    uint32_t header = 0, boxes = 0;
+    uint16_t count = 0;
+    if (playState == 0 || playState > std::numeric_limits<uint32_t>::max() - 0xA98U ||
+        !memory.Read32(playState + 0xA98U, &header) || header == 0 ||
+        header > std::numeric_limits<uint32_t>::max() - 0x2CU || !memory.Read16(header + 0x14U, &count) ||
+        !memory.Read32(header + 0x28U, &boxes) || boxes == 0 ||
+        boxes > std::numeric_limits<uint32_t>::max() - kMaximumPicaSceneWaterBodies * 0x10U)
+        return result;
+    for (uint32_t i = 0; i < std::min<uint32_t>(count, kMaximumPicaSceneWaterBodies); ++i) {
+        std::array<uint16_t, 5> raw{};
+        uint32_t properties = 0;
+        bool valid = memory.Read32(boxes + i * 0x10U + 0x0CU, &properties);
+        for (uint32_t field = 0; valid && field < raw.size(); ++field)
+            valid = memory.Read16(boxes + i * 0x10U + field * 2U, &raw[field]);
+        if (!valid) return {};
+        const auto value = [&](size_t field) { return float(std::bit_cast<int16_t>(raw[field])); };
+        if (value(3) <= 0.0F || value(4) <= 0.0F) continue;
+        auto& body = result.Bodies[result.Count++];
+        body.MinimumXZ = { value(0), value(2) };
+        body.MaximumXZ = { value(0) + value(3), value(2) + value(4) };
+        body.SurfaceY = value(1);
+        body.Properties = properties;
+    }
+    return result;
 }
 
 Fast::Renderer3ds::PicaNativeLightBinding
@@ -487,6 +595,7 @@ NativeA32LightingProbe::CaptureRenderer(uint32_t renderer, oot3d::recomp::a32::M
     result.WorldToView = CaptureWorldToView(memory);
     result.ScenePoints = mScenePoints;
     result.SceneDirectionals = mSceneDirectionals;
+    result.Water = mWater;
     return result;
 }
 
@@ -525,6 +634,7 @@ void NativeA32LightingProbe::Reset() noexcept {
     mRenderStates.clear();
     mScenePoints.reset();
     mSceneDirectionals.reset();
+    mWater.reset();
     mSceneLightTrace = {};
     // A state load is a discontinuity.
     mContinuityPlayState = 0;

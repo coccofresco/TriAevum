@@ -193,10 +193,12 @@ class PublicReleaseAuditTests(unittest.TestCase):
             item = next(item for item in manifest["files"] if item["role"] == "corresponding_source")
             item.update(bytes=source.stat().st_size, sha256=sha256_file(source))
 
-            def audit(capability, mode: str) -> list[str]:
+            def audit(capability, mode: str, developer_tools=False) -> list[str]:
                 capabilities = {"nri": True, "f1": True, "topscreen": True}
                 if capability is not None:
                     capabilities["experimental_global_illumination"] = capability
+                if developer_tools is not None:
+                    capabilities["developer_tools"] = developer_tools
                 product = {
                     "format": "triaevum_product_info_v1", "runtime": "oot3d_native_game",
                     "source_commit": "0" * 40, "whole_aot_plugin_abi": 2, "private_title_loaded": False,
@@ -213,6 +215,10 @@ class PublicReleaseAuditTests(unittest.TestCase):
             for capability, mode in ((True, "Off"), (None, "Off"), (False, "ScreenSpace")):
                 errors = audit(capability, mode)
                 self.assertTrue(any("global illumination" in error for error in errors), errors)
+            # A developer build (warp screen, warp points) is never a release.
+            for developer_tools in (True, None):
+                errors = audit(False, "Off", developer_tools)
+                self.assertTrue(any("developer tools" in error for error in errors), errors)
 
     def test_rejects_binary_importing_vulkan_commands_an_older_loader_lacks(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

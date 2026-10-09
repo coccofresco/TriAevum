@@ -110,6 +110,7 @@ using Renderer3ds::VulkanPipelineCacheHeader;
 using Renderer3ds::MakePipelineCacheHeader;
 using Renderer3ds::LoadPipelineCacheData;
 using Renderer3ds::StorePipelineCacheData;
+using Renderer3ds::kMaximumNriPipelineCacheBytes;
 
 std::filesystem::path VulkanPipelineCachePath(bool nri = false) {
     const auto directory = VulkanShaderCacheDirectory();

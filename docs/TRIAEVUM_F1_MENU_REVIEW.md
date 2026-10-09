@@ -742,6 +742,15 @@ can brighten the scene. This is not automatic exposure or a total-luminance lock
 Profiles use `environments/scene-XXXX.environment.json` beside the global
 graphics configuration. Kokiri is `scene-0055.environment.json`, shared by all
 rooms associated with `spot04_info.zsi`. No native ZSI is rewritten.
+A scene with day and night (Kakariko Village, Hyrule Field) can keep a second
+profile for the night, `scene-XXXX.night.environment.json` (same schema, plus
+`"timeOfDay": "night"`). **Create night profile** saves the values shown as that
+file; while the game's night flag (SaveContext `+0x10`, `0x00587968`) is set
+the night profile is the one in use and edited, by day the scene's own. The
+switch follows the flag (dusk and dawn, not a blend) and drops an unsaved
+preview, as a scene change does. **Remove night profile** (confirmed) deletes the
+file and the scene's own profile applies at night again. Day and night are
+separate render scopes, so the shadow history does not carry across.
 Version 3 separates `nativeLocalStrength` from the scene-wide
 `nativeDirectStrength`. Versions 1 and 2 retain their old gain for both.
 Version 1 acquires default point groups; version 2 retains its saved groups.

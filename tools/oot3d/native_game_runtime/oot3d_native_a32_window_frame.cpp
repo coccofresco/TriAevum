@@ -1,5 +1,6 @@
 // Native A32 window session: one frame of the loop and the renderer-side work it schedules.
 #include "oot3d_native_a32_window_session.h"
+#include "fast/renderer3ds/pica_surface_debug.h"
 
 namespace Oot3dA32Window {
 
@@ -239,7 +240,7 @@ bool NativeA32WindowSession::RunFrame() {
                          presentationElapsedSeconds,
                          guestRefreshesDue != 0U,
                          nativeControlPollingState);
-  if (physicalInputFrame.Exit) {
+  if (physicalInputFrame.Exit || devLabQuit) {
     window.Close();
     return false;
   }
@@ -468,7 +469,9 @@ bool NativeA32WindowSession::RunFrame() {
   gui->EndDraw();
   presentSteps.Mark("gui_end_draw");
   renderStream.Submit([&, width, height,
-                       presentationSerial = presentationFrameCount] {
+                       presentationSerial = presentationFrameCount,
+                       forcedScreenshot = std::exchange(pendingForcedScreenshot, {})] {
+    if (!forcedScreenshot.empty()) screenshotState.ForcedPath = forcedScreenshot;
     if (rendererFrameSkipped) {
       capturedTemporalSample.reset();
       window.EndFrame();
@@ -676,6 +679,9 @@ bool NativeA32WindowSession::UpdateGuestServicesForRefresh(
   auto &uiLifecycleBridge = *uiLifecycleBridgeStorage;
   auto &window = *windowPointer;
   auto &dspHle = *dspHleStorage;
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+  UpdateDevFreeCamera(inputFrame);
+#endif
   const uint32_t topScreenButtons = inputFrame.Hid.Buttons;
   const uint32_t topScreenPressed =
       topScreenButtons &
@@ -946,6 +952,16 @@ bool NativeA32WindowSession::UpdateGuestServicesForRefresh(
       return false;
     }
   }
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+  // F1 > Dev Tools warps run at the same guest-frame boundary as the
+  // structural scenarios, through the same native transition request.
+  if (devWarp != nullptr) {
+    if (devWarpGuest == nullptr) devWarpGuest = Oot3dNativeGame::MakeDevWarpProcessGuest(process);
+    devWarp->Advance(*devWarpGuest, sceneViewProbe.Stats().LastPlayStateAddress, frameCount);
+    UpdateDevFreeCameraTour(frameCount);
+    if (devLab) UpdateDevLab(frameCount);
+  }
+#endif
   refreshTickRemainder += kCtrArm11TicksPerSecond;
   nextVblankTick += refreshTickRemainder / kGuestDisplayRefreshRate;
   refreshTickRemainder %= kGuestDisplayRefreshRate;
@@ -2041,13 +2057,383 @@ void NativeA32WindowSession::PresentVisualFrame(
       SecondsSince(visualPresentationStart);
 }
 
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+void NativeA32WindowSession::UpdateDevFreeCameraTour(uint64_t guestFrame) {
+  if (devTourPoses.empty() || devTourIndex >= static_cast<int>(devTourPoses.size()) || devWarp == nullptr) return;
+  constexpr uint32_t kStartFrames = 90U;  // the scene's title card fades
+  // Held for 45 frames in which the game took the free view (an intro or
+  // other cutscene camera does not count), at most 900 frames.
+  constexpr uint32_t kHoldFrames = 45U;
+  constexpr uint32_t kGiveUpFrames = 900U;
+  constexpr float kRadians = 3.14159265F / 180.0F;
+  const auto status = devWarp->Status();
+  const auto pose = [&](int index) {
+    const auto &p = devTourPoses[static_cast<size_t>(index)];
+    const float yaw = devTourAnchorYaw * kRadians;
+    const std::array<float, 3> forward{std::sin(yaw), 0.0F, std::cos(yaw)};
+    const std::array<float, 3> right{std::cos(yaw), 0.0F, -std::sin(yaw)};
+    std::array<float, 3> eye{p.Forward, p.Right, p.Up};
+    if (!p.Absolute)
+      for (size_t axis = 0; axis < 3; ++axis)
+        eye[axis] = devTourAnchor[axis] + forward[axis] * p.Forward + right[axis] * p.Right + (axis == 1 ? p.Up : 0.0F);
+    const float viewYaw = p.Absolute ? p.Yaw : devTourAnchorYaw + p.Yaw;
+    nativeCandidateDispatch.DevFreeCamera->SetPose(eye, viewYaw, p.Pitch);
+    devTourAppliedAtPose = nativeCandidateDispatch.DevFreeCamera->AppliedCount();
+    std::fprintf(stderr, "TRIAEVUM_DEV_FREECAM_TOUR pose=%d eye=%.1f,%.1f,%.1f yaw=%.1f pitch=%.1f frame=%llu\n", index,
+                 eye[0], eye[1], eye[2], viewYaw, p.Pitch, static_cast<unsigned long long>(guestFrame));
+  };
+  if (devTourIndex < 0) {
+    // A boot warp point is requested once gameplay starts: wait for it too.
+    if (status.Phase != Oot3dNativeGame::DevWarpPhase::Idle) devTourAfterWarp = true;
+    const bool ready = devTourAfterWarp ? status.Phase == Oot3dNativeGame::DevWarpPhase::Arrived
+                                        : status.Observation.Gameplay && status.Observation.Player;
+    if (!ready) {
+      devTourFrames = 0;
+      return;
+    }
+    if (++devTourFrames < kStartFrames) return;
+    devTourAnchor = {status.Observation.Position[0], status.Observation.Position[1], status.Observation.Position[2]};
+    devTourAnchorYaw = static_cast<float>(status.Observation.RotY) * (180.0F / 32768.0F);
+    devTourIndex = 0;
+    devTourFrames = 0;
+    pose(0);
+    return;
+  }
+  ++devTourFrames;
+  // Only frames drawn from the main camera count: PlayState +0xA64 is the
+  // active camera's index (cameras at +0xA54), 0 the main camera.
+  int16_t activeCamera = -1;
+  const uint32_t playState = sceneViewProbe.Stats().LastPlayStateAddress;
+  if (playState != 0U) (void)processStorage->Memory().Read16(playState + 0xA64U, reinterpret_cast<uint16_t *>(&activeCamera));
+  const uint64_t appliedNow = nativeCandidateDispatch.DevFreeCamera->AppliedCount();
+  if (activeCamera != 0) devTourAppliedAtPose = appliedNow;
+  const uint64_t applied = appliedNow - devTourAppliedAtPose;
+  if (applied < kHoldFrames && devTourFrames < kGiveUpFrames) return;
+  char name[32];
+  std::snprintf(name, sizeof(name), "tour-%02d.bmp", devTourIndex);
+  pendingForcedScreenshot = devTourDirectory / name;
+  std::fprintf(stderr, "TRIAEVUM_DEV_FREECAM_TOUR capture=%s applied=%llu%s\n",
+               pendingForcedScreenshot.string().c_str(), static_cast<unsigned long long>(applied),
+               applied < kHoldFrames ? " not-applied" : "");
+  devTourFrames = 0;
+  if (++devTourIndex < static_cast<int>(devTourPoses.size()))
+    pose(devTourIndex);
+  else
+    std::fprintf(stderr, "TRIAEVUM_DEV_FREECAM_TOUR done\n");
+}
+
+void NativeA32WindowSession::UpdateDevLab(uint64_t guestFrame) {
+  using Json = nlohmann::json;
+  auto &camera = *nativeCandidateDispatch.DevFreeCamera;
+  const auto status = devWarp->Status();
+  const auto &seen = status.Observation;
+  const auto place = [&] {
+    return Json{{"frame", guestFrame},
+                {"scene", seen.Scene},
+                {"room", seen.Room},
+                {"position", {seen.Position[0], seen.Position[1], seen.Position[2]}},
+                {"yaw", static_cast<float>(seen.RotY) * (180.0F / 32768.0F)},
+                {"gameplay", seen.Gameplay}};
+  };
+  const auto finish = [&](std::string_view result, Json detail) {
+    devLab->Answer(*devLabCommand, result, detail);
+    devLabCommand.reset();
+  };
+  const auto vector3 = [](const Json &value) {
+    return std::array<float, 3>{value.at(0).get<float>(), value.at(1).get<float>(), value.at(2).get<float>()};
+  };
+  if (!devLabCommand) {
+    devLabCommand = devLab->Next();
+    if (!devLabCommand) return;
+    devLabFrames = 0;
+    devLabSawArrival = false;
+    const auto &command = *devLabCommand;
+    const std::string op = command["op"].get<std::string>();
+    try {
+      if (op == "warp" && command.contains("better")) {
+        // An entrance of the Debug Warp Screen's Better list ([scene, entrance]
+        // indices), with age ("child"/"adult") and time ("day"/"night").
+        const auto scenes = Oot3dNativeGame::DevWarpBetterScenes();
+        const auto scene = command["better"].at(0).get<size_t>();
+        const auto entrance = command["better"].at(1).get<size_t>();
+        if (scene >= scenes.size() || entrance >= scenes[scene].Count)
+          throw std::out_of_range("no such Better scene/entrance");
+        devWarp->WarpTo(Oot3dNativeGame::DevWarpBetterEntrances()[scenes[scene].First + entrance],
+                        command.value("age", std::string("child")) == "adult" ? Oot3dNativeGame::DevWarpAge::Adult
+                                                                               : Oot3dNativeGame::DevWarpAge::Child,
+                        command.value("time", std::string("day")) == "night");
+      } else if (op == "warp") {
+        // Link respawns at the position in the room (SoH's warp point), facing yaw.
+        Oot3dNativeGame::DevWarpPoint point;
+        point.EntranceId = command.value("entrance", 0);
+        point.RoomNum = static_cast<int8_t>(command.value("room", 0));
+        const auto position = vector3(command.at("position"));
+        std::copy(position.begin(), position.end(), point.Position);
+        point.RotY = static_cast<int16_t>(std::lround(command.value("yaw", 0.0) * 32768.0 / 180.0));
+        devWarp->WarpToPlace("lab " + command.value("id", Json()).dump(), point);
+      } else if (op == "camera") {
+        camera.SetPose(vector3(command.at("eye")), command.value("yaw", 0.0F), command.value("pitch", 0.0F));
+        devLabAppliedAt = camera.AppliedCount();
+      } else if (op == "camera_off") {
+        camera.SetActive(false);
+        finish("ok", place());
+      } else if (op == "capture") {
+        // Written by the render stream with this frame; the file appears shortly after.
+        pendingForcedScreenshot = command.at("path").get<std::string>();
+        finish("ok", {{"frame", guestFrame}, {"path", pendingForcedScreenshot.string()}});
+      } else if (op == "status") {
+        const auto environment = sceneEnvironment->Snapshot();
+        auto detail = place();
+        detail["playState"] = sceneViewProbe.Stats().LastPlayStateAddress;
+        detail["warp"] = status.Message;
+        detail["profile"] = {{"file", environment.FileExists ? environment.Path.string() : std::string()},
+                             {"enabled", environment.Profile.Enabled},
+                             {"revision", environment.Revision},
+                             {"error", environment.Error}};
+        finish("ok", detail);
+      } else if (op == "graphics") {
+        // A partial "Graphics" block, applied like an F1 commit (not saved),
+        // as the qualification schedule does.
+        auto &graphicsSettings = Fast::Oot3d::GraphicsSettingsRuntime::Instance();
+        const auto current = graphicsSettings.Snapshot();
+        const auto decoded = Fast::Oot3d::DeserializeGraphicsSettings(
+            Oot3dNativeGame::MergeScheduledGraphics(Fast::Oot3d::SerializeGraphicsSettings(current),
+                                                    command.at("graphics")),
+            current);
+        const auto applied = graphicsSettings.Apply(decoded.Value, false);
+        finish(applied.Accepted() && !decoded.UnsupportedFutureVersion ? "ok" : "failed",
+               {{"frame", guestFrame}, {"decodeIssues", decoded.Issues.size()},
+                {"applyIssues", applied.Issues.size()}});
+      } else if (op == "surface_trace") {
+        // The surface-lighting candidates of the next frames, one JSON line each.
+        Fast::Renderer3ds::PicaSurfaceDebug::Instance().RequestTrace(command.at("path").get<std::string>(),
+                                                                     command.value("frames", 1U));
+        finish("ok", {{"frame", guestFrame}});
+      } else if (op == "surface_exempt") {
+        // Candidates first..last keep their native appearance ({} clears).
+        Fast::Renderer3ds::PicaSurfaceDebug::Instance().SetExemptRange(command.value("first", 1U),
+                                                                       command.value("last", 0U));
+        finish("ok", {{"frame", guestFrame}});
+      } else if (op == "peek") {
+        // Guest memory as hex (at most 4 KiB): finding actor fields.
+        const uint32_t address = command.at("address").get<uint32_t>();
+        const uint32_t size = std::min(command.value("size", 256U), 4096U);
+        std::string hex;
+        hex.reserve(size * 2U);
+        static constexpr char kDigits[] = "0123456789abcdef";
+        bool readable = true;
+        for (uint32_t i = 0; i < size && readable; ++i) {
+          uint8_t byte = 0;
+          readable = processStorage->Memory().Read8(address + i, &byte);
+          hex += kDigits[byte >> 4U];
+          hex += kDigits[byte & 15U];
+        }
+        finish(readable ? "ok" : "failed", {{"frame", guestFrame}, {"address", address}, {"hex", hex}});
+      } else if (op == "poke16") {
+        // One halfword written into guest memory (developer experiments only).
+        const uint32_t address = command.at("address").get<uint32_t>();
+        const uint16_t value = static_cast<uint16_t>(command.at("value").get<int>());
+        const bool written = processStorage->Memory().Write16(address, value);
+        finish(written ? "ok" : "failed", {{"frame", guestFrame}, {"address", address}});
+      } else if (op == "water") {
+        // The scene's water boxes as the renderer receives them.
+        const auto water = Oot3dNativeGame::CaptureNativeWaterBodies(sceneViewProbe.Stats().LastPlayStateAddress, processStorage->Memory());
+        Json bodies = Json::array();
+        for (uint32_t i = 0; i < water.Count; ++i) {
+          const auto &body = water.Bodies[i];
+          bodies.push_back({{"min", {body.MinimumXZ[0], body.MinimumXZ[1]}},
+                            {"max", {body.MaximumXZ[0], body.MaximumXZ[1]}},
+                            {"y", body.SurfaceY},
+                            {"properties", body.Properties}});
+        }
+        auto detail = place();
+        detail["water"] = std::move(bodies);
+        finish("ok", detail);
+      } else if (op == "actors") {
+        // The live actors (optionally only some ids): id, params, instance,
+        // room, world position and scale.
+        Json actors = Json::array();
+        std::vector<uint16_t> only;
+        if (command.contains("ids"))
+          for (const auto &id : command["ids"]) only.push_back(id.get<uint16_t>());
+        for (const auto &a : Oot3dNativeGame::CaptureNativeActors(sceneViewProbe.Stats().LastPlayStateAddress,
+                                                                  processStorage->Memory())) {
+          if (!only.empty() && std::find(only.begin(), only.end(), a.Id) == only.end()) continue;
+          actors.push_back({{"id", a.Id},
+                            {"params", a.Params},
+                            {"category", a.Category},
+                            {"room", a.Room},
+                            {"address", a.Address},
+                            {"position", {a.Position[0], a.Position[1], a.Position[2]}},
+                            {"scale", {a.Scale[0], a.Scale[1], a.Scale[2]}}});
+        }
+        auto detail = place();
+        detail["actors"] = std::move(actors);
+        finish("ok", detail);
+      } else if (op == "emitters") {
+        // The native lights linked now (LightContext), with their owners.
+        Json lights = Json::array();
+        const uint32_t playState = sceneViewProbe.Stats().LastPlayStateAddress;
+        for (const auto &e : Oot3dNativeGame::CaptureNativeEmitters(playState, processStorage->Memory())) {
+          Json light = {{"type", e.Type},
+                        {"position", {e.Position[0], e.Position[1], e.Position[2]}},
+                        {"direction", {e.Direction[0], e.Direction[1], e.Direction[2]}},
+                        {"color", {e.Color[0], e.Color[1], e.Color[2]}},
+                        {"radius", e.Radius}};
+          if (e.Owner && e.Owner->Kind == "actor")
+            light["owner"] = {{"kind", "actor"},
+                              {"actorId", e.Owner->ActorId},
+                              {"actor", e.Owner->ActorAddress},
+                              {"params", e.Owner->Params},
+                              {"offset", e.Owner->Offset}};
+          else if (e.Owner)
+            light["owner"] = {{"kind", e.Owner->Kind}, {"offset", e.Owner->Offset}};
+          lights.push_back(std::move(light));
+        }
+        auto detail = place();
+        detail["lights"] = std::move(lights);
+        finish("ok", detail);
+      } else if (op == "gizmos") {
+        sceneEnvironment->ShowLightGizmos(command.value("shown", true));
+        finish("ok", {{"frame", guestFrame}});
+      } else if (op == "quit") {
+        finish("ok", place());
+        devLabQuit = true;
+      } else if (op != "wait") {
+        finish("rejected", {{"reason", "unknown op"}});
+      }
+    } catch (const std::exception &error) {
+      finish("rejected", {{"reason", error.what()}});
+    }
+    return;
+  }
+  ++devLabFrames;
+  const auto &command = *devLabCommand;
+  const std::string op = command["op"].get<std::string>();
+  if (op == "warp") {
+    // Settled: the given frames after arriving (title cards and fades).
+    if (status.Phase == Oot3dNativeGame::DevWarpPhase::Failed) {
+      finish("failed", {{"reason", status.Message}});
+    } else if (status.Phase == Oot3dNativeGame::DevWarpPhase::Arrived) {
+      if (!devLabSawArrival) {
+        devLabSawArrival = true;
+        devLabFrames = 0;
+      } else if (devLabFrames >= command.value("settleFrames", 60U)) {
+        finish("ok", place());
+      }
+    } else if (devLabFrames >= 3600U) {
+      finish("timeout", {{"reason", status.Message}});
+    }
+  } else if (op == "camera") {
+    // Held until the game took the free view for the given frames from the
+    // main camera (PlayState +0xA64, 0): a cutscene camera does not count.
+    int16_t activeCamera = -1;
+    const uint32_t playState = sceneViewProbe.Stats().LastPlayStateAddress;
+    if (playState != 0U)
+      (void)processStorage->Memory().Read16(playState + 0xA64U, reinterpret_cast<uint16_t *>(&activeCamera));
+    if (activeCamera != 0) devLabAppliedAt = camera.AppliedCount();
+    const uint64_t applied = camera.AppliedCount() - devLabAppliedAt;
+    if (applied >= command.value("holdFrames", 45U))
+      finish("ok", {{"frame", guestFrame}, {"applied", applied}});
+    else if (devLabFrames >= command.value("timeoutFrames", 900U))
+      finish("timeout", {{"frame", guestFrame}, {"applied", applied}, {"activeCamera", activeCamera}});
+  } else if (op == "wait") {
+    if (devLabFrames >= command.value("frames", 30U)) finish("ok", place());
+  }
+}
+
+void NativeA32WindowSession::UpdateDevFreeCamera(Oot3dNativeGame::NativeA32InputFrame &inputFrame) {
+  auto &freeCamera = *nativeCandidateDispatch.DevFreeCamera;
+  const Uint8 *keys = SDL_GetKeyboardState(nullptr);
+  const auto &io = ImGui::GetIO();
+  const bool keyboard = keys != nullptr && !io.WantCaptureKeyboard;
+  const bool toggle = keyboard && keys[SDL_SCANCODE_F6] != 0U;
+  if (toggle && !devFreeCameraToggleHeld) freeCamera.SetActive(!freeCamera.Active());
+  devFreeCameraToggleHeld = toggle;
+  const auto now = std::chrono::steady_clock::now();
+  const float seconds = devFreeCameraLastRefresh.time_since_epoch().count() == 0
+      ? 0.0F
+      : std::min(std::chrono::duration<float>(now - devFreeCameraLastRefresh).count(), 0.1F);
+  devFreeCameraLastRefresh = now;
+  // Physical sources, not the game's bindings (its R is the right mouse
+  // button): the mouse motion since the last refresh, the pad as it is.
+  auto &sources = nativeControlPollingState;
+  const float mouseX = static_cast<float>(sources.DevMouseDeltaX);
+  const float mouseY = static_cast<float>(sources.DevMouseDeltaY);
+  sources.DevMouseDeltaX = sources.DevMouseDeltaY = 0;
+  if (!freeCamera.Active()) return;
+  // Pad: left stick moves, right stick looks (120 degrees per second), L/R
+  // shoulders down/up.
+  float forward = sources.DevPadLeftStick[1];
+  float right = sources.DevPadLeftStick[0];
+  float up = (sources.DevPadRightShoulder ? 1.0F : 0.0F) - (sources.DevPadLeftShoulder ? 1.0F : 0.0F);
+  float yaw = -sources.DevPadRightStick[0] * 120.0F * seconds;
+  float pitch = sources.DevPadRightStick[1] * 120.0F * seconds;
+  float multiplier = 1.0F;
+  if (keyboard) {
+    // WASD moves, Q/E down/up, Shift faster, Ctrl slower.
+    forward += (keys[SDL_SCANCODE_W] ? 1.0F : 0.0F) - (keys[SDL_SCANCODE_S] ? 1.0F : 0.0F);
+    right += (keys[SDL_SCANCODE_D] ? 1.0F : 0.0F) - (keys[SDL_SCANCODE_A] ? 1.0F : 0.0F);
+    up += (keys[SDL_SCANCODE_E] ? 1.0F : 0.0F) - (keys[SDL_SCANCODE_Q] ? 1.0F : 0.0F);
+    if (keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT]) multiplier = 4.0F;
+    if (keys[SDL_SCANCODE_LCTRL] || keys[SDL_SCANCODE_RCTRL]) multiplier = 0.25F;
+  }
+  // Right mouse button held: look (0.15 degrees per pixel).
+  if (sources.DevMouseRightHeld && !io.WantCaptureMouse) {
+    yaw -= mouseX * 0.15F;
+    pitch -= mouseY * 0.15F;
+  }
+  const auto clampAxis = [](float value) { return std::clamp(value, -1.0F, 1.0F); };
+  freeCamera.Move(clampAxis(forward), clampAxis(right), clampAxis(up), yaw, pitch, seconds, multiplier);
+  // Link stays still: the game sees no pad, sticks or touch.
+  inputFrame.Hid.Buttons = 0U;
+  inputFrame.Hid.CirclePadX = inputFrame.Hid.CirclePadY = 0;
+  inputFrame.Hid.TouchPressed = false;
+  inputFrame.CStick = {};
+}
+#endif
+
 void NativeA32WindowSession::PublishNativeSceneView() {
   auto &process = *processStorage;
   // Guest memory is read here; the scene environment, the duplicate check
   // and the publish belong to the renderer and run in its order.
   auto snapshot = sceneViewProbe.Capture(process.Memory());
-  renderStream.Submit([&, snapshot] {
-  sceneEnvironment->ObserveScene(snapshot ? snapshot->SceneId : std::nullopt);
+  // SaveContext nightFlag (+0x10): 1 at night; picks a scene's night profile.
+  constexpr uint32_t kSaveContextNightFlag = 0x00587968U;
+  uint32_t nightFlag = 0U;
+  const bool night =
+      process.Memory().Read32(kSaveContextNightFlag, &nightFlag) && nightFlag != 0U;
+  // Where Link is (world position +0x28, shape yaw +0xBE: 0 faces +Z,
+  // 0x4000 +X), for lights placed from F1.
+  std::optional<Oot3dNativeGame::ScenePlayerPlacement> player;
+  if (const uint32_t actor = playerTimingProbe.Stats().LastPlayerAddress; actor != 0U) {
+    Oot3dNativeGame::ScenePlayerPlacement placement;
+    uint32_t bits[3]{};
+    uint16_t yaw = 0;
+    if (process.Memory().Read32(actor + 0x28U, &bits[0]) &&
+        process.Memory().Read32(actor + 0x2CU, &bits[1]) &&
+        process.Memory().Read32(actor + 0x30U, &bits[2]) &&
+        process.Memory().Read16(actor + 0xBEU, &yaw)) {
+      for (size_t axis = 0; axis < 3; ++axis)
+        placement.Position[axis] = std::bit_cast<float>(bits[axis]);
+      placement.Yaw = static_cast<float>(static_cast<int16_t>(yaw)) * (180.0F / 32768.0F);
+      if (std::isfinite(placement.Position[0]) && std::isfinite(placement.Position[1]) &&
+          std::isfinite(placement.Position[2]))
+        player = placement;
+    }
+  }
+  // Light gizmos also show while the developer free camera looks around.
+  bool freeCamera = false;
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+  freeCamera = nativeCandidateDispatch.DevFreeCamera->Active();
+  if (devEmitterLog && snapshot)
+    devEmitterLog->Observe(++devEmitterFrames, snapshot->PlayStateAddress, snapshot->SceneId, process.Memory());
+#endif
+  renderStream.Submit([&, snapshot, night, player, freeCamera] {
+  sceneEnvironment->ObserveScene(snapshot ? snapshot->SceneId : std::nullopt, night, player);
+  sceneEnvironment->PollProfileFiles();
+  sceneEnvironment->PublishLightGizmo(
+      snapshot && snapshot->CameraAvailable ? std::optional(snapshot->Eye) : std::nullopt, freeCamera);
   if (!snapshot.has_value() ||
       snapshot->Serial == lastPublishedSceneViewSerial) {
     return;
@@ -2158,7 +2544,10 @@ void NativeA32WindowSession::ExecuteVisualSample(const Oot3dNativeGame::Oot3dPic
   auto &api = *apiPointer;
   const auto started = std::chrono::steady_clock::now();
   (void)api.PublishPicaFrameTemporalSample(temporalSample);
-  Fast::Oot3d::GrassInteractionBridge::Instance().SelectSample(temporalSample);
+  // Only displayed samples advance the grass colliders: the authoritative
+  // replay of a new frame is not shown, and taking it as the previous position
+  // gave the next displayed sample a backward sweep.
+  if (present) Fast::Oot3d::GrassInteractionBridge::Instance().SelectSample(temporalSample);
   PinGpuCopyResources(sample);
   if (!picaPresentationScheduler.Execute(
           api, sample, renderTargetNamespace, kind,

@@ -76,13 +76,11 @@ GrassCollisionResult ResolveGrassCollision(
         }
     }
 
-    const float speed = Length2(interactor.Velocity[0],
-                                interactor.Velocity[2]);
-    const float velocityGain = 1.0F +
-        std::clamp(speed / 300.0F, 0.0F, 2.0F) *
-            settings.CollisionVelocityResponse;
-    result.Weight = (1.0F - distance / radius) *
-                    settings.CollisionPush * velocityGain;
+    // The direct push depends on contact alone. The velocity response
+    // belongs to the trail (GrassInteractionField::Stamp), which recovers with
+    // its spring: scaled here, the push would hide the trail's recovery
+    // while the actor moves and drop it at once when the actor stops.
+    result.Weight = (1.0F - distance / radius) * settings.CollisionPush;
     const float bend = std::min(result.Weight, settings.MaximumBend);
     result.Bend = {dx * bend, dz * bend};
     return result;

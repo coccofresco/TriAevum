@@ -3,8 +3,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <utility>
 #include <vector>
-#include <cstdio>
 #include <nlohmann/json.hpp>
 #include "fast/renderer3ds/pica_frame_timing.h"
 #include "fast/oot3d/grass_render_telemetry.h"
@@ -47,34 +47,31 @@ void MaybeWriteFramebufferScreenshot(const Args& args, Fast::GfxRenderingAPI& ap
         grassTransition = grass.FrameId != 0U && status != state.LastGrassDiagnosticStatus;
         state.LastGrassDiagnosticStatus = status;
     }
-    if (!grassTransition && !cameraTransition && !ShouldWriteFramebufferScreenshot(args, frameCount, state)) {
+    const bool forced = !state.ForcedPath.empty();
+    if (!forced && !grassTransition && !cameraTransition && !ShouldWriteFramebufferScreenshot(args, frameCount, state)) {
         return;
     }
 
-    std::vector<uint8_t> framebuffer(static_cast<size_t>(width) * height * 4U, 0);
     if (!grassDiagnostics) grass = Fast::Oot3d::GrassRenderTelemetry::Instance().Snapshot();
-    const auto screenshotPath =
-        args.ScreenshotSequence ? ScreenshotSequenceFramePath(args.ScreenshotPath, frameCount) : args.ScreenshotPath;
-    // Full precision where the backend can read it; otherwise the RGBA5551
-    // readback, declared as 5 bits per channel in the metadata and reported.
-    const bool fullPrecision = api.ReadFramebufferRgba8ToCPU(0, width, height, framebuffer.data());
+    const auto screenshotPath = forced ? std::exchange(state.ForcedPath, {})
+        : args.ScreenshotSequence ? ScreenshotSequenceFramePath(args.ScreenshotPath, frameCount) : args.ScreenshotPath;
+    // Forced (developer lab) captures and --screenshot-rgb8 keep the full
+    // 8-bit precision; other deterministic captures keep their RGBA5551
+    // baseline. The metadata records which one a file holds.
+    const bool rgb8 = forced || args.ScreenshotRgb8;
+    std::vector<uint8_t> rgb(rgb8 ? static_cast<size_t>(width) * height * 3u : 0U);
+    const bool fullPrecision = rgb8 && api.ReadFramebufferRgb8ToCPU(width, height, rgb.data());
     if (fullPrecision) {
-        WriteBmpFromRgba8Framebuffer(screenshotPath, width, height, framebuffer);
+        WriteBmpFromRgb8Framebuffer(screenshotPath, width, height, rgb);
     } else {
-        static bool reported = false;
-        if (!reported) {
-            reported = true;
-            std::fprintf(stderr, "TRIAEVUM_SCREENSHOT_RGB5 backend has no full-precision readback\n");
-        }
-        std::vector<uint16_t> rgba16(static_cast<size_t>(width) * height, 0);
-        api.ReadFramebufferToCPU(0, width, height, rgba16.data());
-        WriteBmpFromRgba5551Framebuffer(screenshotPath, width, height, rgba16);
+        std::vector<uint16_t> framebuffer(static_cast<size_t>(width) * height, 0);
+        api.ReadFramebufferToCPU(0, width, height, framebuffer.data());
+        WriteBmpFromRgba5551Framebuffer(screenshotPath, width, height, framebuffer);
     }
     nlohmann::json metadata = {
         {"format", "triaevum_framebuffer_sample_v1"}, {"host_frame", frameCount},
         {"width", width}, {"height", height}, {"temporal_sample", nullptr},
         {"rgb_bits_per_channel", fullPrecision ? 8 : 5},
-        {"readback_format", fullPrecision ? "RGBA8" : "RGBA5551"},
         {"scope", "synchronous_capture_not_performance_measurement"}};
     if (temporalSample && temporalSample->Available()) {
         const auto& sample = *temporalSample;
@@ -102,8 +99,9 @@ void MaybeWriteFramebufferScreenshot(const Args& args, Fast::GfxRenderingAPI& ap
     auto metadataPath = screenshotPath;
     metadataPath += ".json";
     WriteJsonFile(metadataPath, metadata);
-    state.Written = true;
     ++state.WrittenCount;
+    if (forced) return;
+    state.Written = true;
     state.Width = width;
     state.Height = height;
 }

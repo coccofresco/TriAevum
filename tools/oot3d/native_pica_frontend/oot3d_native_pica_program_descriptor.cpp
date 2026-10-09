@@ -1,6 +1,7 @@
 #include "oot3d_native_pica_program_descriptor.h"
 #include "oot3d_native_pica_canonical_hash.h"
 #include "oot3d_native_pica_fragment_lighting_gen.h"
+#include "oot3d_native_pica_fragment_shader_gen.h"
 #include "oot3d_native_pica_proctex.h"
 #include "fast/oot3d/pica_fragment_lighting.h"
 
@@ -206,6 +207,11 @@ uint64_t BuildFragmentProgramId(const Oot3dPicaDrawPacket& packet,
     for (uint16_t light = 0; light < 8U; ++light) {
         hash.AppendU32(packet.Registers[0x140U + light * 0x10U + 9U]);
     }
+    // Z-buffered depth with scale -1 and offset 0 is left to fixed function by
+    // the specialized program (another program than the explicit depth form),
+    // as its shader state key records. Only then, so other identities remain.
+    if (Oot3dPicaFragmentDepthIsRasterDepth(state))
+        hash.AppendU32(0x5A524153U);
     return hash.Finish();
 }
 

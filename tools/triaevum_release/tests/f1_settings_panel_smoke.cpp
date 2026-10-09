@@ -6,9 +6,12 @@
 #include "oot3d_game_language_panel.h"
 #include "oot3d_savestate_panel.h"
 #include "oot3d_scene_environment.h"
+#include "oot3d_scene_environment_codec.h"
+#include "fast/oot3d/world_debug_lines.h"
 #include "fast/MouseCapturePolicy.h"
 #include <imgui_internal.h>
 #include <nlohmann/json.hpp>
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <chrono>
@@ -323,8 +326,55 @@ void CheckSavestatePanel() {
     std::filesystem::remove_all(root, cleanup);
 }
 
+// The profile codec shared by the runtime and the environment tool.
+void CheckSceneEnvironmentCodec() {
+    using namespace Oot3dNativeGame;
+    auto profile = BaseSceneEnvironmentProfile();
+    profile.AmbientIntensity = 0.3F;
+    PlacedLight high;
+    high.Id = 0xFFFFFFFFU;
+    high.Name = "High id";
+    high.Type = PlacedLightType::Spot;
+    high.Intensity = 0.6F;
+    profile.PlacedLights.push_back(high);
+    const auto document = EncodeSceneEnvironment(profile, 0x55, true);
+    const auto text = FormatSceneEnvironment(document);
+    Check(text.find("\"ambientIntensity\": 0.3,") != std::string::npos && text.back() == '\n',
+          "canonical profiles do not write numbers in their shortest form");
+    const auto decoded = DecodeSceneEnvironment(nlohmann::json::parse(text), 0x55, true);
+    Check(decoded.Profile && *decoded.Profile == profile && decoded.Errors.empty(),
+          "a canonical profile does not decode to the same profile");
+    Check(!DecodeSceneEnvironment(nlohmann::json::parse(text), 0x55, false).Profile,
+          "a night profile decodes as a day profile");
+    // The whole 32-bit id: night and day, scenes and lights stay distinct.
+    Check(PlacedLightIdentity(0x55, false, 0xFFFFFFFFU) != PlacedLightIdentity(0x55, true, 0xFFFFFFFFU) &&
+              PlacedLightIdentity(0x55, false, 0x80000001U) != PlacedLightIdentity(0x55, true, 1U) &&
+              PlacedLightIdentity(0x55, false, 1U) != PlacedLightIdentity(0x56, false, 1U),
+          "placed light identities collide across time of day, scene or high ids");
+    auto broken = document;
+    broken["placedLights"][0]["id"] = 2.5;
+    broken["placedLights"][0]["intensity"] = 30;
+    broken["directionalLights"][1]["color"] = nlohmann::json::array({1, 2});
+    broken.erase("fogStrength");
+    broken["placedLights"].push_back(document["placedLights"][0]);
+    broken["placedLights"].push_back(document["placedLights"][0]);
+    const auto errors = DecodeSceneEnvironment(broken, 0x55, true).Errors;
+    const auto has = [&](const char* pointer) {
+        return std::any_of(errors.begin(), errors.end(), [&](const auto& error) { return error.Pointer == pointer; });
+    };
+    Check(has("/placedLights/0/id") && has("/placedLights/0/intensity") && has("/directionalLights/1/color") &&
+              has("/fogStrength") && has("/placedLights/2/id"),
+          "profile errors are not all reported at their JSON pointers");
+    const auto explained = ExplainSceneEnvironment(profile, 0x55, true);
+    Check(explained.at("renderer").at("placedLights").size() == 1U &&
+              explained.at("renderer").at("placedLights")[0].at("id") == 0xFFFFFFFFU &&
+              explained.at("dependsOnScene").size() == 1U,
+          "explain does not show the renderer's placed lights or the scene-following key light");
+}
+
 void CheckSceneEnvironment() {
     using namespace Oot3dNativeGame;
+    using Fast::Renderer3ds::PicaPlacedLightKind;
     const auto root = std::filesystem::temp_directory_path() /
         ("triaevum-environment-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     std::filesystem::create_directory(root);
@@ -544,6 +594,148 @@ void CheckSceneEnvironment() {
           "previous scene's environment leaked across a transition instead of the base");
     environment->ObserveScene(0x55);
     Check(environment->Snapshot().Profile == saved.Profile, "returning to scene did not restore its file");
+    // Day and night: one profile until the scene has a night profile, then
+    // the game's night flag picks it.
+    environment->ObserveScene(0x55, true);
+    Check(environment->Snapshot().Night && !environment->Snapshot().EditingNight &&
+              environment->Snapshot().Profile == saved.Profile,
+          "night without a night profile did not keep the scene's profile");
+    const auto dayScope = graphics.SnapshotForRendering().Environment.ScopeIdentity;
+    Click("Create night profile");
+    const auto nightPath = root / "scene-0055.night.environment.json";
+    Check(std::filesystem::exists(nightPath) && environment->Snapshot().EditingNight &&
+              environment->Snapshot().Path == nightPath &&
+              graphics.SnapshotForRendering().Environment.ScopeIdentity != dayScope,
+          "creating the night profile did not make it the night scope");
+    auto nightEdit = saved.Profile;
+    nightEdit.AmbientIntensity = 0.4F;
+    nightEdit.AmbientColor = {0.2F, 0.3F, 0.8F};
+    environment->Preview(nightEdit);
+    Click("Save scene environment");
+    nlohmann::json nightDocument;
+    { std::ifstream file(nightPath); file >> nightDocument; }
+    Check(nightDocument.value("timeOfDay", "") == "night" && nightDocument.at("ambientIntensity").get<float>() == 0.4F,
+          "the night profile was not saved to its own file");
+    environment->ObserveScene(0x55, false);
+    Check(!environment->Snapshot().EditingNight && environment->Snapshot().Profile == saved.Profile &&
+              graphics.SnapshotForRendering().Environment.AmbientIntensity == saved.Profile.AmbientIntensity,
+          "day did not return to the scene's own profile");
+    environment->ObserveScene(0x55, true);
+    Check(environment->Snapshot().Profile == nightEdit &&
+              graphics.SnapshotForRendering().Environment.AmbientIntensity == 0.4F,
+          "night did not take the night profile");
+    environment->ObserveScene(0x56, true);
+    Check(environment->Snapshot().Profile == BaseSceneEnvironmentProfile() && !environment->Snapshot().EditingNight,
+          "a scene without a night profile took another scene's");
+    environment->ObserveScene(0x55, true);
+    Click("Remove night profile");
+    Click("Remove");
+    Check(!std::filesystem::exists(nightPath) && !environment->Snapshot().EditingNight &&
+              environment->Snapshot().Profile == saved.Profile,
+          "removing the night profile did not return night to the scene's profile");
+    environment->ObserveScene(0x55, false);
+    // Placed lights: added where Link is, edited by type, saved in the profile.
+    environment->ObserveScene(0x55, false, ScenePlayerPlacement{{100.0F, 0.0F, 200.0F}, 90.0F});
+    Click("Add light at Link");
+    {
+        const auto placed = environment->Snapshot().Profile.PlacedLights;
+        const auto& rendered = graphics.SnapshotForRendering().Environment;
+        Check(placed.size() == 1U && placed[0].Position == std::array<float, 3>{100.0F, 50.0F, 200.0F} &&
+                  placed[0].Rotation[0] == 90.0F && placed[0].Type == PlacedLightType::Point &&
+                  rendered.PlacedLightCount == 1U && rendered.PlacedLights[0].Reach == 300.0F &&
+                  rendered.PlacedLights[0].Kind == PicaPlacedLightKind::Point &&
+                  rendered.PlacedLights[0].PositionWorld == placed[0].Position && !rendered.PlacedLights[0].CastShadows,
+              "a light added at Link was not placed there or not drawn");
+        // Yaw 90 faces +X; tilted 30 degrees down.
+        const auto axis = rendered.PlacedLights[0].AxisWorld;
+        Check(std::abs(axis[0] - 0.8660254F) < 1.0e-4F && std::abs(axis[1] + 0.5F) < 1.0e-4F &&
+                  std::abs(axis[2]) < 1.0e-4F,
+              "the placed light's axis does not follow its yaw and pitch");
+    }
+    Select("Light type", "Spot");
+    Check(environment->Snapshot().Profile.PlacedLights[0].Type == PlacedLightType::Spot &&
+              graphics.SnapshotForRendering().Environment.PlacedLights[0].Kind == PicaPlacedLightKind::Spot &&
+              std::abs(graphics.SnapshotForRendering().Environment.PlacedLights[0].CosOuter - 0.9238795F) < 1.0e-4F &&
+              Find("Beam angle").Rect.GetHeight() > 0.0F,
+          "a spot light is not drawn as a spot or its beam controls are missing");
+    Select("Light type", "Surface");
+    Check(Find("Surface width").Rect.GetHeight() > 0.0F && Find("Emit from both sides").Rect.GetHeight() > 0.0F &&
+              graphics.SnapshotForRendering().Environment.PlacedLights[0].Kind == PicaPlacedLightKind::Rectangle &&
+              graphics.SnapshotForRendering().Environment.PlacedLights[0].HalfWidth == 50.0F,
+          "the surface light controls are missing or it is not drawn as a rectangle");
+    Select("Surface shape", "Disc");
+    Check(graphics.SnapshotForRendering().Environment.PlacedLights[0].Kind == PicaPlacedLightKind::Disc &&
+              Find("Surface radius").Rect.GetHeight() > 0.0F,
+          "a disc surface is not drawn as a disc");
+    Select("Light type", "Sun");
+    Check(Find("Cast shadows").Disabled &&
+              graphics.SnapshotForRendering().Environment.PlacedLights[0].Kind == PicaPlacedLightKind::Sun,
+          "a sun light offers shadows or is not drawn as a sun");
+    Select("Light type", "Omni");
+    Click("Cast shadows");
+    Check(graphics.SnapshotForRendering().Environment.PlacedLightCount == 1U &&
+              graphics.SnapshotForRendering().Environment.PlacedLights[0].Kind == PicaPlacedLightKind::Omni &&
+              graphics.SnapshotForRendering().Environment.PlacedLights[0].CastShadows,
+          "an omni light did not cast shadows");
+    // Light gizmos: published while the editor is drawn, none once turned off.
+    {
+        using Fast::Oot3d::WorldDebugLineRuntime;
+        environment->PublishLightGizmo(std::array<float, 3>{100.0F, 50.0F, 700.0F});
+        const auto lines = WorldDebugLineRuntime::Instance().Latest();
+        const auto hasLine = [&](const std::array<float, 3>& from, const std::array<float, 3>& to) {
+            return lines != nullptr && std::any_of(lines->Lines.begin(), lines->Lines.end(), [&](const auto& line) {
+                       return line.From == from && line.To == to;
+                   });
+        };
+        Check(lines != nullptr && lines->Lines.size() >= 3U * 64U + 3U &&
+                  hasLine({100.0F - 20000.0F, 50.0F, 200.0F}, {100.0F + 20000.0F, 50.0F, 200.0F}) &&
+                  hasLine({100.0F, 50.0F - 20000.0F, 200.0F}, {100.0F, 50.0F + 20000.0F, 200.0F}),
+              "the placed light's gizmo (its reach and move axes) was not published");
+        Click("Show light gizmos");
+        environment->PublishLightGizmo(std::array<float, 3>{100.0F, 50.0F, 700.0F});
+        Check(WorldDebugLineRuntime::Instance().Latest() == nullptr, "light gizmos turned off are still drawn");
+        Click("Show light gizmos");
+        // A camera at the origin looking down -Z (near 1, far 1000): a line
+        // from behind it is cut at the near plane; the physical framebuffer
+        // takes the logical Y as X and the logical X reversed as Y.
+        std::array<float, 16> clip{};
+        clip[0] = 1.0F;
+        clip[5] = 1.0F;
+        clip[10] = 1000.0F / (1.0F - 1000.0F);
+        clip[11] = -1.0F;
+        clip[14] = 1000.0F / (1.0F - 1000.0F);
+        Fast::Oot3d::WorldDebugLineSet set;
+        set.Lines.push_back({{1.0F, 2.0F, 10.0F}, {1.0F, 2.0F, -10.0F}, {1.0F, 1.0F, 1.0F, 1.0F}});
+        set.Lines.push_back({{0.0F, 0.0F, 5.0F}, {0.0F, 0.0F, 1.0F}, {1.0F, 1.0F, 1.0F, 1.0F}});
+        const auto vertices = Fast::Oot3d::BuildWorldDebugLineVertices(set, clip);
+        Check(vertices.size() == 6U && std::abs(vertices[0].ClipFrom[2] / vertices[0].ClipFrom[3]) < 1.0e-3F &&
+                  std::abs(vertices[0].ClipTo[0] / vertices[0].ClipTo[3] - 0.2F) < 1.0e-5F &&
+                  std::abs(vertices[0].ClipTo[1] / vertices[0].ClipTo[3] + 0.1F) < 1.0e-5F,
+              "world debug lines are not cut at the near plane or not turned into the framebuffer");
+    }
+    Click("Save scene environment");
+    {
+        nlohmann::json document;
+        { std::ifstream file(saved.Path); file >> document; }
+        Check(document.at("placedLights").size() == 1U && document["placedLights"][0].at("type") == "omni" &&
+                  document["placedLights"][0].at("castShadows") == true,
+              "the placed light was not saved in the profile");
+    }
+    Click("Duplicate light");
+    Check(environment->Snapshot().Profile.PlacedLights.size() == 2U &&
+              environment->Snapshot().Profile.PlacedLights[1].Id != environment->Snapshot().Profile.PlacedLights[0].Id,
+          "a duplicated light kept its identity");
+    Click("Delete light");
+    Click("Delete light");
+    Check(environment->Snapshot().Profile.PlacedLights.empty() &&
+              graphics.SnapshotForRendering().Environment.PlacedLightCount == 0U,
+          "deleted lights are still drawn");
+    Click("Reload scene environment");
+    Check(environment->Snapshot().Profile.PlacedLights.size() == 1U, "reload lost the saved placed light");
+    auto withoutLights = environment->Snapshot().Profile;
+    withoutLights.PlacedLights.clear();
+    environment->Preview(withoutLights);
+    Click("Save scene environment");
     const auto backup = root / "saved.json";
     std::filesystem::rename(saved.Path, backup);
     std::filesystem::create_directory(saved.Path);
@@ -1876,6 +2068,7 @@ int main() try {
     Check(differentRom.SystemId() == 1, "unsupported old language leaked into another ROM");
     std::filesystem::remove(languagePath);
     CheckSavestatePanel();
+    CheckSceneEnvironmentCodec();
     CheckSceneEnvironment();
     InstallGraphicsSettingsPanelTabs({});
     CheckTitleWithoutSceneHooks();

@@ -380,6 +380,12 @@ Json SerializeGrassRule(const GrassPlacementRule& rule) {
         {"OutputWhite", rule.OutputWhite},
         {"MaximumSlopeDegrees", rule.MaximumSlopeDegrees},
         {"NormalOffset", rule.NormalOffset},
+        {"ActiveRects", [&rule] {
+             Json rects = Json::array();
+             for (const auto& rect : rule.ActiveRects)
+                 rects.push_back({rect.MinU, rect.MinV, rect.MaxU, rect.MaxV});
+             return rects;
+         }()},
     };
 }
 
@@ -618,6 +624,22 @@ GrassPlacementRule DeserializeGrassRule(
                prefix + ".MaximumSlopeDegrees", result);
     ReadScalar(document, "NormalOffset", rule.NormalOffset,
                prefix + ".NormalOffset", result);
+    // Optional: absent means the whole mask applies (earlier files).
+    if (const Json* rects = FindMember(document, "ActiveRects"); rects != nullptr) {
+        bool valid = rects->is_array();
+        for (size_t i = 0; valid && i < rects->size(); ++i) {
+            const auto& entry = (*rects)[i];
+            valid = entry.is_array() && entry.size() == 4U &&
+                    std::all_of(entry.begin(), entry.end(), [](const Json& value) { return value.is_number(); });
+            if (valid)
+                rule.ActiveRects.push_back({entry[0].get<float>(), entry[1].get<float>(), entry[2].get<float>(),
+                                            entry[3].get<float>()});
+        }
+        if (!valid) {
+            rule.ActiveRects.clear();
+            Correct(result, prefix + ".ActiveRects", "invalid active rectangles removed");
+        }
+    }
     return rule;
 }
 
@@ -1225,6 +1247,15 @@ std::string_view EnhancedPresetDocument() noexcept {
       "DepthBiasSlope": 1.75,
       "MaximumDistance": 6550.0,
       "Mode": "VirtualShadowMaps",
+      "ContactShadows": {
+        "Blur": 1.0,
+        "Enabled": false,
+        "HalfResolution": true,
+        "Length": 1,
+        "Opacity": 1.0,
+        "SurfaceThickness": 0.009999999776482582
+      },
+      "NormalBias": 1.0,
       "PcfRadius": 2,
       "Resolution": 2048,
       "Strength": 1.0
@@ -1518,6 +1549,14 @@ SerializeGraphicsSettings(const GraphicsSettings& settings) {
                    directionalShadows.DepthBiasSlope},
                   {"Strength", directionalShadows.Strength},
                   {"PcfRadius", directionalShadows.PcfRadius},
+                  {"NormalBias", directionalShadows.NormalBias},
+                  {"ContactShadows",
+                   {{"Enabled", directionalShadows.ContactShadows.Enabled},
+                    {"Length", directionalShadows.ContactShadows.Length},
+                    {"SurfaceThickness", directionalShadows.ContactShadows.SurfaceThickness},
+                    {"Opacity", directionalShadows.ContactShadows.Opacity},
+                    {"Blur", directionalShadows.ContactShadows.Blur},
+                    {"HalfResolution", directionalShadows.ContactShadows.HalfResolution}}},
               }},
              {"PointShadows",
               {
@@ -1602,6 +1641,7 @@ SerializeGraphicsSettings(const GraphicsSettings& settings) {
                    effects.ReflectionRoughnessBias},
                   {"DebugView",
                    effects.ReflectionDebugView},
+                  {"Water", effects.WaterReflections},
                   {"Materials", std::move(reflectionRules)},
               }},
              {"Toon",
@@ -1883,6 +1923,26 @@ GraphicsSettingsLoadResult DeserializeGraphicsSettings(
                     *shadows, "PcfRadius", settings.PcfRadius,
                     "Graphics.Effects.DirectionalShadows.PcfRadius",
                     result);
+                if (FindMember(*shadows, "NormalBias") != nullptr)
+                    ReadScalar(*shadows, "NormalBias", settings.NormalBias,
+                               "Graphics.Effects.DirectionalShadows.NormalBias", result);
+                // Optional: documents from before keep the defaults (off).
+                if (const Json* contact = FindMember(*shadows, "ContactShadows"); contact != nullptr) {
+                    const std::string contactPath = "Graphics.Effects.DirectionalShadows.ContactShadows.";
+                    auto& value = settings.ContactShadows;
+                    if (!contact->is_object()) {
+                        Correct(result, contactPath + "*", "non-object value restored from defaults");
+                    } else {
+                        ReadScalar(*contact, "Enabled", value.Enabled, contactPath + "Enabled", result);
+                        ReadScalar(*contact, "Length", value.Length, contactPath + "Length", result);
+                        ReadScalar(*contact, "SurfaceThickness", value.SurfaceThickness,
+                                   contactPath + "SurfaceThickness", result);
+                        ReadScalar(*contact, "Opacity", value.Opacity, contactPath + "Opacity", result);
+                        ReadScalar(*contact, "Blur", value.Blur, contactPath + "Blur", result);
+                        ReadScalar(*contact, "HalfResolution", value.HalfResolution,
+                                   contactPath + "HalfResolution", result);
+                    }
+                }
                 if (version < 12U || legacyMode) {
                     // The old distance sized a camera-fitted map; it is not a
                     // virtual-map coverage limit. Preserve strength/filter/bias.
@@ -2091,6 +2151,10 @@ GraphicsSettingsLoadResult DeserializeGraphicsSettings(
             ReadScalar(*reflections, "DebugView",
                        value.ReflectionDebugView,
                        "Graphics.Effects.Reflections.DebugView",
+                       result);
+            ReadScalar(*reflections, "Water",
+                       value.WaterReflections,
+                       "Graphics.Effects.Reflections.Water",
                        result);
             if (const Json* materials =
                     FindMember(*reflections, "Materials");

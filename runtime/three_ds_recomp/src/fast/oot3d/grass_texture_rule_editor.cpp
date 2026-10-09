@@ -23,13 +23,15 @@ bool EnumCombo(const char* label, T& value,
     return true;
 }
 
-void DrawMaskPreview(
+// The mask as extraction sees it (active rectangles included). Left-drag on
+// it adds an active rectangle; right-click removes the one under the cursor.
+bool DrawMaskPreview(
     const GrassScalarMask& mask,
-    const GrassPlacementRule& rule) {
+    GrassPlacementRule& rule) {
     if (mask.Samples.empty() || mask.Width == 0U ||
         mask.Height == 0U) {
         ImGui::TextDisabled("Mask preview unavailable");
-        return;
+        return false;
     }
 
     constexpr uint32_t kMaximumPreviewCells = 64U;
@@ -48,7 +50,46 @@ void DrawMaskPreview(
         previewWidth,
         std::clamp(previewWidth * aspect, 24.0F, 180.0F)};
     const ImVec2 origin = ImGui::GetCursorScreenPos();
-    ImGui::InvisibleButton("##GrassMaskPreview", previewSize);
+    ImGui::InvisibleButton("##GrassMaskPreview", previewSize,
+                           ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
+    const auto toMask = [&](ImVec2 point) {
+        return ImVec2(std::clamp((point.x - origin.x) / previewSize.x, 0.0F, 1.0F),
+                      std::clamp((point.y - origin.y) / previewSize.y, 0.0F, 1.0F));
+    };
+    bool changed = false;
+    const ImGuiIO& io = ImGui::GetIO();
+    if (ImGui::IsItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&
+        ImGui::IsMouseDragging(ImGuiMouseButton_Left, 2.0F) &&
+        rule.ActiveRects.size() < kMaximumGrassMaskRects) {
+        const ImVec2 start = toMask({io.MouseClickedPos[0].x, io.MouseClickedPos[0].y});
+        const ImVec2 end = toMask(io.MousePos);
+        const ImVec2 a{origin.x + std::min(start.x, end.x) * previewSize.x,
+                       origin.y + std::min(start.y, end.y) * previewSize.y};
+        const ImVec2 b{origin.x + std::max(start.x, end.x) * previewSize.x,
+                       origin.y + std::max(start.y, end.y) * previewSize.y};
+        ImGui::GetWindowDrawList()->AddRect(a, b, IM_COL32(255, 200, 40, 255), 0.0F, 0, 2.0F);
+    }
+    if (ImGui::IsItemDeactivated() && rule.ActiveRects.size() < kMaximumGrassMaskRects &&
+        ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+        const ImVec2 start = toMask({io.MouseClickedPos[0].x, io.MouseClickedPos[0].y});
+        const ImVec2 end = toMask(io.MousePos);
+        if (std::abs(end.x - start.x) > 0.01F && std::abs(end.y - start.y) > 0.01F) {
+            rule.ActiveRects.push_back({std::min(start.x, end.x), std::min(start.y, end.y),
+                                        std::max(start.x, end.x), std::max(start.y, end.y)});
+            changed = true;
+        }
+    }
+    if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+        const ImVec2 at = toMask(io.MousePos);
+        for (size_t i = rule.ActiveRects.size(); i-- > 0;) {
+            const auto& rect = rule.ActiveRects[i];
+            if (at.x >= rect.MinU && at.x <= rect.MaxU && at.y >= rect.MinV && at.y <= rect.MaxV) {
+                rule.ActiveRects.erase(rule.ActiveRects.begin() + static_cast<std::ptrdiff_t>(i));
+                changed = true;
+                break;
+            }
+        }
+    }
 
     ImDrawList* drawList = ImGui::GetWindowDrawList();
     double total = 0.0;
@@ -74,7 +115,11 @@ void DrawMaskPreview(
             const float value = EvaluateGrassMaskLevel(
                 static_cast<float>(mask.Samples[sourceIndex]) /
                     255.0F,
-                rule);
+                rule,
+                (static_cast<float>(sourceX) + 0.5F) /
+                    static_cast<float>(mask.Width),
+                (static_cast<float>(sourceY) + 0.5F) /
+                    static_cast<float>(mask.Height));
             total += value;
             nonZero += value > (0.5F / 255.0F) ? 1U : 0U;
             full += value >= (254.5F / 255.0F) ? 1U : 0U;
@@ -101,6 +146,10 @@ void DrawMaskPreview(
         origin,
         {origin.x + previewSize.x, origin.y + previewSize.y},
         ImGui::GetColorU32(ImGuiCol_Border));
+    for (const auto& rect : rule.ActiveRects)
+        drawList->AddRect({origin.x + rect.MinU * previewSize.x, origin.y + rect.MinV * previewSize.y},
+                          {origin.x + rect.MaxU * previewSize.x, origin.y + rect.MaxV * previewSize.y},
+                          IM_COL32(255, 200, 40, 255), 0.0F, 0, 1.5F);
     const float sampleCount =
         static_cast<float>(columns * rows);
     ImGui::TextDisabled(
@@ -108,6 +157,7 @@ void DrawMaskPreview(
         static_cast<float>(total / sampleCount),
         100.0F * static_cast<float>(nonZero) / sampleCount,
         100.0F * static_cast<float>(full) / sampleCount);
+    return changed;
 }
 
 } // namespace
@@ -164,7 +214,39 @@ bool DrawGrassTextureRuleControls(
     changed |= ImGui::SliderFloat(
         "Output white", &rule.OutputWhite,
         0.0F, 1.0F, "%.3f");
-    DrawMaskPreview(scalarMask, rule);
+    changed |= DrawMaskPreview(scalarMask, rule);
+
+    ImGui::SeparatorText("Active rectangles");
+    if (rule.ActiveRects.empty())
+        ImGui::TextDisabled("None: the whole mask applies. Drag on the preview to add one.");
+    else
+        ImGui::TextDisabled("Only inside them the mask applies; elsewhere it is 0 (right-click removes).");
+    for (size_t i = 0; i < rule.ActiveRects.size(); ++i) {
+        auto& rect = rule.ActiveRects[i];
+        ImGui::PushID(static_cast<int>(i));
+        changed |= ImGui::DragFloatRange2("U", &rect.MinU, &rect.MaxU, 0.002F, 0.0F, 1.0F, "%.3f", "%.3f",
+                                          ImGuiSliderFlags_AlwaysClamp);
+        changed |= ImGui::DragFloatRange2("V", &rect.MinV, &rect.MaxV, 0.002F, 0.0F, 1.0F, "%.3f", "%.3f",
+                                          ImGuiSliderFlags_AlwaysClamp);
+        if (ImGui::SmallButton("Remove rectangle")) {
+            rule.ActiveRects.erase(rule.ActiveRects.begin() + static_cast<std::ptrdiff_t>(i));
+            changed = true;
+            ImGui::PopID();
+            break;
+        }
+        ImGui::PopID();
+    }
+    if (rule.ActiveRects.size() < kMaximumGrassMaskRects && ImGui::Button("Add rectangle")) {
+        rule.ActiveRects.push_back({0.25F, 0.25F, 0.75F, 0.75F});
+        changed = true;
+    }
+    if (!rule.ActiveRects.empty()) {
+        ImGui::SameLine();
+        if (ImGui::Button("Clear rectangles")) {
+            rule.ActiveRects.clear();
+            changed = true;
+        }
+    }
 
     ImGui::SeparatorText("Surface filtering");
     changed |= ImGui::SliderFloat(

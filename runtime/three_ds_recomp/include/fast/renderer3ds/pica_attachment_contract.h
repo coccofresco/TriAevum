@@ -84,6 +84,8 @@ struct PicaAttachmentFeatureRequests {
     // With GlobalIllumination: the GI gathers on screen from the guides, so
     // no scene distance field is built.
     bool ScreenSpaceGlobalIllumination = false;
+    // With DirectionalShadows: screen-space contact shadows of its light.
+    bool ContactShadows = false;
     bool operator==(const PicaAttachmentFeatureRequests&) const = default;
 };
 

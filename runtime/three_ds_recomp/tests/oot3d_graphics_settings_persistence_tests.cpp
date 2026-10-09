@@ -104,8 +104,10 @@ Fast::Oot3d::GraphicsSettings CompleteSettings() {
     grassRule.OutputWhite = 0.93F;
     grassRule.MaximumSlopeDegrees = 37.0F;
     grassRule.NormalOffset = 0.7F;
+    grassRule.ActiveRects = {{0.1F, 0.2F, 0.5F, 0.6F}, {0.7F, 0.0F, 1.0F, 0.25F}};
     grass.Rules.push_back(grassRule);
     GrassPlacementRule secondGrassRule = grassRule;
+    secondGrassRule.ActiveRects.clear();
     secondGrassRule.RuleId = 8U;
     secondGrassRule.Target.AssetName = "field/flowers_mask";
     secondGrassRule.Target.Rgba8Hash = 0x1020304050607080ULL;
@@ -130,6 +132,8 @@ Fast::Oot3d::GraphicsSettings CompleteSettings() {
     effects.DirectionalShadows.DepthBiasSlope = 2.25F;
     effects.DirectionalShadows.Strength = 3.25F;
     effects.DirectionalShadows.PcfRadius = 2U;
+    effects.DirectionalShadows.NormalBias = 2.5F;
+    effects.DirectionalShadows.ContactShadows = {true, 2U, 0.02F, 0.75F, 0.5F, false};
     effects.PointShadows.Mode = PointShadowMode::CubeMaps;
     effects.PointShadows.Resolution = 1024U;
     effects.PointShadows.MaxLights = 6U;
@@ -386,6 +390,8 @@ TEST(Oot3dGraphicsSettingsPersistence, MigratesSingleCascadeWithoutLosingTheOffC
     shadows["Mode"] = "SingleCascade";
     shadows["Resolution"] = 1024;
     shadows["MaximumDistance"] = 1310;
+    shadows.erase("NormalBias");
+    shadows.erase("ContactShadows");
     shadows["DepthPadding"] = 30;
     shadows["Stabilize"] = false;
     const auto migrated = DeserializeGraphicsSettings(document);
@@ -395,6 +401,9 @@ TEST(Oot3dGraphicsSettingsPersistence, MigratesSingleCascadeWithoutLosingTheOffC
     EXPECT_FLOAT_EQ(migrated.Value.Effects.DirectionalShadows.MaximumDistance, 65536.0F);
     EXPECT_FLOAT_EQ(migrated.Value.Effects.DirectionalShadows.Strength, 3.25F);
     EXPECT_FLOAT_EQ(migrated.Value.Effects.DirectionalShadows.DepthBiasSlope, 2.25F);
+    // Documents from before the normal bias take its default.
+    EXPECT_FLOAT_EQ(migrated.Value.Effects.DirectionalShadows.NormalBias, DirectionalShadowSettings{}.NormalBias);
+    EXPECT_EQ(migrated.Value.Effects.DirectionalShadows.ContactShadows, ContactShadowSettings{});
     const auto saved = SerializeGraphicsSettings(migrated.Value);
     const auto reloaded = DeserializeGraphicsSettings(saved);
     EXPECT_FALSE(reloaded.NeedsRewrite);
@@ -437,6 +446,10 @@ TEST(Oot3dGraphicsSettingsPersistence, RoundTripsCompleteSettings) {
     ASSERT_EQ(loaded.Value.Grass.Rules.size(), 2U);
     EXPECT_EQ(loaded.Value.Grass.Rules[0].Target.Rgba8Hash,
               0xFEDCBA9876543210ULL);
+    ASSERT_EQ(loaded.Value.Grass.Rules[0].ActiveRects.size(), 2U);
+    EXPECT_EQ(loaded.Value.Grass.Rules[0].ActiveRects[1],
+              (Fast::Oot3d::GrassMaskRect{0.7F, 0.0F, 1.0F, 0.25F}));
+    EXPECT_TRUE(loaded.Value.Grass.Rules[1].ActiveRects.empty());
     EXPECT_EQ(
         loaded.Value.Grass.Rules[1].Channel,
         Fast::Oot3d::GrassSampleChannel::Alpha);

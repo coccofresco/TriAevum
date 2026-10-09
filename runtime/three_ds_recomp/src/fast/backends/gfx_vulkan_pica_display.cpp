@@ -2,6 +2,7 @@
 // clears, overlays and memory fills.
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_pica_internal.h"
+#include "fast/renderer3ds/pica_surface_debug.h"
 
 namespace Fast {
 
@@ -2245,6 +2246,41 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
             }
             if (activeReflectionProvider ==
                 Oot3d::ReflectionProvider::HiZ) {
+                // The drawn water's map: rebuilt when the pieces on screen
+                // change (their keys, in order).
+                const Renderer3ds::PicaWaterMap* waterMap = nullptr;
+                if (effectGuideTarget != nullptr && effectGuideTarget->WaterPiecesFrame == mFrameCounter &&
+                    !effectGuideTarget->WaterPieces.empty()) {
+                    auto keys = effectGuideTarget->WaterPieceKeys;
+                    std::sort(keys.begin(), keys.end());
+                    uint64_t signature = 1469598103934665603ULL;
+                    for (const uint64_t key : keys) signature = (signature ^ key) * 1099511628211ULL;
+                    if (signature != mWaterMapSignature) {
+                        std::vector<const Renderer3ds::PicaWaterTriangles*> sets;
+                        for (const auto& pieces : effectGuideTarget->WaterPieces) sets.push_back(pieces.get());
+                        mWaterMap = Renderer3ds::BuildPicaWaterMap(sets);
+                        mWaterMapSignature = signature;
+                        ++mWaterMapVersion;
+                    }
+                    waterMap = &mWaterMap;
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+                    // The lab frames every piece and landing of the map.
+                    if (Renderer3ds::PicaSurfaceDebug::Instance().Tracing()) {
+                        std::string line = "{\"waterMap\":[";
+                        for (const auto& region : Renderer3ds::PicaWaterMapRegions(mWaterMap)) {
+                            char text[192];
+                            std::snprintf(text, sizeof(text),
+                                          "%s{\"landing\":%d,\"height\":%.1f,\"min\":[%.1f,%.1f],"
+                                          "\"max\":[%.1f,%.1f],\"texels\":%u}",
+                                          line.back() == '[' ? "" : ",", region.Landing ? 1 : 0, region.Height,
+                                          region.MinimumXZ[0], region.MinimumXZ[1], region.MaximumXZ[0],
+                                          region.MaximumXZ[1], region.Texels);
+                            line += text;
+                        }
+                        Renderer3ds::PicaSurfaceDebug::Instance().Write(line + "]}");
+                    }
+#endif
+                }
                 const bool hiZExecuted =
                     transientReflectionOutput != nullptr &&
                     mHiZReflectionPass.Configure(
@@ -2263,7 +2299,32 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                         *presentationPerspective,
                         presentationSettings.Effects,
                         reflectionBarrierPlan,
-                        Oot3d::PicaSurfaceCoordinates::FromTransferFlags(transfer.Flags));
+                        Oot3d::PicaSurfaceCoordinates::FromTransferFlags(transfer.Flags),
+                        [&] {
+                            // Water surfaces the trace finds itself (the
+                            // title's transparent water writes no depth).
+                            // The title's bodies and the planes of catalog
+                            // water without one.
+                            const auto worldToView = effectGuideTarget->SampleView.Resolve(mFrameCounter);
+                            Renderer3ds::PicaSceneWaterBodies bodies;
+                            if (effectGuideTarget->WaterBodies &&
+                                effectGuideTarget->WaterBodiesFrame == mFrameCounter)
+                                bodies = *effectGuideTarget->WaterBodies;
+                            if (effectGuideTarget->WaterPlanesFrame == mFrameCounter) {
+                                const auto& planes = effectGuideTarget->WaterPlanes;
+                                for (uint32_t i = 0; i < planes.Count &&
+                                     bodies.Count < Renderer3ds::kMaximumPicaSceneWaterBodies; ++i)
+                                    bodies.Bodies[bodies.Count++] = planes.Bodies[i];
+                            }
+                            const bool water = bodies.Count != 0U && worldToView;
+                            return Oot3d::BuildHiZWaterUniforms(
+                                water ? &*worldToView : nullptr,
+                                water ? &bodies : nullptr,
+                                std::chrono::duration<float>(std::chrono::steady_clock::now() - mWaterEpoch).count(),
+                                mWaterOnlyReflections,
+                                mWaterRipplesFrame == mFrameCounter ? &mWaterRings : nullptr, waterMap);
+                        }(),
+                        waterMap, mWaterMapVersion);
                 if (hiZExecuted) {
                     recordEffectPassTransitions(
                         mHiZReflectionPass.LastBarrierExecution());

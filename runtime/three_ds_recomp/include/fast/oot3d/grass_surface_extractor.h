@@ -77,6 +77,13 @@ struct GrassPlacementSet {
 // the canonical mask evaluation used by extraction and editor previews.
 [[nodiscard]] float EvaluateGrassMaskLevel(
     float sample, const GrassPlacementRule& rule) noexcept;
+// Whether a mask position (normalized, after wrap) is active: inside one of
+// the rule's rectangles, or anywhere when it lists none.
+[[nodiscard]] bool GrassMaskPositionActive(
+    const GrassPlacementRule& rule, float u, float v) noexcept;
+// The level at a mask position: zero outside the active rectangles.
+[[nodiscard]] float EvaluateGrassMaskLevel(
+    float sample, const GrassPlacementRule& rule, float u, float v) noexcept;
 
 [[nodiscard]] uint64_t GrassPlacementRuleVersion(
     const GrassPlacementRule& rule,

@@ -89,6 +89,9 @@ def prepare(args) -> dict:
     if receipt["product"]["capabilities"].get("experimental_global_illumination") is not False:
         raise ValueError("The release runtime must not offer the experimental global illumination "
                          "(configure with THREE_DS_RECOMP_OFFER_EXPERIMENTAL_GI=OFF)")
+    if receipt["product"]["capabilities"].get("developer_tools") is not False:
+        raise ValueError("The release runtime must not contain the developer tools "
+                         "(configure with TRIAEVUM_DEVELOPER_TOOLS=OFF)")
     source_zip = work / "TriAevum-source.zip"
     create_source_archive(ROOT, source_zip, source_commit=commit)
     forge_exe = build_forge(work / "forge-binary", work / "forge-build",

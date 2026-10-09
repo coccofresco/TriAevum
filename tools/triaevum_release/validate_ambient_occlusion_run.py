@@ -77,7 +77,7 @@ def main():
         result["validation_errors"] = max((f.get("vulkan_validation_error_count", 0) +
                                             f.get("nri_validation_error_count", 0) for f in frames), default=0)
     result["live_steps"] = (root / "stderr.log").read_text(encoding="utf-8").count("AO diagnostic:")
-    runtime_log = root / "logs" / "OOT3D Native Game.log"
+    runtime_log = root / "logs" / "oot3d_native_game.log"
     result["storage_format_mismatch"] = runtime_log.exists() and "Format operand" in runtime_log.read_text(encoding="utf-8")
     result["framebuffer_captured"] = (root / "framebuffer.bmp").exists()
     result["passed"] = (result.get("exit_code") == 0 and

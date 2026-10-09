@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <bit>
 #include <cmath>
+#include <fstream>
 
 namespace Fast::Oot3d {
 namespace {
@@ -127,6 +128,7 @@ void GrassTextureSourceCache::ObserveDecoded(
     if (inserted) {
         mSources.emplace(rgba8Hash, Source{width, height,
             std::make_shared<const std::vector<uint8_t>>(rgba8.begin(), rgba8.end())});
+        ++mGeneration;
     }
     auto& source = mSources.at(rgba8Hash);
     const auto observation = ++mObservationSerial;
@@ -312,8 +314,48 @@ GrassTextureSourceCache::AcquireAverageColor(
     return found->second.AverageColor;
 }
 
+std::shared_ptr<const GrassTextureSignature> GrassTextureSourceCache::Find(
+    uint64_t rgba8Hash, bool persist) {
+    std::scoped_lock lock(mMutex);
+    const auto found = mSources.find(rgba8Hash);
+    if (found == mSources.end()) {
+        const auto stored = mStoredSignatures.find(rgba8Hash);
+        return stored == mStoredSignatures.end() ? nullptr : stored->second;
+    }
+    auto& source = found->second;
+    if (source.Signature == nullptr)
+        source.Signature = std::make_shared<const GrassTextureSignature>(
+            ComputeGrassTextureSignature(source.Width, source.Height, *source.Rgba8));
+    if (persist && !mSignatureStore.empty()) {
+        // Kept once; a changed payload under the same hash is not expected.
+        const auto [stored, added] = mStoredSignatures.try_emplace(rgba8Hash, source.Signature);
+        if (added) {
+            std::ofstream output(mSignatureStore, std::ios::binary | std::ios::app);
+            if (output) WriteGrassTextureSignature(output, rgba8Hash, *source.Signature);
+        }
+    }
+    return source.Signature;
+}
+
+uint64_t GrassTextureSourceCache::Generation() const {
+    std::scoped_lock lock(mMutex);
+    return mGeneration;
+}
+
+void GrassTextureSourceCache::SetSignatureStore(std::filesystem::path path) {
+    std::scoped_lock lock(mMutex);
+    mSignatureStore = std::move(path);
+    mStoredSignatures.clear();
+    if (std::ifstream input(mSignatureStore, std::ios::binary); input) {
+        for (auto& [hash, signature] : ReadGrassTextureSignatures(input))
+            mStoredSignatures[hash] = std::make_shared<const GrassTextureSignature>(signature);
+    }
+    ++mGeneration;
+}
+
 void GrassTextureSourceCache::Clear() {
     std::scoped_lock lock(mMutex);
+    ++mGeneration;
     mSources.clear();
     mDecodedToObserved.clear();
     mObservationSerial = 0;

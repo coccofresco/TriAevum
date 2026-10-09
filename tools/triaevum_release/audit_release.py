@@ -294,6 +294,9 @@ def audit_release(
             # offers it nor selects it by default.
             if contract["product"]["capabilities"].get("experimental_global_illumination") is not False:
                 reject("runtime contract does not exclude the experimental global illumination")
+            # Developer tools (warp screen, warp points) never ship.
+            if contract["product"]["capabilities"].get("developer_tools") is not False:
+                reject("runtime contract does not exclude the developer tools")
             graphics = contract["product"]["default_config"]["Graphics"]
             if graphics.get("Effects", {}).get("GlobalIllumination", {}).get("Mode", "Off") != "Off":
                 reject("runtime default configuration enables global illumination")

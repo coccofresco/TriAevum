@@ -24,9 +24,12 @@ struct PicaVirtualShadowLayout {
 };
 layout(set=0,binding=12,std140) uniform PicaVirtualShadowReceiver {
     vec4 shadow_state;
-    vec4 shadowed_direct_fraction;
+    // x: smooth-shaded receivers' normal bias (texels); y: 1 with contact
+    // shadows; w: light mask.
+    vec4 receiver;
     uvec4 extent;
     vec4 dissolve;
+    mat4 contact_projection;
     PicaVirtualShadowLayout layouts[2];
 } pica_vsm;
 uint pica_vsm_page(int layout_index, int level, ivec2 cell) {
@@ -93,6 +96,14 @@ float pica_vsm_filter(int layout_index, int level, vec3 light, vec2 depth_gradie
     float width = float(2 * radius + 1);
     return visibility / (width * width);
 }
+// The finest level that holds a light-space position.
+int pica_vsm_first_level(int layout_index, vec3 light) {
+    vec3 relative = light - pica_vsm.layouts[layout_index].camera_light.xyz;
+    float distance_plane = max(abs(relative.x), abs(relative.y));
+    int count = int(pica_vsm.layouts[layout_index].camera_light.w);
+    float finest_page = pica_vsm.layouts[layout_index].levels[0].z;
+    return clamp(int(ceil(log2(max(distance_plane / (3.0 * finest_page), 1.0)))), 0, count - 1);
+}
 vec2 pica_vsm_occlusion(int layout_index, vec3 light, vec2 depth_gradient) {
     if ((pica_vsm.extent.w & 1u) == 0u || light.z < 0.0 || light.z > 1.0) return vec2(0.0);
     vec3 relative = light - pica_vsm.layouts[layout_index].camera_light.xyz;
@@ -100,10 +111,9 @@ vec2 pica_vsm_occlusion(int layout_index, vec3 light, vec2 depth_gradient) {
     float depth_extent = max(maximum_distance * 4.0, 65536.0);
     float world_distance = length(vec3(relative.xy, relative.z * (2.0 * depth_extent)));
     if (world_distance >= maximum_distance) return vec2(0.0);
-    float distance_plane = max(abs(relative.x), abs(relative.y));
     int count = int(pica_vsm.layouts[layout_index].camera_light.w);
-    float finest_page = pica_vsm.layouts[layout_index].levels[0].z;
-    int first = clamp(int(ceil(log2(max(distance_plane / (3.0 * finest_page), 1.0)))), 0, count - 1);
+    float distance_plane = max(abs(relative.x), abs(relative.y));
+    int first = pica_vsm_first_level(layout_index, light);
     float visibility = 1.0;
     for (int level = first; level < count; ++level) {
         float sample_visibility = pica_vsm_filter(layout_index, level, light, depth_gradient);
@@ -125,20 +135,37 @@ vec2 pica_vsm_occlusion(int layout_index, vec3 light, vec2 depth_gradient) {
     return vec2(1.0 - visibility, fade);
 }
 // Visibility of an input-space position in one layout; dx and dy span the
-// receiver's surface in input space.
-float pica_vsm_layout_visibility(int layout_index, vec3 position, vec3 dx, vec3 dy) {
+// receiver's surface in input space for a receiver-plane depth slope (zero:
+// none); normal is its vertex normal in input space (zero: no normal bias).
+float pica_vsm_layout_visibility(int layout_index, vec3 position, vec3 dx, vec3 dy, vec3 normal) {
     vec4 light = pica_vsm.layouts[layout_index].input_to_light * vec4(position, 1.0);
     if (abs(light.w) <= 1.0e-7) return 1.0;
     // Differentiate before normalized-depth translation to retain D32 slopes.
     mat3 linear = mat3(pica_vsm.layouts[layout_index].input_to_light);
+    // Godot's directional normal bias (scene_forward_clustered.glsl): along
+    // the vertex normal, weighted by 1 - max(0, -N.L), its part along the
+    // light removed; texels of the level the position reads.
+    float normal_length = dot(normal, normal);
+    if (pica_vsm.receiver.x > 0.0 && normal_length > 1.0e-12) {
+        vec3 unit = normal * inversesqrt(normal_length);
+        vec3 axis = vec3(linear[0].z, linear[1].z, linear[2].z);
+        // Depth grows away from the light.
+        vec3 toward = -axis * inversesqrt(max(dot(axis, axis), 1.0e-30));
+        vec3 bias = unit * (1.0 - max(0.0, dot(toward, -unit)));
+        bias -= toward * dot(toward, bias);
+        int level = pica_vsm_first_level(layout_index, light.xyz / light.w);
+        float texel_world = pica_vsm.layouts[layout_index].levels[level].z / 128.0;
+        light += pica_vsm.layouts[layout_index].input_to_light *
+                 vec4(bias * (pica_vsm.receiver.x * texel_world), 0.0);
+    }
     vec2 sample_value = pica_vsm_occlusion(layout_index, light.xyz / light.w,
                                            pica_vsm_depth_gradient(linear * dx, linear * dy));
     return max(0.0, 1.0 - sample_value.x * clamp(pica_vsm.shadow_state.x, 0.0, 4.0) * sample_value.y);
 }
-float pica_vsm_visibility(vec3 position, vec3 dx, vec3 dy) {
-    float visibility = pica_vsm_layout_visibility(0, position, dx, dy);
+float pica_vsm_visibility(vec3 position, vec3 dx, vec3 dy, vec3 normal) {
+    float visibility = pica_vsm_layout_visibility(0, position, dx, dy, normal);
     if ((pica_vsm.extent.w & 2u) != 0u)
-        visibility = mix(pica_vsm_layout_visibility(1, position, dx, dy), visibility, pica_vsm.dissolve.x);
+        visibility = mix(pica_vsm_layout_visibility(1, position, dx, dy, normal), visibility, pica_vsm.dissolve.x);
     return visibility;
 }
 )glsl";

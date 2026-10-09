@@ -326,7 +326,7 @@ class ForgeWindow:
         self.worker_process = None
         self.closing = threading.Event()
 
-        self.root.title("TriAevum Forge")
+        self.root.title("TriAevum Forge — Echoes of Time")
         self.root.geometry("760x390")
         self.root.minsize(760, 390)
         self.root.protocol("WM_DELETE_WINDOW", self._close)
@@ -640,7 +640,7 @@ class ForgeWindow:
                     self._refresh_actions()
                     self.messagebox.showinfo(
                         "TriAevum Forge",
-                        "The title is ready. You can launch TriAevum now.",
+                        "The title is ready. You can launch TriAevum — Echoes of Time now.",
                         parent=self.root,
                     )
         except queue.Empty:

@@ -1,4 +1,5 @@
 // Per-block native candidates of the A32 window: TopScreen UI source-port blocks and product hooks.
+#include <cstring>
 #include "oot3d_native_a32_window_shared.h"
 
 namespace Oot3dA32Window {
@@ -378,6 +379,59 @@ bool ExecuteTopScreenUiSourcePortBlock(
   if (pc == kTopScreenCameraUpdateEntry ||
       pc == kTopScreenCameraUpdatePatchSite) {
     const bool enteredAtFunctionEntry = pc == kTopScreenCameraUpdateEntry;
+    // Developer free camera: the main camera's update is replaced by the
+    // free view (no Link follow, no collision), and returns to the caller.
+    if (enteredAtFunctionEntry &&
+        dispatch.TopScreenCamera.Phase == Oot3dNativeGame::TopScreenCameraGuestPhase::Idle &&
+        dispatch.DevFreeCamera != nullptr && dispatch.DevFreeCamera->Active()) {
+      const uint32_t out = state.r[0];
+      const uint32_t camera = state.r[1];
+      const auto readVec = [&](uint32_t address, std::array<float, 3> &value) {
+        for (uint32_t axis = 0; axis < 3U; ++axis) {
+          uint32_t bits = 0U;
+          if (!memory.Read32(address + axis * 4U, &bits)) return false;
+          std::memcpy(&value[axis], &bits, sizeof(bits));
+        }
+        return true;
+      };
+      const auto writeVec = [&](uint32_t address, const std::array<float, 3> &value) {
+        for (uint32_t axis = 0; axis < 3U; ++axis) {
+          uint32_t bits = 0U;
+          std::memcpy(&bits, &value[axis], sizeof(bits));
+          if (!memory.Write32(address + axis * 4U, bits)) return false;
+        }
+        return true;
+      };
+      uint32_t play = 0U;
+      std::array<float, 3> gameEye{}, gameAt{};
+      // Camera +0xD4 is its PlayState; the main camera is PlayState +0x364.
+      if (memory.Read32(camera + 0xD4U, &play) && play != 0U && camera == play + 0x364U &&
+          readVec(camera + 0x8CU, gameEye) && readVec(camera + 0x80U, gameAt)) {
+        if (const auto view = dispatch.DevFreeCamera->ResolveView(gameEye, gameAt)) {
+          // Camera at/eye (+0x80/+0x8C/+0xA4) and the PlayState view
+          // (eye +0x1B8, at +0x1C4, up +0x1D0), as the TopScreen camera writes.
+          if (!writeVec(camera + 0x80U, view->At) || !writeVec(camera + 0x8CU, view->Eye) ||
+              !writeVec(camera + 0xA4U, view->Eye) || !writeVec(play + 0x1C4U, view->At) ||
+              !writeVec(play + 0x1B8U, view->Eye) || !writeVec(play + 0x1D0U, {0.0F, 1.0F, 0.0F}) ||
+              !memory.Write16(out, static_cast<uint16_t>(view->Pitch)) ||
+              !memory.Write16(out + 2U, static_cast<uint16_t>(view->Yaw)) ||
+              !memory.Write16(out + 4U, 0U))
+            return false;
+          if (!dispatch.DevFreeCameraReported) {
+            dispatch.DevFreeCameraReported = true;
+            std::fprintf(stderr, "TRIAEVUM_DEV_FREECAM applied camera=0x%08X eye=%.1f,%.1f,%.1f\n", camera,
+                         view->Eye[0], view->Eye[1], view->Eye[2]);
+          }
+          state.r[0] = out;
+          state.r[15] = state.r[14];
+          *result = {oot3d::recomp::a32::ExitKind::Branch, state.r[14],
+                     oot3d::recomp::a32::FallbackReason::None, pc};
+          if (blocksConsumed != nullptr)
+            *blocksConsumed = 1U;
+          return true;
+        }
+      }
+    }
     if (enteredAtFunctionEntry &&
         dispatch.TopScreenCamera.Phase ==
             Oot3dNativeGame::TopScreenCameraGuestPhase::Idle) {

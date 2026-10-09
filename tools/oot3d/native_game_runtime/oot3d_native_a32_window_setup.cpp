@@ -673,6 +673,9 @@ void NativeA32WindowSession::Setup() {
   widescreenProjection.TopScreenInputClock =
       &nativeCandidateDispatch.TopScreenInputClock;
   widescreenProjection.TopScreenItems = &nativeCandidateDispatch.TopScreenItems;
+  // After the dispatch state is rebuilt: an earlier pointer would name the
+  // free camera that assignment destroyed.
+  widescreenProjection.DevFreeCamera = nativeCandidateDispatch.DevFreeCamera.get();
   nativeCandidateDispatch.TopScreenItems.TraceEnabled = launch.ExtendedDiagnostics;
   nativeCandidateDispatch.UiLifecycleBridge = &uiLifecycleBridge;
   nativeCandidateDispatch.PicaCompositionDomain = &picaCompositionDomain;
@@ -814,6 +817,45 @@ void NativeA32WindowSession::Setup() {
   if (titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur) {
     applicationSettingsTabs.push_back(Oot3dNativeGame::CreateSceneEnvironmentPanel(sceneEnvironment));
   }
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+  if (const char *tour = std::getenv("TRIAEVUM_DEV_FREECAM_TOUR"); tour != nullptr && *tour != '\0') {
+    std::string text = tour;
+    size_t start = 0;
+    while (start < text.size()) {
+      const size_t end = std::min(text.find(';', start), text.size());
+      DevFreeCameraTourPose pose;
+      std::string entry = text.substr(start, end - start);
+      if (!entry.empty() && entry.front() == '@') {
+        pose.Absolute = true;
+        entry.erase(0, 1);
+      }
+      if (std::sscanf(entry.c_str(), "%f,%f,%f,%f,%f", &pose.Forward, &pose.Right, &pose.Up, &pose.Yaw,
+                      &pose.Pitch) == 5)
+        devTourPoses.push_back(pose);
+      start = end + 1;
+    }
+    const char *out = std::getenv("TRIAEVUM_DEV_FREECAM_TOUR_OUT");
+    devTourDirectory = out != nullptr ? std::filesystem::path(out) : std::filesystem::current_path();
+    std::filesystem::create_directories(devTourDirectory);
+    // A boot warp point is noticed when it is requested (UpdateDevFreeCameraTour).
+    devTourAfterWarp = std::getenv("TRIAEVUM_DEV_WARP") != nullptr;
+    std::fprintf(stderr, "TRIAEVUM_DEV_FREECAM_TOUR poses=%zu out=%s\n", devTourPoses.size(),
+                 devTourDirectory.string().c_str());
+  }
+  if (const char *lab = std::getenv("TRIAEVUM_DEV_LAB"); lab != nullptr && *lab != '\0') {
+    devLab = std::make_unique<Oot3dNativeGame::DevLabChannel>(lab);
+    std::fprintf(stderr, "TRIAEVUM_DEV_LAB %s\n", lab);
+  }
+  if (const char *emitters = std::getenv("TRIAEVUM_DEV_EMITTERS"); emitters != nullptr && *emitters != '\0') {
+    devEmitterLog = std::make_unique<Oot3dNativeGame::NativeEmitterInventoryLog>(emitters);
+    std::fprintf(stderr, "TRIAEVUM_DEV_EMITTERS %s\n", emitters);
+  }
+  // Agents edit scene profiles on disk while the game runs.
+  if (const char *reload = std::getenv("TRIAEVUM_ENVIRONMENT_HOT_RELOAD"); reload != nullptr && *reload != '0') {
+    sceneEnvironment->SetHotReload(true);
+    std::fprintf(stderr, "TRIAEVUM_ENVIRONMENT_HOT_RELOAD enabled\n");
+  }
+#endif
   applicationSettingsTabs.push_back(
       Oot3dNativeGame::CreateNativeControlsSettingsPanel(
           controlConfigRuntime,
@@ -830,6 +872,41 @@ void NativeA32WindowSession::Setup() {
   applicationSettingsTabs.push_back(
       Oot3dNativeGame::CreateSavestatePanel(savestateLibrary));
   applicationSettingsTabs.push_back(Oot3dNativeGame::CreateGameLanguagePanel(languageSettings));
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+  devWarp = std::make_shared<Oot3dNativeGame::DevWarpRuntime>(
+      std::filesystem::path(launch.Host.ConfigurationPath).parent_path() / "developer-tools.json");
+  applicationSettingsTabs.push_back(
+      Oot3dNativeGame::CreateDevToolsPanel(devWarp, nativeCandidateDispatch.DevFreeCamera,
+                                           languageSettings->BootLanguage()));
+  // Scripted check of the Better list without the menu:
+  // TRIAEVUM_DEV_WARP=<scene>:<entrance>:<child|adult>:<day|night> (list
+  // indices), requested when gameplay first starts.
+  // TRIAEVUM_DEV_FREECAM=<x>,<y>,<z>,<yaw>,<pitch>: the free camera at a fixed
+  // pose from the start (degrees; yaw 0 faces +Z, pitch positive up).
+  if (const char *pose = std::getenv("TRIAEVUM_DEV_FREECAM")) {
+    std::array<float, 3> eye{};
+    float yaw = 0.0F, pitch = 0.0F;
+    if (std::sscanf(pose, "%f,%f,%f,%f,%f", &eye[0], &eye[1], &eye[2], &yaw, &pitch) != 5)
+      throw std::runtime_error("TRIAEVUM_DEV_FREECAM must be <x>,<y>,<z>,<yaw>,<pitch>");
+    nativeCandidateDispatch.DevFreeCamera->SetPose(eye, yaw, pitch);
+    std::fprintf(stderr, "TRIAEVUM_DEV_FREECAM pose=%.1f,%.1f,%.1f yaw=%.1f pitch=%.1f\n", eye[0], eye[1], eye[2], yaw, pitch);
+  }
+  if (const char *script = std::getenv("TRIAEVUM_DEV_WARP")) {
+    int scene = -1, entrance = -1;
+    char age[8]{}, time[8]{};
+    const auto scenes = Oot3dNativeGame::DevWarpBetterScenes();
+    if (std::sscanf(script, "%d:%d:%7[a-z]:%7[a-z]", &scene, &entrance, age, time) != 4 || scene < 0 ||
+        scene >= static_cast<int>(scenes.size()) || entrance < 0 ||
+        entrance >= static_cast<int>(scenes[static_cast<size_t>(scene)].Count)) {
+      throw std::runtime_error("TRIAEVUM_DEV_WARP must be <scene>:<entrance>:<child|adult>:<day|night>");
+    }
+    devWarp->WarpTo(Oot3dNativeGame::DevWarpBetterEntrances()[scenes[static_cast<size_t>(scene)].First +
+                                                               static_cast<size_t>(entrance)],
+                    std::string_view(age) == "adult" ? Oot3dNativeGame::DevWarpAge::Adult
+                                                     : Oot3dNativeGame::DevWarpAge::Child,
+                    std::string_view(time) == "night");
+  }
+#endif
   Fast::Oot3d::InstallGraphicsSettingsPanelTabs(
       std::move(applicationSettingsTabs));
   if (const char* title = Oot3dNativeGame::TitleGraphicsWindowTitle(titleAdapter)) {

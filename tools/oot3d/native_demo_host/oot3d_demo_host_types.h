@@ -16,6 +16,9 @@ struct Args {
     std::filesystem::path OutputPath;
     std::filesystem::path ScreenshotPath;
     bool ScreenshotSequence = false;
+    // Deterministic screenshots at full 8-bit precision instead of the
+    // RGBA5551 baseline (for comparisons that must not band gradients).
+    bool ScreenshotRgb8 = false;
     uint32_t ScreenshotStartFrame = 0;
     uint32_t ScreenshotSequenceInterval = 1;
     uint32_t FrameLimit = 0;

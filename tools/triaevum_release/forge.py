@@ -919,6 +919,7 @@ def publish_private_runtime(
     launch_profile: Path,
     data_root: Path,
     topscreen_texture_pack: Path | None = None,
+    water_texture_catalog: Path | None = None,
     package_root: Path | None = None,
     pica_shader_pack: Path | None = None,
     renderer_cache_directory: Path | None = None,
@@ -999,6 +1000,10 @@ def publish_private_runtime(
         if not topscreen_texture_pack.is_file():
             raise ForgeError("TopScreen texture pack is missing before activation")
         profile["arguments"].extend(("--topscreen-texture-overrides", str(topscreen_texture_pack.resolve())))
+    if water_texture_catalog is not None:
+        if not water_texture_catalog.is_file():
+            raise ForgeError("Water texture catalog is missing before activation")
+        profile["arguments"].extend(("--water-texture-catalog", str(water_texture_catalog.resolve())))
     context = InstallationContext(installation)
     if pica_shader_pack is not None:
         if not pica_shader_pack.is_file():
@@ -1008,7 +1013,8 @@ def publish_private_runtime(
         profile["arguments"].extend(("--renderer-cache-directory", str(renderer_cache_directory.resolve())))
     path_options = {"--title-plugin", "--a32-process-manifest", "--resource-root",
                     "--config", "--topscreen-config", "--save-data", "--output",
-                    "--topscreen-texture-overrides", "--pica-aot-shader-pack", "--renderer-cache-directory"}
+                    "--topscreen-texture-overrides", "--water-texture-catalog", "--pica-aot-shader-pack",
+                    "--renderer-cache-directory"}
     scopes = {}
     for index, argument in enumerate(profile["arguments"][:-1]):
         if argument in path_options:
@@ -1049,6 +1055,11 @@ def publish_private_runtime(
         prepared.state["runtime"]["topscreen_textures"] = {
             "path": context.reference(topscreen_texture_pack, prepared.directory),
             "sha256": sha256_file(topscreen_texture_pack),
+        }
+    if water_texture_catalog is not None:
+        prepared.state["runtime"]["water_textures"] = {
+            "path": context.reference(water_texture_catalog, prepared.directory),
+            "sha256": sha256_file(water_texture_catalog),
         }
     if pica_shader_pack is not None:
         prepared.state["runtime"]["pica_shader_pack"] = {

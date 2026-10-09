@@ -14,6 +14,7 @@
 #include <vulkan/vulkan.h>
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <optional>
@@ -45,6 +46,16 @@ struct NriDirectionalShadowExecuteDesc {
     float NativeDirectStrength = 1.0F;
     // Resolves the key's direction from the casters' scene snapshot.
     const Renderer3ds::PicaEnvironmentLighting* Environment = nullptr;
+    // The target's host extent: the contact shadows' camera depth and
+    // visibility are this size.
+    uint32_t ScreenWidth = 0;
+    uint32_t ScreenHeight = 0;
+    // The temporal jitter sequence, 0 without temporal accumulation: the
+    // contact shadows' noise phase (Godot's taa_frame_count).
+    uint64_t TemporalFrame = 0;
+    // Optional GPU profiler marks of the contact shadows' steps; the
+    // backend resumes its own label after ExecuteMap.
+    std::function<void(const char*)> ProfileMark;
 };
 
 struct NriDirectionalShadowHistorySnapshot {
@@ -53,10 +64,18 @@ struct NriDirectionalShadowHistorySnapshot {
     VkSampler Sampler = VK_NULL_HANDLE;
     VkFormat Format = VK_FORMAT_D32_SFLOAT;
     PicaDirectionalShadowHistoryState State;
+    // The contact shadows' visibility (R8) when State.ContactShadows.
+    VkImage ContactImage = VK_NULL_HANDLE;
+    uint32_t ContactWidth = 0;
+    uint32_t ContactHeight = 0;
 
     [[nodiscard]] bool Valid() const noexcept {
         return Image != VK_NULL_HANDLE && View != VK_NULL_HANDLE &&
                Sampler != VK_NULL_HANDLE && State.Valid();
+    }
+    [[nodiscard]] bool ContactValid() const noexcept {
+        return Valid() && State.ContactShadows && ContactImage != VK_NULL_HANDLE && ContactWidth != 0U &&
+               ContactHeight != 0U;
     }
 };
 

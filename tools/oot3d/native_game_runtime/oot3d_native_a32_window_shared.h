@@ -4,6 +4,7 @@
 // title addresses, the dispatch and projection state, and the functions the window calls.
 
 #include "oot3d_native_a32_window.h"
+#include "oot3d_dev_free_camera.h"
 #include "three_ds_sdl_controller.h"
 #include "oot3d_prebackend_budget.h"
 #include "oot3d_cpu_phase_probe.h"
@@ -542,6 +543,8 @@ struct NativeWidescreenProjectionState {
       PendingTopScreenPauseChildRestore;
   Oot3dNativeGame::NativeFrameRatePolicy *FrameRatePolicy = nullptr;
   Oot3dNativeGame::NativeA32SceneViewProbe *SceneViewProbe = nullptr;
+  // The developer free camera owns Camera_Update while it is active.
+  const Oot3dNativeGame::DevFreeCamera *DevFreeCamera = nullptr;
   Oot3dNativeGame::NativeA32PlayerTimingProbe *PlayerTimingProbe = nullptr;
   Oot3dNativeGame::NativeTemporalEventLedger *TemporalEventLedger = nullptr;
   Oot3dNativeGame::NativeA32PlayerTemporalBridge *PlayerTemporalBridge =
@@ -569,6 +572,10 @@ struct NativeCandidateDispatchState {
   bool TopScreenPauseAotBarrier = false;
   bool TopScreenExtendedCameraActive = false;
   Oot3dNativeGame::TopScreenFreeCameraGuestRuntime TopScreenCamera;
+  // Developer free camera (inactive unless F1 > Dev Tools turns it on).
+  std::shared_ptr<Oot3dNativeGame::DevFreeCamera> DevFreeCamera =
+      std::make_shared<Oot3dNativeGame::DevFreeCamera>();
+  bool DevFreeCameraReported = false;
   Oot3dNativeGame::TopScreenCameraFovOwnership TopScreenCameraFov;
   Oot3dNativeGame::NativeFreeCameraInputAccumulator TopScreenCameraInput;
   Oot3dNativeGame::TopScreenExtendedInputFrame TopScreenInput;
@@ -662,6 +669,17 @@ struct NativeControlPollingState {
   ThreeDsRecomp::Input::VirtualMotionState VirtualMotion;
   uint32_t PreviousControllerButtons = 0;
   uint32_t PendingControllerButtons = 0;
+  // The developer free camera's own physical sources, apart from the game's
+  // bindings (the right mouse button is the game's R): mouse motion since it
+  // last read it, the right mouse button, and the pad's sticks (-1..1, dead
+  // zone applied; Y up) and shoulders.
+  int64_t DevMouseDeltaX = 0;
+  int64_t DevMouseDeltaY = 0;
+  bool DevMouseRightHeld = false;
+  std::array<float, 2> DevPadLeftStick{};
+  std::array<float, 2> DevPadRightStick{};
+  bool DevPadLeftShoulder = false;
+  bool DevPadRightShoulder = false;
 };
 
 bool ExecuteProductTopScreenHook(uint32_t pc, oot3d::recomp::a32::GuestState &state,

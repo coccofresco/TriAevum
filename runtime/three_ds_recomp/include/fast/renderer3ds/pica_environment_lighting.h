@@ -35,6 +35,50 @@ struct PicaScenePointLightSettings {
     bool operator==(const PicaScenePointLightSettings&) const = default;
 };
 
+// A light the title placed in the scene. Applies while the environment is
+// enabled; a shadowing light (not a sun) competes for a point-shadow cube map
+// at its position.
+inline constexpr uint32_t kMaximumPicaPlacedLights = 16U;
+// The shader's codes (PicaPlacedLightUniforms::AxisKind.w).
+enum class PicaPlacedLightKind : uint8_t {
+    // Range falloff 1 - d^2/r^2, as the scene point lights.
+    Omni = 0,
+    // Inverse square (the colour at kPicaPlacedLightReferenceDistance), cut
+    // smoothly at the reach.
+    Point = 1,
+    // Point falloff within a cone around the axis.
+    Spot = 2,
+    // An emitting rectangle or disc facing the axis: its form factor from the
+    // closest point of the shape, cut at the reach.
+    Rectangle = 3,
+    Disc = 4,
+    // Parallel light travelling along the axis; never shadowed.
+    Sun = 5,
+};
+inline constexpr float kPicaPlacedLightReferenceDistance = 100.0F;
+struct PicaPlacedLight {
+    uint64_t SourceIdentity = 0;
+    PicaPlacedLightKind Kind = PicaPlacedLightKind::Omni;
+    std::array<float, 3> PositionWorld{};
+    // Unit emission direction: the spot's beam, the surface's front face,
+    // the sun's light.
+    std::array<float, 3> AxisWorld{ 0.0F, -1.0F, 0.0F };
+    // Unit width direction of a rectangle (perpendicular to the axis).
+    std::array<float, 3> TangentWorld{ 1.0F, 0.0F, 0.0F };
+    // Linear RGB already scaled by the light's intensity.
+    std::array<float, 3> Color{};
+    float Reach = 0.0F;
+    // Rectangle half extents; a disc's radius is HalfWidth.
+    float HalfWidth = 0.0F;
+    float HalfHeight = 0.0F;
+    // Spot: cosines of the beam's half angle and of its hard core.
+    float CosOuter = 0.0F;
+    float CosInner = 0.0F;
+    bool TwoSided = false;
+    bool CastShadows = false;
+    bool operator==(const PicaPlacedLight&) const = default;
+};
+
 // Explicit extension inputs, never a replacement for native PICA state.
 // The title owns profile identity, persistence and world-axis conventions.
 struct PicaEnvironmentLighting {
@@ -62,6 +106,14 @@ struct PicaEnvironmentLighting {
     std::array<float, 3> WorldAzimuthZero{ 0.0F, 0.0F, 1.0F };
     // Independent of the directional/ambient override; title-owned groups.
     std::array<PicaScenePointLightSettings, kPicaScenePointLightGroups> PointLights{};
+    // Lights placed in the scene (their own per-draw slots).
+    std::array<PicaPlacedLight, kMaximumPicaPlacedLights> PlacedLights{};
+    uint32_t PlacedLightCount = 0;
+    // Directional shadow casters keep the title's face culling; off, both
+    // faces of every caster draw into the map (open or one-sided meshes
+    // whose culled faces leave holes or leak light). Independent of the
+    // lighting override.
+    bool ShadowCasterCulling = true;
     bool operator==(const PicaEnvironmentLighting&) const = default;
 };
 

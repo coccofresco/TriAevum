@@ -26,7 +26,8 @@ void ApplyNativeWidescreenProjectionPolicy(
   }
   const bool enabledTopScreenCameraExit =
       (pc != kTopScreenCameraUpdateEntry ||
-       runtime.TopScreenConfig.FreeCameraEnabled) &&
+       runtime.TopScreenConfig.FreeCameraEnabled ||
+       (runtime.DevFreeCamera != nullptr && runtime.DevFreeCamera->Active())) &&
       (pc != kTopScreenCameraNormal1Scalar ||
        runtime.TopScreenConfig.CameraZoomPercent != 100U);
   const bool enabledTopScreenItemExit =

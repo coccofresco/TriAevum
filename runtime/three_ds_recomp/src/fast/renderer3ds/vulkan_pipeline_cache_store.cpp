@@ -36,11 +36,11 @@ VulkanPipelineCacheHeader MakePipelineCacheHeader(const VkPhysicalDeviceProperti
 
 bool LoadPipelineCacheData(const std::filesystem::path& path,
                            const VulkanPipelineCacheHeader& expected,
-                           std::vector<uint8_t>& data) {
+                           std::vector<uint8_t>& data, uint64_t maximumBytes) {
     data.clear();
     std::error_code error;
     const auto size = std::filesystem::file_size(path, error);
-    if (error || size <= kHeaderBytes || size > kHeaderBytes + kMaximumPipelineCacheBytes) return false;
+    if (error || size <= kHeaderBytes || size > kHeaderBytes + maximumBytes) return false;
     std::ifstream input(path, std::ios::binary);
     std::array<uint8_t, kHeaderBytes> header{};
     if (!input.read(reinterpret_cast<char*>(header.data()), header.size())) return false;
@@ -60,9 +60,10 @@ bool LoadPipelineCacheData(const std::filesystem::path& path,
 
 bool StorePipelineCacheData(const std::filesystem::path& path,
                             const VulkanPipelineCacheHeader& identity,
-                            std::span<const uint8_t> data, std::string* error) {
+                            std::span<const uint8_t> data, std::string* error,
+                            uint64_t maximumBytes) {
     try {
-        if (path.empty() || data.empty() || data.size() > kMaximumPipelineCacheBytes)
+        if (path.empty() || data.empty() || data.size() > maximumBytes)
             throw std::runtime_error("invalid pipeline cache path or size");
         std::vector<uint8_t> header;
         Append(header, kMagic, 4); Append(header, kVersion, 4);

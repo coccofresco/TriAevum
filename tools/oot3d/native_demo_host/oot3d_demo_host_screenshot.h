@@ -16,6 +16,9 @@ struct FramebufferScreenshotState {
     int LastGrassDiagnosticStatus = -1;
     uint64_t LastTemporalDiagnosticEpoch = 0;
     uint32_t TemporalDiagnosticFrames = 0;
+    // A single capture of the next frame to this path (developer camera
+    // tours), besides the arguments' own schedule.
+    std::filesystem::path ForcedPath;
 };
 
 bool ShouldWriteFramebufferScreenshot(const Args& args, uint32_t frameCount,

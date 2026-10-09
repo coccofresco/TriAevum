@@ -1,5 +1,6 @@
 #include "fast/oot3d/builtin_pass_shaders.h"
 #include "fast/oot3d/brixelizer_gi_prepare_shader.h"
+#include "fast/oot3d/contact_shadows.h"
 #include "fast/oot3d/diffuse_gi_adapter.h"
 #include "fast/oot3d/grass_shader_sources.h"
 #include "fast/oot3d/hiz_depth_pyramid.h"
@@ -71,6 +72,11 @@ std::vector<BuiltinPassShader> BuildBuiltinPassShaders() {
         shaders.push_back({kernel.Name, Compute, std::move(kernel.Source), {}});
     // Its OOT3D adapter kernel (pass inputs from the renderer's guides).
     shaders.push_back({"oot3d_diffuse_gi_inputs.comp", Compute, BuildDiffuseGiAdapterShader(), {}});
+    // Contact shadows, one kernel per length (Godot's READ_COUNT).
+    constexpr const char* kContactShadowNames[kContactShadowLengthCount] = {
+        "oot3d_contact_shadows_0.comp", "oot3d_contact_shadows_1.comp", "oot3d_contact_shadows_2.comp"};
+    for (uint32_t length = 0; length < kContactShadowLengthCount; ++length)
+        shaders.push_back({kContactShadowNames[length], Compute, ContactShadowComputeShader(length), {}});
     return shaders;
 }
 }

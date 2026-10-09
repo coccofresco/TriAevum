@@ -42,6 +42,7 @@
 #include "fast/oot3d/hiz_depth_pyramid_pass.h"
 #include "fast/oot3d/hiz_reflection_pass.h"
 #include "fast/oot3d/interactive_grass_pass.h"
+#include "fast/oot3d/world_debug_line_pass.h"
 #include "fast/oot3d/linear_scene_color.h"
 #include "fast/oot3d/linear_scene_color_pass.h"
 #include "fast/oot3d/motion_vector_pass.h"
@@ -193,6 +194,51 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         const ::Fast::Renderer3ds::PicaCompositionDrawReference& draw) const override;
     bool PreparePicaSequenceDraw(const GfxNativePicaDrawView& draw,
                                  std::string* error = nullptr) override;
+    // A scene draw lying on one of its binding's water bodies (flat, at the
+    // body's height, over it): the body index. World bounds come from the
+    // draw's cached triangle geometry; unknown geometry is not water.
+    struct NativePicaWaterSurface {
+        std::optional<uint32_t> Body;
+        ::Fast::Renderer3ds::ShadowBounds WorldBounds;
+        // Its bounds reach a body's surface: it may hold water fragments.
+        bool ReachesWater = false;
+        // A catalog water texture: all of the draw is water (a waterfall, a
+        // river's rapids); flat and reaching no body, its own plane (water
+        // the title publishes no body for: a moat, a well).
+        bool WholeDraw = false;
+        std::optional<::Fast::Renderer3ds::PicaSceneWaterBody> Plane;
+        // Its catalog roles (PicaWaterTextureRole).
+        uint8_t Roles = 0;
+        // A whole water draw's world triangles by slope (the water map's
+        // pieces) and their placement key.
+        std::shared_ptr<const ::Fast::Renderer3ds::PicaWaterTriangles> Pieces;
+        uint64_t PiecesKey = 0;
+    };
+    // Water triangles per rigid placement (PicaGiInstance::RigidSignature).
+    std::unordered_map<uint64_t, std::shared_ptr<const ::Fast::Renderer3ds::PicaWaterTriangles>> mWaterTriangles;
+    // The drawn water's map, rebuilt when the set of pieces on screen changes.
+    ::Fast::Renderer3ds::PicaWaterMap mWaterMap;
+    uint64_t mWaterMapSignature = 0;
+    uint64_t mWaterMapVersion = 0;
+    // Ripples of the actors moving through the water (their collision
+    // cylinders), advanced once per frame on the water ripple clock.
+    ::Fast::Renderer3ds::PicaWaterRippleField mWaterRipples;
+    uint64_t mWaterRipplesFrame = 0;
+    const std::array<::Fast::Renderer3ds::PicaWaterRing, ::Fast::Renderer3ds::kPicaWaterRings>& AdvanceWaterRipples(
+        const ::Fast::Renderer3ds::PicaSceneWaterBodies& bodies, float seconds);
+    std::array<::Fast::Renderer3ds::PicaWaterRing, ::Fast::Renderer3ds::kPicaWaterRings> mWaterRings{};
+    NativePicaWaterSurface ResolveNativePicaWaterSurface(const GfxNativePicaDrawView& draw);
+    // The title's water textures (TRIAEVUM_WATER_TEXTURE_CATALOG, generated
+    // by the installer from the user's RomFS), loaded on first use.
+    const ::Fast::Renderer3ds::PicaWaterTextureCatalog* WaterTextureCatalog();
+    std::optional<::Fast::Renderer3ds::PicaWaterTextureCatalog> mWaterTextureCatalog;
+    bool mWaterTextureCatalogLoaded = false;
+    // Water ripple time origin (cosmetic animation, presentation clock).
+    std::chrono::steady_clock::time_point mWaterEpoch = std::chrono::steady_clock::now();
+    // Texture scrolling of water draws, per geometry (native time).
+    std::unordered_map<uint64_t, ::Fast::Renderer3ds::PicaWaterFlowTrack> mWaterFlow;
+    // This frame traces reflections for water only (Reflections Off).
+    bool mWaterOnlyReflections = false;
     bool SubmitPicaDisplayTransfer(
         const GfxNativePicaDisplayTransferView& transfer,
         std::string* error = nullptr) override;
@@ -280,7 +326,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
                          int dstX0, int dstY0, int dstX1, int dstY1) override;
     void ClearFramebuffer(bool color, bool depth) override;
     void ReadFramebufferToCPU(int fbId, uint32_t width, uint32_t height, uint16_t* rgba16Buf) override;
-    bool ReadFramebufferRgba8ToCPU(int fbId, uint32_t width, uint32_t height, uint8_t* rgba8Buf) override;
+    bool ReadFramebufferRgb8ToCPU(uint32_t width, uint32_t height, uint8_t* rgb) override;
+    // The presented swapchain image as 8-bit RGBA (or BGRA); empty when none.
+    std::vector<uint8_t> ReadSwapchainRgba8(uint32_t& width, uint32_t& height, bool& bgra);
     void ResolveMSAAColorBuffer(int fbIdTarget, int fbIdSrc) override;
     std::unordered_map<std::pair<float, float>, uint16_t, hash_pair_ff>
     GetPixelDepth(int fbId, const std::set<std::pair<float, float>>& coordinates) override;
@@ -298,8 +346,6 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     void RenderImGuiDrawData(ImDrawData* drawData);
 
   private:
-    bool ReadFramebufferToCPUImpl(uint32_t width, uint32_t height,
-                                  uint16_t* rgba16Buf, uint8_t* rgba8Buf);
     struct QueueFamilies {
         std::optional<uint32_t> Graphics;
         std::optional<uint32_t> Present;
@@ -678,6 +724,17 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         Oot3d::SampleViewAccumulator SampleView;
         // The projection those draws apply (see SamplePerspective).
         Oot3d::SampleProjectionAccumulator SampleProjection;
+        // Gameplay water reaching this target's scene draws, and the frame
+        // it was last seen (reflections find water surfaces from it).
+        std::shared_ptr<const Renderer3ds::PicaSceneWaterBodies> WaterBodies;
+        uint64_t WaterBodiesFrame = 0;
+        // Water planes of catalog water without a body, this frame.
+        Renderer3ds::PicaSceneWaterBodies WaterPlanes;
+        uint64_t WaterPlanesFrame = 0;
+        // Whole water draws' pieces this frame (the water map).
+        std::vector<std::shared_ptr<const Renderer3ds::PicaWaterTriangles>> WaterPieces;
+        std::vector<uint64_t> WaterPieceKeys;
+        uint64_t WaterPiecesFrame = 0;
         bool AuxiliaryNeedsClear = false;
         bool WBuffering = false;
         bool NriOwned = false;
@@ -870,6 +927,8 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         NativePicaRenderTarget& target,
         const Oot3d::GraphicsSettings& settings,
         Oot3d::EffectGeometryProviderInvocationKind invocationKind);
+    // The title's world debug lines (light gizmos) over the target's scene.
+    void TryRenderWorldDebugLines(NativePicaRenderTarget& target);
     bool TryRenderDirectionalShadowMap(
         NativePicaRenderTarget& target,
         const Oot3d::GraphicsSettings& settings,
@@ -1674,6 +1733,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     Oot3d::HiZDepthPyramidPass mHiZDepthPyramidPass;
     Oot3d::HiZReflectionPass mHiZReflectionPass;
     Oot3d::InteractiveGrassPass mInteractiveGrassPass;
+    Oot3d::WorldDebugLinePass mWorldDebugLinePass;
     Oot3d::LinearSceneColorPass mLinearSceneColorPass;
     Oot3d::MotionVectorPass mMotionVectorPass;
     Oot3d::NriDirectionalShadowPass mNriDirectionalShadowPass;

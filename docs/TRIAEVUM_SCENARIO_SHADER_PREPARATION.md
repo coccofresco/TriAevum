@@ -260,6 +260,55 @@ different timing or gameplay state can change which transient draws occur.
 Capture scheduling and checkpoint I/O have isolated PowerShell tests:
 `Test-Oot3dAzaharCaptureSchedule.ps1` and `Test-Oot3dCoverageCheckpoint.ps1`.
 
+## Regeneration with the current runtime (2026-10-07)
+
+The pack's modules are keyed by generated source text, so every change to the
+PICA lowering, the NRI variants or the surface lighting leaves an older pack
+unresolved (Windows qualification A8: the 2026-09-10 pack resolved 0 of 29
+programs of the Kokiri quick save). The private inputs are raw PICA state and
+stay valid; `tools/triaevum_release/regenerate_shader_corpus.py` re-imports
+them with the importers built from the runtime's own source, writes the
+observed pipeline manifest, compiles the union and records a receipt:
+
+```text
+python tools/triaevum_release/regenerate_shader_corpus.py --tools BUILD \
+  --capture-corpus PRIVATE/combined/corpus.json \
+  --citra-cache PRIVATE/0004000000033500.bin --citra-cache PRIVATE/transferable-final.bin \
+  --output NEW_PRIVATE_DIRECTORY
+```
+
+It accepts a transferable cache's partial import (exit 3) only when its sole
+gap is the documented unimported vertex/geometry records. The in-repo boot
+profile (`profiles/oot3d_pica_boot_title_kokiri_effective.json`) is generated
+source, not raw state, and is not part of the union; the captures cover the
+title and Kokiri Forest.
+
+The first run found an identity defect: since `58b1cd13` a specialized fragment
+program leaves Z-buffered depth with scale -1 and offset 0 to fixed function,
+and its shader state key records that, but the canonical fragment program id
+did not. Two draws of `spot00_info_setup_10_entry_00cd` (draws 4 and 18) then
+shared pipeline `0x751ad6609e8a6176` with two fragment sources, and the importer
+stopped ("native pipeline/source identity collision"). The fragment program id
+now includes that choice (only when it holds, so other identities are
+unchanged); the collision message names both draws.
+
+| Measurement (Windows, 2026-10-07, HEAD `6ba1aeb` + the fix) | Result |
+| --- | --- |
+| Capture corpus re-import | 126,612/126,612 complete draws, 0 failures, 513 modules, 732 native recipes (709 before the split), 521 host pipeline recipes, 116 s |
+| Citra seed cache | 426 records, complete, 718 unique modules |
+| TAS cache | 392 of 393 records (1 vertex record not imported), 688 unique modules |
+| Union pack | 989 modules, schema 3, 8,263,460 bytes, compiled in 12.5 s |
+| Kokiri quick save, qualification configuration (Custom, per-pixel PBR) | 18 hits / 11 misses (old pack: 0 / 29) |
+| Same, Authentic preset | 18 hits / 0 misses |
+
+The 11 remaining misses are NRI fragment programs the renderer composes with
+the user's effects (surface lighting, PBR): they depend on graphics settings,
+not on captured state, and compile in the background (hybrid preparation), as
+with the freshly built September pack (54 hits / 32 misses on its first replay).
+Private output: `I:/oot3dre_work/shader-corpus-20261007/` (`regeneration.json`,
+`expanded-union.o3ps` SHA-256 `55b954304f7b13fe621f1843b43faeff79a5e939d27c3a646d8762eeb9c927ae`,
+`captures-0-pipelines.json`). Regenerate again with the release runtime.
+
 ## Remaining Work
 
 - Representatives and setup variants are collected. Further collection should

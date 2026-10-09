@@ -92,6 +92,7 @@ class PrecompiledTitleTests(unittest.TestCase):
             kind: SimpleNamespace(sha256=value["sha256"], bytes=value["bytes"], path=self.root / kind)
             for kind, value in self.recipe["inputs"].items()})
         pack = self.root / "data/shader-seeds/test/portable.o3ps"
+        water = self.root / "data/cache/water/test/water_textures.txt"
         order = []
         def step(name, result):
             def invoke(*args, **kwargs):
@@ -100,7 +101,7 @@ class PrecompiledTitleTests(unittest.TestCase):
             return invoke
         with patch("forge.load_prepared_content", return_value=prepared), \
                 patch("device_pipeline_preparation.adopt_existing_cache"), \
-                patch("topscreen_assets.prepare_topscreen_assets", return_value=None), \
+                patch("topscreen_assets.prepare_topscreen_assets", return_value=None),                 patch("water_textures.prepare_water_textures", side_effect=step("water", water)), \
                 patch("shader_preparation.prepare_shader_seed", side_effect=step("shaders", pack)), \
                 patch("shader_preparation.prepare_renderer_shader_cache",
                       side_effect=step("renderer", {"renderer_shader_preparation": "complete"})) as renderer, \
@@ -112,12 +113,13 @@ class PrecompiledTitleTests(unittest.TestCase):
             result = install_precompiled_title(title_directory, root=self.root, recipe=self.recipe,
                 data_root=self.root / "data", runtime_plugin=self.root / self.platform.title_module,
                 launch_profile=self.root / "TriAevum.launch.json", active_title_state=self.root / "data/active-title.json")
-        self.assertEqual(order, ["shaders", "renderer", "pipelines", "package", "publish", "activate"])
+        self.assertEqual(order, ["water", "shaders", "renderer", "pipelines", "package", "publish", "activate"])
         cache = (self.root / "data/cache/renderer").resolve()
         self.assertEqual(device.call_args.kwargs["cache_directory"], cache)
         self.assertEqual(renderer.call_args.kwargs["cache_directory"], cache)
         self.assertEqual(publish.call_args.kwargs["renderer_cache_directory"], cache)
         self.assertEqual(publish.call_args.kwargs["pica_shader_pack"], pack)
+        self.assertEqual(publish.call_args.kwargs["water_texture_catalog"], water)
         self.assertEqual(result["objects_compiled"], 0)
 
 

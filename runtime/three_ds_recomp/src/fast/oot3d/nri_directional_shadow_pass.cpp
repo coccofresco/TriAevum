@@ -1,5 +1,7 @@
 #include "fast/oot3d/nri_directional_shadow_pass.h"
 
+#include "fast/oot3d/contact_shadows.h"
+
 #ifdef ENABLE_OOT3D_VULKAN
 
 #include "fast/oot3d/nri_interop_context.h"
@@ -36,11 +38,14 @@ constexpr uint32_t kFrameSlots = 2U;
 constexpr uint32_t kMaximumCasters = 512U;
 // Caster descriptor sets of one frame slot: each shadow layout (the two
 // displayed and the one in construction) and the point maps bind a caster once.
+// The contact shadows' camera depth binds the casters once more, for one
+// target per frame (the arena's reserve).
 constexpr uint32_t kCasterBindingsPerFrame =
-    (Renderer3ds::kVirtualShadowKeyframeSlots + 1U) * kMaximumCasters;
+    (Renderer3ds::kVirtualShadowKeyframeSlots + 2U) * kMaximumCasters;
 // A still light releases the layouts it no longer displays after this long.
 constexpr uint32_t kStillLayoutReleaseFrames = 600U;
 constexpr size_t kMaximumShadowTargets = 8U;
+constexpr uint32_t kMaximumContactTargets = 1U;
 
 uint64_t AlignUp(uint64_t value, uint64_t alignment) {
     return ((value + alignment - 1U) / alignment) * alignment;
@@ -216,8 +221,18 @@ struct NriDirectionalShadowPass::Impl {
 
     // Slot.Texture is the composed atlas: one region (a still light, slot 0)
     // or one per layout slot, side by side, each of the layout resolution.
+    // Contact shadows of one target: the camera depth (reverse-Z) of its
+    // casters and the visibility the receivers read.
+    struct ContactTarget {
+        NriOwnedTexture2D Depth;
+        NriOwnedTexture2D Visibility;
+        uint32_t Width = 0U;
+        uint32_t Height = 0U;
+    };
+
     struct TargetHistory {
         HistorySlot Slot;
+        ContactTarget Contact;
         std::array<LayoutSlot, Renderer3ds::kVirtualShadowKeyframeSlots> Layouts;
         Renderer3ds::VirtualShadowKeyframes Keyframes;
         uint32_t Resolution = 0U;
@@ -272,6 +287,10 @@ struct NriDirectionalShadowPass::Impl {
         std::vector<nri::Descriptor*> TransientViews;
         uint64_t FrameId = std::numeric_limits<uint64_t>::max();
         uint32_t CastersUsed = 0U;
+        // Contact shadow compute sets, one per target and frame.
+        nri::DescriptorPool* ContactPool = nullptr;
+        std::vector<nri::DescriptorSet*> ContactSets;
+        uint32_t ContactUsed = 0U;
     };
     std::array<FrameDescriptors, kFrameSlots> Frames;
     std::unordered_map<uint64_t, nri::Pipeline*> ShadowPipelines;
@@ -279,6 +298,11 @@ struct NriDirectionalShadowPass::Impl {
     std::unordered_map<uint64_t, nri::Pipeline*> PointPipelines;
     std::unordered_set<uint64_t> FailedPointPipelines;
     std::unordered_map<uint64_t, nri::Descriptor*> CasterSamplers;
+    // Contact shadows (Godot's screen space contact shadows compute).
+    nri::PipelineLayout* ContactLayout = nullptr;
+    std::array<nri::Pipeline*, kContactShadowLengthCount> ContactPipelines{};
+    std::array<bool, kContactShadowLengthCount> FailedContactPipelines{};
+    nri::Descriptor* ContactDepthSampler = nullptr;
 #endif
 
     void RetireTexture(NriOwnedTexture2D& texture, uint64_t frameId) {
@@ -291,6 +315,8 @@ struct NriDirectionalShadowPass::Impl {
 
     void Retire(TargetHistory& history, uint64_t frameId) {
         RetireTexture(history.Slot.Texture, frameId);
+        RetireTexture(history.Contact.Depth, frameId);
+        RetireTexture(history.Contact.Visibility, frameId);
         for (auto& layout : history.Layouts)
             RetireTexture(layout.StaticTexture, frameId);
         history = {};
@@ -301,6 +327,8 @@ struct NriDirectionalShadowPass::Impl {
             for (auto& [key, history] : Histories) {
                 (void)key;
                 Interop->DestroyOwnedTexture(history.Slot.Texture.Image);
+                Interop->DestroyOwnedTexture(history.Contact.Depth.Image);
+                Interop->DestroyOwnedTexture(history.Contact.Visibility.Image);
                 for (auto& layout : history.Layouts)
                     Interop->DestroyOwnedTexture(layout.StaticTexture.Image);
             }
@@ -394,11 +422,12 @@ struct NriDirectionalShadowPass::Impl {
         return true;
     }
 
-    uint64_t PipelineKey(const PicaSceneDrawRecord& caster, const DirectionalShadowFramePlan& plan) const {
-        uint64_t hash = 1469598103934665603ULL;
+    uint64_t PipelineKey(const PicaSceneDrawRecord& caster, const DirectionalShadowFramePlan& plan,
+                         bool camera = false) const {
+        uint64_t hash = camera ? 0x6a09e667f3bcc909ULL : 1469598103934665603ULL;
         hash = HashValue(hash, caster.VertexShader->Key);
         hash = HashValue(hash, caster.Material.Topology);
-        hash = HashValue(hash, caster.Material.CullMode);
+        hash = HashValue(hash, plan.CullCasters && !camera ? caster.Material.CullMode : PicaSceneCullMode::None);
         hash = HashValue(hash, caster.Material.FrontFace);
         hash = HashValue(hash, plan.DepthBiasConstant);
         hash = HashValue(hash, plan.DepthBiasSlope);
@@ -429,8 +458,11 @@ struct NriDirectionalShadowPass::Impl {
         return found->second;
     }
 
-    nri::Pipeline* GetOrCreatePipeline(const PicaSceneDrawRecord& caster, const DirectionalShadowFramePlan& plan) {
-        const uint64_t key = PipelineKey(caster, plan);
+    // camera: the contact shadows' camera depth (reverse-Z, both faces, no
+    // bias) instead of a shadow map page.
+    nri::Pipeline* GetOrCreatePipeline(const PicaSceneDrawRecord& caster, const DirectionalShadowFramePlan& plan,
+                                       bool camera = false) {
+        const uint64_t key = PipelineKey(caster, plan, camera);
         const auto found = ShadowPipelines.find(key);
         if (found != ShadowPipelines.end()) {
             return found->second;
@@ -443,7 +475,8 @@ struct NriDirectionalShadowPass::Impl {
             return nullptr;
         };
         const nri::Topology topology = ToNriTopology(caster.Material.Topology);
-        const nri::CullMode cull = ToNriCullMode(caster.Material.CullMode);
+        const nri::CullMode cull = ToNriCullMode(plan.CullCasters && !camera ? caster.Material.CullMode
+                                                                            : PicaSceneCullMode::None);
         if (topology == nri::Topology::MAX_NUM || cull == nri::CullMode::MAX_NUM) {
             return reject();
         }
@@ -519,9 +552,10 @@ struct NriDirectionalShadowPass::Impl {
         pipeline.rasterization.cullMode = cull;
         pipeline.rasterization.frontCounterClockwise =
             caster.Material.FrontFace == PicaSceneFrontFace::CounterClockwise;
-        pipeline.rasterization.depthBias = { plan.DepthBiasConstant, 0.0F, plan.DepthBiasSlope };
+        if (!camera)
+            pipeline.rasterization.depthBias = { plan.DepthBiasConstant, 0.0F, plan.DepthBiasSlope };
         pipeline.multisample = &multisample;
-        pipeline.outputMerger.depth.compareOp = nri::CompareOp::LESS_EQUAL;
+        pipeline.outputMerger.depth.compareOp = camera ? nri::CompareOp::GREATER : nri::CompareOp::LESS_EQUAL;
         pipeline.outputMerger.depth.write = true;
         pipeline.outputMerger.depthStencilFormat = nri::Format::D32_SFLOAT;
         pipeline.shaders = shaders.data();
@@ -755,6 +789,181 @@ struct NriDirectionalShadowPass::Impl {
         Core->UpdateDescriptorRanges(updates.data(), updateCount);
         return true;
     }
+
+    // Godot's contact shadow compute for a length (2 + length reads).
+    nri::Pipeline* ContactPipeline(uint32_t length) {
+        if (length >= ContactPipelines.size() || FailedContactPipelines[length])
+            return nullptr;
+        if (ContactPipelines[length] != nullptr)
+            return ContactPipelines[length];
+        try {
+            const std::string name = "oot3d_contact_shadows_" + std::to_string(length) + ".comp";
+            const auto shader = Compile(Interop->Shaders(), ContactShadowComputeShader(length),
+                                        Renderer::SpirvStage::Compute, name.c_str());
+            nri::ComputePipelineDesc pipeline{};
+            pipeline.pipelineLayout = ContactLayout;
+            pipeline.shader.stage = nri::StageBits::COMPUTE_SHADER;
+            pipeline.shader.bytecode = shader.data();
+            pipeline.shader.size = shader.size() * sizeof(uint32_t);
+            pipeline.cache = NriInteropAccess::PipelineCache(*Interop);
+            if (Core->CreateComputePipeline(*NriInteropAccess::Device(*Interop), pipeline,
+                                            ContactPipelines[length]) != nri::Result::SUCCESS) {
+                ContactPipelines[length] = nullptr;
+                FailedContactPipelines[length] = true;
+            }
+        } catch (const std::exception&) {
+            FailedContactPipelines[length] = true;
+        }
+        return ContactPipelines[length];
+    }
+
+    // The contact shadows of a target: its casters' camera depth (reverse-Z,
+    // both faces), then Godot's screen space contact shadows toward the
+    // light into the visibility the receivers read (graph resource
+    // ContactShadowMap). The depth is private to the pass.
+    bool RenderContactShadows(const NriDirectionalShadowExecuteDesc& desc, nri::CommandBuffer& command,
+                              FrameDescriptors& frame, const PicaSceneFrame& sceneFrame,
+                              std::span<const PicaSceneDrawRecord*> drawable, const DirectionalShadowFramePlan& plan,
+                              TargetHistory& target, const DirectionalShadowMatrix& worldToContactClip,
+                              const Renderer3ds::ShadowVector& lightDirection, const EffectPassOutputBarrier& barrier) {
+        if (ContactLayout == nullptr || ContactDepthSampler == nullptr || frame.ContactPool == nullptr ||
+            frame.ContactUsed >= frame.ContactSets.size())
+            return false;
+        auto& contact = target.Contact;
+        const uint32_t scale = plan.ContactShadows.HalfResolution ? 2U : 1U;
+        const uint32_t width = (desc.ScreenWidth + scale - 1U) / scale;
+        const uint32_t height = (desc.ScreenHeight + scale - 1U) / scale;
+        if (contact.Width != width || contact.Height != height || contact.Depth.Image == VK_NULL_HANDLE ||
+            contact.Visibility.Image == VK_NULL_HANDLE) {
+            RetireTexture(contact.Depth, desc.FrameId);
+            RetireTexture(contact.Visibility, desc.FrameId);
+            contact = {};
+            NriOwnedTexture2DDesc depthDesc;
+            depthDesc.Width = width;
+            depthDesc.Height = height;
+            depthDesc.Format = VK_FORMAT_D32_SFLOAT;
+            depthDesc.Usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+            NriOwnedTexture2DDesc visibilityDesc;
+            visibilityDesc.Width = width;
+            visibilityDesc.Height = height;
+            visibilityDesc.Format = VK_FORMAT_R8_UNORM;
+            visibilityDesc.Usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+            if (!Interop->CreateOwnedTexture2D(depthDesc, contact.Depth) ||
+                !Interop->CreateOwnedTexture2D(visibilityDesc, contact.Visibility)) {
+                RetireTexture(contact.Depth, desc.FrameId);
+                RetireTexture(contact.Visibility, desc.FrameId);
+                contact = {};
+                return false;
+            }
+            contact.Width = width;
+            contact.Height = height;
+        }
+        const uint32_t length = std::min<uint32_t>(plan.ContactShadows.Length, kContactShadowLengthCount - 1U);
+        nri::Pipeline* compute = ContactPipeline(length);
+        const auto dispatch =
+            ResolveContactShadowDispatch(worldToContactClip, lightDirection, width, height, plan.ContactShadows,
+                                         desc.TemporalFrame);
+        if (compute == nullptr || !dispatch.Valid())
+            return false;
+
+        // Every caster once more, with the contact camera.
+        std::array<PreparedCaster, kMaximumCasters> draws{};
+        for (size_t index = 0; index < drawable.size(); ++index) {
+            auto* pipeline = GetOrCreatePipeline(*drawable[index], plan, true);
+            if (pipeline == nullptr)
+                continue;
+            if (!BindCaster(frame, sceneFrame, *drawable[index], worldToContactClip, draws[index]))
+                return false;
+            draws[index].Pipeline = pipeline;
+        }
+        const auto transition = [&](VkImage image, ResourceAccess access, bool graph) {
+            const auto change = OwnedStates.PlanTransition(reinterpret_cast<uintptr_t>(image), { access, 0 });
+            if (!NriInteropAccess::CmdTextureBarrier(*Interop, desc.FrameSlot, image, change))
+                return false;
+            if (graph)
+                LastShadowMapBarrierExecution.RecordGraphTransition(change);
+            else
+                LastShadowMapBarrierExecution.RecordPrivateTransition(change);
+            OwnedStates.Commit(change);
+            return true;
+        };
+        if (desc.ProfileMark)
+            desc.ProfileMark("contact_depth");
+        if (!transition(contact.Depth.Image, ResourceAccess::DepthAttachment, false))
+            return false;
+        nri::RenderingDesc rendering{};
+        rendering.depth.descriptor = NriInteropAccess::DepthAttachmentView(*Interop, contact.Depth.Image);
+        if (rendering.depth.descriptor == nullptr)
+            return false;
+        // Reverse-Z: cleared to the far plane.
+        rendering.depth.loadOp = nri::LoadOp::CLEAR;
+        rendering.depth.clearValue.depthStencil.depth = 0.0F;
+        rendering.depth.storeOp = nri::StoreOp::STORE;
+        Core->CmdSetDescriptorPool(command, *frame.CasterPool);
+        Core->CmdBeginRendering(command, rendering);
+        Core->CmdSetPipelineLayout(command, nri::BindPoint::GRAPHICS, *ShadowLayout);
+        const nri::Viewport viewport{ 0.0F, 0.0F, float(width), float(height), 0, 1, true };
+        const nri::Rect scissor{ 0, 0, static_cast<nri::Dim_t>(width), static_cast<nri::Dim_t>(height) };
+        Core->CmdSetViewports(command, &viewport, 1);
+        Core->CmdSetScissors(command, &scissor, 1);
+        const std::array<float, 4> identity{ 1.0F, 1.0F, 0.0F, 0.0F };
+        const nri::SetRootConstantsDesc constants{ 0, identity.data(), sizeof(identity) };
+        Core->CmdSetRootConstants(command, constants);
+        nri::Pipeline* boundPipeline = nullptr;
+        for (size_t index = 0; index < drawable.size(); ++index) {
+            const auto& draw = draws[index];
+            if (draw.Pipeline == nullptr)
+                continue;
+            const auto& caster = *drawable[index];
+            if (boundPipeline != draw.Pipeline) {
+                Core->CmdSetPipeline(command, *draw.Pipeline);
+                boundPipeline = draw.Pipeline;
+            }
+            const nri::SetDescriptorSetDesc set{ 0, draw.Set, nri::BindPoint::GRAPHICS };
+            Core->CmdSetDescriptorSet(command, set);
+            for (const auto& binding : sceneFrame.VertexBindings(caster)) {
+                const nri::VertexBufferDesc vertex{ draw.Geometry, binding.Offset, binding.Stride };
+                Core->CmdSetVertexBuffers(command, binding.Binding, &vertex, 1);
+            }
+            if (caster.Indexed) {
+                Core->CmdSetIndexBuffer(command, *draw.Geometry, caster.IndexOffset, nri::IndexType::UINT16);
+                const nri::DrawIndexedDesc nativeDraw{ caster.VertexOrIndexCount, 1, 0, caster.BaseVertex, 0 };
+                Core->CmdDrawIndexed(command, nativeDraw);
+            } else {
+                const nri::DrawDesc nativeDraw{ caster.VertexOrIndexCount, 1, 0, 0 };
+                Core->CmdDraw(command, nativeDraw);
+            }
+        }
+        Core->CmdEndRendering(command);
+        if (desc.ProfileMark)
+            desc.ProfileMark("contact_compute");
+
+        if (!transition(contact.Depth.Image, ResourceAccess::ShaderRead, false) ||
+            !transition(contact.Visibility.Image, barrier.DispatchAccess, true))
+            return false;
+        nri::Descriptor* depthView = NriInteropAccess::TextureView(*Interop, contact.Depth.Image, false);
+        nri::Descriptor* storage = NriInteropAccess::TextureView(*Interop, contact.Visibility.Image, true);
+        if (depthView == nullptr || storage == nullptr)
+            return false;
+        nri::DescriptorSet* set = frame.ContactSets[frame.ContactUsed++];
+        const std::array<nri::UpdateDescriptorRangeDesc, 3> updates{ {
+            { set, 0, 0, &depthView, 1 },
+            { set, 1, 0, &storage, 1 },
+            { set, 2, 0, &ContactDepthSampler, 1 },
+        } };
+        Core->UpdateDescriptorRanges(updates.data(), static_cast<uint32_t>(updates.size()));
+        Core->CmdSetDescriptorPool(command, *frame.ContactPool);
+        Core->CmdSetPipelineLayout(command, nri::BindPoint::COMPUTE, *ContactLayout);
+        Core->CmdSetPipeline(command, *compute);
+        const nri::SetDescriptorSetDesc computeSet{ 0, set, nri::BindPoint::COMPUTE };
+        Core->CmdSetDescriptorSet(command, computeSet);
+        const nri::SetRootConstantsDesc push{ 0, &dispatch.Constants, sizeof(dispatch.Constants), 0,
+                                              nri::BindPoint::COMPUTE };
+        Core->CmdSetRootConstants(command, push);
+        const nri::DispatchDesc groups{ dispatch.Groups[0], dispatch.Groups[1], dispatch.Groups[2] };
+        Core->CmdDispatch(command, groups);
+        return transition(contact.Visibility.Image, barrier.CompletionAccess, true);
+    }
 #endif
 };
 
@@ -846,6 +1055,49 @@ bool NriDirectionalShadowPass::Initialize(VkPhysicalDevice physicalDevice, VkDev
             throw std::runtime_error("directional shadow receiver sampler creation failed");
         }
 
+        {
+            // Contact shadows: camera depth (texture + sampler) in, R8
+            // visibility (storage) out, Godot's push constants.
+            const std::array<nri::DescriptorRangeDesc, 3> contactRanges{ {
+                { 0, 1, nri::DescriptorType::TEXTURE, nri::StageBits::COMPUTE_SHADER },
+                { 1, 1, nri::DescriptorType::STORAGE_TEXTURE, nri::StageBits::COMPUTE_SHADER },
+                { 2, 1, nri::DescriptorType::SAMPLER, nri::StageBits::COMPUTE_SHADER },
+            } };
+            nri::DescriptorSetDesc contactSet{};
+            contactSet.ranges = contactRanges.data();
+            contactSet.rangeNum = static_cast<uint32_t>(contactRanges.size());
+            nri::RootConstantDesc contactConstants{};
+            contactConstants.size = sizeof(ContactShadowPushConstants);
+            contactConstants.shaderStages = nri::StageBits::COMPUTE_SHADER;
+            nri::PipelineLayoutDesc contactLayout{};
+            contactLayout.rootConstants = &contactConstants;
+            contactLayout.rootConstantNum = 1;
+            contactLayout.descriptorSets = &contactSet;
+            contactLayout.descriptorSetNum = 1;
+            contactLayout.shaderStages = nri::StageBits::COMPUTE_SHADER;
+            contactLayout.flags = nri::PipelineLayoutBits::IGNORE_GLOBAL_SPIRV_OFFSETS;
+            // Optional: without them the shadow map works alone. The
+            // visibility is a filtered R8 storage image.
+            VkFormatProperties r8{};
+            vkGetPhysicalDeviceFormatProperties(physicalDevice, VK_FORMAT_R8_UNORM, &r8);
+            const VkFormatFeatureFlags r8Needed = VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT |
+                VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+            if ((r8.optimalTilingFeatures & r8Needed) != r8Needed ||
+                mImpl->Core->CreatePipelineLayout(*nriDevice, contactLayout, mImpl->ContactLayout) !=
+                    nri::Result::SUCCESS)
+                mImpl->ContactLayout = nullptr;
+            // Outside the screen reads the far plane (reverse-Z 0), as
+            // Godot's border sampler.
+            nri::SamplerDesc border{};
+            border.filters = { nri::Filter::NEAREST, nri::Filter::NEAREST, nri::Filter::NEAREST };
+            border.addressModes = { nri::AddressMode::CLAMP_TO_BORDER, nri::AddressMode::CLAMP_TO_BORDER,
+                                    nri::AddressMode::CLAMP_TO_BORDER };
+            border.borderColor.f = { 0.0F, 0.0F, 0.0F, 0.0F };
+            if (mImpl->ContactLayout != nullptr &&
+                mImpl->Core->CreateSampler(*nriDevice, border, mImpl->ContactDepthSampler) != nri::Result::SUCCESS)
+                mImpl->ContactDepthSampler = nullptr;
+        }
+
         const auto& deviceDesc = mImpl->Core->GetDeviceDesc(*nriDevice);
         const uint64_t uniformAlignment = std::max<uint64_t>(1U, deviceDesc.memoryAlignment.constantBufferOffset);
         for (auto& frame : mImpl->Frames) {
@@ -885,6 +1137,23 @@ bool NriDirectionalShadowPass::Initialize(VkPhysicalDevice physicalDevice, VkDev
                                                     kCasterBindingsPerFrame, 0) != nri::Result::SUCCESS) {
                 throw std::runtime_error("NRI directional shadow caster descriptors failed");
             }
+            nri::DescriptorPoolDesc contactPool{};
+            contactPool.descriptorSetMaxNum = kMaximumContactTargets;
+            contactPool.textureMaxNum = kMaximumContactTargets;
+            contactPool.storageTextureMaxNum = kMaximumContactTargets;
+            contactPool.samplerMaxNum = kMaximumContactTargets;
+            frame.ContactSets.resize(kMaximumContactTargets);
+            if (mImpl->ContactLayout == nullptr || mImpl->ContactDepthSampler == nullptr ||
+                mImpl->Core->CreateDescriptorPool(*nriDevice, contactPool, frame.ContactPool) != nri::Result::SUCCESS ||
+                mImpl->Core->AllocateDescriptorSets(*frame.ContactPool, *mImpl->ContactLayout, 0,
+                                                    frame.ContactSets.data(), kMaximumContactTargets,
+                                                    0) != nri::Result::SUCCESS) {
+                // This frame slot has no contact shadows; the map is unaffected.
+                if (frame.ContactPool != nullptr)
+                    mImpl->Core->DestroyDescriptorPool(frame.ContactPool);
+                frame.ContactPool = nullptr;
+                frame.ContactSets.clear();
+            }
         }
         mImpl->Reason.clear();
         return true;
@@ -914,6 +1183,8 @@ bool NriDirectionalShadowPass::ExecuteMap(const NriDirectionalShadowExecuteDesc&
 #else
     const auto* mapBarrier = shadowMapBarrierPlan.Find(EffectResource::DirectionalShadowMap);
     const auto* staticBarrier = shadowMapBarrierPlan.Find(EffectResource::DirectionalShadowStaticCache);
+    // Declared only while contact shadows are requested.
+    const auto* contactBarrier = shadowMapBarrierPlan.Find(EffectResource::ContactShadowMap);
     const auto expectedPassId =
         ::Fast::Renderer::StableExtensionPassId(PicaExtensionPassName(PicaExtensionPass::DirectionalShadowMap));
     if (!Available() ||
@@ -990,6 +1261,7 @@ bool NriDirectionalShadowPass::ExecuteMap(const NriDirectionalShadowExecuteDesc&
     input.CameraWorld = { viewToWorld[12], viewToWorld[13], viewToWorld[14] };
     input.LightDirectionTowardSource = light.WorldDirectionTowardSource;
     input.Settings = desc.Settings;
+    input.CullCasters = desc.Environment == nullptr || desc.Environment->ShadowCasterCulling;
     // Validates the settings and the light. Each layout is planned at its own
     // direction below.
     const auto plan = BuildDirectionalShadowFramePlan(input);
@@ -1082,6 +1354,7 @@ bool NriDirectionalShadowPass::ExecuteMap(const NriDirectionalShadowExecuteDesc&
         frame.TransientViews.clear();
         frame.FrameId = desc.FrameId;
         frame.CastersUsed = 0;
+        frame.ContactUsed = 0;
     }
     using PreparedCasters = std::array<Impl::PreparedCaster, kMaximumCasters>;
     std::array<PreparedCasters, Renderer3ds::kVirtualShadowKeyframeSlots> prepared{};
@@ -1345,6 +1618,33 @@ bool NriDirectionalShadowPass::ExecuteMap(const NriDirectionalShadowExecuteDesc&
     history.State.Strength = plan.Strength * std::clamp(light.ShadowStrength, 0.0F, 1.0F);
     history.State.DepthBias = std::max(plan.DepthBiasConstant, 0.0F) * 0.5F / (2.0F * plan.Virtual.DepthExtent);
     history.State.PcfRadius = plan.PcfRadius;
+    history.State.NormalBias = plan.NormalBias;
+    // Contact shadows: a camera depth of the same casters, then Godot's
+    // screen space contact shadows toward the light. A failure leaves the
+    // receivers on the shadow map alone.
+    if (contactBarrier != nullptr && plan.ContactShadows.Enabled && desc.ScreenWidth != 0U &&
+        desc.ScreenHeight != 0U) {
+        const auto& reference = *light.ReferenceDraw;
+        const auto projection =
+            reference.NativeTransform.CurrentClipToWorldAvailable && reference.LightingWorldToView
+                ? BuildContactShadowProjection(reference.NativeTransform.CurrentClipToWorld,
+                                               reference.NativeTransform.CurrentViewToWorldAvailable
+                                                   ? reference.NativeTransform.CurrentViewToWorld
+                                                   : IdentityDirectionalShadowMatrix())
+                : std::nullopt;
+        if (projection) {
+            // Receivers and casters reach it through the lighting view.
+            const auto worldToContactClip =
+                MultiplyDirectionalShadowMatrices(*projection, *reference.LightingWorldToView);
+            const bool contactRendered = mImpl->RenderContactShadows(desc, *command, frame, sceneFrame, drawable, plan,
+                                                                     *target, worldToContactClip, lightDirection,
+                                                                     *contactBarrier);
+            if (contactRendered) {
+                history.State.ContactShadows = true;
+                history.State.WorldToContactClip = worldToContactClip;
+            }
+        }
+    }
     target->LastUsedFrameId = desc.FrameId;
     telemetry.DisplayedLayouts = displayed[1] >= 0 ? 2U : 1U;
     telemetry.NewerWeight = history.State.NewerWeight;
@@ -1398,6 +1698,15 @@ bool NriDirectionalShadowPass::ExecutePointMaps(const NriPointShadowExecuteDesc&
         candidates[candidateCount++] = light;
     };
     const auto& environment = desc.Environment;
+    // Placed lights that cast shadows (a cube map at their position), while
+    // the environment applies them. Suns never do.
+    for (uint32_t index = 0; environment.Enabled &&
+         index < std::min<uint32_t>(environment.PlacedLightCount, kMaximumPicaPlacedLights); ++index) {
+        const auto& placed = environment.PlacedLights[index];
+        if (placed.CastShadows && placed.Kind != PicaPlacedLightKind::Sun)
+            addCandidate({ placed.SourceIdentity, placed.PositionWorld, placed.Reach,
+                           std::max({ placed.Color[0], placed.Color[1], placed.Color[2] }) });
+    }
     std::optional<ShadowVector> camera;
     const auto draws = sceneFrame.Draws();
     for (size_t index = 0; index < draws.size(); ++index) {
@@ -1487,6 +1796,7 @@ bool NriDirectionalShadowPass::ExecutePointMaps(const NriPointShadowExecuteDesc&
         frame.TransientViews.clear();
         frame.FrameId = desc.FrameId;
         frame.CastersUsed = 0;
+        frame.ContactUsed = 0;
     }
     const auto transition = [&](VkImage image, ResourceAccess access) {
         const auto change = mImpl->OwnedStates.PlanTransition(reinterpret_cast<uintptr_t>(image), { access, 0 });
@@ -1629,6 +1939,16 @@ NriDirectionalShadowHistorySnapshot NriDirectionalShadowPass::FindLatestHistory(
     result.View = slot.Texture.SampledView;
     result.Sampler = mImpl->ReceiverSampler;
     result.State = slot.State;
+    // The contact shadows are screen space: only the frame that produced
+    // them may read them. A skipped or disabled production leaves the
+    // receivers on the shadow map alone.
+    const auto& contact = found->second.Contact;
+    result.State.ContactShadows = slot.State.ContactShadows && slot.State.ProducedFrameId == atFrameId;
+    if (result.State.ContactShadows) {
+        result.ContactImage = contact.Visibility.Image;
+        result.ContactWidth = contact.Width;
+        result.ContactHeight = contact.Height;
+    }
     return result.Valid() ? result : NriDirectionalShadowHistorySnapshot{};
 }
 
@@ -1677,6 +1997,9 @@ void NriDirectionalShadowPass::Shutdown() {
             if (frame.CasterPool != nullptr) {
                 mImpl->Core->DestroyDescriptorPool(frame.CasterPool);
             }
+            if (frame.ContactPool != nullptr) {
+                mImpl->Core->DestroyDescriptorPool(frame.ContactPool);
+            }
         }
         for (auto& [key, pipeline] : mImpl->ShadowPipelines) {
             (void)key;
@@ -1693,6 +2016,13 @@ void NriDirectionalShadowPass::Shutdown() {
         if (mImpl->ShadowLayout != nullptr) {
             mImpl->Core->DestroyPipelineLayout(mImpl->ShadowLayout);
         }
+        for (nri::Pipeline* pipeline : mImpl->ContactPipelines)
+            if (pipeline != nullptr)
+                mImpl->Core->DestroyPipeline(pipeline);
+        if (mImpl->ContactDepthSampler != nullptr)
+            mImpl->Core->DestroyDescriptor(mImpl->ContactDepthSampler);
+        if (mImpl->ContactLayout != nullptr)
+            mImpl->Core->DestroyPipelineLayout(mImpl->ContactLayout);
     }
 #endif
     if (mImpl->ReceiverSampler != VK_NULL_HANDLE && mImpl->Device != VK_NULL_HANDLE) {

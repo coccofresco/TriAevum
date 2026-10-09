@@ -150,6 +150,20 @@ PicaNriFragmentShaderVariant BuildPicaNriFragmentShaderVariant(
         }
     }
 
+    if (!extensions.ContactShadowSampler.empty()) {
+        const std::string samplerName(extensions.ContactShadowSampler);
+        const std::string declaration =
+            "layout(set=0,binding=29) uniform sampler2D " + samplerName + ";";
+        const CombinedSamplerDeclaration contact{
+            declaration, {}, extensions.ContactShadowSampler, 29U, 30U, false};
+        if (result.Source.find(contact.SignedDeclaration) != std::string::npos &&
+            !ReplaceOnce(result.Source, contact.SignedDeclaration, BuildSeparateDeclaration(contact, false))) {
+            result.Error = "combined extension sampler declaration is not unique: " + samplerName;
+            result.Source.assign(source);
+            return result;
+        }
+    }
+
     result.Applied = true;
     return result;
 }

@@ -2517,6 +2517,21 @@ bias, including when the user bias is zero. The hair comparison retains
 world shadows without the previous dark striping or the diagnostic iteration's
 precision grid.
 
+PICA draw receivers (2026-10-09) no longer pass a receiver-plane slope; the
+grid-based Grass receiver keeps its own. The derivatives of a flat triangle are
+constant across it and change at its edges. On smooth-shaded low-poly actors
+the filtered shadows therefore showed the triangles they fell on, as facets
+with hard edges along the mesh. The depth bias, its two-ULP minimum and the
+normal bias now cover the filter footprint. Two other corrections, tried and
+rejected on Link's savestate, did not remove the facets:
+- moving the lookup point onto the surface implied by the vertex normals
+  (Hanika's shadow terminator offset, Phong tessellation);
+- drawing the casters' back faces.
+In interleaved same-pose 8-bit captures, the slope-free filter ranked best, tied
+with Phong plus slope-free. It was chosen because it needs no
+fragment-barycentric support. The game-camera ratio map against shadows off
+shows no new acne on the platform, tree, cliffs or fences.
+
 CPU caster bounds resolve packed attribute streams once per draw and compose
 each used palette matrix once, retaining native post-skin homogeneous W even
 when weights do not sum to one. Grass selection emits directly during stable
@@ -3027,6 +3042,50 @@ without rewriting files. Native capture, replay, interpolation, 19 scene-frame,
 41 shader-cache, 292 foundation and 47 graph tests pass. No graph pass failed or
 remained unresolved in the bounded captures. Evidence is private under
 `I:/_triaevum_work/native-scene-lighting/`; no gameplay input was injected.
+
+### Screen-Space Contact Shadows (2026-10-09)
+
+The directional shadow light can add Godot 4.8's screen-space contact shadows
+(pull request 118045, after Bend Studio's screen-space shadows): small-scale
+shadows the paged map misses, combined with it by `min()` as Godot does. They
+are off by default and exist only with virtual shadow maps.
+
+- **Controls.** `DirectionalShadowSettings.ContactShadows`, persisted as the
+  optional `ContactShadows` object and edited under F1 Shadows: enable, length
+  (Godot's Short/Normal/Long, 2-4 reads of 64 samples), surface thickness
+  (0.001-0.1, default 0.01), opacity and blur (Godot's per-light values, here
+  of the one shadow light) and half resolution (default on; see cost).
+- **Camera depth.** Godot traces its depth prepass. This renderer has no
+  completed scene depth before opaque shading, so the shadow pass draws its
+  prepared casters once more with the native camera: reverse-Z depth
+  `near / w` (near 1), both faces, no bias, into a private D32 at the target's
+  extent (half width and height by default). Only eligible shadow casters are in
+  it, so other surfaces neither receive nor occlude contact shadows.
+- **Rays.** `contact_shadow_shader.cpp` is Godot's compute shader, with the
+  depth texture and sampler split (bindings 0 and 2), the R8 visibility at 1 and
+  a far-plane write of 1 where Godot clears the image white.
+  `ResolveContactShadowDispatch` is Godot's light-coordinate and group-bound
+  math (converging, diverging and parallel rays). The noise phase is the
+  temporal jitter sequence, 0 without temporal accumulation.
+- **Graph and receivers.** `EffectResource::ContactShadowMap` is written by the
+  directional shadow pass and exported as `ContactShadowHistory`; the camera depth
+  is private to the pass, like the atlas pages. Receivers bind the visibility at
+  set 0 bindings 29/30 and project their view position with
+  `contact_projection`. They read it only in the frame that produced it, scaled
+  by the light's shadow strength; otherwise, and outside the screen, they read 1.
+  Contact shadows run for one shadow target per frame, within the caster arena's
+  reserve. Missing R8 storage support or a failed contact resource leaves the
+  shadow map working alone.
+- **Cost.** In the Kokiri lab (2160x3840 target, Normal length, three
+  interleaved rounds of 600 frames), full resolution costs 0.64 ms of camera
+  depth and 1.42 ms of compute; half resolution costs 0.20 + 0.31 ms. GPU busy
+  time rises by 0.8 ms at half resolution and 2.4 ms at full. At half resolution
+  a one-pixel halo can follow strong depth edges.
+- **Evidence.** Unit tests cover the reverse-Z projection, the dispatch cases,
+  parameter clamps and the three kernels' compilation. The kernels are in the
+  built-in pass catalogue (85 artifacts). A depth-debug capture matched the
+  geometry, and the contact ratio maps show the fence posts', grass blades' and
+  Link's feet shadows. Evidence is private under `I:/_triaevum_work/contact-shadows/`.
 
 ### Selected-tree commit qualification
 

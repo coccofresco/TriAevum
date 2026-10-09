@@ -28,7 +28,8 @@ namespace {
            resource == EffectResource::NativeShadow2D ||
            resource == EffectResource::DirectionalShadowHistory ||
            resource == EffectResource::DirectionalShadowStaticHistory ||
-           resource == EffectResource::PointShadowHistory;
+           resource == EffectResource::PointShadowHistory ||
+           resource == EffectResource::ContactShadowHistory;
 }
 
 [[nodiscard]] constexpr bool IsSemanticResource(EffectResource resource) noexcept {
@@ -506,28 +507,41 @@ CompiledEffectGraph BuildPicaExtensionGraph(const PicaAttachmentFeatureRequests&
                 .Stage = EffectStage::NativeLighting,
                 .Contract = EffectContractKind::AuxiliaryOutput,
                 .Resources = std::move(guideOutputs) });
+    // Contact shadows: the shadow map producer also writes the screen-space
+    // visibility of its light, and the receivers read it.
+    const bool contactShadows = requests.DirectionalShadows && requests.ContactShadows;
+    std::vector<EffectResourceUse> shadowLightingResources{ Read(EffectResource::NativeSceneView),
+                                                            Read(EffectResource::DirectionalShadowHistory) };
+    if (contactShadows)
+        shadowLightingResources.push_back(Read(EffectResource::ContactShadowHistory));
     graph.Add({ .Name = std::string(PicaExtensionPassName(PicaExtensionPass::DirectionalShadowLighting)),
                 .Enabled = requests.DirectionalShadows,
                 .Stage = EffectStage::NativeLighting,
                 .Contract = EffectContractKind::LightingContributor,
-                .Resources = { Read(EffectResource::NativeSceneView),
-                               Read(EffectResource::DirectionalShadowHistory) } });
+                .Resources = std::move(shadowLightingResources) });
     // This sample's casters are prepared before the sequence executes, so the
     // map is complete before the first opaque receiver samples it. The late
     // anchor remains for targets that publish no opaque boundary.
+    std::vector<EffectResourceUse> shadowMapResources{ Read(EffectResource::PreparedShadowCasters),
+                                                       Read(EffectResource::DirectionalShadowHistory),
+                                                       Read(EffectResource::DirectionalShadowStaticHistory),
+                                                       Write(EffectResource::DirectionalShadowStaticCache),
+                                                       Write(EffectResource::DirectionalShadowMap) };
+    if (contactShadows) {
+        shadowMapResources.push_back(Read(EffectResource::ContactShadowHistory));
+        shadowMapResources.push_back(Write(EffectResource::ContactShadowMap));
+    }
     graph.Add({ .Name = std::string(PicaExtensionPassName(PicaExtensionPass::DirectionalShadowMap)),
                 .Enabled = requests.DirectionalShadows,
                 .Stage = EffectStage::BeforeOpaque,
                 .Contract = EffectContractKind::AuxiliaryOutput,
-                .Resources = { Read(EffectResource::PreparedShadowCasters),
-                               Read(EffectResource::DirectionalShadowHistory),
-                               Read(EffectResource::DirectionalShadowStaticHistory),
-                               Write(EffectResource::DirectionalShadowStaticCache),
-                               Write(EffectResource::DirectionalShadowMap) },
+                .Resources = std::move(shadowMapResources),
                 .FallbackStage = EffectStage::BeforeUi });
     if (requests.DirectionalShadows) {
         graph.Export(EffectResource::DirectionalShadowMap);
         graph.Export(EffectResource::DirectionalShadowStaticCache);
+        if (contactShadows)
+            graph.Export(EffectResource::ContactShadowMap);
     }
     // Point lights: receivers read the published cube atlas; the producer
     // renders it from the same prepared casters at the opaque boundary.

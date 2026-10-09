@@ -369,6 +369,8 @@ extern/nlohmann-json/*_jsonConfig*
 *.xcworkspace
 *.xcsettings
 build*
+# Build directories, not sources named build_*.cpp (artifact generators).
+!build_*.cpp
 
 # Local full-game integration harness. It owns a dedicated Shipwright checkout
 # and build cache while this repository remains the renderer source of truth.

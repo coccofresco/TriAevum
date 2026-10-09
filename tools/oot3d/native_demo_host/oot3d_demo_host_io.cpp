@@ -51,26 +51,12 @@ uint8_t ExpandRgba5551Channel(uint16_t value) {
 
 } // namespace
 
-void WriteBmpFromRgba5551Framebuffer(
-    const std::filesystem::path& path, uint32_t width, uint32_t height,
-    const std::vector<uint16_t>& rgba16) {
-    if (path.empty() || !width || !height || uint64_t(width) * height > rgba16.size()) return;
-    std::vector<uint8_t> rgba8(static_cast<size_t>(width) * height * 4U);
-    for (size_t i = 0; i < static_cast<size_t>(width) * height; ++i) {
-        rgba8[i * 4U] = ExpandRgba5551Channel(rgba16[i] >> 11U);
-        rgba8[i * 4U + 1U] = ExpandRgba5551Channel(rgba16[i] >> 6U);
-        rgba8[i * 4U + 2U] = ExpandRgba5551Channel(rgba16[i] >> 1U);
-        rgba8[i * 4U + 3U] = (rgba16[i] & 1U) ? 255U : 0U;
-    }
-    WriteBmpFromRgba8Framebuffer(path, width, height, rgba8);
-}
-
-void WriteBmpFromRgba8Framebuffer(
+void WriteBmpFromRgb8Framebuffer(
     const std::filesystem::path& path,
     uint32_t width,
     uint32_t height,
-    const std::vector<uint8_t>& rgba8) {
-    if (path.empty() || width == 0 || height == 0 || uint64_t(width) * height > rgba8.size() / 4U) {
+    const std::vector<uint8_t>& rgb) {
+    if (path.empty() || width == 0 || height == 0 || rgb.size() < static_cast<size_t>(width) * height * 3u) {
         return;
     }
 
@@ -114,16 +100,33 @@ void WriteBmpFromRgba8Framebuffer(
         const uint32_t srcY = height - 1u - y;
         std::fill(row.begin(), row.end(), 0);
         for (uint32_t x = 0; x < width; ++x) {
-            const size_t pixel = (static_cast<size_t>(srcY) * width + x) * 4U;
-            const uint8_t r = rgba8[pixel];
-            const uint8_t g = rgba8[pixel + 1U];
-            const uint8_t b = rgba8[pixel + 2U];
+            const size_t source = (static_cast<size_t>(srcY) * width + x) * 3u;
+            const uint8_t r = rgb[source + 0u];
+            const uint8_t g = rgb[source + 1u];
+            const uint8_t b = rgb[source + 2u];
             row[x * 3u + 0u] = b;
             row[x * 3u + 1u] = g;
             row[x * 3u + 2u] = r;
         }
         file.write(reinterpret_cast<const char*>(row.data()), static_cast<std::streamsize>(row.size()));
     }
+}
+
+void WriteBmpFromRgba5551Framebuffer(
+    const std::filesystem::path& path,
+    uint32_t width,
+    uint32_t height,
+    const std::vector<uint16_t>& rgba16) {
+    if (rgba16.size() < static_cast<size_t>(width) * height) {
+        return;
+    }
+    std::vector<uint8_t> rgb(static_cast<size_t>(width) * height * 3u);
+    for (size_t index = 0; index < static_cast<size_t>(width) * height; ++index) {
+        rgb[index * 3u + 0u] = ExpandRgba5551Channel(rgba16[index] >> 11);
+        rgb[index * 3u + 1u] = ExpandRgba5551Channel(rgba16[index] >> 6);
+        rgb[index * 3u + 2u] = ExpandRgba5551Channel(rgba16[index] >> 1);
+    }
+    WriteBmpFromRgb8Framebuffer(path, width, height, rgb);
 }
 
 std::filesystem::path ScreenshotSequenceFramePath(const std::filesystem::path& path, uint32_t frameIndex) {

@@ -45,6 +45,13 @@ struct NativeSceneLightTraceRecord {
     bool operator==(const NativeSceneLightTraceRecord&) const = default;
 };
 
+// The scene's water boxes from its static collision (EUR: header at
+// PlayState+0xA98, count u16 +0x14, records +0x28; 16-byte records of s16
+// xMin, ySurface, zMin, xLength, zLength and u32 properties at +0xC). Heights
+// are live: the Water Temple's level writes ySurface.
+[[nodiscard]] Fast::Renderer3ds::PicaSceneWaterBodies CaptureNativeWaterBodies(uint32_t playState,
+                                                                              oot3d::recomp::a32::MemoryBus& memory);
+
 class NativeA32LightingProbe {
   public:
     void ObserveBlockEntry(uint32_t pc, const oot3d::recomp::a32::GuestState& state,
@@ -71,6 +78,7 @@ class NativeA32LightingProbe {
     std::unordered_map<uint32_t, Fast::Renderer3ds::PicaNativeLightBinding> mRenderStates;
     std::shared_ptr<const Fast::Renderer3ds::PicaScenePointLights> mScenePoints;
     std::shared_ptr<const Fast::Renderer3ds::PicaSceneDirectionalLights> mSceneDirectionals;
+    std::shared_ptr<const Fast::Renderer3ds::PicaSceneWaterBodies> mWater;
     uint64_t mSceneLightFrames = 0;
     NativeSceneLightTraceRecord mSceneLightTrace;
     // Continuous scene light (docs/TRIAEVUM_ANIMATED_LIGHTING_STRATEGY.md):

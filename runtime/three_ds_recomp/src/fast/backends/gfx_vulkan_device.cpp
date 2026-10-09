@@ -560,12 +560,27 @@ void GfxRenderingAPIVulkan::StorePipelineCache() {
     if (!nriData.empty()) {
         VkPhysicalDeviceProperties properties{};
         vkGetPhysicalDeviceProperties(mPhysicalDevice, &properties);
+        const auto nriPath = VulkanPipelineCachePath(true);
         std::string error;
-        if (StorePipelineCacheData(VulkanPipelineCachePath(true),
-                                  MakePipelineCacheHeader(properties), nriData, &error))
+        // stderr as well: the logger may already be quiet at shutdown, and a
+        // cache that silently stops being stored costs every later session.
+        if (nriData.size() > kMaximumNriPipelineCacheBytes) {
+            // Too large to keep growing: drop it, so the next session rebuilds
+            // a cache of what it actually uses instead of loading a stale one.
+            std::error_code removed;
+            std::filesystem::remove(nriPath, removed);
+            std::fprintf(stderr, "TRIAEVUM_NRI_PIPELINE_CACHE_STORE result=dropped bytes=%zu limit=%llu\n",
+                         nriData.size(), static_cast<unsigned long long>(kMaximumNriPipelineCacheBytes));
+            SPDLOG_WARN("NRI PICA pipeline cache: {} bytes over the limit, dropped", nriData.size());
+        } else if (StorePipelineCacheData(nriPath, MakePipelineCacheHeader(properties), nriData, &error,
+                                          kMaximumNriPipelineCacheBytes)) {
+            std::fprintf(stderr, "TRIAEVUM_NRI_PIPELINE_CACHE_STORE result=stored bytes=%zu\n", nriData.size());
             SPDLOG_INFO("NRI PICA pipeline cache: stored {} bytes", nriData.size());
-        else
+        } else {
+            std::fprintf(stderr, "TRIAEVUM_NRI_PIPELINE_CACHE_STORE result=failed bytes=%zu error=%s\n",
+                         nriData.size(), error.c_str());
             SPDLOG_WARN("NRI PICA pipeline cache: {}", error);
+        }
     }
     if (mPipelineCache == VK_NULL_HANDLE) {
         return;

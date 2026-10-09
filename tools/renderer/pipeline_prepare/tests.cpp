@@ -86,6 +86,20 @@ int main() {
         Check(Renderer3ds::StorePipelineCacheData(path, identity, bytes));
         std::filesystem::resize_file(path, 12);
         Check(!Renderer3ds::LoadPipelineCacheData(path, identity, read));
+        {
+            // The NRI cache outgrows the plain limit: refused there (the last
+            // valid file stays), stored and loaded within the NRI limit.
+            const std::vector<uint8_t> large(Renderer3ds::kMaximumPipelineCacheBytes + 1U, 7U);
+            Check(Renderer3ds::StorePipelineCacheData(path, identity, bytes));
+            Check(!Renderer3ds::StorePipelineCacheData(path, identity, large));
+            Check(Renderer3ds::LoadPipelineCacheData(path, identity, read) && read == bytes);
+            Check(Renderer3ds::StorePipelineCacheData(path, identity, large, nullptr,
+                                                      Renderer3ds::kMaximumNriPipelineCacheBytes));
+            Check(!Renderer3ds::LoadPipelineCacheData(path, identity, read));
+            Check(Renderer3ds::LoadPipelineCacheData(path, identity, read,
+                                                     Renderer3ds::kMaximumNriPipelineCacheBytes) &&
+                  read == large);
+        }
         std::filesystem::remove(path);
 
         Renderer3ds::PicaDrawView draw;

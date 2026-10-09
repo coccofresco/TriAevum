@@ -21,6 +21,17 @@ struct GrassTextureSelector {
     uint8_t MapperSlotMask = 0x07;
 };
 
+// A rectangle of a grass mask, in its normalized texture coordinates after
+// wrap (u across, v down the rows, as the editor's preview shows it).
+struct GrassMaskRect {
+    float MinU = 0.0F;
+    float MinV = 0.0F;
+    float MaxU = 1.0F;
+    float MaxV = 1.0F;
+    bool operator==(const GrassMaskRect&) const = default;
+};
+inline constexpr size_t kMaximumGrassMaskRects = 16U;
+
 struct GrassPlacementRule {
     uint32_t RuleId = 0;
     GrassTextureSelector Target;
@@ -34,6 +45,15 @@ struct GrassPlacementRule {
     float OutputWhite = 1.0F;
     float MaximumSlopeDegrees = 48.0F;
     float NormalOffset = 0.5F;
+    // Active rectangles: when any are listed, the mask applies only inside
+    // them and is zero elsewhere (as a black mask); none: all of it applies.
+    std::vector<GrassMaskRect> ActiveRects;
+    // Inherited rules only (a twin texture's, never configured or saved):
+    // its samples mapped onto the source texture's range before the levels,
+    // and the configured rule they come from.
+    float SampleScale = 1.0F;
+    float SampleOffset = 0.0F;
+    uint32_t InheritedFrom = 0U;
 };
 
 struct GrassGenerationSettings {

@@ -71,6 +71,7 @@ void PrintOot3dNativeGameUsage() {
                  "[--pica-semantic-trace <trace.jsonl>] [--pica-parametric-tev] "
                  "[--pica-aot-shader-pack <pack.o3ps>] "
                  "[--renderer-cache-directory <directory>] "
+                 "[--water-texture-catalog <water_textures.txt>] "
                  "[--pica-aot-shader-strict] "
                  "[--pica-effective-shader-inventory <inventory.json>] "
                  "[--pica-pipeline-inventory <inventory.json>] "
@@ -106,7 +107,8 @@ void PrintOot3dNativeGameUsage() {
 }
 
 bool ParseOot3dNativeGameArgs(int argc, char** argv, Oot3dNativeGameLaunch& launch) {
-    launch.Host.ApplicationName = "OOT3D Native Game";
+    // The window title: the Ocarina of Time 3D project of TriAevum (UTF-8).
+    launch.Host.ApplicationName = "TriAevum \xE2\x80\x94 Echoes of Time";
     launch.Host.ApplicationId = "oot3d_native_game";
     launch.Host.ConfigurationPath = "oot3d_native_game.json";
     launch.Host.BackendId = 2;
@@ -192,6 +194,9 @@ bool ParseOot3dNativeGameArgs(int argc, char** argv, Oot3dNativeGameLaunch& laun
             launch.PicaParametricTev = true;
         } else if (arg == "--renderer-cache-directory" && index + 1 < argc) {
             launch.RendererCacheDirectory =
+                std::filesystem::absolute(std::filesystem::u8path(argv[++index])).lexically_normal();
+        } else if (arg == "--water-texture-catalog" && index + 1 < argc) {
+            launch.WaterTextureCatalogPath =
                 std::filesystem::absolute(std::filesystem::u8path(argv[++index])).lexically_normal();
         } else if (arg == "--pica-aot-shader-pack" &&
                    index + 1 < argc) {
@@ -302,6 +307,8 @@ bool ParseOot3dNativeGameArgs(int argc, char** argv, Oot3dNativeGameLaunch& laun
             launch.Host.ScreenshotPath = argv[++index];
         } else if (arg == "--screenshot-sequence") {
             launch.Host.ScreenshotSequence = true;
+        } else if (arg == "--screenshot-rgb8") {
+            launch.Host.ScreenshotRgb8 = true;
         } else if (arg == "--screenshot-start-frame" && index + 1 < argc) {
             launch.Host.ScreenshotStartFrame =
                 ParseU32(argv[++index], "screenshot start frame");

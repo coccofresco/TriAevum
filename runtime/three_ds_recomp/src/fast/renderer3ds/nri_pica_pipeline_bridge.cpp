@@ -8,6 +8,7 @@
 #include "fast/renderer3ds/pica_device_pipeline_pool.h"
 #include "fast/renderer3ds/pica_nri_upload.h"
 #include "fast/renderer3ds/pica_preparation_queue.h"
+#include "fast/renderer3ds/vulkan_pipeline_cache_store.h"
 
 #ifdef ENABLE_RENDERER3DS_NRI
 #include "nri_pica_upload_arena.h"
@@ -29,6 +30,10 @@
 
 namespace Fast::Renderer3ds {
 namespace {
+
+// Image/sampler pairs a PICA draw binds: the native units and the extension
+// samplers (shadow atlases, contact shadows).
+constexpr size_t kTextureSlotCount = 11U;
 
 #ifdef ENABLE_RENDERER3DS_NRI
 nri::Topology ToNriTopology(VkPrimitiveTopology topology) {
@@ -260,7 +265,7 @@ struct NriPicaPipelineBridge::Impl {
     std::vector<FrameDescriptors> Frames;
     std::map<NriPicaSamplerKey, nri::Descriptor*> Samplers;
     // Last sampler per texture slot in BindOwnedDraw.
-    std::array<std::pair<NriPicaSamplerKey, nri::Descriptor*>, 10> RecentSamplers{};
+    std::array<std::pair<NriPicaSamplerKey, nri::Descriptor*>, kTextureSlotCount> RecentSamplers{};
     bool OwnedDraws = false;
     bool PreferOwnedUploads = false;
     bool PipelineLibrariesEnabled = false;
@@ -279,9 +284,9 @@ struct NriPicaPipelineBridge::Impl {
         pool.constantBufferMaxNum =
             static_cast<uint32_t>(std::tuple_size_v<decltype(NriPicaOwnedDrawDesc::Uniforms)>) *
             DescriptorSetsPerPool;
-        pool.textureMaxNum = 10U * DescriptorSetsPerPool;
+        pool.textureMaxNum = static_cast<uint32_t>(kTextureSlotCount) * DescriptorSetsPerPool;
         pool.storageTextureMaxNum = DescriptorSetsPerPool;
-        pool.samplerMaxNum = 10U * DescriptorSetsPerPool;
+        pool.samplerMaxNum = static_cast<uint32_t>(kTextureSlotCount) * DescriptorSetsPerPool;
         pool.structuredBufferMaxNum = DescriptorSetsPerPool;
         if (core.CreateDescriptorPool(device, pool, block.Pool) != nri::Result::SUCCESS ||
             core.AllocateDescriptorSets(*block.Pool, *DescriptorLayout, 0,
@@ -438,8 +443,12 @@ std::vector<uint8_t> NriPicaPipelineBridge::GetPipelineCacheData() const {
     if (!Available() || mImpl->PipelineCache == nullptr) return {};
     auto* core = mImpl->Interop->Core();
     uint64_t size = 0;
+    // No size policy here: the store keeps or drops the cache (it outgrows the
+    // plain 64 MiB limit; capping it here once left it silently unsaved).
+    // Only an implausible size is refused before allocating it.
+    constexpr uint64_t kImplausibleBytes = 4ULL * kMaximumNriPipelineCacheBytes;
     if (core->GetPipelineCacheData(*mImpl->PipelineCache, nullptr, size) != nri::Result::SUCCESS ||
-        size == 0 || size > 64ULL * 1024ULL * 1024ULL) return {};
+        size == 0 || size > kImplausibleBytes) return {};
     std::vector<uint8_t> data(static_cast<size_t>(size));
     if (core->GetPipelineCacheData(*mImpl->PipelineCache, data.data(), size) != nri::Result::SUCCESS ||
         size == 0 || size > data.size()) return {};
@@ -1002,15 +1011,16 @@ bool NriPicaPipelineBridge::BindOwnedDraw(
         seamBuffer = frame.SeamFallback;
     }
 
-    std::array<NriPicaTextureBindingDesc, 10> textureSources{};
+    std::array<NriPicaTextureBindingDesc, kTextureSlotCount> textureSources{};
     std::copy(desc.Textures.begin(), desc.Textures.end(),
               textureSources.begin());
     textureSources[3] = desc.DirectionalShadowTexture;
     textureSources[4] = desc.LightingLutTexture;
     std::copy(desc.PbrTextures.begin(), desc.PbrTextures.end(), textureSources.begin() + 5);
     textureSources[9] = desc.PointShadowTexture;
-    std::array<nri::Descriptor*, 10> textures{};
-    std::array<nri::Descriptor*, 10> samplers{};
+    textureSources[10] = desc.ContactShadowTexture;
+    std::array<nri::Descriptor*, kTextureSlotCount> textures{};
+    std::array<nri::Descriptor*, kTextureSlotCount> samplers{};
     for (size_t index = 0; index < textures.size(); ++index) {
         const auto& source = textureSources[index];
         if (source.Image == VK_NULL_HANDLE ||
@@ -1110,6 +1120,8 @@ bool NriPicaPipelineBridge::BindOwnedDraw(
         {set, 25, 0, &samplers[8], 1},
         {set, 27, 0, &textures[9], 1},
         {set, 28, 0, &samplers[9], 1},
+        {set, 29, 0, &textures[10], 1},
+        {set, 30, 0, &samplers[10], 1},
         // The draw's seam data, or the frame's fallback view.
         {set, 26, 0, &seamBuffer, 1},
     }};

@@ -192,6 +192,12 @@ add_compile_definitions(CONTROLLERBUTTONS_T=uint32_t)
 ################################################################################
 option(OOT3D_FAST_DEV_LINK
     "Disable large linker debug artifacts during iterative native builds" OFF)
+option(TRIAEVUM_DEVELOPER_TOOLS
+    "Developer build: F1 Dev Tools (warp screen and warp points); never public" OFF)
+if(TRIAEVUM_DEVELOPER_TOOLS)
+    # Renderer diagnostics for the lighting lab (pica_surface_debug.h).
+    add_compile_definitions(TRIAEVUM_RENDERER_DEVELOPER_TOOLS=1)
+endif()
 option(OOT3D_ENABLE_VULKAN_RENDERER
     "Build the Vulkan renderer used by native OoT3D executables" ON)
 set(THREE_DS_RECOMP_ENABLE_VULKAN ${OOT3D_ENABLE_VULKAN_RENDERER} CACHE BOOL

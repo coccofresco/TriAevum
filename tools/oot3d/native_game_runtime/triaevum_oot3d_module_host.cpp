@@ -118,7 +118,8 @@ bool ParseArguments(int argc, char **argv, ModuleHostArguments *arguments) {
     return false;
   }
   arguments->ExecutablePath = argv[0];
-  arguments->Host.ApplicationName = "TriAevum";
+  // The window title: the Ocarina of Time 3D project of TriAevum (UTF-8).
+  arguments->Host.ApplicationName = "TriAevum \xE2\x80\x94 Echoes of Time";
   arguments->Host.ApplicationId = "triaevum";
   arguments->Host.Renderer = "nri";
   arguments->Host.BackendId = Fast::WindowBackend::FAST3D_SDL_OOT3D_VULKAN;

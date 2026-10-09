@@ -10,6 +10,7 @@
 #include "fast/renderer3ds/pica_surface_passthrough_scale.h"
 #include "fast/oot3d/display_effect_plan.h"
 #include "fast/oot3d/directional_shadows.h"
+#include "fast/oot3d/contact_shadows.h"
 #include "fast/oot3d/sample_view.h"
 #include "fast/oot3d/ambient_occlusion_composite.h"
 #include "fast/oot3d/anti_aliasing_frame_policy.h"
@@ -33,7 +34,9 @@
 #include "fast/oot3d/grass_shading_environment.h"
 #include "fast/oot3d/grass_surface_eligibility.h"
 #include "fast/oot3d/grass_surface_extractor.h"
+#include "fast/oot3d/grass_mask_interior.h"
 #include "fast/oot3d/grass_texture_source_cache.h"
+#include "fast/oot3d/grass_texture_twins.h"
 #include "fast/oot3d/grass_visibility.h"
 #include "fast/oot3d/pica_shader_instrumentation.h"
 #include "fast/oot3d/outline_occlusion_pass.h"
@@ -113,6 +116,8 @@
 #include <limits>
 #include <memory>
 #include <vector>
+#include <unordered_map>
+#include <sstream>
 
 namespace {
 
@@ -579,6 +584,110 @@ TEST(Oot3dDirectionalShadows, RejectsMissingDirectionAndDisabledMode) {
     input.Settings.Mode = DirectionalShadowMode::VirtualShadowMaps;
     EXPECT_EQ(BuildDirectionalShadowFramePlan(input).Status, DirectionalShadowPlanStatus::InvalidLightDirection);
 }
+
+TEST(Oot3dContactShadows, ProjectsNativeViewToReverseZ) {
+    using namespace Fast::Oot3d;
+    // A native perspective (column-major): x and y scales, w = -z_view.
+    DirectionalShadowMatrix projection{};
+    projection[0] = 1.5F;
+    projection[5] = 2.0F;
+    projection[10] = -1.0F;
+    projection[11] = -1.0F;
+    projection[14] = -2.0F;
+    DirectionalShadowMatrix clipToWorld{};
+    ASSERT_TRUE(InvertDirectionalShadowMatrix(projection, clipToWorld));
+    const auto contact = BuildContactShadowProjection(clipToWorld, IdentityDirectionalShadowMatrix());
+    ASSERT_TRUE(contact.has_value());
+    // A view point 10 units ahead keeps the native x and y; its depth is
+    // near / distance.
+    const std::array<float, 4> point{ 3.0F, -2.0F, -10.0F, 1.0F };
+    std::array<float, 4> clip{};
+    for (size_t row = 0; row < 4U; ++row)
+        for (size_t column = 0; column < 4U; ++column)
+            clip[row] += (*contact)[column * 4U + row] * point[column];
+    ASSERT_NEAR(clip[3], 10.0F, 1.0e-4F);
+    EXPECT_NEAR(clip[0] / clip[3], 0.45F, 1.0e-5F);
+    EXPECT_NEAR(clip[1] / clip[3], -0.4F, 1.0e-5F);
+    EXPECT_NEAR(clip[2] / clip[3], kContactShadowNearPlane / 10.0F, 1.0e-6F);
+
+    const DirectionalShadowMatrix singular{};
+    EXPECT_FALSE(BuildContactShadowProjection(singular, IdentityDirectionalShadowMatrix()).has_value());
+}
+
+TEST(Oot3dContactShadows, ResolvesGodotDispatchForConvergingDivergingAndParallelLight) {
+    using namespace Fast::Oot3d;
+    DirectionalShadowMatrix projection{};
+    projection[0] = 1.0F;
+    projection[5] = 1.0F;
+    projection[11] = -1.0F;
+    projection[14] = kContactShadowNearPlane;
+    ContactShadowSettings settings;
+    settings.Enabled = true;
+
+    // A light ahead on the view axis: converging rays toward the screen
+    // centre, groups around it covering the whole screen.
+    const auto ahead = ResolveContactShadowDispatch(projection, { 0.0F, 0.0F, -1.0F }, 1920U, 1080U, settings, 7U);
+    ASSERT_TRUE(ahead.Valid());
+    EXPECT_FLOAT_EQ(ahead.Constants.LightCoordinate[0], 960.0F);
+    EXPECT_FLOAT_EQ(ahead.Constants.LightCoordinate[1], 540.0F);
+    EXPECT_FLOAT_EQ(ahead.Constants.LightCoordinate[3], 1.0F);
+    EXPECT_EQ(ahead.Groups[0], kContactShadowWaveSize);
+    EXPECT_EQ(ahead.Constants.LightOffset[0], (-15 - 1) * 64);
+    EXPECT_EQ(ahead.Constants.LightOffset[1], (-9 - 1) * 64);
+    EXPECT_EQ(ahead.Groups[1], uint32_t(15 + 2 + 16));
+    EXPECT_EQ(ahead.Groups[2], uint32_t(9 + 2 + 10));
+    EXPECT_EQ(ahead.Constants.ScreenSize[0], 1920);
+    EXPECT_EQ(ahead.Constants.ScreenSize[1], 1080);
+    EXPECT_FLOAT_EQ(ahead.Constants.FrameCount, 7.0F);
+
+    // Behind the camera: diverging rays.
+    const auto behind = ResolveContactShadowDispatch(projection, { 0.0F, 0.0F, 1.0F }, 1920U, 1080U, settings, 7U);
+    ASSERT_TRUE(behind.Valid());
+    EXPECT_FLOAT_EQ(behind.Constants.LightCoordinate[3], -1.0F);
+
+    // Across the view: parallel screen rays, normalised to the major axis.
+    const auto across = ResolveContactShadowDispatch(projection, { 1.0F, 0.5F, 0.0F }, 1920U, 1080U, settings, 7U);
+    ASSERT_TRUE(across.Valid());
+    EXPECT_FLOAT_EQ(across.Constants.LightCoordinate[3], 0.0F);
+    EXPECT_FLOAT_EQ(std::max(std::abs(across.Constants.LightCoordinate[0]),
+                             std::abs(across.Constants.LightCoordinate[1])),
+                    1.0F);
+
+    EXPECT_FALSE(ResolveContactShadowDispatch(projection, { 0.0F, 0.0F, -1.0F }, 0U, 1080U, settings, 7U).Valid());
+    EXPECT_FALSE(ResolveContactShadowDispatch(projection, { 0.0F, 0.0F, 0.0F }, 1920U, 1080U, settings, 7U).Valid());
+}
+
+TEST(Oot3dContactShadows, ClampsShaderParameters) {
+    using namespace Fast::Oot3d;
+    DirectionalShadowMatrix projection{};
+    projection[0] = 1.0F;
+    projection[5] = 1.0F;
+    projection[11] = -1.0F;
+    ContactShadowSettings settings;
+    settings.SurfaceThickness = 0.0F;
+    settings.Opacity = 2.0F;
+    settings.Blur = -1.0F;
+    const auto dispatch = ResolveContactShadowDispatch(projection, { 0.0F, 0.0F, -1.0F }, 64U, 64U, settings, 2048U);
+    ASSERT_TRUE(dispatch.Valid());
+    EXPECT_GT(dispatch.Constants.SurfaceThickness, 0.0F);
+    EXPECT_FLOAT_EQ(dispatch.Constants.Opacity, 1.0F);
+    EXPECT_FLOAT_EQ(dispatch.Constants.Blur, 0.0F);
+    EXPECT_FLOAT_EQ(dispatch.Constants.FrameCount, 0.0F);
+}
+
+#ifdef OOT3D_FOUNDATION_HAS_SHADERC
+TEST(Oot3dContactShadows, ComputeShadersCompileForEveryLength) {
+    shaderc::Compiler compiler;
+    shaderc::CompileOptions options;
+    options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_2);
+    for (uint32_t length = 0; length < Fast::Oot3d::kContactShadowLengthCount; ++length) {
+        const auto source = Fast::Oot3d::ContactShadowComputeShader(length);
+        EXPECT_NE(source.find("#define READ_COUNT " + std::to_string(2U + length)), std::string::npos);
+        const auto result = compiler.CompileGlslToSpv(source, shaderc_compute_shader, "contact_shadows.comp", options);
+        EXPECT_EQ(result.GetCompilationStatus(), shaderc_compilation_status_success) << result.GetErrorMessage();
+    }
+}
+#endif
 
 TEST(Renderer3dsVirtualShadows, RetainsWorldPagesAndRetriesUncommittedCasterChanges) {
     using namespace Fast::Renderer3ds;
@@ -1267,6 +1376,217 @@ TEST(Oot3dGrassMaskLevels,
     EXPECT_GT(
         EvaluateGrassMaskLevel(1.0F / 255.0F, rule),
         0.0F);
+}
+
+TEST(Oot3dGrassMaskLevels,
+     ActiveRectanglesKeepTheMaskOnlyInsideThem) {
+    using namespace Fast::Oot3d;
+    GrassPlacementRule rule;
+    rule.InputBlack = 0.0F;
+    rule.InputWhite = 1.0F;
+    // None listed: all of the mask applies.
+    EXPECT_TRUE(GrassMaskPositionActive(rule, 0.9F, 0.9F));
+    EXPECT_FLOAT_EQ(EvaluateGrassMaskLevel(1.0F, rule, 0.9F, 0.9F), 1.0F);
+    rule.ActiveRects = {{0.1F, 0.1F, 0.4F, 0.3F}, {0.6F, 0.5F, 0.9F, 1.0F}};
+    EXPECT_FLOAT_EQ(EvaluateGrassMaskLevel(1.0F, rule, 0.2F, 0.2F), 1.0F);
+    EXPECT_FLOAT_EQ(EvaluateGrassMaskLevel(0.5F, rule, 0.8F, 0.9F), 0.5F);
+    // Outside every rectangle: zero, as for a black mask.
+    EXPECT_FLOAT_EQ(EvaluateGrassMaskLevel(1.0F, rule, 0.5F, 0.5F), 0.0F);
+    EXPECT_FLOAT_EQ(EvaluateGrassMaskLevel(1.0F, rule, 0.2F, 0.4F), 0.0F);
+    // Inactive texels are never interior for midrange grouping.
+    const std::vector<uint8_t> white(16U * 16U, 255U);
+    const GrassMaskInterior interior(16U, 16U, white, [](uint8_t) { return true; },
+                                     [&](float u, float v) { return GrassMaskPositionActive(rule, u, v); });
+    EXPECT_TRUE(interior.Contains({0.15F, 0.15F}, {0.35F, 0.25F}));
+    EXPECT_FALSE(interior.Contains({0.45F, 0.45F}, {0.55F, 0.55F}));
+}
+
+namespace {
+
+// A ground-like texture: smooth blobs plus fine grain, from a seed; tinted by
+// a green gain.
+std::vector<uint8_t> GrassTwinPattern(uint32_t seed, uint32_t side, float greenGain = 1.0F) {
+    std::mt19937 random(seed);
+    std::uniform_real_distribution<float> unit(0.0F, 1.0F);
+    std::vector<float> coarse(16U * 16U);
+    for (auto& value : coarse) value = unit(random);
+    std::vector<uint8_t> rgba(size_t(side) * side * 4U);
+    std::mt19937 grain(seed * 7U + 1U);
+    for (uint32_t y = 0; y < side; ++y)
+        for (uint32_t x = 0; x < side; ++x) {
+            const float fx = float(x) * 16.0F / float(side), fy = float(y) * 16.0F / float(side);
+            const uint32_t x0 = uint32_t(fx) % 16U, y0 = uint32_t(fy) % 16U;
+            const uint32_t x1 = (x0 + 1U) % 16U, y1 = (y0 + 1U) % 16U;
+            const float ax = fx - std::floor(fx), ay = fy - std::floor(fy);
+            const float blob = std::lerp(std::lerp(coarse[y0 * 16U + x0], coarse[y0 * 16U + x1], ax),
+                                         std::lerp(coarse[y1 * 16U + x0], coarse[y1 * 16U + x1], ax), ay);
+            const float value = 0.6F * blob + 0.4F * unit(grain);
+            uint8_t* pixel = rgba.data() + (size_t(y) * side + x) * 4U;
+            pixel[0] = uint8_t(std::lround(60.0F * value));
+            pixel[1] = uint8_t(std::clamp(std::lround(greenGain * (60.0F + 140.0F * value)), 0L, 255L));
+            pixel[2] = uint8_t(std::lround(30.0F * value));
+            pixel[3] = 255U;
+        }
+    return rgba;
+}
+
+std::vector<uint8_t> GrassTwinHalf(const std::vector<uint8_t>& rgba, uint32_t side) {
+    std::vector<uint8_t> half(size_t(side / 2U) * (side / 2U) * 4U);
+    for (uint32_t y = 0; y < side / 2U; ++y)
+        for (uint32_t x = 0; x < side / 2U; ++x)
+            for (uint32_t c = 0; c < 4U; ++c) {
+                uint32_t sum = 0U;
+                for (uint32_t k = 0; k < 4U; ++k)
+                    sum += rgba[((size_t(2U * y + k / 2U)) * side + 2U * x + k % 2U) * 4U + c];
+                half[(size_t(y) * (side / 2U) + x) * 4U + c] = uint8_t((sum + 2U) / 4U);
+            }
+    return half;
+}
+
+class FakeGrassSignatures final : public Fast::Oot3d::GrassTextureSignatureSource {
+  public:
+    std::shared_ptr<const Fast::Oot3d::GrassTextureSignature> Find(uint64_t hash, bool persist) override {
+        ++Finds;
+        if (persist) Persisted.push_back(hash);
+        const auto found = Signatures.find(hash);
+        return found == Signatures.end() ? nullptr : found->second;
+    }
+    uint64_t Generation() const override { return Serial; }
+    void Add(uint64_t hash, uint32_t side, const std::vector<uint8_t>& rgba) {
+        Signatures[hash] = std::make_shared<const Fast::Oot3d::GrassTextureSignature>(
+            Fast::Oot3d::ComputeGrassTextureSignature(uint16_t(side), uint16_t(side), rgba));
+        ++Serial;
+    }
+    std::unordered_map<uint64_t, std::shared_ptr<const Fast::Oot3d::GrassTextureSignature>> Signatures;
+    std::vector<uint64_t> Persisted;
+    uint64_t Serial = 1U;
+    size_t Finds = 0U;
+};
+
+} // namespace
+
+TEST(Oot3dGrassTextureTwins, SameImageScoresAboveDifferentImages) {
+    using namespace Fast::Oot3d;
+    const auto original = GrassTwinPattern(11U, 128U);
+    const auto sig = ComputeGrassTextureSignature(128U, 128U, original);
+    // Another tint, half the size, a patch painted over: the same image.
+    const auto tinted = ComputeGrassTextureSignature(128U, 128U, GrassTwinPattern(11U, 128U, 0.55F));
+    const auto half = ComputeGrassTextureSignature(64U, 64U, GrassTwinHalf(original, 128U));
+    auto patched = original;
+    for (uint32_t y = 70U; y < 100U; ++y)
+        for (uint32_t x = 10U; x < 60U; ++x)
+            for (uint32_t c = 0; c < 3U; ++c) patched[(size_t(y) * 128U + x) * 4U + c] = 0U;
+    const auto patchedSig = ComputeGrassTextureSignature(128U, 128U, patched);
+    EXPECT_GT(GrassTextureTwinScore(sig, tinted), 0.95F);
+    EXPECT_GT(GrassTextureTwinScore(sig, half), kGrassTextureTwinThreshold);
+    EXPECT_GT(GrassTextureTwinScore(sig, patchedSig), kGrassTextureTwinThreshold);
+    // Another pattern of the same kind and colours: not the same image.
+    const auto other = ComputeGrassTextureSignature(128U, 128U, GrassTwinPattern(12U, 128U));
+    EXPECT_LT(GrassTextureTwinScore(sig, other), 0.3F);
+    // Shapes that cannot be the same image.
+    const auto quarter = ComputeGrassTextureSignature(32U, 32U, GrassTwinHalf(GrassTwinHalf(original, 128U), 64U));
+    EXPECT_EQ(GrassTextureTwinScore(sig, quarter), -1.0F);
+    const auto wide = ComputeGrassTextureSignature(128U, 64U, std::vector<uint8_t>(original.begin(), original.begin() + 128U * 64U * 4U));
+    EXPECT_EQ(GrassTextureTwinScore(sig, wide), -1.0F);
+}
+
+TEST(Oot3dGrassTextureTwins, InheritedRuleMapsTheTwinsTintOntoTheSource) {
+    using namespace Fast::Oot3d;
+    const auto source = ComputeGrassTextureSignature(128U, 128U, GrassTwinPattern(5U, 128U));
+    const auto twin = ComputeGrassTextureSignature(128U, 128U, GrassTwinPattern(5U, 128U, 0.5F));
+    GrassPlacementRule rule;
+    rule.RuleId = 3U;
+    rule.Target.Rgba8Hash = 0xAAU;
+    rule.Target.Width = rule.Target.Height = 128U;
+    rule.Channel = GrassSampleChannel::Green;
+    rule.InputBlack = 0.4F;
+    rule.InputWhite = 0.7F;
+    rule.ActiveRects = {{0.1F, 0.1F, 0.6F, 0.6F}};
+    const auto inherited = DeriveGrassTwinRule(rule, source, twin, 0xBBU);
+    EXPECT_EQ(inherited.Target.Rgba8Hash, 0xBBU);
+    EXPECT_EQ(inherited.InheritedFrom, 3U);
+    EXPECT_NE(inherited.RuleId & kGrassInheritedRuleIdBit, 0U);
+    EXPECT_EQ(inherited.ActiveRects, rule.ActiveRects);
+    // The same texel: green g on the source, about g / 2 on the twin.
+    for (const float green : {0.35F, 0.5F, 0.6F, 0.72F}) {
+        EXPECT_NEAR(EvaluateGrassMaskLevel(green * 0.5F, inherited),
+                    EvaluateGrassMaskLevel(green, rule), 0.06F) << green;
+    }
+    // Its own rule from it keeps the mask (the mapping folded into levels).
+    for (const bool invert : {false, true}) {
+        auto from = inherited;
+        from.Invert = invert;
+        const auto own = OwnGrassRuleFromInherited(from, 9U);
+        EXPECT_EQ(own.RuleId, 9U);
+        EXPECT_EQ(own.InheritedFrom, 0U);
+        EXPECT_FLOAT_EQ(own.SampleScale, 1.0F);
+        for (const float sample : {0.18F, 0.25F, 0.3F, 0.34F})
+            EXPECT_NEAR(EvaluateGrassMaskLevel(sample, own), EvaluateGrassMaskLevel(sample, from), 1.0e-3F)
+                << invert << " " << sample;
+    }
+}
+
+TEST(Oot3dGrassTextureTwins, SignatureStoreRoundTrips) {
+    using namespace Fast::Oot3d;
+    const auto a = ComputeGrassTextureSignature(128U, 128U, GrassTwinPattern(1U, 128U));
+    const auto b = ComputeGrassTextureSignature(64U, 64U, GrassTwinPattern(2U, 64U));
+    std::stringstream stream;
+    WriteGrassTextureSignature(stream, 0x1234U, a);
+    WriteGrassTextureSignature(stream, 0x5678U, b);
+    std::string bytes = stream.str();
+    std::stringstream input(bytes);
+    const auto read = ReadGrassTextureSignatures(input);
+    ASSERT_EQ(read.size(), 2U);
+    EXPECT_EQ(read[0].first, 0x1234U);
+    EXPECT_EQ(read[0].second, a);
+    EXPECT_EQ(read[1].second, b);
+    // A truncated last record is dropped, the others kept.
+    std::stringstream truncated(bytes.substr(0, bytes.size() - 10U));
+    EXPECT_EQ(ReadGrassTextureSignatures(truncated).size(), 1U);
+}
+
+TEST(Oot3dGrassTextureTwins, TexturesWithoutTheirOwnRuleInheritTheirTwinsRule) {
+    using namespace Fast::Oot3d;
+    FakeGrassSignatures signatures;
+    auto& twins = GrassTwinRules::Instance();
+    twins.SetSource(&signatures);
+    const auto pattern = GrassTwinPattern(21U, 128U);
+    signatures.Add(0xB0U, 128U, GrassTwinPattern(21U, 128U, 0.6F));  // twin
+    signatures.Add(0xC0U, 128U, GrassTwinPattern(22U, 128U));        // another image
+    std::vector<GrassPlacementRule> rules(1);
+    rules[0].RuleId = 1U;
+    rules[0].Target.Rgba8Hash = 0xA0U;
+    rules[0].Target.Width = rules[0].Target.Height = 128U;
+    rules[0].Target.MapperSlotMask = 0x01U;
+    // The rule's texture not known yet: nothing to inherit from.
+    EXPECT_FALSE(twins.Configured(rules, 0xB0U, 128U, 128U, 0U));
+    signatures.Add(0xA0U, 128U, pattern);
+    EXPECT_TRUE(twins.Configured(rules, 0xA0U, 128U, 128U, 0U));
+    EXPECT_TRUE(twins.Configured(rules, 0xB0U, 128U, 128U, 0U));
+    EXPECT_FALSE(twins.Configured(rules, 0xB0U, 128U, 128U, 1U));  // the source's slots
+    EXPECT_FALSE(twins.Configured(rules, 0xC0U, 128U, 128U, 0U));
+    EXPECT_NE(std::find(signatures.Persisted.begin(), signatures.Persisted.end(), 0xA0U),
+              signatures.Persisted.end());
+    auto inherited = twins.Inherited(rules, 0xB0U, 128U, 128U);
+    ASSERT_TRUE(inherited.has_value());
+    EXPECT_EQ(inherited->InheritedFrom, 1U);
+    EXPECT_EQ(inherited->Target.Rgba8Hash, 0xB0U);
+    ASSERT_EQ(twins.AllInherited(rules).size(), 1U);
+    // The source's settings are read when asked, without matching again.
+    const size_t finds = signatures.Finds;
+    rules[0].InputBlack = 0.123F;
+    inherited = twins.Inherited(rules, 0xB0U, 128U, 128U);
+    ASSERT_TRUE(inherited.has_value());
+    EXPECT_FLOAT_EQ(inherited->InputBlack, 0.123F);
+    EXPECT_EQ(signatures.Finds, finds);
+    // A rule of its own wins.
+    rules.push_back(rules[0]);
+    rules[1].RuleId = 2U;
+    rules[1].Target.Rgba8Hash = 0xB0U;
+    EXPECT_FALSE(twins.Inherited(rules, 0xB0U, 128U, 128U).has_value());
+    EXPECT_TRUE(twins.Configured(rules, 0xB0U, 128U, 128U, 0U));
+    EXPECT_TRUE(twins.AllInherited(rules).empty());
+    twins.SetSource(nullptr);
 }
 
 TEST(Oot3dGrassTextureCoordinates,
@@ -5837,6 +6157,25 @@ TEST(Oot3dGrassCollision, SweptCapsuleCatchesMotionAndRejectsOtherFloors) {
     EXPECT_FLOAT_EQ(otherFloor.Weight, 0.0F);
 }
 
+TEST(Oot3dGrassCollision, DirectPushDoesNotDropWhenTheActorStops) {
+    Fast::Oot3d::InteractiveGrassSettings settings;
+    settings.CollisionPush = 1.0F;
+    settings.CollisionVelocityResponse = 3.0F;
+    settings.MaximumBend = 1.0F;
+    Fast::Oot3d::GrassInteractor link;
+    link.PreviousPosition = {0.0F, 0.0F, 0.0F};
+    link.Position = {0.0F, 0.0F, 0.0F};
+    link.Velocity = {600.0F, 0.0F, 0.0F};
+    link.Radius = 10.0F;
+    link.HalfHeight = 40.0F;
+    const auto running = Fast::Oot3d::ResolveGrassCollision({5.0F, 0.0F, 0.0F}, 20.0F, link, settings);
+    link.Velocity = {};
+    const auto stopped = Fast::Oot3d::ResolveGrassCollision({5.0F, 0.0F, 0.0F}, 20.0F, link, settings);
+    EXPECT_FLOAT_EQ(running.Weight, 0.5F);
+    EXPECT_FLOAT_EQ(stopped.Weight, running.Weight);
+    EXPECT_EQ(stopped.Bend, running.Bend);
+}
+
 TEST(Oot3dGrassInteractionField, KeepsTrailAtWorldCoordinatesWhenRecentering) {
     Fast::Oot3d::InteractiveGrassSettings settings;
     settings.InteractionFieldResolution = 32;
@@ -5867,6 +6206,48 @@ TEST(Oot3dGrassInteractionField, KeepsTrailAtWorldCoordinatesWhenRecentering) {
     const auto otherFloor = field.Sample(5.0F, 15.0F, 200.0F, 5.0F);
     EXPECT_FLOAT_EQ(otherFloor[0], 0.0F);
     EXPECT_FLOAT_EQ(otherFloor[1], 0.0F);
+}
+
+TEST(Oot3dGrassInteractionField, KeepsLinksTrailWhenHeStopsAndAFarActorMoves) {
+    using namespace Fast::Oot3d;
+    InteractiveGrassSettings settings;
+    settings.InteractionFieldResolution = 32;
+    settings.InteractionFieldRadius = 160.0F;
+    settings.CollisionPush = 1.0F;
+    settings.MaximumBend = 2.0F;
+    settings.RecoverySeconds = 10.0F;
+    GrassInteractionField field;
+    std::array<GrassInteractor, 2> actors;
+    auto& link = actors[0];
+    link.StableId = 1U;
+    link.PreviousPosition = {-40.0F, 0.0F, 0.0F};
+    link.Position = {40.0F, 0.0F, 0.0F};
+    link.Velocity = {100.0F, 0.0F, 0.0F};
+    link.Radius = 30.0F;
+    link.FrameId = 1U;
+    auto& kokiri = actors[1];
+    kokiri.Type = GrassInteractor::Kind::SceneActor;
+    kokiri.StableId = 2U;
+    kokiri.PreviousPosition = kokiri.Position = {2000.0F, 0.0F, 2000.0F};
+    kokiri.Radius = 20.0F;
+    kokiri.FrameId = 1U;
+    field.UpdateActors(1.0F / 60.0F, settings, actors);
+    const auto before = field.Sample(5.0F, 15.0F, 0.0F, 5.0F);
+    EXPECT_GT(std::hypot(before[0], before[1]), 0.0F);
+
+    // Link stops; the far actor is now the fastest. The trail around Link is
+    // what the camera sees, so the field must stay on him.
+    link.PreviousPosition = link.Position;
+    link.Velocity = {};
+    link.FrameId = 2U;
+    kokiri.PreviousPosition = kokiri.Position;
+    kokiri.Position[0] += 2.0F;
+    kokiri.Velocity = {120.0F, 0.0F, 0.0F};
+    kokiri.FrameId = 2U;
+    field.UpdateActors(0.0F, settings, actors);
+    const auto after = field.Sample(5.0F, 15.0F, 0.0F, 5.0F);
+    EXPECT_NEAR(after[0], before[0], 1.0e-5F);
+    EXPECT_NEAR(after[1], before[1], 1.0e-5F);
 }
 
 TEST(Oot3dHiZ, BuildsCompleteOddSizedPyramid) {

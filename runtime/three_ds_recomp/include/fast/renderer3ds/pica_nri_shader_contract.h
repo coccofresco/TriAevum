@@ -40,6 +40,8 @@ struct PicaNriFragmentShaderExtensions {
     std::string_view DirectionalShadowSampler;
     // Optional point-shadow atlas sampler: image/sampler at bindings 27 and 28.
     std::string_view PointShadowSampler;
+    // Optional contact-shadow visibility sampler: bindings 29 and 30.
+    std::string_view ContactShadowSampler;
 };
 
 // This binding contract deliberately matches the original PICA bindings for
@@ -52,7 +54,8 @@ struct PicaNriFragmentShaderExtensions {
 // Bindings 17-25 carry opt-in PBR parameters and normal/ORM/emissive/height maps.
 // Binding 26 is read-only, geometry-owned UV-seam metadata.
 // Bindings 27-28 are the optional point-shadow atlas image and sampler.
-constexpr std::array<PicaNriDescriptorBinding, 29>
+// Bindings 29-30 are the optional contact-shadow visibility and sampler.
+constexpr std::array<PicaNriDescriptorBinding, 31>
     kPicaNriDescriptorBindings{{
         {0U, PicaNriDescriptorKind::ConstantBuffer,
          PicaNriShaderStage::Vertex},
@@ -111,6 +114,10 @@ constexpr std::array<PicaNriDescriptorBinding, 29>
         {27U, PicaNriDescriptorKind::Texture,
          PicaNriShaderStage::Fragment},
         {28U, PicaNriDescriptorKind::Sampler,
+         PicaNriShaderStage::Fragment},
+        {29U, PicaNriDescriptorKind::Texture,
+         PicaNriShaderStage::Fragment},
+        {30U, PicaNriDescriptorKind::Sampler,
          PicaNriShaderStage::Fragment},
     }};
 

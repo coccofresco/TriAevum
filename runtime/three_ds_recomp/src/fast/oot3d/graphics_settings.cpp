@@ -297,6 +297,20 @@ GraphicsSettingsValidation GraphicsSettingsService::Validate(
         std::isfinite(directionalShadows.Strength)
             ? std::clamp(directionalShadows.Strength, 0.0F, 4.0F)
             : 0.80F;
+    directionalShadows.NormalBias =
+        std::isfinite(directionalShadows.NormalBias)
+            ? std::clamp(directionalShadows.NormalBias, 0.0F, 10.0F)
+            : DirectionalShadowSettings{}.NormalBias;
+    {
+        // Godot's ranges: thickness > 0, opacity 0..1, blur 0..10.
+        auto& contact = directionalShadows.ContactShadows;
+        const ContactShadowSettings defaults;
+        contact.Length = std::min<uint8_t>(contact.Length, 2U);
+        contact.SurfaceThickness = std::isfinite(contact.SurfaceThickness)
+            ? std::clamp(contact.SurfaceThickness, 0.001F, 0.1F) : defaults.SurfaceThickness;
+        contact.Opacity = std::isfinite(contact.Opacity) ? std::clamp(contact.Opacity, 0.0F, 1.0F) : defaults.Opacity;
+        contact.Blur = std::isfinite(contact.Blur) ? std::clamp(contact.Blur, 0.0F, 10.0F) : defaults.Blur;
+    }
     if (directionalShadows.Mode ==
             DirectionalShadowMode::VirtualShadowMaps &&
         !capabilities.Has(GraphicsCapability::NriDirectionalShadows)) {
@@ -723,6 +737,20 @@ GraphicsSettingsValidation GraphicsSettingsService::Validate(
             std::clamp(rule.MaximumSlopeDegrees, 0.0F, 90.0F);
         rule.NormalOffset =
             std::clamp(rule.NormalOffset, -1000.0F, 1000.0F);
+        // Active rectangles inside the mask, ordered corners, no empty ones.
+        if (rule.ActiveRects.size() > kMaximumGrassMaskRects) {
+            rule.ActiveRects.resize(kMaximumGrassMaskRects);
+        }
+        for (auto& rect : rule.ActiveRects) {
+            const auto unit = [](float value) {
+                return std::isfinite(value) ? std::clamp(value, 0.0F, 1.0F) : 0.0F;
+            };
+            rect = {unit(std::min(rect.MinU, rect.MaxU)), unit(std::min(rect.MinV, rect.MaxV)),
+                    unit(std::max(rect.MinU, rect.MaxU)), unit(std::max(rect.MinV, rect.MaxV))};
+        }
+        std::erase_if(rule.ActiveRects, [](const GrassMaskRect& rect) {
+            return !(rect.MaxU > rect.MinU) || !(rect.MaxV > rect.MinV);
+        });
     }
     if (value.AntiAliasing == AntiAliasingMode::Taa &&
         (!capabilities.Has(GraphicsCapability::MotionVectors) ||

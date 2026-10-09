@@ -170,6 +170,25 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
   // pointer so menu movement and capture warps cannot leak into gameplay.
   const auto mouseDelta = window.GetMouseDelta();
   pollingState.MouseMovementPolls += mouseDelta.x != 0 || mouseDelta.y != 0 ? 1U : 0U;
+  pollingState.DevMouseDeltaX += mouseDelta.x;
+  pollingState.DevMouseDeltaY += mouseDelta.y;
+  pollingState.DevMouseRightHeld = window.GetMouseState(Ship::LUS_MOUSE_BTN_RIGHT);
+  {
+    SDL_GameController *pad = selectedController.Controller;
+    const auto axis = [&](SDL_GameControllerAxis which, float sign) {
+      if (pad == nullptr) return 0.0F;
+      const float value = static_cast<float>(SDL_GameControllerGetAxis(pad, which)) / 32767.0F * sign;
+      constexpr float kDeadZone = 0.2F;
+      return std::abs(value) < kDeadZone ? 0.0F
+          : std::clamp((value - std::copysign(kDeadZone, value)) / (1.0F - kDeadZone), -1.0F, 1.0F);
+    };
+    pollingState.DevPadLeftStick = {axis(SDL_CONTROLLER_AXIS_LEFTX, 1.0F), axis(SDL_CONTROLLER_AXIS_LEFTY, -1.0F)};
+    pollingState.DevPadRightStick = {axis(SDL_CONTROLLER_AXIS_RIGHTX, 1.0F), axis(SDL_CONTROLLER_AXIS_RIGHTY, -1.0F)};
+    pollingState.DevPadLeftShoulder =
+        pad != nullptr && SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_LEFTSHOULDER) != 0;
+    pollingState.DevPadRightShoulder =
+        pad != nullptr && SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) != 0;
+  }
   if (gameplayMouseOwned && !mouseCaptureChanged) {
     pollingState.PendingMouseDeltaX += mouseDelta.x;
     pollingState.PendingMouseDeltaY += mouseDelta.y;

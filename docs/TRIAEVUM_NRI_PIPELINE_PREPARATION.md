@@ -64,7 +64,20 @@ drawable; only the recording backend consumes it.
 
 - File: `nri_pipeline_cache.bin`, in the live renderer's shader-cache directory.
 - Version 2: explicit little-endian header, renderer ABI, Vulkan vendor/device,
-  driver version, pipeline-cache UUID, size and payload checksum; maximum 64 MiB.
+  driver version, pipeline-cache UUID, size and payload checksum; maximum
+  512 MiB (`kMaximumNriPipelineCacheBytes`; the plain Vulkan cache keeps 64 MiB).
+- 2026-10-07: the NRI cache had outgrown the former 64 MiB limit on
+  2026-10-01 (52 MB then, 74.5 MB once stored again). Above it the bridge's
+  `GetPipelineCacheData` returned nothing, so shutdown skipped the store without
+  a message and every session loaded the 2026-10-01 file. NVIDIA's own
+  per-executable cache hid it until a new executable: then every launch spent
+  about 55 s preparing the 39 startup parts and room changes compiled their
+  pipelines again (286 s of pipeline creation in a 600-frame run with one warp,
+  2.5 s once the cache was stored; startup 0.9 s). The size policy now belongs
+  to the store alone: over the limit the file is dropped, so the next session
+  rebuilds a cache of what it uses. The store reports
+  `TRIAEVUM_NRI_PIPELINE_CACHE_STORE result=stored|dropped|failed` on stderr,
+  since the logger may be quiet at shutdown.
 - Old version-1, foreign-device, truncated, oversized and corrupt caches are
   rejected and rebuilt. This intentionally causes one cache rebuild on upgrade.
 - Writes replace a same-directory temporary file atomically. Failed writes keep

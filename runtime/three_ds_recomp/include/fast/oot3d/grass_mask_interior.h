@@ -16,6 +16,13 @@ class GrassMaskInterior final {
   public:
     template<class IsInterior>
     GrassMaskInterior(uint32_t width, uint32_t height, std::span<const uint8_t> samples, IsInterior interior)
+        : GrassMaskInterior(width, height, samples, interior, [](float, float) { return true; }) {}
+
+    // Active(u, v) at texel centres (normalized): an inactive texel is never
+    // interior (a mask's active rectangles).
+    template<class IsInterior, class Active>
+    GrassMaskInterior(uint32_t width, uint32_t height, std::span<const uint8_t> samples, IsInterior interior,
+                      Active active)
         : Width(width), Height(height), Tile(std::max(1U,(std::max(width,height)+511U)/512U)),
           Columns((width + Tile - 1) / Tile), Rows((height + Tile - 1) / Tile) {
         if (!width || !height || width > 65535 || height > 65535 || uint64_t(width) * height != samples.size())
@@ -25,7 +32,8 @@ class GrassMaskInterior final {
         Prefix.resize(size_t(Columns + 1) * (Rows + 1));
         for (uint32_t y = 0; y < height; ++y)
             for (uint32_t x = 0; x < width; ++x)
-                if (!accepted[samples[size_t(y) * width + x]])
+                if (!accepted[samples[size_t(y) * width + x]] ||
+                    !active((float(x) + 0.5F) / float(width), (float(y) + 0.5F) / float(height)))
                     Prefix[size_t(y / Tile + 1) * (Columns + 1) + x / Tile + 1] = 1;
         for (uint32_t y = 1; y <= Rows; ++y)
             for (uint32_t x = 1; x <= Columns; ++x) {

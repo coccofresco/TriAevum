@@ -272,10 +272,10 @@ std::string BuildPicaUberEffectProgram(const PicaUberEffectProgramRequest& reque
         declarations += PicaDirectionalShadowLightingDeclarations();
         declarations += "\nvec3 pica_surface_shadow(int slot) {\n"
                         "    if (!" + Bit(Decision::DirectionalShadow) + ") return vec3(1.0);\n"
-                        "    uint selected = uint(pica_vsm.shadowed_direct_fraction.w);\n"
+                        "    uint selected = uint(pica_vsm.receiver.w);\n"
                         "    if (slot < 0) return vec3(1.0);\n"
                         "    return (selected & (1u << uint(slot))) != 0u\n"
-                        "        ? oot3d_directional_shadow_visibility() : vec3(1.0);\n}\n";
+                        "        ? oot3d_directional_shadow_visibility(pica_surface_normal) : vec3(1.0);\n}\n";
         std::string point(Renderer3ds::PointShadowReceiverShader());
         const std::string_view name = "float pica_point_shadow(float slot, vec3 light_to_fragment, float radius) {";
         const size_t at = point.find(name);
@@ -328,6 +328,8 @@ std::string BuildPicaUberEffectProgram(const PicaUberEffectProgramRequest& reque
         vec2 pica_texcoord1 = oot3d_native_texcoord1;
         vec2 pica_texcoord2 = oot3d_native_texcoord2;
 )glsl" + tev + "\n        combiner_output.rgb = surface_lit_rgb;\n    }\n");
+        atAfterTev += Guarded(Bit(Decision::SurfaceLighting) + " && !" + Bit(Decision::Pbr),
+                              Renderer3ds::PicaSurfaceLightingWaterShading());
         atAfterTev += pbr.ShadingBody;
         atAfterTev += "\n    vec3 surface_before_fog = combiner_output.rgb;\n";
         atAfterTev += "    vec3 surface_gi_albedo = vec3(0.0);\n";
@@ -424,6 +426,9 @@ std::string BuildPicaUberEffectProgram(const PicaUberEffectProgramRequest& reque
         end += Guarded(Bit(Decision::Reactive), reactive);
     }
     end += MaterialBaseline(Decision::MaterialWriter::Baseline);
+    if (surface)
+        end += Guarded(Bit(Decision::SurfaceLighting) + " && !" + Bit(Decision::Pbr),
+                       Renderer3ds::PicaSurfaceLightingWaterMarker());
     if (request.TemporalInputs)
         end += Guarded(Bit(Decision::RigidMotion),
             "    vec4 oot3d_motion = oot3d_draw.rigid_motion;\n"
@@ -446,7 +451,9 @@ std::string BuildPicaUberEffectProgram(const PicaUberEffectProgramRequest& reque
     }
     if (surface) {
         end += Guarded(Bit(Decision::EnvironmentMix),
-                       "\n    if (pica_surface.environment_parameters.w != 0.0)\n"
+                       "\n    // Water keeps its native fog (its native colour is its appearance;\n"
+                       "    // far water meets the native horizon).\n"
+                       "    if (pica_surface.environment_parameters.w != 0.0 && !pica_surface_water_fragment)\n"
                        "        pica_color.rgb = mix(surface_before_fog, pica_color.rgb, pica_surface.environment_parameters.z);\n");
         end += Guarded(Bit(Decision::Pbr), pbr.DiagnosticOutput);
     }

@@ -78,6 +78,11 @@ enum class EffectResource : uint8_t {
     // the atlas a producer writes for the current sample.
     PointShadowHistory,
     PointShadowMap,
+    // Screen-space contact shadows of the directional shadow light (R8, one
+    // per target): the visibility receivers read, and the one the shadow map
+    // producer writes for the current sample from its camera depth.
+    ContactShadowHistory,
+    ContactShadowMap,
     Count,
 };
 // Resource sets are 32-bit masks in the barrier and residency plans.
@@ -134,6 +139,8 @@ struct EffectResourceUse {
         case EffectResource::DirectionalShadowStaticHistory:
         case EffectResource::PointShadowHistory:
         case EffectResource::PointShadowMap:
+        case EffectResource::ContactShadowHistory:
+        case EffectResource::ContactShadowMap:
         case EffectResource::HierarchicalDepth:
         case EffectResource::MotionVectors:
         case EffectResource::ReactiveMask:

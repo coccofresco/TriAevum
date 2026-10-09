@@ -5,6 +5,7 @@
 
 #include "fast/oot3d/effect_graph_pass_barriers.h"
 #include "fast/oot3d/graphics_settings.h"
+#include "fast/oot3d/hiz_reflection.h"
 #include "fast/oot3d/scene_view_runtime.h"
 
 #include <vulkan/vulkan.h>
@@ -37,7 +38,9 @@ class HiZReflectionPass final {
                  const PerspectiveViewState& view,
                  const EffectsSettings& settings,
                  const EffectPassBarrierPlan& barrierPlan,
-                 std::optional<PicaSurfaceCoordinates> coordinates = std::nullopt);
+                 std::optional<PicaSurfaceCoordinates> coordinates = std::nullopt,
+                 const HiZWaterUniforms& water = {},
+                 const Renderer3ds::PicaWaterMap* waterMap = nullptr, uint64_t waterMapVersion = 0);
     void InvalidateScreenResources();
     void Shutdown();
 

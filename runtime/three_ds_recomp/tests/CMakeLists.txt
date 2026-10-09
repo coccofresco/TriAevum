@@ -21,6 +21,21 @@ target_compile_features(pica_surface_coordinates_tests PRIVATE cxx_std_20)
 target_include_directories(pica_surface_coordinates_tests PRIVATE ../include)
 add_test(NAME pica_surface_coordinates_tests COMMAND pica_surface_coordinates_tests)
 
+add_executable(pica_surface_appearance_tests pica_surface_appearance_tests.cpp)
+target_compile_features(pica_surface_appearance_tests PRIVATE cxx_std_20)
+target_include_directories(pica_surface_appearance_tests PRIVATE ../include)
+add_test(NAME pica_surface_appearance_tests COMMAND pica_surface_appearance_tests)
+
+add_executable(pica_scene_water_tests pica_scene_water_tests.cpp)
+target_compile_features(pica_scene_water_tests PRIVATE cxx_std_20)
+target_include_directories(pica_scene_water_tests PRIVATE ../include)
+add_test(NAME pica_scene_water_tests COMMAND pica_scene_water_tests)
+
+add_executable(pica_water_map_tests pica_water_map_tests.cpp)
+target_compile_features(pica_water_map_tests PRIVATE cxx_std_20)
+target_include_directories(pica_water_map_tests PRIVATE ../include)
+add_test(NAME pica_water_map_tests COMMAND pica_water_map_tests)
+
 add_executable(ambient_occlusion_guide_tests ambient_occlusion_guide_tests.cpp)
 target_compile_features(ambient_occlusion_guide_tests PRIVATE cxx_std_20)
 target_include_directories(ambient_occlusion_guide_tests PRIVATE ../include)
@@ -701,11 +716,14 @@ add_executable(oot3d_graphics_foundation_tests
     ../src/fast/oot3d/pica_scene_semantics.cpp
     ../src/fast/oot3d/grass_surface_extractor.cpp
     ../src/fast/oot3d/grass_texture_source_cache.cpp
+    ../src/fast/oot3d/grass_texture_twins.cpp
     ../src/fast/oot3d/grass_visibility.cpp
     ../src/fast/oot3d/grass_wind.cpp
     ../src/fast/oot3d/graphics_capabilities.cpp
     ../src/fast/oot3d/graphics_settings.cpp
     ../src/fast/oot3d/directional_shadows.cpp
+    ../src/fast/oot3d/contact_shadows.cpp
+    ../src/fast/oot3d/contact_shadow_shader.cpp
     ../src/fast/oot3d/sample_view.cpp
     ../src/fast/renderer3ds/virtual_shadow_map.cpp
     ../src/fast/renderer3ds/pica_shadow_geometry.cpp

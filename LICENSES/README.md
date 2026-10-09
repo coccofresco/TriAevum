@@ -12,6 +12,7 @@ their imported source.
 | nihstro subset | BSD-3-Clause | `tools/oot3d/third_party/azahar_pica/NIHSTRO_LICENSE.txt` |
 | libultraship | MIT | Upstream submodule `runtime/three_ds_recomp/LICENSE` |
 | NVIDIA NRI | MIT | `LICENSES/NRI-MIT.txt` and pinned upstream source |
+| Godot Engine contact shadows port | MIT | `LICENSES/Godot-MIT.txt` and the ported file headers |
 | SDL2 2.32.10 (statically linked) | zlib | `LICENSES/SDL2-zlib.txt` |
 | SDL_GameControllerDB mappings | zlib | `LICENSES/SDL-GameControllerDB-zlib.txt` |
 | Zstandard 1.5.6 (statically linked) | BSD-3-Clause (upstream is dual BSD/GPL-2.0; used under BSD) | `LICENSES/zstd-BSD-3-Clause.txt` |

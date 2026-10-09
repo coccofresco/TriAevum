@@ -197,7 +197,14 @@ struct Collector {
                 {"first_scenario", scenario}, {"first_draw", metadata.DrawIndex}, {"draws", 0U}});
             if (!added && (it->second.at("vertex_source_id") != vertexSource->second ||
                            it->second.at("fragment_source_id") != fragment->second.first))
-                throw std::runtime_error("native pipeline/source identity collision");
+                throw std::runtime_error("native pipeline/source identity collision: pipeline " + recipeId +
+                    " first " + it->second.at("first_scenario").get<std::string>() + " draw " +
+                    std::to_string(it->second.at("first_draw").get<uint64_t>()) + " (complete " +
+                    (it->second.at("complete_capture_resources").get<bool>() ? "yes" : "no") + ", vertex " +
+                    it->second.at("vertex_source_id").get<std::string>() + ", fragment " +
+                    it->second.at("fragment_source_id").get<std::string>() + "), then " + scenario + " draw " +
+                    std::to_string(metadata.DrawIndex) + " (complete " + (seeded ? "yes" : "no") +
+                    ", vertex " + vertexSource->second + ", fragment " + fragment->second.first + ")");
             if (seeded && !it->second.at("complete_capture_resources").get<bool>()) {
                 it->second["native_register_snapshot"] = event.at("register_snapshot");
                 it->second["complete_capture_resources"] = true;

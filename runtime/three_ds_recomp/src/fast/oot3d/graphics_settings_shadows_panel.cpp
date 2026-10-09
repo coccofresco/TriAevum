@@ -58,6 +58,38 @@ bool DrawDirectionalShadows(GraphicsSettings& settings, const GraphicsCapabiliti
             changed = true;
         }
         ImGui::TextWrapped("World-anchored virtual pages; unchanged pages are reused. Budget includes the static cache and composed atlas, and controls residency rather than near-field texel size.");
+        {
+            // Godot 4.8's screen-space contact shadows (project settings and
+            // the light's contact shadow group).
+            auto& contact = directionalShadows.ContactShadows;
+            changed |= ImGui::Checkbox("Contact shadows", &contact.Enabled);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Screen-space shadows marched toward the light from a camera depth of the shadow "
+                                  "casters: small-scale shadows the shadow map misses (contacts, creases, folds). "
+                                  "Combined with the shadow map by its minimum.");
+            ImGui::BeginDisabled(!contact.Enabled);
+            int length = contact.Length;
+            const char* lengths[] = { "Short", "Normal", "Long" };
+            if (ImGui::Combo("Contact shadow length", &length, lengths, 3)) {
+                contact.Length = static_cast<uint8_t>(length);
+                changed = true;
+            }
+            changed |= ImGui::SliderFloat("Contact surface thickness", &contact.SurfaceThickness, 0.001F, 0.1F,
+                                          "%.3f", ImGuiSliderFlags_Logarithmic);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Assumed depth thickness of surfaces, a fraction of the depth range. Larger fills "
+                                  "gaps in thin geometry but can bleed shadows through surfaces.");
+            changed |= ImGui::SliderFloat("Contact shadow opacity", &contact.Opacity, 0.0F, 1.0F, "%.2f");
+            changed |= ImGui::SliderFloat("Contact shadow blur", &contact.Blur, 0.0F, 10.0F, "%.2f");
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Noise on the ray start: 0 is sharp; higher softens the edges (best with "
+                                  "temporal anti-aliasing).");
+            changed |= ImGui::Checkbox("Contact shadows at half resolution", &contact.HalfResolution);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Camera depth and rays at half width and height: about a quarter of the GPU "
+                                  "cost. Very thin occluders can be missed.");
+            ImGui::EndDisabled();
+        }
         if (ImGui::TreeNode("Advanced directional shadows")) {
             changed |= ImGui::DragFloat(
                 "Shadow constant bias",
@@ -67,6 +99,14 @@ bool DrawDirectionalShadows(GraphicsSettings& settings, const GraphicsCapabiliti
                 "Shadow slope bias",
                 &directionalShadows.DepthBiasSlope,
                 0.05F, 0.0F, 16.0F, "%.2f");
+            changed |= ImGui::SliderFloat(
+                "Shadow normal bias",
+                &directionalShadows.NormalBias,
+                0.0F, 10.0F, "%.2f texels");
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("As Godot's directional normal bias: smooth-shaded models read the shadow this many "
+                                  "texels along their vertex normal, across the light. Too low: they shadow "
+                                  "themselves; too high: shadows look thinner.");
             ImGui::TreePop();
         }
         if (!directionalShadowsReady) ImGui::EndDisabled();

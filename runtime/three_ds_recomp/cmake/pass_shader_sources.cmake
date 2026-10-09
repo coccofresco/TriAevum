@@ -9,6 +9,7 @@ function(triaevum_add_pass_shader_sources target)
         "${runtime}/src/fast/oot3d/reflection_debug.cpp"
         "${runtime}/src/fast/oot3d/spatial_aa.cpp"
         "${runtime}/src/fast/oot3d/builtin_pass_shaders.cpp"
+        "${runtime}/src/fast/oot3d/contact_shadow_shader.cpp"
         "${runtime}/src/fast/oot3d/grass_shader_sources.cpp"
         "${runtime}/src/fast/oot3d/hiz_depth_pyramid.cpp"
         "${runtime}/src/fast/oot3d/hiz_reflection.cpp"

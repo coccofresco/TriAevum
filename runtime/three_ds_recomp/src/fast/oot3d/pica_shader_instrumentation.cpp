@@ -662,7 +662,8 @@ BuildPicaFragmentInstrumentationVariant(const PicaFragmentInstrumentationRequest
         preserveAlpha.append(request.Source.substr(tevBegin, tevEnd - tevBegin));
         preserveAlpha += "\n        combiner_output.rgb = surface_lit_rgb;\n    }\n";
         insertions.push_back({tevEnd, std::move(preserveAlpha)});
-        result.FragmentKey = SaltedVariantKey(result.FragmentKey, "PICA_NATIVE_PER_PIXEL_LIGHTING_V9_GI_LINEAR_WEIGHTS");
+        if (!pbr) insertions.push_back({tevEnd, std::string(Renderer3ds::PicaSurfaceLightingWaterShading())});
+        result.FragmentKey = SaltedVariantKey(result.FragmentKey, "PICA_NATIVE_PER_PIXEL_LIGHTING_V20_WATER_NATIVE_FOG");
         result.AppliedFeatures |= PicaShaderInstrumentationFeature::NativePerPixelLighting;
         if (pbr) {
             declarations += pbr->Declarations;
@@ -1036,10 +1037,10 @@ vec3 oot3d_normal_guide_typed(vec3 authored, vec3 native_normal) {
     if (surfaceLighting) {
         declarations += surfaceShadow ? R"glsl(
 vec3 pica_surface_shadow(int slot) {
-    uint selected = uint(pica_vsm.shadowed_direct_fraction.w);
+    uint selected = uint(pica_vsm.receiver.w);
     if (slot < 0) return vec3(1.0);
     return (selected & (1u << uint(slot))) != 0u
-        ? oot3d_directional_shadow_visibility() : vec3(1.0);
+        ? oot3d_directional_shadow_visibility(pica_surface_normal) : vec3(1.0);
 }
 )glsl" : "\nvec3 pica_surface_shadow(int slot) { return vec3(1.0); }\n";
         // Point lights read their cube map only when this sample has one.
@@ -1352,11 +1353,15 @@ vec3 pica_surface_shadow(int slot) {
     epilogue += deferredEpilogue;
     if (surfaceLighting && result.Hooks.Has(PicaShaderSemantic::NativeColorOutput)) {
         decisions.Set(Decision::EnvironmentMix);
-        epilogue += "\n    if (pica_surface.environment_parameters.w != 0.0)\n"
+        epilogue += "\n    // Water keeps its native fog (its native colour is its appearance;\n"
+                    "    // far water meets the native horizon).\n"
+                    "    if (pica_surface.environment_parameters.w != 0.0 && !pica_surface_water_fragment)\n"
                     "        pica_color.rgb = mix(surface_before_fog, pica_color.rgb, pica_surface.environment_parameters.z);\n";
     }
     if (pbr && result.Hooks.Has(PicaShaderSemantic::NativeColorOutput))
         epilogue += pbr->DiagnosticOutput;
+    if (surfaceLighting && !pbr && materialAvailable)
+        epilogue += Renderer3ds::PicaSurfaceLightingWaterMarker();
 
     if (result.Applied()) {
         result.Source = Compose(

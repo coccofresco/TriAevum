@@ -346,6 +346,15 @@ constexpr std::string_view kPbrShadingEnd = R"glsl(
         pbr_direct += (diffuse + specular) * radiance;
         pbr_gi_direct += diffuse * radiance * pica_surface.gi_sources.z;
     }
+    for (uint slot = 0u; slot < pica_surface_placed_count(); ++slot) {
+        vec3 direction, radiance, diffuse, specular;
+        pica_surface_placed_light(int(slot), direction, radiance);
+        if (all(equal(radiance, vec3(0.0)))) continue;
+        pbr_ggx(pbr_normal, pbr_view, direction, pbr_albedo, pbr_f0,
+            pbr_roughness, pbr_metallic, false, diffuse, specular);
+        pbr_direct += (diffuse + specular) * radiance;
+        pbr_gi_direct += diffuse * radiance * pica_surface.gi_sources.z;
+    }
     vec3 pbr_gi_radiance = max(pbr_gi_native + pbr_gi_direct, vec3(0.0));
     vec3 pbr_lit = max(pbr_direct + pbr_indirect + pbr_emission, vec3(0.0));
     vec3 pbr_ao_response = clamp(pbr_indirect / max(pbr_lit, vec3(1.0e-6)), 0.0, 1.0);

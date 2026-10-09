@@ -1876,6 +1876,7 @@ TEST(Oot3dPicaShaderInstrumentation, SurfaceShadowsExcludePointsAndPreserveSelec
     history.ProducedFrameId = 1U;
     history.Virtual = Fast::Renderer3ds::BuildVirtualShadowLayout({}, {0, 1, 0}, 2048, 65536);
     history.WorldLightDirectionTowardSource = {0.0F, 1.0F, 0.0F};
+    history.NormalBias = 1.5F;
     std::array<PicaSurfaceShadowLight, 4> lights{{
         {{1.0F, 0.0F, 0.0F}, 0U, true, true},
         {{1.0F, 0.0F, 0.0F}, 2U, true, false},
@@ -1884,7 +1885,9 @@ TEST(Oot3dPicaShaderInstrumentation, SurfaceShadowsExcludePointsAndPreserveSelec
     }};
     const auto binding = BuildPicaSurfaceShadowReceiverBinding(view, lights, history);
     ASSERT_TRUE(binding.Bound());
-    EXPECT_EQ(binding.Uniforms.ShadowedDirectFraction[3], 4.0F);
+    EXPECT_EQ(binding.Uniforms.Receiver[3], 4.0F);
+    // The smooth receivers' normal bias.
+    EXPECT_EQ(binding.Uniforms.Receiver[0], 1.5F);
     lights[1].Enabled = false;
     EXPECT_FALSE(BuildPicaSurfaceShadowReceiverBinding(view, lights, history).Bound());
 }

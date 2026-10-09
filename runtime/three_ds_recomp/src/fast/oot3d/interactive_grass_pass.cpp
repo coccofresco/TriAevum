@@ -1035,7 +1035,15 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
         const auto viewSide = Normalize(Cross(viewForward, { 0.0F, 1.0F, 0.0F }));
         const auto viewUp = Cross(viewSide, viewForward);
 
-        for (const auto& rule : settings.Rules) {
+        // The configured rules, then those inherited by their twin textures
+        // (the same image stored again) that have no rule of their own.
+        const auto inherited = GrassTwinRules::Instance().AllInherited(settings.Rules);
+        std::vector<GrassPlacementRule> withInherited;
+        if (!inherited.empty()) {
+            withInherited = settings.Rules;
+            withInherited.insert(withInherited.end(), inherited.begin(), inherited.end());
+        }
+        for (const auto& rule : inherited.empty() ? settings.Rules : withInherited) {
             const auto mask =
                 GrassTextureSourceCache::Instance().AcquireMaskShared(rule.Target.Rgba8Hash, rule.Channel);
             if (mask == nullptr || mask->Samples.empty())

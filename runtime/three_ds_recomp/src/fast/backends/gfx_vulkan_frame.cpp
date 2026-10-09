@@ -1,6 +1,7 @@
 // Vulkan backend: presentation settings and the frame (StartFrame, EndFrame, FinishRender).
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_internal.h"
+#include "fast/renderer3ds/pica_surface_debug.h"
 
 namespace Fast {
 
@@ -358,6 +359,26 @@ void GfxRenderingAPIVulkan::StartFrame() {
         }
     }
     auto graphicsSnapshot = settingsRuntime.SnapshotForRendering();
+    // Water reflections with Reflections Off (EffectsSettings::WaterReflections):
+    // the frame traces Hi-Z, and only water writes a reflection material.
+    {
+        auto& effects = graphicsSnapshot.Value.Effects;
+        const auto capabilities = settingsRuntime.Capabilities();
+        mWaterOnlyReflections = effects.Reflections == Oot3d::ReflectionMode::Off && effects.WaterReflections &&
+            Oot3d::UsesFullSceneLighting(effects.SurfaceLighting) &&
+            capabilities.Has(Oot3d::GraphicsCapability::NriInterop) &&
+            capabilities.Has(Oot3d::GraphicsCapability::ValidViewMetadata);
+        if (mWaterOnlyReflections) {
+            effects.Reflections = Oot3d::ReflectionMode::HiZ;
+            effects.ReflectionMaterials.clear();
+            // The water's reflectance weighs the trace; open water reaches far.
+            effects.ReflectionStrength = 1.0F;
+            effects.ReflectionMaxDistance = std::max(effects.ReflectionMaxDistance, 3000.0F);
+        }
+    }
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+    Renderer3ds::PicaSurfaceDebug::Instance().BeginFrame();
+#endif
     const auto& nextGraphicsSettings = graphicsSnapshot.Value;
     if (mFrameEnvironment != graphicsSnapshot.Environment) {
         mTemporalAaPass.ResetHistory();
@@ -368,6 +389,7 @@ void GfxRenderingAPIVulkan::StartFrame() {
             mFrameEnvironment.KeyDirection != graphicsSnapshot.Environment.KeyDirection ||
             mFrameEnvironment.KeyAzimuthOffset != graphicsSnapshot.Environment.KeyAzimuthOffset ||
             mFrameEnvironment.KeyElevationOffset != graphicsSnapshot.Environment.KeyElevationOffset ||
+            mFrameEnvironment.ShadowCasterCulling != graphicsSnapshot.Environment.ShadowCasterCulling ||
             mFrameEnvironment.Lights[0].DirectionTowardSource !=
                 graphicsSnapshot.Environment.Lights[0].DirectionTowardSource)
             mNriDirectionalShadowPass.InvalidateHistory();
@@ -474,6 +496,8 @@ void GfxRenderingAPIVulkan::StartFrame() {
             (screenSpaceGlobalIlluminationRequested &&
              Oot3d::GlobalIlluminationReadsFaceNormal(graphicsSettings.Effects.GlobalIllumination)),
         screenSpaceGlobalIlluminationRequested,
+        graphicsSettings.Effects.DirectionalShadows.Mode == Oot3d::DirectionalShadowMode::VirtualShadowMaps &&
+            graphicsSettings.Effects.DirectionalShadows.ContactShadows.Enabled,
     };
     if (!mPicaExtensionRequests.has_value() ||
         *mPicaExtensionRequests != extensionRequests) {

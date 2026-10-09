@@ -797,14 +797,11 @@ vec2 resolve_direct_collision(vec3 base, float blade_height, ActorCollider actor
         else
             delta = vec2(1.0, 0.0);
     }
-    float speed =
-        length(actor.velocity_teleported.xz);
-    float velocity_gain =
-        1.0 + clamp(speed / 300.0, 0.0, 2.0) *
-            state.collision.w;
+    // Contact alone, as ResolveGrassCollision: the velocity response is the
+    // trail's, which recovers with its spring.
     float weight =
         (1.0 - distance / radius) *
-        state.collision.z * velocity_gain;
+        state.collision.z;
     return delta * min(weight, state.bend.x);
 }
 
@@ -961,7 +958,7 @@ void main() {
         tangent = normalize(cross(normal, abs(normal.z) < 0.9 ? vec3(0,0,1) : vec3(0,1,0)));
         bitangent = cross(normal, tangent);
     }
-    float value = pica_vsm_visibility(point.position.xyz, tangent, bitangent);
+    float value = pica_vsm_visibility(point.position.xyz, tangent, bitangent, vec3(0.0));
     visibility.values[index] = GrassShadowVisibility(value, packed_patches);
 }
 )glsl";

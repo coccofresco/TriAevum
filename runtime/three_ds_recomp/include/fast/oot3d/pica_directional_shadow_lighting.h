@@ -41,12 +41,16 @@ inline constexpr uint32_t kPicaDirectionalShadowDissolveFlag = 2U;
 struct alignas(16) PicaDirectionalShadowReceiverUniforms {
     // strength, inverse atlas width, maximum distance, finest-level depth bias
     std::array<float, 4> ShadowState{};
-    // RGB: native direct fraction; W: selected shader-light mask for surface lighting.
-    std::array<float, 4> ShadowedDirectFraction{};
+    // X: the smooth-shaded receivers' normal bias (texels); Y: 1 with contact
+    // shadows; W: selected shader-light mask for surface lighting.
+    std::array<float, 4> Receiver{};
     // layout resolution (twice), PCF radius, flags
     std::array<uint32_t, 4> Extent{};
     // weight of layout 0, inverse atlas height, atlas X offset of layouts 0 and 1
     std::array<float, 4> Dissolve{};
+    // The receiver's view position to the contact shadows' clip space (read
+    // while Receiver[1] is 1).
+    std::array<float, 16> ContactProjection{};
     // Layout 0 is the newest; layout 1 is read only with the dissolve flag.
     std::array<PicaDirectionalShadowReceiverLayout, 2> Layouts{};
 
@@ -58,7 +62,7 @@ struct alignas(16) PicaDirectionalShadowReceiverUniforms {
     }
 };
 
-static_assert(sizeof(PicaDirectionalShadowReceiverUniforms) == 5664U);
+static_assert(sizeof(PicaDirectionalShadowReceiverUniforms) == 5728U);
 
 
 struct PicaDirectionalShadowReceiverBinding {
@@ -96,6 +100,10 @@ struct PicaDirectionalShadowHistoryState {
     float Strength = 0.0F;
     float DepthBias = 0.0F;
     uint8_t PcfRadius = 0U;
+    float NormalBias = 0.0F;
+    // Contact shadows of this sample: their clip space from the world.
+    bool ContactShadows = false;
+    DirectionalShadowMatrix WorldToContactClip{};
 
     [[nodiscard]] bool Valid() const noexcept {
         return ProducedFrameId != 0U && Virtual.Valid();

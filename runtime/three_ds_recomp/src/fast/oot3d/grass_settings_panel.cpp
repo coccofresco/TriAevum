@@ -4,6 +4,7 @@
 #include "fast/oot3d/grass_interaction_bridge.h"
 #include "fast/oot3d/grass_render_telemetry.h"
 #include "fast/oot3d/grass_texture_rule_editor.h"
+#include "fast/oot3d/grass_texture_twins.h"
 #include "fast/oot3d/texture_assignment_model.h"
 #include "fast/oot3d/texture_catalog_viewer.h"
 
@@ -12,6 +13,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdio>
+#include <optional>
 #include <vector>
 
 namespace Fast::Oot3d {
@@ -40,6 +42,17 @@ bool DrawSourcesAndPlacement(
         tags.push_back(
             {rule.Target.Rgba8Hash, rule.Target.Width,
              rule.Target.Height, "GRASS"});
+    }
+    // Textures that are the same image as a source inherit its rule.
+    for (const auto& texture :
+         TextureCatalogRuntime::Instance().Snapshot()) {
+        if (GrassTwinRules::Instance().Inherited(
+                grass.Rules, texture.ContentHash, texture.Width,
+                texture.Height)) {
+            tags.push_back(
+                {texture.ContentHash, texture.Width,
+                 texture.Height, "GRASS twin"});
+        }
     }
 
     auto findSelectedSource = [&]() -> GrassPlacementRule* {
@@ -148,11 +161,40 @@ bool DrawSourcesAndPlacement(
     const auto& texture = *catalog.Selected;
     bool assigned =
         FindGrassTextureRule(grass, texture) != nullptr;
+    const auto inherited = assigned
+        ? std::nullopt
+        : GrassTwinRules::Instance().Inherited(
+              grass.Rules, texture.ContentHash, texture.Width,
+              texture.Height);
+    if (inherited.has_value()) {
+        const auto source = std::find_if(
+            grass.Rules.begin(), grass.Rules.end(),
+            [&](const auto& rule) {
+                return rule.RuleId == inherited->InheritedFrom;
+            });
+        if (source != grass.Rules.end()) {
+            ImGui::TextWrapped(
+                "Same image as source %016llX | %ux%u: it grows "
+                "that source's grass, with its mask.",
+                static_cast<unsigned long long>(
+                    source->Target.Rgba8Hash),
+                source->Target.Width, source->Target.Height);
+        }
+    }
     if (!assigned) {
-        if (ImGui::Button("Add selected texture source")) {
+        if (ImGui::Button(inherited.has_value()
+                              ? "Make it a source of its own"
+                              : "Add selected texture source")) {
             changed |= AssignTextureToGrass(grass, texture);
-            if (const auto* source =
+            if (auto* source =
                     FindGrassTextureRule(grass, texture)) {
+                if (inherited.has_value()) {
+                    // Start from what it inherited.
+                    auto own = OwnGrassRuleFromInherited(
+                        *inherited, source->RuleId);
+                    own.Target = source->Target;
+                    *source = std::move(own);
+                }
                 state.SelectedSourceRuleId = source->RuleId;
             }
             state.Status = "Texture assigned to grass";
@@ -417,6 +459,8 @@ bool DrawInteraction(InteractiveGrassSettings& grass) {
         "Velocity response",
         &grass.CollisionVelocityResponse,
         0.0F, 3.0F, "%.2f");
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Extra bend of the trail a moving actor leaves; it recovers like the rest of the trail.");
     changed |= ImGui::SliderFloat(
         "Collider radius",
         &grass.ColliderRadiusMultiplier,

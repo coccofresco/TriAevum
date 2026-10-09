@@ -2,6 +2,14 @@
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_pica_internal.h"
 #include "fast/renderer3ds/pica_draw_coverage.h"
+#include "fast/renderer3ds/pica_surface_appearance.h"
+#include "fast/renderer3ds/pica_surface_debug.h"
+#include "fast/oot3d/grass_interaction_bridge.h"
+#include "fast/oot3d/grass_texture_twins.h"
+
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 
 namespace Fast {
 
@@ -84,6 +92,11 @@ void GfxRenderingAPIVulkan::ExecuteNativePicaBeforeDrawAnchors(
             Oot3d::EffectGeometryProviderInvocationKind::DeclaredBoundary);
     if (timed)
         grassMilliseconds += std::chrono::duration<double, std::milli>(Clock::now() - begin).count();
+    // The finished scene, before its first UI draw and the scene stages.
+    if (draw.CompositionDomain == Renderer3ds::PicaCompositionDomain::Ui &&
+        mNativePicaCompositionSchedule.FindAnchorBeforeDraw(
+            Oot3d::EffectStage::BeforeUi, reference.Target, draw.SubmissionId) != nullptr)
+        TryRenderWorldDebugLines(target);
     const auto& effects = mFrameGraphicsSettings.Effects;
     // Scene stages, same-extent anti-aliasing included: it resolves the scene
     // here so the UI that follows is drawn over the result, never through it.
@@ -214,6 +227,134 @@ bool GfxRenderingAPIVulkan::WantsPicaSequenceDrawPreparation(
            draw.Domain == Renderer3ds::PicaCompositionDomain::Scene &&
            draw.Composition.Layer == Renderer3ds::PicaCompositionLayer::OpaqueWorld &&
            !draw.Composition.NativeProjectedShadow;
+}
+
+const Renderer3ds::PicaWaterTextureCatalog* GfxRenderingAPIVulkan::WaterTextureCatalog() {
+    if (!mWaterTextureCatalogLoaded) {
+        mWaterTextureCatalogLoaded = true;
+        if (const char* path = std::getenv("TRIAEVUM_WATER_TEXTURE_CATALOG"); path != nullptr && *path != '\0') {
+            std::ifstream stream(std::filesystem::u8path(path), std::ios::binary);
+            const std::string text((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
+            mWaterTextureCatalog = Renderer3ds::PicaWaterTextureCatalog::Parse(text);
+            if (mWaterTextureCatalog)
+                spdlog::info("Water texture catalog: {} textures", mWaterTextureCatalog->Size());
+            else
+                spdlog::warn("Water texture catalog is unreadable: {}", path);
+        }
+    }
+    return mWaterTextureCatalog ? &*mWaterTextureCatalog : nullptr;
+}
+
+const std::array<Renderer3ds::PicaWaterRing, Renderer3ds::kPicaWaterRings>&
+GfxRenderingAPIVulkan::AdvanceWaterRipples(const Renderer3ds::PicaSceneWaterBodies& bodies, float seconds) {
+    if (mWaterRipplesFrame != mFrameCounter) {
+        mWaterRipplesFrame = mFrameCounter;
+        // The actors of the native frame on screen (the grass interactors).
+        const auto actors = Oot3d::GrassInteractionBridge::Instance().LatestActors();
+        std::vector<Renderer3ds::PicaWaterMover> movers;
+        movers.reserve(actors.size());
+        for (const auto& actor : actors)
+            movers.push_back({actor.StableId, actor.Position, actor.Radius, 2.0F * actor.HalfHeight});
+        mWaterRipples.Advance(seconds, movers.data(), movers.size(), bodies);
+        mWaterRings = mWaterRipples.Rings();
+    }
+    return mWaterRings;
+}
+
+GfxRenderingAPIVulkan::NativePicaWaterSurface GfxRenderingAPIVulkan::ResolveNativePicaWaterSurface(
+    const GfxNativePicaDrawView& draw) {
+    NativePicaWaterSurface result;
+    // One material per draw: a water texture in any of its slots makes all of
+    // it water.
+    uint8_t roles = 0;
+    if (const auto* catalog = WaterTextureCatalog())
+        for (const auto& texture : draw.Textures)
+            if (texture.NativeType == 0U && texture.Slot < 3U)
+                if (const auto hash = ResolveNativeTextureBaseLevelContentHash(texture))
+                    roles |= catalog->Roles(*hash, texture.Width, texture.Height);
+    const bool catalogWater = (roles & Renderer3ds::kPicaWaterTextureWater) != 0U;
+    const bool bodies = draw.LightBinding.Water && draw.LightBinding.Water->Count != 0U;
+    Oot3d::DirectionalShadowMatrix viewToWorld;
+    if ((!bodies && !catalogWater) || !draw.GeometryIdentityAvailable ||
+        draw.VertexCount == 0U || draw.VertexBindings.empty() || draw.VertexAttributes.empty() ||
+        draw.VertexUniformBytes.size() < Oot3d::kPicaPackedVertexFloatOffset || !draw.LightBinding.WorldToView ||
+        !Oot3d::InvertDirectionalShadowMatrix(*draw.LightBinding.WorldToView, viewToWorld))
+        return result;
+    std::vector<Oot3d::PicaNriSourceVertexStream> streams;
+    std::vector<Oot3d::PicaNriSourceVertexBinding> sourceBindings;
+    std::vector<Oot3d::PicaNriSourceVertexAttribute> attributes;
+    streams.reserve(draw.VertexBindings.size());
+    sourceBindings.reserve(draw.VertexBindings.size());
+    for (const auto& binding : draw.VertexBindings) {
+        streams.push_back({ { binding.Binding, binding.ByteStride, binding.PerInstance }, binding.Bytes });
+        sourceBindings.push_back({ binding.Binding, binding.ByteStride, binding.PerInstance });
+    }
+    attributes.reserve(draw.VertexAttributes.size());
+    for (const auto& attribute : draw.VertexAttributes)
+        attributes.push_back({ attribute.Location, attribute.Binding,
+                               static_cast<Oot3d::PicaNriVertexScalar>(attribute.Format),
+                               attribute.ComponentCount, attribute.ByteOffset });
+    const auto layout = Oot3d::BuildPicaNriVertexInputLayout(sourceBindings, attributes);
+    if (!layout.Valid() || layout.Bindings.empty() || layout.Attributes.empty()) return result;
+    // The ordered submission resolves the same geometry again: a cache hit.
+    const auto resolution = mPicaGeometryRegistry.Resolve({
+        draw.GeometryIdentity, draw.GeometryContentVersion, draw.GeometryIdentityAvailable, mFrameCounter,
+        streams, attributes, draw.IndexBytes, draw.Indexed, draw.IndicesAre16Bit, draw.VertexCount, true,
+    });
+    if (resolution.Geometry == nullptr) throw std::runtime_error("native PICA geometry preparation failed");
+    for (const uint64_t evicted : mPicaGeometryRegistry.TakeEvictedIdentities()) RetireNativePicaGeometry(evicted);
+    const auto& geometry = *resolution.Geometry;
+    if (!resolution.Cacheable || !geometry.PackedValid) return result;
+    std::vector<Oot3d::PicaSceneVertexBufferBinding> bindings;
+    bindings.reserve(geometry.PackedBindings.size());
+    for (const auto& binding : geometry.PackedBindings)
+        bindings.push_back({ binding.Binding, binding.Offset, binding.Size, binding.Stride });
+    uint32_t booleanUniforms = 0;
+    std::memcpy(&booleanUniforms, draw.VertexUniformBytes.data() + Oot3d::kPicaPackedVertexBooleanMaskOffset,
+                sizeof(booleanUniforms));
+    // The scene distance field's cache: one mesh per geometry version.
+    const uint64_t version = geometry.ContentVersion ^ (geometry.StructuralSignature * 0x9e3779b97f4a7c15ULL) ^
+                             geometry.Identity ^ draw.VertexShaderKey;
+    const auto instance = Renderer3ds::BuildPicaGiInstance(
+        { geometry.Payload, bindings, layout.Attributes, layout.Bindings, 0, geometry.IndexOffset,
+          geometry.VertexOrIndexCount, draw.BaseVertex, geometry.Indexed },
+        ToPicaSceneTopology(draw.Topology), draw.TemporalVertexProgram.Hooks, booleanUniforms,
+        draw.VertexUniformBytes.subspan(Oot3d::kPicaPackedVertexFloatOffset), viewToWorld, version,
+        mNativePicaGeometryBuffers[geometry.Identity].GiGeometry);
+    if (!instance.Valid()) return result;
+    result.WorldBounds = instance.WorldBounds;
+    if (bodies) {
+        const auto& water = *draw.LightBinding.Water;
+        for (uint32_t i = 0; i < std::min(water.Count, Renderer3ds::kMaximumPicaSceneWaterBodies); ++i)
+            result.ReachesWater |= Renderer3ds::PicaWaterSurfaceReaches(
+                instance.WorldBounds.Minimum, instance.WorldBounds.Maximum, water.Bodies[i]);
+        result.Body = Renderer3ds::MatchPicaWaterSurface(instance.WorldBounds.Minimum,
+                                                         instance.WorldBounds.Maximum, water);
+    }
+    result.Roles = roles;
+    if (catalogWater) {
+        result.WholeDraw = true;
+        // Its triangles by slope, once per rigid placement.
+        const auto split = [&] {
+            return std::make_shared<const Renderer3ds::PicaWaterTriangles>(Renderer3ds::SplitPicaWaterTriangles(
+                instance.Mesh->Positions, instance.Mesh->Indices, instance.WorldFromLocal));
+        };
+        if (instance.RigidSignature != 0U) {
+            if (mWaterTriangles.size() > 1024U) mWaterTriangles.clear();
+            auto& cached = mWaterTriangles[instance.RigidSignature];
+            if (!cached) cached = split();
+            result.Pieces = cached;
+            result.PiecesKey = instance.RigidSignature;
+        } else {
+            result.Pieces = split();
+            result.PiecesKey = std::bit_cast<uint32_t>(instance.WorldBounds.Minimum[0]) * 0x9e3779b97f4a7c15ULL ^
+                               std::bit_cast<uint32_t>(instance.WorldBounds.Maximum[2]);
+        }
+        if (!result.ReachesWater)
+            result.Plane = Renderer3ds::PicaWaterSurfaceFromBounds(instance.WorldBounds.Minimum,
+                                                                   instance.WorldBounds.Maximum);
+    }
+    return result;
 }
 
 bool GfxRenderingAPIVulkan::PreparePicaSequenceDraw(
@@ -685,7 +826,34 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         // environment profile, shadows, GI or ambient occlusion.
         const bool isolatedLighting = !nativeMemoryOnly && draw.Composition.IsolatedLighting &&
             Oot3d::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting);
-        const bool directionalShadowReceiver = !nativeMemoryOnly && !isolatedLighting &&
+        // Authored appearance (additive light, colour no light produced) is
+        // never relit or shadowed (pica_surface_appearance.h). Vertex lighting
+        // is the typed surface program's boolean; unknown counts as lit.
+        bool nativeVertexLighting = true;
+        if (const auto* surfaceProgram = draw.TemporalVertexProgram.Hooks.SurfaceProgram();
+            surfaceProgram != nullptr &&
+            draw.VertexUniformBytes.size() >= Oot3d::kPicaPackedVertexBooleanMaskOffset + sizeof(uint32_t)) {
+            uint32_t vertexBooleans = 0U;
+            std::memcpy(&vertexBooleans, draw.VertexUniformBytes.data() + Oot3d::kPicaPackedVertexBooleanMaskOffset,
+                        sizeof(vertexBooleans));
+            nativeVertexLighting = ((vertexBooleans >> surfaceProgram->LightingBooleanUniform) & 1U) != 0U;
+        }
+        const auto surfaceAppearance = Renderer3ds::ClassifyPicaSurfaceAppearance(
+            draw.Blend, nativeVertexLighting, draw.FragmentFeatures.FragmentLightingEnabled);
+        // Gameplay water (pica_scene_water.h) keeps its native colour with
+        // added optics: the title's water is ambient-only geometry, and relit
+        // like ground its top faced the key light at full Lambert. Its
+        // fragments are found in the surface shader (AssignPicaSurfaceWater).
+        NativePicaWaterSurface waterSurface;
+        if (!nativeMemoryOnly && !mNativeFidelityProfile &&
+            Oot3d::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting) &&
+            surfaceAppearance == Renderer3ds::PicaSurfaceAppearance::Relightable &&
+            draw.CompositionDomain == Renderer3ds::PicaCompositionDomain::Scene &&
+            Renderer3ds::PicaCompositionReceivesSurfaceLighting(draw.Composition.Layer) && grassPerspectiveProjection)
+            waterSurface = ResolveNativePicaWaterSurface(draw);
+        const bool authoredAppearance = Oot3d::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting) &&
+            surfaceAppearance != Renderer3ds::PicaSurfaceAppearance::Relightable;
+        const bool directionalShadowReceiver = !nativeMemoryOnly && !isolatedLighting && !authoredAppearance &&
             Oot3d::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting) &&
             mDirectionalShadowMapBarrierPlan.Valid() &&
             Oot3d::PicaExtensionPassEnabled(
@@ -694,6 +862,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             grassPerspectiveProjection;
         // Point lights with a cube map: only NRI-owned draws bind the atlas.
         const bool pointShadowReceiver = !nativeMemoryOnly && !mNativeFidelityProfile && !isolatedLighting &&
+            !authoredAppearance &&
             graphicsSettings.Effects.PointShadows.Mode == Oot3d::PointShadowMode::CubeMaps &&
             Oot3d::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting) &&
             mPointShadowMapBarrierPlan.Valid() &&
@@ -723,12 +892,22 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         const auto* environmentWorldToView = draw.LightBinding.WorldToView
             ? &*draw.LightBinding.WorldToView : nullptr;
         Oot3d::DirectionalShadowMatrix environmentViewToWorld{};
-        if (!nativeMemoryOnly && !mNativeFidelityProfile &&
+        const bool surfaceCandidate = !nativeMemoryOnly && !mNativeFidelityProfile &&
             graphicsSettings.Effects.SurfaceLighting != Oot3d::SurfaceLightingMode::Native &&
             draw.CompositionDomain == Renderer3ds::PicaCompositionDomain::Scene &&
             Renderer3ds::PicaCompositionReceivesSurfaceLighting(draw.Composition.Layer) &&
             grassPerspectiveProjection && draw.FragmentOperationMode != 3U &&
-            draw.VertexUniformBytes.size() >= Oot3d::kPicaPackedVertexFloatOffset) {
+            draw.VertexUniformBytes.size() >= Oot3d::kPicaPackedVertexFloatOffset;
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+        // Developer lab: candidates are numbered per frame; a debug range keeps
+        // its native appearance (finding the draw an effect belongs to).
+        auto& surfaceDebug = Renderer3ds::PicaSurfaceDebug::Instance();
+        const uint32_t surfaceOrdinal = surfaceCandidate ? surfaceDebug.NextOrdinal() : 0U;
+        const bool surfaceExempt = surfaceCandidate && surfaceDebug.Exempt(surfaceOrdinal);
+#else
+        constexpr bool surfaceExempt = false;
+#endif
+        if (surfaceCandidate && !surfaceExempt && !authoredAppearance) {
             uint32_t booleanUniforms = 0U;
             std::memcpy(&booleanUniforms, draw.VertexUniformBytes.data() +
                         Oot3d::kPicaPackedVertexBooleanMaskOffset, sizeof(booleanUniforms));
@@ -769,6 +948,66 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 (void)Renderer3ds::ExcludePicaSceneDirectionalsLitNatively(
                     *surfaceLighting, std::span(directions.data(), directionCount));
             }
+            // Water in a mixed mesh (a room's water and banks in one draw),
+            // or a whole water draw (on its own plane when it has no body).
+            if (surfaceLighting && waterSurface.WorldBounds.Available && mSurfaceLightingView &&
+                (draw.LightBinding.Water || waterSurface.WholeDraw)) {
+                Renderer3ds::PicaSceneWaterBodies plane;
+                if (waterSurface.Plane) {
+                    plane.Bodies[0] = *waterSurface.Plane;
+                    plane.Count = 1U;
+                }
+                const float seconds =
+                    std::chrono::duration<float>(std::chrono::steady_clock::now() - mWaterEpoch).count();
+                const auto* rings = draw.LightBinding.Water
+                    ? &AdvanceWaterRipples(*draw.LightBinding.Water, std::fmod(std::max(seconds, 0.0F), 3600.0F))
+                    : nullptr;
+                Renderer3ds::AssignPicaSurfaceWater(
+                    *surfaceLighting, *mSurfaceLightingView,
+                    waterSurface.Plane || !draw.LightBinding.Water ? plane : *draw.LightBinding.Water,
+                    waterSurface.WorldBounds.Minimum, waterSurface.WorldBounds.Maximum, seconds,
+                    waterSurface.WholeDraw, rings);
+                // A tall catalog waterfall: foam where it lands (its base).
+                const auto& minimum = waterSurface.WorldBounds.Minimum;
+                const auto& maximum = waterSurface.WorldBounds.Maximum;
+                if (waterSurface.WholeDraw &&
+                    (waterSurface.Roles & Renderer3ds::kPicaWaterTextureWaterfall) != 0U &&
+                    maximum[1] - minimum[1] > 0.5F * std::max(maximum[0] - minimum[0], maximum[2] - minimum[2]))
+                    surfaceLighting->WaterRipples[3] = minimum[1];
+            }
+            // Its texture's scrolling (coordinate 0) over native frames.
+            if (surfaceLighting && surfaceLighting->WaterViewTranslation[3] > 0.0F) {
+                const auto& sample = mPicaSceneFrame.TemporalSample();
+                const auto* coordinate = draw.TemporalVertexProgram.Hooks.TextureCoordinate(0);
+                const auto floats = draw.VertexUniformBytes.subspan(Oot3d::kPicaPackedVertexFloatOffset);
+                const auto translation = [&](uint8_t uniform, float& value) {
+                    const size_t offset = static_cast<size_t>(uniform) * 16U + 12U;
+                    if (offset + sizeof(float) > floats.size()) return false;
+                    std::memcpy(&value, floats.data() + offset, sizeof(float));
+                    return std::isfinite(value);
+                };
+                std::array<float, 2> shift{};
+                if (sample.Available() && coordinate != nullptr &&
+                    translation(coordinate->MatrixRowUUniform, shift[0]) &&
+                    translation(coordinate->MatrixRowVUniform, shift[1])) {
+                    if (mWaterFlow.size() > 4096U) mWaterFlow.clear();
+                    auto& track = mWaterFlow[draw.GeometryIdentity];
+                    Renderer3ds::AdvancePicaWaterFlow(track, sample.CurrentSourceFrameId,
+                                                      static_cast<float>(sample.NativeRateHz), shift);
+                    if (track.Valid())
+                        surfaceLighting->WaterFlow = {track.Velocity[0], track.Velocity[1], 1.0F, 0.0F};
+                }
+                surfaceLighting->WaterFlow[3] =
+                    graphicsSettings.Effects.Reflections == Oot3d::ReflectionMode::HiZ ? 1.0F : 0.0F;
+            }
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+            // Developer view: water fragments in magenta (1), their ripple
+            // slope (2), their flow (3: blue calm, red fast, green unknown) or their
+            // reflection flag and reflectance (4: red, green).
+            if (const char* debug = std::getenv("TRIAEVUM_DEV_WATER_DEBUG");
+                debug != nullptr && surfaceLighting && surfaceLighting->WaterViewTranslation[3] > 0.0F)
+                surfaceLighting->WaterOptics[3] = -static_cast<float>(std::clamp(std::atoi(debug), 1, 4));
+#endif
             if (surfaceLighting && environmentWorldToView && directionalShadowReceiver &&
                 !Oot3d::InvertDirectionalShadowMatrix(*environmentWorldToView, environmentViewToWorld))
                 surfaceLighting.reset();
@@ -943,6 +1182,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             mDiagnostics.RecordAoReliefDraw(reliefTexture < 3U);
         }
         finishCpuStage(cpuTimings.TextureMilliseconds);
+        // Nor does it reflect: its colour is not a surface's.
+        if (authoredAppearance) resolvedReflectionMaterial.reset();
         const Oot3d::PicaShaderPipelineRequest variantRequest{
             draw.VertexShaderSource,
             draw.VertexShaderKey,
@@ -962,7 +1203,10 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 draw.DepthCompare,
                 draw.Composition.Layer,
                 pointShadowReceiver && surfaceLighting.has_value(),
-                isolatedLighting,
+                // Authored appearance, like an isolated object, publishes no
+                // ambient occlusion response and no GI albedo; nor does a
+                // draw that is all water.
+                isolatedLighting || authoredAppearance || waterSurface.Body.has_value() || waterSurface.WholeDraw,
             },
             mTemporalMotionEnabled && !nativeMemoryOnly,
             resolvedReflectionMaterial.has_value()
@@ -985,6 +1229,120 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 variantRequest,
                 nativeMemoryOnly ? nativeMemoryEffects : graphicsSettings.Effects,
                 &variantCacheHit);
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+        if (surfaceCandidate && surfaceDebug.Tracing()) {
+            // One candidate: its native colour computation and what Modern did.
+            Renderer3ds::PicaTevProgram tev{};
+            const bool tevKnown = draw.FragmentUniformBytes.size() >=
+                Oot3d::kPicaPackedFragmentTevProgramOffset + sizeof(tev);
+            if (tevKnown)
+                std::memcpy(&tev, draw.FragmentUniformBytes.data() + Oot3d::kPicaPackedFragmentTevProgramOffset,
+                            sizeof(tev));
+            const bool pbrApplied = Oot3d::HasPicaShaderInstrumentationFeature(
+                shaderVariant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::PbrMaterial);
+            const bool perPixelApplied = Oot3d::HasPicaShaderInstrumentationFeature(
+                shaderVariant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::NativePerPixelLighting);
+            const bool vertexLightingKnown = draw.TemporalVertexProgram.Hooks.SurfaceProgram() != nullptr;
+            char line[1024];
+            std::snprintf(line, sizeof(line),
+                "{\"frame\":%llu,\"ordinal\":%u,\"submission\":%llu,\"layer\":%u,\"provenance\":%u,"
+                "\"actor\":%d,\"actorIdentity\":\"%llx\",\"isolated\":%d,\"vertexLit\":%d,\"fragmentLighting\":%d,"
+                "\"fog\":%d,\"blend\":[%d,%u,%u,%u],\"alphaTest\":%d,\"depthWrite\":%d,\"textures\":%zu,"
+                "\"vertices\":%u,\"tevColorSources\":\"%04x\",\"tevKnown\":%d,\"fragmentProgram\":\"%llx\","
+                "\"geometry\":\"%llx\",\"surfaceUniforms\":%d,\"perPixel\":%d,\"pbr\":%d,\"exempt\":%d,"
+                "\"appearance\":%u,\"vertexLightingKnown\":%d}",
+                static_cast<unsigned long long>(surfaceDebug.Frame()), surfaceOrdinal,
+                static_cast<unsigned long long>(draw.SubmissionId), static_cast<unsigned>(draw.Composition.Layer),
+                static_cast<unsigned>(draw.Composition.Provenance), draw.Composition.NativeActorGeometry ? 1 : 0,
+                static_cast<unsigned long long>(draw.Composition.NativeActorIdentity),
+                draw.Composition.IsolatedLighting ? 1 : 0,
+                nativeVertexLighting ? 1 : 0,
+                draw.FragmentFeatures.FragmentLightingEnabled ? 1 : 0, draw.FragmentFeatures.FogEnabled ? 1 : 0,
+                draw.Blend.Enabled ? 1 : 0, static_cast<unsigned>(draw.Blend.EquationRgb),
+                static_cast<unsigned>(draw.Blend.SourceRgb), static_cast<unsigned>(draw.Blend.DestRgb),
+                draw.AlphaTestEnabled ? 1 : 0, draw.DepthWriteEnabled ? 1 : 0, draw.Textures.size(),
+                draw.VertexCount, tevKnown ? Renderer3ds::PicaTevColorSourceMask(tev) : 0U, tevKnown ? 1 : 0,
+                static_cast<unsigned long long>(draw.CanonicalFragmentProgramId),
+                static_cast<unsigned long long>(draw.GeometryIdentity), surfaceLighting.has_value() ? 1 : 0,
+                perPixelApplied ? 1 : 0, pbrApplied ? 1 : 0, surfaceExempt ? 1 : 0,
+                static_cast<unsigned>(surfaceAppearance), vertexLightingKnown ? 1 : 0);
+            std::string record = line;
+            {
+                // Texture-matrix translations (row U/V .w) of each coordinate:
+                // two traced frames give scrolling speed (flowing water, lava).
+                const auto floats = draw.VertexUniformBytes.size() > Oot3d::kPicaPackedVertexFloatOffset
+                    ? draw.VertexUniformBytes.subspan(Oot3d::kPicaPackedVertexFloatOffset)
+                    : std::span<const uint8_t>{};
+                const auto readW = [&](uint8_t uniform, float& value) {
+                    const size_t offset = static_cast<size_t>(uniform) * 16U + 12U;
+                    if (uniform >= 96U || offset + sizeof(float) > floats.size()) return false;
+                    std::memcpy(&value, floats.data() + offset, sizeof(float));
+                    return std::isfinite(value);
+                };
+                std::string shifts = ",\"texShift\":[";
+                for (uint8_t coordinate = 0; coordinate < 3U; ++coordinate) {
+                    const auto* layout = draw.TemporalVertexProgram.Hooks.TextureCoordinate(coordinate);
+                    float u = 0.0F, v = 0.0F;
+                    char text[64];
+                    if (layout != nullptr && readW(layout->MatrixRowUUniform, u) && readW(layout->MatrixRowVUniform, v))
+                        std::snprintf(text, sizeof(text), "%s[%.5f,%.5f]", coordinate ? "," : "", u, v);
+                    else
+                        std::snprintf(text, sizeof(text), "%snull", coordinate ? "," : "");
+                    shifts += text;
+                }
+                record.pop_back();
+                record += shifts + "]}";
+            }
+            if (waterSurface.WorldBounds.Available) {
+                const auto& b = waterSurface.WorldBounds;
+                char water[256];
+                std::snprintf(water, sizeof(water),
+                    ",\"worldMin\":[%.1f,%.1f,%.1f],\"worldMax\":[%.1f,%.1f,%.1f],\"waterBody\":%d,"
+                    "\"reachesWater\":%d,\"wholeWater\":%d,\"waterPlane\":%d}",
+                    b.Minimum[0], b.Minimum[1], b.Minimum[2], b.Maximum[0], b.Maximum[1], b.Maximum[2],
+                    waterSurface.Body ? static_cast<int>(*waterSurface.Body) : -1, waterSurface.ReachesWater ? 1 : 0,
+                    waterSurface.WholeDraw ? 1 : 0, waterSurface.Plane ? 1 : 0);
+                record.pop_back();
+                record += water;
+            }
+            {
+                // Texture identities (base-level content hash, size, slot), as
+                // texture-keyed materials select them: building water catalogs.
+                std::string ids = ",\"textureIds\":[";
+                for (const auto& texture : draw.Textures) {
+                    const auto hash = ResolveNativeTextureBaseLevelContentHash(texture);
+                    char text[96];
+                    std::snprintf(text, sizeof(text), "%s\"%016llx:%ux%u:%u\"", ids.back() == '[' ? "" : ",",
+                                  static_cast<unsigned long long>(hash.value_or(0U)), texture.Width, texture.Height,
+                                  static_cast<unsigned>(texture.Slot));
+                    ids += text;
+                }
+                record.pop_back();
+                record += ids + "]}";
+            }
+            if (surfaceLighting) {
+                // The native material and lights the replacement read.
+                const auto& s = *surfaceLighting;
+                char material[512];
+                std::snprintf(material, sizeof(material),
+                    ",\"materialDiffuse\":[%.3f,%.3f,%.3f],\"materialAmbient\":[%.3f,%.3f,%.3f],"
+                    "\"resolvedAmbient\":[%.3f,%.3f,%.3f],\"nativeLights\":[[%.3f,%.3f,%.3f,%.0f],"
+                    "[%.3f,%.3f,%.3f,%.0f],[%.3f,%.3f,%.3f,%.0f]]}",
+                    s.MaterialDiffuse[0], s.MaterialDiffuse[1], s.MaterialDiffuse[2], s.MaterialAmbient[0],
+                    s.MaterialAmbient[1], s.MaterialAmbient[2], s.ResolvedAmbient[0], s.ResolvedAmbient[1],
+                    s.ResolvedAmbient[2], s.Lights[0].Diffuse[0], s.Lights[0].Diffuse[1], s.Lights[0].Diffuse[2],
+                    s.Lights[0].DirectionEnabled[3], s.Lights[1].Diffuse[0], s.Lights[1].Diffuse[1],
+                    s.Lights[1].Diffuse[2], s.Lights[1].DirectionEnabled[3], s.Lights[2].Diffuse[0],
+                    s.Lights[2].Diffuse[1], s.Lights[2].Diffuse[2], s.Lights[2].DirectionEnabled[3]);
+                record.pop_back();
+                record += material;
+            }
+            surfaceDebug.Write(record);
+            // An exempted candidate's native shaders, next to the trace.
+            if (surfaceExempt)
+                surfaceDebug.WriteSource(surfaceOrdinal, draw.VertexShaderSource, draw.FragmentShaderSource);
+        }
+#endif
         if (pbrMaterial != nullptr && pbrMaterial->Material->ColorReplacement &&
             Oot3d::HasPicaShaderInstrumentationFeature(
                 shaderVariant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::PbrMaterial))
@@ -2335,6 +2693,25 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 destination.Integer = false;
             }
             {
+                // The contact shadows' visibility where this sample has it.
+                const bool contactBound = directionalShadowHistoryBound && directionalShadowHistory.ContactValid();
+                auto& destination = nriDraw.ContactShadowTexture;
+                destination.Image = contactBound ? directionalShadowHistory.ContactImage : mFallbackTexture.NriImage;
+                destination.Format = contactBound ? VK_FORMAT_R8_UNORM : VK_FORMAT_R8G8B8A8_UNORM;
+                destination.Usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+                destination.Width = contactBound ? directionalShadowHistory.ContactWidth : mFallbackTexture.Width;
+                destination.Height = contactBound ? directionalShadowHistory.ContactHeight : mFallbackTexture.Height;
+                destination.MipLevels = 1U;
+                destination.MinFilter = VK_FILTER_LINEAR;
+                destination.MagFilter = VK_FILTER_LINEAR;
+                destination.MipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+                destination.AddressU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+                destination.AddressV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+                destination.MinLod = 0.0F;
+                destination.MaxLod = 0.0F;
+                destination.Integer = false;
+            }
+            {
                 // The cube atlas only where the variant reads it.
                 const bool pointShadowBound = pointShadowHistory.Valid() &&
                     Oot3d::HasPicaShaderInstrumentationFeature(
@@ -2454,6 +2831,33 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             shadowCaster.OwnerIdentity = draw.Composition.NativeActorIdentity;
             if (opaqueWorldDraw && draw.LightBinding.WorldToView)
                 renderTarget.SampleView.Observe(mFrameCounter, *draw.LightBinding.WorldToView);
+            if (draw.LightBinding.Water && draw.CompositionDomain == Renderer3ds::PicaCompositionDomain::Scene) {
+                renderTarget.WaterBodies = draw.LightBinding.Water;
+                renderTarget.WaterBodiesFrame = mFrameCounter;
+            }
+            if (waterSurface.Pieces && draw.CompositionDomain == Renderer3ds::PicaCompositionDomain::Scene) {
+                if (renderTarget.WaterPiecesFrame != mFrameCounter) {
+                    renderTarget.WaterPieces.clear();
+                    renderTarget.WaterPieceKeys.clear();
+                    renderTarget.WaterPiecesFrame = mFrameCounter;
+                }
+                if (std::find(renderTarget.WaterPieceKeys.begin(), renderTarget.WaterPieceKeys.end(),
+                              waterSurface.PiecesKey) == renderTarget.WaterPieceKeys.end()) {
+                    renderTarget.WaterPieceKeys.push_back(waterSurface.PiecesKey);
+                    renderTarget.WaterPieces.push_back(waterSurface.Pieces);
+                }
+            }
+            if (waterSurface.Plane && draw.CompositionDomain == Renderer3ds::PicaCompositionDomain::Scene) {
+                auto& planes = renderTarget.WaterPlanes;
+                if (renderTarget.WaterPlanesFrame != mFrameCounter) {
+                    planes.Count = 0U;
+                    renderTarget.WaterPlanesFrame = mFrameCounter;
+                }
+                const auto end = planes.Bodies.begin() + planes.Count;
+                if (planes.Count < Renderer3ds::kMaximumPicaSceneWaterBodies &&
+                    std::find(planes.Bodies.begin(), end, *waterSurface.Plane) == end)
+                    planes.Bodies[planes.Count++] = *waterSurface.Plane;
+            }
             if (opaqueWorldDraw)
                 if (const auto projection = Oot3d::DecodePicaPerspectiveProjection(draw.VertexUniformBytes))
                     renderTarget.SampleProjection.Observe(mFrameCounter, *projection);
@@ -2862,6 +3266,30 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
     }
 }
 
+void GfxRenderingAPIVulkan::TryRenderWorldDebugLines(NativePicaRenderTarget& target) {
+    const auto lines = Oot3d::WorldDebugLineRuntime::Instance().Latest();
+    if (lines == nullptr) return;
+    // The projection the target's draws applied, so the lines meet its depth.
+    const auto perspective = SamplePerspective(&target);
+    if (!perspective.has_value() || !perspective->CameraAvailable) return;
+    const std::array<float, 2> jitterNdc = mTemporalJitterEnabled
+        ? std::array<float, 2>{ 2.0F * mTemporalJitterPixels[0] / static_cast<float>(target.Width),
+                                2.0F * mTemporalJitterPixels[1] / static_cast<float>(target.Height) }
+        : std::array<float, 2>{};
+    BeginNativePicaRenderPass(target);
+    const bool drawn = mWorldDebugLinePass.Draw(
+        mCommandBuffers[mCurrentFrame], mCurrentFrame, mFrameCounter, target.Width, target.Height, *lines,
+        perspective->WorldToClip, jitterNdc, mFramePicaAttachmentRequirements);
+    // The next native draw starts its render pass afresh, with its own state.
+    if (drawn) EndNativePicaRenderPass();
+    static bool reported = false;
+    if (!reported && (drawn || !mWorldDebugLinePass.UnavailableReason().empty())) {
+        reported = true;
+        std::fprintf(stderr, "TRIAEVUM_WORLD_DEBUG_LINES drawn=%d lines=%zu target=%ux%u reason=%s\n", drawn ? 1 : 0,
+                     lines->Lines.size(), target.Width, target.Height, mWorldDebugLinePass.UnavailableReason().c_str());
+    }
+}
+
 bool GfxRenderingAPIVulkan::TryRenderInteractiveGrass(
     NativePicaRenderTarget& target,
     const Oot3d::GraphicsSettings& settings,
@@ -3107,9 +3535,18 @@ bool GfxRenderingAPIVulkan::TryRenderDirectionalShadowMap(
                     ? std::optional(mFrameEnvironment.Lights[0]) : std::nullopt,
                 mFrameEnvironment.Enabled ? mFrameEnvironment.NativeDirectStrength : 1.0F,
                 mFrameEnvironment.Enabled ? &mFrameEnvironment : nullptr,
+                target.Width,
+                target.Height,
+                mTemporalJitterEnabled ? mTemporalJitterSequence : 0U,
+                [this](const char* label) {
+                    mGpuProfiler.Mark(mCurrentFrame, label, mCommandBuffers[mCurrentFrame]);
+                },
             },
             mPreparedShadowCasterView,
             mDirectionalShadowMapBarrierPlan);
+    // The contact shadows' marks end where the map's own work ends.
+    if (executionRequested && settings.Effects.DirectionalShadows.ContactShadows.Enabled)
+        mGpuProfiler.Mark(mCurrentFrame, "directional_shadows", mCommandBuffers[mCurrentFrame]);
     if (executionRequested) {
         const auto& shadowMapTransitions =
             mNriDirectionalShadowPass.LastShadowMapBarrierExecution();
@@ -3261,17 +3698,11 @@ bool PublishNativePicaGrassSurface(
             .ResolveObservedHash(
                 *textureHash, texture->Width,
                 texture->Height);
-    const bool configuredSource = std::any_of(
-        settings.Rules.begin(), settings.Rules.end(),
-        [&](const auto& rule) {
-            return rule.Target.Rgba8Hash ==
-                       observedTextureHash &&
-                (rule.Target.MapperSlotMask & 1U) != 0U &&
-                (rule.Target.Width == 0U ||
-                 rule.Target.Width == texture->Width) &&
-                (rule.Target.Height == 0U ||
-                 rule.Target.Height == texture->Height);
-        });
+    // Its own rule, or the rule of a texture it is the same image as.
+    const bool configuredSource =
+        Oot3d::GrassTwinRules::Instance().Configured(
+            settings.Rules, observedTextureHash,
+            texture->Width, texture->Height, 0U);
     if (diagnostics) {
         static uint32_t sourceDrawReports = 0U;
         if (sourceDrawReports++ < 128U) {

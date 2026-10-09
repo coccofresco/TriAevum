@@ -138,6 +138,12 @@
 
 #include "oot3d_native_a32_window_shared.h"
 #include "oot3d_native_a32_window_stats.h"
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+#include "oot3d_dev_tools_panel.h"
+#include "oot3d_dev_warp.h"
+#include "oot3d_dev_emitter_inventory.h"
+#include "oot3d_dev_lab.h"
+#endif
 
 namespace Oot3dA32Window {
 
@@ -315,6 +321,48 @@ private:
   std::optional<Oot3dNativeGame::NativeA32ProcessImageManifest> manifest{};
   std::optional<Oot3dNativeGame::NativeScenarioCatalog> scenarioCatalog;
   std::optional<Oot3dNativeGame::NativeScenarioBootstrap> scenarioBootstrap;
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+  // F1 > Dev Tools warping (developer builds only).
+  std::shared_ptr<Oot3dNativeGame::DevWarpRuntime> devWarp;
+  std::unique_ptr<Oot3dNativeGame::DevWarpGuest> devWarpGuest;
+  // TRIAEVUM_DEV_FREECAM_TOUR="f,r,u,yaw,pitch;...": free camera poses
+  // relative to Link (forward/right/up units, yaw offset and pitch in
+  // degrees), from 3 s after the scripted warp arrives (or gameplay starts),
+  // each held 1.5 s then captured to TRIAEVUM_DEV_FREECAM_TOUR_OUT/tour-NN.bmp.
+  // A pose written "@x,y,z,yaw,pitch" is absolute (world units, yaw 0
+  // facing +Z): Forward/Right/Up then hold x/y/z.
+  struct DevFreeCameraTourPose {
+    float Forward = 0.0F, Right = 0.0F, Up = 0.0F, Yaw = 0.0F, Pitch = 0.0F;
+    bool Absolute = false;
+  };
+  std::vector<DevFreeCameraTourPose> devTourPoses;
+  std::filesystem::path devTourDirectory;
+  bool devTourAfterWarp = false;
+  int devTourIndex = -1;
+  uint32_t devTourFrames = 0;
+  uint64_t devTourAppliedAtPose = 0;
+  std::array<float, 3> devTourAnchor{};
+  float devTourAnchorYaw = 0.0F;
+  void UpdateDevFreeCameraTour(uint64_t guestFrame);
+  // TRIAEVUM_DEV_LAB=<dir>: commands from an agent (oot3d_dev_lab.h), one
+  // at a time: warp, camera, camera_off, wait, capture, graphics, gizmos,
+  // status, quit.
+  std::unique_ptr<Oot3dNativeGame::DevLabChannel> devLab;
+  std::optional<nlohmann::json> devLabCommand;
+  uint32_t devLabFrames = 0;
+  uint64_t devLabAppliedAt = 0;
+  bool devLabSawArrival = false;
+  void UpdateDevLab(uint64_t guestFrame);
+  // TRIAEVUM_DEV_EMITTERS=<file.jsonl>: the native lights per scene/room.
+  std::unique_ptr<Oot3dNativeGame::NativeEmitterInventoryLog> devEmitterLog;
+  uint64_t devEmitterFrames = 0;
+  // F6 (free camera) rising edge and the free camera's refresh clock.
+  bool devFreeCameraToggleHeld = false;
+  std::chrono::steady_clock::time_point devFreeCameraLastRefresh{};
+  // Moves the free camera from the pad, keyboard and mouse and withholds that
+  // input from the game while it is active.
+  void UpdateDevFreeCamera(Oot3dNativeGame::NativeA32InputFrame &inputFrame);
+#endif
   Oot3dNativeGame::TopScreenTextureOverridePack topScreenTextureOverridePack;
   Oot3dNativeGame::NativeHdFontRuntime hdFonts;
   bool hdFontsLoaded = false;
@@ -404,6 +452,10 @@ private:
   Oot3dNativeGame::NativeA32ProcessRunResult processResult;
   uint32_t frameCount = 0;
   uint32_t runFrameCount = 0;
+  // A one-frame capture path requested by a developer camera tour.
+  std::filesystem::path pendingForcedScreenshot;
+  // A developer lab asked the session to end (closes like the window).
+  bool devLabQuit = false;
   uint64_t presentationFrameCount = 0;
   uint64_t refreshTickRemainder = 0;
   uint64_t nextVblankTick = 0;
