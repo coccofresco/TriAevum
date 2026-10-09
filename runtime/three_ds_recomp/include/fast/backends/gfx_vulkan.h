@@ -280,6 +280,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
                          int dstX0, int dstY0, int dstX1, int dstY1) override;
     void ClearFramebuffer(bool color, bool depth) override;
     void ReadFramebufferToCPU(int fbId, uint32_t width, uint32_t height, uint16_t* rgba16Buf) override;
+    bool ReadFramebufferRgba8ToCPU(int fbId, uint32_t width, uint32_t height, uint8_t* rgba8Buf) override;
     void ResolveMSAAColorBuffer(int fbIdTarget, int fbIdSrc) override;
     std::unordered_map<std::pair<float, float>, uint16_t, hash_pair_ff>
     GetPixelDepth(int fbId, const std::set<std::pair<float, float>>& coordinates) override;
@@ -297,6 +298,8 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     void RenderImGuiDrawData(ImDrawData* drawData);
 
   private:
+    bool ReadFramebufferToCPUImpl(uint32_t width, uint32_t height,
+                                  uint16_t* rgba16Buf, uint8_t* rgba8Buf);
     struct QueueFamilies {
         std::optional<uint32_t> Graphics;
         std::optional<uint32_t> Present;

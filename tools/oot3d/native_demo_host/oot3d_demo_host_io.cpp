@@ -52,11 +52,25 @@ uint8_t ExpandRgba5551Channel(uint16_t value) {
 } // namespace
 
 void WriteBmpFromRgba5551Framebuffer(
+    const std::filesystem::path& path, uint32_t width, uint32_t height,
+    const std::vector<uint16_t>& rgba16) {
+    if (path.empty() || !width || !height || uint64_t(width) * height > rgba16.size()) return;
+    std::vector<uint8_t> rgba8(static_cast<size_t>(width) * height * 4U);
+    for (size_t i = 0; i < static_cast<size_t>(width) * height; ++i) {
+        rgba8[i * 4U] = ExpandRgba5551Channel(rgba16[i] >> 11U);
+        rgba8[i * 4U + 1U] = ExpandRgba5551Channel(rgba16[i] >> 6U);
+        rgba8[i * 4U + 2U] = ExpandRgba5551Channel(rgba16[i] >> 1U);
+        rgba8[i * 4U + 3U] = (rgba16[i] & 1U) ? 255U : 0U;
+    }
+    WriteBmpFromRgba8Framebuffer(path, width, height, rgba8);
+}
+
+void WriteBmpFromRgba8Framebuffer(
     const std::filesystem::path& path,
     uint32_t width,
     uint32_t height,
-    const std::vector<uint16_t>& rgba16) {
-    if (path.empty() || width == 0 || height == 0 || rgba16.size() < static_cast<size_t>(width) * height) {
+    const std::vector<uint8_t>& rgba8) {
+    if (path.empty() || width == 0 || height == 0 || uint64_t(width) * height > rgba8.size() / 4U) {
         return;
     }
 
@@ -100,10 +114,10 @@ void WriteBmpFromRgba5551Framebuffer(
         const uint32_t srcY = height - 1u - y;
         std::fill(row.begin(), row.end(), 0);
         for (uint32_t x = 0; x < width; ++x) {
-            const uint16_t pixel = rgba16[static_cast<size_t>(srcY) * width + x];
-            const uint8_t r = ExpandRgba5551Channel(pixel >> 11);
-            const uint8_t g = ExpandRgba5551Channel(pixel >> 6);
-            const uint8_t b = ExpandRgba5551Channel(pixel >> 1);
+            const size_t pixel = (static_cast<size_t>(srcY) * width + x) * 4U;
+            const uint8_t r = rgba8[pixel];
+            const uint8_t g = rgba8[pixel + 1U];
+            const uint8_t b = rgba8[pixel + 2U];
             row[x * 3u + 0u] = b;
             row[x * 3u + 1u] = g;
             row[x * 3u + 2u] = r;

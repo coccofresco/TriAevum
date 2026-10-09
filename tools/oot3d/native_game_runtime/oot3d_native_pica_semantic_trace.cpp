@@ -1,10 +1,13 @@
 #include "oot3d_native_pica_semantic_trace.h"
 
 #include "oot3d_native_pica_program_descriptor.h"
+#include "oot3d/renderer/pica_texture_decode.h"
 
 #include <array>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
@@ -567,6 +570,71 @@ void Oot3dPicaSemanticTraceWriter::RecordDraw(
                 {"continuity_epoch", snapshot->ContinuityEpoch},
             });
         }
+    }
+
+    // Opt-in payload of selected draws (TRIAEVUM_PICA_TRACE_PAYLOAD_DRAWS, a
+    // comma-separated list of submission ids): the packed fragment uniforms
+    // and, next to the trace, each texture's native bytes and its decoded
+    // RGBA8 pixels, to tell decode, sampling and combiner causes apart.
+    static const std::vector<uint64_t> payloadDraws = [] {
+        std::vector<uint64_t> ids;
+        if (const char* raw = std::getenv("TRIAEVUM_PICA_TRACE_PAYLOAD_DRAWS")) {
+            std::string text(raw);
+            size_t start = 0U;
+            while (start < text.size()) {
+                const size_t end = std::min(text.find(',', start), text.size());
+                if (end > start) ids.push_back(std::stoull(text.substr(start, end - start), nullptr, 0));
+                start = end + 1U;
+            }
+        }
+        return ids;
+    }();
+    if (std::find(payloadDraws.begin(), payloadDraws.end(), submission.Id) != payloadDraws.end()) {
+        const auto& uniforms = plan.FragmentShader.Uniforms;
+        nlohmann::json fog = nlohmann::json::array();
+        for (const auto& entry : uniforms.FogLut) fog.push_back({entry[0], entry[1]});
+        nlohmann::json textures = nlohmann::json::array();
+        for (const auto& binding : plan.Textures) {
+            const auto bytes = binding.ResolvedNativeBytes();
+            const auto stem = mOutputPath.string() + ".draw" + std::to_string(submission.Id) +
+                              ".slot" + std::to_string(binding.Slot);
+            const auto write = [](const std::string& path, std::span<const uint8_t> data) {
+                std::ofstream out(path, std::ios::binary);
+                out.write(reinterpret_cast<const char*>(data.data()),
+                          static_cast<std::streamsize>(data.size()));
+            };
+            write(stem + ".native.bin", bytes);
+            std::vector<uint8_t> rgba;
+            std::string decodeError;
+            const auto& state = binding.State;
+            const bool decoded = Oot3d::Renderer::DecodePicaTextureRgba8(
+                state.Format, state.Width, state.Height, bytes, rgba, &decodeError);
+            if (decoded) write(stem + ".rgba8.bin", rgba);
+            textures.push_back({{"slot", binding.Slot},
+                                {"physical_address", state.PhysicalAddress},
+                                {"width", state.Width},
+                                {"height", state.Height},
+                                {"format", state.Format},
+                                {"native_bytes", bytes.size()},
+                                {"native_file", stem + ".native.bin"},
+                                {"decoded_file", decoded ? stem + ".rgba8.bin" : std::string{}},
+                                {"decode_error", decodeError},
+                                {"copy_references", binding.CopyReferences.size()}});
+        }
+        WriteEvent({
+            {"event", "draw_payload"},
+            {"submission_id", submission.Id},
+            {"guest_frame", guestFrame},
+            {"fragment_shader_state_key", plan.FragmentShader.StateKey},
+            {"tev_constants", uniforms.TevConstants},
+            {"combiner_buffer_color", uniforms.CombinerBufferColor},
+            {"alpha_reference", uniforms.AlphaReference},
+            {"fog_color", uniforms.FogColor},
+            {"fog_lut", std::move(fog)},
+            {"texture_lod_bias", uniforms.TextureLodBias},
+            {"fragment_control", uniforms.FragmentControl},
+            {"textures", std::move(textures)},
+        });
     }
 
     WriteEvent({

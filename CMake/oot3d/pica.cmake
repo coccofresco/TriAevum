@@ -282,6 +282,7 @@ target_include_directories(oot3d_native_pica_semantic_trace PUBLIC
 )
 target_link_libraries(oot3d_native_pica_semantic_trace PUBLIC
     oot3d_native_pica_vulkan_plan
+    oot3d_renderer_texture_decode
     nlohmann_json::nlohmann_json)
 target_compile_options(oot3d_native_pica_semantic_trace PRIVATE
     "${WARNING_OVERRIDE}")

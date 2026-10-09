@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <vector>
+#include <cstdio>
 #include <nlohmann/json.hpp>
 #include "fast/renderer3ds/pica_frame_timing.h"
 #include "fast/oot3d/grass_render_telemetry.h"
@@ -50,15 +51,30 @@ void MaybeWriteFramebufferScreenshot(const Args& args, Fast::GfxRenderingAPI& ap
         return;
     }
 
-    std::vector<uint16_t> framebuffer(static_cast<size_t>(width) * height, 0);
+    std::vector<uint8_t> framebuffer(static_cast<size_t>(width) * height * 4U, 0);
     if (!grassDiagnostics) grass = Fast::Oot3d::GrassRenderTelemetry::Instance().Snapshot();
-    api.ReadFramebufferToCPU(0, width, height, framebuffer.data());
     const auto screenshotPath =
         args.ScreenshotSequence ? ScreenshotSequenceFramePath(args.ScreenshotPath, frameCount) : args.ScreenshotPath;
-    WriteBmpFromRgba5551Framebuffer(screenshotPath, width, height, framebuffer);
+    // Full precision where the backend can read it; otherwise the RGBA5551
+    // readback, declared as 5 bits per channel in the metadata and reported.
+    const bool fullPrecision = api.ReadFramebufferRgba8ToCPU(0, width, height, framebuffer.data());
+    if (fullPrecision) {
+        WriteBmpFromRgba8Framebuffer(screenshotPath, width, height, framebuffer);
+    } else {
+        static bool reported = false;
+        if (!reported) {
+            reported = true;
+            std::fprintf(stderr, "TRIAEVUM_SCREENSHOT_RGB5 backend has no full-precision readback\n");
+        }
+        std::vector<uint16_t> rgba16(static_cast<size_t>(width) * height, 0);
+        api.ReadFramebufferToCPU(0, width, height, rgba16.data());
+        WriteBmpFromRgba5551Framebuffer(screenshotPath, width, height, rgba16);
+    }
     nlohmann::json metadata = {
         {"format", "triaevum_framebuffer_sample_v1"}, {"host_frame", frameCount},
         {"width", width}, {"height", height}, {"temporal_sample", nullptr},
+        {"rgb_bits_per_channel", fullPrecision ? 8 : 5},
+        {"readback_format", fullPrecision ? "RGBA8" : "RGBA5551"},
         {"scope", "synchronous_capture_not_performance_measurement"}};
     if (temporalSample && temporalSample->Available()) {
         const auto& sample = *temporalSample;

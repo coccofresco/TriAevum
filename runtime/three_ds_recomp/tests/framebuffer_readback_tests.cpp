@@ -8,6 +8,36 @@ namespace {
 void Check(bool ok) { if (!ok) std::abort(); }
 }
 int main() {
+    using Fast::Renderer::CopyScaledFramebufferRgba8;
+    // Preserve all 256 values, including dark halo ramps and sky low bits.
+    std::vector<uint8_t> ramp(256U * 2U * 4U);
+    for (size_t y = 0; y < 2; ++y) for (size_t x = 0; x < 256; ++x) {
+        const auto i = (y * 256U + x) * 4U;
+        ramp[i] = static_cast<uint8_t>(x);
+        ramp[i + 1] = static_cast<uint8_t>(255U - x);
+        ramp[i + 2] = static_cast<uint8_t>(x ^ (y ? 0x55U : 0xAAU));
+        ramp[i + 3] = static_cast<uint8_t>(x ^ 0x17U);
+    }
+    std::vector<uint8_t> exact(ramp.size(), 0xCCU);
+    Check(CopyScaledFramebufferRgba8(ramp, 256, 2, false, exact, 256, 2));
+    Check(exact == ramp);
+    auto bgraRamp = ramp;
+    for (size_t i = 0; i < bgraRamp.size(); i += 4) std::swap(bgraRamp[i], bgraRamp[i + 2]);
+    Check(CopyScaledFramebufferRgba8(bgraRamp, 256, 2, true, exact, 256, 2));
+    Check(exact == ramp);
+    std::vector<uint8_t> scaled(512U * 4U * 4U);
+    Check(CopyScaledFramebufferRgba8(bgraRamp, 256, 2, true, scaled, 512, 4));
+    for (size_t y = 0; y < 4; ++y) for (size_t x = 0; x < 512; ++x)
+        for (size_t c = 0; c < 4; ++c)
+            Check(scaled[(y * 512U + x) * 4U + c] == ramp[((y / 2) * 256U + x / 2) * 4U + c]);
+    Check(CopyScaledFramebufferRgba8(scaled, 512, 4, false, exact, 256, 2));
+    Check(exact == ramp);
+    Check(!CopyScaledFramebufferRgba8(std::span(ramp).first(ramp.size() - 1), 256, 2, false, exact, 256, 2));
+    Check(!CopyScaledFramebufferRgba8(ramp, 256, 2, false, std::span(exact).first(exact.size() - 1), 256, 2));
+    Check(!CopyScaledFramebufferRgba8(ramp, UINT32_MAX, UINT32_MAX, false, exact, 256, 2));
+    Check(!CopyScaledFramebufferRgba8(ramp, 256, 2, false, exact, UINT32_MAX, UINT32_MAX));
+    Check(!CopyScaledFramebufferRgba8(ramp, 0, 2, false, exact, 256, 2));
+    Check(exact == ramp); // Rejected reads leave the destination intact.
     using Fast::Renderer::CopyScaledFramebufferRgba5551;
     const std::array<uint8_t, 16> rgba{255, 0, 0, 255, 0, 255, 0, 0,
                                       0, 0, 255, 1, 255, 255, 255, 255};
