@@ -48,7 +48,8 @@ def _run(command: list[str], root: Path) -> None:
     result = run_native(command, cwd=root,
                             env=native_helper_environment(command[0]),
                             capture_output=True, text=True, errors="replace", timeout=600,
-                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)
+                            | getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0))
     if result.returncode:
         raise ValueError("Shader preparation failed: " + (result.stderr or result.stdout)[-4000:])
 

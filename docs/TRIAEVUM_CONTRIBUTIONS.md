@@ -57,6 +57,25 @@ compilation, removal of the precompiled shader packs, the Reframed UI profile,
 iCloud save sync. Apple and Android changes compile in the fork's CI; they are
 not verified on Apple or Android hardware in this tree.
 
+## WINDROID fork: Renderer Robustness (fork, no PR)
+
+- Contributor: [WINDROID-EMU](https://github.com/WINDROID-EMU), fork
+  [RECOMP-ZELDA-3DS-ANDROID](https://github.com/WINDROID-EMU/RECOMP-ZELDA-3DS-ANDROID)
+  (from TriAevum `e419028`, v0.6.0-alpha.2c; 73 commits to 2026-10-17).
+- Integration: selective adaptation into the shared runtime, 2026-10-23; the
+  fork predates the renderer's NRI split, so each item was rewritten against
+  the current tree and verified at its owning boundary.
+- Record: [WINDROID fork evaluation](TRIAEVUM_WINDROID_FORK_EVALUATION.md)
+  lists what was taken, what is still a candidate, and what was left out.
+
+Retained contribution: periodic pipeline-cache persistence (game device and
+Forge helper), per-frame vertex arena growth instead of a fatal overflow.
+Not taken: the Android platform layer, the parallel PICA renderer tree, the
+TopScreen verification stubs, sprint/cutscene-skip/auto-save/cheats, the
+2.1.1-era HUD hunks, pacing and settings bypasses, and the CI title
+compilation and bundled title artifacts, which TriAevum's release invariant
+forbids.
+
 ## PR #14: Display Failure Feedback
 
 - Contributor: [999sian](https://github.com/999sian), Git author `sian <sian@localhost>`.

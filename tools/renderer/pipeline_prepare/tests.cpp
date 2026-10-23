@@ -1,10 +1,14 @@
 #include "fast/renderer/pipeline_preparation_job.h"
+#include "fast/renderer/preparation_host.h"
+#include "fast/renderer3ds/pipeline_cache_flusher.h"
 #include "fast/renderer3ds/vulkan_pipeline_cache_store.h"
 #include "fast/renderer3ds/pica_vulkan_device_profile.h"
 #include "fast/renderer3ds/pica_startup_programs.h"
 #include "fast/oot3d/pica_nri_pipeline_state.h"
 #include "fast/oot3d/pica_pipeline_preparation.h"
+#include <atomic>
 #include <chrono>
+#include <thread>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -99,6 +103,69 @@ int main() {
             Check(Renderer3ds::LoadPipelineCacheData(path, identity, read,
                                                      Renderer3ds::kMaximumNriPipelineCacheBytes) &&
                   read == large);
+        }
+        {
+            // Host-load policy: half the logical cores, bounded, fewer when the
+            // driver compiles on a pool of its own; explicit override 1..16.
+            Renderer::PreparationWorkerPolicy policy;
+            policy.HardwareThreads = 12;
+            Check(Renderer::PreparationWorkerCount(policy) == 6);
+            policy.DriverCompilesConcurrently = true;
+            Check(Renderer::PreparationWorkerCount(policy) == 4);
+            policy.DriverCompilesConcurrently = false;
+            policy.HardwareThreads = 32;
+            Check(Renderer::PreparationWorkerCount(policy) == 8);
+            policy.HardwareThreads = 0;
+            Check(Renderer::PreparationWorkerCount(policy) == 1);
+            policy.HardwareThreads = 3;
+            Check(Renderer::PreparationWorkerCount(policy) == 2);
+            policy.Environment = "16";
+            Check(Renderer::PreparationWorkerCount(policy) == 16);
+            for (const char* invalid : {"0", "17", "4x", "-1"}) {
+                policy.Environment = invalid;
+                bool rejected = false;
+                try { Renderer::PreparationWorkerCount(policy); }
+                catch (const std::invalid_argument&) { rejected = true; }
+                Check(rejected);
+            }
+            constexpr uint64_t kGiB = 1024ULL * 1024ULL * 1024ULL;
+            Check(Renderer::PreparationMemoryReserveBytes(4 * kGiB) == kGiB);
+            Check(Renderer::PreparationMemoryReserveBytes(64 * kGiB) == 8 * kGiB);
+            Renderer::HostMemory memory;
+            Check(!Renderer::ShouldRetirePreparationWorker(memory, 8));  // unknown: never
+            memory.Known = true;
+            memory.TotalBytes = 16 * kGiB;
+            memory.AvailableBytes = kGiB;
+            Check(Renderer::ShouldRetirePreparationWorker(memory, 2));
+            Check(!Renderer::ShouldRetirePreparationWorker(memory, 1));  // the last worker finishes
+            memory.AvailableBytes = 3 * kGiB;
+            Check(!Renderer::ShouldRetirePreparationWorker(memory, 8));
+            Check(Renderer::QueryHostMemory().Known);
+
+            Check(!Renderer3ds::PipelineCacheFlushDue(0, 100.0, {}));
+            Check(!Renderer3ds::PipelineCacheFlushDue(5, 19.9, {}));
+            Check(Renderer3ds::PipelineCacheFlushDue(1, 20.0, {}));
+            Renderer3ds::PipelineCacheFlushPolicy eight;
+            eight.MinimumNewPipelines = 8;
+            Check(!Renderer3ds::PipelineCacheFlushDue(7, 100.0, eight));
+            Check(Renderer3ds::PipelineCacheFlushDue(8, 20.0, eight));
+
+            // The flusher persists the snapshot through the same atomic store.
+            std::atomic<int> snapshots{0};
+            Renderer3ds::PipelineCacheFlusher flusher;
+            Renderer3ds::PipelineCacheFlushPolicy immediate;
+            immediate.MinimumIntervalSeconds = 0.0;
+            flusher.Start(path, identity, Renderer3ds::kMaximumNriPipelineCacheBytes,
+                          [&] { ++snapshots; return bytes; }, immediate);
+            Check(flusher.Running() && flusher.Stats().Flushes == 0);
+            flusher.Notice(3);
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+            while (flusher.Stats().Flushes == 0 && std::chrono::steady_clock::now() < deadline)
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            Check(flusher.Stats().Flushes == 1 && flusher.Stats().FlushedBytes == bytes.size());
+            Check(Renderer3ds::LoadPipelineCacheData(path, identity, read) && read == bytes);
+            flusher.Stop();
+            Check(!flusher.Running() && snapshots == 1);
         }
         std::filesystem::remove(path);
 

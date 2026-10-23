@@ -118,6 +118,7 @@ class HeadlessDevice final : public Fast::Renderer3ds::NriPicaInterop {
         properties.pNext = &driverProperties;
         driverProperties.pNext = &libraryProperties;
         getProperties2(physical, &properties);
+        DriverId = driverProperties.driverID;
         const auto policy = Fast::Renderer3ds::ResolvePicaPipelineLibraryPolicy(
             std::getenv("TRIAEVUM_NRI_PIPELINE_LIBRARIES"), librarySupported, dynamic.dynamicRendering,
             true, driverProperties.driverID);
@@ -174,6 +175,8 @@ class HeadlessDevice final : public Fast::Renderer3ds::NriPicaInterop {
     bool PipelineLibraries = false;
     bool AllPipelinesUseLibraries = false;
     bool GeometryShaders = false;
+    // Host-load policy: some drivers compile each pipeline on a pool of their own.
+    VkDriverId DriverId = VK_DRIVER_ID_MAX_ENUM;
   private:
     static VKAPI_ATTR VkBool32 VKAPI_CALL VulkanMessage(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
         VkDebugUtilsMessageTypeFlagsEXT, const VkDebugUtilsMessengerCallbackDataEXT* data, void* context) {

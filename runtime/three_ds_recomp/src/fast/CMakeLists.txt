@@ -54,6 +54,7 @@ set(Source_Files__RendererExtensions
     renderer/gtao_shader.cpp
     renderer/spirv_cache.cpp
     renderer/pipeline_preparation_job.cpp
+    renderer/preparation_host.cpp
     renderer/extension_resource_allocation.cpp
     renderer/extension_resource_binding.cpp
     renderer/extension_resource_graph.cpp
@@ -128,6 +129,7 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
         renderer3ds/nri_pica_pipeline_bridge.cpp
         renderer3ds/pica_preparation_queue.cpp
         renderer3ds/vulkan_pipeline_cache_store.cpp
+        renderer3ds/pipeline_cache_flusher.cpp
         renderer3ds/vulkan_memory_budget.cpp
         renderer3ds/nri_pica_upload_arena.cpp
         renderer3ds/pica_nri_shader_contract.cpp

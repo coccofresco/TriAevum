@@ -846,10 +846,8 @@ void GfxRenderingAPIVulkan::UploadNativePicaTextureRows(
             true, mNriPicaTextureUploadPass.LastUploadedBytes());
         return;
     }
+    const VkDeviceSize uploadOffset = EnsureFrameVertexCapacity(pixels.size());
     auto& frame = mFrameResources[mCurrentFrame];
-    const VkDeviceSize uploadOffset = (frame.VertexBytesUsed + 15U) & ~VkDeviceSize(15U);
-    if (uploadOffset + pixels.size() > frame.VertexBuffer.Size)
-        throw std::runtime_error("native PICA texture exceeds the per-frame upload arena");
     std::memcpy(static_cast<uint8_t*>(frame.VertexBuffer.Mapped) + uploadOffset,
                 pixels.data(), pixels.size());
     frame.VertexBytesUsed = uploadOffset + pixels.size();

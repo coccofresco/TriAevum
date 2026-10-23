@@ -244,10 +244,7 @@ GfxRenderingAPIVulkan::NativePicaGeometryPlacement GfxRenderingAPIVulkan::PlaceN
         }
         return { buffer.Buffer, buffer.Size, static_cast<uint8_t*>(buffer.Mapped), 0U, true };
     }
-    const VkDeviceSize baseOffset = (frame.VertexBytesUsed + 15U) & ~VkDeviceSize(15U);
-    if (baseOffset + geometry.Payload.size() > frame.VertexBuffer.Size) {
-        throw std::runtime_error("native PICA transient geometry arena exhausted");
-    }
+    const VkDeviceSize baseOffset = EnsureFrameVertexCapacity(geometry.Payload.size());
     std::memcpy(static_cast<uint8_t*>(frame.VertexBuffer.Mapped) + baseOffset, geometry.Payload.data(),
                 geometry.Payload.size());
     frame.VertexBytesUsed = baseOffset + geometry.Payload.size();

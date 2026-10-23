@@ -406,6 +406,20 @@ SPDX tag are GPL-2.0-or-later. The adapted code is marked in place and listed in
 `docs/TRIAEVUM_OCARINA_RETUNED_INTEGRATION.md`. No ReTuned interface, font,
 artwork, ROM-preparation or Reframed-profile code was taken.
 
+## WINDROID fork (renderer robustness)
+
+**RECOMP-ZELDA-3DS-ANDROID** by **WINDROID-EMU**
+(<https://github.com/WINDROID-EMU/RECOMP-ZELDA-3DS-ANDROID>) is a fork of
+TriAevum at v0.6.0-alpha.2c that ports the runtime to Android. TriAevum adapted
+two of its renderer changes back into the shared runtime in October 2026: the
+periodic persistence of the Vulkan pipeline cache while pipelines are still
+being created, and the continuation on a larger per-frame vertex arena where an
+overflow used to end the session. As modifications of a GPL-3.0 program they
+are covered by this repository's GPL-3.0-or-later license. The adapted code is
+marked in place and listed in `docs/TRIAEVUM_WINDROID_FORK_EVALUATION.md`. No
+Android platform code, overlay, media, gameplay convenience or title artifact
+was taken.
+
 ## Fira Sans Condensed (in-game menu font)
 
 The in-game settings menu (Esc / R3) is drawn by TriAevum's own UI renderer

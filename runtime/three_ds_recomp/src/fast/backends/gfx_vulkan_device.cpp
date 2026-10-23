@@ -528,6 +528,14 @@ void GfxRenderingAPIVulkan::CreatePipelineCache() {
 }
 
 void GfxRenderingAPIVulkan::StorePipelineCache() {
+    // No flush may race the final store below.
+    mNriPipelineCacheFlusher.Stop();
+    const auto flushes = mNriPipelineCacheFlusher.Stats();
+    if (flushes.Flushes != 0 || flushes.Failures != 0)
+        std::fprintf(stderr, "TRIAEVUM_NRI_PIPELINE_CACHE_FLUSH summary flushes=%llu bytes=%llu failures=%llu\n",
+                     static_cast<unsigned long long>(flushes.Flushes),
+                     static_cast<unsigned long long>(flushes.FlushedBytes),
+                     static_cast<unsigned long long>(flushes.Failures));
     const auto statistics = mNriPicaPipelineBridge.PipelineStatistics();
     mDiagnostics.SetNriPipelineStatistics(statistics.InitialCacheBytes,
         statistics.CreationAttempts, statistics.Created, statistics.CreationNanoseconds);

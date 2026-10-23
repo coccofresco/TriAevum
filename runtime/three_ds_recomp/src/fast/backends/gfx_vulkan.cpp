@@ -308,12 +308,9 @@ void GfxRenderingAPIVulkan::DrawTriangles(float bufVbo[], size_t bufVboLen,
         bufVbo == nullptr || bufVboLen == 0 || bufVboNumTris == 0) {
         return;
     }
-    auto& frame = mFrameResources[mCurrentFrame];
     const VkDeviceSize byteCount = static_cast<VkDeviceSize>(bufVboLen * sizeof(float));
-    const VkDeviceSize alignedOffset = (frame.VertexBytesUsed + 15) & ~VkDeviceSize(15);
-    if (alignedOffset + byteCount > frame.VertexBuffer.Size) {
-        throw std::runtime_error("OOT3D Vulkan per-frame vertex arena exhausted");
-    }
+    const VkDeviceSize alignedOffset = EnsureFrameVertexCapacity(byteCount);
+    auto& frame = mFrameResources[mCurrentFrame];
     std::memcpy(static_cast<uint8_t*>(frame.VertexBuffer.Mapped) + alignedOffset, bufVbo,
                 static_cast<size_t>(byteCount));
     frame.VertexBytesUsed = alignedOffset + byteCount;
@@ -820,12 +817,9 @@ bool GfxRenderingAPIVulkan::DrawOot3dShadow2dDepthEncodedTriangles(
         mOot3dShadow2dDepthEncodePipeline == VK_NULL_HANDLE) {
         return false;
     }
-    auto& frame = mFrameResources[mCurrentFrame];
     const VkDeviceSize byteCount = static_cast<VkDeviceSize>(bufVboLen * sizeof(float));
-    const VkDeviceSize alignedOffset = (frame.VertexBytesUsed + 15) & ~VkDeviceSize(15);
-    if (alignedOffset + byteCount > frame.VertexBuffer.Size) {
-        throw std::runtime_error("OOT3D Vulkan Shadow2D vertex arena exhausted");
-    }
+    const VkDeviceSize alignedOffset = EnsureFrameVertexCapacity(byteCount);
+    auto& frame = mFrameResources[mCurrentFrame];
     std::memcpy(static_cast<uint8_t*>(frame.VertexBuffer.Mapped) + alignedOffset, bufVbo,
                 static_cast<size_t>(byteCount));
     frame.VertexBytesUsed = alignedOffset + byteCount;

@@ -360,3 +360,66 @@ Limits: coverage is what a spawn view of each entrance draws under the two
 profiles; profiles with other effects (Toon, other AO or shadow modes) need
 their own sweep. Variants a session did not see still prepare in the
 background behind the always-available programs.
+
+## Host Load (2026-10-23)
+
+A fork user with a Ryzen 5600 and an RX 6700 reported that Forge's
+"Preparing GPU pipelines" stage made the machine unusable. The helper ran one
+worker per logical core (12 there) at normal priority; AMD's proprietary driver
+compiles every pipeline on a worker pool of its own, so the machine carried
+12 x N compiler threads plus the working set of 12 concurrent compilations
+(issues #78 and #84 report `VK_ERROR_OUT_OF_HOST_MEMORY` from the same driver).
+On the reference RTX 3060 the 1872 cold pipelines took 204 s on 6 threads and
+175 s on 12: the extra cores bought 14 percent of time for all of the CPU.
+
+The helper now follows `Fast::Renderer::PreparationWorkerCount`
+(`runtime/three_ds_recomp/include/fast/renderer/preparation_host.h`, shared by
+the renderer and Forge):
+
+- Workers: half the logical cores, at most 8; at most 4 when the driver
+  compiles concurrently itself (`VK_DRIVER_ID_AMD_PROPRIETARY`).
+  `TRIAEVUM_PIPELINE_PREPARE_THREADS` (1..16) still overrides.
+- Priority: the helper process runs at below-normal priority and every worker
+  thread below normal; Forge also starts the helper and the shader compiler
+  with `BELOW_NORMAL_PRIORITY_CLASS` on Windows.
+- Memory governor: before taking the next pipeline a worker checks the host's
+  available memory and retires when it is below max(1 GiB, 1/8 of installed
+  memory) while other workers run; the last worker never retires, so the job
+  completes sequentially on a machine short of memory.
+- Retry: pipelines the driver refused during the parallel pass are retried
+  once, sequentially, after it; a refusal under memory pressure is not a
+  verdict on the pipeline.
+- Incremental persistence: `Renderer3ds::PipelineCacheFlusher` stores the
+  cache during the run (at most once per 20 s, only when new pipelines exist),
+  so a cancelled run, a kill or an exhausted time budget keeps its work and the
+  next attempt continues from a warm cache. The final store is unchanged.
+
+The receipt (`shader-seeds/device-preparation/latest.json`) records
+`worker_policy_threads`, `process_priority_lowered`,
+`workers_retired_for_memory`, `retried`, `recovered`, `host_memory_total_bytes`,
+`host_memory_available_bytes`, `peak_working_set_bytes`, `cache_flushes`,
+`cache_flushed_bytes` and `driver_id`, so AMD reports become measurable. The
+same flusher runs in the game device (`TRIAEVUM_NRI_PIPELINE_CACHE_FLUSH=0`
+restores the shutdown-only store), see
+`docs/TRIAEVUM_WINDROID_FORK_EVALUATION.md`.
+
+Verification: contract tests in `tools/renderer/pipeline_prepare/tests.cpp`
+(policy, reserve, retirement, flush schedule, flusher store), and cold runs of
+the helper on the reference machine (RTX 3060, 12 logical cores, 32 GiB, NVIDIA
+driver id 4) over the beta.1b corpus (1888 pipelines including the 39 startup
+program parts), with an empty renderer cache and the driver's own shader cache
+redirected to an empty directory (`__GL_SHADER_DISK_CACHE_PATH`; without that
+a "cold" rerun completes in 5 s from the driver cache):
+
+| Workers | Wall | Startup programs | Recipes | Peak working set | Flushes |
+| --- | --- | --- | --- | --- | --- |
+| 6 (policy) | 238 s, 236 s | 99 s, 97 s | 130 s, 137 s | 3.66 GiB, 3.64 GiB | 11 |
+| 12 (`TRIAEVUM_PIPELINE_PREPARE_THREADS=12`) | 213 s | 97 s | 113 s | 6.78 GiB | 9 |
+
+Twelve workers buy 10 percent of wall time for twice the working set; the
+startup-program phase does not scale at all. No worker was retired for memory
+and no pipeline was retried on this machine. Each flush stores the whole cache
+(114 MiB at the end), so the eleven flushes wrote 563 MiB over four minutes; the
+20 s minimum interval keeps that below 2.5 MiB/s. Not verified on an AMD
+Windows driver (no such GPU here); the Linux AMD reference machine runs RADV, a
+different compiler.

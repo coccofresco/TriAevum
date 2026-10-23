@@ -32,8 +32,51 @@ void GfxRenderingAPIVulkan::EnsureFrameUniformCapacity(
     frame.TextureDescriptorSets.clear();
 }
 
+VkDeviceSize GfxRenderingAPIVulkan::EnsureFrameVertexCapacity(VkDeviceSize bytes) {
+    auto& frame = mFrameResources[mCurrentFrame];
+    const VkDeviceSize offset = (frame.VertexBytesUsed + 15U) & ~VkDeviceSize(15U);
+    if (offset <= frame.VertexBuffer.Size && bytes <= frame.VertexBuffer.Size - offset) {
+        return offset;
+    }
+    // A scene that outgrows the arena (heavy transient geometry, large texture
+    // uploads in one frame) continues on a larger buffer instead of ending the
+    // session. Draws already recorded keep the old buffer until the fence.
+    // Adapted from the WINDROID fork's overflow fallback (c24df3a).
+    frame.RetiredVertexBuffers.reserve(frame.RetiredVertexBuffers.size() + 1U);
+    const VkDeviceSize grown = std::max(frame.VertexBuffer.Size * 2U, bytes + 16U);
+    const auto replacement = CreateBuffer(
+        grown,
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, true);
+    std::fprintf(stderr, "TRIAEVUM_VULKAN_VERTEX_ARENA_GROWN frame=%llu slot=%u bytes=%llu->%llu request=%llu\n",
+                 static_cast<unsigned long long>(mFrameCounter), mCurrentFrame,
+                 static_cast<unsigned long long>(frame.VertexBuffer.Size), static_cast<unsigned long long>(grown),
+                 static_cast<unsigned long long>(bytes));
+    SPDLOG_INFO("OOT3D Vulkan per-frame vertex arena grown {} -> {} bytes (request {})", frame.VertexBuffer.Size,
+                grown, bytes);
+    ++mFrameVertexArenaGrowths;
+    frame.RetiredVertexBuffers.push_back(frame.VertexBuffer);
+    frame.VertexBuffer = replacement;
+    frame.VertexBytesUsed = 0;
+    return 0;
+}
+
+VkDeviceSize GfxRenderingAPIVulkan::InitialFrameVertexArenaBytes() {
+    constexpr VkDeviceSize kDefault = 64ull * 1024ull * 1024ull;
+    // Diagnostic only: a deliberately small arena exercises the growth path.
+    if (const char* value = std::getenv("TRIAEVUM_VULKAN_VERTEX_ARENA_KIB"); value != nullptr && *value != '\0') {
+        char* end = nullptr;
+        const unsigned long kib = std::strtoul(value, &end, 10);
+        if (end != nullptr && *end == '\0' && kib >= 16UL && kib <= 1048576UL) {
+            return static_cast<VkDeviceSize>(kib) * 1024ull;
+        }
+        SPDLOG_WARN("TRIAEVUM_VULKAN_VERTEX_ARENA_KIB ignored: expected 16..1048576, got '{}'", value);
+    }
+    return kDefault;
+}
+
 void GfxRenderingAPIVulkan::CreateFrameResources() {
-    constexpr VkDeviceSize kVertexArenaSize = 64ull * 1024ull * 1024ull;
+    const VkDeviceSize kVertexArenaSize = InitialFrameVertexArenaBytes();
     constexpr VkDeviceSize kUniformArenaSize = 4ull * 1024ull * 1024ull;
     for (auto& frame : mFrameResources) {
         frame.VertexBuffer =

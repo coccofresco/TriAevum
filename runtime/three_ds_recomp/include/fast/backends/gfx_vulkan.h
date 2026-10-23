@@ -13,6 +13,7 @@
 #include "fast/renderer3ds/pica_motion_provenance.h"
 #include "fast/renderer3ds/pica_program_preparation.h"
 #include "fast/renderer3ds/pica_preparation_queue.h"
+#include "fast/renderer3ds/pipeline_cache_flusher.h"
 #include "fast/renderer3ds/pica_texture_copy_plan.h"
 #include "fast/renderer3ds/pica_shadow_geometry.h"
 #include "fast/renderer3ds/pica_ui_canvas.h"
@@ -492,6 +493,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         std::vector<uint64_t> NativePicaCompletionIds;
         std::vector<TextureRecord> RetiredTextures;
         std::vector<BufferAllocation> RetiredUniformBuffers;
+        // Vertex arenas replaced mid-frame by EnsureFrameVertexCapacity;
+        // recorded draws still read them until the frame's fence completes.
+        std::vector<BufferAllocation> RetiredVertexBuffers;
     };
 
     struct CachedVertexBuffer {
@@ -983,6 +987,10 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     void PaintNativePicaPictureBars(const Renderer3ds::PicaCanvasSurround& bars);
     void CreateFrameResources();
     void EnsureFrameUniformCapacity(VkDeviceSize bytes, VkDeviceSize alignment);
+    // Grows the current frame's vertex/upload arena so `bytes` fit at the
+    // next 16-byte offset; returns that offset.
+    VkDeviceSize EnsureFrameVertexCapacity(VkDeviceSize bytes);
+    static VkDeviceSize InitialFrameVertexArenaBytes();
     // Cacheable geometry uses its per-identity buffer, uploaded once per
     // content version and frame slot; other geometry is copied into the
     // frame's transient arena.
@@ -1809,6 +1817,12 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
 #endif
     // Destroyed after the NRI objects whose background creation it runs.
     std::unique_ptr<Renderer3ds::PicaPreparationQueue> mPreparationQueue;
+    // Persists the NRI pipeline cache while the session runs; stopped before
+    // the final store at shutdown.
+    Renderer3ds::PipelineCacheFlusher mNriPipelineCacheFlusher;
+    // Per-frame vertex/upload arena sizing evidence, summarized at shutdown.
+    VkDeviceSize mPeakFrameVertexBytes = 0;
+    uint32_t mFrameVertexArenaGrowths = 0;
     // Startup preparation of the always-available parts: threads of its own,
     // so specialized programs never queue behind it.
     std::vector<std::thread> mStartupPreparationThreads;

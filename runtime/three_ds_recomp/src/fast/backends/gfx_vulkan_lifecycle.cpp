@@ -259,6 +259,15 @@ void GfxRenderingAPIVulkan::Init() {
         const bool initialized = mNriPicaPipelineBridge.InitializePipelineCache(data);
         SPDLOG_INFO("NRI PICA pipeline cache: initialized={}, accepted {} bytes", initialized,
                     mNriPicaPipelineBridge.PipelineStatistics().InitialCacheBytes);
+        // Pipelines compiled this session reach the disk while it runs, not
+        // only at a clean shutdown (TRIAEVUM_NRI_PIPELINE_CACHE_FLUSH=0 keeps
+        // the shutdown-only store for comparisons).
+        if (const char* flush = std::getenv("TRIAEVUM_NRI_PIPELINE_CACHE_FLUSH");
+            initialized && (flush == nullptr || std::string_view(flush) != "0")) {
+            mNriPipelineCacheFlusher.Start(
+                VulkanPipelineCachePath(true), MakePipelineCacheHeader(properties), kMaximumNriPipelineCacheBytes,
+                [this] { return mNriPicaPipelineBridge.GetPipelineCacheData(); });
+        }
     }
     LoadDlssFeatureRecord();
     if (const auto directory = VulkanShaderCacheDirectory(); !directory.empty())
@@ -728,6 +737,9 @@ void GfxRenderingAPIVulkan::Shutdown() {
             vkDestroySampler(mDevice, sampler, nullptr);
         }
         mRetiredSamplers.clear();
+        std::fprintf(stderr, "TRIAEVUM_VULKAN_VERTEX_ARENA summary initial=%llu peak_frame_bytes=%llu grown=%u\n",
+                     static_cast<unsigned long long>(InitialFrameVertexArenaBytes()),
+                     static_cast<unsigned long long>(mPeakFrameVertexBytes), mFrameVertexArenaGrowths);
         for (auto& frame : mFrameResources) {
             if (frame.DescriptorPool != VK_NULL_HANDLE) {
                 vkDestroyDescriptorPool(mDevice, frame.DescriptorPool, nullptr);
@@ -737,6 +749,8 @@ void GfxRenderingAPIVulkan::Shutdown() {
             DestroyBuffer(frame.UniformBuffer);
             for (auto& buffer : frame.RetiredUniformBuffers) DestroyBuffer(buffer);
             frame.RetiredUniformBuffers.clear();
+            for (auto& buffer : frame.RetiredVertexBuffers) DestroyBuffer(buffer);
+            frame.RetiredVertexBuffers.clear();
         }
         for (auto& [key, shader] : mShaders) {
             if (shader.VertexShader != VK_NULL_HANDLE) {

@@ -663,6 +663,8 @@ void GfxRenderingAPIVulkan::StartFrame() {
     frame.RetiredTextures.clear();
     for (auto& buffer : frame.RetiredUniformBuffers) DestroyBuffer(buffer);
     frame.RetiredUniformBuffers.clear();
+    for (auto& buffer : frame.RetiredVertexBuffers) DestroyBuffer(buffer);
+    frame.RetiredVertexBuffers.clear();
     for (auto material = mNativePicaMaterials.begin(); material != mNativePicaMaterials.end();) {
         if (mFrameCounter <= material->second.LastUsedFrame + 240U) {
             ++material;
@@ -772,6 +774,7 @@ void GfxRenderingAPIVulkan::StartFrame() {
                 "vkWaitForFences(image)");
     }
     mImagesInFlight[mCurrentImage] = mInFlightFences[mCurrentFrame];
+    if (frame.VertexBytesUsed > mPeakFrameVertexBytes) mPeakFrameVertexBytes = frame.VertexBytesUsed;
     frame.VertexBytesUsed = 0;
     frame.UniformBytesUsed = 0;
     frame.SurfaceLightingUniformOffset.reset();
@@ -911,6 +914,8 @@ void GfxRenderingAPIVulkan::EndFrame() {
                              mInFlightFences[mCurrentFrame],
                              mRenderFinishedSemaphores[mCurrentImage]);
     mGpuCopySubmittedFrames[mCurrentFrame] = mFrameCounter;
+    if (mNriPipelineCacheFlusher.Running())
+        mNriPipelineCacheFlusher.Notice(mNriPicaPipelineBridge.PipelineStatistics().Created);
     mFrameActive = false;
     mFrameSubmitted = true;
 }

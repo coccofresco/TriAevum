@@ -5,6 +5,8 @@
 #include "fast/oot3d/pica_builtin_fragment_families.h"
 #include "headless_device.h"
 #include "fast/oot3d/pica_pipeline_preparation.h"
+#include "fast/renderer/preparation_host.h"
+#include "fast/renderer3ds/pipeline_cache_flusher.h"
 // Translated title vertex family (title code, like the runtime executable's).
 #include "oot3d_native_vertex_binaries.h"
 #include <NRI.h>
@@ -24,6 +26,7 @@
 #include <mutex>
 #include <optional>
 #include <thread>
+#include <vector>
 
 namespace {
 using namespace Fast;
@@ -31,12 +34,17 @@ using Json = nlohmann::json;
 
 using TriAevum::Tools::HeadlessDevice;
 
-// Independent pipeline creations on worker threads, one per logical core: the
-// driver's compilation scales sub-linearly, yet the 1872 cold pipelines of
-// the reference PC took 204 s on 6 threads and 175 s on 12 (sequential
-// recipes took about 9 minutes). The bridge and the device's pipeline cache
-// accept concurrent creation. TRIAEVUM_PIPELINE_PREPARE_THREADS (1..16)
-// bounds the compiler working set on a machine short of memory.
+// Independent pipeline creations on worker threads. The driver's compilation
+// scales sub-linearly (the 1872 cold pipelines of the reference PC took 204 s
+// on 6 threads and 175 s on 12; sequential recipes about 9 minutes) while each
+// worker holds a compiler working set and some drivers (AMD proprietary)
+// compile on a pool of their own, so the worker count follows
+// Renderer::PreparationWorkerCount, every worker runs below normal priority,
+// and a worker retires when host memory runs short (never the last one).
+// Items the driver refused are retried once, sequentially, after the parallel
+// pass: a refusal under memory pressure (VK_ERROR_OUT_OF_HOST_MEMORY, #78/#84)
+// is not a verdict on the pipeline. The bridge and the device's pipeline
+// cache accept concurrent creation.
 struct ParallelPreparation {
     unsigned Threads = 0;
     std::atomic<size_t> Next{0};
@@ -44,41 +52,59 @@ struct ParallelPreparation {
     std::atomic<size_t> Prepared{0};
     std::atomic<size_t> Failed{0};
     std::atomic<unsigned> Running{0};
+    std::atomic<unsigned> RetiredForMemory{0};
     std::atomic<bool> Cancelled{false};
     std::mutex ErrorMutex;
     std::string LastError;
+    std::vector<size_t> FailedIndices;
+    size_t Retried = 0;
+    size_t Recovered = 0;
     double Seconds = 0.0;
+
+    template <class Prepare>
+    bool Attempt(size_t index, Prepare& prepare) {
+        bool prepared = false;
+        std::string why;
+        try {
+            prepared = prepare(index, why);
+        } catch (const std::exception& exception) { why = exception.what(); }
+        if (prepared) ++Prepared;
+        else {
+            ++Failed;
+            std::lock_guard lock(ErrorMutex);
+            LastError = why;
+            FailedIndices.push_back(index);
+        }
+        ++Attempted;
+        return prepared;
+    }
 
     // prepare(index, why) -> prepared; progress(attempted, prepared, failed, last error).
     template <class Prepare, class Cancel, class Progress>
-    void Run(size_t count, Prepare prepare, Cancel cancelled, Progress progress) {
+    void Run(size_t count, unsigned workers, Prepare prepare, Cancel cancelled, Progress progress) {
         if (count == 0) return;
         const auto begin = std::chrono::steady_clock::now();
-        Threads = std::clamp(std::thread::hardware_concurrency(), 1U, 16U);
-        if (const char* value = std::getenv("TRIAEVUM_PIPELINE_PREPARE_THREADS")) {
-            const std::string_view text(value);
-            const auto parsed = std::from_chars(text.data(), text.data() + text.size(), Threads);
-            if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size() || Threads < 1 || Threads > 16)
-                throw std::runtime_error("TRIAEVUM_PIPELINE_PREPARE_THREADS must be 1..16");
-        }
-        Threads = std::min<unsigned>(Threads, static_cast<unsigned>(std::min<size_t>(count, 16)));
-        std::vector<std::thread> workers;
+        Threads = std::min<unsigned>(std::max(1U, workers),
+                                     static_cast<unsigned>(std::min<size_t>(count, Renderer::kPreparationWorkerLimit)));
+        std::vector<std::thread> threads;
         Running = Threads;
         for (unsigned thread = 0; thread < Threads; ++thread) {
-            workers.emplace_back([&] {
-                for (size_t index; !Cancelled && (index = Next++) < count;) {
-                    bool prepared = false;
-                    std::string why;
-                    try {
-                        prepared = prepare(index, why);
-                    } catch (const std::exception& exception) { why = exception.what(); }
-                    if (prepared) ++Prepared;
-                    else {
-                        ++Failed;
-                        std::lock_guard lock(ErrorMutex);
-                        LastError = why;
+            threads.emplace_back([&] {
+                Renderer::LowerPreparationThreadPriority();
+                while (!Cancelled) {
+                    // Decided before taking an item: the compiler working set
+                    // of one more concurrent creation may not fit this machine.
+                    if (Renderer::ShouldRetirePreparationWorker(Renderer::QueryHostMemory(), Running.load())) {
+                        unsigned running = Running.load();
+                        if (running > 1U && Running.compare_exchange_strong(running, running - 1U)) {
+                            ++RetiredForMemory;
+                            return;
+                        }
+                        continue;
                     }
-                    ++Attempted;
+                    const size_t index = Next++;
+                    if (index >= count) break;
+                    Attempt(index, prepare);
                 }
                 --Running;
             });
@@ -93,7 +119,21 @@ struct ParallelPreparation {
             std::lock_guard lock(ErrorMutex);
             progress(attempted, Prepared.load(), Failed.load(), LastError);
         }
-        for (auto& worker : workers) worker.join();
+        for (auto& worker : threads) worker.join();
+        std::vector<size_t> failed;
+        {
+            std::lock_guard lock(ErrorMutex);
+            failed.swap(FailedIndices);
+        }
+        for (const size_t index : failed) {
+            if (Cancelled || cancelled()) { Cancelled = true; break; }
+            ++Retried;
+            --Failed;
+            if (Attempt(index, prepare)) ++Recovered;
+            --Attempted;
+            std::lock_guard lock(ErrorMutex);
+            progress(Attempted.load(), Prepared.load(), Failed.load(), LastError);
+        }
         Seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - begin).count();
     }
 };
@@ -101,6 +141,9 @@ struct ParallelPreparation {
 
 int main(int argc, char** argv) {
     try {
+        // The desktop keeps its cores: this job competes with nothing interactive.
+        const bool priorityLowered = Fast::Renderer::LowerPreparationProcessPriority();
+        const auto hostMemoryAtStart = Fast::Renderer::QueryHostMemory();
         std::map<std::string, std::string> args;
         std::vector<std::filesystem::path> manifests;
         bool validation = false;
@@ -189,6 +232,14 @@ int main(int argc, char** argv) {
         const bool loaded = Renderer3ds::LoadPipelineCacheData(cachePath, identity, cache,
                                                                Renderer3ds::kMaximumNriPipelineCacheBytes);
         if (!bridge.InitializePipelineCache(cache)) throw std::runtime_error("NRI device pipeline cache unavailable");
+        const unsigned workers = Fast::Renderer::PreparationWorkerCount(
+            {std::thread::hardware_concurrency(), device.DriverId == VK_DRIVER_ID_AMD_PROPRIETARY,
+             std::getenv("TRIAEVUM_PIPELINE_PREPARE_THREADS")});
+        // Work survives a kill or an exhausted time budget: the cache is flushed
+        // while creation continues, then stored once more at the end.
+        Renderer3ds::PipelineCacheFlusher flusher;
+        flusher.Start(cachePath, identity, Renderer3ds::kMaximumNriPipelineCacheBytes,
+                      [&] { return bridge.GetPipelineCacheData(); });
         const auto cancelled = [&] { return args.contains("--cancel-file") && std::filesystem::exists(args.at("--cancel-file")); };
 
         // The parts the renderer creates before its first frame: the same
@@ -203,6 +254,7 @@ int main(int argc, char** argv) {
                 Renderer3ds::NativeFragmentArtifacts(), startupDevice);
         const size_t total = parts.size() + entries.size();
         const auto progress = [&](size_t attempted, size_t prepared, size_t failed, const std::string& last) {
+            flusher.Notice(prepared);
             std::cout << Json{{"event", "pipeline_progress"}, {"total", total}, {"attempted", attempted},
                 {"prepared", prepared}, {"failed", failed}, {"error", last}}.dump() << std::endl;
         };
@@ -214,13 +266,13 @@ int main(int argc, char** argv) {
             return prepared;
         };
         ParallelPreparation startup, recipes;
-        startup.Run(parts.size(), [&](size_t index, std::string& why) {
+        startup.Run(parts.size(), workers, [&](size_t index, std::string& why) {
             const bool prepared = Renderer3ds::PreparePicaStartupProgramPart(bridge, parts[index], startupDevice);
             if (!prepared) why = "NRI rejected startup program part " + std::to_string(index);
             return validated(prepared, why);
         }, cancelled, progress);
         if (!startup.Cancelled)
-            recipes.Run(entries.size(), [&](size_t index, std::string& why) {
+            recipes.Run(entries.size(), workers, [&](size_t index, std::string& why) {
                 const auto item = Fast::Oot3d::ResolvePicaPipelinePreparationItem(entries[index], pack, depthFormat,
                                                                                 &Fast::Oot3d::FindPicaBuiltInFragmentSpirv);
                 const bool prepared = bridge.PreparePipeline(item.Descriptor);
@@ -230,6 +282,8 @@ int main(int argc, char** argv) {
                 progress(startup.Attempted + attempted, startup.Prepared + prepared, startup.Failed + failed,
                          last.empty() ? startup.LastError : last);
             });
+        flusher.Stop();
+        const auto flushes = flusher.Stats();
         cache = bridge.GetPipelineCacheData();
         if (!Renderer3ds::StorePipelineCacheData(cachePath, identity, cache, &error,
                                                  Renderer3ds::kMaximumNriPipelineCacheBytes))
@@ -250,6 +304,15 @@ int main(int argc, char** argv) {
             {"startup_failed", startup.Failed.load()}, {"startup_threads", startup.Threads},
             {"startup_seconds", startup.Seconds},
             {"recipe_threads", recipes.Threads}, {"recipe_seconds", recipes.Seconds},
+            {"worker_policy_threads", workers}, {"process_priority_lowered", priorityLowered},
+            {"workers_retired_for_memory", startup.RetiredForMemory.load() + recipes.RetiredForMemory.load()},
+            {"retried", startup.Retried + recipes.Retried}, {"recovered", startup.Recovered + recipes.Recovered},
+            {"host_memory_known", hostMemoryAtStart.Known},
+            {"host_memory_total_bytes", hostMemoryAtStart.TotalBytes},
+            {"host_memory_available_bytes", hostMemoryAtStart.AvailableBytes},
+            {"peak_working_set_bytes", Fast::Renderer::PeakWorkingSetBytes()},
+            {"cache_flushes", flushes.Flushes}, {"cache_flushed_bytes", flushes.FlushedBytes},
+            {"driver_id", static_cast<uint32_t>(device.DriverId)},
             {"validation_requested", validation}, {"validation_errors", device.ValidationErrors()},
             {"creation_nanoseconds", statistics.CreationNanoseconds},
             {"initial_cache_bytes", statistics.InitialCacheBytes},

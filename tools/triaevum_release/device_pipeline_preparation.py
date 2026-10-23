@@ -112,10 +112,13 @@ def _run(command: list[str], root: Path, stage: Path, cancel: Callable[[], bool]
     with (stage / "stdout.log").open("w", encoding="utf-8") as output, \
             (stage / "stderr.log").open("w", encoding="utf-8") as errors, \
             (stage / "stdout.log").open(encoding="utf-8", errors="replace") as progress:
+        # The helper lowers its own priority too; starting it below normal
+        # keeps the desktop responsive while the driver compiles.
         process = popen_native(command, cwd=root,
                                    env=native_helper_environment(command[0]),
                                    stdout=output, stderr=errors,
-                                   creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                                   creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)
+                                   | getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0))
         try:
             while process.poll() is None:
                 now = time.monotonic()
