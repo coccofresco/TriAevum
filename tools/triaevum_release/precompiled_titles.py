@@ -119,12 +119,18 @@ def install_precompiled_title(prepared_directory: Path, *, root: Path, recipe: d
         from . import forge
         from .topscreen_assets import prepare_topscreen_assets
         from .water_textures import prepare_water_textures
+        from .scene_lights import prepare_scene_lights
+        from .interior_sun import prepare_interior_sun
+        from .precomputed_tables import title_tables
         from .shader_preparation import prepare_shader_seed, prepare_renderer_shader_cache
         from .device_pipeline_preparation import prepare_device_pipelines, installation_cache_directory, adopt_existing_cache
     except ImportError:
         import forge
         from topscreen_assets import prepare_topscreen_assets
         from water_textures import prepare_water_textures
+        from scene_lights import prepare_scene_lights
+        from interior_sun import prepare_interior_sun
+        from precomputed_tables import title_tables
         from shader_preparation import prepare_shader_seed, prepare_renderer_shader_cache
         from device_pipeline_preparation import prepare_device_pipelines, installation_cache_directory, adopt_existing_cache
     catalog = load_catalog(root)
@@ -146,15 +152,22 @@ def install_precompiled_title(prepared_directory: Path, *, root: Path, recipe: d
         verify(recipe, {kind: value.path for kind, value in prepared.inputs.items()}, phase='execution')
     plugin = checked_file(root, item["plugin"])
     native_module = checked_file(root, catalog["native_module"])
+    tables = title_tables(root, item)
     texture_pack = prepare_topscreen_assets(
         root=root, data_root=data_root, recipe=recipe,
         romfs=prepared.inputs["romfs"].path, report=report)
     water_textures = prepare_water_textures(data_root=data_root, recipe=recipe,
                                             romfs=prepared.inputs["romfs"].path, report=report)
+    scene_lights = prepare_scene_lights(data_root=data_root, recipe=recipe,
+                                        romfs=prepared.inputs["romfs"].path,
+                                        table=tables.get("scene_lights"), report=report)
     shader_pack = prepare_shader_seed(root=root, data_root=data_root,
                                      title=item, report=report)
     renderer_cache = installation_cache_directory(data_root)
     adopt_existing_cache(renderer_cache, report=report)
+    interior_sun = prepare_interior_sun(root=root, data_root=data_root, runtime_record=catalog["runtime"],
+        romfs=prepared.inputs["romfs"].path, romfs_sha256=prepared.inputs["romfs"].sha256,
+        cache_directory=renderer_cache, mask_table=tables.get("interior_sun_masks"), report=report)
     renderer_preparation = prepare_renderer_shader_cache(root=root, data_root=data_root,
         title=item, cache_directory=renderer_cache, report=report)
     pipeline_preparation = prepare_device_pipelines(root=root, data_root=data_root,
@@ -170,10 +183,12 @@ def install_precompiled_title(prepared_directory: Path, *, root: Path, recipe: d
         runtime = forge.publish_private_runtime(
             prepared.directory, plugin=plugin, runtime_plugin=runtime_plugin,
             launch_profile=launch_profile, data_root=data_root,
-            topscreen_texture_pack=texture_pack, water_texture_catalog=water_textures, package_root=root,
+            topscreen_texture_pack=texture_pack, water_texture_catalog=water_textures,
+            scene_light_catalog=scene_lights, package_root=root,
             pica_shader_pack=shader_pack, renderer_cache_directory=renderer_cache)
         activation = forge.activate_prepared_title(prepared.directory, active_title_state=active_title_state)
     return {"status": "ready", "install_model": MODEL, "objects_compiled": 0,
+            "interior_sun": interior_sun,
             "renderer_shader_preparation": renderer_preparation,
             "device_pipeline_preparation": pipeline_preparation,
             "package": packaged, "runtime": runtime, "active_title": activation["active_title"]}

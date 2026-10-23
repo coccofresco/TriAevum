@@ -3,16 +3,18 @@
 
 #include "fast/oot3d/effect_graph_pass_barriers.h"
 #include <vulkan/vulkan.h>
+#include <array>
 #include <memory>
 #include <string>
 
 namespace Fast::Oot3d {
 class NriInteropContext;
 
-// Resamples a temporal upscaler's declared guides (depth, motion, reactive) to
-// its colour input's extent; see upscaler_guides.h. It runs inside the
-// upscaler pass, only when the extents differ, and its outputs are private
-// images the upscaler dispatch reads in the same frame.
+// Prepares a temporal upscaler's declared guides (depth, motion, reactive) at
+// its colour input's extent, resampled when the extents differ, with the
+// jitter taken out of the motion; see upscaler_guides.h. It runs inside the
+// upscaler pass for every dispatch, and its outputs are private images the
+// upscaler dispatch reads in the same frame.
 class UpscalerGuidePass final {
   public:
     struct Guides {
@@ -32,8 +34,10 @@ class UpscalerGuidePass final {
     UpscalerGuidePass& operator=(const UpscalerGuidePass&) = delete;
     bool Initialize(VkPhysicalDevice physicalDevice, VkDevice device, NriInteropContext& interop);
     // Reads the declared guides in their shader-read state and leaves the
-    // resampled images (R32F depth, RGBA16F motion, R16F reactive) readable.
-    bool Execute(uint32_t frameSlot, const Guides& guides, uint32_t width, uint32_t height);
+    // prepared images (R32F depth, RGBA16F motion, R16F reactive) readable.
+    // `motionCorrection`: UpscalerMotionJitterCorrection.
+    bool Execute(uint32_t frameSlot, const Guides& guides, uint32_t width, uint32_t height,
+                 const std::array<float, 2>& motionCorrection);
     void InvalidateScreenResources();
     void Shutdown();
     [[nodiscard]] bool Available() const;

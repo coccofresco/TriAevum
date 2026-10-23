@@ -2,6 +2,8 @@
 // framebuffers and interrupts, memory, timing. Services: oot3d_native_a32_ctr_host_*.cpp.
 #include "oot3d_native_a32_ctr_host_internal.h"
 
+#include <cstdio>
+
 namespace Oot3dNativeGame {
 
 detail::NativeA32CtrSvcEventHistory::NativeA32CtrSvcEventHistory(
@@ -669,6 +671,27 @@ NativeA32HostResult NativeA32CtrHostServices::HandleControlMemory(
 NativeA32HostResult NativeA32CtrHostServices::HandleSvc(
     uint32_t immediate, oot3d::recomp::a32::GuestState& state,
     NativeA32Memory& memory, NativeA32HostContext& context) {
+    auto result = HandleSvcImpl(immediate, state, memory, context);
+    if (result.Action == NativeA32HostAction::Wait) {
+        const auto* event = mSvcEvents.LastEvent();
+        if (!event || !event->Handled) {
+            // Only a registered/intentional wait may park a guest. Unsupported
+            // host emulation must produce a named fault, not an orphan waiter.
+            std::ostringstream error;
+            error << "TRIAEVUM_HOST_REQUEST_UNSERVED svc=0x" << std::hex << immediate
+                  << " pc=0x" << state.r[15] << std::dec << " thread=" << context.ThreadId;
+            if (event) error << " request=" << std::quoted(event->Name)
+                             << " detail=0x" << std::hex << event->Detail;
+            std::fprintf(stderr, "%s\n", error.str().c_str());
+            return {NativeA32HostAction::Fault, std::nullopt, 0U, error.str()};
+        }
+    }
+    return result;
+}
+
+NativeA32HostResult NativeA32CtrHostServices::HandleSvcImpl(
+    uint32_t immediate, oot3d::recomp::a32::GuestState& state,
+    NativeA32Memory& memory, NativeA32HostContext& context) {
     static_cast<void>(memory);
     NativeA32CtrSvcEvent event;
     event.Immediate = immediate;
@@ -1210,13 +1233,17 @@ NativeA32HostResult NativeA32CtrHostServices::HandleSvc(
             sessionType->starts_with("client_session:")) {
             event.Name += ":" + sessionType->substr(15U);
         }
-        if (!sessionType.has_value() ||
-            !sessionType->starts_with("client_session:") ||
-            !memory.Read32(state.thread_pointer + 0x80U, &event.Detail)) {
-            mSvcEvents.push_back(std::move(event));
-            return {NativeA32HostAction::Wait};
-        }
         const uint32_t commandBuffer = state.thread_pointer + 0x80U;
+        const bool headerReadable = state.thread_pointer <= UINT32_MAX - 0x80U &&
+                                    memory.Read32(commandBuffer, &event.Detail);
+        if (!sessionType.has_value() || !sessionType->starts_with("client_session:")) {
+            return FailFsRequest(state, memory, state.thread_pointer + 0x80U,
+                                 sessionType, event, kInvalidSessionHandle, "invalid-session");
+        }
+        if (!headerReadable) {
+            return FailFsRequest(state, memory, state.thread_pointer + 0x80U,
+                                 sessionType, event, kInvalidBufferDescriptor, "unreadable-header");
+        }
         if (*sessionType == "client_session:ndm:u") {
             return HandleNdmRequest(state, memory, context, sessionType,
                                     commandBuffer, std::move(event));

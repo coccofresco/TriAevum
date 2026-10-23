@@ -7,6 +7,9 @@
 namespace Fast::Renderer3ds {
 inline constexpr std::string_view kPicaSurfaceLightingRecomposeShader = R"glsl(
 vec3 pica_surface_recompose(vec4 appearance, vec3 raw, vec3 directional, float visibility) {
+    // Baked colour times a dimensionless lighting ratio. Keep the selected
+    // shadow term before clamping, exactly as the terrain evaluator does.
+    if (appearance.a > 4.5) return clamp(raw - directional * (1.0 - visibility), 0.0, 1.0);
     if (appearance.a > 3.5) return appearance.rgb;
     vec3 response = raw - directional * (1.0 - visibility);
     if (appearance.a < 2.5) response = min(abs(response), vec3(1.0));
@@ -101,6 +104,19 @@ void main() {
     vec3 appearance = pica_primary_color.rgb;
     float mode = 4.0;
     uint mask = pica_surface_shadow_mask();
+    if (pica_surface.baked_reference_up.w != 0.0) {
+        vec3 reference;
+        raw = pica_surface_baked_response(normal, mask, reference, directional);
+        vec3 anchor = appearance / max(reference, vec3(1.0e-6));
+        raw *= anchor;
+        directional *= anchor;
+        raw += (pica_surface_scene_point_primary(normal, true) +
+            pica_surface_rim_independent(normal, pica_surface_unit(pica_view))) * pica_surface_tint.rgb;
+        surface_primary = vec4(appearance, 5.0);
+        surface_raw = vec4(raw, 0.0);
+        surface_directional = vec4(directional, 0.0);
+        return;
+    }
     if (pica_surface.control.x != 0u ||
         (pica_surface.environment_parameters.w != 0.0 && (pica_surface.control.w & 1u) == 0u)) {
         raw = pica_surface_native_response(normal, mask, directional);
@@ -110,8 +126,8 @@ void main() {
         raw = pica_surface_native_response(normal, mask, directional);
         mode = 2.0;
     } else if (pica_surface.control.y != 0u || pica_surface.control.z != 0u) {
-        raw = pica_surface_scene_point_primary(normal) +
-            pica_surface_scene_directional_response(normal, mask, directional);
+        raw = pica_surface_scene_point_primary(normal, true) +
+            pica_surface_scene_directional_response(normal, mask, directional, true);
         mode = 3.0;
     }
     surface_primary = vec4(appearance, mode);

@@ -119,9 +119,22 @@ void ApplyNativeControlShortcutTouch(
 // suppressed until that physical gesture is released so it cannot also close
 // the page it just opened.
 struct TopScreenStartRoutingState {
+    bool StartHeld = false;
+    // One consuming sample's START edge, transferred to the pause transaction.
+    bool OpenRequested = false;
     bool OpenGestureHeld = false;
     bool CloseGestureHeld = false;
+    // TopScreen 2.1.1 005D52C4..537C records the page that owns the pause UI
+    // (Items 0xC, Gear 0x10, Map 0x14 in 005E21C8, initial 0xC) on every
+    // update, and the START open at 005D5B0C..5B24 reopens that page.
+    NativeA32TopScreenPage LastPage = NativeA32TopScreenPage::Items;
 };
+
+// Source form of the 005E21C8 page memory: Items, then Gear, then Map, as in
+// 005D52C4..537C. Other states (System Menu, no page) keep the last value.
+void ObserveTopScreenStartRoutingPage(bool itemsActive, bool gearActive,
+                                      bool mapActive,
+                                      TopScreenStartRoutingState& state) noexcept;
 
 void MarkTopScreenStartOpenGestureConsumed(
     TopScreenStartRoutingState& state) noexcept;
@@ -160,22 +173,29 @@ bool ApplyTopScreenVersionChoiceReveal(
     NativeA32InputFrame& frame, bool awaitingReveal, bool prompting,
     TopScreenVersionChoiceRevealState& state) noexcept;
 
-// The TopScreen payload routes START to the native Items touch target while
-// gameplay owns the UI. Once Pause owns the UI, this boundary leaves START
-// available for the source-level pause-close dispatcher. Routing state changes
-// only when a guest refresh will consume the sample.
+// Capture one OpenLastPage request on a gameplay START edge, without touch.
+// Once Pause owns the UI, leave START for the pause-close dispatcher. Routing
+// state changes only when a guest refresh will consume the sample.
 void ApplyTopScreenStartRouting(NativeA32InputFrame& frame,
                                 bool topScreenProfile,
-                                bool routeGameplayStartToItems,
+                                bool routeGameplayStartToLastPage,
                                 bool nativePauseOpen,
                                 bool guestRefreshWillConsume,
                                 TopScreenStartRoutingState& state) noexcept;
 
-// SaveContext.game_mode uses 0 for ordinary play and 1 for gameplay
-// cutscenes. Frontend/title ownership begins at 2 and must retain START.
+// SaveContext.game_mode uses 0 for ordinary play and 1 for the title
+// screen's gameplay demo; frontend modes begin at 2.
 constexpr bool
 IsTopScreenGameplayInputMode(std::uint32_t nativeGameMode) noexcept {
   return nativeGameMode <= 1U;
+}
+
+// START opens the last page only in ordinary play, as 2.1.1 0x005D5A54
+// does. The title demo draws the gameplay HUD but owns START: routing it
+// there swallowed the press that leaves the title.
+constexpr bool
+IsTopScreenStartRoutingMode(std::uint32_t nativeGameMode) noexcept {
+  return nativeGameMode == 0U;
 }
 
 NativeA32TouchMapping MapHostPointerToNativeA32Touch(

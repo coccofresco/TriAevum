@@ -12,6 +12,20 @@ not permission to ship driver caches, ROMs, extracted assets, saves or captures.
 Forge prepares device-specific pipelines locally, without asking users to
 select or enable a cache. See [the verified contract](TRIAEVUM_BUNDLED_FORGE_SHADER_CORPUS.md).
 
+2026-10-13 amendment, at the maintainer's request (installation had to fit in
+about five minutes): the release also ships its own **analysis results** for
+the supported revision's rooms, so Forge does not repeat them on every machine.
+These are TriAevum's computations, not game content: per-triangle bits saying
+which triangles may stop casting toward each of 64 interior-sun directions,
+and scene-light placements (position, reach, gain, colour, category, and the
+content hashes and names of the textures they light). They carry no geometry,
+texture, text, audio or code, and each entry is keyed by a hash of one room's
+content, so it applies only where the user's own RomFS has exactly that room.
+Forge still reads every room from the user's RomFS (the interior sun welds the
+geometry from it) and computes locally any room the tables do not cover. Tests
+prove the installed result is byte-identical to local computation. See
+`tools/triaevum_release/precomputed_tables.py`.
+
 ## User contract
 
 Windows packages are portable ZIPs, with application-managed persistent data
@@ -31,6 +45,19 @@ decision and remaining work are in [desktop packaging](TRIAEVUM_DESKTOP_PACKAGIN
 - Fresh graphics configs also select the title-owned 1.10x FOV, toon/outline
   and grass snapshot described in `TRIAEVUM_GRAPHICS_DEFAULTS_AND_GRASS_PERFORMANCE.md`.
   This is not a change to the shared renderer's Authentic preset.
+
+## Offline interior sun
+
+Forge runs the catalogued neutral runtime's `--prebuild-interior-sun` tool mode
+before activation, passing the user's RomFS, the installation renderer cache,
+the release's interior-sun mask table and an output manifest. This never boots
+a title or invokes a compiler/SDK. The room/setup caches hold welded geometry:
+they are local ROM-derived data and must not be included in a release package.
+Only the mask table (fingerprints, triangle counts and mask bits) is shipped.
+Receipts bind RomFS SHA-256, criterion version, runtime identity, mask table
+and output hashes; lazy runtime building handles a missing cache. See
+[Interior sun / offline](ROOM_SHADOW_SHELLS.md) for the command, format, bounds
+and fallback contract.
 
 ## Package boundary
 

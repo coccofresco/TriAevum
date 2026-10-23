@@ -91,8 +91,29 @@ if(OOT3D_DIRECT_AOT_PLUGIN)
     set_property(TARGET oot3d_native_game PROPERTY OUTPUT_NAME TriAevum)
     add_custom_target(triaevum_public_runtime
         DEPENDS oot3d_native_game triaevum_title_aot_stub)
+    # The separately licensed iMMERSE module, a library of its own beside the
+    # runtime (runtime/three_ds_recomp/src/fast/immerse/LICENSE.md).
+    set(_triaevum_immerse_target "")
+    if(TARGET triaevum_immerse)
+        add_dependencies(triaevum_public_runtime triaevum_immerse)
+        set(_triaevum_immerse_target ",\n  \"immerse\": \"$<TARGET_FILE:triaevum_immerse>\"")
+    endif()
+    # The separately licensed DLSS module with NVIDIA's DLSS runtime and the
+    # NGX SDK licence (runtime/three_ds_recomp/src/fast/dlss/LICENSE.md), and
+    # FidelityFX's FSR runtime (MIT), each beside the runtime.
+    if(TARGET triaevum_dlss AND THREE_DS_RECOMP_DLSS_VK_DLL)
+        add_dependencies(triaevum_public_runtime triaevum_dlss)
+        string(APPEND _triaevum_immerse_target
+            ",\n  \"dlss\": \"$<TARGET_FILE:triaevum_dlss>\""
+            ",\n  \"dlss_runtime\": \"${THREE_DS_RECOMP_DLSS_VK_DLL}\""
+            ",\n  \"dlss_license\": \"${THREE_DS_RECOMP_NGX_SOURCE_DIR}/LICENSE.txt\"")
+    endif()
+    if(THREE_DS_RECOMP_FFX_VK_DLL)
+        string(APPEND _triaevum_immerse_target
+            ",\n  \"fidelityfx_runtime\": \"${THREE_DS_RECOMP_FFX_VK_DLL}\"")
+    endif()
     file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/triaevum-runtime-targets-$<CONFIG>.json"
-        CONTENT "{\n  \"format\": \"triaevum_runtime_targets_v1\",\n  \"source_commit\": \"${GIT_COMMIT_HASH}\",\n  \"runtime\": \"$<TARGET_FILE:oot3d_native_game>\",\n  \"stub\": \"$<TARGET_FILE:triaevum_title_aot_stub>\"\n}\n")
+        CONTENT "{\n  \"format\": \"triaevum_runtime_targets_v1\",\n  \"source_commit\": \"${GIT_COMMIT_HASH}\",\n  \"runtime\": \"$<TARGET_FILE:oot3d_native_game>\",\n  \"stub\": \"$<TARGET_FILE:triaevum_title_aot_stub>\"${_triaevum_immerse_target}\n}\n")
 endif()
 set(TRIAEVUM_PRODUCT_NRI 0)
 if(THREE_DS_RECOMP_ENABLE_NRI AND OOT3D_ENABLE_VULKAN_RENDERER)
@@ -158,6 +179,37 @@ endif()
 set_property(TARGET oot3d_graphics_settings_schedule_tests PROPERTY
     FOLDER Tests)
 
+add_executable(oot3d_actor_visibility_policy_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/oot3d_actor_visibility_policy.cpp
+    tools/oot3d/native_game_runtime/oot3d_actor_visibility_policy_tests.cpp
+)
+target_compile_options(oot3d_actor_visibility_policy_tests PRIVATE
+    "${WARNING_OVERRIDE}")
+if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set_property(TARGET oot3d_actor_visibility_policy_tests PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+set_property(TARGET oot3d_actor_visibility_policy_tests PROPERTY
+    FOLDER Tests)
+
+add_executable(oot3d_native_a32_actor_visibility_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/oot3d_actor_visibility_policy.cpp
+    tools/oot3d/native_game_runtime/oot3d_native_a32_actor_visibility.cpp
+    tools/oot3d/native_game_runtime/oot3d_native_a32_actor_visibility_tests.cpp
+    runtime/three_ds_recomp/src/fast/oot3d/perspective_fov_policy.cpp
+)
+target_include_directories(oot3d_native_a32_actor_visibility_tests PRIVATE
+    runtime/three_ds_recomp/include)
+target_link_libraries(oot3d_native_a32_actor_visibility_tests PRIVATE
+    oot3d_native_a32_process)
+target_compile_options(oot3d_native_a32_actor_visibility_tests PRIVATE
+    "${WARNING_OVERRIDE}")
+if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set_property(TARGET oot3d_native_a32_actor_visibility_tests PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+set_property(TARGET oot3d_native_a32_actor_visibility_tests PROPERTY FOLDER Tests)
+
 add_library(oot3d_native_crash_diagnostics STATIC EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_crash_diagnostics.cpp
 )
@@ -214,13 +266,19 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
         tools/oot3d/native_game_runtime/oot3d_native_preparation_screen.cpp
         tools/oot3d/native_game_runtime/oot3d_native_render_command_stream.cpp
         tools/oot3d/native_game_runtime/oot3d_top_screen_ocarina_text_runtime.cpp
+        tools/oot3d/native_game_runtime/oot3d_top_screen_pause_transaction.cpp
+        tools/oot3d/native_game_runtime/oot3d_top_screen_item_description_runtime.cpp
+        tools/oot3d/native_game_runtime/oot3d_top_screen_wide_items_runtime.cpp
         tools/oot3d/native_game_runtime/oot3d_native_actor_interactions.cpp
+        tools/oot3d/native_game_runtime/oot3d_actor_visibility_policy.cpp
+        tools/oot3d/native_game_runtime/oot3d_native_a32_actor_visibility.cpp
         tools/oot3d/native_game_runtime/oot3d_native_pcm_diagnostics.cpp
         tools/oot3d/native_game_runtime/oot3d_native_controls_settings_panel.cpp
         tools/oot3d/native_game_runtime/oot3d_game_language_panel.cpp
         tools/oot3d/native_game_runtime/oot3d_savestate_panel.cpp
         tools/oot3d/native_game_runtime/oot3d_savestate_settings.cpp
         tools/oot3d/native_game_runtime/oot3d_scene_environment.cpp
+        tools/oot3d/native_game_runtime/oot3d_scene_environment_blend.cpp
         tools/oot3d/native_game_runtime/oot3d_light_gizmo.cpp
         tools/oot3d/native_game_runtime/oot3d_scene_environment_codec.cpp
         tools/oot3d/native_game_runtime/oot3d_scene_environment_panel.cpp
@@ -269,15 +327,17 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
         # explain), without starting the game.
         add_executable(triaevum_environment_tool EXCLUDE_FROM_ALL
             tools/oot3d/native_game_runtime/oot3d_environment_tool.cpp
+            tools/oot3d/native_game_runtime/oot3d_interior_sun_prebuild.cpp
             tools/oot3d/native_game_runtime/oot3d_scene_environment_codec.cpp)
         target_include_directories(triaevum_environment_tool PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/native_game_runtime")
-        target_link_libraries(triaevum_environment_tool PRIVATE three_ds_recomp_runtime)
+        target_link_libraries(triaevum_environment_tool PRIVATE three_ds_recomp_runtime oot3d_native_pica_composition)
         oot3d_target_defaults(triaevum_environment_tool FOLDER Tools)
         # The scene environment runtime's developer hot reload.
         add_executable(triaevum_environment_tests EXCLUDE_FROM_ALL
             tools/oot3d/native_game_runtime/oot3d_scene_environment_tests.cpp
             tools/oot3d/native_game_runtime/oot3d_scene_environment.cpp
+            tools/oot3d/native_game_runtime/oot3d_scene_environment_blend.cpp
             tools/oot3d/native_game_runtime/oot3d_scene_environment_codec.cpp
             tools/oot3d/native_game_runtime/oot3d_light_gizmo.cpp)
         target_include_directories(triaevum_environment_tests PRIVATE

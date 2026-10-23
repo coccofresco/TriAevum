@@ -1,43 +1,34 @@
 #include "fast/oot3d/nri_ngx_vulkan_requirements.h"
 
-#ifdef ENABLE_OOT3D_NGX
-#include <vulkan/vulkan.h>
-#include <nvsdk_ngx_vk.h>
-#endif
+#include "fast/oot3d/dlss_module_loader.h"
+
+#include <array>
 
 namespace Fast::Oot3d {
-
-namespace {
-#ifdef OOT3D_NGX_RUNTIME_VERSION
-constexpr const char* kNgxRuntimeVersion = OOT3D_NGX_RUNTIME_VERSION;
-#else
-constexpr const char* kNgxRuntimeVersion = "unknown";
-#endif
-}
 
 const NriNgxVulkanRequirements& GetNriNgxVulkanRequirements() {
     static const NriNgxVulkanRequirements requirements = [] {
         NriNgxVulkanRequirements result;
-        result.RuntimeVersion = kNgxRuntimeVersion;
-#ifdef ENABLE_OOT3D_NGX
-        unsigned int instanceCount = 0;
-        unsigned int deviceCount = 0;
-        const char** instances = nullptr;
-        const char** devices = nullptr;
-        if (NVSDK_NGX_VULKAN_RequiredExtensions(
-                &instanceCount, &instances, &deviceCount, &devices) !=
-            NVSDK_NGX_Result_Success) {
-            result.Reason = "NGX failed to report its Vulkan requirements";
+        // NGX is the DLSS module's (triaevum/dlss_module.h); the runtime
+        // links nothing of it.
+        const TriaevumDlssModule* module = DlssModule();
+        if (module == nullptr) {
+            result.RuntimeVersion = "unknown";
+            result.Reason = DlssModuleUnavailableReason();
             return result;
         }
-        for (unsigned int index = 0; index < instanceCount; ++index)
-            result.InstanceExtensions.emplace_back(instances[index]);
-        for (unsigned int index = 0; index < deviceCount; ++index)
-            result.DeviceExtensions.emplace_back(devices[index]);
+        result.RuntimeVersion = module->RuntimeVersion != nullptr ? module->RuntimeVersion : "unknown";
+        TriaevumDlssVulkanRequirements extensions{};
+        std::array<char, 256> reason{};
+        if (module->VulkanRequirements(&extensions, reason.data(), reason.size()) == 0) {
+            result.Reason = reason.data();
+            return result;
+        }
+        for (uint32_t index = 0; index < extensions.InstanceExtensionCount; ++index)
+            result.InstanceExtensions.emplace_back(extensions.InstanceExtensions[index]);
+        for (uint32_t index = 0; index < extensions.DeviceExtensionCount; ++index)
+            result.DeviceExtensions.emplace_back(extensions.DeviceExtensions[index]);
         result.Available = true;
-#else
-        result.Reason = "NGX SDK support is not compiled";
-#endif
         return result;
     }();
     return requirements;

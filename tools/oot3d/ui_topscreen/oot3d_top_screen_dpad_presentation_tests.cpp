@@ -46,7 +46,8 @@ void RunTopScreenDpadPresentationTests() {
       require(result.size() == (visible ? (badges ? 8 : 4) : 0),
               "D-pad action age/availability mismatch");
       for (std::size_t i = 0; i < result.size(); ++i) {
-        require(result[i].source_quad == i &&
+        // 2.1.1 draws View on its own quads 38..41, before the item lanes.
+        require(result[i].source_quad == (action == 1 ? 38 + i : i) &&
                     result[i].owner_address == 0x005D4A8C,
                 "mapped icons need stable direction identity");
         require(result[i].uv.x >= 0 && result[i].uv.y >= 0 &&
@@ -106,5 +107,47 @@ void RunTopScreenDpadPresentationTests() {
   config.RenderDpadIcons = true;
   config.RenderHud = false;
   require(render().empty(), "HUD suppression must include mapped icons");
+  config.RenderHud = true;
+
+  // View/Navi lane of 2.1.1 FUN_005D4A8C (005D7400..7CE0, 005D8F00..9200).
+  TopScreenAuxiliaryTouchInputs view;
+  const auto viewQuad = [&]() {
+    std::vector<oot3d::ui::UiPrimitive> result;
+    AppendTopScreenDpadPresentation(config, state, view, 1, items, page, result);
+    oot3d::ui::UiPrimitive found{};
+    for (const auto &primitive : result)
+      if (primitive.source_quad >= 38) found = primitive;
+    return found;
+  };
+  const auto at = [](const oot3d::ui::UiPrimitive &p, float x, float y, float w, float h) {
+    return p.destination.x == x && p.destination.y == y && p.destination.width == w &&
+           p.destination.height == h;
+  };
+  config.AdultDpad = {TopScreenDpadAction::None, TopScreenDpadAction::View,
+                      TopScreenDpadAction::None, TopScreenDpadAction::None};
+  const auto eye = viewQuad();
+  require(at(eye, 29 - 8 + 2, 90 - 5, 16, 10) && eye.uv.x == 129.0F / 512 &&
+              eye.uv.width == 47.0F / 512,
+          "View eye must be 16x10 at its lane center with the 2.1.1 lane offset");
+  view.HasPlayState = true;
+  view.StateType = 3;
+  view.StateSubtype = 2;
+  view.PlayerHudMode = 0x0123;
+  auto navi = viewQuad();
+  require(at(navi, 29 - 7 + 2, 90 - 7, 14, 14) && navi.uv.x == 176.0F / 512 &&
+              navi.uv.height == 48.0F / 256,
+          "Navi prompt must be 14x14 centered on the View lane");
+  config.AdultDpad[1] = TopScreenDpadAction::Ocarina;
+  navi = viewQuad();
+  require(at(navi, 30 - 7, 45 - 7, 14, 14),
+          "Navi prompt must stay at (30,45) when no lane is mapped to View");
+  config.AdultDpad[2] = TopScreenDpadAction::View;
+  config.RenderDpadIcons = false;
+  navi = viewQuad();
+  require(at(navi, 9 - 7, 67 - 7, 14, 14),
+          "Navi prompt must remain on the first View lane with D-pad icons off");
+  view.PlayerHudMode = 0;
+  require(viewQuad().source_quad == 0, "D-pad icons off must hide the View eye");
+  config.RenderDpadIcons = true;
   std::cout << "TopScreen mapped D-pad presentation contracts passed\n";
 }

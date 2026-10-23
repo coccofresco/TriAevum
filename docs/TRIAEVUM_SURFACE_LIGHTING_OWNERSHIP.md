@@ -113,6 +113,10 @@ Verification:
 
 F1 Environment now owns **Preserve scene brightness**. It retains the native
 ambient/material reference independently of all three native source gains.
+For sky-lit baked surfaces, the later [outdoor calibration](BAKED_SURFACE_LIGHTING.md)
+distributes this reference by orientation and visibility instead of adding
+another full-strength sky contribution. The baseline-only semantics and
+historical measurements below otherwise describe the earlier implementation.
 Authored unlit primary color also remains a base appearance, not a light gain.
 Added ambient, key/fill and point lights remain additive and independently
 controllable. This deliberately preserves a baseline, not total irradiance:

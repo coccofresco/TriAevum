@@ -905,6 +905,55 @@ bool SuppressTopScreenTouchButtonDraw(std::uint32_t pauseState) noexcept {
   return pauseState >= 12U && pauseState <= 19U;
 }
 
+bool ReadTopScreenItemDescriptionInputs(NativeA32Memory &memory,
+                                        TopScreenItemDescriptionInputs *inputs) {
+  if (inputs == nullptr) return false;
+  std::uint32_t row = 0U, gearCursor = 0U;
+  if (!memory.Read32(0x0050672CU, &inputs->Items) ||
+      !memory.Read32(0x00504484U, &inputs->Gear) ||
+      !memory.Read32(0x0050A530U, &inputs->System) ||
+      !memory.Read32(0x0050AF68U, &inputs->Controller) ||
+      !memory.Read32(0x00506774U, &row) || !memory.Read32(0x0050448CU, &gearCursor))
+    return false;
+  inputs->ItemsCursorRow = static_cast<std::int32_t>(row);
+  inputs->GearCursor = static_cast<std::int32_t>(gearCursor);
+  return true;
+}
+
+bool UpdateTopScreenItemDescription(const TopScreenItemDescriptionInputs &inputs,
+                                    bool selectPressed, bool &visible) noexcept {
+  const bool browsing = inputs.Items == 2U || inputs.Gear == 2U;
+  if (!browsing || inputs.System != 0U) visible = false;
+  if (!selectPressed || !browsing) return false;
+  visible = !visible;
+  return true;
+}
+
+bool TopScreenItemDescriptionOwnsSelect(
+    const TopScreenItemDescriptionInputs &inputs) noexcept {
+  return inputs.Controller != 2U;
+}
+
+bool TopScreenItemDescriptionDrawEligible(const TopScreenItemDescriptionInputs &inputs,
+                                          bool visible) noexcept {
+  return visible && inputs.System == 0U && (inputs.Items == 2U || inputs.Gear == 2U);
+}
+
+std::uint32_t ResolveTopScreenItemDescriptionOffset(
+    const TopScreenItemDescriptionInputs &inputs) noexcept {
+  if (inputs.Items != 0U) return inputs.ItemsCursorRow >= 2 ? 300U : 0U;
+  if (inputs.Gear != 0U)
+    return inputs.GearCursor >= 0x13 && inputs.GearCursor <= 0x19 ? 300U : 0U;
+  return 0U;
+}
+
+bool SuppressTopScreenTouchButtonPageDraw(
+    std::uint32_t pauseState, const TopScreenPauseDrawInputs &inputs) noexcept {
+  return SuppressTopScreenTouchButtonDraw(pauseState) || inputs.ChildStates[0] != 0U ||
+         inputs.ChildStates[1] != 0U || inputs.ChildStates[2] != 0U ||
+         inputs.ChildStates[3] != 0U;
+}
+
 bool BeginTopScreenPauseChildSuppression(NativeA32Memory &memory,
                                          TopScreenPauseChildSuppressionSet set,
                                          TopScreenPauseChildState *saved,
@@ -925,6 +974,9 @@ bool BeginTopScreenPauseChildSuppression(NativeA32Memory &memory,
   case TopScreenPauseChildSuppressionSet::PageRedraw:
     snapshot.SuppressedMask = kTopScreenPausePageRedrawSuppressionMask;
     break;
+  case TopScreenPauseChildSuppressionSet::SystemPageRedraw:
+    snapshot.SuppressedMask = 0x30U;
+    break;
   }
   for (std::size_t index = 0; index < kTopScreenPauseChildStateAddresses.size();
        ++index) {
@@ -941,7 +993,10 @@ bool BeginTopScreenPauseChildSuppression(NativeA32Memory &memory,
        ++index) {
     if ((snapshot.SuppressedMask & (1U << index)) == 0U)
       continue;
-    if (!memory.Write32(kTopScreenPauseChildStateAddresses[index], 0U)) {
+    const auto value = set == TopScreenPauseChildSuppressionSet::SystemPageRedraw &&
+                               index == 4U ? 1U : 0U;
+    if (!memory.Write32(kTopScreenPauseChildStateAddresses[index], value)) {
+      (void)EndTopScreenPauseChildSuppression(memory, snapshot);
       if (error != nullptr)
         *error = "cannot suppress pause child state";
       return false;

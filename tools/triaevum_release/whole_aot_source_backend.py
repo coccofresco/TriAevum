@@ -67,6 +67,7 @@ def _translator_identity_files() -> tuple[tuple[str, Path], ...]:
     candidates = {
         A32_ROOT / "generate_aot.py",
         A32_ROOT / "whole_aot_program.py",
+        A32_ROOT / "whole_aot_observed_sites.json",
         A32_ROOT / "audit_whole_aot_product.py",
         A32_ROOT / "runtime_discovered_entries.csv",
         A32_ROOT / "whole_aot_product_manifest.json",

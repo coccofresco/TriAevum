@@ -11,6 +11,24 @@ which no preset owns; see `TRIAEVUM_F1_MENU_REVIEW.md`, "Enhanced default,
 Lights & Shadows and credits". The September 7 snapshot below, with its Toon
 style, is no longer the default.
 
+Since 2026-10-14 the title's grass sources are seven: the seventh maps the
+blue channel of `a35e3fe6f83ca9c2` (128x256), inverted, input 0.855-0.899,
+maximum slope 48 degrees, normal offset 0.5, response exponent 4.02.
+
+## Grass across render targets (START menu stall)
+
+Opening the TopScreen pause draws the gameplay scene into another framebuffer
+(renderer+0x3C instead of +0x38). Grass placement identity used to hash the
+render target into the instance, and the static anchor was kept per target,
+so the same terrain re-derived a slightly different ModelToWorld there and
+rebuilt about 4.7 million anchors synchronously: 1.3-1.9 s at the first
+START, 60-100 ms at every later open or close (Hyrule Field checkpoint).
+`GrassSceneMesh::WorldInstanceId` is the draw identity and its occurrence
+within its target, without the target. World placement identity, overlay
+versions and static anchors use it; draw scoping, overlay scope and the
+per-target instance maps still use `InstanceId`. The first open now costs
+about 38 ms and later toggles at most about 50 ms.
+
 Former content: `tools/oot3d/native_game_runtime/triaevum_product_graphics.inc` held the
 maintainer-approved snapshot from the September 7 playable session:
 

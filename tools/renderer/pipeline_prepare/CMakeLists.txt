@@ -45,7 +45,9 @@ if(MSVC)
     target_compile_definitions(triaevum_pipeline_preparation PUBLIC NOMINMAX)
     target_compile_options(triaevum_pipeline_preparation PRIVATE /utf-8)
 endif()
-add_executable(triaevum_nri_pipeline_prepare main.cpp)
+# The built-in fragment families resolve before the portable pack, as in the
+# runtime (pica_builtin_fragment_families.h).
+add_executable(triaevum_nri_pipeline_prepare main.cpp "${runtime}/src/fast/oot3d/pica_builtin_fragment_families.cpp")
 target_link_libraries(triaevum_nri_pipeline_prepare PRIVATE triaevum_pipeline_preparation)
 # --startup-programs embeds the translated title vertex family, as the runtime
 # executable does: this helper is the title's Forge tool, not title-neutral.
@@ -53,7 +55,8 @@ target_include_directories(triaevum_nri_pipeline_prepare PRIVATE "${root}/tools/
 include("${runtime}/cmake/spirv_pack.cmake")
 triaevum_add_spirv_pack(triaevum_nri_pipeline_prepare "${root}/tools/oot3d/native_pica_frontend/oot3d_native_vertex_binaries.cpp"
     "${root}/tools/oot3d/native_pica_frontend/oot3d_native_vertex.spvpack")
-foreach(_pack renderer3ds/pica_native_fragment oot3d/pica_uber_fragment)
+foreach(_pack renderer3ds/pica_native_fragment oot3d/pica_temporal_fragment oot3d/pica_toon_fragment
+              oot3d/pica_uber_fragment)
     triaevum_add_spirv_pack(triaevum_nri_pipeline_prepare "${runtime}/src/fast/${_pack}_binaries.cpp"
         "${runtime}/src/fast/${_pack}.spvpack")
 endforeach()

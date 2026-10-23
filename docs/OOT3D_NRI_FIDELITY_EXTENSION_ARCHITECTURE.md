@@ -248,7 +248,7 @@ historical measurements, not the current instrumented layout. See
 - Each compiled pass exposes its declared resource bindings and the diagnostics stream records the aggregate binding contract. A 30-frame Native Fidelity run resolved `1` pass, `2` resources/bindings and attachment count/mask `1/0`; a TAA run resolved `4` passes, `8` resource lifetimes, `13` bindings, `6` declared barriers and attachment count/mask `5/0x06`.
 - The TAA run executed 29 temporal and 29 motion passes, used direct typed fragment/vertex programs for all 5,202 instrumented draws and reported zero legacy analyses, rejected draws or Vulkan/NRI warnings and errors. Reproducible artifacts use the `graph-dispatch-native-*` and `graph-dispatch-taa-*` prefixes.
 - Every compiled display pass now has a fixed-size execution ledger. It distinguishes newly executed, reused, fused, skipped, failed and unresolved work, rejects duplicate or undeclared records, and reports both pass masks and active binding counts without per-frame heap allocation.
-- Ledger integration exposed two declaration/runtime mismatches. FSR now declares and depends on its real HiZ depth preparation rather than claiming native-depth input, and non-world display surfaces cannot request world effects. Duplicate presentations of the same world surface now reuse the already generated guide, motion and TAA outputs instead of silently scanning out an unprocessed image.
+- Ledger integration exposed two declaration/runtime mismatches. FSR now declares and depends on its real HiZ depth preparation rather than claiming native-depth input, and non-world display surfaces cannot request world effects. Duplicate presentations of the same world surface now reuse the already generated guide and TAA outputs instead of silently scanning out an unprocessed image (motion is computed by each execution since 2026-10-12, see Upscaler motion).
 - Native Fidelity validation over 30 frames records 59 declared/executed scanouts, 5,202 canonical draws, attachment count/mask `1/0`, and zero skipped, failed, unresolved, duplicate or undeclared outcomes. The equivalent TAA run records 29 motion and 29 TAA executions, 29 fused and 87 reused logical passes across 59 presentations, and zero skipped, failed or unresolved outcomes. Both runs have zero Vulkan/NRI warnings and errors; artifacts use the `graph-execution-native-*-v2` and `graph-execution-taa-*-v3` prefixes.
 - `DisplayEffectResourceTable` is the first concrete graph-binding layer. It maps every typed `EffectResource` to a versioned image or semantic identity using a fixed array, validates declared reads, and carries native image/view handles, format, extent and color-space metadata without per-frame allocation.
 - Scanout now selects its primary input from the compiled graph and resolves the seven auxiliary descriptor slots by resource identity rather than parallel image/view conditionals. A compatibility fallback is explicit and counted. Native Fidelity and TAA each resolve all `59/59` scanout reads with zero missing resources or fallbacks, while preserving the execution counts above and zero Vulkan/NRI warnings or errors. Artifacts use the `graph-bindings-native-*-v1` and `graph-bindings-taa-*-v1` prefixes.
@@ -332,6 +332,7 @@ historical measurements, not the current instrumented layout. See
 - Physical lifetime ownership has started at renderer commit `4f41f8be`. `BuildEffectTransientAllocationPlan` turns compiled graph lifetimes plus explicit image requirements into fixed-capacity physical slots before any provider dispatch; it rejects missing lifetimes, duplicate/invalid declarations and overlapping aliases, and unions image usage only across compatible non-overlapping resources.
 - `NriEffectGraphTransientImageArena` owns those physical slots and exposes borrowed typed bindings to providers. `SceneCompositePass` is the first migrated consumer: it retains only pipeline, descriptors, barriers and execution state, while `CompositeColor` allocation/destruction belongs exclusively to the arena. Resolution/sample-count/state invalidation clears the borrower before destroying arena images.
 - A deterministic 20-frame Kokiri CACAO+TAA run configured the arena 36 times across multiple display transfers, executed 18 composite passes, allocated one physical image once and reused the same configuration 35 times. It reported zero binding fallback, missing reads, failed/unresolved passes, Vulkan errors or NRI warnings/errors. The extensions-off regression performs zero arena/composite work, keeps 302 canonical and zero instrumented draws, and retains only the documented 11-warning machine/PICA-interface baseline. Artifacts are under `I:/oot3dre_work/visual-parity/effect-transient-arena-20260825/`.
+- A plan that a cached configuration covers reuses it (2026-10-14): every requested resource exists there with the same requirement and storage class, and resources in distinct slots of the plan stay in distinct images. The TopScreen pause plan is the gameplay plan without `CompositeColor`; a second configuration made every pass see new images at each toggle and rebuild its screen resources behind a `CompleteRecordedWork` drain (`composite_taa` about 34 ms). The covering configuration keeps its own plan; an exact match is still preferred.
 - Renderer commit `d80883b2` realizes the first cross-provider alias. `ReflectionMaterialResolvePass`, `SceneCompositePass` and the public SMAA output now borrow graph-owned bindings; SMAA retains ownership only of its two private edge/weight images. The arena also owns the physical-image state tracker, so a reused slot carries its real Vulkan state from reflection completion into the later SMAA write instead of restarting from a fictitious undefined state.
 - The actual SSSR+SMAA display graph deterministically maps three RGBA16F resources to two physical images: `ReflectionColor` and `AntiAliasedColor` share one slot because their lifetimes are disjoint, while `CompositeColor` remains separate because it overlaps both adjacent pass boundaries. A 30-frame Kokiri run covered 28 reflection resolves and 28 SMAA executions; 56 arena configurations allocated two slots once, reused the plan 55 times and reported one alias opportunity per presentation. Vulkan/NRI validation recorded zero errors. The composer now binds only optional guide inputs declared by its compiled pass, removing a hidden `AmbientGuide` attachment-layout dependency exposed by the validation run. Artifacts are under `I:/oot3dre_work/visual-parity/effect-transient-alias-20260825/`.
 - Follow-up renderer commit `868230ce` closes the multi-presentation SMAA mismatch at its source. The preparatory overlay presentation reuses the same world output, but the old key compared the graph-input extent against the packed display-transfer extent. Reuse is now keyed to the declared SMAA input domain; SSSR+SMAA records zero skipped passes, missing reads/resources and fallbacks across both presentations. SMAA-only also allocates its graph output without requiring an unrelated guide target and closes the same gates. Both validation profiles report zero Vulkan/NRI errors; the final artifacts use the `v3` and `smaa_only` suffixes in the same directory.
@@ -2193,6 +2194,15 @@ unit test.
 
 ### Optional Scene Environment Profiles (2026-09-23)
 
+Release defaults (2026-10-12): a package ships read-only profiles in
+`resources/environments/` (source `runtime/triaevum_resources/environments/`,
+release role `default_environment_profile`). A slot resolves the user's scene
+file, the release's scene file, the user's group standard, the release's group
+standard, then the base profile; F1 shows the release's files as "TriAevum
+default" and always saves to the user's directory. "Use group standard"
+removes the user's scene file, so a scene the release profiles returns to that
+profile.
+
 `oot3d_scene_environment` owns authored lighting profiles in the OOT3D adapter.
 The key is the native scene ID read from `PlayState + 0x104`, not a room,
 texture hash, actor, or renderer-generated identifier. Kokiri Forest is scene
@@ -3248,11 +3258,18 @@ Private captures, checkpoints, profiles and measurement reports remain under
 MXAO from Pascal Gilcher's iMMERSE is a separate module under its own licence,
 `runtime/three_ds_recomp/src/fast/immerse/` (see `LICENSE.md` there): it is not
 covered by TriAevum's GPL, and it is compiled only with
-`THREE_DS_RECOMP_ENABLE_IMMERSE`. Its graph contract is GTAO's: native FP32
-depth and the coverage-bearing normal guide in, the published R32F visibility
-out, composited before UI. TriAevum reaches it through `fast/oot3d/mxao_pass.h`;
-the port, its options, the temporal mode and their validation are documented
-in the module's [README](../runtime/three_ds_recomp/src/fast/immerse/README.md).
+`THREE_DS_RECOMP_ENABLE_IMMERSE`, into its own shared library
+(`triaevum_immerse`) beside the runtime. Its graph contract is GTAO's: native
+FP32 depth and the coverage-bearing normal guide in, the published R32F
+visibility out, composited before UI. TriAevum reaches it through
+`fast/oot3d/mxao_pass.h`, whose implementation loads the library through the
+MIT module interface `module_interface/triaevum/immerse_module.h` and serves
+it the renderer's NRI device, textures, programs and barriers (the pass's
+transitions are recorded as before). Without the library MXAO is unavailable,
+and `GraphicsSettingsRuntime::SnapshotForRendering` renders a configuration
+that selects it, like an unavailable CACAO, with AO Off. The port, its
+options, the temporal mode and their validation are documented in the
+module's [README](../runtime/three_ds_recomp/src/fast/immerse/README.md).
 
 ### Native AO normals
 
@@ -3434,6 +3451,120 @@ render resolution`, 357 of 360 frames; the scene was black). DLSS failed alike.
   The field FSR frame takes 2.35 ms, the upscaler scope (with the resampling)
   0.74 ms. Diagnostics: `upscaler_guide_resample_count`,
   `upscaler_guide_width/height`.
+
+### Upscaler motion (2026-10-12)
+
+DLSS shook with a still camera: in Hyrule Field the presented frame moved 0.44
+pixels from one frame to the next (AA off 0.003, TAA 0.09), following the
+jitter phases; with the jitter off it held still. The vectors it read were
+zero. The motion vectors are a transient of the graph execution that computes
+them, and their slot is taken by the plan's later passes once their last reader
+ran (`EffectTransientAllocationPlan`); the presentation that dispatches DLSS
+reused the vectors of the native boundary executed before it in the frame, so
+it read the slot's later contents (no motion), and the jitter step the colour
+carried was taken for motion.
+
+- Every graph execution that reads motion computes it (a compute pass at the
+  render resolution); none reads another execution's motion.
+- The upscalers take motion without the projection jitter: `UpscalerGuidePass`
+  now prepares the guides for every dispatch, resampled or not, and adds the
+  jitter step back to each texel that has motion (`UpscalerMotionWithoutJitter`);
+  texels without motion (the sky, backdrops drawn without depth) stay still.
+  FSR, DLSS and the D3D12 DLSS bridge no longer declare jittered motion.
+- Scene draws whose vertex program does not add the jitter (no temporal
+  variant) take the same sub-pixel step through their viewport, so the whole
+  scene the upscaler reads is jittered alike.
+- Field, still camera, DLSS Quality 1280x720: 0.002 pixels frame to frame
+  upright and stored (was 0.44), temporal flicker 0.99 (was 2.46; TAA 1.08).
+  Mid-pan the image is sharper (edge energy 10.94 against 8.70) with no trails.
+- Only an execution that runs a reader of motion (AO that reads it, SSSR,
+  GI, TAA, a temporal upscaler) computes it. A frame without native UI (the
+  Temple of Time cutscene between text boxes) presents the same plan twice;
+  the second execution reuses the first's AO, Hi-Z and reflection, and used
+  to write this frame's motion again into the slot the reflection shared with
+  it, so the scanout composed the motion as reflection. With temporal MXAO
+  (which reads motion) and the water reflections on, additive surfaces, where
+  the reactive mask is 1, turned black: the light from the windows, Navi's
+  glow. Frames with a text box compose at the boundary before UI and were not
+  affected. That second execution now runs no reader, so it computes no
+  motion. Where motion is computed anyway (GI runs in every execution), an
+  output of an earlier execution that shares its slot (reflection, working
+  colour, composite, SMAA, upscaled colour) is computed again, not reused.
+- Water reflections with Reflections Off trace Hi-Z for water only: a pixel
+  off the title's water bodies and the catalog's water planes writes zero. A
+  frame whose scene draws published neither (`mReflectableWaterFrame`) plans
+  no reflection, Hi-Z included; its image is unchanged. Temple of Time
+  cutscene, medians: frames with a text box 18.4 -> 16.6 ms on the GPU, frames
+  without 21.4 -> 15.7 ms (reflection 0.44 / 1.67 ms -> 0).
+
+### Lights that follow their surfaces (2026-10-12)
+
+The architecture's lights (Forge's scene light catalog) shone whenever their
+room was loaded. In Hyrule Castle the lit windows of the town below (glow
+cards) lit the hill by day, and Kakariko's windows lit the village by day,
+although the game showed no light there: it draws those glow cards in every
+frame and fades them with a combiner constant's alpha (0 by day, 1 at night;
+Kakariko's window shafts 0.5 at night).
+
+- `PicaSurfaceEmissionRegistry` (shared renderer, `pica_surface_emission.h`)
+  follows the surfaces a title names (base-level texture content hashes) and
+  measures how strongly each frame draws them: the combiner's output for white
+  textures and vertex colour (`EvaluatePicaTevProgram`, the CPU mirror of
+  `pica_evaluate_tev_resolved`), weighed by the blend's source factor
+  (`PicaUnitSurfaceEmission`); the strongest draw of a frame counts. Strengths
+  are read one frame late. A surface not drawn in a frame keeps its last
+  strength; one never drawn reads full.
+- The OoT3D adapter follows each catalog light's `surfaces` and scales the
+  light by the strongest of them before light selection; a light whose
+  surfaces were drawn dark is left out, so it takes no slot and no shadow.
+  Forge's generator names the surfaces (merged lights name both) and no longer
+  takes the opaque panes of a room that draws lit windows as additive glow for
+  lights.
+- Lamplight through a window now casts point shadows, like doorways: it sits
+  off the facade.
+
+### Torch stands are not lights (2026-10-12)
+
+The scene light catalog placed a light above every torch stand drawn in a
+room mesh, whether a flame burned on it or not. By day, Hyrule Field's
+drawbridge gate was lit, with shadows, by two torches that burn only at night;
+unlit stands in the Spirit Temple and Ganon's Castle lit their rooms too.
+
+- The flame on a stand is always an actor's: En_Light or Obj_Syokudai in the
+  dungeons (already lit as flames, group 2, while they burn), and at the
+  drawbridge Bg_Spot00_Hanebasi itself, which draws both flames at a scale
+  that grows from 0 as the bridge rises at night. The adapter now lights
+  those two flames from that scale (`oot3d_native_a32_fire_emitters.cpp`).
+- Forge's generator no longer turns torch stands into lights (catalog
+  revision 4: 127 fewer); the runtime refuses a catalog that still lists the
+  `torch` category, so an older one is regenerated, and no longer needs to
+  drop a stand's light where a flame actor already burns.
+
+### Grass coarse grid without actor shadows (2026-10-12)
+
+Link's and the actors' shadows reached the grass twice: through the local
+grids around Link and Epona, blade by blade, and through the coarse 4x4
+texture-colour grid, whose nodes sampled the composed shadow map and spread an
+actor's shadow over whole grid cells.
+
+- The directional shadow pass already keeps each layout's static casters'
+  depth (`DirectionalShadowStaticCache`), copied into the composed map before
+  the actors are drawn. That copy is now its intermediate phase (TransferRead),
+  and the pass completes with the displayed layouts' static atlases readable
+  (ShaderRead). The history snapshot names them (`StaticViews`: the newest
+  layout, then the older one while a dissolve runs).
+- The Grass pass declares a read of `DirectionalShadowStaticHistory` with the
+  composed history. Its grid compute runs twice over one pipeline: the coarse
+  nodes with the static atlases, the local nodes with the composed map. Each
+  layout of the static depth is its own one-region atlas, so the receiver
+  shader can read layout 1 from its own binding (`PICA_VSM_LAYOUT_ATLASES`).
+- Static shadows on the grass are unchanged (a pillar's shade: 69 against 70
+  of 255 in the same low-sun frame). With the local grids disabled, Link's
+  long shadow leaves the blades lit and stays on the ground only.
+- Actors without a local grid (all but Link and Epona) no longer shadow the
+  grass.
+- The geometry-provider plan's read mask accepted only the first 32 resources;
+  it now covers the graph's 64.
 
 ### Presentation stages under native UI
 

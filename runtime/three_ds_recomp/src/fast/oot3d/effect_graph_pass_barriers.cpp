@@ -63,8 +63,10 @@ namespace {
 [[nodiscard]] ResourceAccess CompletionAccessFor(
     EffectResource resource, ResourceAccess dispatchAccess,
     bool downstreamRead) noexcept {
+    // The static casters' depth is copied into the composed map, then left
+    // readable by the receivers that leave the actors out.
     if (resource == EffectResource::DirectionalShadowStaticCache)
-        return ResourceAccess::TransferRead;
+        return ResourceAccess::ShaderRead;
     if (resource == EffectResource::PresentationOutput) {
         return ResourceAccess::Present;
     }
@@ -219,7 +221,9 @@ EffectPassBarrierPlan BuildEffectPassBarrierPlan(
         const ResourceAccess completion = CompletionAccessFor(
             use.Resource, dispatch, downstreamRead);
         const ResourceAccess intermediate = use.Resource == EffectResource::DirectionalShadowMap
-            ? ResourceAccess::DepthAttachment : ResourceAccess::Undefined;
+            ? ResourceAccess::DepthAttachment
+            : use.Resource == EffectResource::DirectionalShadowStaticCache ? ResourceAccess::TransferRead
+                                                                          : ResourceAccess::Undefined;
         plan.mOutputs[plan.mOutputCount++] = {
             use.Resource, dispatch, completion, downstreamRead, intermediate};
         if (dispatch == ResourceAccess::Undefined) {

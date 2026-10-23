@@ -46,6 +46,14 @@ struct NativeBlendState {
     float ConstantColor[4] = { 0.0F, 0.0F, 0.0F, 0.0F };
 };
 
+// PICA enables its blend unit even for opaque ONE/ZERO replacement.
+[[nodiscard]] constexpr bool PicaBlendReplacesDestination(const NativeBlendState& blend) noexcept {
+    return !blend.Enabled ||
+           (blend.EquationRgb == NativeBlendEquation::Add && blend.EquationAlpha == NativeBlendEquation::Add &&
+            blend.SourceRgb == NativeBlendFactor::One && blend.DestRgb == NativeBlendFactor::Zero &&
+            blend.SourceAlpha == NativeBlendFactor::One && blend.DestAlpha == NativeBlendFactor::Zero);
+}
+
 enum class NativeCullMode : uint8_t {
     KeepAll,
     KeepClockwise,

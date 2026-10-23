@@ -27,6 +27,8 @@ struct GrassGpuInstanceCompactionRequest {
     const GrassInteractionField* InteractionField = nullptr;
     std::span<const GrassInteractor> Actors;
     const InteractiveGrassSettings* Settings = nullptr;
+    uint64_t SelectionRevision = 0;
+    bool AllowIdleReuse = false;
 };
 
 struct GrassGpuInstanceCompactionResult {
@@ -34,6 +36,8 @@ struct GrassGpuInstanceCompactionResult {
     uint32_t InstanceCount = 0U;
     uint64_t DynamicUploadedBytes = 0U;
     uint64_t StaticUploadedBytes = 0U;
+    bool SelectionUploadReused = false;
+    bool Reused = false;
     VkBuffer VisibleIndicesBuffer = VK_NULL_HANDLE;
     // One vec2 per instance: the interaction bend the previous frame drew,
     // or the current one where the blade has no previous frame.

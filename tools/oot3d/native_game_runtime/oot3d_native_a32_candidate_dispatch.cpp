@@ -11,8 +11,59 @@ bool ExecuteTopScreenUiSourcePortBlock(
     NativeCandidateDispatchState &dispatch,
     oot3d::recomp::a32::ExecutionResult *result, uint32_t *blocksConsumed) {
   auto &memory = *dispatch.Memory;
-  if (pc == Oot3dNativeGame::kTopScreenInputUpdateBoundary && dispatch.OcarinaText != nullptr) {
-    return dispatch.OcarinaText->Execute(state, result, blocksConsumed);
+  if (Oot3dNativeGame::ExecuteTopScreenDungeonMapIconCoordinate(
+          pc, state, result, blocksConsumed))
+    return true;
+  if (pc == Oot3dNativeGame::kTopScreenInputUpdateBoundary) {
+    // One guest continuation owns the boundary at a time; a requested pause
+    // transaction runs before the song text of the same update. The product
+    // build reaches TopScreen only through this boundary, so 2.1.1's
+    // 0x0041EAE0 controller work is delivered here, in the same update.
+    const bool textInFlight = dispatch.OcarinaText != nullptr && dispatch.OcarinaText->Pending();
+    if (!textInFlight && dispatch.PauseTransaction != nullptr &&
+        dispatch.PauseTransaction->Execute(state, result, blocksConsumed))
+      return true;
+    return dispatch.OcarinaText != nullptr &&
+           dispatch.OcarinaText->Execute(state, result, blocksConsumed);
+  }
+  if (pc == Oot3dNativeGame::kTopScreenSystemPageBoundary && dispatch.SystemPage != nullptr)
+    return dispatch.SystemPage->Execute(state, result, blocksConsumed);
+  // R6: the description is redrawn over the page this draw just placed on
+  // the upper screen (2.1.1 0x005D3344..0x005D3410).
+  if (pc == Oot3dNativeGame::kTopScreenItemDescriptionBoundary &&
+      dispatch.ItemDescription != nullptr &&
+      dispatch.ItemDescription->Execute(state, result, blocksConsumed))
+    return true;
+  // Shared wide-page upload (0x005DF428) and Items-only draw/cursor hooks
+  // (0x005D19F8, 0x005D1CBC, 0x005D1BE8).
+  if (dispatch.WideItems != nullptr) {
+    if (pc == Oot3dNativeGame::kTopScreenPageProjectionUploadCall) {
+      if (dispatch.SystemPage != nullptr && dispatch.SystemPage->Drawing()) {
+        try {
+          return dispatch.WideItems->ExecutePageProjection(state, true);
+        } catch (...) {
+          dispatch.SystemPage->Cancel();
+          throw;
+        }
+      }
+      Oot3dNativeGame::TopScreenPauseDrawInputs inputs;
+      if (!Oot3dNativeGame::ReadTopScreenPauseDrawInputs(memory, &inputs)) {
+        return false;
+      }
+      // The page goes to the upper screen as the target routing decides.
+      const bool pageRedraw = dispatch.TopScreenPausePageRedrawActive != nullptr &&
+                              *dispatch.TopScreenPausePageRedrawActive;
+      return dispatch.WideItems->ExecutePageProjection(
+          state,
+          Oot3dNativeGame::ResolveTopScreenPauseRouteActive(
+              inputs, &dispatch.TopScreenPauseRoute) ||
+              pageRedraw);
+    }
+    if (pc == Oot3dNativeGame::kTopScreenItemsPageDrawCall)
+      return dispatch.WideItems->ExecuteItemsDraw(state, result, blocksConsumed);
+    if (pc == Oot3dNativeGame::kTopScreenItemsCursorDrawCallA ||
+        pc == Oot3dNativeGame::kTopScreenItemsCursorDrawCallB)
+      return dispatch.WideItems->ExecuteCursorDraw(pc, state, result, blocksConsumed);
   }
   uint32_t nextPc = 0U;
   auto branchFromCallsite = [&](uint32_t target, uint32_t returnAddress) {
@@ -160,10 +211,14 @@ bool ExecuteTopScreenUiSourcePortBlock(
         return false;
       }
       if (dispatch.UiLifecycleBridge != nullptr) {
+        // 2.1.1 0x005D18F0: scene mode 5 has no pause edges.
         dispatch.UiLifecycleBridge->SetTopScreenPauseEdgePresentation(
-            Oot3dNativeGame::BuildTopScreenPauseEdgeGeometry(
-                inputs.Pause.HasScene, inputs.Pause.SceneMode,
-                inputs.Pause.RuntimeMode, 0U, 0, 1.0F, 1.0F));
+            Oot3dNativeGame::UseTopScreenSceneFiveViewport(inputs.Pause)
+                ? std::nullopt
+                : std::optional(Oot3dNativeGame::BuildTopScreenPauseEdgeGeometry(
+                      inputs.Pause.HasScene, inputs.Pause.SceneMode,
+                      inputs.Pause.RuntimeMode, 0U, 0, 1.0F, 1.0F,
+                      inputs.Pause.ChildStates[1] != 0U)));
       }
       return branchFromCallsite(pc + 4U, pc + 4U);
     }
@@ -231,18 +286,15 @@ bool ExecuteTopScreenUiSourcePortBlock(
     if (!Oot3dNativeGame::ReadTopScreenPauseDrawInputs(memory, &inputs)) {
       return false;
     }
-    if (!Oot3dNativeGame::UseTopScreenSceneFiveViewport(inputs)) {
-      if (dispatch.UiLifecycleBridge != nullptr) {
-        dispatch.UiLifecycleBridge->SetTopScreenPauseEdgePresentation(
-            std::nullopt);
-      }
-      return branchFromCallsite(pc + 4U, pc + 4U);
-    }
+    // No pause edges here: in scene mode 5 (the file select and the other
+    // frontend screens) 2.1.1 0x005D2078 leaves through 0x005D18F0 before its
+    // edge producer 0x005D0374.
     if (dispatch.UiLifecycleBridge != nullptr) {
       dispatch.UiLifecycleBridge->SetTopScreenPauseEdgePresentation(
-          Oot3dNativeGame::BuildTopScreenPauseEdgeGeometry(
-              inputs.HasScene, inputs.SceneMode, inputs.RuntimeMode, 0U, 0,
-              1.0F, 1.0F));
+          std::nullopt);
+    }
+    if (!Oot3dNativeGame::UseTopScreenSceneFiveViewport(inputs)) {
+      return branchFromCallsite(pc + 4U, pc + 4U);
     }
     state.r[0] = 0U;
     state.r[1] = 0U;
@@ -255,55 +307,35 @@ bool ExecuteTopScreenUiSourcePortBlock(
     if (!Oot3dNativeGame::ReadTopScreenPauseDrawInputs(memory, &inputs)) {
       return false;
     }
-    if (inputs.HasScene && inputs.SceneMode == 7U) {
+    if (inputs.HasScene && (inputs.SceneMode == 5U || inputs.SceneMode == 7U)) {
       return branchFromCallsite(pc + 4U, pc + 4U);
     }
     return branchFromCallsite(kPauseSceneSevenNativeDraw, pc + 4U);
   }
-  if (pc == kPauseSceneViewportDrawCall) {
-    auto branch = [&](uint32_t target, uint32_t returnAddress) {
-      state.r[14] = returnAddress;
-      state.r[15] = target;
-      *result = {oot3d::recomp::a32::ExitKind::Branch, target,
-                 oot3d::recomp::a32::FallbackReason::None, pc};
-      if (blocksConsumed != nullptr)
-        *blocksConsumed = 1U;
-      return true;
-    };
-    if (dispatch.TopScreenSceneViewportDrawPhase == 0U) {
-      Oot3dNativeGame::TopScreenPauseDrawInputs inputs;
-      if (!Oot3dNativeGame::ReadTopScreenPauseDrawInputs(memory, &inputs)) {
-        return false;
-      }
-      if (!Oot3dNativeGame::UseTopScreenSceneFiveViewport(inputs)) {
-        return branch(kPauseSceneViewportNativeDraw, pc + 4U);
-      }
-      dispatch.TopScreenSceneViewportDrawArgument = state.r[0];
-      dispatch.TopScreenSceneViewportDrawPhase = 1U;
-      state.r[0] = 0U;
-      state.r[1] = static_cast<uint32_t>(-80);
-      state.r[2] = 240U;
-      state.r[3] = 480U;
-      return branch(kGlViewportEntry, pc);
+  // 2.1.1 005DF518 / 005D3CBC: scene type 5 skips these calls.
+  // The 1.2 message viewport transaction is not present in 2.1.1.
+  if (pc == kPauseSceneFiveDrawCall || pc == kPauseSceneViewportDrawCall) {
+    Oot3dNativeGame::TopScreenPauseDrawInputs inputs;
+    if (!Oot3dNativeGame::ReadTopScreenPauseDrawInputs(memory, &inputs)) {
+      return false;
     }
-    if (dispatch.TopScreenSceneViewportDrawPhase == 1U) {
-      dispatch.TopScreenSceneViewportDrawPhase = 2U;
-      state.r[0] = dispatch.TopScreenSceneViewportDrawArgument;
-      return branch(kPauseSceneViewportNativeDraw, pc);
+    if (inputs.HasScene && inputs.SceneMode == 5U) {
+      return branchFromCallsite(pc + 4U, pc + 4U);
     }
-    dispatch.TopScreenSceneViewportDrawPhase = 0U;
-    dispatch.TopScreenSceneViewportDrawArgument = 0U;
-    state.r[0] = 0U;
-    state.r[1] = 0U;
-    state.r[2] = 240U;
-    state.r[3] = 320U;
-    return branch(kGlViewportEntry, pc + 4U);
+    return branchFromCallsite(pc == kPauseSceneFiveDrawCall
+                                  ? kPauseSceneFiveNativeDraw
+                                  : kPauseSceneViewportNativeDraw,
+                              pc + 4U);
   }
   if (pc == kPauseAlternateRendererUpdateCall) {
     if (!dispatch.TopScreenAlternateRendererRestore.has_value()) {
       Oot3dNativeGame::TopScreenPauseDrawInputs inputs;
       if (!Oot3dNativeGame::ReadTopScreenPauseDrawInputs(memory, &inputs)) {
         return false;
+      }
+      // 005D1920 tests scene type 5 before saving any renderer fields.
+      if (inputs.HasScene && inputs.SceneMode == 5U) {
+        return branchFromCallsite(pc + 4U, pc + 4U);
       }
       if (Oot3dNativeGame::UseTopScreenAlternatePauseViewport(inputs)) {
         Oot3dNativeGame::TopScreenAlternateRendererState saved;
@@ -437,13 +469,15 @@ bool ExecuteTopScreenUiSourcePortBlock(
             Oot3dNativeGame::TopScreenCameraGuestPhase::Idle) {
       std::uint16_t cameraSetting = 0U;
       std::uint16_t cameraIndex = 0xFFFFU;
+      std::uint32_t play = 0U;
       if (!memory.Read16(state.r[1] + 0x18AU, &cameraSetting) ||
-          !memory.Read16(state.r[1] + 0x1ACU, &cameraIndex)) {
+          !memory.Read16(state.r[1] + 0x1ACU, &cameraIndex) ||
+          !memory.Read32(state.r[1] + 0xD4U, &play)) {
         return false;
       }
       dispatch.TopScreenCameraFov =
           Oot3dNativeGame::ResolveTopScreenCameraFovOwnership(
-              {state.r[0], static_cast<std::int16_t>(cameraSetting),
+              {play, static_cast<std::int16_t>(cameraSetting),
                static_cast<std::int16_t>(cameraIndex)});
     }
     if (!dispatch.TopScreenCamera.Camera.Enabled) {
@@ -584,9 +618,10 @@ bool ExecuteTopScreenUiSourcePortBlock(
     }
   }
   if (pc == kTopScreenCameraFovScalar) {
+    // 005DF388 scales and clamps to 20..110 degrees at every percentage,
+    // 100 included.
     if (!dispatch.TopScreenCameraFov.Active ||
-        dispatch.TopScreenCameraFov.ValueAddress != state.r[4] + 0x10U ||
-        dispatch.TopScreenCamera.Camera.FovPercent == 100U) {
+        dispatch.TopScreenCameraFov.ValueAddress != state.r[4] + 0x10U) {
       return false;
     }
     std::uint32_t nativeFovBits = 0U;
@@ -740,9 +775,11 @@ bool ExecuteTopScreenUiSourcePortBlock(
       return false;
     }
     uint32_t pauseState = 0U;
-    if (!memory.Read32(0x0050AF68U, &pauseState))
+    Oot3dNativeGame::TopScreenPauseDrawInputs pageInputs;
+    if (!memory.Read32(0x0050AF68U, &pauseState) ||
+        !Oot3dNativeGame::ReadTopScreenPauseDrawInputs(memory, &pageInputs))
       return false;
-    if (Oot3dNativeGame::SuppressTopScreenTouchButtonDraw(pauseState)) {
+    if (Oot3dNativeGame::SuppressTopScreenTouchButtonPageDraw(pauseState, pageInputs)) {
       nextPc = pc + 4U;
     } else {
       state.r[14] = pc + 4U;
@@ -755,6 +792,14 @@ bool ExecuteTopScreenUiSourcePortBlock(
     // native BEQ therefore always takes the no-touch continuation.
     state.cpsr = (state.cpsr & ~((1U << 31U) | (1U << 30U))) | (1U << 30U);
     nextPc = kPauseTouchButtonsNoTouchExit;
+    break;
+  case kPauseTouchButtonsHeldDownQuery:
+    // TopScreen 2.1.1 replaces this PauseInput_GetHeldButtons call with
+    // `mov r0, #0`: held D-pad Down (0x80) never reaches the native 30-update
+    // counter at 0x0042E654 that calls PauseTouchButtons_TogglePrimaryRestriction
+    // (0x002F009C). The mod owns D-pad Down (Ocarina by default).
+    state.r[0] = 0U;
+    nextPc = kPauseTouchButtonsHeldDownTest;
     break;
   case kPauseLowerScreenBlock:
     nextPc = kPauseLowerScreenBlockEnd;
@@ -776,17 +821,27 @@ bool ExecuteTopScreenUiSourcePortBlock(
 } // namespace
 
 bool ExecuteProductTopScreenHook(uint32_t pc, oot3d::recomp::a32::GuestState &state,
-                                   oot3d::recomp::a32::MemoryBus &,
+                                   oot3d::recomp::a32::MemoryBus &memory,
                                    oot3d::recomp::a32::ExecutionResult *result,
                                    uint32_t blockBudget, uint32_t *blocksConsumed, void *user) {
   auto &dispatch = *static_cast<NativeCandidateDispatchState *>(user);
-  // Product opt-in UI mod, not the experimental source/gameplay dispatcher.
+  const bool observedExit = dispatch.ObservedExitPc == pc;
+  dispatch.ObservedExitPc.reset();
+  // Product opt-in UI mod, not the experimental source/gameplay dispatcher:
+  // the whole TopScreen source port, and nothing else.
   if (!dispatch.TopScreenUiProfile || dispatch.Memory == nullptr ||
-      (pc != kTopScreenCameraUpdateEntry && pc != kTopScreenCameraUpdatePatchSite &&
-       pc != kTopScreenCameraNormal1Scalar &&
-       pc != Oot3dNativeGame::kTopScreenInputUpdateBoundary &&
-       pc != kPauseRendererVisibilityNativeDraw &&
-       !Oot3dNativeGame::IsTopScreenItemDispatchEntry(pc))) return false;
+      !std::binary_search(dispatch.ProductTopScreenBlocks.begin(),
+                          dispatch.ProductTopScreenBlocks.end(), pc)) return false;
+  // As the developer interpreter does, the entry's block policy runs before
+  // its hook. An entry resumed after its own observable exit already ran it
+  // in compiled code; one reached by a hook's branch (0x0041E984 resumes at
+  // the input boundary 0x0041E988) or after a block budget has not. Outside
+  // compiled execution the policy cannot raise another exit.
+  if (!observedExit && dispatch.BlockEntry != nullptr &&
+      (dispatch.BlockEntryPcs.empty() ||
+       std::find(dispatch.BlockEntryPcs.begin(), dispatch.BlockEntryPcs.end(), pc) !=
+           dispatch.BlockEntryPcs.end()))
+    dispatch.BlockEntry(pc, state, memory, dispatch.BlockEntryUser);
   if (pc == kPauseRendererVisibilityNativeDraw) {
     auto &phase = dispatch.TopScreenGameOverDrawPhase;
     auto &saved = dispatch.TopScreenGameOverDrawRegisters;
@@ -852,9 +907,19 @@ bool ExecuteProductTopScreenHook(uint32_t pc, oot3d::recomp::a32::GuestState &st
         dispatch.BlockEntryPcs.data(), dispatch.BlockEntryPcs.size(), true, true, true);
   }
   const bool handled = ExecuteTopScreenUiSourcePortBlock(pc, state, dispatch, result, blocksConsumed);
-  if (handled) return true;
-  // This entry was already observed before returning to the dispatcher. If
-  // native ownership wins, resume it once instead of trapping the same entry.
+  if (handled) {
+    ++dispatch.TopScreenSourcePortCalls;
+    if (pc == kTopScreenGameplayCompositionPrefix) {
+      ++dispatch.TopScreenLowerCompositionSkips;
+      if (dispatch.PicaCompositionDomain != nullptr)
+        *dispatch.PicaCompositionDomain = Oot3dNativeGame::Oot3dPicaCompositionDomain::Ui;
+      if (dispatch.UiLifecycleBridge != nullptr)
+        dispatch.UiLifecycleBridge->ObserveGameplayComposition();
+    }
+    return true;
+  }
+  // The entry's policy ran above or before its observable exit. If native
+  // ownership wins, resume it once instead of trapping the same entry.
   return Oot3dNativeGame::ExecuteOot3dCompiledFunction(
       pc, state, *dispatch.Memory, result, blockBudget, blocksConsumed,
       dispatch.BlockEntry, dispatch.BlockEntryUser,

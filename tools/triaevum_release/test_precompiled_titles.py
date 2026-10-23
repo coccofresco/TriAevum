@@ -93,6 +93,7 @@ class PrecompiledTitleTests(unittest.TestCase):
             for kind, value in self.recipe["inputs"].items()})
         pack = self.root / "data/shader-seeds/test/portable.o3ps"
         water = self.root / "data/cache/water/test/water_textures.txt"
+        lights = self.root / "data/cache/scene-lights/test/scene_lights.json"
         order = []
         def step(name, result):
             def invoke(*args, **kwargs):
@@ -101,7 +102,8 @@ class PrecompiledTitleTests(unittest.TestCase):
             return invoke
         with patch("forge.load_prepared_content", return_value=prepared), \
                 patch("device_pipeline_preparation.adopt_existing_cache"), \
-                patch("topscreen_assets.prepare_topscreen_assets", return_value=None),                 patch("water_textures.prepare_water_textures", side_effect=step("water", water)), \
+                patch("topscreen_assets.prepare_topscreen_assets", return_value=None),                 patch("water_textures.prepare_water_textures", side_effect=step("water", water)),                 patch("scene_lights.prepare_scene_lights", side_effect=step("lights", lights)), \
+                patch("interior_sun.prepare_interior_sun", side_effect=step("sun", {})) as sun, \
                 patch("shader_preparation.prepare_shader_seed", side_effect=step("shaders", pack)), \
                 patch("shader_preparation.prepare_renderer_shader_cache",
                       side_effect=step("renderer", {"renderer_shader_preparation": "complete"})) as renderer, \
@@ -113,13 +115,17 @@ class PrecompiledTitleTests(unittest.TestCase):
             result = install_precompiled_title(title_directory, root=self.root, recipe=self.recipe,
                 data_root=self.root / "data", runtime_plugin=self.root / self.platform.title_module,
                 launch_profile=self.root / "TriAevum.launch.json", active_title_state=self.root / "data/active-title.json")
-        self.assertEqual(order, ["water", "shaders", "renderer", "pipelines", "package", "publish", "activate"])
+        self.assertEqual(order, ["water", "lights", "shaders", "sun", "renderer", "pipelines", "package", "publish", "activate"])
         cache = (self.root / "data/cache/renderer").resolve()
+        self.assertEqual(sun.call_args.kwargs["cache_directory"], cache)
+        self.assertEqual(sun.call_args.kwargs["romfs_sha256"], prepared.inputs["romfs"].sha256)
+        self.assertEqual(sun.call_args.kwargs["romfs"], prepared.inputs["romfs"].path)
         self.assertEqual(device.call_args.kwargs["cache_directory"], cache)
         self.assertEqual(renderer.call_args.kwargs["cache_directory"], cache)
         self.assertEqual(publish.call_args.kwargs["renderer_cache_directory"], cache)
         self.assertEqual(publish.call_args.kwargs["pica_shader_pack"], pack)
         self.assertEqual(publish.call_args.kwargs["water_texture_catalog"], water)
+        self.assertEqual(publish.call_args.kwargs["scene_light_catalog"], lights)
         self.assertEqual(result["objects_compiled"], 0)
 
 

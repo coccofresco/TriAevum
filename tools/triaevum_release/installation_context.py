@@ -26,10 +26,18 @@ class InstallationContext:
             internal = internal and base.resolve().is_relative_to(self.root.resolve())
         return "relative" if internal else "external"
 
-    def profile_argument(self, path: Path, profile: Path) -> str:
+    def profile_argument(self, path: Path, profile: Path, runtime_dir: Path | None = None) -> str:
+        # A file of the runtime's own package is named from the runtime's
+        # directory: an AppImage is mounted at a new path on every launch, so
+        # an absolute path into it is stale by the next start.
+        if runtime_dir is not None and path.resolve().is_relative_to(runtime_dir.resolve()):
+            return "${runtime_dir}/" + path.resolve().relative_to(runtime_dir.resolve()).as_posix()
         reference = self.reference(path, profile.parent)
         return reference if Path(reference).is_absolute() else "${profile_dir}/" + reference
 
 
-def expand_profile_argument(value: str, profile: Path) -> str:
+def expand_profile_argument(value: str, profile: Path, runtime_dir: Path | None = None) -> str:
+    """The runtime expands ${runtime_dir} to its executable's directory."""
+    if runtime_dir is not None:
+        value = value.replace("${runtime_dir}", runtime_dir.resolve().as_posix())
     return value.replace("${profile_dir}", profile.resolve().parent.as_posix())

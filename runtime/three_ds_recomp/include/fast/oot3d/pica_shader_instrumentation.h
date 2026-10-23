@@ -52,6 +52,11 @@ enum class PicaShaderInstrumentationFeature : uint32_t {
 #endif
 };
 
+// Every defined feature (FaceNormalGuide is the highest): persisted masks such
+// as pipeline recipes accept exactly these. A new feature extends it here.
+inline constexpr uint32_t kPicaShaderInstrumentationFeatureBits =
+    (static_cast<uint32_t>(PicaShaderInstrumentationFeature::FaceNormalGuide) << 1U) - 1U;
+
 constexpr PicaShaderInstrumentationFeature operator|(PicaShaderInstrumentationFeature left,
                                                      PicaShaderInstrumentationFeature right) noexcept {
     return static_cast<PicaShaderInstrumentationFeature>(static_cast<uint32_t>(left) | static_cast<uint32_t>(right));
@@ -109,6 +114,7 @@ struct PicaFragmentInstrumentationRequest {
     // (normal tilt per unit change of log2 luminance across one texel).
     uint8_t ReliefTexture = 0xffU;
     float ReliefGain = 0.0F;
+    bool TemporalInputs = true;
 };
 
 struct PicaFragmentInstrumentationOutputLayout {

@@ -805,7 +805,23 @@ dispatcher consumes the `START` edge and reproduces payload root
 priority, runs that page's original OoT3D reset function, writes pause state
 `2` and scene control `0`, then calls native `PauseInput_SetTouchEnabled(0,1)`.
 The original functions run through the generated A32 registry and the normal
-CTR host-service handler; no injected payload code is executed. The routing
+CTR host-service handler; no injected payload code is executed. Like the
+payload's own controller, they run inside the native UI update: the host
+queues the transaction and `TopScreenPauseTransactionRuntime`
+(`oot3d_top_screen_pause_transaction.h`) calls the reset, writes and touch
+service as guest branches at the input boundary `0x0041E988` of
+`PauseUi_Update`, then resumes that update with its own registers, the same
+continuation as the TopScreen song text. Calling them from the host refresh
+boundary instead (before 2026-10-13) interleaved them with a native routine
+the guest was suspended in: closing while the selected item's detail message
+was being prepared let the preparation finish after the reset, so the message
+reopened over gameplay with no page left to close it (issue #60, reproduced by
+`early_close_77` in `I:/_triaevum_work/issue60`), and closing while its icon
+was loading faulted in `ZAR_GetCMBByIndex`. The page is resolved again at
+delivery; a request the native update does not reach within eight host
+refreshes is dropped, START wins over a Save/Quit of the same refresh, and a
+savestate is neither written during a transaction nor restored into one. The
+routing
 applies equally to physical and deterministic timeline input, is disabled
 completely by `--ui-profile oot3d`, and does not affect the diagnostic `G`,
 `M`, and `I` page shortcuts.

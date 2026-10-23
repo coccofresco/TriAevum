@@ -1,0 +1,441 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "triaevum.scene-environment.v6",
+  "title": "TriAevum scene or group environment profile (version 6)",
+  "description": "Group standard: group-<groupId>[.night].environment.json. Profile fields and ranges match version 5; exactly one of groupId or sceneId is required. Scene saves remain version 5. Canonical filenames must match identity and timeOfDay; triaevum_environment_tool also validates these filename constraints.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "version",
+    "enabled",
+    "preserveSceneBrightness",
+    "nativeDirectStrength",
+    "nativeLocalStrength",
+    "nativeAmbientStrength",
+    "ambientColor",
+    "ambientIntensity",
+    "fogStrength",
+    "pointLights",
+    "directionalLights",
+    "keyLightDirection",
+    "keyLightAzimuthOffset",
+    "keyLightElevationOffset"
+  ],
+  "properties": {
+    "schema": {
+      "const": "triaevum.scene-environment"
+    },
+    "version": {
+      "const": 6
+    },
+    "sceneId": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 65535
+    },
+    "timeOfDay": {
+      "enum": [
+        "day",
+        "night"
+      ]
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "preserveSceneBrightness": {
+      "type": "boolean"
+    },
+    "nativeDirectStrength": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 2
+    },
+    "nativeLocalStrength": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 2
+    },
+    "nativeAmbientStrength": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 2
+    },
+    "ambientColor": {
+      "type": "array",
+      "items": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "Linear RGB 0..1"
+    },
+    "ambientIntensity": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 2
+    },
+    "fogStrength": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Scales the scene's own fog"
+    },
+    "pointLights": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "enabled",
+          "intensity",
+          "radiusScale",
+          "colorTint"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "intensity": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 8
+          },
+          "radiusScale": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 8
+          },
+          "colorTint": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Linear RGB 0..1"
+          }
+        }
+      },
+      "minItems": 2,
+      "maxItems": 3,
+      "description": "Scene point-light groups: Navi, fairies, flames (torches and fire objects the title draws but never lights); a profile listing two keeps the flames defaults"
+    },
+    "directionalLights": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "azimuth",
+          "elevation",
+          "color",
+          "intensity"
+        ],
+        "properties": {
+          "azimuth": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180,
+            "description": "Degrees: 0 toward +Z, 90 toward +X (direction toward the source)"
+          },
+          "elevation": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90,
+            "description": "Degrees above the horizon"
+          },
+          "color": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Linear RGB 0..1"
+          },
+          "intensity": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 4
+          }
+        }
+      },
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "Key light, fill light"
+    },
+    "keyLightDirection": {
+      "enum": [
+        "authored",
+        "scene_main",
+        "scene_ambient"
+      ]
+    },
+    "keyLightAzimuthOffset": {
+      "type": "number",
+      "minimum": -180,
+      "maximum": 180
+    },
+    "keyLightElevationOffset": {
+      "type": "number",
+      "minimum": -90,
+      "maximum": 90
+    },
+    "placedLights": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "type",
+          "visible",
+          "color",
+          "intensity",
+          "position",
+          "rotation",
+          "castShadows",
+          "radius",
+          "width",
+          "height",
+          "shape",
+          "twoSided",
+          "beamAngle",
+          "beamSoftness",
+          "range"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4294967295,
+            "description": "Unique in the profile"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "type": {
+            "enum": [
+              "sun",
+              "spot",
+              "point",
+              "surface",
+              "omni"
+            ]
+          },
+          "visible": {
+            "type": "boolean"
+          },
+          "color": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Linear RGB 0..1"
+          },
+          "intensity": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 16,
+            "description": "Spot/point: 1 is the colour at 100 units"
+          },
+          "position": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": -100000,
+              "maximum": 100000
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "World units, Y up (not used by a sun)"
+          },
+          "rotation": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Degrees: yaw (0 faces +Z, 90 +X), pitch (positive up, -90..90), roll (surface)",
+            "prefixItems": [
+              {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180
+              },
+              {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90
+              },
+              {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180
+              }
+            ]
+          },
+          "castShadows": {
+            "type": "boolean",
+            "description": "Never for a sun; point-shadow cube maps shared with Navi and the fairies"
+          },
+          "radius": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 20000,
+            "description": "Reach of point, omni and spot; radius of a disc surface"
+          },
+          "width": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 20000
+          },
+          "height": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 20000
+          },
+          "shape": {
+            "enum": [
+              "rectangle",
+              "disc"
+            ]
+          },
+          "twoSided": {
+            "type": "boolean"
+          },
+          "spread": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 180,
+            "description": "Optional (180 when missing). Surface: full angle, degrees, within which each point emits around the axis; 180 is diffuse, less straightens the light"
+          },
+          "beamAngle": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 179,
+            "description": "Spot: full beam angle, degrees"
+          },
+          "beamSoftness": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "range": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 20000,
+            "description": "Surface: reach"
+          }
+        }
+      },
+      "maxItems": 16
+    },
+    "rimLight": {
+      "description": "Optional modern rim. Missing object means off; missing source means independent. Owned and saved with this scene environment.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "intensity",
+        "sharpness",
+        "scope"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "intensity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 8
+        },
+        "sharpness": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "ambient": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.25,
+          "deprecated": true,
+          "description": "Legacy round-27 value: validated on read, ignored by rendering and omitted on save."
+        },
+        "scope": {
+          "enum": [
+            "actors",
+            "actorsAndWorld"
+          ]
+        },
+        "source": {
+          "enum": [
+            "independent",
+            "sceneLights"
+          ],
+          "default": "independent"
+        },
+        "color": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "default": [
+            1,
+            0.96,
+            0.9
+          ]
+        },
+        "azimuth": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180,
+          "default": 0,
+          "description": "Camera-relative degrees: 0 top, 90 right, -90 left, 180 bottom."
+        },
+        "coverage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.25,
+          "description": "0 directional edge; 1 entire silhouette. Independent source only."
+        }
+      }
+    },
+    "groupId": {
+      "enum": [
+        "indoor",
+        "outdoor-time-flows",
+        "outdoor-time-at-entry",
+        "outdoor-fixed-time"
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "required": [
+        "sceneId"
+      ]
+    },
+    {
+      "required": [
+        "groupId"
+      ]
+    }
+  ]
+}

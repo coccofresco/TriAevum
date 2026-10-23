@@ -78,13 +78,15 @@ float TopScreenBinaryCosine(std::uint16_t angle) noexcept {
 TopScreenCameraFovOwnership ResolveTopScreenCameraFovOwnership(
     const TopScreenCameraFovOwnershipInput &input) noexcept {
   TopScreenCameraFovOwnership ownership;
-  ownership.Active = input.OutputAddress != 0U && input.CameraIndex == 0 &&
-                     !IsTopScreenFreeCameraSettingBlocked(
-                         input.CameraSetting);
+  // 2.1.1 005DF318 keeps two flags: 005E3D2C (main camera) gates the FOV
+  // at 005DF388, while the blocked camera settings only clear the zoom flag
+  // 005E3D28. The FOV therefore applies in every main-camera setting.
+  ownership.Active = input.PlayAddress != 0U && input.CameraIndex == 0;
   if (ownership.Active) {
-    // Official 2.1.1 stores output + 0x198 and compares it with the value
-    // address loaded by the camera projection owner.
-    ownership.ValueAddress = input.OutputAddress + 0x198U;
+    // At 0x002D92B4 (vstr s25, [r0, #0x198] with r0 = camera->play) 2.1.1
+    // stores play + 0x198, the play view's FOV, and 005DF388 compares it
+    // with the view + 0x10 that 0x00478EB8 loads.
+    ownership.ValueAddress = input.PlayAddress + 0x198U;
   }
   return ownership;
 }

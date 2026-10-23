@@ -75,8 +75,11 @@ try {
     $data = Join-Path $installation 'data'
     if (Test-Path -LiteralPath $data) { throw 'Package already contains private data.' }
     $null = New-Item -ItemType Directory -Path $data
+    # Installation also catalogues water and scene lights and prebuilds the
+    # interior sun (seconds with the release's tables), and prepares the
+    # device's pipelines (about 3 minutes cold on the 12-thread reference PC).
     Invoke-RecordedProcess 'forge' (Join-Path $installation 'TriAevumForge.exe') @(
-        '--install-worker', '--rom', $romPath, '--data-root', $data, '--owner-pid', "$PID") 180
+        '--install-worker', '--rom', $romPath, '--data-root', $data, '--owner-pid', "$PID") 3600
     $events = @(Get-Content -LiteralPath (Join-Path $outputPath 'forge.stdout.log') |
         Where-Object { $_ -match '^\s*\{"forge_worker_event":' } |
         ForEach-Object { $_ | ConvertFrom-Json })
@@ -92,10 +95,12 @@ try {
     $receipt.forge_install_seconds = $complete.install_wall_seconds
     $statePath = Join-Path $outputPath 'runtime.json'
     $capturePath = Join-Path $outputPath 'framebuffer.bmp'
+    # The first launch renders under the preparation screen (about 30 s on
+    # the reference PC) before frame 600 can be captured.
     Invoke-RecordedProcess 'runtime' (Join-Path $installation 'TriAevum.exe') @(
         '--launch-profile', (Join-Path $installation 'TriAevum.launch.json'),
-        '--frames', '0', '--max-seconds', '30', '--benchmark-warmup-frames', '60',
-        '--output', $statePath, '--screenshot', $capturePath, '--screenshot-start-frame', '600') 90
+        '--frames', '1200', '--max-seconds', '120', '--benchmark-warmup-frames', '60',
+        '--output', $statePath, '--screenshot', $capturePath, '--screenshot-start-frame', '600') 240
     $state = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
     if ($state.ui_profile -ne 'topscreen' -or -not $state.frame_rate.visual_interpolation_active `
         -or $state.frame_rate.visual_sample_multiplier -ne 2 -or -not (Test-Path -LiteralPath $capturePath)) {

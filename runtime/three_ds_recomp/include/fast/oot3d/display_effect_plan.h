@@ -60,6 +60,11 @@ struct DisplayEffectPlanInput {
     bool OutlineEnabled = false;
     AntiAliasingMode AntiAliasing = AntiAliasingMode::Off;
     UpscalerProvider Upscaler = UpscalerProvider::Nis;
+    // The selected upscaler's provider can execute on this device now. A
+    // provider that is missing or was withdrawn after a failure plans no
+    // upscaler, so the display presents without one instead of declaring an
+    // output nobody writes.
+    bool UpscalerAvailable = true;
     bool GuideDiagnostics = false;
     // This boundary composes the scene inside the frame, at the native
     // consumer's own order, instead of at presentation. Only scene stages may

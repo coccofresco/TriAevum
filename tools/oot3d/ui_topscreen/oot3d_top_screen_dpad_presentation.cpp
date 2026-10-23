@@ -120,11 +120,53 @@ std::size_t AppendTopScreenDpadPresentation(
     const oot3d::ui::UiTextureIdentity &itemIcons,
     const oot3d::ui::UiTextureIdentity &pauseTopPage,
     std::vector<oot3d::ui::UiPrimitive> &output) {
-  if (!config.RenderHud || !config.RenderDpadIcons || !(alpha > 0))
+  if (!config.RenderHud || !(alpha > 0) ||
+      (viewState.PauseState >= 12U && viewState.PauseState <= 19U) ||
+      viewState.PauseState == 23U)
     return 0;
   const auto start = output.size();
   const auto &actions = state.Child ? config.ChildDpad : config.AdultDpad;
+  const bool navi = viewState.HasPlayState && viewState.StateType == 3U &&
+                    viewState.StateSubtype == 2U && viewState.PlayerHudMode != 0;
+  const auto view =
+      BuildTopScreenAuxiliaryTouchGeometry(viewState, {}, alpha).Quads[4];
+  constexpr std::array<float, 4> kViewLaneOffsetX{1.0F, 2.0F, 0.0F, 0.0F};
+  const auto firstView = std::find(actions.begin(), actions.end(), TopScreenDpadAction::View);
+  std::uint32_t viewCount = 0U;
+  const auto appendView = [&](std::size_t direction, bool laneCorrection) {
+    if (!view.Visible || pauseTopPage.semantic_name.empty()) return;
+    oot3d::ui::UiPrimitive p;
+    p.subsystem = oot3d::ui::UiSubsystem::GameplayHud;
+    p.role = oot3d::ui::UiPrimitiveRole::ActionButton;
+    p.owner_address = 0x005D4A8CU;
+    p.source_quad = 38U + viewCount++;
+    p.layer = 13U;
+    p.texture = pauseTopPage;
+    p.color = view.Color;
+    p.destination = {
+        view.Position.X + kCenterX[direction] - kCenterX[0] +
+            (laneCorrection ? kViewLaneOffsetX[direction] : 0.0F),
+        view.Position.Y + kCenterY[direction] - kCenterY[0],
+        view.Size.X, view.Size.Y};
+    p.uv = {view.AtlasOrigin.X / 512.0F, view.AtlasOrigin.Y / 256.0F,
+            view.AtlasSize.X / 512.0F, view.AtlasSize.Y / 256.0F};
+    output.push_back(std::move(p));
+  };
+  if (config.RenderDpadIcons && firstView != actions.end()) {
+    for (std::size_t direction = 0; direction < actions.size(); ++direction)
+      if (actions[direction] == TopScreenDpadAction::View) appendView(direction, true);
+  } else if (navi) {
+    // 005D77E0 / 005D9054: unmapped Navi is centered at (30,45).
+    // With display disabled, use the FIRST mapped center, without +1/+2.
+    const auto direction = firstView == actions.end()
+                               ? 0U : static_cast<std::size_t>(firstView - actions.begin());
+    appendView(direction, false);
+  }
+  // Unused 38..41 slots are parked at (500,300) with alpha 0 in the payload;
+  // host presentation is rebuilt each frame, so simply omit those slots.
+  if (!config.RenderDpadIcons) return output.size() - start;
   for (std::size_t direction = 0; direction < actions.size(); ++direction) {
+    if (actions[direction] == TopScreenDpadAction::View) continue;
     oot3d::ui::UiPrimitive p;
     p.subsystem = oot3d::ui::UiSubsystem::GameplayHud;
     p.role = oot3d::ui::UiPrimitiveRole::ActionButton;
@@ -141,17 +183,7 @@ std::size_t AppendTopScreenDpadPresentation(
       p.color.alpha *= state.ItemOpacity.Ocarina;
     p.destination = {kCenterX[direction] - kIconSize / 2,
                      kCenterY[direction] - kIconSize / 2, kIconSize, kIconSize};
-    if (actions[direction] == TopScreenDpadAction::View) {
-      const auto q =
-          BuildTopScreenAuxiliaryTouchGeometry(viewState, {}, alpha).Quads[4];
-      p.texture = pauseTopPage;
-      // Retain native view/gyro/telescope variants and move their anchor only.
-      p.destination = {q.Position.X + kCenterX[direction] - kCenterX[0],
-                       q.Position.Y + kCenterY[direction] - kCenterY[0],
-                       q.Size.X, q.Size.Y};
-      p.uv = {q.AtlasOrigin.X / 512, q.AtlasOrigin.Y / 256, q.AtlasSize.X / 512,
-              q.AtlasSize.Y / 256};
-    } else if (actions[direction] == TopScreenDpadAction::MinimapToggle) {
+    if (actions[direction] == TopScreenDpadAction::MinimapToggle) {
       // FUN_005D8AB8: map glyph is not an inventory ItemId.
       p.texture = itemIcons;
       p.uv = {420.0F / 512, 380.0F / 512, 42.0F / 512, 42.0F / 512};

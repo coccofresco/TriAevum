@@ -20,6 +20,8 @@ constexpr float kPlacedLightMaximumSize = 20000.0F;
 constexpr size_t kPointShadowRows = Fast::Renderer3ds::kMaximumPointShadowLights;
 constexpr const char *kPlacedLightTypeNames[] = {"sun", "spot", "point", "surface", "omni"};
 constexpr const char *kPlacedLightShapeNames[] = {"rectangle", "disc"};
+constexpr const char *kRimScopeNames[] = {"actors", "actorsAndWorld"};
+constexpr const char *kRimSourceNames[] = {"independent", "sceneLights"};
 constexpr float kRadians = std::numbers::pi_v<float> / 180.0F;
 
 std::string Join(const std::string &pointer, const std::string &key) { return pointer + "/" + key; }
@@ -157,6 +159,8 @@ PlacedLight DecodePlacedLight(Reader &read, const Json &object, const std::strin
   light.Height = read.Scalar(object, pointer, "height", 1.0F, kPlacedLightMaximumSize, 1.0F);
   light.Shape = read.Name<PlacedLightShape>(object, pointer, "shape", kPlacedLightShapeNames);
   light.TwoSided = read.Boolean(object, pointer, "twoSided");
+  // Optional: lights saved before it are diffuse surfaces.
+  if (object.contains("spread")) light.Spread = read.Scalar(object, pointer, "spread", 1.0F, 180.0F, 180.0F);
   light.BeamAngle = read.Scalar(object, pointer, "beamAngle", 1.0F, 179.0F, 1.0F);
   light.BeamSoftness = read.Scalar(object, pointer, "beamSoftness", 0.0F, 1.0F);
   light.Range = read.Scalar(object, pointer, "range", 1.0F, kPlacedLightMaximumSize, 1.0F);
@@ -187,6 +191,7 @@ Json EncodePlacedLight(const PlacedLight &light) {
           {"height", Number(light.Height)},
           {"shape", kPlacedLightShapeNames[static_cast<size_t>(light.Shape)]},
           {"twoSided", light.TwoSided},
+          {"spread", Number(light.Spread)},
           {"beamAngle", Number(light.BeamAngle)},
           {"beamSoftness", Number(light.BeamSoftness)},
           {"range", Number(light.Range)}};
@@ -217,6 +222,15 @@ std::vector<SceneEnvironmentDiagnostic> ValidateSceneEnvironment(const SceneEnvi
   scalar(profile.NativeAmbientStrength, "/nativeAmbientStrength", 0.0F, 2.0F);
   scalar(profile.AmbientIntensity, "/ambientIntensity", 0.0F, 2.0F);
   scalar(profile.FogStrength, "/fogStrength", 0.0F, 1.0F);
+  scalar(profile.Rim.Intensity, "/rimLight/intensity", 0.0F, Fast::Renderer3ds::kMaximumPicaRimIntensity);
+  scalar(profile.Rim.Sharpness, "/rimLight/sharpness", 1.0F, 16.0F);
+  scalar(profile.Rim.Azimuth, "/rimLight/azimuth", -180.0F, 180.0F);
+  scalar(profile.Rim.Coverage, "/rimLight/coverage", 0.0F, 1.0F);
+  triple(profile.Rim.Color, "/rimLight/color", 0.0F, 1.0F);
+  if (profile.Rim.Source > Fast::Renderer3ds::PicaRimLightSource::SceneLights)
+    read.Error("/rimLight/source", "is unknown");
+  if (profile.Rim.Scope > Fast::Renderer3ds::PicaRimLightScope::ActorsAndWorld)
+    read.Error("/rimLight/scope", "is unknown");
   triple(profile.AmbientColor, "/ambientColor", 0.0F, 1.0F);
   for (size_t i = 0; i < profile.Lights.size(); ++i) {
     const auto &light = profile.Lights[i];
@@ -229,6 +243,8 @@ std::vector<SceneEnvironmentDiagnostic> ValidateSceneEnvironment(const SceneEnvi
   scalar(profile.KeyAzimuthOffset, "/keyLightAzimuthOffset", -180.0F, 180.0F);
   scalar(profile.KeyElevationOffset, "/keyLightElevationOffset", -90.0F, 90.0F);
   if (profile.KeyDirection > KeyDirection::SceneAmbient) read.Error("/keyLightDirection", "is unknown");
+  if (profile.CasterFaces > Fast::Renderer3ds::ShadowCasterFaces::InteriorShells)
+    read.Error("/shadowCasterFaces", "is unknown");
   for (size_t i = 0; i < profile.PointLights.size(); ++i) {
     const auto &light = profile.PointLights[i];
     const auto pointer = Join("/pointLights", i);
@@ -262,6 +278,7 @@ std::vector<SceneEnvironmentDiagnostic> ValidateSceneEnvironment(const SceneEnvi
     scalar(light.Range, pointer + "/range", 1.0F, kPlacedLightMaximumSize);
     scalar(light.BeamAngle, pointer + "/beamAngle", 1.0F, 179.0F);
     scalar(light.BeamSoftness, pointer + "/beamSoftness", 0.0F, 1.0F);
+    scalar(light.Spread, pointer + "/spread", 1.0F, 180.0F);
   }
   return read.Errors;
 }
@@ -275,7 +292,7 @@ std::string DescribeSceneEnvironmentErrors(const std::vector<SceneEnvironmentDia
 }
 
 SceneEnvironmentDocument DecodeSceneEnvironment(const Json &doc, std::optional<uint16_t> expectedScene,
-                                                std::optional<bool> expectedNight) {
+                                                std::optional<bool> expectedNight, std::optional<SceneEnvironmentGroup> expectedGroup) {
   SceneEnvironmentDocument out;
   Reader read;
   if (!doc.is_object()) {
@@ -286,12 +303,18 @@ SceneEnvironmentDocument DecodeSceneEnvironment(const Json &doc, std::optional<u
     read.Error("/schema", "must be \"triaevum.scene-environment\"");
   int version = 0;
   if (const auto *value = read.Member(doc, "", "version")) {
-    if (const auto number = WholeNumber(*value, 1, 5))
+    if (const auto number = WholeNumber(*value, 1, 6))
       version = static_cast<int>(*number);
     else
-      read.Error("/version", "must be a whole number within 1..5");
+      read.Error("/version", "must be a whole number within 1..6");
   }
-  if (const auto *value = read.Member(doc, "", "sceneId")) {
+  if (doc.contains("groupId")) {
+    out.Group = ParseEnvironmentGroup(read.String(doc, "", "groupId"));
+    if (!out.Group) read.Error("/groupId", "must name a supported environment group");
+    if (version != 6) read.Error("/version", "group profiles require version 6");
+    if (doc.contains("sceneId")) read.Error("/sceneId", "group profiles must not name a scene");
+    if (expectedScene) read.Error("/groupId", "a scene file cannot contain a group standard");
+  } else if (const auto *value = read.Member(doc, "", "sceneId")) {
     if (const auto number = WholeNumber(*value, 0, 0xFFFF))
       out.SceneId = static_cast<uint16_t>(*number);
     else
@@ -300,6 +323,8 @@ SceneEnvironmentDocument DecodeSceneEnvironment(const Json &doc, std::optional<u
   if (out.SceneId && expectedScene && *out.SceneId != *expectedScene)
     read.Error("/sceneId", "names scene " + std::to_string(*out.SceneId) + "; the file is scene " +
                                std::to_string(*expectedScene) + "'s");
+  if (expectedGroup && out.Group != expectedGroup)
+    read.Error("/groupId", "must match the group named by the file");
   // A night profile names its time of day; the scene's own profile does not.
   if (const auto time = doc.find("timeOfDay"); time != doc.end()) {
     if (!time->is_string() || (*time != "day" && *time != "night"))
@@ -351,15 +376,23 @@ SceneEnvironmentDocument DecodeSceneEnvironment(const Json &doc, std::optional<u
     result.KeyAzimuthOffset = read.Scalar(doc, "", "keyLightAzimuthOffset", -180.0F, 180.0F);
     result.KeyElevationOffset = read.Scalar(doc, "", "keyLightElevationOffset", -90.0F, 90.0F);
   }
-  // Optional: profiles without it keep the title's culling.
-  if (doc.contains("shadowCasterCulling"))
-    result.ShadowCasterCulling = read.Boolean(doc, "", "shadowCasterCulling");
+  // New enum takes precedence; older profiles retain their exact policy.
+  using Faces = Fast::Renderer3ds::ShadowCasterFaces;
+  if (doc.contains("shadowCasterFaces")) {
+    const auto faces = read.String(doc, "", "shadowCasterFaces");
+    if (faces == "native") result.CasterFaces = Faces::Native;
+    else if (faces == "both") result.CasterFaces = Faces::BothFaces;
+    else if (faces == "interiorShells") result.CasterFaces = Faces::InteriorShells;
+    else read.Error("/shadowCasterFaces", "must be native, both or interiorShells");
+  } else if (doc.contains("shadowCasterCulling")) {
+    result.CasterFaces = read.Boolean(doc, "", "shadowCasterCulling") ? Faces::Native : Faces::BothFaces;
+  }
   if (version >= 2) {
     if (const auto *points = read.Member(doc, "", "pointLights")) {
       // Profiles from before the flames group list two; it keeps its defaults.
       if (!points->is_array() || points->size() < 2U || points->size() > result.PointLights.size()) {
         read.Error("/pointLights", "must be an array of 2 or " + std::to_string(result.PointLights.size()) +
-                                       " point-light groups (Navi, fairies, flames)");
+                                       " point-light groups (Navi, fairies, flames, architecture)");
       } else {
         for (size_t i = 0; i < points->size(); ++i) {
           auto &light = result.PointLights[i];
@@ -374,6 +407,31 @@ SceneEnvironmentDocument DecodeSceneEnvironment(const Json &doc, std::optional<u
           light.ColorTint = read.Triple((*points)[i], pointer, "colorTint", 0.0F, 1.0F);
         }
       }
+    }
+  }
+  // Optional extension: old profiles retain their exact rim-off behavior.
+  if (const auto rim = doc.find("rimLight"); rim != doc.end()) {
+    if (!rim->is_object()) {
+      read.Error("/rimLight", "must be an object");
+    } else {
+      result.Rim.Enabled = read.Boolean(*rim, "/rimLight", "enabled");
+      result.Rim.Intensity = read.Scalar(*rim, "/rimLight", "intensity", 0.0F,
+                                         Fast::Renderer3ds::kMaximumPicaRimIntensity);
+      result.Rim.Sharpness = read.Scalar(*rim, "/rimLight", "sharpness", 1.0F, 16.0F, 4.0F);
+      // Round-27 objects need no new members. Ambient is accepted/validated
+      // for migration but is no longer a rendering control or encoded field.
+      if (rim->contains("ambient")) (void)read.Scalar(*rim, "/rimLight", "ambient", 0.0F, 0.25F);
+      if (rim->contains("source"))
+        result.Rim.Source = read.Name<Fast::Renderer3ds::PicaRimLightSource>(*rim, "/rimLight", "source", kRimSourceNames);
+      if (rim->contains("color")) result.Rim.Color = read.Triple(*rim, "/rimLight", "color", 0.0F, 1.0F);
+      if (rim->contains("azimuth")) result.Rim.Azimuth = read.Scalar(*rim, "/rimLight", "azimuth", -180.0F, 180.0F);
+      if (rim->contains("coverage")) result.Rim.Coverage = read.Scalar(*rim, "/rimLight", "coverage", 0.0F, 1.0F);
+      result.Rim.Scope = read.Name<Fast::Renderer3ds::PicaRimLightScope>(*rim, "/rimLight", "scope", kRimScopeNames);
+      for (auto it = rim->begin(); it != rim->end(); ++it)
+        if (it.key() != "enabled" && it.key() != "intensity" && it.key() != "sharpness" &&
+            it.key() != "ambient" && it.key() != "scope" && it.key() != "source" &&
+            it.key() != "color" && it.key() != "azimuth" && it.key() != "coverage")
+          read.Error(Join("/rimLight", it.key()), "is unknown");
     }
   }
   // Optional in version 5: a profile without placed lights omits them, and
@@ -408,10 +466,15 @@ SceneEnvironmentDocument DecodeSceneEnvironment(const Json &doc, std::optional<u
 
 SceneEnvironmentFile LoadSceneEnvironmentFile(const std::filesystem::path &path,
                                               std::optional<uint16_t> expectedScene,
-                                              std::optional<bool> expectedNight) {
+                                              std::optional<bool> expectedNight, std::optional<SceneEnvironmentGroup> expectedGroup) {
   SceneEnvironmentFile file;
   std::error_code error;
   file.Exists = std::filesystem::exists(path, error);
+  if (error) {
+    file.Exists = true; // Unreadable is not absent; do not silently fall back.
+    file.Document.Errors.push_back({"", "cannot inspect file: " + error.message()});
+    return file;
+  }
   if (!file.Exists) {
     file.Document.Errors.push_back({"", "does not exist"});
     return file;
@@ -430,11 +493,19 @@ SceneEnvironmentFile LoadSceneEnvironmentFile(const std::filesystem::path &path,
   }
   file.Text = text.str();
   try {
-    file.Document = DecodeSceneEnvironment(Json::parse(file.Text), expectedScene, expectedNight);
+    file.Document = DecodeSceneEnvironment(Json::parse(file.Text), expectedScene, expectedNight, expectedGroup);
   } catch (const Json::parse_error &parse) {
     file.Document.Errors.push_back({"", std::string("is not valid JSON: ") + parse.what()});
   }
   return file;
+}
+
+Json EncodeGroupEnvironment(const SceneEnvironmentProfile& profile, SceneEnvironmentGroup group, bool night) {
+  auto result = EncodeSceneEnvironment(profile, 0, night);
+  result.erase("sceneId");
+  result["version"] = 6;
+  result["groupId"] = EnvironmentGroupId(group);
+  return result;
 }
 
 Json EncodeSceneEnvironment(const SceneEnvironmentProfile &value, uint16_t scene, bool night) {
@@ -461,12 +532,20 @@ Json EncodeSceneEnvironment(const SceneEnvironmentProfile &value, uint16_t scene
                  {"ambientColor", Triple(value.AmbientColor)},
                  {"ambientIntensity", Number(value.AmbientIntensity)},
                  {"fogStrength", Number(value.FogStrength)},
+                 {"rimLight", {{"enabled", value.Rim.Enabled}, {"intensity", Number(value.Rim.Intensity)},
+                               {"sharpness", Number(value.Rim.Sharpness)}, {"color", Triple(value.Rim.Color)},
+                               {"azimuth", Number(value.Rim.Azimuth)}, {"coverage", Number(value.Rim.Coverage)},
+                               {"source", value.Rim.Source == Fast::Renderer3ds::PicaRimLightSource::SceneLights
+                                              ? "sceneLights" : "independent"},
+                               {"scope", value.Rim.Scope == Fast::Renderer3ds::PicaRimLightScope::ActorsAndWorld
+                                             ? "actorsAndWorld" : "actors"}}},
                  {"pointLights", std::move(points)},
                  {"directionalLights", std::move(lights)},
                  {"keyLightDirection", EncodeKeyDirection(value.KeyDirection)},
                  {"keyLightAzimuthOffset", Number(value.KeyAzimuthOffset)},
                  {"keyLightElevationOffset", Number(value.KeyElevationOffset)},
-                 {"shadowCasterCulling", value.ShadowCasterCulling}};
+                 {"shadowCasterFaces", value.CasterFaces == Fast::Renderer3ds::ShadowCasterFaces::Native ? "native" :
+                      value.CasterFaces == Fast::Renderer3ds::ShadowCasterFaces::BothFaces ? "both" : "interiorShells"}};
   if (night) result["timeOfDay"] = "night";
   if (!value.PlacedLights.empty()) {
     Json placed = Json::array();
@@ -518,6 +597,7 @@ Fast::Renderer3ds::PicaPlacedLight ResolvePlacedLight(const PlacedLight &light, 
     result.HalfWidth = light.Shape == PlacedLightShape::Disc ? light.Radius : light.Width * 0.5F;
     result.HalfHeight = light.Shape == PlacedLightShape::Disc ? light.Radius : light.Height * 0.5F;
     result.TwoSided = light.TwoSided;
+    result.Spread = light.Spread;
   }
   const float halfAngle = light.BeamAngle * 0.5F * kRadians;
   result.CosOuter = std::cos(halfAngle);
@@ -539,13 +619,14 @@ Fast::Renderer3ds::PicaEnvironmentLighting ResolveSceneEnvironment(const SceneEn
   result.AmbientColor = value.AmbientColor;
   result.AmbientIntensity = value.AmbientIntensity;
   result.FogStrength = value.FogStrength;
+  result.Rim = value.Rim;
   result.PointLights = value.PointLights;
   for (const auto &light : value.PlacedLights) {
     if (!light.Visible || result.PlacedLightCount == result.PlacedLights.size()) continue;
     result.PlacedLights[result.PlacedLightCount++] =
         ResolvePlacedLight(light, PlacedLightIdentity(scene, night, light.Id));
   }
-  result.ShadowCasterCulling = value.ShadowCasterCulling;
+  result.CasterFaces = value.CasterFaces;
   result.KeyDirection = value.KeyDirection;
   result.KeyAzimuthOffset = value.KeyAzimuthOffset * kRadians;
   result.KeyElevationOffset = value.KeyElevationOffset * kRadians;
@@ -576,6 +657,7 @@ Json ExplainSceneEnvironment(const SceneEnvironmentProfile &profile, uint16_t sc
                       {"radiusScale", Number(resolved.PointLights[i].RadiusScale)},
                       {"colorTint", Triple(resolved.PointLights[i].ColorTint)}});
   Json renderer = {{"enabled", resolved.Enabled},
+                   {"rimLight", EncodeSceneEnvironment(profile, scene, night).at("rimLight")},
                    {"scopeIdentity", std::to_string(resolved.ScopeIdentity)},
                    {"scenePointLightGroups", std::move(groups)},
                    {"preserveSceneBrightness", resolved.PreserveSceneBrightness},
@@ -585,7 +667,8 @@ Json ExplainSceneEnvironment(const SceneEnvironmentProfile &profile, uint16_t sc
                      {"ambient", Number(resolved.NativeAmbientStrength)}}},
                    {"ambient", {{"color", Triple(resolved.AmbientColor)}, {"intensity", Number(resolved.AmbientIntensity)}}},
                    {"fogStrength", Number(resolved.FogStrength)},
-                   {"shadowCasterCulling", resolved.ShadowCasterCulling},
+                   {"shadowCasterFaces", resolved.CasterFaces == Fast::Renderer3ds::ShadowCasterFaces::Native ? "native" :
+                      resolved.CasterFaces == Fast::Renderer3ds::ShadowCasterFaces::BothFaces ? "both" : "interiorShells"},
                    {"keyLight",
                     {{"follows", EncodeKeyDirection(resolved.KeyDirection)},
                      {"offsetDegrees", Json::array({Number(profile.KeyAzimuthOffset), Number(profile.KeyElevationOffset)})},
@@ -621,6 +704,7 @@ Json ExplainSceneEnvironment(const SceneEnvironmentProfile &profile, uint16_t sc
       entry["widthAxisWorld"] = DirectionJson(light.TangentWorld);
       entry["halfExtents"] = Json::array({Number(light.HalfWidth), Number(light.HalfHeight)});
       entry["twoSided"] = light.TwoSided;
+      entry["spreadDegrees"] = Number(light.Spread);
     }
     placed.push_back(std::move(entry));
   }

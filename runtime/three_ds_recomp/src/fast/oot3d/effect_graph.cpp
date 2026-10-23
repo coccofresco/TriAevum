@@ -590,8 +590,12 @@ CompiledEffectGraph BuildPicaExtensionGraph(const PicaAttachmentFeatureRequests&
     std::vector<EffectResourceUse> grassResources{
         Read(EffectResource::PicaSceneFrame), Read(EffectResource::NativeSceneView),
         Write(EffectResource::ExtensionGeometry)};
-    if (requests.DirectionalShadows)
+    // Its coarse grid reads the static casters' depth (no actor shadows) and
+    // its refinement near the actors the composed map.
+    if (requests.DirectionalShadows) {
         grassResources.push_back(Read(EffectResource::DirectionalShadowHistory));
+        grassResources.push_back(Read(EffectResource::DirectionalShadowStaticHistory));
+    }
     graph.Add({ .Name = std::string(PicaExtensionPassName(PicaExtensionPass::InteractiveGrass)),
                 .Enabled = requests.InteractiveGrass,
                 .Stage = EffectStage::BeforeTransparent,

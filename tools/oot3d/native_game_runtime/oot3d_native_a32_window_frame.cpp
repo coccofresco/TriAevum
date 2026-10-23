@@ -2,6 +2,7 @@
 #include "oot3d_native_a32_window_session.h"
 #include "mm3d_scene_environment.h"
 #include "fast/renderer3ds/pica_surface_debug.h"
+#include "oot3d_native_room_shadow_shell.h"
 
 namespace Oot3dA32Window {
 
@@ -217,7 +218,8 @@ bool NativeA32WindowSession::RunFrame() {
           : Oot3dNativeGame::Oot3dPicaCompositionDomain::Unknown;
   bool topScreenStartRoutingEligible =
       uiLifecycleBridge.NativeGameplayPresentationActive() &&
-      topScreenGameplayInputMode;
+      topScreenGameplayInputMode &&
+      Oot3dNativeGame::IsTopScreenStartRoutingMode(topScreenNativeGameMode);
   Oot3dNativeGame::NativeAimProfileTransform aimProfileTransform;
   if (nativeCandidateDispatch.TopScreenUiProfile) {
     const auto topScreenAim =
@@ -636,7 +638,8 @@ bool NativeA32WindowSession::SampleGuestRefreshInput(
             topScreenNativeGameMode);
     topScreenStartRoutingEligible =
         uiLifecycleBridge.NativeGameplayPresentationActive() &&
-        refreshedTopScreenGameplayInputMode;
+        refreshedTopScreenGameplayInputMode &&
+        Oot3dNativeGame::IsTopScreenStartRoutingMode(topScreenNativeGameMode);
     picaCompositionDomain =
         refreshedTopScreenGameplayInputMode
             ? Oot3dNativeGame::Oot3dPicaCompositionDomain::Scene
@@ -794,9 +797,28 @@ bool NativeA32WindowSession::UpdateGuestServicesForRefresh(
     const bool rightShoulderHeld =
         (buttons &
          button(Oot3dNativeGame::NativeA32HidButton::R)) != 0U;
-    const bool selectPressed =
+    bool selectPressed =
         (pressed &
          button(Oot3dNativeGame::NativeA32HidButton::Select)) != 0U;
+    // R6 (2.1.1 0x005D5730..5BC0): on an open Items/Gear page SELECT toggles
+    // the item description; it reaches the gameplay routes (minimap, Save)
+    // only while the pause controller is in its gameplay state.
+    if (Oot3dNativeGame::TopScreenItemDescriptionInputs description;
+        Oot3dNativeGame::ReadTopScreenItemDescriptionInputs(process.Memory(), &description)) {
+      auto &descriptionRuntime = *nativeCandidateDispatch.ItemDescription;
+      if (Oot3dNativeGame::UpdateTopScreenItemDescription(
+              description, selectPressed, descriptionRuntime.VisibleState())) {
+        descriptionRuntime.CountToggle();
+        std::string soundError;
+        if (!Oot3dNativeGame::PlayTopScreenUiSound(process, 0x01000498U,
+                                                   kTopScreenDirectCallReturn, &soundError))
+          throw std::runtime_error("TopScreen description sound failed: " + soundError);
+      }
+      if (selectPressed && Oot3dNativeGame::TopScreenItemDescriptionOwnsSelect(description)) {
+        selectPressed = false;
+        inputFrame.Hid.Buttons &= ~button(Oot3dNativeGame::NativeA32HidButton::Select);
+      }
+    }
     if (topScreenDpadActions.WasPressed(
             Oot3dNativeGame::TopScreenDpadAction::MinimapToggle) ||
         (selectPressed &&
@@ -868,38 +890,39 @@ bool NativeA32WindowSession::UpdateGuestServicesForRefresh(
     nativeCandidateDispatch.PreviousTopScreenButtons = buttons;
     nativeCandidateDispatch.TopScreenItems.DirectItemId =
         nativeCandidateDispatch.TopScreenGameplayActionRuntime.DirectItem.ActiveItemId;
+    nativeCandidateDispatch.PauseTransaction->AgeUndelivered();
     Oot3dNativeGame::TopScreenPauseDrawInputs pauseInputs;
     if (!Oot3dNativeGame::ReadTopScreenPauseDrawInputs(process.Memory(),
                                                        &pauseInputs)) {
       nativeCandidateDispatch.TopScreenPauseAotBarrier = true;
     } else {
+      // ChildStates: [0] Gear 0x00504484, [1] Items 0x0050672C,
+      // [2] Dungeon/World Map 0x00506CE8.
+      Oot3dNativeGame::ObserveTopScreenStartRoutingPage(
+          pauseInputs.ChildStates[1] != 0U, pauseInputs.ChildStates[0] != 0U,
+          pauseInputs.ChildStates[2] != 0U,
+          nativeCandidateDispatch.TopScreenStartRouting);
       const auto closePlan =
           Oot3dNativeGame::ResolveTopScreenPauseStartClose(
               pauseInputs,
               (pressed &
                button(Oot3dNativeGame::NativeA32HidButton::Start)) != 0U);
+      // The transactions run inside this refresh's native UI update
+      // (oot3d_top_screen_pause_transaction.h), not here: the guest may be
+      // suspended inside a routine whose tail would undo them.
       if (closePlan.Page !=
           Oot3dNativeGame::TopScreenPauseClosePage::None) {
-        std::string closeError;
-        if (!ApplyTopScreenPauseClose(process, closePlan, &closeError)) {
-          throw std::runtime_error(
-              "TopScreen START pause-close transaction failed: " +
-              closeError);
-        }
+        nativeCandidateDispatch.PauseTransaction->RequestStartClose();
         Oot3dNativeGame::MarkTopScreenStartCloseGestureConsumed(
             nativeCandidateDispatch.TopScreenStartRouting);
         inputFrame.Hid.Buttons &=
             ~button(Oot3dNativeGame::NativeA32HidButton::Start);
-        ++nativeCandidateDispatch.TopScreenPauseStartCloseCalls;
-        nativeCandidateDispatch.TopScreenPauseLastClosedPage =
-            closePlan.Page;
-        if (!Oot3dNativeGame::ReadTopScreenPauseDrawInputs(
-                process.Memory(), &pauseInputs)) {
-          throw std::runtime_error("TopScreen pause state could not be "
-                                   "read after START close");
-        }
-      }
-      if (activeTopScreenConfig.ExitItemsToSaveScreen) {
+        // START wins: a pending Save/Quit of the same page is dropped.
+        nativeCandidateDispatch.TopScreenPauseSystemOpen = {};
+      } else if (nativeCandidateDispatch.TopScreenStartRouting.OpenRequested) {
+        nativeCandidateDispatch.PauseTransaction->RequestOpenLastPage(
+            nativeCandidateDispatch.TopScreenStartRouting.LastPage);
+      } else if (activeTopScreenConfig.ExitItemsToSaveScreen) {
         const auto systemOpenPlan =
             Oot3dNativeGame::ResolveTopScreenPauseBSystemOpen(
                 pauseInputs,
@@ -908,21 +931,10 @@ bool NativeA32WindowSession::UpdateGuestServicesForRefresh(
                 nativeCandidateDispatch.TopScreenPauseSystemOpen);
         if (systemOpenPlan.Page !=
             Oot3dNativeGame::TopScreenPauseClosePage::None) {
-          std::string systemOpenError;
-          if (!ApplyTopScreenPauseSystemOpen(
-                  process, systemOpenPlan, &systemOpenError)) {
-            throw std::runtime_error(
-                "TopScreen B system-menu transaction failed: " +
-                systemOpenError);
-          }
-          ++nativeCandidateDispatch.TopScreenPauseSystemOpenCalls;
-          nativeCandidateDispatch.TopScreenPauseSystemSourcePage =
-              systemOpenPlan.Page;
-          if (!Oot3dNativeGame::ReadTopScreenPauseDrawInputs(
-                  process.Memory(), &pauseInputs)) {
-            throw std::runtime_error("TopScreen pause state could not be "
-                                     "read after B system-menu open");
-          }
+          nativeCandidateDispatch.PauseTransaction->RequestSystemOpen(
+              systemOpenPlan);
+          // 0x005D5478..5558: B-to-Save clears the description.
+          nativeCandidateDispatch.ItemDescription->Hide();
         }
       }
       const bool sceneRuntimeRoute = pauseInputs.HasScene &&
@@ -936,6 +948,7 @@ bool NativeA32WindowSession::UpdateGuestServicesForRefresh(
               &nativeCandidateDispatch.TopScreenAotPauseRoute);
     }
   }
+  nativeCandidateDispatch.TopScreenStartRouting.OpenRequested = false;
   if (scenarioBootstrap.has_value() && !scenarioBootstrap->Finished()) {
     std::string scenarioError;
     if (!scenarioBootstrap->Advance(
@@ -2210,13 +2223,30 @@ void NativeA32WindowSession::UpdateDevLab(uint64_t guestFrame) {
                                                     command.at("graphics")),
             current);
         const auto applied = graphicsSettings.Apply(decoded.Value, false);
+        const auto issueDetails = [](const auto& issues, const char* phase) {
+          auto details = Json::array();
+          for (const auto& issue : issues) {
+            details.push_back({{"field", issue.Field}, {"message", issue.Message}, {"corrected", issue.Corrected}});
+            std::fprintf(stderr, "TRIAEVUM_DEV_LAB_GRAPHICS_ISSUE phase=%s field=\"%s\" corrected=%d message=\"%s\"\n",
+                         phase, issue.Field.c_str(), issue.Corrected, issue.Message.c_str());
+          }
+          return details;
+        };
+        const auto effective = graphicsSettings.SnapshotForRendering();
+        const auto effectiveJson = Fast::Oot3d::SerializeGraphicsSettings(effective.Value);
         finish(applied.Accepted() && !decoded.UnsupportedFutureVersion ? "ok" : "failed",
                {{"frame", guestFrame}, {"decodeIssues", decoded.Issues.size()},
-                {"applyIssues", applied.Issues.size()}});
+                {"applyIssues", applied.Issues.size()},
+                {"decodeIssueDetails", issueDetails(decoded.Issues, "decode")},
+                {"applyIssueDetails", issueDetails(applied.Issues, "apply")},
+                {"effectiveSurfaceLighting", effectiveJson["Effects"]["SurfaceLighting"]},
+                {"effectiveDirectionalShadows", effectiveJson["Effects"]["DirectionalShadows"]["Mode"]},
+                {"effectiveCasterFaces", static_cast<unsigned>(effective.Environment.CasterFaces)}});
       } else if (op == "surface_trace") {
         // The surface-lighting candidates of the next frames, one JSON line each.
         Fast::Renderer3ds::PicaSurfaceDebug::Instance().RequestTrace(command.at("path").get<std::string>(),
-                                                                     command.value("frames", 1U));
+                                                                     command.value("frames", 1U),
+                                                                     command.value("census", false));
         finish("ok", {{"frame", guestFrame}});
       } else if (op == "surface_exempt") {
         // Candidates first..last keep their native appearance ({} clears).
@@ -2420,16 +2450,15 @@ void NativeA32WindowSession::PublishNativeSceneView() {
     sceneViewProbe.ObserveExternalSceneEnvironment(std::nullopt);
     snapshot = sceneViewProbe.Capture(process.Memory());
   }
-  // SaveContext nightFlag (+0x10): 1 at night; picks a scene's night profile.
-  constexpr uint32_t kSaveContextNightFlag = 0x00587968U;
-  // OoT3D's SaveContext and actor layout: another title's memory there is
-  // something else, so its night and player stay unknown until its adapter
-  // provides them.
+  // OoT3D's PlayState, SaveContext and actor layout: another title's memory
+  // there is something else, so its time and player come from its adapter.
   const bool oot3dTitle = titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur;
-  uint32_t nightFlag = 0U;
-  std::optional<bool> night;
-  if (oot3dTitle && process.Memory().Read32(kSaveContextNightFlag, &nightFlag))
-    night = nightFlag != 0U;
+  auto environmentTime = snapshot && oot3dTitle
+      ? Oot3dNativeGame::CaptureSceneEnvironmentTime(snapshot->PlayStateAddress, process.Memory())
+      : std::nullopt;
+  if (environmentTime)
+    environmentTime->Group = Oot3dNativeGame::CaptureNativeEnvironmentGroup(
+        snapshot->PlayStateAddress, process.Memory(), &environmentTime->AuthoredScene);
   // Where Link is (world position +0x28, shape yaw +0xBE: 0 faces +Z,
   // 0x4000 +X), for lights placed from F1.
   std::optional<Oot3dNativeGame::ScenePlayerPlacement> player;
@@ -2451,8 +2480,20 @@ void NativeA32WindowSession::PublishNativeSceneView() {
     }
   }
   if (titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d && snapshot && snapshot->Environment) {
-    night = snapshot->Environment->Night;
-    player = snapshot->Environment->Player;
+    // MM3D's adapter: its play context owns the time, the scene view's world
+    // identity stands for the authored scene (a restore is another world) and
+    // its clock drives the day/night blend once its night flag is read.
+    const auto& state = *snapshot->Environment;
+    Oot3dNativeGame::SceneEnvironmentTime time;
+    time.Owner = state.ContextIdentity;
+    time.AuthoredScene = snapshot->WorldIdentity;
+    if (state.Night) {
+      time.TimeDriven = true;
+      time.Night = *state.Night;
+      time.Clock = state.Clock.value_or(*state.Night ? 0x0000U : 0x8000U);
+    }
+    environmentTime = time;
+    player = state.Player;
   }
   // Light gizmos also show while the developer free camera looks around.
   bool freeCamera = false;
@@ -2461,10 +2502,14 @@ void NativeA32WindowSession::PublishNativeSceneView() {
   if (devEmitterLog && snapshot)
     devEmitterLog->Observe(++devEmitterFrames, snapshot->PlayStateAddress, snapshot->SceneId, process.Memory());
 #endif
-  renderStream.Submit([&, snapshot, night, player, freeCamera] {
-  sceneEnvironment->ObserveScene(snapshot ? snapshot->SceneId : std::nullopt, night, player,
-                                 snapshot ? snapshot->WorldIdentity : 0);
+  renderStream.Submit([&, snapshot, environmentTime, player, freeCamera] {
+  sceneEnvironment->ObserveScene(snapshot ? snapshot->SceneId : std::nullopt,
+      environmentTime.value_or(Oot3dNativeGame::SceneEnvironmentTime{}), player);
   sceneEnvironment->PollProfileFiles();
+  const auto shadowSettings = Fast::Oot3d::GraphicsSettingsRuntime::Instance().SnapshotForRendering();
+  picaCompositionTracker.SetRoomShadowShellsEnabled(
+      shadowSettings.Environment.CasterFaces == Fast::Renderer3ds::ShadowCasterFaces::InteriorShells &&
+      shadowSettings.Value.Effects.DirectionalShadows.Mode == Fast::Oot3d::DirectionalShadowMode::VirtualShadowMaps);
   sceneEnvironment->PublishLightGizmo(
       snapshot && snapshot->CameraAvailable ? std::optional(snapshot->Eye) : std::nullopt, freeCamera);
   if (!snapshot.has_value() ||

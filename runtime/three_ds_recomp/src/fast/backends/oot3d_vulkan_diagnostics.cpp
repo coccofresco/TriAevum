@@ -843,6 +843,8 @@ nlohmann::json FrameToJson(const Oot3dVulkanFrameDiagnostics& frame) {
         { "temporal_jitter_draw_count", frame.TemporalJitterDrawCount },
         { "rigid_motion_draw_count", frame.RigidMotionDrawCount },
         { "exact_motion_draw_count", frame.ExactMotionDrawCount },
+        { "motion_provenance_draw_counts", frame.MotionProvenanceDrawCounts },
+        { "temporal_match_reason_draw_counts", frame.TemporalMatchReasonDrawCounts },
         { "deformed_motion_draw_count", frame.DeformedMotionDrawCount },
         { "repeated_identity_motion_draw_count", frame.RepeatedIdentityMotionDrawCount },
         { "grass_motion_blade_count", frame.GrassMotionBladeCount },
@@ -2071,6 +2073,14 @@ void Oot3dVulkanDiagnostics::RecordPresentationTransaction(
 void Oot3dVulkanDiagnostics::SetPresentationState(
     Oot3dVulkanPresentationStateDiagnostics state) {
     mPresentationState = state;
+}
+
+void Oot3dVulkanDiagnostics::RecordTemporalCorrespondence(uint32_t reason, uint32_t provenance) {
+    if (!mActiveFrame.has_value()) return;
+    if (reason < mActiveFrame->TemporalMatchReasonDrawCounts.size())
+        ++mActiveFrame->TemporalMatchReasonDrawCounts[reason];
+    if (provenance < mActiveFrame->MotionProvenanceDrawCounts.size())
+        ++mActiveFrame->MotionProvenanceDrawCounts[provenance];
 }
 
 void Oot3dVulkanDiagnostics::RecordTemporalDraw(

@@ -233,6 +233,18 @@ void main() {
             const float discForm = discArea / (kPi * 10000.0F + discArea) * window(100, 1000);
             auto twoSided = light(PicaPlacedLightKind::Rectangle, { 0, 100, 0 }, { 0, 1, 0 }, 1000);
             twoSided.TwoSided = true;
+            // Spread 30: the footprint (radius 100 tan 15) lies inside the
+            // shape over the fragment and ends 73 units short of the rectangle
+            // beside it.
+            const auto straightened = [&](PicaPlacedLightKind kind, std::array<float, 3> position) {
+                auto value = light(kind, position, { 0, -1, 0 }, 1000);
+                value.Spread = 30;
+                return value;
+            };
+            const float besideDistance = std::sqrt(150.0F * 150.0F + 100.0F * 100.0F);
+            const float besideForm = 10000.0F * (100.0F / besideDistance) /
+                (kPi * (100.0F * 100.0F + 100.0F * 100.0F) + 10000.0F) * window(besideDistance, 1000) *
+                (100.0F / std::sqrt(100.0F * 100.0F + 100.0F * 100.0F));
             const std::vector<Placed> placed{
                 { light(PicaPlacedLightKind::Omni, { 0, 10, 0 }, { 0, -1, 0 }, 20), .2F + .5F * .75F, "omni" },
                 { light(PicaPlacedLightKind::Point, { 0, 100, 0 }, { 0, -1, 0 }, 1000), .2F + .5F * window(100, 1000),
@@ -248,6 +260,14 @@ void main() {
                   "one-sided rectangle facing away" },
                 { twoSided, .2F + .5F * rectangleForm, "two-sided rectangle facing away" },
                 { light(PicaPlacedLightKind::Disc, { 0, 100, 0 }, { 0, -1, 0 }, 1000), .2F + .5F * discForm, "disc" },
+                { straightened(PicaPlacedLightKind::Rectangle, { 0, 100, 0 }), .2F + .5F * rectangleForm,
+                  "straightened rectangle over the fragment" },
+                { straightened(PicaPlacedLightKind::Disc, { 0, 100, 0 }), .2F + .5F * discForm,
+                  "straightened disc over the fragment" },
+                { straightened(PicaPlacedLightKind::Rectangle, { 150, 100, 0 }), .2F,
+                  "straightened rectangle beside the fragment" },
+                { light(PicaPlacedLightKind::Rectangle, { 150, 100, 0 }, { 0, -1, 0 }, 1000), .2F + .5F * besideForm,
+                  "diffuse rectangle beside the fragment" },
                 { light(PicaPlacedLightKind::Sun, { 0, 0, 0 }, { 0, -1, 0 }, 0), .7F, "sun from above" },
                 { light(PicaPlacedLightKind::Point, { 0, 2000, 0 }, { 0, -1, 0 }, 1000), .2F, "point beyond its reach" },
             };

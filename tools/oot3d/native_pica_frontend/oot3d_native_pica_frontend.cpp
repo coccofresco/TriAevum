@@ -669,13 +669,22 @@ bool Oot3dNativePicaFrontend::SubmitGspCommand(
                     mLightingLuts->ContentHashAvailable = true;
                 }
                 const auto* metadata = resolveComposition(offsetWords);
-                const auto composition = metadata != nullptr
+                auto composition = metadata != nullptr
                     ? metadata->Attribution
                     : mCommandListCompositionDomain == Oot3dPicaCompositionDomain::Ui
                         ? Oot3dPicaCompositionAttribution{
                               Oot3dPicaCompositionLayer::Ui,
                               Oot3dPicaCompositionProvenance::NativeUiLifecycle, 0U, 0U}
                         : Oot3dPicaCompositionAttribution{};
+                if (composition.TemporalIdentity.Available()) {
+                    const uint64_t address = uint64_t{commandListAddress} + uint64_t{offsetWords} * 4U;
+                    if (metadata == nullptr || composition.TemporalPacketBeginAddress == 0 ||
+                        address < composition.TemporalPacketBeginAddress || address >= metadata->EndAddress)
+                        composition.TemporalIdentity = {};
+                    else
+                        composition.TemporalIdentity.Slot += address - composition.TemporalPacketBeginAddress;
+                }
+                composition.TemporalPacketBeginAddress = 0;
                 auto domain = mCommandListCompositionDomain;
                 switch (composition.Layer) {
                     case Oot3dPicaCompositionLayer::OpaqueWorld:

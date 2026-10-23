@@ -10,6 +10,9 @@ namespace Fast::Oot3d {
 struct GrassSettingsPanelState {
     TextureCatalogSelectionState TextureSelection;
     uint32_t SelectedSourceRuleId = 0;
+    GrassTextureSelector SelectedMask;
+    TextureCatalogSelectionState MaskTextureSelection;
+    bool HighlightMask = false;
     std::string Status;
 };
 

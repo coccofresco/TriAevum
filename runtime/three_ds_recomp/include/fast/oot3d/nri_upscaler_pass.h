@@ -4,10 +4,13 @@
 
 #include "fast/oot3d/effect_graph_pass_barriers.h"
 #include "fast/oot3d/linear_scene_color.h"
+#include "fast/oot3d/pica_surface_coordinates.h"
+#include "fast/oot3d/upscaler_orientation_pass.h"
 
 #include <vulkan/vulkan.h>
 
 #include <cstdint>
+#include <optional>
 #include <string>
 
 namespace Fast::Oot3d {
@@ -33,9 +36,15 @@ class NriUpscalerPass final {
     bool ExecuteFsr(VkCommandBuffer commandBuffer,
                     NriTemporalUpscaleDispatchDesc desc,
                     const EffectPassBarrierPlan& barrierPlan);
-    bool ExecuteDlss(VkCommandBuffer commandBuffer,
-                     NriTemporalUpscaleDispatchDesc desc,
-                     const EffectPassBarrierPlan& barrierPlan);
+    // With `upright`, DLSS reconstructs the frame the way the screen shows it
+    // (upscaler_orientation.h): its inputs are turned upright and its output
+    // turned back onto the declared surface. Without it, or when the turn is
+    // unavailable, it reconstructs the surface as stored.
+    bool ExecuteDlss(VkCommandBuffer commandBuffer, NriTemporalUpscaleDispatchDesc desc,
+                     const EffectPassBarrierPlan& barrierPlan,
+                     std::optional<PicaSurfaceCoordinates> upright = std::nullopt);
+    // Whether the last DLSS dispatch reconstructed upright.
+    [[nodiscard]] bool LastDispatchUpright() const;
     void InvalidateScreenResources();
 
     [[nodiscard]] bool Available() const;
@@ -53,10 +62,8 @@ class NriUpscalerPass final {
         const;
 
   private:
-    bool ExecuteTemporal(VkCommandBuffer commandBuffer,
-                         NriTemporalUpscaleDispatchDesc desc,
-                         UpscalerProvider provider,
-                         const EffectPassBarrierPlan& barrierPlan);
+    bool ExecuteTemporal(VkCommandBuffer commandBuffer, NriTemporalUpscaleDispatchDesc desc, UpscalerProvider provider,
+                         const EffectPassBarrierPlan& barrierPlan, std::optional<PicaSurfaceCoordinates> upright);
     void ReleaseOutput();
     bool BeginOutput(uint32_t frameIndex,
                      const EffectPassOutputBarrier& outputBarrier);
@@ -73,6 +80,8 @@ class NriUpscalerPass final {
     EffectPassBarrierExecution mLastBarrierExecution;
     ResourceStateTracker* mOutputStates = nullptr;
     SceneColorEncoding mOutputEncoding = SceneColorEncoding::Unknown;
+    UpscalerOrientationPass mOrientation;
+    bool mLastDispatchUpright = false;
     std::string mUnavailableReason = "NRI upscaler is not initialized";
 };
 

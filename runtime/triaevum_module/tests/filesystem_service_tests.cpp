@@ -246,6 +246,8 @@ int main() {
         rooted->Write(rootedFile.handle, 1U, saveBytes, &rootedWritten) ==
                 TRIAEVUM_MODULE_OK_V1 &&
             rootedWritten == saveBytes.size() &&
+            rooted->Read(rootedFile.handle, 2U, rootedBytes, &rootedRead) == TRIAEVUM_MODULE_OK_V1 &&
+            rootedRead.returnedSize == 1U && rootedRead.endOfFile &&
             rooted->Resize(rootedFile.handle, 8U) == TRIAEVUM_MODULE_OK_V1 &&
             rooted->Close(rootedFile.handle) == TRIAEVUM_MODULE_OK_V1 &&
             std::filesystem::file_size(saveRoot / "slot/save.bin") == 8U,

@@ -54,6 +54,7 @@ struct PicaSceneDrawRecordDesc {
     // Point lights the draw's lighting sees: the shared scene snapshot and its
     // own selected native sources (in shader slot order).
     std::shared_ptr<const ::Fast::Renderer3ds::PicaScenePointLights> ScenePoints;
+    std::shared_ptr<const ::Fast::Renderer3ds::RoomShadowShellScene> RoomShadows;
     std::array<::Fast::Renderer3ds::PicaNativeLightSource, 4> NativeLightSources{};
     ::Fast::Renderer3ds::VirtualShadowCaster ShadowCaster;
     PicaSceneResolvedRasterState Raster;

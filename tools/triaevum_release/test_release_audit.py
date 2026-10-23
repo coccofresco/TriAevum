@@ -57,6 +57,13 @@ FILES = {
     "LICENSES/LLVM-exception.txt": ("license", b"LLVM exception fixture\n"),
     "LICENSES/iMMERSE-MXAO.md": ("license", b"iMMERSE module exception fixture\n"),
     "LICENSES/iMMERSE-LICENSE.txt": ("license", b"iMMERSE license fixture\n"),
+    "triaevum_immerse.dll": ("separately_licensed_module", b"MZ iMMERSE module fixture"),
+    # The DLSS module is the one binary allowed to contain NGX code.
+    "triaevum_dlss.dll": ("separately_licensed_module", b"MZ DLSS module fixture NVSDK_NGX_VULKAN_Init"),
+    "nvngx_dlss.dll": ("separately_licensed_module", b"MZ NVIDIA DLSS runtime fixture"),
+    "LICENSES/NVIDIA-DLSS-SDK-LICENSE.txt": ("license", b"NVIDIA RTX SDKs licence fixture\n"),
+    "LICENSES/TriAevum-DLSS-module.md": ("license", b"DLSS module boundary fixture\n"),
+    "resources/environments/scene-0043.environment.json": ("default_environment_profile", b"{}\n"),
     "recipes/oot3d.json": ("revision_recipe", b'{"format":"recipe-test"}\n'),
 }
 
@@ -171,6 +178,55 @@ class PublicReleaseAuditTests(unittest.TestCase):
                                     enforce_readiness=False)
             self.assertFalse((root / "output").exists())
 
+    def test_separately_licensed_module_keeps_its_role(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            write_clean_package(root)
+            manifest_path = root / "release-manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            for item in manifest["files"]:
+                if item["path"] == "triaevum_immerse.dll":
+                    item["role"] = "runtime_library"
+            atomic_write_json(manifest_path, manifest)
+            result = audit_release(root)
+            self.assertFalse(result.ok)
+            self.assertTrue(any("separately licensed" in error for error in result.errors), result.errors)
+
+    def test_dlss_module_and_nvidia_runtime_keep_their_role(self) -> None:
+        for relative in ("triaevum_dlss.dll", "nvngx_dlss.dll"):
+            with self.subTest(path=relative), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                write_clean_package(root)
+                manifest_path = root / "release-manifest.json"
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                for item in manifest["files"]:
+                    if item["path"] == relative:
+                        item["role"] = "runtime_library"
+                atomic_write_json(manifest_path, manifest)
+                result = audit_release(root)
+                self.assertFalse(result.ok)
+                self.assertTrue(any(relative in error and "separately licensed" in error
+                                    for error in result.errors), result.errors)
+
+    def test_rejects_ngx_code_outside_the_dlss_module(self) -> None:
+        for relative in ("TriAevum.exe", "msvcp140.dll"):
+            with self.subTest(path=relative), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                write_clean_package(root)
+                path = root / relative
+                # Across the scanner's chunk boundary, too.
+                path.write_bytes(b"MZ" + b"\0" * (8 * 1024 * 1024 - 5) + b"NVSDK_NGX_Init")
+                manifest_path = root / "release-manifest.json"
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                for item in manifest["files"]:
+                    if item["path"] == relative:
+                        item.update(bytes=path.stat().st_size, sha256=sha256_file(path))
+                atomic_write_json(manifest_path, manifest)
+                result = audit_release(root)
+                self.assertFalse(result.ok)
+                self.assertTrue(any(relative in error and "proprietary SDK code" in error
+                                    for error in result.errors), result.errors)
+
     def test_accepts_exact_clean_allowlist(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -238,6 +294,25 @@ class PublicReleaseAuditTests(unittest.TestCase):
             self.assertEqual(audit(["vkCreateInstance", "vkQueuePresentKHR"]), [])
             self.assertEqual(audit(["vkCreateInstance", "vkWaitSemaphores"]),
                              ["TriAevum.exe imports Vulkan commands that older loaders lack: vkWaitSemaphores"])
+
+    def test_on_demand_vulkan_runtime_may_import_newer_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            write_clean_package(root)
+            manifest_path = root / "release-manifest.json"
+            manifest = json.loads(manifest_path.read_text())
+            library = root / "amd_fidelityfx_vk.dll"
+            library.write_bytes(pe_import_fixture({"vulkan-1.dll": ["vkWaitSemaphores"]}))
+            entry = {"path": "amd_fidelityfx_vk.dll", "role": "optional_vulkan_runtime",
+                     "bytes": library.stat().st_size, "sha256": sha256_file(library)}
+            manifest["files"].append(entry)
+            atomic_write_json(manifest_path, manifest)
+            self.assertEqual(list(audit_release(root).errors), [])
+            # The same library as an ordinary runtime library loads at startup.
+            entry["role"] = "runtime_library"
+            atomic_write_json(manifest_path, manifest)
+            self.assertEqual(list(audit_release(root).errors),
+                             ["amd_fidelityfx_vk.dll imports Vulkan commands that older loaders lack: vkWaitSemaphores"])
 
     def test_rejects_private_file_hidden_in_source_archive(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

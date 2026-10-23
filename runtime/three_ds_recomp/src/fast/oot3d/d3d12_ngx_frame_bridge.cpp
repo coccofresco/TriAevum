@@ -620,7 +620,7 @@ struct D3d12NgxFrameBridge::Impl {
         desc.type = nri::UpscalerType::DLSR;
         desc.mode = ToNriUpscalerMode(Contract.Quality);
         desc.flags = (Contract.InputSrgb ? nri::UpscalerBits::SRGB : nri::UpscalerBits::HDR) |
-                     nri::UpscalerBits::USE_REACTIVE | nri::UpscalerBits::MV_JITTERED;
+                     nri::UpscalerBits::USE_REACTIVE; // motion without jitter (upscaler_guides.h)
         // No USE_EXPOSURE flag deliberately selects NGX auto-exposure.
         desc.commandBuffer = &commandBuffer;
         if (UpscalerInterface->CreateUpscaler(*NriDevice, desc, Upscaler) != nri::Result::SUCCESS ||

@@ -1,4 +1,5 @@
 #include "fast/oot3d/motion_vectors.h"
+#include "fast/renderer3ds/pica_motion_provenance.h"
 #include "fast/oot3d/pica_surface_coordinates.h"
 
 #include <cmath>
@@ -115,7 +116,7 @@ void main(){
     // it is never inferred from texture colour.
     float reactive=texelFetch(sampler2D(material_guide,source_sampler),pixel,0).a;
     vec4 rigid=texelFetch(sampler2D(rigid_motion_guide,source_sampler),pixel,0);
-    if(rigid.b>0.5){ motion=rigid.rg; disocclusion=0.0; }
+)glsl" + std::string(Renderer3ds::PicaMotionGuideResolve) + R"glsl(
     imageStore(motion_output,pixel,vec4(motion,disocclusion,reactive));
     imageStore(reactive_output,pixel,vec4(reactive,0.0,0.0,1.0));
 }

@@ -1,3 +1,11 @@
+#include "fast/oot3d/grass_persistent_placement_cache.h"
+#include "fast/oot3d/grass_overlay_mask.h"
+#include "fast/oot3d/graphics_settings_persistence.h"
+#include <nlohmann/json.hpp>
+#include <atomic>
+#include <chrono>
+#include <cstring>
+#include <fstream>
 #include "fast/oot3d/grass_async_placement_builder.h"
 #include "fast/oot3d/grass_static_placement_cache.h"
 #include "fast/oot3d/grass_visibility.h"
@@ -403,6 +411,55 @@ TEST(Oot3dGrassStaticPlacement, CameraCutsDistanceChangesAndReturningSourcesNeve
     EXPECT_EQ(builder.Stats().Builds,beforeTransient);
 }
 
+TEST(Oot3dGrassStaticPlacement, OverlayAndShadowGridChangesKeepTheShownPlacementUntilReady) {
+    using namespace Fast::Oot3d;
+    auto request = BaseRequest();
+    request.Generation.InstancesPerSquareMeter = 4096;
+    std::vector<GrassAsyncPlacementRequest> requests{ request };
+    GrassStaticPlacementCache cache;
+    const auto shown = cache.Resolve(requests)[0].Placement;
+    ASSERT_NE(shown, nullptr);
+    // Overlays change twice in a row (a decal appears, then fades) before
+    // the first rebuild finishes: the frame never waits for either.
+    const auto overlays = [](uint64_t version) {
+        auto set = std::make_shared<GrassOverlaySet>();
+        set->Version = set->PlacementVersion = version;
+        return set;
+    };
+    for (uint64_t version : { 1U, 2U }) {
+        requests[0].Overlays = overlays(version);
+        ++requests[0].FrameId;
+        const auto result = cache.Resolve(requests)[0];
+        EXPECT_EQ(result.State, GrassAsyncPlacementState::Ready);
+        EXPECT_EQ(result.Placement, shown);
+    }
+    cache.WaitForIdle();
+    ++requests[0].FrameId;
+    const auto rebuilt = cache.Resolve(requests)[0].Placement;
+    ASSERT_NE(rebuilt, nullptr);
+    EXPECT_NE(rebuilt, shown);
+    EXPECT_TRUE(rebuilt->ShadowPoints.empty());
+    // Shadows begin to reach the grass: the placement without a shadow grid
+    // stays (drawn unshadowed) until the one with it is built.
+    requests[0].ShadowGrid = true;
+    ++requests[0].FrameId;
+    const auto shadowing = cache.Resolve(requests)[0];
+    EXPECT_EQ(shadowing.State, GrassAsyncPlacementState::Ready);
+    EXPECT_EQ(shadowing.Placement, rebuilt);
+    cache.WaitForIdle();
+    ++requests[0].FrameId;
+    const auto shadowed = cache.Resolve(requests)[0].Placement;
+    ASSERT_NE(shadowed, nullptr);
+    EXPECT_FALSE(shadowed->ShadowPoints.empty());
+    EXPECT_EQ(shadowed->ShadowReferences.size(), shadowed->Anchors.size());
+    // Anything else still applies in the same frame.
+    requests[0].HeightScale *= 2;
+    ++requests[0].FrameId;
+    const auto resized = cache.Resolve(requests)[0];
+    EXPECT_EQ(resized.State, GrassAsyncPlacementState::Ready);
+    EXPECT_NE(resized.Placement, shadowed);
+}
+
 TEST(Oot3dGrassStaticPlacement, FirstAdmissionHasCompleteCoverageWithoutIgnoringBlackMasks) {
     using namespace Fast::Oot3d;
     auto request = BaseRequest();
@@ -432,4 +489,345 @@ TEST(Oot3dGrassStaticPlacement, FirstAdmissionHasCompleteCoverageWithoutIgnoring
     EXPECT_TRUE(masked[0].Placement->Anchors.empty());
     cache.WaitForIdle();
     EXPECT_TRUE(cache.Resolve(requests)[0].Placement->Anchors.empty());
+}
+
+namespace {
+struct GrassDiskFixture : testing::Test {
+    std::filesystem::path Directory =
+        std::filesystem::temp_directory_path() /
+        ("triaevum-grass-round37-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    void TearDown() override {
+        std::error_code ec;
+        std::filesystem::remove_all(Directory, ec);
+    }
+};
+void ExpectSamePlacement(const Fast::Oot3d::GrassWorldPlacement& a, const Fast::Oot3d::GrassWorldPlacement& b) {
+    const auto equal = [](const auto& a, const auto& b) {
+        ASSERT_EQ(a.size(), b.size());
+        if (!a.empty())
+            EXPECT_EQ(std::memcmp(a.data(), b.data(), a.size() * sizeof(a[0])), 0);
+    };
+    equal(a.Anchors, b.Anchors);
+    equal(a.CullingAnchors, b.CullingAnchors);
+    equal(a.Clusters, b.Clusters);
+    equal(a.VisibilityClusterOrder, b.VisibilityClusterOrder);
+    equal(a.VisibilityNodes, b.VisibilityNodes);
+    equal(a.Midrange.Members, b.Midrange.Members);
+    equal(a.Midrange.Groups, b.Midrange.Groups);
+    equal(a.Midrange.GroupForRoot, b.Midrange.GroupForRoot);
+    equal(a.Midrange.GroupOrder, b.Midrange.GroupOrder);
+    equal(a.Midrange.Nodes, b.Midrange.Nodes);
+    equal(a.ShadowPoints, b.ShadowPoints);
+    equal(a.ShadowReferences, b.ShadowReferences);
+    equal(a.ShadowSurfaces, b.ShadowSurfaces);
+}
+} // namespace
+TEST_F(GrassDiskFixture, RoundTripFinalAnchorsClustersColorsAndShadowSupport) {
+    using namespace Fast::Oot3d;
+    auto r = BaseRequest();
+    r.ShadowGrid = true;
+    r.MidrangeCellExtent = 20;
+    r.MidrangeAdaptive = true;
+    auto grid = std::make_shared<GrassTextureColorGrid>();
+    for (auto& rgb : grid->Rgb)
+        rgb = { 32, 128, 64 };
+    r.ColorSource.Grid = grid;
+    GrassAsyncPlacementBuilder builder;
+    auto result = builder.ResolveOrQueue(r);
+    result.WaitUntilReady();
+    ASSERT_TRUE(result.Placement);
+    ASSERT_FALSE(result.Placement->ShadowPoints.empty());
+    GrassPersistentPlacementCache disk(Directory);
+    const auto key = GrassPlacementPersistentKey(r);
+    ASSERT_TRUE(disk.Store(key, *result.Placement));
+    bool rejected = true;
+    const auto loaded = disk.Load(key, &rejected);
+    ASSERT_TRUE(loaded);
+    EXPECT_FALSE(rejected);
+    ExpectSamePlacement(*result.Placement, *loaded);
+    EXPECT_EQ(loaded->Identity, 0);
+    EXPECT_NE(loaded->Anchors[0].SurfaceColor, 0);
+}
+TEST_F(GrassDiskFixture, RejectsVersionTruncationChecksumOverflowAndWrongKeyThenRepairs) {
+    using namespace Fast::Oot3d;
+    auto r = BaseRequest();
+    const auto p = BuildSynchronously(r);
+    GrassPersistentPlacementCache disk(Directory);
+    const auto key = GrassPlacementPersistentKey(r);
+    ASSERT_TRUE(disk.Store(key, p));
+    std::ifstream in(disk.Path(key), std::ios::binary);
+    const std::vector<char> original{ std::istreambuf_iterator<char>(in), {} };
+    in.close();
+    const auto replace = [&](const auto& bytes) {
+        std::ofstream out(disk.Path(key), std::ios::binary | std::ios::trunc);
+        out.write(bytes.data(), bytes.size());
+    };
+    for (unsigned kind = 0; kind < 4; ++kind) {
+        auto bytes = original;
+        if (kind == 0)
+            bytes[8] ^= 1;
+        else if (kind == 1)
+            bytes.resize(20);
+        else if (kind == 2)
+            bytes.back() ^= 1;
+        else { // the first vector count in the private ABI header (aligned after sizes)
+            for (size_t i = 104; i < 112; ++i)
+                bytes[i] = char(0xff);
+        }
+        replace(bytes);
+        bool rejected = false;
+        EXPECT_FALSE(disk.Load(key, &rejected));
+        EXPECT_TRUE(rejected);
+    }
+    ASSERT_TRUE(disk.Store(key, p));
+    ASSERT_TRUE(disk.Load(key));
+    auto wrong = key;
+    ++wrong.Content;
+    std::filesystem::copy_file(disk.Path(key), disk.Path(wrong));
+    EXPECT_FALSE(disk.Load(wrong));
+}
+TEST_F(GrassDiskFixture, BoundsStorageAndIgnoresUnrelatedFiles) {
+    using namespace Fast::Oot3d;
+    auto r = BaseRequest();
+    const auto p = BuildSynchronously(r);
+    GrassPersistentPlacementCache disk(Directory, 1024 * 1024, 1);
+    const auto first = GrassPlacementPersistentKey(r);
+    ASSERT_TRUE(disk.Store(first, p));
+    std::ofstream(Directory / "keep.txt") << "not a grass cache";
+    auto second = first;
+    ++second.Settings;
+    ASSERT_TRUE(disk.Store(second, p));
+    EXPECT_FALSE(disk.Load(first));
+    EXPECT_TRUE(disk.Load(second));
+    EXPECT_TRUE(std::filesystem::exists(Directory / "keep.txt"));
+    GrassPersistentPlacementCache tiny(Directory / "tiny", 1, 1);
+    EXPECT_FALSE(tiny.Store(first, p));
+}
+TEST_F(GrassDiskFixture, NewBuilderLoadsWithoutExtractionMaskDecodeOrColorSource) {
+    using namespace Fast::Oot3d;
+    auto r = BaseRequest();
+    r.Mask = {};
+    r.LazyMaskTexture = r.LazyColorTexture = 0x123477;
+    const std::array<uint8_t, 4> rgba{ 100, 180, 90, 255 };
+    auto& textures = GrassTextureSourceCache::Instance();
+    textures.ObserveDecoded(r.LazyMaskTexture, 1, 1, rgba);
+    std::shared_ptr<const GrassWorldPlacement> original;
+    {
+        GrassAsyncPlacementBuilder first;
+        first.SetCacheDirectory(Directory);
+        first.SetDiskSettleDelay({});
+        auto result = first.ResolveOrQueue(r);
+        result.WaitUntilReady();
+        first.WaitForIdle();
+        ASSERT_TRUE(result.Placement);
+        original = result.Placement;
+        EXPECT_EQ(first.Stats().DiskWrites, 0); // written once it is used again
+        (void)first.ResolveOrQueue(r);
+        first.WaitForIdle();
+        EXPECT_EQ(first.Stats().DiskWrites, 1);
+    }
+    textures.Clear(); // There is no texture payload left to decode or sample.
+    r.WorldIdentity = 12345;
+    r.PlacementKey.ContentVersion += 10;
+    r.SourceContentVersion += 10;
+    r.FrameId = 55;
+    {
+        GrassAsyncPlacementBuilder second;
+        second.SetCacheDirectory(Directory);
+        auto result = second.ResolveOrQueue(r);
+        result.WaitUntilReady();
+        second.WaitForIdle();
+        ASSERT_TRUE(result.Placement);
+        EXPECT_EQ(second.Stats().DiskHits, 1);
+        EXPECT_EQ(second.Stats().Builds, 0);
+        EXPECT_EQ(result.Placement->Identity, r.WorldIdentity);
+        EXPECT_EQ(result.Placement->LastUsedFrame, 55);
+        ExpectSamePlacement(*original, *result.Placement);
+    }
+}
+TEST_F(GrassDiskFixture, OnlySettledPlacementsAreWritten) {
+    using namespace Fast::Oot3d;
+    GrassAsyncPlacementBuilder builder;
+    builder.SetCacheDirectory(Directory);
+    builder.SetDiskSettleDelay(std::chrono::hours(1));
+    // An F1 edit: every step is a new placement, used for a moment, then replaced.
+    auto r = BaseRequest();
+    for (int step = 0; step < 3; ++step) {
+        r.PlacementKey.ContentVersion += 1;
+        r.Generation.InstancesPerSquareMeter += 1.0F;
+        auto result = builder.ResolveOrQueue(r);
+        result.WaitUntilReady();
+        builder.WaitForIdle();
+        ASSERT_TRUE(result.Placement);
+        (void)builder.ResolveOrQueue(r);
+        builder.WaitForIdle();
+    }
+    EXPECT_EQ(builder.Stats().DiskWrites, 0);
+    EXPECT_TRUE(!std::filesystem::exists(Directory) || std::filesystem::is_empty(Directory));
+    // The last one stays in use past the settle delay: written once.
+    builder.SetDiskSettleDelay({});
+    (void)builder.ResolveOrQueue(r);
+    builder.WaitForIdle();
+    (void)builder.ResolveOrQueue(r);
+    builder.WaitForIdle();
+    EXPECT_EQ(builder.Stats().DiskWrites, 1);
+    EXPECT_TRUE(GrassPersistentPlacementCache(Directory).Load(GrassPlacementPersistentKey(r)));
+}
+TEST_F(GrassDiskFixture, PersistentFingerprintUsesGeometryPayloadAndEveryBakeSetting) {
+    using namespace Fast::Oot3d;
+    const auto r = BaseRequest();
+    const auto key = GrassPlacementPersistentKey(r);
+    auto changed = r;
+    changed.SourceContentVersion++;
+    changed.PlacementKey.ContentVersion++;
+    changed.FrameId++;
+    changed.WorldIdentity++;
+    EXPECT_EQ(key, GrassPlacementPersistentKey(changed));
+    const std::vector<std::function<void(GrassAsyncPlacementRequest&)>> changes{
+        [](auto& r) { r.PlacementKey.GeometryId++; },
+        [](auto& r) { r.TextureHash++; },
+        [](auto& r) { r.MapperSlot++; },
+        [](auto& r) { r.Rule.InputBlack = .3F; },
+        [](auto& r) { r.Rule.Channel = GrassSampleChannel::Red; },
+        [](auto& r) { r.Rule.ActiveRects.push_back({ 0, 0, .5F, .5F }); },
+        [](auto& r) { r.Rule.SampleScale = .5F; },
+        [](auto& r) { r.Generation.Seed++; },
+        [](auto& r) { r.Generation.MinimumSpacing++; },
+        [](auto& r) { r.ModelToWorld[3]++; },
+        [](auto& r) { r.TransformBakedIntoVertices = true; },
+        [](auto& r) { r.MaterialWrapS = GrassTextureWrap::Clamp; },
+        [](auto& r) { r.MaterialWrapT = GrassTextureWrap::Mirror; },
+        [](auto& r) { r.Budget++; },
+        [](auto& r) { r.ClusterSize++; },
+        [](auto& r) { r.NormalOffset++; },
+        [](auto& r) { r.HeightScale++; },
+        [](auto& r) { r.MidrangeCellExtent = 1; },
+        [](auto& r) { r.MidrangeAdaptive = true; },
+        [](auto& r) { r.MidrangeAdaptiveCapacity++; },
+        [](auto& r) { r.ShadowGrid = true; },
+        [](auto& r) {
+            auto v = std::make_shared<std::vector<GrassSourceVertex>>(*r.Vertices);
+            (*v)[0].Position[0]++;
+            r.Vertices = v;
+        },
+        [](auto& r) {
+            auto v = std::make_shared<std::vector<uint32_t>>(*r.Indices);
+            std::swap((*v)[1], (*v)[2]);
+            r.Indices = v;
+        },
+        [](auto& r) {
+            auto m = std::make_shared<GrassScalarMask>(*r.Mask);
+            m->Samples[0]--;
+            r.Mask = m;
+        },
+        [](auto& r) {
+            auto grid = std::make_shared<GrassTextureColorGrid>();
+            r.ColorSource.Grid = grid;
+        }
+    };
+    for (size_t i = 0; i < changes.size(); ++i) {
+        SCOPED_TRACE(i);
+        auto value = r;
+        changes[i](value);
+        EXPECT_NE(key, GrassPlacementPersistentKey(value));
+    }
+}
+TEST_F(GrassDiskFixture, ExplicitOverlayMaskLayoutAndChannelSlotsInvalidateDiskKey) {
+    using namespace Fast::Oot3d;
+    auto r = BaseRequest();
+    auto scalar = std::make_shared<GrassScalarMask>();
+    scalar->Width = 2;
+    scalar->Height = 1;
+    scalar->Samples = { 0, 255 };
+    auto alpha = std::make_shared<GrassOverlayAlpha>();
+    alpha->Version = 77;
+    alpha->Texture[0] = scalar;
+    auto set = std::make_shared<GrassOverlaySet>();
+    GrassOverlayTriangle triangle;
+    triangle.Alpha = alpha;
+    set->Triangles.push_back(triangle);
+    r.Overlays = set;
+    const auto native = GrassPlacementPersistentKey(r);
+    alpha->Texture[1] = alpha->Texture[0];
+    alpha->Texture[0].reset();
+    EXPECT_NE(native, GrassPlacementPersistentKey(r));
+    alpha->Texture[1].reset();
+    alpha->CustomMask = scalar;
+    const auto custom = GrassPlacementPersistentKey(r);
+    std::swap(scalar->Width, scalar->Height);
+    EXPECT_NE(custom, GrassPlacementPersistentKey(r));
+    // An overlay that cannot cover leaves the key alone, wherever it scrolls.
+    alpha->CustomMask.reset();
+    alpha->NativeSupported = false;
+    const auto hidden = GrassPlacementPersistentKey(r);
+    set->Triangles[0].Vertices[0].Uv = { 0.5F, 0.5F };
+    EXPECT_EQ(hidden, GrassPlacementPersistentKey(r));
+    alpha->NativeSupported = true;
+    EXPECT_NE(hidden, GrassPlacementPersistentKey(r));
+}
+TEST_F(GrassDiskFixture, F1MaskEditInvalidatesMemoryAndDiskWithoutRunningDeferredDecoderOnHit) {
+    using namespace Fast::Oot3d;
+    auto r = BaseRequest();
+    r.TransformBakedIntoVertices = true;
+    r.NormalOffset = 0;
+    r.Generation.InstancesPerSquareMeter = 100;
+    std::atomic<unsigned> decodes = 0;
+    GraphicsSettings settings;
+    GrassMaskRule mask;
+    mask.Mode = GrassMaskMode::Custom;
+    mask.Coverage.Target = { "", 90, 1, 1 };
+    settings.Grass.Masks = { mask };
+    const auto overlay = [&](const GrassMaskRule& rule) {
+        auto alpha = std::make_shared<GrassOverlayAlpha>();
+        alpha->Rule = rule;
+        alpha->Version = GrassOverlayAlphaVersion(*alpha, 90);
+        alpha->LoadTextures = [&](auto& target) {
+            ++decodes;
+            auto scalar = std::make_shared<GrassScalarMask>();
+            scalar->Width = scalar->Height = 1;
+            scalar->Samples = { 255 };
+            target.CustomMask = scalar;
+        };
+        auto set = std::make_shared<GrassOverlaySet>();
+        set->Version = set->PlacementVersion = alpha->Version;
+        GrassOverlayTriangle t;
+        t.Draw = 20;
+        t.Alpha = alpha;
+        for (size_t i = 0; i < 3; ++i)
+            t.Vertices[i] = { (*r.Vertices)[i].Position, (*r.Vertices)[i].Uv, 1 };
+        EXPECT_TRUE(PrepareGrassOverlayTriangle(t));
+        set->Triangles = { t };
+        return set;
+    };
+    r.Overlays = overlay(settings.Grass.Masks[0]);
+    GrassAsyncPlacementBuilder builder;
+    builder.SetCacheDirectory(Directory);
+    builder.SetDiskSettleDelay({});
+    auto masked = builder.ResolveOrQueue(r);
+    masked.WaitUntilReady();
+    builder.WaitForIdle();
+    ASSERT_TRUE(masked.Placement);
+    EXPECT_TRUE(masked.Placement->Anchors.empty());
+    EXPECT_EQ(decodes, 1);
+    (void)builder.ResolveOrQueue(r); // settled: persisted
+    builder.WaitForIdle();
+    builder.Clear();
+    auto hit = builder.ResolveOrQueue(r);
+    hit.WaitUntilReady();
+    builder.WaitForIdle();
+    EXPECT_EQ(builder.Stats().DiskHits, 1);
+    EXPECT_EQ(decodes, 1);
+    // The same settings transaction used by F1 persistence changes the owner.
+    auto document = SerializeGraphicsSettings(settings);
+    document["Grass"]["Masks"][0]["Mode"] = "Off";
+    auto edited = DeserializeGraphicsSettings(document).Value;
+    ASSERT_EQ(edited.Grass.Masks[0].Mode, GrassMaskMode::Off);
+    r.Overlays = overlay(edited.Grass.Masks[0]);
+    auto rebuilt = builder.ResolveOrQueue(r);
+    rebuilt.WaitUntilReady();
+    builder.WaitForIdle();
+    ASSERT_TRUE(rebuilt.Placement);
+    EXPECT_FALSE(rebuilt.Placement->Anchors.empty());
+    EXPECT_EQ(builder.Stats().DiskMisses, 1);
+    EXPECT_EQ(builder.Stats().Builds, 1);
 }

@@ -9,13 +9,22 @@ namespace Fast::Renderer3ds {
 // geometric derivatives; only the raster adapter is allowed to use dFdx/dFdy.
 // The block holds two layouts: layout 0 is the newest; layout 1 is the older
 // keyframe of a moving light, sampled only while the dissolve runs (flag 2).
-// Both live in regions of one atlas.
+// Both live in regions of one atlas; a receiver that defines
+// PICA_VSM_LAYOUT_ATLASES reads layout 1 from its own atlas (binding 11).
 inline std::string_view VirtualShadowReceiverShader() noexcept {
     static_assert(kVirtualShadowPageTexels == 128 && kVirtualShadowPageBorder == 3 &&
                   kVirtualShadowPhysicalPageTexels == 134 && kVirtualShadowGridPages == 8 &&
                   kVirtualShadowLevelCount == 10 && kVirtualShadowTableEntries == 640);
     return R"glsl(
 layout(set=0,binding=10) uniform sampler2D pica_vsm_atlas;
+#ifdef PICA_VSM_LAYOUT_ATLASES
+layout(set=0,binding=11) uniform sampler2D pica_vsm_older_atlas;
+vec4 pica_vsm_gather(int layout_index, vec2 uv) {
+    return layout_index == 0 ? textureGather(pica_vsm_atlas, uv, 0) : textureGather(pica_vsm_older_atlas, uv, 0);
+}
+#else
+vec4 pica_vsm_gather(int layout_index, vec2 uv) { return textureGather(pica_vsm_atlas, uv, 0); }
+#endif
 struct PicaVirtualShadowLayout {
     mat4 input_to_light;
     vec4 camera_light;
@@ -90,7 +99,7 @@ float pica_vsm_filter(int layout_index, int level, vec3 light, vec2 depth_gradie
             vec4 sample_depth = vec4(depth) +
                 sample_gradient.x * (vec4(x, x + 1, x + 1, x) - fraction.x) +
                 sample_gradient.y * (vec4(y + 1, y + 1, y, y) - fraction.y);
-            visibility += dot(step(sample_depth, textureGather(pica_vsm_atlas, uv, 0)), weights);
+            visibility += dot(step(sample_depth, pica_vsm_gather(layout_index, uv)), weights);
         }
     }
     float width = float(2 * radius + 1);

@@ -115,14 +115,7 @@ VkPrimitiveTopology ToNativeVkTopology(Renderer3ds::PicaTopology topology) {
 }
 
 bool UsesTranslucentBlend(const Renderer3ds::NativeBlendState& blend) {
-    const bool opaqueReplace =
-        blend.EquationRgb == Renderer3ds::NativeBlendEquation::Add &&
-        blend.EquationAlpha == Renderer3ds::NativeBlendEquation::Add &&
-        blend.SourceRgb == Renderer3ds::NativeBlendFactor::One &&
-        blend.DestRgb == Renderer3ds::NativeBlendFactor::Zero &&
-        blend.SourceAlpha == Renderer3ds::NativeBlendFactor::One &&
-        blend.DestAlpha == Renderer3ds::NativeBlendFactor::Zero;
-    return blend.Enabled && !opaqueReplace;
+    return !Renderer3ds::PicaBlendReplacesDestination(blend);
 }
 
 VkBlendOp ToNativeVkBlendOperation(Renderer3ds::NativeBlendEquation equation) {

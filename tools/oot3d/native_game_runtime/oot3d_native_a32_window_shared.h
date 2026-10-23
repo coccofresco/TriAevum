@@ -38,6 +38,7 @@
 #include "oot3d_native_a32_savestate.h"
 #include "oot3d_native_a32_scene_view.h"
 #include "oot3d_native_actor_interactions.h"
+#include "oot3d_native_a32_actor_visibility.h"
 #include "fast/oot3d/grass_interaction_bridge.h"
 #include "oot3d_native_a32_timing_probe.h"
 #include "oot3d_native_compiled_functions.h"
@@ -69,6 +70,9 @@
 #include "oot3d_native_ui_lifecycle_bridge.h"
 #include "oot3d_native_ui_texture_provider.h"
 #include "oot3d_top_screen_ocarina_text_runtime.h"
+#include "oot3d_top_screen_pause_transaction.h"
+#include "oot3d_top_screen_item_description_runtime.h"
+#include "oot3d_top_screen_wide_items_runtime.h"
 #include "oot3d_native_whole_aot_runtime.h"
 #ifdef OOT3D_NATIVE_DIRECT_AOT_PLUGIN
 #include "oot3d_native_direct_aot.h"
@@ -172,6 +176,8 @@ inline constexpr uint32_t kPauseAlternateRendererUpdateCall = 0x00300538U;
 inline constexpr uint32_t kPauseAlternateRendererNativeUpdate = 0x0042A278U;
 inline constexpr uint32_t kPauseSceneSevenDrawCall = 0x00300520U;
 inline constexpr uint32_t kPauseSceneSevenNativeDraw = 0x004228E4U;
+inline constexpr uint32_t kPauseSceneFiveDrawCall = 0x0030052CU;
+inline constexpr uint32_t kPauseSceneFiveNativeDraw = 0x0042CB54U;
 inline constexpr uint32_t kPauseSceneViewportDrawCall = 0x00300550U;
 inline constexpr uint32_t kPauseSceneViewportNativeDraw = 0x0042CBCCU;
 inline constexpr uint32_t kPauseTouchCoordinateUpdateCall = 0x0041E984U;
@@ -181,8 +187,6 @@ inline constexpr uint32_t kPauseRendererVisibilityNativeDraw = 0x00427A3CU;
 inline constexpr uint32_t kPauseControllerDrawCall = 0x0041988CU;
 inline constexpr uint32_t kPauseControllerNativeDraw = 0x0041AFACU;
 inline constexpr uint32_t kPauseControllerRendererDraw = 0x002F1280U;
-inline constexpr uint32_t kPauseInputSetTouchEnabled = 0x002FD84CU;
-inline constexpr uint32_t kPauseSystemMenuOpen = 0x0043ACA8U;
 inline constexpr uint32_t kTopScreenPauseState = 0x0050AF68U;
 inline constexpr uint32_t kTopScreenPauseSceneControl = 0x005043E8U;
 inline constexpr uint32_t kTopScreenDirectCallReturn = 0x60000000U;
@@ -196,6 +200,9 @@ inline constexpr uint32_t kPauseIconBuild = 0x002E6CD4U;
 inline constexpr uint32_t kPauseTouchButtonsDrawCall = 0x0042F5CCU;
 inline constexpr uint32_t kPauseTouchButtonsTouchBranch = 0x0042EC2CU;
 inline constexpr uint32_t kPauseTouchButtonsNoTouchExit = 0x0042F294U;
+// IPS 0x0042E644: `bl PauseInput_GetHeldButtons` -> `mov r0, #0`.
+inline constexpr uint32_t kPauseTouchButtonsHeldDownQuery = 0x0042E644U;
+inline constexpr uint32_t kPauseTouchButtonsHeldDownTest = 0x0042E648U;
 inline constexpr uint32_t kPauseLowerScreenBlock = 0x0041DDC8U;
 inline constexpr uint32_t kPauseLowerScreenBlockEnd = 0x0041DEC8U;
 inline constexpr uint32_t kPauseDungeonMapCursorInput = 0x00442F38U;
@@ -449,6 +456,7 @@ struct NativeWidescreenProjectionState {
   };
 
   NativeSceneProjectionState Projection;
+  Oot3dNativeGame::NativeActorVisibilityState ActorVisibility;
   bool CollectExtendedDiagnostics = false;
   uint32_t CurrentHostFrame = 0;
   uint32_t EnMagInitCalls = 0;
@@ -508,6 +516,9 @@ struct NativeWidescreenProjectionState {
   std::deque<A32BlockTraceRecord> BlockTrace;
   Oot3dNativeGame::Oot3dNativeUiLifecycleBridge *UiLifecycleBridge = nullptr;
   Oot3dNativeGame::TopScreenOcarinaTextRuntime *OcarinaText = nullptr;
+  Oot3dNativeGame::TopScreenPauseTransactionRuntime *PauseTransaction = nullptr;
+  Oot3dNativeGame::TopScreenSystemPageRuntime *SystemPage = nullptr;
+  Oot3dNativeGame::TopScreenItemDescriptionRuntime *ItemDescription = nullptr;
   Oot3dNativeGame::Oot3dPicaCompositionDomain *PicaCompositionDomain =
       nullptr;
   Oot3dNativeGame::Oot3dNativePicaCompositionTracker
@@ -523,6 +534,9 @@ struct NativeWidescreenProjectionState {
   Oot3dNativeGame::TopScreenInputCadence *TopScreenInputClock = nullptr;
   const Oot3dNativeGame::TopScreenItemDispatchRuntime *TopScreenItems = nullptr;
   std::span<const uint32_t> WholeAotObservableExitPcs;
+  // Set to the pc of each observable exit this policy raises (see
+  // NativeCandidateDispatchState::ObservedExitPc).
+  std::optional<uint32_t> *ObservedExitPc = nullptr;
   std::optional<Oot3dNativeGame::TopScreenPauseTargetPlan>
       PendingTopScreenPauseTarget;
   uint32_t PendingTopScreenPauseRenderer = 0U;
@@ -589,13 +603,22 @@ struct NativeCandidateDispatchState {
   Oot3dNativeGame::NativeFreeCameraInputAccumulator TopScreenCameraInput;
   Oot3dNativeGame::TopScreenExtendedInputFrame TopScreenInput;
   Oot3dNativeGame::TopScreenInputCadence TopScreenInputClock;
+  // The pc whose block policy raised the last observable exit: the product
+  // dispatcher resumes it without running that policy a second time.
+  std::optional<uint32_t> ObservedExitPc;
+  // The projection policy's page redraw to the upper screen.
+  const bool *TopScreenPausePageRedrawActive = nullptr;
   uint32_t PreviousTopScreenButtons = 0U;
   Oot3dNativeGame::NativeA32PolledButtonLatch StartButtonLatch;
   Oot3dNativeGame::TopScreenStartRoutingState TopScreenStartRouting;
   Oot3dNativeGame::TopScreenVersionChoiceRevealState TopScreenVersionChoiceReveal;
   Oot3dNativeGame::TopScreenPauseSystemOpenState TopScreenPauseSystemOpen;
-  uint64_t TopScreenPauseStartCloseCalls = 0U;
-  uint64_t TopScreenPauseSystemOpenCalls = 0U;
+  Oot3dNativeGame::TopScreenPauseTransactionRuntime *PauseTransaction = nullptr;
+  Oot3dNativeGame::TopScreenSystemPageRuntime *SystemPage = nullptr;
+  Oot3dNativeGame::TopScreenItemDescriptionRuntime *ItemDescription = nullptr;
+  Oot3dNativeGame::TopScreenWideItemsRuntime *WideItems = nullptr;
+  // Sorted TopScreen entries the product hook owns (product builds only).
+  std::vector<uint32_t> ProductTopScreenBlocks;
   uint64_t TopScreenAimProjectileCycleAttempts = 0U;
   uint64_t TopScreenAimProjectileCycleUpdates = 0U;
   uint64_t TopScreenAimProjectileCycleSoundCalls = 0U;
@@ -607,14 +630,8 @@ struct NativeCandidateDispatchState {
       TopScreenGameplayActions;
   Oot3dNativeGame::TopScreenGameplayActionConsumerRuntime
       TopScreenGameplayActionRuntime;
-  Oot3dNativeGame::TopScreenPauseClosePage TopScreenPauseLastClosedPage =
-      Oot3dNativeGame::TopScreenPauseClosePage::None;
-  Oot3dNativeGame::TopScreenPauseClosePage TopScreenPauseSystemSourcePage =
-      Oot3dNativeGame::TopScreenPauseClosePage::None;
   uint8_t TopScreenViewportDrawPhase = 0U;
   uint32_t TopScreenViewportDrawArgument = 0U;
-  uint8_t TopScreenSceneViewportDrawPhase = 0U;
-  uint32_t TopScreenSceneViewportDrawArgument = 0U;
   uint8_t TopScreenOverlayViewportDrawPhase = 0U;
   uint8_t TopScreenTouchCoordinateUpdatePhase = 0U;
   std::optional<Oot3dNativeGame::TopScreenAlternateRendererState>
@@ -732,14 +749,5 @@ bool ResolveNativeA32TouchInputEnabled(
     Oot3dNativeGame::NativeA32Memory &memory,
     const Oot3dNativeGame::Oot3dNativeUiLifecycleBridge &uiLifecycleBridge,
     bool topScreenUiProfile);
-
-bool ApplyTopScreenPauseClose(
-    Oot3dNativeGame::NativeA32Process &process,
-    const Oot3dNativeGame::TopScreenPauseClosePlan &plan, std::string *error);
-
-bool ApplyTopScreenPauseSystemOpen(
-    Oot3dNativeGame::NativeA32Process &process,
-    const Oot3dNativeGame::TopScreenPauseSystemOpenPlan &plan,
-    std::string *error);
 
 } // namespace Oot3dA32Window

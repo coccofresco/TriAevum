@@ -25,6 +25,9 @@ struct GrassShadowGridResult {
 
 // Private GPU producer within the graph-authorized Grass invocation. It reads
 // the published atlas/history pair and never changes VSM residency or casters.
+// The coarse grid (the ground textures' 4x4 lattice) reads the static
+// casters' depth: Link and the actors shadow the grass only through the
+// refinement around them, blade by blade.
 class GrassShadowGridPass final {
   public:
     GrassShadowGridPass();

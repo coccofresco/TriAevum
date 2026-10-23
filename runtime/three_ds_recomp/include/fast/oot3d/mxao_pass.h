@@ -31,10 +31,10 @@ struct MxaoTemporalFrame {
     uint64_t FrameId = 0U;
 };
 
-// iMMERSE MXAO provider: TriAevum's integration interface to the iMMERSE
-// module. The implementation, fast/immerse/mxao_pass.cpp, is part of that
-// module and under its own licence (fast/immerse/LICENSE.md); without the
-// module, fast/oot3d/immerse_unavailable.cpp reports MXAO as not compiled. It
+// iMMERSE MXAO provider: TriAevum's side of the iMMERSE module. The module is
+// a separate shared library under its own licence (fast/immerse/LICENSE.md),
+// loaded through triaevum/immerse_module.h; this pass gives it the renderer's
+// services and is unavailable when the library is not installed. MXAO
 // reads the same native depth and normal guide as GTAO and publishes the same
 // R32F ambient visibility. Without motion vectors there is no history, so a
 // frame depends only on its own inputs; with them the per-pixel occlusion

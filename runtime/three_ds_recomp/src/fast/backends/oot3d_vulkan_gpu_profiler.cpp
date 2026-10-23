@@ -2,6 +2,7 @@
 
 #ifdef ENABLE_OOT3D_VULKAN
 
+#include "fast/oot3d/grass_stage_profile.h"
 #include <algorithm>
 #include <array>
 #include <cstdio>
@@ -61,22 +62,61 @@ void StoreTiming(Oot3dVulkanGpuTimings& timings,
         case Oot3d::GpuProfileScope::GlobalIllumination:
             timings.GlobalIlluminationMilliseconds = milliseconds;
             break;
+        case Oot3d::GpuProfileScope::GrassCompaction:
+            timings.GrassCompactionMilliseconds = milliseconds;
+            break;
+        case Oot3d::GpuProfileScope::GrassBlades:
+            timings.GrassBladesMilliseconds = milliseconds;
+            break;
+        case Oot3d::GpuProfileScope::GrassShadows:
+            timings.GrassShadowsMilliseconds = milliseconds;
+            break;
+        case Oot3d::GpuProfileScope::GrassLighting:
+            timings.GrassLightingMilliseconds = milliseconds;
+            break;
         case Oot3d::GpuProfileScope::Count:
             break;
     }
 }
 
-constexpr std::array<const char*, Oot3d::kGpuProfileScopeCount> kScopeBeginLabels{
-    "frame", "native_pica", "toon_raster", "grass", "ambient_occlusion",
-    "depth_preparation", "reflection", "motion_vectors", "scene_composite",
-    "anti_aliasing", "upscaler", "display_transfer", "scanout", "overlay",
-    "global_illumination"};
-constexpr std::array<const char*, Oot3d::kGpuProfileScopeCount> kScopeEndLabels{
-    "after frame", "after native_pica", "after toon_raster", "after grass",
-    "after ambient_occlusion", "after depth_preparation", "after reflection",
-    "after motion_vectors", "after scene_composite", "after anti_aliasing",
-    "after upscaler", "after display_transfer", "after scanout",
-    "after overlay", "after global_illumination"};
+constexpr std::array<const char*, Oot3d::kGpuProfileScopeCount> kScopeBeginLabels{ "frame",
+                                                                                   "native_pica",
+                                                                                   "toon_raster",
+                                                                                   "grass",
+                                                                                   "ambient_occlusion",
+                                                                                   "depth_preparation",
+                                                                                   "reflection",
+                                                                                   "motion_vectors",
+                                                                                   "scene_composite",
+                                                                                   "anti_aliasing",
+                                                                                   "upscaler",
+                                                                                   "display_transfer",
+                                                                                   "scanout",
+                                                                                   "overlay",
+                                                                                   "global_illumination",
+                                                                                   "grass_compaction",
+                                                                                   "grass_blades",
+                                                                                   "grass_shadows",
+                                                                                   "grass_lighting" };
+constexpr std::array<const char*, Oot3d::kGpuProfileScopeCount> kScopeEndLabels{ "after frame",
+                                                                                 "after native_pica",
+                                                                                 "after toon_raster",
+                                                                                 "after grass",
+                                                                                 "after ambient_occlusion",
+                                                                                 "after depth_preparation",
+                                                                                 "after reflection",
+                                                                                 "after motion_vectors",
+                                                                                 "after scene_composite",
+                                                                                 "after anti_aliasing",
+                                                                                 "after upscaler",
+                                                                                 "after display_transfer",
+                                                                                 "after scanout",
+                                                                                 "after overlay",
+                                                                                 "after global_illumination",
+                                                                                 "after grass_compaction",
+                                                                                 "after grass_blades",
+                                                                                 "after grass_shadows",
+                                                                                 "after grass_lighting" };
 
 bool EnvironmentFlag(const char* name) {
     const char* value = std::getenv(name);
@@ -91,9 +131,8 @@ void Oot3dVulkanGpuProfiler::Initialize(
     Shutdown();
     // Either developer trace enables the timestamps by itself.
     const bool timeline = EnvironmentFlag("TRIAEVUM_GPU_TIMELINE");
-    if (!(enabled || timeline || EnvironmentFlag("TRIAEVUM_GPU_GAP_TRACE")) ||
-        physicalDevice == VK_NULL_HANDLE ||
-        device == VK_NULL_HANDLE) {
+    if (!(enabled || timeline || EnvironmentFlag("TRIAEVUM_GPU_GAP_TRACE") || Oot3d::GrassStageProfileEnabled()) ||
+        physicalDevice == VK_NULL_HANDLE || device == VK_NULL_HANDLE) {
         return;
     }
 

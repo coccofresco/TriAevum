@@ -1,4 +1,5 @@
 #include "fast/oot3d/grass_surface_extractor.h"
+#include "fast/oot3d/grass_overlay_mask.h"
 #include "fast/oot3d/grass_parallel_work.h"
 #include "fast/oot3d/grass_surface_reference.h"
 #include "fast/oot3d/grass_visibility.h"
@@ -552,6 +553,11 @@ static std::vector<GrassAnchor> ExtractAnchors(
                                     Subtract(c.Position, a.Position));
             const float doubledArea = Length(face);
             if (doubledArea <= 1.0e-6F) continue;
+            const auto overlays = surface.Overlays ? GrassOverlaysForTriangle({ TransformPoint(surface, a.Position),
+                                                                                TransformPoint(surface, b.Position),
+                                                                                TransformPoint(surface, c.Position) },
+                                                                              *surface.Overlays)
+                                                   : std::vector<const GrassOverlayTriangle*>{};
             for (uint32_t selected = 0; selected < selectedCandidates; ++selected) {
                 // A progressive prefix is independent of the view/budget. Increasing
                 // a patch's quota adds blades without moving its existing samples.
@@ -612,6 +618,8 @@ static std::vector<GrassAnchor> ExtractAnchors(
                 }
                 pending.World = TransformPoint(surface, anchor.LocalPosition);
                 sample *= ClusterWeight(generation, pending.World);
+                if (!overlays.empty())
+                    sample *= GrassOverlaySurvival(pending.World, overlays);
                 const float acceptanceSample = UnitRandom(random);
                 if (!(acceptanceSample < sample)) continue;
                 anchor.Uv = uv;

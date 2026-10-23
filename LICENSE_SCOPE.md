@@ -33,6 +33,9 @@ No permission is granted here for:
   their respective author has granted redistribution permission;
 - the iMMERSE module, `runtime/three_ds_recomp/src/fast/immerse/` (MXAO by
   Pascal Gilcher); see [the exception below](#exception-the-immerse-module);
+- the DLSS module, `runtime/three_ds_recomp/src/fast/dlss/`, and NVIDIA's DLSS
+  SDK components it is built and distributed with; see
+  [the exception below](#exception-the-dlss-module);
 - proprietary SDKs, redistributable libraries or model files whose own terms
   do not permit inclusion.
 
@@ -55,11 +58,40 @@ GPL grant above. It ports MXAO from Pascal Gilcher's iMMERSE, and:
   exclusively to the TriAevum project. The permission does not pass to
   recipients, forks or other projects.
 
-The directory's `LICENSE.md` states these terms and the boundary. TriAevum's
-GPL code reaches the module only through integration points it owns, and
-building with `THREE_DS_RECOMP_ENABLE_IMMERSE=OFF` produces the complete GPL
-runtime without it. Anyone else distributing TriAevum must build that way and
-omit the directory, unless the author has given them permission.
+The directory's `LICENSE.md` states these terms and the boundary. The module
+is built as a separate shared library (`triaevum_immerse.dll`,
+`libtriaevum_immerse.so`) that contains only the module and links nothing of
+TriAevum; packages ship it beside the runtime as a separately licensed
+component. TriAevum's GPL code reaches it only through the module interface
+`runtime/three_ds_recomp/module_interface/triaevum/immerse_module.h`, which the
+maintainer licenses under MIT so that the module may implement it. The GPL
+runtime is complete without the library: building with
+`THREE_DS_RECOMP_ENABLE_IMMERSE=OFF`, or leaving the library out, gives every
+feature except MXAO. Anyone else distributing TriAevum must do so and omit the
+directory, unless the author has given them permission.
+
+## Exception: the DLSS module
+
+The directory `runtime/three_ds_recomp/src/fast/dlss/` is excluded from the
+GPL grant above. It is the only part of TriAevum that links NVIDIA's NGX SDK,
+and its `LICENSE.md` states the terms and the boundary:
+
+- TriAevum's integration code in it is licensed under the MIT License;
+- NVIDIA's NGX SDK library linked into it, and NVIDIA's DLSS runtime
+  (`nvngx_dlss.dll`, `libnvidia-ngx-dlss.so.<version>`) distributed beside it,
+  remain NVIDIA's, under the NVIDIA RTX SDKs licence that packages reproduce
+  as `LICENSES/NVIDIA-DLSS-SDK-LICENSE.txt`. Neither this file nor the GPL
+  grants any right in them.
+
+The module is a separate shared library (`triaevum_dlss.dll`,
+`libtriaevum_dlss.so`) that links nothing of TriAevum. The GPL runtime links
+nothing of NGX and reaches the module only through
+`runtime/three_ds_recomp/module_interface/triaevum/dlss_module.h`, which the
+maintainer licenses under MIT so that the module may implement it. The runtime
+is complete without the module: building with
+`THREE_DS_RECOMP_ENABLE_DLSS_MODULE=OFF`, or leaving the module or NVIDIA's
+runtime out, gives every feature except DLSS. The release audit rejects any
+other packaged binary that contains NGX code.
 
 ## Release review
 

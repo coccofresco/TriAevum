@@ -1,5 +1,161 @@
 # F1 settings rationalization
 
+## Grass masks (2026-10-11, round 36)
+
+Grass > Masks identifies current overlay/source overlaps with thumbnails,
+catalog badges, estimated coverage and an optional world wireframe. Automatic,
+Custom and Off persist beside Sources; Custom reuses the source mask editor
+and adds strength. Manual add, removal, reset, capability-safe Off, explicit
+save failure/retry, and F1/tab/F2 highlight cleanup are exercised by
+`triaevum_f1_settings_smoke --grass-masks` (489 assertions). The full smoke
+still stops at the previously documented Azahar-identity assertion.
+See [overlay masks](TRIAEVUM_GRASS_OVERLAY_MASKS.md) for the persistence,
+presentation boundary, diagnosis numbers and outstanding native-alpha lab check.
+
+## Group environment standards (2026-10-11, round 34)
+
+**Lighting > Lights & Shadows > Scene lights** shows the authored scene group:
+Indoor, Outdoor time flows, Outdoor time at entry, or Outdoor fixed time.
+The first readable installed room fixes the group for the visit, including
+mixed dungeons. Unknown groups retain the previous fallback behavior.
+
+Each slot shows **Scene's own**, **Group standard**, **Base**, or (for a night
+without either night file) **Day result**, plus the selected source filename.
+Day resolves scene -> group -> Base; night resolves scene -> group -> day.
+An own day file therefore no longer prevents inheriting the group's night.
+The existing blend and independent drafts remain; fixed-time and other
+non-clock-driven scenes still expose one profile.
+
+**Save as group standard** confirms replacing the group's current slot and
+explains that scene-owned files keep precedence. **Use group standard**
+confirms deleting the scene's current-slot file and discarding custom values
+and unsaved edits. Ordinary Save still writes only the scene's file. Both
+actions disable for unknown groups and surface persistence errors. An open
+confirmation disables its commit when the scene or editor revision changes;
+its popup ID is outside the day/night tabs, so Cancel remains usable across
+a tab change. Capability-safe Off controls are retained.
+
+The actual-widget fixture `triaevum_f1_settings_smoke --scene-environment`
+passes **2,660 assertions**, including group labels/provenance, save/use
+cancel and confirm, scene override creation, shared night standards, stale
+confirmation after a scene/tab change, and visible group-write failure.
+`triaevum_environment_tests` passes **655,553 checks**; native room/header
+tests pass, including all four classes, selected headers, capture offsets,
+unknown/mixed behavior and directory/Level-3/IVFC inventory equivalence.
+TriAevum, the environment tool and all touched test targets build.
+
+The full F1 smoke was also run and still stops at the existing unrelated
+material-editor assertion: "creation used the catalog hash instead of the
+native texture's Azahar identity". No game was run for round 34. See
+[environment tooling](TRIAEVUM_SCENE_ENVIRONMENT_TOOLING.md) for the native
+addresses, group file schema, hot reload and offline `list-groups` command.
+
+## Day/night profiles (2026-10-10, round 32)
+
+**Lighting > Lights & Shadows > Scene lights** now separates the editor from
+playback: **Day / Night** tabs edit independent drafts at any game time, while
+**Auto / Force day / Force night** controls the preview. The live percentage
+indicator reports the published blend. F2 and closing F1 restore Auto;
+preview is never saved. Fixed-lighting scenes have one profile and no
+clock-related controls. This remains one `SceneEnvironmentRuntime` owner.
+
+Create night copies day to the new file. Copy day -> night confirms replacing
+the night draft, then Save night persists it. Remove night confirms deleting
+its file and draft. Each tab saves/reverts separately; time changes retain
+both unsaved drafts. The existing two-file schema remains compatible.
+
+Focused actual-widget smoke passes **2,364 assertions**, including editing
+Night by day, both dirty drafts across native time changes, preview/percentage
+agreement, copy cancel/confirm/save, removal cancel/confirm, per-tab revert,
+F2/close reset and absence of day/night controls for fixed scenes. The full
+suite still stops earlier at the pre-existing material-editor assertion
+"creation used the catalog hash instead of the native texture's Azahar
+identity" (also recorded in round 28). The native curve and cache simulation
+are documented in [Scene environment profiles](TRIAEVUM_SCENE_ENVIRONMENT_TOOLING.md).
+
+## Interior sun / offline (2026-10-10, round 29)
+
+The base default remains JSON `shadowCasterFaces: "interiorShells"`. The actual
+F1 choice now reads **Interior sun / offline** and explains authored interiors,
+offline preparation, inner occluders and the two-sided fallback. This remains
+owned by `SceneEnvironmentRuntime`; no duplicate graphics setting was added.
+Focused actual-widget smoke passes **1,978 assertions**, including selection
+of the new label. See [the builder and Forge contract](ROOM_SHADOW_SHELLS.md).
+
+## Independent rim light (2026-10-10, round 28)
+
+**Lighting > Lights & Shadows > Scene lights > Rim light** is owned solely by
+`SceneEnvironmentRuntime`, persisted as the optional scene-profile `rimLight`.
+Enable, source, intensity, sharpness, RGB color, camera-relative azimuth,
+coverage and Actors / Actors and world preview and save through that owner.
+Independent is the default: warm white, intensity 1, sharpness 4, top (0 degrees),
+coverage .25, actors. Scene lights retains the previous direct-light response;
+it disables color/azimuth/coverage without erasing them. The ambient control
+was removed; its legacy JSON member is accepted but ignored.
+
+The actual-widget fixture edits each control (including all three ColorEdit3
+components), switches both sources and scopes, checks disabled controls and
+Off stability, the 0..8 intensity range, renderer publication, save/reload,
+native/F2 bypass and scene/day/night transitions. Profiles lacking the new
+fields default to Independent; a missing whole object remains off. Modern-only
+and capability gating are unchanged. See [RIM_LIGHT.md](RIM_LIGHT.md) for the
+formulation, migration and game lab.
+
+Verification: `TriAevum.exe` and touched tests build with `build-host.cmd`.
+Focused `triaevum_f1_settings_smoke --scene-environment`: **1,978 assertions**.
+Environment owner: **92 checks**; pipeline: **54/54**; foundation: **352/352**;
+RTX 3060 GPU equations: **121 cases**, with both complete PBR shader variants
+compiled. The full F1 suite still stops before this panel at the unchanged
+material-editor assertion "creation used the catalog hash instead of the
+native texture's Azahar identity". No game was run.
+
+## Extended draw distance and presented actor culling (2026-10-09)
+
+**Display > Extended draw distance** (off by default, off in Authentic) turns
+on Ship of Harkinian's actor draw distance at 5x, the native foliage groups'
+5x spawn ranges and the end of the Kokiri fade, as one choice. Distant actors
+are also updated, as in SoH, so gameplay can differ from the title's. SoH's
+LOD and glitch-actor options are not carried over. The setting persists as
+the optional `Graphics.Camera.ExtendedDrawDistance`; older documents keep the
+native ranges.
+
+Actor culling now always matches the presented view. The title culls actors
+with its own view-projection (play+0x5BB4), built without the frustum hook, so
+at 16:9 and a wider FOV actors at the margins of the picture were culled as if
+the screen were 5:3. The culling decision is re-evaluated with the presented
+view's extent, derived from that matrix through `ResolvePerspectiveFov`; it
+has no control.
+
+Owner: `GraphicsSettings::ExtendedDrawDistance` (Display), snapshotted each
+host frame into the title adapter's `NativeActorVisibilityState`; the pure
+policy is `oot3d_actor_visibility_policy.{h,cpp}` and the EUR hooks
+`oot3d_native_a32_actor_visibility.{h,cpp}`, all at existing A32 block
+entries:
+
+- `0x00461904` Actor_UpdateCulling entry (`r0` = play): the presented
+  volume is resolved once per walk from the live play state.
+- `0x00461AC4` Actor_UpdateCulling result: an extended pass sets the title's
+  own pass (state 0, `r0 = 1`), so the native fade and update flag follow;
+  a failure inside the extended depth becomes "outside", not "far". En_Viewer
+  keeps the native test.
+- `0x003BC5DC`/`0x003CC298` Obj_Mure: its distance table and retirement
+  margin are written (5x or native) before each use, host-owned, known EUR
+  values only.
+- `0x003B30AC`/`0x003AEF48` Obj_Mure2: the distance scalar the update just
+  stored becomes at least 25 (5x on squared distances) and sees the presented
+  width.
+- `0x0034E854` En_Wood02 offspring: extended, spawn in the extended volume.
+- `0x001B5FE0`/`0x001B60E8` En_Ko: extended, the fade distance reads 0.
+- `0x00341CD8` Actor_UpdateAlphaByDistance, Mido's and Saria's fade (as in
+  SoH's Kokiri option): extended, their distance reads 0, so they fade in
+  with the title's smoothing; Mido's house and Saria's cutscene stay native.
+
+Verification (developer build): actual-widget smoke **9,400 assertions**
+(toggle applies and saves once, and restores); policy tests; foundation
+352/352 with the persistence round trip and the Authentic reset;
+deterministic walks from a Kokiri Forest savestate, off and on: on shows the
+distant Kokiri and otherwise the same frames; facing the Lost Woods tunnel,
+Mido is visible at once instead of when Link gets close.
 ## Title-owned capabilities (2026-10-07)
 
 The window title comes from the game frontend
@@ -180,7 +336,7 @@ window/framebuffer verification is recorded in
 
 The global controls are **Shadow atlas budget** (2048/32 MiB or 4096/128 MiB,
 including the static depth cache and composed atlas),
-distance (50–65,536 native world units), strength (0–4x), PCF radius (0–2),
+distance (50Ã¢â‚¬â€œ65,536 native world units), strength (0Ã¢â‚¬â€œ4x), PCF radius (0Ã¢â‚¬â€œ2),
 and advanced constant/slope bias. Stabilization is inherent to world-fixed
 virtual pages, not a toggle. These settings save automatically and are not
 part of **Save scene environment**. Schema 12 migrates the old single-cascade
@@ -190,7 +346,7 @@ the two-atlas memory budget and F2 lighting restoration.
 The NRI architecture document records GPU/camera evidence.
 
 2026-09-23 amplified directional shadows: Lighting **Shadow strength** now
-accepts **0–4x**, including persistence, cascade planning and GPU receiver
+accepts **0Ã¢â‚¬â€œ4x**, including persistence, cascade planning and GPU receiver
 evaluation. Above 1x amplifies partial occlusion; visibility saturates at zero
 instead of producing negative light. The tooltip describes that limit.
 The real-widget fixture passes **4,593 assertions**, including live 4x/zero
@@ -211,7 +367,7 @@ and material format are documented in
 
 2026-09-23 live PBR controls (historical; superseded by the material editor below):
 Lighting then owned **Normal strength**
-(0–8×), **Glossiness strength** (0–2×), **Material view** (Shaded / Surface
+(0Ã¢â‚¬â€œ8Ãƒâ€”), **Glossiness strength** (0Ã¢â‚¬â€œ2Ãƒâ€”), **Material view** (Shaded / Surface
 normals / Roughness), and **Reset PBR controls**, shared by both PBR models.
 Both strengths default to 1; zero disables mapped-normal perturbation or makes
 the material matte, respectively. Changes persist and update live uniforms
@@ -242,7 +398,7 @@ the corrected qualification does.
 See the [Native + PBR contract and evidence](OOT3D_NRI_FIDELITY_EXTENSION_ARCHITECTURE.md#native--pbr-2026-09-24).
 
 2026-09-25 global height control (historical; superseded below): **Height strength**
-in Lighting was shared by **Per-pixel + PBR** and **Native + PBR**. It accepted 0–4x, defaulted to 1x,
+in Lighting was shared by **Per-pixel + PBR** and **Native + PBR**. It accepted 0Ã¢â‚¬â€œ4x, defaulted to 1x,
 and multiplies the material's height scale, with effective depth capped at
 0.1 UV. Zero disables parallax; a missing height map remains inert.
 The control persists as `Graphics.Effects.PBR.HeightStrength`, updates live
@@ -252,13 +408,13 @@ The actual-widget smoke passes **5,190 assertions**, including live edits,
 persistence, zero, range normalization, F2 restoration and reset.
 Three deterministic Shaded captures at 0/1/4x also verify the renderer consumer:
 0x exactly matches the previous no-height framebuffer, 1x preserves the pack,
-and 1x→4x changes 215,295 pixels. Compared native geometry, registers and lights
+and 1xÃ¢â€ â€™4x changes 215,295 pixels. Compared native geometry, registers and lights
 stay identical. Vulkan/NRI report zero errors and the same 11 baseline Vulkan
 warnings. Private receipts are under `I:/_triaevum_work/f1-height/`.
 
 2026-09-25 global dielectric specular control (historical; superseded below):
-Lighting owned **Specular level**, persisted as `Graphics.Effects.PBR.SpecularLevel`. Range 0–2x
-maps dielectric F0 to 0–8%; 1x retains the previous 4%. Fully metallic response
+Lighting owned **Specular level**, persisted as `Graphics.Effects.PBR.SpecularLevel`. Range 0Ã¢â‚¬â€œ2x
+maps dielectric F0 to 0Ã¢â‚¬â€œ8%; 1x retains the previous 4%. Fully metallic response
 and roughness are unchanged. Zero is base reflectance zero, not a global
 specular-off switch: Schlick's grazing term remains. Direct lighting and the
 reflection guide share F0; the existing SSR/SSSR strength control stays separate.
@@ -268,7 +424,7 @@ including persistence, live updates, range limits and restoration.
 Eight deterministic captures verify the shaded consumer and Hi-Z guide:
 the old profile without the new key is pixel-identical to the prior PBR build,
 Native remains pixel-identical at 2x, and fully metallic output is identical
-between 0x and 2x. Dielectric 0x→1x and 1x→2x change 205,239 and 201,630 pixels.
+between 0x and 2x. Dielectric 0xÃ¢â€ â€™1x and 1xÃ¢â€ â€™2x change 205,239 and 201,630 pixels.
 The Hi-Z material debug view changes F0 from 4% to 8% in 262,711 pixels;
 the host's RGBA5551 screenshot readback expands those red values to 8 and 16,
 not the unquantized RGB8 values 10 and 20. Compared native draw state is unchanged.
@@ -284,7 +440,7 @@ the paired failure logs are under `I:/_triaevum_work/f1-specular/`.
 2026-09-25 material editor: F1 now has an always-available **Material editor** tab.
 The scene-wide PBR controls are removed; the material JSON owns normal scale,
 glossiness, dielectric reflectance, height depth and the new **Minimum roughness**
-(0.045–1, default 0.045). Lighting retains the model selector; Textures retains
+(0.045Ã¢â‚¬â€œ1, default 0.045). Lighting retains the model selector; Textures retains
 the pack folder/load controls. Obsolete `Graphics.Effects.PBR` values are ignored,
 not copied into every material.
 
@@ -312,7 +468,7 @@ baseline Vulkan warnings. Private evidence: `I:/_triaevum_work/material-editor/`
 The SSSR limitation above is unchanged.
 
 2026-09-25 per-material reflection weights: **Material editor** adds **Specular
-weight** (0–1, default 1) and **Screen-space reflection weight** (0–2, default 1).
+weight** (0Ã¢â‚¬â€œ1, default 1) and **Screen-space reflection weight** (0Ã¢â‚¬â€œ2, default 1).
 The first scales complete direct and screen-space specular response, including
 metals and grazing Fresnel; zero leaves diffuse/emission intact. The second
 affects only screen-space reflections and multiplies the first. Both preview
@@ -342,8 +498,8 @@ Evidence and invocation recipes: `I:/_triaevum_work/material-weights/`.
 The private `Avvia-PBR-Height.cmd` now selects `bin-material-weights/TriAevum.exe`;
 the interactive profile, authored pack and already-running game are untouched.
 
-2026-09-25 auxiliary UV seams: **Material editor → Material → UV seam softening**
-adds per-material enable (default Off), strength 0–1, width 0.1–25% of the shared
+2026-09-25 auxiliary UV seams: **Material editor Ã¢â€ â€™ Material Ã¢â€ â€™ UV seam softening**
+adds per-material enable (default Off), strength 0Ã¢â‚¬â€œ1, width 0.1Ã¢â‚¬â€œ25% of the shared
 native edge, and independent normal/AO/roughness/metallic/emission/height channels.
 Default width is 5%; emission is excluded by default. Save writes the selected
 descriptor's `seamSoftening` object; live preview and Reset use the existing
@@ -476,7 +632,7 @@ Current surfaces (since the 2026-10-06 tab rationalization above):
 | --- | --- | --- |
 | Display | Screen, Antialiasing and upscaling, Motion and camera | GraphicsSettingsRuntime |
 | Lighting | Lighting & GI, Shadows, Occlusion, Reflections, Scene environment, Toon | GraphicsSettingsRuntime; SceneEnvironmentRuntime (Scene environment) |
-| Grass | Sources, Generation, Appearance, Performance, Wind, Interaction | GraphicsSettingsRuntime / grass module |
+| Grass | Sources, Masks, Generation, Appearance, Performance, Wind, Interaction | GraphicsSettingsRuntime / grass module |
 | Materials | Texture packs, Material editor, Reflection materials | GraphicsSettingsRuntime / texture-pack module / material JSON |
 | Controls | Bindings, Camera, Devices, Shortcuts | NativeControlConfigRuntime / TopScreenUiConfigRuntime |
 | HUD | TopScreen 2.1.1 HUD and layout | TopScreenUiConfigRuntime |
@@ -755,7 +911,7 @@ Version 3 separates `nativeLocalStrength` from the scene-wide
 `nativeDirectStrength`. Versions 1 and 2 retain their old gain for both.
 Version 1 acquires default point groups; version 2 retains its saved groups.
 Version 4 adds `preserveSceneBrightness`: new profiles enable it, while versions
-1–3 keep authored-only brightness. Loading does not rewrite the user's file;
+1Ã¢â‚¬â€œ3 keep authored-only brightness. Loading does not rewrite the user's file;
 explicit saves write version 4.
 **Save scene environment** persists the live preview atomically; **Reload
 scene environment** reads the file. The unsaved warning explicitly requires
@@ -779,12 +935,12 @@ See the scene-environment section of the NRI architecture document for the
 schema, ranges, owning boundaries and capture evidence.
 The brightness-reference increment passes 6,648 actual-widget assertions,
 including the active control, ambient ownership, persistence, legacy versions
-1–3, F2/native bypass, scene transitions and visible save/reload failures.
+1Ã¢â‚¬â€œ3, F2/native bypass, scene transitions and visible save/reload failures.
 
 Final verification: 4,516 actual-widget assertions passed, including the
 inactive-profile rendering-input invariant. Two additional GPU runs compare
 the user's combined CACAO/Hi-Z/PBR/shadow configuration with an effects-off
-baseline at the same persisted 1920×1080 output extent. Native-memory RGBA and
+baseline at the same persisted 1920Ãƒâ€”1080 output extent. Native-memory RGBA and
 all compared alpha/depth/stencil attachments remain exact. The real-time
 interactive runtime also survived framebuffer readback and the following
 20 seconds; its fresh renderer framebuffer was inspected.

@@ -33,6 +33,9 @@ struct GrassGeometryRequest {
     uint32_t VertexCount = 0;
     ::Oot3d::Renderer::PicaTopology Topology = ::Oot3d::Renderer::PicaTopology::TriangleList;
     PicaGrassTextureCoordinateTransform TextureCoordinates;
+    // Optional native primary-alpha input, only requested by overlay capture.
+    GrassGeometryAttributeStream Alpha;
+    float AlphaScale = 1.0F;
 };
 
 struct GrassPreparedGeometry {
@@ -42,6 +45,7 @@ struct GrassPreparedGeometry {
     uint64_t LastUsedFrame = 0;
     std::shared_ptr<const std::vector<GrassSourceVertex>> Vertices;
     std::shared_ptr<const std::vector<uint32_t>> Indices;
+    std::shared_ptr<const std::vector<float>> Alphas;
 };
 
 struct GrassGeometryRegistryStats {

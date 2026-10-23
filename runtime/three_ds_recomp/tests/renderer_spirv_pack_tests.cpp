@@ -7,6 +7,7 @@
 #include "fast/oot3d/pica_toon_fragment_artifact.h"
 #include "fast/oot3d/pica_uber_fragment_binaries.h"
 #include "fast/renderer/builtin_pass_binaries.h"
+#include "fast/renderer/pass_shader_artifact.h"
 #include "fast/renderer3ds/pica_native_fragment_binaries.h"
 #include "fast/renderer3ds/pica_startup_programs.h"
 #include "oot3d_native_vertex_binaries.h"
@@ -138,9 +139,11 @@ TEST(SpirvPack, EmbeddedFamiliesHoldTheirModules) {
     ExpectSpirvModules(Fast::Oot3d::ToonFragmentArtifacts(), 200U);
     ExpectSpirvModules(Fast::Oot3d::UberFragmentArtifacts(), 24U);
     ExpectSpirvModules(Fast::Oot3d::CasterFragmentArtifacts(), 4U);
-    ExpectSpirvModules(BuiltinPassArtifacts(), 80U); // 70 + 9 diffuse GI pass kernels + its OOT3D adapter (M5)
+    ExpectSpirvModules(BuiltinPassArtifacts(), 87U); // 70 + 9 diffuse GI pass kernels + its OOT3D adapter (M5), 2 grass raster-depth fragments, 3 contact shadow lengths, 2 upscaler orientation turns
 #ifdef ENABLE_OOT3D_IMMERSE
-    ExpectSpirvModules(Fast::Immerse::MxaoPassArtifacts(), 6U);
+    // The iMMERSE module hands its pack to the host, which reads it.
+    const auto mxaoEntries = ReadSpirvPack(Fast::Immerse::MxaoPassPack());
+    ExpectSpirvModules(PassShaderArtifactsFromPack(mxaoEntries), 6U);
 #endif
     ExpectSpirvModules(Oot3dNativeGame::TitleVertexArtifacts(), 8U);
     ExpectSpirvModules(Oot3dNativeGame::TitlePassArtifacts(), 6U);

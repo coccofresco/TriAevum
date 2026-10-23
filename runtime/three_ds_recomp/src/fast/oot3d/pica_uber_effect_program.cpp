@@ -1,4 +1,5 @@
 #include "fast/oot3d/pica_uber_effect_program.h"
+#include "fast/renderer3ds/pica_motion_provenance.h"
 
 #include "fast/oot3d/pica_directional_shadow_lighting.h"
 #include "fast/oot3d/pica_reactive_mask.h"
@@ -171,9 +172,8 @@ bool PicaUberEffectSupports(const PicaEffectDecisions& decisions,
     constexpr uint32_t surfaceBits = Decision::SurfaceLighting | Decision::Pbr | Decision::AlbedoReplay |
         Decision::DirectionalShadow | Decision::PointShadow | Decision::ReflectionPbr | Decision::EnvironmentMix;
     if (!surface && (decisions.Bits & surfaceBits) != 0U) return false;
-    if (!request.TemporalInputs &&
-        (decisions.Has(Decision::RigidMotion) || decisions.Has(Decision::SceneTransparentRigid)))
-        return false;
+    // Without temporal clip inputs the same writer publishes the explicit
+    // fallback provenance from the draw push constants.
     // An explicit-depth base serves a draw whose specialized program left
     // depth to fixed function: that draw's PICA depth is the rasterized one.
     if (decisions.Has(Decision::ExplicitDepth) && !base.ExplicitDepth) return false;
@@ -254,16 +254,13 @@ std::string BuildPicaUberEffectProgram(const PicaUberEffectProgramRequest& reque
         "layout(location=5) out vec4 pica_fog_guide;\n"
         "layout(location=6) out uvec4 pica_geometry_guide;\n"
         "layout(location=7) out vec4 pica_diffuse_albedo_guide;\n";
-    if (request.TemporalInputs) {
-        declarations +=
-            "layout(location=3) out vec4 pica_rigid_motion_guide;\n"
-            "#define pica_transparent_depth_guide pica_rigid_motion_guide\n"
-            "layout(location=7) in vec4 oot3d_current_clip;\n"
-            "layout(location=8) in vec4 oot3d_previous_clip;\n"
-            "layout(push_constant) uniform Oot3dDrawState { vec4 rigid_motion; vec4 jitter; } oot3d_draw;\n";
-    } else {
-        declarations += "layout(location=3) out vec4 pica_transparent_depth_guide;\n";
-    }
+    declarations +=
+        "layout(location=3) out vec4 pica_rigid_motion_guide;\n"
+        "#define pica_transparent_depth_guide pica_rigid_motion_guide\n"
+        "layout(push_constant) uniform Oot3dDrawState { vec4 rigid_motion; vec4 jitter; } oot3d_draw;\n";
+    if (request.TemporalInputs)
+        declarations += "layout(location=7) in vec4 oot3d_current_clip;\n"
+                        "layout(location=8) in vec4 oot3d_previous_clip;\n";
     const std::string block =
         "layout(set=0,binding=15,std140) uniform Oot3dUberEffects {\n"
         "    ToonSurfaceParameters toon;\n    uvec4 control;\n    vec4 values;\n} oot3d_uber;\n";
@@ -437,14 +434,10 @@ std::string BuildPicaUberEffectProgram(const PicaUberEffectProgramRequest& reque
                        Renderer3ds::PicaSurfaceLightingWaterMarker());
     if (request.TemporalInputs)
         end += Guarded(Bit(Decision::RigidMotion),
-            "    vec4 oot3d_motion = oot3d_draw.rigid_motion;\n"
-            "    if (oot3d_draw.rigid_motion.a > 0.5 &&\n"
-            "        oot3d_current_clip.w > 1.0e-7 && oot3d_previous_clip.w > 1.0e-7) {\n"
-            "        vec2 oot3d_current_uv = oot3d_current_clip.xy / oot3d_current_clip.w * 0.5 + 0.5;\n"
-            "        vec2 oot3d_previous_uv = oot3d_previous_clip.xy / oot3d_previous_clip.w * 0.5 + 0.5;\n"
-            "        oot3d_motion = vec4(oot3d_previous_uv - oot3d_current_uv, 1.0, 1.0);\n"
-            "    }\n"
-            "    pica_rigid_motion_guide = vec4(oot3d_motion.xy, oot3d_motion.z, 0.0);\n");
+            std::string(Renderer3ds::PicaMotionGuideAssignment));
+    else
+        end += Guarded(Bit(Decision::RigidMotion),
+            Renderer3ds::PicaMotionFallbackAssignment);
     // Deferred: the relief bend after every reader of the unbent guide, then
     // the overlay's transparent depth.
     end += Guarded(Bit(Decision::Relief), kPicaTextureReliefBend);

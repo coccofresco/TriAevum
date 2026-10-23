@@ -15,8 +15,11 @@
 namespace Fast::Immerse {
 
 // The six MXAO programs (deinterleave, occlusion, filter, resolve, temporal,
-// debug) in pass order; debugLibrary is the AO debug view library.
-[[nodiscard]] std::array<std::string, 6> BuildMxaoPassShaders(std::string_view debugLibrary);
+// debug) in pass order. Every program includes the host's GLSL library
+// `geometryLibrary` (pica_geometry_decode_normal of the geometry guide);
+// debugLibrary is its AO debug view library (TriaevumImmerseHost).
+[[nodiscard]] std::array<std::string, 6> BuildMxaoPassShaders(std::string_view debugLibrary,
+                                                              std::string_view geometryLibrary);
 
 // Pixels are deinterleaved into kMxaoTiles x kMxaoTiles tiles: a tile holds
 // every fourth pixel of each axis, so the taps of one tile stay cache local.
@@ -144,25 +147,25 @@ static_assert(sizeof(MxaoConstants) == 128);
 }
 
 // Linear view depth of every pixel, written in tile order.
-[[nodiscard]] std::string BuildMxaoDeinterleaveShader();
+[[nodiscard]] std::string BuildMxaoDeinterleaveShader(std::string_view geometryLibrary);
 // Occlusion per tile pixel: RG16F (ambient occlusion, normalized depth,
 // negated where the filter must smooth across a depth discontinuity).
-[[nodiscard]] std::string BuildMxaoOcclusionShader();
+[[nodiscard]] std::string BuildMxaoOcclusionShader(std::string_view geometryLibrary);
 // MXAO's depth-guided regression filter. The intermediate pass keeps the RG16F
 // layout; the final pass writes the published R32F visibility (1 - occlusion).
-[[nodiscard]] std::string BuildMxaoFilterShader(bool finalPass);
+[[nodiscard]] std::string BuildMxaoFilterShader(bool finalPass, std::string_view geometryLibrary);
 // Debug views of the inputs the renderer passes and of the estimate's terms
 // (not part of the original, whose only view is the AO itself). Binding 2 is
 // the raw estimate, or the accumulation for the history view. `packNormal`
 // supplies `float mxao_debug_pack_normal(vec3 view_normal)`, the display
 // encoding of a normal in the R32F output.
-[[nodiscard]] std::string BuildMxaoDebugShader(std::string_view packNormal);
+[[nodiscard]] std::string BuildMxaoDebugShader(std::string_view packNormal, std::string_view geometryLibrary);
 // Temporal accumulation of the per-pixel occlusion (not part of the original):
 // reprojects the previous accumulation with the scene's motion vectors,
 // rejects it where the surface's previous depth disagrees, clamps it to this
 // frame's jitter phases and writes RGBA16F (occlusion, signed depth, history
 // length) for the filter and the next frame. Bindings 5 and 6 are the motion
 // vectors and the previous accumulation.
-[[nodiscard]] std::string BuildMxaoTemporalShader();
+[[nodiscard]] std::string BuildMxaoTemporalShader(std::string_view geometryLibrary);
 
 } // namespace Fast::Immerse

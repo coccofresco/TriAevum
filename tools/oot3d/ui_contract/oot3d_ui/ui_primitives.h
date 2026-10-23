@@ -68,6 +68,10 @@ struct UiPrimitive {
     UiColor color;
     std::uint32_t layer = 0;
     bool visible = true;
+    // The source crop is stored a quarter turn from the destination: corners
+    // top-left, top-right, bottom-left, bottom-right sample (u0,v1), (u0,v0),
+    // (u1,v1), (u1,v0) of the uv rectangle (top-left origin).
+    bool uv_quarter_turn = false;
 };
 
 } // namespace oot3d::ui

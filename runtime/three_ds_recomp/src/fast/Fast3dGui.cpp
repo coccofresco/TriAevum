@@ -106,6 +106,7 @@ class Oot3dGraphicsSettingsWindow final : public Ship::GuiWindow {
                 maximum);
         }
         GuiWindow::Draw();
+        if (!IsVisible()) Oot3d::EndGraphicsSettingsPreviews();
     }
 
   protected:

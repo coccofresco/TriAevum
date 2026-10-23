@@ -574,6 +574,19 @@ int main() {
         Require(shrink.size() == 1U, "nearest shrink is wrong");
     }
 
+    // The default folder: next to the executable in the portable layout,
+    // beside the save data where the executable sits in a read-only image.
+    {
+        const std::filesystem::path exe = "/opt/app", data = "/home/u/TriAevum/data";
+        Require(DefaultSavestateDirectory(true, exe, data / "savedata") == exe / "savestates",
+                "the portable layout does not keep states next to the executable");
+        Require(DefaultSavestateDirectory(false, exe, data / "savedata") == data / "savestates" &&
+                    DefaultSavestateDirectory(false, exe, data / "savedata" / "") == data / "savestates",
+                "a read-only package does not keep states beside the save data");
+        Require(DefaultSavestateDirectory(false, exe, {}) == exe / "savestates",
+                "no save data folder does not fall back to the executable's");
+    }
+
     // The library: default folder, timestamped names, last state and
     // preferences that survive a restart, newest-first listing, fixed slot.
     {

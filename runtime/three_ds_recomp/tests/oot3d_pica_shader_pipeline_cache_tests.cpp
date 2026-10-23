@@ -5,6 +5,7 @@
 #include "fast/oot3d/pica_reactive_mask.h"
 #include "fast/oot3d/pica_rigid_motion.h"
 #include "fast/oot3d/pica_shader_pipeline_cache.h"
+#include "fast/oot3d/pica_rim_light.h"
 #include "fast/oot3d/pica_uber_effect_program.h"
 #include "fast/renderer3ds/pica_surface_lighting.h"
 
@@ -15,8 +16,108 @@
 
 #include <stdexcept>
 #include <cmath>
+#include <limits>
 
 namespace {
+
+TEST(Oot3dRimLight, ScopeUsesNativeActorOwnershipAndRejectsNonOpaquePasses) {
+    using namespace Fast::Renderer3ds;
+    PicaEnvironmentLighting environment;
+    environment.Enabled = environment.Rim.Enabled = true;
+    PicaCompositionAttribution composition;
+    composition.Layer = PicaCompositionLayer::OpaqueWorld;
+    NativeBlendState blend;
+    auto domain = PicaCompositionDomain::Scene;
+    auto appearance = PicaSurfaceAppearance::Relightable;
+    bool depthTest = true, depthWrite = true;
+    uint8_t operation = 0;
+    const auto eligible = [&] { return Fast::Oot3d::PicaDrawReceivesRimLight(
+        environment, domain, composition, blend, appearance, depthTest, depthWrite, operation); };
+    EXPECT_FALSE(eligible()); // A room material is not an actor, even with the same shader.
+    composition.NativeActorGeometry = true;
+    EXPECT_TRUE(eligible()); // Rigid props and skinned characters use the same ownership.
+    composition.NativeActorGeometry = false;
+    environment.Rim.Scope = PicaRimLightScope::ActorsAndWorld;
+    EXPECT_TRUE(eligible());
+    for (auto layer : {PicaCompositionLayer::Unknown, PicaCompositionLayer::TransparentWorld,
+                       PicaCompositionLayer::Atmosphere, PicaCompositionLayer::Ui}) {
+        composition.Layer = layer;
+        EXPECT_FALSE(eligible());
+    }
+    composition.Layer = PicaCompositionLayer::OpaqueWorld;
+    for (auto excluded : {PicaCompositionDomain::Unknown, PicaCompositionDomain::Ui, PicaCompositionDomain::Screen}) {
+        domain = excluded;
+        EXPECT_FALSE(eligible());
+    }
+    domain = PicaCompositionDomain::Scene;
+    blend.Enabled = true;
+    EXPECT_TRUE(eligible()); // Native ONE/ZERO replacement blending.
+    blend.SourceRgb = NativeBlendFactor::SourceAlpha;
+    blend.DestRgb = NativeBlendFactor::OneMinusSourceAlpha;
+    EXPECT_FALSE(eligible()); // Fades are excluded even if they write depth.
+    blend.DestRgb = NativeBlendFactor::One;
+    EXPECT_FALSE(eligible());
+    blend = {};
+    composition.IsolatedLighting = true; EXPECT_FALSE(eligible()); composition.IsolatedLighting = false;
+    composition.NativeProjectedShadow = true; EXPECT_FALSE(eligible()); composition.NativeProjectedShadow = false;
+    appearance = PicaSurfaceAppearance::Unlit; EXPECT_FALSE(eligible());
+    appearance = PicaSurfaceAppearance::AdditiveComposition; EXPECT_FALSE(eligible());
+    appearance = PicaSurfaceAppearance::Relightable;
+    depthTest = false; EXPECT_FALSE(eligible()); depthTest = true;
+    depthWrite = false; EXPECT_FALSE(eligible()); depthWrite = true;
+    operation = 3; EXPECT_FALSE(eligible()); operation = 0;
+    environment.Enabled = false; EXPECT_FALSE(eligible()); environment.Enabled = true;
+    environment.Rim.Enabled = false; EXPECT_FALSE(eligible());
+}
+
+TEST(Oot3dRimLight, DisabledAndInvalidSettingsPublishCanonicalZeroUniforms) {
+    using namespace Fast::Renderer3ds;
+    PicaSurfaceLightingUniforms uniforms;
+    PicaRimLightSettings rim;
+    AssignPicaSurfaceRim(uniforms, rim);
+    EXPECT_EQ(uniforms.Rim, (std::array<float, 4>{}));
+    rim.Enabled = true;
+    AssignPicaSurfaceRim(uniforms, rim);
+    EXPECT_EQ(uniforms.Rim, (std::array<float, 4>{1.0F, 4.0F, 1.0F, 0.25F}));
+    EXPECT_EQ(uniforms.RimColor, (std::array<float, 4>{1.0F, 0.96F, 0.9F, 0.0F}));
+    EXPECT_EQ(uniforms.RimDirection, (std::array<float, 4>{0, 1, 0, 0}));
+    rim.Intensity = kMaximumPicaRimIntensity; rim.Azimuth = 90;
+    AssignPicaSurfaceRim(uniforms, rim);
+    EXPECT_FLOAT_EQ(uniforms.Rim[0], 8.0F);
+    EXPECT_NEAR(uniforms.RimDirection[0], 1.0F, 1.e-6F);
+    EXPECT_NEAR(uniforms.RimDirection[1], 0.0F, 1.e-6F);
+    rim.Source = PicaRimLightSource::SceneLights;
+    AssignPicaSurfaceRim(uniforms, rim);
+    EXPECT_EQ(uniforms.Rim, (std::array<float, 4>{8, 4, 2, 0}));
+    EXPECT_EQ(uniforms.RimColor, (std::array<float, 4>{}));
+    EXPECT_EQ(uniforms.RimDirection, (std::array<float, 4>{}));
+    rim.Enabled = false; rim.Intensity = 1; rim.Sharpness = 16; rim.Coverage = 0.7F;
+    AssignPicaSurfaceRim(uniforms, rim);
+    EXPECT_EQ(uniforms.Rim, (std::array<float, 4>{}));
+    EXPECT_EQ(uniforms.RimColor, (std::array<float, 4>{}));
+    EXPECT_EQ(uniforms.RimDirection, (std::array<float, 4>{}));
+    rim.Enabled = true;
+    for (float bad : {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(), -1.0F, 17.0F}) {
+        auto invalid = rim; invalid.Sharpness = bad;
+        AssignPicaSurfaceRim(uniforms, invalid);
+        EXPECT_EQ(uniforms.Rim, (std::array<float, 4>{}));
+    }
+    for (auto member : {&PicaRimLightSettings::Intensity, &PicaRimLightSettings::Azimuth,
+                        &PicaRimLightSettings::Coverage}) {
+        auto invalid = rim; invalid.*member = std::numeric_limits<float>::quiet_NaN();
+        AssignPicaSurfaceRim(uniforms, invalid);
+        EXPECT_EQ(uniforms.Rim, (std::array<float, 4>{}));
+    }
+    auto invalid = rim; invalid.Color[1] = 1.1F;
+    AssignPicaSurfaceRim(uniforms, invalid);
+    EXPECT_EQ(uniforms.Rim, (std::array<float, 4>{}));
+    invalid = rim; invalid.Source = static_cast<PicaRimLightSource>(2);
+    AssignPicaSurfaceRim(uniforms, invalid);
+    EXPECT_EQ(uniforms.Rim, (std::array<float, 4>{}));
+    rim.Intensity = 0;
+    AssignPicaSurfaceRim(uniforms, rim);
+    EXPECT_EQ(uniforms.Rim, (std::array<float, 4>{}));
+}
 
 Oot3d::Renderer::PicaTemporalVertexProgramView
 BaseTemporalVertexProgram();
@@ -625,7 +726,7 @@ void main() {
 }
 
 TEST(Oot3dPicaShaderPipelineCache,
-     OmitsTemporalInstrumentationWithoutTypedFrontendProgram) {
+     PublishesFallbackProvenanceWithoutTypedFrontendProgram) {
     Fast::Oot3d::PicaShaderPipelineCache cache;
     Fast::Oot3d::EffectsSettings effects;
     auto request = BaseRequest();
@@ -636,8 +737,10 @@ TEST(Oot3dPicaShaderPipelineCache,
     const auto& result = cache.Resolve(request, effects);
     EXPECT_FALSE(Fast::Oot3d::HasPicaShaderInstrumentationFeature(
         result.AppliedFeatures, Fast::Oot3d::PicaShaderInstrumentationFeature::TemporalVertex));
-    EXPECT_FALSE(Fast::Oot3d::HasPicaShaderInstrumentationFeature(
+    EXPECT_TRUE(Fast::Oot3d::HasPicaShaderInstrumentationFeature(
         result.AppliedFeatures, Fast::Oot3d::PicaShaderInstrumentationFeature::RigidMotionGuide));
+    EXPECT_EQ(result.FragmentShaderSource.find("layout(location=7) in"), std::string::npos);
+    EXPECT_NE(result.FragmentShaderSource.find("vec4(oot3d_draw.rigid_motion.xyz, 0.0)"), std::string::npos);
     EXPECT_EQ(cache.Stats().TypedInstrumentationContractRejects, 1U);
 }
 
@@ -1641,7 +1744,7 @@ void main() {
                                  firstLocation + 1U),
               std::string::npos);
     const size_t motionWrite = result.Source.find(
-        "pica_rigid_motion_guide = vec4(oot3d_motion.xy");
+        "pica_rigid_motion_guide = oot3d_motion");
     const size_t depthWrite = result.Source.find(
         "pica_rigid_motion_guide.a = pica_color.a");
     ASSERT_NE(motionWrite, std::string::npos);
@@ -2231,9 +2334,9 @@ TEST(PicaFragmentBalance, LegacyDeclarationsAndWaterBodyAreUnchanged) {
     EXPECT_EQ(PicaSurfaceLightingBody(false,false),PicaSurfaceLightingBody());
     EXPECT_EQ(PicaSurfaceLightingDeclarations(true,false),PicaSurfaceLightingDeclarations(true));
     EXPECT_EQ(PicaSurfaceLightingBody(true,false),PicaSurfaceLightingBody(true));
-    EXPECT_EQ(sizeof(PicaSurfaceLightingUniforms),2912U);
-    EXPECT_EQ(offsetof(PicaBalancedSurfaceUniforms,Balance),2912U);
-    EXPECT_EQ(sizeof(PicaBalancedSurfaceUniforms),3072U);
+    EXPECT_EQ(sizeof(PicaSurfaceLightingUniforms),2992U);
+    EXPECT_EQ(offsetof(PicaBalancedSurfaceUniforms,Balance),2992U);
+    EXPECT_EQ(sizeof(PicaBalancedSurfaceUniforms),3152U);
     const auto body=PicaSurfaceLightingBody(true,true);
     EXPECT_EQ(body.find("primary_fragment_color.rgb + added"),std::string::npos);
     EXPECT_EQ(body.find("fragment_uniforms.lighting_diffuse[pica_light]"),std::string::npos);
@@ -2288,15 +2391,18 @@ TEST(PicaFragmentBalance, CapabilityFalseKeepsCanonicalKeysAndNativeMemoryInert)
         PicaShaderInstrumentationFeature::FragmentLightingBalance));
 }
 
-TEST(Oot3dPicaShaderInstrumentation, LegacySurfaceSourceIs9039d71ByteIdentical) {
+// The plain (no balance operand) surface source is pinned: a change here is a
+// change to every title's canonical lighting shader, not to the balance variant.
+// Pinned at the beta.1 alignment (rim and baked-reference fields present).
+TEST(Oot3dPicaShaderInstrumentation, LegacySurfaceSourceIsPinned) {
     using namespace Fast::Renderer3ds;
     const auto hash = [](std::string_view text) {
         uint64_t value = 14695981039346656037ULL;
         for (const unsigned char byte : text) value = (value ^ byte) * 1099511628211ULL;
         return value;
     };
-    EXPECT_EQ(PicaSurfaceLightingDeclarations().size(), 30199U);
-    EXPECT_EQ(hash(PicaSurfaceLightingDeclarations()), 10437627254862936829ULL);
+    EXPECT_EQ(PicaSurfaceLightingDeclarations().size(), 38472U);
+    EXPECT_EQ(hash(PicaSurfaceLightingDeclarations()), 17643374038356268985ULL);
     EXPECT_EQ(PicaSurfaceLightingBody().size(), 4238U);
     EXPECT_EQ(hash(PicaSurfaceLightingBody()), 3389087660484655324ULL);
     EXPECT_NE(PicaSurfaceLightingBody(true), PicaSurfaceLightingBody());

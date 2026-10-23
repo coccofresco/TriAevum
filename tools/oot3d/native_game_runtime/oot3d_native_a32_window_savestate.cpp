@@ -271,6 +271,12 @@ NativeA32WindowSession::SaveState(const std::filesystem::path &path, bool withSe
   renderStream.Drain();
   // Host-owned continuation registers must never escape into a standalone savestate.
   if (ocarinaText.Pending()) return SaveStateOutcome::Deferred;
+  if (pauseTransactionStorage->NeedsExecution()) return SaveStateOutcome::Deferred;
+  if (systemPageStorage->Pending() || widescreenProjection.PendingTopScreenPauseChildRestore.has_value())
+    return SaveStateOutcome::Deferred;
+  if (itemDescriptionStorage->Pending()) return SaveStateOutcome::Deferred;
+  if (Oot3dNativeGame::NativeActorVisibilityHasPendingRestore(widescreenProjection.ActorVisibility))
+    return SaveStateOutcome::Deferred;
   const auto started = std::chrono::steady_clock::now();
   Oot3dNativeGame::NativeA32SavestateRuntimeState runtime;
   runtime.FrameCount = frameCount;
@@ -433,6 +439,7 @@ bool NativeA32WindowSession::LoadState(const std::filesystem::path &path,
   // the scale they select.
   ApplyLoadedSavestateSettings(runtime, applySettings);
   Oot3dNativeGame::ResetOot3dTypedGameplayTransientState();
+  Oot3dNativeGame::ResetNativeActorVisibilityAfterStateLoad(widescreenProjection.ActorVisibility);
   picaCompositionTracker.Reset();
   mm3dCompositionTracker.Reset();
   widescreenProjection.Projection.PendingSceneFrustum.reset();
@@ -470,6 +477,10 @@ bool NativeA32WindowSession::LoadState(const std::filesystem::path &path,
   uiLifecycleBridge.ResetAfterStateLoad(frameCount);
   hdFonts.Reset();
   ocarinaText.Reset();
+  pauseTransactionStorage->Reset();
+  systemPageStorage->Reset();
+  itemDescriptionStorage->Reset();
+  wideItemsStorage->Reset();
   uiLifecycleBridge.SetTopScreenConfig(activeTopScreenConfig);
   widescreenProjection.TopScreenPauseDrawRouting = {};
   widescreenProjection.TopScreenPausePageRedraw = {};
@@ -488,8 +499,6 @@ bool NativeA32WindowSession::LoadState(const std::filesystem::path &path,
   nativeCandidateDispatch.TopScreenPauseSystemOpen = {};
   nativeCandidateDispatch.TopScreenViewportDrawPhase = 0U;
   nativeCandidateDispatch.TopScreenViewportDrawArgument = 0U;
-  nativeCandidateDispatch.TopScreenSceneViewportDrawPhase = 0U;
-  nativeCandidateDispatch.TopScreenSceneViewportDrawArgument = 0U;
   nativeCandidateDispatch.TopScreenOverlayViewportDrawPhase = 0U;
   nativeCandidateDispatch.TopScreenTouchCoordinateUpdatePhase = 0U;
   nativeCandidateDispatch.TopScreenAlternateRendererRestore.reset();
@@ -594,6 +603,7 @@ void NativeA32WindowSession::ServiceSavestateRequests() {
     }
     switch (SaveState(path, request->WithSettings)) {
     case SaveStateOutcome::Deferred:
+      ++savestateStats.SaveDeferralCount;
       savestateLibrary->Request(*request);  // Retried at the next boundary.
       return;
     case SaveStateOutcome::Failed:

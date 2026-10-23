@@ -37,6 +37,8 @@ class GraphicsSettingsPanelTab {
     // the tab is top-level under its own label.
     [[nodiscard]] virtual const char* Group() const noexcept { return nullptr; }
     virtual void Draw() = 0;
+    // Session-only previews end when F1 closes or F2 is pressed.
+    virtual void EndPreview() {}
 };
 
 // Game frontends may contribute application-owned settings tabs without
@@ -47,6 +49,9 @@ void InstallGraphicsSettingsPanelTabs(
 // Backward-compatible convenience wrapper for frontends with one tab.
 void InstallGraphicsSettingsPanelTab(
     std::shared_ptr<GraphicsSettingsPanelTab> tab);
+void EndGraphicsSettingsPreviews();
+// The host F2 action, including ending application-owned previews.
+void ToggleGraphicsNativePresentation();
 
 // The F1 window's title, named for the running game. The game frontend
 // installs it before the GUI is created; the default is "OOT3D Graphics".
@@ -78,8 +83,8 @@ class GraphicsSettingsPanel final {
     bool DrawLightingSettings(GraphicsSettings&, const GraphicsCapabilities&);
     bool DrawShadowSettings(GraphicsSettings&, const GraphicsCapabilities&);
     bool DrawAmbientOcclusionSettings(GraphicsSettings&, const GraphicsCapabilities&);
-    // In the iMMERSE module (fast/immerse/mxao_settings_panel.cpp, under its
-    // own licence); without it, fast/oot3d/immerse_unavailable.cpp.
+    // MXAO's controls, labelled with the texts of the iMMERSE module
+    // (fast/oot3d/mxao_settings_panel.cpp); none without the module.
     bool DrawMxaoSettings(EffectsSettings&);
     // MXAO's credit and licence exception, at the foot of Ambient Occlusion.
     void DrawMxaoCredits();

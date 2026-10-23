@@ -128,7 +128,8 @@ bool NriEffectGraphTransientImageArena::Configure(
     const auto selection = mImpl->Cache.Select(plan);
     auto& configuration = mImpl->Configurations[selection.Index];
     if (selection.Hit) {
-        mImpl->Cache.Commit(selection.Index, plan);
+        if (selection.Covers) mImpl->Cache.Touch(selection.Index);
+        else mImpl->Cache.Commit(selection.Index, plan);
         mImpl->Current = &configuration;
         mImpl->Summarize(plan);
         mImpl->Statistics.LastConfigurationReused = true;

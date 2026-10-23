@@ -300,3 +300,60 @@ The helper build needed three repairs of its own: the bridge now uses the
 preparation queue (`pica_preparation_queue.cpp`), clang-cl needs NRI's `/WX`
 relaxed as in the runtime build, and its contract test expected geometry
 shaders disabled although the shared profile enables them for PBR seams.
+
+## Graphics Profile Coverage (2026-10-12)
+
+The corpus recipes were canonical and attachment-free: captures and Citra
+caches hold Authentic programs only. A profile such as Enhanced (or a Custom
+one with per-pixel PBR lighting, virtual shadow maps and MXAO) draws
+instrumented variants whose features and attachments the runtime decides per
+draw (shadow receivers, water, isolated or authored appearance, grass,
+materials). A cache prepared from the 2026-10-07 corpus left a dusk session in
+Hyrule Field creating 283 pipelines in 54.6 s, as with no cache at all.
+
+Those variants come from recorded sessions instead. The runtime's own
+inventories (`OOT3D_PICA_EFFECTIVE_SHADER_INVENTORY`,
+`OOT3D_PICA_PIPELINE_INVENTORY`) are inputs of
+`regenerate_shader_corpus.py --runtime-inventory DIR`; their programs join the
+pack and their recipes merge into `runtime-pipelines.json`, passed to the
+release builder as another `--pipeline-manifest`. Recording exposed three
+defects, fixed in `fe0f370`, each found by tracing both sides with
+`TRIAEVUM_NRI_PIPELINE_TRACE=1`:
+
+- Recipes with an instrumentation feature above bit 13 failed a fixed mask and
+  were dropped silently; the material baseline (applied, never requested)
+  failed the applied-within-requested rule. These were the heaviest programs
+  (4-6 s of driver work each).
+- Always-available pipelines were recorded although they are linked from the
+  startup parts and their programs are not in the pack.
+- The runtime resolved a specialized fragment program from the built-in
+  families before the pack; the helper read the pack only. Both use
+  `FindPicaBuiltInFragmentSpirv`.
+
+With those fixed, every pipeline the helper prepared from a session's recipes
+was created by the game from the cache (identical creation input, 0.1-0.2 ms).
+
+Developer sweep (`lighting-library/lab/lab_sweep.py`, outside the repository):
+each entrance of the Better warp list, Enhanced and the play profile applied
+in turn through the lab `graphics` command (75 frames each); outdoor scenes as
+child by day and adult by night, dungeons at their age. A session that a
+cutscene keeps out of normal play is ended and the next one resumes from the
+Kokiri savestate. 419 visits: 390 arrived, 9 held by a cutscene, 20 refused
+(adult Market and Castle are other scenes); 10 sessions, about 75 minutes.
+
+Corpus `shader-corpus-20261012`: 1,773 modules (989 before), 521 capture
+recipes and 1,312 profile recipes. The helper prepares 1,872 pipelines with the
+startup parts in 357 s on an RTX 3060 (driver disk cache warm for the parts);
+the cache is 98.7 MB.
+
+Validation on a path the sweep never visits (Hyrule Field through dusk into
+night, 2,400 frames, cache from the helper only): driver pipeline work during
+the session 1,318 ms in total (54.6 s with the old corpus's cache, 6.6 s with
+one recorded session), slowest pipeline 115 ms (an always-available link),
+draws waiting on always-available programs 514 (15,048-51,344 before). Four
+programs of that path are still compiled once at run time.
+
+Limits: coverage is what a spawn view of each entrance draws under the two
+profiles; profiles with other effects (Toon, other AO or shadow modes) need
+their own sweep. Variants a session did not see still prepare in the
+background behind the always-available programs.

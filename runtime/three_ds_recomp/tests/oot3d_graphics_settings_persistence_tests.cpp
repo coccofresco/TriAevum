@@ -382,6 +382,27 @@ TEST(Oot3dGraphicsSettingsPersistence, RoundTripsAoTextureReliefAndDefaultsOlder
     EXPECT_FALSE(corrected.Issues.empty());
 }
 
+TEST(Oot3dGraphicsSettingsPersistence, RoundTripsExtendedDrawDistanceAndDefaultsOlderFilesToNative) {
+    using namespace Fast::Oot3d;
+    auto settings = CompleteSettings();
+    settings.ExtendedDrawDistance = true;
+    const auto saved = SerializeGraphicsSettings(settings);
+    EXPECT_EQ(saved["Camera"]["ExtendedDrawDistance"], true);
+    const auto loaded = DeserializeGraphicsSettings(saved);
+    EXPECT_TRUE(loaded.Issues.empty());
+    EXPECT_TRUE(loaded.Value.ExtendedDrawDistance);
+    auto older = saved;
+    older["Camera"].erase("ExtendedDrawDistance");
+    const auto defaults = DeserializeGraphicsSettings(older);
+    EXPECT_TRUE(defaults.Issues.empty());
+    EXPECT_FALSE(defaults.Value.ExtendedDrawDistance);
+    auto invalid = saved;
+    invalid["Camera"]["ExtendedDrawDistance"] = "far";
+    const auto corrected = DeserializeGraphicsSettings(invalid);
+    EXPECT_FALSE(corrected.Value.ExtendedDrawDistance);
+    EXPECT_FALSE(corrected.Issues.empty());
+}
+
 TEST(Oot3dGraphicsSettingsPersistence, MigratesSingleCascadeWithoutLosingTheOffChoiceOrLightResponse) {
     using namespace Fast::Oot3d;
     auto document = SerializeGraphicsSettings(CompleteSettings());
@@ -798,6 +819,55 @@ TEST(Oot3dGraphicsSettingsPersistence,
 }
 
 TEST(Oot3dGraphicsSettingsPersistence,
+     Schema15TakesTitleGrassRulesAndKeepsOtherGrassSettings) {
+    auto document =
+        Fast::Oot3d::SerializeGraphicsSettings(CompleteSettings());
+    ASSERT_FALSE(document["Grass"]["Sources"].empty());
+    auto titleRule = document["Grass"]["Sources"][0];
+    titleRule["Target"]["Rgba8Hash"] = "a35e3fe6f83ca9c2";
+    titleRule["InputWhite"] = 0.5;
+    const nlohmann::json titleRules = {
+        {"Sources", nlohmann::json::array({titleRule})},
+        {"Masks", nlohmann::json::array()}};
+
+    document["SchemaVersion"] = 14U;
+    document["Grass"]["Budget"]["DrawDistance"] = 1234.0;
+    document["Grass"]["Performance"]["FarDensity"] = 0.25;
+    document["Grass"]["Generation"]["Seed"] = 77U;
+    document["GrassSavedPreset"] = document["Grass"];
+    document["GrassSavedPreset"]["Budget"]["DrawDistance"] = 4321.0;
+
+    Fast::Oot3d::InstallTitleGrassRuleDefaults(titleRules);
+    const auto migrated = Fast::Oot3d::DeserializeGraphicsSettings(document);
+    auto current = document;
+    current["SchemaVersion"] = Fast::Oot3d::kGraphicsSettingsSchemaVersion;
+    const auto unchanged = Fast::Oot3d::DeserializeGraphicsSettings(current);
+    Fast::Oot3d::ClearTitleGrassRuleDefaults();
+    const auto withoutTitle = Fast::Oot3d::DeserializeGraphicsSettings(document);
+
+    EXPECT_TRUE(migrated.NeedsRewrite);
+    const auto saved = Fast::Oot3d::SerializeGraphicsSettings(migrated.Value);
+    for (const char* block : {"Grass", "GrassSavedPreset"}) {
+        ASSERT_EQ(saved[block]["Sources"].size(), 1U);
+        EXPECT_EQ(saved[block]["Sources"][0]["Target"]["Rgba8Hash"], "a35e3fe6f83ca9c2");
+        EXPECT_FLOAT_EQ(saved[block]["Sources"][0]["InputWhite"].get<float>(), 0.5F);
+        EXPECT_TRUE(saved[block]["Masks"].empty());
+        EXPECT_FLOAT_EQ(saved[block]["Performance"]["FarDensity"].get<float>(), 0.25F);
+        EXPECT_EQ(saved[block]["Generation"]["Seed"], 77U);
+    }
+    EXPECT_FLOAT_EQ(saved["Grass"]["Budget"]["DrawDistance"].get<float>(), 1234.0F);
+    EXPECT_FLOAT_EQ(saved["GrassSavedPreset"]["Budget"]["DrawDistance"].get<float>(), 4321.0F);
+
+    // A current-schema configuration keeps its own rules, and without
+    // installed title rules an old one keeps them too.
+    const auto ownHash = document["Grass"]["Sources"][0]["Target"]["Rgba8Hash"];
+    EXPECT_EQ(Fast::Oot3d::SerializeGraphicsSettings(unchanged.Value)["Grass"]["Sources"][0]["Target"]["Rgba8Hash"],
+              ownHash);
+    EXPECT_EQ(Fast::Oot3d::SerializeGraphicsSettings(withoutTitle.Value)["Grass"]["Sources"][0]["Target"]["Rgba8Hash"],
+              ownHash);
+}
+
+TEST(Oot3dGraphicsSettingsPersistence,
      PreservesUnsupportedFutureSchema) {
     auto fallback = CompleteSettings();
     fallback.OutputWidth = 3440U;
@@ -1037,4 +1107,54 @@ TEST(Oot3dGraphicsSettingsPersistence, ScreenSpaceGlobalIllumination) {
     EXPECT_TRUE(partial.NeedsRewrite);
     EXPECT_FLOAT_EQ(partial.Value.Effects.GlobalIllumination.ScreenSpace.Thickness, ScreenSpaceGiSettings{}.Thickness);
     EXPECT_EQ(partial.Value.Effects.GlobalIllumination.ScreenSpace.Sectors, 128U);
+}
+
+TEST(GrassMaskPersistence, RoundTripDefaultsValidationAndPresetOwnership) {
+    using namespace Fast::Oot3d;
+    GraphicsSettings settings;
+    settings.Preset = GraphicsPreset::Custom;
+    for (auto mode : { GrassMaskMode::Automatic, GrassMaskMode::Custom, GrassMaskMode::Off }) {
+        GrassMaskRule rule;
+        rule.Mode = mode;
+        rule.Coverage.Target = { "", 0x1234 + uint64_t(mode), 64, 128 };
+        rule.Coverage.Channel = GrassSampleChannel::Green;
+        rule.Coverage.Invert = true;
+        rule.Coverage.InputBlack = .2F;
+        rule.Coverage.InputWhite = .8F;
+        rule.Coverage.OutputBlack = .1F;
+        rule.Coverage.OutputWhite = .7F;
+        rule.Coverage.ResponseExponent = 2;
+        rule.Coverage.ActiveRects = { { .1F, .2F, .7F, .8F } };
+        rule.Strength = .4F;
+        settings.Grass.Masks.push_back(rule);
+    }
+    auto document = SerializeGraphicsSettings(settings);
+    const auto loaded = DeserializeGraphicsSettings(document);
+    ASSERT_EQ(loaded.Value.Grass.Masks.size(), 3);
+    EXPECT_EQ(SerializeGraphicsSettings(loaded.Value)["Grass"]["Masks"], document["Grass"]["Masks"]);
+    EXPECT_EQ(loaded.Value.Grass.Masks[1].Coverage.ActiveRects, settings.Grass.Masks[1].Coverage.ActiveRects);
+    auto kept = GraphicsSettingsService::KeepHostOwnedSettings(GraphicsSettings{}, settings);
+    EXPECT_EQ(kept.Grass.Masks.size(), 3);
+    document["Grass"].erase("Masks");
+    EXPECT_TRUE(DeserializeGraphicsSettings(document).Value.Grass.Masks.empty());
+    document["Grass"]["Masks"] = nlohmann::json::array(
+        { { { "Target", { { "Rgba8Hash", "0000000000001234" }, { "Width", 64 }, { "Height", 128 } } },
+            { "Mode", "unknown" },
+            { "Channel", "unknown" },
+            { "InputBlack", "mistyped" },
+            { "Strength", 2.0 } } });
+    auto defaults = DeserializeGraphicsSettings(document);
+    ASSERT_EQ(defaults.Value.Grass.Masks.size(), 1);
+    const auto& mask = defaults.Value.Grass.Masks[0];
+    EXPECT_EQ(mask.Mode, GrassMaskMode::Automatic);
+    EXPECT_EQ(mask.Coverage.Channel, GrassSampleChannel::Alpha);
+    EXPECT_EQ(mask.Coverage.InputBlack, 0);
+    EXPECT_EQ(mask.Strength, 1);
+    EXPECT_TRUE(FindGrassMaskRule(defaults.Value.Grass.Masks, 0x1234, 64, 128));
+    EXPECT_FALSE(FindGrassMaskRule(defaults.Value.Grass.Masks, 0x1234, 128, 64));
+    document["Grass"]["Masks"].push_back(document["Grass"]["Masks"][0]);
+    document["Grass"]["Masks"].push_back(17);
+    EXPECT_EQ(DeserializeGraphicsSettings(document).Value.Grass.Masks.size(), 1);
+    document["Grass"]["Masks"] = "mistyped";
+    EXPECT_TRUE(DeserializeGraphicsSettings(document).Value.Grass.Masks.empty());
 }

@@ -28,6 +28,17 @@ std::array<float, 2> UpscalerJitterInInputPixels(
             targetPixels[1] * float(inputHeight) / float(targetHeight)};
 }
 
+std::array<float, 2> UpscalerMotionJitterCorrection(
+    const std::array<float, 2>& currentJitterUv, const std::array<float, 2>& previousJitterUv) noexcept {
+    return {currentJitterUv[0] - previousJitterUv[0], currentJitterUv[1] - previousJitterUv[1]};
+}
+
+std::array<float, 4> UpscalerMotionWithoutJitter(
+    const std::array<float, 4>& motion, const std::array<float, 2>& correction) noexcept {
+    if (motion[2] >= 0.5F) return motion;
+    return {motion[0] + correction[0], motion[1] + correction[1], motion[2], motion[3]};
+}
+
 std::string BuildUpscalerGuideResampleShader() {
     return R"glsl(#version 450
 layout(local_size_x=8,local_size_y=8,local_size_z=1) in;
@@ -41,6 +52,7 @@ layout(set=0,binding=6) uniform sampler point_sampler;
 layout(push_constant) uniform GuideState {
     uvec2 extent;
     uvec2 source_extent;
+    vec2 motion_correction;
 } pc;
 const uint max_span=4u;
 void main(){
@@ -64,7 +76,10 @@ void main(){
         }
     }
     imageStore(depth_output,ivec2(pixel),vec4(depth,0.0,0.0,1.0));
-    imageStore(motion_output,ivec2(pixel),texelFetch(sampler2D(source_motion,point_sampler),nearest,0));
+    // Motion without the jitter (UpscalerMotionWithoutJitter).
+    vec4 motion=texelFetch(sampler2D(source_motion,point_sampler),nearest,0);
+    if(motion.z<0.5) motion.xy+=pc.motion_correction;
+    imageStore(motion_output,ivec2(pixel),motion);
     imageStore(reactive_output,ivec2(pixel),vec4(reactive,0.0,0.0,1.0));
 }
 )glsl";

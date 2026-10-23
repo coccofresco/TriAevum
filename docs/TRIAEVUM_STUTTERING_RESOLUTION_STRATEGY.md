@@ -1658,3 +1658,43 @@ are unchanged; with the fixes the validation layer reports no error in any of
 the five runs (`renderer_spirv_pack_tests` checks every startup link of the
 embedded families). The remaining warnings are unused vertex attributes,
 fragment outputs masked by the guide attachments and unread vertex outputs.
+
+### Stale built-in packs disable the always-available programs (2026-10-11)
+
+Hyrule Field from day through dusk into night stalled 4.6-4.9 s per new
+program with an empty pipeline cache (Kokiri savestate, warp by day, clock
+just before dusk, 2,400 frames). `TRIAEVUM_HYBRID_PREPARATION` reported
+`completed_draws=103` and `uber_unavailable=0/0/103/0/0/0`: every draw of the
+profile's instrumented variants found no superset program (reason 2,
+`FragmentNotBuiltIn`) and completed its specialized program on the render
+thread.
+
+The superset programs embed the surface-lighting text. The rim light, the
+outdoor-brightness anchor and the night grass reference (2026-10-10/11)
+changed that text without regenerating `pica_uber_fragment.spvpack`, so the
+composed source of every superset no longer matched a built-in artifact.
+`build_fragment_artifacts --uber --check` reported it ("uber effect source
+changed"); the same commits left seven `builtin_pass.spvpack` entries stale
+(the grass passes, `native_surface_lighting.frag`), which `build_pass_artifacts
+--check` reported and the runtime compiled on first use
+(`TRIAEVUM_PASS_ARTIFACT_MISS`).
+
+Any change to text a built-in family composes (surface lighting,
+instrumentation snippets, pass shaders) must regenerate the families and pass
+`check_fragment_families` and `build_pass_artifacts --check` (both are ctest
+entries of `tools/renderer/tev_program`). The host test suites do not see it.
+
+Regenerated both packs. Same path, empty cache: `completed_draws=0`,
+`uber_unavailable=0/0/0/0/0/0`, about 51,000 draws on the superset programs
+while specialized ones prepare in the background. Worst frame of the ramp
+4,905 -> 136 ms, night 4,680 -> 174 ms. The first entry into the field still
+costs about 2 s with nothing cached (first grass placement, composition
+pipelines); a kept or Forge-prepared cache removes it.
+
+The shader corpus is not the cause: regenerating it with the current
+importers produced a byte-identical pack (`expanded-union.o3ps`, SHA-256
+`55b95430...`). It covers the Authentic variants of the captured
+configurations; 42 of the 64 dusk shaders it missed are captured
+configurations in the profile's instrumented variants, and the pipeline
+manifests carry only canonical, attachment-free recipes, so device preparation
+cannot reach the instrumented pipelines of an F1 profile.

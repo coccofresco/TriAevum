@@ -9,7 +9,7 @@
 
 namespace Fast::Oot3d {
 
-inline constexpr uint32_t kGraphicsSettingsSchemaVersion = 14U;
+inline constexpr uint32_t kGraphicsSettingsSchemaVersion = 15U;
 
 struct GraphicsSettingsLoadResult {
     GraphicsSettings Value;
@@ -45,6 +45,14 @@ SerializeGraphicsSettings(const GraphicsSettings& settings);
 [[nodiscard]] GraphicsSettingsLoadResult LoadGraphicsSettingsConfig(
     const nlohmann::json& configRoot,
     GraphicsSettings fallback = {});
+
+// The title's shipped grass source and mask rules, {"Sources": [...],
+// "Masks": [...]}, installed by its adapter before any settings load. A
+// "Graphics" block older than schema 15 takes them in place of its own rules
+// in Grass and GrassSavedPreset; every other grass setting (quality, budget,
+// performance, generation, appearance, interaction, wind) is kept.
+void InstallTitleGrassRuleDefaults(const nlohmann::json& rules);
+void ClearTitleGrassRuleDefaults();
 
 // Central guard used by every runtime save site. Automated environment
 // overrides are ephemeral, and no state is durable while a display-mode

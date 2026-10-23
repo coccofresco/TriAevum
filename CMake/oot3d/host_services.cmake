@@ -139,6 +139,15 @@ if (OOT3D_WHOLE_AOT_PRODUCT_MODE AND
     set_target_properties(oot3d_game_module PROPERTIES
         PREFIX ""
         OUTPUT_NAME "oot3d_game_module")
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        # Packaged as forge/oot3d_game_module.so beside the package root's
+        # triaevum_title_aot.so: never record the publisher's build
+        # directory as a library search path.
+        set_target_properties(oot3d_game_module PROPERTIES
+            BUILD_RPATH_USE_ORIGIN TRUE
+            BUILD_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../lib"
+            INSTALL_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../lib")
+    endif()
     oot3d_target_defaults(oot3d_game_module NO_WARNING_OVERRIDE FOLDER Tools)
 
     add_executable(oot3d_game_module_smoke EXCLUDE_FROM_ALL
@@ -286,6 +295,13 @@ add_executable(oot3d_native_a32_romfs_overlay_tests EXCLUDE_FROM_ALL
 target_link_libraries(oot3d_native_a32_romfs_overlay_tests PRIVATE
     oot3d_native_a32_ctr_host)
 oot3d_target_defaults(oot3d_native_a32_romfs_overlay_tests FOLDER Tests)
+# Exercise FS IPC through the same service-only host used by the product module.
+add_executable(oot3d_native_a32_ctr_fs_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/oot3d_native_a32_ctr_fs_tests.cpp
+    tools/oot3d/native_game_runtime/triaevum_ctr_filesystem_client_bridge.cpp)
+target_link_libraries(oot3d_native_a32_ctr_fs_tests PRIVATE
+    oot3d_native_a32_ctr_service_host triaevum_module)
+oot3d_target_defaults(oot3d_native_a32_ctr_fs_tests FOLDER Tests)
 
 add_executable(oot3d_native_render_command_stream_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_render_command_stream_tests.cpp

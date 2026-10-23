@@ -2,6 +2,7 @@
 // shader modules.
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_internal.h"
+#include "fast/oot3d/pica_builtin_fragment_families.h"
 
 namespace Fast {
 
@@ -339,19 +340,9 @@ GfxRenderingAPIVulkan::ResolveNativePicaShaderSpirv(
     bool vertexShader, const char* sourceName) {
     if (!vertexShader && (stage == Oot3d::PicaAotShaderStage::Fragment ||
                           stage == Oot3d::PicaAotShaderStage::NriFragment)) {
-        auto artifact = Renderer3ds::FindPicaFragmentArtifact(
-            Renderer3ds::NativeFragmentArtifacts(), source,
-            stage == Oot3d::PicaAotShaderStage::NriFragment);
-        if (artifact.empty()) {
-            artifact = Renderer3ds::FindPicaFragmentArtifact(
-                Oot3d::TemporalFragmentArtifacts(), source,
-                stage == Oot3d::PicaAotShaderStage::NriFragment);
-        }
-        if (artifact.empty()) {
-            artifact = Renderer3ds::FindPicaFragmentArtifact(
-                Oot3d::ToonFragmentArtifacts(), source,
-                stage == Oot3d::PicaAotShaderStage::NriFragment);
-        }
+        // The same order device preparation resolves (Forge's prepared pipelines).
+        const auto artifact = Oot3d::FindPicaBuiltInFragmentSpirv(
+            Renderer3ds::IdentifyPicaShaderSource(source), stage == Oot3d::PicaAotShaderStage::NriFragment);
         if (!artifact.empty()) {
             ++mNativeFragmentArtifactHits;
             return {artifact.begin(), artifact.end()};

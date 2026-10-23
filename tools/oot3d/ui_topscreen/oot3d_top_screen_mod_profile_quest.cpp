@@ -698,6 +698,25 @@ bool ApplyTopScreenPauseProjection(NativeA32Memory &memory,
   state.NativeQuestGate =
       (specialMode || pauseState == 0x0BU) && questRenderer != 0U;
 
+  // 2.1.1 0x005CDC78..0x005CDCA8 returns before the minimap relocation while
+  // any pause page is open (native predicates 0x002FCAD4 Gear, 0x002FCAEC
+  // Items, 0x002FCDD4 Map, 0x004392B0 System). The indicator groups belong to
+  // the shared map owner 0x004FDA6C, which also draws the dungeon map page's
+  // boss and chest markers (0x002F013C); moving them with the HUD minimap
+  // took those markers off the page.
+  std::array<std::uint32_t, 4> pageStates{};
+  constexpr std::array<std::uint32_t, 4> kPageStates{
+      0x00504484U, 0x0050672CU, 0x00506CE8U, 0x0050A530U};
+  for (std::size_t page = 0; page < kPageStates.size(); ++page) {
+    if (!memory.Read32(kPageStates[page], &pageStates[page])) {
+      if (error != nullptr)
+        *error = "cannot read pause page states";
+      return false;
+    }
+    if (pageStates[page] != 0U)
+      return true;
+  }
+
   if (owner == 0U)
     return true;
   std::uint32_t extents = 0U;
@@ -915,6 +934,24 @@ TopScreenPauseTargetPlan ResolveTopScreenPausePageRedrawTargetCommand(
     result.ViewportHeight = 320U;
   }
   return result;
+}
+
+void WidenTopScreenPauseTargetForPage(TopScreenPauseTargetPlan &plan,
+                                      bool widePage) noexcept {
+  if (!widePage || !plan.BindTopTarget || plan.ViewportWidth != 480U ||
+      plan.ViewportY != 40U || plan.ViewportHeight != 320U)
+    return;
+  plan.ViewportY = 0U;
+  plan.ViewportHeight = 400U;
+}
+
+TopScreenPauseTargetPlan ResolveTopScreenPauseCompositionTargetCommand(
+    const TopScreenPauseTargetCommand &command, bool routeActive,
+    bool pageRedrawActive, bool systemActive) noexcept {
+  if (systemActive)
+    return ResolveTopScreenPauseTargetCommand(command, routeActive);
+  return pageRedrawActive ? ResolveTopScreenPausePageRedrawTargetCommand(command)
+                         : ResolveTopScreenPauseTargetCommand(command, routeActive);
 }
 
 } // namespace Oot3dNativeGame

@@ -353,6 +353,8 @@ RootedFilesystemBackendV1::Stat(TriAevumFilesystemRootV1 root,
 
 TriAevumModuleStatusV1 RootedFilesystemBackendV1::Resize(std::uint64_t handle,
                                                          std::uint64_t size) {
+  if (size > static_cast<std::uint64_t>(std::numeric_limits<std::streamoff>::max()))
+    return TRIAEVUM_MODULE_INVALID_ARGUMENT_V1;
   std::scoped_lock lock(mImpl->Mutex);
   const auto opened = mImpl->OpenFiles.find(handle);
   if (opened == mImpl->OpenFiles.end() ||
@@ -360,8 +362,13 @@ TriAevumModuleStatusV1 RootedFilesystemBackendV1::Resize(std::uint64_t handle,
     return TRIAEVUM_MODULE_INVALID_ARGUMENT_V1;
   }
   auto &file = opened->second;
+  // A successful short read sets eof/fail; it must not poison a later resize.
+  file.Stream.clear();
   file.Stream.flush();
+  if (!file.Stream) return TRIAEVUM_MODULE_HOST_ERROR_V1;
   file.Stream.close();
+  if (file.Stream.fail()) return TRIAEVUM_MODULE_HOST_ERROR_V1;
+  file.Stream.clear();
   std::error_code resizeError;
   std::filesystem::resize_file(file.Path, size, resizeError);
   std::ios::openmode mode = std::ios::binary | std::ios::in | std::ios::out;

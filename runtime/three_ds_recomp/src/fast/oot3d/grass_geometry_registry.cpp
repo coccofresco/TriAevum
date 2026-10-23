@@ -3,6 +3,7 @@
 #include "fast/oot3d/grass_primitive_topology.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <limits>
 #include <unordered_map>
@@ -94,6 +95,10 @@ uint64_t StructuralSignature(const GrassGeometryRequest& request) noexcept {
     };
     hashStream(request.Position);
     hashStream(request.TexCoord0);
+    if (!request.Alpha.Bytes.empty())
+        hashStream(request.Alpha);
+    if (!request.Alpha.Bytes.empty() || request.AlphaScale != 1.0F)
+        HashValue(hash, request.AlphaScale);
     HashValue(hash, request.IndexBytes.size());
     HashValue(hash, request.Indexed);
     HashValue(hash, request.IndicesAre16Bit);
@@ -121,6 +126,8 @@ uint64_t DynamicGeometryId(const GrassGeometryRequest& request, uint64_t structu
         HashBytes(hash, request.TexCoord0.Bytes);
     }
     HashBytes(hash, request.IndexBytes);
+    if (!request.Alpha.Bytes.empty())
+        HashBytes(hash, request.Alpha.Bytes);
     return hash == 0U ? 1U : hash;
 }
 
@@ -141,6 +148,9 @@ bool BuildPreparedGeometry(const GrassGeometryRequest& request, uint64_t structu
     auto vertices = std::make_shared<std::vector<GrassSourceVertex>>();
     uint64_t anchorVersion = kFnvOffset;
     vertices->resize(availableVertices);
+    std::shared_ptr<std::vector<float>> alphas;
+    if (!request.Alpha.Bytes.empty() || request.AlphaScale != 1.0F)
+        alphas = std::make_shared<std::vector<float>>(availableVertices);
     for (uint32_t vertex = 0; vertex < availableVertices; ++vertex) {
         std::array<float, 2> rawUv{};
         if (!ReadAttribute(request.Position, vertex, (*vertices)[vertex].Position) ||
@@ -148,6 +158,15 @@ bool BuildPreparedGeometry(const GrassGeometryRequest& request, uint64_t structu
             return false;
         }
         (*vertices)[vertex].Uv = ApplyPicaGrassTextureCoordinateTransform(request.TextureCoordinates, rawUv);
+        if (alphas) {
+            float alpha = 1;
+            if (!request.Alpha.Bytes.empty() && !ReadAttribute(request.Alpha, vertex, std::span<float>(&alpha, 1)))
+                return false;
+            alpha *= request.AlphaScale;
+            if (!std::isfinite(alpha))
+                return false;
+            (*alphas)[vertex] = std::min(std::abs(alpha), 1.0F); // native vertex output conversion
+        }
     }
 
     std::vector<uint32_t> sourceIndices;
@@ -199,6 +218,7 @@ bool BuildPreparedGeometry(const GrassGeometryRequest& request, uint64_t structu
     prepared.LastUsedFrame = request.FrameId;
     prepared.Vertices = std::move(vertices);
     prepared.Indices = std::move(indices);
+    prepared.Alphas = std::move(alphas);
     return true;
 }
 

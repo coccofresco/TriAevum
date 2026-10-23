@@ -22,6 +22,23 @@ struct alignas(16) PicaSurfaceLightUniforms {
     std::array<float, 4> PositionRadius{};
 };
 
+enum class PicaNativeSurfaceLightingClass : uint8_t { Unlit, AmbientOnly, DirectLit };
+
+// Raw native inputs, before profile gains, source deduplication or point-light
+// reconstruction. A nonzero material coefficient alone does not imply direct
+// lighting: at least one enabled light must supply diffuse RGB to that channel.
+struct PicaNativeSurfaceLighting {
+    std::array<float, 4> MaterialDiffuse{}, MaterialAmbient{}, ResolvedAmbient{};
+    std::array<PicaSurfaceLightUniforms, 3> Lights{};
+    uint32_t Enabled = 0;
+    uint32_t DirectSlotMask = 0;
+    PicaNativeSurfaceLightingClass Classification = PicaNativeSurfaceLightingClass::Unlit;
+};
+
+[[nodiscard]] std::optional<PicaNativeSurfaceLighting> ReadPicaNativeSurfaceLighting(
+    const PicaVertexShaderHookLayout& hooks, uint32_t booleanUniforms,
+    std::span<const uint8_t> floatUniformBytes) noexcept;
+
 struct alignas(16) PicaScenePointLightUniforms {
     std::array<float, 4> PositionRadius{};
     // RGB colour; W: point-shadow atlas row, negative for none.
@@ -36,7 +53,8 @@ struct alignas(16) PicaPlacedLightUniforms {
     // RGB irradiance when Control.w bit1 is set, otherwise colour times reflectance.
     // W: point-shadow atlas row, negative for none.
     std::array<float, 4> Color{};
-    // XYZ: world emission axis; W: PicaPlacedLightKind, plus 8 when two-sided.
+    // XYZ: world emission axis; W: PicaPlacedLightKind, plus 8 when two-sided,
+    // plus 16 times (180 - spread) for a straightened surface (whole degrees).
     std::array<float, 4> AxisKind{};
     // Rectangle: XYZ the world width axis times the half width, W the half
     // height. Disc: XYZ any in-plane axis times the radius. Spot: X, Y the
@@ -117,9 +135,21 @@ struct alignas(16) PicaSurfaceLightingUniforms {
     // Movers' ripple rings (PicaWaterRippleField): centre x, z, birth (water
     // ripple time) and strength (0: none).
     std::array<std::array<float, 4>, kPicaWaterRings> WaterRings{};
+    // Intensity, grazing exponent, source (1 independent, 2 scene), coverage.
+    // Zero for disabled/ineligible draws; no shader or pipeline variant.
+    std::array<float, 4> Rim{};
+    std::array<float, 4> RimColor{};
+    // XY: camera-relative unit direction around the view axis; ZW reserved.
+    std::array<float, 4> RimDirection{};
+    // View-space normal of the horizontal lit reference; W enables baked
+    // outdoor calibration. Only unlit/ambient-only surfaces under sky lights.
+    // Native presentation, fragment-lit materials and interiors leave W zero.
+    std::array<float, 4> BakedReferenceUp{};
+    // Unit key radiance before the user's colour tint (RGB), reserved W.
+    std::array<float, 4> BakedReferenceKey{};
 };
 
-static_assert(sizeof(PicaSurfaceLightingUniforms) == 2912U);
+static_assert(sizeof(PicaSurfaceLightingUniforms) == 2992U);
 
 // Water's Fresnel reflectance at normal incidence, its GGX alpha, and its
 // environment reflection (subdued: the environment is the fog colour until
@@ -177,6 +207,9 @@ void AssignPicaSurfaceWater(PicaSurfaceLightingUniforms& uniforms, const PicaSur
                             const std::array<PicaWaterRing, kPicaWaterRings>* rings = nullptr) noexcept;
 
 [[nodiscard]] std::string PicaSurfaceLightingDeclarations(bool fragmentOperand = false, bool fragmentBalance = false);
+// Called only after the adapter admits this draw. Disabled or invalid input
+// publishes the same all-zero value, independent of the saved controls.
+void AssignPicaSurfaceRim(PicaSurfaceLightingUniforms& uniforms, const PicaRimLightSettings& settings) noexcept;
 // Last of the material guide writes: a water fragment marks the guide (B at
 // 1.0, a value reflection weights never take: pica_encode_reflection_weight
 // stops at 254/255), keeping the reactive alpha; the reflection trace frames

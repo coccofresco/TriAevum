@@ -220,6 +220,40 @@ int main() {
   }
   Require(retainedPageRedrawEdgeCount == 2U,
           "TopScreen page-redraw edges did not retain independent ownership");
+  // System omits both redraw edges and the retained alternate-edge fallback.
+  bridge.SetTopScreenPauseEdgePresentation(
+      BuildTopScreenPauseEdgeGeometry(true, 5U, 0U, 0U, 0, 1.0F, 1.0F));
+  Require(memory.Write32(0x0055B4C4U, 0x00560400U) &&
+              memory.Write32(0x0056044CU, 0x14010000U) &&
+              memory.Write32(0x0055B4A0U, 0x00560500U) &&
+              memory.Write32(0x0056054CU, 0x14020000U) && memory.Write32(0x0050672CU, 2U),
+          "cannot seed cursor/equipment atlases for tab hints");
+  const auto pageHints = bridge.BuildTopScreenPresentation(oot3d::ui::UiSubsystem::GameplayHud);
+  for (const auto owner : {0x005E4030U, 0x005E4058U})
+    Require(std::count_if(pageHints.begin(), pageHints.end(), [=](const auto &primitive) {
+              return primitive.owner_address == owner;
+            }) == 2, "the ordinary page did not emit both tab-hint lanes");
+  Require(memory.Write32(0x0050A530U, 2U), "cannot activate System over the Items gate");
+  bridge.SetTopScreenSystemPagePresentation(true);
+  for (const bool redrawEdges : {true, false}) {
+    if (!redrawEdges) {
+      bridge.SetTopScreenPausePageRedrawEdgePresentation(std::nullopt);
+      Require(memory.Write32(0x0050A530U, 0U), "cannot suppress System in the tail");
+    }
+    const auto systemPresentation = bridge.BuildTopScreenPresentation(oot3d::ui::UiSubsystem::GameplayHud);
+    for (const auto &primitive : systemPresentation)
+      Require(primitive.owner_address != 0x005CD1E0U && primitive.owner_address != 0x005E4030U &&
+                  primitive.owner_address != 0x005E4058U,
+              "System retained pause edges or tab hints");
+  }
+  Require(memory.Write32(0x0050A530U, 0U) && memory.Write32(0x0050672CU, 0U),
+          "cannot leave System");
+  bridge.SetTopScreenSystemPagePresentation(false);
+  const auto returnedEdges = bridge.BuildTopScreenPresentation(oot3d::ui::UiSubsystem::GameplayHud);
+  Require(std::count_if(returnedEdges.begin(), returnedEdges.end(), [](const auto &primitive) {
+            return primitive.owner_address == 0x005CD1E0U;
+          }) == 2, "System suppressed subsequent ordinary page edges");
+  bridge.SetTopScreenPauseEdgePresentation(std::nullopt);
   bridge.SetTopScreenPausePageRedrawEdgePresentation(std::nullopt);
   Require(memory.Write32(0x00504FB0U, 0U),
           "cannot deactivate the typed file-select fixture");

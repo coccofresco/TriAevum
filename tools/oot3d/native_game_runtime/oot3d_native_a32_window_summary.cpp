@@ -12,6 +12,7 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
   auto &hdFontsLoaded = in.hdFontsLoaded;
   auto &quickStatePath = in.quickStatePath;
   auto &hostServices = in.hostServices;
+  hostServices.WriteFsRequestSummary();
   auto &frameRatePolicy = in.frameRatePolicy;
   auto &sceneViewProbe = in.sceneViewProbe;
   auto &playerTimingProbe = in.playerTimingProbe;
@@ -486,6 +487,7 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                    : nlohmann::json(nullptr)},
               {"save_count", savestateStats.SaveCount},
               {"save_failure_count", savestateStats.SaveFailureCount},
+              {"save_deferral_count", savestateStats.SaveDeferralCount},
               {"load_count", savestateStats.LoadCount},
               {"save_bytes", savestateStats.SaveBytes},
               {"load_bytes", savestateStats.LoadBytes},
@@ -2272,6 +2274,7 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                    {"romfs_stream_open_calls",
                     ctrTiming.RomFsStreamOpenCalls},
                    {"romfs_read_calls", ctrTiming.RomFsReadCalls},
+                   {"fs_unserved_requests", ctrTiming.FsUnservedRequests},
                    {"romfs_read_bytes", ctrTiming.RomFsReadBytes},
                    {"romfs_read_seconds",
                     ctrTiming.RomFsReadNanoseconds * nanosecondsToSeconds},
@@ -2382,10 +2385,24 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                     widescreenProjection.TopScreenPauseTargetCommands},
                    {"topscreen_pause_target_rewrites",
                     widescreenProjection.TopScreenPauseTargetRewrites},
+                   {"topscreen_pause_last_page_opens",
+                    nativeCandidateDispatch.PauseTransaction->LastPageOpens()},
                    {"topscreen_pause_start_close_calls",
-                    nativeCandidateDispatch.TopScreenPauseStartCloseCalls},
+                    nativeCandidateDispatch.PauseTransaction->StartCloses()},
                    {"topscreen_pause_system_open_calls",
-                    nativeCandidateDispatch.TopScreenPauseSystemOpenCalls},
+                    nativeCandidateDispatch.PauseTransaction->SystemOpens()},
+                   {"topscreen_pause_retired_transactions",
+                    nativeCandidateDispatch.PauseTransaction->Retired()},
+                   {"topscreen_item_description_toggles",
+                    nativeCandidateDispatch.ItemDescription->Toggles()},
+                   {"topscreen_item_description_redraws",
+                    nativeCandidateDispatch.ItemDescription->Redraws()},
+                   {"topscreen_wide_pages",
+                    nativeCandidateDispatch.WideItems->WidePages()},
+                   {"topscreen_wide_items_draws",
+                    nativeCandidateDispatch.WideItems->WideItemsDraws()},
+                   {"topscreen_wide_items_cursor_draws",
+                    nativeCandidateDispatch.WideItems->CursorDraws()},
                    {"topscreen_aim_projectile_cycle_attempts",
                     nativeCandidateDispatch
                         .TopScreenAimProjectileCycleAttempts},
@@ -2405,10 +2422,10 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                     nativeCandidateDispatch.TopScreenOcarinaActivations},
                    {"topscreen_pause_last_closed_page",
                     static_cast<uint32_t>(
-                        nativeCandidateDispatch.TopScreenPauseLastClosedPage)},
+                        nativeCandidateDispatch.PauseTransaction->LastClosedPage())},
                    {"topscreen_pause_system_source_page",
-                    static_cast<uint32_t>(nativeCandidateDispatch
-                                              .TopScreenPauseSystemSourcePage)},
+                    static_cast<uint32_t>(nativeCandidateDispatch.PauseTransaction
+                                              ->LastSystemSourcePage())},
                    {"topscreen_pause_child_suppressions",
                     widescreenProjection.TopScreenPauseChildSuppressions},
                    {"topscreen_pause_child_native_draws",
@@ -2490,8 +2507,6 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                    {"topscreen_temporal_state",
                     {{"viewport_draw_phase",
                       nativeCandidateDispatch.TopScreenViewportDrawPhase},
-                     {"scene_viewport_draw_phase",
-                      nativeCandidateDispatch.TopScreenSceneViewportDrawPhase},
                      {"overlay_viewport_draw_phase",
                       nativeCandidateDispatch.TopScreenOverlayViewportDrawPhase},
                      {"touch_coordinate_update_phase",

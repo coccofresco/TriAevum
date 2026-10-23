@@ -49,13 +49,14 @@ void DrawPreview(uint64_t hash) {
 
 } // namespace
 
-void DrawTexturePixelPreview(std::span<const uint8_t> rgba8, uint32_t width, uint32_t height) {
+void DrawTexturePixelPreview(std::span<const uint8_t> rgba8, uint32_t width, uint32_t height, float maximumWidth,
+                             float maximumHeight) {
     if (!width || !height || uint64_t(width) * height * 4U > rgba8.size()) {
         ImGui::TextDisabled("Texture preview is waiting for decoded RGBA pixels.");
         return;
     }
-    const float scale = std::min(260.0F / width, 190.0F / height);
-    const ImVec2 size{std::max(1.0F, width * scale), std::max(1.0F, height * scale)};
+    const float scale = std::min(maximumWidth / width, maximumHeight / height);
+    const ImVec2 size{ std::max(1.0F, width * scale), std::max(1.0F, height * scale) };
     const ImVec2 origin = ImGui::GetCursorScreenPos();
     ImGui::InvisibleButton("##shared_texture_catalog_preview", size);
     auto* draw = ImGui::GetWindowDrawList();

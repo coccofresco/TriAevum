@@ -18,22 +18,53 @@ public:
   const char *Group() const noexcept override {
     return Fast::Oot3d::kLightingSettingsGroup;
   }
+  void EndPreview() override { mRuntime->EndPreview(); }
   void Draw() override {
     ImGui::SeparatorText("Scene lights");
-    const auto state = mRuntime->Snapshot();
+    auto state = mRuntime->Snapshot();
     if (!state.SceneId) {
-      ImGui::TextWrapped("No native gameplay scene is available. Environment "
-                         "overrides are inactive.");
+      ImGui::TextWrapped("No native gameplay scene is available. Environment overrides are inactive.");
       return;
     }
     ImGui::Text("Native scene: 0x%04X (all rooms)", unsigned(*state.SceneId));
-    ImGui::TextWrapped(state.FileExists
-                           ? "Profile: %s"
-                           : "Base environment. Saving creates %s for this scene only.",
-                       state.Path.string().c_str());
-    if (!state.NightKnown)
-      ImGui::TextWrapped("Time of day is unavailable; using the scene profile.");
+    ImGui::Text("Group: %s", state.Group ? EnvironmentGroupLabel(*state.Group) : "Unknown (no group standard)");
+    ImGui::Text("Day source: %s", EnvironmentSourceLabel(state.Sources[0]));
+    if (state.TimeDriven) ImGui::Text("Night source: %s", EnvironmentSourceLabel(state.Sources[1]));
+    // Keep confirmation IDs outside the tab scope: a native scene change can
+    // select Day while a Night action is awaiting confirmation.
+    DrawGroupActions(state);
+    if (!state.TimeDriven) {
+      ImGui::TextWrapped("Fixed scene lighting: one profile applies at every time.");
+      DrawProfile(state);
+      mLastScene.reset();
+      return;
+    }
+    if (mLastScene != state.SceneId) { mRequestedTab = state.EditingNight; mLastScene = state.SceneId; }
+    if (state.EditingNight != mLastEditingNight) mRequestedTab = state.EditingNight;
     DrawDayNight(state);
+    state = mRuntime->Snapshot();
+    if (ImGui::BeginTabBar("##SceneEnvironmentProfiles")) {
+      for (bool night : {false, true}) {
+        ImGuiTabItemFlags flags = state.DirtyTabs[night ? 1 : 0] ? ImGuiTabItemFlags_UnsavedDocument : ImGuiTabItemFlags_None;
+        if (mRequestedTab && *mRequestedTab == night) flags |= ImGuiTabItemFlags_SetSelected;
+        ImGui::BeginDisabled(night && !state.NightProfileExists);
+        if (ImGui::BeginTabItem(night ? "Night" : "Day", nullptr, flags)) {
+          if (mRuntime->SelectTab(night)) DrawProfile(mRuntime->Snapshot());
+          ImGui::EndTabItem();
+        }
+        ImGui::EndDisabled();
+      }
+      ImGui::EndTabBar();
+    }
+    mRequestedTab.reset();
+    mLastEditingNight = mRuntime->Snapshot().EditingNight;
+  }
+private:
+  void DrawProfile(const SceneEnvironmentSnapshot& state) {
+    ImGui::Text("Profile source: %s", EnvironmentSourceLabel(state.Sources[state.EditingNight ? 1 : 0]));
+    if (!state.SourcePaths[state.EditingNight ? 1 : 0].empty())
+      ImGui::TextWrapped("Source file: %s", state.SourcePaths[state.EditingNight ? 1 : 0].string().c_str());
+    ImGui::TextWrapped("Save writes %s for this scene only.", state.Path.filename().string().c_str());
     auto value = state.Profile;
     auto &graphics = Fast::Oot3d::GraphicsSettingsRuntime::Instance();
     const auto settings = graphics.Snapshot();
@@ -80,6 +111,36 @@ public:
     changed |=
         ImGui::SliderFloat("Native fog contribution", &value.FogStrength, 0.0F,
                            1.0F, "%.2fx", ImGuiSliderFlags_AlwaysClamp);
+    ImGui::SeparatorText("Rim light");
+    changed |= ImGui::Checkbox("Enable rim light", &value.Rim.Enabled);
+    ImGui::BeginDisabled(!value.Rim.Enabled);
+    int rimSource = static_cast<int>(value.Rim.Source);
+    if (ImGui::Combo("Rim source", &rimSource, "Independent\0Scene lights\0")) {
+      value.Rim.Source = static_cast<Fast::Renderer3ds::PicaRimLightSource>(rimSource);
+      changed = true;
+    }
+    changed |= ImGui::SliderFloat("Rim intensity", &value.Rim.Intensity, 0.0F,
+                                  Fast::Renderer3ds::kMaximumPicaRimIntensity, "%.2fx",
+                                  ImGuiSliderFlags_AlwaysClamp);
+    changed |= ImGui::SliderFloat("Rim sharpness", &value.Rim.Sharpness, 1.0F, 16.0F, "%.1f",
+                                  ImGuiSliderFlags_AlwaysClamp);
+    ImGui::BeginDisabled(value.Rim.Source != Fast::Renderer3ds::PicaRimLightSource::Independent);
+    changed |= ImGui::ColorEdit3("Rim color", value.Rim.Color.data(), ImGuiColorEditFlags_Float);
+    changed |= ImGui::SliderFloat("Rim azimuth", &value.Rim.Azimuth, -180.0F, 180.0F, "%.0f deg",
+                                  ImGuiSliderFlags_AlwaysClamp);
+    changed |= ImGui::SliderFloat("Rim coverage", &value.Rim.Coverage, 0.0F, 1.0F, "%.2f",
+                                  ImGuiSliderFlags_AlwaysClamp);
+    ImGui::EndDisabled();
+    int rimScope = static_cast<int>(value.Rim.Scope);
+    if (ImGui::Combo("Rim scope", &rimScope, "Actors\0Actors and world\0")) {
+      value.Rim.Scope = static_cast<Fast::Renderer3ds::PicaRimLightScope>(rimScope);
+      changed = true;
+    }
+    ImGui::EndDisabled();
+    ImGui::TextWrapped("Independent is a camera-relative edge light, unchanged by scene lights or shadows. "
+                       "Azimuth: 0 top, 90 right, -90 left, 180 bottom. Coverage: 0 directional, 1 whole silhouette. "
+                       "Scene lights uses the existing lights and their shadows. Sharpness narrows the edge. "
+                       "Opaque surfaces only.");
     ImGui::TextUnformatted("Additional environment lights");
     if (ImGui::BeginTabBar("Scene lights")) {
       const char *labels[] = {"Key light", "Fill light"};
@@ -151,11 +212,14 @@ public:
     ImGui::EndDisabled();
     ImGui::SeparatorText("Dynamic scene point lights");
     ImGui::TextWrapped("Replace Navi and fairy vertex-light contributions with spatial scene lights, and light "
-                       "the flames the game only draws (torches, fire objects). Native positions, colors and "
-                       "ranges are retained. These controls are independent of Use scene environment and affect "
+                       "the flames the game only draws (torches, fire objects). Architecture lights the room "
+                       "torches, lava, windows, light shafts and glows of the room geometry, in the rooms the "
+                       "game has loaded. Native positions, colors and ranges are retained. These controls are independent of Use scene environment and affect "
                        "only the Modern lighting model.");
-    const char *pointLabels[] = {"Navi point lights", "Fairy point lights", "Flame point lights"};
-    const char *pointNames[] = {"Navi", "Fairy", "Flame"};
+    const char *pointLabels[] = {"Navi point lights", "Fairy point lights", "Flame point lights",
+                                 "Architecture point lights"};
+    const char *pointNames[] = {"Navi", "Fairy", "Flame", "Architecture"};
+    static_assert(std::size(pointLabels) == Fast::Renderer3ds::kPicaScenePointLightGroups);
     for (size_t i = 0; i < value.PointLights.size(); ++i) {
       auto &light = value.PointLights[i];
       ImGui::PushID(pointLabels[i]);
@@ -178,17 +242,21 @@ public:
     ImGui::EndDisabled();
     ImGui::SeparatorText("Shadows");
     ImGui::BeginDisabled(!supported);
-    changed |= ImGui::Checkbox("Cull shadow caster faces", &value.ShadowCasterCulling);
+    int faces = static_cast<int>(value.CasterFaces);
+    if (ImGui::Combo("Shadow caster faces", &faces, "Native\0Both faces\0Interior sun / offline\0")) {
+      value.CasterFaces = static_cast<Fast::Renderer3ds::ShadowCasterFaces>(faces);
+      changed = true;
+    }
     ImGui::EndDisabled();
-    ImGui::TextWrapped("Directional shadow casters keep the title's back-face culling. Off: both faces of every "
-                       "caster draw into the shadow map, for one-sided or open meshes whose culled faces leave "
-                       "holes or leak light.");
+    ImGui::TextWrapped("Native uses the title's face culling. Both faces closes one-sided gaps. "
+                       "Interior sun uses offline room data to admit the key light into authored interiors. Inner roofs, "
+                       "walls and foliage still cast. Rooms use both faces while their local cache is prepared.");
     if (changed)
       mRuntime->Preview(value, state.Revision);
-    if (ImGui::Button("Save scene environment"))
+    if (ImGui::Button(!state.TimeDriven ? "Save profile" : state.EditingNight ? "Save night" : "Save day"))
       mRuntime->Save();
     ImGui::SameLine();
-    if (ImGui::Button("Reload scene environment"))
+    if (ImGui::Button(!state.TimeDriven ? "Revert profile" : state.EditingNight ? "Revert night" : "Revert day"))
       mRuntime->Reload();
     if (ImGui::Button("Use native environment")) {
       value.Enabled = false;
@@ -198,17 +266,52 @@ public:
     if (!status.Error.empty())
       ImGui::TextWrapped("Environment error: %s", status.Error.c_str());
     if (status.Dirty)
-      ImGui::TextWrapped(
-          status.NightProfileExists
-              ? "Unsaved live preview. Save before leaving this scene or before the time of day changes."
-              : "Unsaved live preview. Save before leaving this scene.");
+      ImGui::TextWrapped("Unsaved changes in this tab. Time changes keep both drafts; save before leaving this scene.");
     else
       ImGui::TextUnformatted(
           status.FileExists ? "Scene profile saved."
-                            : "Using the base environment. Save to keep a profile for this scene.");
+                            : "Using a fallback. Save creates this scene's own profile.");
   }
 
 private:
+  uint64_t mGroupActionRevision = 0;
+  void DrawGroupActions(const SceneEnvironmentSnapshot& state) {
+    ImGui::TextWrapped("Day: scene's own > group standard > base. Night: scene's own > group standard > day result. "
+                       "A scene with its own day profile can still inherit the group's night standard.");
+    ImGui::BeginDisabled(!state.Group);
+    if (ImGui::Button("Save as group standard")) {
+      mGroupActionRevision = state.Revision;
+      ImGui::OpenPopup("Save group standard?");
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Use group standard")) {
+      mGroupActionRevision = state.Revision;
+      ImGui::OpenPopup("Use group standard?");
+    }
+    ImGui::EndDisabled();
+    for (bool save : {true, false}) {
+      if (ImGui::IsPopupOpen(save ? "Save group standard?" : "Use group standard?"))
+        ImGui::SetNextWindowSize(ImVec2(560, 0), ImGuiCond_Appearing);
+      if (!ImGui::BeginPopupModal(save ? "Save group standard?" : "Use group standard?", nullptr,
+                                 ImGuiWindowFlags_AlwaysAutoResize)) continue;
+      ImGui::Text("Group: %s; slot: %s", state.Group ? EnvironmentGroupLabel(*state.Group) : "Unknown",
+                    state.EditingNight ? "Night" : "Day");
+      ImGui::TextWrapped(save
+          ? "Replace this group's standard with the current draft? Every scene inheriting this slot uses the new values. Scene-owned files keep precedence."
+          : "Delete this scene's own file for this tab and discard its custom values and unsaved edits? The group standard applies; if absent, day uses base and night uses the day result.");
+      const bool stale = state.Revision != mGroupActionRevision;
+      if (stale) ImGui::TextWrapped("The scene or profile changed. Cancel and reopen this action.");
+      ImGui::BeginDisabled(stale || !state.Group);
+      if (ImGui::Button(save ? "Save standard" : "Use standard")) {
+        if (save) mRuntime->SaveAsGroupStandard(); else mRuntime->UseGroupStandard();
+        ImGui::CloseCurrentPopup();
+      }
+      ImGui::EndDisabled();
+      ImGui::SameLine();
+      if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+      ImGui::EndPopup();
+    }
+  }
   // Lights placed in the scene: added where Link is, then moved, turned and
   // shaped with the controls of their type.
   bool DrawPlacedLights(SceneEnvironmentProfile &value, const SceneEnvironmentSnapshot &state) {
@@ -361,6 +464,10 @@ private:
                                       ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
       }
       changed |= ImGui::Checkbox("Emit from both sides", &light.TwoSided);
+      changed |= ImGui::SliderFloat("Surface spread", &light.Spread, 1.0F, 180.0F, "%.0f deg",
+                                    ImGuiSliderFlags_AlwaysClamp);
+      ImGui::TextWrapped("180 is a diffuse surface. Less straightens its light along its axis: a sharper "
+                         "footprint of its shape, as bright under it.");
       changed |= ImGui::SliderFloat("Surface reach", &light.Range, 1.0F, 5000.0F, "%.0f",
                                     ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
       break;
@@ -407,35 +514,57 @@ private:
   static constexpr float kPlacedLightHeadHeight = 50.0F;
   uint32_t mSelectedLight = 0;
   bool mShowGizmos = true;
-  // A scene with day and night (Kakariko Village, Hyrule Field) may keep a
-  // second profile for the night; the game's night flag picks it.
-  void DrawDayNight(const SceneEnvironmentSnapshot &state) {
-    ImGui::Text("Time of day: %s", state.Night ? "night" : "day");
+  std::optional<bool> mRequestedTab;
+  std::optional<uint16_t> mLastScene;
+  bool mLastEditingNight = false;
+  void DrawDayNight(const SceneEnvironmentSnapshot& state) {
+    if (!state.NightError.empty()) ImGui::TextWrapped("Night profile: %s", state.NightError.c_str());
+    int preview = static_cast<int>(state.PreviewMode);
+    if (ImGui::BeginCombo("Preview", preview == 0 ? "Auto" : preview == 1 ? "Force day" : "Force night")) {
+      const char* names[] = {"Auto", "Force day", "Force night"};
+      for (int i = 0; i < 3; ++i) {
+        ImGui::BeginDisabled(i == 2 && !state.NightProfileExists);
+        if (ImGui::Selectable(names[i], preview == i))
+          mRuntime->SetPreviewMode(static_cast<SceneEnvironmentPreview>(i));
+        ImGui::EndDisabled();
+      }
+      ImGui::EndCombo();
+    }
+    const auto applied = mRuntime->Snapshot();
+    ImGui::Text("Applied: day %.0f%% / night %.0f%%", (1 - applied.AppliedNightWeight) * 100,
+                 applied.AppliedNightWeight * 100);
+    if (applied.ForcedWeight) ImGui::TextUnformatted("Lab weight override active (process environment).");
+    ImGui::TextWrapped("Edit either tab at any time. Auto follows native dawn and dusk; forced preview ends on F2 or closing F1.");
     if (!state.NightProfileExists) {
-      ImGui::TextWrapped("The same profile applies by day and by night.");
-      if (ImGui::Button("Create night profile"))
-        mRuntime->CreateNightProfile();
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Saves the values shown as this scene's night profile. At night it is the "
-                          "profile in use and edited here; by day, the scene's own profile is.");
+      ImGui::TextWrapped("Day applies at all times until a night profile is created.");
+      if (ImGui::Button("Create night (from day)") && mRuntime->CreateNightProfile()) mRequestedTab = true;
       return;
     }
-    ImGui::TextWrapped(state.EditingNight
-                           ? "Separate day and night profiles: editing the night profile."
-                           : "Separate day and night profiles: editing the day profile (the night "
-                             "profile applies at night).");
-    if (ImGui::Button("Remove night profile"))
-      ImGui::OpenPopup("Remove night profile?");
-    if (ImGui::BeginPopupModal("Remove night profile?", nullptr,
-                               ImGuiWindowFlags_AlwaysAutoResize)) {
-      ImGui::TextUnformatted("Delete this scene's night profile? The day profile will apply at night too.");
-      if (ImGui::Button("Remove")) {
-        mRuntime->RemoveNightProfile();
+    if (ImGui::Button("Copy day -> night")) ImGui::OpenPopup("Copy day to night?");
+    if (ImGui::BeginPopupModal("Copy day to night?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+      ImGui::TextUnformatted("Replace the night draft with the day draft? Save night to keep the copy.");
+      if (ImGui::Button("Copy")) {
+        if (mRuntime->CopyDayToNight()) mRequestedTab = true;
         ImGui::CloseCurrentPopup();
       }
       ImGui::SameLine();
-      if (ImGui::Button("Cancel"))
+      if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+      ImGui::EndPopup();
+    }
+    ImGui::SameLine();
+    ImGui::BeginDisabled(state.Sources[1] != SceneEnvironmentSource::Scene);
+    if (ImGui::Button("Remove night")) ImGui::OpenPopup("Remove night profile?");
+    ImGui::EndDisabled();
+    if (ImGui::BeginPopupModal("Remove night profile?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+      ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 480);
+      ImGui::TextWrapped("Delete the scene night file and discard its unsaved edits? The group night standard applies when present; otherwise the day result applies.");
+      ImGui::PopTextWrapPos();
+      if (ImGui::Button("Remove")) {
+        if (mRuntime->RemoveNightProfile()) mRequestedTab = false;
         ImGui::CloseCurrentPopup();
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
       ImGui::EndPopup();
     }
   }

@@ -1,8 +1,11 @@
 #include "oot3d_native_pica_visual_frame.h"
 #include "fast/renderer3ds/pica_vertex_temporal_policy.h"
 #include "fast/renderer3ds/pica_camera_temporal_policy.h"
+#include "fast/renderer3ds/pica_factored_interpolation.h"
+#include "oot3d_native_pica_affine_layout.h"
 
 #include <algorithm>
+#include <tuple>
 #include <bit>
 #include <chrono>
 #include <cmath>
@@ -11,6 +14,7 @@
 #include <cstdlib>
 #include <iterator>
 #include <limits>
+#include <map>
 #include <optional>
 #include <unordered_map>
 #include <utility>
@@ -814,6 +818,40 @@ VisualDrawMatching BuildVisualDrawMatching(
     std::vector<bool> noPreviousMatches(previous.Draws.size(), false);
     std::vector<bool> previousMatched(previous.Draws.size(), false);
     std::vector<bool> currentMatched(current.Draws.size(), false);
+    // Native instance matches are independent of draw order and cardinality.
+    // Reserve every evidenced draw from the legacy interpolation matcher,
+    // including unmatched/ambiguous ones, so it cannot pair their uniforms by
+    // occurrence. Unknown producers retain their existing visual sampling,
+    // but cannot acquire exact renderer motion history.
+    using NativeKey = std::pair<Fast::Renderer3ds::PicaTemporalIdentity, std::array<uint64_t, 8>>;
+    const auto nativeKey = [](const Oot3dPicaVulkanDrawPlan& draw) -> NativeKey {
+        const auto& fb = draw.State.Framebuffer;
+        return {draw.Composition.TemporalIdentity, {fb.ColorPhysicalAddress, fb.DepthPhysicalAddress,
+            fb.Width, fb.Height, fb.ColorFormat, fb.DepthFormat,
+            uint64_t(uint16_t(draw.State.Viewport.CornerX)), uint64_t(uint16_t(draw.State.Viewport.CornerY))}};
+    };
+    std::map<NativeKey, std::vector<size_t>> oldInstances, newInstances;
+    for (size_t i = 0; i < previous.Draws.size(); ++i)
+        if (previous.Draws[i].Composition.TemporalIdentity.Available()) {
+            oldInstances[nativeKey(previous.Draws[i])].push_back(i);
+            previousMatched[i] = true;
+        }
+    for (size_t i = 0; i < current.Draws.size(); ++i)
+        if (current.Draws[i].Composition.TemporalIdentity.Available()) {
+            newInstances[nativeKey(current.Draws[i])].push_back(i);
+            currentMatched[i] = true;
+        }
+    for (const auto& [key, indices] : oldInstances)
+        if (indices.size() != 1) matching.AmbiguousPrevious += indices.size();
+    for (const auto& [key, indices] : newInstances) {
+        if (indices.size() != 1) matching.AmbiguousCurrent += indices.size();
+        const auto old = oldInstances.find(key);
+        if (indices.size() == 1 && old != oldInstances.end() && old->second.size() == 1 &&
+            HaveMatchingPipelineLayout(previous.Draws[old->second[0]], current.Draws[indices[0]])) {
+            matching.PreviousByCurrent[indices[0]] = {old->second[0], VisualDrawMatchKind::StrictUnique};
+            ++matching.StrictUniqueMatches;
+        }
+    }
     const auto previousStrict =
         ResolveVisualIdentities(previous.StrictDrawIdentities, previous.Draws, ComputeOot3dPicaVisualDrawIdentity);
     const auto currentStrict =
@@ -855,10 +893,11 @@ VisualDrawMatching BuildVisualDrawMatching(
         HaveMatchingPipelineLayout, VisualDrawMatchKind::PipelineOrdinal,
         matching.PipelineOrdinalMatches);
 
-    matching.UnmatchedPrevious = static_cast<size_t>(std::count(
-        previousMatched.begin(), previousMatched.end(), false));
-    matching.UnmatchedCurrent = static_cast<size_t>(std::count(
-        currentMatched.begin(), currentMatched.end(), false));
+    const auto actualMatches = static_cast<size_t>(std::count_if(
+        matching.PreviousByCurrent.begin(), matching.PreviousByCurrent.end(),
+        [](const auto& match) { return match.has_value(); }));
+    matching.UnmatchedPrevious = previous.Draws.size() - actualMatches;
+    matching.UnmatchedCurrent = current.Draws.size() - actualMatches;
     return matching;
 }
 
@@ -1057,21 +1096,290 @@ void InterpolateVisualLightBinding(
     }
 }
 
+// Return a conservative exact mask of the slots referenced by this draw.
+// A missing snapshot or an unfamiliar addressing mode disables factoring;
+// selecting rigid-looking rows from an unknown active palette could separate
+// a joint shared with an excluded, non-rigid matrix.
+std::optional<uint32_t> CmbPaletteSlots(
+    const Oot3dPicaVulkanDrawPlan& previous, const Oot3dPicaVulkanDrawPlan& current) {
+    const auto& a = previous.VertexShader.Uniforms;
+    const auto& b = current.VertexShader.Uniforms;
+    if (a.BooleanMask != b.BooleanMask || a.Integers != b.Integers) return {};
+    for (size_t row : {89U, 92U, 93U, 94U, 95U}) if (a.Floats[row] != b.Floats[row]) return {};
+    if (b.Floats[93] != std::array<float,4>{0,1,2,3} ||
+        b.Floats[95][0] != 3.0F || b.Floats[95][1] != 4.0F ||
+        (b.Floats[89][3] != 0.0F && b.Floats[89][3] != 1.0F)) return {};
+    if (!(b.BooleanMask & 4U)) return 1U; // unskinned CMB: c20..22 only
+    size_t influences = 1;
+    if (b.BooleanMask & 8U) {
+        const float count = b.Floats[92][3];
+        if (count != 2.0F && count != 3.0F && count != 4.0F) return {};
+        influences = static_cast<size_t>(count);
+    }
+    const auto findAttribute = [](const auto& plan, uint8_t location) -> const Oot3dPicaVulkanVertexAttribute* {
+        const auto it = std::find_if(plan.VertexAttributes.begin(), plan.VertexAttributes.end(),
+            [=](const auto& attribute) { return attribute.Location == location; });
+        return it == plan.VertexAttributes.end() ? nullptr : &*it;
+    };
+    const auto* left = findAttribute(previous,6), *right = findAttribute(current,6);
+    if (!left || !right || left->ComponentCount < influences || right->ComponentCount < influences ||
+        !current.VertexCount || previous.VertexCount != current.VertexCount ||
+        previous.Indexed != current.Indexed || previous.BaseVertex != current.BaseVertex ||
+        previous.IndicesAre16Bit != current.IndicesAre16Bit || !EqualIndexBytes(previous,current)) return {};
+    const auto read = [](const auto& plan, const auto& attribute, size_t vertex, size_t component)
+        -> std::optional<float> {
+        const auto* binding = FindVertexBinding(plan,attribute.Binding);
+        if (!binding || !binding->ByteStride) return {};
+        const size_t size = VertexFormatByteSize(attribute.Format);
+        if (!size || attribute.ByteOffset > binding->ByteStride ||
+            size*attribute.ComponentCount > binding->ByteStride-attribute.ByteOffset) return {};
+        const auto bytes = binding->ResolvedBytes();
+        const size_t record = binding->InputRate == Oot3dPicaVertexInputRate::PerInstance ? 0 : vertex;
+        if (record >= bytes.size()/binding->ByteStride) return {};
+        const size_t offset = record*binding->ByteStride+attribute.ByteOffset+component*size;
+        switch (attribute.Format) {
+        case Oot3dPicaVertexFormat::UnsignedByte: return float(bytes[offset]);
+        case Oot3dPicaVertexFormat::SignedByte: return float(static_cast<int8_t>(bytes[offset]));
+        case Oot3dPicaVertexFormat::SignedShort: {
+            int16_t value; std::memcpy(&value,bytes.data()+offset,2); return float(value);
+        }
+        case Oot3dPicaVertexFormat::Float: {
+            float value; std::memcpy(&value,bytes.data()+offset,4); return value;
+        }
+        }
+        return {};
+    };
+    uint32_t selected = 0;
+    const auto indices = current.ResolvedIndexBytes();
+    const size_t indexSize = current.IndicesAre16Bit ? 2 : 1;
+    if (current.Indexed && current.VertexCount > indices.size()/indexSize) return {};
+    for (size_t i = 0; i < current.VertexCount; ++i) {
+        int64_t vertex = static_cast<int64_t>(i);
+        if (current.Indexed) {
+            vertex = indices[i*indexSize];
+            if (indexSize == 2) vertex |= int64_t(indices[i*indexSize+1]) << 8;
+            vertex += current.BaseVertex;
+        }
+        if (vertex < 0) return {};
+        for (size_t component = 0; component < influences; ++component) {
+            const auto from = read(previous,*left,size_t(vertex),component);
+            const auto to = read(current,*right,size_t(vertex),component);
+            // Reject fractional, wrapped and out-of-palette addresses instead
+            // of approximating PICA's MOVA/wrap semantics with a guessed span.
+            if (!from || !to || !std::isfinite(*to) || *from != *to ||
+                *to < 0 || *to >= 10 || std::floor(*to) != *to) return {};
+            selected |= 1U << static_cast<uint32_t>(*to);
+        }
+    }
+    return selected;
+}
+
+bool CmbAffineLayouts(const Oot3dPicaVulkanDrawPlan& previous, const Oot3dPicaVulkanDrawPlan& current) {
+    const auto& from = previous.VertexShader.TemporalProgram;
+    const auto& to = current.VertexShader.TemporalProgram;
+    return from && to && from->AffineLayout == kOot3dCmbAffineLayout && to->AffineLayout == from->AffineLayout;
+}
+
+using VisualUniformFloats = decltype(Oot3dPicaVertexUniformState{}.Floats);
+using VisualMatrixBits = std::array<uint32_t, 12>;
+
+VisualMatrixBits AffineBits(const VisualUniformFloats& floats, size_t first) {
+    VisualMatrixBits bits{};
+    for (size_t row = 0; row < 3; ++row) for (size_t c = 0; c < 4; ++c)
+        bits[row * 4 + c] = std::bit_cast<uint32_t>(floats[first + row][c]);
+    return bits;
+}
+
+// A draw's referenced palette slots and the left motion it shares with the
+// other draws of its actor, prepared once per interpolated sample. A draw of
+// the actor that has no previous match carries a reconstructed previous
+// palette instead of being shown at the new pose.
+struct VisualFactoredPalette {
+    bool Prepared = false;
+    std::optional<uint32_t> Selected;
+    std::optional<Fast::Renderer3ds::PicaRigidMotionRows> SharedMotion;
+    std::optional<VisualUniformFloats> CarriedPrevious;
+};
+
+// An actor is drawn in pieces (body, hands, attachments) whose palettes can
+// share joints across draws: the hand continues the arm. The factored proof
+// keeps such a joint only if both draws use the SAME left motion, so the
+// draws of one actor whose palettes share an output space (equal model-view
+// rows, the same at both endpoints for every member) take one motion: the
+// least-residual motion over all the actor's bones, the body's rather than a
+// swinging limb's (PicaLeastResidualMotion). Native actor evidence (owner and
+// lifetime) defines the actor; without it each draw keeps its own reference.
+//
+// The game also swaps pieces between frames (Link's open and closed hands
+// when he turns). Such a draw has no previous match: shown at its new pose
+// while the rest of the actor is still in between, it would come off the
+// body for that sample. It is interpolated from a previous palette rebuilt
+// from the actor: a bone the actor's matched draws also use this frame (the
+// same matrix) takes that bone's previous pose, so both copies move together;
+// any other bone is carried by the actor's common motion (inverse(D) * N1).
+std::vector<VisualFactoredPalette> ShareVisualPaletteMotions(
+    const Oot3dPicaVisualFrame& previous, const Oot3dPicaVisualFrame& current,
+    const std::vector<std::optional<VisualDrawMatch>>& previousByCurrent) {
+    std::vector<VisualFactoredPalette> result(current.Draws.size());
+    using Key = std::tuple<uint64_t, uint64_t, VisualMatrixBits>;
+    struct Group {
+        VisualMatrixBits PriorSpace{};
+        std::optional<Fast::Renderer3ds::PicaRigidMotionRows> Motion;
+        // Current bone matrix -> its previous pose; empty when ambiguous.
+        std::map<VisualMatrixBits, std::optional<VisualMatrixBits>> Bones;
+        // Each distinct bone once, whichever draws reference it.
+        std::vector<Fast::Renderer3ds::PicaAffineEndpoints> Matrices;
+    };
+    const auto endpoints = [](const VisualUniformFloats& before, const VisualUniformFloats& after, size_t first) {
+        Fast::Renderer3ds::PicaAffineEndpoints matrix{};
+        for (size_t row = 0; row < 3; ++row) for (size_t c = 0; c < 4; ++c) {
+            matrix[0][row][c] = before[first + row][c];
+            matrix[1][row][c] = after[first + row][c];
+        }
+        return matrix;
+    };
+    std::map<Key, Group> groups;
+    std::vector<std::optional<Key>> keys(current.Draws.size());
+    const auto actorKey = [](const Oot3dPicaVulkanDrawPlan& plan) -> std::optional<Key> {
+        const auto& id = plan.Composition.TemporalIdentity;
+        if (!id.Available() || id.Owner == 0) return {};
+        const auto first = plan.VertexShader.TemporalProgram->AffineLayout.ModelView.FirstUniform;
+        return Key{id.Owner, id.Lifetime, AffineBits(plan.VertexShader.Uniforms.Floats, first)};
+    };
+    for (size_t index = 0; index < current.Draws.size(); ++index) {
+        const auto& match = previousByCurrent[index];
+        if (!match) continue;
+        const auto& before = previous.Draws[match->PreviousIndex];
+        const auto& after = current.Draws[index];
+        if (!CmbAffineLayouts(before, after)) continue;
+        auto& entry = result[index];
+        entry.Prepared = true;
+        entry.Selected = CmbPaletteSlots(before, after);
+        const auto key = actorKey(after);
+        const auto& priorId = before.Composition.TemporalIdentity;
+        if (!entry.Selected || !key || priorId.Owner != std::get<0>(*key) || priorId.Lifetime != std::get<1>(*key))
+            continue;
+        const auto& layout = after.VertexShader.TemporalProgram->AffineLayout;
+        const auto priorSpace = AffineBits(before.VertexShader.Uniforms.Floats, layout.ModelView.FirstUniform);
+        auto [found, inserted] = groups.try_emplace(*key);
+        auto& group = found->second;
+        if (inserted) group.PriorSpace = priorSpace;
+        else if (group.PriorSpace != priorSpace) continue;
+        keys[index] = key;
+        for (size_t slot = 0; slot < layout.Palette.MatrixCount; ++slot) {
+            if (!(*entry.Selected & (1U << slot))) continue;
+            const size_t first = layout.Palette.FirstUniform + 3 * slot;
+            const auto prior = AffineBits(before.VertexShader.Uniforms.Floats, first);
+            const auto [bone, added] = group.Bones.try_emplace(AffineBits(after.VertexShader.Uniforms.Floats, first), prior);
+            if (added)
+                group.Matrices.push_back(endpoints(before.VertexShader.Uniforms.Floats,
+                                                   after.VertexShader.Uniforms.Floats, first));
+            else if (bone->second != prior)
+                bone->second.reset();
+        }
+    }
+    for (auto& [key, group] : groups) group.Motion = Fast::Renderer3ds::PicaLeastResidualMotion(group.Matrices);
+    for (size_t index = 0; index < current.Draws.size(); ++index)
+        if (keys[index]) result[index].SharedMotion = groups[*keys[index]].Motion;
+    for (size_t index = 0; index < current.Draws.size(); ++index) {
+        const auto& after = current.Draws[index];
+        if (previousByCurrent[index] || !CmbAffineLayouts(after, after)) continue;
+        const auto key = actorKey(after);
+        const auto found = key ? groups.find(*key) : groups.end();
+        if (found == groups.end() || !found->second.Motion) continue;
+        const auto selected = CmbPaletteSlots(after, after);
+        if (!selected) continue;
+        const auto& group = found->second;
+        const auto& motion = *group.Motion;
+        const auto& layout = after.VertexShader.TemporalProgram->AffineLayout;
+        VisualUniformFloats prior = after.VertexShader.Uniforms.Floats;
+        // The group's previous model-view: the piece shares the actor's space.
+        for (size_t row = 0; row < 3; ++row) for (size_t c = 0; c < 4; ++c)
+            prior[layout.ModelView.FirstUniform + row][c] = std::bit_cast<float>(group.PriorSpace[row * 4 + c]);
+        for (size_t slot = 0; slot < layout.Palette.MatrixCount; ++slot) {
+            if (!(*selected & (1U << slot))) continue;
+            const size_t first = layout.Palette.FirstUniform + 3 * slot;
+            const auto bone = group.Bones.find(AffineBits(after.VertexShader.Uniforms.Floats, first));
+            if (bone != group.Bones.end() && bone->second) {
+                for (size_t row = 0; row < 3; ++row) for (size_t c = 0; c < 4; ++c)
+                    prior[first + row][c] = std::bit_cast<float>((*bone->second)[row * 4 + c]);
+                continue;
+            }
+            // inverse(D) * N1 with D = [R | t]: R^T * (N1 - [0 | t]).
+            for (size_t row = 0; row < 3; ++row) for (size_t c = 0; c < 4; ++c) {
+                double value = 0.0;
+                for (size_t k = 0; k < 3; ++k)
+                    value += motion[k][row] * (double(after.VertexShader.Uniforms.Floats[first + k][c]) -
+                                               (c == 3 ? motion[k][3] : 0.0));
+                prior[first + row][c] = static_cast<float>(value);
+            }
+        }
+        auto& entry = result[index];
+        entry.Prepared = true;
+        entry.Selected = selected;
+        entry.SharedMotion = motion;
+        entry.CarriedPrevious = prior;
+    }
+    return result;
+}
+
+// An unmatched draw of an actor, interpolated from its carried palette.
+bool InterpolateCarriedVisualDraw(const Oot3dPicaVulkanDrawPlan& current, const VisualFactoredPalette& palette,
+                                  float alpha, Oot3dPicaVertexUniformState& vertexUniforms) {
+    if (!palette.CarriedPrevious || !palette.Selected || !palette.SharedMotion) return false;
+    const auto& layout = current.VertexShader.TemporalProgram->AffineLayout;
+    auto factored = current.VertexShader.Uniforms.Floats;
+    if (!Fast::Renderer3ds::InterpolatePicaFactoredUniformGroup(
+            *palette.CarriedPrevious, current.VertexShader.Uniforms.Floats, layout.Palette, *palette.Selected,
+            alpha, factored, &*palette.SharedMotion) ||
+        !Fast::Renderer3ds::InterpolatePicaFactoredUniformGroup(
+            *palette.CarriedPrevious, current.VertexShader.Uniforms.Floats, layout.ModelView, 1U, alpha, factored))
+        return false;
+    vertexUniforms.Floats = factored;
+    return true;
+}
+
 void InterpolateVisualVertexUniforms(
     const Oot3dPicaVulkanDrawPlan& previous,
     const Oot3dPicaVulkanDrawPlan& current, float alpha,
-    Oot3dPicaVertexUniformState& vertexUniforms) {
+    Oot3dPicaVertexUniformState& vertexUniforms,
+    const VisualFactoredPalette* palette = nullptr) {
     alpha = std::clamp(alpha, 0.0F, 1.0F);
+    const auto& before = previous.VertexShader.Uniforms.Floats;
+    const auto& after = current.VertexShader.Uniforms.Floats;
     for (size_t index = 0; index < vertexUniforms.Floats.size(); ++index) {
-        if (!IsContinuousVertexUniform(index)) {
-            continue;
-        }
-        for (size_t component = 0; component < 4U; ++component) {
-            vertexUniforms.Floats[index][component] =
-                InterpolateFinite(previous.VertexShader.Uniforms.Floats[index][component],
-                                  current.VertexShader.Uniforms.Floats[index][component], alpha);
-        }
+        if (!IsContinuousVertexUniform(index)) continue;
+        for (size_t component = 0; component < 4; ++component)
+            vertexUniforms.Floats[index][component] = alpha == 0.0F ? before[index][component]
+                : alpha == 1.0F ? after[index][component]
+                : InterpolateFinite(before[index][component],after[index][component],alpha);
     }
+    if (!(alpha > 0.0F && alpha < 1.0F)) return;
+    const auto& previousProgram = previous.VertexShader.TemporalProgram;
+    const auto& currentProgram = current.VertexShader.TemporalProgram;
+    if (previousProgram && currentProgram) {
+        const auto previousTranslations = DescribeOot3dTextureTranslations(
+            previousProgram->CmbTextureCoordinates, before, previous.VertexShader.Uniforms.BooleanMask,
+            previous.State, previous.FragmentShader.Uniforms.FragmentControl[2]);
+        const auto currentTranslations = DescribeOot3dTextureTranslations(
+            currentProgram->CmbTextureCoordinates, after, current.VertexShader.Uniforms.BooleanMask,
+            current.State, current.FragmentShader.Uniforms.FragmentControl[2]);
+        Fast::Renderer3ds::InterpolatePicaTextureTranslations(
+            before, after, previousTranslations, currentTranslations, alpha, vertexUniforms.Floats);
+    }
+    if (!CmbAffineLayouts(previous, current)) return;
+    const auto selected = palette && palette->Prepared ? palette->Selected : CmbPaletteSlots(previous,current);
+    if (!selected) return;
+    const auto& layout = current.VertexShader.TemporalProgram->AffineLayout;
+    const auto* shared = palette && palette->SharedMotion ? &*palette->SharedMotion : nullptr;
+    auto factored = vertexUniforms.Floats;
+    // Palette outputs feed model-view inputs: two coordinate spaces, hence
+    // separate motions. Commit both groups together or keep scalar fallback.
+    if (Fast::Renderer3ds::InterpolatePicaFactoredUniformGroup(
+            before,after,layout.Palette,*selected,alpha,factored,shared) &&
+        Fast::Renderer3ds::InterpolatePicaFactoredUniformGroup(
+            before,after,layout.ModelView,1U,alpha,factored))
+        vertexUniforms.Floats = factored;
 }
 
 void InterpolateVisualFragmentUniforms(
@@ -1188,9 +1496,10 @@ void InterpolateCompatibleVisualRenderState(
     Oot3dPicaVertexUniformState& vertexUniforms,
     Oot3dPicaFragmentUniformState& fragmentUniforms,
     Oot3dPicaViewportState& viewport,
-    std::array<float, 4>& blendConstantColor) {
+    std::array<float, 4>& blendConstantColor,
+    const VisualFactoredPalette* palette = nullptr) {
     InterpolateVisualVertexUniforms(previous, current, alpha,
-                                    vertexUniforms);
+                                    vertexUniforms, palette);
     InterpolateVisualFragmentUniforms(previous, current, alpha,
                                       fragmentUniforms);
     InterpolateVisualViewport(previous, current, alpha, viewport);
@@ -1200,11 +1509,12 @@ void InterpolateCompatibleVisualRenderState(
 
 void InterpolateCompatibleVisualDraw(const Oot3dPicaVulkanDrawPlan& previous, const Oot3dPicaVulkanDrawPlan& current,
                                      float alpha, Oot3dPicaVulkanDrawPlan& output,
-                                     VisualSceneLightInterpolation& scenePoints) {
+                                     VisualSceneLightInterpolation& scenePoints,
+                                     const VisualFactoredPalette* palette = nullptr) {
     output = current;
     InterpolateCompatibleVisualRenderState(previous, current, alpha, output.VertexShader.Uniforms,
                                            output.FragmentShader.Uniforms, output.State.Viewport,
-                                           output.State.OutputMerger.Blend.ConstantColor);
+                                           output.State.OutputMerger.Blend.ConstantColor, palette);
     InterpolateVisualLightBinding(previous.LightBinding, current.LightBinding, alpha, output.LightBinding, scenePoints);
     const bool perInstanceInterpolated = InterpolateVertexValues(
         previous, current, alpha, Oot3dPicaVertexInputRate::PerInstance,
@@ -1236,6 +1546,9 @@ bool SampleVisualFrameWithMatching(const Oot3dPicaVisualFrame& previous, const O
     output.InterpolatedPerVertexDraws = 0;
     output.Draws.resize(current.Draws.size());
     VisualSceneLightInterpolation scenePoints;
+    const auto palettes = alpha > 0.0F && alpha < 1.0F
+        ? ShareVisualPaletteMotions(previous, current, matching.PreviousByCurrent)
+        : std::vector<VisualFactoredPalette>{};
 
     for (size_t currentIndex = 0; currentIndex < current.Draws.size(); ++currentIndex) {
         const auto& currentDraw = current.Draws[currentIndex];
@@ -1243,7 +1556,8 @@ bool SampleVisualFrameWithMatching(const Oot3dPicaVisualFrame& previous, const O
         auto& sampled = output.Draws[currentIndex];
         if (match.has_value()) {
             const auto& previousDraw = previous.Draws[match->PreviousIndex];
-            InterpolateCompatibleVisualDraw(previousDraw, currentDraw, alpha, sampled, scenePoints);
+            InterpolateCompatibleVisualDraw(previousDraw, currentDraw, alpha, sampled, scenePoints,
+                                            palettes.empty() ? nullptr : &palettes[currentIndex]);
             VisualDrawDeltaFlags delta;
             if (drawDeltas != nullptr) {
                 delta = (*drawDeltas)[currentIndex];
@@ -1284,6 +1598,10 @@ bool SampleVisualFrameWithMatching(const Oot3dPicaVisualFrame& previous, const O
             }
         } else {
             sampled = currentDraw;
+            if (!palettes.empty() && palettes[currentIndex].CarriedPrevious &&
+                InterpolateCarriedVisualDraw(currentDraw, palettes[currentIndex], alpha,
+                                             sampled.VertexShader.Uniforms))
+                ++output.InterpolatedDraws;
         }
     }
     if (output.Draws.empty()) {
@@ -1313,6 +1631,9 @@ bool SampleVisualFrameViewWithMatching(const Oot3dPicaVisualFrame& previous, con
     output.InterpolatedPerVertexDraws = 0;
     output.Draws.resize(current.Draws.size());
     VisualSceneLightInterpolation scenePoints;
+    const auto palettes = alpha > 0.0F && alpha < 1.0F
+        ? ShareVisualPaletteMotions(previous, current, matching.PreviousByCurrent)
+        : std::vector<VisualFactoredPalette>{};
 
     for (size_t currentIndex = 0; currentIndex < current.Draws.size(); ++currentIndex) {
         const auto& currentDraw = current.Draws[currentIndex];
@@ -1327,6 +1648,13 @@ bool SampleVisualFrameViewWithMatching(const Oot3dPicaVisualFrame& previous, con
 
         const auto match = matching.PreviousByCurrent[currentIndex];
         if (!match.has_value()) {
+            if (!palettes.empty() && palettes[currentIndex].CarriedPrevious) {
+                sampled.VertexUniforms.emplace(currentDraw.VertexShader.Uniforms);
+                if (InterpolateCarriedVisualDraw(currentDraw, palettes[currentIndex], alpha, *sampled.VertexUniforms))
+                    ++output.InterpolatedDraws;
+                else
+                    sampled.VertexUniforms.reset();
+            }
             continue;
         }
         const auto& previousDraw = previous.Draws[match->PreviousIndex];
@@ -1339,7 +1667,8 @@ bool SampleVisualFrameViewWithMatching(const Oot3dPicaVisualFrame& previous, con
         if (delta.VertexUniforms) {
             sampled.VertexUniforms.emplace(currentDraw.VertexShader.Uniforms);
             InterpolateVisualVertexUniforms(
-                previousDraw, currentDraw, alpha, *sampled.VertexUniforms);
+                previousDraw, currentDraw, alpha, *sampled.VertexUniforms,
+                palettes.empty() ? nullptr : &palettes[currentIndex]);
         }
         if (delta.FragmentUniforms) {
             sampled.FragmentUniforms.emplace(currentDraw.FragmentShader.Uniforms);
@@ -1515,6 +1844,9 @@ ComputeOot3dPicaVisualDrawIdentity(const Oot3dPicaVulkanDrawPlan& plan) {
     HashValue(hash, plan.Composition.NativeProjectedShadow);
     HashValue(hash, plan.Composition.NativeActorGeometry);
     HashValue(hash, plan.Composition.NativeActorIdentity);
+    const auto& temporal = plan.Composition.TemporalIdentity;
+    HashValue(hash, temporal.Owner); HashValue(hash, temporal.Instance);
+    HashValue(hash, temporal.Part); HashValue(hash, temporal.Slot); HashValue(hash, temporal.Lifetime);
     HashValue(hash, plan.Composition.IsolatedLighting);
     HashValue(hash, plan.VertexShader.StateKey);
     HashValue(hash, plan.FragmentShader.StateKey);

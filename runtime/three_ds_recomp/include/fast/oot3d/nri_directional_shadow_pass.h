@@ -13,6 +13,7 @@
 
 #include <vulkan/vulkan.h>
 
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -68,10 +69,18 @@ struct NriDirectionalShadowHistorySnapshot {
     VkImage ContactImage = VK_NULL_HANDLE;
     uint32_t ContactWidth = 0;
     uint32_t ContactHeight = 0;
+    // The static casters' depth alone (no actors) of the displayed layouts:
+    // the newest, then the older one while a dissolve runs. Each is an atlas
+    // of one region with the composed atlas's page placement and table.
+    std::array<VkImageView, 2> StaticViews{};
 
     [[nodiscard]] bool Valid() const noexcept {
         return Image != VK_NULL_HANDLE && View != VK_NULL_HANDLE &&
                Sampler != VK_NULL_HANDLE && State.Valid();
+    }
+    [[nodiscard]] bool StaticValid() const noexcept {
+        return Valid() && StaticViews[0] != VK_NULL_HANDLE &&
+               (!State.Dissolving() || StaticViews[1] != VK_NULL_HANDLE);
     }
     [[nodiscard]] bool ContactValid() const noexcept {
         return Valid() && State.ContactShadows && ContactImage != VK_NULL_HANDLE && ContactWidth != 0U &&

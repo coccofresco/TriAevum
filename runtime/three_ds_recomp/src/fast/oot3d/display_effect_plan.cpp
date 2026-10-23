@@ -349,7 +349,8 @@ DisplayEffectPlan BuildDisplayEffectPlan(const DisplayEffectPlanInput& input) {
     // these keep the boundary's derived requirements free of presentation
     // resources.
     const bool upscaler = !input.NativeSceneBoundary && extensionWorld &&
-                          input.AntiAliasing == AntiAliasingMode::Upscaler;
+                          input.AntiAliasing == AntiAliasingMode::Upscaler &&
+                          input.UpscalerAvailable;
     const bool nis = upscaler && input.Upscaler == UpscalerProvider::Nis;
     const bool fsr = temporalMetadata && upscaler && input.Upscaler == UpscalerProvider::Fsr;
     const bool dlss = temporalMetadata && upscaler && input.Upscaler == UpscalerProvider::Dlss;

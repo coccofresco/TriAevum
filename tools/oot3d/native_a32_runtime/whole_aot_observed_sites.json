@@ -1,0 +1,195 @@
+{
+ "format": "oot3d_whole_aot_observed_sites_v1",
+ "purpose": "Guest pcs where the TopScreen source port observes or redirects execution. Product builds reach a hook only at a whole-AOT block start, so the structural program starts a block at each of these pcs. Applied only to the code image below.",
+ "code_sha256": "16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220",
+ "sites": [
+  {
+   "pc": "0x002D84C8",
+   "use": "camera update patch site"
+  },
+  {
+   "pc": "0x002E27C0",
+   "use": "cf skip lower composition"
+  },
+  {
+   "pc": "0x00300520",
+   "use": "scene seven draw call"
+  },
+  {
+   "pc": "0x0030052C",
+   "use": "scene five draw call"
+  },
+  {
+   "pc": "0x00300538",
+   "use": "alternate renderer update call"
+  },
+  {
+   "pc": "0x00300544",
+   "use": "renderer visibility call"
+  },
+  {
+   "pc": "0x00300550",
+   "use": "scene viewport draw call"
+  },
+  {
+   "pc": "0x0030055C",
+   "use": "draw-view page compositor call"
+  },
+  {
+   "pc": "0x00324638",
+   "use": "cf uniforms bind"
+  },
+  {
+   "pc": "0x0032464C",
+   "use": "cf uniforms block0"
+  },
+  {
+   "pc": "0x00324658",
+   "use": "cf uniforms block4"
+  },
+  {
+   "pc": "0x00324664",
+   "use": "cf uniforms stats"
+  },
+  {
+   "pc": "0x0041952C",
+   "use": "routed command call A"
+  },
+  {
+   "pc": "0x00419838",
+   "use": "overlay viewport draw call"
+  },
+  {
+   "pc": "0x00419850",
+   "use": "alternate viewport draw call"
+  },
+  {
+   "pc": "0x00419874",
+   "use": "conditional draw call"
+  },
+  {
+   "pc": "0x0041988C",
+   "use": "controller draw call"
+  },
+  {
+   "pc": "0x004198B0",
+   "use": "routed command call B"
+  },
+  {
+   "pc": "0x0041E984",
+   "use": "touch coordinate update call"
+  },
+  {
+   "pc": "0x0041EB28",
+   "use": "pause projection prepare call"
+  },
+  {
+   "pc": "0x0041EB40",
+   "use": "cf skip lower projection"
+  },
+  {
+   "pc": "0x0041EE1C",
+   "use": "page projection upload call"
+  },
+  {
+   "pc": "0x0041EE74",
+   "use": "items draw call"
+  },
+  {
+   "pc": "0x0042BF6C",
+   "use": "cf quest prompt"
+  },
+  {
+   "pc": "0x0042F5CC",
+   "use": "touch-button draw call"
+  },
+  {
+   "pc": "0x00434CDC",
+   "use": "items cursor subdraw A"
+  },
+  {
+   "pc": "0x00434D48",
+   "use": "items cursor subdraw B"
+  },
+  {
+   "pc": "0x004426B4",
+   "use": "dungeon icon 0 owned"
+  },
+  {
+   "pc": "0x004426B8",
+   "use": "resume after the site at 0x004426B4"
+  },
+  {
+   "pc": "0x004426D4",
+   "use": "dungeon icon 0 absent"
+  },
+  {
+   "pc": "0x004426D8",
+   "use": "resume after the site at 0x004426D4"
+  },
+  {
+   "pc": "0x00442704",
+   "use": "dungeon icon 1 owned"
+  },
+  {
+   "pc": "0x00442708",
+   "use": "resume after the site at 0x00442704"
+  },
+  {
+   "pc": "0x00442730",
+   "use": "dungeon icon 1 absent"
+  },
+  {
+   "pc": "0x00442734",
+   "use": "resume after the site at 0x00442730"
+  },
+  {
+   "pc": "0x00442760",
+   "use": "dungeon icon 2 owned"
+  },
+  {
+   "pc": "0x00442764",
+   "use": "resume after the site at 0x00442760"
+  },
+  {
+   "pc": "0x0044278C",
+   "use": "dungeon icon 2 absent"
+  },
+  {
+   "pc": "0x00442790",
+   "use": "resume after the site at 0x0044278C"
+  },
+  {
+   "pc": "0x00469AE8",
+   "use": "float load quest origin x"
+  },
+  {
+   "pc": "0x00469AEC",
+   "use": "float load quest origin y"
+  },
+  {
+   "pc": "0x00469AF0",
+   "use": "float load resume"
+  },
+  {
+   "pc": "0x00478EB8",
+   "use": "camera FOV scalar"
+  },
+  {
+   "pc": "0x00478EBC",
+   "use": "resume after the camera FOV scalar at 0x00478EB8"
+  },
+  {
+   "pc": "0x004848F0",
+   "use": "cf hint movie 4e4"
+  },
+  {
+   "pc": "0x00484944",
+   "use": "cf hint movie 4e8"
+  },
+  {
+   "pc": "0x004849B0",
+   "use": "cf hint movie 4ec"
+  }
+ ]
+}

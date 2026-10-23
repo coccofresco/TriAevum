@@ -86,6 +86,10 @@ struct VulkanAdapterCandidate {
     bool HasSwapchainExtension = false;
     bool HasSurfaceFormats = false;
     bool HasPresentModes = false;
+    // The device's Vulkan version: the renderer needs 1.2 (render pass 2,
+    // the 1.2 features NRI relies on).
+    uint32_t ApiMajor = 1;
+    uint32_t ApiMinor = 2;
 };
 
 [[nodiscard]] bool IsVulkanAdapterSuitable(

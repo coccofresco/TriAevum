@@ -128,6 +128,7 @@ layout(location=6) out vec3 blade_view_direction;
 layout(location=7) flat out float blade_rim_weight;
 layout(location=8) out vec4 blade_current_clip;
 layout(location=9) out vec4 blade_previous_clip;
+layout(location=10) out vec3 blade_lit_ceiling;
 
 void evaluate_shading(
     uint environment_index, vec3 world_normal,
@@ -459,6 +460,10 @@ void main() {
         evaluate_blade_color(
             grass.flags.w, height_factor, lighting, in_surface_color),
         1.0);
+    // Root/tip texture gains and the optional toon rim are appearance controls,
+    // not emission. Their combined result may not exceed the native terrain's
+    // lit white response (including its TEV scale). Unlit grass keeps its opt-out.
+    blade_lit_ceiling = grass_native_material_rgb(vec3(1.0), lighting, source_light);
     // Lighting is constant over a blade. The unclamped toon transform is
     // linear in color, so it commutes with perspective interpolation.
     ToonSurfaceParameters toon = environment_state.records[grass.flags.w].toon;
@@ -511,6 +516,7 @@ layout(location=3) in vec4 tuft_sample;
 layout(location=4) flat in float lod_visibility;
 layout(location=6) in vec3 blade_view_direction;
 layout(location=7) flat in float blade_rim_weight;
+layout(location=10) in vec3 blade_lit_ceiling;
 struct GrassEnvironmentRecord {
     vec4 color_and_mode;
     vec2 lut[128];
@@ -578,15 +584,16 @@ void main() {
     if (toon.flags.x > 0.5)
         resolved_color.rgb = clamp(resolved_color.rgb, 0.0, 1.0);
     if (toon.flags.x > 0.5 && blade_rim_weight > 0.0)
-        resolved_color.rgb = clamp(resolved_color.rgb + blade_rim_weight *
+        resolved_color.rgb = clamp(resolved_color.rgb + blade_lit_ceiling * blade_rim_weight *
             oot3d_toon_rim(blade_normal_guide.xyz * 2.0 - 1.0, blade_view_direction, toon), 0.0, 1.0);
+    resolved_color.rgb = min(resolved_color.rgb, blade_lit_ceiling);
 #if GRASS_AUXILIARY_OUTPUTS
     out_normal_guide = blade_normal_guide;
     out_geometry_guide = uvec4(0u, pica_geometry_encode_normal(pica_geometry_face_normal(
         blade_view_direction, blade_face_dx, blade_face_dy)), 2u, 0u);
     // With the placement's previous frame the blade writes exact motion and
-    // keeps its temporal history. Without it, the motion pass reconstructs
-    // camera motion from depth and the reactive mask rejects the history,
+    // keeps its temporal history. Without it, the motion pass invalidates
+    // motion and the reactive mask rejects the history,
     // since wind and interaction still move the blade.
     bool exact_motion = environment_state.records[grass.flags.w].motion_state.z > 0.5 &&
         blade_current_clip.w > 1.0e-7 && blade_previous_clip.w > 1.0e-7;
@@ -596,7 +603,7 @@ void main() {
     if (exact_motion) {
         vec2 current_uv = blade_current_clip.xy / blade_current_clip.w * 0.5 + 0.5;
         vec2 previous_uv = blade_previous_clip.xy / blade_previous_clip.w * 0.5 + 0.5;
-        out_rigid_motion.xyz = vec3(previous_uv - current_uv, 1.0);
+        out_rigid_motion.xyz = vec3(previous_uv - current_uv, 3.0);
     }
 #endif
     float resolved_depth = gl_FragCoord.z;
@@ -892,7 +899,10 @@ void main() {
 }
 
 std::string BuildGrassShadowGridComputeShader() {
-    return std::string("#version 450\n") + std::string(Renderer3ds::VirtualShadowReceiverShader()) +
+    // The coarse grid and the refinement bind different atlases (static
+    // depth, or the composed map); layout 1 has its own.
+    return std::string("#version 450\n#define PICA_VSM_LAYOUT_ATLASES\n") +
+        std::string(Renderer3ds::VirtualShadowReceiverShader()) +
         std::string(kGrassShadowRefinementShader) + R"glsl(
 layout(local_size_x=64) in;
 struct GrassGridPoint { vec4 position; vec4 normal; };

@@ -8,6 +8,7 @@
 #include <cstring>
 #include <limits>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 namespace Fast::Oot3d {
@@ -26,9 +27,11 @@ struct GrassShadowGridPass::Impl {
         void* Mapped{};
     };
     struct Invocation {
-        Buffer Points, References, Visibility, Uniforms, SurfacePatches, Patches;
+        Buffer Points, References, Visibility, Uniforms, StaticUniforms, SurfacePatches, Patches;
         VkDescriptorPool Pool{};
+        // The refinement's (composed map) and the coarse grid's (static depth).
         VkDescriptorSet Set{};
+        VkDescriptorSet StaticSet{};
         uint64_t Revision{};
         size_t SurfaceCount = 0;
     };
@@ -96,19 +99,23 @@ struct GrassShadowGridPass::Impl {
             frame.Invocations.push_back(std::make_unique<Invocation>());
         auto& invocation = *frame.Invocations[frame.Used++];
         if (!invocation.Pool) {
-            const std::array<VkDescriptorPoolSize, 3> sizes{ { { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4 },
-                                                               { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 },
-                                                               { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1 } } };
+            const std::array<VkDescriptorPoolSize, 3> sizes{ { { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 8 },
+                                                               { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2 },
+                                                               { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4 } } };
             VkDescriptorPoolCreateInfo pool{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
-            pool.maxSets = 1;
+            pool.maxSets = 2;
             pool.poolSizeCount = static_cast<uint32_t>(sizes.size());
             pool.pPoolSizes = sizes.data();
             Check(vkCreateDescriptorPool(Device, &pool, nullptr, &invocation.Pool));
+            const std::array<VkDescriptorSetLayout, 2> layouts{ DescriptorLayout, DescriptorLayout };
+            std::array<VkDescriptorSet, 2> sets{};
             VkDescriptorSetAllocateInfo set{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
             set.descriptorPool = invocation.Pool;
-            set.descriptorSetCount = 1;
-            set.pSetLayouts = &DescriptorLayout;
-            Check(vkAllocateDescriptorSets(Device, &set, &invocation.Set));
+            set.descriptorSetCount = 2;
+            set.pSetLayouts = layouts.data();
+            Check(vkAllocateDescriptorSets(Device, &set, sets.data()));
+            invocation.Set = sets[0];
+            invocation.StaticSet = sets[1];
         }
         return invocation;
     }
@@ -135,12 +142,13 @@ void GrassShadowGridPass::Initialize(VkPhysicalDevice physical, VkDevice device,
     p.MaximumStorageRange = properties.limits.maxStorageBufferRange;
     p.DispatchCapacity = static_cast<uint32_t>(std::min<uint64_t>(
         uint64_t(properties.limits.maxComputeWorkGroupCount[0]) * 64U, std::numeric_limits<uint32_t>::max() - 63U));
-    const std::array<VkDescriptorSetLayoutBinding, 6> bindings{
+    const std::array<VkDescriptorSetLayoutBinding, 7> bindings{
         { { 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr },
           { 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr },
           { 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr },
           { 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr },
           { 10, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr },
+          { 11, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr },
           { 12, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr } }
     };
     VkDescriptorSetLayoutCreateInfo descriptor{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
@@ -182,7 +190,8 @@ GrassShadowGridResult GrassShadowGridPass::Execute(VkCommandBuffer command, uint
                                                    const std::array<Renderer3ds::ShadowBounds, 2>& focus,
                                                    const EffectGeometryProviderPlan& plan,
                                                    const NriDirectionalShadowHistorySnapshot& history) {
-    if (!plan.Valid() || !plan.Requires(EffectResource::DirectionalShadowHistory) || !history.Valid() ||
+    if (!plan.Valid() || !plan.Requires(EffectResource::DirectionalShadowHistory) ||
+        !plan.Requires(EffectResource::DirectionalShadowStaticHistory) || !history.StaticValid() ||
         history.State.ProducedFrameId > frameId || history.State.Strength <= 0 || !Available() ||
         command == VK_NULL_HANDLE || points.empty() || references.empty() || surfaces.empty() || revision == 0)
         throw std::runtime_error("grass shadow grid invocation lacks declared receiver inputs");
@@ -232,19 +241,40 @@ GrassShadowGridResult GrassShadowGridPass::Execute(VkCommandBuffer command, uint
     p.Ensure(invocation.Visibility, visibilityBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, false);
     p.Ensure(invocation.Uniforms, sizeof(PicaDirectionalShadowReceiverUniforms), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
              true);
+    p.Ensure(invocation.StaticUniforms, sizeof(PicaDirectionalShadowReceiverUniforms),
+             VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, true);
     const DirectionalShadowMatrix identity{ 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
     const auto uniforms = PackPicaDirectionalShadowReceiverUniforms(identity, history.State);
     std::memcpy(invocation.Uniforms.Mapped, &uniforms, uniforms.UsedBytes());
+    // The static depth: the same layouts and pages, each layout in its own
+    // atlas of one region.
+    auto staticState = history.State;
+    staticState.AtlasRegions = 1U;
+    staticState.Region = 0U;
+    if (staticState.Older) {
+        auto older = std::make_shared<PicaDirectionalShadowOlderLayout>(*staticState.Older);
+        older->Region = 0U;
+        staticState.Older = std::move(older);
+    }
+    const auto staticUniforms = PackPicaDirectionalShadowReceiverUniforms(identity, staticState);
+    std::memcpy(invocation.StaticUniforms.Mapped, &staticUniforms, staticUniforms.UsedBytes());
+    dynamicUploaded += sizeof(PicaDirectionalShadowReceiverUniforms);
     const std::array<VkDescriptorBufferInfo, 5> buffers{ { { invocation.Points.Handle, 0, points.size_bytes() },
                                                            { invocation.Visibility.Handle, 0, visibilityBytes },
                                                            { invocation.Uniforms.Handle, 0, sizeof(uniforms) },
                                                            { invocation.SurfacePatches.Handle, 0, surfaceBytes },
                                                            { invocation.Patches.Handle, 0, patchBytes } } };
     const VkDescriptorImageInfo atlas{ history.Sampler, history.View, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
-    std::array<VkWriteDescriptorSet, 6> writes{};
+    const VkDescriptorImageInfo staticAtlas{ history.Sampler, history.StaticViews[0],
+                                             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+    const VkDescriptorImageInfo staticOlderAtlas{
+        history.Sampler, history.StaticViews[1] != VK_NULL_HANDLE ? history.StaticViews[1] : history.StaticViews[0],
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+    const VkDescriptorBufferInfo staticUniformBuffer{ invocation.StaticUniforms.Handle, 0, sizeof(staticUniforms) };
+    std::array<VkWriteDescriptorSet, 14> writes{};
     for (size_t i = 0; i < writes.size(); ++i) {
         writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[i].dstSet = invocation.Set;
+        writes[i].dstSet = i < 7U ? invocation.Set : invocation.StaticSet;
         writes[i].descriptorCount = 1;
     }
     writes[0].dstBinding = 0;
@@ -265,6 +295,19 @@ GrassShadowGridResult GrassShadowGridPass::Execute(VkCommandBuffer command, uint
     writes[5].dstBinding = 3;
     writes[5].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     writes[5].pBufferInfo = &buffers[4];
+    // The composed map holds both layouts' regions.
+    writes[6].dstBinding = 11;
+    writes[6].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    writes[6].pImageInfo = &atlas;
+    // The coarse grid's set: the same buffers, the static depth.
+    for (size_t i = 0; i < 7U; ++i) {
+        const auto set = writes[7U + i].dstSet;
+        writes[7U + i] = writes[i];
+        writes[7U + i].dstSet = set;
+    }
+    writes[9].pImageInfo = &staticAtlas;
+    writes[10].pBufferInfo = &staticUniformBuffer;
+    writes[13].pImageInfo = &staticOlderAtlas;
     vkUpdateDescriptorSets(p.Device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
     // External atlas transitions belong to the graph's VSM producer. Its
     // ShaderRead completion includes vertex, fragment and compute stages.
@@ -275,14 +318,21 @@ GrassShadowGridResult GrassShadowGridPass::Execute(VkCommandBuffer command, uint
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, 0, 1, &upload, 0,
                          nullptr, 0, nullptr);
     vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_COMPUTE, p.Pipeline);
-    vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_COMPUTE, p.Layout, 0, 1, &invocation.Set, 0, nullptr);
-    for (uint32_t first = 0; first < count;) {
-        const uint32_t batch = std::min(count - first, p.DispatchCapacity);
-        const std::array<uint32_t, 4> push{ first + batch, first, coarseCount,
-                                          static_cast<uint32_t>(refinement.Patches.size()) };
-        vkCmdPushConstants(command, p.Layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push.data());
-        vkCmdDispatch(command, (batch + 63U) / 64U, 1, 1);
-        first += batch;
+    // The coarse grid without the actors, then the refinement around them.
+    const std::array<std::pair<VkDescriptorSet, std::array<uint32_t, 2>>, 2> ranges{
+        { { invocation.StaticSet, { 0U, coarseCount } }, { invocation.Set, { coarseCount, count } } } };
+    for (const auto& [set, range] : ranges) {
+        if (range[0] == range[1])
+            continue;
+        vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_COMPUTE, p.Layout, 0, 1, &set, 0, nullptr);
+        for (uint32_t first = range[0]; first < range[1];) {
+            const uint32_t batch = std::min(range[1] - first, p.DispatchCapacity);
+            const std::array<uint32_t, 4> push{ first + batch, first, coarseCount,
+                                              static_cast<uint32_t>(refinement.Patches.size()) };
+            vkCmdPushConstants(command, p.Layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push.data());
+            vkCmdDispatch(command, (batch + 63U) / 64U, 1, 1);
+            first += batch;
+        }
     }
     VkBufferMemoryBarrier ready{ VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER };
     ready.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
@@ -308,6 +358,7 @@ void GrassShadowGridPass::Shutdown() {
                 p.Destroy(entry->References);
                 p.Destroy(entry->Visibility);
                 p.Destroy(entry->Uniforms);
+                p.Destroy(entry->StaticUniforms);
                 p.Destroy(entry->SurfacePatches);
                 p.Destroy(entry->Patches);
                 if (entry->Pool)

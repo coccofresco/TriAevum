@@ -3,6 +3,7 @@
   "manifest_format": "triaevum_public_release_manifest_v1",
   "allowed_roles": {
     "forge_clang_header": ["forge/clang/include/*.h", "forge/clang/include/**/*.h", "forge/clang/include/*.modulemap", "forge/clang/include/**/*.modulemap", "forge/clang/include/cuda_wrappers/algorithm", "forge/clang/include/cuda_wrappers/bits/basic_string.tcc", "forge/clang/include/cuda_wrappers/cmath", "forge/clang/include/cuda_wrappers/complex", "forge/clang/include/cuda_wrappers/new", "forge/clang/include/openmp_wrappers/cmath", "forge/clang/include/openmp_wrappers/complex", "forge/clang/include/openmp_wrappers/new", "forge/clang/include/profile/InstrProfData.inc"],
+    "default_environment_profile": ["resources/environments/*.environment.json"],
     "title_neutral_resource": ["resources/*", "resources/**/*", "gamecontrollerdb.txt"],
     "configuration": ["config/*", "config/**/*"],
     "documentation": ["README.md", "LICENSE_SCOPE.md", "THIRD_PARTY_NOTICES.md", "SOURCE_OFFER.md", "docs/*", "docs/**/*"],
@@ -12,6 +13,8 @@
     "precompiled_catalog": ["recipes/precompiled-titles.json"],
     "portable_shader_corpus": ["forge/shader-corpus/portable.o3ps"],
     "portable_pipeline_recipes": ["forge/shader-corpus/pipelines-*.json"],
+    "precomputed_interior_sun": ["forge/precomputed/interior-sun.masks"],
+    "precomputed_scene_lights": ["forge/precomputed/scene-lights.json"],
     "translated_title_source": ["source/titles/*-translated.zip"],
     "title_build_source": ["source/titles/*-build.zip"],
     "corresponding_source": ["source/*.zip"]
@@ -47,6 +50,8 @@
         "forge_tool_resource": ["lib/clang/*", "lib/clang/**/*"],
         "forge_runtime_module": ["forge/*.dll"],
         "runtime_library": ["*.dll", "bin/*.dll"],
+        "separately_licensed_module": ["triaevum_immerse.dll", "triaevum_dlss.dll", "nvngx_dlss.dll"],
+        "optional_vulkan_runtime": ["amd_fidelityfx_vk.dll"],
         "precompiled_title": ["titles/*/triaevum_title_aot.dll"]
       },
       "required_paths": ["TriAevum.exe", "TriAevumForge.exe", "forge/oot3d_game_module.dll", "msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll", "LICENSES/Microsoft-Visual-Cpp-Runtime.md", "LICENSES/Python-3.13.txt"]
@@ -57,7 +62,8 @@
         "forge_executable": ["TriAevumForge"],
         "forge_runtime_module": ["forge/oot3d_game_module.so", "forge/libshaderc.so.1", "forge/libshaderc_shared.so", "forge/libshaderc_shared.so.*", "forge/libglslang.so", "forge/libglslang.so.*", "forge/libSPIRV-Tools.so", "forge/libSPIRV-Tools.so.*", "forge/libSPIRV-Tools-opt.so", "forge/libSPIRV-Tools-opt.so.*"],
         "shader_preparation_tool": ["forge/oot3d_native_pica_aot_compiler", "forge/oot3d_native_nri_pipeline_prepare"],
-        "runtime_library": ["triaevum_title_aot.so", "lib/*.so", "lib/*.so.*"],
+        "runtime_library": ["triaevum_title_aot.so", "lib/*.so", "lib/*.so.*", "lib/compat-cxx/*.so.*"],
+        "separately_licensed_module": ["libtriaevum_immerse.so", "lib/libtriaevum_immerse.so", "libtriaevum_dlss.so", "lib/libtriaevum_dlss.so", "libnvidia-ngx-dlss.so.*", "lib/libnvidia-ngx-dlss.so.*"],
         "forge_frozen_resource": ["_internal/*", "_internal/**/*"],
         "precompiled_title": ["titles/*/triaevum_title_aot.so"]
       },
@@ -73,6 +79,12 @@
     "revision_recipe",
     "corresponding_source"
   ],
+  "separately_licensed_modules": ["triaevum_immerse.dll", "libtriaevum_immerse.so", "triaevum_dlss.dll", "libtriaevum_dlss.so", "nvngx_dlss.dll", "libnvidia-ngx-dlss.so.*"],
+  "vulkan_import_exempt_roles": ["optional_vulkan_runtime"],
+  "proprietary_sdk_markers": {
+    "markers": ["NVSDK_NGX_"],
+    "scanned_roles": ["runtime_executable", "runtime_library", "forge_executable", "forge_tool", "forge_runtime_module", "shader_preparation_tool", "precompiled_title"]
+  },
   "forbidden_basenames": [
     "AGENTS.md",
     "code.bin",
@@ -109,7 +121,8 @@
     "tools/oot3d/ui_contract/CMakeLists.txt",
     "tools/oot3d/ui_contract/README.md",
     "runtime/three_ds_recomp/src/fast/immerse/LICENSE.md",
-    "runtime/three_ds_recomp/src/fast/immerse/LICENSE-iMMERSE.txt"
+    "runtime/three_ds_recomp/src/fast/immerse/LICENSE-iMMERSE.txt",
+    "runtime/three_ds_recomp/src/fast/dlss/LICENSE.md"
   ],
   "source_archive_required_manifests": [
     "tools/oot3d/ui_contract/SOURCE_MANIFEST.json"

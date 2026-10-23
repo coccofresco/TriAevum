@@ -3,6 +3,7 @@
 #include <vulkan/vulkan.h>
 
 #include <array>
+#include <string_view>
 
 namespace Fast::Renderer3ds {
 
@@ -67,6 +68,43 @@ inline bool PicaPipelineLibrariesSupported(
     const VkPhysicalDeviceFeatures& core) {
     return extensionsAvailable && libraries.graphicsPipelineLibrary == VK_TRUE &&
            dynamicState.extendedDynamicState == VK_TRUE && core.fragmentStoresAndAtomics == VK_TRUE;
+}
+
+// Driver policy belongs here, shared by the live device and Forge. Capability
+// alone says nothing about compilation memory: Intel's Mesa driver (anv)
+// grows to tens of GB compiling library parts (issue #72), so it defaults to
+// monolithic pipelines. Explicit opt-in still requires every capability and
+// is meant for bounded diagnostic runs. An invalid value is reported in the
+// policy reason and otherwise treated as unset.
+inline bool PicaPipelineLibrariesByDefault(VkDriverId driver) {
+    return driver != VK_DRIVER_ID_INTEL_OPEN_SOURCE_MESA;
+}
+
+struct PicaPipelineLibraryPolicy {
+    bool Requested = false;
+    bool Enabled = false;
+    bool AllPipelines = false;
+    const char* Reason = "default";
+};
+
+inline PicaPipelineLibraryPolicy ResolvePicaPipelineLibraryPolicy(
+    const char* environment, bool supported, bool dynamicRendering,
+    bool preparesPrograms, VkDriverId driver) {
+    const std::string_view mode = environment ? environment : "";
+    const bool valid = mode.empty() || mode == "0" || mode == "1";
+    const bool optIn = mode == "1", optOut = mode == "0";
+    const bool driverDefault = PicaPipelineLibrariesByDefault(driver);
+    PicaPipelineLibraryPolicy result;
+    result.Requested = optIn || (!optOut && preparesPrograms && driverDefault);
+    result.Enabled = result.Requested && supported && dynamicRendering;
+    result.AllPipelines = result.Enabled && optIn;
+    result.Reason = optOut ? "environment_disabled" :
+        !supported || !dynamicRendering ? "unsupported" :
+        optIn ? "explicit_opt_in" :
+        !preparesPrograms ? "preparation_mode" :
+        !driverDefault ? "driver_policy" :
+        !valid ? "invalid_environment_ignored" : "default";
+    return result;
 }
 
 } // namespace Fast::Renderer3ds

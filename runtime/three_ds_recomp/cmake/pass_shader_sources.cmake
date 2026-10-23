@@ -21,6 +21,7 @@ function(triaevum_add_pass_shader_sources target)
         "${runtime}/src/fast/oot3d/smaa_1x.cpp"
         "${runtime}/src/fast/oot3d/temporal_aa.cpp"
         "${runtime}/src/fast/oot3d/upscaler_guides.cpp"
+        "${runtime}/src/fast/oot3d/upscaler_orientation.cpp"
         "${runtime}/src/fast/oot3d/native_ui_overlay.cpp"
         "${runtime}/src/fast/renderer/gtao_shader.cpp"
         # Diffuse screen-space GI kernels of the M5 runtime pass and the

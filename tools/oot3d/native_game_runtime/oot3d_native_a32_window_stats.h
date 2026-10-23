@@ -15,6 +15,8 @@ namespace Oot3dA32Window {
 struct NativeA32SavestateStats {
     uint64_t SaveCount = 0;
     uint64_t SaveFailureCount = 0;
+    // Save requests retried because a guest continuation was in flight.
+    uint64_t SaveDeferralCount = 0;
     uint64_t LoadCount = 0;
     uint64_t SaveBytes = 0;
     uint64_t LoadBytes = 0;

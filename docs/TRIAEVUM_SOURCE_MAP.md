@@ -112,17 +112,19 @@ Everything derived from MXAO lives in that directory and nowhere else.
 
 | File | Contents |
 | --- | --- |
-| `mxao_shader.{h,cpp}`, `mxao_pass.cpp` | The ported programs and their NRI execution. |
+| `mxao_shader.{h,cpp}`, `mxao_module.cpp` | The ported programs, their NRI execution and the texts of the F1 controls. |
 | `mxao_pass.spvpack`, `mxao_pass_binaries.{h,cpp}` | The precompiled programs. |
-| `mxao_settings_panel.cpp` | The MXAO controls of the F1 Lighting tab. |
-| `immerse.cmake`, `tests/gpu_tests.cmake` | The module's runtime sources, GPU tests and `build_immerse_pass_artifacts`. |
+| `immerse.cmake`, `tests/gpu_tests.cmake` | The module library `triaevum_immerse`, GPU tests and `build_immerse_pass_artifacts`. |
 | `README.md`, `LICENSE.md`, `LICENSE-iMMERSE.txt` | The port's documentation, the exception, the original licence. |
 
-TriAevum code reaches the module through `include/fast/oot3d/mxao_pass.h` and
-`GraphicsSettingsPanel::DrawMxaoSettings`. It is built with
-`THREE_DS_RECOMP_ENABLE_IMMERSE` (on with NRI); with the option off,
-`fast/oot3d/immerse_unavailable.cpp` implements both and MXAO reports that it
-was not compiled.
+The module is a separate shared library (`triaevum_immerse.dll`,
+`libtriaevum_immerse.so`) beside the runtime. TriAevum reaches it only through
+the MIT interface `runtime/three_ds_recomp/module_interface/triaevum/immerse_module.h`:
+`fast/oot3d/immerse_module_loader.cpp` loads it, `fast/oot3d/mxao_pass.cpp`
+serves it the renderer's resources and `fast/oot3d/mxao_settings_panel.cpp`
+draws its controls. It is built with `THREE_DS_RECOMP_ENABLE_IMMERSE` (on with
+NRI); without the library MXAO is unavailable and a configuration selecting it
+renders AO Off.
 
 ## Reading older documents
 
@@ -139,7 +141,8 @@ whole and unchanged:
 | `oot3d_top_screen_mod_profile.cpp` | `oot3d_top_screen_mod_profile*.cpp` |
 | `oot3d_native_audio.cpp` | `oot3d_native_audio.cpp`, `_profiles.cpp`, `_mixer.cpp` |
 | root `CMakeLists.txt` target blocks | `CMake/oot3d/*.cmake` |
-| `fast/oot3d/mxao_pass.cpp`, `include/fast/immerse/*`, `tev_program/mxao_gpu_tests.cpp`, `DrawMxaoSettings` in the lighting panel | `runtime/three_ds_recomp/src/fast/immerse/` |
+| `fast/oot3d/mxao_pass.cpp` (before 2026-10-04), `include/fast/immerse/*`, `tev_program/mxao_gpu_tests.cpp`, `DrawMxaoSettings` in the lighting panel | `runtime/three_ds_recomp/src/fast/immerse/` |
+| `fast/immerse/mxao_pass.cpp`, `fast/immerse/mxao_settings_panel.cpp`, `fast/oot3d/immerse_unavailable.cpp` (before 2026-10-12) | `fast/immerse/mxao_module.cpp` (the module library); TriAevum's side in `fast/oot3d/mxao_pass.cpp`, `mxao_settings_panel.cpp`, `immerse_module_loader.cpp` |
 | `build_pass_artifacts --immerse` | `build_immerse_pass_artifacts` |
 | "iMMERSE MXAO" sections of `OOT3D_NRI_FIDELITY_EXTENSION_ARCHITECTURE.md` | `runtime/three_ds_recomp/src/fast/immerse/README.md` |
 

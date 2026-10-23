@@ -1,9 +1,9 @@
 #pragma once
 
 // Where save states live and which one is "the last": the folder (a default
-// next to the executable, or one the player chose), timestamped file names,
-// the listing shown in F1, and the request/outcome mailbox between the F1 tab
-// and the frame loop. No ImGui and no game state: the window session performs
+// next to the executable or the save data, or one the player chose),
+// timestamped file names, the listing shown in F1, and the request/outcome
+// mailbox between the F1 tab and the frame loop. No ImGui and no game state: the window session performs
 // the saves and loads at a frame boundary.
 
 #include <chrono>
@@ -17,6 +17,13 @@
 namespace Oot3dNativeGame {
 
 inline constexpr const char* kSavestateExtension = ".oot3dsav";
+
+// The default save-state folder. The portable Windows layout keeps it next to
+// the executable. The Linux packages run from a read-only image (the AppImage
+// mount, the Flatpak's /app), so there it sits beside the save data instead.
+[[nodiscard]] std::filesystem::path DefaultSavestateDirectory(
+    bool besideExecutable, const std::filesystem::path& executableDirectory,
+    const std::filesystem::path& saveDataDirectory);
 
 enum class SavestateRequestKind : uint8_t { Save, Load };
 

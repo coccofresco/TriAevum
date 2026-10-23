@@ -1,6 +1,8 @@
 #include "fast/oot3d/grass_static_placement_cache.h"
 #include "fast/oot3d/grass_visibility.h"
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
 #include <cmath>
 #include <limits>
 #include <numbers>
@@ -77,16 +79,58 @@ GrassStaticPlacementCache::Resolve(std::span<const GrassAsyncPlacementRequest> r
     }
     const auto budgets = AllocateGrassBudget(demands, mCandidateCapacity);
     std::vector<GrassAsyncPlacementResult> results;
+    std::vector<uint64_t> bases;
     for (size_t i = 0; i < requests.size(); ++i) {
         auto request = requests[i];
         request.PlacementView = {};
         request.Budget = budgets[i];
+        // Everything but the overlays and the shadow grid: what must match to
+        // keep showing the previous placement while those rebuild. A shown
+        // placement without the grid is drawn unshadowed meanwhile.
+        auto base = request;
+        base.Overlays.reset();
+        const auto version = GrassPlacementSourceVersion(base);
+        bases.push_back(version ^
+                        (uint64_t(request.Budget) + 0x9e3779b97f4a7c15ULL + (version << 6U) + (version >> 2U)));
         results.push_back(mBuilder.ResolveOrQueue(std::move(request)));
     }
     // Admit the scene only when its requested geometry exists. Queue the whole
     // batch first so construction remains parallel. Tickets pin results even
     // when the resident cache evicts an entry before the batch finishes.
-    for (auto& result : results) result.WaitUntilReady();
+    for (size_t i = 0; i < results.size(); ++i) {
+        auto& result = results[i];
+        const auto world = requests[i].WorldIdentity;
+        if (result.State == GrassAsyncPlacementState::Pending) {
+            if (const auto shown = mShown.find(world); shown != mShown.end() && shown->second.Base == bases[i]) {
+                shown->second.LastFrame = requests[i].FrameId;
+                result = { GrassAsyncPlacementState::Ready, shown->second.Placement, result.Queued,
+                           shown->second.BuildMilliseconds };
+                continue;
+            }
+            static const bool diagnose = std::getenv("OOT3D_GRASS_DIAGNOSTICS") != nullptr;
+            if (diagnose) {
+                const auto shown = mShown.find(world);
+                std::fprintf(
+                    stderr,
+                    "[grass-wait] world=%llx shown=%d base=%llx shown_base=%llx budget=%u shadow=%d frame=%llu\n",
+                    static_cast<unsigned long long>(world), shown != mShown.end() ? 1 : 0,
+                    static_cast<unsigned long long>(bases[i]),
+                    static_cast<unsigned long long>(shown != mShown.end() ? shown->second.Base : 0), budgets[i],
+                    requests[i].ShadowGrid ? 1 : 0, static_cast<unsigned long long>(requests[i].FrameId));
+            }
+        }
+        result.WaitUntilReady();
+        if (result.State == GrassAsyncPlacementState::Ready && result.Placement)
+            mShown.insert_or_assign(world,
+                                    Shown{ bases[i], result.Placement, result.BuildMilliseconds, requests[i].FrameId });
+    }
+    while (mShown.size() > std::max<size_t>(32U, requests.size())) {
+        auto oldest = mShown.begin();
+        for (auto entry = mShown.begin(); entry != mShown.end(); ++entry)
+            if (entry->second.LastFrame < oldest->second.LastFrame)
+                oldest = entry;
+        mShown.erase(oldest);
+    }
     while (mDemands.size() > std::max<size_t>(32U, activeKeys.size())) {
         auto oldest = mDemands.end();
         for (auto entry = mDemands.begin(); entry != mDemands.end(); ++entry) {
@@ -102,5 +146,6 @@ GrassStaticPlacementCache::Resolve(std::span<const GrassAsyncPlacementRequest> r
 void GrassStaticPlacementCache::Clear() {
     mBuilder.Clear();
     mDemands.clear();
+    mShown.clear();
 }
 } // namespace Fast::Oot3d

@@ -1,7 +1,8 @@
 #pragma once
 
 // The scene environment profile file (scene-XXXX[.night].environment.json,
-// schema "triaevum.scene-environment", versions 1-5) for the runtime, the F1
+// schema "triaevum.scene-environment", versions 1-6; group-ID files use v6)
+// for the runtime, the F1
 // editor and the developer environment tool alike: decoding that reports
 // every problem with its JSON pointer, canonical encoding, and the renderer
 // inputs a profile resolves to.
@@ -28,6 +29,7 @@ struct SceneEnvironmentDocument {
   // As the document names them.
   std::optional<uint16_t> SceneId;
   bool Night = false;
+  std::optional<SceneEnvironmentGroup> Group;
   std::vector<SceneEnvironmentDiagnostic> Errors;
 };
 
@@ -35,7 +37,8 @@ struct SceneEnvironmentDocument {
 // document naming another is an error. Every error is reported, none thrown.
 [[nodiscard]] SceneEnvironmentDocument
 DecodeSceneEnvironment(const nlohmann::json &document, std::optional<uint16_t> expectedScene = std::nullopt,
-                       std::optional<bool> expectedNight = std::nullopt);
+                       std::optional<bool> expectedNight = std::nullopt,
+                       std::optional<SceneEnvironmentGroup> expectedGroup = std::nullopt);
 // A profile file as the runtime reads it: at most 64 KiB, then decoded.
 inline constexpr uintmax_t kMaximumSceneEnvironmentFileBytes = 65536U;
 struct SceneEnvironmentFile {
@@ -46,7 +49,8 @@ struct SceneEnvironmentFile {
 };
 [[nodiscard]] SceneEnvironmentFile LoadSceneEnvironmentFile(const std::filesystem::path &path,
                                                             std::optional<uint16_t> expectedScene = std::nullopt,
-                                                            std::optional<bool> expectedNight = std::nullopt);
+                                                            std::optional<bool> expectedNight = std::nullopt,
+                       std::optional<SceneEnvironmentGroup> expectedGroup = std::nullopt);
 
 // Ranges, counts and identities of a profile (pointers as in the file).
 [[nodiscard]] std::vector<SceneEnvironmentDiagnostic>
@@ -55,9 +59,11 @@ ValidateSceneEnvironment(const SceneEnvironmentProfile &profile);
 [[nodiscard]] std::string
 DescribeSceneEnvironmentErrors(const std::vector<SceneEnvironmentDiagnostic> &errors);
 
-// The current version (5); numbers are written in their shortest exact form.
+// Scene saves retain version 5; group saves use version 6 and groupId instead
+// of sceneId. Numbers are written in their shortest exact form.
 [[nodiscard]] nlohmann::json EncodeSceneEnvironment(const SceneEnvironmentProfile &profile, uint16_t scene,
                                                     bool night);
+[[nodiscard]] nlohmann::json EncodeGroupEnvironment(const SceneEnvironmentProfile &profile, SceneEnvironmentGroup group, bool night);
 // Two-space indentation and a final newline: the bytes the runtime saves.
 [[nodiscard]] std::string FormatSceneEnvironment(const nlohmann::json &document);
 

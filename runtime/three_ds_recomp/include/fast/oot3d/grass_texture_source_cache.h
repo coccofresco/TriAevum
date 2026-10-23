@@ -77,6 +77,7 @@ class GrassTextureSourceCache final : public GrassTextureSignatureSource {
     [[nodiscard]] std::shared_ptr<const GrassScalarMask>
     AcquireMaskShared(
         uint64_t rgba8Hash, GrassSampleChannel channel) const;
+    [[nodiscard]] bool Contains(uint64_t hash) const;
     [[nodiscard]] GrassTexturePreview AcquirePreview(uint64_t rgba8Hash) const;
     [[nodiscard]] GrassTextureColorSource AcquireColorSource(uint64_t rgba8Hash) const;
     // Alpha-weighted encoded RGB average. This intentionally stays in the

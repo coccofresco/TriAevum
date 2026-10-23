@@ -5,6 +5,7 @@
 #include "fast/oot3d/pica_uniform_layout.h"
 #include "fast/oot3d/title_render_backend.h"
 #include "fast/renderer3ds/pica_shader_hooks.h"
+#include "fast/renderer3ds/pica_room_shadow_selection.h"
 #include "oot3d/renderer/pica_render_backend.h"
 #include "oot3d/renderer/azahar_texture_pack.h"
 
@@ -281,14 +282,31 @@ TEST(Oot3dPicaSceneFrame, RecordsGpuResourcesWithoutGeometryPayloadCopies) {
     const auto temporalSample =
         BuildNativeFrameTemporalSample(x3Policy, NativeFrameTemporalSampleKind::Transition, 40U, 41U, 3U, 1.0F / 3.0F);
     ASSERT_TRUE(frame.SetTemporalSample(temporalSample));
-    EXPECT_EQ(frame.Record(BuildDraw(shader, layoutBindings, layoutAttributes,
-                                     vertexBindings)),
+    auto submitted = BuildDraw(shader, layoutBindings, layoutAttributes, vertexBindings);
+    auto shells = std::make_shared<Fast::Renderer3ds::RoomShadowShellScene>();
+    shells->ScopeIdentity = 123;
+    const std::array<Fast::Renderer3ds::RoomShadowTriangle, 1> triangles{ {
+        { { { { 0, 0, 0 }, { 1, 0, 0 }, { 0, 0, 1 } } } },
+    } };
+    const auto mesh = Fast::Renderer3ds::BuildRoomShadowShell(456, triangles, 32);
+    ASSERT_TRUE(mesh);
+    shells->Rooms.push_back({456, std::make_shared<const Fast::Renderer3ds::RoomShadowShell>(*mesh)});
+    submitted.RoomShadows = shells;
+    submitted.Material.Blend.Enabled = true; // Native opaque ONE/ZERO.
+    EXPECT_EQ(frame.Record(submitted),
               PicaSceneRecordStatus::Recorded);
+    submitted.RoomShadows.reset();
     shader[0] = '!';
     vertexBindings[0].Offset = 128U;
 
     ASSERT_EQ(frame.Draws().size(), 1U);
     const auto& draw = frame.Draws().front();
+    EXPECT_EQ(draw.RoomShadows, shells);
+    EXPECT_EQ(draw.RoomShadows->Rooms.front().Fingerprint, 456U);
+    const std::array<const PicaSceneDrawRecord*, 1> casters{ &draw };
+    const auto selection = Fast::Renderer3ds::SelectPicaRoomShadowScene(casters);
+    EXPECT_EQ(selection.ReplacementScene, shells.get());
+    EXPECT_STREQ(selection.Status, "ready");
     ASSERT_NE(draw.VertexShader, nullptr);
     ASSERT_NE(draw.VertexLayout, nullptr);
     EXPECT_EQ(draw.VertexShader->Source, "#version 450\nvoid main(){}\n");

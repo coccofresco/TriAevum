@@ -6,10 +6,13 @@
 //                                only report the files that are not
 //   explain <file>               the authored profile, the renderer inputs,
 //                                run-time dependencies and notes (JSON)
+//   list-groups <romfs>          authored room groups, selected setups and
+//                                mixed scenes; directory or Level-3/IVFC image
 //
 // A file named scene-XXXX[.night].environment.json must name that scene and
 // time of day. Exit status: 0 success, 1 invalid or not canonical, 2 usage.
 #include "oot3d_scene_environment_codec.h"
+#include "oot3d_interior_sun_prebuild.h"
 #include "ship/config/ConfigPersistence.h"
 #include <cstdio>
 #include <filesystem>
@@ -33,6 +36,7 @@ struct Loaded {
 Loaded Load(const std::filesystem::path &path) {
   std::optional<uint16_t> scene;
   std::optional<bool> night;
+  std::optional<SceneEnvironmentGroup> group;
   std::smatch match;
   const auto name = path.filename().string();
   static const std::regex kName(R"(scene-([0-9A-Fa-f]{4})(\.night)?\.environment\.json)");
@@ -40,7 +44,15 @@ Loaded Load(const std::filesystem::path &path) {
     scene = static_cast<uint16_t>(std::stoul(match[1].str(), nullptr, 16));
     night = match[2].matched;
   }
-  auto file = LoadSceneEnvironmentFile(path, scene, night);
+  static const std::regex kGroupName(R"(group-(indoor|outdoor-time-flows|outdoor-time-at-entry|outdoor-fixed-time)(\.night)?\.environment\.json)");
+  if (std::regex_match(name, match, kGroupName)) {
+    group = ParseEnvironmentGroup(match[1].str()); night = match[2].matched;
+  }
+  auto file = LoadSceneEnvironmentFile(path, scene, night, group);
+  if (name.starts_with("group-") && !group) {
+    file.Document.Errors.push_back({"/groupId", "unrecognized group profile filename"});
+    file.Document.Profile.reset();
+  }
   return {std::move(file.Text), std::move(file.Document)};
 }
 
@@ -49,6 +61,7 @@ Json Report(const std::filesystem::path &path, const SceneEnvironmentDocument &d
   for (const auto &error : document.Errors) errors.push_back({{"pointer", error.Pointer}, {"message", error.Message}});
   Json report = {{"file", path.string()}, {"valid", document.Profile.has_value()}, {"errors", std::move(errors)}};
   if (document.SceneId) report["sceneId"] = *document.SceneId;
+  if (document.Group) report["groupId"] = EnvironmentGroupId(*document.Group);
   report["timeOfDay"] = document.Night ? "night" : "day";
   return report;
 }
@@ -56,7 +69,8 @@ Json Report(const std::filesystem::path &path, const SceneEnvironmentDocument &d
 int Usage() {
   std::fputs("usage: triaevum_environment_tool validate <file>...\n"
              "       triaevum_environment_tool format [--check] <file>...\n"
-             "       triaevum_environment_tool explain <file>\n",
+             "       triaevum_environment_tool explain <file>\n"
+             "       triaevum_environment_tool list-groups <romfs-directory-or-image>\n",
              stderr);
   return 2;
 }
@@ -65,6 +79,10 @@ int Usage() {
 int main(int argc, char **argv) try {
   if (argc < 3) return Usage();
   const std::string command = argv[1];
+  if (command == "list-groups" && argc == 3) {
+    std::cout << ListNativeEnvironmentGroups(argv[2]).dump(2) << "\n";
+    return 0;
+  }
   if (command == "validate") {
     int status = 0;
     for (int i = 2; i < argc; ++i) {
@@ -86,7 +104,8 @@ int main(int argc, char **argv) try {
         continue;
       }
       const auto canonical = FormatSceneEnvironment(
-          EncodeSceneEnvironment(*loaded.Document.Profile, *loaded.Document.SceneId, loaded.Document.Night));
+          loaded.Document.Group ? EncodeGroupEnvironment(*loaded.Document.Profile, *loaded.Document.Group, loaded.Document.Night)
+              : EncodeSceneEnvironment(*loaded.Document.Profile, *loaded.Document.SceneId, loaded.Document.Night));
       const bool same = canonical == loaded.Text;
       if (!same && !check) {
         // Atomically, as the runtime saves: a failed write keeps the original.
@@ -108,9 +127,14 @@ int main(int argc, char **argv) try {
       std::cout << Report(argv[2], loaded.Document).dump(2) << "\n";
       return 1;
     }
-    std::cout << ExplainSceneEnvironment(*loaded.Document.Profile, *loaded.Document.SceneId, loaded.Document.Night)
-                     .dump(2)
-              << "\n";
+    auto explanation = ExplainSceneEnvironment(*loaded.Document.Profile, loaded.Document.SceneId.value_or(0), loaded.Document.Night);
+    if (loaded.Document.Group) {
+      explanation.erase("sceneId");
+      explanation["groupId"] = EnvironmentGroupId(*loaded.Document.Group);
+      explanation["authored"] = EncodeGroupEnvironment(*loaded.Document.Profile, *loaded.Document.Group, loaded.Document.Night);
+      explanation["groupNote"] = "Renderer identities shown with scene 0; a standard resolves in each consuming scene's own scope.";
+    }
+    std::cout << explanation.dump(2) << "\n";
     return 0;
   }
   return Usage();

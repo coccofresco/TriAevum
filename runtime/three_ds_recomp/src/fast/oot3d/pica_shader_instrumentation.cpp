@@ -1,5 +1,6 @@
 #include "fast/renderer3ds/pica_fragment_balance.h"
 #include "fast/oot3d/pica_shader_instrumentation.h"
+#include "fast/renderer3ds/pica_motion_provenance.h"
 #include "fast/renderer3ds/point_shadow_map.h"
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
 #include "fast/renderer3ds/pica_shadow_probe.h"
@@ -1359,18 +1360,16 @@ vec3 pica_surface_shadow(int slot) {
         decisions.Set(Decision::RigidMotion);
         declarations +=
             "layout(location=3) out vec4 pica_rigid_motion_guide;\n"
-            "layout(location=7) in vec4 oot3d_current_clip;\n"
-            "layout(location=8) in vec4 oot3d_previous_clip;\n"
             "layout(push_constant) uniform Oot3dDrawState { vec4 rigid_motion; vec4 jitter; } oot3d_draw;\n";
-        epilogue += "    vec4 oot3d_motion = oot3d_draw.rigid_motion;\n"
-                    "    if (oot3d_draw.rigid_motion.a > 0.5 &&\n"
-                    "        oot3d_current_clip.w > 1.0e-7 && oot3d_previous_clip.w > 1.0e-7) {\n"
-                    "        vec2 oot3d_current_uv = oot3d_current_clip.xy / oot3d_current_clip.w * 0.5 + 0.5;\n"
-                    "        vec2 oot3d_previous_uv = oot3d_previous_clip.xy / oot3d_previous_clip.w * 0.5 + 0.5;\n"
-                    "        oot3d_motion = vec4(oot3d_previous_uv - oot3d_current_uv, 1.0, 1.0);\n"
-                    "    }\n"
-                    "    pica_rigid_motion_guide = vec4(oot3d_motion.xy, oot3d_motion.z, 0.0);\n";
-        result.FragmentKey ^= 0x52494749444d4f54ULL;
+        if (request.TemporalInputs) {
+            declarations += "layout(location=7) in vec4 oot3d_current_clip;\n"
+                            "layout(location=8) in vec4 oot3d_previous_clip;\n";
+            epilogue += Renderer3ds::PicaMotionGuideAssignment;
+        } else {
+            epilogue += Renderer3ds::PicaMotionFallbackAssignment;
+            result.FragmentKey ^= 0x4e4f434c4950494eULL;
+        }
+        result.FragmentKey ^= 0x52494749444d4f55ULL;
         result.RigidMotionApplied = true;
         apply(PicaShaderInstrumentationFeature::RigidMotionGuide);
     }

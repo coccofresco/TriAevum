@@ -21,7 +21,10 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdio>
+#include <cstdlib>
 #include <limits>
+#include <string>
 #include <map>
 #include <mutex>
 #include <set>
@@ -457,7 +460,78 @@ std::vector<uint8_t> NriPicaPipelineBridge::GetPipelineCacheData() const {
 #endif
 }
 
+uint64_t NriPicaTraceProgramHash(std::span<const uint32_t> words) noexcept {
+    uint64_t hash = 1469598103934665603ULL;
+    for (const uint32_t word : words)
+        for (int shift = 0; shift < 32; shift += 8) {
+            hash ^= (word >> shift) & 0xffU;
+            hash *= 1099511628211ULL;
+        }
+    return hash;
+}
+
+bool NriPicaPipelineTraceEnabled() noexcept {
+    static const bool enabled = [] {
+        const char* value = std::getenv("TRIAEVUM_NRI_PIPELINE_TRACE");
+        return value != nullptr && value[0] == '1';
+    }();
+    return enabled;
+}
+
 #ifdef ENABLE_RENDERER3DS_NRI
+namespace {
+// TRIAEVUM_NRI_PIPELINE_TRACE=1: one line per created pipeline with the full
+// creation input (programs by content hash), so a prepared cache can be
+// compared field by field with what a game session creates.
+void TracePipelineCreation(const NriPicaGraphicsPipelineDesc& desc, bool libraries, long long nanoseconds) {
+    if (!NriPicaPipelineTraceEnabled())
+        return;
+    std::string line = "TRIAEVUM_NRI_PIPELINE_CREATE";
+    char buffer[160];
+    std::snprintf(buffer, sizeof(buffer), " vs=%016llx fs=%016llx libraries=%u ms=%.3f",
+                  static_cast<unsigned long long>(NriPicaTraceProgramHash(desc.VertexSpirv)),
+                  static_cast<unsigned long long>(NriPicaTraceProgramHash(desc.FragmentSpirv)), libraries ? 1U : 0U,
+                  static_cast<double>(nanoseconds) / 1.0e6);
+    line += buffer;
+    std::snprintf(buffer, sizeof(buffer),
+                  " topo=%u cull=%u front=%u samples=%u a2c=%u depth=%u/%u/%u stencil=%u logic=%u/%u ds=%u colors=%u",
+                  unsigned(desc.Topology), unsigned(desc.CullMode), unsigned(desc.FrontFace), unsigned(desc.Samples),
+                  unsigned(desc.AlphaToCoverage), unsigned(desc.DepthTest), unsigned(desc.DepthWrite),
+                  unsigned(desc.DepthCompare), unsigned(desc.StencilTest), unsigned(desc.LogicOpEnabled),
+                  unsigned(desc.LogicOp), unsigned(desc.DepthStencilFormat), desc.ColorAttachmentCount);
+    line += buffer;
+    if (desc.StencilTest) {
+        for (const auto* face : { &desc.FrontStencil, &desc.BackStencil }) {
+            std::snprintf(buffer, sizeof(buffer), " st=%u/%u/%u/%u/%x/%x", unsigned(face->failOp),
+                          unsigned(face->passOp), unsigned(face->depthFailOp), unsigned(face->compareOp),
+                          face->compareMask, face->writeMask);
+            line += buffer;
+        }
+    }
+    for (uint32_t index = 0; index < desc.ColorAttachmentCount && index < desc.Colors.size(); ++index) {
+        const auto& color = desc.Colors[index];
+        std::snprintf(buffer, sizeof(buffer), " c%u=%u:%u:%u/%u/%u/%u/%u/%u:%x", index,
+                      unsigned(desc.ColorFormats[index]), unsigned(color.blendEnable),
+                      unsigned(color.srcColorBlendFactor), unsigned(color.dstColorBlendFactor),
+                      unsigned(color.colorBlendOp), unsigned(color.srcAlphaBlendFactor),
+                      unsigned(color.dstAlphaBlendFactor), unsigned(color.alphaBlendOp), color.colorWriteMask);
+        line += buffer;
+    }
+    for (const auto& binding : desc.VertexBindings) {
+        std::snprintf(buffer, sizeof(buffer), " b%u=%u/%u", binding.binding, binding.stride,
+                      unsigned(binding.inputRate));
+        line += buffer;
+    }
+    for (const auto& attribute : desc.VertexAttributes) {
+        std::snprintf(buffer, sizeof(buffer), " a%u=%u/%u/%u", attribute.location, attribute.binding,
+                      unsigned(attribute.format), attribute.offset);
+        line += buffer;
+    }
+    line += '\n';
+    std::fputs(line.c_str(), stderr);
+}
+} // namespace
+
 nri::PipelineCache* NriPicaPipelineBridge::PipelineCache() const {
     std::lock_guard lock(mImpl->PipelineCacheMutex);
     return mImpl->PipelineCache;
@@ -600,6 +674,7 @@ nri::Pipeline* NriPicaPipelineBridge::CreatePipeline(const NriPicaGraphicsPipeli
         *mImpl->Interop->Device(), pipeline, owned);
     const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::steady_clock::now() - start).count();
+    TracePipelineCreation(desc, libraries, elapsed);
     std::lock_guard statistics(mImpl->StatisticsMutex);
     ++mImpl->Statistics.CreationAttempts;
     mImpl->Statistics.CreationNanoseconds += elapsed;

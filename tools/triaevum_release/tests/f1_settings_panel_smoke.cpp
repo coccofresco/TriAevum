@@ -8,6 +8,7 @@
 #include "oot3d_scene_environment.h"
 #include "oot3d_scene_environment_codec.h"
 #include "fast/oot3d/world_debug_lines.h"
+#include "fast/oot3d/grass_scene_bridge.h"
 #include "fast/MouseCapturePolicy.h"
 #include <imgui_internal.h>
 #include <nlohmann/json.hpp>
@@ -88,6 +89,8 @@ void Frame(bool logText = false) {
             ImGui::LogFinish();
         }
         ImGui::End();
+    } else {
+        EndGraphicsSettingsPreviews(); // Same close boundary as the host F1 window.
     }
     DrawDisplayConfirmation();
     ImGui::Render();
@@ -101,6 +104,19 @@ void Frame(bool logText = false) {
     }
 }
 Item Find(const char* label) {
+    // ColorEdit3 publishes its actual ##X/##Y/##Z drag widgets beneath
+    // PushID(label), rather than a labelled parent item. Resolve that scope.
+    const std::string_view path(label);
+    if (const auto slash = path.find("/##"); slash != std::string_view::npos) {
+        const auto parent = path.substr(0, slash);
+        const auto child = path.substr(slash + 1);
+        for (const auto& [id, item] : items) {
+            const auto parentId = ImHashStr(parent.data(), parent.size(), item.Seed);
+            const auto childId = ImHashStr(child.data(), child.size(), parentId);
+            const auto found = items.find(childId);
+            if (found != items.end() && found->second.Rect.GetHeight() > 0.0F) return found->second;
+        }
+    }
     std::optional<Item> found;
     for (const auto& [id, item] : items)
         if ((item.Label == label || ImHashStr(label, 0, item.Seed) == id) &&
@@ -336,6 +352,7 @@ void CheckSceneEnvironmentCodec() {
     high.Name = "High id";
     high.Type = PlacedLightType::Spot;
     high.Intensity = 0.6F;
+    high.Spread = 30.0F;
     profile.PlacedLights.push_back(high);
     const auto document = EncodeSceneEnvironment(profile, 0x55, true);
     const auto text = FormatSceneEnvironment(document);
@@ -351,9 +368,16 @@ void CheckSceneEnvironmentCodec() {
               PlacedLightIdentity(0x55, false, 0x80000001U) != PlacedLightIdentity(0x55, true, 1U) &&
               PlacedLightIdentity(0x55, false, 1U) != PlacedLightIdentity(0x56, false, 1U),
           "placed light identities collide across time of day, scene or high ids");
+    // A light saved before the spread existed is a diffuse surface.
+    auto older = document;
+    older["placedLights"][0].erase("spread");
+    const auto olderDecoded = DecodeSceneEnvironment(older, 0x55, true);
+    Check(olderDecoded.Profile && olderDecoded.Profile->PlacedLights[0].Spread == 180.0F,
+          "a placed light without a spread is not a diffuse surface");
     auto broken = document;
     broken["placedLights"][0]["id"] = 2.5;
     broken["placedLights"][0]["intensity"] = 30;
+    broken["placedLights"][0]["spread"] = 0;
     broken["directionalLights"][1]["color"] = nlohmann::json::array({1, 2});
     broken.erase("fogStrength");
     broken["placedLights"].push_back(document["placedLights"][0]);
@@ -362,7 +386,8 @@ void CheckSceneEnvironmentCodec() {
     const auto has = [&](const char* pointer) {
         return std::any_of(errors.begin(), errors.end(), [&](const auto& error) { return error.Pointer == pointer; });
     };
-    Check(has("/placedLights/0/id") && has("/placedLights/0/intensity") && has("/directionalLights/1/color") &&
+    Check(has("/placedLights/0/id") && has("/placedLights/0/intensity") && has("/placedLights/0/spread") &&
+              has("/directionalLights/1/color") &&
               has("/fogStrength") && has("/placedLights/2/id"),
           "profile errors are not all reported at their JSON pointers");
     const auto explained = ExplainSceneEnvironment(profile, 0x55, true);
@@ -388,7 +413,7 @@ void CheckSceneEnvironment() {
     auto environment = std::make_shared<SceneEnvironmentRuntime>(root, [&](const auto& value) {
         graphics.PublishSceneEnvironment(value);
     });
-    environment->ObserveScene(0x55);
+    environment->ObserveScene(0x55, {true, 0x8000, false});
     // A scene without its own profile takes the base environment.
     Check(environment->Snapshot().Profile == BaseSceneEnvironmentProfile() &&
               !environment->Snapshot().FileExists && graphics.SnapshotForRendering().Environment.Enabled &&
@@ -400,7 +425,7 @@ void CheckSceneEnvironment() {
     Frame(); Frame(); Click("Lighting"); Click("Lights & Shadows");
     Frame(true);
     Check(loggedPanelText.find("Scene lights") != std::string::npos &&
-              loggedPanelText.find("Base environment.") != std::string::npos &&
+              loggedPanelText.find("Profile source: Base") != std::string::npos &&
               loggedPanelText.find("Directional shadows") != std::string::npos,
           "Lights & Shadows does not show the scene lights, the base environment and the shadows");
     for (const char* old : {"Shadows", "Scene environment", "Occlusion"})
@@ -448,6 +473,25 @@ void CheckSceneEnvironment() {
     graphics.Apply(settings);
     Check(lightsAndShadowsOffered(), "Lights & Shadows not offered with the Modern model");
     Click("Lights & Shadows");
+    Select("Shadow caster faces", "Native");
+    Check(environment->Snapshot().Profile.CasterFaces == Fast::Renderer3ds::ShadowCasterFaces::Native,
+          "native caster faces combo did not apply");
+    Select("Shadow caster faces", "Both faces");
+    Check(graphics.SnapshotForRendering().Environment.CasterFaces == Fast::Renderer3ds::ShadowCasterFaces::BothFaces,
+          "both faces combo did not publish");
+    Select("Shadow caster faces", "Interior sun / offline");
+    Check(graphics.SnapshotForRendering().Environment.CasterFaces == Fast::Renderer3ds::ShadowCasterFaces::InteriorShells,
+          "interior shells combo did not publish");
+    {
+        const auto enabled = environment->Snapshot().Profile;
+        auto disabled = enabled;
+        disabled.Enabled = false;
+        environment->Preview(disabled, environment->Snapshot().Revision);
+        Check(!graphics.SnapshotForRendering().Environment.Enabled &&
+                  graphics.SnapshotForRendering().Environment.CasterFaces == Fast::Renderer3ds::ShadowCasterFaces::InteriorShells,
+              "disabled light override erased the independent shell policy");
+        environment->Preview(enabled, environment->Snapshot().Revision);
+    }
     Select("Shadow mode", "Off");
     Select("Shadow mode", "Virtual Shadow Maps");
     Check(graphics.SnapshotForRendering().Value.Effects.DirectionalShadows.Mode == DirectionalShadowMode::VirtualShadowMaps,
@@ -501,6 +545,59 @@ void CheckSceneEnvironment() {
     Check(Find("Native ambient contribution").Disabled, "scene reference did not own the ambient baseline");
     Click("Preserve scene brightness");
     EditScalar("Ambient intensity", "0.12");
+    // Rim is a scene-profile property: real widgets, no second graphics owner.
+    Check(environment->Snapshot().Profile.Rim.Enabled && !Find("Rim intensity").Disabled,
+          "base actor rim is not enabled");
+    EditScalar("Rim intensity", "0.45");
+    EditScalar("Rim sharpness", "6");
+    EditScalar("Rim azimuth", "90");
+    EditScalar("Rim coverage", "0.6");
+    EditScalar("Rim color/##X", "0.8");
+    EditScalar("Rim color/##Y", "0.7");
+    EditScalar("Rim color/##Z", "0.6");
+    Check(environment->Snapshot().Profile.Rim.Color[0] == 0.8F, "rim color widget did not apply");
+    Select("Rim source", "Scene lights");
+    Check(Find("Rim color/##X").Disabled && Find("Rim azimuth").Disabled && Find("Rim coverage").Disabled &&
+              !Find("Rim intensity").Disabled &&
+              graphics.SnapshotForRendering().Environment.Rim.Source == Fast::Renderer3ds::PicaRimLightSource::SceneLights,
+          "scene source did not disable independent controls or publish");
+    Select("Rim source", "Independent");
+    Check(!Find("Rim color/##X").Disabled && !Find("Rim azimuth").Disabled && !Find("Rim coverage").Disabled,
+          "independent source did not restore its controls");
+    Select("Rim scope", "Actors and world");
+    Check(graphics.SnapshotForRendering().Environment.Rim.Intensity == 0.45F &&
+              graphics.SnapshotForRendering().Environment.Rim.Sharpness == 6.0F &&
+              graphics.SnapshotForRendering().Environment.Rim.Azimuth == 90 &&
+              graphics.SnapshotForRendering().Environment.Rim.Coverage == 0.6F &&
+              graphics.SnapshotForRendering().Environment.Rim.Color[0] == 0.8F &&
+              graphics.SnapshotForRendering().Environment.Rim.Source == Fast::Renderer3ds::PicaRimLightSource::Independent &&
+              graphics.SnapshotForRendering().Environment.Rim.Scope == Fast::Renderer3ds::PicaRimLightScope::ActorsAndWorld,
+          "rim widgets did not reach the rendering snapshot");
+    Select("Rim scope", "Actors");
+    Click("Enable rim light");
+    Check(Find("Rim intensity").Disabled && Find("Rim sharpness").Disabled && Find("Rim source").Disabled &&
+              Find("Rim color/##X").Disabled && Find("Rim azimuth").Disabled && Find("Rim coverage").Disabled &&
+              Find("Rim scope").Disabled && !graphics.SnapshotForRendering().Environment.Rim.Enabled,
+          "rim Off did not disable its controls and rendering");
+    const auto rimOff = graphics.SnapshotForRendering().Environment;
+    auto rimEdit = environment->Snapshot().Profile;
+    rimEdit.Rim.Intensity = 0.6F;
+    rimEdit.Rim.Source = Fast::Renderer3ds::PicaRimLightSource::SceneLights;
+    rimEdit.Rim.Azimuth = -45;
+    rimEdit.Rim.Color = {0.1F, 0.2F, 0.3F};
+    rimEdit.Rim.Coverage = 1;
+    Check(environment->Preview(rimEdit) && graphics.SnapshotForRendering().Environment == rimOff,
+          "inactive rim edits changed renderer state");
+    Click("Enable rim light");
+    Select("Rim source", "Independent");
+    EditScalar("Rim azimuth", "90");
+    EditScalar("Rim coverage", "0.6");
+    EditScalar("Rim color/##X", "0.8");
+    EditScalar("Rim color/##Y", "0.7");
+    EditScalar("Rim color/##Z", "0.6");
+    EditScalar("Rim intensity", "8");
+    Check(graphics.SnapshotForRendering().Environment.Rim.Intensity == 8, "rim intensity lost 0..8 range");
+    EditScalar("Rim intensity", "0.45");
     EditScalar("Native scene direct contribution", "0.25");
     EditScalar("Native local contribution", "0.7");
     EditScalar("Native ambient contribution", "0.15");
@@ -547,14 +644,20 @@ void CheckSceneEnvironment() {
     Check(graphics.SnapshotForRendering().Environment.PreserveSceneBrightness &&
               Find("Native ambient contribution").Disabled,
           "scene brightness reference did not apply independently of native source gains");
-    Click("Save scene environment");
+    Click(environment->Snapshot().EditingNight ? "Save night" : "Save day");
     const auto saved = environment->Snapshot();
     Check(saved.FileExists && !saved.Dirty && saved.Error.empty(), "scene environment was not saved");
+    Check(saved.Profile.Rim.Enabled && saved.Profile.Rim.Intensity == 0.45F && saved.Profile.Rim.Sharpness == 6.0F &&
+              saved.Profile.Rim.Azimuth == 90 && saved.Profile.Rim.Coverage == 0.6F &&
+              saved.Profile.Rim.Color == (std::array<float, 3>{0.8F, 0.7F, 0.6F}) &&
+              saved.Profile.Rim.Source == Fast::Renderer3ds::PicaRimLightSource::Independent && saved.Profile.Rim.Scope == Fast::Renderer3ds::PicaRimLightScope::Actors,
+          "rim settings were not saved with the scene profile");
     Check(saved.Profile.KeyDirection == KeyDirection::SceneMain && saved.Profile.KeyAzimuthOffset == 30.0F &&
               saved.Profile.KeyElevationOffset == -10.0F,
           "the saved profile lost the key light direction");
     Click("Use native environment");
     Check(!graphics.SnapshotForRendering().Environment.Enabled, "native environment restore was not immediate");
+    Check(!graphics.SnapshotForRendering().Environment.Rim.Enabled, "disabled environment kept its rim");
     Check(graphics.SnapshotForRendering().Environment.PointLights[0].Intensity == 2.5F &&
               !graphics.SnapshotForRendering().Environment.PointLights[1].Enabled,
           "using native environment erased independent scene point-light controls");
@@ -565,7 +668,7 @@ void CheckSceneEnvironment() {
     environment->Preview(inactiveEdit);
     Check(graphics.SnapshotForRendering().Environment == inactiveEnvironment,
           "disabled profile edits changed rendering inputs and invalidated history");
-    Click("Reload scene environment");
+    Click(environment->Snapshot().EditingNight ? "Revert night" : "Revert day");
     Check(environment->Snapshot().Profile == saved.Profile, "scene profile reload lost authored settings");
     settings = graphics.Snapshot();
     settings.Effects.SurfaceLighting = SurfaceLightingMode::NativePbr;
@@ -573,6 +676,7 @@ void CheckSceneEnvironment() {
     const auto nativePbrEnvironment = graphics.SnapshotForRendering().Environment;
     Check(!nativePbrEnvironment.Enabled && environment->Snapshot().Profile.Enabled,
           "Native PBR applied the scene environment or erased its profile");
+    Check(!nativePbrEnvironment.Rim.Enabled, "Native PBR consumed modern scene rim settings");
     auto nativePbrEdit = saved.Profile;
     nativePbrEdit.NativeDirectStrength = 0;
     nativePbrEdit.NativeLocalStrength = 0;
@@ -586,56 +690,149 @@ void CheckSceneEnvironment() {
     graphics.ToggleNativePresentationOverride();
     Check(!graphics.SnapshotForRendering().Environment.Enabled && environment->Snapshot().Profile.Enabled,
           "F2 did not bypass scene relighting without erasing its profile");
+    Check(!graphics.SnapshotForRendering().Environment.Rim.Enabled && environment->Snapshot().Profile.Rim.Enabled,
+          "F2 did not bypass rim while retaining its preference");
     graphics.ToggleNativePresentationOverride();
     Check(graphics.SnapshotForRendering().Environment.Enabled, "F2 did not restore the authored environment");
-    environment->ObserveScene(0x56);
+    environment->ObserveScene(0x56, {true, 0x8000, false});
     Check(environment->Snapshot().Profile == BaseSceneEnvironmentProfile() &&
               graphics.SnapshotForRendering().Environment.AmbientIntensity == 0.0F,
           "previous scene's environment leaked across a transition instead of the base");
-    environment->ObserveScene(0x55);
+    environment->ObserveScene(0x55, {true, 0x8000, false});
     Check(environment->Snapshot().Profile == saved.Profile, "returning to scene did not restore its file");
-    // Day and night: one profile until the scene has a night profile, then
-    // the game's night flag picks it.
-    environment->ObserveScene(0x55, true);
+    // Both real editor tabs are available at any game time. Editing does not
+    // change the preview selection; the indicator reports the applied blend.
+    environment->ObserveScene(0x55, {true, 0, true});
+    Frame();
     Check(environment->Snapshot().Night && !environment->Snapshot().EditingNight &&
               environment->Snapshot().Profile == saved.Profile,
-          "night without a night profile did not keep the scene's profile");
+          "night without a night profile did not keep the day profile");
     const auto dayScope = graphics.SnapshotForRendering().Environment.ScopeIdentity;
-    Click("Create night profile");
+    Click("Create night (from day)");
     const auto nightPath = root / "scene-0055.night.environment.json";
     Check(std::filesystem::exists(nightPath) && environment->Snapshot().EditingNight &&
               environment->Snapshot().Path == nightPath &&
-              graphics.SnapshotForRendering().Environment.ScopeIdentity != dayScope,
-          "creating the night profile did not make it the night scope");
-    auto nightEdit = saved.Profile;
-    nightEdit.AmbientIntensity = 0.4F;
-    nightEdit.AmbientColor = {0.2F, 0.3F, 0.8F};
-    environment->Preview(nightEdit);
-    Click("Save scene environment");
+              graphics.SnapshotForRendering().Environment.ScopeIdentity == dayScope,
+          "creating night did not select its draft or changed the continuous scope");
+    EditScalar("Ambient intensity", "0.4");
+    Click("Save night");
+    const auto savedNight = environment->Snapshot().Profile;
     nlohmann::json nightDocument;
     { std::ifstream file(nightPath); file >> nightDocument; }
     Check(nightDocument.value("timeOfDay", "") == "night" && nightDocument.at("ambientIntensity").get<float>() == 0.4F,
-          "the night profile was not saved to its own file");
-    environment->ObserveScene(0x55, false);
-    Check(!environment->Snapshot().EditingNight && environment->Snapshot().Profile == saved.Profile &&
+          "night was not saved to its own file");
+    environment->ObserveScene(0x55, {true, 0x8000, false});
+    Frame();
+    Check(environment->Snapshot().EditingNight && environment->Snapshot().Profile == savedNight &&
               graphics.SnapshotForRendering().Environment.AmbientIntensity == saved.Profile.AmbientIntensity,
-          "day did not return to the scene's own profile");
-    environment->ObserveScene(0x55, true);
-    Check(environment->Snapshot().Profile == nightEdit &&
-              graphics.SnapshotForRendering().Environment.AmbientIntensity == 0.4F,
-          "night did not take the night profile");
-    environment->ObserveScene(0x56, true);
-    Check(environment->Snapshot().Profile == BaseSceneEnvironmentProfile() && !environment->Snapshot().EditingNight,
-          "a scene without a night profile took another scene's");
-    environment->ObserveScene(0x55, true);
-    Click("Remove night profile");
-    Click("Remove");
+          "day time changed the editor or failed to use day lighting");
+    EditScalar("Ambient intensity", "0.8");
+    Select("Preview", "Force night");
+    Check(graphics.SnapshotForRendering().Environment.AmbientIntensity == 0.8F, "force night did not preview the night draft by day");
+    Click("Day");
+    Check(!environment->Snapshot().EditingNight && environment->Snapshot().Profile == saved.Profile,
+          "Day tab did not restore its own draft");
+    EditScalar("Ambient intensity", "1.1");
+    environment->ObserveScene(0x55, {true, 0, true});
+    Frame();
+    Check(!environment->Snapshot().EditingNight && environment->Snapshot().DirtyTabs == (std::array<bool,2>{true,true}),
+          "native time change discarded a draft or selected a different tab");
+    Select("Preview", "Force day");
+    Frame(true);
+    Check(graphics.SnapshotForRendering().Environment.AmbientIntensity == 1.1F &&
+              loggedPanelText.find("day 100% / night 0%") != std::string::npos,
+          "force day/indicator does not show the actual applied blend");
+    Select("Preview", "Auto");
+    environment->SetForcedNightWeight(0.5F);
+    Frame(true);
+    Check(loggedPanelText.find("day 50% / night 50%") != std::string::npos &&
+              std::abs(graphics.SnapshotForRendering().Environment.AmbientIntensity - 0.95F) < 1e-6F,
+          "half-weight indicator disagrees with the applied profiles");
+    environment->SetForcedNightWeight(std::nullopt);
+    Select("Preview", "Force day");
+    ToggleGraphicsNativePresentation(); // Actual host F2 action, no game/window.
+    Check(environment->Snapshot().PreviewMode == SceneEnvironmentPreview::Auto, "F2 did not clear forced preview");
+    ToggleGraphicsNativePresentation();
+    Frame();
+    Select("Preview", "Force day");
+    showPanel = false; Frame();
+    Check(environment->Snapshot().PreviewMode == SceneEnvironmentPreview::Auto &&
+              graphics.SnapshotForRendering().Environment.AmbientIntensity == 0.8F,
+          "closing F1 did not restore Auto");
+    showPanel = true; Frame(); Frame();
+    Click("Night");
+    Click("Revert night");
+    Check(environment->Snapshot().Profile == savedNight && environment->Snapshot().DirtyTabs[0] &&
+              !environment->Snapshot().DirtyTabs[1], "revert night discarded the day draft");
+    Click("Copy day -> night"); Click("Cancel");
+    Check(environment->Snapshot().Profile == savedNight, "cancel copy changed night");
+    Click("Copy day -> night"); Click("Copy");
+    Check(environment->Snapshot().EditingNight && environment->Snapshot().Dirty &&
+              environment->Snapshot().Profile.AmbientIntensity == 1.1F, "copy did not populate the unsaved night draft");
+    { std::ifstream file(nightPath); file >> nightDocument; }
+    Check(nightDocument.at("ambientIntensity").get<float>() == 0.4F, "copy persisted before Save night");
+    Click("Save night");
+    Click("Day"); Click("Revert day");
+    Check(environment->Snapshot().Profile == saved.Profile, "revert day changed its saved profile");
+    Click("Remove night"); Click("Cancel");
+    Check(std::filesystem::exists(nightPath), "cancel remove deleted the night file");
+    Click("Remove night"); Click("Remove");
     Check(!std::filesystem::exists(nightPath) && !environment->Snapshot().EditingNight &&
-              environment->Snapshot().Profile == saved.Profile,
-          "removing the night profile did not return night to the scene's profile");
-    environment->ObserveScene(0x55, false);
+              environment->Snapshot().Profile == saved.Profile && environment->Snapshot().AppliedNightWeight == 0,
+          "remove night failed to preserve the day draft");
+    environment->ObserveScene(0x56, {false,0,true}); Frame(true);
+    for (const char* label : {"Day", "Night", "Preview", "Create night (from day)", "Copy day -> night", "Remove night"})
+        Check(std::none_of(items.begin(),items.end(),[&](const auto& item){ return item.second.Label == label; }),
+              std::string("fixed scene shows day/night UI: ") + label);
+    Check(loggedPanelText.find("Fixed scene lighting") != std::string::npos && !Find("Save profile").Disabled,
+          "fixed scene does not show one editable profile");
+    environment->ObserveScene(0x55, {true, 0x8000, false}); Frame(); Frame();
+    // Group standards use the real widgets and persistence path.
+    environment->ObserveScene(0x58,{true,0x8000,false,0,SceneEnvironmentGroup::TimeFlows}); Frame(true); Frame(true);
+    Check(loggedPanelText.find("Outdoor, time flows")!=std::string::npos &&
+          loggedPanelText.find("Day source: Base")!=std::string::npos,"group/source labels missing");
+    const auto groupDay=root/"group-outdoor-time-flows.environment.json";
+    const auto groupNight=root/"group-outdoor-time-flows.night.environment.json";
+    const auto ownGroupScene=root/"scene-0058.environment.json";
+    EditScalar("Ambient intensity","0.37");
+    Click("Save as group standard"); Click("Cancel");
+    Check(!std::filesystem::exists(groupDay),"cancel persisted group standard");
+    Click("Save as group standard"); Click("Save standard");
+    Check(std::filesystem::exists(groupDay) && !std::filesystem::exists(ownGroupScene) &&
+          environment->Snapshot().Sources[0]==SceneEnvironmentSource::Group && !environment->Snapshot().Dirty,
+          "save standard did not commit fallback draft");
+    EditScalar("Ambient intensity","0.62"); Click("Save day");
+    Check(std::filesystem::exists(ownGroupScene) && environment->Snapshot().Sources[0]==SceneEnvironmentSource::Scene,
+          "editing fallback did not create scene own profile");
+    Click("Use group standard"); Click("Cancel");
+    Check(std::filesystem::exists(ownGroupScene),"cancel removed scene profile");
+    Click("Use group standard"); Click("Use standard");
+    Check(!std::filesystem::exists(ownGroupScene) && std::abs(environment->Snapshot().Profile.AmbientIntensity-.37F)<1e-6F,
+          "use group standard did not discard own values");
+    auto groupValue=environment->Snapshot().Profile; groupValue.AmbientIntensity=.73F;
+    { std::ofstream file(groupNight); file<<FormatSceneEnvironment(EncodeGroupEnvironment(groupValue,SceneEnvironmentGroup::TimeFlows,true)); }
+    environment->ObserveScene(0x51,{true,0,true,0,SceneEnvironmentGroup::TimeFlows}); Frame(); Frame();
+    Check(std::abs(graphics.SnapshotForRendering().Environment.AmbientIntensity-.73F)<1e-6F,
+          "another group scene did not inherit night standard");
+    Click("Night"); Frame(true);
+    Check(loggedPanelText.find("Night source: Group standard")!=std::string::npos,"night provenance missing");
+    EditScalar("Ambient intensity","0.81");
+    Click("Save as group standard"); Click("Save standard");
+    Check(!std::filesystem::exists(root/"scene-0051.night.environment.json") && !environment->Snapshot().Dirty,
+          "night group save wrote a scene file");
+    // Confirmation cannot apply to a scene/tab that changed while it was open.
+    Click("Use group standard");
+    environment->ObserveScene(0x58,{true,0x8000,false,0,SceneEnvironmentGroup::TimeFlows}); Frame();
+    Check(Find("Use standard").Disabled,"stale group confirmation remained enabled"); Click("Cancel");
+    // Errors remain visible in the same control surface.
+    std::filesystem::remove(groupDay); std::filesystem::create_directory(groupDay);
+    Click("Save as group standard"); Click("Save standard"); Frame(true);
+    Check(!environment->Snapshot().Error.empty() && loggedPanelText.find("Environment error:")!=std::string::npos,
+          "group persistence failure hidden");
+    std::filesystem::remove(groupDay);
+    environment->ObserveScene(0x55,{true,0x8000,false}); Frame(); Frame();
     // Placed lights: added where Link is, edited by type, saved in the profile.
-    environment->ObserveScene(0x55, false, ScenePlayerPlacement{{100.0F, 0.0F, 200.0F}, 90.0F});
+    environment->ObserveScene(0x55, {true, 0x8000, false}, ScenePlayerPlacement{{100.0F, 0.0F, 200.0F}, 90.0F});
     Click("Add light at Link");
     {
         const auto placed = environment->Snapshot().Profile.PlacedLights;
@@ -663,6 +860,12 @@ void CheckSceneEnvironment() {
               graphics.SnapshotForRendering().Environment.PlacedLights[0].Kind == PicaPlacedLightKind::Rectangle &&
               graphics.SnapshotForRendering().Environment.PlacedLights[0].HalfWidth == 50.0F,
           "the surface light controls are missing or it is not drawn as a rectangle");
+    Check(graphics.SnapshotForRendering().Environment.PlacedLights[0].Spread == 180.0F,
+          "a new surface light is not diffuse");
+    EditScalar("Surface spread", "40");
+    Check(environment->Snapshot().Profile.PlacedLights[0].Spread == 40.0F &&
+              graphics.SnapshotForRendering().Environment.PlacedLights[0].Spread == 40.0F,
+          "the surface spread control does not reach the rendered light");
     Select("Surface shape", "Disc");
     Check(graphics.SnapshotForRendering().Environment.PlacedLights[0].Kind == PicaPlacedLightKind::Disc &&
               Find("Surface radius").Rect.GetHeight() > 0.0F,
@@ -713,7 +916,7 @@ void CheckSceneEnvironment() {
                   std::abs(vertices[0].ClipTo[1] / vertices[0].ClipTo[3] + 0.1F) < 1.0e-5F,
               "world debug lines are not cut at the near plane or not turned into the framebuffer");
     }
-    Click("Save scene environment");
+    Click(environment->Snapshot().EditingNight ? "Save night" : "Save day");
     {
         nlohmann::json document;
         { std::ifstream file(saved.Path); file >> document; }
@@ -730,12 +933,12 @@ void CheckSceneEnvironment() {
     Check(environment->Snapshot().Profile.PlacedLights.empty() &&
               graphics.SnapshotForRendering().Environment.PlacedLightCount == 0U,
           "deleted lights are still drawn");
-    Click("Reload scene environment");
+    Click(environment->Snapshot().EditingNight ? "Revert night" : "Revert day");
     Check(environment->Snapshot().Profile.PlacedLights.size() == 1U, "reload lost the saved placed light");
     auto withoutLights = environment->Snapshot().Profile;
     withoutLights.PlacedLights.clear();
     environment->Preview(withoutLights);
-    Click("Save scene environment");
+    Click(environment->Snapshot().EditingNight ? "Save night" : "Save day");
     const auto backup = root / "saved.json";
     std::filesystem::rename(saved.Path, backup);
     std::filesystem::create_directory(saved.Path);
@@ -744,13 +947,13 @@ void CheckSceneEnvironment() {
     { std::ofstream file(saved.Path); file << "{invalid"; }
     Check(!environment->Reload() && environment->Snapshot().Profile == saved.Profile,
           "malformed reload replaced the last valid live environment");
-    environment->ObserveScene(0x56);
-    environment->ObserveScene(0x55);
+    environment->ObserveScene(0x56, {true, 0x8000, false});
+    environment->ObserveScene(0x55, {true, 0x8000, false});
     Check(!graphics.SnapshotForRendering().Environment.Enabled && !environment->Snapshot().Error.empty(),
           "invalid destination profile inherited another scene's lights");
     std::filesystem::remove(saved.Path);
     std::filesystem::rename(backup, saved.Path);
-    Click("Reload scene environment");
+    Click(environment->Snapshot().EditingNight ? "Revert night" : "Revert day");
     nlohmann::json originalProfile;
     { std::ifstream file(saved.Path); file >> originalProfile; }
     for (int version : {1, 2, 3}) {
@@ -760,7 +963,7 @@ void CheckSceneEnvironment() {
         legacy.erase("preserveSceneBrightness");
         if (version == 1) legacy.erase("pointLights");
         { std::ofstream file(saved.Path); file << legacy; }
-        Click("Reload scene environment");
+        Click(environment->Snapshot().EditingNight ? "Revert night" : "Revert day");
         const auto migrated = environment->Snapshot();
         Check(migrated.Error.empty() && !migrated.Dirty &&
                   migrated.Profile.NativeDirectStrength == 0.25F &&
@@ -797,15 +1000,16 @@ void CheckMm3dSceneEnvironment() {
     graphics.Apply(settings);
     auto environment=std::make_shared<SceneEnvironmentRuntime>(root,[&](const auto& v){
         graphics.PublishSceneEnvironment(v);
-    },NativePreservingSceneEnvironmentProfile());
-    environment->ObserveScene(0x2A,std::nullopt,std::nullopt,1);
+    },std::filesystem::path{},NativePreservingSceneEnvironmentProfile());
+    // MM3D's time is unknown here: not time-driven, no night profile.
+    environment->ObserveScene(0x2A);
     InstallGraphicsSettingsPanelTabs({CreateSceneEnvironmentPanel(environment)});
     size=ImVec2(760,2600);
     Frame();Frame();Click("Lighting");Click("Lights & Shadows");Frame(true);
     Check(!environment->Snapshot().Profile.Enabled && !graphics.SnapshotForRendering().Environment.Enabled,
           "MM3D widget enabled a missing profile");
-    Check(loggedPanelText.find("Time of day is unavailable")!=std::string::npos,
-          "MM3D widget presented unknown time as known day");
+    Check(loggedPanelText.find("Fixed scene lighting")!=std::string::npos,
+          "MM3D widget presented unknown time as time-driven");
     Click("Use scene environment");
     Check(environment->Snapshot().Profile.Enabled,"MM3D profile control did not enable explicit override");
     graphics.SetCapability(GraphicsCapability::NativeSurfaceLighting,false,"test unavailable");
@@ -815,7 +1019,7 @@ void CheckMm3dSceneEnvironment() {
     Check(!environment->Snapshot().Profile.Enabled,"unsupported MM3D environment did not switch Off");
     Frame();
     Check(Find("Use scene environment").Disabled,"unsupported inactive environment offered On");
-    environment->ObserveScene(std::nullopt,std::nullopt);
+    environment->ObserveScene(std::nullopt);
     Frame(true);
     Check(loggedPanelText.find("No native gameplay scene is available")!=std::string::npos &&
           !graphics.SnapshotForRendering().Environment.Enabled,"lost MM3D scene did not deactivate widget/runtime");
@@ -1137,7 +1341,7 @@ const char* ImGuiTestEngine_FindItemDebugLabel(ImGuiContext*, ImGuiID id) {
     return it == items.end() ? nullptr : it->second.Label.c_str();
 }
 
-int main() try {
+int main(int argc, char** argv) try {
     PresentationSettingsTransaction delayedConfirmation(500);
     PresentationSettingsValue previousDisplay;
     auto nextDisplay = previousDisplay;
@@ -1170,6 +1374,133 @@ int main() try {
     int width, height;
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
     Frame(); Frame();
+
+    if (argc == 2 && std::string_view(argv[1]) == "--grass-masks") {
+        auto& bridge = GrassSceneBridge::Instance();
+        bridge.Clear();
+        GrassSceneMesh source;
+        source.GeometryId = source.InstanceId = 1;
+        source.DrawOrder = 1;
+        source.FrameId = 1;
+        source.RenderTargetNamespace = 1;
+        source.TextureHash = 0xCC00;
+        source.TextureWidth = source.TextureHeight = 32;
+        source.Vertices = std::make_shared<const std::vector<GrassSourceVertex>>(
+            std::initializer_list<GrassSourceVertex>{ { { 0, 0, 0 }, { 0, 1, 0 }, { 0, 0 } },
+                                                      { { 100, 0, 0 }, { 0, 1, 0 }, { 1, 0 } },
+                                                      { { 0, 0, 100 }, { 0, 1, 0 }, { 0, 1 } } });
+        source.Indices = std::make_shared<const std::vector<uint32_t>>(std::initializer_list<uint32_t>{ 0, 1, 2 });
+        auto overlay = source;
+        overlay.GeometryId = overlay.InstanceId = 2;
+        overlay.DrawOrder = 2;
+        overlay.TextureHash = firstTextureHash;
+        overlay.Overlay = std::make_shared<GrassOverlayAlpha>();
+        bridge.Publish(source);
+        bridge.Publish(overlay);
+        (void)bridge.OverlaysFor(source);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+        while (bridge.ObservedMasks().empty() && std::chrono::steady_clock::now() < deadline)
+            (void)bridge.OverlaysFor(source);
+        TextureCatalogRuntime::Instance().Clear();
+        TextureCatalogRuntime::Instance().Observe(firstTextureHash, 0x1000, 32, 32, 0);
+        TextureCatalogRuntime::Instance().Observe(secondTextureHash, 0x2000, 64, 64, 0);
+        std::vector<uint8_t> rgba(32 * 32 * 4, 128);
+        GrassTextureSourceCache::Instance().ObserveDecoded(firstTextureHash, 32, 32, rgba);
+        auto settings = runtime.Snapshot();
+        settings.Preset = GraphicsPreset::Custom;
+        settings.Grass.Masks.clear();
+        runtime.Apply(settings);
+        Click("Grass");
+        Click("Masks");
+        Frame(true);
+        Check(loggedPanelText.find("Covered source area") != std::string::npos, "mask overlap absent from panel");
+        Check(loggedPanelText.find("MASK auto") != std::string::npos, "automatic catalog badge missing");
+        Click("Overlay mask");
+        ClickTexture(firstTextureHash);
+        Check(bridge.MaskHighlight({ 1, 1, 0 }).Lines.empty(), "highlight active without request");
+        Click("Highlight mask in scene");
+        Check(!bridge.MaskHighlight({ 1, 1, 0 }).Lines.empty(), "selected mask did not highlight");
+        Click("Sources");
+        Check(bridge.MaskHighlight({ 1, 1, 0 }).Lines.empty(), "tab switch retained highlight");
+        Click("Masks");
+        ToggleGraphicsNativePresentation();
+        Frame();
+        Check(bridge.MaskHighlight({ 1, 1, 0 }).Lines.empty(), "F2 retained highlight");
+        ToggleGraphicsNativePresentation();
+        Frame();
+        showPanel = false;
+        Frame();
+        Check(bridge.MaskHighlight({ 1, 1, 0 }).Lines.empty(), "closed F1 retained highlight");
+        showPanel = true;
+        Frame();
+        Click("Highlight mask in scene");
+        AllCapabilities(false);
+        Select("Mask mode", "Off");
+        Check(runtime.Snapshot().Grass.Masks.size() == 1 &&
+                  runtime.Snapshot().Grass.Masks[0].Mode == GrassMaskMode::Off,
+              "capability loss prevented mask Off");
+        AllCapabilities(true);
+        Select("Mask mode", "Custom");
+        size.y = 2200;
+        Frame();
+        Frame();
+        Select("Sample channel", "Green");
+        Click("Invert mask");
+        EditScalar("Mask strength", "0.4");
+        EditScalar("Input black", "0.2");
+        EditScalar("Input white", "0.8");
+        EditScalar("Response exponent", "2");
+        EditScalar("Output black", "0.1");
+        EditScalar("Output white", "0.7");
+        Click("Add rectangle");
+        const auto custom = runtime.Snapshot().Grass.Masks.front();
+        Check(custom.Mode == GrassMaskMode::Custom && custom.Coverage.Channel == GrassSampleChannel::Green &&
+                  custom.Coverage.Invert && custom.Strength == .4F && custom.Coverage.InputBlack == .2F &&
+                  custom.Coverage.InputWhite == .8F && custom.Coverage.ResponseExponent == 2 &&
+                  custom.Coverage.OutputBlack == .1F && custom.Coverage.OutputWhite == .7F &&
+                  custom.Coverage.ActiveRects.size() == 1,
+              "shared custom mask controls failed");
+        const auto saved = DeserializeGraphicsSettings(store->Root["Graphics"]);
+        Check(saved.Value.Grass.Masks.front().Coverage.ActiveRects.size() == 1, "mask controls were not persisted");
+        Frame(true);
+        Check(loggedPanelText.find("MASK custom") != std::string::npos, "custom catalog badge missing");
+        store->Fail = true;
+        Select("Mask mode", "Off");
+        Frame(true);
+        Check(loggedPanelText.find("Settings applied, but could not be saved.") != std::string::npos &&
+                  runtime.SaveState() == GraphicsSettingsSaveState::Failed,
+              "mask persistence failure not shown");
+        Check(runtime.Snapshot().Grass.Masks[0].Mode == GrassMaskMode::Off, "failed save prevented live Off");
+        store->Fail = false;
+        Click("Retry saving graphics");
+        Check(runtime.SaveState() == GraphicsSettingsSaveState::Saved, "mask save retry failed");
+        Click("Reset mask to automatic");
+        Check(runtime.Snapshot().Grass.Masks.empty(), "reset to automatic retained override");
+        Click("Texture catalog selection");
+        ClickTexture(secondTextureHash);
+        Click("Add selected texture mask");
+        Check(runtime.Snapshot().Grass.Masks.size() == 1 &&
+                  runtime.Snapshot().Grass.Masks[0].Coverage.Target.Rgba8Hash == secondTextureHash,
+              "manual catalog mask used wrong identity");
+        Click("Remove mask rule");
+        Check(runtime.Snapshot().Grass.Masks.empty(), "remove mask failed");
+        size.y = 680;
+        Frame();
+        Frame();
+        bridge.Clear();
+        EndGraphicsSettingsPreviews();
+        ImGui::DestroyContext();
+        std::cout << "F1 grass masks smoke passed: " << assertions << " assertions\n";
+        return 0;
+    }
+
+    // Run the owning panel independently of unrelated material/controls UI.
+    if (argc == 2 && std::string_view(argv[1]) == "--scene-environment") {
+        CheckSceneEnvironment();
+        ImGui::DestroyContext();
+        std::cout << "F1 scene environment smoke passed: " << assertions << " assertions\n";
+        return 0;
+    }
 
     // Top-level tabs in their order; the former Renderer/Textures/TopScreen
     // tabs no longer exist.
@@ -1674,6 +2005,13 @@ int main() try {
 #endif
     runtime.SetCapability(GraphicsCapability::ImmerseMxao, false, "provider unavailable");
     Frame();
+#ifdef ENABLE_OOT3D_IMMERSE
+    // A selected provider that is not available (the iMMERSE module is not
+    // installed) renders Off; the preference stays.
+    Check(runtime.Snapshot().Effects.AmbientOcclusion == AmbientOcclusionMode::Mxao &&
+              runtime.SnapshotForRendering().Value.Effects.AmbientOcclusion == AmbientOcclusionMode::Off,
+          "an unavailable MXAO is rendered, or its preference was dropped");
+#endif
     Select("Ambient occlusion", "Off");
     Click("Ambient occlusion");
     Check(Find("iMMERSE MXAO").Disabled && !Find("Multiscale GTAO").Disabled,
@@ -2080,6 +2418,16 @@ int main() try {
     io.AddMouseButtonEvent(0, false);
     Frame(); Frame();
     Check(store->Stores == beforeDrag + 1, "UI slider release did not save once");
+    const bool extendedBefore = runtime.Snapshot().ExtendedDrawDistance;
+    const int beforeExtended = store->Stores;
+    Click("Extended draw distance");
+    Frame(); Frame();
+    Check(runtime.Snapshot().ExtendedDrawDistance != extendedBefore, "draw distance checkbox not applied");
+    Check(store->Stores == beforeExtended + 1, "draw distance checkbox did not save once");
+    Click("Extended draw distance");
+    Frame(); Frame();
+    Check(runtime.Snapshot().ExtendedDrawDistance == extendedBefore, "draw distance checkbox did not restore");
+    pending = runtime.Snapshot();
     store->Fail = true;
     pending.FovMultiplier = 1.1F;
     runtime.Apply(pending);

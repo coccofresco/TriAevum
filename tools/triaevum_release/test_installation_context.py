@@ -17,6 +17,18 @@ class InstallationContextTests(unittest.TestCase):
                 expanded = expand_profile_argument(argument, moved / profile.name)
                 self.assertEqual(Path(expanded), moved / suffix)
 
+    def test_package_files_follow_the_runtime_across_mounts(self):
+        # Issue 66: an AppImage is mounted at a new path on every launch, so
+        # its resources are named from the runtime, not by absolute path.
+        with tempfile.TemporaryDirectory() as temporary:
+            data = Path(temporary) / "data" / "activation"
+            first = Path(temporary) / ".mount_first" / "usr" / "lib" / "triaevum"
+            second = Path(temporary) / ".mount_second" / "usr" / "lib" / "triaevum"
+            profile = data / "TriAevum.launch.json"
+            argument = InstallationContext(data).profile_argument(first / "resources", profile, runtime_dir=first)
+            self.assertEqual(argument, "${runtime_dir}/resources")
+            self.assertEqual(Path(expand_profile_argument(argument, profile, second)), (second / "resources").resolve())
+
     def test_external_inputs_remain_explicit(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "installation"

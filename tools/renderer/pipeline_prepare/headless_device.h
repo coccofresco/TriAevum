@@ -1,4 +1,6 @@
 #pragma once
+#include <cstdio>
+#include <cstdlib>
 
 #include "fast/renderer3ds/nri_pica_pipeline_bridge.h"
 #include "fast/renderer3ds/pica_vulkan_device_profile.h"
@@ -105,12 +107,27 @@ class HeadlessDevice final : public Fast::Renderer3ds::NriPicaInterop {
                 if (std::strcmp(extension.extensionName, name) == 0) return true;
             return false;
         };
-        // The live renderer's negotiation (its default preparation mode links
-        // library parts): it decides which pipelines NRI creates.
         const auto& libraryExtensions = Fast::Renderer3ds::kPicaPipelineLibraryExtensions;
-        PipelineLibraries = Fast::Renderer3ds::PicaPipelineLibrariesSupported(
+        const bool librarySupported = Fast::Renderer3ds::PicaPipelineLibrariesSupported(
             std::all_of(libraryExtensions.begin(), libraryExtensions.end(), hasExtension),
             libraries, extendedDynamic, supported.features);
+        VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT libraryProperties{
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_PROPERTIES_EXT};
+        VkPhysicalDeviceDriverProperties driverProperties{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES};
+        VkPhysicalDeviceProperties2 properties{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+        properties.pNext = &driverProperties;
+        driverProperties.pNext = &libraryProperties;
+        getProperties2(physical, &properties);
+        const auto policy = Fast::Renderer3ds::ResolvePicaPipelineLibraryPolicy(
+            std::getenv("TRIAEVUM_NRI_PIPELINE_LIBRARIES"), librarySupported, dynamic.dynamicRendering,
+            true, driverProperties.driverID);
+        PipelineLibraries = policy.Enabled;
+        AllPipelinesUseLibraries = policy.AllPipelines;
+        std::fprintf(stderr, "TRIAEVUM_NRI_GPL_CAPABILITY supported=%u requested=%u enabled=%u fast_link=%u independent_interpolation=%u driver_id=%u policy=%s\n",
+            unsigned(librarySupported), unsigned(policy.Requested), unsigned(policy.Enabled),
+            unsigned(libraryProperties.graphicsPipelineLibraryFastLinking),
+            unsigned(libraryProperties.graphicsPipelineLibraryIndependentInterpolationDecoration),
+            unsigned(driverProperties.driverID), policy.Reason);
         GeometryShaders = supported.features.geometryShader == VK_TRUE;
         const auto coreFeatures = Fast::Renderer3ds::PicaVulkanCoreFeatures(supported.features);
         v12 = Fast::Renderer3ds::PicaVulkan12Features(v12);
@@ -154,6 +171,7 @@ class HeadlessDevice final : public Fast::Renderer3ds::NriPicaInterop {
     nri::WrapperVKInterface Wrapper{};
     // Negotiated as the live renderer does: library parts can be prepared.
     bool PipelineLibraries = false;
+    bool AllPipelinesUseLibraries = false;
     bool GeometryShaders = false;
   private:
     static VKAPI_ATTR VkBool32 VKAPI_CALL VulkanMessage(VkDebugUtilsMessageSeverityFlagBitsEXT severity,

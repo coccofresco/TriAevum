@@ -1,277 +1,267 @@
 // CTR host services: the fs:USER session and RomFS files.
 #include "oot3d_native_a32_ctr_host_internal.h"
 
+#include <cstdio>
+
 namespace Oot3dNativeGame {
+
+void NativeA32CtrHostServices::WriteFsRequestSummary() const {
+    std::fprintf(stderr, "TRIAEVUM_FS_REQUEST_SUMMARY unserved=%llu\n",
+                 static_cast<unsigned long long>(mRuntimeProfile.FsUnservedRequests));
+}
+
+NativeA32HostResult NativeA32CtrHostServices::FailFsRequest(
+    oot3d::recomp::a32::GuestState& state, NativeA32Memory& memory,
+    uint32_t commandBuffer, const std::optional<std::string>& sessionType,
+    NativeA32CtrSvcEvent event, uint32_t result, std::string_view reason,
+    uint64_t offset, uint64_t length) {
+    const uint32_t header = event.Detail;
+    const auto* handle = LookupHandle(state.r[0]);
+    std::string path = handle ? handle->Object->FilePath.generic_string() : "";
+    if (sessionType == "client_session:fs:USER") {
+        uint32_t typeOffset = 0U, addressOffset = 0U;
+        switch (header) {
+        case kFsOpenFileRequest: typeOffset = 16U; addressOffset = 36U; break;
+        case kFsCreateFileRequest: typeOffset = 16U; addressOffset = 40U; break;
+        case kFsDeleteFileRequest: typeOffset = 16U; addressOffset = 28U; break;
+        case kFsOpenFileDirectlyRequest: typeOffset = 20U; addressOffset = 48U; break;
+        case kFsOpenArchiveRequest: typeOffset = 8U; addressOffset = 20U; break;
+        default: break;
+        }
+        uint32_t type = 0U, size = 0U, address = 0U;
+        if (typeOffset && memory.Read32(commandBuffer + typeOffset, &type) &&
+            memory.Read32(commandBuffer + typeOffset + 4U, &size) &&
+            memory.Read32(commandBuffer + addressOffset, &address))
+            path = DescribeLowPath(memory, type, size, address);
+    }
+    const uint64_t count = ++mRuntimeProfile.FsUnservedRequests;
+    // First 8, then powers of two: bounded output even if the title retries.
+    if (count <= 8U || (count & (count - 1U)) == 0U) {
+        std::ostringstream diagnostic;
+        diagnostic << "TRIAEVUM_FS_REQUEST_UNSERVED count=" << count
+                   << " session=" << sessionType.value_or("invalid")
+                   << " header=0x" << std::hex << header
+                   << " handle=0x" << state.r[0] << " pc=0x" << event.Pc
+                   << std::dec << " thread=" << event.ThreadId
+                   << " path=" << std::quoted(path)
+                   << " offset=" << offset << " length=" << length
+                   << " size=" << (handle ? handle->Object->FileSize : 0U)
+                   << " result=0x" << std::hex << result
+                   << " reason=" << reason << " request=" << std::quoted(event.Name);
+        std::fprintf(stderr, "%s\n", diagnostic.str().c_str());
+    }
+    event.Name += ":Unserved:" + std::string(reason);
+    event.Handled = true;
+    event.Detail = result;
+    mSvcEvents.push_back(std::move(event));
+    // Descriptor/handle validation belongs to SendSyncRequest, not FS IPC.
+    if (result == kInvalidBufferDescriptor || result == kInvalidSessionHandle ||
+        result == kSessionClosed) {
+        state.r[0] = result;
+        return {NativeA32HostAction::Resume};
+    }
+    std::array<uint32_t, 5> reply{(header & 0xFFFF0000U) | 0x40U, result};
+    size_t words = 2U;
+    const bool file = sessionType && sessionType->starts_with("client_session:file:");
+    if (file && (header == kFileReadRequest || header == kFileWriteRequest)) {
+        const uint32_t descriptorOffset = header == kFileReadRequest ? 16U : 20U;
+        reply[0] = (header & 0xFFFF0000U) | 0x82U;
+        words = 5U;
+        if (!memory.Read32(commandBuffer + descriptorOffset, &reply[3]) ||
+            !memory.Read32(commandBuffer + descriptorOffset + 4U, &reply[4])) {
+            return {NativeA32HostAction::Fault, std::nullopt, 0U,
+                    "FS error reply has an unreadable mapped-buffer descriptor"};
+        }
+    } else if ((file && header == kFileGetSizeRequest) ||
+               (!file && header == kFsOpenArchiveRequest)) {
+        reply[0] = (header & 0xFFFF0000U) | 0xC0U;
+        words = 4U;
+    } else if (!file && (header == kFsOpenFileRequest || header == kFsOpenFileDirectlyRequest)) {
+        reply[0] = (header & 0xFFFF0000U) | 0x42U;
+        reply[2] = kMoveHandleDescriptor;
+        words = 4U;
+    }
+    if (!memory.IsWritable(commandBuffer, words * sizeof(uint32_t))) {
+        return {NativeA32HostAction::Fault, std::nullopt, 0U,
+                "FS reply command buffer is not writable"};
+    }
+    for (size_t i = 0; i < words; ++i) {
+        if (!memory.Write32(commandBuffer + static_cast<uint32_t>(i * 4U), reply[i])) {
+            return {NativeA32HostAction::Fault, std::nullopt, 0U, "FS reply write failed"};
+        }
+    }
+    state.r[0] = kResultSuccess;
+    return {NativeA32HostAction::Resume};
+}
+
 
 // SendSyncRequest on a client session of a RomFS file or archive session.
 NativeA32HostResult NativeA32CtrHostServices::HandleRomFsRequest(
     oot3d::recomp::a32::GuestState& state, NativeA32Memory& memory,
     NativeA32HostContext& context, const std::optional<std::string>& sessionType,
     uint32_t commandBuffer, NativeA32CtrSvcEvent event) {
+    static_cast<void>(context);
     const auto* fileHandle = LookupHandle(state.r[0]);
-    if (fileHandle == nullptr || fileHandle->Object->FilePath.empty()) {
-        mSvcEvents.push_back(std::move(event));
-        return {NativeA32HostAction::Wait};
+    const auto fail = [&](uint32_t result, std::string_view reason,
+                          uint64_t offset = 0U, uint64_t length = 0U) {
+        return FailFsRequest(state, memory, commandBuffer, sessionType, event,
+                             result, reason, offset, length);
+    };
+    if (!fileHandle || fileHandle->Object->FilePath.empty()) {
+        return fail(kInvalidSessionHandle, "invalid-file-handle");
     }
-    if (*sessionType == "client_session:file:savedata") {
-        if (fileHandle->Object->FileBackend) {
-            fileHandle->Object->FileSize =
-                fileHandle->Object->FileBackend->Size();
-        } else {
-            std::error_code sizeError;
-            const uint64_t fileSize = std::filesystem::file_size(
-                fileHandle->Object->FilePath, sizeError);
-            if (!sizeError) {
-                fileHandle->Object->FileSize = fileSize;
-            }
+    auto& file = *fileHandle->Object;
+    if (file.FileClosed) {
+        return fail(kSessionClosed, "closed-file");
+    }
+    const bool romfs = *sessionType == "client_session:file:romfs";
+    // Validate the reply BEFORE any disk mutation or backend allocation.
+    const uint32_t replyBytes = event.Detail == kFileReadRequest || event.Detail == kFileWriteRequest
+                                    ? 20U : event.Detail == kFileGetSizeRequest ? 16U : 8U;
+    if (!memory.IsWritable(commandBuffer, replyBytes)) {
+        return fail(kFsBackendFailure, "unwritable-command-buffer");
+    }
+    const auto reply = [&](uint32_t header, std::string_view name,
+                           uint64_t value = 0U, uint32_t descriptor = 0U,
+                           uint32_t address = 0U) -> NativeA32HostResult {
+        bool written = memory.Write32(commandBuffer, header) &&
+                       memory.Write32(commandBuffer + 4U, kResultSuccess);
+        if (header == kFileGetSizeResponse) {
+            written = written && memory.Write64(commandBuffer + 8U, value, nullptr);
+        } else if (header == kFileReadResponse || header == kFileWriteResponse) {
+            written = written && memory.Write32(commandBuffer + 8U, static_cast<uint32_t>(value)) &&
+                      memory.Write32(commandBuffer + 12U, descriptor) &&
+                      memory.Write32(commandBuffer + 16U, address);
         }
-    }
-    if (event.Detail == kFileGetSizeRequest &&
-        memory.Write32(commandBuffer, kFileGetSizeResponse) &&
-        memory.Write32(commandBuffer + 4U, kResultSuccess) &&
-        memory.Write64(commandBuffer + 8U, fileHandle->Object->FileSize,
-                       nullptr)) {
+        if (!written) return fail(kFsBackendFailure, "reply-write-failed");
         state.r[0] = kResultSuccess;
-        event.Name += ":GetSize";
+        event.Name += ":" + std::string(name);
         event.Handled = true;
         mSvcEvents.push_back(std::move(event));
         return {NativeA32HostAction::Resume};
+    };
+    if (!romfs) {
+        if (file.FileBackend) {
+            file.FileSize = file.FileBackend->Size();
+        } else {
+            std::error_code error;
+            const auto size = std::filesystem::file_size(file.FilePath, error);
+            if (error) return fail(kFsBackendFailure, "stat-failed");
+            file.FileSize = size;
+        }
     }
-    if (event.Detail == kFileReadRequest) {
-        uint64_t offset = 0;
-        uint32_t length = 0;
-        uint32_t descriptor = 0;
-        uint32_t targetAddress = 0;
-        uint32_t faultAddress = 0;
-        if (memory.Read64(commandBuffer + 4U, &offset, &faultAddress) &&
-            memory.Read32(commandBuffer + 12U, &length) &&
-            memory.Read32(commandBuffer + 16U, &descriptor) &&
-            memory.Read32(commandBuffer + 20U, &targetAddress) &&
-            (descriptor & 0xFU) == 0xCU &&
-            (descriptor >> 4U) >= length &&
-            offset <= fileHandle->Object->FileSize &&
-            length <= fileHandle->Object->FileSize - offset) {
+    if (event.Detail == kFileGetSizeRequest) {
+        return reply(kFileGetSizeResponse, "GetSize", file.FileSize);
+    }
+    if (event.Detail == kFileReadRequest || event.Detail == kFileWriteRequest) {
+        const bool writing = event.Detail == kFileWriteRequest;
+        uint64_t offset = 0U;
+        uint32_t length = 0U, flags = 0U, descriptor = 0U, address = 0U;
+        const uint32_t descriptorOffset = writing ? 20U : 16U;
+        if (!memory.Read64(commandBuffer + 4U, &offset, nullptr) ||
+            !memory.Read32(commandBuffer + 12U, &length) ||
+            (writing && !memory.Read32(commandBuffer + 16U, &flags)) ||
+            !memory.Read32(commandBuffer + descriptorOffset, &descriptor) ||
+            !memory.Read32(commandBuffer + descriptorOffset + 4U, &address)) {
+            return fail(kInvalidBufferDescriptor, "unreadable-request");
+        }
+        const uint32_t permission = descriptor & 0xFU;
+        if ((writing ? (permission != 0xAU && permission != 0xEU)
+                     : (permission != 0xCU && permission != 0xEU)) ||
+            (descriptor >> 4U) < length ||
+            (length != 0U && (writing ? !memory.IsMapped(address, length)
+                                     : !memory.IsWritable(address, length)))) {
+            return fail(kInvalidBufferDescriptor, "invalid-mapped-buffer", offset, length);
+        }
+        if ((writing && (romfs || (file.FileOpenMode & 2U) == 0U)) ||
+            (!writing && !romfs && (file.FileOpenMode & 1U) == 0U)) {
+            return fail(kFsInvalidOpenFlags, "open-mode", offset, length);
+        }
+        const uint64_t maximum = static_cast<uint64_t>(std::numeric_limits<std::streamoff>::max());
+        if (offset > maximum || length > maximum - offset ||
+            file.FileOffset > maximum - offset) {
+            return fail(kFsOutOfRange, "offset-overflow", offset, length);
+        }
+        if (writing) {
             std::vector<uint8_t> bytes(length);
-            bool readSucceeded = false;
-            if (fileHandle->Object->FileBackend) {
-                const bool isRomFs =
-                    *sessionType == "client_session:file:romfs";
-                const auto readStart =
-                    mConfig.ProfileRuntime && isRomFs
-                        ? RuntimeProfileClock::now()
-                        : RuntimeProfileClock::time_point{};
-                if (mConfig.ProfileRuntime && isRomFs) {
-                    ++mRuntimeProfile.RomFsReadCalls;
-                }
-                uint32_t returnedSize = 0U;
-                if (fileHandle->Object->FileOffset <=
-                    std::numeric_limits<uint64_t>::max() - offset) {
-                    readSucceeded =
-                        fileHandle->Object->FileBackend->Read(
-                            fileHandle->Object->FileOffset + offset,
-                            bytes, &returnedSize) &&
-                        returnedSize == length;
-                }
-                if (mConfig.ProfileRuntime && isRomFs) {
-                    mRuntimeProfile.RomFsReadBytes +=
-                        readSucceeded ? length : 0U;
-                    mRuntimeProfile.RomFsReadNanoseconds +=
-                        RuntimeProfileElapsedNanoseconds(readStart);
-                }
-            } else if (*sessionType == "client_session:file:romfs") {
-                if (!fileHandle->Object->RomFsBacking) {
-                    fileHandle->Object->RomFsBacking =
-                        std::make_shared<RomFsBackingFile>(
-                            fileHandle->Object->FilePath);
-                }
-                const auto readStart =
-                    mConfig.ProfileRuntime
-                        ? RuntimeProfileClock::now()
-                        : RuntimeProfileClock::time_point{};
-                bool openedStream = false;
-                if (mConfig.ProfileRuntime) {
-                    ++mRuntimeProfile.RomFsReadCalls;
-                }
-                if (fileHandle->Object->FileOffset <=
-                    std::numeric_limits<uint64_t>::max() - offset) {
-                    readSucceeded =
-                        fileHandle->Object->RomFsBacking->Read(
-                            fileHandle->Object->FileOffset + offset,
-                            bytes, &openedStream);
-                }
-                if (mConfig.ProfileRuntime) {
-                    mRuntimeProfile.RomFsStreamOpenCalls +=
-                        openedStream ? 1U : 0U;
-                    mRuntimeProfile.RomFsReadBytes +=
-                        readSucceeded ? length : 0U;
-                    mRuntimeProfile.RomFsReadNanoseconds +=
-                        RuntimeProfileElapsedNanoseconds(readStart);
-                }
-            } else {
-                std::ifstream stream(fileHandle->Object->FilePath,
-                                     std::ios::binary);
-                stream.seekg(
-                    static_cast<std::streamoff>(
-                        fileHandle->Object->FileOffset + offset),
-                    std::ios::beg);
-                readSucceeded =
-                    stream &&
-                    (bytes.empty() ||
-                     static_cast<bool>(stream.read(
-                         reinterpret_cast<char*>(bytes.data()),
-                         static_cast<std::streamsize>(bytes.size()))));
+            if (length && !memory.ReadBytes(address, bytes)) {
+                return fail(kInvalidBufferDescriptor, "source-read-failed", offset, length);
             }
-            if (readSucceeded &&
-                memory.WriteBytes(targetAddress, bytes) &&
-                memory.Write32(commandBuffer, kFileReadResponse) &&
-                memory.Write32(commandBuffer + 4U, kResultSuccess) &&
-                memory.Write32(commandBuffer + 8U, length) &&
-                memory.Write32(commandBuffer + 12U, descriptor) &&
-                memory.Write32(commandBuffer + 16U, targetAddress)) {
-                state.r[0] = kResultSuccess;
-                std::ostringstream readDetail;
-                readDetail << ":Read:offset=0x" << std::hex << offset
-                           << ":length=0x" << length << ":target=0x"
-                           << targetAddress;
-                event.Name += readDetail.str();
-                event.Handled = true;
-                event.Detail = length;
-                mSvcEvents.push_back(std::move(event));
-                return {NativeA32HostAction::Resume};
-            }
-        }
-    }
-    if (event.Detail == kFileWriteRequest &&
-        (fileHandle->Object->FileOpenMode & 2U) != 0U) {
-        uint64_t offset = 0;
-        uint32_t length = 0;
-        uint32_t flags = 0;
-        uint32_t descriptor = 0;
-        uint32_t sourceAddress = 0;
-        uint32_t faultAddress = 0;
-        const bool validRange =
-            memory.Read64(commandBuffer + 4U, &offset, &faultAddress) &&
-            memory.Read32(commandBuffer + 12U, &length) &&
-            memory.Read32(commandBuffer + 16U, &flags) &&
-            memory.Read32(commandBuffer + 20U, &descriptor) &&
-            memory.Read32(commandBuffer + 24U, &sourceAddress) &&
-            ((descriptor & 0xFU) == 0xAU ||
-             (descriptor & 0xFU) == 0xEU) &&
-            (descriptor >> 4U) >= length &&
-            offset <= static_cast<uint64_t>(
-                          std::numeric_limits<std::int64_t>::max()) &&
-            offset <= std::numeric_limits<uint64_t>::max() - length;
-        std::vector<uint8_t> bytes(length);
-        if (validRange &&
-            (length == 0U || memory.ReadBytes(sourceAddress, bytes))) {
-            bool writeSucceeded = false;
-            if (fileHandle->Object->FileBackend) {
-                uint32_t writtenSize = 0U;
-                writeSucceeded = fileHandle->Object->FileBackend->Write(
-                                     offset, bytes, &writtenSize) &&
-                                 writtenSize == length;
-                if (writeSucceeded) {
-                    fileHandle->Object->FileSize =
-                        fileHandle->Object->FileBackend->Size();
-                }
+            bool success = false;
+            uint32_t written = 0U;
+            if (file.FileBackend) {
+                success = file.FileBackend->Write(offset, bytes, &written) && written == length;
+                if (success) file.FileSize = file.FileBackend->Size();
             } else {
-                std::fstream stream(fileHandle->Object->FilePath,
-                                    std::ios::binary | std::ios::in |
-                                        std::ios::out);
-                stream.seekp(static_cast<std::streamoff>(offset),
-                             std::ios::beg);
-                writeSucceeded =
-                    stream &&
-                    (bytes.empty() ||
-                     stream.write(
-                         reinterpret_cast<const char*>(bytes.data()),
-                         static_cast<std::streamsize>(bytes.size()))) &&
-                    ((flags & 0xFFU) == 0U ||
-                     static_cast<bool>(stream.flush()));
+                std::fstream stream(file.FilePath, std::ios::binary | std::ios::in | std::ios::out);
+                stream.seekp(static_cast<std::streamoff>(offset));
+                if (length) stream.write(reinterpret_cast<const char*>(bytes.data()), length);
+                // The backend contract is write-through; Flush can then be a no-op.
+                stream.flush();
+                success = static_cast<bool>(stream);
                 stream.close();
-                std::error_code sizeError;
-                fileHandle->Object->FileSize =
-                    std::filesystem::file_size(
-                        fileHandle->Object->FilePath, sizeError);
-                writeSucceeded = writeSucceeded && !sizeError;
+                success = success && !stream.fail();
+                std::error_code error;
+                const auto size = std::filesystem::file_size(file.FilePath, error);
+                success = success && !error;
+                if (success) { file.FileSize = size; written = length; }
             }
-            if (writeSucceeded) {
-                if (memory.Write32(commandBuffer, kFileWriteResponse) &&
-                    memory.Write32(commandBuffer + 4U,
-                                   kResultSuccess) &&
-                    memory.Write32(commandBuffer + 8U, length) &&
-                    memory.Write32(commandBuffer + 12U, descriptor) &&
-                    memory.Write32(commandBuffer + 16U,
-                                   sourceAddress)) {
-                    state.r[0] = kResultSuccess;
-                    std::ostringstream writeDetail;
-                    writeDetail << ":Write:offset=0x" << std::hex
-                                << offset << ":length=0x" << length
-                                << ":flags=0x" << flags;
-                    event.Name += writeDetail.str();
-                    event.Handled = true;
-                    event.Detail = length;
-                    mSvcEvents.push_back(std::move(event));
-                    return {NativeA32HostAction::Resume};
-                }
+            if (!success) return fail(kFsBackendFailure, "backend-write-failed", offset, length);
+            return reply(kFileWriteResponse, "Write", written, descriptor, address);
+        }
+        // A read across EOF is a successful short read. For the RomFS service
+        // view, do not expose bytes past its configured slice of the image.
+        const uint32_t requested = romfs
+            ? static_cast<uint32_t>(offset >= file.FileSize ? 0U :
+                  std::min<uint64_t>(length, file.FileSize - offset)) : length;
+        std::vector<uint8_t> bytes(requested);
+        uint32_t returned = 0U;
+        bool success = false;
+        const auto start = mConfig.ProfileRuntime && romfs ? RuntimeProfileClock::now()
+                                                         : RuntimeProfileClock::time_point{};
+        if (mConfig.ProfileRuntime && romfs) ++mRuntimeProfile.RomFsReadCalls;
+        if (file.FileBackend) {
+            success = file.FileBackend->Read(file.FileOffset + offset, bytes, &returned) &&
+                      returned <= requested;
+        } else if (romfs) {
+            if (!file.RomFsBacking) file.RomFsBacking = std::make_shared<RomFsBackingFile>(file.FilePath);
+            bool opened = false;
+            success = file.RomFsBacking->Read(file.FileOffset + offset, bytes, &opened);
+            returned = success ? requested : 0U;
+            if (mConfig.ProfileRuntime && opened) ++mRuntimeProfile.RomFsStreamOpenCalls;
+        } else {
+            std::ifstream stream(file.FilePath, std::ios::binary);
+            stream.seekg(static_cast<std::streamoff>(file.FileOffset + offset));
+            success = static_cast<bool>(stream);
+            if (success && requested) {
+                stream.read(reinterpret_cast<char*>(bytes.data()), requested);
+                returned = static_cast<uint32_t>(stream.gcount());
+                success = !stream.bad() && (stream.good() || stream.eof());
             }
         }
-    }
-    if (event.Detail == kFileSetSizeRequest &&
-        (fileHandle->Object->FileOpenMode & 2U) != 0U) {
-        uint64_t size = 0;
-        uint32_t faultAddress = 0;
-        const bool readable =
-            memory.Read64(commandBuffer + 4U, &size, &faultAddress) &&
-            size <= static_cast<uint64_t>(
-                        std::numeric_limits<std::int64_t>::max());
-        if (readable) {
-            bool resized = false;
-            if (fileHandle->Object->FileBackend) {
-                resized = fileHandle->Object->FileBackend->Resize(size);
-            } else {
-                std::error_code resizeError;
-                std::filesystem::resize_file(
-                    fileHandle->Object->FilePath, size, resizeError);
-                resized = !resizeError;
-            }
-            if (resized &&
-                memory.Write32(commandBuffer, kFileSetSizeResponse) &&
-                memory.Write32(commandBuffer + 4U, kResultSuccess)) {
-                fileHandle->Object->FileSize = size;
-                state.r[0] = kResultSuccess;
-                event.Name += ":SetSize:" + std::to_string(size);
-                event.Handled = true;
-                event.Detail = static_cast<uint32_t>(size);
-                mSvcEvents.push_back(std::move(event));
-                return {NativeA32HostAction::Resume};
-            }
+        if (mConfig.ProfileRuntime && romfs) {
+            mRuntimeProfile.RomFsReadBytes += success ? returned : 0U;
+            mRuntimeProfile.RomFsReadNanoseconds += RuntimeProfileElapsedNanoseconds(start);
         }
+        if (!success) return fail(kFsBackendFailure, "backend-read-failed", offset, length);
+        if (returned && !memory.WriteBytes(address, std::span<const uint8_t>(bytes.data(), returned))) {
+            return fail(kInvalidBufferDescriptor, "target-write-failed", offset, length);
+        }
+        return reply(kFileReadResponse, "Read", returned, descriptor, address);
     }
     // Set/GetPriority: the session's I/O priority. Reads complete
     // synchronously here, so it is only kept and reported back.
     if (event.Detail == kFileSetPriorityRequest) {
         uint32_t priority = 0;
-        if (memory.Read32(commandBuffer + 4U, &priority) &&
-            memory.Write32(commandBuffer, kFileSetPriorityResponse) &&
-            memory.Write32(commandBuffer + 4U, kResultSuccess)) {
-            fileHandle->Object->FilePriority = priority;
-            state.r[0] = kResultSuccess;
-            event.Name += ":SetPriority:" + std::to_string(priority);
-            event.Handled = true;
-            mSvcEvents.push_back(std::move(event));
-            return {NativeA32HostAction::Resume};
-        }
+        if (!memory.Read32(commandBuffer + 4U, &priority))
+            return fail(kInvalidBufferDescriptor, "unreadable-priority");
+        file.FilePriority = priority;
+        return reply(kFileSetPriorityResponse, "SetPriority");
     }
-    if (event.Detail == kFileGetPriorityRequest &&
-        memory.Write32(commandBuffer, kFileGetPriorityResponse) &&
-        memory.Write32(commandBuffer + 4U, kResultSuccess) &&
-        memory.Write32(commandBuffer + 8U, fileHandle->Object->FilePriority)) {
-        state.r[0] = kResultSuccess;
-        event.Name += ":GetPriority";
-        event.Handled = true;
-        mSvcEvents.push_back(std::move(event));
-        return {NativeA32HostAction::Resume};
+    if (event.Detail == kFileGetPriorityRequest) {
+        if (!memory.Write32(commandBuffer + 8U, file.FilePriority))
+            return fail(kFsBackendFailure, "reply-write-failed");
+        return reply(kFileGetPriorityResponse, "GetPriority");
     }
     if (event.Detail == kFileOpenLinkFileRequest) {
         // Another session on the same file. A file session here holds no
@@ -279,47 +269,52 @@ NativeA32HostResult NativeA32CtrHostServices::HandleRomFsRequest(
         // the file and its backing stream. The fields are copied before
         // CreateHandle, which may reallocate the handle table.
         auto link = std::make_shared<KernelObject>();
-        link->Type = fileHandle->Object->Type;
-        link->FilePath = fileHandle->Object->FilePath;
-        link->FileOffset = fileHandle->Object->FileOffset;
-        link->FileSize = fileHandle->Object->FileSize;
-        link->FileOpenMode = fileHandle->Object->FileOpenMode;
-        link->FilePriority = fileHandle->Object->FilePriority;
-        link->FileBackend = fileHandle->Object->FileBackend;
-        link->RomFsBacking = fileHandle->Object->RomFsBacking;
+        link->Type = file.Type;
+        link->FilePath = file.FilePath;
+        link->FileOffset = file.FileOffset;
+        link->FileSize = file.FileSize;
+        link->FileOpenMode = file.FileOpenMode;
+        link->FilePriority = file.FilePriority;
+        link->FileBackend = file.FileBackend;
+        link->RomFsBacking = file.RomFsBacking;
         const uint32_t handle = CreateHandle(std::move(link));
-        if (handle != 0U &&
-            memory.Write32(commandBuffer, kFileOpenLinkFileResponse) &&
-            memory.Write32(commandBuffer + 4U, kResultSuccess) &&
-            memory.Write32(commandBuffer + 8U, kMoveHandleDescriptor) &&
-            memory.Write32(commandBuffer + 12U, handle)) {
-            state.r[0] = kResultSuccess;
-            event.Name += ":OpenLinkFile";
-            event.Handled = true;
-            mSvcEvents.push_back(std::move(event));
-            return {NativeA32HostAction::Resume};
+        if (handle == 0U || !memory.Write32(commandBuffer + 8U, kMoveHandleDescriptor) ||
+            !memory.Write32(commandBuffer + 12U, handle))
+            return fail(kFsBackendFailure, "link-handle-failed");
+        return reply(kFileOpenLinkFileResponse, "OpenLinkFile");
+    }
+    if (event.Detail == kFileSetSizeRequest) {
+        uint64_t size = 0U;
+        if (!memory.Read64(commandBuffer + 4U, &size, nullptr))
+            return fail(kInvalidBufferDescriptor, "unreadable-size");
+        if (romfs || (file.FileOpenMode & 2U) == 0U)
+            return fail(kFsInvalidOpenFlags, "open-mode", 0U, size);
+        if (size > static_cast<uint64_t>(std::numeric_limits<std::streamoff>::max()))
+            return fail(kFsOutOfRange, "size-overflow", 0U, size);
+        bool resized = false;
+        if (file.FileBackend) resized = file.FileBackend->Resize(size);
+        else {
+            std::error_code error;
+            std::filesystem::resize_file(file.FilePath, size, error);
+            resized = !error;
         }
+        if (!resized) return fail(kFsBackendFailure, "backend-resize-failed", 0U, size);
+        file.FileSize = size;
+        return reply(kFileSetSizeResponse, "SetSize");
     }
-    if (event.Detail == kFileFlushRequest &&
-        memory.Write32(commandBuffer, kFileFlushResponse) &&
-        memory.Write32(commandBuffer + 4U, kResultSuccess)) {
-        state.r[0] = kResultSuccess;
-        event.Name += ":Flush";
-        event.Handled = true;
-        mSvcEvents.push_back(std::move(event));
-        return {NativeA32HostAction::Resume};
+    if (event.Detail == kFileFlushRequest) {
+        // RootedFilesystemBackendV1::Write flushes before returning success.
+        return reply(kFileFlushResponse, "Flush");
     }
-    if (event.Detail == kFileCloseRequest &&
-        memory.Write32(commandBuffer, kFileCloseResponse) &&
-        memory.Write32(commandBuffer + 4U, kResultSuccess)) {
-        state.r[0] = kResultSuccess;
-        event.Name += ":Close";
-        event.Handled = true;
-        mSvcEvents.push_back(std::move(event));
-        return {NativeA32HostAction::Resume};
+    if (event.Detail == kFileCloseRequest) {
+        // FSFILE_Close releases the backing stream. svcCloseHandle separately
+        // releases the session handle; keep it valid until that SVC arrives.
+        file.FileBackend.reset();
+        file.RomFsBacking.reset();
+        file.FileClosed = true;
+        return reply(kFileCloseResponse, "Close");
     }
-    mSvcEvents.push_back(std::move(event));
-    return {NativeA32HostAction::Wait};
+    return fail(kFsNotImplemented, "unsupported-file-command");
 }
 
 // SendSyncRequest on a client session of fs:USER.
@@ -327,6 +322,14 @@ NativeA32HostResult NativeA32CtrHostServices::HandleFsRequest(
     oot3d::recomp::a32::GuestState& state, NativeA32Memory& memory,
     NativeA32HostContext& context, const std::optional<std::string>& sessionType,
     uint32_t commandBuffer, NativeA32CtrSvcEvent event) {
+    // Validate before opening, creating, deleting, or resizing host files.
+    const uint32_t replyBytes = event.Detail == kFsOpenFileRequest ||
+                                event.Detail == kFsOpenFileDirectlyRequest ||
+                                event.Detail == kFsOpenArchiveRequest ? 16U : 8U;
+    if (!memory.IsWritable(commandBuffer, replyBytes)) {
+        return FailFsRequest(state, memory, commandBuffer, sessionType, event,
+                             kFsBackendFailure, "unwritable-command-buffer");
+    }
     if (event.Detail == kFsInitializeRequest) {
         uint32_t descriptor = 0;
         if (memory.Read32(commandBuffer + 4U, &descriptor) &&
@@ -426,6 +429,14 @@ NativeA32HostResult NativeA32CtrHostServices::HandleFsRequest(
                                      (mConfig.RomFsImageSize != 0U &&
                                       (mConfig.Filesystem != nullptr ||
                                        !mConfig.RomFsImagePath.empty())));
+            if (!requestsRomFs) {
+                return FailFsRequest(state, memory, commandBuffer, sessionType, event,
+                                     kFsInvalidPath, "unsupported-romfs-path");
+            }
+            if (!opensRomFs) {
+                return FailFsRequest(state, memory, commandBuffer, sessionType, event,
+                                     0xC8804464U, "romfs-unavailable");
+            }
             if (opensRomFs) {
                 auto file = std::make_shared<KernelObject>();
                 file->Type = "client_session:file:romfs";
@@ -477,6 +488,8 @@ NativeA32HostResult NativeA32CtrHostServices::HandleFsRequest(
                 if (handle != 0U) {
                     CloseHandle(handle);
                 }
+                return FailFsRequest(state, memory, commandBuffer, sessionType, event,
+                                     kFsBackendFailure, "romfs-open-failed");
             }
         }
     }
@@ -567,10 +580,13 @@ NativeA32HostResult NativeA32CtrHostServices::HandleFsRequest(
                 });
             const auto relativePath = DecodeArchiveRelativePath(
                 memory, pathType, pathSize, pathAddress);
-            uint32_t result = kFsInvalidArchiveHandle;
+            uint32_t result = archive == mArchives.end() ? kFsInvalidArchiveHandle : kFsInvalidPath;
             if (archive != mArchives.end() &&
                 relativePath.has_value()) {
-                if (mConfig.Filesystem != nullptr) {
+                result = kFsBackendFailure;
+                if (archive->Id != kFsSaveDataArchiveId) result = kFsCommandNotAllowed;
+                else if (fileSize > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) result = kFsOutOfRange;
+                else if (mConfig.Filesystem != nullptr) {
                     const std::string logicalPath =
                         relativePath->generic_string();
                     std::shared_ptr<NativeA32CtrFile> existing;
@@ -621,6 +637,11 @@ NativeA32HostResult NativeA32CtrHostServices::HandleFsRequest(
                     }
                 }
             }
+            if (result != kResultSuccess && result != kFsFileAlreadyExists) {
+                event.Name += ":CreateFile:" + DescribeLowPath(memory, pathType, pathSize, pathAddress);
+                return FailFsRequest(state, memory, commandBuffer, sessionType, event,
+                                     result, "create-file-failed", 0U, fileSize);
+            }
             if (memory.Write32(commandBuffer, kFsCreateFileResponse) &&
                 memory.Write32(commandBuffer + 4U, result)) {
                 state.r[0] = kResultSuccess;
@@ -666,10 +687,11 @@ NativeA32HostResult NativeA32CtrHostServices::HandleFsRequest(
                 });
             const auto relativePath = DecodeArchiveRelativePath(
                 memory, pathType, pathSize, pathAddress);
-            uint32_t result = kFsInvalidArchiveHandle;
+            uint32_t result = archive == mArchives.end() ? kFsInvalidArchiveHandle : kFsInvalidPath;
             uint32_t fileSession = 0;
             if (archive != mArchives.end() &&
                 relativePath.has_value()) {
+                result = kFsFileNotFound;
                 const bool establishWritableSaveFile =
                     archive->Id == kFsSaveDataArchiveId &&
                     (openMode & 2U) != 0U;
@@ -808,6 +830,12 @@ NativeA32HostResult NativeA32CtrHostServices::HandleFsRequest(
                 }
                 mArchives.pop_back();
             }
+            return FailFsRequest(state, memory, commandBuffer, sessionType, event,
+                                 kFsBackendFailure, "save-root-open-failed");
+        }
+        if (validStaticBuffer) {
+            return FailFsRequest(state, memory, commandBuffer, sessionType, event,
+                                 kFsInvalidPath, "unsupported-archive-path");
         }
     }
     if (event.Detail == kFsControlArchiveRequest) {
@@ -898,8 +926,13 @@ NativeA32HostResult NativeA32CtrHostServices::HandleFsRequest(
             }
         }
     }
-    mSvcEvents.push_back(std::move(event));
-    return {NativeA32HostAction::Wait};
+    const uint32_t id = event.Detail >> 16U;
+    const bool knownCommand = id == 0x801U || id == 0x802U || id == 0x803U ||
+                              id == 0x804U || id == 0x808U || id == 0x80CU ||
+                              id == 0x80DU || id == 0x80EU;
+    return FailFsRequest(state, memory, commandBuffer, sessionType, event,
+                         knownCommand ? kInvalidBufferDescriptor : kFsNotImplemented,
+                         knownCommand ? "malformed-fs-request" : "unsupported-fs-command");
 }
 
 } // namespace Oot3dNativeGame

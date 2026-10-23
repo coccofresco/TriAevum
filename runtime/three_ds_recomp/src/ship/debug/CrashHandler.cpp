@@ -352,7 +352,8 @@ void CrashHandler::PrintStack(CONTEXT* ctx) {
         }
         symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
         symbol->MaxNameLen = MAX_SYM_NAME;
-        SymFromAddr(process, (ULONG64)stack.AddrPC.Offset, &displacement, symbol);
+        displacement = 0;
+        const bool named = SymFromAddr(process, (ULONG64)stack.AddrPC.Offset, &displacement, symbol) != FALSE;
 #if defined(_M_AMD64)
         IMAGEHLP_LINE64 line;
         line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
@@ -369,21 +370,32 @@ void CrashHandler::PrintStack(CONTEXT* ctx) {
             sprintf_s(lineNumberStr, sizeof(lineNumberStr), " Line: %d", line.LineNumber);
             AppendLine(lineNumberStr);
         } else {
-            WRITE_VAR_M("    ", symbol->Name);
-            char addrString[20];
-            sprintf_s(addrString, std::size(addrString), "0x%016llX", symbol->Address);
-            WRITE_VAR_M("(", addrString);
-            AppendStr(")");
+            // Without line information a frame is its module and the offset
+            // into it (resolvable against that build's symbols later), plus
+            // the nearest exported name when there is one. A failed symbol
+            // lookup leaves the previous frame's name behind, so it is only
+            // printed when this frame's lookup succeeded.
             hModule = nullptr;
             GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                               (LPCTSTR)(stack.AddrPC.Offset), &hModule);
-
+            char frameString[MAX_PATH + 96];
             if (hModule != nullptr) {
                 GetModuleFileNameA(hModule, module, sizeof(module));
-                WRITE_VAR_LINE_M(" in ", module);
+                sprintf_s(frameString, std::size(frameString), "    %s+0x%llX", module,
+                          static_cast<unsigned long long>(stack.AddrPC.Offset -
+                                                          reinterpret_cast<DWORD64>(hModule)));
             } else {
-                WRITE_VAR_LINE_M(" in ", "???");
+                sprintf_s(frameString, std::size(frameString), "    ???!0x%016llX",
+                          static_cast<unsigned long long>(stack.AddrPC.Offset));
             }
+            AppendStr(frameString);
+            if (named) {
+                char nameString[MAX_SYM_NAME + 32];
+                sprintf_s(nameString, std::size(nameString), " (%s+0x%llX)", symbol->Name,
+                          static_cast<unsigned long long>(displacement));
+                AppendStr(nameString);
+            }
+            AppendLine("");
         }
     }
     PrintCommon();

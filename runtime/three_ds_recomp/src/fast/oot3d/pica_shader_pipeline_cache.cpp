@@ -144,12 +144,11 @@ PicaShaderInstrumentationFeature ResolvePicaDrawInstrumentationFeatures(
         !HasPicaShaderInstrumentationFeature(features, PicaShaderInstrumentationFeature::PbrMaterial)) {
         features |= PicaShaderInstrumentationFeature::Toon;
     }
-    // Temporal instrumentation replays the previous vertex program, which only
-    // the typed frontend program provides. A draw without one (a frame
-    // restored from a visual savestate) keeps the camera's motion only.
-    if (sceneDraw && request.TemporalMotionEnabled &&
-        request.TemporalVertexProgram.ValidFor(request.VertexShaderSource)) {
-        features |= PicaShaderInstrumentationFeature::TemporalVertex;
+    // Every scene draw overwrites motion provenance. Missing typed vertex
+    // programs still write invalid/rigid/camera provenance without clip inputs.
+    if (sceneDraw && request.TemporalMotionEnabled) {
+        if (request.TemporalVertexProgram.ValidFor(request.VertexShaderSource))
+            features |= PicaShaderInstrumentationFeature::TemporalVertex;
         features |= PicaShaderInstrumentationFeature::ReactiveMask;
         features |= PicaShaderInstrumentationFeature::RigidMotionGuide;
     }
@@ -366,6 +365,7 @@ PicaShaderPipelineResult BuildInstrumentedVariant(
         surfaceNormalInput,
         request.ReliefTexture,
         AoTextureReliefGain(effects.AoRelief),
+        result.TemporalVertexApplied,
     });
     result.ToonEligibility = fragment.ToonEligibility;
     result.ToonMaterialPath = fragment.ToonMaterialPath;

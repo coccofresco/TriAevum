@@ -4,9 +4,11 @@
 #include "fast/oot3d/grass_world_placement_cache.h"
 
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <future>
+#include <filesystem>
 #include <memory>
 #include <vector>
 
@@ -35,6 +37,9 @@ struct GrassAsyncPlacementRequest {
     std::shared_ptr<const std::vector<uint32_t>> Indices;
     std::shared_ptr<const GrassScalarMask> Mask;
     GrassTextureColorSource ColorSource;
+    // Native renderer already owns the source RGBA; channel/color conversion is
+    // deferred until a disk miss, never required to load baked anchors.
+    uint64_t LazyMaskTexture = 0, LazyColorTexture = 0;
     GrassPlacementRule Rule;
     GrassGenerationSettings Generation;
     uint32_t Budget = 0U;
@@ -46,6 +51,7 @@ struct GrassAsyncPlacementRequest {
     uint32_t MidrangeAdaptiveCapacity = kGrassDefaultAdaptiveClusterCapacity;
     GrassPlacementView PlacementView;
     bool ShadowGrid = false;
+    std::shared_ptr<const GrassOverlaySet> Overlays;
 };
 
 struct GrassPlacementCompletion {
@@ -72,6 +78,7 @@ struct GrassAsyncPlacementStats {
     uint64_t PendingHits = 0U;
     uint64_t Builds = 0U;
     uint64_t Failures = 0U;
+    uint64_t DiskHits = 0, DiskMisses = 0, DiskRejects = 0, DiskWrites = 0;
     size_t Entries = 0U;
     size_t Pending = 0U;
     double BuildMilliseconds = 0.0;
@@ -89,6 +96,12 @@ class GrassAsyncPlacementBuilder final {
 
     [[nodiscard]] GrassAsyncPlacementResult ResolveOrQueue(GrassAsyncPlacementRequest request);
     [[nodiscard]] GrassAsyncPlacementStats Stats() const;
+    void SetCacheDirectory(std::filesystem::path directory);
+    // Batch owner debounces edits. Loads/builds remain immediate; only current,
+    // settled results may publish to disk. A new revision cancels queued writes.
+    void SetPersistenceState(uint64_t revision, bool settled);
+    // How long a built placement must stay in use before it is persisted.
+    void SetDiskSettleDelay(std::chrono::steady_clock::duration delay);
     void Clear();
     void WaitForIdle();
 

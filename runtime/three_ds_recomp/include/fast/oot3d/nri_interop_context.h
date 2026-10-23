@@ -120,6 +120,9 @@ class NriInteropContext final {
     bool CreateOwnedTexture2D(const NriOwnedTexture2DDesc& desc,
                               NriOwnedTexture2D& texture);
     [[nodiscard]] bool OwnsTexture(VkImage image) const;
+    // Nonzero for a live registration; never reused during this context's lifetime,
+    // even if Vulkan recycles an image handle or the device is reinitialized.
+    [[nodiscard]] uint64_t TextureGeneration(VkImage image) const;
     [[nodiscard]] bool DynamicRenderingAvailable() const;
     void DestroyOwnedTexture(VkImage image);
     void ForgetTexture(VkImage image);

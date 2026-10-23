@@ -140,3 +140,169 @@ reports stay local and are not release payloads.
 Run the focused regression suite via `run_grass_outline_tests.ps1`; the product
 suite is `python -m unittest tools.triaevum_release.test_product_graphics_defaults`
 with `TRIAEVUM_PRODUCT_TEST_EXE` pointing at the built runtime.
+
+
+## Round 37: mask and placement cache
+
+2026-10-11. The native capture path memoizes source/mask/neither outcomes; the
+worker persists final placements, including every mask and baked RGB. Details,
+limits and invalidation are in [the overlay cache contract](TRIAEVUM_GRASS_OVERLAY_MASKS.md#round-37-draw-memo-and-final-placement-persistence).
+
+Claude's supplied pre-round baseline (`dc66dad`), throughput, 600 frames with
+180 warmup, play-kokiri Custom settings, all other effects retained:
+
+| Scene | Grass | Frame mean / p95 ms | Pre-backend CPU ms | PICA submit ms |
+| --- | --- | ---: | ---: | ---: |
+| Graveyard 16-21-37 | On | 17.97 / 19.50 | 6.72 | 3.63 |
+| Graveyard | Off | 18.00 / 19.38 | 6.39 | 3.17 |
+| Kokiri night 11-21-57 | On | 29.59 / 31.38 | 7.83 | 4.31 |
+| Kokiri | Off | 26.00 / 27.75 | 7.33 | 3.57 |
+
+No post-round live frame/GPU result is claimed here: Claude owns game runs.
+The roughly 3.6 ms Kokiri difference includes blade vertex/fill/guide/lighting
+cost that placement caching cannot eliminate. No density, shape, distance,
+coverage or shadow quality is reduced.
+
+### Same-method offline comparison
+
+Private Graveyard fixture, Release, isolated run, median of five new-worker
+requests per path, identical request and 490,943 final anchors:
+
+| Full placement request | Before (build, no disk cache) | After (disk hit) |
+| --- | ---: | ---: |
+| Worker completion, including request/key/I/O/validation | 104.016 ms | 29.691 ms |
+| Extraction calls | 1 | 0 |
+| Exact anchor bytes compared | reference | identical |
+
+The final file is 31,455,784 bytes. Saving about 74.3 ms (71.5%) is an offline
+**scene-entry** result, not a per-frame or GPU saving. The fixture uses actual
+room triangles/native samples but assumed TEV/primary values; it does not replace
+live validation. Warm overlay lookup measured 0.554 us, 19 mesh republishes plus
+lookup 3.030 us, empty lookup 0.023 us. These exclude native capture. Source mask
+extraction before/with overlays was 70.963/66.913 ms, 542,260/490,943 roots.
+
+### Expected per-stage changes
+
+| Stage | Warm behavior / expected saving |
+| --- | --- |
+| Eligibility, texture hash, TEV/UV/alpha capture, geometry registry | No calls on a matching memo entry; recover their measured reference cost. |
+| World placement reconstruction | Camera inverses are reused; exact per-draw clip/world rigidity checks and dynamic source shading remain. |
+| Overlay capture total | Signature lookup, clip check and bridge publication remain; the prior ~0.14 ms is not all removable. |
+| Source publication | Same bounded lookup/refresh; no new claim about frontend work outside this boundary. |
+| Placement request/membership/budget lookup | Remain; warm final placement avoids extraction as before. Disk saves repeat scene-entry bakes. |
+| Selection | Existing exact view cache remains; moving views still select. |
+| Visible-index upload | Reused per fenced frame slot for an unchanged selection; saves `visible roots * 4` bytes/upload. |
+| GPU compaction | Zero dispatch only for the tested actor-free, resting, non-motion case; normal gameplay retains interaction history. |
+| Blade draws, dynamic native lighting, grass shadow receivers | No promised reduction; all remain dynamic. Grass is not added as a native shadow-map caster. |
+
+### One-line frame telemetry
+
+`TRIAEVUM_GRASS_PROFILE=1` opts into CPU timers and Vulkan timestamp scopes. Off
+means no new clock reads, profile allocations, locks, log output or GPU query
+commands (only disabled guards). Existing renderer telemetry is unchanged.
+`TRIAEVUM_GRASS_DRAW_MEMO=0` forces the cold capture path while still recording
+repeated signatures. `TRIAEVUM_GRASS_DISK_CACHE=0` disables disk loads/writes;
+it does not disable the pre-existing resident placement cache. These switches
+are process-level diagnostics, not product/F1 settings.
+
+`stderr.log` contains one `TRIAEVUM_GRASS_PROFILE frame=...` line per completed
+sample, read two frames later without waiting for GPU completion. Final two
+frames lack resolved samples. Missing GPU scopes are `-1`, never assumed zero.
+CPU fields sum all invocations; GPU scopes follow the existing profiler's one
+query pair per scope per frame, so use the ordinary single scene-grass pass for
+attribution, not multi-target lab views.
+
+- `<stage>_ms`, `<stage>_n`: `source`, `overlay`, `memo`, `eligibility`,
+  `texture_hash`, `tev`, `geometry`, `world`, `publish`, `requests`, `placement`,
+  `selection`, `compaction`, `lighting`, `shadows`, `draw`, `prepare`,
+  `interaction`, `upload`. `memo` includes key building and live refresh.
+  Eligibility has separate early and rule/twin scopes. Inclusive scopes nest;
+  do not sum source/overlay/prepare with their children, or CPU with GPU.
+- `memo_hit`, `memo_miss`, `neither_hit`, `signature_repeat`, `clip_same`,
+  `clip_changed`, `world_invalidations`. Signature repeat counts identical
+  non-camera inputs even with memo reuse disabled. Clip counters distinguish
+  unchanged/moving captures when reuse is on; world changes still invalidate.
+- `placement_hit`, `placement_miss`, `disk_hit`, `disk_miss`, `disk_reject`,
+  `disk_write`, `worker_ms`; worker time includes load/build/write and can overlap
+  across workers. Use the first frames for scene-entry attribution, and exclude
+  warmup for steady-state comparisons.
+- `selection_hit`, `selection_miss`, `selection_upload_reuse`, `compaction_reuse`.
+- `gpu_total_ms`, `gpu_compaction_ms`, `gpu_blades_ms`, `gpu_shadows_ms`,
+  `gpu_lighting_ms`. Shadows measure the grass shadow-receiver grid; lighting
+  measures its native surface-lighting producer. Neither is a blade-mask sample.
+
+### Exact live commands (Claude)
+
+The checked local coordinator script uses the same profile, savestates, cache
+root and `frames=600 warmup=180 diagnostics=true timeout=240` arguments as the
+supplied baseline. It makes fresh output directories; the benchmark tool makes
+private config/save copies. It does not modify play-kokiri. The moving timeline
+walks forward/right/left during frames 180-599 and is identical for both variants.
+Run each pair sequentially, preferably interleaved over at least three repeats:
+
+```powershell
+$run = 'I:/_triaevum_work/contact-shadows/coord/round37-benchmark.ps1'
+& $run -Kind profile -Variant reference -Motion static
+& $run -Kind profile -Variant cached -Motion static
+& $run -Kind profile -Variant reference -Motion moving
+& $run -Kind profile -Variant cached -Motion moving
+# A second cached process should report disk hits at scene entry.
+& $run -Kind profile -Variant cached -Motion static
+# Compare final frame capacity without the new instrumentation overhead.
+& $run -Kind throughput -Variant reference -Motion static
+& $run -Kind throughput -Variant cached -Motion static
+& $run -Kind throughput -Variant reference -Motion moving
+& $run -Kind throughput -Variant cached -Motion moving
+```
+
+`reference` is the same binary's repeated-capture path with persistence disabled,
+not an assertion that every cold-start side effect equals the old executable.
+For the exact historical baseline, pass the retained `dc66dad` executable with
+`-Exe` to a throughput run; do not substitute another settings snapshot.
+To summarize a returned output directory:
+
+```powershell
+& 'C:/ProgramData/miniconda3/python.exe' `
+  'I:/_triaevum_work/contact-shadows/coord/round37-profile-summary.py' `
+  '<returned-output-directory>/stderr.log' 180
+```
+
+Live acceptance: matching warm draws should produce hits with zero cold
+`texture_hash_n`/`tev_n`/`geometry_n`; moving-camera clip counts should change
+without rebaking. Inspect world invalidations if that fails. Restart the same
+view, confirm `disk_hit`, then edit source channel/levels/rects/twin rule/slope/
+normal offset and overlay mode/strength in F1. Confirm a rebuild and changed
+coverage immediately on the next grass batch; restore settings and confirm the
+original distribution. Re-enter the room, reload a texture pack, and verify
+native-mask policy and no stale placements. Keep F1 closed for timing; measure
+its requested histograms separately.
+
+For deterministic grass-On comparison, run the same two capture commands with
+no movement, and optionally repeat both with `-Motion moving`:
+
+```powershell
+& $run -Kind capture -Variant reference -Motion static
+& $run -Kind capture -Variant cached -Motion static
+```
+
+Both restore the same state and capture native frame 599. Compare RGB and grass
+coverage at the same render size, visual clock and native frame. Acceptance on
+the same GPU/compiler is **zero changed RGB pixels (tolerance 0)**. Record any
+mismatch rather than relaxing density/coverage. Captures/validation are separate
+from throughput results. Also compare the original executable at that exact
+frame before claiming full pre/post live parity.
+
+### Verification in this round
+
+`TriAevum.exe`, foundation tests, actual F1 smoke and Vulkan grass-motion test
+built. Foundation: **386 passed**, one optional private benchmark skipped in the
+generic run; that fixture passed separately. Actual F1 Masks widgets: **489
+assertions passed**. Vulkan on RTX 3060: unchanged output bytes and matched
+color/material/motion images identical; selection/static/actor/field/motion/reset
+invalidation and existing bend-history/reprojection tests passed. The test now
+uses the production shader resolver; missing built-in grass vertex/fragment
+artifacts were compiled from the current maintained source, as runtime fallback
+does. No shader source or packaged binary was changed by this round.
+
+Logs and exact offline reproduction are in the round37 coordinator report.
+No game runs, git commands, or edits to play-kokiri were performed by Codex.

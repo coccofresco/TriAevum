@@ -262,6 +262,7 @@ bool WithOot3dPicaVulkanDrawView(
         plan.Composition.NativeActorGeometry,
         plan.Composition.NativeActorIdentity,
         plan.Composition.IsolatedLighting,
+        plan.Composition.TemporalIdentity,
     };
     draw.LightBinding = overrides != nullptr && overrides->LightBinding != nullptr
         ? *overrides->LightBinding : plan.LightBinding;
@@ -462,15 +463,12 @@ bool PrepareOot3dPicaVulkanSequenceDraw(
     const Oot3dPicaVulkanDrawPlan& plan, std::string* error,
     uint64_t renderTargetNamespace,
     const Oot3dPicaVulkanDrawOverrides* overrides) {
-    // An alpha-tested caster runs its native alpha test in the map, so its
-    // preparation carries the fragment uniforms and textures; others carry
-    // the vertex side only.
-    const auto& fragmentUniforms = overrides != nullptr && overrides->FragmentUniforms != nullptr
-                                       ? *overrides->FragmentUniforms
-                                       : plan.FragmentShader.Uniforms;
-    const bool alphaTested = DecodeOot3dPicaAlphaTest(fragmentUniforms.FragmentControl[1]).Enabled;
+    // Preparation consumers inspect more than shadow alpha testing: grass
+    // classifies explicit/twin sources and evaluates alpha-blended overlays.
+    // Preserve the same texture identities, payloads and TEV/uniform state as
+    // submission, including opaque and non-alpha-tested transparent draws.
     return WithOot3dPicaVulkanDrawView(
-        plan, error, renderTargetNamespace, overrides, nullptr, alphaTested,
+        plan, error, renderTargetNamespace, overrides, nullptr, true,
         [&](const Oot3d::Renderer::PicaDrawView& draw) {
             return renderingApi.PreparePicaSequenceDraw(draw, error);
         });

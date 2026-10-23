@@ -16,7 +16,13 @@ namespace {
 constexpr size_t kMaximumPipelineCount = 65536U;
 constexpr size_t kMaximumVertexBindings = 16U;
 constexpr size_t kMaximumVertexAttributes = 16U;
-constexpr uint32_t kAllInstrumentationFeatures = 0x3fffU;
+// A fixed 0x3fff once dropped every recipe using a later feature (material
+// baseline, texture relief, point shadows, face normals) without a trace.
+constexpr uint32_t kAllInstrumentationFeatures = kPicaShaderInstrumentationFeatureBits;
+// Applied by the instrumentation without being requested: an opaque guide
+// writer's neutral material baseline. Every other applied feature is requested.
+constexpr uint32_t kAppliedOnlyInstrumentationFeatures =
+    static_cast<uint32_t>(PicaShaderInstrumentationFeature::MaterialGuideBaseline);
 
 void SetError(std::string* error, std::string message) {
     if (error != nullptr) {
@@ -572,7 +578,7 @@ bool PicaGraphicsPipelineManifestEntry::Valid() const noexcept {
         (AttachmentRequirementsKey &
          ~static_cast<uint8_t>(kExtendedPicaAuxiliaryOutputs)) != 0U ||
         (requestedFeatures & ~kAllInstrumentationFeatures) != 0U ||
-        (appliedFeatures & ~requestedFeatures) != 0U ||
+        (appliedFeatures & ~(requestedFeatures | kAppliedOnlyInstrumentationFeatures)) != 0U ||
         (Domain == PicaGraphicsPipelineDomain::Canonical &&
          appliedFeatures != 0U) ||
         (Domain == PicaGraphicsPipelineDomain::Instrumented &&

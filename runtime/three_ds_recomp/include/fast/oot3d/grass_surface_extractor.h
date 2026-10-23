@@ -9,6 +9,7 @@
 #include <vector>
 
 namespace Fast::Oot3d {
+struct GrassOverlaySet;
 
 struct GrassPlacementView {
     bool Enabled = false;
@@ -41,6 +42,7 @@ struct GrassSourceSurface {
     std::span<const uint32_t> Indices;
     GrassPlacementView PlacementView;
     std::span<const std::array<uint32_t, 3>> TriangleSources;
+    std::shared_ptr<const GrassOverlaySet> Overlays;
 };
 
 struct GrassAnchor {

@@ -53,6 +53,29 @@ bool SameEffectTransientAllocation(
     return true;
 }
 
+bool EffectTransientAllocationCovers(
+    const EffectTransientAllocationPlan& cached,
+    const EffectTransientAllocationPlan& plan) noexcept {
+    if (!cached.Complete() || !plan.Complete() || plan.ResourceCount() == 0U) return false;
+    std::array<size_t, EffectTransientAllocationPlan::kCapacity> cachedSlots{};
+    for (size_t index = 0U; index < plan.ResourceCount(); ++index) {
+        const auto& resource = plan.ResourceAt(index);
+        const auto* found = cached.Find(resource.Requirement.Resource);
+        if (found == nullptr || !SameRequirement(found->Requirement, resource.Requirement) ||
+            found->StorageClass != resource.StorageClass) {
+            return false;
+        }
+        cachedSlots[index] = found->Slot;
+        for (size_t other = 0U; other < index; ++other) {
+            if (plan.ResourceAt(other).Slot != resource.Slot &&
+                cachedSlots[other] == found->Slot) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 EffectTransientConfigurationCache::Selection
 EffectTransientConfigurationCache::Select(
     const EffectTransientAllocationPlan& plan) const noexcept {
@@ -61,6 +84,15 @@ EffectTransientConfigurationCache::Select(
             return {index, true, false};
         }
     }
+    // The most recently used configuration whose images cover the plan.
+    size_t covering = kCapacity;
+    for (size_t index = 0U; index < kCapacity; ++index) {
+        if (mOccupied[index] && EffectTransientAllocationCovers(mPlans[index], plan) &&
+            (covering == kCapacity || mLastUse[index] > mLastUse[covering])) {
+            covering = index;
+        }
+    }
+    if (covering != kCapacity) return {covering, true, false, true};
     for (size_t index = 0U; index < kCapacity; ++index) {
         if (!mOccupied[index]) return {index, false, false};
     }
@@ -76,6 +108,11 @@ void EffectTransientConfigurationCache::Commit(
     if (index >= kCapacity) return;
     mPlans[index] = plan;
     mOccupied[index] = true;
+    mLastUse[index] = ++mClock;
+}
+
+void EffectTransientConfigurationCache::Touch(size_t index) noexcept {
+    if (index >= kCapacity || !mOccupied[index]) return;
     mLastUse[index] = ++mClock;
 }
 

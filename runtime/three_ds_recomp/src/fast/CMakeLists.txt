@@ -84,9 +84,11 @@ set(Source_Files__Renderer3dsPica
     renderer3ds/pica_semantic_scene_view.cpp
     renderer3ds/pica_vertex_surface.cpp
     renderer3ds/pica_surface_lighting.cpp
+    renderer3ds/pica_surface_emission.cpp
     renderer3ds/pica_pbr_shading.cpp
     renderer3ds/pica_pbr_seams.cpp
     renderer3ds/pica_pbr_seam_shader.cpp
+    renderer3ds/room_shadow_shell.cpp
     renderer3ds/virtual_shadow_map.cpp
     renderer3ds/point_shadow_map.cpp
     renderer3ds/pica_shadow_geometry.cpp
@@ -172,6 +174,7 @@ if(NOT THREE_DS_RECOMP_ENABLE_VULKAN)
     list(REMOVE_ITEM Source_Files__Oot3dRenderer
         "oot3d/pica_nri_pipeline_state.cpp"
         "oot3d/pica_pipeline_preparation.cpp"
+        "oot3d/pica_builtin_fragment_families.cpp"
         "oot3d/pica_guide_sampling_barriers.cpp")
 endif()
 source_group("oot3d" FILES ${Source_Files__Oot3dRenderer})

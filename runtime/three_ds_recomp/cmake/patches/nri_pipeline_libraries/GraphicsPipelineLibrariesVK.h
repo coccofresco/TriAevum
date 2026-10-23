@@ -1,6 +1,7 @@
 // TriAevum NRI integration. Generic Vulkan state, no title or asset identities.
 #pragma once
 #include <vulkan/vulkan.h>
+#include "PipelineLibraryMemoryVK.h"
 #include <array>
 #include <algorithm>
 #include <chrono>
@@ -258,8 +259,10 @@ class GraphicsPipelineLibraries {
             if (p == 2 || p == 3) part.pMultisampleState = &ms;
             if (p == 3) part.pColorBlendState = &blend;
             VkPipeline handle = VK_NULL_HANDLE;
+            const auto rssBefore = PipelineLibraryResidentBytes();
             const auto start = Now();
             const auto result = create(device, cache, 1, &part, allocator, &handle);
+            const auto rssAfter = PipelineLibraryResidentBytes();
             const auto elapsed = Now() - start;
             if (result != VK_SUCCESS && handle) { destroy(device, handle, allocator); handle = VK_NULL_HANDLE; }
             lock.lock();
@@ -271,8 +274,9 @@ class GraphicsPipelineLibraries {
             lock.unlock();
             mPartReady.notify_all();
             if (result == VK_SUCCESS && (p == 1 || p == 2))
-                std::fprintf(stderr, "TRIAEVUM_NRI_GPL_SHADER_PART_CREATED part=%zu ms=%.1f\n", p,
-                             static_cast<double>(elapsed) / 1.0e6);
+                std::fprintf(stderr, "TRIAEVUM_NRI_GPL_SHADER_PART_CREATED part=%zu ms=%.1f rss_before=%llu rss_after=%llu\n", p,
+                             static_cast<double>(elapsed) / 1.0e6,
+                             static_cast<unsigned long long>(rssBefore), static_cast<unsigned long long>(rssAfter));
         }
         // Parts other threads create: wait for those alone.
         VkResult result = VK_SUCCESS;

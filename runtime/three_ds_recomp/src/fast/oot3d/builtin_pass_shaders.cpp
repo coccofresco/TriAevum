@@ -16,6 +16,7 @@
 #include "fast/oot3d/smaa_1x.h"
 #include "fast/oot3d/temporal_aa.h"
 #include "fast/oot3d/upscaler_guides.h"
+#include "fast/oot3d/upscaler_orientation.h"
 #include "fast/oot3d/native_ui_overlay.h"
 #include "fast/renderer/diffuse_gi_pass_shader.h"
 #include "fast/renderer/gtao_shader.h"
@@ -39,6 +40,8 @@ std::vector<BuiltinPassShader> BuildBuiltinPassShaders() {
         {"oot3d_motion_vectors.comp", Compute, BuildCameraMotionComputeShader(), {}},
         {"oot3d_temporal_aa.comp", Compute, BuildTemporalAaComputeShader(), {}},
         {"oot3d_upscaler_guides.comp", Compute, BuildUpscalerGuideResampleShader(), {}},
+        {"oot3d_upscaler_upright_inputs.comp", Compute, BuildUpscalerUprightInputShader(), {}},
+        {"oot3d_upscaler_upright_output.comp", Compute, BuildUpscalerUprightOutputShader(), {}},
         {"oot3d_native_ui_overlay.comp", Compute, BuildNativeUiOverlayShader(), {}},
         {"oot3d_scene_composite.comp", Compute, BuildSceneCompositeComputeShader(), {}},
         {"oot3d_smaa_edges.comp", Compute, BuildSmaa1xComputeShader(Smaa1xStage::EdgeDetection), {}},

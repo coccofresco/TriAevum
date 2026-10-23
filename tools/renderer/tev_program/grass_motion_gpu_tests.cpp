@@ -1,4 +1,4 @@
-// Grass motion vectors with the shipped SPIR-V: the compactor keeps each
+// Grass motion vectors with the production shader resolver (built-in or compiled): the compactor keeps each
 // blade's previous interaction bend, and a blade point moved by its motion
 // vector lands where the previous frame drew the same point.
 #include "fast/oot3d/grass_draw_state.h"
@@ -401,7 +401,7 @@ class Harness {
     }
 
     VkShaderModule Module(std::span<const uint32_t> words) {
-        Require(!words.empty(), "grass shader has no built-in artifact");
+        Require(!words.empty(), "grass shader resolution failed");
         VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
         info.codeSize = words.size() * sizeof(uint32_t);
         info.pCode = words.data();
@@ -444,10 +444,10 @@ class Harness {
         pipelineLayout.pPushConstantRanges = &push;
         Check(vkCreatePipelineLayout(mDevice, &pipelineLayout, nullptr, &mPipelineLayout));
 
-        const auto vertex = Module(Fast::Renderer::FindBuiltinPassShaderSpirv(
-            BuildGrassVertexShader(), SpirvStage::Vertex));
-        const auto fragment = Module(Fast::Renderer::FindBuiltinPassShaderSpirv(
-            BuildGrassFragmentShader(), SpirvStage::Fragment, {{"GRASS_AUXILIARY_OUTPUTS", "1"}}));
+        Fast::Renderer::CachedPassShaderCompiler shaders;
+        const auto vertex = Module(shaders.Resolve(BuildGrassVertexShader(), SpirvStage::Vertex, "grass_test.vert"));
+        const auto fragment = Module(shaders.Resolve(BuildGrassFragmentShader(), SpirvStage::Fragment,
+                                                     "grass_test.frag", { { "GRASS_AUXILIARY_OUTPUTS", "1" } }));
         const std::array<VkPipelineShaderStageCreateInfo, 2> stages{{
             {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0U, VK_SHADER_STAGE_VERTEX_BIT, vertex,
              "main", nullptr},
@@ -815,6 +815,70 @@ void TestBendHistory(Harness& harness) {
     std::cout << "bend history: consecutive, repeated, gap, reset and static-set cases passed\n";
 }
 
+void TestIdleCompactionReuse(Harness& harness) {
+    GrassGpuInstanceCompactor compactor;
+    Fast::Renderer::CachedPassShaderCompiler shaders;
+    Scene scene;
+    Require(compactor.Initialize(harness.Device().Physical, harness.Device().Device, shaders),
+            compactor.UnavailableReason().c_str());
+    uint64_t frame = 500, selection = 1;
+    const auto compact = [&](uint32_t slot, bool allow = true, std::span<const GrassInteractor> actors = {}) {
+        GrassGpuInstanceCompactionResult result;
+        harness.Submit([&](VkCommandBuffer command) {
+            Require(compactor.Compact({ command, slot, frame++, scene.StaticRevision, scene.Anchors, scene.Visible,
+                                        &scene.Field, actors, &scene.Settings, selection, allow },
+                                      result),
+                    "idle compaction failed");
+        });
+        return result;
+    };
+    const auto first = compact(0);
+    const auto second = compact(1);
+    Require(!first.Reused && !second.Reused, "each fenced slot must be initialized");
+    const auto original = harness.ReadWords(first.InstanceBuffer, kBlades * uint32_t(sizeof(GrassInstance) / 4));
+    const SceneFrame view{ 1, { { 0, 15, 70 }, { 0, 15, 0 } }, 10, {}, {}, {} };
+    const auto before = harness.Draw(first.InstanceBuffer, kBlades, first.PreviousBendBuffer,
+                                     BuildRecord(view, nullptr, false), Push(view, 1));
+    auto hit = compact(0);
+    Require(hit.Reused && hit.SelectionUploadReused && hit.DynamicUploadedBytes == 0,
+            "idle exact selection must reuse GPU data");
+    Require(original == harness.ReadWords(hit.InstanceBuffer, kBlades * uint32_t(sizeof(GrassInstance) / 4)),
+            "cached instance payload must be bit identical");
+    const auto after = harness.Draw(hit.InstanceBuffer, kBlades, hit.PreviousBendBuffer,
+                                    BuildRecord(view, nullptr, false), Push(view, 1));
+    Require(before.Color == after.Color && before.Material == after.Material && before.Motion == after.Motion,
+            "cached blade capture must be pixel identical");
+    auto dynamic = compact(0, false);
+    Require(!dynamic.Reused && dynamic.SelectionUploadReused,
+            "motion vectors retain their per-frame bend-history dispatch");
+    ++selection;
+    std::reverse(scene.Visible.begin(), scene.Visible.end());
+    auto changed = compact(0);
+    Require(!changed.Reused && !changed.SelectionUploadReused, "selection edit invalidates both caches");
+    ++scene.StaticRevision;
+    changed = compact(0);
+    Require(!changed.Reused, "static edit invalidates compacted payload");
+    GrassInteractor actor;
+    actor.Position = actor.PreviousPosition = { 0, 0, 0 };
+    actor.Radius = 10;
+    actor.HalfHeight = 20;
+    actor.Velocity = { 300, 0, 0 };
+    const std::array<GrassInteractor, 1> actors{ actor };
+    changed = compact(0, true, actors);
+    Require(!changed.Reused, "actors cannot reuse idle output");
+    scene.Field.UpdateActors(1.F / 30, scene.Settings, actors);
+    Require(!scene.Field.AtRest(), "interaction fixture must be active");
+    changed = compact(1);
+    Require(!changed.Reused, "a relaxing interaction field cannot reuse idle output");
+    scene.Field.Reset();
+    compactor.ResetHistory();
+    changed = compact(0);
+    Require(!changed.Reused && !changed.SelectionUploadReused, "reset invalidates GPU cache");
+    compactor.Shutdown();
+    std::cout << "idle compaction: exact GPU payload/capture, selection/static/actor/field/motion/reset invalidation "
+                 "passed\n";
+}
+
 } // namespace
 
 int main() {
@@ -824,6 +888,7 @@ int main() {
         Gpu gpu(features, VK_API_VERSION_1_2);
         {
             Harness harness(gpu);
+            TestIdleCompactionReuse(harness);
             TestBendHistory(harness);
             TestBladeMotion(harness, 2U);
             TestBladeMotion(harness, 1U);

@@ -70,6 +70,8 @@ endif()
 target_include_directories(three_ds_recomp_runtime
     PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${INCLUDE_DIR} ${ADDITIONAL_LIB_INCLUDES}
+    # The interface of the separately licensed iMMERSE module (MIT).
+    ${CMAKE_CURRENT_SOURCE_DIR}/../module_interface
 )
 
 #=================== Linking ===================
@@ -189,13 +191,6 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
     target_link_libraries(three_ds_recomp_runtime PUBLIC Vulkan::Vulkan PRIVATE three_ds_recomp_shaderc)
     if(THREE_DS_RECOMP_ENABLE_NRI)
         target_link_libraries(three_ds_recomp_runtime PRIVATE NRI)
-        if(THREE_DS_RECOMP_NGX_INCLUDE_DIR)
-            target_include_directories(three_ds_recomp_runtime PRIVATE
-                "${THREE_DS_RECOMP_NGX_INCLUDE_DIR}")
-            target_compile_definitions(three_ds_recomp_runtime PRIVATE
-                ENABLE_OOT3D_NGX
-                OOT3D_NGX_RUNTIME_VERSION="${THREE_DS_RECOMP_NGX_VERSION}")
-        endif()
     endif()
     if(THREE_DS_RECOMP_ENABLE_SSSR)
         target_link_libraries(three_ds_recomp_runtime PRIVATE
@@ -216,9 +211,16 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
         target_link_libraries(three_ds_recomp_runtime PRIVATE oot3d_cacao)
         target_compile_definitions(three_ds_recomp_runtime PRIVATE ENABLE_OOT3D_CACAO)
     endif()
-    # The iMMERSE module is under its own licence (fast/immerse/LICENSE.md).
+    # The iMMERSE module is under its own licence (fast/immerse/LICENSE.md):
+    # a separate shared library the runtime loads when it is installed.
     if(THREE_DS_RECOMP_ENABLE_IMMERSE)
         include(${CMAKE_CURRENT_SOURCE_DIR}/fast/immerse/immerse.cmake)
+    endif()
+    # The DLSS module links NVIDIA's NGX SDK under NVIDIA's licence
+    # (fast/dlss/LICENSE.md): a separate shared library the runtime loads when
+    # it is installed. The runtime links nothing of NGX.
+    if(THREE_DS_RECOMP_ENABLE_DLSS_MODULE)
+        include(${CMAKE_CURRENT_SOURCE_DIR}/fast/dlss/dlss.cmake)
     endif()
     if(THREE_DS_RECOMP_ENABLE_D3D12_NGX_PROVIDER)
         target_link_libraries(three_ds_recomp_runtime PRIVATE d3d12 dxgi)

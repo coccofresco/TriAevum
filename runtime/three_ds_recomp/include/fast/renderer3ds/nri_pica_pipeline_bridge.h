@@ -83,6 +83,10 @@ struct NriPicaGraphicsPipelineDesc {
     VkFormat DepthStencilFormat = VK_FORMAT_UNDEFINED;
 };
 
+// TRIAEVUM_NRI_PIPELINE_TRACE: content hash of a program in the trace lines.
+[[nodiscard]] uint64_t NriPicaTraceProgramHash(std::span<const uint32_t> words) noexcept;
+[[nodiscard]] bool NriPicaPipelineTraceEnabled() noexcept;
+
 struct NriPicaTextureBindingDesc {
     VkImage Image = VK_NULL_HANDLE;
     VkFormat Format = VK_FORMAT_UNDEFINED;

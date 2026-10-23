@@ -1,4 +1,5 @@
 #include "fast/Fast3dWindow.h"
+#include "fast/oot3d/graphics_settings_window.h"
 
 #include "ship/Context.h"
 #include "ship/utils/ShutdownRequest.h"
@@ -452,7 +453,7 @@ bool Fast3dWindow::KeyDown(int32_t scancode) {
             WindowBackend::FAST3D_SDL_OOT3D_VULKAN &&
         scancode == Ship::KbScancode::LUS_KB_F2) {
         // Event-driven: keep short taps and reject key repeat, independent of guest/presentation rate.
-        if (firstPress) Oot3d::GraphicsSettingsRuntime::Instance().ToggleNativePresentationOverride();
+        if (firstPress) Oot3d::ToggleGraphicsNativePresentation();
         return true;
     }
 #endif

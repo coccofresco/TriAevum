@@ -19,6 +19,8 @@ function(patch_nri relative old new)
     file(WRITE "${path}" "${source}")
 endfunction()
 
+configure_file("${CMAKE_CURRENT_LIST_DIR}/nri_pipeline_libraries/PipelineLibraryMemoryVK.h"
+    "${NRI_SOURCE_DIR}/Source/VK/PipelineLibraryMemoryVK.h" COPYONLY)
 configure_file("${CMAKE_CURRENT_LIST_DIR}/nri_pipeline_libraries/GraphicsPipelineLibrariesVK.h"
     "${NRI_SOURCE_DIR}/Source/VK/GraphicsPipelineLibrariesVK.h" COPYONLY)
 configure_file("${CMAKE_CURRENT_LIST_DIR}/nri_pipeline_libraries/DynamicPipelineStateVK.h"

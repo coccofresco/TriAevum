@@ -8,6 +8,7 @@
 #ifdef ENABLE_OOT3D_NRI
 #include "nri_interop_internal.h"
 #endif
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstring>
@@ -29,6 +30,8 @@ static_assert(sizeof(ReflectionPush) == 76U);
 
 // Water uniforms per frame slot (the dispatches of a slot read its buffer).
 constexpr uint32_t kWaterSlots = 2U;
+// Scene colours the trace keeps descriptor sets for (see ColorVariants).
+constexpr uint32_t kColorVariants = 4U;
 
 std::vector<uint32_t> Compile(Renderer::CachedPassShaderCompiler& shaders, const std::string& source, const char* name) {
     return shaders.Resolve(source, Renderer::SpirvStage::Compute, name);
@@ -56,6 +59,18 @@ struct HiZReflectionPass::Impl {
     std::array<nri::Descriptor*, kWaterSlots> MapViews{};
     std::array<void*, kWaterSlots> MapMapped{};
     std::array<uint64_t, kWaterSlots> MapVersions{};
+    // The descriptor sets of each scene colour read since the last
+    // configuration, written once when the colour first appears. The title
+    // alternates its colour target between frames; that must select sets,
+    // not reconfigure (and wait for) the pass, and never rewrite a set that a
+    // recorded frame still uses.
+    struct ColorSets {
+        VkImage Color = VK_NULL_HANDLE;
+        std::array<nri::DescriptorSet*, kWaterSlots> Ray{};
+        std::array<nri::DescriptorSet*, kWaterSlots> Filter{};
+    };
+    std::array<ColorSets, kColorVariants> ColorVariants{};
+    uint32_t ColorVariantCount = 0;
 #endif
     std::array<VkImage, 2> Images{};
     std::array<VkImageView, 2> Views{};
@@ -242,6 +257,76 @@ bool HiZReflectionPass::Configure(
 #ifndef ENABLE_OOT3D_NRI
     return false;
 #else
+    // Writes the descriptor sets of one scene colour into the current pool.
+    const auto writeColorSets = [&](Impl::ColorSets& variant, VkImage color, VkFormat colorFormat) {
+        if (!mImpl->Interop->WrapTexture(color, colorFormat, VK_IMAGE_TYPE_2D, VK_IMAGE_USAGE_SAMPLED_BIT,
+                                         output.Width, output.Height))
+            throw std::runtime_error("NRI SSR input wrapping failed");
+        std::array<nri::Descriptor*, 4> views{};
+        for (uint32_t i = 0; i < views.size(); ++i) {
+            views[i] = NriInteropAccess::TextureView(*mImpl->Interop, i == 0U ? color : inputs[i], false);
+            if (views[i] == nullptr)
+                throw std::runtime_error("NRI SSR input view failed");
+        }
+        std::array<nri::DescriptorSet*, 2U * kWaterSlots> sets{};
+        if (mImpl->Core->AllocateDescriptorSets(
+                *mImpl->DescriptorPool, *mImpl->PipelineLayout, 0,
+                sets.data(), 2U * kWaterSlots, 0) != nri::Result::SUCCESS)
+            throw std::runtime_error("NRI SSR descriptor sets failed");
+        const auto updateSet = [&](nri::DescriptorSet* set,
+                                   const std::array<nri::Descriptor*, 4>& sources,
+                                   VkImage destinationImage, uint32_t slot) {
+            nri::Descriptor* destination = NriInteropAccess::TextureView(
+                *mImpl->Interop, destinationImage, true);
+            if (destination == nullptr)
+                throw std::runtime_error("NRI SSR storage view failed");
+            std::array<nri::UpdateDescriptorRangeDesc, 10> updates{};
+            for (uint32_t i = 0; i < sources.size(); ++i)
+                updates[i] = {set, i, 0, &sources[i], 1};
+            updates[4] = {set, 4, 0, &destination, 1};
+            updates[5] = {set, 5, 0, &mImpl->LinearSampler, 1};
+            updates[6] = {set, 6, 0, &mImpl->NearestSampler, 1};
+            updates[7] = {set, 7, 0, &mImpl->WaterViews[slot], 1};
+            updates[8] = {set, 8, 0, &views[0], 1};
+            updates[9] = {set, 9, 0, &mImpl->MapViews[slot], 1};
+            mImpl->Core->UpdateDescriptorRanges(
+                updates.data(), static_cast<uint32_t>(updates.size()));
+        };
+        std::array<nri::Descriptor*, 4> filterInputs{
+            NriInteropAccess::TextureView(*mImpl->Interop, mImpl->Images[0], false),
+            views[1], views[2], views[3]};
+        for (uint32_t slot = 0; slot < kWaterSlots; ++slot) {
+            variant.Ray[slot] = sets[2U * slot];
+            variant.Filter[slot] = sets[2U * slot + 1U];
+            updateSet(variant.Ray[slot], views, mImpl->Images[0], slot);
+            updateSet(variant.Filter[slot], filterInputs, mImpl->Images[1], slot);
+        }
+        variant.Color = color;
+    };
+    const auto selectColor = [&](uint32_t index) {
+        mImpl->RaySets = mImpl->ColorVariants[index].Ray;
+        mImpl->FilterSets = mImpl->ColorVariants[index].Filter;
+        mImpl->Inputs[0] = mImpl->ColorVariants[index].Color;
+    };
+    if (mImpl->Width == output.Width && mImpl->Height == output.Height &&
+        mImpl->Images[1] == output.Texture.Image && mImpl->OutputStates == output.StateTracker &&
+        mImpl->InputFormats == formats && std::equal(inputs.begin() + 1, inputs.end(), mImpl->Inputs.begin() + 1)) {
+        for (uint32_t i = 0; i < mImpl->ColorVariantCount; ++i)
+            if (mImpl->ColorVariants[i].Color == inputs[0]) {
+                selectColor(i);
+                return true;
+            }
+        if (mImpl->ColorVariantCount < kColorVariants) {
+            try {
+                writeColorSets(mImpl->ColorVariants[mImpl->ColorVariantCount], inputs[0], formats[0]);
+                selectColor(mImpl->ColorVariantCount++);
+                return true;
+            } catch (const std::exception& exception) {
+                // Configure the pass anew below.
+                mImpl->Reason = exception.what();
+            }
+        }
+    }
     if (mImpl->Width != 0U && !mImpl->Interop->CompleteRecordedWork())
         return false;
     InvalidateScreenResources();
@@ -270,52 +355,20 @@ bool HiZReflectionPass::Configure(
                 throw std::runtime_error("NRI SSR input view failed");
         }
         nri::DescriptorPoolDesc pool{};
-        pool.descriptorSetMaxNum = 2U * kWaterSlots;
-        pool.samplerMaxNum = 4U * kWaterSlots;
-        pool.textureMaxNum = 10U * kWaterSlots;
-        pool.storageTextureMaxNum = 2U * kWaterSlots;
-        pool.constantBufferMaxNum = 2U * kWaterSlots;
-        pool.structuredBufferMaxNum = 2U * kWaterSlots;
+        pool.descriptorSetMaxNum = 2U * kWaterSlots * kColorVariants;
+        pool.samplerMaxNum = 4U * kWaterSlots * kColorVariants;
+        pool.textureMaxNum = 10U * kWaterSlots * kColorVariants;
+        pool.storageTextureMaxNum = 2U * kWaterSlots * kColorVariants;
+        pool.constantBufferMaxNum = 2U * kWaterSlots * kColorVariants;
+        pool.structuredBufferMaxNum = 2U * kWaterSlots * kColorVariants;
         nri::Device* device = NriInteropAccess::Device(*mImpl->Interop);
         if (mImpl->Core->CreateDescriptorPool(
                 *device, pool, mImpl->DescriptorPool) != nri::Result::SUCCESS)
             throw std::runtime_error("NRI SSR descriptor pool failed");
-        std::array<nri::DescriptorSet*, 2U * kWaterSlots> sets{};
-        if (mImpl->Core->AllocateDescriptorSets(
-                *mImpl->DescriptorPool, *mImpl->PipelineLayout, 0,
-                sets.data(), 2U * kWaterSlots, 0) != nri::Result::SUCCESS)
-            throw std::runtime_error("NRI SSR descriptor sets failed");
-        for (uint32_t slot = 0; slot < kWaterSlots; ++slot) {
-            mImpl->RaySets[slot] = sets[2U * slot];
-            mImpl->FilterSets[slot] = sets[2U * slot + 1U];
-        }
-        const auto updateSet = [&](nri::DescriptorSet* set,
-                                   const std::array<nri::Descriptor*, 4>& sources,
-                                   VkImage destinationImage, uint32_t slot) {
-            nri::Descriptor* destination = NriInteropAccess::TextureView(
-                *mImpl->Interop, destinationImage, true);
-            if (destination == nullptr)
-                throw std::runtime_error("NRI SSR storage view failed");
-            std::array<nri::UpdateDescriptorRangeDesc, 10> updates{};
-            for (uint32_t i = 0; i < sources.size(); ++i)
-                updates[i] = {set, i, 0, &sources[i], 1};
-            updates[4] = {set, 4, 0, &destination, 1};
-            updates[5] = {set, 5, 0, &mImpl->LinearSampler, 1};
-            updates[6] = {set, 6, 0, &mImpl->NearestSampler, 1};
-            updates[7] = {set, 7, 0, &mImpl->WaterViews[slot], 1};
-            updates[8] = {set, 8, 0, &inputViews[0], 1};
-            updates[9] = {set, 9, 0, &mImpl->MapViews[slot], 1};
-            mImpl->Core->UpdateDescriptorRanges(
-                updates.data(), static_cast<uint32_t>(updates.size()));
-        };
-        std::array<nri::Descriptor*, 4> filterInputs{
-            NriInteropAccess::TextureView(*mImpl->Interop,
-                                          mImpl->Images[0], false),
-            inputViews[1], inputViews[2], inputViews[3]};
-        for (uint32_t slot = 0; slot < kWaterSlots; ++slot) {
-            updateSet(mImpl->RaySets[slot], inputViews, mImpl->Images[0], slot);
-            updateSet(mImpl->FilterSets[slot], filterInputs, mImpl->Images[1], slot);
-        }
+        (void)inputViews;
+        writeColorSets(mImpl->ColorVariants[0], inputs[0], formats[0]);
+        mImpl->ColorVariantCount = 1U;
+        selectColor(0);
         mImpl->Width = output.Width;
         mImpl->Height = output.Height;
         mImpl->Inputs = inputs;
@@ -442,6 +495,8 @@ void HiZReflectionPass::InvalidateScreenResources() {
     mImpl->DescriptorPool = nullptr;
     mImpl->RaySets = {};
     mImpl->FilterSets = {};
+    mImpl->ColorVariants = {};
+    mImpl->ColorVariantCount = 0;
 #endif
     if (mImpl->Interop != nullptr)
         mImpl->Interop->DestroyOwnedTexture(mImpl->Images[0]);

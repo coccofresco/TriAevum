@@ -54,6 +54,11 @@ class NativeA32CtrSvcEventHistory final {
     const std::map<std::string, uint64_t>& IpcNameCounts() const noexcept;
     uint64_t TotalEventCount() const noexcept;
     bool RetainsFullHistory() const noexcept;
+    const NativeA32CtrSvcEvent* LastEvent() const noexcept {
+        if (mRetainFullHistory) return mFullEvents.empty() ? nullptr : &mFullEvents.back();
+        if (mRecentEvents.Size == 0U) return nullptr;
+        return &mRecentEvents.Records[(mRecentEvents.Start + mRecentEvents.Size - 1U) % RecentEventCapacity].Event;
+    }
 
   private:
     struct RecordedEvent {
@@ -131,6 +136,8 @@ struct NativeA32CtrRuntimeProfile {
     uint64_t CommandListBytes = 0;
     uint64_t CommandListReadNanoseconds = 0;
     uint64_t PicaFrontendSubmitNanoseconds = 0;
+    // Process-lifetime diagnostics; never rewound by a guest savestate.
+    uint64_t FsUnservedRequests = 0;
     uint64_t RomFsStreamOpenCalls = 0;
     uint64_t RomFsReadCalls = 0;
     uint64_t RomFsReadBytes = 0;
@@ -316,11 +323,20 @@ class NativeA32CtrHostServices final : public NativeA32HostServices {
     bool NdmSchedulerRunsInBackground() const;
     uint32_t NdmSuspendedDaemons() const;
     NativeA32CtrRuntimeProfile RuntimeProfile() const noexcept;
+    void WriteFsRequestSummary() const;
     nlohmann::json CaptureState() const;
     bool RestoreState(const nlohmann::json& state, NativeA32Process& process,
                       std::string* error = nullptr);
 
   private:
+    NativeA32HostResult HandleSvcImpl(
+        uint32_t immediate, oot3d::recomp::a32::GuestState& state,
+        NativeA32Memory& memory, NativeA32HostContext& context);
+    NativeA32HostResult FailFsRequest(
+        oot3d::recomp::a32::GuestState& state, NativeA32Memory& memory,
+        uint32_t commandBuffer, const std::optional<std::string>& sessionType,
+        NativeA32CtrSvcEvent event, uint32_t result, std::string_view reason,
+        uint64_t offset = 0U, uint64_t length = 0U);
     struct RomFsBackingFile;
 
     struct KernelObject {
@@ -335,6 +351,7 @@ class NativeA32CtrHostServices final : public NativeA32HostServices {
         uint64_t FileSize = 0;
         uint32_t FileOpenMode = 0;
         uint32_t FilePriority = 0;
+        bool FileClosed = false;
         std::shared_ptr<NativeA32CtrFile> FileBackend;
         std::shared_ptr<RomFsBackingFile> RomFsBacking;
         std::optional<uint32_t> MappedAddress;

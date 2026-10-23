@@ -1,6 +1,116 @@
 #include "fast/renderer3ds/pica_tev_program.h"
 
+#include <algorithm>
+#include <cmath>
+
 namespace Fast::Renderer3ds {
+
+namespace {
+
+using Rgba = std::array<float, 4>;
+
+float Round255(float value) noexcept { return std::floor(value * 255.0F + 0.5F) / 255.0F; }
+
+Rgba Source(uint32_t selector, size_t stage, const PicaTevInputs& inputs, const Rgba& buffer,
+            const Rgba& previous) noexcept {
+    switch (selector) {
+    case 0U: return inputs.Primary;
+    case 1U: return inputs.PrimaryFragment;
+    case 2U: return inputs.SecondaryFragment;
+    case 3U: case 4U: case 5U: case 6U: return inputs.Textures[selector - 3U];
+    case 13U: return buffer;
+    case 14U: return inputs.Constants[stage];
+    case 15U: return previous;
+    default: return {};
+    }
+}
+
+Rgba ColorOperand(const Rgba& v, uint32_t op) noexcept {
+    Rgba value = v;
+    switch (op & 14U) {
+    case 2U: value = {v[3], v[3], v[3], 0.0F}; break;
+    case 4U: value = {v[0], v[0], v[0], 0.0F}; break;
+    case 8U: value = {v[1], v[1], v[1], 0.0F}; break;
+    case 12U: value = {v[2], v[2], v[2], 0.0F}; break;
+    default: break;
+    }
+    if ((op & 1U) != 0U)
+        for (size_t c = 0; c < 3U; ++c) value[c] = 1.0F - value[c];
+    value[3] = 0.0F;
+    return value;
+}
+
+float AlphaOperand(const Rgba& v, uint32_t op) noexcept {
+    const float value = op < 2U ? v[3] : (op < 4U ? v[0] : (op < 6U ? v[1] : v[2]));
+    return (op & 1U) != 0U ? 1.0F - value : value;
+}
+
+Rgba Operation(uint32_t op, const Rgba& a, const Rgba& b, const Rgba& c) noexcept {
+    Rgba result{};
+    if (op == 6U || op == 7U) {
+        float dot = 0.0F;
+        for (size_t i = 0; i < 3U; ++i) dot += (a[i] - 0.5F) * (b[i] - 0.5F);
+        result.fill(dot * 4.0F);
+        return result;
+    }
+    for (size_t i = 0; i < 4U; ++i) {
+        switch (op) {
+        case 0U: result[i] = a[i]; break;
+        case 1U: result[i] = a[i] * b[i]; break;
+        case 2U: result[i] = a[i] + b[i]; break;
+        case 3U: result[i] = a[i] + b[i] - 0.5F; break;
+        case 4U: result[i] = b[i] + (a[i] - b[i]) * c[i]; break;
+        case 5U: result[i] = a[i] - b[i]; break;
+        case 8U: result[i] = a[i] * b[i] + c[i]; break;
+        case 9U: result[i] = std::min(a[i] + b[i], 1.0F) * c[i]; break;
+        default: break;
+        }
+    }
+    return result;
+}
+
+} // namespace
+
+std::array<float, 4> EvaluatePicaTevProgram(const PicaTevProgram& program, const PicaTevInputs& inputs) noexcept {
+    Rgba buffer{}, nextBuffer = inputs.BufferColor, previous{};
+    for (size_t stage = 0; stage < program.Stages.size(); ++stage) {
+        const auto& words = program.Stages[stage];
+        std::array<Rgba, 3> colors{}, alphas{};
+        for (uint32_t input = 0; input < 3U; ++input) {
+            uint32_t rgb = (words[0] >> (input * 4U)) & 15U;
+            uint32_t alpha = (words[0] >> (16U + input * 4U)) & 15U;
+            // Native stage-zero PREVIOUS aliases source C for A/B only.
+            if (stage == 0U && input < 2U) {
+                if (rgb == 15U) rgb = (words[0] >> 8U) & 15U;
+                if (alpha == 15U) alpha = (words[0] >> 24U) & 15U;
+            }
+            colors[input] =
+                ColorOperand(Source(rgb, stage, inputs, buffer, previous), (words[1] >> (input * 4U)) & 15U);
+            alphas[input].fill(AlphaOperand(Source(alpha, stage, inputs, buffer, previous),
+                                            (words[1] >> (12U + input * 4U)) & 7U));
+        }
+        const uint32_t colorOp = words[2] & 15U;
+        Rgba color = Operation(colorOp, colors[0], colors[1], colors[2]);
+        for (float& value : color) value = Round255(std::clamp(value, 0.0F, 1.0F));
+        const float alpha = colorOp == 7U
+            ? color[0]
+            : Round255(std::clamp(Operation((words[2] >> 16U) & 15U, alphas[0], alphas[1], alphas[2])[0], 0.0F, 1.0F));
+        const uint32_t rgbScale = words[3] & 3U;
+        const uint32_t alphaScale = (words[3] >> 16U) & 3U;
+        const float rgbFactor = static_cast<float>(rgbScale < 3U ? 1U << rgbScale : 1U);
+        const float alphaFactor = static_cast<float>(alphaScale < 3U ? 1U << alphaScale : 1U);
+        for (size_t c = 0; c < 3U; ++c) previous[c] = std::clamp(color[c] * rgbFactor, 0.0F, 1.0F);
+        previous[3] = std::clamp(alpha * alphaFactor, 0.0F, 1.0F);
+        // Buffer updates become visible one stage later than PREVIOUS.
+        buffer = nextBuffer;
+        if (stage < 4U) {
+            if ((program.Control[0] & (1U << (8U + stage))) != 0U)
+                for (size_t c = 0; c < 3U; ++c) nextBuffer[c] = previous[c];
+            if ((program.Control[0] & (1U << (12U + stage))) != 0U) nextBuffer[3] = previous[3];
+        }
+    }
+    return previous;
+}
 
 PicaTevDecodeError DecodePicaTevProgram(std::span<const uint32_t> registers,
                                       PicaTevProgram& output) noexcept {

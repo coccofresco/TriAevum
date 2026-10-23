@@ -1,5 +1,7 @@
 #pragma once
 
+#include "fast/renderer3ds/pica_temporal_identity.h"
+
 #include "fast/oot3d/display_effect_plan.h"
 #include "fast/oot3d/display_effect_resources.h"
 #include "fast/oot3d/effect_geometry_provider_plan.h"
@@ -41,6 +43,8 @@ struct Oot3dVulkanGpuTimings {
     std::optional<double> NativePicaMilliseconds;
     std::optional<double> ToonRasterMilliseconds;
     std::optional<double> GrassMilliseconds;
+    std::optional<double> GrassCompactionMilliseconds, GrassBladesMilliseconds, GrassShadowsMilliseconds,
+        GrassLightingMilliseconds;
     std::optional<double> AmbientOcclusionMilliseconds;
     std::optional<double> DepthPreparationMilliseconds;
     std::optional<double> ReflectionMilliseconds;
@@ -609,9 +613,11 @@ struct Oot3dVulkanFrameDiagnostics {
     uint32_t RigidMotionDrawCount = 0;
     uint32_t ExactMotionDrawCount = 0;
     uint32_t DeformedMotionDrawCount = 0;
-    // Temporal draws whose geometry was already drawn this frame: their
-    // history is matched by occurrence order.
+    // All draws in an ambiguous native instance group (including its first).
     uint32_t RepeatedIdentityMotionDrawCount = 0;
+    // PicaMotionProvenance order: invalid, camera, rigid, exact candidate.
+    std::array<uint32_t, 4> MotionProvenanceDrawCounts{};
+    std::array<uint32_t, static_cast<size_t>(Renderer3ds::PicaTemporalMatchReason::Count)> TemporalMatchReasonDrawCounts{};
     uint32_t GrassMotionBladeCount = 0;
     // Normal guide sources: draws that write it and those that read the
     // authored vertex normal; AO texture relief candidates and appliers.
@@ -882,6 +888,7 @@ class Oot3dVulkanDiagnostics {
         Oot3dVulkanPresentationStateDiagnostics state);
     void RecordTemporalDraw(bool rigidMotionValid, bool exactMotionValid,
                             bool deformedMotionValid, bool repeatedIdentity = false);
+    void RecordTemporalCorrespondence(uint32_t reason, uint32_t provenance);
     void RecordGrassMotion(uint32_t bladeCount);
     void RecordNormalGuideDraw(bool typedNormal, bool relief);
     void RecordAoReliefDraw(bool reliefTexture);

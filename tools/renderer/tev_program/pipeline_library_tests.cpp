@@ -1,6 +1,7 @@
 #include "GraphicsPipelineLibrariesVK.h"
 #include "DynamicPipelineStateVK.h"
 #include "fast/renderer3ds/pica_vulkan_device_profile.h"
+#include "fast/renderer3ds/vulkan_image_contract.h"
 #include <iostream>
 #include <set>
 #include <stdexcept>
@@ -19,6 +20,7 @@ struct Driver {
     std::array<unsigned, 4> PerPart{};
     std::set<VkPipeline> Live;
 } driver;
+static int failPart = -1;
 static triaevum_nri::DynamicPipelineState expectedDynamic;
 static unsigned dynamicCalls = 0;
 static void TestDynamicBind() {
@@ -66,6 +68,7 @@ static VKAPI_ATTR VkResult VKAPI_CALL Create(VkDevice, VkPipelineCache, uint32_t
         const auto subset = reinterpret_cast<const VkGraphicsPipelineLibraryCreateInfoEXT*>(chain)->flags;
         const auto part = subset == 1 ? 0U : subset == 2 ? 1U : subset == 4 ? 2U : 3U;
         ++driver.PerPart[part]; ++driver.Parts;
+        if (static_cast<int>(part) == failPart) return VK_ERROR_OUT_OF_HOST_MEMORY;
         Check((info->stageCount == 1) == (part == 1 || part == 2), "wrong shader-bearing subset");
     } else {
         Check(chain && chain->sType == VK_STRUCTURE_TYPE_PIPELINE_LIBRARY_CREATE_INFO_KHR,
@@ -85,6 +88,40 @@ static VKAPI_ATTR void VKAPI_CALL Destroy(VkDevice, VkPipeline pipeline, const V
 }
 int main() try {
     TestDynamicBind();
+    using Fast::Renderer3ds::ResolvePicaPipelineLibraryPolicy;
+    const auto nvidia = VK_DRIVER_ID_NVIDIA_PROPRIETARY;
+    const auto anv = VK_DRIVER_ID_INTEL_OPEN_SOURCE_MESA;
+    for (auto id : {nvidia, VK_DRIVER_ID_MESA_RADV, VK_DRIVER_ID_AMD_PROPRIETARY,
+                    VK_DRIVER_ID_INTEL_PROPRIETARY_WINDOWS, VkDriverId(0)})
+        Check(ResolvePicaPipelineLibraryPolicy(nullptr, true, true, true, id).Enabled,
+              "capable driver lost its default libraries");
+    Check(!ResolvePicaPipelineLibraryPolicy(nullptr, true, true, true, anv).Enabled &&
+          std::string_view(ResolvePicaPipelineLibraryPolicy(nullptr, true, true, true, anv).Reason) ==
+              "driver_policy",
+          "anv default enabled");
+    Check(ResolvePicaPipelineLibraryPolicy("1", true, true, true, anv).AllPipelines,
+          "capable explicit opt-in rejected");
+    Check(!ResolvePicaPipelineLibraryPolicy("0", true, true, true, nvidia).Requested,
+          "explicit disable ignored");
+    Check(!ResolvePicaPipelineLibraryPolicy("1", false, true, true, anv).Enabled &&
+          !ResolvePicaPipelineLibraryPolicy("1", true, false, true, anv).Enabled,
+          "opt-in bypassed capabilities");
+    Check(!ResolvePicaPipelineLibraryPolicy(nullptr, true, true, false, nvidia).Enabled,
+          "default bypassed preparation mode");
+    const auto invalid = ResolvePicaPipelineLibraryPolicy("yes", true, true, true, nvidia);
+    Check(invalid.Enabled && !invalid.AllPipelines &&
+          std::string_view(invalid.Reason) == "invalid_environment_ignored",
+          "invalid environment not reported as ignored");
+    VkImageFormatProperties limits{};
+    limits.maxExtent = {1024, 1024, 1}; limits.maxMipLevels = 11; limits.maxArrayLayers = 6;
+    limits.sampleCounts = VK_SAMPLE_COUNT_1_BIT;
+    using Fast::Renderer3ds::VulkanImage2DWithinLimits;
+    Check(VulkanImage2DWithinLimits(limits, 640, 480, 1, 1, VK_SAMPLE_COUNT_1_BIT),
+          "supported image rejected");
+    Check(!VulkanImage2DWithinLimits(limits, 640, 480, 1, 1, VK_SAMPLE_COUNT_4_BIT) &&
+          !VulkanImage2DWithinLimits(limits, 2048, 480, 1, 1, VK_SAMPLE_COUNT_1_BIT) &&
+          !VulkanImage2DWithinLimits(limits, 0, 480, 1, 1, VK_SAMPLE_COUNT_1_BIT),
+          "unsupported image accepted");
     VkPhysicalDeviceFeatures support{};
     Check(!Fast::Renderer3ds::PicaVulkanCoreFeatures(support).fragmentStoresAndAtomics,
           "unsupported fragment writes were advertised");
@@ -172,6 +209,15 @@ int main() try {
     Check(driver.Parts > partsBefore && driver.Live.size() <= 140, "retained parts are not bounded");
     pool.Clear({}, Destroy, nullptr);
     Check(driver.Live.empty(), "layout teardown leaked library handles");
+    {
+        triaevum_nri::GraphicsPipelineLibraries failing;
+        failPart = 1;
+        Check(failing.Create({}, Create, Destroy, nullptr, {}, input, programs, &out) ==
+              VK_ERROR_OUT_OF_HOST_MEMORY, "real driver OOM was hidden by fallback");
+        failing.Clear({}, Destroy, nullptr);
+        Check(driver.Live.empty(), "driver failure leaked retained handles");
+        failPart = -1;
+    }
     std::cout << "pipeline parts: exact state isolation, program identity, reuse, rejection and retirement passed\n";
     return 0;
 } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }

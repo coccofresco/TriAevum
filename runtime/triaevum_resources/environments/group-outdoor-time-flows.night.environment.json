@@ -1,0 +1,100 @@
+{
+  "ambientColor": [
+    0.5833334,
+    0.58333343,
+    1.0
+  ],
+  "ambientIntensity": 0.5,
+  "directionalLights": [
+    {
+      "azimuth": -89.2,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "elevation": 63.6,
+      "intensity": 1.0
+    },
+    {
+      "azimuth": 180.0,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "elevation": -23.4,
+      "intensity": 0.0
+    }
+  ],
+  "enabled": true,
+  "fogStrength": 1.0,
+  "groupId": "outdoor-time-flows",
+  "keyLightAzimuthOffset": 0.0,
+  "keyLightDirection": "scene_main",
+  "keyLightElevationOffset": 0.0,
+  "nativeAmbientStrength": 0.3,
+  "nativeDirectStrength": 0.0,
+  "nativeLocalStrength": 0.0,
+  "pointLights": [
+    {
+      "colorTint": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "enabled": true,
+      "intensity": 1.0,
+      "radiusScale": 1.0
+    },
+    {
+      "colorTint": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "enabled": true,
+      "intensity": 1.0,
+      "radiusScale": 1.0
+    },
+    {
+      "colorTint": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "enabled": true,
+      "intensity": 1.0,
+      "radiusScale": 1.0
+    },
+    {
+      "colorTint": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "enabled": true,
+      "intensity": 1.0,
+      "radiusScale": 1.0
+    }
+  ],
+  "preserveSceneBrightness": false,
+  "rimLight": {
+    "azimuth": 0.0,
+    "color": [
+      1.0,
+      0.96,
+      0.9
+    ],
+    "coverage": 0.25,
+    "enabled": true,
+    "intensity": 0.19,
+    "scope": "actorsAndWorld",
+    "sharpness": 2.5,
+    "source": "independent"
+  },
+  "schema": "triaevum.scene-environment",
+  "shadowCasterFaces": "interiorShells",
+  "timeOfDay": "night",
+  "version": 6
+}

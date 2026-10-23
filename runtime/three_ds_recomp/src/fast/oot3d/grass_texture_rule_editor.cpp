@@ -25,11 +25,8 @@ bool EnumCombo(const char* label, T& value,
 
 // The mask as extraction sees it (active rectangles included). Left-drag on
 // it adds an active rectangle; right-click removes the one under the cursor.
-bool DrawMaskPreview(
-    const GrassScalarMask& mask,
-    GrassPlacementRule& rule) {
-    if (mask.Samples.empty() || mask.Width == 0U ||
-        mask.Height == 0U) {
+bool DrawMaskPreview(const GrassScalarMask& mask, GrassPlacementRule& rule, float strength) {
+    if (mask.Samples.empty() || mask.Width == 0U || mask.Height == 0U) {
         ImGui::TextDisabled("Mask preview unavailable");
         return false;
     }
@@ -112,14 +109,11 @@ bool DrawMaskPreview(
             const size_t sourceIndex =
                 static_cast<size_t>(sourceY) * mask.Width +
                 sourceX;
-            const float value = EvaluateGrassMaskLevel(
-                static_cast<float>(mask.Samples[sourceIndex]) /
-                    255.0F,
-                rule,
-                (static_cast<float>(sourceX) + 0.5F) /
-                    static_cast<float>(mask.Width),
-                (static_cast<float>(sourceY) + 0.5F) /
-                    static_cast<float>(mask.Height));
+            const float value =
+                EvaluateGrassMaskLevel(static_cast<float>(mask.Samples[sourceIndex]) / 255.0F, rule,
+                                       (static_cast<float>(sourceX) + 0.5F) / static_cast<float>(mask.Width),
+                                       (static_cast<float>(sourceY) + 0.5F) / static_cast<float>(mask.Height)) *
+                strength;
             total += value;
             nonZero += value > (0.5F / 255.0F) ? 1U : 0U;
             full += value >= (254.5F / 255.0F) ? 1U : 0U;
@@ -162,8 +156,7 @@ bool DrawMaskPreview(
 
 } // namespace
 
-bool DrawGrassTextureRuleControls(
-    GrassPlacementRule& rule) {
+bool DrawGrassTextureRuleControls(GrassPlacementRule& rule, bool surfaceControls, float previewStrength) {
     bool changed = false;
     const auto scalarMask =
         GrassTextureSourceCache::Instance().AcquireMask(
@@ -211,10 +204,9 @@ bool DrawGrassTextureRuleControls(
     changed |= ImGui::SliderFloat(
         "Output black", &rule.OutputBlack,
         0.0F, 1.0F, "%.3f");
-    changed |= ImGui::SliderFloat(
-        "Output white", &rule.OutputWhite,
-        0.0F, 1.0F, "%.3f");
-    changed |= DrawMaskPreview(scalarMask, rule);
+    changed |= ImGui::SliderFloat("Output white", &rule.OutputWhite, 0.0F, 1.0F, "%.3f");
+    changed |= DrawMaskPreview(GrassTextureSourceCache::Instance().AcquireMask(rule.Target.Rgba8Hash, rule.Channel),
+                               rule, previewStrength);
 
     ImGui::SeparatorText("Active rectangles");
     if (rule.ActiveRects.empty())
@@ -248,6 +240,8 @@ bool DrawGrassTextureRuleControls(
         }
     }
 
+    if (!surfaceControls)
+        return changed;
     ImGui::SeparatorText("Surface filtering");
     changed |= ImGui::SliderFloat(
         "Maximum surface slope",

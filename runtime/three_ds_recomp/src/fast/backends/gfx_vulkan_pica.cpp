@@ -238,6 +238,7 @@ void GfxRenderingAPIVulkan::DestroyNativePicaGeometryResources() {
     mPreparedShadowCasters.clear();
     mPicaScenePublications.Reset();
     mGrassGeometryRegistry.Clear();
+    mGrassDrawMemo.Clear();
     Oot3d::GrassSceneBridge::Instance().Clear();
 }
 
@@ -524,8 +525,7 @@ void GfxRenderingAPIVulkan::ApplyNativePicaSampleCount(VkSampleCountFlagBits sam
     mInteractiveGrassPass.Shutdown();
     mWorldDebugLinePass.Shutdown();
     mTemporalHistory.Reset();
-    mRigidMotionTracker.Reset();
-    mPreviousPicaVertexUniforms.clear();
+    mPicaTemporalHistory.Reset();
     for (auto& [key, target] : mNativePicaRenderTargets) {
         DestroyNativePicaRenderTarget(target);
     }
@@ -1959,6 +1959,46 @@ void GfxRenderingAPIVulkan::PublishGlobalIlluminationStatus(Oot3d::GlobalIllumin
     Oot3d::GraphicsSettingsRuntime::Instance().PublishGlobalIlluminationStatus(std::move(status));
 }
 
+void GfxRenderingAPIVulkan::WithdrawFailedUpscaler(Oot3d::UpscalerProvider provider) {
+    Oot3d::GraphicsCapability capability = Oot3d::GraphicsCapability::NriNisUpscaler;
+    const char* name = "NIS";
+    bool available = false;
+    std::string reason;
+    switch (provider) {
+        case Oot3d::UpscalerProvider::Nis:
+            available = mNriUpscalerPass.Available();
+            reason = mNriUpscalerPass.UnavailableReason();
+            break;
+        case Oot3d::UpscalerProvider::Fsr:
+            capability = Oot3d::GraphicsCapability::NriFsrUpscaler;
+            name = "FSR";
+            available = mNriUpscalerPass.FsrAvailable();
+            reason = mNriInterop.FsrUnavailableReason();
+            break;
+        case Oot3d::UpscalerProvider::Dlss:
+            capability = Oot3d::GraphicsCapability::NriDlssUpscaler;
+            name = "DLSS";
+            available = mNriUpscalerPass.DlssAvailable();
+            reason = mNriInterop.DlssUnavailableReason();
+            break;
+        case Oot3d::UpscalerProvider::Xess:
+            capability = Oot3d::GraphicsCapability::NriXessUpscaler;
+            name = "XeSS";
+            reason = "NRI XeSS is unavailable on the Vulkan backend";
+            break;
+    }
+    if (available) reason = "its inputs were not ready";
+    const std::string report = std::string(name) + ": " + reason;
+    if (report != mReportedUpscalerFallback) {
+        mReportedUpscalerFallback = report;
+        std::fprintf(stderr, "TRIAEVUM_UPSCALER_FALLBACK provider=%s withdrawn=%d reason=\"%s\"\n", name,
+                     available ? 0 : 1, reason.c_str());
+        SPDLOG_WARN("{} produced no frame; the display is shown unscaled ({})", name, reason);
+    }
+    if (!available)
+        Oot3d::GraphicsSettingsRuntime::Instance().SetCapability(capability, false, reason);
+}
+
 void GfxRenderingAPIVulkan::ReleaseEffectGraphImageClients() {
     mAmbientOcclusionPass.InvalidateScreenResources();
     mCacaoPass.InvalidateScreenResources();
@@ -2001,7 +2041,7 @@ void GfxRenderingAPIVulkan::ReleaseEffectGraphImageClients() {
     mAmbientOcclusionOutputValid = false;
     mHiZOutputValid = false;
     mTemporalHistory.Reset();
-    mRigidMotionTracker.Reset();
+    mPicaTemporalHistory.Reset();
 }
 
 void GfxRenderingAPIVulkan::ApplyInternalResolutionScale(float scale) {
@@ -2057,8 +2097,7 @@ void GfxRenderingAPIVulkan::ResetNativePicaRenderTargets(bool preserveDisplayIma
     mHiZOutputValid = false;
     mAmbientOcclusionOutputValid = false;
     mTemporalHistory.Reset();
-    mRigidMotionTracker.Reset();
-    mPreviousPicaVertexUniforms.clear();
+    mPicaTemporalHistory.Reset();
     for (auto texture = mNativePicaTextures.begin();
          texture != mNativePicaTextures.end();) {
         if (!texture->second.ImageBorrowed) {

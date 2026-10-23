@@ -48,6 +48,7 @@ class RecordingBackend final : public Oot3d::Renderer::PicaRenderBackend {
         DrawCommandListAddress = draw.CommandListAddress;
         DrawCompositionDomain = draw.CompositionDomain;
         DrawComposition = draw.Composition;
+        DrawRoomShadows = draw.LightBinding.RoomShadows;
         DrawTopology = draw.Topology;
         DrawVertexCount = draw.VertexCount;
         DrawWBuffering = draw.WBuffering;
@@ -81,6 +82,10 @@ class RecordingBackend final : public Oot3d::Renderer::PicaRenderBackend {
         return PreparedLayer.has_value() && draw.Composition.Layer == *PreparedLayer;
     }
 
+    bool PicaSequenceDrawPreparationNeedsFragmentState() const override {
+        return PreparationNeedsFragmentState;
+    }
+
     bool PreparePicaSequenceDraw(
         const Oot3d::Renderer::PicaDrawView& draw, std::string*) override {
         Operations.push_back("prepare:" + std::to_string(draw.SubmissionId));
@@ -88,6 +93,7 @@ class RecordingBackend final : public Oot3d::Renderer::PicaRenderBackend {
         PreparedFragmentUniformBytes = draw.FragmentUniformBytes.size();
         PreparedTextureCount = draw.Textures.size();
         PreparedAlphaTestEnabled = draw.AlphaTestEnabled;
+        PreparedRoomShadows = draw.LightBinding.RoomShadows;
         return true;
     }
 
@@ -147,10 +153,13 @@ class RecordingBackend final : public Oot3d::Renderer::PicaRenderBackend {
     std::vector<Fast::Renderer3ds::PicaTextureCopyReference>
         DrawTextureCopyReferences;
     bool DrawAlphaTestEnabled = false;
+    std::shared_ptr<const Fast::Renderer3ds::RoomShadowShellScene> DrawRoomShadows;
+    std::shared_ptr<const Fast::Renderer3ds::RoomShadowShellScene> PreparedRoomShadows;
     Oot3d::Renderer::PicaCompareFunction DrawAlphaCompare =
         Oot3d::Renderer::PicaCompareFunction::Always;
     uint8_t DrawAlphaReference = 0U;
     std::optional<Oot3d::Renderer::PicaCompositionLayer> PreparedLayer;
+    bool PreparationNeedsFragmentState = false;
     size_t PreparedVertexUniformBytes = 0U;
     size_t PreparedFragmentUniformBytes = 0U;
     size_t PreparedTextureCount = 0U;
@@ -175,6 +184,9 @@ int main() {
     RecordingBackend backend;
     Oot3dNativeGame::Oot3dPicaVulkanDrawPlan plan;
     plan.SubmissionId = 17;
+    auto roomShadows = std::make_shared<Fast::Renderer3ds::RoomShadowShellScene>();
+    roomShadows->ScopeIdentity = 123;
+    plan.LightBinding.RoomShadows = roomShadows;
     plan.CommandListAddress = 0x14003000U;
     plan.CompositionDomain =
         Oot3dNativeGame::Oot3dPicaCompositionDomain::Scene;
@@ -184,6 +196,7 @@ int main() {
         0x0030F4D0U,
         1U,
     };
+    plan.Composition.TemporalIdentity = {9, 10, 11, 12, 13};
     plan.VertexCount = 3;
     plan.FragmentFeatures.FogEnabled = true;
     plan.FragmentFeatures.FogFlip = true;
@@ -248,6 +261,9 @@ int main() {
     Require(Oot3dNativeGame::SubmitOot3dPicaVulkanDrawPlan(
                 backend, plan, &error, 9),
             error);
+    Require(backend.DrawRoomShadows == roomShadows, "draw bridge lost room shell publication");
+    Require(backend.DrawComposition.TemporalIdentity == plan.Composition.TemporalIdentity,
+            "draw bridge lost native temporal identity");
     float packedDiffuse = 0.0F;
     float packedGlobalAmbient = 0.0F;
     int32_t packedShadowTextureBias = 0;
@@ -590,10 +606,27 @@ int main() {
                     true, preparedDraws);
     Require(preparedDraws == 1U &&
                 opaqueBackend.PreparedVertexUniformBytes != 0U &&
-                opaqueBackend.PreparedFragmentUniformBytes == 0U &&
-                opaqueBackend.PreparedTextureCount == 0U &&
+                opaqueBackend.PreparedFragmentUniformBytes == Fast::Oot3d::kPicaPackedFragmentUniformSize &&
+                opaqueBackend.PreparedTextureCount == plan.Textures.size() &&
                 !opaqueBackend.PreparedAlphaTestEnabled,
-            "a prepared draw without an alpha test carried fragment state");
+            "an opaque prepared draw lost source-classification fragment state");
+    // A backend reading native overlay alpha during preparation receives the
+    // fragment state of draws without an alpha test too.
+    RecordingBackend overlayBackend;
+    overlayBackend.PreparedLayer =
+        Oot3d::Renderer::PicaCompositionLayer::OpaqueWorld;
+    overlayBackend.PreparationNeedsFragmentState = true;
+    executePrepared(overlayBackend,
+                    Oot3dNativeGame::Oot3dPicaPresentationExecutionKind::CurrentFrame,
+                    true, preparedDraws);
+    Require(preparedDraws == 1U &&
+                overlayBackend.PreparedFragmentUniformBytes ==
+                    Fast::Oot3d::kPicaPackedFragmentUniformSize &&
+                overlayBackend.PreparedTextureCount == plan.Textures.size() &&
+                !overlayBackend.PreparedAlphaTestEnabled,
+            "a prepared draw lost the fragment state its backend asked for");
+    Require(opaqueBackend.PreparedRoomShadows == roomShadows && opaqueBackend.DrawRoomShadows == roomShadows,
+            "presentation preparation or submission lost room shell publication");
     RecordingBackend nativeMemoryBackend;
     nativeMemoryBackend.PreparedLayer =
         Oot3d::Renderer::PicaCompositionLayer::OpaqueWorld;

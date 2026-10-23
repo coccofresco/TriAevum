@@ -18,7 +18,7 @@ profile. The controls follow the type:
 | Sun | no | yaw, pitch (the light's direction) | none | never (the key light keeps the directional shadows) |
 | Spot | yes | yaw, pitch (the beam) | reach, beam angle, beam softness | yes |
 | Point | yes | no | reach | yes |
-| Surface | yes | yaw, pitch, roll (the emitting face) | rectangle (width, height) or disc (radius), one or both sides, reach | yes |
+| Surface | yes | yaw, pitch, roll (the emitting face) | rectangle (width, height) or disc (radius), one or both sides, spread, reach | yes |
 | Omni | yes | no | reach | yes |
 
 Every light has a name, visibility, colour (linear RGB) and intensity (0 to 16).
@@ -39,8 +39,23 @@ are world units. The terms (`pica_surface_placed_light`):
 | Omni | `1 - d^2/r^2` to the reach `r`, as Navi and the fairies |
 | Point | `(100 / max(d, 10))^2`: intensity 1 is the colour at 100 units; times a smooth cut `(1 - (d/r)^4)^2` at the reach |
 | Spot | the point term times `smoothstep(cos outer, cos inner, cos angle)`; outer is half the beam angle, inner shrinks it by the softness |
-| Surface | rectangle or disc: direction to the shape's closest point, form factor `A cos / (pi d^2 + A)` (the colour times intensity in contact with it), cut at the reach; one-sided surfaces emit from the front face only |
+| Surface | rectangle or disc: direction to the shape's closest point, form factor `A cos / (pi d^2 + A)` (the colour times intensity in contact with it), cut at the reach; one-sided surfaces emit from the front face only. A spread below 180 degrees (see below) limits `A` to the footprint and raises it by a gain |
 | Sun | parallel light along its direction, no falloff, never shadowed |
+
+**Spread** (surfaces, 1 to 180 degrees, 180 by default) is the full angle
+around the axis within which each point of the surface emits, as an area
+light's spread in Blender. At 180 the surface is diffuse. Below, its light is
+straightened: a fragment at height `h` above the surface's plane is reached
+only from the part of the shape inside a footprint of radius
+`h tan(spread / 2)` around its projection (for a rectangle, the square of the
+same area; for a disc, the exact overlap), and the term uses that part's area
+and its centroid's angle. A gain, the diffuse surface's form factor straight
+under its centre over the footprint's, keeps the light under a surface that
+covers the footprint as bright as at 180; beside the surface it falls off
+within `h tan(spread / 2)` of the shape's edge. The renderer takes whole
+degrees: `PicaPlacedLightUniforms::AxisKind.w` adds 16 times `180 - spread`
+to the kind's code, so a diffuse surface's uniforms do not change. The field
+`spread` is optional in the profile (180 when missing).
 
 **Cast shadows** gives spot, point, surface and omni a point-shadow cube map at
 the light's position (Point shadows: Cube maps; 8 rows shared with Navi and the
@@ -88,22 +103,25 @@ optional within version 5, so runtimes that predate it ignore the lights:
    "color": [1.0, 0.8, 0.6], "intensity": 1.5,
    "position": [-504.0, 430.0, -1224.0], "rotation": [90.0, -30.0, 0.0],
    "castShadows": true, "radius": 300.0, "width": 100.0, "height": 100.0,
-   "shape": "rectangle", "twoSided": false, "beamAngle": 45.0,
+   "shape": "rectangle", "twoSided": false, "spread": 180.0, "beamAngle": 45.0,
    "beamSoftness": 0.2, "range": 300.0}
 ]
 ```
 
 `type` is `sun`, `spot`, `point`, `surface` or `omni`; `shape` is `rectangle`
 or `disc`. `id` is unique in the profile and names the light's shadow row.
-Every field is required in an entry and range-checked; an invalid entry makes
-the profile invalid, as any other out-of-range value does.
+Every field but `spread` is required in an entry and range-checked; an
+invalid entry makes the profile invalid, as any other out-of-range value does.
 
 ## Verification
 
 - `scene_point_light_gpu_tests` runs the production lighting GLSL on the GPU:
-  11 placed-light cases (omni, point at 100 and 50 units and beyond its reach,
+  15 placed-light cases (omni, point at 100 and 50 units and beyond its reach,
   spot on and off its axis, rectangle facing, one-sided and two-sided facing
-  away, disc, sun) beside the 24 scene and 10 shadow cases.
+  away, disc, sun; a 30-degree rectangle and disc over the fragment as bright
+  as the diffuse ones, the rectangle beside its footprint dark, a diffuse
+  rectangle beside the fragment still lit) beside the 24 scene and 10 shadow
+  cases.
 - `build_fragment_artifacts --check` (all five families) and
   `tev_generator_consumer_tests` after regenerating the packs; only the uber
   family contains the lighting term and changed.

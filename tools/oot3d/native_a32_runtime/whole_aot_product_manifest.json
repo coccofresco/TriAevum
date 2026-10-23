@@ -31,7 +31,7 @@
       "functions": 12442,
       "selected_functions": 12439,
       "host_boundaries": 3,
-      "blocks": 162719,
+      "blocks": 162766,
       "unique_instructions": 924535,
       "emitted_instructions": 963498,
       "unclaimed_blocks": 0,
@@ -39,7 +39,7 @@
       "lowering_rejections": 0,
       "performance_exclusions": 0,
       "dispatch_aliases": 421,
-      "dispatcher_entries": 162710,
+      "dispatcher_entries": 162757,
       "atomic_host_blocks": 9
     },
     "host_boundaries": [

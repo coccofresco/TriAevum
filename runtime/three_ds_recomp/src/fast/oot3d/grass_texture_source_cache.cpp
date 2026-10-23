@@ -106,6 +106,11 @@ uint32_t GrassTextureColorSource::SamplePacked(const GrassTextureGridSample& sam
     return packed;
 }
 
+bool GrassTextureSourceCache::Contains(uint64_t hash) const {
+    std::scoped_lock lock(mMutex);
+    return mSources.contains(hash);
+}
+
 GrassTextureSourceCache& GrassTextureSourceCache::Instance() {
     static GrassTextureSourceCache cache;
     return cache;

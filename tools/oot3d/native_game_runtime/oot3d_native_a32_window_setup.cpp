@@ -5,6 +5,9 @@
 #include "mm3d_dev_camera_hook.h"
 #endif
 #include "oot3d_native_a32_romfs_overlay.h"
+#include "oot3d_native_direct_aot.h"
+#include "oot3d_title_grass_rules.h"
+#include "fast/oot3d/graphics_settings_persistence.h"
 
 namespace Oot3dA32Window {
 
@@ -27,6 +30,9 @@ BuildPicaMemoryRegions(
 } // namespace
 
 void NativeA32WindowSession::Setup() {
+  // Before any settings load: configurations older than schema 15 take the
+  // title's shipped grass source and mask rules.
+  Fast::Oot3d::InstallTitleGrassRuleDefaults(Oot3dNativeGame::Oot3dTitleGrassRuleDefaults());
   if (launch.Host.Renderer != "opengl" &&
       launch.Host.Renderer != "nri" &&
       launch.Host.Renderer != "vulkan") {
@@ -164,12 +170,20 @@ void NativeA32WindowSession::Setup() {
                 "oot3d_native_savedata"
           : launch.SaveDataDirectory;
   saveDataDirectory = hostConfig.SaveDataDirectory;
-  // Save states default to a folder beside the executable; --quick-state pins one file for scripted runs.
+  // Save states default to a folder beside the executable on Windows and beside
+  // the save data elsewhere; --quick-state pins one file for scripted runs.
+#if defined(_WIN32)
+  constexpr bool kSavestatesBesideExecutable = true;
+#else
+  constexpr bool kSavestatesBesideExecutable = false;
+#endif
   savestateLibrary = std::make_shared<Oot3dNativeGame::SavestateLibrary>(
       std::filesystem::path(launch.Host.ConfigurationPath).parent_path() / "savestates.json",
-      std::filesystem::path(std::u8string(
-          reinterpret_cast<const char8_t *>(Ship::Context::GetAppBundlePath().c_str()))) /
-          "savestates",
+      Oot3dNativeGame::DefaultSavestateDirectory(
+          kSavestatesBesideExecutable,
+          std::filesystem::path(std::u8string(
+              reinterpret_cast<const char8_t *>(Ship::Context::GetAppBundlePath().c_str()))),
+          hostConfig.SaveDataDirectory),
       launch.QuickStatePath);
   quickStatePath = launch.QuickStatePath.empty() ? savestateLibrary->Directory()
                                                  : launch.QuickStatePath;
@@ -257,6 +271,12 @@ void NativeA32WindowSession::Setup() {
       Oot3dNativeGame::kOot3dFramePacingCommitEntry,
       Oot3dNativeGame::kOot3dMeshCommandPacketSubmitEntry,
   };
+  const auto actorVisibilityHooks =
+      Oot3dNativeGame::NativeActorVisibilityHookPcs();
+  blockEntryHooks.insert(blockEntryHooks.end(), actorVisibilityHooks.begin(),
+                         actorVisibilityHooks.end());
+  widescreenProjection.ActorVisibility.Diagnostics =
+      std::getenv("OOT3D_ACTOR_VISIBILITY_DIAGNOSTICS") != nullptr;
   picaCompositionHooks =
       Oot3dNativeGame::Oot3dNativePicaCompositionHookPcs();
   blockEntryHooks.insert(blockEntryHooks.end(),
@@ -312,6 +332,9 @@ void NativeA32WindowSession::Setup() {
         kPauseAlternateRendererUpdateCall,
         kPauseSceneSevenDrawCall,
         kPauseSceneViewportDrawCall,
+        kPauseSceneFiveDrawCall,
+        Oot3dNativeGame::kTopScreenSystemPageBoundary,
+        kPauseTouchButtonsHeldDownQuery,
         kPauseTouchCoordinateUpdateCall,
         kPauseRendererVisibilityCall,
         kPauseControllerDrawCall,
@@ -320,6 +343,10 @@ void NativeA32WindowSession::Setup() {
         kTopScreenCameraUpdateEntry,
         kTopScreenCameraUpdatePatchSite,
         kTopScreenGameplayCompositionPrefix,
+        Oot3dNativeGame::kTopScreenPageProjectionUploadCall,
+        Oot3dNativeGame::kTopScreenItemsPageDrawCall,
+        Oot3dNativeGame::kTopScreenItemsCursorDrawCallA,
+        Oot3dNativeGame::kTopScreenItemsCursorDrawCallB,
     };
     blockEntryHooks.insert(blockEntryHooks.end(),
                            topScreenSourcePortHooks.begin(),
@@ -332,6 +359,8 @@ void NativeA32WindowSession::Setup() {
          Oot3dNativeGame::TopScreenVerifiedFloatLoadContracts()) {
       blockEntryHooks.push_back(contract.Entry);
     }
+    for (const auto pc : Oot3dNativeGame::TopScreenDungeonMapIconCoordinateSites())
+      blockEntryHooks.push_back(pc);
     const auto itemHooks = Oot3dNativeGame::TopScreenItemDispatchEntries();
     blockEntryHooks.insert(blockEntryHooks.end(), itemHooks.begin(), itemHooks.end());
     blockEntryHooks.push_back(Oot3dNativeGame::kTopScreenInputUpdateBoundary);
@@ -591,19 +620,29 @@ void NativeA32WindowSession::Setup() {
         typedGameplayObservableExitHooks.end());
   }
 #endif
+  // Sorted TopScreen entries the product hook owns (product builds only).
+  std::vector<uint32_t> productTopScreenBlocks;
   if (launch.UiProfile == Oot3dNativeGame::Oot3dUiProfile::TopScreen) {
     topScreenSourcePortBlocks = {
         kPauseTouchButtonsDrawCall,       kPauseTouchButtonsTouchBranch,
+        kPauseTouchButtonsHeldDownQuery,
         kPauseLowerScreenBlock,           kPauseDungeonMapCursorInput,
         kPauseUiNativeUpdateCall,         kPauseProjectionPrepareCall,
         kPauseAlternateViewportDrawCall,  kPauseConditionalDrawCall,
         kPauseRoutedCommandCallA,         kPauseRoutedCommandCallB,
         kPauseOverlayViewportDrawCall,    kPauseAlternateRendererUpdateCall,
         kPauseSceneSevenDrawCall,         kPauseSceneViewportDrawCall,
+        kPauseSceneFiveDrawCall,          kPauseUiDrawReturn,
+        Oot3dNativeGame::kTopScreenSystemPageBoundary,
         kPauseTouchCoordinateUpdateCall,  kPauseRendererVisibilityCall,
         kPauseControllerDrawCall,         kTopScreenCameraNormal1Scalar,
+        kTopScreenCameraFovScalar,
         kTopScreenCameraUpdateEntry,      kTopScreenCameraUpdatePatchSite,
-        kTopScreenTitleLogoFadeHoldPrefix};
+        kTopScreenTitleLogoFadeHoldPrefix,
+        Oot3dNativeGame::kTopScreenPageProjectionUploadCall,
+        Oot3dNativeGame::kTopScreenItemsPageDrawCall,
+        Oot3dNativeGame::kTopScreenItemsCursorDrawCallA,
+        Oot3dNativeGame::kTopScreenItemsCursorDrawCallB};
     for (const auto &contract :
          Oot3dNativeGame::TopScreenVerifiedControlFlowContracts()) {
       topScreenSourcePortBlocks.push_back(contract.Entry);
@@ -612,6 +651,10 @@ void NativeA32WindowSession::Setup() {
          Oot3dNativeGame::TopScreenVerifiedFloatLoadContracts()) {
       topScreenSourcePortBlocks.push_back(contract.Entry);
     }
+    const auto mapIconSites =
+        Oot3dNativeGame::TopScreenDungeonMapIconCoordinateSites();
+    topScreenSourcePortBlocks.insert(topScreenSourcePortBlocks.end(),
+                                    mapIconSites.begin(), mapIconSites.end());
     const auto itemEntries = Oot3dNativeGame::TopScreenItemDispatchEntries();
     topScreenSourcePortBlocks.insert(topScreenSourcePortBlocks.end(),
                                     itemEntries.begin(), itemEntries.end());
@@ -633,8 +676,51 @@ void NativeA32WindowSession::Setup() {
         topScreenObservableExitBlocks.begin(),
         topScreenObservableExitBlocks.end());
 #else
-    wholeAotObservableExitBlocks.push_back(kTopScreenCameraUpdateEntry);
-    wholeAotObservableExitBlocks.push_back(kTopScreenCameraNormal1Scalar);
+    // The product runs the same TopScreen source port as developer builds:
+    // every block is an observable exit of the whole-AOT graph, because the
+    // product keeps whole-AOT execution through pause routes.
+    wholeAotObservableExitBlocks.insert(wholeAotObservableExitBlocks.end(),
+                                       topScreenObservableExitBlocks.begin(),
+                                       topScreenObservableExitBlocks.end());
+    wholeAotObservableExitBlocks.insert(wholeAotObservableExitBlocks.end(),
+                                       topScreenSourcePortBlocks.begin(),
+                                       topScreenSourcePortBlocks.end());
+    productTopScreenBlocks = topScreenSourcePortBlocks;
+    productTopScreenBlocks.push_back(kPauseRendererVisibilityNativeDraw);
+    productTopScreenBlocks.insert(productTopScreenBlocks.end(), itemEntries.begin(),
+                                  itemEntries.end());
+    std::sort(productTopScreenBlocks.begin(), productTopScreenBlocks.end());
+    // The whole-AOT graph reports only its block starts: a hook or resume pc
+    // that is not an entry of the title module would silently never run.
+    // tools/oot3d/native_a32_runtime/whole_aot_observed_sites.json makes the
+    // generator start a block at each of them.
+    {
+      std::vector<uint32_t> required = productTopScreenBlocks;
+      for (const auto &contract :
+           Oot3dNativeGame::TopScreenVerifiedControlFlowContracts())
+        required.push_back(contract.Target);
+      for (const auto &contract :
+           Oot3dNativeGame::TopScreenVerifiedFloatLoadContracts())
+        required.push_back(contract.Entry + 4U);
+      for (const auto pc : mapIconSites)
+        required.push_back(pc + 4U);
+      required.push_back(kTopScreenCameraFovScalar + 4U);
+      const auto entries = Oot3dNativeGame::Oot3dWholeAotEntryPoints();
+      std::vector<uint32_t> sortedEntries(entries.begin(), entries.end());
+      std::sort(sortedEntries.begin(), sortedEntries.end());
+      std::string missing;
+      for (const uint32_t pc : required) {
+        if (!std::binary_search(sortedEntries.begin(), sortedEntries.end(), pc)) {
+          char text[16];
+          std::snprintf(text, sizeof(text), " 0x%08X", pc);
+          missing += text;
+        }
+      }
+      if (!missing.empty())
+        throw std::runtime_error(
+            "the title module does not start a block at the TopScreen sites" + missing +
+            "; rebuild it with whole_aot_observed_sites.json");
+    }
 #endif
     wholeAotObservableExitBlocks.push_back(Oot3dNativeGame::kTopScreenInputUpdateBoundary);
     wholeAotObservableExitBlocks.push_back(kPauseRendererVisibilityNativeDraw);
@@ -659,6 +745,7 @@ void NativeA32WindowSession::Setup() {
   auto &process = processStorage.emplace(
       Oot3dNativeGame::Oot3dNativeA32Registry(), hostServices);
   widescreenProjection.TraceMemory = &process.Memory();
+  widescreenProjection.ActorVisibility.HostMemory = &process.Memory();
   process.Memory().EnableWriteTraceFingerprint(
       widescreenProjection.TraceA32Blocks);
   auto &uiLifecycleBridge = uiLifecycleBridgeStorage.emplace(
@@ -700,10 +787,15 @@ void NativeA32WindowSession::Setup() {
   nativeCandidateDispatch.DevFreeCamera = std::move(devFreeCamera);
   nativeCandidateDispatch.TopScreenUiProfile =
       launch.UiProfile == Oot3dNativeGame::Oot3dUiProfile::TopScreen;
+  // After the rebuild above, which would discard an earlier assignment.
+  nativeCandidateDispatch.ProductTopScreenBlocks = std::move(productTopScreenBlocks);
   widescreenProjection.TopScreenInput =
       &nativeCandidateDispatch.TopScreenInput;
   widescreenProjection.TopScreenInputClock =
       &nativeCandidateDispatch.TopScreenInputClock;
+  widescreenProjection.ObservedExitPc = &nativeCandidateDispatch.ObservedExitPc;
+  nativeCandidateDispatch.TopScreenPausePageRedrawActive =
+      &widescreenProjection.TopScreenPausePageRedrawActive;
   widescreenProjection.TopScreenItems = &nativeCandidateDispatch.TopScreenItems;
   // After the dispatch state is rebuilt: an earlier pointer would name the
   // free camera that assignment destroyed.
@@ -856,13 +948,20 @@ void NativeA32WindowSession::Setup() {
                                 kMinimumHostAudioPrebufferMilliseconds +
                             999U) /
                            1000U));
+  // The user's profiles beside the configuration; the release's defaults in
+  // the runtime resources.
   sceneEnvironment = std::make_shared<Oot3dNativeGame::SceneEnvironmentRuntime>(
       Oot3dNativeGame::TitleSceneEnvironmentDirectory(launch.Host.ConfigurationPath, titleAdapter),
       [](const Fast::Renderer3ds::PicaEnvironmentLighting& environment) {
         Fast::Oot3d::GraphicsSettingsRuntime::Instance().PublishSceneEnvironment(environment);
-      }, titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur
-             ? Oot3dNativeGame::BaseSceneEnvironmentProfile()
-             : Oot3dNativeGame::NativePreservingSceneEnvironmentProfile());
+      },
+      launch.Host.ResourceRoot.empty() ? std::filesystem::path{}
+                                       : std::filesystem::path(launch.Host.ResourceRoot) / "environments",
+      // A title without authored tuning keeps its native lighting (D1 of the
+      // alignment: OoT3D's base profile is OoT3D's).
+      titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur
+          ? Oot3dNativeGame::BaseSceneEnvironmentProfile()
+          : Oot3dNativeGame::NativePreservingSceneEnvironmentProfile());
   // F1 order: the scene lights join Lighting > Lights & Shadows; then
   // Controls, HUD and Game (Save states, Language) after the graphics tabs.
   // Only adapters with a typed scene provider expose scene profiles.
@@ -1088,6 +1187,17 @@ void NativeA32WindowSession::Setup() {
   auto &ocarinaText = ocarinaTextStorage.emplace(process.Memory(), nativeUiTextureProvider);
   nativeCandidateDispatch.OcarinaText = &ocarinaText;
   widescreenProjection.OcarinaText = &ocarinaText;
+  auto &pauseTransaction = pauseTransactionStorage.emplace(process.Memory());
+  nativeCandidateDispatch.PauseTransaction = &pauseTransaction;
+  widescreenProjection.PauseTransaction = &pauseTransaction;
+  auto &systemPage = systemPageStorage.emplace(process.Memory());
+  nativeCandidateDispatch.SystemPage = &systemPage;
+  widescreenProjection.SystemPage = &systemPage;
+  auto &itemDescription = itemDescriptionStorage.emplace(process.Memory());
+  nativeCandidateDispatch.ItemDescription = &itemDescription;
+  widescreenProjection.ItemDescription = &itemDescription;
+  auto &wideItems = wideItemsStorage.emplace(process.Memory());
+  nativeCandidateDispatch.WideItems = &wideItems;
   auto &uiRenderBackend = uiRenderBackendStorage.emplace(api);
   auto &n64UiRenderer = n64UiRendererStorage.emplace(uiRenderBackend,
                                                &ocarinaText);
@@ -1422,10 +1532,12 @@ void NativeA32WindowSession::UpdateScenePresentation() {
       Fast::Oot3d::ResolveScenePresentationPolicy(
           std::max<uint32_t>(1, window.GetWidth()),
           std::max<uint32_t>(1, window.GetHeight()));
-  widescreenProjection.Projection.FovMultiplier =
-      Fast::Oot3d::GraphicsSettingsRuntime::Instance()
-          .Snapshot()
-          .FovMultiplier;
+  const auto graphics = Fast::Oot3d::GraphicsSettingsRuntime::Instance().Snapshot();
+  widescreenProjection.Projection.FovMultiplier = graphics.FovMultiplier;
+  auto &visibility = widescreenProjection.ActorVisibility;
+  visibility.ExtendedDrawDistance = graphics.ExtendedDrawDistance;
+  visibility.Presentation = widescreenProjection.Projection.Presentation;
+  visibility.FovMultiplier = graphics.FovMultiplier;
 }
 
 Fast::Renderer3ds::PicaFrameCompositionPolicy NativeA32WindowSession::ResolveFrameCompositionPolicy(const Fast::Oot3d::PresentationPacingPolicy& pacing) {

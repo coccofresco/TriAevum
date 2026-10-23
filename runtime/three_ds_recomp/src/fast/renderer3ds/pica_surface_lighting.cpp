@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <numbers>
 
 namespace Fast::Renderer3ds {
 namespace {
@@ -81,6 +82,43 @@ void AssignPicaSurfaceWater(PicaSurfaceLightingUniforms& uniforms, const PicaSur
                                       (*rings)[i].Strength};
 }
 
+std::optional<PicaNativeSurfaceLighting> ReadPicaNativeSurfaceLighting(
+    const PicaVertexShaderHookLayout& hooks, uint32_t booleanUniforms,
+    std::span<const uint8_t> floatUniformBytes) noexcept {
+    const auto* surface = hooks.SurfaceProgram();
+    if (surface == nullptr) return std::nullopt;
+    PicaNativeSurfaceLighting result;
+    if (!ReadUniform(floatUniformBytes, surface->DiffuseUniform, result.MaterialDiffuse) ||
+        !ReadUniform(floatUniformBytes, surface->AmbientUniform, result.MaterialAmbient)) return std::nullopt;
+    result.Enabled = (booleanUniforms >> surface->LightingBooleanUniform) & 1U;
+    // A vertex-lighting block the rows cannot hold keeps a lit draw native.
+    if (!surface->VertexLightsReconstructed && result.Enabled != 0U) return std::nullopt;
+    Vec4 enabledValue{};
+    if (surface->VertexLightsReconstructed &&
+        !ReadUniform(floatUniformBytes, surface->LightEnabledValue.Uniform, enabledValue)) return std::nullopt;
+    for (size_t slot = 0; surface->VertexLightsReconstructed && slot < result.Lights.size(); ++slot) {
+        auto& light = result.Lights[slot];
+        const uint8_t first = surface->LightDirectionUniforms[slot];
+        Vec4 ambient{};
+        if (!ReadUniform(floatUniformBytes, first, light.DirectionEnabled) ||
+            !ReadUniform(floatUniformBytes, first + 1U, light.Diffuse) ||
+            !ReadUniform(floatUniformBytes, first + 2U, ambient)) return std::nullopt;
+        light.DirectionEnabled[3] = light.DirectionEnabled[3] == enabledValue[surface->LightEnabledValue.Component] ? 1.0F : 0.0F;
+        for (size_t component = 0; component < 3U; ++component) light.DirectionEnabled[component] = -light.DirectionEnabled[component];
+        if (result.Enabled != 0U && light.DirectionEnabled[3] != 0.0F) {
+            for (size_t channel = 0; channel < 3; ++channel) {
+                result.ResolvedAmbient[channel] += ambient[channel] * result.MaterialAmbient[channel];
+                if (light.Diffuse[channel] != 0.0F && result.MaterialDiffuse[channel] != 0.0F)
+                    result.DirectSlotMask |= 1U << slot;
+            }
+        }
+    }
+    result.Classification = !result.Enabled ? PicaNativeSurfaceLightingClass::Unlit
+        : result.DirectSlotMask != 0 ? PicaNativeSurfaceLightingClass::DirectLit
+                                     : PicaNativeSurfaceLightingClass::AmbientOnly;
+    return result;
+}
+
 std::optional<PicaSurfaceLightingUniforms> BuildPicaSurfaceLightingUniforms(
     const PicaVertexShaderHookLayout& hooks, uint32_t booleanUniforms,
     std::span<const uint8_t> floatUniformBytes,
@@ -95,31 +133,15 @@ std::optional<PicaSurfaceLightingUniforms> BuildPicaSurfaceLightingUniforms(
             if (pointShadows->Identities[row] == identity) return static_cast<float>(row);
         return -1.0F;
     };
-    const auto* surface = hooks.SurfaceProgram();
     const auto* transform = hooks.TransformProgram();
-    if (surface == nullptr || transform == nullptr) return std::nullopt;
+    const auto native = ReadPicaNativeSurfaceLighting(hooks, booleanUniforms, floatUniformBytes);
+    if (!native || transform == nullptr) return std::nullopt;
     PicaSurfaceLightingUniforms result;
-    if (!ReadUniform(floatUniformBytes, surface->DiffuseUniform, result.MaterialDiffuse) ||
-        !ReadUniform(floatUniformBytes, surface->AmbientUniform, result.MaterialAmbient)) return std::nullopt;
-    result.Control[0] = (booleanUniforms >> surface->LightingBooleanUniform) & 1U;
-    // A vertex-lighting block the rows cannot hold keeps a lit draw native.
-    if (!surface->VertexLightsReconstructed && result.Control[0] != 0U) return std::nullopt;
-    Vec4 enabledValue{};
-    if (surface->VertexLightsReconstructed &&
-        !ReadUniform(floatUniformBytes, surface->LightEnabledValue.Uniform, enabledValue)) return std::nullopt;
-    for (size_t slot = 0; surface->VertexLightsReconstructed && slot < result.Lights.size(); ++slot) {
-        auto& light = result.Lights[slot];
-        const uint8_t first = surface->LightDirectionUniforms[slot];
-        Vec4 ambient{};
-        if (!ReadUniform(floatUniformBytes, first, light.DirectionEnabled) ||
-            !ReadUniform(floatUniformBytes, first + 1U, light.Diffuse) ||
-            !ReadUniform(floatUniformBytes, first + 2U, ambient)) return std::nullopt;
-        light.DirectionEnabled[3] = light.DirectionEnabled[3] == enabledValue[surface->LightEnabledValue.Component] ? 1.0F : 0.0F;
-        for (size_t component = 0; component < 3U; ++component) light.DirectionEnabled[component] = -light.DirectionEnabled[component];
-        if (result.Control[0] != 0U && light.DirectionEnabled[3] != 0.0F)
-            for (size_t channel = 0; channel < 3; ++channel)
-                result.ResolvedAmbient[channel] += ambient[channel] * result.MaterialAmbient[channel];
-    }
+    result.MaterialDiffuse = native->MaterialDiffuse;
+    result.MaterialAmbient = native->MaterialAmbient;
+    result.ResolvedAmbient = native->ResolvedAmbient;
+    result.Lights = native->Lights;
+    result.Control[0] = native->Enabled;
     std::span<const PicaScenePointLight> scenePoints;
     if (binding.ScenePoints) {
         if (binding.ScenePoints->Count > binding.ScenePoints->Lights.size()) return std::nullopt;
@@ -180,6 +202,17 @@ std::optional<PicaSurfaceLightingUniforms> BuildPicaSurfaceLightingUniforms(
     }
     const bool hasDiffuse = std::any_of(result.MaterialDiffuse.begin(),
         result.MaterialDiffuse.begin() + 3, [](float value) { return value != 0.0F; });
+    if (native->Classification != PicaNativeSurfaceLightingClass::DirectLit &&
+        std::any_of(sceneDirectionals.begin(), sceneDirectionals.end(), [](const auto& light) { return light.SkyLight; })) {
+        // Native room colour already contains the environment's illumination.
+        // Its lit reference is a horizontal face. Transform that normal by
+        // inverse transpose, just like the geometry's surface normal.
+        const auto& up = binding.SceneDirectionals->WorldUp;
+        for (size_t row = 0; row < 3; ++row)
+            for (size_t axis = 0; axis < 3; ++axis)
+                result.BakedReferenceUp[row] += result.ViewToWorldLinear[axis][row] * up[axis];
+        result.BakedReferenceUp[3] = 1.0F;
+    }
     // Fragment-lit Lambert leaves native primary color (material or vertex
     // color) in the TEV. Feed irradiance to its fragment-lighting operand;
     // folding material here as well would square its response.
@@ -226,8 +259,12 @@ std::optional<PicaSurfaceLightingUniforms> BuildPicaSurfaceLightingUniforms(
         auto& placed = result.Placed[placedCount++];
         placed.PositionReach[3] = source.Reach;
         placed.Color[3] = source.CastShadows && !sun ? pointShadowRow(source.SourceIdentity) : -1.0F;
+        const bool surface = source.Kind == PicaPlacedLightKind::Rectangle ||
+                             source.Kind == PicaPlacedLightKind::Disc;
+        const float straightening = surface ? 180.0F - std::round(std::clamp(source.Spread, 1.0F, 180.0F)) : 0.0F;
         placed.AxisKind = { source.AxisWorld[0], source.AxisWorld[1], source.AxisWorld[2],
-                            static_cast<float>(source.Kind) + (source.TwoSided ? 8.0F : 0.0F) };
+                            static_cast<float>(source.Kind) + (source.TwoSided ? 8.0F : 0.0F) +
+                                16.0F * straightening };
         if (source.Kind == PicaPlacedLightKind::Spot)
             placed.TangentShape = { source.CosOuter, source.CosInner, 0.0F, 0.0F };
         else
@@ -257,9 +294,18 @@ std::optional<PicaSurfaceLightingUniforms> BuildPicaSurfaceLightingUniforms(
         for (size_t channel = 0; channel < 3; ++channel)
             result.EnvironmentAmbient[channel] = environment.AmbientColor[channel] *
                 environment.AmbientIntensity * (nativePrimary ? 1.0F : result.MaterialAmbient[channel]);
+        if (result.BakedReferenceUp[3] != 0.0F) {
+            auto referenceEnvironment = environment;
+            referenceEnvironment.Lights[0].Color = {1.0F, 1.0F, 1.0F};
+            const auto color = ResolvePicaEnvironmentKeyColor(referenceEnvironment, binding.SceneDirectionals.get());
+            for (size_t channel = 0; channel < 3; ++channel)
+                result.BakedReferenceKey[channel] = color[channel] * reflectance[channel];
+        }
         for (size_t slot = 0; slot < environment.Lights.size(); ++slot) {
             const auto& source = environment.Lights[slot];
-            if (source.Intensity <= 0.0F) continue;
+            // A disabled key still defines the unit-intensity reference, so
+            // turning it down removes illumination instead of renormalizing it.
+            if (source.Intensity <= 0.0F && !(slot == 0 && result.BakedReferenceUp[3] != 0.0F)) continue;
             const auto direction = slot == 0
                 ? ResolvePicaEnvironmentKeyDirection(environment, binding.SceneDirectionals.get())
                 : source.DirectionTowardSource;
@@ -341,6 +387,29 @@ uint32_t ExcludePicaSceneDirectionalsLitNatively(
     return removed;
 }
 
+void AssignPicaSurfaceRim(PicaSurfaceLightingUniforms& uniforms, const PicaRimLightSettings& settings) noexcept {
+    uniforms.Rim = {};
+    uniforms.RimColor = {};
+    uniforms.RimDirection = {};
+    if (!settings.Enabled || !std::isfinite(settings.Intensity) || !std::isfinite(settings.Sharpness) ||
+        !std::isfinite(settings.Azimuth) || !std::isfinite(settings.Coverage)) return;
+    if (settings.Intensity < 0.0F || settings.Intensity > kMaximumPicaRimIntensity || settings.Sharpness < 1.0F ||
+        settings.Sharpness > 16.0F || settings.Azimuth < -180.0F || settings.Azimuth > 180.0F ||
+        settings.Coverage < 0.0F || settings.Coverage > 1.0F ||
+        settings.Source > PicaRimLightSource::SceneLights) return;
+    for (float channel : settings.Color)
+        if (!std::isfinite(channel) || channel < 0.0F || channel > 1.0F) return;
+    if (settings.Intensity == 0.0F) return;
+    if (settings.Source == PicaRimLightSource::SceneLights) {
+        uniforms.Rim = {settings.Intensity, settings.Sharpness, 2.0F, 0.0F};
+        return; // Independent-only controls do not change these rendering inputs.
+    }
+    uniforms.Rim = {settings.Intensity, settings.Sharpness, 1.0F, settings.Coverage};
+    uniforms.RimColor = {settings.Color[0], settings.Color[1], settings.Color[2], 0.0F};
+    const float azimuth = settings.Azimuth * std::numbers::pi_v<float> / 180.0F;
+    uniforms.RimDirection = {std::sin(azimuth), std::cos(azimuth), 0.0F, 0.0F};
+}
+
 std::string PicaSurfaceLightingDeclarations(bool fragmentOperand, bool fragmentBalance) {
     return std::string(R"glsl(
 layout(location=9) in vec3 pica_surface_normal;
@@ -385,6 +454,11 @@ layout(set=0,binding=16,std140) uniform PicaSurfaceLighting {
     vec4 water_ripples;
     vec4 water_flow;
     vec4 water_rings[16];
+    vec4 rim;
+    vec4 rim_color;
+    vec4 rim_direction;
+    vec4 baked_reference_up;
+    vec4 baked_reference_key;
 )glsl") + (fragmentBalance ? std::string(R"glsl(    uvec4 balance_control;
     vec4 balance_gains[8];
     vec4 balance_parameters;
@@ -491,6 +565,36 @@ vec3 pica_surface_unit(vec3 value) {
 vec3 pica_surface_resolved_ambient(vec3 native_ambient) {
 )glsl") + (fragmentBalance ? std::string("    return pica_balance_ambient;\n") : std::string{}) + std::string(R"glsl(    return native_ambient * pica_surface.environment_parameters.y + pica_surface.environment_ambient.rgb;
 }
+// Bounded artistic scattering, not a new light or a GI source. N and V are
+// the final shading normal and surface-to-camera direction in view space.
+float pica_surface_rim_fresnel(vec3 n, vec3 v) {
+    if (dot(n, n) < 0.5 || dot(v, v) < 0.5) return 0.0;
+    return pow(clamp(1.0 - abs(dot(n, v)), 0.0, 1.0), pica_surface.rim.y);
+}
+float pica_surface_rim_weight(vec3 n, vec3 v, vec3 l) {
+    if (pica_surface.rim.x <= 0.0 || pica_surface.rim.z != 2.0) return 0.0;
+    l = pica_surface_unit(l);
+    if (dot(l, l) < 0.5) return 0.0;
+    float back = smoothstep(-0.25, 0.5, dot(l, -v));
+    float wrap = clamp((dot(n, l) + 0.5) / 1.5, 0.0, 1.0);
+    return pica_surface.rim.x * pica_surface_rim_fresnel(n, v) * back * wrap;
+}
+vec3 pica_surface_rim_independent(vec3 n, vec3 v) {
+    if (pica_surface.rim.x <= 0.0 || pica_surface.rim.z != 1.0) return vec3(0.0);
+    float projected = dot(n.xy, n.xy);
+    // Undefined silhouette direction: no division by a zero projected normal.
+    float side = projected > 1.0e-8
+        ? smoothstep(-0.25, 0.75, dot(n.xy * inversesqrt(projected), pica_surface.rim_direction.xy)) : 0.0;
+    float coverage = mix(side, 1.0, pica_surface.rim.w);
+    return pica_surface.rim_color.rgb * pica_surface.rim.x *
+        pica_surface_rim_fresnel(n, v) * coverage;
+}
+float pica_surface_diffuse_rim(vec3 n, vec3 l, bool rim) {
+    float diffuse = max(dot(n, l), 0.0);
+    if (rim && pica_surface.rim.x > 0.0)
+        diffuse += pica_surface_rim_weight(n, pica_surface_unit(pica_view), l);
+    return diffuse;
+}
 vec3 pica_surface_shadow(int slot);
 float pica_point_shadow(float slot, vec3 light_to_fragment, float radius);
 void pica_surface_light(int slot, out vec3 direction, out vec3 radiance) {
@@ -540,12 +644,25 @@ float pica_surface_reach_window(float distance_world, float reach) {
     float window = clamp(1.0 - ratio * ratio * ratio * ratio, 0.0, 1.0);
     return window * window;
 }
+// The area shared by discs of radii a and b whose centres are d apart.
+float pica_surface_disc_overlap(float a, float b, float d) {
+    if (d >= a + b) return 0.0;
+    float smaller = min(a, b);
+    if (d <= abs(a - b)) return 3.14159265 * smaller * smaller;
+    float cos_a = clamp((d * d + a * a - b * b) / (2.0 * d * a), -1.0, 1.0);
+    float cos_b = clamp((d * d + b * b - a * a) / (2.0 * d * b), -1.0, 1.0);
+    float k = (-d + a + b) * (d + a - b) * (d - a + b) * (d + a + b);
+    return a * a * acos(cos_a) + b * b * acos(cos_b) - 0.5 * sqrt(max(k, 0.0));
+}
 // Placed light kinds (PicaPlacedLightKind): 0 omni, 1 point, 2 spot,
-// 3 rectangle, 4 disc, 5 sun; 8 is added for a two-sided surface.
+// 3 rectangle, 4 disc, 5 sun; 8 is added for a two-sided surface, and 16
+// times (180 - spread degrees) for a straightened surface.
 void pica_surface_placed_light(int slot, out vec3 direction, out vec3 radiance) {
     PicaPlacedLight light = pica_surface.placed_lights[slot];
-    bool two_sided = light.axis_kind.w >= 7.5;
-    int kind = int(light.axis_kind.w - (two_sided ? 8.0 : 0.0) + 0.5);
+    uint code = uint(light.axis_kind.w + 0.5);
+    bool two_sided = (code & 8u) != 0u;
+    int kind = int(code & 7u);
+    float straightening = float(code >> 4u);
     vec3 axis = light.axis_kind.xyz;
     radiance = light.color.rgb;
     if (kind == 5) {
@@ -565,27 +682,64 @@ void pica_surface_placed_light(int slot, out vec3 direction, out vec3 radiance) 
             radiance = vec3(0.0);
             return;
         }
+        // A straightened surface reaches the fragment only from its points
+        // that see it within half the spread of the axis: those inside a
+        // footprint of radius height * tan(spread / 2) around the fragment's
+        // projection on the surface. That part of the shape emits, from its
+        // centre's angle, and a gain keeps the light under a surface that
+        // covers the footprint as bright as the diffuse surface's.
+        float height = abs(side);
+        float footprint = straightening > 0.0 ? height * tan(radians(180.0 - straightening) * 0.5) : -1.0;
+        vec3 emitting_center = vec3(0.0);
         vec3 closest;
         float area;
+        float shape_area;
         if (kind == 3) {
             float half_width = length(light.tangent_shape.xyz);
             vec3 tangent = light.tangent_shape.xyz / max(half_width, 1.0e-6);
             vec3 bitangent = cross(axis, tangent);
             float half_height = light.tangent_shape.w;
-            closest = tangent * clamp(dot(from_center, tangent), -half_width, half_width) +
-                      bitangent * clamp(dot(from_center, bitangent), -half_height, half_height);
+            vec2 projected = vec2(dot(from_center, tangent), dot(from_center, bitangent));
+            closest = tangent * clamp(projected.x, -half_width, half_width) +
+                      bitangent * clamp(projected.y, -half_height, half_height);
             area = 4.0 * half_width * half_height;
+            shape_area = area;
+            if (footprint >= 0.0) {
+                // The footprint as the square of its area.
+                vec2 low = max(vec2(-half_width, -half_height), projected - footprint * 0.886226925);
+                vec2 high = min(vec2(half_width, half_height), projected + footprint * 0.886226925);
+                vec2 extent = max(high - low, vec2(0.0));
+                area = extent.x * extent.y;
+                emitting_center = tangent * (0.5 * (low.x + high.x)) + bitangent * (0.5 * (low.y + high.y));
+            }
         } else {
             float radius = length(light.tangent_shape.xyz);
             vec3 planar = from_center - axis * side;
             float planar_length = length(planar);
             closest = planar_length > radius ? planar * (radius / planar_length) : planar;
             area = 3.14159265 * radius * radius;
+            shape_area = area;
+            if (footprint >= 0.0) {
+                area = pica_surface_disc_overlap(radius, footprint, planar_length);
+                // Midway across the overlap, on the line from the disc's
+                // centre to the fragment's projection.
+                float near_edge = max(-radius, planar_length - footprint);
+                float far_edge = min(radius, planar_length + footprint);
+                emitting_center = planar_length > 1.0e-3 ? planar * (0.5 * (near_edge + far_edge) / planar_length)
+                                                  : vec3(0.0);
+            }
         }
         // From the fragment to the closest point of the surface.
         vec3 to_surface = closest - from_center;
-        float cos_light = abs(side) / max(distance_world, 1.0e-3);
+        float cos_light = height / max(footprint >= 0.0 ? length(emitting_center - from_center) : distance_world, 1.0e-3);
         float form = area * cos_light / (3.14159265 * dot(to_surface, to_surface) + area);
+        if (footprint >= 0.0) {
+            // The diffuse surface's form factor straight under its centre
+            // over the footprint's (no more of it than the shape).
+            float reached = min(shape_area, 3.14159265 * footprint * footprint);
+            float spread_disc = 3.14159265 * height * height;
+            form *= shape_area / (spread_disc + shape_area) * (spread_disc + reached) / max(reached, 1.0e-12);
+        }
         direction = pica_surface_view_direction(to_surface);
         radiance *= form * pica_surface_reach_window(distance_world, reach);
     } else {
@@ -607,26 +761,26 @@ void pica_surface_placed_light(int slot, out vec3 direction, out vec3 radiance) 
     }
     radiance *= pica_point_shadow(light.color.w, -to_light, reach);
 }
-vec3 pica_surface_scene_point_primary(vec3 normal_view) {
+vec3 pica_surface_scene_point_primary(vec3 normal_view, bool rim) {
     vec3 color = vec3(0.0);
     for (uint slot = 0u; slot < pica_surface.control.y; ++slot) {
         vec3 direction, radiance;
         pica_surface_scene_point(int(slot), direction, radiance);
-        color += max(dot(normal_view, direction), 0.0) * radiance;
+        color += pica_surface_diffuse_rim(normal_view, direction, rim) * radiance;
     }
     for (uint slot = 0u; slot < pica_surface_placed_count(); ++slot) {
         vec3 direction, radiance;
         pica_surface_placed_light(int(slot), direction, radiance);
-        color += max(dot(normal_view, direction), 0.0) * radiance;
+        color += pica_surface_diffuse_rim(normal_view, direction, rim) * radiance;
     }
     return color;
 }
-vec3 pica_surface_scene_directional_response(vec3 normal_view, uint capture_mask, out vec3 captured) {
+vec3 pica_surface_scene_directional_response(vec3 normal_view, uint capture_mask, out vec3 captured, bool rim) {
     captured = vec3(0.0);
     vec3 color = vec3(0.0);
     for (uint slot = 0u; slot < pica_surface.control.z; ++slot) {
         vec3 direction = pica_surface_unit(pica_surface.scene_directions[slot].xyz);
-        vec3 response = max(dot(normal_view, direction), 0.0) *
+        vec3 response = pica_surface_diffuse_rim(normal_view, direction, rim) *
             pica_surface.scene_directional_colors[slot].rgb * pica_surface_shadow(10 + int(slot));
         color += response;
         if ((capture_mask & (1u << (10u + slot))) != 0u) captured += response;
@@ -635,7 +789,7 @@ vec3 pica_surface_scene_directional_response(vec3 normal_view, uint capture_mask
 }
 vec3 pica_surface_scene_directional_primary(vec3 normal_view) {
     vec3 unused;
-    return pica_surface_scene_directional_response(normal_view, 0u, unused);
+    return pica_surface_scene_directional_response(normal_view, 0u, unused, false);
 }
 // Raw radiance and the selected directional contribution, before tint,
 // abs/clamp and native colour quantization. A zero capture mask eliminates
@@ -650,7 +804,7 @@ vec3 pica_surface_native_response(vec3 normal_view, uint capture_mask, out vec3 
         if (any(notEqual(pica_surface.lights[slot].diffuse.rgb, vec3(0.0)))) {
         vec3 direction, radiance;
         pica_surface_light(slot, direction, radiance);
-        vec3 response = max(dot(normal_view, direction), 0.0) * radiance * pica_surface_shadow(slot);
+        vec3 response = pica_surface_diffuse_rim(normal_view, direction, true) * radiance * pica_surface_shadow(slot);
         direct += response;
         if ((capture_mask & (1u << uint(slot))) != 0u) captured += response;
         }
@@ -662,20 +816,23 @@ vec3 pica_surface_native_response(vec3 normal_view, uint capture_mask, out vec3 
         captured *= pica_surface.environment_parameters.x;
     }
     color += pica_surface.resolved_ambient.rgb;
+    // This virtual source bypasses all scene gains and shadow capture. It is
+    // deliberately absent from pica_surface_gi_direct.
+    color += pica_surface_rim_independent(normal_view, pica_surface_unit(pica_view));
     if (pica_surface.environment_parameters.w != 0.0) {
         for (int slot = 0; slot < 2; ++slot) {
             if (pica_surface.environment_directions[slot].w <= 0.0) continue;
             vec3 direction = pica_surface_unit(pica_surface.environment_directions[slot].xyz);
-            vec3 response = max(dot(normal_view, direction), 0.0) *
+            vec3 response = pica_surface_diffuse_rim(normal_view, direction, true) *
                 pica_surface.environment_colors[slot].rgb * pica_surface.environment_directions[slot].w *
                 pica_surface_shadow(8 + slot);
             color += response;
             if ((capture_mask & (1u << uint(8 + slot))) != 0u) captured += response;
         }
     }
-    color += pica_surface_scene_point_primary(normal_view);
+    color += pica_surface_scene_point_primary(normal_view, true);
     vec3 scene_captured;
-    color += pica_surface_scene_directional_response(normal_view, capture_mask, scene_captured);
+    color += pica_surface_scene_directional_response(normal_view, capture_mask, scene_captured, true);
     captured += scene_captured;
     return color;
 }
@@ -683,6 +840,54 @@ vec3 pica_surface_native_primary(vec3 normal_view) {
     vec3 unused;
     vec3 color = pica_surface_native_response(normal_view, 0u, unused);
     return min(abs(color * pica_surface_tint.rgb), vec3(1.0));
+}
+// Baked outdoor colour is a lit reference, not another light to add to the
+// sky. Ambient and directional light distribute that reference. The key's
+// denominator is always evaluated at 1x, without shadows; its numerator
+// retains the user's intensity. Local/placed lights and rim stay additive.
+vec3 pica_surface_baked_ambient() {
+    return pica_surface.control.x != 0u ? pica_surface.resolved_ambient.rgb
+        : vec3(pica_surface.environment_parameters.y) + pica_surface.environment_ambient.rgb;
+}
+float pica_surface_baked_diffuse(vec3 normal_view, vec3 up, vec3 direction) {
+    // A near-horizon key must not amplify a facing wall by 1 / sin(elevation).
+    // The horizontal lit reference is the ceiling for the baked response;
+    // explicit light intensity and optional rim may still exceed it.
+    return min(max(dot(normal_view, direction), 0.0), max(dot(up, direction), 0.0)) +
+        pica_surface_rim_weight(normal_view, pica_surface_unit(pica_view), direction);
+}
+vec3 pica_surface_baked_response(vec3 normal_view, uint capture_mask, out vec3 reference, out vec3 captured) {
+    vec3 up = pica_surface_unit(pica_surface.baked_reference_up.xyz);
+    vec3 response = pica_surface_baked_ambient();
+    reference = response;
+    captured = vec3(0.0);
+    if (pica_surface.environment_parameters.w != 0.0) {
+        for (int slot = 0; slot < 2; ++slot) {
+            vec3 direction = pica_surface_unit(pica_surface.environment_directions[slot].xyz);
+            vec3 color = pica_surface.environment_colors[slot].rgb;
+            float gain = pica_surface.environment_directions[slot].w;
+            vec3 direct = color * gain * pica_surface_baked_diffuse(normal_view, up, direction) *
+                pica_surface_shadow(8 + slot);
+            response += direct;
+            if ((capture_mask & (1u << uint(8 + slot))) != 0u) captured += direct;
+            reference += (slot == 0 ? pica_surface.baked_reference_key.rgb : color * gain) *
+                max(dot(up, direction), 0.0);
+        }
+    }
+    for (uint slot = 0u; slot < pica_surface.control.z; ++slot) {
+        vec3 direction = pica_surface_unit(pica_surface.scene_directions[slot].xyz);
+        vec3 color = pica_surface.scene_directional_colors[slot].rgb;
+        vec3 direct = color * pica_surface_baked_diffuse(normal_view, up, direction) *
+            pica_surface_shadow(10 + int(slot));
+        response += direct;
+        if ((capture_mask & (1u << (10u + slot))) != 0u) captured += direct;
+        reference += color * max(dot(up, direction), 0.0);
+    }
+    return response;
+}
+vec3 pica_surface_baked_response(vec3 normal_view, out vec3 reference) {
+    vec3 unused;
+    return pica_surface_baked_response(normal_view, 0u, reference, unused);
 }
 // Direct light that seeds global illumination: the native scene directionals
 // (gi_sources.x), the added key (y) and the dynamic lights (z: native local
@@ -710,7 +915,7 @@ vec3 pica_surface_gi_direct(vec3 normal_view) {
                 pica_surface.environment_colors[0].rgb * pica_surface.environment_directions[0].w *
                 pica_surface_shadow(8) * weight.y;
     }
-    color += pica_surface_scene_point_primary(normal_view) * weight.z;
+    color += pica_surface_scene_point_primary(normal_view, false) * weight.z;
     color += pica_surface_scene_directional_primary(normal_view) * weight.x;
 )glsl") +
         (fragmentOperand ? std::string(R"glsl(    vec3 material = (pica_surface.control.w & 2u) != 0u
@@ -720,6 +925,14 @@ vec3 pica_surface_gi_direct(vec3 normal_view) {
 )glsl")) +
         std::string(R"glsl(}
 vec3 pica_surface_primary(vec3 native_color, vec3 normal_view) {
+    if (pica_surface.baked_reference_up.w != 0.0) {
+        vec3 reference;
+        vec3 response = pica_surface_baked_response(normal_view, reference);
+        vec3 color = native_color * response / max(reference, vec3(1.0e-6));
+        color += (pica_surface_scene_point_primary(normal_view, true) +
+                  pica_surface_rim_independent(normal_view, pica_surface_unit(pica_view))) * pica_surface_tint.rgb;
+        return clamp(color, 0.0, 1.0);
+    }
     if (pica_surface.control.x != 0u ||
         (pica_surface.environment_parameters.w != 0.0 && (pica_surface.control.w & 1u) == 0u))
         return pica_surface_native_primary(normal_view);
@@ -727,7 +940,7 @@ vec3 pica_surface_primary(vec3 native_color, vec3 normal_view) {
     // The scene reference keeps it intact even when the override is active.
     if (pica_surface.environment_parameters.w != 0.0)
         return min(native_color + pica_surface_native_primary(normal_view), vec3(1.0));
-    return min(native_color + (pica_surface_scene_point_primary(normal_view) +
+    return min(native_color + (pica_surface_scene_point_primary(normal_view, true) +
                pica_surface_scene_directional_primary(normal_view)) * pica_surface_tint.rgb, vec3(1.0));
 }
 // Gameplay water (pica_surface_water): its native colour is its appearance.

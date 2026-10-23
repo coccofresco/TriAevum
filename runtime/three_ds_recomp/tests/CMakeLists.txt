@@ -1,6 +1,14 @@
 include(FetchContent)
 
 find_package(Threads REQUIRED)
+add_executable(renderer3ds_room_shadow_shell_tests renderer3ds_room_shadow_shell_tests.cpp)
+target_compile_features(renderer3ds_room_shadow_shell_tests PRIVATE cxx_std_20)
+target_link_libraries(renderer3ds_room_shadow_shell_tests PRIVATE ThreeDsRecomp::Renderer3dsPicaCore gtest_main)
+if(TARGET three_ds_recomp_shaderc)
+    target_link_libraries(renderer3ds_room_shadow_shell_tests PRIVATE three_ds_recomp_shaderc)
+    target_compile_definitions(renderer3ds_room_shadow_shell_tests PRIVATE ROOM_SHADOW_HAS_SHADERC=1)
+endif()
+add_test(NAME renderer3ds_room_shadow_shell_tests COMMAND renderer3ds_room_shadow_shell_tests)
 add_executable(spirv_cache_tests spirv_cache_tests.cpp)
 target_compile_features(spirv_cache_tests PRIVATE cxx_std_20)
 target_link_libraries(spirv_cache_tests PRIVATE ThreeDsRecomp::RendererExtensionCore Threads::Threads)
@@ -15,6 +23,16 @@ add_executable(native_presentation_policy_tests native_presentation_policy_tests
 target_compile_features(native_presentation_policy_tests PRIVATE cxx_std_20)
 target_include_directories(native_presentation_policy_tests PRIVATE ../include)
 add_test(NAME native_presentation_policy_tests COMMAND native_presentation_policy_tests)
+
+add_executable(pica_temporal_history_tests pica_temporal_history_tests.cpp)
+target_compile_features(pica_temporal_history_tests PRIVATE cxx_std_20)
+target_include_directories(pica_temporal_history_tests PRIVATE ../include)
+add_test(NAME pica_temporal_history_tests COMMAND pica_temporal_history_tests)
+
+add_executable(pica_temporal_occurrences_tests pica_temporal_occurrences_tests.cpp)
+target_compile_features(pica_temporal_occurrences_tests PRIVATE cxx_std_20)
+target_include_directories(pica_temporal_occurrences_tests PRIVATE ../include)
+add_test(NAME pica_temporal_occurrences_tests COMMAND pica_temporal_occurrences_tests)
 
 add_executable(pica_surface_coordinates_tests pica_surface_coordinates_tests.cpp)
 target_compile_features(pica_surface_coordinates_tests PRIVATE cxx_std_20)
@@ -244,6 +262,17 @@ if(MSVC)
 endif()
 gtest_discover_tests(oot3d_pica_shader_pipeline_cache_tests
     DISCOVERY_TIMEOUT 30)
+
+# Exercise all three source generators without a GPU. Optional argv[1]
+# exports shaders for offline glslang validation.
+get_target_property(_pica_motion_sources oot3d_pica_shader_pipeline_cache_tests SOURCES)
+list(REMOVE_ITEM _pica_motion_sources oot3d_pica_shader_pipeline_cache_tests.cpp)
+add_executable(pica_motion_provenance_tests pica_motion_provenance_tests.cpp
+    ${_pica_motion_sources} ../src/fast/oot3d/motion_vectors.cpp)
+target_compile_features(pica_motion_provenance_tests PRIVATE cxx_std_20)
+target_include_directories(pica_motion_provenance_tests PRIVATE ../include)
+add_test(NAME pica_motion_provenance_tests COMMAND pica_motion_provenance_tests)
+unset(_pica_motion_sources)
 
 add_executable(oot3d_pica_pipeline_manifest_tests
     oot3d_pica_pipeline_manifest_tests.cpp
@@ -682,7 +711,9 @@ add_executable(oot3d_graphics_foundation_tests
     oot3d_azahar_texture_pack_tests.cpp
     oot3d_graphics_settings_persistence_tests.cpp
     oot3d_graphics_settings_runtime_tests.cpp
+    oot3d_grass_overlay_mask_tests.cpp
     oot3d_grass_async_placement_builder_tests.cpp
+    oot3d_grass_draw_memo_tests.cpp
     oot3d_grass_geometry_registry_tests.cpp
     oot3d_grass_world_placement_cache_tests.cpp
     oot3d_pica_display_transfer_tests.cpp
@@ -697,11 +728,13 @@ add_executable(oot3d_graphics_foundation_tests
     ../src/fast/oot3d/ambient_occlusion_composite.cpp
     ../src/fast/oot3d/azahar_texture_pack.cpp
     ../src/fast/oot3d/azahar_pbr_materials.cpp
+    ../src/fast/oot3d/grass_persistent_placement_cache.cpp
     ../src/fast/oot3d/grass_async_placement_builder.cpp
     ../src/fast/oot3d/grass_static_placement_cache.cpp
     ../src/fast/oot3d/grass_shader_sources.cpp
     ../src/fast/oot3d/grass_blade_geometry.cpp
     ../src/fast/oot3d/grass_collision_resolver.cpp
+    ../src/fast/oot3d/grass_draw_memo.cpp
     ../src/fast/oot3d/grass_geometry_registry.cpp
     ../src/fast/oot3d/grass_world_placement_cache.cpp
     ../src/fast/oot3d/grass_shadow_refinement.cpp
@@ -714,6 +747,7 @@ add_executable(oot3d_graphics_foundation_tests
     ../src/fast/oot3d/grass_scene_bridge.cpp
     ../src/fast/oot3d/grass_shading_environment.cpp
     ../src/fast/oot3d/pica_scene_semantics.cpp
+    ../src/fast/oot3d/grass_overlay_mask.cpp
     ../src/fast/oot3d/grass_surface_extractor.cpp
     ../src/fast/oot3d/grass_texture_source_cache.cpp
     ../src/fast/oot3d/grass_texture_twins.cpp
@@ -763,6 +797,7 @@ add_executable(oot3d_graphics_foundation_tests
     ../src/fast/oot3d/pica_rigid_motion.cpp
     ../src/fast/renderer3ds/pica_vertex_surface.cpp
     ../src/fast/renderer3ds/pica_surface_lighting.cpp
+    ../src/fast/renderer3ds/pica_surface_emission.cpp
     ../src/fast/renderer3ds/point_shadow_map.cpp
     ../src/fast/renderer3ds/pica_pbr_shading.cpp
     ../src/fast/renderer3ds/pica_pbr_seam_shader.cpp
@@ -780,6 +815,7 @@ add_executable(oot3d_graphics_foundation_tests
     ../src/fast/oot3d/temporal_aa.cpp
     ../src/fast/oot3d/upscaler_contract.cpp
     ../src/fast/oot3d/upscaler_guides.cpp
+    ../src/fast/oot3d/upscaler_orientation.cpp
     ../src/fast/oot3d/native_ui_overlay.cpp
     ../src/fast/oot3d/pica_shadow2d.cpp
     ../src/fast/oot3d/scene_view_bridge.cpp
@@ -801,6 +837,7 @@ target_link_libraries(oot3d_graphics_foundation_tests PRIVATE
     gtest_main
     nlohmann_json::nlohmann_json
     ThreeDsRecomp::RendererExtensionCore
+    ThreeDsRecomp::TevProgram
     spdlog::spdlog
     stb
     ZLIB::ZLIB
@@ -818,7 +855,44 @@ endif()
 gtest_discover_tests(oot3d_graphics_foundation_tests DISCOVERY_TIMEOUT 30)
 
 # Small GPU contract test: no runtime/title rebuild or game assets required.
+add_executable(pica_surface_calibration_trace_tests
+    pica_surface_calibration_trace_tests.cpp
+    ../src/fast/renderer3ds/pica_surface_lighting.cpp)
+target_compile_features(pica_surface_calibration_trace_tests PRIVATE cxx_std_20)
+target_include_directories(pica_surface_calibration_trace_tests PRIVATE ../include)
+target_link_libraries(pica_surface_calibration_trace_tests PRIVATE gtest_main)
+gtest_discover_tests(pica_surface_calibration_trace_tests DISCOVERY_TIMEOUT 30)
+
 if(TARGET three_ds_recomp_shaderc AND TARGET Vulkan::Vulkan)
+    add_executable(grass_lighting_gpu_tests
+        grass_lighting_gpu_tests.cpp
+        ../src/fast/oot3d/grass_shader_sources.cpp
+        ../src/fast/renderer3ds/pica_surface_lighting.cpp)
+    target_compile_features(grass_lighting_gpu_tests PRIVATE cxx_std_20)
+    target_include_directories(grass_lighting_gpu_tests PRIVATE ../include
+        "${CMAKE_CURRENT_LIST_DIR}/../../../tools/renderer/tev_program")
+    target_link_libraries(grass_lighting_gpu_tests PRIVATE three_ds_recomp_shaderc Vulkan::Vulkan)
+    add_test(NAME grass_lighting_gpu_tests COMMAND grass_lighting_gpu_tests)
+    add_executable(pica_baked_lighting_gpu_tests
+        pica_baked_lighting_gpu_tests.cpp
+        ../src/fast/renderer3ds/pica_surface_lighting.cpp
+        ../src/fast/renderer3ds/pica_pbr_shading.cpp
+        ../src/fast/renderer3ds/pica_pbr_seam_shader.cpp)
+    target_compile_features(pica_baked_lighting_gpu_tests PRIVATE cxx_std_20)
+    target_include_directories(pica_baked_lighting_gpu_tests PRIVATE ../include
+        "${CMAKE_CURRENT_LIST_DIR}/../../../tools/renderer/tev_program")
+    target_link_libraries(pica_baked_lighting_gpu_tests PRIVATE three_ds_recomp_shaderc Vulkan::Vulkan)
+    add_test(NAME pica_baked_lighting_gpu_tests COMMAND pica_baked_lighting_gpu_tests)
+    add_executable(pica_rim_light_gpu_tests
+        pica_rim_light_gpu_tests.cpp
+        ../src/fast/renderer3ds/pica_surface_lighting.cpp
+        ../src/fast/renderer3ds/pica_pbr_shading.cpp
+        ../src/fast/renderer3ds/pica_pbr_seam_shader.cpp)
+    target_compile_features(pica_rim_light_gpu_tests PRIVATE cxx_std_20)
+    target_include_directories(pica_rim_light_gpu_tests PRIVATE ../include
+        "${CMAKE_CURRENT_LIST_DIR}/../../../tools/renderer/tev_program")
+    target_link_libraries(pica_rim_light_gpu_tests PRIVATE three_ds_recomp_shaderc Vulkan::Vulkan)
+    add_test(NAME pica_rim_light_gpu_tests COMMAND pica_rim_light_gpu_tests)
     add_executable(oot3d_toon_outline_gpu_tests
         oot3d_toon_outline_gpu_tests.cpp
         oot3d_grass_lod_gpu_tests.cpp

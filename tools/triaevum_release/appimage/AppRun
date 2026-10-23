@@ -5,6 +5,23 @@ APPDIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 export APPDIR
 package="$APPDIR/usr/lib/triaevum"
 export LD_LIBRARY_PATH="$package/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+# lib/compat-cxx carries the SDK's libstdc++/libgcc_s. Use it only when the
+# host's libstdc++ is missing or older: one copy serves the whole process,
+# and the host GPU driver may need the newer host library.
+glibcxx_level() {
+    grep -ao 'GLIBCXX_3\.4\.[0-9]*' "$1" 2>/dev/null | sed 's/.*\.//' | sort -n | tail -n 1
+}
+compat="$package/lib/compat-cxx"
+if [ -r "$compat/libstdc++.so.6" ]; then
+    bundled="$(glibcxx_level "$compat/libstdc++.so.6")"
+    host="$( (/sbin/ldconfig -p || ldconfig -p) 2>/dev/null |
+        sed -n 's/^[[:space:]]*libstdc++\.so\.6 (libc6,x86-64[^)]*) => //p' | head -n 1)"
+    level=""
+    [ -n "$host" ] && [ -r "$host" ] && level="$(glibcxx_level "$host")"
+    if [ -z "$level" ] || [ "${bundled:-0}" -gt "$level" ]; then
+        export LD_LIBRARY_PATH="$compat:$LD_LIBRARY_PATH"
+    fi
+fi
 # A launch that cannot reach the Forge must say so: a desktop launch that exits
 # silently is indistinguishable from "the application does nothing".
 if [ ! -x "$package/TriAevumForge" ]; then

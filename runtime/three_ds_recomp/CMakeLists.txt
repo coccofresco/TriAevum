@@ -73,10 +73,19 @@ option(THREE_DS_RECOMP_ENABLE_VULKAN "Build the native 3DS Vulkan backend" OFF)
 option(THREE_DS_RECOMP_ENABLE_NRI "Enable NVIDIA NRI interop for the native 3DS Vulkan backend" ${THREE_DS_RECOMP_ENABLE_VULKAN})
 cmake_dependent_option(THREE_DS_RECOMP_ENABLE_NRI_UPSCALER_SDKS
 	"Compile the optional NRI desktop upscaler SDK integrations" ON "NOT ANDROID" OFF)
+# DLSS (NVIDIA's NGX SDK, under NVIDIA's licence) lives only in the DLSS module
+# (src/fast/dlss/LICENSE.md): its own shared library, triaevum_dlss, which the
+# runtime loads when installed beside it with NVIDIA's DLSS runtime. The
+# runtime itself links nothing of NGX and is complete without the module.
+cmake_dependent_option(THREE_DS_RECOMP_ENABLE_DLSS_MODULE
+	"Build the DLSS module (NVIDIA NGX SDK), under its own licence" ON
+	"THREE_DS_RECOMP_ENABLE_VULKAN;THREE_DS_RECOMP_ENABLE_NRI;THREE_DS_RECOMP_ENABLE_NRI_UPSCALER_SDKS" OFF)
+# Developer experiment (docs/OOT3D_D3D12_NGX_COMPATIBILITY.md): links NGX into
+# the runtime through NRI's D3D12 backend, so it is never part of a release.
 cmake_dependent_option(
 	THREE_DS_RECOMP_ENABLE_D3D12_NGX_PROVIDER
-	"Expose an official NGX D3D12 provider beside the Vulkan renderer"
-	ON
+	"Expose an official NGX D3D12 provider beside the Vulkan renderer (links NGX into the runtime)"
+	OFF
 	"WIN32;THREE_DS_RECOMP_ENABLE_VULKAN;THREE_DS_RECOMP_ENABLE_NRI"
 	OFF)
 option(THREE_DS_RECOMP_ENABLE_SSSR "Enable FidelityFX SSSR for the native 3DS Vulkan backend" ${THREE_DS_RECOMP_ENABLE_NRI})
@@ -84,7 +93,9 @@ option(THREE_DS_RECOMP_ENABLE_CACAO "Enable original FidelityFX CACAO alongside 
 # The iMMERSE module (src/fast/immerse: MXAO by Pascal Gilcher) is not covered
 # by TriAevum's GPL: it stays under the original iMMERSE licence and is used
 # under the author's explicit permission, granted exclusively to TriAevum (see
-# src/fast/immerse/LICENSE.md). OFF builds the complete GPL runtime without it.
+# src/fast/immerse/LICENSE.md). ON builds it as its own shared library,
+# triaevum_immerse, which the runtime loads when installed; the runtime is the
+# same either way and complete without it.
 cmake_dependent_option(THREE_DS_RECOMP_ENABLE_IMMERSE
 	"Build the iMMERSE module (MXAO), under its own licence" ON
 	"THREE_DS_RECOMP_ENABLE_VULKAN;THREE_DS_RECOMP_ENABLE_NRI" OFF)
@@ -185,7 +196,13 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
 		# runtime even though their SDK adapters are compiled together here.
 		set(NRI_ENABLE_NIS_SDK ${THREE_DS_RECOMP_ENABLE_NRI_UPSCALER_SDKS} CACHE BOOL "" FORCE)
 		set(NRI_ENABLE_FFX_SDK ${THREE_DS_RECOMP_ENABLE_NRI_UPSCALER_SDKS} CACHE BOOL "" FORCE)
-		set(NRI_ENABLE_NGX_SDK ${THREE_DS_RECOMP_ENABLE_NRI_UPSCALER_SDKS} CACHE BOOL "" FORCE)
+		# Vulkan DLSS belongs to the DLSS module, outside the runtime; only the
+		# D3D12 NGX experiment links NGX into NRI.
+		if(THREE_DS_RECOMP_ENABLE_NRI_UPSCALER_SDKS AND THREE_DS_RECOMP_ENABLE_D3D12_NGX_PROVIDER)
+			set(NRI_ENABLE_NGX_SDK ON CACHE BOOL "" FORCE)
+		else()
+			set(NRI_ENABLE_NGX_SDK OFF CACHE BOOL "" FORCE)
+		endif()
 		if(THREE_DS_RECOMP_NRI_SOURCE_DIR)
 			FetchContent_Declare(nri SOURCE_DIR "${THREE_DS_RECOMP_NRI_SOURCE_DIR}")
 			execute_process(
@@ -208,6 +225,9 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
 				COMMAND ${CMAKE_COMMAND}
 					-DNRI_SOURCE_DIR=${THREE_DS_RECOMP_NRI_SOURCE_DIR}
 					-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/nri_graphics_pipeline_libraries.cmake
+				COMMAND ${CMAKE_COMMAND}
+					-DNRI_SOURCE_DIR=${THREE_DS_RECOMP_NRI_SOURCE_DIR}
+					-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/oot3d_nri_storage_view_sampled.cmake
 				COMMAND_ERROR_IS_FATAL ANY)
 		else()
 			FetchContent_Declare(nri
@@ -233,6 +253,9 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
 				COMMAND ${CMAKE_COMMAND}
 					-DNRI_SOURCE_DIR=<SOURCE_DIR>
 					-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/nri_graphics_pipeline_libraries.cmake
+				COMMAND ${CMAKE_COMMAND}
+					-DNRI_SOURCE_DIR=<SOURCE_DIR>
+					-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/oot3d_nri_storage_view_sampled.cmake
 			)
 		endif()
 		FetchContent_MakeAvailable(nri)
@@ -265,16 +288,25 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
 				"${ffx_SOURCE_DIR}/PrebuiltSignedDLL/amd_fidelityfx_vk.dll"
 				CACHE INTERNAL "OOT3D FidelityFX Vulkan runtime")
 		endif()
-		if(WIN32 AND NRI_ENABLE_NGX_SDK)
-			FetchContent_GetProperties(ngx)
+		if(THREE_DS_RECOMP_ENABLE_DLSS_MODULE OR NRI_ENABLE_NGX_SDK)
+			# NVIDIA's DLSS SDK as NVIDIA publishes it (NRI declares the same
+			# archive when its own NGX support is on).
+			FetchContent_Declare(ngx
+				URL https://github.com/NVIDIA/DLSS/archive/refs/tags/v${THREE_DS_RECOMP_NGX_VERSION}.zip)
+			FetchContent_MakeAvailable(ngx)
+			set(THREE_DS_RECOMP_NGX_SOURCE_DIR "${ngx_SOURCE_DIR}"
+				CACHE INTERNAL "OOT3D NGX SDK directory")
 			set(THREE_DS_RECOMP_NGX_INCLUDE_DIR "${ngx_SOURCE_DIR}/include"
 				CACHE INTERNAL "OOT3D NGX SDK include directory")
 			if(THREE_DS_RECOMP_DLSS_RUNTIME)
 				get_filename_component(_oot3d_dlss_runtime
 					"${THREE_DS_RECOMP_DLSS_RUNTIME}" ABSOLUTE)
-			else()
+			elseif(WIN32)
 				set(_oot3d_dlss_runtime
 					"${ngx_SOURCE_DIR}/lib/Windows_x86_64/rel/nvngx_dlss.dll")
+			else()
+				set(_oot3d_dlss_runtime
+					"${ngx_SOURCE_DIR}/lib/Linux_x86_64/rel/libnvidia-ngx-dlss.so.${THREE_DS_RECOMP_NGX_VERSION}")
 			endif()
 			execute_process(
 				COMMAND ${CMAKE_COMMAND}
@@ -296,7 +328,7 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
 					"$<TARGET_FILE_DIR:${target_name}>"
 				COMMENT "Deploying FidelityFX Vulkan runtime for ${target_name}")
 		endif()
-		if(WIN32 AND THREE_DS_RECOMP_DLSS_VK_DLL AND
+		if(THREE_DS_RECOMP_DLSS_VK_DLL AND
 				EXISTS "${THREE_DS_RECOMP_DLSS_VK_DLL}")
 			add_custom_command(TARGET ${target_name} POST_BUILD
 				COMMAND ${CMAKE_COMMAND}

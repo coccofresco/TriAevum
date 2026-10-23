@@ -178,6 +178,8 @@ void GfxRenderingAPIVulkan::PickPhysicalDevice() {
             hasSwapchain,
             hasFormats,
             hasPresentModes,
+            VK_VERSION_MAJOR(properties.apiVersion),
+            VK_VERSION_MINOR(properties.apiVersion),
         });
         SPDLOG_INFO(
             "OOT3D Vulkan adapter [{}]: {} (suitable={}, score={})",
@@ -238,10 +240,16 @@ void GfxRenderingAPIVulkan::PickPhysicalDevice() {
     mUniformBufferAlignment =
         std::max(mStorageBufferAlignment,
                  std::max<VkDeviceSize>(16, properties.limits.minUniformBufferOffsetAlignment));
-    SPDLOG_INFO("OOT3D Vulkan device [{}]: {} (api {}.{}.{})",
-                 mVulkanAdapterIndex, properties.deviceName,
-                 VK_VERSION_MAJOR(properties.apiVersion), VK_VERSION_MINOR(properties.apiVersion),
-                 VK_VERSION_PATCH(properties.apiVersion));
+    // Release logs keep warnings only; the device is what a tester's report
+    // needs first, so it is written at that level and to the console.
+    SPDLOG_WARN("OOT3D Vulkan device [{}]: {} (api {}.{}.{}, vendor 0x{:04X}, driver 0x{:08X})",
+                mVulkanAdapterIndex, properties.deviceName,
+                VK_VERSION_MAJOR(properties.apiVersion), VK_VERSION_MINOR(properties.apiVersion),
+                VK_VERSION_PATCH(properties.apiVersion), properties.vendorID, properties.driverVersion);
+    std::fprintf(stderr, "TRIAEVUM_VULKAN_DEVICE index=%u name=\"%s\" api=%u.%u.%u vendor=0x%04X driver=0x%08X\n",
+                 mVulkanAdapterIndex, properties.deviceName, VK_VERSION_MAJOR(properties.apiVersion),
+                 VK_VERSION_MINOR(properties.apiVersion), VK_VERSION_PATCH(properties.apiVersion),
+                 properties.vendorID, properties.driverVersion);
 }
 
 void GfxRenderingAPIVulkan::CreateLogicalDevice() {
@@ -290,6 +298,13 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
     std::vector<const char*> extensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
     VkPhysicalDeviceProperties deviceProperties{};
     vkGetPhysicalDeviceProperties(mPhysicalDevice, &deviceProperties);
+    const auto& limits = deviceProperties.limits;
+    std::fprintf(stderr, "TRIAEVUM_VULKAN_LIMITS push_constants=%u color_attachments=%u sampled_images=%u samplers=%u uniform_buffers=%u storage_images=%u uniform_alignment=%llu storage_alignment=%llu\n",
+        limits.maxPushConstantsSize, limits.maxColorAttachments,
+        limits.maxPerStageDescriptorSampledImages, limits.maxPerStageDescriptorSamplers,
+        limits.maxPerStageDescriptorUniformBuffers, limits.maxPerStageDescriptorStorageImages,
+        static_cast<unsigned long long>(limits.minUniformBufferOffsetAlignment),
+        static_cast<unsigned long long>(limits.minStorageBufferOffsetAlignment));
     const bool hasVulkan12 = deviceProperties.apiVersion >= VK_API_VERSION_1_2;
     const bool hasSynchronization2Extension =
         hasExtension(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
@@ -331,23 +346,24 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
     VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT libraryProperties{
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_PROPERTIES_EXT};
     VkPhysicalDeviceProperties2 properties2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
-    properties2.pNext = &libraryProperties;
+    VkPhysicalDeviceDriverProperties driverProperties{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES};
+    driverProperties.pNext = &libraryProperties;
+    properties2.pNext = &driverProperties;
     RequiredInstanceCommand<PFN_vkGetPhysicalDeviceProperties2>(mInstance, "vkGetPhysicalDeviceProperties2")(
         mPhysicalDevice, &properties2);
-    // Always-available programs link prepared library parts. "1" also moves
-    // every specialized pipeline onto libraries; "0" disables them.
-    const char* libraryMode = std::getenv("TRIAEVUM_NRI_PIPELINE_LIBRARIES");
-    mAllNativePipelinesUseLibraries = libraryMode && std::string_view(libraryMode) == "1";
-    const bool libraryRequested = mAllNativePipelinesUseLibraries ||
-        (!(libraryMode && std::string_view(libraryMode) == "0") &&
-         (mNativePicaPreparationMode == NativePicaPreparationMode::Hybrid ||
-          mNativePicaPreparationMode == NativePicaPreparationMode::Uber));
-    mGraphicsPipelineLibrariesEnabled = libraryRequested && librarySupported && mDynamicRenderingEnabled;
-    if (!mGraphicsPipelineLibrariesEnabled) mAllNativePipelinesUseLibraries = false;
-    std::fprintf(stderr, "TRIAEVUM_NRI_GPL_CAPABILITY supported=%u requested=%u enabled=%u fast_link=%u independent_interpolation=%u\n",
-        unsigned(librarySupported), unsigned(libraryRequested), unsigned(mGraphicsPipelineLibrariesEnabled),
+    const auto libraryPolicy = Renderer3ds::ResolvePicaPipelineLibraryPolicy(
+        std::getenv("TRIAEVUM_NRI_PIPELINE_LIBRARIES"),
+        librarySupported, mDynamicRenderingEnabled,
+        mNativePicaPreparationMode == NativePicaPreparationMode::Hybrid ||
+            mNativePicaPreparationMode == NativePicaPreparationMode::Uber,
+        driverProperties.driverID);
+    mGraphicsPipelineLibrariesEnabled = libraryPolicy.Enabled;
+    mAllNativePipelinesUseLibraries = libraryPolicy.AllPipelines;
+    std::fprintf(stderr, "TRIAEVUM_NRI_GPL_CAPABILITY supported=%u requested=%u enabled=%u fast_link=%u independent_interpolation=%u driver_id=%u policy=%s\n",
+        unsigned(librarySupported), unsigned(libraryPolicy.Requested), unsigned(libraryPolicy.Enabled),
         unsigned(libraryProperties.graphicsPipelineLibraryFastLinking),
-        unsigned(libraryProperties.graphicsPipelineLibraryIndependentInterpolationDecoration));
+        unsigned(libraryProperties.graphicsPipelineLibraryIndependentInterpolationDecoration),
+        unsigned(driverProperties.driverID), libraryPolicy.Reason);
     if (mGraphicsPipelineLibrariesEnabled)
         extensions.insert(extensions.end(), Renderer3ds::kPicaPipelineLibraryExtensions.begin(),
                           Renderer3ds::kPicaPipelineLibraryExtensions.end());
@@ -1354,7 +1370,9 @@ VkExtent2D GfxRenderingAPIVulkan::ChooseExtent(const VkSurfaceCapabilitiesKHR& c
 }
 
 VkFormat GfxRenderingAPIVulkan::FindDepthFormat() const {
-    return Oot3d::FindPicaDepthFormat(mPhysicalDevice);
+    const auto format = Oot3d::FindPicaDepthFormat(mPhysicalDevice);
+    std::fprintf(stderr, "TRIAEVUM_VULKAN_DEPTH_FORMAT format=%u\n", unsigned(format));
+    return format;
 }
 
 uint32_t GfxRenderingAPIVulkan::FindMemoryType(uint32_t typeFilter,

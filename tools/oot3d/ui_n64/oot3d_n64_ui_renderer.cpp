@@ -96,20 +96,27 @@ BuildQuad(const UiPrimitive& primitive, float canvasWidth, float canvasHeight,
     const float v0 = primitive.uv.y;
     const float u1 = u0 + primitive.uv.width;
     const float v1 = v0 + primitive.uv.height;
+    // Texture coordinates of the top-left, bottom-left, bottom-right and
+    // top-right corners.
+    struct Uv { float u, v; };
+    const std::array<Uv, 4> corners =
+        primitive.uv_quarter_turn
+            ? std::array<Uv, 4>{{{u0, v1}, {u1, v1}, {u1, v0}, {u0, v0}}}
+            : std::array<Uv, 4>{{{u0, v0}, {u0, v1}, {u1, v1}, {u1, v0}}};
     std::vector<Oot3d::Renderer::UiOverlayVertex> vertices;
     vertices.reserve(6U);
-    AppendVertex(vertices, left, top, u0, v0, primitive.color, canvasWidth,
-                 canvasHeight, invertY);
-    AppendVertex(vertices, left, bottom, u0, v1, primitive.color, canvasWidth,
-                 canvasHeight, invertY);
-    AppendVertex(vertices, right, bottom, u1, v1, primitive.color, canvasWidth,
-                 canvasHeight, invertY);
-    AppendVertex(vertices, left, top, u0, v0, primitive.color, canvasWidth,
-                 canvasHeight, invertY);
-    AppendVertex(vertices, right, bottom, u1, v1, primitive.color, canvasWidth,
-                 canvasHeight, invertY);
-    AppendVertex(vertices, right, top, u1, v0, primitive.color, canvasWidth,
-                 canvasHeight, invertY);
+    AppendVertex(vertices, left, top, corners[0].u, corners[0].v, primitive.color,
+                 canvasWidth, canvasHeight, invertY);
+    AppendVertex(vertices, left, bottom, corners[1].u, corners[1].v, primitive.color,
+                 canvasWidth, canvasHeight, invertY);
+    AppendVertex(vertices, right, bottom, corners[2].u, corners[2].v, primitive.color,
+                 canvasWidth, canvasHeight, invertY);
+    AppendVertex(vertices, left, top, corners[0].u, corners[0].v, primitive.color,
+                 canvasWidth, canvasHeight, invertY);
+    AppendVertex(vertices, right, bottom, corners[2].u, corners[2].v, primitive.color,
+                 canvasWidth, canvasHeight, invertY);
+    AppendVertex(vertices, right, top, corners[3].u, corners[3].v, primitive.color,
+                 canvasWidth, canvasHeight, invertY);
     return vertices;
 }
 

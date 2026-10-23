@@ -955,7 +955,7 @@ embeds it, instead of SPIR-V words as C++ literals (about 114 MB of headers):
 | Uber effect fragment | `oot3d/pica_uber_fragment.spvpack` | `Oot3d::UberFragmentArtifacts()` |
 | Alpha shadow casters | `oot3d/pica_caster_fragment.spvpack` | `Oot3d::CasterFragmentArtifacts()` |
 | Renderer passes | `renderer/builtin_pass.spvpack` | `Renderer::BuiltinPassArtifacts()` |
-| iMMERSE MXAO | `immerse/mxao_pass.spvpack` | `Immerse::MxaoPassArtifacts()` |
+| iMMERSE MXAO | `immerse/mxao_pass.spvpack` | `Immerse::MxaoPassPack()` in the module library, read by the host (`TriaevumImmerseHost::ComputeSpirv`) |
 | Title vertex (translated title code) | `tools/oot3d/native_pica_frontend/oot3d_native_vertex.spvpack` | `TitleVertexArtifacts()`, `TitlePassArtifacts()` |
 
 `fast/renderer/spirv_pack.h` defines the format (an index of kind, stage,

@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import forge
 import forge_gui
-from common import atomic_write_json, sha256_file
+from common import atomic_write_json, load_json_object, sha256_file
 from installed_runtime import validate_installed_runtime
 from activation_transaction import journal_path
 from release_platform import host_platform, LINUX, WINDOWS
@@ -139,7 +139,7 @@ class InstalledRuntimeTests(unittest.TestCase):
                 self.assertTrue(all(call.args[0] == executable for call in query.call_args_list))
         finally:
             package.chmod(old_mode)
-        arguments = [expand_profile_argument(arg, profile) for arg in load_json_object(profile)["arguments"]]
+        arguments = [expand_profile_argument(arg, profile, package) for arg in load_json_object(profile)["arguments"]]
         self.assertEqual(Path(arguments[arguments.index("--resource-root") + 1]), package / "resources")
         self.assertEqual({p.name: p.read_bytes() for p in package.iterdir()}, before)
         self.assertEqual(marker.read_bytes(), b"existing save")
@@ -179,6 +179,25 @@ class InstalledRuntimeTests(unittest.TestCase):
         self.assertEqual(self.validate(), self.profile)
         catalog.write_bytes(b"corrupt")
         with self.assertRaisesRegex(ValueError, "water texture catalog changed"):
+            self.validate()
+
+    def test_scene_light_catalog_is_published_and_verified_with_launch_profile(self):
+        catalog = self.data / "cache/scene-lights/key/scene_lights.json"
+        catalog.parent.mkdir(parents=True)
+        catalog.write_bytes(b'{"schema":"triaevum.scene-lights","version":1,"rooms":[]}')
+        prepared = SimpleNamespace(directory=self.title, state={})
+        with (patch("forge.load_prepared_content", return_value=prepared),
+              patch("forge.ensure_runtime_config"),
+              patch("forge.query_product", return_value={
+                  "product": {}, "runtime_sha256": sha256_file(self.exe)})):
+            forge.publish_private_runtime(
+                self.title, plugin=self.plugin, runtime_plugin=self.plugin,
+                launch_profile=self.profile, data_root=self.data, scene_light_catalog=catalog)
+        self.receipt = prepared.state["runtime"]
+        self.assertEqual(self.validate(), self.profile)
+        self.assertIn("--scene-light-catalog", load_json_object(self.profile)["arguments"])
+        catalog.write_bytes(b"corrupt")
+        with self.assertRaisesRegex(ValueError, "scene light catalog changed"):
             self.validate()
 
     def test_launcher_refuses_pending_activation_before_loading_title(self):

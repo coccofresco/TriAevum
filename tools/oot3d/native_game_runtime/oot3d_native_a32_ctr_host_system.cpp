@@ -467,6 +467,15 @@ NativeA32HostResult NativeA32CtrHostServices::HandleAptRequest(
             return {NativeA32HostAction::Resume};
         }
     }
+    if (event.Detail == kAptReceiveParameterRequest || glance) {
+        // No parameter yet: the application waits for one (an applet's result
+        // or a wakeup) that the host delivers later. An intentional wait, not
+        // an unserved request.
+        event.Name += glance ? ":GlanceParameter:pending" : ":ReceiveParameter:pending";
+        event.Handled = true;
+        mSvcEvents.push_back(std::move(event));
+        return {NativeA32HostAction::Wait};
+    }
     if (event.Detail == kAptAppletUtilityRequest) {
         uint32_t utilityCommand = 0;
         uint32_t inputSize = 0;

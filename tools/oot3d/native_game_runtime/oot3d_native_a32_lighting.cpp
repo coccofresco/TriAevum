@@ -1,10 +1,12 @@
 #include "oot3d_native_a32_lighting.h"
 
 #include "recomp/a32_runtime.h"
+#include "oot3d_native_a32_fire_emitters.h"
 #include "oot3d/actor_spawn.h"
 #include <cstddef>
 
 #include <algorithm>
+#include <string_view>
 #include <bit>
 #include <cmath>
 #include <cstdio>
@@ -375,8 +377,9 @@ void NativeA32LightingProbe::ContinueSceneLights(Fast::Renderer3ds::PicaSceneDir
 
 // A flame actor's light: En_Light (0x008, fire objects such as the Fire
 // Temple's great flames), Obj_Syokudai (0x05E, torches) and Bg_Po_Syokudai
-// (0x105, the Forest Temple's coloured torches). Neither registers
-// a LightContext record in OOT3D. Position: the actor's world position
+// (0x105, the Forest Temple's coloured torches). Their Init inserts a
+// LightContext record, which this capture does not read; the light follows
+// the flame the title draws instead. Position: the actor's world position
 // (+0x28) raised to the flame; reach from its scale (+0x54); colour from the
 // flame's kind (OoT's En_Light table: 2 blue, 3 green, else orange). A torch
 // is lit while its timer (s16 +0x27C, OoT's litTimer: -1 for good, a count
@@ -431,6 +434,11 @@ static bool CaptureFlameEmitter(oot3d::recomp::a32::MemoryBus& memory, uint32_t 
     return true;
 }
 
+void NativeA32LightingProbe::SetRoomShadowShellsEnabled(bool enabled) {
+    if (mRoomShellsEnabled.exchange(enabled, std::memory_order_relaxed) != enabled)
+        std::fprintf(stderr, "TRIAEVUM_ROOM_SHADOW_SHELL event=enabled value=%d\n", enabled);
+}
+
 void NativeA32LightingProbe::CaptureSceneLights(uint32_t playState, oot3d::recomp::a32::MemoryBus& memory) {
     using namespace Fast::Renderer3ds;
     TraceSceneLights(++mSceneLightFrames, playState, memory, mSceneLightTrace);
@@ -476,6 +484,8 @@ void NativeA32LightingProbe::CaptureSceneLights(uint32_t playState, oot3d::recom
     else if (!mSceneDirectionals || *mSceneDirectionals != directionals)
         mSceneDirectionals = std::make_shared<const PicaSceneDirectionalLights>(std::move(directionals));
     PicaScenePointLights snapshot;
+    std::vector<PicaScenePointLight> candidates;
+    std::optional<std::array<float, 3>> player;
     // EUR LightContext_InsertLight (0034FAA8) owns a 32-node pool; only
     // records still linked through their real native LightNode are accepted.
     static_assert(kMaximumPicaScenePointLights >= 32U);
@@ -515,32 +525,78 @@ void NativeA32LightingProbe::CaptureSceneLights(uint32_t playState, oot3d::recom
                         light.Group = params == 0 ? 0U : 1U;
                         if (light.Group == 1U && offset == 0x948U && light.Radius == 0.0F)
                             (void)CaptureFairyEmitter(memory, actor, light);
-                        const auto end = snapshot.Lights.begin() + snapshot.Count;
-                        if (std::none_of(snapshot.Lights.begin(), end,
-                                         [&](const auto& existing) {
-                                             return existing.SourceIdentity == light.SourceIdentity;
-                                         }) &&
-                            snapshot.Count < snapshot.Lights.size())
-                            snapshot.Lights[snapshot.Count++] = light;
+                        candidates.push_back(light);
                     }
+                }
+                if (id == 0x000U && !player) {
+                    std::array<float, 3> position{};
+                    if (ReadPosition(memory, actor + 0x28U, position)) player = position;
                 }
                 // Flames the title draws but never lights (group 2): their
                 // light is only baked into room vertex colours natively.
-                if ((id == 0x008U || id == 0x05EU || id == 0x105U) && update != 0 &&
+                const bool flame = id == 0x008U || id == 0x05EU || id == 0x105U;
+                if ((flame || IsNativeFireEmitterActor(id)) && update != 0 &&
                     memory.Read16(actor + offsetof(Oot3dActor, params), &params)) {
                     PicaScenePointLight light;
-                    if (CaptureFlameEmitter(memory, playState, actor, id, params, light)) {
-                        const auto end = snapshot.Lights.begin() + snapshot.Count;
-                        if (std::none_of(snapshot.Lights.begin(), end,
-                                         [&](const auto& existing) {
-                                             return existing.SourceIdentity == light.SourceIdentity;
-                                         }) &&
-                            snapshot.Count < snapshot.Lights.size())
-                            snapshot.Lights[snapshot.Count++] = light;
-                    }
+                    if (!flame)
+                        CaptureNativeFireEmitters(memory, playState, actor, id, params, candidates);
+                    else if (CaptureFlameEmitter(memory, playState, actor, id, params, light))
+                        candidates.push_back(light);
                 }
                 actor = next;
             }
+        }
+    }
+    // The architecture's own light, in the rooms the title has loaded.
+    const auto environmentState = ReadNativeEnvironmentState(playState, memory);
+    const uint16_t scene = environmentState ? environmentState->Scene : uint16_t{0xFFFFU};
+    const bool shellsEnabled = mRoomShellsEnabled.load(std::memory_order_relaxed) && environmentState.has_value();
+    mRoomShells = shellsEnabled ? mRoomShellCache.Capture(true, (uint64_t(playState) << 16U) | scene,
+                                                        NativeLoadedRooms(playState, memory), memory, playState) : nullptr;
+    if (!mStaticEmittersResolved) {
+        mStaticEmitters = NativeStaticEmitterCatalog::FromEnvironment();
+        mStaticEmittersResolved = true;
+    }
+    if (mStaticEmitters && environmentState) {
+        const auto rooms = NativeLoadedRooms(playState, memory);
+        CaptureStaticEmitters(*mStaticEmitters, scene, rooms, candidates,
+                              &Fast::Renderer3ds::PicaSurfaceEmissionRegistry::Instance());
+    }
+    // More lights than slots (the Fire Temple's maze room alone places 41
+    // flames): keep Navi and the fairies, then choose and fade the added
+    // lights by their light at Link, under a brightness ceiling.
+    const bool discontinuity = playState != mSelectionPlayState || scene != mSelectionScene;
+    mSelectionPlayState = playState;
+    mSelectionScene = scene;
+    mSelector.Select(candidates, player, discontinuity, snapshot);
+    static const bool selectionTrace = std::getenv("TRIAEVUM_LIGHT_SELECTION_TRACE") != nullptr;
+    // Every 30 captures, or every N with TRIAEVUM_LIGHT_SELECTION_TRACE_EVERY.
+    static const uint64_t traceEvery = [] {
+        const char* every = std::getenv("TRIAEVUM_LIGHT_SELECTION_TRACE_EVERY");
+        const long value = every ? std::strtol(every, nullptr, 10) : 30L;
+        return static_cast<uint64_t>(std::max(1L, value));
+    }();
+    if (selectionTrace && (mSceneLightFrames % traceEvery) == 0U) {
+        uint32_t byGroup[4]{};
+        for (const auto& light : candidates) ++byGroup[std::min<uint32_t>(light.Group, 3U)];
+        const auto rooms = NativeLoadedRooms(playState, memory);
+        const auto& stats = mSelector.Stats();
+        std::fprintf(stderr,
+                     "[light-selection] scene=%u rooms=%d,%d catalog=%zu candidates=%u/%u/%u/%u selected=%u "
+                     "fading=%u snapshot=%u light@link=%.3f exposure=%.3f\n",
+                     scene, rooms.size() > 0 ? rooms[0].Number : -1, rooms.size() > 1 ? rooms[1].Number : -1,
+                     mStaticEmitters ? mStaticEmitters->Count() : size_t{0}, byGroup[0], byGroup[1], byGroup[2],
+                     byGroup[3], stats.Selected, stats.Fading, snapshot.Count, stats.SummedLight, stats.Exposure);
+        // TRIAEVUM_LIGHT_SELECTION_TRACE=2: every light the renderer receives.
+        static const bool lightsTrace = std::string_view(std::getenv("TRIAEVUM_LIGHT_SELECTION_TRACE")) == "2";
+        for (uint32_t i = 0; lightsTrace && i < snapshot.Count; ++i) {
+            const auto& light = snapshot.Lights[i];
+            std::fprintf(stderr,
+                         "[light-selection]   group=%u id=%016llx at=%.0f,%.0f,%.0f radius=%.0f "
+                         "colour=%.3f,%.3f,%.3f shadow=%d\n",
+                         light.Group, static_cast<unsigned long long>(light.SourceIdentity), light.PositionWorld[0],
+                         light.PositionWorld[1], light.PositionWorld[2], light.Radius, light.Color[0], light.Color[1],
+                         light.Color[2], light.CastsShadow ? 1 : 0);
         }
     }
     if (snapshot.Count == 0)
@@ -596,6 +652,7 @@ NativeA32LightingProbe::CaptureRenderer(uint32_t renderer, oot3d::recomp::a32::M
     result.ScenePoints = mScenePoints;
     result.SceneDirectionals = mSceneDirectionals;
     result.Water = mWater;
+    result.RoomShadows = mRoomShells;
     return result;
 }
 
@@ -635,6 +692,7 @@ void NativeA32LightingProbe::Reset() noexcept {
     mScenePoints.reset();
     mSceneDirectionals.reset();
     mWater.reset();
+    mRoomShells.reset();
     mSceneLightTrace = {};
     // A state load is a discontinuity.
     mContinuityPlayState = 0;
@@ -642,6 +700,8 @@ void NativeA32LightingProbe::Reset() noexcept {
     mContinuityCount = 0;
     ++mContinuityEpoch;
     mShadowCaster.Reset();
+    mSelector.Reset();
+    mSelectionPlayState = 0;
 }
 
 } // namespace Oot3dNativeGame

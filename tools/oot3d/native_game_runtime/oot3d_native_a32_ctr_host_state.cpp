@@ -73,6 +73,7 @@ nlohmann::json NativeA32CtrHostServices::CaptureState() const {
             {"file_size", object.FileSize},
             {"file_open_mode", object.FileOpenMode},
             {"file_priority", object.FilePriority},
+            {"file_closed", object.FileClosed},
             {"mapped_address", object.MappedAddress.has_value()
                                    ? nlohmann::json(*object.MappedAddress)
                                    : nlohmann::json(nullptr)},
@@ -361,6 +362,7 @@ bool NativeA32CtrHostServices::RestoreState(const nlohmann::json& state,
             object->FileSize = encoded.at("file_size").get<uint64_t>();
             object->FileOpenMode = encoded.at("file_open_mode").get<uint32_t>();
             object->FilePriority = encoded.value("file_priority", 0U);
+            object->FileClosed = encoded.value("file_closed", false);
             if (isRomFsFile) {
                 // The title caches the RomFS tables it read: a state taken
                 // over another RomFS (with or without an overlay, or another
@@ -375,9 +377,9 @@ bool NativeA32CtrHostServices::RestoreState(const nlohmann::json& state,
                         "the state was saved over another RomFS (overlay) than the configured one");
                 }
             }
-            if (isRomFsFile && mConfig.RomFsOverlay != nullptr) {
+            if (!object->FileClosed && isRomFsFile && mConfig.RomFsOverlay != nullptr) {
                 object->FileBackend = mConfig.RomFsOverlay;
-            } else if (mConfig.Filesystem != nullptr && (isRomFsFile || isSaveFile)) {
+            } else if (!object->FileClosed && mConfig.Filesystem != nullptr && (isRomFsFile || isSaveFile)) {
                 uint32_t openFlags = 0U;
                 if (isRomFsFile || (object->FileOpenMode & 1U) != 0U) {
                     openFlags |= NativeA32CtrFileOpenRead;
@@ -401,7 +403,7 @@ bool NativeA32CtrHostServices::RestoreState(const nlohmann::json& state,
                     throw std::runtime_error(
                         "restored RomFS range exceeds its backing file");
                 }
-            } else if (isRomFsFile) {
+            } else if (isRomFsFile && !object->FileClosed) {
                 object->RomFsBacking =
                     std::make_shared<RomFsBackingFile>(object->FilePath);
             }
@@ -739,6 +741,7 @@ bool NativeA32CtrHostServices::RestoreState(const nlohmann::json& state,
             throw std::runtime_error("NDM daemon mask is invalid");
         }
 
+        staged.mRuntimeProfile.FsUnservedRequests = mRuntimeProfile.FsUnservedRequests;
         *this = std::move(staged);
         return true;
     } catch (const std::exception& exception) {

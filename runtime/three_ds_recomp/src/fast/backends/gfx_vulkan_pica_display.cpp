@@ -481,6 +481,24 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                                             Oot3d::GlobalIlluminationMode::ScreenSpace;
         const bool screenSpaceGiReady = screenSpaceGiRequested && mScreenSpaceGi.Prepare();
         PublishGlobalIlluminationStatus(presentationSettings.Effects.GlobalIllumination.Mode);
+        // Only a provider that can execute is planned: one that is missing or
+        // was withdrawn after a failure leaves the display unscaled.
+        const bool upscalerAvailable = [&] {
+            switch (presentationSettings.Upscaler) {
+                case Oot3d::UpscalerProvider::Nis:
+                    return mNriUpscalerPass.Available();
+                case Oot3d::UpscalerProvider::Fsr:
+                    return mNriUpscalerPass.FsrAvailable();
+                case Oot3d::UpscalerProvider::Dlss:
+#if defined(_WIN32) && defined(ENABLE_OOT3D_D3D12_NGX_PROVIDER)
+                    if (mD3d12NgxProvider.Available()) return true;
+#endif
+                    return mNriUpscalerPass.DlssAvailable();
+                case Oot3d::UpscalerProvider::Xess:
+                    return false;
+            }
+            return false;
+        }();
         const auto effectPlan = Oot3d::BuildDisplayEffectPlan({
             .AlphaOverlay = alphaOverlay,
             .WorldSurface = worldSurface,
@@ -497,7 +515,12 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                 presentationSettings.Effects.MxaoTemporal && mMxaoPass.Available(),
             .AmbientOcclusionFaceNormal =
                 Oot3d::EffectsReadFaceNormal(presentationSettings.Effects) && mMxaoPass.Available(),
-            .Reflections = presentationSettings.Effects.Reflections,
+            // A water-only trace reflects only the water this frame drew (the
+            // title's bodies, catalog planes); without any it writes zero
+            // everywhere, so the frame plans no reflection, Hi-Z included.
+            .Reflections = mWaterOnlyReflections && mReflectableWaterFrame != mFrameCounter
+                ? Oot3d::ReflectionMode::Off
+                : presentationSettings.Effects.Reflections,
             .GlobalIllumination =
                 (presentationSettings.Effects.GlobalIllumination.Mode ==
                      Oot3d::GlobalIlluminationMode::BrixelizerGi &&
@@ -510,6 +533,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                 presentationSettings.Effects.ToonStyle.OutlineEnabled,
             .AntiAliasing = presentationSettings.AntiAliasing,
             .Upscaler = presentationSettings.Upscaler,
+            .UpscalerAvailable = upscalerAvailable,
             .GuideDiagnostics = Oot3d::PicaGuideDiagnosticMode() != 0,
             .NativeSceneBoundary = copyBoundary,
             .BeforeNativeUi = copyBoundary && beforeNativeUi && antiAliasingAvailableHere,
@@ -1340,14 +1364,62 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                 effectGuideTarget->Key.ColorPhysicalAddress,
                 Oot3d::SceneSurfaceKind::Motion};
         }
-        const bool canReuseMotion =
-            wantsMotionVectors && mMotionExecutedThisFrame &&
-            motionKey.has_value() && mMotionSurface.has_value() &&
-            *mMotionSurface == *motionKey;
-        bool motionForDisplay = wantsMotionVectors && temporalState.has_value() &&
-                                effectGuideTarget != nullptr &&
-                                !mMotionExecutedThisFrame;
+        // Every graph execution that runs a reader of motion computes it. The
+        // vectors are a transient of the executing plan, whose slot the plan's
+        // later passes reuse once their last reader ran (EffectTransientAllocation
+        // Plan), so another execution of the frame (a native boundary before
+        // its presentation) cannot read them: they read as no motion.
+        constexpr bool canReuseMotion = false;
+        std::optional<Oot3d::SceneSurfaceKey> taaKey;
+        if (effectGuideTarget != nullptr) {
+            taaKey = Oot3d::SceneSurfaceKey{
+                transfer.RenderTargetNamespace,
+                effectGuideTarget->Key.ColorPhysicalAddress,
+                Oot3d::SceneSurfaceKind::Output};
+        }
+        const bool canReuseTaa =
+            wantsTaa && mTaaExecutedThisFrame && mTaaOutputValid &&
+            taaKey.has_value() && mTaaSurface.has_value() &&
+            *mTaaSurface == *taaKey;
+        const bool canReuseUpscalerOutput =
+            (wantsTemporalUpscaler || wantsNis) &&
+            mUpscalerExecutedThisFrame &&
+            mUpscalerProviderThisFrame == effectPlan.Upscaler &&
+            mUpscalerRenderTargetNamespace ==
+                transfer.RenderTargetNamespace &&
+            mUpscalerDisplayPhysicalAddress ==
+                transfer.OutputPhysicalAddress;
+        const auto aoBindings = effectPlan.Bindings(Oot3d::DisplayEffectPass::AmbientOcclusion);
+        const bool aoReadsMotion = std::any_of(
+            aoBindings.begin(), aoBindings.end(), [](const Oot3d::EffectResourceUse& use) {
+                return Oot3d::ReadsEffectResource(use.Access) &&
+                       use.Resource == Oot3d::EffectResource::MotionVectors;
+            });
+        const bool sssrReflectionReusable =
+            mReflectionExecutedThisFrame && mHiZReflectionSurface.has_value() &&
+            *mHiZReflectionSurface == Oot3d::SceneSurfaceKey{transfer.RenderTargetNamespace,
+                                                             transfer.OutputPhysicalAddress,
+                                                             Oot3d::SceneSurfaceKind::Reflection};
+        // A later execution of the same plan in the frame (a frame without
+        // native UI presents it twice) reuses its readers' results; computing
+        // motion there would only overwrite the slot it shares with an output
+        // that execution reuses (the reflection), so it computes none.
+        const bool motionReaderRuns =
+            (wantsAmbientOcclusion && aoReadsMotion && !mAmbientOcclusionExecutedThisFrame) ||
+            (wantsFidelityFxSssr && !sssrReflectionReusable) || wantsGlobalIllumination ||
+            (wantsTaa && !canReuseTaa) || (wantsTemporalUpscaler && !canReuseUpscalerOutput);
+        bool motionForDisplay = wantsMotionVectors && motionReaderRuns &&
+                                temporalState.has_value() && effectGuideTarget != nullptr;
         const bool motionAttempted = motionForDisplay;
+        // Where motion is computed anyway, an output of an earlier execution
+        // that shares its slot is not reused but computed again.
+        const auto motionOverwrites = [&](const Oot3d::NriEffectGraphTransientImageBinding* output) {
+            const auto shares = [output](const Oot3d::NriEffectGraphTransientImageBinding* motion) {
+                return motion != nullptr && motion->Slot == output->Slot;
+            };
+            return motionAttempted && output != nullptr && output->Slot != Oot3d::kNoEffectAliasSlot &&
+                   (shares(transientMotionOutput) || shares(transientReactiveOutput));
+        };
         if (motionForDisplay) {
             const auto motionReads = resolveEffectPassReads(
                 Oot3d::DisplayEffectPass::Motion);
@@ -1415,7 +1487,6 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                     VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                     effectGuideTarget->Width, effectGuideTarget->Height);
                 mMotionSurface = *motionKey;
-                mMotionExecutedThisFrame = true;
             }
             mDiagnostics.RecordMotionVectors(
                 motionForDisplay, temporalState->HistoryValid,
@@ -1448,12 +1519,6 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
         bool aoAttempted = false;
         bool aoExecutedNow = false;
         // An AO that declares the motion vectors (temporal MXAO) runs with them.
-        const auto aoBindings = effectPlan.Bindings(Oot3d::DisplayEffectPass::AmbientOcclusion);
-        const bool aoReadsMotion = std::any_of(
-            aoBindings.begin(), aoBindings.end(), [](const Oot3d::EffectResourceUse& use) {
-                return Oot3d::ReadsEffectResource(use.Access) &&
-                       use.Resource == Oot3d::EffectResource::MotionVectors;
-            });
         if (wantsAmbientOcclusion && effectGuideTarget != nullptr &&
             !mAmbientOcclusionExecutedThisFrame &&
             (!aoReadsMotion || motionAvailableForDisplay)) {
@@ -1816,6 +1881,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
         }
         const bool canReuseWorkingColor =
             wantsWorkingColor && mLinearColorExecutedThisFrame &&
+            !motionOverwrites(transientLinearWorkingColor) &&
             linearKey.has_value() && mLinearColorSurface.has_value() &&
             *mLinearColorSurface == *linearKey &&
             mLinearSceneColorPass.OutputImage() != VK_NULL_HANDLE &&
@@ -1915,6 +1981,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
         const bool canReuseReflections =
             reflectionRequestedForDisplay &&
             mReflectionExecutedThisFrame && reflectionKey.has_value() &&
+            !motionOverwrites(transientReflectionOutput) &&
             mHiZReflectionSurface.has_value() &&
             *mHiZReflectionSurface == *reflectionKey;
         const bool reflectionsAttempted =
@@ -2412,17 +2479,6 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                 effectGuideTarget->Width, effectGuideTarget->Height,
                 reflectionOutputEncoding);
         }
-        std::optional<Oot3d::SceneSurfaceKey> taaKey;
-        if (effectGuideTarget != nullptr) {
-            taaKey = Oot3d::SceneSurfaceKey{
-                transfer.RenderTargetNamespace,
-                effectGuideTarget->Key.ColorPhysicalAddress,
-                Oot3d::SceneSurfaceKind::Output};
-        }
-        const bool canReuseTaa =
-            wantsTaa && mTaaExecutedThisFrame && mTaaOutputValid &&
-            taaKey.has_value() && mTaaSurface.has_value() &&
-            *mTaaSurface == *taaKey;
         std::optional<Oot3d::SceneSurfaceKey> compositeKey;
         if (effectGuideTarget != nullptr) {
             compositeKey = Oot3d::SceneSurfaceKey{
@@ -2438,16 +2494,11 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
         const bool canReuseComposite =
             effectPlan.Enabled(Oot3d::DisplayEffectPass::Composite) &&
             mCompositeExecutedThisFrame && compositeKey.has_value() &&
+            !motionOverwrites(transientCompositeOutput) &&
             mCompositeSurface.has_value() &&
             *mCompositeSurface == *compositeKey;
         const bool canReuseUpscaler =
-            (wantsTemporalUpscaler || wantsNis) &&
-            mUpscalerExecutedThisFrame &&
-            mUpscalerProviderThisFrame == effectPlan.Upscaler &&
-            mUpscalerRenderTargetNamespace ==
-                transfer.RenderTargetNamespace &&
-            mUpscalerDisplayPhysicalAddress ==
-                transfer.OutputPhysicalAddress;
+            canReuseUpscalerOutput && !motionOverwrites(transientUpscaledOutput);
         // A boundary always composes when any scene stage applies, because its
         // consumer samples the composed colour instead of a later presentation
         // fusing those stages in. Presentation keeps its existing gate.
@@ -2736,8 +2787,10 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
         // guides keep the scene target's, which differs when the native display
         // transfer resized the colour: they are then resampled to the colour's
         // extent, and the jitter (applied in target pixels) is given in input
-        // pixels.
-        const auto prepareUpscalerGuides = [&](Oot3d::NriTemporalUpscaleDispatchDesc& desc) {
+        // pixels. Its motion is taken without the jitter (upscaler_guides.h),
+        // so the guides are prepared for every dispatch.
+        const auto prepareUpscalerGuides = [&](Oot3d::NriTemporalUpscaleDispatchDesc& desc,
+                                               const Oot3d::TemporalViewState& temporal) {
             const uint32_t guideWidth = effectGuideTarget->Width;
             const uint32_t guideHeight = effectGuideTarget->Height;
             desc.JitterPixels = Oot3d::UpscalerJitterInInputPixels(
@@ -2745,13 +2798,12 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
             const bool resample = Oot3d::UpscalerGuidesNeedResample(
                 desc.InputWidth, desc.InputHeight, guideWidth, guideHeight);
             mDiagnostics.RecordUpscalerGuides(resample, guideWidth, guideHeight);
-            if (!resample)
-                return true;
             if (!mUpscalerGuidePass.Execute(
                     mCurrentFrame,
                     {desc.DepthImage, desc.DepthFormat, desc.MotionImage, desc.MotionFormat,
                      desc.ReactiveImage, desc.ReactiveFormat, guideWidth, guideHeight},
-                    desc.InputWidth, desc.InputHeight))
+                    desc.InputWidth, desc.InputHeight,
+                    Oot3d::UpscalerMotionJitterCorrection(temporal.CurrentJitterUv, temporal.PreviousJitterUv)))
                 return false;
             recordEffectPassTransitions(mUpscalerGuidePass.LastBarrierExecution());
             desc.DepthImage = mUpscalerGuidePass.DepthImage();
@@ -2835,7 +2887,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                 Oot3d::GpuProfileScope::Upscaler,
                 command);
             fsrForDisplay = transientUpscaledOutput != nullptr &&
-                prepareUpscalerGuides(fsr) &&
+                prepareUpscalerGuides(fsr, *temporalState) &&
                 mNriUpscalerPass.Configure(*transientUpscaledOutput) &&
                 mNriUpscalerPass.ExecuteFsr(
                     command, fsr, temporalUpscalerBarrierPlan);
@@ -2898,7 +2950,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
             dlss.DlssPreset = Oot3d::DlssRenderPreset(presentationSettings.UpscalerDlssModel,
                                                       presentationSettings.UpscalerMode);
             transitionEffectPassGuides(Oot3d::DisplayEffectPass::TemporalUpscaler);
-            const bool dlssGuidesReady = prepareUpscalerGuides(dlss);
+            const bool dlssGuidesReady = prepareUpscalerGuides(dlss, *temporalState);
             bool d3d12FrameDlss = false;
             bool d3d12FrameContractReady = false;
             bool d3d12FramePrepared = false;
@@ -2908,7 +2960,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
             uint64_t d3d12FrameDispatchCount = 0U;
 #if defined(_WIN32) && defined(ENABLE_OOT3D_D3D12_NGX_PROVIDER)
             if (d3d12FrameDlssRequested && dlssGuidesReady) {
-                const bool dlssGuidesResampled =
+                const bool dlssGuidesPrepared =
                     dlss.DepthImage != reinterpret_cast<VkImage>(dlssDepthBinding.NativeImage);
                 const Oot3d::D3d12NgxFrameContract contract{
                     dlss.InputWidth,
@@ -2931,14 +2983,14 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                 d3d12FrameContractReady = mD3d12NgxProvider.ConfiguredForFrameContract(contract);
                 Oot3d::D3d12NgxFrameInputs bridgeInputs{
                     reinterpret_cast<VkImageView>(dlssInputBinding->NativeView),
-                    dlssGuidesResampled ? mUpscalerGuidePass.DepthView()
+                    dlssGuidesPrepared ? mUpscalerGuidePass.DepthView()
                                         : reinterpret_cast<VkImageView>(dlssDepthBinding.NativeView),
-                    dlssGuidesResampled ? mUpscalerGuidePass.MotionView()
+                    dlssGuidesPrepared ? mUpscalerGuidePass.MotionView()
                                         : reinterpret_cast<VkImageView>(dlssMotionBinding.NativeView),
-                    dlssGuidesResampled ? mUpscalerGuidePass.ReactiveView()
+                    dlssGuidesPrepared ? mUpscalerGuidePass.ReactiveView()
                                         : reinterpret_cast<VkImageView>(dlssReactiveBinding.NativeView),
                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                    dlssGuidesResampled ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                    dlssGuidesPrepared ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
                                         : VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -2968,10 +3020,27 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
 #endif
             dlssForDisplay = d3d12FrameDlss;
             if (!dlssForDisplay && dlssGuidesReady && mNriUpscalerPass.DlssAvailable()) {
+                // DLSS reconstructs the frame upright, as the screen shows it
+                // (upscaler_orientation.h); TRIAEVUM_DLSS_UPRIGHT=0 keeps the
+                // stored orientation for comparison.
+                static const bool uprightDisabled = [] {
+                    const char* value = std::getenv("TRIAEVUM_DLSS_UPRIGHT");
+                    return value != nullptr && value[0] == '0';
+                }();
+                const auto dlssUpright = uprightDisabled
+                    ? std::nullopt
+                    : std::optional(Oot3d::PicaSurfaceCoordinates::FromTransferFlags(transfer.Flags));
                 mGpuProfiler.BeginScope(mCurrentFrame, Oot3d::GpuProfileScope::Upscaler, command);
                 dlssForDisplay = transientUpscaledOutput != nullptr &&
                                  mNriUpscalerPass.Configure(*transientUpscaledOutput) &&
-                                 mNriUpscalerPass.ExecuteDlss(command, dlss, temporalUpscalerBarrierPlan);
+                                 mNriUpscalerPass.ExecuteDlss(command, dlss, temporalUpscalerBarrierPlan, dlssUpright);
+                static bool uprightReported = false;
+                if (dlssForDisplay && !uprightReported) {
+                    uprightReported = true;
+                    std::fprintf(stderr, "TRIAEVUM_DLSS_ORIENTATION upright=%d flip_y=%d input=%ux%u\n",
+                                 mNriUpscalerPass.LastDispatchUpright() ? 1 : 0,
+                                 dlssUpright && dlssUpright->FlipY ? 1 : 0, dlss.InputWidth, dlss.InputHeight);
+                }
                 mGpuProfiler.EndScope(mCurrentFrame, Oot3d::GpuProfileScope::Upscaler, command);
             }
             if (dlssForDisplay) {
@@ -3059,6 +3128,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
             outlineForDisplay;
         const bool canReuseSmaa = wantsSmaa &&
             mSmaaExecutedThisFrame &&
+            !motionOverwrites(transientAntiAliasedOutput) &&
             mSmaaRenderTargetNamespace ==
                 transfer.RenderTargetNamespace &&
             mSmaaDisplayPhysicalAddress ==
@@ -3567,6 +3637,48 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                 VK_FORMAT_R16G16B16A16_SFLOAT,
                 mSmaaWidth, mSmaaHeight,
                 mSmaaOutputEncodingThisFrame);
+        }
+        // A planned upscaler that wrote no output this frame (its provider
+        // failed, or its inputs were not ready) does not end the game: the
+        // scanout shows the colour the upscaler was to read, at that colour's
+        // extent. That colour is already in the shader-read layout the
+        // upscaler declared; the memory barrier extends the visibility of its
+        // writes to the scanout's fragment reads. A provider that failed is
+        // withdrawn (its capability with it), so later frames plan without it.
+        if ((wantsTemporalUpscaler || wantsNis) &&
+            effectResources.Find(Oot3d::EffectResource::UpscaledColor) == nullptr) {
+            const auto imageBinding = [&](Oot3d::EffectResource resource)
+                -> const Oot3d::EffectResourceBinding* {
+                const auto* binding = effectResources.Find(resource);
+                return binding != nullptr &&
+                               binding->Kind == Oot3d::EffectResourceBindingKind::Image
+                           ? binding : nullptr;
+            };
+            // Over the native UI the display's own colour carries the UI the
+            // overlay would have laid over the upscaled scene.
+            const auto* shown = imageBinding(effectPlan.NativeUiOverlay
+                                                 ? Oot3d::EffectResource::SceneColor
+                                                 : upscalerColor);
+            if (shown == nullptr)
+                shown = imageBinding(Oot3d::EffectResource::SceneColor);
+            if (shown == nullptr) {
+                throw std::runtime_error(
+                    "display effect upscaler fallback has no colour to show");
+            }
+            const Oot3d::EffectResourceBinding unscaled = *shown;
+            VkMemoryBarrier visible{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+            visible.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+            visible.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            vkCmdPipelineBarrier(command, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 1,
+                                 &visible, 0, nullptr, 0, nullptr);
+            bindEffectImage(
+                Oot3d::EffectResource::UpscaledColor,
+                reinterpret_cast<VkImage>(unscaled.NativeImage),
+                reinterpret_cast<VkImageView>(unscaled.NativeView),
+                static_cast<VkFormat>(unscaled.Format),
+                unscaled.Width, unscaled.Height, unscaled.ColorEncoding);
+            WithdrawFailedUpscaler(presentationSettings.Upscaler);
         }
 
         transitionEffectPassGuides(Oot3d::DisplayEffectPass::Scanout);
@@ -4117,11 +4229,24 @@ bool GfxRenderingAPIVulkan::PrepareOverlay(
     if (!mLastPresentedNativePicaDisplayTransfer.has_value()) {
         return true;
     }
-    GfxNativePicaDisplayTransferView transfer =
-        *mLastPresentedNativePicaDisplayTransfer;
-    transfer.Present = true;
-    if (!SubmitPicaDisplayTransfer(transfer, error)) {
-        return false;
+    if (mNativePicaPresentedThisFrame) {
+        // This frame's scanout already wrote the swapchain image and left it
+        // presentable, as the overlay pass loads it: presenting the display
+        // again would run its effect graph and scanout a second time for the
+        // same image.
+        EndNativePicaRenderPass();
+        if (mRenderPassActive) {
+            vkCmdEndRenderPass(mCommandBuffers[mCurrentFrame]);
+            mRenderPassActive = false;
+            mOverlayRenderPassActive = false;
+        }
+    } else {
+        GfxNativePicaDisplayTransferView transfer =
+            *mLastPresentedNativePicaDisplayTransfer;
+        transfer.Present = true;
+        if (!SubmitPicaDisplayTransfer(transfer, error)) {
+            return false;
+        }
     }
     if (mOverlayRenderPass == VK_NULL_HANDLE ||
         mSwapchainFramebuffers.empty()) {

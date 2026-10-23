@@ -56,6 +56,25 @@ struct GrassPlacementRule {
     uint32_t InheritedFrom = 0U;
 };
 
+enum class GrassMaskMode : uint8_t { Automatic, Custom, Off };
+
+// An override for a native overlay texture. Exact native identity and size:
+// visual texture twins can have different alpha and must not inherit cutouts.
+struct GrassMaskRule {
+    GrassMaskMode Mode = GrassMaskMode::Automatic;
+    GrassPlacementRule Coverage = [] {
+        GrassPlacementRule rule;
+        rule.Channel = GrassSampleChannel::Alpha;
+        rule.InputBlack = 0.0F;
+        return rule;
+    }();
+    float Strength = 1.0F;
+};
+
+[[nodiscard]] const GrassMaskRule* FindGrassMaskRule(const std::vector<GrassMaskRule>& rules, uint64_t hash,
+                                                     uint16_t width, uint16_t height);
+void NormalizeGrassMaskRule(GrassMaskRule& rule);
+
 struct GrassGenerationSettings {
     float InstancesPerSquareMeter = 8.0F;
     float MinimumSpacing = 8.0F;

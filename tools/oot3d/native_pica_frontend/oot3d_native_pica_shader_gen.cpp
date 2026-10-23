@@ -1,4 +1,5 @@
 #include "oot3d_native_pica_shader_gen.h"
+#include "oot3d_native_pica_affine_layout.h"
 #include "oot3d_translated_vertex_programs.h"
 
 #include "nihstro/shader_bytecode.h"
@@ -1342,6 +1343,8 @@ bool GenerateOot3dPicaVertexShader(
     using Oot3d::Renderer::PicaVertexShaderSemantic;
     auto temporalProgram =
         std::make_shared<Oot3dPicaTemporalVertexProgram>();
+    temporalProgram->AffineLayout = DescribeOot3dAffineUniforms(packet, state);
+    temporalProgram->CmbTextureCoordinates = DescribeOot3dCmbTextureCoordinates(packet, state);
     auto& hooks = temporalProgram->Hooks;
     hooks.SchemaVersion =
         Oot3d::Renderer::kPicaShaderHookSchemaVersion;

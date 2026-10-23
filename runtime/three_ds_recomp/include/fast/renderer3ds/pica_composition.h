@@ -1,5 +1,7 @@
 #pragma once
 
+#include "fast/renderer3ds/pica_temporal_identity.h"
+
 #include <cstdint>
 #include <span>
 
@@ -122,11 +124,12 @@ struct PicaCompositionAttribution {
     // scene's environment profile, shadows, global illumination or ambient
     // occlusion.
     bool IsolatedLighting = false;
+    PicaTemporalIdentity TemporalIdentity;
 
     bool operator==(const PicaCompositionAttribution&) const = default;
 };
 
-inline constexpr uint32_t kPicaCompositionSequenceSchemaVersion = 4U;
+inline constexpr uint32_t kPicaCompositionSequenceSchemaVersion = 5U;
 
 struct PicaCompositionTargetReference {
     uint64_t RenderTargetNamespace = 0;
@@ -137,7 +140,7 @@ struct PicaCompositionTargetReference {
     uint8_t ColorFormat = 0;
     uint8_t DepthFormat = 0;
 
-    bool operator==(const PicaCompositionTargetReference&) const = default;
+    auto operator<=>(const PicaCompositionTargetReference&) const = default;
 };
 
 struct PicaCompositionDrawReference {

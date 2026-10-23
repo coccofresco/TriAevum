@@ -4,7 +4,10 @@
 #include "mm3d_title_contracts.h"
 #include "fast/renderer3ds/pica_environment_lighting.h"
 
+#include "oot3d_native_a32_fire_emitters.h"
+#include "oot3d_native_a32_light_selection.h"
 #include "oot3d_native_a32_memory.h"
+#include "oot3d_native_static_emitters.h"
 #include "oot3d_typed_gameplay_bridge.h"
 #include "recomp/a32_runtime.h"
 #include "oot3d/actor_spawn.h"
@@ -14,6 +17,7 @@
 #include <array>
 #include <bit>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <numbers>
 #include <iostream>
@@ -403,6 +407,222 @@ void TestRestoredSceneLightOwnership() {
             "a recycled LightNode remained attributed to its old actor");
 }
 
+void TestFireEmittersAndSelection() {
+    using namespace Oot3dNativeGame;
+    using Fast::Renderer3ds::PicaScenePointLight;
+    // Selection: Navi and fairies first, then the nearest to Link, by
+    // identity on ties, whatever the actor-list order.
+    std::vector<PicaScenePointLight> candidates;
+    for (uint32_t i = 0; i < 40U; ++i) {
+        PicaScenePointLight light;
+        light.SourceIdentity = 1000U + i;
+        light.Group = 2U;
+        light.Radius = 100.0F;
+        light.PositionWorld = {static_cast<float>(40U - i) * 100.0F, 0.0F, 0.0F};
+        candidates.push_back(light);
+    }
+    PicaScenePointLight navi;
+    navi.SourceIdentity = 7U;
+    navi.PositionWorld = {9000.0F, 0.0F, 0.0F};
+    candidates.push_back(navi);
+    candidates.push_back(candidates.front());
+    for (auto& light : candidates) {
+        light.Color = {0.3F, 0.2F, 0.1F};
+        light.Radius = 500.0F;
+    }
+    const std::optional<std::array<float, 3>> link = std::array<float, 3>{};
+    Fast::Renderer3ds::PicaScenePointLights snapshot;
+    NativeSceneLightSelector selector;
+    selector.Settings.Ceiling = 100.0F;
+    selector.Select(candidates, link, true, snapshot);
+    // The first frame fades the chosen lights in.
+    Require(snapshot.Count == 1U + selector.Settings.MaximumAddedLights && snapshot.Lights[0].SourceIdentity == 7U &&
+                snapshot.Lights[1].SourceIdentity == 1039U &&
+                std::abs(snapshot.Lights[1].Color[0] - 0.3F * selector.Settings.FadeStep) < 1.0e-4F,
+            "light selection did not keep Navi and fade in the flames nearest to Link");
+    for (int frame = 0; frame < 10; ++frame) selector.Select(candidates, link, false, snapshot);
+    Require(std::abs(snapshot.Lights[1].Color[0] - 0.3F) < 1.0e-4F &&
+                std::none_of(snapshot.Lights.begin(), snapshot.Lights.begin() + snapshot.Count,
+                             [](const auto& light) { return light.SourceIdentity == 1000U; }),
+            "selected lights did not reach full light, or a far light was chosen");
+    // Too much light at Link dims the added lights together.
+    selector.Settings.Ceiling = 0.05F;
+    for (int frame = 0; frame < 20; ++frame) selector.Select(candidates, link, false, snapshot);
+    Require(selector.Stats().Exposure < 1.0F && snapshot.Lights[1].Color[0] < 0.3F,
+            "the brightness ceiling did not dim the added lights");
+
+    // Bg_Hidan_Fwbig half raised (0.1 scale: 240 tall, risen 120 of it):
+    // three distinct points across the exposed wall at half intensity.
+    NativeA32Memory memory;
+    constexpr uint32_t play = 0x10000000U, wall = play + 0x4000U;
+    Map(memory, play, 0x10000U);
+    const auto scalar = [&](uint32_t offset, float value) {
+        return memory.Write32(wall + offset, std::bit_cast<uint32_t>(value));
+    };
+    Require(scalar(0x28U, 0.0F) && scalar(0x2CU, -120.0F) && scalar(0x30U, 0.0F) && scalar(0x0CU, 0.0F) &&
+                scalar(0x54U, 0.1F) && scalar(0x58U, 0.1F) && scalar(0x5CU, 0.1F) && scalar(0xC4U, 0.0F) &&
+                memory.Write32(wall + 0x140U, 0x0029B1C8U) && memory.Write32(wall + 0x204U, 1U) &&
+                memory.Write16(wall + 0xBEU, 0x4000U),
+            "could not seed the great fire wall");
+    std::vector<PicaScenePointLight> lights;
+    CaptureNativeFireEmitters(memory, play, wall, 0x08DU, 0U, lights);
+    Require(lights.size() == 3U && lights[0].SourceIdentity != lights[1].SourceIdentity &&
+                lights[0].SourceIdentity == wall + 0x28U && std::abs(lights[0].PositionWorld[1] - 60.0F) < 1.0e-3F &&
+                std::abs(lights[0].PositionWorld[2] - 264.0F) < 1.0e-2F &&
+                std::abs(lights[1].Color[0] - 0.5F) < 1.0e-3F,
+            "the half-raised great fire wall did not light three points across it");
+    Require(scalar(0x2CU, -240.0F), "could not bury the wall");
+    lights.clear();
+    CaptureNativeFireEmitters(memory, play, wall, 0x08DU, 0U, lights);
+    Require(lights.empty(), "a buried fire wall still emitted light");
+
+    // The drawbridge's torches burn while the bridge is up (flame scale
+    // 0.004 of 0.008: half light), at the gate; down (0), or in the scene
+    // layer that draws none, they give no light. The chain actors draw none.
+    constexpr uint32_t bridge = play + 0x6000U, flameScale = 0x005135B4U, sceneLayer = 0x00588E40U;
+    Map(memory, flameScale & ~0xFFFU, 0x1000U);
+    Map(memory, sceneLayer & ~0xFFFU, 0x1000U);
+    Require(memory.Write32(bridge + 0x140U, 0x0038AF04U) && memory.Write32(flameScale, std::bit_cast<uint32_t>(0.004F)) &&
+                memory.Write32(sceneLayer, 1U),
+            "could not seed the drawbridge");
+    lights.clear();
+    CaptureNativeFireEmitters(memory, play, bridge, 0x04AU, 0xFFFFU, lights);
+    Require(lights.size() == 2U && std::abs(lights[0].PositionWorld[0] - 260.0F) < 1.0e-3F &&
+                std::abs(lights[1].PositionWorld[0] + 260.0F) < 1.0e-3F &&
+                std::abs(lights[0].Color[0] - 0.5F) < 1.0e-3F && lights[0].SourceIdentity != lights[1].SourceIdentity,
+            "the raised drawbridge's torches did not light the gate");
+    lights.clear();
+    CaptureNativeFireEmitters(memory, play, bridge, 0x04AU, 0U, lights);
+    Require(lights.empty(), "a drawbridge chain lit the torches");
+    Require(memory.Write32(sceneLayer, 12U), "could not change the scene layer");
+    CaptureNativeFireEmitters(memory, play, bridge, 0x04AU, 0xFFFFU, lights);
+    Require(lights.empty(), "the scene layer without torches lit them");
+    Require(memory.Write32(sceneLayer, 1U) && memory.Write32(flameScale, 0U), "could not lower the bridge");
+    CaptureNativeFireEmitters(memory, play, bridge, 0x04AU, 0xFFFFU, lights);
+    Require(lights.empty(), "the lowered drawbridge's torches still gave light");
+}
+
+void TestSceneLightCatalog() {
+    using namespace Oot3dNativeGame;
+    // A standard and a Master Quest room 1 of scene 10: the loaded file's
+    // command list (fingerprint) chooses which.
+    NativeA32Memory memory;
+    constexpr uint32_t play = 0x10000000U, file = play + 0x8000U;
+    Map(memory, play, 0x10000U);
+    std::array<uint8_t, kNativeRoomFingerprintBytes> commands{};
+    for (size_t i = 0; i < commands.size(); ++i) commands[i] = static_cast<uint8_t>(i * 7U);
+    for (size_t i = 0; i < commands.size(); ++i)
+        Require(memory.Write8(file + static_cast<uint32_t>(i), commands[i]), "could not seed the room file");
+    Require(memory.Write8(play + 0x4C30U, 1U) && memory.Write32(play + 0x4FFCU, file) &&
+                memory.Write8(play + 0x500CU, 0xFFU),
+            "could not seed the loaded room");
+    const uint64_t standard = NativeRoomFingerprint(commands);
+    char hex[17]{};
+    std::snprintf(hex, sizeof(hex), "%016llx", static_cast<unsigned long long>(standard));
+    const std::string text =
+        std::string(R"({"schema":"triaevum.scene-lights","version":1,"rooms":[)") +
+        R"({"scene":10,"room":1,"masterQuest":false,"fingerprint":")" + hex +
+        R"(","emitters":[{"category":"window-lamp","position":[1,2,3],"radius":450,"gain":1.0,"colour":[1,0.5,0.25]},)" +
+        R"({"category":"fire-lava","position":[4,5,6],"radius":600,"gain":0.5,"colour":[1,0.4,0.2]},)" +
+        R"({"category":"doorway","position":[0,95,820],"radius":1330,"gain":1.6,"colour":[1,0.95,0.85]}]},)" +
+        R"({"scene":10,"room":1,"masterQuest":true,"fingerprint":"0123456789abcdef","emitters":[)" +
+        R"({"category":"window-lamp","position":[7,8,9],"radius":300,"gain":0.9,"colour":[1,1,1]}]}]})";
+    std::string error;
+    const auto catalog = NativeStaticEmitterCatalog::Parse(text, &error);
+    Require(catalog && catalog->Count() == 4U, "the scene light catalog was rejected: " + error);
+    const auto rooms = NativeLoadedRooms(play, memory);
+    Require(rooms.size() == 1U && rooms[0].Number == 1 && rooms[0].Fingerprint == standard,
+            "the loaded room or its fingerprint was not read");
+    std::vector<Fast::Renderer3ds::PicaScenePointLight> lights;
+    CaptureStaticEmitters(*catalog, 10U, rooms, lights);
+    // Windows and doorways (daylight) cast point shadows; broad sources do not.
+    Require(lights.size() == 3U && lights[0].Group == 3U && lights[0].CastsShadow && !lights[1].CastsShadow &&
+                lights[2].CastsShadow && std::abs(lights[2].Color[0] - 1.6F) < 1.0e-6F &&
+                lights[0].PositionWorld == std::array<float, 3>{1.0F, 2.0F, 3.0F} &&
+                std::abs(lights[1].Color[0] - 0.5F) < 1.0e-6F && lights[0].SourceIdentity != lights[1].SourceIdentity,
+            "the standard room's lights were not published");
+    // Another file loaded as room 1 (the Master Quest one here differs): only
+    // its own lights, none of another variant's.
+    Require(memory.Write8(file, 0xEEU), "could not change the room file");
+    lights.clear();
+    CaptureStaticEmitters(*catalog, 10U, NativeLoadedRooms(play, memory), lights);
+    Require(lights.empty(), "an unknown room file took another variant's lights");
+    lights.clear();
+    CaptureStaticEmitters(*catalog, 11U, rooms, lights);
+    Require(lights.empty(), "another scene took this scene's lights");
+    // Lamplight through a window casts point shadows too; a shaft does not.
+    {
+        const auto windows = NativeStaticEmitterCatalog::Parse(
+            std::string(R"({"schema":"triaevum.scene-lights","version":1,"rooms":[{"scene":82,"room":0,)") +
+            R"("masterQuest":false,"fingerprint":")" + hex + R"(","emitters":[)" +
+            R"({"category":"window-lamp","position":[7,8,9],"radius":300,"gain":0.45,"colour":[1,0.8,0.5],)" +
+            R"("surfaces":["285c1b592e3e8731","299c35318a700c1e"]},)" +
+            R"({"category":"light-shaft","position":[7,0,9],"radius":400,"gain":0.55,"colour":[1,1,1]}]}]})");
+        Require(windows != nullptr, "the window catalog was rejected");
+        std::vector<NativeLoadedRoom> room0{{0, standard, file}};
+        lights.clear();
+        CaptureStaticEmitters(*windows, 82U, room0, lights);
+        Require(lights.size() == 2U && lights[0].CastsShadow && !lights[1].CastsShadow,
+                "a window's lamplight does not cast point shadows");
+        // The window shines as strongly as the renderer last drew its glow;
+        // drawn dark (by day) it is left out. The shaft names no surface.
+        Fast::Renderer3ds::PicaSurfaceEmissionRegistry emission;
+        const auto capture = [&] {
+            lights.clear();
+            CaptureStaticEmitters(*windows, 82U, room0, lights, &emission);
+        };
+        capture();
+        Require(lights.size() == 2U && std::abs(lights[0].Color[0] - 0.45F) < 1.0e-6F,
+                "a window not drawn yet is not at full strength");
+        emission.BeginFrame();
+        Require(emission.Follows(0x285c1b592e3e8731ULL) && emission.Follows(0x299c35318a700c1eULL),
+                "the window's surfaces are not followed");
+        emission.Observe(0x285c1b592e3e8731ULL, 0.0F);
+        emission.Observe(0x299c35318a700c1eULL, 0.0F);
+        emission.BeginFrame();
+        capture();
+        Require(lights.size() == 1U && !lights[0].CastsShadow, "a window drawn dark still shines");
+        emission.Observe(0x299c35318a700c1eULL, 0.5F);
+        emission.BeginFrame();
+        capture();
+        Require(lights.size() == 2U && std::abs(lights[0].Color[0] - 0.225F) < 1.0e-6F,
+                "a window does not shine as strongly as its brightest surface");
+        Require(!NativeStaticEmitterCatalog::Parse(
+                    std::string(R"({"schema":"triaevum.scene-lights","version":1,"rooms":[{"scene":82,"room":0,)") +
+                    R"("fingerprint":")" + hex + R"(","emitters":[{"category":"lamp","position":[0,0,0],)" +
+                    R"("radius":300,"gain":0.5,"colour":[1,1,1],"surfaces":["xyz"]}]}]})"),
+                "malformed emitter surfaces were accepted");
+    }
+    // Malformed catalogs are refused whole.
+    Require(!NativeStaticEmitterCatalog::Parse(R"({"schema":"triaevum.static-emitters.v1","scenes":{}})") &&
+                !NativeStaticEmitterCatalog::Parse(
+                    R"({"schema":"triaevum.scene-lights","version":1,"rooms":[{"scene":1,"room":0,)"
+                    R"("fingerprint":"xyz","emitters":[]}]})") &&
+                !NativeStaticEmitterCatalog::Parse(
+                    R"({"schema":"triaevum.scene-lights","version":1,"rooms":[{"scene":1,"room":0,)"
+                    R"("fingerprint":"0123456789abcdef","emitters":[{"category":"lamp","position":[0,0,0],)"
+                    R"("radius":0,"gain":1,"colour":[1,1,1]}]}]})"),
+            "a malformed scene light catalog was accepted");
+    // A torch stand is no emitter (its flame is an actor's): a catalog that
+    // still lists one predates that and is refused, to be regenerated.
+    Require(!NativeStaticEmitterCatalog::Parse(
+                R"({"schema":"triaevum.scene-lights","version":1,"rooms":[{"scene":1,"room":0,)"
+                R"("fingerprint":"0123456789abcdef","emitters":[{"category":"torch","position":[0,0,0],)"
+                R"("radius":450,"gain":1,"colour":[1,1,1]}]}]})"),
+            "a catalog listing a torch stand was accepted");
+    // Wrong types and unbounded values are refused, never thrown.
+    Require(!NativeStaticEmitterCatalog::Parse(R"({"schema":123,"version":1,"rooms":[]})") &&
+                !NativeStaticEmitterCatalog::Parse(
+                    R"({"schema":"triaevum.scene-lights","version":1,"rooms":[{"scene":1,"room":0,)"
+                    R"("fingerprint":"0123456789abcdef","emitters":[{"category":7,"position":[0,0,0],)"
+                    R"("radius":10,"gain":1,"colour":[1,1,1]}]}]})") &&
+                !NativeStaticEmitterCatalog::Parse(
+                    R"({"schema":"triaevum.scene-lights","version":1,"rooms":[{"scene":1,"room":0,)"
+                    R"("fingerprint":"0123456789abcdef","emitters":[{"category":"lamp","position":[0,0,0],)"
+                    R"("radius":1e100,"gain":1,"colour":[1,1,1]}]}]})"),
+            "a mistyped or unbounded scene light catalog was accepted");
+}
+
 void TestRestoredNativeEnvironmentLights() {
     using namespace Oot3dNativeGame;
     NativeA32Memory memory;
@@ -686,6 +906,8 @@ int main() {
     TestDeferredAtmosphereOwnership();
     TestDeferredActorOwnership();
     TestRestoredSceneLightOwnership();
+    TestFireEmittersAndSelection();
+    TestSceneLightCatalog();
     TestRestoredNativeEnvironmentLights();
     TestTimeDrivenEnvironmentLights();
     TestEnvironmentKeyDirection();
@@ -887,6 +1109,7 @@ int main() {
     tracker.ObserveBlockEntry(0x003004E0U, state, memory);
     Require(tracker.Stats().UiScopeExits == 0, "reset retained a UI view scope");
     for (const auto [entry, returnPc] : std::array{
+             std::pair{0x0041EC50U, 0x0030055CU},
              std::pair{0x0041F308U, 0x0041983CU},
              std::pair{0x00425930U, 0x0041EB14U},
             std::pair{0x0041AFACU, 0x00419890U},

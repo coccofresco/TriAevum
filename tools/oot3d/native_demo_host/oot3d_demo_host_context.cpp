@@ -1,11 +1,14 @@
 #include "oot3d_demo_host_context.h"
 
+#include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "fast/Fast3dWindow.h"
@@ -48,10 +51,49 @@ void RecordSwitchHostInitStage(const char*) {
 }
 #endif
 
+std::filesystem::path& LaunchMarker() {
+    static std::filesystem::path marker;
+    return marker;
+}
+
+// A launch marker beside the configuration lives for the session's first
+// minute. Finding it means the previous launch ended before that (a crash or
+// an error at startup, as a too-demanding resolution causes at every launch
+// once it is saved): the graphics settings then restart their presentation
+// from the defaults (graphics_settings_runtime.cpp).
+void ArmLaunchMarker(const std::string& configurationPath) {
+    std::error_code error;
+    auto marker = std::filesystem::path(configurationPath);
+    marker += ".launching";
+    if (std::filesystem::exists(marker, error)) {
+#if defined(_WIN32)
+        _putenv_s("TRIAEVUM_SAFE_PRESENTATION", "the previous launch ended within its first minute");
+#else
+        setenv("TRIAEVUM_SAFE_PRESENTATION", "the previous launch ended within its first minute", 1);
+#endif
+    }
+    if (!marker.parent_path().empty())
+        std::filesystem::create_directories(marker.parent_path(), error);
+    std::ofstream(marker) << "TriAevum launch in progress\n";
+    LaunchMarker() = marker;
+    std::thread([marker] {
+        std::this_thread::sleep_for(std::chrono::seconds(60));
+        std::error_code removed;
+        std::filesystem::remove(marker, removed);
+    }).detach();
+}
+
 } // namespace
+
+void ClearLaunchMarkerForDemo() noexcept {
+    std::error_code error;
+    if (!LaunchMarker().empty())
+        std::filesystem::remove(LaunchMarker(), error);
+}
 
 void InitContextForDemo(const Args& args) {
     RecordSwitchHostInitStage("host_create_context");
+    ArmLaunchMarker(args.ConfigurationPath);
     std::filesystem::create_directories("logs");
     auto* context = Ship::Context::CreateUninitializedInstance(
         args.ApplicationName, args.ApplicationId, args.ConfigurationPath);
@@ -140,6 +182,16 @@ void DestroyContextForDemo() noexcept {
         context->GetControlDeck()->GetConnectedPhysicalDeviceManager()->Shutdown();
     }
     Ship::Context::DestroyInstance();
+}
+
+void LogFatalErrorForDemo(const char* message) noexcept {
+    try {
+        if (auto* context = Ship::Context::GetRawInstance(); context != nullptr && context->GetLogger() != nullptr) {
+            context->GetLogger()->critical("oot3d_native_game: {}", message != nullptr ? message : "unknown error");
+            context->GetLogger()->flush();
+        }
+    } catch (...) {
+    }
 }
 
 Fast::Fast3dWindow& GetActiveFast3dWindowForDemo() {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "fast/renderer3ds/pica_light_binding.h"
+#include "fast/renderer3ds/room_shadow_shell.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -33,6 +34,23 @@ struct PicaScenePointLightSettings {
     float RadiusScale = 1.0F;
     std::array<float, 3> ColorTint{1.0F, 1.0F, 1.0F};
     bool operator==(const PicaScenePointLightSettings&) const = default;
+};
+
+enum class PicaRimLightScope : uint8_t { Actors, ActorsAndWorld };
+enum class PicaRimLightSource : uint8_t { Independent, SceneLights };
+// Bounded artistic edge light, camera-relative by default.
+// Scope eligibility belongs to the title adapter, not the surface shader.
+inline constexpr float kMaximumPicaRimIntensity = 8.0F;
+struct PicaRimLightSettings {
+    bool Enabled = false;
+    float Intensity = 1.0F;
+    float Sharpness = 4.0F;
+    PicaRimLightSource Source = PicaRimLightSource::Independent;
+    std::array<float, 3> Color{1.0F, 0.96F, 0.9F};
+    float Azimuth = 0.0F; // Camera-relative degrees: 0 top, 90 right.
+    float Coverage = 0.25F; // 0 directional edge, 1 full silhouette.
+    PicaRimLightScope Scope = PicaRimLightScope::Actors;
+    bool operator==(const PicaRimLightSettings&) const = default;
 };
 
 // A light the title placed in the scene. Applies while the environment is
@@ -74,6 +92,11 @@ struct PicaPlacedLight {
     // Spot: cosines of the beam's half angle and of its hard core.
     float CosOuter = 0.0F;
     float CosInner = 0.0F;
+    // Rectangle and disc: the full angle (degrees, 1..180) around the axis
+    // within which each point of the surface emits. 180 is a diffuse
+    // surface; less straightens its light along the axis, so it draws a
+    // sharper footprint of its shape, as bright under the surface.
+    float Spread = 180.0F;
     bool TwoSided = false;
     bool CastShadows = false;
     bool operator==(const PicaPlacedLight&) const = default;
@@ -83,6 +106,10 @@ struct PicaPlacedLight {
 // The title owns profile identity, persistence and world-axis conventions.
 struct PicaEnvironmentLighting {
     uint64_t ScopeIdentity = 0;
+    // Nonzero: the owner publishes continuous animation within this epoch.
+    // Edits, time cuts and scene/load changes advance it. The renderer's
+    // shadow keyframe scheduler follows direction motion within an epoch.
+    uint64_t ContinuityEpoch = 0;
     bool Enabled = false;
     // Keep the native low-frequency reference independently of source gains.
     bool PreserveSceneBrightness = true;
@@ -109,13 +136,18 @@ struct PicaEnvironmentLighting {
     // Lights placed in the scene (their own per-draw slots).
     std::array<PicaPlacedLight, kMaximumPicaPlacedLights> PlacedLights{};
     uint32_t PlacedLightCount = 0;
-    // Directional shadow casters keep the title's face culling; off, both
-    // faces of every caster draw into the map (open or one-sided meshes
-    // whose culled faces leave holes or leak light). Independent of the
-    // lighting override.
-    bool ShadowCasterCulling = true;
+    PicaRimLightSettings Rim;
+    // Independent of the lighting override.
+    ShadowCasterFaces CasterFaces = ShadowCasterFaces::Native;
     bool operator==(const PicaEnvironmentLighting&) const = default;
 };
+
+[[nodiscard]] inline bool ContinuousPicaEnvironmentChange(const PicaEnvironmentLighting& before,
+                                                          const PicaEnvironmentLighting& after) noexcept {
+    return before.ContinuityEpoch != 0 && before.ContinuityEpoch == after.ContinuityEpoch &&
+           before.ScopeIdentity == after.ScopeIdentity && before.Enabled == after.Enabled &&
+           before.CasterFaces == after.CasterFaces && before.KeyDirection == after.KeyDirection;
+}
 
 // Light 0's colour for a draw with this scene snapshot. A key that follows
 // the scene's lights also takes its main light's colour and brightness (after

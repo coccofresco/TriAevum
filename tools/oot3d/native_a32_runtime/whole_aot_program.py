@@ -40,6 +40,7 @@ from oot3d_pack.arm_ir import (  # noqa: E402
 FORMAT = "oot3d_whole_aot_program_v1"
 CACHE_FORMAT = "oot3d_whole_aot_program_cache_v1"
 DEFAULT_BASE = 0x00100000
+DEFAULT_OBSERVED_SITES = Path(__file__).resolve().with_name("whole_aot_observed_sites.json")
 
 
 def _sha256_bytes(data: bytes) -> str:
@@ -711,6 +712,21 @@ def _body_hash(block_ids: Iterable[int], blocks: tuple[AotBlock, ...]) -> str:
     return digest.hexdigest()
 
 
+def load_observed_sites(path: Path, code: bytes) -> frozenset[int]:
+    """Catalogued pcs that must start a block, for this exact code image.
+
+    The runtime observes or redirects execution at these pcs (TopScreen source
+    port hooks and their resume points); whole-AOT reports only block starts.
+    A catalog for another code image does not apply.
+    """
+    catalog = json.loads(path.read_text(encoding="utf-8"))
+    if catalog.get("format") != "oot3d_whole_aot_observed_sites_v1":
+        raise ValueError(f"unsupported observed-site catalog: {path}")
+    if catalog.get("code_sha256") != hashlib.sha256(code).hexdigest():
+        return frozenset()
+    return frozenset(int(site["pc"], 16) for site in catalog["sites"])
+
+
 def build_program(
     code: bytes,
     inventory_path: Path,
@@ -718,6 +734,7 @@ def build_program(
     *,
     base: int = DEFAULT_BASE,
     executable_size: int | None = None,
+    observed_sites: Iterable[int] = (),
 ) -> AotProgram:
     if executable_size is None:
         executable_size = len(code)
@@ -755,11 +772,15 @@ def build_program(
         )
         iterations += extra_iterations
     reachable = flow.decoded_reachable | flow.unknown_stops
+    observed = frozenset(observed_sites)
+    if observed - flow.decoded_reachable:
+        missing = ", ".join(f"0x{pc:08X}" for pc in sorted(observed - flow.decoded_reachable))
+        raise ValueError(f"observed sites are not reachable code: {missing}")
     dynamic_targets = _switch_targets(decoder, literal_sources, reachable)
     blocks = _make_blocks(
         decoder,
         reachable,
-        flow.block_starts,
+        flow.block_starts | observed,
         flow.explicit_lr_returns,
         dynamic_targets,
     )
@@ -776,7 +797,7 @@ def build_program(
     }
     roots = set(inventory_by_entry) | set(flow.pointer_roots) | direct_targets | internal_cases
     roots &= set(entry_to_block)
-    blocks = _normalize_complementary_branch_chains(blocks, roots)
+    blocks = _normalize_complementary_branch_chains(blocks, roots | observed)
 
     def root_record(entry: int) -> tuple[int | None, str, str]:
         record = inventory_by_entry.get(entry)
@@ -918,7 +939,8 @@ def _cache_key(args: argparse.Namespace) -> str:
         UPSTREAM_SRC / "oot3d_pack/arm_decode.py",
         UPSTREAM_SRC / "oot3d_pack/arm_ir.py",
     )
-    for path in (*sources, args.code, args.inventory, args.boundary_audit):
+    for path in (*sources, args.code, args.inventory, args.boundary_audit,
+                 args.observed_sites):
         digest.update(str(path.resolve()).encode("utf-8"))
         digest.update(b"\0")
         digest.update(bytes.fromhex(_sha256_path(path)))
@@ -967,6 +989,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--executable-size", type=lambda value: int(value, 0))
     parser.add_argument("--include-instructions", action="store_true")
     parser.add_argument("--force", action="store_true")
+    parser.add_argument("--observed-sites", type=Path, default=DEFAULT_OBSERVED_SITES)
     return parser
 
 
@@ -992,6 +1015,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.boundary_audit,
         base=args.base,
         executable_size=args.executable_size,
+        observed_sites=load_observed_sites(args.observed_sites, code),
     )
     manifest = program.to_manifest(args.include_instructions)
     contents = (

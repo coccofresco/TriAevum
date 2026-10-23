@@ -18,7 +18,14 @@ class ProductGraphicsDefaultsTests(unittest.TestCase):
         self.assertEqual(self.defaults, {"Grass": {"Sources": self.defaults["Grass"]["Sources"]}})
         self.assertEqual([source["Target"]["Rgba8Hash"] for source in self.defaults["Grass"]["Sources"]],
                          ["be15aff93dfdcd88", "2321986eb9820c29", "4b8941fd174516b0",
-                          "0a29e93a3b0742b3", "bd769b9ce136d73a", "d13528cd4896c851"])
+                          "0a29e93a3b0742b3", "bd769b9ce136d73a", "d13528cd4896c851",
+                          "98d219f9acce7e31", "cc0f3ad3756aa28b", "7a41e65008d2ea50",
+                          "abc341818083dec7", "a580b32083237f97", "887ffba709e21b96",
+                          "fa7cfd29f3dcdaba", "c62b9d278e8bd285", "a35e3fe6f83ca9c2",
+                          "d19ab95b18fb3495", "a475bf5c5bbd4ff8", "4e80b26cfb20ea87",
+                          "72471d7a6540e0cc", "c09d75caf61cc19c", "62d5ae1053b31e2e",
+                          "7e5075b79d5c5dcd", "86f3d2415641fc84", "14dd64ec10e5bbd6",
+                          "8bbe4b35b0af27a9"])
         source = (SOURCE / "triaevum_product_info.cpp").read_text()
         self.assertIn("Preset(GraphicsPreset::Enhanced)", source)
         self.assertIn('document["GrassSavedPreset"] = document["Grass"]', source)
@@ -49,7 +56,7 @@ class ProductGraphicsDefaultsTests(unittest.TestCase):
         self.assertEqual(graphics["Effects"]["Reflections"]["Mode"], "Off")
         self.assertEqual(graphics["Effects"]["Toon"]["Mode"], "Off")
         self.assertEqual(graphics["Grass"]["Quality"], "Custom")
-        self.assertEqual(len(graphics["Grass"]["Sources"]), 6)
+        self.assertEqual(len(graphics["Grass"]["Sources"]), 25)
         self.assertEqual(graphics["GrassSavedPreset"], graphics["Grass"])
         self.assertEqual((graphics["Output"]["Width"], graphics["Output"]["Height"]), (1280, 720))
 

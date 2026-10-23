@@ -1,7 +1,9 @@
 // Vulkan backend: presentation settings and the frame (StartFrame, EndFrame, FinishRender).
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_internal.h"
+#include "fast/oot3d/grass_stage_profile.h"
 #include "fast/renderer3ds/pica_surface_debug.h"
+#include "fast/renderer3ds/pica_surface_emission.h"
 
 namespace Fast {
 
@@ -269,7 +271,7 @@ void GfxRenderingAPIVulkan::StartFrame() {
         Oot3d::SceneColorEncoding::Unknown;
     mGrassExecutedThisFrame = false;
     mLinearColorExecutedThisFrame = false;
-    mMotionExecutedThisFrame = false;
+    Renderer3ds::PicaSurfaceEmissionRegistry::Instance().BeginFrame();
     mUpscalerExecutedThisFrame = false;
     mNativeUiOverlayExecutedThisFrame = false;
     mUpscalerUsedD3d12ThisFrame = false;
@@ -297,16 +299,10 @@ void GfxRenderingAPIVulkan::StartFrame() {
     mDirectionalShadowInsertionAttemptedTargetsThisFrame.clear();
     mPointShadowInsertionAttemptedTargetsThisFrame.clear();
     mGrassSurfaceOccurrencesThisFrame.clear();
-    mRigidMotionOccurrencesThisFrame.clear();
     mNativePicaDepthWritingDrawsThisFrame = 0;
     mCustomTextureUploadBytesThisFrame = 0;
     if (mFrameCounter > 3U) {
         Oot3d::GrassSceneBridge::Instance().PruneBeforeFrame(mFrameCounter - 2U);
-        mRigidMotionTracker.PruneBeforeFrame(mFrameCounter - 2U);
-        std::erase_if(mPreviousPicaVertexUniforms,
-            [this](const auto& item) {
-                return item.second.FrameId + 2U < mFrameCounter;
-            });
     }
     settingsRuntime.SetCapability(
         Oot3d::GraphicsCapability::ValidViewMetadata,
@@ -381,18 +377,24 @@ void GfxRenderingAPIVulkan::StartFrame() {
 #endif
     const auto& nextGraphicsSettings = graphicsSnapshot.Value;
     if (mFrameEnvironment != graphicsSnapshot.Environment) {
+      if (!Renderer3ds::ContinuousPicaEnvironmentChange(mFrameEnvironment, graphicsSnapshot.Environment)) {
         mTemporalAaPass.ResetHistory();
         mTaaOutputValid = false;
         // Never use a previous scene/sun's depth map for a new lighting direction.
-        if (mFrameEnvironment.ScopeIdentity != graphicsSnapshot.Environment.ScopeIdentity ||
+        if (mFrameEnvironment.ContinuityEpoch != graphicsSnapshot.Environment.ContinuityEpoch ||
+            mFrameEnvironment.ScopeIdentity != graphicsSnapshot.Environment.ScopeIdentity ||
             mFrameEnvironment.Enabled != graphicsSnapshot.Environment.Enabled ||
             mFrameEnvironment.KeyDirection != graphicsSnapshot.Environment.KeyDirection ||
             mFrameEnvironment.KeyAzimuthOffset != graphicsSnapshot.Environment.KeyAzimuthOffset ||
             mFrameEnvironment.KeyElevationOffset != graphicsSnapshot.Environment.KeyElevationOffset ||
-            mFrameEnvironment.ShadowCasterCulling != graphicsSnapshot.Environment.ShadowCasterCulling ||
+            mFrameEnvironment.CasterFaces != graphicsSnapshot.Environment.CasterFaces ||
             mFrameEnvironment.Lights[0].DirectionTowardSource !=
                 graphicsSnapshot.Environment.Lights[0].DirectionTowardSource)
             mNriDirectionalShadowPass.InvalidateHistory();
+      }
+        // Continuous profile motion uses VirtualShadowKeyframes' existing
+        // page budget/dissolve, just like the moving native sun. Do not reset
+        // its construction (or TAA history) for every interpolated sample.
         mFrameEnvironment = graphicsSnapshot.Environment;
     }
     if (mFrameGraphicsSettings.Effects.DirectionalShadows.Mode != nextGraphicsSettings.Effects.DirectionalShadows.Mode ||
@@ -585,8 +587,7 @@ void GfxRenderingAPIVulkan::StartFrame() {
               aaPolicy.TemporalJitterPhases).PixelOffset
         : std::array<float, 2>{};
     if (!mTemporalMotionEnabled) {
-        mRigidMotionTracker.Reset();
-        mPreviousPicaVertexUniforms.clear();
+        mPicaTemporalHistory.Reset();
     }
     if (!mTemporalJitterEnabled) {
         mTaaOutputValid = false;
@@ -773,6 +774,8 @@ void GfxRenderingAPIVulkan::StartFrame() {
     mFrameActive = true;
     PrepareRecordedDlssFeature();
     ++mFrameCounter;
+    Oot3d::BeginGrassStageFrame(mFrameCounter);
+    mSurfaceCalibrationTrace.BeginFrame(mFrameCounter);
     mDrawCallCountThisFrame = 0;
     mRenderPassActive = false;
     mOverlayRenderPassActive = false;
@@ -814,10 +817,17 @@ void GfxRenderingAPIVulkan::StartFrame() {
         static_cast<uint32_t>(mSwapchainImages.size()),
         nriAcquire,
         nriAcquire);
-    if (const auto timings = mGpuProfiler.BeginFrame(
-            mCurrentFrame, mFrameCounter, mCommandBuffers[mCurrentFrame]);
-        timings.has_value() && mFrameCounter > kFramesInFlight) {
-        mDiagnostics.SetGpuTimings(mFrameCounter - kFramesInFlight, *timings);
+    if (const auto timings = mGpuProfiler.BeginFrame(mCurrentFrame, mFrameCounter, mCommandBuffers[mCurrentFrame]);
+        mFrameCounter > kFramesInFlight) {
+        if (timings)
+            mDiagnostics.SetGpuTimings(mFrameCounter - kFramesInFlight, *timings);
+        if (Oot3d::GrassStageProfileEnabled()) {
+            const auto measured = timings.value_or(Oot3dVulkanGpuTimings{});
+            Oot3d::ReportGrassStageFrame(
+                mFrameCounter - kFramesInFlight, measured.GrassMilliseconds.value_or(-1),
+                measured.GrassCompactionMilliseconds.value_or(-1), measured.GrassBladesMilliseconds.value_or(-1),
+                measured.GrassShadowsMilliseconds.value_or(-1), measured.GrassLightingMilliseconds.value_or(-1));
+        }
     }
     mViewport = { 0.0f, 0.0f, static_cast<float>(mSwapchainExtent.width),
                   static_cast<float>(mSwapchainExtent.height), 0.0f, 1.0f };
@@ -942,6 +952,7 @@ void GfxRenderingAPIVulkan::FinishRender() {
     mDiagnostics.RecordRendererValidation(
         mValidationTelemetry.Snapshot());
     mDiagnostics.EndFrame();
+    FinishSurfaceCalibrationTrace();
     mFrameSubmitted = false;
     mCurrentFrame = (mCurrentFrame + 1) % kFramesInFlight;
 }

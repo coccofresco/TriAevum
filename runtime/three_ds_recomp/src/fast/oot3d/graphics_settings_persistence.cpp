@@ -6,6 +6,8 @@
 #include <cmath>
 #include <cstdio>
 #include <limits>
+#include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -16,6 +18,16 @@ namespace Fast::Oot3d {
 namespace {
 
 using Json = nlohmann::json;
+
+std::mutex& TitleGrassRuleMutex() {
+    static std::mutex mutex;
+    return mutex;
+}
+
+std::optional<Json>& TitleGrassRules() {
+    static std::optional<Json> rules;
+    return rules;
+}
 
 template <typename Enum>
 using EnumNames = std::initializer_list<std::pair<Enum, std::string_view>>;
@@ -124,18 +136,18 @@ constexpr EnumNames<SurfaceLightingMode> kSurfaceLightingNames{
     {SurfaceLightingMode::NativePbr, "NativePBR"},
 };
 constexpr EnumNames<GrassQuality> kGrassQualityNames{
-    {GrassQuality::Off, "Off"},
-    {GrassQuality::Low, "Low"},
-    {GrassQuality::Medium, "Medium"},
-    {GrassQuality::High, "High"},
-    {GrassQuality::Custom, "Custom"},
+    { GrassQuality::Off, "Off" },   { GrassQuality::Low, "Low" },       { GrassQuality::Medium, "Medium" },
+    { GrassQuality::High, "High" }, { GrassQuality::Custom, "Custom" },
 };
+constexpr EnumNames<GrassMaskMode> kGrassMaskModeNames{ { GrassMaskMode::Automatic, "Automatic" },
+                                                        { GrassMaskMode::Custom, "Custom" },
+                                                        { GrassMaskMode::Off, "Off" } };
 constexpr EnumNames<GrassSampleChannel> kGrassChannelNames{
-    {GrassSampleChannel::Red, "Red"},
-    {GrassSampleChannel::Green, "Green"},
-    {GrassSampleChannel::Blue, "Blue"},
-    {GrassSampleChannel::Alpha, "Alpha"},
-    {GrassSampleChannel::Luminance, "Luminance"},
+    { GrassSampleChannel::Red, "Red" },
+    { GrassSampleChannel::Green, "Green" },
+    { GrassSampleChannel::Blue, "Blue" },
+    { GrassSampleChannel::Alpha, "Alpha" },
+    { GrassSampleChannel::Luminance, "Luminance" },
 };
 constexpr EnumNames<GrassWrapOverride> kGrassWrapNames{
     {GrassWrapOverride::Material, "Material"},
@@ -415,88 +427,93 @@ Json SerializeInteractiveGrassSettings(
         rules.push_back(SerializeGrassRule(rule));
     }
     return {
-        {"Quality", EnumName(grass.Quality, kGrassQualityNames)},
-        {"Budget",
-         {
-             {"MaxInstancesPerRoom", grass.MaxInstancesPerRoom},
-             {"DrawDistance", grass.DrawDistance},
-         }},
-        {"Performance",
-         {
-             {"FrustumCulling", grass.FrustumCulling},
-             {"CullingClusterSize", grass.CullingClusterSize},
-             {"LodStartFraction", grass.LodStartFraction},
-             {"LodReferenceDistance", grass.LodReferenceDistance},
-             {"LodEndFraction", grass.LodEndFraction},
-             {"SegmentLodStartDistance", grass.SegmentLodStartDistance},
-             {"SegmentLodEndDistance", grass.SegmentLodEndDistance},
-             {"FarDensity", grass.FarDensity},
-             {"FarBladeSegments", grass.FarBladeSegments},
-             {"FarTuftsEnabled", grass.FarTuftsEnabled},
-             {"MidrangeClustersEnabled", grass.MidrangeClustersEnabled},
-             {"MidrangeAdaptiveEnabled", grass.MidrangeAdaptiveEnabled},
-             {"MidrangeAdaptiveCapacity", grass.MidrangeAdaptiveCapacity},
-             {"MidrangeClusterCellExtent", grass.MidrangeClusterCellExtent},
-             {"MidrangeFarBladeFraction", grass.MidrangeFarBladeFraction},
-             {"FarTuftBladeCount", grass.FarTuftBladeCount},
-             {"DrawFadeFraction", grass.DrawFadeFraction},
-             {"DensityFadeFraction", grass.DensityFadeFraction},
-             {"TuftTransitionFraction", grass.TuftTransitionFraction},
-             {"FarTuftDensity", grass.FarTuftDensity},
-             {"FarTuftSpread", grass.FarTuftSpread},
-             {"SegmentLodSoftness", grass.SegmentLodSoftness},
-         }},
-        {"Generation",
-         SerializeGrassGeneration(grass.Generation)},
-        {"Appearance",
-         {
-             {"RootColor", grass.Appearance.RootColor},
-             {"TipColor", grass.Appearance.TipColor},
-             {"TextureColorInfluence",
-              grass.Appearance.TextureColorInfluence},
-             {"TextureRootBrightness",
-              grass.Appearance.TextureRootBrightness},
-             {"TextureTipBrightness",
-              grass.Appearance.TextureTipBrightness},
-             {"HeightScale", grass.Appearance.HeightScale},
-             {"BladeCurvature", grass.Appearance.BladeCurvature},
-             {"BladeDroop", grass.Appearance.BladeDroop},
-             {"ShapeVariation", grass.Appearance.ShapeVariation},
-             {"BladeTwistDegrees", grass.Appearance.BladeTwistDegrees},
-             {"BladeSegments", grass.Appearance.BladeSegments},
-             {"ReceiveLighting", grass.Appearance.ReceiveLighting},
-             {"ToonRimEnabled", grass.Appearance.ToonRimEnabled},
-             {"ToonRimFadeStart", grass.Appearance.ToonRimFadeStart},
-             {"ToonRimFadeEnd", grass.Appearance.ToonRimFadeEnd},
-             {"ReceiveFog", grass.Appearance.ReceiveFog},
-         }},
-        {"Wind",
-         {
-             {"DirectionDegrees", grass.WindDirectionDegrees},
-             {"Strength", grass.WindStrength},
-             {"Speed", grass.WindSpeed},
-             {"SpatialScale", grass.WindSpatialScale},
-             {"GustStrength", grass.WindGustStrength},
-             {"GustFrequency", grass.WindGustFrequency},
-             {"Turbulence", grass.WindTurbulence},
-             {"Randomness", grass.WindRandomness},
-         }},
-        {"LinkInteraction",
-         {
-             {"CollisionPush", grass.CollisionPush},
-             {"VelocityResponse", grass.CollisionVelocityResponse},
-             {"ColliderRadiusMultiplier",
-              grass.ColliderRadiusMultiplier},
-             {"ColliderHeightMultiplier",
-              grass.ColliderHeightMultiplier},
-             {"RecoverySeconds", grass.RecoverySeconds},
-             {"Damping", grass.InteractionDamping},
-             {"MaximumBend", grass.MaximumBend},
-             {"FieldRadius", grass.InteractionFieldRadius},
-             {"FieldResolution", grass.InteractionFieldResolution},
-             {"VerticalMargin", grass.InteractionVerticalMargin},
-         }},
-        {"Sources", std::move(rules)},
+        { "Quality", EnumName(grass.Quality, kGrassQualityNames) },
+        { "Budget",
+          {
+              { "MaxInstancesPerRoom", grass.MaxInstancesPerRoom },
+              { "DrawDistance", grass.DrawDistance },
+          } },
+        { "Performance",
+          {
+              { "FrustumCulling", grass.FrustumCulling },
+              { "CullingClusterSize", grass.CullingClusterSize },
+              { "LodStartFraction", grass.LodStartFraction },
+              { "LodReferenceDistance", grass.LodReferenceDistance },
+              { "LodEndFraction", grass.LodEndFraction },
+              { "SegmentLodStartDistance", grass.SegmentLodStartDistance },
+              { "SegmentLodEndDistance", grass.SegmentLodEndDistance },
+              { "FarDensity", grass.FarDensity },
+              { "FarBladeSegments", grass.FarBladeSegments },
+              { "FarTuftsEnabled", grass.FarTuftsEnabled },
+              { "MidrangeClustersEnabled", grass.MidrangeClustersEnabled },
+              { "MidrangeAdaptiveEnabled", grass.MidrangeAdaptiveEnabled },
+              { "MidrangeAdaptiveCapacity", grass.MidrangeAdaptiveCapacity },
+              { "MidrangeClusterCellExtent", grass.MidrangeClusterCellExtent },
+              { "MidrangeFarBladeFraction", grass.MidrangeFarBladeFraction },
+              { "FarTuftBladeCount", grass.FarTuftBladeCount },
+              { "DrawFadeFraction", grass.DrawFadeFraction },
+              { "DensityFadeFraction", grass.DensityFadeFraction },
+              { "TuftTransitionFraction", grass.TuftTransitionFraction },
+              { "FarTuftDensity", grass.FarTuftDensity },
+              { "FarTuftSpread", grass.FarTuftSpread },
+              { "SegmentLodSoftness", grass.SegmentLodSoftness },
+          } },
+        { "Generation", SerializeGrassGeneration(grass.Generation) },
+        { "Appearance",
+          {
+              { "RootColor", grass.Appearance.RootColor },
+              { "TipColor", grass.Appearance.TipColor },
+              { "TextureColorInfluence", grass.Appearance.TextureColorInfluence },
+              { "TextureRootBrightness", grass.Appearance.TextureRootBrightness },
+              { "TextureTipBrightness", grass.Appearance.TextureTipBrightness },
+              { "HeightScale", grass.Appearance.HeightScale },
+              { "BladeCurvature", grass.Appearance.BladeCurvature },
+              { "BladeDroop", grass.Appearance.BladeDroop },
+              { "ShapeVariation", grass.Appearance.ShapeVariation },
+              { "BladeTwistDegrees", grass.Appearance.BladeTwistDegrees },
+              { "BladeSegments", grass.Appearance.BladeSegments },
+              { "ReceiveLighting", grass.Appearance.ReceiveLighting },
+              { "ToonRimEnabled", grass.Appearance.ToonRimEnabled },
+              { "ToonRimFadeStart", grass.Appearance.ToonRimFadeStart },
+              { "ToonRimFadeEnd", grass.Appearance.ToonRimFadeEnd },
+              { "ReceiveFog", grass.Appearance.ReceiveFog },
+          } },
+        { "Wind",
+          {
+              { "DirectionDegrees", grass.WindDirectionDegrees },
+              { "Strength", grass.WindStrength },
+              { "Speed", grass.WindSpeed },
+              { "SpatialScale", grass.WindSpatialScale },
+              { "GustStrength", grass.WindGustStrength },
+              { "GustFrequency", grass.WindGustFrequency },
+              { "Turbulence", grass.WindTurbulence },
+              { "Randomness", grass.WindRandomness },
+          } },
+        { "LinkInteraction",
+          {
+              { "CollisionPush", grass.CollisionPush },
+              { "VelocityResponse", grass.CollisionVelocityResponse },
+              { "ColliderRadiusMultiplier", grass.ColliderRadiusMultiplier },
+              { "ColliderHeightMultiplier", grass.ColliderHeightMultiplier },
+              { "RecoverySeconds", grass.RecoverySeconds },
+              { "Damping", grass.InteractionDamping },
+              { "MaximumBend", grass.MaximumBend },
+              { "FieldRadius", grass.InteractionFieldRadius },
+              { "FieldResolution", grass.InteractionFieldResolution },
+              { "VerticalMargin", grass.InteractionVerticalMargin },
+          } },
+        { "Sources", std::move(rules) },
+        { "Masks",
+          [&grass] {
+              Json masks = Json::array();
+              for (const auto& mask : grass.Masks) {
+                  auto entry = SerializeGrassRule(mask.Coverage);
+                  entry["Mode"] = EnumName(mask.Mode, kGrassMaskModeNames);
+                  entry["Strength"] = mask.Strength;
+                  masks.push_back(std::move(entry));
+              }
+              return masks;
+          }() },
     };
 }
 
@@ -567,15 +584,11 @@ void DeserializeGrassGeneration(
     }
 }
 
-GrassPlacementRule DeserializeGrassRule(
-    const Json& document, size_t index,
-    std::string_view settingsPath, std::string_view collectionName,
-    uint32_t schemaVersion, GraphicsSettingsLoadResult& result) {
-    GrassPlacementRule rule;
+GrassPlacementRule DeserializeGrassRule(const Json& document, size_t index, std::string_view settingsPath,
+                                        std::string_view collectionName, uint32_t schemaVersion,
+                                        GraphicsSettingsLoadResult& result, GrassPlacementRule rule = {}) {
     const std::string prefix =
-        std::string(settingsPath) + "." +
-        std::string(collectionName) + "[" +
-        std::to_string(index) + "]";
+        std::string(settingsPath) + "." + std::string(collectionName) + "[" + std::to_string(index) + "]";
     ReadScalar(document, "RuleId", rule.RuleId,
                prefix + ".RuleId", result);
     if (const Json* target =
@@ -717,6 +730,34 @@ void DeserializeInteractiveGrassSettings(
         readOptional("FarTuftDensity", value.FarTuftDensity);
         readOptional("FarTuftSpread", value.FarTuftSpread);
         readOptional("SegmentLodSoftness", value.SegmentLodSoftness);
+    }
+    // Optional: old configurations use native alpha for every overlay.
+    value.Masks.clear();
+    if (const Json* masks = FindMember(document, "Masks"); masks != nullptr) {
+        if (!masks->is_array())
+            Correct(result, path + ".Masks", "invalid mask array ignored");
+        else
+            for (size_t index = 0; index < std::min<size_t>(masks->size(), 256U); ++index) {
+                const auto& entry = (*masks)[index];
+                const auto prefix = path + ".Masks[" + std::to_string(index) + "]";
+                if (!entry.is_object()) {
+                    Correct(result, prefix, "non-object mask rule ignored");
+                    continue;
+                }
+                GrassMaskRule mask;
+                auto defaults = SerializeGrassRule(mask.Coverage);
+                defaults.merge_patch(entry);
+                mask.Coverage =
+                    DeserializeGrassRule(defaults, index, settingsPath, "Masks", 11U, result, mask.Coverage);
+                if (FindMember(entry, "Mode"))
+                    ReadEnum(entry, "Mode", mask.Mode, kGrassMaskModeNames, prefix + ".Mode", result);
+                if (FindMember(entry, "Strength"))
+                    ReadScalar(entry, "Strength", mask.Strength, prefix + ".Strength", result);
+                NormalizeGrassMaskRule(mask);
+                value.Masks.push_back(std::move(mask));
+            }
+        if (masks->is_array() && masks->size() > 256U)
+            Correct(result, path + ".Masks", "mask rules truncated to 256 entries");
     }
     const std::string_view sourceCollection =
         schemaVersion >= 10U ? "Sources" : "Rules";
@@ -1211,6 +1252,7 @@ std::string_view EnhancedPresetDocument() noexcept {
     }
   },
   "Camera": {
+    "ExtendedDrawDistance": false,
     "FovMultiplier": 1.100000023841858
   },
   "Effects": {
@@ -1445,7 +1487,7 @@ std::string_view EnhancedPresetDocument() noexcept {
   },
   "Preset": "Enhanced",
   "RenderScale": 1.0,
-  "SchemaVersion": 14
+  "SchemaVersion": 15
 })json";
 }
 
@@ -1511,7 +1553,9 @@ SerializeGraphicsSettings(const GraphicsSettings& settings) {
          {{"Mode", EnumName(settings.FrameRate,
                             kFrameRateNames)}}},
         {"Presentation", {{"VSync", settings.VSync}}},
-        {"Camera", {{"FovMultiplier", settings.FovMultiplier}}},
+        {"Camera",
+         {{"FovMultiplier", settings.FovMultiplier},
+          {"ExtendedDrawDistance", settings.ExtendedDrawDistance}}},
         {"TexturePacks",
          {
              {"Azahar",
@@ -1800,6 +1844,11 @@ GraphicsSettingsLoadResult DeserializeGraphicsSettings(
         ReadScalar(*camera, "FovMultiplier",
                    result.Value.FovMultiplier,
                    "Graphics.Camera.FovMultiplier", result);
+        // Optional: documents from before keep the native ranges.
+        if (FindMember(*camera, "ExtendedDrawDistance") != nullptr)
+            ReadScalar(*camera, "ExtendedDrawDistance",
+                       result.Value.ExtendedDrawDistance,
+                       "Graphics.Camera.ExtendedDrawDistance", result);
     }
     if (version >= 8U) {
         if (const Json* texturePacks =
@@ -1869,6 +1918,29 @@ GraphicsSettingsLoadResult DeserializeGraphicsSettings(
             DeserializeInteractiveGrassSettings(
                 *savedPreset, result.Value.GrassSavedPreset,
                 "Graphics.GrassSavedPreset", version, result);
+        }
+    }
+    // Schema 15: the title's shipped source and mask rules replace the
+    // configuration's own, once; everything else about the grass is kept.
+    if (version < 15U) {
+        std::optional<Json> rules;
+        {
+            std::scoped_lock lock(TitleGrassRuleMutex());
+            rules = TitleGrassRules();
+        }
+        if (rules.has_value()) {
+            const auto replace = [&](InteractiveGrassSettings& grass, const char* path) {
+                auto document = SerializeInteractiveGrassSettings(grass);
+                document["Sources"] = rules->value("Sources", Json::array());
+                document["Masks"] = rules->value("Masks", Json::array());
+                DeserializeInteractiveGrassSettings(document, grass, path,
+                                                    kGraphicsSettingsSchemaVersion, result);
+            };
+            replace(result.Value.Grass, "Graphics.Grass");
+            replace(result.Value.GrassSavedPreset, "Graphics.GrassSavedPreset");
+            result.NeedsRewrite = true;
+            result.Issues.push_back({"Graphics.Grass.Sources",
+                                     "grass source and mask rules replaced by the title's defaults", true});
         }
     }
 
@@ -2276,6 +2348,16 @@ GraphicsSettingsLoadResult LoadGraphicsSettingsConfig(
                                            std::move(fallback));
     }
     return MigrateLegacy(configRoot, std::move(fallback));
+}
+
+void InstallTitleGrassRuleDefaults(const nlohmann::json& rules) {
+    std::scoped_lock lock(TitleGrassRuleMutex());
+    TitleGrassRules() = rules;
+}
+
+void ClearTitleGrassRuleDefaults() {
+    std::scoped_lock lock(TitleGrassRuleMutex());
+    TitleGrassRules().reset();
 }
 
 bool ShouldPersistGraphicsSettings(

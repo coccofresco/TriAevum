@@ -316,6 +316,12 @@
           "twoSided": {
             "type": "boolean"
           },
+          "spread": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 180,
+            "description": "Optional (180 when missing). Surface: full angle, degrees, within which each point emits around the axis; 180 is diffuse, less straightens the light"
+          },
           "beamAngle": {
             "type": "number",
             "minimum": 1,
@@ -336,6 +342,81 @@
         }
       },
       "maxItems": 16
+    },
+    "rimLight": {
+      "description": "Optional modern rim. Missing object means off; missing source means independent. Owned and saved with this scene environment.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "intensity",
+        "sharpness",
+        "scope"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "intensity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 8
+        },
+        "sharpness": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "ambient": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.25,
+          "deprecated": true,
+          "description": "Legacy round-27 value: validated on read, ignored by rendering and omitted on save."
+        },
+        "scope": {
+          "enum": [
+            "actors",
+            "actorsAndWorld"
+          ]
+        },
+        "source": {
+          "enum": [
+            "independent",
+            "sceneLights"
+          ],
+          "default": "independent"
+        },
+        "color": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "default": [
+            1,
+            0.96,
+            0.9
+          ]
+        },
+        "azimuth": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180,
+          "default": 0,
+          "description": "Camera-relative degrees: 0 top, 90 right, -90 left, 180 bottom."
+        },
+        "coverage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.25,
+          "description": "0 directional edge; 1 entire silhouette. Independent source only."
+        }
+      }
     }
   }
 }

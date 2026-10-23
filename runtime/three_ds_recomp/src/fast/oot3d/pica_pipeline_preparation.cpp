@@ -5,7 +5,7 @@
 namespace Fast::Oot3d {
 PicaPipelinePreparationItem ResolvePicaPipelinePreparationItem(
     const PicaGraphicsPipelineManifestEntry& entry,
-    const PicaAotShaderPack& pack, VkFormat depthFormat) {
+    const PicaAotShaderPack& pack, VkFormat depthFormat, PicaBuiltInFragmentLookup builtIn) {
     if (!entry.Valid() || !entry.NriFragmentAvailable ||
         entry.DescriptorSchemaVersion != pack.DescriptorSchemaVersion())
         throw std::runtime_error("incompatible NRI pipeline recipe");
@@ -42,7 +42,11 @@ PicaPipelinePreparationItem ResolvePicaPipelinePreparationItem(
         static_cast<VkSampleCountFlagBits>(entry.SampleCount), depthFormat,
         entry.WritesReactiveMask, entry.OutlineOcclusionOnly);
     item.Descriptor.VertexSpirv = pack.Find(PicaAotShaderStage::Vertex, entry.VertexSource);
-    item.Descriptor.FragmentSpirv = pack.Find(PicaAotShaderStage::NriFragment, entry.NriFragmentSource);
+    const auto& source = entry.NriFragmentSource;
+    if (builtIn != nullptr)
+        item.Descriptor.FragmentSpirv = builtIn({source.Id, source.SecondaryHash, source.Size}, true);
+    if (item.Descriptor.FragmentSpirv.empty())
+        item.Descriptor.FragmentSpirv = pack.Find(PicaAotShaderStage::NriFragment, source);
     if (item.Descriptor.VertexSpirv.empty() || item.Descriptor.FragmentSpirv.empty())
         throw std::runtime_error("pipeline recipe shader is absent from the portable pack");
     std::vector<PicaNriSourceVertexBinding> bindings;

@@ -127,3 +127,27 @@ TEST(Oot3dGrassGeometryRegistry, RebuildsOnlyWhenNativeContentVersionChanges) {
     ASSERT_NE(geometryUpdate.Geometry, nullptr);
     EXPECT_NE(geometryUpdate.Geometry->AnchorVersion, firstAnchorVersion);
 }
+
+TEST(Oot3dGrassGeometryRegistry, OverlayAlphaUsesNativeConversionAndInvalidatesWithoutMovingAnchor) {
+    const auto positions = BytesOf(std::vector<std::array<float, 3>>{ { 0, 0, 0 }, { 10, 0, 0 }, { 0, 0, 10 } });
+    const auto uv = BytesOf(std::vector<std::array<float, 2>>{ { 0, 0 }, { 1, 0 }, { 0, 1 } });
+    const auto indices = BytesOf(std::vector<uint16_t>{ 0, 1, 2 });
+    auto r = MakeRequest(positions, uv, indices);
+    const auto alpha = BytesOf(std::vector<float>{ 0, -.5F, 2 });
+    r.Alpha = { alpha, sizeof(float), ::Oot3d::Renderer::PicaVertexFormat::Float, 1, 0 };
+    Fast::Oot3d::GrassGeometryRegistry registry;
+    auto a = registry.Resolve(r);
+    ASSERT_TRUE(a.Geometry);
+    ASSERT_TRUE(a.Geometry->Alphas);
+    EXPECT_EQ(*a.Geometry->Alphas, (std::vector<float>{ 0, .5F, 1 }));
+    EXPECT_TRUE(registry.Resolve(r).CacheHit);
+    r.AlphaScale = .5F;
+    auto b = registry.Resolve(r);
+    ASSERT_TRUE(b.Geometry);
+    EXPECT_FALSE(b.CacheHit);
+    EXPECT_EQ(*b.Geometry->Alphas, (std::vector<float>{ 0, .25F, 1 }));
+    EXPECT_EQ(a.Geometry->AnchorVersion, b.Geometry->AnchorVersion);
+    EXPECT_NE(a.Geometry->ContentVersion, b.Geometry->ContentVersion);
+    r.Alpha.Bytes = std::span(alpha).first(2);
+    EXPECT_FALSE(registry.Resolve(r).Geometry);
+}

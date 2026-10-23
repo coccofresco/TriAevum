@@ -106,6 +106,9 @@ struct PicaDrawView {
     PicaCompareFunction DepthCompare = PicaCompareFunction::Always;
     PicaStencilState Stencil;
     std::span<const PicaVertexArtifact> VertexArtifacts;
+    // Explicit producer proof of a stationary world surface. Unknown/moving
+    // draws must not inherit camera-only history after a correspondence miss.
+    bool TemporalCameraOnly = false;
 };
 
 // Projects the full transient draw facade into the compact ordered metadata
@@ -350,6 +353,13 @@ class PicaRenderBackend {
     virtual bool PreparePicaSequenceDraw(
         const PicaDrawView&, std::string* = nullptr) {
         return true;
+    }
+    // Prepared draws carry their vertex side, and their fragment uniforms and
+    // textures only when they run an alpha test. A backend that reads every
+    // prepared draw's fragment state ahead of native order (a native overlay's
+    // output alpha) asks for it here.
+    [[nodiscard]] virtual bool PicaSequenceDrawPreparationNeedsFragmentState() const {
+        return false;
     }
     virtual bool SubmitPicaDisplayTransfer(
         const PicaDisplayTransferView& transfer,

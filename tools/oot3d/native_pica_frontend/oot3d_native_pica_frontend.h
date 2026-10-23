@@ -1,6 +1,7 @@
 #pragma once
 
 #include "fast/renderer3ds/pica_light_binding.h"
+#include "fast/renderer3ds/pica_temporal_identity.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -157,6 +158,10 @@ struct Oot3dPicaCompositionAttribution {
     uint64_t NativeActorIdentity = 0;
     // Renderer3ds::PicaCompositionAttribution::IsolatedLighting.
     bool IsolatedLighting = false;
+    Fast::Renderer3ds::PicaTemporalIdentity TemporalIdentity;
+    // Transient command destination, used ONLY to derive the source-relative
+    // trigger offset. Cleared before publishing a draw packet.
+    uint32_t TemporalPacketBeginAddress = 0;
 
     bool operator==(const Oot3dPicaCompositionAttribution&) const = default;
 };

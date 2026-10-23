@@ -10,6 +10,45 @@
 
 namespace Fast::Oot3d {
 
+const GrassMaskRule* FindGrassMaskRule(const std::vector<GrassMaskRule>& rules, uint64_t hash, uint16_t width,
+                                       uint16_t height) {
+    const auto found = std::find_if(rules.begin(), rules.end(), [&](const auto& rule) {
+        const auto& target = rule.Coverage.Target;
+        return target.Rgba8Hash == hash && target.Width == width && target.Height == height;
+    });
+    return found == rules.end() ? nullptr : &*found;
+}
+
+void NormalizeGrassMaskRule(GrassMaskRule& mask) {
+    const auto finite = [](float x, float fallback, float low, float high) {
+        return std::clamp(std::isfinite(x) ? x : fallback, low, high);
+    };
+    if (mask.Mode > GrassMaskMode::Off)
+        mask.Mode = GrassMaskMode::Automatic;
+    mask.Strength = finite(mask.Strength, 1, 0, 1);
+    auto& rule = mask.Coverage;
+    if (rule.Channel > GrassSampleChannel::Luminance)
+        rule.Channel = GrassSampleChannel::Alpha;
+    if (rule.Wrap > GrassWrapOverride::Mirror)
+        rule.Wrap = GrassWrapOverride::Material;
+    rule.InputBlack = finite(rule.InputBlack, 0, 0, .999F);
+    rule.InputWhite = finite(rule.InputWhite, 1, rule.InputBlack + .001F, 1);
+    rule.OutputBlack = finite(rule.OutputBlack, 0, 0, 1);
+    rule.OutputWhite = finite(rule.OutputWhite, 1, 0, 1);
+    rule.ResponseExponent = finite(rule.ResponseExponent, 1, .05F, 8);
+    rule.SampleScale = 1;
+    rule.SampleOffset = 0;
+    rule.InheritedFrom = 0;
+    if (rule.ActiveRects.size() > kMaximumGrassMaskRects)
+        rule.ActiveRects.resize(kMaximumGrassMaskRects);
+    for (auto& rect : rule.ActiveRects) {
+        float a = finite(rect.MinU, 0, 0, 1), b = finite(rect.MaxU, 0, 0, 1);
+        float c = finite(rect.MinV, 0, 0, 1), d = finite(rect.MaxV, 0, 0, 1);
+        rect = { std::min(a, b), std::min(c, d), std::max(a, b), std::max(c, d) };
+    }
+    std::erase_if(rule.ActiveRects, [](const auto& r) { return r.MinU >= r.MaxU || r.MinV >= r.MaxV; });
+}
+
 GlobalIlluminationSourceMix ResolveGlobalIlluminationSources(const GlobalIlluminationSettings& settings) noexcept {
     const auto gain = [](float value) { return std::isfinite(value) ? std::max(value, 0.0F) : 0.0F; };
     const bool sky = settings.Mode != GlobalIlluminationMode::ScreenSpace;
@@ -201,6 +240,7 @@ GraphicsSettings GraphicsSettingsService::KeepHostOwnedSettings(
     value.VSync = current.VSync;
     value.TexturePacks = current.TexturePacks;
     value.Grass.Rules = current.Grass.Rules;
+    value.Grass.Masks = current.Grass.Masks;
     value.GrassSavedPreset = current.GrassSavedPreset;
     value.Effects.ReflectionMaterials =
         current.Effects.ReflectionMaterials;
@@ -680,10 +720,26 @@ GraphicsSettingsValidation GraphicsSettingsService::Validate(
     grassGeneration.BladeWidthMin =
         std::clamp(
             grassGeneration.BladeWidthMin, 0.01F, 500.0F);
-    grassGeneration.BladeWidthMax =
-        std::clamp(
-            grassGeneration.BladeWidthMax,
-            grassGeneration.BladeWidthMin, 500.0F);
+    grassGeneration.BladeWidthMax = std::clamp(grassGeneration.BladeWidthMax, grassGeneration.BladeWidthMin, 500.0F);
+    if (value.Grass.Masks.size() > 256U) {
+        value.Grass.Masks.resize(256U);
+        Correct(result.Issues, "Graphics.Grass.Masks", "mask rules truncated to 256 entries");
+    }
+    std::vector<GrassTextureSelector> maskTargets;
+    std::erase_if(value.Grass.Masks, [&](auto& mask) {
+        NormalizeGrassMaskRule(mask);
+        const auto& target = mask.Coverage.Target;
+        const bool invalid = !target.Rgba8Hash || !target.Width || !target.Height ||
+                             std::any_of(maskTargets.begin(), maskTargets.end(), [&](const auto& previous) {
+                                 return previous.Rgba8Hash == target.Rgba8Hash && previous.Width == target.Width &&
+                                        previous.Height == target.Height;
+                             });
+        if (invalid)
+            Correct(result.Issues, "Graphics.Grass.Masks", "invalid or duplicate mask target removed");
+        else
+            maskTargets.push_back(target);
+        return invalid;
+    });
     if (value.Grass.Rules.size() > 256U) {
         value.Grass.Rules.resize(256U);
         Correct(result.Issues, "Graphics.Grass.Rules",
@@ -876,18 +932,19 @@ GraphicsSettingsValidation GraphicsSettingsService::Validate(
     }
     if (value.Preset == GraphicsPreset::Authentic) {
         auto grassRules = std::move(value.Grass.Rules);
-        auto reflectionMaterials =
-            std::move(value.Effects.ReflectionMaterials);
+        auto grassMasks = std::move(value.Grass.Masks);
+        auto reflectionMaterials = std::move(value.Effects.ReflectionMaterials);
         value.InternalResolutionScale = 1.0F;
         value.AntiAliasing = AntiAliasingMode::Off;
         value.MsaaSamples = 1;
         value.FrameRate = FrameRateMode::Original30;
         value.FovMultiplier = 1.0F;
+        value.ExtendedDrawDistance = false;
         value.Grass = {};
         value.Effects = {};
         value.Grass.Rules = std::move(grassRules);
-        value.Effects.ReflectionMaterials =
-            std::move(reflectionMaterials);
+        value.Grass.Masks = std::move(grassMasks);
+        value.Effects.ReflectionMaterials = std::move(reflectionMaterials);
     }
     result.Value = std::move(value);
     return result;

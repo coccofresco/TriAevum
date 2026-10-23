@@ -74,7 +74,7 @@ stable, generic contracts.
 | Item input | ZR/ZL item lanes, native item-query compatibility and direct child-item lifetime handling |
 | Camera | Zoom percentage, FOV percentage, free-camera speed/inversion and C-stick aiming speed/inversion |
 | Filtering | Five official smoothing levels, exact coefficient table, half-unit deadband, update only on guest refresh |
-| Pause behavior | Configurable Select action and configurable Items-to-Save B behavior |
+| Pause behavior | Configurable Select action and configurable Items-to-Save B behavior; START reopens the last page (0x005E21C8); on an open Items or Gear page SELECT shows the native item description over the page (0x005E3D3C, 0x005D3344..0x005D3410) |
 | Items hint | Native selected-model bounds, 90-update delay, 12-update fade, 90-update pulse and exact atlas geometry |
 | Assets | Original-size localized CTXB replacements plus named 2.1.1 menu/font profile assets in O3TU v2 |
 | Version choice | The title's normal / Master Quest choice on the upper screen with the frontend menus, native input unchanged (`TRIAEVUM_TOPSCREEN_FRONTEND_SKY.md`, #28) |
@@ -83,6 +83,111 @@ stable, generic contracts.
 Equipment and direct-item routes deliberately call or mutate the same native
 OoT3D contracts recovered from the payload. They are gameplay intents handled
 by the application adapter, not renderer substitutions.
+
+### Product hooks
+
+Product builds (`OOT3D_WHOLE_AOT_PRODUCT_MODE`) execute the precompiled
+whole-AOT graph through pause routes. `ExecuteProductTopScreenHook` accepts the
+sorted list `ProductTopScreenBlocks` (every TopScreen source-port block), and
+those blocks are observable exits. The graph reports only the starts of its
+basic blocks, and blocks end after branches and calls, so a site in the middle
+of a block would never be reached.
+
+`tools/oot3d/native_a32_runtime/whole_aot_observed_sites.json` lists the hook
+and resume pcs that are not natural block starts (touch-button draw predicate
+0x0042F5CC, the page draw calls 0x00419838/50/74/8C, 0x0041952C, 0x004198B0,
+0x0041E984, 0x0041EB28, the scene sites 0x00300520..0x0030055C, the FOV scalar
+0x00478EB8 and its resume, the control-flow and float-load contracts, and the
+planned layout sites). `whole_aot_program.py` starts a block at each of them,
+so a title module generated from it reaches all of them. The product runtime
+checks the title module's entry points at startup and refuses one that lacks
+any TopScreen site, instead of silently skipping it.
+
+The developer interpreter runs the block policy at every dispatcher entry
+before the hook; `ExecuteProductTopScreenHook` does the same, except for the
+entry that its own observable exit left, whose policy already ran in compiled
+code. A hook that branches to another hooked entry (0x0041E984 resumes at the
+input boundary 0x0041E988) therefore still runs that entry's policy.
+
+The camera update entry 0x002D84C4 is observed whenever the TopScreen profile
+is active, because it resolves the FOV owner. 2.1.1 stores the play view's
+FOV address (`camera->play + 0x198`, its hook at 0x002D92B4) and 005DF388
+scales and clamps the value that 0x00478EB8 loads from that address, at every
+percentage.
+
+One 2.1.1 patch is deliberately not ported. 2.1.1 branches 0x0041EB40 to
+0x0041EC10 and so skips the pause scene dim (a translucent grey submitted
+through `EnvironmentRenderer_SubmitViewportConfig`). At 400x240 the page covers
+the scene; with wider output the scene shows beside the page, so the port keeps
+the native dim and those strips stay dark during the pause. The site stays in
+the observed-sites catalogue; an extra block start is harmless.
+
+### Widened Items page
+
+While Items is active (word 0x0050672C; the payload's 0x005E21F4 is a constant
+1), 2.1.1 draws `PauseUi_Draw` in the full 400-wide viewport (0x005D32A4) with
+the projection offset by 0.8 instead of the centred (0, 40, 480, 320) one.
+`TopScreenWideItemsRuntime` (native_game_runtime) ports it on native calls:
+
+- `WidenTopScreenPauseTargetForPage` gives the page target plan the full
+  viewport. The plan rewrites the next `glViewport`, so a viewport call of its
+  own would be overwritten.
+- 0x0041EE1C (005DF428) writes -0.005 and 0.8 into the projection in r1 and
+  lets the native upload run. No other call may run there: 0x0041EE08 has
+  bound the material's PicaCommandWriter at the command cursor (0x0054CC4C),
+  and a GL call in between writes over the same commands. Doing so turned the
+  page background white in every other command buffer.
+- 0x0041EE74 (005D19F8) moves the page's background columns by -40, its grid
+  and icon groups by -17 and its assignment origins to -17 on the selected
+  model streams, which the native update rewrites every frame. It then uploads
+  the projection with 0.6, calls `PauseItemsPage_Draw` and restores 0.8.
+- The cursor subdraws 0x00434CDC (005D1CBC) and 0x00434D48 (005D1BE8) use 0.685
+  for a cursor over the grid. The payload's record of the selected cursor's
+  bounds (0x005E40A8..BC) is read only by payload code and is not ported.
+- 0x005D0494 gives the right pause edge quad no width while Items is active,
+  because the page covers that side; the left edge stays.
+
+Dungeon Map shares the full viewport and page projection: Map state
+0x00506CE8 must be nonzero and shared map mode 0x004FDABC must equal 1.
+World Map stays centred. Verified scalar contracts widen both the dungeon
+panel and title to 272 pixels and move the side columns; six native icon
+coordinate hooks set R2 to -30 while retaining the ownership branches.
+Dungeon Map omits both extra pause edges but keeps the tab hints.
+
+Scene mode 5 (the file select and the other frontend screens) has no pause
+edges: 2.1.1 0x005D2078 leaves through 0x005D18F0 (scene owner byte +0x100
+== 5) before its edge producer 0x005D0374. The record-33 site 0x00419838
+keeps the mode-5 viewport but no longer adds the 1.2 payload's edges; they
+showed as stone strips beside the file select once 29d0375 made the site
+reachable in product builds. Azahar captures of 2.1.1 show the file select's
+sky to the screen edges.
+
+The Save (System) page overlays gameplay on the upper screen. 2.1.1 replaces
+the queue-5 draw at 0x0030055C: after the original 0x004228D4 it calls its
+compositor before the top transfer. While System is active (0x0050A530) the
+compositor sets viewport (0, 0, 480, 400), saves the pause root's
+backdrop skip (0x005043F4) and touch (0x0050AF68), writes 1 and 0, calls
+`PauseUi_Draw` on the gameplay target and restores both values and the
+viewport. `TopScreenSystemPageRuntime` (pause transaction unit) runs the same
+native calls and resumes at 0x00300560. System joins the shared wide
+predicate, so 0x0041EE1C applies the same projection. The page keeps the
+native framebuffer plan rather than PageRedraw's lower-target swap, draws no
+pause edges or tab hints, and its later lower-tail draw uses the Tail
+suppression set. The payload's Mod Options affordance (0x005DCA80,
+0x005DF178) is not drawn; mod settings live in F1.
+
+Exits that run guest continuations are conditional: 0x0041E988 leaves the
+graph only while the pause transaction or song text has work, and the page
+draw return 0x00419830 only while the item description is drawing or may
+start. The page-child restore at 0x00419830 runs before that exit, because a
+resumed graph skips the entry it left from.
+
+The item description is the native message 0x005C1878, which the native page
+draws under the relocated page. `TopScreenItemDescriptionRuntime` redraws it
+after the page with the payload's native calls (material bind, the payload's
+two matrices from guest stack scratch, viewport X 0 or 300 by cursor row).
+While a page is open SELECT belongs to the description; it reaches the
+minimap and Save routes only in the gameplay pause state.
 
 ## Deliberate host adaptations
 

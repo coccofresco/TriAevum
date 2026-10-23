@@ -23,6 +23,10 @@ default export, complete Grass JSON and TopScreen template.
 
 ## Grass
 
+Native room overlays now mask static placements; see
+[Native room overlays and grass placement](TRIAEVUM_GRASS_OVERLAY_MASKS.md)
+for coverage, caching, diagnostics and the Graveyard lab checklist.
+
 Files below belong to `runtime/three_ds_recomp/`:
 
 - `grass_async_placement_builder.{h,cpp}`: immutable shared-future completion

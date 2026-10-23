@@ -6,6 +6,7 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <string_view>
 #include <vector>
@@ -392,6 +393,27 @@ GraphicsSettingsRuntime::GraphicsSettingsRuntime() {
         initial.Preset = GraphicsPreset::Custom;
         selectedInitial = true;
     }
+    // The host found that the previous launch with these settings ended in
+    // its first minute (TRIAEVUM_SAFE_PRESENTATION carries why): the stored
+    // presentation (resolutions, window mode, anti-aliasing and upscaler) may
+    // be what ends it, so it restarts from the defaults and is stored so,
+    // instead of failing at every launch. Everything else is kept.
+    if (const char* safe = std::getenv("TRIAEVUM_SAFE_PRESENTATION");
+        selectedInitial && safe != nullptr && *safe != '\0') {
+        const GraphicsSettings defaults{};
+        initial.Window = defaults.Window;
+        initial.OutputWidth = defaults.OutputWidth;
+        initial.OutputHeight = defaults.OutputHeight;
+        initial.InternalResolutionScale = defaults.InternalResolutionScale;
+        initial.AntiAliasing = defaults.AntiAliasing;
+        initial.MsaaSamples = defaults.MsaaSamples;
+        initial.Upscaler = defaults.Upscaler;
+        initial.UpscalerMode = defaults.UpscalerMode;
+        rewriteLoadedSettings = true;
+        SPDLOG_WARN("OOT3D graphics: {}; display, resolution, anti-aliasing and upscaler settings were reset "
+                    "to their defaults", safe);
+        std::fprintf(stderr, "TRIAEVUM_SAFE_PRESENTATION reason=\"%s\"\n", safe);
+    }
     if (selectedInitial) {
         mService = GraphicsSettingsService(std::move(initial));
     }
@@ -430,6 +452,13 @@ VersionedGraphicsSettings GraphicsSettingsRuntime::SnapshotForRendering() const 
         (globalIllumination.Mode == GlobalIlluminationMode::ScreenSpace &&
          !mCapabilities.Has(GraphicsCapability::ScreenSpaceGlobalIllumination)))
         globalIllumination.Mode = GlobalIlluminationMode::Off;
+    // Likewise an AO provider that is not available (MXAO without the
+    // separately installed iMMERSE module, CACAO without its SDK) renders Off;
+    // the preference stays saved for when it is.
+    auto& ambientOcclusion = result.Value.Effects.AmbientOcclusion;
+    if ((ambientOcclusion == AmbientOcclusionMode::Mxao && !mCapabilities.Has(GraphicsCapability::ImmerseMxao)) ||
+        (ambientOcclusion == AmbientOcclusionMode::Cacao && !mCapabilities.Has(GraphicsCapability::FidelityFxCacao)))
+        ambientOcclusion = AmbientOcclusionMode::Off;
     // Inactive directional/ambient edits must not invalidate histories.
     // Point-light groups remain independently controllable in per-pixel modes.
     if (!mNativePresentation.Active() && result.Value.Preset != GraphicsPreset::Authentic &&
@@ -438,8 +467,12 @@ VersionedGraphicsSettings GraphicsSettingsRuntime::SnapshotForRendering() const 
         else {
             result.Environment.ScopeIdentity = mSceneEnvironment.ScopeIdentity;
             result.Environment.PointLights = mSceneEnvironment.PointLights;
+            // Caster policy is independent of the authored light override.
+            result.Environment.CasterFaces = mSceneEnvironment.CasterFaces;
         }
     }
+    // Inactive rim edits neither change renderer state nor invalidate histories.
+    if (!result.Environment.Rim.Enabled) result.Environment.Rim = {};
     return result;
 }
 void GraphicsSettingsRuntime::PublishSceneEnvironment(

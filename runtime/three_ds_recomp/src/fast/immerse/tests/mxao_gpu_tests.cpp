@@ -211,10 +211,8 @@ struct MxaoFixture {
         layout.pushConstantRangeCount = 1;
         layout.pPushConstantRanges = &push;
         Check(vkCreatePipelineLayout(Device.Device, &layout, nullptr, &Layout));
-        const std::array sources{ Fast::Immerse::BuildMxaoDeinterleaveShader(), Fast::Immerse::BuildMxaoOcclusionShader(),
-                                  Fast::Immerse::BuildMxaoFilterShader(false), Fast::Immerse::BuildMxaoFilterShader(true),
-                                  Fast::Immerse::BuildMxaoTemporalShader(),
-                                  Fast::Immerse::BuildMxaoDebugShader(Fast::Oot3d::AmbientOcclusionDebugShaderLibrary()) };
+        const auto sources = Fast::Immerse::BuildMxaoPassShaders(
+            Fast::Oot3d::AmbientOcclusionDebugShaderLibrary(), Fast::Renderer3ds::PicaGeometryGuideShaderLibrary());
         for (uint32_t program = 0; program < kProgramCount; ++program) {
             const auto shader = Device.Shader(sources[program], shaderc_compute_shader);
             VkComputePipelineCreateInfo pipeline{ VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO };

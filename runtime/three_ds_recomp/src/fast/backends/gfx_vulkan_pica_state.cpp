@@ -1321,8 +1321,7 @@ bool GfxRenderingAPIVulkan::ResetPicaState(
         mInteractiveGrassPass.ResetTemporalState();
         Oot3d::GrassSceneBridge::Instance().Clear();
         mTemporalHistory.Reset();
-        mRigidMotionTracker.Reset();
-        mPreviousPicaVertexUniforms.clear();
+        mPicaTemporalHistory.Reset();
         mNativePicaCompositionSchedule.Reset();
         for (auto texture = mNativePicaTextures.begin();
              texture != mNativePicaTextures.end();) {

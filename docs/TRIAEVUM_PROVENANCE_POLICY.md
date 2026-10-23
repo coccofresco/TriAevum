@@ -25,7 +25,7 @@ reviewable separation between evidence and distributable source.
 | Private title input | ROM, `code.bin`, RomFS, save states | Never commit or package |
 | Generated title output | AOT shards/archive, `game.tam`, shader cache | Local only; never package publicly |
 | Third-party mod evidence | TopScreen IPS, CTXB, injected payload | Offline/private unless author grants redistribution |
-| Proprietary optional SDK | NGX/DLSS SDK or DLL | Excluded by default; separate review/discovery path |
+| Proprietary optional SDK | NGX/DLSS SDK or DLL | Only inside its separately licensed module after a dedicated licence review (DLSS: `src/fast/dlss/LICENSE.md`, approved 2026-10-13); never in a GPL binary |
 
 ## Import checklist
 
@@ -51,7 +51,10 @@ Before adding or updating donor material:
   payload, CTXB files or the derived `atlas_overrides.o3tu`.
 - Original TriAevum contributions use GPL-3.0-or-later. Donor files retain
   their existing terms and notices.
-- Proprietary NGX/DLSS components are outside the clean public baseline.
+- Proprietary NGX/DLSS components stay outside every GPL binary. They are
+  distributed only as the separately licensed DLSS module with NVIDIA's own
+  runtime and licence (`TRIAEVUM_RELEASE_APPROVAL_RECORD.md`, NVIDIA DLSS
+  module); the release audit enforces the boundary.
 
 ## Release evidence
 

@@ -194,6 +194,42 @@ TEST(PicaPipelineManifest, RoundTripsNativeFogInstrumentation) {
     std::filesystem::remove(path, ignored);
 }
 
+// Every defined feature is a valid recipe: the later guides and lighting
+// features once fell outside a fixed mask, and the material baseline (applied,
+// never requested) failed the applied-within-requested rule; their recipes were
+// dropped without a trace.
+TEST(PicaPipelineManifest, RecordsAndRoundTripsEveryInstrumentationFeature) {
+    auto entry = MakeEntry();
+    const auto later = PicaShaderInstrumentationFeature::NormalGuideTextureRelief |
+                       PicaShaderInstrumentationFeature::PointShadowLighting |
+                       PicaShaderInstrumentationFeature::FaceNormalGuide;
+    entry.RequestedFeatures |= later;
+    entry.AppliedFeatures |= later | PicaShaderInstrumentationFeature::MaterialGuideBaseline;
+    entry.ShaderOutputs.WritesFaceNormalGuide = true;
+    ASSERT_TRUE(entry.Valid());
+    const auto path = TemporaryPath("oot3d_pica_feature_inventory");
+    PicaGraphicsPipelineInventory inventory;
+    std::string error;
+    ASSERT_TRUE(inventory.Configure(path, &error)) << error;
+    inventory.Observe(entry, 7U, 1U);
+    EXPECT_EQ(inventory.EntryCount(), 1U);
+    ASSERT_TRUE(inventory.Finish(&error)) << error;
+    PicaGraphicsPipelineManifest manifest;
+    ASSERT_TRUE(manifest.Load(path, &error)) << error;
+    ASSERT_EQ(manifest.Entries().size(), 1U);
+    EXPECT_EQ(manifest.Entries().front().AppliedFeatures, entry.AppliedFeatures);
+    EXPECT_TRUE(entry.StructurallyEquivalent(manifest.Entries().front()));
+    // A bit no feature defines is still rejected, and so is any other
+    // applied feature that was not requested.
+    auto unrequested = entry;
+    unrequested.AppliedFeatures |= PicaShaderInstrumentationFeature::PbrMaterial;
+    EXPECT_FALSE(unrequested.Valid());
+    entry.RequestedFeatures |= static_cast<PicaShaderInstrumentationFeature>(1U << 18U);
+    EXPECT_FALSE(entry.Valid());
+    std::error_code ignored;
+    std::filesystem::remove(path, ignored);
+}
+
 TEST(PicaPipelineManifest, InventoryMergesRepeatedObservations) {
     const auto path = TemporaryPath("oot3d_pica_pipeline_inventory");
     PicaGraphicsPipelineInventory inventory;

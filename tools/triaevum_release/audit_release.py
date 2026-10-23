@@ -22,6 +22,7 @@ try:
     from .input_adapters import validate_adapter
     from .source_contracts import source_contract_errors
     from .shader_corpus_layout import validate_bundled_corpus
+    from .precomputed_tables import validate_precomputed_tables
     from .qualified_input_coverage import require_coverage
     from .vulkan_imports import vulkan_import_errors
 except ImportError:
@@ -33,6 +34,7 @@ except ImportError:
     from input_adapters import validate_adapter
     from source_contracts import source_contract_errors
     from shader_corpus_layout import validate_bundled_corpus
+    from precomputed_tables import validate_precomputed_tables
     from qualified_input_coverage import require_coverage
     from vulkan_imports import vulkan_import_errors
 
@@ -88,6 +90,22 @@ def _json_policy_violations(
 def _matches_any(path: str, patterns: Iterable[str]) -> bool:
     lowered = path.lower()
     return any(fnmatch.fnmatchcase(lowered, pattern.lower()) for pattern in patterns)
+
+
+def _binary_marker(path: Path, markers: Sequence[bytes]) -> bytes | None:
+    """The first of `markers` found in the file, read in overlapping chunks."""
+    if not markers:
+        return None
+    overlap = max(len(marker) for marker in markers) - 1
+    tail = b""
+    with path.open("rb") as stream:
+        while chunk := stream.read(8 * 1024 * 1024):
+            window = tail + chunk
+            for marker in markers:
+                if marker in window:
+                    return marker
+            tail = window[-overlap:] if overlap > 0 else b""
+    return None
 
 
 def _path_policy_errors(
@@ -281,6 +299,24 @@ def audit_release(
         roles_seen.add(role)
         declared[relative] = item
 
+    # A separately licensed module (the iMMERSE library, the DLSS module and
+    # NVIDIA's DLSS runtime) ships under its own role, never as an ordinary
+    # runtime library.
+    separate_modules = [str(name) for name in policy.get("separately_licensed_modules", [])]
+    for relative, item in declared.items():
+        if (_matches_any(relative.rsplit("/", 1)[-1], separate_modules)
+                and item.get("role") != "separately_licensed_module"):
+            reject(f"{relative} is separately licensed; declare it as separately_licensed_module")
+    # Proprietary SDK code stays inside its separately licensed module: no
+    # other binary may contain its marker.
+    sdk_policy = policy.get("proprietary_sdk_markers", {})
+    sdk_markers = [str(marker).encode("ascii") for marker in sdk_policy.get("markers", [])]
+    sdk_roles = {str(role) for role in sdk_policy.get("scanned_roles", [])}
+    # A library loaded only on demand (LoadLibrary) whose load may fail on an
+    # older Vulkan loader without ending the process: its provider is then
+    # simply not offered. Everything loaded at startup stays checked.
+    vulkan_exempt_roles = {str(role) for role in policy.get("vulkan_import_exempt_roles", [])}
+
     manifest_relative = manifest_path.relative_to(root).as_posix()
     contract = release.get("runtime_contract")
     if contract is not None:
@@ -341,9 +377,15 @@ def audit_release(
         role = str(item.get("role", ""))
         # A Windows binary that imports a Vulkan command an older loader lacks
         # cannot start there at all (0xC0000139).
-        if platform.target == WINDOWS.target and pure.suffix.lower() in (".exe", ".dll"):
+        if (platform.target == WINDOWS.target and pure.suffix.lower() in (".exe", ".dll")
+                and role not in vulkan_exempt_roles):
             for error in vulkan_import_errors(path, relative, require_pe=False):
                 reject(error)
+        if role in sdk_roles:
+            marker = _binary_marker(path, sdk_markers)
+            if marker is not None:
+                reject(f"{relative} contains proprietary SDK code ({marker.decode('ascii')}); "
+                       "it belongs only in its separately licensed module")
         package_forbidden_extensions = {
             extension
             for extension in forbidden_extensions
@@ -405,6 +447,7 @@ def audit_release(
         try:
             catalog = load_catalog(root)
             validate_bundled_corpus(root, catalog, declared)
+            validate_precomputed_tables(root, catalog, declared)
             if catalog_platform(catalog) != platform:
                 raise ValueError("Catalog target differs from release target")
             recipes = load_json_object(root / "recipes/oot3d.json")["recipes"]
@@ -464,6 +507,8 @@ def audit_release(
         reject("title artifacts require the precompiled distribution model")
     if not precompiled and roles_seen & {"portable_shader_corpus", "portable_pipeline_recipes"}:
         reject("bundled shader artifacts require a validated precompiled catalog")
+    if not precompiled and roles_seen & {"precomputed_interior_sun", "precomputed_scene_lights"}:
+        reject("precomputed tables require a validated precompiled catalog")
     if {name for name, item in declared.items() if item["role"] == "input_copy_adapter"} != adapter_paths:
         reject("Uncatalogued COPY adapter in release")
 

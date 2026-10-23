@@ -224,6 +224,11 @@ add_library(oot3d_native_pica_composition STATIC EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/mm3d_pica_composition.cpp
     tools/oot3d/native_game_runtime/mm3d_native_a32_lighting.cpp
     tools/oot3d/native_game_runtime/oot3d_native_a32_lighting.cpp
+    tools/oot3d/native_game_runtime/oot3d_native_a32_fire_emitters.cpp
+    tools/oot3d/native_game_runtime/oot3d_native_a32_light_selection.cpp
+    tools/oot3d/native_game_runtime/oot3d_native_static_emitters.cpp
+    tools/oot3d/native_game_runtime/oot3d_native_room_shadow_shell.cpp
+    tools/oot3d/native_game_runtime/oot3d_interior_sun_prebuild.cpp
 )
 set_source_files_properties(
     tools/oot3d/native_game_runtime/oot3d_native_a32_lighting.cpp
@@ -235,7 +240,9 @@ target_include_directories(oot3d_native_pica_composition PUBLIC
 )
 target_link_libraries(oot3d_native_pica_composition PUBLIC
     oot3d_native_a32_process
-    oot3d_native_pica_frontend)
+    oot3d_native_pica_frontend
+    nlohmann_json::nlohmann_json
+    ThreeDsRecomp::Renderer3dsPicaCore)
 target_compile_options(oot3d_native_pica_composition PRIVATE
     "${WARNING_OVERRIDE}")
 oot3d_target_defaults(oot3d_native_pica_composition NO_WARNING_OVERRIDE FOLDER Tools)
@@ -243,6 +250,11 @@ oot3d_target_defaults(oot3d_native_pica_composition NO_WARNING_OVERRIDE FOLDER T
 add_executable(oot3d_native_pica_composition_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_pica_composition_tests.cpp
 )
+
+  add_executable(oot3d_native_room_shadow_shell_tests EXCLUDE_FROM_ALL
+      tools/oot3d/native_game_runtime/oot3d_native_room_shadow_shell_tests.cpp)
+  target_link_libraries(oot3d_native_room_shadow_shell_tests PRIVATE oot3d_native_pica_composition)
+  oot3d_target_defaults(oot3d_native_room_shadow_shell_tests FOLDER Tests)
 target_link_libraries(oot3d_native_pica_composition_tests PRIVATE
     oot3d_native_pica_composition)
 target_compile_options(oot3d_native_pica_composition_tests PRIVATE
@@ -266,6 +278,12 @@ target_include_directories(oot3d_native_pica_vulkan_plan PUBLIC
 target_link_libraries(oot3d_native_pica_vulkan_plan PUBLIC
     oot3d_native_pica_submission)
 oot3d_target_defaults(oot3d_native_pica_vulkan_plan FOLDER Tools)
+
+add_executable(oot3d_native_pica_temporal_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/oot3d_native_pica_temporal_tests.cpp)
+target_link_libraries(oot3d_native_pica_temporal_tests PRIVATE
+    oot3d_native_pica_composition oot3d_native_pica_vulkan_plan)
+oot3d_target_defaults(oot3d_native_pica_temporal_tests FOLDER Tests)
 
 add_executable(oot3d_native_pica_vulkan_plan_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_pica_vulkan_plan_tests.cpp

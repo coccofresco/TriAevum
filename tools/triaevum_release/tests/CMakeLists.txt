@@ -14,6 +14,7 @@ add_executable(triaevum_f1_settings_smoke EXCLUDE_FROM_ALL
     ../../oot3d/native_game_runtime/oot3d_game_language.cpp
     ../../oot3d/native_game_runtime/oot3d_game_language_panel.cpp
     ../../oot3d/native_game_runtime/oot3d_scene_environment.cpp
+    ../../oot3d/native_game_runtime/oot3d_scene_environment_blend.cpp
     ../../oot3d/native_game_runtime/oot3d_light_gizmo.cpp
     ../../oot3d/native_game_runtime/oot3d_scene_environment_codec.cpp
     ../../oot3d/native_game_runtime/oot3d_scene_environment_panel.cpp
@@ -30,10 +31,13 @@ target_include_directories(triaevum_f1_settings_smoke PRIVATE
     ${PROJECT_SOURCE_DIR}/runtime/three_ds_recomp/src/fast/renderer)
 target_link_libraries(triaevum_f1_settings_smoke PRIVATE
     three_ds_recomp_runtime oot3d_ui_topscreen oot3d_native_control_config)
-# The MXAO controls come from the iMMERSE module when the runtime builds it.
-get_target_property(_f1_runtime_definitions three_ds_recomp_runtime COMPILE_DEFINITIONS)
-if("ENABLE_OOT3D_IMMERSE" IN_LIST _f1_runtime_definitions)
+# The MXAO controls are labelled by the iMMERSE module, a separate library the
+# runtime loads from beside the executable: copied beside the smoke test.
+if(TARGET triaevum_immerse)
     target_compile_definitions(triaevum_f1_settings_smoke PRIVATE ENABLE_OOT3D_IMMERSE)
+    add_dependencies(triaevum_f1_settings_smoke triaevum_immerse)
+    add_custom_command(TARGET triaevum_f1_settings_smoke POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "$<TARGET_FILE:triaevum_immerse>" "$<TARGET_FILE_DIR:triaevum_f1_settings_smoke>")
 endif()
 if(WIN32)
     target_compile_definitions(triaevum_f1_settings_smoke PRIVATE NOMINMAX)

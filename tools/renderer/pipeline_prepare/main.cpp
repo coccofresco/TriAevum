@@ -1,8 +1,8 @@
-#include "fast/renderer/pipeline_preparation_job.h"
 #include "fast/renderer3ds/vulkan_pipeline_cache_store.h"
 #include "fast/renderer3ds/pica_startup_programs.h"
 #include "fast/renderer3ds/pica_native_fragment_binaries.h"
 #include "fast/oot3d/pica_uber_fragment_binaries.h"
+#include "fast/oot3d/pica_builtin_fragment_families.h"
 #include "headless_device.h"
 #include "fast/oot3d/pica_pipeline_preparation.h"
 // Translated title vertex family (title code, like the runtime executable's).
@@ -16,6 +16,8 @@
 #include <atomic>
 #include <chrono>
 #include <charconv>
+#include <cstdlib>
+#include <string_view>
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -29,12 +31,13 @@ using Json = nlohmann::json;
 
 using TriAevum::Tools::HeadlessDevice;
 
-// The renderer's startup program parts, created by worker threads: about one
-// per physical core, since driver compilation oversubscribed across logical
-// cores makes each part slower for no added throughput.
-struct StartupPreparation {
-    std::vector<Renderer3ds::PicaStartupProgramPart> Parts;
-    Renderer3ds::PicaStartupProgramDevice Device;
+// Independent pipeline creations on worker threads, one per logical core: the
+// driver's compilation scales sub-linearly, yet the 1872 cold pipelines of
+// the reference PC took 204 s on 6 threads and 175 s on 12 (sequential
+// recipes took about 9 minutes). The bridge and the device's pipeline cache
+// accept concurrent creation. TRIAEVUM_PIPELINE_PREPARE_THREADS (1..16)
+// bounds the compiler working set on a machine short of memory.
+struct ParallelPreparation {
     unsigned Threads = 0;
     std::atomic<size_t> Next{0};
     std::atomic<size_t> Attempted{0};
@@ -45,6 +48,54 @@ struct StartupPreparation {
     std::mutex ErrorMutex;
     std::string LastError;
     double Seconds = 0.0;
+
+    // prepare(index, why) -> prepared; progress(attempted, prepared, failed, last error).
+    template <class Prepare, class Cancel, class Progress>
+    void Run(size_t count, Prepare prepare, Cancel cancelled, Progress progress) {
+        if (count == 0) return;
+        const auto begin = std::chrono::steady_clock::now();
+        Threads = std::clamp(std::thread::hardware_concurrency(), 1U, 16U);
+        if (const char* value = std::getenv("TRIAEVUM_PIPELINE_PREPARE_THREADS")) {
+            const std::string_view text(value);
+            const auto parsed = std::from_chars(text.data(), text.data() + text.size(), Threads);
+            if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size() || Threads < 1 || Threads > 16)
+                throw std::runtime_error("TRIAEVUM_PIPELINE_PREPARE_THREADS must be 1..16");
+        }
+        Threads = std::min<unsigned>(Threads, static_cast<unsigned>(std::min<size_t>(count, 16)));
+        std::vector<std::thread> workers;
+        Running = Threads;
+        for (unsigned thread = 0; thread < Threads; ++thread) {
+            workers.emplace_back([&] {
+                for (size_t index; !Cancelled && (index = Next++) < count;) {
+                    bool prepared = false;
+                    std::string why;
+                    try {
+                        prepared = prepare(index, why);
+                    } catch (const std::exception& exception) { why = exception.what(); }
+                    if (prepared) ++Prepared;
+                    else {
+                        ++Failed;
+                        std::lock_guard lock(ErrorMutex);
+                        LastError = why;
+                    }
+                    ++Attempted;
+                }
+                --Running;
+            });
+        }
+        size_t reported = 0;
+        while (Running != 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            if (!Cancelled && cancelled()) Cancelled = true;
+            const size_t attempted = Attempted;
+            if (attempted == reported) continue;
+            reported = attempted;
+            std::lock_guard lock(ErrorMutex);
+            progress(attempted, Prepared.load(), Failed.load(), LastError);
+        }
+        for (auto& worker : workers) worker.join();
+        Seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - begin).count();
+    }
 };
 }
 
@@ -131,6 +182,7 @@ int main(int argc, char** argv) {
         execution.FrameSlotCount = 1;
         execution.DescriptorSetsPerPool = 1;
         execution.PipelineLibrariesAvailable = device.PipelineLibraries;
+        execution.PipelineLibrariesEnabled = device.AllPipelinesUseLibraries;
         if (!bridge.Initialize(device, execution)) throw std::runtime_error(bridge.UnavailableReason());
         std::vector<uint8_t> cache;
         const bool loaded = Renderer3ds::LoadPipelineCacheData(cachePath, identity, cache,
@@ -141,84 +193,51 @@ int main(int argc, char** argv) {
         // The parts the renderer creates before its first frame: the same
         // derivation, at its single-sample startup state. Without library
         // support the renderer prepares none either.
-        StartupPreparation startup;
-        startup.Device = {depthFormat, VK_SAMPLE_COUNT_1_BIT, device.GeometryShaders};
+        std::vector<Renderer3ds::PicaStartupProgramPart> parts;
+        const Renderer3ds::PicaStartupProgramDevice startupDevice{depthFormat, VK_SAMPLE_COUNT_1_BIT,
+                                                                  device.GeometryShaders};
         if (startupPrograms && device.PipelineLibraries)
-            startup.Parts = Renderer3ds::PicaStartupProgramParts(
+            parts = Renderer3ds::PicaStartupProgramParts(
                 Oot3dNativeGame::TitleVertexArtifacts(), Fast::Oot3d::UberFragmentArtifacts(),
-                Renderer3ds::NativeFragmentArtifacts(), startup.Device);
-        const size_t total = startup.Parts.size() + entries.size();
+                Renderer3ds::NativeFragmentArtifacts(), startupDevice);
+        const size_t total = parts.size() + entries.size();
         const auto progress = [&](size_t attempted, size_t prepared, size_t failed, const std::string& last) {
             std::cout << Json{{"event", "pipeline_progress"}, {"total", total}, {"attempted", attempted},
                 {"prepared", prepared}, {"failed", failed}, {"error", last}}.dump() << std::endl;
         };
-        if (!startup.Parts.empty()) {
-            const auto startupBegin = std::chrono::steady_clock::now();
-            startup.Threads = std::clamp(std::thread::hardware_concurrency() / 2U, 1U, 8U);
-            startup.Threads = std::min<unsigned>(startup.Threads, static_cast<unsigned>(startup.Parts.size()));
-            std::vector<std::thread> workers;
-            startup.Running = startup.Threads;
-            for (unsigned thread = 0; thread < startup.Threads; ++thread) {
-                workers.emplace_back([&] {
-                    for (size_t index; !startup.Cancelled && (index = startup.Next++) < startup.Parts.size();) {
-                        bool prepared = false;
-                        std::string why;
-                        try {
-                            prepared = Renderer3ds::PreparePicaStartupProgramPart(bridge, startup.Parts[index], startup.Device);
-                            if (!prepared) why = "NRI rejected startup program part " + std::to_string(index);
-                        } catch (const std::exception& exception) { why = exception.what(); }
-                        if (prepared && device.ValidationErrors()) {
-                            prepared = false;
-                            why = "NRI/Vulkan validation reported errors";
-                        }
-                        if (prepared) ++startup.Prepared;
-                        else {
-                            ++startup.Failed;
-                            std::lock_guard lock(startup.ErrorMutex);
-                            startup.LastError = why;
-                        }
-                        ++startup.Attempted;
-                    }
-                    --startup.Running;
-                });
+        const auto validated = [&](bool prepared, std::string& why) {
+            if (prepared && device.ValidationErrors()) {
+                why = "NRI/Vulkan validation reported errors";
+                return false;
             }
-            size_t reported = 0;
-            while (startup.Running != 0) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                if (!startup.Cancelled && cancelled()) startup.Cancelled = true;
-                const size_t attempted = startup.Attempted;
-                if (attempted == reported) continue;
-                reported = attempted;
-                std::lock_guard lock(startup.ErrorMutex);
-                progress(attempted, startup.Prepared, startup.Failed, startup.LastError);
-            }
-            for (auto& worker : workers) worker.join();
-            startup.Seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - startupBegin).count();
-        }
-
-        std::optional<Renderer::PipelinePreparationJob> job;
-        if (!entries.empty() && !startup.Cancelled) {
-            job.emplace(entries.size(), [&](size_t index, std::string& why) {
-                const auto item = Fast::Oot3d::ResolvePicaPipelinePreparationItem(entries[index], pack, depthFormat);
-                if (!bridge.PreparePipeline(item.Descriptor)) { why = "NRI rejected pipeline " + std::to_string(index); return false; }
-                if (device.ValidationErrors()) { why = "NRI/Vulkan validation reported errors"; return false; }
-                return true;
+            return prepared;
+        };
+        ParallelPreparation startup, recipes;
+        startup.Run(parts.size(), [&](size_t index, std::string& why) {
+            const bool prepared = Renderer3ds::PreparePicaStartupProgramPart(bridge, parts[index], startupDevice);
+            if (!prepared) why = "NRI rejected startup program part " + std::to_string(index);
+            return validated(prepared, why);
+        }, cancelled, progress);
+        if (!startup.Cancelled)
+            recipes.Run(entries.size(), [&](size_t index, std::string& why) {
+                const auto item = Fast::Oot3d::ResolvePicaPipelinePreparationItem(entries[index], pack, depthFormat,
+                                                                                &Fast::Oot3d::FindPicaBuiltInFragmentSpirv);
+                const bool prepared = bridge.PreparePipeline(item.Descriptor);
+                if (!prepared) why = "NRI rejected pipeline " + std::to_string(index);
+                return validated(prepared, why);
+            }, cancelled, [&](size_t attempted, size_t prepared, size_t failed, const std::string& last) {
+                progress(startup.Attempted + attempted, startup.Prepared + prepared, startup.Failed + failed,
+                         last.empty() ? startup.LastError : last);
             });
-            while (!job->Progress().Finished()) {
-                const auto& p = job->Step(8, cancelled);
-                progress(startup.Attempted + p.Attempted, startup.Prepared + p.Prepared, startup.Failed + p.Failed,
-                         p.LastError.empty() ? startup.LastError : p.LastError);
-            }
-        }
         cache = bridge.GetPipelineCacheData();
         if (!Renderer3ds::StorePipelineCacheData(cachePath, identity, cache, &error,
                                                  Renderer3ds::kMaximumNriPipelineCacheBytes))
             throw std::runtime_error(error);
-        const bool wasCancelled = startup.Cancelled || (job && job->Progress().Cancelled);
-        const size_t attempted = startup.Attempted + (job ? job->Progress().Attempted : 0U);
-        const size_t prepared = startup.Prepared + (job ? job->Progress().Prepared : 0U);
-        const size_t failed = startup.Failed + (job ? job->Progress().Failed : 0U);
-        const std::string lastError = job && !job->Progress().LastError.empty() ? job->Progress().LastError : startup.LastError;
+        const bool wasCancelled = startup.Cancelled || recipes.Cancelled;
+        const size_t attempted = startup.Attempted + recipes.Attempted;
+        const size_t prepared = startup.Prepared + recipes.Prepared;
+        const size_t failed = startup.Failed + recipes.Failed;
+        const std::string lastError = !recipes.LastError.empty() ? recipes.LastError : startup.LastError;
         const bool complete = !wasCancelled && total != 0 && attempted == total && failed == 0;
         const auto statistics = bridge.PipelineStatistics();
         Json report{{"format", "triaevum_device_pipeline_preparation_v1"},
@@ -226,9 +245,10 @@ int main(int argc, char** argv) {
             {"total", total}, {"prepared", prepared}, {"failed", failed}, {"error", lastError},
             {"manifest_count", manifests.size()}, {"input_recipes", observations}, {"recipes", entries.size()},
             {"startup_programs_requested", startupPrograms}, {"pipeline_libraries", device.PipelineLibraries},
-            {"startup_parts", startup.Parts.size()}, {"startup_prepared", startup.Prepared.load()},
+            {"startup_parts", parts.size()}, {"startup_prepared", startup.Prepared.load()},
             {"startup_failed", startup.Failed.load()}, {"startup_threads", startup.Threads},
             {"startup_seconds", startup.Seconds},
+            {"recipe_threads", recipes.Threads}, {"recipe_seconds", recipes.Seconds},
             {"validation_requested", validation}, {"validation_errors", device.ValidationErrors()},
             {"creation_nanoseconds", statistics.CreationNanoseconds},
             {"initial_cache_bytes", statistics.InitialCacheBytes},

@@ -456,6 +456,15 @@ TEST(Oot3dGeometryProviderPlan,
     EXPECT_FALSE(plan.Requires(EffectResource::AmbientGuide));
     EXPECT_TRUE(plan.ProducesExtensionGeometry());
     EXPECT_TRUE(plan.ExportsExtensionGeometry());
+    EXPECT_FALSE(plan.Requires(EffectResource::DirectionalShadowStaticHistory));
+    // With directional shadows the grass reads the composed map and the
+    // static casters' depth.
+    const auto shadowed = BuildEffectGeometryProviderPlan(
+        BuildPicaExtensionGraph({ .DirectionalShadows = true, .InteractiveGrass = true }),
+        PicaExtensionPassName(PicaExtensionPass::InteractiveGrass));
+    ASSERT_TRUE(shadowed.Valid());
+    EXPECT_TRUE(shadowed.Requires(EffectResource::DirectionalShadowHistory));
+    EXPECT_TRUE(shadowed.Requires(EffectResource::DirectionalShadowStaticHistory));
 
     GeometryProviderSceneFixture scene;
     scene.Publish();
@@ -1030,6 +1039,37 @@ TEST(Oot3dDisplayEffectPlan, DeclaresFsrDepthPreparation) {
     EXPECT_NE(std::find(bindings.begin(), bindings.end(),
                         Read(EffectResource::LinearWorkingColor)),
               bindings.end());
+}
+
+// A selected upscaler whose provider cannot execute (missing, or withdrawn
+// after a failure) is not planned: nothing declares an UpscaledColor that no
+// pass writes, and the scanout reads the colour it would have upscaled.
+TEST(Oot3dDisplayEffectPlan, PlansNoUpscalerWithoutItsProvider) {
+    for (const auto provider : {UpscalerProvider::Nis, UpscalerProvider::Fsr, UpscalerProvider::Dlss}) {
+        DisplayEffectPlanInput input;
+        input.WorldSurface = true;
+        input.PerspectiveAvailable = true;
+        input.CameraAvailable = true;
+        input.AntiAliasing = AntiAliasingMode::Upscaler;
+        input.Upscaler = provider;
+        input.UpscalerAvailable = false;
+        const auto plan = BuildDisplayEffectPlan(input);
+        ASSERT_TRUE(plan.Graph.Valid()) << plan.Graph.Error;
+        EXPECT_FALSE(plan.Enabled(DisplayEffectPass::Nis));
+        EXPECT_FALSE(plan.Enabled(DisplayEffectPass::TemporalUpscaler));
+        const auto scanout = plan.Bindings(DisplayEffectPass::Scanout);
+        EXPECT_EQ(std::find(scanout.begin(), scanout.end(), Read(EffectResource::UpscaledColor)),
+                  scanout.end());
+
+        input.UpscalerAvailable = true;
+        const auto available = BuildDisplayEffectPlan(input);
+        ASSERT_TRUE(available.Graph.Valid()) << available.Graph.Error;
+        EXPECT_TRUE(available.Enabled(provider == UpscalerProvider::Nis ? DisplayEffectPass::Nis
+                                                                        : DisplayEffectPass::TemporalUpscaler));
+        const auto upscaled = available.Bindings(DisplayEffectPass::Scanout);
+        EXPECT_NE(std::find(upscaled.begin(), upscaled.end(), Read(EffectResource::UpscaledColor)),
+                  upscaled.end());
+    }
 }
 
 TEST(Oot3dDisplayEffectPlan, KeepsNonWorldDisplaysCanonical) {
@@ -2071,6 +2111,86 @@ TEST(Oot3dEffectTransientConfigurationCache,
     EXPECT_FALSE(cache.Select(first).Hit);
 }
 
+EffectTransientAllocationPlan BothPlan(const CompiledEffectGraph& graph, uint32_t width) {
+    const std::array<EffectTransientImageRequirement, 2> requirements{{
+        {EffectResource::AmbientOcclusion, 97U, width, 240U, 1U, 1U, 1U, 0x3U},
+        {EffectResource::MotionVectors, 97U, width, 240U, 1U, 1U, 1U, 0x3U},
+    }};
+    return BuildEffectTransientAllocationPlan(graph, requirements);
+}
+
+TEST(Oot3dEffectTransientConfigurationCache,
+     ReusesACoveringConfigurationForAPlanThatDropsAResource) {
+    // A pause page drops one scene effect: its plan is the gameplay plan
+    // minus a resource and must keep the gameplay images, not allocate new
+    // ones that every pass would then rebuild its resources around.
+    const auto graph = AlternatingPlansGraph();
+    ASSERT_TRUE(graph.Valid()) << graph.Error;
+    const auto gameplay = BothPlan(graph, 400U);
+    const auto pause = AlternatingPlan(graph, EffectResource::AmbientOcclusion, 400U);
+    ASSERT_TRUE(gameplay.Complete());
+    ASSERT_EQ(gameplay.SlotCount(), 2U);
+    EXPECT_TRUE(EffectTransientAllocationCovers(gameplay, pause));
+    EXPECT_FALSE(EffectTransientAllocationCovers(pause, gameplay));
+    EXPECT_FALSE(EffectTransientAllocationCovers(
+        gameplay, AlternatingPlan(graph, EffectResource::AmbientOcclusion, 401U)));
+
+    EffectTransientConfigurationCache cache;
+    auto selection = cache.Select(gameplay);
+    cache.Commit(selection.Index, gameplay);
+    const size_t gameplayIndex = selection.Index;
+    for (int toggle = 0; toggle < 3; ++toggle) {
+        selection = cache.Select(pause);
+        EXPECT_TRUE(selection.Hit);
+        EXPECT_TRUE(selection.Covers);
+        EXPECT_FALSE(selection.Evicts);
+        EXPECT_EQ(selection.Index, gameplayIndex);
+        cache.Touch(selection.Index);
+        selection = cache.Select(gameplay);
+        EXPECT_TRUE(selection.Hit);
+        EXPECT_FALSE(selection.Covers);
+        EXPECT_EQ(selection.Index, gameplayIndex);
+        cache.Commit(selection.Index, gameplay);
+    }
+    EXPECT_EQ(cache.Count(), 1U);
+
+    // An exact configuration is preferred over a covering one.
+    selection = cache.Select(pause);
+    ASSERT_TRUE(selection.Covers);
+    const size_t other = gameplayIndex == 0U ? 1U : 0U;
+    cache.Commit(other, pause);
+    selection = cache.Select(pause);
+    EXPECT_TRUE(selection.Hit);
+    EXPECT_FALSE(selection.Covers);
+    EXPECT_EQ(selection.Index, other);
+}
+
+TEST(Oot3dEffectTransientConfigurationCache,
+     DoesNotCoverResourcesThatOverlapWhereTheCachedPlanAliasedThem) {
+    EffectGraph sequential;
+    sequential.Add({ .Name = "ao", .Stage = EffectStage::AfterOpaque,
+                     .Contract = EffectContractKind::ComposerPass,
+                     .Resources = { Write(EffectResource::AmbientOcclusion) } });
+    sequential.Add({ .Name = "ao_read", .DependsOn = { "ao" }, .Stage = EffectStage::AfterOpaque,
+                     .Contract = EffectContractKind::ComposerPass,
+                     .Resources = { Read(EffectResource::AmbientOcclusion) } });
+    sequential.Add({ .Name = "mv", .DependsOn = { "ao_read" }, .Stage = EffectStage::BeforeUi,
+                     .Contract = EffectContractKind::ComposerPass,
+                     .Resources = { Write(EffectResource::MotionVectors) } });
+    sequential.Add({ .Name = "mv_read", .DependsOn = { "mv" }, .Stage = EffectStage::BeforeUi,
+                     .Contract = EffectContractKind::ComposerPass,
+                     .Resources = { Read(EffectResource::MotionVectors) } });
+    const auto sequentialGraph = sequential.Compile();
+    ASSERT_TRUE(sequentialGraph.Valid()) << sequentialGraph.Error;
+    const auto aliased = BothPlan(sequentialGraph, 400U);
+    ASSERT_TRUE(aliased.Complete());
+    ASSERT_EQ(aliased.SlotCount(), 1U);
+    const auto overlapping = BothPlan(AlternatingPlansGraph(), 400U);
+    ASSERT_EQ(overlapping.SlotCount(), 2U);
+    EXPECT_FALSE(EffectTransientAllocationCovers(aliased, overlapping));
+    EXPECT_TRUE(EffectTransientAllocationCovers(overlapping, aliased));
+}
+
 TEST(Oot3dEffectGraphPhysicalPlan,
      AliasesActualSssrAndSmaaOutputsAcrossDisjointPasses) {
     DisplayEffectPlanInput input;
@@ -2140,9 +2260,11 @@ TEST(Oot3dEffectPassBarrierPlan,
     const auto* staticOutput = shadowMap.Find(EffectResource::DirectionalShadowStaticCache);
     ASSERT_NE(staticOutput, nullptr);
     EXPECT_EQ(staticOutput->DispatchAccess, ResourceAccess::DepthAttachment);
-    EXPECT_EQ(staticOutput->CompletionAccess, ResourceAccess::TransferRead);
+    // Copied into the composed map, then readable (the grass's coarse grid).
+    EXPECT_EQ(staticOutput->IntermediateAccess, ResourceAccess::TransferRead);
+    EXPECT_EQ(staticOutput->CompletionAccess, ResourceAccess::ShaderRead);
     EXPECT_TRUE(graph.ExportsResource(EffectResource::DirectionalShadowStaticCache));
-    EXPECT_EQ(shadowMap.BeginExecution().PlannedGraphTransitionCount(), 5U);
+    EXPECT_EQ(shadowMap.BeginExecution().PlannedGraphTransitionCount(), 6U);
     const auto* mapOutput = shadowMap.Find(
         EffectResource::DirectionalShadowMap);
     ASSERT_NE(mapOutput, nullptr);

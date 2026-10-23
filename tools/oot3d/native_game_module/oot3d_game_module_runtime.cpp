@@ -517,7 +517,9 @@ Oot3dGameModuleRuntime::Create(const TriAevumHostApiV1 &host,
 Oot3dGameModuleRuntime::Oot3dGameModuleRuntime(std::unique_ptr<Impl> impl)
     : mImpl(std::move(impl)) {}
 
-Oot3dGameModuleRuntime::~Oot3dGameModuleRuntime() = default;
+Oot3dGameModuleRuntime::~Oot3dGameModuleRuntime() {
+  if (mImpl) mImpl->HostServices.WriteFsRequestSummary();
+}
 
 TriAevumModuleStatusV1 Oot3dGameModuleRuntime::Start(std::string *error) {
   if (mImpl == nullptr || !mImpl->RunUntilWait(error)) {

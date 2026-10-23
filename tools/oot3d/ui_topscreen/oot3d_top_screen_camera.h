@@ -16,7 +16,8 @@ struct TopScreenCameraVec3 {
 };
 
 struct TopScreenCameraFovOwnershipInput {
-  std::uint32_t OutputAddress = 0U;
+  // The updated camera's play state (camera + 0xD4).
+  std::uint32_t PlayAddress = 0U;
   std::int16_t CameraSetting = 0;
   std::int16_t CameraIndex = -1;
 };

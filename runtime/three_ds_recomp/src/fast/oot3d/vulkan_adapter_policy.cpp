@@ -99,8 +99,25 @@ bool IsVulkanAdapterSuitable(
            candidate.HasPresentQueue &&
            candidate.HasSwapchainExtension &&
            candidate.HasSurfaceFormats &&
-           candidate.HasPresentModes;
+           candidate.HasPresentModes &&
+           (candidate.ApiMajor > 1 ||
+            (candidate.ApiMajor == 1 && candidate.ApiMinor >= 2));
 }
+
+namespace {
+// A presentation-capable adapter whose driver is too old: the reason a user
+// can act on (update the driver), instead of a generic refusal.
+std::string OutdatedVulkanReason(const VulkanAdapterCandidate& candidate) {
+    return "the graphics driver of " + candidate.Name + " supports Vulkan " +
+           std::to_string(candidate.ApiMajor) + "." + std::to_string(candidate.ApiMinor) +
+           "; TriAevum needs Vulkan 1.2 or newer: update the graphics driver from the GPU maker's site";
+}
+
+bool PresentationCapable(const VulkanAdapterCandidate& candidate) {
+    return candidate.HasGraphicsQueue && candidate.HasPresentQueue && candidate.HasSwapchainExtension &&
+           candidate.HasSurfaceFormats && candidate.HasPresentModes;
+}
+} // namespace
 
 int64_t ScoreVulkanAdapter(
     const VulkanAdapterCandidate& candidate) {
@@ -126,8 +143,9 @@ VulkanAdapterSelection SelectVulkanAdapter(
                 continue;
             }
             if (!IsVulkanAdapterSuitable(candidates[index])) {
-                selection.Reason =
-                    "requested Vulkan adapter is not presentation-capable";
+                selection.Reason = PresentationCapable(candidates[index])
+                    ? OutdatedVulkanReason(candidates[index])
+                    : "requested Vulkan adapter is not presentation-capable";
                 return selection;
             }
             selection.CandidatePosition = index;
@@ -149,6 +167,12 @@ VulkanAdapterSelection SelectVulkanAdapter(
     if (!selection.CandidatePosition.has_value()) {
         selection.Reason =
             "no Vulkan adapter supports graphics, presentation and swapchain";
+        for (const auto& candidate : candidates) {
+            if (PresentationCapable(candidate)) {
+                selection.Reason = OutdatedVulkanReason(candidate);
+                break;
+            }
+        }
     }
     return selection;
 }

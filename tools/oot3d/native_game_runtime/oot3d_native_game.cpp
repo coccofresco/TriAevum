@@ -1,3 +1,4 @@
+#include "oot3d_interior_sun_prebuild.h"
 #include <cstdlib>
 #include "oot3d_game_language.h"
 #include <array>
@@ -63,6 +64,7 @@ void SetRendererEnvironment(const char* name,
 void ConfigurePicaAotShaders(const Oot3dNativeGameLaunch& launch) {
     SetRendererEnvironment("TRIAEVUM_RENDERER_CACHE_DIR", launch.RendererCacheDirectory);
     SetRendererEnvironment("TRIAEVUM_WATER_TEXTURE_CATALOG", launch.WaterTextureCatalogPath);
+    SetRendererEnvironment("TRIAEVUM_SCENE_LIGHT_CATALOG", launch.SceneLightCatalogPath);
     SetRendererEnvironment("OOT3D_PICA_AOT_SHADER_PACK",
                            launch.PicaAotShaderPackPath);
     SetRendererEnvironment("OOT3D_PICA_EFFECTIVE_SHADER_INVENTORY",
@@ -139,6 +141,8 @@ NativeGameArguments PrepareNativeGameArguments(int argc, char** argv) {
 
 int main(int argc, char** argv) {
     try {
+        if (argc >= 2 && std::string_view(argv[1]) == "--prebuild-interior-sun")
+            return Oot3dNativeGame::InteriorSunToolMain(argc, argv);
 #if defined(__ANDROID__)
         InitializeAndroidGameHost();
 #endif
@@ -245,6 +249,7 @@ int main(int argc, char** argv) {
         ConfigurePicaAotShaders(launch);
 #ifdef OOT3D_NATIVE_A32_WINDOW_AVAILABLE
         RunOot3dNativeA32Window(launch);
+        ClearLaunchMarkerForDemo();
         // The A32 window owns objects that refer back to the host context.
         // Destroy those locals on return before tearing the context down.
         DestroyContextForDemo();
@@ -261,6 +266,7 @@ int main(int argc, char** argv) {
 #if defined(__SWITCH__)
         WriteSwitchBootStatus("failed", ex.what());
 #endif
+        LogFatalErrorForDemo(ex.what());
         DestroyContextForDemo();
         return 1;
     }

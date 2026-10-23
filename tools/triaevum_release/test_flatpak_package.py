@@ -76,10 +76,11 @@ class FlatpakPackageTests(unittest.TestCase):
     def test_permissions_are_scoped_and_desktop_actions_share_launcher(self):
         settings = json.loads((ASSETS / "io.github.coccofresco.TriAevum.json").read_text())
         flags = settings["finish-args"]
-        self.assertIn("--device=dri", flags)
-        self.assertIn("--device=input", flags)
+        # Flatpak before 1.15.6 silently drops --device=input, which leaves
+        # SDL without /dev/input; pads also need hidraw and USB nodes (#71).
+        self.assertIn("--device=all", flags)
+        self.assertNotIn("--device=input", flags)
         self.assertFalse(any(flag.startswith("--filesystem=") for flag in flags))
-        self.assertNotIn("--device=all", flags)
         desktop = (ASSETS / "io.github.coccofresco.TriAevum.desktop").read_text()
         self.assertIn("Exec=triaevum\n", desktop)
         self.assertIn("Exec=triaevum --forge\n", desktop)

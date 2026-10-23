@@ -4,6 +4,7 @@
 #include "fast/oot3d/graphics_settings.h"
 
 #include <array>
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -38,6 +39,10 @@ class GrassInteractionField final {
     }
     [[nodiscard]] bool Initialized() const noexcept {
         return mInitialized;
+    }
+    [[nodiscard]] bool AtRest() const {
+        return std::all_of(mActiveColumns.begin(), mActiveColumns.end(),
+                           [](const auto& range) { return range[0] >= range[1]; });
     }
     void Reset();
 

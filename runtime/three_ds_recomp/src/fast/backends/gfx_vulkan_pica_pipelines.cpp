@@ -236,6 +236,16 @@ Renderer3ds::PicaDevicePipelineRecord& GfxRenderingAPIVulkan::GetOrCreateNativeP
         nriPipeline.FragmentSpirv = shader.NriFragmentSpirv;
         nriPipeline.VertexBindings = nriBindings;
         nriPipeline.VertexAttributes = nriAttributes;
+        if (Renderer3ds::NriPicaPipelineTraceEnabled())
+            std::fprintf(
+                stderr,
+                "TRIAEVUM_PICA_PIPELINE_REQUEST vs=%016llx fs=%016llx nri_source=%016llx domain=%u applied=%08x "
+                "attachments=%02x recorded=%u acquisition=%u\n",
+                static_cast<unsigned long long>(Renderer3ds::NriPicaTraceProgramHash(shader.NriVertexSpirv)),
+                static_cast<unsigned long long>(Renderer3ds::NriPicaTraceProgramHash(shader.NriFragmentSpirv)),
+                static_cast<unsigned long long>(shader.NriFragmentSource.Id), static_cast<unsigned>(domain),
+                static_cast<unsigned>(appliedFeatures), static_cast<unsigned>(ActivePicaAttachmentRequirements().Key()),
+                recordInventory ? 1U : 0U, static_cast<unsigned>(acquisition));
         if (acquisition == NativePicaPipelineAcquisition::Background && mPreparationQueue) {
             const auto state = mNriPicaPipelineBridge.RequestOwnedPipeline(
                 record.Id, nriPipeline, Oot3d::NriPicaPipelineFactory::Default, *mPreparationQueue);

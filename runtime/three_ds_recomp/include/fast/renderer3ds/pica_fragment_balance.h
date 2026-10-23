@@ -5,7 +5,7 @@
 
 namespace Fast::Renderer3ds {
 // Appended ONLY for the new applied variant at the existing surface binding16.
-// The old2912-byte payload and every old descriptor range remain unchanged.
+// The plain surface payload (sizeof(PicaSurfaceLightingUniforms)) and every old descriptor range remain unchanged.
 struct alignas(16) PicaFragmentBalanceUniforms {
     // active native-index mask, key native index, retained reference-fill mask, preserve
     std::array<uint32_t,4> Control{};
@@ -19,8 +19,8 @@ struct alignas(16) PicaBalancedSurfaceUniforms {
     PicaFragmentBalanceUniforms Balance;
 };
 static_assert(sizeof(PicaFragmentBalanceUniforms)==160);
-static_assert(offsetof(PicaBalancedSurfaceUniforms,Balance)==2912);
-static_assert(sizeof(PicaBalancedSurfaceUniforms)==3072);
+static_assert(offsetof(PicaBalancedSurfaceUniforms,Balance)==sizeof(PicaSurfaceLightingUniforms));
+static_assert(sizeof(PicaBalancedSurfaceUniforms)==sizeof(PicaSurfaceLightingUniforms)+sizeof(PicaFragmentBalanceUniforms));
 
 // First balanced contract: transfer the existing scene_main source, not a
 // separately evaluated/new light. A white, unit, unrotated key is essential.

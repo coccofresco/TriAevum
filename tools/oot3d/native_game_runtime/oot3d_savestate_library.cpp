@@ -37,6 +37,17 @@ std::string TimestampName(std::chrono::system_clock::time_point now) {
 
 } // namespace
 
+std::filesystem::path DefaultSavestateDirectory(
+    bool besideExecutable, const std::filesystem::path& executableDirectory,
+    const std::filesystem::path& saveDataDirectory) {
+  if (besideExecutable || saveDataDirectory.empty())
+    return executableDirectory / "savestates";
+  // ".../data/savedata" -> ".../data/savestates"
+  auto saveData = saveDataDirectory.lexically_normal();
+  if (!saveData.has_filename()) saveData = saveData.parent_path();
+  return saveData.parent_path() / "savestates";
+}
+
 SavestateLibrary::SavestateLibrary(std::filesystem::path preferencesPath,
                                    std::filesystem::path defaultDirectory,
                                    std::filesystem::path fixedSlot)

@@ -18,14 +18,17 @@ find_library(SHADERC_LIBRARY NAMES shaderc_shared shaderc HINTS "$ENV{VULKAN_SDK
 get_filename_component(runtime "${CMAKE_CURRENT_LIST_DIR}/../../../runtime/three_ds_recomp" ABSOLUTE)
 add_executable(texture_source_cache_tests texture_source_cache_tests.cpp
     "${runtime}/src/fast/oot3d/grass_texture_source_cache.cpp"
+    "${runtime}/src/fast/oot3d/grass_texture_twins.cpp"
     "${runtime}/src/fast/oot3d/texture_preview_artifact.cpp"
     "${runtime}/src/fast/oot3d/grass_surface_extractor.cpp"
+    "${runtime}/src/fast/oot3d/grass_overlay_mask.cpp"
     "${runtime}/src/fast/oot3d/grass_visibility.cpp")
 target_compile_features(texture_source_cache_tests PRIVATE cxx_std_20)
 target_include_directories(texture_source_cache_tests PRIVATE "${runtime}/include")
 add_test(NAME texture_source_cache COMMAND texture_source_cache_tests)
 add_executable(grass_spacing_tests grass_spacing_tests.cpp
     "${runtime}/src/fast/oot3d/grass_surface_extractor.cpp"
+    "${runtime}/src/fast/oot3d/grass_overlay_mask.cpp"
     "${runtime}/src/fast/oot3d/grass_visibility.cpp")
 target_compile_features(grass_spacing_tests PRIVATE cxx_std_20)
 target_include_directories(grass_spacing_tests PRIVATE "${runtime}/include")

@@ -5,6 +5,7 @@
 #include <string_view>
 #include <unordered_map>
 
+#include <SDL.h>
 #include <nlohmann/json.hpp>
 
 namespace Oot3dNativeGame {
@@ -75,6 +76,15 @@ std::vector<std::string> LoadNativeGameLaunchProfile(
         {"profile_dir", resolvedPath.parent_path().generic_string()},
         {"executable_dir", resolvedPath.parent_path().generic_string()},
     };
+    // The running executable's own directory: files of its package are named
+    // from it, because an AppImage is mounted at a new path on every launch.
+    if (char* base = SDL_GetBasePath(); base != nullptr) {
+        std::filesystem::path runtimeDirectory(base);
+        SDL_free(base);
+        variables["runtime_dir"] = runtimeDirectory.lexically_normal().generic_string();
+        while (!variables["runtime_dir"].empty() && variables["runtime_dir"].back() == '/')
+            variables["runtime_dir"].pop_back();
+    }
     if (const auto variablesIt = document.find("variables");
         variablesIt != document.end()) {
         if (!variablesIt->is_object()) {

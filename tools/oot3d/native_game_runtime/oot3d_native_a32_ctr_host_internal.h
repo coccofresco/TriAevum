@@ -164,6 +164,16 @@ constexpr uint32_t kFsCloseArchiveResponse = 0x080E0040U;
 constexpr uint32_t kFsInvalidArchiveHandle = 0xC8804465U;
 constexpr uint32_t kFsFileNotFound = 0xC8804470U;
 constexpr uint32_t kFsFileAlreadyExists = 0xC82044B4U;
+// CTR result fields: level / summary / module / description. Known FS
+// errors follow the FS service contract; the bool backend API cannot retain
+// a device-specific failure reason, so use an explicit FS/Internal result.
+constexpr uint32_t kFsBackendFailure = 0xD9604400U;
+constexpr uint32_t kFsInvalidOpenFlags = 0xC92044E6U;
+constexpr uint32_t kFsOutOfRange = 0xE0E046C1U;
+constexpr uint32_t kFsNotImplemented = 0xD8C047F4U;
+constexpr uint32_t kInvalidBufferDescriptor = 0xD9001830U;
+constexpr uint32_t kInvalidSessionHandle = 0xD8E007F7U;
+constexpr uint32_t kSessionClosed = 0xC920181AU;
 constexpr uint32_t kFsSaveDataArchiveId = 4U;
 constexpr uint32_t kFileReadRequest = 0x080200C2U;
 constexpr uint32_t kFileReadResponse = 0x08020082U;

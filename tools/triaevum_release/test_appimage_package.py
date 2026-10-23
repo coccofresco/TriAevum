@@ -11,6 +11,22 @@ from test_release_audit import write_clean_package
 
 
 class AppImageTests(unittest.TestCase):
+    def setUp(self):
+        # These tests use inventory fixtures, not real ELF binaries. The ELF
+        # parser and dependency failures are exercised by test_linux_elf_audit.
+        gate = patch("tools.triaevum_release.appimage_package.audit_native_elfs")
+        self.elf_audit = gate.start()
+        self.addCleanup(gate.stop)
+
+    def test_elf_failure_does_not_create_output(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            write_linux_package(root / "package")
+            self.elf_audit.side_effect = ValueError("missing bundled dependency libdecor-0.so.0")
+            with self.assertRaisesRegex(ValueError, "libdecor"):
+                stage_appimage(root / "package", root / "AppDir")
+            self.assertFalse((root / "AppDir").exists())
+
     def test_mount_relocation_keeps_user_data(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()

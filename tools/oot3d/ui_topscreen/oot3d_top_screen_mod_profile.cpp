@@ -230,6 +230,28 @@ bool RebindTopScreenVerifiedRuntimeGeometry(
     result.QuadsRebound += contract.QuadCount;
   }
 
+  // 0x004673BC/0x00467688 change both Gear filters to GL_NEAREST. Restored
+  // stages already contain the converted values from 0x00348A64: mag at
+  // +0x13C (linear 1), min at +0x140 (linear 3), nearest 0 for both.
+  for (const auto owner : {0x0050446CU, 0x005044C4U, 0x005044C8U}) {
+    std::uint32_t stage = 0U;
+    if (!memory.Read32(owner, &stage)) {
+      SetError(error, "TopScreen Gear texture-stage owner is unmapped");
+      return false;
+    }
+    if (stage == 0U) continue;
+    std::uint32_t mag = 0U, min = 0U;
+    if ((stage & 3U) != 0U || !memory.IsMapped(stage, 0x1B8U) ||
+        !memory.Read32(stage + 0x13CU, &mag) ||
+        !memory.Read32(stage + 0x140U, &min) ||
+        (mag != 0U && mag != 1U) || (min != 0U && min != 3U)) {
+      SetError(error, "TopScreen Gear texture-stage filters are incompatible");
+      return false;
+    }
+    writes.push_back({stage + 0x13CU, 0U});
+    writes.push_back({stage + 0x140U, 0U});
+  }
+
   for (const auto &write : writes) {
     if (!memory.WriteHost<std::uint32_t>(write.Address, write.Value)) {
       SetError(error, "TopScreen runtime geometry write failed");

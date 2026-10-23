@@ -14,6 +14,14 @@ namespace Fast::Oot3d {
     const EffectTransientAllocationPlan& lhs,
     const EffectTransientAllocationPlan& rhs) noexcept;
 
+// The images of `cached` can serve `plan`: each requested resource exists
+// there with the same requirement and storage class, and resources that
+// `plan` keeps in distinct slots stay in distinct images (no new aliasing).
+// A pause page that drops one scene effect keeps the gameplay images.
+[[nodiscard]] bool EffectTransientAllocationCovers(
+    const EffectTransientAllocationPlan& cached,
+    const EffectTransientAllocationPlan& plan) noexcept;
+
 // The display graph runs several invocations per frame (native boundaries,
 // presentations), each with its own transient plan. One image configuration
 // per recurring plan lets them alternate without destroying images, the
@@ -29,12 +37,17 @@ class EffectTransientConfigurationCache final {
         bool Hit = false;
         // The configuration at Index serves another plan and is replaced.
         bool Evicts = false;
+        // Hit through a configuration whose plan covers this one: it keeps
+        // its own plan (Touch, not Commit).
+        bool Covers = false;
     };
 
     [[nodiscard]] Selection Select(
         const EffectTransientAllocationPlan& plan) const noexcept;
     // Index now serves the plan and is the most recently used.
     void Commit(size_t index, const EffectTransientAllocationPlan& plan) noexcept;
+    // Index is the most recently used and keeps its plan.
+    void Touch(size_t index) noexcept;
     void Remove(size_t index) noexcept;
     void Clear() noexcept;
     [[nodiscard]] size_t Count() const noexcept;

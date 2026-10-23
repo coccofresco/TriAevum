@@ -1,6 +1,4 @@
-#include "fast/immerse/mxao_shader.h"
-
-#include "fast/renderer3ds/pica_geometry_guide.h"
+#include "mxao_shader.h"
 
 // iMMERSE MXAO, ported from MartysMods_MXAO.fx of
 // https://github.com/martymcmodding/iMMERSE at revision
@@ -39,9 +37,10 @@
 
 namespace Fast::Immerse {
 
-std::array<std::string, 6> BuildMxaoPassShaders(std::string_view debugLibrary) {
-    return {BuildMxaoDeinterleaveShader(), BuildMxaoOcclusionShader(), BuildMxaoFilterShader(false),
-            BuildMxaoFilterShader(true), BuildMxaoTemporalShader(), BuildMxaoDebugShader(debugLibrary)};
+std::array<std::string, 6> BuildMxaoPassShaders(std::string_view debugLibrary, std::string_view geometryLibrary) {
+    return {BuildMxaoDeinterleaveShader(geometryLibrary), BuildMxaoOcclusionShader(geometryLibrary),
+            BuildMxaoFilterShader(false, geometryLibrary), BuildMxaoFilterShader(true, geometryLibrary),
+            BuildMxaoTemporalShader(geometryLibrary), BuildMxaoDebugShader(debugLibrary, geometryLibrary)};
 }
 namespace {
 constexpr const char* kCommon = R"glsl(#version 450
@@ -162,16 +161,16 @@ vec3 geometry_normal(ivec2 pixel) {
 }
 )glsl";
 
-std::string Common() {
+std::string Common(std::string_view geometryLibrary) {
     std::string source = kCommon;
-    source += Renderer3ds::PicaGeometryGuideShaderLibrary();
+    source += geometryLibrary;
     source += kGeometryNormal;
     return source;
 }
 } // namespace
 
-std::string BuildMxaoDeinterleaveShader() {
-    std::string source = Common();
+std::string BuildMxaoDeinterleaveShader(std::string_view geometryLibrary) {
+    std::string source = Common(geometryLibrary);
     source += R"glsl(
 layout(local_size_x=8,local_size_y=8,local_size_z=1) in;
 layout(set=0,binding=3,r32f) uniform writeonly image2D tiled_depth;
@@ -186,8 +185,8 @@ void main() {
     return source;
 }
 
-std::string BuildMxaoOcclusionShader() {
-    std::string source = Common();
+std::string BuildMxaoOcclusionShader(std::string_view geometryLibrary) {
+    std::string source = Common(geometryLibrary);
     source += R"glsl(
 layout(local_size_x=16,local_size_y=16,local_size_z=1) in;
 layout(set=0,binding=3,rg16f) uniform writeonly image2D raw_occlusion;
@@ -381,8 +380,8 @@ void main() {
     return source;
 }
 
-std::string BuildMxaoFilterShader(bool finalPass) {
-    std::string source = Common();
+std::string BuildMxaoFilterShader(bool finalPass, std::string_view geometryLibrary) {
+    std::string source = Common(geometryLibrary);
     source += finalPass ? "layout(set=0,binding=3,r32f) uniform writeonly image2D filtered;\n"
                         : "layout(set=0,binding=3,rg16f) uniform writeonly image2D filtered;\n";
     source += R"glsl(
@@ -420,8 +419,8 @@ void main() {
     return source;
 }
 
-std::string BuildMxaoDebugShader(std::string_view packNormal) {
-    std::string source = Common();
+std::string BuildMxaoDebugShader(std::string_view packNormal, std::string_view geometryLibrary) {
+    std::string source = Common(geometryLibrary);
     source += "layout(set=0,binding=3,r32f) uniform writeonly image2D debug_view;\n";
     source.append(packNormal);
     source += R"glsl(
@@ -479,8 +478,8 @@ void main() {
     return source;
 }
 
-std::string BuildMxaoTemporalShader() {
-    std::string source = Common();
+std::string BuildMxaoTemporalShader(std::string_view geometryLibrary) {
+    std::string source = Common(geometryLibrary);
     source += R"glsl(
 layout(local_size_x=8,local_size_y=8,local_size_z=1) in;
 layout(set=0,binding=3,rgba16f) uniform writeonly image2D accumulated;

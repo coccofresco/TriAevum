@@ -277,6 +277,11 @@ python tools/triaevum_release/regenerate_shader_corpus.py --tools BUILD \
   --output NEW_PRIVATE_DIRECTORY
 ```
 
+Graphics profiles add `--runtime-inventory DIR` (repeatable): recorded game
+sessions' `*-shaders.json` and `*-pipelines.json` join the union and merge into
+`runtime-pipelines.json`, the profile recipes for device preparation (see
+`TRIAEVUM_NRI_PIPELINE_PREPARATION.md`, Graphics Profile Coverage).
+
 It accepts a transferable cache's partial import (exit 3) only when its sole
 gap is the documented unimported vertex/geometry records. The in-repo boot
 profile (`profiles/oot3d_pica_boot_title_kokiri_effective.json`) is generated

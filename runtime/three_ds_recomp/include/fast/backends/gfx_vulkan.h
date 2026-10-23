@@ -9,6 +9,8 @@
 #include "fast/backends/gfx_rendering_api.h"
 #include "fast/renderer/spirv_cache.h"
 #include "fast/renderer3ds/pica_shader_module_identity.h"
+#include "fast/renderer3ds/pica_temporal_history.h"
+#include "fast/renderer3ds/pica_motion_provenance.h"
 #include "fast/renderer3ds/pica_program_preparation.h"
 #include "fast/renderer3ds/pica_preparation_queue.h"
 #include "fast/renderer3ds/pica_texture_copy_plan.h"
@@ -17,6 +19,7 @@
 #include "fast/renderer3ds/pica_pbr_material.h"
 #include "fast/renderer3ds/pica_pbr_seams.h"
 #include "fast/renderer3ds/pica_surface_lighting.h"
+#include "fast/renderer3ds/pica_surface_calibration_trace.h"
 #include "fast/backends/oot3d_vulkan_diagnostics.h"
 #include "fast/backends/oot3d_vulkan_gpu_profiler.h"
 #include "fast/backends/oot3d_vulkan_validation.h"
@@ -39,6 +42,7 @@
 #include "fast/oot3d/effect_graph.h"
 #include "fast/oot3d/fidelityfx_sssr_pass.h"
 #include "fast/oot3d/grass_geometry_registry.h"
+#include "fast/oot3d/grass_draw_memo.h"
 #include "fast/oot3d/hiz_depth_pyramid_pass.h"
 #include "fast/oot3d/hiz_reflection_pass.h"
 #include "fast/oot3d/interactive_grass_pass.h"
@@ -194,6 +198,11 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         const ::Fast::Renderer3ds::PicaCompositionDrawReference& draw) const override;
     bool PreparePicaSequenceDraw(const GfxNativePicaDrawView& draw,
                                  std::string* error = nullptr) override;
+    // Grass masks read the output alpha of the overlays they capture during
+    // preparation, translucent ones included.
+    [[nodiscard]] bool PicaSequenceDrawPreparationNeedsFragmentState() const override {
+        return mInteractiveGrassProviderPlan.Valid();
+    }
     // A scene draw lying on one of its binding's water bodies (flat, at the
     // body's height, over it): the body index. World bounds come from the
     // draw's cached triangle geometry; unknown geometry is not water.
@@ -228,6 +237,11 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         const ::Fast::Renderer3ds::PicaSceneWaterBodies& bodies, float seconds);
     std::array<::Fast::Renderer3ds::PicaWaterRing, ::Fast::Renderer3ds::kPicaWaterRings> mWaterRings{};
     NativePicaWaterSurface ResolveNativePicaWaterSurface(const GfxNativePicaDrawView& draw);
+    void TraceSurfaceCalibrationDraw(const GfxNativePicaDrawView& draw,
+        const Oot3d::PicaShaderPipelineResult& variant,
+        const std::optional<Renderer3ds::PicaSurfaceLightingUniforms>& lighting,
+        bool candidate, bool exempt, bool authoredAppearance, bool isolated, bool perspective, bool uber);
+    void FinishSurfaceCalibrationTrace();
     // The title's water textures (TRIAEVUM_WATER_TEXTURE_CATALOG, generated
     // by the installer from the user's RomFS), loaded on first use.
     const ::Fast::Renderer3ds::PicaWaterTextureCatalog* WaterTextureCatalog();
@@ -239,6 +253,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     std::unordered_map<uint64_t, ::Fast::Renderer3ds::PicaWaterFlowTrack> mWaterFlow;
     // This frame traces reflections for water only (Reflections Off).
     bool mWaterOnlyReflections = false;
+    // The frame whose scene draws last published water a water-only trace
+    // finds (the title's bodies or catalog water planes).
+    uint64_t mReflectableWaterFrame = UINT64_MAX;
     bool SubmitPicaDisplayTransfer(
         const GfxNativePicaDisplayTransferView& transfer,
         std::string* error = nullptr) override;
@@ -1220,6 +1237,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     std::unordered_map<uint64_t, Renderer3ds::VirtualShadowCaster> mPreparedShadowCasters;
     Oot3d::PicaScenePublicationAdapter mPicaScenePublications;
     Oot3d::GrassGeometryRegistry mGrassGeometryRegistry;
+    Oot3d::GrassDrawMemo mGrassDrawMemo;
     std::unordered_map<uint64_t, NativePicaGeometryBuffer> mNativePicaGeometryBuffers;
     // Distance field of the native opaque geometry (global illumination).
     Oot3d::BrixelizerScene mBrixelizerScene;
@@ -1244,6 +1262,11 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     // The GI provider state last published to the settings runtime (F1).
     Oot3d::GlobalIlluminationProviderStatus mPublishedGlobalIlluminationStatus;
     void PublishGlobalIlluminationStatus(Oot3d::GlobalIlluminationMode mode);
+    // A planned upscaler wrote no output and the display showed its input
+    // unscaled: reported once per provider and cause, and a provider that is
+    // no longer available is withdrawn from F1 (its capability).
+    void WithdrawFailedUpscaler(Oot3d::UpscalerProvider provider);
+    std::string mReportedUpscalerFallback;
     std::array<std::vector<BufferAllocation>, kFramesInFlight> mRetiredNativePicaGeometryBuffers;
     Oot3d::PicaShaderPipelineCache mPicaShaderPipelineCache;
     Oot3d::PicaAotShaderPack mPicaAotShaderPack;
@@ -1645,6 +1668,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     uint32_t mCurrentFrame = 0;
     uint32_t mCurrentImage = 0;
     uint32_t mFrameCounter = 0;
+    Renderer3ds::PicaSurfaceCalibrationTrace mSurfaceCalibrationTrace;
     uint32_t mDrawCallCountThisFrame = 0;
     uint32_t mRequestedWidth = 0;
     uint32_t mRequestedHeight = 0;
@@ -1710,11 +1734,6 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     Oot3d::RendererValidationTelemetry mValidationTelemetry;
     Oot3dVulkanValidation mVulkanValidation;
 
-    struct PreviousPicaVertexUniforms {
-        uint64_t FrameId = 0;
-        std::vector<uint8_t> Bytes;
-        std::array<float, 2> JitterNdc{};
-    };
     Oot3dVulkanGpuProfiler mGpuProfiler;
 #if defined(_WIN32) && defined(ENABLE_OOT3D_D3D12_NGX_PROVIDER)
     Oot3d::D3d12NgxProvider mD3d12NgxProvider;
@@ -1759,7 +1778,6 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     Oot3d::UpscalerGuidePass mUpscalerGuidePass;
     Oot3d::NativeUiOverlayPass mNativeUiOverlayPass;
     Oot3d::TemporalHistoryManager mTemporalHistory;
-    Oot3d::PicaRigidMotionTracker mRigidMotionTracker;
     Oot3d::SceneCompositePass mSceneCompositePass;
     Oot3d::Smaa1xPass mSmaa1xPass;
     Oot3d::ReflectionIblPass mReflectionIblPass;
@@ -1783,7 +1801,6 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     std::optional<Oot3d::SceneSurfaceKey> mMotionSurface;
     std::optional<Oot3d::SceneSurfaceKey> mLinearColorSurface;
     bool mLinearColorExecutedThisFrame = false;
-    bool mMotionExecutedThisFrame = false;
     bool mUpscalerExecutedThisFrame = false;
     bool mUpscalerUsedD3d12ThisFrame = false;
     Oot3d::UpscalerProvider mUpscalerProviderThisFrame =
@@ -1845,10 +1862,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         mPointShadowInsertionAttemptedTargetsThisFrame;
     std::unordered_map<uint64_t, uint32_t>
         mGrassSurfaceOccurrencesThisFrame;
-    std::unordered_map<uint64_t, uint32_t>
-        mRigidMotionOccurrencesThisFrame;
-    std::unordered_map<uint64_t, PreviousPicaVertexUniforms>
-        mPreviousPicaVertexUniforms;
+    std::unordered_map<uint64_t, uint32_t> mGrassOverlayOccurrences;
+    std::unordered_map<uint64_t, uint64_t> mGrassDrawOrdinals;
+    Renderer3ds::PicaTemporalHistory mPicaTemporalHistory;
     uint32_t mNativePicaDepthWritingDrawsThisFrame = 0;
     Oot3d::SceneSurfaceRegistry mSceneSurfaces;
     Oot3d::ResourceStateTracker mResourceStates;

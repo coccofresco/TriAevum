@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <deque>
 #include <optional>
+#include <unordered_map>
 #include <span>
 #include <string>
 #include <vector>
@@ -110,6 +111,7 @@ class Oot3dNativePicaCompositionTracker final
         std::string* error = nullptr) override;
 
     void Reset() noexcept;
+    void SetRoomShadowShellsEnabled(bool enabled) { mLighting.SetRoomShadowShellsEnabled(enabled); }
     [[nodiscard]] const Oot3dNativePicaCompositionStats& Stats() const
         noexcept;
 
@@ -146,6 +148,16 @@ class Oot3dNativePicaCompositionTracker final
 
     std::optional<uint8_t> mActiveCmbPass;
     uint32_t mActiveCmbRenderer = 0;
+    // Native actor lifetimes are independent: recycling one actor must not
+    // invalidate a surviving instance. Non-actor CMBs use the tracker lifetime
+    // together with the renderer's continuity epoch.
+    uint64_t mNextTemporalLifetime = 1;
+    uint64_t mWorldTemporalLifetime = 1;
+    std::unordered_map<uint32_t, uint64_t> mActorLifetimes;
+    [[nodiscard]] uint64_t ActorTemporalLifetime(uint64_t owner) const {
+        const auto found = mActorLifetimes.find(static_cast<uint32_t>(owner));
+        return found == mActorLifetimes.end() ? 0 : found->second;
+    }
     std::vector<uint32_t> mProjectedShadowRenderers;
     NativeA32LightingProbe mLighting;
     std::optional<uint32_t> mActiveCmbReturnPc;

@@ -60,8 +60,8 @@ Oot3dNativeGame::NativeA32Memory BuildLayoutFixture() {
   NativeA32Memory memory;
   std::string error;
   Require(memory.MapRegion({"topscreen-layout-fixture",
-                            0x004D0000U,
-                            0x00040000U,
+                            0x002F0000U,
+                            0x00220000U,
                             true,
                             false,
                             {}},
@@ -79,6 +79,85 @@ Oot3dNativeGame::NativeA32Memory BuildLayoutFixture() {
 }
 
 
+void TestGearTextureFilters() {
+  using namespace Oot3dNativeGame;
+  auto memory = BuildLayoutFixture();
+  std::string error;
+  std::uint32_t value = 0U;
+  // The two IPS records are constructor literals, not quad coordinates.
+  for (const auto address : {0x004673BCU, 0x00467688U}) {
+    Require(memory.Read32(address, &value) && value == 0x2601U,
+            "Gear constructor filter contract is missing");
+  }
+  Require(ApplyTopScreenVerifiedLayout(memory, nullptr, &error),
+          "could not apply Gear constructor filters");
+  for (const auto address : {0x004673BCU, 0x00467688U}) {
+    Require(memory.Read32(address, &value) && value == 0x2600U,
+            "Gear constructors retained linear filtering");
+  }
+
+  constexpr std::array kOwners{0x0050446CU, 0x005044C4U, 0x005044C8U};
+  constexpr std::uint32_t kStages = 0x08000000U;
+  constexpr std::uint32_t kStageBytes = 0x1B8U;
+  constexpr std::uint32_t kSentinel = 0xA5A5A5A5U;
+  Require(memory.MapRegion(
+              {"gear-texture-stages", kStages, 0x1000U, true, false, {}},
+              &error),
+          "could not map Gear texture-stage fixture");
+  // Three restored Gear stages and an unrelated stage sharing the atlas.
+  for (std::uint32_t index = 0U; index < 4U; ++index) {
+    const auto stage = kStages + index * 0x200U;
+    Require(memory.Fill(stage, kStageBytes, 0xA5U) &&
+                memory.Write32(stage + 0x13CU, 1U) &&
+                memory.Write32(stage + 0x140U, 3U),
+            "could not seed restored texture-stage filters");
+    if (index < kOwners.size()) {
+      Require(memory.Write32(kOwners[index], stage),
+              "could not bind restored Gear texture stage");
+    }
+  }
+  TopScreenRuntimeGeometryApplyStats stats;
+  Require(RebindTopScreenVerifiedRuntimeGeometry(memory, &stats, &error) &&
+              stats.StreamsRebound == 0U &&
+              stats.StreamsNotInitialized == 5U && stats.WordsWritten == 6U,
+          "restored Gear samplers were not rebound without quad streams");
+  for (std::uint32_t index = 0U; index < 4U; ++index) {
+    const auto stage = kStages + index * 0x200U;
+    for (std::uint32_t offset = 0U; offset < kStageBytes; offset += 4U) {
+      auto expected = kSentinel;
+      if (offset == 0x13CU) expected = index < kOwners.size() ? 0U : 1U;
+      if (offset == 0x140U) expected = index < kOwners.size() ? 0U : 3U;
+      Require(memory.Read32(stage + offset, &value) && value == expected,
+              "Gear sampler rebind changed unrelated native state");
+    }
+  }
+  Require(RebindTopScreenVerifiedRuntimeGeometry(memory, &stats, &error) &&
+              stats.WordsWritten == 6U,
+          "Gear sampler rebind is not idempotent");
+
+  // A late invalid stage must reject the whole staged rebind.
+  for (std::uint32_t index = 0U; index < kOwners.size(); ++index) {
+    const auto stage = kStages + index * 0x200U;
+    Require(memory.Write32(stage + 0x13CU, 1U) &&
+                memory.Write32(stage + 0x140U, index == 2U ? 4U : 3U),
+            "could not seed incompatible Gear filter");
+  }
+  Require(!RebindTopScreenVerifiedRuntimeGeometry(memory, nullptr, &error) &&
+              error.find("filters are incompatible") != std::string::npos,
+          "incompatible Gear sampler was not rejected");
+  for (std::uint32_t index = 0U; index < kOwners.size(); ++index) {
+    const auto stage = kStages + index * 0x200U;
+    Require(memory.Read32(stage + 0x13CU, &value) && value == 1U &&
+                memory.Read32(stage + 0x140U, &value) &&
+                value == (index == 2U ? 4U : 3U),
+            "failed Gear sampler preflight partially changed native state");
+  }
+  Require(memory.Write32(kOwners.back(), 0x09000000U) &&
+              !RebindTopScreenVerifiedRuntimeGeometry(memory, nullptr, &error) &&
+              memory.Read32(kStages + 0x13CU, &value) && value == 1U,
+          "unmapped Gear stage was accepted or caused partial writes");
+}
+
 } // namespace
 
 void RunTopScreenItemDispatchTests();
@@ -86,6 +165,7 @@ void RunTopScreenOcarinaTests();
 void RunTopScreenDpadPresentationTests();
 
 int main() {
+  TestGearTextureFilters();
   RunTopScreenItemDispatchTests();
   RunTopScreenOcarinaTests();
   RunTopScreenDpadPresentationTests();
@@ -429,6 +509,16 @@ int main() {
           "touch-label presenter lost its recovered texture semantics");
 
   auto memory = BuildLayoutFixture();
+  // Native floor producer rows retain their Y while X moves outward.
+  for (std::uint32_t row = 0; row < 5U; ++row) {
+    Require(memory.Write32(0x004D4E98U + row * 8U,
+                           std::bit_cast<std::uint32_t>(6.0F + row * 46.0F)) &&
+                memory.Write32(0x004D4EC0U + row * 8U,
+                               std::bit_cast<std::uint32_t>(8.0F + row * 46.0F)) &&
+                memory.Write32(0x004D4EE8U + row * 8U,
+                               std::bit_cast<std::uint32_t>(17.0F + row * 46.0F)),
+            "cannot seed native dungeon floor rows");
+  }
   TopScreenLayoutApplyStats stats;
   std::string error;
   Require(ApplyTopScreenVerifiedLayout(memory, &stats, &error),
@@ -447,6 +537,47 @@ int main() {
           "layout replacement value was not written");
     }
   }
+  const auto layoutFloat = [&memory](std::uint32_t address) {
+    std::uint32_t bits = 0U;
+    Require(memory.Read32(address, &bits), "cannot read dungeon map layout");
+    return std::bit_cast<float>(bits);
+  };
+  Require(layoutFloat(0x00506D60U) == 24.0F &&
+              layoutFloat(0x00506EF0U) == 272.0F &&
+              layoutFloat(0x00506DE0U) == 24.0F &&
+              layoutFloat(0x00506F70U) == 272.0F &&
+              layoutFloat(0x00506D68U) == -40.0F &&
+              layoutFloat(0x00506D70U) == 296.0F &&
+              layoutFloat(0x002F0404U) == 300.0F &&
+              layoutFloat(0x002F0410U) == -32.0F &&
+              layoutFloat(0x0044262CU) == 301.0F &&
+              layoutFloat(0x0044264CU) == 344.0F &&
+              layoutFloat(0x0042D9F0U) == -20.0F,
+          "dungeon panels, columns or dynamic producer literals remain narrow");
+  for (std::uint32_t row = 0; row < 5U; ++row) {
+    Require(layoutFloat(0x004D4E94U + row * 8U) == 302.0F &&
+                layoutFloat(0x004D4EBCU + row * 8U) == 304.0F &&
+                layoutFloat(0x004D4EE4U + row * 8U) == 314.0F &&
+                layoutFloat(0x004D4E98U + row * 8U) == 6.0F + row * 46.0F &&
+                layoutFloat(0x004D4EC0U + row * 8U) == 8.0F + row * 46.0F &&
+                layoutFloat(0x004D4EE8U + row * 8U) == 17.0F + row * 46.0F,
+            "dungeon floor row movement changed its native vertical spacing");
+  }
+  for (std::uint32_t row = 0; row < 8U; ++row)
+    Require(layoutFloat(0x004D4DBCU + row * 8U) == 417.0F,
+            "dungeon floor-number UV origin is incorrect");
+  for (std::uint32_t row = 0; row < 4U; ++row)
+    Require(layoutFloat(0x004D4DFCU + row * 8U) == 321.0F,
+            "dungeon basement-number UV origin is incorrect");
+  Require(layoutFloat(0x005075C0U) == 7.5F &&
+              layoutFloat(0x005075E0U) == 7.5F &&
+              layoutFloat(0x005075F0U) == -7.5F &&
+              layoutFloat(0x005076E0U) == 351.5F &&
+              layoutFloat(0x004D2E6CU) == 0.0F &&
+              layoutFloat(0x004D2E70U) == 0.0F &&
+              layoutFloat(0x004D2E84U) == 0.0F &&
+              layoutFloat(0x004D2E88U) == 0.0F,
+          "map shared UVs or overlay width/height quartet are incomplete");
   TopScreenLayoutApplyStats repeatedLayoutStats;
   Require(ApplyTopScreenVerifiedLayout(memory, &repeatedLayoutStats, &error) &&
               repeatedLayoutStats.WordsChanged == 0U,
@@ -591,6 +722,20 @@ int main() {
     }
     ++runtimeStreamIndex;
   }
+  // The already-constructed dungeon panel/title both span X 24..296.
+  const std::uint32_t mapPositions = 0x08020100U;
+  Require(readFloat(mapPositions) == 24.0F &&
+              readFloat(mapPositions + 12U) == 296.0F &&
+              readFloat(mapPositions + 16U * 48U) == 24.0F &&
+              readFloat(mapPositions + 16U * 48U + 36U) == 296.0F &&
+              readFloat(mapPositions + 48U) == -40.0F &&
+              readFloat(mapPositions + 2U * 48U) == 296.0F &&
+              readFloat(mapPositions + 44U) == 7.0F,
+          "restored dungeon geometry did not retain its widened native rectangles");
+  const std::uint32_t mirroredUv = 0x08034000U + 14U * 32U;
+  Require(readFloat(mirroredUv) == 351.5F / 512.0F &&
+              readFloat(mirroredUv + 8U) == 344.0F / 512.0F,
+          "restored map UVs lost their negative extent");
   Require(RebindTopScreenVerifiedRuntimeGeometry(runtimeGeometry, nullptr,
                                                  &error),
           "runtime geometry rebind is not idempotent");
@@ -1169,6 +1314,8 @@ int main() {
   auxiliaryInputs.PlayerHudMode = 1;
   auxiliaryInputs.NestedSceneOwnerActive = true;
   auxiliaryInputs.AlternateHudRendererActive = true;
+  // 005E3D88, latched at the previous native update.
+  auxiliaryInputs.SuppressBCopies = true;
   const auto auxiliaryGeometry = BuildTopScreenAuxiliaryTouchGeometry(
       auxiliaryInputs, dynamicTouch.VerticalOffsets, dynamicTouch.Alpha);
   Require(auxiliaryGeometry.Quads[0].Visible &&
@@ -1178,8 +1325,8 @@ int main() {
               auxiliaryGeometry.Quads[2].Position.X == 227.0F &&
               auxiliaryGeometry.Quads[2].AtlasOrigin.Y == 174.0F &&
               !auxiliaryGeometry.Quads[3].Visible &&
-              auxiliaryGeometry.Quads[4].Position.X == 22.0F &&
-              auxiliaryGeometry.Quads[4].Size.Y == 16.0F &&
+              auxiliaryGeometry.Quads[4].Position.X == 23.0F &&
+              auxiliaryGeometry.Quads[4].Size.Y == 14.0F &&
               auxiliaryGeometry.Quads[4].AtlasSize.Y == 48.0F,
           "TopScreen group-39 auxiliary geometry is incorrect");
   std::vector<oot3d::ui::UiPrimitive> auxiliaryPrimitives;
@@ -1215,8 +1362,9 @@ int main() {
   auxiliaryInputs.TouchLayoutState = 1U;
   const auto fixedAuxiliaryGeometry = BuildTopScreenAuxiliaryTouchGeometry(
       auxiliaryInputs, dynamicTouch.VerticalOffsets, 1.0F);
-  Require(fixedAuxiliaryGeometry.Quads[4].Position.X == 21.0F &&
-              fixedAuxiliaryGeometry.Quads[4].Position.Y == 43.0F &&
+  // 2.1.1 centers it on the lane; the presentation adds the lane offset.
+  Require(fixedAuxiliaryGeometry.Quads[4].Position.X == 20.0F &&
+              fixedAuxiliaryGeometry.Quads[4].Position.Y == 40.0F &&
               fixedAuxiliaryGeometry.Quads[4].Size.X == 20.0F &&
               fixedAuxiliaryGeometry.Quads[4].AtlasOrigin.Y == 56.0F &&
               fixedAuxiliaryGeometry.Quads[4].AtlasSize.Y == 24.0F,
@@ -1394,12 +1542,16 @@ int main() {
                                       {}},
                                      &error),
           "could not map TopScreen counter save fixture");
+  constexpr std::uint32_t kRootPlayState = 0x00528000U;
   Require(touchStateMemory.Write16(0x00587958U + 0x48U, 123U) &&
               touchStateMemory.Write16(0x00587958U + 0x1592U, 0U) &&
               touchStateMemory.Write8(0x00587958U + 0xD4U, 5U) &&
-              touchStateMemory.Write8(kPlayState + 0x100U, 3U) &&
-              touchStateMemory.Write8(kPlayState + 0x101U, 2U) &&
-              touchStateMemory.Write16(kPlayState + 0x104U, 3U) &&
+              // The key gate reads the root PlayState; the ammo counters
+              // stay on the touch-button owner (PauseTouchButton+14).
+              touchStateMemory.Write32(0x005043D4U + 0x0CU, kRootPlayState) &&
+              touchStateMemory.Write8(kRootPlayState + 0x100U, 3U) &&
+              touchStateMemory.Write8(kRootPlayState + 0x101U, 2U) &&
+              touchStateMemory.Write16(kRootPlayState + 0x104U, 3U) &&
               touchStateMemory.Write32(kPlayState + 0x224U, 4U) &&
               touchStateMemory.Write8(kPlayState + 0x435U, 1U) &&
               touchStateMemory.Write32(kPlayState + 0x32CU, 42U) &&
@@ -1449,6 +1601,39 @@ int main() {
               styledCounters[4].destination.y == 49.0F &&
               std::abs(styledCounters[4].destination.width - 7.7F) < 0.001F,
           "styled ammo copied the native B placement instead of the destination layout");
+  {
+    // R11: at HUD scale 0.8 the source translation stays unscaled (0x005CD254).
+    TopScreenUiConfig scaledCounterConfig;
+    scaledCounterConfig.HudScale = 0.8F;
+    std::vector<oot3d::ui::UiPrimitive> still;
+    Require(AppendTopScreenNativeCounters(touchStateMemory, dynamicTouch.VerticalOffsets,
+                                           numberGlyphTexture, still, &error,
+                                           &scaledCounterConfig),
+            "cannot build the untranslated scaled ammo counter");
+    const std::array<float, 2> digitTranslation{5.0F, -3.0F};
+    Require(touchStateMemory.WriteBytes(
+                kItemTranslations,
+                std::span<const std::uint8_t>(
+                    reinterpret_cast<const std::uint8_t *>(digitTranslation.data()),
+                    sizeof(digitTranslation))),
+            "cannot seed the ammo source translation");
+    std::vector<oot3d::ui::UiPrimitive> moved;
+    Require(AppendTopScreenNativeCounters(touchStateMemory, dynamicTouch.VerticalOffsets,
+                                           numberGlyphTexture, moved, &error,
+                                           &scaledCounterConfig) &&
+                moved.size() == still.size() && still.size() == 6U,
+            "cannot build the translated scaled ammo counter");
+    ApplyTopScreenHudScale(still, scaledCounterConfig);
+    ApplyTopScreenHudScale(moved, scaledCounterConfig);
+    Require(std::abs(moved[4].destination.x - still[4].destination.x - 5.0F) < 0.001F &&
+                std::abs(moved[4].destination.y - still[4].destination.y + 3.0F) < 0.001F &&
+                std::abs(moved[5].destination.x - still[5].destination.x) < 0.001F &&
+                std::abs(moved[4].destination.width - still[4].destination.width) < 0.001F,
+            "the HUD scale must not scale the ammo digit translation");
+    Require(touchStateMemory.Write32(kItemTranslations, 0U) &&
+                touchStateMemory.Write32(kItemTranslations + 4U, 0U),
+            "cannot clear the ammo source translation");
+  }
 
   const auto fixedPauseEdges =
       BuildTopScreenPauseEdgeGeometry(true, 5U, 0U, 0U, 0, 1.0F, 1.0F);
@@ -1460,6 +1645,15 @@ int main() {
               fixedPauseEdges.AtlasSizes[1].X == -64.0F &&
               fixedPauseEdges.RgbScale == 1.0F,
           "TopScreen pause-edge fixed geometry is incorrect");
+  const auto itemsPauseEdges =
+      BuildTopScreenPauseEdgeGeometry(true, 5U, 0U, 0U, 0, 1.0F, 1.0F, true);
+  Require(itemsPauseEdges.Sizes[0].X == 0.0F && itemsPauseEdges.Sizes[1].X == 32.0F &&
+              itemsPauseEdges.Positions[1].X == 0.0F,
+          "the Items page keeps the right pause edge (2.1.1 0x005D0494)");
+  const auto dungeonPauseEdges =
+      BuildTopScreenPauseEdgeGeometry(true, 5U, 0U, 0U, 0, 1.0F, 1.0F, false, true);
+  Require(dungeonPauseEdges.Sizes[0].X == 0.0F && dungeonPauseEdges.Sizes[1].X == 0.0F,
+          "the dungeon map retains extra pause edges (2.1.1 0x005D3A6C)");
   const auto transitioningPauseEdges =
       BuildTopScreenPauseEdgeGeometry(true, 3U, 1U, 0x7FU, 10, 1.0F, 0.8F);
   Require(transitioningPauseEdges.Positions[0].X == 304.0F &&
@@ -1485,6 +1679,29 @@ int main() {
               pauseEdgePrimitives[0].destination.height == 240.0F &&
               std::abs(pauseEdgePrimitives[1].destination.x) < 0.001F,
           "TopScreen pause-edge presentation is incorrect");
+  {
+    // 2.1.1 L/R tab hints (0x005CFE48): backings first, glyphs a quarter turn.
+    const oot3d::ui::UiTextureIdentity cursor{0U, 0U, "oot3d/native/pause_shared/cursor"};
+    const oot3d::ui::UiTextureIdentity equipment{0U, 0U, "oot3d/native/pause_shared/equipment"};
+    std::vector<oot3d::ui::UiPrimitive> hints;
+    TopScreenTabHintInputs closed;
+    Require(AppendTopScreenTabHintPresentation(closed, cursor, equipment, hints) == 0U,
+            "tab hints must stay hidden without an open Items/Gear/Map page");
+    TopScreenTabHintInputs open;
+    open.PageOpen = true;
+    open.RightHeld = true;
+    Require(AppendTopScreenTabHintPresentation(open, cursor, equipment, hints) == 4U &&
+                hints[0].destination.x == 64.0F && hints[1].destination.x == 294.0F &&
+                hints[2].destination.x == 66.0F && hints[2].destination.y == 208.0F &&
+                hints[2].destination.width == 36.0F && hints[2].uv_quarter_turn &&
+                hints[2].uv.x == 100.0F / 128.0F && hints[3].uv.x == 72.0F / 128.0F &&
+                hints[3].destination.x == 298.0F && hints[2].color.red == 1.0F &&
+                hints[3].color.red == 0.55F && !hints[0].uv_quarter_turn,
+            "TopScreen tab hints diverge from 2.1.1 0x005CFE48");
+    hints.clear();
+    Require(AppendTopScreenTabHintPresentation(open, cursor, {}, hints) == 2U,
+            "a missing backing atlas must skip only the backings");
+  }
 
   NativeA32Memory nativeTouchMemory;
   Require(nativeTouchMemory.MapRegion(
@@ -1713,7 +1930,8 @@ int main() {
           near(scaledSpecialHud[0].destination.y, 7.4F) &&
           near(scaledSpecialHud[0].destination.width, 25.6F) &&
           near(scaledSpecialHud[1].destination.x, 142.4F) &&
-          near(scaledSpecialHud[1].destination.y, 215.0F) &&
+          // 2.1.1 005CE554: about (200, 240) without the HUD margins.
+          near(scaledSpecialHud[1].destination.y, 216.0F) &&
           near(scaledSpecialHud[1].destination.width, 19.2F) &&
           near(scaledSpecialHud[2].destination.x, 349.6F) &&
           near(scaledSpecialHud[2].destination.y, 4.2F) &&
@@ -1749,7 +1967,7 @@ int main() {
   Require(
       nativeTouchMemory.Write32(kRenderer, 92U) &&
           nativeTouchMemory.Write32(0x0050AF34U + 0x34U, 2U) &&
-          nativeTouchMemory.Write32(0x0050AF34U + 0x14U, kTouchQuadPlayState) &&
+          nativeTouchMemory.Write32(0x005043D4U + 0x0CU, kTouchQuadPlayState) &&
           nativeTouchMemory.Write16(kTouchQuadPlayState + 0x2DD4U, 0U) &&
           writeFloats(kPositions + kNativeNaviViewEyeQuad * 0x30U,
                       touchQuadPositions),
@@ -2223,7 +2441,8 @@ int main() {
           questStateMemory.Write32(projectionOffset + 4U,
                                    std::bit_cast<std::uint32_t>(100.0F)) &&
           questStateMemory.Write8(0x00587966U, 0U) &&
-          questStateMemory.Write32(0x004FC688U, 1U),
+          questStateMemory.Write32(0x004FC688U, 1U) &&
+          questStateMemory.Write32(0x00504484U, 0U),
       "cannot seed pause projection fixture");
   projectionState = {};
   Require(
@@ -2297,6 +2516,26 @@ int main() {
           std::bit_cast<float>(projectedXBits) == 221.0F &&
           projectionState.OffsetX == 211.0F,
       "TopScreen 1.2 secondary-layer minimap margin was not decoded");
+  {
+    // 2.1.1 0x005CDC78: an open pause page (here the dungeon map, owner
+    // 0x00506CB0+0x38) leaves the shared map markers and anchor native.
+    const std::uint32_t nativeMarker = std::bit_cast<std::uint32_t>(42.0F);
+    std::uint32_t markerBits = 0U, anchorBits = 0U;
+    Require(questStateMemory.Write32(0x00506CE8U, 1U) &&
+                questStateMemory.Write32(indicatorPositions, nativeMarker) &&
+                questStateMemory.Write32(projectionOffset,
+                                         std::bit_cast<std::uint32_t>(10.0F)) &&
+                ApplyTopScreenPauseProjection(questStateMemory, projectionState,
+                                              &error) &&
+                questStateMemory.Read32(indicatorPositions, &markerBits) &&
+                questStateMemory.Read32(projectionOffset, &anchorBits) &&
+                markerBits == nativeMarker &&
+                std::bit_cast<float>(anchorBits) == 10.0F &&
+                projectionState.OffsetX == 0.0F,
+            "an open pause page must keep the shared map markers native");
+    Require(questStateMemory.Write32(0x00506CE8U, 0U),
+            "cannot close the map page fixture");
+  }
 
   constexpr std::uint32_t systemLayerRenderer = 0x00560000U;
   constexpr std::uint32_t systemLayerPositions = 0x00561000U;
@@ -2392,6 +2631,34 @@ int main() {
               pageRedrawTarget.ViewportWidth == 480U &&
               pageRedrawTarget.ViewportHeight == 320U,
           "TopScreen pause target command contract is incorrect");
+  auto wideTarget = pageRedrawTarget;
+  WidenTopScreenPauseTargetForPage(wideTarget, true);
+  auto narrowTarget = pageRedrawTarget;
+  WidenTopScreenPauseTargetForPage(narrowTarget, false);
+  auto wideHalfTarget = halfTarget;
+  WidenTopScreenPauseTargetForPage(wideHalfTarget, true);
+  Require(wideTarget.ViewportY == 0U && wideTarget.ViewportWidth == 480U &&
+              wideTarget.ViewportHeight == 400U && narrowTarget.ViewportY == 40U &&
+              narrowTarget.ViewportHeight == 320U && wideHalfTarget.ViewportY == 40U,
+          "the wide page target is not the full 400-wide viewport");
+
+  for (const bool halfHeight : {false, true}) {
+    for (const auto command : {0x400U, 0x401U}) {
+      const TopScreenPauseTargetCommand native{true, command, halfHeight};
+      const auto system = ResolveTopScreenPauseCompositionTargetCommand(native, false, true, true);
+      const auto transition = ResolveTopScreenPauseCompositionTargetCommand(native, true, true, true);
+      const auto routed = ResolveTopScreenPauseTargetCommand(native, true);
+      Require(!system.Handled && transition.FramebufferBindingOffset == routed.FramebufferBindingOffset &&
+                  transition.ViewportWidth == routed.ViewportWidth &&
+                  transition.ViewportY == routed.ViewportY,
+              "System inherited the preceding page swap or lost the alternate route");
+      const auto page = ResolveTopScreenPauseCompositionTargetCommand(native, false, true, false);
+      const auto previous = ResolveTopScreenPausePageRedrawTargetCommand(native);
+      Require(page.FramebufferBindingOffset == previous.FramebufferBindingOffset &&
+                  page.ViewportWidth == previous.ViewportWidth && page.ViewportY == previous.ViewportY,
+              "System composition changed ordinary page target plans");
+    }
+  }
 
   NativeA32Memory suppressionMemory;
   Require(suppressionMemory.MapRegion(
@@ -2454,6 +2721,23 @@ int main() {
   Require(EndTopScreenPauseChildSuppression(suppressionMemory, savedChildState,
                                             &error),
           "cannot restore page-redraw child state");
+
+  Require(BeginTopScreenPauseChildSuppression(
+              suppressionMemory, TopScreenPauseChildSuppressionSet::SystemPageRedraw,
+              &savedChildState, &error), "cannot begin System redraw");
+  for (std::size_t index = 0; index < suppressionAddresses.size(); ++index) {
+    std::uint32_t value = 0U;
+    Require(suppressionMemory.Read32(suppressionAddresses[index], &value) &&
+                value == (index == 4U ? 1U : index == 5U ? 0U : index + 1U),
+            "System redraw did not set backdrop-skip 1 and touch 0 while preserving pages");
+  }
+  Require(EndTopScreenPauseChildSuppression(suppressionMemory, savedChildState, &error),
+          "cannot end System redraw");
+  for (std::size_t index = 0; index < suppressionAddresses.size(); ++index) {
+    std::uint32_t value = 0U;
+    Require(suppressionMemory.Read32(suppressionAddresses[index], &value) && value == index + 1U,
+            "System redraw did not restore the exact prior child state");
+  }
 
   TopScreenPauseDrawInputs drawInputs;
   {
@@ -2602,6 +2886,63 @@ int main() {
               SuppressTopScreenTouchButtonDraw(19U) &&
               !SuppressTopScreenTouchButtonDraw(20U),
           "TopScreen touch-button draw state interval is incorrect");
+  {
+    // R6: SELECT description toggle of TopScreen 2.1.1 (0x005E3D3C).
+    TopScreenItemDescriptionInputs page;
+    page.Items = 2U;
+    bool visible = false;
+    Require(UpdateTopScreenItemDescription(page, true, visible) && visible &&
+                !UpdateTopScreenItemDescription(page, false, visible) && visible &&
+                TopScreenItemDescriptionDrawEligible(page, visible) &&
+                UpdateTopScreenItemDescription(page, true, visible) && !visible,
+            "SELECT must toggle the description on a browsing Items page");
+    visible = true;
+    page.Items = 0xEU;
+    Require(!UpdateTopScreenItemDescription(page, true, visible) && !visible,
+            "leaving the browsing state must clear the description");
+    page.Items = 0U;
+    page.Gear = 2U;
+    page.System = 1U;
+    visible = false;
+    Require(UpdateTopScreenItemDescription(page, true, visible) && visible &&
+                !TopScreenItemDescriptionDrawEligible(page, visible),
+            "a System page clears before the toggle and blocks the redraw");
+    page.System = 0U;
+    page.GearCursor = 0x12;
+    bool offsets = ResolveTopScreenItemDescriptionOffset(page) == 0U;
+    page.GearCursor = 0x13;
+    offsets = offsets && ResolveTopScreenItemDescriptionOffset(page) == 300U;
+    page.GearCursor = 0x19;
+    offsets = offsets && ResolveTopScreenItemDescriptionOffset(page) == 300U;
+    page.GearCursor = 0x1A;
+    offsets = offsets && ResolveTopScreenItemDescriptionOffset(page) == 0U;
+    page.Items = 1U;
+    page.ItemsCursorRow = 1;
+    offsets = offsets && ResolveTopScreenItemDescriptionOffset(page) == 0U;
+    page.ItemsCursorRow = 2;
+    offsets = offsets && ResolveTopScreenItemDescriptionOffset(page) == 300U;
+    page.ItemsCursorRow = -1;
+    offsets = offsets && ResolveTopScreenItemDescriptionOffset(page) == 0U;
+    Require(offsets, "description offset must follow the 2.1.1 cursor rule");
+    page.Controller = 2U;
+    Require(!TopScreenItemDescriptionOwnsSelect(page), "gameplay keeps SELECT");
+    page.Controller = 0U;
+    Require(TopScreenItemDescriptionOwnsSelect(page), "an open page owns SELECT");
+  }
+  {
+    TopScreenPauseDrawInputs pages;
+    bool pagesGate = !SuppressTopScreenTouchButtonPageDraw(2U, pages) &&
+                     SuppressTopScreenTouchButtonPageDraw(12U, pages);
+    for (std::size_t page = 0; page < 4U; ++page) {
+      pages = {};
+      pages.ChildStates[page] = 2U;
+      pagesGate = pagesGate && SuppressTopScreenTouchButtonPageDraw(2U, pages);
+    }
+    pages = {};
+    pages.ChildStates[4] = 1U;
+    Require(pagesGate && !SuppressTopScreenTouchButtonPageDraw(2U, pages),
+            "TopScreen touch-button draw must skip every native pause page (0x005CB5E8)");
+  }
 
   TopScreenPauseDrawInputs viewportInputs;
   viewportInputs.HasScene = true;
@@ -3026,8 +3367,10 @@ int main() {
   }
 
   const auto flowContracts = TopScreenVerifiedControlFlowContracts();
-  Require(flowContracts.size() == 10U,
+  Require(flowContracts.size() == 9U,
           "TopScreen control-flow contract count is incorrect");
+  Require(!ResolveTopScreenControlFlow(0x0041EB40U, nullptr),
+          "the pause scene dim is skipped beside the page");
   for (const auto &contract : flowContracts) {
     std::uint32_t target = 0U;
     Require(ResolveTopScreenControlFlow(contract.Entry, &target) &&
@@ -3123,7 +3466,9 @@ int main() {
   Require(mainCameraFovOwner.Active &&
               mainCameraFovOwner.ValueAddress == 0x08001198U &&
               !secondaryCameraFovOwner.Active &&
-              !blockedCameraFovOwner.Active &&
+              // The blocked settings gate only the zoom (005E3D28).
+              blockedCameraFovOwner.Active &&
+              ResolveTopScreenCameraFovDegrees(130.0F, 100U) == 110.0F &&
               std::abs(ResolveTopScreenCameraFovDegrees(60.0F, 115U) -
                        69.0F) < 0.001F &&
               ResolveTopScreenCameraFovDegrees(10.0F, 70U) == 20.0F &&

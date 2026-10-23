@@ -111,9 +111,12 @@ The public package may contain only:
 - source offer/source archive and all required licenses/notices;
 - user documentation.
 
-The default build excludes proprietary NGX/DLSS binaries and SDK material.
-Optional integration may discover a separately installed user component only
-after its API and redistribution terms receive a dedicated review.
+The runtime and every other GPL binary exclude proprietary NGX/DLSS SDK
+material. After a dedicated review of NVIDIA's terms (2026-10-13), DLSS ships
+as a separately licensed module (`triaevum_dlss`, the only binary linking the
+NGX SDK) beside NVIDIA's unmodified DLSS runtime and NVIDIA's licence; the
+runtime loads it when present and is complete without it. The release audit
+rejects NGX code in any other binary.
 
 ## TopScreen handling
 

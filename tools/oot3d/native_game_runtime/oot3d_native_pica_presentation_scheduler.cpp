@@ -181,6 +181,7 @@ bool Oot3dPicaPresentationScheduler::Execute(
             .NativeActorGeometry = draw.Composition.NativeActorGeometry,
             .NativeActorIdentity = draw.Composition.NativeActorIdentity,
             .IsolatedLighting = draw.Composition.IsolatedLighting,
+            .TemporalIdentity = draw.Composition.TemporalIdentity,
         },
     });
   }

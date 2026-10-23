@@ -3,6 +3,7 @@
 #include "fast/oot3d/graphics_settings_window.h"
 #include "native_scene_environment_state.h"
 #include "fast/renderer3ds/pica_environment_lighting.h"
+#include "oot3d_environment_time.h"
 #include <chrono>
 #include <filesystem>
 #include <functional>
@@ -46,6 +47,9 @@ struct PlacedLight {
   PlacedLightShape Shape = PlacedLightShape::Rectangle;
   // Surface: emits from both faces.
   bool TwoSided = false;
+  // Surface: the full angle (degrees, 1..180) within which each of its points
+  // emits around its axis; 180 is diffuse, less straightens its light.
+  float Spread = 180.0F;
   // Spot: the full beam angle and the soft edge (a fraction of it).
   float BeamAngle = 45.0F;
   float BeamSoftness = 0.2F;
@@ -81,34 +85,48 @@ struct SceneEnvironmentProfile {
   std::array<Fast::Renderer3ds::PicaScenePointLightSettings,
              Fast::Renderer3ds::kPicaScenePointLightGroups> PointLights{};
   std::vector<PlacedLight> PlacedLights;
-  // The directional shadow casters' face culling (off: both faces cast).
-  bool ShadowCasterCulling = true;
+  Fast::Renderer3ds::PicaRimLightSettings Rim;
+  Fast::Renderer3ds::ShadowCasterFaces CasterFaces = Fast::Renderer3ds::ShadowCasterFaces::Native;
   bool operator==(const SceneEnvironmentProfile &) const = default;
 };
 
-// The environment of every scene without its own profile: the title intro's
-// (scene 0x6B) tuned lights. Saving stores a profile for the current scene only.
+// Final day fallback when neither scene nor group has a profile: the title
+// intro's (scene 0x6B) tuned lights. Normal Save writes the current scene only.
 [[nodiscard]] SceneEnvironmentProfile BaseSceneEnvironmentProfile();
 // A title without authored tuning: disabled, native gains one, no added light.
 [[nodiscard]] SceneEnvironmentProfile NativePreservingSceneEnvironmentProfile();
 
+// Profile RGB is already linear and is interpolated directly. Directions/
+// rotations take the shortest angular route. Placed
+// lights match by index, with stable blend identities and missing lights faded.
+[[nodiscard]] SceneEnvironmentProfile BlendSceneEnvironmentProfiles(
+    const SceneEnvironmentProfile& day, const SceneEnvironmentProfile& night, float weight);
+enum class SceneEnvironmentPreview : uint8_t { Auto, Day, Night };
+
 struct SceneEnvironmentSnapshot {
   std::optional<uint16_t> SceneId;
   SceneEnvironmentProfile Profile;
-  // The profile file shown and saved: the night one while the scene has a
-  // night profile and the game's time is night, otherwise the scene's own.
+  std::optional<SceneEnvironmentGroup> Group;
+  std::array<SceneEnvironmentSource, 2> Sources{SceneEnvironmentSource::Base, SceneEnvironmentSource::Day};
+  std::array<std::filesystem::path, 2> SourcePaths;
+  // The explicitly selected editor tab, independent of native time.
   std::filesystem::path Path;
   std::string Error;
+  std::string NightError;
   bool Dirty = false;
   bool FileExists = false;
   // The game's time of day (SaveContext nightFlag).
   bool Night = false;
-  bool NightKnown = true;
-  uint64_t WorldIdentity = 0;
-  // The scene keeps a separate night profile (scene-XXXX.night.environment.json).
+  // A separate night endpoint exists, from either the scene or its group.
   bool NightProfileExists = false;
-  // The night profile is the one in use.
+  // The night profile is the one being edited, independent of applied weight.
   bool EditingNight = false;
+  bool TimeDriven = false;
+  float NativeNightWeight = 0;
+  float AppliedNightWeight = 0;
+  SceneEnvironmentPreview PreviewMode = SceneEnvironmentPreview::Auto;
+  bool ForcedWeight = false;
+  std::array<bool, 2> DirtyTabs{};
   // The player in this scene, when known.
   std::optional<ScenePlayerPlacement> Player;
   // Advances whenever the profile is replaced from outside the editor (scene
@@ -121,23 +139,37 @@ class SceneEnvironmentRuntime final {
 public:
   using Publisher =
       std::function<void(const Fast::Renderer3ds::PicaEnvironmentLighting &)>;
+  // `defaults`: the release's read-only profiles, named as in `directory`.
+  // A slot resolves the user's scene file, the default scene file, the
+  // user's group file, the default group file, then the base profile; edits
+  // are always saved to `directory`.
+  // `fallback`: the base profile when no file resolves (OoT3D's tuned intro
+  // lights, or a title's native-preserving profile).
   SceneEnvironmentRuntime(std::filesystem::path directory, Publisher publish,
+                          std::filesystem::path defaults = {},
                           SceneEnvironmentProfile fallback = BaseSceneEnvironmentProfile());
-  // A scene with a night profile switches to it while `night`; any unsaved
-  // preview is dropped then, as when the scene changes.
-  void ObserveScene(std::optional<uint16_t> scene, std::optional<bool> night = false,
-                    std::optional<ScenePlayerPlacement> player = std::nullopt,
-                    uint64_t worldIdentity = 0);
+  // Time selects the blend, never the editable draft. Scene changes reload.
+  void ObserveScene(std::optional<uint16_t> scene, SceneEnvironmentTime time = {},
+                    std::optional<ScenePlayerPlacement> player = std::nullopt);
   [[nodiscard]] SceneEnvironmentSnapshot Snapshot() const;
   // False (and an error) when the profile does not validate, or when
   // `basedOnRevision` is older than the profile in use.
   bool Preview(SceneEnvironmentProfile profile, std::optional<uint64_t> basedOnRevision = std::nullopt);
   bool Save();
+  bool SaveAsGroupStandard();
+  bool UseGroupStandard();
   bool Reload();
-  // Saves the values shown as the scene's night profile; at night it becomes
-  // the profile in use.
+  bool SelectTab(bool night);
+  void SetPreviewMode(SceneEnvironmentPreview mode);
+  // Preview is session-only. Closing F1 or pressing F2 returns to Auto.
+  void EndPreview();
+  // Deterministic developer captures. Does not modify the files or clock.
+  bool SetForcedNightWeight(std::optional<float> weight);
+  // Creates the night file from the day draft and selects its editor tab.
   bool CreateNightProfile();
-  // Deletes the night profile: the scene's own profile applies day and night.
+  // Copies the day draft into the night draft; Save night commits it.
+  bool CopyDayToNight();
+  // Deletes the scene's night file, resolving group night then the day result.
   bool RemoveNightProfile();
   // Light gizmos: the light the placed-light editor selected and whether it
   // wants gizmos, told while the editor is drawn.
@@ -148,10 +180,10 @@ public:
   // lines) while the editor was drawn within the last half second or while
   // `forced` (the free camera), none otherwise. `eye`: the scene's camera.
   void PublishLightGizmo(const std::optional<std::array<float, 3>> &eye, bool forced = false);
-  // Developer builds (TRIAEVUM_ENVIRONMENT_HOT_RELOAD): the scene's profile
-  // files are re-read when they change on disk, so an agent can edit them
-  // while the game runs. A file that does not validate, or is missing,
-  // keeps the profile in use; unsaved F1 edits are never replaced. Each
+  // Developer builds (TRIAEVUM_ENVIRONMENT_HOT_RELOAD): scene files and their
+  // group fallbacks are re-read on disk changes. Invalid files keep the last
+  // accepted value; removal resolves the next fallback (legacy unknown-group
+  // day removal keeps its last value). Unsaved F1 edits are never replaced. Each
   // outcome is reported on stderr (TRIAEVUM_ENVIRONMENT_RELOAD).
   void SetHotReload(bool enabled);
   // Renderer order, once per frame; looks at the files at most every 250 ms
@@ -161,24 +193,35 @@ public:
   void PollProfileFiles(std::chrono::steady_clock::time_point now);
 
 private:
-  bool ReloadLocked();
-  // Reads the day or night file and, when it validates (or is absent: the
-  // base environment), makes it the profile in use together with that
-  // selection; otherwise only records the error.
-  bool LoadSelectionLocked(bool editingNight, bool nightExists);
+  bool LoadSlotLocked(bool night);
+  void SyncSelectionLocked();
+  [[nodiscard]] std::filesystem::path GroupPathLocked(bool night) const;
   // A file as it is on disk: "-" when absent, otherwise size and time.
   [[nodiscard]] std::string FileStampLocked(bool night) const;
   void AcknowledgeFilesLocked();
-  void PublishLocked();
+  void PublishLocked(bool edited = false);
   [[nodiscard]] std::filesystem::path ProfilePathLocked(bool night) const;
-  void SelectLocked(std::optional<uint16_t> scene, std::optional<bool> night,
-                    uint64_t worldIdentity);
+  void SelectLocked(std::optional<uint16_t> scene);
   std::filesystem::path mDirectory;
-  Publisher mPublish;
+  std::filesystem::path mDefaults;
   const SceneEnvironmentProfile mFallback;
+  Publisher mPublish;
   mutable std::mutex mMutex;
   SceneEnvironmentSnapshot mState;
-  SceneEnvironmentProfile mSaved;
+  struct Draft {
+    SceneEnvironmentProfile Profile, Saved;
+    std::string Error;
+    bool Exists = false, Available = false;
+    size_t AppliedHash = 0;
+    SceneEnvironmentSource Source = SceneEnvironmentSource::Base;
+    std::filesystem::path SourcePath;
+  };
+  std::array<Draft, 2> mDrafts;
+  SceneEnvironmentTime mTime;
+  std::optional<float> mForcedNightWeight;
+  std::optional<Fast::Renderer3ds::PicaEnvironmentLighting> mPublished;
+  uint64_t mContinuityEpoch = 0;
+  uint64_t mObservations = 0;
   uint32_t mGizmoSelected = 0;
   bool mGizmoEnabled = true;
   std::chrono::steady_clock::time_point mGizmoEdited{};
@@ -190,8 +233,6 @@ private:
   std::array<std::string, 2> mFileStamps{};
   std::array<std::string, 2> mPendingStamps{};
   std::array<std::string, 2> mReportedStamps{};
-  // The content of the file in use (unchanged content is no change).
-  size_t mAppliedHash = 0;
   uint64_t mRevision = 0;
 };
 

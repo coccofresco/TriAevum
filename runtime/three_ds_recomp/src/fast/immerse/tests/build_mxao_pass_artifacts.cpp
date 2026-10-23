@@ -9,6 +9,8 @@
 #include "fast/immerse/mxao_pass_binaries.h"
 #include "fast/immerse/mxao_shader.h"
 #include "fast/oot3d/ambient_occlusion_composite.h"
+#include "fast/renderer/pass_shader_artifact.h"
+#include "fast/renderer3ds/pica_geometry_guide.h"
 #include "spirv_pack_file.h"
 #include <shaderc/shaderc.hpp>
 #include <algorithm>
@@ -23,7 +25,10 @@ static void Check(bool ok, const std::string& message) {
 int main(int argc, char** argv) try {
     Check(argc == 2, "usage: build_immerse_pass_artifacts mxao_pass.spvpack|--check");
     const bool check = std::string_view(argv[1]) == "--check";
-    const auto sources = Fast::Immerse::BuildMxaoPassShaders(Fast::Oot3d::AmbientOcclusionDebugShaderLibrary());
+    const auto sources = Fast::Immerse::BuildMxaoPassShaders(Fast::Oot3d::AmbientOcclusionDebugShaderLibrary(),
+                                                             Fast::Renderer3ds::PicaGeometryGuideShaderLibrary());
+    const auto entries = ReadSpirvPack(Fast::Immerse::MxaoPassPack());
+    const auto stored = PassShaderArtifactsFromPack(entries);
     shaderc::Compiler compiler;
     SpirvPackFile pack;
     for (size_t index = 0; index < sources.size(); ++index) {
@@ -33,10 +38,9 @@ int main(int argc, char** argv) try {
         const auto result = compiler.CompileGlslToSpv(sources[index], shaderc_compute_shader, "mxao", options);
         Check(result.GetCompilationStatus() == shaderc_compilation_status_success, result.GetErrorMessage());
         if (check) {
-            const auto stored = FindPassShaderArtifact(Fast::Immerse::MxaoPassArtifacts(), sources[index],
-                                                       SpirvStage::Compute, {});
-            Check(stored.size() == size_t(result.cend() - result.cbegin()) &&
-                      std::equal(stored.begin(), stored.end(), result.cbegin()),
+            const auto spirv = FindPassShaderArtifact(stored, sources[index], SpirvStage::Compute, {});
+            Check(spirv.size() == size_t(result.cend() - result.cbegin()) &&
+                      std::equal(spirv.begin(), spirv.end(), result.cbegin()),
                   "stale/missing MXAO pass: regenerate with build_immerse_pass_artifacts");
         }
         auto& entry = pack.Add(Fast::Renderer::SpirvPackKind::Pass, {result.cbegin(), result.cend()});

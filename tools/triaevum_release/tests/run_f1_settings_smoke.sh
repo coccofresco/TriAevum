@@ -28,7 +28,9 @@ if [[ -n "${TRIAEVUM_NLOHMANN_INCLUDE:-}" ]]; then
     includes+=(-I"$TRIAEVUM_NLOHMANN_INCLUDE")
 fi
 for unit in oot3d_native_controls_settings_panel oot3d_top_screen_settings_panel \
-            oot3d_game_language oot3d_game_language_panel oot3d_savestate_panel; do
+            oot3d_game_language oot3d_game_language_panel oot3d_savestate_panel \
+            oot3d_scene_environment oot3d_scene_environment_blend oot3d_scene_environment_codec \
+            oot3d_scene_environment_panel oot3d_light_gizmo; do
     panels+=("$build/CMakeFiles/oot3d_native_game.dir/tools/oot3d/native_game_runtime/$unit.cpp.o")
 done
 panels+=("$build/CMakeFiles/oot3d_native_a32_savestate.dir/tools/oot3d/native_game_runtime/oot3d_savestate_library.cpp.o")

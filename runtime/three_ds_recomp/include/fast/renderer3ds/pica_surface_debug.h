@@ -1,7 +1,8 @@
 #pragma once
 
 // Developer diagnostics of the per-pixel surface replacement (lighting lab):
-// a trace of the candidate draws of the next frames, one JSON line each, and
+// a trace of the candidate draws of the next frames, one JSON line each (with
+// a census: every draw's textures, blend and TEV constants as well), and
 // an exemption of a range of candidate ordinals (counted per frame in draw
 // order), to find which native draw an effect lost in Modern belongs to.
 // Off unless requested; the render thread reads, the game thread requests.
@@ -50,10 +51,11 @@ public:
     }
 
     // Game side.
-    void RequestTrace(std::string path, uint32_t frames) {
+    void RequestTrace(std::string path, uint32_t frames, bool census = false) {
         std::scoped_lock lock(mMutex);
         mRequestedPath = std::move(path);
         mRequestedFrames = frames;
+        mRequestedCensus = census;
     }
     // Candidates first..last (inclusive) keep their native appearance from the
     // next frame on (the range is latched whole per frame); first > last
@@ -81,6 +83,7 @@ public:
                 std::fprintf(stderr, "TRIAEVUM_SURFACE_TRACE cannot open %s\n", mRequestedPath.c_str());
             mPath = mRequestedPath;
             mFramesLeft = mRequestedFrames;
+            mCensus = mRequestedCensus;
             mRequestedFrames = 0;
         }
     }
@@ -92,6 +95,10 @@ public:
     [[nodiscard]] bool Tracing() {
         std::scoped_lock lock(mMutex);
         return mFile != nullptr;
+    }
+    [[nodiscard]] bool Census() {
+        std::scoped_lock lock(mMutex);
+        return mFile != nullptr && mCensus;
     }
     [[nodiscard]] uint64_t Frame() const { return mFrame; }
     void Write(const std::string& line) {
@@ -158,6 +165,8 @@ private:
     std::string mPath;
     std::string mRequestedPath;
     uint32_t mRequestedFrames = 0;
+    bool mRequestedCensus = false;
+    bool mCensus = false;
     std::FILE* mFile = nullptr;
     uint32_t mFramesLeft = 0;
     uint32_t mOrdinal = 0;

@@ -1,3 +1,5 @@
+#include "fast/oot3d/grass_stage_profile.h"
+#include "fast/backends/oot3d_vulkan_gpu_profiler.h"
 #include "fast/renderer3ds/slow_step_trace.h"
 #include "fast/oot3d/interactive_grass_pass.h"
 #include "fast/oot3d/grass_shader_sources.h"
@@ -100,11 +102,17 @@ void HashGrassIdentityValue(
     }
 }
 
+// Shadow grid data for every anchor of a non-empty placement.
+bool GrassPlacementHasShadowGrid(const GrassWorldPlacement& placement) noexcept {
+    return placement.ShadowReferences.size() == placement.Anchors.size() && !placement.ShadowPoints.empty() &&
+           !placement.ShadowSurfaces.empty();
+}
+
 uint64_t GrassWorldPlacementIdentity(
     const GrassSceneMesh& mesh,
     const GrassPlacementKey& key) noexcept {
     uint64_t hash = kGrassIdentityFnvOffset;
-    HashGrassIdentityValue(hash, mesh.InstanceId);
+    HashGrassIdentityValue(hash, mesh.WorldInstanceId != 0U ? mesh.WorldInstanceId : mesh.InstanceId);
     HashGrassIdentityValue(hash, key.GeometryId);
     HashGrassIdentityValue(hash, key.ContentVersion);
     HashGrassIdentityValue(hash, key.TextureHash);
@@ -463,6 +471,7 @@ struct InteractiveGrassPass::Impl {
     BufferSlot IndexBuffer;
     GrassIndexedTopology IndexedTopology;
     GrassSelectionCache SelectionCache;
+    uint64_t SelectionRevision = 1;
     std::vector<GrassDrawBatch> Batches;
     std::vector<GrassEnvironmentRecord> EnvironmentRecords;
     std::vector<GrassPreparedPlacement> PreparedPlacements;
@@ -484,6 +493,7 @@ struct InteractiveGrassPass::Impl {
         bool operator==(const ActivePlacement&) const = default;
     };
     std::vector<ActivePlacement> ActivePlacements;
+    bool ActiveShadowGrid = false;
     uint64_t StaticRevision = 0U;
     std::unique_ptr<BS::thread_pool> WorkerPool;
     std::vector<GrassWorkerOutput> WorkerOutputs;
@@ -914,15 +924,14 @@ bool InteractiveGrassPass::Initialize(VkPhysicalDevice physicalDevice,
 
 bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width, uint32_t height,
                                    const ::Fast::Renderer3ds::PicaPerspectiveCameraState& view,
-                                   const InteractiveGrassSettings& settings,
-                                   const ToonSurfaceParameters& toon,
-                                   ::Fast::Renderer3ds::PicaResolvedDrawStreamView scene,
-                                   uint64_t frameId, uint64_t renderTargetNamespace,
-                                   uint32_t framebufferColorPhysicalAddress, uint32_t frameSlot,
-                                   const EffectGeometryProviderPlan& providerPlan,
+                                   const InteractiveGrassSettings& settings, const ToonSurfaceParameters& toon,
+                                   ::Fast::Renderer3ds::PicaResolvedDrawStreamView scene, uint64_t frameId,
+                                   uint64_t renderTargetNamespace, uint32_t framebufferColorPhysicalAddress,
+                                   uint32_t frameSlot, const EffectGeometryProviderPlan& providerPlan,
                                    const NriDirectionalShadowHistorySnapshot& shadowHistory,
-                                   const std::array<float, 2>& jitterPixels, bool temporalJitter,
-                                   bool temporalMotion) {
+                                   const std::array<float, 2>& jitterPixels, bool temporalJitter, bool temporalMotion,
+                                   Fast::Oot3dVulkanGpuProfiler* profiler) {
+    GrassStageTimer prepareTimer(GrassStage::Prepare);
     mImpl->Prepared = false;
     mImpl->PreparedInstanceBuffer = VK_NULL_HANDLE;
     mImpl->LastBlades = 0;
@@ -961,6 +970,16 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
         telemetry.CpuMilliseconds = std::chrono::duration<double, std::milli>(cpuEnd - cpuStart).count();
         telemetry.Status = status;
         telemetry.Executed = executed;
+        if (GrassStageProfileEnabled()) {
+            auto& f = GrassStageCurrent();
+            f.PlacementHit += placementStatsAfter.Hits - placementStatsBefore.Hits;
+            f.PlacementMiss += placementStatsAfter.Misses - placementStatsBefore.Misses;
+            f.WorkerMs += placementStatsAfter.BuildMilliseconds - placementStatsBefore.BuildMilliseconds;
+            f.DiskHit += placementStatsAfter.DiskHits - placementStatsBefore.DiskHits;
+            f.DiskMiss += placementStatsAfter.DiskMisses - placementStatsBefore.DiskMisses;
+            f.DiskReject += placementStatsAfter.DiskRejects - placementStatsBefore.DiskRejects;
+            f.DiskWrite += placementStatsAfter.DiskWrites - placementStatsBefore.DiskWrites;
+        }
         GrassRenderTelemetry::Instance().Publish(telemetry);
         return executed;
     };
@@ -987,10 +1006,10 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
         return finish(GrassRenderStatus::NoBudget, false);
     }
     try {
-        const bool receiveShadows = settings.Appearance.ReceiveLighting &&
-            providerPlan.Requires(EffectResource::DirectionalShadowHistory) && shadowHistory.Valid() &&
-            shadowHistory.State.ProducedFrameId <= frameId && shadowHistory.State.Strength > 0.0F;
-        auto& surfaceLighting = receiveShadows ? mImpl->ShadowSurfaceLighting : mImpl->SurfaceLighting;
+        const bool requestShadows = settings.Appearance.ReceiveLighting &&
+                                    providerPlan.Requires(EffectResource::DirectionalShadowHistory) &&
+                                    shadowHistory.Valid() && shadowHistory.State.ProducedFrameId <= frameId &&
+                                    shadowHistory.State.Strength > 0.0F;
         const auto actors = GrassInteractionBridge::Instance().LatestActors();
         const auto clock = VisualClock::Instance().Snapshot();
         float deltaSeconds = 0.0F;
@@ -1011,7 +1030,10 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
             }
             visualSeconds = mImpl->FallbackSeconds;
         }
-        mImpl->InteractionField.UpdateActors(deltaSeconds, settings, actors);
+        {
+            GrassStageTimer interactionTimer(GrassStage::Interaction);
+            mImpl->InteractionField.UpdateActors(deltaSeconds, settings, actors);
+        }
         auto& batches = mImpl->Batches;
         auto& environmentRecords = mImpl->EnvironmentRecords;
         auto& preparedPlacements = mImpl->PreparedPlacements;
@@ -1037,6 +1059,7 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
 
         // The configured rules, then those inherited by their twin textures
         // (the same image stored again) that have no rule of their own.
+        GrassStageTimer requestsTimer(GrassStage::Requests);
         const auto inherited = GrassTwinRules::Instance().AllInherited(settings.Rules);
         std::vector<GrassPlacementRule> withInherited;
         if (!inherited.empty()) {
@@ -1044,9 +1067,7 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
             withInherited.insert(withInherited.end(), inherited.begin(), inherited.end());
         }
         for (const auto& rule : inherited.empty() ? settings.Rules : withInherited) {
-            const auto mask =
-                GrassTextureSourceCache::Instance().AcquireMaskShared(rule.Target.Rgba8Hash, rule.Channel);
-            if (mask == nullptr || mask->Samples.empty())
+            if (!GrassTextureSourceCache::Instance().Contains(rule.Target.Rgba8Hash))
                 continue;
             ++telemetry.ReadyMasks;
             const auto textureAverage = GrassTextureSourceCache::Instance().AcquireAverageColor(rule.Target.Rgba8Hash);
@@ -1082,8 +1103,9 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                     mesh.TransformBakedIntoVertices;
                 placementRequest.Vertices = mesh.Vertices;
                 placementRequest.Indices = mesh.Indices;
-                placementRequest.Mask = mask;
-                placementRequest.ColorSource = GrassTextureSourceCache::Instance().AcquireColorSource(mesh.ObservedTextureHash);
+                placementRequest.LazyMaskTexture = rule.Target.Rgba8Hash;
+                placementRequest.Overlays = GrassSceneBridge::Instance().OverlaysFor(mesh);
+                placementRequest.LazyColorTexture = mesh.ObservedTextureHash;
                 placementRequest.Rule = rule;
                 placementRequest.Generation =
                     settings.Generation;
@@ -1098,7 +1120,7 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                 placementRequest.MidrangeAdaptiveCapacity = settings.MidrangeAdaptiveCapacity;
                 placementRequest.HeightScale =
                     settings.Appearance.HeightScale;
-                placementRequest.ShadowGrid = receiveShadows;
+                placementRequest.ShadowGrid = requestShadows;
                 GrassPushConstants push = ProjectionForMesh(mesh, view);
                 push.JitterNdc[0] = currentJitterNdc[0];
                 push.JitterNdc[1] = currentJitterNdc[1];
@@ -1127,8 +1149,23 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
 
         grassSteps.Mark("before_placements");
         const auto placementStart = std::chrono::steady_clock::now();
+        requestsTimer.Stop();
+        GrassStageTimer placementTimer(GrassStage::Placement);
         auto placements = mImpl->PlacementBuilder.Resolve(placementRequests);
+        placementTimer.Stop();
+        GrassStageTimer lightingTimer(GrassStage::Lighting);
+        if (profiler)
+            profiler->BeginScope(frameSlot, GpuProfileScope::GrassLighting, commandBuffer);
         grassSteps.Mark("placements");
+        // Shadows that begin to reach shown grass (the key light at dusk)
+        // need a shadow grid its placement may still be building: until it
+        // is ready the grass stays unshadowed instead of the frame waiting.
+        bool receiveShadows = requestShadows;
+        for (const auto& result : placements)
+            if (result.Placement && !result.Placement->Anchors.empty() &&
+                !GrassPlacementHasShadowGrid(*result.Placement))
+                receiveShadows = false;
+        auto& surfaceLighting = receiveShadows ? mImpl->ShadowSurfaceLighting : mImpl->SurfaceLighting;
         if (!surfaceLighting.Sampler() && !surfaceLighting.Initialize(
                 mImpl->PhysicalDevice, mImpl->Device, *mImpl->SurfaceShaders, receiveShadows,
                 mImpl->PipelineCache))
@@ -1137,6 +1174,9 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                 shadowHistory.State.WorldLightDirectionTowardSource))
             return finish(GrassRenderStatus::PipelineUnavailable, false);
         grassSteps.Mark("surface_lighting");
+        if (profiler)
+            profiler->EndScope(frameSlot, GpuProfileScope::GrassLighting, commandBuffer);
+        lightingTimer.Stop();
         size_t nativeLit = 0;
         for (size_t i = 0; i < preparedPlacements.size(); ++i) {
             const auto& source = mImpl->LightingRequests[i];
@@ -1205,8 +1245,9 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
             activePlacements.push_back(
                 { prepared.World->Identity, prepared.World->ContentVersion, prepared.World->Anchors.size() });
         }
-        if (activePlacements != mImpl->ActivePlacements) {
+        if (activePlacements != mImpl->ActivePlacements || receiveShadows != mImpl->ActiveShadowGrid) {
             mImpl->ActivePlacements = std::move(activePlacements);
+            mImpl->ActiveShadowGrid = receiveShadows;
             mImpl->StaticAnchors.clear();
             mImpl->ShadowPoints.clear();
             mImpl->ShadowReferences.clear();
@@ -1214,8 +1255,7 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
             mImpl->StaticAnchors.reserve(totalStaticAnchors);
             for (const auto& prepared : preparedPlacements) {
                 if (receiveShadows) {
-                    if (prepared.World->ShadowReferences.size() != prepared.World->Anchors.size() ||
-                        prepared.World->ShadowPoints.empty() || prepared.World->ShadowSurfaces.empty())
+                    if (!GrassPlacementHasShadowGrid(*prepared.World))
                         throw std::runtime_error("grass shadow grid does not cover the immutable placement");
                     const auto pointBase = static_cast<uint32_t>(mImpl->ShadowPoints.size());
                     if (prepared.World->ShadowPoints.size() > std::numeric_limits<uint32_t>::max() - pointBase)
@@ -1288,7 +1328,16 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
             }
             std::erase_if(mImpl->MotionHistory, [frameId](const auto& item) { return item.second.FrameId + 1U < frameId; });
         }
+        GrassStageTimer selectionTimer(GrassStage::Selection);
         const bool reuseSelection = mImpl->SelectionCache.Matches(selectionKey);
+        if (GrassStageProfileEnabled()) {
+            if (reuseSelection)
+                ++GrassStageCurrent().SelectionHit;
+            else
+                ++GrassStageCurrent().SelectionMiss;
+        }
+        if (!reuseSelection)
+            ++mImpl->SelectionRevision;
         if (reuseSelection) {
             mImpl->LastBlades = static_cast<uint32_t>(mImpl->VisibleAnchorIndices.size());
             telemetry.VisibleBlades = mImpl->LastBlades;
@@ -1553,7 +1602,11 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
             return finish(GrassRenderStatus::Culled, false);
         }
 
+        selectionTimer.Stop();
         const auto uploadStart = std::chrono::steady_clock::now();
+        GrassStageTimer compactionTimer(GrassStage::Compaction);
+        if (profiler)
+            profiler->BeginScope(frameSlot, GpuProfileScope::GrassCompaction, commandBuffer);
         GrassGpuInstanceCompactionResult compaction;
         bool gpuCompacted = false;
         if (mImpl->GpuCompactorAvailable) {
@@ -1568,6 +1621,8 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                     &mImpl->InteractionField,
                     actors,
                     &settings,
+                    mImpl->SelectionRevision,
+                    !temporalMotion,
                 },
                 compaction);
             if (!gpuCompacted || compaction.InstanceBuffer == VK_NULL_HANDLE ||
@@ -1628,11 +1683,21 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
             dynamicUploadedBytes = static_cast<uint64_t>(instanceBytes);
         }
 
+        compactionTimer.Stop();
+        if (profiler)
+            profiler->EndScope(frameSlot, GpuProfileScope::GrassCompaction, commandBuffer);
+        if (GrassStageProfileEnabled()) {
+            GrassStageCurrent().SelectionUploadReuse += compaction.SelectionUploadReused;
+            GrassStageCurrent().CompactionReuse += compaction.Reused;
+        }
         // Disabled receivers reuse an already valid descriptor without a shadow
         // allocation, upload or dispatch. The shader never reads these bindings.
         const VkDescriptorBufferInfo unusedShadow{mImpl->PreparedInstanceBuffer, 0, sizeof(GrassInstance)};
         std::array<VkDescriptorBufferInfo, 4> shadowBuffers{unusedShadow, unusedShadow, unusedShadow, unusedShadow};
         if (receiveShadows) {
+            GrassStageTimer shadowTimer(GrassStage::Shadows);
+            if (profiler)
+                profiler->BeginScope(frameSlot, GpuProfileScope::GrassShadows, commandBuffer);
             if (!mImpl->ShadowGrid.Available())
                 mImpl->ShadowGrid.Initialize(mImpl->PhysicalDevice, mImpl->Device, *mImpl->SurfaceShaders,
                                              mImpl->PipelineCache);
@@ -1641,6 +1706,8 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                 : std::array<Renderer3ds::ShadowBounds, 2>{};
             const auto grid = mImpl->ShadowGrid.Execute(commandBuffer, frameSlot, frameId, mImpl->StaticRevision,
                 mImpl->ShadowPoints, mImpl->ShadowReferences, mImpl->ShadowSurfaces, focus, providerPlan, shadowHistory);
+            if (profiler)
+                profiler->EndScope(frameSlot, GpuProfileScope::GrassShadows, commandBuffer);
             shadowBuffers[0] = grid.Visibility;
             shadowBuffers[1] = grid.References;
             shadowBuffers[3] = grid.Patches;
@@ -1667,6 +1734,7 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
         }
         // Updating a set already recorded at another native anchor would make
         // the earlier draw read the later invocation's history/grid buffers.
+        GrassStageTimer uploadTimer(GrassStage::Upload);
         const auto descriptorSet = mImpl->AcquireDescriptorSet(slotIndex, frameId);
         std::array<VkWriteDescriptorSet, 4> shadowWrites{};
         for (uint32_t index = 0; index < shadowWrites.size(); ++index) {
@@ -1800,6 +1868,13 @@ bool InteractiveGrassPass::DrawPrepared(
     return true;
 }
 
+void InteractiveGrassPass::SetCacheDirectory(std::filesystem::path directory) {
+    static const bool disabled = [] {
+        const auto* p = std::getenv("TRIAEVUM_GRASS_DISK_CACHE");
+        return p && std::string_view(p) == "0";
+    }();
+    mImpl->PlacementBuilder.SetCacheDirectory(disabled ? std::filesystem::path{} : std::move(directory));
+}
 void InteractiveGrassPass::ResetTemporalState() {
     mImpl->SelectionCache.Reset();
     mImpl->InteractionField.Reset();
@@ -1872,6 +1947,7 @@ void InteractiveGrassPass::Shutdown() {
     mImpl->ShadowReferences.clear();
     mImpl->ShadowSurfaces.clear();
     mImpl->ActivePlacements.clear();
+    mImpl->ActiveShadowGrid = false;
     mImpl->ClusterWork.clear();
     mImpl->SelectionRoots.clear();
     mImpl->SelectionOutputs.clear();

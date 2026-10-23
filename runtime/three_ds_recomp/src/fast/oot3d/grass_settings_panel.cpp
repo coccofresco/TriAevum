@@ -1,6 +1,8 @@
 #include "fast/oot3d/grass_settings_panel.h"
 
 #include "fast/oot3d/grass_blade_geometry.h"
+#include "fast/oot3d/grass_scene_bridge.h"
+#include "fast/oot3d/graphics_settings_runtime.h"
 #include "fast/oot3d/grass_interaction_bridge.h"
 #include "fast/oot3d/grass_render_telemetry.h"
 #include "fast/oot3d/grass_texture_rule_editor.h"
@@ -14,6 +16,7 @@
 #include <array>
 #include <cstdio>
 #include <optional>
+#include <tuple>
 #include <vector>
 
 namespace Fast::Oot3d {
@@ -32,12 +35,188 @@ bool EnumCombo(
     return true;
 }
 
-bool DrawSourcesAndPlacement(
-    InteractiveGrassSettings& grass,
-    GrassSettingsPanelState& state) {
+const char* MaskBadge(GrassMaskMode mode) {
+    switch (mode) {
+        case GrassMaskMode::Custom:
+            return "MASK custom";
+        case GrassMaskMode::Off:
+            return "MASK off";
+        default:
+            return "MASK auto";
+    }
+}
+
+bool SameTexture(const GrassTextureSelector& a, const GrassTextureSelector& b) {
+    return a.Rgba8Hash == b.Rgba8Hash && a.Width == b.Width && a.Height == b.Height;
+}
+
+void AppendMaskTags(std::vector<TextureCatalogTag>& tags, const InteractiveGrassSettings& grass) {
+    for (const auto& mask : GrassSceneBridge::Instance().ObservedMasks()) {
+        const auto& t = mask.Texture;
+        const auto* rule = FindGrassMaskRule(grass.Masks, t.Rgba8Hash, t.Width, t.Height);
+        tags.push_back({ t.Rgba8Hash, t.Width, t.Height, MaskBadge(rule ? rule->Mode : GrassMaskMode::Automatic) });
+    }
+    for (const auto& rule : grass.Masks) {
+        const auto& t = rule.Coverage.Target;
+        tags.push_back({ t.Rgba8Hash, t.Width, t.Height, MaskBadge(rule.Mode) });
+    }
+}
+
+bool DrawMasks(InteractiveGrassSettings& grass, GrassSettingsPanelState& state) {
+    bool changed = false;
+    const auto observations = GrassSceneBridge::Instance().ObservedMasks();
+    std::vector<GrassTextureSelector> textures;
+    const auto append = [&](const auto& t) {
+        if (std::none_of(textures.begin(), textures.end(), [&](const auto& other) { return SameTexture(t, other); }))
+            textures.push_back(t);
+    };
+    for (const auto& mask : observations)
+        append(mask.Texture);
+    for (const auto& rule : grass.Masks)
+        append(rule.Coverage.Target);
+    std::sort(textures.begin(), textures.end(), [](const auto& a, const auto& b) {
+        return std::tie(a.Rgba8Hash, a.Width, a.Height) < std::tie(b.Rgba8Hash, b.Width, b.Height);
+    });
+    if (std::none_of(textures.begin(), textures.end(),
+                     [&](const auto& t) { return SameTexture(t, state.SelectedMask); }))
+        state.SelectedMask = textures.empty() ? GrassTextureSelector{} : textures.front();
+    ImGui::TextWrapped("Masks thin grass beneath room overlays. Automatic follows the native alpha; Custom uses the "
+                       "texture controls; Off lets grass pass.");
+    char label[160] = "No masks observed";
+    const auto format = [](char* out, size_t size, const GrassTextureSelector& texture,
+                           const InteractiveGrassSettings& settings) {
+        const auto* rule = FindGrassMaskRule(settings.Masks, texture.Rgba8Hash, texture.Width, texture.Height);
+        std::snprintf(out, size, "%016llX | %ux%u | %s", static_cast<unsigned long long>(texture.Rgba8Hash),
+                      texture.Width, texture.Height, MaskBadge(rule ? rule->Mode : GrassMaskMode::Automatic));
+    };
+    if (state.SelectedMask.Rgba8Hash)
+        format(label, sizeof(label), state.SelectedMask, grass);
+    if (ImGui::BeginCombo("Overlay mask", label)) {
+        for (const auto& texture : textures) {
+            format(label, sizeof(label), texture, grass);
+            ImGui::PushID(label);
+            const auto preview = GrassTextureSourceCache::Instance().AcquirePreview(texture.Rgba8Hash);
+            if (!preview.Rgba8.empty()) {
+                DrawTexturePixelPreview(preview.Rgba8, preview.Width, preview.Height, 40, 40);
+                ImGui::SameLine();
+            }
+            if (ImGui::Selectable(label, SameTexture(texture, state.SelectedMask), 0, ImVec2(0, 40)))
+                state.SelectedMask = texture;
+            ImGui::PopID();
+        }
+        ImGui::EndCombo();
+    }
+    if (state.SelectedMask.Rgba8Hash) {
+        const auto target = state.SelectedMask;
+        const auto* configured = FindGrassMaskRule(grass.Masks, target.Rgba8Hash, target.Width, target.Height);
+        GrassMaskRule value = configured ? *configured : GrassMaskRule{};
+        value.Coverage.Target = target;
+        const char* const modes[] = { "Automatic", "Custom", "Off" };
+        const bool ruleLimit = configured == nullptr && grass.Masks.size() >= 256;
+        ImGui::BeginDisabled(ruleLimit);
+        bool edited = EnumCombo("Mask mode", value.Mode, modes);
+        ImGui::EndDisabled();
+        if (ruleLimit)
+            ImGui::TextWrapped("Mask rule limit reached. Remove an override to edit another texture.");
+        bool removed = false;
+        if (ImGui::Button("Reset mask to automatic")) {
+            std::erase_if(grass.Masks, [&](const auto& rule) { return SameTexture(rule.Coverage.Target, target); });
+            value = GrassMaskRule{};
+            value.Coverage.Target = target;
+            changed = true;
+            removed = true;
+            state.Status = "Mask reset to automatic";
+        }
+        ImGui::SameLine();
+        ImGui::BeginDisabled(configured == nullptr);
+        if (ImGui::Button("Remove mask rule")) {
+            std::erase_if(grass.Masks, [&](const auto& rule) { return SameTexture(rule.Coverage.Target, target); });
+            changed = true;
+            removed = true;
+            state.Status = "Mask rule removed; observed overlays use Automatic";
+        }
+        ImGui::EndDisabled();
+        ImGui::Checkbox("Highlight mask in scene", &state.HighlightMask);
+        if (state.HighlightMask && !GraphicsSettingsRuntime::Instance().NativePresentationOverrideActive())
+            GrassSceneBridge::Instance().HighlightMask(target);
+        double area = 0, coverage = 0, transparent = 0, opaque = 0;
+        bool supported = true;
+        std::vector<GrassTextureSelector> sources;
+        for (const auto& mask : observations)
+            if (SameTexture(mask.Texture, target)) {
+                area += mask.Area;
+                coverage += mask.CoverageArea;
+                transparent += mask.NativeAlphaArea[0];
+                opaque += mask.NativeAlphaArea[15];
+                supported &= mask.NativeSupported;
+                if (std::none_of(sources.begin(), sources.end(),
+                                 [&](const auto& source) { return SameTexture(source, mask.Source); }))
+                    sources.push_back(mask.Source);
+            }
+        if (area > 0) {
+            ImGui::Text("Covered source area: %.3f m2 | estimated coverage: %.1f%%", area / 10000,
+                        100 * coverage / area);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Sum of clipped triangle overlaps. Overlapping draws are counted separately.");
+            ImGui::TextDisabled("Native coverage: transparent %.1f%% | opaque %.1f%%", 100 * transparent / area,
+                                100 * opaque / area);
+            for (const auto& source : sources)
+                ImGui::Text("Covers source %016llX (%ux%u)", static_cast<unsigned long long>(source.Rgba8Hash),
+                            source.Width, source.Height);
+            if (!supported)
+                ImGui::TextWrapped("Native alpha unavailable for some draws; Automatic leaves those draws unmasked. "
+                                   "Custom remains available.");
+        } else
+            ImGui::TextDisabled("No overlap observed in the current scene. Enable grass to refresh coverage.");
+        const auto preview = GrassTextureSourceCache::Instance().AcquirePreview(target.Rgba8Hash);
+        DrawTexturePixelPreview(preview.Rgba8, preview.Width, preview.Height);
+        if (value.Mode == GrassMaskMode::Custom && !removed) {
+            edited |= ImGui::SliderFloat("Mask strength", &value.Strength, 0, 1, "%.3f");
+            ImGui::TextDisabled("White suppresses grass; black lets it pass.");
+            edited |= DrawGrassTextureRuleControls(value.Coverage, false, value.Strength);
+        }
+        if (edited && !removed) {
+            NormalizeGrassMaskRule(value);
+            const auto found = std::find_if(grass.Masks.begin(), grass.Masks.end(), [&](const auto& rule) {
+                return SameTexture(rule.Coverage.Target, target);
+            });
+            if (found != grass.Masks.end())
+                *found = std::move(value);
+            else if (grass.Masks.size() < 256)
+                grass.Masks.push_back(std::move(value));
+            changed = true;
+        }
+    }
+    ImGui::SeparatorText("Add mask from observed textures");
+    std::vector<TextureCatalogTag> tags;
+    AppendMaskTags(tags, grass);
+    for (const auto& rule : grass.Rules)
+        tags.push_back({ rule.Target.Rgba8Hash, rule.Target.Width, rule.Target.Height, "GRASS" });
+    const auto catalog = DrawTextureCatalogViewer(state.MaskTextureSelection, tags, 8);
+    if (catalog.Selected) {
+        const auto& texture = *catalog.Selected;
+        ImGui::BeginDisabled(grass.Masks.size() >= 256);
+        if (ImGui::Button("Add selected texture mask")) {
+            state.SelectedMask = { "", texture.ContentHash, texture.Width, texture.Height };
+            if (!FindGrassMaskRule(grass.Masks, texture.ContentHash, texture.Width, texture.Height)) {
+                GrassMaskRule rule;
+                rule.Mode = GrassMaskMode::Custom;
+                rule.Coverage.Target = state.SelectedMask;
+                grass.Masks.push_back(rule);
+                changed = true;
+            }
+            state.Status = "Mask selected; configured source rules keep priority";
+        }
+        ImGui::EndDisabled();
+    }
+    return changed;
+}
+
+bool DrawSourcesAndPlacement(InteractiveGrassSettings& grass, GrassSettingsPanelState& state) {
     bool changed = false;
     std::vector<TextureCatalogTag> tags;
     tags.reserve(grass.Rules.size());
+    AppendMaskTags(tags, grass);
     for (const auto& rule : grass.Rules) {
         tags.push_back(
             {rule.Target.Rgba8Hash, rule.Target.Width,
@@ -580,6 +759,12 @@ bool DrawGrassSettingsPanel(
         if (ImGui::BeginTabItem("Sources")) {
             ImGui::BeginChild("Sources");
             changed |= DrawSourcesAndPlacement(grass, state);
+            ImGui::EndChild();
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("Masks")) {
+            ImGui::BeginChild("Masks");
+            changed |= DrawMasks(grass, state);
             ImGui::EndChild();
             ImGui::EndTabItem();
         }

@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdlib>
+#include <cstdio>
 #include <limits>
 #include <stdexcept>
 #include <string_view>
@@ -38,6 +39,7 @@ struct NriPicaScanoutPass::Impl {
     ResourceStateTracker TargetStates;
     EffectPassBarrierExecution LastBarrierExecution;
     std::string Reason = "NRI PICA scanout is not initialized";
+    bool DiagnosticSolid = false;
 #ifdef ENABLE_OOT3D_NRI
     nri::CoreInterface* Core = nullptr;
     nri::PipelineLayout* PipelineLayout = nullptr;
@@ -75,6 +77,11 @@ bool NriPicaScanoutPass::Initialize(
     Shutdown();
     mImpl->Device = device;
     mImpl->Interop = &interop;
+    if (const char* solid = std::getenv("TRIAEVUM_VULKAN_SCANOUT_SOLID");
+        solid && std::string_view(solid) == "1") {
+        mImpl->DiagnosticSolid = true;
+        std::fprintf(stderr, "TRIAEVUM_VULKAN_SCANOUT_SOLID enabled=1 color=green\n");
+    }
     if (const char* enabled = std::getenv("OOT3D_GRAPHICS_NRI_SCANOUT");
         enabled != nullptr && std::string_view(enabled) == "0") {
         mImpl->Reason = "NRI PICA scanout disabled by environment";
@@ -375,6 +382,10 @@ bool NriPicaScanoutPass::Execute(
         desc.ClearColor[2], desc.ClearColor[3]};
     attachment.loadOp =
         desc.Overlay ? nri::LoadOp::LOAD : nri::LoadOp::CLEAR;
+    if (mImpl->DiagnosticSolid && !desc.OffscreenTarget) {
+        attachment.loadOp = nri::LoadOp::CLEAR;
+        attachment.clearValue.color.f = {0.0F, 1.0F, 0.0F, 1.0F};
+    }
     attachment.storeOp = nri::StoreOp::STORE;
     attachment.resolveOp = nri::ResolveOp::AVERAGE;
     nri::RenderingDesc rendering{};
@@ -382,39 +393,41 @@ bool NriPicaScanoutPass::Execute(
     rendering.colorNum = 1;
     mImpl->Core->CmdSetDescriptorPool(*command, *frame.Pool);
     mImpl->Core->CmdBeginRendering(*command, rendering);
-    mImpl->Core->CmdSetPipelineLayout(
-        *command, nri::BindPoint::GRAPHICS, *mImpl->PipelineLayout);
-    mImpl->Core->CmdSetPipeline(
-        *command,
-        desc.OffscreenTarget
-            ? *mImpl->OffscreenPipeline
-            : (desc.Overlay ? *mImpl->OverlayPipeline
-                            : *mImpl->BasePipeline));
-    const nri::SetDescriptorSetDesc setDesc{
-        0, set, nri::BindPoint::GRAPHICS};
-    mImpl->Core->CmdSetDescriptorSet(*command, setDesc);
-    const nri::SetRootConstantsDesc constants{
-        0, &desc.Push, sizeof(desc.Push)};
-    mImpl->Core->CmdSetRootConstants(*command, constants);
-    const nri::Viewport viewport{
-        desc.ViewportX, desc.ViewportY,
-        desc.ViewportWidth, desc.ViewportHeight,
-        0.0F, 1.0F, true};
-    const nri::Rect scissor{
-        static_cast<int16_t>(std::clamp(
-            desc.ScissorX,
-            static_cast<int32_t>(std::numeric_limits<int16_t>::min()),
-            static_cast<int32_t>(std::numeric_limits<int16_t>::max()))),
-        static_cast<int16_t>(std::clamp(
-            desc.ScissorY,
-            static_cast<int32_t>(std::numeric_limits<int16_t>::min()),
-            static_cast<int32_t>(std::numeric_limits<int16_t>::max()))),
-        static_cast<nri::Dim_t>(desc.ScissorWidth),
-        static_cast<nri::Dim_t>(desc.ScissorHeight)};
-    mImpl->Core->CmdSetViewports(*command, &viewport, 1);
-    mImpl->Core->CmdSetScissors(*command, &scissor, 1);
-    const nri::DrawDesc draw{3, 1, 0, 0};
-    mImpl->Core->CmdDraw(*command, draw);
+    if (!mImpl->DiagnosticSolid || desc.OffscreenTarget) {
+        mImpl->Core->CmdSetPipelineLayout(
+            *command, nri::BindPoint::GRAPHICS, *mImpl->PipelineLayout);
+        mImpl->Core->CmdSetPipeline(
+            *command,
+            desc.OffscreenTarget
+                ? *mImpl->OffscreenPipeline
+                : (desc.Overlay ? *mImpl->OverlayPipeline
+                                : *mImpl->BasePipeline));
+        const nri::SetDescriptorSetDesc setDesc{
+            0, set, nri::BindPoint::GRAPHICS};
+        mImpl->Core->CmdSetDescriptorSet(*command, setDesc);
+        const nri::SetRootConstantsDesc constants{
+            0, &desc.Push, sizeof(desc.Push)};
+        mImpl->Core->CmdSetRootConstants(*command, constants);
+        const nri::Viewport viewport{
+            desc.ViewportX, desc.ViewportY,
+            desc.ViewportWidth, desc.ViewportHeight,
+            0.0F, 1.0F, true};
+        const nri::Rect scissor{
+            static_cast<int16_t>(std::clamp(
+                desc.ScissorX,
+                static_cast<int32_t>(std::numeric_limits<int16_t>::min()),
+                static_cast<int32_t>(std::numeric_limits<int16_t>::max()))),
+            static_cast<int16_t>(std::clamp(
+                desc.ScissorY,
+                static_cast<int32_t>(std::numeric_limits<int16_t>::min()),
+                static_cast<int32_t>(std::numeric_limits<int16_t>::max()))),
+            static_cast<nri::Dim_t>(desc.ScissorWidth),
+            static_cast<nri::Dim_t>(desc.ScissorHeight)};
+        mImpl->Core->CmdSetViewports(*command, &viewport, 1);
+        mImpl->Core->CmdSetScissors(*command, &scissor, 1);
+        const nri::DrawDesc draw{3, 1, 0, 0};
+        mImpl->Core->CmdDraw(*command, draw);
+    }
     mImpl->Core->CmdEndRendering(*command);
 
     const auto presentable = mImpl->TargetStates.PlanTransition(

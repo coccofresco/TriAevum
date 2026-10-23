@@ -424,7 +424,7 @@ int main(int argc, char** argv) try {
         }
     }
     if (countOnly) { std::cout << "unique_modules=" << modules << '\n'; return 0; }
-    Check(modules == (toon ? 200U : temporal ? 40U : 16U), "unexpected finite fragment family size");
+    Check(modules == (toon ? 348U : temporal ? 40U : 16U), "unexpected finite fragment family size");
     if (exact)
         Check(pack.Matches(argv[2]), "fragment artifacts are stale; regenerate with the current compiler and generators");
     else if (!verify)

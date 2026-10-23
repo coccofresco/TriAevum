@@ -784,7 +784,8 @@ void WritePlan(Writer& writer, const Oot3dPicaVulkanDrawPlan& value,
             for (uint32_t i = 0; i < points->Count; ++i) {
                 const auto& light = points->Lights[i];
                 writer.U64(light.SourceIdentity);
-                writer.U32(light.Group);
+                // The high bit marks a light without shadows; earlier files never set it.
+                writer.U32(light.Group | (light.CastsShadow ? 0U : 0x80000000U));
                 for (float component : light.PositionWorld) writer.Float(component);
                 for (float component : light.Color) writer.Float(component);
                 writer.Float(light.Radius);
@@ -1004,8 +1005,11 @@ bool ReadPlan(Reader& reader, Oot3dPicaVulkanDrawPlan& value,
             if (!reader.U32(points->Count) || points->Count == 0 || points->Count > points->Lights.size()) return false;
             for (uint32_t i = 0; i < points->Count; ++i) {
                 auto& light = points->Lights[i];
-                if (!reader.U64(light.SourceIdentity) || light.SourceIdentity == 0 ||
-                    !reader.U32(light.Group) || light.Group >= Fast::Renderer3ds::kPicaScenePointLightGroups) return false;
+                if (!reader.U64(light.SourceIdentity) || light.SourceIdentity == 0 || !reader.U32(light.Group))
+                    return false;
+                light.CastsShadow = (light.Group & 0x80000000U) == 0U;
+                light.Group &= 0x7FFFFFFFU;
+                if (light.Group >= Fast::Renderer3ds::kPicaScenePointLightGroups) return false;
                 for (float& component : light.PositionWorld)
                     if (!reader.Float(component) || !std::isfinite(component)) return false;
                 for (float& component : light.Color)

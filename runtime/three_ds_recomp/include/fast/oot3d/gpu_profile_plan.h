@@ -22,6 +22,10 @@ enum class GpuProfileScope : uint8_t {
     Scanout,
     Overlay,
     GlobalIllumination,
+    GrassCompaction,
+    GrassBlades,
+    GrassShadows,
+    GrassLighting,
     Count,
 };
 

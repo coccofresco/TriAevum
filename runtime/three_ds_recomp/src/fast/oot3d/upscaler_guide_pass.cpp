@@ -128,13 +128,15 @@ bool UpscalerGuidePass::Initialize(VkPhysicalDevice physical, VkDevice device, N
 #endif
 }
 
-bool UpscalerGuidePass::Execute(uint32_t frameSlot, const Guides& guides, uint32_t width, uint32_t height) {
+bool UpscalerGuidePass::Execute(uint32_t frameSlot, const Guides& guides, uint32_t width, uint32_t height,
+                                const std::array<float, 2>& motionCorrection) {
     mImpl->LastBarriers = {};
     if (!Available() || guides.Depth == VK_NULL_HANDLE || guides.Motion == VK_NULL_HANDLE ||
         guides.Reactive == VK_NULL_HANDLE || guides.Width == 0U || guides.Height == 0U || width == 0U || height == 0U)
         return false;
 #ifndef ENABLE_OOT3D_NRI
     (void)frameSlot;
+    (void)motionCorrection;
     return false;
 #else
     if (mImpl->Set == nullptr || mImpl->Width != width || mImpl->Height != height ||
@@ -210,7 +212,8 @@ bool UpscalerGuidePass::Execute(uint32_t frameSlot, const Guides& guides, uint32
     for (const VkImage image : outputs)
         if (!transition(image, ResourceAccess::ComputeWrite))
             return false;
-    const UpscalerGuideConstants push{ width, height, guides.Width, guides.Height };
+    const UpscalerGuideConstants push{ width, height, guides.Width, guides.Height,
+                                       { motionCorrection[0], motionCorrection[1] } };
     mImpl->Core->CmdSetDescriptorPool(*command, *mImpl->Pool);
     mImpl->Core->CmdSetPipelineLayout(*command, nri::BindPoint::COMPUTE, *mImpl->Layout);
     mImpl->Core->CmdSetPipeline(*command, *mImpl->Pipeline);

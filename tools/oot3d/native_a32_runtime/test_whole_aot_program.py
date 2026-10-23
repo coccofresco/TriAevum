@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import sys
 import tempfile
@@ -9,7 +10,7 @@ from pathlib import Path
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from whole_aot_program import build_program, pinned
+from whole_aot_program import build_program, load_observed_sites, pinned
 
 
 BASE = 0x1000
@@ -215,6 +216,31 @@ class WholeAotProgramTest(unittest.TestCase):
         audit = root / "audit.csv"
         audit.write_text("entry\n", encoding="utf-8")
         return inventory, audit
+
+    def test_observed_sites_start_blocks_for_their_code_image_only(self) -> None:
+        words = [0xE3A00001, 0xE3A01002, 0xE3A02003, 0xE12FFF1E]
+        code = b"".join(w.to_bytes(4, "little") for w in words)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            inventory, audit = self._inputs(root, [(BASE, 16, "straight")])
+            plain = build_program(code, inventory, audit, base=BASE)
+            observed = build_program(code, inventory, audit, base=BASE,
+                                     observed_sites=(BASE + 8,))
+            with self.assertRaisesRegex(ValueError, "not reachable"):
+                build_program(code, inventory, audit, base=BASE,
+                              observed_sites=(BASE + 32,))
+            catalog = root / "sites.json"
+            catalog.write_text(json.dumps({
+                "format": "oot3d_whole_aot_observed_sites_v1",
+                "code_sha256": hashlib.sha256(code).hexdigest(),
+                "sites": [{"pc": f"0x{BASE + 8:08X}", "use": "test"}]}), encoding="utf-8")
+            self.assertEqual(load_observed_sites(catalog, code), frozenset({BASE + 8}))
+            self.assertEqual(load_observed_sites(catalog, code + b"\0\0\0\0"), frozenset())
+        self.assertEqual([b.pc for b in plain.blocks], [BASE])
+        self.assertEqual([b.pc for b in observed.blocks], [BASE, BASE + 8])
+        first = observed.blocks[0]
+        self.assertEqual({(e.kind, e.target) for e in first.successors},
+                         {("fallthrough", BASE + 8)})
 
     def test_recovers_function_cfg_call_and_literal(self) -> None:
         words = [0] * 11

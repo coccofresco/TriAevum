@@ -24,9 +24,10 @@ constexpr std::array<std::string_view, 4> kReservedNames{"Authentic", "Enhanced"
 // The documents of the host-owned state (KeepHostOwnedSettings), which a
 // preset never applies: a preset document leaves them out, as the Enhanced
 // document does, and reading one restores them from the defaults.
-constexpr std::array<std::string_view, 7> kHostOwnedPaths{
-    "/Window", "/Output", "/Presentation", "/TexturePacks", "/Grass/Sources",
-    "/GrassSavedPreset", "/Effects/Reflections/Materials"};
+constexpr std::array<std::string_view, 8> kHostOwnedPaths{ "/Window",           "/Output",
+                                                           "/Presentation",     "/TexturePacks",
+                                                           "/Grass/Sources",    "/Grass/Masks",
+                                                           "/GrassSavedPreset", "/Effects/Reflections/Materials" };
 
 nlohmann::json PresetDocument(const GraphicsSettings& settings) {
     auto document = SerializeGraphicsSettings(settings);

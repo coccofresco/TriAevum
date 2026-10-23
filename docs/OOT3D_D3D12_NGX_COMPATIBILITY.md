@@ -1,5 +1,7 @@
 # D3D12 NGX compatibility
 
+> Developer experiment (2026-10-13). This provider links NVIDIA's NGX SDK into the runtime through NRI's D3D12 backend, so it is built only with `THREE_DS_RECOMP_ENABLE_D3D12_NGX_PROVIDER=ON` (default OFF) and is never part of a release: public packages run Vulkan DLSS through the separately licensed DLSS module (`runtime/three_ds_recomp/src/fast/dlss/LICENSE.md`), and the release audit rejects a runtime that contains NGX code.
+
 ## Objective
 
 Expose a normal, documented D3D12 DLSS-SR evaluation contract alongside the Vulkan/NRI renderer. This gives external NGX tooling a legitimate integration point without making the renderer depend on a private neural-rendering ABI.
