@@ -61,6 +61,17 @@ class IntroDataTests(unittest.TestCase):
             self.assertFalse((output / "desktop-cache").exists())
             self.assertIn("--screenshot-sequence", args)
 
+    def test_runtime_dir_placeholders_resolve_to_the_installation_root(self):
+        with tempfile.TemporaryDirectory() as temp:
+            install, profile = self.fixture(Path(temp))
+            data = json.loads(profile.read_text(encoding="utf-8"))
+            data["arguments"] = [a.replace("${profile_dir}", "${runtime_dir}") for a in data["arguments"]]
+            profile.write_text(json.dumps(data), encoding="utf-8")
+            out = Path(temp) / "stage"
+            prepare(install, profile, out)
+            args = json.loads((out / "TriAevum.android.launch.json").read_text(encoding="utf-8"))["arguments"]
+            self.assertEqual(args[args.index("--a32-process-manifest") + 1], "${profile_dir}/manifest.json")
+
     def test_portable_pack_must_remain_inside_installation(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

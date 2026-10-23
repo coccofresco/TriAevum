@@ -6,6 +6,11 @@ from pathlib import Path
 import shutil
 
 
+# Prepared inputs that a current Forge installation names in its launch profile.
+CARRIED_INPUTS = ("--topscreen-config", "--topscreen-texture-overrides", "--topscreen-link-animations",
+                  "--water-texture-catalog", "--scene-light-catalog", "--pica-aot-shader-pack")
+
+
 def contained(root: Path, path: Path) -> Path:
     resolved = path.resolve()
     if not resolved.is_relative_to(root.resolve()):
@@ -28,7 +33,12 @@ def prepare(installation: Path, launch_profile: Path, output: Path, *, capture: 
     options = dict(zip(args[::2], args[1::2]))
 
     def input_path(option: str) -> Path:
-        value = options[option].replace("${profile_dir}", str(launch_profile.parent.resolve()))
+        # The runtime resolves ${runtime_dir}/${executable_dir} to the directory of
+        # its executable: for a Forge installation that is the installation root.
+        value = options[option]
+        for placeholder, directory in (("${profile_dir}", launch_profile.parent.resolve()),
+                                       ("${runtime_dir}", root), ("${executable_dir}", root)):
+            value = value.replace(placeholder, str(directory))
         return contained(root, Path(value))
 
     manifest_path = input_path("--a32-process-manifest")
@@ -36,7 +46,7 @@ def prepare(installation: Path, launch_profile: Path, output: Path, *, capture: 
     inputs = [manifest_path, input_path("--resource-root")]
     for key in ("code_bin_path", "exheader_path", "romfs_image_path"):
         inputs.append(contained(root, manifest_path.parent / manifest["source"][key]))
-    for key in ("--topscreen-config", "--topscreen-texture-overrides", "--pica-aot-shader-pack"):
+    for key in CARRIED_INPUTS:
         if key in options:
             inputs.append(input_path(key))
     if any(not path.exists() for path in inputs):
@@ -70,7 +80,7 @@ def prepare(installation: Path, launch_profile: Path, output: Path, *, capture: 
     if capture:
         target.update({"--screenshot": "${profile_dir}/data/intro-frame.bmp",
                        "--screenshot-start-frame": "30", "--screenshot-interval": "150"})
-    for key in ("--topscreen-config", "--topscreen-texture-overrides", "--pica-aot-shader-pack"):
+    for key in CARRIED_INPUTS:
         if key in options:
             target[key] = relocated(key)
     config = output / "data/config/TriAevum.android.json"

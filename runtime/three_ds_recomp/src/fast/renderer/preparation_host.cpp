@@ -84,7 +84,7 @@ HostMemory QueryHostMemory() {
 
 uint64_t PreparationMemoryReserveBytes(uint64_t totalBytes) {
     constexpr uint64_t kFloor = 1024ULL * 1024ULL * 1024ULL;
-    return std::max(kFloor, totalBytes / 8ULL);
+    return std::max<uint64_t>(kFloor, totalBytes / 8U);
 }
 
 bool ShouldRetirePreparationWorker(const HostMemory& memory, unsigned runningWorkers) {

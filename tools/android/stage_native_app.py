@@ -7,8 +7,19 @@ import shutil
 import subprocess
 
 
+def host_llvm(ndk: Path) -> Path:
+    """The NDK's prebuilt LLVM directory of the build host (Linux, Windows or macOS)."""
+    prebuilt = ndk / "toolchains/llvm/prebuilt"
+    hosts = sorted(path for path in prebuilt.iterdir() if path.is_dir()) if prebuilt.is_dir() else []
+    if len(hosts) != 1:
+        raise FileNotFoundError(f"Expected one NDK host toolchain under {prebuilt}, found {len(hosts)}")
+    return hosts[0]
+
+
 def stage(runtime: Path, title: Path, ndk: Path, output: Path) -> None:
-    llvm = ndk / "toolchains/llvm/prebuilt/linux-x86_64"
+    llvm = host_llvm(ndk)
+    exe = ".exe" if (llvm / "bin/llvm-readelf.exe").is_file() else ""
+    readelf, strip = llvm / f"bin/llvm-readelf{exe}", llvm / f"bin/llvm-strip{exe}"
     source = {
         "libSDL2.so": runtime / "_deps/sdl2-build/libSDL2.so",
         "libTriAevum.so": runtime / "product/libTriAevum.so",
@@ -19,7 +30,7 @@ def stage(runtime: Path, title: Path, ndk: Path, output: Path) -> None:
     for name, path in source.items():
         if not path.is_file():
             raise FileNotFoundError(f"{name}: {path}")
-        header = subprocess.check_output([llvm / "bin/llvm-readelf", "-h", path], text=True)
+        header = subprocess.check_output([readelf, "-h", path], text=True)
         if "AArch64" not in header:
             raise ValueError(f"Not an ARM64 library: {path}")
     output = output.resolve()
@@ -31,13 +42,13 @@ def stage(runtime: Path, title: Path, ndk: Path, output: Path) -> None:
                              "libEGL.so", "libGLESv1_CM.so", "libGLESv2.so", "libGLESv3.so", "libvulkan.so",
                              "libOpenSLES.so", "libaaudio.so", "libz.so"}
     for name, path in source.items():
-        dynamic = subprocess.check_output([llvm / "bin/llvm-readelf", "-d", path], text=True)
+        dynamic = subprocess.check_output([readelf, "-d", path], text=True)
         needed = set(re.findall(r"\(NEEDED\).*\[(.*?)\]", dynamic))
         if needed - allowed:
             raise ValueError(f"Unpackaged dependency for {name}: {needed - allowed}")
         target = destination / name
         shutil.copy2(path, target)
-        subprocess.run([llvm / "bin/llvm-strip", "--strip-debug", target], check=True)
+        subprocess.run([strip, "--strip-debug", target], check=True)
         print(f"{name}: {target.stat().st_size} bytes; dependencies {sorted(needed)}")
 
 
