@@ -54,7 +54,7 @@ struct GrassCardRenderer::Impl {
     std::array<DescriptorFrame, 2> DescriptorFrames;
     VkDescriptorSet PreparedDescriptorSet = VK_NULL_HANDLE;
     VkPipelineLayout PipelineLayout = VK_NULL_HANDLE;
-    GrassPipelineSet Pipelines{};
+    GrassPipelineVariants Pipelines;
     VkSampler AtlasSampler = VK_NULL_HANDLE;
 
     struct Buffer {
@@ -295,6 +295,7 @@ bool GrassCardRenderer::Initialize(VkPhysicalDevice physicalDevice, VkDevice dev
     mImpl->Device = device;
     VkShaderModule vertex = VK_NULL_HANDLE;
     std::array<VkShaderModule, 4> fragments{};
+    bool modulesOwned = false;
     try {
         const auto vertexSource = BuildGrassCardVertexShader();
         const auto fragmentSource = BuildGrassCardFragmentShader(false);
@@ -352,7 +353,9 @@ bool GrassCardRenderer::Initialize(VkPhysicalDevice physicalDevice, VkDevice dev
         pipelineLayout.pPushConstantRanges = &push;
         if (vkCreatePipelineLayout(device, &pipelineLayout, nullptr, &mImpl->PipelineLayout) != VK_SUCCESS)
             throw std::runtime_error("cannot create grass card pipeline layout");
-        CreateGrassPipelineSet(device, targets, mImpl->PipelineLayout, vertex, fragments, mImpl->Pipelines);
+        modulesOwned = true;
+        mImpl->Pipelines.Initialize(device, targets, mImpl->PipelineLayout, vertex, fragments,
+                                    std::tuple_size_v<GrassPipelineSet>);
         VkSamplerCreateInfo sampler{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
         sampler.magFilter = VK_FILTER_LINEAR;
         sampler.minFilter = VK_FILTER_LINEAR;
@@ -363,14 +366,15 @@ bool GrassCardRenderer::Initialize(VkPhysicalDevice physicalDevice, VkDevice dev
         sampler.maxLod = VK_LOD_CLAMP_NONE;
         if (vkCreateSampler(device, &sampler, nullptr, &mImpl->AtlasSampler) != VK_SUCCESS)
             throw std::runtime_error("cannot create grass card atlas sampler");
-        for (const VkShaderModule fragment : fragments) vkDestroyShaderModule(device, fragment, nullptr);
-        vkDestroyShaderModule(device, vertex, nullptr);
         mImpl->Reason.clear();
         return true;
     } catch (const std::exception& exception) {
-        for (const VkShaderModule fragment : fragments)
-            if (fragment != VK_NULL_HANDLE) vkDestroyShaderModule(device, fragment, nullptr);
-        if (vertex != VK_NULL_HANDLE) vkDestroyShaderModule(device, vertex, nullptr);
+        // The pipeline variants own the modules once they have them.
+        if (!modulesOwned) {
+            for (const VkShaderModule fragment : fragments)
+                if (fragment != VK_NULL_HANDLE) vkDestroyShaderModule(device, fragment, nullptr);
+            if (vertex != VK_NULL_HANDLE) vkDestroyShaderModule(device, vertex, nullptr);
+        }
         const std::string reason = exception.what();
         Shutdown();
         mImpl->Reason = reason;
@@ -378,7 +382,7 @@ bool GrassCardRenderer::Initialize(VkPhysicalDevice physicalDevice, VkDevice dev
     }
 }
 
-bool GrassCardRenderer::Available() const noexcept { return mImpl->Pipelines[0] != VK_NULL_HANDLE; }
+bool GrassCardRenderer::Available() const noexcept { return mImpl->Pipelines.Available(); }
 const std::string& GrassCardRenderer::UnavailableReason() const noexcept { return mImpl->Reason; }
 
 GrassCardPrepareResult GrassCardRenderer::Prepare(VkCommandBuffer commandBuffer, uint32_t frameSlot,
@@ -419,11 +423,21 @@ GrassCardPrepareResult GrassCardRenderer::Prepare(VkCommandBuffer commandBuffer,
     return result;
 }
 
-void GrassCardRenderer::Draw(VkCommandBuffer commandBuffer, uint32_t width, uint32_t height, size_t pipelineIndex,
+void GrassCardRenderer::Draw(VkCommandBuffer commandBuffer, uint32_t width, uint32_t height,
+                             const PicaAttachmentRequirements& attachments,
                              std::span<const GrassCardDrawBatch> batches) {
-    if (mImpl->PreparedDescriptorSet == VK_NULL_HANDLE || batches.empty() || pipelineIndex >= 3U) return;
-    const VkPipeline explicitPipeline = mImpl->Pipelines[pipelineIndex];
-    const VkPipeline conservativePipeline = mImpl->Pipelines[pipelineIndex + 3U];
+    if (mImpl->PreparedDescriptorSet == VK_NULL_HANDLE || batches.empty()) return;
+    const size_t pipelineIndex = attachments.NativeColorOnly() ? 0U
+        : attachments.Requires(PicaAuxiliaryOutput::DiffuseAlbedoGuide) ? 2U : 1U;
+    std::span<const VkPipeline> pipelines;
+    try {
+        pipelines = mImpl->Pipelines.For(attachments);
+    } catch (const std::exception& exception) {
+        mImpl->Reason = exception.what();
+        return;
+    }
+    const VkPipeline explicitPipeline = pipelines[pipelineIndex];
+    const VkPipeline conservativePipeline = pipelines[pipelineIndex + 3U];
     if (explicitPipeline == VK_NULL_HANDLE) return;
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mImpl->PipelineLayout, 0U, 1U,
                             &mImpl->PreparedDescriptorSet, 0U, nullptr);
@@ -461,7 +475,7 @@ void GrassCardRenderer::Shutdown() {
         mImpl->DestroyAtlas(mImpl->CurrentAtlas);
         mImpl->DestroyBuffer(mImpl->Records);
         if (mImpl->AtlasSampler != VK_NULL_HANDLE) vkDestroySampler(mImpl->Device, mImpl->AtlasSampler, nullptr);
-        DestroyGrassPipelineSet(mImpl->Device, mImpl->Pipelines);
+        mImpl->Pipelines.Destroy();
         if (mImpl->PipelineLayout != VK_NULL_HANDLE) vkDestroyPipelineLayout(mImpl->Device, mImpl->PipelineLayout, nullptr);
         for (auto& frame : mImpl->DescriptorFrames) {
             for (const auto& invocation : frame.Additional)
@@ -472,7 +486,6 @@ void GrassCardRenderer::Shutdown() {
         if (mImpl->DescriptorSetLayout != VK_NULL_HANDLE)
             vkDestroyDescriptorSetLayout(mImpl->Device, mImpl->DescriptorSetLayout, nullptr);
     }
-    mImpl->Pipelines = {};
     mImpl->AtlasSampler = VK_NULL_HANDLE;
     mImpl->PipelineLayout = VK_NULL_HANDLE;
     mImpl->DescriptorPool = VK_NULL_HANDLE;

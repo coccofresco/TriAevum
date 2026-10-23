@@ -599,11 +599,11 @@ struct InteractiveGrassPass::Impl {
     std::array<DescriptorFrame, 2> DescriptorFrames;
     VkDescriptorSet PreparedDescriptorSet = VK_NULL_HANDLE;
     VkPipelineLayout PipelineLayout = VK_NULL_HANDLE;
-    // Canonical, instrumented, instrumented with the GI albedo guide
-    // (dynamic rendering only; grass leaves the albedo below it).
-    // [0..2] explicit PICA depth, [3..5] the same with rasterized depth,
+    // Per bound guide layout: canonical, instrumented, instrumented with the
+    // GI albedo guide (dynamic rendering only; grass leaves the albedo below
+    // it). [0..2] explicit PICA depth, [3..5] the same with rasterized depth,
     // [6..8] rasterized depth without discard (the whole pass).
-    GrassBladePipelineSet Pipelines{};
+    GrassPipelineVariants Pipelines;
     // Bit s: blades with s segments may fade (LOD stipple), so their batches
     // need the fading pass after the whole one.
     uint32_t FadingSegments = ~0U;
@@ -1265,6 +1265,7 @@ bool InteractiveGrassPass::Initialize(VkPhysicalDevice physicalDevice,
         VkShaderModule vertex = Compile(shaders, device, vertexSource.c_str(),
                                         Renderer::SpirvStage::Vertex, "interactive_grass.vert");
         std::array<VkShaderModule, 6> fragments{};
+        bool modulesOwned = false;
         try {
             fragments[0] = Compile(
                 shaders, device, fragmentSource.c_str(), Renderer::SpirvStage::Fragment,
@@ -1363,7 +1364,9 @@ bool InteractiveGrassPass::Initialize(VkPhysicalDevice physicalDevice,
             // No vertex input: each root reads its anchor and bend from storage.
             const GrassPipelineTargets targets{canonicalRenderPass, instrumentedRenderPass, sampleCount,
                                                dynamicRendering, depthFormat, pipelineCache};
-            CreateGrassPipelineSet(device, targets, mImpl->PipelineLayout, vertex, fragments, mImpl->Pipelines);
+            modulesOwned = true;
+            mImpl->Pipelines.Initialize(device, targets, mImpl->PipelineLayout, vertex, fragments,
+                                        std::tuple_size_v<GrassBladePipelineSet>);
             // The distant cards draw into the same targets, created when a
             // frame first enables them; without them the blades keep their
             // configured draw distance.
@@ -1371,18 +1374,17 @@ bool InteractiveGrassPass::Initialize(VkPhysicalDevice physicalDevice,
             mImpl->CardsInitialized = false;
             mImpl->CardsAvailable = false;
         } catch (...) {
-            for (const auto fragment : fragments) {
-                if (fragment != VK_NULL_HANDLE) {
-                    vkDestroyShaderModule(device, fragment, nullptr);
+            // The pipeline variants own the modules once they have them.
+            if (!modulesOwned) {
+                for (const auto fragment : fragments) {
+                    if (fragment != VK_NULL_HANDLE) {
+                        vkDestroyShaderModule(device, fragment, nullptr);
+                    }
                 }
+                vkDestroyShaderModule(device, vertex, nullptr);
             }
-            vkDestroyShaderModule(device, vertex, nullptr);
             throw;
         }
-        for (const auto fragment : fragments) {
-            vkDestroyShaderModule(device, fragment, nullptr);
-        }
-        vkDestroyShaderModule(device, vertex, nullptr);
         mImpl->GpuCompactorAvailable =
             mImpl->InstanceCompactor.Initialize(
                 physicalDevice, device, shaders, pipelineCache);
@@ -1486,8 +1488,7 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
     if (settings.Quality == GrassQuality::Off) {
         return finish(GrassRenderStatus::Disabled, false);
     }
-    if (mImpl->Pipelines[0] == VK_NULL_HANDLE ||
-        mImpl->Pipelines[1] == VK_NULL_HANDLE) {
+    if (!mImpl->Pipelines.Available()) {
         return finish(GrassRenderStatus::PipelineUnavailable, false);
     }
     if (!view.CameraAvailable) {
@@ -2767,8 +2768,16 @@ bool InteractiveGrassPass::DrawPrepared(
     const PicaAttachmentRequirements& attachments) {
     const size_t pipelineIndex = attachments.NativeColorOnly() ? 0U
         : attachments.Requires(PicaAuxiliaryOutput::DiffuseAlbedoGuide) ? 2U : 1U;
-    const VkPipeline pipeline = mImpl->Pipelines[pipelineIndex];
-    const VkPipeline rasterDepthPipeline = mImpl->Pipelines[pipelineIndex + 3U];
+    std::span<const VkPipeline> pipelines;
+    try {
+        pipelines = mImpl->Pipelines.For(attachments);
+    } catch (const std::exception& exception) {
+        mImpl->Reason = exception.what();
+        AuditGrassError(mImpl->Reason);
+        return false;
+    }
+    const VkPipeline pipeline = pipelines[pipelineIndex];
+    const VkPipeline rasterDepthPipeline = pipelines[pipelineIndex + 3U];
     if (!providerPlan.Valid() ||
         providerPlan.Stage() != EffectStage::BeforeTransparent ||
         !providerPlan.ProducesExtensionGeometry() ||
@@ -2780,7 +2789,7 @@ bool InteractiveGrassPass::DrawPrepared(
         return false;
     }
     if (mImpl->PreparedRootAnchors == VK_NULL_HANDLE) {
-        DrawPreparedCards(commandBuffer, width, height, pipelineIndex);
+        DrawPreparedCards(commandBuffer, width, height, attachments);
         mImpl->Prepared = false;
         return true;
     }
@@ -2822,7 +2831,7 @@ bool InteractiveGrassPass::DrawPrepared(
     // their fading blades with the stipple, and every other batch. Segment
     // counts that only occur below the whole-blade distance have no fading
     // blades: the whole pass draws all of them and they skip the second.
-    const VkPipeline wholePipeline = mImpl->Pipelines[pipelineIndex + 6U];
+    const VkPipeline wholePipeline = pipelines[pipelineIndex + 6U];
     const auto split = [&](const GrassDrawBatch& batch) {
         return wholePipeline != VK_NULL_HANDLE && batch.BladeSegments != 0U && rasterDepth(batch);
     };
@@ -2841,19 +2850,19 @@ bool InteractiveGrassPass::DrawPrepared(
         if (split(batch) && !mayFade(batch)) continue;
         draw(batch, raster ? rasterDepthPipeline : pipeline, split(batch) ? kGrassFadingPassFlag : 0U);
     }
-    DrawPreparedCards(commandBuffer, width, height, pipelineIndex);
+    DrawPreparedCards(commandBuffer, width, height, attachments);
     mImpl->Prepared = false;
     return true;
 }
 
 // The distant cards after the blades, in their own GPU scope when profiled.
 void InteractiveGrassPass::DrawPreparedCards(VkCommandBuffer commandBuffer, uint32_t width, uint32_t height,
-                                             size_t pipelineIndex) {
+                                             const PicaAttachmentRequirements& attachments) {
     if (!mImpl->CardsPrepared) return;
     mImpl->CardsPrepared = false;
     if (mImpl->Profiler)
         mImpl->Profiler->BeginScope(mImpl->ProfilerSlot, GpuProfileScope::GrassCards, commandBuffer);
-    mImpl->Cards.Draw(commandBuffer, width, height, pipelineIndex, mImpl->CardBatches);
+    mImpl->Cards.Draw(commandBuffer, width, height, attachments, mImpl->CardBatches);
     if (mImpl->Profiler)
         mImpl->Profiler->EndScope(mImpl->ProfilerSlot, GpuProfileScope::GrassCards, commandBuffer);
     if (GrassStageProfileEnabled()) {
@@ -2920,7 +2929,7 @@ void InteractiveGrassPass::Shutdown() {
             mImpl->DestroyBuffer(buffer);
         for (auto& buffer : mImpl->ShadowVisibleIndices)
             mImpl->DestroyBuffer(buffer);
-        DestroyGrassPipelineSet(mImpl->Device, mImpl->Pipelines);
+        mImpl->Pipelines.Destroy();
         if (mImpl->PipelineLayout != VK_NULL_HANDLE)
             vkDestroyPipelineLayout(mImpl->Device, mImpl->PipelineLayout, nullptr);
         for (auto& frame : mImpl->DescriptorFrames) {
@@ -2935,7 +2944,6 @@ void InteractiveGrassPass::Shutdown() {
             vkDestroyDescriptorSetLayout(
                 mImpl->Device, mImpl->DescriptorSetLayout, nullptr);
     }
-    mImpl->Pipelines = {};
     mImpl->PipelineLayout = VK_NULL_HANDLE;
     mImpl->DescriptorPool = VK_NULL_HANDLE;
     mImpl->DescriptorSetLayout = VK_NULL_HANDLE;

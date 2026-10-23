@@ -4219,30 +4219,25 @@ bool GfxRenderingAPIVulkan::ClearPicaRenderTarget(
                     nullptr, 1, &barrier);
             }
             BeginNativePicaRenderPass(target);
+            // The colour, the bound normal, material and motion guides, the depth.
+            const std::array<VkClearColorValue, 4> colorClears{
+                {{{0.0F, 0.0F, 0.0F, 0.0F}}, {{0.5F, 0.5F, 1.0F, 0.0F}},
+                 {{0.0F, 0.0F, 0.0F, 0.0F}}, {{0.0F, 0.0F, 0.0F, 0.0F}}}};
             std::array<VkClearAttachment, 5> attachments{};
-            attachments[0].aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            attachments[0].colorAttachment = 0U;
-            attachments[0].clearValue.color = {{0.0F, 0.0F, 0.0F, 0.0F}};
-            attachments[1].aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            attachments[1].colorAttachment = 1U;
-            attachments[1].clearValue.color = {{0.5F, 0.5F, 1.0F, 0.0F}};
-            attachments[2].aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            attachments[2].colorAttachment = 2U;
-            attachments[2].clearValue.color = {{0.0F, 0.0F, 0.0F, 0.0F}};
-            attachments[3].aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            attachments[3].colorAttachment = 3U;
-            attachments[3].clearValue.color = {{0.0F, 0.0F, 0.0F, 0.0F}};
-            attachments[4].aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+            uint32_t attachmentCount = 0U;
+            for (uint32_t index = 0U; index < colorClears.size(); ++index) {
+                if (!mActiveNativePicaAttachments.Binds(static_cast<Oot3d::PicaColorAttachment>(index))) continue;
+                auto& attachment = attachments[attachmentCount++];
+                attachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                attachment.colorAttachment = index;
+                attachment.clearValue.color = colorClears[index];
+            }
+            auto& depthAttachment = attachments[attachmentCount++];
+            depthAttachment.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
             if (key.DepthFormat == 3U) {
-                attachments[4].aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+                depthAttachment.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
             }
-            attachments[4].clearValue.depthStencil = {1.0F, 0U};
-            // A colour-only pass has no guide attachments to clear.
-            uint32_t attachmentCount = static_cast<uint32_t>(attachments.size());
-            if (mActiveNativePicaAttachments.NativeColorOnly()) {
-                attachments[1] = attachments[4];
-                attachmentCount = 2U;
-            }
+            depthAttachment.clearValue.depthStencil = {1.0F, 0U};
             const VkClearRect clearRect{
                 {{0, 0}, {target.Width, target.Height}}, 0U, 1U};
             vkCmdClearAttachments(mCommandBuffers[mCurrentFrame],

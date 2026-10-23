@@ -601,7 +601,10 @@ nri::Pipeline* NriPicaPipelineBridge::CreatePipeline(const NriPicaGraphicsPipeli
         auto& destination = colors[index];
         destination.format =
             nri::nriConvertVKFormatToNRI(desc.ColorFormats[index]);
-        if (destination.format == nri::Format::UNKNOWN)
+        // An unbound guide (VK_FORMAT_UNDEFINED) declares no format; the
+        // scene colour always has one.
+        if (destination.format == nri::Format::UNKNOWN &&
+            (index == 0U || desc.ColorFormats[index] != VK_FORMAT_UNDEFINED))
             return nullptr;
         destination.colorBlend = {
             ToNriBlendFactor(source.srcColorBlendFactor),

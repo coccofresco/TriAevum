@@ -2,13 +2,17 @@
 
 #ifdef ENABLE_OOT3D_VULKAN
 
+#include "fast/oot3d/pica_attachment_contract.h"
 #include "fast/renderer/shaderc_compiler.h"
 
 #include <vulkan/vulkan.h>
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <span>
+#include <unordered_map>
+#include <vector>
 
 namespace Fast::Oot3d {
 
@@ -41,13 +45,45 @@ using GrassBladePipelineSet = std::array<VkPipeline, 9>;
 // Fragments: a canonical and an instrumented program per group of three
 // pipelines (explicit depth, raster depth, ...). No vertex input (the shaders
 // read storage buffers), triangle list, no culling, depth test and write (less
-// or equal), the grass blend and write masks of every attachment. Throws
+// or equal), the grass blend and write masks of every attachment. The
+// instrumented pipelines target the guides `instrumented` binds (dynamic
+// rendering; the render pass binds every base guide). Throws
 // std::runtime_error on failure after destroying what it created.
 void CreateGrassPipelineSet(VkDevice device, const GrassPipelineTargets& targets, VkPipelineLayout layout,
                             VkShaderModule vertex, std::span<const VkShaderModule> fragments,
-                            std::span<VkPipeline> pipelines);
+                            std::span<VkPipeline> pipelines,
+                            PicaAttachmentRequirements instrumented = {kAllPicaAuxiliaryOutputs});
 
 void DestroyGrassPipelineSet(VkDevice device, std::span<VkPipeline> pipelines) noexcept;
+
+// A grass pipeline set per bound guide layout: the every-guide set at once,
+// the others the first time a frame binds them. Owns its shader modules.
+class GrassPipelineVariants final {
+  public:
+    GrassPipelineVariants() = default;
+    ~GrassPipelineVariants();
+    GrassPipelineVariants(const GrassPipelineVariants&) = delete;
+    GrassPipelineVariants& operator=(const GrassPipelineVariants&) = delete;
+
+    // Takes the modules (also on failure). Throws std::runtime_error.
+    void Initialize(VkDevice device, const GrassPipelineTargets& targets, VkPipelineLayout layout,
+                    VkShaderModule vertex, std::span<const VkShaderModule> fragments, size_t pipelineCount);
+    // The set for a frame's attachments, indexed like CreateGrassPipelineSet.
+    // Throws std::runtime_error when its pipelines cannot be created.
+    [[nodiscard]] std::span<const VkPipeline> For(const PicaAttachmentRequirements& attachments);
+    // The every-guide set exists.
+    [[nodiscard]] bool Available() const noexcept;
+    void Destroy() noexcept;
+
+  private:
+    VkDevice mDevice = VK_NULL_HANDLE;
+    GrassPipelineTargets mTargets;
+    VkPipelineLayout mLayout = VK_NULL_HANDLE;
+    VkShaderModule mVertex = VK_NULL_HANDLE;
+    std::vector<VkShaderModule> mFragments;
+    size_t mPipelineCount = 0;
+    std::unordered_map<uint8_t, std::vector<VkPipeline>> mSets;
+};
 
 } // namespace Fast::Oot3d
 

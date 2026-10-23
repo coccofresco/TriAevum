@@ -7,7 +7,10 @@
 #include <cstddef>
 #include <cstring>
 #include <stdexcept>
+#include <unordered_map>
 #include <vector>
+
+#include "fast/oot3d/pica_attachment_formats.h"
 
 namespace Fast::Oot3d {
 
@@ -102,11 +105,12 @@ struct WorldDebugLinePass::Impl {
     VkFormat DepthFormat = VK_FORMAT_UNDEFINED;
     VkPipelineCache PipelineCache = VK_NULL_HANDLE;
     bool Initialized = false;
-    bool PipelinesBuilt = false;
     std::string UnavailableReason;
     VkPipelineLayout PipelineLayout = VK_NULL_HANDLE;
-    // [attachment layout 0..2][visible, hidden]
-    std::array<std::array<VkPipeline, 2>, 3> Pipelines{};
+    // Per bound guide layout (its instrumented requirements' key):
+    // [attachment layout 0..2][visible, hidden].
+    using PipelineSet = std::array<std::array<VkPipeline, 2>, 3>;
+    std::unordered_map<uint8_t, PipelineSet> Pipelines;
     struct BufferSlot {
         VkBuffer Buffer = VK_NULL_HANDLE;
         VkDeviceMemory Memory = VK_NULL_HANDLE;
@@ -149,24 +153,45 @@ struct WorldDebugLinePass::Impl {
     }
 
     void DestroyPipelines() {
-        for (auto& pair : Pipelines)
-            for (auto& pipeline : pair) {
-                if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(Device, pipeline, nullptr);
-                pipeline = VK_NULL_HANDLE;
-            }
+        for (auto& [key, set] : Pipelines)
+            for (auto& pair : set)
+                for (auto& pipeline : pair) {
+                    if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(Device, pipeline, nullptr);
+                    pipeline = VK_NULL_HANDLE;
+                }
+        Pipelines.clear();
         if (PipelineLayout != VK_NULL_HANDLE) vkDestroyPipelineLayout(Device, PipelineLayout, nullptr);
         PipelineLayout = VK_NULL_HANDLE;
-        PipelinesBuilt = false;
     }
 
-    void BuildPipelines() {
-        VkPushConstantRange push{ VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
-                                  sizeof(LinePushConstants) };
-        VkPipelineLayoutCreateInfo layoutInfo{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
-        layoutInfo.pushConstantRangeCount = 1U;
-        layoutInfo.pPushConstantRanges = &push;
-        if (vkCreatePipelineLayout(Device, &layoutInfo, nullptr, &PipelineLayout) != VK_SUCCESS)
-            throw std::runtime_error("cannot create the world debug line pipeline layout");
+    // The set for the guides `instrumented` binds (dynamic rendering; the
+    // render pass binds every base guide).
+    const PipelineSet& PipelinesFor(PicaAttachmentRequirements instrumented) {
+        auto [found, inserted] = Pipelines.try_emplace(instrumented.Key());
+        if (inserted) {
+            try {
+                BuildPipelines(instrumented, found->second);
+            } catch (...) {
+                for (auto& pair : found->second)
+                    for (auto& pipeline : pair)
+                        if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(Device, pipeline, nullptr);
+                Pipelines.erase(found);
+                throw;
+            }
+        }
+        return found->second;
+    }
+
+    void BuildPipelines(PicaAttachmentRequirements instrumented, PipelineSet& pipelines) {
+        if (PipelineLayout == VK_NULL_HANDLE) {
+            VkPushConstantRange push{ VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
+                                      sizeof(LinePushConstants) };
+            VkPipelineLayoutCreateInfo layoutInfo{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+            layoutInfo.pushConstantRangeCount = 1U;
+            layoutInfo.pPushConstantRanges = &push;
+            if (vkCreatePipelineLayout(Device, &layoutInfo, nullptr, &PipelineLayout) != VK_SUCCESS)
+                throw std::runtime_error("cannot create the world debug line pipeline layout");
+        }
         const VkShaderModule vertex =
             Compile(*Shaders, Device, kVertexShader, Renderer::SpirvStage::Vertex, "oot3d_world_debug_lines.vert");
         VkShaderModule fragment = VK_NULL_HANDLE;
@@ -242,11 +267,13 @@ struct WorldDebugLinePass::Impl {
             pipeline.pColorBlendState = &blend;
             pipeline.pDynamicState = &dynamic;
             pipeline.layout = PipelineLayout;
-            // The scene geometry passes' attachment formats (interactive grass).
-            const std::array<VkFormat, kPicaColorAttachmentCount> colorFormats{
-                VK_FORMAT_R8G8B8A8_UNORM,      VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM,
-                VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM,
-                VK_FORMAT_R32G32B32A32_UINT,   VK_FORMAT_R16G16B16A16_UNORM };
+            // The scene geometry passes' attachment formats, unbound guides
+            // without one: canonical, instrumented, with the albedo guide.
+            const std::array<PicaAttachmentRequirements, 3> layouts{
+                PicaAttachmentRequirements{}, instrumented.BaseGuides(),
+                PicaAttachmentRequirements{instrumented.BaseGuides().AuxiliaryOutputs |
+                                           PicaAuxiliaryOutput::DiffuseAlbedoGuide}};
+            auto colorFormats = kPicaColorAttachmentFormats;
             VkPipelineRenderingCreateInfoKHR rendering{ VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR };
             if (DynamicRendering) {
                 if (DepthFormat == VK_FORMAT_UNDEFINED)
@@ -263,8 +290,9 @@ struct WorldDebugLinePass::Impl {
                 1U, static_cast<uint32_t>(kPicaBaseInstrumentedColorAttachmentCount),
                 static_cast<uint32_t>(kPicaColorAttachmentCount) };
             const std::array<VkRenderPass, 2> renderPasses{ CanonicalRenderPass, InstrumentedRenderPass };
-            for (size_t layout = 0; layout < Pipelines.size(); ++layout) {
+            for (size_t layout = 0; layout < pipelines.size(); ++layout) {
                 if (layout == 2U && !DynamicRendering) continue;
+                colorFormats = BoundPicaColorAttachmentFormats(layouts[layout]);
                 blend.attachmentCount = attachmentCounts[layout];
                 if (DynamicRendering) {
                     rendering.colorAttachmentCount = attachmentCounts[layout];
@@ -277,7 +305,7 @@ struct WorldDebugLinePass::Impl {
                     // Visible: in front of the scene; hidden: behind it.
                     depth.depthCompareOp = hidden == 0U ? VK_COMPARE_OP_LESS_OR_EQUAL : VK_COMPARE_OP_GREATER;
                     if (vkCreateGraphicsPipelines(Device, PipelineCache, 1U, &pipeline, nullptr,
-                                                  &Pipelines[layout][hidden]) != VK_SUCCESS)
+                                                  &pipelines[layout][hidden]) != VK_SUCCESS)
                         throw std::runtime_error("cannot create a world debug line pipeline");
                 }
             }
@@ -288,7 +316,6 @@ struct WorldDebugLinePass::Impl {
         }
         vkDestroyShaderModule(Device, fragment, nullptr);
         vkDestroyShaderModule(Device, vertex, nullptr);
-        PipelinesBuilt = true;
     }
 };
 
@@ -323,10 +350,11 @@ bool WorldDebugLinePass::Draw(VkCommandBuffer commandBuffer, uint32_t frameSlot,
         width == 0U || height == 0U || lines.Lines.empty())
         return false;
     try {
-        if (!impl.PipelinesBuilt) impl.BuildPipelines();
         const size_t layout = attachments.NativeColorOnly() ? 0U
             : attachments.Requires(PicaAuxiliaryOutput::DiffuseAlbedoGuide) ? 2U : 1U;
-        const auto& pipelines = impl.Pipelines[layout];
+        const auto& pipelines = impl.PipelinesFor(
+            impl.DynamicRendering && !attachments.NativeColorOnly()
+                ? attachments.BaseGuides() : PicaAttachmentRequirements{kAllPicaAuxiliaryOutputs})[layout];
         if (pipelines[0] == VK_NULL_HANDLE || pipelines[1] == VK_NULL_HANDLE) return false;
         const auto vertices = BuildWorldDebugLineVertices(lines, worldToClip, jitterNdc);
         if (vertices.empty()) return false;

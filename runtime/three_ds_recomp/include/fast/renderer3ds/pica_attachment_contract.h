@@ -86,8 +86,25 @@ struct PicaAttachmentFeatureRequests {
     bool ScreenSpaceGlobalIllumination = false;
     // With DirectionalShadows: screen-space contact shadows of its light.
     bool ContactShadows = false;
+    // With Reflections: the trace reflects only water, which it finds itself;
+    // it reads the material guide's water mark, no normal guide.
+    bool ReflectionsWaterOnly = false;
     bool operator==(const PicaAttachmentFeatureRequests&) const = default;
 };
+
+// The auxiliary output an instrumented attachment carries (None: scene colour).
+[[nodiscard]] constexpr PicaAuxiliaryOutput PicaAuxiliaryOutputFor(PicaColorAttachment attachment) noexcept {
+    switch (attachment) {
+        case PicaColorAttachment::NormalGuide: return PicaAuxiliaryOutput::NormalGuide;
+        case PicaColorAttachment::MaterialGuide: return PicaAuxiliaryOutput::MaterialGuide;
+        case PicaColorAttachment::RigidMotionGuide: return PicaAuxiliaryOutput::RigidMotionGuide;
+        case PicaColorAttachment::AmbientGuide: return PicaAuxiliaryOutput::AmbientGuide;
+        case PicaColorAttachment::FogGuide: return PicaAuxiliaryOutput::FogGuide;
+        case PicaColorAttachment::OutlineGeometryGuide: return PicaAuxiliaryOutput::OutlineGeometryGuide;
+        case PicaColorAttachment::DiffuseAlbedoGuide: return PicaAuxiliaryOutput::DiffuseAlbedoGuide;
+        default: return PicaAuxiliaryOutput::None;
+    }
+}
 
 struct PicaAttachmentRequirements {
     PicaAuxiliaryOutput AuxiliaryOutputs = PicaAuxiliaryOutput::None;
@@ -110,6 +127,16 @@ struct PicaAttachmentRequirements {
         return Requires(PicaAuxiliaryOutput::DiffuseAlbedoGuide)
             ? static_cast<uint32_t>(kPicaColorAttachmentCount)
             : static_cast<uint32_t>(kPicaBaseInstrumentedColorAttachmentCount);
+    }
+    // Whether the layout binds an attachment: the scene colour always, a
+    // guide when required. An unbound guide keeps its location (instrumented
+    // programs write it, the write is discarded) and costs no target memory
+    // or bandwidth in the pass; a layout that cannot leave attachments
+    // unbound requires every base guide instead.
+    [[nodiscard]] constexpr bool Binds(PicaColorAttachment attachment) const noexcept {
+        return attachment == PicaColorAttachment::SceneColor ||
+               (static_cast<size_t>(attachment) < ColorAttachmentCount() &&
+                Requires(PicaAuxiliaryOutputFor(attachment)));
     }
     // The same requirements without the on-demand albedo guide.
     [[nodiscard]] constexpr PicaAttachmentRequirements BaseGuides() const noexcept {

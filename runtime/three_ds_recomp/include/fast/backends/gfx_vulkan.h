@@ -28,6 +28,7 @@
 #include "fast/backends/oot3d_vulkan_validation.h"
 #include "fast/backends/vulkan_scanout_probe.h"
 #include "fast/oot3d/render_resolution_policy.h"
+#include "fast/oot3d/pica_attachment_formats.h"
 #include "fast/oot3d/nri_interop_context.h"
 #include "fast/oot3d/brixelizer_gi_pass.h"
 #include "fast/oot3d/brixelizer_scene.h"

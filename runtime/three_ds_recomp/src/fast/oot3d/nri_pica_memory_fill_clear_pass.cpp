@@ -121,17 +121,23 @@ bool NriPicaMemoryFillClearPass::ClearAttachments(const NriPicaAttachmentClearDe
     std::array<nri::ClearAttachmentDesc, kPicaColorAttachmentCount + 1U> clears{};
     uint32_t count = 0;
     if (desc.ClearColor) {
+        // The scene colour and the bound guides; unbound guides are not in the pass.
         for (uint8_t index = 0; index < desc.Attachments.ColorAttachmentCount(); ++index) {
+            const auto attachment = static_cast<PicaColorAttachment>(index);
+            if (!desc.Attachments.Binds(attachment)) continue;
             auto& clear = clears[count++];
             clear.planes = nri::PlaneBits::COLOR;
             clear.colorAttachmentIndex = index;
-        }
-        clears[0].value.color.f = { desc.Color[0], desc.Color[1], desc.Color[2], desc.Color[3] };
-        if (!desc.Attachments.NativeColorOnly()) {
-            clears[1].value.color.f = { 0.5F, 0.5F, 1.0F, 0.0F };
-            clears[4].value.color.f = { 1.0F, 1.0F, 1.0F, 0.0F };
-            clears[PicaAttachmentIndex(PicaColorAttachment::FogGuide)].value.color.f = { 0, 0, 0, 1 };
-            clears[PicaAttachmentIndex(PicaColorAttachment::OutlineGeometryGuide)].value.color.f = { 0, 0, 0, 1 };
+            switch (attachment) {
+                case PicaColorAttachment::SceneColor:
+                    clear.value.color.f = { desc.Color[0], desc.Color[1], desc.Color[2], desc.Color[3] };
+                    break;
+                case PicaColorAttachment::NormalGuide: clear.value.color.f = { 0.5F, 0.5F, 1.0F, 0.0F }; break;
+                case PicaColorAttachment::AmbientGuide: clear.value.color.f = { 1.0F, 1.0F, 1.0F, 0.0F }; break;
+                case PicaColorAttachment::FogGuide:
+                case PicaColorAttachment::OutlineGeometryGuide: clear.value.color.f = { 0, 0, 0, 1 }; break;
+                default: break;
+            }
         }
     }
     if (desc.ClearDepth) {

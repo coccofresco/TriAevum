@@ -1,5 +1,6 @@
 #include "fast/oot3d/pica_nri_pipeline_state.h"
 #include "fast/oot3d/pica_alpha_coverage_policy.h"
+#include "fast/oot3d/pica_attachment_formats.h"
 #include "fast/oot3d/outline_occlusion_pass.h"
 #include <stdexcept>
 
@@ -334,13 +335,13 @@ Renderer3ds::NriPicaGraphicsPipelineDesc BuildPicaNriPipelineState(
     result.StencilTest = depthStencil.stencilTestEnable != VK_FALSE;
     result.FrontStencil = depthStencil.front;
     result.BackStencil = depthStencil.back;
+    // An unbound guide declares no format and no writes.
+    result.ColorFormats = BoundPicaColorAttachmentFormats(attachments);
+    for (size_t index = 0; index < colorAttachments.size(); ++index)
+        if (result.ColorFormats[index] == VK_FORMAT_UNDEFINED) colorAttachments[index] = {};
     result.Colors = colorAttachments;
     result.LogicOpEnabled = !shadowProducer && !draw.Blend.Enabled;
     result.LogicOp = ToNativeVkLogic(draw.LogicOperation);
-    result.ColorFormats = {
-        VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM,
-        VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_R8G8B8A8_UNORM,
-        VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R32G32B32A32_UINT, VK_FORMAT_R16G16B16A16_UNORM};
     result.ColorAttachmentCount = attachments.ColorAttachmentCount();
     result.DepthStencilFormat = depthFormat;
     return result;

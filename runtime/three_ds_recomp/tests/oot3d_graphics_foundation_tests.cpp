@@ -86,6 +86,7 @@
 #define OOT3D_TEST_DEFINED_VULKAN
 #define ENABLE_OOT3D_VULKAN
 #endif
+#include "fast/oot3d/pica_attachment_formats.h"
 #include "fast/oot3d/pica_dynamic_rendering_scope.h"
 #include "fast/oot3d/pica_alpha_coverage_policy.h"
 #include "fast/oot3d/pica_guide_sampling_barriers.h"
@@ -4737,6 +4738,42 @@ TEST(Oot3dPicaRendering, ValidatesSingleAndMultisampleAttachmentContracts) {
         target, VK_RESOLVE_MODE_MIN_BIT));
     EXPECT_FALSE(Fast::Oot3d::ValidatePicaNriRenderingTarget(
         target, VK_RESOLVE_MODE_MIN_BIT));
+
+    // A guide the layout leaves unbound: no views, no images, no format.
+    target.ColorFormats[2] = VK_FORMAT_UNDEFINED;
+    target.Colors[2] = VK_NULL_HANDLE;
+    target.ColorImages[2] = target.ResolveImages[2] = VK_NULL_HANDLE;
+    EXPECT_FALSE(Fast::Oot3d::PicaDynamicRenderingBinds(target, 2U));
+    EXPECT_TRUE(Fast::Oot3d::ValidatePicaDynamicRenderingTarget(
+        target, VK_RESOLVE_MODE_MIN_BIT));
+    EXPECT_TRUE(Fast::Oot3d::ValidatePicaNriRenderingTarget(
+        target, VK_RESOLVE_MODE_MIN_BIT));
+    // A bound guide (a format) without a view is not a layout.
+    target.ColorFormats[2] = VK_FORMAT_R8G8B8A8_UNORM;
+    EXPECT_FALSE(Fast::Oot3d::ValidatePicaDynamicRenderingTarget(
+        target, VK_RESOLVE_MODE_MIN_BIT));
+    // The scene colour is always bound.
+    target.ColorFormats[2] = VK_FORMAT_UNDEFINED;
+    target.ColorFormats[0] = VK_FORMAT_UNDEFINED;
+    target.Colors[0] = VK_NULL_HANDLE;
+    EXPECT_TRUE(Fast::Oot3d::PicaDynamicRenderingBinds(target, 0U));
+    EXPECT_FALSE(Fast::Oot3d::ValidatePicaDynamicRenderingTarget(
+        target, VK_RESOLVE_MODE_MIN_BIT));
+
+    // The bound formats of a layout: the material guide alone with the colour.
+    const Fast::Oot3d::PicaAttachmentRequirements materialOnly{
+        Fast::Oot3d::PicaAuxiliaryOutput::MaterialGuide};
+    const auto formats = Fast::Oot3d::BoundPicaColorAttachmentFormats(materialOnly);
+    EXPECT_EQ(formats[0], VK_FORMAT_R8G8B8A8_UNORM);
+    EXPECT_EQ(formats[1], VK_FORMAT_UNDEFINED);
+    EXPECT_EQ(formats[2], VK_FORMAT_R8G8B8A8_UNORM);
+    for (size_t index = 3; index < formats.size(); ++index)
+        EXPECT_EQ(formats[index], VK_FORMAT_UNDEFINED) << index;
+    const auto every = Fast::Oot3d::BoundPicaColorAttachmentFormats(
+        Fast::Oot3d::PicaAttachmentRequirements{Fast::Oot3d::kAllPicaAuxiliaryOutputs});
+    for (size_t index = 0; index < Fast::Oot3d::kPicaBaseInstrumentedColorAttachmentCount; ++index)
+        EXPECT_EQ(every[index], Fast::Oot3d::kPicaColorAttachmentFormats[index]) << index;
+    EXPECT_EQ(every[Fast::Oot3d::kPicaBaseInstrumentedColorAttachmentCount], VK_FORMAT_UNDEFINED);
 }
 
 TEST(Oot3dPicaNriDrawOwnership,

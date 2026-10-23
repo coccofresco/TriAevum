@@ -506,6 +506,7 @@ void GfxRenderingAPIVulkan::StartFrame() {
         screenSpaceGlobalIlluminationRequested,
         graphicsSettings.Effects.DirectionalShadows.Mode == Oot3d::DirectionalShadowMode::VirtualShadowMaps &&
             graphicsSettings.Effects.DirectionalShadows.ContactShadows.Enabled,
+        mWaterOnlyReflections,
     };
     if (!mPicaExtensionRequests.has_value() ||
         *mPicaExtensionRequests != extensionRequests) {
@@ -574,14 +575,19 @@ void GfxRenderingAPIVulkan::StartFrame() {
     }
     mInteractiveGrassProviderExecution.Reset(
         mInteractiveGrassProviderPlan);
-    if (mFramePicaAttachmentRequirements != mPicaExtensionGraph.Attachments) {
+    auto frameAttachments = mPicaExtensionGraph.Attachments;
+    // Dynamic rendering leaves the guides no effect requires unbound; the
+    // instrumented render pass binds every base guide.
+    if (!mPicaDynamicRenderingScope.Available() && !frameAttachments.NativeColorOnly())
+        frameAttachments.AuxiliaryOutputs |= Oot3d::kAllPicaAuxiliaryOutputs;
+    if (mFramePicaAttachmentRequirements != frameAttachments) {
         // Effect activation is not a native framebuffer invalidation. Retain
         // color/depth, transfer snapshots and cached framebuffer variants.
         for (auto& [key, target] : mNativePicaRenderTargets) {
             target.AuxiliaryNeedsClear = true;
         }
     }
-    mFramePicaAttachmentRequirements = mPicaExtensionGraph.Attachments;
+    mFramePicaAttachmentRequirements = frameAttachments;
     if (mNativeFidelityProfile &&
         !mFramePicaAttachmentRequirements.NativeColorOnly()) {
         throw std::runtime_error(

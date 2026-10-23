@@ -34,6 +34,14 @@ struct PicaDynamicRenderingTarget {
     VkSampleCountFlagBits Samples = VK_SAMPLE_COUNT_1_BIT;
 };
 
+// A guide attachment the layout leaves unbound has no view and
+// VK_FORMAT_UNDEFINED: its writes are discarded. The scene colour is bound.
+[[nodiscard]] inline bool PicaDynamicRenderingBinds(
+    const PicaDynamicRenderingTarget& target, size_t index) {
+    return index == 0U || target.Colors[index] != VK_NULL_HANDLE ||
+           target.ColorFormats[index] != VK_FORMAT_UNDEFINED;
+}
+
 [[nodiscard]] inline bool ValidatePicaDynamicRenderingTarget(
     const PicaDynamicRenderingTarget& target,
     VkResolveModeFlagBits depthResolveMode) {
@@ -44,11 +52,11 @@ struct PicaDynamicRenderingTarget {
         target.ColorAttachmentCount > kPicaColorAttachmentCount)
         return false;
     for (size_t index = 0; index < target.ColorAttachmentCount; ++index)
-        if (target.Colors[index] == VK_NULL_HANDLE) return false;
+        if (PicaDynamicRenderingBinds(target, index) && target.Colors[index] == VK_NULL_HANDLE) return false;
     if (target.Samples == VK_SAMPLE_COUNT_1_BIT)
         return true;
     for (size_t index = 0; index < target.ColorAttachmentCount; ++index)
-        if (target.Resolves[index] == VK_NULL_HANDLE) return false;
+        if (PicaDynamicRenderingBinds(target, index) && target.Resolves[index] == VK_NULL_HANDLE) return false;
     return target.DepthResolve != VK_NULL_HANDLE &&
            depthResolveMode != VK_RESOLVE_MODE_NONE;
 }
@@ -61,13 +69,15 @@ struct PicaDynamicRenderingTarget {
         target.DepthFormat == VK_FORMAT_UNDEFINED)
         return false;
     for (size_t index = 0; index < target.ColorAttachmentCount; ++index)
-        if (target.ColorImages[index] == VK_NULL_HANDLE ||
-            target.ColorFormats[index] == VK_FORMAT_UNDEFINED)
+        if (PicaDynamicRenderingBinds(target, index) &&
+            (target.ColorImages[index] == VK_NULL_HANDLE ||
+             target.ColorFormats[index] == VK_FORMAT_UNDEFINED))
             return false;
     if (target.Samples == VK_SAMPLE_COUNT_1_BIT)
         return true;
     for (size_t index = 0; index < target.ColorAttachmentCount; ++index)
-        if (target.ResolveImages[index] == VK_NULL_HANDLE) return false;
+        if (PicaDynamicRenderingBinds(target, index) && target.ResolveImages[index] == VK_NULL_HANDLE)
+            return false;
     return target.DepthResolveImage != VK_NULL_HANDLE;
 }
 

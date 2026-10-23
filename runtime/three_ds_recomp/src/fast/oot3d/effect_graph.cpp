@@ -478,8 +478,9 @@ bool PicaExtensionPassEnabled(const CompiledEffectGraph& graph,
 CompiledEffectGraph BuildPicaExtensionGraph(const PicaAttachmentFeatureRequests& requests) {
     EffectGraph graph;
     std::vector<EffectResourceUse> guideOutputs;
-    if (requests.AmbientOcclusion || requests.ToonOutline || requests.Reflections ||
-        requests.GlobalIllumination) {
+    // A water-only trace finds the water and its normal itself.
+    if (requests.AmbientOcclusion || requests.ToonOutline ||
+        (requests.Reflections && !requests.ReflectionsWaterOnly) || requests.GlobalIllumination) {
         guideOutputs.push_back(Write(EffectResource::NormalGuide));
     }
     if (requests.Reflections || requests.TemporalReconstruction || requests.GlobalIllumination) {
@@ -569,15 +570,19 @@ CompiledEffectGraph BuildPicaExtensionGraph(const PicaAttachmentFeatureRequests&
                 .Contract = EffectContractKind::ComposerPass,
                 .Resources = { Read(EffectResource::NativeSceneView), Read(EffectResource::NativeDepth),
                                Read(EffectResource::NormalGuide), Write(EffectResource::AmbientOcclusion) } });
+    std::vector<EffectResourceUse> reflectionResources{
+        Read(EffectResource::PicaSceneFrame), Read(EffectResource::NativeSceneView),
+        Read(EffectResource::SceneColor), Read(EffectResource::NativeDepth)};
+    if (!requests.ReflectionsWaterOnly)
+        reflectionResources.push_back(Read(EffectResource::NormalGuide));
+    reflectionResources.push_back(Read(EffectResource::MaterialGuide));
+    reflectionResources.push_back(Write(EffectResource::ReflectionColor));
     graph.Add({ .Name = std::string(PicaExtensionPassName(PicaExtensionPass::Reflections)),
                 .DependsOn = { std::string(PicaExtensionPassName(PicaExtensionPass::Guides)) },
                 .Enabled = requests.Reflections,
                 .Stage = EffectStage::AfterOpaque,
                 .Contract = EffectContractKind::ComposerPass,
-                .Resources = { Read(EffectResource::PicaSceneFrame), Read(EffectResource::NativeSceneView),
-                               Read(EffectResource::SceneColor), Read(EffectResource::NativeDepth),
-                               Read(EffectResource::NormalGuide), Read(EffectResource::MaterialGuide),
-                               Write(EffectResource::ReflectionColor) } });
+                .Resources = std::move(reflectionResources) });
     graph.Add({ .Name = std::string(PicaExtensionPassName(PicaExtensionPass::TemporalReconstruction)),
                 .DependsOn = { std::string(PicaExtensionPassName(PicaExtensionPass::Guides)) },
                 .Enabled = requests.TemporalReconstruction,

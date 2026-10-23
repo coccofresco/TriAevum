@@ -73,6 +73,15 @@ option(THREE_DS_RECOMP_ENABLE_VULKAN "Build the native 3DS Vulkan backend" OFF)
 option(THREE_DS_RECOMP_ENABLE_NRI "Enable NVIDIA NRI interop for the native 3DS Vulkan backend" ${THREE_DS_RECOMP_ENABLE_VULKAN})
 cmake_dependent_option(THREE_DS_RECOMP_ENABLE_NRI_UPSCALER_SDKS
 	"Compile the optional NRI desktop upscaler SDK integrations" ON "NOT ANDROID" OFF)
+# NIS is shader-only (NRI's own Shaders/NIS.hlsl, built to SPIR-V by the host
+# ShaderMake/DXC): Android compiles it without the desktop SDKs.
+if(ANDROID)
+	set(three_ds_recomp_nis_default ON)
+else()
+	set(three_ds_recomp_nis_default ${THREE_DS_RECOMP_ENABLE_NRI_UPSCALER_SDKS})
+endif()
+option(THREE_DS_RECOMP_ENABLE_NRI_NIS "Compile NRI's NIS spatial upscaler"
+	${three_ds_recomp_nis_default})
 # DLSS (NVIDIA's NGX SDK, under NVIDIA's licence) lives only in the DLSS module
 # (src/fast/dlss/LICENSE.md): its own shared library, triaevum_dlss, which the
 # runtime loads when installed beside it with NVIDIA's DLSS runtime. The
@@ -194,7 +203,7 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
 		set(NRI_ENABLE_DEBUG_NAMES_AND_ANNOTATIONS ON CACHE BOOL "" FORCE)
 		# Keep every NRIUpscaler provider independently capability-gated at
 		# runtime even though their SDK adapters are compiled together here.
-		set(NRI_ENABLE_NIS_SDK ${THREE_DS_RECOMP_ENABLE_NRI_UPSCALER_SDKS} CACHE BOOL "" FORCE)
+		set(NRI_ENABLE_NIS_SDK ${THREE_DS_RECOMP_ENABLE_NRI_NIS} CACHE BOOL "" FORCE)
 		set(NRI_ENABLE_FFX_SDK ${THREE_DS_RECOMP_ENABLE_NRI_UPSCALER_SDKS} CACHE BOOL "" FORCE)
 		# Vulkan DLSS belongs to the DLSS module, outside the runtime; only the
 		# D3D12 NGX experiment links NGX into NRI.
@@ -228,6 +237,9 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
 				COMMAND ${CMAKE_COMMAND}
 					-DNRI_SOURCE_DIR=${THREE_DS_RECOMP_NRI_SOURCE_DIR}
 					-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/oot3d_nri_storage_view_sampled.cmake
+				COMMAND ${CMAKE_COMMAND}
+					-DNRI_SOURCE_DIR=${THREE_DS_RECOMP_NRI_SOURCE_DIR}
+					-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/oot3d_nri_unbound_color_attachments.cmake
 				COMMAND_ERROR_IS_FATAL ANY)
 		else()
 			FetchContent_Declare(nri
@@ -256,7 +268,20 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
 				COMMAND ${CMAKE_COMMAND}
 					-DNRI_SOURCE_DIR=<SOURCE_DIR>
 					-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/oot3d_nri_storage_view_sampled.cmake
+				COMMAND ${CMAKE_COMMAND}
+					-DNRI_SOURCE_DIR=<SOURCE_DIR>
+					-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/oot3d_nri_unbound_color_attachments.cmake
 			)
+		endif()
+		if(ANDROID AND CMAKE_HOST_WIN32 AND THREE_DS_RECOMP_ENABLE_NRI_NIS)
+			# ShaderMake is a host tool, but its predicted path takes the Android
+			# (empty) executable suffix. A normal variable here shadows that cache
+			# entry for NRI's shader target. Generated headers stay in this build
+			# instead of a source tree that a desktop build may share.
+			set(SHADERMAKE_PATH
+				"${FETCHCONTENT_BASE_DIR}/shadermake-build/build/ShaderMake.exe")
+			set(NRI_SHADERS_PATH "${CMAKE_CURRENT_BINARY_DIR}/nri-shaders"
+				CACHE STRING "" FORCE)
 		endif()
 		FetchContent_MakeAvailable(nri)
 		if(WIN32 AND NRI_STATIC_LIBRARY AND TARGET NRI)

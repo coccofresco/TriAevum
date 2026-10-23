@@ -394,6 +394,20 @@ TEST(Oot3dEffectGraph, DerivesFrameAttachmentsFromExtensionContracts) {
     ASSERT_TRUE(reflections.Valid()) << reflections.Error;
     EXPECT_EQ(reflections.Attachments.AuxiliaryOutputs,
               PicaAuxiliaryOutput::NormalGuide | PicaAuxiliaryOutput::MaterialGuide);
+    // A water-only trace finds the water and its normal itself: only the
+    // material guide's water mark, bound alone with the scene colour.
+    const auto waterReflections = BuildPicaExtensionGraph({ .Reflections = true, .ReflectionsWaterOnly = true });
+    ASSERT_TRUE(waterReflections.Valid()) << waterReflections.Error;
+    EXPECT_EQ(waterReflections.Attachments.AuxiliaryOutputs, PicaAuxiliaryOutput::MaterialGuide);
+    EXPECT_FALSE(waterReflections.FindPass(PicaExtensionPassName(PicaExtensionPass::Reflections))
+                     ->ReadsResource(EffectResource::NormalGuide));
+    EXPECT_TRUE(waterReflections.Attachments.Binds(PicaColorAttachment::SceneColor));
+    EXPECT_TRUE(waterReflections.Attachments.Binds(PicaColorAttachment::MaterialGuide));
+    EXPECT_FALSE(waterReflections.Attachments.Binds(PicaColorAttachment::NormalGuide));
+    EXPECT_FALSE(waterReflections.Attachments.Binds(PicaColorAttachment::OutlineGeometryGuide));
+    EXPECT_FALSE(waterReflections.Attachments.Binds(PicaColorAttachment::DiffuseAlbedoGuide));
+    EXPECT_FALSE(BuildPicaExtensionGraph({ .ReflectionsWaterOnly = true }).Attachments.Requires(
+        PicaAuxiliaryOutput::MaterialGuide));
 
     const auto gi = BuildPicaExtensionGraph({ .GlobalIllumination = true });
     ASSERT_TRUE(gi.Valid()) << gi.Error;

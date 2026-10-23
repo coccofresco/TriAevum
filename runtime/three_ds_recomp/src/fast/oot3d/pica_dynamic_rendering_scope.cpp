@@ -210,6 +210,7 @@ bool PicaDynamicRenderingScope::Begin(
         bool ready = core != nullptr && nriCommand != nullptr;
         for (size_t index = 0;
              ready && index < target.ColorAttachmentCount; ++index) {
+            if (!PicaDynamicRenderingBinds(target, index)) continue;
             ready = mImpl->Interop->WrapTexture(
                         target.ColorImages[index],
                         target.ColorFormats[index],
@@ -312,7 +313,7 @@ bool PicaDynamicRenderingScope::Begin(
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         colors[i].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
         colors[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        if (multisampled) {
+        if (multisampled && PicaDynamicRenderingBinds(target, i)) {
             // The geometry guide is an integer attachment: one sample.
             colors[i].resolveMode = i == static_cast<uint32_t>(PicaColorAttachment::OutlineGeometryGuide)
                 ? VK_RESOLVE_MODE_SAMPLE_ZERO_BIT : VK_RESOLVE_MODE_AVERAGE_BIT;

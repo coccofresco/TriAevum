@@ -613,7 +613,11 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
     target.Key = key;
     target.Width = targetExtent.Width;
     target.Height = targetExtent.Height;
+    // A target allocates every base guide together; a frame binds the ones
+    // its effects require (ActivePicaAttachmentRequirements).
     target.Attachments = ActivePicaAttachmentRequirements().BaseGuides();
+    if (!target.Attachments.NativeColorOnly())
+        target.Attachments.AuxiliaryOutputs |= Oot3d::kAllPicaAuxiliaryOutputs;
     const bool instrumented = !target.Attachments.NativeColorOnly();
     VkFormatProperties shadowFormatProperties{};
     vkGetPhysicalDeviceFormatProperties(mPhysicalDevice, VK_FORMAT_R32_UINT,
@@ -1636,10 +1640,13 @@ void GfxRenderingAPIVulkan::BeginNativePicaRenderPass(
             multisampled ? target.MsaaDepthImage : target.DepthImage;
         renderingTarget.DepthResolveImage =
             multisampled ? target.DepthImage : VK_NULL_HANDLE;
-        renderingTarget.ColorFormats = { VK_FORMAT_R8G8B8A8_UNORM,     VK_FORMAT_R8G8B8A8_UNORM,
-                                         VK_FORMAT_R8G8B8A8_UNORM,     VK_FORMAT_R16G16B16A16_SFLOAT,
-                                         VK_FORMAT_R8G8B8A8_UNORM,     VK_FORMAT_R8G8B8A8_UNORM,
-                                         VK_FORMAT_R32G32B32A32_UINT, VK_FORMAT_R16G16B16A16_UNORM };
+        renderingTarget.ColorFormats = Oot3d::BoundPicaColorAttachmentFormats(attachments);
+        // The guides no effect requires this frame stay allocated but unbound.
+        for (size_t index = 0; index < renderingTarget.ColorFormats.size(); ++index) {
+            if (renderingTarget.ColorFormats[index] != VK_FORMAT_UNDEFINED) continue;
+            renderingTarget.Colors[index] = renderingTarget.Resolves[index] = VK_NULL_HANDLE;
+            renderingTarget.ColorImages[index] = renderingTarget.ResolveImages[index] = VK_NULL_HANDLE;
+        }
         renderingTarget.DepthFormat = mDepthFormat;
         renderingTarget.ColorAttachmentCount = attachments.ColorAttachmentCount();
         renderingTarget.Width = target.Width;
@@ -1820,40 +1827,16 @@ void GfxRenderingAPIVulkan::ApplyPendingNativePicaMemoryFills(NativePicaRenderTa
                 attachment.colorAttachment = 0U;
                 attachment.clearValue.color = decodedColor;
             }
-            if (coversColor && !mActiveNativePicaAttachments.NativeColorOnly()) {
-                auto& normalGuide = attachments[attachmentCount++];
-                normalGuide.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                normalGuide.colorAttachment = 1U;
-                normalGuide.clearValue.color = { { 0.5F, 0.5F, 1.0F, 0.0F } };
-                auto& materialGuide = attachments[attachmentCount++];
-                materialGuide.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                materialGuide.colorAttachment = 2U;
-                materialGuide.clearValue.color = { { 0.0F, 0.0F, 0.0F, 0.0F } };
-                auto& rigidMotionGuide = attachments[attachmentCount++];
-                rigidMotionGuide.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                rigidMotionGuide.colorAttachment = 3U;
-                rigidMotionGuide.clearValue.color = { { 0.0F, 0.0F, 0.0F, 0.0F } };
-                auto& ambientGuide = attachments[attachmentCount++];
-                ambientGuide.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                ambientGuide.colorAttachment = 4U;
-                ambientGuide.clearValue.color = { { 1.0F, 1.0F, 1.0F, 0.0F } };
-                auto& fogGuide = attachments[attachmentCount++];
-                fogGuide.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                fogGuide.colorAttachment = static_cast<uint32_t>(Oot3d::PicaColorAttachment::FogGuide);
-                fogGuide.clearValue.color = {{0, 0, 0, 1}};
-            }
-            if (coversColor && !mActiveNativePicaAttachments.NativeColorOnly()) {
+            // The bound guides' cleared values; unbound guides are not in the pass.
+            const std::array<VkClearColorValue, Oot3d::kPicaColorAttachmentCount> guideClears{ {
+                {}, { { 0.5F, 0.5F, 1.0F, 0.0F } }, {}, {}, { { 1.0F, 1.0F, 1.0F, 0.0F } },
+                { { 0.0F, 0.0F, 0.0F, 1.0F } }, { { 0.0F, 0.0F, 0.0F, 1.0F } }, {} } };
+            for (uint32_t index = 1U; coversColor && index < guideClears.size(); ++index) {
+                if (!mActiveNativePicaAttachments.Binds(static_cast<Oot3d::PicaColorAttachment>(index))) continue;
                 auto& guide = attachments[attachmentCount++];
                 guide.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                guide.colorAttachment = static_cast<uint32_t>(Oot3d::PicaColorAttachment::OutlineGeometryGuide);
-                guide.clearValue.color = {{0, 0, 0, 1}};
-            }
-            if (coversColor &&
-                mActiveNativePicaAttachments.Requires(Oot3d::PicaAuxiliaryOutput::DiffuseAlbedoGuide)) {
-                auto& guide = attachments[attachmentCount++];
-                guide.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                guide.colorAttachment = static_cast<uint32_t>(Oot3d::PicaColorAttachment::DiffuseAlbedoGuide);
-                guide.clearValue.color = {};
+                guide.colorAttachment = index;
+                guide.clearValue.color = guideClears[index];
             }
             if (coversDepth) {
                 auto& attachment = attachments[attachmentCount++];

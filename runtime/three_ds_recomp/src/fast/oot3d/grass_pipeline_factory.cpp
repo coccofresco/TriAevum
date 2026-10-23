@@ -5,6 +5,7 @@
 #include "fast/oot3d/grass_draw_state.h"
 #include "fast/oot3d/outline_occlusion_pass.h"
 #include "fast/oot3d/pica_attachment_contract.h"
+#include "fast/oot3d/pica_attachment_formats.h"
 
 #include <algorithm>
 #include <stdexcept>
@@ -29,7 +30,7 @@ VkShaderModule CompileGrassShaderModule(Renderer::CachedPassShaderCompiler& shad
 
 void CreateGrassPipelineSet(VkDevice device, const GrassPipelineTargets& targets, VkPipelineLayout layout,
                             VkShaderModule vertex, std::span<const VkShaderModule> fragments,
-                            std::span<VkPipeline> pipelines) {
+                            std::span<VkPipeline> pipelines, PicaAttachmentRequirements instrumented) {
     if (fragments.size() % 2U != 0U || pipelines.size() != fragments.size() / 2U * 3U)
         throw std::runtime_error("interactive grass pipeline set does not match its fragments");
     std::fill(pipelines.begin(), pipelines.end(), VK_NULL_HANDLE);
@@ -68,9 +69,10 @@ void CreateGrassPipelineSet(VkDevice device, const GrassPipelineTargets& targets
     // normal and depth (R/A) stay the outlines' native surface.
     VkPipelineColorBlendAttachmentState geometryAttachment{};
     geometryAttachment.colorWriteMask = VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
-    const std::array<VkPipelineColorBlendAttachmentState, kPicaColorAttachmentCount> attachments{
+    const std::array<VkPipelineColorBlendAttachmentState, kPicaColorAttachmentCount> allAttachments{
         attachment, guideAttachment, guideAttachment, motionAttachment,
         guideAttachment, VkPipelineColorBlendAttachmentState{}, geometryAttachment};
+    auto attachments = allAttachments;
     static_assert(kPicaColorAttachmentCount == kPicaBaseInstrumentedColorAttachmentCount + 1U);
     VkPipelineColorBlendStateCreateInfo blend{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
     blend.pAttachments = attachments.data();
@@ -90,10 +92,11 @@ void CreateGrassPipelineSet(VkDevice device, const GrassPipelineTargets& targets
     pipeline.pColorBlendState = &blend;
     pipeline.pDynamicState = &dynamic;
     pipeline.layout = layout;
-    const std::array<VkFormat, kPicaColorAttachmentCount> colorFormats{
-        VK_FORMAT_R8G8B8A8_UNORM,      VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM,
-        VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM,
-        VK_FORMAT_R32G32B32A32_UINT,   VK_FORMAT_R16G16B16A16_UNORM};
+    // Canonical colour only; the instrumented guides; the same with the albedo guide.
+    const std::array<PicaAttachmentRequirements, 3> layouts{
+        PicaAttachmentRequirements{}, instrumented.BaseGuides(),
+        PicaAttachmentRequirements{instrumented.BaseGuides().AuxiliaryOutputs | PicaAuxiliaryOutput::DiffuseAlbedoGuide}};
+    auto colorFormats = kPicaColorAttachmentFormats;
     VkPipelineRenderingCreateInfoKHR rendering{VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR};
     if (targets.DynamicRendering) {
         if (targets.DepthFormat == VK_FORMAT_UNDEFINED)
@@ -114,6 +117,11 @@ void CreateGrassPipelineSet(VkDevice device, const GrassPipelineTargets& targets
             const size_t index = slot % 3U;
             if (index == 2U && !targets.DynamicRendering) continue;
             stages[1].module = fragments[std::min<size_t>(index, 1U) + slot / 3U * 2U];
+            // An unbound guide declares no format and no writes.
+            colorFormats = BoundPicaColorAttachmentFormats(layouts[index]);
+            for (size_t color = 0; color < attachments.size(); ++color)
+                attachments[color] = colorFormats[color] == VK_FORMAT_UNDEFINED
+                    ? VkPipelineColorBlendAttachmentState{} : allAttachments[color];
             blend.attachmentCount = attachmentCounts[index];
             if (targets.DynamicRendering) {
                 rendering.colorAttachmentCount = attachmentCounts[index];
@@ -137,6 +145,56 @@ void DestroyGrassPipelineSet(VkDevice device, std::span<VkPipeline> pipelines) n
         if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
         pipeline = VK_NULL_HANDLE;
     }
+}
+
+GrassPipelineVariants::~GrassPipelineVariants() { Destroy(); }
+
+void GrassPipelineVariants::Initialize(VkDevice device, const GrassPipelineTargets& targets,
+                                       VkPipelineLayout layout, VkShaderModule vertex,
+                                       std::span<const VkShaderModule> fragments, size_t pipelineCount) {
+    Destroy();
+    mDevice = device;
+    mTargets = targets;
+    mLayout = layout;
+    mVertex = vertex;
+    mFragments.assign(fragments.begin(), fragments.end());
+    mPipelineCount = pipelineCount;
+    (void)For(PicaAttachmentRequirements{kAllPicaAuxiliaryOutputs});
+}
+
+std::span<const VkPipeline> GrassPipelineVariants::For(const PicaAttachmentRequirements& attachments) {
+    // Colour-only frames use the canonical pipelines of any set; the
+    // instrumented render pass binds every base guide.
+    const auto instrumented = mTargets.DynamicRendering && !attachments.NativeColorOnly()
+        ? attachments.BaseGuides() : PicaAttachmentRequirements{kAllPicaAuxiliaryOutputs};
+    auto [found, inserted] = mSets.try_emplace(instrumented.Key());
+    if (inserted) {
+        found->second.assign(mPipelineCount, VK_NULL_HANDLE);
+        try {
+            CreateGrassPipelineSet(mDevice, mTargets, mLayout, mVertex, mFragments, found->second, instrumented);
+        } catch (...) {
+            mSets.erase(found);
+            throw;
+        }
+    }
+    return found->second;
+}
+
+bool GrassPipelineVariants::Available() const noexcept {
+    const auto found = mSets.find(PicaAttachmentRequirements{kAllPicaAuxiliaryOutputs}.Key());
+    return found != mSets.end() && found->second.size() >= 2U && found->second[0] != VK_NULL_HANDLE &&
+           found->second[1] != VK_NULL_HANDLE;
+}
+
+void GrassPipelineVariants::Destroy() noexcept {
+    for (auto& [key, pipelines] : mSets) DestroyGrassPipelineSet(mDevice, pipelines);
+    mSets.clear();
+    for (const auto fragment : mFragments)
+        if (fragment != VK_NULL_HANDLE) vkDestroyShaderModule(mDevice, fragment, nullptr);
+    mFragments.clear();
+    if (mVertex != VK_NULL_HANDLE) vkDestroyShaderModule(mDevice, mVertex, nullptr);
+    mVertex = VK_NULL_HANDLE;
+    mDevice = VK_NULL_HANDLE;
 }
 
 } // namespace Fast::Oot3d

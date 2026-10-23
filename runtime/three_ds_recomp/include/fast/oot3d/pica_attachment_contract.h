@@ -8,6 +8,7 @@ using Renderer3ds::PicaAttachmentFeatureRequests;
 using Renderer3ds::PicaAttachmentIndex;
 using Renderer3ds::PicaAttachmentRequirements;
 using Renderer3ds::PicaAuxiliaryOutput;
+using Renderer3ds::PicaAuxiliaryOutputFor;
 using Renderer3ds::PicaColorAttachment;
 using Renderer3ds::kAllPicaAuxiliaryOutputs;
 using Renderer3ds::kExtendedPicaAuxiliaryOutputs;

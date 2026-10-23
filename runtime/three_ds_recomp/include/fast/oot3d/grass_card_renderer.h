@@ -73,12 +73,12 @@ class GrassCardRenderer final {
                                    uint64_t recordsRevision, const GrassCardFrameInputs& inputs);
 
     // Draws the batches inside the native render pass with the pipeline of
-    // the attachment set (0 canonical, 1 instrumented, 2 with the albedo
-    // guide). The fragments write their texel's blade depth; batches whose
-    // PICA depth is the raster depth take the conservative-depth variant
-    // (depth_greater, early depth test kept). Needs a Prepare in this frame.
-    void Draw(VkCommandBuffer commandBuffer, uint32_t width, uint32_t height, size_t pipelineIndex,
-              std::span<const GrassCardDrawBatch> batches);
+    // its attachments (canonical, instrumented with the guides it binds, with
+    // the albedo guide). The fragments write their texel's blade depth;
+    // batches whose PICA depth is the raster depth take the conservative-depth
+    // variant (depth_greater, early depth test kept). Needs a Prepare in this frame.
+    void Draw(VkCommandBuffer commandBuffer, uint32_t width, uint32_t height,
+              const PicaAttachmentRequirements& attachments, std::span<const GrassCardDrawBatch> batches);
 
   private:
     struct Impl;
