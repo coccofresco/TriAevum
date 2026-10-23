@@ -1279,6 +1279,9 @@ NativeA32HostResult NativeA32CtrHostServices::HandleSvcImpl(
             return HandleCfgRequest(state, memory, context, sessionType,
                                     commandBuffer, std::move(event));
         }
+        if (*sessionType == "client_session:ir:rst") {
+            return HandleIrstRequest(state, memory, commandBuffer, std::move(event));
+        }
         if (*sessionType == "client_session:hid:USER") {
             return HandleHidRequest(state, memory, context, sessionType,
                                     commandBuffer, std::move(event));
@@ -1361,7 +1364,8 @@ NativeA32HostResult NativeA32CtrHostServices::HandleSvcImpl(
                     serviceName == "gsp::Gpu" || serviceName == "dsp::DSP" ||
                     serviceName == "cfg:u" || serviceName == "hid:USER" ||
                     serviceName == "ndm:u" || serviceName == "y2r:u" ||
-                    serviceName == "ir:USER" || serviceName == "ptm:u") {
+                    serviceName == "ir:USER" || serviceName == "ptm:u" ||
+                    (mConfig.IrstService && serviceName == "ir:rst")) {
                     const uint32_t session =
                         CreateHandle("client_session:" + serviceName);
                     if (memory.Write32(commandBuffer,
@@ -1380,6 +1384,29 @@ NativeA32HostResult NativeA32CtrHostServices::HandleSvcImpl(
         }
         mSvcEvents.push_back(std::move(event));
         return {NativeA32HostAction::Wait};
+    }
+    case 0x3D: {
+        event.Name = "OutputDebugString";
+        const uint32_t address = state.r[0];
+        const uint32_t length = state.r[1];
+        event.Detail = length;
+        if (length != 0U && !memory.IsMapped(address, length)) {
+            mSvcEvents.push_back(std::move(event));
+            return {NativeA32HostAction::Fault};
+        }
+        // The console API passes a length, not a terminator; keep the record bounded.
+        std::vector<uint8_t> text(std::min(length, 1024U));
+        if (!text.empty()) {
+            if (!memory.ReadBytes(address, text)) {
+                mSvcEvents.push_back(std::move(event));
+                return {NativeA32HostAction::Fault};
+            }
+            event.Name += ":" + std::string(text.begin(), text.end());
+        }
+        state.r[0] = kResultSuccess;
+        event.Handled = true;
+        mSvcEvents.push_back(std::move(event));
+        return {NativeA32HostAction::Resume};
     }
     case 0x39:
         return HandleResourceLimitValues(false, state, memory,

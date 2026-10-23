@@ -1121,11 +1121,16 @@ bool VfpBinary64Supported(std::uint32_t raw) noexcept {
         break;
     }
     switch (raw & kUnaryMask) {
+    case 0x0EB50B40U:
+    case 0x0EB50BC0U:
+        // VCMP{E}.F64 Dd, #0.0 encodes Vm as zero.
+        return HasUnaryDoubleRegisters(raw) && (raw & 0xFU) == 0U;
     case 0x0EB10B40U:
     case 0x0EB10BC0U:
     case 0x0EB40B40U:
     case 0x0EB40BC0U:
         return HasUnaryDoubleRegisters(raw);
+    case 0x0EB80B40U:
     case 0x0EB80BC0U:
     case 0x0EB70AC0U:
         return (raw & kDoubleDestinationBit) == 0U;
@@ -1189,6 +1194,11 @@ ExecutionResult ExecuteVfpBinary64(
         case 0x0EB10BC0U:
             result = F64Sqrt(ReadDouble(state, right), control);
             break;
+        case 0x0EB80B40U:
+            // VCVT.F64.U32: an unsigned 32-bit integer is exact in binary64.
+            result = RoundFinite({0U, state.vfp[RightLane(raw)]}, {0U, 1U}, 0, false, control,
+                                 kBinary64);
+            break;
         case 0x0EB80BC0U:
             result = F64FromSigned(state.vfp[RightLane(raw)], control);
             break;
@@ -1213,12 +1223,15 @@ ExecutionResult ExecuteVfpBinary64(
                 DestinationLane(raw),
                 F32FromF64(ReadDouble(state, right), control));
             return Fallthrough(state, pc);
+        case 0x0EB50B40U:
+        case 0x0EB50BC0U:
         case 0x0EB40B40U:
         case 0x0EB40BC0U: {
+            // Bit 16 selects the #0.0 immediate form; bit 7 the signaling (E) form.
             const Result64 comparison = F64Compare(
                 ReadDouble(state, destination),
-                ReadDouble(state, right),
-                unary == 0x0EB40BC0U);
+                (unary & 0x00010000U) != 0U ? 0ULL : ReadDouble(state, right),
+                (unary & 0x80U) != 0U);
             state.fpscr =
                 (state.fpscr & ~kNzcvMask) |
                 (static_cast<std::uint32_t>(comparison.value) & kNzcvMask);

@@ -45,7 +45,7 @@ target_compile_features(renderer_3ds_tev_program PUBLIC cxx_std_20)
 target_include_directories(renderer_3ds_tev_program PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Darwin" OR CMAKE_SYSTEM_NAME STREQUAL "iOS")
-    enable_language(OBJCXX)
+    enable_language(OBJC OBJCXX)
     set(CMAKE_OBJC_FLAGS "${CMAKE_OBJC_FLAGS} -fobjc-arc")
     set(CMAKE_OBJCXX_FLAGS "${CMAKE_OBJCXX_FLAGS} -fobjc-arc")
 endif()

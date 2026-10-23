@@ -40,7 +40,11 @@ static_assert(sizeof(Oot3dDirectAotProgramV1) == 48U);
 using Oot3dQueryDirectAotProgramV1 =
     const Oot3dDirectAotProgramV1 *(*)(uint32_t requestedAbi);
 
-extern "C" const Oot3dDirectAotProgramV1 *
+extern "C"
+#ifdef TRIAEVUM_TITLE_AOT_EXPORT
+TRIAEVUM_TITLE_AOT_EXPORT
+#endif
+const Oot3dDirectAotProgramV1 *
 triaevum_title_aot_query(uint32_t requestedAbi) noexcept;
 
 } // namespace Oot3dNativeGame

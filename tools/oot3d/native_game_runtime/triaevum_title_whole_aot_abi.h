@@ -44,7 +44,11 @@ struct Oot3dWholeAotProgramV2 final {
 static_assert(offsetof(Oot3dWholeAotProgramV2, MemoryWriteObservationVersion) == 48U);
 static_assert(sizeof(Oot3dWholeAotProgramV2) == 56U);
 
-extern "C" const Oot3dWholeAotProgramV2 *
+extern "C"
+#ifdef TRIAEVUM_TITLE_AOT_EXPORT
+TRIAEVUM_TITLE_AOT_EXPORT
+#endif
+const Oot3dWholeAotProgramV2 *
 triaevum_title_whole_aot_query(uint32_t requestedAbi) noexcept;
 
 } // namespace Oot3dNativeGame

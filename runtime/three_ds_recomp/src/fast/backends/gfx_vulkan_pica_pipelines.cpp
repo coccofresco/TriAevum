@@ -180,6 +180,7 @@ Renderer3ds::PicaDevicePipelineRecord& GfxRenderingAPIVulkan::GetOrCreateNativeP
     }
     std::vector<VkVertexInputAttributeDescription> attributes;
     attributes.reserve(draw.VertexAttributes.size());
+    bool nativeVertexFormatsSupported = true;
     for (const auto& attribute : draw.VertexAttributes) {
         const VkFormat format = ToNativeVkVertexFormat(
             attribute.Format, attribute.ComponentCount);
@@ -188,8 +189,9 @@ Renderer3ds::PicaDevicePipelineRecord& GfxRenderingAPIVulkan::GetOrCreateNativeP
                                             &properties);
         if ((properties.bufferFeatures &
              VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT) == 0) {
-            throw std::runtime_error(
-                "native PICA vertex format is not supported by this GPU");
+            // The NRI path repacks such attributes into four floats (mobile
+            // GPUs lack three-byte formats); only the legacy pipeline needs them.
+            nativeVertexFormatsSupported = false;
         }
         attributes.push_back({attribute.Location, attribute.Binding, format,
                               attribute.ByteOffset});
@@ -272,6 +274,9 @@ Renderer3ds::PicaDevicePipelineRecord& GfxRenderingAPIVulkan::GetOrCreateNativeP
     // An always-available program never takes the compiling Vulkan fallback.
     if (acquisition == NativePicaPipelineAcquisition::Libraries) return record;
 
+    if (!nativeVertexFormatsSupported)
+        throw std::runtime_error("native PICA vertex format is not supported by this GPU and the "
+                                 "NRI pipeline is unavailable");
     EnsureNativePicaVulkanShaderModules(draw, shader);
     const VkPipelineShaderStageCreateInfo stages[] = {
         {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0,

@@ -227,6 +227,10 @@ GfxWindowBackendSDL2::~GfxWindowBackendSDL2() {
 }
 
 void GfxWindowBackendSDL2::SetFullscreenImpl(bool on, bool call_callback) {
+#ifdef __ANDROID__
+    // The Activity owns the surface; a windowed request would leave it uncovered.
+    on = true;
+#endif
     if (mFullScreen == on) {
         return;
     }
@@ -455,6 +459,10 @@ void GfxWindowBackendSDL2::Init(const char* gameName, const char* gfxApiName, bo
     Uint32 flags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI;
 #endif
 
+#ifdef __ANDROID__
+    flags |= SDL_WINDOW_FULLSCREEN;
+    startFullScreen = true;
+#endif
     if (mUsesVulkan) {
 #ifndef _WIN32
         flags |= SDL_WINDOW_VULKAN;

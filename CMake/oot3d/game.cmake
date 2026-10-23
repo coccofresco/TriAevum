@@ -448,8 +448,12 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
             oot3d_native_a32_aot)
     endif()
     if (OOT3D_DIRECT_AOT_PLUGIN)
-        target_link_libraries(oot3d_native_game PRIVATE
-            triaevum_title_aot_stub)
+        # macOS resolves the title module at run time through dlopen only; the
+        # stub dylib would need an install name and rpath to link against.
+        if (NOT APPLE)
+            target_link_libraries(oot3d_native_game PRIVATE
+                triaevum_title_aot_stub)
+        endif()
         target_compile_definitions(oot3d_native_game PRIVATE
             OOT3D_REQUIRE_WHOLE_AOT_PLUGIN_V2=1
             OOT3D_NATIVE_DIRECT_AOT_PLUGIN=1)
@@ -463,7 +467,7 @@ if (OOT3D_WHOLE_AOT_PRODUCT_MODE)
         oot3d_native_crash_diagnostics)
     target_compile_definitions(oot3d_native_game PRIVATE
         OOT3D_WHOLE_AOT_PRODUCT_MODE=1)
-    if (CMAKE_SYSTEM_NAME STREQUAL "Windows" AND NOT OOT3D_FAST_DEV_LINK)
+    if (MSVC AND CMAKE_SYSTEM_NAME STREQUAL "Windows" AND NOT OOT3D_FAST_DEV_LINK)
         set(_oot3d_whole_aot_symbol_dir "${CMAKE_CURRENT_BINARY_DIR}/symbols")
         file(MAKE_DIRECTORY "${_oot3d_whole_aot_symbol_dir}")
         # /DEBUG keeps unreferenced functions and data unless /OPT:REF is explicit. Identical-code folding
@@ -473,7 +477,7 @@ if (OOT3D_WHOLE_AOT_PRODUCT_MODE)
             "/OPT:REF"
             "/PDB:${_oot3d_whole_aot_symbol_dir}/oot3d_native_game.pdb"
             "/MAP:${_oot3d_whole_aot_symbol_dir}/oot3d_native_game.map")
-    elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    elseif(MSVC AND CMAKE_SYSTEM_NAME STREQUAL "Windows")
         target_link_options(oot3d_native_game PRIVATE
             "/DEBUG:NONE"
             "/INCREMENTAL:NO"

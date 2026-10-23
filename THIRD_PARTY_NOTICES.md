@@ -390,6 +390,22 @@ GPL-3.0-or-later). TriAevum reimplements that behavior as its own typed host
 code (`tools/oot3d/native_game_runtime/oot3d_top_screen_reframed_file_select.*`);
 it contains no Ocarina Reframed source, patch or artwork.
 
+## Ocarina ReTuned (portability fixes)
+
+**Ocarina ReTuned** by **OTPR26** (<https://github.com/OTPR26/Ocarina-ReTuned>)
+is a fork of TriAevum that builds the runtime for macOS, Android, iOS and tvOS
+and with a non-MSVC Windows toolchain. TriAevum adapted a set of its generic
+portability fixes back into the shared runtime in October 2026: standard-library
+compatibility for libc++, Windows GNU-driver build conditions, MoltenVK
+portability enumeration, the macOS title-module loader, Android fullscreen
+presentation, the Vulkan exclude-scissor partition, the deferred vertex-format
+rejection, three VFP encodings, and the QueryMemory, OutputDebugString and
+ir:rst kernel services. As modifications of a GPL-3.0 program they are covered
+by this repository's GPL-3.0-or-later license; files that carry OTPR26's own
+SPDX tag are GPL-2.0-or-later. The adapted code is marked in place and listed in
+`docs/TRIAEVUM_OCARINA_RETUNED_INTEGRATION.md`. No ReTuned interface, font,
+artwork, ROM-preparation or Reframed-profile code was taken.
+
 ## Fira Sans Condensed (in-game menu font)
 
 The in-game settings menu (Esc / R3) is drawn by TriAevum's own UI renderer

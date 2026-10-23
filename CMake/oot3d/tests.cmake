@@ -27,6 +27,6 @@ function(oot3d_register_test_executables)
 endfunction()
 
 oot3d_register_test_executables(
-    "${CMAKE_SOURCE_DIR}"
-    "${CMAKE_SOURCE_DIR}/runtime/triaevum_module"
-    "${CMAKE_SOURCE_DIR}/tools/triaevum_release/tests")
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/runtime/triaevum_module"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tools/triaevum_release/tests")

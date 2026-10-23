@@ -97,10 +97,8 @@ AudioBackend Audio::GetSavedAudioBackend() {
     return AudioBackend::WASAPI;
 #endif
 
-#ifdef __APPLE__
-    return AudioBackend::COREAUDIO;
-#endif
-
+    // Apple defaults to SDL as well: the CoreAudio backend is not qualified
+    // for the native title audio path.
     return AudioBackend::SDL;
 }
 

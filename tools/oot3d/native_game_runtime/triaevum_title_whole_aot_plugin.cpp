@@ -1,14 +1,15 @@
-#include "triaevum_title_aot_abi.h"
-#include "triaevum_title_whole_aot_abi.h"
-
-#include "oot3d_native_a32_memory.h"
-#include "oot3d_whole_aot_generated.h"
-
+// Declared before the ABI headers so their prototypes share this linkage.
 #if defined(_WIN32)
 #define TRIAEVUM_TITLE_AOT_EXPORT __declspec(dllexport)
 #else
 #define TRIAEVUM_TITLE_AOT_EXPORT __attribute__((visibility("default")))
 #endif
+
+#include "triaevum_title_aot_abi.h"
+#include "triaevum_title_whole_aot_abi.h"
+
+#include "oot3d_native_a32_memory.h"
+#include "oot3d_whole_aot_generated.h"
 
 namespace Oot3dNativeGame {
 

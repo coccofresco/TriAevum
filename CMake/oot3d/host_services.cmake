@@ -132,7 +132,7 @@ if (OOT3D_WHOLE_AOT_PRODUCT_MODE AND
         oot3d_triaevum_pica_client_bridge
         triaevum_module
         nlohmann_json::nlohmann_json)
-    if (OOT3D_DIRECT_AOT_PLUGIN)
+    if (OOT3D_DIRECT_AOT_PLUGIN AND NOT APPLE)
         target_link_libraries(oot3d_game_module PRIVATE
             triaevum_title_aot_stub)
     endif()
