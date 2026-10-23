@@ -15,8 +15,7 @@ Credits, as published on the mod page:
 The pack is licensed under the Creative Commons
 **Attribution-NonCommercial-NoDerivatives 4.0** license (CC BY-NC-ND 4.0,
 <https://creativecommons.org/licenses/by-nc-nd/4.0/>). Its page allows
-downloading and installing it and asks to be contacted before it is
-redistributed on other sites. All rights in it remain its authors'; TriAevum's
+downloading and installing it. All rights in it remain its authors'; TriAevum's
 GPL does not apply to it.
 
 TriAevum does not distribute the pack. Its packages contain no file of it and

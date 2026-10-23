@@ -16,8 +16,7 @@ Credits, as published on the mod page:
 
 The mod is licensed under the Creative Commons
 **Attribution-NonCommercial-NoDerivatives 4.0** license (CC BY-NC-ND 4.0,
-<https://creativecommons.org/licenses/by-nc-nd/4.0/>). Its page also asks to be
-contacted before the mod is redistributed on other sites. All rights in it
+<https://creativecommons.org/licenses/by-nc-nd/4.0/>). All rights in it
 remain the author's; TriAevum's GPL does not apply to it.
 
 TriAevum does not distribute the mod. Its packages contain no file of it and
