@@ -88,6 +88,7 @@ exit normally. Original save files are not patched or overwritten.
 | `action-tunic_toggle/run` | Equipment `1122 -> 1222`, actual Goron tunic |
 | `action-shield_toggle/run` | Equipment `1122 -> 1132`, actual Mirror Shield |
 | `action-tunic-mapped` | One held gesture causes one equipment change/refresh; only mapped tunic icon remains and updates |
+| `action-equipment-held-actor` (2026-10-23, issue #108) | Equipment shortcut eligibility follows SingleScreen 3.1 `0x005D79AC`: play state 3/2, living player, no cutscene action, settled item action. The held actor is not a gate, so the boots shortcut works with the hookshot drawn or an arrow nocked |
 | `native-child-fixture` | Native Temple of Time sword interaction changes adult to child; no age/inventory patch |
 | `action-{boomerang,slingshot}-child-field` | Before resolver repair: temporary action nonzero, actual player action stays zero |
 | `action-{boomerang,slingshot}-child-field-fixed` | Same inputs after repair: actual player action 20/15, boomerang flight and slingshot shot visible |

@@ -116,22 +116,24 @@ bool ReadActionState(NativeA32Memory &memory,
     return true;
   }
 
-  std::uint32_t heldActor = 0U;
   std::uint8_t cutsceneAction = 0U;
   std::uint8_t heldItemAction = 0U;
   std::uint8_t itemAction = 0U;
   std::uint8_t transientItemAction = 0U;
-  if (!memory.Read32(snapshot->Player + 0x1224U, &heldActor) ||
-      !memory.Read8(snapshot->Player + 0x12BCU, &cutsceneAction) ||
+  if (!memory.Read8(snapshot->Player + 0x12BCU, &cutsceneAction) ||
       !memory.Read8(snapshot->Player + 0x1A9U, &heldItemAction) ||
       !memory.Read8(snapshot->Player + 0x1ACU, &itemAction) ||
       !memory.Read8(kSaveContext + 0x89U, &transientItemAction)) {
     SetError(error, "cannot read native TopScreen Player action gates");
     return false;
   }
+  // SingleScreen 3.1's equipment shortcut (0x005D79AC) gates on the play
+  // state (3/2), a living player, no cutscene action and a settled item
+  // action; it does not look at the held actor, so a drawn hookshot or a
+  // nocked arrow keeps the boots/tunic/shield shortcut available (issue #108).
   snapshot->Equipment.Eligible =
       pauseState == 2U && age == 0U && health != 0U && stateType == 3U &&
-      stateSubtype == 2U && heldActor == 0U && cutsceneAction == 0U &&
+      stateSubtype == 2U && cutsceneAction == 0U &&
       heldItemAction == itemAction;
   snapshot->DirectItem.Eligible = pauseState == 2U && age != 0U &&
                                   health != 0U && stateType == 3U &&
