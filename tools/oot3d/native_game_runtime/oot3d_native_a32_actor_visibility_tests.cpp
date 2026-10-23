@@ -264,6 +264,116 @@ void TestInvalidAndOff() {
     Expect(noLight.Used() == 1, "no-light draw does not increment allocator");
 }
 
+// The squared Obj_Mure3 literals follow the group gate at each culling walk;
+// an unknown value (another revision) is left alone.
+void TestObjMure3Distances() {
+    const std::array<std::pair<uint32_t, float>, 2> literals{{{0x003AF234U, 1450.0F * 1450.0F},
+                                                              {0x003B3274U, 1150.0F * 1150.0F}}};
+    Fixture f(1);
+    Expect(f.Memory.MapRegion({"mure3 active", 0x003AF000U, 0x1000U, true, false, {}}), "map mure3 active");
+    Expect(f.Memory.MapRegion({"mure3 wait", 0x003B3000U, 0x1000U, true, false, {}}), "map mure3 wait");
+    Expect(f.Memory.MapRegion({"play pointer", 0x00504000U, 0x1000U, true, false, {}}), "map play pointer");
+    f.Write(0x005043E0U, Fixture::Play);
+    for (const auto& [address, native] : literals) f.Float(address, native);
+    f.Visibility.HostMemory = &f.Memory;
+    const std::array<std::pair<bool, uint8_t>, 4> cases{{{true, 10}, {false, 10}, {true, 165}, {true, 164}}};
+    for (const auto& [enabled, actors] : cases) {
+        f.Visibility.ExtendedDrawDistance = enabled;
+        f.Byte(Fixture::Play + 0x2094U, actors);
+        f.Begin(); f.End();
+        const float scale = enabled && actors < 165U ? 25.0F : 1.0F;
+        for (const auto& [address, native] : literals)
+            Expect(f.Read(address) == std::bit_cast<uint32_t>(native * scale),
+                   "Obj_Mure3 distance follows the group gate");
+    }
+    Fixture other(1);
+    Expect(other.Memory.MapRegion({"mure3 active", 0x003AF000U, 0x1000U, true, false, {}}), "map mure3 active");
+    other.Write(0x003AF234U, 0x12345678U);
+    other.Visibility.HostMemory = &other.Memory;
+    other.Begin(); other.End();
+    Expect(other.Read(0x003AF234U) == 0x12345678U, "unknown Obj_Mure3 value is left alone");
+}
+
+// A full arena moves the allocator cursor into the overflow region; native
+// allocations then count past the arena, and an exhausted region wraps.
+void TestLightOverflowRelocation() {
+    constexpr uint32_t top = kActorLightOverflowBase + kActorLightOverflowSize;
+    const auto allocate = [](Fixture& f) { f.State.r[1] = Fixture::Arena; f.Hook(kActorLightAllocate); };
+    {
+        Fixture f(1); f.Visibility.HostMemory = &f.Memory; f.Used(kActorLightCapacity);
+        allocate(f);
+        Expect(f.Read(Fixture::Arena + 12U) == top && f.Visibility.LightOverflowRelocations == 1U &&
+                   f.Memory.IsMapped(kActorLightOverflowBase, kActorLightOverflowSize),
+               "a full arena continues in the overflow region");
+        Expect(f.Visibility.LightAllocations == kActorLightCapacity + 1U, "overflow usage counts past the arena");
+        f.Write(Fixture::Arena + 12U, top - 0x80U); // the native allocator's record
+        allocate(f);
+        Expect(f.Read(Fixture::Arena + 12U) == top - 0x80U && f.Visibility.LightAllocations == kActorLightCapacity + 2U,
+               "allocations inside the overflow region stay native");
+        f.Write(Fixture::Arena + 12U, kActorLightOverflowBase);
+        allocate(f);
+        Expect(f.Read(Fixture::Arena + 12U) == top && f.Visibility.LightOverflowWraps == 1U,
+               "an exhausted overflow region wraps");
+        f.Used(5U);
+        allocate(f);
+        Expect(f.Read(Fixture::Arena + 12U) == 0x005696A0U - 5U * 0x80U && f.Visibility.LightOverflowRelocations == 1U,
+               "a reset arena allocates natively again");
+    }
+    for (const bool optionOn : {false, true}) {
+        // Option off with host memory, or option on without it.
+        Fixture f(1);
+        f.Visibility.ExtendedDrawDistance = optionOn;
+        f.Visibility.HostMemory = optionOn ? nullptr : &f.Memory;
+        f.Used(kActorLightCapacity);
+        allocate(f);
+        Expect(f.Read(Fixture::Arena + 12U) == 0x005656A0U && !f.Memory.IsMapped(kActorLightOverflowBase, 1U),
+               "without the option or host memory the arena stays native");
+    }
+    // Admission: the arena-full extension that the native capacity denies is
+    // granted once the overflow region can take its record.
+    Fixture full(116); full.Used(1); full.Visibility.HostMemory = &full.Memory;
+    full.Visibility.Retained.push_back({(static_cast<uint64_t>(full.Actor(0)) << 16U) | 1U, 0U});
+    full.Begin(); Expect(full.Step(0, false), "overflow capacity admits the extension");
+}
+
+// As in 3.0 (0x00605AC4), group spawns reach 5x only with Extended draw
+// distance and fewer than 165 live actors (byte play + 0x2094).
+void TestGroupExtensionGate() {
+    for (const uint8_t actors : {uint8_t{10}, uint8_t{164}, uint8_t{165}, uint8_t{200}}) {
+        for (bool enabled : {false, true}) {
+            Fixture f(1);
+            Expect(f.Memory.MapRegion({"mure table", 0x00535000U, 0x1000U, true, false, {}}), "map mure table");
+            Expect(f.Memory.MapRegion({"mure margin", 0x003CC000U, 0x1000U, true, false, {}}), "map mure margin");
+            Expect(f.Memory.MapRegion({"play pointer", 0x00504000U, 0x1000U, true, false, {}}), "map play pointer");
+            f.Write(0x005043E0U, Fixture::Play);
+            f.Byte(Fixture::Play + 0x2094U, actors);
+            f.Visibility.HostMemory = &f.Memory;
+            f.Visibility.ExtendedDrawDistance = enabled;
+            const bool extended = enabled && actors < 165U;
+            const std::array<float, 6> distances{1600, 1600, 1000, 1000, 1000, 40};
+            for (uint32_t i = 0; i < 5; ++i) f.Float(0x005354B8U + i * 4U, distances[i]);
+            f.Float(0x003CC430U, 40);
+            f.Hook(kObjMureActiveEntry);
+            const float scale = extended ? 5.0F : 1.0F;
+            for (uint32_t i = 0; i < 5; ++i)
+                Expect(f.Read(0x005354B8U + i * 4U) == std::bit_cast<uint32_t>(distances[i] * scale),
+                       "Obj_Mure spawn distance follows the group gate");
+            Expect(f.Read(0x003CC430U) == std::bit_cast<uint32_t>(40.0F * scale),
+                   "Obj_Mure retire margin follows the group gate");
+            f.State.r[0] = f.Actor(0); f.State.r[1] = Fixture::Play;
+            f.Float(f.Actor(0) + 0x1DCU, 1); f.Hook(kObjMure2SpawnEntry);
+            Expect((f.Read(f.Actor(0) + 0x1DCU) != std::bit_cast<uint32_t>(1.0F)) == extended,
+                   "Obj_Mure2 scalar follows the group gate");
+            // An En_Wood02 spawner 2000 units ahead: outside native range,
+            // inside the 5x volume.
+            f.Float(f.Actor(0) + 0xF8U, 1.0F / 2001.0F);
+            f.State.r[0] = 0; f.State.r[4] = f.Actor(0); f.State.r[11] = Fixture::Play + 0x2000U;
+            f.Hook(kEnWood02SpawnZoneResult);
+            Expect((f.State.r[0] == 1U) == extended, "En_Wood02 offspring follow the group gate");
+        }
+    }
+}
+
 void TestSpawnHooksAndRateLimit() {
     Fixture f(1);
     Expect(f.Memory.MapRegion({"mure table", 0x00535000U, 0x1000U, true, false, {}}), "map mure table");
@@ -285,6 +395,9 @@ void TestSpawnHooksAndRateLimit() {
         f.Hook(kEnWood02SpawnZoneResult);
         Expect(std::memcmp(&regs, &f.State, sizeof(regs)) == 0, "offspring spawn result is native");
     }
+    TestGroupExtensionGate();
+    TestLightOverflowRelocation();
+    TestObjMure3Distances();
     Fixture limited(1); limited.Used(116);
     for (unsigned i = 0; i < 16; ++i) { limited.Begin(); limited.Step(0, false); limited.End(); }
     Expect(limited.Visibility.BudgetLimitedWalks == 16 && limited.Visibility.BudgetDenied == 16,

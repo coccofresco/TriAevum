@@ -561,6 +561,7 @@ nlohmann::json FrameToJson(const Oot3dVulkanFrameDiagnostics& frame) {
         {"nri_vsm_keyframe_construction_budget", frame.NriVirtualShadowKeyframeConstructionBudget},
         {"nri_vsm_keyframe_cuts", frame.NriVirtualShadowKeyframeCutCount},
         {"nri_vsm_keyframe_rotations", frame.NriVirtualShadowKeyframeRotationCount},
+        {"nri_vsm_keyframe_unbounded_constructions", frame.NriVirtualShadowKeyframeUnboundedCount},
         {"nri_vsm_keyframe_weight", frame.NriVirtualShadowKeyframeWeight},
         {"nri_vsm_keyframe_lag_degrees", frame.NriVirtualShadowKeyframeLagDegrees},
         {"nri_vsm_keyframe_direction_x", frame.NriVirtualShadowKeyframeDirectionX},
@@ -1688,7 +1689,8 @@ void Oot3dVulkanDiagnostics::RecordNriVirtualShadowPages(
 
 void Oot3dVulkanDiagnostics::RecordNriVirtualShadowKeyframes(
     uint32_t displayedLayouts, float newerWeight, uint32_t constructionPages, uint32_t constructionBudget,
-    bool cut, bool rotated, const std::array<float, 3>& displayedDirection, float lagDegrees) {
+    bool cut, bool rotated, const std::array<float, 3>& displayedDirection, float lagDegrees,
+    bool constructionUnbounded) {
     if (!mActiveFrame) return;
     auto& frame = *mActiveFrame;
     // Several targets: the one that displays the most layouts describes the frame.
@@ -1704,6 +1706,7 @@ void Oot3dVulkanDiagnostics::RecordNriVirtualShadowKeyframes(
     frame.NriVirtualShadowKeyframeConstructionBudget += constructionBudget;
     frame.NriVirtualShadowKeyframeCutCount += cut ? 1U : 0U;
     frame.NriVirtualShadowKeyframeRotationCount += rotated ? 1U : 0U;
+    frame.NriVirtualShadowKeyframeUnboundedCount += constructionUnbounded ? 1U : 0U;
 }
 
 void Oot3dVulkanDiagnostics::RecordNriDirectionalShadowReceiver(

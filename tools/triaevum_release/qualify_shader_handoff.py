@@ -3,6 +3,13 @@
 Developer qualification only. Inputs and resulting game-derived artifacts must
 stay outside public packages. Calls the real Forge services and renderer probe;
 does not boot a game to prepare shaders or rebuild title code.
+
+--package qualifies the artifacts a release ships (issue #76 gate 3): the
+packaged catalog's corpus, recipes and helper, after the release audit's own
+corpus check, prepared into an empty data directory exactly as Forge does.
+--release makes the thresholds mandatory: no PICA or pass compilation and no
+shaderc call after preparation, no pack miss, and a non-zero instrumented
+program count (a session that never reached the Enhanced path proves nothing).
 """
 
 import argparse
@@ -14,6 +21,7 @@ import sys
 from pathlib import Path
 
 from common import atomic_write_json, load_json_object, sha256_file
+from shader_corpus_layout import validate_bundled_corpus
 from device_pipeline_preparation import (
     FORMAT as DEVICE_FORMAT, installation_cache_directory, prepare_device_pipelines,
 )
@@ -30,11 +38,15 @@ def shader_statistics(log: str) -> dict:
     pack = record("OOT3D_PICA_AOT_SHADER_RESOLUTION")
     passes = record("TRIAEVUM_PASS_SHADER_CACHE") if "TRIAEVUM_PASS_SHADER_CACHE " in log else None
     audit = record("TRIAEVUM_SHADERC_AUDIT") if "TRIAEVUM_SHADERC_AUDIT " in log else None
+    owners = record("TRIAEVUM_NATIVE_PROGRAM_OWNERS") if "TRIAEVUM_NATIVE_PROGRAM_OWNERS " in log else None
     if int(cache["compile_failed"]) or int(cache["write_failed"]) or pack["strict"] != "0":
         raise ValueError("Shader fallback/cache failed or strict diagnostic mode is active")
     if passes and (int(passes["compile_failed"]) or int(passes["write_failed"])):
         raise ValueError("Pass shader cache failed")
+    unique = lambda name: int(pack[name]) if name in pack else None
     return {"pack_hits": int(pack["hits"]), "pack_misses": int(pack["misses"]),
+            "pack_unique_hits": unique("unique_hits"), "pack_unique_misses": unique("unique_misses"),
+            "instrumented_programs": int(owners["instrumented"]) if owners else None,
             "compiled": int(cache["compiled"]), "cache_hits": int(cache["hits"]),
             "cache_writes": int(cache["writes"]), "compile_ms": float(cache["compile_ms"]),
             "pass_compiled": int(passes["compiled"]) if passes else None,
@@ -43,12 +55,43 @@ def shader_statistics(log: str) -> dict:
             "all_pass_compile_ms": float(audit["compile_ms"]) if audit else None}
 
 
+def release_violations(stats: dict) -> list[str]:
+    """Release thresholds of one launch; unmeasured counts as a violation."""
+    violations = []
+    if stats["compiled"] or stats["pack_misses"] or stats["pack_unique_misses"]:
+        violations.append("PICA shaders compiled or missed in the pack")
+    if stats["pass_compiled"] != 0 or stats["all_pass_compiled"] != 0:
+        violations.append("pass shaders compiled, or the shaderc audit was not enabled")
+    if not stats["instrumented_programs"]:
+        violations.append("no instrumented program: the Enhanced path was not exercised")
+    if stats["pack_unique_hits"] is None:
+        violations.append("the runtime does not report unique pack identities")
+    return violations
+
+
+def packaged_title(package: Path, recipe: str | None) -> dict:
+    """The packaged catalog's title, after the audit's own corpus check."""
+    catalog = load_json_object(package / "recipes/precompiled-titles.json")
+    declared = {item["path"]: item for item in load_json_object(package / "release-manifest.json")["files"]}
+    validate_bundled_corpus(package, catalog, declared)
+    titles = [title for title in catalog["titles"] if recipe in (None, title["recipe"])]
+    if len(titles) != 1:
+        raise ValueError(f"Expected one packaged title for recipe {recipe!r}, found {len(titles)}")
+    return titles[0]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ("output", "compiler", "helper", "installation", "runtime"):
+    for name in ("output", "installation", "runtime"):
         parser.add_argument("--" + name, type=Path, required=True)
-    parser.add_argument("--inventory", type=Path, action="append", required=True)
-    parser.add_argument("--manifest", type=Path, action="append", required=True)
+    parser.add_argument("--package", type=Path, help="Release package root: qualify its shipped corpus")
+    parser.add_argument("--recipe", help="Packaged title recipe (default: the only one)")
+    parser.add_argument("--release", action="store_true",
+                        help="Release thresholds (requires --package and the shaderc audit)")
+    for name in ("compiler", "helper"):
+        parser.add_argument("--" + name, type=Path)
+    parser.add_argument("--inventory", type=Path, action="append", default=[])
+    parser.add_argument("--manifest", type=Path, action="append", default=[])
     parser.add_argument("--dependency", type=Path, action="append", default=[])
     parser.add_argument("--schema", type=int, default=3)
     parser.add_argument("--profile", default="TriAevum.launch.json")
@@ -60,10 +103,19 @@ def main():
     parser.add_argument("--require-all-cold-zero", action="store_true",
                         help="Require zero PICA/pass compiles and zero independent shaderc audit calls")
     args = parser.parse_args()
+    if args.release and args.package is None:
+        parser.error("--release qualifies shipped artifacts: give --package")
+    if args.package is None and not (args.compiler and args.helper and args.inventory and args.manifest):
+        parser.error("without --package, --compiler, --helper, --inventory and --manifest are required")
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
-    package = root / "preparation-inputs"
-    package.mkdir()
+    if args.package is not None:
+        package = args.package.resolve(strict=True)
+        title = packaged_title(package, args.recipe)
+    else:
+        package = root / "preparation-inputs"
+        package.mkdir()
+        title = None
     def artifact(source):
         source = source.resolve(strict=True)
         # Preserve dependency names for the native loader (notably Windows DLLs).
@@ -73,13 +125,14 @@ def main():
             raise ValueError(f"Conflicting preparation input filename: {name}")
         shutil.copy2(source, target)
         return {"path": name, "bytes": target.stat().st_size, "sha256": sha256_file(target)}
-    title = {"recipe": "private-shader-handoff", "shader_preparation": {
-        "format": SHADER_FORMAT, "mode": "source_inventories",
-        "descriptor_schema_version": args.schema, "compiler": artifact(args.compiler),
-        "inventories": [artifact(path) for path in args.inventory],
-        "dependencies": [artifact(path) for path in args.dependency]},
-        "device_pipeline_preparation": {"format": DEVICE_FORMAT,
-            "helper": artifact(args.helper), "manifests": [artifact(path) for path in args.manifest]}}
+    if title is None:
+        title = {"recipe": "private-shader-handoff", "shader_preparation": {
+            "format": SHADER_FORMAT, "mode": "source_inventories",
+            "descriptor_schema_version": args.schema, "compiler": artifact(args.compiler),
+            "inventories": [artifact(path) for path in args.inventory],
+            "dependencies": [artifact(path) for path in args.dependency]},
+            "device_pipeline_preparation": {"format": DEVICE_FORMAT,
+                "helper": artifact(args.helper), "manifests": [artifact(path) for path in args.manifest]}}
     atomic_write_json(root / "title-record.json", title)
     data = root / "data"
     report = lambda stage, text: print(f"{stage}: {text}", flush=True)
@@ -115,6 +168,9 @@ def main():
         captures = {path.name: sha256_file(path) for path in output.glob("framebuffer_*.bmp")}
         if not captures or stats["pack_hits"] <= 0:
             raise ValueError("Game did not produce captures and use the Forge shader pack")
+        if args.release and release_violations(stats):
+            raise ValueError(f"{name}: release shader qualification failed: "
+                             f"{'; '.join(release_violations(stats))}: {stats}")
         if args.require_pica_cold_zero and (stats["compiled"] or stats["pack_misses"]):
             raise ValueError(f"Complete Forge seed left runtime shader work: {stats}")
         if args.require_all_cold_zero and (stats["compiled"] or stats["pack_misses"]
@@ -127,6 +183,7 @@ def main():
     if runs[1]["shaders"]["compiled"] != 0:
         raise ValueError("Second launch recompiled shaders instead of reusing the local cache")
     result = {"format": "triaevum_forge_shader_handoff_qualification_v1",
+              "packaged": args.package is not None, "release_thresholds": args.release,
               "shader_preparation": load_json_object(pack.parent / "preparation.json"),
               "renderer_preparation": renderer,
               "device_preparation": device, "runs": runs,

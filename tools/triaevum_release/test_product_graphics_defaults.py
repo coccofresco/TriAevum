@@ -30,15 +30,27 @@ class ProductGraphicsDefaultsTests(unittest.TestCase):
         self.assertIn("Preset(GraphicsPreset::Enhanced)", source)
         self.assertIn('document["GrassSavedPreset"] = document["Grass"]', source)
 
-    def test_topscreen_installer_template_preserves_current_profile(self):
+    def test_topscreen_installer_template_is_the_standard_profile(self):
         root = SOURCE.parents[2]
         config = json.loads((root / "config/topscreen_ui.example.json").read_text())
-        self.assertEqual(config["hud_scale"], 0.8)
+        self.assertEqual(config["hud_scale"], 0.7)
         self.assertEqual((config["hud_margin_x"], config["hud_margin_y"]), (4, 1))
+        self.assertEqual(config["magic_bar_y"], 2)
+        self.assertEqual((config["dpad_offset_x"], config["dpad_offset_y"]), (0, -1))
         self.assertEqual(config["hud_layout"], "normal")
         self.assertTrue(config["minimap_visible"])
         self.assertFalse(config["free_camera_enabled"])
         self.assertEqual(config["dpad_child"], ["view", "ocarina", "item_zr", "item_zl"])
+        self.assertTrue(all(config[option] for option in
+                            ("quick_put_away", "landing_roll_fix", "roll_dash", "aiming_reticle", "rain_3d")))
+        self.assertEqual(config["rain_3d_density_percent"], 100)
+        # The C++ defaults are the same profile.
+        header = (SOURCE.parents[0] / "ui_topscreen/oot3d_top_screen_config.h").read_text()
+        for declaration in ("kTopScreenHudScaleDefault = kTopScreenHudScaleOptimized",
+                            "kTopScreenHudScaleOptimized = 0.70F", "MagicBarY = 2U",
+                            "DpadOffsetY = -1", "QuickPutAway = true", "LandingRollFix = true",
+                            "RollDash = true", "AimingReticle = true", "Rain3d = true"):
+            self.assertIn(declaration, header)
 
     @unittest.skipUnless(os.environ.get("TRIAEVUM_PRODUCT_TEST_EXE"), "requires a built runtime")
     def test_compiled_product_exports_enhanced_with_the_grass_sources(self):

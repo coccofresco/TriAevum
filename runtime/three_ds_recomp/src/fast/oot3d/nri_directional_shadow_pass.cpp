@@ -9,6 +9,7 @@
 #include "fast/oot3d/pica_directional_shadow_semantics.h"
 #include "fast/oot3d/resource_state_tracker.h"
 #include "fast/renderer3ds/pica_room_shadow_selection.h"
+#include "fast/renderer3ds/shadow_caster_stability_trace.h"
 #include "fast/renderer3ds/virtual_shadow_keyframes.h"
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
 #include "fast/renderer3ds/pica_surface_debug.h"
@@ -98,6 +99,15 @@ uint64_t HashBytes(uint64_t hash, const void* data, size_t size) {
 
 template <typename T> uint64_t HashValue(uint64_t hash, const T& value) {
     return HashBytes(hash, &value, sizeof(value));
+}
+
+// Developer evidence for the static shadow cache (shadow_caster_stability_trace.h).
+bool CasterTraceRequested() {
+    static const bool requested = [] {
+        const char* value = std::getenv("TRIAEVUM_SHADOW_CASTER_TRACE");
+        return value != nullptr && value[0] != 0 && value[0] != '0';
+    }();
+    return requested;
 }
 
 using ::Fast::Renderer3ds::PicaCompareFunction;
@@ -309,6 +319,10 @@ struct NriDirectionalShadowPass::Impl {
     };
     std::map<uint64_t, ShellGpu> ShellBuffers;
     std::chrono::steady_clock::time_point LastShellDiagnostic{};
+    // TRIAEVUM_SHADOW_CASTER_TRACE: evidence for the static shadow cache.
+    std::optional<Renderer3ds::ShadowCasterStabilityTrace> CasterTrace;
+    std::vector<Renderer3ds::ShadowCasterTraceSample> CasterTraceSamples;
+    std::vector<std::string> CasterTraceLines;
     std::unordered_map<uint64_t, nri::Pipeline*> ShadowPipelines;
     std::unordered_set<uint64_t> FailedShadowPipelines;
     std::unordered_map<uint64_t, nri::Pipeline*> PointPipelines;
@@ -1098,6 +1112,13 @@ NriDirectionalShadowPass::NriDirectionalShadowPass() : mImpl(std::make_unique<Im
 }
 
 NriDirectionalShadowPass::~NriDirectionalShadowPass() {
+    if (mImpl->CasterTrace) {
+        mImpl->CasterTraceLines.clear();
+        mImpl->CasterTrace->Flush(mImpl->CasterTraceLines);
+        for (const auto& line : mImpl->CasterTraceLines)
+            std::fprintf(stderr, "%s\n", line.c_str());
+        std::fflush(stderr);
+    }
     Shutdown();
 }
 
@@ -1561,6 +1582,48 @@ bool NriDirectionalShadowPass::ExecuteMap(const NriDirectionalShadowExecuteDesc&
             geometry[index].ContentVersion =
                 HashValue(geometry[index].ContentVersion, mImpl->PipelineKey(*drawable[index], plan));
     }
+    const bool casterTrace = CasterTraceRequested();
+    const uint64_t traceTarget = casterTrace
+        ? HashValue(HashValue(1469598103934665603ULL, desc.RenderTargetNamespace), desc.ColorPhysicalAddress) : 0U;
+    const uint64_t traceTime = casterTrace
+        ? static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                    std::chrono::system_clock::now().time_since_epoch()).count())
+        : 0U;
+    if (casterTrace) {
+        if (!mImpl->CasterTrace) {
+            uint32_t warmup = 120U;
+            if (const char* value = std::getenv("TRIAEVUM_SHADOW_CASTER_TRACE_WARMUP"))
+                warmup = static_cast<uint32_t>(std::strtoul(value, nullptr, 10));
+            mImpl->CasterTrace.emplace(warmup);
+        }
+        auto& samples = mImpl->CasterTraceSamples;
+        samples.clear();
+        // TRIAEVUM_SHADOW_CASTER_TRACE_WORLD=1 also traces unowned (world)
+        // casters: owner 0, one record per native geometry identity.
+        static const bool traceWorld = [] {
+            const char* value = std::getenv("TRIAEVUM_SHADOW_CASTER_TRACE_WORLD");
+            return value != nullptr && value[0] != 0 && value[0] != '0';
+        }();
+        for (size_t index = 0; index < casterCount; ++index) {
+            if (shellMeshes[index] != nullptr)
+                continue;
+            const auto& record = *drawable[index];
+            const bool owned = record.ShadowCaster.OwnerIdentity != 0U;
+            if (!owned && !traceWorld)
+                continue;
+            const auto& temporal = record.Composition.TemporalIdentity;
+            samples.push_back({ record.ShadowCaster.OwnerIdentity, owned ? temporal.Lifetime : record.GeometryIdentity,
+                                HashValue(HashValue(HashValue(1469598103934665603ULL, temporal.Part), temporal.Slot),
+                                          record.GeometryIdentity),
+                                geometry[index].ContentVersion, record.GeometryContentVersion,
+                                record.ShadowCaster.PoseVersion, record.ShadowCaster.VersionState,
+                                record.ShadowCaster.Dynamic, record.Composition.StaticShadowCacheEligible });
+        }
+        mImpl->CasterTraceLines.clear();
+        mImpl->CasterTrace->Observe(traceTarget, desc.FrameId, traceTime, samples, mImpl->CasterTraceLines);
+        for (const auto& line : mImpl->CasterTraceLines)
+            std::fprintf(stderr, "%s\n", line.c_str());
+    }
 
     // Shadow keyframes: which layouts are displayed, which one is constructed
     // and with what page budget. The scene's continuity epoch marks its cuts.
@@ -1835,9 +1898,19 @@ bool NriDirectionalShadowPass::ExecuteMap(const NriDirectionalShadowExecuteDesc&
         if (!prepareLayout(slotIndex, &construction))
             return false;
         auto& slot = target->Layouts[static_cast<size_t>(slotIndex)];
-        telemetry.ConstructionBudget = schedule.ConstructionBudget;
         telemetry.ConstructionPages = static_cast<uint32_t>(slot.Cache.Updates().size());
+        // A stalled construction spends what it needs: report that.
+        telemetry.ConstructionUnbounded = schedule.ConstructionUnbounded;
+        telemetry.ConstructionBudget =
+            schedule.ConstructionUnbounded ? telemetry.ConstructionPages : schedule.ConstructionBudget;
         telemetry.PendingPages = slot.Cache.Statistics().Pending;
+        if (schedule.ConstructionUnbounded && casterTrace)
+            std::fprintf(stderr,
+                         "[vsm-keyframe] v=1 target=%016llx frame=%llu t=%llu event=unbounded age=%u pending=%u "
+                         "pages=%u\n",
+                         static_cast<unsigned long long>(traceTarget), static_cast<unsigned long long>(desc.FrameId),
+                         static_cast<unsigned long long>(traceTime), schedule.ConstructionAge,
+                         telemetry.PendingPages, telemetry.ConstructionPages);
         if (telemetry.ConstructionPages != 0U &&
             (!transition(slot.StaticTexture.Image, staticBarrier->DispatchAccess) ||
              !rasterize(slot.StaticTexture.Image, slotIndex, true) ||

@@ -236,6 +236,10 @@ class NativeControlsSettingsPanel final
         if (mTopScreen) DrawTopScreenActionBindings(mTopDraft);
         else ImGui::TextDisabled("TopScreen profile is not active");
       });
+      section("Gameplay", [&] {
+        if (mTopScreen) DrawTopScreenGameplay(mTopDraft);
+        else ImGui::TextDisabled("TopScreen profile is not active");
+      });
       ImGui::EndTabBar();
     }
     DrawBindingCapture();

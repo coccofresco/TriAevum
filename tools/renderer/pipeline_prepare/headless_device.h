@@ -150,6 +150,7 @@ class HeadlessDevice final : public Fast::Renderer3ds::NriPicaInterop {
         create.vkExtensions.deviceExtensionNum = static_cast<uint32_t>(extensions.size());
         create.enableNRIValidation = validation;
         create.callbackInterface.MessageCallback = Message;
+        create.callbackInterface.AbortExecution = ContinueAfterError;
         create.callbackInterface.userArg = this;
         if (nri::nriCreateDeviceFromVKDevice(create, mDevice) != nri::Result::SUCCESS) return false;
         return nri::nriGetInterface(*mDevice, NRI_INTERFACE(nri::CoreInterface), &mCore) == nri::Result::SUCCESS &&
@@ -181,6 +182,9 @@ class HeadlessDevice final : public Fast::Renderer3ds::NriPicaInterop {
         std::cerr << "Vulkan: " << data->pMessage << '\n';
         return VK_FALSE;
     }
+    // A failed creation returns its result and counts as a failed pipeline;
+    // NRI's default would break into the debugger and end preparation.
+    static void NRI_CALL ContinueAfterError(void*) {}
     static void NRI_CALL Message(nri::Message type, const char*, uint32_t, const char* text, void* context) {
         if (type == nri::Message::ERROR) ++static_cast<HeadlessDevice*>(context)->mValidationErrors;
         std::cerr << "NRI: " << text << '\n';

@@ -302,12 +302,19 @@ tables, not UI textures. It must not be described as title-neutral code; the
 original-game rights exclusions in `LICENSE_SCOPE.md` still apply.
 
 TriAevum contains an independently maintained typed reimplementation of
-behavior observed in the TopScreen modifications for OoT3D. The official 2.1.1
-archive is identified by SHA-256
-`e0c143c872ccf4ad72033caab768753b147a4033d260a701204a63ee6bc16df4`.
-Its IPS, injected ARM payload and CTXB assets are not redistributed by TriAevum.
-Forge imports the modified native textures locally from the official archive,
-downloaded or supplied by the user, without applying its executable patches.
+behavior observed in the TopScreen modifications for OoT3D (2.1.1, then
+SingleScreen 3.0). Their IPS patches and injected ARM payloads are not
+redistributed and never applied.
+
+SingleScreen 3.0 is integrated into TriAevum with its author's permission: the
+package ships its low-resolution UI atlas `custom_ui01.ctxb` and its Link
+animations `zelda_link_ext.zar`, unchanged, from the official archive
+`singlescreen_30_25aeb.zip` (SHA-256
+`5668640fec8dc2b47b4516fd0b871c4d7d90ca1c2203acc2a22adb59aaab5993`;
+SingleScreen 3.1's `singlescreen_31_989c3.zip` carries them unchanged). They
+remain the author's; see `LICENSES/SingleScreen-3.0.md`. Its HD UI atlas and HD
+fonts are not distributed until their author consents; Forge imports them only
+from an archive the user places beside it. TopScreen 2.1.1 is no longer used.
 
 The reverse-engineering method and implementation boundaries are documented in
 `docs/OOT3D_TOPSCREEN_MOD_SEMANTIC_PORT.md` and

@@ -94,13 +94,16 @@ int main() {
 
         // A burst can consume every remaining reservation this epoch. No
         // previous-frame average appears in the admission calculation.
-        for (uint32_t used = 0; used <= 150; ++used)
-            for (uint32_t remaining = 0; remaining <= 300; ++remaining)
-                Expect(ActorLightBudgetAllows(used, remaining) ==
-                           (used + remaining + kActorLightAuxiliaryReserve <= kActorLightBudget),
-                       "exact reservation boundary");
-        Expect(!ActorLightBudgetAllows(UINT32_MAX, 1), "used overflow fails closed");
-        Expect(!ActorLightBudgetAllows(1, UINT32_MAX), "reservation overflow fails closed");
+        for (const bool overflow : {false, true}) {
+            const uint32_t capacity = kActorLightBudget + (overflow ? kActorLightOverflowRecords : 0U);
+            for (uint32_t used = 0; used <= capacity + 30; used += 7)
+                for (uint32_t remaining = 0; remaining <= 300; ++remaining)
+                    Expect(ActorLightBudgetAllows(used, remaining, overflow) ==
+                               (used + remaining + kActorLightAuxiliaryReserve <= capacity),
+                           "exact reservation boundary");
+            Expect(!ActorLightBudgetAllows(UINT32_MAX, 1, overflow), "used overflow fails closed");
+            Expect(!ActorLightBudgetAllows(1, UINT32_MAX, overflow), "reservation overflow fails closed");
+        }
         Expect(NativeCulledActorFade(ActorCullingClass::Far, 10) == 9, "native fade decrements");
         Expect(NativeCulledActorFade(ActorCullingClass::Far, 1) == 0, "last native fade expires");
         Expect(NativeCulledActorFade(ActorCullingClass::Outside, 10) == 0, "native aside cuts");

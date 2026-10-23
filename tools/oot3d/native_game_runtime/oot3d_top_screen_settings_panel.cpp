@@ -2,27 +2,15 @@
 
 #include <imgui.h>
 
-#include <algorithm>
-#include <array>
-#include <cmath>
 #include <string>
 #include <utility>
 
 namespace Oot3dNativeGame {
 namespace {
 
-constexpr std::array<const char *, 13> kHudScaleLabels{
-    "0.60x", "0.65x", "0.70x", "0.75x", "0.80x", "0.85x", "0.90x",
-    "0.95x", "1.00x", "1.05x", "1.10x", "1.15x", "1.20x",
-};
-
-int HudScaleIndex(float scale) {
-  return std::clamp(
-      static_cast<int>(std::lround(
-          (scale - kTopScreenHudScaleMinimum) / kTopScreenHudScaleStep)),
-      0, static_cast<int>(kHudScaleLabels.size()) - 1);
-}
-
+// The TopScreen section of the Display tab. The standard profile fixes the
+// HUD layout; the user chooses only its size. A choice applies and saves at
+// once.
 class TopScreenSettingsPanel final
     : public Fast::Oot3d::GraphicsSettingsPanelTab {
 public:
@@ -30,138 +18,65 @@ public:
       std::shared_ptr<TopScreenUiConfigRuntime> runtime)
       : mRuntime(std::move(runtime)) {}
 
-  // The TopScreen 2.1.1 HUD and layout.
   [[nodiscard]] const char *Label() const noexcept override {
-    return "HUD";
+    return "TopScreen";
+  }
+  [[nodiscard]] const char *Group() const noexcept override {
+    return Fast::Oot3d::kDisplaySettingsGroup;
   }
 
   void Draw() override {
-    const auto snapshot = mRuntime->Snapshot();
-    if (!mInitialized ||
-        snapshot.Revision != mObservedRevision) {
-      mDraft = snapshot.Config;
-      mObservedRevision = snapshot.Revision;
-      mInitialized = true;
-    }
-    const TopScreenUiConfig frameStartDraft = mDraft;
-
-    ImGui::BeginChild("##HudContent", ImVec2(0.0F, std::max(
-        80.0F, ImGui::GetContentRegionAvail().y - ImGui::GetFrameHeightWithSpacing() * 4.0F)));
-    ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45F);
-    DrawHud();
-    ImGui::PopItemWidth();
-    ImGui::SeparatorText("Credits");
-    ImGui::TextWrapped("HUD and layout from the TopScreen mod by M-1 (gamebanana.com/mods/695893). "
-                       "Thanks to the author.");
-    ImGui::EndChild();
-    if (mDraft != frameStartDraft) {
-      mRuntime->Preview(mDraft);
-      const auto preview = mRuntime->Snapshot();
-      mDraft = preview.Config;
-      mObservedRevision = preview.Revision;
-      mDirty = true;
-      mStatus = "Live preview";
-    }
-
-    if (!mRuntime->Persistent()) {
-      ImGui::BeginDisabled();
-    }
-    if (ImGui::Button("Save TopScreen")) {
-      std::string error;
-      if (mRuntime->Apply(mDraft, &error)) {
-        mObservedRevision = mRuntime->Snapshot().Revision;
-        mDirty = false;
-        mStatus = "Saved";
-      } else {
-        mStatus = std::move(error);
+    // No draft: the section always shows the live configuration, so a change
+    // from Controls or the file is never overwritten.
+    auto config = mRuntime->Snapshot().Config;
+    ImGui::SeparatorText("TopScreen HUD");
+    const auto size = [&](const char *label, float scale) {
+      if (ImGui::RadioButton(label, config.HudScale == scale) &&
+          config.HudScale != scale) {
+        config.HudScale = scale;
+        Store(config);
       }
-    }
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-      ImGui::SetTooltip("%s", mRuntime->Path().string().c_str());
+    };
+    ImGui::TextUnformatted("HUD size");
+    size("Native (100%)", kTopScreenHudScaleNative);
+    if (ImGui::IsItemHovered())
+      ImGui::SetTooltip("The game's own HUD size.");
     ImGui::SameLine();
-    if (ImGui::Button("Reload TopScreen")) {
-      std::string error;
-      if (mRuntime->Reload(&error)) {
-        const auto reloaded = mRuntime->Snapshot();
-        mDraft = reloaded.Config;
-        mObservedRevision = reloaded.Revision;
-        mDirty = false;
-        mStatus = "Reloaded";
-      } else {
-        mStatus = std::move(error);
-      }
+    size("Optimized (70%)", kTopScreenHudScaleOptimized);
+    if (ImGui::IsItemHovered())
+      ImGui::SetTooltip("The HUD sized for the single wide screen.");
+    if (config.HudScale != kTopScreenHudScaleNative &&
+        config.HudScale != kTopScreenHudScaleOptimized) {
+      ImGui::TextDisabled("Configuration file size: %.2fx", config.HudScale);
     }
     if (!mRuntime->Persistent()) {
-      ImGui::EndDisabled();
-      ImGui::TextDisabled(
-          "Live preview only; no configuration path is active");
-    }
-
-    if (mDirty) {
-      ImGui::TextDisabled("Unsaved changes");
-    }
-    if (!mStatus.empty()) {
+      ImGui::TextDisabled("TopScreen: session only");
+    } else if (!mStatus.empty()) {
       ImGui::TextWrapped("%s", mStatus.c_str());
     }
+    ImGui::SeparatorText("Credits");
+    ImGui::TextWrapped(
+        "HUD, layout and gameplay options from SingleScreen (TopScreen) by "
+        "M-1 (gamebanana.com/mods/695893). Thanks to the author.");
   }
 
 private:
-  void DrawHud() {
-    ImGui::SeparatorText("HUD");
-    mDirty |= ImGui::Checkbox("Render HUD", &mDraft.RenderHud);
-    mDirty |=
-        ImGui::Checkbox("Render D-pad icons", &mDraft.RenderDpadIcons);
-    mDirty |=
-        ImGui::Checkbox("Render Items hint", &mDraft.RenderItemsHint);
-    bool normal = mDraft.HudLayout == TopScreenHudLayout::Normal;
-    if (ImGui::RadioButton("Normal HUD", normal)) {
-      mDraft.HudLayout = TopScreenHudLayout::Normal;
-      mDirty = true;
+  void Store(const TopScreenUiConfig &config) {
+    if (!mRuntime->Persistent()) {
+      mRuntime->Preview(config);
+      return;
     }
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Restoration HUD", !normal)) {
-      mDraft.HudLayout = TopScreenHudLayout::Restoration;
-      mDirty = true;
+    std::string error;
+    if (mRuntime->Apply(config, &error)) {
+      mStatus = "TopScreen: saved";
+      return;
     }
-
-    int scaleIndex = HudScaleIndex(mDraft.HudScale);
-    if (ImGui::Combo("HUD scale", &scaleIndex, kHudScaleLabels.data(),
-                     static_cast<int>(kHudScaleLabels.size()))) {
-      mDraft.HudScale =
-          kTopScreenHudScaleMinimum +
-          static_cast<float>(scaleIndex) * kTopScreenHudScaleStep;
-      mDirty = true;
-    }
-    if (ImGui::Checkbox("Show minimap", &mDraft.MinimapVisible)) {
-      mDirty = true;
-    }
-
-    int marginX = mDraft.HudMarginX;
-    int marginY = mDraft.HudMarginY;
-    int magicBarY = mDraft.MagicBarY;
-    if (ImGui::SliderInt("Horizontal margin", &marginX,
-                         kTopScreenHudMarginMinimum,
-                         kTopScreenHudMarginMaximum)) {
-      mDraft.HudMarginX = static_cast<std::int8_t>(marginX);
-      mDirty = true;
-    }
-    if (ImGui::SliderInt("Vertical margin", &marginY,
-                         kTopScreenHudMarginMinimum,
-                         kTopScreenHudMarginMaximum)) {
-      mDraft.HudMarginY = static_cast<std::int8_t>(marginY);
-      mDirty = true;
-    }
-    if (ImGui::SliderInt("Magic bar Y", &magicBarY, 0, 10)) {
-      mDraft.MagicBarY = static_cast<std::uint8_t>(magicBarY);
-      mDirty = true;
-    }
-
+    mRuntime->Preview(config);
+    mStatus = "HUD size applied for this session, but could not be saved: " +
+              error;
   }
+
   std::shared_ptr<TopScreenUiConfigRuntime> mRuntime;
-  TopScreenUiConfig mDraft;
-  std::uint64_t mObservedRevision = 0U;
-  bool mInitialized = false;
-  bool mDirty = false;
   std::string mStatus;
 };
 

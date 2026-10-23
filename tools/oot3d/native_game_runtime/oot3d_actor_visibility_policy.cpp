@@ -83,8 +83,9 @@ void SelectActorExtensions(std::span<ActorExtensionCandidate> candidates) {
         ordered[i]->Selected = true;
 }
 
-bool ActorLightBudgetAllows(uint32_t used, uint32_t remaining) noexcept {
-    constexpr auto available = kActorLightBudget - kActorLightAuxiliaryReserve;
+bool ActorLightBudgetAllows(uint32_t used, uint32_t remaining, bool overflow) noexcept {
+    const auto available = kActorLightBudget + (overflow ? kActorLightOverflowRecords : 0U) -
+                           kActorLightAuxiliaryReserve;
     return used <= available && remaining <= available - used;
 }
 

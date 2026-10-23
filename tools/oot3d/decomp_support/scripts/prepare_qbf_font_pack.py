@@ -16,17 +16,22 @@ from tools.oot3d.decomp_support.scripts.build_topscreen_texture_override_pack im
 from tools.oot3d.decomp_support.scripts.qbf_font import MAX_FONT_BYTES, pair_font_coverage, parse_qbf
 
 
-FONT_SOURCES = (
-    ("message/eu/ltn16.qbf", "TopScreen2.1.1/EUR/4K Textures/load/mods/0004000000033600/romfs/message/eu/ltn16.qbf"),
-    ("message/us/ltn16.qbf", "TopScreen2.1.1/USA/4K Textures/load/mods/0004000000033500/romfs/message/us/ltn16.qbf"),
+# SingleScreen 3.0 and 3.1 carry the HD Latin font in their emulator layout
+# (TopScreen 2.1.1 is retired). Their sys8.qbf is not an A4 coverage font and
+# stays native. Paths are relative to the archive's release directory.
+SINGLESCREEN_FONT_SOURCES = (
+    ("message/eu/ltn16.qbf", "EUR/Emulator/load/mods/0004000000033600/romfs/message/eu/ltn16.qbf"),
+    ("message/us/ltn16.qbf", "USA/Emulator/load/mods/0004000000033500/romfs/message/us/ltn16.qbf"),
 )
 
-
-def prepare_font_pack(*, archive: Path, romfs: Path, output: Path) -> dict:
+def prepare_font_pack(*, archive: Path, romfs: Path, output: Path,
+                      archive_root: str = "SingleScreen_3.0") -> dict:
+    """Pair the ROM's fonts with a SingleScreen archive."""
     assets = {}
     fonts = []
     with zipfile.ZipFile(archive) as source:
-        for native_path, archive_path in FONT_SOURCES:
+        sources = [(native, f"{archive_root}/{member}") for native, member in SINGLESCREEN_FONT_SOURCES]
+        for native_path, archive_path in sources:
             try:
                 native = parse_qbf(read_level3_romfs_file(romfs, native_path))
             except FileNotFoundError:
@@ -75,8 +80,11 @@ def main() -> int:
     parser.add_argument("--archive", required=True, type=Path)
     parser.add_argument("--romfs", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--archive-root", default="SingleScreen_3.0",
+                        help="the archive's release directory, e.g. SingleScreen_3.1")
     args = parser.parse_args()
-    manifest = prepare_font_pack(archive=args.archive, romfs=args.romfs, output=args.output)
+    manifest = prepare_font_pack(archive=args.archive, romfs=args.romfs, output=args.output,
+                                 archive_root=args.archive_root)
     print(json.dumps({"output": str(args.output), "runtime_enabled": True,
                       "fonts": [{k: v for k, v in font.items() if k != "characters"}
                                 for font in manifest["fonts"]]}, indent=2))

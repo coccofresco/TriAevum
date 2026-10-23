@@ -1068,15 +1068,21 @@ struct VisualSceneLightInterpolation {
 void InterpolateVisualLightBinding(
     const Fast::Renderer3ds::PicaNativeLightBinding& previous,
     const Fast::Renderer3ds::PicaNativeLightBinding& current, float alpha,
-    Fast::Renderer3ds::PicaNativeLightBinding& output, VisualSceneLightInterpolation& scenePoints) {
+    Fast::Renderer3ds::PicaNativeLightBinding& output, VisualSceneLightInterpolation& scenePoints,
+    bool rigidModelView = false) {
     output = current;
     alpha = std::clamp(alpha, 0.0F, 1.0F);
     output.ScenePoints = scenePoints.Resolve(previous.ScenePoints, current.ScenePoints, alpha);
     output.SceneDirectionals = scenePoints.ResolveDirectionals(previous.SceneDirectionals, current.SceneDirectionals, alpha);
     if (previous.WorldToView && current.WorldToView) {
-        for (size_t component = 0; component < output.WorldToView->size(); ++component)
-            (*output.WorldToView)[component] = InterpolateFinite(
-                (*previous.WorldToView)[component], (*current.WorldToView)[component], alpha);
+        // The camera follows the draw's model-view: a factored (rigid) model-
+        // view needs the same factored camera, or inverse(camera) * model-view
+        // no longer gives the draw's world pose (shadow casters, lighting).
+        if (!rigidModelView || !Fast::Renderer3ds::InterpolatePicaRigidCameraMatrix(
+                                   *previous.WorldToView, *current.WorldToView, alpha, *output.WorldToView))
+            for (size_t component = 0; component < output.WorldToView->size(); ++component)
+                (*output.WorldToView)[component] = InterpolateFinite(
+                    (*previous.WorldToView)[component], (*current.WorldToView)[component], alpha);
     } else {
         // Do not associate an interpolated pose with an unpaired live camera.
         output.WorldToView.reset();
@@ -1339,7 +1345,8 @@ bool InterpolateCarriedVisualDraw(const Oot3dPicaVulkanDrawPlan& current, const 
     return true;
 }
 
-void InterpolateVisualVertexUniforms(
+// True when the model-view group was sampled as a factored rigid motion.
+bool InterpolateVisualVertexUniforms(
     const Oot3dPicaVulkanDrawPlan& previous,
     const Oot3dPicaVulkanDrawPlan& current, float alpha,
     Oot3dPicaVertexUniformState& vertexUniforms,
@@ -1354,7 +1361,7 @@ void InterpolateVisualVertexUniforms(
                 : alpha == 1.0F ? after[index][component]
                 : InterpolateFinite(before[index][component],after[index][component],alpha);
     }
-    if (!(alpha > 0.0F && alpha < 1.0F)) return;
+    if (!(alpha > 0.0F && alpha < 1.0F)) return false;
     const auto& previousProgram = previous.VertexShader.TemporalProgram;
     const auto& currentProgram = current.VertexShader.TemporalProgram;
     if (previousProgram && currentProgram) {
@@ -1367,9 +1374,9 @@ void InterpolateVisualVertexUniforms(
         Fast::Renderer3ds::InterpolatePicaTextureTranslations(
             before, after, previousTranslations, currentTranslations, alpha, vertexUniforms.Floats);
     }
-    if (!CmbAffineLayouts(previous, current)) return;
+    if (!CmbAffineLayouts(previous, current)) return false;
     const auto selected = palette && palette->Prepared ? palette->Selected : CmbPaletteSlots(previous,current);
-    if (!selected) return;
+    if (!selected) return false;
     const auto& layout = current.VertexShader.TemporalProgram->AffineLayout;
     const auto* shared = palette && palette->SharedMotion ? &*palette->SharedMotion : nullptr;
     auto factored = vertexUniforms.Floats;
@@ -1378,8 +1385,11 @@ void InterpolateVisualVertexUniforms(
     if (Fast::Renderer3ds::InterpolatePicaFactoredUniformGroup(
             before,after,layout.Palette,*selected,alpha,factored,shared) &&
         Fast::Renderer3ds::InterpolatePicaFactoredUniformGroup(
-            before,after,layout.ModelView,1U,alpha,factored))
+            before,after,layout.ModelView,1U,alpha,factored)) {
         vertexUniforms.Floats = factored;
+        return true;
+    }
+    return false;
 }
 
 void InterpolateVisualFragmentUniforms(
@@ -1490,7 +1500,7 @@ void InterpolateVisualBlendConstantColor(
     }
 }
 
-void InterpolateCompatibleVisualRenderState(
+bool InterpolateCompatibleVisualRenderState(
     const Oot3dPicaVulkanDrawPlan& previous,
     const Oot3dPicaVulkanDrawPlan& current, float alpha,
     Oot3dPicaVertexUniformState& vertexUniforms,
@@ -1498,13 +1508,14 @@ void InterpolateCompatibleVisualRenderState(
     Oot3dPicaViewportState& viewport,
     std::array<float, 4>& blendConstantColor,
     const VisualFactoredPalette* palette = nullptr) {
-    InterpolateVisualVertexUniforms(previous, current, alpha,
-                                    vertexUniforms, palette);
+    const bool rigidModelView = InterpolateVisualVertexUniforms(previous, current, alpha,
+                                                                vertexUniforms, palette);
     InterpolateVisualFragmentUniforms(previous, current, alpha,
                                       fragmentUniforms);
     InterpolateVisualViewport(previous, current, alpha, viewport);
     InterpolateVisualBlendConstantColor(previous, current, alpha,
                                         blendConstantColor);
+    return rigidModelView;
 }
 
 void InterpolateCompatibleVisualDraw(const Oot3dPicaVulkanDrawPlan& previous, const Oot3dPicaVulkanDrawPlan& current,
@@ -1512,10 +1523,11 @@ void InterpolateCompatibleVisualDraw(const Oot3dPicaVulkanDrawPlan& previous, co
                                      VisualSceneLightInterpolation& scenePoints,
                                      const VisualFactoredPalette* palette = nullptr) {
     output = current;
-    InterpolateCompatibleVisualRenderState(previous, current, alpha, output.VertexShader.Uniforms,
-                                           output.FragmentShader.Uniforms, output.State.Viewport,
-                                           output.State.OutputMerger.Blend.ConstantColor, palette);
-    InterpolateVisualLightBinding(previous.LightBinding, current.LightBinding, alpha, output.LightBinding, scenePoints);
+    const bool rigidModelView = InterpolateCompatibleVisualRenderState(
+        previous, current, alpha, output.VertexShader.Uniforms, output.FragmentShader.Uniforms,
+        output.State.Viewport, output.State.OutputMerger.Blend.ConstantColor, palette);
+    InterpolateVisualLightBinding(previous.LightBinding, current.LightBinding, alpha, output.LightBinding, scenePoints,
+                                  rigidModelView);
     const bool perInstanceInterpolated = InterpolateVertexValues(
         previous, current, alpha, Oot3dPicaVertexInputRate::PerInstance,
         output.VertexBindings);
@@ -1659,16 +1671,17 @@ bool SampleVisualFrameViewWithMatching(const Oot3dPicaVisualFrame& previous, con
         }
         const auto& previousDraw = previous.Draws[match->PreviousIndex];
         const auto& delta = drawDeltas[currentIndex];
+        bool rigidModelView = false;
+        if (delta.VertexUniforms) {
+            sampled.VertexUniforms.emplace(currentDraw.VertexShader.Uniforms);
+            rigidModelView = InterpolateVisualVertexUniforms(
+                previousDraw, currentDraw, alpha, *sampled.VertexUniforms,
+                palettes.empty() ? nullptr : &palettes[currentIndex]);
+        }
         if (delta.LightBinding) {
             sampled.LightBinding.emplace();
             InterpolateVisualLightBinding(previousDraw.LightBinding, currentDraw.LightBinding,
-                                           alpha, *sampled.LightBinding, scenePoints);
-        }
-        if (delta.VertexUniforms) {
-            sampled.VertexUniforms.emplace(currentDraw.VertexShader.Uniforms);
-            InterpolateVisualVertexUniforms(
-                previousDraw, currentDraw, alpha, *sampled.VertexUniforms,
-                palettes.empty() ? nullptr : &palettes[currentIndex]);
+                                           alpha, *sampled.LightBinding, scenePoints, rigidModelView);
         }
         if (delta.FragmentUniforms) {
             sampled.FragmentUniforms.emplace(currentDraw.FragmentShader.Uniforms);

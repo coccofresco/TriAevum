@@ -53,6 +53,8 @@ void PrintOot3dNativeGameUsage() {
                  "--resource-root <directory> "
                  "[--ui-profile <oot3d|topscreen>] "
                  "[--topscreen-texture-overrides <textures.o3tu>] "
+                 "[--topscreen-link-animations <zelda_link_ext.zar>] "
+                 "[--topscreen-ui-atlas-hd <ui_atlas_hd.png>] "
                  "[--topscreen-config <topscreen_ui.json>] "
                  "[--controls-config <oot3d_controls.json>] "
                  "[--save-data <directory>] "
@@ -134,6 +136,10 @@ bool ParseOot3dNativeGameArgs(int argc, char** argv, Oot3dNativeGameLaunch& laun
         } else if (arg == "--topscreen-texture-overrides" &&
                    index + 1 < argc) {
             launch.TopScreenTextureOverridePackPath = argv[++index];
+        } else if (arg == "--topscreen-link-animations" && index + 1 < argc) {
+            launch.TopScreenLinkAnimationsPath = argv[++index];
+        } else if (arg == "--topscreen-ui-atlas-hd" && index + 1 < argc) {
+            launch.TopScreenUiAtlasHdPath = argv[++index];
         } else if (arg == "--topscreen-config" && index + 1 < argc) {
             launch.TopScreenConfigPath = argv[++index];
         } else if (arg == "--controls-config" && index + 1 < argc) {
@@ -456,6 +462,29 @@ bool ParseOot3dNativeGameArgs(int argc, char** argv, Oot3dNativeGameLaunch& laun
             throw std::runtime_error(
                 "TopScreen texture override pack does not exist: " +
                 launch.TopScreenTextureOverridePackPath.string());
+        }
+    }
+    if (!launch.TopScreenLinkAnimationsPath.empty()) {
+        if (launch.UiProfile != Oot3dNativeGame::Oot3dUiProfile::TopScreen) {
+            throw std::runtime_error(
+                "--topscreen-link-animations requires --ui-profile topscreen");
+        }
+        if (!std::filesystem::is_regular_file(launch.TopScreenLinkAnimationsPath)) {
+            throw std::runtime_error(
+                "TopScreen Link animations do not exist: " +
+                launch.TopScreenLinkAnimationsPath.string());
+        }
+    }
+    if (!launch.TopScreenUiAtlasHdPath.empty()) {
+        if (launch.UiProfile != Oot3dNativeGame::Oot3dUiProfile::TopScreen ||
+            launch.TopScreenTextureOverridePackPath.empty()) {
+            throw std::runtime_error(
+                "--topscreen-ui-atlas-hd requires --ui-profile topscreen and "
+                "--topscreen-texture-overrides");
+        }
+        if (!std::filesystem::is_regular_file(launch.TopScreenUiAtlasHdPath)) {
+            throw std::runtime_error("TopScreen HD UI atlas does not exist: " +
+                                     launch.TopScreenUiAtlasHdPath.string());
         }
     }
 

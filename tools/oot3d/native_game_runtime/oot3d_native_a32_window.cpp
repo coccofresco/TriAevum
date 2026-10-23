@@ -30,7 +30,7 @@ void WriteSwitchBootStage(const char* stage) {
          << "visual_interpolation=" << (gSwitchVisualInterpolation ? 1 : 0)
          << '\n'
          << "control_profile=" << gSwitchControlProfile << '\n'
-         << "topscreen_211_assets=" << (gSwitchTopScreen211Assets ? 1 : 0)
+         << "topscreen_30_ui_atlas=" << (gSwitchTopScreen30UiAtlas ? 1 : 0)
          << '\n'
          << "whole_aot_block_budget=" << gSwitchWholeAotBlockBudget << '\n'
          << "whole_aot_block_limit_exits="

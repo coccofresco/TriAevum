@@ -42,8 +42,21 @@ struct alignas(16) HiZWaterUniforms {
     std::array<float, 4> MapInfo{};
     std::array<std::array<float, 4>, Renderer3ds::kPicaWaterMapLevels / 4U> MapLevels{};
     std::array<float, 4> MapCounts{};
+    // World x, z bounds (min x, min z, max x, max z) of the map's water
+    // cells, a texel wider: the surface search fetches no cell outside them.
+    std::array<float, 4> MapExtent{};
 };
-static_assert(sizeof(HiZWaterUniforms) == 592U);
+static_assert(sizeof(HiZWaterUniforms) == 608U);
+
+// Whether any of the scene's water (the bodies' surfaces, the drawn water's
+// extent at its heights) can lie on a view ray in front of the camera: a
+// box corner inside every plane of the view pyramid (apex at the camera, no
+// near plane; the far plane bounds the drawn water only). Without a valid
+// view, true.
+[[nodiscard]] bool HiZWaterPossiblyInView(const std::array<float, 16>* worldToView,
+                                          const std::array<float, 16>& projection, float farPlane,
+                                          const Renderer3ds::PicaSceneWaterBodies* bodies,
+                                          const Renderer3ds::PicaWaterMap* map);
 
 // The bodies below the camera (seen from above), nearest first; without a
 // valid view, none. waterOnly is kept either way.

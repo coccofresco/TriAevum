@@ -176,7 +176,8 @@ def prepare(args) -> dict:
         [artifacts["shaderc_shared.dll"]])
     layout["files"].extend(shader_files)
     catalog, corpus_files = bind_shader_corpus(catalog, args.shader_pack,
-        args.pipeline_manifest, args.pipeline_helper)
+        args.pipeline_manifest, args.pipeline_helper, qualification=args.shader_qualification,
+        source_root=ROOT)
     layout["files"].extend(corpus_files)
     # The release's own interior-sun and scene-light results for the supported
     # rooms, keyed to their content (precomputed_tables).
@@ -216,6 +217,8 @@ def main() -> int:
     parser.add_argument("--shader-pack", type=Path, required=True,
                         help="Publisher input: bundled portable corpus, never a user choice")
     parser.add_argument("--pipeline-manifest", type=Path, action="append", required=True)
+    parser.add_argument("--shader-qualification", type=Path, required=True,
+                        help="qualification.json written by regenerate_shader_corpus.py with the pack")
     parser.add_argument("--pipeline-helper", type=Path, required=True)
     parser.add_argument("--precomputed", type=Path,
                         help="Publisher directory from precomputed_tables (interior-sun.masks, scene-lights.json)")

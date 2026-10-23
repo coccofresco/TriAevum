@@ -47,6 +47,13 @@ void TopScreenPauseTransactionRuntime::RequestOpenLastPage(
   mOpenPage = page;
 }
 
+void TopScreenPauseTransactionRuntime::RequestSelectSave() noexcept {
+  // START and B transactions keep precedence, as in 2.1.1's controller.
+  if (Requested() || Pending()) return;
+  mRequest = Request::SelectSave;
+  mRequestAge = 0;
+}
+
 void TopScreenPauseTransactionRuntime::RequestSystemOpen(
     const TopScreenPauseSystemOpenPlan &plan) noexcept {
   // A START close requested in the same refresh wins over Save/Quit.
@@ -68,6 +75,7 @@ void TopScreenPauseTransactionRuntime::Reset() noexcept {
   mSystemOpenPlan = {};
   mOpenPage = NativeA32TopScreenPage::None;
   mOpening = false;
+  mSelectSave = false;
   mNativeTransitionActive = false;
   mOpenPlay = 0;
   mStepCount = 0;
@@ -97,12 +105,34 @@ bool TopScreenPauseTransactionRuntime::Begin() {
   const auto request = mRequest;
   mRequest = Request::None;
   mOpening = false;
+  mSelectSave = false;
   mStepCount = 0;
   mNextStep = 0;
   const auto add = [&](bool call, std::uint32_t address, std::uint32_t value0 = 0U,
                        std::uint32_t value1 = 0U) {
     mSteps[mStepCount++] = {call, address, value0, value1};
   };
+  if (request == Request::SelectSave) {
+    if (!ReadOpenGates(&mOpenPlay, false)) {
+      ++mRetired;
+      return false;
+    }
+    mOpening = true;
+    mSelectSave = true;
+    mNativeTransitionActive = false;
+    // The same three predicate calls as the page open keep its step layout;
+    // 2.1.1 tests 0x002F43E8() == 0 and 0x00374BE8(play, 3) == 0.
+    add(true, kNativeTransitionPredicate);
+    add(true, kPauseOpenPredicate);
+    add(true, kPlayOpenPredicate, mOpenPlay, 3U);
+    // 0x005D5C44..5C70; the host owns the description word (cleared by the caller).
+    add(false, kPauseSceneControl, 1U);
+    add(true, kPauseInputSetTouchEnabled, 1U, 1U);
+    add(false, kPauseControllerState, 0U);
+    add(false, kPauseTouchCounter, 0U);
+    add(true, kPauseSystemMenuOpen, 0U);
+    return true;
+  }
   if (request == Request::OpenLastPage) {
     std::uint32_t pageState = 0U;
     switch (mOpenPage) {
@@ -166,16 +196,19 @@ bool TopScreenPauseTransactionRuntime::Begin() {
 bool TopScreenPauseTransactionRuntime::Execute(oot3d::recomp::a32::GuestState &state,
                                                oot3d::recomp::a32::ExecutionResult *result,
                                                std::uint32_t *blocksConsumed) {
-  if (Pending() && mOpening) {
+  // Only the returns of the three predicate calls are gates; a SELECT Save
+  // continues through its own native calls afterwards.
+  if (Pending() && mOpening && mNextStep <= 3U) {
     if (mNextStep == 1U) mNativeTransitionActive = state.r[0] != 0U;
     std::uint32_t play = 0U;
     const bool rejected = (mNextStep >= 2U && state.r[0] != 0U) ||
-        !ReadOpenGates(&play, mNextStep >= 2U) || play != mOpenPlay;
+        !ReadOpenGates(&play, mNextStep >= 2U && !mSelectSave) || play != mOpenPlay;
     if (rejected || mRequest == Request::StartClose) {
       // No open writes precede the predicate results. A newer START close
       // can take ownership at this same boundary after restoring its caller.
       state = mCallerState;
       mOpening = false;
+      mSelectSave = false;
       mStepCount = 0;
       mNextStep = 0;
       ++mRetired;
@@ -208,8 +241,9 @@ bool TopScreenPauseTransactionRuntime::Execute(oot3d::recomp::a32::GuestState &s
   }
   // Every call returned to the boundary: the native UI update continues.
   state = mCallerState;
-  if (mOpening) ++mLastPageOpens;
+  if (mOpening) ++(mSelectSave ? mSelectSaves : mLastPageOpens);
   mOpening = false;
+  mSelectSave = false;
   mStepCount = 0;
   mNextStep = 0;
   return false;

@@ -450,6 +450,16 @@ TEST(Oot3dGraphicsSettingsPersistence, MigratesCoupledSegmentLodWithoutMovingIts
     EXPECT_FLOAT_EQ(loaded.Value.Grass.SegmentLodEndDistance, 3000.0F);
 }
 
+TEST(Oot3dGraphicsSettingsPersistence, NullActiveRectsMeanTheWholeMask) {
+    // The title's shipped rules write null; it is not a malformed document.
+    auto document = Fast::Oot3d::SerializeGraphicsSettings(CompleteSettings());
+    document["Grass"]["Sources"][0]["ActiveRects"] = nullptr;
+    const auto loaded = Fast::Oot3d::DeserializeGraphicsSettings(document);
+    EXPECT_TRUE(loaded.Issues.empty());
+    ASSERT_EQ(loaded.Value.Grass.Rules.size(), 2U);
+    EXPECT_TRUE(loaded.Value.Grass.Rules[0].ActiveRects.empty());
+}
+
 TEST(Oot3dGraphicsSettingsPersistence, RoundTripsCompleteSettings) {
     const auto original = CompleteSettings();
     const auto document =

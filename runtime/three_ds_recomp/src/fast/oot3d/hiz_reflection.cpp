@@ -44,6 +44,7 @@ layout(set = 0, binding = 7, std140) uniform HiZWater {
     vec4 map_info;
     vec4 map_levels[4];
     vec4 map_counts;
+    vec4 map_extent;
 } hiz_water;
 // Per texel of the drawn water's map: its surface height at the centre
 // (-1e30: none), landing foam and the surface's slope (d height / dx, dz).
@@ -166,8 +167,32 @@ float hiz_water_surface(vec2 uv, float scene_depth, out vec3 world_position, out
         const int steps = 64;
         float above = first;
         bool found = false;
+        // Samples outside the water cells' bounds (hiz_water.map_extent, a
+        // texel wider than the cells: a rounded edge still lies outside) meet
+        // no water cell: the search would only move `above` past them. They
+        // are skipped without a fetch, `above` kept as the search leaves it,
+        // and the search ends after the last sample inside, so the samples
+        // and the refinement below are unchanged.
+        float enter = first, leave = last;
+        for (int axis = 0; axis < 2; ++axis) {
+            float origin = axis == 0 ? camera.x : camera.z;
+            float direction = axis == 0 ? ray.x : ray.z;
+            float low = hiz_water.map_extent[axis], high = hiz_water.map_extent[axis + 2];
+            if (abs(direction) > 1.0e-6) {
+                float t0 = (low - origin) / direction, t1 = (high - origin) / direction;
+                enter = max(enter, min(t0, t1));
+                leave = min(leave, max(t0, t1));
+            } else if (origin < low || origin > high) {
+                leave = -1.0;
+            }
+        }
         for (int i = 1; first < last && i <= steps; ++i) {
             float depth = mix(first, last, float(i) / float(steps));
+            if (depth < enter) {
+                above = depth;
+                continue;
+            }
+            if (depth > leave) break;
             vec3 position = camera + ray * depth;
             float surface = hiz_water_map_surface(position.xz);
             if (surface > -1.0e29 && position.y <= surface) {
@@ -668,6 +693,10 @@ HiZWaterUniforms BuildHiZWaterUniforms(const std::array<float, 16>* worldToView,
                                                                    Renderer3ds::kPicaWaterMapLevels));
         result.MapCounts[1] = map->HeightRange[0];
         result.MapCounts[2] = map->HeightRange[1];
+        // A texel of margin: a sample the search would place in an edge
+        // cell by rounding still lies inside.
+        result.MapExtent = {map->ExtentMinimumXZ[0] - map->Texel, map->ExtentMinimumXZ[1] - map->Texel,
+                            map->ExtentMaximumXZ[0] + map->Texel, map->ExtentMaximumXZ[1] + map->Texel};
     }
     if (rings != nullptr)
         for (uint32_t i = 0; i < Renderer3ds::kPicaWaterRings; ++i)
@@ -722,6 +751,58 @@ HiZWaterUniforms BuildHiZWaterUniforms(const std::array<float, 16>* worldToView,
     }
     result.Parameters[0] = static_cast<float>(count);
     return result;
+}
+
+bool HiZWaterPossiblyInView(const std::array<float, 16>* worldToView, const std::array<float, 16>& projection,
+                            float farPlane, const Renderer3ds::PicaSceneWaterBodies* bodies,
+                            const Renderer3ds::PicaWaterMap* map) {
+    if (worldToView == nullptr) return true;
+    // The trace's projection (project_view): ndc = scale * xy / w - offset,
+    // w = -z. A view point is on screen when both ndc are within [-1, 1];
+    // each bound is linear in view space once w is positive.
+    const float sx = projection[0], sy = projection[5], ox = projection[8], oy = projection[9];
+    const auto boxInView = [&](const std::array<float, 3>& low, const std::array<float, 3>& high,
+                               bool farBounded) {
+        std::array<uint32_t, 6> outside{};
+        for (uint32_t corner = 0; corner < 8U; ++corner) {
+            const std::array<float, 3> world{(corner & 1U) ? high[0] : low[0], (corner & 2U) ? high[1] : low[1],
+                                             (corner & 4U) ? high[2] : low[2]};
+            std::array<float, 3> view{};
+            for (size_t row = 0; row < 3U; ++row)
+                view[row] = (*worldToView)[row] * world[0] + (*worldToView)[4U + row] * world[1] +
+                            (*worldToView)[8U + row] * world[2] + (*worldToView)[12U + row];
+            const float w = -view[2];
+            const std::array<float, 6> planes{w,
+                                              sx * view[0] - (ox - 1.0F) * w,
+                                              (ox + 1.0F) * w - sx * view[0],
+                                              sy * view[1] - (oy - 1.0F) * w,
+                                              (oy + 1.0F) * w - sy * view[1],
+                                              farBounded ? farPlane - w : 1.0F};
+            for (size_t plane = 0; plane < planes.size(); ++plane)
+                if (planes[plane] < 0.0F) ++outside[plane];
+        }
+        // Every corner beyond one plane: the box is out of view. Anything
+        // else counts as visible (a box straddling a corner of the pyramid
+        // may still be outside; the search then finds nothing).
+        return std::none_of(outside.begin(), outside.end(), [](uint32_t count) { return count == 8U; });
+    };
+    if (bodies != nullptr) {
+        for (uint32_t i = 0; i < std::min(bodies->Count, Renderer3ds::kMaximumPicaSceneWaterBodies); ++i) {
+            const auto& body = bodies->Bodies[i];
+            if (boxInView({body.MinimumXZ[0], body.SurfaceY - Renderer3ds::kPicaWaterSurfaceHeightTolerance,
+                           body.MinimumXZ[1]},
+                          {body.MaximumXZ[0], body.SurfaceY + Renderer3ds::kPicaWaterSurfaceHeightTolerance,
+                           body.MaximumXZ[1]},
+                          false))
+                return true;
+        }
+    }
+    if (map != nullptr && map->Size != 0U && !map->Levels.empty() &&
+        boxInView({map->ExtentMinimumXZ[0] - map->Texel, map->HeightRange[0], map->ExtentMinimumXZ[1] - map->Texel},
+                  {map->ExtentMaximumXZ[0] + map->Texel, map->HeightRange[1], map->ExtentMaximumXZ[1] + map->Texel},
+                  true))
+        return true;
+    return false;
 }
 
 } // namespace Fast::Oot3d

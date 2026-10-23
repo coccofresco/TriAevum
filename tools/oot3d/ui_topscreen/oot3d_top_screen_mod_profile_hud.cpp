@@ -2,6 +2,8 @@
 // icons, touch clusters and labels, file select, HUD scale, timer).
 #include "oot3d_top_screen_mod_profile_internal.h"
 
+#include "oot3d_gameplay_player.h"
+
 namespace Oot3dNativeGame {
 
 TopScreenHealthGeometry
@@ -92,9 +94,12 @@ BuildTopScreenMagicMeterGeometry(const oot3d::ui::UiHudMagicContent &magic,
 TopScreenTouchClusterGeometry BuildTopScreenTouchClusterGeometry(
     const std::array<float, 4> &nativeVerticalOffsets,
     float nativeAlpha, TopScreenHudLayout layout) noexcept {
-  // Payload arrays 0x005D33A0/0x005D33B4 and literals
-  // 0x005CAF7C/0x005CAF9C/0x005CAFA0. FUN_005C7230 converts these atlas
-  // rectangles to PICA UVs after the producer has supplied top-origin pixels.
+  // SingleScreen 3.0 hub 0x005DCAD0..0x005DCCB0 (2.1.1 arrays
+  // 0x005D33A0/0x005D33B4): the four button circles centred on table
+  // 0x00609770/0x00609784, 32 px, custom_ui01 rect 1 (148,3,48,48); the A
+  // circle at (248, 24) with rect 0 (97,3,48,48); the D-pad cross centred on
+  // (30.5, 67), 28 px, rect 3 drawn as (385,108,29,29). The 2.1.1 drew them
+  // from its replaced menu_top_parts00, which TriAevum no longer has.
   constexpr std::array<TopScreenVec2, 4> kNativeCenters{
       {{358.0F, 20.0F}, {334.0F, 44.0F}, {382.0F, 44.0F}, {358.0F, 68.0F}}};
   TopScreenTouchClusterGeometry result;
@@ -103,7 +108,7 @@ TopScreenTouchClusterGeometry BuildTopScreenTouchClusterGeometry(
                                kNativeCenters[index].Y - 16.0F +
                                    nativeVerticalOffsets[index]};
     result.Sizes[index] = {32.0F, 32.0F};
-    result.AtlasOrigins[index] = {386.0F, 201.0F};
+    result.AtlasOrigins[index] = {148.0F, 3.0F};
     result.AtlasSizes[index] = {48.0F, 48.0F};
     result.Alpha[index] =
         layout == TopScreenHudLayout::Restoration && index >= 2U ? 0.0F
@@ -115,14 +120,14 @@ TopScreenTouchClusterGeometry BuildTopScreenTouchClusterGeometry(
           ? TopScreenVec2{342.0F, 52.0F}
           : TopScreenVec2{232.0F, 8.0F};
   result.Sizes[4] = {32.0F, 32.0F};
-  result.AtlasOrigins[4] = {386.0F, 201.0F};
+  result.AtlasOrigins[4] = {97.0F, 3.0F};
   result.AtlasSizes[4] = {48.0F, 48.0F};
   result.Alpha[4] = 1.0F;
 
-  result.Positions[5] = {14.0F, 52.0F};
-  result.Sizes[5] = {30.0F, 30.0F};
-  result.AtlasOrigins[5] = {432.0F, 218.0F};
-  result.AtlasSizes[5] = {30.0F, 30.0F};
+  result.Positions[5] = {30.5F - 14.0F, 67.0F - 14.0F};
+  result.Sizes[5] = {28.0F, 28.0F};
+  result.AtlasOrigins[5] = {385.0F, 108.0F};
+  result.AtlasSizes[5] = {29.0F, 29.0F};
   result.Alpha[5] = nativeAlpha;
   return result;
 }
@@ -238,6 +243,85 @@ bool ReadTopScreenHudCompositorGate(NativeA32Memory &memory,
                playerTransition == 0U && runtimeMode == 0U &&
                (playerHudReady != 0U || alternateHudOwner != 0U) &&
                playerHudSuppressed == 0U && playerHudState == 0U;
+  // SingleScreen 3.0 0x005DA570 adds 0x005CC87C: no HUD while a player is
+  // present and Gameplay_InCsMode (0x0037577C) holds. The native top-screen
+  // HUD already hides then; the lower-screen controls this compositor
+  // relocates do not.
+  if (gate->Draw && player != 0U) {
+    bool cutscene = false;
+    if (!ReadTopScreenGameplayInCutsceneMode(memory, playState, player, &cutscene, error))
+      return false;
+    gate->Draw = !cutscene;
+  }
+  return true;
+}
+
+bool ReadTopScreenGameplayInCutsceneMode(NativeA32Memory &memory, std::uint32_t playState,
+                                         std::uint32_t player, bool *cutscene,
+                                         std::string *error) {
+  using oot3d::gameplay::PlayerPlayStateWire;
+  using oot3d::gameplay::PlayerWireState;
+  if (cutscene == nullptr) {
+    SetError(error, "TopScreen cutscene-mode output is null");
+    return false;
+  }
+  // 0x0037577C: the play cutscene state (+0x2298 +8), else Player_InCsMode
+  // (0x0036A7A0; mask and global state from its literals 0x0036A834/38).
+  constexpr std::uint32_t kPlayCutsceneState = 0x22A0U;
+  constexpr std::uint32_t kPlayerCutsceneBlockingMask = 0x20000080U;
+  constexpr std::uint32_t kPlayerCutsceneGlobalState = 0x00588E58U;
+  std::uint8_t playCutscene = 0U;
+  oot3d::gameplay::PlayerCutsceneModeState state;
+  std::uint8_t itemAction = 0U;
+  if (!memory.Read8(playState + kPlayCutsceneState, &playCutscene) ||
+      !memory.Read32(player + offsetof(PlayerWireState, StateFlags), &state.StateFlags) ||
+      !memory.Read8(player + offsetof(PlayerWireState, CutsceneActionMode),
+                    &state.CutsceneAction) ||
+      !memory.Read8(player + offsetof(PlayerWireState, StateFlagsByte), &state.StateFlagsByte) ||
+      !memory.Read8(player + offsetof(PlayerWireState, ItemAction), &itemAction) ||
+      !memory.Read8(player + offsetof(PlayerWireState, State1749), &state.State1749) ||
+      !memory.Read8(playState + offsetof(PlayerPlayStateWire, State5C2D),
+                    &state.PlayState5C2D) ||
+      !memory.Read16(kPlayerCutsceneGlobalState + 0x80U, &state.GlobalState80)) {
+    SetError(error, "cannot read native TopScreen cutscene mode");
+    return false;
+  }
+  state.ItemAction = static_cast<std::int8_t>(itemAction);
+  *cutscene = playCutscene != 0U ||
+              oot3d::gameplay::PlayerInCutsceneMode(state, {kPlayerCutsceneBlockingMask});
+  return true;
+}
+
+bool ReadTopScreenQuestPageDrawSuppressed(NativeA32Memory &memory,
+                                          bool runtimeSceneLatch, bool *suppressed,
+                                          std::string *error) {
+  if (suppressed == nullptr) {
+    SetError(error, "TopScreen Quest draw gate output is null");
+    return false;
+  }
+  *suppressed = false;
+  // 0x002FCAD4, 0x002FCAEC, 0x002FCDD4 and 0x004392B0, as in 0x005C91D0.
+  constexpr std::array<std::uint32_t, 4> kPauseOwnerStates{
+      0x0050446CU + 0x18U, 0x005066F8U + 0x34U, 0x00506CB0U + 0x38U,
+      0x0050A508U + 0x28U};
+  for (const auto address : kPauseOwnerStates) {
+    std::uint32_t active = 0U;
+    if (!memory.Read32(address, &active)) {
+      SetError(error, "cannot read native TopScreen pause owner");
+      return false;
+    }
+    if (active != 0U) {
+      *suppressed = true;
+      return true;
+    }
+  }
+  // 0x005CEE58 (the latch) and the native byte 0x005C3F71.
+  std::uint8_t runtimeGate = 0U;
+  if (runtimeSceneLatch && !memory.Read8(0x005C3F71U, &runtimeGate)) {
+    SetError(error, "cannot read native TopScreen runtime scene gate");
+    return false;
+  }
+  *suppressed = runtimeGate != 0U;
   return true;
 }
 
@@ -451,9 +535,9 @@ std::size_t AppendTopScreenMagicMeterPresentation(
 
 std::size_t AppendTopScreenTouchClusterPresentation(
     const TopScreenTouchClusterGeometry &geometry,
-    const oot3d::ui::UiTextureIdentity &pauseTopPage,
+    const oot3d::ui::UiTextureIdentity &uiAtlas,
     std::vector<oot3d::ui::UiPrimitive> &output) {
-  if (pauseTopPage.semantic_name.empty()) {
+  if (uiAtlas.semantic_name.empty()) {
     return 0U;
   }
   const std::size_t startSize = output.size();
@@ -467,7 +551,7 @@ std::size_t AppendTopScreenTouchClusterPresentation(
     primitive.role = oot3d::ui::UiPrimitiveRole::TouchControl;
     primitive.owner_address = 0x005C9940U;
     primitive.source_quad = static_cast<std::uint32_t>(index);
-    primitive.texture = pauseTopPage;
+    primitive.texture = uiAtlas;
     primitive.destination = {geometry.Positions[index].X,
                              geometry.Positions[index].Y,
                              geometry.Sizes[index].X, geometry.Sizes[index].Y};
@@ -523,7 +607,7 @@ std::size_t AppendTopScreenPauseEdgePresentation(
 
 bool ReadTopScreenTabHintInputs(NativeA32Memory &memory, TopScreenTabHintInputs *inputs) {
   if (inputs == nullptr) return false;
-  // 0x005CFE58..0x005CFEA4: Items 0x0050672C, Gear 0x00504484, Map 0x00506CE8.
+  // 3.0 0x005D4A0C: Items 0x0050672C, Gear 0x00504484, Map 0x00506CE8.
   std::uint32_t items = 0U, gear = 0U, map = 0U, held = 0U;
   if (!memory.Read32(0x0050672CU, &items) || !memory.Read32(0x00504484U, &gear) ||
       !memory.Read32(0x00506CE8U, &map) || !memory.Read32(0x005655A0U, &held))
@@ -535,42 +619,43 @@ bool ReadTopScreenTabHintInputs(NativeA32Memory &memory, TopScreenTabHintInputs 
 }
 
 std::size_t AppendTopScreenTabHintPresentation(
-    const TopScreenTabHintInputs &inputs, const oot3d::ui::UiTextureIdentity &cursor,
-    const oot3d::ui::UiTextureIdentity &equipmentPage,
+    const TopScreenTabHintInputs &inputs, const oot3d::ui::UiTextureIdentity &uiAtlas,
     std::vector<oot3d::ui::UiPrimitive> &output) {
-  if (!inputs.PageOpen || cursor.semantic_name.empty()) return 0U;
+  if (!inputs.PageOpen || uiAtlas.semantic_name.empty()) return 0U;
   constexpr float kPageOffsetX = 40.0F;
   const std::size_t startSize = output.size();
-  // 0x005CFEF0..0x005CFFF0: optional 42x42 backings from atlas index 4,
-  // crop (255,103,136,28), at (24,205) and (254,205). They precede the glyphs.
-  if (!equipmentPage.semantic_name.empty()) {
-    for (const float x : {24.0F, 254.0F}) {
-      oot3d::ui::UiPrimitive backing;
-      backing.subsystem = oot3d::ui::UiSubsystem::GameplayHud;
-      backing.role = oot3d::ui::UiPrimitiveRole::PauseBackground;
-      backing.owner_address = 0x005E4030U;
-      backing.source_quad = x < 100.0F ? 0U : 1U;
-      backing.texture = equipmentPage;
-      backing.destination = {x + kPageOffsetX, 205.0F, 42.0F, 42.0F};
-      backing.uv = {255.0F / 512.0F, 103.0F / 256.0F, 136.0F / 512.0F, 28.0F / 256.0F};
-      backing.layer = 14U;
-      output.push_back(std::move(backing));
-    }
+  // 0x005D1644 binds both models to custom_ui01. 0x005D4A0C draws the
+  // 41x42 backings first, using its (401,196,18,18) crop without dimming.
+  for (unsigned index = 0; index < 2; ++index) {
+    oot3d::ui::UiPrimitive backing;
+    backing.subsystem = oot3d::ui::UiSubsystem::GameplayHud;
+    backing.role = oot3d::ui::UiPrimitiveRole::PauseBackground;
+    backing.owner_address = 0x005D4A0CU;
+    backing.source_quad = index;
+    backing.texture = uiAtlas;
+    backing.destination = {(index == 0 ? 25.5F : 253.5F) + kPageOffsetX,
+                           206.0F, 41.0F, 42.0F};
+    backing.uv = {401.0F / 512.0F, 196.0F / 256.0F, 18.0F / 512.0F, 18.0F / 256.0F};
+    backing.layer = 14U;
+    output.push_back(std::move(backing));
   }
-  // 0x005D0150..0x005D0364: the L glyph (crop X 100) at x 26 and the R glyph
-  // (crop X 72) at x 258, 36x28 at y 208, from the 28x36 crop at y 89.
-  struct Glyph { float X, CropX; bool Held; };
-  for (const Glyph glyph : {Glyph{26.0F, 100.0F, inputs.LeftHeld},
-                            Glyph{258.0F, 72.0F, inputs.RightHeld}}) {
+  // 0x0060A568 rects 20/21 are upright 37x28 glyphs. The payload grows
+  // each by 1.05 around its centre, with +1.5/-1.5 X and +1 Y offsets.
+  constexpr float kWidth = 37.0F, kHeight = 28.0F, kScale = 1.05F;
+  constexpr float kCentreOffset = (1.0F - kScale) * 0.5F;
+  struct Glyph { float X, CropX, CropY; bool Held; };
+  unsigned glyphIndex = 2;
+  for (const Glyph glyph : {Glyph{62.0F - kWidth + 1.5F, 462.0F, 108.0F, inputs.LeftHeld},
+                            Glyph{258.0F - 1.5F, 240.0F, 117.0F, inputs.RightHeld}}) {
     oot3d::ui::UiPrimitive hint;
     hint.subsystem = oot3d::ui::UiSubsystem::GameplayHud;
     hint.role = oot3d::ui::UiPrimitiveRole::TouchControl;
-    hint.owner_address = 0x005E4058U;
-    hint.source_quad = glyph.X < 100.0F ? 0U : 1U;
-    hint.texture = cursor;
-    hint.destination = {glyph.X + kPageOffsetX, 208.0F, 36.0F, 28.0F};
-    hint.uv = {glyph.CropX / 128.0F, 89.0F / 128.0F, 28.0F / 128.0F, 36.0F / 128.0F};
-    hint.uv_quarter_turn = true;
+    hint.owner_address = 0x005D4A0CU;
+    hint.source_quad = glyphIndex++;
+    hint.texture = uiAtlas;
+    hint.destination = {glyph.X + kWidth * kCentreOffset + kPageOffsetX,
+                        209.0F + kHeight * kCentreOffset, kWidth * kScale, kHeight * kScale};
+    hint.uv = {glyph.CropX / 512.0F, glyph.CropY / 256.0F, kWidth / 512.0F, kHeight / 256.0F};
     const float rgb = glyph.Held ? 0.55F : 1.0F;
     hint.color = {rgb, rgb, rgb, 1.0F};
     hint.layer = 14U;
@@ -682,6 +767,32 @@ std::size_t AppendTopScreenExtendedItemButtonsPresentation(
     output.push_back(std::move(primitive));
   }
   return output.size() - startSize;
+}
+
+float ResolveTopScreenDpadGroupAlpha(const TopScreenNativeItemOpacity &lanes,
+                                     bool nestedOwner) noexcept {
+  // 0x0060D22C, the third lane, has no writer in 3.0.
+  const float lane = lanes.ItemZr > 0.0F ? lanes.ItemZr : lanes.ItemZl;
+  if (lane > 0.0F) return std::min(lane, 1.0F);
+  return nestedOwner ? 0.3F : 1.0F;
+}
+
+bool ReadTopScreenPlayerNestedOwner(NativeA32Memory &memory, bool *nestedOwner) {
+  // 0x005CCFB0: PlayState 0x005043D4+0xC in state 3/2, Player +0x20AC.
+  if (nestedOwner == nullptr) return false;
+  *nestedOwner = false;
+  std::uint32_t play = 0U, player = 0U, nested = 0U;
+  std::uint8_t type = 0U, subtype = 0U;
+  if (!memory.Read32(0x005043D4U + 0x0CU, &play)) return false;
+  if (play == 0U) return true;
+  if (!memory.Read8(play + 0x100U, &type) || !memory.Read8(play + 0x101U, &subtype))
+    return false;
+  if (type != 3U || subtype != 2U) return true;
+  if (!memory.Read32(play + 0x20ACU, &player)) return false;
+  if (player == 0U) return true;
+  if (!memory.Read32(player + 0x12B8U, &nested)) return false;
+  *nestedOwner = nested != 0U;
+  return true;
 }
 
 bool AppendTopScreenNativeItemIconCopies(
@@ -808,6 +919,36 @@ bool AppendTopScreenNativeItemIconCopies(
   return true;
 }
 
+std::size_t AppendTopScreenQuestBButtonCopiesPresentation(
+    std::span<const TopScreenQuestCopiedQuad> copies,
+    const oot3d::ui::UiTextureIdentity &itemIcons,
+    const oot3d::ui::UiTextureIdentity &numberGlyphs,
+    std::vector<oot3d::ui::UiPrimitive> &output) {
+  const std::size_t startSize = output.size();
+  for (std::size_t index = 0U; index < copies.size(); ++index) {
+    const auto &copy = copies[index];
+    const auto &texture = copy.NumberGlyphs ? numberGlyphs : itemIcons;
+    if (texture.semantic_name.empty()) continue;
+    oot3d::ui::UiPrimitive primitive;
+    primitive.subsystem = oot3d::ui::UiSubsystem::GameplayHud;
+    primitive.role = copy.NumberGlyphs ? oot3d::ui::UiPrimitiveRole::AmmoCounter
+                                       : oot3d::ui::UiPrimitiveRole::ActionButton;
+    primitive.owner_address = 0x0042B9F4U;
+    primitive.source_quad = static_cast<std::uint32_t>(index);
+    primitive.texture = texture;
+    primitive.destination = {copy.Positions[0].X, copy.Positions[0].Y,
+                             copy.Positions[1].X - copy.Positions[0].X,
+                             copy.Positions[2].Y - copy.Positions[0].Y};
+    primitive.uv = NativePicaQuadUvToHost(copy.Uvs);
+    primitive.color = copy.Color;
+    // Above the circles (layer 12, appended earlier), under the B label (13).
+    primitive.layer = 12U;
+    primitive.visible = primitive.color.alpha != 0.0F;
+    output.push_back(std::move(primitive));
+  }
+  return output.size() - startSize;
+}
+
 bool AppendTopScreenNativeCounters(
     NativeA32Memory &memory, const std::array<float, 4> &nativeVerticalOffsets,
     const oot3d::ui::UiTextureIdentity &numberGlyphs,
@@ -819,14 +960,39 @@ bool AppendTopScreenNativeCounters(
     return false;
   }
   constexpr std::uint32_t kSaveContext = 0x00587958U;
-  std::uint16_t rupees = 0U;
-  if (!memory.Read16(kSaveContext + 0x48U, &rupees)) {
+  std::uint16_t rupeesRaw = 0U;
+  std::uint32_t upgrades = 0U, walletMask = 0U;
+  std::uint8_t walletShift = 0U;
+  std::uint16_t walletCapacity = 0U;
+  if (!memory.Read16(kSaveContext + 0x48U, &rupeesRaw) ||
+      !memory.Read32(kSaveContext + 0xB8U, &upgrades) ||
+      !memory.Read32(0x0053CBD4U, &walletMask) ||
+      !memory.Read8(0x0053CB20U, &walletShift)) {
     SetError(error, "cannot read native TopScreen rupee count");
     return false;
   }
-  (void)AppendTopScreenCounterDigits(0x005C9940U, kSaveContext + 0x48U, rupees,
-                                     4U, 24.0F, 218.0F, 0.85F, numberGlyphs,
-                                     output);
+  const std::uint32_t walletIndex =
+      ((upgrades & walletMask) >> (walletShift & 31U)) & 3U;
+  if (!memory.Read16(0x0053CC04U + walletIndex * 2U, &walletCapacity)) {
+    SetError(error, "cannot read native TopScreen wallet capacity");
+    return false;
+  }
+  // SingleScreen 3.0 hub 0x005DE318..0x005DE3C8: the digits start at x 24
+  // whatever their count (origin 24 - (3 - n) x 8.5) at y 217; a full wallet
+  // (count >= the 0x0053CC04 capacity) takes the next glyph row and an empty
+  // one draws at alpha 0.3.
+  const auto rupees = static_cast<std::uint32_t>(
+      std::max<std::int16_t>(static_cast<std::int16_t>(rupeesRaw), 0));
+  const std::uint32_t rupeeDigits = rupees < 10U ? 1U : (rupees < 100U ? 2U : 3U);
+  const std::size_t rupeeStart = output.size();
+  (void)AppendTopScreenCounterDigits(
+      0x005C9940U, kSaveContext + 0x48U, rupees,
+      walletCapacity <= rupees ? 5U : 4U,
+      24.0F - static_cast<float>(3U - rupeeDigits) * 8.5F, 217.0F, 0.85F,
+      numberGlyphs, output);
+  for (std::size_t index = rupeeStart; index < output.size(); ++index) {
+    output[index].color.alpha = rupees == 0U ? 0.3F : 1.0F;
+  }
 
   // 2.1.1 005D8434..8540 gates the key digits on the root PlayState
   // *(005043D4+C): type 3, subtype 2, scene 3..16, signed key count >= 0.
@@ -993,21 +1159,24 @@ TopScreenTouchLabelsGeometry BuildTopScreenTouchLabelsGeometry(
       layout == TopScreenHudLayout::Restoration
           ? 0.0F
           : std::clamp(nativeAlpha * 0.9F, 0.0F, 1.0F);
+  // SingleScreen 3.0 hub 0x005DD0D8/0x005DD168: ZR at (364, lane 2 + 31)
+  // with custom_ui01 rect 15 (47,231), ZL at (340, lane 3 + 55) with rect 14
+  // (245,227), both 16 px.
   TopScreenTouchLabelsGeometry result;
-  result.Quads[0] = {alpha != 0.0F,  {362.0F, nativeVerticalOffsets[2] + 33.0F},
-                     {17.0F, 11.0F}, {440.0F, 190.0F},
-                     {17.0F, 11.0F}, {1.0F, 1.0F, 1.0F, alpha}};
-  result.Quads[1] = {alpha != 0.0F,  {338.0F, nativeVerticalOffsets[3] + 57.0F},
-                     {17.0F, 11.0F}, {440.0F, 201.0F},
-                     {17.0F, 11.0F}, {1.0F, 1.0F, 1.0F, alpha}};
+  result.Quads[0] = {alpha != 0.0F,  {364.0F, nativeVerticalOffsets[2] + 31.0F},
+                     {16.0F, 16.0F}, {47.0F, 231.0F},
+                     {16.0F, 16.0F}, {1.0F, 1.0F, 1.0F, alpha}};
+  result.Quads[1] = {alpha != 0.0F,  {340.0F, nativeVerticalOffsets[3] + 55.0F},
+                     {16.0F, 16.0F}, {245.0F, 227.0F},
+                     {16.0F, 16.0F}, {1.0F, 1.0F, 1.0F, alpha}};
   return result;
 }
 
 std::size_t AppendTopScreenTouchLabelsPresentation(
     const TopScreenTouchLabelsGeometry &geometry,
-    const oot3d::ui::UiTextureIdentity &pauseTopPage,
+    const oot3d::ui::UiTextureIdentity &uiAtlas,
     std::vector<oot3d::ui::UiPrimitive> &output) {
-  if (pauseTopPage.semantic_name.empty()) {
+  if (uiAtlas.semantic_name.empty()) {
     return 0U;
   }
   const std::size_t startSize = output.size();
@@ -1021,7 +1190,7 @@ std::size_t AppendTopScreenTouchLabelsPresentation(
     primitive.role = oot3d::ui::UiPrimitiveRole::TouchControl;
     primitive.owner_address = 0x005C9940U;
     primitive.source_quad = static_cast<std::uint32_t>(index);
-    primitive.texture = pauseTopPage;
+    primitive.texture = uiAtlas;
     primitive.destination = {quad.Position.X, quad.Position.Y, quad.Size.X,
                              quad.Size.Y};
     primitive.uv = {quad.AtlasOrigin.X / 512.0F, quad.AtlasOrigin.Y / 256.0F,
@@ -1136,7 +1305,11 @@ TopScreenAuxiliaryTouchGeometry BuildTopScreenAuxiliaryTouchGeometry(
     float nativeAlpha, TopScreenHudLayout layout) noexcept {
   constexpr std::array<float, 4> kCentersX{358.0F, 334.0F, 382.0F, 358.0F};
   constexpr std::array<float, 4> kCentersY{20.0F, 44.0F, 44.0F, 68.0F};
-  constexpr std::array<float, 4> kAtlasY{142.0F, 158.0F, 126.0F, 190.0F};
+  // SingleScreen 3.0 hub 0x005DA708 label model (rects from table
+  // 0x00609808): X rect 10 (207,227), Y rect 11 (226,227), B rect 9
+  // (363,225) of custom_ui01; the fourth label is never drawn (II, rect 13).
+  constexpr std::array<TopScreenVec2, 4> kLabelAtlas{
+      {{207.0F, 227.0F}, {226.0F, 227.0F}, {363.0F, 225.0F}, {188.0F, 227.0F}}};
   const float auxiliaryAlpha = std::clamp(nativeAlpha * 0.9F, 0.0F, 1.0F);
   const bool conditionalVisible = inputs.SuppressBCopies;
 
@@ -1147,7 +1320,7 @@ TopScreenAuxiliaryTouchGeometry BuildTopScreenAuxiliaryTouchGeometry(
                    (index < 2U || (index == 2U && conditionalVisible));
     quad.Position = {500.0F, 300.0F};
     quad.Size = {16.0F, 16.0F};
-    quad.AtlasOrigin = {158.0F, kAtlasY[index]};
+    quad.AtlasOrigin = kLabelAtlas[index];
     quad.AtlasSize = {16.0F, 16.0F};
     quad.Color = {1.0F, 1.0F, 1.0F, auxiliaryAlpha};
     if (index < 2U) {
@@ -1158,7 +1331,6 @@ TopScreenAuxiliaryTouchGeometry BuildTopScreenAuxiliaryTouchGeometry(
           layout == TopScreenHudLayout::Restoration
               ? TopScreenVec2{337.0F, 54.0F}
               : TopScreenVec2{227.0F, 10.0F};
-      quad.AtlasOrigin.Y = 174.0F;
     }
   }
 
@@ -1171,24 +1343,29 @@ TopScreenAuxiliaryTouchGeometry BuildTopScreenAuxiliaryTouchGeometry(
   layoutQuad.Color = {1.0F, 1.0F, 1.0F, viewAlpha};
   float extraX = 0.0F;
   // Variant priority is touch+70 == 1, then Navi, then actor mode / eye.
+  // SingleScreen 3.0 hub 0x005DD200..0x005DD6C8 draws them from custom_ui01:
+  // camera rect 6 (320,198,36,21) 10 px high at its own aspect, Navi rect 5
+  // (199,3,48,48) 14 px, eye rect 4 (451,73,48,32) 16x10. The native
+  // menu_top_parts00 versions carry VIEW/BACK captions that 2.1.1 erased.
+  constexpr float kCameraWidth = 10.0F * 36.0F / 21.0F;
   if (inputs.TouchLayoutState == 1U) {
-    layoutQuad.Size = {20.0F, 10.0F};
-    layoutQuad.AtlasOrigin = {176.0F, 56.0F};
-    layoutQuad.AtlasSize = {48.0F, 24.0F};
+    layoutQuad.Size = {kCameraWidth, 10.0F};
+    layoutQuad.AtlasOrigin = {320.0F, 198.0F};
+    layoutQuad.AtlasSize = {36.0F, 21.0F};
   } else if (inputs.HasPlayState && inputs.StateType == 3U &&
              inputs.StateSubtype == 2U && inputs.PlayerHudMode != 0) {
     layoutQuad.Size = {14.0F, 14.0F};
-    layoutQuad.AtlasOrigin = {176.0F, 0.0F};
+    layoutQuad.AtlasOrigin = {199.0F, 3.0F};
     layoutQuad.AtlasSize = {48.0F, 48.0F};
   } else if (inputs.ViewActorMode20) {
-    layoutQuad.Size = {20.0F, 10.0F};
-    layoutQuad.AtlasOrigin = {128.0F, 56.0F};
-    layoutQuad.AtlasSize = {48.0F, 24.0F};
+    layoutQuad.Size = {kCameraWidth, 10.0F};
+    layoutQuad.AtlasOrigin = {320.0F, 198.0F};
+    layoutQuad.AtlasSize = {36.0F, 21.0F};
     extraX = 1.0F;
   } else {
     layoutQuad.Size = {16.0F, 10.0F};
-    layoutQuad.AtlasOrigin = {129.0F, 0.0F};
-    layoutQuad.AtlasSize = {47.0F, 30.0F};
+    layoutQuad.AtlasOrigin = {451.0F, 73.0F};
+    layoutQuad.AtlasSize = {48.0F, 32.0F};
   }
   // Base center, not the Up lane: singleton Navi has no lane correction.
   // AppendTopScreenDpadPresentation adds {1,2,0,0} only for mapped lanes.
@@ -1199,9 +1376,9 @@ TopScreenAuxiliaryTouchGeometry BuildTopScreenAuxiliaryTouchGeometry(
 
 std::size_t AppendTopScreenAuxiliaryTouchPresentation(
     const TopScreenAuxiliaryTouchGeometry &geometry,
-    const oot3d::ui::UiTextureIdentity &pauseTopPage,
+    const oot3d::ui::UiTextureIdentity &uiAtlas,
     std::vector<oot3d::ui::UiPrimitive> &output) {
-  if (pauseTopPage.semantic_name.empty()) {
+  if (uiAtlas.semantic_name.empty()) {
     return 0U;
   }
   const std::size_t startSize = output.size();
@@ -1215,7 +1392,7 @@ std::size_t AppendTopScreenAuxiliaryTouchPresentation(
     primitive.role = oot3d::ui::UiPrimitiveRole::TouchControl;
     primitive.owner_address = 0x005C9940U;
     primitive.source_quad = static_cast<std::uint32_t>(34U + index);
-    primitive.texture = pauseTopPage;
+    primitive.texture = uiAtlas;
     primitive.destination = {quad.Position.X, quad.Position.Y, quad.Size.X,
                              quad.Size.Y};
     primitive.uv = {quad.AtlasOrigin.X / 512.0F, quad.AtlasOrigin.Y / 256.0F,
@@ -1451,13 +1628,58 @@ void ApplyTopScreenGameplayCanvas(
   }
 }
 
+namespace {
+bool IsTopScreenDpadPrimitive(const oot3d::ui::UiPrimitive &primitive) noexcept {
+  // The D-pad presentation (2.1.1 0x005D4A8C action buttons; that owner's
+  // native touch copies, the rupee and key icons among them, are touch
+  // controls) and the touch-cluster cross, quad 5 (layer 12; the touch labels
+  // share owner and indices on layer 13).
+  return (primitive.owner_address == 0x005D4A8CU &&
+          primitive.role == oot3d::ui::UiPrimitiveRole::ActionButton) ||
+         (primitive.owner_address == 0x005C9940U &&
+          primitive.role == oot3d::ui::UiPrimitiveRole::TouchControl &&
+          primitive.layer == 12U && primitive.source_quad == 5U);
+}
+} // namespace
+
+TopScreenButtonGroupPlacement ResolveTopScreenButtonGroupPlacement(
+    const TopScreenUiConfig &config) noexcept {
+  const float placementScale = config.HudScale > 0.0F ? config.HudScale : 1.0F;
+  TopScreenButtonGroupPlacement result;
+  result.Scale = static_cast<float>(config.ButtonGroupSizePercent) * 0.01F;
+  result.OffsetX =
+      std::clamp(static_cast<float>(config.ButtonGroupOffsetX) * placementScale,
+                 -20.0F, 10.0F) / placementScale;
+  result.OffsetY =
+      std::clamp(static_cast<float>(config.ButtonGroupOffsetY) * placementScale,
+                 -10.0F, 40.0F) / placementScale;
+  return result;
+}
+
 void ApplyTopScreenHudScale(
     std::span<oot3d::ui::UiPrimitive> primitives,
     const TopScreenUiConfig &config) noexcept {
   const float scale = config.HudScale;
   const float marginX = static_cast<float>(config.HudMarginX);
   const float marginY = static_cast<float>(config.HudMarginY);
-  if (scale == 1.0F && marginX == 0.0F && marginY == 0.0F &&
+  // SingleScreen 3.0 places the D-pad and the button group before the HUD
+  // scale. D-pad, helpers 0x005CA63C / 0x005CA66C: (30, 67) + (p - (30, 67))
+  // x size + offset; size modopts+0x2C (hub 0x005DB50C), offset +0x2A/+0x2B.
+  // Button group, 0x005C84B8: the X/Y/ZR/ZL cluster scales about the
+  // top-right corner like the HUD scale, and its offset (+0x2E/+0x2F) moves it
+  // by offset x HUD
+  // scale, which the hub (0x005DB6B4..0x005DB75C) clamps to [-20, 10] and
+  // [-10, 40] px.
+  const float dpadSize = static_cast<float>(config.DpadSizePercent) * 0.01F;
+  const float dpadX = static_cast<float>(config.DpadOffsetX);
+  const float dpadY = static_cast<float>(config.DpadOffsetY);
+  const auto group = ResolveTopScreenButtonGroupPlacement(config);
+  const float groupSize = group.Scale;
+  const float groupX = group.OffsetX;
+  const float groupY = group.OffsetY;
+  const bool placed = dpadSize != 1.0F || dpadX != 0.0F || dpadY != 0.0F ||
+                      groupSize != 1.0F || groupX != 0.0F || groupY != 0.0F;
+  if (!placed && scale == 1.0F && marginX == 0.0F && marginY == 0.0F &&
       config.MagicBarY == 0U) {
     return;
   }
@@ -1475,6 +1697,21 @@ void ApplyTopScreenHudScale(
     // 2.1.1 005CE554 scales copied stamina quads 28..33 as one row
     // about (200, 240), not as independent left/right HUD groups.
     const bool stamina = primitive.role == oot3d::ui::UiPrimitiveRole::HorseStamina;
+    if (IsTopScreenDpadPrimitive(primitive)) {
+      destination.x = 30.0F + (destination.x - 30.0F) * dpadSize + dpadX;
+      destination.y = 67.0F + (destination.y - 67.0F) * dpadSize + dpadY;
+      destination.width *= dpadSize;
+      destination.height *= dpadSize;
+    } else if (centerX > 300.0F && centerY < 90.0F && !stamina) {
+      // 0x005C84B8 moves the native button quads centred in X (330, 398)
+      // above y 90 (PICA y 150), and the hub moves their labels with them:
+      // X, Y, ZR and ZL with items, counts and labels (the Y label is centred
+      // at 322). A (248) and B (237) keep their place.
+      destination.x = 400.0F + (destination.x - 400.0F) * groupSize + groupX;
+      destination.y = destination.y * groupSize + groupY;
+      destination.width *= groupSize;
+      destination.height *= groupSize;
+    }
     // Its pivot literals 005CF558/005CF55C are (200, 240), with no margins.
     const float pivotX = stamina ? 200.0F : (left ? 0.0F : 400.0F);
     const float pivotY = stamina ? 240.0F : (top ? 0.0F : 240.0F);

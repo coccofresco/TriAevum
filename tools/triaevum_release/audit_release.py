@@ -268,6 +268,13 @@ def audit_release(
         ).items()
         if isinstance(roles, list)
     }
+    # A role whose every file must be one of the listed exact artifacts (the
+    # third-party assets shipped with permission).
+    pinned_role_hashes = {
+        str(role): {str(digest).lower() for digest in digests}
+        for role, digests in policy.get("pinned_role_sha256", {}).items()
+        if isinstance(digests, list)
+    }
     source_forbidden_prefixes = tuple(
         str(item).lower()
         for item in policy.get("source_archive_forbidden_prefixes", [])
@@ -375,6 +382,8 @@ def audit_release(
 
         pure = Path(relative)
         role = str(item.get("role", ""))
+        if role in pinned_role_hashes and digest not in pinned_role_hashes[role]:
+            reject(f"{relative} is not a pinned {role} artifact")
         # A Windows binary that imports a Vulkan command an older loader lacks
         # cannot start there at all (0xC0000139).
         if (platform.target == WINDOWS.target and pure.suffix.lower() in (".exe", ".dll")
@@ -505,7 +514,8 @@ def audit_release(
             reject(f"invalid precompiled release: {exc}")
     elif roles_seen & title_roles:
         reject("title artifacts require the precompiled distribution model")
-    if not precompiled and roles_seen & {"portable_shader_corpus", "portable_pipeline_recipes"}:
+    if not precompiled and roles_seen & {"portable_shader_corpus", "portable_pipeline_recipes",
+                                         "portable_shader_qualification"}:
         reject("bundled shader artifacts require a validated precompiled catalog")
     if not precompiled and roles_seen & {"precomputed_interior_sun", "precomputed_scene_lights"}:
         reject("precomputed tables require a validated precompiled catalog")

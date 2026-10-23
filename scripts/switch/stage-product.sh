@@ -18,7 +18,7 @@ shader=${repo_root}/runtime/three_ds_recomp/src/fast/shaders/opengl/default.shad
 topscreen_config=${repo_root}/config/topscreen_ui.switch.json
 controls_config=${repo_root}/config/oot3d_controls.switch.json
 topscreen_pack=${4:-${OOT3D_TOPSCREEN_PACK:-}}
-topscreen_archive=${OOT3D_TOPSCREEN_211_ARCHIVE:-}
+singlescreen_atlas=${repo_root}/runtime/triaevum_resources/topscreen/singlescreen-3.0/custom_ui01.ctxb
 
 for input in "${nro}" "${game_dir}/code.bin" "${game_dir}/exheader.bin" \
              "${game_dir}/romfs.bin" \
@@ -31,18 +31,17 @@ for input in "${nro}" "${game_dir}/code.bin" "${game_dir}/exheader.bin" \
 done
 
 if [[ -z ${topscreen_pack} ]]; then
-    if [[ -z ${topscreen_archive} || ! -s ${topscreen_archive} ]]; then
-        printf '%s\n' \
-            'TopScreen input is missing. Pass an O3TU v2 pack as argument 4,' \
-            'set OOT3D_TOPSCREEN_PACK, or set OOT3D_TOPSCREEN_211_ARCHIVE' \
-            'to the original TopScreen 2.1.1 zip.' >&2
+    # SingleScreen 3.0's low-resolution UI atlas ships in the repository; no
+    # archive is needed (TopScreen 2.1.1 is retired).
+    if [[ ! -s ${singlescreen_atlas} ]]; then
+        printf 'SingleScreen 3.0 UI atlas is missing: %s\n' \
+            "${singlescreen_atlas}" >&2
         exit 2
     fi
-    topscreen_pack=${repo_root}/build-switch-product/topscreen_2_1_1.o3tu
+    topscreen_pack=${repo_root}/build-switch-product/singlescreen_3_0.o3tu
     python3 \
         "${repo_root}/tools/oot3d/decomp_support/scripts/build_topscreen_texture_override_pack.py" \
-        --archive "${topscreen_archive}" \
-        --original-romfs-image "${game_dir}/romfs.bin" \
+        --singlescreen-ui-atlas "${singlescreen_atlas}" \
         --output "${topscreen_pack}"
 elif [[ ! -s ${topscreen_pack} ]]; then
     printf 'required TopScreen pack is missing or empty: %s\n' \

@@ -172,7 +172,8 @@ bool Context::InitLogging(spdlog::level::level_enum debugBuildLogLevel,
 
         // The short name: the display name may hold spaces and non-ASCII text.
         auto logPath = GetPathRelativeToAppDirectory(("logs/" + GetShortName() + ".log"));
-        auto fileSink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(logPath, 1024 * 1024 * 10, 10);
+        // Each launch starts a fresh file; earlier launches stay as .1, .2, ...
+        auto fileSink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(logPath, 1024 * 1024 * 10, 10, true);
         sinks.push_back(fileSink);
 #ifdef _DEBUG
         mLogger = std::make_shared<spdlog::logger>("multi_sink", sinks.begin(), sinks.end());

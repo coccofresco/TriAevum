@@ -2,6 +2,7 @@
 
 #include "fast/backends/gfx_rendering_api.h"
 #include "fast/oot3d/title_render_backend.h"
+#include "fast/renderer/compatibility_combiner.h"
 
 #include <array>
 #include <vector>
@@ -86,15 +87,21 @@ void Fast3dUiRenderBackend::DeleteUiTexture(
 }
 
 Fast::ShaderProgram* Fast3dUiRenderBackend::ResolveShader(
-    bool textured, std::string* error) {
-    Fast::ShaderProgram*& shader = textured ? textured_shader_ : solid_shader_;
+    bool textured, bool saturated, std::string* error) {
+    Fast::ShaderProgram*& shader = saturated ? saturated_shader_
+                                   : textured ? textured_shader_
+                                              : solid_shader_;
     if (shader == nullptr) {
         const std::uint64_t shaderId0 =
             textured ? N64UiTexturedShaderId0() : N64UiSolidShaderId0();
-        shader = rendering_api_.LookupShader(shaderId0, N64UiShaderId1());
+        // The PICA texture environment form of the same combiner clamps
+        // instead of emulating N64 overflow wrap.
+        const std::uint64_t shaderId1 =
+            saturated ? N64UiShaderId1() | Fast::ShaderIdMask(Fast::SHADER_ID_PICA_TEXTURE_ENV)
+                      : N64UiShaderId1();
+        shader = rendering_api_.LookupShader(shaderId0, shaderId1);
         if (shader == nullptr) {
-            shader = rendering_api_.CreateAndLoadNewShader(
-                shaderId0, N64UiShaderId1());
+            shader = rendering_api_.CreateAndLoadNewShader(shaderId0, shaderId1);
         }
     }
     if (shader == nullptr) {
@@ -110,6 +117,18 @@ Fast::ShaderProgram* Fast3dUiRenderBackend::ResolveShader(
 bool Fast3dUiRenderBackend::DrawUiTriangles(
     std::span<const Oot3d::Renderer::UiOverlayVertex> vertices,
     std::uint32_t textureId, std::string* error) {
+    return Draw(vertices, textureId, false, error);
+}
+
+bool Fast3dUiRenderBackend::DrawUiTrianglesSaturated(
+    std::span<const Oot3d::Renderer::UiOverlayVertex> vertices,
+    std::uint32_t textureId, std::string* error) {
+    return Draw(vertices, textureId, textureId != 0U, error);
+}
+
+bool Fast3dUiRenderBackend::Draw(
+    std::span<const Oot3d::Renderer::UiOverlayVertex> vertices,
+    std::uint32_t textureId, bool saturated, std::string* error) {
     if (vertices.empty() || vertices.size() % 3U != 0U) {
         if (error != nullptr) {
             *error = "UI draw has an invalid triangle list";
@@ -123,7 +142,7 @@ bool Fast3dUiRenderBackend::DrawUiTriangles(
             return false;
         }
     }
-    if (ResolveShader(textured, error) == nullptr) {
+    if (ResolveShader(textured, saturated, error) == nullptr) {
         return false;
     }
     static constexpr std::array<float, 16> kClipSpaceIdentity{

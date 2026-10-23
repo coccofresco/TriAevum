@@ -1284,10 +1284,8 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
     publishSurface(inserted.OutlineGeometryGuideImage, VK_FORMAT_R32G32B32A32_UINT,
                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                    Oot3d::SceneSurfaceKind::OutlineGeometryGuide, key.ColorPhysicalAddress);
-    if (key.RenderTargetNamespace == 0U) {
-        mInvalidatedNativePicaRenderTargetAddresses.erase(
-            key.ColorPhysicalAddress);
-    }
+    mInvalidatedNativePicaRenderTargetAddresses.erase(
+        {key.RenderTargetNamespace, key.ColorPhysicalAddress});
     return inserted;
 }
 
@@ -2107,7 +2105,7 @@ void GfxRenderingAPIVulkan::ResetNativePicaRenderTargets(bool preserveDisplayIma
         DestroyTexture(texture->second);
         texture = mNativePicaTextures.erase(texture);
     }
-    DestroyGpuTextureCopySurfaces();
+    RetireGpuTextureCopySurfacesForTargetReset();
     for (auto& [key, target] : mNativePicaRenderTargets) {
         DestroyNativePicaRenderTarget(target);
     }

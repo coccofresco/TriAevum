@@ -293,26 +293,25 @@ def verify_sources(
 
     verified_mod: VerifiedInput | None = None
     if topscreen_archive is not None:
-        optional = recipe.get("optional_inputs", {})
-        contract = (
-            optional.get("topscreen_2_1_1_archive")
-            if isinstance(optional, dict)
-            else None
-        )
-        if not isinstance(contract, dict):
+        try:
+            from .topscreen_assets import singlescreen_archive_contracts
+        except ImportError:
+            from topscreen_assets import singlescreen_archive_contracts
+        contracts = singlescreen_archive_contracts(recipe)
+        if not contracts:
             raise ForgeError("revision recipe does not support a TopScreen archive")
         resolved = topscreen_archive.expanduser().resolve()
         if not resolved.is_file() or resolved.is_symlink():
             raise ForgeError(f"TopScreen archive is not a regular file: {resolved}")
         digest = cache.digest(resolved)
-        expected = str(contract.get("sha256", "")).lower()
-        if digest != expected:
+        kind = next((kind for kind, contract in contracts
+                     if str(contract.get("sha256", "")).lower() == digest), None)
+        if kind is None:
+            expected = ", ".join(str(contract.get("sha256", "")).lower() for _, contract in contracts)
             raise ForgeError(
-                f"TopScreen archive SHA-256 mismatch: expected {expected}, got {digest}"
+                f"TopScreen archive SHA-256 mismatch: expected one of {expected}, got {digest}"
             )
-        verified_mod = VerifiedInput(
-            "topscreen_2_1_1_archive", resolved, resolved.stat().st_size, digest
-        )
+        verified_mod = VerifiedInput(kind, resolved, resolved.stat().st_size, digest)
     cache.save()
     return verified, verified_mod
 
@@ -911,6 +910,41 @@ def build_private_whole_aot(
     return result
 
 
+# The TopScreen layout F1 no longer offers: every installation uses the
+# standard profile's values. The HUD size keeps the user's choice when it is
+# one of the two F1 sizes.
+TOPSCREEN_STANDARD_LAYOUT_FIELDS = (
+    "hud_layout",
+    "hud_margin_x",
+    "hud_margin_y",
+    "magic_bar_y",
+    "dpad_offset_x",
+    "dpad_offset_y",
+    "dpad_size_percent",
+    "button_group_offset_x",
+    "button_group_offset_y",
+    "button_group_size_percent",
+    "render_hud",
+    "render_dpad_icons",
+    "render_items_hint",
+)
+TOPSCREEN_HUD_SIZES = (1.0, 0.7)
+
+
+def standard_topscreen_layout(user: dict[str, Any], standard: dict[str, Any]) -> dict[str, Any]:
+    """Return the user's TopScreen file with the standard profile's layout."""
+
+    if user.get("schema") != standard.get("schema"):
+        return user
+    migrated = dict(user)
+    for field in TOPSCREEN_STANDARD_LAYOUT_FIELDS:
+        migrated[field] = standard[field]
+    scale = user.get("hud_scale")
+    if not isinstance(scale, (int, float)) or not any(abs(scale - size) < 1.0e-6 for size in TOPSCREEN_HUD_SIZES):
+        migrated["hud_scale"] = standard["hud_scale"]
+    return migrated
+
+
 def publish_private_runtime(
     prepared_directory: Path,
     *,
@@ -919,6 +953,8 @@ def publish_private_runtime(
     launch_profile: Path,
     data_root: Path,
     topscreen_texture_pack: Path | None = None,
+    topscreen_link_animations: Path | None = None,
+    topscreen_ui_atlas_hd: Path | None = None,
     water_texture_catalog: Path | None = None,
     scene_light_catalog: Path | None = None,
     package_root: Path | None = None,
@@ -954,13 +990,18 @@ def publish_private_runtime(
     for user_config in (topscreen_config, runtime_config):
         if user_config.exists():
             load_json_object(user_config)
+    source_config = distribution_path("config/topscreen_ui.example.json")
+    try:
+        standard_topscreen = load_json_object(source_config)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        raise ForgeError(f"default TopScreen configuration is invalid: {exc}") from exc
     if not topscreen_config.is_file():
-        source_config = distribution_path("config/topscreen_ui.example.json")
-        try:
-            payload = load_json_object(source_config)
-        except (OSError, ValueError, json.JSONDecodeError) as exc:
-            raise ForgeError(f"default TopScreen configuration is invalid: {exc}") from exc
-        atomic_write_json(topscreen_config, payload)
+        atomic_write_json(topscreen_config, standard_topscreen)
+    else:
+        user_topscreen = load_json_object(topscreen_config)
+        migrated = standard_topscreen_layout(user_topscreen, standard_topscreen)
+        if migrated != user_topscreen:
+            atomic_write_json(topscreen_config, migrated)
 
     ensure_runtime_config(runtime_config, product_receipt["product"])
     savedata = private_root / "savedata"
@@ -1001,6 +1042,14 @@ def publish_private_runtime(
         if not topscreen_texture_pack.is_file():
             raise ForgeError("TopScreen texture pack is missing before activation")
         profile["arguments"].extend(("--topscreen-texture-overrides", str(topscreen_texture_pack.resolve())))
+    if topscreen_link_animations is not None:
+        if not topscreen_link_animations.is_file():
+            raise ForgeError("SingleScreen 3.0 Link animations are missing before activation")
+        profile["arguments"].extend(("--topscreen-link-animations", str(topscreen_link_animations.resolve())))
+    if topscreen_ui_atlas_hd is not None:
+        if not topscreen_ui_atlas_hd.is_file():
+            raise ForgeError("SingleScreen 3.0 HD UI atlas is missing before activation")
+        profile["arguments"].extend(("--topscreen-ui-atlas-hd", str(topscreen_ui_atlas_hd.resolve())))
     if water_texture_catalog is not None:
         if not water_texture_catalog.is_file():
             raise ForgeError("Water texture catalog is missing before activation")
@@ -1018,7 +1067,9 @@ def publish_private_runtime(
         profile["arguments"].extend(("--renderer-cache-directory", str(renderer_cache_directory.resolve())))
     path_options = {"--title-plugin", "--a32-process-manifest", "--resource-root",
                     "--config", "--topscreen-config", "--save-data", "--output",
-                    "--topscreen-texture-overrides", "--water-texture-catalog", "--scene-light-catalog",
+                    "--topscreen-texture-overrides", "--topscreen-link-animations",
+                    "--topscreen-ui-atlas-hd",
+                    "--water-texture-catalog", "--scene-light-catalog",
                     "--pica-aot-shader-pack", "--renderer-cache-directory"}
     scopes = {}
     for index, argument in enumerate(profile["arguments"][:-1]):
@@ -1060,6 +1111,16 @@ def publish_private_runtime(
         prepared.state["runtime"]["topscreen_textures"] = {
             "path": context.reference(topscreen_texture_pack, prepared.directory),
             "sha256": sha256_file(topscreen_texture_pack),
+        }
+    if topscreen_link_animations is not None:
+        prepared.state["runtime"]["topscreen_link_animations"] = {
+            "path": context.reference(topscreen_link_animations, prepared.directory),
+            "sha256": sha256_file(topscreen_link_animations),
+        }
+    if topscreen_ui_atlas_hd is not None:
+        prepared.state["runtime"]["topscreen_ui_atlas_hd"] = {
+            "path": context.reference(topscreen_ui_atlas_hd, prepared.directory),
+            "sha256": sha256_file(topscreen_ui_atlas_hd),
         }
     if water_texture_catalog is not None:
         prepared.state["runtime"]["water_textures"] = {

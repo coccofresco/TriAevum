@@ -41,7 +41,16 @@ struct VirtualShadowKeyframeSettings {
     // A dissolve lasts this many times the construction of its layout, so a
     // construction that takes slightly longer does not stall the motion.
     double DissolveStretch = 1.25;
+    // Static pages whose casters change in every frame take the construction
+    // budget again in every frame and can keep a construction from ever
+    // completing, which would freeze the displayed light. A construction that
+    // has lasted this many times the frames a whole layout needs at the
+    // minimum budget completes without a page budget.
+    double ConstructionStallFactor = 2.0;
 };
+
+// The construction budget of a stalled construction: every pending page.
+inline constexpr uint32_t kVirtualShadowUnboundedConstructionBudget = 0xffffffffU;
 
 struct VirtualShadowKeyframeFrame {
     // The newest layout is slot 0, rebuilt at once at the current light.
@@ -54,6 +63,10 @@ struct VirtualShadowKeyframeFrame {
     int32_t Older = -1;
     int32_t Construction = -1;
     uint32_t ConstructionBudget = 0;
+    // Frames the construction has lasted, this one included.
+    uint32_t ConstructionAge = 0;
+    // The construction stalled: ConstructionBudget is unbounded.
+    bool ConstructionUnbounded = false;
     float NewerWeight = 1.0F;
 
     [[nodiscard]] bool OlderDisplayed() const noexcept {
@@ -83,8 +96,9 @@ class VirtualShadowKeyframes {
     const VirtualShadowKeyframeFrame& Begin(const ShadowVector& light, uint64_t epoch, uint64_t layoutKey,
                                             uint32_t layoutPages) noexcept {
         auto& frame = mFrame;
-        frame.Cut = frame.Rotated = frame.ConstructionStarted = false;
+        frame.Cut = frame.Rotated = frame.ConstructionStarted = frame.ConstructionUnbounded = false;
         frame.ConstructionBudget = 0;
+        frame.ConstructionAge = 0;
         const double step = mHasLight ? AngleDegrees(mLastLight, light) : 0.0;
         if (mHasLight) {
             mSpeed = mSpeedValid ? 0.75 * mSpeed + 0.25 * step : step;
@@ -127,6 +141,18 @@ class VirtualShadowKeyframes {
                                             mSettings.DissolveStretch / mSettings.MaximumSpacingDegrees);
             frame.ConstructionBudget = static_cast<uint32_t>(
                 std::clamp(needed, double(mSettings.MinimumPageBudget), double(mSettings.MaximumPageBudget)));
+            frame.ConstructionAge = mConstructionFrames;
+            const double minimumBudgetFrames = std::ceil(double(std::max<uint32_t>(layoutPages, 1U)) /
+                                                         double(std::max<uint32_t>(mSettings.MinimumPageBudget, 1U)));
+            // Only when the layouts can rotate this frame: a construction
+            // that waits for the dissolve keeps its budget.
+            mStallFrames = static_cast<uint32_t>(
+                std::clamp(mSettings.ConstructionStallFactor * minimumBudgetFrames, 0.0, 1.0e9)) + 1U;
+            if (mOlder < 0 &&
+                double(mConstructionFrames) > mSettings.ConstructionStallFactor * minimumBudgetFrames) {
+                frame.ConstructionBudget = kVirtualShadowUnboundedConstructionBudget;
+                frame.ConstructionUnbounded = true;
+            }
         }
         return Publish();
     }
@@ -137,8 +163,11 @@ class VirtualShadowKeyframes {
             return mFrame;
         if (pendingPages != 0)
             return Publish();
+        // Construction work never exceeds the stall bound: frames spent
+        // waiting for a dissolve, or starved by changing static pages, are
+        // not construction work, and the next dissolve must not grow by them.
         if (mConstructionWork == 0)
-            mConstructionWork = mConstructionFrames;
+            mConstructionWork = mStallFrames != 0 ? std::min(mConstructionFrames, mStallFrames) : mConstructionFrames;
         // The dissolve toward the newest layout has not finished: wait.
         if (mOlder >= 0)
             return Publish();
@@ -194,6 +223,7 @@ class VirtualShadowKeyframes {
     bool mHasLight = false;
     uint32_t mConstructionFrames = 0;
     uint32_t mConstructionWork = 0;
+    uint32_t mStallFrames = 0;
 };
 
 } // namespace Fast::Renderer3ds

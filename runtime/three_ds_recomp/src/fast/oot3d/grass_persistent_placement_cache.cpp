@@ -8,10 +8,13 @@
 #include <unistd.h>
 #endif
 #include <bit>
+#include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <mutex>
+#include <shared_mutex>
 #include <unordered_set>
 #include <type_traits>
 
@@ -19,7 +22,9 @@ namespace Fast::Oot3d {
 namespace {
 constexpr uint64_t kMaximumFileBytes = 512ULL * 1024 * 1024;
 constexpr uint64_t kMagic = 0x3145484341435247ULL;
-std::mutex diskMutex; // writes/eviction across the placement workers
+// Loads share the directory; writes and eviction (which removes files) are
+// exclusive, so a file is never removed while another worker reads it.
+std::shared_mutex diskMutex;
 struct Hash {
     uint64_t Value = 14695981039346656037ULL;
     // Local non-cryptographic checksum, deliberately word-at-a-time rather
@@ -56,6 +61,36 @@ struct Header {
     std::array<uint32_t, 13> Sizes{};
     std::array<uint64_t, 13> Counts{};
     std::array<uint32_t, 3> MidrangeStats{};
+};
+// Large sequential reads straight into the destination: a stream buffer
+// costs about as much as the disk cache read itself for these sizes.
+class UnbufferedFile {
+  public:
+    explicit UnbufferedFile(const std::filesystem::path& path) {
+#ifdef _WIN32
+        mFile = _wfopen(path.c_str(), L"rb");
+#else
+        mFile = std::fopen(path.c_str(), "rb");
+#endif
+        if (mFile != nullptr)
+            std::setvbuf(mFile, nullptr, _IONBF, 0);
+        mGood = mFile != nullptr;
+    }
+    ~UnbufferedFile() {
+        if (mFile != nullptr)
+            std::fclose(mFile);
+    }
+    UnbufferedFile(const UnbufferedFile&) = delete;
+    UnbufferedFile& operator=(const UnbufferedFile&) = delete;
+    void Read(void* data, size_t count) {
+        if (mGood && count != 0U)
+            mGood = std::fread(data, 1, count, mFile) == count;
+    }
+    [[nodiscard]] bool Good() const noexcept { return mGood; }
+
+  private:
+    std::FILE* mFile = nullptr;
+    bool mGood = false;
 };
 template <class P, class F> void Vectors(P& p, F f) {
     f(p.Anchors);
@@ -149,6 +184,10 @@ bool Validate(const GrassWorldPlacement& p) {
     return true;
 }
 } // namespace
+GrassPlacementDiskLoadTiming& GrassLastPlacementDiskLoadTiming() noexcept {
+    thread_local GrassPlacementDiskLoadTiming timing;
+    return timing;
+}
 GrassPlacementDiskKey GrassPlacementPersistentKey(const GrassAsyncPlacementRequest& r) {
     Hash content, settings;
     content.Add(kGrassPlacementDiskVersion);
@@ -237,8 +276,17 @@ std::shared_ptr<GrassWorldPlacement> GrassPersistentPlacementCache::Load(GrassPl
         *rejected = false;
     if (mDirectory.empty())
         return {};
-    std::scoped_lock lock(diskMutex);
+    auto& timing = GrassLastPlacementDiskLoadTiming();
+    timing = {};
+    using Clock = std::chrono::steady_clock;
+    const auto since = [](Clock::time_point start) {
+        return std::chrono::duration<double, std::milli>(Clock::now() - start).count();
+    };
+    const auto waitStart = Clock::now();
+    std::shared_lock lock(diskMutex);
+    timing.MutexWaitMilliseconds = since(waitStart);
     try {
+        const auto readStart = Clock::now();
         const auto path = Path(key);
         std::error_code ec;
         const auto size = std::filesystem::file_size(path, ec);
@@ -248,10 +296,10 @@ std::shared_ptr<GrassWorldPlacement> GrassPersistentPlacementCache::Load(GrassPl
             *rejected = true;
         if (size < sizeof(Header) || size > kMaximumFileBytes)
             return {};
-        std::ifstream in(path, std::ios::binary);
+        UnbufferedFile in(path);
         Header h{};
-        in.read(reinterpret_cast<char*>(&h), sizeof(h));
-        if (!in || h.Magic != kMagic || h.Version != kGrassPlacementDiskVersion || h.Endian != 0x01020304 ||
+        in.Read(&h, sizeof(h));
+        if (!in.Good() || h.Magic != kMagic || h.Version != kGrassPlacementDiskVersion || h.Endian != 0x01020304 ||
             h.Key != key || h.Bytes != size - sizeof(Header))
             return {};
         auto p = std::make_shared<GrassWorldPlacement>();
@@ -276,13 +324,25 @@ std::shared_ptr<GrassWorldPlacement> GrassPersistentPlacementCache::Load(GrassPl
         Vectors(*p, [&](auto& v) {
             v.resize(size_t(h.Counts[i++]));
             const auto n = v.size() * sizeof(v[0]);
-            in.read(reinterpret_cast<char*>(v.data()), n);
-            hash.Bytes(v.data(), n);
+            // Hash each chunk while it is still in cache; chunks are whole
+            // words, so the checksum equals one pass over the vector.
+            auto* data = reinterpret_cast<uint8_t*>(v.data());
+            constexpr size_t kChunk = size_t(8) << 20U;
+            for (size_t offset = 0; offset < n && in.Good(); offset += kChunk) {
+                const auto count = std::min(kChunk, n - offset);
+                in.Read(data + offset, count);
+                hash.Bytes(data + offset, count);
+            }
         });
         p->Midrange.LargeGroupCount = h.MidrangeStats[0];
         p->Midrange.MaximumMemberCount = h.MidrangeStats[1];
         p->Midrange.CapacityLimitedRanges = h.MidrangeStats[2];
-        if (!in || hash.Value != h.Checksum || !Validate(*p))
+        timing.ReadMilliseconds = since(readStart);
+        timing.Bytes = size;
+        const auto validateStart = Clock::now();
+        const bool accepted = in.Good() && hash.Value == h.Checksum && Validate(*p);
+        timing.ValidateMilliseconds = since(validateStart);
+        if (!accepted)
             return {};
         std::filesystem::last_write_time(path, std::filesystem::file_time_type::clock::now(), ec);
         if (rejected)

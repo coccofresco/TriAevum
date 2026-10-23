@@ -1,4 +1,5 @@
 #include "oot3d_top_screen_ocarina.h"
+#include "oot3d_top_screen_items_shortcuts.h"
 #include "oot3d_native_a32_memory.h"
 #include "oot3d_ui/ui_contract_types.h"
 #include <bit>
@@ -260,11 +261,15 @@ void RunTopScreenOcarinaTests() {
               std::abs(rightNavigation.Quads[1].Position.Y - 193.0F) < 0.001F &&
               leftNavigation.Quads[0].Size.X == 26.0F &&
               leftNavigation.Quads[0].AtlasSize.X == -26.0F &&
-              rightNavigation.Quads[1].Size.X == 26.0F,
+              rightNavigation.Quads[1].Size.X == 26.0F &&
+              // SingleScreen 3.0 custom_ui01 arrow, rect 7 (46,124).
+              leftNavigation.Quads[0].AtlasOrigin.X == 74.0F &&
+              rightNavigation.Quads[1].AtlasOrigin.X == 48.0F &&
+              rightNavigation.Quads[1].AtlasOrigin.Y == 124.0F,
           "pause navigation geometry does not match the payload producer");
   std::vector<oot3d::ui::UiPrimitive> navigationPresentation;
-  const oot3d::ui::UiTextureIdentity navigationTexture{
-      0x005D1000U, 0x18010000U, "oot3d/native/pause_shared/pause_top_page"};
+  oot3d::ui::UiTextureIdentity navigationTexture;
+  navigationTexture.semantic_name = std::string(kTopScreen30UiAtlasSemantic);
   Require(
       AppendTopScreenOcarinaNavigationPresentation(
           leftNavigation, navigationTexture, navigationPresentation) == 2U &&

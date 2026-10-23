@@ -853,10 +853,14 @@ void GfxRenderingAPIVulkan::UploadNativePicaTextureRows(
     toTransfer.subresourceRange.baseMipLevel = level;
     toTransfer.subresourceRange.levelCount = 1U;
     toTransfer.subresourceRange.layerCount = 1U;
+    // Sampled textures are read by the same stages as the NRI path's
+    // ShaderRead state: vertex, fragment and compute (GPU-derived copies).
+    constexpr VkPipelineStageFlags shaderReadStages = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
     toTransfer.srcAccessMask = rowOffset == 0U ? 0U : VK_ACCESS_SHADER_READ_BIT;
     toTransfer.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     vkCmdPipelineBarrier(commandBuffer,
-        rowOffset == 0U ? VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT : VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        rowOffset == 0U ? VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT : shaderReadStages,
         VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &toTransfer);
     VkBufferImageCopy copy{};
     copy.bufferOffset = uploadOffset;
@@ -877,7 +881,7 @@ void GfxRenderingAPIVulkan::UploadNativePicaTextureRows(
     toShaderRead.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     toShaderRead.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
     vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &toShaderRead);
+        shaderReadStages, 0, 0, nullptr, 0, nullptr, 1, &toShaderRead);
 }
 
 void GfxRenderingAPIVulkan::RetireNativePicaTexture(TextureRecord& texture) {
@@ -885,6 +889,21 @@ void GfxRenderingAPIVulkan::RetireNativePicaTexture(TextureRecord& texture) {
         texture.Memory != VK_NULL_HANDLE || texture.Sampler != VK_NULL_HANDLE)
         mFrameResources[mCurrentFrame].RetiredTextures.push_back(std::move(texture));
     texture = {};
+}
+
+void GfxRenderingAPIVulkan::RetireNativePicaTexturesOfOtherGenerations(uint64_t generation) {
+    // Every texture-pack reconfiguration starts a generation, and every
+    // sampled texture is created again under it. Without this, each change of
+    // the pack settings kept a full copy of the scene's textures.
+    for (auto texture = mNativePicaTextures.begin(); texture != mNativePicaTextures.end();) {
+        if (texture->first.ReplacementGeneration == generation) {
+            ++texture;
+            continue;
+        }
+        RetireNativePicaTexture(texture->second);
+        texture = mNativePicaTextures.erase(texture);
+    }
+    mNativePicaTexturesGeneration = generation;
 }
 
 void GfxRenderingAPIVulkan::RetireNativePicaMaterial(NativePicaMaterialBundle& material) {

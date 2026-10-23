@@ -616,8 +616,10 @@ struct Scene {
         const std::array<GrassInteractor, 1> actors{actor};
         GrassGpuInstanceCompactionResult result;
         bool compacted = false;
+        const std::array<std::span<const GrassWorldAnchor>, 1> segments{std::span<const GrassWorldAnchor>(Anchors)};
         harness.Submit([&](VkCommandBuffer command) {
-            compacted = compactor.Compact({command, slot, frame.FrameId, StaticRevision, Anchors, Visible, &Field,
+            compacted = compactor.Compact({command, slot, frame.FrameId, StaticRevision,
+                                           GrassStaticAnchorSegments{segments, Anchors.size()}, Visible, &Field,
                                            actors, &Settings}, result);
         });
         Require(compacted, "grass compaction failed");
@@ -824,8 +826,11 @@ void TestIdleCompactionReuse(Harness& harness) {
     uint64_t frame = 500, selection = 1;
     const auto compact = [&](uint32_t slot, bool allow = true, std::span<const GrassInteractor> actors = {}) {
         GrassGpuInstanceCompactionResult result;
+        const std::array<std::span<const GrassWorldAnchor>, 1> segments{
+            std::span<const GrassWorldAnchor>(scene.Anchors)};
         harness.Submit([&](VkCommandBuffer command) {
-            Require(compactor.Compact({ command, slot, frame++, scene.StaticRevision, scene.Anchors, scene.Visible,
+            Require(compactor.Compact({ command, slot, frame++, scene.StaticRevision,
+                                        GrassStaticAnchorSegments{segments, scene.Anchors.size()}, scene.Visible,
                                         &scene.Field, actors, &scene.Settings, selection, allow },
                                       result),
                     "idle compaction failed");

@@ -12,6 +12,8 @@ from common import atomic_write_json, sha256_file
 from package_release import package_release
 from test_vulkan_imports import pe_import_fixture
 
+# The SingleScreen 3.0 assets are pinned by hash: the fixture ships the real files.
+SINGLESCREEN = Path(__file__).resolve().parents[2] / "runtime/triaevum_resources/topscreen/singlescreen-3.0"
 
 FILES = {
     "TriAevum.exe": ("runtime_executable", b"MZ generic runtime"),
@@ -43,6 +45,11 @@ FILES = {
     "LICENSES/zstd-BSD-3-Clause.txt": ("license", b"zstd BSD test fixture\n"),
     "LICENSES/Aurora-MIT.txt": ("license", b"Aurora MIT test fixture\n"),
     "resources/gamecontrollerdb.txt": ("title_neutral_resource", b"# Controller DB fixture\n"),
+    "resources/topscreen/singlescreen-3.0/custom_ui01.ctxb": (
+        "topscreen_singlescreen_asset", (SINGLESCREEN / "custom_ui01.ctxb").read_bytes()),
+    "resources/topscreen/singlescreen-3.0/zelda_link_ext.zar": (
+        "topscreen_singlescreen_asset", (SINGLESCREEN / "zelda_link_ext.zar").read_bytes()),
+    "LICENSES/SingleScreen-3.0.md": ("license", b"SingleScreen 3.0 permission fixture\n"),
     "msvcp140.dll": ("runtime_library", b"MZ C++ library fixture"),
     "vcruntime140.dll": ("runtime_library", b"MZ runtime fixture"),
     "vcruntime140_1.dll": ("runtime_library", b"MZ exception runtime fixture"),
@@ -234,6 +241,39 @@ class PublicReleaseAuditTests(unittest.TestCase):
             result = audit_release(root)
             self.assertTrue(result.ok, result.errors)
             self.assertEqual(result.summary["verified_files"], len(FILES) + 1)
+
+    def test_singlescreen_assets_are_pinned_and_hd_graphics_excluded(self) -> None:
+        def audit_with(relative: str, role: str, data: bytes):
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                write_clean_package(root)
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+                manifest_path = root / "release-manifest.json"
+                manifest = json.loads(manifest_path.read_text())
+                manifest["files"] = [item for item in manifest["files"] if item["path"] != relative]
+                manifest["files"].append({"path": relative, "role": role, "bytes": len(data),
+                                          "sha256": sha256_file(path)})
+                atomic_write_json(manifest_path, manifest)
+                return audit_release(root).errors
+
+        atlas = "resources/topscreen/singlescreen-3.0/custom_ui01.ctxb"
+        errors = audit_with(atlas, "topscreen_singlescreen_asset", b"ctxb another atlas")
+        self.assertTrue(any("not a pinned topscreen_singlescreen_asset" in e for e in errors), errors)
+        # Only the pinned role may carry these extensions.
+        errors = audit_with("resources/topscreen/extra.ctxb", "title_neutral_resource",
+                            (SINGLESCREEN / "custom_ui01.ctxb").read_bytes())
+        self.assertTrue(any("forbidden extension" in e for e in errors), errors)
+        # The archives, the HD UI atlases and the HD fonts wait for their author's
+        # consent, in 3.0 and in 3.1.
+        forbidden = set(json.loads(DEFAULT_POLICY.read_text())["forbidden_sha256"])
+        self.assertTrue({"5668640fec8dc2b47b4516fd0b871c4d7d90ca1c2203acc2a22adb59aaab5993",
+                         "25e9f22720029c64ac729deef9c38b4dea3d5426d57d99678963c8f26b2908a1",
+                         "f91485999a6b8e89b8d574064dc03c1c20704f2c718e93c5187251b6ef69dbcb",
+                         "3a505b0beff8654d71c68e870c132975c6bc0209ab9c41aafbd782f7a5880e7a",
+                         "8b83e081f721c6e1842b0a9cd90b71a3fb2849674d2b1040f3dc5c3221594169",
+                         "9c401a41d142d153b7dfef9208f3a7982a018f89f729eece441cce0470aacb42"} <= forbidden)
 
     def test_runtime_contract_excludes_experimental_global_illumination(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

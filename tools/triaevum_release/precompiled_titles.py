@@ -117,7 +117,7 @@ def install_precompiled_title(prepared_directory: Path, *, root: Path, recipe: d
                               report: Callable[[str, str], None] = lambda *_: None) -> dict[str, Any]:
     try:
         from . import forge
-        from .topscreen_assets import prepare_topscreen_assets
+        from .topscreen_assets import prepare_topscreen_assets, topscreen_link_animations, topscreen_ui_atlas_hd
         from .water_textures import prepare_water_textures
         from .scene_lights import prepare_scene_lights
         from .interior_sun import prepare_interior_sun
@@ -126,7 +126,7 @@ def install_precompiled_title(prepared_directory: Path, *, root: Path, recipe: d
         from .device_pipeline_preparation import prepare_device_pipelines, installation_cache_directory, adopt_existing_cache
     except ImportError:
         import forge
-        from topscreen_assets import prepare_topscreen_assets
+        from topscreen_assets import prepare_topscreen_assets, topscreen_link_animations, topscreen_ui_atlas_hd
         from water_textures import prepare_water_textures
         from scene_lights import prepare_scene_lights
         from interior_sun import prepare_interior_sun
@@ -183,7 +183,10 @@ def install_precompiled_title(prepared_directory: Path, *, root: Path, recipe: d
         runtime = forge.publish_private_runtime(
             prepared.directory, plugin=plugin, runtime_plugin=runtime_plugin,
             launch_profile=launch_profile, data_root=data_root,
-            topscreen_texture_pack=texture_pack, water_texture_catalog=water_textures,
+            topscreen_texture_pack=texture_pack,
+            topscreen_link_animations=topscreen_link_animations(texture_pack),
+            topscreen_ui_atlas_hd=topscreen_ui_atlas_hd(texture_pack),
+            water_texture_catalog=water_textures,
             scene_light_catalog=scene_lights, package_root=root,
             pica_shader_pack=shader_pack, renderer_cache_directory=renderer_cache)
         activation = forge.activate_prepared_title(prepared.directory, active_title_state=active_title_state)

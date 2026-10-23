@@ -91,6 +91,71 @@ struct GrassClusterWork {
     const std::array<float, 3>& eye, const GrassLodPolicy& policy, float bladeRadiusScale,
     bool frustumCulling, uint32_t root, std::vector<GrassClusterWork>& work);
 
+// A camera envelope around a reference view: every view whose eye stays within
+// EyeRadius of Eye and whose clip rows x, y and w, re-based at Eye, differ from
+// the reference by at most RowDelta (3x3 part, Euclidean) and TranslationDelta
+// (per row). Candidate lists built for an envelope are supersets of the exact
+// cluster selection of every view inside it.
+struct GrassCandidateEnvelope {
+    std::array<double, 16> ClipAtEye{};
+    std::array<float, 3> Eye{};
+    float EyeRadius = 0.0F;
+    float RowDelta = 0.0F;
+    std::array<float, 3> TranslationDelta{};
+};
+
+struct GrassClusterCandidate {
+    uint32_t ClusterIndex = 0U;
+    // Conservative end of the retained prefix over the whole envelope.
+    uint32_t AnchorEnd = 0U;
+    bool operator==(const GrassClusterCandidate&) const = default;
+};
+
+[[nodiscard]] GrassCandidateEnvelope MakeGrassCandidateEnvelope(
+    const std::array<float, 16>& positionToClip, const std::array<float, 3>& eye, float eyeRadius,
+    float rowDelta, float translationScale) noexcept;
+
+[[nodiscard]] bool GrassCandidateEnvelopeContains(const GrassCandidateEnvelope& envelope,
+    const std::array<float, 16>& positionToClip, const std::array<float, 3>& eye) noexcept;
+
+// Conservative traversal of one subtree (root 0 = whole placement), unordered.
+[[nodiscard]] GrassClusterSelectionStats SelectGrassClusterCandidates(
+    const GrassWorldPlacement& placement, const GrassCandidateEnvelope& envelope, const GrassLodPolicy& policy,
+    float bladeRadiusScale, bool frustumCulling, uint32_t root, std::vector<GrassClusterCandidate>& candidates);
+
+[[nodiscard]] uint32_t SplitGrassClusterCandidates(
+    const GrassWorldPlacement& placement, const GrassCandidateEnvelope& envelope, const GrassLodPolicy& policy,
+    float bladeRadiusScale, bool frustumCulling, uint32_t maximumJobs, std::vector<uint32_t>& roots);
+
+// The exact per-cluster decisions of SelectGrassClusterWork for the current
+// view, restricted to the candidates (kept in their order). Returns false when
+// a retained prefix reaches past its conservative end: the view left the
+// envelope and the candidates must be rebuilt.
+[[nodiscard]] bool RefineGrassClusterCandidates(
+    const GrassWorldPlacement& placement, std::span<const GrassClusterCandidate> candidates,
+    const std::array<float, 16>& positionToClip, const std::array<float, 3>& eye, const GrassLodPolicy& policy,
+    float bladeRadiusScale, bool frustumCulling, std::vector<GrassClusterWork>& work, uint64_t& candidateAnchors);
+
+// RefineGrassClusterCandidates one candidate at a time, for callers that
+// evaluate each cluster's roots right after its decision.
+class GrassClusterRefiner {
+  public:
+    enum class Result : uint8_t { Rejected, Kept, Violation };
+    GrassClusterRefiner(const GrassWorldPlacement& placement, const std::array<float, 16>& positionToClip,
+        const std::array<float, 3>& eye, const GrassLodPolicy& policy, float bladeRadiusScale,
+        bool frustumCulling) noexcept;
+    [[nodiscard]] Result Refine(const GrassClusterCandidate& candidate, GrassClusterWork& work) const noexcept;
+
+  private:
+    const GrassWorldPlacement& mPlacement;
+    std::array<float, 16> mPositionToClip;
+    std::array<float, 3> mEye;
+    const GrassLodPolicy& mPolicy;
+    float mBladeRadiusScale;
+    bool mFrustumCulling;
+    std::array<float, 3> mRadiusScale;
+};
+
 // Resolve the conservative LOD prefix once, before choosing worker count.
 // The sum bounds output size, unlike the unfiltered BVH candidate count.
 [[nodiscard]] uint64_t PrepareGrassClusterWork(const GrassWorldPlacement& placement,
@@ -151,5 +216,22 @@ BuildGrassFrustumRadiusScale(
 
 [[nodiscard]] GrassLodDecision ResolveGrassLodWithStableVisibility(const GrassLodPolicy& policy, float distance,
                                                                    float stableVisibility) noexcept;
+
+// ResolveGrassLodWithStableVisibility with the far band precomputed. Beyond
+// the segment and tuft transitions every topology weight is exactly 1, so the
+// decision there is constant except for the density retention, which uses the
+// same expressions. Results are bit-identical to the general function.
+class GrassLodEvaluator {
+  public:
+    explicit GrassLodEvaluator(const GrassLodPolicy& policy) noexcept;
+    [[nodiscard]] GrassLodDecision Resolve(float distance, float stableVisibility) const noexcept;
+
+  private:
+    GrassLodPolicy mPolicy;
+    float mReference = 0.0F;
+    float mTuftEnd = 0.0F;
+    float mFarScale = 1.0F;
+    bool mFarBand = false;
+};
 
 } // namespace Fast::Oot3d

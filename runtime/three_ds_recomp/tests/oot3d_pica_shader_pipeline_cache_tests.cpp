@@ -520,6 +520,47 @@ TEST(Oot3dPicaShaderPipelineCache,
     EXPECT_EQ(stats.InstrumentationInvalidations, 1U);
 }
 
+// IsolatedLighting changes the generated guides, so it is part of the
+// variant key: a warm cache returns exactly what a cold cache generates,
+// whichever of the two draws comes first.
+TEST(Oot3dPicaShaderPipelineCache, IsolatedLightingSelectsItsOwnVariant) {
+    using namespace Fast::Oot3d;
+    EffectsSettings effects;
+    effects.AmbientOcclusion = AmbientOcclusionMode::Gtao;
+    auto shared = BaseRequest();
+    auto isolated = shared;
+    isolated.Draw.IsolatedLighting = true;
+    const auto cold = [&](const PicaShaderPipelineRequest& request) {
+        PicaShaderPipelineCache cache;
+        cache.BeginFrame(1U);
+        return cache.Resolve(request, effects);
+    };
+    const auto sharedCold = cold(shared);
+    const auto isolatedCold = cold(isolated);
+    ASSERT_FALSE(sharedCold.IsCanonical());
+    ASSERT_FALSE(isolatedCold.IsCanonical());
+    EXPECT_NE(sharedCold.FragmentShaderKey, isolatedCold.FragmentShaderKey);
+    EXPECT_NE(sharedCold.FragmentShaderSource, isolatedCold.FragmentShaderSource);
+    EXPECT_NE(isolatedCold.FragmentShaderSource.find("pica_ambient_guide = vec4(0.0, 0.0, 0.0, 1.0)"),
+              std::string::npos);
+
+    for (const bool isolatedFirst : {false, true}) {
+        PicaShaderPipelineCache cache;
+        cache.BeginFrame(1U);
+        const auto& first = cache.Resolve(isolatedFirst ? isolated : shared, effects);
+        bool secondHit = true;
+        const auto& second = cache.Resolve(isolatedFirst ? shared : isolated, effects, &secondHit);
+        EXPECT_FALSE(secondHit);
+        const auto& warmShared = isolatedFirst ? second : first;
+        const auto& warmIsolated = isolatedFirst ? first : second;
+        EXPECT_EQ(warmShared.FragmentShaderSource, sharedCold.FragmentShaderSource);
+        EXPECT_EQ(warmShared.FragmentShaderKey, sharedCold.FragmentShaderKey);
+        EXPECT_EQ(warmIsolated.FragmentShaderSource, isolatedCold.FragmentShaderSource);
+        EXPECT_EQ(warmIsolated.FragmentShaderKey, isolatedCold.FragmentShaderKey);
+        EXPECT_EQ(cache.Stats().InstrumentationEntries, 2U);
+    }
+}
+
 TEST(Oot3dPicaShaderPipelineCache,
      CanonicalIdentityIncludesExactSourceContent) {
     Fast::Oot3d::PicaShaderPipelineCache cache;

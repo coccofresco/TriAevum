@@ -142,8 +142,17 @@ class PrecompiledReleaseTests(unittest.TestCase):
         recipes = self.work / "pipelines.json"
         atomic_write_json(recipes, dict(format="oot3d_pica_pipeline_manifest_v2", schema_version=2,
             descriptor_schema_version=3, pipeline_count=1, pipelines=[{}]))
+        # Qualified for the corresponding source the package ships.
+        from test_shader_corpus_layout import write_qualification
+        checkout = self.work / "checkout"
+        with zipfile.ZipFile(self.root / "source/TriAevum-source.zip") as archive:
+            archive.extractall(checkout)
+            member = next(name for name in archive.namelist() if not name.endswith("/"))
+        qualification = write_qualification(self.work / "qualification.json", pack, [recipes], checkout,
+                                            generator=(member,), runtime=(member,))
         catalog, items = bind_renderer_compiler(load_json_object(path), compiler, [])
-        catalog, extra = bind_shader_corpus(catalog, pack, [recipes], compiler)
+        catalog, extra = bind_shader_corpus(catalog, pack, [recipes], compiler, qualification=qualification,
+                                            source_root=checkout)
         for item in [*items, *extra]:
             dest = self.root / item["path"]
             dest.parent.mkdir(parents=True, exist_ok=True)

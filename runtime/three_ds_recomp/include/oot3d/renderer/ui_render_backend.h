@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <span>
 #include <string>
+#include <vector>
 
 namespace Oot3d::Renderer {
 
@@ -38,6 +39,17 @@ class UiRenderBackend {
     virtual bool DrawUiTriangles(std::span<const UiOverlayVertex> vertices,
                                  uint32_t textureId,
                                  std::string* error = nullptr) = 0;
+    // A textured draw whose vertex alpha carries a post-filter texture alpha
+    // scale (above 1): the combiner must saturate texel x vertex alpha to 1
+    // rather than wrap it. A backend without such a combiner draws the
+    // vertex alpha clamped to 1, i.e. unscaled.
+    virtual bool DrawUiTrianglesSaturated(std::span<const UiOverlayVertex> vertices,
+                                          uint32_t textureId,
+                                          std::string* error = nullptr) {
+        std::vector<UiOverlayVertex> clamped(vertices.begin(), vertices.end());
+        for (auto& vertex : clamped) vertex.Alpha = vertex.Alpha > 1.0F ? 1.0F : vertex.Alpha;
+        return DrawUiTriangles(clamped, textureId, error);
+    }
 };
 
 } // namespace Oot3d::Renderer

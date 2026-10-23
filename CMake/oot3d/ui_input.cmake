@@ -30,7 +30,8 @@ target_include_directories(oot3d_ui_topscreen PUBLIC
 target_link_libraries(oot3d_ui_topscreen PUBLIC
     three_ds_recomp_input
     oot3d_native_a32_process
-    oot3d_native_ui_contract)
+    oot3d_native_ui_contract
+    oot3d_typed_gameplay)
 oot3d_target_defaults(oot3d_ui_topscreen FOLDER Tools)
 
 add_executable(oot3d_native_font_coverage_tests EXCLUDE_FROM_ALL
@@ -48,6 +49,12 @@ add_executable(oot3d_top_screen_mod_profile_tests EXCLUDE_FROM_ALL
 target_link_libraries(oot3d_top_screen_mod_profile_tests PRIVATE
     oot3d_ui_topscreen)
 oot3d_target_defaults(oot3d_top_screen_mod_profile_tests FOLDER Tests)
+
+add_executable(oot3d_top_screen_link_ext_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/oot3d_top_screen_link_ext.cpp
+    tools/oot3d/native_game_runtime/oot3d_top_screen_link_ext_tests.cpp
+)
+oot3d_target_defaults(oot3d_top_screen_link_ext_tests FOLDER Tests)
 
 add_executable(oot3d_top_screen_items_hint_tests EXCLUDE_FROM_ALL
     tools/oot3d/ui_topscreen/oot3d_top_screen_items_hint_tests.cpp

@@ -81,6 +81,8 @@ struct NativeActorVisibilityState {
     bool CullingVolumeValid = false;
     // Host-owned writes to the title's read-only distance constants.
     NativeA32Memory* HostMemory = nullptr;
+    // The overflow region could not be mapped: the native arena is the limit.
+    bool LightOverflowUnavailable = false;
     bool Diagnostics = false;
     bool ReportedUnknownConstants = false;
     uint64_t NativeVisible = 0U;
@@ -92,6 +94,9 @@ struct NativeActorVisibilityState {
     uint32_t LightAllocations = 0U;
     uint32_t PreviousLightAllocations = 0U;
     uint32_t PeakLightAllocations = 0U;
+    // Arena cursor moves into the overflow region (and wraps inside it).
+    uint64_t LightOverflowRelocations = 0U;
+    uint64_t LightOverflowWraps = 0U;
     uint64_t BudgetLimitedWalks = 0U;
     uint64_t BudgetDenied = 0U;
     uint64_t BudgetInvalidWalks = 0U;

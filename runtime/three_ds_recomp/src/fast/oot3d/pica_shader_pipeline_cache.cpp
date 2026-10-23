@@ -13,14 +13,17 @@
 #include <vector>
 
 namespace Fast::Oot3d {
-namespace {
-bool FaceNormalGuideDiagnosticRequested() {
+
+bool PicaFaceNormalGuideDiagnosticRequested() noexcept {
     static const bool requested = [] {
         const char* value = std::getenv("OOT3D_GRAPHICS_FACE_NORMAL_GUIDE");
         return value != nullptr && value[0] == '1';
     }();
     return requested;
 }
+
+namespace {
+bool FaceNormalGuideDiagnosticRequested() noexcept { return PicaFaceNormalGuideDiagnosticRequested(); }
 
 void HashCombine(size_t& seed, size_t value) noexcept {
     seed ^= value + 0x9e3779b97f4a7c15ULL + (seed << 6U) +
@@ -272,7 +275,14 @@ InstrumentationKey BuildInstrumentationKey(
         (request.Draw.Blend.Enabled ? 1U << 2U : 0U) |
         (request.Draw.PerspectiveProjection ? 1U << 3U : 0U) |
         (request.TemporalMotionEnabled ? 1U << 4U : 0U) |
-        (request.ReflectionProfile.has_value() ? 1U << 5U : 0U);
+        (request.ReflectionProfile.has_value() ? 1U << 5U : 0U) |
+        // Every other request input BuildInstrumentedVariant forwards to
+        // the generators: the isolated-lighting guides and the typed
+        // vertex contract that selects the authored-normal paths.
+        (request.Draw.IsolatedLighting ? 1U << 6U : 0U) |
+        (request.TemporalVertexProgram.ValidFor(request.VertexShaderSource) ? 1U << 7U : 0U) |
+        (request.TemporalVertexProgram.Hooks.SurfaceProgram() != nullptr ? 1U << 8U : 0U) |
+        (request.TemporalVertexProgram.Hooks.TransformProgram() != nullptr ? 1U << 9U : 0U);
     if (request.ReflectionProfile.has_value()) {
         key.ReflectionReflectivity =
             std::bit_cast<uint32_t>(

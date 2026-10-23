@@ -16,6 +16,7 @@ from common import load_json_object, atomic_write_json, sha256_file
 from migrate_installation import migrate_installation
 from installed_runtime import validate_installed_runtime
 from forge import (
+    TOPSCREEN_STANDARD_LAYOUT_FIELDS,
     ForgeError,
     HashCache,
     activate_prepared_title,
@@ -26,6 +27,7 @@ from forge import (
     package_private_module,
     prepare_content,
     prepare_private_aot_ir,
+    standard_topscreen_layout,
     verify_sources,
 )
 from tam_builder import (
@@ -622,6 +624,32 @@ class ForgeTests(unittest.TestCase):
                 target_triple="x86_64-pc-windows-msvc",
                 translator_identity="7" * 64,
             )
+
+
+class StandardTopScreenLayoutTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.standard = load_json_object(Path(__file__).resolve().parents[2] / "config/topscreen_ui.example.json")
+
+    def test_layout_follows_the_standard_profile_and_keeps_user_choices(self) -> None:
+        user = dict(self.standard, hud_margin_x=8, magic_bar_y=0, dpad_offset_y=4, render_items_hint=False,
+                    hud_scale=1.0, roll_dash=False, free_camera_enabled=True, dpad_child=["view"] * 4)
+        migrated = standard_topscreen_layout(user, self.standard)
+        for field in TOPSCREEN_STANDARD_LAYOUT_FIELDS:
+            self.assertEqual(migrated[field], self.standard[field])
+        self.assertEqual(migrated["hud_scale"], 1.0)
+        self.assertFalse(migrated["roll_dash"])
+        self.assertTrue(migrated["free_camera_enabled"])
+        self.assertEqual(migrated["dpad_child"], ["view"] * 4)
+        self.assertEqual(standard_topscreen_layout(migrated, self.standard), migrated)
+
+    def test_a_size_outside_the_menu_becomes_the_standard_size(self) -> None:
+        for scale in (0.8, 0.75, "large"):
+            migrated = standard_topscreen_layout(dict(self.standard, hud_scale=scale), self.standard)
+            self.assertEqual(migrated["hud_scale"], 0.7)
+
+    def test_other_schemas_are_left_to_the_runtime(self) -> None:
+        legacy = {"schema": "oot3d_topscreen_ui_v1", "hud_scale": 0.8}
+        self.assertIs(standard_topscreen_layout(legacy, self.standard), legacy)
 
 
 if __name__ == "__main__":

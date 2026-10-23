@@ -131,11 +131,13 @@ must not be described as every ocarina state or the entire mod being complete.
 The additional `gear-practice-entry`, `gear-song-entry`, and `gear-song-confirm`
 probes only reached Gear and selected the ocarina icon; they did not enter song
 practice and are not counted as practice or first-time learning qualification.
-The mapped presenter now includes the original sword/boots cycle marks from
-`custom_menu`: payload rectangle `005E1894` is `(458, 2, 40, 40)` in the
-512-pixel atlas; the original draw uses 14-pixel marks and direction-specific
-sword offsets. Unit tests cover atlas selection, geometry and layering. These
-marks still require paired in-game visual qualification; native per-item
+The mapped presenter includes the 2.1.1 sword/boots cycle marks: 14-pixel
+marks with direction-specific sword offsets (2.1.1 `005D818C`). SingleScreen
+3.0 draws no HUD cycle marks and 2.1.1 is retired, so the mark is the 3.0
+cycle badge, custom_ui01 rect `0x0060A718` `(320, 3, 40, 40)` in the 512x256
+atlas, which the 3.0 Items shortcut column also uses. Unit tests cover atlas
+selection, geometry and layering; a developer run (adult, Temple of Time)
+showed both marks over the boots and the sword. Native per-item
 dimming now reuses the source HUD opacity for mapped ZR/ZL items and ocarina,
 but has not been visually qualified in every restricted context.
 

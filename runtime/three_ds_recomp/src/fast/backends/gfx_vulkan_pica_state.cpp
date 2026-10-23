@@ -639,6 +639,9 @@ bool GfxRenderingAPIVulkan::RestorePicaTextureCache(
             DestroyTexture(texture);
         }
         mNativePicaTextures.clear();
+        // The snapshot's records keep their own texture-pack generation; the
+        // next frame retires those of another generation.
+        mNativePicaTexturesGeneration.reset();
         DestroyGpuTextureCopySurfaces();
         for (const auto& snapshot : snapshots) {
             if (snapshot.HasCopyProducer) {

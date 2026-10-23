@@ -1,5 +1,6 @@
 #include "oot3d_native_pica_vulkan_bridge.h"
 #include "oot3d_native_pica_presentation_scheduler.h"
+#include "oot3d_static_shadow_actor_catalog.h"
 
 #include "fast/oot3d/pica_uniform_layout.h"
 
@@ -264,6 +265,37 @@ int main() {
     Require(backend.DrawRoomShadows == roomShadows, "draw bridge lost room shell publication");
     Require(backend.DrawComposition.TemporalIdentity == plan.Composition.TemporalIdentity,
             "draw bridge lost native temporal identity");
+    Require(!backend.DrawComposition.StaticShadowCacheEligible,
+            "draw bridge made non-actor geometry static shadow cache eligible");
+    {
+        // The title catalog decides static shadow cache eligibility from the
+        // native actor profile; the player and horses never qualify.
+        using Oot3dNativeGame::IsStaticShadowCacheEligibleActor;
+        using Oot3dNativeGame::StaticShadowActorProfile;
+        constexpr StaticShadowActorProfile catalog[] = {{0x0077U, "En_Wood02"}};
+        const uint64_t tree = (uint64_t{0x0077U} << 32U) | 0x08123400U;
+        Require(IsStaticShadowCacheEligibleActor(true, tree, catalog), "catalogued actor is not eligible");
+        Require(!IsStaticShadowCacheEligibleActor(false, tree, catalog), "non-actor geometry is eligible");
+        Require(!IsStaticShadowCacheEligibleActor(true, 0U, catalog), "anonymous actor geometry is eligible");
+        Require(!IsStaticShadowCacheEligibleActor(true, (uint64_t{0x0078U} << 32U) | 0x1000U, catalog),
+                "uncatalogued actor is eligible");
+        Require(!IsStaticShadowCacheEligibleActor(true, (uint64_t{0x10077U} << 32U) | 0x1000U, catalog),
+                "malformed actor identity is eligible");
+        constexpr StaticShadowActorProfile excluded[] = {{0x0000U, "Player"}, {0x0014U, "En_Horse"},
+                                                         {0x009AU, "En_Horse_Link_Child"}};
+        for (const auto& entry : excluded)
+            Require(!IsStaticShadowCacheEligibleActor(true, (uint64_t{entry.Id} << 32U) | 0x1000U, excluded),
+                    "player or horse is static shadow cache eligible");
+        for (const auto& entry : Oot3dNativeGame::StaticShadowActorCatalog()) {
+            RecordingBackend actorBackend;
+            auto actorPlan = plan;
+            actorPlan.Composition.NativeActorGeometry = true;
+            actorPlan.Composition.NativeActorIdentity = (uint64_t{entry.Id} << 32U) | 0x08000000U;
+            Require(Oot3dNativeGame::SubmitOot3dPicaVulkanDrawPlan(actorBackend, actorPlan, &error, 9), error);
+            Require(actorBackend.DrawComposition.StaticShadowCacheEligible,
+                    "draw bridge lost catalogued static shadow cache eligibility");
+        }
+    }
     float packedDiffuse = 0.0F;
     float packedGlobalAmbient = 0.0F;
     int32_t packedShadowTextureBias = 0;

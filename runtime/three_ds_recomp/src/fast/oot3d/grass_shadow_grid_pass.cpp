@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <stdexcept>
@@ -318,9 +319,17 @@ GrassShadowGridResult GrassShadowGridPass::Execute(VkCommandBuffer command, uint
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, 0, 1, &upload, 0,
                          nullptr, 0, nullptr);
     vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_COMPUTE, p.Pipeline);
-    // The coarse grid without the actors, then the refinement around them.
+    // The coarse grid samples the static layer (world and stationary props,
+    // without dynamic actors such as the player), then the refinement around
+    // the actors. Diagnostic only: TRIAEVUM_GRASS_COARSE_COMPOSED=1 samples
+    // the composed map (every caster) for the coarse grid, as before 732da1b.
+    static const bool coarseComposed = [] {
+        const char* value = std::getenv("TRIAEVUM_GRASS_COARSE_COMPOSED");
+        return value != nullptr && value[0] != 0 && value[0] != '0';
+    }();
     const std::array<std::pair<VkDescriptorSet, std::array<uint32_t, 2>>, 2> ranges{
-        { { invocation.StaticSet, { 0U, coarseCount } }, { invocation.Set, { coarseCount, count } } } };
+        { { coarseComposed ? invocation.Set : invocation.StaticSet, { 0U, coarseCount } },
+          { invocation.Set, { coarseCount, count } } } };
     for (const auto& [set, range] : ranges) {
         if (range[0] == range[1])
             continue;

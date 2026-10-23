@@ -9,15 +9,15 @@
 
 namespace Oot3dNativeGame {
 
-inline constexpr std::string_view kTopScreen211MenuAtlasSemantic =
-    "oot3d/topscreen/2.1.1/menu_atlas";
-
 struct TopScreenItemsHintCursorBounds {
   bool Active = false;
   float CenterX = 0.0F;
   float MinimumY = 0.0F;
   float MaximumY = 0.0F;
   float Width = 0.0F;
+  // Canvas X of native X 0 under the cursor's projection: 80 at 0.6 and
+  // 84 at 0.58. 0x005E0E6C draws the hint with the cursor's projection.
+  float ScreenOffsetX = 80.0F;
 };
 
 struct TopScreenItemsHintRuntimeState {
@@ -53,19 +53,31 @@ struct TopScreenItemsHintGeometry {
   std::array<TopScreenItemsHintQuad, 2> Quads{};
 };
 
-// Exact source equivalent of the Items hint lane in TopScreen 2.1.1 payload
-// function 0x005D2078. The texture regions, 90-update delay, 12-update fade,
-// pulse waveform, cursor-relative placement, and 320-wide clamps come from
-// the official EUR payload.
+// SingleScreen 3.0 0x005E0E6C: SELECT and ? from custom_ui01, placed on the
+// upper 400x240 canvas with the native timing and clamps.
 TopScreenItemsHintGeometry
 BuildTopScreenItemsHintGeometry(const TopScreenItemsHintRuntimeState &state,
                                 bool enabled) noexcept;
 
-// Converts the 320x240 payload geometry into the promoted 400x240 UI canvas.
+// Emits the upper-screen geometry directly on the 400x240 UI canvas.
 // The renderer receives only ordinary resolved UI primitives.
 std::size_t AppendTopScreenItemsHintPresentation(
     const TopScreenItemsHintGeometry &geometry,
-    const oot3d::ui::UiTextureIdentity &menuAtlas,
+    const oot3d::ui::UiTextureIdentity &uiAtlas,
+    std::vector<oot3d::ui::UiPrimitive> &output);
+
+// SingleScreen 3.0 0x005E2BA8 -> 0x005E9A58: "[X] View Model" below the Gear
+// cursor. `fade` counts the updates past the 90-update delay and `pulse`
+// every update; `cursor` comes from ReadTopScreenGearCursorBounds.
+std::size_t AppendTopScreenGearViewModelLegendPresentation(
+    const TopScreenItemsHintCursorBounds &cursor, std::uint32_t fade, std::uint32_t pulse,
+    const oot3d::ui::UiTextureIdentity &uiAtlas,
+    std::vector<oot3d::ui::UiPrimitive> &output);
+
+// SingleScreen 3.0 0x005E9C3C: the View Model control line, drawn instead of
+// every other 0x005E0E6C overlay while the View Model is open.
+std::size_t AppendTopScreenViewModelControlsPresentation(
+    const oot3d::ui::UiTextureIdentity &uiAtlas,
     std::vector<oot3d::ui::UiPrimitive> &output);
 
 } // namespace Oot3dNativeGame

@@ -1,5 +1,29 @@
 # F1 settings rationalization
 
+## TopScreen standard profile (2026-10-17)
+
+The HUD tab is gone. TriAevum's standard TopScreen profile (the defaults of
+`TopScreenUiConfig` and `config/topscreen_ui.example.json`) fixes the HUD
+layout: HUD 0.70, margins 4/1, magic bar Y 2, D-pad Y -1, Normal layout, and
+every SingleScreen gameplay option on, 3D rain included. For the layout F1
+offers only **Display > TopScreen HUD > HUD size**, Native (100%) or Optimized
+(70%, the default), with the SingleScreen credit below it; the TopScreen
+sections of Controls (Shortcuts, Gameplay, C-stick aiming, free camera) stay. The choice applies and saves at once
+(`TopScreen: saved`, or the save error with the size kept for the session;
+`TopScreen: session only` without a configuration path). The section is an
+application tab in the new `kDisplaySettingsGroup`, drawn below the renderer's
+Display sections; TopScreenUiConfigRuntime still owns the setting.
+
+Forge keeps every installation on the standard layout: on each install or
+update it rewrites the layout fields of an existing v2 `topscreen_ui.json`
+(`TOPSCREEN_STANDARD_LAYOUT_FIELDS`) and resets a HUD size outside the two F1
+sizes; Controls fields, the minimap toggle and the Items order stay the user's.
+Developer configuration files may still set any field.
+
+Actual-widget smoke: **10,934 assertions**, including the absence of the HUD
+tab and of the layout controls, both sizes, an external change surviving a size
+choice, the immediate save and a visible failed save.
+
 ## Grass masks (2026-10-11, round 36)
 
 Grass > Masks identifies current overlay/source overlaps with thumbnails,
@@ -271,12 +295,12 @@ above the tabs because the preset covers every graphics tab.
 
 | Tab | Sections | Former location |
 | --- | --- | --- |
-| **Display** | Screen (window mode, resolution, internal render scale, VSync); Antialiasing and upscaling; Motion and camera (frame rate, scene FOV) | Renderer > Display, Renderer > Antialiasing |
+| **Display** | Screen (window mode, resolution, internal render scale, VSync); Antialiasing and upscaling; Motion and camera (frame rate, scene FOV); TopScreen HUD size (TopScreen profile only, since 2026-10-17) | Renderer > Display, Renderer > Antialiasing, HUD |
 | **Lighting** | **Lighting & GI** (lighting model, global illumination); **Shadows** (directional, point light); **Occlusion**; **Reflections** (provider and parameters); **Scene environment** (per-scene profile, Navi/fairy lights); **Toon** | Renderer > Lighting, Environment, Renderer > Reflections, Renderer > Toon |
 | **Grass** | unchanged | Grass |
 | **Materials** | **Texture packs**; **Material editor**; **Reflection materials** (texture assignments) | Textures, Material editor, Renderer > Reflections |
 | **Controls** | unchanged | Controls |
-| **HUD** | the TopScreen 2.1.1 HUD and layout (TopScreen profile only) | TopScreen 2.1.1 |
+| **HUD** | removed 2026-10-17: the standard profile fixes the layout | TopScreen 2.1.1 |
 | **Game** | **Save states**; **Language** | Save states, Game |
 
 Application tabs declare a group (`GraphicsSettingsPanelTab::Group`): the
@@ -630,12 +654,11 @@ Current surfaces (since the 2026-10-06 tab rationalization above):
 
 | Surface | Sections | Owner |
 | --- | --- | --- |
-| Display | Screen, Antialiasing and upscaling, Motion and camera | GraphicsSettingsRuntime |
+| Display | Screen, Antialiasing and upscaling, Motion and camera, TopScreen HUD size | GraphicsSettingsRuntime; TopScreenUiConfigRuntime (HUD size) |
 | Lighting | Lighting & GI, Shadows, Occlusion, Reflections, Scene environment, Toon | GraphicsSettingsRuntime; SceneEnvironmentRuntime (Scene environment) |
 | Grass | Sources, Masks, Generation, Appearance, Performance, Wind, Interaction | GraphicsSettingsRuntime / grass module |
 | Materials | Texture packs, Material editor, Reflection materials | GraphicsSettingsRuntime / texture-pack module / material JSON |
 | Controls | Bindings, Camera, Devices, Shortcuts | NativeControlConfigRuntime / TopScreenUiConfigRuntime |
-| HUD | TopScreen 2.1.1 HUD and layout | TopScreenUiConfigRuntime |
 | Game | Save states, Language | SavestateLibrary, GameLanguageSettings |
 
 Input still owns host-device routing and sensitivity. TopScreen owns game-camera
@@ -681,8 +704,9 @@ commands. No configuration files belonging to the user are reset or migrated.
 
 Current control ownership and first-frame/LOD update (2026-09-07): see
 [First-Frame Grass and Gameplay Camera](TRIAEVUM_GRASS_FIRST_FRAME_AND_GAMEPLAY_CAMERA.md).
-Camera, aiming and D-pad behavior now live in Controls; TopScreen contains HUD
-and layout only. JSON ownership remains unchanged.
+Camera, aiming and D-pad behavior now live in Controls; the TopScreen section
+of Display offers only the HUD size (2026-10-17). JSON ownership remains
+unchanged.
 
 Renderer files under `runtime/three_ds_recomp/`:
 

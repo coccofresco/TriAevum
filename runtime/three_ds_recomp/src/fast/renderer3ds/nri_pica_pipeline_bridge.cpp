@@ -670,15 +670,38 @@ nri::Pipeline* NriPicaPipelineBridge::CreatePipeline(const NriPicaGraphicsPipeli
     pipeline.cache = mImpl->PipelineCache;
     nri::Pipeline* owned = nullptr;
     const auto start = std::chrono::steady_clock::now();
-    const auto result = mImpl->Interop->Core()->CreateGraphicsPipeline(
+    auto result = mImpl->Interop->Core()->CreateGraphicsPipeline(
         *mImpl->Interop->Device(), pipeline, owned);
+    bool fallback = false;
+    if ((result != nri::Result::SUCCESS || owned == nullptr) && libraries) {
+        // A driver can reject a library part it would compile as a whole
+        // pipeline (AMD Windows, #78/#84): retry once without libraries.
+        pipeline.flags = nri::GraphicsPipelineBits::NONE;
+        owned = nullptr;
+        result = mImpl->Interop->Core()->CreateGraphicsPipeline(
+            *mImpl->Interop->Device(), pipeline, owned);
+        fallback = true;
+    }
     const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::steady_clock::now() - start).count();
-    TracePipelineCreation(desc, libraries, elapsed);
+    TracePipelineCreation(desc, libraries && !fallback, elapsed);
+    const bool created = result == nri::Result::SUCCESS && owned != nullptr;
     std::lock_guard statistics(mImpl->StatisticsMutex);
     ++mImpl->Statistics.CreationAttempts;
     mImpl->Statistics.CreationNanoseconds += elapsed;
-    if (result != nri::Result::SUCCESS || owned == nullptr)
+    mImpl->Statistics.LibraryFallbacks += fallback && created ? 1U : 0U;
+    if (fallback || !created) {
+        // Always reported, for the first few: which program the driver refused.
+        if (const auto reported = ++mImpl->Statistics.CreationFailures; reported <= 16U)
+            std::fprintf(stderr,
+                         "TRIAEVUM_NRI_PIPELINE_CREATE_FAILED vs=%016llx fs=%016llx libraries=%u result=%d "
+                         "fallback=%s\n",
+                         static_cast<unsigned long long>(NriPicaTraceProgramHash(desc.VertexSpirv)),
+                         static_cast<unsigned long long>(NriPicaTraceProgramHash(desc.FragmentSpirv)),
+                         libraries ? 1U : 0U, static_cast<int>(result),
+                         !fallback ? "none" : created ? "monolithic" : "failed");
+    }
+    if (!created)
         return nullptr;
     ++mImpl->Statistics.Created;
     return owned;

@@ -10,6 +10,12 @@ struct GrassPlacementDiskKey {
     bool operator==(const GrassPlacementDiskKey&) const = default;
 };
 [[nodiscard]] GrassPlacementDiskKey GrassPlacementPersistentKey(const GrassAsyncPlacementRequest& request);
+// Phases of the calling thread's last Load, for entry diagnostics.
+struct GrassPlacementDiskLoadTiming {
+    double MutexWaitMilliseconds = 0, ReadMilliseconds = 0, ValidateMilliseconds = 0;
+    uint64_t Bytes = 0;
+};
+[[nodiscard]] GrassPlacementDiskLoadTiming& GrassLastPlacementDiskLoadTiming() noexcept;
 // Whole final placement, including baked RGB, visibility hierarchy and shadow
 // support. No texture, mask, vertex pointer or process-local identity is stored.
 class GrassPersistentPlacementCache {

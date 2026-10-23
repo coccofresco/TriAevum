@@ -26,6 +26,9 @@ namespace {
 
 constexpr uint32_t kFrameSlots = 2U;
 constexpr uint32_t kBytesPerPixel = 4U;
+// The largest nonCoherentAtomSize Vulkan permits; flushed ranges and buffer
+// capacities are multiples of it.
+constexpr uint64_t kFlushAtom = 256U;
 
 } // namespace
 
@@ -55,8 +58,9 @@ struct NriPicaTextureUploadPass::Impl {
 
     bool CreateUploadBuffer(uint64_t capacity, UploadBuffer& upload) {
         if (Core == nullptr || Device == nullptr || capacity == 0U ||
-            capacity > std::numeric_limits<size_t>::max())
+            capacity > std::numeric_limits<size_t>::max() - kFlushAtom)
             return false;
+        capacity = (capacity + kFlushAtom - 1U) / kFlushAtom * kFlushAtom;
         nri::BufferDesc bufferDesc{};
         bufferDesc.size = capacity;
         if (Core->CreateCommittedBuffer(
@@ -72,6 +76,17 @@ struct NriPicaTextureUploadPass::Impl {
         }
         upload.Capacity = capacity;
         return true;
+    }
+
+    // The mapping is persistent, so host writes reach the GPU copy only after
+    // a flush when NRI placed the buffer in non-coherent memory. NRI's Unmap
+    // flushes the last mapped range there and does nothing on coherent memory.
+    void Publish(UploadBuffer& upload, uint64_t begin, uint64_t end) {
+        begin = begin / kFlushAtom * kFlushAtom;
+        end = std::min(upload.Capacity,
+                       (end + kFlushAtom - 1U) / kFlushAtom * kFlushAtom);
+        Core->MapBuffer(*upload.Buffer, begin, end - begin);
+        Core->UnmapBuffer(*upload.Buffer);
     }
 
     void DestroyUploadBuffer(UploadBuffer& upload) {
@@ -232,6 +247,7 @@ bool NriPicaTextureUploadPass::Execute(
                          upload->Mapped,
                          static_cast<size_t>(upload->Capacity))))
         return false;
+    mImpl->Publish(*upload, layout->Offset, layout->RequiredSize);
 
     nri::CommandBuffer* command = NriInteropAccess::CommandBuffer(
         *mImpl->Interop, desc.FrameIndex);

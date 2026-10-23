@@ -54,6 +54,25 @@ runtime links nothing of NGX, and the release audit rejects any other binary
 that contains NGX code. Before this decision the beta.1 runtime had NGX
 statically linked through NRI without NVIDIA's runtime; beta.1b replaces it.
 
+## SingleScreen 3.0 assets
+
+On 2026-10-16 the maintainer reported the author's permission to rebase
+TriAevum's TopScreen port on SingleScreen 3.0, and on 2026-10-17 decided that
+SingleScreen 3.0 is integrated completely into TriAevum with its
+low-resolution graphics. The package therefore ships two unchanged files of
+the official archive, the UI atlas `custom_ui01.ctxb` and the Link animations
+`zelda_link_ext.zar` (`LICENSES/SingleScreen-3.0.md`); all rights in them
+remain the author's. The release audit accepts them only at their declared
+paths and exact SHA-256 values.
+
+The high-resolution graphics (the HD UI atlas and the HD fonts) have a
+separate author whose consent is still pending. Until it is recorded here they
+are not distributed: their hashes, and the archive's, are forbidden in the
+package, and Forge imports them only from an archive the user places beside
+it. The archive's executable patch and payload are never distributed;
+TriAevum reimplements their behavior. No correspondence is stored in this
+repository.
+
 ## Release effect
 
 Legal approval does not bypass technical gates. The packager remains disabled

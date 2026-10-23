@@ -101,6 +101,20 @@ void GfxRenderingAPIVulkan::ConfigureNativePicaAotShaders() {
     mNriInterop.Shaders().Configure(VulkanShaderCacheDirectory());
     // Alpha shadow casters of the parametric bases (built-in, finite).
     mNriInterop.Shaders().AddArtifacts(Oot3d::CasterFragmentArtifacts());
+    // Alpha shadow casters of specialized programs are title-derived: the
+    // corpus carries them as NRI fragments (variant replay, issue #76).
+    mNriInterop.Shaders().SetTitleArtifacts(
+        [this](std::string_view source, Renderer::SpirvStage stage) -> std::span<const uint32_t> {
+            if (stage != Renderer::SpirvStage::Fragment || !mPicaAotShaderPack.Loaded()) return {};
+            const auto binary = mPicaAotShaderPack.Find(Oot3d::PicaAotShaderStage::NriFragment, source);
+            if (!binary.empty()) {
+                ++mPicaAotShaderHits;
+                std::lock_guard lock(mPicaAotShaderLogMutex);
+                mPicaAotShaderHitIdentities.insert(
+                    {Oot3d::PicaAotShaderStage::NriFragment, Oot3d::IdentifyPicaAotShaderSource(source).Id});
+            }
+            return binary;
+        });
     mCompiledShaderCacheSummaryLogged = false;
     if (!mCompiledShaderCache.Enabled())
         SPDLOG_WARN("SPIR-V disk reuse disabled: cache directory or compiler identity unavailable");
@@ -112,6 +126,7 @@ void GfxRenderingAPIVulkan::ConfigureNativePicaAotShaders() {
     JoinStartupPreparation();
     if (mPreparationQueue) mPreparationQueue->Drain();
     mPicaAotShaderMissesLogged.clear();
+    mPicaAotShaderHitIdentities.clear();
     mPicaAotShaderHits = 0;
     mNativeFragmentArtifactHits = 0;
     mNativeVertexArtifactHits = 0;
@@ -157,6 +172,12 @@ void GfxRenderingAPIVulkan::ConfigureNativePicaAotShaders() {
         }
         SPDLOG_INFO("Native PICA effective shader inventory enabled: {}",
                     mPicaEffectiveShaderInventory.Path().string());
+    }
+    if (const char* path = std::getenv("OOT3D_PICA_VARIANT_REQUESTS"); path != nullptr && path[0] != '\0') {
+        std::string error;
+        if (!mPicaVariantRequestRecorder.Configure(path, &error))
+            throw std::runtime_error("could not configure native PICA variant requests: " + error);
+        SPDLOG_INFO("Native PICA variant request recording enabled: {}", path);
     }
     if (const char* path =
             std::getenv("OOT3D_PICA_PIPELINE_INVENTORY");
@@ -205,8 +226,9 @@ void GfxRenderingAPIVulkan::FinishNativePicaAotShaders() {
     const auto passes = mNriInterop.Shaders().Stats();
     if ((cache.Requests || passes.Requests || mNriInterop.Shaders().BuiltinArtifactHits() ||
          mPicaAotShaderPack.Loaded()) && !mCompiledShaderCacheSummaryLogged) {
-        std::fprintf(stderr, "TRIAEVUM_BUILTIN_PASS_ARTIFACTS hits=%llu\n",
-                     static_cast<unsigned long long>(mNriInterop.Shaders().BuiltinArtifactHits()));
+        std::fprintf(stderr, "TRIAEVUM_BUILTIN_PASS_ARTIFACTS hits=%llu title_hits=%llu\n",
+                     static_cast<unsigned long long>(mNriInterop.Shaders().BuiltinArtifactHits()),
+                     static_cast<unsigned long long>(mNriInterop.Shaders().TitleArtifactHits()));
         std::fprintf(stderr,
             "TRIAEVUM_PASS_SHADER_CACHE requests=%llu hits=%llu compiled=%llu compile_failed=%llu "
             "writes=%llu write_failed=%llu compile_ms=%.3f enabled=%d\n",
@@ -224,6 +246,9 @@ void GfxRenderingAPIVulkan::FinishNativePicaAotShaders() {
             static_cast<unsigned long long>(cache.Writes), static_cast<unsigned long long>(cache.WriteFailures),
             cache.CompileNanoseconds / 1e6, cache.ReadNanoseconds / 1e6, cache.WriteNanoseconds / 1e6,
             mCompiledShaderCache.Enabled() ? 1 : 0);
+        const auto audit = Fast::Renderer::ShadercCompilationAudit();
+        std::fprintf(stderr, "TRIAEVUM_SHADERC_AUDIT calls=%llu compile_ms=%.3f\n",
+                     static_cast<unsigned long long>(audit.Calls), audit.Nanoseconds / 1e6);
         mCompiledShaderCacheSummaryLogged = true;
     }
     if (mPicaEffectiveShaderInventory.Enabled()) {
@@ -281,13 +306,19 @@ void GfxRenderingAPIVulkan::FinishNativePicaAotShaders() {
          mPicaAotShaderMisses != 0U)) {
         SPDLOG_INFO("Native PICA AOT shader resolution: {} hits, {} misses",
                     mPicaAotShaderHits.load(), mPicaAotShaderMisses.load());
+        size_t uniqueHits = 0, uniqueMisses = 0;
+        {
+            std::lock_guard lock(mPicaAotShaderLogMutex);
+            uniqueHits = mPicaAotShaderHitIdentities.size();
+            uniqueMisses = mPicaAotShaderMissesLogged.size();
+        }
         std::fprintf(stderr,
                      "OOT3D_PICA_AOT_SHADER_RESOLUTION hits=%llu misses=%llu "
-                     "strict=%u entries=%zu\n",
+                     "strict=%u entries=%zu unique_hits=%zu unique_misses=%zu\n",
                      static_cast<unsigned long long>(mPicaAotShaderHits),
                      static_cast<unsigned long long>(mPicaAotShaderMisses),
                      mPicaAotShaderStrict ? 1U : 0U,
-                     mPicaAotShaderPack.EntryCount());
+                     mPicaAotShaderPack.EntryCount(), uniqueHits, uniqueMisses);
         mPicaAotShaderSummaryLogged = true;
         std::fprintf(stderr, "TRIAEVUM_NATIVE_FRAGMENT_ARTIFACTS hits=%llu modules=%zu\n",
                      static_cast<unsigned long long>(mNativeFragmentArtifactHits),
@@ -360,6 +391,10 @@ GfxRenderingAPIVulkan::ResolveNativePicaShaderSpirv(
     const auto binary = mPicaAotShaderPack.Find(stage, source);
     if (!binary.empty()) {
         ++mPicaAotShaderHits;
+        {
+            std::lock_guard lock(mPicaAotShaderLogMutex);
+            mPicaAotShaderHitIdentities.insert({stage, Oot3d::IdentifyPicaAotShaderSource(source).Id});
+        }
         return {binary.begin(), binary.end()};
     }
 

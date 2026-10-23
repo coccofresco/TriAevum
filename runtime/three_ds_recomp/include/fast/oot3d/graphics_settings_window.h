@@ -24,8 +24,10 @@ void PostHostNotice(std::string text, bool failure = false);
 [[nodiscard]] bool HostNoticeActive();
 void DrawHostNotice();
 
-// The F1 groups that application tabs can join. Lighting is a built-in tab;
-// other group names become top-level tabs in the order they first appear.
+// The F1 groups that application tabs can join. Display and Lighting are
+// built-in tabs; other group names become top-level tabs in the order they
+// first appear.
+inline constexpr const char* kDisplaySettingsGroup = "Display";
 inline constexpr const char* kLightingSettingsGroup = "Lighting";
 inline constexpr const char* kGameSettingsGroup = "Game";
 

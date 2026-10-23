@@ -637,8 +637,9 @@ GrassPlacementRule DeserializeGrassRule(const Json& document, size_t index, std:
                prefix + ".MaximumSlopeDegrees", result);
     ReadScalar(document, "NormalOffset", rule.NormalOffset,
                prefix + ".NormalOffset", result);
-    // Optional: absent means the whole mask applies (earlier files).
-    if (const Json* rects = FindMember(document, "ActiveRects"); rects != nullptr) {
+    // Optional: absent or null means the whole mask applies (earlier files and
+    // the title's shipped rules).
+    if (const Json* rects = FindMember(document, "ActiveRects"); rects != nullptr && !rects->is_null()) {
         bool valid = rects->is_array();
         for (size_t i = 0; valid && i < rects->size(); ++i) {
             const auto& entry = (*rects)[i];
@@ -1716,15 +1717,17 @@ SerializeGraphicsSettings(const GraphicsSettings& settings) {
     };
 }
 
-GraphicsSettingsLoadResult DeserializeGraphicsSettings(
-    const nlohmann::json& document, GraphicsSettings fallback) {
+namespace {
+GraphicsSettingsLoadResult DecodeGraphicsSettings(
+    const nlohmann::json& document, GraphicsSettings fallback, bool normalize) {
     GraphicsSettingsLoadResult result;
     result.Value = std::move(fallback);
     result.Found = true;
     if (!document.is_object()) {
         Correct(result, "Graphics",
                 "graphics settings block is not an object");
-        Normalize(result);
+        if (normalize)
+            Normalize(result);
         return result;
     }
 
@@ -2336,8 +2339,20 @@ GraphicsSettingsLoadResult DeserializeGraphicsSettings(
                        result);
         }
     }
-    Normalize(result);
+    if (normalize)
+        Normalize(result);
     return result;
+}
+} // namespace
+
+GraphicsSettingsLoadResult DeserializeGraphicsSettings(
+    const nlohmann::json& document, GraphicsSettings fallback) {
+    return DecodeGraphicsSettings(document, std::move(fallback), true);
+}
+
+GraphicsSettingsLoadResult DeserializeGraphicsSettingsFields(
+    const nlohmann::json& document, GraphicsSettings fallback) {
+    return DecodeGraphicsSettings(document, std::move(fallback), false);
 }
 
 GraphicsSettingsLoadResult LoadGraphicsSettingsConfig(

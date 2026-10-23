@@ -122,7 +122,11 @@ grotto "Kokiri Forest (Song of Storms)" arrives in the grotto (scene 62); with
 an input timeline walking onto the exit light, Link leaves to Kokiri Forest at
 the grotto's place (minimap and capture). `TRIAEVUM_DEV_WARP=<scene>:
 <entrance>:<child|adult>:<day|night>` requests a Better-list warp at the first
-gameplay frame for such checks.
+gameplay frame for such checks. `TRIAEVUM_DEV_WARP_ENTRANCE=<entrance>:
+<scene>:<child|adult>:<day|night>` requests any native entrance the same way,
+for oracle fixtures outside the list: `0x28A:81:adult:day` (the Lon Lon fence
+jump) arrives in Hyrule Field mounted on Epona, matching the Azahar oracle's
+Gateway-cheat transition from the same save.
 
 Free camera, developer launch from the play quick save with
 `TRIAEVUM_DEV_FREECAM=-32.6,600,1627.4,180,-45`: `TRIAEVUM_DEV_FREECAM

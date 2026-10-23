@@ -987,6 +987,24 @@ void GfxRenderingAPIVulkan::DestroyGpuTextureCopySurfaces() {
     mGpuTextureCopyPinsDeclared = false;
 }
 
+void GfxRenderingAPIVulkan::RetireGpuTextureCopySurfacesForTargetReset() {
+    // A target reset runs at frame start, on the render thread while the guest
+    // may be running, so it cannot materialize guest bytes. A copy is an
+    // immutable image of its own, independent of the targets: one that guest
+    // memory still defers to stays readable, and the frame-fence sweep retires
+    // it once the guest no longer owns it.
+    std::vector<uint64_t> retired;
+    for (const auto& [identity, surface] : mGpuTextureCopySurfaces) {
+        if (!surface.GuestOwner || surface.GuestOwner.use_count() == 1) {
+            retired.push_back(identity);
+        }
+    }
+    for (const auto identity : retired) DestroyGpuTextureCopySurface(identity);
+    mHandledNativePicaTextureCopies.clear();
+    mGpuTextureCopyPins.clear();
+    mGpuTextureCopyPinsDeclared = false;
+}
+
 namespace {
 // Opt-in diagnostic dump of an immutable copy, so the sampled mapping can be
 // asserted from pixels instead of inferred from extents and counters.

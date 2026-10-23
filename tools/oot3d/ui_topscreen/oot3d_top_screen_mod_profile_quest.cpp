@@ -55,12 +55,37 @@ TopScreenQuestGeometryStats TransformTopScreenQuestGeometry(
         }
       } else if (centerX < 398.0F && centerY > 150.0F) {
         if (!context.PlayerSpecialState || centerY < 195.0F) {
-          for (auto &vertex : quad) {
-            vertex.X = 288.0F + (vertex.X - centerX) * 0.95F;
-            vertex.Y = 24.0F + (vertex.Y - centerY) * 0.95F;
+          // SingleScreen 3.0 0x005C89D0..0x005C8B8C: the A ring and icons
+          // (bounds within 0.6..1.4 of square) are normalized to 32 px, the
+          // wide label takes 0.68, all centred on (288, 24) with the button
+          // group's size and offset. The HUD scale below then gives 3.0's
+          // 400 + s(288 - 400) - margin, 24s + margin.
+          float minimumX = quad[0].X, maximumX = quad[0].X;
+          float minimumY = quad[0].Y, maximumY = quad[0].Y;
+          for (const auto &vertex : quad) {
+            minimumX = std::min(minimumX, vertex.X);
+            maximumX = std::max(maximumX, vertex.X);
+            minimumY = std::min(minimumY, vertex.Y);
+            maximumY = std::max(maximumY, vertex.Y);
           }
-          ++stats.QuadsTranslated;
-          ++stats.QuadsScaled;
+          const float width = maximumX - minimumX;
+          const float height = maximumY - minimumY;
+          const bool square = width > 1.0F && height > 1.0F &&
+                              height * 1.4F >= width && height * 0.6F <= width;
+          if (!square && context.ActionLabelHidden) {
+            translateTo(quad, centerX, centerY, 500.0F, 300.0F, true);
+          } else {
+            const float size = (square ? 32.0F / width : 0.68F) * context.ButtonGroupScale;
+            const float targetX = 400.0F + (288.0F - 400.0F) * context.ButtonGroupScale +
+                                  context.ButtonGroupOffsetX;
+            const float targetY = 24.0F * context.ButtonGroupScale + context.ButtonGroupOffsetY;
+            for (auto &vertex : quad) {
+              vertex.X = targetX + (vertex.X - centerX) * size;
+              vertex.Y = targetY + (vertex.Y - centerY) * size;
+            }
+            ++stats.QuadsTranslated;
+            ++stats.QuadsScaled;
+          }
         } else {
           translateTo(quad, centerX, centerY, 500.0F, 300.0F, true);
         }
@@ -154,6 +179,13 @@ bool ReadTopScreenQuestGeometryContext(
       specialMode = specialValue != 0U;
     }
   }
+  std::uint32_t alternateHudMode = 0U;
+  if (!memory.Read32(0x004FC648U + 0x48U, &alternateHudMode)) {
+    if (error != nullptr)
+      *error = "cannot read Quest alternate HUD mode";
+    return false;
+  }
+  context->ActionLabelHidden = alternateHudMode == 1U || alternateHudMode == 4U;
   context->PauseState = pauseState;
   // The alternate gameplay HUD owner is not an open pause page. In
   // particular, riding must still relocate the native A/B geometry.
@@ -631,6 +663,90 @@ bool ApplyTopScreenQuestDrawModelTransform(
       modelStats.VerticesTransformed != 0U ? 1U : 0U;
   if (stats != nullptr)
     *stats = result;
+  return true;
+}
+
+bool CaptureTopScreenQuestBButtonCopies(NativeA32Memory &memory,
+                                        const TopScreenUiConfig &config,
+                                        std::vector<TopScreenQuestCopiedQuad> *copies,
+                                        std::string *error) {
+  if (copies == nullptr) {
+    if (error != nullptr) *error = "missing Quest B copy output";
+    return false;
+  }
+  copies->clear();
+  constexpr std::uint32_t kQuestOwnerBinding = 0x004FC688U;
+  std::uint32_t owner = 0U, childCount = 0U;
+  if (!memory.Read32(kQuestOwnerBinding, &owner)) {
+    if (error != nullptr) *error = "cannot read TopScreen Quest model owner";
+    return false;
+  }
+  if (owner == 0U) return true;
+  std::uint32_t mainRenderer = 0U, child = 0U, childRenderer = 0U;
+  if (!memory.Read32(owner + 0x10CU, &mainRenderer) || !memory.Read32(owner + 0x224U, &childCount) ||
+      !memory.Read32(owner + 0x0CU, &child) || (child != 0U && !memory.Read32(child + 8U, &childRenderer))) {
+    if (error != nullptr) *error = "cannot read TopScreen Quest B renderers";
+    return false;
+  }
+  // The B button after the HUD transform: (248, 24) about the top-right corner.
+  const float scale = config.HudScale;
+  const float centerX = 400.0F + (248.0F - 400.0F) * scale - static_cast<float>(config.HudMarginX);
+  const float centerY = 24.0F * scale + static_cast<float>(config.HudMarginY);
+  const float reach = 24.0F * scale;
+  // Render buffer: count +0, texture extent +4/+8 (floats), positions +0x0C,
+  // UVs +0x14, colors +0x18, translations +0x1C.
+  const auto copy = [&](std::uint32_t renderer, float textureWidth, float textureHeight,
+                        bool numberGlyphs) {
+    std::uint32_t count = 0U, widthBits = 0U, heightBits = 0U, positions = 0U, uvs = 0U, colors = 0U,
+                  translations = 0U;
+    if (renderer == 0U || !memory.Read32(renderer, &count) || !memory.Read32(renderer + 4U, &widthBits) ||
+        !memory.Read32(renderer + 8U, &heightBits) || !memory.Read32(renderer + 0x0CU, &positions) ||
+        !memory.Read32(renderer + 0x14U, &uvs) || !memory.Read32(renderer + 0x18U, &colors) ||
+        !memory.Read32(renderer + 0x1CU, &translations))
+      return false;
+    if (std::bit_cast<float>(widthBits) != textureWidth || std::bit_cast<float>(heightBits) != textureHeight ||
+        count == 0U || count > 8U || positions == 0U || uvs == 0U || colors == 0U || translations == 0U)
+      return true;
+    for (std::uint32_t index = 0U; index < count; ++index) {
+      std::array<TopScreenVec3, 4> quad{};
+      std::array<float, 2> translation{};
+      std::array<float, 16> color{};
+      TopScreenQuestCopiedQuad copied;
+      const auto bytes = [](auto &values) {
+        return std::span<std::uint8_t>(reinterpret_cast<std::uint8_t *>(values.data()), sizeof(values));
+      };
+      if (!memory.ReadBytes(positions + index * 0x30U, bytes(quad)) ||
+          !memory.ReadBytes(translations + index * 8U, bytes(translation)) ||
+          !memory.ReadBytes(uvs + index * 0x20U, bytes(copied.Uvs)) ||
+          !memory.ReadBytes(colors + index * 0x40U, bytes(color)))
+        return false;
+      float quadX = 0.0F, quadY = 0.0F;
+      for (std::size_t vertex = 0U; vertex < quad.size(); ++vertex) {
+        copied.Positions[vertex] = {quad[vertex].X + translation[0], quad[vertex].Y + translation[1]};
+        quadX += copied.Positions[vertex].X * 0.25F;
+        quadY += copied.Positions[vertex].Y * 0.25F;
+      }
+      if (std::abs(quadX - centerX) > reach || std::abs(quadY - centerY) > reach) continue;
+      copied.Color = {color[0], color[1], color[2], color[3]};
+      copied.NumberGlyphs = numberGlyphs;
+      copies->push_back(copied);
+      // Hide the native quad; the next submit rebuilds it.
+      for (auto &vertex : quad) {
+        vertex.X += 500.0F - quadX;
+        vertex.Y += 300.0F - quadY;
+      }
+      if (!memory.WriteBytes(positions + index * 0x30U,
+                             std::span<const std::uint8_t>(reinterpret_cast<const std::uint8_t *>(quad.data()),
+                                                           sizeof(quad))))
+        return false;
+    }
+    return true;
+  };
+  if (!copy(mainRenderer, 512.0F, 512.0F, false) ||
+      (childCount > 0U && !copy(childRenderer, 256.0F, 128.0F, true))) {
+    if (error != nullptr) *error = "cannot copy the TopScreen Quest B quads";
+    return false;
+  }
   return true;
 }
 

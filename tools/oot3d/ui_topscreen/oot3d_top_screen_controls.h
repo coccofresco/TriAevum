@@ -17,8 +17,11 @@ enum class TopScreenDpadDirection : std::uint8_t {
 
 inline constexpr std::size_t kTopScreenDpadDirectionCount = 4U;
 inline constexpr std::size_t kTopScreenDpadActionCount = 14U;
-inline constexpr std::array<std::uint8_t, 7> kTopScreenCStickAimSpeeds{
-    2U, 3U, 4U, 6U, 8U, 12U, 16U};
+// SingleScreen 3.0 C-Stick Aiming speed, levels 0..8 (default 3): table
+// 0x00608FA8+0x522, applied by 0x005D0230 as value / 110. The 0..6 table
+// 2,3,4,6,8,12,16 (0x0060D410) is the 3.0 Free Camera speed.
+inline constexpr std::array<std::uint8_t, 9> kTopScreenCStickAimSpeeds{
+    28U, 40U, 52U, 62U, 76U, 92U, 110U, 132U, 156U};
 
 struct TopScreenDpadPhysicalState {
   std::array<bool, kTopScreenDpadDirectionCount> Pressed{};

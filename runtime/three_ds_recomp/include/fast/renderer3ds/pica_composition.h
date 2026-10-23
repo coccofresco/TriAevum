@@ -125,6 +125,12 @@ struct PicaCompositionAttribution {
     // occlusion.
     bool IsolatedLighting = false;
     PicaTemporalIdentity TemporalIdentity;
+    // Title-catalogued stationary prop: its rigid native actor geometry may
+    // be cached in static shadow layers instead of being redrawn as a dynamic
+    // caster in every frame. Not a promise that it never moves: a moved rigid
+    // caster changes its content version and refreshes what it covers. Only
+    // set together with NativeActorGeometry and a nonzero NativeActorIdentity.
+    bool StaticShadowCacheEligible = false;
 
     bool operator==(const PicaCompositionAttribution&) const = default;
 };

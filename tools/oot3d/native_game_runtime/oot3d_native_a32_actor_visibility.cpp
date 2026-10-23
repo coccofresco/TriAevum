@@ -8,6 +8,7 @@
 #include <bit>
 #include <cmath>
 #include <cstdio>
+#include <string>
 
 namespace Oot3dNativeGame {
 namespace {
@@ -41,6 +42,20 @@ constexpr std::array kObjMureNativeDistances{1600.0F, 1600.0F, 1000.0F, 1000.0F,
 
 // Both the culling walk and En_Wood02 keep play + 0x2000 in a register.
 constexpr uint32_t kPlayHighHalf = 0x2000U;
+
+// Obj_Mure3 (rupee groups) spawns its group inside 1150 (Wait 0x003B3218)
+// and retires it beyond 1450 (Active 0x003AF0B4), squared on the projected
+// X/Z; 3.0 divides those squares by its scale squared (0x003B3234 ->
+// 0x00605C10, 0x003AF170 -> 0x00605BCC). The literal-pool words, which
+// compiled code reads at every use, and their native values.
+constexpr std::array<std::pair<uint32_t, float>, 2> kObjMure3DistanceLiterals{{
+    {0x003AF234U, 1450.0F * 1450.0F}, {0x003B3274U, 1150.0F * 1150.0F}}};
+
+// SingleScreen 3.0 extends group spawns only while the scene holds fewer
+// than 165 actors (0x00605AC4: byte play + 0x2094, `cmp #0xa5; bhs native`).
+constexpr uint32_t kPlayStatePointer = 0x005043E0U;
+constexpr uint32_t kPlayActorCount = 0x2094U;
+constexpr uint8_t kGroupExtensionActorLimit = 165U;
 
 constexpr std::array kHookPcs{
     kEnKoFadeDistanceA, kEnKoFadeDistanceB, kActorDrawEntry, kAlphaByDistanceCompare,
@@ -107,10 +122,49 @@ bool ReadLightUsage(MemoryBus& memory, uint32_t arena, uint32_t& used) {
     if (arena == 0U || !memory.Read32(arena, &size) ||
         !memory.Read32(arena + 4U, &base) || !memory.Read32(arena + 8U, &head) ||
         !memory.Read32(arena + 12U, &tail) || size != 0x4000U ||
-        base != 0x005656A0U || head != base || tail < base || tail > base + size ||
-        ((base + size - tail) % 0x80U) != 0U) return false;
+        base != 0x005656A0U || head != base) return false;
+    constexpr uint32_t overflowTop = kActorLightOverflowBase + kActorLightOverflowSize;
+    // Past the arena the cursor runs inside the overflow region.
+    if (tail >= kActorLightOverflowBase && tail <= overflowTop &&
+        ((overflowTop - tail) % 0x80U) == 0U) {
+        used = kActorLightCapacity + (overflowTop - tail) / 0x80U;
+        return true;
+    }
+    if (tail < base || tail > base + size || ((base + size - tail) % 0x80U) != 0U) return false;
     used = (base + size - tail) / 0x80U;
     return true;
+}
+
+// The title never checks the arena: the record below its base would land in
+// the file-worker queue (#69/#74). With extended draw distance, move the
+// cursor into a separate overflow region instead, as 3.0 (0x005D11A0) keeps
+// every lit actor drawable. Native resets the cursor each frame.
+void RelieveLightArena(uint32_t arena, NativeActorVisibilityState& v) {
+    if (!v.ExtendedDrawDistance || v.HostMemory == nullptr || arena == 0U) return;
+    auto& host = *v.HostMemory;
+    uint32_t size = 0, base = 0, tail = 0;
+    if (!host.Read32(arena, &size) || !host.Read32(arena + 4U, &base) ||
+        !host.Read32(arena + 12U, &tail) || size != 0x4000U || base != 0x005656A0U)
+        return;
+    constexpr uint32_t overflowTop = kActorLightOverflowBase + kActorLightOverflowSize;
+    const bool arenaFull = tail >= base && tail < base + 0x80U;
+    const bool overflowFull = tail >= kActorLightOverflowBase && tail < kActorLightOverflowBase + 0x80U;
+    if (!arenaFull && !overflowFull) return;
+    if (!host.IsMapped(kActorLightOverflowBase, kActorLightOverflowSize)) {
+        std::string error;
+        if (host.IsMapped(kActorLightOverflowBase, 1U) ||
+            !host.MapRegion({"actor_light_overflow", kActorLightOverflowBase,
+                             kActorLightOverflowSize, true, false, {}}, &error)) {
+            if (!v.LightOverflowUnavailable)
+                std::fprintf(stderr, "[actor-visibility] light overflow region unavailable: %s\n",
+                             error.c_str());
+            v.LightOverflowUnavailable = true;
+            return;
+        }
+    }
+    (void)host.Write32(arena + 12U, overflowTop);
+    if (arenaFull) ++v.LightOverflowRelocations;
+    else ++v.LightOverflowWraps;
 }
 
 uint64_t ActorIdentity(uint32_t actor, uint16_t id) {
@@ -263,7 +317,9 @@ bool ApplyBudgetedCulling(GuestState& state, MemoryBus& memory, NativeActorVisib
     auto* entry = Reservation(v, state.r[4]);
     uint32_t used = 0U;
     if (!v.BudgetWalk || !v.BudgetValid || !entry || !entry->Reserved || !entry->Selected ||
-        !ReadLightUsage(memory, v.Arena, used) || !ActorLightBudgetAllows(used, v.RemainingLights)) {
+        !ReadLightUsage(memory, v.Arena, used) ||
+        !ActorLightBudgetAllows(used, v.RemainingLights,
+                                v.HostMemory != nullptr && !v.LightOverflowUnavailable)) {
         ++v.BudgetDenied;
         ++v.WalkDenied;
         return false;
@@ -308,7 +364,7 @@ void ApplyActorCulling(GuestState& state, MemoryBus& memory, NativeActorVisibili
         ? visibility.CullingVolume
         : PresentedVolume(memory, state.r[7] - kPlayHighHalf, visibility);
     if (visibility.Diagnostics && visibility.NativeCulled % 4096U == 1U)
-        std::fprintf(stderr, "[actor-visibility] presented=%.4f,%.4f visible=%llu culled=%llu extended=%llu budget_denied=%llu limited_walks=%llu invalid_walks=%llu lights=%u previous=%u peak=%u\n",
+        std::fprintf(stderr, "[actor-visibility] presented=%.4f,%.4f visible=%llu culled=%llu extended=%llu budget_denied=%llu limited_walks=%llu invalid_walks=%llu lights=%u previous=%u peak=%u overflow=%llu wraps=%llu\n",
                      volume.Horizontal, volume.Vertical,
                      static_cast<unsigned long long>(visibility.NativeVisible),
                      static_cast<unsigned long long>(visibility.NativeCulled),
@@ -316,7 +372,9 @@ void ApplyActorCulling(GuestState& state, MemoryBus& memory, NativeActorVisibili
                      static_cast<unsigned long long>(visibility.BudgetDenied),
                      static_cast<unsigned long long>(visibility.BudgetLimitedWalks),
                      static_cast<unsigned long long>(visibility.BudgetInvalidWalks),
-                     visibility.LightAllocations, visibility.PreviousLightAllocations, visibility.PeakLightAllocations);
+                     visibility.LightAllocations, visibility.PreviousLightAllocations, visibility.PeakLightAllocations,
+                     static_cast<unsigned long long>(visibility.LightOverflowRelocations),
+                     static_cast<unsigned long long>(visibility.LightOverflowWraps));
     if (!Extends(volume)) return;
     uint16_t id = 0U;
     ActorCullingSample sample;
@@ -341,14 +399,24 @@ void ApplyActorCulling(GuestState& state, MemoryBus& memory, NativeActorVisibili
     }
 }
 
-// Restore native Obj_Mure population bounds before either reader uses them.
-// Accept the old policy's 5x values, including states saved by that policy.
+// Group spawns (Obj_Mure, Obj_Mure2, En_Wood02) reach 5x only with Extended
+// draw distance and, as in 3.0, below 165 live actors. Their extra drawn
+// actors take light records past the native arena from the overflow region.
+bool GroupExtensionAllowed(MemoryBus& memory, const NativeActorVisibilityState& visibility) {
+    if (!visibility.ExtendedDrawDistance) return false;
+    uint32_t play = 0U;
+    uint8_t actors = 0U;
+    return memory.Read32(kPlayStatePointer, &play) && play != 0U &&
+           memory.Read8(play + kPlayActorCount, &actors) && actors < kGroupExtensionActorLimit;
+}
+
+// Writes the Obj_Mure distances its readers are about to use: native, or
+// SoH's 5x. Known values only, so another title revision is left alone.
 void AssertObjMureDistances(NativeActorVisibilityState& visibility) {
     if (visibility.HostMemory == nullptr) return;
     auto& memory = *visibility.HostMemory;
-    // Spawned groups persist beyond this frame and may bypass culling. Keep
-    // native population bounds; undo a known old extended value on restore.
-    const float scale = 1.0F;
+    const float scale =
+        GroupExtensionAllowed(memory, visibility) ? kExtendedActorDistanceMultiplier : 1.0F;
     const auto address = [](size_t i) {
         return i + 1U < kObjMureNativeDistances.size()
             ? kObjMureDistanceTable + static_cast<uint32_t>(i) * 4U
@@ -372,6 +440,30 @@ void AssertObjMureDistances(NativeActorVisibilityState& visibility) {
     }
 }
 
+// Obj_Mure3 follows the other group spawners: 5x (25x on the squared
+// literals) under the group gate, native otherwise.
+void AssertObjMure3Distances(NativeActorVisibilityState& visibility) {
+    if (visibility.HostMemory == nullptr) return;
+    auto& memory = *visibility.HostMemory;
+    const float scale = GroupExtensionAllowed(memory, visibility)
+        ? kExtendedActorDistanceMultiplier * kExtendedActorDistanceMultiplier : 1.0F;
+    for (const auto& [address, native] : kObjMure3DistanceLiterals) {
+        uint32_t bits = 0U;
+        const auto wanted = std::bit_cast<uint32_t>(native * scale);
+        if (!memory.Read32(address, &bits) || bits == wanted) continue;
+        if (bits != std::bit_cast<uint32_t>(native) &&
+            bits != std::bit_cast<uint32_t>(native * kExtendedActorDistanceMultiplier *
+                                            kExtendedActorDistanceMultiplier)) {
+            if (!visibility.ReportedUnknownConstants)
+                std::fprintf(stderr, "[actor-visibility] Obj_Mure3 distance %08x at %08x is not the EUR value\n",
+                             bits, address);
+            visibility.ReportedUnknownConstants = true;
+            return;
+        }
+        (void)memory.WriteHost<uint32_t>(address, wanted);
+    }
+}
+
 void ApplyObjMure2(GuestState& state, MemoryBus& memory, const NativeActorVisibilityState& visibility) {
     const uint32_t actor = state.r[0];
     float scalar = 0.0F;
@@ -384,10 +476,27 @@ void ApplyObjMure2(GuestState& state, MemoryBus& memory, const NativeActorVisibi
     // The update stores 1 or 4 before every action; anything else is ours.
     if (scalar != 1.0F && scalar != 4.0F) return;
     const auto volume = PresentedVolume(memory, state.r[1], visibility);
-    const float adjusted =
-        ObjMure2DistanceScalar(scalar, x, z, volume.Horizontal, false);
+    const float adjusted = ObjMure2DistanceScalar(scalar, x, z, volume.Horizontal,
+                                                  GroupExtensionAllowed(memory, visibility));
     if (adjusted != scalar && std::isfinite(adjusted))
         (void)memory.Write32(actor + kObjMure2DistanceScalar, std::bit_cast<uint32_t>(adjusted));
+}
+
+void ApplyEnWood02(GuestState& state, MemoryBus& memory, const NativeActorVisibilityState& visibility) {
+    // The title reciprocates the stored inverse W and multiplies by that, so
+    // its lateral test seldom passes and offspring follow the forward/3
+    // fallback; that is left native. Extended, offspring spawn in SoH's
+    // extended volume with the correct normalisation.
+    if (state.r[0] != 0U || !GroupExtensionAllowed(memory, visibility)) return;
+    const uint32_t spawner = state.r[4];
+    ActorCullingSample sample;
+    float inverseW = 0.0F;
+    if (!ReadCullingSample(memory, spawner, sample) || !ReadFloat(memory, spawner + kActorProjectedW, inverseW) ||
+        !(inverseW > 0.0F))
+        return;
+    sample.W = 1.0F / inverseW;
+    if (ActorInsideExtendedCullingVolume(sample, PresentedVolume(memory, state.r[11] - kPlayHighHalf, visibility)))
+        state.r[0] = 1U;
 }
 
 } // namespace
@@ -427,6 +536,7 @@ bool ApplyNativeActorVisibilityHook(
         ++visibility.LightEpoch;
         return true;
     case kActorLightAllocate: {
+        RelieveLightArena(state.r[1], visibility);
         uint32_t used = 0U;
         if (ReadLightUsage(memory, state.r[1], used)) {
             visibility.LightAllocations = used + 1U;
@@ -466,6 +576,7 @@ bool ApplyNativeActorVisibilityHook(
         // The culling matrix is fixed for the walk: resolve its view once.
         visibility.CullingVolume = PresentedVolume(memory, state.r[0], visibility);
         visibility.CullingVolumeValid = true;
+        AssertObjMure3Distances(visibility);
         BeginBudgetWalk(state, memory, visibility);
         return true;
     case kActorCullingResultHook:
@@ -480,7 +591,7 @@ bool ApplyNativeActorVisibilityHook(
         ApplyObjMure2(state, memory, visibility);
         return true;
     case kEnWood02SpawnZoneResult:
-        // Off was already a no-op. Group offspring remain at native range.
+        ApplyEnWood02(state, memory, visibility);
         return true;
     case kEnKoFadeDistanceA:
     case kEnKoFadeDistanceB:

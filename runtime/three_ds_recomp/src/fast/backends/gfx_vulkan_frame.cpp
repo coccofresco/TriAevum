@@ -666,6 +666,10 @@ void GfxRenderingAPIVulkan::StartFrame() {
         RetireNativePicaMaterial(material->second.Pending);
         material = mNativePicaMaterials.erase(material);
     }
+    // Retired into this slot, after its completed work was released: the
+    // images are destroyed only once this frame's own submission completed.
+    if (mNativePicaTexturesGeneration != mFrameAzaharTextureGeneration)
+        RetireNativePicaTexturesOfOtherGenerations(mFrameAzaharTextureGeneration);
     mCompletedNativePicaIds.insert(mCompletedNativePicaIds.end(),
                                    frame.NativePicaCompletionIds.begin(),
                                    frame.NativePicaCompletionIds.end());

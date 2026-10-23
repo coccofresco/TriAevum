@@ -4,6 +4,7 @@
 #include "oot3d_native_a32_memory.h"
 #include "oot3d_native_omote_ura_selector.h"
 #include "oot3d_top_screen_config.h"
+#include "oot3d_top_screen_dpad_picker.h"
 #include "oot3d_top_screen_items_hint.h"
 #include "oot3d_top_screen_mod_profile.h"
 #include "oot3d_top_screen_ocarina.h"
@@ -18,6 +19,8 @@
 #include <vector>
 
 namespace Oot3dNativeGame {
+
+class TopScreenWideItemsRuntime;
 
 inline constexpr std::size_t NativeUiSeamPhaseCount = 10U;
 inline constexpr std::uint32_t kTopScreenQuestMaterializedHook = 0x0042B884U;
@@ -105,6 +108,20 @@ public:
   void
   SetTopScreenInputFrame(const TopScreenExtendedInputFrame &input) noexcept;
   void SetTopScreenConfig(const TopScreenUiConfig &config) noexcept;
+  void SetTopScreenItemsShortcutSource(TopScreenWideItemsRuntime *source) noexcept {
+    mTopScreenItemsShortcuts = source;
+    mTopScreenDpadPickerCursor = {};
+    mTopScreenItemsShortcutCursor = {};
+  }
+  // Produced with BuildTopScreenPresentation(GameplayHud); consume in the same
+  // composition, using OcarinaPage alpha-only, post-filter TextureAlphaScale,
+  // and layer 37 before the layer-38 X/A glyph. Neither accessor advances time.
+  const TopScreenDpadPickerHoldCursor &TopScreenDpadPickerCursor() const noexcept {
+    return mTopScreenDpadPickerCursor;
+  }
+  const TopScreenDpadPickerHoldCursor &TopScreenItemsShortcutCursor() const noexcept {
+    return mTopScreenItemsShortcutCursor;
+  }
   bool ReadOcarinaGeometry(TopScreenOcarinaGeometry &geometry, std::string *error) {
     return ReadTopScreenOcarinaGeometry(mMemory, mTopScreenOcarina, &geometry, error);
   }
@@ -161,6 +178,8 @@ private:
   std::array<bool, oot3d::ui::kUiSubsystemCount> mObservedSubsystems{};
   std::optional<oot3d::ui::UiSubsystem> mLastObservedSubsystem;
   TopScreenPauseProjectionState mTopScreenPauseProjection;
+  // Captured at the Quest draw, cleared at the next submit.
+  std::vector<TopScreenQuestCopiedQuad> mTopScreenQuestBCopies;
   std::optional<TopScreenPauseEdgeGeometry> mTopScreenPauseEdgeGeometry;
   std::optional<TopScreenPauseEdgeGeometry>
       mTopScreenPausePageRedrawEdgeGeometry;
@@ -168,6 +187,9 @@ private:
   TopScreenExtendedInputFrame mTopScreenInput;
   TopScreenOcarinaBrowser mTopScreenOcarina;
   TopScreenItemsHintRuntimeState mTopScreenItemsHint;
+  TopScreenWideItemsRuntime *mTopScreenItemsShortcuts = nullptr;
+  TopScreenDpadPickerHoldCursor mTopScreenDpadPickerCursor;
+  TopScreenDpadPickerHoldCursor mTopScreenItemsShortcutCursor;
   TopScreenTouchCopyState mTopScreenTouchCopies;
   float mTopScreenViewAlpha = 1.0F;
   bool mVersionChoiceRevealRequired = false;

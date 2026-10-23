@@ -239,9 +239,94 @@ void TestOpenLastPage() {
 }
 } // namespace
 
+// Issue 80: 2.1.1 0x005D5BC0..0x005D5C70, SELECT opens Save/Quit in gameplay.
+void TestSelectSave() {
+  using namespace Oot3dNativeGame;
+  NativeA32Memory memory;
+  std::string error;
+  Require(memory.MapRegion({"select-save-test", 0x00300000, 0x00300000, true, false, {}}, &error),
+          "cannot map SELECT-save fixture");
+  TopScreenPauseTransactionRuntime runtime(memory);
+  constexpr std::uint32_t play = 0x00590000U;
+  constexpr std::uint32_t transitionPredicate = 0x0035B164U;
+  constexpr std::uint32_t pausePredicate = 0x002F43E8U;
+  constexpr std::uint32_t playPredicate = 0x00374BE8U;
+  oot3d::recomp::a32::ExecutionResult result;
+  std::uint32_t blocks = 0U, value = 0U;
+  auto state = CallerState();
+  const auto seed = [&] {
+    runtime.Reset();
+    state = CallerState();
+    // Bit 29 is set: it gates only the page open, not SELECT Save.
+    Require(memory.Write32(0x005043E0U, play) && memory.Write8(play + 0x100U, 3U) &&
+                memory.Write8(play + 0x101U, 2U) && memory.Write32(kControllerState, 2U) &&
+                memory.Write32(0x0050AF9CU, 0x20000000U) && memory.Write16(0x00588ED8U, 0U) &&
+                memory.Write32(kSceneControl, 7U) && memory.Write32(0x0050AF90U, 19U),
+            "cannot seed SELECT-save gates");
+  };
+  const auto predicate = [&](std::uint32_t entry, std::uint32_t returned) {
+    Require(CallsAndReturns(runtime, state, entry, entry == playPredicate ? play : 0U,
+                            entry == playPredicate ? 3U : 0U) &&
+                memory.Read32(kSceneControl, &value) && value == 7U,
+            "SELECT save called the wrong predicate or wrote before its gates");
+    state.r[0] = returned;
+  };
+
+  seed();
+  runtime.RequestSelectSave();
+  Require(runtime.NeedsExecution() && !runtime.Pending(), "SELECT save was not queued");
+  predicate(transitionPredicate, 1U);
+  predicate(pausePredicate, 0U);
+  predicate(playPredicate, 0U);
+  // Touch input enabled with (1, 1), unlike B-to-Save's (1, 0).
+  Require(CallsAndReturns(runtime, state, kSetTouchEnabled, 1U, 1U) &&
+              memory.Read32(kSceneControl, &value) && value == 1U &&
+              memory.Read32(kControllerState, &value) && value == 2U,
+          "SELECT save did not write the scene control before enabling touch");
+  state.r[0] = 0xFFFFFFFFU;  // A callee's result is not a gate.
+  Require(CallsAndReturns(runtime, state, kSystemMenuOpen, 0U, 0U) &&
+              memory.Read32(kControllerState, &value) && value == 0U &&
+              memory.Read32(0x0050AF90U, &value) && value == 0U,
+          "SELECT save did not reset the controller before opening Save/Quit");
+  Require(!runtime.Execute(state, &result, &blocks) && !runtime.NeedsExecution() &&
+              Same(state, CallerState()) && runtime.SelectSaves() == 1U &&
+              runtime.LastPageOpens() == 0U,
+          "SELECT save did not restore its caller once");
+
+  // A native gate that refuses leaves the game untouched.
+  seed();
+  runtime.RequestSelectSave();
+  predicate(transitionPredicate, 0U);
+  predicate(pausePredicate, 1U);
+  const auto retired = runtime.Retired();
+  Require(!runtime.Execute(state, &result, &blocks) && !runtime.NeedsExecution() &&
+              Same(state, CallerState()) && runtime.Retired() == retired + 1U &&
+              memory.Read32(kSceneControl, &value) && value == 7U,
+          "refused SELECT save wrote state");
+
+  // Outside gameplay (an open page) it is retired at delivery; START wins.
+  seed();
+  Require(memory.Write32(kControllerState, 12U), "open a page");
+  runtime.RequestSelectSave();
+  Require(!runtime.Execute(state, &result, &blocks) && !runtime.NeedsExecution() &&
+              runtime.Retired() == retired + 2U,
+          "SELECT save ran on an open page");
+  seed();
+  Require(memory.Write32(0x0050AF9CU, 0U), "clear the page-open bit 29");
+  runtime.RequestOpenLastPage(NativeA32TopScreenPage::Items);
+  runtime.RequestSelectSave();
+  predicate(transitionPredicate, 0U);
+  predicate(pausePredicate, 0U);
+  predicate(playPredicate, 0U);
+  Require(!runtime.Execute(state, &result, &blocks) && runtime.LastPageOpens() == 1U &&
+              runtime.SelectSaves() == 1U && !runtime.NeedsExecution(),
+          "SELECT save displaced a START open");
+}
+
 int main() {
   using namespace Oot3dNativeGame;
   TestOpenLastPage();
+  TestSelectSave();
   NativeA32Memory memory;
   std::string error;
   Require(memory.MapRegion({"pause-transaction-test", 0x00300000, 0x00300000, true, false, {}}, &error),

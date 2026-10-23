@@ -1,6 +1,7 @@
 #include "oot3d_native_pica_presentation_scheduler.h"
 
 #include "oot3d_native_pica_vulkan_bridge.h"
+#include "oot3d_static_shadow_actor_catalog.h"
 
 #include <chrono>
 #include <string_view>
@@ -182,6 +183,10 @@ bool Oot3dPicaPresentationScheduler::Execute(
             .NativeActorIdentity = draw.Composition.NativeActorIdentity,
             .IsolatedLighting = draw.Composition.IsolatedLighting,
             .TemporalIdentity = draw.Composition.TemporalIdentity,
+            .StaticShadowCacheEligible =
+                Oot3dNativeGame::StaticShadowCacheEligibleActor(
+                    draw.Composition.NativeActorGeometry,
+                    draw.Composition.NativeActorIdentity),
         },
     });
   }

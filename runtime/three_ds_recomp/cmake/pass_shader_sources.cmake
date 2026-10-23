@@ -38,6 +38,8 @@ function(triaevum_add_pass_shader_sources target)
         # The OOT3D adapter kernel that fills the pass inputs from the guides.
         "${runtime}/src/fast/oot3d/diffuse_gi_adapter_shader.cpp"
         "${runtime}/src/fast/renderer3ds/pica_surface_lighting.cpp"
+        # The interior room shells' shadow vertex shader.
+        "${runtime}/src/fast/renderer3ds/room_shadow_shell.cpp"
         "${runtime}/src/fast/renderer/shaderc_compiler.cpp"
         "${runtime}/src/fast/renderer/spirv_cache.cpp"
         "${runtime}/src/fast/renderer/cache_file.cpp"

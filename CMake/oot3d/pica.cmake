@@ -27,6 +27,7 @@ add_library(oot3d_native_pica_frontend STATIC EXCLUDE_FROM_ALL
     tools/oot3d/native_pica_frontend/oot3d_native_pica_frontend.cpp
     tools/oot3d/native_pica_frontend/oot3d_native_pica_proctex.cpp
     tools/oot3d/native_pica_frontend/oot3d_native_pica_program_descriptor.cpp
+    tools/oot3d/native_pica_frontend/oot3d_native_pica_raw_draw_record.cpp
     tools/oot3d/native_pica_frontend/oot3d_native_pica_shader_gen.cpp
     tools/oot3d/third_party/azahar_pica/video_core/shader/generator/glsl_shader_decompiler.cpp
 )
@@ -109,7 +110,56 @@ triaevum_add_spirv_pack(oot3d_native_pica_capture_inventory
 target_include_directories(oot3d_native_pica_capture_inventory PRIVATE tools/oot3d/native_game_runtime)
 target_link_libraries(oot3d_native_pica_capture_inventory PRIVATE
     oot3d_native_pica_frontend oot3d_native_pica_azahar_capture)
-foreach(_cache_target oot3d_native_pica_transferable_cache_tests oot3d_native_pica_cache_inventory oot3d_native_pica_capture_inventory)
+# Offline replay of recorded variant requests (issue #76): the canonical plan
+# of this build, then the renderer's real variant cache.
+set(_variant_runtime runtime/three_ds_recomp/src/fast)
+set(_variant_replay_sources
+    tools/oot3d/native_game_runtime/oot3d_native_pica_vulkan_plan.cpp
+    tools/oot3d/native_game_runtime/oot3d_native_pica_vulkan_bridge.cpp
+    ${_variant_runtime}/oot3d/pica_pipeline_manifest.cpp
+    ${_variant_runtime}/oot3d/pica_aot_shader_pack.cpp
+    ${_variant_runtime}/oot3d/pica_variant_request_record.cpp
+    ${_variant_runtime}/oot3d/graphics_settings.cpp
+    ${_variant_runtime}/oot3d/graphics_settings_persistence.cpp
+    ${_variant_runtime}/oot3d/graphics_capabilities.cpp
+    ${_variant_runtime}/oot3d/reflection_material_profile.cpp
+    ${_variant_runtime}/oot3d/upscaler_contract.cpp
+    ${_variant_runtime}/renderer3ds/pica_nri_shader_contract.cpp
+    ${_variant_runtime}/oot3d/pica_fragment_lighting.cpp
+    ${_variant_runtime}/renderer3ds/pica_pbr_seam_shader.cpp
+    ${_variant_runtime}/renderer3ds/pica_pbr_shading.cpp
+    ${_variant_runtime}/renderer3ds/pica_surface_lighting.cpp
+    ${_variant_runtime}/renderer3ds/point_shadow_map.cpp
+    ${_variant_runtime}/renderer3ds/pica_vertex_surface.cpp
+    ${_variant_runtime}/renderer3ds/virtual_shadow_map.cpp
+    ${_variant_runtime}/oot3d/directional_shadows.cpp
+    ${_variant_runtime}/oot3d/pica_directional_shadow_caster.cpp
+    ${_variant_runtime}/oot3d/pica_uber_effect_program.cpp
+    ${_variant_runtime}/oot3d/pica_directional_shadow_lighting.cpp
+    ${_variant_runtime}/oot3d/pica_directional_shadow_semantics.cpp
+    ${_variant_runtime}/oot3d/pica_reactive_mask.cpp
+    ${_variant_runtime}/oot3d/pica_reflection_material.cpp
+    ${_variant_runtime}/oot3d/pica_toon_shader.cpp
+    ${_variant_runtime}/oot3d/pica_shader_pipeline_cache.cpp
+    ${_variant_runtime}/oot3d/pica_rigid_motion.cpp
+    ${_variant_runtime}/oot3d/pica_shader_instrumentation.cpp)
+add_executable(oot3d_native_pica_variant_inventory EXCLUDE_FROM_ALL
+    tools/oot3d/native_pica_frontend/oot3d_native_pica_variant_inventory.cpp ${_variant_replay_sources})
+add_executable(oot3d_native_pica_variant_record_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_pica_frontend/oot3d_native_pica_variant_record_tests.cpp ${_variant_replay_sources})
+foreach(_variant_target oot3d_native_pica_variant_inventory oot3d_native_pica_variant_record_tests)
+    triaevum_add_spirv_pack(${_variant_target}
+        tools/oot3d/native_pica_frontend/oot3d_native_vertex_binaries.cpp
+        tools/oot3d/native_pica_frontend/oot3d_native_vertex.spvpack)
+    # The built-in caster family, which the runtime consults before the corpus.
+    triaevum_add_spirv_pack(${_variant_target}
+        runtime/three_ds_recomp/src/fast/oot3d/pica_caster_fragment_binaries.cpp
+        runtime/three_ds_recomp/src/fast/oot3d/pica_caster_fragment.spvpack)
+    target_include_directories(${_variant_target} PRIVATE tools/oot3d/native_game_runtime)
+    target_link_libraries(${_variant_target} PRIVATE oot3d_native_pica_frontend)
+endforeach()
+foreach(_cache_target oot3d_native_pica_transferable_cache_tests oot3d_native_pica_cache_inventory oot3d_native_pica_capture_inventory
+        oot3d_native_pica_variant_inventory oot3d_native_pica_variant_record_tests)
     target_compile_options(${_cache_target} PRIVATE "${WARNING_OVERRIDE}")
     if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
         target_compile_definitions(${_cache_target} PRIVATE NOMINMAX)

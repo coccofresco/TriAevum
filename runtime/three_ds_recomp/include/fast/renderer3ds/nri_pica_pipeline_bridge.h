@@ -164,6 +164,10 @@ struct NriPicaPipelineStatistics {
     uint64_t Created = 0;
     uint64_t OwnedReuses = 0;
     uint64_t CreationNanoseconds = 0;
+    // Creations the driver refused at least once, and those it then accepted
+    // as a whole pipeline after refusing the library parts.
+    uint64_t CreationFailures = 0;
+    uint64_t LibraryFallbacks = 0;
     // Owned pipelines created by a preparation thread, and draws that had to
     // run or wait for such a creation on the render thread.
     uint64_t BackgroundRequests = 0;

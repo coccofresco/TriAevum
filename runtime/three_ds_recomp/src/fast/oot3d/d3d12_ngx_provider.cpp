@@ -62,6 +62,10 @@ void NRI_CALL CaptureNriMessage(nri::Message messageType, const char* file, uint
     capture.LastError = detail.str();
 }
 
+// The failing call returns its result to the bridge, which reports it; NRI's
+// default would break into the debugger and end the game.
+void NRI_CALL ContinueAfterNriError(void*) {}
+
 std::string FormatHresult(HRESULT result) {
     std::ostringstream text;
     text << "HRESULT 0x" << std::hex << std::setw(8) << std::setfill('0') << static_cast<uint32_t>(result);
@@ -216,6 +220,7 @@ bool D3d12NgxProvider::Initialize(VkInstance instance, VkPhysicalDevice physical
     deviceDesc.queueFamilies = &queueFamily;
     deviceDesc.queueFamilyNum = 1;
     deviceDesc.callbackInterface.MessageCallback = &CaptureNriMessage;
+    deviceDesc.callbackInterface.AbortExecution = &ContinueAfterNriError;
     deviceDesc.callbackInterface.userArg = &mImpl->NriMessages;
     deviceDesc.enableMemoryZeroInitialization = true;
     // The bridge will explicitly own cross-API transitions. Legacy barriers

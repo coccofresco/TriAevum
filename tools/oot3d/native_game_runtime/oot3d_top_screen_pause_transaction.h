@@ -31,6 +31,10 @@ public:
   // gates; release before delivery must not lose a short press.
   void RequestOpenLastPage(NativeA32TopScreenPage page) noexcept;
   void RequestSystemOpen(const TopScreenPauseSystemOpenPlan &plan) noexcept;
+  // A gameplay SELECT edge with the Save action: 2.1.1 0x005D5BC0..0x005D5C70
+  // opens Save/Quit itself, because the source port disables the native route
+  // (0x0042EC2C). Delivery rechecks the same native gates as the page open.
+  void RequestSelectSave() noexcept;
   // Called once per host refresh. The native UI update runs at the title's
   // 30 or 20 Hz, so a request waits a few refreshes for it; one it never
   // reaches is dropped rather than carried into a later pause session.
@@ -47,12 +51,13 @@ public:
   std::uint64_t LastPageOpens() const noexcept { return mLastPageOpens; }
   std::uint64_t StartCloses() const noexcept { return mStartCloses; }
   std::uint64_t SystemOpens() const noexcept { return mSystemOpens; }
+  std::uint64_t SelectSaves() const noexcept { return mSelectSaves; }
   std::uint64_t Retired() const noexcept { return mRetired; }
   TopScreenPauseClosePage LastClosedPage() const noexcept { return mLastClosedPage; }
   TopScreenPauseClosePage LastSystemSourcePage() const noexcept { return mLastSystemSourcePage; }
 
 private:
-  enum class Request : std::uint8_t { None, StartClose, SystemOpen, OpenLastPage };
+  enum class Request : std::uint8_t { None, StartClose, SystemOpen, OpenLastPage, SelectSave };
   struct Step {
     bool Call = false;
     std::uint32_t Address = 0;
@@ -67,16 +72,20 @@ private:
   std::uint32_t mRequestAge = 0;
   TopScreenPauseSystemOpenPlan mSystemOpenPlan;
   NativeA32TopScreenPage mOpenPage = NativeA32TopScreenPage::None;
+  // A gated open (last page or SELECT Save): its three leading predicate
+  // calls can still retire it; the writes and calls after them cannot.
   bool mOpening = false;
+  bool mSelectSave = false;
   bool mNativeTransitionActive = false;
   std::uint32_t mOpenPlay = 0;
-  std::array<Step, 6> mSteps{};
+  std::array<Step, 8> mSteps{};
   std::size_t mStepCount = 0;
   std::size_t mNextStep = 0;
   oot3d::recomp::a32::GuestState mCallerState{};
   std::uint64_t mLastPageOpens = 0;
   std::uint64_t mStartCloses = 0;
   std::uint64_t mSystemOpens = 0;
+  std::uint64_t mSelectSaves = 0;
   std::uint64_t mRetired = 0;
   TopScreenPauseClosePage mLastClosedPage = TopScreenPauseClosePage::None;
   TopScreenPauseClosePage mLastSystemSourcePage = TopScreenPauseClosePage::None;

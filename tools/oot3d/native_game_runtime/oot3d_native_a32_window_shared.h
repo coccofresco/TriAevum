@@ -73,6 +73,9 @@
 #include "oot3d_top_screen_pause_transaction.h"
 #include "oot3d_top_screen_item_description_runtime.h"
 #include "oot3d_top_screen_wide_items_runtime.h"
+#include "oot3d_top_screen_gameplay_runtime.h"
+#include "oot3d_object_bank_extension.h"
+#include "oot3d_top_screen_rain_adapter.h"
 #include "oot3d_native_whole_aot_runtime.h"
 #ifdef OOT3D_NATIVE_DIRECT_AOT_PLUGIN
 #include "oot3d_native_direct_aot.h"
@@ -206,6 +209,9 @@ inline constexpr uint32_t kPauseTouchButtonsHeldDownTest = 0x0042E648U;
 inline constexpr uint32_t kPauseLowerScreenBlock = 0x0041DDC8U;
 inline constexpr uint32_t kPauseLowerScreenBlockEnd = 0x0041DEC8U;
 inline constexpr uint32_t kPauseDungeonMapCursorInput = 0x00442F38U;
+// PauseUi_Update `bne` past the pause scene dim; 2.1.1 and 3.0 make it a `b`.
+inline constexpr uint32_t kPauseSceneDimBranch = 0x0041EB40U;
+inline constexpr uint32_t kPauseSceneDimSkip = 0x0041EC10U;
 inline constexpr uint32_t kPauseUiNativeUpdateCall = 0x0041EAE0U;
 inline constexpr uint32_t kPauseProjectionPrepareCall = 0x0041EB28U;
 inline constexpr uint32_t kPauseProjectionPrepare = 0x002FBC50U;
@@ -519,6 +525,7 @@ struct NativeWidescreenProjectionState {
   Oot3dNativeGame::TopScreenPauseTransactionRuntime *PauseTransaction = nullptr;
   Oot3dNativeGame::TopScreenSystemPageRuntime *SystemPage = nullptr;
   Oot3dNativeGame::TopScreenItemDescriptionRuntime *ItemDescription = nullptr;
+  const Oot3dNativeGame::TopScreenWideItemsRuntime *WideItems = nullptr;
   Oot3dNativeGame::Oot3dPicaCompositionDomain *PicaCompositionDomain =
       nullptr;
   Oot3dNativeGame::Oot3dNativePicaCompositionTracker
@@ -533,6 +540,13 @@ struct NativeWidescreenProjectionState {
   Oot3dNativeGame::TopScreenExtendedInputFrame *TopScreenInput = nullptr;
   Oot3dNativeGame::TopScreenInputCadence *TopScreenInputClock = nullptr;
   const Oot3dNativeGame::TopScreenItemDispatchRuntime *TopScreenItems = nullptr;
+  const Oot3dNativeGame::TopScreenGameplayRuntime *TopScreenGameplay = nullptr;
+  // Extended draw distance object slots: their hooks leave compiled code
+  // only while the extension is active (ObjectBankExtension::ShouldObserve).
+  const Oot3dNativeGame::ObjectBankExtension *ObjectBank = nullptr;
+  // SingleScreen 3.0 rain: observed only while its option or a weather draw
+  // is active (TopScreenRainAdapter::ShouldObserve).
+  const Oot3dNativeGame::TopScreenRainAdapter *Rain = nullptr;
   std::span<const uint32_t> WholeAotObservableExitPcs;
   // Set to the pc of each observable exit this policy raises (see
   // NativeCandidateDispatchState::ObservedExitPc).
@@ -617,6 +631,11 @@ struct NativeCandidateDispatchState {
   Oot3dNativeGame::TopScreenSystemPageRuntime *SystemPage = nullptr;
   Oot3dNativeGame::TopScreenItemDescriptionRuntime *ItemDescription = nullptr;
   Oot3dNativeGame::TopScreenWideItemsRuntime *WideItems = nullptr;
+  Oot3dNativeGame::TopScreenGameplayRuntime *Gameplay = nullptr;
+  // Extended draw distance object slots, in every UI profile, ahead of the
+  // TopScreen source port.
+  Oot3dNativeGame::ObjectBankExtension *ObjectBank = nullptr;
+  Oot3dNativeGame::TopScreenRainAdapter *Rain = nullptr;
   // Sorted TopScreen entries the product hook owns (product builds only).
   std::vector<uint32_t> ProductTopScreenBlocks;
   uint64_t TopScreenAimProjectileCycleAttempts = 0U;

@@ -277,6 +277,9 @@ NativeA32WindowSession::SaveState(const std::filesystem::path &path, bool withSe
   if (itemDescriptionStorage->Pending()) return SaveStateOutcome::Deferred;
   if (Oot3dNativeGame::NativeActorVisibilityHasPendingRestore(widescreenProjection.ActorVisibility))
     return SaveStateOutcome::Deferred;
+  if (objectBankStorage->Pending()) return SaveStateOutcome::Deferred;
+  // The temporary rain count and the outer weather frame are host-held.
+  if (rainStorage->Pending()) return SaveStateOutcome::Deferred;
   const auto started = std::chrono::steady_clock::now();
   Oot3dNativeGame::NativeA32SavestateRuntimeState runtime;
   runtime.FrameCount = frameCount;
@@ -481,6 +484,11 @@ bool NativeA32WindowSession::LoadState(const std::filesystem::path &path,
   systemPageStorage->Reset();
   itemDescriptionStorage->Reset();
   wideItemsStorage->Reset();
+  gameplayStorage->Reset();
+  // Saves wait for an in-flight native load or free, so the loaded memory
+  // (its extra-slot page included) is the whole object bank state.
+  objectBankStorage->Reset();
+  rainStorage->Reset();
   uiLifecycleBridge.SetTopScreenConfig(activeTopScreenConfig);
   widescreenProjection.TopScreenPauseDrawRouting = {};
   widescreenProjection.TopScreenPausePageRedraw = {};

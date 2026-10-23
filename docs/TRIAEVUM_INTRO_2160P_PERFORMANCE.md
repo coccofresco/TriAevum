@@ -166,6 +166,46 @@ canonical pass stays at 0.75 ms of GPU per presented frame (canonical
 shaders never wrote the guides; only their storage and clears went), frame
 p95 32.0 -> 30.3-30.5 ms.
 
+## Water reflection searched where no water could be (2026-10-18)
+
+Product Enhanced settings (Reflections off, water reflections on) at
+3840x2160 on the RTX 3060, Kokiri Forest gameplay: 27.1 ms of GPU per presented
+frame (37 fps uncapped), of which the water-only Hi-Z reflection took 10.9 ms
+(turning it off: 16.2 ms, with a bit-identical capture) in a view with no
+water on screen. The pass runs when the frame drew any water
+(`mReflectableWaterFrame`); its two full-screen dispatches then search the
+drawn water's map per pixel (up to 64 samples and a refinement, twice) for
+the village pond, which lies under the whole scene but out of sight.
+
+- **Frame-level rejection** (`HiZWaterPossiblyInView`, planned before the
+  display graph): no reflection when every gameplay body (its footprint at its
+  surface height, unbounded by the far plane: the body search has none) and the
+  drawn water's extent (`PicaWaterMap::ExtentMinimumXZ/MaximumXZ`, the cells
+  holding water, at its height range, within the far plane) lies entirely
+  beyond one plane of the view pyramid built from the trace's own projection.
+  Hi-Z goes with it. Kokiri's pond spans the village, so this does not trigger
+  there; it does wherever the water is behind the camera.
+- **Per-pixel rejection** (`hiz_water_surface`): the map search skips, without
+  a fetch, the samples outside the water cells' bounds (a texel wider) and
+  stops after the last one inside; `above` is kept as the search would leave
+  it, so the sample positions and the six-step refinement are unchanged.
+  Judging each sample by its cell index instead (Codex's reference) was
+  exact but slower, 21.5 ms: 64 index computations per pixel cost more than
+  the fetches they save.
+
+Kokiri: 27.1 -> 18.0-18.5 ms (54-55 fps). Captures differ from the baseline
+at 150-195 scattered pixels (at most 9/255), the same set that differs
+between two runs of the unchanged shader (153-178): pixels the water search
+classifies as water, whose wave phase follows the wall clock; with water
+reflections off, captures are bit-identical run to run. Intro: 19.1 -> 18.6
+ms; its reflection windows 2.1-6.2 -> 0.5-2.2 ms (water really on screen).
+The remaining frame is the native passes (5-8 ms), MXAO (3-4), the canonical
+frame (2-2.5) and grass (1.7-2.7): 60 fps at 4K without upscaling needs
+those. Tests: `pica_water_map_tests` (extent), `hiz_water_view_tests`
+(pyramid), `oot3d_graphics_foundation_tests`; the pass pack regenerated
+(`build_pass_artifacts --check`). `reflection_weight_gpu_tests` fails before
+and after: its fixture binds no water uniform (bindings 7-9) to the filter.
+
 ## Reproduce
 
 Scripts are private (`I:/_triaevum_work/perf-levers/tmp/intro-fps`); the

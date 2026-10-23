@@ -210,13 +210,18 @@ void GraphicsSettingsPanel::Draw() {
     DrawPresentationStatus();
     ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.48F);
     DrawPresetSelector();
-    // Application tabs: the Lighting group joins the built-in Lighting tab;
-    // every other group (or ungrouped tab) is a top-level tab, in the order
-    // it was first installed.
+    // Application tabs: the Display and Lighting groups join the built-in
+    // tabs of those names; every other group (or ungrouped tab) is a
+    // top-level tab, in the order it was first installed.
+    std::vector<std::shared_ptr<GraphicsSettingsPanelTab>> displayTabs;
     std::vector<std::shared_ptr<GraphicsSettingsPanelTab>> lightingTabs;
     std::vector<std::pair<std::string, std::vector<std::shared_ptr<GraphicsSettingsPanelTab>>>> groups;
     for (const auto& tab : SnapshotPanelTabs()) {
         const char* group = tab->Group();
+        if (group != nullptr && std::string_view(group) == kDisplaySettingsGroup) {
+            displayTabs.push_back(tab);
+            continue;
+        }
         if (group != nullptr && std::string_view(group) == kLightingSettingsGroup) {
             lightingTabs.push_back(tab);
             continue;
@@ -237,9 +242,13 @@ void GraphicsSettingsPanel::Draw() {
     };
     if (ImGui::BeginTabBar("##Oot3dSettingsTabs", ImGuiTabBarFlags_FittingPolicyScroll)) {
         if (ImGui::BeginTabItem("Display")) {
-            DrawSettingsPage("##DisplayContent", {&GraphicsSettingsPanel::DrawDisplaySettings,
-                                                  &GraphicsSettingsPanel::DrawAntialiasingSettings,
-                                                  &GraphicsSettingsPanel::DrawMotionSettings});
+            // The renderer's sections, then the application's below them.
+            ImGui::BeginChild("##DisplayContent");
+            DrawSettingsSections({&GraphicsSettingsPanel::DrawDisplaySettings,
+                                  &GraphicsSettingsPanel::DrawAntialiasingSettings,
+                                  &GraphicsSettingsPanel::DrawMotionSettings});
+            for (const auto& tab : displayTabs) drawApplicationTab(tab);
+            ImGui::EndChild();
             ImGui::EndTabItem();
         }
         if (ImGui::BeginTabItem("Lighting")) {

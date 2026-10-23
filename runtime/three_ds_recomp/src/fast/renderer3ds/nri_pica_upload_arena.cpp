@@ -5,13 +5,34 @@
 #include <limits>
 
 namespace Fast::Renderer3ds {
+namespace {
+
+// Buffers span whole multiples of the largest nonCoherentAtomSize Vulkan
+// permits, so a whole-buffer flush is always a valid range.
+constexpr uint64_t kFlushAtom = 256U;
+
+uint64_t FlushableSize(uint64_t size) {
+    return (size + kFlushAtom - 1U) / kFlushAtom * kFlushAtom;
+}
+
+// The mappings are persistent: host writes reach the GPU only after a flush
+// when NRI placed a buffer in non-coherent memory. NRI's Unmap flushes the
+// last mapped range there and does nothing on coherent memory.
+void Publish(nri::CoreInterface& core, nri::Buffer& buffer, uint64_t size) {
+    core.MapBuffer(buffer, 0, FlushableSize(size));
+    core.UnmapBuffer(buffer);
+}
+
+} // namespace
 
 NriPicaUploadArena::~NriPicaUploadArena() { Shutdown(); }
 
 bool NriPicaUploadArena::Configure(
     nri::CoreInterface& core, nri::Device& device,
     uint64_t uniformSize, uint64_t vertexSize) {
-    if (uniformSize == 0U || vertexSize == 0U)
+    if (uniformSize == 0U || vertexSize == 0U ||
+        uniformSize > std::numeric_limits<uint64_t>::max() - kFlushAtom ||
+        vertexSize > std::numeric_limits<uint64_t>::max() - kFlushAtom)
         return false;
     if (Matches(uniformSize, vertexSize))
         return true;
@@ -19,7 +40,7 @@ bool NriPicaUploadArena::Configure(
     Shutdown();
     mCore = &core;
     nri::BufferDesc uniform{};
-    uniform.size = uniformSize;
+    uniform.size = FlushableSize(uniformSize);
     uniform.usage = nri::BufferUsageBits::CONSTANT_BUFFER;
     if (core.CreateCommittedBuffer(
             device, nri::MemoryLocation::HOST_UPLOAD, 0.0F,
@@ -35,7 +56,7 @@ bool NriPicaUploadArena::Configure(
     }
 
     nri::BufferDesc vertex{};
-    vertex.size = vertexSize;
+    vertex.size = FlushableSize(vertexSize);
     vertex.usage = nri::BufferUsageBits::VERTEX_BUFFER |
                    nri::BufferUsageBits::INDEX_BUFFER;
     if (core.CreateCommittedBuffer(
@@ -82,6 +103,8 @@ bool NriPicaUploadArena::Copy(
     if (vertexBytes >
         std::numeric_limits<uint64_t>::max() - uniformBytes)
         return false;
+    Publish(*mCore, *mUniformBuffer, mUniformSize);
+    Publish(*mCore, *mVertexBuffer, mVertexSize);
     copiedBytes = uniformBytes + vertexBytes;
     return true;
 }

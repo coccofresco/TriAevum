@@ -5,6 +5,8 @@
 #include "fast/renderer3ds/pica_surface_emission.h"
 #include "fast/renderer3ds/pica_scene_light_continuity.h"
 #include "fast/renderer3ds/virtual_shadow_keyframes.h"
+#include "fast/renderer3ds/shadow_caster_stability_trace.h"
+#include "fast/renderer3ds/pica_factored_interpolation.h"
 #include "fast/renderer3ds/pica_geometry_guide.h"
 #include "fast/oot3d/pica_directional_shadow_lighting.h"
 #include "oot3d/renderer/ui_presentation_layout.h"
@@ -811,6 +813,60 @@ TEST(Renderer3dsShadowGeometry, BoundsFixedSkinnedInputsInCapturedWorldSpace) {
     // Native skinning restores homogeneous W after blending; camera
     // translation must not be multiplied by the sum of bone weights.
     data[3] = {0.25F, 0.25F, 0, 0};
+    EXPECT_EQ(first.VersionState, VirtualShadowCasterVersionState::Skinned);
+    EXPECT_EQ(first.ContentVersion, 0U);
+    {
+        // Without skinning: rigid with a geometry version, never versioned
+        // without one.
+        PicaShadowCasterCache rigidCache, uncachedCache;
+        const auto rigid = BuildPicaShadowCaster(geometry, hooks, 0, bytes, viewToWorld, 1, rigidCache);
+        const auto uncached = BuildPicaShadowCaster(geometry, hooks, 0, bytes, viewToWorld, 0, uncachedCache);
+        ASSERT_TRUE(rigid.WorldBounds.Available);
+        EXPECT_EQ(rigid.ContentVersion != 0U, rigid.VersionState == VirtualShadowCasterVersionState::Rigid);
+        ASSERT_EQ(rigid.VersionState, VirtualShadowCasterVersionState::Rigid);
+        EXPECT_EQ(uncached.ContentVersion, 0U);
+        EXPECT_TRUE(uncached.VersionState == VirtualShadowCasterVersionState::Uncacheable ||
+                    uncached.VersionState == VirtualShadowCasterVersionState::NonHomogeneous);
+        if (rigid.VersionState == VirtualShadowCasterVersionState::Rigid) {
+            // A cache hit keeps the state.
+            const auto again = BuildPicaShadowCaster(geometry, hooks, 0, bytes, viewToWorld, 1, rigidCache);
+            EXPECT_EQ(again.ContentVersion, rigid.ContentVersion);
+            EXPECT_EQ(again.VersionState, VirtualShadowCasterVersionState::Rigid);
+            // An instance anchor absorbs sub-step roundoff of a still caster,
+            // and a real move starts a new revision that never aliases the
+            // first one, even back at the original pose.
+            PicaShadowCasterCache anchorCache;
+            PicaShadowCasterAnchor anchor;
+            // The world translation is a whole number of 1/64 cells: start
+            // 0.37 cell in, then move 0.26 cell across the cell's rounding
+            // edge, within the half-step radius.
+            auto jittered = viewToWorld;
+            jittered[12] += 0.37F / 64.0F;
+            const auto anchored = BuildPicaShadowCaster(geometry, hooks, 0, bytes, jittered, 1, anchorCache, &anchor);
+            ASSERT_TRUE(anchor.Valid);
+            jittered[12] += 0.26F / 64.0F;
+            const auto still = BuildPicaShadowCaster(geometry, hooks, 0, bytes, jittered, 1, anchorCache, &anchor);
+            EXPECT_NE(still.PoseVersion, anchored.PoseVersion);
+            EXPECT_EQ(still.ContentVersion, anchored.ContentVersion);
+            EXPECT_EQ(still.WorldBounds.Minimum, anchored.WorldBounds.Minimum);
+            // Without the anchor the same jitter changes the version.
+            PicaShadowCasterCache plainCache;
+            EXPECT_NE(BuildPicaShadowCaster(geometry, hooks, 0, bytes, jittered, 1, plainCache).ContentVersion,
+                      BuildPicaShadowCaster(geometry, hooks, 0, bytes, viewToWorld, 1, plainCache).ContentVersion);
+            jittered[12] += 0.05F;
+            const auto moved = BuildPicaShadowCaster(geometry, hooks, 0, bytes, jittered, 1, anchorCache, &anchor);
+            EXPECT_NE(moved.ContentVersion, anchored.ContentVersion);
+            auto original = viewToWorld;
+            original[12] += 0.37F / 64.0F;
+            const auto back = BuildPicaShadowCaster(geometry, hooks, 0, bytes, original, 1, anchorCache, &anchor);
+            EXPECT_NE(back.ContentVersion, anchored.ContentVersion);
+            EXPECT_NE(back.ContentVersion, moved.ContentVersion);
+            EXPECT_EQ(back.PoseVersion, anchored.PoseVersion);
+            // Another geometry version never reuses the anchor.
+            const auto other = BuildPicaShadowCaster(geometry, hooks, 0, bytes, viewToWorld, 2, anchorCache, &anchor);
+            EXPECT_NE(other.ContentVersion, back.ContentVersion);
+        }
+    }
     const auto partialWeights = BuildPicaShadowCaster(geometry, hooks, 3, bytes, viewToWorld, 1, cache);
     ASSERT_TRUE(partialWeights.WorldBounds.Available);
     EXPECT_LE(partialWeights.WorldBounds.Minimum[0], -94);
@@ -7234,12 +7290,186 @@ TEST(Renderer3dsVirtualShadows, ConstructsStaticPagesWithinBudgetBeforeDisplay) 
     EXPECT_EQ(cache.Statistics().StaticUpdated, 0U);
 }
 
+TEST(Renderer3dsVirtualShadows, StationaryOwnerCastersLiveInTheStaticLayerAndRefreshWhenTheyChange) {
+    // A catalogued stationary prop: an owned, rigid, versioned caster that is
+    // not dynamic. It is drawn into the static layer, reused while its
+    // version holds, and refreshes the static pages it covers when it moves
+    // or disappears; a dynamic owner (the player) never enters the static
+    // layer.
+    using namespace Fast::Renderer3ds;
+    const auto layout = BuildVirtualShadowLayout({0.25F, 0.25F, 0}, {0, 0, 1}, 4096, 65536);
+    const VirtualShadowCaster ground{{{-3000, -3000, -10}, {3000, 3000, 10}, true}, 1};
+    VirtualShadowCaster prop{{{20, 20, 0}, {40, 40, 80}, true}, 0x51, false, (uint64_t{0x77} << 32) | 0x1000U,
+                             VirtualShadowCasterVersionState::Rigid};
+    const VirtualShadowCaster player{{{-40, -40, 0}, {-20, -20, 60}, true}, 0, true, 0x1100U,
+                                     VirtualShadowCasterVersionState::Skinned};
+    VirtualShadowMapCache cache;
+    uint64_t frame = 1;
+    const auto prepare = [&](std::span<const VirtualShadowCaster> casters) {
+        cache.Prepare(layout, casters, frame++);
+        uint32_t staticWithProp = 0, dynamicWithPlayer = 0, staticWithPlayer = 0;
+        for (const auto& page : cache.Updates()) {
+            for (const auto index : cache.StaticCasters(page)) {
+                staticWithProp += casters[index].OwnerIdentity == prop.OwnerIdentity ? 1U : 0U;
+                staticWithPlayer += casters[index].OwnerIdentity == player.OwnerIdentity ? 1U : 0U;
+            }
+            for (const auto index : cache.DynamicCasters(page))
+                dynamicWithPlayer += casters[index].OwnerIdentity == player.OwnerIdentity ? 1U : 0U;
+        }
+        EXPECT_EQ(staticWithPlayer, 0U);
+        const auto statistics = cache.Statistics();
+        cache.Commit();
+        return std::tuple(statistics, staticWithProp, dynamicWithPlayer);
+    };
+    std::array<VirtualShadowCaster, 3> casters{ground, prop, player};
+    auto [first, propPages, playerPages] = prepare(casters);
+    EXPECT_GT(propPages, 0U);
+    EXPECT_GT(playerPages, 0U);
+    // Unchanged: the prop's static pages are reused, only the player's
+    // pages are composed again.
+    auto [steady, steadyProp, steadyPlayer] = prepare(casters);
+    EXPECT_EQ(steady.StaticUpdated, 0U);
+    EXPECT_EQ(steadyProp, 0U);
+    EXPECT_GT(steadyPlayer, 0U);
+    // Moved (a new version, the same bounds): its static pages refresh.
+    casters[1].ContentVersion = 0x52;
+    auto [moved, movedProp, movedPlayer] = prepare(casters);
+    EXPECT_EQ(moved.StaticUpdated, propPages);
+    EXPECT_EQ(movedProp, propPages);
+    // Moved away: the old and the new pages refresh.
+    casters[1].WorldBounds = {{220, 220, 0}, {240, 240, 80}, true};
+    casters[1].ContentVersion = 0x53;
+    auto [away, awayProp, awayPlayer] = prepare(casters);
+    EXPECT_GE(away.StaticUpdated, propPages);
+    EXPECT_GT(awayProp, 0U);
+    // Gone: the pages it covered refresh without it.
+    const std::array<VirtualShadowCaster, 2> without{ground, player};
+    auto [gone, goneProp, gonePlayer] = prepare(without);
+    EXPECT_GE(gone.StaticUpdated, awayProp);
+    EXPECT_EQ(goneProp, 0U);
+    auto [after, afterProp, afterPlayer] = prepare(without);
+    EXPECT_EQ(after.StaticUpdated, 0U);
+}
+
+TEST(Renderer3dsFactoredInterpolation, RigidCameraKeepsTheWorldPoseOfAFactoredModelView) {
+    // A still object far from the origin seen by a turning camera. Its model-
+    // view is sampled as a factored rigid motion; the camera sampled the same
+    // way gives back its world pose, a linearly sampled camera does not.
+    using Fast::Oot3d::DirectionalShadowMatrix;
+    const auto rotationY = [](double degrees, double scale, double x, double y, double z) {
+        const double r = degrees * std::numbers::pi / 180.0;
+        DirectionalShadowMatrix m{};
+        m[0] = float(scale * std::cos(r)); m[2] = float(-scale * std::sin(r));
+        m[5] = float(scale);
+        m[8] = float(scale * std::sin(r)); m[10] = float(scale * std::cos(r));
+        m[12] = float(x); m[13] = float(y); m[14] = float(z); m[15] = 1.0F;
+        return m;
+    };
+    const auto model = rotationY(30.0, 0.8, 5000.0, 120.0, -3000.0);
+    const auto before = rotationY(10.0, 1.0, -4000.0, -100.0, 2500.0);
+    const auto after = rotationY(12.0, 1.0, -4010.0, -100.0, 2520.0);
+    const auto rows = [](const DirectionalShadowMatrix& m) {
+        std::array<std::array<float, 4>, 96> uniforms{};
+        for (size_t i = 0; i < 3; ++i) for (size_t j = 0; j < 4; ++j) uniforms[i][j] = m[j * 4 + i];
+        return uniforms;
+    };
+    const auto mv0 = rows(Fast::Oot3d::MultiplyDirectionalShadowMatrices(before, model));
+    const auto mv1 = rows(Fast::Oot3d::MultiplyDirectionalShadowMatrices(after, model));
+    auto sampledRows = mv1;
+    ASSERT_TRUE(Fast::Renderer3ds::InterpolatePicaFactoredUniformGroup(mv0, mv1, {0U, 1U}, 1U, 0.5F, sampledRows));
+    DirectionalShadowMatrix modelView{};
+    for (size_t i = 0; i < 3; ++i) for (size_t j = 0; j < 4; ++j) modelView[j * 4 + i] = sampledRows[i][j];
+    modelView[15] = 1.0F;
+    const auto worldError = [&](const DirectionalShadowMatrix& camera) {
+        DirectionalShadowMatrix inverse{};
+        EXPECT_TRUE(Fast::Oot3d::InvertDirectionalShadowMatrix(camera, inverse));
+        const auto world = Fast::Oot3d::MultiplyDirectionalShadowMatrices(inverse, modelView);
+        double error = 0.0;
+        for (size_t index = 0; index < 16; ++index)
+            error = std::max(error, std::abs(double(world[index]) - double(model[index])));
+        return error;
+    };
+    DirectionalShadowMatrix rigid{};
+    ASSERT_TRUE(Fast::Renderer3ds::InterpolatePicaRigidCameraMatrix(before, after, 0.5F, rigid));
+    EXPECT_LT(worldError(rigid), 0.01);
+    DirectionalShadowMatrix linear{};
+    for (size_t index = 0; index < 16; ++index) linear[index] = 0.5F * (before[index] + after[index]);
+    EXPECT_GT(worldError(linear), 0.1);
+    // Endpoints copy exactly; a projective matrix is refused.
+    DirectionalShadowMatrix endpoint{};
+    ASSERT_TRUE(Fast::Renderer3ds::InterpolatePicaRigidCameraMatrix(before, after, 1.0F, endpoint));
+    EXPECT_EQ(endpoint, after);
+    auto projective = after;
+    projective[11] = -1.0F;
+    EXPECT_FALSE(Fast::Renderer3ds::InterpolatePicaRigidCameraMatrix(before, projective, 0.5F, endpoint));
+}
+
+TEST(Renderer3dsShadowCasterStabilityTrace, CountsConsecutiveUnchangedObservationsPerOwnerLifetime) {
+    using namespace Fast::Renderer3ds;
+    using State = VirtualShadowCasterVersionState;
+    ShadowCasterStabilityTrace trace(2U, 4U);
+    std::vector<std::string> lines;
+    const uint64_t tree = (uint64_t{0x77} << 32) | 0x2000U, sign = (uint64_t{0x141} << 32) | 0x3000U;
+    const auto sample = [](uint64_t owner, uint64_t lifetime, uint64_t part, uint64_t version, State state) {
+        // The pose follows the version: a move, not a material change.
+        return ShadowCasterTraceSample{owner, lifetime, part, version, 7, version, state, true, false};
+    };
+    // Executions 1..8: the tree keeps two parts unchanged; the sign moves at
+    // execution 6 and is absent at execution 7 (a gap).
+    for (uint64_t execution = 1; execution <= 8; ++execution) {
+        std::vector<ShadowCasterTraceSample> samples{sample(tree, 5, 1, 0x10, State::Rigid),
+                                                     sample(tree, 5, 2, 0x11, State::Rigid)};
+        if (execution != 7)
+            samples.push_back(sample(sign, 9, 1, execution >= 6 ? 0x21 : 0x20, State::Rigid));
+        if (execution == 8)
+            samples.push_back(sample(sign, 9, 3, 0, State::Skinned));
+        trace.Observe(0xabc, 100 + execution, 1000 + execution, samples, lines);
+    }
+    ASSERT_FALSE(lines.empty());
+    EXPECT_EQ(lines.front(), "[shadow-caster-trace] v=1 warmup=2 interval=4 clock=unix_ms");
+    trace.Flush(lines);
+    const auto last = [&](uint64_t owner) {
+        char needle[64];
+        std::snprintf(needle, sizeof(needle), "owner=%016llx", static_cast<unsigned long long>(owner));
+        std::string found;
+        for (const auto& line : lines)
+            if (line.find(needle) != std::string::npos) found = line;
+        return found;
+    };
+    const auto treeLine = last(tree);
+    // Pairs start once the earlier observation is two executions old: 3->4 .. 7->8.
+    EXPECT_NE(treeLine.find("actor=0077 lifetime=5"), std::string::npos) << treeLine;
+    EXPECT_NE(treeLine.find("observed=8 pairs=5 unchanged=5 membership_changes=0 version_changes=0"),
+              std::string::npos) << treeLine;
+    EXPECT_NE(treeLine.find("parts_min=2 parts_max=2 rigid=16"), std::string::npos) << treeLine;
+    const auto signLine = last(sign);
+    // Pairs 3->4, 4->5 unchanged, 5->6 a version change; 6->8 spans the gap
+    // and is not compared.
+    EXPECT_NE(signLine.find("observed=7 pairs=3 unchanged=2 membership_changes=0 version_changes=1"),
+              std::string::npos) << signLine;
+    EXPECT_NE(signLine.find("first_change_frame=106 first_change_t=1006"), std::string::npos) << signLine;
+    EXPECT_NE(signLine.find("geometry_changes=0 pose_changes=1 material_changes=0"), std::string::npos) << signLine;
+    EXPECT_NE(signLine.find("parts_min=1 parts_max=2 rigid=7 uncacheable=0 skinned=1"), std::string::npos)
+        << signLine;
+    // A new lifetime of the same owner address is a new record.
+    lines.clear();
+    trace.Observe(0xabc, 109, 1009, std::vector{sample(sign, 10, 1, 0x20, State::Rigid)}, lines);
+    trace.Flush(lines);
+    bool newLifetime = false;
+    for (const auto& line : lines)
+        newLifetime |= line.find("lifetime=10 ") != std::string::npos && line.find("observed=1 ") != std::string::npos;
+    EXPECT_TRUE(newLifetime);
+}
+
 namespace {
 // Drives the keyframe scheduler with a light that turns about the Z axis and
 // a construction of `pages` static pages.
 struct KeyframeSimulation {
     Fast::Renderer3ds::VirtualShadowKeyframes Keyframes;
     uint32_t Pages = 220;
+    // Built static pages whose casters change again in every frame: they are
+    // pending again before the budget is spent.
+    uint32_t Churn = 0;
     uint32_t Built = 0;
     uint64_t Epoch = 1;
     double Angle = 0.0;
@@ -7258,8 +7488,13 @@ struct KeyframeSimulation {
         Frame = Keyframes.Begin(Direction(Angle), Epoch, 7, Pages);
         if (Frame.ConstructionStarted || Frame.Cut) Built = 0;
         if (Frame.Construction >= 0) {
-            MaximumBudget = std::max(MaximumBudget, Frame.ConstructionBudget);
-            Built = std::min(Pages, Built + Frame.ConstructionBudget);
+            Built = Built > Churn ? Built - Churn : 0U;
+            if (Frame.ConstructionUnbounded) {
+                Built = Pages;
+            } else {
+                MaximumBudget = std::max(MaximumBudget, Frame.ConstructionBudget);
+                Built = std::min(Pages, Built + Frame.ConstructionBudget);
+            }
             Frame = Keyframes.EndConstruction(Pages - Built);
         }
     }
@@ -7387,6 +7622,71 @@ TEST(Renderer3dsVirtualShadowKeyframes, DiscontinuitiesRebuildOneLayout) {
     simulation.Keyframes.Reset();
     simulation.Step(0.0);
     EXPECT_TRUE(simulation.Frame.Cut);
+}
+
+TEST(Renderer3dsVirtualShadowKeyframes, StaticPagesThatChangeInEveryFrameCannotStallTheLight) {
+    // 64 static pages change in every frame (stationary-prop casters that
+    // move after all): they take the whole maximum budget again in every
+    // frame. Without a bound the construction never completes and the
+    // displayed light stops; the stall bound completes it without a budget.
+    constexpr double speed = 0.0165;
+    const auto run = [&](double stallFactor, uint32_t& rotations, uint32_t& unbounded, double& lag) {
+        Fast::Renderer3ds::VirtualShadowKeyframeSettings settings;
+        settings.ConstructionStallFactor = stallFactor;
+        KeyframeSimulation simulation{Fast::Renderer3ds::VirtualShadowKeyframes(settings)};
+        simulation.Churn = 64;
+        simulation.Step(30.0);
+        rotations = unbounded = 0;
+        lag = 0.0;
+        for (int frame = 0; frame < 2000; ++frame) {
+            simulation.Step(speed);
+            EXPECT_FALSE(simulation.Frame.Cut);
+            rotations += simulation.Frame.Rotated ? 1U : 0U;
+            unbounded += simulation.Frame.ConstructionUnbounded ? 1U : 0U;
+            if (simulation.Frame.Construction >= 0 && !simulation.Frame.ConstructionUnbounded)
+                EXPECT_LE(simulation.Frame.ConstructionBudget, 64U);
+            if (frame >= 200)
+                lag = std::max(lag, simulation.Angle - simulation.Displayed());
+        }
+        EXPECT_LE(simulation.MaximumBudget, 64U);
+    };
+    uint32_t rotations = 0, unbounded = 0;
+    double lag = 0.0;
+    run(1.0e9, rotations, unbounded, lag);
+    EXPECT_EQ(rotations, 0U);
+    EXPECT_EQ(unbounded, 0U);
+    EXPECT_GT(lag, 25.0);
+
+    run(Fast::Renderer3ds::VirtualShadowKeyframeSettings{}.ConstructionStallFactor, rotations, unbounded, lag);
+    EXPECT_GT(rotations, 20U);
+    EXPECT_GT(unbounded, 0U);
+    // 220 pages need 14 frames at the minimum budget: a stalled construction
+    // completes after 29 frames and rotates when the 37-frame dissolve ends,
+    // so the displayed light trails by about two dissolves at most.
+    EXPECT_LT(lag, 100.0 * speed);
+}
+
+TEST(Renderer3dsVirtualShadowKeyframes, SlowConstructionsDoNotLengthenTheDissolve) {
+    // 10 of 16 budgeted pages change again in every frame: a construction
+    // completes under its budget only late, while the previous dissolve
+    // runs. Its waiting and starved frames are not construction work, so the
+    // dissolves, and the interval between rotations, stay bounded.
+    KeyframeSimulation simulation;
+    simulation.Churn = 10;
+    simulation.Step(30.0);
+    int last = -1, longest = 0;
+    uint32_t unbounded = 0;
+    for (int frame = 0; frame < 2000; ++frame) {
+        simulation.Step(0.0165);
+        unbounded += simulation.Frame.ConstructionUnbounded ? 1U : 0U;
+        if (!simulation.Frame.Rotated) continue;
+        if (last >= 0 && frame >= 400) longest = std::max(longest, frame - last);
+        last = frame;
+    }
+    EXPECT_GT(last, 1900);
+    EXPECT_GT(unbounded, 0U);
+    // Stall bound 29 frames, dissolve ceil(1.25 * 29) = 37.
+    EXPECT_LE(longest, 38);
 }
 
 TEST(Renderer3dsVirtualShadowKeyframes, WithoutAnAtlasForThreeLayoutsTheLayoutStepsWithTheLight) {

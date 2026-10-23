@@ -1,6 +1,6 @@
 import unittest
 
-from qualify_shader_handoff import shader_statistics
+from qualify_shader_handoff import release_violations, shader_statistics
 
 
 class ShaderHandoffStatisticsTests(unittest.TestCase):
@@ -35,6 +35,26 @@ class ShaderHandoffStatisticsTests(unittest.TestCase):
         stats = shader_statistics(self.log + "TRIAEVUM_SHADERC_AUDIT calls=20 compile_ms=2900.0\n")
         self.assertEqual(stats["compiled"], 0)
         self.assertEqual(stats["all_pass_compiled"], 20)
+
+    def test_release_thresholds(self):
+        complete = ("TRIAEVUM_SPIRV_CACHE requests=0 hits=0 misses=0 rejected=0 compiled=0 "
+                    "compile_failed=0 writes=0 write_failed=0 compile_ms=0.0\n"
+                    "OOT3D_PICA_AOT_SHADER_RESOLUTION hits=98 misses=0 strict=0 entries=889 "
+                    "unique_hits=40 unique_misses=0\n"
+                    "TRIAEVUM_PASS_SHADER_CACHE requests=20 hits=20 compiled=0 "
+                    "compile_failed=0 writes=0 write_failed=0 compile_ms=0.0\n"
+                    "TRIAEVUM_SHADERC_AUDIT calls=0 compile_ms=0.000\n"
+                    "TRIAEVUM_NATIVE_PROGRAM_OWNERS canonical=30 instrumented=12 uber=4\n")
+        stats = shader_statistics(complete)
+        self.assertEqual((stats["pack_unique_hits"], stats["instrumented_programs"]), (40, 12))
+        self.assertEqual(release_violations(stats), [])
+        for change, reason in (("instrumented=12", "instrumented=0"), ("calls=0", "calls=3"),
+                               ("unique_misses=0", "unique_misses=1")):
+            with self.subTest(reason=reason):
+                self.assertTrue(release_violations(shader_statistics(complete.replace(change, reason))))
+        # Unmeasured is a violation, not a pass: an old runtime without the
+        # audit or the unique counts cannot qualify a release.
+        self.assertTrue(release_violations(shader_statistics(self.log)))
 
     def test_missing_duplicate_or_failed_counters_are_not_accepted(self):
         for log in ("", self.log + self.log, self.log.replace("compile_failed=0", "compile_failed=1")):

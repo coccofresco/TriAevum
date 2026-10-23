@@ -38,6 +38,15 @@ def validate_product_info(info: dict[str, Any], source_commit: str = "") -> None
         raise ValueError("Runtime defaults do not enable visual interpolation x2")
 
 
+def _product_document(stdout: str) -> Any:
+    """The runtime's JSON document; lines other software printed before it are skipped."""
+    lines = stdout.splitlines(keepends=True)
+    for index, line in enumerate(lines):
+        if line.startswith("{"):
+            return json.loads("".join(lines[index:]))
+    return json.loads(stdout)
+
+
 def query_product(executable: Path, source_commit: str = "", *, plugin: Path | None = None) -> dict[str, Any]:
     executable = executable.resolve(strict=True)
     try:
@@ -47,8 +56,16 @@ def query_product(executable: Path, source_commit: str = "", *, plugin: Path | N
             cwd=executable.parent,
             capture_output=True, text=True, timeout=15, check=False,
         )
-        if result.returncode != 0:
-            status = describe_exit_status(result.returncode)
+        decode_error = None
+        if result.returncode == 0:
+            try:
+                info = _product_document(result.stdout or "")
+            except json.JSONDecodeError as exc:
+                # A clean exit without the document (#85): keep what it printed.
+                decode_error = exc
+        if result.returncode != 0 or decode_error is not None:
+            status = (describe_exit_status(result.returncode) if result.returncode != 0 else
+                      f"exited normally without product information ({decode_error})")
             log = executable.parent / "TriAevum-preflight-error.json"
             report = {
                 "format": "triaevum_preflight_error_v1",
@@ -69,8 +86,7 @@ def query_product(executable: Path, source_commit: str = "", *, plugin: Path | N
                 f"Runtime preflight failed ({status}): "
                 f"{(result.stderr or result.stdout or '')[-2000:]}\n{logging}"
             )
-        info = json.loads(result.stdout)
-    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError) as exc:
+    except (OSError, subprocess.TimeoutExpired) as exc:
         raise ValueError(f"Cannot query the playable runtime: {exc}") from exc
     if not isinstance(info, dict):
         raise ValueError("Runtime product information is not an object")

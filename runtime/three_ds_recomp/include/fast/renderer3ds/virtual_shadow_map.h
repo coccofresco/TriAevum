@@ -26,16 +26,39 @@ struct ShadowBounds {
     bool Available = false;
 };
 
+// Why a caster has, or lacks, a content version. Diagnostic only: membership
+// in the static layer depends on ContentVersion and Dynamic alone.
+enum class VirtualShadowCasterVersionState : uint8_t {
+    // No transform program, unreadable uniforms or vertices: no bounds.
+    Unavailable = 0,
+    // Rigid, homogeneous positions with cacheable geometry: versioned.
+    Rigid = 1,
+    // Geometry without a stable identity and content version.
+    Uncacheable = 2,
+    // Skinned by the vertex program: the pose is not part of the version.
+    Skinned = 3,
+    // Positions with W != 1.
+    NonHomogeneous = 4,
+};
+
 struct VirtualShadowCaster {
     ShadowBounds WorldBounds;
     // Includes geometry, the world-space deformation, and raster state. Zero
     // means that reuse cannot be proved and this caster invalidates its pages.
     uint64_t ContentVersion = 0;
-    // Native actor ownership remains dynamic even for rigid, cacheable meshes.
-    // Unproven deformation (ContentVersion == 0) is also always dynamic.
+    // Drawn again in every frame into the composed layer only. Native actor
+    // geometry is dynamic unless the title adapter made its owner eligible
+    // for the static shadow cache (PicaCompositionAttribution::
+    // StaticShadowCacheEligible); an eligible rigid caster that moves changes
+    // its ContentVersion, which refreshes the static pages it covers.
+    // Unproven deformation (ContentVersion == 0) is always dynamic.
     bool Dynamic = false;
     // Opaque native owner, shared with captured composition metadata.
     uint64_t OwnerIdentity = 0;
+    VirtualShadowCasterVersionState VersionState = VirtualShadowCasterVersionState::Unavailable;
+    // Diagnostic only: the version of the geometry and its world pose alone,
+    // before material or pass state is mixed into ContentVersion.
+    uint64_t PoseVersion = 0;
 };
 
 struct VirtualShadowLevel {

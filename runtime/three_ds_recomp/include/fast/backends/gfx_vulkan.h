@@ -80,6 +80,7 @@
 #include "fast/oot3d/pica_geometry_registry.h"
 #include "fast/oot3d/pica_scene_frame.h"
 #include "fast/oot3d/pica_shader_pipeline_cache.h"
+#include "fast/oot3d/pica_variant_request_record.h"
 #include "fast/oot3d/scene_surface_registry.h"
 #include "fast/oot3d/scene_composite_pass.h"
 #include "fast/oot3d/smaa_1x_pass.h"
@@ -1059,6 +1060,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
                                     VkFormat format, uint32_t rowOffset,
                                     uint32_t rowCount);
     void RetireNativePicaTexture(TextureRecord& texture);
+    // Retires every texture keyed by another texture-pack generation: lookups
+    // use only the frame's generation, so those records are unreachable.
+    void RetireNativePicaTexturesOfOtherGenerations(uint64_t generation);
     void RetireNativePicaMaterial(NativePicaMaterialBundle& material);
     NativePicaMaterialBundle* GetOrCreateNativePicaMaterial(
         const std::shared_ptr<const ::Oot3d::Renderer::AzaharPbrMaterial>& material);
@@ -1235,6 +1239,13 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     Oot3d::PicaSceneFrame mPreparedShadowCasterFrame;
     Oot3d::NativeSceneView mPreparedShadowCasterView;
     std::unordered_map<uint64_t, Renderer3ds::VirtualShadowCaster> mPreparedShadowCasters;
+    // Accepted caster poses per instance: native geometry identity and the
+    // temporal owner part that draws it (see PicaShadowCasterAnchor).
+    std::unordered_map<uint64_t, Renderer3ds::PicaShadowCasterAnchor> mShadowCasterAnchors;
+    Renderer3ds::PicaShadowCasterAnchor* ShadowCasterAnchor(uint64_t geometryIdentity,
+                                                            const Renderer3ds::PicaTemporalIdentity& identity,
+                                                            uint64_t submissionId);
+    uint64_t mNextShadowCasterAnchorSweep = 0;
     Oot3d::PicaScenePublicationAdapter mPicaScenePublications;
     Oot3d::GrassGeometryRegistry mGrassGeometryRegistry;
     Oot3d::GrassDrawMemo mGrassDrawMemo;
@@ -1273,12 +1284,17 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     Renderer::SpirvCache mCompiledShaderCache;
     bool mCompiledShaderCacheSummaryLogged = false;
     Oot3d::PicaEffectiveShaderInventory mPicaEffectiveShaderInventory;
+    // OOT3D_PICA_VARIANT_REQUESTS: every distinct variant request, for offline replay.
+    Oot3d::PicaVariantRequestRecorder mPicaVariantRequestRecorder;
     Oot3d::PicaGraphicsPipelineInventory mPicaPipelineInventory;
     Oot3d::PicaGraphicsPipelineManifest mPicaPipelineManifest;
     std::set<uint64_t> mPicaPipelinePrewarmedProfiles;
     std::mutex mPicaAotShaderLogMutex;
     std::set<std::pair<Oot3d::PicaAotShaderStage, uint64_t>>
         mPicaAotShaderMissesLogged;
+    // Distinct pack modules served, for release qualification (counts per
+    // identity, not per request).
+    std::set<std::pair<Oot3d::PicaAotShaderStage, uint64_t>> mPicaAotShaderHitIdentities;
     std::atomic<uint64_t> mPicaAotShaderHits = 0;
     std::atomic<uint64_t> mNativeFragmentArtifactHits = 0;
     std::atomic<uint64_t> mNativeVertexArtifactHits = 0;
@@ -1309,6 +1325,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     ::Fast::Renderer::ExtensionPassSchedulePlan
         mPointShadowSchedulePlan;
     uint64_t mFrameAzaharTextureGeneration = 0;
+    // The generation whose textures alone remain in mNativePicaTextures; reset
+    // when a texture restore may bring back records of another generation.
+    std::optional<uint64_t> mNativePicaTexturesGeneration;
     uint64_t mCustomTextureUploadBytesThisFrame = 0;
     std::map<std::vector<uint8_t>, Renderer3ds::PicaDevicePipelineRecord> mNativePicaPipelines;
     uint64_t mNextPicaPipelineId = 1;
@@ -1532,6 +1551,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     void PublishGpuTextureCopySurface(GpuTextureCopySurface& surface);
     void DestroyGpuTextureCopySurface(uint64_t identity);
     void DestroyGpuTextureCopySurfaces();
+    // Retires the copies a render-target reset invalidates, keeping those whose
+    // bytes guest memory still defers to.
+    void RetireGpuTextureCopySurfacesForTargetReset();
     // Resolve a view's producer references into the regions to materialize.
     // Returns false, with `fallback` and `error` set, when the bytes cannot be
     // served from the GPU; that is never downgraded to a CPU sample.
@@ -1654,7 +1676,10 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         mNativePicaSceneBeforeUiDisplays;
     std::map<std::pair<uint64_t, uint32_t>, NativePicaRenderTargetKey>
         mNativePicaDisplayDepthTargets;
-    std::set<uint32_t> mInvalidatedNativePicaRenderTargetAddresses;
+    // Framebuffers transferred while they had no target (namespace, color
+    // address): presenting them is skipped until a draw recreates the target.
+    std::set<std::pair<uint64_t, uint32_t>> mInvalidatedNativePicaRenderTargetAddresses;
+    uint64_t mNativePicaTransfersWithoutTarget = 0U;
     NativePicaRenderTarget* mActiveNativePicaRenderTarget = nullptr;
     // The layout the active native PICA pass began with.
     Oot3d::PicaAttachmentRequirements mActiveNativePicaAttachments;

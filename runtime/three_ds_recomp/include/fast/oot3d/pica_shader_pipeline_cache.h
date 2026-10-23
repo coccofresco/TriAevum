@@ -146,6 +146,12 @@ ResolvePicaShaderProfileFeatures(
 [[nodiscard]] PicaShaderInstrumentationFeature ResolvePicaDrawInstrumentationFeatures(
     const PicaShaderPipelineRequest& request, const EffectsSettings& effects) noexcept;
 
+// OOT3D_GRAPHICS_FACE_NORMAL_GUIDE=1 (diagnostics) adds the face normal guide
+// to every guide-publishing variant. It is an input of variant generation that
+// settings do not carry: variant recordings store it, and corpus regeneration
+// and release qualification refuse it.
+[[nodiscard]] bool PicaFaceNormalGuideDiagnosticRequested() noexcept;
+
 // Owns two independent shader domains. Canonical entries are immutable copies
 // of the PICA frontend output and survive graphics-setting changes. Optional
 // instrumentation is built from those entries and invalidated only at a

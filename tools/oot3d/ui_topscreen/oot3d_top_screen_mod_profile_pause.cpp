@@ -843,7 +843,8 @@ TopScreenPauseDrawAction ResolveTopScreenPauseDrawAction(
                               inputs.AlternatePathReady &&
                               inputs.AlternatePathVisible;
   if (alternateRuntime || alternateSequence || alternateReady ||
-      state->NativeTransitionLatched || !inputs.AnyPageGateActive) {
+      state->NativeTransitionLatched || !inputs.AnyPageGateActive ||
+      state->NativeSceneRequested) {
     return TopScreenPauseDrawAction::NativeDraw;
   }
   const bool suppressionBlocked =

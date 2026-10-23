@@ -77,9 +77,10 @@ struct TopScreenOcarinaNavigationGeometry {
 TopScreenOcarinaNavigationGeometry
 BuildTopScreenOcarinaNavigationGeometry(std::int8_t direction) noexcept;
 
+// Draws from the SingleScreen 3.0 UI atlas (custom_ui01, 512x256).
 std::size_t AppendTopScreenOcarinaNavigationPresentation(
     const TopScreenOcarinaNavigationGeometry &geometry,
-    const oot3d::ui::UiTextureIdentity &pauseTopPage,
+    const oot3d::ui::UiTextureIdentity &uiAtlas,
     std::vector<oot3d::ui::UiPrimitive> &output);
 
 } // namespace Oot3dNativeGame

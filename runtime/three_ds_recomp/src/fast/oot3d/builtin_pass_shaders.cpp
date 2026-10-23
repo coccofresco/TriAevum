@@ -22,6 +22,7 @@
 #include "fast/renderer/gtao_shader.h"
 #include "fast/renderer3ds/pica_surface_lighting_shader.h"
 #include "fast/renderer3ds/pica_texture_copy_derive_gpu.h"
+#include "fast/renderer3ds/room_shadow_shell.h"
 
 namespace Fast::Oot3d {
 std::vector<BuiltinPassShader> BuildBuiltinPassShaders() {
@@ -56,12 +57,17 @@ std::vector<BuiltinPassShader> BuildBuiltinPassShaders() {
         {"interactive_grass_instrumented_raster_depth.frag", Fragment, BuildGrassFragmentShader(true), {{"GRASS_AUXILIARY_OUTPUTS", "1"}}},
         {"grass_instance_compactor.comp", Compute, BuildGrassCompactionComputeShader(), {}},
         {"grass_shadow_grid.comp", Compute, BuildGrassShadowGridComputeShader(), {}},
+        {"grass_selection_count.comp", Compute, BuildGrassSelectionComputeShader(), {{"GRASS_SELECTION_PASS", "0"}}},
+        {"grass_selection_scan.comp", Compute, BuildGrassSelectionComputeShader(), {{"GRASS_SELECTION_PASS", "1"}}},
+        {"grass_selection_scatter.comp", Compute, BuildGrassSelectionComputeShader(), {{"GRASS_SELECTION_PASS", "2"}}},
         {"pica_surface_lighting_native.frag", Fragment, Renderer3ds::BuildPicaSurfaceLightingFragmentShader(false), {}},
         {"pica_surface_lighting.frag", Fragment, Renderer3ds::BuildPicaSurfaceLightingFragmentShader(true), {}},
         {"pica_surface_lighting_native_coefficients.frag", Fragment, Renderer3ds::BuildPicaSurfaceLightingFragmentShader(false, true), {}},
         {"pica_surface_lighting_coefficients.frag", Fragment, Renderer3ds::BuildPicaSurfaceLightingFragmentShader(true, true), {}},
         {"normal_space.comp", Compute, kNormalSpaceComputeShader, {}},
         {"oot3d_nri_directional_shadow.frag", Fragment, kPicaDirectionalShadowFragmentShader, {}},
+        // Interior room shells cast into the directional shadow with its fragment.
+        {"room_shadow_shell.vert", Vertex, std::string(Renderer3ds::RoomShadowShellVertexShader()), {}},
         {"oot3d_nri_pica_scanout_physical.frag", Fragment,
          BuildPicaScanoutFragmentShader(true, std::nullopt, PicaScanoutOrientation::PhysicalScreen), {}},
         {"oot3d_nri_pica_scanout_surface.frag", Fragment,

@@ -40,9 +40,22 @@ static int run() {
     expect(map.At(-1000, 0) == nullptr, "outside the map");
     expect(map.Levels.size() == 2U && std::abs(map.Levels[0]) < 1.0F && std::abs(map.Levels[1] - 50.0F) < 1.0F,
            "two levels");
+    // The water's extent: the cells of the pieces (x 10-110, z 0-200 plus the
+    // drop's landing reach), not the square map around them.
+    expect(map.ExtentMinimumXZ[0] <= 10.0F && map.ExtentMinimumXZ[0] > 10.0F - 2.0F * map.Texel &&
+               map.ExtentMinimumXZ[1] <= 0.0F && map.ExtentMinimumXZ[1] > -2.0F * map.Texel,
+           "extent minimum at the pieces");
+    expect(map.ExtentMaximumXZ[0] >= 110.0F && map.ExtentMaximumXZ[0] < 110.0F + 2.0F * map.Texel &&
+               map.ExtentMaximumXZ[1] >= 200.0F && map.ExtentMaximumXZ[1] < 200.0F + 2.0F * map.Texel,
+           "extent maximum at the pieces");
+    expect(map.ExtentMaximumXZ[0] - map.ExtentMinimumXZ[0] < map.Texel * float(map.Size) * 0.5F,
+           "the extent is tighter than the map");
     const PicaWaterTriangles* none[] = {};
-    expect(BuildPicaWaterMap(std::span<const PicaWaterTriangles* const>(none, 0)).Size == 0U, "no water, no map");
-    checks += 11;
+    const auto empty = BuildPicaWaterMap(std::span<const PicaWaterTriangles* const>(none, 0));
+    expect(empty.Size == 0U, "no water, no map");
+    expect(empty.ExtentMinimumXZ == std::array<float, 2>{} && empty.ExtentMaximumXZ == std::array<float, 2>{},
+           "no water, no extent");
+    checks += 15;
     // Regions: the two pieces and the drop's landing.
     const auto regions = PicaWaterMapRegions(map);
     size_t levels = 0, landings = 0;

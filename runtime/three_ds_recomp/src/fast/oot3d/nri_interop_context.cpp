@@ -200,6 +200,11 @@ struct NriInteropContext::Impl {
         // The automated gate owns the failure policy. Keeping command
         // recording alive lets it collect every error in one run.
     }
+    static void NRI_CALL ContinueAfterError(void*) {
+        // NRI's default breaks into the debugger, which ends the game. The
+        // failing call still returns its result, and every caller handles
+        // it: a pipeline that cannot be created falls back (#78, #84).
+    }
 #endif
 };
 
@@ -545,6 +550,10 @@ bool NriInteropContext::Initialize(VkInstance instance, VkPhysicalDevice physica
         desc.enableNRIValidation = true;
         validationTelemetry->SetEnabled(
             RendererValidationSource::Nri, true);
+    } else {
+        // NRI still prints the message through its default callback.
+        callback.AbortExecution = Impl::ContinueAfterError;
+        desc.callbackInterface = callback;
     }
     desc.vkInstance = instance;
     desc.vkPhysicalDevice = physicalDevice;

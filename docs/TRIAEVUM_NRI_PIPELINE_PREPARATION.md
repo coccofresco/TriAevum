@@ -311,12 +311,15 @@ draw (shadow receivers, water, isolated or authored appearance, grass,
 materials). A cache prepared from the 2026-10-07 corpus left a dusk session in
 Hyrule Field creating 283 pipelines in 54.6 s, as with no cache at all.
 
-Those variants come from recorded sessions instead. The runtime's own
-inventories (`OOT3D_PICA_EFFECTIVE_SHADER_INVENTORY`,
-`OOT3D_PICA_PIPELINE_INVENTORY`) are inputs of
-`regenerate_shader_corpus.py --runtime-inventory DIR`; their programs join the
-pack and their recipes merge into `runtime-pipelines.json`, passed to the
-release builder as another `--pipeline-manifest`. Recording exposed three
+Those variants come from recorded sessions instead. Sessions record the
+variant requests and the raw PICA state (`OOT3D_PICA_VARIANT_REQUESTS`,
+`OOT3D_PICA_RAW_DRAWS`) with the pipeline inventory
+(`OOT3D_PICA_PIPELINE_INVENTORY`); `regenerate_shader_corpus.py
+--variant-records DIR` replays them with the build's own generators (issue
+#76: recorded shader text went stale with every generator change). The
+programs join the pack and the recipes are rewritten into
+`runtime-pipelines.json`, passed to the release builder as another
+`--pipeline-manifest`. Recording the runtime's inventories exposed three
 defects, fixed in `fe0f370`, each found by tracing both sides with
 `TRIAEVUM_NRI_PIPELINE_TRACE=1`:
 

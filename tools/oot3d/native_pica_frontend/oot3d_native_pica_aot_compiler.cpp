@@ -1,8 +1,12 @@
 #include "fast/oot3d/pica_aot_shader_pack.h"
 #include "fast/oot3d/pica_scanout_effects.h"
 #include "fast/oot3d/builtin_pass_shaders.h"
+#include "fast/renderer/shaderc_compiler.h"
+#include "fast/renderer/spirv_cache.h"
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -13,6 +17,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -26,14 +31,21 @@ struct Options {
     std::filesystem::path Manifest;
     std::filesystem::path MergedInventory;
     std::filesystem::path RendererCache;
+    // Publisher compile cache (issue #76 strategy §5): modules keyed by
+    // source, stage and compiler contract survive between regenerations.
+    std::filesystem::path CompileCache;
+    unsigned Jobs = 0;
 };
+
+// The options CompileShader passes; part of every cache key.
+constexpr std::string_view kCompileOptionsContract = "/pica-aot/vulkan1.1/performance/main/v1";
 
 void PrintUsage() {
     std::cerr
         << "usage: oot3d_native_pica_aot_compiler "
            "--inventory <file> [--inventory <file> ...] "
            "--pack <file> --manifest <file> "
-           "[--merged-inventory <file>]\n"
+           "[--merged-inventory <file>] [--compile-cache <directory>] [--jobs <n>]\n"
         << "or: --prepare-renderer-cache <directory> --manifest <file>\n";
 }
 
@@ -53,6 +65,17 @@ bool ParseOptions(int argc, char** argv, Options& options) {
             options.MergedInventory = value;
         else if (argument == "--prepare-renderer-cache")
             options.RendererCache = value;
+        else if (argument == "--compile-cache")
+            options.CompileCache = value;
+        else if (argument == "--jobs") {
+            try {
+                options.Jobs = static_cast<unsigned>(std::stoul(value.string()));
+            } catch (const std::exception&) {
+                return false;
+            }
+            if (options.Jobs == 0U)
+                return false;
+        }
         else
             return false;
     }
@@ -243,32 +266,98 @@ int main(int argc, char** argv) {
             WriteJsonAtomically(options.MergedInventory, merged);
         }
 
-        shaderc::Compiler compiler;
-        std::vector<PicaAotShaderBinary> binaries;
-        binaries.reserve(inputs.size());
-        nlohmann::json manifestEntries = nlohmann::json::array();
+        struct Job {
+            PicaAotShaderStage Stage;
+            std::string StageName;
+            std::string Source;
+            PicaAotShaderSourceIdentity Identity;
+            std::string SourceName;
+            std::vector<uint32_t> Spirv;
+            std::string Error;
+        };
+        std::vector<Job> jobs;
+        jobs.reserve(inputs.size());
         for (const auto& input : inputs) {
-            PicaAotShaderStage stage;
-            const std::string stageName = input.at("stage");
-            if (!ParsePicaAotShaderStage(stageName, stage))
+            Job job;
+            job.StageName = input.at("stage");
+            if (!ParsePicaAotShaderStage(job.StageName, job.Stage))
                 throw std::runtime_error("unknown shader stage: " +
-                                         stageName);
-            const std::string source = input.at("source");
-            const auto identity = IdentifyPicaAotShaderSource(source);
+                                         job.StageName);
+            job.Source = input.at("source");
+            job.Identity = IdentifyPicaAotShaderSource(job.Source);
             if (input.value("source_id", std::string{}) !=
-                    FormatPicaAotShaderId(identity.Id) ||
+                    FormatPicaAotShaderId(job.Identity.Id) ||
                 input.value("secondary_hash", std::string{}) !=
-                    FormatPicaAotShaderId(identity.SecondaryHash) ||
-                input.value("source_size", uint64_t{0}) != identity.Size) {
+                    FormatPicaAotShaderId(job.Identity.SecondaryHash) ||
+                input.value("source_size", uint64_t{0}) != job.Identity.Size) {
                 throw std::runtime_error(
                     "shader source identity does not match inventory");
             }
-            const std::string sourceName =
-                "pica_" + stageName + "_" +
-                FormatPicaAotShaderId(identity.Id) +
-                (stage == PicaAotShaderStage::Vertex ? ".vert" :
-                                                       ".frag");
-            auto spirv = CompileShader(compiler, source, stage, sourceName);
+            job.SourceName =
+                "pica_" + job.StageName + "_" +
+                FormatPicaAotShaderId(job.Identity.Id) +
+                (job.Stage == PicaAotShaderStage::Vertex ? ".vert" :
+                                                           ".frag");
+            jobs.push_back(std::move(job));
+        }
+
+        // Bounded parallel compilation, one shaderc instance per worker. The
+        // cache serves unchanged sources compiled by the same compiler with
+        // the same options; anything else compiles.
+        Fast::Renderer::SpirvCache cache;
+        if (!options.CompileCache.empty()) {
+            const auto& contract = Fast::Renderer::ShadercCompilerContract();
+            if (contract.empty())
+                throw std::runtime_error("compile cache requested but the compiler identity is unavailable");
+            cache.Configure(options.CompileCache, contract + std::string(kCompileOptionsContract));
+        }
+        const unsigned workers = std::max(1U, std::min<unsigned>(
+            options.Jobs != 0U ? options.Jobs : std::min(8U, std::max(1U, std::thread::hardware_concurrency())),
+            static_cast<unsigned>(jobs.size())));
+        const auto compileStart = std::chrono::steady_clock::now();
+        std::atomic<size_t> next{0};
+        std::atomic<bool> failed{false};
+        std::vector<std::thread> threads;
+        for (unsigned worker = 0; worker < workers; ++worker) {
+            threads.emplace_back([&] {
+                shaderc::Compiler compiler;
+                for (size_t index = next++; index < jobs.size() && !failed; index = next++) {
+                    auto& job = jobs[index];
+                    try {
+                        const auto compile = [&] {
+                            return CompileShader(compiler, job.Source, job.Stage, job.SourceName);
+                        };
+                        job.Spirv = cache.Enabled()
+                            ? cache.Resolve(job.Source,
+                                            job.Stage == PicaAotShaderStage::Vertex
+                                                ? Fast::Renderer::SpirvStage::Vertex
+                                                : Fast::Renderer::SpirvStage::Fragment,
+                                            compile)
+                            : compile();
+                    } catch (const std::exception& exception) {
+                        job.Error = exception.what();
+                        failed = true;
+                    }
+                }
+            });
+        }
+        for (auto& thread : threads)
+            thread.join();
+        for (const auto& job : jobs) {
+            if (!job.Error.empty())
+                throw std::runtime_error(job.Error);
+        }
+        const double compileSeconds = std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - compileStart).count();
+
+        std::vector<PicaAotShaderBinary> binaries;
+        binaries.reserve(jobs.size());
+        nlohmann::json manifestEntries = nlohmann::json::array();
+        for (auto& job : jobs) {
+            const auto& stageName = job.StageName;
+            const auto& identity = job.Identity;
+            const auto stage = job.Stage;
+            auto spirv = std::move(job.Spirv);
             const uint64_t spirvHash = HashWords(spirv);
             manifestEntries.push_back({
                 {"stage", stageName},
@@ -320,6 +409,12 @@ int main(int argc, char** argv) {
             {"pack", options.Pack.string()},
             {"shader_count", binaries.size()},
             {"renderer_sources_added", rendererSourcesAdded},
+            {"compilation",
+             {{"workers", workers}, {"seconds", compileSeconds},
+              {"cache", cache.Enabled() ? nlohmann::json{
+                   {"hits", cache.Stats().Hits}, {"compiled", cache.Stats().Compilations},
+                   {"rejected", cache.Stats().Rejected}, {"write_failed", cache.Stats().WriteFailures}}
+                                        : nlohmann::json(nullptr)}}},
             {"shaders", std::move(manifestEntries)},
         };
         WriteJsonAtomically(options.Manifest, manifest);

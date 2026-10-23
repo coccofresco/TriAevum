@@ -95,8 +95,24 @@ bool GfxRenderingAPIVulkan::SubmitPicaDisplayTransfer(
                 }
             }
             if (source == nullptr) {
-                throw std::runtime_error(
-                    "native PICA display transfer source has no Vulkan render target");
+                // No draw reached this framebuffer since its target was
+                // created or reset: after a state load, after a target-extent
+                // reset at frame start, or for a screen whose draws the UI
+                // profile skips. The host holds no newer pixels than the
+                // display already shows, so the transfer keeps them, and the
+                // output presents nothing until a draw recreates the target.
+                mInvalidatedNativePicaRenderTargetAddresses.insert(
+                    {transfer.RenderTargetNamespace, transfer.InputPhysicalAddress});
+                if (++mNativePicaTransfersWithoutTarget <= 8U) {
+                    std::fprintf(stderr,
+                                 "TRIAEVUM_PICA_TRANSFER_WITHOUT_TARGET count=%llu namespace=%llu "
+                                 "input=0x%08X output=0x%08X frame=%llu\n",
+                                 static_cast<unsigned long long>(mNativePicaTransfersWithoutTarget),
+                                 static_cast<unsigned long long>(transfer.RenderTargetNamespace),
+                                 transfer.InputPhysicalAddress, transfer.OutputPhysicalAddress,
+                                 static_cast<unsigned long long>(mFrameCounter));
+                }
+                return true;
             }
             if (transfer.InputWidth > source->Key.Width ||
                 transfer.InputHeight > source->Key.Height) {
@@ -374,9 +390,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDisplayTransfer(
                            transfer.OutputPhysicalAddress));
         if (displayFound == mNativePicaDisplayImages.end() ||
             !displayFound->second.Initialized) {
-            if (transfer.RenderTargetNamespace == 0U &&
-                mInvalidatedNativePicaRenderTargetAddresses.contains(
-                    transfer.InputPhysicalAddress)) {
+            if (mInvalidatedNativePicaRenderTargetAddresses.contains(
+                    {transfer.RenderTargetNamespace, transfer.InputPhysicalAddress})) {
                 return true;
             }
             throw std::runtime_error(
@@ -499,6 +514,43 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
             }
             return false;
         }();
+        // The drawn water's map of a scene target: rebuilt when the pieces on
+        // screen change (their keys, in order); none without pieces this frame.
+        const auto resolveWaterMap = [&](const NativePicaRenderTarget& target) -> const Renderer3ds::PicaWaterMap* {
+            if (target.WaterPiecesFrame != mFrameCounter || target.WaterPieces.empty()) return nullptr;
+            auto keys = target.WaterPieceKeys;
+            std::sort(keys.begin(), keys.end());
+            uint64_t signature = 1469598103934665603ULL;
+            for (const uint64_t key : keys) signature = (signature ^ key) * 1099511628211ULL;
+            if (signature != mWaterMapSignature) {
+                std::vector<const Renderer3ds::PicaWaterTriangles*> sets;
+                for (const auto& pieces : target.WaterPieces) sets.push_back(pieces.get());
+                mWaterMap = Renderer3ds::BuildPicaWaterMap(sets);
+                mWaterMapSignature = signature;
+                ++mWaterMapVersion;
+            }
+            return &mWaterMap;
+        };
+        // A water-only trace reflects only the water this frame drew (the
+        // title's bodies, catalog planes, drawn pieces). Water that cannot be
+        // on screen (HiZWaterPossiblyInView) reflects nothing: the frame
+        // plans no reflection, Hi-Z included, as when no water was drawn.
+        const bool waterOnScreen = [&] {
+            if (!mWaterOnlyReflections || mReflectableWaterFrame != mFrameCounter) return false;
+            if (sceneViewTarget == nullptr || !presentationPerspective.has_value()) return true;
+            Renderer3ds::PicaSceneWaterBodies bodies;
+            if (sceneViewTarget->WaterBodies && sceneViewTarget->WaterBodiesFrame == mFrameCounter)
+                bodies = *sceneViewTarget->WaterBodies;
+            if (sceneViewTarget->WaterPlanesFrame == mFrameCounter) {
+                const auto& planes = sceneViewTarget->WaterPlanes;
+                for (uint32_t i = 0; i < planes.Count && bodies.Count < Renderer3ds::kMaximumPicaSceneWaterBodies; ++i)
+                    bodies.Bodies[bodies.Count++] = planes.Bodies[i];
+            }
+            const auto worldToView = sceneViewTarget->SampleView.Resolve(mFrameCounter);
+            return Oot3d::HiZWaterPossiblyInView(worldToView ? &*worldToView : nullptr,
+                                                 presentationPerspective->Projection, presentationPerspective->FarPlane,
+                                                 &bodies, resolveWaterMap(*sceneViewTarget));
+        }();
         const auto effectPlan = Oot3d::BuildDisplayEffectPlan({
             .AlphaOverlay = alphaOverlay,
             .WorldSurface = worldSurface,
@@ -515,10 +567,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                 presentationSettings.Effects.MxaoTemporal && mMxaoPass.Available(),
             .AmbientOcclusionFaceNormal =
                 Oot3d::EffectsReadFaceNormal(presentationSettings.Effects) && mMxaoPass.Available(),
-            // A water-only trace reflects only the water this frame drew (the
-            // title's bodies, catalog planes); without any it writes zero
-            // everywhere, so the frame plans no reflection, Hi-Z included.
-            .Reflections = mWaterOnlyReflections && mReflectableWaterFrame != mFrameCounter
+            .Reflections = mWaterOnlyReflections && !waterOnScreen
                 ? Oot3d::ReflectionMode::Off
                 : presentationSettings.Effects.Reflections,
             .GlobalIllumination =
@@ -2313,23 +2362,10 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
             }
             if (activeReflectionProvider ==
                 Oot3d::ReflectionProvider::HiZ) {
-                // The drawn water's map: rebuilt when the pieces on screen
-                // change (their keys, in order).
-                const Renderer3ds::PicaWaterMap* waterMap = nullptr;
-                if (effectGuideTarget != nullptr && effectGuideTarget->WaterPiecesFrame == mFrameCounter &&
-                    !effectGuideTarget->WaterPieces.empty()) {
-                    auto keys = effectGuideTarget->WaterPieceKeys;
-                    std::sort(keys.begin(), keys.end());
-                    uint64_t signature = 1469598103934665603ULL;
-                    for (const uint64_t key : keys) signature = (signature ^ key) * 1099511628211ULL;
-                    if (signature != mWaterMapSignature) {
-                        std::vector<const Renderer3ds::PicaWaterTriangles*> sets;
-                        for (const auto& pieces : effectGuideTarget->WaterPieces) sets.push_back(pieces.get());
-                        mWaterMap = Renderer3ds::BuildPicaWaterMap(sets);
-                        mWaterMapSignature = signature;
-                        ++mWaterMapVersion;
-                    }
-                    waterMap = &mWaterMap;
+                // The drawn water's map (resolveWaterMap).
+                const Renderer3ds::PicaWaterMap* waterMap =
+                    effectGuideTarget != nullptr ? resolveWaterMap(*effectGuideTarget) : nullptr;
+                if (waterMap != nullptr) {
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
                     // The lab frames every piece and landing of the map.
                     if (Renderer3ds::PicaSurfaceDebug::Instance().Tracing()) {

@@ -82,6 +82,10 @@ struct PicaWaterMap {
     std::vector<float> Levels;
     // The lowest and highest surface heights.
     std::array<float, 2> HeightRange{};
+    // World x, z bounds of the cells holding water (NaN cells excluded): the
+    // surface search can find nothing outside them.
+    std::array<float, 2> ExtentMinimumXZ{};
+    std::array<float, 2> ExtentMaximumXZ{};
 
     [[nodiscard]] const std::array<float, 4>* At(float x, float z) const noexcept {
         if (Size == 0U) return nullptr;
@@ -203,14 +207,26 @@ inline constexpr float kPicaWaterMapMinimumTexel = 4.0F;
         map.Levels.push_back(levels[i].first);
     std::sort(map.Levels.begin(), map.Levels.end());
     map.HeightRange = {std::numeric_limits<float>::max(), std::numeric_limits<float>::lowest()};
-    for (const auto& texel : map.Texels) {
+    map.ExtentMinimumXZ = {std::numeric_limits<float>::max(), std::numeric_limits<float>::max()};
+    map.ExtentMaximumXZ = {std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest()};
+    for (size_t index = 0; index < map.Texels.size(); ++index) {
+        const auto& texel = map.Texels[index];
         if (std::isnan(texel[0])) continue;
         // The surface anywhere in the texel (its corners).
         const float reach = 0.5F * map.Texel * (std::abs(texel[2]) + std::abs(texel[3]));
         map.HeightRange = {std::min(map.HeightRange[0], texel[0] - reach),
                            std::max(map.HeightRange[1], texel[0] + reach)};
+        const uint32_t u = uint32_t(index % map.Size), v = uint32_t(index / map.Size);
+        const float x = map.Origin[0] + float(u) * map.Texel;
+        const float z = map.Origin[1] + float(v) * map.Texel;
+        map.ExtentMinimumXZ = {std::min(map.ExtentMinimumXZ[0], x), std::min(map.ExtentMinimumXZ[1], z)};
+        map.ExtentMaximumXZ = {std::max(map.ExtentMaximumXZ[0], x + map.Texel),
+                               std::max(map.ExtentMaximumXZ[1], z + map.Texel)};
     }
-    if (map.Levels.empty()) map.HeightRange = {};
+    if (map.Levels.empty()) {
+        map.HeightRange = {};
+        map.ExtentMinimumXZ = map.ExtentMaximumXZ = {};
+    }
     return map;
 }
 

@@ -245,4 +245,45 @@ inline bool InterpolatePicaFactoredUniformGroup(
     return true;
 }
 
+// A column-major affine world-to-view matrix sampled with the same factored
+// motion that InterpolatePicaFactoredUniformGroup gives a model-view group:
+// left rigid motion D = rigid(V1) * inverse(rigid(V0)) as a screw, residual
+// blended linearly. For a draw whose model-view V*M was sampled that way
+// with a constant M, inverse(V_alpha) * (V*M)_alpha is M again, so world
+// positions reconstructed from the sampled camera stay where the native
+// endpoints put them. False (output untouched) unless both endpoints are
+// finite affine matrices with a rigid reference.
+inline bool InterpolatePicaRigidCameraMatrix(const std::array<float, 16>& previous,
+                                             const std::array<float, 16>& current, float alpha,
+                                             std::array<float, 16>& output) {
+    using namespace PicaFactoredDetail;
+    if (!std::isfinite(alpha) || alpha < 0.0F || alpha > 1.0F) return false;
+    const auto rows = [](const std::array<float, 16>& m, Rows& out) {
+        if (m[3] != 0.0F || m[7] != 0.0F || m[11] != 0.0F || m[15] != 1.0F) return false;
+        for (size_t i = 0; i < 3; ++i) for (size_t j = 0; j < 4; ++j) {
+            out[i][j] = m[j * 4 + i];
+            if (!std::isfinite(out[i][j])) return false;
+        }
+        return true;
+    };
+    PicaAffineEndpoints endpoints{};
+    if (!rows(previous, endpoints[0]) || !rows(current, endpoints[1])) return false;
+    const auto delta = PicaLeastResidualMotion({&endpoints, 1});
+    if (!delta) return false;
+    const auto inverse = InverseRigid(*delta), motion = Screw(*delta, alpha);
+    Rows residual = Product(inverse, endpoints[1]);
+    for (size_t i = 0; i < 3; ++i) for (size_t j = 0; j < 4; ++j)
+        residual[i][j] = (1.0 - double(alpha)) * endpoints[0][i][j] + double(alpha) * residual[i][j];
+    const Rows sampled = Product(motion, residual);
+    std::array<float, 16> result = current;
+    for (size_t i = 0; i < 3; ++i) for (size_t j = 0; j < 4; ++j) {
+        const double value = sampled[i][j];
+        if (!std::isfinite(value) || std::abs(value) > std::numeric_limits<float>::max()) return false;
+        result[j * 4 + i] = alpha == 0.0F ? previous[j * 4 + i] : alpha == 1.0F ? current[j * 4 + i]
+            : static_cast<float>(value);
+    }
+    output = result;
+    return true;
+}
+
 } // namespace Fast::Renderer3ds

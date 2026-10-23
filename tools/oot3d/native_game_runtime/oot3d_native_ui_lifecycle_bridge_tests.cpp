@@ -2,9 +2,11 @@
 #include "oot3d_top_screen_gameplay_action_consumer.h"
 #include "oot3d_top_screen_items_hint_consumer.h"
 #include "oot3d_top_screen_mod_profile.h"
+#include "oot3d_top_screen_wide_items_runtime.h"
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -87,16 +89,63 @@ int main() {
   Require(
       ReadTopScreenItemsHintCursorBounds(memory, &selectedItemBounds, &error) &&
           selectedItemBounds.Active &&
-          std::abs(selectedItemBounds.CenterX - 120.0F) < 0.0001F &&
+          std::abs(selectedItemBounds.CenterX - 204.0F) < 0.0001F &&
           std::abs(selectedItemBounds.MinimumY - 50.0F) < 0.0001F &&
           std::abs(selectedItemBounds.MaximumY - 80.0F) < 0.0001F &&
           std::abs(selectedItemBounds.Width - 40.0F) < 0.0001F,
-      "the Items hint adapter did not reproduce FUN_005CA124/005CA270");
+      "the Items hint adapter did not reproduce 3.0 cursor bounds/projection");
+  // At X 256 the icon group retains projection 0.6 (native X+80).
+  for (std::size_t vertex = 0U; vertex < 4U; ++vertex)
+    selectedItemVertices[vertex * 3U] += 156.0F;
+  Require(memory.WriteBytes(kSelectedItemPositions,
+                            std::span<const std::uint8_t>(
+                                reinterpret_cast<const std::uint8_t *>(selectedItemVertices.data()),
+                                sizeof(selectedItemVertices))) &&
+              ReadTopScreenItemsHintCursorBounds(memory, &selectedItemBounds, &error) &&
+              selectedItemBounds.Active && std::abs(selectedItemBounds.CenterX - 356.0F) < 0.0001F,
+          "right-column hint used the grid cursor projection");
+  // A hidden quad is skipped as a unit, even if its later vertices are visible.
+  selectedItemVertices[0U] = 400.0F;
+  Require(memory.WriteBytes(kSelectedItemPositions,
+                            std::span<const std::uint8_t>(
+                                reinterpret_cast<const std::uint8_t *>(selectedItemVertices.data()),
+                                sizeof(selectedItemVertices))) &&
+              ReadTopScreenItemsHintCursorBounds(memory, &selectedItemBounds, &error) &&
+              !selectedItemBounds.Active,
+          "hidden first vertex did not suppress the whole cursor quad");
   Require(memory.Write32(0x005066F8U + 0x34U, 0U) &&
               ReadTopScreenItemsHintCursorBounds(memory, &selectedItemBounds,
                                                  &error) &&
               !selectedItemBounds.Active,
           "the inactive native Items controller retained hint geometry");
+  // 3.0 0x005E2BA8: the same scan of the Gear cursor owner, at projection 0.8.
+  for (std::size_t vertex = 0U; vertex < 4U; ++vertex)
+    selectedItemVertices[vertex * 3U] = vertex % 2U == 0U ? 100.0F : 140.0F;
+  Require(memory.WriteBytes(kSelectedItemPositions,
+                            std::span<const std::uint8_t>(
+                                reinterpret_cast<const std::uint8_t *>(selectedItemVertices.data()),
+                                sizeof(selectedItemVertices))) &&
+              memory.Write32(0x00504480U, kSelectedItemModel) &&
+              ReadTopScreenGearCursorBounds(memory, &selectedItemBounds, &error) &&
+              selectedItemBounds.Active && std::abs(selectedItemBounds.CenterX - 160.0F) < 0.0001F &&
+              std::abs(selectedItemBounds.MaximumY - 80.0F) < 0.0001F &&
+              std::abs(selectedItemBounds.ScreenOffsetX - 40.0F) < 0.0001F &&
+              memory.Write32(0x00504480U, 0U) &&
+              ReadTopScreenGearCursorBounds(memory, &selectedItemBounds, &error) &&
+              !selectedItemBounds.Active,
+          "the Gear cursor bounds differ from 0x005CB298 at projection 0.8");
+  // 3.0 0x005E0F80: the A-hold ring beside Gear slot 4 of 0x00504BD4.
+  constexpr std::array<float, 4> gearSlot{10.0F, 20.0F, 30.0F, 40.0F};
+  for (std::uint32_t lane = 0U; lane < 4U; ++lane)
+    Require(memory.Write32(0x00504BD4U + (lane * 27U + 4U) * 4U, std::bit_cast<std::uint32_t>(gearSlot[lane])),
+            "cannot seed the Gear slot layout");
+  float ringX = 0.0F, ringY = 0.0F;
+  Require(ReadTopScreenGearHoldRingCenter(memory, 4U, &ringX, &ringY) &&
+              std::abs(ringX - 90.133333F) < 0.0001F && std::abs(ringY - 40.0F) < 0.0001F &&
+              !ReadTopScreenGearHoldRingCenter(memory, 27U, &ringX, &ringY),
+          "the Gear A-hold ring is not beside the native slot");
+  for (std::uint32_t lane = 0U; lane < 4U; ++lane)
+    Require(memory.Write32(0x00504BD4U + (lane * 27U + 4U) * 4U, 0U), "cannot clear the Gear slot layout");
 
   Oot3dNativeUiLifecycleBridge bridge(memory);
   const auto backgroundIdentity = bridge.NativePauseSharedTextureIdentity(
@@ -223,17 +272,32 @@ int main() {
   // System omits both redraw edges and the retained alternate-edge fallback.
   bridge.SetTopScreenPauseEdgePresentation(
       BuildTopScreenPauseEdgeGeometry(true, 5U, 0U, 0U, 0, 1.0F, 1.0F));
-  Require(memory.Write32(0x0055B4C4U, 0x00560400U) &&
-              memory.Write32(0x0056044CU, 0x14010000U) &&
-              memory.Write32(0x0055B4A0U, 0x00560500U) &&
-              memory.Write32(0x0056054CU, 0x14020000U) && memory.Write32(0x0050672CU, 2U),
-          "cannot seed cursor/equipment atlases for tab hints");
-  const auto pageHints = bridge.BuildTopScreenPresentation(oot3d::ui::UiSubsystem::GameplayHud);
-  for (const auto owner : {0x005E4030U, 0x005E4058U})
-    Require(std::count_if(pageHints.begin(), pageHints.end(), [=](const auto &primitive) {
-              return primitive.owner_address == owner;
-            }) == 2, "the ordinary page did not emit both tab-hint lanes");
-  Require(memory.Write32(0x0050A530U, 2U), "cannot activate System over the Items gate");
+  // No cursor/equipment bindings: 3.0 hints use the profile atlas directly.
+  Require(memory.Write32(0x0055B4C4U, 0U) && memory.Write32(0x0055B4A0U, 0U) &&
+              memory.Write32(0x0050672CU, 0U), "cannot clear retired hint atlases");
+  for (const auto page : {0x0050672CU, 0x00504484U, 0x00506CE8U}) {
+    Require(memory.Write32(page, 2U), "cannot open Items/Gear/Map for tab hints");
+    const auto pageHints = bridge.BuildTopScreenPresentation(oot3d::ui::UiSubsystem::GameplayHud);
+    Require(std::count_if(pageHints.begin(), pageHints.end(), [](const auto &primitive) {
+              return primitive.owner_address == 0x005D4A0CU;
+            }) == 4, "Items/Gear/Map did not emit both 3.0 tab-hint lanes");
+    for (const auto &primitive : pageHints) {
+      if (primitive.owner_address == 0x005D4A0CU)
+        Require(primitive.texture.semantic_name == "oot3d/topscreen/3.0/ui_atlas",
+                "lifecycle bound tab hints to a retired native atlas");
+    }
+    Require(memory.Write32(page, 0U), "cannot close tab-hint page");
+  }
+  const auto closedHints = bridge.BuildTopScreenPresentation(oot3d::ui::UiSubsystem::GameplayHud);
+  Require(std::none_of(closedHints.begin(), closedHints.end(), [](const auto &primitive) {
+            return primitive.owner_address == 0x005D4A0CU;
+          }), "lifecycle retained tab hints after the pages closed");
+  Require(memory.Write32(0x0050672CU, 2U) && memory.Write32(0x0050A530U, 2U),
+          "cannot activate System over the Items gate");
+  const auto systemHints = bridge.BuildTopScreenPresentation(oot3d::ui::UiSubsystem::GameplayHud);
+  Require(std::none_of(systemHints.begin(), systemHints.end(), [](const auto &primitive) {
+            return primitive.owner_address == 0x005D4A0CU;
+          }), "native System state retained tab hints");
   bridge.SetTopScreenSystemPagePresentation(true);
   for (const bool redrawEdges : {true, false}) {
     if (!redrawEdges) {
@@ -242,8 +306,7 @@ int main() {
     }
     const auto systemPresentation = bridge.BuildTopScreenPresentation(oot3d::ui::UiSubsystem::GameplayHud);
     for (const auto &primitive : systemPresentation)
-      Require(primitive.owner_address != 0x005CD1E0U && primitive.owner_address != 0x005E4030U &&
-                  primitive.owner_address != 0x005E4058U,
+      Require(primitive.owner_address != 0x005CD1E0U && primitive.owner_address != 0x005D4A0CU,
               "System retained pause edges or tab hints");
   }
   Require(memory.Write32(0x0050A530U, 0U) && memory.Write32(0x0050672CU, 0U),
@@ -529,6 +592,107 @@ int main() {
               selectorBridge.NativeFrontendPresentationActive() &&
               selectorBridge.Stats().version_choice_reveals == 2U,
           "a prompt press did not reveal the entering panels");
+
+  NativeA32Memory ringMemory;
+  Require(ringMemory.MapRegion(
+              {"hold-ring-state", 0x004F0000U, 0x00110000U, true, false, {}}, &error),
+          "cannot map hold-ring fixture");
+  Require(ringMemory.Write32(0x0050672CU, 2) && ringMemory.Write32(0x0058795CU, 1) &&
+              ringMemory.Write32(0x0055B498U, 0x00560200U) &&
+              ringMemory.Write32(0x0056024CU, 0x1400789AU) &&
+              ringMemory.Write32(0x005067A8U, kSelectedItemModel) &&
+              ringMemory.Write32(kSelectedItemModel + 4, kSelectedItemFirstOwner) &&
+              ringMemory.Write32(kSelectedItemFirstOwner + 4, kSelectedItemStreamOwner) &&
+              ringMemory.Write32(kSelectedItemStreamOwner + 0x124, 2) &&
+              ringMemory.Write32(kSelectedItemStreamOwner + 0x1A8, kSelectedItemPositions),
+          "cannot seed hold-ring cursor and texture owners");
+  for (unsigned vertex = 0; vertex < 16; ++vertex) selectedItemVertices[vertex * 3] = 400;
+  for (unsigned vertex = 0; vertex < 4; ++vertex) {
+    selectedItemVertices[vertex * 3] = 100.0F + (vertex % 2) * 40.0F;
+    selectedItemVertices[vertex * 3 + 1] = 50.0F + (vertex / 2) * 30.0F;
+  }
+  const auto uploadRingBounds = [&] {
+    Require(ringMemory.WriteBytes(kSelectedItemPositions, std::span<const std::uint8_t>(
+                reinterpret_cast<const std::uint8_t *>(selectedItemVertices.data()),
+                sizeof(selectedItemVertices))), "cannot update live hold-ring bounds");
+  };
+  uploadRingBounds();
+  TopScreenWideItemsRuntime ringSource(ringMemory);
+  Oot3dNativeUiLifecycleBridge ringBridge(ringMemory);
+  ringBridge.SetTopScreenItemsShortcutSource(&ringSource);
+  // Seed an observed producer snapshot; actual input advancement is covered
+  // by the wide Items runtime suite, which links the native-call adapter.
+  auto &ringShortcuts = const_cast<TopScreenItemsShortcutState &>(ringSource.Shortcuts());
+  auto &ringDraw = const_cast<TopScreenItemsShortcutDrawState &>(ringSource.ShortcutDraw());
+  auto &ringPicker = const_cast<TopScreenDpadPickerState &>(ringSource.DpadPicker());
+  ringShortcuts.SelectedRow = 1;
+  ringShortcuts.HoldFrames = 7;
+  ringDraw.Active = ringDraw.Child = true;
+  const auto presentRing = [&] {
+    return ringBridge.BuildTopScreenPresentation(oot3d::ui::UiSubsystem::GameplayHud);
+  };
+  const auto aGlyphs = [&](const auto &primitives) {
+    return std::count_if(primitives.begin(), primitives.end(), [](const auto &p) {
+      return p.owner_address == 0x005E34A4U;
+    });
+  };
+  Require(aGlyphs(presentRing()) == 1 && ringBridge.TopScreenItemsShortcutCursor().Count == 36 &&
+              ringBridge.TopScreenDpadPickerCursor().Count == 0 &&
+              std::abs(ringBridge.TopScreenItemsShortcutCursor().CenterX - 234.133333F) < 0.0001F &&
+              std::abs(ringBridge.TopScreenItemsShortcutCursor().CenterY - 65.0F) < 0.0001F &&
+              ringBridge.TopScreenItemsShortcutCursor().TextureAlphaScale == 2,
+          "lifecycle did not expose the native-bound A ring and its glyph");
+  presentRing();
+  Require(ringShortcuts.HoldFrames == 7 && ringBridge.TopScreenItemsShortcutCursor().Count == 36,
+          "host redraw advanced A-hold time");
+  for (unsigned vertex = 0; vertex < 4; ++vertex) selectedItemVertices[vertex * 3] += 10;
+  uploadRingBounds();
+  presentRing();
+  Require(std::abs(ringBridge.TopScreenItemsShortcutCursor().CenterX - 244.133333F) < 0.0001F,
+          "A ring did not follow a newly uploaded native cursor");
+  Require(ringMemory.Write32(0x005067A8U, 0), "cannot hide native cursor");
+  Require(aGlyphs(presentRing()) == 0 && ringBridge.TopScreenItemsShortcutCursor().Count == 0,
+          "missing native cursor retained an A ring/glyph");
+  Require(ringMemory.Write32(0x005067A8U, kSelectedItemModel), "cannot restore native cursor");
+  ringPicker.Phase = TopScreenDpadPickerPhase::Choosing;
+  ringPicker.Child = true;
+  ringPicker.ClearHoldFrames = 2;
+  Require(aGlyphs(presentRing()) == 0 && ringBridge.TopScreenItemsShortcutCursor().Count == 0 &&
+              ringBridge.TopScreenDpadPickerCursor().Count == 26 &&
+              ringBridge.TopScreenDpadPickerCursor().TextureAlphaScale == 2,
+          "modal/clear ring did not replace the pre-picker A ring");
+  ringPicker = {};
+  ringShortcuts.HoldFrames = -1;
+  Require(aGlyphs(presentRing()) == 0 && ringBridge.TopScreenDpadPickerCursor().Count == 0,
+          "released buttons retained cursor output");
+  for (const auto page : {0U, 1U, 3U}) {
+    ringShortcuts.HoldFrames = 7;
+    Require(ringMemory.Write32(0x0050672CU, page), "cannot switch hold-ring page");
+    Require(aGlyphs(presentRing()) == 0 && ringBridge.TopScreenItemsShortcutCursor().Count == 0 &&
+                ringShortcuts.HoldFrames == -1, "page change retained pre-picker progress");
+  }
+  Require(ringMemory.Write32(0x0050672CU, 2) && ringMemory.Write32(0x0058795CU, 0),
+          "cannot change hold-ring age");
+  ringShortcuts.HoldFrames = 7;
+  Require(aGlyphs(presentRing()) == 0 && ringShortcuts.HoldFrames == -1,
+          "age change retained pre-picker progress");
+  Require(ringMemory.Write32(0x0058795CU, 1), "cannot restore hold-ring age");
+  ringShortcuts.HoldFrames = 7;
+  ringBridge.SetTopScreenSystemPagePresentation(true);
+  Require(aGlyphs(presentRing()) == 0 && ringShortcuts.HoldFrames == -1,
+          "System presentation retained pre-picker progress");
+  ringBridge.SetTopScreenSystemPagePresentation(false);
+  ringShortcuts.HoldFrames = 7;
+  presentRing();
+  ringBridge.ResetAfterStateLoad(50);
+  Require(ringBridge.TopScreenItemsShortcutCursor().Count == 0 &&
+              ringBridge.TopScreenDpadPickerCursor().Count == 0 && ringShortcuts.HoldFrames == -1,
+          "savestate reset retained hold cursors or progress");
+  ringShortcuts.HoldFrames = 7;
+  presentRing();
+  ringBridge.SetTopScreenItemsShortcutSource(nullptr);
+  Require(ringBridge.TopScreenItemsShortcutCursor().Count == 0 && aGlyphs(presentRing()) == 0,
+          "detaching the producer retained the A ring/glyph");
 
   std::cout << "oot3d_native_ui_lifecycle_bridge_tests: ok\n";
   return 0;

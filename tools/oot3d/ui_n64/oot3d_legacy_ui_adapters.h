@@ -28,14 +28,21 @@ class Fast3dUiRenderBackend final
     bool DrawUiTriangles(
         std::span<const Oot3d::Renderer::UiOverlayVertex> vertices,
         std::uint32_t textureId, std::string* error = nullptr) override;
+    bool DrawUiTrianglesSaturated(
+        std::span<const Oot3d::Renderer::UiOverlayVertex> vertices,
+        std::uint32_t textureId, std::string* error = nullptr) override;
 
   private:
-    Fast::ShaderProgram* ResolveShader(bool textured, std::string* error);
+    // saturated: the textured combiner in its PICA (clamping) form.
+    Fast::ShaderProgram* ResolveShader(bool textured, bool saturated, std::string* error);
+    bool Draw(std::span<const Oot3d::Renderer::UiOverlayVertex> vertices,
+              std::uint32_t textureId, bool saturated, std::string* error);
 
     Fast::GfxRenderingAPI& rendering_api_;
     Fast::Oot3d::TitleRenderBackend* title_render_backend_ = nullptr;
     Fast::ShaderProgram* solid_shader_ = nullptr;
     Fast::ShaderProgram* textured_shader_ = nullptr;
+    Fast::ShaderProgram* saturated_shader_ = nullptr;
 };
 
 } // namespace oot3d::ui

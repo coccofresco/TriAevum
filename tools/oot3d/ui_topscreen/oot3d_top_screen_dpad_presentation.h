@@ -14,19 +14,23 @@ struct TopScreenDpadPresentationState {
   bool Boomerang = false;
   bool Slingshot = false;
   TopScreenNativeItemOpacity ItemOpacity;
+  // 3.0 0x005CCF6C, as for the cross: the icons without a lane alpha of
+  // their own (not ZR, ZL or the Ocarina) take it (loop at 0x005DD78C).
+  float GroupAlpha = 1.0F;
 };
 
 bool ReadTopScreenDpadPresentationState(NativeA32Memory &memory,
                                         TopScreenDpadPresentationState *state);
 
 // Emits mapped action icons and their native cycle marks. The cross, face buttons and global
-// HUD scale remain owned by the existing HUD compositor.
+// HUD scale remain owned by the existing HUD compositor. The cycle marks use
+// the SingleScreen 3.0 cycle badge in uiAtlas (custom_ui01).
 std::size_t AppendTopScreenDpadPresentation(
     const TopScreenUiConfig &config,
     const TopScreenDpadPresentationState &state,
     const TopScreenAuxiliaryTouchInputs &viewState, float alpha,
     const oot3d::ui::UiTextureIdentity &itemIcons,
-    const oot3d::ui::UiTextureIdentity &pauseTopPage,
+    const oot3d::ui::UiTextureIdentity &uiAtlas,
     std::vector<oot3d::ui::UiPrimitive> &output);
 
 } // namespace Oot3dNativeGame

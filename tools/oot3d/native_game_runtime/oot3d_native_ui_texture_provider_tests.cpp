@@ -1,9 +1,11 @@
 #include "oot3d_native_ui_texture_provider.h"
 #include "oot3d_native_a32_memory.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstdint>
 #include <iostream>
+#include <memory>
 #include <span>
 #include <string>
 #include <string_view>
@@ -303,6 +305,62 @@ int main() {
                         .profile_asset_decode_failures == 0U,
             "named TopScreen profile CTXB did not resolve through the common "
             "PICA decoder");
+
+    // A custom texture source (a user texture pack) sees the encoded base
+    // level and replaces the decoded pixels once its replacement is ready.
+    Oot3dNativeUiCustomTexture::State packState =
+        Oot3dNativeUiCustomTexture::State::Pending;
+    std::vector<std::uint8_t> requested;
+    std::uint8_t requestedFormat = 0xFFU;
+    std::uint64_t packRevision = 7U;
+    const auto replacement =
+        std::make_shared<const std::vector<std::uint8_t>>(16U * 16U * 4U, 0x40U);
+    const Oot3dNativeUiCustomTextureSource packSource{
+        [&](const Oot3dNativeUiCustomTextureRequest& request) {
+            requested.assign(request.encoded_base_level.begin(),
+                             request.encoded_base_level.end());
+            requestedFormat = request.native_pica_format;
+            Oot3dNativeUiCustomTexture custom;
+            custom.state = packState;
+            if (packState == Oot3dNativeUiCustomTexture::State::Ready) {
+                custom.width = 16U;
+                custom.height = 16U;
+                custom.rgba8 = replacement;
+            }
+            return custom;
+        },
+        [&] { return packRevision; },
+    };
+    profileTextureProvider.SetCustomTextureSource(packSource);
+    Require(profileTextureProvider.Revision() == 7U,
+            "UI provider does not report its custom texture revision");
+    Require(profileTextureProvider.Resolve(profileTextureIdentity, pixels,
+                                           &error) &&
+                pixels.provisional && pixels.width == 8U &&
+                pixels.rgba8.front() == 0xFFU &&
+                requested == profileTexturePayload && requestedFormat == 0U,
+            "a pending custom texture did not keep provisional native pixels");
+    packState = Oot3dNativeUiCustomTexture::State::Ready;
+    Require(profileTextureProvider.Resolve(profileTextureIdentity, pixels,
+                                           &error) &&
+                !pixels.provisional && pixels.width == 16U &&
+                pixels.height == 16U && pixels.rgba8 == *replacement &&
+                profileTextureProvider.Stats().custom_texture_replacements == 1U &&
+                profileTextureProvider.Stats().custom_texture_pending == 1U,
+            "a ready custom texture did not replace the TopScreen profile pixels");
+
+    // Native CTXB textures are identified after the TopScreen override, as
+    // the game with that mod installed would upload them.
+    Require(memory.WriteBytes(0x14000000U, originalPayload),
+            "could not restore the native override fixture");
+    overrideProvider.SetCustomTextureSource(packSource);
+    requested.clear();
+    Require(overrideProvider.Resolve(identity, pixels, &error) &&
+                pixels.width == 16U && !requested.empty() &&
+                requested.size() <= replacementPayload.size() &&
+                std::equal(requested.begin(), requested.end(),
+                           replacementPayload.begin()),
+            "native UI custom texture was not identified by its overridden bytes");
 
     std::cout << "oot3d_native_ui_texture_provider_tests: ok\n";
     return 0;

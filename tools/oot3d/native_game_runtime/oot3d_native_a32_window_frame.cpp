@@ -81,6 +81,58 @@ Oot3dNativeGame::NativeGuestClockDeadlineResolution AdvanceGuestClockTo(
   return resolution;
 }
 
+// The hold rings (0x005CCA90): the D-pad picker's X clear and the shortcut
+// row's A open. Black sectors, then the yellow fill, as free quads of the
+// OcarinaPage texture under their layer-38 glyphs.
+void AppendTopScreenDpadPickerHoldRings(
+    const Oot3dNativeGame::Oot3dNativeUiLifecycleBridge &bridge,
+    std::vector<oot3d::ui::UiPrimitive> &primitives) {
+  const auto &clear = bridge.TopScreenDpadPickerCursor();
+  const auto &open = bridge.TopScreenItemsShortcutCursor();
+  if (clear.Count == 0U && open.Count == 0U) {
+    return;
+  }
+  const auto texture = bridge.NativePauseSharedTextureIdentity(
+      oot3d::ui::UiPauseSharedTextureSlot::OcarinaPage);
+  if (!texture.has_value()) {
+    return;
+  }
+  unsigned sourceQuad = 0U;
+  for (const auto *ring : {&clear, &open}) {
+    const unsigned count = std::min<unsigned>(ring->Count, ring->Quads.size());
+    for (unsigned index = 0; index < count; ++index) {
+      const auto &quad = ring->Quads[index];
+      oot3d::ui::UiPrimitive primitive;
+      primitive.subsystem = oot3d::ui::UiSubsystem::Items;
+      primitive.role = oot3d::ui::UiPrimitiveRole::PauseCursor;
+      primitive.owner_address = 0x005CCA90U;
+      primitive.source_quad = sourceQuad++;
+      primitive.texture = *texture;
+      // 0x005CBD64's material: RGB is the vertex colour; alpha is the
+      // filtered texel alpha (the opaque 425..426 line) times the vertex
+      // alpha, scaled by 2 and saturated.
+      primitive.texture_alpha_only = true;
+      primitive.texture_alpha_scale = ring->TextureAlphaScale;
+      primitive.color = quad.Color;
+      primitive.layer = 37U;
+      std::array<oot3d::ui::UiVertex, 4> corners{};
+      float left = quad.Vertices[0].X, right = left;
+      float top = quad.Vertices[0].Y, bottom = top;
+      for (std::size_t corner = 0; corner < corners.size(); ++corner) {
+        const auto &vertex = quad.Vertices[corner];
+        corners[corner] = {vertex.X, vertex.Y, vertex.U, vertex.V};
+        left = std::min(left, vertex.X);
+        right = std::max(right, vertex.X);
+        top = std::min(top, vertex.Y);
+        bottom = std::max(bottom, vertex.Y);
+      }
+      primitive.destination = {left, top, right - left, bottom - top};
+      primitive.corners = corners;
+      primitives.push_back(std::move(primitive));
+    }
+  }
+}
+
 } // namespace
 
 bool NativeA32WindowSession::RunFrame() {
@@ -435,6 +487,7 @@ bool NativeA32WindowSession::RunFrame() {
         subsystem == oot3d::ui::UiSubsystem::GameplayHud) {
       Oot3dNativeGame::AppendTopScreenFreeCameraOptionPresentation(
           nativeCandidateDispatch.TopScreenCamera.Camera, primitives);
+      AppendTopScreenDpadPickerHoldRings(uiLifecycleBridge, primitives);
     }
     if (topScreenPresentation && subsystem == oot3d::ui::UiSubsystem::TouchControls) {
       ocarinaText.Append(primitives);
@@ -699,8 +752,14 @@ bool NativeA32WindowSession::UpdateGuestServicesForRefresh(
   const bool ocarinaOwnsDpad = nativeCandidateDispatch.TopScreenUiProfile &&
       Oot3dNativeGame::ReadTopScreenOcarinaState(process.Memory(), &ocarinaOwner) &&
       ocarinaOwner.Active;
+  // Gameplay D-pad mappings apply only while the native controller is in
+  // gameplay (2); in the pause pages the D-pad navigates the native cursor.
+  std::uint32_t topScreenController = 0U;
+  const bool topScreenGameplayDpad =
+      process.Memory().Read32(kTopScreenPauseState, &topScreenController) &&
+      topScreenController == 2U;
   if (nativeCandidateDispatch.TopScreenUiProfile &&
-      topScreenStartRoutingEligible && !ocarinaOwnsDpad) {
+      topScreenStartRoutingEligible && topScreenGameplayDpad && !ocarinaOwnsDpad) {
     bool childLink = false;
     std::string childLinkError;
     if (!Oot3dNativeGame::ReadTopScreenChildLink(
@@ -830,6 +889,17 @@ bool NativeA32WindowSession::UpdateGuestServicesForRefresh(
     if (selectPressed &&
         activeTopScreenConfig.SelectAction ==
             Oot3dNativeGame::TopScreenSelectAction::MinimapToggle) {
+      inputFrame.Hid.Buttons &=
+          ~button(Oot3dNativeGame::NativeA32HidButton::Select);
+    }
+    // 2.1.1 0x005D5BC0..0x005D5C70 (issue 80): the source port disables the
+    // native Save route at 0x0042EC2C, so SELECT opens Save/Quit through the
+    // pause transaction, delivered at the native UI input boundary.
+    if (selectPressed &&
+        activeTopScreenConfig.SelectAction ==
+            Oot3dNativeGame::TopScreenSelectAction::SaveScreen) {
+      nativeCandidateDispatch.PauseTransaction->RequestSelectSave();
+      nativeCandidateDispatch.ItemDescription->Hide();
       inputFrame.Hid.Buttons &=
           ~button(Oot3dNativeGame::NativeA32HidButton::Select);
     }
@@ -1350,6 +1420,16 @@ void NativeA32WindowSession::RunGuestRefresh() {
         // MM3D's interface keeps the 16:9 frame mm3d-dekui lays it out for,
         // whatever the output's aspect; the scene fills the output.
         plan.UiFrameExtensionY = Oot3dNativeGame::kMm3dUiFrameExtensionY;
+      }
+      if (picaRawDrawRecorder.Enabled() &&
+          !picaRawDrawRecorder.Seen(plan.CanonicalIdentity.PipelineId)) {
+        const auto &vertex = plan.VertexShader.SourceIdentity;
+        const auto &fragment = plan.FragmentShader.SourceIdentity;
+        picaRawDrawRecorder.Observe(
+            plan.CanonicalIdentity.PipelineId, draw.Packet,
+            {plan.VertexShader.StateKey, plan.FragmentShader.StateKey, vertex.Id,
+             vertex.SecondaryHash, vertex.Size, fragment.Id, fragment.SecondaryHash,
+             fragment.Size});
       }
       picaSemanticTrace.RecordDraw(
           presentationFrameCount, frameCount, draw, plan,
@@ -2543,10 +2623,10 @@ void NativeA32WindowSession::PublishNativeSceneView() {
 // Guest memory and guest interrupts belong to the guest. The renderer
 // reaches them only from a command the guest waits for (inline or Run);
 // anything else would race the running guest, so it fails instead.
-void NativeA32WindowSession::RequireStoppedGuest() {
+void NativeA32WindowSession::RequireStoppedGuest(const char *access) {
   if (renderStream.InCommand() && !renderStream.InSynchronousCommand()) {
     throw std::runtime_error(
-        "renderer reached guest state while the guest was running");
+        std::string("renderer reached guest state while the guest was running (") + access + ")");
   }
 }
 

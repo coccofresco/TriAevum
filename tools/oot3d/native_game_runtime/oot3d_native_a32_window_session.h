@@ -52,6 +52,7 @@
 #include "oot3d_native_pica_frontend.h"
 #include "oot3d_native_pica_composition.h"
 #include "oot3d_native_pica_presentation_scheduler.h"
+#include "oot3d_native_pica_raw_draw_record.h"
 #include "oot3d_native_render_command_stream.h"
 #include "oot3d_native_pica_semantic_trace.h"
 #include "oot3d_native_pica_submission.h"
@@ -158,7 +159,7 @@ inline std::string gSwitchGameplayTiming = "unknown";
 inline std::string gSwitchControlProfile = "unknown";
 inline uint32_t gSwitchPresentationRateHz = 0U;
 inline bool gSwitchVisualInterpolation = false;
-inline bool gSwitchTopScreen211Assets = false;
+inline bool gSwitchTopScreen30UiAtlas = false;
 inline uint32_t gSwitchWholeAotBlockBudget = 0U;
 inline uint64_t gSwitchWholeAotBlockLimitExits = 0U;
 inline bool gSwitchPicaGeometryCacheEnabled = false;
@@ -278,6 +279,7 @@ private:
   void Finish();
   // The setup's former lambdas.
   void ApplyTopScreenConfigSnapshot();
+  void ApplyTopScreenRainConfig();
   void SetTopScreenSessionMinimapVisible(bool visible);
   void ApplySelectedUiProfile();
   void UpdateScenePresentation();
@@ -289,7 +291,7 @@ private:
   void RestoreSavestatePicaVisualReplayState(const Oot3dNativeGame::NativeA32SavestateRuntimeState &runtime);
   Fast::Renderer3ds::PicaFrameCompositionPolicy ResolveFrameCompositionPolicy(const Fast::Oot3d::PresentationPacingPolicy& pacing);
   void PublishNativeSceneView();
-  void RequireStoppedGuest();
+  void RequireStoppedGuest(const char *access);
   std::vector<Fast::Renderer3ds::PicaTextureCopyReference> CollectGuestCopyReferences();
   void PinGpuCopyResources(const Oot3dNativeGame::Oot3dPicaVisualFrameViewSample& sample);
   bool FlushNativeDependencies();
@@ -446,6 +448,9 @@ private:
   std::optional<Oot3dNativeGame::TopScreenSystemPageRuntime> systemPageStorage;
   std::optional<Oot3dNativeGame::TopScreenItemDescriptionRuntime> itemDescriptionStorage;
   std::optional<Oot3dNativeGame::TopScreenWideItemsRuntime> wideItemsStorage;
+  std::optional<Oot3dNativeGame::TopScreenGameplayRuntime> gameplayStorage;
+  std::optional<Oot3dNativeGame::ObjectBankExtension> objectBankStorage;
+  std::optional<Oot3dNativeGame::TopScreenRainAdapter> rainStorage;
   std::optional<oot3d::ui::Fast3dUiRenderBackend> uiRenderBackendStorage;
   std::optional<oot3d::ui::N64UiFast3dRenderer> n64UiRendererStorage;
   std::array<std::vector<oot3d::ui::UiPrimitive>, oot3d::ui::kUiSubsystemCount> lastTopScreenPrimitivesBySubsystem;
@@ -457,6 +462,9 @@ private:
   NativeControlPollingState nativeControlPollingState;
   Oot3dNativeGame::Oot3dPicaVulkanShaderSourceCache shaderSourceCache;
   std::optional<Oot3dNativeGame::Oot3dPicaSemanticTraceWriter> picaSemanticTraceStorage;
+  // OOT3D_PICA_RAW_DRAWS: the raw PICA state of each canonical pipeline, for
+  // offline variant replay (with OOT3D_PICA_VARIANT_REQUESTS).
+  Oot3dNativeGame::Oot3dPicaRawDrawRecorder picaRawDrawRecorder;
   std::optional<Oot3dNativeGame::NativeA32DspHle> dspHleStorage;
   Ship::Context *context{};
   std::shared_ptr<Ship::Audio> audio{};

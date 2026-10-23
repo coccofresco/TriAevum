@@ -228,6 +228,20 @@ bool ReadTopScreenHudCompositorGate(NativeA32Memory &memory,
                                     TopScreenHudCompositorGate *gate,
                                     std::string *error = nullptr);
 
+// Native Gameplay_InCsMode (0x0037577C) for a live play state and player.
+bool ReadTopScreenGameplayInCutsceneMode(NativeA32Memory &memory, std::uint32_t playState,
+                                         std::uint32_t player, bool *cutscene,
+                                         std::string *error = nullptr);
+
+// SingleScreen 3.0 replaces PauseQuestPage_Draw (0x0042B9F4) with 0x005C91D0,
+// which draws nothing while a pause owner (Items/Gear, Map, pause camera,
+// System) is active or while the runtime scene latch holds with native byte
+// 0x005C3F71 set: no page title and no Quest overlay over the paused scene.
+// `runtimeSceneLatch` is 0x005C8E0C's latch (TopScreenTouchCoordinateRoute).
+bool ReadTopScreenQuestPageDrawSuppressed(NativeA32Memory &memory,
+                                          bool runtimeSceneLatch, bool *suppressed,
+                                          std::string *error = nullptr);
+
 struct TopScreenNativeTouchQuad28LayoutStats {
   bool Eligible = false;
   bool Transformed = false;
@@ -296,9 +310,10 @@ std::size_t AppendTopScreenMagicMeterPresentation(
     const oot3d::ui::UiTextureIdentity &pauseTopPage,
     std::vector<oot3d::ui::UiPrimitive> &output);
 
+// Draws from the SingleScreen 3.0 UI atlas (custom_ui01, 512x256).
 std::size_t AppendTopScreenTouchClusterPresentation(
     const TopScreenTouchClusterGeometry &geometry,
-    const oot3d::ui::UiTextureIdentity &pauseTopPage,
+    const oot3d::ui::UiTextureIdentity &uiAtlas,
     std::vector<oot3d::ui::UiPrimitive> &output);
 
 std::size_t AppendTopScreenPauseEdgePresentation(
@@ -306,23 +321,19 @@ std::size_t AppendTopScreenPauseEdgePresentation(
     const oot3d::ui::UiTextureIdentity &itemPage,
     std::vector<oot3d::ui::UiPrimitive> &output);
 
-// TopScreen 2.1.1 L/R tab hints beside GEAR/MAP/ITEMS (payload
-// 0x005CFE48..0x005D0370, drawn after the redrawn page): shown while the
-// Items, Gear or Map page is open (not System); a held L or R (0x005655A0
-// bits 0x200/0x100) dims its hint to RGB 0.55.
+// SingleScreen 3.0 L/R tab hints (0x005D4A0C), drawn after the redrawn page.
+// Items, Gear or Map must be open (not System); held L/R (0x005655A0 bits
+// 0x200/0x100) dims only its glyph to RGB 0.55.
 struct TopScreenTabHintInputs {
   bool PageOpen = false;
   bool LeftHeld = false;
   bool RightHeld = false;
 };
 bool ReadTopScreenTabHintInputs(NativeA32Memory &memory, TopScreenTabHintInputs *inputs);
-// Appends the two backing quads (EquipmentPage atlas, 512x256) and then the
-// two glyphs (Cursor atlas, 128x128, stored a quarter turn), in the 400x240
-// top-screen domain: the payload's 320-wide page coordinates plus the
-// page's 40-pixel offset. Returns the number of primitives appended.
+// Two backing quads, then glyphs: custom_ui01 (512x256), rects 20/21 at
+// 0x0060A568. The 400x240 top-screen domain adds the page's 40-pixel offset.
 std::size_t AppendTopScreenTabHintPresentation(
-    const TopScreenTabHintInputs &inputs, const oot3d::ui::UiTextureIdentity &cursor,
-    const oot3d::ui::UiTextureIdentity &equipmentPage,
+    const TopScreenTabHintInputs &inputs, const oot3d::ui::UiTextureIdentity &uiAtlas,
     std::vector<oot3d::ui::UiPrimitive> &output);
 
 struct TopScreenTexturedQuad {
@@ -376,6 +387,14 @@ struct TopScreenNativeItemOpacity {
   float Ocarina = 1.0F;
 };
 
+// SingleScreen 3.0 0x005CCF6C, the D-pad cross alpha: the first visible of
+// the ZR / ZL item lanes (0x0060D224 / 0x0060D228, stored by 0x005DC868 from
+// the native item colours), clamped to 1; with both hidden, 0.3 in gameplay
+// while the player has a nested owner (+0x12B8), otherwise 1.
+float ResolveTopScreenDpadGroupAlpha(const TopScreenNativeItemOpacity &lanes,
+                                     bool nestedOwner) noexcept;
+bool ReadTopScreenPlayerNestedOwner(NativeA32Memory &memory, bool *nestedOwner);
+
 bool AppendTopScreenNativeItemIconCopies(
     NativeA32Memory &memory, const std::array<float, 4> &nativeVerticalOffsets,
     float nativeAlpha, const oot3d::ui::UiTextureIdentity &itemIcons,
@@ -405,9 +424,10 @@ TopScreenTouchLabelsGeometry BuildTopScreenTouchLabelsGeometry(
     float nativeAlpha,
     TopScreenHudLayout layout = TopScreenHudLayout::Normal) noexcept;
 
+// Draws from the SingleScreen 3.0 UI atlas (custom_ui01, 512x256).
 std::size_t AppendTopScreenTouchLabelsPresentation(
     const TopScreenTouchLabelsGeometry &geometry,
-    const oot3d::ui::UiTextureIdentity &pauseTopPage,
+    const oot3d::ui::UiTextureIdentity &uiAtlas,
     std::vector<oot3d::ui::UiPrimitive> &output);
 
 struct TopScreenAuxiliaryTouchInputs {
@@ -440,9 +460,10 @@ TopScreenAuxiliaryTouchGeometry BuildTopScreenAuxiliaryTouchGeometry(
     const std::array<float, 4> &nativeVerticalOffsets,
     float nativeAlpha,
     TopScreenHudLayout layout = TopScreenHudLayout::Normal) noexcept;
+// Draws from the SingleScreen 3.0 UI atlas (custom_ui01, 512x256).
 std::size_t AppendTopScreenAuxiliaryTouchPresentation(
     const TopScreenAuxiliaryTouchGeometry &geometry,
-    const oot3d::ui::UiTextureIdentity &pauseTopPage,
+    const oot3d::ui::UiTextureIdentity &uiAtlas,
     std::vector<oot3d::ui::UiPrimitive> &output);
 
 // Typed equivalents of payload words 005E3D8C (previous player state) and
@@ -490,6 +511,17 @@ void ApplyTopScreenHudScale(
     std::span<oot3d::ui::UiPrimitive> primitives,
     const TopScreenUiConfig &config) noexcept;
 
+// SingleScreen 3.0 button group placement before the HUD scale: size
+// (modopts+0x2D) and offset (+0x2E/+0x2F), which the hub 0x005DB6B4..0x005DB75C
+// clamps to [-20, 10] x [-10, 40] px after the HUD scale.
+struct TopScreenButtonGroupPlacement {
+  float Scale = 1.0F;
+  float OffsetX = 0.0F;
+  float OffsetY = 0.0F;
+};
+TopScreenButtonGroupPlacement ResolveTopScreenButtonGroupPlacement(
+    const TopScreenUiConfig &config) noexcept;
+
 struct TopScreenVec3 {
   float X = 0.0F;
   float Y = 0.0F;
@@ -510,6 +542,13 @@ struct TopScreenQuestGeometryContext {
   float HudScale = 1.0F;
   float HudMarginX = 0.0F;
   float HudMarginY = 0.0F;
+  // SingleScreen 3.0 0x005C84B8 places the A group with the button group:
+  // its size (0x0060D20C) and its offset, here before the HUD scale.
+  float ButtonGroupScale = 1.0F;
+  float ButtonGroupOffsetX = 0.0F;
+  float ButtonGroupOffsetY = 0.0F;
+  // 0x005DA3D4: alternate HUD mode 1 or 4 (0x004FC648+0x48) hides the A label.
+  bool ActionLabelHidden = false;
 };
 
 struct TopScreenSystemMenuLayerStats {
@@ -577,6 +616,30 @@ bool ApplyTopScreenQuestDrawModelTransform(
     const TopScreenUiConfig &config, TopScreenPauseProjectionState &state,
     TopScreenQuestModelTransformStats *stats = nullptr,
     std::string *error = nullptr);
+
+// SingleScreen 3.0 draws its button circles (hub 0x005DCAD0, from the
+// Gameplay_Draw hook 0x002E27C0) before the native Quest page, so the native
+// B item icon (Quest main renderer, ItemIcons) and its ammo digits (first
+// child, NumberGlyphs) cover the B circle. The host HUD is composed after the
+// native UI: at the Quest draw (0x0042B9F4) the quads around the B button are
+// copied for the host, drawn above its circle, and moved off screen for the
+// native draw (the submit rebuilds them every frame).
+struct TopScreenQuestCopiedQuad {
+  std::array<TopScreenVec2, 4> Positions{};
+  std::array<float, 8> Uvs{};
+  oot3d::ui::UiColor Color;
+  bool NumberGlyphs = false;
+};
+bool CaptureTopScreenQuestBButtonCopies(NativeA32Memory &memory,
+                                        const TopScreenUiConfig &config,
+                                        std::vector<TopScreenQuestCopiedQuad> *copies,
+                                        std::string *error = nullptr);
+// Final native coordinates: append after the HUD scale.
+std::size_t AppendTopScreenQuestBButtonCopiesPresentation(
+    std::span<const TopScreenQuestCopiedQuad> copies,
+    const oot3d::ui::UiTextureIdentity &itemIcons,
+    const oot3d::ui::UiTextureIdentity &numberGlyphs,
+    std::vector<oot3d::ui::UiPrimitive> &output);
 
 bool ReadTopScreenQuestGeometryContext(
     NativeA32Memory &memory, TopScreenQuestGeometryContext *context,
@@ -730,6 +793,10 @@ struct TopScreenPauseDrawRoutingState {
   bool NativeTransitionLatched = false;
   bool SuppressionDelayArmed = false;
   std::uint16_t SuppressionDelayCommands = 0;
+  // SingleScreen 3.0 0x005CD348 returns 0 while the View Model is open, so
+  // the native pause scene (the Gear item model) keeps the upper screen. Host
+  // input, refreshed before each decision.
+  bool NativeSceneRequested = false;
 };
 
 struct TopScreenPausePageRedrawInputs {

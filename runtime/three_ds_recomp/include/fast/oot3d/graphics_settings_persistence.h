@@ -33,6 +33,13 @@ SerializeGraphicsSettings(const GraphicsSettings& settings);
     const nlohmann::json& document,
     GraphicsSettings fallback = {});
 
+// Decodes one "Graphics" block field by field without validating it against
+// capabilities or cross-field rules. For documents that record effective,
+// already-resolved state (shader variant recordings), never for user settings.
+[[nodiscard]] GraphicsSettingsLoadResult DeserializeGraphicsSettingsFields(
+    const nlohmann::json& document,
+    GraphicsSettings fallback = {});
+
 // The Enhanced preset, the default of a new installation: a tuned play
 // configuration's "Graphics" block, without the state a preset never sets
 // (window, output, presentation, texture packs, grass sources, reflection

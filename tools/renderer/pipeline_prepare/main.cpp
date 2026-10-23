@@ -253,6 +253,7 @@ int main(int argc, char** argv) {
             {"creation_nanoseconds", statistics.CreationNanoseconds},
             {"initial_cache_bytes", statistics.InitialCacheBytes},
             {"creation_attempts", statistics.CreationAttempts}, {"created", statistics.Created},
+            {"creation_failures", statistics.CreationFailures}, {"library_fallbacks", statistics.LibraryFallbacks},
             {"cache_input_loaded", loaded}, {"cache_bytes", cache.size()}, {"cache_path", cachePath.string()},
             {"gpu", properties.deviceName}, {"vendor_id", identity.VendorId}, {"device_id", identity.DeviceId},
             {"driver_version", identity.DriverVersion}, {"pipeline_cache_uuid", identity.Uuid},

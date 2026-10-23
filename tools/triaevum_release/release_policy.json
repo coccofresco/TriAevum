@@ -5,6 +5,7 @@
     "forge_clang_header": ["forge/clang/include/*.h", "forge/clang/include/**/*.h", "forge/clang/include/*.modulemap", "forge/clang/include/**/*.modulemap", "forge/clang/include/cuda_wrappers/algorithm", "forge/clang/include/cuda_wrappers/bits/basic_string.tcc", "forge/clang/include/cuda_wrappers/cmath", "forge/clang/include/cuda_wrappers/complex", "forge/clang/include/cuda_wrappers/new", "forge/clang/include/openmp_wrappers/cmath", "forge/clang/include/openmp_wrappers/complex", "forge/clang/include/openmp_wrappers/new", "forge/clang/include/profile/InstrProfData.inc"],
     "default_environment_profile": ["resources/environments/*.environment.json"],
     "title_neutral_resource": ["resources/*", "resources/**/*", "gamecontrollerdb.txt"],
+    "topscreen_singlescreen_asset": ["resources/topscreen/singlescreen-3.0/custom_ui01.ctxb", "resources/topscreen/singlescreen-3.0/zelda_link_ext.zar"],
     "configuration": ["config/*", "config/**/*"],
     "documentation": ["README.md", "LICENSE_SCOPE.md", "THIRD_PARTY_NOTICES.md", "SOURCE_OFFER.md", "docs/*", "docs/**/*"],
     "license": ["LICENSE", "LICENSES/*", "LICENSES/**/*"],
@@ -13,6 +14,7 @@
     "precompiled_catalog": ["recipes/precompiled-titles.json"],
     "portable_shader_corpus": ["forge/shader-corpus/portable.o3ps"],
     "portable_pipeline_recipes": ["forge/shader-corpus/pipelines-*.json"],
+    "portable_shader_qualification": ["forge/shader-corpus/qualification.json"],
     "precomputed_interior_sun": ["forge/precomputed/interior-sun.masks"],
     "precomputed_scene_lights": ["forge/precomputed/scene-lights.json"],
     "translated_title_source": ["source/titles/*-translated.zip"],
@@ -36,8 +38,17 @@
     "LICENSES/PyInstaller-GPL-2.0-or-later-with-bootloader-exception.txt",
     "LICENSES/LLVM-exception.txt",
     "LICENSES/iMMERSE-MXAO.md",
-    "LICENSES/iMMERSE-LICENSE.txt"
+    "LICENSES/iMMERSE-LICENSE.txt",
+    "LICENSES/SingleScreen-3.0.md",
+    "resources/topscreen/singlescreen-3.0/custom_ui01.ctxb",
+    "resources/topscreen/singlescreen-3.0/zelda_link_ext.zar"
   ],
+  "pinned_role_sha256": {
+    "topscreen_singlescreen_asset": [
+      "20290e417c56973cd19daa1f61a6c3963f075d61776db3d996954ee3296d07d8",
+      "06d60e05c493e86677497eb935b49951d613249c43f896816ae898bb8b005902"
+    ]
+  },
   "platforms": {
     "x86_64-pc-windows-msvc": {
       "allowed_roles": {
@@ -103,7 +114,9 @@
   ],
   "forbidden_extension_role_exceptions": {
     ".o3ps": ["portable_shader_corpus"],
-    ".lib": ["forge_link_library", "forge_tool_resource"]
+    ".lib": ["forge_link_library", "forge_tool_resource"],
+    ".ctxb": ["topscreen_singlescreen_asset"],
+    ".zar": ["topscreen_singlescreen_asset"]
   },
   "forbidden_path_components": [
     "captures", "evidence", "exefs", "game", "generated", "mod",
@@ -133,7 +146,13 @@
     "a3ad05dcf12893de5f1617a60f4e80f54f5e1c80069922a96a4f9c8c8cbac8ca",
     "e0c143c872ccf4ad72033caab768753b147a4033d260a701204a63ee6bc16df4",
     "c834030be2fbbfd93db26180333f112e1abcfd85050b09252a8449f06bf90400",
-    "e25bacdae7331714cb8be89044e07f973c3f9701a30bc84e6e282a15aaf89ade"
+    "e25bacdae7331714cb8be89044e07f973c3f9701a30bc84e6e282a15aaf89ade",
+    "5668640fec8dc2b47b4516fd0b871c4d7d90ca1c2203acc2a22adb59aaab5993",
+    "25e9f22720029c64ac729deef9c38b4dea3d5426d57d99678963c8f26b2908a1",
+    "f91485999a6b8e89b8d574064dc03c1c20704f2c718e93c5187251b6ef69dbcb",
+    "3a505b0beff8654d71c68e870c132975c6bc0209ab9c41aafbd782f7a5880e7a",
+    "8b83e081f721c6e1842b0a9cd90b71a3fb2849674d2b1040f3dc5c3221594169",
+    "9c401a41d142d153b7dfef9208f3a7982a018f89f729eece441cce0470aacb42"
   ],
   "forbidden_json_true_fields": [
     "contains_title_code",

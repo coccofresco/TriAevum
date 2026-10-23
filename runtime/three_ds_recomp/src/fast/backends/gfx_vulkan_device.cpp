@@ -514,6 +514,7 @@ void GfxRenderingAPIVulkan::StorePipelineCache() {
         {"initial_cache_bytes", statistics.InitialCacheBytes},
         {"creation_attempts", statistics.CreationAttempts}, {"created", statistics.Created},
         {"owned_reuses", statistics.OwnedReuses},
+        {"creation_failures", statistics.CreationFailures}, {"library_fallbacks", statistics.LibraryFallbacks},
         {"creation_nanoseconds", statistics.CreationNanoseconds}}).dump();
     // Release/mobile hosts may suppress INFO and have no per-frame diagnostics enabled.
     std::fprintf(stderr, "TRIAEVUM_NRI_PIPELINE_CACHE %s\n", receipt.c_str());

@@ -397,6 +397,8 @@ struct Oot3dVulkanFrameDiagnostics {
     uint32_t NriVirtualShadowKeyframeConstructionBudget = 0;
     uint32_t NriVirtualShadowKeyframeCutCount = 0;
     uint32_t NriVirtualShadowKeyframeRotationCount = 0;
+    // Stalled constructions completed without a page budget.
+    uint32_t NriVirtualShadowKeyframeUnboundedCount = 0;
     float NriVirtualShadowKeyframeWeight = 0.0F;
     float NriVirtualShadowKeyframeLagDegrees = 0.0F;
     float NriVirtualShadowKeyframeDirectionX = 0.0F;
@@ -756,7 +758,7 @@ class Oot3dVulkanDiagnostics {
     void RecordNriVirtualShadowKeyframes(uint32_t displayedLayouts, float newerWeight,
                                         uint32_t constructionPages, uint32_t constructionBudget,
                                         bool cut, bool rotated, const std::array<float, 3>& displayedDirection,
-                                        float lagDegrees);
+                                        float lagDegrees, bool constructionUnbounded = false);
     void RecordNriDirectionalShadowReceiver(bool eligible,
                                             bool lightingAvailable,
                                             bool lightingEnabled,

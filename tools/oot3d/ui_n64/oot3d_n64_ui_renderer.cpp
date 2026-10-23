@@ -88,6 +88,17 @@ void AppendVertex(std::vector<Oot3d::Renderer::UiOverlayVertex>& output,
 std::vector<Oot3d::Renderer::UiOverlayVertex>
 BuildQuad(const UiPrimitive& primitive, float canvasWidth, float canvasHeight,
           bool invertY) {
+    std::vector<Oot3d::Renderer::UiOverlayVertex> vertices;
+    vertices.reserve(6U);
+    if (primitive.corners.has_value()) {
+        const auto& corners = *primitive.corners;
+        for (const std::size_t index : {0U, 1U, 2U, 2U, 1U, 3U}) {
+            AppendVertex(vertices, corners[index].x, corners[index].y,
+                         corners[index].u, corners[index].v, primitive.color,
+                         canvasWidth, canvasHeight, invertY);
+        }
+        return vertices;
+    }
     const float left = primitive.destination.x;
     const float top = primitive.destination.y;
     const float right = left + primitive.destination.width;
@@ -103,8 +114,6 @@ BuildQuad(const UiPrimitive& primitive, float canvasWidth, float canvasHeight,
         primitive.uv_quarter_turn
             ? std::array<Uv, 4>{{{u0, v1}, {u1, v1}, {u1, v0}, {u0, v0}}}
             : std::array<Uv, 4>{{{u0, v0}, {u0, v1}, {u1, v1}, {u1, v0}}};
-    std::vector<Oot3d::Renderer::UiOverlayVertex> vertices;
-    vertices.reserve(6U);
     AppendVertex(vertices, left, top, corners[0].u, corners[0].v, primitive.color,
                  canvasWidth, canvasHeight, invertY);
     AppendVertex(vertices, left, bottom, corners[1].u, corners[1].v, primitive.color,
@@ -168,6 +177,14 @@ std::string BuildUiTextureCacheKey(const UiTextureIdentity& identity) {
     return key;
 }
 
+std::string BuildUiPrimitiveTextureKey(const UiPrimitive& primitive) {
+    std::string key = BuildUiTextureCacheKey(primitive.texture);
+    if (primitive.texture_alpha_only) {
+        key.append("#alpha");
+    }
+    return key;
+}
+
 N64UiFast3dRenderer::N64UiFast3dRenderer(
     Oot3d::Renderer::UiRenderBackend& renderingApi,
     const UiTextureProvider* textureProvider) noexcept
@@ -187,6 +204,7 @@ void N64UiFast3dRenderer::Release() noexcept {
     textures_.clear();
     failed_textures_.clear();
     prepared_keys_.clear();
+    provisional_keys_.clear();
     staged_textures_.clear();
 }
 
@@ -200,9 +218,8 @@ void N64UiFast3dRenderer::SetTextureProvider(
 }
 
 const N64UiFast3dRenderer::ResidentTexture*
-N64UiFast3dRenderer::ResolveTexture(const UiTextureIdentity& identity,
+N64UiFast3dRenderer::ResolveTexture(const std::string& semanticKey,
                                     std::string* error) {
-    const std::string semanticKey = BuildUiTextureCacheKey(identity);
     const auto resident = textures_.find(semanticKey);
     if (resident != textures_.end()) {
         ++stats_.texture_cache_hits;
@@ -270,8 +287,9 @@ namespace {
 
 bool DrawsPrimitive(const UiPrimitive& primitive) {
     return primitive.visible && primitive.color.alpha > 0.0F &&
-           primitive.destination.width > 0.0F &&
-           primitive.destination.height > 0.0F;
+           (primitive.corners.has_value() ||
+            (primitive.destination.width > 0.0F &&
+             primitive.destination.height > 0.0F));
 }
 
 } // namespace
@@ -279,6 +297,16 @@ bool DrawsPrimitive(const UiPrimitive& primitive) {
 void N64UiFast3dRenderer::Stage(PreparedUiTextures prepared) {
     for (auto& texture : prepared) {
         std::string key = texture.key;
+        // A payload prepared again (final pixels for a provisional one, or a
+        // new provider revision) supersedes the texture uploaded before.
+        if (const auto resident = textures_.find(key);
+            resident != textures_.end()) {
+            if (resident->second.renderer_id != 0U) {
+                rendering_api_.DeleteUiTexture(resident->second.renderer_id);
+            }
+            textures_.erase(resident);
+        }
+        failed_textures_.erase(key);
         staged_textures_.insert_or_assign(std::move(key), std::move(texture));
     }
 }
@@ -286,13 +314,24 @@ void N64UiFast3dRenderer::Stage(PreparedUiTextures prepared) {
 PreparedUiTextures N64UiFast3dRenderer::PrepareTextures(
     std::span<const UiPrimitive> primitives) {
     PreparedUiTextures prepared;
+    if (texture_provider_ != nullptr &&
+        texture_provider_->Revision() != prepared_revision_) {
+        prepared_revision_ = texture_provider_->Revision();
+        prepared_keys_.clear();
+        provisional_keys_.clear();
+    }
+    std::unordered_set<std::string> seen;
     for (const UiPrimitive& primitive : primitives) {
         if (!DrawsPrimitive(primitive) ||
             primitive.texture.semantic_name.empty()) {
             continue;
         }
-        std::string key = BuildUiTextureCacheKey(primitive.texture);
-        if (!prepared_keys_.insert(key).second) {
+        std::string key = BuildUiPrimitiveTextureKey(primitive);
+        if (!seen.insert(key).second) {
+            continue;
+        }
+        const bool again = !prepared_keys_.insert(key).second;
+        if (again && !provisional_keys_.contains(key)) {
             continue;
         }
         PreparedUiTexture texture;
@@ -310,6 +349,23 @@ PreparedUiTextures N64UiFast3dRenderer::PrepareTextures(
                     static_cast<std::size_t>(pixels.width) * pixels.height * 4U;
             texture.status = resolved ? PreparedUiTexture::Status::Resolved
                                       : PreparedUiTexture::Status::Invalid;
+            if (resolved && primitive.texture_alpha_only) {
+                for (std::size_t texel = 0; texel < pixels.rgba8.size();
+                     texel += 4U) {
+                    pixels.rgba8[texel] = 0xFFU;
+                    pixels.rgba8[texel + 1U] = 0xFFU;
+                    pixels.rgba8[texel + 2U] = 0xFFU;
+                }
+            }
+            if (resolved && pixels.provisional) {
+                provisional_keys_.insert(texture.key);
+                // The provisional pixels handed earlier are still current.
+                if (again) {
+                    continue;
+                }
+            } else {
+                provisional_keys_.erase(texture.key);
+            }
         }
         prepared.push_back(std::move(texture));
     }
@@ -374,16 +430,23 @@ bool N64UiFast3dRenderer::Render(std::span<const UiPrimitive> primitives,
         std::uint32_t textureId = 0U;
         if (textured) {
             const ResidentTexture* texture = ResolveTexture(
-                primitive->texture, error);
+                BuildUiPrimitiveTextureKey(*primitive), error);
             if (texture == nullptr) {
                 success = false;
                 continue;
             }
             textureId = texture->renderer_id;
         }
-        const auto vertices =
+        auto vertices =
             BuildQuad(*primitive, canvasWidth, kCanvasHeight, invertY);
-        if (!rendering_api_.DrawUiTriangles(vertices, textureId, error)) {
+        // A texture alpha scale rides on the vertex alpha through a
+        // saturating combiner: clamp(scale x texel x color alpha).
+        if (textured && primitive->texture_alpha_scale != 1.0F) {
+            for (auto& vertex : vertices) vertex.Alpha *= primitive->texture_alpha_scale;
+        }
+        const bool scaled = textured && primitive->texture_alpha_scale > 1.0F;
+        if (!(scaled ? rendering_api_.DrawUiTrianglesSaturated(vertices, textureId, error)
+                     : rendering_api_.DrawUiTriangles(vertices, textureId, error))) {
             return false;
         }
         ++stats_.primitives_drawn;

@@ -73,7 +73,15 @@ enum class ActorCullingClass : uint8_t { Inside = 0, Outside = 1, Far = 2 };
 inline constexpr uint32_t kActorLightCapacity = 128U;
 inline constexpr uint32_t kActorLightBudget = 120U;
 inline constexpr uint32_t kActorLightAuxiliaryReserve = 4U;
-// A visual policy ceiling, NOT an estimate of native light demand.
+// SingleScreen 3.0 never denies a lit actor: past the arena its records come
+// from an overflow pool (0x005D11A0). TriAevum's pool is a separate guest
+// region, so overflow records never alias live arena records (3.0 reuses
+// the arena's own first 64). Admission counts it as extra capacity.
+inline constexpr uint32_t kActorLightOverflowBase = 0x06100000U;
+inline constexpr uint32_t kActorLightOverflowSize = 0x40000U;
+inline constexpr uint32_t kActorLightOverflowRecords = kActorLightOverflowSize / 0x80U;
+// A visual policy ceiling, NOT an estimate of native light demand. The
+// overflow pool lifted the light bound; this ceiling stays a visual choice.
 inline constexpr uint32_t kActorExtensionLimit = 32U;
 
 struct ActorExtensionCandidate {
@@ -88,7 +96,10 @@ void SelectActorExtensions(std::span<ActorExtensionCandidate> candidates);
 
 // remaining includes the current actor and every not-yet-resolved actor,
 // including deferred draws. used is measured in the CURRENT arena epoch.
-[[nodiscard]] bool ActorLightBudgetAllows(uint32_t used, uint32_t remaining) noexcept;
+// overflow: the cursor can move into the overflow region; without it the
+// native arena is the whole capacity.
+[[nodiscard]] bool ActorLightBudgetAllows(uint32_t used, uint32_t remaining,
+                                          bool overflow) noexcept;
 
 // Native false-result fade branch (Actor_DrawAll): Far decrements; Outside
 // clears. Used to restore native history after an extension-only draw.

@@ -12,8 +12,9 @@ Forge currently provides the release-safe preparation and packaging boundary:
 - integrated bounds-checked extraction from decrypted `.3ds` and `.cci` NCSD
   cartridge images, including ExeFS `.code` decompression;
 - exact size and SHA-256 validation for the extracted code, ExHeader and RomFS;
-- automatic verified local import of TopScreen 2.1.1 HUD/menu textures, using
-  the official download or a local archive (see `TRIAEVUM_TOPSCREEN_INSTALLATION.md`);
+- installation of the SingleScreen 3.0 UI atlas and Link animations shipped in
+  the package, plus its HD graphics only from a local archive the user supplies
+  (see `TRIAEVUM_TOPSCREEN_INSTALLATION.md`);
 - a local water texture catalog (`cache/water/<key>/water_textures.txt`,
   `--water-texture-catalog`): the renderer's content identities and roles
   (surface, river, waterfall, underwater light) of the title's water

@@ -317,6 +317,8 @@ bool Oot3dNativeA32UiTextureProvider::Resolve(
                 return false;
             }
             ++mStats.profile_asset_resolves;
+            ApplyCustomTexture(profileTexture->NativePicaFormat,
+                               profileTexture->EncodedPayload, pixels);
             return true;
         }
     }
@@ -475,7 +477,61 @@ bool Oot3dNativeA32UiTextureProvider::Resolve(
             pixels.rgba8[pixel] = pixels.rgba8[pixel + 1] = pixels.rgba8[pixel + 2] = 255;
         }
     }
+    if (!generatedText) {
+        ApplyCustomTexture(encoding->native_pica_format, coverageBytes, pixels);
+    }
     return true;
+}
+
+std::size_t Oot3dNativePicaBaseLevelBytes(std::uint8_t nativePicaFormat,
+                                          std::uint16_t width,
+                                          std::uint16_t height) noexcept {
+    constexpr std::array<std::uint8_t, 14> bitsPerPixel{
+        32, 24, 16, 16, 16, 16, 16, 8, 8, 8, 4, 4, 4, 8};
+    if (nativePicaFormat >= bitsPerPixel.size()) {
+        return 0U;
+    }
+    return std::size_t(width) * height * bitsPerPixel[nativePicaFormat] / 8U;
+}
+
+void Oot3dNativeA32UiTextureProvider::ApplyCustomTexture(
+    std::uint8_t nativePicaFormat, std::span<const std::uint8_t> encoded,
+    oot3d::ui::UiTexturePixels& pixels) const {
+    if (!mCustomTextures.resolve) {
+        return;
+    }
+    const std::size_t baseBytes =
+        Oot3dNativePicaBaseLevelBytes(nativePicaFormat, pixels.width, pixels.height);
+    if (baseBytes == 0U || encoded.size() < baseBytes) {
+        return;
+    }
+    const auto custom = mCustomTextures.resolve({
+        pixels.width, pixels.height, nativePicaFormat,
+        encoded.first(baseBytes), pixels.rgba8,
+    });
+    if (custom.state == Oot3dNativeUiCustomTexture::State::Pending) {
+        // The native pixels stand in while the replacement decodes.
+        ++mStats.custom_texture_pending;
+        pixels.provisional = true;
+        return;
+    }
+    constexpr std::uint32_t kMaxExtent = 16384U;
+    if (custom.state != Oot3dNativeUiCustomTexture::State::Ready ||
+        custom.rgba8 == nullptr || custom.width == 0U || custom.height == 0U ||
+        custom.width > kMaxExtent || custom.height > kMaxExtent ||
+        custom.rgba8->size() != std::size_t(custom.width) * custom.height * 4U) {
+        return;
+    }
+    // UI coordinates are normalized, so a larger replacement keeps the same
+    // atlas layout at a higher resolution.
+    pixels.width = static_cast<std::uint16_t>(custom.width);
+    pixels.height = static_cast<std::uint16_t>(custom.height);
+    pixels.rgba8 = *custom.rgba8;
+    ++mStats.custom_texture_replacements;
+}
+
+std::uint64_t Oot3dNativeA32UiTextureProvider::Revision() const noexcept {
+    return mCustomTextures.revision ? mCustomTextures.revision() : 0U;
 }
 
 const Oot3dNativeUiTextureProviderStats&

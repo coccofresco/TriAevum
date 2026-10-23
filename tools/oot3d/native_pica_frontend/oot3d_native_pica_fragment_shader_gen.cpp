@@ -653,12 +653,16 @@ bool GenerateOot3dPicaFragmentShader(
     if (state.OutputMerger.FragmentOperationMode == 3U) {
         source << "layout(set=0,binding=5,r32ui) uniform uimage2D pica_shadow_buffer;\n";
     }
+    // log2(0) is undefined: a zero footprint (coordinates constant across the
+    // quad) selects the minimum LOD explicitly, the limit the footprint
+    // approaches, instead of relying on a driver's -inf.
     source << "layout(location=0) out vec4 pica_color;\n"
            << TevExpressions::ByteRoundHelpers <<
               "float pica_texture_lod(vec2 coord, vec2 size) {\n"
               "    vec2 scaled = coord * size;\n"
               "    vec2 delta = max(abs(dFdx(scaled)), abs(dFdy(scaled)));\n"
-              "    return log2(max(delta.x, delta.y));\n"
+              "    float footprint = max(delta.x, delta.y);\n"
+              "    return footprint > 0.0 ? log2(footprint) : -128.0;\n"
               "}\n";
     if (integerTexture0) {
         auto samplerState = state;

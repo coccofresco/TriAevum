@@ -104,14 +104,14 @@ scripts/switch/stage-product.sh \
 This produces `/switch/oot3dre` under the selected SD root. It also creates the
 small `resources.o2r` containing the OpenGL shader required during renderer
 initialization. When `OOT3D_TOPSCREEN_PACK` (or the optional fourth staging
-argument) is absent, staging builds an O3TU v2 pack directly from the original
-game RomFS and the official TopScreen 2.1.1 archive. Supply the archive through
-the explicit `OOT3D_TOPSCREEN_211_ARCHIVE` path; alternatively pass an existing
-O3TU v2 pack as the fourth staging argument or through `OOT3D_TOPSCREEN_PACK`.
+argument) is absent, staging builds an O3TU v2 pack from the SingleScreen 3.0
+UI atlas the repository ships (`runtime/triaevum_resources/topscreen/
+singlescreen-3.0/custom_ui01.ctxb`); no archive is needed. TopScreen 2.1.1 is
+retired and nothing of it is staged. An existing O3TU v2 pack can still be
+passed as the fourth staging argument or through `OOT3D_TOPSCREEN_PACK`.
 For example:
 
 ```sh
-OOT3D_TOPSCREEN_211_ARCHIVE=/path/to/topscreen211.zip \
 scripts/switch/stage-product.sh \
   build-switch-product/oot3d_native_game.nro \
   /path/to/extracted/game /path/to/sdmc
@@ -129,7 +129,7 @@ With no homebrew arguments the NRO uses these paths:
 - `sdmc:/switch/oot3dre/config/oot3d_controls.json`
 - `sdmc:/switch/oot3dre/config/atlas_overrides.o3tu`
 
-The Switch product selects TopScreen 2.1.1, native 30 Hz gameplay,
+The Switch product selects the TopScreen profile (SingleScreen 3.0 art), native 30 Hz gameplay,
 30 presentations per second and no visual interpolation. The latter is
 intentional: interpolation has no intermediate presentation to produce at a
 30 Hz output rate and retaining its delayed history would reintroduce the
@@ -160,15 +160,16 @@ entries and `stage=runtime_running`. The launcher additionally requires the
 effective Switch product contract: `ui_profile=topscreen`,
 `gameplay_timing=native30_no_interpolation`, `presentation_rate_hz=30`,
 `visual_interpolation=0`, `control_profile=controller` and
-`topscreen_211_assets=1`. The current runner also requires the 128-block
+`topscreen_30_ui_atlas=1`. The current runner also requires the 128-block
 whole-AOT budget to have produced block-limit exits and requires the OpenGL
 geometry cache to report at least one persistent draw, upload and resident
 entry.
 
-The integrated checkpoint produces an O3TU v2 pack with eight deduplicated
-native CTXB overrides and both named 2.1.1 profile textures (`menu_atlas` and
-`font_atlas`). Its SHA-256 is
-`fd2d5f60cdb4618398f257b7cc945b79f635888bd3c03b8e9bbd2ed2189813a9`.
+Staging now produces an O3TU v2 pack holding only the SingleScreen 3.0 UI
+atlas (`oot3d/topscreen/3.0/ui_atlas`, 131,140 bytes). The earlier accepted
+checkpoint below used the retired 2.1.1 pack (SHA-256
+`fd2d5f60cdb4618398f257b7cc945b79f635888bd3c03b8e9bbd2ed2189813a9`); the 3.0 pack
+has not been run on Eden yet.
 The last fully accepted pre-geometry-cache NRO SHA-256 was
 `950fa574a51a3801f893055949aeb105f1be54e993e5f2ad6b6406c7ae720dd9`
 (118,573,253 bytes). The current cache/budget candidate is 118,606,021 bytes,

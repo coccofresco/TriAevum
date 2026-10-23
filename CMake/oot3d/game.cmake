@@ -210,6 +210,68 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
 endif()
 set_property(TARGET oot3d_native_a32_actor_visibility_tests PROPERTY FOLDER Tests)
 
+# SingleScreen 3.0 object bank extension (19 -> 39 object slots).
+add_executable(oot3d_object_bank_extension_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/oot3d_object_bank_extension.cpp
+    tools/oot3d/native_game_runtime/oot3d_object_bank_extension_tests.cpp
+)
+target_link_libraries(oot3d_object_bank_extension_tests PRIVATE
+    oot3d_native_a32_process)
+target_compile_options(oot3d_object_bank_extension_tests PRIVATE
+    "${WARNING_OVERRIDE}")
+if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set_property(TARGET oot3d_object_bank_extension_tests PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+set_property(TARGET oot3d_object_bank_extension_tests PROPERTY FOLDER Tests)
+
+# SingleScreen gameplay options: native-call sequences at their block entries.
+add_executable(oot3d_top_screen_gameplay_runtime_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/oot3d_top_screen_gameplay_runtime.cpp
+    tools/oot3d/native_game_runtime/oot3d_top_screen_link_ext.cpp
+    tools/oot3d/native_game_runtime/oot3d_top_screen_gameplay_runtime_tests.cpp
+)
+target_link_libraries(oot3d_top_screen_gameplay_runtime_tests PRIVATE
+    oot3d_native_a32_process oot3d_ui_topscreen)
+target_compile_options(oot3d_top_screen_gameplay_runtime_tests PRIVATE
+    "${WARNING_OVERRIDE}")
+if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set_property(TARGET oot3d_top_screen_gameplay_runtime_tests PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+set_property(TARGET oot3d_top_screen_gameplay_runtime_tests PROPERTY FOLDER Tests)
+
+# SingleScreen 3.0 rain: title policy (runtime) and its whole-AOT adapter.
+# The policy math must not contract into FMAs (3.0 parity goldens).
+if (MSVC)
+    set_property(SOURCE
+        tools/oot3d/native_game_runtime/oot3d_top_screen_rain_runtime.cpp
+        APPEND PROPERTY COMPILE_OPTIONS /fp:strict)
+else()
+    set_property(SOURCE
+        tools/oot3d/native_game_runtime/oot3d_top_screen_rain_runtime.cpp
+        APPEND PROPERTY COMPILE_OPTIONS -ffp-contract=off)
+endif()
+add_executable(oot3d_top_screen_rain_runtime_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/oot3d_top_screen_rain_runtime.cpp
+    tools/oot3d/native_game_runtime/oot3d_top_screen_rain_runtime_tests.cpp
+)
+add_executable(oot3d_top_screen_rain_adapter_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/oot3d_top_screen_rain_runtime.cpp
+    tools/oot3d/native_game_runtime/oot3d_top_screen_rain_adapter.cpp
+    tools/oot3d/native_game_runtime/oot3d_top_screen_rain_adapter_tests.cpp
+)
+target_link_libraries(oot3d_top_screen_rain_adapter_tests PRIVATE
+    oot3d_native_a32_process)
+foreach(rainTests oot3d_top_screen_rain_runtime_tests oot3d_top_screen_rain_adapter_tests)
+    target_compile_options(${rainTests} PRIVATE "${WARNING_OVERRIDE}")
+    if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+        set_property(TARGET ${rainTests} PROPERTY
+            MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+    set_property(TARGET ${rainTests} PROPERTY FOLDER Tests)
+endforeach()
+
 add_library(oot3d_native_crash_diagnostics STATIC EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_crash_diagnostics.cpp
 )
@@ -269,6 +331,11 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
         tools/oot3d/native_game_runtime/oot3d_top_screen_pause_transaction.cpp
         tools/oot3d/native_game_runtime/oot3d_top_screen_item_description_runtime.cpp
         tools/oot3d/native_game_runtime/oot3d_top_screen_wide_items_runtime.cpp
+        tools/oot3d/native_game_runtime/oot3d_top_screen_gameplay_runtime.cpp
+        tools/oot3d/native_game_runtime/oot3d_top_screen_link_ext.cpp
+        tools/oot3d/native_game_runtime/oot3d_object_bank_extension.cpp
+        tools/oot3d/native_game_runtime/oot3d_top_screen_rain_runtime.cpp
+        tools/oot3d/native_game_runtime/oot3d_top_screen_rain_adapter.cpp
         tools/oot3d/native_game_runtime/oot3d_native_actor_interactions.cpp
         tools/oot3d/native_game_runtime/oot3d_actor_visibility_policy.cpp
         tools/oot3d/native_game_runtime/oot3d_native_a32_actor_visibility.cpp

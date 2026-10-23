@@ -93,7 +93,7 @@ if [[ ! -f ${receipt} ]] ||
    ! grep -qx 'presentation_rate_hz=30' "${receipt}" ||
    ! grep -qx 'visual_interpolation=0' "${receipt}" ||
    ! grep -qx 'control_profile=controller' "${receipt}" ||
-   ! grep -qx 'topscreen_211_assets=1' "${receipt}" ||
+   ! grep -qx 'topscreen_30_ui_atlas=1' "${receipt}" ||
    ! grep -qx 'whole_aot_block_budget=128' "${receipt}" ||
    ! grep -Eq '^whole_aot_block_limit_exits=[1-9][0-9]*$' \
        "${receipt}" ||

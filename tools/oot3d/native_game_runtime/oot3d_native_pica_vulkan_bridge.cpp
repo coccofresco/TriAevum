@@ -1,5 +1,6 @@
 #include "oot3d_native_pica_vulkan_bridge.h"
 #include "oot3d_native_vertex_binaries.h"
+#include "oot3d_static_shadow_actor_catalog.h"
 
 #include "fast/oot3d/pica_uniform_layout.h"
 
@@ -263,6 +264,9 @@ bool WithOot3dPicaVulkanDrawView(
         plan.Composition.NativeActorIdentity,
         plan.Composition.IsolatedLighting,
         plan.Composition.TemporalIdentity,
+        Oot3dNativeGame::StaticShadowCacheEligibleActor(
+            plan.Composition.NativeActorGeometry,
+            plan.Composition.NativeActorIdentity),
     };
     draw.LightBinding = overrides != nullptr && overrides->LightBinding != nullptr
         ? *overrides->LightBinding : plan.LightBinding;

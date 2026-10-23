@@ -54,6 +54,12 @@ target_compile_features(pica_water_map_tests PRIVATE cxx_std_20)
 target_include_directories(pica_water_map_tests PRIVATE ../include)
 add_test(NAME pica_water_map_tests COMMAND pica_water_map_tests)
 
+add_executable(hiz_water_view_tests hiz_water_view_tests.cpp)
+target_compile_features(hiz_water_view_tests PRIVATE cxx_std_20)
+target_include_directories(hiz_water_view_tests PRIVATE ../include)
+target_link_libraries(hiz_water_view_tests PRIVATE three_ds_recomp_runtime)
+add_test(NAME hiz_water_view_tests COMMAND hiz_water_view_tests)
+
 add_executable(ambient_occlusion_guide_tests ambient_occlusion_guide_tests.cpp)
 target_compile_features(ambient_occlusion_guide_tests PRIVATE cxx_std_20)
 target_include_directories(ambient_occlusion_guide_tests PRIVATE ../include)

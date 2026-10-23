@@ -690,6 +690,14 @@ layout(std430, set=0, binding=5) buffer BendHistory {
 layout(std430, set=0, binding=6) writeonly buffer PreviousBends {
     vec2 values[];
 } previous_bends;
+// GrassActorCells: cell offsets, then the actor indices of every cell.
+layout(std430, set=0, binding=7) readonly buffer ActorCells {
+    uint words[];
+} actor_cells;
+// GPU selection control (word 3: admitted roots) when history.z is set.
+layout(std430, set=0, binding=8) readonly buffer SelectionControl {
+    uint values[];
+} selection_control;
 
 layout(push_constant) uniform CompactionState {
     uvec4 counts_flags;
@@ -698,6 +706,9 @@ layout(push_constant) uniform CompactionState {
     vec4 bend;
     // current frame stamp, previous frame stamp (0 without continuity)
     uvec4 history;
+    // actor cells: origin X/Z, inverse cell size; width, height, cell count
+    vec4 actor_grid;
+    uvec4 actor_grid_size;
 } state;
 
 vec2 sample_interaction(vec3 base) {
@@ -814,7 +825,8 @@ vec2 resolve_direct_collision(vec3 base, float blade_height, ActorCollider actor
 
 void main() {
     uint visible_index = gl_GlobalInvocationID.x;
-    if (visible_index >= state.counts_flags.x)
+    uint visible_count = state.history.z != 0u ? selection_control.values[3] : state.counts_flags.x;
+    if (visible_index >= visible_count)
         return;
     uint static_index =
         visible_indices.values[visible_index];
@@ -843,8 +855,29 @@ void main() {
     stable ^= stable >> 16u;
     vec4 world_normal = vec4(normalize(normal), float(stable >> 8u) / 16777216.0);
     vec2 dynamic_bend = sample_interaction(base_height.xyz);
-    for (uint i = 0u; i < (state.counts_flags.w >> 1u); ++i)
-        dynamic_bend += resolve_direct_collision(base_height.xyz, base_height.w, actors.values[i]);
+    uint actor_count = state.counts_flags.w >> 1u;
+    if (state.actor_grid_size.x == 0u || any(isnan(base_height.xz)) || any(isinf(base_height.xz))) {
+        for (uint i = 0u; i < actor_count; ++i)
+            dynamic_bend += resolve_direct_collision(base_height.xyz, base_height.w, actors.values[i]);
+    } else {
+        // Only the actors whose swept box can contain this root, in order;
+        // every other actor would add an exact zero.
+        vec2 cell = floor((base_height.xz - state.actor_grid.xy) * state.actor_grid.z);
+        uint first = 0u;
+        uint last = 0u;
+        if (cell.x >= 0.0 && cell.y >= 0.0 &&
+            cell.x < float(state.actor_grid_size.x) && cell.y < float(state.actor_grid_size.y)) {
+            uint index = uint(cell.y) * state.actor_grid_size.x + uint(cell.x);
+            first = actor_cells.words[index];
+            last = actor_cells.words[index + 1u];
+        }
+        uint list = state.actor_grid_size.z + 1u;
+        for (uint i = first; i < last; ++i)
+            dynamic_bend += resolve_direct_collision(
+                base_height.xyz, base_height.w, actors.values[actor_cells.words[list + i]]);
+        if (last - first < actor_count)
+            dynamic_bend += vec2(0.0);
+    }
     float bend_length = length(dynamic_bend);
     if (bend_length > state.bend.x && bend_length > 0.0)
         dynamic_bend *= state.bend.x / bend_length;
@@ -973,4 +1006,381 @@ void main() {
 }
 )glsl";
 }
+
+// GPU grass selection, three passes over one flat cluster index space (each
+// source padded to whole workgroups). The decisions follow the CPU selection
+// (GrassVisibilityQuery::Classify, the retained prefix, ResolveGrassLod...,
+// the per-blade frustum test); float rounding may differ at exact ties.
+// Output order is the CPU's: source, topology slot (bin order), cluster,
+// anchor; the budget keeps the first visible roots in that order. No atomics
+// decide an order, so the output is deterministic.
+std::string BuildGrassSelectionComputeShader() {
+    return std::string("#version 450\n") + R"glsl(
+#ifndef GRASS_SELECTION_PASS
+#define GRASS_SELECTION_PASS 0
+#endif
+layout(local_size_x=256, local_size_y=1, local_size_z=1) in;
+
+const uint SLOT_COUNTERS = 8u;   // seven topology slots, then the visible total
+const uint TOTAL = 7u;
+const uint NO_SLOT = 0xFFu;
+const uint RECORD_WORDS = 6u;    // first, end, eight 16-bit counts
+const uint CLUSTER_WORDS = 8u;
+const uint HEADER_WORDS = 64u;
+const uint SOURCE_WORDS = 32u;
+const uint DRAW_BASE = 4u;       // control: dispatch xyz, admitted total, draws
+const uint MAX_SOURCES = 16u;
+const uint RANK_BASE = DRAW_BASE + MAX_SOURCES * SLOT_COUNTERS * 5u;
+
+layout(std430, set=0, binding=0) readonly buffer StaticAnchors { uint words[]; } static_anchors;
+layout(std430, set=0, binding=1) readonly buffer Clusters { uint words[]; } clusters;
+layout(std430, set=0, binding=2) readonly buffer Sources { uint words[]; } sources;
+layout(std430, set=0, binding=3) buffer AnchorSlots { uint values[]; } anchor_slots;
+layout(std430, set=0, binding=4) buffer ClusterRecords { uint words[]; } records;
+layout(std430, set=0, binding=5) buffer GroupCounts { uint values[]; } groups;
+layout(std430, set=0, binding=6) writeonly buffer Visible { uint values[]; } visible;
+layout(std430, set=0, binding=7) buffer Control { uint values[]; } control;
+
+layout(push_constant) uniform SelectionPolicy {
+    // draw distance, its square, LOD reference, LOD start
+    vec4 distance;
+    // LOD end, far density, segment start, segment end
+    vec4 lod;
+    // tuft transition, far tuft density, segment softness, blade radius scale
+    vec4 tuft;
+    // near segments, far segments, far tufts enabled | frustum culling << 1, far tuft blades
+    uvec4 counts;
+} policy;
+
+uint header(uint index) { return sources.words[index]; }
+uint source_word(uint source, uint index) { return sources.words[HEADER_WORDS + source * SOURCE_WORDS + index]; }
+float source_float(uint source, uint index) { return uintBitsToFloat(source_word(source, index)); }
+
+uint find_source(uint slot) {
+    uint count = header(0u);
+    for (uint s = 0u; s < count; ++s) {
+        uint first = source_word(s, 25u) * 256u;
+        if (slot >= first && slot < first + source_word(s, 26u) * 256u)
+            return s;
+    }
+    return 0xFFFFFFFFu;
+}
+
+float tuft_weight(float value, float start, float end) {
+    float t = start < end ? clamp((value - start) / (end - start), 0.0, 1.0) : (value >= start ? 1.0 : 0.0);
+    return t * t * (3.0 - 2.0 * t);
+}
+float tuft_mean_growth(float weight) {
+    if (weight <= 0.0) return 0.0;
+    if (weight >= 1.0) return 1.0;
+    if (weight < 0.01)
+        return weight * weight * (0.5 + weight * (1.0 / 6.0 + weight * (1.0 / 12.0 + weight * 0.05)));
+    return weight + (1.0 - weight) * log(1.0 - weight);
+}
+float tuft_retention_scale(float weight) {
+    float blades = float(max(policy.counts.w, 1u) - 1u);
+    return (1.0 + (policy.tuft.y - 1.0) * weight) / (1.0 + blades * tuft_mean_growth(weight));
+}
+float density_retention(float normalized) {
+    float lod_start = policy.distance.w;
+    float far_density = policy.lod.y;
+    if (normalized <= lod_start) return 1.0;
+    if (normalized > 1.0) return far_density / (normalized * normalized);
+    float remaining = clamp((1.0 - normalized) / max(1.0 - lod_start, 1.0e-6), 0.0, 1.0);
+    float squared = remaining * remaining;
+    return far_density + (1.0 - far_density) * squared * squared;
+}
+bool far_tufts() { return (policy.counts.z & 1u) != 0u; }
+float retention_from_normalized(float normalized) {
+    float weight = tuft_weight(normalized, policy.lod.x, policy.lod.x + policy.tuft.x);
+    float scale = far_tufts() ? tuft_retention_scale(weight) : 1.0;
+    return clamp(density_retention(normalized) * scale, 0.0, 1.0);
+}
+bool distance_in_range(float d) {
+    return !(isnan(d) || isinf(d) || d < 0.0 || d > policy.distance.x || policy.distance.x <= 0.0);
+}
+float retention_upper_bound(float d) {
+    if (!distance_in_range(d)) return 0.0;
+    float normalized = d / policy.distance.z;
+    if (!far_tufts() || policy.tuft.y <= 1.0) return retention_from_normalized(normalized);
+    float weight = tuft_weight(normalized, policy.lod.x, policy.lod.x + policy.tuft.x);
+    float coverage = 1.0 + float(policy.counts.w - 1u) * tuft_mean_growth(weight);
+    return min(1.0, density_retention(normalized) * policy.tuft.y / coverage);
+}
+float stable_unit(uint value) {
+    value ^= value >> 16u;
+    value *= 0x7feb352du;
+    value ^= value >> 15u;
+    value *= 0x846ca68bu;
+    value ^= value >> 16u;
+    return float(value >> 8u) / 16777216.0;
+}
+// Returns the CPU bin (0..24) or NO_SLOT when the root is not retained.
+uint resolve_bin(float d, float stable_visibility) {
+    if (!distance_in_range(d)) return NO_SLOT;
+    float normalized = d / policy.distance.z;
+    float progress = 0.0;
+    float segment_start = policy.lod.z, segment_end = policy.lod.w;
+    if (d > segment_start)
+        progress = segment_end > segment_start ? clamp((d - segment_start) / (segment_end - segment_start), 0.0, 1.0) : 1.0;
+    uint near_segments = policy.counts.x, far_segments = policy.counts.y;
+    uint middle = max(far_segments, (near_segments + 1u) / 2u);
+    float choice = stable_unit(uint(stable_visibility * 16777216.0));
+    float half_band = policy.tuft.z / 6.0;
+    float first = tuft_weight(progress, 1.0 / 3.0 - half_band, 1.0 / 3.0 + half_band);
+    float second = tuft_weight(progress, 2.0 / 3.0 - half_band, 2.0 / 3.0 + half_band);
+    uint segments = choice < second ? far_segments : choice < first ? middle : near_segments;
+    float tuft_w = tuft_weight(normalized, policy.lod.x, policy.lod.x + policy.tuft.x);
+    bool distant = choice < tuft_w;
+    if (!(stable_visibility <= retention_from_normalized(normalized))) return NO_SLOT;
+    if (far_tufts() && distant) return 24u;
+    uint planes = distant ? 1u : 2u;
+    return (clamp(segments, 1u, 12u) - 1u) * 2u + (planes - 1u);
+}
+
+// 0 outside, 1 intersecting, 2 inside (ClassifyGrassSphereInFrustum).
+uint classify_sphere(uint source, vec3 center, float radius) {
+    radius = max(radius, 0.0);
+    vec4 clip;
+    for (uint row = 0u; row < 4u; ++row)
+        clip[row] = source_float(source, row) * center.x + source_float(source, 4u + row) * center.y +
+                    source_float(source, 8u + row) * center.z + source_float(source, 12u + row);
+    if (any(isnan(clip)) || any(isinf(clip))) return 0u;
+    float radius_x = source_float(source, 19u) * radius;
+    float radius_y = source_float(source, 20u) * radius;
+    float radius_w = source_float(source, 21u) * radius;
+    if (clip.w + radius_w <= 1.0e-7) return 0u;
+    float extent = abs(clip.w) + radius_w;
+    if (clip.x + radius_x < -extent || clip.x - radius_x > extent ||
+        clip.y + radius_y < -extent || clip.y - radius_y > extent)
+        return 0u;
+    float minimum_w = clip.w - radius_w;
+    if (minimum_w > 1.0e-7 && clip.x - radius_x >= -minimum_w && clip.x + radius_x <= minimum_w &&
+        clip.y - radius_y >= -minimum_w && clip.y + radius_y <= minimum_w)
+        return 2u;
+    return 1u;
+}
+
+vec4 anchor_base(uint index) {
+    uint w = index * 12u;
+    return uintBitsToFloat(uvec4(static_anchors.words[w], static_anchors.words[w + 1u],
+                                 static_anchors.words[w + 2u], static_anchors.words[w + 3u]));
+}
+float anchor_stable_visibility(uint index) {
+    uint value = static_anchors.words[index * 12u + 8u];
+    return stable_unit(value);
+}
+uint record_count(uint slot, uint counter) {
+    uint word = records.words[slot * RECORD_WORDS + 2u + counter / 2u];
+    return (counter & 1u) == 0u ? (word & 0xFFFFu) : (word >> 16u);
+}
+
+#if GRASS_SELECTION_PASS == 0
+shared uint group_totals[SLOT_COUNTERS];
+void main() {
+    uint slot = gl_GlobalInvocationID.x;
+    if (gl_LocalInvocationID.x < SLOT_COUNTERS) group_totals[gl_LocalInvocationID.x] = 0u;
+    barrier();
+    uint counts[SLOT_COUNTERS];
+    for (uint k = 0u; k < SLOT_COUNTERS; ++k) counts[k] = 0u;
+    uint first = 0u, end = 0u;
+    uint source = find_source(slot);
+    uint cluster = slot * CLUSTER_WORDS;
+    if (source != 0xFFFFFFFFu && slot - source_word(source, 25u) * 256u < source_word(source, 24u)) {
+        uint anchor_count = clusters.words[cluster + 1u];
+        first = source_word(source, 22u) + clusters.words[cluster];
+        end = first;
+        vec3 center = uintBitsToFloat(uvec3(clusters.words[cluster + 2u], clusters.words[cluster + 3u],
+                                            clusters.words[cluster + 4u]));
+        float cluster_radius = uintBitsToFloat(clusters.words[cluster + 5u]);
+        float blade_height = uintBitsToFloat(clusters.words[cluster + 6u]);
+        float minimum_visibility = uintBitsToFloat(clusters.words[cluster + 7u]);
+        vec3 eye = vec3(source_float(source, 16u), source_float(source, 17u), source_float(source, 18u));
+        float radius = cluster_radius + blade_height * max(0.0, policy.tuft.w - 1.0);
+        vec3 delta = center - eye;
+        float distance_squared = delta.x * delta.x + delta.y * delta.y + delta.z * delta.z;
+        float limit = policy.distance.x + radius;
+        uint relation = 0u;
+        float retention = 0.0;
+        if (!(distance_squared > limit * limit)) {
+            float nearest = max(0.0, sqrt(distance_squared) - radius);
+            if (!(nearest > policy.distance.x)) {
+                relation = (policy.counts.z & 2u) != 0u ? classify_sphere(source, center, radius) : 2u;
+                if (relation != 0u) {
+                    retention = retention_upper_bound(nearest);
+                    if (minimum_visibility > retention) relation = 0u;
+                }
+            }
+        }
+        if (relation != 0u) {
+            uint cluster_end = first + anchor_count;
+            while (end < cluster_end && !(retention < anchor_stable_visibility(end))) ++end;
+            for (uint a = first; a < end; ++a) {
+                vec4 base = anchor_base(a);
+                vec3 offset = base.xyz - eye;
+                float squared = offset.x * offset.x + offset.y * offset.y + offset.z * offset.z;
+                uint bin = NO_SLOT;
+                if (!(squared > policy.distance.y)) {
+                    bin = resolve_bin(sqrt(squared), anchor_stable_visibility(a));
+                    if (bin != NO_SLOT && relation != 2u) {
+                        float half_width = uintBitsToFloat(static_anchors.words[a * 12u + 4u]);
+                        if (classify_sphere(source, base.xyz, base.w * policy.tuft.w + half_width * 2.0) == 0u)
+                            bin = NO_SLOT;
+                    }
+                }
+                uint mapped = bin == NO_SLOT ? NO_SLOT : header(4u + bin);
+                anchor_slots.values[a] = mapped;
+                if (mapped != NO_SLOT) {
+                    ++counts[mapped];
+                    ++counts[TOTAL];
+                }
+            }
+        }
+    }
+    uint record = slot * RECORD_WORDS;
+    records.words[record] = first;
+    records.words[record + 1u] = end;
+    for (uint k = 0u; k < SLOT_COUNTERS; k += 2u)
+        records.words[record + 2u + k / 2u] = min(counts[k], 0xFFFFu) | (min(counts[k + 1u], 0xFFFFu) << 16u);
+    for (uint k = 0u; k < SLOT_COUNTERS; ++k)
+        if (counts[k] != 0u) atomicAdd(group_totals[k], counts[k]);
+    barrier();
+    if (gl_LocalInvocationID.x < SLOT_COUNTERS)
+        groups.values[gl_WorkGroupID.x * SLOT_COUNTERS + gl_LocalInvocationID.x] = group_totals[gl_LocalInvocationID.x];
+}
+#elif GRASS_SELECTION_PASS == 1
+shared uint totals[SLOT_COUNTERS];
+shared uint lane_sums[SLOT_COUNTERS][256];
+uint prefix(uint group, uint counter) {
+    uint group_count = header(1u);
+    return group < group_count ? groups.values[(group_count + group) * SLOT_COUNTERS + counter] : totals[counter];
+}
+void main() {
+    uint group_count = header(1u);
+    uint lane = gl_LocalInvocationID.x;
+    // Each lane scans a contiguous chunk of workgroups; the lane sums are
+    // scanned in shared memory.
+    uint chunk = (group_count + 255u) / 256u;
+    uint begin = min(lane * chunk, group_count), end = min(begin + chunk, group_count);
+    for (uint k = 0u; k < SLOT_COUNTERS; ++k) {
+        uint sum = 0u;
+        for (uint g = begin; g < end; ++g) sum += groups.values[g * SLOT_COUNTERS + k];
+        lane_sums[k][lane] = sum;
+    }
+    barrier();
+    for (uint stride = 1u; stride < 256u; stride <<= 1u) {
+        uint add[SLOT_COUNTERS];
+        for (uint k = 0u; k < SLOT_COUNTERS; ++k) add[k] = lane >= stride ? lane_sums[k][lane - stride] : 0u;
+        barrier();
+        for (uint k = 0u; k < SLOT_COUNTERS; ++k) lane_sums[k][lane] += add[k];
+        barrier();
+    }
+    for (uint k = 0u; k < SLOT_COUNTERS; ++k) {
+        uint running = lane == 0u ? 0u : lane_sums[k][lane - 1u];
+        for (uint g = begin; g < end; ++g) {
+            groups.values[(group_count + g) * SLOT_COUNTERS + k] = running;
+            running += groups.values[g * SLOT_COUNTERS + k];
+        }
+        if (lane == 255u) totals[k] = lane_sums[k][255];
+    }
+    memoryBarrierBuffer();
+    memoryBarrierShared();
+    barrier();
+    if (lane != 0u) return;
+    uint budget = header(3u);
+    uint slot_count = header(2u);
+    uint cut[SLOT_COUNTERS];
+    for (uint k = 0u; k < SLOT_COUNTERS; ++k) cut[k] = 0xFFFFFFFFu;
+    if (totals[TOTAL] > budget) {
+        // The workgroup holding visible rank `budget` (the last whose prefix
+        // does not exceed it), then its clusters and the roots of the
+        // cluster that crosses it.
+        uint low = 0u, high = group_count - 1u;
+        while (low < high) {
+            uint middle = (low + high + 1u) / 2u;
+            if (prefix(middle, TOTAL) <= budget) low = middle;
+            else high = middle - 1u;
+        }
+        uint cut_group = low;
+        for (uint k = 0u; k < SLOT_COUNTERS; ++k) cut[k] = prefix(cut_group, k);
+        for (uint c = 0u; c < 256u && cut[TOTAL] < budget; ++c) {
+            uint slot = cut_group * 256u + c;
+            uint total = record_count(slot, TOTAL);
+            if (cut[TOTAL] + total <= budget) {
+                for (uint k = 0u; k < SLOT_COUNTERS; ++k) cut[k] += record_count(slot, k);
+                continue;
+            }
+            uint end = records.words[slot * RECORD_WORDS + 1u];
+            for (uint a = records.words[slot * RECORD_WORDS]; a < end && cut[TOTAL] < budget; ++a) {
+                uint mapped = anchor_slots.values[a];
+                if (mapped == NO_SLOT) continue;
+                ++cut[mapped];
+                ++cut[TOTAL];
+            }
+        }
+    }
+    uint offset = 0u;
+    uint source_count = header(0u);
+    for (uint s = 0u; s < source_count; ++s) {
+        uint begin_group = source_word(s, 25u);
+        uint end_group = begin_group + source_word(s, 26u);
+        for (uint k = 0u; k < slot_count; ++k) {
+            uint start = prefix(begin_group, k);
+            uint finish = prefix(end_group, k);
+            uint admitted = min(finish, cut[k]) - min(start, cut[k]);
+            uint draw = DRAW_BASE + (s * SLOT_COUNTERS + k) * 5u;
+            control.values[draw] = header(32u + k * 2u);
+            control.values[draw + 1u] = admitted;
+            control.values[draw + 2u] = header(33u + k * 2u);
+            control.values[draw + 3u] = 0u;
+            control.values[draw + 4u] = offset;
+            // Wraps like a signed offset: position = rank + (offset - start).
+            control.values[RANK_BASE + s * SLOT_COUNTERS + k] = offset - start;
+            offset += admitted;
+        }
+    }
+    control.values[0] = (offset + 255u) / 256u;
+    control.values[1] = 1u;
+    control.values[2] = 1u;
+    control.values[3] = offset;
+}
+#else
+shared uint scan[SLOT_COUNTERS][256];
+void main() {
+    uint slot = gl_GlobalInvocationID.x;
+    uint lane = gl_LocalInvocationID.x;
+    uint own[SLOT_COUNTERS];
+    for (uint k = 0u; k < SLOT_COUNTERS; ++k) {
+        own[k] = record_count(slot, k);
+        scan[k][lane] = own[k];
+    }
+    barrier();
+    for (uint stride = 1u; stride < 256u; stride <<= 1u) {
+        uint add[SLOT_COUNTERS];
+        for (uint k = 0u; k < SLOT_COUNTERS; ++k) add[k] = lane >= stride ? scan[k][lane - stride] : 0u;
+        barrier();
+        for (uint k = 0u; k < SLOT_COUNTERS; ++k) scan[k][lane] += add[k];
+        barrier();
+    }
+    if (own[TOTAL] == 0u) return;
+    uint group_count = header(1u);
+    uint rank[SLOT_COUNTERS];
+    for (uint k = 0u; k < SLOT_COUNTERS; ++k)
+        rank[k] = groups.values[(group_count + gl_WorkGroupID.x) * SLOT_COUNTERS + k] + scan[k][lane] - own[k];
+    uint budget = header(3u);
+    if (rank[TOTAL] >= budget) return;
+    uint source = find_source(slot);
+    uint end = records.words[slot * RECORD_WORDS + 1u];
+    for (uint a = records.words[slot * RECORD_WORDS]; a < end && rank[TOTAL] < budget; ++a) {
+        uint mapped = anchor_slots.values[a];
+        if (mapped == NO_SLOT) continue;
+        visible.values[control.values[RANK_BASE + source * SLOT_COUNTERS + mapped] + rank[mapped]] = a;
+        ++rank[mapped];
+        ++rank[TOTAL];
+    }
+}
+#endif
+)glsl";
+}
+
 }

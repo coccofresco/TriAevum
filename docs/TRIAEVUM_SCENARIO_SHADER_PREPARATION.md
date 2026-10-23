@@ -277,10 +277,60 @@ python tools/triaevum_release/regenerate_shader_corpus.py --tools BUILD \
   --output NEW_PRIVATE_DIRECTORY
 ```
 
-Graphics profiles add `--runtime-inventory DIR` (repeatable): recorded game
-sessions' `*-shaders.json` and `*-pipelines.json` join the union and merge into
-`runtime-pipelines.json`, the profile recipes for device preparation (see
-`TRIAEVUM_NRI_PIPELINE_PREPARATION.md`, Graphics Profile Coverage).
+Graphics profiles add `--variant-records DIR` (repeatable, searched
+recursively). Each recorded session directory holds `raw-draws.jsonl`
+(`OOT3D_PICA_RAW_DRAWS`), `variant-requests.jsonl`
+(`OOT3D_PICA_VARIANT_REQUESTS`) and `session-pipelines.json`
+(`OOT3D_PICA_PIPELINE_INVENTORY`). `oot3d_native_pica_variant_inventory`
+rebuilds every request with this build's generators and the real variant
+cache, fails when an output differs from the recorded witness, and rewrites
+the recipes into `runtime-pipelines.json`, the profile recipes for device
+preparation (see `TRIAEVUM_NRI_PIPELINE_PREPARATION.md`, Graphics Profile
+Coverage). Recorded shader text (`*-shaders.json`) is no longer an input: it
+went stale with every generator change (issue #76).
+
+`oot3d_native_pica_variant_inventory --infer-report OUT` is a dry run of
+inferred coverage: every recorded request is resolved again with one per-draw
+semantic changed at a time (surface availability, directional and point shadow
+receivers, isolated lighting, temporal motion, relief, reflection) and the
+report counts the modules not already observed. It never adds to the corpus.
+On the Kokiri rain session (126 observed modules, 16.3 MB of source) it found
+221 more modules (9.0 MB), temporal motion the largest; widening is a budgeted
+decision (+25 % of pack bytes and preparation time), not a default.
+
+The AOT compiler runs up to 8 workers (`--jobs`) and, with `--compile-cache
+DIR`, reuses a module compiled earlier for the same source, stage, compiler
+build and options; a regeneration that changes a few programs recompiles only
+those. On 2026-10-16 (1066 modules) the union took 48 s serially, 13 s with 8
+workers and under 1 s from a warm cache, with byte-identical packs.
+
+Alpha-tested shadow casters run their draw's fragment program up to the native
+alpha test. A program with a parametric (always-available) form uses the
+built-in caster family (`build_fragment_artifacts --casters`); any other is
+title-derived, so the replay adds its caster as an NRI fragment of the corpus
+and the pass compiler finds it in the pack (`TRIAEVUM_BUILTIN_PASS_ARTIFACTS
+title_hits`) instead of compiling it.
+
+A recorded session also holds `runtime-inputs.json`, written right after the
+recording by `shader_corpus_qualification.py record-inputs --build BUILD
+--target TriAevum`. Three gates keep a stale corpus out of a release:
+
+1. Freshness (CPU, seconds). Regeneration writes `qualification.json`: every
+   repository file the generating tools were compiled from (sources, headers,
+   embedded data, from the Ninja graph) and every file of each recording
+   runtime, with SHA-256s. `prepare_release.py --shader-qualification` refuses
+   the corpus when a generator input changed (regenerate) or a runtime input
+   changed (record again), and when the pack or recipes are not the qualified
+   ones. The release audit repeats the check against the corresponding source
+   archive in the package. Both over-invalidate: any change to a listed file
+   counts.
+2. Closure (CPU, during regeneration). Every replayed module and every recipe's
+   module must be in the compiled pack.
+3. Shipped artifacts (GPU). `qualify_shader_handoff.py --package PACKAGE
+   --release` prepares the packaged corpus into an empty data directory as
+   Forge does, launches twice and requires no PICA or pass compilation, no
+   shaderc call (`TRIAEVUM_SHADERC_AUDIT`), no pack miss (also per unique
+   identity) and a non-zero instrumented program count.
 
 It accepts a transferable cache's partial import (exit 3) only when its sole
 gap is the documented unimported vertex/geometry records. The in-repo boot

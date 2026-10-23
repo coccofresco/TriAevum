@@ -151,6 +151,8 @@ struct NriDirectionalShadowKeyframeTelemetry {
     uint32_t ConstructionPages = 0U;
     uint32_t ConstructionBudget = 0U;
     uint32_t PendingPages = 0U;
+    // The construction stalled and was completed without a page budget.
+    bool ConstructionUnbounded = false;
     bool Cut = false;
     bool Rotated = false;
     // The direction the displayed shadows correspond to (the dissolve between

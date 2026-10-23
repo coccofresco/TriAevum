@@ -285,12 +285,15 @@ struct GrassAsyncPlacementBuilder::Impl {
             const bool diskEnabled = !job.Directory.empty() && !job.Request.PlacementView.Enabled;
             GrassPlacementDiskKey diskKey;
             const auto begin = std::chrono::steady_clock::now();
+            auto keyed = begin, loaded = begin, checked = begin;
             try {
                 if (diskEnabled)
                     diskKey = GrassPlacementPersistentKey(job.Request);
+                keyed = std::chrono::steady_clock::now();
                 GrassPersistentPlacementCache disk(job.Directory);
                 if (diskEnabled) {
                     auto cached = disk.Load(diskKey, &diskReject);
+                    loaded = std::chrono::steady_clock::now();
                     if (cached && std::any_of(cached->Anchors.begin(), cached->Anchors.end(), [&](const auto& anchor) {
                             const auto& ref = anchor.SurfaceReference;
                             return (ref[0] & 65535U) >= job.Request.Vertices->size() ||
@@ -300,6 +303,7 @@ struct GrassAsyncPlacementBuilder::Impl {
                         cached.reset();
                         diskReject = true;
                     }
+                    checked = std::chrono::steady_clock::now();
                     if (cached) {
                         cached->Identity = job.Request.WorldIdentity;
                         cached->ContentVersion = job.Request.PlacementKey.ContentVersion ^
@@ -317,6 +321,17 @@ struct GrassAsyncPlacementBuilder::Impl {
             } catch (...) { failed = true; }
             const double elapsed =
                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - begin).count();
+            static const bool diagnoseDisk = std::getenv("OOT3D_GRASS_DIAGNOSTICS") != nullptr;
+            if (diagnoseDisk && diskEnabled) {
+                const auto ms = [](auto a, auto b) { return std::chrono::duration<double, std::milli>(b - a).count(); };
+                const auto& timing = GrassLastPlacementDiskLoadTiming();
+                std::fprintf(stderr, "[grass-disk] world=%llx hit=%d key_ms=%.3f load_ms=%.3f mutex_wait_ms=%.3f "
+                    "read_ms=%.3f validate_ms=%.3f reference_check_ms=%.3f total_ms=%.3f bytes=%llu anchors=%zu\n",
+                    static_cast<unsigned long long>(job.Request.WorldIdentity), diskHit ? 1 : 0, ms(begin, keyed),
+                    ms(keyed, loaded), timing.MutexWaitMilliseconds, timing.ReadMilliseconds,
+                    timing.ValidateMilliseconds, ms(loaded, checked), elapsed,
+                    static_cast<unsigned long long>(timing.Bytes), placement ? placement->Anchors.size() : 0U);
+            }
 
             {
                 std::scoped_lock lock(Mutex);

@@ -247,6 +247,35 @@ void CheckControlPersistence() {
           "Save controls did not persist live input");
     Check(LoadTopScreenUiConfig(root / "topscreen.json", &savedTop) && savedTop.FreeCameraEnabled,
           "Save controls did not persist camera settings");
+    // SingleScreen 3.0 gameplay options: the standard profile's values (all
+    // on), previewed live and persisted by Save controls with the other
+    // TopScreen controls.
+    Click("Gameplay");
+    const auto beforeGameplay = top->Snapshot().Config;
+    Check(beforeGameplay.QuickPutAway && beforeGameplay.LandingRollFix && beforeGameplay.RollDash &&
+              beforeGameplay.AimingReticle && beforeGameplay.Rain3d &&
+              beforeGameplay.Rain3dDensityPercent == 100U,
+          "SingleScreen gameplay options do not start from the standard profile");
+    for (const char* label : {"Quick put away", "Landing roll", "Roll dash",
+                              "Aiming reticle", "3D rain"})
+        Click(label);
+    const auto previewGameplay = top->Snapshot().Config;
+    Check(!previewGameplay.QuickPutAway && !previewGameplay.LandingRollFix && !previewGameplay.RollDash &&
+              !previewGameplay.AimingReticle && !previewGameplay.Rain3d,
+          "Gameplay checkboxes did not preview their options");
+    Click("Save controls");
+    Check(LoadTopScreenUiConfig(root / "topscreen.json", &savedTop) && !savedTop.QuickPutAway &&
+              !savedTop.LandingRollFix && !savedTop.RollDash &&
+              !savedTop.AimingReticle && !savedTop.Rain3d && savedTop.FreeCameraEnabled,
+          "Save controls did not persist the gameplay options");
+    for (const char* label : {"Quick put away", "Landing roll", "Roll dash",
+                              "Aiming reticle", "3D rain"})
+        Click(label);
+    Click("Save controls");
+    Check(LoadTopScreenUiConfig(root / "topscreen.json", &savedTop) && savedTop.QuickPutAway &&
+              savedTop.RollDash && savedTop.AimingReticle && savedTop.Rain3d,
+          "Gameplay options could not be turned on again");
+    Click("Camera");
     Click("Enabled##freecam");
     auto externalHud = top->Snapshot().Config;
     externalHud.HudScale = 0.65F;
@@ -277,6 +306,27 @@ void CheckControlPersistence() {
     Click("Save controls");
     Frame(true);
     Check(loggedPanelText.find("cannot") != std::string::npos, "Save error was not visible");
+    // The Display HUD size saves at once; a failed save keeps the size for the
+    // session and says why.
+    InstallGraphicsSettingsPanelTabs({CreateTopScreenSettingsPanel(top)});
+    size = ImVec2(760, 2600);
+    Frame(); Frame();
+    Click("Display");
+    Click("Native (100%)");
+    Check(LoadTopScreenUiConfig(root / "topscreen.json", &savedTop) &&
+              savedTop.HudScale == kTopScreenHudScaleNative &&
+              top->Snapshot().Config.HudScale == kTopScreenHudScaleNative,
+          "the Native HUD size was not saved");
+    Frame(true);
+    Check(loggedPanelText.find("TopScreen: saved") != std::string::npos, "saved HUD size was not confirmed");
+    auto blockedTop = std::make_shared<TopScreenUiConfigRuntime>(root / "not-a-file", TopScreenUiConfig{});
+    InstallGraphicsSettingsPanelTabs({CreateTopScreenSettingsPanel(blockedTop)});
+    Frame(); Frame();
+    Click("Native (100%)");
+    Frame(true);
+    Check(blockedTop->Snapshot().Config.HudScale == kTopScreenHudScaleNative &&
+              loggedPanelText.find("could not be saved") != std::string::npos,
+          "a failed HUD size save was not visible");
     InstallGraphicsSettingsPanelTabs({});
 }
 
@@ -1506,12 +1556,12 @@ int main(int argc, char** argv) try {
     // tabs no longer exist.
     {
         float previous = -1.0F;
-        for (const char* tab : {"Display", "Lighting", "Grass", "Materials", "Controls", "HUD"}) {
+        for (const char* tab : {"Display", "Lighting", "Grass", "Materials", "Controls"}) {
             const auto item = Find(tab);
             Check(item.Rect.Min.x > previous, std::string("top-level tab out of order: ") + tab);
             previous = item.Rect.Min.x;
         }
-        for (const char* old : {"Renderer", "Textures", "Environment", "TopScreen 2.1.1"})
+        for (const char* old : {"Renderer", "Textures", "Environment", "TopScreen 2.1.1", "HUD"})
             Check(std::none_of(items.begin(), items.end(),
                                [&](const auto& pair) { return pair.second.Label == old; }),
                   std::string("former top-level tab still present: ") + old);
@@ -2362,20 +2412,41 @@ int main(int argc, char** argv) try {
           controls->Snapshot().Config.GyroscopeBiasDegreesPerSecond == beforePreset.GyroscopeBiasDegreesPerSecond &&
           controls->Snapshot().Config.AccelerometerNeutral == beforePreset.AccelerometerNeutral,
           "preset discarded controller identity or calibration");
-    Click("HUD");
-    Frame(true);
-    Check(loggedPanelText.find("TopScreen mod by M-1") != std::string::npos, "HUD lacks the TopScreen credit");
-    Click("Render HUD");
-    Check(!topScreen->Snapshot().Config.RenderHud, "TopScreen preview not connected");
-    auto externalTop = topScreen->Snapshot().Config;
-    externalTop.HudScale = 0.75F;
-    topScreen->Preview(externalTop);
-    Frame();
-    Click("Render HUD");
-    Check(topScreen->Snapshot().Config.HudScale == 0.75F, "stale draft overwrote external TopScreen");
+    // TopScreen offers only the HUD size, at the foot of Display, with the
+    // credit. Show the whole page so its text is logged.
+    {
+        const auto pageSize = size;
+        size = ImVec2(760, 2600);
+        Click("Display");
+        Frame();
+        Frame(true);
+        Check(loggedPanelText.find("SingleScreen (TopScreen) by M-1") != std::string::npos,
+              "Display lacks the TopScreen credit");
+        Check(loggedPanelText.find("TopScreen: session only") != std::string::npos,
+              "TopScreen size without a configuration path is not labelled session only");
+        for (const char* removed : {"Render HUD", "Restoration HUD", "HUD scale", "Save TopScreen",
+                                    "Horizontal margin", "Magic bar Y"})
+            Check(std::none_of(items.begin(), items.end(),
+                               [&](const auto& pair) { return pair.second.Label == removed; }),
+                  std::string("TopScreen layout control still offered: ") + removed);
+        Check(topScreen->Snapshot().Config.HudScale == Oot3dNativeGame::kTopScreenHudScaleOptimized,
+              "Optimized is not the default HUD size");
+        Click("Native (100%)");
+        Check(topScreen->Snapshot().Config.HudScale == Oot3dNativeGame::kTopScreenHudScaleNative,
+              "Native did not preview the game's HUD size");
+        // A change made elsewhere is live: the size choice never reverts it.
+        auto externalTop = topScreen->Snapshot().Config;
+        externalTop.HudMarginX = 8;
+        topScreen->Preview(externalTop);
+        Frame();
+        Click("Optimized (70%)");
+        Check(topScreen->Snapshot().Config.HudScale == Oot3dNativeGame::kTopScreenHudScaleOptimized &&
+                  topScreen->Snapshot().Config.HudMarginX == 8,
+              "HUD size overwrote an external TopScreen change");
+        size = pageSize;
+    }
     size = ImVec2(520, 400);
     Frame(); Frame();
-    Find("Save TopScreen");
     Click("Controls");
     for (const char* section : {"Bindings", "Camera", "Devices", "Shortcuts"}) {
         Click(section);
