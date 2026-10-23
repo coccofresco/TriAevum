@@ -84,10 +84,10 @@ The two images differ by shifts, as the maintainer expected: v1.1's code is
 the reference code moved by a constant within long contiguous stretches (47
 stretches hold 11,606 of the 11,655 matched functions; about 25 distinct
 shifts between -0x230 and +0x228), and the data segment and BSS keep their
-addresses (every global the donors use). `tools/mm3d/a32/v110_address_map.py`
+addresses (every global the donors use). `titles/mm3d/a32/v110_address_map.py`
 turns the instruction correspondence (1,314,324 matched words, branch
 displacements, PC-relative loads and literal pools masked) into
-`tools/mm3d/dekui/v110_address.h`: 363 stretches of equal shift and
+`titles/mm3d/dekui/v110_address.h`: 363 stretches of equal shift and
 `V110(address)` / `V110Branch(word, address)` (a B/BL re-encoded for its
 translated target). With it every one of dekui's 126 native patch entries
 finds its intercepted word in v1.1 (103 identical words, 19 re-encoded
@@ -138,17 +138,17 @@ Work directory `I:/_triaevum_work/mm3d-port` (`W` below).
    the A32 generator as `--supplemental-entries`.
 4. A32 registry: `generate_aot.py` with `--code --exheader --inventory
    --boundary-audit --supplemental-entries --true-aot-blocks` (boundary audit
-   and true-AOT blocks from `tools/mm3d/a32/`, empty for now; supplemental
+   and true-AOT blocks from `titles/mm3d/a32/`, empty for now; supplemental
    entries are the interior entries above plus every guest patch boundary:
    `oot3d_mm3d_single_screen_tests --block-boundaries` lists them and
-   `tools/mm3d/a32/guest_patch_entries.py --merge` adds them to the interior
+   `titles/mm3d/a32/guest_patch_entries.py --merge` adds them to the interior
    entries; regenerate whenever a site is added). 17,556 callable entries,
    1,213,315 of 1,240,404 slots reachable; 6 unsupported operations left, all
    data words decoded as code.
 5. Whole-AOT program (from the first inventory; not yet regenerated):
    `generate_whole_aot.py` with the same title inputs: 17,753 functions, 237,599 blocks, 1,245,442 instructions, none unclaimed.
 6. Selection: `select_profile_whole_aot.py --all-lowerable --code` from the
-   empty profile/selection in `tools/mm3d/a32/`: 16,522 functions (1,063
+   empty profile/selection in `titles/mm3d/a32/`: 16,522 functions (1,063
    lowering rejections, 905 ownership conflicts).
 7. C++ shards: `tools/ctr_title/generate_whole_aot_cpp.py` (256 shards).
 
@@ -510,7 +510,7 @@ Tests: `oot3d_mm3d_a32_substitute_tests`, `oot3d_mm3d_guest_calls_tests`.
 
 ### dekui's guest side
 
-`tools/mm3d/dekui/` is a faithful port of dekui's guest side (56 of its
+`titles/mm3d/dekui/` is a faithful port of dekui's guest side (56 of its
 `src/mm3d` headers, ported by Codex, GPL-2.0-or-later notices kept, every
 address translated to v1.1 with its reference in a comment) and of its
 emulator glue as `Mm3dDekui::Core`: `Instruction` is the ordered
@@ -537,7 +537,7 @@ still checked), and its minimap reads the HUD's heart widget from the port
 code are excluded from dekui's candidates and implemented in the port.
 Without the port, 80 apply. dekui's two text tables (original US English
 messages and their edits) are withheld from the repository as game material
-(`tools/mm3d/dekui/PORT_NOTES.md`). `TRIAEVUM_MM3D_DAMAGE_MULTIPLIER` (development) sets dekui's
+(`titles/mm3d/dekui/PORT_NOTES.md`). `TRIAEVUM_MM3D_DAMAGE_MULTIPLIER` (development) sets dekui's
 damage multiplier until the F1 menu owns its settings.
 
 Verified on the developer launch (100% save, `inputs/save100_dekui_song_list.json`
@@ -554,7 +554,7 @@ corrupted-guard checks), `oot3d_mm3d_single_screen_tests`.
 Restoration supports v1.1 cards only by rewriting their code into its v1.0
 build (`make_release.sh`: the v101/v110 patches go from each version's
 code.bin to the one `patched_code.bin` built on v1.0, with the v1.0
-ExHeader). Its port onto v1.1 (`tools/mm3d/restoration/`, GPL notices kept,
+ExHeader). Its port onto v1.1 (`titles/mm3d/restoration/`, GPL notices kept,
 glue in `mm3d_restoration.cpp`) turns each `hooks/*.hks` record into a guest
 patch site at the translated v1.1 address, guarded by the v1.1 word.
 Magikoopa's softbranch saves r0-r12/lr, calls the function and then runs
@@ -594,7 +594,7 @@ song list's) and plays the decide effect. It calls guest functions through
 `Mm3dGuestCalls` and resumes the guest at the hook itself, whose own
 instruction then runs once (`Mm3dGuestPatches::SkipOnce`).
 
-The rest of the port (Codex; `tools/mm3d/restoration/PORT_NOTES.md`) covers
+The rest of the port (Codex; `titles/mm3d/restoration/PORT_NOTES.md`) covers
 all 107 `hooks/*.hks` records: 108 instruction sites and 15 guarded data
 patches, each v1.1 position proved by instruction context
 (`W/analysis/dekui/RESTORATION_HOOK_PROOFS.md`): schedule and menu
@@ -648,7 +648,7 @@ frame (hearts and magic top left, D-pad items below, B/A and the X/Y/I/II
 items top right, rupees bottom left, clock centred, the map bottom right),
 the pause items page unchanged.
 
-dekui's setup layer: `tools/mm3d/dekui/setup/prepare_romfs_layer.py` (ported
+dekui's setup layer: `titles/mm3d/dekui/setup/prepare_romfs_layer.py` (ported
 from dekui's `build_release_assets.py`, GAR code in `dekui_gar.py`) prepares
 the layer dekui's first launch prepares, from the user's own files: the
 layouts it edits read from the user's RomFS (EUR's `layout/Joker.Main.gar`,
@@ -660,12 +660,12 @@ archive, the map's slide tracks held, notebook rows, submenu title and
 telop poses) and checks every input and output against dekui's published
 fingerprints (`setup-fingerprints.json`): all 11 match on EUR. dekui's
 re-edit sources (`*.mm3d-*-source`) are written beside the layer, not in it.
-In W: `python tools/mm3d/dekui/setup/prepare_romfs_layer.py --romfs
+In W: `python titles/mm3d/dekui/setup/prepare_romfs_layer.py --romfs
 extract/romfs.bin --restoration <restoration> --layer mods/dekui-romfs
 --sources mods/dekui-sources`, then
 `TRIAEVUM_ROMFS_OVERLAY=<W>/mods/dekui-romfs`.
 
-dekui's single-screen wording: `tools/mm3d/dekui/setup/prepare_message_edits.py`
+dekui's single-screen wording: `titles/mm3d/dekui/setup/prepare_message_edits.py`
 (from dekui's `single_screen_text.py`, reviewed English in
 `single-screen.json`) compiles dekui's edits against the user's own English
 messages (EUR `message/eu/eue.gmsg`, language bit 4) with dekui's checks
@@ -700,11 +700,11 @@ guards match, 648 corrupted guards rejected, missing-layout lifecycle),
 
 ### dekui's settings
 
-`tools/mm3d/dekui/settings.{h,cpp}` (ported by Codex from dekui's
+`titles/mm3d/dekui/settings.{h,cpp}` (ported by Codex from dekui's
 `settings.cpp` and the application in `overlay.cpp`, nlohmann::json instead
 of Qt) load dekui's `presentation.json` and apply it to the modules as dekui
 does at startup. The runtime applies dekui's shipped defaults
-(`tools/mm3d/dekui/defaults/presentation.json`, dekui-authored values, no
+(`titles/mm3d/dekui/defaults/presentation.json`, dekui-authored values, no
 game material), or a file named by `TRIAEVUM_MM3D_PRESENTATION`
 (development), until the F1 menu owns and persists them. The shipped
 defaults keep dekui's choices, e.g. `song_reset_top=false` and damage x1.

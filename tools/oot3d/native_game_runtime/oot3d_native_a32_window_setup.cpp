@@ -505,7 +505,7 @@ void NativeA32WindowSession::Setup() {
       mm3dSingleScreen->BindRestoration(*mm3dRestoration);
       if (const char *edits = std::getenv("TRIAEVUM_MM3D_MESSAGE_EDITS")) {
         // Development: dekui's single-screen wording compiled against the
-        // user's own messages (tools/mm3d/dekui/setup/prepare_message_edits.py),
+        // user's own messages (titles/mm3d/dekui/setup/prepare_message_edits.py),
         // until the launcher prepares and owns them.
         std::ifstream stream(std::filesystem::u8path(edits), std::ios::binary);
         const std::string text((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());

@@ -6,10 +6,10 @@ donor BPS, rewrite v1.1 as v1.0, or install appended ARM code. The source and
 generated instruction contracts are GPL-2.0-or-later; see COPYING. No game
 messages, textures, layouts or archives are supplied here.
 
-The title adapter is `tools/oot3d/native_game_runtime/mm3d_restoration.{h,cpp}`.
+The title adapter is `titles/mm3d/adapter/mm3d_restoration.{h,cpp}`.
 It includes `engine_impl.h`, so these implementation fragments do not need
 separate build targets. The existing include paths must include both this
-directory and `tools/mm3d/dekui`. The shared executor and renderer are unchanged.
+directory and `titles/mm3d/dekui`. The shared executor and renderer are unchanged.
 
 ## Source coverage and ownership
 

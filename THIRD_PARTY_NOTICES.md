@@ -345,13 +345,13 @@ traceable through this repository's Git history.
 Moonfall Curse integrates the single-screen mode of
 [tgacquin/mm3d-dekui](https://github.com/tgacquin/mm3d-dekui) (release
 v1.0.0-beta.1, source archive SHA-256 `E39E374B…3E6281`), whose `src/mm3d`
-files are GPL-2.0-or-later. Code ported from it lives in `tools/mm3d/dekui/`
+files are GPL-2.0-or-later. Code ported from it lives in `titles/mm3d/dekui/`
 with its SPDX notice and a note of the dekui file it derives from; addresses
 are translated to the vanilla v1.1 code.bin and the hooks are expressed as
 typed guest patch sites (`docs/MOONFALL_CURSE.md`). dekui builds on
 [leoetlino/project-restoration](https://github.com/leoetlino/project-restoration)
 (GPL-2.0, commit `8bb2a7b8`), credited to leoetlino and contributors; code
-ported from it lives in `tools/mm3d/restoration/` with its SPDX notice, a
+ported from it lives in `titles/mm3d/restoration/` with its SPDX notice, a
 note of the Restoration file it derives from and the GPL text (`COPYING`).
 Neither project's binary
 patches (`code.bps`, `exheader.bin`), RomFS layouts, text payloads or

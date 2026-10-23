@@ -17,7 +17,7 @@ namespace Oot3dNativeGame {
 
 // Project Restoration (leoetlino/project-restoration 8bb2a7b8), the base of
 // mm3d-dekui, ported as source onto the vanilla v1.1 code.bin
-// (tools/mm3d/restoration). Each hook of its hooks/*.hks becomes a guest
+// (titles/mm3d/restoration). Each hook of its hooks/*.hks becomes a guest
 // patch site at the translated v1.1 address, guarded by the v1.1 word:
 // - softbranch (Magikoopa saves r0-r12/lr, calls the function, then runs the
 //   displaced instruction): the site runs the function and declines, so the
@@ -41,7 +41,7 @@ class Mm3dRestorationPort {
     std::size_t ApplyDataPatches(oot3d::recomp::a32::MemoryBus& memory);
     void SetDekuiBridge(Mm3dRestoration::DekuiBridge bridge);
     bool SetMessageEdits(std::vector<Mm3dRestoration::MessageEdit> edits);
-    // Message edits as tools/mm3d/dekui/setup/prepare_message_edits.py
+    // Message edits as titles/mm3d/dekui/setup/prepare_message_edits.py
     // writes them (triaevum_mm3d_message_edits_v1: the user's own text and
     // dekui's wording, kept on the user's machine); nullopt and error set if
     // the document is malformed. SetMessageEdits validates their hashes.

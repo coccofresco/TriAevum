@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Supplemental A32 registry entries for MM3D's guest patch sites.
 
-Every guest patch site (tools/oot3d/native_game_runtime/mm3d_single_screen.cpp)
+Every guest patch site (titles/mm3d/adapter/mm3d_single_screen.cpp)
 must start a registry block, and so must the instruction after it, where the
 guest continues. The generator splits the block containing a supplemental
 entry, so each boundary becomes an entry spanning to the end of its

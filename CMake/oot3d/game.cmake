@@ -18,6 +18,7 @@ target_include_directories(oot3d_native_game_runtime PUBLIC
     tools/oot3d/decomp_support/include
     tools/oot3d/native_demo_host
     tools/oot3d/native_game_runtime
+    titles/mm3d/adapter
 )
 target_compile_options(oot3d_native_game_runtime PRIVATE "${WARNING_OVERRIDE}")
 target_link_libraries(oot3d_native_game_runtime PUBLIC
@@ -46,9 +47,10 @@ oot3d_target_defaults(oot3d_native_game_runtime_tests FOLDER Tests)
 
 # MM3D adapter read/lifetime guards; no process, renderer or ROM needed.
 add_executable(mm3d_scene_environment_tests EXCLUDE_FROM_ALL
-    tools/oot3d/native_game_runtime/mm3d_scene_environment_tests.cpp)
+    titles/mm3d/adapter/mm3d_scene_environment_tests.cpp)
 target_include_directories(mm3d_scene_environment_tests PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/native_game_runtime")
+    "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/native_game_runtime"
+    "${CMAKE_CURRENT_SOURCE_DIR}/titles/mm3d/adapter")
 oot3d_target_defaults(mm3d_scene_environment_tests FOLDER Tests)
 
 # Clock verification must also work without the optional legacy cutscene host.
@@ -393,9 +395,10 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
         oot3d_target_defaults(oot3d_dev_warp_tests FOLDER Tests)
         add_executable(mm3d_dev_tools_tests EXCLUDE_FROM_ALL
             tools/oot3d/native_game_runtime/oot3d_dev_warp.cpp
-            tools/oot3d/native_game_runtime/mm3d_dev_tools_tests.cpp)
+            titles/mm3d/adapter/mm3d_dev_tools_tests.cpp)
         target_include_directories(mm3d_dev_tools_tests PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/native_game_runtime"
+            "${CMAKE_CURRENT_SOURCE_DIR}/titles/mm3d/adapter"
             "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/decomp_support/include")
         target_compile_definitions(mm3d_dev_tools_tests PRIVATE TRIAEVUM_DEVELOPER_TOOLS=1)
         target_link_libraries(mm3d_dev_tools_tests PRIVATE oot3d_native_game_runtime)

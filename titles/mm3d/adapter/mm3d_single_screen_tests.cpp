@@ -127,7 +127,7 @@ void TestGuard() {
 int main(int argc, char** argv) {
     if (argc == 2 && std::string_view(argv[1]) == "--block-boundaries") {
         // The A32 registry input: every candidate PC and the instruction
-        // after it start a block (tools/mm3d/a32/guest_patch_entries.py).
+        // after it start a block (titles/mm3d/a32/guest_patch_entries.py).
         // dekui's sites and Project Restoration's hooks.
         Mm3dSingleScreen singleScreen;
         Mm3dGuestCalls calls;

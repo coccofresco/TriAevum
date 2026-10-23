@@ -18,7 +18,7 @@ namespace Oot3dNativeGame {
 class Mm3dRestorationPort;
 
 // Majora's Mask 3D's single-screen mode: mm3d-dekui's guest side
-// (tools/mm3d/dekui, ported onto the vanilla v1.1 code.bin) run the way
+// (titles/mm3d/dekui, ported onto the vanilla v1.1 code.bin) run the way
 // dekui's emulator runs it. Every PC dekui may change is a guest patch site;
 // once the image is mounted the ported substitution chain gives the word
 // dekui would fetch there, and the site is enabled when that differs from

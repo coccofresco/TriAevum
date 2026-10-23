@@ -113,7 +113,7 @@ std::vector<std::uint32_t> Mm3dSingleScreen::CandidatePcs() {
 
 void Mm3dSingleScreen::Register(Mm3dGuestPatches& patches) {
     // Where dekui's handlers branch into the middle of guest functions
-    // (tools/mm3d/dekui: inventory navigation, item present, dungeon map,
+    // (titles/mm3d/dekui: inventory navigation, item present, dungeon map,
     // death penalties, menu memory and page switch, prices).
     patches.AddTargets({
         0x005A5850U, 0x005A58BCU,                 // InventoryNavigation::GearMove (ref 0x5a56e0, 0x5a574c)
