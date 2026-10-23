@@ -390,6 +390,7 @@ PicaShaderPipelineResult BuildInstrumentedVariant(
     result.TypedNormalGuide = fragment.Applied() && fragment.TypedNormalGuide;
     result.FragmentOutputs = fragment.Outputs;
     result.Decisions = fragment.Decisions;
+    result.ReadsDrawControl = fragment.ReadsDrawControl;
     result.DirectFragmentHooksUsed =
         canonical.DirectCanonicalFragmentHooksUsed &&
         fragment.UsedProvidedHooks;

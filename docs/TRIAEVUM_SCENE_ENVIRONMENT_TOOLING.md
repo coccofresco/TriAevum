@@ -31,6 +31,26 @@ a new visit. If headers are initially unreadable, the group stays unknown
 until a valid sample arrives. An unreadable later sample keeps the latched
 group. Unknown scenes retain the prior no-group behavior.
 
+### The file select (2026-10-20)
+
+The file select keeps the title scene on the upper screen behind its cards.
+The screen is the file select's, but the scene-view probe reads the block
+the title demo's PlayState used: while that PlayState goes on updating
+behind the cards (Player_Update included, the scene clock advancing) it reads
+the title's `0x6B`; at other moments it reads scene 0 (the Deku Tree's id)
+with the View still readable. Until this round the environment runtime took
+those at face value, so a profile saved on the file select applied to the
+title or the Deku Tree as well. The probe now takes the file select's
+identity from `FileSelect_Update` (`NativeA32SceneViewProbe::ObserveFileSelect`)
+and holds it for `kOot3dFileSelectOwnershipRefreshes` (4) guest refreshes
+after the last observation (`BeginGuestRefresh` from the window frame), so
+the order of the two updates within a refresh cannot flip the identity
+frame by frame; a reset clears it. It reports `kOot3dFileSelectSceneId`
+(`0x00FF`, outside the title's scene table): fixed time, no group, its own
+file `scene-00FF.environment.json`, shipped as a release default with the
+user's tuned profile. F1 labels it "File select". The title demo before it
+keeps its own scenes (`0x6B` and the ones the demo cycles through).
+
 Standards live beside scene files:
 `group-<id>.environment.json` and `group-<id>.night.environment.json`.
 Their schema is still `"triaevum.scene-environment"`, with `"version": 6`

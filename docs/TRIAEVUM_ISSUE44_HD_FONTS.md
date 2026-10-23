@@ -48,7 +48,7 @@ At frame 120, native vs HD 720p differs in 2,591 pixels, entirely inside
 `[571,549]-[708,632]` (the text). Nothing outside the text panel changes. The
 text ROI is pixel-identical between Windows and Linux HD captures. Fixtures and
 captures stay private (`J:/TriAevum-diagnostics/issue44/live4` and Linux
-`/home/xander/triaevum-hd-font-live`). This is a verified generated-text scenario,
+`~/triaevum-hd-font-live`). This is a verified generated-text scenario,
 not a claim that every dialogue/language/song has been exhaustively played.
 
 `oot3d_native_hd_font_runtime_tests` exercises the real adapter with synthetic
@@ -90,7 +90,7 @@ until the native atlas consumer exists. The manifest explicitly records
 Reproduce preparation from the repository root (local user inputs only):
 
 ```powershell
-python -m tools.oot3d.decomp_support.scripts.prepare_qbf_font_pack --archive <topscreen211.zip> --romfs <romfs.bin> --output <local-font-coverage.zip>
+python -m tools.oot3d.decomp_support.scripts.prepare_qbf_font_pack --font runtime/triaevum_resources/topscreen/singlescreen-3.1/ltn16.qbf --romfs <romfs.bin> --output <local-font-coverage.zip>
 python -m unittest tools.triaevum_release.test_qbf_font -v
 ```
 
@@ -171,7 +171,7 @@ snapshot immutability, no-op reuse and epoch reset. The module is **not yet
 called by the live native font blitter or NRI upload path**. Do not describe it
 as a working HD dialogue feature.
 
-Linux mirror `/home/xander/triaevum-linux` now has the same font importer,
+Linux mirror `~/triaevum-linux` now has the same font importer,
 Forge integration, tests, C++ module and CMake target. Existing tracked files
 were compared against their Windows baseline before replacement. No reset of
 the independently dirty mirror was performed. The focused Forge suite passes

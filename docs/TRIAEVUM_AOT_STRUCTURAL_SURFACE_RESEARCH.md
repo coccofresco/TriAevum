@@ -132,7 +132,7 @@ substitute these static counts for real-invocation replay or unchanged-game A/B.
 There is no ready-made function-capsule replay in the inspected TEV tooling;
 building that capture path is additional work, not a completed validation.
 
-Private machine audit: `C:/Users/xander/triaevum-aot-causal-analysis/machine-code-audit.json`.
+Private machine audit: `%USERPROFILE%/triaevum-aot-causal-analysis/machine-code-audit.json`.
 Module/map: `I:/TriAevum-aot-lab-debug/plugin/`. Run the audit with `--module`,
 `--map`, `--objdump`, `--output` and repeated `--entry` for the addresses above.
 Two tests cover static parsing/classification and empty output. The existing
@@ -189,7 +189,7 @@ justified by this follow-up. The original baseline remains untouched.
 Tool: `analyze_aot_leaf_ranges.py`; three tests validate exclusive leaf-only
 counting with relocated module bases, overlap rejection and missing modules.
 Range definitions are binary-hash-bound and private at
-`C:/Users/xander/triaevum-aot-causal-analysis/helper-leaf-ranges.json`;
+`%USERPROFILE%/triaevum-aot-causal-analysis/helper-leaf-ranges.json`;
 results are `helper-leaf-observations.json` in the same directory. Pass
 `--module`, `--ranges`, repeated `--capture`, and `--output`. Input hashes and
 per-run counts are recorded; capture-to-binary identity depends on provenance.
@@ -202,7 +202,7 @@ Inputs are private evidence, not distributable project assets:
 - Program and manifest: `I:/TriAevum-aot-lab-evidence/baseline/`, files
   `aot_program.json` and `whole_aot_cpp_manifest.json`.
 - Code: `E:/ppssppvr/oot3d_decomp/work/extract/exefs/code.bin`.
-- Analyses under `C:/Users/xander/triaevum-aot-causal-analysis/`:
+- Analyses under `%USERPROFILE%/triaevum-aot-causal-analysis/`:
   `field-stacks/analysis.json`, `field-repeat/analysis0.json`,
   `field-repeat/analysis1.json`.
 

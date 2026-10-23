@@ -18,6 +18,15 @@ enum class N64UiCanvasMode : std::uint8_t {
     NativeTopScreen400x240,
 };
 
+// The part of the framebuffer the canvas is fitted into: the presentation
+// picture (the aspect ratio's letterbox), in framebuffer pixels.
+struct N64UiOutputRegion {
+    std::uint32_t X = 0;
+    std::uint32_t Y = 0;
+    std::uint32_t Width = 0;
+    std::uint32_t Height = 0;
+};
+
 struct N64UiRendererStats {
     std::uint64_t frames = 0;
     std::uint64_t frames_with_primitives = 0;
@@ -111,6 +120,12 @@ class N64UiFast3dRenderer {
     bool Render(std::span<const UiPrimitive> primitives,
                 std::uint32_t framebufferWidth,
                 std::uint32_t framebufferHeight, N64UiCanvasMode canvasMode,
+                PreparedUiTextures prepared, std::string* error = nullptr);
+    // The canvas fitted into `region` (centred, with the canvas proportions)
+    // instead of the whole framebuffer. The two-extent overloads are the
+    // whole framebuffer as the region.
+    bool Render(std::span<const UiPrimitive> primitives,
+                const N64UiOutputRegion& region, N64UiCanvasMode canvasMode,
                 PreparedUiTextures prepared, std::string* error = nullptr);
     void SetTextureProvider(const UiTextureProvider* textureProvider) noexcept;
     void Release() noexcept;

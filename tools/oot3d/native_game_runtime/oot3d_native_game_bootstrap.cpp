@@ -56,6 +56,7 @@ void PrintOot3dNativeGameUsage() {
                  "[--topscreen-link-animations <zelda_link_ext.zar>] "
                  "[--topscreen-ui-atlas-hd <ui_atlas_hd.png>] "
                  "[--topscreen-config <topscreen_ui.json>] "
+                 "[--romfs-overlay <romfs_overlay.o3ro>] [--ui-texture-pack <directory>] "
                  "[--controls-config <oot3d_controls.json>] "
                  "[--save-data <directory>] "
                  "[--output <summary.json>] [--screenshot "
@@ -142,6 +143,12 @@ bool ParseOot3dNativeGameArgs(int argc, char** argv, Oot3dNativeGameLaunch& laun
             launch.TopScreenUiAtlasHdPath = argv[++index];
         } else if (arg == "--topscreen-config" && index + 1 < argc) {
             launch.TopScreenConfigPath = argv[++index];
+        } else if (arg == "--ui-texture-pack" && index + 1 < argc) {
+            launch.UiTexturePackDirectory =
+                std::filesystem::absolute(std::filesystem::u8path(argv[++index])).lexically_normal();
+        } else if (arg == "--romfs-overlay" && index + 1 < argc) {
+            launch.RomFsOverlayPath =
+                std::filesystem::absolute(std::filesystem::u8path(argv[++index])).lexically_normal();
         } else if (arg == "--controls-config" && index + 1 < argc) {
 #if defined(__SWITCH__)
             // devoptab paths (sdmc:/...) are absolute to Horizon even though
@@ -486,6 +493,18 @@ bool ParseOot3dNativeGameArgs(int argc, char** argv, Oot3dNativeGameLaunch& laun
             throw std::runtime_error("TopScreen HD UI atlas does not exist: " +
                                      launch.TopScreenUiAtlasHdPath.string());
         }
+    }
+
+    if (!launch.RomFsOverlayPath.empty() &&
+        !std::filesystem::is_regular_file(launch.RomFsOverlayPath)) {
+        throw std::runtime_error("RomFS overlay does not exist: " +
+                                 launch.RomFsOverlayPath.string());
+    }
+
+    if (!launch.UiTexturePackDirectory.empty() &&
+        !std::filesystem::is_directory(launch.UiTexturePackDirectory / "common")) {
+        throw std::runtime_error("UI texture pack is not a prepared pack: " +
+                                 launch.UiTexturePackDirectory.string());
     }
 
     if (!launch.TopScreenConfigPath.empty()) {

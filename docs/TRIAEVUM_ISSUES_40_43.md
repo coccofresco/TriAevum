@@ -140,7 +140,7 @@ passed. The consolidated F1 widget smoke remains at 3896 passing assertions.
 ## User race checkpoint verification (2026-09-17)
 
 The user started the actual Lon Lon Ranch obstacle race and saved it using F5.
-Private checkpoint: `C:/Users/xander/triaevum-issues-40-43/ranch-user/savedata/quick.oot3dsav`.
+Private checkpoint: `%USERPROFILE%/triaevum-issues-40-43/ranch-user/savedata/quick.oot3dsav`.
 Replay: `race-user-verification`, 150 frames, `native30_no_interpolation`,
 TopScreen HUD scale 0.8, current executable after commit `71a654e`.
 Framebuffer captures at frames 30 and 90 show the clock and timer reading
@@ -199,7 +199,7 @@ status statements in this chronological investigation are superseded here.
 
 ## Private evidence (not distributed)
 
-`C:/Users/xander/triaevum-issues-40-43/` contains bounded run arguments,
+`%USERPROFILE%/triaevum-issues-40-43/` contains bounded run arguments,
 framebuffer captures and runtime diagnostics. `sages-user/issue41.oot3dsav`
 is the user-created reproduction. `sages-user-{off,toon,no-rim}` isolate the
 effect. `mounted-refresh` verifies the mounted counter, `boots-held` covers

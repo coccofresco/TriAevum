@@ -1,5 +1,6 @@
 #include "oot3d_native_pica_vulkan_bridge.h"
 #include "oot3d_native_pica_presentation_scheduler.h"
+#include "oot3d_native_pica_composition.h"
 #include "oot3d_static_shadow_actor_catalog.h"
 
 #include "fast/oot3d/pica_uniform_layout.h"
@@ -565,6 +566,42 @@ int main() {
                 scheduler.HasSnapshot(replacementTransfer, 7U),
             "presentation scheduler retained an obsolete completion for a "
             "reused display target");
+
+    // TopScreen HUD off: a presentation leaves out the native gameplay HUD's
+    // UI draws (neither published nor submitted) and keeps every transfer
+    // anchored on them; native-memory execution keeps them.
+    {
+        auto hudFrame = *scheduledFrame;
+        hudFrame.Draws[0].CompositionDomain = Oot3dNativeGame::Oot3dPicaCompositionDomain::Ui;
+        hudFrame.Draws[0].Composition.Layer = Oot3dNativeGame::Oot3dPicaCompositionLayer::Ui;
+        hudFrame.Draws[0].Composition.SourcePc = Oot3dNativeGame::kOot3dGameplayHudDrawEntry;
+        Oot3dNativeGame::Oot3dPicaVisualFrameViewSample hudSample;
+        hudSample.TopTransfer = hudFrame.TopTransfer;
+        hudSample.MemoryFills = hudFrame.MemoryFills;
+        hudSample.DisplayTransfers = hudFrame.DisplayTransfers;
+        for (const auto& draw : hudFrame.Draws) hudSample.Draws.push_back({.BasePlan = &draw});
+        for (const bool visible : {true, false}) {
+            for (const auto kind : {Oot3dNativeGame::Oot3dPicaPresentationExecutionKind::CurrentFrame,
+                                    Oot3dNativeGame::Oot3dPicaPresentationExecutionKind::NativeFrame}) {
+                Oot3dNativeGame::Oot3dPicaPresentationScheduler hudScheduler;
+                hudScheduler.SetNativeGameplayHudVisible(visible);
+                hudScheduler.BeginPresentation(1U);
+                backend.Operations.clear();
+                Require(hudScheduler.Execute(backend, hudSample, 7U, kind, false, &error), error);
+                const bool omitted =
+                    !visible && kind == Oot3dNativeGame::Oot3dPicaPresentationExecutionKind::CurrentFrame;
+                const std::vector<std::string> expected = omitted
+                    ? std::vector<std::string>{"composition:1:1", "fill:406847488", "transfer:40",
+                                               "draw:32", "transfer:41"}
+                    : std::vector<std::string>{"composition:1:2", "fill:406847488", "draw:31",
+                                               "transfer:40", "draw:32", "transfer:41"};
+                Require(backend.Operations == expected &&
+                            hudScheduler.Stats().OmittedHudDraws == (omitted ? 1U : 0U) &&
+                            hudScheduler.Stats().ExecutedDraws == (omitted ? 1U : 2U),
+                        "HUD-off presentation did not leave out exactly the native HUD draw");
+            }
+        }
+    }
 
     const auto& schedulerStats = scheduler.Stats();
     Require(schedulerStats.ProducedGuestDraws == 2U &&

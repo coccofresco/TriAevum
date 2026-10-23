@@ -162,6 +162,12 @@ class NriInteropContext final {
     void SetRecordedWorkBoundary(std::function<bool()> boundary);
     [[nodiscard]] bool CompleteRecordedWork();
 
+    // Developer GPU timeline (TRIAEVUM_GPU_TIMELINE): a pass names the work it
+    // recorded since the previous mark in this frame slot's command buffer.
+    // The backend installs the sink only while the timeline runs.
+    void SetTimelineMark(std::function<void(uint32_t frameSlot, const char* label)> mark);
+    void TimelineMark(uint32_t frameSlot, const char* label) const;
+
   private:
     bool EnsureDlssFeature(uint32_t frameIndex, const NriDlssFeatureKey& key);
 

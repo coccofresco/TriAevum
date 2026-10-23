@@ -72,6 +72,6 @@ PicaToonEligibility ClassifyPicaToonDraw(
     uint64_t originalFragmentKey, const PicaToonDrawInfo& draw,
     ToonMode mode, const ToonStyleSettings& style,
     const ::Oot3d::Renderer::PicaShaderHookLayout& hooks,
-    bool uniformParameters = false);
+    bool uniformParameters = false, bool drawControl = false);
 
 } // namespace Fast::Oot3d

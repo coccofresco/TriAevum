@@ -398,6 +398,7 @@ struct GrassAsyncPlacementBuilder::Impl {
             }
             resident-=bytes(oldest->second);
             Entries.erase(oldest);
+            ++Statistics.Evictions;
         }
         Statistics.ResidentBytes=resident;
     }

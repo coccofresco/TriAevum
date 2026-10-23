@@ -159,6 +159,10 @@ struct PicaFragmentInstrumentationResult {
     PicaFragmentInstrumentationOutputLayout Outputs;
     // Every composition branch taken, for the always-available program.
     PicaEffectDecisions Decisions;
+    // The program reads the draw's own decisions (control after the toon
+    // parameters at kPicaUberEffectBinding): isolated lighting is draw data,
+    // so a lit and an isolated draw of one program share its text.
+    bool ReadsDrawControl = false;
 
     [[nodiscard]] bool Applied() const noexcept {
         return AppliedFeatures != PicaShaderInstrumentationFeature::None;

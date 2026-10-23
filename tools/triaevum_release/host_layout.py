@@ -22,6 +22,16 @@ class HostLayout:
         return self.activation / "data"
 
 
+def installation_state(installation: Path, platform: str | None = None) -> Path:
+    """Forge's launch profile and activation journal for an installation.
+
+    The Windows installation root holds only the executables, README.md and
+    LICENSE, so they live in its data/ folder (the runtime looks there too).
+    """
+    platform = sys.platform if platform is None else platform
+    return installation / "data" if platform == "win32" else installation
+
+
 def appimage_root(package: Path, appdir: str = "") -> Path | None:
     """Return the AppDir that owns `package`, or None outside an AppImage.
 

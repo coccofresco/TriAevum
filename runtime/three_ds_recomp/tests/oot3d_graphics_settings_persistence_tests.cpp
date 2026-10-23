@@ -14,6 +14,7 @@ Fast::Oot3d::GraphicsSettings CompleteSettings() {
     settings.OutputWidth = 2560U;
     settings.OutputHeight = 1440U;
     settings.RefreshRate = 144U;
+    settings.Aspect = AspectRatioMode::Ultrawide21x9;
     settings.InternalResolutionScale = 1.35F;
     settings.AntiAliasing = AntiAliasingMode::Upscaler;
     settings.Upscaler = UpscalerProvider::Fsr;
@@ -536,6 +537,61 @@ TEST(Oot3dGraphicsSettingsPersistence, AddsSoftGrassLodDefaultsWithoutMovingExis
     EXPECT_FLOAT_EQ(loaded.Value.Grass.FarTuftSpread, 1);
     EXPECT_FLOAT_EQ(loaded.Value.Grass.TuftTransitionFraction, 0.2F);
     EXPECT_EQ(loaded.Value.Grass.Rules.size(), original.Grass.Rules.size());
+}
+
+TEST(Oot3dGraphicsSettingsPersistence, CrossedBladesDefaultOffAndRoundTrip) {
+    using namespace Fast::Oot3d;
+    auto original = CompleteSettings();
+    original.Grass.Appearance.CrossedBlades = true;
+    const auto roundTrip = DeserializeGraphicsSettings(SerializeGraphicsSettings(original));
+    EXPECT_TRUE(roundTrip.Issues.empty());
+    EXPECT_TRUE(roundTrip.Value.Grass.Appearance.CrossedBlades);
+    auto document = SerializeGraphicsSettings(original);
+    for (const auto* section : {"Grass", "GrassSavedPreset"})
+        document[section]["Appearance"].erase("CrossedBlades");
+    const auto loaded = DeserializeGraphicsSettings(document);
+    EXPECT_TRUE(loaded.Issues.empty());
+    EXPECT_FALSE(loaded.Value.Grass.Appearance.CrossedBlades);
+}
+
+TEST(Oot3dGraphicsSettingsPersistence, AddsDistantCardDefaultsAndRoundTripsThem) {
+    using namespace Fast::Oot3d;
+    auto original = CompleteSettings();
+    original.Grass.CardLodEnabled = true;
+    original.Grass.CardLodBladeDistance = 1200.0F;
+    original.Grass.CardLodClumpDistance = 4500.0F;
+    original.Grass.CardLodGroupDistance = 16000.0F;
+    original.Grass.CardLodBlendFraction = 0.3F;
+    const auto roundTrip = DeserializeGraphicsSettings(SerializeGraphicsSettings(original));
+    EXPECT_TRUE(roundTrip.Issues.empty());
+    EXPECT_TRUE(roundTrip.Value.Grass.CardLodEnabled);
+    EXPECT_FLOAT_EQ(roundTrip.Value.Grass.CardLodBladeDistance, 1200.0F);
+    EXPECT_FLOAT_EQ(roundTrip.Value.Grass.CardLodClumpDistance, 4500.0F);
+    EXPECT_FLOAT_EQ(roundTrip.Value.Grass.CardLodGroupDistance, 16000.0F);
+    EXPECT_FLOAT_EQ(roundTrip.Value.Grass.CardLodBlendFraction, 0.3F);
+
+    auto document = SerializeGraphicsSettings(original);
+    for (const auto* section : {"Grass", "GrassSavedPreset"}) {
+        for (const auto* key : {"CardLodEnabled", "CardLodBladeDistance", "CardLodClumpDistance",
+                                "CardLodGroupDistance", "CardLodBlendFraction"})
+            document[section]["Performance"].erase(key);
+    }
+    const auto loaded = DeserializeGraphicsSettings(document);
+    EXPECT_TRUE(loaded.Issues.empty());
+    EXPECT_FALSE(loaded.Value.Grass.CardLodEnabled);
+    EXPECT_FLOAT_EQ(loaded.Value.Grass.CardLodBladeDistance, 1000.0F);
+    EXPECT_FLOAT_EQ(loaded.Value.Grass.CardLodClumpDistance, 4000.0F);
+    EXPECT_FLOAT_EQ(loaded.Value.Grass.CardLodGroupDistance, 15000.0F);
+    EXPECT_FLOAT_EQ(loaded.Value.Grass.CardLodBlendFraction, 0.25F);
+    EXPECT_FLOAT_EQ(loaded.Value.Grass.DrawDistance, original.Grass.DrawDistance);
+
+    // Tier ends stay ordered when the file disagrees.
+    document = SerializeGraphicsSettings(original);
+    document["Grass"]["Performance"]["CardLodClumpDistance"] = 500.0F;
+    document["Grass"]["Performance"]["CardLodGroupDistance"] = 50.0F;
+    const auto disordered = DeserializeGraphicsSettings(document);
+    EXPECT_GE(disordered.Value.Grass.CardLodClumpDistance, disordered.Value.Grass.CardLodBladeDistance);
+    EXPECT_GE(disordered.Value.Grass.CardLodGroupDistance, disordered.Value.Grass.CardLodClumpDistance);
 }
 
 TEST(Oot3dGraphicsSettingsPersistence, MigratesLegacyFixed60NameToInterpolated2x) {
@@ -1167,4 +1223,39 @@ TEST(GrassMaskPersistence, RoundTripDefaultsValidationAndPresetOwnership) {
     EXPECT_EQ(DeserializeGraphicsSettings(document).Value.Grass.Masks.size(), 1);
     document["Grass"]["Masks"] = "mistyped";
     EXPECT_TRUE(DeserializeGraphicsSettings(document).Value.Grass.Masks.empty());
+}
+
+TEST(Oot3dGraphicsSettingsPersistence, RoundTripsTheAspectRatioAsHostOwnedOutputState) {
+    using namespace Fast::Oot3d;
+    auto settings = CompleteSettings();
+    settings.Aspect = AspectRatioMode::Native3ds;
+    auto document = SerializeGraphicsSettings(settings);
+    EXPECT_EQ(document["Output"]["Aspect"], "Native3ds");
+    EXPECT_EQ(DeserializeGraphicsSettings(document).Value.Aspect, AspectRatioMode::Native3ds);
+    for (const auto [mode, name] :
+         {std::pair{AspectRatioMode::Wide16x9, "Wide16x9"}, std::pair{AspectRatioMode::Ultrawide21x9, "Ultrawide21x9"},
+          std::pair{AspectRatioMode::Free, "Free"}}) {
+        settings.Aspect = mode;
+        const auto serialized = SerializeGraphicsSettings(settings);
+        EXPECT_EQ(serialized["Output"]["Aspect"], name);
+        EXPECT_EQ(DeserializeGraphicsSettings(serialized).Value.Aspect, mode);
+    }
+    // An older file without the key, or an unknown name, is 16:9 (the
+    // default) and asks for a rewrite.
+    document["Output"].erase("Aspect");
+    auto older = DeserializeGraphicsSettings(document);
+    EXPECT_EQ(older.Value.Aspect, AspectRatioMode::Wide16x9);
+    EXPECT_TRUE(older.NeedsRewrite);
+    document["Output"]["Aspect"] = "Cinemascope";
+    EXPECT_EQ(DeserializeGraphicsSettings(document).Value.Aspect, AspectRatioMode::Wide16x9);
+    // A preset keeps the current aspect, like the window and the output size.
+    settings.Aspect = AspectRatioMode::Ultrawide21x9;
+    const auto enhanced = GraphicsSettingsService::PresetForCurrent(GraphicsPreset::Enhanced, settings);
+    EXPECT_EQ(enhanced.Aspect, AspectRatioMode::Ultrawide21x9);
+    EXPECT_EQ(GraphicsSettingsService::KeepHostOwnedSettings(GraphicsSettings{}, settings).Aspect,
+              AspectRatioMode::Ultrawide21x9);
+    // The validator corrects an out-of-range value to the default.
+    settings.Aspect = static_cast<AspectRatioMode>(9);
+    EXPECT_EQ(GraphicsSettingsService::Validate(settings, GraphicsCapabilities{}).Value.Aspect,
+              AspectRatioMode::Wide16x9);
 }

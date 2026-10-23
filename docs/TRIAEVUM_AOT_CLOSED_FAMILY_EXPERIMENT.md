@@ -118,7 +118,7 @@ to the control DLL, `--candidate` to the optimized DLL, and `--oracle` to the fr
 whole-AOT DLL. For original-module comparison, set `--baseline` to that frozen DLL
 and omit `--oracle`. Use the established field invocation and occurrences 64/128.
 
-Private evidence: `C:/Users/xander/triaevum-aot-causal-analysis/`, directories
+Private evidence: `%USERPROFILE%/triaevum-aot-causal-analysis/`, directories
 `floor-family-real-ab`, `floor-family-controlled-ab`, `line-family-controlled-ab`,
 `line-family-frozen-ab`, `line-family-controlled-repeat`; build directories
 `floor-family-*-v2`, `line-family-*`. Provenance identifies the exact snapshots;
@@ -195,7 +195,7 @@ outside this cohort; no native matrix owner was duplicated, recompiled or replac
 Extending across that boundary requires an explicitly replay-safe contract for the
 existing native implementation, not a blanket permission for external callbacks.
 
-Private evidence under `C:/Users/xander/triaevum-aot-causal-analysis/`:
+Private evidence under `%USERPROFILE%/triaevum-aot-causal-analysis/`:
 `collision-cohort-opt`, `collision-cohort-control`, `cohort-line64`,
 `cohort-line-frozen128`, `cohort-wall64`, `cohort-wall128`, `cohort-floor64`.
 Each build/run records provenance and hashes. Game processes exited after testing.

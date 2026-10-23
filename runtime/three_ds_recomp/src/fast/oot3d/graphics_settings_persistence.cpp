@@ -64,6 +64,12 @@ constexpr EnumNames<WindowMode> kWindowNames{
     {WindowMode::Borderless, "Borderless"},
     {WindowMode::ExclusiveFullscreen, "ExclusiveFullscreen"},
 };
+constexpr EnumNames<AspectRatioMode> kAspectNames{
+    {AspectRatioMode::Native3ds, "Native3ds"},
+    {AspectRatioMode::Wide16x9, "Wide16x9"},
+    {AspectRatioMode::Ultrawide21x9, "Ultrawide21x9"},
+    {AspectRatioMode::Free, "Free"},
+};
 constexpr EnumNames<AntiAliasingMode> kAaNames{
     {AntiAliasingMode::Off, "Off"},
     {AntiAliasingMode::Fxaa, "FXAA"},
@@ -457,6 +463,11 @@ Json SerializeInteractiveGrassSettings(
               { "FarTuftDensity", grass.FarTuftDensity },
               { "FarTuftSpread", grass.FarTuftSpread },
               { "SegmentLodSoftness", grass.SegmentLodSoftness },
+              { "CardLodEnabled", grass.CardLodEnabled },
+              { "CardLodBladeDistance", grass.CardLodBladeDistance },
+              { "CardLodClumpDistance", grass.CardLodClumpDistance },
+              { "CardLodGroupDistance", grass.CardLodGroupDistance },
+              { "CardLodBlendFraction", grass.CardLodBlendFraction },
           } },
         { "Generation", SerializeGrassGeneration(grass.Generation) },
         { "Appearance",
@@ -472,6 +483,7 @@ Json SerializeInteractiveGrassSettings(
               { "ShapeVariation", grass.Appearance.ShapeVariation },
               { "BladeTwistDegrees", grass.Appearance.BladeTwistDegrees },
               { "BladeSegments", grass.Appearance.BladeSegments },
+              { "CrossedBlades", grass.Appearance.CrossedBlades },
               { "ReceiveLighting", grass.Appearance.ReceiveLighting },
               { "ToonRimEnabled", grass.Appearance.ToonRimEnabled },
               { "ToonRimFadeStart", grass.Appearance.ToonRimFadeStart },
@@ -731,6 +743,13 @@ void DeserializeInteractiveGrassSettings(
         readOptional("FarTuftDensity", value.FarTuftDensity);
         readOptional("FarTuftSpread", value.FarTuftSpread);
         readOptional("SegmentLodSoftness", value.SegmentLodSoftness);
+        // The card LOD (grass_card_lod.h): absent in profiles before it.
+        if (FindMember(*performance, "CardLodEnabled"))
+            ReadScalar(*performance, "CardLodEnabled", value.CardLodEnabled, path + ".Performance.CardLodEnabled", result);
+        readOptional("CardLodBladeDistance", value.CardLodBladeDistance);
+        readOptional("CardLodClumpDistance", value.CardLodClumpDistance);
+        readOptional("CardLodGroupDistance", value.CardLodGroupDistance);
+        readOptional("CardLodBlendFraction", value.CardLodBlendFraction);
     }
     // Optional: old configurations use native alpha for every overlay.
     value.Masks.clear();
@@ -818,6 +837,10 @@ void DeserializeInteractiveGrassSettings(
         ReadScalar(*appearance, "BladeSegments",
                    value.Appearance.BladeSegments,
                    path + ".Appearance.BladeSegments", result);
+        // Absent in profiles before the single-ribbon default (crossed off).
+        if (FindMember(*appearance, "CrossedBlades"))
+            ReadScalar(*appearance, "CrossedBlades", value.Appearance.CrossedBlades,
+                       path + ".Appearance.CrossedBlades", result);
         ReadScalar(*appearance, "ReceiveLighting",
                    value.Appearance.ReceiveLighting,
                    path + ".Appearance.ReceiveLighting", result);
@@ -1253,7 +1276,7 @@ std::string_view EnhancedPresetDocument() noexcept {
     }
   },
   "Camera": {
-    "ExtendedDrawDistance": false,
+    "ExtendedDrawDistance": true,
     "FovMultiplier": 1.100000023841858
   },
   "Effects": {
@@ -1400,6 +1423,7 @@ std::string_view EnhancedPresetDocument() noexcept {
       "BladeDroop": 0.3499999940395355,
       "BladeSegments": 5,
       "BladeTwistDegrees": 141.0,
+      "CrossedBlades": false,
       "HeightScale": 1.149999976158142,
       "ReceiveFog": true,
       "ReceiveLighting": true,
@@ -1451,6 +1475,11 @@ std::string_view EnhancedPresetDocument() noexcept {
       "VerticalMargin": 69.0
     },
     "Performance": {
+      "CardLodBladeDistance": 1000.0,
+      "CardLodBlendFraction": 0.25,
+      "CardLodClumpDistance": 4000.0,
+      "CardLodEnabled": false,
+      "CardLodGroupDistance": 15000.0,
       "CullingClusterSize": 25.0,
       "DensityFadeFraction": 1.0,
       "DrawFadeFraction": 0.15000000596046448,
@@ -1525,6 +1554,7 @@ SerializeGraphicsSettings(const GraphicsSettings& settings) {
              {"Width", settings.OutputWidth},
              {"Height", settings.OutputHeight},
              {"RefreshRate", settings.RefreshRate},
+             {"Aspect", EnumName(settings.Aspect, kAspectNames)},
          }},
         {"RenderScale", settings.InternalResolutionScale},
         {"AA",
@@ -1781,6 +1811,8 @@ GraphicsSettingsLoadResult DecodeGraphicsSettings(
         ReadScalar(*output, "RefreshRate",
                    result.Value.RefreshRate,
                    "Graphics.Output.RefreshRate", result);
+        ReadEnum(*output, "Aspect", result.Value.Aspect, kAspectNames,
+                 "Graphics.Output.Aspect", result);
     }
     ReadScalar(document, "RenderScale",
                result.Value.InternalResolutionScale,

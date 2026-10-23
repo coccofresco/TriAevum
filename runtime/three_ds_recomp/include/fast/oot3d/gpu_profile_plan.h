@@ -26,6 +26,7 @@ enum class GpuProfileScope : uint8_t {
     GrassBlades,
     GrassShadows,
     GrassLighting,
+    GrassCards,
     Count,
 };
 

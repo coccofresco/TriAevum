@@ -44,6 +44,7 @@ struct NriInteropContext::Impl {
     RendererValidationTelemetry* ValidationTelemetry = nullptr;
     VkDevice VulkanDevice = VK_NULL_HANDLE;
     std::function<bool()> RecordedWorkBoundary;
+    std::function<void(uint32_t, const char*)> TimelineMark;
 #ifdef ENABLE_OOT3D_NRI
     nri::Device* Device = nullptr;
     nri::CoreInterface Core{};
@@ -1441,6 +1442,14 @@ const std::string& NriInteropContext::UnavailableReason() const { return mImpl->
 
 void NriInteropContext::SetRecordedWorkBoundary(std::function<bool()> boundary) {
     mImpl->RecordedWorkBoundary = std::move(boundary);
+}
+
+void NriInteropContext::SetTimelineMark(std::function<void(uint32_t, const char*)> mark) {
+    mImpl->TimelineMark = std::move(mark);
+}
+
+void NriInteropContext::TimelineMark(uint32_t frameSlot, const char* label) const {
+    if (mImpl->TimelineMark) mImpl->TimelineMark(frameSlot, label);
 }
 
 bool NriInteropContext::CompleteRecordedWork() {

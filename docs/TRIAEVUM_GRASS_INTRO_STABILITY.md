@@ -372,3 +372,65 @@ runs. This is **not** synthetic x2 FPS, a guaranteed minimum, or a before/after
 speedup over the preceding commit: that older 72.84 result used a different
 measurement window. The demonstrated gain is removal of recurrent generation
 and practical extension of visibility at a small incremental frame cost.
+
+## Visible Budget Thinning (2026-10-20)
+
+Report: grass disappearing depending on the camera direction (beta.1.1, Kokiri
+Forest near the Know-It-All Brothers' house; the reporter's video and #98
+screenshots). Reproduced on the development launch with the Medium preset budget
+(75,000) from the Kokiri ledge: the audit saturated at 75,000 visible blades,
+four of eight free-camera yaws were dense, one partial, three nearly bare near
+the camera. Not reproducible at the 500,000 default, where that view keeps
+146,000-203,000 blades under budget.
+
+### Cause
+
+`Grass.Budget.MaxInstancesPerRoom` bounded the selection by **truncation in
+cluster order**: both the CPU selection (`LimitGrassSelectionBins`) and the GPU
+selection (the rank cut in `grass_selection_scan.comp`) kept the first visible
+roots in source, slot, cluster, anchor order and dropped the rest. Cluster
+order is placement order, not distance or screen position, so whenever the
+visible roots exceeded the budget the dropped roots formed whole regions of
+the scene, and which regions depended on which clusters the view admitted
+first. Turning the camera changed the admitted prefix: dense in one direction,
+bare in another, bare right in front of the camera when the near clusters came
+late in the table.
+
+### Correction
+
+The budget now thins instead of truncating (`grass_selection_budget.h`). Every
+visible root has a thinning key, its stable visibility divided by the LOD
+retention at its distance (at most 1 for a visible root), quantized into 1,024
+buckets. A histogram of the keys gives the cut: the first bucket whose
+cumulative count would exceed the budget. Roots below the cut draw. Because
+the key is uniform within every cluster and every distance band, each cluster
+keeps the same fraction, the budget is used up to one bucket, and a root's
+admission depends on its own key, not on the camera: moving only flips the
+roots at the cut. No cluster ordering, screen-space heuristic or per-scene
+exception is involved.
+
+- GPU: the count pass accumulates the histogram (control words 772-1795) and
+  stores each root's bucket with its slot; the scan derives the cut (word
+  1796); a recount pass rebuilds the per-cluster counts under the cut (skipped
+  as a whole when nothing is thinned); the scan runs again and the scatter
+  filters by bucket. Four pipelines, five dispatches, deterministic output.
+- CPU: every placement is evaluated without a limit (buckets and per-job
+  histograms alongside the bins), then assembled under the shared cut.
+  Cluster-owned midrange placements keep their own truncation and come out of
+  the budget first (the GPU selection is not used with them).
+- `TRIAEVUM_GRASS_GPU_SELECTION_VERIFY=1` still compares the CPU and GPU root
+  sets; with thinning both apply the same cut.
+- `TRIAEVUM_GRASS_AUDIT` reports `thinning_cut_min` (1024 = nothing thinned).
+
+The budget stays a maximum; the F1 control and the JSON member are unchanged.
+Cost: over budget, the selection evaluates every visible root instead of
+stopping at the budget, which the GPU path already did.
+
+### Verification
+
+Unit tests: bucket and cut rules, the per-cluster fraction and order
+independence (`oot3d_grass_world_placement_cache_tests`); the GPU selector
+against the CPU rule on a six-cluster fixture within and over budget
+(`grass_motion_gpu_tests`); the audit line. Lab: the Kokiri ledge free camera
+at eight yaws with budget 75,000 before and after (sheets in
+`I:/_triaevum_work/issue98/grassvideo/`).

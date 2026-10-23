@@ -627,9 +627,8 @@ NativeA32ProcessRunResult NativeA32Process::Run(
                     SelectReadyThread()) {
                     continue;
                 }
-                if (AllThreadsTerminated()) {
-                    result.Kind = NativeA32ProcessRunKind::Terminated;
-                }
+                result.Kind = ResolveStoppedThreadRunKind(
+                    result.Kind, AllThreadsTerminated());
                 return result;
             }
             SelectReadyThread();
@@ -664,9 +663,8 @@ NativeA32ProcessRunResult NativeA32Process::Run(
                     SelectReadyThread()) {
                     continue;
                 }
-                if (AllThreadsTerminated()) {
-                    result.Kind = NativeA32ProcessRunKind::Terminated;
-                }
+                result.Kind = ResolveStoppedThreadRunKind(
+                    result.Kind, AllThreadsTerminated());
                 return result;
             }
             SelectReadyThread();

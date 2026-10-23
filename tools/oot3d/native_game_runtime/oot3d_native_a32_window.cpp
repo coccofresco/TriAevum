@@ -187,6 +187,18 @@ void NativeA32WindowSession::Finish() {
     rendererTiming = &phaseTiming;
   }
   CpuProbe::Thread.Active = false;
+  if (inputLatencyTrace.Enabled()) {
+    // The first two seconds hold the start-up and the preparation screen.
+    const std::string mode =
+        std::string(parallelPresentation ? "parallel" : "serial") +
+        " pacer_hz=" + std::to_string(realtimePacer.Enabled() ? realtimePacer.TargetRateHz() : 0U) +
+        " interpolation=" + (visualInterpolationEnabled ? "1" : "0");
+    std::fprintf(stderr, "%s\n", inputLatencyTrace.Summary(mode, 120U).c_str());
+    if (const char *csv = std::getenv("TRIAEVUM_INPUT_LATENCY_CSV"); csv != nullptr && *csv != '\0' &&
+        !inputLatencyTrace.WriteCsv(csv)) {
+      std::fprintf(stderr, "TRIAEVUM_INPUT_LATENCY cannot write %s\n", csv);
+    }
+  }
 
 #if defined(__SWITCH__)
   WriteSwitchBootStage(

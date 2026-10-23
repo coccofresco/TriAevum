@@ -13,10 +13,17 @@ installations; do not delete user data or republish older release artifacts.
 - Extract into a user-writable folder, run `TriAevumForge.exe`, select the
   decrypted personal ROM, then run `TriAevum.exe`. No installer, administrator
   permission, registry registration or compiler is required.
+- The package root holds only `TriAevumForge.exe`, `README.md` and `LICENSE`.
+  The runtime and its DLLs are in `runtime/`, notices and the release manifest
+  in `docs/`. Installing a title moves `runtime/TriAevum.exe` to the root (and
+  removes root DLLs an older package left there, which would shadow the new
+  ones); the runtime loads its DLLs from `runtime/`.
 - Application-managed content, configuration, profiles, saves, downloads and
-  caches remain beside the application. `data/` owns persistent user data;
-  the existing root launch profile and private-plugin activation directory
-  remain package-relative. Copy the **whole folder** to relocate it.
+  caches remain beside the application. `data/` owns persistent user data, the
+  launch profile and Forge's activation journal and lock; the private-plugin
+  activation directory remains package-relative. An installation made before
+  this layout keeps its root launch profile. Copy the **whole folder** to
+  relocate it.
 - Never silently fall back to AppData/home when the directory is unwritable or
   unprepared. Show an actionable error. Explicit developer path overrides and
   user-selected external texture directories remain explicit, not portable.

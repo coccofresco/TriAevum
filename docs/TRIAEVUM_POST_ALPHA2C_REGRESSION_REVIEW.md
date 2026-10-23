@@ -134,7 +134,7 @@ clock; timing cases explicitly do not. Never use its capture settings for play.
 
 Private evidence (not distributed):
 
-- Windows: `C:/Users/xander/triaevum-review-timing-20260917/`,
+- Windows: `%USERPROFILE%/triaevum-review-timing-20260917/`,
   `triaevum-review-captures-20260917/`, `triaevum-review-linux-images/`;
   strict oracle failures: `triaevum-review-native-parity-20260917/` and
   `triaevum-review-canonical-parity-20260917/` under the same user directory.

@@ -7,12 +7,12 @@ import shutil
 
 try:
     from .audit_release import DEFAULT_POLICY, audit_release
-    from .common import load_json_object, atomic_write_json
+    from .common import load_json_object, atomic_write_json, release_manifest_path
     from .release_platform import LINUX
     from .host_layout import FLATPAK_ID
 except ImportError:
     from audit_release import DEFAULT_POLICY, audit_release
-    from common import load_json_object, atomic_write_json
+    from common import load_json_object, atomic_write_json, release_manifest_path
     from release_platform import LINUX
     from host_layout import FLATPAK_ID
 
@@ -28,7 +28,7 @@ def stage_flatpak(package: Path, output: Path, *, policy_path: Path = DEFAULT_PO
     audit = audit_release(package, policy_path=policy_path)
     if not audit.ok:
         raise ValueError("Flatpak package audit failed:\n" + "\n".join(audit.errors))
-    manifest = load_json_object(package / "release-manifest.json")
+    manifest = load_json_object(release_manifest_path(package))
     if manifest["release"].get("target") != LINUX.target:
         raise ValueError("Flatpak requires an audited Linux x86-64 package")
     output.mkdir(parents=True)

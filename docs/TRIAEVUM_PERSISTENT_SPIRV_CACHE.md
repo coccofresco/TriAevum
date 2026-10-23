@@ -155,11 +155,11 @@ test; `-DTEST_SHADERC_COMPILER=OFF` runs the independent container tests without
 the SDK. Runtime tests also register `spirv_cache_tests`. The existing renderer
 probe accepts `--cache-directory` to share an isolated cache across runs.
 
-Private evidence: `/home/xander/triaevum-pipeline-live-proof/` directories
+Private evidence: `~/triaevum-pipeline-live-proof/` directories
 `pr11-cache-cold`, `pr11-cache-warm`, `pr11-cache-strict`, and
-`pr11-shared-spirv-cache`. Unit builds: `/home/xander/triaevum-shader-cache-tests`,
-`/home/xander/triaevum-shader-cache-gcc-tests`,
-`/home/xander/triaevum-shader-cache-android-tests`, and
+`pr11-shared-spirv-cache`. Unit builds: `~/triaevum-shader-cache-tests`,
+`~/triaevum-shader-cache-gcc-tests`,
+`~/triaevum-shader-cache-android-tests`, and
 `I:/oot3dre_work/shader-cache-windows`.
 
 The former automatic next-launch-prewarm proposal is superseded by the

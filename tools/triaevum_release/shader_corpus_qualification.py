@@ -4,11 +4,17 @@ A corpus is qualified only for the sources that generated it. Regeneration
 records, from the build graph, every in-repository file the generating tools
 were compiled from (sources, headers, embedded data) with its SHA-256: the
 generator inputs. Each recorded game session records the same for the runtime
-that recorded it: the decision-policy inputs, since the requests a session
-observes depend on that runtime's per-draw decisions. A corpus whose
-generator inputs changed must be regenerated (minutes, CPU only); one whose
-policy inputs changed needs fresh recordings. Both over-invalidate: any change
-to a listed file counts, whether or not it reaches a shader.
+that recorded it; the qualification keeps the decision-policy inputs: the
+files that decide which variant a draw requests (the shader text and identity
+the generator shares with the runtime, the PICA draw path that composes the
+request, the scene semantics, settings and effect policies it consults; see
+POLICY_PATTERNS). A corpus whose generator inputs changed must be regenerated
+(minutes, CPU only); one whose policy inputs changed needs fresh recordings.
+Both over-invalidate within their set: any change to a listed file counts,
+whether or not it reaches a shader. Runtime files outside the set (window,
+input, audio, UI, game logic, GPU memory and upload management, pipeline
+caches) cannot change a request, so they never invalidate a recording: the
+release runtime may differ from the recording runtime there.
 
 The qualification record is the publishable part of the regeneration receipt:
 repository-relative paths and digests only, never private paths. The
@@ -21,6 +27,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -38,6 +45,28 @@ INPUTS_FORMAT = "triaevum_build_inputs_v1"
 GENERATOR_TARGETS = ("oot3d_native_pica_capture_inventory", "oot3d_native_pica_cache_inventory",
                      "oot3d_native_pica_variant_inventory", "oot3d_native_pica_aot_compiler")
 STAGES = {"vertex": 1, "fragment": 2, "nri_fragment": 3}
+# Decision-policy inputs of a recording runtime: its build inputs the generator
+# also compiles from (shader text, identity, settings and semantics types) and
+# the runtime-only files below. A variant request is composed per draw in the
+# Vulkan PICA draw path from the draw's PICA state, the graphics settings and
+# the per-draw decisions (surface lighting, reflection material, water, shadow
+# receivers, relief, temporal motion); these patterns name the modules that
+# take part in that decision. Reviewed with the generator target list.
+POLICY_SELECTION = "decision_policy_v2"
+POLICY_PATTERNS = (
+    r"^runtime/three_ds_recomp/src/fast/backends/gfx_vulkan_pica",
+    r"^runtime/three_ds_recomp/src/fast/backends/gfx_vulkan_shaders\.cpp$",
+    r"^runtime/three_ds_recomp/include/fast/backends/gfx_vulkan\.h$",
+    r"^runtime/three_ds_recomp/include/fast/backends/gfx_native_pica_layout\.h$",
+    r"^runtime/three_ds_recomp/(src|include)/fast/renderer3ds/(pica_|nri_pica_pipeline)",
+    r"^runtime/three_ds_recomp/(src|include)/fast/oot3d/(pica_|scene_|effect_|display_effect|graphics_settings"
+    r"|graphics_preset|gpu_profile|reflection_|azahar_|texture_assignment|texture_catalog|pbr_material"
+    r"|native_scene_view|sample_view|perspective_fov|vulkan_adapter_policy|renderer_presentation"
+    r"|presentation_settings|temporal_|motion_vector|upscaler_|nri_upscaler)",
+    r"^runtime/three_ds_recomp/include/oot3d/",
+    r"^tools/oot3d/native_game_runtime/oot3d_native_pica_",
+    r"^tools/oot3d/native_pica_frontend/",
+)
 
 Reader = Callable[[str], "bytes | None"]
 
@@ -162,12 +191,33 @@ def closure_failures(pack_modules: Iterable[tuple], inventories: Iterable[dict],
     return {"missing_modules": len(missing_modules), "missing_recipe_modules": len(missing_recipes)}
 
 
+def is_policy_input(path: str, generator_files: Iterable[str] | set[str]) -> bool:
+    return path in generator_files or any(re.match(pattern, path) for pattern in POLICY_PATTERNS)
+
+
+def policy_inputs(recorded: dict, generator: dict) -> dict:
+    """The decision-policy subset of a recording runtime's input record."""
+    files = _checked_inputs(recorded, "decision-policy")
+    generator_files = set(_checked_inputs(generator, "generator"))
+    selected = {path: sha for path, sha in files.items() if is_policy_input(path, generator_files)}
+    if not selected:
+        raise ValueError("Recording runtime inputs hold no decision-policy file")
+    return {"format": INPUTS_FORMAT, "targets": recorded["targets"], "selection": POLICY_SELECTION,
+            "recorded_files": len(files), "sha256": inputs_digest(selected), "files": selected}
+
+
 def qualification_record(*, generator: dict, policies: list[dict], pack_sha256: str,
                          manifest_sha256: list[str], modules: int, requests: int) -> dict:
-    """The publishable qualification: digests and repository paths only."""
+    """The publishable qualification: digests and repository paths only.
+
+    Each policy is a recording runtime's full input record; the qualification
+    keeps its decision-policy subset (policy_inputs). User decision 2026-10-22:
+    release work after a freeze stays offline.
+    """
     _checked_inputs(generator, "generator")
     for policy in policies:
         _checked_inputs(policy, "decision-policy")
+    policies = [policy_inputs(policy, generator) for policy in policies]
     if not policies or not requests:
         raise ValueError("A qualified corpus requires recorded variant sessions")
     return {"format": FORMAT, "generator_inputs": generator, "policy_inputs": policies,
@@ -210,11 +260,24 @@ def main() -> int:
     check.add_argument("--pack", type=Path, required=True)
     check.add_argument("--pipeline-manifest", type=Path, action="append", required=True)
     check.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
+    select = commands.add_parser("policy-inputs",
+                                 help="List the decision-policy subset of a recording's input record")
+    select.add_argument("--inputs", type=Path, required=True, help="a session's runtime-inputs.json")
+    select.add_argument("--qualification", type=Path, required=True,
+                        help="the qualification whose generator inputs complete the selection")
     args = parser.parse_args()
     if args.command == "record-inputs":
         result = inputs_record(args.build, args.target, args.root)
         atomic_write_json(args.output, result)
         print(json.dumps({"files": len(result["files"]), "sha256": result["sha256"]}))
+        return 0
+    if args.command == "policy-inputs":
+        record = load_json_object(args.qualification)
+        selected = policy_inputs(load_json_object(args.inputs), record["generator_inputs"])
+        for path in selected["files"]:
+            print(path)
+        print(json.dumps({"selection": POLICY_SELECTION, "recorded_files": selected["recorded_files"],
+                          "files": len(selected["files"]), "sha256": selected["sha256"]}))
         return 0
     validate_qualification(load_json_object(args.qualification), pack_sha256=sha256_file(args.pack),
                            manifest_sha256=[sha256_file(path) for path in args.pipeline_manifest],

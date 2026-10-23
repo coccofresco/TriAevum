@@ -191,7 +191,7 @@ present. No fixture memory edits or per-scene renderer fixes were introduced.
 
 Runner: `I:/TriAevum-public/probe-mounted-parity.py` (private, also copied to
 the user's Linux host). Windows output: `mounted-parity-20260912/game-ready`;
-Linux: `/home/xander/triaevum-mounted-parity-20260912/game-ready`. A first private
+Linux: `~/triaevum-mounted-parity-20260912/game-ready`. A first private
 Windows runner attempt failed before boot because its relative manifest was
 resolved against the output directory; only the runner was corrected.
 

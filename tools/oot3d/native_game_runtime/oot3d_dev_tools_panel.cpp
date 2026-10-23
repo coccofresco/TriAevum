@@ -11,14 +11,12 @@ namespace {
 
 class DevToolsPanel final : public Fast::Oot3d::GraphicsSettingsPanelTab {
  public:
-  DevToolsPanel(std::shared_ptr<DevWarpRuntime> warp, std::shared_ptr<DevFreeCamera> freeCamera,
-                std::string language)
-      : mWarp(std::move(warp)), mFreeCamera(std::move(freeCamera)), mLanguage(std::move(language)) {}
+  DevToolsPanel(std::shared_ptr<DevWarpRuntime> warp, std::string language)
+      : mWarp(std::move(warp)), mLanguage(std::move(language)) {}
 
   const char *Label() const noexcept override { return "Dev Tools"; }
 
   void Draw() override {
-    DrawFreeCamera();
     auto options = mWarp->Options();
     const auto status = mWarp->Status();
     ImGui::SeparatorText("Warping");
@@ -34,27 +32,6 @@ class DevToolsPanel final : public Fast::Oot3d::GraphicsSettingsPanelTab {
   }
 
  private:
-  void DrawFreeCamera() {
-    ImGui::SeparatorText("Free camera");
-    ImGui::BeginDisabled(!mWarp->CameraAvailable());
-    bool active = mFreeCamera->Active();
-    if (ImGui::Checkbox("Free camera (F6)", &active)) mFreeCamera->SetActive(active);
-    Tooltip("A camera detached from Link: the game draws from it and Link stays still. "
-            "WASD move, Q/E down/up, right mouse button held to look, Shift faster, Ctrl slower; "
-            "pad: left stick moves, right stick looks, L/R shoulders down/up.");
-    float speed = mFreeCamera->Speed();
-    if (ImGui::SliderFloat("Free camera speed", &speed, 10.0F, 10000.0F, "%.0f units/s",
-                           ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp))
-      mFreeCamera->SetSpeed(speed);
-    ImGui::BeginDisabled(!active);
-    if (ImGui::Button("Back to the game's view")) mFreeCamera->ResetToGame();
-    ImGui::EndDisabled();
-    ImGui::EndDisabled();
-    if (!mWarp->CameraAvailable()) ImGui::TextDisabled("Free camera is awaiting gameplay validation.");
-    if (const auto view = mFreeCamera->LastView())
-      ImGui::TextDisabled("Eye %.1f, %.1f, %.1f", view->Eye[0], view->Eye[1], view->Eye[2]);
-  }
-
   static void Tooltip(const char *text) {
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", text);
   }
@@ -202,7 +179,6 @@ class DevToolsPanel final : public Fast::Oot3d::GraphicsSettingsPanelTab {
   }
 
   std::shared_ptr<DevWarpRuntime> mWarp;
-  std::shared_ptr<DevFreeCamera> mFreeCamera;
   std::string mLanguage;
   std::array<char, 64> mName{};
 };
@@ -210,9 +186,8 @@ class DevToolsPanel final : public Fast::Oot3d::GraphicsSettingsPanelTab {
 } // namespace
 
 std::shared_ptr<Fast::Oot3d::GraphicsSettingsPanelTab> CreateDevToolsPanel(std::shared_ptr<DevWarpRuntime> warp,
-                                                                           std::shared_ptr<DevFreeCamera> freeCamera,
                                                                            std::string language) {
-  return std::make_shared<DevToolsPanel>(std::move(warp), std::move(freeCamera), std::move(language));
+  return std::make_shared<DevToolsPanel>(std::move(warp), std::move(language));
 }
 
 } // namespace Oot3dNativeGame

@@ -85,8 +85,11 @@ def main():
     executable = args.executable.resolve(strict=True)
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
-    profile = json.loads((installation / args.profile).read_text(encoding="utf-8-sig"))
-    arguments = [value.replace("${profile_dir}", installation.as_posix())
+    profile_path = installation / args.profile
+    if not profile_path.is_file() and (installation / "data" / args.profile).is_file():
+        profile_path = installation / "data" / args.profile  # Windows installations keep it in data/
+    profile = json.loads(profile_path.read_text(encoding="utf-8-sig"))
+    arguments = [value.replace("${profile_dir}", profile_path.parent.as_posix())
                  for value in profile["arguments"]]
     # Diagnostic state and automation must be explicit, not inherited from a
     # user's launcher (especially a checkpoint destination outside this probe).

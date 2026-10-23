@@ -1,4 +1,5 @@
 #include "fast/oot3d/pica_uber_effect_program.h"
+#include "fast/oot3d/pica_rigid_motion.h"
 #include "fast/renderer3ds/pica_motion_provenance.h"
 
 #include "fast/oot3d/pica_directional_shadow_lighting.h"
@@ -434,10 +435,10 @@ std::string BuildPicaUberEffectProgram(const PicaUberEffectProgramRequest& reque
                        Renderer3ds::PicaSurfaceLightingWaterMarker());
     if (request.TemporalInputs)
         end += Guarded(Bit(Decision::RigidMotion),
-            std::string(Renderer3ds::PicaMotionGuideAssignment));
+            std::string(PicaMotionGuideAssignment));
     else
         end += Guarded(Bit(Decision::RigidMotion),
-            Renderer3ds::PicaMotionFallbackAssignment);
+            PicaMotionFallbackAssignment);
     // Deferred: the relief bend after every reader of the unbent guide, then
     // the overlay's transparent depth.
     end += Guarded(Bit(Decision::Relief), kPicaTextureReliefBend);

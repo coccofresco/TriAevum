@@ -68,6 +68,7 @@ bool ReadTopScreenPauseDrawInputs(NativeA32Memory &memory,
   if (result.HasScene) {
     if (!memory.Read8(scene + 0x100U, &result.SceneMode) ||
         !memory.Read8(scene + 0x101U, &result.SceneVariant) ||
+        !memory.Read32(scene + 0x104U, &result.SceneSubmode) ||
         !memory.Read16(scene + 0x318CU, &result.SceneSequence)) {
       if (error != nullptr)
         *error = "cannot read TopScreen pause scene state";
@@ -235,6 +236,15 @@ bool IsTopScreenTitleDemoRuntime(
          inputs.EntranceIndex == 0xFFF3U;
 }
 
+bool IsTopScreenVisionsMenu(const TopScreenPauseDrawInputs &inputs) noexcept {
+  return inputs.HasScene && inputs.SceneMode == 7U &&
+         inputs.SceneSubmode == 4U && !inputs.NativeTransitionActive;
+}
+
+float ResolveTopScreenVisionsFade(std::int32_t step) noexcept {
+  return std::min(static_cast<float>(step) * (1.0F / 24.0F), 1.0F);
+}
+
 bool UseTopScreenSceneFiveViewport(
     const TopScreenPauseDrawInputs &inputs) noexcept {
   return inputs.HasScene && inputs.SceneMode == 5U;
@@ -345,12 +355,14 @@ bool ReconcileAndHideTopScreenRenderer(NativeA32Memory &memory,
                                        std::uint32_t controller,
                                        bool reconcileTables,
                                        bool *rendererConflict,
-                                       std::string *error) {
+                                       std::string *error,
+                                       bool *anyVisible = nullptr) {
   if (controller == 0U || rendererConflict == nullptr) {
     SetError(error, "missing TopScreen renderer controller state");
     return false;
   }
   bool conflict = false;
+  bool visibleRenderer = false;
   std::array<std::pair<std::uint32_t, std::uint32_t>, 256> ownerWrites{};
   std::size_t ownerWriteCount = 0U;
   if (reconcileTables) {
@@ -369,6 +381,7 @@ bool ReconcileAndHideTopScreenRenderer(NativeA32Memory &memory,
       }
       if (visible != 1U)
         continue;
+      visibleRenderer = true;
       const std::uint32_t ownerSlot = controller + offset - 0x400U;
       std::uint32_t owner = 0U;
       if (!memory.Read32(ownerSlot, &owner) ||
@@ -404,6 +417,8 @@ bool ReconcileAndHideTopScreenRenderer(NativeA32Memory &memory,
     return false;
   }
   *rendererConflict = conflict;
+  if (anyVisible != nullptr)
+    *anyVisible = visibleRenderer;
   return true;
 }
 
@@ -461,6 +476,13 @@ bool ApplyTopScreenRendererFade(NativeA32Memory &memory, std::int32_t fadeStep,
 }
 } // namespace
 
+bool RestoreTopScreenVisionsTerminalRenderer(NativeA32Memory &memory,
+                                             std::string *error) {
+  // 3.1 0x005D6C84: outside the Visions menu the terminal renderer's five
+  // alpha bytes and both color blocks return to opaque.
+  return ApplyTopScreenRendererFade(memory, 0, error);
+}
+
 bool ResolveTopScreenRendererVisibilityRoute(
     NativeA32Memory &memory, const TopScreenRendererVisibilityInputs &inputs,
     TopScreenRendererVisibilityRouteState *state,
@@ -478,10 +500,17 @@ bool ResolveTopScreenRendererVisibilityRoute(
       state->RendererConflict = false;
       state->FadeStep = 0;
       state->DelayCalls = 0;
-    } else if (!ReconcileAndHideTopScreenRenderer(
-                   memory, inputs.ControllerAddress, true,
-                   &state->RendererConflict, error)) {
-      return false;
+      state->VisionsRenderersRouted = false;
+    } else {
+      // 3.1 0x005D4A58 sets +0x6AC once any renderer is visible and never
+      // clears it while the menu stays open.
+      bool anyVisible = false;
+      if (!ReconcileAndHideTopScreenRenderer(
+              memory, inputs.ControllerAddress, true, &state->RendererConflict,
+              error, &anyVisible)) {
+        return false;
+      }
+      state->VisionsRenderersRouted |= anyVisible;
     }
     *action = TopScreenRendererVisibilityAction::SuppressNativeDraw;
     return true;
@@ -904,6 +933,18 @@ bool ResolveTopScreenPauseIconBuild(TopScreenPauseIconBuild *build,
 
 bool SuppressTopScreenTouchButtonDraw(std::uint32_t pauseState) noexcept {
   return pauseState >= 12U && pauseState <= 19U;
+}
+
+bool SkipTopScreenDungeonMapCursorInput(std::uint32_t pressedButtons) noexcept {
+  // 0x00442F48 `tst r0, #2`: B leaves the native page state machine.
+  return (pressedButtons & 2U) != 0U;
+}
+
+bool ReadTopScreenPausePressedButtons(NativeA32Memory &memory,
+                                      std::uint32_t *pressedButtons) {
+  if (pressedButtons == nullptr || !memory.Read32(0x0050AF18U, pressedButtons))
+    return false;
+  return *pressedButtons != 0U || memory.Read32(0x0050AF14U, pressedButtons);
 }
 
 bool ReadTopScreenItemDescriptionInputs(NativeA32Memory &memory,

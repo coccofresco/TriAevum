@@ -1,4 +1,5 @@
 #include "fast/oot3d/grass_shadow_grid_pass.h"
+#include "fast/oot3d/grass_gpu_memory.h"
 #include "fast/oot3d/grass_shader_sources.h"
 
 #ifdef ENABLE_OOT3D_VULKAN
@@ -9,6 +10,7 @@
 #include <cstring>
 #include <limits>
 #include <stdexcept>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -26,22 +28,30 @@ struct GrassShadowGridPass::Impl {
         VkDeviceMemory Memory{};
         VkDeviceSize Capacity{};
         void* Mapped{};
+        bool DeviceLocal{};
     };
     struct Invocation {
-        Buffer Points, References, Visibility, Uniforms, StaticUniforms, SurfacePatches, Patches;
+        Buffer Visibility, Uniforms, StaticUniforms, SurfacePatches, Patches;
         VkDescriptorPool Pool{};
         // The refinement's (composed map) and the coarse grid's (static depth).
         VkDescriptorSet Set{};
         VkDescriptorSet StaticSet{};
-        uint64_t Revision{};
         size_t SurfaceCount = 0;
     };
+    // A grid's points and references never change for its revision: one copy
+    // serves both frame slots, retired once no frame in flight uses it.
+    struct StaticGrid {
+        Buffer Points, References;
+        uint64_t LastFrame = 0;
+    };
+    std::unordered_map<uint64_t, StaticGrid> StaticGrids;
     struct Frame {
         uint64_t Id = ~uint64_t{};
         size_t Used = 0;
         std::vector<std::unique_ptr<Invocation>> Invocations;
     };
     VkDevice Device{};
+    VkPhysicalDevice PhysicalDevice{};
     VkPhysicalDeviceMemoryProperties Memory{};
     VkDeviceSize MaximumStorageRange{};
     uint32_t DispatchCapacity = 0;
@@ -56,16 +66,28 @@ struct GrassShadowGridPass::Impl {
             vkUnmapMemory(Device, buffer.Memory);
         if (buffer.Handle)
             vkDestroyBuffer(Device, buffer.Handle, nullptr);
-        if (buffer.Memory)
+        if (buffer.Memory) {
             vkFreeMemory(Device, buffer.Memory, nullptr);
+            TrackGrassGpuMemory(buffer.DeviceLocal, -static_cast<int64_t>(buffer.Capacity));
+        }
         buffer = {};
     }
     void Ensure(Buffer& buffer, VkDeviceSize bytes, VkBufferUsageFlags usage, bool mapped) {
-        if (bytes <= buffer.Capacity)
+        if (!GrassBufferNeedsResize(buffer.Handle != VK_NULL_HANDLE, bytes, buffer.Capacity))
             return;
         // This invocation slot is reused only after its owning frame fence.
         Destroy(buffer);
-        buffer.Capacity = std::bit_ceil(std::max<VkDeviceSize>(bytes, 4096));
+        try {
+            Create(buffer, bytes, usage, mapped);
+        } catch (...) {
+            // Never keep a half-built buffer: the next frame would take its
+            // capacity for a usable allocation.
+            Destroy(buffer);
+            throw;
+        }
+    }
+    void Create(Buffer& buffer, VkDeviceSize bytes, VkBufferUsageFlags usage, bool mapped) {
+        buffer.Capacity = GrassBufferCapacity(bytes);
         VkBufferCreateInfo create{ VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
         create.size = buffer.Capacity;
         create.usage = usage;
@@ -85,7 +107,11 @@ struct GrassShadowGridPass::Impl {
         VkMemoryAllocateInfo allocate{ VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
         allocate.allocationSize = requirements.size;
         allocate.memoryTypeIndex = type;
-        Check(vkAllocateMemory(Device, &allocate, nullptr, &buffer.Memory));
+        buffer.DeviceLocal = !mapped;
+        if (GrassGpuAllocationRefused(PhysicalDevice, type, buffer.Capacity) ||
+            vkAllocateMemory(Device, &allocate, nullptr, &buffer.Memory) != VK_SUCCESS)
+            throw GrassGpuOutOfMemory("cannot allocate grass shadow grid buffer");
+        TrackGrassGpuMemory(buffer.DeviceLocal, static_cast<int64_t>(buffer.Capacity), "shadow_grid", usage);
         Check(vkBindBufferMemory(Device, buffer.Handle, buffer.Memory, 0));
         if (mapped)
             Check(vkMapMemory(Device, buffer.Memory, 0, buffer.Capacity, 0, &buffer.Mapped));
@@ -137,6 +163,7 @@ void GrassShadowGridPass::Initialize(VkPhysicalDevice physical, VkDevice device,
     Shutdown();
     auto& p = *mImpl;
     p.Device = device;
+    p.PhysicalDevice = physical;
     vkGetPhysicalDeviceMemoryProperties(physical, &p.Memory);
     VkPhysicalDeviceProperties properties{};
     vkGetPhysicalDeviceProperties(physical, &properties);
@@ -216,14 +243,24 @@ GrassShadowGridResult GrassShadowGridPass::Execute(VkCommandBuffer command, uint
         throw std::runtime_error("grass refined shadow grid exceeds device storage range");
     auto& invocation = p.Acquire(frameSlot, frameId);
     uint64_t uploaded = 0;
-    if (invocation.Revision != revision) {
-        p.Ensure(invocation.Points, points.size_bytes(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, true);
-        p.Ensure(invocation.References, references.size_bytes(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, true);
-        std::memcpy(invocation.Points.Mapped, points.data(), points.size_bytes());
-        std::memcpy(invocation.References.Mapped, references.data(), references.size_bytes());
-        uploaded = points.size_bytes() + references.size_bytes();
-        invocation.Revision = revision;
+    for (auto grid = p.StaticGrids.begin(); grid != p.StaticGrids.end();) {
+        if (grid->first != revision && grid->second.LastFrame + 2U <= frameId) {
+            p.Destroy(grid->second.Points);
+            p.Destroy(grid->second.References);
+            grid = p.StaticGrids.erase(grid);
+        } else {
+            ++grid;
+        }
     }
+    auto& grid = p.StaticGrids[revision];
+    if (grid.Points.Handle == VK_NULL_HANDLE || grid.References.Handle == VK_NULL_HANDLE) {
+        p.Ensure(grid.Points, points.size_bytes(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, true);
+        p.Ensure(grid.References, references.size_bytes(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, true);
+        std::memcpy(grid.Points.Mapped, points.data(), points.size_bytes());
+        std::memcpy(grid.References.Mapped, references.data(), references.size_bytes());
+        uploaded = points.size_bytes() + references.size_bytes();
+    }
+    grid.LastFrame = frameId;
     uint64_t dynamicUploaded = sizeof(PicaDirectionalShadowReceiverUniforms);
     p.Ensure(invocation.SurfacePatches, surfaceBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, true);
     if (invocation.SurfaceCount != surfaces.size() ||
@@ -260,7 +297,7 @@ GrassShadowGridResult GrassShadowGridPass::Execute(VkCommandBuffer command, uint
     const auto staticUniforms = PackPicaDirectionalShadowReceiverUniforms(identity, staticState);
     std::memcpy(invocation.StaticUniforms.Mapped, &staticUniforms, staticUniforms.UsedBytes());
     dynamicUploaded += sizeof(PicaDirectionalShadowReceiverUniforms);
-    const std::array<VkDescriptorBufferInfo, 5> buffers{ { { invocation.Points.Handle, 0, points.size_bytes() },
+    const std::array<VkDescriptorBufferInfo, 5> buffers{ { { grid.Points.Handle, 0, points.size_bytes() },
                                                            { invocation.Visibility.Handle, 0, visibilityBytes },
                                                            { invocation.Uniforms.Handle, 0, sizeof(uniforms) },
                                                            { invocation.SurfacePatches.Handle, 0, surfaceBytes },
@@ -352,7 +389,7 @@ GrassShadowGridResult GrassShadowGridPass::Execute(VkCommandBuffer command, uint
     vkCmdPipelineBarrier(command, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, 0, 0,
                          nullptr, 1, &ready, 0, nullptr);
     return { { invocation.Visibility.Handle, 0, visibilityBytes },
-             { invocation.References.Handle, 0, references.size_bytes() },
+             { grid.References.Handle, 0, references.size_bytes() },
              buffers[4], coarseCount, refinement.PointCount,
              static_cast<uint32_t>(refinement.Patches.size()), refinement.CellSize,
              uploaded, dynamicUploaded };
@@ -363,8 +400,6 @@ void GrassShadowGridPass::Shutdown() {
     if (p.Device) {
         for (auto& frame : p.Frames)
             for (auto& entry : frame.Invocations) {
-                p.Destroy(entry->Points);
-                p.Destroy(entry->References);
                 p.Destroy(entry->Visibility);
                 p.Destroy(entry->Uniforms);
                 p.Destroy(entry->StaticUniforms);
@@ -373,6 +408,10 @@ void GrassShadowGridPass::Shutdown() {
                 if (entry->Pool)
                     vkDestroyDescriptorPool(p.Device, entry->Pool, nullptr);
             }
+        for (auto& [revision, grid] : p.StaticGrids) {
+            p.Destroy(grid.Points);
+            p.Destroy(grid.References);
+        }
         if (p.Pipeline)
             vkDestroyPipeline(p.Device, p.Pipeline, nullptr);
         if (p.Layout)

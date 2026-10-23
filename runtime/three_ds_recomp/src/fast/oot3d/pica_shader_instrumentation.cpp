@@ -1,5 +1,7 @@
 #include "fast/renderer3ds/pica_fragment_balance.h"
 #include "fast/oot3d/pica_shader_instrumentation.h"
+#include "fast/oot3d/pica_rigid_motion.h"
+#include "fast/oot3d/pica_uber_effect_program.h"
 #include "fast/renderer3ds/pica_motion_provenance.h"
 #include "fast/renderer3ds/point_shadow_map.h"
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
@@ -750,6 +752,31 @@ BuildPicaFragmentInstrumentationVariant(const PicaFragmentInstrumentationRequest
         result.Hooks.Valid() &&
         !ContainsIdentifier(request.Source, "pica_rigid_motion_guide") &&
         !HasOutputAtLocation(request.Source, 3U);
+    const bool rasterInitializer = request.Draw.DepthCompare == ::Oot3d::Renderer::PicaCompareFunction::Always;
+    const bool albedoGuideApplies =
+        HasPicaShaderInstrumentationFeature(request.RequestedFeatures,
+                                            PicaShaderInstrumentationFeature::DiffuseAlbedoGuide) &&
+        result.Hooks.Valid() && request.Draw.DepthTestEnabled && request.Draw.DepthWriteEnabled &&
+        request.Draw.FragmentOperationMode == 0U &&
+        (request.Draw.ColorWriteMask & 7U) != 0U &&
+        request.Draw.CompositionDomain == ::Oot3d::Renderer::PicaCompositionDomain::Scene &&
+        !HasOutputAtLocation(request.Source, 7U);
+    const bool ambientGuideApplies =
+        HasPicaShaderInstrumentationFeature(request.RequestedFeatures,
+                                            PicaShaderInstrumentationFeature::AmbientOcclusionGuide) &&
+        result.Hooks.Valid() && (ambientAvailable || !HasOutputAtLocation(request.Source, 4U));
+    // Isolated lighting zeroes the albedo and ambient guides. It is draw data,
+    // not text: wherever it could change a guide the program tests the draw's
+    // own decision in the effect block, so a lit and an isolated draw of one
+    // program share one module.
+    const bool drawControl =
+        (albedoGuideApplies && !rasterInitializer && (pbr || surfaceLighting)) || ambientGuideApplies;
+    const auto drawField = [](unsigned shift, auto value) {
+        return "((oot3d_draw_control.y >> " + std::to_string(shift) + "u) & " +
+               std::to_string((1U << kPicaUberFieldBits) - 1U) + "u) == " +
+               std::to_string(static_cast<unsigned>(value)) + "u";
+    };
+    bool toonDrawControl = false;
 
     bool viewDerivativesInserted = false;
     const auto ensureNormalGuide = [&](Decision::NormalWriter writer) {
@@ -945,7 +972,6 @@ vec3 oot3d_normal_guide_typed(vec3 authored, vec3 native_normal) {
         declarations += Renderer3ds::PicaGeometryGuideShaderLibrary();
         epilogue += "    pica_geometry_guide = uvec4(0u, 0u, 0u, 0x3F800000u);\n";
     }
-    const bool rasterInitializer = request.Draw.DepthCompare == ::Oot3d::Renderer::PicaCompareFunction::Always;
     if (outlineGeometry) {
         decisions.Set(Decision::Outline);
         if (rasterInitializer)
@@ -1001,13 +1027,7 @@ vec3 oot3d_normal_guide_typed(vec3 authored, vec3 native_normal) {
     // blended: a blended surface that writes depth (a fading NPC) owns the
     // depth and normal the trace reads, and its coverage is the share of the
     // native colour it replaces.
-    if (HasPicaShaderInstrumentationFeature(request.RequestedFeatures,
-                                            PicaShaderInstrumentationFeature::DiffuseAlbedoGuide) &&
-        result.Hooks.Valid() && request.Draw.DepthTestEnabled && request.Draw.DepthWriteEnabled &&
-        request.Draw.FragmentOperationMode == 0U &&
-        (request.Draw.ColorWriteMask & 7U) != 0U &&
-        request.Draw.CompositionDomain == ::Oot3d::Renderer::PicaCompositionDomain::Scene &&
-        !HasOutputAtLocation(request.Source, 7U)) {
+    if (albedoGuideApplies) {
         std::string coverage = "1.0";
         if (!replacesDestinationRgb)
             coverage = blend.DestRgb == ::Oot3d::Renderer::NativeBlendFactor::One ? "0.0"
@@ -1016,26 +1036,21 @@ vec3 oot3d_normal_guide_typed(vec3 authored, vec3 native_normal) {
         decisions.AlbedoCoverage = replacesDestinationRgb ? Decision::Coverage::One
             : blend.DestRgb == ::Oot3d::Renderer::NativeBlendFactor::One ? Decision::Coverage::Zero
             : Decision::Coverage::Alpha;
-        // An isolated object neither receives nor bounces global illumination.
-        const bool zeroAlbedo = request.Draw.DepthCompare == ::Oot3d::Renderer::PicaCompareFunction::Always ||
-                                request.Draw.IsolatedLighting;
-        decisions.Albedo =
-            zeroAlbedo ? Decision::AlbedoPath::Zero
+        const auto lit = rasterInitializer ? Decision::AlbedoPath::Zero
             : pbr ? Decision::AlbedoPath::Pbr
             : surfaceLighting ? Decision::AlbedoPath::Surface
             : Decision::AlbedoPath::Zero;
+        // An isolated object neither receives nor bounces global illumination.
+        decisions.Albedo = request.Draw.IsolatedLighting ? Decision::AlbedoPath::Zero : lit;
         declarations += "layout(location=7) out vec4 pica_diffuse_albedo_guide;\n";
-        if (zeroAlbedo) {
-            if (request.Draw.IsolatedLighting)
-                result.FragmentKey = SaltedVariantKey(result.FragmentKey, "PICA_ISOLATED_ALBEDO_V1");
-            epilogue += "    pica_diffuse_albedo_guide = vec4(0.0);\n";
-        } else if (pbr) {
-            epilogue += "    pica_diffuse_albedo_guide = vec4((floor(clamp(pbr_linear_to_srgb(clamp(pbr_albedo, 0.0, 1.0)), 0.0, 1.0) * 255.0 + 0.5) * 256.0 + floor(clamp(pbr_linear_to_srgb(pbr_gi_radiance), 0.0, 1.0) * 255.0 + 0.5)) / 65535.0, " + coverage + ");\n";
-        } else if (surfaceLighting) {
-            epilogue += "    pica_diffuse_albedo_guide = vec4((floor(surface_gi_albedo * 255.0 + 0.5) * 256.0 + floor(clamp(surface_gi_albedo * pica_surface_gi_direct(pica_surface_unit(pica_surface_normal)), 0.0, 1.0) * 255.0 + 0.5)) / 65535.0, " + coverage + ");\n";
-        } else {
-            epilogue += "    pica_diffuse_albedo_guide = vec4(0.0);\n";
-        }
+        std::string litAlbedo;
+        if (lit == Decision::AlbedoPath::Pbr)
+            litAlbedo = "vec4((floor(clamp(pbr_linear_to_srgb(clamp(pbr_albedo, 0.0, 1.0)), 0.0, 1.0) * 255.0 + 0.5) * 256.0 + floor(clamp(pbr_linear_to_srgb(pbr_gi_radiance), 0.0, 1.0) * 255.0 + 0.5)) / 65535.0, " + coverage + ")";
+        else if (lit == Decision::AlbedoPath::Surface)
+            litAlbedo = "vec4((floor(surface_gi_albedo * 255.0 + 0.5) * 256.0 + floor(clamp(surface_gi_albedo * pica_surface_gi_direct(pica_surface_unit(pica_surface_normal)), 0.0, 1.0) * 255.0 + 0.5)) / 65535.0, " + coverage + ")";
+        epilogue += litAlbedo.empty() ? "    pica_diffuse_albedo_guide = vec4(0.0);\n"
+            : "    pica_diffuse_albedo_guide = " + drawField(kPicaUberAlbedoShift, Decision::AlbedoPath::Zero) +
+                  "\n        ? vec4(0.0) : " + litAlbedo + ";\n";
         result.FragmentKey = SaltedVariantKey(result.FragmentKey, "PICA_DIFFUSE_ALBEDO_GUIDE_V2_DIRECT");
         if (!replacesDestinationRgb)
             result.FragmentKey = SaltedVariantKey(result.FragmentKey, "PICA_DIFFUSE_ALBEDO_GUIDE_BLENDED_COVERAGE_V1");
@@ -1105,7 +1120,7 @@ vec3 pica_surface_shadow(int slot) {
             };
             auto toon = BuildPicaToonInstrumentation(
                 result.FragmentKey, toonDraw, request.Toon,
-                *request.ToonStyle, result.Hooks, request.ToonParametersUniform);
+                *request.ToonStyle, result.Hooks, request.ToonParametersUniform, drawControl);
             result.ToonEligibility = toon.Eligibility;
             result.ToonMaterialPath = toon.MaterialPath;
             if (toon.Applied()) {
@@ -1114,6 +1129,7 @@ vec3 pica_surface_shadow(int slot) {
                 if (result.Hooks.Has(PicaShaderSemantic::PrimaryColorConsumed))
                     decisions.Set(Decision::ToonVertexLighting);
                 declarations += toon.Declarations;
+                toonDrawControl = drawControl && request.ToonParametersUniform;
                 insertions.push_back({
                     result.Hooks.Offset(toon.InsertionHook),
                     std::move(toon.Body),
@@ -1126,7 +1142,7 @@ vec3 pica_surface_shadow(int slot) {
 
     if (HasPicaShaderInstrumentationFeature(request.RequestedFeatures,
                                             PicaShaderInstrumentationFeature::AmbientOcclusionGuide)) {
-        if (!result.Hooks.Valid() || (!ambientAvailable && HasOutputAtLocation(request.Source, 4U))) {
+        if (!ambientGuideApplies) {
             result.AmbientGuideEligibility = PicaAmbientOcclusionGuideEligibility::UnsupportedShader;
         } else {
             if (!ambientAvailable) {
@@ -1138,22 +1154,15 @@ vec3 pica_surface_shadow(int slot) {
             decisions.Ambient = request.Draw.IsolatedLighting ? Decision::AmbientPath::None
                 : pbr ? Decision::AmbientPath::Pbr
                 : exact ? Decision::AmbientPath::Exact : Decision::AmbientPath::Fallback;
-            if (request.Draw.IsolatedLighting) {
-                // An isolated object receives no ambient occlusion.
-                epilogue += "\n    pica_ambient_guide = vec4(0.0, 0.0, 0.0, 1.0);\n";
-                result.AmbientGuideEligibility = PicaAmbientOcclusionGuideEligibility::AppliedExact;
-                result.FragmentKey = SaltedVariantKey(result.FragmentKey, "PICA_ISOLATED_AMBIENT_V1");
-            } else if (pbr) {
-                epilogue += "\n    pica_ambient_guide = vec4(pbr_ao_response, 1.0);\n";
-                result.AmbientGuideEligibility = PicaAmbientOcclusionGuideEligibility::AppliedExact;
-            } else if (exact) {
-                epilogue += "\n    pica_ambient_guide = vec4("
-                            "clamp(oot3d_ao_response_rgb, vec3(0.0), vec3(1.0)), 1.0);";
-                result.AmbientGuideEligibility = PicaAmbientOcclusionGuideEligibility::AppliedExact;
-            } else {
-                epilogue += "\n    pica_ambient_guide = vec4(1.0, 1.0, 1.0, 1.0);\n";
-                result.AmbientGuideEligibility = PicaAmbientOcclusionGuideEligibility::AppliedFallback;
-            }
+            const std::string_view litAmbient = pbr ? "vec4(pbr_ao_response, 1.0)"
+                : exact ? "vec4(clamp(oot3d_ao_response_rgb, vec3(0.0), vec3(1.0)), 1.0)"
+                : "vec4(1.0, 1.0, 1.0, 1.0)";
+            // An isolated object receives no ambient occlusion.
+            epilogue += "\n    pica_ambient_guide = " + drawField(kPicaUberAmbientShift, Decision::AmbientPath::None) +
+                        "\n        ? vec4(0.0, 0.0, 0.0, 1.0) : " + std::string(litAmbient) + ";\n";
+            result.AmbientGuideEligibility = request.Draw.IsolatedLighting || pbr || exact
+                ? PicaAmbientOcclusionGuideEligibility::AppliedExact
+                : PicaAmbientOcclusionGuideEligibility::AppliedFallback;
             result.FragmentKey = AmbientVariantKey(result.FragmentKey);
             result.Outputs.WritesAmbientGuide = true;
             apply(PicaShaderInstrumentationFeature::AmbientOcclusionGuide);
@@ -1364,9 +1373,9 @@ vec3 pica_surface_shadow(int slot) {
         if (request.TemporalInputs) {
             declarations += "layout(location=7) in vec4 oot3d_current_clip;\n"
                             "layout(location=8) in vec4 oot3d_previous_clip;\n";
-            epilogue += Renderer3ds::PicaMotionGuideAssignment;
+            epilogue += Fast::Oot3d::PicaMotionGuideAssignment;
         } else {
-            epilogue += Renderer3ds::PicaMotionFallbackAssignment;
+            epilogue += Fast::Oot3d::PicaMotionFallbackAssignment;
             result.FragmentKey ^= 0x4e4f434c4950494eULL;
         }
         result.FragmentKey ^= 0x52494749444d4f55ULL;
@@ -1386,6 +1395,17 @@ vec3 pica_surface_shadow(int slot) {
         epilogue += pbr->DiagnosticOutput;
     if (surfaceLighting && !pbr && materialAvailable)
         epilogue += Renderer3ds::PicaSurfaceLightingWaterMarker();
+    if (drawControl) {
+        // control of the effect block: after the toon parameters, in the toon
+        // block when the program has one (PicaUberEffectBlock layout).
+        declarations += toonDrawControl
+            ? "#define oot3d_draw_control oot3d_toon_uniforms.control\n"
+            : "layout(set=0,binding=15,std140) uniform Oot3dDrawControl {\n"
+              "    vec4 toon[8];\n    uvec4 control;\n} oot3d_draw_effects;\n"
+              "#define oot3d_draw_control oot3d_draw_effects.control\n";
+        result.ReadsDrawControl = true;
+        result.FragmentKey = SaltedVariantKey(result.FragmentKey, "PICA_DRAW_CONTROL_V1");
+    }
 
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
     if (surfaceShadow && result.Hooks.Has(PicaShaderSemantic::NativeColorOutput) &&
@@ -1412,6 +1432,7 @@ vec3 pica_surface_shadow(int slot) {
             result.Reactive = false;
             result.RigidMotionApplied = false;
             result.TypedNormalGuide = false;
+            result.ReadsDrawControl = false;
         }
     }
     return result;

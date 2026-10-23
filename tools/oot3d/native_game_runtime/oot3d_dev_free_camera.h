@@ -1,6 +1,6 @@
 #pragma once
 
-// A camera detached from Link (F1 > Dev Tools > Free camera, F6). While it is
+// A camera detached from Link (F1 > Photo mode > Free camera, F6). While it is
 // active it replaces the game's Camera_Update for the main camera, so the
 // game itself draws, culls and animates from the free view; Link's input is
 // withheld and drives the camera instead.
@@ -60,7 +60,7 @@ public:
 
   // Host side, once per refresh: movement in the camera's frame (forward,
   // right, up; -1..1 each, scaled by the speed and its multiplier) and look
-  // deltas in degrees.
+  // deltas in degrees (yaw positive turns right, pitch positive looks up).
   void Move(float forward, float right, float up, float yawDegrees, float pitchDegrees, float seconds,
             float speedMultiplier) {
     std::scoped_lock lock(mMutex);
@@ -68,9 +68,11 @@ public:
     mYaw = std::remainder(mYaw + yawDegrees, 360.0F);
     mPitch = std::clamp(mPitch + pitchDegrees, -89.0F, 89.0F);
     const auto f = Forward();
-    // Right of the view, horizontal: yaw 0 faces +Z, so right is -X.
+    // Right of the view, horizontal: the game's look-at takes right as
+    // up x forward, so yaw 0 (facing +Z) has +X on the right and a growing yaw
+    // turns right.
     const float yaw = mYaw * kRadians;
-    const std::array<float, 3> r{-std::cos(yaw), 0.0F, std::sin(yaw)};
+    const std::array<float, 3> r{std::cos(yaw), 0.0F, -std::sin(yaw)};
     const float distance = mSpeed * speedMultiplier * seconds;
     for (size_t axis = 0; axis < 3; ++axis)
       mEye[axis] += (f[axis] * forward + r[axis] * right + (axis == 1 ? up : 0.0F)) * distance;

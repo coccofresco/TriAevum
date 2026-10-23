@@ -1,10 +1,14 @@
 // Host input polling of the A32 window and the TopScreen pause transitions it drives.
 #include "oot3d_native_a32_window_shared.h"
 
+#include <algorithm>
+#include <cmath>
+
 namespace Oot3dA32Window {
 
 Oot3dNativeGame::NativeA32InputFrame
 PollNativeA32Input(Fast::Fast3dWindow &window,
+                   const Fast::Oot3d::PresentationPicture &picture,
                    bool nativeFrontendTouchEnabled,
                    bool hostGuiVisible,
                    bool topScreenUiProfile,
@@ -172,7 +176,8 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
   pollingState.MouseMovementPolls += mouseDelta.x != 0 || mouseDelta.y != 0 ? 1U : 0U;
   pollingState.DevMouseDeltaX += mouseDelta.x;
   pollingState.DevMouseDeltaY += mouseDelta.y;
-  pollingState.DevMouseRightHeld = window.GetMouseState(Ship::LUS_MOUSE_BTN_RIGHT);
+  pollingState.DevMouseLookHeld = !hostGuiVisible && (window.GetMouseState(Ship::LUS_MOUSE_BTN_LEFT) ||
+                                                      window.GetMouseState(Ship::LUS_MOUSE_BTN_RIGHT));
   {
     SDL_GameController *pad = selectedController.Controller;
     const auto axis = [&](SDL_GameControllerAxis which, float sign) {
@@ -188,6 +193,49 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
         pad != nullptr && SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_LEFTSHOULDER) != 0;
     pollingState.DevPadRightShoulder =
         pad != nullptr && SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) != 0;
+    // The in-game menu's controls, from the raw devices: the menu itself
+    // decides whether they act (it is closed, or F1 owns the input).
+    const auto padButton = [&](SDL_GameControllerButton which) {
+      return pad != nullptr && SDL_GameControllerGetButton(pad, which) != 0;
+    };
+    const auto key = [&](Ship::KbScancode scancode) { return window.IsKeyDown(scancode); };
+    constexpr float kMenuStickThreshold = 0.5F;
+    auto &menu = pollingState.Menu;
+    menu.Up = key(Ship::KbScancode::LUS_KB_ARROWKEY_UP) || padButton(SDL_CONTROLLER_BUTTON_DPAD_UP) ||
+              pollingState.DevPadLeftStick[1] > kMenuStickThreshold;
+    menu.Down = key(Ship::KbScancode::LUS_KB_ARROWKEY_DOWN) || padButton(SDL_CONTROLLER_BUTTON_DPAD_DOWN) ||
+                pollingState.DevPadLeftStick[1] < -kMenuStickThreshold;
+    menu.Left = key(Ship::KbScancode::LUS_KB_ARROWKEY_LEFT) || padButton(SDL_CONTROLLER_BUTTON_DPAD_LEFT) ||
+                pollingState.DevPadLeftStick[0] < -kMenuStickThreshold;
+    menu.Right = key(Ship::KbScancode::LUS_KB_ARROWKEY_RIGHT) || padButton(SDL_CONTROLLER_BUTTON_DPAD_RIGHT) ||
+                 pollingState.DevPadLeftStick[0] > kMenuStickThreshold;
+    menu.Confirm = key(Ship::KbScancode::LUS_KB_ENTER) || key(Ship::KbScancode::LUS_KB_SPACE) ||
+                   padButton(SDL_CONTROLLER_BUTTON_A);
+    menu.Back = key(Ship::KbScancode::LUS_KB_BACKSPACE) || padButton(SDL_CONTROLLER_BUTTON_B);
+    menu.TabPrevious = key(Ship::KbScancode::LUS_KB_Q) || padButton(SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
+    menu.TabNext = key(Ship::KbScancode::LUS_KB_E) || padButton(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
+    menu.Toggle = key(Ship::KbScancode::LUS_KB_ESCAPE) || padButton(SDL_CONTROLLER_BUTTON_RIGHTSTICK);
+    // The mouse for the menu: its window position with the presentation
+    // picture the menu is drawn in, the left button, and the wheel while a
+    // host surface is up (gameplay never sees it then). The window's wheel
+    // is an accumulator cleared by the read, and this poll is its only
+    // reader in the native game: the legacy WheelHandler is never updated
+    // here (its coordinates are not even initialized), so it must not be
+    // read.
+    const auto pointer = window.GetMousePos();
+    menu.PointerPresent = !window.IsMouseCaptured();
+    menu.PointerX = static_cast<float>(pointer.x);
+    menu.PointerY = static_cast<float>(pointer.y);
+    menu.PictureX = picture.X;
+    menu.PictureY = picture.Y;
+    menu.PictureWidth = picture.Width;
+    menu.PictureHeight = picture.Height;
+    menu.PointerPressed = window.GetMouseState(Ship::LUS_MOUSE_BTN_LEFT);
+    menu.PointerWheel = 0.0F;
+    if (hostGuiVisible) {
+      const float wheel = window.GetMouseWheel().y;
+      menu.PointerWheel = std::isfinite(wheel) ? std::clamp(wheel, -8.0F, 8.0F) : 0.0F;
+    }
   }
   if (gameplayMouseOwned && !mouseCaptureChanged) {
     pollingState.PendingMouseDeltaX += mouseDelta.x;
@@ -214,10 +262,13 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
       window.SetMouseCapture(false);
     }
     window.SetCursorVisibility(true);
+    // The touch screen is fitted into the presentation picture like every
+    // UI canvas, so the pointer is mapped through the picture.
     const auto pointer = window.GetMousePos();
     const auto touch = Oot3dNativeGame::MapHostPointerToNativeA32Touch(
-        pointer.x, pointer.y, window.GetWidth(), window.GetHeight(),
-        window.GetMouseState(Ship::LUS_MOUSE_BTN_LEFT),
+        pointer.x - static_cast<int32_t>(picture.X),
+        pointer.y - static_cast<int32_t>(picture.Y), picture.Width,
+        picture.Height, window.GetMouseState(Ship::LUS_MOUSE_BTN_LEFT),
         topScreenUiProfile
             ? Oot3dNativeGame::NativeA32TouchPresentation::TopScreen400x240
             : Oot3dNativeGame::NativeA32TouchPresentation::

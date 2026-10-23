@@ -127,7 +127,7 @@ rather than selecting another small function and calling the experiment progress
 
 ## Reproduction and invariant checks
 
-Private artifacts: `C:/Users/xander/triaevum-prebackend-cpu-budget/`, subdirectories
+Private artifacts: `%USERPROFILE%/triaevum-prebackend-cpu-budget/`, subdirectories
 `control-before`, `ledger`, `control-disabled`, `compiled-out`. Each run contains exact arguments,
 logs, JSON timing, private writable configuration/save data. ROM-derived data
 and these artifacts must not enter public packages.

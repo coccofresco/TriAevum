@@ -148,11 +148,42 @@ Queue depth is one packet: G may run guest frame f+1 while R presents frame f.
 
 ## Latency
 
-Pipelining adds one presentation frame of latency (16.7 ms at 60 Hz) on top of
-the one-guest-frame delay interpolation already has. The option stays off by
-default; the intended use is when the serial frame exceeds its budget. An
-adaptive policy (enable while over budget) can follow once the trade-off is
-measured.
+Pipelining as first built added one presentation frame of latency: G pumped
+and polled frame f+1's input as soon as it had queued frame f's end, so that
+input waited behind frame f. Measured with `TRIAEVUM_INPUT_LATENCY=1` (SDL
+pump to the return of the frame end, RTX 3060, VSync 60 Hz): 33.3 ms median
+parallel against 16.6 ms serial.
+
+Input admission (default) closes it: G waits until frame f has ended before
+it pumps events for f+1 (`NativeRenderCommandStream::WaitForFramesInFlight(0)`),
+and still runs guest f+1 while R waits for f+1's frame slot and swapchain
+image. Interleaved runs, parallel / admission / serial, median (p95) ms and fps:
+
+| Scene | Parallel | Admission | Serial |
+|---|---|---|---|
+| Hyrule Field, 720p | 33.3 (35.1), 59.8 | 15.9 (25.9), 59.8 | 16.6 (22.4), 59.9 |
+| Kokiri, 4K Enhanced (GPU-bound) | 36.0 (38.9), 55.5 | 17.8 (21.4), 55.3 | 18.5 (23.6), 54.8 |
+| Barinade fight, 4K Enhanced | 31.7 (45.0), 59.8 | 16.0 (28.1), 59.9 | - |
+
+Uncapped (VSync off, no pacer) the lost overlap costs throughput: 588 against
+523 fps in the field.
+
+Late sampling (default, on top of admission) then begins the renderer frame
+synchronously (frame slot fence and swapchain image acquisition, where VSync
+waits) before the input section, and pumps the events again before polling:
+the 8-13 ms the input spent waiting for the image are gone. Interleaved
+admission / late, median (p95) ms and fps:
+
+| Scene | Admission | Late sampling |
+|---|---|---|
+| Hyrule Field, 720p | 16.1 (25.5), 59.9 | 9.1 (12.4), 59.8 |
+| Kokiri, 4K Enhanced | 17.6 (22.0), 56.2; 18.5 (22.6), 53.9 | 8.3 (12.7), 55.1; 8.3 (13.1), 53.3 |
+| Barinade fight, 4K Enhanced | 16.2 (32.0), 60.0 | 10.2 (17.4), 59.9 |
+
+GPU-bound Kokiri loses 0.6-1.1 fps (1-2 %); uncapped the field runs 520
+(admission) and 555 fps (late). `TRIAEVUM_INPUT_ADMISSION=1` keeps only the
+admission, `=0` restores the early sampling. The interpolation delay is on top
+of these host times.
 
 ## Qualification
 

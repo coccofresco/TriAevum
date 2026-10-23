@@ -20,6 +20,7 @@
 #include <mutex>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <unordered_map>
 #include <utility>
 
@@ -519,13 +520,34 @@ uint64_t NanosecondsToCtrTicks(uint64_t nanoseconds) {
 } // namespace
 
 struct NativeA32CtrHostServices::RomFsBackingFile {
-    explicit RomFsBackingFile(std::filesystem::path path)
-        : Path(std::move(path)) {}
+    explicit RomFsBackingFile(
+        std::filesystem::path path,
+        std::shared_ptr<const NativeA32RomFsOverlay> overlay = {},
+        uint64_t viewOffset = 0U)
+        : Path(std::move(path)), Overlay(std::move(overlay)),
+          ViewOffset(viewOffset) {}
 
+    // `offset` is an image offset (service view offset + ViewOffset). With an
+    // overlay, the view composes the image and the overlay's patches and tail.
     bool Read(uint64_t offset, std::span<uint8_t> bytes, bool* openedStream) {
         if (openedStream != nullptr) {
             *openedStream = false;
         }
+        if (Overlay) {
+            if (offset < ViewOffset) {
+                return false;
+            }
+            return Overlay->Read(
+                offset - ViewOffset, bytes,
+                [&](uint64_t viewOffset, std::span<uint8_t> baseBytes) {
+                    return ReadImage(ViewOffset + viewOffset, baseBytes,
+                                     openedStream);
+                });
+        }
+        return ReadImage(offset, bytes, openedStream);
+    }
+
+    bool ReadImage(uint64_t offset, std::span<uint8_t> bytes, bool* openedStream) {
         if (offset > static_cast<uint64_t>(
                          std::numeric_limits<std::streamoff>::max()) ||
             bytes.size() > static_cast<size_t>(
@@ -558,6 +580,8 @@ struct NativeA32CtrHostServices::RomFsBackingFile {
     }
 
     std::filesystem::path Path;
+    std::shared_ptr<const NativeA32RomFsOverlay> Overlay;
+    uint64_t ViewOffset = 0U;
     std::ifstream Stream;
     std::mutex Mutex;
 };

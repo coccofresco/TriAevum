@@ -23,6 +23,9 @@ inline constexpr uint32_t kOot3dCmbRendererSubmitDrawHandleEntry =
 inline constexpr uint32_t kOot3dObjectKankyoDrawEntry = 0x00297508U;
 inline constexpr uint32_t kOot3dActorDrawEntry = 0x002D5F68U;
 inline constexpr uint32_t kOot3dActorDrawCallbackReturn = 0x002D6314U;
+// The gameplay HUD's UI view (its draws carry it as SourcePc): the native
+// top-screen HUD, the action icon on the A button among them.
+inline constexpr uint32_t kOot3dGameplayHudDrawEntry = 0x0042B9F4U;
 // ACTOR_EN_MAG: the title logo composited over the opening. The full
 // per-pixel model lights it by its own native lights, apart from the scene.
 inline constexpr uint16_t kOot3dTitleLogoActorId = 0x0171U;

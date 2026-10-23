@@ -74,7 +74,7 @@ Use `tools/renderer/tev_program/run_aot_invocation_probe.py` with:
 - `--include C:/vcpkg/installed/x64-windows-static/include`
 - `--baseline` pointing to a title module rebuilt for memory-observation ABI 3
 - `--executable` pointing to a host rebuilt from the same current headers
-- `--invocation C:/Users/xander/triaevum-aot-memory-region/abba/0/command.json`
+- `--invocation %USERPROFILE%/triaevum-aot-memory-region/abba/0/command.json`
 - `--entry 002BBF74`
 - `--output` pointing to a new private directory.
 
@@ -91,7 +91,7 @@ an observer/exit, replicas differ, or original memory changes. Runs are bounded
 and processes exited. No ROM-derived data is saved by the proxy: only counters
 and timing rows. Diagnostic binaries, logs and existing saves remain private.
 
-Private results under `C:/Users/xander/triaevum-aot-causal-analysis/`:
+Private results under `%USERPROFILE%/triaevum-aot-causal-analysis/`:
 `invocation-aa-game`, `invocation-family-aa-game`, `invocation-control-game`,
 `invocation-repro-check`; first two CSV files sit in that parent directory.
 
@@ -348,7 +348,7 @@ These facts establish a real compiler experiment, not gameplay qualification.
 The first native launch failed loading the checkpoint with `bad allocation`,
 before any frame. A concurrent test run also reported a full system volume.
 Inactive diagnostic cache/generated artifacts were moved, not deleted, from
-`C:/Users/xander/triaevum-aot-memory-region/` to the private evidence root's
+`%USERPROFILE%/triaevum-aot-memory-region/` to the private evidence root's
 `reclaimed-memory-region/`; live binaries and benchmark input configurations
 were retained in place. After relocation, all 62 generator and 13 backend tests
 pass. The allocation-failure evidence is preserved in

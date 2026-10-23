@@ -126,8 +126,8 @@ unlocked throughput measurements or physical-controller tests.
 
 Runtime SHA-256: `629afe741ca4ae262b5ed60c8385381ba62ee7becabc474c27b0702cfc88e5b6`.
 Title SHA-256: `97de67f0e595375761661831fa65c4e14f9a70eee52849a4a55d89459d79be15`.
-Private runner: `/home/xander/probe-packaged-parity.py`; results and isolated
-inputs: `/home/xander/triaevum-packaged-gameplay-20260912/`. No game-derived
+Private runner: `~/probe-packaged-parity.py`; results and isolated
+inputs: `~/triaevum-packaged-gameplay-20260912/`. No game-derived
 fixtures or captures are committed. All test processes were closed afterward.
 
 Remaining: Windows SSSR/shutdown binary rebuild and qualification, packaged

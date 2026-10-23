@@ -6,6 +6,7 @@
 #include <compare>
 #include <filesystem>
 #include <map>
+#include <mutex>
 #include <set>
 #include <span>
 #include <string>
@@ -50,11 +51,22 @@ bool WritePicaAotShaderPack(
     std::span<const PicaAotShaderBinary> shaders,
     std::string* error = nullptr);
 
+// Load reads the header and the entry table only. A binary is read, and
+// checked against its recorded hash, the first time it is found; it then
+// stays resident (returned spans stay valid) until Clear(). A pack is thus
+// as large as its title's closure without costing that much memory.
 class PicaAotShaderPack final {
   public:
+    PicaAotShaderPack() = default;
+    PicaAotShaderPack(const PicaAotShaderPack&) = delete;
+    PicaAotShaderPack& operator=(const PicaAotShaderPack&) = delete;
+
     bool Load(const std::filesystem::path& path,
               std::string* error = nullptr);
     void Clear();
+    // Reads and checks every binary without keeping it resident
+    // (installation and publication gates).
+    [[nodiscard]] bool Verify(std::string* error = nullptr) const;
 
     [[nodiscard]] std::span<const uint32_t> Find(
         PicaAotShaderStage stage, std::string_view source) const noexcept;
@@ -74,14 +86,20 @@ class PicaAotShaderPack final {
         auto operator<=>(const Key&) const = default;
     };
     struct Range {
-        size_t WordOffset = 0;
+        uint64_t ByteOffset = 0;
         size_t WordCount = 0;
+        uint64_t Hash = 0;
     };
+
+    // Caller holds mMutex.
+    bool ReadBinary(const Range& range, std::vector<uint32_t>& words) const;
 
     std::filesystem::path mPath;
     uint32_t mDescriptorSchemaVersion = 0;
-    std::vector<uint32_t> mWords;
     std::map<Key, Range> mEntries;
+    mutable std::mutex mMutex;
+    mutable std::map<Key, std::vector<uint32_t>> mResident;
+    mutable std::set<Key> mRejected;
 };
 
 // Diagnostic collector used only to discover the finite set of post-variant

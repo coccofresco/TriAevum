@@ -670,6 +670,7 @@ void GfxRenderingAPIVulkan::StartFrame() {
     // images are destroyed only once this frame's own submission completed.
     if (mNativePicaTexturesGeneration != mFrameAzaharTextureGeneration)
         RetireNativePicaTexturesOfOtherGenerations(mFrameAzaharTextureGeneration);
+    ReleaseIdleNativePicaTextures();
     mCompletedNativePicaIds.insert(mCompletedNativePicaIds.end(),
                                    frame.NativePicaCompletionIds.begin(),
                                    frame.NativePicaCompletionIds.end());
@@ -726,9 +727,18 @@ void GfxRenderingAPIVulkan::StartFrame() {
     }
 
     markStart(5);
-    // Validate targets against the successfully acquired swapchain's extent,
-    // not the requested window size or the previous swapchain. Mode/present-only
-    // changes retain targets; saved display pixels bridge presentation-only frames.
+    // The presentation picture: the chosen aspect ratio's letterbox inside the
+    // successfully acquired swapchain (the whole swapchain for Free). Native
+    // PICA targets follow the picture, never the swapchain, so a change of
+    // ratio rebuilds them like a resize does.
+    mPresentationPicture = Oot3d::ResolvePresentationPicture(
+        mSwapchainExtent.width, mSwapchainExtent.height,
+        graphicsSnapshot.Value.Aspect);
+    // Validate targets against the picture of the successfully acquired
+    // swapchain, not the requested window size or the previous swapchain.
+    // Mode/present-only changes retain targets; saved display pixels bridge
+    // presentation-only frames.
+    const auto pictureExtent = NativePicaOutputExtent();
     const bool staleTargetExtent = std::any_of(
         mNativePicaRenderTargets.begin(), mNativePicaRenderTargets.end(),
         [&](const auto& entry) {
@@ -747,7 +757,8 @@ void GfxRenderingAPIVulkan::StartFrame() {
         mInternalResolutionScale,
         !mWindowBackend->IsFullscreen() ? Oot3d::WindowMode::Windowed :
         mWindowBackend->IsWindowedFullscreen() ? Oot3d::WindowMode::Borderless :
-                                               Oot3d::WindowMode::ExclusiveFullscreen});
+                                               Oot3d::WindowMode::ExclusiveFullscreen,
+        pictureExtent.Width, pictureExtent.Height});
 
     if (mImagesInFlight[mCurrentImage] != VK_NULL_HANDLE) {
         CheckVk(vkWaitForFences(mDevice, 1, &mImagesInFlight[mCurrentImage], VK_TRUE,
@@ -830,7 +841,8 @@ void GfxRenderingAPIVulkan::StartFrame() {
             Oot3d::ReportGrassStageFrame(
                 mFrameCounter - kFramesInFlight, measured.GrassMilliseconds.value_or(-1),
                 measured.GrassCompactionMilliseconds.value_or(-1), measured.GrassBladesMilliseconds.value_or(-1),
-                measured.GrassShadowsMilliseconds.value_or(-1), measured.GrassLightingMilliseconds.value_or(-1));
+                measured.GrassShadowsMilliseconds.value_or(-1), measured.GrassLightingMilliseconds.value_or(-1),
+                measured.GrassCardsMilliseconds.value_or(-1));
         }
     }
     mViewport = { 0.0f, 0.0f, static_cast<float>(mSwapchainExtent.width),

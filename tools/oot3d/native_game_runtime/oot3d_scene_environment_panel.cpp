@@ -1,6 +1,7 @@
 #include "fast/oot3d/graphics_settings_runtime.h"
 #include "fast/oot3d/settings_panel_widgets.h"
 #include "oot3d_scene_environment.h"
+#include "oot3d_native_a32_scene_view.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -26,7 +27,10 @@ public:
       ImGui::TextWrapped("No native gameplay scene is available. Environment overrides are inactive.");
       return;
     }
-    ImGui::Text("Native scene: 0x%04X (all rooms)", unsigned(*state.SceneId));
+    if (*state.SceneId == kOot3dFileSelectSceneId)
+      ImGui::Text("File select: the title scene behind the file cards (0x%04X)", unsigned(*state.SceneId));
+    else
+      ImGui::Text("Native scene: 0x%04X (all rooms)", unsigned(*state.SceneId));
     ImGui::Text("Group: %s", state.Group ? EnvironmentGroupLabel(*state.Group) : "Unknown (no group standard)");
     ImGui::Text("Day source: %s", EnvironmentSourceLabel(state.Sources[0]));
     if (state.TimeDriven) ImGui::Text("Night source: %s", EnvironmentSourceLabel(state.Sources[1]));

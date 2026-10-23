@@ -60,10 +60,13 @@ void ApplyNativeWidescreenProjectionPolicy(
   // Its injected PauseUi_Draw returns here; close UI attribution before an
   // observable exit skips the remaining block-entry observations. The rain
   // adapter's exit at the weather return likewise must not leave the
-  // precipitation atmosphere scope open.
+  // precipitation atmosphere scope open. Reframed's split title logo returns
+  // to its own call site, where the file selection exits again: a UI scope
+  // left open there would hold every later draw, gameplay included, as UI.
   const bool compositionBeforeExit =
       pc == Oot3dNativeGame::kTopScreenSystemPageBoundary ||
-      pc == Oot3dNativeGame::kTopScreenRainWeatherReturn;
+      pc == Oot3dNativeGame::kTopScreenRainWeatherReturn ||
+      pc == Oot3dNativeGame::kReframedFileLogoCall;
   if (compositionBeforeExit && runtime.PicaCompositionTracker != nullptr)
     runtime.PicaCompositionTracker->ObserveBlockEntry(pc, state, memory);
   // The camera update entry resolves the FOV owner of 0x00478EB8, which
@@ -116,7 +119,13 @@ void ApplyNativeWidescreenProjectionPolicy(
   };
   // Player_Update is also the Roll Dash entry: an exit there skips the rest
   // of this policy, so the PlayState and player probes observe it first.
-  if (pc == Oot3dNativeGame::kOot3dPlayerUpdateEntry) {
+  // While A is held, the Roll Dash hook calls FUN_0037577c from this entry
+  // and returns to it: that second entry carries the query's registers (r0
+  // its answer, r1 player+0x1000), not the title's (player, PlayState). Only
+  // the title's call is observed; the probes would otherwise lose the scene
+  // view, its environment and camera for as long as A is held (#91).
+  if (pc == Oot3dNativeGame::kOot3dPlayerUpdateEntry &&
+      (runtime.TopScreenGameplay == nullptr || !runtime.TopScreenGameplay->DashQueryPending())) {
     if (runtime.PlayerTimingProbe != nullptr) {
       runtime.PlayerTimingProbe->ObserveUpdateEntry(state);
     }
@@ -373,6 +382,20 @@ void ApplyNativeWidescreenProjectionPolicy(
       runtime.UiLifecycleBridge->ApplyTopScreenGuestHook(pc, state.r[0]);
     }
   }
+  // The file select's update is the only sign that the title scene on the
+  // upper screen is the file select's (the title demo's PlayState keeps
+  // updating behind its cards): the scene view takes its identity from it
+  // while this keeps running. PauseUi_Update calls it every frame of play as
+  // well (the integrated file-select flow of the touch screen), so only a
+  // frontend SaveContext.game_mode makes it the file select's screen.
+  if (pc == kFileSelectUpdate && runtime.SceneViewProbe != nullptr &&
+      runtime.TraceMemory != nullptr) {
+    uint32_t nativeGameMode = 0U;
+    if (runtime.TraceMemory->Read32(kNativeGameMode, &nativeGameMode) &&
+        !Oot3dNativeGame::IsTopScreenGameplayInputMode(nativeGameMode)) {
+      runtime.SceneViewProbe->ObserveFileSelect();
+    }
+  }
   if (runtime.TopScreenUiProfile && runtime.TraceMemory != nullptr &&
       runtime.UiLifecycleBridge != nullptr && pc == kPauseProjectionPrepare &&
       state.r[14] == kPauseProjectionPrepareCall + 4U) {
@@ -517,7 +540,10 @@ void ApplyNativeWidescreenProjectionPolicy(
             Oot3dNativeGame::ResolveTopScreenFrontendTargetCommand(
                 command,
                 runtime.UiLifecycleBridge != nullptr &&
-                    runtime.UiLifecycleBridge->NativeFrontendPresentationActive());
+                    runtime.UiLifecycleBridge->NativeFrontendPresentationActive() &&
+                    // Reframed draws the file interface into the upper pass
+                    // itself; the lower targets stay native.
+                    !Oot3dNativeGame::TopScreenReframedFileSelect::Active(*runtime.TraceMemory));
         if (frontendPlan.Handled) {
           plan = frontendPlan;
         } else {
@@ -526,7 +552,8 @@ void ApplyNativeWidescreenProjectionPolicy(
               plan, Oot3dNativeGame::ReadTopScreenWidePageState(
                         *runtime.TraceMemory, &page) && page.Wide());
         }
-        if (plan.Handled && plan.BindTopTarget) {
+        if (plan.Handled && plan.BindTopTarget &&
+            !Oot3dNativeGame::TopScreenReframedFileSelect::Active(*runtime.TraceMemory)) {
           runtime.PendingTopScreenPauseTarget = plan;
           runtime.PendingTopScreenPauseRenderer = state.r[0];
           ++runtime.TopScreenPauseTargetCommands;

@@ -5,6 +5,7 @@
 
 #include "oot3d_native_a32_window.h"
 #include "oot3d_dev_free_camera.h"
+#include "oot3d_in_game_menu.h"
 #include "three_ds_sdl_controller.h"
 #include "oot3d_prebackend_budget.h"
 #include "oot3d_cpu_phase_probe.h"
@@ -73,6 +74,8 @@
 #include "oot3d_top_screen_pause_transaction.h"
 #include "oot3d_top_screen_item_description_runtime.h"
 #include "oot3d_top_screen_wide_items_runtime.h"
+#include "oot3d_top_screen_visions_runtime.h"
+#include "oot3d_top_screen_reframed_file_select.h"
 #include "oot3d_top_screen_gameplay_runtime.h"
 #include "oot3d_object_bank_extension.h"
 #include "oot3d_top_screen_rain_adapter.h"
@@ -102,6 +105,7 @@
 #include "fast/oot3d/graphics_settings_window.h"
 #include "fast/oot3d/perspective_fov_policy.h"
 #include "fast/oot3d/presentation_pacing_policy.h"
+#include "fast/oot3d/presentation_picture.h"
 #include "fast/oot3d/title_render_backend.h"
 #include "ship/Context.h"
 #include "ship/audio/Audio.h"
@@ -631,6 +635,8 @@ struct NativeCandidateDispatchState {
   Oot3dNativeGame::TopScreenSystemPageRuntime *SystemPage = nullptr;
   Oot3dNativeGame::TopScreenItemDescriptionRuntime *ItemDescription = nullptr;
   Oot3dNativeGame::TopScreenWideItemsRuntime *WideItems = nullptr;
+  Oot3dNativeGame::TopScreenVisionsRuntime *Visions = nullptr;
+  Oot3dNativeGame::TopScreenReframedFileSelect *ReframedFileSelect = nullptr;
   Oot3dNativeGame::TopScreenGameplayRuntime *Gameplay = nullptr;
   // Extended draw distance object slots, in every UI profile, ahead of the
   // TopScreen source port.
@@ -663,6 +669,14 @@ struct NativeCandidateDispatchState {
       TopScreenRendererVisibilityRoute;
   uint32_t TopScreenGameOverDrawPhase = 0U;
   std::array<uint32_t, 5> TopScreenGameOverDrawRegisters{};
+  // SingleScreen 3.1 0x005D67DC before the upper transfer in scene mode 7:
+  // +0x6AC (list routed), +0x990 (fade step), the draw sequence and what it
+  // saves (0x005CB848's six pause words, the transfer arguments).
+  bool TopScreenVisionsRouted = false;
+  int32_t TopScreenVisionsFadeStep = 0;
+  uint8_t TopScreenVisionsDrawPhase = 0U;
+  std::array<uint32_t, 4> TopScreenVisionsRegisters{};
+  std::array<uint32_t, 6> TopScreenVisionsPauseWords{};
   Oot3dNativeGame::TopScreenPauseChildState TopScreenGameOverChildRestore{};
   Oot3dNativeGame::TopScreenPauseControllerState TopScreenPauseController;
   uint8_t TopScreenPauseControllerDrawPhase = 0U;
@@ -714,17 +728,20 @@ struct NativeControlPollingState {
   ThreeDsRecomp::Input::VirtualMotionState VirtualMotion;
   uint32_t PreviousControllerButtons = 0;
   uint32_t PendingControllerButtons = 0;
-  // The developer free camera's own physical sources, apart from the game's
+  // The Photo mode free camera's own physical sources, apart from the game's
   // bindings (the right mouse button is the game's R): mouse motion since it
-  // last read it, the right mouse button, and the pad's sticks (-1..1, dead
-  // zone applied; Y up) and shoulders.
+  // last read it, the left or right mouse button held outside host menus,
+  // and the pad's sticks (-1..1, dead zone applied; Y up) and shoulders.
   int64_t DevMouseDeltaX = 0;
   int64_t DevMouseDeltaY = 0;
-  bool DevMouseRightHeld = false;
+  bool DevMouseLookHeld = false;
   std::array<float, 2> DevPadLeftStick{};
   std::array<float, 2> DevPadRightStick{};
   bool DevPadLeftShoulder = false;
   bool DevPadRightShoulder = false;
+  // The in-game menu's controls (Esc / R3, D-pad, A/B, shoulders), from the
+  // raw devices every poll.
+  Oot3dNativeGame::InGameMenuHostInput Menu;
 };
 
 bool ExecuteProductTopScreenHook(uint32_t pc, oot3d::recomp::a32::GuestState &state,
@@ -743,7 +760,10 @@ void ApplyNativeWidescreenProjectionPolicy(
     oot3d::recomp::a32::MemoryBus &memory, void *user);
 
 Oot3dNativeGame::NativeA32InputFrame
+// `picture` is the presentation picture in the window (the aspect ratio's
+// letterbox): the menu pointer and the touch screen are mapped through it.
 PollNativeA32Input(Fast::Fast3dWindow &window,
+                   const Fast::Oot3d::PresentationPicture &picture,
                    bool nativeFrontendTouchEnabled,
                    bool hostGuiVisible,
                    bool topScreenUiProfile,

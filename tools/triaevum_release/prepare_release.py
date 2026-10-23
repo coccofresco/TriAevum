@@ -84,8 +84,8 @@ def dlss_layout(targets: dict) -> list[dict]:
         if not path.is_file():
             raise ValueError(f"DLSS release input is missing: {path}")
     return [
-        {"source": str(module), "path": module.name, "role": "separately_licensed_module"},
-        {"source": str(runtime), "path": runtime.name, "role": "separately_licensed_module"},
+        {"source": str(module), "path": f"runtime/{module.name}", "role": "separately_licensed_module"},
+        {"source": str(runtime), "path": f"runtime/{runtime.name}", "role": "separately_licensed_module"},
         {"source": str(license_text), "path": "LICENSES/NVIDIA-DLSS-SDK-LICENSE.txt", "role": "license"},
     ]
 
@@ -133,10 +133,10 @@ def prepare(args) -> dict:
         if item["source"].startswith("build-release/"):
             item["source"] = str(artifacts[Path(item["source"]).name].resolve())
     # The separately licensed iMMERSE module (MXAO), its own library beside the
-    # runtime; its licences are already in the layout.
+    # runtime in runtime/; its licences are already in the layout.
     if "immerse" in targets:
         layout["files"].append({"source": str(Path(targets["immerse"]).resolve()),
-                                "path": Path(targets["immerse"]).name,
+                                "path": "runtime/" + Path(targets["immerse"]).name,
                                 "role": "separately_licensed_module"})
     # The separately licensed DLSS module, the only binary that links NVIDIA's
     # NGX SDK, beside NVIDIA's own DLSS runtime and the SDK licence they are
@@ -147,7 +147,7 @@ def prepare(args) -> dict:
     # Vulkan loader that lacks its imports only withdraws FSR.
     if "fidelityfx_runtime" in targets:
         layout["files"].append({"source": str(Path(targets["fidelityfx_runtime"]).resolve()),
-                                "path": Path(targets["fidelityfx_runtime"]).name,
+                                "path": "runtime/" + Path(targets["fidelityfx_runtime"]).name,
                                 "role": "optional_vulkan_runtime"})
     # The release's default scene environment profiles (read-only; the user's
     # own profiles in the data directory take precedence).

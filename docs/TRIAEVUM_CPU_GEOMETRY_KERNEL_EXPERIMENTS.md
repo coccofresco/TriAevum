@@ -124,7 +124,7 @@ use `run_aot_invocation_probe.py` as described in
 Set `TRIAEVUM_SKELETON_MIN_BONES=16` for larger skeletons: occurrence then means
 qualifying occurrence. Unset it for unfiltered runs. Selection is in provenance.
 
-Private artifacts: `C:/Users/xander/triaevum-aot-causal-analysis/`, directories
+Private artifacts: `%USERPROFILE%/triaevum-aot-causal-analysis/`, directories
 `skeleton-real-ab`, `skeleton-large-ab`, `skeleton-large-ab-repeat`,
 `triangle-real-ab`, `triangle-real-ab-repeat`. Each records module hashes,
 invocation CSV and final runtime state. Binaries, inputs and captures stay private.

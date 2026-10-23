@@ -102,6 +102,15 @@ void NativeRenderCommandStream::Drain() {
     RethrowPendingFailureLocked(lock);
 }
 
+void NativeRenderCommandStream::WaitForFramesInFlight(size_t frames) {
+    if (mMode == Mode::Inline || !mWorker.joinable()) return;
+    std::unique_lock lock(mMutex);
+    mProgress.wait(lock, [&] {
+        return mFailure != nullptr || mFramesQueued <= frames;
+    });
+    RethrowPendingFailureLocked(lock);
+}
+
 void NativeRenderCommandStream::RethrowPendingFailureLocked(
     std::unique_lock<std::mutex>& lock) {
     if (mFailure == nullptr) return;

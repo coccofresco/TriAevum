@@ -25,13 +25,18 @@ def linux_files():
         "forge/oot3d_game_module.so": ("forge_runtime_module", b"ELF module fixture"),
         "triaevum_title_aot.so": ("runtime_library", b"ELF bootstrap fixture"),
         "_internal/base_library.zip": ("forge_frozen_resource", b"Python library fixture"),
+        # The Linux package keeps its documentation in the root.
+        "README.md": ("documentation", b"# TriAevum\n"),
+        "LICENSE_SCOPE.md": ("documentation", b"mixed license scope\n"),
+        "THIRD_PARTY_NOTICES.md": ("documentation", b"third-party notices\n"),
+        "SOURCE_OFFER.md": ("documentation", b"corresponding source included\n"),
     })
     return files
 
 
 def write_linux_package(root, files=None):
     with patch.object(fixture, "FILES", linux_files() if files is None else files):
-        fixture.write_clean_package(root)
+        fixture.write_clean_package(root, "release-manifest.json")
     path = root / "release-manifest.json"
     manifest = json.loads(path.read_text())
     manifest["release"]["target"] = LINUX.target

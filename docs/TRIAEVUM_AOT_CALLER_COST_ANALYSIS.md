@@ -222,7 +222,7 @@ Retain conservative validation for modules that lack the new writer contract.
 
 ## Reproduction and private artifacts
 
-Root: `C:/Users/xander/triaevum-aot-causal-analysis/`.
+Root: `%USERPROFILE%/triaevum-aot-causal-analysis/`.
 
 - `field-stacks/0/native-stacks.json`, `field-repeat/{0,1}/native-stacks.json`:
   raw PCs, module load bases, counts, suspension/termination diagnostics.

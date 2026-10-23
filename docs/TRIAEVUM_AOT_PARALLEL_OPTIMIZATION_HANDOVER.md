@@ -136,10 +136,10 @@ integrare esplicitamente. Non introdurre scheduler alternativo o seconda memoria
 Windows, da usare come riferimenti in sola lettura:
 
 ```text
-Python: C:/Users/xander/AppData/Local/Programs/Python/Python313/python.exe
+Python: %USERPROFILE%/AppData/Local/Programs/Python/Python313/python.exe
 LLVM: I:/oot3dre_tools/llvm-22.1.6/bin/clang++.exe
 Archiver: I:/oot3dre_tools/llvm-22.1.6/bin/llvm-ar.exe
-Ninja: C:/Users/xander/.local/bin/ninja.exe
+Ninja: %USERPROFILE%/.local/bin/ninja.exe
 Headers JSON: C:/vcpkg/installed/x64-windows-static/include
 Runtime: J:/TriAevum-verify-20260910/runtime/TriAevum.exe
 Support: J:/TriAevum-verify-20260910/runtime/triaevum_title_whole_aot_support.lib
@@ -166,10 +166,10 @@ verificato che `runtime/oot3d_native_process_manifest.json` non esiste.
 Usare un'invocazione di gioco qualificata, non quel launcher solo perche' esiste.
 
 Linux, riferimenti dall'ultima qualificazione (non ricontrollati via SSH qui):
-`xander@192.168.1.190`, chiave `%USERPROFILE%/.ssh/triaevum_linux_ed25519`;
-source `/home/xander/triaevum-linux`, build `/home/xander/triaevum-linux-build`,
-installazione `/home/xander/triaevum-linux-play`, modulo
-`/home/xander/triaevum-ui-movie-title-build/triaevum_title_aot.so`.
+`<linux-host>`, chiave `%USERPROFILE%/.ssh/triaevum_linux_ed25519`;
+source `~/triaevum-linux`, build `~/triaevum-linux-build`,
+installazione `~/triaevum-linux-play`, modulo
+`~/triaevum-ui-movie-title-build/triaevum_title_aot.so`.
 Creare directory proprie: non sovrascrivere nessuna di queste.
 La baseline renderer Linux non e' ancora interamente allineata a Windows:
 confrontare A/B per piattaforma, mai dedurre speedup Windows da FPS Linux.
@@ -220,8 +220,8 @@ per evitare che i test eseguibili vengano saltati silenziosamente):
 
 ```powershell
 $env:CXX = 'I:/oot3dre_tools/llvm-22.1.6/bin/clang++.exe'
-& 'C:/Users/xander/AppData/Local/Programs/Python/Python313/python.exe' -m unittest discover -s tools/oot3d/native_a32_runtime -p 'test_whole_aot*.py'
-& 'C:/Users/xander/AppData/Local/Programs/Python/Python313/python.exe' -m unittest discover -s tools/oot3d/native_a32_runtime -p 'test_audit_whole_aot_product.py'
+& '%USERPROFILE%/AppData/Local/Programs/Python/Python313/python.exe' -m unittest discover -s tools/oot3d/native_a32_runtime -p 'test_whole_aot*.py'
+& '%USERPROFILE%/AppData/Local/Programs/Python/Python313/python.exe' -m unittest discover -s tools/oot3d/native_a32_runtime -p 'test_audit_whole_aot_product.py'
 ```
 
 Aggiungere i test release di `whole_aot_source_backend`, `whole_aot_plugin_backend`

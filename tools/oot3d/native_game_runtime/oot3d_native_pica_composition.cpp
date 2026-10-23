@@ -20,10 +20,14 @@ constexpr uint32_t kTemporalActorInit = 0x004615D8U;
 // Exact UI draw owners from ui_native_workflow_closure. The enclosing
 // DrawViewPass also executes scene callbacks and must NOT be classified UI.
 constexpr std::array kUiViews{
-    std::pair{0x0042B9F4U, 0x003004E0U},
+    std::pair{kOot3dGameplayHudDrawEntry, 0x003004E0U},
     std::pair{0x0041EC50U, 0x00419830U},
-    // TopScreen System overlay inside the completed gameplay view.
+    // TopScreen System overlay inside the completed gameplay view; Reframed's
+    // file interface drawn again there, with its overlay groups.
     std::pair{0x0041EC50U, 0x0030055CU},
+    std::pair{0x0041F308U, 0x0030055CU},
+    // Reframed's split title logo, drawn twice from its own call site.
+    std::pair{0x004228E4U, 0x00300520U},
     std::pair{0x0041F308U, 0x0041983CU},
     std::pair{0x00425930U, 0x0041EB14U},
     // Orthographic renderer-local backdrop (single model at GraphRenderer+743C).
@@ -44,6 +48,9 @@ constexpr std::array kUiViews{
     std::pair{0x0042CB54U, 0x00300530U},
     std::pair{0x0042A278U, 0x0030053CU},
     std::pair{0x00427A3CU, 0x00300548U},
+    // TopScreen 3.1 Visions list, drawn before the upper transfer 0x0041952C.
+    std::pair{0x0041EC50U, 0x0041952CU},
+    std::pair{0x00427A3CU, 0x0041952CU},
     std::pair{0x0042CBCCU, 0x00300554U}};
 constexpr std::array kCmbReturnPcs{
     0x002FADDCU, 0x002FADF4U, 0x002FAEC0U, 0x002FAED8U,

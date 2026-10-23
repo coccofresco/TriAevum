@@ -77,7 +77,7 @@ retained pack and pipeline recipes; other recipes are unchanged.
    capture/import tools. Rebuild against the current compiler and requalify;
    do not substitute an old successful 889-module report for current results.
 2. Linux retained source corpus is at
-   `/home/xander/triaevum-pipeline-live-proof/forge-pass-cache-effects/`.
+   `~/triaevum-pipeline-live-proof/forge-pass-cache-effects/`.
    Transfer was initially denied. Following explicit user authorization, the TAS
    union is now bound and active in the installed private Linux Flatpak; see the
    activation report, including its desktop-context GPU-cache qualification.

@@ -33,7 +33,7 @@
 extern "C" {
 #endif
 
-#define TRIAEVUM_IMMERSE_ABI_VERSION 1u
+#define TRIAEVUM_IMMERSE_ABI_VERSION 2u
 /* The module's single export: const TriaevumImmerseModule* (uint32_t abi). */
 #define TRIAEVUM_IMMERSE_ENTRY_POINT "triaevum_immerse_module"
 #if defined(_WIN32)
@@ -139,6 +139,10 @@ typedef struct TriaevumMxaoTargets {
     VkFormat MotionFormat;
     uint32_t MotionWidth;
     uint32_t MotionHeight;
+    /* Nonzero: the estimate, its history and its filter run at half the
+     * output's resolution (each sample reads the inputs' pixel 2p) and a
+     * depth-guided upsample writes the output. */
+    uint32_t HalfResolution;
 } TriaevumMxaoTargets;
 
 typedef struct TriaevumMxaoFrame {

@@ -94,7 +94,7 @@ objects plus normal link/product metadata, not the title DLL.
 
 Private evidence: `J:/TriAevum-verify-20260910/public-shader-tools-{proof,fixed}`,
 `public-shader-game-{proof,fixed}`, and
-`/home/xander/triaevum-shader-distribution-review/`.
+`~/triaevum-shader-distribution-review/`.
 
 Remaining distribution work: a permitted public game seed or ROM-derived seed
 recipe, complete packaged Flatpak helper dependency qualification, and Android's

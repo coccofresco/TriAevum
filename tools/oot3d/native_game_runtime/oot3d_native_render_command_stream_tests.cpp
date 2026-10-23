@@ -78,6 +78,34 @@ void TestFramesInFlightBound() {
     stream.Drain();
 }
 
+// Input admission: the producer waits until the previous frame has ended,
+// while commands that do not end a frame never hold it.
+void TestWaitForFramesInFlight() {
+    NativeRenderCommandStream inlineStream(Mode::Inline);
+    inlineStream.WaitForFramesInFlight(0U);
+    NativeRenderCommandStream stream(Mode::Worker, 1U);
+    std::atomic<bool> release{false};
+    std::atomic<bool> ended{false};
+    std::atomic<bool> admitted{false};
+    stream.Submit([&] {
+        while (!release.load()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    });
+    stream.Submit([&] { ended = true; }, true);
+    std::thread producer([&] {
+        stream.WaitForFramesInFlight(1U);
+        stream.WaitForFramesInFlight(0U);
+        admitted = true;
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    Require(!admitted.load(), "the producer was admitted before the previous frame ended");
+    release = true;
+    producer.join();
+    Require(admitted.load() && ended.load(), "admission did not follow the frame end");
+    stream.Submit([] { std::this_thread::sleep_for(std::chrono::milliseconds(20)); });
+    stream.WaitForFramesInFlight(0U);
+    stream.Drain();
+}
+
 void TestWorkerFailureIsRethrownOnce() {
     NativeRenderCommandStream stream(Mode::Worker);
     bool laterRan = false;
@@ -140,6 +168,7 @@ int main() {
     TestInlineRunsAtSubmission();
     TestWorkerKeepsProgramOrder();
     TestFramesInFlightBound();
+    TestWaitForFramesInFlight();
     TestWorkerFailureIsRethrownOnce();
     TestModeSwitchDrainsAndDestructorRunsPending();
     TestSynchronousCommandsAreDistinguished();

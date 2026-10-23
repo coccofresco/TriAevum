@@ -737,6 +737,7 @@ struct TopScreenPauseDrawInputs {
   bool HasScene = false;
   std::uint8_t SceneMode = 0;
   std::uint8_t SceneVariant = 0;
+  std::uint32_t SceneSubmode = 0;
   std::uint16_t SceneSequence = 0;
   std::uint32_t RuntimeMode = 0;
   std::uint32_t EntranceIndex = 0;
@@ -828,7 +829,19 @@ struct TopScreenRendererVisibilityRouteState {
   std::int32_t FadeStep = 0;
   std::int32_t DelayCalls = 0;
   bool RendererConflict = false;
+  // SingleScreen 3.1 0x0060FA84+0x6AC in scene mode 7 (0x005D49FC): the
+  // Visions menu (submode 4) has a visible renderer, so its list goes on top.
+  bool VisionsRenderersRouted = false;
 };
+
+// SingleScreen 3.1 0x005D67DC, scene mode 7: the Sheikah Stone's Visions
+// menu (play+0x104 == 4) outside a native transition (0x0035B164).
+bool IsTopScreenVisionsMenu(const TopScreenPauseDrawInputs &inputs) noexcept;
+// 3.1 0x005D6DC8: the fade of the top-screen Visions backdrop and edges,
+// min(step / 24, 1); the step advances to 24 while the list is routed.
+float ResolveTopScreenVisionsFade(std::int32_t step) noexcept;
+bool RestoreTopScreenVisionsTerminalRenderer(NativeA32Memory &memory,
+                                             std::string *error = nullptr);
 
 struct TopScreenRendererVisibilityInputs {
   std::uint32_t ControllerAddress = 0;
@@ -942,6 +955,16 @@ bool ResolveTopScreenPauseIconBuild(TopScreenPauseIconBuild *build,
 // Payload wrapper 0x005D005C skips the lower-screen touch-button callback for
 // the contiguous native pause states 12..19.
 bool SuppressTopScreenTouchButtonDraw(std::uint32_t pauseState) noexcept;
+
+// TopScreen 2.1.1 and SingleScreen 3.0/3.1 make PauseDungeonMap_HandleCursorInput
+// (0x00442F38) a `bx lr`, which also drops the native floor and dungeon-item
+// navigation (#89). The port keeps only the mod's ownership of B (the mod's
+// own path closes the page or opens Save) and runs the native navigation on
+// every other update. `pressedButtons` is the pause input word 0x0033B5EC
+// returns: 0x0050AF18, or 0x0050AF14 when that is zero.
+bool SkipTopScreenDungeonMapCursorInput(std::uint32_t pressedButtons) noexcept;
+bool ReadTopScreenPausePressedButtons(NativeA32Memory &memory,
+                                      std::uint32_t *pressedButtons);
 
 // TopScreen 2.1.1 shows the native item/gear description (message context
 // 0x005C1878, drawn under the relocated page) over the page when SELECT is

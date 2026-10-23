@@ -11,6 +11,12 @@ bool ExecuteTopScreenUiSourcePortBlock(
     NativeCandidateDispatchState &dispatch,
     oot3d::recomp::a32::ExecutionResult *result, uint32_t *blocksConsumed) {
   auto &memory = *dispatch.Memory;
+  // Reframed's file selection owns its sites (some shared with the
+  // SingleScreen port's scene-mode-5 handling) while it is shown, and every
+  // re-entry of its guest calls.
+  if (dispatch.ReframedFileSelect != nullptr &&
+      dispatch.ReframedFileSelect->Execute(pc, state, result, blocksConsumed))
+    return true;
   if (Oot3dNativeGame::ExecuteTopScreenDungeonMapIconCoordinate(
           pc, state, result, blocksConsumed))
     return true;
@@ -27,6 +33,9 @@ bool ExecuteTopScreenUiSourcePortBlock(
            dispatch.OcarinaText->Execute(state, result, blocksConsumed);
   }
   if (dispatch.Gameplay != nullptr && dispatch.Gameplay->Execute(pc, state, result, blocksConsumed))
+    return true;
+  if (dispatch.Visions != nullptr &&
+      dispatch.Visions->Execute(pc, state, result, blocksConsumed))
     return true;
   if (pc == Oot3dNativeGame::kTopScreenSystemPageBoundary && dispatch.SystemPage != nullptr)
     return dispatch.SystemPage->Execute(state, result, blocksConsumed);
@@ -166,6 +175,14 @@ bool ExecuteTopScreenUiSourcePortBlock(
             &action)) {
       return false;
     }
+    // The GameOver hook at 0x00427A3C resets the route state, so the
+    // Visions transfer keeps its own copy of 3.1's +0x6AC.
+    if (inputs.HasCallScene && inputs.CallSceneMode == 7U) {
+      dispatch.TopScreenVisionsRouted =
+          inputs.CallSceneSubmode == 4U &&
+          (dispatch.TopScreenVisionsRouted ||
+           dispatch.TopScreenRendererVisibilityRoute.VisionsRenderersRouted);
+    }
     return branchFromCallsite(
         action == Oot3dNativeGame::TopScreenRendererVisibilityAction::NativeDraw
             ? kPauseRendererVisibilityNativeDraw
@@ -173,6 +190,9 @@ bool ExecuteTopScreenUiSourcePortBlock(
         pc + 4U);
   }
   if (pc == kPauseControllerDrawCall) {
+    if (dispatch.TopScreenPauseControllerDrawPhase == 0U &&
+        dispatch.Visions != nullptr)
+      dispatch.Visions->ObserveControllerDraw(state.r[0]);
     if (dispatch.TopScreenPauseControllerDrawPhase == 1U) {
       if (!Oot3dNativeGame::PrepareTopScreenPauseAlternateRenderers(
               memory, &dispatch.TopScreenPauseController,
@@ -255,13 +275,124 @@ bool ExecuteTopScreenUiSourcePortBlock(
     }
     return branchFromCallsite(kPauseControllerNativeDraw, pc + 4U);
   }
+  // SingleScreen 3.1 0x005D67DC runs before each transfer. Before the upper
+  // one (0x400) in the Visions menu it draws the routed list into the upper
+  // image: viewport (0,40,480,320), 0x005CB848 (PauseUi_Draw with the six
+  // pause words cleared), 0x00427A3C(controller, play), viewport
+  // (0,0,480,400) and the edges of 0x005D52E8 at the fade step. Not ported:
+  // its 0x005D5970 backdrop between PauseUi_Draw and the list (host UI
+  // primitives draw over native UI, so they cannot go under it) and its
+  // lower-transfer branch, which only redraws the unpresented lower screen.
+  // Submodes 0..2 are 0x005D5698 instead (TopScreenVisionsRuntime).
+  if (pc == kPauseRoutedCommandCallA) {
+    constexpr std::array<uint32_t, 6> kVisionsPauseWords{
+        0x00504484U, 0x0050AF68U, 0x0050672CU,
+        0x00506CE8U, 0x0050A530U, 0x005043F4U};
+    auto &phase = dispatch.TopScreenVisionsDrawPhase;
+    auto &saved = dispatch.TopScreenVisionsRegisters;
+    if (phase == 0U) {
+      Oot3dNativeGame::TopScreenPauseDrawInputs inputs;
+      if (!Oot3dNativeGame::ReadTopScreenPauseDrawInputs(memory, &inputs))
+        return false;
+      if (Oot3dNativeGame::IsTopScreenVisionsMenu(inputs)) {
+        if (dispatch.TopScreenVisionsRouted &&
+            dispatch.TopScreenVisionsFadeStep < 24)
+          ++dispatch.TopScreenVisionsFadeStep;
+        std::copy_n(state.r.begin(), saved.size(), saved.begin());
+        phase = dispatch.TopScreenVisionsRouted ? 1U : 4U;
+        state.r[0] = 0U;
+        state.r[1] = dispatch.TopScreenVisionsRouted ? 40U : 0U;
+        state.r[2] = 480U;
+        state.r[3] = dispatch.TopScreenVisionsRouted ? 320U : 400U;
+        return branchFromCallsite(kGlViewportEntry, pc);
+      }
+      if (dispatch.TopScreenVisionsRouted ||
+          dispatch.TopScreenVisionsFadeStep != 0) {
+        if (!Oot3dNativeGame::RestoreTopScreenVisionsTerminalRenderer(memory))
+          return false;
+      }
+      dispatch.TopScreenVisionsRouted = false;
+      dispatch.TopScreenVisionsFadeStep = 0;
+      // The edges 3.1 0x005D5698 draws (0x005D52E8, full visibility) after
+      // the list in this upper pass.
+      if (dispatch.UiLifecycleBridge != nullptr) {
+        std::uint32_t itemsPage = 0U;
+        const bool listDrawn = dispatch.Visions != nullptr &&
+                               dispatch.Visions->TakeUpperDrawn();
+        if (listDrawn && !memory.Read32(0x0050672CU, &itemsPage))
+          return false;
+        dispatch.UiLifecycleBridge->SetTopScreenVisionsEdgePresentation(
+            listDrawn ? std::optional(Oot3dNativeGame::BuildTopScreenPauseEdgeGeometry(
+                            inputs.HasScene, inputs.SceneMode, inputs.RuntimeMode,
+                            0U, 0, 1.0F, 1.0F, itemsPage != 0U))
+                      : std::nullopt);
+      }
+    } else if (phase == 1U) {
+      for (std::size_t index = 0U; index < kVisionsPauseWords.size(); ++index) {
+        if (!memory.Read32(kVisionsPauseWords[index],
+                           &dispatch.TopScreenVisionsPauseWords[index]) ||
+            !memory.WriteHost<uint32_t>(kVisionsPauseWords[index], 0U))
+          return false;
+      }
+      phase = 2U;
+      return branchFromCallsite(kPauseUiDraw, pc);
+    } else if (phase == 2U) {
+      for (std::size_t index = 0U; index < kVisionsPauseWords.size(); ++index) {
+        if (!memory.WriteHost<uint32_t>(kVisionsPauseWords[index],
+                                        dispatch.TopScreenVisionsPauseWords[index]))
+          return false;
+      }
+      phase = 3U;
+      uint32_t controller = 0U, play = 0U;
+      if (!memory.Read32(0x005C588CU, &controller) ||
+          !memory.Read32(0x005043E0U, &play))
+        return false;
+      if (controller != 0U) {
+        state.r[0] = controller;
+        state.r[1] = play;
+        return branchFromCallsite(kPauseRendererVisibilityNativeDraw, pc);
+      }
+    }
+    if (phase == 3U) {
+      phase = 4U;
+      state.r[0] = 0U;
+      state.r[1] = 0U;
+      state.r[2] = 480U;
+      state.r[3] = 400U;
+      return branchFromCallsite(kGlViewportEntry, pc);
+    }
+    if (phase == 4U) {
+      phase = 0U;
+      std::copy_n(saved.begin(), saved.size(), state.r.begin());
+      Oot3dNativeGame::TopScreenPauseDrawInputs inputs;
+      std::uint32_t itemsPage = 0U;
+      if (!Oot3dNativeGame::ReadTopScreenPauseDrawInputs(memory, &inputs) ||
+          !memory.Read32(0x0050672CU, &itemsPage))
+        return false;
+      if (dispatch.UiLifecycleBridge != nullptr) {
+        // 0x005D6E4C: the edges fade with the step only while routed.
+        const float fade =
+            dispatch.TopScreenVisionsRouted
+                ? Oot3dNativeGame::ResolveTopScreenVisionsFade(
+                      dispatch.TopScreenVisionsFadeStep)
+                : 0.0F;
+        dispatch.UiLifecycleBridge->SetTopScreenVisionsEdgePresentation(
+            Oot3dNativeGame::BuildTopScreenPauseEdgeGeometry(
+                inputs.HasScene, inputs.SceneMode, inputs.RuntimeMode, 0U, 0,
+                fade, 1.0F, itemsPage != 0U));
+      }
+    }
+  }
   if (pc == kPauseRoutedCommandCallA || pc == kPauseRoutedCommandCallB) {
     Oot3dNativeGame::TopScreenPauseDrawInputs inputs;
     if (!Oot3dNativeGame::ReadTopScreenPauseDrawInputs(memory, &inputs)) {
       return false;
     }
+    // Reframed's file selection keeps both native targets (its own upper
+    // pass draws the file interface).
     const bool routeActive = Oot3dNativeGame::ResolveTopScreenPauseRouteActive(
-        inputs, &dispatch.TopScreenPauseRoute);
+                                 inputs, &dispatch.TopScreenPauseRoute) &&
+                             !Oot3dNativeGame::TopScreenReframedFileSelect::Active(memory);
     state.r[1] = Oot3dNativeGame::ResolveTopScreenPauseRoutedCommand(
         state.r[1], routeActive);
     return branchFromCallsite(kPauseRoutedCommandNative, pc + 4U);
@@ -768,7 +899,9 @@ bool ExecuteTopScreenUiSourcePortBlock(
     uint32_t pauseState = 0U;
     if (!memory.Read32(0x0050AF68U, &pauseState))
       return false;
-    if (Oot3dNativeGame::SuppressTopScreenTouchButtonDraw(pauseState)) {
+    // Reframed's file selection keeps the native touch buttons (Back).
+    if (!Oot3dNativeGame::TopScreenReframedFileSelect::Active(memory) &&
+        Oot3dNativeGame::SuppressTopScreenTouchButtonDraw(pauseState)) {
       nextPc = pc + 4U;
     } else {
       state.r[14] = pc + 4U;
@@ -787,6 +920,11 @@ bool ExecuteTopScreenUiSourcePortBlock(
     nextPc = kPauseProjectionPrepare;
     break;
   case kPauseTouchButtonsDrawCall: {
+    if (Oot3dNativeGame::TopScreenReframedFileSelect::Active(memory)) {
+      state.r[14] = pc + 4U;
+      nextPc = state.r[1];
+      break;
+    }
     if (!Oot3dNativeGame::ApplyTopScreenNativeTouchQuad28Layout(memory)) {
       return false;
     }
@@ -820,9 +958,14 @@ bool ExecuteTopScreenUiSourcePortBlock(
   case kPauseLowerScreenBlock:
     nextPc = kPauseLowerScreenBlockEnd;
     break;
-  case kPauseDungeonMapCursorInput:
+  case kPauseDungeonMapCursorInput: {
+    std::uint32_t pressed = 0U;
+    if (!Oot3dNativeGame::ReadTopScreenPausePressedButtons(memory, &pressed) ||
+        !Oot3dNativeGame::SkipTopScreenDungeonMapCursorInput(pressed))
+      return false;
     nextPc = state.r[14];
     break;
+  }
   case kPauseSceneDimBranch: {
     // 3.0 always skips the dim: the View Model and the System page (Save)
     // show the scene undimmed. Beside the pages the port keeps the native dim

@@ -1,6 +1,8 @@
 """Names and ABI targets at the release/installation platform boundary."""
 
 from dataclasses import dataclass
+import os
+from pathlib import Path
 import platform
 import sys
 
@@ -8,6 +10,10 @@ import sys
 @dataclass(frozen=True)
 class ReleasePlatform:
     target: str
+    # The runtime executable's path in the package (runtime) and in an
+    # installation (installed_runtime): the Windows package keeps it in runtime/
+    # with its DLLs and Forge moves it to the root when it installs a title, so
+    # Forge is the only application in the package root.
     runtime: str
     forge: str
     native_module: str
@@ -17,16 +23,39 @@ class ReleasePlatform:
     archiver: str
     support_library: str
     archive_suffix: str
+    installed_runtime: str
 
 
-WINDOWS = ReleasePlatform("x86_64-pc-windows-msvc", "TriAevum.exe",
+WINDOWS = ReleasePlatform("x86_64-pc-windows-msvc", "runtime/TriAevum.exe",
                           "TriAevumForge.exe", "forge/oot3d_game_module.dll",
                           "triaevum_title_aot.dll", "x86_64-windows-thinlto-release-v1",
-                          "clang-cl.exe", "llvm-lib.exe", "triaevum_title_whole_aot_support.lib", ".zip")
+                          "clang-cl.exe", "llvm-lib.exe", "triaevum_title_whole_aot_support.lib", ".zip",
+                          "TriAevum.exe")
 LINUX = ReleasePlatform("x86_64-unknown-linux-gnu", "TriAevum",
                         "TriAevumForge", "forge/oot3d_game_module.so",
                         "triaevum_title_aot.so", "x86_64-linux-thinlto-release-v1",
-                        "clang++", "llvm-ar", "libtriaevum_title_whole_aot_support.a", ".tar.gz")
+                        "clang++", "llvm-ar", "libtriaevum_title_whole_aot_support.a", ".tar.gz",
+                        "TriAevum")
+
+
+def installed_runtime_path(root: Path, value: ReleasePlatform) -> Path:
+    """The runtime of an installation: where a (new) package put it until Forge places it."""
+    packaged = root / value.runtime
+    return packaged if packaged.is_file() else root / value.installed_runtime
+
+
+def place_installed_runtime(root: Path, value: ReleasePlatform) -> Path:
+    """Move a packaged runtime to the installation root, replacing the previous one.
+
+    The Windows runtime finds its DLLs in runtime/, but its own folder is searched
+    first: DLLs a previous package left in the root would shadow the new ones.
+    """
+    packaged, installed = root / value.runtime, root / value.installed_runtime
+    if packaged != installed and packaged.is_file():
+        for library in packaged.parent.glob("*.dll"):
+            (root / library.name).unlink(missing_ok=True)
+        os.replace(packaged, installed)
+    return installed
 
 
 def is_windows(value: ReleasePlatform) -> bool:

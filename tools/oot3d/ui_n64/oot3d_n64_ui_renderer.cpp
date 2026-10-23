@@ -387,6 +387,16 @@ bool N64UiFast3dRenderer::Render(std::span<const UiPrimitive> primitives,
                                 N64UiCanvasMode canvasMode,
                                 PreparedUiTextures prepared,
                                 std::string* error) {
+    return Render(primitives,
+                  N64UiOutputRegion{0U, 0U, framebufferWidth, framebufferHeight},
+                  canvasMode, std::move(prepared), error);
+}
+
+bool N64UiFast3dRenderer::Render(std::span<const UiPrimitive> primitives,
+                                const N64UiOutputRegion& region,
+                                N64UiCanvasMode canvasMode,
+                                PreparedUiTextures prepared,
+                                std::string* error) {
     Stage(std::move(prepared));
     ++stats_.frames;
     stats_.primitives_received += primitives.size();
@@ -405,17 +415,20 @@ bool N64UiFast3dRenderer::Render(std::span<const UiPrimitive> primitives,
                          return left->layer < right->layer;
                      });
 
-    const std::uint32_t width = std::max<std::uint32_t>(1U, framebufferWidth);
-    const std::uint32_t height =
-        std::max<std::uint32_t>(1U, framebufferHeight);
+    const std::uint32_t width = std::max<std::uint32_t>(1U, region.Width);
+    const std::uint32_t height = std::max<std::uint32_t>(1U, region.Height);
     const float canvasWidth =
         canvasMode == N64UiCanvasMode::NativeTopScreen400x240
             ? kNativeTopScreenCanvasWidth
             : kWidescreenCanvasWidth;
+    // The canvas is fitted into the region, centred; the region itself is
+    // centred in the framebuffer (a letterbox), so the fit is the same seen
+    // from either end of the framebuffer's Y axis.
     const auto viewport = Oot3d::Renderer::FitUiPresentationViewport(
         width, height, canvasWidth, kCanvasHeight);
     if (!rendering_api_.PrepareUiOverlay(
-            {viewport.X, viewport.Y, viewport.Width, viewport.Height},
+            {region.X + viewport.X, region.Y + viewport.Y, viewport.Width,
+             viewport.Height},
             error)) {
         return false;
     }

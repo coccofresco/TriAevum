@@ -25,15 +25,15 @@
         "executable_size": 3973120
       },
       "optional_inputs": {
-        "singlescreen_3_1_archive": {
-          "name": "singlescreen_31_989c3.zip",
-          "bytes": 28384023,
-          "sha256": "f91485999a6b8e89b8d574064dc03c1c20704f2c718e93c5187251b6ef69dbcb"
+        "vanilla_ui_hud_3_2_archive": {
+          "name": "oot3d_vanilla_ui_hud_32.zip",
+          "bytes": 451655008,
+          "sha256": "5ff478db312c3f57f54263cd84f4caef15bbb391fd1dda3bdd3c25c4917938a1"
         },
-        "singlescreen_3_0_archive": {
-          "name": "singlescreen_30_25aeb.zip",
-          "bytes": 28883512,
-          "sha256": "5668640fec8dc2b47b4516fd0b871c4d7d90ca1c2203acc2a22adb59aaab5993"
+        "vanilla_plus_link_1_9_archive": {
+          "name": "link_remodel_vanilla_plus_1_9.rar",
+          "bytes": 6861936,
+          "sha256": "8b30a15569e5eb680deda6fdd9582929309ad5acd92dcf70fe2bd8effac0398c"
         }
       }
     },
@@ -62,15 +62,15 @@
         "executable_size": 3973120
       },
       "optional_inputs": {
-        "singlescreen_3_1_archive": {
-          "name": "singlescreen_31_989c3.zip",
-          "bytes": 28384023,
-          "sha256": "f91485999a6b8e89b8d574064dc03c1c20704f2c718e93c5187251b6ef69dbcb"
+        "vanilla_ui_hud_3_2_archive": {
+          "name": "oot3d_vanilla_ui_hud_32.zip",
+          "bytes": 451655008,
+          "sha256": "5ff478db312c3f57f54263cd84f4caef15bbb391fd1dda3bdd3c25c4917938a1"
         },
-        "singlescreen_3_0_archive": {
-          "name": "singlescreen_30_25aeb.zip",
-          "bytes": 28883512,
-          "sha256": "5668640fec8dc2b47b4516fd0b871c4d7d90ca1c2203acc2a22adb59aaab5993"
+        "vanilla_plus_link_1_9_archive": {
+          "name": "link_remodel_vanilla_plus_1_9.rar",
+          "bytes": 6861936,
+          "sha256": "8b30a15569e5eb680deda6fdd9582929309ad5acd92dcf70fe2bd8effac0398c"
         }
       },
       "catalogue_records": ["no-intro-3ds-0004", "no-intro-3ds-1168"]

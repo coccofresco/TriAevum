@@ -130,7 +130,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDisplayTransfer(
                     source->Height,
                     transfer.Flags,
                     // Target extents follow this policy for the acquired
-                    // swapchain (stale targets are rebuilt at frame start).
+                    // swapchain's picture (stale targets are rebuilt at
+                    // frame start).
                     Oot3d::IsNativeTopScreenTarget({source->Key.Width, source->Key.Height}) &&
                         Oot3d::NativeTopScreenAtPresentedDensity(
                             NativeTopScreenOutputExtent()),
@@ -3810,10 +3811,19 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                                static_cast<uint32_t>(descriptorWrites.size()),
                                descriptorWrites.data(), 0, nullptr);
 
-        const auto presentation = FitNativePicaPresentation(
-            mSwapchainExtent.width, mSwapchainExtent.height,
+        // The display is fitted into the presentation picture (the aspect
+        // ratio's letterbox, centred in the swapchain); the scanout clear
+        // paints the bars around it with the clear colour.
+        const auto picture = mPresentationPicture.Valid()
+            ? mPresentationPicture
+            : Oot3d::PresentationPicture{0U, 0U, mSwapchainExtent.width,
+                                         mSwapchainExtent.height};
+        auto presentation = FitNativePicaPresentation(
+            picture.Width, picture.Height,
             static_cast<float>(display.Height),
             static_cast<float>(display.Width));
+        presentation.X += static_cast<float>(picture.X);
+        presentation.Y += static_cast<float>(picture.Y);
         const VkViewport viewport{
             presentation.X, presentation.Y, presentation.Width,
             presentation.Height, 0.0F, 1.0F};

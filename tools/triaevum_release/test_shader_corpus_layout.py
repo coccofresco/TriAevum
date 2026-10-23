@@ -13,7 +13,11 @@ from shader_preparation import prepare_shader_seed
 from shader_corpus_qualification import INPUTS_FORMAT, inputs_digest, qualification_record
 
 
-def write_qualification(path, pack, manifests, sources, generator=('generator.cpp',), runtime=('runtime.cpp',)):
+# A recording runtime input inside the decision-policy set (shader_corpus_qualification.POLICY_PATTERNS).
+RUNTIME_INPUT = 'runtime/three_ds_recomp/src/fast/backends/gfx_vulkan_pica_draw.cpp'
+
+
+def write_qualification(path, pack, manifests, sources, generator=('generator.cpp',), runtime=(RUNTIME_INPUT,)):
     """A qualification record for pack and manifests, generated from sources."""
     def inputs(names):
         files = {name: sha256_file(sources / name) for name in names}
@@ -36,7 +40,8 @@ class ShaderCorpusLayoutTests(unittest.TestCase):
         self.sources = root / 'checkout'
         self.sources.mkdir()
         (self.sources / 'generator.cpp').write_text('generator', encoding='utf-8')
-        (self.sources / 'runtime.cpp').write_text('runtime', encoding='utf-8')
+        (self.sources / RUNTIME_INPUT).parent.mkdir(parents=True)
+        (self.sources / RUNTIME_INPUT).write_text('runtime', encoding='utf-8')
         self.qualification = write_qualification(root / 'qualification.json', pack, [manifest], self.sources)
         return pack, manifest, helper
 
@@ -101,10 +106,10 @@ class ShaderCorpusLayoutTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Stale shader corpus'):
                 self.bind(catalog, pack, [manifest], helper)
             (self.sources / 'generator.cpp').write_text('generator', encoding='utf-8')
-            (self.sources / 'runtime.cpp').write_text('runtime v2', encoding='utf-8')
+            (self.sources / RUNTIME_INPUT).write_text('runtime v2', encoding='utf-8')
             with self.assertRaisesRegex(ValueError, 'Stale variant recordings'):
                 self.bind(catalog, pack, [manifest], helper)
-            (self.sources / 'runtime.cpp').write_text('runtime', encoding='utf-8')
+            (self.sources / RUNTIME_INPUT).write_text('runtime', encoding='utf-8')
             other = root / 'other.o3ps'
             other.write_bytes(encode(3, {(2, 1, 2, 5): b'\x03\x02\x23\x07'}))
             with self.assertRaisesRegex(ValueError, 'differs from its qualification'):

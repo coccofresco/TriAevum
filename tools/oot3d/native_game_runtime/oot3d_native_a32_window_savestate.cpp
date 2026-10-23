@@ -484,12 +484,14 @@ bool NativeA32WindowSession::LoadState(const std::filesystem::path &path,
   systemPageStorage->Reset();
   itemDescriptionStorage->Reset();
   wideItemsStorage->Reset();
+  if (visionsStorage) visionsStorage->Reset();
+  if (reframedFileSelectStorage) reframedFileSelectStorage->Reset();
   gameplayStorage->Reset();
   // Saves wait for an in-flight native load or free, so the loaded memory
   // (its extra-slot page included) is the whole object bank state.
   objectBankStorage->Reset();
   rainStorage->Reset();
-  uiLifecycleBridge.SetTopScreenConfig(activeTopScreenConfig);
+  PublishTopScreenUiConfig();
   widescreenProjection.TopScreenPauseDrawRouting = {};
   widescreenProjection.TopScreenPausePageRedraw = {};
   widescreenProjection.TopScreenPausePageRedrawActive = false;
@@ -514,6 +516,9 @@ bool NativeA32WindowSession::LoadState(const std::filesystem::path &path,
   nativeCandidateDispatch.TopScreenTouchCoordinateRoute = {};
   nativeCandidateDispatch.TopScreenRendererVisibilityRoute = {};
   nativeCandidateDispatch.TopScreenGameOverDrawPhase = 0U;
+  nativeCandidateDispatch.TopScreenVisionsRouted = false;
+  nativeCandidateDispatch.TopScreenVisionsFadeStep = 0;
+  nativeCandidateDispatch.TopScreenVisionsDrawPhase = 0U;
   nativeCandidateDispatch.TopScreenPauseController = {};
   nativeCandidateDispatch.TopScreenPauseControllerDrawPhase = 0U;
   nativeCandidateDispatch.TopScreenPauseControllerVisibleRenderers = {};

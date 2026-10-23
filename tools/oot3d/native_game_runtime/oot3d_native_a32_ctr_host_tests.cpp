@@ -2017,6 +2017,24 @@ int main() {
                 convertedDspAddress == 0x1FF57FFE,
             "DSP:ConvertProcessAddress did not expose the DSP RAM view");
 
+    // The ending's audio flushes and invalidates DSP-shared buffers (#104).
+    for (const auto [request, expected] :
+         {std::pair{0x00130082U, 0x00130040U}, std::pair{0x00140082U, 0x00140040U}}) {
+        Require(memory.Write32(0x1FF82080, request) &&
+                    memory.Write32(0x1FF82084, 0x1FF00000) &&
+                    memory.Write32(0x1FF82088, 0x100) &&
+                    memory.Write32(0x1FF8208C, 0) &&
+                    memory.Write32(0x1FF82090, 0xFFFF8001),
+                "cannot write DSP data-cache request");
+        state.r[0] = dspSession;
+        Require(host.HandleSvc(0x32, state, memory, context).Action ==
+                        NativeA32HostAction::Resume &&
+                    memory.Read32(0x1FF82080, &response) &&
+                    response == expected &&
+                    memory.Read32(0x1FF82084, &response) && response == 0,
+                "DSP data-cache request rejected coherent guest memory");
+    }
+
     Require(memory.Write32(0x1FF82080, 0x001F0000),
             "cannot write DSP:GetHeadphoneStatus request");
     state.r[0] = dspSession;

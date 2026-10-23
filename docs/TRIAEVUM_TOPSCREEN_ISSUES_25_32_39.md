@@ -313,7 +313,7 @@ Private artifacts (never package these):
 
 - Windows: `%TEMP%/TriAevum-ui-canvas-ultrawide/stone-complete-runtime.json`,
   `stone-cancel-runtime.json` and corresponding `*-framebuffer_*.bmp`.
-- Linux: `/home/xander/triaevum-linux-parity-20260911/ui-issues-20260915/movie/`,
+- Linux: `~/triaevum-linux-parity-20260911/ui-issues-20260915/movie/`,
   `complete-runtime.json`, `cancel-runtime.json`, framebuffer sequences and logs.
 - Inputs: `%TEMP%/stone-complete-input.json` (A at 60/180, B at 900/1050/1200,
   movement at 1350), `stone-cancel-input.json` (A at 60/180, B at 240/360/480,
@@ -404,16 +404,16 @@ issue tranche were also brought across through checked patches.
 - Wayland framebuffer runs: 1501-frame completion route, 901-frame cancellation
   route, and 121-frame 960x720 Visions route. All exited 0. Menu, movie and return
   to Kokiri were inspected from actual captures, not desktop screenshots.
-- Updated `/home/xander/triaevum-linux-play/TriAevum.linux.launch.json` to select
-  the qualified module in `/home/xander/triaevum-ui-movie-title-build/`; it had
-  still pointed to the older `/home/xander/triaevum-linux-title-build/` module.
-- Updated executable: `/home/xander/triaevum-linux-build/TriAevum`, SHA-256
+- Updated `~/triaevum-linux-play/TriAevum.linux.launch.json` to select
+  the qualified module in `~/triaevum-ui-movie-title-build/`; it had
+  still pointed to the older `~/triaevum-linux-title-build/` module.
+- Updated executable: `~/triaevum-linux-build/TriAevum`, SHA-256
   `3f66d41bbdd80143dfa543069f004e1ac769b4a48acf5380590d201486133470`.
   The qualified title module hash remains `fbf5291c...` above.
 
 Private check artifacts: `triaevum-ui-alignment.json`,
 `triaevum_check_ui_alignment.py`, and checked patch files in the Windows temp
-directory and `/home/xander/`. Capture root remains the Linux movie directory
+directory and `~/`. Capture root remains the Linux movie directory
 above (`complete-*`, `cancel-*`, `fourthree-*`).
 
 This is issue-fix parity, NOT full renderer/performance parity. The remaining
@@ -423,3 +423,37 @@ program preparation from the earlier anti-stuttering work. Root CMake also lacks
 the corresponding TEV target link and standalone presentation-clock test. These
 need a dependency-complete renderer alignment, not copying the two differing
 large files alone. No release package was updated by these development checks.
+
+## SingleScreen 3.1 Visions lists (2026-10-21)
+
+The location and vision lists are drawn by the hint movie's lower callback
+(`00477E30`, table `00534C94` indexed by play+0x104), so the TopScreen window
+showed only the native upper header and the 3.1 oracle showed the lists on top.
+Evidence from the 3.1 Azahar oracle with the lists open: play+0x100 is 7 and
++0x104 is 0 or 1; a PICA dump puts about 66 list draws per frame into the upper
+480x400 colour buffer at viewport (0,40,480,320) and only the backdrop into the
+lower one; a writer trace of that viewport word names 3.1 `005D5698`.
+
+3.1 `005D7438` replaces submodes 0..2 of both callback tables once. Ported in
+`TopScreenVisionsRuntime` at the two dispatch entries:
+
+- Upper `00471F60` -> `005D5698`: viewport (0,40,480,320); `005CB848`
+  (`PauseUi_Draw` with `00504484`, `0050AF68`, `0050672C`, `00506CE8`,
+  `0050A530`, `005043F4` cleared); the native lower handler of the submode
+  (`00534C94`+4n) with play; viewport (0,0,480,400); the edges of `005D52E8`
+  (host edge presentation); tail call of queue 6 `0041AFAC` with the argument
+  `005D7438` kept from `0041988C`. The native upper handler is not called.
+- Lower `00477E30` -> `005D5C18`: native `003243A4`, then newly pressed L
+  (0x200, top index above 2) or R (0x100, more than three entries below) move
+  the list by three (+0x12C cursor, +0x130/+0x134 top, +0x118/+0x11C slide +-5)
+  with sound `010004BF`. Its own backdrop `005D5970` is on the lower screen,
+  which is not presented.
+- Submodes 3 and 4 keep the native tables. The submode-4 branch of the
+  transfer resolver `005D67DC` (+0x6AC, 24-step fade) is ported at
+  `0041952C` apart from its `005D5970` backdrop under the list.
+
+Developer launch with the product configuration, Kokiri stone state:
+location list (with its entry slide), vision list, Desert Journey movie, return
+to the list with the seen mark, B back to gameplay with the HUD, 6000 frames.
+Unit tests: `oot3d_top_screen_visions_runtime_tests`; profile tests cover
+`IsTopScreenVisionsMenu` and the fade.

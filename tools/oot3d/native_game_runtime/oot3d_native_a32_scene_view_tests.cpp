@@ -104,10 +104,41 @@ void RunNativeA32SceneViewProbeTests() {
   if (!unavailableScene || unavailableScene->SceneId)
     throw std::runtime_error("invalid native scene identity inherited the previous scene");
 
+  // The file select runs over the PlayState's block: the title demo's scene
+  // while that PlayState still updates (Player_Update included), scene 0 (the
+  // Deku Tree's id) otherwise, the View readable either way. It is its own
+  // identity while FileSelect_Update keeps running, whatever the order of the
+  // two updates within a refresh; it lapses a few refreshes after the last.
+  probe.ObserveFileSelect();
+  memory.Write32(playState + 0x104U, 0x6BU);
+  const auto fileSelect = probe.Capture(memory);
+  if (!fileSelect || !fileSelect->FileSelect || !fileSelect->CameraAvailable ||
+      fileSelect->SceneId != Oot3dNativeGame::kOot3dFileSelectSceneId ||
+      probe.Stats().FileSelectObservations != 1U)
+    throw std::runtime_error("file select did not take its own scene identity");
+  probe.BeginGuestRefresh();
+  probe.ObservePlayState(playState);
+  memory.Write32(playState + 0x104U, 0x00U);
+  if (const auto held = probe.Capture(memory); !held || !held->FileSelect)
+    throw std::runtime_error("the title PlayState's update took the file select's identity");
+  for (uint32_t refresh = 2; refresh < Oot3dNativeGame::kOot3dFileSelectOwnershipRefreshes; ++refresh) {
+    probe.BeginGuestRefresh();
+    if (const auto held = probe.Capture(memory); !held || !held->FileSelect)
+      throw std::runtime_error("file select identity lapsed within its refresh window");
+  }
+  probe.BeginGuestRefresh();
+  const auto dekuTree = probe.Capture(memory);
+  if (!dekuTree || dekuTree->FileSelect || dekuTree->SceneId != 0x00U)
+    throw std::runtime_error("gameplay scene 0 confused with the file select");
+  probe.ObserveFileSelect();
   probe.Reset();
   if (probe.Capture(memory).has_value()) {
     throw std::runtime_error("scene-view probe survived reset");
   }
+  probe.ObservePerspective(0x002FDE9CU, 0x00300F50U, -0.04F, 0.04F, -0.03F, 0.03F, 0.1F, 5000.0F);
+  probe.ObservePlayState(playState);
+  if (const auto afterReset = probe.Capture(memory); !afterReset || afterReset->FileSelect)
+    throw std::runtime_error("file select ownership survived reset");
 
   probe.UseExternalSceneEnvironment();
   probe.ObservePlayState(playState); // OoT hooks cannot opt this title back in.

@@ -18,7 +18,8 @@ try:
     from .precompiled_titles import MODEL, CATALOG, load_catalog, validate_title, checked_file
     from .release_platform import WINDOWS, for_target, catalog_platform
     from .platform_policy import resolve_policy
-    from .common import load_json_object, normalize_relative_path, sha256_file
+    from .common import (RELEASE_MANIFEST_PATHS, load_json_object, normalize_relative_path,
+                         release_manifest_path, sha256_file)
     from .input_adapters import validate_adapter
     from .source_contracts import source_contract_errors
     from .shader_corpus_layout import validate_bundled_corpus
@@ -30,7 +31,8 @@ except ImportError:
     from precompiled_titles import MODEL, CATALOG, load_catalog, validate_title, checked_file
     from release_platform import WINDOWS, for_target, catalog_platform
     from platform_policy import resolve_policy
-    from common import load_json_object, normalize_relative_path, sha256_file
+    from common import (RELEASE_MANIFEST_PATHS, load_json_object, normalize_relative_path,
+                        release_manifest_path, sha256_file)
     from input_adapters import validate_adapter
     from source_contracts import source_contract_errors
     from shader_corpus_layout import validate_bundled_corpus
@@ -185,7 +187,7 @@ def audit_release(
 ) -> ReleaseAuditResult:
     errors: list[str] = []
     root = package_root.resolve()
-    manifest_path = (manifest_path or root / DEFAULT_MANIFEST_NAME).resolve()
+    manifest_path = (manifest_path or release_manifest_path(root)).resolve()
 
     def reject(message: str) -> None:
         if message not in errors:
@@ -291,7 +293,7 @@ def audit_release(
         except ValueError as exc:
             reject(str(exc))
             continue
-        if relative == DEFAULT_MANIFEST_NAME:
+        if relative in RELEASE_MANIFEST_PATHS:
             reject("the release manifest cannot inventory itself")
             continue
         if relative in declared:

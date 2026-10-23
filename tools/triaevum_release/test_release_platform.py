@@ -12,7 +12,8 @@ import forge
 import forge_gui
 import precompiled_titles
 from common import atomic_write_json, sha256_file
-from release_platform import WINDOWS, LINUX, catalog_platform, for_target
+from release_platform import (WINDOWS, LINUX, catalog_platform, for_target,
+                              installed_runtime_path, place_installed_runtime)
 
 
 class ReleasePlatformTests(unittest.TestCase):
@@ -26,6 +27,29 @@ class ReleasePlatformTests(unittest.TestCase):
                 self.assertEqual(build.call_args.kwargs["target_triple"], platform.target)
                 self.assertEqual(build.call_args.kwargs["compiler"].name, platform.compiler)
                 self.assertEqual(build.call_args.kwargs["archiver"].name, platform.archiver)
+
+    def test_installing_places_the_windows_runtime_in_the_root(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "runtime").mkdir()
+            (root / WINDOWS.runtime).write_bytes(b"new runtime")
+            (root / "runtime/SDL2.dll").write_bytes(b"new library")
+            # A previous package left its runtime and DLLs in the root.
+            (root / "TriAevum.exe").write_bytes(b"old runtime")
+            (root / "SDL2.dll").write_bytes(b"old library")
+            (root / "unrelated.dll").write_bytes(b"user file")
+            self.assertEqual(installed_runtime_path(root, WINDOWS), root / WINDOWS.runtime)
+            self.assertEqual(place_installed_runtime(root, WINDOWS), root / "TriAevum.exe")
+            self.assertEqual((root / "TriAevum.exe").read_bytes(), b"new runtime")
+            self.assertFalse((root / WINDOWS.runtime).exists())
+            self.assertFalse((root / "SDL2.dll").exists())
+            self.assertTrue((root / "runtime/SDL2.dll").is_file())
+            self.assertTrue((root / "unrelated.dll").is_file())
+            self.assertEqual(installed_runtime_path(root, WINDOWS), root / "TriAevum.exe")
+            self.assertEqual(place_installed_runtime(root, WINDOWS), root / "TriAevum.exe")
+            (root / LINUX.runtime).write_bytes(b"linux runtime")
+            self.assertEqual(place_installed_runtime(root, LINUX), root / LINUX.runtime)
+            self.assertTrue((root / LINUX.runtime).is_file())
 
     def test_legacy_windows_and_explicit_linux(self):
         self.assertEqual(catalog_platform({}), WINDOWS)

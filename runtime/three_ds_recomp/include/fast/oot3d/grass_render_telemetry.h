@@ -54,6 +54,10 @@ struct GrassRenderTelemetrySnapshot {
     uint32_t MaximumClusterMembers = 0;
     uint32_t CapacityLimitedRanges = 0;
     uint32_t CullingWorkers = 0;
+    // Distant cards drawn (all tiers) and their draw calls.
+    uint32_t Cards = 0;
+    uint32_t CardDrawCalls = 0;
+    bool CardAtlasRebuilt = false;
     uint64_t UploadedBytes = 0;
     uint64_t DynamicUploadedBytes = 0;
     uint64_t StaticUploadedBytes = 0;

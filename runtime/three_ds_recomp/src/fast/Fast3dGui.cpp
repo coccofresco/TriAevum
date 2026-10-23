@@ -125,7 +125,8 @@ class Oot3dDisplayConfirmationWindow final : public Ship::GuiWindow {
     Oot3dDisplayConfirmationWindow() : GuiWindow("", false, "Display confirmation") {}
     void Draw() override {
         SetVisibility(Oot3d::GraphicsSettingsRuntime::Instance().PresentationStatus().Phase ==
-                      Oot3d::PresentationTransactionPhase::AwaitingConfirmation);
+                          Oot3d::PresentationTransactionPhase::AwaitingConfirmation &&
+                      !Oot3d::DisplayConfirmationDeferred());
         Oot3d::DrawDisplayConfirmation();
     }
   protected:

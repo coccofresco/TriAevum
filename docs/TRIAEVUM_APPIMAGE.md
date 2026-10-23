@@ -96,7 +96,7 @@ report Linux-PC results and Deck conformance separately, never as a hardware pas
   and would be missed by an `ldd`-only dependency check.
 - Candidate: `TriAevum-x86_64.AppImage`, 100,076,024 bytes; SHA256
   `8587b02574a1fab2bb1ca2e0d7c1cf7b5f4407b7bbe3053afb78de923f23136c`.
-  Private Linux workspace: `/home/xander/triaevum-appimage-r2-20260914`.
+  Private Linux workspace: `~/triaevum-appimage-r2-20260914`.
 - 24 Python tests pass on Windows and Linux. Real SDL regression executable
   passes with the packaged libraries/database: initialization, mappings,
   buttons, both sticks, refresh, hotplug and subsystem ownership. 491 mappings

@@ -20,7 +20,8 @@ constexpr std::array<uint8_t, 8> kMagic{
 constexpr uint32_t kSpirvMagic = 0x07230203U;
 constexpr size_t kHeaderSize = 24U;
 constexpr size_t kEntrySize = 56U;
-constexpr uint64_t kMaximumPackBytes = 512ULL * 1024ULL * 1024ULL;
+// Binaries are read on demand, so the limit bounds the file, not memory.
+constexpr uint64_t kMaximumPackBytes = 4ULL * 1024ULL * 1024ULL * 1024ULL;
 constexpr uint64_t kFnvPrime = 1099511628211ULL;
 
 uint64_t HashBytes(std::span<const uint8_t> bytes, uint64_t seed) noexcept {
@@ -244,6 +245,7 @@ bool WritePicaAotShaderPack(
 bool PicaAotShaderPack::Load(const std::filesystem::path& path,
                              std::string* error) {
     Clear();
+    std::lock_guard lock(mMutex);
     std::ifstream input(path, std::ios::binary | std::ios::ate);
     if (!input) {
         SetError(error, "could not open PICA AOT shader pack: " +
@@ -256,44 +258,45 @@ bool PicaAotShaderPack::Load(const std::filesystem::path& path,
         SetError(error, "PICA AOT shader pack size is invalid");
         return false;
     }
+    if (static_cast<uint64_t>(length) % sizeof(uint32_t) != 0U) {
+        SetError(error, "PICA AOT shader pack is not word aligned");
+        return false;
+    }
+    const uint64_t fileSize = static_cast<uint64_t>(length);
+    std::vector<uint8_t> header(kHeaderSize);
     input.seekg(0);
-    std::vector<uint8_t> bytes(static_cast<size_t>(length));
-    if (!input.read(reinterpret_cast<char*>(bytes.data()), length)) {
+    if (!input.read(reinterpret_cast<char*>(header.data()),
+                    static_cast<std::streamsize>(header.size()))) {
         SetError(error, "could not read PICA AOT shader pack");
         return false;
     }
-    if (!std::equal(kMagic.begin(), kMagic.end(), bytes.begin())) {
+    if (!std::equal(kMagic.begin(), kMagic.end(), header.begin())) {
         SetError(error, "PICA AOT shader pack magic is invalid");
         return false;
     }
     uint32_t version = 0;
     uint32_t schema = 0;
     uint32_t entryCount = 0;
-    if (!ReadU32(bytes, 8U, version) || !ReadU32(bytes, 12U, schema) ||
-        !ReadU32(bytes, 16U, entryCount) ||
+    if (!ReadU32(header, 8U, version) || !ReadU32(header, 12U, schema) ||
+        !ReadU32(header, 16U, entryCount) ||
         version != kPicaAotShaderPackVersion || schema == 0U ||
         entryCount == 0U ||
-        entryCount > (bytes.size() - kHeaderSize) / kEntrySize) {
+        entryCount > (fileSize - kHeaderSize) / kEntrySize) {
         SetError(error, "PICA AOT shader pack header is invalid");
         return false;
     }
-
-    if (bytes.size() % sizeof(uint32_t) != 0U) {
-        SetError(error, "PICA AOT shader pack is not word aligned");
+    std::vector<uint8_t> table(static_cast<size_t>(entryCount) * kEntrySize);
+    if (!input.read(reinterpret_cast<char*>(table.data()),
+                    static_cast<std::streamsize>(table.size()))) {
+        SetError(error, "could not read PICA AOT shader pack");
         return false;
     }
-    std::vector<uint32_t> words(bytes.size() / sizeof(uint32_t));
-    for (size_t index = 0; index < words.size(); ++index) {
-        if (!ReadU32(bytes, index * sizeof(uint32_t), words[index])) {
-            SetError(error, "PICA AOT shader pack word decode failed");
-            return false;
-        }
-    }
+
     std::map<Key, Range> entries;
     const uint64_t payloadOffset =
         kHeaderSize + static_cast<uint64_t>(entryCount) * kEntrySize;
     for (uint32_t index = 0; index < entryCount; ++index) {
-        const size_t base = kHeaderSize + index * kEntrySize;
+        const size_t base = static_cast<size_t>(index) * kEntrySize;
         uint32_t stageValue = 0;
         uint64_t id = 0;
         uint64_t secondary = 0;
@@ -301,13 +304,13 @@ bool PicaAotShaderPack::Load(const std::filesystem::path& path,
         uint32_t wordCount = 0;
         uint64_t byteOffset = 0;
         uint64_t expectedHash = 0;
-        if (!ReadU32(bytes, base, stageValue) ||
-            !ReadU64(bytes, base + 8U, id) ||
-            !ReadU64(bytes, base + 16U, secondary) ||
-            !ReadU64(bytes, base + 24U, sourceSize) ||
-            !ReadU32(bytes, base + 32U, wordCount) ||
-            !ReadU64(bytes, base + 40U, byteOffset) ||
-            !ReadU64(bytes, base + 48U, expectedHash) ||
+        if (!ReadU32(table, base, stageValue) ||
+            !ReadU64(table, base + 8U, id) ||
+            !ReadU64(table, base + 16U, secondary) ||
+            !ReadU64(table, base + 24U, sourceSize) ||
+            !ReadU32(table, base + 32U, wordCount) ||
+            !ReadU64(table, base + 40U, byteOffset) ||
+            !ReadU64(table, base + 48U, expectedHash) ||
             stageValue < static_cast<uint32_t>(
                              PicaAotShaderStage::Vertex) ||
             stageValue > static_cast<uint32_t>(
@@ -315,27 +318,17 @@ bool PicaAotShaderPack::Load(const std::filesystem::path& path,
             id == 0U || secondary == 0U || sourceSize == 0U ||
             wordCount == 0U || byteOffset % 4U != 0U ||
             byteOffset < payloadOffset ||
-            byteOffset > bytes.size() ||
+            byteOffset > fileSize ||
             static_cast<uint64_t>(wordCount) * 4U >
-                bytes.size() - byteOffset) {
+                fileSize - byteOffset) {
             SetError(error, "PICA AOT shader pack entry is invalid");
-            return false;
-        }
-        const auto binary = std::span(
-            bytes.data() + static_cast<size_t>(byteOffset),
-            static_cast<size_t>(wordCount) * 4U);
-        if (HashBytes(binary, 1469598103934665603ULL) != expectedHash ||
-            words[static_cast<size_t>(byteOffset) / 4U] != kSpirvMagic) {
-            SetError(error, "PICA AOT shader binary checksum is invalid");
             return false;
         }
         const Key key{
             static_cast<PicaAotShaderStage>(stageValue),
             {id, secondary, sourceSize},
         };
-        if (!entries.emplace(
-                 key, Range{static_cast<size_t>(byteOffset) / 4U,
-                            wordCount})
+        if (!entries.emplace(key, Range{byteOffset, wordCount, expectedHash})
                  .second) {
             SetError(error, "PICA AOT shader pack has duplicate entries");
             return false;
@@ -343,16 +336,52 @@ bool PicaAotShaderPack::Load(const std::filesystem::path& path,
     }
     mPath = path;
     mDescriptorSchemaVersion = schema;
-    mWords = std::move(words);
     mEntries = std::move(entries);
     return true;
 }
 
 void PicaAotShaderPack::Clear() {
+    std::lock_guard lock(mMutex);
     mPath.clear();
     mDescriptorSchemaVersion = 0;
-    mWords.clear();
     mEntries.clear();
+    mResident.clear();
+    mRejected.clear();
+}
+
+bool PicaAotShaderPack::ReadBinary(const Range& range,
+                                   std::vector<uint32_t>& words) const {
+    // Opened per read, so the pack is never held open (it can be replaced;
+    // a binary that changed since Load fails its hash and is a miss).
+    std::ifstream input(mPath, std::ios::binary);
+    std::vector<uint8_t> bytes(range.WordCount * 4U);
+    input.seekg(static_cast<std::streamoff>(range.ByteOffset));
+    if (!input || !input.read(reinterpret_cast<char*>(bytes.data()),
+                              static_cast<std::streamsize>(bytes.size())) ||
+        HashBytes(bytes, 1469598103934665603ULL) != range.Hash)
+        return false;
+    words.resize(range.WordCount);
+    for (size_t index = 0; index < words.size(); ++index)
+        ReadU32(bytes, index * sizeof(uint32_t), words[index]);
+    return words.front() == kSpirvMagic;
+}
+
+bool PicaAotShaderPack::Verify(std::string* error) const {
+    std::lock_guard lock(mMutex);
+    if (mEntries.empty()) {
+        SetError(error, "PICA AOT shader pack is not loaded");
+        return false;
+    }
+    std::vector<uint32_t> words;
+    for (const auto& [key, range] : mEntries) {
+        if (!ReadBinary(range, words)) {
+            SetError(error, "PICA AOT shader binary checksum is invalid: " +
+                                std::string(PicaAotShaderStageName(key.Stage)) + " " +
+                                FormatPicaAotShaderId(key.Source.Id));
+            return false;
+        }
+    }
+    return true;
 }
 
 std::span<const uint32_t> PicaAotShaderPack::Find(
@@ -363,15 +392,24 @@ std::span<const uint32_t> PicaAotShaderPack::Find(
 std::span<const uint32_t> PicaAotShaderPack::Find(
     PicaAotShaderStage stage,
     const PicaAotShaderSourceIdentity& source) const noexcept {
-    const auto found = mEntries.find({stage, source});
-    if (found == mEntries.end() ||
-        found->second.WordOffset > mWords.size() ||
-        found->second.WordCount >
-            mWords.size() - found->second.WordOffset) {
+    const Key key{stage, source};
+    std::lock_guard lock(mMutex);
+    if (const auto resident = mResident.find(key); resident != mResident.end())
+        return resident->second;
+    const auto found = mEntries.find(key);
+    if (found == mEntries.end() || mRejected.contains(key))
+        return {};
+    try {
+        std::vector<uint32_t> words;
+        // A damaged binary is a miss: the module is generated at runtime.
+        if (!ReadBinary(found->second, words)) {
+            mRejected.insert(key);
+            return {};
+        }
+        return mResident.emplace(key, std::move(words)).first->second;
+    } catch (const std::exception&) {
         return {};
     }
-    return {mWords.data() + found->second.WordOffset,
-            found->second.WordCount};
 }
 
 bool PicaAotShaderPack::Loaded() const noexcept {

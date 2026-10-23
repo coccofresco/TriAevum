@@ -46,17 +46,24 @@ struct GrassGpuInstanceCompactionRequest {
     GrassGpuSelectionRequest Selection{};
 };
 
+// Words per root bend: the interaction bend and the bend the previous frame
+// drew, each PackGrassBend (half2).
+inline constexpr uint32_t kGrassRootBendWords = 2U;
+
+// The blades read their roots in place: root i is static anchor
+// VisibleIndicesBuffer[i] of StaticAnchorBuffer, bent by RootBendBuffer[i].
 struct GrassGpuInstanceCompactionResult {
-    VkBuffer InstanceBuffer = VK_NULL_HANDLE;
+    VkBuffer StaticAnchorBuffer = VK_NULL_HANDLE;
+    // kGrassRootBendWords per root: the interaction bend and the bend the
+    // previous frame drew, or the current one where the blade has no previous
+    // frame.
+    VkBuffer RootBendBuffer = VK_NULL_HANDLE;
     uint32_t InstanceCount = 0U;
     uint64_t DynamicUploadedBytes = 0U;
     uint64_t StaticUploadedBytes = 0U;
     bool SelectionUploadReused = false;
     bool Reused = false;
     VkBuffer VisibleIndicesBuffer = VK_NULL_HANDLE;
-    // One vec2 per instance: the interaction bend the previous frame drew,
-    // or the current one where the blade has no previous frame.
-    VkBuffer PreviousBendBuffer = VK_NULL_HANDLE;
     // GPU selection: draw arguments and counts; InstanceCount is the capacity.
     VkBuffer SelectionControl = VK_NULL_HANDLE;
     bool GpuSelection = false;
@@ -76,9 +83,14 @@ class GrassGpuInstanceCompactor final {
                                GrassGpuInstanceCompactionResult& result);
     // Forget every previous bend (savestates, scene transitions).
     void ResetHistory();
+    // Frees every data buffer (after the device is idle) and keeps the
+    // pipeline: the next compaction uploads and allocates again.
+    void ReleaseMemory();
     void Shutdown();
 
     [[nodiscard]] const std::string& UnavailableReason() const;
+    // The last failed compaction could not allocate a buffer (recoverable).
+    [[nodiscard]] bool LastFailureOutOfMemory() const;
 
   private:
     struct Impl;

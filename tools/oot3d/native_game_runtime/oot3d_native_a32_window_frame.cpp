@@ -2,6 +2,7 @@
 #include "oot3d_native_a32_window_session.h"
 #include "mm3d_scene_environment.h"
 #include "fast/renderer3ds/pica_surface_debug.h"
+#include "oot3d/renderer/ui_presentation_layout.h"
 #include "oot3d_native_room_shadow_shell.h"
 
 namespace Oot3dA32Window {
@@ -143,6 +144,7 @@ bool NativeA32WindowSession::RunFrame() {
   auto &preparationScreen = *preparationScreenStorage;
   auto &ocarinaText = *ocarinaTextStorage;
   auto &n64UiRenderer = *n64UiRendererStorage;
+  auto &inGameMenu = *inGameMenuStorage;
   auto &picaSemanticTrace = *picaSemanticTraceStorage;
   auto &presentationScheduler = *presentationSchedulerStorage;
   auto &realtimePacer = *realtimePacerStorage;
@@ -152,9 +154,27 @@ bool NativeA32WindowSession::RunFrame() {
   widescreenProjection.CurrentHostFrame =
       static_cast<uint32_t>(presentationFrameCount);
   WindowDemoFrameTiming frameTiming;
+  // Input sampling waits come first. With parallel presentation the next
+  // frame starts only once the previous one has ended (presented); then it
+  // begins its renderer frame (frame slot fence and swapchain image
+  // acquisition, where VSync waits) and only then pumps events and polls
+  // input. Sampled before those waits, the input aged behind them: at 60 Hz
+  // with VSync, 33 ms median parallel and 16 serial, now 8-10 ms at the same
+  // frame rate (docs/TRIAEVUM_PARALLEL_PRESENTATION.md).
+  // TRIAEVUM_INPUT_ADMISSION=1 keeps only the wait for the previous frame and
+  // =0 restores the early sampling, for comparisons.
+  static const char *inputAdmissionMode = std::getenv("TRIAEVUM_INPUT_ADMISSION");
+  static const bool inputAdmission =
+      inputAdmissionMode == nullptr || std::string_view(inputAdmissionMode) != "0";
+  static const bool lateInputSample =
+      inputAdmission && (inputAdmissionMode == nullptr ||
+                         std::string_view(inputAdmissionMode) != "1");
+  if (inputAdmission) renderStream.WaitForFramesInFlight(0U);
   if (!PrepareNextWindowDemoFrame(hostArgs, window, timing, frameTiming)) {
     return true;
   }
+  // The SDL events just pumped are the physical input this frame polls.
+  auto inputPumpTime = std::chrono::steady_clock::now();
   const auto requestedPresentationPolicy =
       Fast::Oot3d::ResolvePresentationPacingPolicy(
           Fast::Oot3d::GraphicsSettingsRuntime::Instance()
@@ -222,6 +242,7 @@ bool NativeA32WindowSession::RunFrame() {
   const float visualInterpolationAlpha = static_cast<float>(
       std::clamp(presentationStep.InterpolationAlpha, 0.0, 1.0));
   ApplyTopScreenConfigSnapshot();
+  ApplyPhotoModeHud();
   uiLifecycleBridge.BeginHostFrame(
       static_cast<uint32_t>(presentationFrameCount));
   if (topScreenTextureOverrideRuntime.has_value()) {
@@ -232,6 +253,10 @@ bool NativeA32WindowSession::RunFrame() {
   const uint32_t height = std::max<uint32_t>(1, window.GetHeight());
   hdFonts.SetOutputHeight(height);
   UpdateScenePresentation();
+  // The presentation picture every UI canvas is fitted into this frame.
+  const oot3d::ui::N64UiOutputRegion uiRegion{
+      presentationPicture.X, presentationPicture.Y, presentationPicture.Width,
+      presentationPicture.Height};
   phaseStart = std::chrono::steady_clock::now();
   Fast::Renderer3ds::SlowStepTrace hostStartSteps("host_frame_start");
   window.GetMouseStateManager()->StartFrame();
@@ -241,6 +266,143 @@ bool NativeA32WindowSession::RunFrame() {
   renderStream.Submit([&] { window.StartFrame(); });
   hostStartSteps.Mark("render_start_frame");
   phaseTiming.HostFrameStartSeconds += SecondsSince(phaseStart);
+  // Developer qualification: scheduled settings take the F1 commit path
+  // (applied, not persisted) before this frame is rendered.
+  for (const auto *step : graphicsSettingsSchedule.TakeDue(runFrameCount)) {
+    auto &graphicsSettings = Fast::Oot3d::GraphicsSettingsRuntime::Instance();
+    const auto current = graphicsSettings.Snapshot();
+    const auto decoded = Fast::Oot3d::DeserializeGraphicsSettings(
+        Oot3dNativeGame::MergeScheduledGraphics(
+            Fast::Oot3d::SerializeGraphicsSettings(current), step->Graphics),
+        current);
+    const auto applied = graphicsSettings.Apply(decoded.Value, false);
+    std::fprintf(stderr,
+                 "TRIAEVUM_GRAPHICS_SETTINGS_SCHEDULE frame=%u accepted=%d "
+                 "decode_issues=%zu apply_issues=%zu\n",
+                 step->Frame, applied.Accepted() ? 1 : 0,
+                 decoded.Issues.size(), applied.Issues.size());
+    if (decoded.UnsupportedFutureVersion || !applied.Accepted())
+      throw std::runtime_error(
+          "graphics settings schedule step at frame " +
+          std::to_string(step->Frame) + " was rejected");
+  }
+  // The renderer frame begin; false when the frame ended early (no image
+  // was acquired, or the guest waits for the preparation screen).
+  Fast::Renderer3ds::PicaPreparationStatus preparationStatus{};
+  const auto beginGuestFrame = [&](bool forceSynchronous) -> bool {
+    const auto rendererFrameStart = std::chrono::steady_clock::now();
+    CpuProbe::Scope cpuRendererStart(CpuProbe::Phase::RendererStart);
+    const auto beginRendererFrame = [&, width, height,
+                                     presentationSerial =
+                                         presentationFrameCount] {
+      api.UpdateFramebufferParameters(0, width, height, 1, false, true, true,
+                                      true);
+      if (titleRenderBackend != nullptr) {
+        // Display settings are window operations: applied only by a frame
+        // begun on the window's thread.
+        titleRenderBackend->SetPresentationSettingsHeld(
+            !renderStream.InSynchronousCommand());
+      }
+      const auto beginStart = std::chrono::steady_clock::now();
+      api.StartFrame();
+      inputLatencyTrace.ObserveBegin(presentationSerial, beginStart,
+                                     std::chrono::steady_clock::now());
+      rendererFrameSkipped = !api.HasActiveFrame();
+      if (rendererFrameSkipped) {
+        rendererFrameWasInactive.store(true);
+        return;
+      }
+      picaPresentationScheduler.BeginPresentation(presentationSerial);
+      api.StartDrawToFramebuffer(0, 1.0F);
+      api.SetClearColor(0.0F, 0.0F, 0.0F, 1.0F);
+      api.ClearFramebuffer(true, true);
+      api.SetViewport(0, 0, static_cast<int>(width), static_cast<int>(height));
+      api.SetScissor(0, 0, static_cast<int>(width), static_cast<int>(height));
+    };
+    // A frame begin may recreate targets (and so read back GPU copies into
+    // guest memory) after a resize or a graphics settings change, may apply
+    // display settings (window operations), and an inactive frame must not
+    // advance the guest: those begin synchronously, on this thread.
+    // Otherwise the guest goes on while the renderer finishes the previous
+    // frame.
+    const auto renderSettings = Fast::Oot3d::GraphicsSettingsRuntime::Instance()
+                                    .SnapshotWithRevision()
+                                    .Revision;
+    const bool renderNativePresentation =
+        Fast::Oot3d::GraphicsSettingsRuntime::Instance()
+            .NativePresentationOverrideActive();
+    const bool presentationTransactionActive =
+        Fast::Oot3d::GraphicsSettingsRuntime::Instance()
+            .PresentationStatus()
+            .Phase != Fast::Oot3d::PresentationTransactionPhase::Idle;
+    const bool previousRendererFrameInactive =
+        rendererFrameWasInactive.exchange(false);
+    const bool synchronousFrameBegin =
+        forceSynchronous ||
+        renderStream.CurrentMode() ==
+            Oot3dNativeGame::NativeRenderCommandStream::Mode::Inline ||
+        presentationTransactionActive || previousRendererFrameInactive ||
+        width != guestFrameBeginWidth ||
+        height != guestFrameBeginHeight ||
+        renderSettings != guestFrameBeginSettings ||
+        renderNativePresentation != guestFrameBeginNativePresentation;
+    guestFrameBeginWidth = width;
+    guestFrameBeginHeight = height;
+    guestFrameBeginSettings = renderSettings;
+    guestFrameBeginNativePresentation = renderNativePresentation;
+    bool rendererFrameActive = true;
+    if (synchronousFrameBegin) {
+      renderStream.Run(beginRendererFrame);
+      // The renderer is idle after Run: its frame state is readable.
+      rendererFrameActive = !rendererFrameSkipped;
+    } else {
+      renderStream.Submit(beginRendererFrame);
+    }
+    if (!rendererFrameActive) {
+      // A minimized or changing surface is not a guest/PICA failure. Keep events
+      // and UI balanced, but do not consume guest time without an acquired frame.
+      if (!presentationScheduler.Restore(presentationStateBeforeFrame, &error)) {
+        throw std::runtime_error("cannot restore suspended presentation clock: " + error);
+      }
+      gui->EndDraw();
+      inputLatencyTrace.DiscardPending(presentationFrameCount);
+      renderStream.Submit([&] { window.EndFrame(); }, true);
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      renderStream.Submit([&] { realtimePacer.ResetDeadline(); });
+      lastPresentationTime = std::chrono::steady_clock::now();
+      return false;
+    }
+    preparationStatus = programPreparation != nullptr
+        ? programPreparation->PreparationStatus()
+        : Fast::Renderer3ds::PicaPreparationStatus{};
+    if (preparationScreen.HoldsGuest(preparationStatus,
+                                     std::chrono::steady_clock::now())) {
+      // The guest waits for the initial preparation: its clock does not run
+      // and the frame shows the progress instead of a game image.
+      if (!presentationScheduler.Restore(presentationStateBeforeFrame, &error)) {
+        throw std::runtime_error("cannot restore the presentation clock during preparation: " + error);
+      }
+      preparationScreen.Draw(preparationStatus);
+      gui->EndDraw();
+      inputLatencyTrace.DiscardPending(presentationFrameCount);
+      renderStream.Submit([&] { window.EndFrame(); }, true);
+      std::this_thread::sleep_for(std::chrono::milliseconds(15));
+      renderStream.Submit([&] { realtimePacer.ResetDeadline(); });
+      lastPresentationTime = std::chrono::steady_clock::now();
+      lastCompletedFrameTime = lastPresentationTime;
+      return false;
+    }
+    phaseTiming.RendererFrameStartSeconds += SecondsSince(rendererFrameStart);
+    cpuRendererStart.Stop();
+    return true;
+  };
+  if (lateInputSample) {
+    // Synchronous, so the image is acquired when the input is sampled; the
+    // frame's events are pumped again for it.
+    if (!beginGuestFrame(true)) return true;
+    window.HandleEvents();
+    inputPumpTime = std::chrono::steady_clock::now();
+  }
   const auto inputPhaseStart = std::chrono::steady_clock::now();
   // F5 saves the game moment and F8 loads the last state; with Shift, the
   // settings are saved beside it / applied from it.
@@ -284,10 +446,15 @@ bool NativeA32WindowSession::RunFrame() {
     aimProfileTransform.RightStickInvertX = topScreenAim.InvertX;
     aimProfileTransform.RightStickInvertY = topScreenAim.InvertY;
   }
+  // The in-game menu withholds the game's input like an ImGui window; F1
+  // (or the menu bar) owns the input over it and closes it.
+  const auto f1Window = gui->GetGuiWindow("OOT3D Graphics");
+  const bool imGuiOwnsInput =
+      gui->GetMenuOrMenubarVisible() || (f1Window != nullptr && f1Window->IsVisible());
   const bool hostGuiVisible =
-      gui->GetMenuOrMenubarVisible() || gui->GetAnyGuiWindowVisible();
+      gui->GetMenuOrMenubarVisible() || gui->GetAnyGuiWindowVisible() || inGameMenu.IsOpen();
   auto physicalInputFrame =
-      PollNativeA32Input(window, nativeFrontendTouchEnabled,
+      PollNativeA32Input(window, presentationPicture, nativeFrontendTouchEnabled,
                          hostGuiVisible,
                          nativeCandidateDispatch.TopScreenUiProfile,
                          activeTopScreenConfig.FreeCameraEnabled,
@@ -295,30 +462,23 @@ bool NativeA32WindowSession::RunFrame() {
                          presentationElapsedSeconds,
                          guestRefreshesDue != 0U,
                          nativeControlPollingState);
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+  // A dev lab "menu" command replaces the host controls with its presses.
+  inGameMenu.Update(devLabMenuDriving ? devLabMenuInput : nativeControlPollingState.Menu, imGuiOwnsInput,
+                    presentationElapsedSeconds);
+  // The lab's wheel is a delta for one menu update; the lab command advances
+  // per guest refresh, this update per presented frame.
+  devLabMenuInput.PointerWheel = 0.0F;
+#else
+  inGameMenu.Update(nativeControlPollingState.Menu, imGuiOwnsInput, presentationElapsedSeconds);
+#endif
   if (physicalInputFrame.Exit || devLabQuit) {
     window.Close();
     return false;
   }
-  // Developer qualification: scheduled settings take the F1 commit path
-  // (applied, not persisted) before this frame is rendered.
-  for (const auto *step : graphicsSettingsSchedule.TakeDue(runFrameCount)) {
-    auto &graphicsSettings = Fast::Oot3d::GraphicsSettingsRuntime::Instance();
-    const auto current = graphicsSettings.Snapshot();
-    const auto decoded = Fast::Oot3d::DeserializeGraphicsSettings(
-        Oot3dNativeGame::MergeScheduledGraphics(
-            Fast::Oot3d::SerializeGraphicsSettings(current), step->Graphics),
-        current);
-    const auto applied = graphicsSettings.Apply(decoded.Value, false);
-    std::fprintf(stderr,
-                 "TRIAEVUM_GRAPHICS_SETTINGS_SCHEDULE frame=%u accepted=%d "
-                 "decode_issues=%zu apply_issues=%zu\n",
-                 step->Frame, applied.Accepted() ? 1 : 0,
-                 decoded.Issues.size(), applied.Issues.size());
-    if (decoded.UnsupportedFutureVersion || !applied.Accepted())
-      throw std::runtime_error(
-          "graphics settings schedule step at frame " +
-          std::to_string(step->Frame) + " was rejected");
-  }
+  inputLatencyTrace.ObserveInput(presentationFrameCount, inputPumpTime,
+                                 std::chrono::steady_clock::now(),
+                                 visualInterpolationAlpha);
   if (!inputTimeline.Enabled()) {
     const uint32_t start = Oot3dNativeGame::NativeA32HidButtonMask(
         Oot3dNativeGame::NativeA32HidButton::Start);
@@ -331,104 +491,7 @@ bool NativeA32WindowSession::RunFrame() {
   }
   Oot3dNativeGame::NativeA32InputFrame inputFrame;
   phaseTiming.InputPollSeconds += SecondsSince(inputPhaseStart);
-  const auto rendererFrameStart = std::chrono::steady_clock::now();
-  CpuProbe::Scope cpuRendererStart(CpuProbe::Phase::RendererStart);
-  const auto beginRendererFrame = [&, width, height,
-                                   presentationSerial =
-                                       presentationFrameCount] {
-    api.UpdateFramebufferParameters(0, width, height, 1, false, true, true,
-                                    true);
-    if (titleRenderBackend != nullptr) {
-      // Display settings are window operations: applied only by a frame
-      // begun on the window's thread.
-      titleRenderBackend->SetPresentationSettingsHeld(
-          !renderStream.InSynchronousCommand());
-    }
-    api.StartFrame();
-    rendererFrameSkipped = !api.HasActiveFrame();
-    if (rendererFrameSkipped) {
-      rendererFrameWasInactive.store(true);
-      return;
-    }
-    picaPresentationScheduler.BeginPresentation(presentationSerial);
-    api.StartDrawToFramebuffer(0, 1.0F);
-    api.SetClearColor(0.0F, 0.0F, 0.0F, 1.0F);
-    api.ClearFramebuffer(true, true);
-    api.SetViewport(0, 0, static_cast<int>(width), static_cast<int>(height));
-    api.SetScissor(0, 0, static_cast<int>(width), static_cast<int>(height));
-  };
-  // A frame begin may recreate targets (and so read back GPU copies into
-  // guest memory) after a resize or a graphics settings change, may apply
-  // display settings (window operations), and an inactive frame must not
-  // advance the guest: those begin synchronously, on this thread.
-  // Otherwise the guest goes on while the renderer finishes the previous
-  // frame.
-  const auto renderSettings = Fast::Oot3d::GraphicsSettingsRuntime::Instance()
-                                  .SnapshotWithRevision()
-                                  .Revision;
-  const bool renderNativePresentation =
-      Fast::Oot3d::GraphicsSettingsRuntime::Instance()
-          .NativePresentationOverrideActive();
-  const bool presentationTransactionActive =
-      Fast::Oot3d::GraphicsSettingsRuntime::Instance()
-          .PresentationStatus()
-          .Phase != Fast::Oot3d::PresentationTransactionPhase::Idle;
-  const bool previousRendererFrameInactive =
-      rendererFrameWasInactive.exchange(false);
-  const bool synchronousFrameBegin =
-      renderStream.CurrentMode() ==
-          Oot3dNativeGame::NativeRenderCommandStream::Mode::Inline ||
-      presentationTransactionActive || previousRendererFrameInactive ||
-      width != guestFrameBeginWidth ||
-      height != guestFrameBeginHeight ||
-      renderSettings != guestFrameBeginSettings ||
-      renderNativePresentation != guestFrameBeginNativePresentation;
-  guestFrameBeginWidth = width;
-  guestFrameBeginHeight = height;
-  guestFrameBeginSettings = renderSettings;
-  guestFrameBeginNativePresentation = renderNativePresentation;
-  bool rendererFrameActive = true;
-  if (synchronousFrameBegin) {
-    renderStream.Run(beginRendererFrame);
-    // The renderer is idle after Run: its frame state is readable.
-    rendererFrameActive = !rendererFrameSkipped;
-  } else {
-    renderStream.Submit(beginRendererFrame);
-  }
-  if (!rendererFrameActive) {
-    // A minimized or changing surface is not a guest/PICA failure. Keep events
-    // and UI balanced, but do not consume guest time without an acquired frame.
-    if (!presentationScheduler.Restore(presentationStateBeforeFrame, &error)) {
-      throw std::runtime_error("cannot restore suspended presentation clock: " + error);
-    }
-    gui->EndDraw();
-    renderStream.Submit([&] { window.EndFrame(); }, true);
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    renderStream.Submit([&] { realtimePacer.ResetDeadline(); });
-    lastPresentationTime = std::chrono::steady_clock::now();
-    return true;
-  }
-  const auto preparationStatus = programPreparation != nullptr
-      ? programPreparation->PreparationStatus()
-      : Fast::Renderer3ds::PicaPreparationStatus{};
-  if (preparationScreen.HoldsGuest(preparationStatus,
-                                   std::chrono::steady_clock::now())) {
-    // The guest waits for the initial preparation: its clock does not run
-    // and the frame shows the progress instead of a game image.
-    if (!presentationScheduler.Restore(presentationStateBeforeFrame, &error)) {
-      throw std::runtime_error("cannot restore the presentation clock during preparation: " + error);
-    }
-    preparationScreen.Draw(preparationStatus);
-    gui->EndDraw();
-    renderStream.Submit([&] { window.EndFrame(); }, true);
-    std::this_thread::sleep_for(std::chrono::milliseconds(15));
-    renderStream.Submit([&] { realtimePacer.ResetDeadline(); });
-    lastPresentationTime = std::chrono::steady_clock::now();
-    lastCompletedFrameTime = lastPresentationTime;
-    return true;
-  }
-  phaseTiming.RendererFrameStartSeconds += SecondsSince(rendererFrameStart);
-  cpuRendererStart.Stop();
+  if (!lateInputSample && !beginGuestFrame(false)) return true;
   phaseTiming.FrameStartSeconds += SecondsSince(phaseStart);
   const uint32_t guestRefreshIterations =
       std::max<uint32_t>(1U, guestRefreshesDue);
@@ -502,17 +565,34 @@ bool NativeA32WindowSession::RunFrame() {
     // Texture payloads are read from guest memory here; the renderer
     // only uploads them.
     auto preparedTextures = n64UiRenderer.PrepareTextures(primitives);
-    renderStream.Submit([&, primitives = std::move(primitives), width,
-                         height, canvasMode,
+    renderStream.Submit([&, primitives = std::move(primitives), uiRegion,
+                         canvasMode,
                          prepared = std::move(preparedTextures)]() mutable {
       if (rendererFrameSkipped) {
         n64UiRenderer.Stage(std::move(prepared));
         return;
       }
-      if (!n64UiRenderer.Render(primitives, width, height, canvasMode,
+      if (!n64UiRenderer.Render(primitives, uiRegion, canvasMode,
                                 std::move(prepared), &renderError)) {
         throw std::runtime_error("integrated N64 UI presentation failed: " +
                                  renderError);
+      }
+    });
+  }
+  // The in-game menu draws last in the UI domain, over the HUD and the
+  // native text, on the widescreen canvas so its dim covers the window.
+  if (inGameMenu.IsOpen()) {
+    auto menuPrimitives = inGameMenu.BuildPresentation(1280.0F / 3.0F, 240.0F);
+    auto menuTextures = n64UiRenderer.PrepareTextures(menuPrimitives);
+    renderStream.Submit([&, primitives = std::move(menuPrimitives), uiRegion,
+                         prepared = std::move(menuTextures)]() mutable {
+      if (rendererFrameSkipped) {
+        n64UiRenderer.Stage(std::move(prepared));
+        return;
+      }
+      if (!n64UiRenderer.Render(primitives, uiRegion, oot3d::ui::N64UiCanvasMode::Widescreen16x9,
+                                std::move(prepared), &renderError)) {
+        throw std::runtime_error("in-game menu presentation failed: " + renderError);
       }
     });
   }
@@ -532,6 +612,7 @@ bool NativeA32WindowSession::RunFrame() {
       capturedTemporalSample.reset();
       window.EndFrame();
       realtimePacer.ResetDeadline();
+      inputLatencyTrace.DiscardPending(presentationSerial);
       return;
     }
     MaybeWriteFramebufferScreenshot(
@@ -543,8 +624,12 @@ bool NativeA32WindowSession::RunFrame() {
     CpuProbe::Scope cpuPacing(CpuProbe::Phase::Pacing);
     realtimePacer.WaitForNextRefresh();
     cpuPacing.Stop();
-    rendererTiming->PacingWaitSeconds += SecondsSince(waitStart);
+    const auto waitEnd = std::chrono::steady_clock::now();
+    rendererTiming->PacingWaitSeconds +=
+        std::chrono::duration<double>(waitEnd - waitStart).count();
     window.EndFrame();
+    inputLatencyTrace.ObserveFrameEnd(presentationSerial, waitStart, waitEnd,
+                                      std::chrono::steady_clock::now());
   }, true);
   presentSteps.Mark("render_end_frame");
   picaSemanticTrace.RecordFrameBoundary(
@@ -736,9 +821,7 @@ bool NativeA32WindowSession::UpdateGuestServicesForRefresh(
   auto &uiLifecycleBridge = *uiLifecycleBridgeStorage;
   auto &window = *windowPointer;
   auto &dspHle = *dspHleStorage;
-#if defined(TRIAEVUM_DEVELOPER_TOOLS)
   UpdateDevFreeCamera(inputFrame);
-#endif
   const uint32_t topScreenButtons = inputFrame.Hid.Buttons;
   const uint32_t topScreenPressed =
       topScreenButtons &
@@ -1172,6 +1255,7 @@ void NativeA32WindowSession::RunGuestRefresh() {
   // PPF unblocks the current guest refresh, not the next presentation.
   // The dependency capture keeps its plans for the complete visual frame.
   (void)FlushNativeDependencies();
+  sceneViewProbe.BeginGuestRefresh();
   phaseStart = std::chrono::steady_clock::now();
   processResult =
       RunUntilGuestWait(process, launch.WholeAotBlockBudget);
@@ -1766,10 +1850,12 @@ void NativeA32WindowSession::PresentVisualFrame(
           ++picaStats.SelectedTopTransferCount;
           // TopScreen draws the relocated lower menu onto the upper target
           // after the upper snapshot: that work completes the same frame.
+          // Reframed's file selection draws inside the upper pass instead.
           const bool relocatedFrontend =
               Oot3dNativeGame::ShouldSuppressTopScreenFrontendBackdrop(
                   launch.UiProfile,
-                  uiLifecycleBridge.NativeFrontendPresentationActive());
+                  uiLifecycleBridge.NativeFrontendPresentationActive()) &&
+              !Oot3dNativeGame::TopScreenReframedFileSelect::Active(process.Memory());
           const auto frontendMenuCanvases =
               Oot3dNativeGame::TopScreenFrontendMenuCanvases();
           auto finishedFrames = picaPresentationScheduler.FinishFrames(
@@ -2244,6 +2330,44 @@ void NativeA32WindowSession::UpdateDevLab(uint64_t guestFrame) {
   const auto vector3 = [](const Json &value) {
     return std::array<float, 3>{value.at(0).get<float>(), value.at(1).get<float>(), value.at(2).get<float>()};
   };
+  // The in-game menu as the agent sees it: open, tab, focused row and value,
+  // pane, status line and modal title.
+  const auto menuState = [&] {
+    const auto &model = inGameMenuStorage->Model();
+    Json state{{"frame", guestFrame},
+               {"open", model.IsOpen()},
+               {"tabIndex", model.TabIndex()},
+               {"rowIndex", model.RowIndex()},
+               {"statusLine", model.Status()},
+               {"statusError", model.StatusIsError()}};
+    if (model.TabIndex() < model.Doc().Tabs.size()) state["tab"] = model.Doc().Tabs[model.TabIndex()].Title;
+    if (const auto *row = model.FocusedRow(); row != nullptr) {
+      state["row"] = row->Key;
+      state["value"] = row->ValueText();
+      state["enabled"] = row->Enabled;
+      state["modified"] = row->IsModified;
+    }
+    switch (model.FocusPane()) {
+      case Oot3dNativeGame::Menu::Pane::Rows: state["pane"] = "rows"; break;
+      case Oot3dNativeGame::Menu::Pane::Choices: state["pane"] = "choices"; break;
+      case Oot3dNativeGame::Menu::Pane::Modal: state["pane"] = "modal"; break;
+    }
+    if (model.CurrentModal()) state["modal"] = model.CurrentModal()->Title;
+    // The pointer's targets as last drawn, in canvas units, when asked for.
+    if (devLabCommand && devLabCommand->value("regions", false)) {
+      Json regions = Json::array();
+      for (const auto &region : model.CurrentLayout().Regions) {
+        regions.push_back({{"kind", Oot3dNativeGame::Menu::MenuHitKindName(region.Kind)},
+                           {"index", region.Index},
+                           {"x", region.Area.X},
+                           {"y", region.Area.Y},
+                           {"width", region.Area.Width},
+                           {"height", region.Area.Height}});
+      }
+      state["regions"] = std::move(regions);
+    }
+    return state;
+  };
   if (!devLabCommand) {
     devLabCommand = devLab->Next();
     if (!devLabCommand) return;
@@ -2415,6 +2539,40 @@ void NativeA32WindowSession::UpdateDevLab(uint64_t guestFrame) {
       } else if (op == "gizmos") {
         sceneEnvironment->ShowLightGizmos(command.value("shown", true));
         finish("ok", {{"frame", guestFrame}});
+      } else if (op == "menu") {
+        // The in-game menu driven by synthetic presses ("steps": toggle, up,
+        // down, left, right, confirm, back, tab_prev, tab_next), each held
+        // one guest frame at the start of a "stepFrames" period (default 4);
+        // answered with the menu's state once the last press was released.
+        // Pointer steps: "move:<kind>[:<index>]" places the mouse on that
+        // region's centre, "click:..." presses it one frame, "press:..."
+        // holds it for the period, "wheel:<notches>", "pointer_out".
+        static constexpr std::array<std::string_view, 9> kMenuSteps{
+            "toggle", "up", "down", "left", "right", "confirm", "back", "tab_prev", "tab_next"};
+        static constexpr std::array<std::string_view, 5> kMenuPointerSteps{"move", "click", "press", "wheel",
+                                                                           "pointer_out"};
+        devLabMenuSteps.clear();
+        for (const auto &step : command.value("steps", Json::array())) {
+          const auto name = step.get<std::string>();
+          const std::string verb = name.substr(0, name.find(':'));
+          if (std::find(kMenuSteps.begin(), kMenuSteps.end(), name) == kMenuSteps.end() &&
+              std::find(kMenuPointerSteps.begin(), kMenuPointerSteps.end(), verb) == kMenuPointerSteps.end())
+            throw std::invalid_argument("unknown menu step " + name);
+          devLabMenuSteps.push_back(name);
+        }
+        // The pointer keeps its place from the previous command; only the
+        // presses start clear.
+        Oot3dNativeGame::InGameMenuHostInput pointerOnly;
+        pointerOnly.PointerPresent = devLabMenuInput.PointerPresent;
+        pointerOnly.PointerX = devLabMenuInput.PointerX;
+        pointerOnly.PointerY = devLabMenuInput.PointerY;
+        pointerOnly.PictureX = devLabMenuInput.PictureX;
+        pointerOnly.PictureY = devLabMenuInput.PictureY;
+        pointerOnly.PictureWidth = devLabMenuInput.PictureWidth;
+        pointerOnly.PictureHeight = devLabMenuInput.PictureHeight;
+        devLabMenuInput = pointerOnly;
+        devLabMenuMissingTarget.clear();
+        devLabMenuDriving = true;
       } else if (op == "quit") {
         finish("ok", place());
         devLabQuit = true;
@@ -2458,8 +2616,89 @@ void NativeA32WindowSession::UpdateDevLab(uint64_t guestFrame) {
       finish("timeout", {{"frame", guestFrame}, {"applied", applied}, {"activeCamera", activeCamera}});
   } else if (op == "wait") {
     if (devLabFrames >= command.value("frames", 30U)) finish("ok", place());
+  } else if (op == "menu") {
+    const uint32_t period = std::max(command.value("stepFrames", 4U), 2U);
+    const uint32_t elapsed = devLabFrames - 1U;
+    const size_t step = elapsed / period;
+    Oot3dNativeGame::InGameMenuHostInput input;
+    // The pointer keeps its place between steps (a "move" or "click" sets it
+    // on a region's centre, as the menu last laid it out); the other steps
+    // are one-frame presses.
+    input.PointerPresent = devLabMenuInput.PointerPresent;
+    input.PointerX = devLabMenuInput.PointerX;
+    input.PointerY = devLabMenuInput.PointerY;
+    input.PictureX = devLabMenuInput.PictureX;
+    input.PictureY = devLabMenuInput.PictureY;
+    input.PictureWidth = devLabMenuInput.PictureWidth;
+    input.PictureHeight = devLabMenuInput.PictureHeight;
+    if (step < devLabMenuSteps.size()) {
+      if (elapsed % period == 0U) {
+        const std::string &name = devLabMenuSteps[step];
+        input.Toggle = name == "toggle";
+        input.Up = name == "up";
+        input.Down = name == "down";
+        input.Left = name == "left";
+        input.Right = name == "right";
+        input.Confirm = name == "confirm";
+        input.Back = name == "back";
+        input.TabPrevious = name == "tab_prev";
+        input.TabNext = name == "tab_next";
+        // "move:<kind>[:<index>]", "click:<kind>[:<index>]", "press:<kind>[:<index>]"
+        // (held for the whole period), "wheel:<notches>", "pointer_out".
+        const auto colon = name.find(':');
+        const std::string verb = name.substr(0, colon);
+        const std::string target = colon == std::string::npos ? "" : name.substr(colon + 1);
+        if (verb == "move" || verb == "click" || verb == "press") {
+          const auto second = target.find(':');
+          const std::string kind = target.substr(0, second);
+          const size_t index = second == std::string::npos ? 0U : std::stoul(target.substr(second + 1));
+          bool found = false;
+          for (const auto &region : inGameMenuStorage->Model().CurrentLayout().Regions) {
+            if (Oot3dNativeGame::Menu::MenuHitKindName(region.Kind) != kind || region.Index != index) continue;
+            // Canvas units to window pixels through the same fit the menu
+            // uses, in the presentation picture the host poll last reported.
+            const auto &hostMenu = nativeControlPollingState.Menu;
+            const auto fit = Oot3d::Renderer::FitUiPresentation(hostMenu.PictureWidth, hostMenu.PictureHeight,
+                                                                1280.0F / 3.0F, 240.0F);
+            input.PointerPresent = true;
+            input.PictureX = hostMenu.PictureX;
+            input.PictureY = hostMenu.PictureY;
+            input.PictureWidth = hostMenu.PictureWidth;
+            input.PictureHeight = hostMenu.PictureHeight;
+            input.PointerX = static_cast<float>(hostMenu.PictureX) + fit.X +
+                             (region.Area.X + region.Area.Width * 0.5F) * fit.Width / (1280.0F / 3.0F);
+            input.PointerY = static_cast<float>(hostMenu.PictureY) + fit.Y +
+                             (region.Area.Y + region.Area.Height * 0.5F) * fit.Height / 240.0F;
+            found = true;
+            break;
+          }
+          if (!found) devLabMenuMissingTarget = name;
+          input.PointerPressed = found && verb != "move";
+        } else if (verb == "wheel") {
+          input.PointerWheel = std::stof(target);
+        } else if (verb == "pointer_out") {
+          input.PointerPresent = false;
+        }
+      } else if (devLabMenuSteps[step].rfind("press:", 0) == 0) {
+        input.PointerPressed = devLabMenuInput.PointerPressed;
+      }
+      devLabMenuInput = input;
+    } else {
+      devLabMenuInput = input;
+      // One more period after the last release: the menu's refresh and the
+      // presentation of the final state are then behind the answer.
+      if (elapsed >= (devLabMenuSteps.size() + 1U) * period) {
+        // The lab keeps driving the menu between commands (its pointer stays
+        // where the last step put it, no press held), so the host's real
+        // mouse over the window cannot refocus a row behind the lab's back.
+        auto state = menuState();
+        if (!devLabMenuMissingTarget.empty()) state["missingTarget"] = devLabMenuMissingTarget;
+        finish(devLabMenuMissingTarget.empty() ? "ok" : "missing_target", std::move(state));
+      }
+    }
   }
 }
+#endif
 
 void NativeA32WindowSession::UpdateDevFreeCamera(Oot3dNativeGame::NativeA32InputFrame &inputFrame) {
   auto &freeCamera = *nativeCandidateDispatch.DevFreeCamera;
@@ -2494,7 +2733,7 @@ void NativeA32WindowSession::UpdateDevFreeCamera(Oot3dNativeGame::NativeA32Input
   float forward = sources.DevPadLeftStick[1];
   float right = sources.DevPadLeftStick[0];
   float up = (sources.DevPadRightShoulder ? 1.0F : 0.0F) - (sources.DevPadLeftShoulder ? 1.0F : 0.0F);
-  float yaw = -sources.DevPadRightStick[0] * 120.0F * seconds;
+  float yaw = sources.DevPadRightStick[0] * 120.0F * seconds;
   float pitch = sources.DevPadRightStick[1] * 120.0F * seconds;
   float multiplier = 1.0F;
   if (keyboard) {
@@ -2505,9 +2744,12 @@ void NativeA32WindowSession::UpdateDevFreeCamera(Oot3dNativeGame::NativeA32Input
     if (keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT]) multiplier = 4.0F;
     if (keys[SDL_SCANCODE_LCTRL] || keys[SDL_SCANCODE_RCTRL]) multiplier = 0.25F;
   }
-  // Right mouse button held: look (0.15 degrees per pixel).
-  if (sources.DevMouseRightHeld && !io.WantCaptureMouse) {
-    yaw -= mouseX * 0.15F;
+  // Left or right mouse button held: drag to look (0.15 degrees per pixel).
+  // Not io.WantCaptureMouse: the full-window "Main Game" ImGui surface always
+  // sets it, so looking never worked; only an open host menu or window
+  // (DevMouseLookHeld is false then) owns the mouse.
+  if (sources.DevMouseLookHeld) {
+    yaw += mouseX * 0.15F;
     pitch -= mouseY * 0.15F;
   }
   const auto clampAxis = [](float value) { return std::clamp(value, -1.0F, 1.0F); };
@@ -2518,7 +2760,6 @@ void NativeA32WindowSession::UpdateDevFreeCamera(Oot3dNativeGame::NativeA32Input
   inputFrame.Hid.TouchPressed = false;
   inputFrame.CStick = {};
 }
-#endif
 
 void NativeA32WindowSession::PublishNativeSceneView() {
   auto &process = *processStorage;
@@ -2533,12 +2774,37 @@ void NativeA32WindowSession::PublishNativeSceneView() {
   // OoT3D's PlayState, SaveContext and actor layout: another title's memory
   // there is something else, so its time and player come from its adapter.
   const bool oot3dTitle = titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur;
-  auto environmentTime = snapshot && oot3dTitle
+  auto environmentTime = snapshot && oot3dTitle && !snapshot->FileSelect
       ? Oot3dNativeGame::CaptureSceneEnvironmentTime(snapshot->PlayStateAddress, process.Memory())
       : std::nullopt;
   if (environmentTime)
     environmentTime->Group = Oot3dNativeGame::CaptureNativeEnvironmentGroup(
         snapshot->PlayStateAddress, process.Memory(), &environmentTime->AuthoredScene);
+  // The file select's title scene is not read for time or headers (the title
+  // demo's PlayState may still be updating behind the cards, or the block may
+  // read scene 0): fixed time, no group, one profile (scene-00FF).
+  if (snapshot && snapshot->FileSelect)
+    environmentTime = Oot3dNativeGame::SceneEnvironmentTime{
+        .TimeDriven = false, .Clock = 0x8000, .Night = false, .Owner = snapshot->PlayStateAddress};
+  {
+    // TRIAEVUM_SCENE_VIEW_TRACE=1: per presentation frame, what the probes
+    // hold when the scene view is captured (the PlayState and player the
+    // Player_Update entry supplied, the snapshot's scene, camera and time).
+    static const bool sceneViewTrace = std::getenv("TRIAEVUM_SCENE_VIEW_TRACE") != nullptr;
+    static unsigned long sceneViewTraceFrames = 0;
+    if (sceneViewTrace) {
+      std::fprintf(stderr,
+                   "TRIAEVUM_SCENE_VIEW frame=%lu playState=%08x timingPlayState=%08x player=%08x snapshot=%d sceneId=%d camera=%d eye=%.1f,%.1f,%.1f time=%d night=%d clock=%u driven=%d\n",
+                   ++sceneViewTraceFrames, sceneViewProbe.Stats().LastPlayStateAddress,
+                   playerTimingProbe.Stats().LastPlayStateAddress, playerTimingProbe.Stats().LastPlayerAddress,
+                   snapshot ? 1 : 0, snapshot && snapshot->SceneId ? static_cast<int>(*snapshot->SceneId) : -1,
+                   snapshot && snapshot->CameraAvailable ? 1 : 0, snapshot ? snapshot->Eye[0] : 0.0F,
+                   snapshot ? snapshot->Eye[1] : 0.0F, snapshot ? snapshot->Eye[2] : 0.0F,
+                   environmentTime ? 1 : 0, environmentTime && environmentTime->Night ? 1 : 0,
+                   environmentTime ? static_cast<unsigned>(environmentTime->Clock) : 0U,
+                   environmentTime && environmentTime->TimeDriven ? 1 : 0);
+    }
+  }
   // Where Link is (world position +0x28, shape yaw +0xBE: 0 faces +Z,
   // 0x4000 +X), for lights placed from F1.
   std::optional<Oot3dNativeGame::ScenePlayerPlacement> player;
@@ -2557,6 +2823,16 @@ void NativeA32WindowSession::PublishNativeSceneView() {
       if (std::isfinite(placement.Position[0]) && std::isfinite(placement.Position[1]) &&
           std::isfinite(placement.Position[2]))
         player = placement;
+    }
+    // With TRIAEVUM_SCENE_VIEW_TRACE, also the raw placement words (oracle
+    // fixtures put Link at the same spot).
+    static const bool placementTrace = std::getenv("TRIAEVUM_SCENE_VIEW_TRACE") != nullptr;
+    if (placementTrace) {
+      uint32_t rotation[2]{};
+      process.Memory().Read32(actor + 0x34U, &rotation[0]);
+      process.Memory().Read32(actor + 0x38U, &rotation[1]);
+      std::fprintf(stderr, "TRIAEVUM_SCENE_VIEW_PLAYER actor=%08x pos=%08x,%08x,%08x rot34=%08x,%08x yaw=%04x\n",
+                   actor, bits[0], bits[1], bits[2], rotation[0], rotation[1], yaw);
     }
   }
   if (titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d && snapshot && snapshot->Environment) {

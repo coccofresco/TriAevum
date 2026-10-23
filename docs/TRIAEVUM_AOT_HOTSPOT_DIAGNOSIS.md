@@ -243,7 +243,7 @@ using only the older shipped module would confound the two changes.
 
 ### Cold-read split: completed, not retained
 
-Private evidence: `C:/Users/xander/triaevum-aot-cold-read/`.
+Private evidence: `%USERPROFILE%/triaevum-aot-cold-read/`.
 The candidate header is preserved as `candidate-memory.h`, the compiled module
 and map in `plugin/`, and eight runs in `abba/`. These are developer experiments,
 not user installation or release inputs. The working game module was never
@@ -349,7 +349,7 @@ Validation tools:
 - `build_aot_header_experiment.py --object-cache ... --max-new-objects 2`
   prevents an accidental full compilation when iterating this emitter-only pilot.
 
-Private artifacts: `C:/Users/xander/triaevum-aot-region-probe/`.
+Private artifacts: `%USERPROFILE%/triaevum-aot-region-probe/`.
 The installed title module is not replaced. The in-game pilot does not establish
 a gain and is NOT enabled in the normal build.
 

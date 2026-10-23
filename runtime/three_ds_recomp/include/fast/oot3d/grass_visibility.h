@@ -56,6 +56,9 @@ struct GrassLodPolicy {
     float SegmentEndDistance = 800.0F;
     uint8_t NearBladeSegments = 1U;
     uint8_t FarBladeSegments = 1U;
+    // Blades that are not distant draw two crossed planes (else one ribbon
+    // facing the camera).
+    bool CrossedBlades = true;
     float LodReferenceDistance = 0.0F;
     bool FarTuftsEnabled = false;
     uint8_t FarTuftBladeCount = 5U;
@@ -207,6 +210,18 @@ BuildGrassFrustumRadiusScale(
 
 // Conservative over all greater distances, including increased distant density.
 [[nodiscard]] float GrassLodRetentionUpperBound(const GrassLodPolicy& policy, float distance) noexcept;
+
+// The distance below which every blade that is not a distant tuft is wholly
+// visible (LOD visibility exactly 1, no stipple) in the blade vertex program,
+// from its environment record: the LOD reference distance, the density start
+// fraction, far tufts and their start fraction, the blade draw distance and
+// its fade fraction.
+[[nodiscard]] float GrassWholeBladeDistance(float reference, float densityStart, bool tufts, float tuftStart,
+                                            float drawDistance, float drawFadeFraction) noexcept;
+
+// The distance at and beyond which no root draws with `segments` segments
+// (infinity for the far segments, 0 for counts the policy never uses).
+[[nodiscard]] float GrassSegmentsMaximumDistance(const GrassLodPolicy& policy, uint8_t segments) noexcept;
 
 [[nodiscard]] GrassLodDecision ResolveGrassLod(const InteractiveGrassSettings& settings, float distance,
                                                uint32_t stableId) noexcept;

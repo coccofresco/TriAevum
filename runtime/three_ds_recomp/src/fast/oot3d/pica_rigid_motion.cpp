@@ -114,7 +114,7 @@ PicaRigidMotionShaderVariant BuildPicaRigidMotionShaderVariant(
         "layout(push_constant) uniform Oot3dDrawState { vec4 rigid_motion; vec4 jitter; } oot3d_draw;\n");
     const size_t adjustedEnd=result.Source.find_last_of('}');
     result.Source.insert(adjustedEnd,
-        Renderer3ds::PicaMotionGuideAssignment);
+        PicaMotionGuideAssignment);
     result.FragmentKey=fragmentKey^0x52494749444d4f55ULL;
     result.Applied=true;
     return result;

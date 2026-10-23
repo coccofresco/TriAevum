@@ -1,6 +1,7 @@
 // Native PICA on Vulkan: texture records, storage, uploads and materials.
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_pica_internal.h"
+#include "fast/oot3d/grass_gpu_memory.h"
 
 namespace Fast {
 
@@ -118,6 +119,18 @@ GfxRenderingAPIVulkan::CreateGpuCopiedTextureRecord(
 
 GfxRenderingAPIVulkan::TextureRecord*
 GfxRenderingAPIVulkan::GetOrCreateNativePicaTexture(
+    const GfxNativePicaTextureView& texture, std::string* error,
+    uint64_t replacementGeneration, uint64_t renderTargetNamespace,
+    const uint64_t* precomputedContentHash) {
+    TextureRecord* record = ResolveNativePicaTexture(
+        texture, error, replacementGeneration, renderTargetNamespace,
+        precomputedContentHash);
+    if (record != nullptr) record->LastUsedFrame = mFrameCounter;
+    return record;
+}
+
+GfxRenderingAPIVulkan::TextureRecord*
+GfxRenderingAPIVulkan::ResolveNativePicaTexture(
     const GfxNativePicaTextureView& textureView, std::string* error,
     uint64_t replacementGeneration, uint64_t renderTargetNamespace,
     const uint64_t* precomputedContentHash) {
@@ -904,6 +917,106 @@ void GfxRenderingAPIVulkan::RetireNativePicaTexturesOfOtherGenerations(uint64_t 
         texture = mNativePicaTextures.erase(texture);
     }
     mNativePicaTexturesGeneration = generation;
+}
+
+void GfxRenderingAPIVulkan::ReleaseIdleNativePicaTextures() {
+    auto& residency = mNativePicaTextureResidency;
+    if (mFrameCounter < residency.NextSweepFrame) return;
+    // Diagnostic: TRIAEVUM_TEXTURE_IDLE_FRAMES=<n> releases every record idle
+    // for n frames whatever the budget, to exercise their recreation.
+    static const std::optional<uint64_t> idleOverride = []() -> std::optional<uint64_t> {
+        const char* value = std::getenv("TRIAEVUM_TEXTURE_IDLE_FRAMES");
+        if (value == nullptr || *value == '\0') return std::nullopt;
+        return std::strtoull(value, nullptr, 10);
+    }();
+    auto policy = residency.Policy;
+    if (idleOverride) {
+        policy.IdleFrames = *idleOverride;
+        policy.PressureIdleFrames = std::min(policy.PressureIdleFrames, *idleOverride);
+        policy.SweepIntervalFrames = std::clamp<uint64_t>(*idleOverride, 1U, policy.SweepIntervalFrames);
+    }
+    residency.NextSweepFrame = mFrameCounter + policy.SweepIntervalFrames;
+    residency.DeviceLocal = Renderer3ds::QueryVulkanDeviceLocalMemory(mPhysicalDevice);
+    // Diagnostic: TRIAEVUM_VRAM_BUDGET_MIB=<n> caps the budget, as a smaller
+    // card would.
+    static const uint64_t budgetCap = [] {
+        const char* value = std::getenv("TRIAEVUM_VRAM_BUDGET_MIB");
+        return value == nullptr || *value == '\0' ? UINT64_MAX : std::strtoull(value, nullptr, 10) << 20U;
+    }();
+    if (residency.DeviceLocal) residency.DeviceLocal->Budget = std::min(residency.DeviceLocal->Budget, budgetCap);
+    const bool pressure = residency.DeviceLocal &&
+        Renderer3ds::DeviceLocalMemoryUnderPressure(residency.DeviceLocal->Usage, residency.DeviceLocal->Budget);
+    if (pressure != residency.Pressure) {
+        residency.Pressure = pressure;
+        if (pressure)
+            SPDLOG_WARN("VRAM budget: {} of {} MiB in use; releasing textures idle for {} frames",
+                        residency.DeviceLocal->Usage >> 20U, residency.DeviceLocal->Budget >> 20U,
+                        policy.PressureIdleFrames);
+        else if (residency.DeviceLocal)
+            SPDLOG_WARN("VRAM budget: {} of {} MiB in use; pressure relieved",
+                        residency.DeviceLocal->Usage >> 20U, residency.DeviceLocal->Budget >> 20U);
+    }
+    const auto residentBytes = [](const TextureRecord& texture) -> uint64_t {
+        if (texture.ImageBorrowed || (texture.Image == VK_NULL_HANDLE && texture.NriImage == VK_NULL_HANDLE))
+            return 0U;
+        return NativePicaDecodedMipChainSize(texture.Width, texture.Height, texture.MipLevels).value_or(0U);
+    };
+    uint64_t cachedRecords = 0U;
+    uint64_t cachedBytes = 0U;
+    for (auto texture = mNativePicaTextures.begin(); texture != mNativePicaTextures.end();) {
+        auto& record = texture->second;
+        // Raw-copy samples live and die with their producers; live aliases
+        // with their render target.
+        const bool otherOwner = record.LiveRenderTargetAlias || record.ImageBorrowed ||
+                                texture->first.GpuCopyIdentity != 0U || !record.CopyProducerIdentities.empty();
+        if (otherOwner || !Renderer3ds::GpuResourceIdle(mFrameCounter, record.LastUsedFrame, pressure, policy)) {
+            ++cachedRecords;
+            cachedBytes += residentBytes(record);
+            ++texture;
+            continue;
+        }
+        ++residency.ReleasedRecords;
+        residency.ReleasedBytes += residentBytes(record);
+        RetireNativePicaTexture(record);
+        texture = mNativePicaTextures.erase(texture);
+    }
+    for (auto lut = mNativePicaLightingLuts.begin(); lut != mNativePicaLightingLuts.end();) {
+        if (!Renderer3ds::GpuResourceIdle(mFrameCounter, lut->second.LastUsedFrame, pressure, policy)) {
+            ++lut;
+            continue;
+        }
+        ++residency.ReleasedRecords;
+        residency.ReleasedBytes += residentBytes(lut->second.Texture);
+        RetireNativePicaTexture(lut->second.Texture);
+        lut = mNativePicaLightingLuts.erase(lut);
+    }
+    // TRIAEVUM_VRAM_TRACE=1: the heap and its known owners at every sweep.
+    static const bool trace = std::getenv("TRIAEVUM_VRAM_TRACE") != nullptr;
+    if (trace) {
+        const auto& memory = residency.DeviceLocal;
+        std::fprintf(stderr,
+                     "TRIAEVUM_VRAM frame=%u usage_mib=%llu budget_mib=%llu pressure=%d textures=%llu "
+                     "texture_mib=%llu luts=%zu materials=%zu render_targets=%zu grass_mib=%llu\n",
+                     mFrameCounter, memory ? static_cast<unsigned long long>(memory->Usage >> 20U) : 0ULL,
+                     memory ? static_cast<unsigned long long>(memory->Budget >> 20U) : 0ULL, pressure ? 1 : 0,
+                     static_cast<unsigned long long>(cachedRecords),
+                     static_cast<unsigned long long>(cachedBytes >> 20U), mNativePicaLightingLuts.size(),
+                     mNativePicaMaterials.size(), mNativePicaRenderTargets.size(),
+                     static_cast<unsigned long long>(Oot3d::GrassGpuMemoryInUse().DeviceLocal >> 20U));
+    }
+    // At most one report per idle window, so a scene change is one line (the
+    // game log keeps warnings and above).
+    if (residency.ReleasedRecords != 0U && mFrameCounter >= residency.NextReportFrame) {
+        const auto& memory = residency.DeviceLocal;
+        SPDLOG_WARN("Texture cache: released {} idle entries ({} MiB); {} textures cached ({} MiB); "
+                    "VRAM {} of {} MiB",
+                    residency.ReleasedRecords, residency.ReleasedBytes >> 20U, cachedRecords, cachedBytes >> 20U,
+                    memory ? std::to_string(memory->Usage >> 20U) : std::string("?"),
+                    memory ? std::to_string(memory->Budget >> 20U) : std::string("?"));
+        residency.NextReportFrame = mFrameCounter + policy.IdleFrames;
+        residency.ReleasedRecords = 0U;
+        residency.ReleasedBytes = 0U;
+    }
 }
 
 void GfxRenderingAPIVulkan::RetireNativePicaMaterial(NativePicaMaterialBundle& material) {

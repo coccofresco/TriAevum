@@ -35,6 +35,10 @@
 #include "fast/oot3d/grass_primitive_topology.h"
 #include "fast/oot3d/grass_scene_bridge.h"
 #include "fast/oot3d/grass_shading_environment.h"
+#include "fast/oot3d/grass_gpu_memory.h"
+#include "fast/renderer3ds/vulkan_memory_budget.h"
+#include "fast/renderer3ds/gpu_memory_residency.h"
+#include "fast/oot3d/grass_placement_audit.h"
 #include "fast/oot3d/grass_surface_eligibility.h"
 #include "fast/oot3d/grass_surface_extractor.h"
 #include "fast/oot3d/grass_mask_interior.h"
@@ -76,6 +80,7 @@
 #include "fast/oot3d/perspective_fov_policy.h"
 #include "fast/oot3d/presentation_pacing_policy.h"
 #include "fast/oot3d/render_resolution_policy.h"
+#include "fast/oot3d/presentation_picture.h"
 #include "oot3d/renderer/ui_presentation_layout.h"
 #ifndef ENABLE_OOT3D_VULKAN
 #define OOT3D_TEST_DEFINED_VULKAN
@@ -161,6 +166,87 @@ TEST(Oot3dUiPresentationLayout, KeepsWidescreenCanvasIndependent) {
     EXPECT_EQ(viewport.Y, 96U);
     EXPECT_EQ(viewport.Width, 1024U);
     EXPECT_EQ(viewport.Height, 576U);
+}
+
+TEST(Oot3dPresentationPicture, FitsTheChosenRatioCentredAndFreeFillsTheOutput) {
+    using namespace Fast::Oot3d;
+    // Free: the output as it is, whatever its shape.
+    EXPECT_EQ(ResolvePresentationPicture(1000U, 700U, AspectRatioMode::Free),
+              (PresentationPicture{0U, 0U, 1000U, 700U}));
+    // 16:9 in a 16:9 output: the whole output, no bars.
+    EXPECT_EQ(ResolvePresentationPicture(1280U, 720U, AspectRatioMode::Wide16x9),
+              (PresentationPicture{0U, 0U, 1280U, 720U}));
+    // 16:9 in a taller output: letterbox, centred vertically.
+    EXPECT_EQ(ResolvePresentationPicture(1920U, 1200U, AspectRatioMode::Wide16x9),
+              (PresentationPicture{0U, 60U, 1920U, 1080U}));
+    // 16:9 in a wider output: pillarbox, centred horizontally.
+    EXPECT_EQ(ResolvePresentationPicture(3440U, 1440U, AspectRatioMode::Wide16x9),
+              (PresentationPicture{440U, 0U, 2560U, 1440U}));
+    // The original top screen (5:3) in a 16:9 output.
+    EXPECT_EQ(ResolvePresentationPicture(1280U, 720U, AspectRatioMode::Native3ds),
+              (PresentationPicture{40U, 0U, 1200U, 720U}));
+    // 21:9 (7:3) in a 16:9 output: letterbox.
+    const auto ultrawide =
+        ResolvePresentationPicture(1280U, 720U, AspectRatioMode::Ultrawide21x9);
+    EXPECT_EQ(ultrawide.Width, 1280U);
+    EXPECT_EQ(ultrawide.Height, 549U);
+    EXPECT_EQ(ultrawide.X, 0U);
+    EXPECT_EQ(ultrawide.Y, 85U);
+    // An empty output has no picture.
+    EXPECT_FALSE(ResolvePresentationPicture(0U, 720U, AspectRatioMode::Wide16x9).Valid());
+    // The picture is what the UI fit and the scene policy see: a 21:9 picture
+    // widens the scene by 7/5 over the native 5:3, a 5:3 one not at all.
+    const auto ultrawidePolicy =
+        ResolveScenePresentationPolicy(ultrawide.Width, ultrawide.Height);
+    EXPECT_EQ(ultrawidePolicy.Extension, SceneAspectExtension::Horizontal);
+    EXPECT_NEAR(ultrawidePolicy.HorizontalFovExpansion, 1.4F, 2.0e-3F);
+    const auto native = ResolvePresentationPicture(1280U, 720U, AspectRatioMode::Native3ds);
+    EXPECT_EQ(ResolveScenePresentationPolicy(native.Width, native.Height).Extension,
+              SceneAspectExtension::None);
+    // A pointer in the bars is outside the canvas; one in the picture maps
+    // as it would in a window of the picture's size.
+    const auto bars = ::Oot3d::Renderer::MapUiPresentationPoint(
+        ultrawide.Width, ultrawide.Height, 1280.0F / 3.0F, 240.0F, 640.0F,
+        10.0F - static_cast<float>(ultrawide.Y));
+    EXPECT_FALSE(bars.Inside);
+    const auto centre = ::Oot3d::Renderer::MapUiPresentationPoint(
+        ultrawide.Width, ultrawide.Height, 1280.0F / 3.0F, 240.0F, 640.0F,
+        360.0F - static_cast<float>(ultrawide.Y));
+    EXPECT_TRUE(centre.Inside);
+    EXPECT_NEAR(centre.X, 1280.0F / 6.0F, 0.5F);
+    EXPECT_NEAR(centre.Y, 120.0F, 0.5F);
+}
+
+TEST(Oot3dPresentationPicture, SnapsAWindowedOutputToTheChosenRatioOnly) {
+    using namespace Fast::Oot3d;
+    GraphicsSettings settings;
+    settings.Window = WindowMode::Windowed;
+    settings.OutputWidth = 1280U;
+    settings.OutputHeight = 720U;
+    settings.Aspect = AspectRatioMode::Ultrawide21x9;
+    EXPECT_TRUE(SnapWindowedOutputToAspect(settings));
+    EXPECT_EQ(settings.OutputWidth, 1280U);
+    EXPECT_EQ(settings.OutputHeight, 549U);
+    settings.Aspect = AspectRatioMode::Native3ds;
+    EXPECT_TRUE(SnapWindowedOutputToAspect(settings));
+    EXPECT_EQ(settings.OutputHeight, 768U);
+    settings.Aspect = AspectRatioMode::Wide16x9;
+    EXPECT_TRUE(SnapWindowedOutputToAspect(settings));
+    EXPECT_EQ(settings.OutputHeight, 720U);
+    // Already that shape: nothing to do.
+    EXPECT_FALSE(SnapWindowedOutputToAspect(settings));
+    // Free keeps the window as the user shaped it.
+    settings.OutputHeight = 700U;
+    settings.Aspect = AspectRatioMode::Free;
+    EXPECT_FALSE(SnapWindowedOutputToAspect(settings));
+    EXPECT_EQ(settings.OutputHeight, 700U);
+    // The display owns a fullscreen output's size.
+    settings.Aspect = AspectRatioMode::Wide16x9;
+    settings.Window = WindowMode::Borderless;
+    EXPECT_FALSE(SnapWindowedOutputToAspect(settings));
+    settings.Window = WindowMode::ExclusiveFullscreen;
+    EXPECT_FALSE(SnapWindowedOutputToAspect(settings));
+    EXPECT_EQ(settings.OutputHeight, 700U);
 }
 
 TEST(Oot3dPicaRasterCanvas, EachScreenContentHasItsMappingAndPlacedUiKeepsNativeFit) {
@@ -1233,6 +1319,49 @@ TEST(Oot3dGrassDepth, RasterDepthProgramOnlyWhereDepthIsUnchanged) {
     EXPECT_NE(explicitDepth.find("#ifdef GRASS_RASTER_DEPTH"), std::string::npos);
     EXPECT_EQ(explicitDepth.find("#define GRASS_RASTER_DEPTH"), std::string::npos);
     EXPECT_EQ(rasterDepth.rfind("#version 450\n#define GRASS_RASTER_DEPTH 1\n", 0), 0U);
+    // The whole pass's program: raster depth and every discard compiled out.
+    const auto whole = BuildGrassFragmentShader(true, true);
+    EXPECT_EQ(whole.rfind("#version 450\n#define GRASS_RASTER_DEPTH 1\n#define GRASS_WHOLE_BLADES 1\n", 0), 0U);
+    EXPECT_EQ(rasterDepth.find("#define GRASS_WHOLE_BLADES"), std::string::npos);
+    const auto body = whole.find("void main()");
+    const auto guard = whole.find("#ifndef GRASS_WHOLE_BLADES", body);
+    const auto end = whole.find("#endif", guard);
+    ASSERT_NE(guard, std::string::npos);
+    EXPECT_LT(guard, whole.find("discard;", body));
+    EXPECT_EQ(whole.find("discard;", end), std::string::npos);
+    // The whole-blade distance and the segment bands that skip the fading
+    // pass (the user's Enhanced values: near 5, far 1, 501..1000, softness
+    // 0.75; density and tufts from 0.32 of 2282).
+    EXPECT_NEAR(GrassWholeBladeDistance(2282.0F, 0.32F, true, 0.32F, 50000.0F, 0.15F), 730.24F, 0.01F);
+    EXPECT_NEAR(GrassWholeBladeDistance(2282.0F, 0.32F, true, 0.2F, 50000.0F, 0.15F), 456.4F, 0.01F);
+    EXPECT_NEAR(GrassWholeBladeDistance(2282.0F, 0.32F, false, 0.2F, 50000.0F, 0.15F), 730.24F, 0.01F);
+    EXPECT_NEAR(GrassWholeBladeDistance(2282.0F, 0.32F, true, 0.32F, 600.0F, 0.5F), 300.0F, 0.01F);
+    GrassLodPolicy bands;
+    bands.NearBladeSegments = 5U;
+    bands.FarBladeSegments = 1U;
+    bands.SegmentStartDistance = 501.0F;
+    bands.SegmentEndDistance = 1000.0F;
+    bands.SegmentLodSoftness = 0.75F;
+    bands.DrawDistance = 50000.0F;
+    bands.LodReferenceDistance = 2282.0F;
+    bands.LodStart = bands.LodEnd = 0.32F;
+    bands.FarDensity = 1.0F;
+    const float nearEnd = GrassSegmentsMaximumDistance(bands, 5U);
+    const float middleEnd = GrassSegmentsMaximumDistance(bands, 3U);
+    EXPECT_NEAR(nearEnd, 729.71F, 0.01F);
+    EXPECT_NEAR(middleEnd, 896.04F, 0.01F);
+    EXPECT_TRUE(std::isinf(GrassSegmentsMaximumDistance(bands, 1U)));
+    EXPECT_EQ(GrassSegmentsMaximumDistance(bands, 2U), 0.0F);
+    for (float distance = nearEnd; distance < nearEnd + 400.0F; distance += 0.37F)
+        for (float choice = 0.0F; choice < 1.0F; choice += 1.0F / 512.0F) {
+            const auto lod = ResolveGrassLodWithStableVisibility(bands, distance, choice);
+            EXPECT_NE(lod.BladeSegments, 5U);
+            if (distance >= middleEnd) EXPECT_EQ(lod.BladeSegments, 1U);
+        }
+    // The split bits stay clear of the segment mode and the grouped flag.
+    EXPECT_EQ(kGrassWholePassFlag & (kGrassGroupedFlag | kGrassSegmentModeMask), 0U);
+    EXPECT_EQ(kGrassFadingPassFlag & (kGrassGroupedFlag | kGrassSegmentModeMask | kGrassWholePassFlag), 0U);
+    EXPECT_EQ(kGrassGroupedFlag | kGrassWholePassFlag | kGrassFadingPassFlag | kGrassSegmentModeMask, 0xFFFFFFFFU);
 }
 
 TEST(Oot3dGrassMotion, RequiresConsecutiveMatchingTopology) {
@@ -1334,6 +1463,13 @@ TEST(Oot3dGrassSurfaceEligibility,
     draw.PerspectiveProjection = false;
     EXPECT_FALSE(
         Fast::Oot3d::IsGrassSurfaceDrawEligible(draw));
+    EXPECT_STREQ(Fast::Oot3d::GrassSurfaceIneligibility(draw), "not_perspective");
+    draw.DepthWrite = false;
+    EXPECT_STREQ(Fast::Oot3d::GrassSurfaceIneligibility(draw), "depth_write_off");
+    draw.WorldSurface = false;
+    EXPECT_STREQ(Fast::Oot3d::GrassSurfaceIneligibility(draw), "not_world_surface");
+    draw.WorldSurface = draw.DepthWrite = draw.PerspectiveProjection = true;
+    EXPECT_EQ(Fast::Oot3d::GrassSurfaceIneligibility(draw), nullptr);
     EXPECT_FALSE(
         Fast::Oot3d::PicaFragmentSamplesGrassTexture0(
             "layout(binding=1) uniform sampler2D pica_texture0;"));
@@ -1343,6 +1479,99 @@ TEST(Oot3dGrassSurfaceEligibility,
     EXPECT_TRUE(
         Fast::Oot3d::PicaFragmentSamplesGrassTexture0(
             "vec4 c = textureProj(pica_texture0, uvw);"));
+}
+
+TEST(Oot3dGrassPlacementAudit, ReportsConfiguredOutcomesAndEachCatalogCandidateOnce) {
+    using namespace Fast::Oot3d;
+    GrassPlacementAudit audit(3);
+    const GrassAuditTexture grass{0xAU, 64, 64, true}, candidate{0xBU, 32, 32, false}, actor{0xCU, 16, 16, false};
+    audit.RecordSource(grass, "published", 100);
+    audit.RecordSource(grass, "skinned geometry unsupported", 20);
+    audit.RecordSource(candidate, "unconfigured", 5);
+    audit.RecordSource(candidate, "unconfigured", 5);
+    audit.RecordSource(actor, "layer_ui", 5); // not a catalog candidate
+    audit.RecordPlacement(0xAU, "ready", 500);
+    audit.RecordError("cannot allocate grass compaction buffer");
+    EXPECT_TRUE(audit.RecordPass(10, GrassRenderStatus::Drawn, 300, {600ULL << 20U, 3, 0, 4}, 700).empty());
+    EXPECT_TRUE(audit.RecordPass(11, GrassRenderStatus::PlacementPending, 0, {900ULL << 20U, 4, 1, 6}).empty());
+    const auto report = audit.RecordPass(12, GrassRenderStatus::Drawn, 200, {700ULL << 20U, 3, 0, 7});
+    const auto has = [&](std::string_view text) { return report.find(text) != std::string::npos; };
+    // The first window counts evictions since the cache was created.
+    EXPECT_TRUE(has("TRIAEVUM_GRASS_AUDIT frames=10-12 passes=3 visible_min=0 visible_max=300 thinning_cut_min=700 "
+                    "placement_pending=1 drawn=2 cache_resident_mib_max=900 cache_entries_max=4 "
+                    "cache_pending_max=1 cache_evictions=7 gpu_device_mib_max=0 gpu_host_mib_max=0 "
+                    "memory_shift_max=0\n")) << report;
+    EXPECT_TRUE(has("TRIAEVUM_GRASS_AUDIT_ERROR passes=1 reason=cannot allocate grass compaction buffer\n"));
+    EXPECT_TRUE(has("texture=000000000000000a size=64x64 outcome=published draws=1 vertices=100\n"));
+    EXPECT_TRUE(has("outcome=skinned_geometry_unsupported draws=1 vertices=20\n"));
+    EXPECT_TRUE(has("TRIAEVUM_GRASS_AUDIT_PLACEMENT texture=000000000000000a outcome=ready surfaces=1 anchors=500\n"));
+    EXPECT_TRUE(has("TRIAEVUM_GRASS_AUDIT_CANDIDATE texture=000000000000000b size=32x32 draws=2 vertices=10 new=1\n"));
+    EXPECT_FALSE(has("000000000000000c"));
+    const auto textures = audit.TakeNewTextures();
+    ASSERT_EQ(textures.size(), 2U);
+    EXPECT_TRUE(textures[0].Configured);
+    EXPECT_EQ(textures[1].Observed, 0xBU);
+    EXPECT_TRUE(audit.TakeNewTextures().empty());
+
+    audit.RecordSource(candidate, "unconfigured", 5);
+    EXPECT_TRUE(audit.Flush().empty()) << "no pass in the window yet";
+    for (uint64_t frame = 13; frame < 15; ++frame)
+        EXPECT_TRUE(audit.RecordPass(frame, GrassRenderStatus::Drawn, 1, {0, 1, 0, 9}).empty());
+    const auto partial = audit.Flush();
+    EXPECT_NE(partial.find("frames=13-14 passes=2 visible_min=1 visible_max=1 thinning_cut_min=1024 "),
+              std::string::npos) << partial;
+    EXPECT_NE(partial.find("cache_evictions=2 "), std::string::npos) << partial;
+    EXPECT_EQ(partial.find("TRIAEVUM_GRASS_AUDIT_ERROR"), std::string::npos);
+    EXPECT_NE(partial.find("texture=000000000000000b size=32x32 draws=1 vertices=5 new=0\n"), std::string::npos);
+    EXPECT_EQ(partial.find("TRIAEVUM_GRASS_AUDIT_SOURCE"), std::string::npos);
+    EXPECT_TRUE(audit.Flush().empty());
+}
+
+TEST(Oot3dGrassGpuMemory, LargeBuffersKeepHeadroomInsteadOfDoublingAndShrinkAfterAScene) {
+    using namespace Fast::Oot3d;
+    constexpr uint64_t MiB = 1ULL << 20U;
+    EXPECT_EQ(GrassBufferCapacity(1), 4096U);
+    EXPECT_EQ(GrassBufferCapacity(5000), 8192U);
+    EXPECT_EQ(GrassBufferCapacity(MiB), MiB);
+    // Hyrule Field's static anchors: 187 MB took 256 MiB as a power of two.
+    const uint64_t field = 4'680'000ULL * 40U;
+    EXPECT_GE(GrassBufferCapacity(field), field + field / 8U);
+    EXPECT_LT(GrassBufferCapacity(field), 202U * MiB);
+    EXPECT_EQ(GrassBufferCapacity(field) % MiB, 0U);
+    EXPECT_TRUE(GrassBufferNeedsResize(false, 1, 0));
+    EXPECT_FALSE(GrassBufferNeedsResize(true, 100 * MiB, 120 * MiB));
+    EXPECT_TRUE(GrassBufferNeedsResize(true, 121 * MiB, 120 * MiB));
+    EXPECT_TRUE(GrassBufferNeedsResize(true, 20 * MiB, 120 * MiB)) << "a peak buffer is given back";
+    EXPECT_FALSE(GrassBufferNeedsResize(true, 1 * MiB, 16 * MiB)) << "small buffers never shrink";
+}
+
+TEST(Renderer3dsGpuMemoryResidency, BudgetQueriesReportNothingWithoutTheLoaderCommand) {
+    using namespace Fast::Renderer3ds;
+    // The Vulkan 1.1 query is bound from the instance at run time (never
+    // imported, so an older vulkan-1.dll still loads the executable): without a
+    // bound instance there is no budget, and no physical device is touched.
+    BindVulkanMemoryBudgetInstance(VK_NULL_HANDLE);
+    EXPECT_FALSE(QueryVulkanDeviceLocalMemory(VK_NULL_HANDLE).has_value());
+    EXPECT_FALSE(QueryVulkanHeapMemory(VK_NULL_HANDLE, 0).has_value());
+}
+
+TEST(Renderer3dsGpuMemoryResidency, ReleasesWhatNoDrawSampledAndSoonerUnderPressure) {
+    using namespace Fast::Renderer3ds;
+    constexpr uint64_t MiB = 1ULL << 20U;
+    EXPECT_FALSE(DeviceLocalMemoryUnderPressure(5000 * MiB, 0)) << "no budget reported";
+    EXPECT_FALSE(DeviceLocalMemoryUnderPressure(5376 * MiB, 6144 * MiB));
+    EXPECT_TRUE(DeviceLocalMemoryUnderPressure(5377 * MiB, 6144 * MiB));
+    EXPECT_TRUE(DeviceLocalMemoryUnderPressure(6099 * MiB, 6144 * MiB)) << "issue #98";
+
+    const GpuMemoryResidencyPolicy policy;
+    EXPECT_FALSE(GpuResourceIdle(1000, 1000, false, policy)) << "used this frame";
+    EXPECT_FALSE(GpuResourceIdle(1000, 1001, true, policy)) << "a newer use is never idle";
+    EXPECT_FALSE(GpuResourceIdle(1000 + policy.IdleFrames, 1000, false, policy));
+    EXPECT_TRUE(GpuResourceIdle(1001 + policy.IdleFrames, 1000, false, policy));
+    EXPECT_FALSE(GpuResourceIdle(1000 + policy.PressureIdleFrames, 1000, true, policy));
+    EXPECT_TRUE(GpuResourceIdle(1001 + policy.PressureIdleFrames, 1000, true, policy));
+    EXPECT_GT(policy.PressureIdleFrames, 2U) << "longer than the frames in flight";
+    EXPECT_LE(policy.SweepIntervalFrames, policy.PressureIdleFrames);
 }
 
 TEST(Oot3dGrassPrimitiveTopology,
@@ -2135,6 +2364,9 @@ TEST(Oot3dGrassVisibility, CullsOutsideAndReducesFarGeometry) {
     settings.LodStartFraction = 0.4F;
     settings.LodEndFraction = 0.8F;
     settings.FarDensity = 1.0F;
+    // One camera-facing ribbon by default; crossed planes on request.
+    EXPECT_EQ(ResolveGrassLod(settings, 100.0F, 1U).PlaneCount, 1U);
+    settings.Appearance.CrossedBlades = true;
     const auto near = ResolveGrassLod(settings, 100.0F, 1U);
     const auto far = ResolveGrassLod(settings, 900.0F, 1U);
     const auto policy = BuildGrassLodPolicy(settings);

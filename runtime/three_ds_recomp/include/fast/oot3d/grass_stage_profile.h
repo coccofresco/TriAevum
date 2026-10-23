@@ -40,6 +40,8 @@ enum class GrassStage : uint8_t {
     Diagnostics,
     // The exact per-view pass over cached cluster candidates (nested in Selection).
     SelectRefine,
+    // The distant cards: record build (nested in Prepare) and their upload.
+    Cards,
     Count
 };
 inline constexpr size_t kGrassStageCount = static_cast<size_t>(GrassStage::Count);
@@ -68,6 +70,7 @@ struct GrassStageFrame {
     uint64_t SelectHash = 0;
     uint64_t RasterDepthBatches = 0, RasterDepthInstances = 0, ExplicitDepthBatches = 0, ExplicitDepthInstances = 0;
     uint64_t SignatureRepeat = 0, ClipSame = 0, ClipChanged = 0, WorldInvalidations = 0;
+    uint64_t CardBatches = 0, CardInstances = 0;
 };
 inline thread_local std::array<GrassStageFrame, 8> GrassStageFrames{};
 inline thread_local uint64_t GrassStageCurrentFrame = 0;
@@ -130,7 +133,7 @@ class GrassStageTimer {
     std::chrono::steady_clock::time_point mStart{};
 };
 inline void ReportGrassStageFrame(uint64_t frame, double total, double compact, double blades, double shadows,
-                                  double lighting) {
+                                  double lighting, double cards = -1.0) {
     if (!GrassStageProfileEnabled())
         return;
     const auto& f = GrassStageFrames[frame % 8];
@@ -140,7 +143,8 @@ inline void ReportGrassStageFrame(uint64_t frame, double total, double compact, 
         "source",  "overlay", "memo",     "eligibility", "texture_hash", "tev",        "geometry",
         "world",   "publish", "requests", "placement",   "selection",    "compaction", "lighting",
         "shadows", "draw",    "prepare",  "interaction", "upload",
-        "select_traverse", "select_order", "select_evaluate", "select_assemble", "diagnostics", "select_refine"
+        "select_traverse", "select_order", "select_evaluate", "select_assemble", "diagnostics", "select_refine",
+        "cards"
     };
     std::fprintf(stderr, "TRIAEVUM_GRASS_PROFILE frame=%llu", static_cast<unsigned long long>(frame));
     for (size_t i = 0; i < names.size(); ++i)
@@ -156,7 +160,8 @@ inline void ReportGrassStageFrame(uint64_t frame, double total, double compact, 
                  "raster_depth_instances=%llu explicit_depth_batches=%llu explicit_depth_instances=%llu "
                  "traverse_jobs=%llu traverse_job_ms=%.6f traverse_max_job_ms=%.6f evaluate_jobs=%llu "
                  "evaluate_job_ms=%.6f evaluate_max_job_ms=%.6f refine_jobs=%llu refine_job_ms=%.6f "
-                 "refine_max_job_ms=%.6f candidate_hit=%llu candidate_miss=%llu candidate_violation=%llu select_hash=%016llx\n",
+                 "refine_max_job_ms=%.6f candidate_hit=%llu candidate_miss=%llu candidate_violation=%llu select_hash=%016llx"
+                 " gpu_cards_ms=%.6f card_batches=%llu card_instances=%llu\n",
                  (unsigned long long)f.MemoHit, (unsigned long long)f.MemoMiss, (unsigned long long)f.NeitherHit,
                  (unsigned long long)f.SelectionHit, (unsigned long long)f.SelectionMiss,
                  (unsigned long long)f.PlacementHit, (unsigned long long)f.PlacementMiss, (unsigned long long)f.DiskHit,
@@ -172,6 +177,7 @@ inline void ReportGrassStageFrame(uint64_t frame, double total, double compact, 
                  f.TraverseMaxJobMs, (unsigned long long)f.EvaluateJobs, f.EvaluateJobMs, f.EvaluateMaxJobMs,
                  (unsigned long long)f.RefineJobs, f.RefineJobMs, f.RefineMaxJobMs, (unsigned long long)f.CandidateHit,
                  (unsigned long long)f.CandidateMiss, (unsigned long long)f.CandidateViolation,
-                 (unsigned long long)f.SelectHash);
+                 (unsigned long long)f.SelectHash, cards, (unsigned long long)f.CardBatches,
+                 (unsigned long long)f.CardInstances);
 }
 } // namespace Fast::Oot3d

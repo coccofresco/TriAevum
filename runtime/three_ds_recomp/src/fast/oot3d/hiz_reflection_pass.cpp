@@ -46,11 +46,13 @@ struct HiZReflectionPass::Impl {
     nri::PipelineLayout* PipelineLayout = nullptr;
     nri::Pipeline* RayPipeline = nullptr;
     nri::Pipeline* FilterPipeline = nullptr;
+    nri::Pipeline* UpsamplePipeline = nullptr;
     nri::Descriptor* LinearSampler = nullptr;
     nri::Descriptor* NearestSampler = nullptr;
     nri::DescriptorPool* DescriptorPool = nullptr;
     std::array<nri::DescriptorSet*, kWaterSlots> RaySets{};
     std::array<nri::DescriptorSet*, kWaterSlots> FilterSets{};
+    std::array<nri::DescriptorSet*, kWaterSlots> UpsampleSets{};
     std::array<nri::Buffer*, kWaterSlots> WaterBuffers{};
     std::array<nri::Descriptor*, kWaterSlots> WaterViews{};
     std::array<void*, kWaterSlots> WaterMapped{};
@@ -68,12 +70,15 @@ struct HiZReflectionPass::Impl {
         VkImage Color = VK_NULL_HANDLE;
         std::array<nri::DescriptorSet*, kWaterSlots> Ray{};
         std::array<nri::DescriptorSet*, kWaterSlots> Filter{};
+        std::array<nri::DescriptorSet*, kWaterSlots> Upsample{};
     };
     std::array<ColorSets, kColorVariants> ColorVariants{};
     uint32_t ColorVariantCount = 0;
 #endif
-    std::array<VkImage, 2> Images{};
-    std::array<VkImageView, 2> Views{};
+    // The half-resolution trace, the graph's scene-resolution output and the
+    // half-resolution filtered result the upsample reads.
+    std::array<VkImage, 3> Images{};
+    std::array<VkImageView, 3> Views{};
     std::array<VkImage, 4> Inputs{};
     std::array<VkFormat, 4> InputFormats{};
     uint32_t Width = 0, Height = 0;
@@ -162,6 +167,9 @@ bool HiZReflectionPass::Initialize(VkPhysicalDevice physicalDevice,
         createPipeline(BuildHiZReflectionBilateralFilterShader(),
                        "oot3d_hiz_reflection_filter.comp",
                        mImpl->FilterPipeline);
+        createPipeline(BuildHiZReflectionUpsampleShader(),
+                       "oot3d_hiz_reflection_upsample.comp",
+                       mImpl->UpsamplePipeline);
         const auto createSampler = [&](nri::Filter filter,
                                        nri::Descriptor*& output) {
             nri::SamplerDesc sampler{};
@@ -268,10 +276,10 @@ bool HiZReflectionPass::Configure(
             if (views[i] == nullptr)
                 throw std::runtime_error("NRI SSR input view failed");
         }
-        std::array<nri::DescriptorSet*, 2U * kWaterSlots> sets{};
+        std::array<nri::DescriptorSet*, 3U * kWaterSlots> sets{};
         if (mImpl->Core->AllocateDescriptorSets(
                 *mImpl->DescriptorPool, *mImpl->PipelineLayout, 0,
-                sets.data(), 2U * kWaterSlots, 0) != nri::Result::SUCCESS)
+                sets.data(), 3U * kWaterSlots, 0) != nri::Result::SUCCESS)
             throw std::runtime_error("NRI SSR descriptor sets failed");
         const auto updateSet = [&](nri::DescriptorSet* set,
                                    const std::array<nri::Descriptor*, 4>& sources,
@@ -295,17 +303,23 @@ bool HiZReflectionPass::Configure(
         std::array<nri::Descriptor*, 4> filterInputs{
             NriInteropAccess::TextureView(*mImpl->Interop, mImpl->Images[0], false),
             views[1], views[2], views[3]};
+        std::array<nri::Descriptor*, 4> upsampleInputs{
+            NriInteropAccess::TextureView(*mImpl->Interop, mImpl->Images[2], false),
+            views[1], views[2], views[3]};
         for (uint32_t slot = 0; slot < kWaterSlots; ++slot) {
-            variant.Ray[slot] = sets[2U * slot];
-            variant.Filter[slot] = sets[2U * slot + 1U];
+            variant.Ray[slot] = sets[3U * slot];
+            variant.Filter[slot] = sets[3U * slot + 1U];
+            variant.Upsample[slot] = sets[3U * slot + 2U];
             updateSet(variant.Ray[slot], views, mImpl->Images[0], slot);
-            updateSet(variant.Filter[slot], filterInputs, mImpl->Images[1], slot);
+            updateSet(variant.Filter[slot], filterInputs, mImpl->Images[2], slot);
+            updateSet(variant.Upsample[slot], upsampleInputs, mImpl->Images[1], slot);
         }
         variant.Color = color;
     };
     const auto selectColor = [&](uint32_t index) {
         mImpl->RaySets = mImpl->ColorVariants[index].Ray;
         mImpl->FilterSets = mImpl->ColorVariants[index].Filter;
+        mImpl->UpsampleSets = mImpl->ColorVariants[index].Upsample;
         mImpl->Inputs[0] = mImpl->ColorVariants[index].Color;
     };
     if (mImpl->Width == output.Width && mImpl->Height == output.Height &&
@@ -331,14 +345,22 @@ bool HiZReflectionPass::Configure(
         return false;
     InvalidateScreenResources();
     try {
-        NriOwnedTexture2D privateOutput;
+        // Half resolution, rounded up (sample s is the scene's pixel 2s).
+        const uint32_t halfWidth = (output.Width + 1U) / 2U, halfHeight = (output.Height + 1U) / 2U;
+        NriOwnedTexture2D privateOutput, filteredHalf;
         if (!mImpl->Interop->CreateOwnedTexture2D(
-                output.Width, output.Height,
-                VK_FORMAT_R16G16B16A16_SFLOAT, privateOutput)) {
+                halfWidth, halfHeight,
+                VK_FORMAT_R16G16B16A16_SFLOAT, privateOutput) ||
+            !mImpl->Interop->CreateOwnedTexture2D(
+                halfWidth, halfHeight,
+                VK_FORMAT_R16G16B16A16_SFLOAT, filteredHalf)) {
+            if (privateOutput.Image != VK_NULL_HANDLE) mImpl->Interop->DestroyOwnedTexture(privateOutput.Image);
             throw std::runtime_error("NRI SSR scratch allocation failed");
         }
         mImpl->Images[0] = privateOutput.Image;
         mImpl->Views[0] = privateOutput.SampledView;
+        mImpl->Images[2] = filteredHalf.Image;
+        mImpl->Views[2] = filteredHalf.SampledView;
         mImpl->Images[1] = output.Texture.Image;
         mImpl->Views[1] = output.Texture.SampledView;
         mImpl->OutputStates = output.StateTracker;
@@ -354,13 +376,14 @@ bool HiZReflectionPass::Configure(
             if (inputViews[i] == nullptr)
                 throw std::runtime_error("NRI SSR input view failed");
         }
+        // Three sets (trace, filter, upsample) per frame slot and colour.
         nri::DescriptorPoolDesc pool{};
-        pool.descriptorSetMaxNum = 2U * kWaterSlots * kColorVariants;
-        pool.samplerMaxNum = 4U * kWaterSlots * kColorVariants;
-        pool.textureMaxNum = 10U * kWaterSlots * kColorVariants;
-        pool.storageTextureMaxNum = 2U * kWaterSlots * kColorVariants;
-        pool.constantBufferMaxNum = 2U * kWaterSlots * kColorVariants;
-        pool.structuredBufferMaxNum = 2U * kWaterSlots * kColorVariants;
+        pool.descriptorSetMaxNum = 3U * kWaterSlots * kColorVariants;
+        pool.samplerMaxNum = 6U * kWaterSlots * kColorVariants;
+        pool.textureMaxNum = 15U * kWaterSlots * kColorVariants;
+        pool.storageTextureMaxNum = 3U * kWaterSlots * kColorVariants;
+        pool.constantBufferMaxNum = 3U * kWaterSlots * kColorVariants;
+        pool.structuredBufferMaxNum = 3U * kWaterSlots * kColorVariants;
         nri::Device* device = NriInteropAccess::Device(*mImpl->Interop);
         if (mImpl->Core->CreateDescriptorPool(
                 *device, pool, mImpl->DescriptorPool) != nri::Result::SUCCESS)
@@ -437,44 +460,59 @@ bool HiZReflectionPass::Execute(VkCommandBuffer commandBuffer,
     const auto rawWrite = mImpl->PrivateStates.PlanTransition(
         reinterpret_cast<uintptr_t>(mImpl->Images[0]),
         {ResourceAccess::ComputeWrite, 0});
+    const auto halfWrite = mImpl->PrivateStates.PlanTransition(
+        reinterpret_cast<uintptr_t>(mImpl->Images[2]),
+        {ResourceAccess::ComputeWrite, 0});
     const auto filteredWrite = mImpl->OutputStates->PlanTransition(
         reinterpret_cast<uintptr_t>(mImpl->Images[1]),
         {outputBarrier->DispatchAccess, 0});
-    const std::array<NriTextureTransitionDesc, 2> toCompute{{
+    const std::array<NriTextureTransitionDesc, 3> toCompute{{
         {mImpl->Images[0], rawWrite},
+        {mImpl->Images[2], halfWrite},
         {mImpl->Images[1], filteredWrite}}};
     if (!NriInteropAccess::CmdTextureBarriers(
             *mImpl->Interop, frameSlot, toCompute.data(),
             static_cast<uint32_t>(toCompute.size())))
         return false;
     mImpl->LastBarrierExecution.RecordPrivateTransition(rawWrite);
+    mImpl->LastBarrierExecution.RecordPrivateTransition(halfWrite);
     mImpl->LastBarrierExecution.RecordGraphTransition(filteredWrite);
     mImpl->PrivateStates.Commit(rawWrite);
+    mImpl->PrivateStates.Commit(halfWrite);
     mImpl->OutputStates->Commit(filteredWrite);
     mImpl->Core->CmdSetDescriptorPool(*command, *mImpl->DescriptorPool);
     mImpl->Core->CmdSetPipelineLayout(
         *command, nri::BindPoint::COMPUTE, *mImpl->PipelineLayout);
+    // The trace and the filter at half resolution, the upsample at the
+    // scene's (the push constants keep the scene's extent).
     const auto dispatch = [&](nri::Pipeline* pipeline,
-                              nri::DescriptorSet* descriptorSet) {
+                              nri::DescriptorSet* descriptorSet, uint32_t scale) {
         mImpl->Core->CmdSetPipeline(*command, *pipeline);
         const nri::SetDescriptorSetDesc set{0, descriptorSet};
         mImpl->Core->CmdSetDescriptorSet(*command, set);
         const nri::SetRootConstantsDesc constants{0, &push, sizeof(push)};
         mImpl->Core->CmdSetRootConstants(*command, constants);
-        const nri::DispatchDesc groups{
-            (mImpl->Width + 7U) / 8U, (mImpl->Height + 7U) / 8U, 1U};
+        const uint32_t width = (mImpl->Width + scale - 1U) / scale, height = (mImpl->Height + scale - 1U) / scale;
+        const nri::DispatchDesc groups{(width + 7U) / 8U, (height + 7U) / 8U, 1U};
         mImpl->Core->CmdDispatch(*command, groups);
     };
-    dispatch(mImpl->RayPipeline, mImpl->RaySets[slot]);
-    const auto rawRead = mImpl->PrivateStates.PlanTransition(
-        reinterpret_cast<uintptr_t>(mImpl->Images[0]),
-        {ResourceAccess::ShaderRead, 0});
-    if (!NriInteropAccess::CmdTextureBarrier(
-            *mImpl->Interop, frameSlot, mImpl->Images[0], rawRead))
-        return false;
-    mImpl->LastBarrierExecution.RecordPrivateTransition(rawRead);
-    mImpl->PrivateStates.Commit(rawRead);
-    dispatch(mImpl->FilterPipeline, mImpl->FilterSets[slot]);
+    const auto toRead = [&](uint32_t index) {
+        const auto change = mImpl->PrivateStates.PlanTransition(
+            reinterpret_cast<uintptr_t>(mImpl->Images[index]), {ResourceAccess::ShaderRead, 0});
+        if (!NriInteropAccess::CmdTextureBarrier(*mImpl->Interop, frameSlot, mImpl->Images[index], change))
+            return false;
+        mImpl->LastBarrierExecution.RecordPrivateTransition(change);
+        mImpl->PrivateStates.Commit(change);
+        return true;
+    };
+    mImpl->Interop->TimelineMark(frameSlot, "reflection trace");
+    dispatch(mImpl->RayPipeline, mImpl->RaySets[slot], 2U);
+    mImpl->Interop->TimelineMark(frameSlot, "reflection filter");
+    if (!toRead(0U)) return false;
+    dispatch(mImpl->FilterPipeline, mImpl->FilterSets[slot], 2U);
+    mImpl->Interop->TimelineMark(frameSlot, "reflection upsample");
+    if (!toRead(2U)) return false;
+    dispatch(mImpl->UpsamplePipeline, mImpl->UpsampleSets[slot], 1U);
     const auto filteredRead = mImpl->OutputStates->PlanTransition(
         reinterpret_cast<uintptr_t>(mImpl->Images[1]),
         {outputBarrier->CompletionAccess, 0});
@@ -495,11 +533,14 @@ void HiZReflectionPass::InvalidateScreenResources() {
     mImpl->DescriptorPool = nullptr;
     mImpl->RaySets = {};
     mImpl->FilterSets = {};
+    mImpl->UpsampleSets = {};
     mImpl->ColorVariants = {};
     mImpl->ColorVariantCount = 0;
 #endif
-    if (mImpl->Interop != nullptr)
+    if (mImpl->Interop != nullptr) {
         mImpl->Interop->DestroyOwnedTexture(mImpl->Images[0]);
+        mImpl->Interop->DestroyOwnedTexture(mImpl->Images[2]);
+    }
     mImpl->Images = {};
     mImpl->Views = {};
     mImpl->Inputs = {};
@@ -523,6 +564,8 @@ void HiZReflectionPass::Shutdown() {
             mImpl->Core->DestroyPipeline(mImpl->RayPipeline);
         if (mImpl->FilterPipeline != nullptr)
             mImpl->Core->DestroyPipeline(mImpl->FilterPipeline);
+        if (mImpl->UpsamplePipeline != nullptr)
+            mImpl->Core->DestroyPipeline(mImpl->UpsamplePipeline);
         if (mImpl->PipelineLayout != nullptr)
             mImpl->Core->DestroyPipelineLayout(mImpl->PipelineLayout);
         for (uint32_t slot = 0; slot < kWaterSlots; ++slot) {
@@ -547,12 +590,14 @@ VkImageView HiZReflectionPass::OutputView() const { return mImpl->Views[1]; }
 bool HiZReflectionPass::OutputsOwnedByNri() const {
     return mImpl->Interop != nullptr &&
            mImpl->Interop->OwnsTexture(mImpl->Images[0]) &&
-           mImpl->Interop->OwnsTexture(mImpl->Images[1]);
+           mImpl->Interop->OwnsTexture(mImpl->Images[1]) &&
+           mImpl->Interop->OwnsTexture(mImpl->Images[2]);
 }
 bool HiZReflectionPass::ComputeOwnedByNri() const {
 #ifdef ENABLE_OOT3D_NRI
     return mImpl->Initialized && mImpl->RayPipeline != nullptr &&
-           mImpl->FilterPipeline != nullptr && mImpl->DescriptorPool != nullptr;
+           mImpl->FilterPipeline != nullptr && mImpl->UpsamplePipeline != nullptr &&
+           mImpl->DescriptorPool != nullptr;
 #else
     return false;
 #endif

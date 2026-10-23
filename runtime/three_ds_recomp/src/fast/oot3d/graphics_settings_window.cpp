@@ -3,6 +3,7 @@
 #include "fast/oot3d/graphics_settings_runtime.h"
 #include "fast/oot3d/settings_panel_widgets.h"
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <iterator>
 #include <mutex>
@@ -11,6 +12,8 @@
 
 namespace Fast::Oot3d {
 namespace {
+std::atomic<bool> gDisplayConfirmationDeferred{false};
+
 std::mutex& PanelTabMutex() {
     static std::mutex mutex;
     return mutex;
@@ -123,9 +126,18 @@ void DrawHostNotice() {
     ImGui::End();
 }
 
+void DeferDisplayConfirmation(bool deferred) {
+    gDisplayConfirmationDeferred.store(deferred, std::memory_order_relaxed);
+}
+
+bool DisplayConfirmationDeferred() {
+    return gDisplayConfirmationDeferred.load(std::memory_order_relaxed);
+}
+
 void DrawDisplayConfirmation() {
     auto& runtime = GraphicsSettingsRuntime::Instance();
-    const bool awaiting = runtime.PresentationStatus().Phase == PresentationTransactionPhase::AwaitingConfirmation;
+    const bool awaiting = runtime.PresentationStatus().Phase == PresentationTransactionPhase::AwaitingConfirmation &&
+                          !DisplayConfirmationDeferred();
     constexpr const char* title = "Keep display settings?";
     if (awaiting && !ImGui::IsPopupOpen(title)) ImGui::OpenPopup(title);
     if (!awaiting && !ImGui::IsPopupOpen(title)) return;

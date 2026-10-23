@@ -131,6 +131,57 @@ TEST_F(Oot3dAzaharTexturePackTest, DumpsAndLoadsModernAzaharPngWithoutOrientatio
     EXPECT_EQ(runtime.Snapshot().LoadedTextures, 1U);
 }
 
+TEST_F(Oot3dAzaharTexturePackTest, BaseDirectoriesLoadBeneathTheUserPackInOrder) {
+    std::array<uint8_t, 256> native{};
+    native.fill(37U);
+    const uint64_t hash = Oot3d::Renderer::AzaharCityHash64(native);
+    const auto filename = Oot3d::Renderer::MakeAzaharTextureFilename(8U, 8U, hash, 0U, 0U);
+    const auto writePack = [&](const std::filesystem::path& directory, uint8_t red) {
+        std::filesystem::create_directories(directory / "nested");
+        std::vector<uint8_t> rgba(8U * 8U * 4U, 255U);
+        for (size_t index = 0; index < rgba.size(); index += 4U) rgba[index] = red;
+        Oot3d::Renderer::WriteAzaharTexturePng(directory / "nested" / filename, 8U, 8U, rgba);
+    };
+    const auto exact = Root / "base" / "languages" / "08_EU_ITALIAN";
+    const auto common = Root / "base" / "common";
+    const auto user = Root / "user_pack";
+    writePack(exact, 11U);
+    writePack(common, 22U);
+    writePack(user, 33U);
+    std::vector<uint8_t> pixels(8U * 8U * 4U, 0U);
+    const Oot3d::Renderer::AzaharTextureRequest request{8U, 8U, 0U, 0U, native, pixels};
+    const auto red = [&](Oot3d::Renderer::AzaharTexturePackRuntime& runtime) {
+        const auto replacement = runtime.ResolveAndMaybeDump(request);
+        return replacement != nullptr ? (*replacement->Rgba8)[0] : uint8_t{0};
+    };
+
+    Oot3d::Renderer::AzaharTexturePackRuntime runtime;
+    runtime.SetBaseDirectories({exact, common});
+    runtime.Configure({.LoadCustomTextures = false, .UserDirectory = Root, .LoadDirectory = user});
+    runtime.WaitForPendingLoads();
+    EXPECT_EQ(red(runtime), 11U) << "the first base directory must win, user pack off";
+    runtime.SetBaseDirectories({common});
+    runtime.WaitForPendingLoads();
+    EXPECT_EQ(red(runtime), 22U) << "a new base list must replace the previous one";
+    runtime.Configure({.LoadCustomTextures = true, .UserDirectory = Root, .LoadDirectory = user});
+    runtime.WaitForPendingLoads();
+    EXPECT_EQ(red(runtime), 33U) << "the user's pack must win over base packs";
+    runtime.SetBaseDirectories({});
+    runtime.Configure({.LoadCustomTextures = false, .UserDirectory = Root, .LoadDirectory = user});
+    runtime.WaitForPendingLoads();
+    EXPECT_EQ(runtime.ResolveOrQueue(request).State, Oot3d::Renderer::AzaharTextureResolveState::Disabled);
+
+    // A user pack in the other hash mode keeps loading; the base pack is left
+    // out and the status says so.
+    std::ofstream(user / "pack.json") << R"({"options":{"use_new_hash":true}})";
+    runtime.SetBaseDirectories({common});
+    runtime.Configure({.LoadCustomTextures = true, .UserDirectory = Root, .LoadDirectory = user});
+    runtime.WaitForPendingLoads();
+    const auto status = runtime.Snapshot();
+    EXPECT_NE(status.LastError.find("another hash mode"), std::string::npos) << status.LastError;
+    EXPECT_EQ(status.IndexedTextures, 1U) << "the user's pack must stay loaded";
+}
+
 TEST_F(Oot3dAzaharTexturePackTest,
        QueuesReplacementDecodeWithoutBlockingTheCaller) {
     constexpr uint64_t titleId = 0x0004000000000044ULL;

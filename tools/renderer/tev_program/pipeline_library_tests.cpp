@@ -128,6 +128,11 @@ int main() try {
     support.fragmentStoresAndAtomics = VK_TRUE;
     Check(Fast::Renderer3ds::PicaVulkanCoreFeatures(support).fragmentStoresAndAtomics,
           "supported native fragment writes were disabled");
+    Check(!Fast::Renderer3ds::PicaVulkanCoreFeatures(support).drawIndirectFirstInstance,
+          "unsupported indirect firstInstance was advertised");
+    support.drawIndirectFirstInstance = VK_TRUE;
+    Check(Fast::Renderer3ds::PicaVulkanCoreFeatures(support).drawIndirectFirstInstance,
+          "supported indirect firstInstance (grass GPU selection) was disabled");
     VkPipelineVertexInputStateCreateInfo vi{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
     VkPipelineInputAssemblyStateCreateInfo ia{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
     ia.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;

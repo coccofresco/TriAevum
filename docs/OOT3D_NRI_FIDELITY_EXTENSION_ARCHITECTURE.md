@@ -364,6 +364,7 @@ historical measurements, not the current instrumented layout. See
 - The native scene baseline is the OOT3D top-screen aspect, `400x240` (`5:3`). `ScenePresentationPolicy` extends horizontal FOV for wider outputs and vertical FOV for narrower outputs; it never crops or stretches the scene. Thus `16:9` resolves to `16/15` horizontal expansion and `4:3` to `5/4` vertical expansion.
 - Perspective scene projection alone consumes this policy. Native orthographic calls remain unchanged, and HUD/UI continues through its independent `400x240` logical canvas and uniform-fit viewport. Pointer/touch mapping uses the same fitted rectangle, so visual placement and interaction cannot diverge.
 - The top PICA render target follows the full output extent at every valid aspect. This produces real `1280x720` and `1024x768` scene frames instead of widening only one case or letterboxing the other.
+- Since 2026-10-20 the "output" of that contract is the presentation picture (`fast/oot3d/presentation_picture.h`): the user's aspect ratio (`Graphics.Output.Aspect`: Original 3DS 5:3, 16:9 default, 21:9, Free), fitted into the swapchain, centred, with black bars on the remaining sides; Free is the whole swapchain and keeps the previous behaviour. The Vulkan backend resolves the picture once per frame from the acquired swapchain (`mPresentationPicture`), sizes the native PICA targets to it (`NativePicaOutputExtent`), fits the scanout into it and leaves the bars to the scanout clear; the window host resolves the same picture from the window size for the scene FOV policy, the UI canvases (`N64UiOutputRegion`), the in-game menu and the pointer/touch mapping. The scene is never cropped or stretched: a wider picture widens the FOV, a narrower one heightens it, exactly as a window of the picture's shape did before.
 - The existing persisted `Graphics.Camera.FovMultiplier` contract remains compatible and is now composed in the typed scene projection policy before aspect extension. It changes both scene axes around the original optical center and cannot affect orthographic UI geometry.
 - Full foundation coverage passes `228/228`. Deterministic strict-NRI Kokiri runs report `57/0` PICA AOT hits/misses; `16:9` modifies 42 perspective calls with horizontal expansion `1.0666667`, while `4:3` modifies 42 with vertical expansion `1.25`; both leave 21 orthographic calls untouched. All 30 HUD primitive descriptors are identical across both aspects and FOV `1.0/1.25`. Reproducible configs, diagnostics and framebuffer captures are under `I:/oot3dre_work/visual-parity/scene-aspect-fov-contract-20260825/`.
 
@@ -3746,6 +3747,43 @@ after, every changed pixel lies inside the logo's box at presentation frames
 1200, 1500 and 1800; Native frames are byte-identical to the previous build.
 Foundation 337/337, pipeline cache 52/52, composition, visual savestate and
 Vulkan bridge tests pass.
+
+## The title logo as a layer over the resolved scene (2026-10-20)
+
+In the intro's river shot the logo (actor 0x0171, `IsolatedLighting`) was
+mirrored, deformed, in the water: its 23 draws (17 opaque with depth write, 6
+transparent) are the last scene draws on the top target, right before its
+display transfer, so the Hi-Z reflection read a scene colour and depth that
+already held the logo. In the extension profile the logo is now a layer of
+its own over the completed scene, exactly as native UI is:
+
+- `PicaCompositionSchedule` treats a draw as an overlay when its domain is
+  `Ui` or when it is a scene draw with `IsolatedLighting`. A tail of overlay
+  draws ends the scene: the `SceneResolved`/`BeforeUi` anchors lie before its
+  first draw, and isolated draws are no world geometry for the stage analysis
+  (the logo's opaque draws after the atmosphere no longer make the intro's
+  opaque world non-contiguous). A world draw after an overlay draw withholds
+  the boundary as before.
+- `ExecuteNativePicaBeforeDrawAnchors` runs the pre-UI boundary for the
+  first overlay draw (`NativeSceneOverlayDraw`): the scene stages (AO, GI,
+  reflections, outline, same-extent TAA/SMAA) are composed and committed to
+  the target, or the scene is kept beside the display for an upscaler.
+- A logo draw after that boundary (`sceneOverlayDraw`: the target's
+  `SceneEffectsResolvedSerial` is current) is drawn like UI: no projection
+  jitter, no motion vectors, not a reflection-environment sample, and its
+  write keeps the resolved-scene and scene-before-UI serials, so the display
+  transfer carries the scene effects as resolved and the upscaler lays the
+  logo over its output through the native UI overlay. Its depth test against
+  the world is unchanged (the target's depth is not touched by the boundary).
+  Without a boundary (no scene stage enabled and no upscaler, or world draws
+  after the logo) it is a scene draw as before. Diagnostics count
+  `scene_overlay_draw_count`.
+- An isolated draw never casts a directional shadow nor feeds the scene
+  distance field, in any frame: it is an object of its own.
+
+The Native profile and F2 are unaffected. What the layer gives up: the
+logo is not temporally anti-aliased (it is drawn after the same-extent TAA
+resolve, like the HUD); SMAA/FSR/DLSS display stages still see it.
 
 ## Sky identity under visual interpolation (2026-10-06)
 

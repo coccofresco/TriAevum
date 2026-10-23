@@ -44,7 +44,10 @@ LoadedModule Load() {
         return loaded;
     }
     std::vector<std::filesystem::path> candidates{ directory / TRIAEVUM_IMMERSE_LIBRARY };
-#if !defined(_WIN32)
+#if defined(_WIN32)
+    // The Windows package keeps its DLLs in runtime/ beside TriAevum.exe.
+    candidates.push_back(directory / "runtime" / TRIAEVUM_IMMERSE_LIBRARY);
+#else
     candidates.push_back(directory / "lib" / TRIAEVUM_IMMERSE_LIBRARY);
 #endif
     for (const auto& path : candidates) {

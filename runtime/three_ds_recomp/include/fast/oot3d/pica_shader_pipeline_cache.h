@@ -109,6 +109,8 @@ struct PicaShaderPipelineResult {
     PicaFragmentInstrumentationOutputLayout FragmentOutputs;
     // The fragment composition's branches (always-available programs).
     PicaEffectDecisions Decisions;
+    // PicaFragmentInstrumentationResult::ReadsDrawControl.
+    bool ReadsDrawControl = false;
 
     [[nodiscard]] bool IsCanonical() const noexcept {
         return Domain == PicaShaderDomain::Canonical;

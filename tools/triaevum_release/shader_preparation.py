@@ -19,10 +19,12 @@ try:
     from .common import atomic_write_bytes, atomic_write_json, load_json_object, sha256_file
     from .precompiled_titles import checked_file
     from .native_process import run_native, native_helper_environment
+    from .merge_shader_packs import MAX_BYTES as PACK_MAX_BYTES
 except ImportError:
     from common import atomic_write_bytes, atomic_write_json, load_json_object, sha256_file
     from precompiled_titles import checked_file
     from native_process import run_native, native_helper_environment
+    from merge_shader_packs import MAX_BYTES as PACK_MAX_BYTES
 
 
 FORMAT = "triaevum_shader_preparation_v1"
@@ -32,7 +34,7 @@ RENDERER_CONTRACT = "triaevum_renderer_shader_compiler_v1"
 
 def _pack_header(path: Path, schema: int) -> int:
     size = path.stat().st_size
-    if size < 24 or size > 512 * 1024 * 1024:
+    if size < 24 or size > PACK_MAX_BYTES:
         raise ValueError("Invalid portable shader pack size")
     with path.open("rb") as stream:
         magic, version, actual_schema, count, reserved = struct.unpack("<8s4I", stream.read(24))

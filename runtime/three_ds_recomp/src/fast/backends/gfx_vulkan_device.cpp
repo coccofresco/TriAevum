@@ -3,6 +3,7 @@
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_internal.h"
 #include "fast/renderer3ds/vulkan_commands.h"
+#include "fast/renderer3ds/vulkan_memory_budget.h"
 
 namespace Fast {
 
@@ -228,6 +229,9 @@ void GfxRenderingAPIVulkan::PickPhysicalDevice() {
     properties2.pNext = &resolveProperties;
     RequiredInstanceCommand<PFN_vkGetPhysicalDeviceProperties2>(mInstance, "vkGetPhysicalDeviceProperties2")(
         mPhysicalDevice, &properties2);
+    // The memory budget (VK_EXT_memory_budget) is read through the same loader
+    // path; a loader without the command only withdraws the budget queries.
+    Renderer3ds::BindVulkanMemoryBudgetInstance(mInstance);
     if ((resolveProperties.supportedDepthResolveModes &
          VK_RESOLVE_MODE_MIN_BIT) != 0U) {
         mNativePicaDepthResolveMode = VK_RESOLVE_MODE_MIN_BIT;

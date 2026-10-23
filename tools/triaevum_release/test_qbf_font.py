@@ -7,9 +7,10 @@ from unittest.mock import patch
 import zipfile
 
 from tools.oot3d.decomp_support.scripts.qbf_font import parse_qbf, pair_font_coverage
-from tools.oot3d.decomp_support.scripts.prepare_qbf_font_pack import (
-    SINGLESCREEN_FONT_SOURCES, prepare_font_pack,
-)
+from tools.oot3d.decomp_support.scripts.prepare_qbf_font_pack import NATIVE_FONTS, prepare_font_pack
+
+REPOSITORY = Path(__file__).resolve().parents[2]
+SHIPPED_FONT = REPOSITORY / "runtime/triaevum_resources/topscreen/singlescreen-3.1/ltn16.qbf"
 
 
 def font_bytes(size=16, records=((32, 0, b"\x06\x04\0\0"), (42, 1, b"\x05\x06\0\0"))):
@@ -73,60 +74,56 @@ class QbfFontTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "alias"):
             pair_font_coverage(native, parse_qbf(font_bytes(64)))
 
-    def test_import_is_reproducible_regional_and_never_contains_patch(self):
+    def test_import_is_reproducible_and_regional(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            archive, output = root / "mod.zip", root / "font.zip"
-            with zipfile.ZipFile(archive, "w") as source:
-                source.writestr("SingleScreen_3.0/" + SINGLESCREEN_FONT_SOURCES[0][1], font_bytes(64))
-                source.writestr("code.ips", b"DO NOT IMPORT")
+            font, output = root / "ltn16.qbf", root / "font.zip"
+            font.write_bytes(font_bytes(64))
             def read_font(_, path):
-                if path == SINGLESCREEN_FONT_SOURCES[0][0]:
+                if path == NATIVE_FONTS[0]:
                     return font_bytes()
                 raise FileNotFoundError(path)
             with patch("tools.oot3d.decomp_support.scripts.prepare_qbf_font_pack.read_level3_romfs_file",
                        side_effect=read_font):
-                manifest = prepare_font_pack(archive=archive, romfs=root / "romfs", output=output)
+                manifest = prepare_font_pack(font=font, romfs=root / "romfs", output=output)
                 first = output.read_bytes()
-                prepare_font_pack(archive=archive, romfs=root / "romfs", output=output)
+                prepare_font_pack(font=font, romfs=root / "romfs", output=output)
             self.assertEqual(first, output.read_bytes())
             self.assertTrue(manifest["runtime_enabled"])
             self.assertEqual(manifest["minimum_output_height"], 480)
-            self.assertEqual(len(manifest["fonts"]), 1)
+            self.assertEqual([item["romfs_path"] for item in manifest["fonts"]], ["message/eu/ltn16.qbf"])
             with zipfile.ZipFile(output) as prepared:
                 self.assertEqual(len(prepared.namelist()), 3)
                 self.assertEqual(json.loads(prepared.read("manifest.json")), manifest)
-            self.assertNotIn(b"DO NOT IMPORT", first)
 
-    def test_singlescreen_layout_supplies_the_usa_font(self):
+    def test_the_same_font_covers_the_usa_rom(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            archive, output = root / "singlescreen.zip", root / "font.zip"
-            with zipfile.ZipFile(archive, "w") as source:
-                for _, member in SINGLESCREEN_FONT_SOURCES:
-                    source.writestr("SingleScreen_3.1/" + member, font_bytes(64))
-                source.writestr("SingleScreen_3.1/EUR/Emulator/load/mods/0004000000033600/romfs/"
-                                "message/sys8.qbf", b"not an A4 coverage font")
+            font, output = root / "ltn16.qbf", root / "font.zip"
+            font.write_bytes(font_bytes(64))
             def read_font(_, path):
-                if path == SINGLESCREEN_FONT_SOURCES[1][0]:
+                if path == NATIVE_FONTS[1]:
                     return font_bytes()
                 raise FileNotFoundError(path)
             with patch("tools.oot3d.decomp_support.scripts.prepare_qbf_font_pack.read_level3_romfs_file",
                        side_effect=read_font):
-                manifest = prepare_font_pack(archive=archive, romfs=root / "romfs", output=output,
-                                             archive_root="SingleScreen_3.1")
-            self.assertEqual([font["romfs_path"] for font in manifest["fonts"]], ["message/us/ltn16.qbf"])
+                manifest = prepare_font_pack(font=font, romfs=root / "romfs", output=output)
+            self.assertEqual([item["romfs_path"] for item in manifest["fonts"]], ["message/us/ltn16.qbf"])
+
+    def test_shipped_font_is_the_hd_latin_font(self):
+        shipped = parse_qbf(SHIPPED_FONT.read_bytes())
+        self.assertEqual(shipped.sha256, "8b83e081f721c6e1842b0a9cd90b71a3fb2849674d2b1040f3dc5c3221594169")
+        self.assertGreater(shipped.height, 16)
 
     def test_invalid_import_does_not_replace_existing_output(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            archive, output = root / "mod.zip", root / "font.zip"
+            font, output = root / "ltn16.qbf", root / "font.zip"
             output.write_bytes(b"existing")
-            with zipfile.ZipFile(archive, "w") as source:
-                source.writestr("SingleScreen_3.0/" + SINGLESCREEN_FONT_SOURCES[0][1], b"broken")
+            font.write_bytes(b"broken")
             with patch("tools.oot3d.decomp_support.scripts.prepare_qbf_font_pack.read_level3_romfs_file",
                        return_value=font_bytes()), self.assertRaises(ValueError):
-                prepare_font_pack(archive=archive, romfs=root / "romfs", output=output)
+                prepare_font_pack(font=font, romfs=root / "romfs", output=output)
             self.assertEqual(output.read_bytes(), b"existing")
             self.assertFalse(output.with_suffix(".zip.partial").exists())
 

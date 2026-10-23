@@ -103,7 +103,7 @@ own execution checks before promotion.
 
 ## Measured Windows Result (2026-09-11)
 
-Private evidence under `C:/Users/xander/triaevum-verify-20260911/`:
+Private evidence under `%USERPROFILE%/triaevum-verify-20260911/`:
 `grass-adaptive-certified` and reversed-order timing-only runs
 `grass-adaptive-repeat-adaptive-clusters` / `grass-adaptive-repeat-fixed-clusters`.
 The control is the previous experimental fixed-cluster configuration, not the

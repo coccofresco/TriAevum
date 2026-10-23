@@ -10,8 +10,8 @@
 - Working title module and provenance: `I:/TriAevum-aot-lab-evidence/baseline`.
 - ROM-derived runtime data: `I:/oot3dre_work/triaevum-full-title-proof`.
 - Issue reproduction, including the user's checkpoint:
-  `C:/Users/xander/triaevum-issues-40-43`.
-- Mounted checkpoint: `C:/Users/xander/triaevum-verify-20260911/epona-user`.
+  `%USERPROFILE%/triaevum-issues-40-43`.
+- Mounted checkpoint: `%USERPROFILE%/triaevum-verify-20260911/epona-user`.
 - External decompilation, ROMs, tools, releases and source worktrees are preserved.
 
 ## Cleanup status
@@ -27,7 +27,7 @@ not source, saves or the active runtime. Their plugin DLL/map siblings are kept:
   its obsolete archive alone is 644,214,700 bytes).
 - `I:/TriAevum-aot-lab-o3/native-objects`.
 
-Older `*.bmp` captures under `C:/Users/xander/triaevum-verify-20260911`
+Older `*.bmp` captures under `%USERPROFILE%/triaevum-verify-20260911`
 total 204 files / approximately 0.52 GiB. Do not delete that entire directory:
 it also contains useful saves, presets and diagnostic reports. Keep reference
 captures supporting still-open issues. Older test captures under

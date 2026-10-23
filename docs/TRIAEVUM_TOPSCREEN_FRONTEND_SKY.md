@@ -76,6 +76,13 @@ accepted captures unchanged; S01 late (first START after the hidden panels have
 entered) now shows the choice on its first START and reaches File Select on the
 second, as the new captures show.
 
+## Ocarina Reframed file selection (2026-10-21)
+
+Once the file board is initialized, the file selection no longer uses this
+relocation: `TopScreenReframedFileSelect` lays it out after Ocarina Reframed and
+keeps both native targets. See `TRIAEVUM_TOPSCREEN_REFRAMED_FILE_SELECT.md`.
+The title and the version choice still use the relocation above.
+
 ## Verification
 
 Fast ROM-free regression test (about three seconds including compilation):

@@ -36,6 +36,16 @@ void SetError(std::string* error, std::string message) {
     return false;
 }
 
+// A draw composited over the completed scene: native UI, or a scene draw the
+// title lights as an object of its own (IsolatedLighting: the title logo).
+// Neither is world geometry for the stage analysis, and a tail of them ends
+// the scene, so effects never consume their pixels.
+[[nodiscard]] bool OverlayDraw(const CompositionDrawReference& draw) noexcept {
+    return draw.Domain == CompositionDomain::Ui ||
+           (draw.Domain == CompositionDomain::Scene &&
+            draw.Composition.IsolatedLighting);
+}
+
 [[nodiscard]] bool SameRun(const PicaCompositionRun& run,
                            const CompositionDrawReference& draw) noexcept {
     return run.Target == draw.Target && run.Domain == draw.Domain &&
@@ -203,8 +213,9 @@ bool PicaCompositionSchedule::Compile(
 
         std::vector<size_t> opaquePositions;
         for (size_t position = 0U; position < targetDraws.size(); ++position) {
-            if (mDraws[targetDraws[position]].Composition.Layer ==
-                CompositionLayer::OpaqueWorld) {
+            const auto& draw = mDraws[targetDraws[position]];
+            if (draw.Composition.Layer == CompositionLayer::OpaqueWorld &&
+                !OverlayDraw(draw)) {
                 opaquePositions.push_back(position);
             }
         }
@@ -222,12 +233,13 @@ bool PicaCompositionSchedule::Compile(
         addAnchor(CompositionStage::BeforeOpaque, target.Target,
                   targetDraws[firstOpaquePosition], false);
         // Completion of a scene prefix does not require opaque/transparent
-        // contiguity. Publish its native UI boundary only when no scene draw
-        // follows UI on this target; effects must never consume UI pixels.
+        // contiguity. Publish its overlay boundary (native UI, the isolated
+        // title logo) only when no world draw follows an overlay draw on this
+        // target; effects must never consume overlay pixels.
         const auto firstUi = std::find_if(targetDraws.begin(), targetDraws.end(),
-            [this](size_t index) { return mDraws[index].Domain == CompositionDomain::Ui; });
+            [this](size_t index) { return OverlayDraw(mDraws[index]); });
         const bool uiTail = std::all_of(firstUi, targetDraws.end(),
-            [this](size_t index) { return mDraws[index].Domain == CompositionDomain::Ui; });
+            [this](size_t index) { return OverlayDraw(mDraws[index]); });
         if (uiTail) {
             const bool atTargetEnd = firstUi == targetDraws.end();
             const size_t boundary = atTargetEnd ? targetDraws.back() + 1U : *firstUi;
@@ -268,7 +280,7 @@ bool PicaCompositionSchedule::Compile(
         for (size_t position = lastOpaquePosition + 1U;
              position < targetDraws.size(); ++position) {
             const auto& draw = mDraws[targetDraws[position]];
-            if (draw.Domain == CompositionDomain::Ui) {
+            if (OverlayDraw(draw)) {
                 continue;
             }
             if (draw.Domain != CompositionDomain::Scene) {

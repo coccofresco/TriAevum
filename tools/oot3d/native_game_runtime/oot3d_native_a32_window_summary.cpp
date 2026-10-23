@@ -2437,6 +2437,8 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                     nativeCandidateDispatch.Gameplay->DashQueries()},
                    {"topscreen_dash_frames",
                     nativeCandidateDispatch.Gameplay->DashFrames()},
+                   {"topscreen_dash_navi_hides",
+                    nativeCandidateDispatch.Gameplay->DashNaviHides()},
                    {"topscreen_dash_speed_applications",
                     nativeCandidateDispatch.Gameplay->DashSpeedApplications()},
                    {"topscreen_dash_blends",

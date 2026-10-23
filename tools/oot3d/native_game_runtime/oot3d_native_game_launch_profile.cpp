@@ -43,7 +43,15 @@ std::filesystem::path DefaultNativeGameLaunchProfilePath(
     resolved = resolved.lexically_normal();
     auto profileName = resolved.filename();
     profileName.replace_extension(".launch.json");
-    return resolved.parent_path() / profileName;
+    // Beside the executable, or in the installation's data/ (the Windows
+    // package keeps only the executables, README and LICENSE in its root).
+    const auto beside = resolved.parent_path() / profileName;
+    const auto inData = resolved.parent_path() / "data" / profileName;
+    std::error_code error;
+    if (!std::filesystem::is_regular_file(beside, error) &&
+        std::filesystem::is_regular_file(inData, error))
+        return inData;
+    return beside;
 }
 
 std::vector<std::string> LoadNativeGameLaunchProfile(

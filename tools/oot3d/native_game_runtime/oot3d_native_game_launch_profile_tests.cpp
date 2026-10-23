@@ -39,6 +39,18 @@ int main() {
                 root / "oot3d_native_game.exe");
         Expect(defaultPath == root / "oot3d_native_game.launch.json",
                "default profile path did not follow the executable");
+        // An installation keeps its profile in data/; one beside the
+        // executable still wins.
+        std::filesystem::create_directories(root / "data");
+        WriteText(root / "data" / "oot3d_native_game.launch.json", "{}");
+        Expect(Oot3dNativeGame::DefaultNativeGameLaunchProfilePath(root / "oot3d_native_game.exe") ==
+                   root / "data" / "oot3d_native_game.launch.json",
+               "default profile path did not fall back to data/");
+        WriteText(root / "oot3d_native_game.launch.json", "{}");
+        Expect(Oot3dNativeGame::DefaultNativeGameLaunchProfilePath(root / "oot3d_native_game.exe") ==
+                   root / "oot3d_native_game.launch.json",
+               "a profile beside the executable did not take precedence");
+        std::filesystem::remove(root / "oot3d_native_game.launch.json");
 
         const auto profilePath = root / "custom.launch.json";
         WriteText(

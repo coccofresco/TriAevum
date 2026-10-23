@@ -25,7 +25,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUT_ROOT = ROOT / "analysis" / "oot3d_public_cpp_profile_search"
 DEFAULT_BUILD_ROOT = ROOT / "build" / "oot3d_public_cpp_profile_search"
-GCC15_ROOT = Path("C:/Users/xander/Downloads/arm-gnu-toolchain-15.2.rel1-mingw-w64-x86_64-arm-none-eabi")
+GCC15_ROOT = Path.home() / "Downloads/arm-gnu-toolchain-15.2.rel1-mingw-w64-x86_64-arm-none-eabi"
 
 
 @dataclass(frozen=True)

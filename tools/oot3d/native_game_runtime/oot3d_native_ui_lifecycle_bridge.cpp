@@ -488,11 +488,14 @@ Oot3dNativeUiLifecycleBridge::BuildTopScreenPresentation(
   std::uint32_t systemPage = 0U;
   const bool systemActive = mTopScreenSystemPagePresentation ||
                             (mMemory.Read32(0x0050A530U, &systemPage) && systemPage != 0U);
-  const auto *pauseEdge = mTopScreenPausePageRedrawEdgeGeometry.has_value()
-                              ? &*mTopScreenPausePageRedrawEdgeGeometry
-                              : (mTopScreenPauseEdgeGeometry.has_value()
-                                     ? &*mTopScreenPauseEdgeGeometry
-                                     : nullptr);
+  const auto *pauseEdge =
+      mTopScreenVisionsEdgeGeometry.has_value()
+          ? &*mTopScreenVisionsEdgeGeometry
+          : (mTopScreenPausePageRedrawEdgeGeometry.has_value()
+                 ? &*mTopScreenPausePageRedrawEdgeGeometry
+                 : (mTopScreenPauseEdgeGeometry.has_value()
+                        ? &*mTopScreenPauseEdgeGeometry
+                        : nullptr));
   if (!systemActive && pauseEdge != nullptr) {
     if (const auto itemPage = NativePauseSharedTextureIdentity(
             oot3d::ui::UiPauseSharedTextureSlot::ItemPage);

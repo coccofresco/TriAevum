@@ -44,7 +44,10 @@ LoadedModule Load() {
         return loaded;
     }
     std::vector<std::filesystem::path> candidates{ directory / TRIAEVUM_DLSS_LIBRARY };
-#if !defined(_WIN32)
+#if defined(_WIN32)
+    // The Windows package keeps its DLLs in runtime/ beside TriAevum.exe.
+    candidates.push_back(directory / "runtime" / TRIAEVUM_DLSS_LIBRARY);
+#else
     candidates.push_back(directory / "lib" / TRIAEVUM_DLSS_LIBRARY);
 #endif
     for (const auto& path : candidates) {

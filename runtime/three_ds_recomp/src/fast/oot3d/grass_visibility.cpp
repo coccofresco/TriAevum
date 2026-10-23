@@ -545,6 +545,7 @@ GrassLodPolicy BuildGrassLodPolicy(const InteractiveGrassSettings& settings) noe
     policy.SegmentEndDistance = settings.SegmentLodEndDistance;
     policy.NearBladeSegments = settings.Appearance.BladeSegments;
     policy.FarBladeSegments = std::min(policy.NearBladeSegments, settings.FarBladeSegments);
+    policy.CrossedBlades = settings.Appearance.CrossedBlades;
     policy.FarTuftsEnabled = settings.FarTuftsEnabled && !settings.MidrangeClustersEnabled;
     policy.FarTuftBladeCount = settings.FarTuftBladeCount;
     policy.TuftTransitionFraction = settings.TuftTransitionFraction;
@@ -699,11 +700,41 @@ GrassLodDecision ResolveGrassLodWithStableVisibility(const GrassLodPolicy& polic
         choice < first ? middleSegments : policy.NearBladeSegments;
     const float tuftWeight = GrassTuftWeight(normalized, policy.LodEnd, policy.LodEnd + policy.TuftTransitionFraction);
     const bool distant = choice < tuftWeight;
-    result.PlaneCount = distant ? 1U : 2U;
+    result.PlaneCount = distant || !policy.CrossedBlades ? 1U : 2U;
     result.DistantTuft = policy.FarTuftsEnabled && distant;
     result.Retention = GrassLodRetentionFromNormalized(policy, normalized);
     result.Visible = stableVisibility <= result.Retention;
     return result;
+}
+
+float GrassWholeBladeDistance(float reference, float densityStart, bool tufts, float tuftStart,
+                              float drawDistance, float drawFadeFraction) noexcept {
+    // The blade vertex program: grass_density_retention is exactly 1 up to
+    // the density start, the tuft weight exactly 0 below the tuft start (its
+    // retention scale is then 1) and the draw fade exactly 1 below its start.
+    const float normalizer = std::max(reference, 1.0e-6F);
+    float bound = normalizer * densityStart;
+    if (tufts) bound = std::min(bound, normalizer * tuftStart);
+    bound = std::min(bound, drawDistance * (1.0F - drawFadeFraction));
+    return std::isfinite(bound) ? std::max(bound, 0.0F) : 0.0F;
+}
+
+float GrassSegmentsMaximumDistance(const GrassLodPolicy& policy, uint8_t segments) noexcept {
+    constexpr float kUnbounded = std::numeric_limits<float>::infinity();
+    if (segments == policy.FarBladeSegments) return kUnbounded;
+    // ResolveGrassLodWithStableVisibility: a choice (< 1) keeps the near
+    // segments only while the first band weight is below 1, the middle ones
+    // while the second is; each weight is exactly 1 from the end of its band.
+    const float halfBand = policy.SegmentLodSoftness / 6.0F;
+    const auto until = [&](float progress) {
+        if (!(progress < 1.0F)) return kUnbounded;
+        const float start = policy.SegmentStartDistance, end = policy.SegmentEndDistance;
+        return end > start ? start + (end - start) * progress : start;
+    };
+    const uint8_t middle = std::max<uint8_t>(policy.FarBladeSegments, (policy.NearBladeSegments + 1U) / 2U);
+    if (segments == middle) return until(2.0F / 3.0F + halfBand);
+    if (segments == policy.NearBladeSegments) return until(1.0F / 3.0F + halfBand);
+    return 0.0F;
 }
 
 GrassLodEvaluator::GrassLodEvaluator(const GrassLodPolicy& policy) noexcept : mPolicy(policy) {

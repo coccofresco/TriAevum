@@ -376,7 +376,7 @@ il checkout attuale. Non aggiornarlo in blocco senza controllare i consumer.
 | `I:/oot3dre_tools/llvm-22.1.6/` | LLVM usato dai percorsi AOT documentati |
 | `I:/oot3dre_work/`, `J:/...`, `%TEMP%/...` | Build/catture/cache storiche; possono essere state rimosse |
 | `I:/TriAevum-public/donor-review-windroid/` | Clone di sola analisi del donor Android |
-| `ssh xander@192.168.1.190` | Host Linux di prova; non e' uno Steam Deck |
+| `ssh <linux-host>` | Host Linux di prova; non e' uno Steam Deck |
 
 In questa sessione ha funzionato il Git Windows:
 `C:/Program Files/Git/mingw64/libexec/git-core/git.exe`.
@@ -398,12 +398,12 @@ ne' l'intero gioco. Conservare NRI/Vulkan; non sostituirlo con un emulatore.
 
 ### 10.1 Operare sulla macchina Linux remota
 
-Accesso SSH porta 22, utente `xander`, chiave locale documentata
+Accesso SSH porta 22, utente locale della macchina, chiave locale documentata
 `%USERPROFILE%/.ssh/triaevum_linux_ed25519`. Non riportare mai contenuto di chiavi
 o password in log pubblici. Da PowerShell:
 
 ```powershell
-$LinuxHost = 'xander@192.168.1.190'
+$LinuxHost = '<linux-host>'
 $Key = "$env:USERPROFILE/.ssh/triaevum_linux_ed25519"
 ssh -i $Key -o BatchMode=yes -o ConnectTimeout=8 $LinuxHost 'hostname; uname -a; df -h /home'
 ```
@@ -419,14 +419,14 @@ Percorsi remoti documentati il 18 settembre, da verificare prima dell'uso:
 
 | Percorso Linux | Funzione |
 | --- | --- |
-| `/home/xander/triaevum-linux` | Mirror sorgente; puo' avere modifiche locali |
-| `/home/xander/triaevum-linux-build` | Build nativa host, iterazione rapida |
-| `/home/xander/triaevum-steamrt4-build/runtime` | Build con ABI Steam Runtime |
-| `/home/xander/triaevum-steamrt4-qualified-sdk` | SDK qualificato riutilizzabile |
-| `/home/xander/triaevum-ui-movie-title-build/triaevum_title_aot.so` | Modulo titolo con correzioni movie |
-| `/home/xander/triaevum-linux-play` | Installazione/profilo di sviluppo |
-| `/home/xander/triaevum-android-build` | Lavoro Android; verificare sottobuild attivi |
-| `/home/xander/triaevum-pipeline-live-proof` | Evidenze/cache/test privati storici |
+| `~/triaevum-linux` | Mirror sorgente; puo' avere modifiche locali |
+| `~/triaevum-linux-build` | Build nativa host, iterazione rapida |
+| `~/triaevum-steamrt4-build/runtime` | Build con ABI Steam Runtime |
+| `~/triaevum-steamrt4-qualified-sdk` | SDK qualificato riutilizzabile |
+| `~/triaevum-ui-movie-title-build/triaevum_title_aot.so` | Modulo titolo con correzioni movie |
+| `~/triaevum-linux-play` | Installazione/profilo di sviluppo |
+| `~/triaevum-android-build` | Lavoro Android; verificare sottobuild attivi |
+| `~/triaevum-pipeline-live-proof` | Evidenze/cache/test privati storici |
 
 Le due build Linux NON sono due edizioni del gioco: una usa il toolchain host,
 l'altra il sysroot Steam per distribuzione. Un AppImage installato e il desktop
@@ -450,7 +450,7 @@ Procedura per sincronizzare senza distruggere il lavoro remoto:
 Esempio di build incrementale host, dopo tale verifica:
 
 ```powershell
-ssh -i $Key $LinuxHost 'cmake --build /home/xander/triaevum-linux-build --target oot3d_native_game --parallel 3'
+ssh -i $Key $LinuxHost 'cmake --build ~/triaevum-linux-build --target oot3d_native_game --parallel 3'
 ```
 
 Per SDK usare `scripts/run-in-steamrt4.sh` e le istruzioni di

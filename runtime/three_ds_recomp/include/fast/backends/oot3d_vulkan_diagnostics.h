@@ -44,7 +44,7 @@ struct Oot3dVulkanGpuTimings {
     std::optional<double> ToonRasterMilliseconds;
     std::optional<double> GrassMilliseconds;
     std::optional<double> GrassCompactionMilliseconds, GrassBladesMilliseconds, GrassShadowsMilliseconds,
-        GrassLightingMilliseconds;
+        GrassLightingMilliseconds, GrassCardsMilliseconds;
     std::optional<double> AmbientOcclusionMilliseconds;
     std::optional<double> DepthPreparationMilliseconds;
     std::optional<double> ReflectionMilliseconds;
@@ -557,6 +557,9 @@ struct Oot3dVulkanFrameDiagnostics {
     uint32_t SceneBeforeUiSnapshotCount = 0;
     uint32_t SceneBeforeUiTransferCount = 0;
     uint32_t NativeUiOverlayCount = 0;
+    // Isolated scene draws (the title logo) drawn over the resolved scene,
+    // after the boundary before them, as a layer like native UI.
+    uint32_t SceneOverlayDrawCount = 0;
     // UI-attributed draws whose viewport covers a colour target this frame's
     // scene drew into, and those of them composed as screen-space frame
     // content rather than placed on the native UI canvas. Of those, opaque
@@ -863,6 +866,7 @@ class Oot3dVulkanDiagnostics {
     void RecordMxaoTemporal(bool temporal, bool historyValid);
     void RecordBeforeUiAntiAliasing(bool applied, bool unavailable);
     void RecordSceneBeforeUi(bool snapshot, bool transferred);
+    void RecordSceneOverlayDraw();
     void RecordNativeUiOverlay();
     void RecordWholeTargetUiDraw(bool screenContent);
     void RecordOwnPictureDraw(uint32_t barRects);

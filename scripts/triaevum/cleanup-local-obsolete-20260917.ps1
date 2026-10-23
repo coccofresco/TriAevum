@@ -11,7 +11,7 @@ $objects = @('.obj', '.o', '.pch', '.ilk')
 foreach ($path in @(
     'I:\TriAevum-aot-lab-debug\native-objects',
     'I:\TriAevum-aot-lab-o3\native-objects',
-    'C:\Users\xander\AppData\Local\Temp\triaevum-ui-title-cache\native-objects'
+    "$env:USERPROFILE\AppData\Local\Temp\triaevum-ui-title-cache\native-objects"
 )) { Add-Scope $path ($objects + '.lib') 'Regenerable diagnostic AOT objects; keep generated source and plugin DLLs' }
 foreach ($path in @(
     'I:\TriAevum-pica-build\CMakeFiles',
@@ -23,7 +23,7 @@ foreach ($path in @(
     'I:\oot3dre_work\triaevum-module-build-release\CMakeFiles',
     'I:\oot3dre_work\shader-cache-windows\CMakeFiles'
 )) { Add-Scope $path $objects 'Inactive build intermediates; keep dependencies, executables and source' }
-$temp = 'C:\Users\xander\AppData\Local\Temp'
+$temp = "$env:USERPROFILE\AppData\Local\Temp"
 foreach ($dir in Get-ChildItem -LiteralPath $temp -Directory -Filter 'TriAevum-*') {
     if ($dir.Attributes -band [IO.FileAttributes]::ReparsePoint) { continue }
     Add-Scope $dir.FullName $objects 'Old project temporary compilation products'
@@ -37,7 +37,7 @@ if ($IncludeOldCaptures) {
         }
     }
     foreach ($path in @(
-        'C:\Users\xander\triaevum-verify-20260911',
+        "$env:USERPROFILE\triaevum-verify-20260911",
         'J:\TriAevum-verify-20260910',
         'J:\TriAevum-diagnostics',
         'I:\TriAevum-diagnostics'
@@ -45,10 +45,10 @@ if ($IncludeOldCaptures) {
 }
 $protected = @(
     'J:\TriAevum-verify-20260910\runtime',
-    'C:\Users\xander\triaevum-verify-20260911\epona-user'
+    "$env:USERPROFILE\triaevum-verify-20260911\epona-user"
 )
 $baseline = Get-Content -LiteralPath 'I:\TriAevum-aot-lab-evidence\baseline\whole-aot-plugin.json' -Raw | ConvertFrom-Json
-$objectRoot = 'C:\Users\xander\AppData\Local\Temp\triaevum-ui-title-cache\native-objects'
+$objectRoot = "$env:USERPROFILE\AppData\Local\Temp\triaevum-ui-title-cache\native-objects"
 $archive = Join-Path $objectRoot ('archives\' + $baseline.archive_cache_key)
 $record = Get-Content -LiteralPath ($archive + '.build.json') -Raw | ConvertFrom-Json
 if (-not $record.objects -or $record.archive_cache_key -ne $baseline.archive_cache_key) { throw 'Cannot establish baseline object protection' }

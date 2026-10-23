@@ -8,9 +8,11 @@ from pathlib import Path
 try:
     from .cache_lock import acquire_cache_lock, release_cache_lock
     from .common import atomic_write_json, load_json_object, sha256_file
+    from .host_layout import installation_state
 except ImportError:
     from cache_lock import acquire_cache_lock, release_cache_lock
     from common import atomic_write_json, load_json_object, sha256_file
+    from host_layout import installation_state
 
 
 def _copy_synced(source: Path, target: Path) -> None:
@@ -29,13 +31,14 @@ def _copy_synced(source: Path, target: Path) -> None:
 
 
 def journal_path(installation: Path) -> Path:
-    return installation / ".forge-activation" / "journal.json"
+    return installation_state(installation) / ".forge-activation" / "journal.json"
 
 
 @contextmanager
 def installation_lock(installation: Path):
-    installation.mkdir(parents=True, exist_ok=True)
-    descriptor = acquire_cache_lock(installation / ".forge-activation.lock")
+    state = installation_state(installation)
+    state.mkdir(parents=True, exist_ok=True)
+    descriptor = acquire_cache_lock(state / ".forge-activation.lock")
     try:
         yield
     finally:

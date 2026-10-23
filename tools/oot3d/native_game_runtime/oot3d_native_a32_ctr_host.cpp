@@ -143,7 +143,26 @@ NativeA32CtrHostServices::NativeA32CtrHostServices(
     : mSvcEvents(config.RetainFullSvcHistory, config.ProfileRuntime,
                  static_cast<size_t>(config.ResourceLimitValues[2])),
       mConfig(std::move(config)),
-      mLinearHeapCursor(mConfig.LinearHeapBaseAddress) {}
+      mLinearHeapCursor(mConfig.LinearHeapBaseAddress) {
+    // An overlay composes the image-path service view; it never applies to a
+    // module filesystem backend, and it must describe this image's view.
+    if (mConfig.RomFsOverlay &&
+        (mConfig.Filesystem != nullptr || mConfig.RomFsImagePath.empty() ||
+         mConfig.RomFsOverlay->BaseViewSize() != mConfig.RomFsImageSize)) {
+        throw std::invalid_argument(
+            "RomFS overlay requires the matching RomFS image service view");
+    }
+    if (mConfig.RomFsLayers && mConfig.RomFsOverlay) {
+        throw std::invalid_argument(
+            "RomFS development layers cannot combine with a RomFS overlay");
+    }
+}
+
+uint64_t NativeA32CtrHostServices::RomFsServiceViewSize() const noexcept {
+    if (mConfig.RomFsLayers) return mConfig.RomFsLayers->Size();
+    return mConfig.RomFsOverlay ? mConfig.RomFsOverlay->ViewSize()
+                                : mConfig.RomFsImageSize;
+}
 
 bool NativeA32CtrHostServices::HasPicaBackend() const noexcept {
 #if defined(OOT3D_CTR_HOST_SERVICE_PICA_ONLY)

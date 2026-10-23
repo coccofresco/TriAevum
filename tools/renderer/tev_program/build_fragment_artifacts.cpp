@@ -61,12 +61,11 @@ static int BuildCasterFamily(int argc, char** argv) {
     options.SetOptimizationLevel(shaderc_optimization_level_performance);
     SpirvPackFile pack;
     unsigned modules = 0;
-    for (unsigned lighting = 0; lighting < 2; ++lighting)
+    for (const auto lighting : kOot3dPicaParametricLightings)
     for (unsigned integerTexture = 0; integerTexture < 2; ++integerTexture) {
         Oot3dPicaGeneratedFragmentShader shader;
         std::string error;
-        Check(GenerateOot3dPicaParametricBaseFragmentShader(lighting != 0, integerTexture != 0, shader, &error),
-              error);
+        Check(GenerateOot3dPicaParametricBaseFragmentShader(lighting, integerTexture != 0, shader, &error), error);
         const auto caster = Fast::Oot3d::BuildPicaShadowCasterAlphaFragmentShader(
             shader.Source, shader.StateKey, shader.Hooks);
         Check(caster.Applied(), "parametric alpha caster derivation failed");
@@ -101,12 +100,11 @@ static int BuildUberFamily(int argc, char** argv) {
     options.SetOptimizationLevel(shaderc_optimization_level_performance);
     SpirvPackFile pack;
     unsigned modules = 0;
-    for (unsigned lighting = 0; lighting < 2; ++lighting)
+    for (const auto lighting : kOot3dPicaParametricLightings)
     for (unsigned integerTexture = 0; integerTexture < 2; ++integerTexture) {
         Oot3dPicaGeneratedFragmentShader shader;
         std::string error;
-        Check(GenerateOot3dPicaParametricBaseFragmentShader(lighting != 0, integerTexture != 0, shader, &error),
-              error);
+        Check(GenerateOot3dPicaParametricBaseFragmentShader(lighting, integerTexture != 0, shader, &error), error);
         // Surface programs with and without fragment primitive IDs (PBR seams).
         for (unsigned temporal = 0; temporal < 2; ++temporal)
         for (unsigned surface = 0; surface < 3; ++surface) {
@@ -137,7 +135,7 @@ static int BuildUberFamily(int argc, char** argv) {
             ++modules;
         }
     }
-    Check(modules == 24U, "unexpected uber effect family size");
+    Check(modules == 36U, "unexpected uber effect family size");
     if (countOnly || verify) {
         std::cout << "uber_fragment_artifacts=" << modules << '\n';
         return 0;
@@ -172,14 +170,19 @@ int main(int argc, char** argv) try {
     std::unordered_set<std::string> emittedSources;
     unsigned modules = 0;
     unsigned materialCases = 0, toonStyleCases = 0;
+    // The always-available canonical family holds every parametric lighting
+    // configuration (Oot3dPicaParametricLighting); the temporal and toon
+    // families only lighting with and without its tables bound.
     for (unsigned primaryColor = 0; primaryColor < (toon ? 2U : 1U); ++primaryColor)
-    for (unsigned lighting = 0; lighting < 2; ++lighting)
+    for (unsigned lighting = 0; lighting < (temporal || toon ? 2U : 3U); ++lighting)
     for (unsigned integerTexture = 0; integerTexture < 2; ++integerTexture)
     for (unsigned shadowWrite = 0; shadowWrite < 2; ++shadowWrite) {
         if (toon && shadowWrite) continue;
         auto packet = std::make_unique<Oot3dPicaDrawPacket>();
         Oot3dPicaDecodedDrawState state{};
-        packet->Registers[0x8f] = lighting;
+        packet->Registers[0x8f] = lighting != 0 ? 1U : 0U;
+        // Lighting without lookup tables (GenerateOot3dPicaParametricBaseFragmentShader).
+        if (lighting == 2) packet->Registers[0x1c4] = 0xFF7BFF00U;
         packet->Registers[0x80] = 1;
         packet->Registers[0x83] = integerTexture ? 2U << 28 : 0;
         state.Textures[0].Enabled = true;
@@ -424,7 +427,7 @@ int main(int argc, char** argv) try {
         }
     }
     if (countOnly) { std::cout << "unique_modules=" << modules << '\n'; return 0; }
-    Check(modules == (toon ? 348U : temporal ? 40U : 16U), "unexpected finite fragment family size");
+    Check(modules == (toon ? 348U : temporal ? 40U : 24U), "unexpected finite fragment family size");
     if (exact)
         Check(pack.Matches(argv[2]), "fragment artifacts are stale; regenerate with the current compiler and generators");
     else if (!verify)

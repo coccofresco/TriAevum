@@ -11,6 +11,7 @@ import subprocess
 import sys
 import threading
 import uuid
+import webbrowser
 from dataclasses import dataclass
 import time
 from pathlib import Path
@@ -18,33 +19,37 @@ from typing import Any, Callable
 
 try:
     from . import ctr_rom, forge, extracted_inputs, game_language
-    from .bundle_paths import installation_path
+    from .bundle_paths import installation_path, installation_root
     from .common import load_json_object
     from .installed_runtime import validate_installed_runtime
     from .activation_transaction import installation_lock, journal_path
     from .installation_context import resolve_reference
     from .precompiled_titles import load_catalog, select_title, install_precompiled_title
     from .input_adapters import import_contract, adapt_extracted_inputs
-    from .release_platform import host_platform
+    from .release_platform import host_platform, installed_runtime_path, place_installed_runtime
     from .native_process import popen_native
     from .host_layout import for_package
     from . import portal_picker
+    from . import romfs_mods
+    from . import ui_texture_pack
 except ImportError:
     import ctr_rom
     import forge
     import extracted_inputs
     import game_language
-    from bundle_paths import installation_path
+    from bundle_paths import installation_path, installation_root
     from common import load_json_object
     from installed_runtime import validate_installed_runtime
     from activation_transaction import installation_lock, journal_path
     from installation_context import resolve_reference
     from precompiled_titles import load_catalog, select_title, install_precompiled_title
     from input_adapters import import_contract, adapt_extracted_inputs
-    from release_platform import host_platform
+    from release_platform import host_platform, installed_runtime_path, place_installed_runtime
     from native_process import popen_native
     from host_layout import for_package
     import portal_picker
+    import romfs_mods
+    import ui_texture_pack
 
 
 StageReporter = Callable[[str, str], None]
@@ -182,7 +187,9 @@ def install_private_title(
     try:
         report("preflight", "Checking the playable runtime and precompiled title catalog...")
         forge.query_product(runtime_path())
-        root = runtime_path().parent
+        forge.check_title_path_length(
+            output_root, [option.recipe_id for option in load_recipe_options()])
+        root = installation_root()
         catalog = load_catalog(root)
         report("extract", "Extracting native title data from the decrypted ROM...")
         if request.rom.expanduser().is_dir():
@@ -251,17 +258,19 @@ def install_private_title(
 
 
 def runtime_path() -> Path:
-    return installation_path(host_platform().runtime).resolve()
+    return installed_runtime_path(installation_root(), host_platform()).resolve()
 
 
 def launch_runtime(data_root: Path | None = None) -> subprocess.Popen[bytes]:
     try:
         from tools.triaevum_release.package_update import refresh_packaged_runtime
-        layout = for_package(runtime_path().parent)
+        layout = for_package(installation_root())
         with installation_lock(layout.activation):
             if journal_path(layout.activation).exists():
                 raise forge.ForgeError("An activation was interrupted; run Forge again before playing")
-        if (runtime_path().parent / "recipes/precompiled-titles.json").is_file():
+            # A package unpacked over the installation brings a new runtime.
+            place_installed_runtime(installation_root(), host_platform())
+        if (installation_root() / "recipes/precompiled-titles.json").is_file():
             private_root = (data_root or default_gui_data_root()).expanduser().resolve()
             active = load_active_title(private_root / "active-title.json")
             if active is not None:
@@ -293,7 +302,7 @@ def _launch_runtime_locked(data_root: Path | None) -> subprocess.Popen[bytes]:
         raise forge.ForgeError(str(exc)) from exc
     return popen_native(
         [str(executable), "--launch-profile", str(profile)],
-        cwd=for_package(executable.parent).activation,
+        cwd=for_package(installation_root()).activation,
     )
 
 
@@ -336,9 +345,38 @@ class ForgeWindow:
         self.language = tk.StringVar()
         self.language_options = []
         self.status = tk.StringVar(value="Checking the local installation...")
+        self.hd_status = tk.StringVar()
+        self.hd_selection = tk.StringVar()
+        self.hd_folder = tk.StringVar()
+        # On by default: a title prepared without the archive stored gets the
+        # HD UI texture pack downloaded first, as part of "Prepare and install".
+        self.hd_auto_download = tk.BooleanVar(value=True)
+        self.hd_pack = ui_texture_pack.VANILLA_UI_HUD
+        self.hd_contract = ui_texture_pack.pack_contract(forge.DEFAULT_RECIPES, self.hd_pack)
+        # Optional RomFS mods: off by default. This section is the setting's
+        # only control; "Prepare and install" applies it.
+        self.mod = romfs_mods.VANILLA_PLUS_LINK
+        self.mod_contract = romfs_mods.archive_contract(forge.DEFAULT_RECIPES, self.mod)
+        self.mod_status = tk.StringVar()
+        self.mod_selection = tk.StringVar()
+        self.mod_folder = tk.StringVar()
+        self.mod_settings_error = None
+        try:
+            enabled = self.mod.mod_id in romfs_mods.enabled_mods(self.data_root)
+        except (OSError, ValueError) as exc:
+            enabled = False
+            self.mod_settings_error = str(exc)
+        self.mod_enabled = tk.BooleanVar(value=enabled)
+        self.install_thread = None
 
         self._build_layout()
         self.rom.trace_add("write", lambda *_args: self._refresh_actions())
+        self.hd_selection.trace_add("write", lambda *_args: self._import_hd())
+        self.hd_folder.trace_add("write", lambda *_args: self._import_hd_folder())
+        self.hd_auto_download.trace_add("write", lambda *_args: self._refresh_hd())
+        self.mod_selection.trace_add("write", lambda *_args: self._import_mod_archive())
+        self.mod_folder.trace_add("write", lambda *_args: self._import_mod_folder())
+        self.mod_enabled.trace_add("write", lambda *_args: self._toggle_mod())
         self._refresh_active_title()
         self._refresh_actions()
         self.status.trace_add("write", lambda *_args: self.root.after_idle(self._fit_to_content))
@@ -370,10 +408,7 @@ class ForgeWindow:
                 "Select your own decrypted Nintendo 3DS cartridge image. Forge "
                 "accepts .3ds and .cci ROMs, extracts the required native data, "
                 "and does not handle encryption keys. You can also select a folder "
-                "containing decompressed code.bin, exheader.bin and romfs.bin.\n\n"
-                "Forge will download the official TopScreen package and install its "
-                "modified HUD and menu textures for correct single-screen functionality. "
-                "Internet access is needed unless a verified local copy is already available."
+                "containing decompressed code.bin, exheader.bin and romfs.bin."
             ),
             wraplength=700,
             justify="left",
@@ -407,18 +442,20 @@ class ForgeWindow:
         self.language_combo = self.ttk.Combobox(outer, textvariable=self.language, state="disabled")
         self.language_combo.grid(row=5, column=1, columnspan=2, sticky="ew", pady=(10, 0))
         self.language_combo.bind("<<ComboboxSelected>>", self._select_language)
+        self._build_hd_section(outer, 6)
+        self._build_mods_section(outer, 7)
         separator = self.ttk.Separator(outer)
-        separator.grid(row=6, column=0, columnspan=3, sticky="ew", pady=(18, 14))
+        separator.grid(row=8, column=0, columnspan=3, sticky="ew", pady=(18, 14))
 
         self.status_label = self.ttk.Label(
             outer, textvariable=self.status, wraplength=700, justify="left"
         )
-        self.status_label.grid(row=7, column=0, columnspan=3, sticky="ew")
+        self.status_label.grid(row=9, column=0, columnspan=3, sticky="ew")
         self.progress = self.ttk.Progressbar(outer, mode="indeterminate")
-        self.progress.grid(row=8, column=0, columnspan=3, sticky="ew", pady=(10, 18))
+        self.progress.grid(row=10, column=0, columnspan=3, sticky="ew", pady=(10, 18))
 
         actions = self.ttk.Frame(outer)
-        actions.grid(row=9, column=0, columnspan=3, sticky="ew")
+        actions.grid(row=11, column=0, columnspan=3, sticky="ew")
         actions.columnconfigure(0, weight=1)
         self.install_button = self.ttk.Button(
             actions, text="Prepare and install", command=self._install
@@ -429,10 +466,291 @@ class ForgeWindow:
         )
         self.launch_button.grid(row=0, column=2, padx=(8, 0))
 
+    def _build_hd_section(self, parent: Any, row: int) -> None:
+        # The HD graphics are not in the package: make obtaining them obvious.
+        style = self.ttk.Style(self.root)
+        style.configure("HD.TLabelframe.Label", font=("Segoe UI", 11, "bold"))
+        style.configure("HD.TButton", font=("Segoe UI", 10, "bold"), padding=(12, 4))
+        style.configure("Link.TLabel", foreground="#1a5fb4")
+        pack = self.hd_pack
+        section = self.ttk.Labelframe(
+            parent, text="HD UI textures (recommended)", style="HD.TLabelframe", padding=12)
+        section.grid(row=row, column=0, columnspan=3, sticky="ew", pady=(16, 0))
+        section.columnconfigure(3, weight=1)
+        credits = ", ".join(credit.name for credit in pack.credits if credit.group == "Key Authors")
+        self.ttk.Label(
+            section,
+            text=(
+                f"{pack.title} {pack.version} by {pack.author} (credits: {credits}): HD textures for "
+                "the HUD, the menus and TopScreen, in the game language you choose here or in game. "
+                f"Licensed {pack.license_name}: TriAevum does not distribute it. Forge downloads the "
+                "author's original archive from GameBanana, verifies it and keeps it in your private "
+                "data folder. If the download does not work, download the zip from the mod page and "
+                "select it here. Thanks to RLG (M-1) for SingleScreen, the mod TriAevum's TopScreen is "
+                "based on; its HD font is included with TriAevum."
+            ),
+            wraplength=680,
+            justify="left",
+        ).grid(row=0, column=0, columnspan=4, sticky="ew")
+        self.hd_download_button = self.ttk.Button(
+            section, text="Download HD textures", style="HD.TButton", command=self._download_hd)
+        self.hd_download_button.grid(row=1, column=0, sticky="w", pady=(10, 0))
+        self.hd_select_button = self.ttk.Button(
+            section, text="Select .zip...",
+            command=lambda: self._browse(
+                self.hd_selection,
+                f"Select {self.hd_contract.name if self.hd_contract else 'the texture pack zip'}",
+                (("Texture pack archive", "*.zip"),)))
+        self.hd_select_button.grid(row=1, column=1, sticky="w", padx=(8, 0), pady=(10, 0))
+        self.hd_folder_button = self.ttk.Button(
+            section, text="Select extracted folder...", command=self._select_hd_folder)
+        self.hd_folder_button.grid(row=1, column=2, sticky="w", padx=(8, 0), pady=(10, 0))
+        links = self.ttk.Frame(section)
+        links.grid(row=1, column=3, sticky="e", pady=(10, 0))
+        for column, (text, url) in enumerate((("Mod page", pack.page), ("License", pack.license_url))):
+            link = self.ttk.Label(links, text=text, style="Link.TLabel", cursor="hand2")
+            link.grid(row=0, column=column, padx=(8, 0))
+            link.bind("<Button-1>", lambda _event, target=url: webbrowser.open(target))
+        self.hd_auto_check = self.ttk.Checkbutton(
+            section, variable=self.hd_auto_download,
+            text="Download the HD textures with \"Prepare and install\" when they are not stored yet")
+        self.hd_auto_check.grid(row=2, column=0, columnspan=4, sticky="w", pady=(8, 0))
+        self.ttk.Label(section, textvariable=self.hd_status, wraplength=680, justify="left").grid(
+            row=3, column=0, columnspan=4, sticky="ew", pady=(8, 0))
+        self._refresh_hd()
+
+    def _hd_state(self) -> str:
+        return ui_texture_pack.pack_status(installation_root(), self.data_root, self.hd_contract, self.hd_pack)
+
+    def _refresh_hd(self) -> None:
+        if self.hd_contract is None:
+            self.hd_status.set("Not available for the supported game revisions of this package.")
+            return
+        state = self._hd_state()
+        if state == "ready":
+            self.hd_status.set("HD textures ready. They are applied when you prepare and install the title.")
+        elif state == "archive":
+            self.hd_status.set("HD texture archive stored. It is prepared and applied when you prepare "
+                               "and install the title.")
+        elif self.hd_auto_download.get():
+            self.hd_status.set(f"Not stored yet: the HD textures ({self.hd_contract.bytes // 1_000_000} MB) "
+                               "are downloaded when you prepare and install the title. Without them the "
+                               "game uses the native textures.")
+        else:
+            self.hd_status.set("Not installed: the game uses the native textures.")
+
+    def _install_hd_download_needed(self) -> bool:
+        """Whether "Prepare and install" downloads the HD textures first."""
+        return (bool(self.hd_auto_download.get()) and self.hd_contract is not None
+                and self._hd_state() == "missing")
+
+    def _download_hd_task(self, report: Callable[[str], None]) -> None:
+        romfs_mods.download_archive(
+            self.data_root, self.hd_pack, self.hd_contract, report=report,
+            progress=lambda done, total: report(f"Downloading the HD textures... {done * 100 // total}%"))
+
+    def _download_hd_for_install(self) -> None:
+        """Worker-thread download before the title is prepared; a failure keeps
+        the native textures and reports why, it never stops the installation."""
+        self.events.put(("hd_stage", "Downloading the HD textures..."))
+        try:
+            self._download_hd_task(lambda text: self.events.put(("hd_stage", text)))
+        except Exception as exc:
+            self.events.put(("hd_stage", (
+                f"HD texture download failed: {exc} The title is prepared with the native textures. "
+                "Download the zip from the mod page and select it with \"Select .zip...\", then "
+                "prepare and install again.")))
+            return
+        self.events.put(("hd_stage", "HD texture archive ready. It is applied by this installation."))
+
+    def _download_hd(self) -> None:
+        self._run_hd(self._download_hd_task, "Downloading the HD textures...")
+
+    def _import_hd(self) -> None:
+        selected = self.hd_selection.get().strip()
+        if not selected or self.hd_contract is None:
+            return
+        self._run_hd(lambda _report: romfs_mods.import_archive(
+            Path(selected), self.data_root, self.hd_pack, self.hd_contract),
+            "Verifying the selected archive...")
+
+    def _select_hd_folder(self) -> None:
+        if self.busy or self.picking:
+            return
+        title = f"Select the extracted {self.hd_pack.title} folder"
+        if for_package(installation_root()).use_file_portal:
+            self._portal_browse(self.hd_folder, title, directory=True)
+            return
+        selected = self.filedialog.askdirectory(title=title, parent=self.root)
+        if selected:
+            self.hd_folder.set(selected)
+
+    def _import_hd_folder(self) -> None:
+        selected = self.hd_folder.get().strip()
+        if selected:
+            self._run_hd(lambda _report: ui_texture_pack.import_extracted(
+                Path(selected), self.data_root, self.hd_pack), "Verifying the extracted textures...")
+
+    def _run_hd(self, task: Callable[[Callable[[str], None]], Any], message: str) -> None:
+        if self.busy or self.picking or self.hd_contract is None:
+            return
+        self.busy = True
+        self.progress.start(12)
+        self.hd_status.set(message)
+        self._refresh_actions()
+
+        def worker() -> None:
+            try:
+                task(lambda text: self.events.put(("hd_stage", text)))
+                self.events.put(("hd", None))
+            except Exception as exc:
+                self.events.put(("hd", str(exc)))
+        threading.Thread(target=worker, name="TriAevumHdTextures", daemon=True).start()
+
+    def _build_mods_section(self, parent: Any, row: int) -> None:
+        # Third-party mods are never in the package: Forge obtains the author's
+        # original archive on request and applies it to the local data only.
+        mod = self.mod
+        section = self.ttk.Labelframe(parent, text="Optional mods", style="HD.TLabelframe", padding=12)
+        section.grid(row=row, column=0, columnspan=3, sticky="ew", pady=(12, 0))
+        section.columnconfigure(3, weight=1)
+        testers = ", ".join(credit.name for credit in mod.credits if credit.group == "Testing")
+        tools = ", ".join(credit.name for credit in mod.credits if credit.group == "Tool Creation")
+        self.ttk.Label(
+            section,
+            text=(f"{mod.title} {mod.version} by {mod.author}: higher-fidelity models for Link and "
+                  f"his items. Testing: {testers}. Tools: {tools}. Licensed {mod.license_name}: "
+                  "TriAevum does not distribute it. Forge downloads the author's original archive "
+                  "from GameBanana, verifies it and applies it to your local game data only. If the "
+                  "download does not work, download the archive from the mod page and select it here."),
+            wraplength=680, justify="left",
+        ).grid(row=0, column=0, columnspan=4, sticky="ew")
+        self.mod_check = self.ttk.Checkbutton(
+            section, variable=self.mod_enabled,
+            text=f"Use {mod.title} (applied by \"Prepare and install\")")
+        self.mod_check.grid(row=1, column=0, columnspan=4, sticky="w", pady=(8, 0))
+        self.mod_download_button = self.ttk.Button(section, text="Download mod", command=self._download_mod)
+        self.mod_download_button.grid(row=2, column=0, sticky="w", pady=(8, 0))
+        self.mod_select_button = self.ttk.Button(
+            section, text="Select .rar...",
+            command=lambda: self._browse(self.mod_selection, f"Select {self.mod_contract.name if self.mod_contract else 'the archive'}",
+                                         (("Mod archive", "*.rar"),)))
+        self.mod_select_button.grid(row=2, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        self.mod_folder_button = self.ttk.Button(
+            section, text="Select extracted folder...", command=self._select_mod_folder)
+        self.mod_folder_button.grid(row=2, column=2, sticky="w", padx=(8, 0), pady=(8, 0))
+        links = self.ttk.Frame(section)
+        links.grid(row=2, column=3, sticky="e", pady=(8, 0))
+        for column, (text, url) in enumerate((("Mod page", mod.page), ("License", mod.license_url))):
+            link = self.ttk.Label(links, text=text, style="Link.TLabel", cursor="hand2")
+            link.grid(row=0, column=column, padx=(8, 0))
+            link.bind("<Button-1>", lambda _event, target=url: webbrowser.open(target))
+        self.ttk.Label(section, textvariable=self.mod_status, wraplength=680, justify="left").grid(
+            row=3, column=0, columnspan=4, sticky="ew", pady=(8, 0))
+        self._refresh_mod()
+
+    def _mod_state(self) -> str:
+        return romfs_mods.mod_status(installation_root(), self.data_root, self.mod, self.mod_contract)
+
+    def _refresh_mod(self) -> None:
+        if self.mod_settings_error:
+            self.mod_status.set(f"Cannot read the mod settings: {self.mod_settings_error}")
+            return
+        if self.mod_contract is None:
+            self.mod_status.set("Not available for the supported game revisions of this package.")
+            return
+        state = self._mod_state()
+        enabled = bool(self.mod_enabled.get())
+        if state == "missing":
+            self.mod_status.set("Not downloaded. It is downloaded when you prepare and install the title."
+                                if enabled else "Off: the game uses its native models.")
+        elif enabled:
+            self.mod_status.set("On: applied when you prepare and install the title.")
+        else:
+            self.mod_status.set("Off: the game uses its native models. The downloaded archive is kept.")
+
+    def _toggle_mod(self) -> None:
+        enabled = bool(self.mod_enabled.get())
+        try:
+            romfs_mods.set_mod_enabled(self.data_root, self.mod.mod_id, enabled)
+            self.mod_settings_error = None
+        except (OSError, ValueError) as exc:
+            self.messagebox.showerror("TriAevum Forge", f"Cannot save the mod setting: {exc}", parent=self.root)
+            self.mod_settings_error = str(exc)
+        self._refresh_mod()
+        if self.active_title is not None and not self.mod_settings_error:
+            self.mod_status.set(self.mod_status.get() + " Prepare and install the title again to apply "
+                                "the change.")
+
+    def _install_mod_download_needed(self) -> bool:
+        return (bool(self.mod_enabled.get()) and self.mod_contract is not None
+                and self._mod_state() == "missing")
+
+    def _download_mod_task(self, report: Callable[[str], None]) -> str:
+        name = f"{self.mod.title} {self.mod.version}"
+        romfs_mods.download_archive(
+            self.data_root, self.mod, self.mod_contract, report=report,
+            progress=lambda done, total: report(f"Downloading {name}... {done * 100 // total}%"))
+        return name
+
+    def _download_mod_for_install(self) -> None:
+        """Worker-thread download before the title is prepared; a failure keeps
+        the native models and reports why, it never stops the installation."""
+        try:
+            self._download_mod_task(lambda text: self.events.put(("mod_stage", text)))
+        except Exception as exc:
+            self.events.put(("mod_stage", (
+                f"Mod download failed: {exc} The title is prepared with the native models. Download "
+                "the archive from the mod page and select it with \"Select .rar...\".")))
+
+    def _download_mod(self) -> None:
+        self._run_mod(self._download_mod_task, f"Downloading {self.mod.title}...")
+
+    def _import_mod_archive(self) -> None:
+        selected = self.mod_selection.get().strip()
+        if not selected or self.mod_contract is None:
+            return
+        self._run_mod(lambda _report: romfs_mods.import_archive(
+            Path(selected), self.data_root, self.mod, self.mod_contract),
+            "Verifying the selected archive...")
+
+    def _select_mod_folder(self) -> None:
+        if self.busy or self.picking:
+            return
+        title = f"Select the extracted {self.mod.title} folder"
+        if for_package(installation_root()).use_file_portal:
+            self._portal_browse(self.mod_folder, title, directory=True)
+            return
+        selected = self.filedialog.askdirectory(title=title, parent=self.root)
+        if selected:
+            self.mod_folder.set(selected)
+
+    def _import_mod_folder(self) -> None:
+        selected = self.mod_folder.get().strip()
+        if selected:
+            self._run_mod(lambda _report: romfs_mods.import_extracted(
+                Path(selected), self.data_root, self.mod), "Verifying the extracted files...")
+
+    def _run_mod(self, task: Callable[[Callable[[str], None]], Any], message: str) -> None:
+        if self.busy or self.picking or self.mod_contract is None:
+            return
+        self.busy = True
+        self.progress.start(12)
+        self.mod_status.set(message)
+        self._refresh_actions()
+
+        def worker() -> None:
+            try:
+                task(lambda text: self.events.put(("mod_stage", text)))
+                self.events.put(("mod", None))
+            except Exception as exc:
+                self.events.put(("mod", str(exc)))
+        threading.Thread(target=worker, name="TriAevumOptionalMod", daemon=True).start()
+
     def _browse_extracted(self) -> None:
         if self.busy or self.picking:
             return
-        if for_package(runtime_path().parent).use_file_portal:
+        if for_package(installation_root()).use_file_portal:
             self._portal_browse(self.rom, "Select extracted title data", directory=True)
             return
         selected = self.filedialog.askdirectory(title="Select extracted title data", parent=self.root)
@@ -470,7 +788,7 @@ class ForgeWindow:
     ) -> None:
         if self.busy or self.picking:
             return
-        if for_package(runtime_path().parent).use_file_portal:
+        if for_package(installation_root()).use_file_portal:
             self._portal_browse(variable, title, directory=False)
             return
         arguments: dict[str, Any] = {"title": title, "parent": self.root}
@@ -549,18 +867,38 @@ class ForgeWindow:
             if self.active_title is not None and not self.busy and not self.picking
             else "disabled"
         )
+        for button in (self.hd_download_button, self.hd_select_button, self.hd_folder_button,
+                       self.hd_auto_check):
+            button.configure(state="disabled" if self.busy or self.picking or self.hd_contract is None
+                             else "normal")
+        mod_available = self.mod_contract is not None and not self.mod_settings_error
+        for button in (self.mod_check, self.mod_download_button, self.mod_select_button,
+                       self.mod_folder_button):
+            button.configure(state="disabled" if self.busy or self.picking or not mod_available
+                             else "normal")
 
     def _install(self) -> None:
         if self.busy or self.picking:
             return
         request = self._request()
+        download_hd = self._install_hd_download_needed()
+        download_mod = self._install_mod_download_needed()
         self.busy = True
         self.progress.start(12)
-        self.status.set("Starting title preparation...")
+        self.status.set("Downloading the HD textures before the title preparation..."
+                        if download_hd else
+                        "Downloading the enabled mod before the title preparation..."
+                        if download_mod else "Starting title preparation...")
         self._refresh_actions()
 
         def worker() -> None:
             try:
+                if download_hd and not self.closing.is_set():
+                    self._download_hd_for_install()
+                    self.events.put(("stage", ("preflight", "Starting title preparation...")))
+                if download_mod and not self.closing.is_set():
+                    self._download_mod_for_install()
+                    self.events.put(("stage", ("preflight", "Starting title preparation...")))
                 command = [sys.executable]
                 if not getattr(sys, "frozen", False):
                     command += ["-m", "tools.triaevum_release.forge_entry"]
@@ -602,7 +940,8 @@ class ForgeWindow:
             finally:
                 self.worker_process = None
 
-        threading.Thread(target=worker, name="TriAevumForge", daemon=True).start()
+        self.install_thread = threading.Thread(target=worker, name="TriAevumForge", daemon=True)
+        self.install_thread.start()
 
     def _launch(self) -> None:
         try:
@@ -625,6 +964,39 @@ class ForgeWindow:
                 elif event == "stage":
                     _stage, message = payload
                     self.status.set(str(message))
+                elif event == "hd_stage":
+                    self.hd_status.set(str(payload))
+                elif event == "mod_stage":
+                    self.mod_status.set(str(payload))
+                elif event == "mod":
+                    self.busy = False
+                    self.progress.stop()
+                    self._refresh_mod()
+                    self._refresh_actions()
+                    if payload:
+                        self.messagebox.showerror(
+                            "TriAevum Forge",
+                            f"{payload}\n\nDownload {self.mod_contract.name} from the mod page "
+                            f"({self.mod.page}) and select it with \"Select .rar...\".",
+                            parent=self.root)
+                    elif self.active_title is not None and self.mod_enabled.get():
+                        self.mod_status.set(f"{self.mod.title} is ready. Prepare and install the "
+                                            "title again to apply it.")
+                elif event == "hd":
+                    self.busy = False
+                    self.progress.stop()
+                    self._refresh_hd()
+                    self._refresh_actions()
+                    if payload:
+                        self.messagebox.showerror(
+                            "TriAevum Forge",
+                            f"{payload}\n\nDownload {self.hd_contract.name} from the mod page "
+                            f"({self.hd_pack.page}) and select it with \"Select .zip...\".",
+                            parent=self.root,
+                        )
+                    elif self.active_title is not None:
+                        self.hd_status.set("HD textures ready. Prepare and install the title again "
+                                           "to apply them.")
                 elif event == "error":
                     self.busy = False
                     self.progress.stop()
@@ -638,6 +1010,10 @@ class ForgeWindow:
                     self.progress.stop()
                     self._refresh_active_title()
                     self._refresh_actions()
+                    if not self.hd_status.get().startswith("HD texture download failed"):
+                        self._refresh_hd()
+                    if not self.mod_status.get().startswith("Mod download failed"):
+                        self._refresh_mod()
                     self.messagebox.showinfo(
                         "TriAevum Forge",
                         "The title is ready. You can launch TriAevum — Echoes of Time now.",

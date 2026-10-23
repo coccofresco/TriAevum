@@ -65,13 +65,16 @@ the official archive, the UI atlas `custom_ui01.ctxb` and the Link animations
 remain the author's. The release audit accepts them only at their declared
 paths and exact SHA-256 values.
 
-The high-resolution graphics (the HD UI atlas and the HD fonts) have a
-separate author whose consent is still pending. Until it is recorded here they
-are not distributed: their hashes, and the archive's, are forbidden in the
-package, and Forge imports them only from an archive the user places beside
-it. The archive's executable patch and payload are never distributed;
-TriAevum reimplements their behavior. No correspondence is stored in this
-repository.
+On 2026-10-21 the maintainer reported the font author's consent and decided
+that the package also ships SingleScreen 3.1's HD Latin font `ltn16.qbf`,
+unchanged and pinned like the 3.0 files.
+
+The HD UI atlas is chubbycubby's and is not distributed: it comes from
+chubbycubby's HD UI texture pack, which Forge obtains on the user's request
+(`LICENSES/OoT3D-Vanilla-UI-HUD.md`); the hashes of the pack, of its textures
+and of the SingleScreen archives are forbidden in the package. The archive's
+executable patch and payload are never distributed; TriAevum reimplements
+their behavior. No correspondence is stored in this repository.
 
 ## Release effect
 

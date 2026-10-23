@@ -37,10 +37,11 @@
 
 namespace Fast::Immerse {
 
-std::array<std::string, 6> BuildMxaoPassShaders(std::string_view debugLibrary, std::string_view geometryLibrary) {
+std::array<std::string, 7> BuildMxaoPassShaders(std::string_view debugLibrary, std::string_view geometryLibrary) {
     return {BuildMxaoDeinterleaveShader(geometryLibrary), BuildMxaoOcclusionShader(geometryLibrary),
             BuildMxaoFilterShader(false, geometryLibrary), BuildMxaoFilterShader(true, geometryLibrary),
-            BuildMxaoTemporalShader(geometryLibrary), BuildMxaoDebugShader(debugLibrary, geometryLibrary)};
+            BuildMxaoTemporalShader(geometryLibrary), BuildMxaoDebugShader(debugLibrary, geometryLibrary),
+            BuildMxaoUpsampleShader(geometryLibrary)};
 }
 namespace {
 constexpr const char* kCommon = R"glsl(#version 450
@@ -69,12 +70,22 @@ const int tiles=4;
 const float pi=3.14159265358979323846;
 // Sky and invalid depth: far enough to never occlude, finite for the math.
 const float sky_z=1.0e8;
-float view_depth(ivec2 pixel) {
-    pixel=clamp(pixel,ivec2(0),ivec2(pc.extent)-1);
-    float d=texelFetch(sampler2D(native_depth,point_sampler),pixel,0).r;
+// Half resolution (flag bit 18): pc.extent is half the inputs' and pixel p
+// reads the inputs' pixel 2p.
+bool half_resolution() {
+    return (pc.flags&262144u)!=0u;
+}
+ivec2 source_pixel(ivec2 pixel) {
+    return half_resolution() ? min(pixel*2,textureSize(native_depth,0)-1) : pixel;
+}
+float linear_depth(float d) {
     if(d>=1.0 || d<0.0 || isnan(d)) return sky_z;
     return pc.depth.w!=0.0 ? pc.depth.x+d*pc.depth.z :
         pc.depth.x/max(pc.depth.y-d*pc.depth.z,1.0e-12);
+}
+float view_depth(ivec2 pixel) {
+    pixel=clamp(pixel,ivec2(0),ivec2(pc.extent)-1);
+    return linear_depth(texelFetch(sampler2D(native_depth,point_sampler),source_pixel(pixel),0).r);
 }
 ivec2 tile_size() {
     return (ivec2(pc.extent)+tiles-1)/tiles;
@@ -87,7 +98,8 @@ ivec2 reinterleave(ivec2 tiled) {
     return (tiled%size)*tiles+tiled/size;
 }
 vec2 pixel_uv(ivec2 pixel) {
-    return (vec2(pixel)+0.5)/vec2(pc.extent);
+    return half_resolution() ? (vec2(source_pixel(pixel))+0.5)/vec2(textureSize(native_depth,0))
+                             : (vec2(pixel)+0.5)/vec2(pc.extent);
 }
 // View space mirrored along Z: MXAO's projection space with positive depth.
 vec3 proj_position(ivec2 pixel,float z) {
@@ -155,7 +167,7 @@ float fade_factor(float z) {
 // space mirrored along Z); zero where the guide has none.
 constexpr const char* kGeometryNormal = R"glsl(
 vec3 geometry_normal(ivec2 pixel) {
-    vec3 n=pica_geometry_decode_normal(texelFetch(geometry_guide,pixel,0).g);
+    vec3 n=pica_geometry_decode_normal(texelFetch(geometry_guide,source_pixel(pixel),0).g);
     n.z=-n.z;
     return n;
 }
@@ -222,7 +234,7 @@ void main() {
     }
     float z=texelFetch(sampler2D(intermediate,point_sampler),tiled,0).r;
     float depth=z>=sky_z ? 1.0 : clamp(z*pc.response.y,0.0,1.0);
-    vec4 guide=texelFetch(sampler2D(view_normals,point_sampler),pixel,0);
+    vec4 guide=texelFetch(sampler2D(view_normals,point_sampler),source_pixel(pixel),0);
     float fade=fade_factor(z);
     if(z>=sky_z || z<=0.0 || guide.a<=0.0 || fade<0.001 || pc.response.x<=0.0) {
         imageStore(raw_occlusion,pixel,vec4(0.0,depth,0.0,0.0));
@@ -390,19 +402,31 @@ vec2 occlusion(ivec2 pixel) {
     pixel=clamp(pixel,ivec2(0),ivec2(pc.extent)-1);
     return texelFetch(sampler2D(intermediate,point_sampler),pixel,0).rg;
 }
+// The group's 4x4 windows cover an 11x11 block of edge-clamped texels: each
+// is fetched once instead of up to sixteen times.
+shared vec2 tile[11][11];
 void main() {
     ivec2 pixel=ivec2(gl_GlobalInvocationID.xy);
+    bool regression=(pc.flags&32u)==0u;
+    ivec2 offset=(pc.flags&16u)!=0u ? ivec2(2) : ivec2(1);
+    if(regression) {
+        ivec2 corner=ivec2(gl_WorkGroupID.xy)*8-offset;
+        for(uint i=gl_LocalInvocationIndex;i<121u;i+=64u)
+            tile[i/11u][i%11u]=occlusion(corner+ivec2(int(i%11u),int(i/11u)));
+        memoryBarrierShared();
+        barrier();
+    }
     if(any(greaterThanEqual(pixel,ivec2(pc.extent)))) return;
     vec2 center=occlusion(pixel);
     vec2 result=center;
-    if((pc.flags&32u)==0u) {
+    if(regression) {
         // Linear regression of occlusion on depth over a 4x4 block; the
         // mirrored second iteration makes the two-pass footprint symmetric.
-        ivec2 origin=pixel-((pc.flags&16u)!=0u ? ivec2(2) : ivec2(1));
+        ivec2 local=ivec2(gl_LocalInvocationID.xy);
         vec4 moments=vec4(0.0);
         for(int y=0;y<4;++y) {
             for(int x=0;x<4;++x) {
-                vec2 texel=occlusion(origin+ivec2(x,y));
+                vec2 texel=tile[local.y+y][local.x+x];
                 float d=abs(texel.y);
                 moments+=vec4(d,d*d,texel.x,texel.x*d);
             }
@@ -430,7 +454,7 @@ void main() {
     if(any(greaterThanEqual(pixel,ivec2(pc.extent)))) return;
     uint view=(pc.flags>>20u)&15u;
     float z=view_depth(pixel);
-    vec4 guide=texelFetch(sampler2D(view_normals,point_sampler),pixel,0);
+    vec4 guide=texelFetch(sampler2D(view_normals,point_sampler),source_pixel(pixel),0);
     float value=0.0;
     if(view==8u) {
         // Accumulated frames over the maximum history length.
@@ -473,6 +497,53 @@ void main() {
         }
     }
     imageStore(debug_view,pixel,vec4(value));
+}
+)glsl";
+    return source;
+}
+
+std::string BuildMxaoUpsampleShader(std::string_view geometryLibrary) {
+    std::string source = Common(geometryLibrary);
+    source += R"glsl(
+layout(local_size_x=8,local_size_y=8,local_size_z=1) in;
+layout(set=0,binding=3,r32f) uniform writeonly image2D visibility;
+// The half-resolution visibility at the inputs' resolution (pc.extent):
+// each pixel averages the samples around it (its own on even rows and
+// columns, the two or four between which it lies otherwise) whose depth is
+// within 2% of its own, else takes the closest in depth. With the copy flag
+// (debug views, packed values) it takes its own sample.
+float full_depth(ivec2 pixel) {
+    pixel=clamp(pixel,ivec2(0),ivec2(pc.extent)-1);
+    return linear_depth(texelFetch(sampler2D(native_depth,point_sampler),pixel,0).r);
+}
+void main() {
+    ivec2 pixel=ivec2(gl_GlobalInvocationID.xy);
+    if(any(greaterThanEqual(pixel,ivec2(pc.extent)))) return;
+    ivec2 half_extent=(ivec2(pc.extent)+1)/2;
+    ivec2 base=pixel>>1;
+    if((pc.flags&32u)!=0u) {
+        imageStore(visibility,pixel,texelFetch(sampler2D(intermediate,point_sampler),base,0));
+        return;
+    }
+    ivec2 odd=pixel&1;
+    float z=full_depth(pixel);
+    float sum=0.0, count=0.0, closest=0.0, closest_difference=1.0e30;
+    for(int i=0;i<4;++i) {
+        ivec2 offset=ivec2(i&1,i>>1);
+        if(offset.x>odd.x || offset.y>odd.y) continue;
+        ivec2 q=min(base+offset,half_extent-1);
+        float difference=abs(full_depth(q*2)-z);
+        float value=texelFetch(sampler2D(intermediate,point_sampler),q,0).r;
+        if(difference<=0.02*z) {
+            sum+=value;
+            count+=1.0;
+        }
+        if(difference<closest_difference) {
+            closest_difference=difference;
+            closest=value;
+        }
+    }
+    imageStore(visibility,pixel,vec4(count>0.0 ? sum/count : closest));
 }
 )glsl";
     return source;

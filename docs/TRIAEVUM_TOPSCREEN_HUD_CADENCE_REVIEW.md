@@ -86,7 +86,7 @@ unconditional visibility is used to conceal flashing.
   native teaching completion and all five before/after progress checks pass.
 
 Private Windows evidence: `J:/TriAevum-verify-20260910/`.
-Private Linux evidence: `/home/xander/triaevum-linux-parity-20260911/`.
+Private Linux evidence: `~/triaevum-linux-parity-20260911/`.
 Capture runs deliberately stall on synchronous GPU readback; not FPS tests.
 
 ## Remaining Investigation
@@ -158,7 +158,7 @@ The first Windows framebuffer regression attempt stopped on disk exhaustion
 on J:, not a rendering assertion. Its log is retained under
 `J:/TriAevum-verify-20260910/hud-context-gates-x2`; incomplete generated images
 were removed. The replacement run uses
-`C:/Users/xander/triaevum-verify-20260911/hud-context-gates-x2`.
+`%USERPROFILE%/triaevum-verify-20260911/hud-context-gates-x2`.
 That replacement run completed with exit 0, 160 presentations and 40 consecutive
 framebuffer captures (120..159). Frame 159 was inspected: gameplay and the
 on-foot HUD are present. This is a regression run, not a reproduction of the
@@ -167,7 +167,7 @@ reported mounted/Navi defects.
 ## Mounted Reproduction: A/B and Map Marker
 
 The user supplied an actual mounted checkpoint on September 11:
-`C:/Users/xander/triaevum-verify-20260911/epona-user/epona-hud-reference.oot3dsav`.
+`%USERPROFILE%/triaevum-verify-20260911/epona-user/epona-hud-reference.oot3dsav`.
 It is private evidence, not a distributable fixture. It was copied from the
 user's F5 save without editing guest state.
 

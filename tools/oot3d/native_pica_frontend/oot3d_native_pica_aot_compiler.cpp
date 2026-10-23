@@ -377,7 +377,7 @@ int main(int argc, char** argv) {
             throw std::runtime_error(error);
         }
         PicaAotShaderPack verification;
-        if (!verification.Load(options.Pack, &error) ||
+        if (!verification.Load(options.Pack, &error) || !verification.Verify(&error) ||
             verification.EntryCount() != binaries.size() ||
             verification.DescriptorSchemaVersion() != schema) {
             throw std::runtime_error(

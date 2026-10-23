@@ -51,6 +51,8 @@ struct Oot3dPicaPresentationSchedulerStats {
   uint64_t CompositionSequencesPublished = 0;
   uint64_t CompositionDrawReferencesPublished = 0;
   uint64_t CompositionPublicationFailures = 0;
+  // Native gameplay HUD draws left out of presentations (TopScreen HUD off).
+  uint64_t OmittedHudDraws = 0;
   uint64_t Resets = 0;
 };
 
@@ -114,6 +116,13 @@ public:
                    uint64_t renderTargetNamespace) const;
 
   void SetTimingEnabled(bool enabled) noexcept;
+  // TopScreen render_hud off: presentations leave out the native gameplay
+  // HUD's UI draws (kOot3dGameplayHudDrawEntry), the action icon among them,
+  // as the TopScreen compositor leaves out the HUD it draws. Native-memory
+  // execution keeps every draw.
+  void SetNativeGameplayHudVisible(bool visible) noexcept {
+    mNativeGameplayHudVisible = visible;
+  }
   void Reset();
   Oot3dPicaPresentationSchedulerState CaptureState() const;
   bool RestoreState(Oot3dPicaPresentationSchedulerState state);
@@ -148,6 +157,9 @@ private:
       mCompositionDrawScratch;
   std::vector<Oot3d::Renderer::PicaCompositionTargetReset>
       mCompositionResetScratch;
+  // Per sample draw: left out of this execution (HUD off).
+  std::vector<bool> mOmittedDrawScratch;
+  bool mNativeGameplayHudVisible = true;
   std::map<SnapshotTarget, uint64_t> mSnapshotCompletions;
 };
 

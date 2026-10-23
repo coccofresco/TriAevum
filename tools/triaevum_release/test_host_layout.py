@@ -78,7 +78,7 @@ class HostLayoutTests(unittest.TestCase):
                 for_package(self.package, platform="linux", environ=dict(self.env, XDG_DATA_HOME=root))
 
     def test_flatpak_launch_lock_lives_in_activation_root(self):
-        with (patch("forge_gui.runtime_path", return_value=self.package / "TriAevum"),
+        with (patch("forge_gui.installation_root", return_value=self.package),
               patch("forge_gui.for_package", return_value=for_package(
                   self.package, environ=self.env, platform="linux")),
               patch("forge_gui._launch_runtime_locked", return_value="child")):

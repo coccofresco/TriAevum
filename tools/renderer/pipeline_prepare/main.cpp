@@ -149,7 +149,8 @@ int main(int argc, char** argv) {
         const auto begin = std::chrono::steady_clock::now();
         Fast::Oot3d::PicaAotShaderPack pack;
         std::string error;
-        if (!manifests.empty() && !pack.Load(args.at("--pack"), &error))
+        // The runtime reads binaries on demand; installation checks them all.
+        if (!manifests.empty() && (!pack.Load(args.at("--pack"), &error) || !pack.Verify(&error)))
             throw std::runtime_error(error);
         std::map<uint64_t, Fast::Oot3d::PicaGraphicsPipelineManifestEntry> unique;
         size_t observations = 0;

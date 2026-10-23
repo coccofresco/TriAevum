@@ -23,6 +23,9 @@ struct AzaharTexturePackConfiguration {
     std::filesystem::path UserDirectory;
     std::filesystem::path LoadDirectory;
     std::filesystem::path DumpDirectory;
+    // Packs a title adapter installs beneath the user's pack, whatever
+    // LoadCustomTextures says: the user's pack wins, then the earlier entry.
+    std::vector<std::filesystem::path> BaseDirectories;
 
     bool operator==(const AzaharTexturePackConfiguration&) const = default;
 };
@@ -157,6 +160,8 @@ class AzaharTexturePackRuntime final {
     // Indexing and decoding run on the pack worker. Reload retains valid
     // resources until replacements are ready; generation changes are atomic.
     void Configure(AzaharTexturePackConfiguration configuration);
+    // Owned by the title adapter, kept across Configure calls from settings.
+    void SetBaseDirectories(std::vector<std::filesystem::path> directories);
     void Reload();
 
     [[nodiscard]] std::shared_ptr<const AzaharTextureReplacement>

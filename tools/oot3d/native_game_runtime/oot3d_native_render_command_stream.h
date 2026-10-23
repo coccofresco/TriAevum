@@ -55,6 +55,9 @@ class NativeRenderCommandStream final {
     void Submit(Command command, bool endsFrame = false);
     void Run(Command command);
     void Drain();
+    // Waits until at most `frames` submitted frames have not ended (their
+    // EndsFrame command has not run). Inline: returns at once.
+    void WaitForFramesInFlight(size_t frames);
 
     // True on the worker thread while it executes a command, and on the
     // submitting thread while an inline command runs.

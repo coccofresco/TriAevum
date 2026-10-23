@@ -3240,6 +3240,30 @@ int main() {
               !SuppressTopScreenTouchButtonDraw(20U),
           "TopScreen touch-button draw state interval is incorrect");
   {
+    // #89: the dungeon map keeps the native floor navigation; only B stays
+    // with the mod (2.1.1/3.0 `bx lr` at 0x00442F38).
+    Require(!SkipTopScreenDungeonMapCursorInput(0U) &&
+                !SkipTopScreenDungeonMapCursorInput(0x40U) &&
+                !SkipTopScreenDungeonMapCursorInput(0x80U) &&
+                !SkipTopScreenDungeonMapCursorInput(0x30U) &&
+                SkipTopScreenDungeonMapCursorInput(2U) &&
+                SkipTopScreenDungeonMapCursorInput(0x82U),
+            "dungeon map cursor input must run natively except on B");
+    NativeA32Memory pressedMemory;
+    std::string pressedError;
+    Require(pressedMemory.MapRegion({"topscreen-pause-pressed-fixture", 0x0050A000U,
+                                     0x00001000U, true, false, {}},
+                                    &pressedError),
+            "could not map TopScreen pause pressed-button fixture");
+    std::uint32_t pressed = 1U;
+    Require(pressedMemory.Write32(0x0050AF14U, 0x80U) &&
+                ReadTopScreenPausePressedButtons(pressedMemory, &pressed) &&
+                pressed == 0x80U &&
+                pressedMemory.Write32(0x0050AF18U, 2U) &&
+                ReadTopScreenPausePressedButtons(pressedMemory, &pressed) && pressed == 2U,
+            "pause pressed buttons must read 0x0050AF18, then 0x0050AF14");
+  }
+  {
     // R6: SELECT description toggle of TopScreen 2.1.1 (0x005E3D3C).
     TopScreenItemDescriptionInputs page;
     page.Items = 2U;
@@ -3348,6 +3372,20 @@ int main() {
   Require(ResolveTopScreenPauseRoutedCommand(0x402U, true) == 0x402U &&
               ResolveTopScreenPauseRoutedCommand(0x400U, false) == 0x400U,
           "TopScreen command routing changed an unowned command");
+  // 3.1 0x005D67DC: Visions submode 4 outside a native transition.
+  TopScreenPauseDrawInputs visionsInputs;
+  visionsInputs.HasScene = true;
+  visionsInputs.SceneMode = 7U;
+  visionsInputs.SceneSubmode = 4U;
+  Require(IsTopScreenVisionsMenu(visionsInputs), "the Visions menu was not recognized");
+  visionsInputs.NativeTransitionActive = true;
+  Require(!IsTopScreenVisionsMenu(visionsInputs), "a native transition kept the Visions route");
+  visionsInputs.NativeTransitionActive = false;
+  visionsInputs.SceneSubmode = 1U;
+  Require(!IsTopScreenVisionsMenu(visionsInputs), "another Visions submode took the 0x6AC route");
+  Require(ResolveTopScreenVisionsFade(0) == 0.0F && ResolveTopScreenVisionsFade(12) == 0.5F &&
+              ResolveTopScreenVisionsFade(30) == 1.0F,
+          "the Visions fade is not min(step / 24, 1)");
 
   TopScreenTouchCoordinateRouteState touchRouteState;
   TopScreenPauseDrawInputs touchRouteInputs;

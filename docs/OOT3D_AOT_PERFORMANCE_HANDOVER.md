@@ -268,7 +268,7 @@ inventare un fallback host.
 
 ```text
 I:\oot3dre-vulkan\build-codex
-  -> C:\Users\xander\AppData\Local\oot3dre-build\build-vulkan
+  -> %USERPROFILE%\AppData\Local\oot3dre-build\build-vulkan
 ```
 
 Artifact principali:
@@ -307,7 +307,7 @@ La build validata usa questa configurazione, letta da
 | Configurazione | `RelWithDebInfo` |
 | Compilatore | MSVC `14.44.35207`, `Hostx64/x64/cl.exe` |
 | Flag configurazione | `/O2 /Ob1 /DNDEBUG` |
-| Ninja | `C:\Users\xander\.local\bin\ninja.exe` |
+| Ninja | `%USERPROFILE%\.local\bin\ninja.exe` |
 | `OOT3D_REBUILD_WHOLE_AOT` | `OFF` |
 | `OOT3D_WHOLE_AOT_MAX_PARALLEL_COMPILES` locale | `8` |
 | `OOT3D_WHOLE_AOT_SHARD_COUNT` | `256` |

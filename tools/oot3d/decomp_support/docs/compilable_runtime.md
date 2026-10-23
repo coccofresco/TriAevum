@@ -60,7 +60,7 @@ refresh uses manual-symbol overlay and does not require a Ghidra re-export.
 Example with the local Arm GNU 15.2 package:
 
 ```powershell
-.\scripts\build-runtime-objects.ps1 -ToolRoot C:\Users\xander\Downloads\arm-gnu-toolchain-15.2.rel1-mingw-w64-x86_64-arm-none-eabi
+.\scripts\build-runtime-objects.ps1 -ToolRoot %USERPROFILE%\Downloads\arm-gnu-toolchain-15.2.rel1-mingw-w64-x86_64-arm-none-eabi
 ```
 
 Outputs are written under `build/runtime/`:

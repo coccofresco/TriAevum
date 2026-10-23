@@ -25,6 +25,11 @@ DetectGameLanguages(const std::filesystem::path &romfs, uint64_t offset = 0,
 nlohmann::json GameLanguageDocument(const std::vector<GameLanguage> &languages,
                                     const std::string &selected = "en");
 
+// The language folders of the UI texture pack for a 3DS system language,
+// most specific first: the native menu folders (rom:/menu/<folder>/, Europe
+// before North America) and the pack's per-language family folder.
+std::vector<std::string> UiTexturePackLanguageFolders(uint8_t systemLanguage);
+
 class GameLanguageSettings {
 public:
   GameLanguageSettings(std::filesystem::path path,

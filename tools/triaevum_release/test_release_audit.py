@@ -11,14 +11,18 @@ from audit_release import DEFAULT_POLICY, audit_release
 from common import atomic_write_json, sha256_file
 from package_release import package_release
 from test_vulkan_imports import pe_import_fixture
+from ui_texture_pack import VANILLA_UI_HUD
+
+# The Windows package root holds only Forge, README.md and LICENSE.
+MANIFEST = "docs/release-manifest.json"
 
 # The SingleScreen 3.0 assets are pinned by hash: the fixture ships the real files.
 SINGLESCREEN = Path(__file__).resolve().parents[2] / "runtime/triaevum_resources/topscreen/singlescreen-3.0"
 
 FILES = {
-    "TriAevum.exe": ("runtime_executable", b"MZ generic runtime"),
+    "runtime/TriAevum.exe": ("runtime_executable", b"MZ generic runtime"),
     "TriAevumForge.exe": ("forge_executable", b"MZ generic forge"),
-    "triaevum_title_aot.dll": ("runtime_library", b"MZ generic AOT stub"),
+    "runtime/triaevum_title_aot.dll": ("runtime_library", b"MZ generic AOT stub"),
     "forge/oot3d_game_module.dll": (
         "forge_runtime_module",
         b"MZ generic game adapter",
@@ -35,9 +39,9 @@ FILES = {
         b"LLVM builtins fixture",
     ),
     "README.md": ("documentation", b"# TriAevum\n"),
-    "LICENSE_SCOPE.md": ("documentation", b"mixed license scope\n"),
-    "THIRD_PARTY_NOTICES.md": ("documentation", b"third-party notices\n"),
-    "SOURCE_OFFER.md": ("documentation", b"corresponding source included\n"),
+    "docs/LICENSE_SCOPE.md": ("documentation", b"mixed license scope\n"),
+    "docs/THIRD_PARTY_NOTICES.md": ("documentation", b"third-party notices\n"),
+    "docs/SOURCE_OFFER.md": ("documentation", b"corresponding source included\n"),
     "LICENSE": ("license", b"GPL-3.0-or-later test fixture\n"),
     "LICENSES/GPL-2.0-or-later.txt": ("license", b"GPL test fixture\n"),
     "LICENSES/SDL2-zlib.txt": ("license", b"SDL zlib test fixture\n"),
@@ -49,10 +53,14 @@ FILES = {
         "topscreen_singlescreen_asset", (SINGLESCREEN / "custom_ui01.ctxb").read_bytes()),
     "resources/topscreen/singlescreen-3.0/zelda_link_ext.zar": (
         "topscreen_singlescreen_asset", (SINGLESCREEN / "zelda_link_ext.zar").read_bytes()),
+    "resources/topscreen/singlescreen-3.1/ltn16.qbf": (
+        "topscreen_singlescreen_asset", (SINGLESCREEN.parent / "singlescreen-3.1/ltn16.qbf").read_bytes()),
     "LICENSES/SingleScreen-3.0.md": ("license", b"SingleScreen 3.0 permission fixture\n"),
-    "msvcp140.dll": ("runtime_library", b"MZ C++ library fixture"),
-    "vcruntime140.dll": ("runtime_library", b"MZ runtime fixture"),
-    "vcruntime140_1.dll": ("runtime_library", b"MZ exception runtime fixture"),
+    # The in-game menu's font atlases are compiled into the runtime.
+    "LICENSES/FiraSans-OFL.txt": ("license", b"SIL Open Font License fixture\n"),
+    "runtime/msvcp140.dll": ("runtime_library", b"MZ C++ library fixture"),
+    "runtime/vcruntime140.dll": ("runtime_library", b"MZ runtime fixture"),
+    "runtime/vcruntime140_1.dll": ("runtime_library", b"MZ exception runtime fixture"),
     "LICENSES/Microsoft-Visual-Cpp-Runtime.md": ("license", b"Microsoft runtime notice fixture"),
     "LICENSES/shaderc-Apache-2.0.txt": ("license", b"Apache test fixture\n"),
     "LICENSES/Python-3.13.txt": ("license", b"Python test fixture\n"),
@@ -64,10 +72,10 @@ FILES = {
     "LICENSES/LLVM-exception.txt": ("license", b"LLVM exception fixture\n"),
     "LICENSES/iMMERSE-MXAO.md": ("license", b"iMMERSE module exception fixture\n"),
     "LICENSES/iMMERSE-LICENSE.txt": ("license", b"iMMERSE license fixture\n"),
-    "triaevum_immerse.dll": ("separately_licensed_module", b"MZ iMMERSE module fixture"),
+    "runtime/triaevum_immerse.dll": ("separately_licensed_module", b"MZ iMMERSE module fixture"),
     # The DLSS module is the one binary allowed to contain NGX code.
-    "triaevum_dlss.dll": ("separately_licensed_module", b"MZ DLSS module fixture NVSDK_NGX_VULKAN_Init"),
-    "nvngx_dlss.dll": ("separately_licensed_module", b"MZ NVIDIA DLSS runtime fixture"),
+    "runtime/triaevum_dlss.dll": ("separately_licensed_module", b"MZ DLSS module fixture NVSDK_NGX_VULKAN_Init"),
+    "runtime/nvngx_dlss.dll": ("separately_licensed_module", b"MZ NVIDIA DLSS runtime fixture"),
     "LICENSES/NVIDIA-DLSS-SDK-LICENSE.txt": ("license", b"NVIDIA RTX SDKs licence fixture\n"),
     "LICENSES/TriAevum-DLSS-module.md": ("license", b"DLSS module boundary fixture\n"),
     "resources/environments/scene-0043.environment.json": ("default_environment_profile", b"{}\n"),
@@ -87,7 +95,7 @@ def write_source_fixture(archive):
             archive.writestr((Path(relative).parent / item["path"]).as_posix(), "// source fixture\n")
 
 
-def write_clean_package(root: Path) -> None:
+def write_clean_package(root: Path, manifest: str = MANIFEST) -> None:
     inventory = []
     for relative, (role, data) in FILES.items():
         path = root / relative
@@ -114,7 +122,7 @@ def write_clean_package(root: Path) -> None:
         }
     )
     atomic_write_json(
-        root / "release-manifest.json",
+        root / manifest,
         {
             "format": "triaevum_public_release_manifest_v1",
             "release": {
@@ -143,7 +151,7 @@ class PublicReleaseAuditTests(unittest.TestCase):
             with zipfile.ZipFile(path, "w") as archive:
                 for name, data in kept.items():
                     archive.writestr(name, data)
-            manifest_path = root / "release-manifest.json"
+            manifest_path = root / MANIFEST
             manifest = json.loads(manifest_path.read_text())
             item = next(item for item in manifest["files"] if item["role"] == "corresponding_source")
             item.update(bytes=path.stat().st_size, sha256=sha256_file(path))
@@ -153,13 +161,13 @@ class PublicReleaseAuditTests(unittest.TestCase):
             self.assertTrue(any(missing in error for error in result.errors), result.errors)
 
     def test_rejects_package_without_input_or_runtime_dependencies(self):
-        for relative in ("resources/gamecontrollerdb.txt", "msvcp140.dll",
-                         "vcruntime140.dll", "vcruntime140_1.dll"):
+        for relative in ("resources/gamecontrollerdb.txt", "runtime/msvcp140.dll",
+                         "runtime/vcruntime140.dll", "runtime/vcruntime140_1.dll"):
             with self.subTest(path=relative), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 write_clean_package(root)
                 (root / relative).unlink()
-                manifest_path = root / "release-manifest.json"
+                manifest_path = root / MANIFEST
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
                 manifest["files"] = [item for item in manifest["files"] if item["path"] != relative]
                 atomic_write_json(manifest_path, manifest)
@@ -174,7 +182,7 @@ class PublicReleaseAuditTests(unittest.TestCase):
             exe.write_bytes(b"fixture")
             layout = root / "layout.json"
             atomic_write_json(layout, {"format": "triaevum_public_release_layout_v1", "files": [
-                {"source": str(exe), "path": "TriAevum.exe", "role": "runtime_executable"}
+                {"source": str(exe), "path": "runtime/TriAevum.exe", "role": "runtime_executable"}
             ]})
             with patch("package_release.query_product", return_value={
                 "product": {"private_title_loaded": True}
@@ -189,10 +197,10 @@ class PublicReleaseAuditTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             write_clean_package(root)
-            manifest_path = root / "release-manifest.json"
+            manifest_path = root / MANIFEST
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             for item in manifest["files"]:
-                if item["path"] == "triaevum_immerse.dll":
+                if item["path"] == "runtime/triaevum_immerse.dll":
                     item["role"] = "runtime_library"
             atomic_write_json(manifest_path, manifest)
             result = audit_release(root)
@@ -200,11 +208,11 @@ class PublicReleaseAuditTests(unittest.TestCase):
             self.assertTrue(any("separately licensed" in error for error in result.errors), result.errors)
 
     def test_dlss_module_and_nvidia_runtime_keep_their_role(self) -> None:
-        for relative in ("triaevum_dlss.dll", "nvngx_dlss.dll"):
+        for relative in ("runtime/triaevum_dlss.dll", "runtime/nvngx_dlss.dll"):
             with self.subTest(path=relative), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 write_clean_package(root)
-                manifest_path = root / "release-manifest.json"
+                manifest_path = root / MANIFEST
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
                 for item in manifest["files"]:
                     if item["path"] == relative:
@@ -216,14 +224,14 @@ class PublicReleaseAuditTests(unittest.TestCase):
                                     for error in result.errors), result.errors)
 
     def test_rejects_ngx_code_outside_the_dlss_module(self) -> None:
-        for relative in ("TriAevum.exe", "msvcp140.dll"):
+        for relative in ("runtime/TriAevum.exe", "runtime/msvcp140.dll"):
             with self.subTest(path=relative), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 write_clean_package(root)
                 path = root / relative
                 # Across the scanner's chunk boundary, too.
                 path.write_bytes(b"MZ" + b"\0" * (8 * 1024 * 1024 - 5) + b"NVSDK_NGX_Init")
-                manifest_path = root / "release-manifest.json"
+                manifest_path = root / MANIFEST
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
                 for item in manifest["files"]:
                     if item["path"] == relative:
@@ -250,7 +258,7 @@ class PublicReleaseAuditTests(unittest.TestCase):
                 path = root / relative
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(data)
-                manifest_path = root / "release-manifest.json"
+                manifest_path = root / MANIFEST
                 manifest = json.loads(manifest_path.read_text())
                 manifest["files"] = [item for item in manifest["files"] if item["path"] != relative]
                 manifest["files"].append({"path": relative, "role": role, "bytes": len(data),
@@ -265,23 +273,31 @@ class PublicReleaseAuditTests(unittest.TestCase):
         errors = audit_with("resources/topscreen/extra.ctxb", "title_neutral_resource",
                             (SINGLESCREEN / "custom_ui01.ctxb").read_bytes())
         self.assertTrue(any("forbidden extension" in e for e in errors), errors)
-        # The archives, the HD UI atlases and the HD fonts wait for their author's
-        # consent, in 3.0 and in 3.1.
-        forbidden = set(json.loads(DEFAULT_POLICY.read_text())["forbidden_sha256"])
+        # The SingleScreen archives and HD UI atlases stay out, and so do the HD
+        # UI texture pack's archive and textures; the HD font ships, pinned.
+        policy = json.loads(DEFAULT_POLICY.read_text())
+        forbidden = set(policy["forbidden_sha256"])
         self.assertTrue({"5668640fec8dc2b47b4516fd0b871c4d7d90ca1c2203acc2a22adb59aaab5993",
                          "25e9f22720029c64ac729deef9c38b4dea3d5426d57d99678963c8f26b2908a1",
                          "f91485999a6b8e89b8d574064dc03c1c20704f2c718e93c5187251b6ef69dbcb",
                          "3a505b0beff8654d71c68e870c132975c6bc0209ab9c41aafbd782f7a5880e7a",
-                         "8b83e081f721c6e1842b0a9cd90b71a3fb2849674d2b1040f3dc5c3221594169",
-                         "9c401a41d142d153b7dfef9208f3a7982a018f89f729eece441cce0470aacb42"} <= forbidden)
+                         "9c401a41d142d153b7dfef9208f3a7982a018f89f729eece441cce0470aacb42",
+                         "5ff478db312c3f57f54263cd84f4caef15bbb391fd1dda3bdd3c25c4917938a1"} <= forbidden)
+        self.assertTrue({digest for _size, digest in VANILLA_UI_HUD.members.values()} <= forbidden)
+        font = "8b83e081f721c6e1842b0a9cd90b71a3fb2849674d2b1040f3dc5c3221594169"
+        self.assertNotIn(font, forbidden)
+        self.assertIn(font, policy["pinned_role_sha256"]["topscreen_singlescreen_asset"])
+        errors = audit_with("resources/topscreen/singlescreen-3.1/ltn16.qbf", "topscreen_singlescreen_asset",
+                            b"QBF1 another font")
+        self.assertTrue(any("not a pinned topscreen_singlescreen_asset" in e for e in errors), errors)
 
     def test_runtime_contract_excludes_experimental_global_illumination(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             write_clean_package(root)
-            manifest_path = root / "release-manifest.json"
+            manifest_path = root / MANIFEST
             manifest = json.loads(manifest_path.read_text())
-            runtime = next(item for item in manifest["files"] if item["path"] == "TriAevum.exe")
+            runtime = next(item for item in manifest["files"] if item["path"] == "runtime/TriAevum.exe")
             # A runtime contract also binds the corresponding source to its commit.
             source = root / "source/TriAevum-source.zip"
             with zipfile.ZipFile(source, "a") as archive:
@@ -320,30 +336,30 @@ class PublicReleaseAuditTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             write_clean_package(root)
-            manifest_path = root / "release-manifest.json"
+            manifest_path = root / MANIFEST
             manifest = json.loads(manifest_path.read_text())
-            runtime = root / "TriAevum.exe"
+            runtime = root / "runtime/TriAevum.exe"
 
             def audit(commands: list[str]) -> list[str]:
                 runtime.write_bytes(pe_import_fixture({"vulkan-1.dll": commands}))
-                item = next(item for item in manifest["files"] if item["path"] == "TriAevum.exe")
+                item = next(item for item in manifest["files"] if item["path"] == "runtime/TriAevum.exe")
                 item.update(bytes=runtime.stat().st_size, sha256=sha256_file(runtime))
                 atomic_write_json(manifest_path, manifest)
                 return list(audit_release(root).errors)
 
             self.assertEqual(audit(["vkCreateInstance", "vkQueuePresentKHR"]), [])
             self.assertEqual(audit(["vkCreateInstance", "vkWaitSemaphores"]),
-                             ["TriAevum.exe imports Vulkan commands that older loaders lack: vkWaitSemaphores"])
+                             ["runtime/TriAevum.exe imports Vulkan commands that older loaders lack: vkWaitSemaphores"])
 
     def test_on_demand_vulkan_runtime_may_import_newer_commands(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             write_clean_package(root)
-            manifest_path = root / "release-manifest.json"
+            manifest_path = root / MANIFEST
             manifest = json.loads(manifest_path.read_text())
-            library = root / "amd_fidelityfx_vk.dll"
+            library = root / "runtime/amd_fidelityfx_vk.dll"
             library.write_bytes(pe_import_fixture({"vulkan-1.dll": ["vkWaitSemaphores"]}))
-            entry = {"path": "amd_fidelityfx_vk.dll", "role": "optional_vulkan_runtime",
+            entry = {"path": "runtime/amd_fidelityfx_vk.dll", "role": "optional_vulkan_runtime",
                      "bytes": library.stat().st_size, "sha256": sha256_file(library)}
             manifest["files"].append(entry)
             atomic_write_json(manifest_path, manifest)
@@ -352,7 +368,7 @@ class PublicReleaseAuditTests(unittest.TestCase):
             entry["role"] = "runtime_library"
             atomic_write_json(manifest_path, manifest)
             self.assertEqual(list(audit_release(root).errors),
-                             ["amd_fidelityfx_vk.dll imports Vulkan commands that older loaders lack: vkWaitSemaphores"])
+                             ["runtime/amd_fidelityfx_vk.dll imports Vulkan commands that older loaders lack: vkWaitSemaphores"])
 
     def test_rejects_private_file_hidden_in_source_archive(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -361,7 +377,7 @@ class PublicReleaseAuditTests(unittest.TestCase):
             source_archive = root / "source" / "TriAevum-source.zip"
             with zipfile.ZipFile(source_archive, "w") as archive:
                 archive.writestr("private/code.bin", b"not public")
-            manifest_path = root / "release-manifest.json"
+            manifest_path = root / MANIFEST
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             item = next(
                 entry
@@ -395,7 +411,7 @@ class PublicReleaseAuditTests(unittest.TestCase):
                 private = root / relative
                 private.parent.mkdir(parents=True, exist_ok=True)
                 private.write_bytes(b"private TopScreen evidence")
-                manifest_path = root / "release-manifest.json"
+                manifest_path = root / MANIFEST
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
                 manifest["files"].append(
                     {
@@ -416,10 +432,10 @@ class PublicReleaseAuditTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             write_clean_package(root)
-            (root / "TriAevum.exe").write_bytes(b"changed")
+            (root / "runtime/TriAevum.exe").write_bytes(b"changed")
             result = audit_release(root)
             self.assertFalse(result.ok)
-            self.assertIn("SHA-256 mismatch: TriAevum.exe", result.errors)
+            self.assertIn("SHA-256 mismatch: runtime/TriAevum.exe", result.errors)
 
     def test_rejects_private_json_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -431,7 +447,7 @@ class PublicReleaseAuditTests(unittest.TestCase):
                 json.dumps({"original_game_data_included": True}),
                 encoding="utf-8",
             )
-            manifest_path = root / "release-manifest.json"
+            manifest_path = root / MANIFEST
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             manifest["files"].append(
                 {
@@ -515,7 +531,7 @@ class PublicReleaseAuditTests(unittest.TestCase):
                     "files": [
                         {
                             "source": "missing",
-                            "path": "TriAevum.exe",
+                            "path": "runtime/TriAevum.exe",
                             "role": "runtime_executable",
                         }
                     ],

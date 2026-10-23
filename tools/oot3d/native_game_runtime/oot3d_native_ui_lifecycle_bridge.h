@@ -100,6 +100,11 @@ public:
       std::optional<TopScreenPauseEdgeGeometry> geometry) noexcept;
   void SetTopScreenPausePageRedrawEdgePresentation(
       std::optional<TopScreenPauseEdgeGeometry> geometry) noexcept;
+  // SingleScreen 3.1 0x005D52E8 before the upper transfer of the Visions menu.
+  void SetTopScreenVisionsEdgePresentation(
+      std::optional<TopScreenPauseEdgeGeometry> geometry) noexcept {
+    mTopScreenVisionsEdgeGeometry = std::move(geometry);
+  }
   // Retained across host refreshes, including the native tail's temporary
   // System suppression. Updated before the first render-target bind.
   void SetTopScreenSystemPagePresentation(bool active) noexcept {
@@ -183,6 +188,7 @@ private:
   std::optional<TopScreenPauseEdgeGeometry> mTopScreenPauseEdgeGeometry;
   std::optional<TopScreenPauseEdgeGeometry>
       mTopScreenPausePageRedrawEdgeGeometry;
+  std::optional<TopScreenPauseEdgeGeometry> mTopScreenVisionsEdgeGeometry;
   bool mTopScreenSystemPagePresentation = false;
   TopScreenExtendedInputFrame mTopScreenInput;
   TopScreenOcarinaBrowser mTopScreenOcarina;

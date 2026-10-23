@@ -3,6 +3,7 @@
 #include "fast/oot3d/graphics_settings_persistence.h"
 #include "oot3d_native_controls_settings_panel.h"
 #include "oot3d_top_screen_settings_panel.h"
+#include "oot3d_photo_mode_panel.h"
 #include "oot3d_game_language_panel.h"
 #include "oot3d_savestate_panel.h"
 #include "oot3d_scene_environment.h"
@@ -327,6 +328,37 @@ void CheckControlPersistence() {
     Check(blockedTop->Snapshot().Config.HudScale == kTopScreenHudScaleNative &&
               loggedPanelText.find("could not be saved") != std::string::npos,
           "a failed HUD size save was not visible");
+    InstallGraphicsSettingsPanelTabs({});
+}
+
+// Photo mode: the free camera's switch, speed and reset, and Hide HUD beside
+// it, a session state that starts off and is never saved.
+void CheckPhotoModePanel() {
+    using namespace Oot3dNativeGame;
+    auto camera = std::make_shared<DevFreeCamera>();
+    auto state = std::make_shared<PhotoModeState>();
+    InstallGraphicsSettingsPanelTabs({CreatePhotoModePanel(camera, state)});
+    size = ImVec2(760, 680);
+    Frame(); Frame();
+    Click("Photo mode");
+    Frame();
+    Check(Find("Back to the game's view").Disabled, "camera reset offered while the free camera is off");
+    const auto cameraRect = Find("Free camera (F6)").Rect;
+    const auto hudRect = Find("Hide HUD").Rect;
+    Check(hudRect.Min.x > cameraRect.Max.x && std::abs(hudRect.GetCenter().y - cameraRect.GetCenter().y) < 2.0F,
+          "Hide HUD is not beside the free camera switch");
+    Check(!state->HideHud.load(), "Hide HUD does not start off");
+    Click("Free camera (F6)");
+    Check(camera->Active(), "Free camera checkbox did not activate the free camera");
+    Check(!Find("Back to the game's view").Disabled, "camera reset unavailable while the free camera is on");
+    EditScalar("Free camera speed", "800");
+    Check(std::abs(camera->Speed() - 800.0F) < 0.5F, "free camera speed was not applied");
+    Click("Free camera (F6)");
+    Check(!camera->Active(), "Free camera checkbox did not deactivate the free camera");
+    Click("Hide HUD");
+    Check(state->HideHud.load(), "Hide HUD did not hide the HUD");
+    Click("Hide HUD");
+    Check(!state->HideHud.load(), "Hide HUD did not show the HUD again");
     InstallGraphicsSettingsPanelTabs({});
 }
 
@@ -2151,6 +2183,27 @@ int main(int argc, char** argv) try {
           grassLod.TuftTransitionFraction == 0.35F && grassLod.FarTuftDensity == 2.5F &&
           grassLod.FarTuftSpread == 1.8F && grassLod.SegmentLodSoftness == 0.75F,
           "grass transition, tuft quantity/spread controls not applied");
+    Check(!runtime.Snapshot().Grass.Appearance.CrossedBlades, "camera-facing ribbons must be the default");
+    Click("Crossed blades (two planes)");
+    Check(runtime.Snapshot().Grass.Appearance.CrossedBlades, "crossed grass blades enable failed");
+    Click("Crossed blades (two planes)");
+    Check(!runtime.Snapshot().Grass.Appearance.CrossedBlades, "crossed grass blades disable failed");
+    Check(!runtime.Snapshot().Grass.CardLodEnabled, "distant grass cards must default off");
+    Click("Distant grass cards");
+    Check(runtime.Snapshot().Grass.CardLodEnabled, "distant grass cards enable failed");
+    EditScalar("Blades up to (m)", "12");
+    EditScalar("Clump cards up to (m)", "45");
+    EditScalar("Group cards up to (m)", "160");
+    EditScalar("Card transition range", "0.30");
+    const auto grassCards = runtime.Snapshot().Grass;
+    Check(grassCards.CardLodBladeDistance == 1200.0F && grassCards.CardLodClumpDistance == 4500.0F &&
+          grassCards.CardLodGroupDistance == 16000.0F && grassCards.CardLodBlendFraction == 0.30F,
+          "distant grass card distances not applied in metres");
+    EditScalar("Blades up to (m)", "50");
+    Check(runtime.Snapshot().Grass.CardLodClumpDistance >= 5000.0F,
+          "clump card distance must follow the blade distance");
+    Click("Distant grass cards");
+    Check(!runtime.Snapshot().Grass.CardLodEnabled, "distant grass cards disable failed");
     size.y = 680.0F;
     for (const char* section : {"Generation", "Appearance", "Performance", "Wind", "Interaction", "Sources"})
         Click(section);
@@ -2528,6 +2581,7 @@ int main(int argc, char** argv) try {
     Check(differentRom.SystemId() == 1, "unsupported old language leaked into another ROM");
     std::filesystem::remove(languagePath);
     CheckSavestatePanel();
+    CheckPhotoModePanel();
     CheckSceneEnvironmentCodec();
     CheckSceneEnvironment();
     CheckMm3dSceneEnvironment();

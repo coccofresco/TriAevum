@@ -12,7 +12,7 @@ the same ARM flags as the runtime seed, but reads its source list from
 To force a specific ARM GNU toolchain, pass its install root:
 
 ```powershell
-.\scripts\build-matched-objects.ps1 -ToolRoot C:\Users\xander\Downloads\arm-gnu-toolchain-15.2.rel1-mingw-w64-x86_64-arm-none-eabi
+.\scripts\build-matched-objects.ps1 -ToolRoot %USERPROFILE%\Downloads\arm-gnu-toolchain-15.2.rel1-mingw-w64-x86_64-arm-none-eabi
 ```
 
 Outputs go under ignored `build/matched/`:

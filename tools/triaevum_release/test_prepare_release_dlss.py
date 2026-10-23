@@ -19,8 +19,8 @@ class DlssLayoutTests(unittest.TestCase):
                 targets[key] = str(root / name)
             layout = dlss_layout(targets)
             self.assertEqual({item["path"]: item["role"] for item in layout}, {
-                "triaevum_dlss.dll": "separately_licensed_module",
-                "nvngx_dlss.dll": "separately_licensed_module",
+                "runtime/triaevum_dlss.dll": "separately_licensed_module",
+                "runtime/nvngx_dlss.dll": "separately_licensed_module",
                 "LICENSES/NVIDIA-DLSS-SDK-LICENSE.txt": "license",
             })
 

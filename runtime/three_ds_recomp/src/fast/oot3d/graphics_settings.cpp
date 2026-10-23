@@ -237,6 +237,7 @@ GraphicsSettings GraphicsSettingsService::KeepHostOwnedSettings(
     value.OutputWidth = current.OutputWidth;
     value.OutputHeight = current.OutputHeight;
     value.RefreshRate = current.RefreshRate;
+    value.Aspect = current.Aspect;
     value.VSync = current.VSync;
     value.TexturePacks = current.TexturePacks;
     value.Grass.Rules = current.Grass.Rules;
@@ -253,6 +254,8 @@ GraphicsSettingsValidation GraphicsSettingsService::Validate(
     value.OutputWidth = std::max(320U, value.OutputWidth);
     value.OutputHeight = std::max(240U, value.OutputHeight);
     value.RefreshRate = std::clamp(value.RefreshRate, 30U, 1000U);
+    if (value.Aspect > AspectRatioMode::Free)
+        value.Aspect = AspectRatioMode::Wide16x9;
     value.InternalResolutionScale =
         std::clamp(value.InternalResolutionScale, 0.5F, 2.0F);
     value.FovMultiplier = std::clamp(value.FovMultiplier, 1.0F, 1.5F);
@@ -604,6 +607,15 @@ GraphicsSettingsValidation GraphicsSettingsService::Validate(
     value.Grass.MidrangeAdaptiveCapacity = std::clamp(value.Grass.MidrangeAdaptiveCapacity, 50U, 10000U);
     value.Grass.MidrangeFarBladeFraction = finiteGrass(value.Grass.MidrangeFarBladeFraction, 0.25F, 0.02F, 1.0F);
     value.Grass.SegmentLodSoftness = finiteGrass(value.Grass.SegmentLodSoftness, 0.5F, 0.0F, 1.0F);
+    value.Grass.CardLodBladeDistance = finiteGrass(value.Grass.CardLodBladeDistance, 1000.0F, 100.0F, 50000.0F);
+    value.Grass.CardLodClumpDistance =
+        finiteGrass(value.Grass.CardLodClumpDistance, 4000.0F, value.Grass.CardLodBladeDistance, 50000.0F);
+    value.Grass.CardLodGroupDistance =
+        finiteGrass(value.Grass.CardLodGroupDistance, 15000.0F, value.Grass.CardLodClumpDistance, 50000.0F);
+    value.Grass.CardLodBlendFraction = finiteGrass(value.Grass.CardLodBlendFraction, 0.25F, 0.05F, 0.9F);
+    // The tier ends stay ordered even when a fallback value replaced one.
+    value.Grass.CardLodClumpDistance = std::max(value.Grass.CardLodClumpDistance, value.Grass.CardLodBladeDistance);
+    value.Grass.CardLodGroupDistance = std::max(value.Grass.CardLodGroupDistance, value.Grass.CardLodClumpDistance);
     value.Grass.SegmentLodStartDistance =
         std::clamp(value.Grass.SegmentLodStartDistance, 0.0F, 10000.0F);
     value.Grass.SegmentLodEndDistance =

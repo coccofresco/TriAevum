@@ -774,6 +774,7 @@ nlohmann::json FrameToJson(const Oot3dVulkanFrameDiagnostics& frame) {
         { "scene_before_ui_snapshot_count", frame.SceneBeforeUiSnapshotCount },
         { "scene_before_ui_transfer_count", frame.SceneBeforeUiTransferCount },
         { "native_ui_overlay_count", frame.NativeUiOverlayCount },
+        { "scene_overlay_draw_count", frame.SceneOverlayDrawCount },
         { "whole_target_ui_draw_count", frame.WholeTargetUiDrawCount },
         { "screen_content_draw_count", frame.ScreenContentDrawCount },
         { "own_picture_draw_count", frame.OwnPictureDrawCount },
@@ -1954,6 +1955,10 @@ void Oot3dVulkanDiagnostics::RecordSceneBeforeUi(bool snapshot, bool transferred
     if (!mActiveFrame.has_value()) return;
     if (snapshot) ++mActiveFrame->SceneBeforeUiSnapshotCount;
     if (transferred) ++mActiveFrame->SceneBeforeUiTransferCount;
+}
+
+void Oot3dVulkanDiagnostics::RecordSceneOverlayDraw() {
+    if (mActiveFrame) ++mActiveFrame->SceneOverlayDrawCount;
 }
 
 void Oot3dVulkanDiagnostics::RecordWholeTargetUiDraw(bool screenContent) {

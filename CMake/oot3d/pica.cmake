@@ -144,7 +144,8 @@ set(_variant_replay_sources
     ${_variant_runtime}/oot3d/pica_rigid_motion.cpp
     ${_variant_runtime}/oot3d/pica_shader_instrumentation.cpp)
 add_executable(oot3d_native_pica_variant_inventory EXCLUDE_FROM_ALL
-    tools/oot3d/native_pica_frontend/oot3d_native_pica_variant_inventory.cpp ${_variant_replay_sources})
+    tools/oot3d/native_pica_frontend/oot3d_native_pica_variant_inventory.cpp
+    tools/oot3d/native_pica_frontend/oot3d_native_pica_transferable_cache.cpp ${_variant_replay_sources})
 add_executable(oot3d_native_pica_variant_record_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_pica_frontend/oot3d_native_pica_variant_record_tests.cpp ${_variant_replay_sources})
 foreach(_variant_target oot3d_native_pica_variant_inventory oot3d_native_pica_variant_record_tests)
@@ -155,6 +156,14 @@ foreach(_variant_target oot3d_native_pica_variant_inventory oot3d_native_pica_va
     triaevum_add_spirv_pack(${_variant_target}
         runtime/three_ds_recomp/src/fast/oot3d/pica_caster_fragment_binaries.cpp
         runtime/three_ds_recomp/src/fast/oot3d/pica_caster_fragment.spvpack)
+    # The always-available families (uber effect programs, canonical parametric
+    # bases) the runtime falls back to while a specialized program compiles.
+    triaevum_add_spirv_pack(${_variant_target}
+        runtime/three_ds_recomp/src/fast/oot3d/pica_uber_fragment_binaries.cpp
+        runtime/three_ds_recomp/src/fast/oot3d/pica_uber_fragment.spvpack)
+    triaevum_add_spirv_pack(${_variant_target}
+        runtime/three_ds_recomp/src/fast/renderer3ds/pica_native_fragment_binaries.cpp
+        runtime/three_ds_recomp/src/fast/renderer3ds/pica_native_fragment.spvpack)
     target_include_directories(${_variant_target} PRIVATE tools/oot3d/native_game_runtime)
     target_link_libraries(${_variant_target} PRIVATE oot3d_native_pica_frontend)
 endforeach()

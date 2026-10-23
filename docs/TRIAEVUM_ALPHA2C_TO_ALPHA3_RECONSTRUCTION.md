@@ -803,7 +803,7 @@ report asks for, in this order:
 
 ### 8.1 Checks that need the Linux host
 
-The Linux host (`xander@192.168.1.190`) did not answer in this session, so no
+The Linux host (`<linux-host>`) did not answer in this session, so no
 AppImage was mounted, launched or re-packaged here. The corrected Python path is
 platform-neutral and is covered by the suite, but that is not a Linux
 qualification. Ordered checks for the next Linux session:

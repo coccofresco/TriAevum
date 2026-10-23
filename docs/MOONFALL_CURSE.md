@@ -605,7 +605,7 @@ are written before the sites are checked, as dekui runs on the image
 Restoration patched. Restoration's own RomFS files (`layout/Joker.Main.New.gar`
 with Hud2, its `Joker.Main.Play.gar` and the `Joker.mfpj` project naming the
 new package and layouts) are not part of the user's game: they are laid over
-it with the RomFS overlay below. Without them the port builds no layout or
+it with the RomFS layers below. Without them the port builds no layout or
 package (the native lookups return 0xFFFF, which the native index would read
 past) and Hud2 stays closed. Message edits (prices, single-screen texts) are
 caller-owned, from the user's own messages; none are supplied yet.
@@ -620,9 +620,12 @@ initialisation swapped the wrong field and the native touch panel was drawn
 on the top screen. dekui's own data references were already translated (its
 guards check them).
 
-### RomFS overlay
+### RomFS layers
 
-`oot3d_native_a32_romfs_overlay.{h,cpp}` (title-neutral) serves the title's
+Installed RomFS mods ship through OoT3D's O3RO overlay
+(`oot3d_native_a32_romfs_overlay.{h,cpp}`, Forge-built over the user's image,
+`NativeA32CtrHostConfig::RomFsOverlay`). The development path is separate:
+`oot3d_native_a32_romfs_layers.{h,cpp}` (title-neutral) serves the title's
 RomFS archive as its level 3 rebuilt with host files laid over it, as
 LayeredFS does: each layer is a directory mirroring RomFS paths, a file
 replaces or adds the one at its path, later layers win. The directory and
@@ -631,10 +634,11 @@ directory's children get consecutive entries before each child's subtree;
 files in depth-first order), so an empty overlay reproduces the image's
 tables byte for byte; file data is read from the image and the layer files
 on demand, never copied. The host serves it in place of the image
-(`NativeA32CtrHostConfig::RomFsOverlay`); a state saved over another RomFS
-is refused, since the title caches the tables it read. Development:
-`TRIAEVUM_ROMFS_OVERLAY=<dir>[;<dir>...]` until the launcher owns the user's
-mod folders. Mod files are the user's and are never packaged.
+(`NativeA32CtrHostConfig::RomFsLayers`); a state saved over another RomFS
+is refused, since the title caches the tables it read. Enabled with
+`TRIAEVUM_ROMFS_OVERLAY=<dir>[;<dir>...]`, never together with installed
+RomFS mods (the host refuses the combination). Layer files are the user's
+and are never packaged.
 
 Verified on the developer launch with Restoration's three RomFS files as the
 layer (1280x720, `save100_items.json`): Hud2 on the top screen in the 16:9
@@ -679,7 +683,7 @@ gear, masks, items, notebook (Event Notes on the top screen), Song of Time
 (dekui's song prompt, staff, the dawn confirmation on the top screen),
 Double Time, shortcuts and file select run without faults. The map
 timeline from the archived branch drives the old lower-screen controls and
-does not open the map. Tests: `oot3d_native_a32_romfs_overlay_tests` (layers, replacement,
+does not open the map. Tests: `oot3d_native_a32_romfs_layers_tests` (layers, replacement,
 nested directories, re-layering, malformed base; with
 `OOT3D_ROMFS_OVERLAY_IMAGE` the image's tables are reproduced and its file
 data served).

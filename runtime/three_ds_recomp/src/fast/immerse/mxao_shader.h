@@ -18,7 +18,7 @@ namespace Fast::Immerse {
 // debug) in pass order. Every program includes the host's GLSL library
 // `geometryLibrary` (pica_geometry_decode_normal of the geometry guide);
 // debugLibrary is its AO debug view library (TriaevumImmerseHost).
-[[nodiscard]] std::array<std::string, 6> BuildMxaoPassShaders(std::string_view debugLibrary,
+[[nodiscard]] std::array<std::string, 7> BuildMxaoPassShaders(std::string_view debugLibrary,
                                                               std::string_view geometryLibrary);
 
 // Pixels are deinterleaved into kMxaoTiles x kMxaoTiles tiles: a tile holds
@@ -56,6 +56,9 @@ inline constexpr uint32_t kMxaoOriginalFade = 1U << 16U;
 // Face normals of the renderer's geometry guide (binding 7), the exact plane
 // of the visible triangle; normals from depth where the guide has none.
 inline constexpr uint32_t kMxaoGeometryNormals = 1U << 17U;
+// Half resolution: the extent is half the inputs' (pixel p reads their pixel
+// 2p); the upsample program writes the output at the inputs' extent.
+inline constexpr uint32_t kMxaoHalfResolution = 1U << 18U;
 // Bits 20-23: the view of the debug program (MxaoDebugProgramView).
 inline constexpr uint32_t kMxaoDebugViewShift = 20U;
 
@@ -167,5 +170,8 @@ static_assert(sizeof(MxaoConstants) == 128);
 // length) for the filter and the next frame. Bindings 5 and 6 are the motion
 // vectors and the previous accumulation.
 [[nodiscard]] std::string BuildMxaoTemporalShader(std::string_view geometryLibrary);
+// Half resolution's last step: the R32F visibility (binding 2) brought to the
+// inputs' extent by depth (binding 3).
+[[nodiscard]] std::string BuildMxaoUpsampleShader(std::string_view geometryLibrary);
 
 } // namespace Fast::Immerse

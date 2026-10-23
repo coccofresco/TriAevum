@@ -45,6 +45,7 @@ layout(set = 0, binding = 7, std140) uniform HiZWater {
     vec4 map_levels[4];
     vec4 map_counts;
     vec4 map_extent;
+    uvec4 map_blocks[8];
 } hiz_water;
 // Per texel of the drawn water's map: its surface height at the centre
 // (-1e30: none), landing foam and the surface's slope (d height / dx, dz).
@@ -141,6 +142,10 @@ float hiz_water_surface(vec2 uv, float scene_depth, out vec3 world_position, out
         float height = hiz_water.heights[i >> 2u][i & 3u];
         if (camera.y <= height) continue;
         float depth = (height - camera.y) / ray.y;
+        // Behind the scene (a pond under the ground in front): never the
+        // result (the acceptance below), never closer than the scene for the
+        // drawn water's search, so its map lookups are skipped.
+        if (depth >= scene_depth) continue;
         vec3 position = camera + ray * depth;
         vec4 footprint = hiz_water.footprints[i];
         if (position.x < footprint.x || position.z < footprint.y || position.x > footprint.z ||
@@ -185,6 +190,43 @@ float hiz_water_surface(vec2 uv, float scene_depth, out vec3 world_position, out
             } else if (origin < low || origin > high) {
                 leave = -1.0;
             }
+        }
+        // Within the bounds, the samples before the first block of the map
+        // the ray crosses with water near it (map_blocks: none within a texel
+        // of a clear block) meet no water cell either: the walk over the
+        // blocks moves `enter` there, a texel early for rounding.
+        if (enter < leave && hiz_water.map_info.w == 512.0) {
+            float block = hiz_water.map_info.z * 16.0;
+            vec2 flat_ray = ray.xz / block;
+            vec2 start = (camera.xz - hiz_water.map_info.xy) / block + flat_ray * enter;
+            ivec2 cell = ivec2(floor(start));
+            ivec2 step_direction = ivec2(sign(flat_ray));
+            vec2 inverse = vec2(abs(flat_ray.x) > 1.0e-12 ? 1.0 / abs(flat_ray.x) : 1.0e30,
+                                abs(flat_ray.y) > 1.0e-12 ? 1.0 / abs(flat_ray.y) : 1.0e30);
+            vec2 to_edge = vec2(step_direction.x > 0 ? float(cell.x + 1) - start.x : start.x - float(cell.x),
+                                step_direction.y > 0 ? float(cell.y + 1) - start.y : start.y - float(cell.y));
+            vec2 next = enter + max(to_edge, vec2(0.0)) * inverse;
+            float reached = enter;
+            bool occupied = false;
+            for (int walk = 0; walk < 72 && reached <= leave; ++walk) {
+                if (all(greaterThanEqual(cell, ivec2(0))) && all(lessThan(cell, ivec2(32))) &&
+                    (hiz_water.map_blocks[cell.y >> 2][cell.y & 3] & (1u << uint(cell.x))) != 0u) {
+                    occupied = true;
+                    break;
+                }
+                if (next.x < next.y) {
+                    reached = next.x;
+                    next.x += inverse.x;
+                    cell.x += step_direction.x;
+                } else {
+                    reached = next.y;
+                    next.y += inverse.y;
+                    cell.y += step_direction.y;
+                }
+            }
+            float texel_reach = hiz_water.map_info.z / max(length(ray.xz), 1.0e-12);
+            if (!occupied && reached > leave) leave = -1.0;
+            else if (occupied) enter = max(enter, reached - texel_reach);
         }
         for (int i = 1; first < last && i <= steps; ++i) {
             float depth = mix(first, last, float(i) / float(steps));
@@ -333,9 +375,12 @@ vec2 project_view(vec3 position) {
 }
 
 void main() {
+    // Half resolution (pc.extent is the scene's): sample s traces the
+    // scene's pixel 2s.
     ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
-    if (any(greaterThanEqual(pixel, ivec2(pc.extent)))) return;
-    vec2 uv = (vec2(pixel) + 0.5) * pc.inverse_size;
+    ivec2 full = pixel * 2;
+    if (any(greaterThanEqual(full, ivec2(pc.extent)))) return;
+    vec2 uv = (vec2(full) + 0.5) * pc.inverse_size;
     float surface_depth = textureLod(
         sampler2D(hiz_depth,nearest_sampler), uv, 0.0).r;
     bool depth_valid = !(isnan(surface_depth) || isinf(surface_depth) ||
@@ -571,12 +616,19 @@ shared vec4 tile_reflection[144];
 shared vec4 tile_normal[144];
 shared float tile_depth[144];
 shared uint tile_active;
+// The scene's uv of half-resolution sample q (its pixel 2q, edge-clamped).
+vec2 half_sample_uv(ivec2 q) {
+    return (vec2(clamp(q * 2, ivec2(0), ivec2(pc.extent) - 1)) + 0.5) * pc.inverse_size;
+}
 void main() {
+    // Half resolution, as the trace: sample s filters and composes the
+    // scene's pixel 2s; the upsample brings it to the scene.
     ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 half_extent = (ivec2(pc.extent) + 1) / 2;
     if (gl_LocalInvocationIndex == 0u) tile_active = 0u;
     barrier();
-    bool inside = all(lessThan(pixel, ivec2(pc.extent)));
-    vec2 uv = (vec2(pixel) + 0.5) * pc.inverse_size;
+    bool inside = all(lessThan(pixel, half_extent));
+    vec2 uv = half_sample_uv(pixel);
     vec4 material = textureLod(sampler2D(material_guide,linear_sampler), uv, 0.0);
     vec4 center_guide = textureLod(sampler2D(normal_guide,linear_sampler), uv, 0.0);
     float reflection_weight = pica_reflection_weight(material);
@@ -596,10 +648,9 @@ void main() {
     ivec2 origin = ivec2(gl_WorkGroupID.xy * 8u) - 2;
     for (uint i = gl_LocalInvocationIndex; i < 144u; i += 64u) {
         ivec2 q = origin + ivec2(int(i) % 12, int(i) / 12);
-        vec2 sample_uv = clamp((vec2(q) + 0.5) * pc.inverse_size,
-                               vec2(0.0), vec2(1.0));
-        tile_reflection[i] = textureLod(
-            sampler2D(raw_reflection,linear_sampler), sample_uv, 0.0);
+        vec2 sample_uv = half_sample_uv(q);
+        tile_reflection[i] = texelFetch(sampler2D(raw_reflection,nearest_sampler),
+                                        clamp(q, ivec2(0), half_extent - 1), 0);
         vec4 normal = textureLod(
             sampler2D(normal_guide,linear_sampler), sample_uv, 0.0);
         tile_normal[i] = vec4(normalize(normal.xyz * 2.0 - 1.0), normal.a);
@@ -607,7 +658,7 @@ void main() {
             sampler2D(hiz_depth,nearest_sampler), sample_uv, 0.0).r;
     }
     barrier();
-    if (any(greaterThanEqual(pixel, ivec2(pc.extent)))) return;
+    if (any(greaterThanEqual(pixel, half_extent))) return;
     int center_index = (int(gl_LocalInvocationID.y) + 2) * 12 +
                        int(gl_LocalInvocationID.x) + 2;
     vec4 center_normal_sample = tile_normal[center_index];
@@ -679,6 +730,52 @@ void main() {
     return source;
 }
 
+std::string BuildHiZReflectionUpsampleShader() {
+    std::string source = R"glsl(#version 450
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+layout(set = 0, binding = 0) uniform texture2D half_reflection;
+layout(set = 0, binding = 1) uniform texture2D hiz_depth;
+layout(set = 0, binding = 4, rgba16f) uniform writeonly image2D reflection_output;
+layout(set = 0, binding = 6) uniform sampler nearest_sampler;
+)glsl";
+    source += kPushBlock;
+    source += R"glsl(
+// The half-resolution result at the scene's resolution: each pixel takes the
+// samples around it (its own on even rows and columns, the two or four
+// between which it lies otherwise) that saw the same surface (scene depth
+// within 2%), premultiplied by their weight. A pixel no such sample saw (an
+// object in front of the water) reflects nothing.
+bool same_surface(float a, float b) {
+    bool far_a = isinf(a) || isnan(a), far_b = isinf(b) || isnan(b);
+    return far_a || far_b ? far_a && far_b : abs(a - b) <= max(0.02 * a, 1.0);
+}
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (any(greaterThanEqual(pixel, ivec2(pc.extent)))) return;
+    ivec2 half_extent = (ivec2(pc.extent) + 1) / 2;
+    float depth = texelFetch(sampler2D(hiz_depth, nearest_sampler), pixel, 0).r;
+    ivec2 base = pixel >> 1;
+    ivec2 odd = pixel & 1;
+    vec4 sum = vec4(0.0);
+    float count = 0.0;
+    for (int i = 0; i < 4; ++i) {
+        ivec2 offset = ivec2(i & 1, i >> 1);
+        if (offset.x > odd.x || offset.y > odd.y) continue;
+        ivec2 q = min(base + offset, half_extent - 1);
+        float sample_depth = texelFetch(sampler2D(hiz_depth, nearest_sampler),
+                                        min(q * 2, ivec2(pc.extent) - 1), 0).r;
+        if (!same_surface(depth, sample_depth)) continue;
+        vec4 value = texelFetch(sampler2D(half_reflection, nearest_sampler), q, 0);
+        sum += vec4(value.rgb * value.a, value.a);
+        count += 1.0;
+    }
+    imageStore(reflection_output, pixel,
+               count > 0.0 && sum.a > 0.0 ? vec4(sum.rgb / sum.a, sum.a / count) : vec4(0.0));
+}
+)glsl";
+    return source;
+}
+
 HiZWaterUniforms BuildHiZWaterUniforms(const std::array<float, 16>* worldToView,
                                        const Renderer3ds::PicaSceneWaterBodies* bodies, float seconds,
                                        bool waterOnly,
@@ -697,6 +794,7 @@ HiZWaterUniforms BuildHiZWaterUniforms(const std::array<float, 16>* worldToView,
         // cell by rounding still lies inside.
         result.MapExtent = {map->ExtentMinimumXZ[0] - map->Texel, map->ExtentMinimumXZ[1] - map->Texel,
                             map->ExtentMaximumXZ[0] + map->Texel, map->ExtentMaximumXZ[1] + map->Texel};
+        for (size_t row = 0; row < map->Blocks.size(); ++row) result.MapBlocks[row / 4U][row % 4U] = map->Blocks[row];
     }
     if (rings != nullptr)
         for (uint32_t i = 0; i < Renderer3ds::kPicaWaterRings; ++i)

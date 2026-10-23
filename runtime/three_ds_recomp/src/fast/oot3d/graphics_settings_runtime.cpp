@@ -27,9 +27,17 @@ std::shared_ptr<GraphicsSettingsPersistencePort>& PersistencePort() {
     return persistence;
 }
 
+// Set once the runtime instance has taken its persistence port snapshot: a
+// port installed later would never be read, so that order is reported.
+bool& PersistencePortSnapshotTaken() {
+    static bool taken = false;
+    return taken;
+}
+
 std::shared_ptr<GraphicsSettingsPersistencePort>
 SnapshotPersistencePort() {
     std::scoped_lock lock(PersistencePortMutex());
+    PersistencePortSnapshotTaken() = true;
     return PersistencePort();
 }
 
@@ -96,6 +104,17 @@ bool HasGraphicsEnvironmentOverride() {
 void InstallGraphicsSettingsPersistencePort(
     std::shared_ptr<GraphicsSettingsPersistencePort> persistence) {
     std::scoped_lock lock(PersistencePortMutex());
+    if (PersistencePortSnapshotTaken()) {
+        // The runtime already started without a port: the settings file is
+        // neither loaded nor saved this launch. An initialization-order
+        // defect in the host, not a user condition.
+        SPDLOG_ERROR("OOT3D graphics settings persistence installed after the "
+                     "settings runtime started: the settings file is ignored "
+                     "this launch");
+        std::fprintf(stderr,
+                     "TRIAEVUM_GRAPHICS_SETTINGS_PERSISTENCE_LATE installed after "
+                     "the runtime started; settings file ignored\n");
+    }
     PersistencePort() = std::move(persistence);
 }
 

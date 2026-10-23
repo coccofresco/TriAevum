@@ -3,13 +3,15 @@
 from pathlib import Path
 
 try:
-    from .release_platform import host_platform
+    from .release_platform import host_platform, installed_runtime_path
+    from .host_layout import installation_state
     from .activation_transaction import activation_transaction
     from .common import atomic_write_json, load_json_object, sha256_file
     from .installation_context import InstallationContext, expand_profile_argument, resolve_reference
     from .installed_runtime import validate_installed_runtime
 except ImportError:
-    from release_platform import host_platform
+    from release_platform import host_platform, installed_runtime_path
+    from host_layout import installation_state
     from activation_transaction import activation_transaction
     from common import atomic_write_json, load_json_object, sha256_file
     from installation_context import InstallationContext, expand_profile_argument, resolve_reference
@@ -26,7 +28,9 @@ def migrate_installation(installation: Path, title: Path, data_root: Path) -> di
         raise ValueError("Portable migration requires title and data inside the installation")
     context = InstallationContext(installation)
     platform = host_platform()
-    profile = installation / "TriAevum.launch.json"
+    profile = installation_state(installation) / "TriAevum.launch.json"
+    if not profile.is_file() and (installation / profile.name).is_file():
+        profile = installation / profile.name  # installed before the profile moved to data/
     manifest_path = title / "process-manifest.json"
     state_path = title / "forge-state.json"
     index_path = title / "content.tap"
@@ -44,7 +48,7 @@ def migrate_installation(installation: Path, title: Path, data_root: Path) -> di
     with activation_transaction(installation, targets):
         prepared = load_prepared_content(title, required_inputs=("code", "exheader", "romfs"))
         runtime = prepared.state.get("runtime", {})
-        selected_profile = validate_installed_runtime(installation / platform.runtime, title, data_root, runtime)
+        selected_profile = validate_installed_runtime(installed_runtime_path(installation, platform), title, data_root, runtime)
         if selected_profile != profile:
             raise ValueError("Migration requires the installation's own default launch profile")
         runtime.setdefault("plugin", str(installation / platform.title_module))
@@ -79,7 +83,8 @@ def migrate_installation(installation: Path, title: Path, data_root: Path) -> di
         path_options = {"--title-plugin", "--a32-process-manifest", "--resource-root",
                         "--config", "--topscreen-config", "--save-data", "--output",
                         "--topscreen-texture-overrides", "--water-texture-catalog", "--scene-light-catalog",
-                        "--pica-aot-shader-pack", "--renderer-cache-directory"}
+                        "--pica-aot-shader-pack", "--renderer-cache-directory", "--romfs-overlay",
+                        "--ui-texture-pack"}
         for index, argument in enumerate(arguments[:-1]):
             if argument in path_options:
                 path = Path(expand_profile_argument(arguments[index + 1], profile))
@@ -106,6 +111,6 @@ def migrate_installation(installation: Path, title: Path, data_root: Path) -> di
                 active["directory_scope"] = "relative"
                 write_if_changed(active_path, active)
         load_prepared_content(title, required_inputs=("code", "exheader", "romfs"))
-        validate_installed_runtime(installation / platform.runtime, title, data_root, runtime)
+        validate_installed_runtime(installed_runtime_path(installation, platform), title, data_root, runtime)
     return {"status": "migrated" if changed else "unchanged", "changed_files": changed,
             "external_inputs": external, "saves_modified": False, "title_recompiled": False}

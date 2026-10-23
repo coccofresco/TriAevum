@@ -584,7 +584,7 @@ Verification on the final binary:
   and uniform codec compatibility. Runtime bridge and savestate executables pass.
 - Six paired framebuffer captures (early boot and Hyrule Field) are pixel-identical
   to the specialized reference. Private evidence is under
-  `C:/Users/xander/AppData/Local/Temp/TriAevum-sampler-final-field-20260914`
+  `%USERPROFILE%/AppData/Local/Temp/TriAevum-sampler-final-field-20260914`
   and `TriAevum-sampler-final-boot-20260914`.
 - Initial sampler-run inventories decreased from 41/35 to 3 entries per fixture:
   one vertex program, one canonical fragment program and its NRI adaptation.
@@ -648,8 +648,8 @@ All five standalone test targets pass. Final real-game comparisons produced six
 pixel-identical, nonuniform framebuffer pairs across Hyrule Field and early
 boot. Private reports (never package them):
 
-- `C:/Users/xander/AppData/Local/Temp/TriAevum-proctex-final-field-20260914/comparison.json`
-- `C:/Users/xander/AppData/Local/Temp/TriAevum-proctex-final-boot-20260914/comparison.json`
+- `%USERPROFILE%/AppData/Local/Temp/TriAevum-proctex-final-field-20260914/comparison.json`
+- `%USERPROFILE%/AppData/Local/Temp/TriAevum-proctex-final-boot-20260914/comparison.json`
 
 Their specialized shader inventories contain zero procedural samplers: these
 fixtures are regression checks, not a claim that active procedural materials
@@ -717,8 +717,8 @@ diagnostic environment only for its isolated child processes and writes
 
 Private final evidence, never package:
 
-- `C:/Users/xander/AppData/Local/Temp/TriAevum-pipeline-final-field-20260914`
-- `C:/Users/xander/AppData/Local/Temp/TriAevum-pipeline-final-boot-20260914`
+- `%USERPROFILE%/AppData/Local/Temp/TriAevum-pipeline-final-field-20260914`
+- `%USERPROFILE%/AppData/Local/Temp/TriAevum-pipeline-final-boot-20260914`
 
 These are structural and framebuffer tests, not FPS benchmarks. Remaining:
 fixed recovered vertex programs, direct binding of developer-built shader
@@ -792,8 +792,8 @@ Verification on Windows NRI:
 
 Private evidence, never package:
 
-- `C:/Users/xander/AppData/Local/Temp/TriAevum-fixed-vertex-final-boot-20260914`
-- `C:/Users/xander/AppData/Local/Temp/TriAevum-fixed-vertex-final-field-20260914`
+- `%USERPROFILE%/AppData/Local/Temp/TriAevum-fixed-vertex-final-boot-20260914`
+- `%USERPROFILE%/AppData/Local/Temp/TriAevum-fixed-vertex-final-field-20260914`
 
 **Remaining distinction:** offline PICA-to-GLSL translation is now implemented;
 GLSL-to-SPIR-V compilation, interface/extension source assembly and driver PSO
@@ -882,8 +882,8 @@ clears pack/prewarm environment overrides in the child, and verifies both positi
 built-in use and zero pack entries. It still compares deterministic framebuffers,
 not FPS. Private evidence, never package:
 
-- `C:/Users/xander/AppData/Local/Temp/TriAevum-fragment-binary-nopack-boot-20260914`
-- `C:/Users/xander/AppData/Local/Temp/TriAevum-fragment-binary-nopack-field-20260914`
+- `%USERPROFILE%/AppData/Local/Temp/TriAevum-fragment-binary-nopack-boot-20260914`
+- `%USERPROFILE%/AppData/Local/Temp/TriAevum-fragment-binary-nopack-field-20260914`
 
 Remaining work is concrete: precompile the vertex interface/interpolation families,
 the presentation/auxiliary passes and supported extension families; remove repeated
@@ -928,7 +928,7 @@ Final Windows/NRI validation with fresh application caches and no collected pack
 
 Six deterministic framebuffer captures match specialized rendering pixel for
 pixel and also match the pre-change fragment-only build captures. Evidence is
-in private `C:/Users/xander/AppData/Local/Temp/TriAevum-vertex-six-{boot,field}-20260914`.
+in private `%USERPROFILE%/AppData/Local/Temp/TriAevum-vertex-six-{boot,field}-20260914`.
 Pack entries are zero. Counts are resolution requests, not unique modules.
 The direct six-module check passes, as do bridge, visual-savestate, planner and
 frontend tests. The temporal variants are compiled and structurally checked;
@@ -1016,7 +1016,7 @@ fresh application cache directory, no collected shader pack:
 Six framebuffer pairs remain pixel-identical, including comparison with the
 pre-pass-change build, not only between two modes of the modified executable.
 Nine standalone suites pass. Private evidence (not distributed):
-`C:/Users/xander/AppData/Local/Temp/TriAevum-pass24-{boot,field}-20260914`.
+`%USERPROFILE%/AppData/Local/Temp/TriAevum-pass24-{boot,field}-20260914`.
 The comparison harness now fails if fixed passes touch the compiler/cache.
 
 The two Field compilations are precisely `oot3d_17301768_1.vert/.frag`, through
@@ -1075,7 +1075,7 @@ time. This is evidence of remaining driver pipeline preparation work, not a
 steady-state FPS benchmark or proof of cold driver caches.
 
 Private diagnostics:
-`C:/Users/xander/AppData/Local/Temp/TriAevum-module-owners-{field,taa,taa-repeat}-20260914`.
+`%USERPROFILE%/AppData/Local/Temp/TriAevum-module-owners-{field,taa,taa-repeat}-20260914`.
 
 Next work must cover the legacy combiner as a semantic family, instrumented
 fragment interfaces from the typed generators, and pipeline preparation/lifetime.

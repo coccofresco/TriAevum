@@ -14,7 +14,7 @@ the rebuilt-product smoke check also passed.
 
 ## Frozen References
 
-Private evidence root: `C:/Users/xander/triaevum-verify-20260911/`.
+Private evidence root: `%USERPROFILE%/triaevum-verify-20260911/`.
 
 - Historical renderer/frontend/bridge: commit `4bd045f`, rebuilt with the
   same host/toolchain/title module. Executable in `grass-historical-runtime/`,

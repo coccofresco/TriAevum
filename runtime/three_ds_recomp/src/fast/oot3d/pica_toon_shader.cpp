@@ -86,11 +86,13 @@ vec3 oot3d_material_rim(vec3 materialNormal) {
 )glsl";
 
 std::string Declarations(const ToonStyleSettings& style, bool usesVertexLighting,
-                         bool uniformParameters = false) {
+                         bool uniformParameters = false, bool drawControl = false) {
     std::string source(kToonSurfaceResponseShader);
     if (uniformParameters) {
+        // The draw's decisions follow the parameters (PicaUberEffectBlock).
         source += "\nlayout(set=0,binding=15,std140) uniform Oot3dToonSurface {\n"
-                  "    ToonSurfaceParameters parameters;\n} oot3d_toon_uniforms;\n"
+                  "    ToonSurfaceParameters parameters;\n" +
+                  std::string(drawControl ? "    uvec4 control;\n" : "") + "} oot3d_toon_uniforms;\n"
                   "ToonSurfaceParameters oot3d_toon_parameters() {\n"
                   "    ToonSurfaceParameters p = oot3d_toon_uniforms.parameters;\n"
                   "    p.flags.y = " + std::string(usesVertexLighting ? "1.0" : "0.0") +
@@ -195,7 +197,7 @@ PicaToonInstrumentation BuildPicaToonInstrumentation(
     uint64_t originalFragmentKey, const PicaToonDrawInfo& draw,
     ToonMode mode, const ToonStyleSettings& style,
     const ::Oot3d::Renderer::PicaShaderHookLayout& hooks,
-    bool uniformParameters) {
+    bool uniformParameters, bool drawControl) {
     using ::Oot3d::Renderer::PicaShaderHook;
     using ::Oot3d::Renderer::PicaShaderSemantic;
 
@@ -230,7 +232,7 @@ PicaToonInstrumentation BuildPicaToonInstrumentation(
                                ? PicaShaderHook::PicaLighting
                                : PicaShaderHook::BeforeDepth;
     result.Declarations = Declarations(
-        style, hooks.Has(PicaShaderSemantic::PrimaryColorConsumed), uniformParameters);
+        style, hooks.Has(PicaShaderSemantic::PrimaryColorConsumed), uniformParameters, drawControl);
     if (materialPath) {
         result.Body =
             "\n    primary_fragment_color.rgb = "

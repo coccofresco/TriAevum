@@ -17,7 +17,7 @@ foreach ($source in @($packagePath)) {
         throw 'Output must be outside the input directories.'
     }
 }
-foreach ($file in @('TriAevumForge.exe', 'TriAevum.exe', 'release-manifest.json', 'recipes/precompiled-titles.json')) {
+foreach ($file in @('TriAevumForge.exe', 'runtime/TriAevum.exe', 'docs/release-manifest.json', 'recipes/precompiled-titles.json')) {
     if (-not (Test-Path -LiteralPath (Join-Path $packagePath $file) -PathType Leaf)) {
         throw "Missing public package file: $file"
     }
@@ -33,7 +33,7 @@ $receipt = [ordered]@{
     os = [Environment]::OSVersion.VersionString
     machine = $env:COMPUTERNAME
     processors = [Environment]::ProcessorCount
-    package_manifest_sha256 = (Get-FileHash -LiteralPath (Join-Path $packagePath 'release-manifest.json')).Hash
+    package_manifest_sha256 = (Get-FileHash -LiteralPath (Join-Path $packagePath 'docs/release-manifest.json')).Hash
     rom_sha256 = (Get-FileHash -LiteralPath $romPath).Hash
     host_tools_found = @()
     stages = @()
@@ -98,7 +98,7 @@ try {
     # The first launch renders under the preparation screen (about 30 s on
     # the reference PC) before frame 600 can be captured.
     Invoke-RecordedProcess 'runtime' (Join-Path $installation 'TriAevum.exe') @(
-        '--launch-profile', (Join-Path $installation 'TriAevum.launch.json'),
+        '--launch-profile', (Join-Path $installation 'data/TriAevum.launch.json'),
         '--frames', '1200', '--max-seconds', '120', '--benchmark-warmup-frames', '60',
         '--output', $statePath, '--screenshot', $capturePath, '--screenshot-start-frame', '600') 240
     $state = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json

@@ -94,6 +94,20 @@ enum class NativeA32ProcessRunKind : uint8_t {
     Faulted,
 };
 
+// What Run() reports when the current thread stopped (waited, exited or
+// faulted) and no other thread is ready. One thread's ExitThread ends the
+// process only when every thread has exited; while others wait, the
+// process waits too (the movie decoder's thread exits at a vision's end).
+constexpr NativeA32ProcessRunKind ResolveStoppedThreadRunKind(
+    NativeA32ProcessRunKind kind, bool allThreadsTerminated) noexcept {
+    if (allThreadsTerminated) {
+        return NativeA32ProcessRunKind::Terminated;
+    }
+    return kind == NativeA32ProcessRunKind::Terminated
+               ? NativeA32ProcessRunKind::Waiting
+               : kind;
+}
+
 struct NativeA32ProcessRunResult {
     NativeA32ProcessRunKind Kind = NativeA32ProcessRunKind::Faulted;
     oot3d::recomp::a32::ExecutionResult Exit;

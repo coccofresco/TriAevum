@@ -215,6 +215,7 @@ include(CMake/oot3d/native_runtime.cmake)
 include(CMake/oot3d/pica.cmake)
 
 include(CMake/oot3d/ui_input.cmake)
+include(CMake/oot3d/ui_menu.cmake)
 
 add_subdirectory(tools/triaevum_release/tests)
 

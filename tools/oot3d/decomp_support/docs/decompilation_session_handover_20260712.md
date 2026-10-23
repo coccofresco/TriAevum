@@ -180,14 +180,14 @@ Re-run the queue before accepting that priority because reports may have changed
 The project has repeatedly used GNU `arm-none-eabi` tools. The supported explicit tool root documented by the project is:
 
 ```text
-C:\Users\xander\Downloads\arm-gnu-toolchain-15.2.rel1-mingw-w64-x86_64-arm-none-eabi
+%USERPROFILE%\Downloads\arm-gnu-toolchain-15.2.rel1-mingw-w64-x86_64-arm-none-eabi
 ```
 
 Build and compare maintained source:
 
 ```powershell
 cd I:\oot3dre\tools\oot3d\decomp_support
-.\scripts\build-matched-objects.ps1 -ToolRoot C:\Users\xander\Downloads\arm-gnu-toolchain-15.2.rel1-mingw-w64-x86_64-arm-none-eabi
+.\scripts\build-matched-objects.ps1 -ToolRoot %USERPROFILE%\Downloads\arm-gnu-toolchain-15.2.rel1-mingw-w64-x86_64-arm-none-eabi
 python .\scripts\report_porting_metrics.py
 ```
 

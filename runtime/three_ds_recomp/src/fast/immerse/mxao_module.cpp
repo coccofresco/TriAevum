@@ -31,6 +31,7 @@ enum : size_t {
     kFilterSet,
     kResolveRawSet,
     kResolveFilteredSet,
+    kUpsampleSet,
     kTemporalSet,
     kFilterAccumulatedSet = kTemporalSet + 2,
     kResolveAccumulatedSet = kFilterAccumulatedSet + 2,
@@ -43,6 +44,7 @@ enum : size_t {
     kResolveProgram,
     kTemporalProgram,
     kDebugProgram,
+    kUpsampleProgram,
     kProgramCount
 };
 
@@ -71,7 +73,12 @@ struct TriaevumImmerseMxao {
     uint64_t OutputIdentity = 0;
     std::array<VkImage, 3> Inputs{};
     std::array<VkFormat, 3> Formats{};
+    // The estimate's extent; at half resolution the resolved visibility is
+    // this size and the upsample writes the output's.
     uint32_t Width = 0, Height = 0;
+    uint32_t OutputWidth = 0, OutputHeight = 0;
+    bool HalfResolution = false;
+    VkImage Resolved = VK_NULL_HANDLE;
     // Temporal mode: the motion vectors and two accumulation images, written
     // alternately (the other one is the history).
     MotionInput Motion;
@@ -95,14 +102,17 @@ void InvalidateScreenResources(TriaevumImmerseMxao* mxao) {
         mxao->Core->DestroyDescriptorPool(mxao->Pool);
     mxao->Pool = nullptr;
     mxao->Sets = {};
-    for (const VkImage image : { mxao->TiledDepth, mxao->Raw, mxao->Filtered, mxao->History[0], mxao->History[1] })
+    for (const VkImage image :
+         { mxao->TiledDepth, mxao->Raw, mxao->Filtered, mxao->History[0], mxao->History[1], mxao->Resolved })
         if (image != VK_NULL_HANDLE)
             host->DestroyTexture(host->Context, image);
-    mxao->TiledDepth = mxao->Raw = mxao->Filtered = VK_NULL_HANDLE;
+    mxao->TiledDepth = mxao->Raw = mxao->Filtered = mxao->Resolved = VK_NULL_HANDLE;
     mxao->History = {};
     mxao->Output = VK_NULL_HANDLE;
     mxao->OutputIdentity = 0;
     mxao->Width = mxao->Height = 0;
+    mxao->OutputWidth = mxao->OutputHeight = 0;
+    mxao->HalfResolution = false;
     mxao->Inputs = {};
     mxao->Formats = {};
     mxao->Motion = {};
@@ -169,7 +179,8 @@ TriaevumImmerseMxao* Create(const TriaevumImmerseHost* host, char* reason, size_
         static_assert(std::tuple_size_v<decltype(sources)> == kProgramCount);
         constexpr std::array<const char*, kProgramCount> names{
             "immerse_mxao_deinterleave.comp", "immerse_mxao_occlusion.comp", "immerse_mxao_filter.comp",
-            "immerse_mxao_resolve.comp", "immerse_mxao_temporal.comp", "immerse_mxao_debug.comp" };
+            "immerse_mxao_resolve.comp", "immerse_mxao_temporal.comp", "immerse_mxao_debug.comp",
+            "immerse_mxao_upsample.comp" };
         const auto pack = MxaoPassPack();
         for (size_t i = 0; i < sources.size(); ++i) {
             size_t words = 0;
@@ -218,26 +229,28 @@ int Configure(TriaevumImmerseMxao* mxao, const TriaevumMxaoTargets* targets) {
     const MotionInput temporal = target.Motion != VK_NULL_HANDLE && target.MotionWidth != 0U && target.MotionHeight != 0U
                                 ? MotionInput{ target.Motion, target.MotionFormat, target.MotionWidth, target.MotionHeight }
                                 : MotionInput{};
-    if (mxao->Width == target.Width && mxao->Height == target.Height && mxao->Output == target.Output &&
+    const bool half = target.HalfResolution != 0U;
+    if (mxao->OutputWidth == target.Width && mxao->OutputHeight == target.Height && mxao->Output == target.Output &&
         mxao->OutputIdentity == target.OutputIdentity && mxao->Inputs == inputs && mxao->Formats == formats &&
-        mxao->Motion == temporal)
+        mxao->Motion == temporal && mxao->HalfResolution == half)
         return 1;
     if (mxao->Width != 0 && !host->CompleteRecordedWork(host->Context))
         return 0;
     InvalidateScreenResources(mxao);
     try {
-        const uint32_t tiledWidth = MxaoTiledExtent(target.Width);
-        const uint32_t tiledHeight = MxaoTiledExtent(target.Height);
+        const uint32_t width = half ? (target.Width + 1U) / 2U : target.Width;
+        const uint32_t height = half ? (target.Height + 1U) / 2U : target.Height;
+        const uint32_t tiledWidth = MxaoTiledExtent(width);
+        const uint32_t tiledHeight = MxaoTiledExtent(height);
         if (!host->CreateTexture(host->Context, tiledWidth, tiledHeight, VK_FORMAT_R32_SFLOAT, &mxao->TiledDepth) ||
-            !host->CreateTexture(host->Context, target.Width, target.Height, VK_FORMAT_R16G16_SFLOAT, &mxao->Raw) ||
-            !host->CreateTexture(host->Context, target.Width, target.Height, VK_FORMAT_R16G16_SFLOAT,
-                                 &mxao->Filtered))
+            !host->CreateTexture(host->Context, width, height, VK_FORMAT_R16G16_SFLOAT, &mxao->Raw) ||
+            !host->CreateTexture(host->Context, width, height, VK_FORMAT_R16G16_SFLOAT, &mxao->Filtered) ||
+            (half && !host->CreateTexture(host->Context, width, height, VK_FORMAT_R32_SFLOAT, &mxao->Resolved)))
             throw std::runtime_error("MXAO scratch allocation failed");
         const bool accumulates = temporal.Image != VK_NULL_HANDLE;
         if (accumulates)
             for (auto& history : mxao->History)
-                if (!host->CreateTexture(host->Context, target.Width, target.Height, VK_FORMAT_R16G16B16A16_SFLOAT,
-                                         &history))
+                if (!host->CreateTexture(host->Context, width, height, VK_FORMAT_R16G16B16A16_SFLOAT, &history))
                     throw std::runtime_error("MXAO history allocation failed");
         mxao->Output = target.Output;
         mxao->OutputIdentity = target.OutputIdentity;
@@ -282,12 +295,16 @@ int Configure(TriaevumImmerseMxao* mxao, const TriaevumMxaoTargets* targets) {
         };
         // The deinterleave program does not read binding 2; bind an input so
         // the unused descriptor still has a valid layout.
+        // At half resolution the resolve (and debug) programs write the
+        // resolved visibility the upsample reads; otherwise the output.
+        const auto resolved = [&]() { return half ? view(mxao->Resolved, true) : view(mxao->Output, true); };
         std::array<SetBinding, kSetCount> bindings{ {
             { sources[0], view(mxao->TiledDepth, true), sources[0] },
             { view(mxao->TiledDepth, false), view(mxao->Raw, true), sources[0] },
             { view(mxao->Raw, false), view(mxao->Filtered, true), sources[0] },
-            { view(mxao->Raw, false), view(mxao->Output, true), sources[0] },
-            { view(mxao->Filtered, false), view(mxao->Output, true), sources[0] },
+            { view(mxao->Raw, false), resolved(), sources[0] },
+            { view(mxao->Filtered, false), resolved(), sources[0] },
+            { half ? view(mxao->Resolved, false) : sources[0], view(mxao->Output, true), sources[0] },
         } };
         if (accumulates) {
             for (size_t written = 0; written < 2; ++written) {
@@ -296,8 +313,7 @@ int Configure(TriaevumImmerseMxao* mxao, const TriaevumMxaoTargets* targets) {
                                                      view(mxao->History[1 - written], false) };
                 bindings[kFilterAccumulatedSet + written] = { view(accumulation, false), view(mxao->Filtered, true),
                                                               sources[0] };
-                bindings[kResolveAccumulatedSet + written] = { view(accumulation, false), view(mxao->Output, true),
-                                                               sources[0] };
+                bindings[kResolveAccumulatedSet + written] = { view(accumulation, false), resolved(), sources[0] };
             }
         }
         for (size_t i = 0; i < setCount; ++i) {
@@ -313,8 +329,11 @@ int Configure(TriaevumImmerseMxao* mxao, const TriaevumMxaoTargets* targets) {
                                                                            { set, 7, 0, &sources[2], 1 } } };
             mxao->Core->UpdateDescriptorRanges(updates.data(), uint32_t(updates.size()));
         }
-        mxao->Width = target.Width;
-        mxao->Height = target.Height;
+        mxao->Width = width;
+        mxao->Height = height;
+        mxao->OutputWidth = target.Width;
+        mxao->OutputHeight = target.Height;
+        mxao->HalfResolution = half;
         mxao->Inputs = inputs;
         mxao->Formats = formats;
         mxao->Motion = temporal;
@@ -358,7 +377,8 @@ int Execute(TriaevumImmerseMxao* mxao, const TriaevumMxaoFrame* frame) {
     const uint32_t shadingPhase = uint32_t(f.FrameId & 3U);
     const uint32_t options = (depthNormals ? kMxaoDepthNormals : 0U) | (geometryNormals ? kMxaoGeometryNormals : 0U) |
                              (screenRadius ? kMxaoScreenRadius : 0U) | (originalFade ? kMxaoOriginalFade : 0U) |
-                             (shadingRate << kMxaoShadingRateShift) | (shadingPhase << kMxaoShadingPhaseShift);
+                             (shadingRate << kMxaoShadingRateShift) | (shadingPhase << kMxaoShadingPhaseShift) |
+                             (mxao->HalfResolution ? kMxaoHalfResolution : 0U);
     const auto& projection = f.Projection;
     push.ViewX = { (f.NdcX[0] - f.NdcOrigin[0]) / projection[0], (f.NdcY[0] - f.NdcOrigin[0]) / projection[0],
                    (f.NdcOrigin[0] + projection[8]) / projection[0], 0 };
@@ -469,7 +489,11 @@ int Execute(TriaevumImmerseMxao* mxao, const TriaevumMxaoFrame* frame) {
             return 0;
         resolveSet = kResolveFilteredSet;
     }
-    if (!transition(mxao->Output, TRIAEVUM_IMMERSE_OUTPUT_DISPATCH))
+    // At half resolution the resolve writes the resolved visibility and the
+    // upsample the output (debug views by their own sample).
+    const VkImage resolved = mxao->HalfResolution ? mxao->Resolved : mxao->Output;
+    if (!transition(resolved, mxao->HalfResolution ? TRIAEVUM_IMMERSE_PRIVATE_COMPUTE_WRITE
+                                                   : TRIAEVUM_IMMERSE_OUTPUT_DISPATCH))
         return 0;
     if (debug >= TRIAEVUM_MXAO_DEBUG_NORMALS) {
         // The history view reads the accumulation, the others the raw estimate.
@@ -480,6 +504,15 @@ int Execute(TriaevumImmerseMxao* mxao, const TriaevumMxaoFrame* frame) {
     } else {
         dispatch(kResolveProgram, resolveSet, filter == 0U ? kMxaoFilterCopy : kMxaoFilterMirrored, mxao->Width,
                  mxao->Height, 8);
+    }
+    if (mxao->HalfResolution) {
+        if (!transition(mxao->Resolved, TRIAEVUM_IMMERSE_PRIVATE_SHADER_READ) ||
+            !transition(mxao->Output, TRIAEVUM_IMMERSE_OUTPUT_DISPATCH))
+            return 0;
+        push.Width = mxao->OutputWidth;
+        push.Height = mxao->OutputHeight;
+        dispatch(kUpsampleProgram, kUpsampleSet, debug >= TRIAEVUM_MXAO_DEBUG_NORMALS ? kMxaoFilterCopy : 0U,
+                 mxao->OutputWidth, mxao->OutputHeight, 8);
     }
     return transition(mxao->Output, TRIAEVUM_IMMERSE_OUTPUT_COMPLETION) ? 1 : 0;
 }

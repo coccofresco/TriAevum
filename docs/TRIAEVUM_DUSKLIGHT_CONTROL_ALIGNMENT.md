@@ -86,7 +86,7 @@ Completed Windows verification:
   against the same shared adapter. No AOT compilation was necessary.
 - Bounded Vulkan run from the user's Sages checkpoint: 60 frames, exit 0,
   without an injected input timeline (real host polling).
-  Private evidence: `C:/Users/xander/triaevum-issues-40-43/controller-alignment/`.
+  Private evidence: `%USERPROFILE%/triaevum-issues-40-43/controller-alignment/`.
   This checks startup/polling integration, not a physical-controller playthrough.
 
 Hardware behavior must not be inferred from the existence of a test target.
@@ -160,7 +160,7 @@ remain separate tasks; desktop SDL tests cannot establish those guarantees.
   suite passes 11 tests. Game builds and the source-module consumer compiles.
 - Vulkan game probe from the existing Sages state completes 60 frames and exits
   0, using real host polling with no injected timeline. Private logs:
-  `C:/Users/xander/triaevum-issues-40-43/motion-touch-alignment/`.
+  `%USERPROFILE%/triaevum-issues-40-43/motion-touch-alignment/`.
   This is an integration smoke, not physical motion/touchpad qualification.
 - No PS4/PS5/Switch USB/Bluetooth hardware matrix, Linux, Android or macOS
   execution was completed for this extension. Test those before claiming parity.
@@ -264,6 +264,6 @@ input suites pass; actual F1 widget smoke passes 3,978 assertions; release audit
 unit suite passes 11 tests. Windows game builds and the module-host consumer
 compiles. A bounded 60-frame Vulkan run from the Sages checkpoint exits 0 with
 real host polling (no injected timeline); private evidence is under
-`C:/Users/xander/triaevum-issues-40-43/combined-motion-aim/`. This last check proves
+`%USERPROFILE%/triaevum-issues-40-43/combined-motion-aim/`. This last check proves
 startup/poll integration only, not physical aiming. No attached motion controller
 was available for a hardware aiming test in this session.

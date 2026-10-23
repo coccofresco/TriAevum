@@ -14,6 +14,7 @@
 #if defined(__SWITCH__) || defined(__ANDROID__)
 #include <SDL.h>
 #endif
+#include <filesystem>
 
 #include "oot3d_demo_host_context.h"
 #if defined(__ANDROID__)
@@ -28,7 +29,41 @@
 #include "triaevum_title_plugin_loader.h"
 #endif
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <Windows.h>
+#endif
+
 namespace {
+
+#ifdef _WIN32
+// The Windows package keeps every DLL in runtime/ beside the installed
+// TriAevum.exe. Libraries loaded by name (the delay-loaded shaderc and its
+// Visual C++ runtime, FidelityFX through NRI) are searched there too;
+// SetDllDirectoryW keeps the rest of the standard search (PATH included)
+// that drivers and Vulkan layers may rely on.
+void UseRuntimeLibraryDirectory() {
+    std::wstring executable(MAX_PATH, L'\0');
+    for (;;) {
+        const DWORD length = GetModuleFileNameW(nullptr, executable.data(), DWORD(executable.size()));
+        if (length == 0) return;
+        if (length < executable.size()) {
+            executable.resize(length);
+            break;
+        }
+        executable.resize(executable.size() * 2);
+    }
+    const auto runtime = std::filesystem::path(executable).parent_path() / "runtime";
+    std::error_code error;
+    if (std::filesystem::is_directory(runtime, error))
+        SetDllDirectoryW(runtime.c_str());
+}
+#endif
 
 #if defined(__SWITCH__)
 constexpr const char* kSwitchBootStatusPath =
@@ -140,6 +175,9 @@ NativeGameArguments PrepareNativeGameArguments(int argc, char** argv) {
 } // namespace
 
 int main(int argc, char** argv) {
+#ifdef _WIN32
+    UseRuntimeLibraryDirectory();
+#endif
     try {
         if (argc >= 2 && std::string_view(argv[1]) == "--prebuild-interior-sun")
             return Oot3dNativeGame::InteriorSunToolMain(argc, argv);

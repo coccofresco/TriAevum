@@ -17,6 +17,10 @@ namespace Fast::Oot3d {
 
 // Draw independently of F1 visibility, collapse state, tabs and scroll position.
 void DrawDisplayConfirmation();
+// While another surface (the in-game menu) asks the "keep display settings"
+// question, the ImGui confirmation stays hidden so the question is asked once.
+void DeferDisplayConfirmation(bool deferred);
+[[nodiscard]] bool DisplayConfirmationDeferred();
 
 // A short host notice (for example the result of a hotkey action) shown for a
 // few seconds outside F1. A later notice replaces the current one.

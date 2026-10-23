@@ -46,7 +46,7 @@ a fix. Do not call this resolved or explain it away as a screenshot/shader stall
   `ReadFramebufferToCPU` waits on a fence, allocates a staging buffer, submits
   immediate transfer commands, copies/converts pixels and destroys staging.
   The observed full pause is not attributed solely to the fence/GPU.
-- Private evidence under `/home/xander/triaevum-pipeline-live-proof/`:
+- Private evidence under `~/triaevum-pipeline-live-proof/`:
   `forge-pass-cache-native-v2/{first-launch,second-launch}`,
   `forge-pass-cache-effects/{first-launch,second-launch}`,
   `native-pacing-no-captures`, `effects-pacing-no-captures`.

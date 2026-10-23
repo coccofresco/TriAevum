@@ -134,10 +134,68 @@ void RollCallWithoutLinkAnimations() {
           "the roll call did not run as the native block");
   Require(!f.Memory.IsMapped(kTopScreenDashBlendBase, 1U), "the blend buffer was mapped unused");
 }
+void NaviEntersTheHatWhenHerReachTimerExpiresWhileDashing() {
+  // The dash state from Player_Update's entry: the native query re-enters
+  // with r0 = 0 (not blocked) and the roll action makes the dash.
+  Fixture f;
+  std::string error;
+  Require(f.Memory.MapRegion({"save", 0x00587000U, 0x1000U, true, false, {}}, &error) &&
+              f.Memory.MapRegion({"time state pointer", 0x0051B000U, 0x1000U, true, false, {}}, &error),
+          "cannot map the save context");
+  f.W32(0x005043D4U + 0x0CU, kPlay); // the play state pointer
+  f.W8(kPlay + 0x100U, 3U);
+  f.W8(kPlay + 0x101U, 2U);
+  f.W32(kPlay + 0x14U, 1U);          // A held
+  f.W16(0x00587958U + 0x44U, 1U);    // alive
+  f.W32(0x0014E9F0U * 4U + 4U, kRollAction); // roll action of animation age 1
+  f.W32(kPlayer + 0x284U, kRollAction);
+  constexpr std::uint32_t kNavi = 0x01400000U;
+  const auto naviCaller = [] {
+    GuestState state;
+    state.r[4] = kNavi + 0x900U;
+    state.r[5] = kNavi;
+    state.r[7] = kPlayer + 0x1000U;
+    state.r[13] = 0x02000000U;
+    state.r[15] = kTopScreenDashRunSite;
+    return state;
+  };
+  auto state = naviCaller();
+  f.Configure(false, false);
+  Require(!f.Execute(kTopScreenDashRunSite, state), "Navi's return left the native block without Roll Dash");
+  f.Configure(false, true);
+  Require(!f.Execute(kTopScreenDashRunSite, state), "Navi's return left the native block without a dash");
+
+  GuestState entry;
+  entry.r[0] = kPlayer;
+  entry.r[1] = kPlay;
+  entry.r[13] = 0x02000000U;
+  entry.r[15] = kTopScreenDashStateEntry;
+  Require(!f.Runtime.DashQueryPending(), "a query was pending before Player_Update");
+  Require(f.Execute(kTopScreenDashStateEntry, entry) && entry.r[15] == 0x0037577CU &&
+              entry.r[14] == kTopScreenDashStateEntry && entry.r[0] == kPlay,
+          "the dash state did not query the native block");
+  // FUN_0037577c returns to the entry with its own registers (#91: the
+  // Player_Update probes must not take them for the player and PlayState).
+  Require(f.Runtime.DashQueryPending(), "the query's return is not announced");
+  entry.r[0] = 0U;
+  entry.r[1] = kPlayer + 0x1000U;
+  entry.r[14] = 0x00375798U;
+  Require(!f.Execute(kTopScreenDashStateEntry, entry) && f.Runtime.DashQueries() == 1U &&
+              f.Runtime.DashFrames() == 1U,
+          "the roll did not start the dash");
+  Require(!f.Runtime.DashQueryPending() && entry.r[0] == kPlayer && entry.r[1] == kPlay,
+          "the title's registers were not restored after the query");
+  state = naviCaller();
+  Require(f.Execute(kTopScreenDashRunSite, state) && state.r[15] == 0x00129680U &&
+              state.r[4] == kNavi + 0x900U && state.r[5] == kNavi && state.r[7] == kPlayer + 0x1000U,
+          "Navi did not go into the hat while dashing");
+  Require(f.Runtime.DashNaviHides() == 1U, "the hat entry was not counted");
+}
 } // namespace
 
 int main() {
   FloorWebAcceptsTheLandingRoll();
   RollCallWithoutLinkAnimations();
+  NaviEntersTheHatWhenHerReachTimerExpiresWhileDashing();
   std::cout << "SingleScreen gameplay runtime tests passed\n";
 }

@@ -63,7 +63,7 @@ Preview with `-IncludeOldCaptures` selected:
 
 Approximately 9.25 GiB logical total. Actual freed disk allocation can differ.
 The full inventory is outside Git at
-`C:/Users/xander/AppData/Local/Temp/triaevum-cleanup-manifest-20260917-105957.csv`.
+`%USERPROFILE%/AppData/Local/Temp/triaevum-cleanup-manifest-20260917-105957.csv`.
 Each invocation regenerates a dated inventory before doing anything destructive.
 
 Selection includes old diagnostic object/archive variants, object intermediates
@@ -80,8 +80,8 @@ inputs. This is not a claim that every unselected directory is necessary.
   verified against the active CMake cache, not inferred from directory dates.
 - Git repositories, external decompilation, source, compiler and SDK directories.
 - ROMs, extracted data, shader caches/corpora, DLLs, saves and settings.
-- Current issue evidence in `C:/Users/xander/triaevum-issues-40-43` and mounted
-  checkpoint directory `C:/Users/xander/triaevum-verify-20260911/epona-user`.
+- Current issue evidence in `%USERPROFILE%/triaevum-issues-40-43` and mounted
+  checkpoint directory `%USERPROFILE%/triaevum-verify-20260911/epona-user`.
 - AOT recovery experiments and their surviving source/evidence.
 - Baseline archive `1110f696861ab75ecd0e9a489e78c57b1919b957511cd9ae7d304c43bd933699`
   and all 257 objects declared by its build record, even though stored in TEMP.

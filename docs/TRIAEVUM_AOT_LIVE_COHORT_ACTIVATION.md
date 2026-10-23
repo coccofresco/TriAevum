@@ -41,7 +41,7 @@ portable public ABI or a renderer extension.
 
 ## Results
 
-Private evidence under `C:/Users/xander/triaevum-aot-causal-analysis/`:
+Private evidence under `%USERPROFILE%/triaevum-aot-causal-analysis/`:
 
 | Run | Activated scope | Calls | Candidate blocks | Pre-NRI baseline | Pre-NRI candidate |
 | --- | --- | ---: | ---: | ---: | ---: |

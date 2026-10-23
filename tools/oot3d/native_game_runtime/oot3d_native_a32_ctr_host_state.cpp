@@ -338,7 +338,7 @@ bool NativeA32CtrHostServices::RestoreState(const nlohmann::json& state,
             const bool isSaveFile =
                 object->Type == "client_session:file:savedata";
             if (isRomFsFile) {
-                if (mConfig.RomFsOverlay == nullptr &&
+                if (mConfig.RomFsLayers == nullptr &&
                     mConfig.Filesystem == nullptr &&
                     mConfig.RomFsImagePath.empty()) {
                     throw std::runtime_error(
@@ -364,21 +364,19 @@ bool NativeA32CtrHostServices::RestoreState(const nlohmann::json& state,
             object->FilePriority = encoded.value("file_priority", 0U);
             object->FileClosed = encoded.value("file_closed", false);
             if (isRomFsFile) {
-                // The title caches the RomFS tables it read: a state taken
-                // over another RomFS (with or without an overlay, or another
-                // overlay) would read files at the wrong offsets.
+                // The title caches the RomFS tables it read: a state is bound
+                // to the view it was saved over (the image, installed RomFS
+                // mods or development layers).
                 const uint64_t expectedOffset =
-                    mConfig.RomFsOverlay != nullptr ? 0U : mConfig.RomFsImageOffset;
-                const uint64_t expectedSize = mConfig.RomFsOverlay != nullptr
-                                                  ? mConfig.RomFsOverlay->Size()
-                                                  : mConfig.RomFsImageSize;
-                if (object->FileOffset != expectedOffset || object->FileSize != expectedSize) {
+                    mConfig.RomFsLayers != nullptr ? 0U : mConfig.RomFsImageOffset;
+                if (object->FileOffset != expectedOffset || object->FileSize != RomFsServiceViewSize()) {
                     throw std::runtime_error(
-                        "the state was saved over another RomFS (overlay) than the configured one");
+                        "restored RomFS service view is incompatible (the save state "
+                        "was made with different RomFS mods or game data)");
                 }
             }
-            if (!object->FileClosed && isRomFsFile && mConfig.RomFsOverlay != nullptr) {
-                object->FileBackend = mConfig.RomFsOverlay;
+            if (!object->FileClosed && isRomFsFile && mConfig.RomFsLayers != nullptr) {
+                object->FileBackend = mConfig.RomFsLayers;
             } else if (!object->FileClosed && mConfig.Filesystem != nullptr && (isRomFsFile || isSaveFile)) {
                 uint32_t openFlags = 0U;
                 if (isRomFsFile || (object->FileOpenMode & 1U) != 0U) {
@@ -404,8 +402,9 @@ bool NativeA32CtrHostServices::RestoreState(const nlohmann::json& state,
                         "restored RomFS range exceeds its backing file");
                 }
             } else if (isRomFsFile && !object->FileClosed) {
-                object->RomFsBacking =
-                    std::make_shared<RomFsBackingFile>(object->FilePath);
+                object->RomFsBacking = std::make_shared<RomFsBackingFile>(
+                    object->FilePath, mConfig.RomFsOverlay,
+                    mConfig.RomFsImageOffset);
             }
             if (!encoded.at("mapped_address").is_null()) {
                 object->MappedAddress =

@@ -1,5 +1,6 @@
 #include "fast/oot3d/graphics_settings_window.h"
 #include "fast/oot3d/graphics_settings_runtime.h"
+#include "fast/oot3d/presentation_picture.h"
 #include "fast/oot3d/settings_panel_widgets.h"
 
 namespace Fast::Oot3d {
@@ -12,6 +13,12 @@ bool GraphicsSettingsPanel::DrawDisplaySettings(GraphicsSettings& settings, cons
     if (observed.OutputWidth != 0 && observed.OutputHeight != 0) {
         ImGui::Text("Output framebuffer: %u x %u (%.3f:1)", observed.OutputWidth,
                     observed.OutputHeight, float(observed.OutputWidth) / observed.OutputHeight);
+        if (observed.PictureWidth != 0 && observed.PictureHeight != 0 &&
+            (observed.PictureWidth != observed.OutputWidth ||
+             observed.PictureHeight != observed.OutputHeight))
+            ImGui::Text("Picture: %u x %u (%.3f:1), black bars around it",
+                        observed.PictureWidth, observed.PictureHeight,
+                        float(observed.PictureWidth) / observed.PictureHeight);
         if (observed.SceneWidth != 0)
             ImGui::Text("Scene image: %u x %u (%.2fx)", observed.SceneWidth,
                         observed.SceneHeight, observed.InternalScale);
@@ -21,6 +28,18 @@ bool GraphicsSettingsPanel::DrawDisplaySettings(GraphicsSettings& settings, cons
         "Window mode", settings, capabilities, windowModes,
         [](auto& value, auto mode) { value.Window = mode; },
         [](const auto& value) { return value.Window; });
+    const char* const aspectRatios[] = { "Original 3DS (5:3)", "16:9", "21:9", "Free" };
+    if (EnumCombo("Aspect ratio", settings.Aspect, aspectRatios)) {
+        // A windowed output takes the chosen shape at once; the window stays
+        // resizable and letterboxes any other shape the user gives it.
+        (void)SnapWindowedOutputToAspect(settings);
+        changed = true;
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("A fixed ratio is centred with black bars where the output is wider or taller. "
+                          "Free fills the window as you shape it, and the whole screen in fullscreen. The "
+                          "scene shows more at the sides as the picture widens, never stretched; the HUD "
+                          "keeps its place.");
     struct ResolutionPreset {
         const char* Label;
         uint32_t Width;

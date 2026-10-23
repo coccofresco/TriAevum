@@ -15,6 +15,9 @@ Forge currently provides the release-safe preparation and packaging boundary:
 - installation of the SingleScreen 3.0 UI atlas and Link animations shipped in
   the package, plus its HD graphics only from a local archive the user supplies
   (see `TRIAEVUM_TOPSCREEN_INSTALLATION.md`);
+- optional third-party RomFS mods, off by default, obtained on the user's
+  request from the author's original archive and applied as a private local
+  overlay (see `TRIAEVUM_MOD_VANILLA_PLUS_LINK.md`);
 - a local water texture catalog (`cache/water/<key>/water_textures.txt`,
   `--water-texture-catalog`): the renderer's content identities and roles
   (surface, river, waterfall, underwater light) of the title's water

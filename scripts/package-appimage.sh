@@ -16,9 +16,12 @@ test ! -e "$appdir" && test ! -L "$appdir"
 test ! -e "$output" && test ! -L "$output"
 test -x "$tool"
 case "$output" in "$appdir"/*|"$package"/*) echo 'Output must be outside package and AppDir' >&2; exit 2 ;; esac
+# Pinned to the tagged releases appimagetool 1.9.1 and type2-runtime 20251108
+# (the earlier `continuous` assets were replaced upstream and are no longer
+# acquirable; reviewed for v0.8.0-beta.1.2).
 printf '%s  %s\n' \
-    a6d71e2b6cd66f8e8d16c37ad164658985e0cf5fcaa950c90a482890cb9d13e0 "$tool" \
-    1cc49bcf1e2ccd593c379adb17c9f85a36d619088296504de95b1d06215aebbf "$runtime" | sha256sum --check --strict
+    ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0 "$tool" \
+    2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d "$runtime" | sha256sum --check --strict
 export PYTHONPATH="$repo${PYTHONPATH:+:$PYTHONPATH}"
 python3 -m tools.triaevum_release.appimage_package --package "$package" --output "$appdir"
 ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$tool" --no-appstream \

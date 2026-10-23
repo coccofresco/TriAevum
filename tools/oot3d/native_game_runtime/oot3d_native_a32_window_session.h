@@ -41,6 +41,7 @@
 #include "oot3d_native_a32_scene_view.h"
 #include "oot3d_native_actor_interactions.h"
 #include "fast/oot3d/grass_interaction_bridge.h"
+#include "fast/oot3d/presentation_picture.h"
 #include "oot3d_native_a32_timing_probe.h"
 #include "oot3d_native_compiled_functions.h"
 #include "oot3d_native_controls_settings_panel.h"
@@ -48,6 +49,7 @@
 #include "oot3d_native_game_bootstrap.h"
 #include "oot3d_native_mass_aot.h"
 #include "oot3d_native_pcm_diagnostics.h"
+#include "oot3d_native_input_latency_trace.h"
 #include "oot3d_native_presentation_pacer.h"
 #include "oot3d_native_pica_frontend.h"
 #include "oot3d_native_pica_composition.h"
@@ -81,12 +83,14 @@
 #include "oot3d_top_screen_input_cadence.h"
 #include "oot3d_top_screen_items_hint.h"
 #include "oot3d_top_screen_settings_panel.h"
+#include "oot3d_photo_mode_panel.h"
 #include "oot3d_top_screen_texture_overrides.h"
 #include "oot3d_native_hd_font_runtime.h"
 #include "oot3d_top_screen_texture_runtime.h"
 #include "oot3d_typed_gameplay_bridge.h"
 
 #include "fast/Fast3dGui.h"
+#include "oot3d_in_game_menu.h"
 #include "fast/Fast3dWindow.h"
 #include "fast/oot3d/graphics_settings_persistence.h"
 #include "fast/oot3d/graphics_settings_runtime.h"
@@ -354,23 +358,37 @@ private:
   void UpdateDevFreeCameraTour(uint64_t guestFrame);
   // TRIAEVUM_DEV_LAB=<dir>: commands from an agent (oot3d_dev_lab.h), one
   // at a time: warp, camera, camera_off, wait, capture, graphics, gizmos,
-  // status, quit.
+  // status, menu, quit.
   std::unique_ptr<Oot3dNativeGame::DevLabChannel> devLab;
   std::optional<nlohmann::json> devLabCommand;
   uint32_t devLabFrames = 0;
   uint64_t devLabAppliedAt = 0;
   bool devLabSawArrival = false;
+  // "menu": synthetic presses driving the in-game menu instead of the host
+  // controls, one step per period of guest frames.
+  std::vector<std::string> devLabMenuSteps;
+  Oot3dNativeGame::InGameMenuHostInput devLabMenuInput;
+  bool devLabMenuDriving = false;
+  std::string devLabMenuMissingTarget; // a pointer step whose region was not drawn
   void UpdateDevLab(uint64_t guestFrame);
   // TRIAEVUM_DEV_EMITTERS=<file.jsonl>: the native lights per scene/room.
   std::unique_ptr<Oot3dNativeGame::NativeEmitterInventoryLog> devEmitterLog;
   uint64_t devEmitterFrames = 0;
-  // F6 (free camera) rising edge and the free camera's refresh clock.
+#endif
+  // F1 > Photo mode (every build): its session state (Hide HUD) and the one
+  // last applied; the free camera's F6 rising edge and refresh clock.
+  std::shared_ptr<Oot3dNativeGame::PhotoModeState> photoMode =
+      std::make_shared<Oot3dNativeGame::PhotoModeState>();
+  bool photoModeHudHidden = false;
+  // The TopScreen configuration the UI bridge sees: the active one, with
+  // render_hud off while Photo mode hides the HUD.
+  void PublishTopScreenUiConfig();
+  void ApplyPhotoModeHud();
   bool devFreeCameraToggleHeld = false;
   std::chrono::steady_clock::time_point devFreeCameraLastRefresh{};
   // Moves the free camera from the pad, keyboard and mouse and withholds that
   // input from the game while it is active.
   void UpdateDevFreeCamera(Oot3dNativeGame::NativeA32InputFrame &inputFrame);
-#endif
   Oot3dNativeGame::TopScreenTextureOverridePack topScreenTextureOverridePack;
   Oot3dNativeGame::NativeHdFontRuntime hdFonts;
   bool hdFontsLoaded = false;
@@ -400,6 +418,10 @@ private:
   Oot3dNativeGame::NativeTemporalEventLedger temporalEventLedger;
   Oot3dNativeGame::NativeA32PlayerTemporalBridge playerTemporalBridge;
   NativeWidescreenProjectionState widescreenProjection;
+  // The presentation picture in the window (the aspect ratio's letterbox,
+  // centred): the scene FOV policy, the UI canvases and the pointer mapping
+  // follow it (UpdateScenePresentation, once per presented frame).
+  Fast::Oot3d::PresentationPicture presentationPicture{};
   std::optional<ScopedA32BlockTraceWriter> blockTraceWriterStorage;
   std::vector<uint32_t> blockEntryHooks{};
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
@@ -448,11 +470,16 @@ private:
   std::optional<Oot3dNativeGame::TopScreenSystemPageRuntime> systemPageStorage;
   std::optional<Oot3dNativeGame::TopScreenItemDescriptionRuntime> itemDescriptionStorage;
   std::optional<Oot3dNativeGame::TopScreenWideItemsRuntime> wideItemsStorage;
+  std::optional<Oot3dNativeGame::TopScreenVisionsRuntime> visionsStorage;
+  std::optional<Oot3dNativeGame::TopScreenReframedFileSelect> reframedFileSelectStorage;
   std::optional<Oot3dNativeGame::TopScreenGameplayRuntime> gameplayStorage;
   std::optional<Oot3dNativeGame::ObjectBankExtension> objectBankStorage;
   std::optional<Oot3dNativeGame::TopScreenRainAdapter> rainStorage;
   std::optional<oot3d::ui::Fast3dUiRenderBackend> uiRenderBackendStorage;
+  std::optional<Oot3dNativeGame::Menu::MenuFontTextureProvider> menuFontProviderStorage;
   std::optional<oot3d::ui::N64UiFast3dRenderer> n64UiRendererStorage;
+  // The in-game menu (Esc / R3), drawn by the UI renderer after the HUD.
+  std::optional<Oot3dNativeGame::InGameMenu> inGameMenuStorage;
   std::array<std::vector<oot3d::ui::UiPrimitive>, oot3d::ui::kUiSubsystemCount> lastTopScreenPrimitivesBySubsystem;
   Oot3dNativeGame::NativeA32InputTimeline inputTimeline{};
   Oot3dNativeGame::GraphicsSettingsSchedule graphicsSettingsSchedule{};
@@ -517,6 +544,8 @@ private:
   Fast::Oot3d::PresentationPacingPolicy presentationPacingPolicy{};
   Fast::Renderer3ds::PicaFrameCompositionPolicy frameCompositionPolicy{};
   std::optional<Oot3dNativeGame::NativeRealtimeRefreshPacer> realtimePacerStorage;
+  Oot3dNativeGame::NativeInputLatencyTrace inputLatencyTrace{
+      Oot3dNativeGame::NativeInputLatencyTrace::EnabledByEnvironment()};
   bool visualInterpolationEnabled{};
   Fast::Renderer3ds::PicaFrameCompositionPolicy guestCompositionPolicy{};
   bool guestInterpolationEnabled{};

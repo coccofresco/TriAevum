@@ -520,10 +520,12 @@ TEST(Oot3dPicaShaderPipelineCache,
     EXPECT_EQ(stats.InstrumentationInvalidations, 1U);
 }
 
-// IsolatedLighting changes the generated guides, so it is part of the
-// variant key: a warm cache returns exactly what a cold cache generates,
-// whichever of the two draws comes first.
-TEST(Oot3dPicaShaderPipelineCache, IsolatedLightingSelectsItsOwnVariant) {
+// IsolatedLighting changes the guides through the draw's decisions, not the
+// text: both draws share one program, which reads the decision from the
+// effect block. It stays part of the variant key (the decisions differ): a
+// warm cache returns exactly what a cold cache generates, whichever of the
+// two draws comes first.
+TEST(Oot3dPicaShaderPipelineCache, IsolatedLightingSelectsItsOwnDecisions) {
     using namespace Fast::Oot3d;
     EffectsSettings effects;
     effects.AmbientOcclusion = AmbientOcclusionMode::Gtao;
@@ -539,10 +541,21 @@ TEST(Oot3dPicaShaderPipelineCache, IsolatedLightingSelectsItsOwnVariant) {
     const auto isolatedCold = cold(isolated);
     ASSERT_FALSE(sharedCold.IsCanonical());
     ASSERT_FALSE(isolatedCold.IsCanonical());
-    EXPECT_NE(sharedCold.FragmentShaderKey, isolatedCold.FragmentShaderKey);
-    EXPECT_NE(sharedCold.FragmentShaderSource, isolatedCold.FragmentShaderSource);
-    EXPECT_NE(isolatedCold.FragmentShaderSource.find("pica_ambient_guide = vec4(0.0, 0.0, 0.0, 1.0)"),
-              std::string::npos);
+    EXPECT_EQ(sharedCold.FragmentShaderKey, isolatedCold.FragmentShaderKey);
+    EXPECT_EQ(sharedCold.FragmentShaderSource, isolatedCold.FragmentShaderSource);
+    EXPECT_TRUE(sharedCold.ReadsDrawControl);
+    EXPECT_TRUE(isolatedCold.ReadsDrawControl);
+    EXPECT_NE(isolatedCold.FragmentShaderSource.find("? vec4(0.0, 0.0, 0.0, 1.0)"), std::string::npos);
+    EXPECT_NE(isolatedCold.FragmentShaderSource.find("uniform Oot3dDrawControl"), std::string::npos);
+    EXPECT_NE(sharedCold.Decisions.Ambient, PicaEffectDecisions::AmbientPath::None);
+    EXPECT_EQ(isolatedCold.Decisions.Ambient, PicaEffectDecisions::AmbientPath::None);
+    // The program tests control.y's ambient field against None.
+    const auto field = [](const PicaShaderPipelineResult& result) {
+        return (PackPicaUberEffectBlock(result.Decisions, {}).Control[1] >> kPicaUberAmbientShift) &
+               ((1U << kPicaUberFieldBits) - 1U);
+    };
+    EXPECT_EQ(field(isolatedCold), static_cast<uint32_t>(PicaEffectDecisions::AmbientPath::None));
+    EXPECT_NE(field(sharedCold), static_cast<uint32_t>(PicaEffectDecisions::AmbientPath::None));
 
     for (const bool isolatedFirst : {false, true}) {
         PicaShaderPipelineCache cache;
@@ -557,6 +570,8 @@ TEST(Oot3dPicaShaderPipelineCache, IsolatedLightingSelectsItsOwnVariant) {
         EXPECT_EQ(warmShared.FragmentShaderKey, sharedCold.FragmentShaderKey);
         EXPECT_EQ(warmIsolated.FragmentShaderSource, isolatedCold.FragmentShaderSource);
         EXPECT_EQ(warmIsolated.FragmentShaderKey, isolatedCold.FragmentShaderKey);
+        EXPECT_EQ(warmIsolated.Decisions.Ambient, PicaEffectDecisions::AmbientPath::None);
+        EXPECT_NE(warmShared.Decisions.Ambient, PicaEffectDecisions::AmbientPath::None);
         EXPECT_EQ(cache.Stats().InstrumentationEntries, 2U);
     }
 }
@@ -1940,7 +1955,7 @@ void helper() { }
     });
     ASSERT_TRUE(composed.Applied());
     const size_t assignment = composed.Source.find(
-        "pica_ambient_guide = vec4(1.0, 1.0, 1.0, 1.0)");
+        ": vec4(1.0, 1.0, 1.0, 1.0);");
     const size_t composedHelper = composed.Source.find("void helper");
     ASSERT_NE(assignment, std::string::npos);
     ASSERT_NE(composedHelper, std::string::npos);

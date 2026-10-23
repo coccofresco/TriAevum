@@ -18,6 +18,10 @@ namespace Fast::Oot3d {
 
 enum class GraphicsPreset : uint8_t { Authentic, Enhanced, Toon, Custom };
 enum class WindowMode : uint8_t { Windowed, Borderless, ExclusiveFullscreen };
+// The picture's aspect ratio: the original top screen (5:3), 16:9, 21:9 (7:3)
+// or Free (the output's own ratio: the window as the user shapes it, the
+// whole screen in a fullscreen mode).
+enum class AspectRatioMode : uint8_t { Native3ds, Wide16x9, Ultrawide21x9, Free };
 enum class AntiAliasingMode : uint8_t { Off, Fxaa, Smaa1x, Msaa, Taa, Upscaler };
 enum class FrameRateMode : uint8_t {
     Original30,
@@ -205,6 +209,9 @@ struct GrassAppearanceSettings {
     float ShapeVariation = 0.0F;
     float BladeTwistDegrees = 0.0F;
     uint8_t BladeSegments = 2U;
+    // Near blades as two crossed planes; otherwise one ribbon that turns its
+    // width toward the camera (half the vertices and fill, the default).
+    bool CrossedBlades = false;
     bool ReceiveLighting = true;
     bool ReceiveFog = true;
     bool ToonRimEnabled = true;
@@ -239,6 +246,14 @@ struct InteractiveGrassSettings {
     float FarTuftDensity = 1.0F;
     float FarTuftSpread = 1.0F;
     float SegmentLodSoftness = 0.5F;
+    // Geometric LOD beyond the blades (grass_card_lod.h): cards per cluster,
+    // per group of clusters and per patch of clusters, the last without end.
+    // The blades end at the clump distance while it is enabled.
+    bool CardLodEnabled = false;
+    float CardLodBladeDistance = 1000.0F;
+    float CardLodClumpDistance = 4000.0F;
+    float CardLodGroupDistance = 15000.0F;
+    float CardLodBlendFraction = 0.25F;
     GrassGenerationSettings Generation;
     GrassAppearanceSettings Appearance;
     float WindDirectionDegrees = 0.0F;
@@ -351,6 +366,10 @@ struct GraphicsSettings {
     uint32_t OutputWidth = 1280;
     uint32_t OutputHeight = 720;
     uint32_t RefreshRate = 60;
+    // The picture's aspect ratio inside the output (presentation_picture.h):
+    // a fixed ratio is letterboxed and centred, Free fills the window or the
+    // screen. Host-owned, like the window and the output size.
+    AspectRatioMode Aspect = AspectRatioMode::Wide16x9;
     float InternalResolutionScale = 1.0F;
     AntiAliasingMode AntiAliasing = AntiAliasingMode::Off;
     uint8_t MsaaSamples = 1;

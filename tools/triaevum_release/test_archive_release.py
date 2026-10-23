@@ -18,7 +18,7 @@ class ReleaseArchiveTests(unittest.TestCase):
             package = root / "TriAevum portable"
             write_clean_package(package)
             first = create_release_archive(package, root / "first.zip")
-            (package / "TriAevum.exe").touch()
+            (package / "runtime/TriAevum.exe").touch()
             second = create_release_archive(package, root / "second.zip")
             self.assertEqual(first["sha256"], second["sha256"])
             with zipfile.ZipFile(first["archive"]) as archive:

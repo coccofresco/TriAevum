@@ -37,7 +37,7 @@ or qualified**. No exploit saves or executable utilities were used.
 - `provenance.json`: source, author credit, archive/file hashes and qualifications.
 - `adult-temple-inventory.oot3dsav`: runtime checkpoint created after the original
   save loaded, not a downloaded emulator state.
-- Linux: `/home/xander/triaevum-pipeline-live-proof/native-save-fixtures/`.
+- Linux: `~/triaevum-pipeline-live-proof/native-save-fixtures/`.
 - Live evidence: sibling directories `native-save-boot`, `native-save-items`,
   `native-save-items-even`, `native-save-items-odd`.
 - Linux checkpoint: `native-save-boot/checkpoint.oot3dsav`.

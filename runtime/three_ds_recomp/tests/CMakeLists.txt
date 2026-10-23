@@ -91,12 +91,15 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    target_compile_options(gtest PRIVATE -Wno-character-conversion)
-    target_compile_options(gtest_main PRIVATE -Wno-character-conversion)
-    if(MSVC)
-        target_compile_options(gtest PRIVATE /WX-)
-        target_compile_options(gtest_main PRIVATE /WX-)
-    endif()
+    # gmock compiles gtest-all.cc too; the default `all` target builds it.
+    foreach(googletest_target IN ITEMS gtest gtest_main gmock gmock_main)
+        if(TARGET ${googletest_target})
+            target_compile_options(${googletest_target} PRIVATE -Wno-character-conversion)
+            if(MSVC)
+                target_compile_options(${googletest_target} PRIVATE /WX-)
+            endif()
+        endif()
+    endforeach()
 endif()
 
 add_executable(three_ds_recomp_tests
@@ -722,6 +725,7 @@ add_executable(oot3d_graphics_foundation_tests
     oot3d_grass_draw_memo_tests.cpp
     oot3d_grass_geometry_registry_tests.cpp
     oot3d_grass_world_placement_cache_tests.cpp
+    oot3d_grass_card_lod_tests.cpp
     oot3d_pica_display_transfer_tests.cpp
     oot3d_pica_geometry_registry_tests.cpp
     oot3d_pica_texture_decode_tests.cpp
@@ -739,6 +743,8 @@ add_executable(oot3d_graphics_foundation_tests
     ../src/fast/oot3d/grass_static_placement_cache.cpp
     ../src/fast/oot3d/grass_shader_sources.cpp
     ../src/fast/oot3d/grass_blade_geometry.cpp
+    ../src/fast/oot3d/grass_card_atlas.cpp
+    ../src/fast/oot3d/grass_card_lod.cpp
     ../src/fast/oot3d/grass_collision_resolver.cpp
     ../src/fast/oot3d/grass_draw_memo.cpp
     ../src/fast/oot3d/grass_geometry_registry.cpp
@@ -747,9 +753,11 @@ add_executable(oot3d_graphics_foundation_tests
     ../src/fast/oot3d/grass_interaction_bridge.cpp
     ../src/fast/oot3d/grass_interaction_field.cpp
     ../src/fast/oot3d/grass_motion.cpp
+    ../src/fast/oot3d/grass_placement_audit.cpp
     ../src/fast/oot3d/grass_placement_cache.cpp
     ../src/fast/oot3d/grass_primitive_topology.cpp
     ../src/fast/oot3d/grass_render_telemetry.cpp
+    ../src/fast/oot3d/grass_residency.cpp
     ../src/fast/oot3d/grass_scene_bridge.cpp
     ../src/fast/oot3d/grass_shading_environment.cpp
     ../src/fast/oot3d/pica_scene_semantics.cpp
@@ -767,6 +775,7 @@ add_executable(oot3d_graphics_foundation_tests
     ../src/fast/oot3d/sample_view.cpp
     ../src/fast/renderer3ds/virtual_shadow_map.cpp
     ../src/fast/renderer3ds/pica_shadow_geometry.cpp
+    ../src/fast/renderer3ds/vulkan_memory_budget.cpp
     ../src/fast/oot3d/graphics_settings_persistence.cpp
     ../src/fast/oot3d/graphics_preset_library.cpp
     ../src/fast/oot3d/graphics_settings_runtime.cpp
@@ -840,6 +849,7 @@ if(NOT TARGET Vulkan::Headers)
 endif()
 target_link_libraries(oot3d_graphics_foundation_tests PRIVATE
     Vulkan::Headers
+    Vulkan::Vulkan
     gtest_main
     nlohmann_json::nlohmann_json
     ThreeDsRecomp::RendererExtensionCore

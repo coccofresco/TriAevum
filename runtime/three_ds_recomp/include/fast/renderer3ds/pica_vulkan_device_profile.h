@@ -31,6 +31,9 @@ inline VkPhysicalDeviceFeatures PicaVulkanCoreFeatures(const VkPhysicalDeviceFea
     // Native fragment-operation programs write the storage-image target.
     enabled.fragmentStoresAndAtomics = supported.fragmentStoresAndAtomics;
     enabled.shaderInt16 = supported.shaderInt16;
+    // The grass GPU selection writes indirect draws whose firstInstance is
+    // the slot's first root; without the feature it must be zero.
+    enabled.drawIndirectFirstInstance = supported.drawIndirectFirstInstance;
     return enabled;
 }
 

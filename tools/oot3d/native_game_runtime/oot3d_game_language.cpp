@@ -272,6 +272,20 @@ nlohmann::json GameLanguageDocument(const std::vector<GameLanguage> &languages,
           {"available", entries},
           {"selected", supported ? selected : languages.front().Code}};
 }
+
+std::vector<std::string> UiTexturePackLanguageFolders(uint8_t systemLanguage) {
+  switch (systemLanguage) {
+  case 0: return {"00_JP_JAPANESE", "JAPANESE"};
+  case 1: return {"02_EU_ENGLISH", "01_US_ENGLISH"};
+  case 2: return {"04_EU_FRENCH", "05_US_FRENCH"};
+  case 3: return {"03_EU_GERMAN", "GERMAN"};
+  case 4: return {"08_EU_ITALIAN", "ITALIAN"};
+  case 5: return {"06_EU_SPANISH", "07_US_SPANISH", "SPANISH"};
+  case 8: return {"09_EU_DUTCH"};
+  default: return {};
+  }
+}
+
 GameLanguageSettings::GameLanguageSettings(std::filesystem::path path,
                                            std::vector<GameLanguage> available)
     : mPath(std::move(path)), mAvailable(std::move(available)) {

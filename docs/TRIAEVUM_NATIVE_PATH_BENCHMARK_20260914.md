@@ -87,7 +87,7 @@ SHA256:
 - Current, both modes: `c0ea84727a016fc8c68a55add8f7ca8a87417f197349ff4d577396cf0f37dbea`
 
 Private measurements, invocation copies and logs (never package):
-`C:/Users/xander/AppData/Local/Temp/TriAevum-architecture-benchmark-unlimited-20260914`.
+`%USERPROFILE%/AppData/Local/Temp/TriAevum-architecture-benchmark-unlimited-20260914`.
 
 ```text
 python tools/renderer/tev_program/benchmark_native_paths.py --invocation <private-invocation.json> --baseline <historical-TriAevum.exe> --output <new-private-directory>
@@ -158,7 +158,7 @@ Measured executable SHA256:
 Built from `74c9eea` plus the static-slot changes documented here. Subsequent
 edits add only a C++ comment, test assertions and documentation.
 
-Private artifacts under `C:/Users/xander/AppData/Local/Temp/` (never package):
+Private artifacts under `%USERPROFILE%/AppData/Local/Temp/` (never package):
 - `TriAevum-tev-static-operands-pilot-20260914`: one-repeat pilot, not headline results.
 - `TriAevum-tev-static-operands-confirm-20260914`: nine-run confirmation,
   including executable hashes, invocations, timing phases and compiler counters.

@@ -154,29 +154,35 @@ void RunNativeFrameRateTests() {
         Oot3dNativeGame::ResolveDelayedVisualSampleAlpha(false, 2.0F), 1.0,
         "delayed visual interpolation did not clamp its upper bound");
 
+    // Fixed cadences end each transition on the completed source frame.
     Oot3dNativeGame::NativeVisualSampleCadence x2Cadence(2U);
-    ExpectNear(x2Cadence.Resolve(true, 0.91F), 0.0,
-               "x2 cadence did not start from the previous source frame");
-    ExpectNear(x2Cadence.Resolve(false, 0.13F), 0.5,
+    ExpectNear(x2Cadence.Resolve(false, 0.4F), 0.0,
+               "x2 cadence sampled before its first source frame");
+    ExpectNear(x2Cadence.Resolve(true, 0.91F), 0.5,
+               "x2 cadence did not start halfway to the new source frame");
+    ExpectNear(x2Cadence.Resolve(false, 0.13F), 1.0,
                "x2 cadence depended on wall-clock jitter");
-    ExpectNear(x2Cadence.Resolve(false, 0.97F), 0.5,
-               "x2 cadence advanced past its fixed sample lattice");
+    ExpectNear(x2Cadence.Resolve(false, 0.97F), 1.0,
+               "x2 cadence hold did not rest on the completed source frame");
     Oot3dNativeGame::NativeVisualSampleCadence x3Cadence(3U);
     constexpr std::array<float, 3> kExpectedX3Cadence{
-        0.0F, 1.0F / 3.0F, 2.0F / 3.0F};
+        1.0F / 3.0F, 2.0F / 3.0F, 1.0F};
     ExpectNear(x3Cadence.Resolve(true, 0.44F), kExpectedX3Cadence[0],
                "x3 cadence source boundary mismatch");
     ExpectNear(x3Cadence.Resolve(false, 0.02F), kExpectedX3Cadence[1],
                "x3 cadence first intermediate mismatch");
     ExpectNear(x3Cadence.Resolve(false, 0.99F), kExpectedX3Cadence[2],
-               "x3 cadence second intermediate mismatch");
-    ExpectNear(x3Cadence.Resolve(true, 0.5F), 0.0,
+               "x3 cadence did not end on the source frame");
+    ExpectNear(x3Cadence.Resolve(true, 0.5F), kExpectedX3Cadence[0],
                "x3 cadence did not reset on a new source frame");
     x3Cadence.Configure(2U);
-    ExpectNear(x3Cadence.Resolve(true, 1.0F), 0.0,
+    ExpectNear(x3Cadence.Resolve(true, 1.0F), 0.5,
                "fixed cadence mode change did not reset phase");
-    ExpectNear(x3Cadence.Resolve(false, 0.0F), 0.5,
+    ExpectNear(x3Cadence.Resolve(false, 0.0F), 1.0,
                "fixed cadence mode change retained the old multiplier");
+    Oot3dNativeGame::NativeVisualSampleCadence adaptiveCadence(0U);
+    ExpectNear(adaptiveCadence.Resolve(true, 0.7F), 0.0,
+               "adaptive cadence changed its source boundary");
 
     const auto native60 =
         Oot3dNativeGame::ResolveNativeFrameRateContract(

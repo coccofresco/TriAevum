@@ -1,5 +1,6 @@
 #include "oot3d_native_pica_presentation_scheduler.h"
 
+#include "oot3d_native_pica_composition.h"
 #include "oot3d_native_pica_vulkan_bridge.h"
 #include "oot3d_static_shadow_actor_catalog.h"
 
@@ -151,11 +152,26 @@ bool Oot3dPicaPresentationScheduler::Execute(
     executedDraws.insert(sampleDraws.begin(), sampleDraws.end());
   }
   mStats.SelectedDraws += sample.Draws.size();
+  const bool presentation =
+      kind != Oot3dPicaPresentationExecutionKind::DependencyFlush &&
+      kind != Oot3dPicaPresentationExecutionKind::NativeFrame;
 
+  // A left-out draw is neither published nor submitted, so the backend's
+  // composition schedule matches what it executes.
   mCompositionDrawScratch.clear();
   mCompositionDrawScratch.reserve(sample.Draws.size());
-  for (const auto &drawView : sample.Draws) {
-    const auto &draw = *drawView.BasePlan;
+  mOmittedDrawScratch.assign(sample.Draws.size(), false);
+  for (size_t index = 0; index < sample.Draws.size(); ++index) {
+    const auto &draw = *sample.Draws[index].BasePlan;
+    const auto domain = static_cast<Oot3d::Renderer::PicaCompositionDomain>(
+        static_cast<uint8_t>(draw.CompositionDomain));
+    if (presentation && !mNativeGameplayHudVisible &&
+        domain == Oot3d::Renderer::PicaCompositionDomain::Ui &&
+        draw.Composition.SourcePc == kOot3dGameplayHudDrawEntry) {
+      mOmittedDrawScratch[index] = true;
+      ++mStats.OmittedHudDraws;
+      continue;
+    }
     const auto &framebuffer = draw.State.Framebuffer;
     mCompositionDrawScratch.push_back({
         .SubmissionId = draw.SubmissionId,
@@ -168,8 +184,7 @@ bool Oot3dPicaPresentationScheduler::Execute(
             .ColorFormat = framebuffer.ColorFormat,
             .DepthFormat = framebuffer.DepthFormat,
         },
-        .Domain = static_cast<Oot3d::Renderer::PicaCompositionDomain>(
-            static_cast<uint8_t>(draw.CompositionDomain)),
+        .Domain = domain,
         .Composition = {
             .Layer = static_cast<Oot3d::Renderer::PicaCompositionLayer>(
                 static_cast<uint8_t>(draw.Composition.Layer)),
@@ -218,9 +233,6 @@ bool Oot3dPicaPresentationScheduler::Execute(
   if (mNextCompositionSequenceId == 0U) {
     mNextCompositionSequenceId = 1U;
   }
-  const bool presentation =
-      kind != Oot3dPicaPresentationExecutionKind::DependencyFlush &&
-      kind != Oot3dPicaPresentationExecutionKind::NativeFrame;
   {
     OptionalTimer timer(mTimings.Enabled,
                         mTimings.CompositionPublicationSeconds);
@@ -251,9 +263,11 @@ bool Oot3dPicaPresentationScheduler::Execute(
   // Native-memory execution keeps its canonical sequence untouched.
   if (presentation) {
     OptionalTimer timer(mTimings.Enabled, mTimings.DrawPreparationSeconds);
+    size_t published = 0;
     for (size_t index = 0; index < sample.Draws.size(); ++index) {
-      if (!backend.WantsPicaSequenceDrawPreparation(
-              mCompositionDrawScratch[index])) {
+      if (mOmittedDrawScratch[index] ||
+          !backend.WantsPicaSequenceDrawPreparation(
+              mCompositionDrawScratch[published++])) {
         continue;
       }
       const auto &drawView = sample.Draws[index];
@@ -323,7 +337,8 @@ bool Oot3dPicaPresentationScheduler::Execute(
     return true;
   };
 
-  for (const auto &drawView : sample.Draws) {
+  for (size_t drawIndex = 0; drawIndex < sample.Draws.size(); ++drawIndex) {
+    const auto &drawView = sample.Draws[drawIndex];
     const auto &draw = *drawView.BasePlan;
     while (transferIndex < transfers.size() &&
            transfers[transferIndex].AfterDrawSubmissionId < draw.SubmissionId) {
@@ -338,7 +353,7 @@ bool Oot3dPicaPresentationScheduler::Execute(
       }
     }
     const auto overrides = drawView.Overrides();
-    {
+    if (!mOmittedDrawScratch[drawIndex]) {
       OptionalTimer timer(mTimings.Enabled, mTimings.DrawSubmissionSeconds);
       Oot3dPicaVulkanDrawBridgeTiming bridgeTiming;
       const bool submitted = SubmitOot3dPicaVulkanDrawPlan(
@@ -355,8 +370,8 @@ bool Oot3dPicaPresentationScheduler::Execute(
       if (!submitted) {
         return false;
       }
+      ++mStats.ExecutedDraws;
     }
-    ++mStats.ExecutedDraws;
     while (transferIndex < transfers.size() &&
            transfers[transferIndex].AfterDrawSubmissionId ==
                draw.SubmissionId) {

@@ -15,6 +15,7 @@ try:
         atomic_write_json,
         load_json_object,
         normalize_relative_path,
+        release_manifest_relative,
         sha256_file,
     )
     from .readiness import DEFAULT_READINESS, evaluate_readiness
@@ -26,6 +27,7 @@ except ImportError:
         atomic_write_json,
         load_json_object,
         normalize_relative_path,
+        release_manifest_relative,
         sha256_file,
     )
     from readiness import DEFAULT_READINESS, evaluate_readiness
@@ -127,7 +129,7 @@ def package_release(
             },
             "files": sorted(inventory, key=lambda item: item["path"]),
         }
-        atomic_write_json(staging / "release-manifest.json", manifest)
+        atomic_write_json(staging / release_manifest_relative(platform.target), manifest)
         audit = audit_release(staging, policy_path=policy_path)
         if not audit.ok:
             details = "\n".join(f"  - {error}" for error in audit.errors)

@@ -134,7 +134,7 @@ mismatch, live-state mutation and partial output from credited batch coverage.
    net benefit. Neither batch timing nor the previous local line-test improvement
    establishes a speedup for this entire 303-function cohort.
 
-Private evidence root: `C:/Users/xander/triaevum-aot-causal-analysis/`.
+Private evidence root: `%USERPROFILE%/triaevum-aot-causal-analysis/`.
 Selection: `cohort300-selection.json`. Builds: `cohort303-opt`,
 `cohort303-coverage`, `cohort303-coverage-v2`, `cohort303-final`.
 Runs: `cohort303-batch1`, `cohort303-tail-v2`, `cohort303-batch2-traced`,

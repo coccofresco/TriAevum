@@ -223,7 +223,7 @@ of the release logger's severity threshold. Neither cache-file existence nor
   portable pack and pass cache. This is device qualification, not an Android
   installer UI: see [Android results](../ports/android/SHADER_PREPARATION.md).
 
-Private live evidence is under `/home/xander/triaevum-pipeline-live-proof/`:
+Private live evidence is under `~/triaevum-pipeline-live-proof/`:
 `baseline-resolved/`, `cold-measured/`, `prepared-live-profile/`, and
 `prepare-desktop.json`. The intermediate `prepared/` run intentionally remains
 as negative evidence: identical images but **zero** accepted cache bytes.
@@ -232,12 +232,12 @@ Windows helper evidence/build is in
 caches or executable backups belong in the public source archive.
 
 Private evidence:
-- Linux: `/home/xander/triaevum-android-build/prepared-native-pipelines.json`,
+- Linux: `~/triaevum-android-build/prepared-native-pipelines.json`,
   `prepared-capture-inventory.json`, `nri-preparation-{cold,warm}.json`.
-- Host build: `/home/xander/triaevum-pipeline-prepare-build`.
-- ARM64 build: `/home/xander/triaevum-pipeline-prepare-android-build`.
+- Host build: `~/triaevum-pipeline-prepare-build`.
+- ARM64 build: `~/triaevum-pipeline-prepare-android-build`.
 - Windows evidence mirror:
-  `C:/Users/xander/AppData/Local/TriAevumDeveloperEvidence/shader-seed-expansion/`.
+  `%USERPROFILE%/AppData/Local/TriAevumDeveloperEvidence/shader-seed-expansion/`.
 
 ## Next Integration
 

@@ -624,6 +624,10 @@ void GfxRenderingAPIVulkan::Init() {
     mScanoutProbe.Initialize(mPhysicalDevice, mDevice, kFramesInFlight);
     mGpuProfiler.Initialize(mPhysicalDevice, mDevice, mGraphicsQueueFamily,
                             mDiagnostics.Enabled());
+    if (mGpuProfiler.TimelineEnabled() && mNriInterop.Available())
+        mNriInterop.SetTimelineMark([this](uint32_t frameSlot, const char* label) {
+            mGpuProfiler.Mark(frameSlot, label, mCommandBuffers[frameSlot]);
+        });
     CreateFallbackTexture();
     StartPresentWorker();
     mInitialized = true;

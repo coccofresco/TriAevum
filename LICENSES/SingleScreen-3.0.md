@@ -13,18 +13,24 @@ from the official archive `singlescreen_30_25aeb.zip` (SHA-256
 
 SingleScreen 3.1 (`singlescreen_31_989c3.zip`, SHA-256
 `f91485999a6b8e89b8d574064dc03c1c20704f2c718e93c5187251b6ef69dbcb`) carries
-the same two files byte for byte.
+the same two files byte for byte. TriAevum also ships, unchanged, its HD Latin
+font, identical in the archive's EUR and USA layouts:
 
-They are distributed with the author's permission, as the maintainer reports
-it on 2026-10-16 (`docs/TRIAEVUM_RELEASE_APPROVAL_RECORD.md`). All rights in
-them remain the author's; TriAevum's GPL does not apply to them, and any use
-outside TriAevum needs the author's own permission.
+| Package path | Archive member | SHA-256 |
+|---|---|---|
+| `resources/topscreen/singlescreen-3.1/ltn16.qbf` | `SingleScreen_3.1/EUR/Emulator/load/mods/0004000000033600/romfs/message/eu/ltn16.qbf` (HD Latin font) | `8b83e081f721c6e1842b0a9cd90b71a3fb2849674d2b1040f3dc5c3221594169` |
+
+They are distributed with their author's permission, as the maintainer reports
+it on 2026-10-16 for the 3.0 files and on 2026-10-21 for the HD font
+(`docs/TRIAEVUM_RELEASE_APPROVAL_RECORD.md`). All rights in these files remain
+the author's; TriAevum's GPL
+does not apply to them, and any use outside TriAevum needs the author's own
+permission.
 
 Not distributed: the archive itself, its IPS patch and ARM payload (TriAevum
-reimplements the behavior as typed host code), and its high-resolution
-graphics: the HD UI atlas and the HD fonts. These stay out of the package until
-their author consents. Forge imports them only from the archive when the user
-places it beside Forge.
+reimplements the behavior as typed host code), its `sys8.qbf`, and the HD UI
+atlas (by chubbycubby). Forge takes the HD UI atlas from chubbycubby's HD UI
+texture pack when the user obtains it (`LICENSES/OoT3D-Vanilla-UI-HUD.md`).
 
 The original game, its characters and its assets belong to Nintendo; these
 files are not a license to any of them.

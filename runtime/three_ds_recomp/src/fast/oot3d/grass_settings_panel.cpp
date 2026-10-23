@@ -556,6 +556,36 @@ bool DrawPerformance(InteractiveGrassSettings& grass) {
             changed = true;
         }
     }
+    ImGui::SeparatorText("Distant cards");
+    changed |= ImGui::Checkbox("Distant grass cards", &grass.CardLodEnabled);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Cut-out cards stand in for the blades beyond the blade distance: one per cluster,\n"
+                          "one per group of clusters, one per patch of clusters without end. While enabled\n"
+                          "the blades stop at the blade distance instead of the draw distance.");
+    ImGui::BeginDisabled(!grass.CardLodEnabled);
+    float cardBlades = grass.CardLodBladeDistance / 100.0F;
+    float cardClumps = grass.CardLodClumpDistance / 100.0F;
+    float cardGroups = grass.CardLodGroupDistance / 100.0F;
+    if (ImGui::DragFloat("Blades up to (m)", &cardBlades, 0.5F, 1.0F, 500.0F, "%.1f", ImGuiSliderFlags_AlwaysClamp)) {
+        grass.CardLodBladeDistance = cardBlades * 100.0F;
+        grass.CardLodClumpDistance = std::max(grass.CardLodClumpDistance, grass.CardLodBladeDistance);
+        grass.CardLodGroupDistance = std::max(grass.CardLodGroupDistance, grass.CardLodClumpDistance);
+        changed = true;
+    }
+    if (ImGui::DragFloat("Clump cards up to (m)", &cardClumps, 1.0F, cardBlades, 500.0F, "%.1f",
+                         ImGuiSliderFlags_AlwaysClamp)) {
+        grass.CardLodClumpDistance = std::max(cardClumps * 100.0F, grass.CardLodBladeDistance);
+        grass.CardLodGroupDistance = std::max(grass.CardLodGroupDistance, grass.CardLodClumpDistance);
+        changed = true;
+    }
+    if (ImGui::DragFloat("Group cards up to (m)", &cardGroups, 2.0F, cardClumps, 500.0F, "%.1f",
+                         ImGuiSliderFlags_AlwaysClamp)) {
+        grass.CardLodGroupDistance = std::max(cardGroups * 100.0F, grass.CardLodClumpDistance);
+        changed = true;
+    }
+    changed |= ImGui::SliderFloat("Card transition range", &grass.CardLodBlendFraction, 0.05F, 0.9F,
+                                  "%.2f tier distance");
+    ImGui::EndDisabled();
     ImGui::SeparatorText("Segments by distance");
     int bladeSegments = static_cast<int>(grass.Appearance.BladeSegments);
     if (ImGui::SliderInt("Near blade segments", &bladeSegments,
@@ -573,6 +603,9 @@ bool DrawPerformance(InteractiveGrassSettings& grass) {
             static_cast<uint8_t>(farSegments);
         changed = true;
     }
+    changed |= ImGui::Checkbox("Crossed blades (two planes)", &grass.Appearance.CrossedBlades);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Off: one ribbon per blade that turns toward the camera, half the cost.");
     changed |= ImGui::SliderFloat("Segment reduction begins", &grass.SegmentLodStartDistance,
                                    0.0F, 10000.0F, "%.0f world units");
     grass.SegmentLodEndDistance = std::max(grass.SegmentLodEndDistance, grass.SegmentLodStartDistance);
@@ -692,9 +725,9 @@ void DrawRuntimeStatus() {
     const auto telemetry =
         GrassRenderTelemetry::Instance().Snapshot();
     ImGui::Text(
-        "Runtime: %s | visible blades: %u",
+        "Runtime: %s | visible blades: %u | distant cards: %u (%u draws)",
         GrassRenderStatusName(telemetry.Status),
-        telemetry.VisibleBlades);
+        telemetry.VisibleBlades, telemetry.Cards, telemetry.CardDrawCalls);
     ImGui::TextDisabled(
         "rules %zu | masks %zu | surfaces %zu/%zu | "
         "placements %zu (cache %zu/%zu hit/miss) | "

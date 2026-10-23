@@ -3,7 +3,7 @@
 2026-09-10. Scope: shared services, input and Forge; no renderer workarounds,
 save-format changes or bundled game data. Private evidence is under
 `I:/oot3dre_work/issue-fixes-20260910/` and Linux
-`/home/xander/triaevum-pipeline-live-proof/issues-20260910-*`.
+`~/triaevum-pipeline-live-proof/issues-20260910-*`.
 
 ## #19: Erase Never Completes
 
@@ -285,6 +285,6 @@ trace at frame 359 finds only the initial raster clear as a non-perspective
 guide writer; no observed NoOp guide draw explains an overlay. These results
 do not establish an erroneous HUD/camera rectangle. No renderer correction was
 made. Temporary diagnostic source edits were removed and the clean SDK runtime
-rebuilt successfully. Private evidence: `/home/xander/triaevum-outline-parity/`
+rebuilt successfully. Private evidence: `~/triaevum-outline-parity/`
 (`projection-trace`, `geometry-guide-4`, `diagnostic-7`). Each bounded replay
 completed with exit 0; these are diagnostic runs, not performance benchmarks.

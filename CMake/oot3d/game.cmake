@@ -8,6 +8,7 @@ add_library(oot3d_native_game_runtime STATIC EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_scenario_bootstrap.cpp
     tools/oot3d/native_game_runtime/oot3d_native_frame_rate.cpp
     tools/oot3d/native_game_runtime/oot3d_native_presentation_pacer.cpp
+    tools/oot3d/native_game_runtime/oot3d_native_input_latency_trace.cpp
     tools/oot3d/native_game_runtime/oot3d_native_temporal_event_ledger.cpp
     tools/oot3d/native_game_runtime/oot3d_native_player_temporal_bridge.cpp
     tools/oot3d/native_game_runtime/oot3d_native_root_motion.cpp
@@ -38,6 +39,7 @@ add_executable(oot3d_native_game_runtime_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_a32_timing_probe_tests.cpp
     tools/oot3d/native_game_runtime/oot3d_native_root_motion_tests.cpp
     tools/oot3d/native_game_runtime/oot3d_native_skel_anime_tests.cpp
+    tools/oot3d/native_game_runtime/oot3d_native_input_latency_trace_tests.cpp
 )
 target_link_libraries(oot3d_native_game_runtime_tests PRIVATE oot3d_native_game_runtime)
 oot3d_target_defaults(oot3d_native_game_runtime_tests FOLDER Tests)
@@ -151,6 +153,14 @@ target_include_directories(oot3d_native_game_launch_profile_tests PRIVATE
     tools/oot3d/native_game_runtime)
 target_link_libraries(oot3d_native_game_launch_profile_tests PRIVATE
     nlohmann_json::nlohmann_json)
+# ${runtime_dir} comes from SDL_GetBasePath; the renderer directory's SDL
+# import is not visible here.
+if (NOT TARGET SDL2::SDL2)
+    find_package(SDL2 CONFIG QUIET)
+endif()
+if (TARGET SDL2::SDL2)
+    target_link_libraries(oot3d_native_game_launch_profile_tests PRIVATE SDL2::SDL2)
+endif()
 target_compile_options(oot3d_native_game_launch_profile_tests PRIVATE
     "${WARNING_OVERRIDE}")
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
@@ -312,7 +322,8 @@ target_link_libraries(oot3d_native_game PRIVATE
     oot3d_native_game_runtime
     oot3d_native_a32_savestate
     oot3d_native_control_config
-    oot3d_ui_topscreen)
+    oot3d_ui_topscreen
+    oot3d_ui_menu)
 target_sources(oot3d_native_game PRIVATE tools/oot3d/native_game_runtime/oot3d_game_language.cpp)
 if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
     OOT3D_DIRECT_AOT_PLUGIN)
@@ -331,6 +342,8 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
         tools/oot3d/native_game_runtime/oot3d_top_screen_pause_transaction.cpp
         tools/oot3d/native_game_runtime/oot3d_top_screen_item_description_runtime.cpp
         tools/oot3d/native_game_runtime/oot3d_top_screen_wide_items_runtime.cpp
+        tools/oot3d/native_game_runtime/oot3d_top_screen_visions_runtime.cpp
+        tools/oot3d/native_game_runtime/oot3d_top_screen_reframed_file_select.cpp
         tools/oot3d/native_game_runtime/oot3d_top_screen_gameplay_runtime.cpp
         tools/oot3d/native_game_runtime/oot3d_top_screen_link_ext.cpp
         tools/oot3d/native_game_runtime/oot3d_object_bank_extension.cpp
@@ -350,6 +363,8 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
         tools/oot3d/native_game_runtime/oot3d_scene_environment_codec.cpp
         tools/oot3d/native_game_runtime/oot3d_scene_environment_panel.cpp
         tools/oot3d/native_game_runtime/oot3d_top_screen_settings_panel.cpp
+        tools/oot3d/native_game_runtime/oot3d_photo_mode_panel.cpp
+        tools/oot3d/native_game_runtime/oot3d_in_game_menu.cpp
         tools/oot3d/native_game_runtime/oot3d_graphics_settings_schedule.cpp)
     set_source_files_properties(tools/oot3d/native_game_runtime/oot3d_native_actor_interactions.cpp
         PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/decomp_support/include")
@@ -465,6 +480,12 @@ if (OOT3D_WHOLE_AOT_PRODUCT_MODE)
             "/OPT:NOREF"
             "/OPT:NOICF")
     endif()
+endif()
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND OOT3D_ENABLE_VULKAN_RENDERER AND TARGET three_ds_recomp_shaderc)
+    # The Windows package keeps shaderc beside the other DLLs in runtime/; it
+    # loads after main registers that directory (UseRuntimeLibraryDirectory).
+    target_link_options(oot3d_native_game PRIVATE "/DELAYLOAD:shaderc_shared.dll")
+    target_link_libraries(oot3d_native_game PRIVATE delayimp)
 endif()
 option(TRIAEVUM_ENABLE_CPU_PHASE_PROBE
     "Developer-only Windows main-thread CPU/wall accounting (not clean performance timing)" OFF)

@@ -14,7 +14,7 @@ from precompiled_titles import MODEL
 from input_adapters import FORMAT as ADAPTER_FORMAT
 from input_copy_adapter import FORMAT as COPY_FORMAT
 from oot3d_region_assets import ALGORITHM
-from test_release_audit import write_clean_package
+from test_release_audit import MANIFEST, write_clean_package
 from release_platform import LINUX, WINDOWS
 
 
@@ -26,7 +26,7 @@ class PrecompiledReleaseTests(unittest.TestCase):
         self.root = self.work / "package"
         self.root.mkdir()
         write_clean_package(self.root)
-        self.manifest = load_json_object(self.root / "release-manifest.json")
+        self.manifest = load_json_object(self.root / MANIFEST)
         removed = {"forge_tool", "forge_link_library", "forge_tool_resource"}
         for item in self.manifest["files"]:
             if item["role"] in removed:
@@ -67,7 +67,7 @@ class PrecompiledReleaseTests(unittest.TestCase):
         self.save()
 
     def layout(self):
-        return title_layout(runtime=self.root / "TriAevum.exe",
+        return title_layout(runtime=self.root / WINDOWS.runtime,
             native_module=self.root / "forge/oot3d_game_module.dll", plugin_manifest=self.build,
             generated_manifest=self.generated, build_source=self.build_source, recipe=self.recipe,
             work=self.work / "promoted")
@@ -78,7 +78,7 @@ class PrecompiledReleaseTests(unittest.TestCase):
         item.update(bytes=path.stat().st_size, sha256=sha256_file(path))
 
     def save(self):
-        atomic_write_json(self.root / "release-manifest.json", self.manifest)
+        atomic_write_json(self.root / MANIFEST, self.manifest)
 
     def test_explicit_title_code_and_sources_pass_without_compiler(self):
         result = audit_release(self.root)
@@ -190,8 +190,8 @@ class PrecompiledReleaseTests(unittest.TestCase):
         self.assertFalse(audit_release(self.root).ok)
 
     def test_runtime_replaced_even_with_updated_package_hash_is_rejected(self):
-        (self.root / "TriAevum.exe").write_bytes(b"wrong runtime")
-        self.rehash("TriAevum.exe")
+        (self.root / WINDOWS.runtime).write_bytes(b"wrong runtime")
+        self.rehash(WINDOWS.runtime)
         self.save()
         self.assertTrue(any("integrity" in e for e in audit_release(self.root).errors))
 
@@ -219,7 +219,7 @@ class PrecompiledReleaseTests(unittest.TestCase):
     def test_profile_guided_title_ships_its_profile_with_the_translated_source(self):
         profile = self.profile_guided()
         with patch("precompiled_title_layout.query_product"):
-            items = title_layout(runtime=self.root / "TriAevum.exe",
+            items = title_layout(runtime=self.root / WINDOWS.runtime,
                 native_module=self.root / "forge/oot3d_game_module.dll", plugin_manifest=self.build,
                 generated_manifest=self.generated, build_source=self.build_source, recipe=self.recipe,
                 work=self.work / "promoted-profile", profile_data=profile)
@@ -243,7 +243,7 @@ class PrecompiledReleaseTests(unittest.TestCase):
         other = self.work / "other.profdata"
         other.write_bytes(b"other counters")
         with patch("precompiled_title_layout.query_product"), self.assertRaisesRegex(ValueError, "differs"):
-            title_layout(runtime=self.root / "TriAevum.exe",
+            title_layout(runtime=self.root / WINDOWS.runtime,
                 native_module=self.root / "forge/oot3d_game_module.dll", plugin_manifest=self.build,
                 generated_manifest=self.generated, build_source=self.build_source, recipe=self.recipe,
                 work=self.work / "promoted-other", profile_data=other)
@@ -252,7 +252,7 @@ class PrecompiledReleaseTests(unittest.TestCase):
         atomic_write_json(self.build, build)
         with patch("precompiled_title_layout.query_product"), \
              self.assertRaisesRegex(ValueError, "without a profile"):
-            title_layout(runtime=self.root / "TriAevum.exe",
+            title_layout(runtime=self.root / WINDOWS.runtime,
                 native_module=self.root / "forge/oot3d_game_module.dll", plugin_manifest=self.build,
                 generated_manifest=self.generated, build_source=self.build_source, recipe=self.recipe,
                 work=self.work / "promoted-unprofiled", profile_data=other)

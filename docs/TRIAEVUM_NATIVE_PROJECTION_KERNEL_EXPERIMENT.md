@@ -103,7 +103,7 @@ Use `run_aot_invocation_probe.py` as described in
 `--entry 0033B11C` and `--occurrence 64` or `128`. The proxy records actual native
 acceptance through the optional `triaevum_invocation_candidate_hits` export.
 
-Private artifacts: `C:/Users/xander/triaevum-aot-causal-analysis/`, files
+Private artifacts: `%USERPROFILE%/triaevum-aot-causal-analysis/`, files
 `projection-test.exe`, `projection-candidate.dll`, directories `projection-real-ab`
 and `projection-real-ab-repeat`. Run provenance records the module hashes.
 This Windows/x64 SSE prototype has no production build or release registration.

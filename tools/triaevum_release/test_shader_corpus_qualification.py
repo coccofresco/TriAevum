@@ -1,8 +1,9 @@
 import hashlib
 import unittest
 
-from shader_corpus_qualification import (INPUTS_FORMAT, changed_inputs, closure_failures, inputs_digest,
-                                         qualification_record, validate_qualification)
+from shader_corpus_qualification import (INPUTS_FORMAT, POLICY_SELECTION, changed_inputs, closure_failures,
+                                         inputs_digest, is_policy_input, policy_inputs, qualification_record,
+                                         validate_qualification)
 
 
 def _sha(data: bytes) -> str:
@@ -16,10 +17,10 @@ def _inputs(files: dict[str, bytes]) -> dict:
 
 class QualificationTests(unittest.TestCase):
     def setUp(self):
-        self.sources = {"gen/shader.cpp": b"generator", "runtime/draw.cpp": b"policy"}
+        self.sources = {"gen/shader.cpp": b"generator", "runtime/three_ds_recomp/src/fast/backends/gfx_vulkan_pica_draw.cpp": b"policy"}
         self.record = qualification_record(
             generator=_inputs({"gen/shader.cpp": b"generator"}),
-            policies=[_inputs({"runtime/draw.cpp": b"policy"})],
+            policies=[_inputs({"runtime/three_ds_recomp/src/fast/backends/gfx_vulkan_pica_draw.cpp": b"policy"})],
             pack_sha256="a" * 64, manifest_sha256=["c" * 64, "b" * 64], modules=3, requests=9)
 
     def validate(self, **overrides):
@@ -37,8 +38,8 @@ class QualificationTests(unittest.TestCase):
             self.validate()
 
     def test_changed_runtime_input_requires_new_recordings(self):
-        del self.sources["runtime/draw.cpp"]
-        with self.assertRaisesRegex(ValueError, "Stale variant recordings.*runtime/draw.cpp"):
+        del self.sources["runtime/three_ds_recomp/src/fast/backends/gfx_vulkan_pica_draw.cpp"]
+        with self.assertRaisesRegex(ValueError, "Stale variant recordings.*runtime/three_ds_recomp/src/fast/backends/gfx_vulkan_pica_draw.cpp"):
             self.validate()
 
     def test_other_artifacts_are_refused(self):
@@ -58,6 +59,47 @@ class QualificationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "recorded variant sessions"):
             qualification_record(generator=_inputs({"a": b"a"}), policies=[], pack_sha256="a" * 64,
                                  manifest_sha256=[], modules=1, requests=0)
+
+    def test_policy_inputs_keep_what_decides_a_variant_request(self):
+        generator = _inputs({"runtime/three_ds_recomp/include/fast/oot3d/graphics_settings.h": b"settings"})
+        recorded = _inputs({
+            "runtime/three_ds_recomp/include/fast/oot3d/graphics_settings.h": b"settings",
+            "runtime/three_ds_recomp/src/fast/backends/gfx_vulkan_pica_draw.cpp": b"request",
+            "runtime/three_ds_recomp/src/fast/oot3d/pica_scene_semantics.cpp": b"semantics",
+            "runtime/three_ds_recomp/src/fast/renderer3ds/vulkan_memory_budget.cpp": b"budget",
+            "runtime/three_ds_recomp/src/fast/backends/gfx_vulkan_device.cpp": b"device",
+            "runtime/three_ds_recomp/src/ship/window/Window.cpp": b"window",
+            "tools/oot3d/native_game_runtime/oot3d_native_audio.cpp": b"audio",
+        })
+        selected = policy_inputs(recorded, generator)
+        self.assertEqual(sorted(selected["files"]), [
+            "runtime/three_ds_recomp/include/fast/oot3d/graphics_settings.h",
+            "runtime/three_ds_recomp/src/fast/backends/gfx_vulkan_pica_draw.cpp",
+            "runtime/three_ds_recomp/src/fast/oot3d/pica_scene_semantics.cpp"])
+        self.assertEqual((selected["selection"], selected["recorded_files"], selected["sha256"]),
+                         (POLICY_SELECTION, 7, inputs_digest(selected["files"])))
+        self.assertFalse(is_policy_input("runtime/three_ds_recomp/include/fast/renderer3ds/vulkan_commands.h", set()))
+        self.assertTrue(is_policy_input("tools/oot3d/native_pica_frontend/oot3d_native_pica_shader_gen.cpp", set()))
+
+    def test_qualification_keeps_the_policy_subset_of_each_recording(self):
+        record = qualification_record(
+            generator=_inputs({"gen/shader.cpp": b"generator"}),
+            policies=[_inputs({"runtime/three_ds_recomp/src/fast/backends/gfx_vulkan_pica_draw.cpp": b"request",
+                               "runtime/three_ds_recomp/src/fast/renderer3ds/vulkan_memory_budget.cpp": b"budget"})],
+            pack_sha256="a" * 64, manifest_sha256=[], modules=1, requests=1)
+        self.assertEqual(list(record["policy_inputs"][0]["files"]),
+                         ["runtime/three_ds_recomp/src/fast/backends/gfx_vulkan_pica_draw.cpp"])
+        sources = {"gen/shader.cpp": b"generator",
+                   "runtime/three_ds_recomp/src/fast/backends/gfx_vulkan_pica_draw.cpp": b"request"}
+        # A changed file outside the policy set does not stale the recordings.
+        validate_qualification(record, pack_sha256="a" * 64, manifest_sha256=[], read=sources.get)
+        sources["runtime/three_ds_recomp/src/fast/backends/gfx_vulkan_pica_draw.cpp"] = b"request v2"
+        with self.assertRaisesRegex(ValueError, "Stale variant recordings.*gfx_vulkan_pica_draw"):
+            validate_qualification(record, pack_sha256="a" * 64, manifest_sha256=[], read=sources.get)
+        with self.assertRaisesRegex(ValueError, "no decision-policy file"):
+            qualification_record(generator=_inputs({"gen/shader.cpp": b"generator"}),
+                                 policies=[_inputs({"runtime/three_ds_recomp/src/ship/window/Window.cpp": b"w"})],
+                                 pack_sha256="a" * 64, manifest_sha256=[], modules=1, requests=1)
 
     def test_changed_inputs_reports_missing_and_modified(self):
         manifest = {"a": _sha(b"a"), "b": _sha(b"b"), "c": _sha(b"c")}

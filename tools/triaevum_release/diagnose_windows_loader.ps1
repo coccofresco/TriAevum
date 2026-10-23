@@ -99,6 +99,9 @@ $previous = [TriAevumLoaderProbe]::SetErrorMode(0x8003)
 try {
     $files = @((Get-Item -LiteralPath (Join-Path $root 'TriAevum.exe')))
     $files += @(Get-ChildItem -LiteralPath $root -Filter '*.dll' -File)
+    # The runtime's own DLLs are in runtime/ (SetDllDirectory), searched after its folder.
+    $libraries = Join-Path $root 'runtime'
+    if (Test-Path -LiteralPath $libraries) { $files += @(Get-ChildItem -LiteralPath $libraries -Filter '*.dll' -File) }
     foreach ($file in $files) {
         $sha = [Security.Cryptography.SHA256]::Create()
         $stream = [IO.File]::OpenRead($file.FullName)
@@ -108,7 +111,9 @@ try {
         foreach ($import in @(Read-Imports $file.FullName)) {
             $local = Join-Path $root $import.dll
             $system = Join-Path ([Environment]::SystemDirectory) $import.dll
+            $bundled = Join-Path (Join-Path $root 'runtime') $import.dll
             $provider = if (Test-Path -LiteralPath $local) { $local }
+                elseif (Test-Path -LiteralPath $bundled) { $bundled }
                 elseif (Test-Path -LiteralPath $system) { $system } else { $import.dll }
             $handle = [TriAevumLoaderProbe]::LoadLibraryExW($provider, [IntPtr]::Zero, 1)
             $errorCode = [Runtime.InteropServices.Marshal]::GetLastWin32Error()

@@ -18,6 +18,7 @@
 #include "fast/oot3d/nri_interop_internal.h"
 #endif
 #include <algorithm>
+#include <array>
 #include <map>
 #include <span>
 #include <vector>
@@ -43,6 +44,8 @@ struct MxaoHostState {
     const EffectPassBarrierPlan* Barriers = nullptr;
     const EffectPassOutputBarrier* OutputBarrier = nullptr;
     EffectPassBarrierExecution LastBarriers;
+    // Dispatches recorded in this execution, for the developer timeline.
+    size_t TimelineDispatch = 0;
     bool LastHistoryValid = false;
     std::string Reason = "iMMERSE MXAO is not initialized";
 };
@@ -115,9 +118,18 @@ TriaevumImmerseHost MakeHost(MxaoHostState& impl) {
     host.BeginOutput = [](void* context) {
         auto& impl = Self(context);
         impl.LastBarriers = impl.Barriers->BeginOutputExecution(EffectResource::AmbientOcclusion);
+        impl.TimelineDispatch = 0;
     };
     host.Transition = [](void* context, uint32_t frameSlot, VkImage image, uint32_t state) -> int {
         auto& impl = Self(context);
+        // Each dispatch first makes its target writable: the developer
+        // timeline names the module's dispatches in order.
+        if (state == TRIAEVUM_IMMERSE_PRIVATE_COMPUTE_WRITE || state == TRIAEVUM_IMMERSE_OUTPUT_DISPATCH) {
+            static constexpr std::array<const char*, 6> kLabels{"mxao dispatch 1", "mxao dispatch 2",
+                                                                "mxao dispatch 3", "mxao dispatch 4",
+                                                                "mxao dispatch 5", "mxao dispatch 6+"};
+            impl.Interop->TimelineMark(frameSlot, kLabels[std::min<size_t>(impl.TimelineDispatch++, 5U)]);
+        }
         const bool output = state == TRIAEVUM_IMMERSE_OUTPUT_DISPATCH || state == TRIAEVUM_IMMERSE_OUTPUT_COMPLETION;
         if (output && (impl.OutputStates == nullptr || impl.OutputBarrier == nullptr))
             return 0;
@@ -232,6 +244,9 @@ bool MxaoPass::Configure(const NriEffectGraphTransientImageBinding& output, VkIm
         targets.MotionWidth = motion->Width;
         targets.MotionHeight = motion->Height;
     }
+    // The estimate at half the scene's resolution, upsampled by depth (the
+    // maintainer's 4K budget, 2026-10-20).
+    targets.HalfResolution = 1U;
     const bool configured = mImpl->Module->Configure(mImpl->Instance, &targets) != 0;
     mImpl->Reason = mImpl->Module->Reason(mImpl->Instance);
     // The output stays bound until the module replaces or releases it.

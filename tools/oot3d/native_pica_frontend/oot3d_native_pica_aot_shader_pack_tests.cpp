@@ -94,8 +94,22 @@ int main() {
     corrupt.write(&changed, 1);
     corrupt.close();
     pack.Clear();
-    Require(!pack.Load(packPath, &error),
-            "pack corruption was not detected");
+    // Binaries are read on demand: the damaged one is a miss, the others
+    // still load, and the full check rejects the pack.
+    RequireSuccess(pack.Load(packPath, &error), error);
+    Require(!pack.Verify(&error), "pack corruption was not detected");
+    Require(pack.Find(PicaAotShaderStage::Fragment, fragmentSource).empty(),
+            "a damaged binary was served");
+    const auto intact = pack.Find(PicaAotShaderStage::Vertex, vertexSource);
+    Require(std::vector<uint32_t>(intact.begin(), intact.end()) == vertexSpirv,
+            "an intact binary of a damaged pack was not served");
+    pack.Clear();
+    std::fstream truncated(packPath, std::ios::binary | std::ios::in | std::ios::out);
+    truncated.seekp(16);
+    const char entries[4] = {'\xff', '\xff', 0, 0};
+    truncated.write(entries, 4);
+    truncated.close();
+    Require(!pack.Load(packPath, &error), "an entry table past the file was accepted");
 
     std::filesystem::remove_all(directory);
     std::cout << "oot3d_native_pica_aot_shader_pack_tests: ok\n";

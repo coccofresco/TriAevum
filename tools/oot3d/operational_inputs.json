@@ -20,7 +20,7 @@
     "vsDevShell": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\Tools\\Launch-VsDevShell.ps1",
     "fastBuildScript": "${repoRoot}\\tools\\oot3d\\build_fast_dev.ps1",
     "buildRoot": "${repoRoot}\\build-codex",
-    "buildPhysicalRoot": "C:\\Users\\xander\\AppData\\Local\\oot3dre-build\\build-codex",
+    "buildPhysicalRoot": "%USERPROFILE%\\AppData\\Local\\oot3dre-build\\build-codex",
     "llvmRoot": "I:\\oot3dre_tools\\llvm-22.1.6",
     "llvmArchive": "I:\\oot3dre_tools\\downloads\\clang+llvm-22.1.6-x86_64-pc-windows-msvc.tar.xz",
     "llvmBuildRoot": "I:\\oot3dre_work\\build-llvm-22.1.6",

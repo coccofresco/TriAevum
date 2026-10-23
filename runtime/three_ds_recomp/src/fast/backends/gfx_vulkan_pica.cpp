@@ -590,6 +590,9 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
         static_cast<uint16_t>(std::lround(mInternalResolutionScale * 1000.0F))};
     const bool restoredExtentAvailable =
         restoredWidth != 0U && restoredHeight != 0U;
+    // Targets follow the presentation picture (the aspect ratio's letterbox
+    // inside the swapchain), the output the scene is shown in.
+    const auto outputExtent = NativePicaOutputExtent();
     const auto targetExtent = restoredExtentAvailable
         ? Oot3d::RenderExtent{restoredWidth, restoredHeight}
         : Oot3d::ResolveNativePicaRenderExtent(
@@ -598,13 +601,13 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
               mInternalResolutionScale);
     if (const auto found = mNativePicaRenderTargets.find(key);
         found != mNativePicaRenderTargets.end()) {
-        mDiagnostics.RecordRenderResolution(mInternalResolutionScale, mSwapchainExtent.width,
-            mSwapchainExtent.height, found->second.Width, found->second.Height);
+        mDiagnostics.RecordRenderResolution(mInternalResolutionScale, outputExtent.Width,
+            outputExtent.Height, found->second.Width, found->second.Height);
         PrepareNativePicaTargetAttachments(found->second);
         return found->second;
     }
-    mDiagnostics.RecordRenderResolution(mInternalResolutionScale, mSwapchainExtent.width,
-        mSwapchainExtent.height, targetExtent.Width, targetExtent.Height);
+    mDiagnostics.RecordRenderResolution(mInternalResolutionScale, outputExtent.Width,
+        outputExtent.Height, targetExtent.Width, targetExtent.Height);
 
     NativePicaRenderTarget target;
     target.Key = key;

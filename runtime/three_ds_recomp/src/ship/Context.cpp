@@ -341,7 +341,15 @@ bool Context::InitWindow(std::shared_ptr<Window> window) {
         return false;
     }
 
-    GetWindow()->Init();
+    try {
+        GetWindow()->Init();
+    } catch (...) {
+        // The window never became usable: do not keep it as the context's
+        // window, or the destructor would save its geometry and tear down
+        // backends that were never created.
+        mWindow = nullptr;
+        throw;
+    }
 
     return true;
 }

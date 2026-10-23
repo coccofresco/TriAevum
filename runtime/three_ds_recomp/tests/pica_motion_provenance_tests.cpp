@@ -57,7 +57,7 @@ void main() {
     PicaUberEffectProgramRequest uberRequest{source,hooks,true,false,false};
     const auto uber=BuildPicaUberEffectProgram(uberRequest);
     for (const auto* shader : {&composed.Source,&standalone.Source,&uber})
-        Require(shader->find(Fast::Renderer3ds::PicaMotionGuideAssignment)!=std::string::npos,
+        Require(shader->find(Fast::Oot3d::PicaMotionGuideAssignment)!=std::string::npos,
                 "shader variants disagree on exact/invalid motion");
     Require(composed.RigidMotionApplied && standalone.Applied && !uber.empty(), "guide writer absent");
     request.TemporalInputs=false;

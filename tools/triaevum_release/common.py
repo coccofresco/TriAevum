@@ -66,3 +66,20 @@ def atomic_write_bytes(path: Path, payload: bytes) -> None:
     except BaseException:
         temporary.unlink(missing_ok=True)
         raise
+
+
+# The package's release manifest: in docs/ in the Windows package (its root
+# holds only TriAevumForge.exe, README.md and LICENSE), in the root elsewhere.
+RELEASE_MANIFEST_PATHS = ("release-manifest.json", "docs/release-manifest.json")
+
+
+def release_manifest_relative(target: str) -> str:
+    return RELEASE_MANIFEST_PATHS[1] if target == "x86_64-pc-windows-msvc" else RELEASE_MANIFEST_PATHS[0]
+
+
+def release_manifest_path(package: Path) -> Path:
+    for relative in RELEASE_MANIFEST_PATHS:
+        candidate = package / relative
+        if candidate.is_file():
+            return candidate
+    return package / RELEASE_MANIFEST_PATHS[0]

@@ -50,12 +50,34 @@ static int run() {
            "extent maximum at the pieces");
     expect(map.ExtentMaximumXZ[0] - map.ExtentMinimumXZ[0] < map.Texel * float(map.Size) * 0.5F,
            "the extent is tighter than the map");
+    // Blocks: a clear block has no water texel within a texel of it; the set
+    // ones are the pieces' neighbourhood, not the whole map.
+    uint32_t setBlocks = 0;
+    for (uint32_t bv = 0; bv < kPicaWaterMapBlocks; ++bv) {
+        for (uint32_t bu = 0; bu < kPicaWaterMapBlocks; ++bu) {
+            const bool set = (map.Blocks[bv] >> bu & 1U) != 0U;
+            setBlocks += set ? 1U : 0U;
+            bool waterNear = false;
+            const int32_t first = -1, last = int32_t(kPicaWaterMapBlockTexels);
+            for (int32_t dv = first; dv <= last && !waterNear; ++dv)
+                for (int32_t du = first; du <= last && !waterNear; ++du) {
+                    const int32_t u = int32_t(bu * kPicaWaterMapBlockTexels) + du;
+                    const int32_t v = int32_t(bv * kPicaWaterMapBlockTexels) + dv;
+                    if (u < 0 || v < 0 || u >= int32_t(map.Size) || v >= int32_t(map.Size)) continue;
+                    waterNear = !std::isnan(map.Texels[size_t(v) * map.Size + size_t(u)][0]);
+                }
+            expect(set == waterNear, "a block is set exactly when water lies within a texel of it");
+        }
+    }
+    expect(setBlocks > 0U && setBlocks < kPicaWaterMapBlocks * kPicaWaterMapBlocks / 4U,
+           "the blocks are the pieces' neighbourhood");
     const PicaWaterTriangles* none[] = {};
     const auto empty = BuildPicaWaterMap(std::span<const PicaWaterTriangles* const>(none, 0));
     expect(empty.Size == 0U, "no water, no map");
     expect(empty.ExtentMinimumXZ == std::array<float, 2>{} && empty.ExtentMaximumXZ == std::array<float, 2>{},
            "no water, no extent");
-    checks += 15;
+    expect(empty.Blocks == decltype(empty.Blocks){}, "no water, no blocks");
+    checks += 18;
     // Regions: the two pieces and the drop's landing.
     const auto regions = PicaWaterMapRegions(map);
     size_t levels = 0, landings = 0;

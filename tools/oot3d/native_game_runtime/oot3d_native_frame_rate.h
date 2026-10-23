@@ -134,7 +134,10 @@ struct NativeVisualSampleCadenceStats {
 
 // Fixed x2/x3 modes are ordinal contracts: each native transition receives
 // exactly two or three presentation samples. Wall-clock phase remains the
-// authority only for adaptive/uncapped presentation.
+// authority only for adaptive/uncapped presentation. A transition's samples
+// end on the completed frame, (0.5, 1) or (1/3, 2/3, 1): the newest state is
+// presented within its transition instead of a sample later (16.7 ms earlier
+// at 60 Hz than (0, 0.5)), and a hold rests on it.
 class NativeVisualSampleCadence {
   public:
     explicit NativeVisualSampleCadence(uint8_t fixedSampleMultiplier = 0U);

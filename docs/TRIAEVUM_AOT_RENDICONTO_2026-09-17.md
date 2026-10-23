@@ -77,6 +77,6 @@ del codice; questi test non ne identificano ancora la causa dominante.
 - Generatore: `tools/renderer/tev_program/build_aot_direct_cohort.py`.
 - Test: `tools/renderer/tev_program/test_aot_direct_cohort.py`.
 - [Rapporto tecnico e dettagli delle misure](TRIAEVUM_AOT_DIRECT_COHORT.md).
-- Evidenze locali: `C:/Users/xander/triaevum-aot-causal-analysis/`, sottocartelle
+- Evidenze locali: `%USERPROFILE%/triaevum-aot-causal-analysis/`, sottocartelle
   `direct-line-v2`, `direct-line-v2-abba`, `direct-line-v2-abba-repeat` e
   `direct-line-v2-sampling`.

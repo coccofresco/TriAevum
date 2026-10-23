@@ -960,15 +960,23 @@ bool GenerateOot3dPicaFragmentShader(
 }
 
 bool GenerateOot3dPicaParametricBaseFragmentShader(
-    bool fragmentLighting, bool integerTexture0,
+    Oot3dPicaParametricLighting lighting, bool integerTexture0,
     Oot3dPicaGeneratedFragmentShader& shader, std::string* error) {
     auto packet = std::make_unique<Oot3dPicaDrawPacket>();
     Oot3dPicaDecodedDrawState state{};
-    packet->Registers[0x8FU] = fragmentLighting ? 1U : 0U;
+    packet->Registers[0x8FU] = lighting != Oot3dPicaParametricLighting::Off ? 1U : 0U;
+    // Config1: every standard table (D0, D1, FR, RR, RG, RB) and every light's
+    // spot and distance attenuation disabled.
+    if (lighting == Oot3dPicaParametricLighting::NoLookupTables) packet->Registers[0x1C4U] = 0xFF7BFF00U;
     packet->Registers[0x80U] = 1U;
     packet->Registers[0x83U] = integerTexture0 ? 2U << 28U : 0U;
     state.Textures[0].Enabled = true;
     state.Textures[0].Type = integerTexture0 ? 2U : 0U;
+    if (lighting != Oot3dPicaParametricLighting::Off &&
+        Oot3dPicaFragmentLightingUsesLuts(*packet) != (lighting == Oot3dPicaParametricLighting::LookupTables)) {
+        if (error != nullptr) *error = "parametric lighting configuration does not select its lookup tables";
+        return false;
+    }
     return GenerateOot3dPicaFragmentShader(*packet, state, shader, error,
                                            Oot3dPicaShaderBuildPurpose::OfflineSource,
                                            Oot3dPicaTevMode::Parametric);

@@ -32,10 +32,10 @@ fallback. Native mask resolution and semantics are unchanged. No full texture
 sampling or nearest-point search occurs in the frame's Grass shader.
 
 `grass_texture_source_cache` owns the grid and shared source lifetime;
-`grass_world_placement_cache` samples it; `grass_instance_layout.h` owns the common
-CPU/compute/render instance layout. CPU fallback and compute expansion both copy
-the packed color. Compute output uses integer words to preserve packed bits,
-and shader strides derive from C++ layout sizes. Reused source observations no
+`grass_world_placement_cache` samples it; `GrassWorldAnchor` is the common
+CPU/compute/render root layout. The blades read the packed color from the
+anchor itself: the GPU path addresses the resident anchors through the visible
+indices, the CPU fallback uploads the selected anchors in root order. Reused source observations no
 longer construct a redundant texture-byte copy before `try_emplace`.
 
 This costs four additional bytes per retained world anchor (36 -> 40) and visible
@@ -112,7 +112,7 @@ The existing use of terrain normals is not the missing feature by itself.
 
 ## Quantitative Evidence, Not An FPS Claim
 
-Private evidence: `C:/Users/xander/triaevum-verify-20260911/epona-grass-restored/`.
+Private evidence: `%USERPROFILE%/triaevum-verify-20260911/epona-grass-restored/`.
 The mounted Hyrule Field probe at frame 172 reports:
 
 | Measurement | Value |
@@ -204,7 +204,7 @@ parameter packing, Off, alpha/fog order and outline independence. Three bounded
 180-presentation Hyrule Field probes exited 0, using the same read-only mounted
 checkpoint: `grass-shared-toon-default`, `grass-shared-toon-off`, and
 `grass-shared-toon-hard-bands` under
-`C:/Users/xander/triaevum-verify-20260911/`. Native framebuffer frame 150 inspected
+`%USERPROFILE%/triaevum-verify-20260911/`. Native framebuffer frame 150 inspected
 in each. The diagnostic two-band profile visibly darkens both terrain and Grass;
 the default rim visibly brightens grazing-angle Grass. User presets were not
 modified. No shader compilation failures in the default run. The final default
@@ -395,8 +395,8 @@ lighting or bit-identical final terrain color.
 - Vulkan/NRI validation enabled in both probes: zero errors. Vulkan warnings
   remain and are not being reported as a clean warning-free validation run.
 - Evidence (local, not distributed):
-  `C:/Users/xander/triaevum-verify-20260911/grass-native-light-validation` and
-  `C:/Users/xander/triaevum-verify-20260911/grass-native-light-field`.
+  `%USERPROFILE%/triaevum-verify-20260911/grass-native-light-validation` and
+  `%USERPROFILE%/triaevum-verify-20260911/grass-native-light-field`.
   These bounded capture runs are functional checks, not FPS benchmarks.
 - Linux/Android execution, day/night comparison and density-sweep visual
   acceptance remain to be verified. Neither whole-game parity nor a speedup is
@@ -446,7 +446,7 @@ package contents. Normal runs perform no export.
 ### Reproduction
 
 Local evidence lives under
-`C:/Users/xander/triaevum-verify-20260911/grass-color-audit/`:
+`%USERPROFILE%/triaevum-verify-20260911/grass-color-audit/`:
 
 - `boosted-run`: blend 1, existing gains 2.87/4, before the TEV correction.
 - `neutral-run`: same settings and checkpoint, gains 1/1, before correction.
@@ -490,7 +490,7 @@ Verification: 101 Grass/toon tests pass, including a regression that checks the
 diffuse consumer cannot invoke the grazing rim while the canonical full response
 still contains it. Windows NRI/Vulkan mounted Field captures at presentation 150
 use the same checkpoint, camera and settings before/after. Local evidence:
-`C:/Users/xander/triaevum-verify-20260911/grass-grazing-before` and
+`%USERPROFILE%/triaevum-verify-20260911/grass-grazing-before` and
 `grass-grazing-after`. A distant Grass rectangle (x100..499, y310..379) changes
 mean encoded RGB from (143.85,98.89,44.45) to (102.21,58.33,13.69); this is an
 image-domain comparison, not radiometric luminance. The checked hearts and
@@ -521,7 +521,7 @@ GraphicsSettingsRuntimeTest.UsesInjectedPersistencePort store-count failure is
 excluded. Actual F1 widget smoke covers editing both distances, unit conversion
 and toggling the rim. Windows NRI/Vulkan runs 180 presentations successfully,
 with zero validation errors and 11 existing Vulkan warnings. Framebuffer evidence:
-`C:/Users/xander/triaevum-verify-20260911/grass-rim-distance`.
+`%USERPROFILE%/triaevum-verify-20260911/grass-rim-distance`.
 Against the preceding rim-off capture, distant pixels x100..499/y240..299,
 the checked hearts and castle are identical; closer grass regains the highlight.
 This is a bounded visual test, not a performance benchmark or cross-platform test.
@@ -565,7 +565,7 @@ no application limiter, no pacing and no interpolated frames. Shader caches
 are warm; the first 240 presentations and the final pending GPU-query slots
 are excluded from GPU means. Tests never modify user saves/configuration.
 
-Evidence root: `C:/Users/xander/triaevum-verify-20260911/`. Each probe contains
+Evidence root: `%USERPROFILE%/triaevum-verify-20260911/`. Each probe contains
 its executable SHA256, arguments, private config, runtime counters and GPU log.
 Windows RTX 3060, output 1280x720, Kokiri legacy hudtest checkpoint:
 
@@ -691,7 +691,7 @@ intervals [270,330), [810,870), [990,1050), [1170,1230). Loading, the close-up
 ground view at 480 and the tree view at 660 do not enter this primary score.
 Captures are direct framebuffers, not desktop screenshots.
 
-Private evidence root: `C:/Users/xander/triaevum-verify-20260911/`.
+Private evidence root: `%USERPROFILE%/triaevum-verify-20260911/`.
 Plans `grass-intro-distance-plan.json` and `grass-intro-final-plan.json` feed
 outputs `grass-intro-distance-sweep` and `grass-intro-final-sweep`. Replay with
 `python tools/triaevum_release/compare_grass_presets.py PLAN NEW_OUTPUT`.

@@ -739,6 +739,7 @@ bool GfxRenderingAPIVulkan::RestorePicaTextureCache(
                 snapshot.CustomReplacementPending;
             texture.CustomReplacementReady =
                 snapshot.CustomReplacementReady;
+            texture.LastUsedFrame = mFrameCounter;
             mNativePicaTextures.emplace(key, std::move(texture));
         }
         return true;

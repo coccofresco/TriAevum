@@ -1,7 +1,7 @@
 #include "fast/oot3d/grass_gpu_instance_compactor.h"
 #include "fast/oot3d/grass_shader_sources.h"
-#include "fast/oot3d/grass_instance_layout.h"
 #include "fast/oot3d/grass_actor_cells.h"
+#include "fast/oot3d/grass_gpu_memory.h"
 
 #ifdef ENABLE_OOT3D_VULKAN
 
@@ -23,7 +23,6 @@ namespace {
 
 constexpr uint32_t kFrameSlots = 2U;
 constexpr uint32_t kComputeGroupSize = 256U;
-constexpr VkDeviceSize kGrassInstanceBytes = sizeof(GrassInstance);
 constexpr VkDeviceSize kStaticAnchorBytes = sizeof(GrassWorldAnchor);
 
 struct alignas(16) GrassGpuInteractionSample {
@@ -57,8 +56,8 @@ static_assert(sizeof(GrassGpuCompactionPush) == 112U);
 
 // Bend history entry: bend XY bits, frame stamp, replaced bend (half2).
 constexpr VkDeviceSize kBendHistoryBytes = 4U * sizeof(uint32_t);
-constexpr VkDeviceSize kPreviousBendBytes = 2U * sizeof(float);
-constexpr uint32_t kDescriptorBindings = 9U;
+constexpr VkDeviceSize kRootBendBytes = kGrassRootBendWords * sizeof(uint32_t);
+constexpr uint32_t kDescriptorBindings = 8U;
 
 // Never zero, so a cleared history entry matches no frame.
 uint32_t BendHistoryStamp(uint64_t frameId) {
@@ -96,6 +95,7 @@ struct GrassGpuInstanceCompactor::Impl {
         VkDeviceMemory Memory = VK_NULL_HANDLE;
         VkDeviceSize Capacity = 0U;
         void* Mapped = nullptr;
+        bool DeviceLocal = false;
     };
 
     VkPhysicalDevice PhysicalDevice = VK_NULL_HANDLE;
@@ -111,8 +111,7 @@ struct GrassGpuInstanceCompactor::Impl {
     std::array<Buffer, kFrameSlots> InteractionSamples{};
     std::array<Buffer, kFrameSlots> Actors{};
     std::array<Buffer, kFrameSlots> ActorCells{};
-    std::array<Buffer, kFrameSlots> OutputInstances{};
-    std::array<Buffer, kFrameSlots> PreviousBends{};
+    std::array<Buffer, kFrameSlots> RootBends{};
     Buffer BendHistory;
     struct SelectionSlot {
         uint64_t Static = 0, Selection = 0;
@@ -126,6 +125,19 @@ struct GrassGpuInstanceCompactor::Impl {
     uint32_t HistoryPreviousStamp = 0U;
     bool HistoryValid = false;
     std::string Reason;
+    bool OutOfMemory = false;
+
+    void DestroyBuffers() {
+        for (auto* buffer : {&StaticAnchors, &BendHistory})
+            DestroyBuffer(*buffer);
+        for (auto* slots : {&StaticStaging, &VisibleIndices, &InteractionSamples, &Actors, &ActorCells, &RootBends})
+            for (auto& buffer : *slots)
+                DestroyBuffer(buffer);
+        StaticRevision = 0U;
+        StaticAnchorCount = 0U;
+        Selections = {};
+        HistoryValid = false;
+    }
 
     void DestroyBuffer(Buffer& buffer) {
         if (buffer.Mapped != nullptr) {
@@ -136,20 +148,34 @@ struct GrassGpuInstanceCompactor::Impl {
         }
         if (buffer.Memory != VK_NULL_HANDLE) {
             vkFreeMemory(Device, buffer.Memory, nullptr);
+            TrackGrassGpuMemory(buffer.DeviceLocal, -static_cast<int64_t>(buffer.Capacity));
         }
         buffer = {};
     }
 
     bool EnsureBuffer(Buffer& buffer, VkDeviceSize bytes, VkBufferUsageFlags usage,
                       VkMemoryPropertyFlags memoryProperties, bool waitBeforeResize) {
-        if (buffer.Handle != VK_NULL_HANDLE && bytes <= buffer.Capacity) {
+        if (!GrassBufferNeedsResize(buffer.Handle != VK_NULL_HANDLE, bytes, buffer.Capacity)) {
             return false;
         }
         if (waitBeforeResize && buffer.Handle != VK_NULL_HANDLE) {
             vkDeviceWaitIdle(Device);
         }
         DestroyBuffer(buffer);
-        buffer.Capacity = std::bit_ceil(std::max<VkDeviceSize>(bytes, 4096U));
+        try {
+            CreateBuffer(buffer, bytes, usage, memoryProperties);
+        } catch (...) {
+            // Never keep a half-built buffer: the next frame would take its
+            // handle and capacity for a usable allocation.
+            DestroyBuffer(buffer);
+            throw;
+        }
+        return true;
+    }
+
+    void CreateBuffer(Buffer& buffer, VkDeviceSize bytes, VkBufferUsageFlags usage,
+                      VkMemoryPropertyFlags memoryProperties) {
+        buffer.Capacity = GrassBufferCapacity(bytes);
         const VkBufferCreateInfo bufferInfo{
             VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
             nullptr,
@@ -171,15 +197,19 @@ struct GrassGpuInstanceCompactor::Impl {
             requirements.size,
             FindMemoryType(PhysicalDevice, requirements.memoryTypeBits, memoryProperties),
         };
-        if (vkAllocateMemory(Device, &allocation, nullptr, &buffer.Memory) != VK_SUCCESS ||
-            vkBindBufferMemory(Device, buffer.Handle, buffer.Memory, 0U) != VK_SUCCESS) {
-            throw std::runtime_error("cannot allocate grass compaction buffer");
+        buffer.DeviceLocal = (memoryProperties & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0U;
+        if (GrassGpuAllocationRefused(PhysicalDevice, allocation.memoryTypeIndex, buffer.Capacity) ||
+            vkAllocateMemory(Device, &allocation, nullptr, &buffer.Memory) != VK_SUCCESS) {
+            throw GrassGpuOutOfMemory("cannot allocate grass compaction buffer");
+        }
+        TrackGrassGpuMemory(buffer.DeviceLocal, static_cast<int64_t>(buffer.Capacity), "compactor", usage);
+        if (vkBindBufferMemory(Device, buffer.Handle, buffer.Memory, 0U) != VK_SUCCESS) {
+            throw std::runtime_error("cannot bind grass compaction buffer");
         }
         if ((memoryProperties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0U &&
             vkMapMemory(Device, buffer.Memory, 0U, buffer.Capacity, 0U, &buffer.Mapped) != VK_SUCCESS) {
             throw std::runtime_error("cannot map grass compaction buffer");
         }
-        return true;
     }
 };
 
@@ -312,7 +342,7 @@ bool GrassGpuInstanceCompactor::Compact(const GrassGpuInstanceCompactionRequest&
         const VkDeviceSize staticBytes = request.StaticAnchors.size() * kStaticAnchorBytes;
         const size_t instanceCapacity = gpuSelection ? request.Selection.Budget : request.VisibleAnchorIndices.size();
         const VkDeviceSize visibleBytes = instanceCapacity * sizeof(uint32_t);
-        const VkDeviceSize outputBytes = instanceCapacity * kGrassInstanceBytes;
+        const VkDeviceSize rootBendBytes = instanceCapacity * kRootBendBytes;
         auto& selection = mImpl->Selections[slot];
         const bool sameSelection = !gpuSelection && request.SelectionRevision != 0 &&
                                    selection.Static == request.StaticRevision &&
@@ -321,8 +351,8 @@ bool GrassGpuInstanceCompactor::Compact(const GrassGpuInstanceCompactionRequest&
         const bool idle = !gpuSelection && request.AllowIdleReuse && request.Actors.empty() &&
                           request.InteractionField->AtRest();
         if (sameSelection && idle && selection.IdleOutput && mImpl->StaticRevision == request.StaticRevision) {
-            result.InstanceBuffer = mImpl->OutputInstances[slot].Handle;
-            result.PreviousBendBuffer = mImpl->PreviousBends[slot].Handle;
+            result.StaticAnchorBuffer = mImpl->StaticAnchors.Handle;
+            result.RootBendBuffer = mImpl->RootBends[slot].Handle;
             result.VisibleIndicesBuffer = mImpl->VisibleIndices[slot].Handle;
             result.InstanceCount = static_cast<uint32_t>(request.VisibleAnchorIndices.size());
             result.SelectionUploadReused = true;
@@ -383,6 +413,7 @@ bool GrassGpuInstanceCompactor::Compact(const GrassGpuInstanceCompactionRequest&
             if (copied != request.StaticAnchors.size())
                 throw std::runtime_error("grass static anchor segments do not match their count");
             if (!staticResized) {
+                // Earlier frames' compactions and blades read these anchors.
                 const VkBufferMemoryBarrier beforeCopy{
                     VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
                     nullptr,
@@ -394,7 +425,8 @@ bool GrassGpuInstanceCompactor::Compact(const GrassGpuInstanceCompactionRequest&
                     0U,
                     staticBytes,
                 };
-                vkCmdPipelineBarrier(request.CommandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                vkCmdPipelineBarrier(request.CommandBuffer,
+                                     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
                                      VK_PIPELINE_STAGE_TRANSFER_BIT, 0U, 0U, nullptr, 1U, &beforeCopy, 0U, nullptr);
             }
             const VkBufferCopy copy{ 0U, 0U, staticBytes };
@@ -412,6 +444,11 @@ bool GrassGpuInstanceCompactor::Compact(const GrassGpuInstanceCompactionRequest&
                     std::chrono::duration<double, std::milli>(stagingReady - deviceReady).count(),
                     static_cast<unsigned long long>(staticBytes), staticResized ? 1 : 0,
                     staticResized && hadBuffer ? 1 : 0);
+        } else if (mImpl->StaticStaging[slot].Handle != VK_NULL_HANDLE) {
+            // The copy that used this slot's staging ran in this slot's
+            // previous frame, which has completed: the whole-scene copy is
+            // not kept resident (it doubled the static anchors' size).
+            mImpl->DestroyBuffer(mImpl->StaticStaging[slot]);
         }
 
         GrassGpuSelectionResult gpu;
@@ -421,8 +458,14 @@ bool GrassGpuInstanceCompactor::Compact(const GrassGpuInstanceCompactionRequest&
             selectionRequest.FrameSlot = request.FrameSlot;
             selectionRequest.StaticAnchors = mImpl->StaticAnchors.Handle;
             selectionRequest.StaticAnchorCount = request.StaticAnchors.size();
-            if (!request.Selector->Record(selectionRequest, gpu))
-                throw std::runtime_error("grass GPU selection failed: " + request.Selector->UnavailableReason());
+            // The cluster table belongs to these anchors: without their revision
+            // the selector re-uploaded it only when its slot layout changed.
+            selectionRequest.StaticRevision = request.StaticRevision;
+            if (!request.Selector->Record(selectionRequest, gpu)) {
+                const auto reason = "grass GPU selection failed: " + request.Selector->UnavailableReason();
+                if (request.Selector->LastFailureOutOfMemory()) throw GrassGpuOutOfMemory(reason);
+                throw std::runtime_error(reason);
+            }
         }
 
         // The bend history follows static anchor indices: a new static set,
@@ -473,11 +516,7 @@ bool GrassGpuInstanceCompactor::Compact(const GrassGpuInstanceCompactionRequest&
                 0.0F,
             };
         }
-        mImpl->EnsureBuffer(mImpl->OutputInstances[slot], outputBytes,
-                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, false);
-        const VkDeviceSize previousBendBytes = instanceCapacity * kPreviousBendBytes;
-        mImpl->EnsureBuffer(mImpl->PreviousBends[slot], previousBendBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        mImpl->EnsureBuffer(mImpl->RootBends[slot], rootBendBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, false);
 
         const std::array<VkDescriptorBufferInfo, kDescriptorBindings> bufferInfos{ {
@@ -496,14 +535,9 @@ bool GrassGpuInstanceCompactor::Compact(const GrassGpuInstanceCompactionRequest&
                 0U,
                 interactionBytes,
             },
-            {
-                mImpl->OutputInstances[slot].Handle,
-                0U,
-                outputBytes,
-            },
+            {mImpl->RootBends[slot].Handle, 0U, rootBendBytes},
             {mImpl->Actors[slot].Handle, 0U, actorBytes},
             {mImpl->BendHistory.Handle, 0U, historyBytes},
-            {mImpl->PreviousBends[slot].Handle, 0U, previousBendBytes},
             {mImpl->ActorCells[slot].Handle, 0U, actorCellBytes},
             // Unused unless history.z selects the GPU count.
             gpuSelection ? VkDescriptorBufferInfo{gpu.Control, 0U, VK_WHOLE_SIZE}
@@ -566,16 +600,10 @@ bool GrassGpuInstanceCompactor::Compact(const GrassGpuInstanceCompactionRequest&
             0U,
             interactionBytes,
         };
+        // The blades of this slot's previous frame read its root bends.
         barriers[barrierCount++] = {
-            VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
-            nullptr,
-            VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_SHADER_READ_BIT,
-            VK_ACCESS_SHADER_WRITE_BIT,
-            VK_QUEUE_FAMILY_IGNORED,
-            VK_QUEUE_FAMILY_IGNORED,
-            mImpl->OutputInstances[slot].Handle,
-            0U,
-            outputBytes,
+            VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER, nullptr, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+            VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, mImpl->RootBends[slot].Handle, 0U, rootBendBytes,
         };
         // After a clear the fill is the last writer; otherwise the previous compaction.
         barriers[barrierCount++] = {
@@ -584,13 +612,9 @@ bool GrassGpuInstanceCompactor::Compact(const GrassGpuInstanceCompactionRequest&
             VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
             VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, mImpl->BendHistory.Handle, 0U, historyBytes,
         };
-        barriers[barrierCount++] = {
-            VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER, nullptr, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-            VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, mImpl->PreviousBends[slot].Handle, 0U, previousBendBytes,
-        };
         vkCmdPipelineBarrier(request.CommandBuffer,
                              (staticChanged || clearHistory ? VK_PIPELINE_STAGE_TRANSFER_BIT : 0U) |
-                                 VK_PIPELINE_STAGE_HOST_BIT | VK_PIPELINE_STAGE_VERTEX_INPUT_BIT |
+                                 VK_PIPELINE_STAGE_HOST_BIT |
                                  VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                              VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, 0U, 0U, nullptr, barrierCount, barriers.data(), 0U,
                              nullptr);
@@ -635,30 +659,15 @@ bool GrassGpuInstanceCompactor::Compact(const GrassGpuInstanceCompactionRequest&
         else
             vkCmdDispatch(request.CommandBuffer, (push.CountsFlags[0] + kComputeGroupSize - 1U) / kComputeGroupSize,
                           1U, 1U);
-        const std::array<VkBufferMemoryBarrier, 2U> outputReady{ {
-            {
-                VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
-                nullptr,
-                VK_ACCESS_SHADER_WRITE_BIT,
-                VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_SHADER_READ_BIT,
-                VK_QUEUE_FAMILY_IGNORED,
-                VK_QUEUE_FAMILY_IGNORED,
-                mImpl->OutputInstances[slot].Handle,
-                0U,
-                outputBytes,
-            },
-            {
-                VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER, nullptr, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, mImpl->PreviousBends[slot].Handle, 0U,
-                previousBendBytes,
-            },
-        } };
+        const VkBufferMemoryBarrier outputReady{
+            VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER, nullptr, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+            VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, mImpl->RootBends[slot].Handle, 0U, rootBendBytes,
+        };
         vkCmdPipelineBarrier(request.CommandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                             VK_PIPELINE_STAGE_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, 0U, 0U, nullptr,
-                             static_cast<uint32_t>(outputReady.size()), outputReady.data(), 0U, nullptr);
+                             VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, 0U, 0U, nullptr, 1U, &outputReady, 0U, nullptr);
 
-        result.InstanceBuffer = mImpl->OutputInstances[slot].Handle;
-        result.PreviousBendBuffer = mImpl->PreviousBends[slot].Handle;
+        result.StaticAnchorBuffer = mImpl->StaticAnchors.Handle;
+        result.RootBendBuffer = mImpl->RootBends[slot].Handle;
         result.InstanceCount = push.CountsFlags[0];
         result.VisibleIndicesBuffer = visibleBuffer;
         result.SelectionControl = gpu.Control;
@@ -667,9 +676,15 @@ bool GrassGpuInstanceCompactor::Compact(const GrassGpuInstanceCompactionRequest&
             static_cast<uint64_t>((sameSelection || gpuSelection ? 0 : visibleBytes) + interactionBytes + actorBytes + actorCellBytes);
         selection = { request.StaticRevision, request.SelectionRevision, request.VisibleAnchorIndices.size(), idle };
         mImpl->Reason.clear();
+        mImpl->OutOfMemory = false;
         return true;
+    } catch (const GrassGpuOutOfMemory& exception) {
+        mImpl->Reason = exception.what();
+        mImpl->OutOfMemory = true;
+        return false;
     } catch (const std::exception& exception) {
         mImpl->Reason = exception.what();
+        mImpl->OutOfMemory = false;
         return false;
     }
 }
@@ -684,29 +699,7 @@ void GrassGpuInstanceCompactor::Shutdown() {
         return;
     }
     vkDeviceWaitIdle(mImpl->Device);
-    mImpl->DestroyBuffer(mImpl->StaticAnchors);
-    mImpl->DestroyBuffer(mImpl->BendHistory);
-    for (auto& buffer : mImpl->PreviousBends) {
-        mImpl->DestroyBuffer(buffer);
-    }
-    for (auto& buffer : mImpl->StaticStaging) {
-        mImpl->DestroyBuffer(buffer);
-    }
-    for (auto& buffer : mImpl->VisibleIndices) {
-        mImpl->DestroyBuffer(buffer);
-    }
-    for (auto& buffer : mImpl->InteractionSamples) {
-        mImpl->DestroyBuffer(buffer);
-    }
-    for (auto& buffer : mImpl->Actors) {
-        mImpl->DestroyBuffer(buffer);
-    }
-    for (auto& buffer : mImpl->ActorCells) {
-        mImpl->DestroyBuffer(buffer);
-    }
-    for (auto& buffer : mImpl->OutputInstances) {
-        mImpl->DestroyBuffer(buffer);
-    }
+    mImpl->DestroyBuffers();
     if (mImpl->Pipeline != VK_NULL_HANDLE) {
         vkDestroyPipeline(mImpl->Device, mImpl->Pipeline, nullptr);
     }
@@ -724,16 +717,22 @@ void GrassGpuInstanceCompactor::Shutdown() {
     mImpl->DescriptorSets = {};
     mImpl->PipelineLayout = VK_NULL_HANDLE;
     mImpl->Pipeline = VK_NULL_HANDLE;
-    mImpl->StaticRevision = 0U;
-    mImpl->Selections = {};
-    mImpl->StaticAnchorCount = 0U;
-    mImpl->HistoryValid = false;
     mImpl->PhysicalDevice = VK_NULL_HANDLE;
     mImpl->Device = VK_NULL_HANDLE;
 }
 
+void GrassGpuInstanceCompactor::ReleaseMemory() {
+    if (!mImpl || mImpl->Device == VK_NULL_HANDLE) return;
+    vkDeviceWaitIdle(mImpl->Device);
+    mImpl->DestroyBuffers();
+}
+
 const std::string& GrassGpuInstanceCompactor::UnavailableReason() const {
     return mImpl->Reason;
+}
+
+bool GrassGpuInstanceCompactor::LastFailureOutOfMemory() const {
+    return mImpl->OutOfMemory;
 }
 
 } // namespace Fast::Oot3d

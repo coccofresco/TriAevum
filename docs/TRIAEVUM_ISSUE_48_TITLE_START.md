@@ -77,5 +77,5 @@ Final asset SHA-256:
 - Linux AppImage: `f1d1917c9dd1048b3cf045b730fa1689af6110918d3ed65fc0ba3aebe3f6ace1`.
 
 Private evidence is under the respective `releases/v0.6.0-alpha.3b` (Windows)
-and `/home/xander/triaevum-alpha3b-20260918` (Linux) directories. Steam Deck
+and `~/triaevum-alpha3b-20260918` (Linux) directories. Steam Deck
 hardware is unavailable; no new hardware certification is claimed.

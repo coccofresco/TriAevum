@@ -64,6 +64,11 @@ struct PicaWaterTriangles {
 
 inline constexpr uint32_t kPicaWaterMapSize = 512U;
 inline constexpr uint32_t kPicaWaterMapLevels = 16U;
+// The map's coarse occupancy: blocks of this many texels per side, one bit
+// each, a row of blocks per 32-bit word.
+inline constexpr uint32_t kPicaWaterMapBlockTexels = 16U;
+inline constexpr uint32_t kPicaWaterMapBlocks = kPicaWaterMapSize / kPicaWaterMapBlockTexels;
+static_assert(kPicaWaterMapBlocks == 32U);
 // World units around a fall's footprint where its landing churns.
 inline constexpr float kPicaWaterLandingReach = 18.0F;
 
@@ -86,6 +91,10 @@ struct PicaWaterMap {
     // surface search can find nothing outside them.
     std::array<float, 2> ExtentMinimumXZ{};
     std::array<float, 2> ExtentMaximumXZ{};
+    // Per block row v, bit u: block (u, v) or a texel next to it holds water.
+    // A clear bit means no water cell within a texel of the block, so a
+    // search sample rounded by less than a texel there meets none.
+    std::array<uint32_t, kPicaWaterMapBlocks> Blocks{};
 
     [[nodiscard]] const std::array<float, 4>* At(float x, float z) const noexcept {
         if (Size == 0U) return nullptr;
@@ -222,10 +231,16 @@ inline constexpr float kPicaWaterMapMinimumTexel = 4.0F;
         map.ExtentMinimumXZ = {std::min(map.ExtentMinimumXZ[0], x), std::min(map.ExtentMinimumXZ[1], z)};
         map.ExtentMaximumXZ = {std::max(map.ExtentMaximumXZ[0], x + map.Texel),
                                std::max(map.ExtentMaximumXZ[1], z + map.Texel)};
+        for (uint32_t bv = (v == 0U ? 0U : v - 1U) / kPicaWaterMapBlockTexels;
+             bv <= std::min(v + 1U, map.Size - 1U) / kPicaWaterMapBlockTexels; ++bv)
+            for (uint32_t bu = (u == 0U ? 0U : u - 1U) / kPicaWaterMapBlockTexels;
+                 bu <= std::min(u + 1U, map.Size - 1U) / kPicaWaterMapBlockTexels; ++bu)
+                map.Blocks[bv] |= 1U << bu;
     }
     if (map.Levels.empty()) {
         map.HeightRange = {};
         map.ExtentMinimumXZ = map.ExtentMaximumXZ = {};
+        map.Blocks = {};
     }
     return map;
 }

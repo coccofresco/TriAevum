@@ -311,10 +311,11 @@ package ships its low-resolution UI atlas `custom_ui01.ctxb` and its Link
 animations `zelda_link_ext.zar`, unchanged, from the official archive
 `singlescreen_30_25aeb.zip` (SHA-256
 `5668640fec8dc2b47b4516fd0b871c4d7d90ca1c2203acc2a22adb59aaab5993`;
-SingleScreen 3.1's `singlescreen_31_989c3.zip` carries them unchanged). They
-remain the author's; see `LICENSES/SingleScreen-3.0.md`. Its HD UI atlas and HD
-fonts are not distributed until their author consents; Forge imports them only
-from an archive the user places beside it. TopScreen 2.1.1 is no longer used.
+SingleScreen 3.1's `singlescreen_31_989c3.zip` carries them unchanged), and
+SingleScreen 3.1's HD Latin font `ltn16.qbf`, unchanged. They remain the
+author's; see `LICENSES/SingleScreen-3.0.md`. The HD UI atlas (by chubbycubby)
+is not distributed; Forge takes it from chubbycubby's HD UI texture pack when
+the user obtains it (see below). TopScreen 2.1.1 is no longer used.
 
 The reverse-engineering method and implementation boundaries are documented in
 `docs/OOT3D_TOPSCREEN_MOD_SEMANTIC_PORT.md` and
@@ -356,6 +357,53 @@ Neither project's binary
 patches (`code.bps`, `exheader.bin`), RomFS layouts, text payloads or
 settings files are redistributed, and none is applied: Nintendo and Grezzo
 material inside them stays under the exclusions of `LICENSE_SCOPE.md`.
+## Vanilla+ - Link Remodel And HD Item Models (optional mod)
+
+Forge's "Optional mods" section can apply **Vanilla+ - Link Remodel And HD
+Item Models** 1.9 by **HugAMuffin** (3D art), tested by **Fado** (QA lead),
+**M-1** and **seiunsky_1084** (hardware testing), made with **Jameriquiah**'s
+CMB-Exporter (<https://gamebanana.com/mods/705890>). It is licensed CC BY-NC-ND
+4.0 (<https://creativecommons.org/licenses/by-nc-nd/4.0/>) and is not part of
+TriAevum: packages contain none of its files. Forge downloads the author's
+original archive on the user's request, verifies it and applies it to the
+user's local game data only. See `LICENSES/Vanilla-Plus-Link-Remodel.md` and
+`docs/TRIAEVUM_MOD_VANILLA_PLUS_LINK.md`.
+
+## OoT3D Vanilla UI/HUD (optional HD UI texture pack)
+
+Forge's "HD UI textures" section can install **OoT3D Vanilla UI/HUD** 3.2 by
+**chubbycubby**, crediting **HenrikoMagnifico** and **M-1**
+(<https://gamebanana.com/mods/701929>), HD textures for the HUD, the menus and
+TopScreen in each game language. It is licensed CC BY-NC-ND 4.0
+(<https://creativecommons.org/licenses/by-nc-nd/4.0/>) and is not part of
+TriAevum: packages contain none of its files. Forge downloads the author's
+original archive on the user's request, verifies it and keeps its textures in
+the user's private data folder only. See `LICENSES/OoT3D-Vanilla-UI-HUD.md` and
+`docs/TRIAEVUM_UI_TEXTURE_PACK.md`.
+
+## Ocarina Reframed (TopScreen file selection design)
+
+TopScreen's file selection (Link's pedestal on the right, the file interface on
+the left, Back in the corner) follows the single-screen presentation of
+**Ocarina Reframed** 2.0.2 by **OTPR26** (<https://github.com/OTPR26/OOT3DHud>,
+GPL-3.0-or-later). TriAevum reimplements that behavior as its own typed host
+code (`tools/oot3d/native_game_runtime/oot3d_top_screen_reframed_file_select.*`);
+it contains no Ocarina Reframed source, patch or artwork.
+
+## Fira Sans Condensed (in-game menu font)
+
+The in-game settings menu (Esc / R3) is drawn by TriAevum's own UI renderer
+from glyph atlases baked from
+[Fira Sans Condensed](https://github.com/mozilla/Fira) Regular and Bold,
+copyright (c) 2012-2015 The Mozilla Foundation and Telefonica S.A., under the
+SIL Open Font License, Version 1.1. The font files, the license and the atlas
+generator are in `tools/oot3d/ui_menu/font`; the baked atlases
+(`tools/oot3d/ui_menu/oot3d_menu_font_atlas_data.cpp`) are compiled into the
+runtime, so the license is also kept at `LICENSES/FiraSans-OFL.txt` for binary
+distributions. The reserved font name "Fira Sans" is not used for any derived
+font. The menu's layout follows Dusklight's settings menu (CC0-1.0, see the
+controller section above) as a design reference; no Dusklight code or assets
+are included.
 
 ## Forge and runtime binary dependencies
 

@@ -290,24 +290,24 @@ mid-flashback state.
 ## Linux Alignment (2026-09-18)
 
 Source baseline: `0bcd22d`, including the preceding #46 changes. Compared all
-archived tracked files with `/home/xander/triaevum-linux`, normalizing line
+archived tracked files with `~/triaevum-linux`, normalizing line
 endings only: 32 missing/different files were updated, then a second comparison
 reported zero differences. Existing overwritten files are backed up privately
-under `/home/xander/triaevum-before-0bcd22d`. Untracked parallel AOT experiments
+under `~/triaevum-before-0bcd22d`. Untracked parallel AOT experiments
 were not imported, and the independently dirty mirror was not reset.
 
 Both existing build paths compile successfully with three jobs:
 
-- Native Clang: `/home/xander/triaevum-linux-build/TriAevum`.
-- Steam Runtime SDK: `/home/xander/triaevum-steamrt4-build/runtime/TriAevum`
+- Native Clang: `~/triaevum-linux-build/TriAevum`.
+- Steam Runtime SDK: `~/triaevum-steamrt4-build/runtime/TriAevum`
   and `oot3d_game_module.so`, using `scripts/run-in-steamrt4.sh` with
-  `/home/xander/triaevum-steamrt4-qualified-sdk`.
+  `~/triaevum-steamrt4-qualified-sdk`.
 
 The five focused Linux suites pass: PICA transfer, submission, visual replay
 serialization, Vulkan bridge/scheduler and TopScreen mod profile (including
 item dispatch, ocarina and D-pad contracts). No platform-specific source fix
 was needed. The movie-capable title module was not recompiled or replaced:
-`/home/xander/triaevum-ui-movie-title-build/triaevum_title_aot.so`.
+`~/triaevum-ui-movie-title-build/triaevum_title_aot.so`.
 
 Binary SHA-256 identities:
 
@@ -326,7 +326,7 @@ The native Linux Vulkan/Wayland replay uses the unchanged Windows pre-stall
 checkpoint and the same dialogue input timeline. It completes all 8,000 host
 frames with exit 0, no pending draws/transfers, and returns to Temple gameplay
 (framebuffer capture at frame 7,200). Private evidence:
-`/home/xander/triaevum-issue45-20260918/{runtime.json,run.log,frame_007200.bmp}`.
+`~/triaevum-issue45-20260918/{runtime.json,run.log,frame_007200.bmp}`.
 It is a functional test, not a performance comparison: a concurrent SDK build,
 framebuffer captures and platform profile differences invalidate timing or
 pixel-identity claims. The mid-flashback savestate limitation remains open.
@@ -335,7 +335,7 @@ Native run totals: 688 dependency flushes, 714,805 executed draws, zero duplicat
 draw attempts and zero guest memory faults. The SDK-built runtime independently
 passes a 1,500-frame replay of the transfer-heavy flashback: exit 0, 664
 dependency flushes, 90,474 draws, zero duplicates and zero memory faults.
-Evidence: `/home/xander/triaevum-issue45-sdk-20260918/`. Captures show the
+Evidence: `~/triaevum-issue45-sdk-20260918/`. Captures show the
 monochrome framebuffer-copy effect progressing. Widescreen side regions and
 optional grass remain visible outside that native image; this qualification
 establishes forward progress, not complete visual equivalence to the 3DS.

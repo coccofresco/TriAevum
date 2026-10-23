@@ -9,8 +9,11 @@
 
 namespace Fast::Oot3d {
 
+// The trace and the filter run at half the scene's resolution (sample s is
+// the scene's pixel 2s); the upsample writes the scene-resolution output.
 [[nodiscard]] std::string BuildHiZReflectionComputeShader();
 [[nodiscard]] std::string BuildHiZReflectionBilateralFilterShader();
+[[nodiscard]] std::string BuildHiZReflectionUpsampleShader();
 
 // Gameplay water for the trace. The title's transparent water writes no
 // depth, so the trace finds the water surface itself: per pixel, the nearest
@@ -45,8 +48,11 @@ struct alignas(16) HiZWaterUniforms {
     // World x, z bounds (min x, min z, max x, max z) of the map's water
     // cells, a texel wider: the surface search fetches no cell outside them.
     std::array<float, 4> MapExtent{};
+    // PicaWaterMap::Blocks, four block rows per element: the search skips
+    // the samples before the first block a view ray meets with water near it.
+    std::array<std::array<uint32_t, 4>, Renderer3ds::kPicaWaterMapBlocks / 4U> MapBlocks{};
 };
-static_assert(sizeof(HiZWaterUniforms) == 608U);
+static_assert(sizeof(HiZWaterUniforms) == 736U);
 
 // Whether any of the scene's water (the bodies' surfaces, the drawn water's
 // extent at its heights) can lie on a view ray in front of the camera: a

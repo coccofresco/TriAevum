@@ -35,7 +35,7 @@ These are compiler/cache measurements, not FPS improvements or whole-game
 coverage. No full Windows game or Android device qualification is claimed.
 
 Private evidence: `forge-pass-cache-native-v2`, `forge-pass-cache-effects` and
-`pass-cache-fallback-cold` under `/home/xander/triaevum-pipeline-live-proof/`.
+`pass-cache-fallback-cold` under `~/triaevum-pipeline-live-proof/`.
 The initial `forge-pass-cache-native` attempt exposed a null interop owner in
 display-copy initialization; initialization now passes its live context directly
 and the subsequent complete runs passed. This was not a shader/fidelity change.
@@ -127,7 +127,7 @@ Implementation points for the completed pair:
   merged-input deduplication, byte-stable packs and diagnostic independence.
 
 Private new evidence: `forge-complete-cold-native`, `forge-complete-shaderc-audit`
-and `forge-complete-cold-effects` below `/home/xander/triaevum-pipeline-live-proof/`.
+and `forge-complete-cold-effects` below `~/triaevum-pipeline-live-proof/`.
 No title code was rebuilt; only the compiler/renderer changed.
 
 ## Product Behavior
@@ -271,7 +271,7 @@ does not capture shader contents and is never part of the distributed runtime.
 Preloading changes the compiler fingerprint, so use an isolated audit cache;
 do not use audit timing as a cache performance benchmark.
 
-Private Linux evidence: `/home/xander/triaevum-pipeline-live-proof/` under
+Private Linux evidence: `~/triaevum-pipeline-live-proof/` under
 `forge-handoff-native`, `forge-handoff-effects`, `forge-handoff-missing-variants`.
 Windows evidence: `I:/oot3dre_work/forge-handoff-windows/`.
 

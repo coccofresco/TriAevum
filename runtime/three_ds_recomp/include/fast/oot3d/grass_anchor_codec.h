@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cmath>
 #include <cstdint>
 
@@ -48,6 +49,35 @@ inline std::array<float, 4> UnpackGrassNormal(uint32_t packed) noexcept {
     for (auto& c : n)
         c *= inverse;
     return n;
+}
+
+// Interaction bends of the drawn roots: GLSL packHalf2x16, rounding to
+// nearest even.
+inline uint32_t GrassHalfBits(float value) noexcept {
+    const uint32_t bits = std::bit_cast<uint32_t>(value);
+    const uint32_t sign = (bits >> 16U) & 0x8000U;
+    const uint32_t magnitude = bits & 0x7fffffffU;
+    if (magnitude > 0x7f800000U) return sign | 0x7e00U;
+    if (magnitude >= 0x477ff000U) return sign | 0x7c00U;
+    if (magnitude < 0x38800000U)
+        return sign | static_cast<uint32_t>(std::nearbyint(std::bit_cast<float>(magnitude) * 16777216.0F));
+    return sign | ((magnitude + 0xfffU + ((magnitude >> 13U) & 1U) - 0x38000000U) >> 13U);
+}
+
+inline float GrassHalfValue(uint32_t half) noexcept {
+    const uint32_t exponent = (half >> 10U) & 0x1fU, mantissa = half & 0x3ffU;
+    const float magnitude = exponent == 0U ? static_cast<float>(mantissa) / 16777216.0F
+        : exponent == 0x1fU ? (mantissa != 0U ? std::nanf("") : INFINITY)
+        : std::ldexp(static_cast<float>(mantissa | 0x400U), static_cast<int>(exponent) - 25);
+    return (half & 0x8000U) != 0U ? -magnitude : magnitude;
+}
+
+inline uint32_t PackGrassBend(const std::array<float, 2>& bend) noexcept {
+    return GrassHalfBits(bend[0]) | (GrassHalfBits(bend[1]) << 16U);
+}
+
+inline std::array<float, 2> UnpackGrassBend(uint32_t packed) noexcept {
+    return { GrassHalfValue(packed & 0xffffU), GrassHalfValue(packed >> 16U) };
 }
 
 } // namespace Fast::Oot3d

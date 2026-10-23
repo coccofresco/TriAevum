@@ -6,7 +6,9 @@ schemas or different binaries for the same complete source identity fail closed.
 """
 
 import argparse
+import concurrent.futures
 import hashlib
+import os
 import struct
 from pathlib import Path
 
@@ -17,7 +19,13 @@ except ImportError:
 
 HEADER = struct.Struct("<8s4I")
 ENTRY = struct.Struct("<IIQQQIIQQ")
-MAX_BYTES = 512 * 1024 * 1024
+# The runtime's kMaximumPackBytes (pica_aot_shader_pack.cpp): the closed Enhanced
+# corpus is larger than 512 MiB.
+MAX_BYTES = 4 * 1024 * 1024 * 1024
+# The FNV-1a loop below runs in the interpreter at roughly ten megabytes per
+# second; a corpus pack is hundreds of megabytes, so its payloads are hashed
+# in worker processes once the total exceeds this.
+PARALLEL_HASH_BYTES = 32 * 1024 * 1024
 
 
 def binary_hash(data):
@@ -27,7 +35,23 @@ def binary_hash(data):
     return value or 1
 
 
-def decode(data):
+def payload_hashes(payloads):
+    """`binary_hash` of every payload, in order, using all CPUs for a large set."""
+    payloads = list(payloads)
+    workers = os.cpu_count() or 1
+    if workers < 2 or sum(map(len, payloads)) < PARALLEL_HASH_BYTES:
+        return [binary_hash(payload) for payload in payloads]
+    with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as pool:
+        return list(pool.map(binary_hash, payloads, chunksize=max(1, len(payloads) // (workers * 16))))
+
+
+def decode(data, *, canonical=False):
+    """Descriptor schema and `{(stage, primary, secondary, size): spirv}` of a pack.
+
+    `canonical` additionally requires the exact layout `encode` produces (entries
+    in key order, payloads contiguous from the table, no trailing bytes), so a
+    public pack carries nothing beyond its declared modules.
+    """
     if not HEADER.size <= len(data) <= MAX_BYTES:
         raise ValueError("Invalid portable pack size")
     magic, version, schema, count, reserved = HEADER.unpack_from(data)
@@ -37,6 +61,7 @@ def decode(data):
         raise ValueError("Invalid portable pack header")
     modules = {}
     ranges = []
+    digests = []
     for index in range(count):
         stage, pad, primary, secondary, size, words, pad2, offset, digest = ENTRY.unpack_from(
             data, HEADER.size + index * ENTRY.size)
@@ -46,15 +71,28 @@ def decode(data):
                 or offset < table_end or offset % 4 or end > len(data) or key in modules):
             raise ValueError("Invalid portable pack entry")
         payload = data[offset:end]
-        if payload[:4] != b"\x03\x02\x23\x07" or binary_hash(payload) != digest:
+        if payload[:4] != b"\x03\x02\x23\x07":
             raise ValueError("Corrupt SPIR-V payload")
         modules[key] = payload
         ranges.append((offset, end))
+        digests.append(digest)
+    if payload_hashes(modules.values()) != digests:
+        raise ValueError("Corrupt SPIR-V payload")
     previous = table_end
     for start, end in sorted(ranges):
         if start < previous:
             raise ValueError("Overlapping SPIR-V payloads")
         previous = end
+    if canonical:
+        # `encode` writes the entries in key order with their payloads packed
+        # contiguously in that same order right after the table.
+        expected = table_end
+        for start, end in ranges:
+            if start != expected:
+                raise ValueError("Portable pack is not canonical")
+            expected = end
+        if expected != len(data) or list(modules) != sorted(modules):
+            raise ValueError("Portable pack is not canonical")
     return schema, modules
 
 

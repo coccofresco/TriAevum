@@ -16,7 +16,7 @@ from pathlib import Path
 
 try:
     from .common import load_json_object
-    from .merge_shader_packs import decode, encode, MAX_BYTES
+    from .merge_shader_packs import decode, MAX_BYTES
     from .precompiled_titles import checked_file
     from .precompiled_title_layout import artifact
     from .release_platform import WINDOWS, for_target
@@ -25,7 +25,7 @@ try:
     from .shader_corpus_qualification import repository_reader, validate_qualification
 except ImportError:
     from common import load_json_object
-    from merge_shader_packs import decode, encode, MAX_BYTES
+    from merge_shader_packs import decode, MAX_BYTES
     from precompiled_titles import checked_file
     from precompiled_title_layout import artifact
     from release_platform import WINDOWS, for_target
@@ -50,11 +50,15 @@ def _validate_against_source_archive(root: Path, declared: dict, record: dict, *
 def read_portable_corpus(pack: Path):
     if pack.is_symlink() or not pack.is_file() or pack.stat().st_size > MAX_BYTES:
         raise ValueError('Invalid portable corpus file')
-    data = pack.read_bytes()
-    schema, modules = decode(data)
-    if encode(schema, modules) != data:
-        raise ValueError('Public corpus must be canonical, without unclaimed data')
-    return schema, modules
+    # The canonical layout is checked structurally: re-encoding the pack would
+    # hash every payload twice more, and the interpreter-side FNV hash was the
+    # whole cost of a release audit (ten minutes per pass on a 2 GB corpus).
+    try:
+        return decode(pack.read_bytes(), canonical=True)
+    except ValueError as exc:
+        if 'canonical' in str(exc):
+            raise ValueError('Public corpus must be canonical, without unclaimed data') from None
+        raise
 
 
 def read_pipeline_manifest(source: Path, schema: int):

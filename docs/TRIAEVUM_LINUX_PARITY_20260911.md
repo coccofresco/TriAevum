@@ -23,11 +23,11 @@ requesting layers. Do not call that zero Vulkan validation errors.
 ## Builds
 
 - Backup of previous mirror including local changes:
-  `/home/xander/triaevum-linux-before-94cb1c1.tar.gz`. Its old Git HEAD was not
+  `~/triaevum-linux-before-94cb1c1.tar.gz`. Its old Git HEAD was not
   its source identity. Archive files were compared byte-for-byte and only
   changed files replaced, retaining incremental build outputs.
-- Host: `/home/xander/triaevum-linux-build/TriAevum`, native Clang, three jobs.
-- Steam Runtime SDK: `/home/xander/triaevum-steamrt4-build/runtime/TriAevum`.
+- Host: `~/triaevum-linux-build/TriAevum`, native Clang, three jobs.
+- Steam Runtime SDK: `~/triaevum-steamrt4-build/runtime/TriAevum`.
   Runtime and game module require at most GLIBC 2.38. SDK dependency/ABI proof
   passes and rejects the empty title stub. The SDK runtime also completes the
   Wayland partial-progress replay, using the current host title module.
@@ -37,7 +37,7 @@ requesting layers. Do not call that zero Vulkan validation errors.
 - Forge/release: 346 tests, 11 skips, no failures; native detector and Tk
   widget enabled. Three new bundle tests also pass on Windows.
 
-Developer Python: `/home/xander/triaevum-pr6-probe-build/venv`, with repository
+Developer Python: `~/triaevum-pr6-probe-build/venv`, with repository
 root in PYTHONPATH. System Python initially lacked capstone/msgpack and Tk
 discovery. Use the native Tk library directory, not an old frozen Forge's
 entire `_internal` on LD_LIBRARY_PATH: the latter injects incompatible
@@ -53,14 +53,14 @@ overrides, standard discovery is unchanged.
 
 Host frozen Forge passes inventory and actual GUI smoke: language combo
 present, no clipped/unmapped widgets, prepare button tracks input. Output:
-`/home/xander/triaevum-linux-parity-20260911/forge-dist/TriAevumForge/`.
+`~/triaevum-linux-parity-20260911/forge-dist/TriAevumForge/`.
 It uses host Python/GLIBC and is **not a portable Flatpak artifact**. The Steam
 SDK lacks Python ensurepip; portable Forge provisioning/build remains pending.
 Do not substitute the host Forge in the existing installed Flatpak.
 
 ## Runtime Evidence
 
-Private root: `/home/xander/triaevum-linux-parity-20260911/`. `run.py`, isolated
+Private root: `~/triaevum-linux-parity-20260911/`. `run.py`, isolated
 invocations/configs, logs, GPU telemetry and runtime framebuffer captures.
 No game data, saves or captures are committed.
 

@@ -205,10 +205,10 @@ reduction or delayed missing-grass workaround has been shipped as a fix.
 ## Developer Reproduction
 
 - Authoritative checkout: `I:/TriAevum-public/source-repository-clean`.
-- Linux source mirror: `/home/xander/triaevum-linux`; SDK/build paths and
+- Linux source mirror: `~/triaevum-linux`; SDK/build paths and
   commands: [Steam Runtime build](TRIAEVUM_STEAM_RUNTIME_BUILD.md).
 - Private helpers: `I:/oot3dre_work/linux-port-proof/` and
-  `/home/xander/triaevum-flatpak-proof/`: `run-flatpak-frame-probe.py`,
+  `~/triaevum-flatpak-proof/`: `run-flatpak-frame-probe.py`,
   `analyze-scanout.py`, `x11-escape-smoke.py`, `refresh-proof-runtime.py`.
 - Private evidence: `~/.var/app/io.github.coccofresco.TriAevum/data/probes/`.
 - The probe helper creates independent configs and saves, uses bounded runs,

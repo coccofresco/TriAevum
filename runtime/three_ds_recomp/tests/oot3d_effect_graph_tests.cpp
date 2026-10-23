@@ -1405,6 +1405,35 @@ TEST(Oot3dCompositionSchedule,
     ASSERT_TRUE(schedule.ConsumeDraw(withUi.back(), &error));
     EXPECT_FALSE(ResolvePicaDisplayComposition(schedule, target).SceneResolved);
 
+    // The isolated title logo is an overlay like UI: a tail of its draws (opaque
+    // and transparent alike) ends the scene, and the late anchor lies before
+    // its first draw; it is no world geometry for the stage analysis.
+    auto withLogo = draws;
+    withLogo.push_back(CompositionDraw(23U, target, PicaCompositionDomain::Scene,
+                                      PicaCompositionLayer::OpaqueWorld,
+                                      PicaCompositionProvenance::NativeCmbDrawPass, 0x0030F4D0U));
+    withLogo.push_back(CompositionDraw(24U, target, PicaCompositionDomain::Scene,
+                                      PicaCompositionLayer::TransparentWorld,
+                                      PicaCompositionProvenance::NativeCmbDrawPass, 0x0030F4D0U));
+    withLogo[withLogo.size() - 2U].Composition.IsolatedLighting = true;
+    withLogo.back().Composition.IsolatedLighting = true;
+    ASSERT_TRUE(schedule.Compile({.SequenceId = 96U, .Draws = withLogo}, &error)) << error;
+    const auto* beforeLogo = schedule.FindAnchor(EffectStage::BeforeUi, target);
+    ASSERT_NE(beforeLogo, nullptr);
+    EXPECT_EQ(beforeLogo->BeforeSubmissionId, 23U);
+    EXPECT_FALSE(beforeLogo->AtTargetEnd);
+    EXPECT_EQ(FindPicaEffectPassAnchor(schedule, latePlan, target), beforeLogo);
+    ASSERT_NE(schedule.FindPublishedGeometryAnchor(target), nullptr);
+    EXPECT_EQ(schedule.FindPublishedGeometryAnchor(target)->BeforeSubmissionId, 21U);
+    for (const auto& draw : draws) ASSERT_TRUE(schedule.ConsumeDraw(draw, &error));
+    EXPECT_TRUE(ResolvePicaDisplayComposition(schedule, target).SceneResolved);
+    EXPECT_TRUE(schedule.Reached(*beforeLogo));
+    // A world draw after the logo withholds the boundary.
+    withLogo.push_back(draws[2]);
+    withLogo.back().SubmissionId = 25U;
+    ASSERT_TRUE(schedule.Compile({.SequenceId = 97U, .Draws = withLogo}, &error)) << error;
+    EXPECT_EQ(schedule.FindAnchor(EffectStage::BeforeUi, target), nullptr);
+
     // UI between scene draws withholds the late anchor, not the opaque start.
     std::swap(withUi[2].Domain, withUi[3].Domain);
     std::swap(withUi[2].Composition, withUi[3].Composition);

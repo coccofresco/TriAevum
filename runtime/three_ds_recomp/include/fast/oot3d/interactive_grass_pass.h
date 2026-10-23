@@ -63,6 +63,7 @@ class InteractiveGrassPass final {
     [[nodiscard]] const std::string& UnavailableReason() const;
 
   private:
+    void DrawPreparedCards(VkCommandBuffer commandBuffer, uint32_t width, uint32_t height, size_t pipelineIndex);
     struct Impl;
     std::unique_ptr<Impl> mImpl;
 };

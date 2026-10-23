@@ -117,7 +117,7 @@ def validate_run(package: Path, plugin: Path, process_manifest: Path,
     title = installation / "data/titles/validation"
     title.mkdir(parents=True)
     clone_validation_content(process_manifest, title, copy_inputs=relocate)
-    profile_path = installation / "TriAevum.launch.json"
+    profile_path = installation / "data/TriAevum.launch.json"
     active_path = installation / "data/active-title.json"
     with activation_transaction(installation, [
         profile_path, active_path, title / "forge-state.json",
@@ -141,7 +141,7 @@ def validate_run(package: Path, plugin: Path, process_manifest: Path,
         installation = moved
         title = installation / title_relative
         generation = installation / generation_relative
-        profile_path = installation / profile_path.name
+        profile_path = installation / "data/TriAevum.launch.json"
         forge.load_prepared_content(title, required_inputs=("code", "exheader", "romfs"))
     validate_installed_runtime(installation / "TriAevum.exe", title, installation / "data",
                               load_json_object(title / "forge-state.json")["runtime"])

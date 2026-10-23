@@ -538,6 +538,21 @@ class AzaharTexturePackRuntime::Impl {
     void Configure(AzaharTexturePackConfiguration configuration) {
         configuration = NormalizeConfiguration(std::move(configuration));
         std::scoped_lock lock(mMutex);
+        configuration.BaseDirectories = mBaseDirectories;
+        ApplyLocked(std::move(configuration));
+    }
+
+    void SetBaseDirectories(std::vector<std::filesystem::path> directories) {
+        for (auto& directory : directories) directory = directory.lexically_normal();
+        std::scoped_lock lock(mMutex);
+        mBaseDirectories = std::move(directories);
+        if (!mConfigured) return;
+        auto configuration = mConfiguration;
+        configuration.BaseDirectories = mBaseDirectories;
+        ApplyLocked(std::move(configuration));
+    }
+
+    void ApplyLocked(AzaharTexturePackConfiguration configuration) {
         if (mConfigured && configuration == mConfiguration) return;
         mConfiguration = std::move(configuration);
         mConfigured = true;
@@ -582,7 +597,7 @@ class AzaharTexturePackRuntime::Impl {
             if (!mConfigured) return {};
             if (!mIndexReady) return {AzaharTextureResolveState::Pending, 0U, nullptr};
             dumpEnabled = mConfiguration.DumpTextures;
-            loadEnabled = mConfiguration.LoadCustomTextures;
+            loadEnabled = LoadsTexturesLocked();
             dumpUsesNewHash = mDumpUsesNewHash;
             loadUsesNewHash = mPack.UseNewHash;
             generation = mGeneration;
@@ -610,7 +625,7 @@ class AzaharTexturePackRuntime::Impl {
         }
         if (!loadEnabled) return {AzaharTextureResolveState::Disabled, hash, nullptr, true, loadUsesNewHash};
         std::scoped_lock lock(mMutex);
-        if (generation != mGeneration || !mConfiguration.LoadCustomTextures) return {};
+        if (generation != mGeneration || !LoadsTexturesLocked()) return {};
         const auto indexed = mIndex.find(hash);
         if (indexed == mIndex.end()) return {AzaharTextureResolveState::Missing, hash, nullptr, true, mPack.UseNewHash};
         const auto cached = mReplacementCache.find(hash);
@@ -753,8 +768,11 @@ class AzaharTexturePackRuntime::Impl {
     }
 
   private:
+    bool LoadsTexturesLocked() const {
+        return mConfiguration.LoadCustomTextures || !mConfiguration.BaseDirectories.empty();
+    }
     AzaharTextureResolveResult PollLocked(uint64_t hash) const {
-        if (!mConfigured || !mConfiguration.LoadCustomTextures) return {};
+        if (!mConfigured || !LoadsTexturesLocked()) return {};
         if (const auto cached = mReplacementCache.find(hash); cached != mReplacementCache.end())
             return {AzaharTextureResolveState::Ready, hash, cached->second, true, mPack.UseNewHash};
         if (mFailedLoadHashes.contains(hash)) return {AzaharTextureResolveState::Failed, hash, nullptr, true, mPack.UseNewHash};
@@ -771,14 +789,37 @@ class AzaharTexturePackRuntime::Impl {
         PackState pack;
         bool dumpModern = true;
         size_t unsupported = 0;
-        std::string error;
+        std::string error, skipped;
         std::unordered_map<uint64_t, IndexedTexture> index;
         std::unordered_map<uint64_t, IndexedAzaharPbrMaterial> materials;
         try {
-            pack = ReadPackState(loadDirectory / "pack.json", &error);
-            if (!error.empty()) throw std::runtime_error(error);
-            index = IndexTexturePack(loadDirectory, pack, unsupported, materials, &error);
-            if (!error.empty()) throw std::runtime_error(error);
+            if (configuration.LoadCustomTextures) {
+                pack = ReadPackState(loadDirectory / "pack.json", &error);
+                if (!error.empty()) throw std::runtime_error(error);
+                index = IndexTexturePack(loadDirectory, pack, unsupported, materials, &error);
+                if (!error.empty()) throw std::runtime_error(error);
+            }
+            // Base packs fill the hashes the user's pack leaves, in order.
+            for (size_t base = 0; base < configuration.BaseDirectories.size(); ++base) {
+                const auto& directory = configuration.BaseDirectories[base];
+                const auto basePack = ReadPackState(directory / "pack.json", &error);
+                if (!error.empty()) throw std::runtime_error(error);
+                if (!configuration.LoadCustomTextures && base == 0) pack = basePack;
+                // One resolver hash mode: the user's pack keeps working and the
+                // base pack is left out, which F1's texture-pack status reports.
+                if (basePack.UseNewHash != pack.UseNewHash) {
+                    skipped = "texture pack " + directory.string() +
+                              " uses another hash mode than the user's pack; it is not loaded";
+                    continue;
+                }
+                size_t baseUnsupported = 0;
+                std::unordered_map<uint64_t, IndexedAzaharPbrMaterial> baseMaterials;
+                for (auto& [hash, texture] :
+                     IndexTexturePack(directory, basePack, baseUnsupported, baseMaterials, &error))
+                    index.try_emplace(hash, std::move(texture));
+                if (!error.empty()) throw std::runtime_error(error);
+                unsupported += baseUnsupported;
+            }
             if (configuration.DumpTextures) {
                 const auto dumpPack = ReadPackState(dumpDirectory / "pack.json", &error);
                 if (!error.empty()) throw std::runtime_error(error);
@@ -789,7 +830,7 @@ class AzaharTexturePackRuntime::Impl {
         std::scoped_lock lock(mMutex);
         mBuilding = false;
         if (serial == mRebuildSerial) {
-            mLastError = error;
+            mLastError = error.empty() ? skipped : error;
             if (error.empty() || !mIndexReady) {
                 if (!error.empty()) { index.clear(); materials.clear(); }
                 if (mIndexReady && pack.UseNewHash != mPack.UseNewHash) {
@@ -894,7 +935,7 @@ class AzaharTexturePackRuntime::Impl {
         auto& failed = job.Material ? mFailedMaterialHashes : mFailedLoadHashes;
         const auto found = pending.find(job.Hash);
         if (found != pending.end() && found->second == job.Generation) {
-            if (job.Generation == mGeneration && mConfiguration.LoadCustomTextures) {
+            if (job.Generation == mGeneration && LoadsTexturesLocked()) {
                 if (material && material->ColorReplacement && job.Material->BaseColorTexture.empty())
                     mReplacementCache.insert_or_assign(job.Hash, material->ColorReplacement);
                 if (material) mMaterialCache.insert_or_assign(job.Hash, std::move(material));
@@ -974,6 +1015,7 @@ class AzaharTexturePackRuntime::Impl {
     std::optional<AzaharMaterialParameterPreview> mPreview;
     std::string mPreviewSeamStatus;
     AzaharTexturePackConfiguration mConfiguration;
+    std::vector<std::filesystem::path> mBaseDirectories;
     std::filesystem::path mLoadDirectory, mDumpDirectory;
     PackState mPack;
     bool mDumpUsesNewHash = true;
@@ -1001,6 +1043,10 @@ AzaharTexturePackRuntime& AzaharTexturePackRuntime::Instance() {
 
 void AzaharTexturePackRuntime::Configure(AzaharTexturePackConfiguration configuration) {
     mImpl->Configure(std::move(configuration));
+}
+
+void AzaharTexturePackRuntime::SetBaseDirectories(std::vector<std::filesystem::path> directories) {
+    mImpl->SetBaseDirectories(std::move(directories));
 }
 
 void AzaharTexturePackRuntime::Reload() {

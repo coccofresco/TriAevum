@@ -3,7 +3,7 @@
 ## Inputs And Isolation
 
 User-provided archives, received 2026-09-10. Originals remain unchanged in
-`C:/Users/xander/Downloads/`; extracted copies and all captures are private,
+`%USERPROFILE%/Downloads/`; extracted copies and all captures are private,
 outside the repository and release inputs.
 
 | Archive | SHA-256 |

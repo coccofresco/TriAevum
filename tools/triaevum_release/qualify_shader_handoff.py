@@ -20,7 +20,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from common import atomic_write_json, load_json_object, sha256_file
+from common import atomic_write_json, load_json_object, release_manifest_path, sha256_file
 from shader_corpus_layout import validate_bundled_corpus
 from device_pipeline_preparation import (
     FORMAT as DEVICE_FORMAT, installation_cache_directory, prepare_device_pipelines,
@@ -72,7 +72,7 @@ def release_violations(stats: dict) -> list[str]:
 def packaged_title(package: Path, recipe: str | None) -> dict:
     """The packaged catalog's title, after the audit's own corpus check."""
     catalog = load_json_object(package / "recipes/precompiled-titles.json")
-    declared = {item["path"]: item for item in load_json_object(package / "release-manifest.json")["files"]}
+    declared = {item["path"]: item for item in load_json_object(release_manifest_path(package))["files"]}
     validate_bundled_corpus(package, catalog, declared)
     titles = [title for title in catalog["titles"] if recipe in (None, title["recipe"])]
     if len(titles) != 1:

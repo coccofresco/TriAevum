@@ -72,7 +72,7 @@ It does not insert mixed-header objects into the release cache. Link workers are
 limited to two, with a persistent ThinLTO cache for subsequent iterations.
 Production qualification must use the normal complete build/cache contract.
 
-Private artifacts: `C:/Users/xander/triaevum-aot-memory-region/`.
+Private artifacts: `%USERPROFILE%/triaevum-aot-memory-region/`.
 Frozen source manifest/module: `I:/TriAevum-aot-lab-evidence/baseline/`.
 Support library: `J:/TriAevum-verify-20260910/runtime/triaevum_title_whole_aot_support.lib`.
 Compiler: `I:/oot3dre_tools/llvm-22.1.6/bin/clang-cl.exe`.

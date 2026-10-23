@@ -532,6 +532,62 @@ R"json({
           "Width": 256
         },
         "Wrap": "Material"
+      },
+      {
+        "ActiveRects": [
+          [
+            0.5,
+            0.0,
+            1.0,
+            1.0
+          ]
+        ],
+        "Channel": "Green",
+        "InputBlack": 0.7739999890327454,
+        "InputWhite": 0.7749999761581421,
+        "Invert": true,
+        "MaximumSlopeDegrees": 48.0,
+        "NormalOffset": 0.5,
+        "OutputBlack": 0.0,
+        "OutputWhite": 1.0,
+        "ResponseExponent": 2.380000114440918,
+        "RuleId": 26,
+        "Target": {
+          "AssetName": "",
+          "Height": 128,
+          "MapperSlotMask": 7,
+          "Rgba8Hash": "aef1174a679fc132",
+          "Width": 256
+        },
+        "Wrap": "Material"
+      },
+      {
+        "ActiveRects": [
+          [
+            0.0,
+            0.0,
+            0.75,
+            0.5
+          ]
+        ],
+        "Channel": "Luminance",
+        "InputBlack": 0.6299999952316284,
+        "InputWhite": 0.6309999823570251,
+        "Invert": true,
+        "MaximumSlopeDegrees": 48.0,
+        "NormalOffset": 0.5,
+        "OutputBlack": 0.0,
+        "OutputWhite": 1.0,
+        "ResponseExponent": 8.0,
+        "RuleId": 27,
+        "Target": {
+          "AssetName": "",
+          "Height": 256,
+          "MapperSlotMask": 7,
+          "Rgba8Hash": "fa446d8abcaa5ce1",
+          "Width": 256
+        },
+        "Wrap": "Material"
       }
     ]
   }

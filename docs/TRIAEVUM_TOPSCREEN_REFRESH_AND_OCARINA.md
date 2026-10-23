@@ -92,7 +92,7 @@ python3 tools/triaevum_release/verify_topscreen_item_probes.py \
 ```
 
 The checker deliberately does not certify visuals or item effects. Private
-evidence lives under `/home/xander/triaevum-pipeline-live-proof/`:
+evidence lives under `~/triaevum-pipeline-live-proof/`:
 `native-save-items-{even,odd}` (before), `native-save-cadence-final-{even,odd}`,
 and `native-save-cadence-use-v2`. Fixture descriptions/timelines and the ocarina
 checkpoint are mirrored in `I:/oot3dre_work/pr13-native-save-fixtures/`.

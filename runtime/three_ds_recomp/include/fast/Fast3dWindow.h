@@ -112,6 +112,7 @@ class Fast3dWindow : public Ship::Window {
     std::shared_ptr<Interpreter> mInterpreter = nullptr;
     std::shared_ptr<GfxDebugger> mGfxDebugger;
     bool mOot3dVulkanEnabled = false;
+    bool mInitialized = false;
     MouseCapturePolicy mMouseCapturePolicy;
     static std::unordered_set<int32_t> sPressedKeys;
 };

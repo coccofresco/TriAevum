@@ -602,7 +602,7 @@ Tutti i comandi seguenti sono da eseguire durante l'implementazione, non risulta
 ```powershell
 $bin = 'I:/TriAevum-public/ui-dependencies/bin'
 $build = 'J:/TriAevum-verify-20260910/runtime'
-$ninja = 'C:/Users/xander/.local/bin/ninja.exe'
+$ninja = '%USERPROFILE%/.local/bin/ninja.exe'
 $install = 'I:/TriAevum-public/releases/v0.6.0-alpha.3b/qualification-windows'
 $diag = 'I:/_triaevum_work'
 $timeline = 'tools/oot3d/native_game_runtime/input_timelines/native_cutscene_dialogue_advance.json'

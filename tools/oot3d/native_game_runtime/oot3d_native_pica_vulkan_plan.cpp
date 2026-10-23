@@ -640,12 +640,15 @@ void AttachOot3dPicaRestoredUberFragment(Oot3dPicaVulkanDrawPlan& plan) {
         Oot3d::Renderer::PicaShaderSourceIdentity Identity;
         Oot3d::Renderer::PicaShaderHookLayout Hooks;
     };
-    // Four immutable programs, generated once on first use.
-    static const std::array<Base, 4> bases = [] {
-        std::array<Base, 4> result;
+    // Six immutable programs (lighting x integer texture 0), generated once
+    // on first use.
+    constexpr size_t kLightings = std::size(kOot3dPicaParametricLightings);
+    static const std::array<Base, kLightings * 2U> bases = [] {
+        std::array<Base, kLightings * 2U> result;
         for (unsigned index = 0; index < result.size(); ++index) {
             Oot3dPicaGeneratedFragmentShader generated;
-            if (!GenerateOot3dPicaParametricBaseFragmentShader((index & 1U) != 0U, (index & 2U) != 0U, generated))
+            if (!GenerateOot3dPicaParametricBaseFragmentShader(kOot3dPicaParametricLightings[index % kLightings],
+                                                               index >= kLightings, generated))
                 continue;
             result[index].StateKey = generated.StateKey;
             result[index].Identity = generated.SourceIdentity;
@@ -656,7 +659,13 @@ void AttachOot3dPicaRestoredUberFragment(Oot3dPicaVulkanDrawPlan& plan) {
     }();
     if (plan.State.OutputMerger.FragmentOperationMode == 3U) return;
     const bool integerTexture0 = plan.State.Textures[0].Type == 2U && plan.State.Textures[0].Enabled;
-    const auto& base = bases[(plan.FragmentFeatures.FragmentLightingEnabled ? 1U : 0U) | (integerTexture0 ? 2U : 0U)];
+    // The specialized program binds the lookup tables under the same rule
+    // (the restored plan keeps no lighting registers).
+    const auto lighting = !plan.FragmentFeatures.FragmentLightingEnabled ? Oot3dPicaParametricLighting::Off
+        : plan.ResolvedFragmentShaderSource().find("usampler2D pica_lighting_lut;") != std::string_view::npos
+            ? Oot3dPicaParametricLighting::LookupTables
+            : Oot3dPicaParametricLighting::NoLookupTables;
+    const auto& base = bases[static_cast<size_t>(lighting) + (integerTexture0 ? kLightings : 0U)];
     if (base.Source == nullptr) return;
     plan.UberFragmentShader.StateKey = base.StateKey;
     plan.UberFragmentShader.SourceIdentity = base.Identity;

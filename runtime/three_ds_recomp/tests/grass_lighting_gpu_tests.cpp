@@ -132,9 +132,14 @@ void main() {
     vec4 blade_normal_guide=vec4(c.normal.xyz*0.5+0.5,0);
     vec3 blade_view_direction=c.view.xyz;
     float blade_rim_weight=c.controls.w;
+    // grass_write_fragment's parameters, as the blade fragment passes them.
+    vec4 resolved_color=blade_color; vec4 normal_guide=blade_normal_guide;
+    vec3 view_direction=blade_view_direction; float rim_weight=blade_rim_weight;
+    vec3 lit_ceiling=blade_lit_ceiling;
 )glsl";
     // Execute the actual fragment's complete colour/rim/ceiling block, before fog.
-    shader += Slice(fragment,"    vec4 resolved_color = blade_color;","#if GRASS_AUXILIARY_OUTPUTS");
+    shader += Slice(fragment,"    ToonSurfaceParameters toon = environment_state.records[grass.flags.w].toon;",
+                    "#if GRASS_AUXILIARY_OUTPUTS");
     shader += R"glsl(
     outputs.values[i]=Result(vec4(lighting,1),vec4(ground,1),resolved_color,
         vec4(old_color,1),vec4(blade_lit_ceiling,1));
@@ -151,8 +156,8 @@ void CompileVariants() {
         Require(result.GetCompilationStatus()==shaderc_compilation_status_success,result.GetErrorMessage().c_str());
     };
     check(BuildGrassVertexShader(),shaderc_vertex_shader);
-    for (bool raster : {false,true}) for (bool aux : {false,true}) {
-        auto source=BuildGrassFragmentShader(raster);
+    for (int variant : {0,1,2}) for (bool aux : {false,true}) {
+        auto source=BuildGrassFragmentShader(variant!=0,variant==2);
         source.insert(source.find('\n')+1,aux?"#define GRASS_AUXILIARY_OUTPUTS 1\n":"#define GRASS_AUXILIARY_OUTPUTS 0\n");
         check(source,shaderc_fragment_shader);
     }

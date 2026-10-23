@@ -26,6 +26,7 @@ their imported source.
 | Capstone 5.0.7 embedded by Forge | BSD-style | `LICENSES/Capstone-BSD.txt` |
 | PyInstaller 6.16.0 bootloader | GPL-2.0-or-later with bootloader exception | `LICENSES/PyInstaller-GPL-2.0-or-later-with-bootloader-exception.txt` |
 | LLVM 22 Forge tools (`llc`, `lld-link`) | Apache-2.0 WITH LLVM-exception | `LICENSES/shaderc-Apache-2.0.txt` plus `LICENSES/LLVM-exception.txt` |
+| Fira Sans Condensed (in-game menu font atlases, compiled into the runtime) | SIL OFL 1.1 | `LICENSES/FiraSans-OFL.txt` and `tools/oot3d/ui_menu/font/OFL.txt` |
 
 The public packager must include the root `LICENSE` and copy applicable donor
 texts into its own `LICENSES` directory. This index does not replace any

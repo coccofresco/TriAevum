@@ -32,8 +32,9 @@ No permission is granted here for:
 - patches, textures or payloads from the TopScreen mod or another mod unless
   their respective author has granted redistribution permission. The two
   SingleScreen 3.0 files in `runtime/triaevum_resources/topscreen/singlescreen-3.0/`
-  are shipped with their author's permission and remain the author's; see
-  `LICENSES/SingleScreen-3.0.md`;
+  and the SingleScreen 3.1 HD font in
+  `runtime/triaevum_resources/topscreen/singlescreen-3.1/` remain the author's;
+  see `LICENSES/SingleScreen-3.0.md`;
 - the iMMERSE module, `runtime/three_ds_recomp/src/fast/immerse/` (MXAO by
   Pascal Gilcher); see [the exception below](#exception-the-immerse-module);
 - the DLSS module, `runtime/three_ds_recomp/src/fast/dlss/`, and NVIDIA's DLSS

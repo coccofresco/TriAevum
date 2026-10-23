@@ -48,6 +48,9 @@ struct GraphicsDisplayMetrics {
     uint32_t SceneWidth = 0, SceneHeight = 0;
     float InternalScale = 1.0F;
     WindowMode Window = WindowMode::Windowed;
+    // The picture inside the output (the aspect ratio's letterbox); the whole
+    // output when it is not known yet.
+    uint32_t PictureWidth = 0, PictureHeight = 0;
 };
 
 // Observed state of the global illumination provider, never persisted: a

@@ -105,7 +105,7 @@ our live checkpoint; do not promote them based only on the PR's classification.
 
 Linux NRI/Vulkan, native 30 Hz without interpolation, isolated copies of the
 original populated save. Private evidence:
-`/home/xander/triaevum-pipeline-live-proof/ocarina-owner-final/` and
+`~/triaevum-pipeline-live-proof/ocarina-owner-final/` and
 `ocarina-regression-{even,odd,title}/`. The final module/test extraction and
 release/repress fix were rerun in `ocarina-owner-module-final/`: all ten
 ocarina captures match the preceding implementation byte-for-byte.

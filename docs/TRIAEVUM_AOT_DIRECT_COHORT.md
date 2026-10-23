@@ -83,7 +83,7 @@ the number of selected functions and presented as a whole-game improvement.
 
 ## Measured outcome
 
-Private evidence: `C:/Users/xander/triaevum-aot-causal-analysis/`.
+Private evidence: `%USERPROFILE%/triaevum-aot-causal-analysis/`.
 
 | Series | Control pre-NRI mean | Candidate pre-NRI mean | Candidate time change |
 | --- | ---: | ---: | ---: |

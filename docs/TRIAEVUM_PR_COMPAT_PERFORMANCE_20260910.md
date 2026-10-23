@@ -109,7 +109,7 @@ No Mac device was available. This contribution does not establish macOS support.
   the interpolated/effects runs are not byte-identical or a deterministic
   visual-equivalence test. The native-fidelity comparison above is separate.
 
-Private evidence: `/home/xander/triaevum-pipeline-live-proof/` directories
+Private evidence: `~/triaevum-pipeline-live-proof/` directories
 `pr-compat-native-title`, `pr-review-cache`, `pr-review-cache-report.json`,
 `pr11-effects` and `pr11-effects-prewarm`. The latter two contain inventory,
 compilation/preparation reports, launch counters and framebuffer captures.

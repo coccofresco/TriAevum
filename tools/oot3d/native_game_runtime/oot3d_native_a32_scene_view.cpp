@@ -61,6 +61,16 @@ void NativeA32SceneViewProbe::ObserveExternalSceneEnvironment(
   mPerspective->WorldIdentity = state ? mEnvironment.Epoch() : 0;
 }
 
+void NativeA32SceneViewProbe::ObserveFileSelect() {
+  ++mStats.FileSelectObservations;
+  mFileSelectRefreshesLeft = kOot3dFileSelectOwnershipRefreshes;
+}
+
+void NativeA32SceneViewProbe::BeginGuestRefresh() {
+  if (mFileSelectRefreshesLeft != 0U)
+    --mFileSelectRefreshesLeft;
+}
+
 void NativeA32SceneViewProbe::ObservePerspective(
     uint32_t guestFunction, uint32_t guestReturnAddress, float left,
     float right, float bottom, float top, float nearPlane, float farPlane) {
@@ -124,9 +134,15 @@ NativeA32SceneViewProbe::Capture(oot3d::recomp::a32::MemoryBus &memory) {
 
   snapshot.PlayStateAddress = mStats.LastPlayStateAddress;
   // Same PlayState identity used by native scene transitions (not a room ID).
+  // While the file select runs, the title scene behind its cards is the file
+  // select's screen whatever the block reads (the title demo's scene while
+  // that PlayState still updates, scene 0 otherwise): its identity is its own.
+  snapshot.FileSelect = mFileSelectRefreshesLeft != 0U;
   uint16_t sceneId = 0xFFFFU;
-  if (memory.Read16(snapshot.PlayStateAddress + 0x104U, &sceneId) &&
-      sceneId < 0x8000U)
+  if (snapshot.FileSelect)
+    snapshot.SceneId = kOot3dFileSelectSceneId;
+  else if (memory.Read16(snapshot.PlayStateAddress + 0x104U, &sceneId) &&
+           sceneId < 0x8000U)
     snapshot.SceneId = sceneId;
   const uint32_t view = snapshot.PlayStateAddress + kPlayViewOffset;
   const bool read =
@@ -153,6 +169,7 @@ NativeA32SceneViewProbe::Capture(oot3d::recomp::a32::MemoryBus &memory) {
 
 void NativeA32SceneViewProbe::Reset() {
   mStats.LastPlayStateAddress = 0U;
+  mFileSelectRefreshesLeft = 0U;
   mPerspective.reset();
   mEnvironment.Reset();
   mLastError.clear();

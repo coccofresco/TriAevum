@@ -34,10 +34,11 @@ constexpr std::uint32_t kLandingRollActionTable = 0x0053A790U;
 constexpr std::uint32_t kPlayStatePointer = 0x005043D4U + 0x0CU;
 constexpr std::uint32_t kSaveContext = 0x00587958U;
 constexpr std::uint32_t kSaveLinkAge = kSaveContext + 0x04U;      // 0 adult, 1 child
-constexpr std::uint32_t kSaveDashEnabled = kSaveContext + 0x44U;  // s16
+constexpr std::uint32_t kSaveDashEnabled = kSaveContext + 0x44U;  // s16 health: alive
 constexpr std::uint32_t kPlayStateMode = 0x100U;                  // 3 = gameplay
 constexpr std::uint32_t kPlayStateSubMode = 0x101U;               // 2 = running
-constexpr std::uint32_t kPlayStateFrameFlags = 0x14U;
+// GameState input[0].cur.button; bit 0 is A, so the query runs while A is held.
+constexpr std::uint32_t kPlayStateButtons = 0x14U;
 constexpr std::uint32_t kPlayStatePlayer = 0x20ACU;
 constexpr std::uint32_t kDashBlockedQuery = 0x0037577CU; // FUN_0037577c(play)
 constexpr std::uint32_t kPlayerRollAction = 0x284U;
@@ -72,7 +73,8 @@ constexpr std::uint32_t kMoveSpeedReturn = 0x00251D4CU;
 constexpr std::uint32_t kMoveSpeedCall = 0x0035FB14U; // Actor_UpdateVelocityXZGravity
 constexpr std::uint32_t kRollSpeedReturn = 0x002BE8BCU;
 constexpr std::uint32_t kRollSpeedCall = 0x002DD8B0U;
-constexpr std::uint32_t kDashRunSkip = 0x00129680U;
+// Navi's "in the hat" block: state 8, then the native hide call.
+constexpr std::uint32_t kNaviInHat = 0x00129680U;
 
 // 3.1 dash cross-fade (0x005D11A8, literals 0x005D14EC..0x005D151C).
 constexpr std::uint32_t kPlayStateFrames = 0x5BF4U;
@@ -350,6 +352,24 @@ bool TopScreenGameplayRuntime::DashStateEntry(oot3d::recomp::a32::GuestState &st
   }
   // 0x005D9420..0x005D947C: the cheap preconditions before the native query.
   const std::uint32_t play = Read32(kPlayStatePointer);
+  // TRIAEVUM_DASH_TRACE=1: per Player_Update, the dash state, Link's
+  // position, linear speed (+0x6C), action (+0x284) and the Navi flag
+  // (+0x1714 bit 20).
+  {
+    static const bool dashTrace = std::getenv("TRIAEVUM_DASH_TRACE") != nullptr;
+    static long dashTraceCalls = 0;
+    if (dashTrace && play != 0U) {
+      const std::uint32_t player = Read32(play + kPlayStatePlayer);
+      if (player != 0U) {
+        std::fprintf(stderr,
+                     "TRIAEVUM_DASH update=%ld roll=%d run_scale=%.3f roll_scale=%.3f answer=%d pos=%.1f,%.1f,%.1f speed=%.3f action=%08x age=%u flags2=%08x\n",
+                     ++dashTraceCalls, mInRoll ? 1 : 0, mRunScale, mRollScale, mAnswerDash ? 1 : 0,
+                     Float(Read32(player + 0x28U)), Float(Read32(player + 0x2CU)), Float(Read32(player + 0x30U)),
+                     Float(Read32(player + 0x6CU)), Read32(player + kPlayerRollAction),
+                     Read32(player + kPlayerAnimationAge) & 0xFFU, Read32(player + 0x1714U));
+      }
+    }
+  }
   bool eligible = mConfig.RollDash && play != 0U;
   if (eligible) {
     std::uint8_t mode = 0, subMode = 0;
@@ -358,7 +378,7 @@ bool TopScreenGameplayRuntime::DashStateEntry(oot3d::recomp::a32::GuestState &st
                mMemory.Read8(play + kPlayStateSubMode, &subMode) && subMode == 2U &&
                Read32(play + kPlayStatePlayer) != 0U &&
                mMemory.Read16(kSaveDashEnabled, &dashEnabled) && dashEnabled != 0U &&
-               (Read32(play + kPlayStateFrameFlags) & 1U) != 0U;
+               (Read32(play + kPlayStateButtons) & 1U) != 0U;
   }
   if (!eligible) {
     UpdateDashState(false);
@@ -602,11 +622,14 @@ bool TopScreenGameplayRuntime::DashSpeedSite(std::uint32_t pc,
     Branch(state, pc, kMoveSpeedCall, result, blocksConsumed);
     return true;
   }
-  case kTopScreenDashRunSite:
-    // The dash keeps the run going: skip the run-end flag (+0x714 0x100000).
+  case kTopScreenDashRunSite: {
+    // Navi's reach timer expired while Link dashes: into the hat (as 3.0
+    // and 3.1 do) instead of the native give-up that leaves her out.
     if (!mInRoll) return false;
-    Branch(state, pc, kDashRunSkip, result, blocksConsumed);
+    ++mDashNaviHides;
+    Branch(state, pc, kNaviInHat, result, blocksConsumed);
     return true;
+  }
   default:
     return false;
   }

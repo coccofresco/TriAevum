@@ -13,11 +13,11 @@ import zipfile
 
 try:
     from .audit_release import DEFAULT_POLICY, audit_release
-    from .common import load_json_object, normalize_relative_path, sha256_file
+    from .common import load_json_object, normalize_relative_path, release_manifest_path, sha256_file
     from .release_platform import WINDOWS, for_target
 except ImportError:
     from audit_release import DEFAULT_POLICY, audit_release
-    from common import load_json_object, normalize_relative_path, sha256_file
+    from common import load_json_object, normalize_relative_path, release_manifest_path, sha256_file
     from release_platform import WINDOWS, for_target
 
 
@@ -31,13 +31,14 @@ def create_release_archive(root: Path, output: Path, *, policy_path: Path = DEFA
     audit = audit_release(root, policy_path=policy_path)
     if not audit.ok:
         raise ValueError("release archive audit failed:\n" + "\n".join(audit.errors))
-    manifest = load_json_object(root / "release-manifest.json")
+    manifest_path = release_manifest_path(root)
+    manifest = load_json_object(manifest_path)
     platform = for_target(manifest["release"].get("target", WINDOWS.target))
     if not output.name.endswith(platform.archive_suffix):
         raise ValueError(f"{platform.target} requires a {platform.archive_suffix} archive")
     prefix = normalize_relative_path(root.name)
     entries = {item["path"]: item for item in manifest["files"]}
-    entries["release-manifest.json"] = {"role": "manifest"}
+    entries[manifest_path.relative_to(root).as_posix()] = {"role": "manifest"}
     # Never recursively archive an installation: only the audited public inventory.
     paths = sorted(entries)
     directories = {prefix}

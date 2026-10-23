@@ -11,6 +11,7 @@ add_executable(triaevum_f1_settings_smoke EXCLUDE_FROM_ALL
     f1_settings_panel_smoke.cpp
     ../../oot3d/native_game_runtime/oot3d_native_controls_settings_panel.cpp
     ../../oot3d/native_game_runtime/oot3d_top_screen_settings_panel.cpp
+    ../../oot3d/native_game_runtime/oot3d_photo_mode_panel.cpp
     ../../oot3d/native_game_runtime/oot3d_game_language.cpp
     ../../oot3d/native_game_runtime/oot3d_game_language_panel.cpp
     ../../oot3d/native_game_runtime/oot3d_scene_environment.cpp

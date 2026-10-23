@@ -12,6 +12,7 @@ set(_oot3d_native_a32_ctr_host_sources
     tools/oot3d/native_game_runtime/oot3d_native_a32_ctr_host_fs.cpp
     tools/oot3d/native_game_runtime/oot3d_native_a32_ctr_host_state.cpp
     tools/oot3d/native_game_runtime/oot3d_native_a32_romfs_overlay.cpp
+    tools/oot3d/native_game_runtime/oot3d_native_a32_romfs_layers.cpp
     tools/oot3d/native_game_runtime/oot3d_native_a32_dsp_hle.cpp
     tools/oot3d/native_game_runtime/oot3d_native_a32_dsp_memory_adapter.cpp
     tools/oot3d/third_party/azahar_audio/audio_core/codec.cpp
@@ -295,6 +296,14 @@ add_executable(oot3d_native_a32_romfs_overlay_tests EXCLUDE_FROM_ALL
 target_link_libraries(oot3d_native_a32_romfs_overlay_tests PRIVATE
     oot3d_native_a32_ctr_host)
 oot3d_target_defaults(oot3d_native_a32_romfs_overlay_tests FOLDER Tests)
+
+add_executable(oot3d_native_a32_romfs_layers_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/oot3d_native_a32_romfs_layers_tests.cpp
+)
+target_link_libraries(oot3d_native_a32_romfs_layers_tests PRIVATE
+    oot3d_native_a32_ctr_host)
+oot3d_target_defaults(oot3d_native_a32_romfs_layers_tests FOLDER Tests)
+
 # Exercise FS IPC through the same service-only host used by the product module.
 add_executable(oot3d_native_a32_ctr_fs_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_a32_ctr_fs_tests.cpp

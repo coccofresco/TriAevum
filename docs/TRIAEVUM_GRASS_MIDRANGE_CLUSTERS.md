@@ -85,7 +85,7 @@ Framebuffer sidecars now record successful Grass draws and cluster counts.
 The harness rejects absent Grass GPU timings or inactive experimental draws.
 An initial shader-compilation failure was corrected and its timings discarded.
 
-Private evidence root: `C:/Users/xander/triaevum-verify-20260911/`.
+Private evidence root: `%USERPROFILE%/triaevum-verify-20260911/`.
 Protocol: boot through 1320 fixed native 30 Hz steps, 180 warmup steps,
 1280x720, no interpolation, VSync or pacing in throughput runs. Captures run
 separately. GPU means use windows [270,330), [810,870), [990,1050),

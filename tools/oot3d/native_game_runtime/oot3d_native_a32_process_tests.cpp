@@ -594,6 +594,56 @@ void TestPrioritySchedulerAndTls(bool testScheduler = true) {
            "foreground service work must retain its full dispatch budget");
 }
 
+void TestStoppedThreadRunKind() {
+    using Kind = Oot3dNativeGame::NativeA32ProcessRunKind;
+    using Oot3dNativeGame::ResolveStoppedThreadRunKind;
+    Expect(ResolveStoppedThreadRunKind(Kind::Terminated, false) ==
+                   Kind::Waiting &&
+               ResolveStoppedThreadRunKind(Kind::Terminated, true) ==
+                   Kind::Terminated &&
+               ResolveStoppedThreadRunKind(Kind::Waiting, false) ==
+                   Kind::Waiting &&
+               ResolveStoppedThreadRunKind(Kind::Waiting, true) ==
+                   Kind::Terminated &&
+               ResolveStoppedThreadRunKind(Kind::Faulted, false) ==
+                   Kind::Faulted,
+           "a thread's exit must end the process only with its last thread");
+}
+
+void TestThreadExitWhileOthersWait() {
+    const auto registry = MakeTestRegistry();
+    TestHostServices services;
+    Oot3dNativeGame::NativeA32Process process(registry, services);
+    const std::array<uint8_t, 0x20> code{};
+    std::string error;
+    Expect(process.MapRegion(
+               {"text", kEntry, code.size(), false, true, code}, &error),
+           "map thread-exit text");
+    Expect(process.MapRegion({"data", kData, 0x100U, true, false, {}},
+                             &error),
+           "map thread-exit data");
+    Expect(process.CreatePrimaryThread(
+               {kEntry, kStack, 0x1000U, kTls, 0x1000U, 0,
+                0, 0x10U, 0x03C00010U, 48U},
+               &error),
+           "create thread-exit primary thread");
+    // The primary thread waits (SVC 1); the lower-priority worker then
+    // exits (SVC 3), as the movie decoder's thread does when a vision ends.
+    const auto worker = process.CreateThread(
+        {kEntry + 0x10U, 0U, kData + 0x100U, 0x10U, 0x03C00000U, 50U},
+        &error);
+    Expect(worker.has_value(), "create thread-exit worker");
+
+    const auto result = process.Run();
+    Expect(process.ThreadStatus(*worker) ==
+                   Oot3dNativeGame::NativeA32ThreadStatus::Terminated &&
+               process.PrimaryThreadStatus() ==
+                   Oot3dNativeGame::NativeA32ThreadStatus::Waiting &&
+               result.Kind ==
+                   Oot3dNativeGame::NativeA32ProcessRunKind::Waiting,
+           "one thread's exit must not end a process whose threads wait");
+}
+
 void TestProcessStateRoundTrip() {
     const auto registry = MakeTestRegistry();
     TestHostServices services;
@@ -1995,6 +2045,7 @@ int main(int argc, char** argv) {
         TestMemoryContract();
         TestMemoryFastBlockEquivalence();
         TestMemoryRangeGenerations();
+        TestStoppedThreadRunKind();
 #if defined(OOT3D_NATIVE_A32_AOT_TESTS)
         TestWholeAotShiftAndFlagSemantics();
 #if defined(OOT3D_NATIVE_WHOLE_AOT_TESTS)
@@ -2012,6 +2063,7 @@ int main(int argc, char** argv) {
         TestPersistentProcess();
         TestPrioritySchedulerAndTls();
         TestYieldRotatesEqualPriority();
+        TestThreadExitWhileOthersWait();
         TestProcessStateRoundTrip();
         TestFallbackBoundary();
         TestBlockEntryCallback();

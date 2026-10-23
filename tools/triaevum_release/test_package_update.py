@@ -15,7 +15,7 @@ class PackageUpdateTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.platform = host_platform()
-        self.exe = self.root / self.platform.runtime
+        self.exe = self.root / self.platform.installed_runtime
         self.exe.write_bytes(b'new runtime')
         self.title = self.root / 'data/titles/test'
         self.title.mkdir(parents=True)

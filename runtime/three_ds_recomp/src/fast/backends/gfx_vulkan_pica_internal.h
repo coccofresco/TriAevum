@@ -147,6 +147,16 @@ Oot3d::PicaSceneFrontFace ToPicaSceneFrontFace(const GfxNativePicaDrawView& draw
                                                                      : Oot3d::PicaSceneFrontFace::CounterClockwise;
 }
 
+// A draw composited over the completed scene (the schedule's overlay tail):
+// native UI, or a scene draw the title lights as an object of its own (the
+// title logo). The scene boundary before the first of them resolves the
+// scene stages; what they draw is laid over that result and never read by it.
+bool NativeSceneOverlayDraw(const GfxNativePicaDrawView& draw) noexcept {
+    return draw.CompositionDomain == Renderer3ds::PicaCompositionDomain::Ui ||
+           (draw.CompositionDomain == Renderer3ds::PicaCompositionDomain::Scene &&
+            draw.Composition.IsolatedLighting);
+}
+
 // Opaque-geometry admission from the draw's own state, shared by shadow
 // casters and the scene distance field: depth-writing, colour-writing and
 // without an alpha cutout, which a depth-only caster would draw solid.

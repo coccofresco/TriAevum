@@ -17,7 +17,7 @@ class InstalledRuntimeTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        self.exe = self.root / host_platform().runtime
+        self.exe = self.root / host_platform().installed_runtime
         self.exe.write_bytes(b"host")
         self.plugin = self.root / host_platform().title_module
         self.plugin.write_bytes(b"title")
@@ -74,7 +74,7 @@ class InstalledRuntimeTests(unittest.TestCase):
     def test_launcher_uses_selected_data_and_validated_profile(self):
         active = SimpleNamespace(directory=self.title)
         prepared = SimpleNamespace(state={"runtime": self.receipt})
-        with (patch("forge_gui.runtime_path", return_value=self.exe),
+        with (patch("forge_gui.installation_root", return_value=self.root),
               patch("forge_gui.load_active_title", return_value=active) as load,
               patch("forge_gui.forge.load_prepared_content", return_value=prepared),
               patch("forge_gui.subprocess.Popen") as launch):
@@ -109,7 +109,7 @@ class InstalledRuntimeTests(unittest.TestCase):
         from installation_context import expand_profile_argument
         package = self.root / "immutable package"
         package.mkdir()
-        executable = package / host_platform().runtime
+        executable = package / host_platform().installed_runtime
         executable.write_bytes(b"read-only runtime")
         incoming = package / host_platform().title_module
         incoming.write_bytes(b"read-only title")
@@ -202,7 +202,7 @@ class InstalledRuntimeTests(unittest.TestCase):
 
     def test_launcher_refuses_pending_activation_before_loading_title(self):
         atomic_write_json(journal_path(self.root), {})
-        with (patch("forge_gui.runtime_path", return_value=self.exe),
+        with (patch("forge_gui.installation_root", return_value=self.root),
               patch("forge_gui.load_active_title") as load,
               patch("forge_gui.subprocess.Popen") as launch):
             with self.assertRaisesRegex(forge.ForgeError, "interrupted"):

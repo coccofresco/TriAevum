@@ -146,5 +146,5 @@ python tools/oot3d/native_pica_frontend/inspect_mmj_shader_cache.py --input PRIV
 Local evidence: `I:/oot3dre_work/citra-cache-review/mmj/`, including all four
 downloaded shader/metadata pairs, `inspection.json`, `validation.json`, and the
 read-only MMJ source references under `source/`.
-Linux evidence: `/home/xander/triaevum-android-build/mmj-validation.json`; inputs
+Linux evidence: `~/triaevum-android-build/mmj-validation.json`; inputs
 under `current/` and `26/`. No game/title rebuild or Android APK install was needed.

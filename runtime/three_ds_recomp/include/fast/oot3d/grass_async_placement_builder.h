@@ -78,6 +78,7 @@ struct GrassAsyncPlacementStats {
     uint64_t PendingHits = 0U;
     uint64_t Builds = 0U;
     uint64_t Failures = 0U;
+    uint64_t Evictions = 0U;
     uint64_t DiskHits = 0, DiskMisses = 0, DiskRejects = 0, DiskWrites = 0;
     size_t Entries = 0U;
     size_t Pending = 0U;

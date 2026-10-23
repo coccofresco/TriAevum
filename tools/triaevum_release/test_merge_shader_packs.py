@@ -58,6 +58,43 @@ class MergeShaderPacksTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             decode(data)
 
+    def test_canonical_layout(self):
+        from merge_shader_packs import ENTRY, HEADER, binary_hash
+        modules = {KEY: SPIRV, (3, 4, 5, 6): SPIRV + bytes(4)}
+        data = encode(3, modules)
+        self.assertEqual(decode(data, canonical=True), (3, modules))
+        # Trailing unclaimed bytes, entries out of key order, and a gap before a
+        # payload all decode but are not the canonical public layout.
+        with self.assertRaises(ValueError):
+            decode(data + bytes(4), canonical=True)
+        swapped = bytearray(data)
+        swapped[HEADER.size:HEADER.size + ENTRY.size], swapped[HEADER.size + ENTRY.size:HEADER.size + 2 * ENTRY.size] = (
+            data[HEADER.size + ENTRY.size:HEADER.size + 2 * ENTRY.size], data[HEADER.size:HEADER.size + ENTRY.size])
+        self.assertEqual(decode(swapped), (3, modules))
+        with self.assertRaises(ValueError):
+            decode(swapped, canonical=True)
+        table_end = HEADER.size + 2 * ENTRY.size
+        gapped = bytearray(HEADER.pack(b"O3PSAOT\0", 1, 3, 2, 0))
+        offset = table_end + 4
+        for (stage, primary, secondary, size), payload in sorted(modules.items()):
+            gapped += ENTRY.pack(stage, 0, primary, secondary, size, len(payload) // 4, 0, offset, binary_hash(payload))
+            offset += len(payload)
+        gapped += bytes(4) + SPIRV + SPIRV + bytes(4)
+        self.assertEqual(decode(gapped), (3, modules))
+        with self.assertRaises(ValueError):
+            decode(gapped, canonical=True)
+
+    def test_parallel_hashes_match_serial(self):
+        import merge_shader_packs as packs
+        payloads = [SPIRV + bytes([i]) * 1024 for i in range(64)]
+        serial = [packs.binary_hash(payload) for payload in payloads]
+        threshold = packs.PARALLEL_HASH_BYTES
+        packs.PARALLEL_HASH_BYTES = 0
+        try:
+            self.assertEqual(packs.payload_hashes(payloads), serial)
+        finally:
+            packs.PARALLEL_HASH_BYTES = threshold
+
 
 if __name__ == "__main__":
     unittest.main()

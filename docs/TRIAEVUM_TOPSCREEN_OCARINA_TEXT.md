@@ -80,12 +80,12 @@ savedata fields or savestate format were added.
 Build/test commands on the Linux host:
 
 ```sh
-cmake --build /home/xander/triaevum-linux-build --parallel 3 --target \
+cmake --build ~/triaevum-linux-build --parallel 3 --target \
   oot3d_native_game oot3d_top_screen_ocarina_text_runtime_tests \
   oot3d_top_screen_mod_profile_tests oot3d_native_ui_texture_provider_tests
-/home/xander/triaevum-linux-build/oot3d_top_screen_ocarina_text_runtime_tests
-/home/xander/triaevum-linux-build/oot3d_top_screen_mod_profile_tests
-/home/xander/triaevum-linux-build/oot3d_native_ui_texture_provider_tests
+~/triaevum-linux-build/oot3d_top_screen_ocarina_text_runtime_tests
+~/triaevum-linux-build/oot3d_top_screen_mod_profile_tests
+~/triaevum-linux-build/oot3d_native_ui_texture_provider_tests
 ```
 
 All three test executables pass. Coverage includes native call ABI, stack
@@ -96,7 +96,7 @@ unlearned-song suppression, descriptor bounds, UV order and alpha coverage.
 Live qualification uses Linux NRI/Vulkan/Wayland at 1280x720, native 30 Hz
 without interpolation or extension effects. Runs use isolated copies of
 original saves and bounded capture through `tools/triaevum_release/probe_renderer.py`.
-Private evidence is under `/home/xander/triaevum-pipeline-live-proof/`:
+Private evidence is under `~/triaevum-pipeline-live-proof/`:
 
 - `ocarina-text-qualified`: 400 presentations, three text builds and three
   native releases, no owner-read errors. Frame 240 shows the pink **Zelda's

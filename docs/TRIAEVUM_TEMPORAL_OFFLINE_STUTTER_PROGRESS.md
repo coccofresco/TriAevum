@@ -82,7 +82,7 @@ Measured executable SHA256:
 Subsequent edits rename a diagnostic label and refine test classification;
 they do not change shader binaries or rendering behavior.
 
-Private evidence under `C:/Users/xander/AppData/Local/Temp/`, never package:
+Private evidence under `%USERPROFILE%/AppData/Local/Temp/`, never package:
 - `TriAevum-temporal-offline-benchmark-20260914`: nine-run timings and counters.
 - `TriAevum-temporal-offline-parity-confirm-20260914`: TAA framebuffer comparisons.
 - `TriAevum-temporal-offline-canonical-verified-20260914`: final canonical comparison.

@@ -329,7 +329,8 @@ LoadNativeA32ProcessImageManifest(const std::filesystem::path& path,
     try {
         std::ifstream stream(path);
         if (!stream) {
-            throw std::runtime_error("cannot open native process manifest");
+            throw std::runtime_error("cannot open native process manifest: " +
+                                     path.string());
         }
         Json document;
         stream >> document;

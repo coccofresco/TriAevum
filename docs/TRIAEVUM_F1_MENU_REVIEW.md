@@ -1,5 +1,64 @@
 # F1 settings rationalization
 
+## Aspect ratio (2026-10-20)
+
+Display > Screen gains **Aspect ratio** (Original 3DS 5:3, 16:9 default,
+21:9, Free) under Window mode, with the same row in the in-game menu's Video
+tab. It is host-owned like the window mode and the output size
+(`Graphics.Output.Aspect`; presets keep it), so choosing it never makes the
+preset Custom. A fixed ratio is the presentation picture: the largest
+rectangle of that shape in the window or the screen, centred, black bars on
+the remaining sides (`fast/oot3d/presentation_picture.h`); Free is the whole
+output as before. Choosing a fixed ratio for a windowed output also resizes
+the window to that shape once (width kept, height follows), so no bars show
+until the user resizes it; the window stays resizable and any other shape is
+letterboxed, SDL having no aspect lock. The observed-state lines show the
+picture when it differs from the output framebuffer. The renderer sizes the
+scene targets to the picture and clears the bars; the scene FOV policy, every
+UI canvas, the in-game menu and the mouse/touch mapping use the picture, so
+the HUD and the menu stay centred and clicks land where they are drawn.
+
+Verification (developer build): actual-widget smoke **11,161 assertions**;
+dev lab menu run with captures at 21:9 (85 / 86 px bars in a 720p window),
+5:3 (40 px pillars) and Free, see `TRIAEVUM_IN_GAME_MENU.md`.
+
+## Photo mode (2026-10-20)
+
+A top-level **Photo mode** tab, in every build (issue #102 asked for a way to
+hide the HUD while recording):
+
+- **Free camera (F6)**: the camera detached from Link, formerly Dev Tools >
+  Free camera (developer builds only). Speed and "Back to the game's view" as
+  before; Dev Tools keeps only warping, so the camera has one surface. WASD /
+  Q / E move, Shift / Ctrl change speed, the pad's sticks and shoulders drive
+  it, and dragging with the left or right mouse button looks around.
+  Looking with the mouse never worked before: the condition was
+  `!io.WantCaptureMouse`, and the full-window "Main Game" ImGui surface sets
+  that flag all the time. The input poll now reports a held button only while
+  no host menu or window is open (`DevMouseLookHeld`), as the game's own mouse
+  routing does. Left and right were also mirrored: the game's look-at takes
+  right as up x forward, so facing +Z the right is +X and a growing yaw
+  turns right (as the scripted tour already assumed); strafing, mouse and
+  right-stick turning now follow the screen.
+- **Hide HUD**, beside the free camera: a session state (`PhotoModeState`),
+  never saved, off at every launch. The UI bridge then sees TopScreen
+  `render_hud` off (`PublishTopScreenUiConfig`; the saved configuration keeps
+  its value), and the game's own gameplay HUD draws (UI view 0x0042B9F4, the
+  action icon on the A button and the minimap among them), which the
+  TopScreen compositor does not draw, are left out of presentations
+  (`Oot3dPicaPresentationScheduler::SetNativeGameplayHudVisible`,
+  `OmittedHudDraws`). A saved `render_hud` off does the same. Native-memory
+  execution keeps every draw; dialogue, menus and the pause screen are other
+  UI views and stay.
+
+Verification (developer build, field checkpoint, 1280x720; the product
+`release-build` builds and starts): with `render_hud` off no HUD element is
+left, A button and minimap included; the Items pause screen opens and closes
+normally. Actual-widget smoke **11,161 assertions** (`CheckPhotoModePanel`:
+the camera switch, speed and reset, Hide HUD beside it, off at start, on and
+off). Scheduler test: the HUD draw is left out only for presentations with
+the HUD hidden, the transfer anchored on it still runs.
+
 ## TopScreen standard profile (2026-10-17)
 
 The HUD tab is gone. TriAevum's standard TopScreen profile (the defaults of
@@ -660,6 +719,7 @@ Current surfaces (since the 2026-10-06 tab rationalization above):
 | Materials | Texture packs, Material editor, Reflection materials | GraphicsSettingsRuntime / texture-pack module / material JSON |
 | Controls | Bindings, Camera, Devices, Shortcuts | NativeControlConfigRuntime / TopScreenUiConfigRuntime |
 | Game | Save states, Language | SavestateLibrary, GameLanguageSettings |
+| Photo mode | Free camera, Hide HUD | DevFreeCamera, PhotoModeState (session only) |
 
 Input still owns host-device routing and sensitivity. TopScreen owns game-camera
 behavior, layout and D-pad actions. Its C-stick smoothing really is consumed by
