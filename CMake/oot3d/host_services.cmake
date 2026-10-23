@@ -25,6 +25,9 @@ add_library(oot3d_native_a32_ctr_host STATIC EXCLUDE_FROM_ALL
     ${_oot3d_native_a32_ctr_host_sources})
 target_include_directories(oot3d_native_a32_ctr_host PUBLIC
     tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment
 )
 target_include_directories(oot3d_native_a32_ctr_host PRIVATE
     tools/oot3d/third_party/azahar_audio
@@ -51,7 +54,10 @@ oot3d_target_defaults(oot3d_native_audio_storage_tests NO_WARNING_OVERRIDE FOLDE
 add_library(oot3d_native_a32_ctr_service_host STATIC EXCLUDE_FROM_ALL
     ${_oot3d_native_a32_ctr_host_sources})
 target_include_directories(oot3d_native_a32_ctr_service_host PUBLIC
-    tools/oot3d/native_game_runtime)
+    tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment)
 target_include_directories(oot3d_native_a32_ctr_service_host PRIVATE
     tools/oot3d/third_party/azahar_audio)
 target_link_libraries(oot3d_native_a32_ctr_service_host PUBLIC
@@ -76,6 +82,9 @@ add_library(oot3d_triaevum_pica_client_bridge STATIC EXCLUDE_FROM_ALL
 )
 target_include_directories(oot3d_triaevum_pica_client_bridge PUBLIC
     tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment
 )
 target_link_libraries(oot3d_triaevum_pica_client_bridge PUBLIC
     triaevum_module)
@@ -95,6 +104,9 @@ if (OOT3D_DIRECT_AOT_PLUGIN)
         tools/oot3d/native_game_runtime/triaevum_title_aot_stub.cpp)
     target_include_directories(triaevum_title_aot_stub PRIVATE
         tools/oot3d/native_game_runtime
+        titles/oot3d/topscreen
+        titles/oot3d/gameplay
+        titles/oot3d/environment
         tools/oot3d/native_a32_runtime
         ${OOT3D_PINNED_A32_ROOT})
     target_compile_options(triaevum_title_aot_stub PRIVATE
@@ -124,7 +136,10 @@ if (OOT3D_WHOLE_AOT_PRODUCT_MODE AND
         tools/oot3d/native_game_runtime/triaevum_ctr_filesystem_client_bridge.cpp)
     target_include_directories(oot3d_game_module PRIVATE
         tools/oot3d/native_game_module
-        tools/oot3d/native_game_runtime)
+        tools/oot3d/native_game_runtime
+        titles/oot3d/topscreen
+        titles/oot3d/gameplay
+        titles/oot3d/environment)
     target_link_libraries(oot3d_game_module PRIVATE
         oot3d_native_a32_process_image
         oot3d_native_a32_ctr_service_host
@@ -209,6 +224,9 @@ add_library(oot3d_mm3d_guest_patches STATIC EXCLUDE_FROM_ALL
 )
 target_include_directories(oot3d_mm3d_guest_patches PUBLIC
     tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment
     titles/mm3d/adapter)
 target_link_libraries(oot3d_mm3d_guest_patches PUBLIC
     oot3d_native_a32_process)
@@ -222,6 +240,9 @@ add_library(oot3d_mm3d_single_screen STATIC EXCLUDE_FROM_ALL
 )
 target_include_directories(oot3d_mm3d_single_screen PUBLIC
     tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment
     titles/mm3d/adapter
     titles/mm3d/dekui
     titles/mm3d/restoration)
@@ -365,6 +386,9 @@ add_library(oot3d_native_a32_savestate STATIC EXCLUDE_FROM_ALL
 )
 target_include_directories(oot3d_native_a32_savestate PUBLIC
     tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment
 )
 target_link_libraries(oot3d_native_a32_savestate PUBLIC
     nlohmann_json::nlohmann_json

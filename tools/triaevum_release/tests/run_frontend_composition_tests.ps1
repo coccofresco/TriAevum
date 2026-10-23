@@ -11,7 +11,7 @@ $args = @('-std=c++20', '-O1', '-fms-runtime-lib=static',
     "-I$repo/tools/oot3d/ui_topscreen", "-I$repo/runtime/three_ds_recomp/include",
     "-I$repo/tools/oot3d/ui_contract",
     "-I$Vcpkg/include",
-    "$repo/tools/oot3d/native_game_runtime/oot3d_top_screen_frontend_composition_tests.cpp",
+    "$repo/titles/oot3d/topscreen/oot3d_top_screen_frontend_composition_tests.cpp",
     '-o', $output)
 & $Compiler @args
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

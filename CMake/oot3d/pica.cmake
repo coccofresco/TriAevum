@@ -11,6 +11,9 @@ add_library(oot3d_native_a32_process_image STATIC EXCLUDE_FROM_ALL
 )
 target_include_directories(oot3d_native_a32_process_image PUBLIC
     tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment
 )
 target_link_libraries(oot3d_native_a32_process_image PUBLIC
     oot3d_native_a32_process
@@ -50,6 +53,9 @@ add_library(triaevum_oot3d_pica_service STATIC EXCLUDE_FROM_ALL
 )
 target_include_directories(triaevum_oot3d_pica_service PUBLIC
     tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment
 )
 target_link_libraries(triaevum_oot3d_pica_service PUBLIC
     triaevum_module
@@ -107,7 +113,7 @@ include(runtime/three_ds_recomp/cmake/spirv_pack.cmake)
 triaevum_add_spirv_pack(oot3d_native_pica_capture_inventory
     tools/oot3d/native_pica_frontend/oot3d_native_vertex_binaries.cpp
     tools/oot3d/native_pica_frontend/oot3d_native_vertex.spvpack)
-target_include_directories(oot3d_native_pica_capture_inventory PRIVATE tools/oot3d/native_game_runtime)
+target_include_directories(oot3d_native_pica_capture_inventory PRIVATE tools/oot3d/native_game_runtime titles/oot3d/topscreen titles/oot3d/gameplay titles/oot3d/environment)
 target_link_libraries(oot3d_native_pica_capture_inventory PRIVATE
     oot3d_native_pica_frontend oot3d_native_pica_azahar_capture)
 # Offline replay of recorded variant requests (issue #76): the canonical plan
@@ -164,7 +170,7 @@ foreach(_variant_target oot3d_native_pica_variant_inventory oot3d_native_pica_va
     triaevum_add_spirv_pack(${_variant_target}
         runtime/three_ds_recomp/src/fast/renderer3ds/pica_native_fragment_binaries.cpp
         runtime/three_ds_recomp/src/fast/renderer3ds/pica_native_fragment.spvpack)
-    target_include_directories(${_variant_target} PRIVATE tools/oot3d/native_game_runtime)
+    target_include_directories(${_variant_target} PRIVATE tools/oot3d/native_game_runtime titles/oot3d/topscreen titles/oot3d/gameplay titles/oot3d/environment)
     target_link_libraries(${_variant_target} PRIVATE oot3d_native_pica_frontend)
 endforeach()
 foreach(_cache_target oot3d_native_pica_transferable_cache_tests oot3d_native_pica_cache_inventory oot3d_native_pica_capture_inventory
@@ -263,6 +269,9 @@ add_library(oot3d_native_pica_submission STATIC EXCLUDE_FROM_ALL
 )
 target_include_directories(oot3d_native_pica_submission PUBLIC
     tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment
     tools/oot3d/native_pica_frontend
 )
 target_link_libraries(oot3d_native_pica_submission PUBLIC
@@ -283,11 +292,11 @@ add_library(oot3d_native_pica_composition STATIC EXCLUDE_FROM_ALL
     titles/mm3d/adapter/mm3d_pica_composition.cpp
     titles/mm3d/adapter/mm3d_native_a32_lighting.cpp
     tools/oot3d/native_game_runtime/oot3d_native_a32_lighting.cpp
-    tools/oot3d/native_game_runtime/oot3d_native_a32_fire_emitters.cpp
-    tools/oot3d/native_game_runtime/oot3d_native_a32_light_selection.cpp
-    tools/oot3d/native_game_runtime/oot3d_native_static_emitters.cpp
-    tools/oot3d/native_game_runtime/oot3d_native_room_shadow_shell.cpp
-    tools/oot3d/native_game_runtime/oot3d_interior_sun_prebuild.cpp
+    titles/oot3d/environment/oot3d_native_a32_fire_emitters.cpp
+    titles/oot3d/environment/oot3d_native_a32_light_selection.cpp
+    titles/oot3d/environment/oot3d_native_static_emitters.cpp
+    titles/oot3d/environment/oot3d_native_room_shadow_shell.cpp
+    titles/oot3d/environment/oot3d_interior_sun_prebuild.cpp
 )
 set_source_files_properties(
     tools/oot3d/native_game_runtime/oot3d_native_a32_lighting.cpp
@@ -295,6 +304,9 @@ set_source_files_properties(
     PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/decomp_support/include")
 target_include_directories(oot3d_native_pica_composition PUBLIC
     tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment
     titles/mm3d/adapter
     tools/oot3d/native_pica_frontend
 )
@@ -312,7 +324,7 @@ add_executable(oot3d_native_pica_composition_tests EXCLUDE_FROM_ALL
 )
 
   add_executable(oot3d_native_room_shadow_shell_tests EXCLUDE_FROM_ALL
-      tools/oot3d/native_game_runtime/oot3d_native_room_shadow_shell_tests.cpp)
+      titles/oot3d/environment/oot3d_native_room_shadow_shell_tests.cpp)
   target_link_libraries(oot3d_native_room_shadow_shell_tests PRIVATE oot3d_native_pica_composition)
   oot3d_target_defaults(oot3d_native_room_shadow_shell_tests FOLDER Tests)
 target_link_libraries(oot3d_native_pica_composition_tests PRIVATE
@@ -333,6 +345,9 @@ add_library(oot3d_native_pica_vulkan_plan STATIC EXCLUDE_FROM_ALL
 )
 target_include_directories(oot3d_native_pica_vulkan_plan PUBLIC
     tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment
     tools/oot3d/native_pica_frontend
 )
 target_link_libraries(oot3d_native_pica_vulkan_plan PUBLIC
@@ -357,6 +372,9 @@ add_library(oot3d_native_pica_semantic_trace STATIC EXCLUDE_FROM_ALL
 )
 target_include_directories(oot3d_native_pica_semantic_trace PUBLIC
     tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment
     tools/oot3d/native_pica_frontend
 )
 target_link_libraries(oot3d_native_pica_semantic_trace PUBLIC
@@ -516,6 +534,9 @@ triaevum_add_spirv_pack(oot3d_native_pica_vulkan_bridge
     tools/oot3d/native_pica_frontend/oot3d_native_vertex.spvpack)
 target_include_directories(oot3d_native_pica_vulkan_bridge PUBLIC
     tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment
 )
 target_link_libraries(oot3d_native_pica_vulkan_bridge PUBLIC
     oot3d_native_pica_vulkan_plan
@@ -528,6 +549,9 @@ add_library(triaevum_oot3d_pica_renderer STATIC EXCLUDE_FROM_ALL
 )
 target_include_directories(triaevum_oot3d_pica_renderer PUBLIC
     tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment
 )
 target_link_libraries(triaevum_oot3d_pica_renderer PUBLIC
     triaevum_oot3d_pica_service
@@ -539,7 +563,10 @@ oot3d_target_defaults(triaevum_oot3d_pica_renderer NO_WARNING_OVERRIDE FOLDER To
 add_library(triaevum_forge_content_filesystem STATIC EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/triaevum_forge_content_filesystem.cpp)
 target_include_directories(triaevum_forge_content_filesystem PUBLIC
-    tools/oot3d/native_game_runtime)
+    tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment)
 target_link_libraries(triaevum_forge_content_filesystem PUBLIC
     triaevum_module
     nlohmann_json::nlohmann_json)
@@ -611,7 +638,10 @@ add_executable(triaevum_runtime_layout_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/triaevum_runtime_layout.cpp
     tools/oot3d/native_game_runtime/triaevum_runtime_layout_tests.cpp)
 target_include_directories(triaevum_runtime_layout_tests PRIVATE
-    tools/oot3d/native_game_runtime)
+    tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment)
 target_link_libraries(triaevum_runtime_layout_tests PRIVATE
     nlohmann_json::nlohmann_json)
 target_compile_options(triaevum_runtime_layout_tests PRIVATE

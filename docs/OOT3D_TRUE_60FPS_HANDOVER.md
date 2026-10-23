@@ -251,10 +251,10 @@ Test principali:
 
 ```text
 tools/oot3d/typed_gameplay/oot3d_gameplay_time_tests.cpp
-tools/oot3d/native_game_runtime/oot3d_typed_gameplay_tests.cpp
-tools/oot3d/native_game_runtime/oot3d_typed_player_gameplay_tests.cpp
+titles/oot3d/gameplay/oot3d_typed_gameplay_tests.cpp
+titles/oot3d/gameplay/oot3d_typed_player_gameplay_tests.cpp
 tools/oot3d/native_game_runtime/oot3d_native_frame_rate_tests.cpp
-tools/oot3d/native_game_runtime/oot3d_native_player_temporal_bridge_tests.cpp
+titles/oot3d/gameplay/oot3d_native_player_temporal_bridge_tests.cpp
 tools/oot3d/native_game_runtime/oot3d_native_temporal_event_ledger_tests.cpp
 tools/oot3d/native_game_runtime/oot3d_native_a32_savestate_tests.cpp
 tools/oot3d/native_game_runtime/oot3d_native_mass_aot_tests.cpp

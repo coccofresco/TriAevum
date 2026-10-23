@@ -28,6 +28,9 @@ add_library(oot3d_native_audio STATIC EXCLUDE_FROM_ALL
 )
 target_include_directories(oot3d_native_audio PUBLIC
     tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment
 )
 oot3d_target_defaults(oot3d_native_audio FOLDER Tools)
 
@@ -275,20 +278,23 @@ add_library(oot3d_native_a32_process STATIC EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_owner_call_adapter.cpp
     tools/oot3d/native_game_runtime/oot3d_native_compiled_functions.cpp
     tools/oot3d/native_game_runtime/oot3d_native_mass_aot.cpp
-    tools/oot3d/native_game_runtime/oot3d_typed_actor_lifecycle.cpp
-    tools/oot3d/native_game_runtime/oot3d_typed_actor_update_records.cpp
-    tools/oot3d/native_game_runtime/oot3d_typed_audio_request_callback.cpp
-    tools/oot3d/native_game_runtime/oot3d_typed_dyna_interaction_reset.cpp
-    tools/oot3d/native_game_runtime/oot3d_typed_game_state.cpp
-    tools/oot3d/native_game_runtime/oot3d_typed_pause_ui_alpha.cpp
-    tools/oot3d/native_game_runtime/oot3d_typed_player_lock_on.cpp
-    tools/oot3d/native_game_runtime/oot3d_typed_record_initializer.cpp
-    tools/oot3d/native_game_runtime/oot3d_typed_gameplay_bridge.cpp
+    titles/oot3d/gameplay/oot3d_typed_actor_lifecycle.cpp
+    titles/oot3d/gameplay/oot3d_typed_actor_update_records.cpp
+    titles/oot3d/gameplay/oot3d_typed_audio_request_callback.cpp
+    titles/oot3d/gameplay/oot3d_typed_dyna_interaction_reset.cpp
+    titles/oot3d/gameplay/oot3d_typed_game_state.cpp
+    titles/oot3d/gameplay/oot3d_typed_pause_ui_alpha.cpp
+    titles/oot3d/gameplay/oot3d_typed_player_lock_on.cpp
+    titles/oot3d/gameplay/oot3d_typed_record_initializer.cpp
+    titles/oot3d/gameplay/oot3d_typed_gameplay_bridge.cpp
     tools/oot3d/native_game_runtime/oot3d_native_true_aot_blocks.cpp
     tools/oot3d/native_game_runtime/oot3d_native_whole_aot_runtime.cpp
 )
 target_include_directories(oot3d_native_a32_process PUBLIC
     tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment
 )
 target_link_libraries(oot3d_native_a32_process PUBLIC
     oot3d_typed_gameplay
@@ -371,6 +377,9 @@ if (EXISTS "${_oot3d_whole_aot_generated_header}" AND
         target_include_directories(oot3d_native_whole_aot PRIVATE
             ${OOT3D_WHOLE_AOT_GENERATED_DIR}
             tools/oot3d/native_game_runtime
+            titles/oot3d/topscreen
+            titles/oot3d/gameplay
+            titles/oot3d/environment
             ${OOT3D_PINNED_A32_ROOT}
             tools/oot3d/native_a32_runtime)
         if (OOT3D_WHOLE_AOT_PRODUCT_MODE)
@@ -626,7 +635,7 @@ endif()
 
 if (TARGET oot3d_native_a32_aot)
     add_executable(oot3d_typed_gameplay_tests EXCLUDE_FROM_ALL
-        tools/oot3d/native_game_runtime/oot3d_typed_gameplay_tests.cpp
+        titles/oot3d/gameplay/oot3d_typed_gameplay_tests.cpp
     )
     target_include_directories(oot3d_typed_gameplay_tests PRIVATE
         ${OOT3D_A32_AOT_GENERATED_DIR}
@@ -640,7 +649,7 @@ if (TARGET oot3d_native_a32_aot)
     oot3d_target_defaults(oot3d_typed_gameplay_tests NO_WARNING_OVERRIDE FOLDER Tests)
 
     add_executable(oot3d_typed_player_gameplay_tests EXCLUDE_FROM_ALL
-        tools/oot3d/native_game_runtime/oot3d_typed_player_gameplay_tests.cpp
+        titles/oot3d/gameplay/oot3d_typed_player_gameplay_tests.cpp
     )
     target_include_directories(oot3d_typed_player_gameplay_tests PRIVATE
         ${OOT3D_A32_AOT_GENERATED_DIR}

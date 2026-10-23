@@ -10,14 +10,17 @@ add_library(oot3d_native_game_runtime STATIC EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_presentation_pacer.cpp
     tools/oot3d/native_game_runtime/oot3d_native_input_latency_trace.cpp
     tools/oot3d/native_game_runtime/oot3d_native_temporal_event_ledger.cpp
-    tools/oot3d/native_game_runtime/oot3d_native_player_temporal_bridge.cpp
-    tools/oot3d/native_game_runtime/oot3d_native_root_motion.cpp
-    tools/oot3d/native_game_runtime/oot3d_native_skel_anime.cpp
+    titles/oot3d/gameplay/oot3d_native_player_temporal_bridge.cpp
+    titles/oot3d/gameplay/oot3d_native_root_motion.cpp
+    titles/oot3d/gameplay/oot3d_native_skel_anime.cpp
 )
 target_include_directories(oot3d_native_game_runtime PUBLIC
     tools/oot3d/decomp_support/include
     tools/oot3d/native_demo_host
     tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment
     titles/mm3d/adapter
 )
 target_compile_options(oot3d_native_game_runtime PRIVATE "${WARNING_OVERRIDE}")
@@ -35,11 +38,11 @@ oot3d_target_defaults(oot3d_native_game_runtime NO_WARNING_OVERRIDE FOLDER Tools
 add_executable(oot3d_native_game_runtime_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_frame_rate_tests.cpp
     tools/oot3d/native_game_runtime/oot3d_native_temporal_event_ledger_tests.cpp
-    tools/oot3d/native_game_runtime/oot3d_native_player_temporal_bridge_tests.cpp
+    titles/oot3d/gameplay/oot3d_native_player_temporal_bridge_tests.cpp
     tools/oot3d/native_game_runtime/oot3d_native_a32_scene_view_tests.cpp
     tools/oot3d/native_game_runtime/oot3d_native_a32_timing_probe_tests.cpp
-    tools/oot3d/native_game_runtime/oot3d_native_root_motion_tests.cpp
-    tools/oot3d/native_game_runtime/oot3d_native_skel_anime_tests.cpp
+    titles/oot3d/gameplay/oot3d_native_root_motion_tests.cpp
+    titles/oot3d/gameplay/oot3d_native_skel_anime_tests.cpp
     tools/oot3d/native_game_runtime/oot3d_native_input_latency_trace_tests.cpp
 )
 target_link_libraries(oot3d_native_game_runtime_tests PRIVATE oot3d_native_game_runtime)
@@ -50,6 +53,9 @@ add_executable(mm3d_scene_environment_tests EXCLUDE_FROM_ALL
     titles/mm3d/adapter/mm3d_scene_environment_tests.cpp)
 target_include_directories(mm3d_scene_environment_tests PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/native_game_runtime"
+    "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/topscreen"
+    "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/gameplay"
+    "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/environment"
     "${CMAKE_CURRENT_SOURCE_DIR}/titles/mm3d/adapter")
 oot3d_target_defaults(mm3d_scene_environment_tests FOLDER Tests)
 
@@ -152,7 +158,10 @@ add_executable(oot3d_native_game_launch_profile_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_game_launch_profile_tests.cpp
 )
 target_include_directories(oot3d_native_game_launch_profile_tests PRIVATE
-    tools/oot3d/native_game_runtime)
+    tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment)
 target_link_libraries(oot3d_native_game_launch_profile_tests PRIVATE
     nlohmann_json::nlohmann_json)
 # ${runtime_dir} comes from SDL_GetBasePath; the renderer directory's SDL
@@ -179,7 +188,10 @@ add_executable(oot3d_graphics_settings_schedule_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_graphics_settings_schedule_tests.cpp
 )
 target_include_directories(oot3d_graphics_settings_schedule_tests PRIVATE
-    tools/oot3d/native_game_runtime)
+    tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment)
 target_link_libraries(oot3d_graphics_settings_schedule_tests PRIVATE
     nlohmann_json::nlohmann_json)
 target_compile_options(oot3d_graphics_settings_schedule_tests PRIVATE
@@ -192,8 +204,8 @@ set_property(TARGET oot3d_graphics_settings_schedule_tests PROPERTY
     FOLDER Tests)
 
 add_executable(oot3d_actor_visibility_policy_tests EXCLUDE_FROM_ALL
-    tools/oot3d/native_game_runtime/oot3d_actor_visibility_policy.cpp
-    tools/oot3d/native_game_runtime/oot3d_actor_visibility_policy_tests.cpp
+    titles/oot3d/gameplay/oot3d_actor_visibility_policy.cpp
+    titles/oot3d/gameplay/oot3d_actor_visibility_policy_tests.cpp
 )
 target_compile_options(oot3d_actor_visibility_policy_tests PRIVATE
     "${WARNING_OVERRIDE}")
@@ -205,9 +217,9 @@ set_property(TARGET oot3d_actor_visibility_policy_tests PROPERTY
     FOLDER Tests)
 
 add_executable(oot3d_native_a32_actor_visibility_tests EXCLUDE_FROM_ALL
-    tools/oot3d/native_game_runtime/oot3d_actor_visibility_policy.cpp
-    tools/oot3d/native_game_runtime/oot3d_native_a32_actor_visibility.cpp
-    tools/oot3d/native_game_runtime/oot3d_native_a32_actor_visibility_tests.cpp
+    titles/oot3d/gameplay/oot3d_actor_visibility_policy.cpp
+    titles/oot3d/gameplay/oot3d_native_a32_actor_visibility.cpp
+    titles/oot3d/gameplay/oot3d_native_a32_actor_visibility_tests.cpp
     runtime/three_ds_recomp/src/fast/oot3d/perspective_fov_policy.cpp
 )
 target_include_directories(oot3d_native_a32_actor_visibility_tests PRIVATE
@@ -224,8 +236,8 @@ set_property(TARGET oot3d_native_a32_actor_visibility_tests PROPERTY FOLDER Test
 
 # SingleScreen 3.0 object bank extension (19 -> 39 object slots).
 add_executable(oot3d_object_bank_extension_tests EXCLUDE_FROM_ALL
-    tools/oot3d/native_game_runtime/oot3d_object_bank_extension.cpp
-    tools/oot3d/native_game_runtime/oot3d_object_bank_extension_tests.cpp
+    titles/oot3d/gameplay/oot3d_object_bank_extension.cpp
+    titles/oot3d/gameplay/oot3d_object_bank_extension_tests.cpp
 )
 target_link_libraries(oot3d_object_bank_extension_tests PRIVATE
     oot3d_native_a32_process)
@@ -239,9 +251,9 @@ set_property(TARGET oot3d_object_bank_extension_tests PROPERTY FOLDER Tests)
 
 # SingleScreen gameplay options: native-call sequences at their block entries.
 add_executable(oot3d_top_screen_gameplay_runtime_tests EXCLUDE_FROM_ALL
-    tools/oot3d/native_game_runtime/oot3d_top_screen_gameplay_runtime.cpp
-    tools/oot3d/native_game_runtime/oot3d_top_screen_link_ext.cpp
-    tools/oot3d/native_game_runtime/oot3d_top_screen_gameplay_runtime_tests.cpp
+    titles/oot3d/topscreen/oot3d_top_screen_gameplay_runtime.cpp
+    titles/oot3d/topscreen/oot3d_top_screen_link_ext.cpp
+    titles/oot3d/topscreen/oot3d_top_screen_gameplay_runtime_tests.cpp
 )
 target_link_libraries(oot3d_top_screen_gameplay_runtime_tests PRIVATE
     oot3d_native_a32_process oot3d_ui_topscreen)
@@ -257,21 +269,21 @@ set_property(TARGET oot3d_top_screen_gameplay_runtime_tests PROPERTY FOLDER Test
 # The policy math must not contract into FMAs (3.0 parity goldens).
 if (MSVC)
     set_property(SOURCE
-        tools/oot3d/native_game_runtime/oot3d_top_screen_rain_runtime.cpp
+        titles/oot3d/topscreen/oot3d_top_screen_rain_runtime.cpp
         APPEND PROPERTY COMPILE_OPTIONS /fp:strict)
 else()
     set_property(SOURCE
-        tools/oot3d/native_game_runtime/oot3d_top_screen_rain_runtime.cpp
+        titles/oot3d/topscreen/oot3d_top_screen_rain_runtime.cpp
         APPEND PROPERTY COMPILE_OPTIONS -ffp-contract=off)
 endif()
 add_executable(oot3d_top_screen_rain_runtime_tests EXCLUDE_FROM_ALL
-    tools/oot3d/native_game_runtime/oot3d_top_screen_rain_runtime.cpp
-    tools/oot3d/native_game_runtime/oot3d_top_screen_rain_runtime_tests.cpp
+    titles/oot3d/topscreen/oot3d_top_screen_rain_runtime.cpp
+    titles/oot3d/topscreen/oot3d_top_screen_rain_runtime_tests.cpp
 )
 add_executable(oot3d_top_screen_rain_adapter_tests EXCLUDE_FROM_ALL
-    tools/oot3d/native_game_runtime/oot3d_top_screen_rain_runtime.cpp
-    tools/oot3d/native_game_runtime/oot3d_top_screen_rain_adapter.cpp
-    tools/oot3d/native_game_runtime/oot3d_top_screen_rain_adapter_tests.cpp
+    titles/oot3d/topscreen/oot3d_top_screen_rain_runtime.cpp
+    titles/oot3d/topscreen/oot3d_top_screen_rain_adapter.cpp
+    titles/oot3d/topscreen/oot3d_top_screen_rain_adapter_tests.cpp
 )
 target_link_libraries(oot3d_top_screen_rain_adapter_tests PRIVATE
     oot3d_native_a32_process)
@@ -289,6 +301,9 @@ add_library(oot3d_native_crash_diagnostics STATIC EXCLUDE_FROM_ALL
 )
 target_include_directories(oot3d_native_crash_diagnostics PUBLIC
     tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment
 )
 target_compile_options(oot3d_native_crash_diagnostics PRIVATE
     "${WARNING_OVERRIDE}")
@@ -317,6 +332,9 @@ set_property(TARGET oot3d_native_crash_diagnostics_tests PROPERTY FOLDER Tools)
 target_include_directories(oot3d_native_game PRIVATE
     tools/oot3d/native_demo_host
     tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment
     tools/oot3d/ui_topscreen
 )
 target_link_libraries(oot3d_native_game PRIVATE
@@ -340,35 +358,35 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
         tools/oot3d/native_game_runtime/oot3d_native_a32_window_summary.cpp
         tools/oot3d/native_game_runtime/oot3d_native_preparation_screen.cpp
         tools/oot3d/native_game_runtime/oot3d_native_render_command_stream.cpp
-        tools/oot3d/native_game_runtime/oot3d_top_screen_ocarina_text_runtime.cpp
-        tools/oot3d/native_game_runtime/oot3d_top_screen_pause_transaction.cpp
-        tools/oot3d/native_game_runtime/oot3d_top_screen_item_description_runtime.cpp
-        tools/oot3d/native_game_runtime/oot3d_top_screen_wide_items_runtime.cpp
-        tools/oot3d/native_game_runtime/oot3d_top_screen_visions_runtime.cpp
-        tools/oot3d/native_game_runtime/oot3d_top_screen_reframed_file_select.cpp
-        tools/oot3d/native_game_runtime/oot3d_top_screen_gameplay_runtime.cpp
-        tools/oot3d/native_game_runtime/oot3d_top_screen_link_ext.cpp
-        tools/oot3d/native_game_runtime/oot3d_object_bank_extension.cpp
-        tools/oot3d/native_game_runtime/oot3d_top_screen_rain_runtime.cpp
-        tools/oot3d/native_game_runtime/oot3d_top_screen_rain_adapter.cpp
-        tools/oot3d/native_game_runtime/oot3d_native_actor_interactions.cpp
-        tools/oot3d/native_game_runtime/oot3d_actor_visibility_policy.cpp
-        tools/oot3d/native_game_runtime/oot3d_native_a32_actor_visibility.cpp
+        titles/oot3d/topscreen/oot3d_top_screen_ocarina_text_runtime.cpp
+        titles/oot3d/topscreen/oot3d_top_screen_pause_transaction.cpp
+        titles/oot3d/topscreen/oot3d_top_screen_item_description_runtime.cpp
+        titles/oot3d/topscreen/oot3d_top_screen_wide_items_runtime.cpp
+        titles/oot3d/topscreen/oot3d_top_screen_visions_runtime.cpp
+        titles/oot3d/topscreen/oot3d_top_screen_reframed_file_select.cpp
+        titles/oot3d/topscreen/oot3d_top_screen_gameplay_runtime.cpp
+        titles/oot3d/topscreen/oot3d_top_screen_link_ext.cpp
+        titles/oot3d/gameplay/oot3d_object_bank_extension.cpp
+        titles/oot3d/topscreen/oot3d_top_screen_rain_runtime.cpp
+        titles/oot3d/topscreen/oot3d_top_screen_rain_adapter.cpp
+        titles/oot3d/gameplay/oot3d_native_actor_interactions.cpp
+        titles/oot3d/gameplay/oot3d_actor_visibility_policy.cpp
+        titles/oot3d/gameplay/oot3d_native_a32_actor_visibility.cpp
         tools/oot3d/native_game_runtime/oot3d_native_pcm_diagnostics.cpp
         tools/oot3d/native_game_runtime/oot3d_native_controls_settings_panel.cpp
         tools/oot3d/native_game_runtime/oot3d_game_language_panel.cpp
         tools/oot3d/native_game_runtime/oot3d_savestate_panel.cpp
         tools/oot3d/native_game_runtime/oot3d_savestate_settings.cpp
-        tools/oot3d/native_game_runtime/oot3d_scene_environment.cpp
-        tools/oot3d/native_game_runtime/oot3d_scene_environment_blend.cpp
-        tools/oot3d/native_game_runtime/oot3d_light_gizmo.cpp
-        tools/oot3d/native_game_runtime/oot3d_scene_environment_codec.cpp
-        tools/oot3d/native_game_runtime/oot3d_scene_environment_panel.cpp
-        tools/oot3d/native_game_runtime/oot3d_top_screen_settings_panel.cpp
+        titles/oot3d/environment/oot3d_scene_environment.cpp
+        titles/oot3d/environment/oot3d_scene_environment_blend.cpp
+        titles/oot3d/environment/oot3d_light_gizmo.cpp
+        titles/oot3d/environment/oot3d_scene_environment_codec.cpp
+        titles/oot3d/environment/oot3d_scene_environment_panel.cpp
+        titles/oot3d/topscreen/oot3d_top_screen_settings_panel.cpp
         tools/oot3d/native_game_runtime/oot3d_photo_mode_panel.cpp
         tools/oot3d/native_game_runtime/oot3d_in_game_menu.cpp
         tools/oot3d/native_game_runtime/oot3d_graphics_settings_schedule.cpp)
-    set_source_files_properties(tools/oot3d/native_game_runtime/oot3d_native_actor_interactions.cpp
+    set_source_files_properties(titles/oot3d/gameplay/oot3d_native_actor_interactions.cpp
         PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/decomp_support/include")
     # Developer tools (F1 > Dev Tools: SoH's Debug Warp Screen and Warp
     # Points). Never in a public build: --product-info reports the capability
@@ -378,11 +396,11 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
             tools/oot3d/native_game_runtime/oot3d_dev_warp.cpp
             tools/oot3d/native_game_runtime/oot3d_dev_tools_panel.cpp
             tools/oot3d/native_game_runtime/oot3d_dev_warp_process.cpp
-            tools/oot3d/native_game_runtime/oot3d_dev_emitter_inventory.cpp
+            titles/oot3d/environment/oot3d_dev_emitter_inventory.cpp
             tools/oot3d/native_game_runtime/oot3d_dev_lab.cpp
             tools/oot3d/native_game_runtime/native_a32_read_probe.cpp)
         set_source_files_properties(tools/oot3d/native_game_runtime/oot3d_dev_warp.cpp
-            tools/oot3d/native_game_runtime/oot3d_dev_emitter_inventory.cpp
+            titles/oot3d/environment/oot3d_dev_emitter_inventory.cpp
             PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/decomp_support/include")
         target_compile_definitions(oot3d_native_game PRIVATE TRIAEVUM_DEVELOPER_TOOLS=1)
         add_executable(oot3d_dev_warp_tests EXCLUDE_FROM_ALL
@@ -390,6 +408,9 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
             tools/oot3d/native_game_runtime/oot3d_dev_warp_tests.cpp)
         target_include_directories(oot3d_dev_warp_tests PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/native_game_runtime"
+            "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/topscreen"
+            "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/gameplay"
+            "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/environment"
             "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/decomp_support/include")
         target_link_libraries(oot3d_dev_warp_tests PRIVATE oot3d_native_game_runtime)
         oot3d_target_defaults(oot3d_dev_warp_tests FOLDER Tests)
@@ -398,6 +419,9 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
             titles/mm3d/adapter/mm3d_dev_tools_tests.cpp)
         target_include_directories(mm3d_dev_tools_tests PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/native_game_runtime"
+            "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/topscreen"
+            "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/gameplay"
+            "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/environment"
             "${CMAKE_CURRENT_SOURCE_DIR}/titles/mm3d/adapter"
             "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/decomp_support/include")
         target_compile_definitions(mm3d_dev_tools_tests PRIVATE TRIAEVUM_DEVELOPER_TOOLS=1)
@@ -411,22 +435,28 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
         # Scene environment profiles for agents and scripts (validate, format,
         # explain), without starting the game.
         add_executable(triaevum_environment_tool EXCLUDE_FROM_ALL
-            tools/oot3d/native_game_runtime/oot3d_environment_tool.cpp
-            tools/oot3d/native_game_runtime/oot3d_interior_sun_prebuild.cpp
-            tools/oot3d/native_game_runtime/oot3d_scene_environment_codec.cpp)
+            titles/oot3d/environment/oot3d_environment_tool.cpp
+            titles/oot3d/environment/oot3d_interior_sun_prebuild.cpp
+            titles/oot3d/environment/oot3d_scene_environment_codec.cpp)
         target_include_directories(triaevum_environment_tool PRIVATE
-            "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/native_game_runtime")
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/native_game_runtime"
+            "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/topscreen"
+            "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/gameplay"
+            "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/environment")
         target_link_libraries(triaevum_environment_tool PRIVATE three_ds_recomp_runtime oot3d_native_pica_composition)
         oot3d_target_defaults(triaevum_environment_tool FOLDER Tools)
         # The scene environment runtime's developer hot reload.
         add_executable(triaevum_environment_tests EXCLUDE_FROM_ALL
-            tools/oot3d/native_game_runtime/oot3d_scene_environment_tests.cpp
-            tools/oot3d/native_game_runtime/oot3d_scene_environment.cpp
-            tools/oot3d/native_game_runtime/oot3d_scene_environment_blend.cpp
-            tools/oot3d/native_game_runtime/oot3d_scene_environment_codec.cpp
-            tools/oot3d/native_game_runtime/oot3d_light_gizmo.cpp)
+            titles/oot3d/environment/oot3d_scene_environment_tests.cpp
+            titles/oot3d/environment/oot3d_scene_environment.cpp
+            titles/oot3d/environment/oot3d_scene_environment_blend.cpp
+            titles/oot3d/environment/oot3d_scene_environment_codec.cpp
+            titles/oot3d/environment/oot3d_light_gizmo.cpp)
         target_include_directories(triaevum_environment_tests PRIVATE
-            "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/native_game_runtime")
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/native_game_runtime"
+            "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/topscreen"
+            "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/gameplay"
+            "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/environment")
         target_compile_definitions(triaevum_environment_tests PRIVATE TRIAEVUM_DEVELOPER_TOOLS=1)
         target_link_libraries(triaevum_environment_tests PRIVATE three_ds_recomp_runtime)
         oot3d_target_defaults(triaevum_environment_tests FOLDER Tests)

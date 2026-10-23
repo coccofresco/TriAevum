@@ -62,8 +62,8 @@ void CheckNativeTime() {
   // Independent fixture: the audited native table, decoded from code.bin,
   // includes all weather modes. Test every clock tick against its component
   // lerp rather than duplicating the implementation's four breakpoints.
-  auto path = std::filesystem::path(__FILE__).parent_path().parent_path() /
-      "native_demo_host/lighting_tables/oot3d_pica_lighting_semantics.json";
+  auto path = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path() /
+      "tools/oot3d/native_demo_host/lighting_tables/oot3d_pica_lighting_semantics.json";
   std::ifstream file(path);
   nlohmann::json document; file >> document;
   for (const auto& mode : document["runtime_environment_light_settings_consumer"]["transition_modes"]) {

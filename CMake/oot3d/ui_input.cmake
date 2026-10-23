@@ -25,6 +25,9 @@ add_library(oot3d_ui_topscreen STATIC EXCLUDE_FROM_ALL
 )
 target_include_directories(oot3d_ui_topscreen PUBLIC
     tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment
     tools/oot3d/ui_topscreen
 )
 target_link_libraries(oot3d_ui_topscreen PUBLIC
@@ -51,8 +54,8 @@ target_link_libraries(oot3d_top_screen_mod_profile_tests PRIVATE
 oot3d_target_defaults(oot3d_top_screen_mod_profile_tests FOLDER Tests)
 
 add_executable(oot3d_top_screen_link_ext_tests EXCLUDE_FROM_ALL
-    tools/oot3d/native_game_runtime/oot3d_top_screen_link_ext.cpp
-    tools/oot3d/native_game_runtime/oot3d_top_screen_link_ext_tests.cpp
+    titles/oot3d/topscreen/oot3d_top_screen_link_ext.cpp
+    titles/oot3d/topscreen/oot3d_top_screen_link_ext_tests.cpp
 )
 oot3d_target_defaults(oot3d_top_screen_link_ext_tests FOLDER Tests)
 
@@ -133,11 +136,14 @@ endif()
 oot3d_target_defaults(oot3d_n64_ui_renderer_tests FOLDER Tests)
 
 add_library(oot3d_top_screen_runtime_consumer STATIC EXCLUDE_FROM_ALL
-    tools/oot3d/native_game_runtime/oot3d_top_screen_gameplay_action_consumer.cpp
-    tools/oot3d/native_game_runtime/oot3d_top_screen_items_hint_consumer.cpp
+    titles/oot3d/topscreen/oot3d_top_screen_gameplay_action_consumer.cpp
+    titles/oot3d/topscreen/oot3d_top_screen_items_hint_consumer.cpp
 )
 target_include_directories(oot3d_top_screen_runtime_consumer PUBLIC
     tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment
 )
 target_link_libraries(oot3d_top_screen_runtime_consumer PUBLIC
     oot3d_native_a32_process
@@ -151,6 +157,9 @@ add_library(oot3d_native_ui_lifecycle_bridge STATIC EXCLUDE_FROM_ALL
 )
 target_include_directories(oot3d_native_ui_lifecycle_bridge PUBLIC
     tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment
 )
 target_link_libraries(oot3d_native_ui_lifecycle_bridge PUBLIC
     oot3d_native_a32_process
@@ -171,6 +180,9 @@ add_library(oot3d_native_ui_texture_provider STATIC EXCLUDE_FROM_ALL
 )
 target_include_directories(oot3d_native_ui_texture_provider PUBLIC
     tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment
 )
 target_link_libraries(oot3d_native_ui_texture_provider PUBLIC
     oot3d_native_pica_submission
@@ -187,8 +199,8 @@ target_link_libraries(oot3d_native_ui_texture_provider_tests PRIVATE
 oot3d_target_defaults(oot3d_native_ui_texture_provider_tests FOLDER Tests)
 
 add_executable(oot3d_top_screen_ocarina_text_runtime_tests EXCLUDE_FROM_ALL
-    tools/oot3d/native_game_runtime/oot3d_top_screen_ocarina_text_runtime.cpp
-    tools/oot3d/native_game_runtime/oot3d_top_screen_ocarina_text_runtime_tests.cpp)
+    titles/oot3d/topscreen/oot3d_top_screen_ocarina_text_runtime.cpp
+    titles/oot3d/topscreen/oot3d_top_screen_ocarina_text_runtime_tests.cpp)
 target_link_libraries(oot3d_top_screen_ocarina_text_runtime_tests PRIVATE
     oot3d_native_ui_texture_provider oot3d_native_a32_process)
 target_compile_options(oot3d_top_screen_ocarina_text_runtime_tests PRIVATE "${WARNING_OVERRIDE}")
@@ -200,8 +212,8 @@ endif()
 set_property(TARGET oot3d_top_screen_ocarina_text_runtime_tests PROPERTY FOLDER Tests)
 
 add_executable(oot3d_top_screen_pause_transaction_tests EXCLUDE_FROM_ALL
-    tools/oot3d/native_game_runtime/oot3d_top_screen_pause_transaction.cpp
-    tools/oot3d/native_game_runtime/oot3d_top_screen_pause_transaction_tests.cpp)
+    titles/oot3d/topscreen/oot3d_top_screen_pause_transaction.cpp
+    titles/oot3d/topscreen/oot3d_top_screen_pause_transaction_tests.cpp)
 target_link_libraries(oot3d_top_screen_pause_transaction_tests PRIVATE
     oot3d_ui_topscreen oot3d_native_a32_process)
 target_compile_options(oot3d_top_screen_pause_transaction_tests PRIVATE "${WARNING_OVERRIDE}")
@@ -213,8 +225,8 @@ endif()
 set_property(TARGET oot3d_top_screen_pause_transaction_tests PROPERTY FOLDER Tests)
 
 add_executable(oot3d_top_screen_item_description_runtime_tests EXCLUDE_FROM_ALL
-    tools/oot3d/native_game_runtime/oot3d_top_screen_item_description_runtime.cpp
-    tools/oot3d/native_game_runtime/oot3d_top_screen_item_description_runtime_tests.cpp)
+    titles/oot3d/topscreen/oot3d_top_screen_item_description_runtime.cpp
+    titles/oot3d/topscreen/oot3d_top_screen_item_description_runtime_tests.cpp)
 target_link_libraries(oot3d_top_screen_item_description_runtime_tests PRIVATE
     oot3d_ui_topscreen oot3d_native_a32_process)
 target_compile_options(oot3d_top_screen_item_description_runtime_tests PRIVATE "${WARNING_OVERRIDE}")
@@ -226,8 +238,8 @@ endif()
 set_property(TARGET oot3d_top_screen_item_description_runtime_tests PROPERTY FOLDER Tests)
 
 add_executable(oot3d_top_screen_wide_items_runtime_tests EXCLUDE_FROM_ALL
-    tools/oot3d/native_game_runtime/oot3d_top_screen_wide_items_runtime.cpp
-    tools/oot3d/native_game_runtime/oot3d_top_screen_wide_items_runtime_tests.cpp)
+    titles/oot3d/topscreen/oot3d_top_screen_wide_items_runtime.cpp
+    titles/oot3d/topscreen/oot3d_top_screen_wide_items_runtime_tests.cpp)
 target_link_libraries(oot3d_top_screen_wide_items_runtime_tests PRIVATE
     oot3d_ui_topscreen oot3d_native_a32_process)
 target_compile_options(oot3d_top_screen_wide_items_runtime_tests PRIVATE "${WARNING_OVERRIDE}")
@@ -239,8 +251,8 @@ endif()
 set_property(TARGET oot3d_top_screen_wide_items_runtime_tests PROPERTY FOLDER Tests)
 
 add_executable(oot3d_top_screen_visions_runtime_tests EXCLUDE_FROM_ALL
-    tools/oot3d/native_game_runtime/oot3d_top_screen_visions_runtime.cpp
-    tools/oot3d/native_game_runtime/oot3d_top_screen_visions_runtime_tests.cpp)
+    titles/oot3d/topscreen/oot3d_top_screen_visions_runtime.cpp
+    titles/oot3d/topscreen/oot3d_top_screen_visions_runtime_tests.cpp)
 target_link_libraries(oot3d_top_screen_visions_runtime_tests PRIVATE
     oot3d_native_a32_process)
 target_compile_options(oot3d_top_screen_visions_runtime_tests PRIVATE "${WARNING_OVERRIDE}")
@@ -252,8 +264,8 @@ endif()
 set_property(TARGET oot3d_top_screen_visions_runtime_tests PROPERTY FOLDER Tests)
 
 add_executable(oot3d_top_screen_reframed_file_select_tests EXCLUDE_FROM_ALL
-    tools/oot3d/native_game_runtime/oot3d_top_screen_reframed_file_select.cpp
-    tools/oot3d/native_game_runtime/oot3d_top_screen_reframed_file_select_tests.cpp)
+    titles/oot3d/topscreen/oot3d_top_screen_reframed_file_select.cpp
+    titles/oot3d/topscreen/oot3d_top_screen_reframed_file_select_tests.cpp)
 target_link_libraries(oot3d_top_screen_reframed_file_select_tests PRIVATE
     oot3d_native_a32_process)
 target_compile_options(oot3d_top_screen_reframed_file_select_tests PRIVATE "${WARNING_OVERRIDE}")
@@ -266,11 +278,14 @@ set_property(TARGET oot3d_top_screen_reframed_file_select_tests PROPERTY FOLDER 
 
 find_package(libzip REQUIRED)
 add_library(oot3d_top_screen_texture_runtime STATIC EXCLUDE_FROM_ALL
-    tools/oot3d/native_game_runtime/oot3d_top_screen_texture_runtime.cpp
-    tools/oot3d/native_game_runtime/oot3d_native_hd_font_runtime.cpp
+    titles/oot3d/topscreen/oot3d_top_screen_texture_runtime.cpp
+    titles/oot3d/topscreen/oot3d_native_hd_font_runtime.cpp
 )
 target_include_directories(oot3d_top_screen_texture_runtime PUBLIC
     tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment
 )
 target_link_libraries(oot3d_top_screen_texture_runtime PUBLIC
     libzip::zip
@@ -278,7 +293,7 @@ target_link_libraries(oot3d_top_screen_texture_runtime PUBLIC
     oot3d_native_ui_texture_provider)
 target_compile_options(oot3d_top_screen_texture_runtime PRIVATE "${WARNING_OVERRIDE}")
 add_executable(oot3d_native_hd_font_runtime_tests EXCLUDE_FROM_ALL
-    tools/oot3d/native_game_runtime/oot3d_native_hd_font_runtime_tests.cpp)
+    titles/oot3d/topscreen/oot3d_native_hd_font_runtime_tests.cpp)
 target_link_libraries(oot3d_native_hd_font_runtime_tests PRIVATE oot3d_top_screen_texture_runtime)
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set_property(TARGET oot3d_native_hd_font_runtime_tests PROPERTY MSVC_RUNTIME_LIBRARY
@@ -287,7 +302,7 @@ endif()
 oot3d_target_defaults(oot3d_top_screen_texture_runtime NO_WARNING_OVERRIDE FOLDER Tools)
 
 add_executable(oot3d_top_screen_texture_runtime_tests EXCLUDE_FROM_ALL
-    tools/oot3d/native_game_runtime/oot3d_top_screen_texture_runtime_tests.cpp
+    titles/oot3d/topscreen/oot3d_top_screen_texture_runtime_tests.cpp
 )
 target_link_libraries(oot3d_top_screen_texture_runtime_tests PRIVATE
     oot3d_top_screen_texture_runtime)
@@ -327,6 +342,9 @@ add_library(oot3d_native_control_config STATIC EXCLUDE_FROM_ALL
 )
 target_include_directories(oot3d_native_control_config PUBLIC
     tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment
 )
 target_link_libraries(oot3d_native_control_config PUBLIC
     nlohmann_json::nlohmann_json
@@ -340,6 +358,9 @@ add_library(oot3d_native_a32_input STATIC EXCLUDE_FROM_ALL
 )
 target_include_directories(oot3d_native_a32_input PUBLIC
     tools/oot3d/native_game_runtime
+    titles/oot3d/topscreen
+    titles/oot3d/gameplay
+    titles/oot3d/environment
 )
 target_include_directories(oot3d_native_a32_input PRIVATE
     runtime/three_ds_recomp/include

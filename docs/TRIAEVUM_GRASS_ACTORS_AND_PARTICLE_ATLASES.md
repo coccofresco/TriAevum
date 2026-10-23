@@ -16,7 +16,7 @@ guest animation timing, or tune the geometry of Link/Epona individually.
 
 ## Actor adapter
 
-`tools/oot3d/native_game_runtime/oot3d_native_actor_interactions.cpp` reads the
+`titles/oot3d/gameplay/oot3d_native_actor_interactions.cpp` reads the
 existing, locally imported native layout in
 `tools/oot3d/decomp_support/include/oot3d/actor{,_spawn}.h` (moved there from the
 removed `source_imports/actor_update_all_449e219e` on 2026-10-03).

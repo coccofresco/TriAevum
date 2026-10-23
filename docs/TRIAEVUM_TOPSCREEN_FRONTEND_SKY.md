@@ -16,7 +16,7 @@ menu draws, so simply binding both to the top target would capture only the sky.
 
 ## Ownership and Fix
 
-`tools/oot3d/native_game_runtime/oot3d_top_screen_frontend_composition.h`
+`titles/oot3d/topscreen/oot3d_top_screen_frontend_composition.h`
 owns this title/profile-specific composition policy:
 
 - Only an active native frontend under TopScreen uses it. Gameplay, pause-page

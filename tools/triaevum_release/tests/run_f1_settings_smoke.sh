@@ -27,16 +27,24 @@ includes=()
 if [[ -n "${TRIAEVUM_NLOHMANN_INCLUDE:-}" ]]; then
     includes+=(-I"$TRIAEVUM_NLOHMANN_INCLUDE")
 fi
-for unit in oot3d_native_controls_settings_panel oot3d_top_screen_settings_panel oot3d_photo_mode_panel \
-            oot3d_game_language oot3d_game_language_panel oot3d_savestate_panel \
-            oot3d_scene_environment oot3d_scene_environment_blend oot3d_scene_environment_codec \
-            oot3d_scene_environment_panel oot3d_light_gizmo; do
-    panels+=("$build/CMakeFiles/oot3d_native_game.dir/tools/oot3d/native_game_runtime/$unit.cpp.o")
+for unit in tools/oot3d/native_game_runtime/oot3d_native_controls_settings_panel \
+            titles/oot3d/topscreen/oot3d_top_screen_settings_panel \
+            tools/oot3d/native_game_runtime/oot3d_photo_mode_panel \
+            tools/oot3d/native_game_runtime/oot3d_game_language \
+            tools/oot3d/native_game_runtime/oot3d_game_language_panel \
+            tools/oot3d/native_game_runtime/oot3d_savestate_panel \
+            titles/oot3d/environment/oot3d_scene_environment \
+            titles/oot3d/environment/oot3d_scene_environment_blend \
+            titles/oot3d/environment/oot3d_scene_environment_codec \
+            titles/oot3d/environment/oot3d_scene_environment_panel \
+            titles/oot3d/environment/oot3d_light_gizmo; do
+    panels+=("$build/CMakeFiles/oot3d_native_game.dir/$unit.cpp.o")
 done
 panels+=("$build/CMakeFiles/oot3d_native_a32_savestate.dir/tools/oot3d/native_game_runtime/oot3d_savestate_library.cpp.o")
 "$compiler" -std=c++20 -O1 -DIMGUI_ENABLE_TEST_ENGINE \
     -I"$imgui" -I"$root/runtime/three_ds_recomp/include" \
     -I"$root/tools/oot3d/native_game_runtime" -I"$root/tools/oot3d/ui_topscreen" \
+    -I"$root/titles/oot3d/topscreen" -I"$root/titles/oot3d/gameplay" -I"$root/titles/oot3d/environment" \
     -I"$root/runtime/three_ds_recomp/src/fast/renderer" -I"$root/tools/three_ds/input" \
     "${includes[@]}" "$root/tools/triaevum_release/tests/f1_settings_panel_smoke.cpp" \
     "${panels[@]}" "${imgui_objects[@]}" -Wl,--start-group \

@@ -151,9 +151,9 @@ one-argument signature.
 
 Consumer implementation:
 
-- `tools/oot3d/native_game_runtime/oot3d_typed_actor_lifecycle.h`
-- `tools/oot3d/native_game_runtime/oot3d_typed_actor_lifecycle.cpp`
-- `tools/oot3d/native_game_runtime/oot3d_typed_gameplay_bridge.cpp`
+- `titles/oot3d/gameplay/oot3d_typed_actor_lifecycle.h`
+- `titles/oot3d/gameplay/oot3d_typed_actor_lifecycle.cpp`
+- `titles/oot3d/gameplay/oot3d_typed_gameplay_bridge.cpp`
 
 Verification:
 
@@ -249,9 +249,9 @@ continuation state remains in guest registers, stack and memory.
 
 Consumer implementation:
 
-- `tools/oot3d/native_game_runtime/oot3d_typed_record_initializer.h`
-- `tools/oot3d/native_game_runtime/oot3d_typed_record_initializer.cpp`
-- `tools/oot3d/native_game_runtime/oot3d_typed_gameplay_bridge.cpp`
+- `titles/oot3d/gameplay/oot3d_typed_record_initializer.h`
+- `titles/oot3d/gameplay/oot3d_typed_record_initializer.cpp`
+- `titles/oot3d/gameplay/oot3d_typed_gameplay_bridge.cpp`
 
 Verification:
 
@@ -337,9 +337,9 @@ state. Do not propagate the pause classification without new target evidence.
 
 Consumer implementation:
 
-- `tools/oot3d/native_game_runtime/oot3d_typed_audio_request_callback.h`
-- `tools/oot3d/native_game_runtime/oot3d_typed_audio_request_callback.cpp`
-- `tools/oot3d/native_game_runtime/oot3d_typed_gameplay_bridge.cpp`
+- `titles/oot3d/gameplay/oot3d_typed_audio_request_callback.h`
+- `titles/oot3d/gameplay/oot3d_typed_audio_request_callback.cpp`
+- `titles/oot3d/gameplay/oot3d_typed_gameplay_bridge.cpp`
 
 Verification:
 
@@ -399,9 +399,9 @@ Required layout:
 
 Consumer implementation:
 
-- `tools/oot3d/native_game_runtime/oot3d_typed_game_state.h`
-- `tools/oot3d/native_game_runtime/oot3d_typed_game_state.cpp`
-- `tools/oot3d/native_game_runtime/oot3d_typed_gameplay_bridge.cpp`
+- `titles/oot3d/gameplay/oot3d_typed_game_state.h`
+- `titles/oot3d/gameplay/oot3d_typed_game_state.cpp`
+- `titles/oot3d/gameplay/oot3d_typed_gameplay_bridge.cpp`
 
 Verification:
 

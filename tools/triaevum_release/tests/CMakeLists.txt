@@ -10,15 +10,15 @@ FetchContent_GetProperties(ImGui SOURCE_DIR _f1_imgui_source)
 add_executable(triaevum_f1_settings_smoke EXCLUDE_FROM_ALL
     f1_settings_panel_smoke.cpp
     ../../oot3d/native_game_runtime/oot3d_native_controls_settings_panel.cpp
-    ../../oot3d/native_game_runtime/oot3d_top_screen_settings_panel.cpp
+    ../../../titles/oot3d/topscreen/oot3d_top_screen_settings_panel.cpp
     ../../oot3d/native_game_runtime/oot3d_photo_mode_panel.cpp
     ../../oot3d/native_game_runtime/oot3d_game_language.cpp
     ../../oot3d/native_game_runtime/oot3d_game_language_panel.cpp
-    ../../oot3d/native_game_runtime/oot3d_scene_environment.cpp
-    ../../oot3d/native_game_runtime/oot3d_scene_environment_blend.cpp
-    ../../oot3d/native_game_runtime/oot3d_light_gizmo.cpp
-    ../../oot3d/native_game_runtime/oot3d_scene_environment_codec.cpp
-    ../../oot3d/native_game_runtime/oot3d_scene_environment_panel.cpp
+    ../../../titles/oot3d/environment/oot3d_scene_environment.cpp
+    ../../../titles/oot3d/environment/oot3d_scene_environment_blend.cpp
+    ../../../titles/oot3d/environment/oot3d_light_gizmo.cpp
+    ../../../titles/oot3d/environment/oot3d_scene_environment_codec.cpp
+    ../../../titles/oot3d/environment/oot3d_scene_environment_panel.cpp
     ../../oot3d/native_game_runtime/oot3d_savestate_panel.cpp
     ../../oot3d/native_game_runtime/oot3d_savestate_library.cpp
     ${_f1_imgui_source}/imgui.cpp

@@ -10,7 +10,10 @@ add_executable(presentation_pacer_tests presentation_pacer_tests.cpp
     "${CMAKE_CURRENT_LIST_DIR}/../../oot3d/native_game_runtime/oot3d_native_presentation_pacer.cpp")
 target_compile_features(presentation_pacer_tests PRIVATE cxx_std_20)
 target_include_directories(presentation_pacer_tests PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/../../oot3d/native_game_runtime")
+    "${CMAKE_CURRENT_LIST_DIR}/../../oot3d/native_game_runtime"
+    "${CMAKE_CURRENT_LIST_DIR}/../../../titles/oot3d/topscreen"
+    "${CMAKE_CURRENT_LIST_DIR}/../../../titles/oot3d/gameplay"
+    "${CMAKE_CURRENT_LIST_DIR}/../../../titles/oot3d/environment")
 add_test(NAME presentation_pacer COMMAND presentation_pacer_tests)
 find_package(Vulkan REQUIRED)
 find_path(SHADERC_INCLUDE_DIR shaderc/shaderc.hpp HINTS "$ENV{VULKAN_SDK}" PATH_SUFFIXES include Include REQUIRED)
