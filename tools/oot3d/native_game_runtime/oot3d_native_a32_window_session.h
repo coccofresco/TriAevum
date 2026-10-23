@@ -603,6 +603,14 @@ private:
   bool guestFrameBeginNativePresentation = false;
   const char* parallelPresentationEnvironment{};
   bool parallelPresentation{};
+  // Input admission decision per host frame; the render worker reports the
+  // admitted refresh frames it paced and how many missed their deadline.
+  Oot3dNativeGame::NativeInputAdmissionController inputAdmission;
+  bool inputAdmissionLateSampling = true;
+  std::atomic<uint64_t> admittedRefreshFramesPaced{0};
+  std::atomic<uint64_t> admittedRefreshFramesLate{0};
+  uint64_t admittedRefreshFramesPacedSeen = 0;
+  uint64_t admittedRefreshFramesLateSeen = 0;
   Fast::Fast3dGui *fast3dGui{};
   std::optional<GuiRendererRoutingReset> guiRendererRoutingReset;
 };

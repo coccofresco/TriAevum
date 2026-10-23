@@ -64,6 +64,7 @@ void PrintOot3dNativeGameUsage() {
                  "[--screenshot-sequence] [--screenshot-interval <frames>] "
                  "[--screenshot-start-frame <frame>] "
                  "[--extended-diagnostics] [--serial-presentation] "
+                 "[--input-admission <on|off|auto>] "
                  "[--gameplay-timing <native30_interpolated|"
                  "native30_no_interpolation|enhanced60>] "
                  "[--simulation-rate <hz>] "
@@ -169,6 +170,12 @@ bool ParseOot3dNativeGameArgs(int argc, char** argv, Oot3dNativeGameLaunch& laun
             launch.ParallelPresentation = true;
         } else if (arg == "--serial-presentation") {
             launch.ParallelPresentation = false;
+        } else if (arg == "--input-admission" && index + 1 < argc) {
+            if (!Oot3dNativeGame::ParseNativeInputAdmissionMode(
+                    argv[++index], &launch.InputAdmission)) {
+                throw std::runtime_error(
+                    "--input-admission expects on, off or auto");
+            }
         } else if (arg == "--gameplay-timing" && index + 1 < argc) {
             if (!Oot3dNativeGame::ParseGameplayTimingMode(
                     argv[++index], &launch.GameplayTiming)) {

@@ -81,6 +81,7 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
   auto &lastTopScreenPrimitivesBySubsystem = in.lastTopScreenPrimitivesBySubsystem;
   auto &picaPresentationScheduler = in.picaPresentationScheduler;
   auto &parallelPresentation = in.parallelPresentation;
+  const auto &inputAdmission = in.inputAdmission;
   if (!launch.Host.OutputPath.empty()) {
     nlohmann::json topFramebuffer = nullptr;
     if (const auto top = hostServices.TopFramebuffer(); top.has_value()) {
@@ -678,7 +679,23 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                !hostArgs.ThroughputBenchmark &&
                    window.GetTargetFps() > 0},
               {"pacing_enabled", realtimePacer.Enabled()},
-              {"parallel_presentation", parallelPresentation}}},
+              {"parallel_presentation", parallelPresentation},
+              {"input_admission",
+               [&]() {
+                 const auto &stats = inputAdmission.Stats();
+                 return nlohmann::json{
+                     {"mode", Oot3dNativeGame::NativeInputAdmissionModeName(
+                                  inputAdmission.Mode())},
+                     {"admitting_at_exit", inputAdmission.Admitting()},
+                     {"admitted_frames", stats.AdmittedFrames},
+                     {"overlapped_frames", stats.OverlappedFrames},
+                     {"observed_refresh_frames", stats.ObservedRefreshFrames},
+                     {"late_refresh_frames", stats.LateRefreshFrames},
+                     {"overlap_entries", stats.OverlapEntries},
+                     {"probes", stats.Probes},
+                     {"successful_probes", stats.SuccessfulProbes},
+                     {"hold_presentations", inputAdmission.HoldPresentations()}};
+               }()}}},
             {"frame_rate",
              [&]() {
                 const auto &contract = frameRatePolicy.Contract();

@@ -72,8 +72,12 @@ def prepare(installation: Path, launch_profile: Path, output: Path, *, capture: 
         "--save-data": "${profile_dir}/data/savedata",
         "--renderer-cache-directory": "${profile_dir}/data/cache/renderer",
         "--output": "${profile_dir}/data/runtime-state.json",
-        "--gameplay-timing": "native30_no_interpolation",
-        "--presentation-rate": "30",
+        # The product presentation: 30 Hz guest, interpolated 60 Hz output.
+        # Auto admission keeps the guest refresh from being serialized with
+        # presentation when the phone cannot fit both in one 60 Hz period.
+        "--gameplay-timing": "native30_interpolated",
+        "--presentation-rate": "60",
+        "--input-admission": "auto",
         "--width": "640", "--height": "360",
         "--max-seconds": "120",
     }
@@ -85,7 +89,13 @@ def prepare(installation: Path, launch_profile: Path, output: Path, *, capture: 
             target[key] = relocated(key)
     config = output / "data/config/TriAevum.android.json"
     config.parent.mkdir(parents=True, exist_ok=True)
-    config.write_text("{}\n", encoding="utf-8")
+    # Visual interpolation is owned by the FrameRate graphics setting; the
+    # launch timing only allows it. Without an explicit Custom preset the
+    # runtime normalizes the document to its current preset, which resets
+    # FrameRate; it writes the remaining fields back on first start.
+    config.write_text(json.dumps({"Graphics": {"Preset": "Custom",
+                                               "FrameRate": {"Mode": "Interpolated2x"}}},
+                                 indent=2) + "\n", encoding="utf-8")
     (output / "TriAevum.android.launch.json").write_text(json.dumps({
         "format": "oot3d_native_game_launch_profile_v1",
         "arguments": [item for pair in target.items() for item in pair] + (["--screenshot-sequence"] if capture else []),

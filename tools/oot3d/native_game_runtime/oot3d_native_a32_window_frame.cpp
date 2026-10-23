@@ -163,13 +163,19 @@ bool NativeA32WindowSession::RunFrame() {
   // frame rate (docs/TRIAEVUM_PARALLEL_PRESENTATION.md).
   // TRIAEVUM_INPUT_ADMISSION=1 keeps only the wait for the previous frame and
   // =0 restores the early sampling, for comparisons.
-  static const char *inputAdmissionMode = std::getenv("TRIAEVUM_INPUT_ADMISSION");
-  static const bool inputAdmission =
-      inputAdmissionMode == nullptr || std::string_view(inputAdmissionMode) != "0";
-  static const bool lateInputSample =
-      inputAdmission && (inputAdmissionMode == nullptr ||
-                         std::string_view(inputAdmissionMode) != "1");
-  if (inputAdmission) renderStream.WaitForFramesInFlight(0U);
+  // Admission policy (oot3d_native_input_admission.h): auto suspends it while
+  // admitted refresh frames keep missing their presentation deadline.
+  {
+    const uint64_t paced = admittedRefreshFramesPaced.load(std::memory_order_acquire);
+    const uint64_t late = admittedRefreshFramesLate.load(std::memory_order_acquire);
+    inputAdmission.ObserveRefreshFrames(paced - admittedRefreshFramesPacedSeen,
+                                        late - admittedRefreshFramesLateSeen);
+    admittedRefreshFramesPacedSeen = paced;
+    admittedRefreshFramesLateSeen = late;
+  }
+  const bool frameAdmitted = inputAdmission.BeginFrame();
+  const bool lateInputSample = frameAdmitted && inputAdmissionLateSampling;
+  if (frameAdmitted) renderStream.WaitForFramesInFlight(0U);
   if (!PrepareNextWindowDemoFrame(hostArgs, window, timing, frameTiming)) {
     return true;
   }
@@ -616,6 +622,7 @@ bool NativeA32WindowSession::RunFrame() {
   presentSteps.Mark("gui_end_draw");
   renderStream.Submit([&, width, height,
                        presentationSerial = presentationFrameCount,
+                       admittedRefreshFrame = frameAdmitted && guestRefreshesDue != 0U,
                        forcedScreenshot = std::exchange(pendingForcedScreenshot, {})] {
     if (!forcedScreenshot.empty()) screenshotState.ForcedPath = forcedScreenshot;
     if (rendererFrameSkipped) {
@@ -632,7 +639,14 @@ bool NativeA32WindowSession::RunFrame() {
     capturedTemporalSample.reset();
     const auto waitStart = std::chrono::steady_clock::now();
     CpuProbe::Scope cpuPacing(CpuProbe::Phase::Pacing);
+    const uint64_t missesBeforeWait = realtimePacer.Stats().DeadlineMisses;
     realtimePacer.WaitForNextRefresh();
+    if (admittedRefreshFrame && realtimePacer.Enabled()) {
+      if (realtimePacer.Stats().DeadlineMisses != missesBeforeWait) {
+        admittedRefreshFramesLate.fetch_add(1U, std::memory_order_relaxed);
+      }
+      admittedRefreshFramesPaced.fetch_add(1U, std::memory_order_release);
+    }
     cpuPacing.Stop();
     const auto waitEnd = std::chrono::steady_clock::now();
     rendererTiming->PacingWaitSeconds +=

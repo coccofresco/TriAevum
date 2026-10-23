@@ -13,6 +13,7 @@ void RunNativeA32SceneViewProbeTests();
 void RunNativeTemporalEventLedgerTests();
 void RunNativePlayerTemporalBridgeTests();
 void RunNativeInputLatencyTraceTests();
+void RunNativeInputAdmissionTests();
 
 namespace {
 
@@ -121,6 +122,7 @@ int main() {
         RunNativeTemporalEventLedgerTests();
         RunNativePlayerTemporalBridgeTests();
         RunNativeInputLatencyTraceTests();
+        RunNativeInputAdmissionTests();
         TestPlanarDeltaAndBaseRestore();
         TestWorldRotationAndActorScale();
         TestPreviousRotationAndOneShotSuppression();

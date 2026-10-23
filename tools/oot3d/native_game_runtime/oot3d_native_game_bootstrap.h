@@ -10,6 +10,7 @@
 #include "oot3d_demo_host_types.h"
 #include "oot3d_native_control_config.h"
 #include "oot3d_native_frame_rate.h"
+#include "oot3d_native_input_admission.h"
 #include "oot3d_top_screen_config.h"
 #include "oot3d_top_screen_mod_profile.h"
 
@@ -63,6 +64,11 @@ struct Oot3dNativeGameLaunch {
     // Presents frame N on a render thread while the guest simulates N+1.
     // --serial-presentation restores the single-threaded loop.
     bool ParallelPresentation = true;
+    // Whether a frame waits for the previous presentation before sampling
+    // input (oot3d_native_input_admission.h). Platform launch profiles that
+    // cannot serialize the guest refresh with presentation select auto.
+    Oot3dNativeGame::NativeInputAdmissionMode InputAdmission =
+        Oot3dNativeGame::NativeInputAdmissionMode::On;
     Oot3dNativeGame::GameplayTimingMode GameplayTiming =
         Oot3dNativeGame::GameplayTimingMode::Native30Interpolated;
     // Legacy aliases retained for existing launch scripts. Parsing resolves

@@ -278,8 +278,16 @@ python3 "$SRC/tools/android/prepare_intro_data.py" \
 The tool copies only required manifest/resources/ROM-derived data, TopScreen
 inputs and an optional prepared `--pica-aot-shader-pack`. It relocates paths,
 excludes desktop title binaries, saves and driver caches, and uses a fresh
-configuration. The generated developer profile selects native 30 Hz, no
-interpolation, logical 640x360 and bounded 120-second execution. The Android
+configuration. The generated developer profile selects the product
+presentation (30 Hz guest, `Interpolated2x` 60 Hz output, `--input-admission
+auto`), logical 640x360 and bounded 120-second execution. Visual interpolation
+is owned by the `FrameRate` graphics setting, so the generated configuration
+carries `Preset: Custom` and `FrameRate: Interpolated2x`; the launch timing only
+allows it. On the S25 (2026-10-23, warm cache) this presents 59.9 fps with 246
+late presentations in 120 s; with admission forced on it presents 56.8 fps with
+4528 late (docs/TRIAEVUM_PARALLEL_PRESENTATION.md, Admission policy). The
+optional `environment` object of `TriAevum.android.host.json` sets developer
+diagnostic variables before the native libraries load. The Android
 Surface policy above determines the actual pixel extent.
 
 Framebuffer capture is now **opt-in** with `--capture`; leave it off for pacing

@@ -4,6 +4,7 @@
 
 #include "oot3d_native_a32_window_shared.h"
 #include "oot3d_native_a32_window_stats.h"
+#include "oot3d_native_input_admission.h"
 
 namespace Oot3dA32Window {
 
@@ -85,6 +86,7 @@ struct NativeA32WindowSummaryInputs {
     std::array<std::vector<oot3d::ui::UiPrimitive>, oot3d::ui::kUiSubsystemCount> &lastTopScreenPrimitivesBySubsystem;
     Oot3dNativeGame::Oot3dPicaPresentationScheduler &picaPresentationScheduler;
     const bool &parallelPresentation;
+    const Oot3dNativeGame::NativeInputAdmissionController &inputAdmission;
 };
 
 // Writes launch.Host.OutputPath when it is set.

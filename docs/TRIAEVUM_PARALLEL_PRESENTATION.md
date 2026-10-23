@@ -185,6 +185,32 @@ GPU-bound Kokiri loses 0.6-1.1 fps (1-2 %); uncapped the field runs 520
 admission, `=0` restores the early sampling. The interpolation delay is on top
 of these host times.
 
+### Admission policy
+
+Admission serializes the guest refresh with the previous presentation. A host
+that cannot fit both in one presentation period misses every refresh-carrying
+deadline. The launch flag `--input-admission on|off|auto` selects the policy
+(`NativeInputAdmissionController`, `oot3d_native_input_admission.h`); `on` is
+the default and keeps the behaviour above. `auto` observes the admitted,
+paced frames that run a guest refresh: when 8 of 30 miss their deadline it
+overlaps for 600 presentations, then probes admission again; a failed probe
+doubles the hold up to 7200 presentations. `TRIAEVUM_INPUT_ADMISSION` still
+overrides the launch choice (`0`, `1`, `on`, `off`, `auto`). The runtime
+summary reports the decisions in `benchmark_window.input_admission`.
+
+Measured on the Android reference phone (Galaxy S25, Adreno 830), intro,
+`native30_interpolated` + `Interpolated2x`, 120 s, input latency from the SDL
+pump to the frame end:
+
+| Policy | Presented fps | Late presentations | Latency p50 (p95) ms |
+|---|---:|---:|---|
+| on | 56.8 | 4528 | 15.9 (27.3) |
+| off | 59.9 | 585 | 33.2 (33.5) |
+| auto | 59.9 | 246 | overlapped after the first second |
+
+Overlap costs exactly one presentation of latency; the Android launch profile
+selects `auto`.
+
 ## Qualification
 
 - Deterministic captures in `Interpolated2x` (and `Original30`), serial

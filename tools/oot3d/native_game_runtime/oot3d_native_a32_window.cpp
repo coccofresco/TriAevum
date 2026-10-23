@@ -236,7 +236,8 @@ void NativeA32WindowSession::Finish() {
       screenshotState, publishedSceneViewCount, automatedStateSavedAtRunFrame, automatedStateSavedAtGuestFrame,
       benchmark, benchmarkFrameTimes, cpuProbeRequested, benchmarkCpuPhases,
       picaCompositionTracker, topScreenTextureOverridePackPointer, topScreenTextureOverrideRuntime, preparationScreen,
-      lastTopScreenPrimitivesBySubsystem, picaPresentationScheduler, parallelPresentation});
+      lastTopScreenPrimitivesBySubsystem, picaPresentationScheduler, parallelPresentation,
+      inputAdmission});
 
   if (launch.ExtendedDiagnostics &&
       (process.Memory().RangeWatchActive() || watchReportRequested)) {

@@ -1691,6 +1691,26 @@ void NativeA32WindowSession::Setup() {
   cpuProbeRequested = CpuProbe::BuildEnabled && cpuProbeEnvironment &&
       std::string_view(cpuProbeEnvironment) == "1";
 
+  {
+    // The launch profile chooses the admission policy; harnesses override it:
+    // TRIAEVUM_INPUT_ADMISSION=0 never admits (early sampling), =1 admits
+    // without late sampling, on|off|auto select the policy itself.
+    auto admissionMode = launch.InputAdmission;
+    inputAdmissionLateSampling = true;
+    if (const char *admission = std::getenv("TRIAEVUM_INPUT_ADMISSION")) {
+      const std::string_view value(admission);
+      if (value == "0") {
+        admissionMode = Oot3dNativeGame::NativeInputAdmissionMode::Off;
+      } else if (value == "1") {
+        admissionMode = Oot3dNativeGame::NativeInputAdmissionMode::On;
+        inputAdmissionLateSampling = false;
+      } else {
+        (void)Oot3dNativeGame::ParseNativeInputAdmissionMode(value, &admissionMode);
+      }
+    }
+    inputAdmission = Oot3dNativeGame::NativeInputAdmissionController(admissionMode);
+  }
+
   parallelPresentationEnvironment =
       std::getenv("TRIAEVUM_PARALLEL_PRESENTATION");
   // Harnesses override the launch choice: "0" serial, "1" parallel.

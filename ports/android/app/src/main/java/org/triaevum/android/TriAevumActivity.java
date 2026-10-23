@@ -3,6 +3,8 @@ package org.triaevum.android;
 import org.libsdl.app.SDLActivity;
 import org.libsdl.app.SDLSurface;
 import org.json.JSONObject;
+import android.system.Os;
+import java.util.Iterator;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.charset.StandardCharsets;
@@ -30,8 +32,31 @@ public final class TriAevumActivity extends SDLActivity {
     }
 
     @Override protected void onCreate(Bundle state) {
+        applyDeveloperEnvironment();
         super.onCreate(state);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
+
+    /**
+     * Developer comparisons only: the optional "environment" object of the host config sets the same
+     * diagnostic variables the desktop harnesses export, before the native libraries load.
+     */
+    private void applyDeveloperEnvironment() {
+        File config = new File(getExternalFilesDir(null), "TriAevum.android.host.json");
+        if (!config.isFile()) return;
+        try {
+            JSONObject environment = new JSONObject(new String(Files.readAllBytes(config.toPath()),
+                StandardCharsets.UTF_8)).optJSONObject("environment");
+            if (environment == null) return;
+            for (Iterator<String> keys = environment.keys(); keys.hasNext();) {
+                String key = keys.next();
+                String value = environment.getString(key);
+                Os.setenv(key, value, true);
+                Log.i("TriAevum", "Developer environment " + key + "=" + value);
+            }
+        } catch (Exception error) {
+            Log.w("TriAevum", "Invalid Android host environment; ignored", error);
+        }
     }
 
     @Override protected String[] getLibraries() {

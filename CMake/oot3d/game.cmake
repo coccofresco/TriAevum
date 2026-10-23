@@ -9,6 +9,7 @@ add_library(oot3d_native_game_runtime STATIC EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_frame_rate.cpp
     tools/oot3d/native_game_runtime/oot3d_native_presentation_pacer.cpp
     tools/oot3d/native_game_runtime/oot3d_native_input_latency_trace.cpp
+    tools/oot3d/native_game_runtime/oot3d_native_input_admission.cpp
     tools/oot3d/native_game_runtime/oot3d_native_temporal_event_ledger.cpp
     titles/oot3d/gameplay/oot3d_native_player_temporal_bridge.cpp
     titles/oot3d/gameplay/oot3d_native_root_motion.cpp
@@ -44,6 +45,7 @@ add_executable(oot3d_native_game_runtime_tests EXCLUDE_FROM_ALL
     titles/oot3d/gameplay/oot3d_native_root_motion_tests.cpp
     titles/oot3d/gameplay/oot3d_native_skel_anime_tests.cpp
     tools/oot3d/native_game_runtime/oot3d_native_input_latency_trace_tests.cpp
+    tools/oot3d/native_game_runtime/oot3d_native_input_admission_tests.cpp
 )
 target_link_libraries(oot3d_native_game_runtime_tests PRIVATE oot3d_native_game_runtime)
 oot3d_target_defaults(oot3d_native_game_runtime_tests FOLDER Tests)
