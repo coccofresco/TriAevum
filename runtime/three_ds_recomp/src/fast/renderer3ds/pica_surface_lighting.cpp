@@ -1133,7 +1133,7 @@ std::string_view PicaSurfaceLightingWaterMarker() noexcept {
 )glsl";
 }
 
-std::string PicaSurfaceLightingBody(bool fragmentOperand, bool fragmentBalance) {
+std::string PicaSurfaceLightingBody(bool fragmentOperand, bool fragmentBalance, bool nativeFragmentShadows) {
     const std::string water = std::string(R"glsl(
     bool surface_water = pica_surface_water(cross(dFdx(pica_view), dFdy(pica_view)));
     pica_surface_water_fragment = surface_water;
@@ -1199,7 +1199,8 @@ std::string PicaSurfaceLightingBody(bool fragmentOperand, bool fragmentBalance) 
         rounded_primary_color.rgb = byteround3(pica_surface_primary(rounded_primary_color.rgb,
             pica_surface_unit(pica_surface_normal)));
     }
-    if (pica_surface.control.x == 0u) {
+)glsl") +
+        (nativeFragmentShadows ? std::string(R"glsl(    if (pica_surface.control.x == 0u) {
         // Native per-pixel lights a scene shadow covers (receiver slots 0-7
         // are native fragment lights here): their shadowed diffuse share
         // leaves the native result.
@@ -1214,7 +1215,7 @@ std::string PicaSurfaceLightingBody(bool fragmentOperand, bool fragmentBalance) 
                 (vec3(1.0) - pica_light_shadow), vec3(0.0));
         }
     }
-)glsl") +
+)glsl") : std::string{}) +
         (fragmentOperand ? std::string(R"glsl(    // Shadow subtraction above belongs to native illumination. Add the new
     // light afterwards so a native shadow cannot subtract a placed source.
     if (surface_fragment_operand) {

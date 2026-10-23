@@ -649,15 +649,20 @@ BuildPicaFragmentInstrumentationVariant(const PicaFragmentInstrumentationRequest
             PicaShaderInstrumentationFeature::FragmentLightingBalance) &&
         result.Hooks.NativeLightingCapture.Valid(request.Source.size(),
             result.Hooks.Offset(PicaShaderHook::PicaLighting));
+    const bool nativeFragmentShadows = surfaceLighting && !pbr &&
+        HasPicaShaderInstrumentationFeature(request.RequestedFeatures,
+            PicaShaderInstrumentationFeature::NativeFragmentLitShadows);
     if (surfaceLighting) {
         decisions.FragmentLightingOperand = fragmentOperand;
+        decisions.NativeFragmentLitShadows = nativeFragmentShadows;
         decisions.Set(Decision::SurfaceLighting);
         declarations += Renderer3ds::PicaSurfaceLightingDeclarations(fragmentOperand, fragmentBalance);
         insertions.push_back({result.Hooks.Offset(PicaShaderHook::PicaLighting),
             "\n    vec4 surface_native_primary = rounded_primary_color;\n"
             "    vec4 surface_native_fragment = primary_fragment_color;\n"
             "    vec4 surface_native_secondary = secondary_fragment_color;\n" +
-            (pbr ? pbr->UnlitInputs : std::string(Renderer3ds::PicaSurfaceLightingBody(fragmentOperand, fragmentBalance)))});
+            (pbr ? pbr->UnlitInputs : std::string(Renderer3ds::PicaSurfaceLightingBody(
+                       fragmentOperand, fragmentBalance, nativeFragmentShadows)))});
         // Native TEV alpha may read RGB operands or DOT3_RGBA. Re-evaluate
         // that dependency chain with the original lighting; never let an
         // extension change native coverage. Dead RGB outputs are eliminated
@@ -692,6 +697,10 @@ BuildPicaFragmentInstrumentationVariant(const PicaFragmentInstrumentationRequest
             insertions.push_back({sites.Specular, std::string(Renderer3ds::kPicaFragmentBalanceCaptureSpecular)});
             result.FragmentKey=SaltedVariantKey(result.FragmentKey, "PICA_NATIVE_FRAGMENT_BALANCE_V1");
             result.AppliedFeatures |= PicaShaderInstrumentationFeature::FragmentLightingBalance;
+        }
+        if (nativeFragmentShadows) {
+            result.FragmentKey = SaltedVariantKey(result.FragmentKey, "PICA_NATIVE_FRAGMENT_SHADOW_V1");
+            result.AppliedFeatures |= PicaShaderInstrumentationFeature::NativeFragmentLitShadows;
         }
         if (pbr) {
             declarations += pbr->Declarations;

@@ -1004,6 +1004,9 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         }
         std::optional<Renderer3ds::PicaSurfaceLightingUniforms> surfaceLighting;
         std::optional<Renderer3ds::PicaFragmentBalanceUniforms> fragmentBalance;
+        // Adapter capability: the draw's native fragment lights are scene
+        // lights (shadow receivers, no second application of a scene light).
+        bool nativeFragmentLitReceivers = false;
         const auto* environmentWorldToView = draw.LightBinding.WorldToView
             ? &*draw.LightBinding.WorldToView : nullptr;
         Oot3d::DirectionalShadowMatrix environmentViewToWorld{};
@@ -1127,9 +1130,12 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                     : std::array<float, 4>{sources.Weights[0], sources.Weights[1], sources.Weights[2], 0.0F};
             }
             // A draw lit per pixel by native fragment lights already applies
-            // the scene lights among them: they are not added a second time.
-            if (surfaceLighting && surfaceLighting->Control[0] == 0U &&
-                draw.FragmentFeatures.FragmentLightingEnabled) {
+            // the scene lights among them: they are not added a second time
+            // (adapter capability: the title's native lights are scene lights).
+            nativeFragmentLitReceivers = NativePicaFragmentLitShadowReceivers() &&
+                surfaceLighting && surfaceLighting->Control[0] == 0U &&
+                draw.FragmentFeatures.FragmentLightingEnabled;
+            if (nativeFragmentLitReceivers) {
                 const auto native = Oot3d::DecodePicaNativeDrawEnvironment(
                     draw.VertexUniformBytes, draw.FragmentUniformBytes, draw.FragmentFeatures).FragmentLighting;
                 std::array<std::array<float, 3>, std::tuple_size_v<decltype(native.Lights)>> directions{};
@@ -1419,6 +1425,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             surfaceCandidate && surfaceDebug.ShadowCode(surfaceOrdinal) != 0U,
 #endif
             fragmentBalance.has_value(),
+            nativeFragmentLitReceivers,
         };
         static const Oot3d::EffectsSettings nativeMemoryEffects;
         const auto& variantEffects = nativeMemoryOnly ? nativeMemoryEffects : graphicsSettings.Effects;
@@ -2281,8 +2288,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                     // per-vertex lighting, in the native per-pixel result.
                     const bool nativeFragmentLights =
                         (pbrMaterial != nullptr && pbrOptions.NativeFragmentLighting) ||
-                        (surfaceLighting && surfaceLighting->Control[0] == 0U &&
-                         draw.FragmentFeatures.FragmentLightingEnabled);
+                        Oot3d::HasPicaShaderInstrumentationFeature(drawVariant.AppliedFeatures,
+                            Oot3d::PicaShaderInstrumentationFeature::NativeFragmentLitShadows);
                     if (surfaceLighting &&
                         Oot3d::HasPicaShaderInstrumentationFeature(drawVariant.AppliedFeatures,
                             Oot3d::PicaShaderInstrumentationFeature::NativePerPixelLighting) &&

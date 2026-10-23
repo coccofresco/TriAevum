@@ -93,6 +93,7 @@ struct hash_pair_ff {
 
 class GfxRenderingAPI : public ::Fast::Renderer3ds::PicaRenderBackend {
     bool mNativePicaFragmentLightingOperand = false;
+    bool mNativePicaFragmentLitShadowReceivers = false;
   public:
     // Adapter capability, fixed before title submissions; not a user setting.
     // Default preserves the legacy primary-colour route and every shader key.
@@ -101,6 +102,16 @@ class GfxRenderingAPI : public ::Fast::Renderer3ds::PicaRenderBackend {
     }
     [[nodiscard]] bool NativePicaFragmentLightingOperand() const noexcept {
         return mNativePicaFragmentLightingOperand;
+    }
+    // Adapter capability: a draw lit per pixel by native fragment lights (and
+    // not per vertex) receives scene shadows on those lights, and a scene
+    // directional light one of them already applies is not added again.
+    // Default keeps the native per-pixel result and every shader source.
+    void SetNativePicaFragmentLitShadowReceivers(bool supported) noexcept {
+        mNativePicaFragmentLitShadowReceivers = supported;
+    }
+    [[nodiscard]] bool NativePicaFragmentLitShadowReceivers() const noexcept {
+        return mNativePicaFragmentLitShadowReceivers;
     }
     virtual ~GfxRenderingAPI() = default;
     virtual const char* GetName() = 0;

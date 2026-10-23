@@ -88,6 +88,8 @@ struct PicaEffectDecisions {
     uint8_t Outputs = 0;
     // This variant is not in the legacy built-in effect superset.
     bool FragmentLightingOperand = false;
+    // Nor is this one: the superset's surface body has no native-light shadows.
+    bool NativeFragmentLitShadows = false;
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
     bool ShadowProbe = false;
 #endif

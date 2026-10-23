@@ -139,6 +139,8 @@ PicaShaderInstrumentationFeature ResolvePicaDrawInstrumentationFeatures(
             request.FragmentShaderHooks.NativeLightingCapture.Valid(request.FragmentShaderSource.size(),
                 request.FragmentShaderHooks.Offset(PicaShaderHook::PicaLighting)))
             features |= PicaShaderInstrumentationFeature::FragmentLightingBalance;
+        if (request.NativeFragmentLitShadows)
+            features |= PicaShaderInstrumentationFeature::NativeFragmentLitShadows;
         if (UsesPbrMaterials(effects.SurfaceLighting) && request.Pbr.TextureSlot < 3U)
             features |= PicaShaderInstrumentationFeature::PbrMaterial;
     }

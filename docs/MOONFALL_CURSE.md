@@ -383,7 +383,9 @@ The scene draws, lit by native fragment lights, keep their native per-pixel
 lighting; the environment lights they already apply are not added again,
 and the directional shadow darkens the matching native light. No MM3D draw
 of the demo lights per vertex (b9 never set); one that did would stay
-native.
+native. In the unified tree this is the adapter capability
+`SetNativePicaFragmentLitShadowReceivers` (MM3D only; OoT3D's shader
+sources are unchanged by it).
 
 Result (developer launch, Clock Town attract demo): 96 opaque, 8
 translucent and 4 sky draws classified; ambient occlusion composes on the

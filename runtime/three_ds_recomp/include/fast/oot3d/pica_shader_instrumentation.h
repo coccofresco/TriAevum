@@ -47,6 +47,9 @@ enum class PicaShaderInstrumentationFeature : uint32_t {
     FaceNormalGuide = 1U << 17U,
     FragmentLightingOperand = 1U << 18U,
     FragmentLightingBalance = 1U << 20U,
+    // Native fragment lights (no per-vertex lighting) receive scene shadows
+    // in the surface body (adapter capability; MM3D).
+    NativeFragmentLitShadows = 1U << 21U,
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
     ShadowProbe = 1U << 19U,
 #endif

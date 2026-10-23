@@ -1272,6 +1272,8 @@ void NativeA32WindowSession::Setup() {
   auto &api = *apiPointer;
   api.SetNativePicaFragmentLightingOperand(
       titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d);
+  api.SetNativePicaFragmentLitShadowReceivers(
+      titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d);
   programPreparation =
       dynamic_cast<Fast::Renderer3ds::PicaProgramPreparationBackend *>(&api);
   alwaysAvailablePrograms =

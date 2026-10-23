@@ -2152,8 +2152,12 @@ TEST(Oot3dPicaShaderInstrumentation, FourLightSurfaceKeepsNativeLightsAndLightsF
     EXPECT_FLOAT_EQ(light->SceneDirections[0][1], 1.0F);
     EXPECT_FLOAT_EQ(light->SceneDirectionalColors[0][0], 0.3F);
     EXPECT_EQ(light->SceneDirections[1], (std::array<float, 4>{}));
-    EXPECT_NE(std::string_view(PicaSurfaceLightingBody()).find("fragment_uniforms.lighting_diffuse[pica_light]"),
-              std::string_view::npos);
+    // The shadow block is the adapter's: the legacy body has none.
+    EXPECT_NE(std::string(PicaSurfaceLightingBody(false, false, true)).find(
+                  "fragment_uniforms.lighting_diffuse[pica_light]"), std::string::npos);
+    EXPECT_EQ(std::string(PicaSurfaceLightingBody()).find("fragment_uniforms.lighting_diffuse[pica_light]"),
+              std::string::npos);
+    EXPECT_EQ(PicaSurfaceLightingBody(), PicaSurfaceLightingBody(false, false, false));
 }
 
 TEST(Oot3dPicaShaderInstrumentation, AuthoredLightingPreservesNativeMaterialReflectance) {
@@ -2449,7 +2453,8 @@ TEST(PicaFragmentBalance, CapabilityFalseKeepsCanonicalKeysAndNativeMemoryInert)
 
 // The plain (no balance operand) surface source is pinned: a change here is a
 // change to every title's canonical lighting shader, not to the balance variant.
-// Pinned at the beta.1 alignment (rim and baked-reference fields present).
+// Pinned at the beta.1.2 alignment (rim and baked-reference fields present;
+// the native fragment-lit shadow block is the MM3D adapter's, not legacy).
 TEST(Oot3dPicaShaderInstrumentation, LegacySurfaceSourceIsPinned) {
     using namespace Fast::Renderer3ds;
     const auto hash = [](std::string_view text) {
@@ -2459,12 +2464,16 @@ TEST(Oot3dPicaShaderInstrumentation, LegacySurfaceSourceIsPinned) {
     };
     EXPECT_EQ(PicaSurfaceLightingDeclarations().size(), 38472U);
     EXPECT_EQ(hash(PicaSurfaceLightingDeclarations()), 17643374038356268985ULL);
-    EXPECT_EQ(PicaSurfaceLightingBody().size(), 4238U);
-    EXPECT_EQ(hash(PicaSurfaceLightingBody()), 3389087660484655324ULL);
+    EXPECT_EQ(PicaSurfaceLightingBody().size(), 3332U);
+    EXPECT_EQ(hash(PicaSurfaceLightingBody()), 6543872953540395030ULL);
     EXPECT_NE(PicaSurfaceLightingBody(true), PicaSurfaceLightingBody());
+    EXPECT_NE(PicaSurfaceLightingBody(false, false, true), PicaSurfaceLightingBody());
     Fast::Oot3d::PicaEffectDecisions decisions;
     decisions.FragmentLightingOperand = true;
     EXPECT_FALSE(Fast::Oot3d::PicaUberEffectSupports(decisions, {}));
+    Fast::Oot3d::PicaEffectDecisions shadows;
+    shadows.NativeFragmentLitShadows = true;
+    EXPECT_FALSE(Fast::Oot3d::PicaUberEffectSupports(shadows, {}));
 }
 
 } // namespace

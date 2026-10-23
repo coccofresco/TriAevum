@@ -215,7 +215,12 @@ void AssignPicaSurfaceRim(PicaSurfaceLightingUniforms& uniforms, const PicaRimLi
 // stops at 254/255), keeping the reactive alpha; the reflection trace frames
 // the drawn water's edges by it.
 [[nodiscard]] std::string_view PicaSurfaceLightingWaterMarker() noexcept;
-[[nodiscard]] std::string PicaSurfaceLightingBody(bool fragmentOperand = false, bool fragmentBalance = false);
+// nativeFragmentShadows: without per-vertex lighting, the shadowed diffuse
+// share of a selected native fragment light (receiver slots 0-7) leaves the
+// native per-pixel result (adapter capability; MM3D). Off, the body is the
+// legacy text.
+[[nodiscard]] std::string PicaSurfaceLightingBody(bool fragmentOperand = false, bool fragmentBalance = false,
+                                                  bool nativeFragmentShadows = false);
 // After the native TEV, before fog: water optics on a water fragment's
 // native colour (the body marks the fragment).
 [[nodiscard]] std::string_view PicaSurfaceLightingWaterShading() noexcept;

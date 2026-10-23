@@ -69,6 +69,7 @@ struct PicaShaderPipelineRequest {
     bool ShadowProbe = false;
 #endif
     bool FragmentLightingBalance = false;
+    bool NativeFragmentLitShadows = false;
 };
 
 struct PicaShaderPipelineResult {

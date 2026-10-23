@@ -3844,3 +3844,14 @@ Tests: frontend (four-light surface program), pipeline cache 53/53 (layout,
 per-vertex fallback, exclusion), foundation 340/340, effect graph 59/59,
 scene frame 20/20. Not re-run: an OoT3D capture; OoT3D changes only where a
 fragment-lit material's native light matches a scene light.
+
+Adapter gate (2026-10-23, unified tree): the exclusion, the native-light
+receiver list and the body's shadow block are behind the adapter capability
+`SetNativePicaFragmentLitShadowReceivers` (MM3D sets it beside the
+fragment-lighting operand; OoT3D leaves it off). The backend requests the
+typed feature `NativeFragmentLitShadows` for an eligible draw, the
+instrumentation emits the block (`PicaSurfaceLightingBody(..., true)`) and
+salts the fragment key; the legacy body, the uber effect family and every
+OoT3D shader source are byte-identical to the tree before the gate. The
+four-light vertex layout (`VertexLightsReconstructed = false`) stays shared:
+it only describes a program shape.
