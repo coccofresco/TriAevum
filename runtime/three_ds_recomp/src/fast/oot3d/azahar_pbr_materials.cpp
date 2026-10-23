@@ -240,10 +240,18 @@ void Finish(const std::filesystem::path& root, Candidate& candidate) {
 } // namespace
 
 std::optional<uint64_t> ParseAzaharTextureFilenameHash(const std::filesystem::path& path) {
-    unsigned int width = 0, height = 0, format = 0;
+    // Azahar dumps `tex1_WxH_HASH_FORMAT_mipN`; packs made for older Citra
+    // builds carry `tex1_WxH_HASH` and hand-renamed files any letter case, so
+    // the width/height/hash prefix is enough and its case is ignored (adapted
+    // from the WINDROID fork's filename tolerance, 18b97ed/6f7be68).
+    const std::string stem = Lower(path.stem().string());
+    unsigned int width = 0, height = 0;
     unsigned long long hash = 0;
-    if (std::sscanf(path.stem().string().c_str(), "tex1_%ux%u_%llX_%u", &width, &height, &hash, &format) != 4)
+    int consumed = 0;
+    if (std::sscanf(stem.c_str(), "tex1_%ux%u_%llx%n", &width, &height, &hash, &consumed) != 3 || consumed <= 0)
         return std::nullopt;
+    const char tail = stem[static_cast<size_t>(consumed)];
+    if (tail != '\0' && tail != '_' && tail != '.') return std::nullopt;
     return static_cast<uint64_t>(hash);
 }
 

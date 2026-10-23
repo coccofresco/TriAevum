@@ -1,4 +1,5 @@
 #include "oot3d/renderer/azahar_texture_pack.h"
+#include "../src/fast/oot3d/azahar_pbr_materials.h"
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
@@ -129,6 +130,61 @@ TEST_F(Oot3dAzaharTexturePackTest, DumpsAndLoadsModernAzaharPngWithoutOrientatio
     EXPECT_EQ(replacement->SourcePath, loadDirectory / filename);
     EXPECT_EQ(runtime.Snapshot().LoadDirectory, loadDirectory);
     EXPECT_EQ(runtime.Snapshot().LoadedTextures, 1U);
+}
+
+TEST_F(Oot3dAzaharTexturePackTest, IndexesThreeFieldAndMixedCaseFilenames) {
+    constexpr uint64_t titleId = 0x0004000000000042ULL;
+    std::array<uint8_t, 256> native{};
+    for (size_t index = 0; index < native.size(); ++index) {
+        native[index] = static_cast<uint8_t>((index * 53U) & 0xFFU);
+    }
+    std::vector<uint8_t> rgba(8U * 8U * 4U, 0x7FU);
+    const Oot3d::Renderer::AzaharTextureRequest request{ 8U, 8U, 0U, 0U, native, rgba };
+    const uint64_t hash = Oot3d::Renderer::AzaharCityHash64(native);
+    const auto dumpDirectory = Root / "tolerant_dump";
+
+    Oot3d::Renderer::AzaharTexturePackRuntime runtime;
+    runtime.Configure({
+        .DumpTextures = true,
+        .LoadCustomTextures = false,
+        .TitleId = titleId,
+        .UserDirectory = Root,
+        .DumpDirectory = dumpDirectory,
+    });
+    EXPECT_EQ(runtime.ResolveAndMaybeDump(request), nullptr);
+    runtime.WaitForPendingDumps();
+    const auto dumped = dumpDirectory / Oot3d::Renderer::MakeAzaharTextureFilename(8U, 8U, hash, 0U, 0U);
+    ASSERT_TRUE(std::filesystem::exists(dumped));
+
+    // Older Citra packs: tex1_WxH_HASH without format and mip fields; hand
+    // renamed files: upper-case prefix, lower-case hash. No pack.json mapping.
+    std::ostringstream hex;
+    hex << std::hex << std::setw(16) << std::setfill('0') << hash;
+    const std::array<std::string, 2> variants{
+        "tex1_8x8_" + hex.str() + ".png",
+        "TEX1_8X8_" + hex.str() + "_0_MIP0.png",
+    };
+    for (const auto& variant : variants) {
+        EXPECT_EQ(Oot3d::Renderer::ParseAzaharTextureFilenameHash(std::filesystem::path(variant)), hash) << variant;
+    }
+    for (size_t variant = 0; variant < variants.size(); ++variant) {
+        const auto loadDirectory = Root / ("tolerant_load_" + std::to_string(variant));
+        std::filesystem::create_directories(loadDirectory);
+        std::filesystem::copy_file(dumped, loadDirectory / variants[variant]);
+        std::filesystem::copy_file(dumpDirectory / "pack.json", loadDirectory / "pack.json");
+        runtime.Configure({
+            .DumpTextures = false,
+            .LoadCustomTextures = true,
+            .TitleId = titleId,
+            .UserDirectory = Root,
+            .LoadDirectory = loadDirectory,
+        });
+        const auto replacement = runtime.ResolveAndMaybeDump(request);
+        ASSERT_NE(replacement, nullptr) << variants[variant];
+        EXPECT_EQ(replacement->SourcePath, loadDirectory / variants[variant]);
+    }
+    EXPECT_FALSE(Oot3d::Renderer::ParseAzaharTextureFilenameHash(std::filesystem::path("tex1_8x8_zz.png")).has_value());
+    EXPECT_FALSE(Oot3d::Renderer::ParseAzaharTextureFilenameHash(std::filesystem::path("texture_8x8_0000000000000001.png")).has_value());
 }
 
 TEST_F(Oot3dAzaharTexturePackTest, BaseDirectoriesLoadBeneathTheUserPackInOrder) {

@@ -24,19 +24,20 @@ in place (`Adapted from the WINDROID fork ...`). Credit is recorded in
 | Periodic pipeline-cache flush while pipelines are still being created | `857081f` | `Renderer3ds::PipelineCacheFlusher` (own below-normal thread, atomic store, at most one write per 20 s and only when new pipelines exist); used by the game device (`TRIAEVUM_NRI_PIPELINE_CACHE_FLUSH=0` restores the shutdown-only store) and by Forge's pipeline helper, whose work now survives a kill or an exhausted time budget | contract test (`triaevum_pipeline_preparation_tests`), Kokiri gate with an empty renderer cache, flush lines in the console |
 | Vertex arena overflow continues instead of ending the session | `c24df3a`, `95b5f00` | `EnsureFrameVertexCapacity`: the per-frame vertex/upload arena is replaced by a larger buffer and the old one retired until the frame's fence, as the uniform arena already did; the five former `throw` sites (legacy draw, Shadow2D, native transient geometry, texture upload) use it. `TRIAEVUM_VULKAN_VERTEX_ARENA_KIB` (16..1048576, diagnostic) sets the initial size to exercise the path (the NRI path keeps geometry and textures in its own buffers, so the arena carries about 70 KB per frame in the Kokiri gate against a 64 MiB default); the shutdown line `TRIAEVUM_VULKAN_VERTEX_ARENA summary` reports the initial size, the peak per-frame use and the growth count | Kokiri gate at the default (64 MiB) and at a 32 KiB arena (four growths to 128 KiB in the first twelve frames, each logged as `TRIAEVUM_VULKAN_VERTEX_ARENA_GROWN`): identical frames |
 
+| Texture-pack filename tolerance (batch 2, 2026-10-23) | `18b97ed`, `6f7be68` | `ParseAzaharTextureFilenameHash` accepts the three-field `tex1_WxH_HASH` form of older Citra packs and ignores the letter case of the prefix and hash; the pack.json mapping, the old/new hash choice and the negative cache (`mFailedLoadHashes`) already existed in the current tree | `oot3d_graphics_foundation_tests` (`IndexesThreeFieldAndMixedCaseFilenames`) |
 The fork's mutex around `vkCreateGraphicsPipelines` was not taken: the NRI
 bridge creates pipelines concurrently by design and the pipeline cache is
 internally synchronized.
 
 ## Candidates for a later batch
 
-- Texture-pack upload robustness (`95b5f00`, `c24df3a`): fallback when a custom
-  upload fails, a per-frame promotion cap, record removal when image creation
-  fails. Relevant to the vanilla UI/HUD pack; verify against the VRAM trace of
-  issue #98.
-- Texture-pack filename tolerance (`18b97ed`, `6f7be68`, `e3cbb62`): lower-case
-  names, the three-field `tex1_WxH_hash` form, old/new hash lookup, a negative
-  cache. Unit tests on filename variants; the fork's preload-all is not wanted.
+- Texture-pack upload robustness (`95b5f00`, `c24df3a`): reviewed 2026-10-23,
+  nothing to take. The current tree already has a per-frame custom upload
+  budget (`kCustomTextureUploadBudgetBytes`), reports PBR material upload
+  failures back to the pack runtime and keeps failed loads out of the retry
+  path; the fork's record removal targets its own pre-NRI texture cache.
+- Texture-pack filename tolerance: adopted (batch 2, above). The fork's
+  preload-all (`e3cbb62`) is not wanted.
 - Non-fatal UI subsystem render error (`12c98dd`): skip the subsystem for the
   frame and count it, if the current tree still throws there.
 - `--threads` and pack reuse in the PICA AOT compiler (`6c25788`), developer
