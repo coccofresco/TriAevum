@@ -215,6 +215,9 @@ class NativeA32CtrFilesystem {
 };
 
 struct NativeA32CtrHostConfig {
+    // Expose the New 3DS ir:rst service (C-stick / ZL / ZR shared memory). A
+    // title adapter that opts in publishes samples with WriteIrstSample.
+    bool IrstService = false;
     std::array<uint64_t, 10> ResourceLimitValues{};
     std::array<uint64_t, 10> ResourceCurrentValues{};
     uint32_t LinearHeapBaseAddress = 0;
@@ -288,6 +291,8 @@ class NativeA32CtrHostServices final : public NativeA32HostServices {
     AdvanceHidToCurrentTick(NativeA32Memory& memory,
                             const NativeA32HidState& state);
     NativeA32CtrHidRuntimeProfile HidRuntimeProfile() const noexcept;
+    bool IrstServiceEnabled() const noexcept { return mConfig.IrstService; }
+    bool WriteIrstSample(NativeA32Memory& memory, int16_t x, int16_t y, uint32_t buttons);
     uint64_t SystemTicks() const;
     uint32_t FallbackPc() const;
     oot3d::recomp::a32::FallbackReason FallbackReason() const;
@@ -435,6 +440,9 @@ class NativeA32CtrHostServices final : public NativeA32HostServices {
     NativeA32HostResult HandleCfgRequest(
         oot3d::recomp::a32::GuestState& state, NativeA32Memory& memory,
         NativeA32HostContext& context, const std::optional<std::string>& sessionType,
+        uint32_t commandBuffer, NativeA32CtrSvcEvent event);
+    NativeA32HostResult HandleIrstRequest(
+        oot3d::recomp::a32::GuestState& state, NativeA32Memory& memory,
         uint32_t commandBuffer, NativeA32CtrSvcEvent event);
     NativeA32HostResult HandleHidRequest(
         oot3d::recomp::a32::GuestState& state, NativeA32Memory& memory,

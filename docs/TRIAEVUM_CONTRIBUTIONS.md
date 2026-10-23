@@ -35,6 +35,28 @@ The contribution's infrastructure tests do not by themselves establish native
 game boot, feature parity or Steam Deck performance. Those remain separate
 release qualification records. See [platform architecture](TRIAEVUM_PLATFORM_RELEASE_ARCHITECTURE.md).
 
+## Ocarina ReTuned: Portability Fixes (fork, no PR)
+
+- Contributor: [OTPR26](https://github.com/OTPR26), fork
+  [Ocarina-ReTuned](https://github.com/OTPR26/Ocarina-ReTuned) (pinned to
+  TriAevum `17218b0`, v0.1.0-preview of 2026-10-22).
+- Integration: selective adaptation into the shared runtime, 2026-10-23; the
+  fork applies its changes as Python patch scripts, so each item was rewritten
+  against the current tree and verified at its owning boundary.
+- Record: [Ocarina ReTuned integration](TRIAEVUM_OCARINA_RETUNED_INTEGRATION.md)
+  lists what was taken, what was left out and why.
+
+Retained contribution: libc++ compatibility (float `from_chars`, `clock_cast`,
+128-bit file-time rep), Windows GNU-driver build conditions and MinGW triplet,
+MoltenVK portability extensions and the macOS title-module loader, Android
+fullscreen presentation, embedded CTest roots, the Vulkan exclude-scissor
+partition, deferred native vertex-format rejection, VFP `VCMP{E} #0.0` and
+`VCVT.F64.U32`, and the QueryMemory, OutputDebugString and ir:rst services.
+Not taken: the ReTuned interface and fonts, on-device ROM preparation and
+compilation, removal of the precompiled shader packs, the Reframed UI profile,
+iCloud save sync. Apple and Android changes compile in the fork's CI; they are
+not verified on Apple or Android hardware in this tree.
+
 ## PR #14: Display Failure Feedback
 
 - Contributor: [999sian](https://github.com/999sian), Git author `sian <sian@localhost>`.

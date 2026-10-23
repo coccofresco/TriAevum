@@ -7,9 +7,15 @@
 
 namespace Fast {
 
-bool GfxRenderingAPIVulkan::ApplyPresentationSettings(
-    const Oot3d::TitlePresentationSettingsView& settings,
-    std::string* error) {
+bool GfxRenderingAPIVulkan::ApplyPresentationSettings(const Oot3d::TitlePresentationSettingsView& requestedSettings,
+                                                      std::string* error) {
+    auto settings = requestedSettings;
+#ifdef __ANDROID__
+    // Android presents to the Activity surface only: fullscreen at its size.
+    settings.WindowMode = 1;
+    int32_t outputX = 0, outputY = 0;
+    mWindowBackend->GetDimensions(&settings.Width, &settings.Height, &outputX, &outputY);
+#endif
     if (!mInitialized || mFrameActive || settings.WindowMode > 2U ||
         settings.Width < 320U || settings.Height < 240U) {
         if (error != nullptr) {

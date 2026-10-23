@@ -181,6 +181,13 @@ target_link_libraries(oot3d_native_a32_runtime_tests PRIVATE
     oot3d_native_a32_runtime)
 oot3d_target_defaults(oot3d_native_a32_runtime_tests FOLDER Tests)
 
+add_executable(oot3d_native_a32_vfp_binary64_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_a32_runtime/oot3d_native_a32_vfp_binary64_tests.cpp
+)
+target_link_libraries(oot3d_native_a32_vfp_binary64_tests PRIVATE
+    oot3d_native_a32_runtime)
+oot3d_target_defaults(oot3d_native_a32_vfp_binary64_tests FOLDER Tests)
+
 add_executable(oot3d_native_a32_vfp_fast_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_a32_runtime/oot3d_native_a32_vfp_fast_tests.cpp
 )
@@ -189,6 +196,14 @@ target_link_libraries(oot3d_native_a32_vfp_fast_tests PRIVATE
 target_compile_options(oot3d_native_a32_vfp_fast_tests PRIVATE "${WARNING_OVERRIDE}"
     $<IF:$<CXX_COMPILER_FRONTEND_VARIANT:MSVC>,/fp:strict,-ffp-model=strict>)
 oot3d_target_defaults(oot3d_native_a32_vfp_fast_tests NO_WARNING_OVERRIDE FOLDER Tests)
+
+add_executable(pica_exclude_scissor_tests EXCLUDE_FROM_ALL
+    runtime/three_ds_recomp/tests/pica_exclude_scissor_tests.cpp
+)
+target_include_directories(pica_exclude_scissor_tests PRIVATE
+    runtime/three_ds_recomp/include)
+target_compile_features(pica_exclude_scissor_tests PRIVATE cxx_std_20)
+oot3d_target_defaults(pica_exclude_scissor_tests NO_WARNING_OVERRIDE FOLDER Tests)
 
 add_executable(pica_gi_geometry_tests EXCLUDE_FROM_ALL
     runtime/three_ds_recomp/tests/pica_gi_geometry_tests.cpp

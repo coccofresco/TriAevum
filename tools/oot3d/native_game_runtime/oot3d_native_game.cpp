@@ -11,7 +11,8 @@
 #include <string_view>
 #include <vector>
 
-#if defined(__SWITCH__) || defined(__ANDROID__)
+#if defined(__SWITCH__) || defined(__ANDROID__) || (defined(_WIN32) && !defined(_MSC_VER))
+// SDL2main renames the entry point on these targets.
 #include <SDL.h>
 #endif
 #include <filesystem>

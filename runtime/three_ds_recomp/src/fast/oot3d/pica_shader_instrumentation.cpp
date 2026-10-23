@@ -275,7 +275,14 @@ float LiteralValue(float value) noexcept {
     stream << std::fixed << std::setprecision(6) << value;
     const auto text = stream.str();
     float parsed = 0.0F;
+#if defined(__cpp_lib_to_chars) && __cpp_lib_to_chars >= 201611L
     std::from_chars(text.data(), text.data() + text.size(), parsed);
+#else
+    // libc++ (Android NDK, older Apple SDKs) lacks floating-point from_chars.
+    std::istringstream parser(text);
+    parser.imbue(std::locale::classic());
+    parser >> parsed;
+#endif
     return parsed;
 }
 

@@ -248,8 +248,18 @@ bool NativeA32WindowSession::RunFrame() {
     topScreenTextureOverrideRuntime->Observe(uiLifecycleBridge);
   }
 
-  const uint32_t width = std::max<uint32_t>(1, window.GetWidth());
-  const uint32_t height = std::max<uint32_t>(1, window.GetHeight());
+  uint32_t width = std::max<uint32_t>(1, window.GetWidth());
+  uint32_t height = std::max<uint32_t>(1, window.GetHeight());
+#if defined(__APPLE__)
+  // SDL window dimensions are points on macOS. Render into drawable pixels;
+  // pointer mapping keeps using the unchanged logical window size.
+  const auto framebufferScale = ImGui::GetIO().DisplayFramebufferScale;
+  if (framebufferScale.x >= 1.0f && framebufferScale.x <= 4.0f &&
+      framebufferScale.y >= 1.0f && framebufferScale.y <= 4.0f) {
+    width = static_cast<uint32_t>(std::lround(width * framebufferScale.x));
+    height = static_cast<uint32_t>(std::lround(height * framebufferScale.y));
+  }
+#endif
   hdFonts.SetOutputHeight(height);
   UpdateScenePresentation();
   // The presentation picture every UI canvas is fitted into this frame.

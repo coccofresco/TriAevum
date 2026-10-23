@@ -360,7 +360,7 @@ std::string SceneEnvironmentRuntime::FileStampLocked(bool night) const {
       return exists || error ? std::string("unreadable") : std::string("-");
     }
     const auto time = std::filesystem::last_write_time(path, error);
-    return std::to_string(size) + ":" + std::to_string(error ? 0 : time.time_since_epoch().count());
+    return std::to_string(size) + ":" + std::to_string(error ? 0LL : static_cast<long long>(time.time_since_epoch().count()));
   };
   auto own = stamp(ProfilePathLocked(night));
   if (own != "-") return "scene:" + own;

@@ -1,6 +1,7 @@
 // Native PICA on Vulkan: draw submission, composition anchors, interactive grass and shadow maps.
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_pica_internal.h"
+#include "fast/renderer3ds/pica_exclude_scissor.h"
 #include "fast/renderer3ds/pica_draw_coverage.h"
 #include "fast/renderer3ds/pica_surface_appearance.h"
 #include "fast/oot3d/pica_rim_light.h"
@@ -823,11 +824,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             throw std::runtime_error(
                 "native PICA non-default fragment operation is unsupported");
         }
-        if (draw.ScissorMode == 1U) {
-            throw std::runtime_error(
-                "native PICA exclude scissor requires shader emulation");
-        }
-        if (draw.ScissorMode != 0U && draw.ScissorMode != 3U) {
+        if (draw.ScissorMode != 0U && draw.ScissorMode != 1U && draw.ScissorMode != 3U) {
             throw std::runtime_error("invalid native PICA scissor mode");
         }
         if (draw.FramebufferWidth == 0 || draw.FramebufferHeight == 0) {
@@ -2622,19 +2619,13 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             if (retainSceneBeforeUi)
                 renderTarget.SceneBeforeUiSerial = renderTarget.ContentWriteSerial;
             const bool fullTargetRaster =
-                compositionDomain ==
-                    ::Fast::Renderer3ds::PicaCompositionDomain::Screen &&
+                draw.ScissorMode != 1U && compositionDomain == ::Fast::Renderer3ds::PicaCompositionDomain::Screen &&
                 mViewport.x <= 0.0F && mViewport.y <= 0.0F &&
-                mViewport.x + static_cast<float>(mViewport.width) >=
-                    static_cast<float>(renderTarget.Width) &&
-                mViewport.y + static_cast<float>(mViewport.height) >=
-                    static_cast<float>(renderTarget.Height) &&
-                mScissor.offset.x <= 0 &&
-                mScissor.offset.y <= 0 &&
-                static_cast<uint32_t>(mScissor.offset.x) + mScissor.extent.width >=
-                    renderTarget.Width &&
-                static_cast<uint32_t>(mScissor.offset.y) + mScissor.extent.height >=
-                    renderTarget.Height;
+                mViewport.x + static_cast<float>(mViewport.width) >= static_cast<float>(renderTarget.Width) &&
+                mViewport.y + static_cast<float>(mViewport.height) >= static_cast<float>(renderTarget.Height) &&
+                mScissor.offset.x <= 0 && mScissor.offset.y <= 0 &&
+                static_cast<uint32_t>(mScissor.offset.x) + mScissor.extent.width >= renderTarget.Width &&
+                static_cast<uint32_t>(mScissor.offset.y) + mScissor.extent.height >= renderTarget.Height;
             if (fullTargetRaster) {
                 bool sampledResolvedCopy = false;
                 bool resolvedContentDraw = true;
@@ -3301,72 +3292,83 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                     ? NativePicaPipelineAcquisition::Libraries
                     : NativePicaPipelineAcquisition::Blocking)
             : nullptr;
-        // Coverage runs before the native draw: stencil must still have its
-        // original value if that draw modifies it. The auxiliary pass is read-only.
-        nriDraw.PipelineId = coveragePipeline ? coveragePipeline->Id : pipelineRecord.Id;
-        const bool nriOwnedDrawBound =
-            nriOwnedDraw &&
-            mNriPicaPipelineBridge.BindOwnedDraw(nriDraw);
-        if (nriOwnedDraw && !nriOwnedDrawBound) {
-            throw std::runtime_error(
-                "NRI PICA draw binding failed in an NRI-owned "
-                "rendering scope");
+        // Exclude scissor (mode 1) rasterizes the target minus a rectangle.
+        // Vulkan takes one scissor per draw: partition the visible region into
+        // disjoint rectangles and submit the same draw once per rectangle, so
+        // blending and stencil still execute exactly once per fragment.
+        const VkRect2D originalScissor = mScissor;
+        Renderer3ds::PicaScissorParts scissorParts;
+        scissorParts.Rects[0] = { mScissor.offset.x, mScissor.offset.y, mScissor.extent.width, mScissor.extent.height };
+        scissorParts.Count = (mScissor.extent.width != 0U && mScissor.extent.height != 0U) ? 1U : 0U;
+        if (draw.ScissorMode == 1U) {
+            const uint32_t x2 = uint32_t{ draw.ScissorX2 } + 1U;
+            const uint32_t y2 = uint32_t{ draw.ScissorY2 } + 1U;
+            const Renderer3ds::PicaScissorRect hole{
+                static_cast<int32_t>(rasterCanvas.X + draw.ScissorX1 * framebufferScaleX),
+                static_cast<int32_t>(rasterCanvas.Y + draw.ScissorY1 * framebufferScaleY),
+                static_cast<uint32_t>((x2 > draw.ScissorX1 ? x2 - draw.ScissorX1 : 0U) * framebufferScaleX),
+                static_cast<uint32_t>((y2 > draw.ScissorY1 ? y2 - draw.ScissorY1 : 0U) * framebufferScaleY)
+            };
+            scissorParts = Renderer3ds::ExcludePicaScissor(scissorParts.Rects[0], hole);
         }
-        if (nriOwnedDrawBound && coveragePipeline != nullptr) {
-            nriDraw.PipelineId = pipelineRecord.Id;
-            if (!mNriPicaPipelineBridge.DrawBoundGeometry(nriDraw))
-                throw std::runtime_error("NRI native draw after outline coverage failed");
-        }
-        bool nriPipelineBound = nriOwnedDrawBound;
-        if (!nriOwnedDrawBound) {
-            pipeline = GetOrCreateNativePicaPipeline(
-                *selectedDraw, *selectedProgram, drawVariant.Reactive,
-                drawVariant.Domain, drawVariant.RequestedFeatures,
-                drawVariant.AppliedFeatures, false, false, true).Vulkan;
-            nriPipelineBound =
-                mNriPicaPipelineBridge.Bind(
-                    mCurrentFrame, pipeline);
-            if (!nriPipelineBound)
-                vkCmdBindPipeline(
-                    commandBuffer,
-                    VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-            for (const auto& [binding, offset] :
-                 bindingOffsets) {
-                vkCmdBindVertexBuffers(commandBuffer, binding, 1, &geometryBuffer, &offset);
+        bool nriOwnedDrawBound = false;
+        bool nriPipelineBound = false;
+        for (uint32_t scissorPart = 0; scissorPart < scissorParts.Count; ++scissorPart) {
+            const auto part = scissorParts.Rects[scissorPart];
+            mScissor = { { part.X, part.Y }, { part.Width, part.Height } };
+            nriDraw.Scissor = mScissor;
+            // Coverage runs before the native draw: stencil must still have its
+            // original value if that draw modifies it. The auxiliary pass is read-only.
+            nriDraw.PipelineId = coveragePipeline ? coveragePipeline->Id : pipelineRecord.Id;
+            nriOwnedDrawBound = nriOwnedDraw && mNriPicaPipelineBridge.BindOwnedDraw(nriDraw);
+            if (nriOwnedDraw && !nriOwnedDrawBound) {
+                throw std::runtime_error("NRI PICA draw binding failed in an NRI-owned "
+                                         "rendering scope");
             }
-            vkCmdBindDescriptorSets(
-                commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                mNativePicaPipelineLayout, 0, 1, &descriptor,
-                0, nullptr);
-            vkCmdSetViewport(commandBuffer, 0, 1, &mViewport);
-            vkCmdSetScissor(commandBuffer, 0, 1, &mScissor);
-            vkCmdSetBlendConstants(
-                commandBuffer, draw.Blend.ConstantColor);
-            vkCmdPushConstants(
-                commandBuffer, mNativePicaPipelineLayout,
-                VK_SHADER_STAGE_VERTEX_BIT |
-                    VK_SHADER_STAGE_FRAGMENT_BIT,
-                0, sizeof(nativeDrawPush), &nativeDrawPush);
-            if (draw.Indexed) {
-                vkCmdBindIndexBuffer(commandBuffer, geometryBuffer, indexOffset, VK_INDEX_TYPE_UINT16);
-                if (coveragePipeline != nullptr) {
-                    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, coveragePipeline->Vulkan);
+            if (nriOwnedDrawBound && coveragePipeline != nullptr) {
+                nriDraw.PipelineId = pipelineRecord.Id;
+                if (!mNriPicaPipelineBridge.DrawBoundGeometry(nriDraw))
+                    throw std::runtime_error("NRI native draw after outline coverage failed");
+            }
+            nriPipelineBound = nriOwnedDrawBound;
+            if (!nriOwnedDrawBound) {
+                pipeline = GetOrCreateNativePicaPipeline(*selectedDraw, *selectedProgram, drawVariant.Reactive,
+                                                         drawVariant.Domain, drawVariant.RequestedFeatures,
+                                                         drawVariant.AppliedFeatures, false, false, true)
+                               .Vulkan;
+                nriPipelineBound = mNriPicaPipelineBridge.Bind(mCurrentFrame, pipeline);
+                if (!nriPipelineBound)
+                    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+                for (const auto& [binding, offset] : bindingOffsets) {
+                    vkCmdBindVertexBuffers(commandBuffer, binding, 1, &geometryBuffer, &offset);
+                }
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mNativePicaPipelineLayout, 0, 1,
+                                        &descriptor, 0, nullptr);
+                vkCmdSetViewport(commandBuffer, 0, 1, &mViewport);
+                vkCmdSetScissor(commandBuffer, 0, 1, &mScissor);
+                vkCmdSetBlendConstants(commandBuffer, draw.Blend.ConstantColor);
+                vkCmdPushConstants(commandBuffer, mNativePicaPipelineLayout,
+                                   VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(nativeDrawPush),
+                                   &nativeDrawPush);
+                if (draw.Indexed) {
+                    vkCmdBindIndexBuffer(commandBuffer, geometryBuffer, indexOffset, VK_INDEX_TYPE_UINT16);
+                    if (coveragePipeline != nullptr) {
+                        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, coveragePipeline->Vulkan);
+                        vkCmdDrawIndexed(commandBuffer, indexCount, 1, 0, draw.BaseVertex, 0);
+                        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+                    }
                     vkCmdDrawIndexed(commandBuffer, indexCount, 1, 0, draw.BaseVertex, 0);
-                    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-                }
-                vkCmdDrawIndexed(
-                    commandBuffer, indexCount, 1, 0,
-                    draw.BaseVertex, 0);
-            } else {
-                if (coveragePipeline != nullptr) {
-                    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, coveragePipeline->Vulkan);
+                } else {
+                    if (coveragePipeline != nullptr) {
+                        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, coveragePipeline->Vulkan);
+                        vkCmdDraw(commandBuffer, draw.VertexCount, 1, 0, 0);
+                        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+                    }
                     vkCmdDraw(commandBuffer, draw.VertexCount, 1, 0, 0);
-                    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
                 }
-                vkCmdDraw(
-                    commandBuffer, draw.VertexCount, 1, 0, 0);
             }
         }
+        mScissor = originalScissor;
         if (coveragePipeline != nullptr) {
             ++mDrawCallCountThisFrame;
             mDiagnostics.RecordOutlineOcclusionDraw();

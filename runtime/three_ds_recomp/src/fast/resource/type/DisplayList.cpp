@@ -1,5 +1,6 @@
 #include "fast/resource/type/DisplayList.h"
 #include <memory>
+#include <cstdlib>
 
 namespace Fast {
 DisplayList::DisplayList() : Resource(std::shared_ptr<Ship::ResourceInitData>()) {

@@ -43,6 +43,15 @@ class NativeA32Memory final : public oot3d::recomp::a32::MemoryBus {
     bool IsMapped(uint32_t address, size_t size) const;
     bool IsWritable(uint32_t address, size_t size) const;
     bool IsExecutable(uint32_t address, size_t size) const;
+    // svc QueryMemory view of an address: the region that contains it or the
+    // unmapped gap around it (3DS MemoryInfo: base, size, permission, state).
+    struct RegionInfo {
+        uint32_t BaseAddress = 0;
+        uint32_t Size = 0;
+        uint32_t Permissions = 0;
+        uint32_t State = 0;
+    };
+    RegionInfo QueryRegion(uint32_t address) const;
     size_t RegionCount() const;
     uint64_t WriteGeneration() const;
     std::optional<uint64_t> RangeWriteGeneration(uint32_t address,

@@ -34,7 +34,14 @@ std::string SizeText(std::uintmax_t bytes) {
 }
 
 std::string TimeText(std::filesystem::file_time_type time) {
+#if defined(__cpp_lib_chrono) && __cpp_lib_chrono >= 201907L
   const auto system = std::chrono::clock_cast<std::chrono::system_clock>(time);
+#else
+  // libc++ has no clock_cast yet: offset the file time onto the system clock.
+  const auto system = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+      std::chrono::system_clock::now() +
+      (time - std::filesystem::file_time_type::clock::now()));
+#endif
   const std::time_t seconds = std::chrono::system_clock::to_time_t(system);
   std::tm local{};
 #if defined(_WIN32)

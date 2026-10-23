@@ -19,7 +19,7 @@ function(triaevum_add_spirv_pack target source pack)
         set(list "${directory}/${name}.inc")
         if(NOT EXISTS "${list}" OR "${pack}" IS_NEWER_THAN "${list}")
             execute_process(COMMAND "${CMAKE_COMMAND}" "-DINPUT=${pack}" "-DOUTPUT=${list}"
-                -P "${TRIAEVUM_SPIRV_PACK_TO_INC}" COMMAND_ERROR_IS_FATAL ANY)
+                -P "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/spirv_pack_to_inc.cmake" COMMAND_ERROR_IS_FATAL ANY)
         endif()
         set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${pack}")
         target_include_directories(${target} PRIVATE "${directory}")

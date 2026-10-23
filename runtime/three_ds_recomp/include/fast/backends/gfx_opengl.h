@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#ifdef _MSC_VER
+#if defined(_WIN32)
 #include <SDL2/SDL.h>
 // #define GL_GLEXT_PROTOTYPES 1
 #include <GL/glew.h>

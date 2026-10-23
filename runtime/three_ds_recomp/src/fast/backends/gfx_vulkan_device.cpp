@@ -94,6 +94,20 @@ void GfxRenderingAPIVulkan::CreateInstance() {
     const auto applicationInfo = Renderer3ds::PicaVulkanApplicationInfo();
 
     VkInstanceCreateInfo createInfo{ VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
+#ifdef __APPLE__
+    // MoltenVK is a portability driver: the loader enumerates it only when the
+    // instance opts into VK_KHR_portability_enumeration.
+    const bool portabilityAvailable = std::any_of(available.begin(), available.end(), [](const auto& extension) {
+        return std::strcmp(extension.extensionName, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME) == 0;
+    });
+    if (portabilityAvailable) {
+        if (std::none_of(extensions.begin(), extensions.end(), [](const char* name) {
+                return std::strcmp(name, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME) == 0;
+            }))
+            extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+        createInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+    }
+#endif
     createInfo.pApplicationInfo = &applicationInfo;
     createInfo.enabledExtensionCount =
         static_cast<uint32_t>(extensions.size());
@@ -300,6 +314,10 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
                            });
     };
     std::vector<const char*> extensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+#ifdef __APPLE__
+    if (hasExtension("VK_KHR_portability_subset"))
+        extensions.push_back("VK_KHR_portability_subset");
+#endif
     VkPhysicalDeviceProperties deviceProperties{};
     vkGetPhysicalDeviceProperties(mPhysicalDevice, &deviceProperties);
     const auto& limits = deviceProperties.limits;

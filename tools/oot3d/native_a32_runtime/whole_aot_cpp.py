@@ -1125,9 +1125,12 @@ def _vfp_binary64_supported(raw: int) -> bool:
     }:
         return (raw & ((1 << 22) | (1 << 7) | (1 << 5))) == 0
     unary = raw & 0x0FBF0FD0
+    if unary in {0x0EB50B40, 0x0EB50BC0}:
+        # VCMP{E}.F64 Dd, #0.0: the Vm field must be zero.
+        return (raw & ((1 << 22) | (1 << 5) | 0xF)) == 0
     if unary in {0x0EB10B40, 0x0EB10BC0, 0x0EB40B40, 0x0EB40BC0}:
         return (raw & ((1 << 22) | (1 << 5))) == 0
-    if unary in {0x0EB80BC0, 0x0EB70AC0}:
+    if unary in {0x0EB80B40, 0x0EB80BC0, 0x0EB70AC0}:
         return (raw & (1 << 22)) == 0
     if unary in {0x0EBD0BC0, 0x0EBC0BC0, 0x0EB70BC0}:
         return (raw & (1 << 5)) == 0
@@ -1433,12 +1436,13 @@ def _emit_vfp(item: Instruction) -> list[str]:
                 f"    a32::VfpBinary32SquareRoot({_lane(right)}, frame.Guest.fpscr));",
             ]
         )
-    elif unary in {0x0EB40A40, 0x0EB40AC0}:
+    elif unary in {0x0EB40A40, 0x0EB40AC0, 0x0EB50A40, 0x0EB50AC0}:
+        # Bit 16 selects the #0.0 immediate form; bit 7 the signaling (E) form.
         body.extend(
             [
                 "const auto comparison = a32::VfpBinary32Compare(",
-                f"    {_lane(destination)}, {_lane(right)},",
-                f"    {'true' if unary == 0x0EB40AC0 else 'false'});",
+                f"    {_lane(destination)}, {'0U' if unary & 0x10000 else _lane(right)},",
+                f"    {'true' if unary & 0x80 else 'false'});",
                 "frame.Guest.fpscr = (frame.Guest.fpscr & ~0xF0000000U) |",
                 "              (comparison.value & 0xF0000000U);",
                 "frame.Guest.fpscr |= comparison.exception_flags;",
