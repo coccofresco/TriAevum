@@ -69,6 +69,10 @@ struct Oot3dNativeGameLaunch {
     // cannot serialize the guest refresh with presentation select auto.
     Oot3dNativeGame::NativeInputAdmissionMode InputAdmission =
         Oot3dNativeGame::NativeInputAdmissionMode::On;
+    // --initialize-config product: a missing configuration (or one without a
+    // Graphics block) starts from the product defaults, as Forge does on the
+    // desktop. Platforms without Forge select it in their launch profile.
+    bool InitializeProductConfig = false;
     Oot3dNativeGame::GameplayTimingMode GameplayTiming =
         Oot3dNativeGame::GameplayTimingMode::Native30Interpolated;
     // Legacy aliases retained for existing launch scripts. Parsing resolves

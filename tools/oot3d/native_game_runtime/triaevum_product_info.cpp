@@ -4,12 +4,14 @@
 #include "fast/oot3d/graphics_settings.h"
 #include "fast/oot3d/graphics_settings_persistence.h"
 #include <nlohmann/json.hpp>
+#include <fstream>
 #include <ostream>
+#include <system_error>
 #if defined(OOT3D_REQUIRE_WHOLE_AOT_PLUGIN_V2)
 #include "oot3d_native_direct_aot.h"
 #endif
 
-void WriteTriAevumProductInfo(std::ostream& output) {
+nlohmann::json TriAevumProductDefaultConfig() {
     using namespace Fast::Oot3d;
     // A new installation starts from the Enhanced preset with the title's grass
     // source texture rules, which no preset owns. Existing installations
@@ -24,6 +26,55 @@ void WriteTriAevumProductInfo(std::ostream& output) {
     graphics = DeserializeGraphicsSettings(document, graphics).Value;
     graphics.OutputWidth = 1280;
     graphics.OutputHeight = 720;
+#if defined(__ANDROID__)
+    // The full Enhanced preset; the picture fills the phone's display instead
+    // of a 16:9 pillarbox (the aspect is host-owned, so the preset stays).
+    graphics.Aspect = AspectRatioMode::Free;
+#endif
+    return {{"Graphics", SerializeGraphicsSettings(graphics)}};
+}
+
+bool InitializeTriAevumProductConfig(const std::filesystem::path& path,
+                                     bool* written, std::string* error) {
+    *written = false;
+    nlohmann::json root = nlohmann::json::object();
+    std::error_code status;
+    if (std::filesystem::exists(path, status)) {
+        std::ifstream input(path, std::ios::binary);
+        try {
+            input >> root;
+        } catch (const std::exception& exception) {
+            // A malformed user file must not be silently replaced.
+            *error = "cannot read " + path.string() + ": " + exception.what();
+            return false;
+        }
+        if (!root.is_object()) {
+            *error = path.string() + " is not a JSON object";
+            return false;
+        }
+        if (root.contains("Graphics")) return true;
+    }
+    root["Graphics"] = TriAevumProductDefaultConfig()["Graphics"];
+    if (path.has_parent_path()) std::filesystem::create_directories(path.parent_path(), status);
+    const auto temporary = std::filesystem::path(path.string() + ".tmp");
+    {
+        std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
+        output << root.dump(4) << '\n';
+        if (!output) {
+            *error = "cannot write " + temporary.string();
+            return false;
+        }
+    }
+    std::filesystem::rename(temporary, path, status);
+    if (status) {
+        *error = "cannot replace " + path.string() + ": " + status.message();
+        return false;
+    }
+    *written = true;
+    return true;
+}
+
+void WriteTriAevumProductInfo(std::ostream& output) {
     const nlohmann::json info = {
         {"format", "triaevum_product_info_v1"},
         {"runtime", "oot3d_native_game"},
@@ -42,7 +93,7 @@ void WriteTriAevumProductInfo(std::ostream& output) {
 #else
                           {"f1", false}, {"topscreen", false}}},
 #endif
-        {"default_config", {{"Graphics", SerializeGraphicsSettings(graphics)}}},
+        {"default_config", TriAevumProductDefaultConfig()},
         {"default_ui_profile", "topscreen"},
     };
     output << info.dump(2) << '\n';

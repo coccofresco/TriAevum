@@ -237,7 +237,7 @@ void NativeA32WindowSession::Finish() {
       benchmark, benchmarkFrameTimes, cpuProbeRequested, benchmarkCpuPhases,
       picaCompositionTracker, topScreenTextureOverridePackPointer, topScreenTextureOverrideRuntime, preparationScreen,
       lastTopScreenPrimitivesBySubsystem, picaPresentationScheduler, parallelPresentation,
-      inputAdmission});
+      inputAdmission, inputSampleDelay, mainPerformanceHint, workerPerformanceHint});
 
   if (launch.ExtendedDiagnostics &&
       (process.Memory().RangeWatchActive() || watchReportRequested)) {

@@ -10,6 +10,7 @@
 #include "triaevum_title_adapter.h"
 #include "oot3d_prebackend_budget.h"
 #include "oot3d_cpu_phase_probe.h"
+#include "oot3d_native_performance_hint.h"
 #include "fast/renderer/frame_time_distribution.h"
 #include "fast/renderer/slow_frame_samples.h"
 #include "fast/renderer3ds/pica_program_preparation.h"
@@ -611,6 +612,19 @@ private:
   std::atomic<uint64_t> admittedRefreshFramesLate{0};
   uint64_t admittedRefreshFramesPacedSeen = 0;
   uint64_t admittedRefreshFramesLateSeen = 0;
+  // Overlapped refresh frames feed the input sample delay the same way.
+  Oot3dNativeGame::NativeInputSampleDelayController inputSampleDelay;
+  std::atomic<uint64_t> overlappedRefreshFramesPaced{0};
+  std::atomic<uint64_t> overlappedRefreshFramesLate{0};
+  uint64_t overlappedRefreshFramesPacedSeen = 0;
+  uint64_t overlappedRefreshFramesLateSeen = 0;
+  // Performance hint sessions: the main thread's (guest and frame building)
+  // and the render thread's (worker side only).
+  Oot3dNativeGame::NativePerformanceHintSession mainPerformanceHint;
+  bool mainPerformanceHintTried = false;
+  Oot3dNativeGame::NativePerformanceHintSession workerPerformanceHint;
+  bool workerPerformanceHintTried = false;
+  std::chrono::steady_clock::time_point workerFrameAcquireEnd{};
   Fast::Fast3dGui *fast3dGui{};
   std::optional<GuiRendererRoutingReset> guiRendererRoutingReset;
 };

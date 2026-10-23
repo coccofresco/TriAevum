@@ -285,6 +285,21 @@ int main(int argc, char** argv) {
 #if defined(__SWITCH__)
         WriteSwitchBootStatus("launching");
 #endif
+        if (launch.InitializeProductConfig) {
+            if (launch.Host.ConfigurationPath.empty()) {
+                throw std::runtime_error("--initialize-config product requires --config");
+            }
+            bool written = false;
+            std::string configError;
+            if (!InitializeTriAevumProductConfig(launch.Host.ConfigurationPath, &written,
+                                                 &configError)) {
+                throw std::runtime_error(configError);
+            }
+            if (written) {
+                std::fprintf(stderr, "TRIAEVUM_CONFIG initialized product defaults in %s\n",
+                             launch.Host.ConfigurationPath.c_str());
+            }
+        }
         ConfigurePicaAotShaders(launch);
 #ifdef OOT3D_NATIVE_A32_WINDOW_AVAILABLE
         RunOot3dNativeA32Window(launch);

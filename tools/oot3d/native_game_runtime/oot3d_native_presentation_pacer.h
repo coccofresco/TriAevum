@@ -62,6 +62,9 @@ class NativeRealtimeRefreshPacer final {
     [[nodiscard]] double MeanIntervalSeconds() const noexcept;
     [[nodiscard]] double RmsIntervalErrorSeconds() const noexcept;
     [[nodiscard]] const NativeRealtimeRefreshPacerStats& Stats() const noexcept;
+    // The last paced WaitForNextRefresh: how long before its deadline the
+    // frame was ready (positive) or how late it was (negative).
+    [[nodiscard]] std::chrono::nanoseconds LastDeadlineSlack() const noexcept { return mLastSlack; }
 
   private:
     std::chrono::nanoseconds NextPeriod() noexcept;
@@ -79,6 +82,7 @@ class NativeRealtimeRefreshPacer final {
     std::chrono::steady_clock::time_point mNextDeadline;
     std::chrono::steady_clock::time_point mLastPresentationTime;
     NativeRealtimeRefreshPacerStats mStats;
+    std::chrono::nanoseconds mLastSlack{0};
 #ifdef _WIN32
     void* mHighResolutionTimer = nullptr;
 #endif

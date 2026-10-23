@@ -37,6 +37,9 @@ NativeInputAdmissionController::NativeInputAdmissionController(
         std::max<uint32_t>(1U, mTuning.InitialHoldPresentations);
     mTuning.MaximumHoldPresentations = std::max(
         mTuning.InitialHoldPresentations, mTuning.MaximumHoldPresentations);
+    mTuning.ProbeWindow = std::max<uint32_t>(1U, mTuning.ProbeWindow);
+    mTuning.ProbeLateThreshold =
+        std::clamp<uint32_t>(mTuning.ProbeLateThreshold, 1U, mTuning.ProbeWindow);
     mHold = mTuning.InitialHoldPresentations;
 }
 
@@ -57,28 +60,45 @@ void NativeInputAdmissionController::ObserveRefreshFrames(
     // Results of frames admitted before a switch may arrive after it; an
     // overlapping controller has no window to fill.
     if (mMode != NativeInputAdmissionMode::Auto || mOverlapping) return;
-    mWindowObserved += static_cast<uint32_t>(std::min<uint64_t>(observed, mTuning.Window));
-    mWindowLate += static_cast<uint32_t>(std::min<uint64_t>(late, mTuning.Window));
-    if (mWindowLate >= mTuning.LateThreshold) {
+    observed = std::min<uint64_t>(observed, mTuning.Window);
+    for (uint64_t frame = 0; frame < observed && !mOverlapping; ++frame) {
+        ObserveRefreshFrame(frame < late);
+    }
+}
+
+void NativeInputAdmissionController::ObserveRefreshFrame(bool late) noexcept {
+    ++mWindowObserved;
+    mWindowLate += late ? 1U : 0U;
+    // A probe decides on a few refresh frames, so a failed one costs at most
+    // ProbeLateThreshold late presentations instead of a full window.
+    const uint32_t window = mProbing ? mTuning.ProbeWindow : mTuning.Window;
+    const uint32_t threshold =
+        mProbing ? mTuning.ProbeLateThreshold : mTuning.LateThreshold;
+    if (mWindowLate >= threshold) {
         mOverlapping = true;
         ++mStats.OverlapEntries;
-        if (mProbing) {
-            mHold = std::min(mTuning.MaximumHoldPresentations,
-                             mHold > mTuning.MaximumHoldPresentations / 2U
-                                 ? mTuning.MaximumHoldPresentations
-                                 : mHold * 2U);
+        // Leaving admission again soon after a passed probe means the probe
+        // was lucky: back off as for a failed probe.
+        if (mProbing || mConfirmRemaining > 0U) {
+            mHold = mHold > mTuning.MaximumHoldPresentations / 2U
+                        ? mTuning.MaximumHoldPresentations
+                        : mHold * 2U;
         }
         mProbing = false;
+        mConfirmRemaining = 0;
         mHoldRemaining = mHold;
         mWindowObserved = 0;
         mWindowLate = 0;
         return;
     }
-    if (mWindowObserved >= mTuning.Window) {
+    if (mConfirmRemaining > 0U && --mConfirmRemaining == 0U) {
+        mHold = mTuning.InitialHoldPresentations;
+    }
+    if (mWindowObserved >= window) {
         if (mProbing) {
             ++mStats.SuccessfulProbes;
             mProbing = false;
-            mHold = mTuning.InitialHoldPresentations;
+            mConfirmRemaining = mTuning.ConfirmRefreshFrames;
         }
         mWindowObserved = 0;
         mWindowLate = 0;
@@ -99,6 +119,53 @@ bool NativeInputAdmissionController::BeginFrame() noexcept {
     const bool admit = Admitting();
     ++(admit ? mStats.AdmittedFrames : mStats.OverlappedFrames);
     return admit;
+}
+
+NativeInputSampleDelayController::NativeInputSampleDelayController(
+    NativeInputSampleDelayTuning tuning) noexcept
+    : mTuning(tuning) {
+    mTuning.Window = std::max<uint32_t>(1U, mTuning.Window);
+    mTuning.DecreasePercent = std::min<uint32_t>(mTuning.DecreasePercent, 100U);
+}
+
+void NativeInputSampleDelayController::Configure(uint32_t maximumMicroseconds) noexcept {
+    mMaximum = maximumMicroseconds;
+    mDelay = std::min(mDelay, mMaximum);
+}
+
+void NativeInputSampleDelayController::Reset() noexcept {
+    mDelay = 0;
+    mWindowObserved = 0;
+    mWindowLate = 0;
+}
+
+void NativeInputSampleDelayController::ObserveRefreshFrames(
+    uint64_t observed, uint64_t late) noexcept {
+    late = std::min(late, observed);
+    mStats.ObservedRefreshFrames += observed;
+    mStats.LateRefreshFrames += late;
+    for (uint64_t frame = 0; frame < observed; ++frame) {
+        ++mWindowObserved;
+        mWindowLate += frame < late ? 1U : 0U;
+        if (mWindowLate > mTuning.TolerableLate) {
+            // React within the window: the delay is the likely cause.
+            mDelay = static_cast<uint32_t>(
+                static_cast<uint64_t>(mDelay) * mTuning.DecreasePercent / 100U);
+            ++mStats.Decreases;
+            mWindowObserved = 0;
+            mWindowLate = 0;
+            continue;
+        }
+        if (mWindowObserved >= mTuning.Window) {
+            if (mWindowLate == 0U && mDelay < mMaximum) {
+                mDelay = std::min(mMaximum, mDelay + mTuning.IncreaseMicroseconds);
+                ++mStats.Increases;
+                mStats.MaximumMicroseconds = std::max(mStats.MaximumMicroseconds, mDelay);
+            }
+            mWindowObserved = 0;
+            mWindowLate = 0;
+        }
+    }
 }
 
 } // namespace Oot3dNativeGame

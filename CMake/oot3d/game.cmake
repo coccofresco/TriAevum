@@ -10,6 +10,7 @@ add_library(oot3d_native_game_runtime STATIC EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_presentation_pacer.cpp
     tools/oot3d/native_game_runtime/oot3d_native_input_latency_trace.cpp
     tools/oot3d/native_game_runtime/oot3d_native_input_admission.cpp
+    tools/oot3d/native_game_runtime/oot3d_native_performance_hint.cpp
     tools/oot3d/native_game_runtime/oot3d_native_temporal_event_ledger.cpp
     titles/oot3d/gameplay/oot3d_native_player_temporal_bridge.cpp
     titles/oot3d/gameplay/oot3d_native_root_motion.cpp

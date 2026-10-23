@@ -82,6 +82,9 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
   auto &picaPresentationScheduler = in.picaPresentationScheduler;
   auto &parallelPresentation = in.parallelPresentation;
   const auto &inputAdmission = in.inputAdmission;
+  const auto &inputSampleDelay = in.inputSampleDelay;
+  const auto &mainPerformanceHint = in.mainPerformanceHint;
+  const auto &workerPerformanceHint = in.workerPerformanceHint;
   if (!launch.Host.OutputPath.empty()) {
     nlohmann::json topFramebuffer = nullptr;
     if (const auto top = hostServices.TopFramebuffer(); top.has_value()) {
@@ -695,6 +698,31 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                      {"probes", stats.Probes},
                      {"successful_probes", stats.SuccessfulProbes},
                      {"hold_presentations", inputAdmission.HoldPresentations()}};
+               }()},
+              {"input_sample_delay",
+               [&]() {
+                 const auto &stats = inputSampleDelay.Stats();
+                 return nlohmann::json{
+                     {"delay_us_at_exit", inputSampleDelay.DelayMicroseconds()},
+                     {"maximum_delay_us", stats.MaximumMicroseconds},
+                     {"bound_us", inputSampleDelay.MaximumMicroseconds()},
+                     {"observed_refresh_frames", stats.ObservedRefreshFrames},
+                     {"late_refresh_frames", stats.LateRefreshFrames},
+                     {"increases", stats.Increases},
+                     {"decreases", stats.Decreases}};
+               }()},
+              {"performance_hint",
+               [&]() {
+                 const auto session = [](const Oot3dNativeGame::NativePerformanceHintSession &hint) {
+                   return nlohmann::json{{"active", hint.Active()},
+                                         {"target_ns", hint.TargetNanoseconds()},
+                                         {"reports", hint.Reports()},
+                                         {"reports_over_target", hint.ReportsOverTarget()}};
+                 };
+                 return nlohmann::json{
+                     {"available", Oot3dNativeGame::NativePerformanceHintSession::Available()},
+                     {"main", session(mainPerformanceHint)},
+                     {"render", session(workerPerformanceHint)}};
                }()}}},
             {"frame_rate",
              [&]() {

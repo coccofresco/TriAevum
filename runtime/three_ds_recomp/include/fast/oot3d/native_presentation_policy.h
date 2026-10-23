@@ -4,15 +4,15 @@
 
 namespace Fast::Oot3d {
 
+// No build forces the native presentation: Android renders the configured
+// effects like the desktop (its product defaults keep grass off), and F2
+// toggles the mask on every platform. A required policy remains available to
+// a platform that cannot render the effect graph.
 inline constexpr bool BuildRequiresNativePresentation() {
-#if defined(__ANDROID__)
-    return true;
-#else
     return false;
-#endif
 }
 
-// The mobile baseline uses the exact F2 mask, not the Authentic preset. Keep
+// The native presentation is the exact F2 mask, not the Authentic preset. Keep
 // configured values intact and preserve pacing and native composition.
 class NativePresentationPolicy {
   public:

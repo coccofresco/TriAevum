@@ -69,19 +69,51 @@ void TestAutoOverlapsHoldsAndProbes() {
     }
     Expect(overlapped == 19U, "hold length");
     Expect(controller.Stats().Probes == 1U, "probe not counted");
-    // A failing probe doubles the hold.
-    Frames(controller, 3U, true);
+    // A probe fails at its second late refresh frame and doubles the hold.
+    Frames(controller, 1U, true);
+    Expect(controller.Admitting(), "probe failed at its first late frame");
+    Frames(controller, 1U, true);
     Expect(!controller.Admitting(), "failed probe kept admitting");
     Expect(controller.HoldPresentations() == 40U, "failed probe did not double the hold");
     while (!controller.BeginFrame()) {}
-    Frames(controller, 3U, true);
+    Frames(controller, 2U, true);
     Expect(controller.HoldPresentations() == 50U, "hold exceeded its maximum");
     while (!controller.BeginFrame()) {}
-    // A passing probe keeps admission and restores the initial hold.
-    Frames(controller, 10U, false);
+    // A passing probe keeps admission but not the initial hold yet.
+    Frames(controller, 4U, false);
     Expect(controller.Admitting(), "passing probe left admission");
     Expect(controller.Stats().SuccessfulProbes == 1U, "successful probe not counted");
-    Expect(controller.HoldPresentations() == 20U, "passing probe kept the long hold");
+    Expect(controller.HoldPresentations() == 50U, "hold restored before confirmation");
+    // Leaving admission during the confirmation counts as a failed probe.
+    Frames(controller, 3U, true);
+    Expect(!controller.Admitting(), "window failure after a probe kept admitting");
+    Expect(controller.HoldPresentations() == 50U, "lucky probe reset the hold");
+    while (!controller.BeginFrame()) {}
+    Frames(controller, 4U, false);
+    Frames(controller, 120U, false);
+    Expect(controller.Admitting(), "confirmed admission left");
+    Expect(controller.HoldPresentations() == 20U, "confirmed probe kept the long hold");
+}
+
+void TestLuckyProbeBacksOff() {
+    NativeInputAdmissionTuning tuning;
+    tuning.Window = 10U;
+    tuning.LateThreshold = 3U;
+    tuning.InitialHoldPresentations = 10U;
+    tuning.MaximumHoldPresentations = 1000U;
+    tuning.ConfirmRefreshFrames = 12U;
+    NativeInputAdmissionController controller(NativeInputAdmissionMode::Auto, tuning);
+    Frames(controller, 3U, true);
+    while (!controller.BeginFrame()) {}
+    Frames(controller, 4U, false);  // passes
+    Frames(controller, 3U, true);   // but fails within the confirmation
+    Expect(controller.HoldPresentations() == 20U, "lucky probe did not double the hold");
+    while (!controller.BeginFrame()) {}
+    Frames(controller, 4U, false);
+    Frames(controller, 12U, false);
+    Expect(controller.HoldPresentations() == 10U, "confirmation did not restore the hold");
+    Expect(controller.Stats().Probes == 2U && controller.Stats().SuccessfulProbes == 2U,
+           "probe counts");
 }
 
 void TestParse() {
@@ -96,11 +128,40 @@ void TestParse() {
            "numeric admission mode accepted");
 }
 
+void TestSampleDelayGrowsShrinksAndIsBounded() {
+    Oot3dNativeGame::NativeInputSampleDelayTuning tuning;
+    tuning.Window = 10U;
+    tuning.TolerableLate = 1U;
+    tuning.IncreaseMicroseconds = 1000U;
+    tuning.DecreasePercent = 50U;
+    Oot3dNativeGame::NativeInputSampleDelayController delay(tuning);
+    delay.ObserveRefreshFrames(100U, 0U);
+    Expect(delay.DelayMicroseconds() == 0U, "unconfigured delay grew");
+    delay.Configure(3500U);
+    delay.ObserveRefreshFrames(10U, 0U);
+    Expect(delay.DelayMicroseconds() == 1000U, "clean window did not grow the delay");
+    delay.ObserveRefreshFrames(9U, 0U);
+    delay.ObserveRefreshFrames(1U, 1U);
+    Expect(delay.DelayMicroseconds() == 1000U, "a tolerable late frame changed the delay");
+    delay.ObserveRefreshFrames(50U, 0U);
+    Expect(delay.DelayMicroseconds() == 3500U, "delay exceeded its bound");
+    delay.ObserveRefreshFrames(2U, 2U);
+    Expect(delay.DelayMicroseconds() == 1750U, "late frames did not halve the delay");
+    Expect(delay.Stats().Decreases == 1U && delay.Stats().MaximumMicroseconds == 3500U,
+           "delay statistics");
+    delay.Configure(1000U);
+    Expect(delay.DelayMicroseconds() == 1000U, "a lower bound did not clamp the delay");
+    delay.Reset();
+    Expect(delay.DelayMicroseconds() == 0U, "reset kept the delay");
+}
+
 } // namespace
 
 void RunNativeInputAdmissionTests() {
     TestFixedModes();
     TestAutoKeepsAdmissionWhenFramesFit();
     TestAutoOverlapsHoldsAndProbes();
+    TestLuckyProbeBacksOff();
+    TestSampleDelayGrowsShrinksAndIsBounded();
     TestParse();
 }

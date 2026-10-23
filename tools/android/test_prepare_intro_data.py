@@ -36,9 +36,9 @@ class IntroDataTests(unittest.TestCase):
             self.assertEqual(arguments[arguments.index("--gameplay-timing") + 1], "native30_interpolated")
             self.assertEqual(arguments[arguments.index("--presentation-rate") + 1], "60")
             self.assertEqual(arguments[arguments.index("--input-admission") + 1], "auto")
-            config = json.loads((output / "data/config/TriAevum.android.json").read_text())
-            self.assertEqual(config["Graphics"]["FrameRate"]["Mode"], "Interpolated2x")
-            self.assertEqual(config["Graphics"]["Preset"], "Custom")
+            self.assertEqual(arguments[arguments.index("--initialize-config") + 1], "product")
+            # The runtime writes the product defaults; staging leaves no config.
+            self.assertFalse((output / "data/config/TriAevum.android.json").exists())
             self.assertIn("--renderer-cache-directory", result["arguments"])
             self.assertFalse(any(arg.startswith("--screenshot") for arg in result["arguments"]))
             self.assertFalse((output / "do-not-copy.sav").exists())

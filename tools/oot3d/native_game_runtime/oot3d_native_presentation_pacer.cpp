@@ -123,6 +123,7 @@ void NativeRealtimeRefreshPacer::WaitForNextRefresh() {
     const auto period = NextPeriod();
     mNextDeadline += period;
     auto now = std::chrono::steady_clock::now();
+    mLastSlack = std::chrono::duration_cast<std::chrono::nanoseconds>(mNextDeadline - now);
     if (now >= mNextDeadline) {
         const auto latenessDuration =
             std::chrono::duration_cast<std::chrono::nanoseconds>(

@@ -13,10 +13,12 @@ ADB connection without hosting a second compiler/SDK installation.
 
 - Retain the existing Vulkan/NRI renderer, native PICA rendering, gameplay and
   shared service interfaces. No Android-specific renderer or new decompilation.
-- `NativePresentationPolicy` applies the exact desktop F2 mask on Android:
-  Grass, Toon/outline, CACAO and reflections Off. This is not the Authentic
-  preset. Configured values, interpolation, FOV, native lighting, UI composition
-  and unrelated options remain unchanged. Desktop F2 remains reversible.
+- Android renders the configured effects like the desktop (2026-10-23). The
+  runtime initializes a missing configuration with the product defaults
+  (`--initialize-config product`): the full Enhanced preset, with the picture
+  filling the display (Free aspect) instead of a 16:9 pillarbox.
+  `NativePresentationPolicy` is no longer forced on Android; F2 toggles the
+  native mask on every platform.
 - Platform lifecycle, surfaces, input devices, storage and audio-device binding
   belong to the Android host, outside title logic and canonical PICA semantics.
 - The publisher cross-compiles the existing manifest-verified translated C++

@@ -3987,6 +3987,8 @@ bool GfxRenderingAPIVulkan::TryRenderPointShadowMaps(
         },
         mPreparedShadowCasterView,
         mPointShadowMapBarrierPlan);
+    // Close the segment: the scene draws that follow are not point-map work.
+    mGpuProfiler.Mark(mCurrentFrame, "after point_shadows", mCommandBuffers[mCurrentFrame]);
     const auto& telemetry = mNriDirectionalShadowPass.LastPointTelemetry();
     mDiagnostics.RecordNriPointShadowMap(
         executed, telemetry.CandidateLights, telemetry.Lights, telemetry.RenderedLights,

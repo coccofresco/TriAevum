@@ -172,13 +172,27 @@ bool NativeA32WindowSession::RunFrame() {
                                         late - admittedRefreshFramesLateSeen);
     admittedRefreshFramesPacedSeen = paced;
     admittedRefreshFramesLateSeen = late;
+    const uint64_t overlappedPaced =
+        overlappedRefreshFramesPaced.load(std::memory_order_acquire);
+    const uint64_t overlappedLate =
+        overlappedRefreshFramesLate.load(std::memory_order_acquire);
+    inputSampleDelay.ObserveRefreshFrames(
+        overlappedPaced - overlappedRefreshFramesPacedSeen,
+        overlappedLate - overlappedRefreshFramesLateSeen);
+    overlappedRefreshFramesPacedSeen = overlappedPaced;
+    overlappedRefreshFramesLateSeen = overlappedLate;
   }
   const bool frameAdmitted = inputAdmission.BeginFrame();
+  if (frameAdmitted) inputSampleDelay.Reset();
   const bool lateInputSample = frameAdmitted && inputAdmissionLateSampling;
   if (frameAdmitted) renderStream.WaitForFramesInFlight(0U);
   if (!PrepareNextWindowDemoFrame(hostArgs, window, timing, frameTiming)) {
     return true;
   }
+  // Main-thread work of this presentation, reported to the performance hint
+  // session without the admission wait and any input sample delay.
+  const auto mainWorkStart = std::chrono::steady_clock::now();
+  std::chrono::steady_clock::duration mainWorkIdle{};
   // The SDL events just pumped are the physical input this frame polls.
   auto inputPumpTime = std::chrono::steady_clock::now();
   const auto requestedPresentationPolicy =
@@ -229,6 +243,22 @@ bool NativeA32WindowSession::RunFrame() {
       visualSampleCadence.Reset();
     }
     });
+  }
+  const uint32_t presentationPeriodMicroseconds =
+      presentationPacingPolicy.Enabled && presentationPacingPolicy.TargetRateHz != 0U &&
+              !hostArgs.ThroughputBenchmark
+          ? 1000000U / presentationPacingPolicy.TargetRateHz
+          : 0U;
+  inputSampleDelay.Configure(presentationPeriodMicroseconds);
+  if (presentationPeriodMicroseconds != 0U) {
+    const std::chrono::nanoseconds period(
+        static_cast<int64_t>(presentationPeriodMicroseconds) * 1000);
+    if (!mainPerformanceHintTried) {
+      mainPerformanceHintTried = true;
+      (void)mainPerformanceHint.Open(
+          {Oot3dNativeGame::NativePerformanceHintSession::CurrentThreadId()}, period);
+    }
+    mainPerformanceHint.UpdateTarget(period);
   }
   const auto presentationTime = std::chrono::steady_clock::now();
   renderStream.Submit([&, presentationTime] {
@@ -321,8 +351,9 @@ bool NativeA32WindowSession::RunFrame() {
       }
       const auto beginStart = std::chrono::steady_clock::now();
       api.StartFrame();
+      workerFrameAcquireEnd = std::chrono::steady_clock::now();
       inputLatencyTrace.ObserveBegin(presentationSerial, beginStart,
-                                     std::chrono::steady_clock::now());
+                                     workerFrameAcquireEnd);
       rendererFrameSkipped = !api.HasActiveFrame();
       if (rendererFrameSkipped) {
         rendererFrameWasInactive.store(true);
@@ -418,6 +449,19 @@ bool NativeA32WindowSession::RunFrame() {
     if (!beginGuestFrame(true)) return true;
     window.HandleEvents();
     inputPumpTime = std::chrono::steady_clock::now();
+  }
+  // Auto admission without admission: sample the refresh frame's input as late
+  // as its measured slack allows (NativeInputSampleDelayController).
+  if (!frameAdmitted && guestRefreshesDue != 0U &&
+      inputAdmission.Mode() == Oot3dNativeGame::NativeInputAdmissionMode::Auto) {
+    const uint32_t delayMicroseconds = inputSampleDelay.DelayMicroseconds();
+    if (delayMicroseconds != 0U) {
+      const auto sleepStart = std::chrono::steady_clock::now();
+      std::this_thread::sleep_for(std::chrono::microseconds(delayMicroseconds));
+      window.HandleEvents();
+      inputPumpTime = std::chrono::steady_clock::now();
+      mainWorkIdle += inputPumpTime - sleepStart;
+    }
   }
   const auto inputPhaseStart = std::chrono::steady_clock::now();
   // F5 saves the game moment and F8 loads the last state; with Shift, the
@@ -623,6 +667,7 @@ bool NativeA32WindowSession::RunFrame() {
   renderStream.Submit([&, width, height,
                        presentationSerial = presentationFrameCount,
                        admittedRefreshFrame = frameAdmitted && guestRefreshesDue != 0U,
+                       overlappedRefreshFrame = !frameAdmitted && guestRefreshesDue != 0U,
                        forcedScreenshot = std::exchange(pendingForcedScreenshot, {})] {
     if (!forcedScreenshot.empty()) screenshotState.ForcedPath = forcedScreenshot;
     if (rendererFrameSkipped) {
@@ -638,14 +683,32 @@ bool NativeA32WindowSession::RunFrame() {
         capturedTemporalSample ? &*capturedTemporalSample : nullptr);
     capturedTemporalSample.reset();
     const auto waitStart = std::chrono::steady_clock::now();
+    if (realtimePacer.Enabled() && realtimePacer.TargetRateHz() != 0U) {
+      // The render thread's work of this presentation: from the acquired
+      // image to the pacing wait.
+      const std::chrono::nanoseconds period(1000000000LL / realtimePacer.TargetRateHz());
+      if (!workerPerformanceHintTried) {
+        workerPerformanceHintTried = true;
+        (void)workerPerformanceHint.Open(
+            {Oot3dNativeGame::NativePerformanceHintSession::CurrentThreadId()}, period);
+      }
+      workerPerformanceHint.UpdateTarget(period);
+      if (waitStart > workerFrameAcquireEnd) {
+        workerPerformanceHint.ReportActual(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(waitStart - workerFrameAcquireEnd));
+      }
+    }
     CpuProbe::Scope cpuPacing(CpuProbe::Phase::Pacing);
     const uint64_t missesBeforeWait = realtimePacer.Stats().DeadlineMisses;
     realtimePacer.WaitForNextRefresh();
-    if (admittedRefreshFrame && realtimePacer.Enabled()) {
-      if (realtimePacer.Stats().DeadlineMisses != missesBeforeWait) {
-        admittedRefreshFramesLate.fetch_add(1U, std::memory_order_relaxed);
-      }
-      admittedRefreshFramesPaced.fetch_add(1U, std::memory_order_release);
+    if ((admittedRefreshFrame || overlappedRefreshFrame) && realtimePacer.Enabled()) {
+      const bool late = realtimePacer.Stats().DeadlineMisses != missesBeforeWait;
+      auto &lateCounter = admittedRefreshFrame ? admittedRefreshFramesLate
+                                               : overlappedRefreshFramesLate;
+      auto &pacedCounter = admittedRefreshFrame ? admittedRefreshFramesPaced
+                                                : overlappedRefreshFramesPaced;
+      if (late) lateCounter.fetch_add(1U, std::memory_order_relaxed);
+      pacedCounter.fetch_add(1U, std::memory_order_release);
     }
     cpuPacing.Stop();
     const auto waitEnd = std::chrono::steady_clock::now();
@@ -660,6 +723,11 @@ bool NativeA32WindowSession::RunFrame() {
       presentationFrameCount, frameCount, guestRefreshesDue != 0U);
   phaseTiming.PresentSeconds += SecondsSince(phaseStart);
   cpuPresent.Stop();
+  if (mainPerformanceHint.Active()) {
+    const auto mainWork = std::chrono::steady_clock::now() - mainWorkStart - mainWorkIdle;
+    mainPerformanceHint.ReportActual(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(mainWork));
+  }
   ++presentationFrameCount;
   ++runFrameCount;
 #if defined(__SWITCH__)

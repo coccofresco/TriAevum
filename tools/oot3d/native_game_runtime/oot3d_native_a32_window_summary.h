@@ -5,6 +5,7 @@
 #include "oot3d_native_a32_window_shared.h"
 #include "oot3d_native_a32_window_stats.h"
 #include "oot3d_native_input_admission.h"
+#include "oot3d_native_performance_hint.h"
 
 namespace Oot3dA32Window {
 
@@ -87,6 +88,9 @@ struct NativeA32WindowSummaryInputs {
     Oot3dNativeGame::Oot3dPicaPresentationScheduler &picaPresentationScheduler;
     const bool &parallelPresentation;
     const Oot3dNativeGame::NativeInputAdmissionController &inputAdmission;
+    const Oot3dNativeGame::NativeInputSampleDelayController &inputSampleDelay;
+    const Oot3dNativeGame::NativePerformanceHintSession &mainPerformanceHint;
+    const Oot3dNativeGame::NativePerformanceHintSession &workerPerformanceHint;
 };
 
 // Writes launch.Host.OutputPath when it is set.
