@@ -504,6 +504,18 @@ initialized from external JSON and are not mutated by gameplay chords.
 Runtime counters distinguish update calls from frames where the free camera
 actually owns the update.
 
+Two later fixes of the original standalone free camera
+(`Roberto-Nessy/OoT3D_Standalone_Free_Cam`) are ported on top of the payload
+semantics: `47d2cf74` resets the camera mode (`camera + 0x18C`) to 0 whenever
+the free camera changes the camera setting from the floor's camera data, and
+`672495a6` (issue #45) moves the camera's field of view (`camera + 0x144`) 5%
+of the way towards 55 degrees on every owned update, so a camera taken over
+during a zoom no longer keeps that value; the TopScreen FOV control and quake
+offsets still apply to the view on top of it. Its other changes are already
+covered (hedge maze scene 0x45 and setting 0x1D gates, floor camera data from
+the player's floor) or do not apply (regional builds, Taiwan support, the
+L+R option chords, which external configuration replaces).
+
 Record 39 reaches the payload's central per-frame ticker at `0x005D048C`;
 record 40 reaches presenter `0x005D063C -> 0x005D024C` and then resumes the
 original `0x002E25F0` continuation.

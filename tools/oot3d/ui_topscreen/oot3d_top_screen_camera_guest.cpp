@@ -359,6 +359,12 @@ bool ApplyTopScreenFreeCameraQuake(
       !ReadFloat(memory, runtime->CameraAddress + 0x144U, &viewFov)) {
     return false;
   }
+  // Standalone free camera 672495a6 (issue #45): while it owns the camera,
+  // the camera's field of view returns towards 55 degrees, so a camera taken
+  // over during a zoom or an abnormal setting does not keep that value.
+  viewFov += (55.0F - viewFov) * 0.05F;
+  if (!WriteFloat(memory, runtime->CameraAddress + 0x144U, viewFov))
+    return false;
   const bool applyQuake = quakeActive && cameraSetting != 0x38U;
   if (applyQuake) {
     TopScreenCameraVec3 at;
@@ -442,9 +448,13 @@ bool ApplyTopScreenFreeCameraData(
                           static_cast<std::uint16_t>(cameraDataIndex))) {
         return false;
       }
+      // A new setting starts in its default mode (standalone free camera
+      // 47d2cf74): a mode kept from the previous setting can index past the
+      // new setting's modes and crash.
       if (newSetting != oldSetting &&
           (!memory.Write16(runtime->CameraAddress + 0x19CU, oldSetting) ||
-           !memory.Write16(runtime->CameraAddress + 0x18AU, newSetting))) {
+           !memory.Write16(runtime->CameraAddress + 0x18AU, newSetting) ||
+           !memory.Write16(runtime->CameraAddress + 0x18CU, 0U))) {
         return false;
       }
     }

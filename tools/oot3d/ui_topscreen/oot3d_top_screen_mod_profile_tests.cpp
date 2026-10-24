@@ -4081,12 +4081,41 @@ int main() {
                                            &error) &&
               guestCamera.Phase == TopScreenCameraGuestPhase::Idle,
           "TopScreen staged native camera guest contract failed");
+  // The camera's 60 degrees move 5% of the way to 55 (59.75), then the
+  // TopScreen FOV control scales the view by 115%.
   std::uint32_t freeCameraFovBits = 0U;
+  std::uint32_t cameraFovBits = 0U;
   Require(cameraMemory.Read32(globalContext + 0x198U,
                               &freeCameraFovBits) &&
-              std::abs(std::bit_cast<float>(freeCameraFovBits) - 69.0F) <
+              cameraMemory.Read32(cameraAddress + 0x144U, &cameraFovBits) &&
+              std::abs(std::bit_cast<float>(cameraFovBits) - 59.75F) <
+                  0.001F &&
+              std::abs(std::bit_cast<float>(freeCameraFovBits) - 68.7125F) <
                   0.001F,
           "TopScreen FOV control did not compose with free-camera ownership");
+  // Standing on a static floor whose camera data names another setting: the
+  // setting changes, the previous one is kept and the mode returns to 0.
+  constexpr std::uint32_t collisionHeader = 0x08030000U;
+  constexpr std::uint32_t cameraDataList = 0x08030100U;
+  Require(cameraMemory.Write8(playerAddress + 0x81U, 0x32U) &&
+              cameraMemory.Write32(globalContext + 0xA98U, collisionHeader) &&
+              cameraMemory.Write32(collisionHeader + 0x24U, cameraDataList) &&
+              cameraMemory.Write16(cameraDataList, 0x02U) &&
+              cameraMemory.Write16(cameraAddress + 0x18AU, 0x01U) &&
+              cameraMemory.Write16(cameraAddress + 0x18CU, 0x05U),
+          "cannot seed TopScreen camera-data fixture");
+  guestCamera.Phase = TopScreenCameraGuestPhase::CameraData;
+  std::uint16_t cameraSetting = 0U, previousSetting = 0U, cameraMode = 0U,
+                cameraDataIndex = 0xFFFFU;
+  Require(ApplyTopScreenFreeCameraData(cameraMemory, &guestCamera, 0,
+                                       &error) &&
+              cameraMemory.Read16(cameraAddress + 0x18AU, &cameraSetting) &&
+              cameraMemory.Read16(cameraAddress + 0x19CU, &previousSetting) &&
+              cameraMemory.Read16(cameraAddress + 0x18CU, &cameraMode) &&
+              cameraMemory.Read16(cameraAddress + 0x190U, &cameraDataIndex) &&
+              cameraSetting == 0x02U && previousSetting == 0x01U &&
+              cameraMode == 0U && cameraDataIndex == 0U,
+          "TopScreen free camera did not reset the mode with a new setting");
 
   const auto zrSelection =
       ResolveTopScreenItemsSelectionBegin({true, false, 2U});
