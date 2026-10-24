@@ -84,13 +84,13 @@ float pica_vsm_filter(int layout_index, int level, vec3 light, vec2 depth_gradie
     vec2 physical_base = vec2(pica_vsm_physical(layout_index, entry, local));
     vec2 inverse_atlas = vec2(pica_vsm.shadow_state.y, pica_vsm.dissolve.y);
     float visibility = 0.0;
-    for (int iy = 0; iy < 3; ++iy) {
-        if (iy > radius) break;
+    // Trip counts from the block: one gather in flight, not nine unrolled.
+    int taps = radius + 1;
+    for (int iy = 0; iy < taps; ++iy) {
         int y = -radius + iy * 2;
         vec2 wy = vec2(pica_vsm_axis_weight(y, radius, fraction.y),
                        pica_vsm_axis_weight(y + 1, radius, fraction.y));
-        for (int ix = 0; ix < 3; ++ix) {
-            if (ix > radius) break;
+        for (int ix = 0; ix < taps; ++ix) {
             int x = -radius + ix * 2;
             vec2 wx = vec2(pica_vsm_axis_weight(x, radius, fraction.x),
                            pica_vsm_axis_weight(x + 1, radius, fraction.x));
@@ -123,22 +123,21 @@ vec2 pica_vsm_occlusion(int layout_index, vec3 light, vec2 depth_gradient) {
     int count = int(pica_vsm.layouts[layout_index].camera_light.w);
     float distance_plane = max(abs(relative.x), abs(relative.y));
     int first = pica_vsm_first_level(layout_index, light);
+    // The finest level with a page, blended toward the next coarser level
+    // with a page near its edge: one filter call site for both.
     float visibility = 1.0;
+    float blend = -1.0;
     for (int level = first; level < count; ++level) {
         float sample_visibility = pica_vsm_filter(layout_index, level, light, depth_gradient);
         if (sample_visibility < 0.0) continue;
+        if (blend > 0.0) {
+            visibility = mix(visibility, sample_visibility, blend);
+            break;
+        }
         visibility = sample_visibility;
         float page_world = pica_vsm.layouts[layout_index].levels[level].z;
-        float blend = smoothstep(2.75 * page_world, 3.0 * page_world, distance_plane);
-        if (blend > 0.0) {
-            for (int coarse = level + 1; coarse < count; ++coarse) {
-                float coarse_visibility = pica_vsm_filter(layout_index, coarse, light, depth_gradient);
-                if (coarse_visibility < 0.0) continue;
-                visibility = mix(visibility, coarse_visibility, blend);
-                break;
-            }
-        }
-        break;
+        blend = smoothstep(2.75 * page_world, 3.0 * page_world, distance_plane);
+        if (blend <= 0.0) break;
     }
     float fade = 1.0 - smoothstep(0.9 * maximum_distance, maximum_distance, world_distance);
     return vec2(1.0 - visibility, fade);

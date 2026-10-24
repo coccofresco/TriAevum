@@ -53,7 +53,7 @@ inline constexpr std::string_view kPicaShadowProbeEpilogue = R"glsl(
         pica_color.rgb = vec3(id & 255u, (id >> 8u) & 255u, 165u) / 255.0;
     } else if (probe_mode >= 2u && probe_mode <= 9u) {
         bool probe_was_sampled = oot3d_directional_shadow_ready;
-        // Reuses the production cache when lighting already asked for visibility.
+        // Set by the main prologue when a light of the draw matches; reuses its value.
         float probe_visibility = oot3d_directional_shadow_visibility(pica_surface_normal).r;
         bool probe_slot8 = (uint(pica_vsm.receiver.w) & 256u) != 0u;
         uint probe_bits = 0u;

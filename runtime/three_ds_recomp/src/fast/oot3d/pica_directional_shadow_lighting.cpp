@@ -12,7 +12,7 @@ namespace {
 uint64_t LightingVariantKey(uint64_t original, bool fragmentPrimary) {
     constexpr uint64_t kOffset = 1469598103934665603ULL;
     constexpr uint64_t kPrime = 1099511628211ULL;
-    constexpr std::string_view kSalt = "OOT3D_PICA_VIRTUAL_SHADOW_LIGHTING_V10";
+    constexpr std::string_view kSalt = "OOT3D_PICA_VIRTUAL_SHADOW_LIGHTING_V12";
     uint64_t hash = kOffset;
     for (unsigned shift = 0U; shift < 64U; shift += 8U) {
         hash ^= static_cast<uint8_t>(original >> shift);
@@ -40,10 +40,13 @@ float oot3d_contact_shadow_visibility(vec3 position) {
     float contact = textureLod(pica_contact_shadow, uv, 0.0).r;
     return max(0.0, 1.0 - (1.0 - contact) * clamp(pica_vsm.shadow_state.x, 0.0, 4.0));
 }
-// The lighting asks once per shadowed term of each matched light; the
-// visibility of a fragment is looked up once. A smooth-shaded receiver passes
-// its vertex normal (view space) for the normal bias, others zero. As Godot,
-// the contact shadows join the map by min().
+// The visibility of a fragment is looked up once, in the main prologue
+// (oot3d_directional_shadow_prepare), and every shadowed term of a matched
+// light reads that value: inlined at each term inside the lighting loops, the
+// receiver held its registers and the loops' at once, even where no fragment
+// ran it. A smooth-shaded receiver passes its vertex normal (view space) for
+// the normal bias, others zero. As Godot, the contact shadows join the map by
+// min().
 // The filter gets no receiver-plane depth slope: the slope of a flat triangle
 // is constant across it and breaks at its edges, so on a smooth-shaded
 // low-poly receiver the shadows showed its facets. The depth and normal
@@ -60,12 +63,21 @@ vec3 oot3d_directional_shadow_visibility(vec3 normal) {
     }
     return oot3d_directional_shadow_value;
 }
+// Once per fragment, before any lighting, when a light of the draw matches.
+void oot3d_directional_shadow_prepare(vec3 normal) {
+    if (uint(pica_vsm.receiver.w) != 0u) oot3d_directional_shadow_visibility(normal);
+}
+vec3 oot3d_directional_shadow_prepared() { return oot3d_directional_shadow_value; }
 )glsl";
 }
 
 } // namespace
 
 std::string PicaDirectionalShadowLightingDeclarations() { return LightingDeclarations(); }
+
+std::string_view PicaDirectionalShadowLightingPrologue() {
+    return "\n    oot3d_directional_shadow_prepare(pica_surface_normal);\n";
+}
 
 PicaDirectionalShadowReceiverUniforms PackPicaDirectionalShadowReceiverUniforms(
     const DirectionalShadowMatrix& viewToWorld, const PicaDirectionalShadowHistoryState& history) noexcept {

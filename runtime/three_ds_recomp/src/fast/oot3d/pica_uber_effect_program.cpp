@@ -280,7 +280,7 @@ std::string BuildPicaUberEffectProgram(const PicaUberEffectProgramRequest& reque
                         "    uint selected = uint(pica_vsm.receiver.w);\n"
                         "    if (slot < 0) return vec3(1.0);\n"
                         "    return (selected & (1u << uint(slot))) != 0u\n"
-                        "        ? oot3d_directional_shadow_visibility(pica_surface_normal) : vec3(1.0);\n}\n";
+                        "        ? oot3d_directional_shadow_prepared() : vec3(1.0);\n}\n";
         std::string point(Renderer3ds::PointShadowReceiverShader());
         const std::string_view name = "float pica_point_shadow(float slot, vec3 light_to_fragment, float radius) {";
         const size_t at = point.find(name);
@@ -294,7 +294,9 @@ std::string BuildPicaUberEffectProgram(const PicaUberEffectProgramRequest& reque
     }
 
     // Insertions at the native hooks, in the specialized composition's order.
-    const std::string atPrologue = std::string(kViewDerivativesPrologue) + ReliefPrologue(base.IntegerTexture0);
+    std::string atPrologue = std::string(kViewDerivativesPrologue) + ReliefPrologue(base.IntegerTexture0);
+    if (surface)
+        atPrologue += Guarded(Bit(Decision::DirectionalShadow), PicaDirectionalShadowLightingPrologue());
     std::string atLighting;
     if (surface) {
         atLighting += "\n    vec4 surface_native_primary = rounded_primary_color;\n"

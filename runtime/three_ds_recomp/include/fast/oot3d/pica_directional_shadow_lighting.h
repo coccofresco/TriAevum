@@ -115,6 +115,9 @@ struct PicaDirectionalShadowHistoryState {
 
 // The receiver declarations every directional-shadow lighting variant adds.
 [[nodiscard]] std::string PicaDirectionalShadowLightingDeclarations();
+// The main-prologue statement that looks the fragment's visibility up once;
+// pica_surface_shadow then reads oot3d_directional_shadow_prepared().
+[[nodiscard]] std::string_view PicaDirectionalShadowLightingPrologue();
 
 struct PicaDirectionalShadowLightingInstrumentation {
     std::string Declarations;
