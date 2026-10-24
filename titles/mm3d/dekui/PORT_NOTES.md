@@ -1,5 +1,9 @@
 # dekui guest-side core port
 
+The baseline account below is historical. For the partial 2026-10-25 update,
+current counts, tested behavior and the required translation stop, see
+[UPDATE_PORT_NOTES.md](UPDATE_PORT_NOTES.md).
+
 This component ports the guest hooks reached by mm3d-dekui's `MemoryReadCode`
 and `CallSVC` in `src/core/arm/dynarmic/arm_dynarmic.cpp`. It targets the original
 EUR v1.1 image. It does not install a Restoration image, change guest code bytes,

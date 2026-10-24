@@ -3,6 +3,13 @@
 // Copyright 2016-2026 Citra Emulator Project / Azahar Emulator Project.
 #pragma once
 #include "host_interfaces.h"
+#include "tatl_reminders.h"
+#include "bomber_approach.h"
+#include "owl_intro.h"
+#include "actor_draw_distance.h"
+#include "prop_draw_distance.h"
+#include "vegetation_draw_distance.h"
+
 #include "form_camera.h"
 #include "camera_live.h"
 #include "minimap.h"

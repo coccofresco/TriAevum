@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Ported from mm3d-dekui instruction contracts; generated from patches.json
 // and v100_to_v110_map.json by analysis/dekui/port_guest_core.py.
+// The 28 update sites use the independent 6e36dfb4 inventory and explicit
+// vanilla alternatives; the original 122-site manifest remains intact.
 #pragma once
 #include <array>
 #include <cstdint>
 namespace Mm3dDekui::TestData {
 struct Site {std::uint32_t pc,word,replacement;const char* module;bool restoration_dependency;};
-inline constexpr std::array<Site,122> Sites{{
+inline constexpr std::array<Site,150> Sites{{
     {0x00104da4U,0xe1a04000U,0xefffff90U,"menu_page_switch",false},
     {0x0010fd2cU,0xe12fff32U,0xeffffe80U,"menu_memory",false},
     {0x0010fd50U,0xe5c40010U,0xeffffe81U,"menu_memory",false},
@@ -24,13 +26,16 @@ inline constexpr std::array<Site,122> Sites{{
     {0x00161b54U,0xe2840008U,0xeffffffaU,"dialogue_scale",false},
     {0x00161b5cU,0xe28dd008U,0xeffffffbU,"dialogue_scale",false},
     {0x0016f8bcU,0xeb00841fU,0xeffffc81U,"death_penalties",false},
+    {0x001754d8U,0xeeb00a48U,0xeffffe73U,"actor_draw_distance",false},
     {0x0018d414U,0xed940a06U,0xeffffffeU,"camera_live",false},
     {0x0018d428U,0xed940a06U,0xeffffffeU,"camera_live",false},
     {0x0019870cU,0xe1a04000U,0xefffffbaU,"pause_capture",false},
     {0x001e6c70U,0xe3a00d05U,0xeffffc83U,"bottle_healing",false},
     {0x00206134U,0xe1c01abcU,0xeffffc80U,"death_penalties",false},
+    {0x0021e33cU,0xb1a040c1U,0xeffffe72U,"difficulty",false},
     {0x0021e34cU,0xe0822004U,0xefffffb5U,"difficulty",false},
     {0x0021f140U,0xe3a000a0U,0xeffffc85U,"bottle_healing",false},
+    {0x0021f54cU,0xe1a04001U,0xeffffe20U,"tatl_reminders",false},
     {0x0022053cU,0xe92d4070U,0xefffffb4U,"difficulty",false},
     {0x002993f4U,0xe1d004f0U,0xeffffd00U,"prices",true},
     {0x00299404U,0xeb00a05cU,0xeffffd15U,"prices",true},
@@ -61,6 +66,14 @@ inline constexpr std::array<Site,122> Sites{{
     {0x00429214U,0xebfa60d8U,0xeffffd1cU,"prices",true},
     {0x0042c6e4U,0xe1d004f0U,0xeffffd08U,"prices",true},
     {0x0042c710U,0xebfa5399U,0xeffffd1dU,"prices",true},
+    {0x00436d30U,0xe59fb31cU,0xeffffc90U,"vegetation_draw_distance",false},
+    {0x00436d40U,0xeddf8ac2U,0xeffffc91U,"vegetation_draw_distance",false},
+    {0x00436d44U,0xeddf9ac3U,0xeffffc92U,"vegetation_draw_distance",false},
+    {0x00436d80U,0xe59f12d8U,0xeffffc93U,"vegetation_draw_distance",false},
+    {0x00437018U,0xe59f0050U,0xeffffc94U,"vegetation_draw_distance",false},
+    {0x00437034U,0xe59f1038U,0xeffffc95U,"vegetation_draw_distance",false},
+    {0x00437078U,0xe51f100cU,0xeffffc96U,"vegetation_draw_distance",false},
+    {0x0043fb7cU,0xe1a04000U,0xeffffe25U,"owl_intro",false},
     {0x004476ccU,0xebf9e7aaU,0xeffffd23U,"prices",true},
     {0x004476ecU,0xe1d004f0U,0xeffffd09U,"prices",true},
     {0x00447724U,0xebf9e794U,0xeffffd1eU,"prices",true},
@@ -72,15 +85,32 @@ inline constexpr std::array<Site,122> Sites{{
     {0x0046ffc4U,0xedd40a3cU,0xefffffb2U,"form_camera",true},
     {0x004700a0U,0xe1a0200dU,0xefffffb0U,"form_camera",true},
     {0x00477724U,0xebf92794U,0xeffffd20U,"prices",true},
+    {0x0047b4a0U,0xe5d002d3U,0xeffffe26U,"owl_intro",false},
     {0x00489d00U,0xe1a0100dU,0xefffffa9U,"song_effect",false},
     {0x00489f68U,0xe1a0100dU,0xefffffaaU,"song_effect",false},
     {0x0048a1c4U,0xe1a0100dU,0xefffffabU,"song_effect",false},
     {0x0048a3e8U,0xe1a0100dU,0xefffffacU,"song_effect",false},
     {0x0048a600U,0xe1a0100dU,0xefffffadU,"song_effect",false},
+    {0x004cb240U,0xe59f1194U,0xeffffe74U,"prop_draw_distance",false},
+    {0x004cb254U,0xe59f0184U,0xeffffe75U,"prop_draw_distance",false},
+    {0x004cb378U,0xed9f1a1fU,0xeffffe76U,"prop_draw_distance",false},
+    {0x0050965cU,0xe59f1208U,0xeffffe77U,"prop_draw_distance",false},
+    {0x005097b4U,0xe59f10ccU,0xeffffe78U,"prop_draw_distance",false},
+    {0x005097f8U,0xed9f1a23U,0xeffffe79U,"prop_draw_distance",false},
+    {0x00517efcU,0xedd10a00U,0xeffffc98U,"vegetation_draw_distance",false},
+    {0x00518400U,0xe59f10f8U,0xeffffc99U,"vegetation_draw_distance",false},
+    {0x00518414U,0xe59f00e8U,0xeffffc9aU,"vegetation_draw_distance",false},
+    {0x00518470U,0xed9f1a24U,0xeffffc9bU,"vegetation_draw_distance",false},
+    {0x00519ad0U,0xedd10a00U,0xeffffc97U,"vegetation_draw_distance",false},
+    {0x00535014U,0xe59f1100U,0xeffffc9cU,"vegetation_draw_distance",false},
+    {0x00535028U,0xe59f00f0U,0xeffffc9dU,"vegetation_draw_distance",false},
+    {0x00535090U,0xed9f1a23U,0xeffffc9eU,"vegetation_draw_distance",false},
     {0x00546cf0U,0xe1d704f0U,0xeffffd0bU,"prices",true},
     {0x00546d94U,0xebf5e9f8U,0xeffffd21U,"prices",true},
     {0x00546fc4U,0xe1d004f0U,0xeffffd0cU,"prices",true},
     {0x00547010U,0xebf5e959U,0xeffffd22U,"prices",true},
+    {0x0056dea0U,0xe1d508fcU,0xeffffe23U,"bomber_approach",false},
+    {0x0056e290U,0xe3a0100fU,0xeffffe24U,"bomber_approach",false},
     {0x005945f0U,0x15d6000cU,0x1fffffa3U,"dungeon_map",false},
     {0x00596d94U,0xe1a04000U,0xefffffa0U,"dungeon_map",false},
     {0x00596e28U,0x0bf430bcU,0x0fffffa1U,"dungeon_map",false},

@@ -7,9 +7,14 @@
 namespace Mm3dDekui::NativeFileSelect {
 using namespace NativeInventory;
 enum Part : unsigned { Summary, Files, Prompt, Actions, Popup, Count };
+struct HeaderBackground {float x=0,y=0,scale_x=1,scale_y=1;};
+struct HeaderTitle {float x=0,y=0,scale=1;};
 struct Options {
     bool enabled=true;
     float stone_spacing=0.f;
+    float entrance_ease=2.f;
+    HeaderBackground header;
+    HeaderTitle title;
     std::array<GearMenu::Pose,Count> poses{{{170,32,.65f},{0,35,.55f},{0,32,.55f},{0,35,.55f},{40,0,1.f}}};
 };
 inline std::atomic<bool> enabled{true};

@@ -26,6 +26,7 @@ inline std::atomic<bool> enabled{false}, needs_service{false};
 inline std::mutex mutex;
 inline Snapshot published;
 inline std::atomic<float> desired_fov{45.f};
+inline std::atomic<float> desired_cutscene_fov{49.f}; // dekui 6e36dfb4 scripted-camera setting
 // Translation-only replacement of the two verified primary projection loads.
 // This does not patch the ROM or guest code/data memory.
 constexpr U32 ProjectionSVC=0x00fffffe;
@@ -78,7 +79,7 @@ template<class M> float ConfiguredFov(M& m,U32 projection) {
     if(m.Read(CameraPointer)==std::optional<U32>(projection)&&
        m.Read(projection+4)==std::optional<U32>(0)&&m.Read(projection+8)==std::optional<U32>(400)&&
        m.Read(projection+12)==std::optional<U32>(0)&&m.Read(projection+16)==std::optional<U32>(240)) {
-        if(ScriptedCamera(m))return 51.f;
+        if(ScriptedCamera(m))return desired_cutscene_fov.load();
     }
     return desired_fov.load();
 }
@@ -120,7 +121,12 @@ inline void SetFov(float degrees) {
     desired_fov.store(std::isfinite(degrees) ? std::clamp(degrees,45.f,70.f) : 45.f);
     needs_service.store(true);
 }
-inline void Stop() { SetFov(45.f); }
+inline void SetCutsceneFov(float degrees) {
+    std::scoped_lock lock{mutex};
+    desired_cutscene_fov.store(std::isfinite(degrees) ? std::clamp(degrees,45.f,70.f) : 49.f);
+    needs_service.store(true);
+}
+inline void Stop() { SetFov(45.f); SetCutsceneFov(45.f); }
 
 // CPU-thread state. The adapter reads/writes guest virtual RAM, never host UI state.
 class Engine {
