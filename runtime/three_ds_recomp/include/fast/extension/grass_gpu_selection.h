@@ -31,6 +31,11 @@ struct GrassGpuSelectionSource {
     uint32_t StaticBase = 0U;
     std::array<float, 16> PositionToClip{};
     std::array<float, 3> Eye{};
+    // With UseCandidates, only these clusters (ascending indices into
+    // Clusters, a superset of the clusters the view keeps) are selected
+    // from; the others cannot contribute a root. Without, every cluster.
+    bool UseCandidates = false;
+    std::span<const uint32_t> Candidates;
 };
 
 // One topology slot: a CPU selection bin that the policy can produce, with

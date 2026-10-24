@@ -33,7 +33,8 @@ static_assert(kRankBase == 644U && kHistogramBase == 772U && kCutWord == 1796U);
 static_assert(kCutWord < kControlWords);
 // The scan pass finds the cut with four buckets per lane of its 256 lanes.
 static_assert(kGrassBudgetBuckets == 4U * 256U);
-constexpr uint32_t kBindings = 8U;
+constexpr uint32_t kBindings = 9U;
+constexpr uint32_t kNoCluster = 0xFFFFFFFFU;
 constexpr uint32_t kNoSlot = 0xFFU;
 constexpr uint32_t kPassCount = 4U;
 // Count, scan, recount under the cut, scan again, scatter.
@@ -83,6 +84,8 @@ struct GrassGpuSelector::Impl {
     std::array<VkPipeline, kPassCount> Pipelines{};
     Buffer Clusters;
     std::array<Buffer, kFrameSlots> ClusterStaging{};
+    // Per selection slot, the cluster table entry it selects from.
+    std::array<Buffer, kFrameSlots> SlotClusters{};
     Buffer AnchorSlots;
     Buffer Records;
     Buffer Groups;
@@ -93,7 +96,7 @@ struct GrassGpuSelector::Impl {
     std::array<SlotState, kFrameSlots> SlotStates{};
     uint64_t ClusterRevision = 0U;
     uint32_t ClusterSlots = 0U;
-    std::vector<uint32_t> GroupBase;
+    std::vector<uint32_t> TableBase;
     std::vector<uint32_t> GroupCount;
     std::string Reason;
     bool OutOfMemory = false;
@@ -101,12 +104,12 @@ struct GrassGpuSelector::Impl {
     void DestroyBuffers() {
         for (auto* buffer : {&Clusters, &AnchorSlots, &Records, &Groups})
             DestroyBuffer(*buffer);
-        for (auto* set : {&ClusterStaging, &Sources, &Visible, &Control, &Readback})
+        for (auto* set : {&ClusterStaging, &SlotClusters, &Sources, &Visible, &Control, &Readback})
             for (auto& buffer : *set) DestroyBuffer(buffer);
         SlotStates = {};
         ClusterRevision = 0U;
         ClusterSlots = 0U;
-        GroupBase.clear();
+        TableBase.clear();
     }
 
     void DestroyBuffer(Buffer& buffer) {
@@ -280,42 +283,71 @@ bool GrassGpuSelector::Record(const GrassGpuSelectionRequest& request, GrassGpuS
             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT, 0U, 1U, &previous, 0U, nullptr, 0U,
             nullptr);
 
-        // Clusters of the active sources in one flat index space, each source
-        // padded to whole workgroups.
+        // Every cluster of the active sources in one table (uploaded when the
+        // sources change), and the clusters this view selects from (all, or a
+        // source's candidates) in one flat slot space, each source padded to
+        // whole workgroups. A slot names its table entry (SlotClusters).
+        std::vector<uint32_t> tableBase(request.Sources.size());
         std::vector<uint32_t> groupBase(request.Sources.size()), groupCount(request.Sources.size());
+        std::vector<uint32_t> slotCount(request.Sources.size());
+        uint32_t tableEntries = 0U;
         uint32_t groups = 0U;
         for (size_t s = 0; s < request.Sources.size(); ++s) {
-            const auto count = request.Sources[s].Clusters.size();
-            if (count > (std::numeric_limits<uint32_t>::max() / 2U) - groups * size_t(kGroupSize))
+            const auto& source = request.Sources[s];
+            const auto clusters = source.Clusters.size();
+            const auto count = source.UseCandidates ? source.Candidates.size() : clusters;
+            if (clusters > std::numeric_limits<uint32_t>::max() / 2U - tableEntries ||
+                count > (std::numeric_limits<uint32_t>::max() / 2U) - groups * size_t(kGroupSize))
                 throw std::runtime_error("grass selection cluster count overflow");
+            tableBase[s] = tableEntries;
+            tableEntries += static_cast<uint32_t>(clusters);
+            slotCount[s] = static_cast<uint32_t>(count);
             groupBase[s] = groups;
             groupCount[s] = static_cast<uint32_t>((count + kGroupSize - 1U) / kGroupSize);
             groups += groupCount[s];
         }
-        if (groups == 0U) return false;
+        if (tableEntries == 0U) return false;
+        // No candidate anywhere: one empty group still produces the (empty)
+        // draws.
+        groups = std::max(groups, 1U);
         const uint32_t clusterSlots = groups * kGroupSize;
-        if (impl.ClusterRevision != request.StaticRevision || impl.ClusterSlots != clusterSlots ||
-            impl.GroupBase != groupBase) {
-            const VkDeviceSize clusterBytes = VkDeviceSize(clusterSlots) * sizeof(GrassWorldCluster);
+        if (impl.ClusterRevision != request.StaticRevision || impl.ClusterSlots != tableEntries ||
+            impl.TableBase != tableBase) {
+            const VkDeviceSize clusterBytes = VkDeviceSize(tableEntries) * sizeof(GrassWorldCluster);
             const bool resized = impl.EnsureBuffer(impl.Clusters, clusterBytes,
                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, kDevice, true);
             (void)resized;
             auto& stagingBuffer = impl.ClusterStaging[slot];
             impl.EnsureBuffer(stagingBuffer, clusterBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, kHost, false);
             auto* staging = static_cast<GrassWorldCluster*>(stagingBuffer.Mapped);
-            std::memset(staging, 0, static_cast<size_t>(clusterBytes));
             for (size_t s = 0; s < request.Sources.size(); ++s) {
                 const auto clusters = request.Sources[s].Clusters;
-                std::memcpy(staging + size_t(groupBase[s]) * kGroupSize, clusters.data(), clusters.size_bytes());
+                if (!clusters.empty())
+                    std::memcpy(staging + tableBase[s], clusters.data(), clusters.size_bytes());
             }
             const VkBufferCopy copy{0U, 0U, clusterBytes};
             vkCmdCopyBuffer(cmd, stagingBuffer.Handle, impl.Clusters.Handle, 1U, &copy);
             impl.ClusterRevision = request.StaticRevision;
-            impl.ClusterSlots = clusterSlots;
-            impl.GroupBase = groupBase;
+            impl.ClusterSlots = tableEntries;
+            impl.TableBase = tableBase;
         } else if (impl.ClusterStaging[slot].Handle != VK_NULL_HANDLE) {
             // Its copy ran in this slot's previous frame, which has completed.
             impl.DestroyBuffer(impl.ClusterStaging[slot]);
+        }
+        auto& slotBuffer = impl.SlotClusters[slot];
+        const VkDeviceSize slotBytes = VkDeviceSize(clusterSlots) * sizeof(uint32_t);
+        impl.EnsureBuffer(slotBuffer, slotBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, kHost, false);
+        auto* slotClusters = static_cast<uint32_t*>(slotBuffer.Mapped);
+        std::fill_n(slotClusters, clusterSlots, kNoCluster);
+        for (size_t s = 0; s < request.Sources.size(); ++s) {
+            const auto& source = request.Sources[s];
+            auto* output = slotClusters + size_t(groupBase[s]) * kGroupSize;
+            for (uint32_t i = 0U; i < slotCount[s]; ++i) {
+                const uint32_t cluster = source.UseCandidates ? source.Candidates[i] : i;
+                if (cluster >= source.Clusters.size())
+                    throw std::runtime_error("grass selection candidate cluster is out of range");
+                output[i] = tableBase[s] + cluster;
+            }
         }
         impl.EnsureBuffer(impl.AnchorSlots, request.StaticAnchorCount * sizeof(uint32_t),
                           VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, kDevice, true);
@@ -364,20 +396,21 @@ bool GrassGpuSelector::Record(const GrassGpuSelectionRequest& request, GrassGpuS
             const std::array<float, 3> radiusScale{scale.X, scale.Y, scale.W};
             std::memcpy(record + 19, radiusScale.data(), sizeof(radiusScale));
             record[22] = source.StaticBase;
-            record[24] = static_cast<uint32_t>(source.Clusters.size());
+            record[24] = slotCount[s];
             record[25] = groupBase[s];
             record[26] = groupCount[s];
         }
 
         const std::array<VkDescriptorBufferInfo, kBindings> infos{{
             {request.StaticAnchors, 0U, VkDeviceSize(request.StaticAnchorCount) * sizeof(GrassWorldAnchor)},
-            {impl.Clusters.Handle, 0U, VkDeviceSize(clusterSlots) * sizeof(GrassWorldCluster)},
+            {impl.Clusters.Handle, 0U, VkDeviceSize(tableEntries) * sizeof(GrassWorldCluster)},
             {impl.Sources[slot].Handle, 0U, sourceBytes},
             {impl.AnchorSlots.Handle, 0U, request.StaticAnchorCount * sizeof(uint32_t)},
             {impl.Records.Handle, 0U, VkDeviceSize(clusterSlots) * kRecordWords * sizeof(uint32_t)},
             {impl.Groups.Handle, 0U, VkDeviceSize(groups) * 2U * kCounters * sizeof(uint32_t)},
             {impl.Visible[slot].Handle, 0U, visibleBytes},
             {impl.Control[slot].Handle, 0U, kControlWords * sizeof(uint32_t)},
+            {slotBuffer.Handle, 0U, slotBytes},
         }};
         std::array<VkWriteDescriptorSet, kBindings> writes{};
         for (uint32_t index = 0U; index < kBindings; ++index)

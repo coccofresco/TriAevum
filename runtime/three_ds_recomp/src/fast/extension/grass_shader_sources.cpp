@@ -1055,7 +1055,9 @@ std::string BuildGrassRootLightingComputeShader() {
             std::string(kGrassShadowRefinementShader) + std::string(kGrassRootAnchorShader) +
             std::string(kGrassEnvironmentShader) + std::string(kGrassShadingShader) +
             std::string(kGrassRootLightingShader) + R"glsl(
-layout(local_size_x=64, local_size_y=1, local_size_z=1) in;
+// 256 wide: with the GPU selection it runs on the selection's indirect
+// dispatch (one workgroup per 256 admitted roots).
+layout(local_size_x=256, local_size_y=1, local_size_z=1) in;
 layout(std430,set=0,binding=2) readonly buffer GrassRootAnchors { uvec4 values[]; } root_anchors;
 layout(std430,set=0,binding=9) readonly buffer GrassRootAnchorIndices { uint values[]; } root_anchor_indices;
 layout(std430,set=0,binding=12) writeonly buffer GrassRootLighting { vec4 values[]; } root_lighting;
@@ -1401,8 +1403,8 @@ void main() {
 )glsl";
 }
 
-// GPU grass selection over one flat cluster index space (each source padded
-// to whole workgroups): count (pass 0), scan (pass 1), recount under the
+// GPU grass selection over one flat slot space, one slot per cluster a source
+// selects from (each source padded to whole workgroups): count (pass 0), scan (pass 1), recount under the
 // budget cut (pass 3), scan again, scatter (pass 2). The decisions follow the
 // CPU selection (GrassVisibilityQuery::Classify, the retained prefix,
 // ResolveGrassLod..., the per-blade frustum test); float rounding may differ
@@ -1442,6 +1444,8 @@ layout(std430, set=0, binding=4) buffer ClusterRecords { uint words[]; } records
 layout(std430, set=0, binding=5) buffer GroupCounts { uint values[]; } groups;
 layout(std430, set=0, binding=6) writeonly buffer Visible { uint values[]; } visible;
 layout(std430, set=0, binding=7) buffer Control { uint values[]; } control;
+// Per slot, the cluster table entry it selects from (0xFFFFFFFF: padding).
+layout(std430, set=0, binding=8) readonly buffer SlotClusters { uint values[]; } slot_clusters;
 
 layout(push_constant) uniform SelectionPolicy {
     // draw distance, its square, LOD reference, LOD start
@@ -1597,8 +1601,8 @@ void main() {
     for (uint k = 0u; k < SLOT_COUNTERS; ++k) counts[k] = 0u;
     uint first = 0u, end = 0u;
     uint source = find_source(slot);
-    uint cluster = slot * CLUSTER_WORDS;
     if (source != 0xFFFFFFFFu && slot - source_word(source, 25u) * 256u < source_word(source, 24u)) {
+        uint cluster = slot_clusters.values[slot] * CLUSTER_WORDS;
         uint anchor_count = clusters.words[cluster + 1u];
         first = source_word(source, 22u) + clusters.words[cluster];
         end = first;

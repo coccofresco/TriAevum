@@ -656,6 +656,8 @@ struct InteractiveGrassPass::Impl {
     std::vector<GrassShadowGridReference> ShadowReferences;
     std::vector<GrassShadowSurface> ShadowSurfaces;
     std::vector<GrassClusterWork> ClusterWork;
+    // Per placement, the clusters the GPU selection selects from.
+    std::vector<std::vector<uint32_t>> GpuCandidates;
     std::vector<uint32_t> SelectionRoots;
     std::vector<std::vector<GrassClusterWork>> SelectionOutputs;
     // Conservative cluster candidates per source and camera envelope.
@@ -2394,14 +2396,43 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
             gpuSlots = BuildGrassGpuSelectionSlots(lodPolicy, mImpl->IndexedTopology);
             batches.clear();
             mImpl->DrawGroups.clear();
+            mImpl->GpuCandidates.resize(preparedPlacements.size());
             for (uint32_t placementIndex = 0; placementIndex < preparedPlacements.size(); ++placementIndex) {
                 const auto& prepared = preparedPlacements[placementIndex];
-                if (residency)
+                // The CPU's cluster traversal (its visibility hierarchy) names
+                // the clusters the view keeps; the GPU selects from those
+                // instead of testing every cluster of the source. A resident
+                // cluster keeps its source cluster's bounds, so the store's
+                // candidates are the kept clusters it holds.
+                const GrassWorldPlacement& world =
+                    residency ? *residency->Sources[placementIndex] : *prepared.World;
+                {
+                    GrassStageTimer clusterTimer(GrassStage::Selection);
+                    mImpl->SelectClusterWork(world, prepared.Push.PositionToClip, prepared.Eye, lodPolicy,
+                                             bladeRadiusScale, settings.FrustumCulling);
+                }
+                auto& kept = mImpl->ClusterWork;
+                if (!std::is_sorted(kept.begin(), kept.end(),
+                        [](const auto& a, const auto& b) { return a.ClusterIndex < b.ClusterIndex; }))
+                    throw std::runtime_error("grass cluster work is not in cluster order");
+                auto& candidates = mImpl->GpuCandidates[placementIndex];
+                candidates.clear();
+                if (residency) {
+                    const auto& stored = residency->SourceClusters[placementIndex];
+                    size_t next = 0U;
+                    for (uint32_t index = 0U; index < stored.size() && next < kept.size(); ++index) {
+                        while (next < kept.size() && kept[next].ClusterIndex < stored[index]) ++next;
+                        if (next < kept.size() && kept[next].ClusterIndex == stored[index]) candidates.push_back(index);
+                    }
                     gpuSources.push_back({residency->Clusters[placementIndex], residency->SourceBase[placementIndex],
-                                          prepared.Push.PositionToClip, prepared.Eye});
-                else
+                                          prepared.Push.PositionToClip, prepared.Eye, true, candidates});
+                } else {
+                    candidates.resize(kept.size());
+                    std::transform(kept.begin(), kept.end(), candidates.begin(),
+                                   [](const GrassClusterWork& work) { return work.ClusterIndex; });
                     gpuSources.push_back({prepared.World->Clusters, prepared.StaticBaseIndex,
-                                          prepared.Push.PositionToClip, prepared.Eye});
+                                          prepared.Push.PositionToClip, prepared.Eye, true, candidates});
+                }
                 for (uint32_t k = 0; k < gpuSlots.size(); ++k) {
                     const auto bin = gpuSlots[k].Bin;
                     const bool tuft = bin == kGrassLodBinCount - 1U;
@@ -2773,7 +2804,13 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                     gpuSelection ? static_cast<uint32_t>(gpuSlots.size()) : 0U};
                 vkCmdPushConstants(commandBuffer, mImpl->RootLightingLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0U,
                                    sizeof(lightingPush), &lightingPush);
-                vkCmdDispatch(commandBuffer, (instanceCount + 63U) / 64U, 1U, 1U);
+                // With the GPU selection, only the admitted roots: the
+                // selection's indirect dispatch (256 per workgroup), not the
+                // whole budget.
+                if (gpuSelection)
+                    vkCmdDispatchIndirect(commandBuffer, compaction.SelectionControl, 0U);
+                else
+                    vkCmdDispatch(commandBuffer, (instanceCount + 255U) / 256U, 1U, 1U);
                 const VkMemoryBarrier lit{VK_STRUCTURE_TYPE_MEMORY_BARRIER, nullptr,
                     VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT};
                 vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,

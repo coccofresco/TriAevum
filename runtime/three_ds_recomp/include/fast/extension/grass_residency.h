@@ -11,6 +11,8 @@
 
 namespace Fast::Extension {
 
+inline constexpr uint32_t kGrassResidencyNoCluster = 0xFFFFFFFFU;
+
 // The camera-centred GPU anchor store. Within a cluster the anchors are in
 // stable-visibility order and the selection only reads the prefix its LOD
 // retains at the cluster's nearest distance. The store keeps, for each
@@ -27,6 +29,10 @@ struct GrassResidency {
     std::vector<GrassWorldAnchor> Anchors;
     std::vector<uint32_t> SourceBase;
     std::vector<std::vector<GrassWorldCluster>> Clusters;
+    // Per stored cluster, its index among its source's clusters (ascending;
+    // kGrassResidencyNoCluster for a source's empty placeholder). A stored
+    // cluster keeps its source cluster's bounds.
+    std::vector<std::vector<uint32_t>> SourceClusters;
     // Per stored anchor, when every source has a shadow grid; they address
     // the sources' shadow points concatenated in source order.
     std::vector<GrassShadowGridReference> ShadowReferences;

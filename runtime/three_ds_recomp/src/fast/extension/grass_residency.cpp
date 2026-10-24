@@ -38,6 +38,7 @@ GrassResidency BuildGrassResidency(std::vector<std::shared_ptr<const GrassWorldP
     residency.Margin = margin;
     residency.SourceBase.reserve(sources.size());
     residency.Clusters.reserve(sources.size());
+    residency.SourceClusters.reserve(sources.size());
     // The pass concatenates the sources' shadow grids in this order: each
     // source's references address its points after the earlier sources'.
     uint32_t pointBase = 0;
@@ -50,8 +51,10 @@ GrassResidency BuildGrassResidency(std::vector<std::shared_ptr<const GrassWorldP
         // Only clusters with resident anchors: the selection visits clusters
         // in table order, so dropping empty ones keeps the visible order.
         auto& clusters = residency.Clusters.emplace_back();
+        auto& sourceClusters = residency.SourceClusters.emplace_back();
         uint32_t stored = 0;
-        for (auto cluster : source->Clusters) {
+        for (size_t clusterIndex = 0; clusterIndex < source->Clusters.size(); ++clusterIndex) {
+            auto cluster = source->Clusters[clusterIndex];
             const size_t first = std::min<size_t>(cluster.FirstAnchor, source->Anchors.size());
             const size_t count = std::min<size_t>(cluster.AnchorCount, source->Anchors.size() - first);
             float distanceSquared = 0.0F;
@@ -79,6 +82,7 @@ GrassResidency BuildGrassResidency(std::vector<std::shared_ptr<const GrassWorldP
             cluster.FirstAnchor = stored;
             cluster.AnchorCount = static_cast<uint32_t>(prefix);
             clusters.push_back(cluster);
+            sourceClusters.push_back(static_cast<uint32_t>(clusterIndex));
             stored += static_cast<uint32_t>(prefix);
             residency.Anchors.insert(residency.Anchors.end(), source->Anchors.begin() + first,
                                      source->Anchors.begin() + first + prefix);
@@ -96,6 +100,7 @@ GrassResidency BuildGrassResidency(std::vector<std::shared_ptr<const GrassWorldP
             auto& empty = clusters.emplace_back(source->Clusters.front());
             empty.FirstAnchor = 0;
             empty.AnchorCount = 0;
+            sourceClusters.push_back(kGrassResidencyNoCluster);
         }
         pointBase += static_cast<uint32_t>(source->ShadowPoints.size());
     }
