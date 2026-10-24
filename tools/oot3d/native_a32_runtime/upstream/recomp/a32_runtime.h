@@ -239,6 +239,13 @@ using NativeBlockCallback = bool (*)(
     std::uint32_t* blocks_consumed,
     void* user);
 
+// Coverage tooling: an optional observer of the guest code the registry does
+// not translate, called at each interpreted Thumb block entry and each A32 PC
+// without a registry block. Null by default; it costs nothing on translated
+// code. Process-wide; set it before running guest code.
+using UntranslatedCodeObserver = void (*)(std::uint32_t pc, bool thumb, void* user);
+void SetUntranslatedCodeObserver(UntranslatedCodeObserver observer, void* user) noexcept;
+
 bool ConditionPassed(Condition condition, std::uint32_t cpsr) noexcept;
 
 const Block* FindBlock(const Registry& registry, std::uint32_t pc) noexcept;

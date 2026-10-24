@@ -27,6 +27,36 @@ BuildPicaMemoryRegions(
   return regions;
 }
 
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+// TRIAEVUM_A32_COVERAGE=PATH: the guest code the A32 registry does not
+// translate (interpreted Thumb block entries, A32 PCs without a block), written
+// as "pc,kind,count" lines when the process exits. A coverage oracle for
+// function discovery: every listed PC is code the title reached in this run.
+struct UntranslatedCodeLog {
+  std::string Path;
+  std::unordered_map<uint32_t, uint64_t> Thumb;
+  std::unordered_map<uint32_t, uint64_t> Arm;
+  ~UntranslatedCodeLog() {
+    std::FILE *file = std::fopen(Path.c_str(), "w");
+    if (file == nullptr) return;
+    std::fprintf(file, "pc,kind,count\n");
+    for (const auto *entries : {&Thumb, &Arm}) {
+      std::vector<std::pair<uint32_t, uint64_t>> sorted(entries->begin(), entries->end());
+      std::sort(sorted.begin(), sorted.end());
+      for (const auto &[pc, count] : sorted)
+        std::fprintf(file, "0x%08X,%s,%llu\n", pc, entries == &Thumb ? "thumb" : "arm",
+                     static_cast<unsigned long long>(count));
+    }
+    std::fclose(file);
+  }
+};
+
+void ObserveUntranslatedCode(uint32_t pc, bool thumb, void *user) {
+  auto &log = *static_cast<UntranslatedCodeLog *>(user);
+  ++(thumb ? log.Thumb : log.Arm)[pc];
+}
+#endif
+
 } // namespace
 
 void NativeA32WindowSession::Setup() {
@@ -469,6 +499,14 @@ void NativeA32WindowSession::Setup() {
     titleSession->InstallHooks(titleHooks);
     widescreenProjection.Title = titleSession.get();
   }
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+  if (const char *coverage = std::getenv("TRIAEVUM_A32_COVERAGE"); coverage != nullptr && *coverage != '\0') {
+    static UntranslatedCodeLog untranslatedCode;
+    untranslatedCode.Path = coverage;
+    oot3d::recomp::a32::SetUntranslatedCodeObserver(&ObserveUntranslatedCode, &untranslatedCode);
+    std::fprintf(stderr, "TRIAEVUM_A32_COVERAGE %s\n", coverage);
+  }
+#endif
   if (const char *pcDump = std::getenv("TRIAEVUM_A32_PC_DUMP")) {
     // PC,FRAME,DIR,ADDR:SIZE[;ADDR:SIZE...]
     const std::string spec(pcDump);

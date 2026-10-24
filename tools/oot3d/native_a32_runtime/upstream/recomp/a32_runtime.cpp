@@ -311,7 +311,15 @@ std::uint32_t DecodeBranchTarget(std::uint32_t raw, std::uint32_t pc) noexcept {
     return pc + 8U + offset;
 }
 
+UntranslatedCodeObserver g_untranslated_observer = nullptr;
+void* g_untranslated_observer_user = nullptr;
+
 }  // namespace
+
+void SetUntranslatedCodeObserver(UntranslatedCodeObserver observer, void* user) noexcept {
+    g_untranslated_observer = observer;
+    g_untranslated_observer_user = user;
+}
 
 bool MemoryBus::Read8(std::uint32_t address, std::uint8_t* value) {
     std::uint32_t word = 0U;
@@ -888,6 +896,9 @@ ExecutionResult Dispatch(
         if (IsThumbPc(pc)) {
             // Thumb code has no registry blocks; it executes from guest
             // memory up to its next PC write.
+            if (g_untranslated_observer != nullptr) {
+                g_untranslated_observer(pc, true, g_untranslated_observer_user);
+            }
             ExecutionResult result = ExecuteThumbBlock(pc, state, memory);
             if (result.kind != ExitKind::Fallthrough &&
                 result.kind != ExitKind::Branch) {
@@ -917,6 +928,9 @@ ExecutionResult Dispatch(
             }
         }
         if (block == nullptr) {
+            if (g_untranslated_observer != nullptr) {
+                g_untranslated_observer(pc, false, g_untranslated_observer_user);
+            }
             if (fallback != nullptr) {
                 const PackedOp missing{
                     0U,
