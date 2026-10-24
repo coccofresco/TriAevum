@@ -658,6 +658,7 @@ struct InteractiveGrassPass::Impl {
     std::vector<GrassClusterWork> ClusterWork;
     // Per placement, the clusters the GPU selection selects from.
     std::vector<std::vector<uint32_t>> GpuCandidates;
+    std::vector<uint32_t> GpuCandidateClusters;
     std::vector<uint32_t> SelectionRoots;
     std::vector<std::vector<GrassClusterWork>> SelectionOutputs;
     // Conservative cluster candidates per source and camera envelope.
@@ -1153,6 +1154,29 @@ struct InteractiveGrassPass::Impl {
             ++VerifyChecks;
         }
         return stats;
+    }
+
+    // The clusters the GPU selection tests for this view, ascending: the
+    // candidates of the envelope that contains it, a superset of the exact
+    // selection of every view inside it. The GPU makes the exact per-cluster
+    // decisions itself, so the CPU refinement is not needed here.
+    void SelectGpuCandidateClusters(const GrassWorldPlacement& world,
+        const std::array<float, 16>& clip, const std::array<float, 3>& eye,
+        const GrassLodPolicy& policy, float bladeRadiusScale, bool frustumCulling, std::vector<uint32_t>& clusters) {
+        clusters.clear();
+        if (!GrassCandidateCacheEnabled()) {
+            (void)SelectExactClusterWork(world, clip, eye, policy, bladeRadiusScale, frustumCulling, ClusterWork);
+            clusters.reserve(ClusterWork.size());
+            for (const auto& work : ClusterWork) clusters.push_back(work.ClusterIndex);
+        } else {
+            uint32_t testedNodes = 0U;
+            const auto& entry = AcquireCandidates(world, clip, eye, policy, bladeRadiusScale, frustumCulling,
+                testedNodes);
+            clusters.reserve(entry.Candidates.size());
+            for (const auto& candidate : entry.Candidates) clusters.push_back(candidate.ClusterIndex);
+        }
+        if (!std::is_sorted(clusters.begin(), clusters.end()))
+            throw std::runtime_error("grass GPU candidate clusters are not in cluster order");
     }
 
     static constexpr uint32_t kMaximumMemoryShift = 4;
@@ -2399,37 +2423,36 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
             mImpl->GpuCandidates.resize(preparedPlacements.size());
             for (uint32_t placementIndex = 0; placementIndex < preparedPlacements.size(); ++placementIndex) {
                 const auto& prepared = preparedPlacements[placementIndex];
-                // The CPU's cluster traversal (its visibility hierarchy) names
-                // the clusters the view keeps; the GPU selects from those
-                // instead of testing every cluster of the source. A resident
-                // cluster keeps its source cluster's bounds, so the store's
-                // candidates are the kept clusters it holds.
+                // The CPU's candidate envelope (its visibility hierarchy, cached
+                // across nearby views) names a superset of the clusters the view
+                // keeps; the GPU tests those instead of every cluster of the
+                // source. A resident cluster keeps its source cluster's bounds,
+                // so the store's candidates are the envelope's clusters it holds.
                 const GrassWorldPlacement& world =
                     residency ? *residency->Sources[placementIndex] : *prepared.World;
-                {
-                    GrassStageTimer clusterTimer(GrassStage::Selection);
-                    mImpl->SelectClusterWork(world, prepared.Push.PositionToClip, prepared.Eye, lodPolicy,
-                                             bladeRadiusScale, settings.FrustumCulling);
-                }
-                auto& kept = mImpl->ClusterWork;
-                if (!std::is_sorted(kept.begin(), kept.end(),
-                        [](const auto& a, const auto& b) { return a.ClusterIndex < b.ClusterIndex; }))
-                    throw std::runtime_error("grass cluster work is not in cluster order");
                 auto& candidates = mImpl->GpuCandidates[placementIndex];
-                candidates.clear();
                 if (residency) {
+                    auto& kept = mImpl->GpuCandidateClusters;
+                    {
+                        GrassStageTimer clusterTimer(GrassStage::Selection);
+                        mImpl->SelectGpuCandidateClusters(world, prepared.Push.PositionToClip, prepared.Eye, lodPolicy,
+                                                          bladeRadiusScale, settings.FrustumCulling, kept);
+                    }
+                    candidates.clear();
                     const auto& stored = residency->SourceClusters[placementIndex];
                     size_t next = 0U;
                     for (uint32_t index = 0U; index < stored.size() && next < kept.size(); ++index) {
-                        while (next < kept.size() && kept[next].ClusterIndex < stored[index]) ++next;
-                        if (next < kept.size() && kept[next].ClusterIndex == stored[index]) candidates.push_back(index);
+                        while (next < kept.size() && kept[next] < stored[index]) ++next;
+                        if (next < kept.size() && kept[next] == stored[index]) candidates.push_back(index);
                     }
                     gpuSources.push_back({residency->Clusters[placementIndex], residency->SourceBase[placementIndex],
                                           prepared.Push.PositionToClip, prepared.Eye, true, candidates});
                 } else {
-                    candidates.resize(kept.size());
-                    std::transform(kept.begin(), kept.end(), candidates.begin(),
-                                   [](const GrassClusterWork& work) { return work.ClusterIndex; });
+                    {
+                        GrassStageTimer clusterTimer(GrassStage::Selection);
+                        mImpl->SelectGpuCandidateClusters(world, prepared.Push.PositionToClip, prepared.Eye, lodPolicy,
+                                                          bladeRadiusScale, settings.FrustumCulling, candidates);
+                    }
                     gpuSources.push_back({prepared.World->Clusters, prepared.StaticBaseIndex,
                                           prepared.Push.PositionToClip, prepared.Eye, true, candidates});
                 }
