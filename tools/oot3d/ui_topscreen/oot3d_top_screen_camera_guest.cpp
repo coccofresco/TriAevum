@@ -18,6 +18,10 @@ constexpr std::uint32_t kScratchAllocation = 0x100U;
 constexpr std::uint32_t kAtScratchOffset = 0x20U;
 constexpr std::uint32_t kEyeScratchOffset = 0x30U;
 constexpr std::uint32_t kShakeScratchOffset = 0x60U;
+constexpr std::uint32_t kFloorResultScratchOffset =
+    kTopScreenCameraFloorResultOffset;
+constexpr std::uint32_t kFloorPolyScratchOffset = 0x94U;
+constexpr std::uint32_t kFloorBgIdScratchOffset = 0x98U;
 
 void SetError(std::string *error, std::string message) {
   if (error != nullptr) *error = std::move(message);
@@ -309,11 +313,69 @@ bool PrepareTopScreenFreeCameraCollision(
   return true;
 }
 
-bool CommitTopScreenFreeCameraCollision(
+bool PrepareTopScreenFreeCameraFloorCheck(
     NativeA32Memory &memory, TopScreenFreeCameraGuestRuntime *runtime,
     std::string *error) {
   if (runtime == nullptr ||
       runtime->Phase != TopScreenCameraGuestPhase::Collision) {
+    SetError(error, "TopScreen camera floor check phase mismatch");
+    return false;
+  }
+  // BgCheck_EntityLineTest1 stack arguments: outPoly, checkWall, checkFloor,
+  // checkCeil, checkOneFace, bgId.
+  const auto scratch = runtime->ScratchAddress;
+  if (!memory.Write32(scratch, scratch + kFloorPolyScratchOffset) ||
+      !memory.Write32(scratch + 4U, 0U) || !memory.Write32(scratch + 8U, 1U) ||
+      !memory.Write32(scratch + 0xCU, 0U) ||
+      !memory.Write32(scratch + 0x10U, 1U) ||
+      !memory.Write32(scratch + 0x14U, scratch + kFloorBgIdScratchOffset) ||
+      !memory.Write32(scratch + kFloorPolyScratchOffset, 0U)) {
+    SetError(error, "cannot stage TopScreen camera floor check arguments");
+    return false;
+  }
+  runtime->Phase = TopScreenCameraGuestPhase::FloorCheck;
+  return true;
+}
+
+bool ApplyTopScreenFreeCameraFloorCheck(
+    NativeA32Memory &memory, TopScreenFreeCameraGuestRuntime *runtime,
+    bool floorHit, std::string *error) {
+  if (runtime == nullptr ||
+      runtime->Phase != TopScreenCameraGuestPhase::FloorCheck) {
+    SetError(error, "TopScreen camera floor result phase mismatch");
+    return false;
+  }
+  std::uint32_t poly = 0U;
+  if (!memory.Read32(runtime->ScratchAddress + kFloorPolyScratchOffset,
+                     &poly)) return false;
+  if (floorHit && poly != 0U) {
+    // Placed like Camera_BGCheckInfo's own hits: the hit point plus the
+    // polygon's unit normal.
+    TopScreenCameraVec3 hit;
+    std::int16_t normal[3] = {};
+    if (!ReadVec3(memory, runtime->ScratchAddress + kFloorResultScratchOffset,
+                  &hit) ||
+        !ReadSigned16(memory, poly + 0xAU, &normal[0]) ||
+        !ReadSigned16(memory, poly + 0xCU, &normal[1]) ||
+        !ReadSigned16(memory, poly + 0xEU, &normal[2])) {
+      SetError(error, "cannot decode TopScreen camera floor hit");
+      return false;
+    }
+    constexpr float kNormalScale = 1.0F / 32767.0F;
+    const TopScreenCameraVec3 eye{hit.X + normal[0] * kNormalScale,
+                                  hit.Y + normal[1] * kNormalScale,
+                                  hit.Z + normal[2] * kNormalScale};
+    if (!WriteVec3(memory, runtime->ScratchAddress + kEyeScratchOffset, eye))
+      return false;
+  }
+  return true;
+}
+
+bool CommitTopScreenFreeCameraCollision(
+    NativeA32Memory &memory, TopScreenFreeCameraGuestRuntime *runtime,
+    std::string *error) {
+  if (runtime == nullptr ||
+      runtime->Phase != TopScreenCameraGuestPhase::FloorCheck) {
     SetError(error, "TopScreen camera collision commit phase mismatch");
     return false;
   }

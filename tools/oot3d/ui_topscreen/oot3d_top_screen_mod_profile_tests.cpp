@@ -4073,6 +4073,11 @@ int main() {
               PrepareTopScreenFreeCameraCollision(cameraMemory, &guestCamera,
                                                   &error) &&
               guestCamera.Phase == TopScreenCameraGuestPhase::Collision &&
+              PrepareTopScreenFreeCameraFloorCheck(cameraMemory, &guestCamera,
+                                                   &error) &&
+              guestCamera.Phase == TopScreenCameraGuestPhase::FloorCheck &&
+              ApplyTopScreenFreeCameraFloorCheck(cameraMemory, &guestCamera,
+                                                 false, &error) &&
               CommitTopScreenFreeCameraCollision(cameraMemory, &guestCamera,
                                                  &error) &&
               ApplyTopScreenFreeCameraQuake(cameraMemory, &guestCamera, false,
@@ -4081,6 +4086,43 @@ int main() {
                                            &error) &&
               guestCamera.Phase == TopScreenCameraGuestPhase::Idle,
           "TopScreen staged native camera guest contract failed");
+  // BgCheck_EntityLineTest1 staging: outPoly, no walls, floors, no ceilings,
+  // one face, bgId. A floor hit puts the eye on the hit point plus the
+  // polygon's unit normal (issue #106: camera-ignored floors).
+  {
+    constexpr std::uint32_t scratch = stackAddress - 0x100U;
+    constexpr std::uint32_t floorPoly = 0x08020000U;
+    std::uint32_t staged[6] = {};
+    guestCamera.ScratchAddress = scratch;
+    guestCamera.Phase = TopScreenCameraGuestPhase::Collision;
+    Require(PrepareTopScreenFreeCameraFloorCheck(cameraMemory, &guestCamera,
+                                                 &error) &&
+                cameraMemory.Read32(scratch, &staged[0]) &&
+                cameraMemory.Read32(scratch + 4U, &staged[1]) &&
+                cameraMemory.Read32(scratch + 8U, &staged[2]) &&
+                cameraMemory.Read32(scratch + 0xCU, &staged[3]) &&
+                cameraMemory.Read32(scratch + 0x10U, &staged[4]) &&
+                cameraMemory.Read32(scratch + 0x14U, &staged[5]) &&
+                staged[0] == scratch + 0x94U && staged[1] == 0U &&
+                staged[2] == 1U && staged[3] == 0U && staged[4] == 1U &&
+                staged[5] == scratch + 0x98U,
+            "TopScreen camera floor check staged wrong line-test arguments");
+    Require(cameraMemory.Write32(scratch + 0x94U, floorPoly) &&
+                cameraMemory.Write16(floorPoly + 0xAU, 0U) &&
+                cameraMemory.Write16(floorPoly + 0xCU, 0x7FFFU) &&
+                cameraMemory.Write16(floorPoly + 0xEU, 0U) &&
+                writeFloat(scratch + 0x88U, 10.0F) &&
+                writeFloat(scratch + 0x8CU, 309.0F) &&
+                writeFloat(scratch + 0x90U, 30.0F) &&
+                writeFloat(scratch + 0x34U, 218.0F),
+            "cannot seed TopScreen camera floor hit");
+    std::uint32_t eyeYBits = 0U;
+    Require(ApplyTopScreenFreeCameraFloorCheck(cameraMemory, &guestCamera,
+                                               true, &error) &&
+                cameraMemory.Read32(scratch + 0x34U, &eyeYBits) &&
+                std::abs(std::bit_cast<float>(eyeYBits) - 310.0F) < 0.001F,
+            "TopScreen camera floor hit did not keep the eye above the floor");
+  }
   // The camera's 60 degrees move 5% of the way to 55 (59.75), then the
   // TopScreen FOV control scales the view by 115%.
   std::uint32_t freeCameraFovBits = 0U;

@@ -635,10 +635,12 @@ bool ExecuteTopScreenUiSourcePortBlock(
         enteredAtFunctionEntry ? state.r[13] - 36U : state.r[13];
     auto branchToNative = [&](uint32_t target, uint32_t argument0,
                               uint32_t argument1 = 0U,
-                              uint32_t argument2 = 0U) {
+                              uint32_t argument2 = 0U,
+                              uint32_t argument3 = 0U) {
       state.r[0] = argument0;
       state.r[1] = argument1;
       state.r[2] = argument2;
+      state.r[3] = argument3;
       // Return through the real function entry: 0x002D84C8 is the IPS patch
       // site but not a materialized AOT block boundary. The staged phase
       // distinguishes this callback from the initial function invocation.
@@ -733,7 +735,20 @@ bool ExecuteTopScreenUiSourcePortBlock(
                             dispatch.TopScreenCamera.ScratchAddress + 0x20U,
                             dispatch.TopScreenCamera.ScratchAddress + 0x30U);
     case Oot3dNativeGame::TopScreenCameraGuestPhase::Collision:
-      if (!Oot3dNativeGame::CommitTopScreenFreeCameraCollision(
+      if (!Oot3dNativeGame::PrepareTopScreenFreeCameraFloorCheck(
+              memory, &dispatch.TopScreenCamera))
+        return false;
+      return branchToNative(
+          Oot3dNativeGame::kTopScreenCameraEntityLineTest,
+          dispatch.TopScreenCamera.GlobalContextAddress + 0xA98U,
+          dispatch.TopScreenCamera.ScratchAddress + 0x20U,
+          dispatch.TopScreenCamera.ScratchAddress + 0x30U,
+          dispatch.TopScreenCamera.ScratchAddress +
+              Oot3dNativeGame::kTopScreenCameraFloorResultOffset);
+    case Oot3dNativeGame::TopScreenCameraGuestPhase::FloorCheck:
+      if (!Oot3dNativeGame::ApplyTopScreenFreeCameraFloorCheck(
+              memory, &dispatch.TopScreenCamera, state.r[0] != 0U) ||
+          !Oot3dNativeGame::CommitTopScreenFreeCameraCollision(
               memory, &dispatch.TopScreenCamera))
         return false;
       return branchToNative(Oot3dNativeGame::kTopScreenCameraQuakeUpdate,
