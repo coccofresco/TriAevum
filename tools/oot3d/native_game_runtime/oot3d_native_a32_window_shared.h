@@ -51,11 +51,7 @@
 #include "oot3d_native_presentation_pacer.h"
 #include "oot3d_native_pica_frontend.h"
 #include "oot3d_native_pica_composition.h"
-#include "mm3d_guest_patches.h"
-#include "mm3d_restoration.h"
-#include "mm3d_single_screen.h"
-#include "mm3d_pica_composition.h"
-#include "mm3d_title_contracts.h"
+#include "triaevum_title_session.h"
 #include "oot3d_native_pica_presentation_scheduler.h"
 #include "oot3d_native_render_command_stream.h"
 #include "oot3d_native_pica_semantic_trace.h"
@@ -434,10 +430,7 @@ struct NativeSceneProjectionState {
   // whose frusta also serve other views holds the latest one until its
   // composition tracker reaches the opaque world pass, and publishes that.
   bool FrustumIsSceneView = true;
-  struct PendingFrustum {
-    uint32_t Pc = 0, ReturnAddress = 0;
-    float Left = 0, Right = 0, Bottom = 0, Top = 0, NearPlane = 0, FarPlane = 0;
-  };
+  using PendingFrustum = Oot3dNativeGame::TitleSceneFrustum;
   std::optional<PendingFrustum> PendingSceneFrustum;
   uint64_t FrustumCalls = 0;
   uint64_t OrthographicCalls = 0;
@@ -534,9 +527,7 @@ struct NativeWidescreenProjectionState {
       nullptr;
   Oot3dNativeGame::Oot3dNativePicaCompositionTracker
       *PicaCompositionTracker = nullptr;
-  Oot3dNativeGame::Mm3dNativePicaCompositionTracker
-      *Mm3dCompositionTracker = nullptr;
-  const Oot3dNativeGame::Mm3dGuestPatches *Mm3dGuestPatches = nullptr;
+  Oot3dNativeGame::TitleSession *Title = nullptr;
   Oot3dNativeGame::TopScreenTextureOverrideRuntime *TopScreenTextureOverrides =
       nullptr;
   bool TopScreenUiProfile = false;

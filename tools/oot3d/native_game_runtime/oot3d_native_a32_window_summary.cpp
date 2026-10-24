@@ -1702,47 +1702,13 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
               {"frustum_calls",
                widescreenProjection.Projection.FrustumCalls},
               {"mm3d_composition",
-               widescreenProjection.Mm3dCompositionTracker == nullptr
+               widescreenProjection.Title == nullptr
                    ? nlohmann::json(nullptr)
-                   : [&] {
-                       const auto &stats =
-                           widescreenProjection.Mm3dCompositionTracker->Stats();
-                       return nlohmann::json{
-                           {"scope_entries", stats.ScopeEntries},
-                           {"scope_exits", stats.ScopeExits},
-                           {"recorded_spans", stats.RecordedSpans},
-                           {"empty_scopes", stats.EmptyScopes},
-                           {"invalid_ranges", stats.InvalidRanges},
-                           {"nested_scope_entries", stats.NestedScopeEntries},
-                           {"replaced_spans", stats.ReplacedSpans},
-                           {"expired_spans", stats.ExpiredSpans},
-                           {"scene_frames", stats.SceneFrames},
-                           {"read_failures", stats.ReadFailures},
-                           {"light_bindings", stats.LightBindings},
-                           {"scene_directional_lights", stats.SceneDirectionalLights}};
-                     }()},
+                   : widescreenProjection.Title->CompositionSummary()},
               {"mm3d_guest_patches",
-               widescreenProjection.Mm3dGuestPatches == nullptr
+               widescreenProjection.Title == nullptr
                    ? nlohmann::json(nullptr)
-                   : [&] {
-                       auto sites = nlohmann::json::array();
-                       for (const auto &site :
-                            widescreenProjection.Mm3dGuestPatches->Statistics()) {
-                         sites.push_back(
-                             {{"name", site.Name},
-                              {"pc", site.Pc},
-                              {"enabled", site.Enabled},
-                              {"mismatch_address",
-                               site.MismatchAddress.has_value()
-                                   ? nlohmann::json(*site.MismatchAddress)
-                                   : nlohmann::json(nullptr)},
-                              {"missing_block", site.MissingBlock},
-                              {"prepared", site.Prepared},
-                              {"replacements", site.Replacements},
-                              {"declined", site.Declined}});
-                       }
-                       return sites;
-                     }()},
+                   : widescreenProjection.Title->GuestPatchSummary()},
               {"orthographic_calls",
                widescreenProjection.Projection.OrthographicCalls},
               {"callsites", std::move(projectionCallsites)},

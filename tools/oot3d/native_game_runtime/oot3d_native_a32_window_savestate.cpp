@@ -444,7 +444,7 @@ bool NativeA32WindowSession::LoadState(const std::filesystem::path &path,
   Oot3dNativeGame::ResetOot3dTypedGameplayTransientState();
   Oot3dNativeGame::ResetNativeActorVisibilityAfterStateLoad(widescreenProjection.ActorVisibility);
   picaCompositionTracker.Reset();
-  mm3dCompositionTracker.Reset();
+  if (titleSession) titleSession->Reset();
   widescreenProjection.Projection.PendingSceneFrustum.reset();
   const auto restoredGravity = hostServices.HidRuntimeProfile().LastAccelerometer;
   nativeControlPollingState.VirtualMotion.RestoreGravity(

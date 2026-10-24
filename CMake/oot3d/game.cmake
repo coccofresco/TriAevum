@@ -361,6 +361,8 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
         tools/oot3d/native_game_runtime/oot3d_native_a32_window_summary.cpp
         tools/oot3d/native_game_runtime/oot3d_native_preparation_screen.cpp
         tools/oot3d/native_game_runtime/oot3d_native_render_command_stream.cpp
+        tools/oot3d/native_game_runtime/triaevum_title_sessions.cpp
+        titles/mm3d/adapter/mm3d_title_session.cpp
         titles/oot3d/topscreen/oot3d_top_screen_ocarina_text_runtime.cpp
         titles/oot3d/topscreen/oot3d_top_screen_pause_transaction.cpp
         titles/oot3d/topscreen/oot3d_top_screen_item_description_runtime.cpp
@@ -391,6 +393,8 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
         tools/oot3d/native_game_runtime/oot3d_graphics_settings_schedule.cpp)
     set_source_files_properties(titles/oot3d/gameplay/oot3d_native_actor_interactions.cpp
         PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/decomp_support/include")
+    # The title sessions this build contains (triaevum_title_session.h).
+    target_compile_definitions(oot3d_native_game PRIVATE TRIAEVUM_TITLE_MM3D=1)
     # Developer tools (F1 > Dev Tools: SoH's Debug Warp Screen and Warp
     # Points). Never in a public build: --product-info reports the capability
     # and the release workflow refuses a runtime that has it.

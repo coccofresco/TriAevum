@@ -43,6 +43,7 @@ entry.
 | `oot3d_native_a32_window_summary.{h,cpp}` | The `runtime.json` document written at the end of a run. |
 | `oot3d_native_a32_window_shared.h`, `_stats.h` | Title constants, window helper declarations, run statistics. |
 | `oot3d_native_a32_candidate_dispatch.cpp`, `_projection_policy.cpp`, `_window_input.cpp` | Native candidate dispatch, widescreen projection policy, input polling. |
+| `triaevum_title_session.h`, `triaevum_title_sessions.cpp` | What a title adapter adds to the session (hooks and guest patches, scene view and environment, interface frame, developer tools, run summary), with inert defaults; the sessions a build contains. MM3D's is `titles/mm3d/adapter/mm3d_title_session.cpp`; OoT3D's adapter is still wired into the session. |
 
 ## Vulkan backend (`runtime/three_ds_recomp/src/fast/backends/`)
 

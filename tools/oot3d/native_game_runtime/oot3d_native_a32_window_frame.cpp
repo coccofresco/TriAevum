@@ -1,6 +1,5 @@
 // Native A32 window session: one frame of the loop and the renderer-side work it schedules.
 #include "oot3d_native_a32_window_session.h"
-#include "mm3d_scene_environment.h"
 #include "fast/renderer3ds/pica_surface_debug.h"
 #include "oot3d/renderer/ui_presentation_layout.h"
 #include "oot3d_native_room_shadow_shell.h"
@@ -1591,11 +1590,10 @@ void NativeA32WindowSession::RunGuestRefresh() {
                                  error);
       }
       phaseTiming.PicaPlanSeconds += SecondsSince(drawPhaseStart);
-      if (titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d &&
-          Oot3dNativeGame::IsMm3dTopScreenCanvas(plan.State.Viewport)) {
-        // MM3D's interface keeps the 16:9 frame mm3d-dekui lays it out for,
-        // whatever the output's aspect; the scene fills the output.
-        plan.UiFrameExtensionY = Oot3dNativeGame::kMm3dUiFrameExtensionY;
+      if (titleSession) {
+        // A title that lays its interface out itself keeps its frame.
+        if (const auto extension = titleSession->UiFrameExtensionY(plan.State.Viewport))
+          plan.UiFrameExtensionY = *extension;
       }
       if (picaRawDrawRecorder.Enabled() &&
           !picaRawDrawRecorder.Seen(plan.CanonicalIdentity.PipelineId)) {
@@ -2864,8 +2862,8 @@ void NativeA32WindowSession::PublishNativeSceneView() {
   // Guest memory is read here; the scene environment, the duplicate check
   // and the publish belong to the renderer and run in its order.
   auto snapshot = sceneViewProbe.Capture(process.Memory());
-  if (titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d && snapshot && snapshot->Environment &&
-      !Oot3dNativeGame::Mm3dSceneEnvironmentStillCurrent(process.Memory(), *snapshot->Environment)) {
+  if (titleSession && snapshot && snapshot->Environment &&
+      !titleSession->SceneEnvironmentStillCurrent(process.Memory(), *snapshot->Environment)) {
     sceneViewProbe.ObserveExternalSceneEnvironment(std::nullopt);
     snapshot = sceneViewProbe.Capture(process.Memory());
   }
@@ -2933,22 +2931,9 @@ void NativeA32WindowSession::PublishNativeSceneView() {
                    actor, bits[0], bits[1], bits[2], rotation[0], rotation[1], yaw);
     }
   }
-  if (titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d && snapshot && snapshot->Environment) {
-    // MM3D's adapter: its play context owns the time, the scene view's world
-    // identity stands for the authored scene (a restore is another world) and
-    // its clock drives the day/night blend once its night flag is read.
-    const auto& state = *snapshot->Environment;
-    Oot3dNativeGame::SceneEnvironmentTime time;
-    time.Owner = state.ContextIdentity;
-    time.AuthoredScene = snapshot->WorldIdentity;
-    if (state.Night) {
-      time.TimeDriven = true;
-      time.Night = *state.Night;
-      time.Clock = state.Clock.value_or(*state.Night ? 0x0000U : 0x8000U);
-    }
-    environmentTime = time;
-    player = state.Player;
-  }
+  // A title session's environment supplies the time and the player.
+  if (titleSession && snapshot)
+    titleSession->SceneEnvironmentInputs(*snapshot, environmentTime, player);
   // Light gizmos also show while the developer free camera looks around.
   bool freeCamera = false;
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)

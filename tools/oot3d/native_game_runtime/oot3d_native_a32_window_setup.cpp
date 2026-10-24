@@ -1,9 +1,5 @@
-#include "mm3d_lighting_hook_sites.h"
 // Native A32 window session: setup (process image, host services, renderer, UI, initial state).
 #include "oot3d_native_a32_window_session.h"
-#if defined(TRIAEVUM_DEVELOPER_TOOLS)
-#include "mm3d_dev_camera_hook.h"
-#endif
 #include "oot3d_native_a32_romfs_overlay.h"
 #include "oot3d_native_a32_romfs_layers.h"
 #include "oot3d_native_direct_aot.h"
@@ -77,6 +73,7 @@ void NativeA32WindowSession::Setup() {
   }
   std::cerr << "TRIAEVUM_TITLE_ADAPTER " << Oot3dNativeGame::TitleAdapterName(titleAdapter)
             << " code_sha256=" << manifest->CodeBinSha256 << '\n';
+  titleSession = Oot3dNativeGame::CreateTitleSession(titleAdapter);
 #if defined(__SWITCH__)
   WriteSwitchBootStage("manifest_loaded");
 #endif
@@ -195,11 +192,10 @@ void NativeA32WindowSession::Setup() {
   }
   hostConfig.PicaFrontend = &picaFrontend;
   hostConfig.PicaCompositionDomain = &picaCompositionDomain;
+  Oot3dNativeGame::Oot3dPicaCommandListCompositionProvider *titleComposition =
+      titleSession ? titleSession->CompositionProvider() : nullptr;
   hostConfig.PicaCompositionProvider =
-      titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d
-          ? static_cast<Oot3dNativeGame::Oot3dPicaCommandListCompositionProvider *>(
-                &mm3dCompositionTracker)
-          : &picaCompositionTracker;
+      titleComposition != nullptr ? titleComposition : &picaCompositionTracker;
   hostConfig.SaveDataDirectory =
       launch.SaveDataDirectory.empty()
           ? launch.A32ProcessManifestPath.parent_path() /
@@ -457,66 +453,21 @@ void NativeA32WindowSession::Setup() {
     picaCompositionHooks = {};
     typedGameplayObservableExitHooks = {};
   }
-  if (titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d) {
-    // MM3D's perspective frustum builder: the scene widens to the output
-    // and takes the scene FOV. Its frusta also serve views other than the
-    // scene camera, so they are not published as the scene view.
-    blockEntryHooks.push_back(Oot3dNativeGame::kMm3dMtx44Frustum);
-    const auto compositionHooks = Oot3dNativeGame::Mm3dNativePicaCompositionHookPcs();
-    blockEntryHooks.insert(blockEntryHooks.end(), compositionHooks.begin(),
-                           compositionHooks.end());
-    std::sort(blockEntryHooks.begin(), blockEntryHooks.end());
-    blockEntryHooks.erase(std::unique(blockEntryHooks.begin(), blockEntryHooks.end()),
-                          blockEntryHooks.end());
-    widescreenProjection.Projection.PerspectiveFrustumEntry =
-        Oot3dNativeGame::kMm3dMtx44Frustum;
-    widescreenProjection.Projection.FrustumIsSceneView = false;
-    widescreenProjection.Mm3dCompositionTracker = &mm3dCompositionTracker;
-    sceneViewProbe.UseExternalSceneEnvironment();
+  if (titleSession) {
+    Oot3dNativeGame::TitleSessionHookSetup titleHooks{
+        .BlockEntryHooks = blockEntryHooks,
+        .PerspectiveFrustumEntry = widescreenProjection.Projection.PerspectiveFrustumEntry,
+        .FrustumIsSceneView = widescreenProjection.Projection.FrustumIsSceneView,
+        .SceneView = sceneViewProbe,
+        .PresentationClock = [this] {
+          return static_cast<std::int64_t>(presentationFrameCount) * 1000000 / 60;
+        },
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
-    if (!devToolsTitle) devToolsTitle = std::make_shared<Oot3dNativeGame::Mm3dDevTools>();
+        .DevToolsTitle = &devToolsTitle,
 #endif
-    if (mm3dGuestPatches.Empty()) {
-      // dekui's settings: its shipped defaults, or (development) a
-      // presentation.json given by TRIAEVUM_MM3D_PRESENTATION, until the F1
-      // menu owns and persists them.
-      const char *presentation = std::getenv("TRIAEVUM_MM3D_PRESENTATION");
-      if (!Oot3dNativeGame::Mm3dSingleScreen::LoadSettings(
-              presentation != nullptr ? std::filesystem::path(presentation) : std::filesystem::path{}))
-        std::fprintf(stderr, "MM3D single-screen: %s is unreadable, using dekui's defaults\n",
-                     presentation != nullptr ? presentation : "dekui's settings");
-      if (const char *multiplier = std::getenv("TRIAEVUM_MM3D_DAMAGE_MULTIPLIER")) {
-        // Development: dekui's damage multiplier until the F1 owns it.
-        Oot3dNativeGame::Mm3dSingleScreen::SetDamageMultiplier(std::atoi(multiplier));
-      }
-      // dekui animates with the emulated clock: here the deterministic
-      // presentation clock (a 60 Hz frame each).
-      mm3dSingleScreen.emplace([this] {
-        return static_cast<std::int64_t>(presentationFrameCount) * 1000000 / 60;
-      });
-      mm3dSingleScreen->Register(mm3dGuestPatches);
-      Oot3dNativeGame::RegisterMm3dLightingHooks(mm3dGuestPatches);
-#if defined(TRIAEVUM_DEVELOPER_TOOLS)
-      Oot3dNativeGame::RegisterMm3dDevCamera(mm3dGuestPatches, devToolsTitle, nativeCandidateDispatch.DevFreeCamera);
-#endif
-      mm3dGuestCalls.Install(mm3dGuestPatches);
-      mm3dRestoration.emplace(mm3dGuestCalls);
-      mm3dRestoration->Register(mm3dGuestPatches);
-      mm3dSingleScreen->BindRestoration(*mm3dRestoration);
-      if (const char *edits = std::getenv("TRIAEVUM_MM3D_MESSAGE_EDITS")) {
-        // Development: dekui's single-screen wording compiled against the
-        // user's own messages (titles/mm3d/dekui/setup/prepare_message_edits.py),
-        // until the launcher prepares and owns them.
-        std::ifstream stream(std::filesystem::u8path(edits), std::ios::binary);
-        const std::string text((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
-        std::string error;
-        const auto parsed = Oot3dNativeGame::Mm3dRestorationPort::ReadMessageEdits(text, &error);
-        if (!stream || !parsed.has_value() || !mm3dRestoration->SetMessageEdits(*parsed)) {
-          throw std::runtime_error(std::string("MM3D message edits: ") + edits + " is invalid " + error);
-        }
-        std::fprintf(stderr, "MM3D message edits: %zu message(s)\n", parsed->size());
-      }
-    }
+        .FreeCamera = nativeCandidateDispatch.DevFreeCamera};
+    titleSession->InstallHooks(titleHooks);
+    widescreenProjection.Title = titleSession.get();
   }
   if (const char *pcDump = std::getenv("TRIAEVUM_A32_PC_DUMP")) {
     // PC,FRAME,DIR,ADDR:SIZE[;ADDR:SIZE...]
@@ -950,48 +901,7 @@ void NativeA32WindowSession::Setup() {
           process, *manifest, std::filesystem::path{}, &error)) {
     throw std::runtime_error(error);
   }
-  if (titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d) {
-    uint32_t word = 0;
-    if (!process.Memory().Read32(Oot3dNativeGame::kMm3dMtx44Frustum, &word) ||
-        word != Oot3dNativeGame::kMm3dMtx44FrustumFirstWord) {
-      throw std::runtime_error("MM3D adapter: the perspective frustum builder is not at its address");
-    }
-    if (!mm3dGuestPatches.Empty()) {
-#if defined(OOT3D_WHOLE_AOT_PRODUCT_MODE)
-      throw std::runtime_error("MM3D adapter: guest patch sites need the A32 registry dispatch");
-#else
-      // Each site whose code matches the mounted image replaces its
-      // instruction; the registry starts a block at every site.
-      // dekui runs on the image Project Restoration patched: its data
-      // patches first, then every site's check.
-      if (mm3dRestoration.has_value()) {
-        mm3dRestoration->ApplyDataPatches(process.Memory());
-      }
-      mm3dGuestPatches.Verify(process.Memory(), &Oot3dNativeGame::Oot3dNativeA32Registry());
-      if (!mm3dCompositionTracker.VerifyHooks(process.Memory(), &Oot3dNativeGame::Oot3dNativeA32Registry()))
-        throw std::runtime_error("MM3D lighting: wrong image or missing observer block; regenerate registry boundaries");
-#if defined(TRIAEVUM_DEVELOPER_TOOLS)
-      const auto adapterProofFlag = [](const char* name) {
-        const char* value = std::getenv(name);
-        return value && *value && *value != '0';
-      };
-      mm3dCompositionTracker.SetSupplementalPublication(
-          adapterProofFlag("TRIAEVUM_MM3D_ADAPTER_POINTS"), !adapterProofFlag("TRIAEVUM_MM3D_ADAPTER_NO_WATER"));
-#endif
-#if defined(TRIAEVUM_DEVELOPER_TOOLS)
-      // Which sites stayed off, for agents reading the log.
-      for (const auto &site : mm3dGuestPatches.Statistics())
-        if (!site.Enabled)
-          std::fprintf(stderr, "TRIAEVUM_MM3D_PATCH_DISABLED %s pc=0x%08X mismatch=0x%08X missing_block=%d prepared=%d\n",
-                       site.Name.c_str(), site.Pc, site.MismatchAddress.value_or(0U), site.MissingBlock ? 1 : 0,
-                       site.Prepared ? 1 : 0);
-#endif
-      process.SetNativeFunctionCallback(&Oot3dNativeGame::Mm3dGuestPatches::Execute,
-                                        &mm3dGuestPatches, mm3dGuestPatches.EnabledPcs());
-#endif
-    }
-    widescreenProjection.Mm3dGuestPatches = &mm3dGuestPatches;
-  }
+  if (titleSession) titleSession->ImageMounted(process);
 #if defined(__SWITCH__)
   WriteSwitchBootStage("process_image_mounted");
 #endif
@@ -1180,18 +1090,8 @@ void NativeA32WindowSession::Setup() {
     std::fprintf(stderr, "TRIAEVUM_DEV_FREECAM pose=%.1f,%.1f,%.1f yaw=%.1f pitch=%.1f\n", eye[0], eye[1], eye[2], yaw, pitch);
   }
   if (devToolsTitle) {
-    if (const char* script = std::getenv("TRIAEVUM_DEV_WARP")) {
-      // Stable encoded entrance, e.g. mm3d:0xD600. No OoT list-index ambiguity.
-      const std::string spec(script);
-      if (!spec.starts_with("mm3d:")) throw std::runtime_error("MM3D TRIAEVUM_DEV_WARP must be mm3d:<encoded entrance>");
-      size_t used = 0;
-      const auto entrance = std::stoul(spec.substr(5), &used, 0);
-      if (used != spec.size()-5 || entrance > 0xFFFF) throw std::runtime_error("Invalid MM3D entrance");
-      const auto entries = devWarp->Entrances();
-      const auto found = std::find_if(entries.begin(), entries.end(), [&](const auto& e) { return e.Entrance == entrance; });
-      if (found == entries.end()) throw std::runtime_error("MM3D entrance is absent from the catalog");
-      devWarp->WarpTo(*found, Oot3dNativeGame::DevWarpAge::Child, std::nullopt);
-    }
+    if (const char* script = std::getenv("TRIAEVUM_DEV_WARP"); script && titleSession)
+      titleSession->RunDevWarpScript(script, *devWarp);
   } else if (const char *script = std::getenv("TRIAEVUM_DEV_WARP")) {
     int scene = -1, entrance = -1;
     char age[8]{}, time[8]{};
@@ -1238,9 +1138,7 @@ void NativeA32WindowSession::Setup() {
   // After the context: it installs the settings' persistence first.
   {
     auto &settingsRuntime = Fast::Extension::GraphicsSettingsRuntime::Instance();
-    const std::string titleName = titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d
-                                      ? "Majora's Mask 3D"
-                                      : "This game";
+    const std::string titleName = titleSession ? titleSession->GameName() : "This game";
     settingsRuntime.SetCapability(
         Fast::Extension::GraphicsCapability::TitleSceneView,
         Oot3dNativeGame::TitlePublishesSceneView(titleAdapter),
@@ -1270,10 +1168,9 @@ void NativeA32WindowSession::Setup() {
   }
   apiPointer = &GetActiveRenderingApiForDemo(window);
   auto &api = *apiPointer;
-  api.SetNativePicaFragmentLightingOperand(
-      titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d);
-  api.SetNativePicaFragmentLitShadowReceivers(
-      titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d);
+  const bool titleFragmentLighting = titleSession && titleSession->NativeFragmentLighting();
+  api.SetNativePicaFragmentLightingOperand(titleFragmentLighting);
+  api.SetNativePicaFragmentLitShadowReceivers(titleFragmentLighting);
   programPreparation =
       dynamic_cast<Fast::Renderer3ds::PicaProgramPreparationBackend *>(&api);
   alwaysAvailablePrograms =
@@ -1539,7 +1436,7 @@ void NativeA32WindowSession::Setup() {
     nativeControlPollingState.PendingMouseDeltaY = 0;
     nativeControlPollingState.PendingInputSeconds = 0.0;
     picaCompositionTracker.Reset();
-    mm3dCompositionTracker.Reset();
+    if (titleSession) titleSession->Reset();
     frameCount = restoredRuntime.FrameCount;
     refreshTickRemainder = restoredRuntime.RefreshTickRemainder;
     nextVblankTick = restoredRuntime.NextVblankTick;

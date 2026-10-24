@@ -5,9 +5,8 @@
 // _frame.cpp (frame loop and renderer side) and _savestate.cpp.
 
 #include "three_ds_sdl_controller.h"
-#include "mm3d_pica_composition.h"
-#include "mm3d_title_contracts.h"
 #include "triaevum_title_adapter.h"
+#include "triaevum_title_session.h"
 #include "oot3d_prebackend_budget.h"
 #include "oot3d_cpu_phase_probe.h"
 #include "oot3d_native_performance_hint.h"
@@ -396,13 +395,9 @@ private:
   const Oot3dNativeGame::TopScreenTextureOverridePack *topScreenTextureOverridePackPointer = nullptr;
   Oot3dNativeGame::Oot3dNativePicaFrontend picaFrontend;
   Oot3dNativeGame::Oot3dNativePicaCompositionTracker picaCompositionTracker;
-  Oot3dNativeGame::Mm3dNativePicaCompositionTracker mm3dCompositionTracker;
-  // MM3D's single-screen mode: its settings and the typed replacements of
-  // guest instructions that read them.
-  std::optional<Oot3dNativeGame::Mm3dSingleScreen> mm3dSingleScreen;
-  Oot3dNativeGame::Mm3dGuestCalls mm3dGuestCalls;
-  std::optional<Oot3dNativeGame::Mm3dRestorationPort> mm3dRestoration;
-  Oot3dNativeGame::Mm3dGuestPatches mm3dGuestPatches;
+  // The title adapter's own session (hooks, guest patches, scene view), when
+  // its title has one (triaevum_title_session.h).
+  std::unique_ptr<Oot3dNativeGame::TitleSession> titleSession;
   Oot3dNativeGame::Oot3dPicaCompositionDomain picaCompositionDomain{};
   Oot3dNativeGame::NativeA32CtrHostConfig hostConfig;
   std::shared_ptr<Oot3dNativeGame::GameLanguageSettings> languageSettings{};

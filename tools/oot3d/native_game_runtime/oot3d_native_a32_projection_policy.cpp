@@ -1,6 +1,5 @@
 // Block-entry policy of the A32 window: widescreen projection and guest observation hooks.
 #include "oot3d_native_a32_window_shared.h"
-#include "mm3d_scene_environment.h"
 
 namespace Oot3dA32Window {
 
@@ -224,59 +223,15 @@ void ApplyNativeWidescreenProjectionPolicy(
   if (runtime.PicaCompositionTracker != nullptr && !compositionBeforeExit) {
     runtime.PicaCompositionTracker->ObserveBlockEntry(pc, state, memory);
   }
-  if (runtime.Mm3dCompositionTracker != nullptr &&
-      runtime.Mm3dCompositionTracker->ObserveBlockEntry(pc, state, memory) ==
-          Oot3dNativeGame::Mm3dNativePicaCompositionTracker::Event::OpaqueWorldBegins &&
-      runtime.SceneViewProbe != nullptr) {
-    runtime.SceneViewProbe->BeginExternalSceneView();
-    // Capture once at the same native opaque boundary as the view/lights,
-    // before the guest advances. The renderer later receives values only.
-    const auto environment = Oot3dNativeGame::CaptureMm3dSceneEnvironment(memory);
-    Oot3dNativeGame::TraceMm3dSceneEnvironment(
-        environment, runtime.CurrentHostFrame, pc, state.r[14]);
-    if (runtime.Projection.PendingSceneFrustum.has_value()) {
-    // The scene's camera for its opaque pass: the current View's field of
-    // view and clip planes, at the aspect (and widening) of the frustum the
-    // pass draws with, and its eye and target. The default View (no current
-    // one) has a placeholder eye and target, so it publishes no camera.
-    const auto &frustum = *runtime.Projection.PendingSceneFrustum;
-    uint32_t currentView = 0;
-    bool read = memory.Read32(Oot3dNativeGame::kMm3dCurrentViewPointer, &currentView);
-    const uint32_t base =
-        currentView != 0U ? currentView : Oot3dNativeGame::kMm3dDefaultViewAddress;
-    const auto readFloat = [&](uint32_t address, float &value) {
-      uint32_t word = 0;
-      read = read && memory.Read32(address, &word);
-      value = std::bit_cast<float>(word);
-    };
-    float view[3] = {};
-    std::array<float, 3> eye{}, at{};
-    readFloat(base + Oot3dNativeGame::kMm3dViewFovyOffset, view[0]);
-    readFloat(base + Oot3dNativeGame::kMm3dViewNearOffset, view[1]);
-    readFloat(base + Oot3dNativeGame::kMm3dViewFarOffset, view[2]);
-    for (uint32_t axis = 0; axis < 3U; ++axis) {
-      readFloat(base + Oot3dNativeGame::kMm3dViewEyeOffset + axis * 4U, eye[axis]);
-      readFloat(base + Oot3dNativeGame::kMm3dViewAtOffset + axis * 4U, at[axis]);
-    }
-    const float frustumHeight = frustum.Top - frustum.Bottom;
-    if (read && view[0] > 1.0F && view[0] < 179.0F && view[1] > 0.0F &&
-        view[2] > view[1] && frustumHeight > 0.0F) {
-      const float top = view[1] * std::tan(view[0] * 0.5F * 3.14159265F / 180.0F);
-      const float scale = 2.0F * top / frustumHeight;
-      if (currentView != 0U) {
-        runtime.SceneViewProbe->ObservePerspectiveCamera(
-            frustum.Pc, frustum.ReturnAddress, frustum.Left * scale,
-            frustum.Right * scale, frustum.Bottom * scale, frustum.Top * scale,
-            view[1], view[2], eye, at);
-      } else {
-        runtime.SceneViewProbe->ObservePerspective(
-            frustum.Pc, frustum.ReturnAddress, frustum.Left * scale,
-            frustum.Right * scale, frustum.Bottom * scale, frustum.Top * scale,
-            view[1], view[2]);
-      }
-    }
-    }
-    runtime.SceneViewProbe->ObserveExternalSceneEnvironment(environment.State);
+  if (runtime.Title != nullptr) {
+    Oot3dNativeGame::TitleBlockEntry entry{
+        .Pc = pc,
+        .State = state,
+        .Memory = memory,
+        .SceneView = runtime.SceneViewProbe,
+        .PendingSceneFrustum = runtime.Projection.PendingSceneFrustum,
+        .HostFrame = runtime.CurrentHostFrame};
+    runtime.Title->ObserveBlockEntry(entry);
   }
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
   if (runtime.ReadProbes != nullptr && runtime.ReadProbes->Watches(pc)) {
