@@ -516,6 +516,19 @@ covered (hedge maze scene 0x45 and setting 0x1D gates, floor camera data from
 the player's floor) or do not apply (regional builds, Taiwan support, the
 L+R option chords, which external configuration replaces).
 
+TriAevum adds one fix of its own (issue #106). The payload keeps the eye out of
+geometry with `Camera_BGCheckInfo` (`0x003553FC`), whose line test skips
+polygons flagged as ignored by the camera (bit 13 of the first vertex word).
+The native camera never goes below some of those floors, the Forest Temple's
+grass floors among them, but the free camera did: with the stick held towards
+a low camera the eye ended 91 units under the entrance room floor. After
+`Camera_BGCheckInfo` the free camera now tests the line from Link's head to the
+eye against floors only with the entity flags, `BgCheck_EntityLineTest1`
+(`0x00369F9C`: walls and ceilings off, floors and one face on), and a hit puts
+the eye on the hit point plus the polygon's unit normal, as the native hits
+are placed. Camera-ignored walls stay passable. Where the camera line test
+already sees the floor (Kokiri Forest) the result is unchanged.
+
 Record 39 reaches the payload's central per-frame ticker at `0x005D048C`;
 record 40 reaches presenter `0x005D063C -> 0x005D024C` and then resumes the
 original `0x002E25F0` continuation.
