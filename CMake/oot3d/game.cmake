@@ -23,7 +23,6 @@ target_include_directories(oot3d_native_game_runtime PUBLIC
     titles/oot3d/topscreen
     titles/oot3d/gameplay
     titles/oot3d/environment
-    titles/mm3d/adapter
 )
 target_compile_options(oot3d_native_game_runtime PRIVATE "${WARNING_OVERRIDE}")
 target_link_libraries(oot3d_native_game_runtime PUBLIC
@@ -51,16 +50,18 @@ add_executable(oot3d_native_game_runtime_tests EXCLUDE_FROM_ALL
 target_link_libraries(oot3d_native_game_runtime_tests PRIVATE oot3d_native_game_runtime)
 oot3d_target_defaults(oot3d_native_game_runtime_tests FOLDER Tests)
 
-# MM3D adapter read/lifetime guards; no process, renderer or ROM needed.
-add_executable(mm3d_scene_environment_tests EXCLUDE_FROM_ALL
-    titles/mm3d/adapter/mm3d_scene_environment_tests.cpp)
-target_include_directories(mm3d_scene_environment_tests PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/native_game_runtime"
-    "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/topscreen"
-    "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/gameplay"
-    "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/environment"
-    "${CMAKE_CURRENT_SOURCE_DIR}/titles/mm3d/adapter")
-oot3d_target_defaults(mm3d_scene_environment_tests FOLDER Tests)
+if(TRIAEVUM_TITLE_MM3D)
+    # MM3D adapter read/lifetime guards; no process, renderer or ROM needed.
+    add_executable(mm3d_scene_environment_tests EXCLUDE_FROM_ALL
+        titles/mm3d/adapter/mm3d_scene_environment_tests.cpp)
+    target_include_directories(mm3d_scene_environment_tests PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/native_game_runtime"
+        "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/topscreen"
+        "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/gameplay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/environment"
+        "${CMAKE_CURRENT_SOURCE_DIR}/titles/mm3d/adapter")
+    oot3d_target_defaults(mm3d_scene_environment_tests FOLDER Tests)
+endif()
 
 # Clock verification must also work without the optional legacy cutscene host.
 add_executable(triaevum_presentation_clock_tests EXCLUDE_FROM_ALL
@@ -362,7 +363,6 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
         tools/oot3d/native_game_runtime/oot3d_native_preparation_screen.cpp
         tools/oot3d/native_game_runtime/oot3d_native_render_command_stream.cpp
         tools/oot3d/native_game_runtime/triaevum_title_sessions.cpp
-        titles/mm3d/adapter/mm3d_title_session.cpp
         titles/oot3d/topscreen/oot3d_top_screen_ocarina_text_runtime.cpp
         titles/oot3d/topscreen/oot3d_top_screen_pause_transaction.cpp
         titles/oot3d/topscreen/oot3d_top_screen_item_description_runtime.cpp
@@ -394,7 +394,15 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
     set_source_files_properties(titles/oot3d/gameplay/oot3d_native_actor_interactions.cpp
         PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/decomp_support/include")
     # The title sessions this build contains (triaevum_title_session.h).
-    target_compile_definitions(oot3d_native_game PRIVATE TRIAEVUM_TITLE_MM3D=1)
+    if(TRIAEVUM_TITLE_MM3D)
+        target_sources(oot3d_native_game PRIVATE
+            titles/mm3d/adapter/mm3d_title_session.cpp)
+        target_compile_definitions(oot3d_native_game PRIVATE TRIAEVUM_TITLE_MM3D=1)
+        target_link_libraries(oot3d_native_game PRIVATE
+            oot3d_mm3d_guest_patches
+            oot3d_mm3d_single_screen
+            oot3d_mm3d_pica_composition)
+    endif()
     # Developer tools (F1 > Dev Tools: SoH's Debug Warp Screen and Warp
     # Points). Never in a public build: --product-info reports the capability
     # and the release workflow refuses a runtime that has it.
@@ -421,19 +429,21 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
             "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/decomp_support/include")
         target_link_libraries(oot3d_dev_warp_tests PRIVATE oot3d_native_game_runtime)
         oot3d_target_defaults(oot3d_dev_warp_tests FOLDER Tests)
-        add_executable(mm3d_dev_tools_tests EXCLUDE_FROM_ALL
-            tools/oot3d/native_game_runtime/oot3d_dev_warp.cpp
-            titles/mm3d/adapter/mm3d_dev_tools_tests.cpp)
-        target_include_directories(mm3d_dev_tools_tests PRIVATE
-            "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/native_game_runtime"
-            "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/topscreen"
-            "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/gameplay"
-            "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/environment"
-            "${CMAKE_CURRENT_SOURCE_DIR}/titles/mm3d/adapter"
-            "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/decomp_support/include")
-        target_compile_definitions(mm3d_dev_tools_tests PRIVATE TRIAEVUM_DEVELOPER_TOOLS=1)
-        target_link_libraries(mm3d_dev_tools_tests PRIVATE oot3d_native_game_runtime)
-        oot3d_target_defaults(mm3d_dev_tools_tests FOLDER Tests)
+        if(TRIAEVUM_TITLE_MM3D)
+            add_executable(mm3d_dev_tools_tests EXCLUDE_FROM_ALL
+                tools/oot3d/native_game_runtime/oot3d_dev_warp.cpp
+                titles/mm3d/adapter/mm3d_dev_tools_tests.cpp)
+            target_include_directories(mm3d_dev_tools_tests PRIVATE
+                "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/native_game_runtime"
+                "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/topscreen"
+                "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/gameplay"
+                "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/environment"
+                "${CMAKE_CURRENT_SOURCE_DIR}/titles/mm3d/adapter"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/decomp_support/include")
+            target_compile_definitions(mm3d_dev_tools_tests PRIVATE TRIAEVUM_DEVELOPER_TOOLS=1)
+            target_link_libraries(mm3d_dev_tools_tests PRIVATE oot3d_native_game_runtime)
+            oot3d_target_defaults(mm3d_dev_tools_tests FOLDER Tests)
+        endif()
         add_executable(native_a32_read_probe_tests EXCLUDE_FROM_ALL
             tools/oot3d/native_game_runtime/native_a32_read_probe.cpp
             tools/oot3d/native_game_runtime/native_a32_read_probe_tests.cpp)
@@ -478,8 +488,6 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
         oot3d_top_screen_texture_runtime
         oot3d_top_screen_runtime_consumer
         oot3d_native_pica_composition
-        oot3d_mm3d_guest_patches
-        oot3d_mm3d_single_screen
         oot3d_native_pica_submission
         oot3d_native_pica_semantic_trace
         oot3d_native_pica_vulkan_bridge)

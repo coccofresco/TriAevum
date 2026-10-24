@@ -217,94 +217,97 @@ if (OOT3D_WHOLE_AOT_PRODUCT_MODE)
 endif()
 oot3d_target_defaults(oot3d_native_a32_process_tests FOLDER Tests)
 
-add_library(oot3d_mm3d_guest_patches STATIC EXCLUDE_FROM_ALL
-    titles/mm3d/adapter/mm3d_guest_patches.cpp
-    titles/mm3d/adapter/mm3d_a32_substitute.cpp
-    titles/mm3d/adapter/mm3d_guest_calls.cpp
-)
-target_include_directories(oot3d_mm3d_guest_patches PUBLIC
-    tools/oot3d/native_game_runtime
-    titles/oot3d/topscreen
-    titles/oot3d/gameplay
-    titles/oot3d/environment
-    titles/mm3d/adapter)
-target_link_libraries(oot3d_mm3d_guest_patches PUBLIC
-    oot3d_native_a32_process)
-oot3d_target_defaults(oot3d_mm3d_guest_patches FOLDER Tools)
+# Majora's Mask 3D's adapter: guest patches, mm3d-dekui, Project Restoration.
+if(TRIAEVUM_TITLE_MM3D)
+    add_library(oot3d_mm3d_guest_patches STATIC EXCLUDE_FROM_ALL
+        titles/mm3d/adapter/mm3d_guest_patches.cpp
+        titles/mm3d/adapter/mm3d_a32_substitute.cpp
+        titles/mm3d/adapter/mm3d_guest_calls.cpp
+    )
+    target_include_directories(oot3d_mm3d_guest_patches PUBLIC
+        tools/oot3d/native_game_runtime
+        titles/oot3d/topscreen
+        titles/oot3d/gameplay
+        titles/oot3d/environment
+        titles/mm3d/adapter)
+    target_link_libraries(oot3d_mm3d_guest_patches PUBLIC
+        oot3d_native_a32_process)
+    oot3d_target_defaults(oot3d_mm3d_guest_patches FOLDER Tools)
 
-add_library(oot3d_mm3d_single_screen STATIC EXCLUDE_FROM_ALL
-    titles/mm3d/adapter/mm3d_single_screen.cpp
-    titles/mm3d/adapter/mm3d_restoration.cpp
-    titles/mm3d/dekui/core.cpp
-    titles/mm3d/dekui/settings.cpp
-)
-target_include_directories(oot3d_mm3d_single_screen PUBLIC
-    tools/oot3d/native_game_runtime
-    titles/oot3d/topscreen
-    titles/oot3d/gameplay
-    titles/oot3d/environment
-    titles/mm3d/adapter
-    titles/mm3d/dekui
-    titles/mm3d/restoration)
-target_link_libraries(oot3d_mm3d_single_screen PUBLIC
-    oot3d_mm3d_guest_patches
-    nlohmann_json::nlohmann_json)
-oot3d_target_defaults(oot3d_mm3d_single_screen FOLDER Tools)
+    add_library(oot3d_mm3d_single_screen STATIC EXCLUDE_FROM_ALL
+        titles/mm3d/adapter/mm3d_single_screen.cpp
+        titles/mm3d/adapter/mm3d_restoration.cpp
+        titles/mm3d/dekui/core.cpp
+        titles/mm3d/dekui/settings.cpp
+    )
+    target_include_directories(oot3d_mm3d_single_screen PUBLIC
+        tools/oot3d/native_game_runtime
+        titles/oot3d/topscreen
+        titles/oot3d/gameplay
+        titles/oot3d/environment
+        titles/mm3d/adapter
+        titles/mm3d/dekui
+        titles/mm3d/restoration)
+    target_link_libraries(oot3d_mm3d_single_screen PUBLIC
+        oot3d_mm3d_guest_patches
+        nlohmann_json::nlohmann_json)
+    oot3d_target_defaults(oot3d_mm3d_single_screen FOLDER Tools)
 
-add_executable(oot3d_mm3d_v110_address_tests EXCLUDE_FROM_ALL
-    titles/mm3d/dekui/v110_address_tests.cpp
-)
-target_include_directories(oot3d_mm3d_v110_address_tests PRIVATE titles/mm3d/dekui)
-oot3d_target_defaults(oot3d_mm3d_v110_address_tests FOLDER Tests)
+    add_executable(oot3d_mm3d_v110_address_tests EXCLUDE_FROM_ALL
+        titles/mm3d/dekui/v110_address_tests.cpp
+    )
+    target_include_directories(oot3d_mm3d_v110_address_tests PRIVATE titles/mm3d/dekui)
+    oot3d_target_defaults(oot3d_mm3d_v110_address_tests FOLDER Tests)
 
-add_executable(oot3d_mm3d_dekui_core_tests EXCLUDE_FROM_ALL
-    titles/mm3d/dekui/core_tests.cpp
-)
-target_link_libraries(oot3d_mm3d_dekui_core_tests PRIVATE
-    oot3d_mm3d_single_screen)
-oot3d_target_defaults(oot3d_mm3d_dekui_core_tests FOLDER Tests)
+    add_executable(oot3d_mm3d_dekui_core_tests EXCLUDE_FROM_ALL
+        titles/mm3d/dekui/core_tests.cpp
+    )
+    target_link_libraries(oot3d_mm3d_dekui_core_tests PRIVATE
+        oot3d_mm3d_single_screen)
+    oot3d_target_defaults(oot3d_mm3d_dekui_core_tests FOLDER Tests)
 
-add_executable(oot3d_mm3d_restoration_tests EXCLUDE_FROM_ALL
-    titles/mm3d/adapter/mm3d_restoration_tests.cpp
-)
-target_link_libraries(oot3d_mm3d_restoration_tests PRIVATE
-    oot3d_mm3d_single_screen)
-oot3d_target_defaults(oot3d_mm3d_restoration_tests FOLDER Tests)
+    add_executable(oot3d_mm3d_restoration_tests EXCLUDE_FROM_ALL
+        titles/mm3d/adapter/mm3d_restoration_tests.cpp
+    )
+    target_link_libraries(oot3d_mm3d_restoration_tests PRIVATE
+        oot3d_mm3d_single_screen)
+    oot3d_target_defaults(oot3d_mm3d_restoration_tests FOLDER Tests)
 
-add_executable(oot3d_mm3d_dekui_settings_tests EXCLUDE_FROM_ALL
-    titles/mm3d/dekui/settings_tests.cpp
-)
-target_link_libraries(oot3d_mm3d_dekui_settings_tests PRIVATE
-    oot3d_mm3d_single_screen)
-oot3d_target_defaults(oot3d_mm3d_dekui_settings_tests FOLDER Tests)
+    add_executable(oot3d_mm3d_dekui_settings_tests EXCLUDE_FROM_ALL
+        titles/mm3d/dekui/settings_tests.cpp
+    )
+    target_link_libraries(oot3d_mm3d_dekui_settings_tests PRIVATE
+        oot3d_mm3d_single_screen)
+    oot3d_target_defaults(oot3d_mm3d_dekui_settings_tests FOLDER Tests)
 
-add_executable(oot3d_mm3d_single_screen_tests EXCLUDE_FROM_ALL
-    titles/mm3d/adapter/mm3d_single_screen_tests.cpp
-)
-target_link_libraries(oot3d_mm3d_single_screen_tests PRIVATE
-    oot3d_mm3d_single_screen)
-oot3d_target_defaults(oot3d_mm3d_single_screen_tests FOLDER Tests)
+    add_executable(oot3d_mm3d_single_screen_tests EXCLUDE_FROM_ALL
+        titles/mm3d/adapter/mm3d_single_screen_tests.cpp
+    )
+    target_link_libraries(oot3d_mm3d_single_screen_tests PRIVATE
+        oot3d_mm3d_single_screen)
+    oot3d_target_defaults(oot3d_mm3d_single_screen_tests FOLDER Tests)
 
-add_executable(oot3d_mm3d_a32_substitute_tests EXCLUDE_FROM_ALL
-    titles/mm3d/adapter/mm3d_a32_substitute_tests.cpp
-)
-target_link_libraries(oot3d_mm3d_a32_substitute_tests PRIVATE
-    oot3d_mm3d_guest_patches)
-oot3d_target_defaults(oot3d_mm3d_a32_substitute_tests FOLDER Tests)
+    add_executable(oot3d_mm3d_a32_substitute_tests EXCLUDE_FROM_ALL
+        titles/mm3d/adapter/mm3d_a32_substitute_tests.cpp
+    )
+    target_link_libraries(oot3d_mm3d_a32_substitute_tests PRIVATE
+        oot3d_mm3d_guest_patches)
+    oot3d_target_defaults(oot3d_mm3d_a32_substitute_tests FOLDER Tests)
 
-add_executable(oot3d_mm3d_guest_calls_tests EXCLUDE_FROM_ALL
-    titles/mm3d/adapter/mm3d_guest_calls_tests.cpp
-)
-target_link_libraries(oot3d_mm3d_guest_calls_tests PRIVATE
-    oot3d_mm3d_guest_patches)
-oot3d_target_defaults(oot3d_mm3d_guest_calls_tests FOLDER Tests)
+    add_executable(oot3d_mm3d_guest_calls_tests EXCLUDE_FROM_ALL
+        titles/mm3d/adapter/mm3d_guest_calls_tests.cpp
+    )
+    target_link_libraries(oot3d_mm3d_guest_calls_tests PRIVATE
+        oot3d_mm3d_guest_patches)
+    oot3d_target_defaults(oot3d_mm3d_guest_calls_tests FOLDER Tests)
 
-add_executable(oot3d_mm3d_guest_patches_tests EXCLUDE_FROM_ALL
-    titles/mm3d/adapter/mm3d_guest_patches_tests.cpp
-)
-target_link_libraries(oot3d_mm3d_guest_patches_tests PRIVATE
-    oot3d_mm3d_guest_patches)
-oot3d_target_defaults(oot3d_mm3d_guest_patches_tests FOLDER Tests)
+    add_executable(oot3d_mm3d_guest_patches_tests EXCLUDE_FROM_ALL
+        titles/mm3d/adapter/mm3d_guest_patches_tests.cpp
+    )
+    target_link_libraries(oot3d_mm3d_guest_patches_tests PRIVATE
+        oot3d_mm3d_guest_patches)
+    oot3d_target_defaults(oot3d_mm3d_guest_patches_tests FOLDER Tests)
+endif()
 
 add_executable(oot3d_native_a32_ctr_host_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_a32_ctr_host_tests.cpp

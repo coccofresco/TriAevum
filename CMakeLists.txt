@@ -202,6 +202,25 @@ if(TRIAEVUM_DEVELOPER_TOOLS)
     # Renderer diagnostics for the lighting lab (pica_surface_debug.h).
     add_compile_definitions(TRIAEVUM_RENDERER_DEVELOPER_TOOLS=1)
 endif()
+# The titles whose adapters the build contains. OoT3D's adapter is still part of
+# the shared window session, so it is always present; mm3d adds Majora's Mask
+# 3D's adapter (titles/mm3d), which a build for one title leaves out.
+set(TRIAEVUM_TITLES "oot3d;mm3d" CACHE STRING
+    "Titles whose adapters the build contains (oot3d, mm3d)")
+foreach(_triaevum_title IN LISTS TRIAEVUM_TITLES)
+    if(NOT _triaevum_title MATCHES "^(oot3d|mm3d)$")
+        message(FATAL_ERROR "TRIAEVUM_TITLES: unknown title '${_triaevum_title}' (oot3d, mm3d)")
+    endif()
+endforeach()
+if(NOT "oot3d" IN_LIST TRIAEVUM_TITLES)
+    message(FATAL_ERROR "TRIAEVUM_TITLES must contain oot3d: its adapter is still part of the shared window session")
+endif()
+if("mm3d" IN_LIST TRIAEVUM_TITLES)
+    set(TRIAEVUM_TITLE_MM3D ON)
+else()
+    set(TRIAEVUM_TITLE_MM3D OFF)
+endif()
+message(STATUS "TriAevum titles: ${TRIAEVUM_TITLES}")
 option(OOT3D_ENABLE_VULKAN_RENDERER
     "Build the Vulkan renderer used by native OoT3D executables" ON)
 set(THREE_DS_RECOMP_ENABLE_VULKAN ${OOT3D_ENABLE_VULKAN_RENDERER} CACHE BOOL

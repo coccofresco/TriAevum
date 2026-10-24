@@ -161,11 +161,24 @@ is unchanged.
 code.bin hash: `oot3d_eur`, `mm3d` or `generic`. Only OoT3D EUR gets the
 OoT3D adapter: guest block hooks, composition and UI-lifecycle hooks,
 hand-written compiled functions, typed gameplay, mass/true-AOT blocks and the
-TopScreen profile (refused for other titles). MM3D's adapter so far only
-selects its RomFS language layout (`DetectGameLanguages`, also reachable as
+TopScreen profile (refused for other titles). MM3D's adapter is a title
+session (`triaevum_title_session.h`, implemented in
+`titles/mm3d/adapter/mm3d_title_session.cpp`): its hooks and guest patches
+(dekui, Project Restoration, lighting), the image checks, the scene view,
+camera and environment it publishes at the opaque world pass, its interface
+frame, its developer warp and its `runtime.json` statistics. The window
+session calls these at fixed points and holds no MM3D code; every member
+defaults to the session's own behaviour. The adapter also selects its RomFS
+language layout (`DetectGameLanguages`, also reachable as
 `TriAevum --game-language-info ROMFS CODE_SHA256`). Other titles run on the
 CTR host, the A32 runtime with their own whole AOT, and the canonical
 renderer. Stderr reports `TRIAEVUM_TITLE_ADAPTER`.
+
+The CMake cache variable `TRIAEVUM_TITLES` (default `oot3d;mm3d`) lists the
+titles whose adapters a build contains. `-DTRIAEVUM_TITLES=oot3d` leaves out
+every `titles/mm3d` source, library and test; such a build refuses an MM3D
+image at start instead of running it as a generic title. OoT3D's adapter is
+still part of the window session, so `oot3d` is required.
 
 ## Bring-up status
 

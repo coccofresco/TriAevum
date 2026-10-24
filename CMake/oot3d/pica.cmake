@@ -289,8 +289,6 @@ oot3d_target_defaults(oot3d_native_pica_submission_tests FOLDER Tests)
 
 add_library(oot3d_native_pica_composition STATIC EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_pica_composition.cpp
-    titles/mm3d/adapter/mm3d_pica_composition.cpp
-    titles/mm3d/adapter/mm3d_native_a32_lighting.cpp
     tools/oot3d/native_game_runtime/oot3d_native_a32_lighting.cpp
     titles/oot3d/environment/oot3d_native_a32_fire_emitters.cpp
     titles/oot3d/environment/oot3d_native_a32_light_selection.cpp
@@ -307,7 +305,6 @@ target_include_directories(oot3d_native_pica_composition PUBLIC
     titles/oot3d/topscreen
     titles/oot3d/gameplay
     titles/oot3d/environment
-    titles/mm3d/adapter
     tools/oot3d/native_pica_frontend
 )
 target_link_libraries(oot3d_native_pica_composition PUBLIC
@@ -338,6 +335,36 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
         MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 set_property(TARGET oot3d_native_pica_composition_tests PROPERTY FOLDER Tests)
+
+if(TRIAEVUM_TITLE_MM3D)
+    # MM3D's composition tracker and its scene lighting reads (titles/mm3d).
+    add_library(oot3d_mm3d_pica_composition STATIC EXCLUDE_FROM_ALL
+        titles/mm3d/adapter/mm3d_pica_composition.cpp
+        titles/mm3d/adapter/mm3d_native_a32_lighting.cpp
+    )
+    target_include_directories(oot3d_mm3d_pica_composition PUBLIC
+        titles/mm3d/adapter)
+    target_link_libraries(oot3d_mm3d_pica_composition PUBLIC
+        oot3d_native_pica_composition)
+    target_compile_options(oot3d_mm3d_pica_composition PRIVATE
+        "${WARNING_OVERRIDE}")
+    oot3d_target_defaults(oot3d_mm3d_pica_composition NO_WARNING_OVERRIDE FOLDER Tools)
+
+    add_executable(mm3d_pica_composition_tests EXCLUDE_FROM_ALL
+        titles/mm3d/adapter/mm3d_pica_composition_tests.cpp
+    )
+    target_link_libraries(mm3d_pica_composition_tests PRIVATE
+        oot3d_mm3d_pica_composition)
+    target_compile_options(mm3d_pica_composition_tests PRIVATE
+        "${WARNING_OVERRIDE}")
+    if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+        target_compile_definitions(mm3d_pica_composition_tests PRIVATE
+            NOMINMAX)
+        set_property(TARGET mm3d_pica_composition_tests PROPERTY
+            MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+    set_property(TARGET mm3d_pica_composition_tests PROPERTY FOLDER Tests)
+endif()
 
 add_library(oot3d_native_pica_vulkan_plan STATIC EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_pica_vulkan_plan.cpp
@@ -677,7 +704,9 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
 endif()
 set_property(TARGET oot3d_native_pica_vulkan_bridge_tests PROPERTY FOLDER Tests)
 
-add_executable(mm3d_native_lighting_tests EXCLUDE_FROM_ALL
-    titles/mm3d/adapter/mm3d_native_lighting_tests.cpp)
-target_link_libraries(mm3d_native_lighting_tests PRIVATE oot3d_native_pica_composition)
-oot3d_target_defaults(mm3d_native_lighting_tests FOLDER Tests)
+if(TRIAEVUM_TITLE_MM3D)
+    add_executable(mm3d_native_lighting_tests EXCLUDE_FROM_ALL
+        titles/mm3d/adapter/mm3d_native_lighting_tests.cpp)
+    target_link_libraries(mm3d_native_lighting_tests PRIVATE oot3d_mm3d_pica_composition)
+    oot3d_target_defaults(mm3d_native_lighting_tests FOLDER Tests)
+endif()
