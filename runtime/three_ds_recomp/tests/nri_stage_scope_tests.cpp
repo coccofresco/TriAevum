@@ -1,10 +1,10 @@
-#include "fast/oot3d/nri_stage_scope.h"
+#include "fast/extension/nri_stage_scope.h"
 #include <initializer_list>
 #include <stdexcept>
 
 int main() {
     using nri::StageBits;
-    using Fast::Oot3d::MergeNriStageScopes;
+    using Fast::Extension::MergeNriStageScopes;
     const auto require = [](bool condition) {
         if (!condition) throw std::runtime_error("NRI stage scope regression");
     };

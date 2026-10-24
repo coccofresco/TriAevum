@@ -1,8 +1,8 @@
-#include "fast/oot3d/display_effect_plan.h"
+#include "fast/extension/display_effect_plan.h"
 #include <iostream>
 #include <stdexcept>
 
-using namespace Fast::Oot3d;
+using namespace Fast::Extension;
 static void check(bool value) {
     static int assertion = 0;
     ++assertion;

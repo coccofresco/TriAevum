@@ -1,11 +1,11 @@
-#include "fast/oot3d/grass_cluster_order.h"
-#include "fast/oot3d/grass_visibility.h"
+#include "fast/extension/grass_cluster_order.h"
+#include "fast/extension/grass_visibility.h"
 #include <iostream>
 #include <random>
 #include <stdexcept>
 
 int main() try {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     std::mt19937 random(813);
     for (size_t count : {0U,1U,1023U,1024U,65536U,100000U})
     for (uint32_t mask : {0U,1023U,0x3ffffU,0xffffffffU}) {

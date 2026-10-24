@@ -1,5 +1,5 @@
 #include "fast/Fast3dWindow.h"
-#include "fast/oot3d/graphics_settings_window.h"
+#include "fast/extension/graphics_settings_window.h"
 
 #include "ship/Context.h"
 #include "ship/utils/ShutdownRequest.h"
@@ -15,7 +15,7 @@
 #include "fast/backends/gfx_direct3d11.h"
 #ifdef ENABLE_OOT3D_VULKAN
 #include "fast/backends/gfx_vulkan.h"
-#include "fast/oot3d/graphics_settings_runtime.h"
+#include "fast/extension/graphics_settings_runtime.h"
 #endif
 #include "fast/backends/gfx_window_manager_api.h"
 
@@ -394,9 +394,9 @@ void Fast3dWindow::SetMsaaLevel(uint32_t value) {
 void Fast3dWindow::SetFullscreen(bool isFullscreen) {
 #ifdef ENABLE_OOT3D_VULKAN
     if (GetWindowBackend() == WindowBackend::FAST3D_SDL_OOT3D_VULKAN) {
-        auto& runtime = Oot3d::GraphicsSettingsRuntime::Instance();
+        auto& runtime = Extension::GraphicsSettingsRuntime::Instance();
         auto settings = runtime.Snapshot();
-        settings.Window = isFullscreen ? Oot3d::WindowMode::Borderless : Oot3d::WindowMode::Windowed;
+        settings.Window = isFullscreen ? Extension::WindowMode::Borderless : Extension::WindowMode::Windowed;
         runtime.Apply(settings);
         return;
     }
@@ -461,7 +461,7 @@ bool Fast3dWindow::KeyDown(int32_t scancode) {
             WindowBackend::FAST3D_SDL_OOT3D_VULKAN &&
         scancode == Ship::KbScancode::LUS_KB_F2) {
         // Event-driven: keep short taps and reject key repeat, independent of guest/presentation rate.
-        if (firstPress) Oot3d::ToggleGraphicsNativePresentation();
+        if (firstPress) Extension::ToggleGraphicsNativePresentation();
         return true;
     }
 #endif

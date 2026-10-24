@@ -389,7 +389,7 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
         serializeTopScreenPrimitives(lastTopScreenPrimitivesBySubsystem[
             static_cast<std::size_t>(oot3d::ui::UiSubsystem::GameplayHud)]);
     const auto graphicsSettings =
-        Fast::Oot3d::GraphicsSettingsRuntime::Instance().Snapshot();
+        Fast::Extension::GraphicsSettingsRuntime::Instance().Snapshot();
     const auto &directionalShadows =
         graphicsSettings.Effects.DirectionalShadows;
     const auto &realtimePacingStats = realtimePacer.Stats();
@@ -786,7 +786,7 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                     {"visual_interpolation_active",
                      visualInterpolationEnabled},
                     {"visual_interpolation_mode",
-                     Fast::Oot3d::NativeVisualInterpolationModeName(
+                     Fast::Extension::NativeVisualInterpolationModeName(
                          frameCompositionPolicy.Interpolation)},
                     {"visual_sample_multiplier",
                      frameCompositionPolicy.FixedSampleMultiplier},
@@ -1218,7 +1218,7 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
               {"directional_shadows",
                {{"enabled",
                  directionalShadows.Mode ==
-                     Fast::Oot3d::DirectionalShadowMode::
+                     Fast::Extension::DirectionalShadowMode::
                          VirtualShadowMaps},
                 {"mode",
                  static_cast<std::uint32_t>(

@@ -7,7 +7,7 @@
 namespace Oot3dNativeGame {
 namespace {
 
-class PhotoModePanel final : public Fast::Oot3d::GraphicsSettingsPanelTab {
+class PhotoModePanel final : public Fast::Extension::GraphicsSettingsPanelTab {
 public:
   PhotoModePanel(std::shared_ptr<DevFreeCamera> freeCamera, std::shared_ptr<PhotoModeState> state)
       : mFreeCamera(std::move(freeCamera)), mState(std::move(state)) {}
@@ -46,7 +46,7 @@ private:
 
 } // namespace
 
-std::shared_ptr<Fast::Oot3d::GraphicsSettingsPanelTab>
+std::shared_ptr<Fast::Extension::GraphicsSettingsPanelTab>
 CreatePhotoModePanel(std::shared_ptr<DevFreeCamera> freeCamera, std::shared_ptr<PhotoModeState> state) {
   return std::make_shared<PhotoModePanel>(std::move(freeCamera), std::move(state));
 }

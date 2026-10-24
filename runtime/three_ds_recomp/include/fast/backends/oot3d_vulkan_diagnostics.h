@@ -2,11 +2,11 @@
 
 #include "fast/renderer3ds/pica_temporal_identity.h"
 
-#include "fast/oot3d/display_effect_plan.h"
-#include "fast/oot3d/display_effect_resources.h"
-#include "fast/oot3d/effect_geometry_provider_plan.h"
-#include "fast/oot3d/effect_graph_physical_plan.h"
-#include "fast/oot3d/renderer_validation_telemetry.h"
+#include "fast/extension/display_effect_plan.h"
+#include "fast/extension/display_effect_resources.h"
+#include "fast/extension/effect_geometry_provider_plan.h"
+#include "fast/extension/effect_graph_physical_plan.h"
+#include "fast/extension/renderer_validation_telemetry.h"
 #include "oot3d/renderer/pica_render_backend.h"
 
 #include <chrono>
@@ -19,7 +19,7 @@
 
 namespace Fast {
 
-namespace Oot3d {
+namespace Extension {
 struct PicaSceneFrameStats;
 }
 namespace Renderer3ds {
@@ -659,7 +659,7 @@ class Oot3dVulkanDiagnostics {
         std::string detail);
     void BeginFrame(uint64_t frameIndex);
     void RecordRendererValidation(
-        const Oot3d::RendererValidationSnapshot& snapshot);
+        const Extension::RendererValidationSnapshot& snapshot);
     void RecordNativePicaDraw(uint64_t submissionId,
                               uint64_t renderTargetNamespace,
                               uint32_t vertexCount, bool indexed,
@@ -688,16 +688,16 @@ class Oot3dVulkanDiagnostics {
         uint32_t privatePlanned = 0U,
         uint32_t privateEmitted = 0U);
     void RecordEffectGeometryProvider(
-        const Oot3d::EffectGeometryProviderExecutionSummary& summary);
+        const Extension::EffectGeometryProviderExecutionSummary& summary);
     void RecordDisplayEffectGraphExecution(
-        const Oot3d::DisplayEffectExecutionSummary& summary);
+        const Extension::DisplayEffectExecutionSummary& summary);
     void RecordDisplayEffectGraphBindings(
-        const Oot3d::EffectResourceBindingValidation& validation,
+        const Extension::EffectResourceBindingValidation& validation,
         bool compatibilityFallback);
     void RecordDisplayEffectPhysicalPlan(
-        const Oot3d::EffectPhysicalPlanSummary& summary);
+        const Extension::EffectPhysicalPlanSummary& summary);
     void RecordEffectTransientImageArena(
-        const Oot3d::EffectTransientAllocationSummary& summary,
+        const Extension::EffectTransientAllocationSummary& summary,
         bool configured, uint32_t allocatedSlotCount,
         bool reusedConfiguration);
     void RecordPicaShaderSelection(
@@ -728,7 +728,7 @@ class Oot3dVulkanDiagnostics {
         ::Oot3d::Renderer::PicaCompositionDomain domain,
         bool sceneResolved);
     void RecordPicaSceneFrame(
-        const Oot3d::PicaSceneFrameStats& stats);
+        const Extension::PicaSceneFrameStats& stats);
     void RecordNriPicaTextureUpload(bool executed,
                                     uint64_t uploadBytes = 0);
     void RecordNriPicaTextureImage(bool owned);

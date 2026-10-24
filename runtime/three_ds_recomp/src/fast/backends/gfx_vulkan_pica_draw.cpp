@@ -5,14 +5,14 @@
 #include "fast/renderer3ds/pica_draw_coverage.h"
 #include "fast/renderer3ds/pica_fragment_balance.h"
 #include "fast/renderer3ds/pica_surface_appearance.h"
-#include "fast/oot3d/pica_rim_light.h"
+#include "fast/extension/pica_rim_light.h"
 #include "fast/renderer3ds/pica_surface_debug.h"
 #include "fast/renderer3ds/pica_surface_emission.h"
-#include "fast/oot3d/grass_interaction_bridge.h"
-#include "fast/oot3d/grass_texture_twins.h"
-#include "fast/oot3d/grass_overlay_mask.h"
-#include "fast/oot3d/grass_placement_audit.h"
-#include "fast/oot3d/grass_stage_profile.h"
+#include "fast/extension/grass_interaction_bridge.h"
+#include "fast/extension/grass_texture_twins.h"
+#include "fast/extension/grass_overlay_mask.h"
+#include "fast/extension/grass_placement_audit.h"
+#include "fast/extension/grass_stage_profile.h"
 
 #include <filesystem>
 #include <fstream>
@@ -22,11 +22,11 @@ namespace Fast {
 
 bool PublishNativePicaGrassSurface(const GfxNativePicaDrawView& draw, uint64_t frameId,
                                    std::unordered_map<uint64_t, uint32_t>& occurrences,
-                                   const Oot3d::InteractiveGrassSettings& settings, bool worldSurface,
+                                   const Extension::InteractiveGrassSettings& settings, bool worldSurface,
                                    bool fragmentUsesTexture0, bool perspectiveProjection,
-                                   Oot3d::GrassGeometryRegistry& geometryRegistry, Oot3d::GrassDrawMemo& memo,
+                                   Extension::GrassGeometryRegistry& geometryRegistry, Extension::GrassDrawMemo& memo,
                                    uint64_t sequenceId, uint64_t drawOrder, bool masksOnly = false);
-void AuditNativePicaGrassGate(const GfxNativePicaDrawView& draw, const Oot3d::InteractiveGrassSettings& settings,
+void AuditNativePicaGrassGate(const GfxNativePicaDrawView& draw, const Extension::InteractiveGrassSettings& settings,
                               const char* gate);
 
 Renderer3ds::PicaShadowCasterAnchor* GfxRenderingAPIVulkan::ShadowCasterAnchor(
@@ -70,7 +70,7 @@ bool GfxRenderingAPIVulkan::PublishPicaCompositionSequence(
             }
         }
 
-        Oot3d::PicaCompositionSchedule compiled;
+        Extension::PicaCompositionSchedule compiled;
         std::string compileError;
         if (!compiled.Compile(sequence, &compileError)) {
             throw std::runtime_error(
@@ -117,11 +117,11 @@ void GfxRenderingAPIVulkan::ExecuteNativePicaBeforeDrawAnchors(
     const bool timed = mDiagnostics.Enabled();
     using Clock = std::chrono::steady_clock;
     auto begin = timed ? Clock::now() : Clock::time_point{};
-    if (const auto* anchor = Oot3d::FindPicaEffectPassAnchor(
+    if (const auto* anchor = Extension::FindPicaEffectPassAnchor(
             mNativePicaCompositionSchedule, mDirectionalShadowSchedulePlan, reference.Target);
         anchor != nullptr && !anchor->AtTargetEnd && anchor->BeforeSubmissionId == draw.SubmissionId)
         TryRenderDirectionalShadowMap(target, mFrameGraphicsSettings, *anchor);
-    if (const auto* anchor = Oot3d::FindPicaEffectPassAnchor(
+    if (const auto* anchor = Extension::FindPicaEffectPassAnchor(
             mNativePicaCompositionSchedule, mPointShadowSchedulePlan, reference.Target);
         anchor != nullptr && !anchor->AtTargetEnd && anchor->BeforeSubmissionId == draw.SubmissionId)
         TryRenderPointShadowMaps(target, mFrameGraphicsSettings, *anchor);
@@ -135,16 +135,16 @@ void GfxRenderingAPIVulkan::ExecuteNativePicaBeforeDrawAnchors(
     if (grassAnchor != nullptr && !grassAnchor->AtTargetEnd &&
         grassAnchor->BeforeSubmissionId == draw.SubmissionId)
         TryRenderInteractiveGrass(target, mFrameGraphicsSettings,
-            Oot3d::EffectGeometryProviderInvocationKind::DeclaredBoundary);
+            Extension::EffectGeometryProviderInvocationKind::DeclaredBoundary);
     if (timed)
         grassMilliseconds += std::chrono::duration<double, std::milli>(Clock::now() - begin).count();
     const auto& effects = mFrameGraphicsSettings.Effects;
     // Scene stages, same-extent anti-aliasing included: it resolves the scene
     // here so the UI that follows is drawn over the result, never through it.
-    const bool sceneEffects = effects.AmbientOcclusion != Oot3d::AmbientOcclusionMode::Off ||
-        effects.Reflections != Oot3d::ReflectionMode::Off ||
-        effects.GlobalIllumination.Mode != Oot3d::GlobalIlluminationMode::Off ||
-        (effects.Toon != Oot3d::ToonMode::Off && effects.ToonStyle.OutlineEnabled) ||
+    const bool sceneEffects = effects.AmbientOcclusion != Extension::AmbientOcclusionMode::Off ||
+        effects.Reflections != Extension::ReflectionMode::Off ||
+        effects.GlobalIllumination.Mode != Extension::GlobalIlluminationMode::Off ||
+        (effects.Toon != Extension::ToonMode::Off && effects.ToonStyle.OutlineEnabled) ||
         mSceneAntiAliasing;
     // Presentation stages (AA, upscalers) read the display's world surface.
     // When an overlay (native UI, the isolated title logo) reaches the target
@@ -153,7 +153,7 @@ void GfxRenderingAPIVulkan::ExecuteNativePicaBeforeDrawAnchors(
     if (!mNativeFidelityProfile && (sceneEffects || mPresentationWorldSurface) &&
         NativeSceneOverlayDraw(draw)) {
         const auto* beforeUi = mNativePicaCompositionSchedule.FindAnchorBeforeDraw(
-            Oot3d::EffectStage::BeforeUi, reference.Target, draw.SubmissionId);
+            Extension::EffectStage::BeforeUi, reference.Target, draw.SubmissionId);
         if (beforeUi != nullptr) {
             GpuTextureCopySourceImport composed;
             if (sceneEffects) {
@@ -206,13 +206,13 @@ void GfxRenderingAPIVulkan::ExecuteNativePicaBeforeDrawAnchors(
     // consumed/published the clean scene, including the upscaler snapshot.
     // Native UI is submitted afterwards, so it remains above the wireframe.
     if (!mNativeFidelityProfile && NativeSceneOverlayDraw(draw) &&
-        mNativePicaCompositionSchedule.FindAnchorBeforeDraw(Oot3d::EffectStage::BeforeUi, reference.Target,
+        mNativePicaCompositionSchedule.FindAnchorBeforeDraw(Extension::EffectStage::BeforeUi, reference.Target,
                                                             draw.SubmissionId) != nullptr)
         TryRenderWorldDebugLines(target);
 }
 
 GfxRenderingAPIVulkan::NativePicaGeometryPlacement GfxRenderingAPIVulkan::PlaceNativePicaGeometry(
-    const Oot3d::PicaGeometryResolveResult& resolution, Oot3dVulkanNativePicaCpuTimings* cpuTimings) {
+    const Extension::PicaGeometryResolveResult& resolution, Oot3dVulkanNativePicaCpuTimings* cpuTimings) {
     const auto& geometry = *resolution.Geometry;
     auto& frame = mFrameResources[mCurrentFrame];
     if (resolution.Cacheable) {
@@ -262,10 +262,10 @@ bool GfxRenderingAPIVulkan::WantsPicaSequenceDrawPreparation(
     // this sample, so they need its opaque world before native order reaches it.
     const bool directionalMap =
         mDirectionalShadowMapBarrierPlan.Valid() && mDirectionalShadowSchedulePlan.Valid() &&
-        Oot3d::PicaExtensionPassEnabled(mPicaExtensionGraph, Oot3d::PicaExtensionPass::DirectionalShadowLighting);
+        Extension::PicaExtensionPassEnabled(mPicaExtensionGraph, Extension::PicaExtensionPass::DirectionalShadowLighting);
     const bool pointMaps =
         mPointShadowMapBarrierPlan.Valid() && mPointShadowSchedulePlan.Valid() &&
-        Oot3d::PicaExtensionPassEnabled(mPicaExtensionGraph, Oot3d::PicaExtensionPass::PointShadowLighting);
+        Extension::PicaExtensionPassEnabled(mPicaExtensionGraph, Extension::PicaExtensionPass::PointShadowLighting);
     return mFrameActive && mNativePicaCompositionSchedule.Valid() &&
            mNativePicaCompositionSchedule.Purpose() == Renderer3ds::PicaCompositionPurpose::Presentation &&
            (directionalMap || pointMaps || mInteractiveGrassProviderPlan.Valid()) &&
@@ -297,7 +297,7 @@ GfxRenderingAPIVulkan::AdvanceWaterRipples(const Renderer3ds::PicaSceneWaterBodi
     if (mWaterRipplesFrame != mFrameCounter) {
         mWaterRipplesFrame = mFrameCounter;
         // The actors of the native frame on screen (the grass interactors).
-        const auto actors = Oot3d::GrassInteractionBridge::Instance().LatestActors();
+        const auto actors = Extension::GrassInteractionBridge::Instance().LatestActors();
         std::vector<Renderer3ds::PicaWaterMover> movers;
         movers.reserve(actors.size());
         for (const auto& actor : actors)
@@ -321,15 +321,15 @@ GfxRenderingAPIVulkan::NativePicaWaterSurface GfxRenderingAPIVulkan::ResolveNati
                     roles |= catalog->Roles(*hash, texture.Width, texture.Height);
     const bool catalogWater = (roles & Renderer3ds::kPicaWaterTextureWater) != 0U;
     const bool bodies = draw.LightBinding.Water && draw.LightBinding.Water->Count != 0U;
-    Oot3d::DirectionalShadowMatrix viewToWorld;
+    Extension::DirectionalShadowMatrix viewToWorld;
     if ((!bodies && !catalogWater) || !draw.GeometryIdentityAvailable ||
         draw.VertexCount == 0U || draw.VertexBindings.empty() || draw.VertexAttributes.empty() ||
-        draw.VertexUniformBytes.size() < Oot3d::kPicaPackedVertexFloatOffset || !draw.LightBinding.WorldToView ||
-        !Oot3d::InvertDirectionalShadowMatrix(*draw.LightBinding.WorldToView, viewToWorld))
+        draw.VertexUniformBytes.size() < Extension::kPicaPackedVertexFloatOffset || !draw.LightBinding.WorldToView ||
+        !Extension::InvertDirectionalShadowMatrix(*draw.LightBinding.WorldToView, viewToWorld))
         return result;
-    std::vector<Oot3d::PicaNriSourceVertexStream> streams;
-    std::vector<Oot3d::PicaNriSourceVertexBinding> sourceBindings;
-    std::vector<Oot3d::PicaNriSourceVertexAttribute> attributes;
+    std::vector<Extension::PicaNriSourceVertexStream> streams;
+    std::vector<Extension::PicaNriSourceVertexBinding> sourceBindings;
+    std::vector<Extension::PicaNriSourceVertexAttribute> attributes;
     streams.reserve(draw.VertexBindings.size());
     sourceBindings.reserve(draw.VertexBindings.size());
     for (const auto& binding : draw.VertexBindings) {
@@ -339,9 +339,9 @@ GfxRenderingAPIVulkan::NativePicaWaterSurface GfxRenderingAPIVulkan::ResolveNati
     attributes.reserve(draw.VertexAttributes.size());
     for (const auto& attribute : draw.VertexAttributes)
         attributes.push_back({ attribute.Location, attribute.Binding,
-                               static_cast<Oot3d::PicaNriVertexScalar>(attribute.Format),
+                               static_cast<Extension::PicaNriVertexScalar>(attribute.Format),
                                attribute.ComponentCount, attribute.ByteOffset });
-    const auto layout = Oot3d::BuildPicaNriVertexInputLayout(sourceBindings, attributes);
+    const auto layout = Extension::BuildPicaNriVertexInputLayout(sourceBindings, attributes);
     if (!layout.Valid() || layout.Bindings.empty() || layout.Attributes.empty()) return result;
     // The ordered submission resolves the same geometry again: a cache hit.
     const auto resolution = mPicaGeometryRegistry.Resolve({
@@ -352,12 +352,12 @@ GfxRenderingAPIVulkan::NativePicaWaterSurface GfxRenderingAPIVulkan::ResolveNati
     for (const uint64_t evicted : mPicaGeometryRegistry.TakeEvictedIdentities()) RetireNativePicaGeometry(evicted);
     const auto& geometry = *resolution.Geometry;
     if (!resolution.Cacheable || !geometry.PackedValid) return result;
-    std::vector<Oot3d::PicaSceneVertexBufferBinding> bindings;
+    std::vector<Extension::PicaSceneVertexBufferBinding> bindings;
     bindings.reserve(geometry.PackedBindings.size());
     for (const auto& binding : geometry.PackedBindings)
         bindings.push_back({ binding.Binding, binding.Offset, binding.Size, binding.Stride });
     uint32_t booleanUniforms = 0;
-    std::memcpy(&booleanUniforms, draw.VertexUniformBytes.data() + Oot3d::kPicaPackedVertexBooleanMaskOffset,
+    std::memcpy(&booleanUniforms, draw.VertexUniformBytes.data() + Extension::kPicaPackedVertexBooleanMaskOffset,
                 sizeof(booleanUniforms));
     // The scene distance field's cache: one mesh per geometry version.
     const uint64_t version = geometry.ContentVersion ^ (geometry.StructuralSignature * 0x9e3779b97f4a7c15ULL) ^
@@ -366,7 +366,7 @@ GfxRenderingAPIVulkan::NativePicaWaterSurface GfxRenderingAPIVulkan::ResolveNati
         { geometry.Payload, bindings, layout.Attributes, layout.Bindings, 0, geometry.IndexOffset,
           geometry.VertexOrIndexCount, draw.BaseVertex, geometry.Indexed },
         ToPicaSceneTopology(draw.Topology), draw.TemporalVertexProgram.Hooks, booleanUniforms,
-        draw.VertexUniformBytes.subspan(Oot3d::kPicaPackedVertexFloatOffset), viewToWorld, version,
+        draw.VertexUniformBytes.subspan(Extension::kPicaPackedVertexFloatOffset), viewToWorld, version,
         mNativePicaGeometryBuffers[geometry.Identity].GiGeometry);
     if (!instance.Valid()) return result;
     result.WorldBounds = instance.WorldBounds;
@@ -423,7 +423,7 @@ bool GfxRenderingAPIVulkan::PreparePicaSequenceDraw(
             const bool captured = PublishNativePicaGrassSurface(
                 draw, mFrameCounter, mGrassOverlayOccurrences, mFrameGraphicsSettings.Grass, true,
                 draw.FragmentShaderHooks.SamplesTexture(0),
-                Oot3d::UsesPicaPerspectiveProjection(draw.VertexUniformBytes), mGrassGeometryRegistry, mGrassDrawMemo,
+                Extension::UsesPicaPerspectiveProjection(draw.VertexUniformBytes), mGrassGeometryRegistry, mGrassDrawMemo,
                 mNativePicaCompositionSchedule.SequenceId(), mGrassDrawOrdinals.at(draw.SubmissionId), true);
             if (maskDiagnostics) {
                 static uint64_t frame = 0;
@@ -446,22 +446,22 @@ bool GfxRenderingAPIVulkan::PreparePicaSequenceDraw(
         }
         const bool shadowPreparation =
             (mDirectionalShadowMapBarrierPlan.Valid() && mDirectionalShadowSchedulePlan.Valid() &&
-             Oot3d::PicaExtensionPassEnabled(mPicaExtensionGraph,
-                                             Oot3d::PicaExtensionPass::DirectionalShadowLighting)) ||
+             Extension::PicaExtensionPassEnabled(mPicaExtensionGraph,
+                                             Extension::PicaExtensionPass::DirectionalShadowLighting)) ||
             (mPointShadowMapBarrierPlan.Valid() && mPointShadowSchedulePlan.Valid() &&
-             Oot3d::PicaExtensionPassEnabled(mPicaExtensionGraph, Oot3d::PicaExtensionPass::PointShadowLighting));
+             Extension::PicaExtensionPassEnabled(mPicaExtensionGraph, Extension::PicaExtensionPass::PointShadowLighting));
         if (!shadowPreparation || draw.Composition.Layer != Renderer3ds::PicaCompositionLayer::OpaqueWorld)
             return true;
         // Caster admission: depth-writing perspective geometry with its
         // captured view; an alpha-tested caster also needs its alpha test.
-        Oot3d::DirectionalShadowMatrix viewToWorld;
+        Extension::DirectionalShadowMatrix viewToWorld;
         const bool admitted =
             AdmitsShadowCasterGeometry(draw) &&
             draw.Topology != GfxNativePicaTopology::TriangleFan && !draw.VertexShaderSource.empty() &&
             !draw.FragmentShaderSource.empty() && draw.VertexCount != 0U && !draw.VertexBindings.empty() &&
-            !draw.VertexAttributes.empty() && draw.VertexUniformBytes.size() >= Oot3d::kPicaPackedVertexFloatOffset &&
-            Oot3d::UsesPicaPerspectiveProjection(draw.VertexUniformBytes) && draw.LightBinding.WorldToView &&
-            Oot3d::InvertDirectionalShadowMatrix(*draw.LightBinding.WorldToView, viewToWorld);
+            !draw.VertexAttributes.empty() && draw.VertexUniformBytes.size() >= Extension::kPicaPackedVertexFloatOffset &&
+            Extension::UsesPicaPerspectiveProjection(draw.VertexUniformBytes) && draw.LightBinding.WorldToView &&
+            Extension::InvertDirectionalShadowMatrix(*draw.LightBinding.WorldToView, viewToWorld);
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
         auto& shadowDebug = Renderer3ds::PicaSurfaceDebug::Instance();
         if (shadowDebug.ShadowTracing()) {
@@ -479,9 +479,9 @@ bool GfxRenderingAPIVulkan::PreparePicaSequenceDraw(
             return true;
         }
 
-        std::vector<Oot3d::PicaNriSourceVertexStream> streams;
-        std::vector<Oot3d::PicaNriSourceVertexBinding> sourceBindings;
-        std::vector<Oot3d::PicaNriSourceVertexAttribute> attributes;
+        std::vector<Extension::PicaNriSourceVertexStream> streams;
+        std::vector<Extension::PicaNriSourceVertexBinding> sourceBindings;
+        std::vector<Extension::PicaNriSourceVertexAttribute> attributes;
         streams.reserve(draw.VertexBindings.size());
         sourceBindings.reserve(draw.VertexBindings.size());
         for (const auto& binding : draw.VertexBindings) {
@@ -491,10 +491,10 @@ bool GfxRenderingAPIVulkan::PreparePicaSequenceDraw(
         attributes.reserve(draw.VertexAttributes.size());
         for (const auto& attribute : draw.VertexAttributes) {
             attributes.push_back({ attribute.Location, attribute.Binding,
-                                   static_cast<Oot3d::PicaNriVertexScalar>(attribute.Format),
+                                   static_cast<Extension::PicaNriVertexScalar>(attribute.Format),
                                    attribute.ComponentCount, attribute.ByteOffset });
         }
-        const auto layout = Oot3d::BuildPicaNriVertexInputLayout(sourceBindings, attributes);
+        const auto layout = Extension::BuildPicaNriVertexInputLayout(sourceBindings, attributes);
         const auto resolution = mPicaGeometryRegistry.Resolve({
             draw.GeometryIdentity,
             draw.GeometryContentVersion,
@@ -553,7 +553,7 @@ bool GfxRenderingAPIVulkan::PreparePicaSequenceDraw(
             return true;
         }
         const auto placement = PlaceNativePicaGeometry(resolution, nullptr);
-        std::vector<Oot3d::PicaSceneVertexBufferBinding> bindings;
+        std::vector<Extension::PicaSceneVertexBufferBinding> bindings;
         bindings.reserve(geometry.PackedBindings.size());
         for (const auto& binding : geometry.PackedBindings) {
             bindings.push_back({ binding.Binding, placement.BaseOffset + binding.Offset, binding.Size, binding.Stride });
@@ -577,7 +577,7 @@ bool GfxRenderingAPIVulkan::PreparePicaSequenceDraw(
         const VkDeviceSize fragmentUniformOffset = alphaTested ? uploadUniform(draw.FragmentUniformBytes) : 0U;
 
         uint32_t booleanUniforms = 0;
-        std::memcpy(&booleanUniforms, draw.VertexUniformBytes.data() + Oot3d::kPicaPackedVertexBooleanMaskOffset,
+        std::memcpy(&booleanUniforms, draw.VertexUniformBytes.data() + Extension::kPicaPackedVertexBooleanMaskOffset,
                     sizeof(booleanUniforms));
         Renderer3ds::PicaShadowCasterCache transientCache;
         auto& shadowCache = resolution.Cacheable
@@ -589,15 +589,15 @@ bool GfxRenderingAPIVulkan::PreparePicaSequenceDraw(
             {geometry.Payload, bindings, layout.Attributes, layout.Bindings, placement.BaseOffset,
              geometry.IndexOffset, geometry.VertexOrIndexCount, draw.BaseVertex, geometry.Indexed},
             draw.TemporalVertexProgram.Hooks, booleanUniforms,
-            draw.VertexUniformBytes.subspan(Oot3d::kPicaPackedVertexFloatOffset), viewToWorld, version, shadowCache,
+            draw.VertexUniformBytes.subspan(Extension::kPicaPackedVertexFloatOffset), viewToWorld, version, shadowCache,
             resolution.Cacheable
                 ? ShadowCasterAnchor(geometry.Identity, draw.Composition.TemporalIdentity, draw.SubmissionId)
                 : nullptr);
         shadowCaster.Dynamic =
             draw.Composition.NativeActorGeometry && !draw.Composition.StaticShadowCacheEligible;
         shadowCaster.OwnerIdentity = draw.Composition.NativeActorIdentity;
-        std::array<Oot3d::PicaSceneTextureBinding, 3> sceneTextures{};
-        Oot3d::PicaSceneTextureBinding sceneLightingLut;
+        std::array<Extension::PicaSceneTextureBinding, 3> sceneTextures{};
+        Extension::PicaSceneTextureBinding sceneLightingLut;
         if (alphaTested) {
             std::array<uint64_t, 3> replacementHashes{};
             for (size_t slot = 0; slot < sceneTextures.size(); ++slot) {
@@ -636,7 +636,7 @@ bool GfxRenderingAPIVulkan::PreparePicaSequenceDraw(
                 sceneLightingLut.ImageWidth = casterLightingLut->Width;
                 sceneLightingLut.ImageHeight = casterLightingLut->Height;
                 sceneLightingLut.MipLevels = 1U;
-                sceneLightingLut.ImageFormat = Oot3d::PicaSceneTextureImageFormat::R32Uint;
+                sceneLightingLut.ImageFormat = Extension::PicaSceneTextureImageFormat::R32Uint;
                 sceneLightingLut.Bound = true;
             }
             // The cutout is part of the caster's content: a changed texture or
@@ -651,7 +651,7 @@ bool GfxRenderingAPIVulkan::PreparePicaSequenceDraw(
         // in for the effective ones. Fragment state and textures are recorded
         // for an alpha-tested caster only; no resolved raster/target value is
         // known before the ordered submission.
-        Oot3d::PicaSceneDrawRecordDesc record{
+        Extension::PicaSceneDrawRecordDesc record{
             .SubmissionId = draw.SubmissionId,
             .CommandListAddress = draw.CommandListAddress,
             .CommandListOffsetWords = draw.CommandListOffsetWords,
@@ -664,7 +664,7 @@ bool GfxRenderingAPIVulkan::PreparePicaSequenceDraw(
             .NativeLightSources = draw.LightBinding.Sources,
             .ShadowCaster = shadowCaster,
             .Raster = {
-                .SchemaVersion = Oot3d::kPicaSceneResolvedRasterStateSchemaVersion,
+                .SchemaVersion = Extension::kPicaSceneResolvedRasterStateSchemaVersion,
                 .NativeViewportX = draw.ViewportX,
                 .NativeViewportY = draw.ViewportY,
                 .NativeViewportWidth = draw.ViewportWidth,
@@ -680,7 +680,7 @@ bool GfxRenderingAPIVulkan::PreparePicaSequenceDraw(
                 .FramebufferFlipped = draw.FramebufferFlipped,
             },
             .RenderTarget = {
-                .SchemaVersion = Oot3d::kPicaSceneRenderTargetStateSchemaVersion,
+                .SchemaVersion = Extension::kPicaSceneRenderTargetStateSchemaVersion,
                 .RenderTargetNamespace = draw.RenderTargetNamespace,
                 .ColorPhysicalAddress = draw.FramebufferColorPhysicalAddress,
                 .DepthPhysicalAddress = draw.FramebufferDepthPhysicalAddress,
@@ -711,7 +711,7 @@ bool GfxRenderingAPIVulkan::PreparePicaSequenceDraw(
             .VertexLayoutBindings = layout.Bindings,
             .VertexLayoutAttributes = layout.Attributes,
             .Material = {
-                .SchemaVersion = Oot3d::kPicaSceneResolvedMaterialStateSchemaVersion,
+                .SchemaVersion = Extension::kPicaSceneResolvedMaterialStateSchemaVersion,
                 .Topology = ToPicaSceneTopology(draw.Topology),
                 .CullMode = ToPicaSceneCullMode(draw),
                 .FrontFace = ToPicaSceneFrontFace(draw),
@@ -774,7 +774,7 @@ bool GfxRenderingAPIVulkan::PreparePicaSequenceDraw(
             }
         }
         const auto status = mPreparedShadowCasterFrame.Record(record);
-        const bool caster = status == Oot3d::PicaSceneRecordStatus::Recorded &&
+        const bool caster = status == Extension::PicaSceneRecordStatus::Recorded &&
             mPreparedShadowCasterFrame.DirectionalShadowCaster(mPreparedShadowCasterFrame.Draws().size() - 1U);
         if (caster) {
             mPreparedShadowCasters.insert_or_assign(draw.SubmissionId, shadowCaster);
@@ -873,7 +873,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         const auto& graphicsSettings = mFrameGraphicsSettings;
         if (!nativeMemoryOnly && !mNativeFidelityProfile && sceneDraw &&
             draw.Composition.NativeProjectedShadow &&
-            Oot3d::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting)) {
+            Extension::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting)) {
             // Consume native ordering and its graph boundaries, but do not
             // rasterize the legacy projected shadow into presentation or guides.
             // The canonical native-memory replay remains untouched.
@@ -890,11 +890,11 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         // (Brixelizer GI: a reflection source resolved through the same guide).
         const bool reflectionsEnabled = !nativeMemoryOnly &&
             (graphicsSettings.Effects.Reflections !=
-                 Oot3d::ReflectionMode::Off ||
+                 Extension::ReflectionMode::Off ||
              (graphicsSettings.Effects.GlobalIllumination.Mode ==
-                  Oot3d::GlobalIlluminationMode::BrixelizerGi &&
+                  Extension::GlobalIlluminationMode::BrixelizerGi &&
               graphicsSettings.Effects.GlobalIllumination.Specular));
-        std::array<Oot3d::ReflectionMaterialTextureIdentity, 3U>
+        std::array<Extension::ReflectionMaterialTextureIdentity, 3U>
             reflectionTextureIdentities{};
         size_t reflectionTextureCount = 0U;
         if (reflectionsEnabled) {
@@ -916,33 +916,33 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 };
             }
         }
-        std::optional<Oot3d::ResolvedReflectionMaterialProfile>
+        std::optional<Extension::ResolvedReflectionMaterialProfile>
             resolvedReflectionMaterial;
         if (reflectionsEnabled) {
             resolvedReflectionMaterial =
-                Oot3d::ResolveReflectionMaterialProfile(
+                Extension::ResolveReflectionMaterialProfile(
                     graphicsSettings.Effects.ReflectionMaterials,
                     std::span(
                         reflectionTextureIdentities.data(),
                         reflectionTextureCount));
         }
         const bool grassPerspectiveProjection =
-            Oot3d::UsesPicaPerspectiveProjection(
+            Extension::UsesPicaPerspectiveProjection(
                 draw.VertexUniformBytes);
         // A draw the title lights as an object of its own keeps its native
         // lights in the full per-pixel model and receives none of the scene's
         // environment profile, shadows, GI or ambient occlusion.
         const bool isolatedLighting = !nativeMemoryOnly && draw.Composition.IsolatedLighting &&
-            Oot3d::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting);
+            Extension::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting);
         // Authored appearance (additive light, colour no light produced) is
         // never relit or shadowed (pica_surface_appearance.h). Vertex lighting
         // is the typed surface program's boolean; unknown counts as lit.
         bool nativeVertexLighting = true;
         if (const auto* surfaceProgram = draw.TemporalVertexProgram.Hooks.SurfaceProgram();
             surfaceProgram != nullptr &&
-            draw.VertexUniformBytes.size() >= Oot3d::kPicaPackedVertexBooleanMaskOffset + sizeof(uint32_t)) {
+            draw.VertexUniformBytes.size() >= Extension::kPicaPackedVertexBooleanMaskOffset + sizeof(uint32_t)) {
             uint32_t vertexBooleans = 0U;
-            std::memcpy(&vertexBooleans, draw.VertexUniformBytes.data() + Oot3d::kPicaPackedVertexBooleanMaskOffset,
+            std::memcpy(&vertexBooleans, draw.VertexUniformBytes.data() + Extension::kPicaPackedVertexBooleanMaskOffset,
                         sizeof(vertexBooleans));
             nativeVertexLighting = ((vertexBooleans >> surfaceProgram->LightingBooleanUniform) & 1U) != 0U;
         }
@@ -954,30 +954,30 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         // fragments are found in the surface shader (AssignPicaSurfaceWater).
         NativePicaWaterSurface waterSurface;
         if (!nativeMemoryOnly && !mNativeFidelityProfile &&
-            Oot3d::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting) &&
+            Extension::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting) &&
             surfaceAppearance == Renderer3ds::PicaSurfaceAppearance::Relightable &&
             draw.CompositionDomain == Renderer3ds::PicaCompositionDomain::Scene &&
             Renderer3ds::PicaCompositionReceivesSurfaceLighting(draw.Composition.Layer) && grassPerspectiveProjection)
             waterSurface = ResolveNativePicaWaterSurface(draw);
-        const bool authoredAppearance = Oot3d::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting) &&
+        const bool authoredAppearance = Extension::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting) &&
             surfaceAppearance != Renderer3ds::PicaSurfaceAppearance::Relightable;
         const bool directionalShadowReceiver = !nativeMemoryOnly && !isolatedLighting && !authoredAppearance &&
-            Oot3d::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting) &&
+            Extension::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting) &&
             mDirectionalShadowMapBarrierPlan.Valid() &&
-            Oot3d::PicaExtensionPassEnabled(
+            Extension::PicaExtensionPassEnabled(
                 mPicaExtensionGraph,
-                Oot3d::PicaExtensionPass::DirectionalShadowLighting) &&
+                Extension::PicaExtensionPass::DirectionalShadowLighting) &&
             grassPerspectiveProjection;
         // Point lights with a cube map: only NRI-owned draws bind the atlas.
         const bool pointShadowReceiver = !nativeMemoryOnly && !mNativeFidelityProfile && !isolatedLighting &&
             !authoredAppearance &&
-            graphicsSettings.Effects.PointShadows.Mode == Oot3d::PointShadowMode::CubeMaps &&
-            Oot3d::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting) &&
+            graphicsSettings.Effects.PointShadows.Mode == Extension::PointShadowMode::CubeMaps &&
+            Extension::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting) &&
             mPointShadowMapBarrierPlan.Valid() &&
-            Oot3d::PicaExtensionPassEnabled(
-                mPicaExtensionGraph, Oot3d::PicaExtensionPass::PointShadowLighting) &&
+            Extension::PicaExtensionPassEnabled(
+                mPicaExtensionGraph, Extension::PicaExtensionPass::PointShadowLighting) &&
             mNriPicaPipelineBridge.OwnedDrawsEnabled() && grassPerspectiveProjection;
-        Oot3d::NriPointShadowHistorySnapshot pointShadowHistory;
+        Extension::NriPointShadowHistorySnapshot pointShadowHistory;
         Renderer3ds::PicaPointShadowAssignment pointShadowAssignment;
         if (pointShadowReceiver) {
             pointShadowHistory = mNriDirectionalShadowPass.FindLatestPointHistory(
@@ -1003,13 +1003,13 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         bool nativeFragmentLitReceivers = false;
         const auto* environmentWorldToView = draw.LightBinding.WorldToView
             ? &*draw.LightBinding.WorldToView : nullptr;
-        Oot3d::DirectionalShadowMatrix environmentViewToWorld{};
+        Extension::DirectionalShadowMatrix environmentViewToWorld{};
         const bool surfaceCandidate = !nativeMemoryOnly && !mNativeFidelityProfile &&
-            graphicsSettings.Effects.SurfaceLighting != Oot3d::SurfaceLightingMode::Native &&
+            graphicsSettings.Effects.SurfaceLighting != Extension::SurfaceLightingMode::Native &&
             draw.CompositionDomain == Renderer3ds::PicaCompositionDomain::Scene &&
             Renderer3ds::PicaCompositionReceivesSurfaceLighting(draw.Composition.Layer) &&
             grassPerspectiveProjection && draw.FragmentOperationMode != 3U &&
-            draw.VertexUniformBytes.size() >= Oot3d::kPicaPackedVertexFloatOffset;
+            draw.VertexUniformBytes.size() >= Extension::kPicaPackedVertexFloatOffset;
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
         // Developer lab: candidates are numbered per frame; a debug range keeps
         // its native appearance (finding the draw an effect belongs to).
@@ -1020,9 +1020,9 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             // Every draw: what it samples, how it blends, its TEV constants.
             Renderer3ds::PicaTevProgram tev{};
             const bool tevKnown = draw.FragmentUniformBytes.size() >=
-                Oot3d::kPicaPackedFragmentTevProgramOffset + sizeof(tev);
+                Extension::kPicaPackedFragmentTevProgramOffset + sizeof(tev);
             if (tevKnown)
-                std::memcpy(&tev, draw.FragmentUniformBytes.data() + Oot3d::kPicaPackedFragmentTevProgramOffset,
+                std::memcpy(&tev, draw.FragmentUniformBytes.data() + Extension::kPicaPackedFragmentTevProgramOffset,
                             sizeof(tev));
             char head[320];
             std::snprintf(head, sizeof(head),
@@ -1054,7 +1054,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             record += "],\"tevConstants\":[";
             for (size_t stage = 0; stage < 6U; ++stage) {
                 float colour[4] = {};
-                const size_t offset = Oot3d::kPicaPackedFragmentTevConstantsOffset + stage * sizeof(colour);
+                const size_t offset = Extension::kPicaPackedFragmentTevConstantsOffset + stage * sizeof(colour);
                 if (draw.FragmentUniformBytes.size() >= offset + sizeof(colour))
                     std::memcpy(colour, draw.FragmentUniformBytes.data() + offset, sizeof(colour));
                 char entry[64];
@@ -1074,7 +1074,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         if (surfaceCandidate && !surfaceExempt && !authoredAppearance) {
             uint32_t booleanUniforms = 0U;
             std::memcpy(&booleanUniforms, draw.VertexUniformBytes.data() +
-                        Oot3d::kPicaPackedVertexBooleanMaskOffset, sizeof(booleanUniforms));
+                        Extension::kPicaPackedVertexBooleanMaskOffset, sizeof(booleanUniforms));
             if (environmentWorldToView &&
                 (!mSurfaceLightingView || mSurfaceLightingView->WorldToView != *environmentWorldToView))
                 mSurfaceLightingView = Renderer3ds::BuildPicaSurfaceLightingView(*environmentWorldToView);
@@ -1089,7 +1089,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 draw.LightBinding.Water ? draw.LightBinding.Water->Count : 0U,
                 waterSurface.WorldBounds.Available, waterSurface.ReachesWater, waterSurface.WholeDraw);
             if (balanceTitleDraw && draw.FragmentFeatures.FragmentLightingEnabled && balanceWaterEligible &&
-                Oot3d::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting) &&
+                Extension::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting) &&
                 draw.FragmentShaderHooks.ValidFor(draw.FragmentShaderSource) &&
                 draw.FragmentShaderHooks.NativeLightingCapture.Valid(draw.FragmentShaderSource.size(),
                     draw.FragmentShaderHooks.Offset(Renderer3ds::PicaShaderHook::PicaLighting)))
@@ -1101,24 +1101,24 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 ? isolatedEnvironment : mFrameEnvironment;
             surfaceLighting = Renderer3ds::BuildPicaSurfaceLightingUniforms(
                 draw.TemporalVertexProgram.Hooks, booleanUniforms,
-                draw.VertexUniformBytes.subspan(Oot3d::kPicaPackedVertexFloatOffset),
+                draw.VertexUniformBytes.subspan(Extension::kPicaPackedVertexFloatOffset),
                 draw.LightBinding, surfaceEnvironment,
                 environmentWorldToView && mSurfaceLightingView ? &*mSurfaceLightingView : nullptr,
                 pointShadowHistory.Valid() ? &pointShadowAssignment : nullptr,
                 fragmentBalance.has_value());
             if (!surfaceLighting || surfaceLighting->Control[0] != 0U) fragmentBalance.reset();
             if (surfaceLighting) {
-                if (!Oot3d::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting) ||
+                if (!Extension::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting) ||
                     isolatedLighting || draw.FragmentFeatures.FragmentLightingEnabled)
                     surfaceLighting->BakedReferenceUp = {};
-                if (Oot3d::PicaDrawReceivesRimLight(mFrameEnvironment, draw.CompositionDomain,
+                if (Extension::PicaDrawReceivesRimLight(mFrameEnvironment, draw.CompositionDomain,
                         draw.Composition, draw.Blend, surfaceAppearance,
                         draw.DepthTestEnabled, draw.DepthWriteEnabled, draw.FragmentOperationMode))
                     Renderer3ds::AssignPicaSurfaceRim(*surfaceLighting, mFrameEnvironment.Rim);
                 // Relative source weights (the guide's 8-bit radiance would
                 // clip gains above one); the gain applies when GI is composed.
                 const auto sources =
-                    Oot3d::ResolveGlobalIlluminationSources(graphicsSettings.Effects.GlobalIllumination);
+                    Extension::ResolveGlobalIlluminationSources(graphicsSettings.Effects.GlobalIllumination);
                 surfaceLighting->GlobalIlluminationSources = isolatedLighting
                     ? std::array<float, 4>{}
                     : std::array<float, 4>{sources.Weights[0], sources.Weights[1], sources.Weights[2], 0.0F};
@@ -1130,7 +1130,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 surfaceLighting && surfaceLighting->Control[0] == 0U &&
                 draw.FragmentFeatures.FragmentLightingEnabled;
             if (nativeFragmentLitReceivers) {
-                const auto native = Oot3d::DecodePicaNativeDrawEnvironment(
+                const auto native = Extension::DecodePicaNativeDrawEnvironment(
                     draw.VertexUniformBytes, draw.FragmentUniformBytes, draw.FragmentFeatures).FragmentLighting;
                 std::array<std::array<float, 3>, std::tuple_size_v<decltype(native.Lights)>> directions{};
                 size_t directionCount = 0;
@@ -1172,7 +1172,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             if (surfaceLighting && surfaceLighting->WaterViewTranslation[3] > 0.0F) {
                 const auto& sample = mPicaSceneFrame.TemporalSample();
                 const auto* coordinate = draw.TemporalVertexProgram.Hooks.TextureCoordinate(0);
-                const auto floats = draw.VertexUniformBytes.subspan(Oot3d::kPicaPackedVertexFloatOffset);
+                const auto floats = draw.VertexUniformBytes.subspan(Extension::kPicaPackedVertexFloatOffset);
                 const auto translation = [&](uint8_t uniform, float& value) {
                     const size_t offset = static_cast<size_t>(uniform) * 16U + 12U;
                     if (offset + sizeof(float) > floats.size()) return false;
@@ -1191,7 +1191,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                         surfaceLighting->WaterFlow = {track.Velocity[0], track.Velocity[1], 1.0F, 0.0F};
                 }
                 surfaceLighting->WaterFlow[3] =
-                    graphicsSettings.Effects.Reflections == Oot3d::ReflectionMode::HiZ ? 1.0F : 0.0F;
+                    graphicsSettings.Effects.Reflections == Extension::ReflectionMode::HiZ ? 1.0F : 0.0F;
             }
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
             // Developer view: water fragments in magenta (1), their ripple
@@ -1202,7 +1202,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 surfaceLighting->WaterOptics[3] = -static_cast<float>(std::clamp(std::atoi(debug), 1, 4));
 #endif
             if (surfaceLighting && environmentWorldToView && directionalShadowReceiver &&
-                !Oot3d::InvertDirectionalShadowMatrix(*environmentWorldToView, environmentViewToWorld))
+                !Extension::InvertDirectionalShadowMatrix(*environmentWorldToView, environmentViewToWorld))
                 surfaceLighting.reset();
         }
         std::array<TextureRecord*, 3> textures{
@@ -1274,18 +1274,18 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         pbrTextures.fill(&mFallbackTexture);
         VkSampler pbrSampler = mFallbackTexture.Sampler;
         if (surfaceLighting &&
-            Oot3d::UsesPbrMaterials(graphicsSettings.Effects.SurfaceLighting) &&
+            Extension::UsesPbrMaterials(graphicsSettings.Effects.SurfaceLighting) &&
             draw.FragmentShaderHooks.ValidFor(draw.FragmentShaderSource) &&
             draw.FragmentShaderHooks.Supports(Renderer3ds::PicaShaderHook::AfterNativeTev) &&
             (!draw.FragmentFeatures.FragmentLightingEnabled ||
              (draw.FragmentFeatures.FragmentLighting.Valid() &&
-              draw.FragmentUniformBytes.size() >= Oot3d::kPicaPackedFragmentLightingProgramOffset +
+              draw.FragmentUniformBytes.size() >= Extension::kPicaPackedFragmentLightingProgramOffset +
                   sizeof(Renderer3ds::PicaLightingProgram))) &&
-            draw.FragmentUniformBytes.size() >= Oot3d::kPicaPackedFragmentTevProgramOffset +
+            draw.FragmentUniformBytes.size() >= Extension::kPicaPackedFragmentTevProgramOffset +
                 sizeof(Renderer3ds::PicaTevProgram)) {
             Renderer3ds::PicaTevProgram tev;
             std::memcpy(&tev, draw.FragmentUniformBytes.data() +
-                Oot3d::kPicaPackedFragmentTevProgramOffset, sizeof(tev));
+                Extension::kPicaPackedFragmentTevProgramOffset, sizeof(tev));
             const uint8_t colorMask = Renderer3ds::PicaTevMaterialTextureMask(tev) & 7U;
             uint8_t automaticMask = colorMask;
             if (draw.FragmentFeatures.FragmentLighting.BumpMode != Renderer3ds::PicaFragmentLightingBumpMode::None)
@@ -1325,9 +1325,9 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                     pbrOptions.NativeAttenuationLuts |= light.SpotAttenuationEnabled || light.DistanceAttenuationEnabled;
                 }
                 Renderer3ds::PicaLightingProgram lighting;
-                if (draw.FragmentUniformBytes.size() >= Oot3d::kPicaPackedFragmentLightingProgramOffset + sizeof(lighting))
+                if (draw.FragmentUniformBytes.size() >= Extension::kPicaPackedFragmentLightingProgramOffset + sizeof(lighting))
                     std::memcpy(&lighting, draw.FragmentUniformBytes.data() +
-                        Oot3d::kPicaPackedFragmentLightingProgramOffset, sizeof(lighting));
+                        Extension::kPicaPackedFragmentLightingProgramOffset, sizeof(lighting));
                 uint8_t mapMask = 0U;
                 for (size_t role = 0; role < pbrTextures.size(); ++role) {
                     if (!pbrMaterial->Material->Textures[role]) continue;
@@ -1344,7 +1344,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 resolvedReflectionMaterial.reset();
             }
         }
-        if (graphicsSettings.Effects.SurfaceLighting == Oot3d::SurfaceLightingMode::NativePbr &&
+        if (graphicsSettings.Effects.SurfaceLighting == Extension::SurfaceLightingMode::NativePbr &&
             pbrMaterial == nullptr)
             surfaceLighting.reset();
         // AO texture relief reads the one texture whose colour the draw's TEV
@@ -1352,13 +1352,13 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         // textures leave the draw without relief rather than guess a layer.
         uint8_t reliefTexture = 0xffU;
         if (!nativeMemoryOnly && sceneDraw && draw.DepthWriteEnabled &&
-            graphicsSettings.Effects.AmbientOcclusion != Oot3d::AmbientOcclusionMode::Off &&
-            graphicsSettings.Effects.AoRelief != Oot3d::AoTextureRelief::Off &&
-            draw.FragmentUniformBytes.size() >= Oot3d::kPicaPackedFragmentTevProgramOffset +
+            graphicsSettings.Effects.AmbientOcclusion != Extension::AmbientOcclusionMode::Off &&
+            graphicsSettings.Effects.AoRelief != Extension::AoTextureRelief::Off &&
+            draw.FragmentUniformBytes.size() >= Extension::kPicaPackedFragmentTevProgramOffset +
                 sizeof(Renderer3ds::PicaTevProgram)) {
             Renderer3ds::PicaTevProgram tev;
             std::memcpy(&tev, draw.FragmentUniformBytes.data() +
-                Oot3d::kPicaPackedFragmentTevProgramOffset, sizeof(tev));
+                Extension::kPicaPackedFragmentTevProgramOffset, sizeof(tev));
             uint8_t colorTextures = Renderer3ds::PicaTevMaterialTextureMask(tev) & 7U;
             if (draw.FragmentFeatures.FragmentLighting.BumpMode != Renderer3ds::PicaFragmentLightingBumpMode::None)
                 colorTextures &= static_cast<uint8_t>(
@@ -1377,7 +1377,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         finishCpuStage(cpuTimings.TextureMilliseconds);
         // Nor does it reflect: its colour is not a surface's.
         if (authoredAppearance) resolvedReflectionMaterial.reset();
-        const Oot3d::PicaShaderPipelineRequest variantRequest{
+        const Extension::PicaShaderPipelineRequest variantRequest{
             draw.VertexShaderSource,
             draw.VertexShaderKey,
             draw.FragmentShaderSource,
@@ -1403,7 +1403,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             },
             mTemporalMotionEnabled && !nativeMemoryOnly,
             resolvedReflectionMaterial.has_value()
-                ? std::optional<Oot3d::ReflectionMaterialParameters>(
+                ? std::optional<Extension::ReflectionMaterialParameters>(
                       resolvedReflectionMaterial->Parameters)
                 : std::nullopt,
             mNativeFidelityProfile || nativeMemoryOnly,
@@ -1421,7 +1421,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             fragmentBalance.has_value(),
             nativeFragmentLitReceivers,
         };
-        static const Oot3d::EffectsSettings nativeMemoryEffects;
+        static const Extension::EffectsSettings nativeMemoryEffects;
         const auto& variantEffects = nativeMemoryOnly ? nativeMemoryEffects : graphicsSettings.Effects;
         bool variantCacheHit = false;
         const auto& shaderVariant =
@@ -1430,24 +1430,24 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         // Cache hits too: the recording is of requests, not of misses.
         mPicaVariantRequestRecorder.Observe(draw.CanonicalPipelineId, variantRequest, variantEffects,
                                             graphicsSettings, mFrameGraphicsSettingsRevision, shaderVariant);
-        const bool fragmentBalanceApplied = fragmentBalance && Oot3d::HasPicaShaderInstrumentationFeature(
-            shaderVariant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::FragmentLightingBalance);
-        if (surfaceLighting && !Oot3d::HasPicaShaderInstrumentationFeature(
-                shaderVariant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::FragmentLightingOperand))
+        const bool fragmentBalanceApplied = fragmentBalance && Extension::HasPicaShaderInstrumentationFeature(
+            shaderVariant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::FragmentLightingBalance);
+        if (surfaceLighting && !Extension::HasPicaShaderInstrumentationFeature(
+                shaderVariant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::FragmentLightingOperand))
             Renderer3ds::FoldPicaSurfaceMaterialForPbr(*surfaceLighting);
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
         if (surfaceCandidate && surfaceDebug.Tracing()) {
             // One candidate: its native colour computation and what Modern did.
             Renderer3ds::PicaTevProgram tev{};
             const bool tevKnown = draw.FragmentUniformBytes.size() >=
-                Oot3d::kPicaPackedFragmentTevProgramOffset + sizeof(tev);
+                Extension::kPicaPackedFragmentTevProgramOffset + sizeof(tev);
             if (tevKnown)
-                std::memcpy(&tev, draw.FragmentUniformBytes.data() + Oot3d::kPicaPackedFragmentTevProgramOffset,
+                std::memcpy(&tev, draw.FragmentUniformBytes.data() + Extension::kPicaPackedFragmentTevProgramOffset,
                             sizeof(tev));
-            const bool pbrApplied = Oot3d::HasPicaShaderInstrumentationFeature(
-                shaderVariant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::PbrMaterial);
-            const bool perPixelApplied = Oot3d::HasPicaShaderInstrumentationFeature(
-                shaderVariant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::NativePerPixelLighting);
+            const bool pbrApplied = Extension::HasPicaShaderInstrumentationFeature(
+                shaderVariant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::PbrMaterial);
+            const bool perPixelApplied = Extension::HasPicaShaderInstrumentationFeature(
+                shaderVariant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::NativePerPixelLighting);
             const bool vertexLightingKnown = draw.TemporalVertexProgram.Hooks.SurfaceProgram() != nullptr;
             char line[1024];
             std::snprintf(line, sizeof(line),
@@ -1476,8 +1476,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             {
                 // Texture-matrix translations (row U/V .w) of each coordinate:
                 // two traced frames give scrolling speed (flowing water, lava).
-                const auto floats = draw.VertexUniformBytes.size() > Oot3d::kPicaPackedVertexFloatOffset
-                    ? draw.VertexUniformBytes.subspan(Oot3d::kPicaPackedVertexFloatOffset)
+                const auto floats = draw.VertexUniformBytes.size() > Extension::kPicaPackedVertexFloatOffset
+                    ? draw.VertexUniformBytes.subspan(Extension::kPicaPackedVertexFloatOffset)
                     : std::span<const uint8_t>{};
                 const auto readW = [&](uint8_t uniform, float& value) {
                     const size_t offset = static_cast<size_t>(uniform) * 16U + 12U;
@@ -1504,8 +1504,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 std::snprintf(route, sizeof(route),
                     ",\"fragmentOperand\":%d,\"waterCount\":%u,\"waterBoundsKnown\":%d,"
                     "\"waterClassifierMode\":%.0f,\"surfaceControl\":[%u,%u,%u,%u]}",
-                    Oot3d::HasPicaShaderInstrumentationFeature(shaderVariant.AppliedFeatures,
-                        Oot3d::PicaShaderInstrumentationFeature::FragmentLightingOperand) ? 1 : 0,
+                    Extension::HasPicaShaderInstrumentationFeature(shaderVariant.AppliedFeatures,
+                        Extension::PicaShaderInstrumentationFeature::FragmentLightingOperand) ? 1 : 0,
                     draw.LightBinding.Water ? draw.LightBinding.Water->Count : 0U,
                     waterSurface.WorldBounds.Available ? 1 : 0,
                     surfaceLighting ? surfaceLighting->WaterViewTranslation[3] : 0.0F,
@@ -1574,15 +1574,15 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         }
 #endif
         if (pbrMaterial != nullptr && pbrMaterial->Material->ColorReplacement &&
-            Oot3d::HasPicaShaderInstrumentationFeature(
-                shaderVariant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::PbrMaterial))
+            Extension::HasPicaShaderInstrumentationFeature(
+                shaderVariant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::PbrMaterial))
             textures[pbrOptions.TextureSlot] = &pbrMaterial->Images[Renderer3ds::kPicaPbrTextureCount];
         const auto variantCacheStats =
             mPicaShaderPipelineCache.Stats();
         mDiagnostics.RecordPicaShaderSelection(
             shaderVariant.IsCanonical(),
             shaderVariant.RequestedFeatures !=
-                Oot3d::PicaShaderInstrumentationFeature::None,
+                Extension::PicaShaderInstrumentationFeature::None,
             static_cast<uint32_t>(std::min<size_t>(
                 variantCacheStats.CanonicalEntries,
                 std::numeric_limits<uint32_t>::max())),
@@ -1590,9 +1590,9 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 variantCacheStats.InstrumentationEntries,
                 std::numeric_limits<uint32_t>::max())),
             shaderVariant.DirectFragmentHooksUsed,
-            Oot3d::HasPicaShaderInstrumentationFeature(
+            Extension::HasPicaShaderInstrumentationFeature(
                 shaderVariant.RequestedFeatures,
-                Oot3d::PicaShaderInstrumentationFeature::TemporalVertex),
+                Extension::PicaShaderInstrumentationFeature::TemporalVertex),
             shaderVariant.DirectTemporalVertexProgramUsed,
             static_cast<uint32_t>(std::min<uint64_t>(
                 variantCacheStats.CanonicalOutputAudits,
@@ -1629,21 +1629,21 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         effectiveDraw.FragmentShaderSourceIdentity =
             shaderVariant.FragmentShaderSourceIdentity;
         mPicaEffectiveShaderInventory.Observe(
-            Oot3d::PicaAotShaderStage::Vertex,
+            Extension::PicaAotShaderStage::Vertex,
             effectiveDraw.VertexShaderSource,
             effectiveDraw.CanonicalDescriptorSchemaVersion,
             effectiveDraw.CanonicalPipelineId,
             effectiveDraw.VertexShaderKey,
             mFrameGraphicsSettingsRevision);
         mPicaEffectiveShaderInventory.Observe(
-            Oot3d::PicaAotShaderStage::Fragment,
+            Extension::PicaAotShaderStage::Fragment,
             effectiveDraw.FragmentShaderSource,
             effectiveDraw.CanonicalDescriptorSchemaVersion,
             effectiveDraw.CanonicalPipelineId,
             effectiveDraw.FragmentShaderKey,
             mFrameGraphicsSettingsRevision);
 
-        Oot3d::TraceOutlineDraw(mFrameCounter, draw, grassPerspectiveProjection,
+        Extension::TraceOutlineDraw(mFrameCounter, draw, grassPerspectiveProjection,
                                shaderVariant.FragmentOutputs.WritesOutlineGeometryGuide);
         static const bool toonDiagnosticsEnabled = [] {
             const char* value =
@@ -1666,17 +1666,17 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                     static_cast<unsigned>(
                         shaderVariant.ToonEligibility),
                     shaderVariant.ToonEligibility ==
-                            Oot3d::PicaToonEligibility::Eligible
+                            Extension::PicaToonEligibility::Eligible
                         ? 1U
                         : 0U);
             }
         }
-        if (graphicsSettings.Effects.Toon != Oot3d::ToonMode::Off) {
-            auto& telemetry = Oot3d::PicaToonTelemetry::Instance();
+        if (graphicsSettings.Effects.Toon != Extension::ToonMode::Off) {
+            auto& telemetry = Extension::PicaToonTelemetry::Instance();
             const uint64_t telemetryTotal =
                 telemetry.Record(shaderVariant.ToonEligibility);
             if (shaderVariant.ToonEligibility ==
-                Oot3d::PicaToonEligibility::Eligible) {
+                Extension::PicaToonEligibility::Eligible) {
                 mDiagnostics.RecordToonDraw(
                     shaderVariant.ToonMaterialPath);
             }
@@ -1684,29 +1684,29 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 const auto snapshot = telemetry.Snapshot();
                 spdlog::info(
                     "PICA toon classifier: applied={}, outside-scene={}, no-depth={}, blended={}, no-rgb={}, unsupported={}",
-                    snapshot.Count(Oot3d::PicaToonEligibility::Eligible),
-                    snapshot.Count(Oot3d::PicaToonEligibility::OutsideScene),
-                    snapshot.Count(Oot3d::PicaToonEligibility::NoDepth),
-                    snapshot.Count(Oot3d::PicaToonEligibility::Blended),
-                    snapshot.Count(Oot3d::PicaToonEligibility::NoRgbOutput),
-                    snapshot.Count(Oot3d::PicaToonEligibility::UnsupportedShader));
+                    snapshot.Count(Extension::PicaToonEligibility::Eligible),
+                    snapshot.Count(Extension::PicaToonEligibility::OutsideScene),
+                    snapshot.Count(Extension::PicaToonEligibility::NoDepth),
+                    snapshot.Count(Extension::PicaToonEligibility::Blended),
+                    snapshot.Count(Extension::PicaToonEligibility::NoRgbOutput),
+                    snapshot.Count(Extension::PicaToonEligibility::UnsupportedShader));
             }
         }
-        if (Oot3d::HasPicaShaderInstrumentationFeature(
-                shaderVariant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::NormalGuide))
+        if (Extension::HasPicaShaderInstrumentationFeature(
+                shaderVariant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::NormalGuide))
             mDiagnostics.RecordNormalGuideDraw(
                 shaderVariant.TypedNormalGuide,
-                Oot3d::HasPicaShaderInstrumentationFeature(
-                    shaderVariant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::NormalGuideTextureRelief));
+                Extension::HasPicaShaderInstrumentationFeature(
+                    shaderVariant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::NormalGuideTextureRelief));
         if (shaderVariant.AmbientGuideEligibility ==
-                Oot3d::PicaAmbientOcclusionGuideEligibility::
+                Extension::PicaAmbientOcclusionGuideEligibility::
                     AppliedExact ||
             shaderVariant.AmbientGuideEligibility ==
-                Oot3d::PicaAmbientOcclusionGuideEligibility::
+                Extension::PicaAmbientOcclusionGuideEligibility::
                     AppliedFallback) {
             mDiagnostics.RecordAmbientOcclusionAmbientGuideDraw(
                 shaderVariant.AmbientGuideEligibility ==
-                    Oot3d::PicaAmbientOcclusionGuideEligibility::
+                    Extension::PicaAmbientOcclusionGuideEligibility::
                         AppliedExact);
         }
         if (reflectionsEnabled) {
@@ -1714,31 +1714,31 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 shaderVariant.ReflectionEligibility;
             const bool profiled =
                 eligibility ==
-                Oot3d::PicaReflectionMaterialEligibility::
+                Extension::PicaReflectionMaterialEligibility::
                     ExplicitTextureProfile;
             mDiagnostics.RecordReflectionMaterialDraw(
                 eligibility ==
-                        Oot3d::PicaReflectionMaterialEligibility::
+                        Extension::PicaReflectionMaterialEligibility::
                             Eligible ||
                     profiled,
                 profiled,
                 eligibility ==
-                    Oot3d::PicaReflectionMaterialEligibility::
+                    Extension::PicaReflectionMaterialEligibility::
                         NoSpecularTevUse,
                 eligibility ==
-                    Oot3d::PicaReflectionMaterialEligibility::
+                    Extension::PicaReflectionMaterialEligibility::
                         UnsupportedShader);
             const bool worldMaterialCandidate =
                 eligibility ==
-                    Oot3d::PicaReflectionMaterialEligibility::Eligible ||
+                    Extension::PicaReflectionMaterialEligibility::Eligible ||
                 eligibility ==
-                    Oot3d::PicaReflectionMaterialEligibility::
+                    Extension::PicaReflectionMaterialEligibility::
                         ExplicitTextureProfile ||
                 eligibility ==
-                    Oot3d::PicaReflectionMaterialEligibility::
+                    Extension::PicaReflectionMaterialEligibility::
                         NoSpecularTevUse ||
                 eligibility ==
-                    Oot3d::PicaReflectionMaterialEligibility::
+                    Extension::PicaReflectionMaterialEligibility::
                         UnsupportedShader;
             if (worldMaterialCandidate) {
                 for (size_t textureIndex = 0U;
@@ -1839,9 +1839,9 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         auto shaderIt = nativeShaderCache.find(shaderKey);
         if (shaderIt == nativeShaderCache.end()) {
             NativePicaShaderProgram shader;
-            shader.VertexSource = Oot3d::IdentifyPicaAotShaderSource(
+            shader.VertexSource = Extension::IdentifyPicaAotShaderSource(
                 effectiveDraw.VertexShaderSource);
-            shader.FragmentSource = Oot3d::IdentifyPicaAotShaderSource(
+            shader.FragmentSource = Extension::IdentifyPicaAotShaderSource(
                 effectiveDraw.FragmentShaderSource);
             shader.FragmentOutputs = shaderVariant.FragmentOutputs;
             auto preparation = std::make_shared<NativePicaProgramPreparation>();
@@ -1883,13 +1883,13 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
 
         if (!nativeMemoryOnly && mInteractiveGrassProviderPlan.Valid() && opaqueWorldDraw) {
             auto latestGrassPerspective =
-                Oot3d::SceneViewRuntime::Instance()
+                Extension::SceneViewRuntime::Instance()
                     .LatestPerspective();
             if (latestGrassPerspective)
-                if (const auto projection = Oot3d::DecodePicaPerspectiveProjection(draw.VertexUniformBytes))
-                    latestGrassPerspective = Oot3d::ApplySampleProjection(*latestGrassPerspective, *projection);
+                if (const auto projection = Extension::DecodePicaPerspectiveProjection(draw.VertexUniformBytes))
+                    latestGrassPerspective = Extension::ApplySampleProjection(*latestGrassPerspective, *projection);
             if (latestGrassPerspective && draw.LightBinding.WorldToView)
-                latestGrassPerspective = Oot3d::ResolveSamplePerspective(
+                latestGrassPerspective = Extension::ResolveSamplePerspective(
                     *latestGrassPerspective, *draw.LightBinding.WorldToView);
             (void)mNativeSceneView.Publish(
                 mFrameCounter, mPicaSceneFrame,
@@ -1956,7 +1956,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             cpuTimings.DirectionalShadowMilliseconds +
             cpuTimings.GrassRenderMilliseconds +
             cpuTimings.ReflectionEnvironmentMilliseconds;
-        Oot3d::RigidMotionSample rigidMotion{};
+        Extension::RigidMotionSample rigidMotion{};
         const std::array<float, 2> jitterUv = mTemporalJitterEnabled && !nativeMemoryOnly && !sceneOverlayDraw
             ? std::array<float, 2>{
                   mTemporalJitterPixels[0] /
@@ -1984,10 +1984,10 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             temporalMatch.Reason == Renderer3ds::PicaTemporalMatchReason::Ambiguous;
         const bool rigidEligible = temporalEligible && temporalMatch.Exact() &&
             draw.TemporalVertexProgram.Hooks.TransformProgram() != nullptr &&
-            Oot3d::DecodeCommonRigidOriginClip(draw.VertexUniformBytes, draw.FramebufferFlipped, rigidOriginClip);
+            Extension::DecodeCommonRigidOriginClip(draw.VertexUniformBytes, draw.FramebufferFlipped, rigidOriginClip);
         if (rigidEligible) {
             std::array<float, 4> previousClip{};
-            if (Oot3d::DecodeCommonRigidOriginClip(previousVertexUniformBytes, draw.FramebufferFlipped, previousClip) &&
+            if (Extension::DecodeCommonRigidOriginClip(previousVertexUniformBytes, draw.FramebufferFlipped, previousClip) &&
                 rigidOriginClip[3] > 1.0e-7F && previousClip[3] > 1.0e-7F) {
                 for (size_t axis = 0; axis < 2; ++axis)
                     rigidMotion.MotionUv[axis] = (previousClip[axis] / previousClip[3] -
@@ -2012,7 +2012,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         // A draw with neither completes its specialized program here.
         const auto backgroundAcquisition = mPreparationQueue
             ? NativePicaPipelineAcquisition::Background : NativePicaPipelineAcquisition::Blocking;
-        const Oot3d::PicaShaderPipelineResult* selectedVariant = &shaderVariant;
+        const Extension::PicaShaderPipelineResult* selectedVariant = &shaderVariant;
         NativePicaShaderProgram* selectedProgram = &shaderIt->second;
         Renderer3ds::PicaDevicePipelineRecord* selectedPipeline = nullptr;
         GfxNativePicaDrawView uberDraw;
@@ -2078,10 +2078,10 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 auto& counters = mNativePicaPreparationCounters;
                 const auto& decisions = shaderVariant.Decisions;
                 ++counters.UberDraws;
-                counters.UberSurfaceDraws += decisions.Has(Oot3d::PicaEffectDecisions::SurfaceLighting) ? 1U : 0U;
-                counters.UberPbrDraws += decisions.Has(Oot3d::PicaEffectDecisions::Pbr) ? 1U : 0U;
-                counters.UberReliefDraws += decisions.Has(Oot3d::PicaEffectDecisions::Relief) ? 1U : 0U;
-                counters.UberToonDraws += decisions.Has(Oot3d::PicaEffectDecisions::Toon) ? 1U : 0U;
+                counters.UberSurfaceDraws += decisions.Has(Extension::PicaEffectDecisions::SurfaceLighting) ? 1U : 0U;
+                counters.UberPbrDraws += decisions.Has(Extension::PicaEffectDecisions::Pbr) ? 1U : 0U;
+                counters.UberReliefDraws += decisions.Has(Extension::PicaEffectDecisions::Relief) ? 1U : 0U;
+                counters.UberToonDraws += decisions.Has(Extension::PicaEffectDecisions::Toon) ? 1U : 0U;
             }
         }
         if (selectedPipeline == nullptr) {
@@ -2120,11 +2120,11 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             mNriPicaPipelineBridge.OwnedDrawsEnabled();
         const bool nriOwnedPipelineReady =
             mNriPicaPipelineBridge.OwnedPipelineReady(pipelineRecord.Id);
-        auto nriDrawOwnership = Oot3d::PreparePicaNriDrawOwnership(
+        auto nriDrawOwnership = Extension::PreparePicaNriDrawOwnership(
             nriOwnedDrawsEnabled, nriOwnedPipelineReady);
-        std::vector<Oot3d::PicaNriSourceVertexStream>
+        std::vector<Extension::PicaNriSourceVertexStream>
             nriDrawSourceStreams;
-        std::vector<Oot3d::PicaNriSourceVertexAttribute>
+        std::vector<Extension::PicaNriSourceVertexAttribute>
             nriDrawSourceAttributes;
         nriDrawSourceStreams.reserve(draw.VertexBindings.size());
         for (const auto& binding : draw.VertexBindings) {
@@ -2134,14 +2134,14 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         nriDrawSourceAttributes.reserve(draw.VertexAttributes.size());
         for (const auto& attribute : draw.VertexAttributes) {
             nriDrawSourceAttributes.push_back({ attribute.Location, attribute.Binding,
-                                                static_cast<Oot3d::PicaNriVertexScalar>(attribute.Format),
+                                                static_cast<Extension::PicaNriVertexScalar>(attribute.Format),
                                                 attribute.ComponentCount, attribute.ByteOffset });
         }
         const bool directionalShadowGeometry =
             mDirectionalShadowMapBarrierPlan.Valid() &&
-            Oot3d::PicaExtensionPassEnabled(
+            Extension::PicaExtensionPassEnabled(
                 mPicaExtensionGraph,
-                Oot3d::PicaExtensionPass::DirectionalShadowLighting);
+                Extension::PicaExtensionPass::DirectionalShadowLighting);
         const auto geometryResolution = mPicaGeometryRegistry.Resolve({
             draw.GeometryIdentity,
             draw.GeometryContentVersion,
@@ -2168,14 +2168,14 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         Renderer3ds::PicaPbrSeamCache transientSeams;
         const Renderer3ds::PicaPbrSeamData* seamData = nullptr;
         if (pbrOptions.SeamSoftening && geometry.PackedValid &&
-            Oot3d::HasPicaShaderInstrumentationFeature(
-                drawVariant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::PbrMaterial)) {
-            std::array<Oot3d::PicaNriSourceVertexBinding, 16> sourceBindings{};
+            Extension::HasPicaShaderInstrumentationFeature(
+                drawVariant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::PbrMaterial)) {
+            std::array<Extension::PicaNriSourceVertexBinding, 16> sourceBindings{};
             if (nriDrawSourceStreams.size() > sourceBindings.size())
                 throw std::runtime_error("PICA seam input exceeds native binding count");
             for (size_t i = 0; i < nriDrawSourceStreams.size(); ++i)
                 sourceBindings[i] = nriDrawSourceStreams[i].Binding;
-            const auto layout = Oot3d::BuildPicaNriVertexInputLayout(
+            const auto layout = Extension::BuildPicaNriVertexInputLayout(
                 std::span(sourceBindings).first(nriDrawSourceStreams.size()), nriDrawSourceAttributes);
             std::array<Renderer3ds::PicaSceneVertexBufferBinding, 16> bindings{};
             if (geometry.PackedBindings.size() > bindings.size())
@@ -2190,11 +2190,11 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 geometry.VertexOrIndexCount, draw.BaseVertex, geometry.Indexed};
             uint32_t booleans = 0;
             std::memcpy(&booleans, draw.VertexUniformBytes.data() +
-                Oot3d::kPicaPackedVertexBooleanMaskOffset, sizeof(booleans));
+                Extension::kPicaPackedVertexBooleanMaskOffset, sizeof(booleans));
             auto& cache = geometryResolution.Cacheable
                 ? mNativePicaGeometryBuffers[geometry.Identity].Seams : transientSeams;
             seamData = &cache.Resolve(view, draw.TemporalVertexProgram.Hooks, booleans,
-                draw.VertexUniformBytes.subspan(Oot3d::kPicaPackedVertexFloatOffset),
+                draw.VertexUniformBytes.subspan(Extension::kPicaPackedVertexFloatOffset),
                 draw.FragmentShaderHooks.TextureSample(pbrOptions.TextureSlot)->Coordinate,
                 draw.Topology == GfxNativePicaTopology::TriangleStrip,
                 geometryResolution.Cacheable ? geometry.ContentVersion ^
@@ -2235,7 +2235,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         for (const auto& binding : geometry.SourceBindings) {
             bindingOffsets.emplace_back(binding.Binding, geometryBaseOffset + binding.Offset);
         }
-        std::vector<Oot3d::NriPicaVertexBufferBindingDesc>
+        std::vector<Extension::NriPicaVertexBufferBindingDesc>
             nriVertexBindings;
         if (geometry.PackedValid) {
             nriVertexBindings.reserve(geometry.PackedBindings.size());
@@ -2252,15 +2252,15 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         const VkDeviceSize indexOffset = geometryBaseOffset + geometry.IndexOffset;
         const uint32_t indexCount = geometry.Indexed ? geometry.VertexOrIndexCount : 0U;
 
-        Oot3d::NriDirectionalShadowHistorySnapshot
+        Extension::NriDirectionalShadowHistorySnapshot
             directionalShadowHistory;
-        Oot3d::PicaDirectionalShadowReceiverBinding
+        Extension::PicaDirectionalShadowReceiverBinding
             directionalShadowBinding{};
         const bool directionalShadowShaderApplied =
             drawVariant.DirectionalShadowEligibility ==
-                Oot3d::PicaDirectionalShadowLightingEligibility::VertexPrimary ||
+                Extension::PicaDirectionalShadowLightingEligibility::VertexPrimary ||
             drawVariant.DirectionalShadowEligibility ==
-                Oot3d::PicaDirectionalShadowLightingEligibility::FragmentPrimary;
+                Extension::PicaDirectionalShadowLightingEligibility::FragmentPrimary;
         if (directionalShadowReceiver &&
             directionalShadowShaderApplied) {
             directionalShadowHistory =
@@ -2270,28 +2270,28 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                     mFrameCounter);
             if (directionalShadowHistory.Valid()) {
                 const auto nativeEnvironment =
-                    Oot3d::DecodePicaNativeDrawEnvironment(
+                    Extension::DecodePicaNativeDrawEnvironment(
                         draw.VertexUniformBytes,
                         draw.FragmentUniformBytes,
                         draw.FragmentFeatures);
-                Oot3d::DirectionalShadowMatrix receiverViewToWorld;
+                Extension::DirectionalShadowMatrix receiverViewToWorld;
                 if (draw.LightBinding.WorldToView &&
-                    Oot3d::InvertDirectionalShadowMatrix(*draw.LightBinding.WorldToView, receiverViewToWorld)) {
+                    Extension::InvertDirectionalShadowMatrix(*draw.LightBinding.WorldToView, receiverViewToWorld)) {
                     // Native fragment lights receive the shadow as themselves:
                     // through the PBR material's native loop, or, without
                     // per-vertex lighting, in the native per-pixel result.
                     const bool nativeFragmentLights =
                         (pbrMaterial != nullptr && pbrOptions.NativeFragmentLighting) ||
-                        Oot3d::HasPicaShaderInstrumentationFeature(drawVariant.AppliedFeatures,
-                            Oot3d::PicaShaderInstrumentationFeature::NativeFragmentLitShadows);
+                        Extension::HasPicaShaderInstrumentationFeature(drawVariant.AppliedFeatures,
+                            Extension::PicaShaderInstrumentationFeature::NativeFragmentLitShadows);
                     if (surfaceLighting &&
-                        Oot3d::HasPicaShaderInstrumentationFeature(drawVariant.AppliedFeatures,
-                            Oot3d::PicaShaderInstrumentationFeature::NativePerPixelLighting) &&
+                        Extension::HasPicaShaderInstrumentationFeature(drawVariant.AppliedFeatures,
+                            Extension::PicaShaderInstrumentationFeature::NativePerPixelLighting) &&
                         (surfaceLighting->EnvironmentParameters[3] != 0.0F ||
                          surfaceLighting->Control[0] != 0U ||
                          surfaceLighting->Control[2] != 0U ||
                          nativeFragmentLights)) {
-                        std::array<Oot3d::PicaSurfaceShadowLight, 12> lights{};
+                        std::array<Extension::PicaSurfaceShadowLight, 12> lights{};
                         if (nativeFragmentLights) {
                             const auto& native = nativeEnvironment.FragmentLighting;
                             for (size_t index = 0; index < native.Lights.size(); ++index) {
@@ -2324,7 +2324,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                             lights[10 + slot].ShaderSlot = static_cast<uint8_t>(10 + slot);
                             lights[10 + slot].Enabled = true;
                         }
-                        directionalShadowBinding = Oot3d::BuildPicaSurfaceShadowReceiverBinding(
+                        directionalShadowBinding = Extension::BuildPicaSurfaceShadowReceiverBinding(
                             receiverViewToWorld,
                             lights, directionalShadowHistory.State);
                     }
@@ -2338,51 +2338,51 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         mDiagnostics.RecordNriDirectionalShadowReceiver(
             directionalShadowReceiver && directionalShadowShaderApplied,
             directionalShadowReceiverClass !=
-                Oot3d::PicaDirectionalShadowReceiverClass::LightingUnavailable,
+                Extension::PicaDirectionalShadowReceiverClass::LightingUnavailable,
             directionalShadowReceiverClass !=
-                    Oot3d::PicaDirectionalShadowReceiverClass::LightingUnavailable &&
+                    Extension::PicaDirectionalShadowReceiverClass::LightingUnavailable &&
                 directionalShadowReceiverClass !=
-                    Oot3d::PicaDirectionalShadowReceiverClass::LightingDisabled,
+                    Extension::PicaDirectionalShadowReceiverClass::LightingDisabled,
             directionalShadowReceiverClass ==
-                Oot3d::PicaDirectionalShadowReceiverClass::AmbientOnly,
+                Extension::PicaDirectionalShadowReceiverClass::AmbientOnly,
             directionalShadowReceiverClass ==
-                Oot3d::PicaDirectionalShadowReceiverClass::DirectUnmatched,
+                Extension::PicaDirectionalShadowReceiverClass::DirectUnmatched,
             directionalShadowReceiverClass ==
-                Oot3d::PicaDirectionalShadowReceiverClass::DirectMatched,
+                Extension::PicaDirectionalShadowReceiverClass::DirectMatched,
             directionalShadowHistoryBound);
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
-        if (surfaceCandidate && Oot3d::HasPicaShaderInstrumentationFeature(
-                drawVariant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::ShadowProbe))
+        if (surfaceCandidate && Extension::HasPicaShaderInstrumentationFeature(
+                drawVariant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::ShadowProbe))
             directionalShadowBinding.Uniforms.Receiver[2] = float(surfaceDebug.ShadowCode(surfaceOrdinal));
 #endif
         const auto& directionalShadowUniforms =
             directionalShadowBinding.Uniforms;
-        const auto toonUniforms = Oot3d::PackToonSurfaceParameters(
+        const auto toonUniforms = Extension::PackToonSurfaceParameters(
             graphicsSettings.Effects.Toon, graphicsSettings.Effects.ToonStyle, false);
         // The superset effect program reads its decisions (and the toon
         // parameters) from the toon binding; a specialized program reads
         // the draw's own where isolated lighting would change its text.
-        std::optional<Oot3d::PicaUberEffectBlock> effectBlock;
+        std::optional<Extension::PicaUberEffectBlock> effectBlock;
         if (selectedProgram->EffectBlock || drawVariant.ReadsDrawControl) {
             std::array<float, 32> toon{};
             static_assert(sizeof(toonUniforms) == sizeof(toon));
             std::memcpy(toon.data(), &toonUniforms, sizeof(toon));
-            effectBlock = Oot3d::PackPicaUberEffectBlock(drawVariant.Decisions, toon);
+            effectBlock = Extension::PackPicaUberEffectBlock(drawVariant.Decisions, toon);
         }
 
-        const bool uniformToon = effectBlock.has_value() || Oot3d::HasPicaShaderInstrumentationFeature(
-            drawVariant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::Toon);
+        const bool uniformToon = effectBlock.has_value() || Extension::HasPicaShaderInstrumentationFeature(
+            drawVariant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::Toon);
         const std::span<const uint8_t> toonBytes = effectBlock
             ? std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(&*effectBlock), sizeof(*effectBlock))
             : std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(&toonUniforms), sizeof(toonUniforms));
-        const bool uniformSurface = Oot3d::HasPicaShaderInstrumentationFeature(
-            drawVariant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::NativePerPixelLighting);
-        const bool drawBalanceApplied=fragmentBalance && Oot3d::HasPicaShaderInstrumentationFeature(
-            drawVariant.AppliedFeatures,Oot3d::PicaShaderInstrumentationFeature::FragmentLightingBalance);
-        const bool uniformPbr = Oot3d::HasPicaShaderInstrumentationFeature(
-            drawVariant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::PbrMaterial);
-        const bool uniformShadow = Oot3d::HasPicaShaderInstrumentationFeature(
-            drawVariant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::DirectionalShadowLighting);
+        const bool uniformSurface = Extension::HasPicaShaderInstrumentationFeature(
+            drawVariant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::NativePerPixelLighting);
+        const bool drawBalanceApplied=fragmentBalance && Extension::HasPicaShaderInstrumentationFeature(
+            drawVariant.AppliedFeatures,Extension::PicaShaderInstrumentationFeature::FragmentLightingBalance);
+        const bool uniformPbr = Extension::HasPicaShaderInstrumentationFeature(
+            drawVariant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::PbrMaterial);
+        const bool uniformShadow = Extension::HasPicaShaderInstrumentationFeature(
+            drawVariant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::DirectionalShadowLighting);
         // Without a dissolve the receiver never reads the older layout: its
         // range ends before it.
         const VkDeviceSize directionalShadowUniformSize = uniformShadow
@@ -2406,8 +2406,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             std::snprintf(balanceFields,sizeof(balanceFields),
                 ",\"native_fragment_saved\":%u,\"balance_saved\":%u,\"balance_applied\":%u",
                 nativeFragmentBlob?1U:0U,balanceBlob?1U:0U,
-                Oot3d::HasPicaShaderInstrumentationFeature(drawVariant.AppliedFeatures,
-                    Oot3d::PicaShaderInstrumentationFeature::FragmentLightingBalance)?1U:0U);
+                Extension::HasPicaShaderInstrumentationFeature(drawVariant.AppliedFeatures,
+                    Extension::PicaShaderInstrumentationFeature::FragmentLightingBalance)?1U:0U);
             surfaceDebug.ShadowRecord("fragment_balance",mFrameCounter,draw.SubmissionId,balanceFields);
             const auto prepared = mPreparedShadowCasters.find(draw.SubmissionId);
             char fields[1536];
@@ -2631,12 +2631,12 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         // finalized only after the current target's scope has been opened;
         // checking the previous scope here used to force its first draw
         // through the Vulkan fallback.
-        nriDrawOwnership = Oot3d::FinalizePicaNriDrawOwnership(
+        nriDrawOwnership = Extension::FinalizePicaNriDrawOwnership(
             nriDrawOwnership,
             mPicaDynamicRenderingScope.ActiveOwnedByNri());
         nriOwnedDraw = nriDrawOwnership.SubmitOwned;
         if (!nriOwnedDraw &&
-            !Oot3d::PicaNriVulkanFallbackAllowed(
+            !Extension::PicaNriVulkanFallbackAllowed(
                 nriDrawOwnership)) {
             throw std::runtime_error(
                 "NRI PICA draw ownership is unavailable in an "
@@ -2697,17 +2697,17 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                                      texture.NativeFormat);
                              });
             if (draw.VertexUniformBytes.size() >=
-                Oot3d::kPicaPackedVertexFloatOffset) {
+                Extension::kPicaPackedVertexFloatOffset) {
                 uint32_t booleanUniforms = 0;
                 std::memcpy(&booleanUniforms,
                             draw.VertexUniformBytes.data() +
-                                Oot3d::kPicaPackedVertexBooleanMaskOffset,
+                                Extension::kPicaPackedVertexBooleanMaskOffset,
                             sizeof(booleanUniforms));
                 frameContent.GeometryCoversViewport =
                     Renderer3ds::PicaDrawGeometryCoversViewport(
                         draw, booleanUniforms,
                         draw.VertexUniformBytes.subspan(
-                            Oot3d::kPicaPackedVertexFloatOffset));
+                            Extension::kPicaPackedVertexFloatOffset));
             }
         }
         const auto frameContentResolution =
@@ -2733,7 +2733,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             compositionDomain, frameContentResolution.Content,
             draw.FramebufferWidth, draw.FramebufferHeight, renderTarget.Width,
             renderTarget.Height,
-            Oot3d::NativeTopScreenStorageSamplingX(
+            Extension::NativeTopScreenStorageSamplingX(
                 {draw.FramebufferWidth, draw.FramebufferHeight},
                 NativeTopScreenOutputExtent()),
             uiFrameExtensionY);
@@ -2741,7 +2741,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             const std::array<float, 2> clipScaleDelta{0.0F, 1.0F / uiFrameExtensionY - 1.0F};
             for (const VkDeviceSize offset : {vertexUniformOffset, previousVertexUniformOffset}) {
                 std::memcpy(static_cast<uint8_t*>(frame.UniformBuffer.Mapped) + offset +
-                                Oot3d::kPicaPackedVertexClipScaleDeltaOffset,
+                                Extension::kPicaPackedVertexClipScaleDeltaOffset,
                             clipScaleDelta.data(), sizeof(clipScaleDelta));
             }
         }
@@ -2886,8 +2886,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 exactMotionHistory && !rigidEligible, repeatedTemporalIdentity);
         }
 
-        Oot3d::NriPicaOwnedDrawDesc nriDraw;
-        Oot3d::PicaNriVertexInputLayout sceneVertexLayout;
+        Extension::NriPicaOwnedDrawDesc nriDraw;
+        Extension::PicaNriVertexInputLayout sceneVertexLayout;
         if (nriOwnedDraw) {
             nriDraw.FrameIndex = mCurrentFrame;
             nriDraw.FrameId = mFrameCounter;
@@ -2920,7 +2920,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             nriDraw.VertexOrIndexCount =
                 draw.Indexed ? indexCount : draw.VertexCount;
             nriDraw.BaseVertex = draw.BaseVertex;
-            const auto bindTexture = [](Oot3d::NriPicaTextureBindingDesc& destination,
+            const auto bindTexture = [](Extension::NriPicaTextureBindingDesc& destination,
                                         const TextureRecord& texture, const TextureRecord& sampler,
                                         VkFormat format, bool integer) {
                 destination.Image = texture.NriImage;
@@ -3001,8 +3001,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             {
                 // The cube atlas only where the variant reads it.
                 const bool pointShadowBound = pointShadowHistory.Valid() &&
-                    Oot3d::HasPicaShaderInstrumentationFeature(
-                        drawVariant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::PointShadowLighting);
+                    Extension::HasPicaShaderInstrumentationFeature(
+                        drawVariant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::PointShadowLighting);
                 if (pointShadowReceiver)
                     mDiagnostics.RecordNriPointShadowReceiver(pointShadowBound);
                 auto& destination = nriDraw.PointShadowTexture;
@@ -3060,8 +3060,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             // sky, backdrops and effects drawn without depth) moves by the
             // same sub-pixel step through its viewport.
             if (sceneDraw && (jitterUv[0] != 0.0F || jitterUv[1] != 0.0F) &&
-                !Oot3d::HasPicaShaderInstrumentationFeature(
-                    drawVariant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::TemporalVertex)) {
+                !Extension::HasPicaShaderInstrumentationFeature(
+                    drawVariant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::TemporalVertex)) {
                 nriDraw.Viewport.x += jitterUv[0] * nriDraw.Viewport.width;
                 nriDraw.Viewport.y += jitterUv[1] * nriDraw.Viewport.height;
             }
@@ -3072,13 +3072,13 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             nriDraw.StencilTest = draw.Stencil.Enabled;
             nriDraw.StencilReference = draw.Stencil.Reference;
 
-            std::vector<Oot3d::PicaNriSourceVertexBinding> shadowSourceBindings;
+            std::vector<Extension::PicaNriSourceVertexBinding> shadowSourceBindings;
             shadowSourceBindings.reserve(draw.VertexBindings.size());
             for (const auto& binding : draw.VertexBindings) {
                 shadowSourceBindings.push_back({ binding.Binding, binding.ByteStride, binding.PerInstance });
             }
             sceneVertexLayout =
-                Oot3d::BuildPicaNriVertexInputLayout(shadowSourceBindings, nriDrawSourceAttributes);
+                Extension::BuildPicaNriVertexInputLayout(shadowSourceBindings, nriDrawSourceAttributes);
         }
         // An isolated draw (the title logo) is an object of its own: it casts
         // no shadow into the scene and is no scene distance field geometry.
@@ -3087,12 +3087,12 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             !sceneVertexLayout.Bindings.empty() &&
             !sceneVertexLayout.Attributes.empty() &&
             mDirectionalShadowMapBarrierPlan.Valid() &&
-            Oot3d::PicaExtensionPassEnabled(
+            Extension::PicaExtensionPassEnabled(
                 mPicaExtensionGraph,
-                Oot3d::PicaExtensionPass::DirectionalShadowLighting) &&
+                Extension::PicaExtensionPass::DirectionalShadowLighting) &&
             AdmitsOpaqueSceneGeometry(draw);
         if (nriOwnedDraw && !nativeMemoryOnly) {
-            std::vector<Oot3d::PicaSceneVertexBufferBinding>
+            std::vector<Extension::PicaSceneVertexBufferBinding>
                 sceneVertexBindings;
             sceneVertexBindings.reserve(nriVertexBindings.size());
             for (const auto& binding : nriVertexBindings) {
@@ -3101,18 +3101,18 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                       binding.Stride });
             }
             Renderer3ds::VirtualShadowCaster shadowCaster;
-            Oot3d::DirectionalShadowMatrix shadowViewToWorld;
+            Extension::DirectionalShadowMatrix shadowViewToWorld;
             const auto prepared = mPreparedShadowCasters.find(draw.SubmissionId);
             if (directionalShadowCaster && prepared != mPreparedShadowCasters.end()) {
                 // Prepared from the same inputs for this sample's map.
                 shadowCaster = prepared->second;
                 mDiagnostics.RecordNriDirectionalShadowPreparedReuse();
             } else if (directionalShadowCaster && draw.LightBinding.WorldToView &&
-                draw.VertexUniformBytes.size() >= Oot3d::kPicaPackedVertexFloatOffset &&
-                Oot3d::InvertDirectionalShadowMatrix(*draw.LightBinding.WorldToView, shadowViewToWorld)) {
+                draw.VertexUniformBytes.size() >= Extension::kPicaPackedVertexFloatOffset &&
+                Extension::InvertDirectionalShadowMatrix(*draw.LightBinding.WorldToView, shadowViewToWorld)) {
                 uint32_t booleanUniforms = 0;
                 std::memcpy(&booleanUniforms, draw.VertexUniformBytes.data() +
-                            Oot3d::kPicaPackedVertexBooleanMaskOffset, sizeof(booleanUniforms));
+                            Extension::kPicaPackedVertexBooleanMaskOffset, sizeof(booleanUniforms));
                 Renderer3ds::PicaShadowCasterCache transientCache;
                 auto& shadowCache = geometryResolution.Cacheable
                     ? mNativePicaGeometryBuffers.at(geometry.Identity).ShadowCaster : transientCache;
@@ -3124,7 +3124,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                      geometryBaseOffset, geometry.IndexOffset, geometry.VertexOrIndexCount,
                      draw.BaseVertex, geometry.Indexed},
                     draw.TemporalVertexProgram.Hooks, booleanUniforms,
-                    draw.VertexUniformBytes.subspan(Oot3d::kPicaPackedVertexFloatOffset),
+                    draw.VertexUniformBytes.subspan(Extension::kPicaPackedVertexFloatOffset),
                     shadowViewToWorld, version, shadowCache,
                     geometryResolution.Cacheable
                         ? ShadowCasterAnchor(geometry.Identity, draw.Composition.TemporalIdentity,
@@ -3166,17 +3166,17 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 mReflectableWaterFrame = mFrameCounter;
             }
             if (opaqueWorldDraw)
-                if (const auto projection = Oot3d::DecodePicaPerspectiveProjection(draw.VertexUniformBytes))
+                if (const auto projection = Extension::DecodePicaPerspectiveProjection(draw.VertexUniformBytes))
                     renderTarget.SampleProjection.Observe(mFrameCounter, *projection);
             // Native frame geometry for the scene distance field: the shadow
             // caster admission, from the first non-synthetic execution.
             const bool sceneDistanceFieldGeometry =
-                Oot3d::PicaExtensionPassEnabled(
-                    mPicaExtensionGraph, Oot3d::PicaExtensionPass::SceneDistanceField) &&
+                Extension::PicaExtensionPassEnabled(
+                    mPicaExtensionGraph, Extension::PicaExtensionPass::SceneDistanceField) &&
                 opaqueWorldDraw && !isolatedLighting && sceneVertexLayout.Valid() &&
                 !sceneVertexLayout.Bindings.empty() &&
                 AdmitsOpaqueSceneGeometry(draw) && draw.LightBinding.WorldToView &&
-                draw.VertexUniformBytes.size() >= Oot3d::kPicaPackedVertexFloatOffset;
+                draw.VertexUniformBytes.size() >= Extension::kPicaPackedVertexFloatOffset;
             if (sceneDistanceFieldGeometry) {
                 if (!mBrixelizerScene.Available() && !mBrixelizerInitializationAttempted) {
                     mBrixelizerInitializationAttempted = true;
@@ -3185,13 +3185,13 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                                      mBrixelizerScene.UnavailableReason().c_str());
                 }
                 const auto& sample = mPicaSceneFrame.TemporalSample();
-                Oot3d::DirectionalShadowMatrix giViewToWorld;
+                Extension::DirectionalShadowMatrix giViewToWorld;
                 if (!sample.Synthetic &&
                     mBrixelizerScene.AcceptsExecution(sample.CurrentSourceFrameId, draw.RenderTargetNamespace) &&
-                    Oot3d::InvertDirectionalShadowMatrix(*draw.LightBinding.WorldToView, giViewToWorld)) {
+                    Extension::InvertDirectionalShadowMatrix(*draw.LightBinding.WorldToView, giViewToWorld)) {
                     uint32_t booleanUniforms = 0;
                     std::memcpy(&booleanUniforms, draw.VertexUniformBytes.data() +
-                                Oot3d::kPicaPackedVertexBooleanMaskOffset, sizeof(booleanUniforms));
+                                Extension::kPicaPackedVertexBooleanMaskOffset, sizeof(booleanUniforms));
                     Renderer3ds::PicaGiGeometryCache transientGiCache;
                     auto& giCache = geometryResolution.Cacheable
                         ? mNativePicaGeometryBuffers.at(geometry.Identity).GiGeometry : transientGiCache;
@@ -3203,12 +3203,12 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                          sceneVertexLayout.Bindings, geometryBaseOffset, geometry.IndexOffset,
                          geometry.VertexOrIndexCount, draw.BaseVertex, geometry.Indexed},
                         ToPicaSceneTopology(draw.Topology), draw.TemporalVertexProgram.Hooks, booleanUniforms,
-                        draw.VertexUniformBytes.subspan(Oot3d::kPicaPackedVertexFloatOffset),
+                        draw.VertexUniformBytes.subspan(Extension::kPicaPackedVertexFloatOffset),
                         giViewToWorld, giVersion, giCache);
                     mBrixelizerScene.Submit(giInstance);
                 }
             }
-            std::array<Oot3d::PicaSceneTextureBinding, 3>
+            std::array<Extension::PicaSceneTextureBinding, 3>
                 sceneTextures{};
             for (size_t slot = 0; slot < sceneTextures.size(); ++slot) {
                 const auto* texture = textures[slot];
@@ -3222,8 +3222,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 destination.MipLevels = texture->UploadedMipLevels;
                 destination.Slot = static_cast<uint8_t>(slot);
                 destination.ImageFormat = integerTextures[slot]
-                    ? Oot3d::PicaSceneTextureImageFormat::R32Uint
-                    : Oot3d::PicaSceneTextureImageFormat::Rgba8;
+                    ? Extension::PicaSceneTextureImageFormat::R32Uint
+                    : Extension::PicaSceneTextureImageFormat::Rgba8;
                 destination.CustomReplacement =
                     texture->CustomReplacementApplied;
             }
@@ -3275,12 +3275,12 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                     std::array<std::array<float, 4>, 6> constants{};
                     std::array<float, 4> bufferColor{};
                     const auto& bytes = draw.FragmentUniformBytes;
-                    if (bytes.size() >= Oot3d::kPicaPackedFragmentTevProgramOffset + sizeof(tev) &&
-                        bytes.size() >= Oot3d::kPicaPackedFragmentCombinerBufferOffset + sizeof(bufferColor)) {
-                        std::memcpy(&tev, bytes.data() + Oot3d::kPicaPackedFragmentTevProgramOffset, sizeof(tev));
-                        std::memcpy(constants.data(), bytes.data() + Oot3d::kPicaPackedFragmentTevConstantsOffset,
+                    if (bytes.size() >= Extension::kPicaPackedFragmentTevProgramOffset + sizeof(tev) &&
+                        bytes.size() >= Extension::kPicaPackedFragmentCombinerBufferOffset + sizeof(bufferColor)) {
+                        std::memcpy(&tev, bytes.data() + Extension::kPicaPackedFragmentTevProgramOffset, sizeof(tev));
+                        std::memcpy(constants.data(), bytes.data() + Extension::kPicaPackedFragmentTevConstantsOffset,
                                     sizeof(constants));
-                        std::memcpy(bufferColor.data(), bytes.data() + Oot3d::kPicaPackedFragmentCombinerBufferOffset,
+                        std::memcpy(bufferColor.data(), bytes.data() + Extension::kPicaPackedFragmentCombinerBufferOffset,
                                     sizeof(bufferColor));
                         surfaceEmission = Renderer3ds::PicaUnitSurfaceEmission(tev, constants, bufferColor, draw.Blend);
                     } else {
@@ -3289,17 +3289,17 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 }
                 surfaceEmissions.Observe(texture.NativeBaseLevelContentHash, *surfaceEmission);
             }
-            Oot3d::PicaSceneTextureBinding orderedLightingLut;
+            Extension::PicaSceneTextureBinding orderedLightingLut;
             if (lightingLutInteger) {
                 orderedLightingLut.NativeImageHandle = ToPicaSceneNativeHandle(lightingLutTexture->NriImage);
                 orderedLightingLut.ImageWidth = lightingLutTexture->Width;
                 orderedLightingLut.ImageHeight = lightingLutTexture->Height;
                 orderedLightingLut.MipLevels = 1U;
-                orderedLightingLut.ImageFormat = Oot3d::PicaSceneTextureImageFormat::R32Uint;
+                orderedLightingLut.ImageFormat = Extension::PicaSceneTextureImageFormat::R32Uint;
                 orderedLightingLut.Bound = true;
             }
-            const Oot3d::PicaSceneCullMode sceneCull = ToPicaSceneCullMode(draw);
-            const Oot3d::PicaSceneFrontFace sceneFront = ToPicaSceneFrontFace(draw);
+            const Extension::PicaSceneCullMode sceneCull = ToPicaSceneCullMode(draw);
+            const Extension::PicaSceneFrontFace sceneFront = ToPicaSceneFrontFace(draw);
             mPicaSceneFrame.Record({
                 .SubmissionId = draw.SubmissionId,
                 .CommandListAddress = draw.CommandListAddress,
@@ -3314,7 +3314,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 .ShadowCaster = shadowCaster,
                 .Raster = {
                     .SchemaVersion =
-                        Oot3d::kPicaSceneResolvedRasterStateSchemaVersion,
+                        Extension::kPicaSceneResolvedRasterStateSchemaVersion,
                     .NativeViewportX = draw.ViewportX,
                     .NativeViewportY = draw.ViewportY,
                     .NativeViewportWidth = draw.ViewportWidth,
@@ -3339,7 +3339,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 },
                 .RenderTarget = {
                     .SchemaVersion =
-                        Oot3d::kPicaSceneRenderTargetStateSchemaVersion,
+                        Extension::kPicaSceneRenderTargetStateSchemaVersion,
                     .RenderTargetNamespace =
                         draw.RenderTargetNamespace,
                     .ColorPhysicalAddress =
@@ -3410,7 +3410,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 .VertexLayoutAttributes = sceneVertexLayout.Attributes,
                 .Material = {
                     .SchemaVersion =
-                        Oot3d::kPicaSceneResolvedMaterialStateSchemaVersion,
+                        Extension::kPicaSceneResolvedMaterialStateSchemaVersion,
                     .Topology = ToPicaSceneTopology(draw.Topology),
                     .CullMode = sceneCull,
                     .FrontFace = sceneFront,
@@ -3601,7 +3601,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             draw.FramebufferHeight, draw.DepthRange, draw.NearPlane,
             draw.DepthTestEnabled, draw.DepthWriteEnabled,
             draw.AlphaTestEnabled,
-            Oot3d::ResolvePicaAlphaCoveragePolicy(
+            Extension::ResolvePicaAlphaCoveragePolicy(
                 mNativePicaSampleCount, draw.AlphaTestEnabled,
                 draw.DepthTestEnabled,
                 draw.DepthWriteEnabled, UsesTranslucentBlend(draw.Blend),
@@ -3614,8 +3614,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
 }
 
 void GfxRenderingAPIVulkan::TryRenderWorldDebugLines(NativePicaRenderTarget& target) {
-    const auto lights = Oot3d::WorldDebugLineRuntime::Instance().Latest();
-    auto combined = Oot3d::GrassSceneBridge::Instance().MaskHighlight(
+    const auto lights = Extension::WorldDebugLineRuntime::Instance().Latest();
+    auto combined = Extension::GrassSceneBridge::Instance().MaskHighlight(
         { mFrameCounter, target.Key.RenderTargetNamespace, target.Key.ColorPhysicalAddress });
     if (lights) {
         combined.WidthPixels = lights->WidthPixels;
@@ -3648,8 +3648,8 @@ void GfxRenderingAPIVulkan::TryRenderWorldDebugLines(NativePicaRenderTarget& tar
 
 bool GfxRenderingAPIVulkan::TryRenderInteractiveGrass(
     NativePicaRenderTarget& target,
-    const Oot3d::GraphicsSettings& settings,
-    Oot3d::EffectGeometryProviderInvocationKind invocationKind) {
+    const Extension::GraphicsSettings& settings,
+    Extension::EffectGeometryProviderInvocationKind invocationKind) {
     Renderer3ds::SlowStepScope slowStep("interactive_grass");
     const auto latestPerspective = SamplePerspective(&target);
     (void)mNativeSceneView.Publish(
@@ -3658,9 +3658,9 @@ bool GfxRenderingAPIVulkan::TryRenderInteractiveGrass(
         mFrameCounter, mPicaSceneFrame, mNativeSceneView);
     const auto* perspective =
         mPicaScenePublications.ResolvePerspectiveCamera();
-    const Oot3d::EffectGeometryProviderInvocation invocation{
+    const Extension::EffectGeometryProviderInvocation invocation{
         invocationKind,
-        Oot3d::EffectStage::BeforeTransparent,
+        Extension::EffectStage::BeforeTransparent,
         {
             mPicaScenePublications.View(),
         },
@@ -3671,7 +3671,7 @@ bool GfxRenderingAPIVulkan::TryRenderInteractiveGrass(
     if (!decision.Authorized() || perspective == nullptr) {
         mInteractiveGrassProviderExecution.RecordInvocation(
             invocationKind, decision,
-            Oot3d::EffectGeometryProviderExecutionOutcome::Skipped);
+            Extension::EffectGeometryProviderExecutionOutcome::Skipped);
         return false;
     }
     if (!mGrassInsertionAttemptedTargetsThisFrame
@@ -3682,17 +3682,17 @@ bool GfxRenderingAPIVulkan::TryRenderInteractiveGrass(
         mInteractiveGrassProviderExecution.RecordInvocation(
             invocationKind, decision,
             reused
-                ? Oot3d::EffectGeometryProviderExecutionOutcome::Reused
-                : Oot3d::EffectGeometryProviderExecutionOutcome::Skipped);
+                ? Extension::EffectGeometryProviderExecutionOutcome::Reused
+                : Extension::EffectGeometryProviderExecutionOutcome::Skipped);
         return reused;
     }
     EndNativePicaRenderPass();
     mGpuProfiler.BeginScope(
-        mCurrentFrame, Oot3d::GpuProfileScope::Grass,
+        mCurrentFrame, Extension::GpuProfileScope::Grass,
         mCommandBuffers[mCurrentFrame]);
-    Oot3d::NriDirectionalShadowHistorySnapshot grassShadowHistory;
+    Extension::NriDirectionalShadowHistorySnapshot grassShadowHistory;
     if (settings.Grass.Appearance.ReceiveLighting &&
-        mInteractiveGrassProviderPlan.Requires(Oot3d::EffectResource::DirectionalShadowHistory)) {
+        mInteractiveGrassProviderPlan.Requires(Extension::EffectResource::DirectionalShadowHistory)) {
         // Resolve atlas and page-table version together at the declared native
         // insertion anchor, just like other receivers at this boundary.
         grassShadowHistory = mNriDirectionalShadowPass.FindLatestHistory(
@@ -3700,28 +3700,28 @@ bool GfxRenderingAPIVulkan::TryRenderInteractiveGrass(
     }
     const bool prepared = mInteractiveGrassPass.Prepare(
         mCommandBuffers[mCurrentFrame], target.Width, target.Height, *perspective, settings.Grass,
-        Oot3d::PackToonSurfaceParameters(settings.Effects.Toon, settings.Effects.ToonStyle, false),
+        Extension::PackToonSurfaceParameters(settings.Effects.Toon, settings.Effects.ToonStyle, false),
         mPicaSceneFrame.ResolvedDrawStream(), mFrameCounter, target.Key.RenderTargetNamespace,
         target.Key.ColorPhysicalAddress, mCurrentFrame, mInteractiveGrassProviderPlan, grassShadowHistory,
         mTemporalJitterPixels, mTemporalJitterEnabled, mTemporalMotionEnabled,
-        Oot3d::GrassStageProfileEnabled() ? &mGpuProfiler : nullptr);
+        Extension::GrassStageProfileEnabled() ? &mGpuProfiler : nullptr);
     bool executed = false;
     if (prepared) {
         BeginNativePicaRenderPass(target);
         mGpuProfiler.Mark(mCurrentFrame, "grass_draw", mCommandBuffers[mCurrentFrame]);
-        Oot3d::GrassStageTimer drawTimer(Oot3d::GrassStage::Draw);
-        if (Oot3d::GrassStageProfileEnabled())
-            mGpuProfiler.BeginScope(mCurrentFrame, Oot3d::GpuProfileScope::GrassBlades, mCommandBuffers[mCurrentFrame]);
+        Extension::GrassStageTimer drawTimer(Extension::GrassStage::Draw);
+        if (Extension::GrassStageProfileEnabled())
+            mGpuProfiler.BeginScope(mCurrentFrame, Extension::GpuProfileScope::GrassBlades, mCommandBuffers[mCurrentFrame]);
         executed = mInteractiveGrassPass.DrawPrepared(
             mCommandBuffers[mCurrentFrame],
             target.Width, target.Height,
             mInteractiveGrassProviderPlan,
             mFramePicaAttachmentRequirements);
-        if (Oot3d::GrassStageProfileEnabled())
-            mGpuProfiler.EndScope(mCurrentFrame, Oot3d::GpuProfileScope::GrassBlades, mCommandBuffers[mCurrentFrame]);
+        if (Extension::GrassStageProfileEnabled())
+            mGpuProfiler.EndScope(mCurrentFrame, Extension::GpuProfileScope::GrassBlades, mCommandBuffers[mCurrentFrame]);
     }
     mGpuProfiler.EndScope(
-        mCurrentFrame, Oot3d::GpuProfileScope::Grass,
+        mCurrentFrame, Extension::GpuProfileScope::Grass,
         mCommandBuffers[mCurrentFrame]);
     mGrassExecutedThisFrame |= executed;
     if (executed) {
@@ -3730,25 +3730,25 @@ bool GfxRenderingAPIVulkan::TryRenderInteractiveGrass(
             mInteractiveGrassPass.LastMotionBladeCount());
     }
     const auto grassTelemetry =
-        Oot3d::GrassRenderTelemetry::Instance().Snapshot();
+        Extension::GrassRenderTelemetry::Instance().Snapshot();
     const bool failed =
-        grassTelemetry.Status == Oot3d::GrassRenderStatus::Error ||
+        grassTelemetry.Status == Extension::GrassRenderStatus::Error ||
         (prepared && !executed);
     mInteractiveGrassProviderExecution.RecordInvocation(
         invocationKind, decision,
         executed
-            ? Oot3d::EffectGeometryProviderExecutionOutcome::Executed
+            ? Extension::EffectGeometryProviderExecutionOutcome::Executed
             : failed
-                  ? Oot3d::EffectGeometryProviderExecutionOutcome::Failed
-                  : Oot3d::EffectGeometryProviderExecutionOutcome::Skipped);
+                  ? Extension::EffectGeometryProviderExecutionOutcome::Failed
+                  : Extension::EffectGeometryProviderExecutionOutcome::Skipped);
 
     if (std::getenv("OOT3D_GRASS_DIAGNOSTICS") != nullptr ||
         std::getenv("OOT3D_GRAPHICS_GRASS_AUTO") != nullptr) {
         static uint32_t grassSmokeReports = 0U;
         static uint64_t lastGrassSmokeFrame = 0U;
-        static auto lastGrassSmokeStatus = Oot3d::GrassRenderStatus::Disabled;
+        static auto lastGrassSmokeStatus = Extension::GrassRenderStatus::Disabled;
         const auto telemetry =
-            Oot3d::GrassRenderTelemetry::Instance().Snapshot();
+            Extension::GrassRenderTelemetry::Instance().Snapshot();
         const bool initialReport = grassSmokeReports < 3U;
         const bool periodicReport =
             telemetry.FrameId >= lastGrassSmokeFrame + 15U;
@@ -3775,7 +3775,7 @@ bool GfxRenderingAPIVulkan::TryRenderInteractiveGrass(
                 "cpu_ms=%.3f miss_geometry=%llx miss_content=%llx "
                 "reason=%s\n",
                 static_cast<unsigned long long>(telemetry.FrameId),
-                Oot3d::GrassRenderStatusName(telemetry.Status),
+                Extension::GrassRenderStatusName(telemetry.Status),
                 perspective->CameraAvailable ? 1 : 0,
                 telemetry.AvailableMeshes,
                 telemetry.AvailableTextures,
@@ -3834,10 +3834,10 @@ bool GfxRenderingAPIVulkan::TryRenderInteractiveGrass(
 
 bool GfxRenderingAPIVulkan::TryRenderDirectionalShadowMap(
     NativePicaRenderTarget& target,
-    const Oot3d::GraphicsSettings& settings,
-    const Oot3d::PicaCompositionStageAnchor& anchor) {
+    const Extension::GraphicsSettings& settings,
+    const Extension::PicaCompositionStageAnchor& anchor) {
     Renderer3ds::SlowStepScope slowStep("directional_shadows");
-    const auto boundary = Oot3d::BuildPicaExtensionScheduleBoundary(
+    const auto boundary = Extension::BuildPicaExtensionScheduleBoundary(
         mNativePicaCompositionSchedule, anchor);
     const auto decision = mDirectionalShadowSchedulePlan.Resolve(boundary);
     if (!decision.Authorized()) {
@@ -3869,7 +3869,7 @@ bool GfxRenderingAPIVulkan::TryRenderDirectionalShadowMap(
     (void)mPreparedShadowCasterView.Publish(
         mFrameCounter, mPreparedShadowCasterFrame, latestPerspective);
     mDiagnostics.RecordNriDirectionalShadowPreparedMap(
-        boundary.Stage == Oot3d::EffectStage::BeforeOpaque);
+        boundary.Stage == Extension::EffectStage::BeforeOpaque);
     EndNativePicaRenderPass();
     if (mRenderPassActive) {
         vkCmdEndRenderPass(mCommandBuffers[mCurrentFrame]);
@@ -3952,10 +3952,10 @@ bool GfxRenderingAPIVulkan::TryRenderDirectionalShadowMap(
 
 bool GfxRenderingAPIVulkan::TryRenderPointShadowMaps(
     NativePicaRenderTarget& target,
-    const Oot3d::GraphicsSettings& settings,
-    const Oot3d::PicaCompositionStageAnchor& anchor) {
+    const Extension::GraphicsSettings& settings,
+    const Extension::PicaCompositionStageAnchor& anchor) {
     Renderer3ds::SlowStepScope slowStep("point_shadows");
-    const auto boundary = Oot3d::BuildPicaExtensionScheduleBoundary(
+    const auto boundary = Extension::BuildPicaExtensionScheduleBoundary(
         mNativePicaCompositionSchedule, anchor);
     const auto decision = mPointShadowSchedulePlan.Resolve(boundary);
     if (!decision.Authorized() ||
@@ -4027,22 +4027,22 @@ static uint64_t GrassTargetOccurrenceKey(uint64_t drawIdentity, uint64_t renderT
 template <typename Texture>
 static void ObserveNativePicaGrassTexture(const Texture& texture, uint64_t textureHash) {
     if (texture.NativeType != 0 || !texture.CopyReferences.empty() || texture.Width < 16 || texture.Height < 16 ||
-        Oot3d::GrassTextureSourceCache::Instance().Find(textureHash, false))
+        Extension::GrassTextureSourceCache::Instance().Find(textureHash, false))
         return;
     const auto size = NativePicaEncodedMipSize(texture.NativeFormat, texture.Width, texture.Height);
     std::vector<uint8_t> rgba;
     if (size && *size <= texture.NativeBytes.size() &&
-        Oot3d::DecodePicaTextureRgba8(texture.NativeFormat, texture.Width, texture.Height,
+        Extension::DecodePicaTextureRgba8(texture.NativeFormat, texture.Width, texture.Height,
                                       texture.NativeBytes.first(*size), rgba, nullptr)) {
-        auto& cache = Oot3d::GrassTextureSourceCache::Instance();
+        auto& cache = Extension::GrassTextureSourceCache::Instance();
         cache.ObserveDecoded(textureHash, texture.Width, texture.Height, rgba);
         (void)cache.Find(textureHash, true);
     }
 }
 
 // The placement audit's identity of a draw's texture 0.
-static std::optional<Oot3d::GrassAuditTexture> DescribeNativePicaGrassTexture(
-    const GfxNativePicaDrawView& draw, const Oot3d::InteractiveGrassSettings& settings) {
+static std::optional<Extension::GrassAuditTexture> DescribeNativePicaGrassTexture(
+    const GfxNativePicaDrawView& draw, const Extension::InteractiveGrassSettings& settings) {
     const auto texture = std::find_if(draw.Textures.begin(), draw.Textures.end(),
                                       [](const auto& value) { return value.Slot == 0U; });
     if (texture == draw.Textures.end()) return std::nullopt;
@@ -4050,25 +4050,25 @@ static std::optional<Oot3d::GrassAuditTexture> DescribeNativePicaGrassTexture(
     if (!hash) return std::nullopt;
     ObserveNativePicaGrassTexture(*texture, *hash);
     const uint64_t observed =
-        Oot3d::GrassTextureSourceCache::Instance().ResolveObservedHash(*hash, texture->Width, texture->Height);
-    return Oot3d::GrassAuditTexture{
+        Extension::GrassTextureSourceCache::Instance().ResolveObservedHash(*hash, texture->Width, texture->Height);
+    return Extension::GrassAuditTexture{
         observed, texture->Width, texture->Height,
-        Oot3d::GrassTwinRules::Instance().Configured(settings.Rules, observed, texture->Width, texture->Height, 0U)};
+        Extension::GrassTwinRules::Instance().Configured(settings.Rules, observed, texture->Width, texture->Height, 0U)};
 }
 
-void AuditNativePicaGrassGate(const GfxNativePicaDrawView& draw, const Oot3d::InteractiveGrassSettings& settings,
+void AuditNativePicaGrassGate(const GfxNativePicaDrawView& draw, const Extension::InteractiveGrassSettings& settings,
                               const char* gate) {
-    if (!Oot3d::GrassPlacementAuditEnabled() || settings.Rules.empty()) return;
+    if (!Extension::GrassPlacementAuditEnabled() || settings.Rules.empty()) return;
     if (const auto texture = DescribeNativePicaGrassTexture(draw, settings))
-        Oot3d::AuditGrassSource(*texture, gate, draw.VertexCount);
+        Extension::AuditGrassSource(*texture, gate, draw.VertexCount);
 }
 
 bool ResolveNativePicaGrassSurface(const GfxNativePicaDrawView& draw, uint64_t frameId,
                                    std::unordered_map<uint64_t, uint32_t>& occurrences,
-                                   const Oot3d::InteractiveGrassSettings& settings, bool worldSurface,
+                                   const Extension::InteractiveGrassSettings& settings, bool worldSurface,
                                    bool fragmentUsesTexture0, bool perspectiveProjection,
-                                   Oot3d::GrassGeometryRegistry& geometryRegistry, uint64_t sequenceId,
-                                   uint64_t drawOrder, bool masksOnly, Oot3d::GrassSceneMesh& resolved,
+                                   Extension::GrassGeometryRegistry& geometryRegistry, uint64_t sequenceId,
+                                   uint64_t drawOrder, bool masksOnly, Extension::GrassSceneMesh& resolved,
                                    bool& cacheable, const char** rejection = nullptr) {
     cacheable = true;
     // The first stage that drops the draw, for the placement audit.
@@ -4076,7 +4076,7 @@ bool ResolveNativePicaGrassSurface(const GfxNativePicaDrawView& draw, uint64_t f
         if (rejection) *rejection = reason;
         return false;
     };
-    Oot3d::GrassStageTimer eligibilityTimer(Oot3d::GrassStage::Eligibility);
+    Extension::GrassStageTimer eligibilityTimer(Extension::GrassStage::Eligibility);
     if (settings.Rules.empty() ||
         (masksOnly && (draw.Composition.NativeActorGeometry || draw.Composition.NativeProjectedShadow ||
                        !draw.GeometryIdentityAvailable || draw.Stencil.Enabled))) {
@@ -4085,7 +4085,7 @@ bool ResolveNativePicaGrassSurface(const GfxNativePicaDrawView& draw, uint64_t f
     const auto texture = std::find_if(
         draw.Textures.begin(), draw.Textures.end(),
         [](const auto& value) { return value.Slot == 0U; });
-    const Oot3d::GrassSurfaceDrawInfo eligibility{
+    const Extension::GrassSurfaceDrawInfo eligibility{
         draw.FragmentOperationMode == 0U,
         worldSurface,
         texture != draw.Textures.end(),
@@ -4099,11 +4099,11 @@ bool ResolveNativePicaGrassSurface(const GfxNativePicaDrawView& draw, uint64_t f
         perspectiveProjection,
         (draw.ColorWriteMask & 0x7U) != 0U,
         UsesTranslucentBlend(draw.Blend),
-        Oot3d::IsGrassPrimitiveTopologySupported(
+        Extension::IsGrassPrimitiveTopologySupported(
             draw.Topology),
     };
     const bool eligible =
-        Oot3d::IsGrassSurfaceDrawEligible(eligibility);
+        Extension::IsGrassSurfaceDrawEligible(eligibility);
     static const bool diagnostics =
         std::getenv("OOT3D_GRASS_DIAGNOSTICS") != nullptr;
     const bool maskCandidate = masksOnly && eligibility.ColorOperation && worldSurface && eligibility.HasPosition &&
@@ -4114,7 +4114,7 @@ bool ResolveNativePicaGrassSurface(const GfxNativePicaDrawView& draw, uint64_t f
         return false;
     }
     eligibilityTimer.Stop();
-    Oot3d::GrassStageTimer hashTimer(Oot3d::GrassStage::TextureHash);
+    Extension::GrassStageTimer hashTimer(Extension::GrassStage::TextureHash);
     const auto textureHash = texture != draw.Textures.end() ? ResolveNativeTextureBaseLevelContentHash(*texture)
                                                             : std::optional<uint64_t>(0);
     hashTimer.Stop();
@@ -4125,16 +4125,16 @@ bool ResolveNativePicaGrassSurface(const GfxNativePicaDrawView& draw, uint64_t f
     // needs its native signature before it can be classified as an overlay.
     // Keep that signature locally so subsequent scene-entry cache hits require
     // no grass texture decode merely to repeat the source/neither decision.
-    Oot3d::GrassStageTimer ruleEligibilityTimer(Oot3d::GrassStage::Eligibility);
+    Extension::GrassStageTimer ruleEligibilityTimer(Extension::GrassStage::Eligibility);
     if (eligible && texture != draw.Textures.end())
         ObserveNativePicaGrassTexture(*texture, *textureHash);
     const uint64_t observedTextureHash = texture == draw.Textures.end()
                                              ? 0
-                                             : Oot3d::GrassTextureSourceCache::Instance().ResolveObservedHash(
+                                             : Extension::GrassTextureSourceCache::Instance().ResolveObservedHash(
                                                    *textureHash, texture->Width, texture->Height);
     // Its own rule, or the rule of a texture it is the same image as.
     const bool configuredSource = texture != draw.Textures.end() &&
-                                  Oot3d::GrassTwinRules::Instance().Configured(settings.Rules, observedTextureHash,
+                                  Extension::GrassTwinRules::Instance().Configured(settings.Rules, observedTextureHash,
                                                                                texture->Width, texture->Height, 0U);
     if (diagnostics && texture != draw.Textures.end()) {
         static uint32_t sourceDrawReports = 0U;
@@ -4165,7 +4165,7 @@ bool ResolveNativePicaGrassSurface(const GfxNativePicaDrawView& draw, uint64_t f
     }
     if (masksOnly ? (!maskCandidate || (eligible && configuredSource)) : (!eligible || !configuredSource)) {
         if (masksOnly) return false;
-        return reject(!eligible ? Oot3d::GrassSurfaceIneligibility(eligibility) : "unconfigured");
+        return reject(!eligible ? Extension::GrassSurfaceIneligibility(eligibility) : "unconfigured");
     }
     ruleEligibilityTimer.Stop();
     const auto rejectConfiguredSource = [&](const char* reason) {
@@ -4191,14 +4191,14 @@ bool ResolveNativePicaGrassSurface(const GfxNativePicaDrawView& draw, uint64_t f
         }
         return false;
     };
-    Oot3d::GrassStageTimer tevTimer(Oot3d::GrassStage::Tev);
-    std::shared_ptr<Oot3d::GrassOverlayAlpha> overlay;
-    Oot3d::GrassOverlayAlphaInputs alphaInputs;
+    Extension::GrassStageTimer tevTimer(Extension::GrassStage::Tev);
+    std::shared_ptr<Extension::GrassOverlayAlpha> overlay;
+    Extension::GrassOverlayAlphaInputs alphaInputs;
     if (masksOnly) {
-        overlay = std::make_shared<Oot3d::GrassOverlayAlpha>();
+        overlay = std::make_shared<Extension::GrassOverlayAlpha>();
         if (texture != draw.Textures.end()) {
             if (const auto* rule =
-                    Oot3d::FindGrassMaskRule(settings.Masks, observedTextureHash, texture->Width, texture->Height))
+                    Extension::FindGrassMaskRule(settings.Masks, observedTextureHash, texture->Width, texture->Height))
                 overlay->Rule = *rule;
             overlay->Rule.Coverage.Target = { "", observedTextureHash, texture->Width, texture->Height };
         }
@@ -4213,17 +4213,17 @@ bool ResolveNativePicaGrassSurface(const GfxNativePicaDrawView& draw, uint64_t f
         overlay->Reference = draw.AlphaReference;
         if (overlay->Translucent || overlay->AlphaTest) {
             if (draw.FragmentUniformBytes.size() <
-                Oot3d::kPicaPackedFragmentTevProgramOffset + sizeof(overlay->Program)) {
+                Extension::kPicaPackedFragmentTevProgramOffset + sizeof(overlay->Program)) {
                 overlay->NativeSupported = false;
             } else {
                 std::memcpy(&overlay->Program,
-                            draw.FragmentUniformBytes.data() + Oot3d::kPicaPackedFragmentTevProgramOffset,
+                            draw.FragmentUniformBytes.data() + Extension::kPicaPackedFragmentTevProgramOffset,
                             sizeof(overlay->Program));
                 std::memcpy(overlay->Constants.data(), draw.FragmentUniformBytes.data(), sizeof(overlay->Constants));
                 std::memcpy(overlay->Buffer.data(),
-                            draw.FragmentUniformBytes.data() + Oot3d::kPicaPackedFragmentCombinerBufferOffset,
+                            draw.FragmentUniformBytes.data() + Extension::kPicaPackedFragmentCombinerBufferOffset,
                             sizeof(overlay->Buffer));
-                alphaInputs = Oot3d::GrassOverlayRequiredAlphaInputs(*overlay);
+                alphaInputs = Extension::GrassOverlayRequiredAlphaInputs(*overlay);
                 overlay->NativeSupported &= alphaInputs.Supported;
             }
         }
@@ -4235,9 +4235,9 @@ bool ResolveNativePicaGrassSurface(const GfxNativePicaDrawView& draw, uint64_t f
         (texture == draw.Textures.end() || texture->NativeType != 0 || !texture->CopyReferences.empty()))
         return rejectConfiguredSource("mask requires an immutable 2D texture");
     const auto materialWrapS =
-        needsTexture ? DecodeNativePicaGrassWrap(texture->NativeWrapS) : std::optional(Oot3d::GrassTextureWrap::Repeat);
+        needsTexture ? DecodeNativePicaGrassWrap(texture->NativeWrapS) : std::optional(Extension::GrassTextureWrap::Repeat);
     const auto materialWrapT =
-        needsTexture ? DecodeNativePicaGrassWrap(texture->NativeWrapT) : std::optional(Oot3d::GrassTextureWrap::Repeat);
+        needsTexture ? DecodeNativePicaGrassWrap(texture->NativeWrapT) : std::optional(Extension::GrassTextureWrap::Repeat);
     if (!materialWrapS || !materialWrapT)
         return rejectConfiguredSource("unsupported texture wrap");
     const auto* position = FindNativeAttribute(draw, draw.PositionAttributeLocation);
@@ -4248,18 +4248,18 @@ bool ResolveNativePicaGrassSurface(const GfxNativePicaDrawView& draw, uint64_t f
     const auto* uvBinding = FindNativeBinding(draw, uv->Binding);
     if (!positionBinding || !uvBinding || positionBinding->PerInstance || uvBinding->PerInstance)
         return rejectConfiguredSource("invalid vertex bindings");
-    auto textureCoordinateTransform = needsTexture ? Oot3d::DecodePicaGrassTextureCoordinateTransform(
+    auto textureCoordinateTransform = needsTexture ? Extension::DecodePicaGrassTextureCoordinateTransform(
                                                          draw.VertexShaderSource, draw.FragmentShaderSource,
                                                          draw.VertexUniformBytes, draw.TexCoord0AttributeLocation,
                                                          &draw.TemporalVertexProgram.Hooks, &draw.FragmentShaderHooks)
-                                                   : Oot3d::PicaGrassTextureCoordinateTransform{};
+                                                   : Extension::PicaGrassTextureCoordinateTransform{};
     if (!needsTexture) {
         textureCoordinateTransform.RawToSample = {};
-        textureCoordinateTransform.Eligibility = Oot3d::PicaGrassTextureCoordinateEligibility::Applied;
+        textureCoordinateTransform.Eligibility = Extension::PicaGrassTextureCoordinateEligibility::Applied;
     }
     if (!textureCoordinateTransform.Applied())
         return rejectConfiguredSource(
-            Oot3d::PicaGrassTextureCoordinateEligibilityName(textureCoordinateTransform.Eligibility));
+            Extension::PicaGrassTextureCoordinateEligibilityName(textureCoordinateTransform.Eligibility));
     if (overlay) {
         overlay->WrapS = *materialWrapS;
         overlay->WrapT = *materialWrapT;
@@ -4274,26 +4274,26 @@ bool ResolveNativePicaGrassSurface(const GfxNativePicaDrawView& draw, uint64_t f
                                                                             texture->NativeBytes.begin() + *size);
             overlay->LoadTextures = [bytes, hash = *textureHash, format = texture->NativeFormat, width = texture->Width,
                                      height = texture->Height, alphaInputs](auto& alpha) {
-                auto& cache = Oot3d::GrassTextureSourceCache::Instance();
+                auto& cache = Extension::GrassTextureSourceCache::Instance();
                 if (!cache.Contains(hash)) {
                     std::vector<uint8_t> rgba;
-                    if (Oot3d::DecodePicaTextureRgba8(format, width, height, *bytes, rgba, nullptr))
+                    if (Extension::DecodePicaTextureRgba8(format, width, height, *bytes, rgba, nullptr))
                         cache.ObserveDecoded(hash, width, height, rgba);
                 }
                 for (size_t c = 0; c < 4; ++c)
                     if ((alphaInputs.TextureChannels & (1U << c)) || c == 3) {
-                        alpha.Texture[c] = cache.AcquireMaskShared(hash, static_cast<Oot3d::GrassSampleChannel>(c));
+                        alpha.Texture[c] = cache.AcquireMaskShared(hash, static_cast<Extension::GrassSampleChannel>(c));
                         if (!alpha.Texture[c])
                             alpha.NativeSupported = false;
                     }
-                if (alpha.Rule.Mode == Oot3d::GrassMaskMode::Custom)
+                if (alpha.Rule.Mode == Extension::GrassMaskMode::Custom)
                     alpha.CustomMask = cache.AcquireMaskShared(hash, alpha.Rule.Coverage.Channel);
             };
         }
     }
 
     tevTimer.Stop();
-    Oot3d::GrassStageTimer worldTimer(Oot3d::GrassStage::World);
+    Extension::GrassStageTimer worldTimer(Extension::GrassStage::World);
     cacheable = false; // Transient camera/transform failures must be retried.
     // OoT3D's common rigid CMB vertex program transforms attribute 0 through
     // f[20..22], then f[4..6], and finally projection f[0..3]. Preserve that
@@ -4372,9 +4372,9 @@ bool ResolveNativePicaGrassSurface(const GfxNativePicaDrawView& draw, uint64_t f
     }
     const auto modelToView = multiply(viewTransform, modelTransform);
 
-    Oot3d::DirectionalShadowMatrix capturedViewToWorld;
+    Extension::DirectionalShadowMatrix capturedViewToWorld;
     if (!draw.LightBinding.WorldToView ||
-        !Oot3d::InvertDirectionalShadowMatrix(*draw.LightBinding.WorldToView, capturedViewToWorld)) {
+        !Extension::InvertDirectionalShadowMatrix(*draw.LightBinding.WorldToView, capturedViewToWorld)) {
         return rejectConfiguredSource("captured camera unavailable");
     }
     // Placement and lighting must undo the camera paired with these exact
@@ -4404,8 +4404,8 @@ bool ResolveNativePicaGrassSurface(const GfxNativePicaDrawView& draw, uint64_t f
 
     worldTimer.Stop();
     cacheable = true;
-    Oot3d::GrassStageTimer geometryTimer(Oot3d::GrassStage::Geometry);
-    Oot3d::GrassGeometryRequest geometryRequest{
+    Extension::GrassStageTimer geometryTimer(Extension::GrassStage::Geometry);
+    Extension::GrassGeometryRequest geometryRequest{
         draw.GeometryIdentity,
         draw.GeometryContentVersion,
         draw.GeometryIdentityAvailable,
@@ -4434,7 +4434,7 @@ bool ResolveNativePicaGrassSurface(const GfxNativePicaDrawView& draw, uint64_t f
     };
     if (overlay && alphaInputs.Primary) {
         const auto primary =
-            Oot3d::DecodeGrassOverlayPrimaryAlpha(draw.TemporalVertexProgram.Hooks, draw.VertexUniformBytes);
+            Extension::DecodeGrassOverlayPrimaryAlpha(draw.TemporalVertexProgram.Hooks, draw.VertexUniformBytes);
         overlay->NativeSupported &= primary.Valid;
         if (primary.Valid && primary.InputRegister != 0xff) {
             const auto* color = FindNativeAttribute(draw, primary.InputRegister);
@@ -4453,7 +4453,7 @@ bool ResolveNativePicaGrassSurface(const GfxNativePicaDrawView& draw, uint64_t f
             geometryRequest.AlphaScale = primary.Scale;
     }
     if (overlay)
-        overlay->Version = Oot3d::GrassOverlayAlphaVersion(*overlay, *textureHash);
+        overlay->Version = Extension::GrassOverlayAlphaVersion(*overlay, *textureHash);
     const auto grassGeometryResolution = geometryRegistry.Resolve(geometryRequest);
     if (grassGeometryResolution.Geometry == nullptr) {
         return rejectConfiguredSource("geometry extraction failed");
@@ -4497,14 +4497,14 @@ bool ResolveNativePicaGrassSurface(const GfxNativePicaDrawView& draw, uint64_t f
             }
         }
     }
-    Oot3d::GrassSceneMesh mesh;
+    Extension::GrassSceneMesh mesh;
     mesh.SubmissionId = draw.SubmissionId;
     mesh.DrawOrder = drawOrder;
     mesh.SequenceId = sequenceId;
     mesh.Overlay = overlay;
     mesh.NativeTextureIdentity = texture == draw.Textures.end() ? 0 : texture->NativeContentHash;
     if (!masksOnly) {
-        const auto inherited = Oot3d::GrassTwinRules::Instance().Inherited(settings.Rules, observedTextureHash,
+        const auto inherited = Extension::GrassTwinRules::Instance().Inherited(settings.Rules, observedTextureHash,
                                                                            texture->Width, texture->Height);
         const auto rule = std::find_if(settings.Rules.begin(), settings.Rules.end(), [&](const auto& r) {
             return inherited ? r.RuleId == inherited->RuleId : r.Target.Rgba8Hash == observedTextureHash;
@@ -4514,7 +4514,7 @@ bool ResolveNativePicaGrassSurface(const GfxNativePicaDrawView& draw, uint64_t f
             mesh.ConfiguredRuleHash = rule->Target.Rgba8Hash;
         }
     }
-    mesh.CoordinateVersion = Oot3d::PicaGrassTextureCoordinateTransformVersion(textureCoordinateTransform);
+    mesh.CoordinateVersion = Extension::PicaGrassTextureCoordinateTransformVersion(textureCoordinateTransform);
     mesh.Alphas = grassGeometry.Alphas;
     mesh.GeometryId = grassGeometry.GeometryId;
     mesh.AnchorVersion = grassGeometry.AnchorVersion;
@@ -4582,7 +4582,7 @@ bool ResolveNativePicaGrassSurface(const GfxNativePicaDrawView& draw, uint64_t f
         }
     }
     mesh.PicaModelToClipAvailable = true;
-    mesh.Shading = Oot3d::DecodeGrassShadingEnvironment(
+    mesh.Shading = Extension::DecodeGrassShadingEnvironment(
         draw.VertexUniformBytes, draw.FragmentUniformBytes,
         draw.FragmentFeatures, capturedViewToWorld);
     mesh.Vertices = grassGeometry.Vertices;
@@ -4596,11 +4596,11 @@ bool ResolveNativePicaGrassSurface(const GfxNativePicaDrawView& draw, uint64_t f
 
 bool PublishNativePicaGrassSurface(const GfxNativePicaDrawView& draw, uint64_t frameId,
                                    std::unordered_map<uint64_t, uint32_t>& occurrences,
-                                   const Oot3d::InteractiveGrassSettings& settings, bool worldSurface,
+                                   const Extension::InteractiveGrassSettings& settings, bool worldSurface,
                                    bool fragmentUsesTexture0, bool perspectiveProjection,
-                                   Oot3d::GrassGeometryRegistry& geometryRegistry, Oot3d::GrassDrawMemo& memo,
+                                   Extension::GrassGeometryRegistry& geometryRegistry, Extension::GrassDrawMemo& memo,
                                    uint64_t sequenceId, uint64_t drawOrder, bool masksOnly) {
-    using namespace Oot3d;
+    using namespace Extension;
     GrassStageTimer total(masksOnly ? GrassStage::Overlay : GrassStage::Source);
     static const bool bypass = [] {
         const auto* p = std::getenv("TRIAEVUM_GRASS_DRAW_MEMO");

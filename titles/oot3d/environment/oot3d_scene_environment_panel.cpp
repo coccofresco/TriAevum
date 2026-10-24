@@ -1,5 +1,5 @@
-#include "fast/oot3d/graphics_settings_runtime.h"
-#include "fast/oot3d/settings_panel_widgets.h"
+#include "fast/extension/graphics_settings_runtime.h"
+#include "fast/extension/settings_panel_widgets.h"
 #include "oot3d_scene_environment.h"
 #include "oot3d_native_a32_scene_view.h"
 #include <algorithm>
@@ -10,14 +10,14 @@
 
 namespace Oot3dNativeGame {
 namespace {
-class EnvironmentPanel final : public Fast::Oot3d::GraphicsSettingsPanelTab {
+class EnvironmentPanel final : public Fast::Extension::GraphicsSettingsPanelTab {
 public:
   explicit EnvironmentPanel(std::shared_ptr<SceneEnvironmentRuntime> runtime)
       : mRuntime(std::move(runtime)) {}
   // A section of Lighting > Lights & Shadows, above the shadow settings.
   const char *Label() const noexcept override { return "Scene lights"; }
   const char *Group() const noexcept override {
-    return Fast::Oot3d::kLightingSettingsGroup;
+    return Fast::Extension::kLightingSettingsGroup;
   }
   void EndPreview() override { mRuntime->EndPreview(); }
   void Draw() override {
@@ -70,18 +70,18 @@ private:
       ImGui::TextWrapped("Source file: %s", state.SourcePaths[state.EditingNight ? 1 : 0].string().c_str());
     ImGui::TextWrapped("Save writes %s for this scene only.", state.Path.filename().string().c_str());
     auto value = state.Profile;
-    auto &graphics = Fast::Oot3d::GraphicsSettingsRuntime::Instance();
+    auto &graphics = Fast::Extension::GraphicsSettingsRuntime::Instance();
     const auto settings = graphics.Snapshot();
     const bool supported =
         graphics.Capabilities()
-            .Get(Fast::Oot3d::GraphicsCapability::NativeSurfaceLighting)
+            .Get(Fast::Extension::GraphicsCapability::NativeSurfaceLighting)
             .Available;
     ImGui::BeginDisabled(!supported && !value.Enabled);
     bool changed = ImGui::Checkbox("Use scene environment", &value.Enabled);
     ImGui::EndDisabled();
     if (!supported ||
-        !Fast::Oot3d::UsesFullSceneLighting(settings.Effects.SurfaceLighting) ||
-        settings.Preset == Fast::Oot3d::GraphicsPreset::Authentic ||
+        !Fast::Extension::UsesFullSceneLighting(settings.Effects.SurfaceLighting) ||
+        settings.Preset == Fast::Extension::GraphicsPreset::Authentic ||
         graphics.NativePresentationOverrideActive())
       ImGui::TextWrapped(
           "Inactive: needs the Modern lighting model, F2 native override off "
@@ -575,7 +575,7 @@ private:
   std::shared_ptr<SceneEnvironmentRuntime> mRuntime;
 };
 } // namespace
-std::shared_ptr<Fast::Oot3d::GraphicsSettingsPanelTab>
+std::shared_ptr<Fast::Extension::GraphicsSettingsPanelTab>
 CreateSceneEnvironmentPanel(std::shared_ptr<SceneEnvironmentRuntime> runtime) {
   return std::make_shared<EnvironmentPanel>(std::move(runtime));
 }

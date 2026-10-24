@@ -5,7 +5,7 @@
 get_filename_component(_immerse "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 
 add_executable(mxao_gpu_tests "${CMAKE_CURRENT_LIST_DIR}/mxao_gpu_tests.cpp" "${_immerse}/mxao_shader.cpp"
-    "${runtime}/src/fast/oot3d/ambient_occlusion_composite.cpp")
+    "${runtime}/src/fast/extension/ambient_occlusion_composite.cpp")
 target_compile_features(mxao_gpu_tests PRIVATE cxx_std_20)
 target_include_directories(mxao_gpu_tests PRIVATE "${runtime}/include" "${runtime}/src" "${SHADERC_INCLUDE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -18,7 +18,7 @@ add_test(NAME mxao_gpu COMMAND mxao_gpu_tests)
 set_tests_properties(mxao_gpu PROPERTIES TIMEOUT 120)
 
 add_executable(build_immerse_pass_artifacts "${CMAKE_CURRENT_LIST_DIR}/build_mxao_pass_artifacts.cpp"
-    "${_immerse}/mxao_shader.cpp" "${runtime}/src/fast/oot3d/ambient_occlusion_composite.cpp")
+    "${_immerse}/mxao_shader.cpp" "${runtime}/src/fast/extension/ambient_occlusion_composite.cpp")
 triaevum_add_spirv_pack(build_immerse_pass_artifacts "${_immerse}/mxao_pass_binaries.cpp" "${_immerse}/mxao_pass.spvpack")
 target_compile_features(build_immerse_pass_artifacts PRIVATE cxx_std_20)
 target_include_directories(build_immerse_pass_artifacts PRIVATE "${runtime}/include" "${runtime}/src"

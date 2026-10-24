@@ -8,7 +8,7 @@ namespace Oot3dA32Window {
 
 Oot3dNativeGame::NativeA32InputFrame
 PollNativeA32Input(Fast::Fast3dWindow &window,
-                   const Fast::Oot3d::PresentationPicture &picture,
+                   const Fast::Extension::PresentationPicture &picture,
                    bool nativeFrontendTouchEnabled,
                    bool hostGuiVisible,
                    bool topScreenUiProfile,

@@ -1,9 +1,9 @@
-#include "fast/oot3d/native_scene_view.h"
-#include "fast/oot3d/pica_directional_shadow_semantics.h"
-#include "fast/oot3d/pica_scene_frame.h"
-#include "fast/oot3d/pica_scene_publication_adapter.h"
-#include "fast/oot3d/pica_uniform_layout.h"
-#include "fast/oot3d/title_render_backend.h"
+#include "fast/extension/native_scene_view.h"
+#include "fast/extension/pica_directional_shadow_semantics.h"
+#include "fast/extension/pica_scene_frame.h"
+#include "fast/extension/pica_scene_publication_adapter.h"
+#include "fast/extension/pica_uniform_layout.h"
+#include "fast/extension/title_render_backend.h"
 #include "fast/renderer3ds/pica_shader_hooks.h"
 #include "fast/renderer3ds/pica_room_shadow_selection.h"
 #include "oot3d/renderer/pica_render_backend.h"
@@ -23,7 +23,7 @@ namespace {
 
 TEST(Oot3dTitleRenderBackend,
      KeepsTitleHooksOutsideTheSharedPicaBackendContract) {
-    Fast::Oot3d::TitleRenderBackend backend;
+    Fast::Extension::TitleRenderBackend backend;
     std::string error;
     EXPECT_TRUE(backend.PrepareOverlay(&error));
     EXPECT_FALSE(backend.PublishSceneView({}));
@@ -33,22 +33,22 @@ TEST(Oot3dTitleRenderBackend,
 }
 
 static_assert(std::is_same_v<
-              Fast::Oot3d::PerspectiveViewState,
+              Fast::Extension::PerspectiveViewState,
               Fast::Renderer3ds::PicaPerspectiveCameraState>);
 static_assert(std::is_same_v<
-              Fast::Oot3d::NativeFrameTemporalSample,
+              Fast::Extension::NativeFrameTemporalSample,
               Fast::Renderer3ds::PicaFrameTemporalSample>);
 static_assert(std::is_same_v<
-              Fast::Oot3d::NativeViewFamily,
+              Fast::Extension::NativeViewFamily,
               Fast::Renderer3ds::PicaViewFamily>);
 static_assert(std::is_same_v<
-              Fast::Oot3d::PicaSceneResolvedRasterState,
+              Fast::Extension::PicaSceneResolvedRasterState,
               Fast::Renderer3ds::PicaSceneResolvedRasterState>);
 static_assert(std::is_same_v<
-              Fast::Oot3d::PicaSceneRenderTargetState,
+              Fast::Extension::PicaSceneRenderTargetState,
               Fast::Renderer3ds::PicaSceneRenderTargetState>);
 static_assert(std::is_same_v<
-              Fast::Oot3d::PicaSceneResolvedMaterialState,
+              Fast::Extension::PicaSceneResolvedMaterialState,
               Fast::Renderer3ds::PicaSceneResolvedMaterialState>);
 static_assert(std::is_same_v<
               Oot3d::Renderer::PicaFragmentFeatureView,
@@ -84,13 +84,13 @@ static_assert(std::is_same_v<
               Oot3d::Renderer::PicaTemporalVertexProgramView,
               Fast::Renderer3ds::PicaTemporalVertexProgramView>);
 static_assert(std::is_same_v<
-              Fast::Oot3d::PicaNriPackedVertexBinding,
+              Fast::Extension::PicaNriPackedVertexBinding,
               Fast::Renderer3ds::PicaNriPackedVertexBinding>);
 static_assert(std::is_same_v<
-              Fast::Oot3d::PicaNativeLightingState,
+              Fast::Extension::PicaNativeLightingState,
               Fast::Renderer3ds::PicaNativeLightingState>);
 static_assert(std::is_same_v<
-              Fast::Oot3d::PicaSceneDrawRecord,
+              Fast::Extension::PicaSceneDrawRecord,
               Fast::Renderer3ds::PicaResolvedDrawRecord>);
 
 Oot3d::Renderer::PicaVertexShaderHookLayout BuildTransformHooks(size_t sourceSize) {
@@ -107,15 +107,15 @@ Oot3d::Renderer::PicaVertexShaderHookLayout BuildTransformHooks(size_t sourceSiz
     return hooks;
 }
 
-Fast::Oot3d::PicaSceneDrawRecordDesc BuildDraw(
+Fast::Extension::PicaSceneDrawRecordDesc BuildDraw(
     std::string_view shaderSource,
-    std::span<const Fast::Oot3d::PicaNriPackedVertexBinding> layoutBindings,
-    std::span<const Fast::Oot3d::PicaNriPackedVertexAttribute> layoutAttributes,
-    std::span<const Fast::Oot3d::PicaSceneVertexBufferBinding> vertexBindings,
+    std::span<const Fast::Extension::PicaNriPackedVertexBinding> layoutBindings,
+    std::span<const Fast::Extension::PicaNriPackedVertexAttribute> layoutAttributes,
+    std::span<const Fast::Extension::PicaSceneVertexBufferBinding> vertexBindings,
     std::span<const uint8_t> uniforms = {},
     std::span<const uint8_t> fragmentUniforms = {},
     Oot3d::Renderer::PicaFragmentFeatureView fragmentFeatures = {}) {
-    Fast::Oot3d::PicaSceneDrawRecordDesc draw;
+    Fast::Extension::PicaSceneDrawRecordDesc draw;
     draw.SubmissionId = 17U;
     draw.CommandListAddress = 0x14004000U;
     draw.CommandListOffsetWords = 12U;
@@ -129,7 +129,7 @@ Fast::Oot3d::PicaSceneDrawRecordDesc BuildDraw(
     };
     draw.Raster = {
         .SchemaVersion =
-            Fast::Oot3d::kPicaSceneResolvedRasterStateSchemaVersion,
+            Fast::Extension::kPicaSceneResolvedRasterStateSchemaVersion,
         .NativeViewportX = 0.0F,
         .NativeViewportY = 0.0F,
         .NativeViewportWidth = 400.0F,
@@ -154,7 +154,7 @@ Fast::Oot3d::PicaSceneDrawRecordDesc BuildDraw(
     };
     draw.RenderTarget = {
         .SchemaVersion =
-            Fast::Oot3d::kPicaSceneRenderTargetStateSchemaVersion,
+            Fast::Extension::kPicaSceneRenderTargetStateSchemaVersion,
         .RenderTargetNamespace = 23U,
         .ColorPhysicalAddress = 0x18100000U,
         .DepthPhysicalAddress = 0x18200000U,
@@ -201,12 +201,12 @@ Fast::Oot3d::PicaSceneDrawRecordDesc BuildDraw(
     draw.VertexLayoutBindings = layoutBindings;
     draw.VertexLayoutAttributes = layoutAttributes;
     draw.Material.SchemaVersion =
-        Fast::Oot3d::kPicaSceneResolvedMaterialStateSchemaVersion;
+        Fast::Extension::kPicaSceneResolvedMaterialStateSchemaVersion;
     draw.Material.Topology =
-        Fast::Oot3d::PicaSceneTopology::TriangleList;
-    draw.Material.CullMode = Fast::Oot3d::PicaSceneCullMode::Back;
+        Fast::Extension::PicaSceneTopology::TriangleList;
+    draw.Material.CullMode = Fast::Extension::PicaSceneCullMode::Back;
     draw.Material.FrontFace =
-        Fast::Oot3d::PicaSceneFrontFace::CounterClockwise;
+        Fast::Extension::PicaSceneFrontFace::CounterClockwise;
     draw.UniformBuffer = { 0x1000U, 4096U };
     draw.VertexUniformOffset = 256U;
     draw.VertexUniformSize = 1024U;
@@ -230,7 +230,7 @@ Fast::Oot3d::PicaSceneDrawRecordDesc BuildDraw(
 }
 
 TEST(Oot3dPicaSceneFrame, ReportsTheColourTargetsTheFrameSceneDrewInto) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     std::string shader = "#version 450\nvoid main(){}\n";
     const std::array<PicaNriPackedVertexBinding, 1> layoutBindings{ {
         { 0U, 16U, false },
@@ -264,7 +264,7 @@ TEST(Oot3dPicaSceneFrame, ReportsTheColourTargetsTheFrameSceneDrewInto) {
 }
 
 TEST(Oot3dPicaSceneFrame, RecordsGpuResourcesWithoutGeometryPayloadCopies) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     std::string shader = "#version 450\nvoid main(){}\n";
     const std::array<PicaNriPackedVertexBinding, 1> layoutBindings{ {
         { 0U, 16U, false },
@@ -360,7 +360,7 @@ TEST(Oot3dPicaSceneFrame, RecordsGpuResourcesWithoutGeometryPayloadCopies) {
 
 TEST(Oot3dPicaSceneFrame,
      InternsCanonicalVertexHooksAndRejectsConflictingMetadata) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     constexpr std::string_view shader = "#version 450\nvoid main(){}\n";
     const std::array<PicaNriPackedVertexBinding, 1> layoutBindings{{
         {0U, 16U, false},
@@ -388,7 +388,7 @@ TEST(Oot3dPicaSceneFrame,
 }
 
 TEST(Oot3dPicaSceneFrame, ValidatesPreidentifiedSourcesAndLegacyCallers) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     constexpr std::string_view source = "#version 450\nvoid main(){}\n";
     const std::array<PicaNriPackedVertexBinding, 1> bindings{{{0U, 16U, false}}};
     const std::array<PicaNriPackedVertexAttribute, 1> attributes{{
@@ -418,7 +418,7 @@ TEST(Oot3dPicaSceneFrame, ValidatesPreidentifiedSourcesAndLegacyCallers) {
 }
 
 TEST(Oot3dPicaSceneFrame, UniformVersionsUsePortableContentHashWithoutChangingTexturePackIdentity) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     EXPECT_EQ(HashPicaUniformBytes({}), 0U);
     std::array<uint8_t, 4097> storage{};
     for (size_t i = 0; i < storage.size(); ++i) storage[i] = static_cast<uint8_t>(i * 17U);
@@ -434,7 +434,7 @@ TEST(Oot3dPicaSceneFrame, UniformVersionsUsePortableContentHashWithoutChangingTe
 }
 
 TEST(Oot3dPicaSceneFrame, InternsShaderAndLayoutAcrossFrames) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     constexpr std::string_view shader = "#version 450\nvoid main(){}\n";
     const std::array<PicaNriPackedVertexBinding, 1> layoutBindings{ {
         { 2U, 16U, false },
@@ -473,7 +473,7 @@ TEST(Oot3dPicaSceneFrame, InternsShaderAndLayoutAcrossFrames) {
 
 TEST(Oot3dPicaSceneFrame,
      IncludesRigidAndSkinnedPerspectiveShadowCasters) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     constexpr size_t floatOffset = 80U;
     constexpr size_t vec4Bytes = 4U * sizeof(float);
     std::vector<uint8_t> uniforms(floatOffset + 96U * vec4Bytes);
@@ -545,7 +545,7 @@ TEST(Oot3dPicaSceneFrame,
 }
 
 TEST(Oot3dPicaSceneFrame, RetainsCanonicalMaterialAndResolvedTextureBindings) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const std::array<PicaNriPackedVertexBinding, 1> layoutBindings{ {
         { 0U, 16U, false },
     } };
@@ -657,7 +657,7 @@ TEST(Oot3dPicaSceneFrame, RetainsCanonicalMaterialAndResolvedTextureBindings) {
 }
 
 TEST(Oot3dPicaSceneFrame, RetainsFragmentHooksAndTheNativeLightingLut) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     using Oot3d::Renderer::PicaShaderHook;
     const std::array<PicaNriPackedVertexBinding, 1> layoutBindings{ {
         { 0U, 16U, false },
@@ -722,7 +722,7 @@ TEST(Oot3dPicaSceneFrame, RetainsFragmentHooksAndTheNativeLightingLut) {
 
 TEST(Oot3dPicaSceneFrame,
      PublishesTypedNativeEnvironmentAndVersionedUniformSlices) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     constexpr size_t floatOffset = 80U;
     constexpr size_t vec4Bytes = 4U * sizeof(float);
     std::vector<uint8_t> vertexUniforms(floatOffset + 96U * vec4Bytes);
@@ -902,7 +902,7 @@ TEST(Oot3dPicaSceneFrame,
 }
 
 TEST(Oot3dPicaSceneFrame, PublishesTypedCurrentAndPreviousTransformAndSkeletonSlices) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     constexpr std::string_view shader = "native transform";
     constexpr size_t floatOffset = 80U;
     constexpr size_t vec4Bytes = 4U * sizeof(float);
@@ -1007,7 +1007,7 @@ TEST(Oot3dPicaSceneFrame, PublishesTypedCurrentAndPreviousTransformAndSkeletonSl
 }
 
 TEST(Oot3dPicaSceneFrame, RejectsConflictingShaderIdentityAndInvalidRanges) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const std::array<PicaNriPackedVertexBinding, 1> layoutBindings{ {
         { 0U, 16U, false },
     } };
@@ -1050,7 +1050,7 @@ TEST(Oot3dPicaSceneFrame, RejectsConflictingShaderIdentityAndInvalidRanges) {
 }
 
 TEST(Oot3dNativeSceneView, ReferencesFrameAndTracksCameraHistory) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const std::array<PicaNriPackedVertexBinding, 1> layoutBindings{ {
         { 0U, 16U, false },
     } };
@@ -1129,7 +1129,7 @@ TEST(Oot3dNativeSceneView, ReferencesFrameAndTracksCameraHistory) {
 }
 
 TEST(Oot3dNativeSceneView, SharesOneTemporalSampleAcrossStereoViewFamily) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
 
     PicaSceneFrame frame;
     frame.BeginFrame(0U, 40U);
@@ -1189,7 +1189,7 @@ TEST(Oot3dNativeSceneView, SharesOneTemporalSampleAcrossStereoViewFamily) {
 }
 
 TEST(Oot3dNativeSceneView, ExposesKnownDataAndMarksMissingSemantics) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const std::array<PicaNriPackedVertexBinding, 1> layoutBindings{ {
         { 0U, 16U, false },
     } };
@@ -1274,7 +1274,7 @@ TEST(Oot3dNativeSceneView, ExposesKnownDataAndMarksMissingSemantics) {
 
 TEST(Oot3dPicaScenePublication,
      AdaptsConcretePayloadsToShared3dsCapabilities) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     PicaSceneFrame frame;
     frame.BeginFrame(0U, 35U);
 
@@ -1321,7 +1321,7 @@ TEST(Oot3dPicaScenePublication,
 
 TEST(Oot3dDirectionalShadowSemantics,
      ClustersNativeLightsInWorldSpaceAndWeightsSceneGeometry) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     PicaSceneDrawRecord first;
     first.VertexOrIndexCount = 100U;
     first.NativeTransform.CurrentViewToWorld =
@@ -1365,7 +1365,7 @@ TEST(Oot3dDirectionalShadowSemantics,
 }
 
 TEST(Oot3dDirectionalShadowSemantics, NativeEnvironmentCastsFromStrongestSourceAboveHorizon) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     // The brighter source lights from below the horizon: it lights, but the
     // shadow comes from the source above.
     auto sources = std::make_shared<Fast::Renderer3ds::PicaSceneDirectionalLights>();
@@ -1393,7 +1393,7 @@ TEST(Oot3dDirectionalShadowSemantics, NativeEnvironmentCastsFromStrongestSourceA
 
 TEST(Oot3dDirectionalShadowSemantics,
      ReceiverPreservesAmbientAndUnmatchedNativeLights) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     PicaNativeLightingState lighting;
     lighting.Available = true;
     lighting.Enabled = true;

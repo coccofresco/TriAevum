@@ -165,20 +165,20 @@ endif()
 #=================== OOT3D renderer modules ===================
 
 file(GLOB Source_Files__Oot3dRenderer CONFIGURE_DEPENDS
-    RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "oot3d/*.cpp")
+    RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "extension/*.cpp")
 list(FILTER Source_Files__Oot3dRenderer EXCLUDE REGEX
-    "^oot3d/(pica_texture_decode|pica_fragment_lighting)\\.cpp$")
+    "^extension/(pica_texture_decode|pica_fragment_lighting)\\.cpp$")
 # SPIR-V pack sources are added with their packs (src/CMakeLists.txt).
-list(FILTER Source_Files__Oot3dRenderer EXCLUDE REGEX "^oot3d/.*_binaries\\.cpp$")
+list(FILTER Source_Files__Oot3dRenderer EXCLUDE REGEX "^extension/.*_binaries\\.cpp$")
 if(NOT THREE_DS_RECOMP_ENABLE_VULKAN)
     # This translation unit is Vulkan-only and deliberately has no stub
     # implementation.  Keep Vulkan headers out of OpenGL-only ports such as
     # Nintendo Switch.
     list(REMOVE_ITEM Source_Files__Oot3dRenderer
-        "oot3d/pica_nri_pipeline_state.cpp"
-        "oot3d/pica_pipeline_preparation.cpp"
-        "oot3d/pica_builtin_fragment_families.cpp"
-        "oot3d/pica_guide_sampling_barriers.cpp")
+        "extension/pica_nri_pipeline_state.cpp"
+        "extension/pica_pipeline_preparation.cpp"
+        "extension/pica_builtin_fragment_families.cpp"
+        "extension/pica_guide_sampling_barriers.cpp")
 endif()
 source_group("oot3d" FILES ${Source_Files__Oot3dRenderer})
 target_sources(three_ds_recomp_runtime PRIVATE ${Source_Files__Oot3dRenderer})

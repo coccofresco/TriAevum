@@ -4,8 +4,8 @@
 // decoding of the renderer's guides (FP32 twin of the adapter kernel), the
 // guide camera and the previous-view transform. Lines starting with DGI_M5B
 // are quoted in the document.
-#include "fast/oot3d/diffuse_gi_adapter.h"
-#include "fast/oot3d/screen_space_gi_provider.h"
+#include "fast/extension/diffuse_gi_adapter.h"
+#include "fast/extension/screen_space_gi_provider.h"
 #include "fast/renderer/diffuse_gi_pass_shader.h"
 #include "fast/renderer3ds/pica_geometry_guide.h"
 
@@ -20,7 +20,7 @@
 #include <utility>
 #include <vector>
 
-using namespace Fast::Oot3d;
+using namespace Fast::Extension;
 namespace DGI = Fast::Renderer::DiffuseGi;
 
 namespace {

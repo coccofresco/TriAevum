@@ -2,7 +2,7 @@
 
 #ifdef ENABLE_OOT3D_VULKAN
 
-#include "fast/oot3d/grass_stage_profile.h"
+#include "fast/extension/grass_stage_profile.h"
 #include <algorithm>
 #include <array>
 #include <cstdio>
@@ -15,74 +15,74 @@ namespace Fast {
 namespace {
 
 void StoreTiming(Oot3dVulkanGpuTimings& timings,
-                 Oot3d::GpuProfileScope scope, double milliseconds) {
+                 Extension::GpuProfileScope scope, double milliseconds) {
     switch (scope) {
-        case Oot3d::GpuProfileScope::Frame:
+        case Extension::GpuProfileScope::Frame:
             timings.FrameMilliseconds = milliseconds;
             break;
-        case Oot3d::GpuProfileScope::NativePica:
+        case Extension::GpuProfileScope::NativePica:
             timings.NativePicaMilliseconds = milliseconds;
             break;
-        case Oot3d::GpuProfileScope::ToonRaster:
+        case Extension::GpuProfileScope::ToonRaster:
             timings.ToonRasterMilliseconds = milliseconds;
             break;
-        case Oot3d::GpuProfileScope::Grass:
+        case Extension::GpuProfileScope::Grass:
             timings.GrassMilliseconds = milliseconds;
             break;
-        case Oot3d::GpuProfileScope::AmbientOcclusion:
+        case Extension::GpuProfileScope::AmbientOcclusion:
             timings.AmbientOcclusionMilliseconds = milliseconds;
             break;
-        case Oot3d::GpuProfileScope::DepthPreparation:
+        case Extension::GpuProfileScope::DepthPreparation:
             timings.DepthPreparationMilliseconds = milliseconds;
             break;
-        case Oot3d::GpuProfileScope::Reflection:
+        case Extension::GpuProfileScope::Reflection:
             timings.ReflectionMilliseconds = milliseconds;
             break;
-        case Oot3d::GpuProfileScope::MotionVectors:
+        case Extension::GpuProfileScope::MotionVectors:
             timings.MotionVectorsMilliseconds = milliseconds;
             break;
-        case Oot3d::GpuProfileScope::SceneComposite:
+        case Extension::GpuProfileScope::SceneComposite:
             timings.SceneCompositeMilliseconds = milliseconds;
             break;
-        case Oot3d::GpuProfileScope::AntiAliasing:
+        case Extension::GpuProfileScope::AntiAliasing:
             timings.AntiAliasingMilliseconds = milliseconds;
             break;
-        case Oot3d::GpuProfileScope::Upscaler:
+        case Extension::GpuProfileScope::Upscaler:
             timings.UpscalerMilliseconds = milliseconds;
             break;
-        case Oot3d::GpuProfileScope::DisplayTransfer:
+        case Extension::GpuProfileScope::DisplayTransfer:
             timings.DisplayTransferMilliseconds = milliseconds;
             break;
-        case Oot3d::GpuProfileScope::Scanout:
+        case Extension::GpuProfileScope::Scanout:
             timings.ScanoutMilliseconds = milliseconds;
             break;
-        case Oot3d::GpuProfileScope::Overlay:
+        case Extension::GpuProfileScope::Overlay:
             timings.OverlayMilliseconds = milliseconds;
             break;
-        case Oot3d::GpuProfileScope::GlobalIllumination:
+        case Extension::GpuProfileScope::GlobalIllumination:
             timings.GlobalIlluminationMilliseconds = milliseconds;
             break;
-        case Oot3d::GpuProfileScope::GrassCompaction:
+        case Extension::GpuProfileScope::GrassCompaction:
             timings.GrassCompactionMilliseconds = milliseconds;
             break;
-        case Oot3d::GpuProfileScope::GrassBlades:
+        case Extension::GpuProfileScope::GrassBlades:
             timings.GrassBladesMilliseconds = milliseconds;
             break;
-        case Oot3d::GpuProfileScope::GrassShadows:
+        case Extension::GpuProfileScope::GrassShadows:
             timings.GrassShadowsMilliseconds = milliseconds;
             break;
-        case Oot3d::GpuProfileScope::GrassLighting:
+        case Extension::GpuProfileScope::GrassLighting:
             timings.GrassLightingMilliseconds = milliseconds;
             break;
-        case Oot3d::GpuProfileScope::GrassCards:
+        case Extension::GpuProfileScope::GrassCards:
             timings.GrassCardsMilliseconds = milliseconds;
             break;
-        case Oot3d::GpuProfileScope::Count:
+        case Extension::GpuProfileScope::Count:
             break;
     }
 }
 
-constexpr std::array<const char*, Oot3d::kGpuProfileScopeCount> kScopeBeginLabels{ "frame",
+constexpr std::array<const char*, Extension::kGpuProfileScopeCount> kScopeBeginLabels{ "frame",
                                                                                    "native_pica",
                                                                                    "toon_raster",
                                                                                    "grass",
@@ -102,7 +102,7 @@ constexpr std::array<const char*, Oot3d::kGpuProfileScopeCount> kScopeBeginLabel
                                                                                    "grass_shadows",
                                                                                    "grass_lighting",
                                                                                    "grass_cards" };
-constexpr std::array<const char*, Oot3d::kGpuProfileScopeCount> kScopeEndLabels{ "after frame",
+constexpr std::array<const char*, Extension::kGpuProfileScopeCount> kScopeEndLabels{ "after frame",
                                                                                  "after native_pica",
                                                                                  "after toon_raster",
                                                                                  "after grass",
@@ -136,7 +136,7 @@ void Oot3dVulkanGpuProfiler::Initialize(
     Shutdown();
     // Either developer trace enables the timestamps by itself.
     const bool timeline = EnvironmentFlag("TRIAEVUM_GPU_TIMELINE");
-    if (!(enabled || timeline || EnvironmentFlag("TRIAEVUM_GPU_GAP_TRACE") || Oot3d::GrassStageProfileEnabled()) ||
+    if (!(enabled || timeline || EnvironmentFlag("TRIAEVUM_GPU_GAP_TRACE") || Extension::GrassStageProfileEnabled()) ||
         physicalDevice == VK_NULL_HANDLE || device == VK_NULL_HANDLE) {
         return;
     }
@@ -159,7 +159,7 @@ void Oot3dVulkanGpuProfiler::Initialize(
         VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
     info.queryType = VK_QUERY_TYPE_TIMESTAMP;
     info.queryCount =
-        kFramesInFlight * Oot3d::kGpuProfileQueriesPerFrame;
+        kFramesInFlight * Extension::kGpuProfileQueriesPerFrame;
     if (vkCreateQueryPool(
             device, &info, nullptr, &mPool) != VK_SUCCESS) {
         mPool = VK_NULL_HANDLE;
@@ -266,7 +266,7 @@ void Oot3dVulkanGpuProfiler::ReportTimeline() {
 
 void Oot3dVulkanGpuProfiler::TraceFrameGap(uint32_t slot) {
     std::array<uint64_t, 2> ticks{};
-    if (vkGetQueryPoolResults(mDevice, mPool, Query(slot, Oot3d::GpuProfileScope::Frame, false), 2U,
+    if (vkGetQueryPoolResults(mDevice, mPool, Query(slot, Extension::GpuProfileScope::Frame, false), 2U,
                               sizeof(ticks), ticks.data(), sizeof(uint64_t),
                               VK_QUERY_RESULT_64_BIT) != VK_SUCCESS || ticks[1] < ticks[0])
         return;
@@ -306,14 +306,14 @@ void Oot3dVulkanGpuProfiler::Shutdown() {
 }
 
 uint32_t Oot3dVulkanGpuProfiler::Query(
-    uint32_t slot, Oot3d::GpuProfileScope scope, bool end) const {
-    const auto range = Oot3d::GpuProfileQueries(scope);
-    return slot * Oot3d::kGpuProfileQueriesPerFrame +
+    uint32_t slot, Extension::GpuProfileScope scope, bool end) const {
+    const auto range = Extension::GpuProfileQueries(scope);
+    return slot * Extension::kGpuProfileQueriesPerFrame +
            (end ? range.End : range.Begin);
 }
 
 std::optional<double> Oot3dVulkanGpuProfiler::ReadMilliseconds(
-    uint32_t slot, Oot3d::GpuProfileScope scope) const {
+    uint32_t slot, Extension::GpuProfileScope scope) const {
     std::array<uint64_t, 2> ticks{};
     const VkResult result = vkGetQueryPoolResults(
         mDevice, mPool, Query(slot, scope, false),
@@ -341,9 +341,9 @@ Oot3dVulkanGpuProfiler::BeginFrame(
         Oot3dVulkanGpuTimings timings;
         bool anyTiming = false;
         for (size_t index = 0;
-             index < Oot3d::kGpuProfileScopeCount; ++index) {
+             index < Extension::kGpuProfileScopeCount; ++index) {
             const auto scope =
-                static_cast<Oot3d::GpuProfileScope>(index);
+                static_cast<Extension::GpuProfileScope>(index);
             if (!frame.Plan.Written(scope)) {
                 continue;
             }
@@ -357,21 +357,21 @@ Oot3dVulkanGpuProfiler::BeginFrame(
         if (anyTiming) {
             result = timings;
         }
-        if (mGapTrace && frame.Plan.Written(Oot3d::GpuProfileScope::Frame)) TraceFrameGap(slot);
+        if (mGapTrace && frame.Plan.Written(Extension::GpuProfileScope::Frame)) TraceFrameGap(slot);
         if (mTimelinePool != VK_NULL_HANDLE) ReadTimeline(slot);
     }
 
     frame = {};
     vkCmdResetQueryPool(
         commandBuffer, mPool,
-        slot * Oot3d::kGpuProfileQueriesPerFrame,
-        Oot3d::kGpuProfileQueriesPerFrame);
+        slot * Extension::kGpuProfileQueriesPerFrame,
+        Extension::kGpuProfileQueriesPerFrame);
     if (mTimelinePool != VK_NULL_HANDLE) {
         vkCmdResetQueryPool(commandBuffer, mTimelinePool, slot * kTimelineMarksPerFrame,
                             kTimelineMarksPerFrame);
     }
     BeginScope(
-        slot, Oot3d::GpuProfileScope::Frame, commandBuffer);
+        slot, Extension::GpuProfileScope::Frame, commandBuffer);
     return result;
 }
 
@@ -383,22 +383,22 @@ void Oot3dVulkanGpuProfiler::EndFrame(
     }
     auto& frame = mFrames[slot];
     for (size_t index = 1;
-         index < Oot3d::kGpuProfileScopeCount; ++index) {
+         index < Extension::kGpuProfileScopeCount; ++index) {
         const auto scope =
-            static_cast<Oot3d::GpuProfileScope>(index);
+            static_cast<Extension::GpuProfileScope>(index);
         if (frame.Plan.Open(scope)) {
             EndScope(slot, scope, commandBuffer);
         }
     }
-    EndScope(slot, Oot3d::GpuProfileScope::Frame, commandBuffer);
+    EndScope(slot, Extension::GpuProfileScope::Frame, commandBuffer);
     frame.Pending =
-        frame.Plan.Written(Oot3d::GpuProfileScope::Frame);
+        frame.Plan.Written(Extension::GpuProfileScope::Frame);
 }
 
 void Oot3dVulkanGpuProfiler::BeginScope(
-    uint32_t slot, Oot3d::GpuProfileScope scope,
+    uint32_t slot, Extension::GpuProfileScope scope,
     VkCommandBuffer commandBuffer) {
-    if (static_cast<size_t>(scope) < Oot3d::kGpuProfileScopeCount) {
+    if (static_cast<size_t>(scope) < Extension::kGpuProfileScopeCount) {
         Mark(slot, kScopeBeginLabels[static_cast<size_t>(scope)], commandBuffer);
     }
     if (mPool == VK_NULL_HANDLE || slot >= kFramesInFlight ||
@@ -412,9 +412,9 @@ void Oot3dVulkanGpuProfiler::BeginScope(
 }
 
 void Oot3dVulkanGpuProfiler::EndScope(
-    uint32_t slot, Oot3d::GpuProfileScope scope,
+    uint32_t slot, Extension::GpuProfileScope scope,
     VkCommandBuffer commandBuffer) {
-    if (static_cast<size_t>(scope) < Oot3d::kGpuProfileScopeCount) {
+    if (static_cast<size_t>(scope) < Extension::kGpuProfileScopeCount) {
         Mark(slot, kScopeEndLabels[static_cast<size_t>(scope)], commandBuffer);
     }
     if (mPool == VK_NULL_HANDLE || slot >= kFramesInFlight ||

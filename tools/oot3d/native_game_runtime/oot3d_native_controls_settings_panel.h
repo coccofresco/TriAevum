@@ -1,6 +1,6 @@
 #pragma once
 
-#include "fast/oot3d/graphics_settings_window.h"
+#include "fast/extension/graphics_settings_window.h"
 #include "oot3d_native_control_config.h"
 #include "oot3d_top_screen_config.h"
 
@@ -8,7 +8,7 @@
 
 namespace Oot3dNativeGame {
 
-std::shared_ptr<Fast::Oot3d::GraphicsSettingsPanelTab>
+std::shared_ptr<Fast::Extension::GraphicsSettingsPanelTab>
 CreateNativeControlsSettingsPanel(
     std::shared_ptr<NativeControlConfigRuntime> controls,
     std::shared_ptr<TopScreenUiConfigRuntime> topScreen);

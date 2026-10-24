@@ -2,7 +2,7 @@
 #include "oot3d_native_vertex_binaries.h"
 #include "oot3d_static_shadow_actor_catalog.h"
 
-#include "fast/oot3d/pica_uniform_layout.h"
+#include "fast/extension/pica_uniform_layout.h"
 
 #include <algorithm>
 #include <array>
@@ -23,58 +23,58 @@ Destination SameValueEnum(Source source) {
     return static_cast<Destination>(static_cast<uint8_t>(source));
 }
 
-std::array<uint8_t, Fast::Oot3d::kPicaPackedVertexUniformSize>
+std::array<uint8_t, Fast::Extension::kPicaPackedVertexUniformSize>
 PackVertexUniforms(
     const Oot3dPicaVertexUniformState& uniforms, bool flipViewport) {
-    std::array<uint8_t, Fast::Oot3d::kPicaPackedVertexUniformSize> bytes{};
+    std::array<uint8_t, Fast::Extension::kPicaPackedVertexUniformSize> bytes{};
     std::memcpy(bytes.data() +
-                    Fast::Oot3d::kPicaPackedVertexBooleanMaskOffset,
+                    Fast::Extension::kPicaPackedVertexBooleanMaskOffset,
                 &uniforms.BooleanMask,
                 sizeof(uniforms.BooleanMask));
     const int32_t flip = flipViewport ? 1 : 0;
     std::memcpy(bytes.data() +
-                    Fast::Oot3d::kPicaPackedVertexFlipViewportOffset,
+                    Fast::Extension::kPicaPackedVertexFlipViewportOffset,
                 &flip, sizeof(flip));
-    std::memcpy(bytes.data() + Fast::Oot3d::kPicaPackedVertexIntegerOffset,
+    std::memcpy(bytes.data() + Fast::Extension::kPicaPackedVertexIntegerOffset,
                 uniforms.Integers.data(),
                 sizeof(uniforms.Integers));
-    std::memcpy(bytes.data() + Fast::Oot3d::kPicaPackedVertexFloatOffset,
+    std::memcpy(bytes.data() + Fast::Extension::kPicaPackedVertexFloatOffset,
                 uniforms.Floats.data(),
                 sizeof(uniforms.Floats));
     return bytes;
 }
 
-std::array<uint8_t, Fast::Oot3d::kPicaPackedFragmentUniformSize>
+std::array<uint8_t, Fast::Extension::kPicaPackedFragmentUniformSize>
 PackFragmentUniforms(
     const Oot3dPicaFragmentUniformState& uniforms,
     const Oot3dPicaViewportState& viewport) {
-    std::array<uint8_t, Fast::Oot3d::kPicaPackedFragmentUniformSize> bytes{};
+    std::array<uint8_t, Fast::Extension::kPicaPackedFragmentUniformSize> bytes{};
     std::memcpy(bytes.data() +
-                    Fast::Oot3d::kPicaPackedFragmentTevConstantsOffset,
+                    Fast::Extension::kPicaPackedFragmentTevConstantsOffset,
                 uniforms.TevConstants.data(),
                 sizeof(uniforms.TevConstants));
     std::memcpy(bytes.data() +
-                    Fast::Oot3d::kPicaPackedFragmentCombinerBufferOffset,
+                    Fast::Extension::kPicaPackedFragmentCombinerBufferOffset,
                 uniforms.CombinerBufferColor.data(),
                 sizeof(uniforms.CombinerBufferColor));
     std::memcpy(bytes.data() +
-                    Fast::Oot3d::kPicaPackedFragmentAlphaReferenceOffset,
+                    Fast::Extension::kPicaPackedFragmentAlphaReferenceOffset,
                 &uniforms.AlphaReference, sizeof(uniforms.AlphaReference));
     std::memcpy(bytes.data() +
-                    Fast::Oot3d::kPicaPackedFragmentDepthScaleOffset,
+                    Fast::Extension::kPicaPackedFragmentDepthScaleOffset,
                 &viewport.DepthRange,
                 sizeof(viewport.DepthRange));
     std::memcpy(bytes.data() +
-                    Fast::Oot3d::kPicaPackedFragmentDepthOffsetOffset,
+                    Fast::Extension::kPicaPackedFragmentDepthOffsetOffset,
                 &viewport.NearPlane,
                 sizeof(viewport.NearPlane));
     const int32_t wBuffering = viewport.ZBuffering ? 0 : 1;
     std::memcpy(bytes.data() +
-                    Fast::Oot3d::kPicaPackedFragmentWBufferingOffset,
+                    Fast::Extension::kPicaPackedFragmentWBufferingOffset,
                 &wBuffering,
                 sizeof(wBuffering));
     std::memcpy(bytes.data() +
-                    Fast::Oot3d::kPicaPackedFragmentFogColorOffset,
+                    Fast::Extension::kPicaPackedFragmentFogColorOffset,
                 uniforms.FogColor.data(),
                 sizeof(uniforms.FogColor));
     for (size_t pair = 0; pair < 64U; ++pair) {
@@ -84,73 +84,73 @@ PackFragmentUniforms(
             uniforms.FogLut[pair * 2U + 1U][0],
             uniforms.FogLut[pair * 2U + 1U][1]};
         std::memcpy(bytes.data() +
-                        Fast::Oot3d::kPicaPackedFragmentFogLutOffset +
+                        Fast::Extension::kPicaPackedFragmentFogLutOffset +
                         pair * sizeof(packed),
                     packed.data(), sizeof(packed));
     }
     std::memcpy(bytes.data() +
-                    Fast::Oot3d::kPicaPackedFragmentTextureLodBiasOffset,
+                    Fast::Extension::kPicaPackedFragmentTextureLodBiasOffset,
                 uniforms.TextureLodBias.data(),
                 sizeof(uniforms.TextureLodBias));
     std::memcpy(bytes.data() +
-                    Fast::Oot3d::kPicaPackedFragmentLightingSpecular0Offset,
+                    Fast::Extension::kPicaPackedFragmentLightingSpecular0Offset,
                 uniforms.Lighting.Specular0.data(),
                 sizeof(uniforms.Lighting.Specular0));
     std::memcpy(bytes.data() +
-                    Fast::Oot3d::kPicaPackedFragmentLightingSpecular1Offset,
+                    Fast::Extension::kPicaPackedFragmentLightingSpecular1Offset,
                 uniforms.Lighting.Specular1.data(),
                 sizeof(uniforms.Lighting.Specular1));
     std::memcpy(bytes.data() +
-                    Fast::Oot3d::kPicaPackedFragmentLightingDiffuseOffset,
+                    Fast::Extension::kPicaPackedFragmentLightingDiffuseOffset,
                 uniforms.Lighting.Diffuse.data(),
                 sizeof(uniforms.Lighting.Diffuse));
     std::memcpy(bytes.data() +
-                    Fast::Oot3d::kPicaPackedFragmentLightingAmbientOffset,
+                    Fast::Extension::kPicaPackedFragmentLightingAmbientOffset,
                 uniforms.Lighting.Ambient.data(),
                 sizeof(uniforms.Lighting.Ambient));
     std::memcpy(bytes.data() +
-                    Fast::Oot3d::kPicaPackedFragmentLightingPositionOffset,
+                    Fast::Extension::kPicaPackedFragmentLightingPositionOffset,
                 uniforms.Lighting.Position.data(),
                 sizeof(uniforms.Lighting.Position));
     std::memcpy(
         bytes.data() +
-            Fast::Oot3d::kPicaPackedFragmentLightingSpotDirectionOffset,
+            Fast::Extension::kPicaPackedFragmentLightingSpotDirectionOffset,
         uniforms.Lighting.SpotDirection.data(),
         sizeof(uniforms.Lighting.SpotDirection));
     std::memcpy(bytes.data() +
-                    Fast::Oot3d::kPicaPackedFragmentLightingAttenuationOffset,
+                    Fast::Extension::kPicaPackedFragmentLightingAttenuationOffset,
                 uniforms.Lighting.Attenuation.data(),
                 sizeof(uniforms.Lighting.Attenuation));
     std::memcpy(
         bytes.data() +
-            Fast::Oot3d::kPicaPackedFragmentLightingGlobalAmbientOffset,
+            Fast::Extension::kPicaPackedFragmentLightingGlobalAmbientOffset,
         uniforms.Lighting.GlobalAmbient.data(),
         sizeof(uniforms.Lighting.GlobalAmbient));
     std::memcpy(
         bytes.data() +
-            Fast::Oot3d::kPicaPackedFragmentShadowTextureBiasOffset,
+            Fast::Extension::kPicaPackedFragmentShadowTextureBiasOffset,
         &uniforms.ShadowTextureBias, sizeof(uniforms.ShadowTextureBias));
     std::memcpy(
         bytes.data() +
-            Fast::Oot3d::kPicaPackedFragmentShadowOrthographicOffset,
+            Fast::Extension::kPicaPackedFragmentShadowOrthographicOffset,
         &uniforms.ShadowOrthographic, sizeof(uniforms.ShadowOrthographic));
     std::memcpy(
         bytes.data() +
-            Fast::Oot3d::kPicaPackedFragmentShadowBiasConstantOffset,
+            Fast::Extension::kPicaPackedFragmentShadowBiasConstantOffset,
         &uniforms.ShadowBiasConstant, sizeof(uniforms.ShadowBiasConstant));
     std::memcpy(
         bytes.data() +
-            Fast::Oot3d::kPicaPackedFragmentShadowBiasLinearOffset,
+            Fast::Extension::kPicaPackedFragmentShadowBiasLinearOffset,
         &uniforms.ShadowBiasLinear, sizeof(uniforms.ShadowBiasLinear));
     static_assert(sizeof(uniforms.TevProgram) == 112U);
-    std::memcpy(bytes.data() + Fast::Oot3d::kPicaPackedFragmentTevProgramOffset,
+    std::memcpy(bytes.data() + Fast::Extension::kPicaPackedFragmentTevProgramOffset,
                 &uniforms.TevProgram, sizeof(uniforms.TevProgram));
     static_assert(sizeof(uniforms.LightingProgram) == 256U);
-    std::memcpy(bytes.data() + Fast::Oot3d::kPicaPackedFragmentLightingProgramOffset,
+    std::memcpy(bytes.data() + Fast::Extension::kPicaPackedFragmentLightingProgramOffset,
                 &uniforms.LightingProgram, sizeof(uniforms.LightingProgram));
-    std::memcpy(bytes.data() + Fast::Oot3d::kPicaPackedFragmentControlOffset,
+    std::memcpy(bytes.data() + Fast::Extension::kPicaPackedFragmentControlOffset,
                 uniforms.FragmentControl.data(), sizeof(uniforms.FragmentControl));
-    std::memcpy(bytes.data() + Fast::Oot3d::kPicaPackedFragmentProcTexOffset,
+    std::memcpy(bytes.data() + Fast::Extension::kPicaPackedFragmentProcTexOffset,
                 &uniforms.ProcTexProgram, sizeof(uniforms.ProcTexProgram));
     return bytes;
 }
@@ -184,7 +184,7 @@ bool WithOot3dPicaVulkanDrawView(
     const auto vertexUniforms = PackVertexUniforms(vertexUniformState, plan.State.Framebuffer.Flipped);
     const auto fragmentUniforms = fragmentState
         ? PackFragmentUniforms(fragmentUniformState, viewport)
-        : std::array<uint8_t, Fast::Oot3d::kPicaPackedFragmentUniformSize>{};
+        : std::array<uint8_t, Fast::Extension::kPicaPackedFragmentUniformSize>{};
     if (timing != nullptr) {
         const auto now = Clock::now();
         timing->UniformPackingSeconds +=

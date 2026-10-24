@@ -1,7 +1,7 @@
 // Native PICA on Vulkan: texture records, storage, uploads and materials.
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_pica_internal.h"
-#include "fast/oot3d/grass_gpu_memory.h"
+#include "fast/extension/grass_gpu_memory.h"
 
 namespace Fast {
 
@@ -244,7 +244,7 @@ GfxRenderingAPIVulkan::ResolveNativePicaTexture(
                     }
                     std::vector<uint8_t> nativePixels;
                     std::string decodeError;
-                    if (Oot3d::DecodePicaTextureRgba8(
+                    if (Extension::DecodePicaTextureRgba8(
                             texture.NativeFormat, texture.Width,
                             texture.Height,
                             texture.NativeBytes.first(*encodedBytes),
@@ -311,7 +311,7 @@ GfxRenderingAPIVulkan::ResolveNativePicaTexture(
             ? ResolveNativeTextureBaseLevelContentHash(texture)
             : std::nullopt;
         if (baseLevelContentHash.has_value()) {
-            Oot3d::TextureCatalogRuntime::Instance().Observe(
+            Extension::TextureCatalogRuntime::Instance().Observe(
                 *baseLevelContentHash, key.PhysicalAddress, key.Width,
                 key.Height, key.Format);
         }
@@ -382,7 +382,7 @@ GfxRenderingAPIVulkan::ResolveNativePicaTexture(
                     if (!textureKey.CustomReplacement &&
                         record.Width == key.Width && record.Height == key.Height &&
                         pixels.size() >= baseBytes) {
-                        Oot3d::GrassTextureSourceCache::Instance().ObserveDecoded(
+                        Extension::GrassTextureSourceCache::Instance().ObserveDecoded(
                             *baseLevelContentHash, key.Width, key.Height,
                             std::span<const uint8_t>(pixels).first(baseBytes));
                     } else {
@@ -391,11 +391,11 @@ GfxRenderingAPIVulkan::ResolveNativePicaTexture(
                         std::vector<uint8_t> nativePixels;
                         if (encodedBytes.has_value() &&
                             *encodedBytes <= texture.NativeBytes.size() &&
-                            Oot3d::DecodePicaTextureRgba8(
+                            Extension::DecodePicaTextureRgba8(
                                 texture.NativeFormat, key.Width, key.Height,
                                 texture.NativeBytes.first(*encodedBytes),
                                 nativePixels, nullptr)) {
-                            Oot3d::GrassTextureSourceCache::Instance().ObserveDecoded(
+                            Extension::GrassTextureSourceCache::Instance().ObserveDecoded(
                                 *baseLevelContentHash, key.Width, key.Height,
                                 nativePixels);
                         }
@@ -540,7 +540,7 @@ GfxRenderingAPIVulkan::ResolveNativePicaTexture(
             static_cast<size_t>(texture.Width) * texture.Height * 4U;
         if (shadow2d) {
             std::vector<uint32_t> shadowPixels;
-            if (!Oot3d::DetilePicaShadow2d(
+            if (!Extension::DetilePicaShadow2d(
                     texture.NativeBytes, texture.Width, texture.Height,
                     shadowPixels, &decodeError)) {
                 throw std::runtime_error(
@@ -570,7 +570,7 @@ GfxRenderingAPIVulkan::ResolveNativePicaTexture(
                         "native PICA mip chain is truncated");
                 }
                 std::vector<uint8_t> decodedMip;
-                if (!Oot3d::DecodePicaTextureRgba8(
+                if (!Extension::DecodePicaTextureRgba8(
                         texture.NativeFormat,
                         static_cast<uint16_t>(mipWidth),
                         static_cast<uint16_t>(mipHeight),
@@ -589,7 +589,7 @@ GfxRenderingAPIVulkan::ResolveNativePicaTexture(
                               decodedMip.end());
                 nativeOffset += *encodedBytes;
             }
-            Oot3d::GrassTextureSourceCache::Instance().ObserveDecoded(
+            Extension::GrassTextureSourceCache::Instance().ObserveDecoded(
                 baseLevelContentHash.value_or(key.ContentHash),
                 key.Width, key.Height,
                 std::span<const uint8_t>(pixels).first(baseDecodedBytes));
@@ -615,7 +615,7 @@ GfxRenderingAPIVulkan::ResolveNativePicaTexture(
                                     .first(baseDecodedBytes),
                         });
             if (baseLevelContentHash && replacementResult.NativeHashAvailable)
-                Oot3d::TextureCatalogRuntime::Instance().AssociateMaterial(
+                Extension::TextureCatalogRuntime::Instance().AssociateMaterial(
                     *baseLevelContentHash, texture.Width, texture.Height, texture.NativeFormat,
                     replacementResult.NativeHash, replacementResult.UseNewHash);
             if (replacementResult.State ==
@@ -733,7 +733,7 @@ void GfxRenderingAPIVulkan::CreateNativePicaTextureStorage(
     texture.MipLevels = mipLevels;
     texture.UploadedMipLevels = 0;
 
-    Oot3d::NriPicaTextureImage nriTexture;
+    Extension::NriPicaTextureImage nriTexture;
     if (mNriPicaTextureImageOwner.Create(width, height, format, mipLevels,
                                          nriTexture, storageView)) {
         texture.Image = nriTexture.Image;
@@ -829,7 +829,7 @@ void GfxRenderingAPIVulkan::UploadNativePicaTextureRows(
         mRenderPassActive = false;
         mOverlayRenderPassActive = false;
     }
-    Oot3d::NriPicaTextureUploadDesc upload;
+    Extension::NriPicaTextureUploadDesc upload;
     upload.FrameIndex = mCurrentFrame;
     upload.FrameId = mFrameCounter;
     upload.Image = texture.Image;
@@ -1000,7 +1000,7 @@ void GfxRenderingAPIVulkan::ReleaseIdleNativePicaTextures() {
                      static_cast<unsigned long long>(cachedRecords),
                      static_cast<unsigned long long>(cachedBytes >> 20U), mNativePicaLightingLuts.size(),
                      mNativePicaMaterials.size(), mNativePicaRenderTargets.size(),
-                     static_cast<unsigned long long>(Oot3d::GrassGpuMemoryInUse().DeviceLocal >> 20U));
+                     static_cast<unsigned long long>(Extension::GrassGpuMemoryInUse().DeviceLocal >> 20U));
     }
     // At most one report per idle window, so a scene change is one line (the
     // game log keeps warnings and above).

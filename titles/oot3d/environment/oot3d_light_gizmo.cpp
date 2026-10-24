@@ -38,7 +38,7 @@ constexpr size_t kCircleSegments = 64U;
 
 class Builder {
 public:
-  explicit Builder(Fast::Oot3d::WorldDebugLineSet &set) : mSet(set) {}
+  explicit Builder(Fast::Extension::WorldDebugLineSet &set) : mSet(set) {}
   void Line(const Vec3 &from, const Vec3 &to, const Color &color) { mSet.Lines.push_back({from, to, color}); }
   // A circle of `radius` about `center` in the plane of unit `u` and `v`.
   void Circle(const Vec3 &center, const Vec3 &u, const Vec3 &v, float radius, const Color &color) {
@@ -62,7 +62,7 @@ public:
   }
 
 private:
-  Fast::Oot3d::WorldDebugLineSet &mSet;
+  Fast::Extension::WorldDebugLineSet &mSet;
 };
 
 Color Faded(const Color &color, float alpha) { return {color[0], color[1], color[2], color[3] * alpha}; }
@@ -181,9 +181,9 @@ void DrawHandles(Builder &out, const PlacedLight &light, const Fast::Renderer3ds
 
 } // namespace
 
-Fast::Oot3d::WorldDebugLineSet BuildPlacedLightGizmo(const std::vector<PlacedLight> &lights,
+Fast::Extension::WorldDebugLineSet BuildPlacedLightGizmo(const std::vector<PlacedLight> &lights,
                                                      uint32_t selectedLight, const std::array<float, 3> &eye) {
-  Fast::Oot3d::WorldDebugLineSet set;
+  Fast::Extension::WorldDebugLineSet set;
   Builder out(set);
   // As the editor: without a selection, the first light.
   if (!lights.empty() && std::none_of(lights.begin(), lights.end(),

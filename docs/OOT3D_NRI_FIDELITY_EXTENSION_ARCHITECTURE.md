@@ -364,7 +364,7 @@ historical measurements, not the current instrumented layout. See
 - The native scene baseline is the OOT3D top-screen aspect, `400x240` (`5:3`). `ScenePresentationPolicy` extends horizontal FOV for wider outputs and vertical FOV for narrower outputs; it never crops or stretches the scene. Thus `16:9` resolves to `16/15` horizontal expansion and `4:3` to `5/4` vertical expansion.
 - Perspective scene projection alone consumes this policy. Native orthographic calls remain unchanged, and HUD/UI continues through its independent `400x240` logical canvas and uniform-fit viewport. Pointer/touch mapping uses the same fitted rectangle, so visual placement and interaction cannot diverge.
 - The top PICA render target follows the full output extent at every valid aspect. This produces real `1280x720` and `1024x768` scene frames instead of widening only one case or letterboxing the other.
-- Since 2026-10-20 the "output" of that contract is the presentation picture (`fast/oot3d/presentation_picture.h`): the user's aspect ratio (`Graphics.Output.Aspect`: Original 3DS 5:3, 16:9 default, 21:9, Free), fitted into the swapchain, centred, with black bars on the remaining sides; Free is the whole swapchain and keeps the previous behaviour. The Vulkan backend resolves the picture once per frame from the acquired swapchain (`mPresentationPicture`), sizes the native PICA targets to it (`NativePicaOutputExtent`), fits the scanout into it and leaves the bars to the scanout clear; the window host resolves the same picture from the window size for the scene FOV policy, the UI canvases (`N64UiOutputRegion`), the in-game menu and the pointer/touch mapping. The scene is never cropped or stretched: a wider picture widens the FOV, a narrower one heightens it, exactly as a window of the picture's shape did before.
+- Since 2026-10-20 the "output" of that contract is the presentation picture (`fast/extension/presentation_picture.h`): the user's aspect ratio (`Graphics.Output.Aspect`: Original 3DS 5:3, 16:9 default, 21:9, Free), fitted into the swapchain, centred, with black bars on the remaining sides; Free is the whole swapchain and keeps the previous behaviour. The Vulkan backend resolves the picture once per frame from the acquired swapchain (`mPresentationPicture`), sizes the native PICA targets to it (`NativePicaOutputExtent`), fits the scanout into it and leaves the bars to the scanout clear; the window host resolves the same picture from the window size for the scene FOV policy, the UI canvases (`N64UiOutputRegion`), the in-game menu and the pointer/touch mapping. The scene is never cropped or stretched: a wider picture widens the FOV, a narrower one heightens it, exactly as a window of the picture's shape did before.
 - The existing persisted `Graphics.Camera.FovMultiplier` contract remains compatible and is now composed in the typed scene projection policy before aspect extension. It changes both scene axes around the original optical center and cannot affect orthographic UI geometry.
 - Full foundation coverage passes `228/228`. Deterministic strict-NRI Kokiri runs report `57/0` PICA AOT hits/misses; `16:9` modifies 42 perspective calls with horizontal expansion `1.0666667`, while `4:3` modifies 42 with vertical expansion `1.25`; both leave 21 orthographic calls untouched. All 30 HUD primitive descriptors are identical across both aspects and FOV `1.0/1.25`. Reproducible configs, diagnostics and framebuffer captures are under `I:/oot3dre_work/visual-parity/scene-aspect-fov-contract-20260825/`.
 
@@ -515,7 +515,7 @@ historical measurements, not the current instrumented layout. See
   packing, visual interpolation and replay schema `PVR6`; its generated GLSL
   also passes the production Vulkan `shaderc` toolchain. Packed vertex and
   fragment uniform offsets now have one renderer-owned ABI in
-  `fast/oot3d/pica_uniform_layout.h`; the same contract is consumed by packing,
+  `fast/extension/pica_uniform_layout.h`; the same contract is consumed by packing,
   scene semantics and reflection/IBL, correcting the former fog/global-ambient
   reads at offsets `144/1184` to the native packed offsets `128/2080`.
   The corpus gate also deduplicates generated sources by structural state key,
@@ -1032,7 +1032,7 @@ historical measurements, not the current instrumented layout. See
   title-neutral renderer modules. They define generic stages, stable pass IDs,
   surface identities, exact boundary kinds and authorization decisions; they
   contain no OOT3D, PICA, 3DS, framebuffer-size or physical-address policy.
-- `fast/oot3d/pica_extension_schedule` is the title adapter. It maps an exact
+- `fast/extension/pica_extension_schedule` is the title adapter. It maps an exact
   compiled PICA composition anchor and target signature to the generic contract,
   rejecting copied, stale or fabricated anchors. The NRI directional-shadow
   provider now requires that generic authorization and no longer runs from the
@@ -1240,7 +1240,7 @@ historical measurements, not the current instrumented layout. See
   `I:/oot3dre_work/visual-parity/portable-3ds-scene-publication-20260826/`.
 - Cross-title 3DS extraction remains incomplete at the frame/view level:
   concrete resolved draw streams and semantic scene views still live under
-  `fast/oot3d`. Camera, material, raster and target payload extraction is closed
+  `fast/extension`. Camera, material, raster and target payload extraction is closed
   by the next tranche; scene/actor, asset and gameplay meanings remain in each
   3DS title adapter.
 
@@ -1617,7 +1617,7 @@ historical measurements, not the current instrumented layout. See
 
 ### OOT3D Title Render Adapter Boundary (2026-08-26)
 
-- `fast/oot3d/title_render_backend` now contains the optional OOT3D-only
+- `fast/extension/title_render_backend` now contains the optional OOT3D-only
   renderer interface and its presentation and scene-view payloads.
   `GfxRenderingAPI` no longer declares or includes OOT3D overlay, window,
   camera-scene or title-reset contracts.
@@ -1645,7 +1645,7 @@ historical measurements, not the current instrumented layout. See
   and which are genuine reusable PICA operations before moving or deleting
   them.
 - A strategically useful next gate is a second-title Nintendo 3DS canary, not
-  a parallel full port: its adapter must compile without any `fast/oot3d`
+  a parallel full port: its adapter must compile without any `fast/extension`
   include and replay a small real PICA corpus covering opaque, transparent,
   TEV/material, UI and display-transfer work. A structurally different title
   provides stronger evidence than another Zelda title; gameplay remains out
@@ -2864,7 +2864,7 @@ Dynamic point lights (Navi, fairies, native local point lights) cast shadows
 from the same prepared casters as the directional map, and only within their
 own reach: a light's far plane is its lighting radius times the shadow reach.
 
-- **Setting.** `Graphics.Effects.PointShadows` (`fast/oot3d/point_shadows.h`):
+- **Setting.** `Graphics.Effects.PointShadows` (`fast/extension/point_shadows.h`):
   Mode `Off | CubeMaps` (default Off), face resolution 256/512/1024 (default
   512), shadowed lights 1-8 (default 4), reach 0.25-1.0 of the light radius
   (default 1.0) and strength 0-1. One owner and one control surface: F1 >
@@ -3142,8 +3142,8 @@ three models (`12296319316116986855`, `539994612170039003`,
 
 The selector retains both providers. Multiscale GTAO uses shared kernels in
 `fast/renderer/gtao_shader.{h,cpp}` and the OOT3D/NRI adapter in
-`fast/oot3d/ambient_occlusion_pass.{h,cpp}`. Original FidelityFX CACAO uses
-`fast/oot3d/cacao_pass.{h,cpp}` and upstream revision
+`fast/extension/ambient_occlusion_pass.{h,cpp}`. Original FidelityFX CACAO uses
+`fast/extension/cacao_pass.{h,cpp}` and upstream revision
 `0ddca95e6714727a252ead345591ca8f2598f261`, with its MIT notice retained.
 The following estimator and performance details describe GTAO:
 
@@ -3263,7 +3263,7 @@ covered by TriAevum's GPL, and it is compiled only with
 (`triaevum_immerse`) beside the runtime. Its graph contract is GTAO's: native
 FP32 depth and the coverage-bearing normal guide in, the published R32F
 visibility out, composited before UI. TriAevum reaches it through
-`fast/oot3d/mxao_pass.h`, whose implementation loads the library through the
+`fast/extension/mxao_pass.h`, whose implementation loads the library through the
 MIT module interface `module_interface/triaevum/immerse_module.h` and serves
 it the renderer's NRI device, textures, programs and barriers (the pass's
 transitions are recorded as before). Without the library MXAO is unavailable,

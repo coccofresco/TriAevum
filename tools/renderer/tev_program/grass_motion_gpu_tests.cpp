@@ -1,15 +1,15 @@
 // Grass motion vectors with the production shader resolver (built-in or compiled): the compactor keeps each
 // blade's previous interaction bend, and a blade point moved by its motion
 // vector lands where the previous frame drew the same point.
-#include "fast/oot3d/grass_anchor_codec.h"
-#include "fast/oot3d/grass_draw_state.h"
-#include "fast/oot3d/grass_gpu_instance_compactor.h"
-#include "fast/oot3d/grass_gpu_selection.h"
-#include "fast/oot3d/grass_indexed_topology.h"
-#include "fast/oot3d/grass_interaction_field.h"
-#include "fast/oot3d/grass_selection_budget.h"
-#include "fast/oot3d/grass_shader_sources.h"
-#include "fast/oot3d/outline_occlusion_pass.h"
+#include "fast/extension/grass_anchor_codec.h"
+#include "fast/extension/grass_draw_state.h"
+#include "fast/extension/grass_gpu_instance_compactor.h"
+#include "fast/extension/grass_gpu_selection.h"
+#include "fast/extension/grass_indexed_topology.h"
+#include "fast/extension/grass_interaction_field.h"
+#include "fast/extension/grass_selection_budget.h"
+#include "fast/extension/grass_shader_sources.h"
+#include "fast/extension/outline_occlusion_pass.h"
 #include "fast/renderer/shaderc_compiler.h"
 #include "vulkan_test_device.h"
 
@@ -24,7 +24,7 @@
 #include <vector>
 
 namespace {
-using namespace Fast::Oot3d;
+using namespace Fast::Extension;
 using Fast::Renderer::SpirvStage;
 
 constexpr uint32_t kExtent = 192U;

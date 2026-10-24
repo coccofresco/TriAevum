@@ -9,7 +9,7 @@
 namespace Oot3dNativeGame {
 namespace {
 
-class DevToolsPanel final : public Fast::Oot3d::GraphicsSettingsPanelTab {
+class DevToolsPanel final : public Fast::Extension::GraphicsSettingsPanelTab {
  public:
   DevToolsPanel(std::shared_ptr<DevWarpRuntime> warp, std::string language)
       : mWarp(std::move(warp)), mLanguage(std::move(language)) {}
@@ -185,7 +185,7 @@ class DevToolsPanel final : public Fast::Oot3d::GraphicsSettingsPanelTab {
 
 } // namespace
 
-std::shared_ptr<Fast::Oot3d::GraphicsSettingsPanelTab> CreateDevToolsPanel(std::shared_ptr<DevWarpRuntime> warp,
+std::shared_ptr<Fast::Extension::GraphicsSettingsPanelTab> CreateDevToolsPanel(std::shared_ptr<DevWarpRuntime> warp,
                                                                            std::string language) {
   return std::make_shared<DevToolsPanel>(std::move(warp), std::move(language));
 }

@@ -1,4 +1,4 @@
-#include "fast/oot3d/effect_graph.h"
+#include "fast/extension/effect_graph.h"
 #include "fast/renderer3ds/pica_ui_canvas.h"
 #include "fast/renderer3ds/pica_draw_coverage.h"
 #include "fast/renderer3ds/pica_shadow_geometry.h"
@@ -8,112 +8,112 @@
 #include "fast/renderer3ds/shadow_caster_stability_trace.h"
 #include "fast/renderer3ds/pica_factored_interpolation.h"
 #include "fast/renderer3ds/pica_geometry_guide.h"
-#include "fast/oot3d/pica_directional_shadow_lighting.h"
+#include "fast/extension/pica_directional_shadow_lighting.h"
 #include "oot3d/renderer/ui_presentation_layout.h"
 #include "fast/renderer3ds/pica_surface_passthrough_scale.h"
-#include "fast/oot3d/display_effect_plan.h"
-#include "fast/oot3d/directional_shadows.h"
-#include "fast/oot3d/contact_shadows.h"
-#include "fast/oot3d/sample_view.h"
-#include "fast/oot3d/ambient_occlusion_composite.h"
-#include "fast/oot3d/anti_aliasing_frame_policy.h"
-#include "fast/oot3d/graphics_settings.h"
-#include "fast/oot3d/graphics_settings_persistence.h"
+#include "fast/extension/display_effect_plan.h"
+#include "fast/extension/directional_shadows.h"
+#include "fast/extension/contact_shadows.h"
+#include "fast/extension/sample_view.h"
+#include "fast/extension/ambient_occlusion_composite.h"
+#include "fast/extension/anti_aliasing_frame_policy.h"
+#include "fast/extension/graphics_settings.h"
+#include "fast/extension/graphics_settings_persistence.h"
 #include <nlohmann/json.hpp>
-#include "fast/oot3d/gpu_profile_plan.h"
-#include "fast/oot3d/hiz_depth_pyramid.h"
-#include "fast/oot3d/hiz_reflection.h"
-#include "fast/oot3d/linear_scene_color.h"
-#include "fast/oot3d/motion_vectors.h"
-#include "fast/oot3d/grass_blade_geometry.h"
-#include "fast/oot3d/grass_blade_shape.h"
-#include "fast/oot3d/grass_collision_resolver.h"
-#include "fast/oot3d/grass_interaction_bridge.h"
-#include "fast/oot3d/grass_interaction_field.h"
-#include "fast/oot3d/grass_motion.h"
-#include "fast/oot3d/grass_placement_cache.h"
-#include "fast/oot3d/grass_primitive_topology.h"
-#include "fast/oot3d/grass_scene_bridge.h"
-#include "fast/oot3d/grass_shading_environment.h"
-#include "fast/oot3d/grass_gpu_memory.h"
+#include "fast/extension/gpu_profile_plan.h"
+#include "fast/extension/hiz_depth_pyramid.h"
+#include "fast/extension/hiz_reflection.h"
+#include "fast/extension/linear_scene_color.h"
+#include "fast/extension/motion_vectors.h"
+#include "fast/extension/grass_blade_geometry.h"
+#include "fast/extension/grass_blade_shape.h"
+#include "fast/extension/grass_collision_resolver.h"
+#include "fast/extension/grass_interaction_bridge.h"
+#include "fast/extension/grass_interaction_field.h"
+#include "fast/extension/grass_motion.h"
+#include "fast/extension/grass_placement_cache.h"
+#include "fast/extension/grass_primitive_topology.h"
+#include "fast/extension/grass_scene_bridge.h"
+#include "fast/extension/grass_shading_environment.h"
+#include "fast/extension/grass_gpu_memory.h"
 #include "fast/renderer3ds/vulkan_memory_budget.h"
 #include "fast/renderer3ds/gpu_memory_residency.h"
-#include "fast/oot3d/grass_placement_audit.h"
-#include "fast/oot3d/grass_surface_eligibility.h"
-#include "fast/oot3d/grass_surface_extractor.h"
-#include "fast/oot3d/grass_mask_interior.h"
-#include "fast/oot3d/grass_texture_source_cache.h"
-#include "fast/oot3d/grass_texture_twins.h"
-#include "fast/oot3d/grass_visibility.h"
-#include "fast/oot3d/pica_shader_instrumentation.h"
-#include "fast/oot3d/outline_occlusion_pass.h"
-#include "fast/oot3d/grass_wind.h"
-#include "fast/oot3d/scene_view_bridge.h"
-#include "fast/oot3d/scene_surface_registry.h"
-#include "fast/oot3d/scene_composite.h"
-#include "fast/oot3d/resource_state_tracker.h"
-#include "fast/oot3d/smaa_1x.h"
-#include "fast/oot3d/smaa_lookup_data.h"
-#include "fast/oot3d/visual_clock.h"
-#include "fast/oot3d/temporal_history_manager.h"
-#include "fast/oot3d/temporal_jitter.h"
-#include "fast/oot3d/temporal_aa.h"
-#include "fast/oot3d/texture_preview_artifact.h"
-#include "fast/oot3d/pica_toon_shader.h"
-#include "fast/oot3d/toon_surface_response.h"
-#include "fast/oot3d/grass_draw_state.h"
-#include "fast/oot3d/grass_shader_sources.h"
-#include "fast/oot3d/renderer_validation_telemetry.h"
-#include "fast/oot3d/reflection_ibl.h"
-#include "fast/oot3d/pica_uniform_layout.h"
-#include "fast/oot3d/reflection_debug.h"
-#include "fast/oot3d/reflection_provider.h"
-#include "fast/oot3d/pica_scanout_effects.h"
-#include "fast/oot3d/pica_nri_shader_contract.h"
-#include "fast/oot3d/pica_nri_draw_ownership.h"
-#include "fast/oot3d/pica_nri_texture_upload.h"
-#include "fast/oot3d/pica_nri_upload.h"
-#include "fast/oot3d/pica_nri_vertex_input.h"
-#include "fast/oot3d/pica_ambient_occlusion_guide.h"
-#include "fast/oot3d/pica_grass_texture_coordinates.h"
-#include "fast/oot3d/pica_scene_domain_guide.h"
-#include "fast/oot3d/perspective_fov_policy.h"
-#include "fast/oot3d/presentation_pacing_policy.h"
-#include "fast/oot3d/render_resolution_policy.h"
-#include "fast/oot3d/presentation_picture.h"
+#include "fast/extension/grass_placement_audit.h"
+#include "fast/extension/grass_surface_eligibility.h"
+#include "fast/extension/grass_surface_extractor.h"
+#include "fast/extension/grass_mask_interior.h"
+#include "fast/extension/grass_texture_source_cache.h"
+#include "fast/extension/grass_texture_twins.h"
+#include "fast/extension/grass_visibility.h"
+#include "fast/extension/pica_shader_instrumentation.h"
+#include "fast/extension/outline_occlusion_pass.h"
+#include "fast/extension/grass_wind.h"
+#include "fast/extension/scene_view_bridge.h"
+#include "fast/extension/scene_surface_registry.h"
+#include "fast/extension/scene_composite.h"
+#include "fast/extension/resource_state_tracker.h"
+#include "fast/extension/smaa_1x.h"
+#include "fast/extension/smaa_lookup_data.h"
+#include "fast/extension/visual_clock.h"
+#include "fast/extension/temporal_history_manager.h"
+#include "fast/extension/temporal_jitter.h"
+#include "fast/extension/temporal_aa.h"
+#include "fast/extension/texture_preview_artifact.h"
+#include "fast/extension/pica_toon_shader.h"
+#include "fast/extension/toon_surface_response.h"
+#include "fast/extension/grass_draw_state.h"
+#include "fast/extension/grass_shader_sources.h"
+#include "fast/extension/renderer_validation_telemetry.h"
+#include "fast/extension/reflection_ibl.h"
+#include "fast/extension/pica_uniform_layout.h"
+#include "fast/extension/reflection_debug.h"
+#include "fast/extension/reflection_provider.h"
+#include "fast/extension/pica_scanout_effects.h"
+#include "fast/extension/pica_nri_shader_contract.h"
+#include "fast/extension/pica_nri_draw_ownership.h"
+#include "fast/extension/pica_nri_texture_upload.h"
+#include "fast/extension/pica_nri_upload.h"
+#include "fast/extension/pica_nri_vertex_input.h"
+#include "fast/extension/pica_ambient_occlusion_guide.h"
+#include "fast/extension/pica_grass_texture_coordinates.h"
+#include "fast/extension/pica_scene_domain_guide.h"
+#include "fast/extension/perspective_fov_policy.h"
+#include "fast/extension/presentation_pacing_policy.h"
+#include "fast/extension/render_resolution_policy.h"
+#include "fast/extension/presentation_picture.h"
 #include "oot3d/renderer/ui_presentation_layout.h"
 #ifndef ENABLE_OOT3D_VULKAN
 #define OOT3D_TEST_DEFINED_VULKAN
 #define ENABLE_OOT3D_VULKAN
 #endif
-#include "fast/oot3d/pica_attachment_formats.h"
-#include "fast/oot3d/pica_dynamic_rendering_scope.h"
-#include "fast/oot3d/pica_alpha_coverage_policy.h"
-#include "fast/oot3d/pica_guide_sampling_barriers.h"
-#include "fast/oot3d/nri_pica_display_copy_pass.h"
-#include "fast/oot3d/nri_pica_memory_fill_clear_pass.h"
-#include "fast/oot3d/nri_pica_render_target_init_pass.h"
-#include "fast/oot3d/nri_pica_render_target_owner.h"
-#include "fast/oot3d/nri_swapchain.h"
-#include "fast/oot3d/nri_upscaler_instances.h"
-#include "fast/oot3d/presentation_settings_transaction.h"
-#include "fast/oot3d/renderer_presentation_controller.h"
-#include "fast/oot3d/vulkan_adapter_policy.h"
+#include "fast/extension/pica_attachment_formats.h"
+#include "fast/extension/pica_dynamic_rendering_scope.h"
+#include "fast/extension/pica_alpha_coverage_policy.h"
+#include "fast/extension/pica_guide_sampling_barriers.h"
+#include "fast/extension/nri_pica_display_copy_pass.h"
+#include "fast/extension/nri_pica_memory_fill_clear_pass.h"
+#include "fast/extension/nri_pica_render_target_init_pass.h"
+#include "fast/extension/nri_pica_render_target_owner.h"
+#include "fast/extension/nri_swapchain.h"
+#include "fast/extension/nri_upscaler_instances.h"
+#include "fast/extension/presentation_settings_transaction.h"
+#include "fast/extension/renderer_presentation_controller.h"
+#include "fast/extension/vulkan_adapter_policy.h"
 #ifdef OOT3D_TEST_DEFINED_VULKAN
 #undef ENABLE_OOT3D_VULKAN
 #undef OOT3D_TEST_DEFINED_VULKAN
 #endif
-#include "fast/oot3d/pica_shadow2d.h"
-#include "fast/oot3d/pica_fragment_lighting.h"
-#include "fast/oot3d/pica_reactive_mask.h"
-#include "fast/oot3d/pica_rigid_motion.h"
-#include "fast/oot3d/pica_reflection_material.h"
-#include "fast/oot3d/reflection_material_profile.h"
-#include "fast/oot3d/toon_outline_shader.h"
-#include "fast/oot3d/upscaler_guides.h"
-#include "fast/oot3d/upscaler_orientation.h"
-#include "fast/oot3d/upscaler_descriptor_key.h"
-#include "fast/oot3d/native_ui_overlay.h"
+#include "fast/extension/pica_shadow2d.h"
+#include "fast/extension/pica_fragment_lighting.h"
+#include "fast/extension/pica_reactive_mask.h"
+#include "fast/extension/pica_rigid_motion.h"
+#include "fast/extension/pica_reflection_material.h"
+#include "fast/extension/reflection_material_profile.h"
+#include "fast/extension/toon_outline_shader.h"
+#include "fast/extension/upscaler_guides.h"
+#include "fast/extension/upscaler_orientation.h"
+#include "fast/extension/upscaler_descriptor_key.h"
+#include "fast/extension/native_ui_overlay.h"
 
 #include <gtest/gtest.h>
 #ifdef OOT3D_FOUNDATION_HAS_SHADERC
@@ -170,7 +170,7 @@ TEST(Oot3dUiPresentationLayout, KeepsWidescreenCanvasIndependent) {
 }
 
 TEST(Oot3dPresentationPicture, FitsTheChosenRatioCentredAndFreeFillsTheOutput) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     // Free: the output as it is, whatever its shape.
     EXPECT_EQ(ResolvePresentationPicture(1000U, 700U, AspectRatioMode::Free),
               (PresentationPicture{0U, 0U, 1000U, 700U}));
@@ -219,7 +219,7 @@ TEST(Oot3dPresentationPicture, FitsTheChosenRatioCentredAndFreeFillsTheOutput) {
 }
 
 TEST(Oot3dPresentationPicture, SnapsAWindowedOutputToTheChosenRatioOnly) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GraphicsSettings settings;
     settings.Window = WindowMode::Windowed;
     settings.OutputWidth = 1280U;
@@ -370,7 +370,7 @@ TEST(Oot3dPicaRasterCanvas, ExtendedUiFrameKeepsItsAspectAndTheScreenItsProporti
 TEST(Oot3dPicaRasterCanvas, PresentedDensityTopTargetKeepsThePresentedProportions) {
     using Fast::Renderer3ds::PicaCompositionDomain;
     using Fast::Renderer3ds::PicaScreenContent;
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     using ::Oot3d::Renderer::ResolvePicaRasterCanvas;
 
     // The same output with the former 2x top target and the presented-density
@@ -672,7 +672,7 @@ TEST(Oot3dUiPresentationLayout, MapsTargetPointsIntoLogicalCanvas) {
 }
 
 TEST(Oot3dDirectionalShadows, RejectsMissingDirectionAndDisabledMode) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     DirectionalShadowFrameInput input;
     EXPECT_EQ(BuildDirectionalShadowFramePlan(input).Status, DirectionalShadowPlanStatus::Disabled);
 
@@ -681,7 +681,7 @@ TEST(Oot3dDirectionalShadows, RejectsMissingDirectionAndDisabledMode) {
 }
 
 TEST(Oot3dContactShadows, ProjectsNativeViewToReverseZ) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     // A native perspective (column-major): x and y scales, w = -z_view.
     DirectionalShadowMatrix projection{};
     projection[0] = 1.5F;
@@ -710,7 +710,7 @@ TEST(Oot3dContactShadows, ProjectsNativeViewToReverseZ) {
 }
 
 TEST(Oot3dContactShadows, ResolvesGodotDispatchForConvergingDivergingAndParallelLight) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     DirectionalShadowMatrix projection{};
     projection[0] = 1.0F;
     projection[5] = 1.0F;
@@ -753,7 +753,7 @@ TEST(Oot3dContactShadows, ResolvesGodotDispatchForConvergingDivergingAndParallel
 }
 
 TEST(Oot3dContactShadows, ClampsShaderParameters) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     DirectionalShadowMatrix projection{};
     projection[0] = 1.0F;
     projection[5] = 1.0F;
@@ -775,8 +775,8 @@ TEST(Oot3dContactShadows, ComputeShadersCompileForEveryLength) {
     shaderc::Compiler compiler;
     shaderc::CompileOptions options;
     options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_2);
-    for (uint32_t length = 0; length < Fast::Oot3d::kContactShadowLengthCount; ++length) {
-        const auto source = Fast::Oot3d::ContactShadowComputeShader(length);
+    for (uint32_t length = 0; length < Fast::Extension::kContactShadowLengthCount; ++length) {
+        const auto source = Fast::Extension::ContactShadowComputeShader(length);
         EXPECT_NE(source.find("#define READ_COUNT " + std::to_string(2U + length)), std::string::npos);
         const auto result = compiler.CompileGlslToSpv(source, shaderc_compute_shader, "contact_shadows.comp", options);
         EXPECT_EQ(result.GetCompilationStatus(), shaderc_compilation_status_success) << result.GetErrorMessage();
@@ -879,7 +879,7 @@ TEST(Renderer3dsShadowGeometry, BoundsFixedSkinnedInputsInCapturedWorldSpace) {
         {0, 0, 32, 16}, {1, 32, 16, 16}, {2, 48, 16, 16}}};
     const std::array<PicaNriPackedVertexAttribute, 3> attributes{{{0, 0, 0}, {6, 1, 0}, {7, 2, 0}}};
     const std::array<PicaNriPackedVertexBinding, 3> inputs{{{0, 16, false}, {1, 16, true}, {2, 16, true}}};
-    auto viewToWorld = Fast::Oot3d::IdentityDirectionalShadowMatrix();
+    auto viewToWorld = Fast::Extension::IdentityDirectionalShadowMatrix();
     viewToWorld[12] = -100;
     PicaShadowCasterCache cache;
     const PicaShadowGeometryView geometry{
@@ -963,7 +963,7 @@ TEST(Renderer3dsShadowGeometry, BoundsFixedSkinnedInputsInCapturedWorldSpace) {
 }
 
 TEST(Oot3dDirectionalShadows, RejectsOrthographicScreenDrawsAsCasters) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     constexpr size_t floatOffset = 80U;
     constexpr size_t vec4Bytes = 4U * sizeof(float);
     std::vector<uint8_t> uniforms(floatOffset + 96U * vec4Bytes);
@@ -1012,7 +1012,7 @@ void main() {
 
 TEST(Oot3dReflectionMaterialProfile,
      ResolvesExactHashDimensionsAndLowestMapperSlot) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     ReflectionMaterialRule water;
     water.RuleId = 4U;
     water.Target = {0x1122U, 64U, 32U, 0x07U};
@@ -1043,7 +1043,7 @@ TEST(Oot3dReflectionMaterialProfile,
 
 TEST(Oot3dReflectionMaterialProfile,
      RejectsDimensionAndMapperMismatches) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     ReflectionMaterialRule rule;
     rule.RuleId = 1U;
     rule.Target = {0xAABBCCDDU, 32U, 32U, 0x01U};
@@ -1060,36 +1060,36 @@ TEST(Oot3dReflectionMaterialProfile,
 }
 
 TEST(Oot3dReflectionMaterial, RequiresWorldDepthAndOriginalTevSpecularUse) {
-    Fast::Oot3d::PicaReflectionMaterialDrawInfo draw{
+    Fast::Extension::PicaReflectionMaterialDrawInfo draw{
         Oot3d::Renderer::PicaCompositionDomain::Scene,
         0U, true, true, 0xFU};
     EXPECT_EQ(
-        Fast::Oot3d::ClassifyPicaReflectionMaterialDraw(
+        Fast::Extension::ClassifyPicaReflectionMaterialDraw(
             ReflectionMaterialShader(true), draw, true),
-        Fast::Oot3d::PicaReflectionMaterialEligibility::Eligible);
+        Fast::Extension::PicaReflectionMaterialEligibility::Eligible);
     EXPECT_EQ(
-        Fast::Oot3d::ClassifyPicaReflectionMaterialDraw(
+        Fast::Extension::ClassifyPicaReflectionMaterialDraw(
             ReflectionMaterialShader(false), draw, true),
-        Fast::Oot3d::PicaReflectionMaterialEligibility::
+        Fast::Extension::PicaReflectionMaterialEligibility::
             NoSpecularTevUse);
     draw.DepthWriteEnabled = false;
     EXPECT_EQ(
-        Fast::Oot3d::ClassifyPicaReflectionMaterialDraw(
+        Fast::Extension::ClassifyPicaReflectionMaterialDraw(
             ReflectionMaterialShader(true), draw, true),
-        Fast::Oot3d::PicaReflectionMaterialEligibility::NoDepth);
+        Fast::Extension::PicaReflectionMaterialEligibility::NoDepth);
     draw.DepthWriteEnabled = true;
     draw.CompositionDomain =
         Oot3d::Renderer::PicaCompositionDomain::Ui;
     EXPECT_EQ(
-        Fast::Oot3d::ClassifyPicaReflectionMaterialDraw(
+        Fast::Extension::ClassifyPicaReflectionMaterialDraw(
             ReflectionMaterialShader(true), draw, true),
-        Fast::Oot3d::PicaReflectionMaterialEligibility::OutsideScene);
+        Fast::Extension::PicaReflectionMaterialEligibility::OutsideScene);
 }
 
 TEST(Oot3dReflectionMaterial, ChangesCacheIdentityForCalibratedGuide) {
     const std::string source = ReflectionMaterialShader(true);
     const auto variant =
-        Fast::Oot3d::BuildPicaReflectionMaterialShaderVariant(
+        Fast::Extension::BuildPicaReflectionMaterialShaderVariant(
             source, 19U,
             {Oot3d::Renderer::PicaCompositionDomain::Scene,
              0U, true, true, 0xFU},
@@ -1100,7 +1100,7 @@ TEST(Oot3dReflectionMaterial, ChangesCacheIdentityForCalibratedGuide) {
 
 TEST(Oot3dReflectionMaterial,
      ExplicitTextureProfileCalibratesVertexLitGuideOnly) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const std::string source = VertexLitReflectionMaterialShader();
     const auto profile = DefaultReflectionMaterialParameters(
         ReflectionMaterialProfile::Water);
@@ -1120,7 +1120,7 @@ TEST(Oot3dReflectionMaterial,
 
 TEST(Oot3dReflectionMaterial,
      ExplicitProfileParametersProduceDistinctShaderVariants) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const ReflectionMaterialParameters glossy{
         0.90F, 0.08F};
     const ReflectionMaterialParameters rough{
@@ -1148,7 +1148,7 @@ TEST(Oot3dReflectionMaterial,
 #ifdef OOT3D_FOUNDATION_HAS_SHADERC
 TEST(Oot3dReflectionMaterial, CalibratedFragmentShaderCompiles) {
     const auto variant =
-        Fast::Oot3d::BuildPicaReflectionMaterialShaderVariant(
+        Fast::Extension::BuildPicaReflectionMaterialShaderVariant(
             ReflectionMaterialShader(true), 3U,
             {Oot3d::Renderer::PicaCompositionDomain::Scene,
              0U, true, true, 0xFU},
@@ -1165,7 +1165,7 @@ TEST(Oot3dReflectionMaterial, CalibratedFragmentShaderCompiles) {
 
 TEST(Oot3dReflectionMaterial,
      ExplicitVertexLitFragmentShaderCompiles) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const auto profile = DefaultReflectionMaterialParameters(
         ReflectionMaterialProfile::Polished);
     const auto variant =
@@ -1188,19 +1188,19 @@ TEST(Oot3dReflectionMaterial,
 
 TEST(Oot3dReflectionIbl, DerivesStableEnvironmentFromPicaUniforms) {
     std::vector<uint8_t> uniforms(
-        Fast::Oot3d::kPicaPackedFragmentUniformSize, 0U);
+        Fast::Extension::kPicaPackedFragmentUniformSize, 0U);
     const std::array<float, 4> fog{0.4F, 0.5F, 0.6F, 1.0F};
     const std::array<float, 4> ambient{0.2F, 0.3F, 0.4F, 1.0F};
     std::memcpy(uniforms.data() +
-                    Fast::Oot3d::kPicaPackedFragmentFogColorOffset,
+                    Fast::Extension::kPicaPackedFragmentFogColorOffset,
                 fog.data(), sizeof(fog));
     std::memcpy(uniforms.data() +
-                    Fast::Oot3d::
+                    Fast::Extension::
                         kPicaPackedFragmentLightingGlobalAmbientOffset,
                 ambient.data(),
                 sizeof(ambient));
 
-    Fast::Oot3d::PicaReflectionEnvironmentAccumulator accumulator;
+    Fast::Extension::PicaReflectionEnvironmentAccumulator accumulator;
     accumulator.Observe(
         7U, "fog_factor lighting_global_ambient", uniforms, true);
     const auto profile = accumulator.Resolve(7U);
@@ -1228,7 +1228,7 @@ TEST(Oot3dReflectionIbl, DerivesStableEnvironmentFromPicaUniforms) {
 
     // A program key analyzes its source once: the keyed path gives the same
     // profile, and a later draw of that program reuses the terms.
-    Fast::Oot3d::PicaReflectionEnvironmentAccumulator keyed;
+    Fast::Extension::PicaReflectionEnvironmentAccumulator keyed;
     keyed.Observe(7U, "fog_factor lighting_global_ambient", uniforms, true, 0x1234U);
     EXPECT_EQ(keyed.Resolve(7U).Signature, profile.Signature);
     keyed.Observe(10U, "", uniforms, true, 0x1234U);
@@ -1237,9 +1237,9 @@ TEST(Oot3dReflectionIbl, DerivesStableEnvironmentFromPicaUniforms) {
 
 TEST(Oot3dReflectionIbl, SplitSumBrdfIsFiniteAndMaterialDependent) {
     const auto smooth =
-        Fast::Oot3d::IntegrateReflectionBrdf(0.8F, 0.1F, 512U);
+        Fast::Extension::IntegrateReflectionBrdf(0.8F, 0.1F, 512U);
     const auto rough =
-        Fast::Oot3d::IntegrateReflectionBrdf(0.3F, 0.9F, 512U);
+        Fast::Extension::IntegrateReflectionBrdf(0.3F, 0.9F, 512U);
     for (float value :
          {smooth.Scale, smooth.Bias, rough.Scale, rough.Bias}) {
         EXPECT_TRUE(std::isfinite(value));
@@ -1252,7 +1252,7 @@ TEST(Oot3dReflectionIbl, SplitSumBrdfIsFiniteAndMaterialDependent) {
 
 TEST(Oot3dReflectionDebug,
      SeparatesReflectionWeightFromTemporalReactiveAlpha) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const std::array<float, 4> material{
         0.60F, 0.25F, 0.75F, 1.0F};
     const std::array<float, 4> reflection{
@@ -1284,11 +1284,11 @@ TEST(Oot3dReflectionIbl, ComputeShadersCompile) {
     options.SetTargetEnvironment(
         shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_2);
     const std::array<std::pair<std::string, const char*>, 3> shaders{{
-        {Fast::Oot3d::BuildReflectionEnvironmentComputeShader(),
+        {Fast::Extension::BuildReflectionEnvironmentComputeShader(),
          "reflection_environment.comp"},
-        {Fast::Oot3d::BuildReflectionBrdfComputeShader(),
+        {Fast::Extension::BuildReflectionBrdfComputeShader(),
          "reflection_brdf.comp"},
-        {Fast::Oot3d::BuildReflectionMaterialResolveComputeShader(),
+        {Fast::Extension::BuildReflectionMaterialResolveComputeShader(),
          "reflection_material_resolve.comp"},
     }};
     for (const auto& [source, name] : shaders) {
@@ -1303,7 +1303,7 @@ TEST(Oot3dReflectionIbl, ComputeShadersCompile) {
 #endif
 
 TEST(Oot3dGrassDepth, RasterDepthProgramOnlyWhereDepthIsUnchanged) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GrassPushConstants push;
     EXPECT_TRUE(GrassDepthIsRasterDepth(push));  // no PICA depth mapping
     push.Flags[0] = 1U;
@@ -1366,13 +1366,13 @@ TEST(Oot3dGrassDepth, RasterDepthProgramOnlyWhereDepthIsUnchanged) {
 }
 
 TEST(Oot3dGrassMotion, RequiresConsecutiveMatchingTopology) {
-    EXPECT_TRUE(Fast::Oot3d::GrassMotionHistoryMatches(10U,11U,180U,180U));
-    EXPECT_FALSE(Fast::Oot3d::GrassMotionHistoryMatches(10U,12U,180U,180U));
-    EXPECT_FALSE(Fast::Oot3d::GrassMotionHistoryMatches(10U,11U,180U,162U));
+    EXPECT_TRUE(Fast::Extension::GrassMotionHistoryMatches(10U,11U,180U,180U));
+    EXPECT_FALSE(Fast::Extension::GrassMotionHistoryMatches(10U,12U,180U,180U));
+    EXPECT_FALSE(Fast::Extension::GrassMotionHistoryMatches(10U,11U,180U,162U));
 }
 
 TEST(Oot3dGrassQuality, PresetsAlwaysRestoreCoherentPerformanceValues) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     InteractiveGrassSettings settings;
     settings.MaxInstancesPerRoom = 499999U;
     settings.DrawDistance = 4999.0F;
@@ -1392,7 +1392,7 @@ TEST(Oot3dGrassQuality, PresetsAlwaysRestoreCoherentPerformanceValues) {
 }
 
 TEST(Oot3dGrassDensity, SupportsAndValidates4096BladesPerSquareMetre) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     EXPECT_FLOAT_EQ(
         kMaximumGrassInstancesPerSquareMeter, 4096.0F);
     GraphicsSettings settings;
@@ -1411,7 +1411,7 @@ TEST(Oot3dGrassDensity, SupportsAndValidates4096BladesPerSquareMetre) {
 }
 
 TEST(Oot3dGrassShape, BoundsStaticCurvatureAndDynamicBendingTogether) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     EXPECT_FLOAT_EQ(GrassBladeRadiusScale(0.0F, 0.0F, 0.0F), 1.0F);
     EXPECT_GT(GrassBladeRadiusScale(2.0F, 1.0F, 0.0F), 4.35F);
     EXPECT_GT(GrassBladeRadiusScale(2.0F, 1.0F, 2.0F),
@@ -1430,7 +1430,7 @@ TEST(Oot3dGrassShape, BoundsStaticCurvatureAndDynamicBendingTogether) {
 }
 
 TEST(Oot3dPicaToon, UsesOneIsotropicKernelAndResolutionIndependentWidth) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const auto kernel = ToonOutlineShaderLibrary();
     EXPECT_NE(BuildSceneCompositeComputeShader().find(kernel), std::string::npos);
     EXPECT_NE(BuildPicaScanoutFragmentShader().find(kernel), std::string::npos);
@@ -1444,46 +1444,46 @@ TEST(Oot3dPicaToon, UsesOneIsotropicKernelAndResolutionIndependentWidth) {
 
 TEST(Oot3dGrassSurfaceEligibility,
      RejectsNonWorldAndTranslucentTextureDraws) {
-    Fast::Oot3d::GrassSurfaceDrawInfo draw{
+    Fast::Extension::GrassSurfaceDrawInfo draw{
         true, true, true, true, true, true,
         true, true, false, true, true, false, true};
     EXPECT_TRUE(
-        Fast::Oot3d::IsGrassSurfaceDrawEligible(draw));
+        Fast::Extension::IsGrassSurfaceDrawEligible(draw));
     draw.WorldSurface = false;
     EXPECT_FALSE(
-        Fast::Oot3d::IsGrassSurfaceDrawEligible(draw));
+        Fast::Extension::IsGrassSurfaceDrawEligible(draw));
     draw.WorldSurface = true;
     draw.DepthWrite = false;
     EXPECT_FALSE(
-        Fast::Oot3d::IsGrassSurfaceDrawEligible(draw));
+        Fast::Extension::IsGrassSurfaceDrawEligible(draw));
     draw.DepthWrite = true;
     draw.TranslucentBlend = true;
     EXPECT_FALSE(
-        Fast::Oot3d::IsGrassSurfaceDrawEligible(draw));
+        Fast::Extension::IsGrassSurfaceDrawEligible(draw));
     draw.TranslucentBlend = false;
     draw.PerspectiveProjection = false;
     EXPECT_FALSE(
-        Fast::Oot3d::IsGrassSurfaceDrawEligible(draw));
-    EXPECT_STREQ(Fast::Oot3d::GrassSurfaceIneligibility(draw), "not_perspective");
+        Fast::Extension::IsGrassSurfaceDrawEligible(draw));
+    EXPECT_STREQ(Fast::Extension::GrassSurfaceIneligibility(draw), "not_perspective");
     draw.DepthWrite = false;
-    EXPECT_STREQ(Fast::Oot3d::GrassSurfaceIneligibility(draw), "depth_write_off");
+    EXPECT_STREQ(Fast::Extension::GrassSurfaceIneligibility(draw), "depth_write_off");
     draw.WorldSurface = false;
-    EXPECT_STREQ(Fast::Oot3d::GrassSurfaceIneligibility(draw), "not_world_surface");
+    EXPECT_STREQ(Fast::Extension::GrassSurfaceIneligibility(draw), "not_world_surface");
     draw.WorldSurface = draw.DepthWrite = draw.PerspectiveProjection = true;
-    EXPECT_EQ(Fast::Oot3d::GrassSurfaceIneligibility(draw), nullptr);
+    EXPECT_EQ(Fast::Extension::GrassSurfaceIneligibility(draw), nullptr);
     EXPECT_FALSE(
-        Fast::Oot3d::PicaFragmentSamplesGrassTexture0(
+        Fast::Extension::PicaFragmentSamplesGrassTexture0(
             "layout(binding=1) uniform sampler2D pica_texture0;"));
     EXPECT_TRUE(
-        Fast::Oot3d::PicaFragmentSamplesGrassTexture0(
+        Fast::Extension::PicaFragmentSamplesGrassTexture0(
             "vec4 c = texture(pica_texture0, uv);"));
     EXPECT_TRUE(
-        Fast::Oot3d::PicaFragmentSamplesGrassTexture0(
+        Fast::Extension::PicaFragmentSamplesGrassTexture0(
             "vec4 c = textureProj(pica_texture0, uvw);"));
 }
 
 TEST(Oot3dGrassPlacementAudit, ReportsConfiguredOutcomesAndEachCatalogCandidateOnce) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GrassPlacementAudit audit(3);
     const GrassAuditTexture grass{0xAU, 64, 64, true}, candidate{0xBU, 32, 32, false}, actor{0xCU, 16, 16, false};
     audit.RecordSource(grass, "published", 100);
@@ -1529,7 +1529,7 @@ TEST(Oot3dGrassPlacementAudit, ReportsConfiguredOutcomesAndEachCatalogCandidateO
 }
 
 TEST(Oot3dGrassGpuMemory, LargeBuffersKeepHeadroomInsteadOfDoublingAndShrinkAfterAScene) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     constexpr uint64_t MiB = 1ULL << 20U;
     EXPECT_EQ(GrassBufferCapacity(1), 4096U);
     EXPECT_EQ(GrassBufferCapacity(5000), 8192U);
@@ -1581,30 +1581,30 @@ TEST(Oot3dGrassPrimitiveTopology,
     const std::vector<uint32_t> source{0U, 1U, 2U, 3U};
 
     EXPECT_EQ(
-        Fast::Oot3d::ExpandGrassPrimitiveIndices(
+        Fast::Extension::ExpandGrassPrimitiveIndices(
             source, Topology::TriangleList),
         (std::vector<uint32_t>{0U, 1U, 2U}));
     EXPECT_EQ(
-        Fast::Oot3d::ExpandGrassPrimitiveIndices(
+        Fast::Extension::ExpandGrassPrimitiveIndices(
             source, Topology::TriangleStrip),
         (std::vector<uint32_t>{
             0U, 1U, 2U, 2U, 1U, 3U}));
     EXPECT_EQ(
-        Fast::Oot3d::ExpandGrassPrimitiveIndices(
+        Fast::Extension::ExpandGrassPrimitiveIndices(
             source, Topology::TriangleFan),
         (std::vector<uint32_t>{
             0U, 1U, 2U, 0U, 2U, 3U}));
     EXPECT_EQ(
-        Fast::Oot3d::ExpandGrassPrimitiveIndices(
+        Fast::Extension::ExpandGrassPrimitiveIndices(
             source, Topology::GeometryShader),
         (std::vector<uint32_t>{0U, 1U, 2U}));
     EXPECT_TRUE(
-        Fast::Oot3d::IsGrassPrimitiveTopologySupported(
+        Fast::Extension::IsGrassPrimitiveTopologySupported(
             Topology::GeometryShader));
 }
 
 TEST(Oot3dGrassTextureWrap, HonorsMaterialAndOverrideModes) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     EXPECT_EQ(
         ResolveGrassTextureWrap(
             GrassWrapOverride::Material,
@@ -1635,7 +1635,7 @@ TEST(Oot3dGrassTextureWrap, HonorsMaterialAndOverrideModes) {
 
 TEST(Oot3dGrassMaskLevels,
      RemapsSelectedChannelToContinuousPlacementProbability) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GrassPlacementRule rule;
     rule.InputBlack = 0.25F;
     rule.InputWhite = 0.75F;
@@ -1654,7 +1654,7 @@ TEST(Oot3dGrassMaskLevels,
 
 TEST(Oot3dGrassMaskLevels,
      TreatsPreviewBlackAsExactAbsence) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GrassPlacementRule rule;
     rule.InputBlack = 0.0F;
     rule.InputWhite = 1.0F;
@@ -1672,7 +1672,7 @@ TEST(Oot3dGrassMaskLevels,
 
 TEST(Oot3dGrassMaskLevels,
      ActiveRectanglesKeepTheMaskOnlyInsideThem) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GrassPlacementRule rule;
     rule.InputBlack = 0.0F;
     rule.InputWhite = 1.0F;
@@ -1735,9 +1735,9 @@ std::vector<uint8_t> GrassTwinHalf(const std::vector<uint8_t>& rgba, uint32_t si
     return half;
 }
 
-class FakeGrassSignatures final : public Fast::Oot3d::GrassTextureSignatureSource {
+class FakeGrassSignatures final : public Fast::Extension::GrassTextureSignatureSource {
   public:
-    std::shared_ptr<const Fast::Oot3d::GrassTextureSignature> Find(uint64_t hash, bool persist) override {
+    std::shared_ptr<const Fast::Extension::GrassTextureSignature> Find(uint64_t hash, bool persist) override {
         ++Finds;
         if (persist) Persisted.push_back(hash);
         const auto found = Signatures.find(hash);
@@ -1745,11 +1745,11 @@ class FakeGrassSignatures final : public Fast::Oot3d::GrassTextureSignatureSourc
     }
     uint64_t Generation() const override { return Serial; }
     void Add(uint64_t hash, uint32_t side, const std::vector<uint8_t>& rgba) {
-        Signatures[hash] = std::make_shared<const Fast::Oot3d::GrassTextureSignature>(
-            Fast::Oot3d::ComputeGrassTextureSignature(uint16_t(side), uint16_t(side), rgba));
+        Signatures[hash] = std::make_shared<const Fast::Extension::GrassTextureSignature>(
+            Fast::Extension::ComputeGrassTextureSignature(uint16_t(side), uint16_t(side), rgba));
         ++Serial;
     }
-    std::unordered_map<uint64_t, std::shared_ptr<const Fast::Oot3d::GrassTextureSignature>> Signatures;
+    std::unordered_map<uint64_t, std::shared_ptr<const Fast::Extension::GrassTextureSignature>> Signatures;
     std::vector<uint64_t> Persisted;
     uint64_t Serial = 1U;
     size_t Finds = 0U;
@@ -1758,7 +1758,7 @@ class FakeGrassSignatures final : public Fast::Oot3d::GrassTextureSignatureSourc
 } // namespace
 
 TEST(Oot3dGrassTextureTwins, SameImageScoresAboveDifferentImages) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const auto original = GrassTwinPattern(11U, 128U);
     const auto sig = ComputeGrassTextureSignature(128U, 128U, original);
     // Another tint, half the size, a patch painted over: the same image.
@@ -1783,7 +1783,7 @@ TEST(Oot3dGrassTextureTwins, SameImageScoresAboveDifferentImages) {
 }
 
 TEST(Oot3dGrassTextureTwins, InheritedRuleMapsTheTwinsTintOntoTheSource) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const auto source = ComputeGrassTextureSignature(128U, 128U, GrassTwinPattern(5U, 128U));
     const auto twin = ComputeGrassTextureSignature(128U, 128U, GrassTwinPattern(5U, 128U, 0.5F));
     GrassPlacementRule rule;
@@ -1819,7 +1819,7 @@ TEST(Oot3dGrassTextureTwins, InheritedRuleMapsTheTwinsTintOntoTheSource) {
 }
 
 TEST(Oot3dGrassTextureTwins, SignatureStoreRoundTrips) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const auto a = ComputeGrassTextureSignature(128U, 128U, GrassTwinPattern(1U, 128U));
     const auto b = ComputeGrassTextureSignature(64U, 64U, GrassTwinPattern(2U, 64U));
     std::stringstream stream;
@@ -1838,7 +1838,7 @@ TEST(Oot3dGrassTextureTwins, SignatureStoreRoundTrips) {
 }
 
 TEST(Oot3dGrassTextureTwins, TexturesWithoutTheirOwnRuleInheritTheirTwinsRule) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     FakeGrassSignatures signatures;
     auto& twins = GrassTwinRules::Instance();
     twins.SetSource(&signatures);
@@ -1883,7 +1883,7 @@ TEST(Oot3dGrassTextureTwins, TexturesWithoutTheirOwnRuleInheritTheirTwinsRule) {
 
 TEST(Oot3dGrassTextureCoordinates,
      DecodesCmbUvScaleMatrixAndNativeVFlip) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     constexpr std::string_view vertexSource = R"glsl(
 void main() {
     reg_tmp10.xy = (uniforms.f[91].xxxx * pica_input3.xyyy).xy;
@@ -1936,7 +1936,7 @@ void main() {
 
 TEST(Oot3dGrassTextureCoordinates,
      DeclinesProceduralAndProjectiveCoordinates) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     constexpr std::string_view vertexSource = R"glsl(
 void main() {
     reg_tmp10.xy = (uniforms.f[91].xxxx * pica_input3.xyyy).xy;
@@ -1990,7 +1990,7 @@ void main() {
 
 TEST(Oot3dGrassTextureCoordinates,
      VersionCanonicalizesSignedZero) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     PicaGrassTextureCoordinateTransform positiveZero;
     positiveZero.RawToSample = {
         1.0F, 0.0F, 0.0F,
@@ -2011,16 +2011,16 @@ TEST(Oot3dGrassTextureCoordinates,
 }
 
 TEST(Oot3dGrassMotion, ComputesPreviousMinusCurrentUv) {
-    const auto motion=Fast::Oot3d::ComputeGrassMotionUv(
+    const auto motion=Fast::Extension::ComputeGrassMotionUv(
         {0.4F,-0.2F,0,2.0F},{0.0F,0.2F,0,1.0F},true);
     EXPECT_NEAR(motion[0],-0.1F,1.0e-6F);
     EXPECT_NEAR(motion[1],0.15F,1.0e-6F);
-    EXPECT_EQ(Fast::Oot3d::ComputeGrassMotionUv(
+    EXPECT_EQ(Fast::Extension::ComputeGrassMotionUv(
         {0,0,0,1},{0,0,0,1},false),(std::array<float,2>{}));
 }
 
 TEST(Oot3dGrassBladeGeometry, HonorsSegmentCountAndEndpoints) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     for (const uint8_t segments : {1U, 2U, 5U, 12U}) {
         std::vector<GrassBladeGeometryVertex> vertices;
         AppendGrassBladeGeometry(
@@ -2039,21 +2039,21 @@ TEST(Oot3dGrassBladeGeometry, HonorsSegmentCountAndEndpoints) {
 
 TEST(Oot3dGrassPlacementCache,
      FingerprintIncludesUnifiedGenerationSettings) {
-    Fast::Oot3d::GrassPlacementRule rule;
-    Fast::Oot3d::GrassGenerationSettings generation;
+    Fast::Extension::GrassPlacementRule rule;
+    Fast::Extension::GrassGenerationSettings generation;
     const uint64_t baseline =
-        Fast::Oot3d::GrassPlacementRuleVersion(
+        Fast::Extension::GrassPlacementRuleVersion(
             rule, generation);
     generation.BladeHeightMax += 1.0F;
     EXPECT_NE(
-        Fast::Oot3d::GrassPlacementRuleVersion(
+        Fast::Extension::GrassPlacementRuleVersion(
             rule, generation),
         baseline);
 }
 
 TEST(Oot3dGrassPlacement,
      EnforcesSpacingAndBuildsDeterministicSpatialClusters) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const std::array<GrassSourceVertex, 3> vertices{{
         {{0.0F, 0.0F, 0.0F}, {0.0F, 1.0F, 0.0F},
          {0.0F, 0.0F}},
@@ -2133,7 +2133,7 @@ TEST(Oot3dGrassPlacement,
 
 TEST(Oot3dGrassPlacement,
      ProducesNoAnchorsFromAnExactBlackMask) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const std::array<GrassSourceVertex, 3> vertices{{
         {{0.0F, 0.0F, 0.0F}, {0.0F, 1.0F, 0.0F},
          {0.0F, 0.0F}},
@@ -2167,7 +2167,7 @@ TEST(Oot3dGrassPlacement,
 
 TEST(Oot3dGrassPlacementCache,
      ReplacesSupersededVersionsOfTheSameSurfaceRule) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GrassPlacementCache cache;
     const GrassPlacementKey first{
         11U, 101U, 22U, 7U};
@@ -2186,7 +2186,7 @@ TEST(Oot3dGrassPlacementCache,
 
 TEST(Oot3dGrassPlacement,
      SeparatesIndividualJitterFromGroupDistribution) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const std::array<GrassSourceVertex, 3> vertices{{
         {{0.0F, 0.0F, 0.0F}, {0.0F, 1.0F, 0.0F},
          {0.0F, 0.0F}},
@@ -2251,7 +2251,7 @@ TEST(Oot3dGrassPlacement,
 
 TEST(Oot3dGrassTextureColor, UsesAlphaWeightedAverage) {
     auto& cache =
-        Fast::Oot3d::GrassTextureSourceCache::Instance();
+        Fast::Extension::GrassTextureSourceCache::Instance();
     cache.Clear();
     const std::array<uint8_t, 8> pixels{
         255U, 32U, 16U, 255U,
@@ -2259,10 +2259,10 @@ TEST(Oot3dGrassTextureColor, UsesAlphaWeightedAverage) {
     cache.ObserveDecoded(91U, 2U, 1U, pixels);
     const auto redMask =
         cache.AcquireMaskShared(
-            91U, Fast::Oot3d::GrassSampleChannel::Red);
+            91U, Fast::Extension::GrassSampleChannel::Red);
     const auto redMaskAgain =
         cache.AcquireMaskShared(
-            91U, Fast::Oot3d::GrassSampleChannel::Red);
+            91U, Fast::Extension::GrassSampleChannel::Red);
     ASSERT_NE(redMask, nullptr);
     EXPECT_EQ(redMask, redMaskAgain);
     EXPECT_EQ(
@@ -2277,7 +2277,7 @@ TEST(Oot3dGrassTextureColor, UsesAlphaWeightedAverage) {
 }
 
 TEST(Oot3dGrassTextureColor, GridUsesOnlyTwoNearestDistanceWeightedPoints) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto grid = std::make_shared<GrassTextureColorGrid>();
     for (auto& rgb : grid->Rgb) rgb = {0, 255, 255};
     grid->Rgb[0] = {0, 0, 0};
@@ -2297,7 +2297,7 @@ TEST(Oot3dGrassTextureColor, GridUsesOnlyTwoNearestDistanceWeightedPoints) {
 }
 
 TEST(Oot3dGrassTextureColor, GridIsSharedAndSurvivesSourceCacheReset) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto& cache = GrassTextureSourceCache::Instance();
     cache.Clear();
     std::vector<uint8_t> pixels(8U * 8U * 4U);
@@ -2320,7 +2320,7 @@ TEST(Oot3dGrassTextureColor, GridIsSharedAndSurvivesSourceCacheReset) {
 }
 
 TEST(Oot3dGrassVisibility, CullsOutsideAndReducesFarGeometry) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const std::array<float, 16> identity{
         1, 0, 0, 0, 0, 1, 0, 0,
         0, 0, 1, 0, 0, 0, 0, 1};
@@ -2406,7 +2406,7 @@ TEST(Oot3dGrassVisibility, CullsOutsideAndReducesFarGeometry) {
 }
 
 TEST(Oot3dGrassVisibility, SegmentDistancesAreIndependentOfDensityAndDrawRange) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     InteractiveGrassSettings settings;
     settings.DrawDistance = 5000.0F;
     settings.Appearance.BladeSegments = 8U;
@@ -2426,7 +2426,7 @@ TEST(Oot3dGrassVisibility, SegmentDistancesAreIndependentOfDensityAndDrawRange) 
 }
 
 TEST(Oot3dGrassVisibility, UsesAtMostThreeOrderedTopologyBandsAcrossSupportedLodPolicies) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     constexpr float drawDistance = 4096.0F;
     constexpr float lodStart = 0.23F;
     constexpr float lodEnd = 0.91F;
@@ -2461,7 +2461,7 @@ TEST(Oot3dGrassVisibility, UsesAtMostThreeOrderedTopologyBandsAcrossSupportedLod
 }
 
 TEST(Oot3dGrassVisibility, DistantDensityFallsQuarticallyWithoutAffectingNearCoverage) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     InteractiveGrassSettings settings;
     settings.FarTuftsEnabled = false;
     settings.DrawDistance = 1000;
@@ -2480,7 +2480,7 @@ TEST(Oot3dGrassVisibility, DistantDensityFallsQuarticallyWithoutAffectingNearCov
 }
 
 TEST(Oot3dGrassShading, SamplesNativeFogAndCmbLights) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     std::vector<uint8_t> vertexUniforms(
         80U + (0x56U + 3U) * 16U, 0U);
     const uint32_t lightingEnabled = 1U << 9U;
@@ -2558,31 +2558,31 @@ TEST(Oot3dGrassShading, SamplesNativeFogAndCmbLights) {
 }
 
 TEST(Oot3dGrassWind, RandomnessControlsPerBladePhase) {
-    Fast::Oot3d::InteractiveGrassSettings settings;
+    Fast::Extension::InteractiveGrassSettings settings;
     settings.WindStrength = 1.0F;
     settings.WindSpeed = 1.0F;
     settings.MaximumBend = 4.0F;
     settings.WindRandomness = 0.0F;
     const std::array<float, 3> position{100.0F, 0.0F, 200.0F};
     const auto uniformA =
-        Fast::Oot3d::EvaluateGrassWind(
+        Fast::Extension::EvaluateGrassWind(
             settings, position, 0.25F, 2.0);
     const auto uniformB =
-        Fast::Oot3d::EvaluateGrassWind(
+        Fast::Extension::EvaluateGrassWind(
             settings, position, 4.25F, 2.0);
     EXPECT_FLOAT_EQ(uniformA[0], uniformB[0]);
     EXPECT_FLOAT_EQ(uniformA[1], uniformB[1]);
 
     settings.WindRandomness = 1.0F;
     const auto randomized =
-        Fast::Oot3d::EvaluateGrassWind(
+        Fast::Extension::EvaluateGrassWind(
             settings, position, 4.25F, 2.0);
     EXPECT_TRUE(randomized[0] != uniformA[0] ||
                 randomized[1] != uniformA[1]);
 }
 
 TEST(Oot3dRigidMotion, TracksConsecutiveInstanceMotionAndRejectsGaps) {
-    Fast::Oot3d::PicaRigidMotionTracker tracker;
+    Fast::Extension::PicaRigidMotionTracker tracker;
     EXPECT_FALSE(tracker.Track(7U, 10U, {0,0,0,1}, {}).Valid);
     const auto moved=tracker.Track(7U,11U,{0.2F,-0.4F,0,1},{});
     ASSERT_TRUE(moved.Valid);
@@ -2600,14 +2600,14 @@ TEST(Oot3dRigidMotion, DecodesCommonRigidUniformOrigin) {
     std::memcpy(bytes.data()+floats+4U*16U,identity.data(),3U*16U);
     std::memcpy(bytes.data()+floats+20U*16U,identity.data(),3U*16U);
     std::array<float,4> clip{};
-    ASSERT_TRUE(Fast::Oot3d::DecodeCommonRigidOriginClip(bytes,false,clip));
+    ASSERT_TRUE(Fast::Extension::DecodeCommonRigidOriginClip(bytes,false,clip));
     EXPECT_FLOAT_EQ(clip[0],0.0F);
     EXPECT_FLOAT_EQ(clip[1],0.0F);
     EXPECT_FLOAT_EQ(clip[3],1.0F);
 }
 
 TEST(Oot3dRigidMotion, ShaderVariantAddsGuideWithoutChangingTextures) {
-    const auto variant=Fast::Oot3d::BuildPicaRigidMotionShaderVariant(
+    const auto variant=Fast::Extension::BuildPicaRigidMotionShaderVariant(
         "#version 450\nlayout(location=0) out vec4 color;\nvoid main(){color=vec4(1);}\n",9U);
     ASSERT_TRUE(variant.Applied);
     EXPECT_NE(variant.FragmentKey,9U);
@@ -2616,7 +2616,7 @@ TEST(Oot3dRigidMotion, ShaderVariantAddsGuideWithoutChangingTextures) {
 }
 
 TEST(Oot3dRigidMotion, VertexVariantAddsHomogeneousJitter) {
-    const auto variant=Fast::Oot3d::BuildPicaTemporalVertexVariant(
+    const auto variant=Fast::Extension::BuildPicaTemporalVertexVariant(
         "#version 450\nlayout(set=0,binding=0) uniform U{vec4 f[96];} uniforms;\n"
         "vec4 pica_output0 = vec4(0);\nvoid exec_shader(){}\n"
         "void main(){exec_shader();gl_Position=pica_output0;}\n",11U);
@@ -2627,41 +2627,41 @@ TEST(Oot3dRigidMotion, VertexVariantAddsHomogeneousJitter) {
 
 TEST(Oot3dTemporalJitter, IsBoundedDeterministicAndRepeatsAfterEightFrames) {
     for (uint64_t frame = 0; frame < 8; ++frame) {
-        const auto sample = Fast::Oot3d::TemporalJitterForFrame(frame);
+        const auto sample = Fast::Extension::TemporalJitterForFrame(frame);
         EXPECT_GE(sample.PixelOffset[0], -0.5F);
         EXPECT_LT(sample.PixelOffset[0], 0.5F);
         EXPECT_GE(sample.PixelOffset[1], -0.5F);
         EXPECT_LT(sample.PixelOffset[1], 0.5F);
         EXPECT_EQ(sample.PixelOffset,
-                  Fast::Oot3d::TemporalJitterForFrame(frame + 8)
+                  Fast::Extension::TemporalJitterForFrame(frame + 8)
                       .PixelOffset);
     }
 }
 
 TEST(Oot3dTemporalJitter, SupportsProviderSpecificPhaseCount) {
     for (uint64_t frame = 0; frame < 18U; ++frame) {
-        EXPECT_EQ(Fast::Oot3d::TemporalJitterForFrame(frame, 18U).PixelOffset,
-                  Fast::Oot3d::TemporalJitterForFrame(frame + 18U, 18U)
+        EXPECT_EQ(Fast::Extension::TemporalJitterForFrame(frame, 18U).PixelOffset,
+                  Fast::Extension::TemporalJitterForFrame(frame + 18U, 18U)
                       .PixelOffset);
     }
-    EXPECT_NE(Fast::Oot3d::TemporalJitterForFrame(0U, 18U).PixelOffset,
-              Fast::Oot3d::TemporalJitterForFrame(8U, 18U).PixelOffset);
+    EXPECT_NE(Fast::Extension::TemporalJitterForFrame(0U, 18U).PixelOffset,
+              Fast::Extension::TemporalJitterForFrame(8U, 18U).PixelOffset);
 }
 
 TEST(Oot3dTemporalJitter, AppliesClipSpaceOffsetThroughHomogeneousW) {
     const std::array<float, 16> matrix{
         1, 0, 0, 0, 0, 1, 0, 0,
         0, 0, 1, -1, 0, 0, 0, 0};
-    const auto jittered = Fast::Oot3d::ApplyTemporalJitterToClipMatrix(
+    const auto jittered = Fast::Extension::ApplyTemporalJitterToClipMatrix(
         matrix, {0.5F, -0.25F}, 400.0F, 200.0F);
     EXPECT_FLOAT_EQ(jittered[8], -0.0025F);
     EXPECT_FLOAT_EQ(jittered[9], 0.0025F);
-    EXPECT_TRUE(Fast::Oot3d::HasPerspectiveClipW(matrix));
+    EXPECT_TRUE(Fast::Extension::HasPerspectiveClipW(matrix));
 }
 
 TEST(Oot3dPerspectiveFov,
      ScalesBothAxesAndPreservesOpticalCenters) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const PerspectiveFovInput input{
         {-2.0F, 4.0F, -1.0F, 3.0F, 2.0F, 1000.0F},
         1.5F, ResolveScenePresentationPolicy(400U, 240U), true};
@@ -2690,7 +2690,7 @@ TEST(Oot3dPerspectiveFov,
 
 TEST(Oot3dPerspectiveFov,
      LeavesOrthographicProjectionUntouched) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const PerspectiveFovInput input{
         {-2.0F, 4.0F, -1.0F, 3.0F, 2.0F, 1000.0F},
         1.5F, ResolveScenePresentationPolicy(1280U, 720U), false};
@@ -2704,7 +2704,7 @@ TEST(Oot3dPerspectiveFov,
 
 TEST(Oot3dPerspectiveFov,
      ExtendsHorizontalAt16x9AndVerticalAt4x3) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const PerspectiveFrustum native{
         -2.0F, 2.0F, -1.0F, 1.0F, 2.0F, 1000.0F};
 
@@ -2740,7 +2740,7 @@ TEST(Oot3dPerspectiveFov,
 
 TEST(Oot3dPerspectiveFov,
      ComposesGeneralMultiplierWithAspectWithoutMovingOpticalCenter) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const auto result = ResolvePerspectiveFov({
         {-2.0F, 4.0F, -1.0F, 3.0F, 2.0F, 1000.0F},
         1.25F,
@@ -2760,7 +2760,7 @@ TEST(Oot3dPerspectiveFov,
 
 TEST(Oot3dPresentationPacing,
      MapsSettingsWithoutChangingSimulationPolicy) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const auto original =
         ResolvePresentationPacingPolicy(FrameRateMode::Original30);
     EXPECT_TRUE(original.Enabled);
@@ -2810,7 +2810,7 @@ TEST(Oot3dPresentationPacing,
 
 TEST(Oot3dRenderResolution,
      SeparatesOutputAndScaledNativePicaExtent) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const auto ordinary = ResolveNativePicaRenderExtent(
         {320U, 240U}, {1920U, 1080U}, 1.5F);
     EXPECT_EQ(ordinary.Width, 480U);
@@ -2870,7 +2870,7 @@ TEST(Oot3dRenderResolution,
 
 TEST(Oot3dRenderResolution,
      UpscalerQualityOverridesButPreservesUserScale) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GraphicsSettings settings;
     settings.InternalResolutionScale = 1.75F;
     EXPECT_FLOAT_EQ(ResolveInternalResolutionScale(settings), 1.75F);
@@ -2907,7 +2907,7 @@ TEST(Oot3dRenderResolution,
 
 TEST(Oot3dAntiAliasingFramePolicy,
      KeepsSpatialTemporalAndMultisampleModesExclusive) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GraphicsSettings settings;
     const AntiAliasingFrameCapabilities capabilities{
         true, true, true, false};
@@ -2977,7 +2977,7 @@ TEST(Oot3dAntiAliasingFramePolicy,
 }
 
 TEST(Oot3dUpscalerGuides, CoverTheDisplayTransferFootprint) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     // The native top-screen transfer halves the target's first axis: each
     // colour texel covers two guide texels, the second axis maps 1:1.
     for (uint32_t pixel = 0U; pixel < 640U; ++pixel) {
@@ -3089,7 +3089,7 @@ TEST(Oot3dSurfaceEmission, StrengthIsHowTheLastFrameDrewTheSurface) {
 }
 
 TEST(Oot3dUpscalerGuides, MotionLeavesTheJitterOut) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const std::array<float, 2> current{0.25F / 480.0F, -0.125F / 853.0F};
     const std::array<float, 2> previous{-0.375F / 480.0F, 0.3F / 853.0F};
     const auto correction = UpscalerMotionJitterCorrection(current, previous);
@@ -3111,7 +3111,7 @@ TEST(Oot3dUpscalerGuides, MotionLeavesTheJitterOut) {
 }
 
 TEST(Oot3dUpscalerDescriptors, RecycledImageCannotSelectRetiredViews) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     // Same image values, formats and extents after guide recreation. Only the
     // owner's lifetime distinguishes the new views from the retired set.
     std::array<UpscalerDescriptorBinding, 2> bindings{{{0x10U, 1U, false}, {0x20U, 2U, true}}};
@@ -3134,7 +3134,7 @@ TEST(Oot3dUpscalerDescriptors, RecycledImageCannotSelectRetiredViews) {
 }
 
 TEST(Oot3dUpscalerDescriptors, MissingLifetimeAndDifferentBindingContractsCannotHit) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     std::array<UpscalerDescriptorBinding, 1> bindings{{{0x10U, 1U, false}}};
     const auto sampled = BuildUpscalerDescriptorKey(true, bindings);
     ASSERT_TRUE(sampled);
@@ -3149,7 +3149,7 @@ TEST(Oot3dUpscalerDescriptors, MissingLifetimeAndDifferentBindingContractsCannot
 }
 
 TEST(Oot3dUpscalerInstances, SpareCapacityDoesNotDrainRecordedWork) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     UpscalerInstances<int*> instances;
     int a = 0, b = 0;
     const NriDlssFeatureKey keyA{3840U, 2160U};
@@ -3166,7 +3166,7 @@ TEST(Oot3dUpscalerInstances, SpareCapacityDoesNotDrainRecordedWork) {
 }
 
 TEST(Oot3dUpscalerInstances, FailedCompletionPreservesFeaturesAndHistory) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     UpscalerInstances<int*> instances;
     int a = 0, b = 0, c = 0;
     const NriDlssFeatureKey keyA{3840U, 2160U}, keyB{3840U, 4320U}, keyC{1920U, 1080U};
@@ -3188,7 +3188,7 @@ TEST(Oot3dUpscalerInstances, FailedCompletionPreservesFeaturesAndHistory) {
 }
 
 TEST(Oot3dUpscalerInstances, EvictionCompletesPrefixBeforeReleasingTheLeastRecentlyUsedFeature) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     UpscalerInstances<int*> instances;
     int a = 0, b = 0, c = 0;
     const NriDlssFeatureKey keyA{3840U, 2160U}, keyB{3840U, 4320U}, keyC{1920U, 1080U};
@@ -3214,7 +3214,7 @@ TEST(Oot3dUpscalerInstances, EvictionCompletesPrefixBeforeReleasingTheLeastRecen
 }
 
 TEST(Oot3dUpscalerInstances, SettingsRetirementCompletesOnceBeforeAllReleases) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     UpscalerInstances<int*> instances;
     int a = 0, b = 0;
     instances.Add({3840U, 2160U}, &a);
@@ -3235,7 +3235,7 @@ TEST(Oot3dUpscalerInstances, SettingsRetirementCompletesOnceBeforeAllReleases) {
 // is the surface texel PresentationToStorage names at its centre, for both
 // display-transfer flips, and the output turn is the exact inverse.
 TEST(Oot3dUpscalerOrientation, UprightTexelsAreThePresentedSurface) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     constexpr uint32_t width = 720U, height = 1280U;
     const auto upright = UprightExtent(width, height);
     EXPECT_EQ(upright[0], 1280U);
@@ -3274,8 +3274,8 @@ TEST(Oot3dUpscalerOrientation, UprightTexelsAreThePresentedSurface) {
 TEST(Oot3dUpscalerOrientation, ShadersCompile) {
     shaderc::Compiler compiler;
     for (const auto& [source, name] :
-         {std::pair{Fast::Oot3d::BuildUpscalerUprightInputShader(), "oot3d_upscaler_upright_inputs.comp"},
-          std::pair{Fast::Oot3d::BuildUpscalerUprightOutputShader(), "oot3d_upscaler_upright_output.comp"}}) {
+         {std::pair{Fast::Extension::BuildUpscalerUprightInputShader(), "oot3d_upscaler_upright_inputs.comp"},
+          std::pair{Fast::Extension::BuildUpscalerUprightOutputShader(), "oot3d_upscaler_upright_output.comp"}}) {
         const auto result = compiler.CompileGlslToSpv(source, shaderc_compute_shader, name);
         EXPECT_EQ(result.GetCompilationStatus(), shaderc_compilation_status_success) << result.GetErrorMessage();
     }
@@ -3286,7 +3286,7 @@ TEST(Oot3dUpscalerOrientation, ShadersCompile) {
 TEST(Oot3dUpscalerGuides, ResampleShaderCompiles) {
     shaderc::Compiler compiler;
     const auto result = compiler.CompileGlslToSpv(
-        Fast::Oot3d::BuildUpscalerGuideResampleShader(), shaderc_compute_shader,
+        Fast::Extension::BuildUpscalerGuideResampleShader(), shaderc_compute_shader,
         "oot3d_upscaler_guides.comp");
     EXPECT_EQ(result.GetCompilationStatus(), shaderc_compilation_status_success)
         << result.GetErrorMessage();
@@ -3294,7 +3294,7 @@ TEST(Oot3dUpscalerGuides, ResampleShaderCompiles) {
 #endif
 
 TEST(Oot3dNativeUiOverlay, MapsTheUpscaledTexelOntoItsDisplayFootprint) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     // An identity extent lands on the texel itself with no neighbour weight.
     for (uint32_t pixel = 0U; pixel < 16U; ++pixel) {
         const auto tap = ResolveNativeUiOverlayTap(pixel, 16U, 16U);
@@ -3323,7 +3323,7 @@ TEST(Oot3dNativeUiOverlay, MapsTheUpscaledTexelOntoItsDisplayFootprint) {
 TEST(Oot3dNativeUiOverlay, ShaderCompiles) {
     shaderc::Compiler compiler;
     const auto result = compiler.CompileGlslToSpv(
-        Fast::Oot3d::BuildNativeUiOverlayShader(), shaderc_compute_shader,
+        Fast::Extension::BuildNativeUiOverlayShader(), shaderc_compute_shader,
         "oot3d_native_ui_overlay.comp");
     EXPECT_EQ(result.GetCompilationStatus(), shaderc_compilation_status_success)
         << result.GetErrorMessage();
@@ -3332,7 +3332,7 @@ TEST(Oot3dNativeUiOverlay, ShaderCompiles) {
 
 TEST(Oot3dPicaAlphaCoveragePolicy,
      EnablesOnlyMultisampledOpaqueAlphaTestedWorldDraws) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
 
     const auto enabled = ResolvePicaAlphaCoveragePolicy(
         VK_SAMPLE_COUNT_4_BIT, true, true, true, false, 0xFU);
@@ -3351,7 +3351,7 @@ TEST(Oot3dPicaAlphaCoveragePolicy,
 
 TEST(Oot3dAmbientOcclusionComposite,
      AttenuatesOnlyTheEncodedAmbientResponse) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     EXPECT_FLOAT_EQ(EncodeAmbientOcclusionResponse(0.0F), 0.5F);
     EXPECT_FLOAT_EQ(EncodeAmbientOcclusionResponse(1.0F), 1.0F);
     EXPECT_FLOAT_EQ(
@@ -3377,7 +3377,7 @@ TEST(Oot3dAmbientOcclusionComposite,
 
 TEST(Oot3dAmbientOcclusionComposite,
      ResolvesExactRgbResponseWithLegacyFallback) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const auto exact = ResolveAmbientOcclusionVisibilityRgb(
         0.2F, 1.0F, {0.0F, 0.5F, 1.0F, 1.0F});
     EXPECT_FLOAT_EQ(exact[0], 1.0F);
@@ -3400,7 +3400,7 @@ TEST(Oot3dAmbientOcclusionComposite,
 
 TEST(Oot3dAmbientOcclusionComposite,
      AppliesAcrossSceneCoverageOnly) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     EXPECT_FLOAT_EQ(
         ResolveSceneAmbientOcclusionVisibility(0.2F, 0.0F),
         1.0F);
@@ -3419,7 +3419,7 @@ TEST(Oot3dAmbientOcclusionComposite,
 
 TEST(Oot3dPicaAmbientOcclusionGuide,
      PreservesNormalGuideAndMarksSceneCoverage) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     constexpr std::string_view source = R"glsl(#version 450
 layout(set=0,binding=0) uniform sampler2D source_texture;
 layout(location=0) out vec4 pica_color;
@@ -3477,7 +3477,7 @@ void main() {
 
 TEST(Oot3dPicaSceneDomainGuide,
      AttenuatesGuidesOnlyForSceneDomainOverlays) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     constexpr std::string_view source = R"glsl(#version 450
 layout(location=0) out vec4 pica_color;
 layout(location=1) out vec4 pica_normal_guide;
@@ -3548,7 +3548,7 @@ TEST(Oot3dOutlineGeometryGuide, OcclusionPassCannotWriteSceneDepthColorOrGeometr
     depth.front.compareOp = depth.back.compareOp = VK_COMPARE_OP_EQUAL;
     std::array<VkPipelineColorBlendAttachmentState, Fast::Renderer3ds::kPicaColorAttachmentCount> colors{};
     for (auto& color : colors) color.colorWriteMask = 15;
-    Fast::Oot3d::ConfigureOutlineOcclusionPass(depth, colors);
+    Fast::Extension::ConfigureOutlineOcclusionPass(depth, colors);
     EXPECT_FALSE(depth.depthTestEnable);
     EXPECT_FALSE(depth.depthWriteEnable);
     EXPECT_TRUE(depth.stencilTestEnable);
@@ -3567,7 +3567,7 @@ TEST(Oot3dOutlineGeometryGuide, OcclusionPassCannotWriteSceneDepthColorOrGeometr
 
 TEST(Oot3dOutlineGeometryGuide, ExtensionCoverageKeepsNearestDepthAndReplacesMotionOnly) {
     VkPipelineColorBlendAttachmentState color{};
-    Fast::Oot3d::ConfigureOutlineCoverageBlend(color,
+    Fast::Extension::ConfigureOutlineCoverageBlend(color,
         VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT);
     EXPECT_EQ(color.colorWriteMask, 15U);
     EXPECT_TRUE(color.blendEnable);
@@ -3604,7 +3604,7 @@ TEST(Renderer3dsGeometryGuide, OctahedralNormalsKeepTheirDirection) {
 }
 
 TEST(Oot3dOutlineGeometryGuide, FaceNormalFollowsDepthWritingDraws) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     shaderc::Compiler compiler;
     PicaFragmentInstrumentationRequest request;
     request.Source = "#version 450\nlayout(location=5) in vec4 pica_normquat;\n"
@@ -3657,7 +3657,7 @@ TEST(Oot3dOutlineGeometryGuide, FaceNormalFollowsDepthWritingDraws) {
 }
 
 TEST(Oot3dOutlineGeometryGuide, PreservesNativeDepthAndColorInBothDepthModes) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     shaderc::Compiler compiler;
     for (bool explicitDepth : { false, true }) {
         const std::string source = std::string("#version 450\nlayout(location=5) in vec4 pica_normquat;\n"
@@ -3709,7 +3709,7 @@ TEST(Oot3dOutlineGeometryGuide, PreservesNativeDepthAndColorInBothDepthModes) {
 }
 
 TEST(Oot3dDiffuseAlbedoGuide, DepthWritingSceneSurfacesPublishItAndOverlaysLeaveIt) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     shaderc::Compiler compiler;
     const std::string source = "#version 450\nlayout(location=5) in vec4 pica_normquat;\n"
                                "layout(location=0) out vec4 pica_color;\n"
@@ -3754,7 +3754,7 @@ TEST(Oot3dDiffuseAlbedoGuide, DepthWritingSceneSurfacesPublishItAndOverlaysLeave
 }
 
 TEST(Oot3dNativeFogGuide, CopiesNativeFogResultWithoutChangingNativeColorOrDepth) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     constexpr std::string_view source = R"glsl(#version 450
 layout(set=0,binding=0,std140) uniform F { vec4 fog_color; } fragment_uniforms;
 layout(location=0) out vec4 pica_color;
@@ -3785,7 +3785,7 @@ void main() {
 }
 
 TEST(Oot3dNativeFogGuide, NativeFogDisabledWritesNeutralGuide) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     PicaFragmentInstrumentationRequest request;
     request.Source = "#version 450\nlayout(location=0) out vec4 pica_color;\n"
                      "void main() { pica_color=vec4(1); }\n";
@@ -3802,11 +3802,11 @@ TEST(Oot3dNativeFogGuide, NativeFogDisabledWritesNeutralGuide) {
 
 TEST(Oot3dRigidMotion, TemporalShaderVariantsCompile) {
     shaderc::Compiler compiler;
-    const auto vertex=Fast::Oot3d::BuildPicaTemporalVertexVariant(
+    const auto vertex=Fast::Extension::BuildPicaTemporalVertexVariant(
         "#version 450\nlayout(set=0,binding=0,std140) uniform U{uint b;int flip_viewport;uvec4 i[4];vec4 f[96];} uniforms;\n"
         "vec4 pica_output0 = vec4(0,0,0,1);\nvoid exec_shader(){}\n"
         "void main(){exec_shader();gl_Position=pica_output0;}\n",1U);
-    const auto fragment=Fast::Oot3d::BuildPicaRigidMotionShaderVariant(
+    const auto fragment=Fast::Extension::BuildPicaRigidMotionShaderVariant(
         "#version 450\nlayout(location=0) out vec4 color;\nvoid main(){color=vec4(1);}\n",2U);
     const auto vertexResult=compiler.CompileGlslToSpv(
         vertex.Source,shaderc_vertex_shader,"rigid_motion.vert");
@@ -3834,7 +3834,7 @@ void main() {
 }
 )glsl";
     const auto variant =
-        Fast::Oot3d::BuildPicaAmbientOcclusionGuideVariant(
+        Fast::Extension::BuildPicaAmbientOcclusionGuideVariant(
             source, 33U, true);
     ASSERT_TRUE(variant.Applied());
     shaderc::Compiler compiler;
@@ -3857,7 +3857,7 @@ void main() {
 }
 )glsl";
     const auto variant =
-        Fast::Oot3d::BuildPicaSceneDomainGuideVariant(
+        Fast::Extension::BuildPicaSceneDomainGuideVariant(
             source, 42U,
             {Oot3d::Renderer::PicaCompositionDomain::Scene,
              0U, false, true, 0xFU},
@@ -3874,7 +3874,7 @@ void main() {
 
 TEST(Oot3dSceneComposite, ComputeShaderCompiles) {
     const std::string shader =
-        Fast::Oot3d::BuildSceneCompositeComputeShader();
+        Fast::Extension::BuildSceneCompositeComputeShader();
     EXPECT_NE(shader.find("binding=4) uniform texture2D normal_guide"),
               std::string::npos);
     EXPECT_NE(shader.find("binding=5) uniform texture2D depth_guide"),
@@ -3898,34 +3898,34 @@ TEST(Oot3dSceneComposite, ComputeShaderCompiles) {
 
 TEST(Oot3dLinearSceneColor, TransferFunctionsAndShaderAreExplicit) {
     const auto unknownPolicy =
-        Fast::Oot3d::BuildLinearSceneColorPolicy(
-            Fast::Oot3d::SceneColorEncoding::Unknown);
+        Fast::Extension::BuildLinearSceneColorPolicy(
+            Fast::Extension::SceneColorEncoding::Unknown);
     EXPECT_FALSE(unknownPolicy.Valid);
     const auto linearPolicy =
-        Fast::Oot3d::BuildLinearSceneColorPolicy(
-            Fast::Oot3d::SceneColorEncoding::Linear);
+        Fast::Extension::BuildLinearSceneColorPolicy(
+            Fast::Extension::SceneColorEncoding::Linear);
     EXPECT_EQ(linearPolicy.Source,
-              Fast::Oot3d::SceneColorEncoding::Linear);
+              Fast::Extension::SceneColorEncoding::Linear);
     EXPECT_TRUE(linearPolicy.Valid);
     EXPECT_FALSE(linearPolicy.DecodeSrgb);
     const auto srgbPolicy =
-        Fast::Oot3d::BuildLinearSceneColorPolicy(
-            Fast::Oot3d::NativePicaSceneColorEncoding());
+        Fast::Extension::BuildLinearSceneColorPolicy(
+            Fast::Extension::NativePicaSceneColorEncoding());
     EXPECT_EQ(srgbPolicy.Source,
-              Fast::Oot3d::SceneColorEncoding::Srgb);
+              Fast::Extension::SceneColorEncoding::Srgb);
     EXPECT_TRUE(srgbPolicy.Valid);
     EXPECT_TRUE(srgbPolicy.DecodeSrgb);
-    EXPECT_NEAR(Fast::Oot3d::SrgbToLinear(0.04045F),
+    EXPECT_NEAR(Fast::Extension::SrgbToLinear(0.04045F),
                 0.0031308F, 1.0e-6F);
-    EXPECT_NEAR(Fast::Oot3d::SrgbToLinear(0.5F),
+    EXPECT_NEAR(Fast::Extension::SrgbToLinear(0.5F),
                 0.214041F, 1.0e-5F);
     EXPECT_NEAR(
-        Fast::Oot3d::LinearToSrgb(
-            Fast::Oot3d::SrgbToLinear(0.5F)),
+        Fast::Extension::LinearToSrgb(
+            Fast::Extension::SrgbToLinear(0.5F)),
         0.5F, 1.0e-5F);
     shaderc::Compiler compiler;
     const auto result = compiler.CompileGlslToSpv(
-        Fast::Oot3d::BuildLinearSceneColorComputeShader(),
+        Fast::Extension::BuildLinearSceneColorComputeShader(),
         shaderc_compute_shader, "linear_scene_color.comp");
     EXPECT_EQ(result.GetCompilationStatus(),
               shaderc_compilation_status_success)
@@ -3934,8 +3934,8 @@ TEST(Oot3dLinearSceneColor, TransferFunctionsAndShaderAreExplicit) {
 #endif
 
 TEST(Oot3dTemporalHistory, PreservesPreviousViewAndDeduplicatesSceneFrame) {
-    Fast::Oot3d::TemporalHistoryManager history;
-    Fast::Oot3d::TemporalViewInput input{};
+    Fast::Extension::TemporalHistoryManager history;
+    Fast::Extension::TemporalViewInput input{};
     input.Key = {1U, 2U, 3U};
     input.RenderedFrameId = 10U;
     input.Width = 1280U;
@@ -3946,7 +3946,7 @@ TEST(Oot3dTemporalHistory, PreservesPreviousViewAndDeduplicatesSceneFrame) {
     auto first = history.Prepare(input);
     EXPECT_TRUE(first.CameraCut);
     EXPECT_EQ(first.ResetReason,
-              Fast::Oot3d::TemporalResetReason::FirstFrame);
+              Fast::Extension::TemporalResetReason::FirstFrame);
 
     input.RenderedFrameId = 11U;
     input.WorldToClip[12] = 0.25F;
@@ -3962,8 +3962,8 @@ TEST(Oot3dTemporalHistory, PreservesPreviousViewAndDeduplicatesSceneFrame) {
 }
 
 TEST(Oot3dTemporalHistory, InvalidatesOnProjectionResizeTeleportAndReset) {
-    Fast::Oot3d::TemporalHistoryManager history;
-    Fast::Oot3d::TemporalViewInput input{};
+    Fast::Extension::TemporalHistoryManager history;
+    Fast::Extension::TemporalViewInput input{};
     input.Key = {4U, 5U, 6U};
     input.Width = 640U;
     input.Height = 480U;
@@ -3977,16 +3977,16 @@ TEST(Oot3dTemporalHistory, InvalidatesOnProjectionResizeTeleportAndReset) {
     input.RenderedFrameId++;
     input.Width = 800U;
     EXPECT_EQ(history.Prepare(input).ResetReason,
-              Fast::Oot3d::TemporalResetReason::ResolutionChanged);
+              Fast::Extension::TemporalResetReason::ResolutionChanged);
     input.RenderedFrameId++;
     input.Projection[0] = 1.2F;
     input.WorldToClip[0] = 1.2F;
     EXPECT_EQ(history.Prepare(input).ResetReason,
-              Fast::Oot3d::TemporalResetReason::ProjectionChanged);
+              Fast::Extension::TemporalResetReason::ProjectionChanged);
     input.RenderedFrameId++;
     input.Eye[0] = 500.0F;
     EXPECT_EQ(history.Prepare(input).ResetReason,
-              Fast::Oot3d::TemporalResetReason::CameraTeleport);
+              Fast::Extension::TemporalResetReason::CameraTeleport);
     const uint64_t oldEpoch = history.Epoch();
     history.Reset();
     EXPECT_GT(history.Epoch(), oldEpoch);
@@ -3995,8 +3995,8 @@ TEST(Oot3dTemporalHistory, InvalidatesOnProjectionResizeTeleportAndReset) {
 }
 
 TEST(Oot3dTemporalHistory, RejectsNonInvertibleViewProjection) {
-    Fast::Oot3d::TemporalHistoryManager history;
-    Fast::Oot3d::TemporalViewInput input{};
+    Fast::Extension::TemporalHistoryManager history;
+    Fast::Extension::TemporalViewInput input{};
     input.Key = {7U, 8U, 9U};
     input.RenderedFrameId = 1U;
     input.Width = 320U;
@@ -4004,13 +4004,13 @@ TEST(Oot3dTemporalHistory, RejectsNonInvertibleViewProjection) {
     const auto state = history.Prepare(input);
     EXPECT_FALSE(state.HistoryValid);
     EXPECT_EQ(state.ResetReason,
-              Fast::Oot3d::TemporalResetReason::NonInvertibleViewProjection);
+              Fast::Extension::TemporalResetReason::NonInvertibleViewProjection);
 }
 
 TEST(Oot3dMotionVectors, StaticCameraProducesZeroHistoryOffset) {
     const std::array<float, 16> identity{
         1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
-    const auto motion = Fast::Oot3d::ComputeCameraMotionUv(
+    const auto motion = Fast::Extension::ComputeCameraMotionUv(
         {0.25F, 0.75F}, 1.0F, identity, identity,
         {0.0F, 0.0F, 0.0F}, {0.0F, 0.0F, 1.0F}, true);
     EXPECT_FALSE(motion.Disoccluded);
@@ -4021,7 +4021,7 @@ TEST(Oot3dMotionVectors, StaticCameraProducesZeroHistoryOffset) {
 TEST(Oot3dMotionVectors, InvalidHistoryEmitsDisocclusion) {
     const std::array<float, 16> identity{
         1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
-    const auto motion = Fast::Oot3d::ComputeCameraMotionUv(
+    const auto motion = Fast::Extension::ComputeCameraMotionUv(
         {0.5F, 0.5F}, 1.0F, identity, identity,
         {0.0F, 0.0F, 0.0F}, {0.0F, 0.0F, 1.0F}, false);
     EXPECT_TRUE(motion.Disoccluded);
@@ -4029,7 +4029,7 @@ TEST(Oot3dMotionVectors, InvalidHistoryEmitsDisocclusion) {
 
 TEST(Oot3dMotionVectors,
      ReactiveVariantFollowsNativeBlendAndCompositionSemantics) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     using BlendEquation = Oot3d::Renderer::NativeBlendEquation;
     using BlendFactor = Oot3d::Renderer::NativeBlendFactor;
     using CompositionDomain = Oot3d::Renderer::PicaCompositionDomain;
@@ -4085,19 +4085,19 @@ TEST(Oot3dMotionVectors,
 }
 
 TEST(Oot3dTemporalAa, RejectsHistoryForDisocclusionAndReactivePixels) {
-    EXPECT_FLOAT_EQ(Fast::Oot3d::TemporalHistoryWeight(
+    EXPECT_FLOAT_EQ(Fast::Extension::TemporalHistoryWeight(
                         0.9F, 0.0F, 0.0F, false), 0.0F);
-    EXPECT_FLOAT_EQ(Fast::Oot3d::TemporalHistoryWeight(
+    EXPECT_FLOAT_EQ(Fast::Extension::TemporalHistoryWeight(
                         0.9F, 1.0F, 0.0F, true), 0.0F);
-    EXPECT_FLOAT_EQ(Fast::Oot3d::TemporalHistoryWeight(
+    EXPECT_FLOAT_EQ(Fast::Extension::TemporalHistoryWeight(
                         0.9F, 0.0F, 1.0F, true), 0.0F);
-    EXPECT_NEAR(Fast::Oot3d::TemporalHistoryWeight(
+    EXPECT_NEAR(Fast::Extension::TemporalHistoryWeight(
                     0.9F, 0.25F, 0.5F, true), 0.3375F, 1.0e-6F);
 }
 
 #ifdef OOT3D_FOUNDATION_HAS_SHADERC
 TEST(Oot3dTemporalAa, ComputeShaderCompilesWithClampAndReactiveRejection) {
-    const std::string shader = Fast::Oot3d::BuildTemporalAaComputeShader();
+    const std::string shader = Fast::Extension::BuildTemporalAaComputeShader();
     EXPECT_NE(shader.find("minimum_color-span"), std::string::npos);
     EXPECT_NE(shader.find("motion.a"), std::string::npos);
     EXPECT_NE(shader.find("edge_support"), std::string::npos);
@@ -4114,7 +4114,7 @@ TEST(Oot3dTemporalAa, ComputeShaderCompilesWithClampAndReactiveRejection) {
 
 #ifdef OOT3D_FOUNDATION_HAS_SHADERC
 TEST(Oot3dMotionVectors, ComputeShaderCompilesAndDeclaresReactiveContract) {
-    const std::string shader = Fast::Oot3d::BuildCameraMotionComputeShader();
+    const std::string shader = Fast::Extension::BuildCameraMotionComputeShader();
     EXPECT_NE(shader.find("previous_uv-uv"), std::string::npos);
     EXPECT_NE(shader.find("disocclusion"), std::string::npos);
     EXPECT_NE(shader.find("material_guide,source_sampler"), std::string::npos);
@@ -4152,7 +4152,7 @@ TEST(Oot3dPicaLighting, DecodesStructuralAndDynamicRegisters) {
     registers[0x1D1] = 3U;       // D0 uses L dot N
     registers[0x1D2] = 2U;       // D0 scale 4
 
-    const auto state = Fast::Oot3d::DecodePicaFragmentLighting(registers);
+    const auto state = Fast::Extension::DecodePicaFragmentLighting(registers);
     ASSERT_TRUE(state.Enabled);
     EXPECT_EQ(state.ActiveLightCount, 2U);
     EXPECT_EQ(state.LightPermutation[0], 3U);
@@ -4161,7 +4161,7 @@ TEST(Oot3dPicaLighting, DecodesStructuralAndDynamicRegisters) {
     EXPECT_NEAR(state.GlobalAmbient.Rgb[1], 128.0F / 255.0F, 1.0e-6F);
     EXPECT_EQ(state.EnvironmentConfiguration, 5U);
     EXPECT_EQ(state.FresnelSelector, 2U);
-    EXPECT_EQ(state.BumpMode, Fast::Oot3d::PicaLightingBumpMode::NormalMap);
+    EXPECT_EQ(state.BumpMode, Fast::Extension::PicaLightingBumpMode::NormalMap);
     EXPECT_EQ(state.BumpTextureUnit, 2U);
     EXPECT_TRUE(state.ClampHighlights);
     EXPECT_TRUE(state.ShadowPrimary);
@@ -4183,35 +4183,35 @@ TEST(Oot3dPicaLighting, DecodesStructuralAndDynamicRegisters) {
     EXPECT_FALSE(light.DistanceAttenuationEnabled);
     EXPECT_FALSE(state.LutSamplers[0].AbsoluteInput);
     EXPECT_EQ(state.LutSamplers[0].Input,
-              Fast::Oot3d::PicaLightingLutInput::LightNormal);
+              Fast::Extension::PicaLightingLutInput::LightNormal);
     EXPECT_FLOAT_EQ(state.LutSamplers[0].Scale, 4.0F);
 }
 
 TEST(Oot3dPicaLighting, DecodesLutCursorEntriesAndValidTables) {
-    const auto cursor = Fast::Oot3d::DecodePicaLightingLutWriteCursor(
+    const auto cursor = Fast::Extension::DecodePicaLightingLutWriteCursor(
         (17U << 8U) | 231U);
     EXPECT_EQ(cursor.Index, 231U);
     EXPECT_EQ(cursor.Table, 17U);
-    const auto increasing = Fast::Oot3d::DecodePicaLightingLutEntry(
+    const auto increasing = Fast::Extension::DecodePicaLightingLutEntry(
         2048U | (1024U << 12U));
     EXPECT_NEAR(increasing.Value, 2048.0F / 4095.0F, 1.0e-6F);
     EXPECT_NEAR(increasing.Delta, 1024.0F / 2047.0F, 1.0e-6F);
-    const auto decreasing = Fast::Oot3d::DecodePicaLightingLutEntry(
+    const auto decreasing = Fast::Extension::DecodePicaLightingLutEntry(
         4095U | (0xC00U << 12U));
     EXPECT_FLOAT_EQ(decreasing.Value, 1.0F);
     EXPECT_NEAR(decreasing.Delta, -1024.0F / 2047.0F, 1.0e-6F);
-    EXPECT_TRUE(Fast::Oot3d::IsPicaLightingLutTableValid(0U));
-    EXPECT_TRUE(Fast::Oot3d::IsPicaLightingLutTableValid(23U));
-    EXPECT_FALSE(Fast::Oot3d::IsPicaLightingLutTableValid(2U));
-    EXPECT_FALSE(Fast::Oot3d::IsPicaLightingLutTableValid(24U));
-    EXPECT_TRUE(Fast::Oot3d::IsPicaLightingLutSamplerSupported(0U, 0U));
-    EXPECT_FALSE(Fast::Oot3d::IsPicaLightingLutSamplerSupported(1U, 0U));
-    EXPECT_FALSE(Fast::Oot3d::IsPicaLightingLutSamplerSupported(3U, 8U));
-    EXPECT_TRUE(Fast::Oot3d::IsPicaLightingLutSamplerSupported(4U, 8U));
-    EXPECT_TRUE(Fast::Oot3d::IsPicaLightingLutSamplerSupported(8U, 4U));
-    EXPECT_FALSE(Fast::Oot3d::IsPicaLightingLutSamplerSupported(0U, 4U));
-    EXPECT_TRUE(Fast::Oot3d::IsPicaLightingLutSamplerSupported(0U, 16U));
-    EXPECT_FALSE(Fast::Oot3d::IsPicaLightingLutSamplerSupported(7U, 16U));
+    EXPECT_TRUE(Fast::Extension::IsPicaLightingLutTableValid(0U));
+    EXPECT_TRUE(Fast::Extension::IsPicaLightingLutTableValid(23U));
+    EXPECT_FALSE(Fast::Extension::IsPicaLightingLutTableValid(2U));
+    EXPECT_FALSE(Fast::Extension::IsPicaLightingLutTableValid(24U));
+    EXPECT_TRUE(Fast::Extension::IsPicaLightingLutSamplerSupported(0U, 0U));
+    EXPECT_FALSE(Fast::Extension::IsPicaLightingLutSamplerSupported(1U, 0U));
+    EXPECT_FALSE(Fast::Extension::IsPicaLightingLutSamplerSupported(3U, 8U));
+    EXPECT_TRUE(Fast::Extension::IsPicaLightingLutSamplerSupported(4U, 8U));
+    EXPECT_TRUE(Fast::Extension::IsPicaLightingLutSamplerSupported(8U, 4U));
+    EXPECT_FALSE(Fast::Extension::IsPicaLightingLutSamplerSupported(0U, 4U));
+    EXPECT_TRUE(Fast::Extension::IsPicaLightingLutSamplerSupported(0U, 16U));
+    EXPECT_FALSE(Fast::Extension::IsPicaLightingLutSamplerSupported(7U, 16U));
 }
 
 TEST(Oot3dPicaLighting, StructuralKeyIgnoresDynamicLightValues) {
@@ -4221,11 +4221,11 @@ TEST(Oot3dPicaLighting, StructuralKeyIgnoresDynamicLightValues) {
     auto second = first;
     second[0x140] = 0x0FF000FFU;
     second[0x144] = 0x3C003C00U;
-    EXPECT_EQ(Fast::Oot3d::ComputePicaFragmentLightingStructuralKey(first),
-              Fast::Oot3d::ComputePicaFragmentLightingStructuralKey(second));
+    EXPECT_EQ(Fast::Extension::ComputePicaFragmentLightingStructuralKey(first),
+              Fast::Extension::ComputePicaFragmentLightingStructuralKey(second));
     second[0x149] = 1U;
-    EXPECT_NE(Fast::Oot3d::ComputePicaFragmentLightingStructuralKey(first),
-              Fast::Oot3d::ComputePicaFragmentLightingStructuralKey(second));
+    EXPECT_NE(Fast::Extension::ComputePicaFragmentLightingStructuralKey(first),
+              Fast::Extension::ComputePicaFragmentLightingStructuralKey(second));
 }
 
 TEST(Oot3dPicaShadow2d, DetilesPackedDepthAndComparesPenumbra) {
@@ -4236,42 +4236,42 @@ TEST(Oot3dPicaShadow2d, DetilesPackedDepthAndComparesPenumbra) {
                 &packed, sizeof(packed));
     std::vector<uint32_t> linear;
     std::string error;
-    ASSERT_TRUE(Fast::Oot3d::DetilePicaShadow2d(
+    ASSERT_TRUE(Fast::Extension::DetilePicaShadow2d(
         tiled, 5U, 4U, linear, &error)) << error;
     ASSERT_EQ(linear.size(), 20U);
     EXPECT_EQ(linear[2U * 5U + 3U], packed);
-    EXPECT_FLOAT_EQ(Fast::Oot3d::ComparePicaShadow2d(
+    EXPECT_FLOAT_EQ(Fast::Extension::ComparePicaShadow2d(
                         packed, 0x654321U), 0.0F);
-    EXPECT_NEAR(Fast::Oot3d::ComparePicaShadow2d(
+    EXPECT_NEAR(Fast::Extension::ComparePicaShadow2d(
                     packed, 0x123456U), 128.0F / 255.0F, 1.0e-6F);
-    EXPECT_FALSE(Fast::Oot3d::DetilePicaShadow2d(
+    EXPECT_FALSE(Fast::Extension::DetilePicaShadow2d(
         std::span<const uint8_t>(tiled).first(12U), 5U, 4U,
         linear, &error));
 }
 
 TEST(Oot3dPicaShadow2d, PacksAndUpdatesDepthPenumbraAtomically) {
-    EXPECT_FLOAT_EQ(Fast::Oot3d::DecodePicaFloat16(0x3C00U), 1.0F);
-    EXPECT_FLOAT_EQ(Fast::Oot3d::DecodePicaFloat16(0x3800U), 0.5F);
-    EXPECT_EQ(Fast::Oot3d::PackPicaShadow2d(0x123456U, 0x80U),
+    EXPECT_FLOAT_EQ(Fast::Extension::DecodePicaFloat16(0x3C00U), 1.0F);
+    EXPECT_FLOAT_EQ(Fast::Extension::DecodePicaFloat16(0x3800U), 0.5F);
+    EXPECT_EQ(Fast::Extension::PackPicaShadow2d(0x123456U, 0x80U),
               0x12345680U);
 
-    const uint32_t initial = Fast::Oot3d::PackPicaShadow2d(0xF00000U, 200U);
-    EXPECT_EQ(Fast::Oot3d::UpdatePicaShadow2d(
+    const uint32_t initial = Fast::Extension::PackPicaShadow2d(0xF00000U, 200U);
+    EXPECT_EQ(Fast::Extension::UpdatePicaShadow2d(
                   initial, 0xE00000U, 0U, 1.0F, 0.0F),
-              Fast::Oot3d::PackPicaShadow2d(0xE00000U, 200U));
-    EXPECT_EQ(Fast::Oot3d::UpdatePicaShadow2d(
+              Fast::Extension::PackPicaShadow2d(0xE00000U, 200U));
+    EXPECT_EQ(Fast::Extension::UpdatePicaShadow2d(
                   initial, 0xE00000U, 100U, 1.0F, 0.0F),
-              Fast::Oot3d::PackPicaShadow2d(0xF00000U, 100U));
-    EXPECT_EQ(Fast::Oot3d::UpdatePicaShadow2d(
+              Fast::Extension::PackPicaShadow2d(0xF00000U, 100U));
+    EXPECT_EQ(Fast::Extension::UpdatePicaShadow2d(
                   initial, 0xF10000U, 1U, 1.0F, 0.0F),
               initial);
 }
 
 TEST(Oot3dPicaToon, ToonPresetKeepsApprovedStyleDefaults) {
-    const auto preset = Fast::Oot3d::GraphicsSettingsService::Preset(
-        Fast::Oot3d::GraphicsPreset::Toon);
+    const auto preset = Fast::Extension::GraphicsSettingsService::Preset(
+        Fast::Extension::GraphicsPreset::Toon);
     EXPECT_EQ(preset.Effects.Toon,
-              Fast::Oot3d::ToonMode::PostProcessPreview);
+              Fast::Extension::ToonMode::PostProcessPreview);
     EXPECT_EQ(preset.Effects.ToonStyle.LightBands, 4U);
     EXPECT_FLOAT_EQ(preset.Effects.ToonStyle.BandSoftness, 0.228F);
     EXPECT_FLOAT_EQ(preset.Effects.ToonStyle.Saturation, 1.09F);
@@ -4281,7 +4281,7 @@ TEST(Oot3dPicaToon, ToonPresetKeepsApprovedStyleDefaults) {
 }
 
 TEST(Oot3dPicaToon, ScanoutComposesOutlineBeforeFxaaOnly) {
-    const auto shader = Fast::Oot3d::BuildPicaScanoutFragmentShader();
+    const auto shader = Fast::Extension::BuildPicaScanoutFragmentShader();
     const auto ao = shader.find(
         "color.rgb *= oot3d_scene_ambient_occlusion_visibility");
     const auto outline = shader.find(
@@ -4306,7 +4306,7 @@ TEST(Oot3dPicaToon, ScanoutComposesOutlineBeforeFxaaOnly) {
 
 TEST(Oot3dPicaToon, OutlineRestoresSceneGuidesWithNativeWidthProtection) {
     const auto shader =
-        Fast::Oot3d::ToonOutlineComputeShaderLibrary();
+        Fast::Extension::ToonOutlineComputeShaderLibrary();
     EXPECT_NE(
         shader.find("sampler2D(depth_guide,composite_sampler)"),
         std::string::npos);
@@ -4326,7 +4326,7 @@ TEST(Oot3dPicaToon, OutlineRestoresSceneGuidesWithNativeWidthProtection) {
 }
 
 TEST(Oot3dPicaToon, CoverageOnlyHidesFinishedNativeContours) {
-    const auto kernel = Fast::Oot3d::ToonOutlineShaderLibrary();
+    const auto kernel = Fast::Extension::ToonOutlineShaderLibrary();
     const auto visibility = kernel.find("float oot3d_toon_outline_edge(");
     ASSERT_NE(visibility, std::string::npos);
     const auto detector = kernel.substr(0, visibility);
@@ -4339,60 +4339,60 @@ TEST(Oot3dPicaToon, CoverageOnlyHidesFinishedNativeContours) {
 }
 
 TEST(Oot3dPicaScanout, PolicySuppressesAllEffectsAlreadyComposited) {
-    Fast::Oot3d::PicaScanoutPolicyInput input;
+    Fast::Extension::PicaScanoutPolicyInput input;
     input.Width = 960;
     input.Height = 540;
-    EXPECT_FALSE(Fast::Oot3d::ValidatePicaScanoutPolicyInput(input));
-    input.InputEncoding = Fast::Oot3d::SceneColorEncoding::Srgb;
-    EXPECT_TRUE(Fast::Oot3d::ValidatePicaScanoutPolicyInput(input));
+    EXPECT_FALSE(Fast::Extension::ValidatePicaScanoutPolicyInput(input));
+    input.InputEncoding = Fast::Extension::SceneColorEncoding::Srgb;
+    EXPECT_TRUE(Fast::Extension::ValidatePicaScanoutPolicyInput(input));
     input.AmbientOcclusionAvailable = true;
     input.OutlineAvailable = true;
     input.ReflectionsAvailable = true;
     input.TemporalOutput = true;
     input.EffectsComposited = true;
-    auto output = Fast::Oot3d::BuildPicaScanoutPushConstants(input);
+    auto output = Fast::Extension::BuildPicaScanoutPushConstants(input);
     EXPECT_EQ(output.AmbientOcclusion, 0U);
     EXPECT_EQ(output.Reflections, 0U);
     EXPECT_EQ(output.Outline, 0U);
 
     input.EffectsComposited = false;
-    output = Fast::Oot3d::BuildPicaScanoutPushConstants(input);
+    output = Fast::Extension::BuildPicaScanoutPushConstants(input);
     EXPECT_EQ(output.AmbientOcclusion, 1U);
     EXPECT_EQ(output.Reflections, 1U);
     EXPECT_EQ(output.Outline, 1U);
 
     // An MXAO debug view is shown only by the scene composite, never applied
     // as occlusion at scanout.
-    input.Effects.AmbientOcclusion = Fast::Oot3d::AmbientOcclusionMode::Mxao;
-    input.Effects.MxaoDebug = Fast::Oot3d::MxaoDebugView::DepthNormals;
-    EXPECT_EQ(Fast::Oot3d::BuildPicaScanoutPushConstants(input).AmbientOcclusion, 0U);
-    input.Effects.MxaoDebug = Fast::Oot3d::MxaoDebugView::Off;
-    EXPECT_EQ(Fast::Oot3d::BuildPicaScanoutPushConstants(input).AmbientOcclusion, 1U);
+    input.Effects.AmbientOcclusion = Fast::Extension::AmbientOcclusionMode::Mxao;
+    input.Effects.MxaoDebug = Fast::Extension::MxaoDebugView::DepthNormals;
+    EXPECT_EQ(Fast::Extension::BuildPicaScanoutPushConstants(input).AmbientOcclusion, 0U);
+    input.Effects.MxaoDebug = Fast::Extension::MxaoDebugView::Off;
+    EXPECT_EQ(Fast::Extension::BuildPicaScanoutPushConstants(input).AmbientOcclusion, 1U);
 
-    input.InputEncoding = Fast::Oot3d::SceneColorEncoding::Linear;
+    input.InputEncoding = Fast::Extension::SceneColorEncoding::Linear;
     input.TargetSrgb = false;
-    output = Fast::Oot3d::BuildPicaScanoutPushConstants(input);
+    output = Fast::Extension::BuildPicaScanoutPushConstants(input);
     EXPECT_EQ(output.InputLinear, 1U);
     EXPECT_EQ(output.EncodeSrgb, 1U);
     input.TargetSrgb = true;
-    output = Fast::Oot3d::BuildPicaScanoutPushConstants(input);
+    output = Fast::Extension::BuildPicaScanoutPushConstants(input);
     EXPECT_EQ(output.InputLinear, 1U);
     EXPECT_EQ(output.EncodeSrgb, 0U)
         << "an sRGB attachment performs the final encode";
 }
 
 TEST(Oot3dPicaScanout, PolicyCopiesViewAndArtSettings) {
-    Fast::Oot3d::PicaScanoutPolicyInput input;
+    Fast::Extension::PicaScanoutPolicyInput input;
     input.TransferFlags = 1U;
     input.AaMode = 2U;
     input.Width = 1280U;
     input.Height = 720U;
-    input.InputEncoding = Fast::Oot3d::SceneColorEncoding::Srgb;
+    input.InputEncoding = Fast::Extension::SceneColorEncoding::Srgb;
     input.HiZMipCount = 11U;
     input.Effects.ToonStyle.OutlineWidth = 2.5F;
     input.Effects.ToonStyle.OutlineTint = {0.2F, 0.3F, 0.4F};
     input.Effects.ReflectionStrength = 0.75F;
-    Fast::Oot3d::PerspectiveViewState perspective;
+    Fast::Extension::PerspectiveViewState perspective;
     perspective.Projection[0] = 1.25F;
     perspective.Projection[5] = 2.0F;
     perspective.Projection[8] = 0.1F;
@@ -4402,7 +4402,7 @@ TEST(Oot3dPicaScanout, PolicyCopiesViewAndArtSettings) {
     input.Perspective = perspective;
 
     const auto output =
-        Fast::Oot3d::BuildPicaScanoutPushConstants(input);
+        Fast::Extension::BuildPicaScanoutPushConstants(input);
     EXPECT_EQ(output.FlipY, 0U);
     EXPECT_EQ(output.AaMode, 2U);
     EXPECT_FLOAT_EQ(output.InvWidth, 1.0F / 1280.0F);
@@ -4420,9 +4420,9 @@ TEST(Oot3dPicaScanout, PolicyCopiesViewAndArtSettings) {
 }
 
 TEST(Oot3dPicaScanout, NriShaderUsesSeparateTexturesAndSampler) {
-    const auto vertex = Fast::Oot3d::BuildPicaScanoutVertexShader();
+    const auto vertex = Fast::Extension::BuildPicaScanoutVertexShader();
     const auto fragment =
-        Fast::Oot3d::BuildPicaScanoutFragmentShader(true);
+        Fast::Extension::BuildPicaScanoutFragmentShader(true);
     EXPECT_NE(vertex.find("gl_VertexIndex"), std::string::npos);
     EXPECT_NE(fragment.find("uniform texture2D physical_scanout"),
               std::string::npos);
@@ -4469,9 +4469,9 @@ TEST(Oot3dPicaNri, CompilesMixedSamplerTypesUnderTheNriContract) {
         "ivec2 s=textureSize(pica_texture2,0);"
         "color=vec4(a)+b+vec4(s,0,0);}\n";
     const auto variant =
-        Fast::Oot3d::BuildPicaNriFragmentShaderVariant(source);
+        Fast::Extension::BuildPicaNriFragmentShaderVariant(source);
     ASSERT_TRUE(variant.Applied) << variant.Error;
-    EXPECT_TRUE(Fast::Oot3d::ValidatePicaNriDescriptorContract());
+    EXPECT_TRUE(Fast::Extension::ValidatePicaNriDescriptorContract());
 #ifdef OOT3D_FOUNDATION_HAS_SHADERC
     shaderc::Compiler compiler;
     shaderc::CompileOptions options;
@@ -4499,7 +4499,7 @@ TEST(Oot3dPicaNri, PreservesNativeShadowStorageImageWithUnsignedSampler) {
         "color=vec4(texelFetch(pica_texture0,p,0))+vec4(seen)"
         "+texture(pica_texture1,vec2(0))+texture(pica_texture2,vec2(0));}\n";
     const auto variant =
-        Fast::Oot3d::BuildPicaNriFragmentShaderVariant(source);
+        Fast::Extension::BuildPicaNriFragmentShaderVariant(source);
     ASSERT_TRUE(variant.Applied) << variant.Error;
     EXPECT_NE(variant.Source.find(
                   "binding=1) uniform utexture2D pica_texture0_image"),
@@ -4536,7 +4536,7 @@ TEST(Oot3dPicaNri, ConvertsNativeLightingLutSamplerWhenPresent) {
         "color=vec4(v)+texture(pica_texture0,vec2(0))"
         "+texture(pica_texture1,vec2(0))+texture(pica_texture2,vec2(0));}\n";
     const auto variant =
-        Fast::Oot3d::BuildPicaNriFragmentShaderVariant(source);
+        Fast::Extension::BuildPicaNriFragmentShaderVariant(source);
     ASSERT_TRUE(variant.Applied) << variant.Error;
     EXPECT_NE(variant.Source.find(
                   "binding=13) uniform utexture2D pica_lighting_lut_image"),
@@ -4567,14 +4567,14 @@ TEST(Oot3dPicaNri, RejectsIncompleteContractForVulkanFallback) {
         "layout(set=0,binding=1) uniform sampler2D pica_texture0;\n"
         "void main(){}\n";
     const auto variant =
-        Fast::Oot3d::BuildPicaNriFragmentShaderVariant(source);
+        Fast::Extension::BuildPicaNriFragmentShaderVariant(source);
     EXPECT_FALSE(variant.Applied);
     EXPECT_FALSE(variant.Error.empty());
     EXPECT_EQ(variant.Source, source);
 }
 
 TEST(Oot3dPicaNri, CanonicalVertexInputPreservesScaledValuesAndDefaults) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const std::array<PicaNriSourceVertexBinding, 1> bindings{{
         {2U, 8U, false},
     }};
@@ -4616,7 +4616,7 @@ TEST(Oot3dPicaNri, CanonicalVertexInputPreservesScaledValuesAndDefaults) {
 }
 
 TEST(Oot3dPicaNri, VertexInputLayoutOrdersBindingsAndRejectsDuplicates) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const std::array<PicaNriSourceVertexBinding, 2> bindings{{
         {3U, 12U, false},
         {1U, 4U, true},
@@ -4657,7 +4657,7 @@ TEST(Oot3dPicaNri, VertexInputLayoutOrdersBindingsAndRejectsDuplicates) {
 }
 
 TEST(Oot3dPicaNri, BuildsCanonicalVertexStreamsForSubmission) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const std::array<uint8_t, 8> source{{
         0xFEU, 0x03U, 0x04U, 0x00U,
         0x05U, 0x06U, 0x07U, 0x00U,
@@ -4691,23 +4691,23 @@ TEST(Oot3dPicaNri, BuildsCanonicalVertexStreamsForSubmission) {
 }
 
 TEST(Oot3dPicaRendering, ValidatesSingleAndMultisampleAttachmentContracts) {
-    EXPECT_EQ(Fast::Oot3d::kPicaColorAttachmentCount, 8U);
-    EXPECT_EQ(Fast::Oot3d::kPicaBaseInstrumentedColorAttachmentCount, 7U);
-    EXPECT_EQ(Fast::Oot3d::PicaAttachmentIndex(Fast::Oot3d::PicaColorAttachment::DiffuseAlbedoGuide), 7U);
-    EXPECT_EQ(Fast::Oot3d::PicaAttachmentIndex(Fast::Oot3d::PicaColorAttachment::FogGuide), 5U);
-    EXPECT_EQ(Fast::Oot3d::PicaAttachmentIndex(
-                  Fast::Oot3d::PicaColorAttachment::AmbientGuide),
+    EXPECT_EQ(Fast::Extension::kPicaColorAttachmentCount, 8U);
+    EXPECT_EQ(Fast::Extension::kPicaBaseInstrumentedColorAttachmentCount, 7U);
+    EXPECT_EQ(Fast::Extension::PicaAttachmentIndex(Fast::Extension::PicaColorAttachment::DiffuseAlbedoGuide), 7U);
+    EXPECT_EQ(Fast::Extension::PicaAttachmentIndex(Fast::Extension::PicaColorAttachment::FogGuide), 5U);
+    EXPECT_EQ(Fast::Extension::PicaAttachmentIndex(
+                  Fast::Extension::PicaColorAttachment::AmbientGuide),
               4U);
     const auto view =
         reinterpret_cast<VkImageView>(static_cast<uintptr_t>(1U));
-    Fast::Oot3d::PicaDynamicRenderingTarget target;
+    Fast::Extension::PicaDynamicRenderingTarget target;
     target.Colors.fill(view);
     target.Depth = view;
     target.Width = 1280U;
     target.Height = 720U;
-    EXPECT_TRUE(Fast::Oot3d::ValidatePicaDynamicRenderingTarget(
+    EXPECT_TRUE(Fast::Extension::ValidatePicaDynamicRenderingTarget(
         target, VK_RESOLVE_MODE_NONE));
-    EXPECT_FALSE(Fast::Oot3d::ValidatePicaNriRenderingTarget(
+    EXPECT_FALSE(Fast::Extension::ValidatePicaNriRenderingTarget(
         target, VK_RESOLVE_MODE_NONE));
     target.ColorImages.fill(
         reinterpret_cast<VkImage>(static_cast<uintptr_t>(2U)));
@@ -4715,11 +4715,11 @@ TEST(Oot3dPicaRendering, ValidatesSingleAndMultisampleAttachmentContracts) {
     target.DepthImage =
         reinterpret_cast<VkImage>(static_cast<uintptr_t>(3U));
     target.DepthFormat = VK_FORMAT_D32_SFLOAT;
-    EXPECT_TRUE(Fast::Oot3d::ValidatePicaNriRenderingTarget(
+    EXPECT_TRUE(Fast::Extension::ValidatePicaNriRenderingTarget(
         target, VK_RESOLVE_MODE_NONE));
 
     target.Samples = VK_SAMPLE_COUNT_4_BIT;
-    EXPECT_FALSE(Fast::Oot3d::ValidatePicaDynamicRenderingTarget(
+    EXPECT_FALSE(Fast::Extension::ValidatePicaDynamicRenderingTarget(
         target, VK_RESOLVE_MODE_MIN_BIT));
     target.Resolves.fill(view);
     target.ResolveImages.fill(
@@ -4727,60 +4727,60 @@ TEST(Oot3dPicaRendering, ValidatesSingleAndMultisampleAttachmentContracts) {
     target.DepthResolve = view;
     target.DepthResolveImage =
         reinterpret_cast<VkImage>(static_cast<uintptr_t>(5U));
-    EXPECT_FALSE(Fast::Oot3d::ValidatePicaDynamicRenderingTarget(
+    EXPECT_FALSE(Fast::Extension::ValidatePicaDynamicRenderingTarget(
         target, VK_RESOLVE_MODE_NONE));
-    EXPECT_TRUE(Fast::Oot3d::ValidatePicaDynamicRenderingTarget(
+    EXPECT_TRUE(Fast::Extension::ValidatePicaDynamicRenderingTarget(
         target, VK_RESOLVE_MODE_MIN_BIT));
-    EXPECT_TRUE(Fast::Oot3d::ValidatePicaNriRenderingTarget(
+    EXPECT_TRUE(Fast::Extension::ValidatePicaNriRenderingTarget(
         target, VK_RESOLVE_MODE_MIN_BIT));
     target.Resolves[2] = VK_NULL_HANDLE;
-    EXPECT_FALSE(Fast::Oot3d::ValidatePicaDynamicRenderingTarget(
+    EXPECT_FALSE(Fast::Extension::ValidatePicaDynamicRenderingTarget(
         target, VK_RESOLVE_MODE_MIN_BIT));
-    EXPECT_FALSE(Fast::Oot3d::ValidatePicaNriRenderingTarget(
+    EXPECT_FALSE(Fast::Extension::ValidatePicaNriRenderingTarget(
         target, VK_RESOLVE_MODE_MIN_BIT));
 
     // A guide the layout leaves unbound: no views, no images, no format.
     target.ColorFormats[2] = VK_FORMAT_UNDEFINED;
     target.Colors[2] = VK_NULL_HANDLE;
     target.ColorImages[2] = target.ResolveImages[2] = VK_NULL_HANDLE;
-    EXPECT_FALSE(Fast::Oot3d::PicaDynamicRenderingBinds(target, 2U));
-    EXPECT_TRUE(Fast::Oot3d::ValidatePicaDynamicRenderingTarget(
+    EXPECT_FALSE(Fast::Extension::PicaDynamicRenderingBinds(target, 2U));
+    EXPECT_TRUE(Fast::Extension::ValidatePicaDynamicRenderingTarget(
         target, VK_RESOLVE_MODE_MIN_BIT));
-    EXPECT_TRUE(Fast::Oot3d::ValidatePicaNriRenderingTarget(
+    EXPECT_TRUE(Fast::Extension::ValidatePicaNriRenderingTarget(
         target, VK_RESOLVE_MODE_MIN_BIT));
     // A bound guide (a format) without a view is not a layout.
     target.ColorFormats[2] = VK_FORMAT_R8G8B8A8_UNORM;
-    EXPECT_FALSE(Fast::Oot3d::ValidatePicaDynamicRenderingTarget(
+    EXPECT_FALSE(Fast::Extension::ValidatePicaDynamicRenderingTarget(
         target, VK_RESOLVE_MODE_MIN_BIT));
     // The scene colour is always bound.
     target.ColorFormats[2] = VK_FORMAT_UNDEFINED;
     target.ColorFormats[0] = VK_FORMAT_UNDEFINED;
     target.Colors[0] = VK_NULL_HANDLE;
-    EXPECT_TRUE(Fast::Oot3d::PicaDynamicRenderingBinds(target, 0U));
-    EXPECT_FALSE(Fast::Oot3d::ValidatePicaDynamicRenderingTarget(
+    EXPECT_TRUE(Fast::Extension::PicaDynamicRenderingBinds(target, 0U));
+    EXPECT_FALSE(Fast::Extension::ValidatePicaDynamicRenderingTarget(
         target, VK_RESOLVE_MODE_MIN_BIT));
 
     // The bound formats of a layout: the material guide alone with the colour.
-    const Fast::Oot3d::PicaAttachmentRequirements materialOnly{
-        Fast::Oot3d::PicaAuxiliaryOutput::MaterialGuide};
-    const auto formats = Fast::Oot3d::BoundPicaColorAttachmentFormats(materialOnly);
+    const Fast::Extension::PicaAttachmentRequirements materialOnly{
+        Fast::Extension::PicaAuxiliaryOutput::MaterialGuide};
+    const auto formats = Fast::Extension::BoundPicaColorAttachmentFormats(materialOnly);
     EXPECT_EQ(formats[0], VK_FORMAT_R8G8B8A8_UNORM);
     EXPECT_EQ(formats[1], VK_FORMAT_UNDEFINED);
     EXPECT_EQ(formats[2], VK_FORMAT_R8G8B8A8_UNORM);
     for (size_t index = 3; index < formats.size(); ++index)
         EXPECT_EQ(formats[index], VK_FORMAT_UNDEFINED) << index;
-    const auto every = Fast::Oot3d::BoundPicaColorAttachmentFormats(
-        Fast::Oot3d::PicaAttachmentRequirements{Fast::Oot3d::kAllPicaAuxiliaryOutputs});
-    for (size_t index = 0; index < Fast::Oot3d::kPicaBaseInstrumentedColorAttachmentCount; ++index)
-        EXPECT_EQ(every[index], Fast::Oot3d::kPicaColorAttachmentFormats[index]) << index;
-    EXPECT_EQ(every[Fast::Oot3d::kPicaBaseInstrumentedColorAttachmentCount], VK_FORMAT_UNDEFINED);
+    const auto every = Fast::Extension::BoundPicaColorAttachmentFormats(
+        Fast::Extension::PicaAttachmentRequirements{Fast::Extension::kAllPicaAuxiliaryOutputs});
+    for (size_t index = 0; index < Fast::Extension::kPicaBaseInstrumentedColorAttachmentCount; ++index)
+        EXPECT_EQ(every[index], Fast::Extension::kPicaColorAttachmentFormats[index]) << index;
+    EXPECT_EQ(every[Fast::Extension::kPicaBaseInstrumentedColorAttachmentCount], VK_FORMAT_UNDEFINED);
 }
 
 TEST(Oot3dPicaNriDrawOwnership,
      PreparesBeforeAndFinalizesAgainstTheCurrentRenderingScope) {
-    using Fast::Oot3d::FinalizePicaNriDrawOwnership;
-    using Fast::Oot3d::PicaNriVulkanFallbackAllowed;
-    using Fast::Oot3d::PreparePicaNriDrawOwnership;
+    using Fast::Extension::FinalizePicaNriDrawOwnership;
+    using Fast::Extension::PicaNriVulkanFallbackAllowed;
+    using Fast::Extension::PreparePicaNriDrawOwnership;
 
     const auto beforeScope =
         PreparePicaNriDrawOwnership(true, true);
@@ -4816,7 +4816,7 @@ TEST(Oot3dPicaNriDrawOwnership,
 
 TEST(Oot3dPicaGuideSamplingBarriers,
       CoversFiveGuidesAndComputeConsumersBidirectionally) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     DisplayEffectPlanInput input;
     input.WorldSurface = true;
     input.PerspectiveAvailable = true;
@@ -4920,7 +4920,7 @@ TEST(Oot3dPicaNriRenderTargets, ValidatesTransactionalAttachmentBundles) {
     const auto image = [](uintptr_t value) {
         return reinterpret_cast<VkImage>(value);
     };
-    Fast::Oot3d::NriPicaRenderTargetImages target;
+    Fast::Extension::NriPicaRenderTargetImages target;
     target.Color = image(1U);
     target.NormalGuide = image(2U);
     target.MaterialGuide = image(3U);
@@ -4930,10 +4930,10 @@ TEST(Oot3dPicaNriRenderTargets, ValidatesTransactionalAttachmentBundles) {
     target.OutlineGeometryGuide = image(16U);
     target.Shadow = image(6U);
     target.Depth = image(7U);
-    EXPECT_TRUE(Fast::Oot3d::ValidateNriPicaRenderTargetImages(
+    EXPECT_TRUE(Fast::Extension::ValidateNriPicaRenderTargetImages(
         target, VK_SAMPLE_COUNT_1_BIT));
-    EXPECT_EQ(Fast::Oot3d::CountNriPicaRenderTargetImages(target), 9U);
-    EXPECT_FALSE(Fast::Oot3d::ValidateNriPicaRenderTargetImages(
+    EXPECT_EQ(Fast::Extension::CountNriPicaRenderTargetImages(target), 9U);
+    EXPECT_FALSE(Fast::Extension::ValidateNriPicaRenderTargetImages(
         target, VK_SAMPLE_COUNT_4_BIT));
 
     target.MsaaColor = image(8U);
@@ -4944,11 +4944,11 @@ TEST(Oot3dPicaNriRenderTargets, ValidatesTransactionalAttachmentBundles) {
     target.MsaaFogGuide = image(15U);
     target.MsaaOutlineGeometryGuide = image(17U);
     target.MsaaDepth = image(13U);
-    EXPECT_TRUE(Fast::Oot3d::ValidateNriPicaRenderTargetImages(
+    EXPECT_TRUE(Fast::Extension::ValidateNriPicaRenderTargetImages(
         target, VK_SAMPLE_COUNT_4_BIT));
-    EXPECT_EQ(Fast::Oot3d::CountNriPicaRenderTargetImages(target), 17U);
+    EXPECT_EQ(Fast::Extension::CountNriPicaRenderTargetImages(target), 17U);
     target.MsaaDepth = VK_NULL_HANDLE;
-    EXPECT_FALSE(Fast::Oot3d::ValidateNriPicaRenderTargetImages(
+    EXPECT_FALSE(Fast::Extension::ValidateNriPicaRenderTargetImages(
         target, VK_SAMPLE_COUNT_4_BIT));
 }
 
@@ -4956,7 +4956,7 @@ TEST(Oot3dPicaNriDisplayCopy, RejectsInvalidOrAliasedCopies) {
     const auto image = [](uintptr_t value) {
         return reinterpret_cast<VkImage>(value);
     };
-    Fast::Oot3d::NriPicaDisplayCopyDesc desc;
+    Fast::Extension::NriPicaDisplayCopyDesc desc;
     desc.SourceImage = image(1U);
     desc.DestinationImage = image(2U);
     desc.Format = VK_FORMAT_R8G8B8A8_UNORM;
@@ -4964,68 +4964,68 @@ TEST(Oot3dPicaNriDisplayCopy, RejectsInvalidOrAliasedCopies) {
     desc.Plan.SourceHeight = 240U;
     desc.Plan.DestinationWidth = 400U;
     desc.Plan.DestinationHeight = 240U;
-    EXPECT_TRUE(Fast::Oot3d::ValidateNriPicaDisplayCopyDesc(desc));
+    EXPECT_TRUE(Fast::Extension::ValidateNriPicaDisplayCopyDesc(desc));
     desc.DestinationColorAttachment = true;
-    EXPECT_FALSE(Fast::Oot3d::ValidateNriPicaDisplayCopyDesc(desc));
+    EXPECT_FALSE(Fast::Extension::ValidateNriPicaDisplayCopyDesc(desc));
     desc.DestinationInitialized = true;
-    EXPECT_TRUE(Fast::Oot3d::ValidateNriPicaDisplayCopyDesc(desc));
+    EXPECT_TRUE(Fast::Extension::ValidateNriPicaDisplayCopyDesc(desc));
     desc.Plan.SourceWidth = 800U;
     desc.Plan.HorizontalSamples = 2U;
-    EXPECT_FALSE(Fast::Oot3d::ValidateNriPicaDisplayCopyDesc(desc));
+    EXPECT_FALSE(Fast::Extension::ValidateNriPicaDisplayCopyDesc(desc));
     desc.DestinationColorAttachment = false;
-    EXPECT_TRUE(Fast::Oot3d::ValidateNriPicaDisplayCopyDesc(desc));
+    EXPECT_TRUE(Fast::Extension::ValidateNriPicaDisplayCopyDesc(desc));
     desc.DestinationImage = desc.SourceImage;
-    EXPECT_FALSE(Fast::Oot3d::ValidateNriPicaDisplayCopyDesc(desc));
+    EXPECT_FALSE(Fast::Extension::ValidateNriPicaDisplayCopyDesc(desc));
     desc.DestinationImage = image(2U);
     desc.Plan.SourceWidth = 0U;
-    EXPECT_FALSE(Fast::Oot3d::ValidateNriPicaDisplayCopyDesc(desc));
+    EXPECT_FALSE(Fast::Extension::ValidateNriPicaDisplayCopyDesc(desc));
 }
 
 TEST(Oot3dPicaNriMemoryFillClear, RequiresImagesAndOwnedRenderingScopes) {
     const auto image = [](uintptr_t value) {
         return reinterpret_cast<VkImage>(value);
     };
-    Fast::Oot3d::NriPicaShadowClearDesc shadow;
+    Fast::Extension::NriPicaShadowClearDesc shadow;
     shadow.Image = image(1U);
     shadow.Width = 400U;
     shadow.Height = 240U;
-    EXPECT_TRUE(Fast::Oot3d::ValidateNriPicaShadowClearDesc(shadow));
+    EXPECT_TRUE(Fast::Extension::ValidateNriPicaShadowClearDesc(shadow));
     shadow.Image = VK_NULL_HANDLE;
-    EXPECT_FALSE(Fast::Oot3d::ValidateNriPicaShadowClearDesc(shadow));
+    EXPECT_FALSE(Fast::Extension::ValidateNriPicaShadowClearDesc(shadow));
 
-    Fast::Oot3d::NriPicaAttachmentClearDesc attachments;
+    Fast::Extension::NriPicaAttachmentClearDesc attachments;
     attachments.Width = 400U;
     attachments.Height = 240U;
     attachments.ClearColor = true;
     attachments.NriRenderingScope = true;
     EXPECT_TRUE(
-        Fast::Oot3d::ValidateNriPicaAttachmentClearDesc(attachments));
+        Fast::Extension::ValidateNriPicaAttachmentClearDesc(attachments));
     attachments.NriRenderingScope = false;
     EXPECT_FALSE(
-        Fast::Oot3d::ValidateNriPicaAttachmentClearDesc(attachments));
+        Fast::Extension::ValidateNriPicaAttachmentClearDesc(attachments));
     attachments.NriRenderingScope = true;
     attachments.ClearColor = false;
     EXPECT_FALSE(
-        Fast::Oot3d::ValidateNriPicaAttachmentClearDesc(attachments));
+        Fast::Extension::ValidateNriPicaAttachmentClearDesc(attachments));
 }
 
 TEST(Oot3dNriSwapchain, ValidatesAtomicOwnershipAndWorkerPolicy) {
-    Fast::Oot3d::NriSwapchainDesc desc;
+    Fast::Extension::NriSwapchainDesc desc;
     desc.NativeWindow = reinterpret_cast<void*>(1U);
     desc.Width = 1280U;
     desc.Height = 720U;
     desc.DesiredImageCount = 3U;
     desc.FrameCount = 2U;
-    EXPECT_TRUE(Fast::Oot3d::ValidateNriSwapchainDesc(desc));
+    EXPECT_TRUE(Fast::Extension::ValidateNriSwapchainDesc(desc));
     desc.NativeWindow = nullptr;
-    EXPECT_FALSE(Fast::Oot3d::ValidateNriSwapchainDesc(desc));
+    EXPECT_FALSE(Fast::Extension::ValidateNriSwapchainDesc(desc));
     desc.NativeWindow = reinterpret_cast<void*>(1U);
     desc.DesiredImageCount = 1U;
-    EXPECT_FALSE(Fast::Oot3d::ValidateNriSwapchainDesc(desc));
+    EXPECT_FALSE(Fast::Extension::ValidateNriSwapchainDesc(desc));
 
-    EXPECT_FALSE(Fast::Oot3d::ShouldUseVulkanPresentWorker(true, true));
-    EXPECT_TRUE(Fast::Oot3d::ShouldUseVulkanPresentWorker(false, true));
-    EXPECT_FALSE(Fast::Oot3d::ShouldUseVulkanPresentWorker(false, false));
+    EXPECT_FALSE(Fast::Extension::ShouldUseVulkanPresentWorker(true, true));
+    EXPECT_TRUE(Fast::Extension::ShouldUseVulkanPresentWorker(false, true));
+    EXPECT_FALSE(Fast::Extension::ShouldUseVulkanPresentWorker(false, false));
 }
 
 TEST(Oot3dPicaNriRenderTargetInitialization,
@@ -5033,7 +5033,7 @@ TEST(Oot3dPicaNriRenderTargetInitialization,
     const auto image = [](uintptr_t value) {
         return reinterpret_cast<VkImage>(value);
     };
-    Fast::Oot3d::NriPicaRenderTargetInitDesc desc;
+    Fast::Extension::NriPicaRenderTargetInitDesc desc;
     desc.Width = 400U;
     desc.Height = 240U;
     desc.DepthFormat = VK_FORMAT_D32_SFLOAT;
@@ -5047,14 +5047,14 @@ TEST(Oot3dPicaNriRenderTargetInitialization,
     desc.Images.Shadow = image(6U);
     desc.Images.Depth = image(7U);
     EXPECT_TRUE(
-        Fast::Oot3d::ValidateNriPicaRenderTargetInitDesc(desc));
+        Fast::Extension::ValidateNriPicaRenderTargetInitDesc(desc));
     desc.Samples = VK_SAMPLE_COUNT_4_BIT;
     EXPECT_FALSE(
-        Fast::Oot3d::ValidateNriPicaRenderTargetInitDesc(desc));
+        Fast::Extension::ValidateNriPicaRenderTargetInitDesc(desc));
     desc.Samples = VK_SAMPLE_COUNT_1_BIT;
     desc.Height = 0U;
     EXPECT_FALSE(
-        Fast::Oot3d::ValidateNriPicaRenderTargetInitDesc(desc));
+        Fast::Extension::ValidateNriPicaRenderTargetInitDesc(desc));
 }
 
 TEST(Oot3dPicaNriUpload, CopiesSparseRangesTransactionally) {
@@ -5062,11 +5062,11 @@ TEST(Oot3dPicaNriUpload, CopiesSparseRangesTransactionally) {
     std::array<uint8_t, 32> destination{};
     for (size_t index = 0; index < source.size(); ++index)
         source[index] = static_cast<uint8_t>(index + 1U);
-    const std::array<Fast::Oot3d::PicaNriUploadRange, 2> ranges{{
+    const std::array<Fast::Extension::PicaNriUploadRange, 2> ranges{{
         {2U, 5U}, {20U, 4U},
     }};
     uint64_t copied = 0;
-    ASSERT_TRUE(Fast::Oot3d::CopyPicaNriUploadRanges(
+    ASSERT_TRUE(Fast::Extension::CopyPicaNriUploadRanges(
         source, destination, ranges, &copied));
     EXPECT_EQ(copied, 9U);
     EXPECT_TRUE(std::equal(
@@ -5079,18 +5079,18 @@ TEST(Oot3dPicaNriUpload, CopiesSparseRangesTransactionally) {
     EXPECT_EQ(destination[7], 0U);
 
     const auto before = destination;
-    const std::array<Fast::Oot3d::PicaNriUploadRange, 2> invalid{{
+    const std::array<Fast::Extension::PicaNriUploadRange, 2> invalid{{
         {4U, 2U}, {31U, 2U},
     }};
     copied = 99U;
-    EXPECT_FALSE(Fast::Oot3d::CopyPicaNriUploadRanges(
+    EXPECT_FALSE(Fast::Extension::CopyPicaNriUploadRanges(
         source, destination, invalid, &copied));
     EXPECT_EQ(copied, 0U);
     EXPECT_EQ(destination, before);
 }
 
 TEST(Oot3dPicaNriTextureUpload, AlignsAndPacksRowsWithoutTouchingPadding) {
-    const auto layout = Fast::Oot3d::PlanPicaNriTextureUpload(
+    const auto layout = Fast::Extension::PlanPicaNriTextureUpload(
         3U, 128U, 3U, 2U, 4U, 16U, 32U);
     ASSERT_TRUE(layout.has_value());
     EXPECT_EQ(layout->Offset, 32U);
@@ -5103,7 +5103,7 @@ TEST(Oot3dPicaNriTextureUpload, AlignsAndPacksRowsWithoutTouchingPadding) {
         pixels[i] = static_cast<uint8_t>(i + 1U);
     std::array<uint8_t, 128> destination{};
     destination.fill(0xCDU);
-    ASSERT_TRUE(Fast::Oot3d::PackPicaNriTextureUpload(
+    ASSERT_TRUE(Fast::Extension::PackPicaNriTextureUpload(
         pixels, 3U, 2U, 4U, *layout, destination));
     EXPECT_TRUE(std::equal(
         pixels.begin(), pixels.begin() + 12,
@@ -5116,10 +5116,10 @@ TEST(Oot3dPicaNriTextureUpload, AlignsAndPacksRowsWithoutTouchingPadding) {
     EXPECT_EQ(destination[47], 0xCDU);
     EXPECT_EQ(destination[60], 0xCDU);
 
-    EXPECT_FALSE(Fast::Oot3d::PlanPicaNriTextureUpload(
+    EXPECT_FALSE(Fast::Extension::PlanPicaNriTextureUpload(
         3U, 63U, 3U, 2U, 4U, 16U, 32U).has_value());
     const auto before = destination;
-    EXPECT_FALSE(Fast::Oot3d::PackPicaNriTextureUpload(
+    EXPECT_FALSE(Fast::Extension::PackPicaNriTextureUpload(
         std::span<const uint8_t>(pixels).first(23),
         3U, 2U, 4U, *layout, destination));
     EXPECT_EQ(destination, before);
@@ -5128,11 +5128,11 @@ TEST(Oot3dPicaNriTextureUpload, AlignsAndPacksRowsWithoutTouchingPadding) {
 TEST(Oot3dPicaNriTextureUpload,
      PlansFreshSegmentWhenA4kTextureCannotShareTheBaseArena) {
     constexpr uint64_t capacity = 64ULL * 1024ULL * 1024ULL;
-    EXPECT_FALSE(Fast::Oot3d::PlanPicaNriTextureUpload(
+    EXPECT_FALSE(Fast::Extension::PlanPicaNriTextureUpload(
                      16U, capacity, 4096U, 4096U, 4U, 256U, 512U)
                      .has_value());
 
-    const auto fresh = Fast::Oot3d::PlanPicaNriTextureUpload(
+    const auto fresh = Fast::Extension::PlanPicaNriTextureUpload(
         0U, capacity, 4096U, 4096U, 4U, 256U, 512U);
     ASSERT_TRUE(fresh.has_value());
     EXPECT_EQ(fresh->Offset, 0U);
@@ -5141,7 +5141,7 @@ TEST(Oot3dPicaNriTextureUpload,
 
 
 TEST(Oot3dSmaa1x, DecodesOfficialLookupTexturesExactly) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const auto lookups = DecodeSmaaLookupData();
     ASSERT_TRUE(lookups.Valid());
     const auto fnv1a = [](const std::vector<uint8_t>& bytes) {
@@ -5172,11 +5172,11 @@ TEST(Oot3dSmaa1x, OfficialThreeStageComputeShadersCompile) {
     options.SetOptimizationLevel(
         shaderc_optimization_level_performance);
     for (const auto stage : {
-             Fast::Oot3d::Smaa1xStage::EdgeDetection,
-             Fast::Oot3d::Smaa1xStage::BlendWeightCalculation,
-             Fast::Oot3d::Smaa1xStage::NeighborhoodBlending}) {
+             Fast::Extension::Smaa1xStage::EdgeDetection,
+             Fast::Extension::Smaa1xStage::BlendWeightCalculation,
+             Fast::Extension::Smaa1xStage::NeighborhoodBlending}) {
         const std::string source =
-            Fast::Oot3d::BuildSmaa1xComputeShader(stage);
+            Fast::Extension::BuildSmaa1xComputeShader(stage);
         ASSERT_NE(
             source.find("SMAABlendingWeightCalculationPS"),
             std::string::npos);
@@ -5195,7 +5195,7 @@ TEST(Oot3dSmaa1x, OfficialThreeStageComputeShadersCompile) {
 // Saved Per-pixel becomes Modern and plain native shading becomes Native;
 // plain native shading stays the capability fallback and the Authentic look.
 TEST(Oot3dGraphicsSettings, LightingModelsAreNativeAndModern) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GraphicsCapabilities capabilities;
     capabilities.Set(GraphicsCapability::NativeSurfaceLighting, true);
     auto settings = GraphicsSettingsService::Preset(GraphicsPreset::Custom);
@@ -5215,50 +5215,50 @@ TEST(Oot3dGraphicsSettings, LightingModelsAreNativeAndModern) {
 }
 
 TEST(Oot3dGraphicsSettings, GatesSmaaOnThreeStageNriCapability) {
-    Fast::Oot3d::GraphicsCapabilities capabilities;
-    auto settings = Fast::Oot3d::GraphicsSettingsService::Preset(
-        Fast::Oot3d::GraphicsPreset::Custom);
-    settings.AntiAliasing = Fast::Oot3d::AntiAliasingMode::Smaa1x;
+    Fast::Extension::GraphicsCapabilities capabilities;
+    auto settings = Fast::Extension::GraphicsSettingsService::Preset(
+        Fast::Extension::GraphicsPreset::Custom);
+    settings.AntiAliasing = Fast::Extension::AntiAliasingMode::Smaa1x;
     settings.MsaaSamples = 8U;
-    auto result = Fast::Oot3d::GraphicsSettingsService::Validate(
+    auto result = Fast::Extension::GraphicsSettingsService::Validate(
         settings, capabilities);
     EXPECT_EQ(result.Value.AntiAliasing,
-              Fast::Oot3d::AntiAliasingMode::Off);
+              Fast::Extension::AntiAliasingMode::Off);
     capabilities.Set(
-        Fast::Oot3d::GraphicsCapability::Smaa1x, true);
-    result = Fast::Oot3d::GraphicsSettingsService::Validate(
+        Fast::Extension::GraphicsCapability::Smaa1x, true);
+    result = Fast::Extension::GraphicsSettingsService::Validate(
         settings, capabilities);
     EXPECT_EQ(result.Value.AntiAliasing,
-              Fast::Oot3d::AntiAliasingMode::Smaa1x);
+              Fast::Extension::AntiAliasingMode::Smaa1x);
     EXPECT_EQ(result.Value.MsaaSamples, 1U);
 }
 
 TEST(Oot3dGraphicsSettings, GatesMsaaOnSampleAndDepthResolveCapabilities) {
-    Fast::Oot3d::GraphicsCapabilities capabilities;
-    capabilities.Set(Fast::Oot3d::GraphicsCapability::Msaa4x, true);
+    Fast::Extension::GraphicsCapabilities capabilities;
+    capabilities.Set(Fast::Extension::GraphicsCapability::Msaa4x, true);
     capabilities.Set(
-        Fast::Oot3d::GraphicsCapability::MultisampledDepthResolve, true);
-    auto settings = Fast::Oot3d::GraphicsSettingsService::Preset(
-        Fast::Oot3d::GraphicsPreset::Custom);
-    settings.AntiAliasing = Fast::Oot3d::AntiAliasingMode::Msaa;
+        Fast::Extension::GraphicsCapability::MultisampledDepthResolve, true);
+    auto settings = Fast::Extension::GraphicsSettingsService::Preset(
+        Fast::Extension::GraphicsPreset::Custom);
+    settings.AntiAliasing = Fast::Extension::AntiAliasingMode::Msaa;
     settings.MsaaSamples = 4U;
-    auto result = Fast::Oot3d::GraphicsSettingsService::Validate(
+    auto result = Fast::Extension::GraphicsSettingsService::Validate(
         settings, capabilities);
     EXPECT_EQ(result.Value.AntiAliasing,
-              Fast::Oot3d::AntiAliasingMode::Msaa);
+              Fast::Extension::AntiAliasingMode::Msaa);
     EXPECT_EQ(result.Value.MsaaSamples, 4U);
 
     capabilities.Set(
-        Fast::Oot3d::GraphicsCapability::MultisampledDepthResolve, false);
-    result = Fast::Oot3d::GraphicsSettingsService::Validate(
+        Fast::Extension::GraphicsCapability::MultisampledDepthResolve, false);
+    result = Fast::Extension::GraphicsSettingsService::Validate(
         settings, capabilities);
     EXPECT_EQ(result.Value.AntiAliasing,
-              Fast::Oot3d::AntiAliasingMode::Off);
+              Fast::Extension::AntiAliasingMode::Off);
     EXPECT_EQ(result.Value.MsaaSamples, 1U);
 }
 
 TEST(Oot3dGraphicsSettings, VisualPresetsPreserveHostAndContentIdentityState) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto current = GraphicsSettingsService::Preset(GraphicsPreset::Custom);
     current.Window = WindowMode::Borderless;
     current.DisplayIndex = 2U;
@@ -5299,7 +5299,7 @@ TEST(Oot3dGraphicsSettings, VisualPresetsPreserveHostAndContentIdentityState) {
 }
 
 TEST(Oot3dGraphicsSettings, AuthenticModeDisablesEffectsWithoutErasingAssignments) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto settings = GraphicsSettingsService::Preset(GraphicsPreset::Custom);
     settings.Preset = GraphicsPreset::Authentic;
     settings.Grass.Quality = GrassQuality::High;
@@ -5320,7 +5320,7 @@ TEST(Oot3dGraphicsSettings, AuthenticModeDisablesEffectsWithoutErasingAssignment
 }
 
 TEST(Oot3dGraphicsSettings, GatesDirectionalShadowsOnTheirBackendOwner) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto settings = GraphicsSettingsService::Preset(GraphicsPreset::Custom);
     settings.Effects.DirectionalShadows.Mode =
         DirectionalShadowMode::VirtualShadowMaps;
@@ -5337,7 +5337,7 @@ TEST(Oot3dGraphicsSettings, GatesDirectionalShadowsOnTheirBackendOwner) {
 }
 
 TEST(Oot3dGraphicsSettings, EnhancedIsTheCapturedProfileAndToonKeepsItsBase) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const auto enhanced = GraphicsSettingsService::Preset(GraphicsPreset::Enhanced);
     EXPECT_EQ(enhanced.Preset, GraphicsPreset::Enhanced);
     EXPECT_EQ(enhanced.Effects.SurfaceLighting, SurfaceLightingMode::PerPixelPbr);
@@ -5394,7 +5394,7 @@ TEST(Oot3dGraphicsSettings, EnhancedIsTheCapturedProfileAndToonKeepsItsBase) {
 }
 
 TEST(Oot3dGraphicsSettings, ClampsTheOriginalMxaoOptions) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto settings = GraphicsSettingsService::Preset(GraphicsPreset::Custom);
     EXPECT_EQ(settings.Effects.MxaoNormals, MxaoNormalSource::Geometry);
     EXPECT_EQ(settings.Effects.MxaoDebug, MxaoDebugView::Off);
@@ -5420,7 +5420,7 @@ TEST(Oot3dGraphicsSettings, ClampsTheOriginalMxaoOptions) {
 }
 
 TEST(Oot3dGraphicsSettings, GatesAndClampsPointShadows) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto settings = GraphicsSettingsService::Preset(GraphicsPreset::Custom);
     EXPECT_EQ(settings.Effects.PointShadows.Mode, PointShadowMode::Off);
     settings.Effects.PointShadows.Mode = PointShadowMode::CubeMaps;
@@ -5444,7 +5444,7 @@ TEST(Oot3dGraphicsSettings, GatesAndClampsPointShadows) {
 }
 
 TEST(Oot3dSampleView, UsesTheRenderedCameraAndTheMajorityView) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     // Guest camera: eye (0,0,10) looking at the origin, one step ahead.
     PerspectiveViewState guest{};
     guest.Serial = 7U;
@@ -5484,7 +5484,7 @@ TEST(Oot3dSampleView, UsesTheRenderedCameraAndTheMajorityView) {
 }
 
 TEST(Oot3dSampleView, NativeDrawsSetTheProjectionScale) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     // OOT3D's projection rows c0-c3, rotated with the framebuffer: the Kokiri
     // walk's draws (clip x from view y, clip y from view x).
     std::vector<uint8_t> uniforms(kPicaPackedVertexUniformSize);
@@ -5534,7 +5534,7 @@ TEST(Oot3dSampleView, NativeDrawsSetTheProjectionScale) {
 }
 
 TEST(Oot3dGraphicsSettings, GatesGlobalIlluminationOnItsInputsAndProvider) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto settings = GraphicsSettingsService::Preset(GraphicsPreset::Custom);
     settings.Effects.GlobalIllumination.Mode = GlobalIlluminationMode::BrixelizerGi;
     settings.Effects.GlobalIllumination.DiffuseIntensity = 9.0F; // above the 8 limit
@@ -5565,7 +5565,7 @@ TEST(Oot3dGraphicsSettings, GatesGlobalIlluminationOnItsInputsAndProvider) {
 // guides are not its inputs), capability-safe Off, and its parameters kept on
 // the pass's supported grid.
 TEST(Oot3dGraphicsSettings, GatesScreenSpaceGlobalIlluminationAndClampsItsParameters) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto settings = GraphicsSettingsService::Preset(GraphicsPreset::Custom);
     auto& gi = settings.Effects.GlobalIllumination;
     gi.Mode = GlobalIlluminationMode::ScreenSpace;
@@ -5621,7 +5621,7 @@ TEST(Oot3dGraphicsSettings, GatesScreenSpaceGlobalIlluminationAndClampsItsParame
 // the sky gain never raises the composition gain. The face normal is its
 // geometric normal.
 TEST(Oot3dGraphicsSettings, ScreenSpaceGlobalIlluminationHasNoSkySource) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GlobalIlluminationSettings gi;
     gi.SkyLight = 4.0F;
     gi.Mode = GlobalIlluminationMode::BrixelizerGi;
@@ -5635,7 +5635,7 @@ TEST(Oot3dGraphicsSettings, ScreenSpaceGlobalIlluminationHasNoSkySource) {
 }
 
 TEST(Oot3dGraphicsSettings, GlobalIlluminationSourcesSplitIntoWeightsAndGain) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GlobalIlluminationSettings gi;
     auto mix = ResolveGlobalIlluminationSources(gi);
     EXPECT_FLOAT_EQ(mix.Gain, 1.0F);
@@ -5668,7 +5668,7 @@ TEST(Oot3dGraphicsSettings, GlobalIlluminationSourcesSplitIntoWeightsAndGain) {
 }
 
 TEST(Oot3dGraphicsSettings, GlobalIlluminationHistoryRestartsOnlyWhereBlendingWouldLinger) {
-    using Fast::Oot3d::RestartsGlobalIlluminationHistory;
+    using Fast::Extension::RestartsGlobalIlluminationHistory;
     using Weights = std::array<float, 4>;
     EXPECT_FALSE(RestartsGlobalIlluminationHistory({1.0F, 0.5F, 0.0F}, {1.0F, 0.5F, 0.0F}));
     // Light returning to an empty history.
@@ -5682,16 +5682,16 @@ TEST(Oot3dGraphicsSettings, GlobalIlluminationHistoryRestartsOnlyWhereBlendingWo
 }
 
 TEST(Oot3dPicaToon, ValidationClampsOutlineControls) {
-    Fast::Oot3d::GraphicsCapabilities capabilities;
-    auto settings = Fast::Oot3d::GraphicsSettingsService::Preset(
-        Fast::Oot3d::GraphicsPreset::Custom);
+    Fast::Extension::GraphicsCapabilities capabilities;
+    auto settings = Fast::Extension::GraphicsSettingsService::Preset(
+        Fast::Extension::GraphicsPreset::Custom);
     settings.Effects.ToonStyle.OutlineWidth = 100.0F;
     settings.Effects.ToonStyle.OutlineSoftness = -2.0F;
     settings.Effects.ToonStyle.OutlineDepthSensitivity = -1.0F;
     settings.Effects.ToonStyle.OutlineNormalSensitivity = 100.0F;
     settings.Effects.ToonStyle.OutlineTint = { -1.0F, 0.5F, 4.0F };
     settings.Effects.ToonStyle.OutlineOpacity = 2.0F;
-    const auto validated = Fast::Oot3d::GraphicsSettingsService::Validate(
+    const auto validated = Fast::Extension::GraphicsSettingsService::Validate(
         settings, capabilities).Value.Effects.ToonStyle;
     EXPECT_FLOAT_EQ(validated.OutlineWidth, 12.0F);
     EXPECT_FLOAT_EQ(validated.OutlineSoftness, 0.0F);
@@ -5704,15 +5704,15 @@ TEST(Oot3dPicaToon, ValidationClampsOutlineControls) {
 }
 
 TEST(Oot3dPicaToon, ValidatesCustomLightBandProfile) {
-    Fast::Oot3d::GraphicsCapabilities capabilities;
-    auto settings = Fast::Oot3d::GraphicsSettingsService::Preset(
-        Fast::Oot3d::GraphicsPreset::Custom);
+    Fast::Extension::GraphicsCapabilities capabilities;
+    auto settings = Fast::Extension::GraphicsSettingsService::Preset(
+        Fast::Extension::GraphicsPreset::Custom);
     auto& toon = settings.Effects.ToonStyle;
     toon.LightBands = 4U;
     toon.CustomLightBands = true;
     toon.LightBandLevels = {-1.0F, 0.25F, 2.0F, 0.8F, 1.0F, 1.0F};
     toon.LightBandThresholds = {0.9F, 0.2F, 0.5F, 1.0F, 1.0F};
-    const auto validated = Fast::Oot3d::GraphicsSettingsService::Validate(
+    const auto validated = Fast::Extension::GraphicsSettingsService::Validate(
         settings, capabilities).Value.Effects.ToonStyle;
     EXPECT_FLOAT_EQ(validated.LightBandLevels[0], 0.0F);
     EXPECT_FLOAT_EQ(validated.LightBandLevels[1], 0.25F);
@@ -5725,9 +5725,9 @@ TEST(Oot3dPicaToon, ValidatesCustomLightBandProfile) {
 }
 
 TEST(Oot3dPicaToon, ResetsLightBandsToEqualQuantization) {
-    Fast::Oot3d::ToonStyleSettings style;
+    Fast::Extension::ToonStyleSettings style;
     style.LightBands = 5U;
-    Fast::Oot3d::ResetToonLightBandProfile(style);
+    Fast::Extension::ResetToonLightBandProfile(style);
     EXPECT_FLOAT_EQ(style.LightBandLevels[0], 0.0F);
     EXPECT_FLOAT_EQ(style.LightBandLevels[1], 0.25F);
     EXPECT_FLOAT_EQ(style.LightBandLevels[4], 1.0F);
@@ -5747,12 +5747,12 @@ TEST(Oot3dPicaToon, PreservesAlphaAndFogOrdering) {
         "    float pica_z_over_w = -gl_FragCoord.z;\n"
         "    float fog_index = pica_z_over_w * 128.0;\n"
         "    pica_color = combiner_output;\n}\n";
-    Fast::Oot3d::PicaToonDrawInfo draw{
+    Fast::Extension::PicaToonDrawInfo draw{
         Oot3d::Renderer::PicaCompositionDomain::Scene,
         true, true, false, 0xFU };
-    Fast::Oot3d::ToonStyleSettings style;
-    const auto variant = Fast::Oot3d::BuildPicaToonShaderVariant(
-        source, 42U, draw, Fast::Oot3d::ToonMode::PostProcessPreview, style);
+    Fast::Extension::ToonStyleSettings style;
+    const auto variant = Fast::Extension::BuildPicaToonShaderVariant(
+        source, 42U, draw, Fast::Extension::ToonMode::PostProcessPreview, style);
     ASSERT_TRUE(variant.Applied());
     const auto alpha = variant.Source.find("discard");
     const auto toon = variant.Source.find("combiner_output.rgb = oot3d_apply_toon");
@@ -5772,44 +5772,44 @@ TEST(Oot3dPicaToon, PreservesAlphaAndFogOrdering) {
 }
 
 TEST(Oot3dPicaToon, UsesDepthWriteToSeparateWorldFromOverlays) {
-    Fast::Oot3d::PicaToonDrawInfo draw{
+    Fast::Extension::PicaToonDrawInfo draw{
         Oot3d::Renderer::PicaCompositionDomain::Scene,
         true, true, true, 0xFU };
-    EXPECT_EQ(Fast::Oot3d::ClassifyPicaToonDraw(
-                  draw, Fast::Oot3d::ToonMode::PostProcessPreview),
-              Fast::Oot3d::PicaToonEligibility::Eligible);
+    EXPECT_EQ(Fast::Extension::ClassifyPicaToonDraw(
+                  draw, Fast::Extension::ToonMode::PostProcessPreview),
+              Fast::Extension::PicaToonEligibility::Eligible);
     draw.DepthWriteEnabled = false;
-    EXPECT_EQ(Fast::Oot3d::ClassifyPicaToonDraw(
-                  draw, Fast::Oot3d::ToonMode::PostProcessPreview),
-              Fast::Oot3d::PicaToonEligibility::NoDepth);
+    EXPECT_EQ(Fast::Extension::ClassifyPicaToonDraw(
+                  draw, Fast::Extension::ToonMode::PostProcessPreview),
+              Fast::Extension::PicaToonEligibility::NoDepth);
 }
 
 TEST(Oot3dPicaToon, UsesTypedSceneDomainInsteadOfTargetExtent) {
-    Fast::Oot3d::PicaToonDrawInfo draw{
+    Fast::Extension::PicaToonDrawInfo draw{
         Oot3d::Renderer::PicaCompositionDomain::Scene,
         true, true, false, 0xFU };
-    EXPECT_EQ(Fast::Oot3d::ClassifyPicaToonDraw(
-                  draw, Fast::Oot3d::ToonMode::PostProcessPreview),
-              Fast::Oot3d::PicaToonEligibility::Eligible);
+    EXPECT_EQ(Fast::Extension::ClassifyPicaToonDraw(
+                  draw, Fast::Extension::ToonMode::PostProcessPreview),
+              Fast::Extension::PicaToonEligibility::Eligible);
     draw.CompositionDomain =
         Oot3d::Renderer::PicaCompositionDomain::Ui;
-    EXPECT_EQ(Fast::Oot3d::ClassifyPicaToonDraw(
-                  draw, Fast::Oot3d::ToonMode::PostProcessPreview),
-              Fast::Oot3d::PicaToonEligibility::OutsideScene);
+    EXPECT_EQ(Fast::Extension::ClassifyPicaToonDraw(
+                  draw, Fast::Extension::ToonMode::PostProcessPreview),
+              Fast::Extension::PicaToonEligibility::OutsideScene);
 }
 
 TEST(Oot3dPicaToon, SettingsChangeShaderVariantKey) {
     const std::string source = "void main() {\n    float pica_z_over_w = -gl_FragCoord.z;\n}";
-    Fast::Oot3d::PicaToonDrawInfo draw{
+    Fast::Extension::PicaToonDrawInfo draw{
         Oot3d::Renderer::PicaCompositionDomain::Scene,
         true, true, false, 0x7U };
-    Fast::Oot3d::ToonStyleSettings fourBands;
+    Fast::Extension::ToonStyleSettings fourBands;
     auto sixBands = fourBands;
     sixBands.LightBands = 6;
-    const auto first = Fast::Oot3d::BuildPicaToonShaderVariant(
-        source, 8U, draw, Fast::Oot3d::ToonMode::PostProcessPreview, fourBands);
-    const auto second = Fast::Oot3d::BuildPicaToonShaderVariant(
-        source, 8U, draw, Fast::Oot3d::ToonMode::PostProcessPreview, sixBands);
+    const auto first = Fast::Extension::BuildPicaToonShaderVariant(
+        source, 8U, draw, Fast::Extension::ToonMode::PostProcessPreview, fourBands);
+    const auto second = Fast::Extension::BuildPicaToonShaderVariant(
+        source, 8U, draw, Fast::Extension::ToonMode::PostProcessPreview, sixBands);
     ASSERT_TRUE(first.Applied());
     ASSERT_TRUE(second.Applied());
     EXPECT_NE(first.FragmentKey, second.FragmentKey);
@@ -5820,20 +5820,20 @@ TEST(Oot3dPicaToon, CustomBandValuesChangeShaderAndVariantKey) {
         "void main() {\n"
         "    float pica_z_over_w = -gl_FragCoord.z;\n"
         "}";
-    Fast::Oot3d::PicaToonDrawInfo draw{
+    Fast::Extension::PicaToonDrawInfo draw{
         Oot3d::Renderer::PicaCompositionDomain::Scene,
         true, true, false, 0x7U };
-    Fast::Oot3d::ToonStyleSettings firstStyle;
+    Fast::Extension::ToonStyleSettings firstStyle;
     firstStyle.CustomLightBands = true;
-    Fast::Oot3d::ResetToonLightBandProfile(firstStyle);
+    Fast::Extension::ResetToonLightBandProfile(firstStyle);
     auto secondStyle = firstStyle;
     secondStyle.LightBandLevels[1] = 0.2F;
     secondStyle.LightBandThresholds[0] = 0.12F;
-    const auto first = Fast::Oot3d::BuildPicaToonShaderVariant(
-        source, 9U, draw, Fast::Oot3d::ToonMode::PostProcessPreview,
+    const auto first = Fast::Extension::BuildPicaToonShaderVariant(
+        source, 9U, draw, Fast::Extension::ToonMode::PostProcessPreview,
         firstStyle);
-    const auto second = Fast::Oot3d::BuildPicaToonShaderVariant(
-        source, 9U, draw, Fast::Oot3d::ToonMode::PostProcessPreview,
+    const auto second = Fast::Extension::BuildPicaToonShaderVariant(
+        source, 9U, draw, Fast::Extension::ToonMode::PostProcessPreview,
         secondStyle);
     ASSERT_TRUE(first.Applied());
     ASSERT_TRUE(second.Applied());
@@ -5868,7 +5868,7 @@ TEST(Oot3dGrassToon, CollapsedNativeScalePreservesEveryByteAndValidStageCombinat
 
 
 TEST(Oot3dGrassToon, RimDistanceValidationKeepsSmoothstepEdgesOrdered) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GraphicsSettings settings;
     settings.Preset = GraphicsPreset::Custom;
     settings.Grass.Appearance.ToonRimFadeStart = 1000;
@@ -5884,7 +5884,7 @@ TEST(Oot3dGrassToon, RimDistanceValidationKeepsSmoothstepEdgesOrdered) {
 }
 
 TEST(Oot3dGrassToon, PacksTheExistingStyleAndKeepsOffAndLightingIndependent) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     ToonStyleSettings style;
     style.LightBands = 6;
     style.CustomLightBands = true;
@@ -5922,12 +5922,12 @@ TEST(Oot3dPicaToon, MaterialModeInjectsBeforeTevAndNeverPostprocessesTexels) {
         "    // OOT3D_PICA_MATERIAL_TOON_POINT\n"
         "    vec4 combiner_output = primary_fragment_color;\n"
         "    float pica_z_over_w = -gl_FragCoord.z;\n}\n";
-    Fast::Oot3d::PicaToonDrawInfo draw{
+    Fast::Extension::PicaToonDrawInfo draw{
         Oot3d::Renderer::PicaCompositionDomain::Scene,
         true, true, false, 0xFU };
-    const auto variant = Fast::Oot3d::BuildPicaToonShaderVariant(
-        source, 91U, draw, Fast::Oot3d::ToonMode::PicaMaterial,
-        Fast::Oot3d::ToonStyleSettings{});
+    const auto variant = Fast::Extension::BuildPicaToonShaderVariant(
+        source, 91U, draw, Fast::Extension::ToonMode::PicaMaterial,
+        Fast::Extension::ToonStyleSettings{});
     ASSERT_TRUE(variant.Applied());
     EXPECT_TRUE(variant.MaterialPath);
     const auto material = variant.Source.find(
@@ -5949,12 +5949,12 @@ TEST(Oot3dPicaToon, MaterialModeFallsBackForVertexLitPicaShaders) {
         "    vec4 rounded_primary_color = pica_primary_color;\n"
         "    vec4 combiner_output = rounded_primary_color;\n"
         "    float pica_z_over_w = -gl_FragCoord.z;\n}\n";
-    Fast::Oot3d::PicaToonDrawInfo draw{
+    Fast::Extension::PicaToonDrawInfo draw{
         Oot3d::Renderer::PicaCompositionDomain::Scene,
         true, true, false, 0xFU };
-    const auto variant = Fast::Oot3d::BuildPicaToonShaderVariant(
-        source, 92U, draw, Fast::Oot3d::ToonMode::PicaMaterial,
-        Fast::Oot3d::ToonStyleSettings{});
+    const auto variant = Fast::Extension::BuildPicaToonShaderVariant(
+        source, 92U, draw, Fast::Extension::ToonMode::PicaMaterial,
+        Fast::Extension::ToonStyleSettings{});
     ASSERT_TRUE(variant.Applied());
     EXPECT_FALSE(variant.MaterialPath);
     EXPECT_NE(variant.Source.find(
@@ -5963,49 +5963,49 @@ TEST(Oot3dPicaToon, MaterialModeFallsBackForVertexLitPicaShaders) {
 }
 
 TEST(Oot3dGraphicsSettings, AuthenticForcesCompatibilityDefaults) {
-    Fast::Oot3d::GraphicsCapabilities capabilities;
-    auto candidate = Fast::Oot3d::GraphicsSettingsService::Preset(
-        Fast::Oot3d::GraphicsPreset::Enhanced);
-    candidate.Preset = Fast::Oot3d::GraphicsPreset::Authentic;
+    Fast::Extension::GraphicsCapabilities capabilities;
+    auto candidate = Fast::Extension::GraphicsSettingsService::Preset(
+        Fast::Extension::GraphicsPreset::Enhanced);
+    candidate.Preset = Fast::Extension::GraphicsPreset::Authentic;
     candidate.FovMultiplier = 1.5F;
     candidate.ExtendedDrawDistance = true;
-    const auto result = Fast::Oot3d::GraphicsSettingsService::Validate(
+    const auto result = Fast::Extension::GraphicsSettingsService::Validate(
         candidate, capabilities);
     EXPECT_TRUE(result.Accepted());
     EXPECT_FALSE(result.Value.ExtendedDrawDistance);
     EXPECT_EQ(result.Value.AntiAliasing,
-              Fast::Oot3d::AntiAliasingMode::Off);
+              Fast::Extension::AntiAliasingMode::Off);
     EXPECT_EQ(result.Value.FrameRate,
-              Fast::Oot3d::FrameRateMode::Original30);
+              Fast::Extension::FrameRateMode::Original30);
     EXPECT_FLOAT_EQ(result.Value.FovMultiplier, 1.0F);
     EXPECT_EQ(result.Value.Effects.AmbientOcclusion,
-              Fast::Oot3d::AmbientOcclusionMode::Off);
+              Fast::Extension::AmbientOcclusionMode::Off);
 }
 
 TEST(Oot3dGraphicsSettings, CapabilityGatesInvalidCombinations) {
-    Fast::Oot3d::GraphicsCapabilities capabilities;
-    capabilities.Set(Fast::Oot3d::GraphicsCapability::ExclusiveFullscreen,
+    Fast::Extension::GraphicsCapabilities capabilities;
+    capabilities.Set(Fast::Extension::GraphicsCapability::ExclusiveFullscreen,
                      false, "exclusive mode unavailable");
-    capabilities.Set(Fast::Oot3d::GraphicsCapability::PresentTearing,
+    capabilities.Set(Fast::Extension::GraphicsCapability::PresentTearing,
                      false, "tearing unavailable");
-    auto candidate = Fast::Oot3d::GraphicsSettingsService::Preset(
-        Fast::Oot3d::GraphicsPreset::Custom);
-    candidate.Window = Fast::Oot3d::WindowMode::ExclusiveFullscreen;
-    candidate.FrameRate = Fast::Oot3d::FrameRateMode::Uncapped;
+    auto candidate = Fast::Extension::GraphicsSettingsService::Preset(
+        Fast::Extension::GraphicsPreset::Custom);
+    candidate.Window = Fast::Extension::WindowMode::ExclusiveFullscreen;
+    candidate.FrameRate = Fast::Extension::FrameRateMode::Uncapped;
     candidate.VSync = false;
     candidate.Effects.AmbientOcclusion =
-        Fast::Oot3d::AmbientOcclusionMode::Gtao;
-    const auto result = Fast::Oot3d::GraphicsSettingsService::Validate(
+        Fast::Extension::AmbientOcclusionMode::Gtao;
+    const auto result = Fast::Extension::GraphicsSettingsService::Validate(
         candidate, capabilities);
-    EXPECT_EQ(result.Value.Window, Fast::Oot3d::WindowMode::Borderless);
+    EXPECT_EQ(result.Value.Window, Fast::Extension::WindowMode::Borderless);
     EXPECT_TRUE(result.Value.VSync);
     EXPECT_EQ(result.Value.Effects.AmbientOcclusion,
-              Fast::Oot3d::AmbientOcclusionMode::Off);
+              Fast::Extension::AmbientOcclusionMode::Off);
     EXPECT_EQ(result.Issues.size(), 3U);
 }
 
 TEST(Oot3dGraphicsSettings, MxaoRequiresItsProviderAndClampsItsControls) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GraphicsCapabilities capabilities;
     for (const auto capability : {GraphicsCapability::NriInterop, GraphicsCapability::SampledDepth,
                                   GraphicsCapability::NormalGuide, GraphicsCapability::ValidViewMetadata,
@@ -6030,7 +6030,7 @@ TEST(Oot3dGraphicsSettings, MxaoRequiresItsProviderAndClampsItsControls) {
 }
 
 TEST(Oot3dGraphicsSettings, AoTextureReliefKeepsItsLevelAndResetsUnknownOnes) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GraphicsCapabilities capabilities;
     for (const auto capability : {GraphicsCapability::NriInterop, GraphicsCapability::SampledDepth,
                                   GraphicsCapability::NormalGuide, GraphicsCapability::ValidViewMetadata})
@@ -6049,8 +6049,8 @@ TEST(Oot3dGraphicsSettings, AoTextureReliefKeepsItsLevelAndResetsUnknownOnes) {
 }
 
 TEST(Oot3dGraphicsSettings, AcceptsHiZOnlyWithMaterialAndViewContract) {
-    Fast::Oot3d::GraphicsCapabilities capabilities;
-    using Capability = Fast::Oot3d::GraphicsCapability;
+    Fast::Extension::GraphicsCapabilities capabilities;
+    using Capability = Fast::Extension::GraphicsCapability;
     for (const auto capability : {Capability::NriInterop,
                                   Capability::SampledSceneColor,
                                   Capability::SampledDepth,
@@ -6059,44 +6059,44 @@ TEST(Oot3dGraphicsSettings, AcceptsHiZOnlyWithMaterialAndViewContract) {
                                   Capability::ValidViewMetadata}) {
         capabilities.Set(capability, true);
     }
-    auto candidate = Fast::Oot3d::GraphicsSettingsService::Preset(
-        Fast::Oot3d::GraphicsPreset::Custom);
-    candidate.Effects.Reflections = Fast::Oot3d::ReflectionMode::HiZ;
+    auto candidate = Fast::Extension::GraphicsSettingsService::Preset(
+        Fast::Extension::GraphicsPreset::Custom);
+    candidate.Effects.Reflections = Fast::Extension::ReflectionMode::HiZ;
     candidate.Effects.ReflectionMaxSteps = 255U;
     candidate.Effects.ReflectionThickness = -2.0F;
-    const auto accepted = Fast::Oot3d::GraphicsSettingsService::Validate(
+    const auto accepted = Fast::Extension::GraphicsSettingsService::Validate(
         candidate, capabilities);
     EXPECT_EQ(accepted.Value.Effects.Reflections,
-              Fast::Oot3d::ReflectionMode::HiZ);
+              Fast::Extension::ReflectionMode::HiZ);
     EXPECT_EQ(accepted.Value.Effects.ReflectionMaxSteps, 64U);
     EXPECT_FLOAT_EQ(accepted.Value.Effects.ReflectionThickness, 0.1F);
 
     capabilities.Set(Capability::MaterialGuide, false);
-    const auto rejected = Fast::Oot3d::GraphicsSettingsService::Validate(
+    const auto rejected = Fast::Extension::GraphicsSettingsService::Validate(
         candidate, capabilities);
     EXPECT_EQ(rejected.Value.Effects.Reflections,
-              Fast::Oot3d::ReflectionMode::Off);
+              Fast::Extension::ReflectionMode::Off);
 }
 
 TEST(Oot3dReflections, SelectsFidelityFxAndFallsBackDeterministically) {
-    using Fast::Oot3d::ReflectionMode;
-    using Fast::Oot3d::ReflectionProvider;
-    Fast::Oot3d::ReflectionProviderAvailability available{
+    using Fast::Extension::ReflectionMode;
+    using Fast::Extension::ReflectionProvider;
+    Fast::Extension::ReflectionProviderAvailability available{
         true, true, true, true, true, true};
-    EXPECT_EQ(Fast::Oot3d::SelectReflectionProvider(
+    EXPECT_EQ(Fast::Extension::SelectReflectionProvider(
                   ReflectionMode::FidelityFxSssr, available),
               ReflectionProvider::FidelityFxSssr);
 
     available.PerspectiveDepth = false;
-    EXPECT_EQ(Fast::Oot3d::SelectReflectionProvider(
+    EXPECT_EQ(Fast::Extension::SelectReflectionProvider(
                   ReflectionMode::FidelityFxSssr, available),
               ReflectionProvider::HiZ);
 
     available.HiZ = false;
-    EXPECT_EQ(Fast::Oot3d::SelectReflectionProvider(
+    EXPECT_EQ(Fast::Extension::SelectReflectionProvider(
                   ReflectionMode::FidelityFxSssr, available),
               ReflectionProvider::Off);
-    EXPECT_EQ(Fast::Oot3d::SelectReflectionProvider(
+    EXPECT_EQ(Fast::Extension::SelectReflectionProvider(
                   ReflectionMode::Off,
                   {true, true, true, true, true, true}),
               ReflectionProvider::Off);
@@ -6104,7 +6104,7 @@ TEST(Oot3dReflections, SelectsFidelityFxAndFallsBackDeterministically) {
 
 TEST(Oot3dGraphicsSettings,
      NormalizesReflectionMaterialRulesWithoutDroppingSelections) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto settings =
         GraphicsSettingsService::Preset(GraphicsPreset::Custom);
     ReflectionMaterialRule first;
@@ -6140,8 +6140,8 @@ TEST(Oot3dGraphicsSettings,
 }
 
 TEST(Oot3dGraphicsSettings, AcceptsFidelityFxOnlyWithTemporalProvider) {
-    Fast::Oot3d::GraphicsCapabilities capabilities;
-    using Capability = Fast::Oot3d::GraphicsCapability;
+    Fast::Extension::GraphicsCapabilities capabilities;
+    using Capability = Fast::Extension::GraphicsCapability;
     for (const auto capability : {
              Capability::NriInterop, Capability::SampledSceneColor,
              Capability::SampledDepth,
@@ -6152,31 +6152,31 @@ TEST(Oot3dGraphicsSettings, AcceptsFidelityFxOnlyWithTemporalProvider) {
              Capability::FidelityFxSssr}) {
         capabilities.Set(capability, true);
     }
-    auto candidate = Fast::Oot3d::GraphicsSettingsService::Preset(
-        Fast::Oot3d::GraphicsPreset::Custom);
+    auto candidate = Fast::Extension::GraphicsSettingsService::Preset(
+        Fast::Extension::GraphicsPreset::Custom);
     candidate.Effects.Reflections =
-        Fast::Oot3d::ReflectionMode::FidelityFxSssr;
-    EXPECT_EQ(Fast::Oot3d::GraphicsSettingsService::Validate(
+        Fast::Extension::ReflectionMode::FidelityFxSssr;
+    EXPECT_EQ(Fast::Extension::GraphicsSettingsService::Validate(
                   candidate, capabilities).Value.Effects.Reflections,
-              Fast::Oot3d::ReflectionMode::FidelityFxSssr);
+              Fast::Extension::ReflectionMode::FidelityFxSssr);
 
     capabilities.Set(Capability::MotionVectors, false);
-    EXPECT_EQ(Fast::Oot3d::GraphicsSettingsService::Validate(
+    EXPECT_EQ(Fast::Extension::GraphicsSettingsService::Validate(
                   candidate, capabilities).Value.Effects.Reflections,
-              Fast::Oot3d::ReflectionMode::HiZ);
+              Fast::Extension::ReflectionMode::HiZ);
 
     capabilities.Set(Capability::MotionVectors, true);
     capabilities.Set(Capability::LinearHdrWorkingColor, false);
-    EXPECT_EQ(Fast::Oot3d::GraphicsSettingsService::Validate(
+    EXPECT_EQ(Fast::Extension::GraphicsSettingsService::Validate(
                   candidate, capabilities).Value.Effects.Reflections,
-              Fast::Oot3d::ReflectionMode::HiZ);
+              Fast::Extension::ReflectionMode::HiZ);
 }
 
 TEST(Oot3dGraphicsSettings, TransactionCanConfirmAndRollback) {
-    Fast::Oot3d::GraphicsCapabilities capabilities;
-    Fast::Oot3d::GraphicsSettingsService service;
+    Fast::Extension::GraphicsCapabilities capabilities;
+    Fast::Extension::GraphicsSettingsService service;
     auto custom = service.Current();
-    custom.Preset = Fast::Oot3d::GraphicsPreset::Custom;
+    custom.Preset = Fast::Extension::GraphicsPreset::Custom;
     custom.FovMultiplier = 1.25F;
     EXPECT_TRUE(service.Stage(custom, capabilities).Accepted());
     EXPECT_TRUE(service.ApplyPending());
@@ -6190,35 +6190,35 @@ TEST(Oot3dGraphicsSettings, TransactionCanConfirmAndRollback) {
 
 TEST(Oot3dPresentationTransaction,
      RequiresBackendAcknowledgementBeforeConfirmation) {
-    Fast::Oot3d::PresentationSettingsTransaction transaction(1000U);
-    Fast::Oot3d::PresentationSettingsValue original;
-    Fast::Oot3d::PresentationSettingsValue requested = original;
-    requested.Window = Fast::Oot3d::WindowMode::Borderless;
+    Fast::Extension::PresentationSettingsTransaction transaction(1000U);
+    Fast::Extension::PresentationSettingsValue original;
+    Fast::Extension::PresentationSettingsValue requested = original;
+    requested.Window = Fast::Extension::WindowMode::Borderless;
 
     EXPECT_TRUE(transaction.Begin(original, requested));
     EXPECT_EQ(
         transaction.Status(100U).Phase,
-        Fast::Oot3d::PresentationTransactionPhase::ApplyRequested);
+        Fast::Extension::PresentationTransactionPhase::ApplyRequested);
     EXPECT_FALSE(transaction.Confirm());
     EXPECT_TRUE(transaction.MarkApplied(requested, 100U));
     const auto awaiting = transaction.Status(100U);
     EXPECT_EQ(
         awaiting.Phase,
-        Fast::Oot3d::PresentationTransactionPhase::AwaitingConfirmation);
+        Fast::Extension::PresentationTransactionPhase::AwaitingConfirmation);
     EXPECT_EQ(awaiting.RemainingMilliseconds, 1000U);
     EXPECT_TRUE(transaction.Confirm());
     EXPECT_EQ(
         transaction.Status(101U).Phase,
-        Fast::Oot3d::PresentationTransactionPhase::Idle);
+        Fast::Extension::PresentationTransactionPhase::Idle);
     EXPECT_EQ(transaction.LastKnownGood(), requested);
 }
 
 TEST(Oot3dPresentationTransaction,
      TimeoutRequestsAndCompletesExactRollback) {
-    Fast::Oot3d::PresentationSettingsTransaction transaction(500U);
-    Fast::Oot3d::PresentationSettingsValue original;
-    Fast::Oot3d::PresentationSettingsValue requested = original;
-    requested.Window = Fast::Oot3d::WindowMode::ExclusiveFullscreen;
+    Fast::Extension::PresentationSettingsTransaction transaction(500U);
+    Fast::Extension::PresentationSettingsValue original;
+    Fast::Extension::PresentationSettingsValue requested = original;
+    requested.Window = Fast::Extension::WindowMode::ExclusiveFullscreen;
     requested.Width = 1920U;
     requested.Height = 1080U;
     requested.VSync = false;
@@ -6229,39 +6229,39 @@ TEST(Oot3dPresentationTransaction,
     EXPECT_TRUE(transaction.Advance(700U));
     EXPECT_EQ(
         transaction.Status(700U).Phase,
-        Fast::Oot3d::PresentationTransactionPhase::RollbackRequested);
+        Fast::Extension::PresentationTransactionPhase::RollbackRequested);
     EXPECT_EQ(transaction.Target(), original);
     EXPECT_TRUE(transaction.MarkApplied(original, 700U));
     EXPECT_EQ(
         transaction.Status(700U).Phase,
-        Fast::Oot3d::PresentationTransactionPhase::Idle);
+        Fast::Extension::PresentationTransactionPhase::Idle);
 }
 
 TEST(Oot3dPresentationTransaction,
      WindowedResolutionCommitsWithoutSilentTimeoutRollback) {
-    Fast::Oot3d::PresentationSettingsTransaction transaction(500U);
-    Fast::Oot3d::PresentationSettingsValue original;
-    Fast::Oot3d::PresentationSettingsValue requested = original;
+    Fast::Extension::PresentationSettingsTransaction transaction(500U);
+    Fast::Extension::PresentationSettingsValue original;
+    Fast::Extension::PresentationSettingsValue requested = original;
     requested.Width = 1920U;
     requested.Height = 1080U;
 
     ASSERT_TRUE(transaction.Begin(original, requested));
     ASSERT_TRUE(transaction.MarkApplied(requested, 200U));
     EXPECT_EQ(transaction.Status(200U).Phase,
-              Fast::Oot3d::PresentationTransactionPhase::Idle);
+              Fast::Extension::PresentationTransactionPhase::Idle);
     EXPECT_EQ(transaction.LastKnownGood(), requested);
     EXPECT_FALSE(transaction.Advance(1000U));
 }
 
 TEST(Oot3dPresentationTransaction,
      RetargetPreservesOriginalLastKnownGood) {
-    Fast::Oot3d::PresentationSettingsTransaction transaction;
-    Fast::Oot3d::PresentationSettingsValue original;
-    Fast::Oot3d::PresentationSettingsValue borderless = original;
-    borderless.Window = Fast::Oot3d::WindowMode::Borderless;
-    Fast::Oot3d::PresentationSettingsValue fullscreen = borderless;
+    Fast::Extension::PresentationSettingsTransaction transaction;
+    Fast::Extension::PresentationSettingsValue original;
+    Fast::Extension::PresentationSettingsValue borderless = original;
+    borderless.Window = Fast::Extension::WindowMode::Borderless;
+    Fast::Extension::PresentationSettingsValue fullscreen = borderless;
     fullscreen.Window =
-        Fast::Oot3d::WindowMode::ExclusiveFullscreen;
+        Fast::Extension::WindowMode::ExclusiveFullscreen;
 
     ASSERT_TRUE(transaction.Begin(original, borderless));
     ASSERT_TRUE(transaction.MarkApplied(borderless, 10U));
@@ -6270,62 +6270,62 @@ TEST(Oot3dPresentationTransaction,
     ASSERT_TRUE(transaction.Begin(fullscreen, original));
     EXPECT_EQ(
         transaction.Status(20U).Phase,
-        Fast::Oot3d::PresentationTransactionPhase::RollbackRequested);
+        Fast::Extension::PresentationTransactionPhase::RollbackRequested);
     EXPECT_EQ(transaction.Target(), original);
 }
 
 TEST(Oot3dRendererPresentationController,
      AppliesInitialSettingsAndOnlyPendingTransactionsAfterwards) {
-    Fast::Oot3d::GraphicsSettings settings;
-    settings.Window = Fast::Oot3d::WindowMode::Borderless;
+    Fast::Extension::GraphicsSettings settings;
+    settings.Window = Fast::Extension::WindowMode::Borderless;
     settings.OutputWidth = 1920U;
     settings.OutputHeight = 1080U;
     settings.VSync = false;
-    Fast::Oot3d::PresentationTransactionStatus idle;
+    Fast::Extension::PresentationTransactionStatus idle;
 
     const auto initial =
-        Fast::Oot3d::ResolveRendererPresentationRequest(
+        Fast::Extension::ResolveRendererPresentationRequest(
             settings, idle, false);
     ASSERT_TRUE(initial.has_value());
     EXPECT_EQ(initial->Kind,
-              Fast::Oot3d::RendererPresentationRequestKind::Initial);
+              Fast::Extension::RendererPresentationRequestKind::Initial);
     EXPECT_EQ(initial->Value,
-              Fast::Oot3d::GetPresentationSettings(settings));
+              Fast::Extension::GetPresentationSettings(settings));
     EXPECT_FALSE(initial->RequiresAcknowledgement());
     EXPECT_FALSE(
-        Fast::Oot3d::ResolveRendererPresentationRequest(
+        Fast::Extension::ResolveRendererPresentationRequest(
             settings, idle, true).has_value());
 
-    Fast::Oot3d::PresentationTransactionStatus candidate;
+    Fast::Extension::PresentationTransactionStatus candidate;
     candidate.Phase =
-        Fast::Oot3d::PresentationTransactionPhase::ApplyRequested;
+        Fast::Extension::PresentationTransactionPhase::ApplyRequested;
     candidate.Requested = initial->Value;
     candidate.Requested.Width = 2560U;
     candidate.Requested.Height = 1440U;
     const auto apply =
-        Fast::Oot3d::ResolveRendererPresentationRequest(
+        Fast::Extension::ResolveRendererPresentationRequest(
             settings, candidate, true);
     ASSERT_TRUE(apply.has_value());
     EXPECT_EQ(apply->Kind,
-              Fast::Oot3d::RendererPresentationRequestKind::Candidate);
+              Fast::Extension::RendererPresentationRequestKind::Candidate);
     EXPECT_EQ(apply->Value, candidate.Requested);
     EXPECT_TRUE(apply->RequiresAcknowledgement());
 
     candidate.Phase =
-        Fast::Oot3d::PresentationTransactionPhase::RollbackRequested;
+        Fast::Extension::PresentationTransactionPhase::RollbackRequested;
     candidate.LastKnownGood = initial->Value;
     const auto rollback =
-        Fast::Oot3d::ResolveRendererPresentationRequest(
+        Fast::Extension::ResolveRendererPresentationRequest(
             settings, candidate, true);
     ASSERT_TRUE(rollback.has_value());
     EXPECT_EQ(rollback->Kind,
-              Fast::Oot3d::RendererPresentationRequestKind::Rollback);
+              Fast::Extension::RendererPresentationRequestKind::Rollback);
     EXPECT_EQ(rollback->Value, candidate.LastKnownGood);
 }
 
 TEST(Oot3dSceneViewBridge, TracksHistoryPerViewAndTarget) {
-    Fast::Oot3d::SceneViewBridge bridge;
-    Fast::Oot3d::SceneViewInfo first;
+    Fast::Extension::SceneViewBridge bridge;
+    Fast::Extension::SceneViewInfo first;
     first.ViewId = 7;
     first.Target = { 1, 2, 3 };
     first.ViewProjectionMatrix[0] = 10.0F;
@@ -6341,7 +6341,7 @@ TEST(Oot3dSceneViewBridge, TracksHistoryPerViewAndTarget) {
 }
 
 TEST(Oot3dEffectGraph, CompilesDependenciesAndRejectsCycles) {
-    Fast::Oot3d::EffectGraph graph;
+    Fast::Extension::EffectGraph graph;
     EXPECT_TRUE(graph.Add({ "depth", {} }));
     EXPECT_TRUE(graph.Add({ "ao", { "depth" } }));
     EXPECT_TRUE(graph.Add({ "composite", { "ao" } }));
@@ -6359,7 +6359,7 @@ TEST(Oot3dEffectGraph, CompilesDependenciesAndRejectsCycles) {
 
 TEST(Oot3dDisplayEffectPlan,
      BuildsDeterministicAdvancedDependencies) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     DisplayEffectPlanInput input;
     input.WorldSurface = true;
     input.PerspectiveAvailable = true;
@@ -6383,7 +6383,7 @@ TEST(Oot3dDisplayEffectPlan,
 
 TEST(Oot3dDisplayEffectPlan,
      SuppressesOverlayAndCapabilityGatesSmaa) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     DisplayEffectPlanInput input;
     input.AlphaOverlay = true;
     input.PerspectiveAvailable = true;
@@ -6410,7 +6410,7 @@ TEST(Oot3dDisplayEffectPlan,
 
 TEST(Oot3dDisplayEffectPlan,
      SeparatesSpatialAndTemporalUpscalerRequirements) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     DisplayEffectPlanInput input;
     input.WorldSurface = true;
     input.AntiAliasing = AntiAliasingMode::Upscaler;
@@ -6438,9 +6438,9 @@ TEST(Oot3dDisplayEffectPlan,
 
 TEST(Oot3dSceneSurfaces, ReplacementRetiresOldGeneration) {
     uint32_t retired = 0;
-    Fast::Oot3d::SceneSurfaceRegistry registry(
-        [&](const Fast::Oot3d::SceneSurface&) { ++retired; });
-    Fast::Oot3d::SceneSurface surface{ { 4, 8, Fast::Oot3d::SceneSurfaceKind::Depth },
+    Fast::Extension::SceneSurfaceRegistry registry(
+        [&](const Fast::Extension::SceneSurface&) { ++retired; });
+    Fast::Extension::SceneSurface surface{ { 4, 8, Fast::Extension::SceneSurfaceKind::Depth },
                                        100, 320, 240, 1, 0, true };
     const auto firstGeneration = registry.Publish(surface).Generation;
     EXPECT_EQ(registry.Publish(surface).Generation, firstGeneration);
@@ -6451,37 +6451,37 @@ TEST(Oot3dSceneSurfaces, ReplacementRetiresOldGeneration) {
 
 TEST(Oot3dSceneSurfaces, EncodingParticipatesInSurfaceIdentity) {
     uint32_t retired = 0;
-    Fast::Oot3d::SceneSurfaceRegistry registry(
-        [&](const Fast::Oot3d::SceneSurface&) { ++retired; });
-    Fast::Oot3d::SceneSurface surface{
-        {4, 8, Fast::Oot3d::SceneSurfaceKind::Composite},
+    Fast::Extension::SceneSurfaceRegistry registry(
+        [&](const Fast::Extension::SceneSurface&) { ++retired; });
+    Fast::Extension::SceneSurface surface{
+        {4, 8, Fast::Extension::SceneSurfaceKind::Composite},
         100, 320, 240, 97, 0, true,
-        Fast::Oot3d::SceneColorEncoding::Srgb};
+        Fast::Extension::SceneColorEncoding::Srgb};
     const auto srgbGeneration = registry.Publish(surface).Generation;
     EXPECT_EQ(registry.Publish(surface).Generation, srgbGeneration);
-    surface.ColorEncoding = Fast::Oot3d::SceneColorEncoding::Linear;
+    surface.ColorEncoding = Fast::Extension::SceneColorEncoding::Linear;
     EXPECT_GT(registry.Publish(surface).Generation, srgbGeneration);
     EXPECT_EQ(retired, 1U);
 }
 
 TEST(Oot3dResourceStates, EmitsOnlyRealTransitions) {
-    Fast::Oot3d::ResourceStateTracker tracker;
-    const Fast::Oot3d::ResourceState sampled{ Fast::Oot3d::ResourceAccess::ShaderRead, 2 };
+    Fast::Extension::ResourceStateTracker tracker;
+    const Fast::Extension::ResourceState sampled{ Fast::Extension::ResourceAccess::ShaderRead, 2 };
     const auto planned = tracker.PlanTransition(55, sampled);
     EXPECT_TRUE(planned.Required());
     EXPECT_FALSE(tracker.Find(55).has_value());
     tracker.Commit(planned);
     ASSERT_TRUE(tracker.Find(55).has_value());
     EXPECT_EQ(tracker.Find(55)->Access,
-              Fast::Oot3d::ResourceAccess::ShaderRead);
+              Fast::Extension::ResourceAccess::ShaderRead);
     EXPECT_FALSE(tracker.Transition(55, sampled).Required());
-    EXPECT_TRUE(tracker.Transition(55, { Fast::Oot3d::ResourceAccess::ComputeWrite, 2 }).Required());
+    EXPECT_TRUE(tracker.Transition(55, { Fast::Extension::ResourceAccess::ComputeWrite, 2 }).Required());
 }
 
 TEST(Oot3dGrassSceneBridge, PreservesStaticAnchorAcrossPresentationGaps) {
-    auto& bridge = Fast::Oot3d::GrassSceneBridge::Instance();
+    auto& bridge = Fast::Extension::GrassSceneBridge::Instance();
     bridge.Clear();
-    Fast::Oot3d::GrassSceneMesh mesh;
+    Fast::Extension::GrassSceneMesh mesh;
     mesh.GeometryId = 10U;
     mesh.InstanceId = 20U;
     mesh.RenderTargetNamespace = 7U;
@@ -6499,7 +6499,7 @@ TEST(Oot3dGrassSceneBridge, PreservesStaticAnchorAcrossPresentationGaps) {
     mesh.TransformBakedIntoVertices = false;
     mesh.PreserveWorldAnchor = true;
     mesh.Vertices = std::make_shared<const std::vector<
-        Fast::Oot3d::GrassSourceVertex>>(3U);
+        Fast::Extension::GrassSourceVertex>>(3U);
     mesh.Indices = std::make_shared<const std::vector<uint32_t>>(
         std::initializer_list<uint32_t>{0U, 1U, 2U});
     bridge.Publish(mesh);
@@ -6508,11 +6508,11 @@ TEST(Oot3dGrassSceneBridge, PreservesStaticAnchorAcrossPresentationGaps) {
     mesh.ModelToWorld[3] = 100.0F;
     mesh.PicaModelToClip[3] = 2.0F;
     bridge.Publish(mesh);
-    Fast::Oot3d::GrassTextureSelector selector;
+    Fast::Extension::GrassTextureSelector selector;
     selector.Rgba8Hash = 30U;
     selector.Width = 1U;
     selector.Height = 1U;
-    const Fast::Oot3d::GrassSceneScope currentScope{
+    const Fast::Extension::GrassSceneScope currentScope{
         101U, 7U, 0x123400U};
     const auto continuous =
         bridge.Matching(selector, &currentScope);
@@ -6523,11 +6523,11 @@ TEST(Oot3dGrassSceneBridge, PreservesStaticAnchorAcrossPresentationGaps) {
     EXPECT_EQ(indexed.ScopedMeshes.size(), 1U);
     EXPECT_FLOAT_EQ(continuous.front().ModelToWorld[3], 10.0F);
     EXPECT_FLOAT_EQ(continuous.front().PicaModelToClip[3], 2.0F);
-    const Fast::Oot3d::GrassSceneScope staleScope{
+    const Fast::Extension::GrassSceneScope staleScope{
         100U, 7U, 0x123400U};
     EXPECT_TRUE(
         bridge.Matching(selector, &staleScope).empty());
-    const Fast::Oot3d::GrassSceneScope otherTarget{
+    const Fast::Extension::GrassSceneScope otherTarget{
         101U, 7U, 0x567800U};
     EXPECT_TRUE(
         bridge.Matching(selector, &otherTarget).empty());
@@ -6536,9 +6536,9 @@ TEST(Oot3dGrassSceneBridge, PreservesStaticAnchorAcrossPresentationGaps) {
     mesh.ContentVersion = 2U;
     mesh.ModelToWorld[3] = 200.0F;
     mesh.Vertices = std::make_shared<const std::vector<
-        Fast::Oot3d::GrassSourceVertex>>(4U);
+        Fast::Extension::GrassSourceVertex>>(4U);
     bridge.Publish(mesh);
-    const Fast::Oot3d::GrassSceneScope refreshedScope{
+    const Fast::Extension::GrassSceneScope refreshedScope{
         102U, 7U, 0x123400U};
     const auto refreshed =
         bridge.Matching(selector, &refreshedScope);
@@ -6553,7 +6553,7 @@ TEST(Oot3dGrassSceneBridge, PreservesStaticAnchorAcrossPresentationGaps) {
     mesh.FrameId = 105U;
     mesh.ModelToWorld[3] = 100.0F;
     bridge.Publish(mesh);
-    const Fast::Oot3d::GrassSceneScope afterGapScope{
+    const Fast::Extension::GrassSceneScope afterGapScope{
         105U, 7U, 0x123400U};
     const auto afterGap =
         bridge.Matching(selector, &afterGapScope);
@@ -6592,9 +6592,9 @@ TEST(Oot3dGrassSceneBridge, KeepsWorldAnchorWhenRedrawnIntoAnotherTarget) {
     // A pause page redraws the scene into another framebuffer: the same world
     // instance must keep its anchor there instead of re-deriving the matrix
     // from that target's projection, while target scoping stays per target.
-    auto& bridge = Fast::Oot3d::GrassSceneBridge::Instance();
+    auto& bridge = Fast::Extension::GrassSceneBridge::Instance();
     bridge.Clear();
-    Fast::Oot3d::GrassSceneMesh mesh;
+    Fast::Extension::GrassSceneMesh mesh;
     mesh.GeometryId = 10U;
     mesh.InstanceId = 20U;
     mesh.WorldInstanceId = 99U;
@@ -6610,7 +6610,7 @@ TEST(Oot3dGrassSceneBridge, KeepsWorldAnchorWhenRedrawnIntoAnotherTarget) {
     mesh.TransformBakedIntoVertices = false;
     mesh.PreserveWorldAnchor = true;
     mesh.Vertices = std::make_shared<const std::vector<
-        Fast::Oot3d::GrassSourceVertex>>(3U);
+        Fast::Extension::GrassSourceVertex>>(3U);
     mesh.Indices = std::make_shared<const std::vector<uint32_t>>(
         std::initializer_list<uint32_t>{0U, 1U, 2U});
     bridge.Publish(mesh);
@@ -6621,16 +6621,16 @@ TEST(Oot3dGrassSceneBridge, KeepsWorldAnchorWhenRedrawnIntoAnotherTarget) {
     mesh.FrameId = 101U;
     mesh.ModelToWorld[3] = 10.00006F;
     bridge.Publish(mesh);
-    Fast::Oot3d::GrassTextureSelector selector;
+    Fast::Extension::GrassTextureSelector selector;
     selector.Rgba8Hash = 30U;
     selector.Width = 1U;
     selector.Height = 1U;
-    const Fast::Oot3d::GrassSceneScope redrawn{101U, 8U, 0x567800U};
+    const Fast::Extension::GrassSceneScope redrawn{101U, 8U, 0x567800U};
     const auto scoped = bridge.Matching(selector, &redrawn);
     ASSERT_EQ(scoped.size(), 1U);
     EXPECT_EQ(scoped.front().InstanceId, 21U);
     EXPECT_FLOAT_EQ(scoped.front().ModelToWorld[3], 10.0F);
-    const Fast::Oot3d::GrassSceneScope original{101U, 7U, 0x123400U};
+    const Fast::Extension::GrassSceneScope original{101U, 7U, 0x123400U};
     EXPECT_TRUE(bridge.Matching(selector, &original).empty());
 
     // Without a world instance the anchor stays per render target.
@@ -6639,7 +6639,7 @@ TEST(Oot3dGrassSceneBridge, KeepsWorldAnchorWhenRedrawnIntoAnotherTarget) {
     mesh.FrameId = 102U;
     mesh.ModelToWorld[3] = 10.00006F;
     bridge.Publish(mesh);
-    const Fast::Oot3d::GrassSceneScope legacy{102U, 8U, 0x567800U};
+    const Fast::Extension::GrassSceneScope legacy{102U, 8U, 0x567800U};
     const auto unanchored = bridge.Matching(selector, &legacy);
     ASSERT_EQ(unanchored.size(), 1U);
     EXPECT_FLOAT_EQ(unanchored.front().ModelToWorld[3], 10.00006F);
@@ -6647,7 +6647,7 @@ TEST(Oot3dGrassSceneBridge, KeepsWorldAnchorWhenRedrawnIntoAnotherTarget) {
 }
 
 TEST(Oot3dVisualClock, AdvancesOncePerPresentationAndFreezesOnPause) {
-    auto& clock = Fast::Oot3d::VisualClock::Instance();
+    auto& clock = Fast::Extension::VisualClock::Instance();
     clock.Reset();
     clock.Publish(0.02, false, 10U);
     const auto first = clock.Snapshot();
@@ -6668,7 +6668,7 @@ TEST(Oot3dVisualClock, AdvancesOncePerPresentationAndFreezesOnPause) {
 }
 
 TEST(Oot3dGrassInteractionBridge, PreservesSweepAndDetectsTeleport) {
-    auto& bridge = Fast::Oot3d::GrassInteractionBridge::Instance();
+    auto& bridge = Fast::Extension::GrassInteractionBridge::Instance();
     bridge.Reset();
     bridge.PublishLink({0.0F, 0.0F, 0.0F}, {10.0F, 0.0F, 0.0F},
                        35.0F, 85.0F, 100U, 7U, 9U);
@@ -6691,7 +6691,7 @@ TEST(Oot3dGrassInteractionBridge, PreservesSweepAndDetectsTeleport) {
 }
 
 TEST(Oot3dGrassInteractionBridge, SamplesAllActorsOnTheGeometryClockAndRemovesDespawnedActors) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto& bridge = GrassInteractionBridge::Instance();
     bridge.Reset();
     std::array<GrassInteractor, 2> actors;
@@ -6736,7 +6736,7 @@ TEST(Oot3dGrassInteractionBridge, SamplesAllActorsOnTheGeometryClockAndRemovesDe
 }
 
 TEST(Oot3dGrassInteractionBridge, TeleportsDoNotSweepAcrossTheScene) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto& bridge = GrassInteractionBridge::Instance();
     bridge.Reset();
     GrassInteractor actor;
@@ -6760,7 +6760,7 @@ TEST(Oot3dGrassInteractionBridge, TeleportsDoNotSweepAcrossTheScene) {
 }
 
 TEST(Oot3dGrassInteractionField, MultipleActorsStampOnceWithoutClearingEachOthersTrail) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     InteractiveGrassSettings settings;
     settings.InteractionFieldResolution = 64;
     settings.InteractionFieldRadius = 160;
@@ -6792,56 +6792,56 @@ TEST(Oot3dGrassInteractionField, MultipleActorsStampOnceWithoutClearingEachOther
 }
 
 TEST(Oot3dGrassCollision, SweptCapsuleCatchesMotionAndRejectsOtherFloors) {
-    Fast::Oot3d::InteractiveGrassSettings settings;
+    Fast::Extension::InteractiveGrassSettings settings;
     settings.CollisionPush = 1.0F;
     settings.MaximumBend = 1.0F;
     settings.InteractionVerticalMargin = 5.0F;
-    Fast::Oot3d::GrassInteractor link;
+    Fast::Extension::GrassInteractor link;
     link.PreviousPosition = {0.0F, 0.0F, 0.0F};
     link.Position = {100.0F, 0.0F, 0.0F};
     link.Velocity = {100.0F, 0.0F, 0.0F};
     link.Radius = 10.0F;
     link.HalfHeight = 40.0F;
-    const auto swept = Fast::Oot3d::ResolveGrassCollision(
+    const auto swept = Fast::Extension::ResolveGrassCollision(
         {50.0F, 0.0F, 5.0F}, 20.0F, link, settings);
     EXPECT_TRUE(swept.VerticalOverlap);
     EXPECT_GT(swept.Weight, 0.0F);
     EXPECT_GT(swept.Bend[1], 0.0F);
 
-    const auto otherFloor = Fast::Oot3d::ResolveGrassCollision(
+    const auto otherFloor = Fast::Extension::ResolveGrassCollision(
         {50.0F, 250.0F, 5.0F}, 20.0F, link, settings);
     EXPECT_FALSE(otherFloor.VerticalOverlap);
     EXPECT_FLOAT_EQ(otherFloor.Weight, 0.0F);
 }
 
 TEST(Oot3dGrassCollision, DirectPushDoesNotDropWhenTheActorStops) {
-    Fast::Oot3d::InteractiveGrassSettings settings;
+    Fast::Extension::InteractiveGrassSettings settings;
     settings.CollisionPush = 1.0F;
     settings.CollisionVelocityResponse = 3.0F;
     settings.MaximumBend = 1.0F;
-    Fast::Oot3d::GrassInteractor link;
+    Fast::Extension::GrassInteractor link;
     link.PreviousPosition = {0.0F, 0.0F, 0.0F};
     link.Position = {0.0F, 0.0F, 0.0F};
     link.Velocity = {600.0F, 0.0F, 0.0F};
     link.Radius = 10.0F;
     link.HalfHeight = 40.0F;
-    const auto running = Fast::Oot3d::ResolveGrassCollision({5.0F, 0.0F, 0.0F}, 20.0F, link, settings);
+    const auto running = Fast::Extension::ResolveGrassCollision({5.0F, 0.0F, 0.0F}, 20.0F, link, settings);
     link.Velocity = {};
-    const auto stopped = Fast::Oot3d::ResolveGrassCollision({5.0F, 0.0F, 0.0F}, 20.0F, link, settings);
+    const auto stopped = Fast::Extension::ResolveGrassCollision({5.0F, 0.0F, 0.0F}, 20.0F, link, settings);
     EXPECT_FLOAT_EQ(running.Weight, 0.5F);
     EXPECT_FLOAT_EQ(stopped.Weight, running.Weight);
     EXPECT_EQ(stopped.Bend, running.Bend);
 }
 
 TEST(Oot3dGrassInteractionField, KeepsTrailAtWorldCoordinatesWhenRecentering) {
-    Fast::Oot3d::InteractiveGrassSettings settings;
+    Fast::Extension::InteractiveGrassSettings settings;
     settings.InteractionFieldResolution = 32;
     settings.InteractionFieldRadius = 160.0F;
     settings.CollisionPush = 1.0F;
     settings.MaximumBend = 2.0F;
     settings.RecoverySeconds = 10.0F;
-    Fast::Oot3d::GrassInteractionField field;
-    Fast::Oot3d::GrassInteractor link;
+    Fast::Extension::GrassInteractionField field;
+    Fast::Extension::GrassInteractor link;
     link.StableId = 3U;
     link.PreviousPosition = {-40.0F, 0.0F, 0.0F};
     link.Position = {40.0F, 0.0F, 0.0F};
@@ -6866,7 +6866,7 @@ TEST(Oot3dGrassInteractionField, KeepsTrailAtWorldCoordinatesWhenRecentering) {
 }
 
 TEST(Oot3dGrassInteractionField, KeepsLinksTrailWhenHeStopsAndAFarActorMoves) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     InteractiveGrassSettings settings;
     settings.InteractionFieldResolution = 32;
     settings.InteractionFieldRadius = 160.0F;
@@ -6908,7 +6908,7 @@ TEST(Oot3dGrassInteractionField, KeepsLinksTrailWhenHeStopsAndAFarActorMoves) {
 }
 
 TEST(Oot3dHiZ, BuildsCompleteOddSizedPyramid) {
-    const auto layout = Fast::Oot3d::BuildHiZPyramidLayout(5U, 3U);
+    const auto layout = Fast::Extension::BuildHiZPyramidLayout(5U, 3U);
     ASSERT_EQ(layout.Mips.size(), 3U);
     EXPECT_EQ(layout.Mips[0].Width, 5U);
     EXPECT_EQ(layout.Mips[0].Height, 3U);
@@ -6921,37 +6921,37 @@ TEST(Oot3dHiZ, BuildsCompleteOddSizedPyramid) {
 }
 
 TEST(Oot3dHiZ, LinearizesNormalReversedAndWBufferDepth) {
-    using Fast::Oot3d::DepthConvention;
+    using Fast::Extension::DepthConvention;
     constexpr float nearPlane = 1.0F;
     constexpr float farPlane = 101.0F;
-    EXPECT_NEAR(Fast::Oot3d::LinearizeDepth(
+    EXPECT_NEAR(Fast::Extension::LinearizeDepth(
                     0.0F, nearPlane, farPlane, DepthConvention::Perspective),
                 nearPlane, 1.0e-5F);
-    EXPECT_NEAR(Fast::Oot3d::LinearizeDepth(
+    EXPECT_NEAR(Fast::Extension::LinearizeDepth(
                     1.0F, nearPlane, farPlane, DepthConvention::Perspective),
                 farPlane, 1.0e-3F);
-    EXPECT_NEAR(Fast::Oot3d::LinearizeDepth(
+    EXPECT_NEAR(Fast::Extension::LinearizeDepth(
                     1.0F, nearPlane, farPlane,
                     DepthConvention::ReversedPerspective),
                 nearPlane, 1.0e-5F);
-    EXPECT_NEAR(Fast::Oot3d::LinearizeDepth(
+    EXPECT_NEAR(Fast::Extension::LinearizeDepth(
                     0.0F, nearPlane, farPlane,
                     DepthConvention::ReversedPerspective),
                 farPlane, 1.0e-3F);
-    EXPECT_FLOAT_EQ(Fast::Oot3d::LinearizeDepth(
+    EXPECT_FLOAT_EQ(Fast::Extension::LinearizeDepth(
                         0.25F, nearPlane, farPlane,
                         DepthConvention::WBuffer),
                     26.0F);
-    EXPECT_FLOAT_EQ(Fast::Oot3d::LinearizeDepth(
+    EXPECT_FLOAT_EQ(Fast::Extension::LinearizeDepth(
                         0.25F, nearPlane, farPlane,
                         DepthConvention::ReversedWBuffer),
                     76.0F);
-    EXPECT_FLOAT_EQ(Fast::Oot3d::ReduceHiZClosest(8.0F, 3.0F, 7.0F, 4.0F),
+    EXPECT_FLOAT_EQ(Fast::Extension::ReduceHiZClosest(8.0F, 3.0F, 7.0F, 4.0F),
                     3.0F);
 }
 
 TEST(Oot3dHiZ, EmitsBoundedComputeReductionShader) {
-    const auto shader = Fast::Oot3d::BuildHiZReductionComputeShader();
+    const auto shader = Fast::Extension::BuildHiZReductionComputeShader();
     EXPECT_NE(shader.find("local_size_x = 8"), std::string::npos);
     EXPECT_NE(shader.find("source_is_raw"), std::string::npos);
     EXPECT_NE(shader.find("binding = 2) uniform sampler"), std::string::npos);
@@ -6973,7 +6973,7 @@ TEST(Oot3dHiZ, EmitsBoundedComputeReductionShader) {
 
 
 TEST(Oot3dUpscaler, ResolvesNriQualityContractDeterministically) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const auto contract = ResolveUpscalerContract(
         UpscalerProvider::Nis, UpscalerQuality::Quality, 1920U, 1080U);
     EXPECT_EQ(contract.Output, (UpscalerExtent{1920U, 1080U}));
@@ -6984,7 +6984,7 @@ TEST(Oot3dUpscaler, ResolvesNriQualityContractDeterministically) {
 }
 
 TEST(Oot3dUpscaler, SettingsGateProviderAndApplyRenderScale) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GraphicsSettings settings = GraphicsSettingsService::Preset(
         GraphicsPreset::Custom);
     settings.AntiAliasing = AntiAliasingMode::Upscaler;
@@ -7002,7 +7002,7 @@ TEST(Oot3dUpscaler, SettingsGateProviderAndApplyRenderScale) {
 }
 
 TEST(Oot3dUpscaler, FsrRequiresProviderAndAllTemporalGuides) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GraphicsSettings settings = GraphicsSettingsService::Preset(
         GraphicsPreset::Custom);
     settings.AntiAliasing = AntiAliasingMode::Upscaler;
@@ -7022,7 +7022,7 @@ TEST(Oot3dUpscaler, FsrRequiresProviderAndAllTemporalGuides) {
 }
 
 TEST(Oot3dUpscaler, DlssUsesAnIndependentTemporalCapability) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GraphicsSettings settings = GraphicsSettingsService::Preset(
         GraphicsPreset::Custom);
     settings.AntiAliasing = AntiAliasingMode::Upscaler;
@@ -7043,7 +7043,7 @@ TEST(Oot3dUpscaler, DlssUsesAnIndependentTemporalCapability) {
 }
 
 TEST(Oot3dVulkanAdapter, ResolvesSharedAndSeparateQueueTopologies) {
-    using Fast::Oot3d::ResolveVulkanQueueTopology;
+    using Fast::Extension::ResolveVulkanQueueTopology;
 
     const auto dualQueue = ResolveVulkanQueueTopology(3U, 3U, 2U);
     EXPECT_TRUE(dualQueue.SharedFamily);
@@ -7069,7 +7069,7 @@ TEST(Oot3dVulkanAdapter, ResolvesSharedAndSeparateQueueTopologies) {
 }
 
 TEST(Oot3dGpuProfile, AssignsTwoQueriesPerScopeWithoutOverlap) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     std::array<bool, kGpuProfileQueriesPerFrame> used{};
     for (size_t index = 0; index < kGpuProfileScopeCount; ++index) {
         const auto range =
@@ -7086,7 +7086,7 @@ TEST(Oot3dGpuProfile, AssignsTwoQueriesPerScopeWithoutOverlap) {
 }
 
 TEST(Oot3dGpuProfile, TracksOneClosedIntervalPerScopeAndFrame) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GpuProfileFramePlan plan;
 
     EXPECT_TRUE(plan.Begin(GpuProfileScope::Frame));
@@ -7108,7 +7108,7 @@ TEST(Oot3dGpuProfile, TracksOneClosedIntervalPerScopeAndFrame) {
 }
 
 TEST(Oot3dRendererValidation, SeparatesThreadSafeApiCounters) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     RendererValidationTelemetry telemetry;
     telemetry.SetEnabled(RendererValidationSource::Vulkan, true);
     telemetry.SetEnabled(RendererValidationSource::Nri, true);
@@ -7144,7 +7144,7 @@ TEST(Oot3dRendererValidation, SeparatesThreadSafeApiCounters) {
 }
 
 TEST(Oot3dVulkanAdapter, PrefersACompleteSharedQueueFamily) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const std::vector<VulkanQueueFamilyCandidate> candidates = {
         { 0U, 2U, true, false },
         { 1U, 1U, false, true },
@@ -7158,7 +7158,7 @@ TEST(Oot3dVulkanAdapter, PrefersACompleteSharedQueueFamily) {
 }
 
 TEST(Oot3dVulkanAdapter, FallsBackToSeparateQueueFamilies) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const std::vector<VulkanQueueFamilyCandidate> candidates = {
         { 0U, 0U, true, true },
         { 3U, 4U, true, false },
@@ -7172,7 +7172,7 @@ TEST(Oot3dVulkanAdapter, FallsBackToSeparateQueueFamilies) {
 }
 
 TEST(Oot3dVulkanAdapter, RejectsAnIncompleteQueueTopology) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const std::vector<VulkanQueueFamilyCandidate> candidates = {
         { 4U, 1U, true, false },
     };
@@ -7184,7 +7184,7 @@ TEST(Oot3dVulkanAdapter, RejectsAnIncompleteQueueTopology) {
 }
 
 TEST(Oot3dVulkanAdapter, ParsesOnlyCanonicalEnumeratedIndices) {
-    using Fast::Oot3d::ParseVulkanAdapterIndex;
+    using Fast::Extension::ParseVulkanAdapterIndex;
 
     const auto zero = ParseVulkanAdapterIndex("0");
     ASSERT_TRUE(zero.Valid());
@@ -7204,7 +7204,7 @@ TEST(Oot3dVulkanAdapter, ParsesOnlyCanonicalEnumeratedIndices) {
 }
 
 TEST(Oot3dVulkanAdapter, AutoSelectionPrefersSuitableDiscreteAdapter) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const std::vector<VulkanAdapterCandidate> candidates = {
         { 0U, "integrated", VulkanAdapterClass::Integrated, 16384U,
           true, true, true, true, true },
@@ -7222,7 +7222,7 @@ TEST(Oot3dVulkanAdapter, AutoSelectionPrefersSuitableDiscreteAdapter) {
 }
 
 TEST(Oot3dVulkanAdapter, ExplicitSelectionIsStrictAndDeterministic) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const std::vector<VulkanAdapterCandidate> candidates = {
         { 3U, "suitable", VulkanAdapterClass::Integrated, 8192U,
           true, true, true, true, true },
@@ -7249,7 +7249,7 @@ TEST(Oot3dVulkanAdapter, ExplicitSelectionIsStrictAndDeterministic) {
 // first render pass), and the refusal names the device, its version and the
 // remedy instead of a missing entry point.
 TEST(Oot3dVulkanAdapter, RequiresVulkan12AndExplainsAnOutdatedDriver) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const std::vector<VulkanAdapterCandidate> candidates = {
         { 0U, "old integrated", VulkanAdapterClass::Integrated, 16384U, true, true, true, true, true, 1U, 1U },
         { 1U, "current discrete", VulkanAdapterClass::Discrete, 8192U, true, true, true, true, true, 1U, 3U },
@@ -7276,7 +7276,7 @@ TEST(Oot3dTexturePreviewArtifact,
         1U, 2U, 3U, 4U,
         10U, 20U, 30U, 40U};
     const auto bmp =
-        Fast::Oot3d::EncodeTexturePreviewBmp(
+        Fast::Extension::EncodeTexturePreviewBmp(
             2U, 1U, rgba);
     ASSERT_EQ(bmp.size(), 62U);
     EXPECT_EQ(bmp[0], 'B');
@@ -7295,7 +7295,7 @@ TEST(Oot3dTexturePreviewArtifact,
             3U, 2U, 1U, 4U,
             30U, 20U, 10U, 40U}));
     EXPECT_TRUE(
-        Fast::Oot3d::EncodeTexturePreviewBmp(
+        Fast::Extension::EncodeTexturePreviewBmp(
             2U, 2U, rgba).empty());
 }
 
@@ -7624,7 +7624,7 @@ TEST(Renderer3dsFactoredInterpolation, RigidCameraKeepsTheWorldPoseOfAFactoredMo
     // A still object far from the origin seen by a turning camera. Its model-
     // view is sampled as a factored rigid motion; the camera sampled the same
     // way gives back its world pose, a linearly sampled camera does not.
-    using Fast::Oot3d::DirectionalShadowMatrix;
+    using Fast::Extension::DirectionalShadowMatrix;
     const auto rotationY = [](double degrees, double scale, double x, double y, double z) {
         const double r = degrees * std::numbers::pi / 180.0;
         DirectionalShadowMatrix m{};
@@ -7642,8 +7642,8 @@ TEST(Renderer3dsFactoredInterpolation, RigidCameraKeepsTheWorldPoseOfAFactoredMo
         for (size_t i = 0; i < 3; ++i) for (size_t j = 0; j < 4; ++j) uniforms[i][j] = m[j * 4 + i];
         return uniforms;
     };
-    const auto mv0 = rows(Fast::Oot3d::MultiplyDirectionalShadowMatrices(before, model));
-    const auto mv1 = rows(Fast::Oot3d::MultiplyDirectionalShadowMatrices(after, model));
+    const auto mv0 = rows(Fast::Extension::MultiplyDirectionalShadowMatrices(before, model));
+    const auto mv1 = rows(Fast::Extension::MultiplyDirectionalShadowMatrices(after, model));
     auto sampledRows = mv1;
     ASSERT_TRUE(Fast::Renderer3ds::InterpolatePicaFactoredUniformGroup(mv0, mv1, {0U, 1U}, 1U, 0.5F, sampledRows));
     DirectionalShadowMatrix modelView{};
@@ -7651,8 +7651,8 @@ TEST(Renderer3dsFactoredInterpolation, RigidCameraKeepsTheWorldPoseOfAFactoredMo
     modelView[15] = 1.0F;
     const auto worldError = [&](const DirectionalShadowMatrix& camera) {
         DirectionalShadowMatrix inverse{};
-        EXPECT_TRUE(Fast::Oot3d::InvertDirectionalShadowMatrix(camera, inverse));
-        const auto world = Fast::Oot3d::MultiplyDirectionalShadowMatrices(inverse, modelView);
+        EXPECT_TRUE(Fast::Extension::InvertDirectionalShadowMatrix(camera, inverse));
+        const auto world = Fast::Extension::MultiplyDirectionalShadowMatrices(inverse, modelView);
         double error = 0.0;
         for (size_t index = 0; index < 16; ++index)
             error = std::max(error, std::abs(double(world[index]) - double(model[index])));
@@ -7978,7 +7978,7 @@ TEST(Renderer3dsVirtualShadowKeyframes, WithoutAnAtlasForThreeLayoutsTheLayoutSt
 }
 
 TEST(Oot3dDirectionalShadowReceiver, PacksTheOlderLayoutOnlyWhileItDissolves) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const auto identity = IdentityDirectionalShadowMatrix();
     PicaDirectionalShadowHistoryState history;
     history.ProducedFrameId = 1U;

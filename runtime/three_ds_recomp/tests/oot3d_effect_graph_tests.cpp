@@ -1,17 +1,17 @@
-#include "fast/oot3d/display_effect_plan.h"
-#include "fast/oot3d/display_effect_resources.h"
-#include "fast/oot3d/effect_geometry_provider_plan.h"
-#include "fast/oot3d/effect_graph.h"
-#include "fast/oot3d/effect_graph_pass_barriers.h"
-#include "fast/oot3d/effect_graph_physical_plan.h"
-#include "fast/oot3d/effect_transient_configuration_cache.h"
-#include "fast/oot3d/hiz_depth_pyramid.h"
-#include "fast/oot3d/pica_composition_schedule.h"
-#include "fast/oot3d/pica_display_composition.h"
-#include "fast/oot3d/pica_extension_schedule.h"
-#include "fast/oot3d/pica_guide_sampling_barriers.h"
-#include "fast/oot3d/pica_scene_publication_adapter.h"
-#include "fast/oot3d/upscaler_contract.h"
+#include "fast/extension/display_effect_plan.h"
+#include "fast/extension/display_effect_resources.h"
+#include "fast/extension/effect_geometry_provider_plan.h"
+#include "fast/extension/effect_graph.h"
+#include "fast/extension/effect_graph_pass_barriers.h"
+#include "fast/extension/effect_graph_physical_plan.h"
+#include "fast/extension/effect_transient_configuration_cache.h"
+#include "fast/extension/hiz_depth_pyramid.h"
+#include "fast/extension/pica_composition_schedule.h"
+#include "fast/extension/pica_display_composition.h"
+#include "fast/extension/pica_extension_schedule.h"
+#include "fast/extension/pica_guide_sampling_barriers.h"
+#include "fast/extension/pica_scene_publication_adapter.h"
+#include "fast/extension/upscaler_contract.h"
 
 #include <gtest/gtest.h>
 
@@ -21,13 +21,13 @@
 
 namespace {
 
-using namespace Fast::Oot3d;
+using namespace Fast::Extension;
 
 static_assert(std::is_same_v<
-              Fast::Oot3d::PicaCompositionSchedule,
+              Fast::Extension::PicaCompositionSchedule,
               Fast::Renderer3ds::PicaCompositionSchedule>);
 static_assert(std::is_same_v<
-              Fast::Oot3d::PicaDisplayComposition,
+              Fast::Extension::PicaDisplayComposition,
               Fast::Renderer3ds::PicaDisplayComposition>);
 
 [[nodiscard]] EffectResourceUse Read(EffectResource resource) {

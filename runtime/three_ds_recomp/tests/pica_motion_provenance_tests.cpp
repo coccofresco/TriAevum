@@ -1,15 +1,15 @@
 #include "fast/renderer3ds/pica_motion_provenance.h"
-#include "fast/oot3d/pica_rigid_motion.h"
-#include "fast/oot3d/pica_shader_instrumentation.h"
-#include "fast/oot3d/pica_shader_pipeline_cache.h"
-#include "fast/oot3d/pica_uber_effect_program.h"
-#include "fast/oot3d/motion_vectors.h"
+#include "fast/extension/pica_rigid_motion.h"
+#include "fast/extension/pica_shader_instrumentation.h"
+#include "fast/extension/pica_shader_pipeline_cache.h"
+#include "fast/extension/pica_uber_effect_program.h"
+#include "fast/extension/motion_vectors.h"
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
 
-using namespace Fast::Oot3d;
+using namespace Fast::Extension;
 static void Require(bool value, const char* message) { if (!value) throw std::runtime_error(message); }
 int main(int argc, char** argv) {
     constexpr std::string_view source = R"glsl(#version 450
@@ -57,7 +57,7 @@ void main() {
     PicaUberEffectProgramRequest uberRequest{source,hooks,true,false,false};
     const auto uber=BuildPicaUberEffectProgram(uberRequest);
     for (const auto* shader : {&composed.Source,&standalone.Source,&uber})
-        Require(shader->find(Fast::Oot3d::PicaMotionGuideAssignment)!=std::string::npos,
+        Require(shader->find(Fast::Extension::PicaMotionGuideAssignment)!=std::string::npos,
                 "shader variants disagree on exact/invalid motion");
     Require(composed.RigidMotionApplied && standalone.Applied && !uber.empty(), "guide writer absent");
     request.TemporalInputs=false;

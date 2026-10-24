@@ -227,13 +227,13 @@ claim an existing implementation.
 
 | Boundary | Current code / intended responsibility |
 | --- | --- |
-| Device and NRI integration | `runtime/three_ds_recomp/src/fast/backends/gfx_vulkan.cpp`; `src/fast/oot3d/nri_interop_context.cpp` under the same runtime; negotiate device features and connect a reusable factory |
+| Device and NRI integration | `runtime/three_ds_recomp/src/fast/backends/gfx_vulkan.cpp`; `src/fast/extension/nri_interop_context.cpp` under the same runtime; negotiate device features and connect a reusable factory |
 | NRI native factory | `runtime/three_ds_recomp/src/fast/renderer3ds/nri_pica_pipeline_bridge.cpp`; keep descriptors, binding and ownership coherent |
 | Shared identities/lifetime | `runtime/three_ds_recomp/include/fast/renderer3ds/{pica_pipeline_identity,nri_pica_pipeline_identity,pica_device_pipeline_pool}.h` |
 | Shared contract | `runtime/three_ds_recomp/include/fast/renderer3ds/pica_nri_shader_contract.h`; proposed pipeline-part/preparation types belong beside this layer, with no OOT3D addresses |
 | NRI donor changes | `runtime/three_ds_recomp/cmake/patches/` and `CMakeLists.txt`; explicit pinned patch, reproducible on every platform, notices preserved |
 | Native lowering | `tools/oot3d/native_pica_frontend/`; use existing SHBIN/material/register evidence |
-| Extension composition | `runtime/three_ds_recomp/src/fast/oot3d/pica_shader_{pipeline_cache,instrumentation}.cpp` and feature-owned modules; no string-patched scheduling |
+| Extension composition | `runtime/three_ds_recomp/src/fast/extension/pica_shader_{pipeline_cache,instrumentation}.cpp` and feature-owned modules; no string-patched scheduling |
 | Developer artifacts | `tools/renderer/tev_program/build_{vertex,fragment,pass}_artifacts.cpp` |
 | Verification | `tools/renderer/tev_program/{run_native_comparison,benchmark_native_paths}.py`, GPU tests and identity/lifetime tests |
 

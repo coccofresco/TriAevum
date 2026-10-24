@@ -106,8 +106,8 @@ add_executable(oot3d_native_pica_capture_inventory EXCLUDE_FROM_ALL
     tools/oot3d/native_pica_frontend/oot3d_native_pica_capture_inventory.cpp
     tools/oot3d/native_game_runtime/oot3d_native_pica_vulkan_plan.cpp
     tools/oot3d/native_game_runtime/oot3d_native_pica_vulkan_bridge.cpp
-    runtime/three_ds_recomp/src/fast/oot3d/pica_pipeline_manifest.cpp
-    runtime/three_ds_recomp/src/fast/oot3d/pica_aot_shader_pack.cpp
+    runtime/three_ds_recomp/src/fast/extension/pica_pipeline_manifest.cpp
+    runtime/three_ds_recomp/src/fast/extension/pica_aot_shader_pack.cpp
     runtime/three_ds_recomp/src/fast/renderer3ds/pica_nri_shader_contract.cpp)
 include(runtime/three_ds_recomp/cmake/spirv_pack.cmake)
 triaevum_add_spirv_pack(oot3d_native_pica_capture_inventory
@@ -122,33 +122,33 @@ set(_variant_runtime runtime/three_ds_recomp/src/fast)
 set(_variant_replay_sources
     tools/oot3d/native_game_runtime/oot3d_native_pica_vulkan_plan.cpp
     tools/oot3d/native_game_runtime/oot3d_native_pica_vulkan_bridge.cpp
-    ${_variant_runtime}/oot3d/pica_pipeline_manifest.cpp
-    ${_variant_runtime}/oot3d/pica_aot_shader_pack.cpp
-    ${_variant_runtime}/oot3d/pica_variant_request_record.cpp
-    ${_variant_runtime}/oot3d/graphics_settings.cpp
-    ${_variant_runtime}/oot3d/graphics_settings_persistence.cpp
-    ${_variant_runtime}/oot3d/graphics_capabilities.cpp
-    ${_variant_runtime}/oot3d/reflection_material_profile.cpp
-    ${_variant_runtime}/oot3d/upscaler_contract.cpp
+    ${_variant_runtime}/extension/pica_pipeline_manifest.cpp
+    ${_variant_runtime}/extension/pica_aot_shader_pack.cpp
+    ${_variant_runtime}/extension/pica_variant_request_record.cpp
+    ${_variant_runtime}/extension/graphics_settings.cpp
+    ${_variant_runtime}/extension/graphics_settings_persistence.cpp
+    ${_variant_runtime}/extension/graphics_capabilities.cpp
+    ${_variant_runtime}/extension/reflection_material_profile.cpp
+    ${_variant_runtime}/extension/upscaler_contract.cpp
     ${_variant_runtime}/renderer3ds/pica_nri_shader_contract.cpp
-    ${_variant_runtime}/oot3d/pica_fragment_lighting.cpp
+    ${_variant_runtime}/extension/pica_fragment_lighting.cpp
     ${_variant_runtime}/renderer3ds/pica_pbr_seam_shader.cpp
     ${_variant_runtime}/renderer3ds/pica_pbr_shading.cpp
     ${_variant_runtime}/renderer3ds/pica_surface_lighting.cpp
     ${_variant_runtime}/renderer3ds/point_shadow_map.cpp
     ${_variant_runtime}/renderer3ds/pica_vertex_surface.cpp
     ${_variant_runtime}/renderer3ds/virtual_shadow_map.cpp
-    ${_variant_runtime}/oot3d/directional_shadows.cpp
-    ${_variant_runtime}/oot3d/pica_directional_shadow_caster.cpp
-    ${_variant_runtime}/oot3d/pica_uber_effect_program.cpp
-    ${_variant_runtime}/oot3d/pica_directional_shadow_lighting.cpp
-    ${_variant_runtime}/oot3d/pica_directional_shadow_semantics.cpp
-    ${_variant_runtime}/oot3d/pica_reactive_mask.cpp
-    ${_variant_runtime}/oot3d/pica_reflection_material.cpp
-    ${_variant_runtime}/oot3d/pica_toon_shader.cpp
-    ${_variant_runtime}/oot3d/pica_shader_pipeline_cache.cpp
-    ${_variant_runtime}/oot3d/pica_rigid_motion.cpp
-    ${_variant_runtime}/oot3d/pica_shader_instrumentation.cpp)
+    ${_variant_runtime}/extension/directional_shadows.cpp
+    ${_variant_runtime}/extension/pica_directional_shadow_caster.cpp
+    ${_variant_runtime}/extension/pica_uber_effect_program.cpp
+    ${_variant_runtime}/extension/pica_directional_shadow_lighting.cpp
+    ${_variant_runtime}/extension/pica_directional_shadow_semantics.cpp
+    ${_variant_runtime}/extension/pica_reactive_mask.cpp
+    ${_variant_runtime}/extension/pica_reflection_material.cpp
+    ${_variant_runtime}/extension/pica_toon_shader.cpp
+    ${_variant_runtime}/extension/pica_shader_pipeline_cache.cpp
+    ${_variant_runtime}/extension/pica_rigid_motion.cpp
+    ${_variant_runtime}/extension/pica_shader_instrumentation.cpp)
 add_executable(oot3d_native_pica_variant_inventory EXCLUDE_FROM_ALL
     tools/oot3d/native_pica_frontend/oot3d_native_pica_variant_inventory.cpp
     tools/oot3d/native_pica_frontend/oot3d_native_pica_transferable_cache.cpp ${_variant_replay_sources})
@@ -160,13 +160,13 @@ foreach(_variant_target oot3d_native_pica_variant_inventory oot3d_native_pica_va
         tools/oot3d/native_pica_frontend/oot3d_native_vertex.spvpack)
     # The built-in caster family, which the runtime consults before the corpus.
     triaevum_add_spirv_pack(${_variant_target}
-        runtime/three_ds_recomp/src/fast/oot3d/pica_caster_fragment_binaries.cpp
-        runtime/three_ds_recomp/src/fast/oot3d/pica_caster_fragment.spvpack)
+        runtime/three_ds_recomp/src/fast/extension/pica_caster_fragment_binaries.cpp
+        runtime/three_ds_recomp/src/fast/extension/pica_caster_fragment.spvpack)
     # The always-available families (uber effect programs, canonical parametric
     # bases) the runtime falls back to while a specialized program compiles.
     triaevum_add_spirv_pack(${_variant_target}
-        runtime/three_ds_recomp/src/fast/oot3d/pica_uber_fragment_binaries.cpp
-        runtime/three_ds_recomp/src/fast/oot3d/pica_uber_fragment.spvpack)
+        runtime/three_ds_recomp/src/fast/extension/pica_uber_fragment_binaries.cpp
+        runtime/three_ds_recomp/src/fast/extension/pica_uber_fragment.spvpack)
     triaevum_add_spirv_pack(${_variant_target}
         runtime/three_ds_recomp/src/fast/renderer3ds/pica_native_fragment_binaries.cpp
         runtime/three_ds_recomp/src/fast/renderer3ds/pica_native_fragment.spvpack)
@@ -207,7 +207,7 @@ set_property(TARGET oot3d_native_pica_program_descriptor_tests PROPERTY
 
 add_executable(oot3d_native_pica_aot_shader_pack_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_pica_frontend/oot3d_native_pica_aot_shader_pack_tests.cpp
-    runtime/three_ds_recomp/src/fast/oot3d/pica_aot_shader_pack.cpp
+    runtime/three_ds_recomp/src/fast/extension/pica_aot_shader_pack.cpp
 )
 target_include_directories(oot3d_native_pica_aot_shader_pack_tests PRIVATE
     runtime/three_ds_recomp/include)
@@ -226,8 +226,8 @@ set_property(TARGET oot3d_native_pica_aot_shader_pack_tests PROPERTY
 
 add_executable(oot3d_native_pica_pipeline_manifest EXCLUDE_FROM_ALL
     tools/oot3d/native_pica_frontend/oot3d_native_pica_pipeline_manifest.cpp
-    runtime/three_ds_recomp/src/fast/oot3d/pica_aot_shader_pack.cpp
-    runtime/three_ds_recomp/src/fast/oot3d/pica_pipeline_manifest.cpp
+    runtime/three_ds_recomp/src/fast/extension/pica_aot_shader_pack.cpp
+    runtime/three_ds_recomp/src/fast/extension/pica_pipeline_manifest.cpp
 )
 target_include_directories(oot3d_native_pica_pipeline_manifest PRIVATE
     runtime/three_ds_recomp/include)
@@ -456,7 +456,7 @@ oot3d_target_defaults(oot3d_native_pica_azahar_corpus_validator NO_WARNING_OVERR
 if(OOT3D_ENABLE_VULKAN_RENDERER AND TARGET three_ds_recomp_shaderc)
     add_executable(oot3d_native_pica_aot_compiler EXCLUDE_FROM_ALL
         tools/oot3d/native_pica_frontend/oot3d_native_pica_aot_compiler.cpp
-        runtime/three_ds_recomp/src/fast/oot3d/pica_aot_shader_pack.cpp
+        runtime/three_ds_recomp/src/fast/extension/pica_aot_shader_pack.cpp
     )
     include(runtime/three_ds_recomp/cmake/pass_shader_sources.cmake)
     triaevum_add_pass_shader_sources(oot3d_native_pica_aot_compiler)

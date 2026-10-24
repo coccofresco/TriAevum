@@ -6,7 +6,7 @@
 namespace Fast {
 class GfxRenderingAPI;
 class ShaderProgram;
-namespace Oot3d {
+namespace Extension {
 class TitleRenderBackend;
 }
 } // namespace Fast
@@ -39,7 +39,7 @@ class Fast3dUiRenderBackend final
               std::uint32_t textureId, bool saturated, std::string* error);
 
     Fast::GfxRenderingAPI& rendering_api_;
-    Fast::Oot3d::TitleRenderBackend* title_render_backend_ = nullptr;
+    Fast::Extension::TitleRenderBackend* title_render_backend_ = nullptr;
     Fast::ShaderProgram* solid_shader_ = nullptr;
     Fast::ShaderProgram* textured_shader_ = nullptr;
     Fast::ShaderProgram* saturated_shader_ = nullptr;

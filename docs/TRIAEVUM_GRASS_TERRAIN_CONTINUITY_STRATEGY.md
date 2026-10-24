@@ -96,8 +96,8 @@ All paths below are relative to `runtime/three_ds_recomp/`.
 
 | Finding | Code boundary | Consequence |
 | --- | --- | --- |
-| One alpha-weighted average RGB per source texture | `src/fast/oot3d/grass_texture_source_cache.cpp`, `AcquireAverageColor`; `interactive_grass_pass.cpp`, `BuildGrassEnvironmentRecord` | Local dark/light/color variations underneath a root are lost. Multiple masks do not solve this. |
-| Root/tip colors mix with that average, then separate illumination | `src/fast/oot3d/grass_shader_sources.cpp`, `evaluate_blade_color`, `evaluate_shading` | Matching the average terrain color does not ensure matching the terrain's final appearance. |
+| One alpha-weighted average RGB per source texture | `src/fast/extension/grass_texture_source_cache.cpp`, `AcquireAverageColor`; `interactive_grass_pass.cpp`, `BuildGrassEnvironmentRecord` | Local dark/light/color variations underneath a root are lost. Multiple masks do not solve this. |
+| Root/tip colors mix with that average, then separate illumination | `src/fast/extension/grass_shader_sources.cpp`, `evaluate_blade_color`, `evaluate_shading` | Matching the average terrain color does not ensure matching the terrain's final appearance. |
 | Lighting bridge carries light directions, diffuse/ambient and fog, but not full resolved terrain color/TEV/vertex-color contribution | `grass_shading_environment.cpp`, `grass_shading_environment.h`, `grass_scene_bridge.h` | With no active lights, the shader returns unit illumination. That is not evidence that the actual terrain is unshaded. |
 | Root UV exists locally but is dropped from the packed world anchor | `grass_surface_extractor.h` (`GrassAnchor::Uv`), `grass_world_placement_cache.cpp` (`BuildPlacement`) | The draw cannot sample local terrain appearance through that anchor as currently packed. |
 | Whole-surface anchor population precedes view selection | `interactive_grass_pass.cpp` constructs placement requests without enabling `PlacementView`; `grass_async_placement_builder.cpp` | Cached invisible detail consumes memory and cold construction time. Simply enabling view-dependent full-mesh rebuilds would reintroduce camera stalls. |

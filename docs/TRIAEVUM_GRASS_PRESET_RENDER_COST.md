@@ -26,7 +26,7 @@ All renderer paths below are under `runtime/three_ds_recomp`.
 
 1. **Repeated selection of an unchanged view.** Kokiri reevaluated about 215,000
    anchors each frame to reproduce the same 198,738 visible instances. The new
-   `include/fast/oot3d/grass_selection_cache.h` validates exact projection/eye,
+   `include/fast/extension/grass_selection_cache.h` validates exact projection/eye,
    ordered static-placement revision, full LOD policy, conservative blade bound,
    culling switch and budget. A match reuses the existing indices and topology
    batches, without another copy of the instance list. Any view or policy change
@@ -52,11 +52,11 @@ All renderer paths below are under `runtime/three_ds_recomp`.
 4. **Duplicated cluster checks while moving.** The measured broad-phase and
    prefix-preparation stages separately repeated distance, frustum and retention
    work on tens of thousands of clusters. `SelectGrassClusterWork` in
-   `src/fast/oot3d/grass_visibility.cpp` fuses them and computes the prefix from
+   `src/fast/extension/grass_visibility.cpp` fuses them and computes the prefix from
    the same bound. The older two-stage entry points remain usable as reference
    tests. CPU diagnostic output now separates cluster work and anchor evaluation.
 
-`src/fast/oot3d/interactive_grass_pass.cpp` integrates these small modules into
+`src/fast/extension/interactive_grass_pass.cpp` integrates these small modules into
 the existing Grass geometry provider. No native PICA, scene composition, outline,
 fog, UI, gameplay or title-specific rendering exceptions were added.
 

@@ -7,7 +7,7 @@
 // that write the composition outputs: the output kernel (the pass's own
 // extent) and the geometry-guided upsampler (a work-scale pass to the output
 // extent). They are precompiled into builtin_pass.spvpack by
-// build_pass_artifacts (the catalogue in fast/oot3d/builtin_pass_shaders.cpp
+// build_pass_artifacts (the catalogue in fast/extension/builtin_pass_shaders.cpp
 // appends BuildDiffuseGiPassKernels()); the pass resolves each kernel by its
 // exact source text, never by name.
 //

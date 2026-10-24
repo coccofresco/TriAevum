@@ -1,5 +1,5 @@
 #include "oot3d/renderer/azahar_texture_pack.h"
-#include "../src/fast/oot3d/azahar_pbr_materials.h"
+#include "../src/fast/extension/azahar_pbr_materials.h"
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>

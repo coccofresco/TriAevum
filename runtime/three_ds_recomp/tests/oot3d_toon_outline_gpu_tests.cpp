@@ -1,4 +1,4 @@
-#include "fast/oot3d/toon_outline_shader.h"
+#include "fast/extension/toon_outline_shader.h"
 
 #include "oot3d_vulkan_compute_fixture.h"
 
@@ -30,7 +30,7 @@ vec4 oot3d_outline_sample_normal(vec2 uv) {
     bool grass=oot3d_outline_sample_scene_depth(uv)<native.a;
     return grass ? vec4(0.5,1,0.5,64.0/255.0) : vec4(native.xyz*0.5+0.5,1);
 }
-)glsl") + Fast::Oot3d::ToonOutlineShaderLibrary() + R"glsl(
+)glsl") + Fast::Extension::ToonOutlineShaderLibrary() + R"glsl(
 void main() {
     vec2 uv=vec2(float(gl_GlobalInvocationID.x)-3.0,0);
     float normal=gl_GlobalInvocationID.y==5u ? 1.0 : 0.0;
@@ -74,7 +74,7 @@ vec4 oot3d_outline_sample_normal(vec2 uv) {
 float oot3d_outline_sample_occlusion(vec2 uv) {
     return gl_GlobalInvocationID.y==5u ? 0.01 : 0.0;
 }
-)glsl") + Fast::Oot3d::ToonOutlineShaderLibrary() + R"glsl(
+)glsl") + Fast::Extension::ToonOutlineShaderLibrary() + R"glsl(
 void main() {
     vec2 uv=vec2(float(gl_GlobalInvocationID.x)-3.0,0);
     uint scenario=gl_GlobalInvocationID.y;

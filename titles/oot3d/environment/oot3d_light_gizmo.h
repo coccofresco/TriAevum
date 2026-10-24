@@ -1,6 +1,6 @@
 #pragma once
 
-#include "fast/oot3d/world_debug_lines.h"
+#include "fast/extension/world_debug_lines.h"
 #include "oot3d_scene_environment.h"
 #include <array>
 #include <cstdint>
@@ -22,7 +22,7 @@ inline constexpr float kLightGizmoAxisReach = 20000.0F;
 //   about its own axis, cyan, for a surface), with rings of a constant size
 //   on screen around it, the eye given.
 // Without a light of `selectedLight`, the first light is the selected one.
-[[nodiscard]] Fast::Oot3d::WorldDebugLineSet
+[[nodiscard]] Fast::Extension::WorldDebugLineSet
 BuildPlacedLightGizmo(const std::vector<PlacedLight> &lights, uint32_t selectedLight,
                       const std::array<float, 3> &eye);
 

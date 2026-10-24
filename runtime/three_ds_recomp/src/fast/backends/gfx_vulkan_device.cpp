@@ -43,7 +43,7 @@ void GfxRenderingAPIVulkan::CreateInstance() {
     }
 #endif
 
-    const auto& ngxRequirements = Oot3d::GetNriNgxVulkanRequirements();
+    const auto& ngxRequirements = Extension::GetNriNgxVulkanRequirements();
     mNgxVulkanRequirementsSatisfied = ngxRequirements.Available;
     mNgxVulkanUnavailableReason = ngxRequirements.Reason;
     const auto recordMissingNgxRequirement = [this](
@@ -147,7 +147,7 @@ void GfxRenderingAPIVulkan::PickPhysicalDevice() {
     CheckVk(vkEnumeratePhysicalDevices(mInstance, &deviceCount, devices.data()),
             "vkEnumeratePhysicalDevices");
 
-    std::vector<Oot3d::VulkanAdapterCandidate> candidates;
+    std::vector<Extension::VulkanAdapterCandidate> candidates;
     candidates.reserve(devices.size());
     for (uint32_t index = 0; index < devices.size(); ++index) {
         const VkPhysicalDevice device = devices[index];
@@ -162,23 +162,23 @@ void GfxRenderingAPIVulkan::PickPhysicalDevice() {
         }
         VkPhysicalDeviceProperties properties{};
         vkGetPhysicalDeviceProperties(device, &properties);
-        Oot3d::VulkanAdapterClass adapterClass =
-            Oot3d::VulkanAdapterClass::Other;
+        Extension::VulkanAdapterClass adapterClass =
+            Extension::VulkanAdapterClass::Other;
         switch (properties.deviceType) {
             case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
                 adapterClass =
-                    Oot3d::VulkanAdapterClass::Integrated;
+                    Extension::VulkanAdapterClass::Integrated;
                 break;
             case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
                 adapterClass =
-                    Oot3d::VulkanAdapterClass::Discrete;
+                    Extension::VulkanAdapterClass::Discrete;
                 break;
             case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
                 adapterClass =
-                    Oot3d::VulkanAdapterClass::Virtual;
+                    Extension::VulkanAdapterClass::Virtual;
                 break;
             case VK_PHYSICAL_DEVICE_TYPE_CPU:
-                adapterClass = Oot3d::VulkanAdapterClass::Cpu;
+                adapterClass = Extension::VulkanAdapterClass::Cpu;
                 break;
             default:
                 break;
@@ -199,8 +199,8 @@ void GfxRenderingAPIVulkan::PickPhysicalDevice() {
         SPDLOG_INFO(
             "OOT3D Vulkan adapter [{}]: {} (suitable={}, score={})",
             index, properties.deviceName,
-            Oot3d::IsVulkanAdapterSuitable(candidates.back()),
-            Oot3d::ScoreVulkanAdapter(candidates.back()));
+            Extension::IsVulkanAdapterSuitable(candidates.back()),
+            Extension::ScoreVulkanAdapter(candidates.back()));
     }
 
     std::optional<uint32_t> requestedAdapter;
@@ -208,13 +208,13 @@ void GfxRenderingAPIVulkan::PickPhysicalDevice() {
             std::getenv("OOT3D_GRAPHICS_VULKAN_ADAPTER");
         requested != nullptr && *requested != '\0') {
         const auto parsed =
-            Oot3d::ParseVulkanAdapterIndex(requested);
+            Extension::ParseVulkanAdapterIndex(requested);
         if (!parsed.Valid())
             throw std::runtime_error(parsed.Reason);
         requestedAdapter = parsed.EnumerationIndex;
     }
     const auto selection =
-        Oot3d::SelectVulkanAdapter(candidates, requestedAdapter);
+        Extension::SelectVulkanAdapter(candidates, requestedAdapter);
     if (!selection.CandidatePosition.has_value()) {
         throw std::runtime_error(selection.Reason);
     }
@@ -283,9 +283,9 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
             : 0U;
     const char* presentDispatch = std::getenv("TRIAEVUM_VULKAN_PRESENT_DISPATCH");
     const char* videoDriver = SDL_GetCurrentVideoDriver();
-    const auto queuePlan = Oot3d::ResolveVulkanQueueTopology(
+    const auto queuePlan = Extension::ResolveVulkanQueueTopology(
         mGraphicsQueueFamily, mPresentQueueFamily,
-        graphicsQueueCount, Oot3d::ParseVulkanPresentDispatchMode(
+        graphicsQueueCount, Extension::ParseVulkanPresentDispatchMode(
             presentDispatch ? presentDispatch : ""), videoDriver ? videoDriver : "");
     mNriSwapchainQueueEligible =
         queuePlan.NriSwapchainEligible;
@@ -410,7 +410,7 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
     if (hasExternalSemaphoreWin32)
         extensions.push_back(kExternalSemaphoreWin32);
 #endif
-    const auto& ngxRequirements = Oot3d::GetNriNgxVulkanRequirements();
+    const auto& ngxRequirements = Extension::GetNriNgxVulkanRequirements();
     for (const std::string& required : ngxRequirements.DeviceExtensions) {
         const bool promotedBufferDeviceAddress =
             hasVulkan12 &&
@@ -668,7 +668,7 @@ void GfxRenderingAPIVulkan::StorePipelineCache() {
 }
 
 void GfxRenderingAPIVulkan::StartPresentWorker() {
-    if (!Oot3d::ShouldUseVulkanPresentWorker(
+    if (!Extension::ShouldUseVulkanPresentWorker(
             mNriSwapchain.Active(), mAsyncPresentSupported) ||
         mPresentThread.joinable()) {
         return;
@@ -690,7 +690,7 @@ void GfxRenderingAPIVulkan::StopPresentWorker() {
 }
 
 void GfxRenderingAPIVulkan::WaitForFramePresent(uint32_t frameIndex) {
-    if (!Oot3d::ShouldUseVulkanPresentWorker(
+    if (!Extension::ShouldUseVulkanPresentWorker(
             mNriSwapchain.Active(), mAsyncPresentSupported) ||
         frameIndex >= kFramesInFlight) {
         return;
@@ -703,7 +703,7 @@ void GfxRenderingAPIVulkan::WaitForFramePresent(uint32_t frameIndex) {
 }
 
 void GfxRenderingAPIVulkan::WaitForAllPresents() {
-    if (!Oot3d::ShouldUseVulkanPresentWorker(
+    if (!Extension::ShouldUseVulkanPresentWorker(
             mNriSwapchain.Active(), mAsyncPresentSupported) ||
         !mPresentThread.joinable()) {
         return;
@@ -1300,7 +1300,7 @@ GfxRenderingAPIVulkan::FindQueueFamilies(VkPhysicalDevice device) const {
     vkGetPhysicalDeviceQueueFamilyProperties(device, &count, nullptr);
     std::vector<VkQueueFamilyProperties> properties(count);
     vkGetPhysicalDeviceQueueFamilyProperties(device, &count, properties.data());
-    std::vector<Oot3d::VulkanQueueFamilyCandidate> candidates;
+    std::vector<Extension::VulkanQueueFamilyCandidate> candidates;
     candidates.reserve(properties.size());
     for (uint32_t index = 0; index < count; ++index) {
         VkBool32 present = VK_FALSE;
@@ -1315,7 +1315,7 @@ GfxRenderingAPIVulkan::FindQueueFamilies(VkPhysicalDevice device) const {
         });
     }
     const auto selected =
-        Oot3d::SelectVulkanQueueFamilies(candidates);
+        Extension::SelectVulkanQueueFamilies(candidates);
     QueueFamilies result;
     result.Graphics = selected.GraphicsFamily;
     result.Present = selected.PresentFamily;
@@ -1401,7 +1401,7 @@ VkExtent2D GfxRenderingAPIVulkan::ChooseExtent(const VkSurfaceCapabilitiesKHR& c
 }
 
 VkFormat GfxRenderingAPIVulkan::FindDepthFormat() const {
-    const auto format = Oot3d::FindPicaDepthFormat(mPhysicalDevice);
+    const auto format = Extension::FindPicaDepthFormat(mPhysicalDevice);
     std::fprintf(stderr, "TRIAEVUM_VULKAN_DEPTH_FORMAT format=%u\n", unsigned(format));
     return format;
 }

@@ -80,7 +80,7 @@ void GfxRenderingAPIVulkan::CreateNativePicaShaderResources() {
 
     VkPushConstantRange scanoutPushConstant{};
     scanoutPushConstant.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-    scanoutPushConstant.size = sizeof(Oot3d::PicaScanoutPushConstants);
+    scanoutPushConstant.size = sizeof(Extension::PicaScanoutPushConstants);
     pipelineInfo.pSetLayouts = &mNativePicaScanoutDescriptorSetLayout;
     pipelineInfo.pushConstantRangeCount = 1;
     pipelineInfo.pPushConstantRanges = &scanoutPushConstant;
@@ -239,7 +239,7 @@ void GfxRenderingAPIVulkan::DestroyNativePicaGeometryResources() {
     mPicaScenePublications.Reset();
     mGrassGeometryRegistry.Clear();
     mGrassDrawMemo.Clear();
-    Oot3d::GrassSceneBridge::Instance().Clear();
+    Extension::GrassSceneBridge::Instance().Clear();
 }
 
 void GfxRenderingAPIVulkan::CreateNativePicaScanoutPipeline() {
@@ -253,16 +253,16 @@ void GfxRenderingAPIVulkan::CreateNativePicaScanoutPipeline() {
     }
 
     const std::string vertexSource =
-        Oot3d::BuildPicaScanoutVertexShader();
+        Extension::BuildPicaScanoutVertexShader();
     const std::string fragmentSource =
-        Oot3d::BuildPicaScanoutFragmentShader();
+        Extension::BuildPicaScanoutFragmentShader();
 
     VkShaderModule vertexShader = CreateShaderModuleFromSpirv(ResolveNativePicaShaderSpirv(
-        vertexSource, Oot3d::PicaAotShaderStage::Vertex, true, "oot3d_native_pica_scanout.vert"));
+        vertexSource, Extension::PicaAotShaderStage::Vertex, true, "oot3d_native_pica_scanout.vert"));
     VkShaderModule fragmentShader = VK_NULL_HANDLE;
     try {
         fragmentShader = CreateShaderModuleFromSpirv(ResolveNativePicaShaderSpirv(
-            fragmentSource, Oot3d::PicaAotShaderStage::Fragment, false, "oot3d_native_pica_scanout.frag"));
+            fragmentSource, Extension::PicaAotShaderStage::Fragment, false, "oot3d_native_pica_scanout.frag"));
     } catch (...) {
         vkDestroyShaderModule(mDevice, vertexShader, nullptr);
         throw;
@@ -375,7 +375,7 @@ void GfxRenderingAPIVulkan::CreateNativePicaRenderPass() {
         for (auto& attachment : attachments) {
             attachment.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2;
         }
-        constexpr std::array<VkFormat, Oot3d::kPicaColorAttachmentCount> colorFormats{
+        constexpr std::array<VkFormat, Extension::kPicaColorAttachmentCount> colorFormats{
             VK_FORMAT_R8G8B8A8_UNORM,      VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM,
             VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM,
             VK_FORMAT_R32G32B32A32_UINT
@@ -398,7 +398,7 @@ void GfxRenderingAPIVulkan::CreateNativePicaRenderPass() {
         attachments[depthIndex].stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
         attachments[depthIndex].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         attachments[depthIndex].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-        std::array<VkAttachmentReference2, Oot3d::kPicaColorAttachmentCount> colorReferences{};
+        std::array<VkAttachmentReference2, Extension::kPicaColorAttachmentCount> colorReferences{};
         for (uint32_t index = 0; index < colorCount; ++index) {
             colorReferences[index] = { VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2, nullptr, index,
                                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT };
@@ -406,7 +406,7 @@ void GfxRenderingAPIVulkan::CreateNativePicaRenderPass() {
         VkAttachmentReference2 depthReference{ VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2, nullptr, depthIndex,
                                                VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                                                NativeDepthAspect(mDepthFormat) };
-        std::array<VkAttachmentReference2, Oot3d::kPicaColorAttachmentCount> resolveReferences{};
+        std::array<VkAttachmentReference2, Extension::kPicaColorAttachmentCount> resolveReferences{};
         VkAttachmentReference2 depthResolveReference{ VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2, nullptr,
                                                       depthResolveIndex,
                                                       VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
@@ -466,7 +466,7 @@ void GfxRenderingAPIVulkan::CreateNativePicaRenderPass() {
     };
     createRenderPass(1U, mNativePicaCanonicalRenderPass);
     // The legacy render pass has no albedo guide; GI requires dynamic rendering.
-    createRenderPass(static_cast<uint32_t>(Oot3d::kPicaBaseInstrumentedColorAttachmentCount), mNativePicaRenderPass);
+    createRenderPass(static_cast<uint32_t>(Extension::kPicaBaseInstrumentedColorAttachmentCount), mNativePicaRenderPass);
 }
 
 void GfxRenderingAPIVulkan::ApplyNativePicaSampleCount(VkSampleCountFlagBits sampleCount) {
@@ -562,16 +562,16 @@ void GfxRenderingAPIVulkan::ApplyNativePicaSampleCount(VkSampleCountFlagBits sam
                 static_cast<uint32_t>(mNativePicaSampleCount));
 }
 
-std::optional<Oot3d::PerspectiveViewState> GfxRenderingAPIVulkan::SamplePerspective(
+std::optional<Extension::PerspectiveViewState> GfxRenderingAPIVulkan::SamplePerspective(
     const NativePicaRenderTarget* target) const {
-    auto perspective = Oot3d::SceneViewRuntime::Instance().LatestPerspective();
+    auto perspective = Extension::SceneViewRuntime::Instance().LatestPerspective();
     if (!perspective.has_value() || target == nullptr) return perspective;
     // The rendered depth follows the projection the draws applied, which the
     // game adjusts after building it from the camera's frustum.
     if (const auto projection = target->SampleProjection.Resolve(mFrameCounter))
-        perspective = Oot3d::ApplySampleProjection(*perspective, *projection);
+        perspective = Extension::ApplySampleProjection(*perspective, *projection);
     if (const auto view = target->SampleView.Resolve(mFrameCounter))
-        return Oot3d::ResolveSamplePerspective(*perspective, *view);
+        return Extension::ResolveSamplePerspective(*perspective, *view);
     return perspective;
 }
 
@@ -594,8 +594,8 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
     // inside the swapchain), the output the scene is shown in.
     const auto outputExtent = NativePicaOutputExtent();
     const auto targetExtent = restoredExtentAvailable
-        ? Oot3d::RenderExtent{restoredWidth, restoredHeight}
-        : Oot3d::ResolveNativePicaRenderExtent(
+        ? Extension::RenderExtent{restoredWidth, restoredHeight}
+        : Extension::ResolveNativePicaRenderExtent(
               {key.Width, key.Height},
               NativeTopScreenOutputExtent(),
               mInternalResolutionScale);
@@ -617,7 +617,7 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
     // its effects require (ActivePicaAttachmentRequirements).
     target.Attachments = ActivePicaAttachmentRequirements().BaseGuides();
     if (!target.Attachments.NativeColorOnly())
-        target.Attachments.AuxiliaryOutputs |= Oot3d::kAllPicaAuxiliaryOutputs;
+        target.Attachments.AuxiliaryOutputs |= Extension::kAllPicaAuxiliaryOutputs;
     const bool instrumented = !target.Attachments.NativeColorOnly();
     VkFormatProperties shadowFormatProperties{};
     vkGetPhysicalDeviceFormatProperties(mPhysicalDevice, VK_FORMAT_R32_UINT,
@@ -628,7 +628,7 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
             "VK_FORMAT_R32_UINT storage image atomics are unavailable");
     }
 
-    Oot3d::NriPicaRenderTargetImages nriImages;
+    Extension::NriPicaRenderTargetImages nriImages;
     if (mNriPicaRenderTargetOwner.Create(
             {target.Width, target.Height, mDepthFormat,
              mNativePicaSampleCount, target.Attachments},
@@ -653,7 +653,7 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
         target.MsaaDepthImage = nriImages.MsaaDepth;
         target.NriOwned = true;
         mDiagnostics.RecordNriPicaRenderTarget(
-            true, Oot3d::CountNriPicaRenderTargetImages(nriImages));
+            true, Extension::CountNriPicaRenderTargetImages(nriImages));
     } else {
         const auto createImage = [&](
                                      VkFormat format,
@@ -942,7 +942,7 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
             mOverlayRenderPassActive = false;
         }
     }
-    const Oot3d::NriPicaRenderTargetImages initImages{
+    const Extension::NriPicaRenderTargetImages initImages{
         target.ColorImage,
         target.NormalGuideImage,
         target.MaterialGuideImage,
@@ -1227,7 +1227,7 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
                          .first->second;
     const auto publishSurface = [&](VkImage image, VkFormat format,
                                     VkImageUsageFlags usage,
-                                    Oot3d::SceneSurfaceKind kind,
+                                    Extension::SceneSurfaceKind kind,
                                     uint32_t physicalAddress) -> uint64_t {
         if (image == VK_NULL_HANDLE)
             return 0U;
@@ -1237,9 +1237,9 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
               nativeImage, inserted.Width, inserted.Height,
               static_cast<uint32_t>(format), 0, true });
         mResourceStates.Transition(nativeImage,
-            { kind == Oot3d::SceneSurfaceKind::Depth
-                  ? Oot3d::ResourceAccess::DepthAttachment
-                  : Oot3d::ResourceAccess::ColorAttachment,
+            { kind == Extension::SceneSurfaceKind::Depth
+                  ? Extension::ResourceAccess::DepthAttachment
+                  : Extension::ResourceAccess::ColorAttachment,
               mGraphicsQueueFamily });
         mNriInterop.WrapTexture(image, format, VK_IMAGE_TYPE_2D, usage,
                                 inserted.Width, inserted.Height);
@@ -1251,46 +1251,46 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
             VK_IMAGE_USAGE_TRANSFER_DST_BIT |
             VK_IMAGE_USAGE_SAMPLED_BIT,
-        Oot3d::SceneSurfaceKind::Color, key.ColorPhysicalAddress);
+        Extension::SceneSurfaceKind::Color, key.ColorPhysicalAddress);
     inserted.DepthSurfaceGeneration = publishSurface(
         inserted.DepthImage, mDepthFormat,
         VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
             VK_IMAGE_USAGE_TRANSFER_DST_BIT |
             VK_IMAGE_USAGE_SAMPLED_BIT,
-        Oot3d::SceneSurfaceKind::Depth, key.DepthPhysicalAddress);
+        Extension::SceneSurfaceKind::Depth, key.DepthPhysicalAddress);
     publishSurface(inserted.NormalGuideImage, VK_FORMAT_R8G8B8A8_UNORM,
                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
                        VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                        VK_IMAGE_USAGE_SAMPLED_BIT,
-                   Oot3d::SceneSurfaceKind::NormalGuide,
+                   Extension::SceneSurfaceKind::NormalGuide,
                    key.ColorPhysicalAddress);
     publishSurface(inserted.MaterialGuideImage, VK_FORMAT_R8G8B8A8_UNORM,
                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
                        VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                        VK_IMAGE_USAGE_SAMPLED_BIT,
-                   Oot3d::SceneSurfaceKind::MaterialGuide,
+                   Extension::SceneSurfaceKind::MaterialGuide,
                    key.ColorPhysicalAddress);
     publishSurface(inserted.RigidMotionGuideImage,
                    VK_FORMAT_R16G16B16A16_SFLOAT,
                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
                        VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                        VK_IMAGE_USAGE_SAMPLED_BIT,
-                   Oot3d::SceneSurfaceKind::RigidMotionGuide,
+                   Extension::SceneSurfaceKind::RigidMotionGuide,
                    key.ColorPhysicalAddress);
     publishSurface(inserted.AmbientGuideImage,
                    VK_FORMAT_R8G8B8A8_UNORM,
                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
                        VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                        VK_IMAGE_USAGE_SAMPLED_BIT,
-                   Oot3d::SceneSurfaceKind::AmbientGuide,
+                   Extension::SceneSurfaceKind::AmbientGuide,
                    key.ColorPhysicalAddress);
     publishSurface(inserted.FogGuideImage, VK_FORMAT_R8G8B8A8_UNORM,
                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                        VK_IMAGE_USAGE_SAMPLED_BIT,
-                   Oot3d::SceneSurfaceKind::FogGuide, key.ColorPhysicalAddress);
+                   Extension::SceneSurfaceKind::FogGuide, key.ColorPhysicalAddress);
     publishSurface(inserted.OutlineGeometryGuideImage, VK_FORMAT_R32G32B32A32_UINT,
                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                   Oot3d::SceneSurfaceKind::OutlineGeometryGuide, key.ColorPhysicalAddress);
+                   Extension::SceneSurfaceKind::OutlineGeometryGuide, key.ColorPhysicalAddress);
     mInvalidatedNativePicaRenderTargetAddresses.erase(
         {key.RenderTargetNamespace, key.ColorPhysicalAddress});
     return inserted;
@@ -1312,28 +1312,28 @@ void GfxRenderingAPIVulkan::DestroyNativePicaRenderTarget(
     }
     mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace,
                             target.Key.ColorPhysicalAddress,
-                            Oot3d::SceneSurfaceKind::Color });
+                            Extension::SceneSurfaceKind::Color });
     mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace,
                             target.Key.DepthPhysicalAddress,
-                            Oot3d::SceneSurfaceKind::Depth });
+                            Extension::SceneSurfaceKind::Depth });
     mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace,
                             target.Key.ColorPhysicalAddress,
-                            Oot3d::SceneSurfaceKind::NormalGuide });
+                            Extension::SceneSurfaceKind::NormalGuide });
     mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace,
                             target.Key.ColorPhysicalAddress,
-                            Oot3d::SceneSurfaceKind::MaterialGuide });
+                            Extension::SceneSurfaceKind::MaterialGuide });
     mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace,
                             target.Key.ColorPhysicalAddress,
-                            Oot3d::SceneSurfaceKind::RigidMotionGuide });
+                            Extension::SceneSurfaceKind::RigidMotionGuide });
     mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace,
                             target.Key.ColorPhysicalAddress,
-                            Oot3d::SceneSurfaceKind::AmbientGuide });
+                            Extension::SceneSurfaceKind::AmbientGuide });
     mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace,
-                            target.Key.ColorPhysicalAddress, Oot3d::SceneSurfaceKind::FogGuide });
+                            target.Key.ColorPhysicalAddress, Extension::SceneSurfaceKind::FogGuide });
     mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace, target.Key.ColorPhysicalAddress,
-                            Oot3d::SceneSurfaceKind::OutlineGeometryGuide });
+                            Extension::SceneSurfaceKind::OutlineGeometryGuide });
     mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace, target.Key.ColorPhysicalAddress,
-                            Oot3d::SceneSurfaceKind::DiffuseAlbedoGuide });
+                            Extension::SceneSurfaceKind::DiffuseAlbedoGuide });
     if (target.Framebuffer != VK_NULL_HANDLE) {
         vkDestroyFramebuffer(mDevice, target.Framebuffer, nullptr);
     }
@@ -1474,7 +1474,7 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaDisplayImage(
     NativePicaDisplayImage image;
     image.Width = width;
     image.Height = height;
-    Oot3d::NriPicaTextureImage nriImage;
+    Extension::NriPicaTextureImage nriImage;
     if (mNriPicaDisplayImageOwner.Create(
             width, height, VK_FORMAT_R8G8B8A8_UNORM, 1U, nriImage,
             true)) {
@@ -1576,10 +1576,10 @@ void GfxRenderingAPIVulkan::BeginNativePicaRenderPass(
     if (mPicaDynamicRenderingScope.Available()) {
         const bool multisampled =
             mNativePicaSampleCount != VK_SAMPLE_COUNT_1_BIT;
-        Oot3d::PicaDynamicRenderingTarget renderingTarget;
+        Extension::PicaDynamicRenderingTarget renderingTarget;
         renderingTarget.Colors =
             multisampled
-                ? std::array<VkImageView, Oot3d::kPicaColorAttachmentCount>{ target.MsaaColorView,
+                ? std::array<VkImageView, Extension::kPicaColorAttachmentCount>{ target.MsaaColorView,
                                                                              target.MsaaNormalGuideView,
                                                                              target.MsaaMaterialGuideView,
                                                                              target.MsaaRigidMotionGuideView,
@@ -1587,7 +1587,7 @@ void GfxRenderingAPIVulkan::BeginNativePicaRenderPass(
                                                                              target.MsaaFogGuideView,
                                                                              target.MsaaOutlineGeometryGuideView,
                                                                              target.MsaaDiffuseAlbedoGuideView }
-                : std::array<VkImageView, Oot3d::kPicaColorAttachmentCount>{ target.ColorView,
+                : std::array<VkImageView, Extension::kPicaColorAttachmentCount>{ target.ColorView,
                                                                              target.NormalGuideView,
                                                                              target.MaterialGuideView,
                                                                              target.RigidMotionGuideView,
@@ -1596,7 +1596,7 @@ void GfxRenderingAPIVulkan::BeginNativePicaRenderPass(
                                                                              target.OutlineGeometryGuideView,
                                                                              target.DiffuseAlbedoGuideView };
         renderingTarget.Resolves =
-            multisampled ? std::array<VkImageView, Oot3d::kPicaColorAttachmentCount>{ target.ColorView,
+            multisampled ? std::array<VkImageView, Extension::kPicaColorAttachmentCount>{ target.ColorView,
                                                                                       target.NormalGuideView,
                                                                                       target.MaterialGuideView,
                                                                                       target.RigidMotionGuideView,
@@ -1604,13 +1604,13 @@ void GfxRenderingAPIVulkan::BeginNativePicaRenderPass(
                                                                                       target.FogGuideView,
                                                                                       target.OutlineGeometryGuideView,
                                                                                       target.DiffuseAlbedoGuideView }
-                         : std::array<VkImageView, Oot3d::kPicaColorAttachmentCount>{};
+                         : std::array<VkImageView, Extension::kPicaColorAttachmentCount>{};
         renderingTarget.Depth =
             multisampled ? target.MsaaDepthView : target.DepthView;
         renderingTarget.DepthResolve =
             multisampled ? target.DepthView : VK_NULL_HANDLE;
         renderingTarget.ColorImages =
-            multisampled ? std::array<VkImage, Oot3d::kPicaColorAttachmentCount>{ target.MsaaColorImage,
+            multisampled ? std::array<VkImage, Extension::kPicaColorAttachmentCount>{ target.MsaaColorImage,
                                                                                   target.MsaaNormalGuideImage,
                                                                                   target.MsaaMaterialGuideImage,
                                                                                   target.MsaaRigidMotionGuideImage,
@@ -1618,7 +1618,7 @@ void GfxRenderingAPIVulkan::BeginNativePicaRenderPass(
                                                                                   target.MsaaFogGuideImage,
                                                                                   target.MsaaOutlineGeometryGuideImage,
                                                                                   target.MsaaDiffuseAlbedoGuideImage }
-                         : std::array<VkImage, Oot3d::kPicaColorAttachmentCount>{ target.ColorImage,
+                         : std::array<VkImage, Extension::kPicaColorAttachmentCount>{ target.ColorImage,
                                                                                   target.NormalGuideImage,
                                                                                   target.MaterialGuideImage,
                                                                                   target.RigidMotionGuideImage,
@@ -1627,7 +1627,7 @@ void GfxRenderingAPIVulkan::BeginNativePicaRenderPass(
                                                                                   target.OutlineGeometryGuideImage,
                                                                                   target.DiffuseAlbedoGuideImage };
         renderingTarget.ResolveImages =
-            multisampled ? std::array<VkImage, Oot3d::kPicaColorAttachmentCount>{ target.ColorImage,
+            multisampled ? std::array<VkImage, Extension::kPicaColorAttachmentCount>{ target.ColorImage,
                                                                                   target.NormalGuideImage,
                                                                                   target.MaterialGuideImage,
                                                                                   target.RigidMotionGuideImage,
@@ -1635,12 +1635,12 @@ void GfxRenderingAPIVulkan::BeginNativePicaRenderPass(
                                                                                   target.FogGuideImage,
                                                                                   target.OutlineGeometryGuideImage,
                                                                                   target.DiffuseAlbedoGuideImage }
-                         : std::array<VkImage, Oot3d::kPicaColorAttachmentCount>{};
+                         : std::array<VkImage, Extension::kPicaColorAttachmentCount>{};
         renderingTarget.DepthImage =
             multisampled ? target.MsaaDepthImage : target.DepthImage;
         renderingTarget.DepthResolveImage =
             multisampled ? target.DepthImage : VK_NULL_HANDLE;
-        renderingTarget.ColorFormats = Oot3d::BoundPicaColorAttachmentFormats(attachments);
+        renderingTarget.ColorFormats = Extension::BoundPicaColorAttachmentFormats(attachments);
         // The guides no effect requires this frame stay allocated but unbound.
         for (size_t index = 0; index < renderingTarget.ColorFormats.size(); ++index) {
             if (renderingTarget.ColorFormats[index] != VK_FORMAT_UNDEFINED) continue;
@@ -1671,7 +1671,7 @@ void GfxRenderingAPIVulkan::BeginNativePicaRenderPass(
                              VK_SUBPASS_CONTENTS_INLINE);
     }
     mGpuProfiler.BeginScope(
-        mCurrentFrame, Oot3d::GpuProfileScope::NativePica,
+        mCurrentFrame, Extension::GpuProfileScope::NativePica,
         mCommandBuffers[mCurrentFrame]);
     if (mGpuProfiler.TimelineEnabled()) {
         mGpuProfiler.MarkNamed(mCurrentFrame,
@@ -1681,9 +1681,9 @@ void GfxRenderingAPIVulkan::BeginNativePicaRenderPass(
                                mCommandBuffers[mCurrentFrame]);
     }
     if (mFrameGraphicsSettings.Effects.Toon !=
-        Oot3d::ToonMode::Off) {
+        Extension::ToonMode::Off) {
         mGpuProfiler.BeginScope(
-            mCurrentFrame, Oot3d::GpuProfileScope::ToonRaster,
+            mCurrentFrame, Extension::GpuProfileScope::ToonRaster,
             mCommandBuffers[mCurrentFrame]);
     }
     mNativePicaRenderPassActive = true;
@@ -1704,10 +1704,10 @@ void GfxRenderingAPIVulkan::EndNativePicaRenderPass() {
         vkCmdEndRenderPass(mCommandBuffers[mCurrentFrame]);
     }
     mGpuProfiler.EndScope(
-        mCurrentFrame, Oot3d::GpuProfileScope::ToonRaster,
+        mCurrentFrame, Extension::GpuProfileScope::ToonRaster,
         mCommandBuffers[mCurrentFrame]);
     mGpuProfiler.EndScope(
-        mCurrentFrame, Oot3d::GpuProfileScope::NativePica,
+        mCurrentFrame, Extension::GpuProfileScope::NativePica,
         mCommandBuffers[mCurrentFrame]);
     mNativePicaRenderPassActive = false;
     mActiveNativePicaRenderTarget = nullptr;
@@ -1804,7 +1804,7 @@ void GfxRenderingAPIVulkan::ApplyPendingNativePicaMemoryFills(NativePicaRenderTa
         BeginNativePicaRenderPass(target);
         const VkClearColorValue decodedColor = DecodeNativePicaClearColor(*fill, target.Key.ColorFormat);
         const VkClearDepthStencilValue decodedDepth = DecodeNativePicaClearDepthStencil(*fill, target.Key.DepthFormat);
-        Oot3d::NriPicaAttachmentClearDesc nriClear;
+        Extension::NriPicaAttachmentClearDesc nriClear;
         nriClear.FrameIndex = mCurrentFrame;
         nriClear.Width = target.Width;
         nriClear.Height = target.Height;
@@ -1819,7 +1819,7 @@ void GfxRenderingAPIVulkan::ApplyPendingNativePicaMemoryFills(NativePicaRenderTa
         nriClear.Attachments = mActiveNativePicaAttachments;
         const bool nriAttachmentClear = mNriPicaMemoryFillClearPass.ClearAttachments(nriClear);
         if (!nriAttachmentClear) {
-            std::array<VkClearAttachment, Oot3d::kPicaColorAttachmentCount + 1U> attachments{};
+            std::array<VkClearAttachment, Extension::kPicaColorAttachmentCount + 1U> attachments{};
             uint32_t attachmentCount = 0;
             if (coversColor) {
                 auto& attachment = attachments[attachmentCount++];
@@ -1828,11 +1828,11 @@ void GfxRenderingAPIVulkan::ApplyPendingNativePicaMemoryFills(NativePicaRenderTa
                 attachment.clearValue.color = decodedColor;
             }
             // The bound guides' cleared values; unbound guides are not in the pass.
-            const std::array<VkClearColorValue, Oot3d::kPicaColorAttachmentCount> guideClears{ {
+            const std::array<VkClearColorValue, Extension::kPicaColorAttachmentCount> guideClears{ {
                 {}, { { 0.5F, 0.5F, 1.0F, 0.0F } }, {}, {}, { { 1.0F, 1.0F, 1.0F, 0.0F } },
                 { { 0.0F, 0.0F, 0.0F, 1.0F } }, { { 0.0F, 0.0F, 0.0F, 1.0F } }, {} } };
             for (uint32_t index = 1U; coversColor && index < guideClears.size(); ++index) {
-                if (!mActiveNativePicaAttachments.Binds(static_cast<Oot3d::PicaColorAttachment>(index))) continue;
+                if (!mActiveNativePicaAttachments.Binds(static_cast<Extension::PicaColorAttachment>(index))) continue;
                 auto& guide = attachments[attachmentCount++];
                 guide.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
                 guide.colorAttachment = index;
@@ -1866,7 +1866,7 @@ void GfxRenderingAPIVulkan::PaintNativePicaPictureBars(
     }
     // Opaque black on the native colour only: the bars are presentation
     // pixels, so the guides, depth and stencil of what lies under them stay.
-    Oot3d::NriPicaColorRectsClearDesc clear;
+    Extension::NriPicaColorRectsClearDesc clear;
     clear.FrameIndex = mCurrentFrame;
     clear.Color = {0.0F, 0.0F, 0.0F, 1.0F};
     clear.RectCount = bars.Count;
@@ -1927,46 +1927,46 @@ void GfxRenderingAPIVulkan::ForgetNativePicaEffectNriTextures() {
     // the pass through the owned-resource path.
 }
 
-void GfxRenderingAPIVulkan::PublishGlobalIlluminationStatus(Oot3d::GlobalIlluminationMode mode) {
+void GfxRenderingAPIVulkan::PublishGlobalIlluminationStatus(Extension::GlobalIlluminationMode mode) {
     // Only the screen-space provider reports a readiness of its own (its
     // pipelines are created off the frame).
-    Oot3d::GlobalIlluminationProviderStatus status{mode, false, {}};
-    if (mode == Oot3d::GlobalIlluminationMode::ScreenSpace) {
+    Extension::GlobalIlluminationProviderStatus status{mode, false, {}};
+    if (mode == Extension::GlobalIlluminationMode::ScreenSpace) {
         status.Ready = mScreenSpaceGi.Ready();
         if (!status.Ready) status.Reason = mScreenSpaceGi.UnavailableReason();
     }
     if (status == mPublishedGlobalIlluminationStatus) return;
     mPublishedGlobalIlluminationStatus = status;
-    if (mode == Oot3d::GlobalIlluminationMode::ScreenSpace)
+    if (mode == Extension::GlobalIlluminationMode::ScreenSpace)
         std::fprintf(stderr, "TRIAEVUM_SCREEN_SPACE_GI ready=%d reason=\"%s\"\n", status.Ready ? 1 : 0,
                      status.Reason.c_str());
-    Oot3d::GraphicsSettingsRuntime::Instance().PublishGlobalIlluminationStatus(std::move(status));
+    Extension::GraphicsSettingsRuntime::Instance().PublishGlobalIlluminationStatus(std::move(status));
 }
 
-void GfxRenderingAPIVulkan::WithdrawFailedUpscaler(Oot3d::UpscalerProvider provider) {
-    Oot3d::GraphicsCapability capability = Oot3d::GraphicsCapability::NriNisUpscaler;
+void GfxRenderingAPIVulkan::WithdrawFailedUpscaler(Extension::UpscalerProvider provider) {
+    Extension::GraphicsCapability capability = Extension::GraphicsCapability::NriNisUpscaler;
     const char* name = "NIS";
     bool available = false;
     std::string reason;
     switch (provider) {
-        case Oot3d::UpscalerProvider::Nis:
+        case Extension::UpscalerProvider::Nis:
             available = mNriUpscalerPass.Available();
             reason = mNriUpscalerPass.UnavailableReason();
             break;
-        case Oot3d::UpscalerProvider::Fsr:
-            capability = Oot3d::GraphicsCapability::NriFsrUpscaler;
+        case Extension::UpscalerProvider::Fsr:
+            capability = Extension::GraphicsCapability::NriFsrUpscaler;
             name = "FSR";
             available = mNriUpscalerPass.FsrAvailable();
             reason = mNriInterop.FsrUnavailableReason();
             break;
-        case Oot3d::UpscalerProvider::Dlss:
-            capability = Oot3d::GraphicsCapability::NriDlssUpscaler;
+        case Extension::UpscalerProvider::Dlss:
+            capability = Extension::GraphicsCapability::NriDlssUpscaler;
             name = "DLSS";
             available = mNriUpscalerPass.DlssAvailable();
             reason = mNriInterop.DlssUnavailableReason();
             break;
-        case Oot3d::UpscalerProvider::Xess:
-            capability = Oot3d::GraphicsCapability::NriXessUpscaler;
+        case Extension::UpscalerProvider::Xess:
+            capability = Extension::GraphicsCapability::NriXessUpscaler;
             name = "XeSS";
             reason = "NRI XeSS is unavailable on the Vulkan backend";
             break;
@@ -1980,7 +1980,7 @@ void GfxRenderingAPIVulkan::WithdrawFailedUpscaler(Oot3d::UpscalerProvider provi
         SPDLOG_WARN("{} produced no frame; the display is shown unscaled ({})", name, reason);
     }
     if (!available)
-        Oot3d::GraphicsSettingsRuntime::Instance().SetCapability(capability, false, reason);
+        Extension::GraphicsSettingsRuntime::Instance().SetCapability(capability, false, reason);
 }
 
 void GfxRenderingAPIVulkan::ReleaseEffectGraphImageClients() {

@@ -41,8 +41,8 @@
 #include "oot3d_native_a32_savestate.h"
 #include "oot3d_native_a32_scene_view.h"
 #include "oot3d_native_actor_interactions.h"
-#include "fast/oot3d/grass_interaction_bridge.h"
-#include "fast/oot3d/presentation_picture.h"
+#include "fast/extension/grass_interaction_bridge.h"
+#include "fast/extension/presentation_picture.h"
 #include "oot3d_native_a32_timing_probe.h"
 #include "oot3d_native_compiled_functions.h"
 #include "oot3d_native_controls_settings_panel.h"
@@ -93,12 +93,12 @@
 #include "fast/Fast3dGui.h"
 #include "oot3d_in_game_menu.h"
 #include "fast/Fast3dWindow.h"
-#include "fast/oot3d/graphics_settings_persistence.h"
-#include "fast/oot3d/graphics_settings_runtime.h"
-#include "fast/oot3d/graphics_settings_window.h"
-#include "fast/oot3d/perspective_fov_policy.h"
-#include "fast/oot3d/presentation_pacing_policy.h"
-#include "fast/oot3d/title_render_backend.h"
+#include "fast/extension/graphics_settings_persistence.h"
+#include "fast/extension/graphics_settings_runtime.h"
+#include "fast/extension/graphics_settings_window.h"
+#include "fast/extension/perspective_fov_policy.h"
+#include "fast/extension/presentation_pacing_policy.h"
+#include "fast/extension/title_render_backend.h"
 #include "ship/Context.h"
 #include "ship/audio/Audio.h"
 #include "ship/audio/AudioPlayer.h"
@@ -294,13 +294,13 @@ private:
   void RestoreSavestatePicaColorTargets(const Oot3dNativeGame::NativeA32SavestateRuntimeState &runtime);
   void RestoreSavestatePicaPresentationState(const Oot3dNativeGame::NativeA32SavestateRuntimeState &runtime);
   void RestoreSavestatePicaVisualReplayState(const Oot3dNativeGame::NativeA32SavestateRuntimeState &runtime);
-  Fast::Renderer3ds::PicaFrameCompositionPolicy ResolveFrameCompositionPolicy(const Fast::Oot3d::PresentationPacingPolicy& pacing);
+  Fast::Renderer3ds::PicaFrameCompositionPolicy ResolveFrameCompositionPolicy(const Fast::Extension::PresentationPacingPolicy& pacing);
   void PublishNativeSceneView();
   void RequireStoppedGuest(const char *access);
   std::vector<Fast::Renderer3ds::PicaTextureCopyReference> CollectGuestCopyReferences();
   void PinGpuCopyResources(const Oot3dNativeGame::Oot3dPicaVisualFrameViewSample& sample);
   bool FlushNativeDependencies();
-  void ExecuteVisualSample(const Oot3dNativeGame::Oot3dPicaVisualFrameViewSample &sample, Oot3dNativeGame::Oot3dPicaPresentationExecutionKind kind, bool present, const Fast::Oot3d::NativeFrameTemporalSample& temporalSample, uint64_t renderTargetNamespace = kVisualInterpolationRenderTargetNamespace);
+  void ExecuteVisualSample(const Oot3dNativeGame::Oot3dPicaVisualFrameViewSample &sample, Oot3dNativeGame::Oot3dPicaPresentationExecutionKind kind, bool present, const Fast::Extension::NativeFrameTemporalSample& temporalSample, uint64_t renderTargetNamespace = kVisualInterpolationRenderTargetNamespace);
   // Deferred: a host continuation is pending, retry at a later frame boundary. Failed: reported once; the request is
   // dropped because every retry repeats the full GPU drain and readback.
   enum class SaveStateOutcome : uint8_t { Saved, Deferred, Failed };
@@ -422,7 +422,7 @@ private:
   // The presentation picture in the window (the aspect ratio's letterbox,
   // centred): the scene FOV policy, the UI canvases and the pointer mapping
   // follow it (UpdateScenePresentation, once per presented frame).
-  Fast::Oot3d::PresentationPicture presentationPicture{};
+  Fast::Extension::PresentationPicture presentationPicture{};
   std::optional<ScopedA32BlockTraceWriter> blockTraceWriterStorage;
   std::vector<uint32_t> blockEntryHooks{};
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
@@ -457,13 +457,13 @@ private:
   std::optional<CopyWriteObserverLifetime> copyWriteObserverLifetime;
   Args hostArgs{};
   std::shared_ptr<Oot3dNativeGame::SceneEnvironmentRuntime> sceneEnvironment{};
-  std::vector<std::shared_ptr<Fast::Oot3d::GraphicsSettingsPanelTab>> applicationSettingsTabs;
+  std::vector<std::shared_ptr<Fast::Extension::GraphicsSettingsPanelTab>> applicationSettingsTabs;
   Fast::Fast3dWindow *windowPointer = nullptr;
   Fast::GfxRenderingAPI *apiPointer = nullptr;
   Fast::Renderer3ds::PicaProgramPreparationBackend *programPreparation{};
   bool alwaysAvailablePrograms{};
   std::optional<Oot3dNativeGame::NativePreparationScreen> preparationScreenStorage;
-  Fast::Oot3d::TitleRenderBackend *titleRenderBackend{};
+  Fast::Extension::TitleRenderBackend *titleRenderBackend{};
   std::shared_ptr<Ship::Gui> gui{};
   std::optional<Oot3dNativeGame::Oot3dNativeA32UiTextureProvider> nativeUiTextureProviderStorage;
   std::optional<Oot3dNativeGame::TopScreenOcarinaTextRuntime> ocarinaTextStorage;
@@ -542,7 +542,7 @@ private:
   nlohmann::json drawEvents = nlohmann::json::array();
   nlohmann::json visualTransitionEvents = nlohmann::json::array();
   WindowDemoTimingState timing;
-  Fast::Oot3d::PresentationPacingPolicy presentationPacingPolicy{};
+  Fast::Extension::PresentationPacingPolicy presentationPacingPolicy{};
   Fast::Renderer3ds::PicaFrameCompositionPolicy frameCompositionPolicy{};
   std::optional<Oot3dNativeGame::NativeRealtimeRefreshPacer> realtimePacerStorage;
   Oot3dNativeGame::NativeInputLatencyTrace inputLatencyTrace{
@@ -562,7 +562,7 @@ private:
   // first.
   Oot3dNativeGame::NativeRenderCommandStream renderStream;
   std::optional<PhysicalMemoryAccessLifetime> physicalMemoryAccessLifetime;
-  std::optional<Fast::Oot3d::NativeFrameTemporalSample> capturedTemporalSample;
+  std::optional<Fast::Extension::NativeFrameTemporalSample> capturedTemporalSample;
   std::vector<Fast::Renderer3ds::PicaTextureCopyReference> pinnedCopyReferences;
   // Renderer-side state written only by render commands (or at a drain).
   // Inline mode points the timings at the loop's own phase timing.

@@ -1,8 +1,8 @@
 // Issue #76 recordings: the variant request and raw draw codecs must be
 // lossless, recorded effects must decode exactly (effective values, never
 // "corrected" by settings validation), and the recorders must deduplicate.
-#include "fast/oot3d/graphics_settings_persistence.h"
-#include "fast/oot3d/pica_variant_request_record.h"
+#include "fast/extension/graphics_settings_persistence.h"
+#include "fast/extension/pica_variant_request_record.h"
 #include "oot3d_native_pica_raw_draw_record.h"
 
 #include <algorithm>
@@ -16,7 +16,7 @@
 #include <nlohmann/json.hpp>
 
 using Json = nlohmann::json;
-using namespace Fast::Oot3d;
+using namespace Fast::Extension;
 
 namespace {
 void Require(bool value, const char* what) {

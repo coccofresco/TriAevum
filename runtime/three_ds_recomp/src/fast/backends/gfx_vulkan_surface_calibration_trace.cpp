@@ -27,12 +27,12 @@ const char* PassName(PicaCompositionLayer layer) {
     default: return "unknown";
     }
 }
-const char* ModeName(Oot3d::SurfaceLightingMode mode) {
+const char* ModeName(Extension::SurfaceLightingMode mode) {
     switch (mode) {
-    case Oot3d::SurfaceLightingMode::Native: return "Native";
-    case Oot3d::SurfaceLightingMode::NativePbr: return "NativePBR";
-    case Oot3d::SurfaceLightingMode::PerPixel: return "PerPixel";
-    case Oot3d::SurfaceLightingMode::PerPixelPbr: return "PerPixelPBR";
+    case Extension::SurfaceLightingMode::Native: return "Native";
+    case Extension::SurfaceLightingMode::NativePbr: return "NativePBR";
+    case Extension::SurfaceLightingMode::PerPixel: return "PerPixel";
+    case Extension::SurfaceLightingMode::PerPixelPbr: return "PerPixelPBR";
     default: return "unknown";
     }
 }
@@ -59,23 +59,23 @@ bool Read(std::span<const uint8_t> bytes, size_t offset, T& value) {
 } // namespace
 
 void GfxRenderingAPIVulkan::TraceSurfaceCalibrationDraw(const GfxNativePicaDrawView& draw,
-    const Oot3d::PicaShaderPipelineResult& variant,
+    const Extension::PicaShaderPipelineResult& variant,
     const std::optional<Renderer3ds::PicaSurfaceLightingUniforms>& lighting,
     bool candidate, bool exempt, bool authoredAppearance, bool isolated, bool perspective, bool uber) {
     if (!mSurfaceCalibrationTrace.Sampling()) return;
     const auto& hooks = draw.TemporalVertexProgram.Hooks;
     const auto* surface = hooks.SurfaceProgram();
     uint32_t booleans = 0;
-    const bool booleansKnown = Read(draw.VertexUniformBytes, Oot3d::kPicaPackedVertexBooleanMaskOffset, booleans);
-    const auto floats = draw.VertexUniformBytes.size() >= Oot3d::kPicaPackedVertexFloatOffset
-        ? draw.VertexUniformBytes.subspan(Oot3d::kPicaPackedVertexFloatOffset) : std::span<const uint8_t>{};
+    const bool booleansKnown = Read(draw.VertexUniformBytes, Extension::kPicaPackedVertexBooleanMaskOffset, booleans);
+    const auto floats = draw.VertexUniformBytes.size() >= Extension::kPicaPackedVertexFloatOffset
+        ? draw.VertexUniformBytes.subspan(Extension::kPicaPackedVertexFloatOffset) : std::span<const uint8_t>{};
     const auto native = booleansKnown ? ReadPicaNativeSurfaceLighting(hooks, booleans, floats) : std::nullopt;
     const char* nativeClass = !native ? "unknown" : !native->Enabled ? "unlit"
         : native->DirectSlotMask != 0 ? "direct-lit" : "ambient-only";
-    const bool pbr = Oot3d::HasPicaShaderInstrumentationFeature(
-        variant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::PbrMaterial);
-    const bool perPixel = Oot3d::HasPicaShaderInstrumentationFeature(
-        variant.AppliedFeatures, Oot3d::PicaShaderInstrumentationFeature::NativePerPixelLighting);
+    const bool pbr = Extension::HasPicaShaderInstrumentationFeature(
+        variant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::PbrMaterial);
+    const bool perPixel = Extension::HasPicaShaderInstrumentationFeature(
+        variant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::NativePerPixelLighting);
     const bool memory = mNativePicaCompositionSchedule.Purpose() == Renderer3ds::PicaCompositionPurpose::NativeMemory;
     const auto mode = mFrameGraphicsSettings.Effects.SurfaceLighting;
     const auto* scene = draw.LightBinding.SceneDirectionals.get();
@@ -92,7 +92,7 @@ void GfxRenderingAPIVulkan::TraceSurfaceCalibrationDraw(const GfxNativePicaDrawV
     if (admitted) reason = mixedWater ? "admitted-nonwater-fragments" : "admitted";
     else if (memory) reason = "native-memory";
     else if (mNativeFidelityProfile) reason = "native-fidelity";
-    else if (!Oot3d::UsesFullSceneLighting(mode)) reason = "native-mode";
+    else if (!Extension::UsesFullSceneLighting(mode)) reason = "native-mode";
     else if (draw.CompositionDomain != PicaCompositionDomain::Scene) reason = "domain-not-scene";
     else if (!PicaCompositionReceivesSurfaceLighting(draw.Composition.Layer)) reason = "pass-not-world";
     else if (!perspective) reason = "no-perspective";
@@ -142,7 +142,7 @@ void GfxRenderingAPIVulkan::TraceSurfaceCalibrationDraw(const GfxNativePicaDrawV
         << " booleans=" << std::hex << booleans << std::dec << " booleansKnown=" << booleansKnown
         << " sceneCount=" << (scene ? scene->Count : 0) << " skyMask=" << skyMask;
     PicaTevProgram tev{};
-    const bool tevKnown = Read(draw.FragmentUniformBytes, Oot3d::kPicaPackedFragmentTevProgramOffset, tev);
+    const bool tevKnown = Read(draw.FragmentUniformBytes, Extension::kPicaPackedFragmentTevProgramOffset, tev);
     out << " tevKnown=" << tevKnown << " tevColorSources=" << std::hex
         << (tevKnown ? PicaTevColorSourceMask(tev) : 0) << std::dec;
     for (const auto& texture : draw.Textures) {
@@ -172,7 +172,7 @@ void GfxRenderingAPIVulkan::TraceSurfaceCalibrationDraw(const GfxNativePicaDrawV
         }
     }
     std::array<float, 4> fragmentAmbient{};
-    if (Read(draw.FragmentUniformBytes, Oot3d::kPicaPackedFragmentLightingGlobalAmbientOffset, fragmentAmbient))
+    if (Read(draw.FragmentUniformBytes, Extension::kPicaPackedFragmentLightingGlobalAmbientOffset, fragmentAmbient))
         Vector(out, "fragmentGlobalAmbient", fragmentAmbient);
     const bool profile = mFrameEnvironment.Enabled && !isolated;
     out << " profile=" << profile << " profileScope=" << mFrameEnvironment.ScopeIdentity

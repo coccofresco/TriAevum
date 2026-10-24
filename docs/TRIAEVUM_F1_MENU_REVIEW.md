@@ -8,7 +8,7 @@ tab. It is host-owned like the window mode and the output size
 (`Graphics.Output.Aspect`; presets keep it), so choosing it never makes the
 preset Custom. A fixed ratio is the presentation picture: the largest
 rectangle of that shape in the window or the screen, centred, black bars on
-the remaining sides (`fast/oot3d/presentation_picture.h`); Free is the whole
+the remaining sides (`fast/extension/presentation_picture.h`); Free is the whole
 output as before. Choosing a fixed ratio for a windowed output also resizes
 the window to that shape once (width kept, height follows), so no bars show
 until the user resizes it; the window stays resizable and any other shape is
@@ -770,16 +770,16 @@ unchanged.
 
 Renderer files under `runtime/three_ds_recomp/`:
 
-- `src/fast/oot3d/graphics_settings_window.cpp`: navigation (top-level tabs,
+- `src/fast/extension/graphics_settings_window.cpp`: navigation (top-level tabs,
   Lighting and Materials sections, application-tab groups) and application.
-- `src/fast/oot3d/graphics_settings_{display,antialiasing,lighting,shadows,reflection,toon}_panel.cpp`:
+- `src/fast/extension/graphics_settings_{display,antialiasing,lighting,shadows,reflection,toon}_panel.cpp`:
   separate section implementations.
-- `include/fast/oot3d/settings_panel_widgets.h`: validated choice widget and
+- `include/fast/extension/settings_panel_widgets.h`: validated choice widget and
   complete apply-result formatting.
-- `src/fast/oot3d/graphics_settings_runtime.cpp`: persistence state and coalescing.
-- `src/fast/oot3d/graphics_settings.cpp`: Custom semantics and band resampling.
+- `src/fast/extension/graphics_settings_runtime.cpp`: persistence state and coalescing.
+- `src/fast/extension/graphics_settings.cpp`: Custom semantics and band resampling.
 - `src/fast/Fast3dGui.cpp`: viewport constraints and save flush on close.
-- `src/fast/oot3d/{grass_settings_panel,azahar_texture_pack_panel}.cpp`.
+- `src/fast/extension/{grass_settings_panel,azahar_texture_pack_panel}.cpp`.
 
 Application files under `tools/oot3d/native_game_runtime/`:
 

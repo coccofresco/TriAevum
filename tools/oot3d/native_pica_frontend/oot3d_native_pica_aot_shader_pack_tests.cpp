@@ -1,4 +1,4 @@
-#include "fast/oot3d/pica_aot_shader_pack.h"
+#include "fast/extension/pica_aot_shader_pack.h"
 
 #include <chrono>
 #include <cstdlib>
@@ -27,7 +27,7 @@ void RequireSuccess(bool condition, const std::string& error) {
 
 int main() {
     try {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const auto suffix = std::to_string(
         std::chrono::steady_clock::now().time_since_epoch().count());
     const auto directory = std::filesystem::temp_directory_path() /

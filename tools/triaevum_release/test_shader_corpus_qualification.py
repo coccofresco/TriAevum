@@ -61,11 +61,11 @@ class QualificationTests(unittest.TestCase):
                                  manifest_sha256=[], modules=1, requests=0)
 
     def test_policy_inputs_keep_what_decides_a_variant_request(self):
-        generator = _inputs({"runtime/three_ds_recomp/include/fast/oot3d/graphics_settings.h": b"settings"})
+        generator = _inputs({"runtime/three_ds_recomp/include/fast/extension/graphics_settings.h": b"settings"})
         recorded = _inputs({
-            "runtime/three_ds_recomp/include/fast/oot3d/graphics_settings.h": b"settings",
+            "runtime/three_ds_recomp/include/fast/extension/graphics_settings.h": b"settings",
             "runtime/three_ds_recomp/src/fast/backends/gfx_vulkan_pica_draw.cpp": b"request",
-            "runtime/three_ds_recomp/src/fast/oot3d/pica_scene_semantics.cpp": b"semantics",
+            "runtime/three_ds_recomp/src/fast/extension/pica_scene_semantics.cpp": b"semantics",
             "runtime/three_ds_recomp/src/fast/renderer3ds/vulkan_memory_budget.cpp": b"budget",
             "runtime/three_ds_recomp/src/fast/backends/gfx_vulkan_device.cpp": b"device",
             "runtime/three_ds_recomp/src/ship/window/Window.cpp": b"window",
@@ -73,9 +73,9 @@ class QualificationTests(unittest.TestCase):
         })
         selected = policy_inputs(recorded, generator)
         self.assertEqual(sorted(selected["files"]), [
-            "runtime/three_ds_recomp/include/fast/oot3d/graphics_settings.h",
+            "runtime/three_ds_recomp/include/fast/extension/graphics_settings.h",
             "runtime/three_ds_recomp/src/fast/backends/gfx_vulkan_pica_draw.cpp",
-            "runtime/three_ds_recomp/src/fast/oot3d/pica_scene_semantics.cpp"])
+            "runtime/three_ds_recomp/src/fast/extension/pica_scene_semantics.cpp"])
         self.assertEqual((selected["selection"], selected["recorded_files"], selected["sha256"]),
                          (POLICY_SELECTION, 7, inputs_digest(selected["files"])))
         self.assertFalse(is_policy_input("runtime/three_ds_recomp/include/fast/renderer3ds/vulkan_commands.h", set()))

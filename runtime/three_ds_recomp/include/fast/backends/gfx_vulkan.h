@@ -27,73 +27,73 @@
 #include "fast/backends/oot3d_vulkan_gpu_profiler.h"
 #include "fast/backends/oot3d_vulkan_validation.h"
 #include "fast/backends/vulkan_scanout_probe.h"
-#include "fast/oot3d/render_resolution_policy.h"
-#include "fast/oot3d/pica_attachment_formats.h"
-#include "fast/oot3d/nri_interop_context.h"
-#include "fast/oot3d/brixelizer_gi_pass.h"
-#include "fast/oot3d/brixelizer_scene.h"
-#include "fast/oot3d/graphics_settings_runtime.h"
-#include "fast/oot3d/presentation_picture.h"
-#include "fast/oot3d/render_resolution_policy.h"
-#include "fast/oot3d/screen_space_gi_provider.h"
-#include "fast/oot3d/sample_view.h"
+#include "fast/extension/render_resolution_policy.h"
+#include "fast/extension/pica_attachment_formats.h"
+#include "fast/extension/nri_interop_context.h"
+#include "fast/extension/brixelizer_gi_pass.h"
+#include "fast/extension/brixelizer_scene.h"
+#include "fast/extension/graphics_settings_runtime.h"
+#include "fast/extension/presentation_picture.h"
+#include "fast/extension/render_resolution_policy.h"
+#include "fast/extension/screen_space_gi_provider.h"
+#include "fast/extension/sample_view.h"
 #include "fast/renderer3ds/pica_gi_geometry.h"
-#include "fast/oot3d/ambient_occlusion_pass.h"
-#include "fast/oot3d/cacao_pass.h"
-#include "fast/oot3d/mxao_pass.h"
+#include "fast/extension/ambient_occlusion_pass.h"
+#include "fast/extension/cacao_pass.h"
+#include "fast/extension/mxao_pass.h"
 #if defined(_WIN32) && defined(ENABLE_OOT3D_D3D12_NGX_PROVIDER)
-#include "fast/oot3d/d3d12_ngx_provider.h"
+#include "fast/extension/d3d12_ngx_provider.h"
 #endif
-#include "fast/oot3d/effect_geometry_provider_plan.h"
-#include "fast/oot3d/effect_graph.h"
-#include "fast/oot3d/fidelityfx_sssr_pass.h"
-#include "fast/oot3d/grass_geometry_registry.h"
-#include "fast/oot3d/grass_draw_memo.h"
-#include "fast/oot3d/hiz_depth_pyramid_pass.h"
-#include "fast/oot3d/hiz_reflection_pass.h"
-#include "fast/oot3d/interactive_grass_pass.h"
-#include "fast/oot3d/world_debug_line_pass.h"
-#include "fast/oot3d/linear_scene_color.h"
-#include "fast/oot3d/linear_scene_color_pass.h"
-#include "fast/oot3d/motion_vector_pass.h"
-#include "fast/oot3d/native_scene_view.h"
-#include "fast/oot3d/title_render_backend.h"
-#include "fast/oot3d/nri_directional_shadow_pass.h"
-#include "fast/oot3d/nri_effect_graph_transient_image_arena.h"
-#include "fast/oot3d/nri_pica_display_copy_pass.h"
-#include "fast/oot3d/nri_pica_memory_fill_clear_pass.h"
-#include "fast/oot3d/nri_pica_scanout_pass.h"
-#include "fast/oot3d/nri_pica_pipeline_bridge.h"
-#include "fast/oot3d/nri_pica_render_target_init_pass.h"
-#include "fast/oot3d/nri_pica_render_target_owner.h"
-#include "fast/oot3d/nri_pica_texture_image_owner.h"
-#include "fast/oot3d/nri_pica_texture_upload_pass.h"
-#include "fast/oot3d/nri_swapchain.h"
-#include "fast/oot3d/nri_upscaler_pass.h"
-#include "fast/oot3d/upscaler_guide_pass.h"
-#include "fast/oot3d/native_ui_overlay_pass.h"
-#include "fast/oot3d/pica_dynamic_rendering_scope.h"
-#include "fast/oot3d/pica_aot_shader_pack.h"
-#include "fast/oot3d/pica_composition_schedule.h"
-#include "fast/oot3d/pica_extension_schedule.h"
-#include "fast/oot3d/pica_pipeline_manifest.h"
-#include "fast/oot3d/pica_scene_publication_adapter.h"
-#include "fast/oot3d/reflection_ibl.h"
-#include "fast/oot3d/reflection_ibl_pass.h"
-#include "fast/oot3d/reflection_material_resolve_pass.h"
-#include "fast/oot3d/reflection_provider.h"
-#include "fast/oot3d/resource_state_tracker.h"
-#include "fast/oot3d/pica_geometry_registry.h"
-#include "fast/oot3d/pica_scene_frame.h"
-#include "fast/oot3d/pica_shader_pipeline_cache.h"
-#include "fast/oot3d/pica_variant_request_record.h"
-#include "fast/oot3d/scene_surface_registry.h"
-#include "fast/oot3d/scene_composite_pass.h"
-#include "fast/oot3d/smaa_1x_pass.h"
-#include "fast/oot3d/pica_rigid_motion.h"
-#include "fast/oot3d/temporal_history_manager.h"
-#include "fast/oot3d/temporal_aa_pass.h"
-#include "fast/oot3d/temporal_jitter.h"
+#include "fast/extension/effect_geometry_provider_plan.h"
+#include "fast/extension/effect_graph.h"
+#include "fast/extension/fidelityfx_sssr_pass.h"
+#include "fast/extension/grass_geometry_registry.h"
+#include "fast/extension/grass_draw_memo.h"
+#include "fast/extension/hiz_depth_pyramid_pass.h"
+#include "fast/extension/hiz_reflection_pass.h"
+#include "fast/extension/interactive_grass_pass.h"
+#include "fast/extension/world_debug_line_pass.h"
+#include "fast/extension/linear_scene_color.h"
+#include "fast/extension/linear_scene_color_pass.h"
+#include "fast/extension/motion_vector_pass.h"
+#include "fast/extension/native_scene_view.h"
+#include "fast/extension/title_render_backend.h"
+#include "fast/extension/nri_directional_shadow_pass.h"
+#include "fast/extension/nri_effect_graph_transient_image_arena.h"
+#include "fast/extension/nri_pica_display_copy_pass.h"
+#include "fast/extension/nri_pica_memory_fill_clear_pass.h"
+#include "fast/extension/nri_pica_scanout_pass.h"
+#include "fast/extension/nri_pica_pipeline_bridge.h"
+#include "fast/extension/nri_pica_render_target_init_pass.h"
+#include "fast/extension/nri_pica_render_target_owner.h"
+#include "fast/extension/nri_pica_texture_image_owner.h"
+#include "fast/extension/nri_pica_texture_upload_pass.h"
+#include "fast/extension/nri_swapchain.h"
+#include "fast/extension/nri_upscaler_pass.h"
+#include "fast/extension/upscaler_guide_pass.h"
+#include "fast/extension/native_ui_overlay_pass.h"
+#include "fast/extension/pica_dynamic_rendering_scope.h"
+#include "fast/extension/pica_aot_shader_pack.h"
+#include "fast/extension/pica_composition_schedule.h"
+#include "fast/extension/pica_extension_schedule.h"
+#include "fast/extension/pica_pipeline_manifest.h"
+#include "fast/extension/pica_scene_publication_adapter.h"
+#include "fast/extension/reflection_ibl.h"
+#include "fast/extension/reflection_ibl_pass.h"
+#include "fast/extension/reflection_material_resolve_pass.h"
+#include "fast/extension/reflection_provider.h"
+#include "fast/extension/resource_state_tracker.h"
+#include "fast/extension/pica_geometry_registry.h"
+#include "fast/extension/pica_scene_frame.h"
+#include "fast/extension/pica_shader_pipeline_cache.h"
+#include "fast/extension/pica_variant_request_record.h"
+#include "fast/extension/scene_surface_registry.h"
+#include "fast/extension/scene_composite_pass.h"
+#include "fast/extension/smaa_1x_pass.h"
+#include "fast/extension/pica_rigid_motion.h"
+#include "fast/extension/temporal_history_manager.h"
+#include "fast/extension/temporal_aa_pass.h"
+#include "fast/extension/temporal_jitter.h"
 #include <vulkan/vulkan.h>
 #include <imgui.h>
 
@@ -154,7 +154,7 @@ struct VulkanShaderProgram {
 };
 
 class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
-                                    public Oot3d::TitleRenderBackend,
+                                    public Extension::TitleRenderBackend,
                                     public Renderer3ds::PicaProgramPreparationBackend {
   public:
     explicit GfxRenderingAPIVulkan(GfxWindowBackendSDL2* windowBackend);
@@ -245,7 +245,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     std::array<::Fast::Renderer3ds::PicaWaterRing, ::Fast::Renderer3ds::kPicaWaterRings> mWaterRings{};
     NativePicaWaterSurface ResolveNativePicaWaterSurface(const GfxNativePicaDrawView& draw);
     void TraceSurfaceCalibrationDraw(const GfxNativePicaDrawView& draw,
-        const Oot3d::PicaShaderPipelineResult& variant,
+        const Extension::PicaShaderPipelineResult& variant,
         const std::optional<Renderer3ds::PicaSurfaceLightingUniforms>& lighting,
         bool candidate, bool exempt, bool authoredAppearance, bool isolated, bool perspective, bool uber);
     void FinishSurfaceCalibrationTrace();
@@ -304,7 +304,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     bool ResetPicaState(
         std::string* error = nullptr) override;
     bool ApplyPresentationSettings(
-        const Oot3d::TitlePresentationSettingsView& settings,
+        const Extension::TitlePresentationSettingsView& settings,
         std::string* error = nullptr) override;
     // Readable from the ImGui thread while the renderer runs elsewhere.
     bool ImGuiBackendReady() const noexcept {
@@ -314,7 +314,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         mPresentationSettingsHeld = held;
     }
     bool PublishSceneView(
-        const Oot3d::TitleSceneViewSubmission& view) override;
+        const Extension::TitleSceneViewSubmission& view) override;
     bool ResetTitleState(std::string* error = nullptr) override;
     bool PublishPicaFrameTemporalSample(
         const ::Fast::Renderer3ds::PicaFrameTemporalSample& sample) override;
@@ -508,7 +508,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     };
 
     using NativePicaShaderModuleKey = Renderer3ds::PicaShaderModuleIdentity<
-        Oot3d::PicaGraphicsPipelineShaderOutputs>;
+        Extension::PicaGraphicsPipelineShaderOutputs>;
     // Source to SPIR-V of one specialized program on a preparation thread.
     // Inputs are owned copies; the render thread adopts the results.
     struct NativePicaProgramPreparation {
@@ -535,10 +535,10 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         VkShaderModule FragmentShader = VK_NULL_HANDLE;
         std::vector<uint32_t> NriVertexSpirv;
         std::vector<uint32_t> NriFragmentSpirv;
-        Oot3d::PicaAotShaderSourceIdentity VertexSource;
-        Oot3d::PicaAotShaderSourceIdentity FragmentSource;
-        Oot3d::PicaAotShaderSourceIdentity NriFragmentSource;
-        Oot3d::PicaGraphicsPipelineShaderOutputs FragmentOutputs;
+        Extension::PicaAotShaderSourceIdentity VertexSource;
+        Extension::PicaAotShaderSourceIdentity FragmentSource;
+        Extension::PicaAotShaderSourceIdentity NriFragmentSource;
+        Extension::PicaGraphicsPipelineShaderOutputs FragmentOutputs;
         bool NriDescriptorContract = false;
         // Background preparation not yet adopted (specialized programs).
         std::shared_ptr<NativePicaProgramPreparation> Preparation;
@@ -672,7 +672,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         NativePicaRenderTargetKey Key;
         uint32_t Width = 0;
         uint32_t Height = 0;
-        Oot3d::PicaAttachmentRequirements Attachments;
+        Extension::PicaAttachmentRequirements Attachments;
         VkImage ColorImage = VK_NULL_HANDLE;
         VkDeviceMemory ColorMemory = VK_NULL_HANDLE;
         VkImageView ColorView = VK_NULL_HANDLE;
@@ -751,9 +751,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         VkFramebuffer CanonicalFramebuffer = VK_NULL_HANDLE;
         // Camera of the opaque world geometry drawn into this target during
         // each presented frame (see SamplePerspective).
-        Oot3d::SampleViewAccumulator SampleView;
+        Extension::SampleViewAccumulator SampleView;
         // The projection those draws apply (see SamplePerspective).
-        Oot3d::SampleProjectionAccumulator SampleProjection;
+        Extension::SampleProjectionAccumulator SampleProjection;
         // Gameplay water reaching this target's scene draws, and the frame
         // it was last seen (reflections find water surfaces from it).
         std::shared_ptr<const Renderer3ds::PicaSceneWaterBodies> WaterBodies;
@@ -768,7 +768,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         bool AuxiliaryNeedsClear = false;
         bool WBuffering = false;
         bool NriOwned = false;
-        Oot3d::PicaReflectionEnvironmentAccumulator
+        Extension::PicaReflectionEnvironmentAccumulator
             ReflectionEnvironment;
     };
 
@@ -893,11 +893,11 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     // execution (the canonical frame and raw-copy dependencies) is never
     // presented and runs no scene effect: it renders colour, depth and
     // stencil only, so its targets carry no guide storage.
-    [[nodiscard]] Oot3d::PicaAttachmentRequirements ActivePicaAttachmentRequirements() const noexcept;
+    [[nodiscard]] Extension::PicaAttachmentRequirements ActivePicaAttachmentRequirements() const noexcept;
     // The scene camera of the presented sample: the guest projection with the
     // world-to-view the target's geometry was rendered with this frame, or
     // the latest guest camera when the target recorded none.
-    [[nodiscard]] std::optional<Oot3d::PerspectiveViewState> SamplePerspective(
+    [[nodiscard]] std::optional<Extension::PerspectiveViewState> SamplePerspective(
         const NativePicaRenderTarget* target) const;
     void PrepareNativePicaBaseGuides(NativePicaRenderTarget& target);
     void PrepareNativePicaDiffuseAlbedoGuide(NativePicaRenderTarget& target, bool clear);
@@ -947,37 +947,37 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     // The output extent the top-screen target is resolved against: the
     // presentation picture (NativePicaOutputExtent), or its native-aspect fit
     // for a title that does not widen.
-    [[nodiscard]] Oot3d::RenderExtent NativeTopScreenOutputExtent() const noexcept {
+    [[nodiscard]] Extension::RenderExtent NativeTopScreenOutputExtent() const noexcept {
         const auto output = NativePicaOutputExtent();
-        return mNativeTopScreenExtendsToOutput ? output : Oot3d::FitNativeTopScreenAspect(output);
+        return mNativeTopScreenExtendsToOutput ? output : Extension::FitNativeTopScreenAspect(output);
     }
     void ExecuteNativePicaBeforeDrawAnchors(
         NativePicaRenderTarget& target, const GfxNativePicaDrawView& draw,
         double& shadowMilliseconds, double& grassMilliseconds);
     bool TryRenderInteractiveGrass(
         NativePicaRenderTarget& target,
-        const Oot3d::GraphicsSettings& settings,
-        Oot3d::EffectGeometryProviderInvocationKind invocationKind);
+        const Extension::GraphicsSettings& settings,
+        Extension::EffectGeometryProviderInvocationKind invocationKind);
     // The title's world debug lines (light gizmos) over the target's scene.
     void TryRenderWorldDebugLines(NativePicaRenderTarget& target);
     bool TryRenderDirectionalShadowMap(
         NativePicaRenderTarget& target,
-        const Oot3d::GraphicsSettings& settings,
-        const Oot3d::PicaCompositionStageAnchor& anchor);
+        const Extension::GraphicsSettings& settings,
+        const Extension::PicaCompositionStageAnchor& anchor);
     bool TryRenderPointShadowMaps(
         NativePicaRenderTarget& target,
-        const Oot3d::GraphicsSettings& settings,
-        const Oot3d::PicaCompositionStageAnchor& anchor);
+        const Extension::GraphicsSettings& settings,
+        const Extension::PicaCompositionStageAnchor& anchor);
     void ReleaseEffectGraphImageClients();
     void ApplyInternalResolutionScale(float scale);
     // The output the native PICA targets follow: the presentation picture of
     // the acquired swapchain, or the whole swapchain before a frame resolved
     // one.
-    [[nodiscard]] Oot3d::RenderExtent NativePicaOutputExtent() const noexcept {
+    [[nodiscard]] Extension::RenderExtent NativePicaOutputExtent() const noexcept {
         return mPresentationPicture.Valid()
-            ? Oot3d::RenderExtent{mPresentationPicture.Width,
+            ? Extension::RenderExtent{mPresentationPicture.Width,
                                   mPresentationPicture.Height}
-            : Oot3d::RenderExtent{mSwapchainExtent.width,
+            : Extension::RenderExtent{mSwapchainExtent.width,
                                   mSwapchainExtent.height};
     }
     void ResetNativePicaRenderTargets(bool preserveDisplayImages = false);
@@ -996,7 +996,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     // content version and frame slot; other geometry is copied into the
     // frame's transient arena.
     NativePicaGeometryPlacement PlaceNativePicaGeometry(
-        const Oot3d::PicaGeometryResolveResult& resolution,
+        const Extension::PicaGeometryResolveResult& resolution,
         Oot3dVulkanNativePicaCpuTimings* cpuTimings);
     void CreateFallbackTexture();
     void CreateOot3dShadow2dRenderPass();
@@ -1052,14 +1052,14 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     void DestroyNativePicaPipelines();
     // Thread-safe: preparation threads resolve specialized programs.
     std::vector<uint32_t> ResolveNativePicaShaderSpirv(
-        std::string_view source, Oot3d::PicaAotShaderStage stage,
+        std::string_view source, Extension::PicaAotShaderStage stage,
         bool vertexShader, const char* sourceName);
     void PrepareNativePicaProgram(NativePicaProgramPreparation& preparation);
     // Render thread. Adopts finished background work; with complete set, runs
     // or waits for unfinished work first. Returns whether the program is ready.
     bool AdoptNativePicaProgram(NativePicaShaderProgram& shader, bool complete);
     NativePicaShaderProgram* ResolveUberNativePicaProgram(
-        const Oot3d::PicaShaderPipelineResult& variant, const GfxNativePicaDrawView& draw,
+        const Extension::PicaShaderPipelineResult& variant, const GfxNativePicaDrawView& draw,
         NativePicaUberUnavailable& reason);
     VkShaderModule CreateShaderModuleFromSpirv(
         std::span<const uint32_t> spirv);
@@ -1068,9 +1068,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     Renderer3ds::PicaDevicePipelineRecord& GetOrCreateNativePicaPipeline(
         const GfxNativePicaDrawView& draw,
         NativePicaShaderProgram& shader, bool writesReactiveMask,
-        Oot3d::PicaShaderDomain domain,
-        Oot3d::PicaShaderInstrumentationFeature requestedFeatures,
-        Oot3d::PicaShaderInstrumentationFeature appliedFeatures,
+        Extension::PicaShaderDomain domain,
+        Extension::PicaShaderInstrumentationFeature requestedFeatures,
+        Extension::PicaShaderInstrumentationFeature appliedFeatures,
         bool recordInventory = true, bool outlineOcclusionOnly = false,
         bool requireVulkan = false,
         NativePicaPipelineAcquisition acquisition = NativePicaPipelineAcquisition::Blocking,
@@ -1163,7 +1163,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     // active frame when the settings still select them, so neither the first
     // upscaled frame nor a later native boundary creates one.
     struct DlssFeatureRecord {
-        std::vector<Oot3d::NriDlssFeatureKey> Keys;
+        std::vector<Extension::NriDlssFeatureKey> Keys;
         uint32_t SwapchainWidth = 0;
         uint32_t SwapchainHeight = 0;
         bool operator==(const DlssFeatureRecord&) const = default;
@@ -1190,7 +1190,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     // The presentation picture inside the acquired swapchain: the aspect
     // ratio's letterbox, centred (presentation_picture.h). Native PICA
     // targets follow it and scanout places the display in it.
-    Oot3d::PresentationPicture mPresentationPicture{};
+    Extension::PresentationPicture mPresentationPicture{};
     VkSurfaceCapabilitiesKHR mSwapchainSurfaceCapabilities{};
     VkSurfaceFormatKHR mSwapchainSurfaceFormat{};
     std::vector<VkImage> mSwapchainImages;
@@ -1264,21 +1264,21 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     // composed and identified once, shared by every variant of the base.
     struct UberSupersetArtifact {
         std::span<const uint32_t> Fragment;
-        Oot3d::PicaAotShaderSourceIdentity NriSource{};
+        Extension::PicaAotShaderSourceIdentity NriSource{};
         bool NriApplied = false;
     };
     std::map<std::tuple<uint64_t, uint64_t, uint64_t, uint8_t>, UberSupersetArtifact>
         mUberSupersetArtifacts;
-    Oot3d::PicaGeometryRegistry mPicaGeometryRegistry;
+    Extension::PicaGeometryRegistry mPicaGeometryRegistry;
     bool mPbrSeamsAvailable = false;
-    Oot3d::PicaCompositionSchedule mNativePicaCompositionSchedule;
-    Oot3d::PicaSceneFrame mPicaSceneFrame;
-    Oot3d::NativeSceneView mNativeSceneView;
+    Extension::PicaCompositionSchedule mNativePicaCompositionSchedule;
+    Extension::PicaSceneFrame mPicaSceneFrame;
+    Extension::NativeSceneView mNativeSceneView;
     // Directional-shadow casters of the published presentation sequence,
     // prepared before it executes: the map reads them at the opaque boundary,
     // and the ordered submission of each draw reuses its prepared bounds.
-    Oot3d::PicaSceneFrame mPreparedShadowCasterFrame;
-    Oot3d::NativeSceneView mPreparedShadowCasterView;
+    Extension::PicaSceneFrame mPreparedShadowCasterFrame;
+    Extension::NativeSceneView mPreparedShadowCasterView;
     std::unordered_map<uint64_t, Renderer3ds::VirtualShadowCaster> mPreparedShadowCasters;
     // Accepted caster poses per instance: native geometry identity and the
     // temporal owner part that draws it (see PicaShadowCasterAnchor).
@@ -1287,15 +1287,15 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
                                                             const Renderer3ds::PicaTemporalIdentity& identity,
                                                             uint64_t submissionId);
     uint64_t mNextShadowCasterAnchorSweep = 0;
-    Oot3d::PicaScenePublicationAdapter mPicaScenePublications;
-    Oot3d::GrassGeometryRegistry mGrassGeometryRegistry;
-    Oot3d::GrassDrawMemo mGrassDrawMemo;
+    Extension::PicaScenePublicationAdapter mPicaScenePublications;
+    Extension::GrassGeometryRegistry mGrassGeometryRegistry;
+    Extension::GrassDrawMemo mGrassDrawMemo;
     std::unordered_map<uint64_t, NativePicaGeometryBuffer> mNativePicaGeometryBuffers;
     // Distance field of the native opaque geometry (global illumination).
-    Oot3d::BrixelizerScene mBrixelizerScene;
+    Extension::BrixelizerScene mBrixelizerScene;
     // Diffuse GI traced through mBrixelizerScene (declared after it: its
     // contexts use the field's backend and are destroyed first).
-    Oot3d::BrixelizerGiPass mBrixelizerGiPass;
+    Extension::BrixelizerGiPass mBrixelizerGiPass;
     bool mBrixelizerInitializationAttempted = false;
     bool mSceneDistanceFieldUpdatedThisFrame = false;
     // Title world identity (TitleSceneViewSubmission::WorldIdentity); a change
@@ -1307,35 +1307,35 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     uint64_t mReportedGiCreationFailures = 0;
     // Screen-space diffuse GI (GlobalIllumination.Mode ScreenSpace): pipelines
     // created off the frame, one pass instance and history per surface.
-    Oot3d::ScreenSpaceGiProvider mScreenSpaceGi;
+    Extension::ScreenSpaceGiProvider mScreenSpaceGi;
     uint64_t mScreenSpaceGiWorldIdentity = 0;
     std::array<float, 4> mScreenSpaceGiSourceWeights{};
-    Oot3d::ScreenSpaceGiStats mReportedScreenSpaceGi;
+    Extension::ScreenSpaceGiStats mReportedScreenSpaceGi;
     // The GI provider state last published to the settings runtime (F1).
-    Oot3d::GlobalIlluminationProviderStatus mPublishedGlobalIlluminationStatus;
-    void PublishGlobalIlluminationStatus(Oot3d::GlobalIlluminationMode mode);
+    Extension::GlobalIlluminationProviderStatus mPublishedGlobalIlluminationStatus;
+    void PublishGlobalIlluminationStatus(Extension::GlobalIlluminationMode mode);
     // A planned upscaler wrote no output and the display showed its input
     // unscaled: reported once per provider and cause, and a provider that is
     // no longer available is withdrawn from F1 (its capability).
-    void WithdrawFailedUpscaler(Oot3d::UpscalerProvider provider);
+    void WithdrawFailedUpscaler(Extension::UpscalerProvider provider);
     std::string mReportedUpscalerFallback;
     std::array<std::vector<BufferAllocation>, kFramesInFlight> mRetiredNativePicaGeometryBuffers;
-    Oot3d::PicaShaderPipelineCache mPicaShaderPipelineCache;
-    Oot3d::PicaAotShaderPack mPicaAotShaderPack;
+    Extension::PicaShaderPipelineCache mPicaShaderPipelineCache;
+    Extension::PicaAotShaderPack mPicaAotShaderPack;
     Renderer::SpirvCache mCompiledShaderCache;
     bool mCompiledShaderCacheSummaryLogged = false;
-    Oot3d::PicaEffectiveShaderInventory mPicaEffectiveShaderInventory;
+    Extension::PicaEffectiveShaderInventory mPicaEffectiveShaderInventory;
     // OOT3D_PICA_VARIANT_REQUESTS: every distinct variant request, for offline replay.
-    Oot3d::PicaVariantRequestRecorder mPicaVariantRequestRecorder;
-    Oot3d::PicaGraphicsPipelineInventory mPicaPipelineInventory;
-    Oot3d::PicaGraphicsPipelineManifest mPicaPipelineManifest;
+    Extension::PicaVariantRequestRecorder mPicaVariantRequestRecorder;
+    Extension::PicaGraphicsPipelineInventory mPicaPipelineInventory;
+    Extension::PicaGraphicsPipelineManifest mPicaPipelineManifest;
     std::set<uint64_t> mPicaPipelinePrewarmedProfiles;
     std::mutex mPicaAotShaderLogMutex;
-    std::set<std::pair<Oot3d::PicaAotShaderStage, uint64_t>>
+    std::set<std::pair<Extension::PicaAotShaderStage, uint64_t>>
         mPicaAotShaderMissesLogged;
     // Distinct pack modules served, for release qualification (counts per
     // identity, not per request).
-    std::set<std::pair<Oot3d::PicaAotShaderStage, uint64_t>> mPicaAotShaderHitIdentities;
+    std::set<std::pair<Extension::PicaAotShaderStage, uint64_t>> mPicaAotShaderHitIdentities;
     std::atomic<uint64_t> mPicaAotShaderHits = 0;
     std::atomic<uint64_t> mNativeFragmentArtifactHits = 0;
     std::atomic<uint64_t> mNativeVertexArtifactHits = 0;
@@ -1347,22 +1347,22 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     uint64_t mPicaPipelinePrewarmCreated = 0U;
     uint64_t mPicaPipelinePrewarmReused = 0U;
     uint64_t mPicaPipelinePrewarmSkipped = 0U;
-    Oot3d::GraphicsSettings mFrameGraphicsSettings;
+    Extension::GraphicsSettings mFrameGraphicsSettings;
     Renderer3ds::PicaEnvironmentLighting mFrameEnvironment;
     std::optional<Renderer3ds::PicaSurfaceLightingView> mSurfaceLightingView;
     uint64_t mFrameGraphicsSettingsRevision = 0;
     uint64_t mAzaharConfiguredSettingsRevision = 0;
     uint64_t mFrameMaterialRevision = 0;
-    std::optional<Oot3d::PicaAttachmentFeatureRequests>
+    std::optional<Extension::PicaAttachmentFeatureRequests>
         mPicaExtensionRequests;
-    Oot3d::CompiledEffectGraph mPicaExtensionGraph;
-    Oot3d::EffectGeometryProviderPlan mInteractiveGrassProviderPlan;
-    Oot3d::EffectGeometryProviderExecutionLedger
+    Extension::CompiledEffectGraph mPicaExtensionGraph;
+    Extension::EffectGeometryProviderPlan mInteractiveGrassProviderPlan;
+    Extension::EffectGeometryProviderExecutionLedger
         mInteractiveGrassProviderExecution;
-    Oot3d::EffectPassBarrierPlan mDirectionalShadowMapBarrierPlan;
+    Extension::EffectPassBarrierPlan mDirectionalShadowMapBarrierPlan;
     ::Fast::Renderer::ExtensionPassSchedulePlan
         mDirectionalShadowSchedulePlan;
-    Oot3d::EffectPassBarrierPlan mPointShadowMapBarrierPlan;
+    Extension::EffectPassBarrierPlan mPointShadowMapBarrierPlan;
     ::Fast::Renderer::ExtensionPassSchedulePlan
         mPointShadowSchedulePlan;
     uint64_t mFrameAzaharTextureGeneration = 0;
@@ -1396,7 +1396,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         // than inferred, so nothing decodes the source or applies a scene effect
         // a second time. The identity native target is display-encoded with no
         // effect applied.
-        Oot3d::SceneColorEncoding Encoding = Oot3d::NativePicaSceneColorEncoding();
+        Extension::SceneColorEncoding Encoding = Extension::NativePicaSceneColorEncoding();
         bool SceneEffectsResolved = false;
     };
     // Immutable GPU copies of raw-transfer sources, captured at the copy's
@@ -1428,7 +1428,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         uint32_t ImageHeight = 0;
         // Declared provenance of the sampled source, carried from the composer
         // through to the sampler so nothing re-applies a resolved effect.
-        Oot3d::SceneColorEncoding Encoding = Oot3d::NativePicaSceneColorEncoding();
+        Extension::SceneColorEncoding Encoding = Extension::NativePicaSceneColorEncoding();
         bool SceneEffectsResolved = false;
         VkImage Image = VK_NULL_HANDLE;
         VkImageLayout Layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -1449,7 +1449,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         std::shared_ptr<const uint64_t> GuestOwner;
     };
     // The boundary canvas the scene composer materializes and owns.
-    Oot3d::NriOwnedTexture2D mNativePicaSceneCopyCanvas;
+    Extension::NriOwnedTexture2D mNativePicaSceneCopyCanvas;
     uint32_t mNativePicaSceneCopyCanvasWidth = 0;
     uint32_t mNativePicaSceneCopyCanvasHeight = 0;
     // Retire only at a completed frame fence, never while recorded sampling or
@@ -1585,7 +1585,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         uint32_t ImageHeight = 0;
         // Declared provenance of the resolved producers: the encoded domain and
         // whether their captures already carry this boundary's scene effects.
-        Oot3d::SceneColorEncoding Encoding = Oot3d::NativePicaSceneColorEncoding();
+        Extension::SceneColorEncoding Encoding = Extension::NativePicaSceneColorEncoding();
         bool SceneEffectsResolved = false;
         uint64_t FirstProducerCompletionId = 0;
     };
@@ -1641,7 +1641,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     void DumpGpuTextureCopyConsumer(
         VkImage sampled, uint32_t sampledWidth, uint32_t sampledHeight,
         const GfxNativePicaTextureView& texture, uint64_t producerCompletionId,
-        Oot3d::SceneColorEncoding encoding, bool sceneEffectsResolved);
+        Extension::SceneColorEncoding encoding, bool sceneEffectsResolved);
     void DestroyRawCopyEncodeResources();
     bool EnsureRawCopySampler(std::string* error);
     bool EnsureRawCopyEncodeResources(uint32_t encodedBytes, std::string* error);
@@ -1735,7 +1735,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     uint64_t mNativePicaTransfersWithoutTarget = 0U;
     NativePicaRenderTarget* mActiveNativePicaRenderTarget = nullptr;
     // The layout the active native PICA pass began with.
-    Oot3d::PicaAttachmentRequirements mActiveNativePicaAttachments;
+    Extension::PicaAttachmentRequirements mActiveNativePicaAttachments;
     std::optional<GfxNativePicaDisplayTransferView>
         mLastPresentedNativePicaDisplayTransfer;
     std::vector<GfxNativePicaMemoryFillView> mPendingNativePicaMemoryFills;
@@ -1809,12 +1809,12 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     Oot3dVulkanDiagnostics mDiagnostics{
         Oot3dVulkanDiagnosticsConfig::FromEnvironment()
     };
-    Oot3d::RendererValidationTelemetry mValidationTelemetry;
+    Extension::RendererValidationTelemetry mValidationTelemetry;
     Oot3dVulkanValidation mVulkanValidation;
 
     Oot3dVulkanGpuProfiler mGpuProfiler;
 #if defined(_WIN32) && defined(ENABLE_OOT3D_D3D12_NGX_PROVIDER)
-    Oot3d::D3d12NgxProvider mD3d12NgxProvider;
+    Extension::D3d12NgxProvider mD3d12NgxProvider;
 #endif
     // Destroyed after the NRI objects whose background creation it runs.
     std::unique_ptr<Renderer3ds::PicaPreparationQueue> mPreparationQueue;
@@ -1828,46 +1828,46 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     // so specialized programs never queue behind it.
     std::vector<std::thread> mStartupPreparationThreads;
     void JoinStartupPreparation();
-    Oot3d::NriInteropContext mNriInterop;
-    Oot3d::AmbientOcclusionPass mAmbientOcclusionPass;
-    Oot3d::CacaoPass mCacaoPass;
-    Oot3d::MxaoPass mMxaoPass;
-    Oot3d::FidelityFxSssrPass mFidelityFxSssrPass;
-    Oot3d::HiZDepthPyramidPass mHiZDepthPyramidPass;
-    Oot3d::HiZReflectionPass mHiZReflectionPass;
-    Oot3d::InteractiveGrassPass mInteractiveGrassPass;
-    Oot3d::WorldDebugLinePass mWorldDebugLinePass;
-    Oot3d::LinearSceneColorPass mLinearSceneColorPass;
-    Oot3d::MotionVectorPass mMotionVectorPass;
-    Oot3d::NriDirectionalShadowPass mNriDirectionalShadowPass;
-    Oot3d::NriEffectGraphTransientImageArena
+    Extension::NriInteropContext mNriInterop;
+    Extension::AmbientOcclusionPass mAmbientOcclusionPass;
+    Extension::CacaoPass mCacaoPass;
+    Extension::MxaoPass mMxaoPass;
+    Extension::FidelityFxSssrPass mFidelityFxSssrPass;
+    Extension::HiZDepthPyramidPass mHiZDepthPyramidPass;
+    Extension::HiZReflectionPass mHiZReflectionPass;
+    Extension::InteractiveGrassPass mInteractiveGrassPass;
+    Extension::WorldDebugLinePass mWorldDebugLinePass;
+    Extension::LinearSceneColorPass mLinearSceneColorPass;
+    Extension::MotionVectorPass mMotionVectorPass;
+    Extension::NriDirectionalShadowPass mNriDirectionalShadowPass;
+    Extension::NriEffectGraphTransientImageArena
         mNriEffectGraphTransientImageArena;
-    Oot3d::NriPicaDisplayCopyPass mNriPicaDisplayCopyPass;
+    Extension::NriPicaDisplayCopyPass mNriPicaDisplayCopyPass;
     // Raw-transfer source capture. A separate instance so the display
     // transfer's per-frame descriptor budget stays independent of raw copies.
-    Oot3d::NriPicaDisplayCopyPass mNriPicaTextureCopyCapturePass;
+    Extension::NriPicaDisplayCopyPass mNriPicaTextureCopyCapturePass;
     // Raw-copy derivation into the sampled texture, likewise independent.
-    Oot3d::NriPicaDisplayCopyPass mNriPicaTextureCopyDerivePass;
-    Oot3d::NriPicaMemoryFillClearPass mNriPicaMemoryFillClearPass;
-    Oot3d::NriPicaScanoutPass mNriPicaScanoutPass;
-    Oot3d::NriPicaPipelineBridge mNriPicaPipelineBridge;
-    Oot3d::NriPicaRenderTargetInitPass mNriPicaRenderTargetInitPass;
-    Oot3d::NriPicaRenderTargetOwner mNriPicaRenderTargetOwner;
-    Oot3d::NriPicaTextureImageOwner mNriPicaDisplayImageOwner;
-    Oot3d::NriPicaTextureImageOwner mNriPicaTextureImageOwner;
-    Oot3d::NriPicaTextureUploadPass mNriPicaTextureUploadPass;
-    Oot3d::NriSwapchain mNriSwapchain;
-    Oot3d::PicaDynamicRenderingScope mPicaDynamicRenderingScope;
-    Oot3d::NriUpscalerPass mNriUpscalerPass;
-    Oot3d::UpscalerGuidePass mUpscalerGuidePass;
-    Oot3d::NativeUiOverlayPass mNativeUiOverlayPass;
-    Oot3d::TemporalHistoryManager mTemporalHistory;
-    Oot3d::SceneCompositePass mSceneCompositePass;
-    Oot3d::Smaa1xPass mSmaa1xPass;
-    Oot3d::ReflectionIblPass mReflectionIblPass;
-    Oot3d::ReflectionMaterialResolvePass
+    Extension::NriPicaDisplayCopyPass mNriPicaTextureCopyDerivePass;
+    Extension::NriPicaMemoryFillClearPass mNriPicaMemoryFillClearPass;
+    Extension::NriPicaScanoutPass mNriPicaScanoutPass;
+    Extension::NriPicaPipelineBridge mNriPicaPipelineBridge;
+    Extension::NriPicaRenderTargetInitPass mNriPicaRenderTargetInitPass;
+    Extension::NriPicaRenderTargetOwner mNriPicaRenderTargetOwner;
+    Extension::NriPicaTextureImageOwner mNriPicaDisplayImageOwner;
+    Extension::NriPicaTextureImageOwner mNriPicaTextureImageOwner;
+    Extension::NriPicaTextureUploadPass mNriPicaTextureUploadPass;
+    Extension::NriSwapchain mNriSwapchain;
+    Extension::PicaDynamicRenderingScope mPicaDynamicRenderingScope;
+    Extension::NriUpscalerPass mNriUpscalerPass;
+    Extension::UpscalerGuidePass mUpscalerGuidePass;
+    Extension::NativeUiOverlayPass mNativeUiOverlayPass;
+    Extension::TemporalHistoryManager mTemporalHistory;
+    Extension::SceneCompositePass mSceneCompositePass;
+    Extension::Smaa1xPass mSmaa1xPass;
+    Extension::ReflectionIblPass mReflectionIblPass;
+    Extension::ReflectionMaterialResolvePass
         mReflectionMaterialResolvePass;
-    Oot3d::TemporalAaPass mTemporalAaPass;
+    Extension::TemporalAaPass mTemporalAaPass;
     uint64_t mAmbientOcclusionRenderTargetNamespace = 0;
     uint32_t mAmbientOcclusionDisplayPhysicalAddress = 0;
     bool mAmbientOcclusionOutputValid = false;
@@ -1876,40 +1876,40 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     uint64_t mHiZRenderTargetNamespace = 0;
     uint32_t mHiZDisplayPhysicalAddress = 0;
     bool mHiZOutputValid = false;
-    std::optional<Oot3d::SceneSurfaceKey> mHiZReflectionSurface;
+    std::optional<Extension::SceneSurfaceKey> mHiZReflectionSurface;
     bool mReflectionExecutedThisFrame = false;
-    Oot3d::ReflectionProvider mReflectionProviderThisFrame =
-        Oot3d::ReflectionProvider::Off;
-    Oot3d::SceneColorEncoding mReflectionOutputEncodingThisFrame =
-        Oot3d::SceneColorEncoding::Unknown;
-    std::optional<Oot3d::SceneSurfaceKey> mMotionSurface;
-    std::optional<Oot3d::SceneSurfaceKey> mLinearColorSurface;
+    Extension::ReflectionProvider mReflectionProviderThisFrame =
+        Extension::ReflectionProvider::Off;
+    Extension::SceneColorEncoding mReflectionOutputEncodingThisFrame =
+        Extension::SceneColorEncoding::Unknown;
+    std::optional<Extension::SceneSurfaceKey> mMotionSurface;
+    std::optional<Extension::SceneSurfaceKey> mLinearColorSurface;
     bool mLinearColorExecutedThisFrame = false;
     bool mUpscalerExecutedThisFrame = false;
     bool mUpscalerUsedD3d12ThisFrame = false;
-    Oot3d::UpscalerProvider mUpscalerProviderThisFrame =
-        Oot3d::UpscalerProvider::Nis;
-    Oot3d::SceneColorEncoding mUpscalerOutputEncodingThisFrame =
-        Oot3d::SceneColorEncoding::Unknown;
+    Extension::UpscalerProvider mUpscalerProviderThisFrame =
+        Extension::UpscalerProvider::Nis;
+    Extension::SceneColorEncoding mUpscalerOutputEncodingThisFrame =
+        Extension::SceneColorEncoding::Unknown;
     bool mUpscalerEffectsCompositedThisFrame = false;
     uint64_t mUpscalerRenderTargetNamespace = 0;
     uint32_t mUpscalerDisplayPhysicalAddress = 0;
     uint32_t mUpscalerOutputWidth = 0;
     uint32_t mUpscalerOutputHeight = 0;
-    std::optional<Oot3d::SceneSurfaceKey> mTaaSurface;
-    std::optional<Oot3d::SceneSurfaceKey> mCompositeSurface;
+    std::optional<Extension::SceneSurfaceKey> mTaaSurface;
+    std::optional<Extension::SceneSurfaceKey> mCompositeSurface;
     bool mCompositeExecutedThisFrame = false;
-    Oot3d::SceneColorEncoding mCompositeOutputEncodingThisFrame =
-        Oot3d::SceneColorEncoding::Unknown;
+    Extension::SceneColorEncoding mCompositeOutputEncodingThisFrame =
+        Extension::SceneColorEncoding::Unknown;
     bool mTaaOutputValid = false;
     bool mTaaExecutedThisFrame = false;
-    Oot3d::SceneColorEncoding mTaaOutputEncodingThisFrame =
-        Oot3d::SceneColorEncoding::Unknown;
+    Extension::SceneColorEncoding mTaaOutputEncodingThisFrame =
+        Extension::SceneColorEncoding::Unknown;
     bool mTaaEffectsCompositedThisFrame = false;
     bool mSmaaExecutedThisFrame = false;
     bool mSmaaEffectsCompositedThisFrame = false;
-    Oot3d::SceneColorEncoding mSmaaOutputEncodingThisFrame =
-        Oot3d::SceneColorEncoding::Unknown;
+    Extension::SceneColorEncoding mSmaaOutputEncodingThisFrame =
+        Extension::SceneColorEncoding::Unknown;
     uint64_t mSmaaRenderTargetNamespace = 0;
     uint32_t mSmaaDisplayPhysicalAddress = 0;
     uint32_t mSmaaWidth = 0;
@@ -1927,7 +1927,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     // The native UI overlay of this frame's upscaled display (reused with it).
     bool mNativeUiOverlayExecutedThisFrame = false;
     bool mNativeFidelityProfile = false;
-    Oot3d::PicaAttachmentRequirements mFramePicaAttachmentRequirements;
+    Extension::PicaAttachmentRequirements mFramePicaAttachmentRequirements;
     std::array<float, 2> mTemporalJitterPixels{};
     // Frames that drew the PICA scene: the jitter phase. Frames without the
     // scene (the host holding the guest for its initial preparation) do not
@@ -1950,8 +1950,8 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     std::unordered_map<uint64_t, uint64_t> mGrassDrawOrdinals;
     Renderer3ds::PicaTemporalHistory mPicaTemporalHistory;
     uint32_t mNativePicaDepthWritingDrawsThisFrame = 0;
-    Oot3d::SceneSurfaceRegistry mSceneSurfaces;
-    Oot3d::ResourceStateTracker mResourceStates;
+    Extension::SceneSurfaceRegistry mSceneSurfaces;
+    Extension::ResourceStateTracker mResourceStates;
 };
 
 } // namespace Fast

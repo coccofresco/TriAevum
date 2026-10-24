@@ -7,7 +7,7 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 #include "fast/renderer3ds/pica_frame_timing.h"
-#include "fast/oot3d/grass_render_telemetry.h"
+#include "fast/extension/grass_render_telemetry.h"
 
 #include "oot3d_demo_host_io.h"
 
@@ -29,7 +29,7 @@ void MaybeWriteFramebufferScreenshot(const Args& args, Fast::GfxRenderingAPI& ap
                                      const Fast::Renderer3ds::PicaFrameTemporalSample* temporalSample) {
     const bool grassDiagnostics = std::getenv("OOT3D_SCREENSHOT_GRASS_TRANSITIONS") != nullptr &&
                                   args.ScreenshotSequence && !args.ScreenshotPath.empty();
-    Fast::Oot3d::GrassRenderTelemetrySnapshot grass;
+    Fast::Extension::GrassRenderTelemetrySnapshot grass;
     bool grassTransition = false;
     bool cameraTransition = false;
     if (std::getenv("OOT3D_SCREENSHOT_CAMERA_TRANSITIONS") && temporalSample && temporalSample->Available() &&
@@ -42,7 +42,7 @@ void MaybeWriteFramebufferScreenshot(const Args& args, Fast::GfxRenderingAPI& ap
         if (cameraTransition) --state.TemporalDiagnosticFrames;
     }
     if (grassDiagnostics) {
-        grass = Fast::Oot3d::GrassRenderTelemetry::Instance().Snapshot();
+        grass = Fast::Extension::GrassRenderTelemetry::Instance().Snapshot();
         const auto status = static_cast<int>(grass.Status);
         grassTransition = grass.FrameId != 0U && status != state.LastGrassDiagnosticStatus;
         state.LastGrassDiagnosticStatus = status;
@@ -52,7 +52,7 @@ void MaybeWriteFramebufferScreenshot(const Args& args, Fast::GfxRenderingAPI& ap
         return;
     }
 
-    if (!grassDiagnostics) grass = Fast::Oot3d::GrassRenderTelemetry::Instance().Snapshot();
+    if (!grassDiagnostics) grass = Fast::Extension::GrassRenderTelemetry::Instance().Snapshot();
     const auto screenshotPath = forced ? std::exchange(state.ForcedPath, {})
         : args.ScreenshotSequence ? ScreenshotSequenceFramePath(args.ScreenshotPath, frameCount) : args.ScreenshotPath;
     // Forced (developer lab) captures and --screenshot-rgb8 keep the full
@@ -84,7 +84,7 @@ void MaybeWriteFramebufferScreenshot(const Args& args, Fast::GfxRenderingAPI& ap
             {"synthetic", sample.Synthetic}, {"history_reset", sample.HistoryReset}};
     }
     if (grass.FrameId != 0U) {
-        metadata["grass"] = {{"frame", grass.FrameId}, {"status", Fast::Oot3d::GrassRenderStatusName(grass.Status)},
+        metadata["grass"] = {{"frame", grass.FrameId}, {"status", Fast::Extension::GrassRenderStatusName(grass.Status)},
             {"transition", grassTransition}, {"visible_blades", grass.VisibleBlades},
             {"cluster_instances", grass.ClusterDrawInstances}, {"cluster_blades", grass.ClusterRepresentedBlades},
             {"draw_calls", grass.DrawCalls},

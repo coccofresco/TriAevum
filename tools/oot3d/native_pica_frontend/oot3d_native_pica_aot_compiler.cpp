@@ -1,6 +1,6 @@
-#include "fast/oot3d/pica_aot_shader_pack.h"
-#include "fast/oot3d/pica_scanout_effects.h"
-#include "fast/oot3d/builtin_pass_shaders.h"
+#include "fast/extension/pica_aot_shader_pack.h"
+#include "fast/extension/pica_scanout_effects.h"
+#include "fast/extension/builtin_pass_shaders.h"
 #include "fast/renderer/shaderc_compiler.h"
 #include "fast/renderer/spirv_cache.h"
 
@@ -107,13 +107,13 @@ uint64_t HashWords(std::span<const uint32_t> words) {
 
 std::vector<uint32_t> CompileShader(
     shaderc::Compiler& compiler, const std::string& source,
-    Fast::Oot3d::PicaAotShaderStage stage,
+    Fast::Extension::PicaAotShaderStage stage,
     const std::string& sourceName) {
     shaderc::CompileOptions options;
     options.SetTargetEnvironment(shaderc_target_env_vulkan,
                                  shaderc_env_version_vulkan_1_1);
     options.SetOptimizationLevel(shaderc_optimization_level_performance);
-    const auto kind = stage == Fast::Oot3d::PicaAotShaderStage::Vertex
+    const auto kind = stage == Fast::Extension::PicaAotShaderStage::Vertex
                           ? shaderc_vertex_shader
                           : shaderc_fragment_shader;
     const auto result = compiler.CompileGlslToSpv(
@@ -153,7 +153,7 @@ void WriteJsonAtomically(const std::filesystem::path& path,
 } // namespace
 
 int main(int argc, char** argv) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     try {
         Options options;
         if (!ParseOptions(argc, argv, options)) {

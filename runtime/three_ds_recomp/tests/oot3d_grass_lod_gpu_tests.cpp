@@ -1,9 +1,9 @@
-#include "fast/oot3d/grass_distant_tuft.h"
-#include "fast/oot3d/grass_indexed_topology.h"
+#include "fast/extension/grass_distant_tuft.h"
+#include "fast/extension/grass_indexed_topology.h"
 #include "oot3d_vulkan_compute_fixture.h"
 
 TEST(Oot3dGrassLodGpu, IndexedVertexDecoderMatchesExpandedStreamForEveryTopology) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const auto topology = BuildGrassIndexedTopology();
     // The 25 (first, count) ranges, then the index stream, as input words: a
     // constant array of this size makes the driver refuse the pipeline.
@@ -65,7 +65,7 @@ TEST(Oot3dGrassLodGpu, TransitionAndFadeMathMatchesCpuAcrossDensityScales) {
     const auto source = std::string(R"glsl(#version 450
 layout(local_size_x=8) in;
 layout(std430,set=0,binding=0) buffer Output { vec4 values[]; } output_data;
-)glsl") + std::string(Fast::Oot3d::kGrassDistantTuftShader) + R"glsl(
+)glsl") + std::string(Fast::Extension::kGrassDistantTuftShader) + R"glsl(
 void main() {
     float row=float(gl_GlobalInvocationID.y);
     float x=float(gl_GlobalInvocationID.x)/7.0;
@@ -81,7 +81,7 @@ void main() {
 )glsl";
     ComputeFixture gpu;
     const auto values = gpu.Run(source);
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     for (size_t row = 0; row < 6; ++row) {
         for (size_t column = 0; column < 8; ++column) {
             SCOPED_TRACE("row=" + std::to_string(row) + " column=" + std::to_string(column));

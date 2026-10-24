@@ -1,13 +1,13 @@
-#include "fast/oot3d/grass_midrange_clusters.h"
-#include "fast/oot3d/grass_indexed_topology.h"
-#include "fast/oot3d/grass_cluster_selection.h"
-#include "fast/oot3d/grass_selection_cache.h"
+#include "fast/extension/grass_midrange_clusters.h"
+#include "fast/extension/grass_indexed_topology.h"
+#include "fast/extension/grass_cluster_selection.h"
+#include "fast/extension/grass_selection_cache.h"
 
 #include <iostream>
 #include <numeric>
 #include <set>
 
-using namespace Fast::Oot3d;
+using namespace Fast::Extension;
 
 static void Check(bool value, const char* message) {
     if (!value) throw std::runtime_error(message);

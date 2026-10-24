@@ -357,7 +357,7 @@ Le versioni cross-frame/replay sono export persistenti, non slot transient dell'
 - `src/fast/backends/gfx_vulkan_pica.cpp`: rilascio risorse in `DestroyNativePicaShaderResources` (426-429), reset/restore che oggi svuota il registro (8986-8988); niente riscrittura della classificazione Screen.
 - `include/fast/renderer3ds/pica_render_backend.h:122-142,244-248`: contratto transfer/visibilità. Portare esplicitamente anche l'obbligo `SignalInterrupt` dal submission, oggi assente dalla view, senza emetterlo nella fase di registrazione.
 - `tools/oot3d/native_game_runtime/oot3d_native_pica_vulkan_bridge.cpp:411-442`: propagazione completa del transfer, invariati campi raw/ordine.
-- Riutilizzare, normalmente senza modificarli: `pica_texture_copy_plan.h`, `pica_framebuffer_encode.h` come oracle CPU; `oot3d/nri_interop_context.h:70-107` per owned texture/wrapper; `src/fast/oot3d/nri_interop_internal.h:22-59`, `NriInteropAccess::{Core,CommandBuffer,Texture,Buffer,CmdTextureBarrier,CmdGlobalBarrier}`. Il kernel compute specifico della conversione può restare nel modulo copia esistente; nessuna libreria generica nuova.
+- Riutilizzare, normalmente senza modificarli: `pica_texture_copy_plan.h`, `pica_framebuffer_encode.h` come oracle CPU; `oot3d/nri_interop_context.h:70-107` per owned texture/wrapper; `src/fast/extension/nri_interop_internal.h:22-59`, `NriInteropAccess::{Core,CommandBuffer,Texture,Buffer,CmdTextureBarrier,CmdGlobalBarrier}`. Il kernel compute specifico della conversione può restare nel modulo copia esistente; nessuna libreria generica nuova.
 - Se il wiring del grafo richiede dichiarazioni aggiuntive, farlo nel modulo copia e nel punto di scheduling nativo citato, usando `ExtensionResourceGraphInput`; non cambiare le regole del compilatore condiviso per accettare una dipendenza non valida.
 
 ### Implementazione e barriere
@@ -390,7 +390,7 @@ Le versioni cross-frame/replay sono export persistenti, non slot transient dell'
 - `gfx_vulkan_pica_texture_copy.cpp:8-39`: resolver della versione/layout corretti.
 - `gfx_vulkan_pica.cpp:2553-2794,4137-4165`: early resolution GPU-owned PRIMA di hashing/decode/replacement da byte CPU; creare binding borrowed con sampler canonico.
 - `oot3d_native_pica_visual_frame.cpp`, `oot3d_native_pica_visual_savestate.cpp`, `oot3d_native_pica_semantic_trace.cpp:426-458`: identità dei piani/replay e trace devono distinguere riferimento GPU da payload CPU; mai inventare un content hash da un seriale.
-- `PicaSceneFrame::Record` e binding risolti in `src/fast/oot3d/pica_scene_frame.cpp`/`include/fast/oot3d/pica_scene_frame.h:44-92,166-186`: far arrivare la risorsa/versione reale ai consumer della ricomposizione, senza toccare `HasSceneDrawOnColorTarget:195-196` né la classificazione Screen.
+- `PicaSceneFrame::Record` e binding risolti in `src/fast/extension/pica_scene_frame.cpp`/`include/fast/extension/pica_scene_frame.h:44-92,166-186`: far arrivare la risorsa/versione reale ai consumer della ricomposizione, senza toccare `HasSceneDrawOnColorTarget:195-196` né la classificazione Screen.
 
 ### Ownership/coerenza
 

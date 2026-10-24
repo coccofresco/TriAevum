@@ -1,4 +1,4 @@
-#include "fast/oot3d/pica_pipeline_manifest.h"
+#include "fast/extension/pica_pipeline_manifest.h"
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
@@ -8,7 +8,7 @@
 #include <filesystem>
 #include <fstream>
 
-namespace Fast::Oot3d {
+namespace Fast::Extension {
 namespace {
 
 PicaGraphicsPipelineManifestEntry MakeEntry() {
@@ -290,4 +290,4 @@ TEST(PicaPipelineManifest, RejectsIncompleteStructuralState) {
 }
 
 } // namespace
-} // namespace Fast::Oot3d
+} // namespace Fast::Extension

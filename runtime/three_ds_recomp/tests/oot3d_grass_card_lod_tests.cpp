@@ -1,6 +1,6 @@
-#include "fast/oot3d/grass_card_atlas.h"
-#include "fast/oot3d/grass_card_lod.h"
-#include "fast/oot3d/grass_anchor_codec.h"
+#include "fast/extension/grass_card_atlas.h"
+#include "fast/extension/grass_card_lod.h"
+#include "fast/extension/grass_anchor_codec.h"
 
 #include <gtest/gtest.h>
 
@@ -12,7 +12,7 @@
 
 namespace {
 
-using namespace Fast::Oot3d;
+using namespace Fast::Extension;
 
 // A placement of a regular grid of clusters, each with a few roots around
 // its centre, laid out directly in the world format (no extractor needed).

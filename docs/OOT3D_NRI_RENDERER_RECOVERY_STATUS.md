@@ -20,7 +20,7 @@ unless a narrow bridge is required to provide typed renderer input.
 Renderer settings are authored through `GraphicsSettingsRuntime`. Backend
 implementations consume immutable snapshots and report transaction outcomes.
 Feature-specific policy and state transitions belong in small modules under
-`runtime/three_ds_recomp/src/fast/oot3d`; `gfx_vulkan.cpp` only coordinates those modules
+`runtime/three_ds_recomp/src/fast/extension`; `gfx_vulkan.cpp` only coordinates those modules
 with Vulkan/NRI resources.
 
 The host application must not duplicate swapchain, effect, or layout policy.
@@ -34,8 +34,8 @@ Nested renderer commit: `55583233 fix(renderer): apply NRI presentation settings
 
 Files:
 
-- `runtime/three_ds_recomp/include/fast/oot3d/renderer_presentation_controller.h`
-- `runtime/three_ds_recomp/src/fast/oot3d/renderer_presentation_controller.cpp`
+- `runtime/three_ds_recomp/include/fast/extension/renderer_presentation_controller.h`
+- `runtime/three_ds_recomp/src/fast/extension/renderer_presentation_controller.cpp`
 - `runtime/three_ds_recomp/src/fast/backends/gfx_vulkan.cpp`
 
 The controller distinguishes:

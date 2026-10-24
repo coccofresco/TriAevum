@@ -45,12 +45,12 @@ unqualified because no device was visible to local ADB.
 | Generic renderer | `fast/renderer/pipeline_preparation_job.*`: bounded batches, progress, cancellation and failure accounting; no game/PICA/platform knowledge |
 | Shared 3DS renderer | `fast/renderer3ds/nri_pica_pipeline_bridge.*`: one factory for live draws and `PreparePipeline`; no fake fallback handles |
 | Shared 3DS renderer | `fast/renderer3ds/vulkan_pipeline_cache_store.*`: serialization, GPU/driver validation, atomic publication |
-| PICA adapter | `fast/oot3d/pica_nri_pipeline_state.*`, `pica_pipeline_preparation.*`, `pica_pipeline_manifest.*`: existing raster/attachment policy and packed NRI vertex layout, shared with live rendering |
+| PICA adapter | `fast/extension/pica_nri_pipeline_state.*`, `pica_pipeline_preparation.*`, `pica_pipeline_manifest.*`: existing raster/attachment policy and packed NRI vertex layout, shared with live rendering |
 | Native capture adapter | `oot3d_native_pica_capture_inventory.cpp`, `oot3d_native_pica_vulkan_plan.*`: recorded native state into the existing planner/bridge, not a second register decoder |
 | CLI host | `tools/renderer/pipeline_prepare/`: NRI device lifetime, file arguments and JSON progress/report; no SDL, window, guest or whole-AOT |
 | Forge host | `tools/triaevum_release/device_pipeline_preparation.py`: verified artifacts, process lifetime, progress and optional acceleration receipt |
 
-The `fast/oot3d` paths retain existing renderer API names but contain no title
+The `fast/extension` paths retain existing renderer API names but contain no title
 addresses, scene IDs or asset exceptions. Android uses the **already patched NRI
 checkout from its renderer build**, not another platform-specific implementation.
 

@@ -1,7 +1,7 @@
 #include "oot3d_legacy_ui_adapters.h"
 
 #include "fast/backends/gfx_rendering_api.h"
-#include "fast/oot3d/title_render_backend.h"
+#include "fast/extension/title_render_backend.h"
 #include "fast/renderer/compatibility_combiner.h"
 
 #include <array>
@@ -32,7 +32,7 @@ Fast3dUiRenderBackend::Fast3dUiRenderBackend(
     Fast::GfxRenderingAPI& renderingApi) noexcept
     : rendering_api_(renderingApi),
       title_render_backend_(
-          dynamic_cast<Fast::Oot3d::TitleRenderBackend*>(&renderingApi)) {}
+          dynamic_cast<Fast::Extension::TitleRenderBackend*>(&renderingApi)) {}
 
 bool Fast3dUiRenderBackend::PrepareUiOverlay(
     const Oot3d::Renderer::UiOverlayViewport& viewport, std::string* error) {

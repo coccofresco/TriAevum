@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "fast/oot3d/graphics_settings.h"
+#include "fast/extension/graphics_settings.h"
 
 namespace Oot3dNativeGame {
 
@@ -41,8 +41,8 @@ struct SavestateSettingsApplyResult {
 
 // The graphics candidate a saved block produces: the saved values over the
 // current ones, keeping the current display mode.
-[[nodiscard]] Fast::Oot3d::GraphicsSettings MergeSavedGraphicsSettings(
-    const Fast::Oot3d::GraphicsSettings& saved,
-    const Fast::Oot3d::GraphicsSettings& current);
+[[nodiscard]] Fast::Extension::GraphicsSettings MergeSavedGraphicsSettings(
+    const Fast::Extension::GraphicsSettings& saved,
+    const Fast::Extension::GraphicsSettings& current);
 
 } // namespace Oot3dNativeGame

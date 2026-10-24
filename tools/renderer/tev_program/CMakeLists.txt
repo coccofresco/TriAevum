@@ -20,19 +20,19 @@ find_path(SHADERC_INCLUDE_DIR shaderc/shaderc.hpp HINTS "$ENV{VULKAN_SDK}" PATH_
 find_library(SHADERC_LIBRARY NAMES shaderc_shared shaderc HINTS "$ENV{VULKAN_SDK}" PATH_SUFFIXES lib Lib REQUIRED)
 get_filename_component(runtime "${CMAKE_CURRENT_LIST_DIR}/../../../runtime/three_ds_recomp" ABSOLUTE)
 add_executable(texture_source_cache_tests texture_source_cache_tests.cpp
-    "${runtime}/src/fast/oot3d/grass_texture_source_cache.cpp"
-    "${runtime}/src/fast/oot3d/grass_texture_twins.cpp"
-    "${runtime}/src/fast/oot3d/texture_preview_artifact.cpp"
-    "${runtime}/src/fast/oot3d/grass_surface_extractor.cpp"
-    "${runtime}/src/fast/oot3d/grass_overlay_mask.cpp"
-    "${runtime}/src/fast/oot3d/grass_visibility.cpp")
+    "${runtime}/src/fast/extension/grass_texture_source_cache.cpp"
+    "${runtime}/src/fast/extension/grass_texture_twins.cpp"
+    "${runtime}/src/fast/extension/texture_preview_artifact.cpp"
+    "${runtime}/src/fast/extension/grass_surface_extractor.cpp"
+    "${runtime}/src/fast/extension/grass_overlay_mask.cpp"
+    "${runtime}/src/fast/extension/grass_visibility.cpp")
 target_compile_features(texture_source_cache_tests PRIVATE cxx_std_20)
 target_include_directories(texture_source_cache_tests PRIVATE "${runtime}/include")
 add_test(NAME texture_source_cache COMMAND texture_source_cache_tests)
 add_executable(grass_spacing_tests grass_spacing_tests.cpp
-    "${runtime}/src/fast/oot3d/grass_surface_extractor.cpp"
-    "${runtime}/src/fast/oot3d/grass_overlay_mask.cpp"
-    "${runtime}/src/fast/oot3d/grass_visibility.cpp")
+    "${runtime}/src/fast/extension/grass_surface_extractor.cpp"
+    "${runtime}/src/fast/extension/grass_overlay_mask.cpp"
+    "${runtime}/src/fast/extension/grass_visibility.cpp")
 target_compile_features(grass_spacing_tests PRIVATE cxx_std_20)
 target_include_directories(grass_spacing_tests PRIVATE "${runtime}/include")
 add_test(NAME grass_spacing COMMAND grass_spacing_tests)
@@ -41,7 +41,7 @@ target_compile_features(grass_cluster_order_tests PRIVATE cxx_std_20)
 target_include_directories(grass_cluster_order_tests PRIVATE "${runtime}/include")
 add_test(NAME grass_cluster_order COMMAND grass_cluster_order_tests)
 add_executable(grass_partition_tests grass_partition_tests.cpp
-    "${runtime}/src/fast/oot3d/grass_visibility.cpp")
+    "${runtime}/src/fast/extension/grass_visibility.cpp")
 target_compile_features(grass_partition_tests PRIVATE cxx_std_20)
 target_include_directories(grass_partition_tests PRIVATE "${runtime}/include")
 add_test(NAME grass_partition COMMAND grass_partition_tests)
@@ -68,7 +68,7 @@ add_executable(tev_generator_consumer_tests generator_consumer_tests.cpp
     "${frontend}/oot3d_native_pica_fragment_shader_gen.cpp"
     "${frontend}/oot3d_native_pica_fragment_lighting_gen.cpp"
     "${frontend}/oot3d_native_pica_proctex.cpp"
-    "${runtime}/src/fast/oot3d/pica_fragment_lighting.cpp")
+    "${runtime}/src/fast/extension/pica_fragment_lighting.cpp")
 target_include_directories(tev_generator_consumer_tests PRIVATE "${frontend}" "${runtime}/include"
     "${SHADERC_INCLUDE_DIR}" "${CMAKE_CURRENT_LIST_DIR}/../../triaevum_release/vendor/include")
 target_link_libraries(tev_generator_consumer_tests PRIVATE pica_tev_program "${SHADERC_LIBRARY}")
@@ -93,7 +93,7 @@ add_test(NAME tev_uniform_codec COMMAND tev_uniform_codec_tests)
 set_tests_properties(pica_tev_gpu PROPERTIES TIMEOUT 180)
 add_executable(pica_lighting_gpu_tests lighting_gpu_tests.cpp
     "${frontend}/oot3d_native_pica_fragment_lighting_gen.cpp"
-    "${runtime}/src/fast/oot3d/pica_fragment_lighting.cpp")
+    "${runtime}/src/fast/extension/pica_fragment_lighting.cpp")
 target_compile_features(pica_lighting_gpu_tests PRIVATE cxx_std_20)
 target_include_directories(pica_lighting_gpu_tests PRIVATE "${frontend}" "${runtime}/include"
     "${SHADERC_INCLUDE_DIR}" "${CMAKE_CURRENT_LIST_DIR}/../../triaevum_release/vendor/include")
@@ -187,7 +187,7 @@ endif()
 add_test(NAME diffuse_gi_m4_gpu COMMAND diffuse_gi_m4_gpu_tests)
 set_tests_properties(diffuse_gi_m4_gpu PROPERTIES TIMEOUT 300)
 add_executable(scene_coverage_gpu_tests scene_coverage_gpu_tests.cpp
-    "${runtime}/src/fast/oot3d/pica_nri_pipeline_state.cpp")
+    "${runtime}/src/fast/extension/pica_nri_pipeline_state.cpp")
 target_compile_features(scene_coverage_gpu_tests PRIVATE cxx_std_20)
 target_compile_definitions(scene_coverage_gpu_tests PRIVATE ENABLE_RENDERER3DS_VULKAN)
 target_include_directories(scene_coverage_gpu_tests PRIVATE "${runtime}/include" "${SHADERC_INCLUDE_DIR}")
@@ -242,7 +242,7 @@ add_executable(build_fragment_artifacts build_fragment_artifacts.cpp
     "${frontend}/oot3d_native_pica_fragment_shader_gen.cpp"
     "${frontend}/oot3d_native_pica_fragment_lighting_gen.cpp"
     "${frontend}/oot3d_native_pica_proctex.cpp"
-    "${runtime}/src/fast/oot3d/pica_fragment_lighting.cpp"
+    "${runtime}/src/fast/extension/pica_fragment_lighting.cpp"
     "${runtime}/src/fast/renderer3ds/pica_nri_shader_contract.cpp")
 target_compile_features(build_fragment_artifacts PRIVATE cxx_std_20)
 target_include_directories(build_fragment_artifacts PRIVATE "${frontend}" "${runtime}/include"
@@ -255,20 +255,20 @@ target_sources(build_fragment_artifacts PRIVATE
     "${runtime}/src/fast/renderer3ds/point_shadow_map.cpp"
     "${runtime}/src/fast/renderer3ds/pica_vertex_surface.cpp"
     "${runtime}/src/fast/renderer3ds/virtual_shadow_map.cpp"
-    "${runtime}/src/fast/oot3d/directional_shadows.cpp"
-    "${runtime}/src/fast/oot3d/pica_directional_shadow_caster.cpp"
-    "${runtime}/src/fast/oot3d/pica_uber_effect_program.cpp"
-    "${runtime}/src/fast/oot3d/pica_directional_shadow_lighting.cpp"
-    "${runtime}/src/fast/oot3d/pica_directional_shadow_semantics.cpp"
-    "${runtime}/src/fast/oot3d/pica_reactive_mask.cpp"
-    "${runtime}/src/fast/oot3d/pica_reflection_material.cpp"
-    "${runtime}/src/fast/oot3d/pica_toon_shader.cpp"
-    "${runtime}/src/fast/oot3d/pica_shader_pipeline_cache.cpp"
-    "${runtime}/src/fast/oot3d/pica_rigid_motion.cpp"
-    "${runtime}/src/fast/oot3d/pica_shader_instrumentation.cpp")
+    "${runtime}/src/fast/extension/directional_shadows.cpp"
+    "${runtime}/src/fast/extension/pica_directional_shadow_caster.cpp"
+    "${runtime}/src/fast/extension/pica_uber_effect_program.cpp"
+    "${runtime}/src/fast/extension/pica_directional_shadow_lighting.cpp"
+    "${runtime}/src/fast/extension/pica_directional_shadow_semantics.cpp"
+    "${runtime}/src/fast/extension/pica_reactive_mask.cpp"
+    "${runtime}/src/fast/extension/pica_reflection_material.cpp"
+    "${runtime}/src/fast/extension/pica_toon_shader.cpp"
+    "${runtime}/src/fast/extension/pica_shader_pipeline_cache.cpp"
+    "${runtime}/src/fast/extension/pica_rigid_motion.cpp"
+    "${runtime}/src/fast/extension/pica_shader_instrumentation.cpp")
 include("${runtime}/cmake/spirv_pack.cmake")
-foreach(_pack renderer3ds/pica_native_fragment oot3d/pica_temporal_fragment oot3d/pica_toon_fragment
-              oot3d/pica_uber_fragment oot3d/pica_caster_fragment)
+foreach(_pack renderer3ds/pica_native_fragment extension/pica_temporal_fragment extension/pica_toon_fragment
+              extension/pica_uber_fragment extension/pica_caster_fragment)
     triaevum_add_spirv_pack(build_fragment_artifacts "${runtime}/src/fast/${_pack}_binaries.cpp"
         "${runtime}/src/fast/${_pack}.spvpack")
 endforeach()
@@ -307,12 +307,12 @@ if(THREE_DS_RECOMP_ENABLE_IMMERSE)
 endif()
 
 add_executable(grass_motion_gpu_tests grass_motion_gpu_tests.cpp
-    "${runtime}/src/fast/oot3d/grass_gpu_instance_compactor.cpp"
-    "${runtime}/src/fast/oot3d/grass_gpu_selection.cpp"
-    "${runtime}/src/fast/oot3d/grass_gpu_memory.cpp"
+    "${runtime}/src/fast/extension/grass_gpu_instance_compactor.cpp"
+    "${runtime}/src/fast/extension/grass_gpu_selection.cpp"
+    "${runtime}/src/fast/extension/grass_gpu_memory.cpp"
     "${runtime}/src/fast/renderer3ds/vulkan_memory_budget.cpp"
-    "${runtime}/src/fast/oot3d/grass_visibility.cpp"
-    "${runtime}/src/fast/oot3d/grass_interaction_field.cpp")
+    "${runtime}/src/fast/extension/grass_visibility.cpp"
+    "${runtime}/src/fast/extension/grass_interaction_field.cpp")
 triaevum_add_pass_shader_sources(grass_motion_gpu_tests)
 target_compile_features(grass_motion_gpu_tests PRIVATE cxx_std_20)
 target_compile_definitions(grass_motion_gpu_tests PRIVATE ENABLE_OOT3D_VULKAN)
@@ -335,9 +335,9 @@ add_executable(diffuse_gi_pass_gpu_tests diffuse_gi_pass_gpu_tests.cpp
     "${runtime}/src/fast/renderer/diffuse_gi_temporal.cpp"
     "${runtime}/src/fast/renderer/diffuse_gi_pass_plan.cpp"
     "${runtime}/src/fast/renderer/diffuse_gi_pass.cpp"
-    "${runtime}/src/fast/oot3d/diffuse_gi_adapter.cpp")
+    "${runtime}/src/fast/extension/diffuse_gi_adapter.cpp")
 # M5 Stage B: the OOT3D adapter kernel with its Vulkan recording.
-set_source_files_properties("${runtime}/src/fast/oot3d/diffuse_gi_adapter.cpp" PROPERTIES
+set_source_files_properties("${runtime}/src/fast/extension/diffuse_gi_adapter.cpp" PROPERTIES
     COMPILE_DEFINITIONS ENABLE_OOT3D_VULKAN)
 triaevum_add_pass_shader_sources(diffuse_gi_pass_gpu_tests)
 target_compile_features(diffuse_gi_pass_gpu_tests PRIVATE cxx_std_20)
@@ -351,8 +351,8 @@ add_test(NAME diffuse_gi_pass_gpu COMMAND diffuse_gi_pass_gpu_tests)
 set_tests_properties(diffuse_gi_pass_gpu PROPERTIES TIMEOUT 300)
 
 add_executable(reflection_weight_gpu_tests reflection_weight_gpu_tests.cpp
-    "${runtime}/src/fast/oot3d/hiz_reflection.cpp"
-    "${runtime}/src/fast/oot3d/reflection_ibl.cpp")
+    "${runtime}/src/fast/extension/hiz_reflection.cpp"
+    "${runtime}/src/fast/extension/reflection_ibl.cpp")
 target_compile_features(reflection_weight_gpu_tests PRIVATE cxx_std_20)
 target_include_directories(reflection_weight_gpu_tests PRIVATE "${runtime}/include" "${SHADERC_INCLUDE_DIR}")
 target_link_libraries(reflection_weight_gpu_tests PRIVATE Vulkan::Vulkan "${SHADERC_LIBRARY}")
@@ -379,11 +379,11 @@ endif()
 add_test(NAME pbr_seam_gpu_tests COMMAND pbr_seam_gpu_tests)
 set_tests_properties(pbr_seam_gpu_tests PROPERTIES TIMEOUT 120)
 add_executable(build_vertex_artifacts build_vertex_artifacts.cpp
-    "${runtime}/src/fast/oot3d/pica_rigid_motion.cpp"
+    "${runtime}/src/fast/extension/pica_rigid_motion.cpp"
     "${frontend}/oot3d_native_pica_shader_gen.cpp"
     "${frontend}/../third_party/azahar_pica/video_core/shader/generator/glsl_shader_decompiler.cpp"
     "${runtime}/src/fast/renderer3ds/pica_vertex_surface.cpp"
-    "${runtime}/src/fast/oot3d/pica_directional_shadow_caster.cpp"
+    "${runtime}/src/fast/extension/pica_directional_shadow_caster.cpp"
     "${runtime}/src/fast/renderer3ds/pica_nri_shader_contract.cpp"
     "${runtime}/src/fast/renderer3ds/pica_surface_lighting.cpp")
 triaevum_add_spirv_pack(build_vertex_artifacts "${frontend}/oot3d_native_vertex_binaries.cpp"

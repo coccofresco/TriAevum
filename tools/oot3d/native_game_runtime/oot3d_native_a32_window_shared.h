@@ -40,7 +40,7 @@
 #include "oot3d_native_a32_scene_view.h"
 #include "oot3d_native_actor_interactions.h"
 #include "oot3d_native_a32_actor_visibility.h"
-#include "fast/oot3d/grass_interaction_bridge.h"
+#include "fast/extension/grass_interaction_bridge.h"
 #include "oot3d_native_a32_timing_probe.h"
 #include "oot3d_native_compiled_functions.h"
 #include "oot3d_native_controls_settings_panel.h"
@@ -100,13 +100,13 @@
 
 #include "fast/Fast3dGui.h"
 #include "fast/Fast3dWindow.h"
-#include "fast/oot3d/graphics_settings_persistence.h"
-#include "fast/oot3d/graphics_settings_runtime.h"
-#include "fast/oot3d/graphics_settings_window.h"
-#include "fast/oot3d/perspective_fov_policy.h"
-#include "fast/oot3d/presentation_pacing_policy.h"
-#include "fast/oot3d/presentation_picture.h"
-#include "fast/oot3d/title_render_backend.h"
+#include "fast/extension/graphics_settings_persistence.h"
+#include "fast/extension/graphics_settings_runtime.h"
+#include "fast/extension/graphics_settings_window.h"
+#include "fast/extension/perspective_fov_policy.h"
+#include "fast/extension/presentation_pacing_policy.h"
+#include "fast/extension/presentation_picture.h"
+#include "fast/extension/title_render_backend.h"
 #include "ship/Context.h"
 #include "ship/audio/Audio.h"
 #include "ship/audio/AudioPlayer.h"
@@ -425,7 +425,7 @@ struct NativeSceneProjectionState {
     std::array<float, 6> LastFrustum{};
   };
 
-  Fast::Oot3d::ScenePresentationPolicy Presentation{};
+  Fast::Extension::ScenePresentationPolicy Presentation{};
   float FovMultiplier = 1.0F;
   // The title's perspective frustum builder (s0..s5 = left, right, bottom,
   // top, near, far), hooked at entry; OoT3D's by default.
@@ -763,7 +763,7 @@ Oot3dNativeGame::NativeA32InputFrame
 // `picture` is the presentation picture in the window (the aspect ratio's
 // letterbox): the menu pointer and the touch screen are mapped through it.
 PollNativeA32Input(Fast::Fast3dWindow &window,
-                   const Fast::Oot3d::PresentationPicture &picture,
+                   const Fast::Extension::PresentationPicture &picture,
                    bool nativeFrontendTouchEnabled,
                    bool hostGuiVisible,
                    bool topScreenUiProfile,

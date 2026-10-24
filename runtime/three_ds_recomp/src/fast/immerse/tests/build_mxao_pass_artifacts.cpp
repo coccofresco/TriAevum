@@ -8,7 +8,7 @@
 // without ROMs: build_immerse_pass_artifacts mxao_pass.spvpack|--check.
 #include "fast/immerse/mxao_pass_binaries.h"
 #include "fast/immerse/mxao_shader.h"
-#include "fast/oot3d/ambient_occlusion_composite.h"
+#include "fast/extension/ambient_occlusion_composite.h"
 #include "fast/renderer/pass_shader_artifact.h"
 #include "fast/renderer3ds/pica_geometry_guide.h"
 #include "spirv_pack_file.h"
@@ -25,7 +25,7 @@ static void Check(bool ok, const std::string& message) {
 int main(int argc, char** argv) try {
     Check(argc == 2, "usage: build_immerse_pass_artifacts mxao_pass.spvpack|--check");
     const bool check = std::string_view(argv[1]) == "--check";
-    const auto sources = Fast::Immerse::BuildMxaoPassShaders(Fast::Oot3d::AmbientOcclusionDebugShaderLibrary(),
+    const auto sources = Fast::Immerse::BuildMxaoPassShaders(Fast::Extension::AmbientOcclusionDebugShaderLibrary(),
                                                              Fast::Renderer3ds::PicaGeometryGuideShaderLibrary());
     const auto entries = ReadSpirvPack(Fast::Immerse::MxaoPassPack());
     const auto stored = PassShaderArtifactsFromPack(entries);

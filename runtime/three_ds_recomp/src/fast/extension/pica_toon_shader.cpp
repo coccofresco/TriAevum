@@ -1,0 +1,254 @@
+#include "fast/extension/pica_toon_shader.h"
+#include "fast/extension/toon_surface_response.h"
+#include "fast/extension/pica_toon_fragment_artifact.h"
+
+#include <algorithm>
+#include <bit>
+#include <iomanip>
+#include <locale>
+#include <sstream>
+
+namespace Fast::Extension {
+namespace {
+
+constexpr std::string_view kDepthMarker =
+    "    float pica_z_over_w = -gl_FragCoord.z;";
+constexpr std::string_view kMaterialMarker =
+    "    // OOT3D_PICA_MATERIAL_TOON_POINT";
+
+uint64_t AppendHash(uint64_t hash, uint32_t value) {
+    for (unsigned shift = 0; shift < 32; shift += 8) {
+        hash ^= static_cast<uint8_t>(value >> shift);
+        hash *= 1099511628211ULL;
+    }
+    return hash;
+}
+
+uint64_t VariantKey(uint64_t original, ToonMode mode,
+                    const ToonStyleSettings& style) {
+    uint64_t hash = 1469598103934665603ULL;
+    hash = AppendHash(hash, 2U); // Shared surface response and defined hard-band edges.
+    hash = AppendHash(hash, static_cast<uint32_t>(original));
+    hash = AppendHash(hash, static_cast<uint32_t>(original >> 32));
+    hash = AppendHash(hash, static_cast<uint32_t>(mode));
+    const size_t bandCount = std::clamp<size_t>(
+        style.LightBands, 2U, kMaximumToonLightBands);
+    hash = AppendHash(hash, static_cast<uint32_t>(bandCount));
+    hash = AppendHash(hash, style.CustomLightBands ? 1U : 0U);
+    auto addFloat = [&](float value) {
+        hash = AppendHash(hash, std::bit_cast<uint32_t>(value));
+    };
+    if (style.CustomLightBands) {
+        for (size_t index = 0; index < bandCount; ++index) {
+            addFloat(style.LightBandLevels[index]);
+        }
+        for (size_t index = 0; index + 1U < bandCount; ++index) {
+            addFloat(style.LightBandThresholds[index]);
+        }
+    }
+    addFloat(style.BandSoftness);
+    addFloat(style.Saturation);
+    for (float value : style.ShadowTint) addFloat(value);
+    addFloat(style.ShadowStrength);
+    addFloat(style.RimStrength);
+    addFloat(style.RimWidth);
+    for (float value : style.RimTint) addFloat(value);
+    return hash;
+}
+
+std::string Float(float value) {
+    std::ostringstream out;
+    out.imbue(std::locale::classic());
+    out << std::fixed << std::setprecision(6) << value;
+    return out.str();
+}
+
+constexpr std::string_view kToonHelpers = R"glsl(
+vec3 oot3d_toon_rotate_z(vec4 q) {
+    float qlen = dot(q, q);
+    if (qlen < 0.000001) return vec3(0.0, 0.0, 1.0);
+    q *= inversesqrt(qlen);
+    return vec3(2.0 * (q.x * q.z + q.w * q.y),
+                2.0 * (q.y * q.z - q.w * q.x),
+                1.0 - 2.0 * (q.x * q.x + q.y * q.y));
+}
+vec3 oot3d_apply_toon(vec3 sourceColor) {
+    return oot3d_toon_surface_response(sourceColor, pica_primary_color.rgb,
+        oot3d_toon_rotate_z(pica_normquat), pica_view, oot3d_toon_parameters());
+}
+vec3 oot3d_material_bands(vec3 lighting, bool shadow_tint) {
+    return clamp(oot3d_toon_banded_color(lighting, lighting, 1.0,
+        shadow_tint, oot3d_toon_parameters()), 0.0, 1.0);
+}
+vec3 oot3d_material_rim(vec3 materialNormal) {
+    return oot3d_toon_rim(materialNormal, pica_view, oot3d_toon_parameters());
+}
+)glsl";
+
+std::string Declarations(const ToonStyleSettings& style, bool usesVertexLighting,
+                         bool uniformParameters = false, bool drawControl = false) {
+    std::string source(kToonSurfaceResponseShader);
+    if (uniformParameters) {
+        // The draw's decisions follow the parameters (PicaUberEffectBlock).
+        source += "\nlayout(set=0,binding=15,std140) uniform Oot3dToonSurface {\n"
+                  "    ToonSurfaceParameters parameters;\n" +
+                  std::string(drawControl ? "    uvec4 control;\n" : "") + "} oot3d_toon_uniforms;\n"
+                  "ToonSurfaceParameters oot3d_toon_parameters() {\n"
+                  "    ToonSurfaceParameters p = oot3d_toon_uniforms.parameters;\n"
+                  "    p.flags.y = " + std::string(usesVertexLighting ? "1.0" : "0.0") +
+                  ";\n    return p;\n}\n";
+    } else {
+        const auto params = PackToonSurfaceParameters(ToonMode::PicaMaterial, style, usesVertexLighting);
+        const auto vec4 = [](const std::array<float, 4>& value) {
+            return "vec4(" + Float(value[0]) + ", " + Float(value[1]) + ", " +
+                Float(value[2]) + ", " + Float(value[3]) + ")";
+        };
+        source += "\nToonSurfaceParameters oot3d_toon_parameters() {\n"
+            "    return ToonSurfaceParameters(" + vec4(params.Control) + ", " +
+            vec4(params.Shadow) + ", " + vec4(params.Rim) + ", " + vec4(params.Flags) +
+            ", vec4[2](" + vec4(params.Levels[0]) + ", " + vec4(params.Levels[1]) +
+            "), vec4[2](" + vec4(params.Thresholds[0]) + ", " + vec4(params.Thresholds[1]) + "));\n}\n";
+    }
+    source += kToonHelpers;
+    return source;
+}
+
+} // namespace
+
+std::string PicaToonUberDeclarations(std::string_view parametersBlock, std::string_view vertexLighting) {
+    std::string source(kToonSurfaceResponseShader);
+    source += parametersBlock;
+    source += "ToonSurfaceParameters oot3d_toon_parameters() {\n"
+              "    ToonSurfaceParameters p = oot3d_uber.toon;\n"
+              "    p.flags.y = ";
+    source += vertexLighting;
+    source += ";\n    return p;\n}\n";
+    source += kToonHelpers;
+    return source;
+}
+
+
+PicaToonEligibility ClassifyPicaToonDraw(const PicaToonDrawInfo& draw,
+                                         ToonMode mode) {
+    if (mode == ToonMode::Off) return PicaToonEligibility::Disabled;
+    if (draw.CompositionDomain !=
+        ::Oot3d::Renderer::PicaCompositionDomain::Scene)
+        return PicaToonEligibility::OutsideScene;
+    if (!draw.DepthTestEnabled || !draw.DepthWriteEnabled)
+        return PicaToonEligibility::NoDepth;
+    // OoT3D/PICA keeps fixed-function blending enabled for opaque world
+    // geometry too. Depth writing is the reliable boundary: translucent
+    // surfaces and UI draws do not write the scene depth buffer.
+    if ((draw.ColorWriteMask & 0x7U) == 0U)
+        return PicaToonEligibility::NoRgbOutput;
+    return PicaToonEligibility::Eligible;
+}
+
+PicaToonShaderVariant BuildPicaToonShaderVariant(
+    std::string_view source, uint64_t originalFragmentKey,
+    const PicaToonDrawInfo& draw, ToonMode mode,
+    const ToonStyleSettings& style) {
+    PicaToonShaderVariant result;
+    result.FragmentKey = originalFragmentKey;
+    result.Eligibility = ClassifyPicaToonDraw(draw, mode);
+    if (result.Eligibility != PicaToonEligibility::Eligible) return result;
+
+    const size_t mainPosition = source.find("void main()");
+    const size_t depthPosition = source.find(kDepthMarker);
+    if (mainPosition == std::string_view::npos ||
+        depthPosition == std::string_view::npos) {
+        result.Eligibility = PicaToonEligibility::UnsupportedShader;
+        return result;
+    }
+
+    const size_t primaryDeclaration = source.find("rounded_primary_color");
+    const bool usesVertexLighting = primaryDeclaration != std::string_view::npos &&
+        source.find("rounded_primary_color",
+                    primaryDeclaration + std::string_view("rounded_primary_color").size()) !=
+            std::string_view::npos;
+    const size_t materialMarker = source.find(kMaterialMarker);
+    const bool materialPath = mode == ToonMode::PicaMaterial &&
+                              materialMarker != std::string_view::npos;
+    result.MaterialPath = materialPath;
+    const std::string declarations =
+        Declarations(style, usesVertexLighting);
+
+    result.Source.reserve(source.size() + declarations.size() + 256U);
+    result.Source.append(source.substr(0, mainPosition));
+    result.Source += declarations;
+    if (materialPath) {
+        const size_t insertion = materialMarker + kMaterialMarker.size();
+        result.Source.append(source.substr(mainPosition, insertion - mainPosition));
+        result.Source +=
+            "\n    primary_fragment_color.rgb = oot3d_material_bands(primary_fragment_color.rgb, true);\n"
+            "    secondary_fragment_color.rgb = clamp(oot3d_material_bands(secondary_fragment_color.rgb, false) + oot3d_material_rim(normal), 0.0, 1.0);";
+        result.Source.append(source.substr(insertion));
+    } else {
+        result.Source.append(source.substr(mainPosition,
+                                           depthPosition - mainPosition));
+        result.Source += "    combiner_output.rgb = oot3d_apply_toon(combiner_output.rgb);\n";
+        result.Source.append(source.substr(depthPosition));
+    }
+    result.FragmentKey = VariantKey(originalFragmentKey, mode, style);
+    return result;
+}
+
+PicaToonInstrumentation BuildPicaToonInstrumentation(
+    uint64_t originalFragmentKey, const PicaToonDrawInfo& draw,
+    ToonMode mode, const ToonStyleSettings& style,
+    const ::Oot3d::Renderer::PicaShaderHookLayout& hooks,
+    bool uniformParameters, bool drawControl) {
+    using ::Oot3d::Renderer::PicaShaderHook;
+    using ::Oot3d::Renderer::PicaShaderSemantic;
+
+    PicaToonInstrumentation result;
+    result.FragmentKey = originalFragmentKey;
+    result.Eligibility = ClassifyPicaToonDraw(draw, mode);
+    if (result.Eligibility != PicaToonEligibility::Eligible) {
+        return result;
+    }
+
+    const bool commonSemantics =
+        hooks.Valid() &&
+        hooks.Has(PicaShaderSemantic::NormalQuaternion) &&
+        hooks.Has(PicaShaderSemantic::PrimaryColorInput) &&
+        hooks.Has(PicaShaderSemantic::ViewVector) &&
+        hooks.Has(PicaShaderSemantic::CombinerOutput);
+    const bool materialPath =
+        mode == ToonMode::PicaMaterial && commonSemantics &&
+        hooks.Supports(PicaShaderHook::PicaLighting) &&
+        hooks.Has(PicaShaderSemantic::MaterialLightingPoint) &&
+        hooks.Has(PicaShaderSemantic::SecondaryFragmentColor) &&
+        hooks.Has(PicaShaderSemantic::MaterialNormal);
+    if (!materialPath &&
+        (!commonSemantics ||
+         !hooks.Supports(PicaShaderHook::BeforeDepth))) {
+        result.Eligibility = PicaToonEligibility::UnsupportedShader;
+        return result;
+    }
+
+    result.MaterialPath = materialPath;
+    result.InsertionHook = materialPath
+                               ? PicaShaderHook::PicaLighting
+                               : PicaShaderHook::BeforeDepth;
+    result.Declarations = Declarations(
+        style, hooks.Has(PicaShaderSemantic::PrimaryColorConsumed), uniformParameters, drawControl);
+    if (materialPath) {
+        result.Body =
+            "\n    primary_fragment_color.rgb = "
+            "oot3d_material_bands(primary_fragment_color.rgb, true);\n"
+            "    secondary_fragment_color.rgb = clamp("
+            "oot3d_material_bands(secondary_fragment_color.rgb, false) + "
+            "oot3d_material_rim(normal), 0.0, 1.0);";
+    } else {
+        result.Body =
+            "    combiner_output.rgb = "
+            "oot3d_apply_toon(combiner_output.rgb);\n";
+    }
+    result.FragmentKey = uniformParameters
+        ? AppendHash(VariantKey(originalFragmentKey, mode, ToonStyleSettings{}), 15U)
+        : VariantKey(originalFragmentKey, mode, style);
+    return result;
+}
+
+} // namespace Fast::Extension

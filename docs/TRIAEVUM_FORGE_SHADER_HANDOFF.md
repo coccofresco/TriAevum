@@ -94,7 +94,7 @@ compiler paths, not a regression introduced by the Forge pack.
 
 The 20 calls are:
 
-| Owner under `runtime/three_ds_recomp/src/fast/oot3d/` | Calls | Modules |
+| Owner under `runtime/three_ds_recomp/src/fast/extension/` | Calls | Modules |
 |---|---:|---|
 | `nri_pica_display_copy_pass.cpp` | 1 | Display transfer compute |
 | `hiz_depth_pyramid_pass.cpp` | 1 | Hi-Z reduction |

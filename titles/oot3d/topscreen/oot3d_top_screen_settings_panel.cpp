@@ -12,7 +12,7 @@ namespace {
 // HUD layout; the user chooses only its size. A choice applies and saves at
 // once.
 class TopScreenSettingsPanel final
-    : public Fast::Oot3d::GraphicsSettingsPanelTab {
+    : public Fast::Extension::GraphicsSettingsPanelTab {
 public:
   explicit TopScreenSettingsPanel(
       std::shared_ptr<TopScreenUiConfigRuntime> runtime)
@@ -22,7 +22,7 @@ public:
     return "TopScreen";
   }
   [[nodiscard]] const char *Group() const noexcept override {
-    return Fast::Oot3d::kDisplaySettingsGroup;
+    return Fast::Extension::kDisplaySettingsGroup;
   }
 
   void Draw() override {
@@ -82,7 +82,7 @@ private:
 
 } // namespace
 
-std::shared_ptr<Fast::Oot3d::GraphicsSettingsPanelTab>
+std::shared_ptr<Fast::Extension::GraphicsSettingsPanelTab>
 CreateTopScreenSettingsPanel(
     std::shared_ptr<TopScreenUiConfigRuntime> runtime) {
   return std::make_shared<TopScreenSettingsPanel>(std::move(runtime));

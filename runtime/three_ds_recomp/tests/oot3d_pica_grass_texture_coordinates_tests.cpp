@@ -1,4 +1,4 @@
-#include "fast/oot3d/pica_grass_texture_coordinates.h"
+#include "fast/extension/pica_grass_texture_coordinates.h"
 
 #include <gtest/gtest.h>
 
@@ -93,7 +93,7 @@ Oot3d::Renderer::PicaVertexShaderHookLayout BuildVertexHooks(
 
 TEST(Oot3dPicaGrassTextureCoordinates,
      UsesTypedNativeVFlipContractForCanonicalSamplerHelpers) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     static constexpr std::string_view kVertex =
         "canonical vertex program; no GLSL contract parsing required";
     static constexpr std::string_view kFragment = R"glsl(
@@ -119,7 +119,7 @@ void main() {
 
 TEST(Oot3dPicaGrassTextureCoordinates,
      RejectsTypedProjectiveSamplingWithoutGuessing) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     static constexpr std::string_view kVertex =
         "canonical vertex program; no GLSL contract parsing required";
     static constexpr std::string_view kFragment =

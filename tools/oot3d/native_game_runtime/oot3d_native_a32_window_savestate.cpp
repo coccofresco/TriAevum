@@ -534,7 +534,7 @@ bool NativeA32WindowSession::LoadState(const std::filesystem::path &path,
   RestoreSavestateTopScreenTemporalState(runtime);
   sceneViewProbe.Reset();
   sceneEnvironment->ObserveScene(std::nullopt);
-  Fast::Oot3d::GrassInteractionBridge::Instance().Reset();
+  Fast::Extension::GrassInteractionBridge::Instance().Reset();
   temporalEventLedger.Reset();
   lastPublishedSceneViewSerial = 0;
   n64UiRenderer.Release();
@@ -598,7 +598,7 @@ void NativeA32WindowSession::ServiceSavestateRequests() {
   const auto report = [&](bool success, std::string message) {
     std::cout << "oot3d_native_game: savestate request "
               << (success ? "succeeded" : "failed") << ": " << message << '\n';
-    Fast::Oot3d::PostHostNotice(message, !success);
+    Fast::Extension::PostHostNotice(message, !success);
     savestateLibrary->Report(success, std::move(message));
   };
   const auto fileName = [](const std::filesystem::path &path) {

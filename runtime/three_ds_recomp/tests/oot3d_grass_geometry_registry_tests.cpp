@@ -1,4 +1,4 @@
-#include "fast/oot3d/grass_geometry_registry.h"
+#include "fast/extension/grass_geometry_registry.h"
 
 #include <gtest/gtest.h>
 
@@ -14,9 +14,9 @@ template <typename Value> std::vector<uint8_t> BytesOf(const std::vector<Value>&
     return bytes;
 }
 
-Fast::Oot3d::GrassGeometryRequest MakeRequest(std::span<const uint8_t> positions, std::span<const uint8_t> uvs,
+Fast::Extension::GrassGeometryRequest MakeRequest(std::span<const uint8_t> positions, std::span<const uint8_t> uvs,
                                               std::span<const uint8_t> indices) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GrassGeometryRequest request;
     request.Identity = 91U;
     request.ContentVersion = 7U;
@@ -52,7 +52,7 @@ TEST(Oot3dGrassGeometryRegistry, ReusesDecodedVerticesAndExpandedIndicesByConten
     const auto indexBytes = BytesOf(indices);
     auto request = MakeRequest(positionBytes, uvBytes, indexBytes);
 
-    Fast::Oot3d::GrassGeometryRegistry registry(4U);
+    Fast::Extension::GrassGeometryRegistry registry(4U);
     const auto first = registry.Resolve(request);
     ASSERT_NE(first.Geometry, nullptr);
     EXPECT_FALSE(first.CacheHit);
@@ -92,7 +92,7 @@ TEST(Oot3dGrassGeometryRegistry, RebuildsOnlyWhenNativeContentVersionChanges) {
     const auto indexBytes = BytesOf(indices);
     auto request = MakeRequest(positionBytes, uvBytes, indexBytes);
 
-    Fast::Oot3d::GrassGeometryRegistry registry(4U);
+    Fast::Extension::GrassGeometryRegistry registry(4U);
     const auto first = registry.Resolve(request);
     ASSERT_NE(first.Geometry, nullptr);
     const uint64_t firstVersion = first.Geometry->ContentVersion;
@@ -135,7 +135,7 @@ TEST(Oot3dGrassGeometryRegistry, OverlayAlphaUsesNativeConversionAndInvalidatesW
     auto r = MakeRequest(positions, uv, indices);
     const auto alpha = BytesOf(std::vector<float>{ 0, -.5F, 2 });
     r.Alpha = { alpha, sizeof(float), ::Oot3d::Renderer::PicaVertexFormat::Float, 1, 0 };
-    Fast::Oot3d::GrassGeometryRegistry registry;
+    Fast::Extension::GrassGeometryRegistry registry;
     auto a = registry.Resolve(r);
     ASSERT_TRUE(a.Geometry);
     ASSERT_TRUE(a.Geometry->Alphas);

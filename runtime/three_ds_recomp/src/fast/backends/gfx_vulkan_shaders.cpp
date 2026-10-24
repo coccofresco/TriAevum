@@ -2,7 +2,7 @@
 // shader modules.
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_internal.h"
-#include "fast/oot3d/pica_builtin_fragment_families.h"
+#include "fast/extension/pica_builtin_fragment_families.h"
 
 namespace Fast {
 
@@ -100,18 +100,18 @@ void GfxRenderingAPIVulkan::ConfigureNativePicaAotShaders() {
     mCompiledShaderCache.Configure(VulkanShaderCacheDirectory(), Renderer::ShadercCompilerContract());
     mNriInterop.Shaders().Configure(VulkanShaderCacheDirectory());
     // Alpha shadow casters of the parametric bases (built-in, finite).
-    mNriInterop.Shaders().AddArtifacts(Oot3d::CasterFragmentArtifacts());
+    mNriInterop.Shaders().AddArtifacts(Extension::CasterFragmentArtifacts());
     // Alpha shadow casters of specialized programs are title-derived: the
     // corpus carries them as NRI fragments (variant replay, issue #76).
     mNriInterop.Shaders().SetTitleArtifacts(
         [this](std::string_view source, Renderer::SpirvStage stage) -> std::span<const uint32_t> {
             if (stage != Renderer::SpirvStage::Fragment || !mPicaAotShaderPack.Loaded()) return {};
-            const auto binary = mPicaAotShaderPack.Find(Oot3d::PicaAotShaderStage::NriFragment, source);
+            const auto binary = mPicaAotShaderPack.Find(Extension::PicaAotShaderStage::NriFragment, source);
             if (!binary.empty()) {
                 ++mPicaAotShaderHits;
                 std::lock_guard lock(mPicaAotShaderLogMutex);
                 mPicaAotShaderHitIdentities.insert(
-                    {Oot3d::PicaAotShaderStage::NriFragment, Oot3d::IdentifyPicaAotShaderSource(source).Id});
+                    {Extension::PicaAotShaderStage::NriFragment, Extension::IdentifyPicaAotShaderSource(source).Id});
             }
             return binary;
         });
@@ -323,8 +323,8 @@ void GfxRenderingAPIVulkan::FinishNativePicaAotShaders() {
         std::fprintf(stderr, "TRIAEVUM_NATIVE_FRAGMENT_ARTIFACTS hits=%llu modules=%zu\n",
                      static_cast<unsigned long long>(mNativeFragmentArtifactHits),
                      Renderer3ds::NativeFragmentArtifacts().size() +
-                         Oot3d::TemporalFragmentArtifacts().size() +
-                         Oot3d::ToonFragmentArtifacts().size());
+                         Extension::TemporalFragmentArtifacts().size() +
+                         Extension::ToonFragmentArtifacts().size());
         std::fprintf(stderr, "TRIAEVUM_NATIVE_VERTEX_ARTIFACTS hits=%llu\n",
                      static_cast<unsigned long long>(mNativeVertexArtifactHits));
         std::fprintf(stderr, "TRIAEVUM_NATIVE_PROGRAM_OWNERS canonical=%zu instrumented=%zu uber=%zu\n",
@@ -367,19 +367,19 @@ void GfxRenderingAPIVulkan::FinishNativePicaAotShaders() {
 
 std::vector<uint32_t>
 GfxRenderingAPIVulkan::ResolveNativePicaShaderSpirv(
-    std::string_view source, Oot3d::PicaAotShaderStage stage,
+    std::string_view source, Extension::PicaAotShaderStage stage,
     bool vertexShader, const char* sourceName) {
-    if (!vertexShader && (stage == Oot3d::PicaAotShaderStage::Fragment ||
-                          stage == Oot3d::PicaAotShaderStage::NriFragment)) {
+    if (!vertexShader && (stage == Extension::PicaAotShaderStage::Fragment ||
+                          stage == Extension::PicaAotShaderStage::NriFragment)) {
         // The same order device preparation resolves (Forge's prepared pipelines).
-        const auto artifact = Oot3d::FindPicaBuiltInFragmentSpirv(
-            Renderer3ds::IdentifyPicaShaderSource(source), stage == Oot3d::PicaAotShaderStage::NriFragment);
+        const auto artifact = Extension::FindPicaBuiltInFragmentSpirv(
+            Renderer3ds::IdentifyPicaShaderSource(source), stage == Extension::PicaAotShaderStage::NriFragment);
         if (!artifact.empty()) {
             ++mNativeFragmentArtifactHits;
             return {artifact.begin(), artifact.end()};
         }
         const auto identity = Renderer3ds::IdentifyPicaShaderSource(source);
-        const auto stageName = Oot3d::PicaAotShaderStageName(stage);
+        const auto stageName = Extension::PicaAotShaderStageName(stage);
         std::fprintf(stderr, "TRIAEVUM_FRAGMENT_ARTIFACT_MISS stage=%.*s source=%llu bytes=%zu\n",
                      static_cast<int>(stageName.size()), stageName.data(),
                      static_cast<unsigned long long>(identity.Id), source.size());
@@ -393,13 +393,13 @@ GfxRenderingAPIVulkan::ResolveNativePicaShaderSpirv(
         ++mPicaAotShaderHits;
         {
             std::lock_guard lock(mPicaAotShaderLogMutex);
-            mPicaAotShaderHitIdentities.insert({stage, Oot3d::IdentifyPicaAotShaderSource(source).Id});
+            mPicaAotShaderHitIdentities.insert({stage, Extension::IdentifyPicaAotShaderSource(source).Id});
         }
         return {binary.begin(), binary.end()};
     }
 
     ++mPicaAotShaderMisses;
-    const auto identity = Oot3d::IdentifyPicaAotShaderSource(source);
+    const auto identity = Extension::IdentifyPicaAotShaderSource(source);
     bool firstMiss = false;
     {
         std::lock_guard lock(mPicaAotShaderLogMutex);
@@ -408,21 +408,21 @@ GfxRenderingAPIVulkan::ResolveNativePicaShaderSpirv(
     if (firstMiss) {
         SPDLOG_WARN(
             "Native PICA AOT shader miss: stage={}, source={}, name={}",
-            Oot3d::PicaAotShaderStageName(stage),
-            Oot3d::FormatPicaAotShaderId(identity.Id), sourceName);
+            Extension::PicaAotShaderStageName(stage),
+            Extension::FormatPicaAotShaderId(identity.Id), sourceName);
     }
     if (mPicaAotShaderStrict) {
         throw std::runtime_error(
             "native PICA AOT shader pack has no " +
-            std::string(Oot3d::PicaAotShaderStageName(stage)) +
-            " module for " + Oot3d::FormatPicaAotShaderId(identity.Id));
+            std::string(Extension::PicaAotShaderStageName(stage)) +
+            " module for " + Extension::FormatPicaAotShaderId(identity.Id));
     }
     return CompileShaderSpirv(std::string(source), vertexShader,
                               sourceName);
 }
 
 GfxRenderingAPIVulkan::NativePicaShaderProgram* GfxRenderingAPIVulkan::ResolveUberNativePicaProgram(
-    const Oot3d::PicaShaderPipelineResult& variant, const GfxNativePicaDrawView& draw,
+    const Extension::PicaShaderPipelineResult& variant, const GfxNativePicaDrawView& draw,
     NativePicaUberUnavailable& reason) {
     // variant is the specialized program's: the always-available program
     // executes its decisions on the parametric base of the draw's pair.
@@ -437,20 +437,20 @@ GfxRenderingAPIVulkan::NativePicaShaderProgram* GfxRenderingAPIVulkan::ResolveUb
         // Built-in artifacts only: an always-available program never compiles.
         NativePicaShaderProgram shader;
         shader.Available = false;
-        shader.VertexSource = Oot3d::IdentifyPicaAotShaderSource(variant.VertexShaderSource);
-        shader.FragmentSource = Oot3d::IdentifyPicaAotShaderSource(draw.UberFragmentShaderSource);
+        shader.VertexSource = Extension::IdentifyPicaAotShaderSource(variant.VertexShaderSource);
+        shader.FragmentSource = Extension::IdentifyPicaAotShaderSource(draw.UberFragmentShaderSource);
         shader.FragmentOutputs = variant.FragmentOutputs;
         const auto vertex = Renderer3ds::FindPicaVertexArtifact(draw.VertexArtifacts, variant.VertexShaderSource);
         const bool fragmentInstrumented =
             (static_cast<uint32_t>(variant.AppliedFeatures) &
-             ~static_cast<uint32_t>(Oot3d::PicaShaderInstrumentationFeature::TemporalVertex)) != 0U;
+             ~static_cast<uint32_t>(Extension::PicaShaderInstrumentationFeature::TemporalVertex)) != 0U;
         // Effects compose as data in the superset program of the parametric
         // base: one program per structural configuration and vertex interface.
-        const Oot3d::PicaUberEffectProgramRequest supersetRequest{
+        const Extension::PicaUberEffectProgramRequest supersetRequest{
             draw.UberFragmentShaderSource, draw.UberFragmentShaderHooks, variant.TemporalVertexApplied,
             variant.SurfaceVertexApplied, variant.SurfaceVertexApplied && mPbrSeamsAvailable};
         const bool superset = fragmentInstrumented &&
-            Oot3d::PicaUberEffectSupports(variant.Decisions, supersetRequest);
+            Extension::PicaUberEffectSupports(variant.Decisions, supersetRequest);
         std::span<const uint32_t> fragment;
         bool nriApplied = false;
         if (superset) {
@@ -459,14 +459,14 @@ GfxRenderingAPIVulkan::NativePicaShaderProgram* GfxRenderingAPIVulkan::ResolveUb
                     (supersetRequest.SurfaceInputs ? 2U : 0U) | (supersetRequest.PrimitiveIds ? 4U : 0U)));
             auto artifact = mUberSupersetArtifacts.find(artifactKey);
             if (artifact == mUberSupersetArtifacts.end()) {
-                const auto composed = Oot3d::BuildPicaNriFragmentShaderVariant(
-                    Oot3d::BuildPicaUberEffectProgram(supersetRequest));
+                const auto composed = Extension::BuildPicaNriFragmentShaderVariant(
+                    Extension::BuildPicaUberEffectProgram(supersetRequest));
                 UberSupersetArtifact entry;
                 entry.NriApplied = composed.Applied;
                 if (composed.Applied) {
                     entry.Fragment = Renderer3ds::FindPicaFragmentArtifact(
-                        Oot3d::UberFragmentArtifacts(), composed.Source, true);
-                    entry.NriSource = Oot3d::IdentifyPicaAotShaderSource(composed.Source);
+                        Extension::UberFragmentArtifacts(), composed.Source, true);
+                    entry.NriSource = Extension::IdentifyPicaAotShaderSource(composed.Source);
                 }
                 artifact = mUberSupersetArtifacts.emplace(artifactKey, entry).first;
             }
@@ -477,11 +477,11 @@ GfxRenderingAPIVulkan::NativePicaShaderProgram* GfxRenderingAPIVulkan::ResolveUb
             shader.NriFragmentSource = artifact->second.NriSource;
         } else if (!fragmentInstrumented) {
             // The canonical parametric base.
-            const auto nri = Oot3d::BuildPicaNriFragmentShaderVariant(std::string(draw.UberFragmentShaderSource));
+            const auto nri = Extension::BuildPicaNriFragmentShaderVariant(std::string(draw.UberFragmentShaderSource));
             nriApplied = nri.Applied;
             if (nri.Applied) {
                 fragment = Renderer3ds::FindPicaFragmentArtifact(Renderer3ds::NativeFragmentArtifacts(), nri.Source, true);
-                shader.NriFragmentSource = Oot3d::IdentifyPicaAotShaderSource(nri.Source);
+                shader.NriFragmentSource = Extension::IdentifyPicaAotShaderSource(nri.Source);
             }
         }
         auto unavailable = NativePicaUberUnavailable::Count;

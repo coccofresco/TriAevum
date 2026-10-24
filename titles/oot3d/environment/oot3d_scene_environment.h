@@ -1,6 +1,6 @@
 #pragma once
 
-#include "fast/oot3d/graphics_settings_window.h"
+#include "fast/extension/graphics_settings_window.h"
 #include "native_scene_environment_state.h"
 #include "fast/renderer3ds/pica_environment_lighting.h"
 #include "oot3d_environment_time.h"
@@ -236,7 +236,7 @@ private:
   uint64_t mRevision = 0;
 };
 
-std::shared_ptr<Fast::Oot3d::GraphicsSettingsPanelTab>
+std::shared_ptr<Fast::Extension::GraphicsSettingsPanelTab>
 CreateSceneEnvironmentPanel(std::shared_ptr<SceneEnvironmentRuntime> runtime);
 
 } // namespace Oot3dNativeGame

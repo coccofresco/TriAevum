@@ -1,12 +1,12 @@
 #include "fast/renderer3ds/pica_fragment_balance.h"
-#include "fast/oot3d/pica_attachment_contract.h"
-#include "fast/oot3d/pica_directional_shadow_caster.h"
-#include "fast/oot3d/pica_directional_shadow_lighting.h"
-#include "fast/oot3d/pica_reactive_mask.h"
-#include "fast/oot3d/pica_rigid_motion.h"
-#include "fast/oot3d/pica_shader_pipeline_cache.h"
-#include "fast/oot3d/pica_rim_light.h"
-#include "fast/oot3d/pica_uber_effect_program.h"
+#include "fast/extension/pica_attachment_contract.h"
+#include "fast/extension/pica_directional_shadow_caster.h"
+#include "fast/extension/pica_directional_shadow_lighting.h"
+#include "fast/extension/pica_reactive_mask.h"
+#include "fast/extension/pica_rigid_motion.h"
+#include "fast/extension/pica_shader_pipeline_cache.h"
+#include "fast/extension/pica_rim_light.h"
+#include "fast/extension/pica_uber_effect_program.h"
 #include "fast/renderer3ds/pica_surface_lighting.h"
 
 #include <gtest/gtest.h>
@@ -31,7 +31,7 @@ TEST(Oot3dRimLight, ScopeUsesNativeActorOwnershipAndRejectsNonOpaquePasses) {
     auto appearance = PicaSurfaceAppearance::Relightable;
     bool depthTest = true, depthWrite = true;
     uint8_t operation = 0;
-    const auto eligible = [&] { return Fast::Oot3d::PicaDrawReceivesRimLight(
+    const auto eligible = [&] { return Fast::Extension::PicaDrawReceivesRimLight(
         environment, domain, composition, blend, appearance, depthTest, depthWrite, operation); };
     EXPECT_FALSE(eligible()); // A room material is not an actor, even with the same shader.
     composition.NativeActorGeometry = true;
@@ -184,7 +184,7 @@ Oot3d::Renderer::NativeBlendState SourceAlphaBlend() {
     return blend;
 }
 
-Fast::Oot3d::PicaShaderPipelineRequest BaseRequest() {
+Fast::Extension::PicaShaderPipelineRequest BaseRequest() {
     static constexpr std::string_view kVertexShader =
         "#version 450\n"
         "vec4 pica_output0 = vec4(0.0);\n"
@@ -195,7 +195,7 @@ Fast::Oot3d::PicaShaderPipelineRequest BaseRequest() {
         "void main() {\n"
         "    pica_color = vec4(1.0);\n"
         "}\n";
-    Fast::Oot3d::PicaShaderPipelineRequest request;
+    Fast::Extension::PicaShaderPipelineRequest request;
     request.VertexShaderSource = kVertexShader;
     request.VertexShaderKey = 11U;
     request.FragmentShaderSource = kFragmentShader;
@@ -211,7 +211,7 @@ Fast::Oot3d::PicaShaderPipelineRequest BaseRequest() {
     request.Draw.CompositionLayer = Fast::Renderer3ds::PicaCompositionLayer::OpaqueWorld;
     request.TemporalVertexProgram = BaseTemporalVertexProgram();
     request.FragmentShaderHooks =
-        Fast::Oot3d::AnalyzePicaFragmentShaderHooks(kFragmentShader);
+        Fast::Extension::AnalyzePicaFragmentShaderHooks(kFragmentShader);
     return request;
 }
 
@@ -254,7 +254,7 @@ BaseTemporalVertexProgram() {
 
 TEST(Oot3dPicaDirectionalShadowCaster,
      UsesTypedVertexHooksInsteadOfTextualMainDiscovery) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const auto result = BuildPicaDirectionalShadowCasterShader(
         kShadowCasterVertexShader, 0x1234U, ShadowCasterHooks());
     ASSERT_TRUE(result.Applied());
@@ -287,7 +287,7 @@ TEST(Oot3dPicaDirectionalShadowCaster,
 
 TEST(Oot3dPicaDirectionalShadowCaster,
      RejectsMissingOrStaleFrontendSemantics) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto hooks = ShadowCasterHooks();
     hooks.Semantics =
         static_cast<Oot3d::Renderer::PicaVertexShaderSemantic>(
@@ -359,7 +359,7 @@ Oot3d::Renderer::PicaShaderHookLayout AlphaCasterFragmentHooks(std::string_view 
 }
 
 TEST(Oot3dPicaDirectionalShadowCaster, CasterTransformLeavesTheNativeBindingsFree) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const auto result = BuildPicaDirectionalShadowCasterShader(
         kShadowCasterVertexShader, 0x1234U, ShadowCasterHooks());
     ASSERT_TRUE(result.Applied());
@@ -370,7 +370,7 @@ TEST(Oot3dPicaDirectionalShadowCaster, CasterTransformLeavesTheNativeBindingsFre
 }
 
 TEST(Oot3dPicaDirectionalShadowCaster, AlphaCasterRunsTheNativeProgramUpToItsAlphaTest) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const auto hooks = AlphaCasterFragmentHooks(kAlphaCasterFragmentShader);
     ASSERT_TRUE(hooks.ValidFor(kAlphaCasterFragmentShader));
     const auto result = BuildPicaShadowCasterAlphaFragmentShader(kAlphaCasterFragmentShader, 0x77U, hooks);
@@ -401,7 +401,7 @@ TEST(Oot3dPicaDirectionalShadowCaster, AlphaCasterRunsTheNativeProgramUpToItsAlp
 }
 
 TEST(Oot3dPicaDirectionalShadowCaster, AlphaCasterRequiresPublishedHooks) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     using Oot3d::Renderer::PicaShaderHook;
     const std::string_view source = kAlphaCasterFragmentShader;
     auto hooks = AlphaCasterFragmentHooks(source);
@@ -441,7 +441,7 @@ TEST(Oot3dPicaDirectionalShadowCaster, AlphaCasterRequiresPublishedHooks) {
 }
 
 TEST(Oot3dPicaAttachmentContract, CanonicalRenderingDeclaresOnlyNativeColor) {
-    const Fast::Oot3d::PicaAttachmentRequirements requirements;
+    const Fast::Extension::PicaAttachmentRequirements requirements;
     EXPECT_TRUE(requirements.NativeColorOnly());
     EXPECT_EQ(requirements.ColorAttachmentCount(), 1U);
     EXPECT_EQ(requirements.Key(), 0U);
@@ -449,8 +449,8 @@ TEST(Oot3dPicaAttachmentContract, CanonicalRenderingDeclaresOnlyNativeColor) {
 
 TEST(Oot3dPicaAttachmentContract,
      InstrumentedRenderingPreservesStableMrtAbi) {
-    using Fast::Oot3d::PicaAuxiliaryOutput;
-    const Fast::Oot3d::PicaAttachmentRequirements requirements{
+    using Fast::Extension::PicaAuxiliaryOutput;
+    const Fast::Extension::PicaAttachmentRequirements requirements{
         PicaAuxiliaryOutput::NormalGuide};
     EXPECT_FALSE(requirements.NativeColorOnly());
     EXPECT_TRUE(requirements.Requires(PicaAuxiliaryOutput::NormalGuide));
@@ -459,18 +459,18 @@ TEST(Oot3dPicaAttachmentContract,
         PicaAuxiliaryOutput::RigidMotionGuide));
     EXPECT_FALSE(requirements.Requires(PicaAuxiliaryOutput::AmbientGuide));
     EXPECT_EQ(requirements.ColorAttachmentCount(),
-              Fast::Oot3d::kPicaBaseInstrumentedColorAttachmentCount);
+              Fast::Extension::kPicaBaseInstrumentedColorAttachmentCount);
     // The GI albedo guide extends the layout only while requested.
-    const Fast::Oot3d::PicaAttachmentRequirements withAlbedo{
+    const Fast::Extension::PicaAttachmentRequirements withAlbedo{
         PicaAuxiliaryOutput::NormalGuide | PicaAuxiliaryOutput::DiffuseAlbedoGuide};
-    EXPECT_EQ(withAlbedo.ColorAttachmentCount(), Fast::Oot3d::kPicaColorAttachmentCount);
+    EXPECT_EQ(withAlbedo.ColorAttachmentCount(), Fast::Extension::kPicaColorAttachmentCount);
     EXPECT_EQ(withAlbedo.BaseGuides(), requirements);
 }
 
 TEST(Oot3dPicaAttachmentContract,
      ReportsTheExactDeclaredAuxiliaryMask) {
-    using Fast::Oot3d::PicaAuxiliaryOutput;
-    const Fast::Oot3d::PicaAttachmentRequirements requirements{
+    using Fast::Extension::PicaAuxiliaryOutput;
+    const Fast::Extension::PicaAttachmentRequirements requirements{
         PicaAuxiliaryOutput::NormalGuide |
         PicaAuxiliaryOutput::MaterialGuide |
         PicaAuxiliaryOutput::AmbientGuide};
@@ -483,8 +483,8 @@ TEST(Oot3dPicaAttachmentContract,
 
 TEST(Oot3dPicaShaderPipelineCache,
      CanonicalPathPreservesSourceAndSurvivesSettingsRevision) {
-    Fast::Oot3d::PicaShaderPipelineCache cache;
-    Fast::Oot3d::EffectsSettings effects;
+    Fast::Extension::PicaShaderPipelineCache cache;
+    Fast::Extension::EffectsSettings effects;
     const auto request = BaseRequest();
     cache.BeginFrame(4U);
 
@@ -502,9 +502,9 @@ TEST(Oot3dPicaShaderPipelineCache,
     EXPECT_EQ(first.VertexShaderKey, request.VertexShaderKey);
     EXPECT_EQ(first.FragmentShaderKey, request.FragmentShaderKey);
     EXPECT_EQ(first.RequestedFeatures,
-              Fast::Oot3d::PicaShaderInstrumentationFeature::None);
+              Fast::Extension::PicaShaderInstrumentationFeature::None);
     EXPECT_EQ(first.AppliedFeatures,
-              Fast::Oot3d::PicaShaderInstrumentationFeature::None);
+              Fast::Extension::PicaShaderInstrumentationFeature::None);
 
     cache.BeginFrame(5U);
     bool revisedHit = false;
@@ -526,7 +526,7 @@ TEST(Oot3dPicaShaderPipelineCache,
 // warm cache returns exactly what a cold cache generates, whichever of the
 // two draws comes first.
 TEST(Oot3dPicaShaderPipelineCache, IsolatedLightingSelectsItsOwnDecisions) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     EffectsSettings effects;
     effects.AmbientOcclusion = AmbientOcclusionMode::Gtao;
     auto shared = BaseRequest();
@@ -578,8 +578,8 @@ TEST(Oot3dPicaShaderPipelineCache, IsolatedLightingSelectsItsOwnDecisions) {
 
 TEST(Oot3dPicaShaderPipelineCache,
      CanonicalIdentityIncludesExactSourceContent) {
-    Fast::Oot3d::PicaShaderPipelineCache cache;
-    Fast::Oot3d::EffectsSettings effects;
+    Fast::Extension::PicaShaderPipelineCache cache;
+    Fast::Extension::EffectsSettings effects;
     cache.BeginFrame(7U);
     auto first = BaseRequest();
     auto second = BaseRequest();
@@ -602,8 +602,8 @@ TEST(Oot3dPicaShaderPipelineCache,
 
 TEST(Oot3dPicaShaderPipelineCache,
      AuditsPublishedSourceIdentityOnceAndUsesFastHits) {
-    Fast::Oot3d::PicaShaderPipelineCache cache;
-    Fast::Oot3d::EffectsSettings effects;
+    Fast::Extension::PicaShaderPipelineCache cache;
+    Fast::Extension::EffectsSettings effects;
     auto request = BaseRequest();
     request.VertexShaderSourceIdentity =
         Oot3d::Renderer::IdentifyPicaShaderSource(
@@ -628,8 +628,8 @@ TEST(Oot3dPicaShaderPipelineCache,
 
 TEST(Oot3dPicaShaderPipelineCache,
      RejectsIncorrectPublishedSourceIdentity) {
-    Fast::Oot3d::PicaShaderPipelineCache cache;
-    Fast::Oot3d::EffectsSettings effects;
+    Fast::Extension::PicaShaderPipelineCache cache;
+    Fast::Extension::EffectsSettings effects;
     auto request = BaseRequest();
     request.VertexShaderSourceIdentity =
         Oot3d::Renderer::IdentifyPicaShaderSource(
@@ -647,21 +647,21 @@ TEST(Oot3dPicaShaderPipelineCache,
 
 TEST(Oot3dPicaShaderPipelineCache,
      InstrumentationInvalidatesWithoutDiscardingCanonicalShaders) {
-    Fast::Oot3d::PicaShaderPipelineCache cache;
-    Fast::Oot3d::EffectsSettings effects;
+    Fast::Extension::PicaShaderPipelineCache cache;
+    Fast::Extension::EffectsSettings effects;
     auto request = BaseRequest();
     request.TemporalMotionEnabled = true;
     cache.BeginFrame(9U);
 
     const auto& instrumented = cache.Resolve(request, effects);
     EXPECT_EQ(instrumented.Domain,
-              Fast::Oot3d::PicaShaderDomain::Instrumented);
-    EXPECT_TRUE(Fast::Oot3d::HasPicaShaderInstrumentationFeature(
+              Fast::Extension::PicaShaderDomain::Instrumented);
+    EXPECT_TRUE(Fast::Extension::HasPicaShaderInstrumentationFeature(
         instrumented.AppliedFeatures,
-        Fast::Oot3d::PicaShaderInstrumentationFeature::TemporalVertex));
-    EXPECT_TRUE(Fast::Oot3d::HasPicaShaderInstrumentationFeature(
+        Fast::Extension::PicaShaderInstrumentationFeature::TemporalVertex));
+    EXPECT_TRUE(Fast::Extension::HasPicaShaderInstrumentationFeature(
         instrumented.AppliedFeatures,
-        Fast::Oot3d::PicaShaderInstrumentationFeature::RigidMotionGuide));
+        Fast::Extension::PicaShaderInstrumentationFeature::RigidMotionGuide));
     EXPECT_NE(instrumented.VertexShaderSource,
               request.VertexShaderSource);
     EXPECT_NE(instrumented.FragmentShaderSource,
@@ -676,8 +676,8 @@ TEST(Oot3dPicaShaderPipelineCache,
 
 TEST(Oot3dPicaShaderPipelineCache,
      RejectsPreInstrumentedCanonicalFragmentSources) {
-    Fast::Oot3d::PicaShaderPipelineCache cache;
-    Fast::Oot3d::EffectsSettings effects;
+    Fast::Extension::PicaShaderPipelineCache cache;
+    Fast::Extension::EffectsSettings effects;
     auto request = BaseRequest();
     static constexpr std::string_view kContaminated =
         "#version 450\n"
@@ -689,7 +689,7 @@ TEST(Oot3dPicaShaderPipelineCache,
         "}\n";
     request.FragmentShaderSource = kContaminated;
     request.FragmentShaderHooks =
-        Fast::Oot3d::AnalyzePicaFragmentShaderHooks(kContaminated);
+        Fast::Extension::AnalyzePicaFragmentShaderHooks(kContaminated);
     cache.BeginFrame(1U);
 
     EXPECT_THROW((void)cache.Resolve(request, effects),
@@ -702,8 +702,8 @@ TEST(Oot3dPicaShaderPipelineCache,
 
 TEST(Oot3dPicaShaderPipelineCache,
      RejectsDuplicateCanonicalColorLocations) {
-    Fast::Oot3d::PicaShaderPipelineCache cache;
-    Fast::Oot3d::EffectsSettings effects;
+    Fast::Extension::PicaShaderPipelineCache cache;
+    Fast::Extension::EffectsSettings effects;
     auto request = BaseRequest();
     static constexpr std::string_view kDuplicateLocation =
         "#version 450\n"
@@ -715,7 +715,7 @@ TEST(Oot3dPicaShaderPipelineCache,
         "}\n";
     request.FragmentShaderSource = kDuplicateLocation;
     request.FragmentShaderHooks =
-        Fast::Oot3d::AnalyzePicaFragmentShaderHooks(
+        Fast::Extension::AnalyzePicaFragmentShaderHooks(
             kDuplicateLocation);
     cache.BeginFrame(1U);
 
@@ -726,8 +726,8 @@ TEST(Oot3dPicaShaderPipelineCache,
 
 TEST(Oot3dPicaShaderPipelineCache,
      AuditsLegacyCanonicalHooksOnceBeforeCaching) {
-    Fast::Oot3d::PicaShaderPipelineCache cache;
-    Fast::Oot3d::EffectsSettings effects;
+    Fast::Extension::PicaShaderPipelineCache cache;
+    Fast::Extension::EffectsSettings effects;
     auto request = BaseRequest();
     request.FragmentShaderHooks = {};
     cache.BeginFrame(1U);
@@ -745,7 +745,7 @@ TEST(Oot3dPicaShaderPipelineCache,
 
 TEST(Oot3dPicaShaderPipelineCache,
      LiveTypedContractSupersedesReplayInferenceAndCachedVariants) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     constexpr std::string_view source = R"glsl(#version 450
 layout(location=0) out vec4 pica_color;
 void main() {
@@ -783,18 +783,18 @@ void main() {
 
 TEST(Oot3dPicaShaderPipelineCache,
      PublishesFallbackProvenanceWithoutTypedFrontendProgram) {
-    Fast::Oot3d::PicaShaderPipelineCache cache;
-    Fast::Oot3d::EffectsSettings effects;
+    Fast::Extension::PicaShaderPipelineCache cache;
+    Fast::Extension::EffectsSettings effects;
     auto request = BaseRequest();
     request.TemporalMotionEnabled = true;
     request.TemporalVertexProgram = {};
     cache.BeginFrame(1U);
 
     const auto& result = cache.Resolve(request, effects);
-    EXPECT_FALSE(Fast::Oot3d::HasPicaShaderInstrumentationFeature(
-        result.AppliedFeatures, Fast::Oot3d::PicaShaderInstrumentationFeature::TemporalVertex));
-    EXPECT_TRUE(Fast::Oot3d::HasPicaShaderInstrumentationFeature(
-        result.AppliedFeatures, Fast::Oot3d::PicaShaderInstrumentationFeature::RigidMotionGuide));
+    EXPECT_FALSE(Fast::Extension::HasPicaShaderInstrumentationFeature(
+        result.AppliedFeatures, Fast::Extension::PicaShaderInstrumentationFeature::TemporalVertex));
+    EXPECT_TRUE(Fast::Extension::HasPicaShaderInstrumentationFeature(
+        result.AppliedFeatures, Fast::Extension::PicaShaderInstrumentationFeature::RigidMotionGuide));
     EXPECT_EQ(result.FragmentShaderSource.find("layout(location=7) in"), std::string::npos);
     EXPECT_NE(result.FragmentShaderSource.find("vec4(oot3d_draw.rigid_motion.xyz, 0.0)"), std::string::npos);
     EXPECT_EQ(cache.Stats().TypedInstrumentationContractRejects, 1U);
@@ -802,7 +802,7 @@ TEST(Oot3dPicaShaderPipelineCache,
 
 TEST(Oot3dPicaShaderPipelineCache,
      NativeLightingRejectsDirectionalShadowsEvenWhenRequested) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
 
     EffectsSettings disabledSettings;
     auto enabledRequest = BaseRequest();
@@ -832,11 +832,11 @@ TEST(Oot3dPicaShaderPipelineCache,
 
 TEST(Oot3dPicaShaderPipelineCache,
      UsesFrontendFragmentHooksWhenTheyMatchCanonicalSource) {
-    Fast::Oot3d::PicaShaderPipelineCache cache;
-    Fast::Oot3d::EffectsSettings effects;
+    Fast::Extension::PicaShaderPipelineCache cache;
+    Fast::Extension::EffectsSettings effects;
     auto request = BaseRequest();
     request.FragmentShaderHooks =
-        Fast::Oot3d::AnalyzePicaFragmentShaderHooks(
+        Fast::Extension::AnalyzePicaFragmentShaderHooks(
             request.FragmentShaderSource);
     request.TemporalMotionEnabled = true;
     cache.BeginFrame(11U);
@@ -849,7 +849,7 @@ TEST(Oot3dPicaShaderPipelineCache,
 
 TEST(Oot3dPicaShaderPipelineCache,
      BuildsRequestedNormalGuideFromTypedMaterialNormal) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     static constexpr std::string_view kFragmentShader = R"glsl(#version 450
 layout(location=0) out vec4 pica_color;
 void main() {
@@ -961,12 +961,12 @@ void main() {
 }
 )glsl";
 
-Fast::Oot3d::PicaShaderPipelineRequest VertexLitWorldRequest() {
+Fast::Extension::PicaShaderPipelineRequest VertexLitWorldRequest() {
     auto request = BaseRequest();
     request.VertexShaderSource = kTypedVertexShader;
     request.TemporalVertexProgram = TypedVertexProgram();
     request.FragmentShaderSource = kVertexLitFragmentShader;
-    request.FragmentShaderHooks = Fast::Oot3d::AnalyzePicaFragmentShaderHooks(kVertexLitFragmentShader);
+    request.FragmentShaderHooks = Fast::Extension::AnalyzePicaFragmentShaderHooks(kVertexLitFragmentShader);
     return request;
 }
 
@@ -979,7 +979,7 @@ void ExpectCompiles(const std::string& source, shaderc_shader_kind kind, const c
 #endif
 
 TEST(Oot3dPicaUberEffectProgram, DecisionFieldsDecodeIndependently) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     using Decision = PicaEffectDecisions;
     const auto decode = [](uint32_t packed, unsigned shift) {
         return (packed >> shift) & ((1U << kPicaUberFieldBits) - 1U);
@@ -1009,7 +1009,7 @@ TEST(Oot3dPicaUberEffectProgram, DecisionFieldsDecodeIndependently) {
 }
 
 TEST(Oot3dPicaUberEffectProgram, DecisionsRecordTheDeclaredGuideOutputs) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     PicaShaderPipelineCache cache;
     EffectsSettings effects;
     effects.AmbientOcclusion = AmbientOcclusionMode::Mxao;
@@ -1028,7 +1028,7 @@ TEST(Oot3dPicaUberEffectProgram, DecisionsRecordTheDeclaredGuideOutputs) {
 }
 
 TEST(Oot3dPicaShaderPipelineCache, NormalGuideReadsTheAuthoredVertexNormalInEveryLightingMode) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     PicaShaderPipelineCache cache;
     EffectsSettings effects;
     effects.AmbientOcclusion = AmbientOcclusionMode::Mxao;
@@ -1079,7 +1079,7 @@ TEST(Oot3dPicaShaderPipelineCache, NormalGuideReadsTheAuthoredVertexNormalInEver
 }
 
 TEST(Oot3dPicaShaderPipelineCache, FaceNormalReadersRequestTheGeometryGuide) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     PicaShaderPipelineCache cache;
     EffectsSettings effects;
     effects.AmbientOcclusion = AmbientOcclusionMode::Mxao;
@@ -1113,7 +1113,7 @@ TEST(Oot3dPicaShaderPipelineCache, FaceNormalReadersRequestTheGeometryGuide) {
 }
 
 TEST(Oot3dPicaShaderPipelineCache, AoTextureReliefBendsTheGuideFromTheColourTexture) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     PicaShaderPipelineCache cache;
     EffectsSettings effects;
     effects.AmbientOcclusion = AmbientOcclusionMode::Gtao;
@@ -1178,7 +1178,7 @@ TEST(Oot3dPicaShaderPipelineCache, AoTextureReliefBendsTheGuideFromTheColourText
 
 TEST(Oot3dPicaShaderPipelineCache,
      OutlineFogGuideBelongsOnlyToDepthWritingWorldDraws) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     PicaShaderPipelineCache cache;
     EffectsSettings effects;
     effects.Toon = ToonMode::PostProcessPreview;
@@ -1220,7 +1220,7 @@ TEST(Oot3dPicaShaderPipelineCache,
 
 TEST(Oot3dPicaShaderPipelineCache,
      BuildsRequestedNormalGuideFromNativeNormalQuaternion) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     static constexpr std::string_view kFragmentShader = R"glsl(#version 450
 layout(location=5) in vec4 pica_normquat;
 layout(location=0) out vec4 pica_color;
@@ -1260,7 +1260,7 @@ void main() {
 
 TEST(Oot3dPicaShaderPipelineCache,
      MaterialToonConsumesTheTypedPicaNormal) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     static constexpr std::string_view kFragmentShader = R"glsl(#version 450
 layout(location=0) in vec4 pica_primary_color;
 layout(location=5) in vec4 pica_normquat;
@@ -1307,10 +1307,10 @@ void main() {
 
 TEST(Oot3dPicaShaderPipelineCache,
      TypedTemporalVertexProgramPreservesLegacySourceAndKey) {
-    Fast::Oot3d::PicaShaderPipelineCache cache;
-    Fast::Oot3d::EffectsSettings effects;
+    Fast::Extension::PicaShaderPipelineCache cache;
+    Fast::Extension::EffectsSettings effects;
     auto request = BaseRequest();
-    const auto legacy = Fast::Oot3d::BuildPicaTemporalVertexVariant(
+    const auto legacy = Fast::Extension::BuildPicaTemporalVertexVariant(
         request.VertexShaderSource, request.VertexShaderKey);
     ASSERT_TRUE(legacy.Applied);
     request.TemporalVertexProgram = BaseTemporalVertexProgram();
@@ -1326,11 +1326,11 @@ TEST(Oot3dPicaShaderPipelineCache,
 
 TEST(Oot3dPicaShaderPipelineCache,
      RejectsStaleFrontendFragmentHooksAndFallsBackToAnalysis) {
-    Fast::Oot3d::PicaShaderPipelineCache cache;
-    Fast::Oot3d::EffectsSettings effects;
+    Fast::Extension::PicaShaderPipelineCache cache;
+    Fast::Extension::EffectsSettings effects;
     auto request = BaseRequest();
     request.FragmentShaderHooks =
-        Fast::Oot3d::AnalyzePicaFragmentShaderHooks(
+        Fast::Extension::AnalyzePicaFragmentShaderHooks(
             request.FragmentShaderSource);
     ++request.FragmentShaderHooks.SourceSize;
     request.TemporalMotionEnabled = true;
@@ -1344,7 +1344,7 @@ TEST(Oot3dPicaShaderPipelineCache,
 
 TEST(Oot3dPicaShaderPipelineCache,
      TypedToonCompositionUsesUniformParametersAndRasterEligibility) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     static constexpr std::string_view kFragmentShader = R"glsl(#version 450
 layout(location=0) in vec4 pica_primary_color;
 layout(location=5) in vec4 pica_normquat;
@@ -1421,8 +1421,8 @@ void main() {
 
 TEST(Oot3dPicaShaderPipelineCache,
      NativeFidelityRejectsRequestedInstrumentation) {
-    Fast::Oot3d::PicaShaderPipelineCache cache;
-    Fast::Oot3d::EffectsSettings effects;
+    Fast::Extension::PicaShaderPipelineCache cache;
+    Fast::Extension::EffectsSettings effects;
     auto request = BaseRequest();
     request.TemporalMotionEnabled = true;
     request.RequireNativeFidelity = true;
@@ -1438,8 +1438,8 @@ TEST(Oot3dPicaShaderPipelineCache,
 
 TEST(Oot3dPicaShaderPipelineCache,
      ReactiveMaskIsPartOfTemporalInstrumentationOnly) {
-    Fast::Oot3d::PicaShaderPipelineCache cache;
-    Fast::Oot3d::EffectsSettings effects;
+    Fast::Extension::PicaShaderPipelineCache cache;
+    Fast::Extension::EffectsSettings effects;
     auto request = BaseRequest();
     request.Draw.Blend = SourceAlphaBlend();
     cache.BeginFrame(15U);
@@ -1452,9 +1452,9 @@ TEST(Oot3dPicaShaderPipelineCache,
 
     request.TemporalMotionEnabled = true;
     const auto& temporal = cache.Resolve(request, effects);
-    EXPECT_TRUE(Fast::Oot3d::HasPicaShaderInstrumentationFeature(
+    EXPECT_TRUE(Fast::Extension::HasPicaShaderInstrumentationFeature(
         temporal.AppliedFeatures,
-        Fast::Oot3d::PicaShaderInstrumentationFeature::ReactiveMask));
+        Fast::Extension::PicaShaderInstrumentationFeature::ReactiveMask));
     EXPECT_NE(temporal.FragmentShaderSource.find(
                   "OOT3D reactive world draw"),
               std::string::npos);
@@ -1462,7 +1462,7 @@ TEST(Oot3dPicaShaderPipelineCache,
 
 TEST(Oot3dPicaShaderPipelineCache,
      TypedReflectionOwnsMaterialGuideOutsideCanonicalSource) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     PicaShaderPipelineCache cache;
     EffectsSettings effects;
     effects.Reflections = ReflectionMode::HiZ;
@@ -1501,7 +1501,7 @@ TEST(Oot3dPicaShaderPipelineCache,
     // The material attachment is in every opaque guide writer's write mask;
     // a draw without reflectivity must still overwrite it, or an earlier
     // presented sample's values survive where it draws.
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     PicaShaderPipelineCache cache;
     EffectsSettings effects;
     effects.Reflections = ReflectionMode::HiZ;
@@ -1538,7 +1538,7 @@ TEST(Oot3dPicaShaderPipelineCache,
 
 TEST(Oot3dPicaShaderPipelineCache,
      ExplicitReflectionProfileDoesNotRequireTevSpecular) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     PicaShaderPipelineCache cache;
     EffectsSettings effects;
     effects.Reflections = ReflectionMode::HiZ;
@@ -1561,8 +1561,8 @@ TEST(Oot3dPicaShaderPipelineCache,
 
 TEST(Oot3dPicaShaderPipelineCache,
      CanonicalMetadataClassifiesGrassWithoutShaderMutation) {
-    Fast::Oot3d::PicaShaderPipelineCache cache;
-    Fast::Oot3d::EffectsSettings effects;
+    Fast::Extension::PicaShaderPipelineCache cache;
+    Fast::Extension::EffectsSettings effects;
     cache.BeginFrame(18U);
     auto request = BaseRequest();
     static constexpr std::string_view kGrassFragment =
@@ -1580,7 +1580,7 @@ TEST(Oot3dPicaShaderPipelineCache,
     request.FragmentShaderSource = kGrassFragment;
     request.FragmentShaderKey = 29U;
     request.FragmentShaderHooks =
-        Fast::Oot3d::AnalyzePicaFragmentShaderHooks(kGrassFragment);
+        Fast::Extension::AnalyzePicaFragmentShaderHooks(kGrassFragment);
 
     const auto& result = cache.Resolve(request, effects);
     EXPECT_TRUE(result.IsCanonical());
@@ -1591,8 +1591,8 @@ TEST(Oot3dPicaShaderPipelineCache,
 
 TEST(Oot3dPicaShaderPipelineCache,
      TypedSamplerUsageIgnoresUncalledTextureHelpers) {
-    Fast::Oot3d::PicaShaderPipelineCache cache;
-    Fast::Oot3d::EffectsSettings effects;
+    Fast::Extension::PicaShaderPipelineCache cache;
+    Fast::Extension::EffectsSettings effects;
     cache.BeginFrame(19U);
     auto request = BaseRequest();
     static constexpr std::string_view kFragment =
@@ -1614,7 +1614,7 @@ TEST(Oot3dPicaShaderPipelineCache,
         Oot3d::Renderer::PicaShaderHook::MainEpilogue)] =
         kFragment.find_last_of('}');
     request.FragmentShaderHooks.Outputs =
-        Fast::Oot3d::AnalyzePicaFragmentOutputContract(kFragment);
+        Fast::Extension::AnalyzePicaFragmentOutputContract(kFragment);
 
     const auto& unused = cache.Resolve(request, effects);
     EXPECT_FALSE(unused.GrassTexture0Sampled);
@@ -1630,7 +1630,7 @@ TEST(Oot3dPicaShaderPipelineCache,
 
 TEST(Oot3dPicaShaderInstrumentation,
      AnalyzesTextureRoutingOnlyFromTheMainProgram) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     static constexpr std::string_view kFragment =
         "#version 450\n"
         "uniform sampler2D pica_texture0;\n"
@@ -1666,7 +1666,7 @@ TEST(Oot3dPicaShaderInstrumentation,
 
 TEST(Oot3dPicaShaderInstrumentation,
      OverlaysAttenuateTheGlobalIlluminationCoverage) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     static constexpr std::string_view kFragmentShader = R"glsl(#version 450
 layout(location=0) out vec4 pica_color;
 void main() {
@@ -1711,7 +1711,7 @@ void main() {
 
 TEST(Oot3dPicaShaderInstrumentation,
      PublishesTypedSceneOverlayOutputs) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     static constexpr std::string_view kFragmentShader = R"glsl(#version 450
 layout(location=0) out vec4 pica_color;
 layout(location=1) out vec4 pica_normal_guide;
@@ -1764,7 +1764,7 @@ void main() {
 
 TEST(Oot3dPicaShaderInstrumentation,
      SharesRigidMotionOutputWithTransparentDepthGuide) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     static constexpr std::string_view kFragmentShader = R"glsl(#version 450
 layout(location=0) out vec4 pica_color;
 layout(location=1) out vec4 pica_normal_guide;
@@ -1818,7 +1818,7 @@ void main() {
 }
 
 TEST(Oot3dPicaShaderInstrumentation, NativeOutlineCoverageFollowsBlendAndWindowDepth) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     for (bool explicitDepth : {false, true}) {
         const std::string source = std::string(
             "#version 450\nlayout(location=5) in vec4 pica_normquat;\n"
@@ -1869,7 +1869,7 @@ TEST(Oot3dPicaShaderInstrumentation, NativeOutlineCoverageFollowsBlendAndWindowD
 
 TEST(Oot3dPicaShaderPipelineCache,
      UiDomainCannotRequestSceneExtensionInstrumentation) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     PicaShaderPipelineCache cache;
     EffectsSettings effects;
     effects.Toon = ToonMode::PicaMaterial;
@@ -1896,7 +1896,7 @@ TEST(Oot3dPicaShaderPipelineCache,
 
 TEST(Oot3dPicaShaderInstrumentation,
      ResolvesStablePrewarmProfileFeatures) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     EffectsSettings effects;
     effects.Toon = ToonMode::PicaMaterial;
     effects.ToonStyle.OutlineEnabled = true;
@@ -1931,7 +1931,7 @@ TEST(Oot3dPicaShaderInstrumentation,
 
 TEST(Oot3dPicaShaderInstrumentation,
      MainEpilogueHookIgnoresLaterFunctionsAndNestedBlocks) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     static constexpr std::string_view kFragmentShader = R"glsl(#version 450
 layout(location=0) out vec4 pica_color;
 void main() {
@@ -1963,7 +1963,7 @@ void helper() { }
 }
 
 TEST(Oot3dPicaShaderPipelineCache, AtmosphereDoesNotInheritWorldRelightingFromSharedPrograms) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     using namespace Fast::Renderer3ds;
     auto request = BaseRequest();
     request.SurfaceLightingAvailable = true;
@@ -2002,7 +2002,7 @@ TEST(Oot3dPicaShaderPipelineCache, AtmosphereDoesNotInheritWorldRelightingFromSh
 
 TEST(Oot3dPicaShaderInstrumentation,
      DirectionalShadowLightingCannotModifyBakedLighting) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     static constexpr std::string_view kFragmentShader = R"glsl(#version 450
 layout(location=5) in vec4 pica_normquat;
 layout(location=0) out vec4 pica_color;
@@ -2027,7 +2027,7 @@ void main() { pica_color = vec4(1.0); }
 
 
 TEST(Oot3dPicaShaderInstrumentation, SurfaceShadowsExcludePointsAndPreserveSelectedLightSlots) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto view = IdentityDirectionalShadowMatrix();
     view[0] = view[5] = 0.0F;
     view[1] = 1.0F;
@@ -2078,7 +2078,7 @@ TEST(Oot3dPicaShaderInstrumentation, AuthoredLightStaysWorldFixedWithCameraFolde
     // The native post-transform stays identity while the camera is baked into
     // the model/bone palette. A +X world-facing surface must remain fully lit.
     for (float yaw : {0.0F, 1.57079632679F, 3.14159265359F}) {
-        auto camera = Fast::Oot3d::IdentityDirectionalShadowMatrix();
+        auto camera = Fast::Extension::IdentityDirectionalShadowMatrix();
         const float c = std::cos(yaw), s = std::sin(yaw);
         camera[0] = camera[10] = c;
         camera[2] = -s;
@@ -2092,15 +2092,15 @@ TEST(Oot3dPicaShaderInstrumentation, AuthoredLightStaysWorldFixedWithCameraFolde
         EXPECT_NEAR(diffuse, 1.0F, 1.0e-6F);
         // Shadow matching must recover the same world-space key, not a
         // camera-relative direction that changes with the actor's view.
-        Fast::Oot3d::DirectionalShadowMatrix inverse{};
-        ASSERT_TRUE(Fast::Oot3d::InvertDirectionalShadowMatrix(camera, inverse));
-        const std::array<Fast::Oot3d::PicaSurfaceShadowLight, 1> sources{{
+        Fast::Extension::DirectionalShadowMatrix inverse{};
+        ASSERT_TRUE(Fast::Extension::InvertDirectionalShadowMatrix(camera, inverse));
+        const std::array<Fast::Extension::PicaSurfaceShadowLight, 1> sources{{
             {{direction[0], direction[1], direction[2]}, 8, true, false}}};
-        Fast::Oot3d::PicaDirectionalShadowHistoryState history;
+        Fast::Extension::PicaDirectionalShadowHistoryState history;
         history.ProducedFrameId = 1;
         history.Virtual = Fast::Renderer3ds::BuildVirtualShadowLayout({}, {1, 0, 0}, 2048, 65536);
         history.WorldLightDirectionTowardSource = {1, 0, 0};
-        EXPECT_TRUE(Fast::Oot3d::BuildPicaSurfaceShadowReceiverBinding(inverse, sources, history).Bound());
+        EXPECT_TRUE(Fast::Extension::BuildPicaSurfaceShadowReceiverBinding(inverse, sources, history).Bound());
     }
     EXPECT_FALSE(BuildPicaSurfaceLightingUniforms(hooks, 0, bytes, {}, environment, nullptr));
     environment.Enabled = false;
@@ -2136,7 +2136,7 @@ TEST(Oot3dPicaShaderInstrumentation, FourLightSurfaceKeepsNativeLightsAndLightsF
     directionals.Lights[1] = {2, {0.0F, 1.0F, 0.0F}, {0.3F, 0.3F, 0.3F}};
     directionals.Count = 2;
     binding.SceneDirectionals = std::make_shared<const PicaSceneDirectionalLights>(directionals);
-    const auto view = BuildPicaSurfaceLightingView(Fast::Oot3d::IdentityDirectionalShadowMatrix());
+    const auto view = BuildPicaSurfaceLightingView(Fast::Extension::IdentityDirectionalShadowMatrix());
     ASSERT_TRUE(view);
     PicaEnvironmentLighting environment;
     EXPECT_FALSE(BuildPicaSurfaceLightingUniforms(hooks, 1U << 9, bytes, binding, environment, &*view))
@@ -2186,7 +2186,7 @@ TEST(Oot3dPicaShaderInstrumentation, AuthoredLightingPreservesNativeMaterialRefl
     environment.Lights[0].DirectionTowardSource = {1, 0, 0};
     environment.Lights[0].Color = {1.0F, 0.8F, 0.6F};
     environment.Lights[0].Intensity = 1.0F;
-    const auto view = BuildPicaSurfaceLightingView(Fast::Oot3d::IdentityDirectionalShadowMatrix());
+    const auto view = BuildPicaSurfaceLightingView(Fast::Extension::IdentityDirectionalShadowMatrix());
     ASSERT_TRUE(view);
     const auto evaluate = [&] {
         const auto light = BuildPicaSurfaceLightingUniforms(hooks, 512U, bytes, {}, environment, &*view);
@@ -2228,7 +2228,7 @@ TEST(Oot3dPicaShaderInstrumentation, FragmentLambertKeepsPrimaryMaterialAndPlace
     uniforms[8] = {0.5F, 0.25F, 0.0F, 1.0F};
     uniforms[9] = {0.25F, 0.25F, 0.25F, 0.0F};
     const std::span<const uint8_t> bytes{reinterpret_cast<const uint8_t*>(uniforms.data()), sizeof(uniforms)};
-    const auto view = BuildPicaSurfaceLightingView(Fast::Oot3d::IdentityDirectionalShadowMatrix());
+    const auto view = BuildPicaSurfaceLightingView(Fast::Extension::IdentityDirectionalShadowMatrix());
     ASSERT_TRUE(view);
     PicaEnvironmentLighting e;
     e.Enabled = true; e.PreserveSceneBrightness = true;
@@ -2296,7 +2296,7 @@ TEST(Oot3dPicaShaderInstrumentation, MixedWaterBoundsKeepDryFragmentIrradiance) 
     uniforms[8] = {0.498F, 0.498F, 0.498F, 1.0F};
     uniforms[9] = {0.498F, 0.498F, 0.498F, 1.0F};
     const std::span<const uint8_t> bytes{reinterpret_cast<const uint8_t*>(uniforms.data()), sizeof(uniforms)};
-    const auto view = BuildPicaSurfaceLightingView(Fast::Oot3d::IdentityDirectionalShadowMatrix());
+    const auto view = BuildPicaSurfaceLightingView(Fast::Extension::IdentityDirectionalShadowMatrix());
     ASSERT_TRUE(view);
     PicaNativeLightBinding binding; binding.Water = water;
     PicaEnvironmentLighting environment;
@@ -2403,8 +2403,8 @@ TEST(PicaFragmentBalance, LegacyDeclarationsAndWaterBodyAreUnchanged) {
     EXPECT_NE(body.find("if (!surface_water)"),std::string::npos);
     EXPECT_NE(body.find("pica_surface_shadow(8)"),std::string::npos);
     EXPECT_NE(body.find("if (!identity)"),std::string::npos);
-    Fast::Oot3d::PicaEffectDecisions d;d.FragmentLightingOperand=true;
-    EXPECT_FALSE(Fast::Oot3d::PicaUberEffectSupports(d,{}));
+    Fast::Extension::PicaEffectDecisions d;d.FragmentLightingOperand=true;
+    EXPECT_FALSE(Fast::Extension::PicaUberEffectSupports(d,{}));
 }
 
 TEST(PicaFragmentBalance, PreClampTransferLeavesAmbientFillAndAlphaAlone) {
@@ -2428,7 +2428,7 @@ TEST(PicaFragmentBalance, PreClampTransferLeavesAmbientFillAndAlphaAlone) {
 }
 
 TEST(PicaFragmentBalance, CapabilityFalseKeepsCanonicalKeysAndNativeMemoryInert) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto request=BaseRequest();
     EffectsSettings effects;
     PicaShaderPipelineCache cache;
@@ -2468,12 +2468,12 @@ TEST(Oot3dPicaShaderInstrumentation, LegacySurfaceSourceIsPinned) {
     EXPECT_EQ(hash(PicaSurfaceLightingBody()), 6543872953540395030ULL);
     EXPECT_NE(PicaSurfaceLightingBody(true), PicaSurfaceLightingBody());
     EXPECT_NE(PicaSurfaceLightingBody(false, false, true), PicaSurfaceLightingBody());
-    Fast::Oot3d::PicaEffectDecisions decisions;
+    Fast::Extension::PicaEffectDecisions decisions;
     decisions.FragmentLightingOperand = true;
-    EXPECT_FALSE(Fast::Oot3d::PicaUberEffectSupports(decisions, {}));
-    Fast::Oot3d::PicaEffectDecisions shadows;
+    EXPECT_FALSE(Fast::Extension::PicaUberEffectSupports(decisions, {}));
+    Fast::Extension::PicaEffectDecisions shadows;
     shadows.NativeFragmentLitShadows = true;
-    EXPECT_FALSE(Fast::Oot3d::PicaUberEffectSupports(shadows, {}));
+    EXPECT_FALSE(Fast::Extension::PicaUberEffectSupports(shadows, {}));
 }
 
 } // namespace

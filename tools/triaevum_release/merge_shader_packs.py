@@ -1,6 +1,6 @@
 """Developer-only union of qualified portable PICA packs, never driver caches.
 
-Wire format belongs to fast/oot3d/pica_aot_shader_pack.cpp (O3PSAOT v1).
+Wire format belongs to fast/extension/pica_aot_shader_pack.cpp (O3PSAOT v1).
 No title, GPU, scene or compiler selection occurs here. Different descriptor
 schemas or different binaries for the same complete source identity fail closed.
 """

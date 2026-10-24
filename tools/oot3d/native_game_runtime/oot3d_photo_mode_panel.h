@@ -1,6 +1,6 @@
 #pragma once
 
-#include "fast/oot3d/graphics_settings_window.h"
+#include "fast/extension/graphics_settings_window.h"
 #include "oot3d_dev_free_camera.h"
 
 #include <atomic>
@@ -17,7 +17,7 @@ struct PhotoModeState {
 };
 
 // F1 "Photo mode": the free camera (F6) and Hide HUD.
-std::shared_ptr<Fast::Oot3d::GraphicsSettingsPanelTab>
+std::shared_ptr<Fast::Extension::GraphicsSettingsPanelTab>
 CreatePhotoModePanel(std::shared_ptr<DevFreeCamera> freeCamera,
                      std::shared_ptr<PhotoModeState> state);
 

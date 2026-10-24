@@ -1,6 +1,6 @@
 // Developer-only compilation of the maintained pass catalogue, without ROMs.
-#include "fast/oot3d/builtin_pass_shaders.h"
-#include "fast/oot3d/pica_scanout_effects.h"
+#include "fast/extension/builtin_pass_shaders.h"
+#include "fast/extension/pica_scanout_effects.h"
 #include "fast/renderer/builtin_pass_binaries.h"
 #include "fast/renderer/compatibility_shader_sources.h"
 #include "spirv_pack_file.h"
@@ -17,11 +17,11 @@ static void Check(bool ok, const std::string& message) {
 int main(int argc, char** argv) try {
     Check(argc == 2, "usage: build_pass_artifacts builtin_pass.spvpack|--check");
     const bool check = std::string_view(argv[1]) == "--check";
-    auto passes = Fast::Oot3d::BuildBuiltinPassShaders();
+    auto passes = Fast::Extension::BuildBuiltinPassShaders();
     const auto nativePassCount = passes.size();
     // The compatibility scanout uses the older Vulkan 1.1 descriptor contract.
-    passes.push_back({"compat_scanout.vert", SpirvStage::Vertex, Fast::Oot3d::BuildPicaScanoutVertexShader(), {}});
-    passes.push_back({"compat_scanout.frag", SpirvStage::Fragment, Fast::Oot3d::BuildPicaScanoutFragmentShader(false, 0), {}});
+    passes.push_back({"compat_scanout.vert", SpirvStage::Vertex, Fast::Extension::BuildPicaScanoutVertexShader(), {}});
+    passes.push_back({"compat_scanout.frag", SpirvStage::Fragment, Fast::Extension::BuildPicaScanoutFragmentShader(false, 0), {}});
     // Cartesian family of direct color, direct texture and texture modulation.
     // RGB and alpha are independent; enumerate the contract, not observed IDs.
     const uint64_t terms[] = {

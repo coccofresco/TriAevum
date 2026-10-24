@@ -11,9 +11,9 @@ exclusively to the project. The renderer it plugs into is described in
 `mxao_module.cpp` is the module's shared library (`triaevum_immerse`): MXAO's
 NRI execution and the texts of its F1 controls, behind the module interface
 `module_interface/triaevum/immerse_module.h`. TriAevum loads the library when
-it is installed beside the runtime; its `fast/oot3d/mxao_pass.cpp` serves the
+it is installed beside the runtime; its `fast/extension/mxao_pass.cpp` serves the
 module the renderer's device, textures, programs and barriers, and
-`fast/oot3d/mxao_settings_panel.cpp` draws the controls. The library is built
+`fast/extension/mxao_settings_panel.cpp` draws the controls. The library is built
 only with `THREE_DS_RECOMP_ENABLE_IMMERSE` (see `LICENSE.md`, Boundary).
 The graph contract is GTAO's: native FP32 depth and the coverage-bearing normal
 guide in, the published R32F visibility out, composited before UI. By default there is no history; the

@@ -2,13 +2,13 @@
 #include <imgui.h>
 namespace Oot3dNativeGame {
 namespace {
-class LanguagePanel final : public Fast::Oot3d::GraphicsSettingsPanelTab {
+class LanguagePanel final : public Fast::Extension::GraphicsSettingsPanelTab {
 public:
   explicit LanguagePanel(std::shared_ptr<GameLanguageSettings> settings)
       : mSettings(std::move(settings)) {}
   const char *Label() const noexcept override { return "Language"; }
   const char *Group() const noexcept override {
-    return Fast::Oot3d::kGameSettingsGroup;
+    return Fast::Extension::kGameSettingsGroup;
   }
   void Draw() override {
     const char *label = mSettings->Selected().c_str();
@@ -38,7 +38,7 @@ private:
   std::shared_ptr<GameLanguageSettings> mSettings;
 };
 } // namespace
-std::shared_ptr<Fast::Oot3d::GraphicsSettingsPanelTab>
+std::shared_ptr<Fast::Extension::GraphicsSettingsPanelTab>
 CreateGameLanguagePanel(std::shared_ptr<GameLanguageSettings> settings) {
   return std::make_shared<LanguagePanel>(std::move(settings));
 }

@@ -1,12 +1,12 @@
 // Differential test: DecodePicaFragmentLighting memoizes per thread on the
 // registers it reads. Every result must equal a decode on a fresh thread,
 // whose cache is empty, including after changes outside the decoded range.
-#include "fast/oot3d/pica_fragment_lighting.h"
+#include "fast/extension/pica_fragment_lighting.h"
 #include <bit>
 #include <cstdio>
 #include <thread>
 #include <vector>
-using namespace Fast::Oot3d;
+using namespace Fast::Extension;
 static std::vector<uint32_t> Signature(const PicaFragmentLightingState& s) {
     std::vector<uint32_t> out;
     auto f = [&](float v) { out.push_back(std::bit_cast<uint32_t>(v)); };

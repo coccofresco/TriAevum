@@ -1,12 +1,12 @@
-#include "fast/oot3d/graphics_settings_persistence.h"
+#include "fast/extension/graphics_settings_persistence.h"
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
 
 namespace {
 
-Fast::Oot3d::GraphicsSettings CompleteSettings() {
-    using namespace Fast::Oot3d;
+Fast::Extension::GraphicsSettings CompleteSettings() {
+    using namespace Fast::Extension;
     auto settings =
         GraphicsSettingsService::Preset(GraphicsPreset::Custom);
     settings.Window = WindowMode::ExclusiveFullscreen;
@@ -249,7 +249,7 @@ void DowngradeGrassDocumentToVersionNine(
 }
 
 TEST(Oot3dGraphicsSettingsPersistence, PreservesLegacyCacaoAndExistingGtaoChoices) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto document = SerializeGraphicsSettings(CompleteSettings());
     document["SchemaVersion"] = 12;
     auto& ao = document["Effects"]["AO"];
@@ -285,7 +285,7 @@ TEST(Oot3dGraphicsSettingsPersistence, PreservesLegacyCacaoAndExistingGtaoChoice
 }
 
 TEST(Oot3dGraphicsSettingsPersistence, RoundTripsMxaoAndAddsItsDefaultsToOlderFiles) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto settings = CompleteSettings();
     settings.Effects.AmbientOcclusion = AmbientOcclusionMode::Mxao;
     settings.Effects.MxaoMethod = MxaoEstimator::SolidAngle;
@@ -361,7 +361,7 @@ TEST(Oot3dGraphicsSettingsPersistence, RoundTripsMxaoAndAddsItsDefaultsToOlderFi
 }
 
 TEST(Oot3dGraphicsSettingsPersistence, RoundTripsAoTextureReliefAndDefaultsOlderFilesToOff) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto settings = CompleteSettings();
     settings.Effects.AmbientOcclusion = AmbientOcclusionMode::Mxao;
     settings.Effects.AoRelief = AoTextureRelief::Strong;
@@ -384,7 +384,7 @@ TEST(Oot3dGraphicsSettingsPersistence, RoundTripsAoTextureReliefAndDefaultsOlder
 }
 
 TEST(Oot3dGraphicsSettingsPersistence, RoundTripsExtendedDrawDistanceAndDefaultsOlderFilesToNative) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto settings = CompleteSettings();
     settings.ExtendedDrawDistance = true;
     const auto saved = SerializeGraphicsSettings(settings);
@@ -405,7 +405,7 @@ TEST(Oot3dGraphicsSettingsPersistence, RoundTripsExtendedDrawDistanceAndDefaults
 }
 
 TEST(Oot3dGraphicsSettingsPersistence, MigratesSingleCascadeWithoutLosingTheOffChoiceOrLightResponse) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto document = SerializeGraphicsSettings(CompleteSettings());
     document["SchemaVersion"] = 11;
     auto& shadows = document["Effects"]["DirectionalShadows"];
@@ -442,20 +442,20 @@ TEST(Oot3dGraphicsSettingsPersistence, MigratesCoupledSegmentLodWithoutMovingIts
     settings.Grass.DrawDistance = 5000.0F;
     settings.Grass.LodStartFraction = 0.3F;
     settings.Grass.LodEndFraction = 0.6F;
-    auto document = Fast::Oot3d::SerializeGraphicsSettings(settings);
+    auto document = Fast::Extension::SerializeGraphicsSettings(settings);
     auto& performance = document["Grass"]["Performance"];
     performance.erase("SegmentLodStartDistance");
     performance.erase("SegmentLodEndDistance");
-    const auto loaded = Fast::Oot3d::DeserializeGraphicsSettings(document);
+    const auto loaded = Fast::Extension::DeserializeGraphicsSettings(document);
     EXPECT_FLOAT_EQ(loaded.Value.Grass.SegmentLodStartDistance, 1500.0F);
     EXPECT_FLOAT_EQ(loaded.Value.Grass.SegmentLodEndDistance, 3000.0F);
 }
 
 TEST(Oot3dGraphicsSettingsPersistence, NullActiveRectsMeanTheWholeMask) {
     // The title's shipped rules write null; it is not a malformed document.
-    auto document = Fast::Oot3d::SerializeGraphicsSettings(CompleteSettings());
+    auto document = Fast::Extension::SerializeGraphicsSettings(CompleteSettings());
     document["Grass"]["Sources"][0]["ActiveRects"] = nullptr;
-    const auto loaded = Fast::Oot3d::DeserializeGraphicsSettings(document);
+    const auto loaded = Fast::Extension::DeserializeGraphicsSettings(document);
     EXPECT_TRUE(loaded.Issues.empty());
     ASSERT_EQ(loaded.Value.Grass.Rules.size(), 2U);
     EXPECT_TRUE(loaded.Value.Grass.Rules[0].ActiveRects.empty());
@@ -464,27 +464,27 @@ TEST(Oot3dGraphicsSettingsPersistence, NullActiveRectsMeanTheWholeMask) {
 TEST(Oot3dGraphicsSettingsPersistence, RoundTripsCompleteSettings) {
     const auto original = CompleteSettings();
     const auto document =
-        Fast::Oot3d::SerializeGraphicsSettings(original);
+        Fast::Extension::SerializeGraphicsSettings(original);
     const auto loaded =
-        Fast::Oot3d::DeserializeGraphicsSettings(document);
+        Fast::Extension::DeserializeGraphicsSettings(document);
     ASSERT_TRUE(loaded.Found);
     EXPECT_FALSE(loaded.NeedsRewrite);
     EXPECT_FALSE(loaded.UnsupportedFutureVersion);
     EXPECT_TRUE(loaded.Issues.empty());
-    EXPECT_EQ(Fast::Oot3d::SerializeGraphicsSettings(loaded.Value),
+    EXPECT_EQ(Fast::Extension::SerializeGraphicsSettings(loaded.Value),
               document);
     EXPECT_EQ(loaded.Value.Effects.SurfaceLighting,
-              Fast::Oot3d::SurfaceLightingMode::PerPixelPbr);
+              Fast::Extension::SurfaceLightingMode::PerPixelPbr);
     ASSERT_EQ(loaded.Value.Grass.Rules.size(), 2U);
     EXPECT_EQ(loaded.Value.Grass.Rules[0].Target.Rgba8Hash,
               0xFEDCBA9876543210ULL);
     ASSERT_EQ(loaded.Value.Grass.Rules[0].ActiveRects.size(), 2U);
     EXPECT_EQ(loaded.Value.Grass.Rules[0].ActiveRects[1],
-              (Fast::Oot3d::GrassMaskRect{0.7F, 0.0F, 1.0F, 0.25F}));
+              (Fast::Extension::GrassMaskRect{0.7F, 0.0F, 1.0F, 0.25F}));
     EXPECT_TRUE(loaded.Value.Grass.Rules[1].ActiveRects.empty());
     EXPECT_EQ(
         loaded.Value.Grass.Rules[1].Channel,
-        Fast::Oot3d::GrassSampleChannel::Alpha);
+        Fast::Extension::GrassSampleChannel::Alpha);
     EXPECT_FLOAT_EQ(
         loaded.Value.Grass.Generation
             .InstancesPerSquareMeter,
@@ -500,12 +500,12 @@ TEST(Oot3dGraphicsSettingsPersistence, RoundTripsCompleteSettings) {
     EXPECT_FLOAT_EQ(
         loaded.Value.GrassSavedPreset.WindStrength, 0.27F);
     EXPECT_EQ(loaded.Value.Effects.GlobalIllumination.Mode,
-              Fast::Oot3d::GlobalIlluminationMode::BrixelizerGi);
+              Fast::Extension::GlobalIlluminationMode::BrixelizerGi);
     EXPECT_FLOAT_EQ(loaded.Value.Effects.GlobalIllumination.DiffuseIntensity, 1.75F);
 }
 
 TEST(Oot3dGraphicsSettingsPersistence, AddsGlobalIlluminationOffToOlderFiles) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto document = SerializeGraphicsSettings(CompleteSettings());
     EXPECT_EQ(document["Effects"]["GlobalIllumination"]["Mode"], "BrixelizerGI");
     EXPECT_EQ(document["Effects"]["GlobalIllumination"]["Resolution"], "Quarter");
@@ -519,7 +519,7 @@ TEST(Oot3dGraphicsSettingsPersistence, AddsGlobalIlluminationOffToOlderFiles) {
 }
 
 TEST(Oot3dGraphicsSettingsPersistence, AddsSoftGrassLodDefaultsWithoutMovingExistingDistances) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const auto original = CompleteSettings();
     auto document = SerializeGraphicsSettings(original);
     for (const auto* section : {"Grass", "GrassSavedPreset"}) {
@@ -540,7 +540,7 @@ TEST(Oot3dGraphicsSettingsPersistence, AddsSoftGrassLodDefaultsWithoutMovingExis
 }
 
 TEST(Oot3dGraphicsSettingsPersistence, CrossedBladesDefaultOffAndRoundTrip) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto original = CompleteSettings();
     original.Grass.Appearance.CrossedBlades = true;
     const auto roundTrip = DeserializeGraphicsSettings(SerializeGraphicsSettings(original));
@@ -555,7 +555,7 @@ TEST(Oot3dGraphicsSettingsPersistence, CrossedBladesDefaultOffAndRoundTrip) {
 }
 
 TEST(Oot3dGraphicsSettingsPersistence, AddsDistantCardDefaultsAndRoundTripsThem) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto original = CompleteSettings();
     original.Grass.CardLodEnabled = true;
     original.Grass.CardLodBladeDistance = 1200.0F;
@@ -595,18 +595,18 @@ TEST(Oot3dGraphicsSettingsPersistence, AddsDistantCardDefaultsAndRoundTripsThem)
 }
 
 TEST(Oot3dGraphicsSettingsPersistence, MigratesLegacyFixed60NameToInterpolated2x) {
-    auto document = Fast::Oot3d::SerializeGraphicsSettings(CompleteSettings());
+    auto document = Fast::Extension::SerializeGraphicsSettings(CompleteSettings());
     document["FrameRate"]["Mode"] = "Fixed60";
-    const auto loaded = Fast::Oot3d::DeserializeGraphicsSettings(document);
+    const auto loaded = Fast::Extension::DeserializeGraphicsSettings(document);
     ASSERT_TRUE(loaded.Found);
-    EXPECT_EQ(loaded.Value.FrameRate, Fast::Oot3d::FrameRateMode::Interpolated2x);
-    EXPECT_EQ(Fast::Oot3d::SerializeGraphicsSettings(loaded.Value)["FrameRate"]["Mode"], "Interpolated2x");
+    EXPECT_EQ(loaded.Value.FrameRate, Fast::Extension::FrameRateMode::Interpolated2x);
+    EXPECT_EQ(Fast::Extension::SerializeGraphicsSettings(loaded.Value)["FrameRate"]["Mode"], "Interpolated2x");
 }
 
 TEST(Oot3dGraphicsSettingsPersistence,
      MigratesVersionSixLiveGrassAsSavedPreset) {
     auto document =
-        Fast::Oot3d::SerializeGraphicsSettings(CompleteSettings());
+        Fast::Extension::SerializeGraphicsSettings(CompleteSettings());
     document["SchemaVersion"] = 6U;
     DowngradeGrassDocumentToVersionNine(document);
     document.erase("GrassSavedPreset");
@@ -614,7 +614,7 @@ TEST(Oot3dGraphicsSettingsPersistence,
     document["Grass"]["Wind"]["Strength"] = 0.91F;
 
     const auto loaded =
-        Fast::Oot3d::DeserializeGraphicsSettings(document);
+        Fast::Extension::DeserializeGraphicsSettings(document);
     ASSERT_TRUE(loaded.Found);
     EXPECT_TRUE(loaded.NeedsRewrite);
     EXPECT_FLOAT_EQ(loaded.Value.Grass.DrawDistance, 2468.0F);
@@ -623,20 +623,20 @@ TEST(Oot3dGraphicsSettingsPersistence,
     EXPECT_FLOAT_EQ(
         loaded.Value.GrassSavedPreset.WindStrength, 0.91F);
     const auto migrated =
-        Fast::Oot3d::SerializeGraphicsSettings(loaded.Value);
+        Fast::Extension::SerializeGraphicsSettings(loaded.Value);
     EXPECT_EQ(migrated["GrassSavedPreset"], migrated["Grass"]);
 }
 
 TEST(Oot3dGraphicsSettingsPersistence,
      MigratesVersionSevenWithTexturePacksDisabled) {
     auto document =
-        Fast::Oot3d::SerializeGraphicsSettings(CompleteSettings());
+        Fast::Extension::SerializeGraphicsSettings(CompleteSettings());
     document["SchemaVersion"] = 7U;
     DowngradeGrassDocumentToVersionNine(document);
     document.erase("TexturePacks");
 
     const auto loaded =
-        Fast::Oot3d::DeserializeGraphicsSettings(document);
+        Fast::Extension::DeserializeGraphicsSettings(document);
     ASSERT_TRUE(loaded.Found);
     EXPECT_TRUE(loaded.NeedsRewrite);
     EXPECT_FALSE(
@@ -648,14 +648,14 @@ TEST(Oot3dGraphicsSettingsPersistence,
 TEST(Oot3dGraphicsSettingsPersistence,
      MigratesVersionEightWithDefaultTextureDirectories) {
     auto document =
-        Fast::Oot3d::SerializeGraphicsSettings(CompleteSettings());
+        Fast::Extension::SerializeGraphicsSettings(CompleteSettings());
     document["SchemaVersion"] = 8U;
     DowngradeGrassDocumentToVersionNine(document);
     document["TexturePacks"]["Azahar"].erase("LoadDirectory");
     document["TexturePacks"]["Azahar"].erase("DumpDirectory");
 
     const auto loaded =
-        Fast::Oot3d::DeserializeGraphicsSettings(document);
+        Fast::Extension::DeserializeGraphicsSettings(document);
     ASSERT_TRUE(loaded.Found);
     EXPECT_TRUE(loaded.NeedsRewrite);
     EXPECT_TRUE(
@@ -671,7 +671,7 @@ TEST(Oot3dGraphicsSettingsPersistence,
 TEST(Oot3dGraphicsSettingsPersistence,
      MigratesVersionNineToSharedGrassGeneration) {
     auto document =
-        Fast::Oot3d::SerializeGraphicsSettings(CompleteSettings());
+        Fast::Extension::SerializeGraphicsSettings(CompleteSettings());
     document["SchemaVersion"] = 9U;
     DowngradeGrassDocumentToVersionNine(document);
     document["Grass"]["Rules"][0]
@@ -680,7 +680,7 @@ TEST(Oot3dGraphicsSettingsPersistence,
             ["InstancesPerSquareMeter"] = 12.0F;
 
     const auto loaded =
-        Fast::Oot3d::DeserializeGraphicsSettings(document);
+        Fast::Extension::DeserializeGraphicsSettings(document);
     ASSERT_TRUE(loaded.Found);
     EXPECT_TRUE(loaded.NeedsRewrite);
     ASSERT_EQ(loaded.Value.Grass.Rules.size(), 2U);
@@ -690,13 +690,13 @@ TEST(Oot3dGraphicsSettingsPersistence,
         777.0F);
     EXPECT_EQ(
         loaded.Value.Grass.Rules[0].Channel,
-        Fast::Oot3d::GrassSampleChannel::Green);
+        Fast::Extension::GrassSampleChannel::Green);
     EXPECT_EQ(
         loaded.Value.Grass.Rules[1].Channel,
-        Fast::Oot3d::GrassSampleChannel::Alpha);
+        Fast::Extension::GrassSampleChannel::Alpha);
 
     const auto migrated =
-        Fast::Oot3d::SerializeGraphicsSettings(loaded.Value);
+        Fast::Extension::SerializeGraphicsSettings(loaded.Value);
     EXPECT_TRUE(migrated["Grass"].contains("Generation"));
     EXPECT_TRUE(migrated["Grass"].contains("Sources"));
     EXPECT_FALSE(migrated["Grass"].contains("Rules"));
@@ -708,12 +708,12 @@ TEST(Oot3dGraphicsSettingsPersistence,
 TEST(Oot3dGraphicsSettingsPersistence,
      MigratesVersionTenGrassThresholdsToMaskLevels) {
     auto document =
-        Fast::Oot3d::SerializeGraphicsSettings(CompleteSettings());
+        Fast::Extension::SerializeGraphicsSettings(CompleteSettings());
     document["SchemaVersion"] = 10U;
     DowngradeGrassDocumentToVersionTen(document);
 
     const auto loaded =
-        Fast::Oot3d::DeserializeGraphicsSettings(document);
+        Fast::Extension::DeserializeGraphicsSettings(document);
     ASSERT_TRUE(loaded.Found);
     EXPECT_TRUE(loaded.NeedsRewrite);
     ASSERT_EQ(loaded.Value.Grass.Rules.size(), 2U);
@@ -729,7 +729,7 @@ TEST(Oot3dGraphicsSettingsPersistence,
         loaded.Value.Grass.Rules[0].OutputWhite, 1.0F);
 
     const auto migrated =
-        Fast::Oot3d::SerializeGraphicsSettings(loaded.Value);
+        Fast::Extension::SerializeGraphicsSettings(loaded.Value);
     EXPECT_TRUE(
         migrated["Grass"]["Sources"][0].contains("InputBlack"));
     EXPECT_FALSE(
@@ -739,7 +739,7 @@ TEST(Oot3dGraphicsSettingsPersistence,
 TEST(Oot3dGraphicsSettingsPersistence,
      MigratesVersionOneToEqualLightBandProfile) {
     auto document =
-        Fast::Oot3d::SerializeGraphicsSettings(CompleteSettings());
+        Fast::Extension::SerializeGraphicsSettings(CompleteSettings());
     document["SchemaVersion"] = 1U;
     DowngradeGrassDocumentToVersionNine(document);
     auto& toon = document["Effects"]["Toon"];
@@ -748,7 +748,7 @@ TEST(Oot3dGraphicsSettingsPersistence,
     toon.erase("LightBandThresholds");
 
     const auto loaded =
-        Fast::Oot3d::DeserializeGraphicsSettings(document);
+        Fast::Extension::DeserializeGraphicsSettings(document);
     ASSERT_TRUE(loaded.Found);
     EXPECT_TRUE(loaded.NeedsRewrite);
     const auto& style = loaded.Value.Effects.ToonStyle;
@@ -762,53 +762,53 @@ TEST(Oot3dGraphicsSettingsPersistence,
 
 TEST(Oot3dGraphicsSettingsPersistence, PointShadowsRoundTripAndDefaultWhenAbsent) {
     const auto settings = CompleteSettings();
-    auto document = Fast::Oot3d::SerializeGraphicsSettings(settings);
+    auto document = Fast::Extension::SerializeGraphicsSettings(settings);
     const auto& saved = document["Effects"]["PointShadows"];
     EXPECT_EQ(saved["Mode"], "CubeMaps");
     EXPECT_EQ(saved["Resolution"], 1024U);
     EXPECT_EQ(saved["MaxLights"], 6U);
-    const auto loaded = Fast::Oot3d::DeserializeGraphicsSettings(document);
+    const auto loaded = Fast::Extension::DeserializeGraphicsSettings(document);
     ASSERT_TRUE(loaded.Found);
-    EXPECT_EQ(loaded.Value.Effects.PointShadows.Mode, Fast::Oot3d::PointShadowMode::CubeMaps);
+    EXPECT_EQ(loaded.Value.Effects.PointShadows.Mode, Fast::Extension::PointShadowMode::CubeMaps);
     EXPECT_EQ(loaded.Value.Effects.PointShadows.Resolution, 1024U);
     EXPECT_EQ(loaded.Value.Effects.PointShadows.MaxLights, 6U);
     EXPECT_FLOAT_EQ(loaded.Value.Effects.PointShadows.Range, 0.75F);
     EXPECT_FLOAT_EQ(loaded.Value.Effects.PointShadows.Strength, 0.5F);
 
     document["Effects"].erase("PointShadows");
-    const auto absent = Fast::Oot3d::DeserializeGraphicsSettings(document);
+    const auto absent = Fast::Extension::DeserializeGraphicsSettings(document);
     ASSERT_TRUE(absent.Found);
-    EXPECT_EQ(absent.Value.Effects.PointShadows.Mode, Fast::Oot3d::PointShadowMode::Off);
-    EXPECT_EQ(absent.Value.Effects.PointShadows.Resolution, Fast::Oot3d::PointShadowSettings{}.Resolution);
+    EXPECT_EQ(absent.Value.Effects.PointShadows.Mode, Fast::Extension::PointShadowMode::Off);
+    EXPECT_EQ(absent.Value.Effects.PointShadows.Resolution, Fast::Extension::PointShadowSettings{}.Resolution);
 }
 
 TEST(Oot3dGraphicsSettingsPersistence,
      MigratesVersionTwoWithDirectionalShadowsDisabled) {
     auto document =
-        Fast::Oot3d::SerializeGraphicsSettings(CompleteSettings());
+        Fast::Extension::SerializeGraphicsSettings(CompleteSettings());
     document["SchemaVersion"] = 2U;
     DowngradeGrassDocumentToVersionNine(document);
     document["Effects"].erase("DirectionalShadows");
 
     const auto loaded =
-        Fast::Oot3d::DeserializeGraphicsSettings(document);
+        Fast::Extension::DeserializeGraphicsSettings(document);
     ASSERT_TRUE(loaded.Found);
     EXPECT_TRUE(loaded.NeedsRewrite);
     EXPECT_EQ(loaded.Value.Effects.DirectionalShadows.Mode,
-              Fast::Oot3d::DirectionalShadowMode::Off);
+              Fast::Extension::DirectionalShadowMode::Off);
 }
 
 TEST(Oot3dGraphicsSettingsPersistence,
      MigratesVersionThreeGrassAppearanceDefaults) {
     auto document =
-        Fast::Oot3d::SerializeGraphicsSettings(CompleteSettings());
+        Fast::Extension::SerializeGraphicsSettings(CompleteSettings());
     document["SchemaVersion"] = 3U;
     DowngradeGrassDocumentToVersionNine(document);
     document["Grass"].erase("Appearance");
     document["Grass"]["Wind"].erase("Randomness");
 
     const auto loaded =
-        Fast::Oot3d::DeserializeGraphicsSettings(document);
+        Fast::Extension::DeserializeGraphicsSettings(document);
     ASSERT_TRUE(loaded.Found);
     EXPECT_TRUE(loaded.NeedsRewrite);
     EXPECT_EQ(loaded.Value.Grass.Appearance.BladeSegments, 2U);
@@ -821,7 +821,7 @@ TEST(Oot3dGraphicsSettingsPersistence,
 TEST(Oot3dGraphicsSettingsPersistence,
      MigratesVersionFiveGrassControlsToCanonicalDensity) {
     auto document =
-        Fast::Oot3d::SerializeGraphicsSettings(CompleteSettings());
+        Fast::Extension::SerializeGraphicsSettings(CompleteSettings());
     document["SchemaVersion"] = 5U;
     DowngradeGrassDocumentToVersionNine(document);
     auto& rule = document["Grass"]["Rules"][0];
@@ -831,7 +831,7 @@ TEST(Oot3dGraphicsSettingsPersistence,
     rule["MaximumInstancesPerMesh"] = 1234U;
 
     const auto loaded =
-        Fast::Oot3d::DeserializeGraphicsSettings(document);
+        Fast::Extension::DeserializeGraphicsSettings(document);
     ASSERT_TRUE(loaded.Found);
     EXPECT_TRUE(loaded.NeedsRewrite);
     ASSERT_EQ(loaded.Value.Grass.Rules.size(), 2U);
@@ -841,7 +841,7 @@ TEST(Oot3dGraphicsSettingsPersistence,
         40.0F);
 
     const auto migrated =
-        Fast::Oot3d::SerializeGraphicsSettings(loaded.Value);
+        Fast::Extension::SerializeGraphicsSettings(loaded.Value);
     const auto& migratedRule =
         migrated["Grass"]["Sources"][0];
     EXPECT_FALSE(migratedRule.contains("DensityMultiplier"));
@@ -853,7 +853,7 @@ TEST(Oot3dGraphicsSettingsPersistence,
 TEST(Oot3dGraphicsSettingsPersistence,
      RepairsMalformedValuesAndBoundsRuleArrays) {
     auto document =
-        Fast::Oot3d::SerializeGraphicsSettings(CompleteSettings());
+        Fast::Extension::SerializeGraphicsSettings(CompleteSettings());
     document["Output"]["Width"] = 1U;
     document["AA"]["Mode"] = "UnknownAA";
     const auto grassRule = document["Grass"]["Sources"][0];
@@ -873,11 +873,11 @@ TEST(Oot3dGraphicsSettingsPersistence,
     }
 
     const auto loaded =
-        Fast::Oot3d::DeserializeGraphicsSettings(document);
+        Fast::Extension::DeserializeGraphicsSettings(document);
     EXPECT_TRUE(loaded.NeedsRewrite);
     EXPECT_EQ(loaded.Value.OutputWidth, 320U);
     EXPECT_EQ(loaded.Value.AntiAliasing,
-              Fast::Oot3d::AntiAliasingMode::Off);
+              Fast::Extension::AntiAliasingMode::Off);
     EXPECT_EQ(loaded.Value.Grass.Rules.size(), 256U);
     EXPECT_EQ(
         loaded.Value.Effects.ReflectionMaterials.size(), 256U);
@@ -887,7 +887,7 @@ TEST(Oot3dGraphicsSettingsPersistence,
 TEST(Oot3dGraphicsSettingsPersistence,
      Schema15TakesTitleGrassRulesAndKeepsOtherGrassSettings) {
     auto document =
-        Fast::Oot3d::SerializeGraphicsSettings(CompleteSettings());
+        Fast::Extension::SerializeGraphicsSettings(CompleteSettings());
     ASSERT_FALSE(document["Grass"]["Sources"].empty());
     auto titleRule = document["Grass"]["Sources"][0];
     titleRule["Target"]["Rgba8Hash"] = "a35e3fe6f83ca9c2";
@@ -903,16 +903,16 @@ TEST(Oot3dGraphicsSettingsPersistence,
     document["GrassSavedPreset"] = document["Grass"];
     document["GrassSavedPreset"]["Budget"]["DrawDistance"] = 4321.0;
 
-    Fast::Oot3d::InstallTitleGrassRuleDefaults(titleRules);
-    const auto migrated = Fast::Oot3d::DeserializeGraphicsSettings(document);
+    Fast::Extension::InstallTitleGrassRuleDefaults(titleRules);
+    const auto migrated = Fast::Extension::DeserializeGraphicsSettings(document);
     auto current = document;
-    current["SchemaVersion"] = Fast::Oot3d::kGraphicsSettingsSchemaVersion;
-    const auto unchanged = Fast::Oot3d::DeserializeGraphicsSettings(current);
-    Fast::Oot3d::ClearTitleGrassRuleDefaults();
-    const auto withoutTitle = Fast::Oot3d::DeserializeGraphicsSettings(document);
+    current["SchemaVersion"] = Fast::Extension::kGraphicsSettingsSchemaVersion;
+    const auto unchanged = Fast::Extension::DeserializeGraphicsSettings(current);
+    Fast::Extension::ClearTitleGrassRuleDefaults();
+    const auto withoutTitle = Fast::Extension::DeserializeGraphicsSettings(document);
 
     EXPECT_TRUE(migrated.NeedsRewrite);
-    const auto saved = Fast::Oot3d::SerializeGraphicsSettings(migrated.Value);
+    const auto saved = Fast::Extension::SerializeGraphicsSettings(migrated.Value);
     for (const char* block : {"Grass", "GrassSavedPreset"}) {
         ASSERT_EQ(saved[block]["Sources"].size(), 1U);
         EXPECT_EQ(saved[block]["Sources"][0]["Target"]["Rgba8Hash"], "a35e3fe6f83ca9c2");
@@ -927,9 +927,9 @@ TEST(Oot3dGraphicsSettingsPersistence,
     // A current-schema configuration keeps its own rules, and without
     // installed title rules an old one keeps them too.
     const auto ownHash = document["Grass"]["Sources"][0]["Target"]["Rgba8Hash"];
-    EXPECT_EQ(Fast::Oot3d::SerializeGraphicsSettings(unchanged.Value)["Grass"]["Sources"][0]["Target"]["Rgba8Hash"],
+    EXPECT_EQ(Fast::Extension::SerializeGraphicsSettings(unchanged.Value)["Grass"]["Sources"][0]["Target"]["Rgba8Hash"],
               ownHash);
-    EXPECT_EQ(Fast::Oot3d::SerializeGraphicsSettings(withoutTitle.Value)["Grass"]["Sources"][0]["Target"]["Rgba8Hash"],
+    EXPECT_EQ(Fast::Extension::SerializeGraphicsSettings(withoutTitle.Value)["Grass"]["Sources"][0]["Target"]["Rgba8Hash"],
               ownHash);
 }
 
@@ -938,13 +938,13 @@ TEST(Oot3dGraphicsSettingsPersistence,
     auto fallback = CompleteSettings();
     fallback.OutputWidth = 3440U;
     auto document =
-        Fast::Oot3d::SerializeGraphicsSettings(CompleteSettings());
+        Fast::Extension::SerializeGraphicsSettings(CompleteSettings());
     document["SchemaVersion"] =
-        Fast::Oot3d::kGraphicsSettingsSchemaVersion + 1U;
+        Fast::Extension::kGraphicsSettingsSchemaVersion + 1U;
     document["Output"]["Width"] = 640U;
 
     const auto loaded =
-        Fast::Oot3d::DeserializeGraphicsSettings(document,
+        Fast::Extension::DeserializeGraphicsSettings(document,
                                                   fallback);
     EXPECT_TRUE(loaded.Found);
     EXPECT_TRUE(loaded.UnsupportedFutureVersion);
@@ -955,11 +955,11 @@ TEST(Oot3dGraphicsSettingsPersistence,
 TEST(Oot3dGraphicsSettingsPersistence,
      NormalizesOutOfRangeDocumentAndRequestsRewrite) {
     auto document =
-        Fast::Oot3d::SerializeGraphicsSettings(CompleteSettings());
+        Fast::Extension::SerializeGraphicsSettings(CompleteSettings());
     document["Output"]["Width"] = 1U;
     document["Camera"]["FovMultiplier"] = 8.0F;
     const auto loaded =
-        Fast::Oot3d::DeserializeGraphicsSettings(document);
+        Fast::Extension::DeserializeGraphicsSettings(document);
     EXPECT_TRUE(loaded.NeedsRewrite);
     EXPECT_EQ(loaded.Value.OutputWidth, 320U);
     EXPECT_FLOAT_EQ(loaded.Value.FovMultiplier, 1.5F);
@@ -996,19 +996,19 @@ TEST(Oot3dGraphicsSettingsPersistence,
          }},
     };
     const auto loaded =
-        Fast::Oot3d::LoadGraphicsSettingsConfig(config);
+        Fast::Extension::LoadGraphicsSettingsConfig(config);
     ASSERT_TRUE(loaded.Found);
     EXPECT_TRUE(loaded.MigratedLegacy);
     EXPECT_TRUE(loaded.NeedsRewrite);
     EXPECT_EQ(loaded.Value.Preset,
-              Fast::Oot3d::GraphicsPreset::Custom);
+              Fast::Extension::GraphicsPreset::Custom);
     EXPECT_EQ(loaded.Value.Window,
-              Fast::Oot3d::WindowMode::Borderless);
+              Fast::Extension::WindowMode::Borderless);
     EXPECT_EQ(loaded.Value.OutputWidth, 1920U);
     EXPECT_EQ(loaded.Value.OutputHeight, 1080U);
     EXPECT_FLOAT_EQ(loaded.Value.InternalResolutionScale, 1.5F);
     EXPECT_EQ(loaded.Value.AntiAliasing,
-              Fast::Oot3d::AntiAliasingMode::Msaa);
+              Fast::Extension::AntiAliasingMode::Msaa);
     EXPECT_EQ(loaded.Value.MsaaSamples, 4U);
     EXPECT_FALSE(loaded.Value.VSync);
 }
@@ -1016,7 +1016,7 @@ TEST(Oot3dGraphicsSettingsPersistence,
 TEST(Oot3dGraphicsSettingsPersistence,
      LeavesConfigWithoutGraphicsOrLegacyUntouched) {
     const auto loaded =
-        Fast::Oot3d::LoadGraphicsSettingsConfig(
+        Fast::Extension::LoadGraphicsSettingsConfig(
             nlohmann::json{{"Audio", {{"Volume", 0.5F}}}});
     EXPECT_FALSE(loaded.Found);
     EXPECT_FALSE(loaded.NeedsRewrite);
@@ -1042,22 +1042,22 @@ TEST(Oot3dGraphicsSettingsPersistence,
            }}}},
     };
     const auto loaded =
-        Fast::Oot3d::LoadGraphicsSettingsConfig(config);
+        Fast::Extension::LoadGraphicsSettingsConfig(config);
     ASSERT_TRUE(loaded.MigratedLegacy);
     EXPECT_EQ(loaded.Value.Window,
-              Fast::Oot3d::WindowMode::Windowed);
+              Fast::Extension::WindowMode::Windowed);
     EXPECT_EQ(loaded.Value.OutputWidth, 1600U);
     EXPECT_EQ(loaded.Value.OutputHeight, 900U);
     EXPECT_FLOAT_EQ(loaded.Value.InternalResolutionScale, 1.25F);
     EXPECT_EQ(loaded.Value.AntiAliasing,
-              Fast::Oot3d::AntiAliasingMode::Msaa);
+              Fast::Extension::AntiAliasingMode::Msaa);
     EXPECT_EQ(loaded.Value.MsaaSamples, 2U);
     EXPECT_TRUE(loaded.Value.VSync);
 }
 
 TEST(Oot3dGraphicsSettingsPersistence,
      SuppressesAutomationAndUnconfirmedPresentationWrites) {
-    using Fast::Oot3d::ShouldPersistGraphicsSettings;
+    using Fast::Extension::ShouldPersistGraphicsSettings;
     EXPECT_TRUE(ShouldPersistGraphicsSettings(false, false));
     EXPECT_FALSE(ShouldPersistGraphicsSettings(true, false));
     EXPECT_FALSE(ShouldPersistGraphicsSettings(false, true));
@@ -1065,7 +1065,7 @@ TEST(Oot3dGraphicsSettingsPersistence,
 }
 
 TEST(Oot3dGraphicsSettingsPersistence, GrassVisibilityMigratesAndDecouplesFalloffDistance) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto document=SerializeGraphicsSettings(CompleteSettings());
     auto& performance=document["Grass"]["Performance"];
     document["Grass"]["Budget"]["DrawDistance"]=20000.0F;
@@ -1084,7 +1084,7 @@ TEST(Oot3dGraphicsSettingsPersistence, GrassVisibilityMigratesAndDecouplesFallof
 } // namespace
 
 TEST(Oot3dGraphicsSettingsPersistence, GlobalIlluminationSpecular) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto settings = GraphicsSettingsService::Preset(GraphicsPreset::Custom);
     settings.Effects.GlobalIllumination.Specular = true;
     settings.Effects.GlobalIllumination.SpecularIntensity = 7.0F;
@@ -1138,7 +1138,7 @@ TEST(Oot3dGraphicsSettingsPersistence, GlobalIlluminationSpecular) {
 }
 
 TEST(Oot3dGraphicsSettingsPersistence, ScreenSpaceGlobalIllumination) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto settings = GraphicsSettingsService::Preset(GraphicsPreset::Custom);
     settings.Effects.GlobalIllumination.Mode = GlobalIlluminationMode::ScreenSpace;
     settings.Effects.GlobalIllumination.ScreenSpace = {3, 32, 128, 240.0F, 45.0F, false, 2, true};
@@ -1176,7 +1176,7 @@ TEST(Oot3dGraphicsSettingsPersistence, ScreenSpaceGlobalIllumination) {
 }
 
 TEST(GrassMaskPersistence, RoundTripDefaultsValidationAndPresetOwnership) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GraphicsSettings settings;
     settings.Preset = GraphicsPreset::Custom;
     for (auto mode : { GrassMaskMode::Automatic, GrassMaskMode::Custom, GrassMaskMode::Off }) {
@@ -1226,7 +1226,7 @@ TEST(GrassMaskPersistence, RoundTripDefaultsValidationAndPresetOwnership) {
 }
 
 TEST(Oot3dGraphicsSettingsPersistence, RoundTripsTheAspectRatioAsHostOwnedOutputState) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto settings = CompleteSettings();
     settings.Aspect = AspectRatioMode::Native3ds;
     auto document = SerializeGraphicsSettings(settings);

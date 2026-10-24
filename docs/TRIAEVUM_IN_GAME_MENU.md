@@ -60,7 +60,7 @@ sets them), so changing them keeps the current preset; any other Video or
 Graphics change makes it Custom, as in F1.
 
 The aspect ratio is the shape of the presentation picture
-(`fast/oot3d/presentation_picture.h`, persisted as `Graphics.Output.Aspect`,
+(`fast/extension/presentation_picture.h`, persisted as `Graphics.Output.Aspect`,
 default 16:9). A fixed ratio is the largest rectangle of that shape fitted
 into the window or the screen, centred, with black bars on the remaining
 sides; Free uses the whole output (the window as the user shapes it, the whole

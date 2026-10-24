@@ -3,11 +3,11 @@
 ## Stato congelato
 
 La meccanica di creazione pipeline NRI, binding draw, descriptor, upload sparsi
-e trasformazione dei sampler GLSL e stata spostata da `fast/oot3d` a
+e trasformazione dei sampler GLSL e stata spostata da `fast/extension` a
 `fast/renderer3ds`. Il modulo comune non contiene token o policy di Zelda.
 
 Il backend esistente conserva la stessa API tramite
-`fast/oot3d/nri_pica_pipeline_bridge.*`, ora ridotto a un adapter che:
+`fast/extension/nri_pica_pipeline_bridge.*`, ora ridotto a un adapter che:
 
 - espone al modulo comune solo i servizi Vulkan/NRI necessari;
 - conserva le variabili ambiente `OOT3D_GRAPHICS_NRI_PICA_DRAWS` e

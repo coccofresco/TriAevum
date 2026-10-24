@@ -23,11 +23,11 @@ asset or PICA semantic changes.
 
 Paths below are relative to `runtime/three_ds_recomp/`.
 
-- `graphics_settings_runtime.{h,cpp}` under `include/fast/oot3d/` and
-  `src/fast/oot3d/`: `Snapshot()` and `SnapshotWithRevision()` retain configured
+- `graphics_settings_runtime.{h,cpp}` under `include/fast/extension/` and
+  `src/fast/extension/`: `Snapshot()` and `SnapshotWithRevision()` retain configured
   values. `SnapshotForRendering()` applies the temporary mask to a copy under the
   same lock. A toggle increments the revision without staging or persisting values.
-  `include/fast/oot3d/native_presentation_policy.h` owns the mask shared by the
+  `include/fast/extension/native_presentation_policy.h` owns the mask shared by the
   desktop override and mandatory mobile native presentation.
 - `src/fast/backends/gfx_vulkan.cpp`: takes the effective snapshot once per frame,
   before extension-graph, shader and provider decisions. Existing Off paths own
@@ -39,7 +39,7 @@ Paths below are relative to `runtime/three_ds_recomp/`.
   This reservation applies only to the NRI host, not legacy backends.
 - `src/fast/Fast3dGui.cpp`: ignores previous F1 open state at construction and keeps
   F1/F2 out of independent ImGui shortcuts. F1 still toggles and controls cursor capture.
-- `src/fast/oot3d/graphics_settings_window.cpp`: status header only; no duplicate
+- `src/fast/extension/graphics_settings_window.cpp`: status header only; no duplicate
   effect settings or UI-owned restoration buffer.
 
 ## Verification

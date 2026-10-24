@@ -1,8 +1,8 @@
-#include "fast/oot3d/grass_persistent_placement_cache.h"
-#include "fast/oot3d/grass_overlay_mask.h"
-#include "fast/oot3d/grass_scene_bridge.h"
-#include "fast/oot3d/grass_async_placement_builder.h"
-#include "fast/oot3d/grass_static_placement_cache.h"
+#include "fast/extension/grass_persistent_placement_cache.h"
+#include "fast/extension/grass_overlay_mask.h"
+#include "fast/extension/grass_scene_bridge.h"
+#include "fast/extension/grass_async_placement_builder.h"
+#include "fast/extension/grass_static_placement_cache.h"
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <chrono>
@@ -13,7 +13,7 @@
 #include <nlohmann/json.hpp>
 
 namespace {
-using namespace Fast::Oot3d;
+using namespace Fast::Extension;
 GrassOverlayAlpha Alpha() {
     GrassOverlayAlpha a;
     a.Translucent = true;

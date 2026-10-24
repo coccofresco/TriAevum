@@ -223,7 +223,7 @@ add_executable(oot3d_native_a32_actor_visibility_tests EXCLUDE_FROM_ALL
     titles/oot3d/gameplay/oot3d_actor_visibility_policy.cpp
     titles/oot3d/gameplay/oot3d_native_a32_actor_visibility.cpp
     titles/oot3d/gameplay/oot3d_native_a32_actor_visibility_tests.cpp
-    runtime/three_ds_recomp/src/fast/oot3d/perspective_fov_policy.cpp
+    runtime/three_ds_recomp/src/fast/extension/perspective_fov_policy.cpp
 )
 target_include_directories(oot3d_native_a32_actor_visibility_tests PRIVATE
     runtime/three_ds_recomp/include)

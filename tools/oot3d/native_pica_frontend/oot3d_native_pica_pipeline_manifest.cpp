@@ -1,4 +1,4 @@
-#include "fast/oot3d/pica_pipeline_manifest.h"
+#include "fast/extension/pica_pipeline_manifest.h"
 
 #include <filesystem>
 #include <iostream>
@@ -41,9 +41,9 @@ int main(int argc, char** argv) {
     try {
         const auto options = ParseOptions(argc, argv);
         uint32_t descriptorSchemaVersion = 0U;
-        std::vector<Fast::Oot3d::PicaGraphicsPipelineManifestEntry> entries;
+        std::vector<Fast::Extension::PicaGraphicsPipelineManifestEntry> entries;
         for (const auto& input : options.Inputs) {
-            Fast::Oot3d::PicaGraphicsPipelineManifest manifest;
+            Fast::Extension::PicaGraphicsPipelineManifest manifest;
             std::string error;
             if (!manifest.Load(input, &error)) {
                 throw std::runtime_error(error);
@@ -60,11 +60,11 @@ int main(int argc, char** argv) {
                            manifest.Entries().end());
         }
         std::string error;
-        if (!Fast::Oot3d::WritePicaGraphicsPipelineManifest(
+        if (!Fast::Extension::WritePicaGraphicsPipelineManifest(
                 options.Output, descriptorSchemaVersion, entries, &error)) {
             throw std::runtime_error(error);
         }
-        Fast::Oot3d::PicaGraphicsPipelineManifest merged;
+        Fast::Extension::PicaGraphicsPipelineManifest merged;
         if (!merged.Load(options.Output, &error)) {
             throw std::runtime_error(error);
         }

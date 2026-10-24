@@ -54,20 +54,20 @@
 #include "oot3d_native_pica_vulkan_plan.h"
 #include "oot3d_native_vertex_binaries.h"
 
-#include "fast/oot3d/pica_caster_fragment_binaries.h"
-#include "fast/oot3d/pica_directional_shadow_caster.h"
-#include "fast/oot3d/pica_uber_effect_program.h"
-#include "fast/oot3d/pica_uber_fragment_binaries.h"
+#include "fast/extension/pica_caster_fragment_binaries.h"
+#include "fast/extension/pica_directional_shadow_caster.h"
+#include "fast/extension/pica_uber_effect_program.h"
+#include "fast/extension/pica_uber_fragment_binaries.h"
 #include "fast/renderer/pass_shader_artifact.h"
 #include "fast/renderer3ds/pica_fragment_artifact.h"
 #include "fast/renderer3ds/pica_native_fragment_binaries.h"
 #include "fast/renderer3ds/pica_vertex_artifact.h"
 
-#include "fast/oot3d/pica_aot_shader_pack.h"
-#include "fast/oot3d/pica_nri_shader_contract.h"
-#include "fast/oot3d/pica_pipeline_manifest.h"
-#include "fast/oot3d/pica_shader_pipeline_cache.h"
-#include "fast/oot3d/pica_variant_request_record.h"
+#include "fast/extension/pica_aot_shader_pack.h"
+#include "fast/extension/pica_nri_shader_contract.h"
+#include "fast/extension/pica_pipeline_manifest.h"
+#include "fast/extension/pica_shader_pipeline_cache.h"
+#include "fast/extension/pica_variant_request_record.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -88,8 +88,8 @@
 namespace {
 using Json = nlohmann::json;
 using namespace Oot3dNativeGame;
-using Fast::Oot3d::PicaShaderPipelineRequest;
-using Fast::Oot3d::PicaVariantShaderIdentity;
+using Fast::Extension::PicaShaderPipelineRequest;
+using Fast::Extension::PicaVariantShaderIdentity;
 
 // PicaCompareFunction::Always in the alpha test register.
 constexpr uint32_t kPicaCompareAlways = 1U;
@@ -104,7 +104,7 @@ PicaVariantShaderIdentity Identity(const Oot3d::Renderer::PicaShaderSourceIdenti
     return {identity.Id, identity.SecondaryHash, identity.Size};
 }
 
-PicaVariantShaderIdentity Identity(const Fast::Oot3d::PicaAotShaderSourceIdentity& identity) {
+PicaVariantShaderIdentity Identity(const Fast::Extension::PicaAotShaderSourceIdentity& identity) {
     return {identity.Id, identity.SecondaryHash, identity.Size};
 }
 
@@ -136,9 +136,9 @@ struct Regenerated {
     bool NriAvailable = false;
     uint64_t VertexKey = 0;
     uint64_t FragmentKey = 0;
-    Fast::Oot3d::PicaShaderInstrumentationFeature Requested{};
-    Fast::Oot3d::PicaShaderInstrumentationFeature Applied{};
-    Fast::Oot3d::PicaFragmentInstrumentationOutputLayout Outputs;
+    Fast::Extension::PicaShaderInstrumentationFeature Requested{};
+    Fast::Extension::PicaShaderInstrumentationFeature Applied{};
+    Fast::Extension::PicaFragmentInstrumentationOutputLayout Outputs;
     bool Canonical = true;
 };
 
@@ -201,15 +201,15 @@ CanonicalPlan CanonicalFromPlan(const Oot3dPicaVulkanDrawPlan& plan) {
 // primitive IDs (PBR seams), as the recording machines do.
 class UberAvailability {
   public:
-    const char* Classify(const Fast::Oot3d::PicaShaderPipelineResult& variant, const CanonicalPlan& canonical) {
+    const char* Classify(const Fast::Extension::PicaShaderPipelineResult& variant, const CanonicalPlan& canonical) {
         if (canonical.UberSource.empty()) return "no_parametric_program";
         const bool instrumented =
             (static_cast<uint32_t>(variant.AppliedFeatures) &
-             ~static_cast<uint32_t>(Fast::Oot3d::PicaShaderInstrumentationFeature::TemporalVertex)) != 0U;
-        const Fast::Oot3d::PicaUberEffectProgramRequest superset{
+             ~static_cast<uint32_t>(Fast::Extension::PicaShaderInstrumentationFeature::TemporalVertex)) != 0U;
+        const Fast::Extension::PicaUberEffectProgramRequest superset{
             canonical.UberSource, canonical.UberHooks, variant.TemporalVertexApplied, variant.SurfaceVertexApplied,
             variant.SurfaceVertexApplied};
-        if (instrumented && !Fast::Oot3d::PicaUberEffectSupports(variant.Decisions, superset))
+        if (instrumented && !Fast::Extension::PicaUberEffectSupports(variant.Decisions, superset))
             return "effect_not_covered";
         if (Fast::Renderer3ds::FindPicaVertexArtifact(TitleVertexArtifacts(), variant.VertexShaderSource).Spirv.empty())
             return "vertex_not_built_in";
@@ -220,11 +220,11 @@ class UberAvailability {
                                                       : 0U);
         auto found = mFragments.find(key);
         if (found == mFragments.end()) {
-            const auto nri = Fast::Oot3d::BuildPicaNriFragmentShaderVariant(
-                instrumented ? Fast::Oot3d::BuildPicaUberEffectProgram(superset) : canonical.UberSource);
+            const auto nri = Fast::Extension::BuildPicaNriFragmentShaderVariant(
+                instrumented ? Fast::Extension::BuildPicaUberEffectProgram(superset) : canonical.UberSource);
             const char* gap = !nri.Applied ? "no_nri_contract"
                 : Fast::Renderer3ds::FindPicaFragmentArtifact(
-                      instrumented ? Fast::Oot3d::UberFragmentArtifacts() : Fast::Renderer3ds::NativeFragmentArtifacts(),
+                      instrumented ? Fast::Extension::UberFragmentArtifacts() : Fast::Renderer3ds::NativeFragmentArtifacts(),
                       nri.Source, true).empty() ? "fragment_not_built_in" : "available";
             found = mFragments.emplace(key, gap).first;
         }
@@ -289,7 +289,7 @@ constexpr InferredSemantic kInferredSemantics[] = {
          if (r.ReflectionProfile.has_value())
              r.ReflectionProfile.reset();
          else
-             r.ReflectionProfile = Fast::Oot3d::ReflectionMaterialParameters{};
+             r.ReflectionProfile = Fast::Extension::ReflectionMaterialParameters{};
      }},
 };
 
@@ -304,11 +304,11 @@ int Usage() {
 }
 
 int Run(const Options& options) {
-    if (Fast::Oot3d::PicaFaceNormalGuideDiagnosticRequested()) {
+    if (Fast::Extension::PicaFaceNormalGuideDiagnosticRequested()) {
         std::cerr << "OOT3D_GRAPHICS_FACE_NORMAL_GUIDE is set: it changes generated variants; unset it\n";
         return 2;
     }
-    Fast::Oot3d::PicaEffectiveShaderInventory inventory;
+    Fast::Extension::PicaEffectiveShaderInventory inventory;
     std::string error;
     if (!inventory.Configure(options.ShaderInventory, &error)) throw std::runtime_error(error);
 
@@ -330,7 +330,7 @@ int Run(const Options& options) {
     uint64_t totalUberGaps = 0;
     // One sample per distinct gap configuration.
     std::map<std::tuple<std::string, uint64_t, uint32_t, bool, bool>, Json> uberGapSamples;
-    const auto countUber = [&](Json& counts, const Fast::Oot3d::PicaShaderPipelineResult& result,
+    const auto countUber = [&](Json& counts, const Fast::Extension::PicaShaderPipelineResult& result,
                                const CanonicalPlan& canonical) {
         const std::string gap = uber.Classify(result, canonical);
         counts[gap] = counts.value(gap, uint64_t{0}) + 1U;
@@ -372,14 +372,14 @@ int Run(const Options& options) {
     const bool synthesize = !options.SynthesizeCaches.empty();
     if (synthesize && options.SynthesizeEffects.empty())
         throw std::runtime_error("--synthesize-cache needs --synthesize-effects");
-    std::map<std::string, Fast::Oot3d::EffectsSettings> targetEffects;
+    std::map<std::string, Fast::Extension::EffectsSettings> targetEffects;
     for (size_t index = 0; index < options.SynthesizeEffects.size(); ++index) {
-        Fast::Oot3d::PicaVariantRequestSession session;
-        if (!Fast::Oot3d::LoadPicaVariantRequests(options.SynthesizeEffects[index], session, &error))
+        Fast::Extension::PicaVariantRequestSession session;
+        if (!Fast::Extension::LoadPicaVariantRequests(options.SynthesizeEffects[index], session, &error))
             throw std::runtime_error(error);
-        std::map<std::string, Fast::Oot3d::EffectsSettings> found;
+        std::map<std::string, Fast::Extension::EffectsSettings> found;
         for (const auto& [id, effects] : session.Effects)
-            found.emplace(Fast::Oot3d::EncodePicaVariantEffects(effects).dump(), effects);
+            found.emplace(Fast::Extension::EncodePicaVariantEffects(effects).dump(), effects);
         if (index == 0) {
             targetEffects = std::move(found);
         } else {
@@ -395,8 +395,8 @@ int Run(const Options& options) {
     for (const auto& [rawPath, requestPath] : options.Sessions) {
         Oot3dPicaRawDrawSession raw;
         if (!LoadOot3dPicaRawDraws(rawPath, raw, &error)) throw std::runtime_error(error);
-        Fast::Oot3d::PicaVariantRequestSession requests;
-        if (!Fast::Oot3d::LoadPicaVariantRequests(requestPath, requests, &error)) throw std::runtime_error(error);
+        Fast::Extension::PicaVariantRequestSession requests;
+        if (!Fast::Extension::LoadPicaVariantRequests(requestPath, requests, &error)) throw std::runtime_error(error);
         if (requests.FaceNormalGuideDiagnostic)
             throw std::runtime_error(requestPath.string() +
                                      ": recorded with OOT3D_GRAPHICS_FACE_NORMAL_GUIDE; record it again without");
@@ -442,18 +442,18 @@ int Run(const Options& options) {
                 ++alphaTested;
                 if (parametric) ++alphaTestedParametric;
                 const auto caster = parametric
-                    ? Fast::Oot3d::BuildPicaShadowCasterAlphaFragmentShader(*plan.SharedUberFragmentShaderSource,
+                    ? Fast::Extension::BuildPicaShadowCasterAlphaFragmentShader(*plan.SharedUberFragmentShaderSource,
                                                                             plan.UberFragmentShader.StateKey,
                                                                             plan.UberFragmentShader.Hooks)
-                    : Fast::Oot3d::BuildPicaShadowCasterAlphaFragmentShader(
+                    : Fast::Extension::BuildPicaShadowCasterAlphaFragmentShader(
                           canonical.FragmentSource, canonical.FragmentKey, canonical.FragmentHooks);
                 // The runtime resolves a caster from the built-in family first;
                 // any other compiles unless the corpus carries it.
                 const bool builtIn = parametric && caster.Applied() &&
-                    !Fast::Renderer::FindPassShaderArtifact(Fast::Oot3d::CasterFragmentArtifacts(), caster.Source,
+                    !Fast::Renderer::FindPassShaderArtifact(Fast::Extension::CasterFragmentArtifacts(), caster.Source,
                                                             Fast::Renderer::SpirvStage::Fragment, {}).empty();
                 if (caster.Applied() && !builtIn) {
-                    inventory.Observe(Fast::Oot3d::PicaAotShaderStage::NriFragment, caster.Source,
+                    inventory.Observe(Fast::Extension::PicaAotShaderStage::NriFragment, caster.Source,
                                       canonical.DescriptorSchemaVersion, draw.CanonicalPipelineId,
                                       parametric ? plan.UberFragmentShader.StateKey : canonical.FragmentKey, 0U);
                     ++casterFragments;
@@ -473,29 +473,29 @@ int Run(const Options& options) {
             // from the effects: a context is replayed only with its own effects.
             std::map<uint32_t, std::string> targeted;
             for (const auto& [id, effects] : requests.Effects)
-                if (auto text = Fast::Oot3d::EncodePicaVariantEffects(effects).dump(); targetEffects.contains(text))
+                if (auto text = Fast::Extension::EncodePicaVariantEffects(effects).dump(); targetEffects.contains(text))
                     targeted.emplace(id, std::move(text));
             for (const auto& record : requests.Requests) {
                 const auto effects = targeted.find(record.EffectsId);
                 if (effects == targeted.end()) continue;
                 const auto context = ContextOf(record.Request);
                 contexts[effects->second].try_emplace(
-                    Fast::Oot3d::EncodePicaVariantRequest(0U, 0U, 0U, context, {}).dump(), context);
+                    Fast::Extension::EncodePicaVariantRequest(0U, 0U, 0U, context, {}).dump(), context);
             }
         }
 
         // Variants depend on the effects: resolve one effects value at a time,
         // as the runtime cache does per settings revision.
-        std::vector<const Fast::Oot3d::PicaVariantRequestRecord*> ordered;
+        std::vector<const Fast::Extension::PicaVariantRequestRecord*> ordered;
         for (const auto& request : requests.Requests) ordered.push_back(&request);
         std::stable_sort(ordered.begin(), ordered.end(),
                          [](const auto* left, const auto* right) { return left->EffectsId < right->EffectsId; });
-        Fast::Oot3d::PicaShaderPipelineCache cache;
+        Fast::Extension::PicaShaderPipelineCache cache;
         uint64_t unresolvedRaw = 0, resolveFailures = 0, outputWitnessMismatches = 0, instrumented = 0;
         Json failures = Json::array();
         Json uberCounts = Json::object();
         // The recorded request bound to this build's regenerated canonical plan.
-        const auto bind = [](const Fast::Oot3d::PicaVariantRequestRecord& record, const CanonicalPlan& canonical) {
+        const auto bind = [](const Fast::Extension::PicaVariantRequestRecord& record, const CanonicalPlan& canonical) {
             PicaShaderPipelineRequest request = record.Request;
             request.VertexShaderSource = canonical.VertexSource;
             request.FragmentShaderSource = canonical.FragmentSource;
@@ -520,7 +520,7 @@ int Run(const Options& options) {
             const PicaShaderPipelineRequest request = bind(*record, canonical);
             const auto& effects = requests.Effects.at(record->EffectsId);
             cache.BeginFrame(record->EffectsId);
-            const Fast::Oot3d::PicaShaderPipelineResult* result = nullptr;
+            const Fast::Extension::PicaShaderPipelineResult* result = nullptr;
             try {
                 result = &cache.Resolve(request, effects);
             } catch (const std::exception& exception) {
@@ -530,14 +530,14 @@ int Run(const Options& options) {
                                         {"error", exception.what()}});
                 continue;
             }
-            const auto witness = Fast::Oot3d::WitnessPicaVariantRequest(request, *result);
+            const auto witness = Fast::Extension::WitnessPicaVariantRequest(request, *result);
             if (!(witness == record->Witness)) ++outputWitnessMismatches;
             if (!result->IsCanonical()) ++instrumented;
             countUber(uberCounts, *result, canonical);
             const auto schema = canonical.DescriptorSchemaVersion;
-            inventory.Observe(Fast::Oot3d::PicaAotShaderStage::Vertex, result->VertexShaderSource, schema,
+            inventory.Observe(Fast::Extension::PicaAotShaderStage::Vertex, result->VertexShaderSource, schema,
                               record->CanonicalPipelineId, result->VertexShaderKey, record->SettingsRevision);
-            inventory.Observe(Fast::Oot3d::PicaAotShaderStage::Fragment, result->FragmentShaderSource, schema,
+            inventory.Observe(Fast::Extension::PicaAotShaderStage::Fragment, result->FragmentShaderSource, schema,
                               record->CanonicalPipelineId, result->FragmentShaderKey, record->SettingsRevision);
             Regenerated regenerated{Identity(result->VertexShaderSourceIdentity),
                                     Identity(result->FragmentShaderSourceIdentity),
@@ -549,13 +549,13 @@ int Run(const Options& options) {
                                     result->AppliedFeatures,
                                     result->FragmentOutputs,
                                     result->IsCanonical()};
-            const auto nri = Fast::Oot3d::BuildPicaNriFragmentShaderVariant(result->FragmentShaderSource);
+            const auto nri = Fast::Extension::BuildPicaNriFragmentShaderVariant(result->FragmentShaderSource);
             observedModules.insert({1U, regenerated.Vertex.Id});
             observedModules.insert({2U, regenerated.Fragment.Id});
             if (nri.Applied) {
                 regenerated.NriAvailable = true;
-                regenerated.NriFragment = Identity(Fast::Oot3d::IdentifyPicaAotShaderSource(nri.Source));
-                inventory.Observe(Fast::Oot3d::PicaAotShaderStage::NriFragment, nri.Source, schema,
+                regenerated.NriFragment = Identity(Fast::Extension::IdentifyPicaAotShaderSource(nri.Source));
+                inventory.Observe(Fast::Extension::PicaAotShaderStage::NriFragment, nri.Source, schema,
                                   record->CanonicalPipelineId, result->FragmentShaderKey, record->SettingsRevision);
                 observedModules.insert({3U, regenerated.NriFragment.Id});
                 observedBytes += nri.Source.size();
@@ -581,14 +581,14 @@ int Run(const Options& options) {
                     try {
                         const auto& result = cache.Resolve(request, requests.Effects.at(record->EffectsId));
                         const auto add = [&](uint32_t stage, std::string_view source) {
-                            const auto id = Fast::Oot3d::IdentifyPicaAotShaderSource(source).Id;
+                            const auto id = Fast::Extension::IdentifyPicaAotShaderSource(source).Id;
                             if (observedModules.contains({stage, id})) return;
                             if (entry.Modules.insert({stage, id}).second) entry.SourceBytes += source.size();
                             if (inferredModules.insert({stage, id}).second) inferredBytes += source.size();
                         };
                         add(1U, result.VertexShaderSource);
                         add(2U, result.FragmentShaderSource);
-                        if (const auto nri = Fast::Oot3d::BuildPicaNriFragmentShaderVariant(result.FragmentShaderSource);
+                        if (const auto nri = Fast::Extension::BuildPicaNriFragmentShaderVariant(result.FragmentShaderSource);
                             nri.Applied)
                             add(3U, nri.Source);
                     } catch (const std::exception&) {
@@ -626,7 +626,7 @@ int Run(const Options& options) {
         Oot3dPicaVulkanShaderSourceCache shaderCache;
         shaderCache.TevMode = donorTevMode;
         shaderCache.UberFragments = donorUberFragments;
-        Fast::Oot3d::PicaShaderPipelineCache cache;
+        Fast::Extension::PicaShaderPipelineCache cache;
         std::set<std::tuple<uint64_t, uint64_t, uint64_t>> programs;
         uint64_t records = 0, duplicates = 0, sourceFailures = 0, transplantFailures = 0, identityMismatches = 0,
                  resolves = 0, resolveRejects = 0, newModules = 0;
@@ -715,7 +715,7 @@ int Run(const Options& options) {
                             auto request = BindCanonical(context, canonical);
                             AssignOutputMergerState(request, plan.State.OutputMerger);
                             ++resolves;
-                            const Fast::Oot3d::PicaShaderPipelineResult* result = nullptr;
+                            const Fast::Extension::PicaShaderPipelineResult* result = nullptr;
                             try {
                                 result = &cache.Resolve(request, effects);
                             } catch (const std::exception&) {
@@ -723,19 +723,19 @@ int Run(const Options& options) {
                                 continue;
                             }
                             countUber(uberCounts, *result, canonical);
-                            const auto observe = [&](uint32_t stage, Fast::Oot3d::PicaAotShaderStage aot,
+                            const auto observe = [&](uint32_t stage, Fast::Extension::PicaAotShaderStage aot,
                                                      std::string_view source, uint64_t shaderKey) {
-                                const auto id = Fast::Oot3d::IdentifyPicaAotShaderSource(source).Id;
+                                const auto id = Fast::Extension::IdentifyPicaAotShaderSource(source).Id;
                                 if (observedModules.insert({stage, id}).second) ++newModules;
                                 inventory.Observe(aot, source, schema, pipelineId, shaderKey, 0U);
                             };
-                            observe(1U, Fast::Oot3d::PicaAotShaderStage::Vertex, result->VertexShaderSource,
+                            observe(1U, Fast::Extension::PicaAotShaderStage::Vertex, result->VertexShaderSource,
                                     result->VertexShaderKey);
-                            observe(2U, Fast::Oot3d::PicaAotShaderStage::Fragment, result->FragmentShaderSource,
+                            observe(2U, Fast::Extension::PicaAotShaderStage::Fragment, result->FragmentShaderSource,
                                     result->FragmentShaderKey);
-                            const auto nri = Fast::Oot3d::BuildPicaNriFragmentShaderVariant(result->FragmentShaderSource);
+                            const auto nri = Fast::Extension::BuildPicaNriFragmentShaderVariant(result->FragmentShaderSource);
                             if (nri.Applied)
-                                observe(3U, Fast::Oot3d::PicaAotShaderStage::NriFragment, nri.Source,
+                                observe(3U, Fast::Extension::PicaAotShaderStage::NriFragment, nri.Source,
                                         result->FragmentShaderKey);
                             if (trace.is_open()) {
                                 Json merger = Json::array();
@@ -748,10 +748,10 @@ int Run(const Options& options) {
                                               {"context", contextIndex},
                                               {"lighting", record.Registers[0x08FU]},
                                               {"merger", merger},
-                                              {"fragment", Hex64(Fast::Oot3d::IdentifyPicaAotShaderSource(
+                                              {"fragment", Hex64(Fast::Extension::IdentifyPicaAotShaderSource(
                                                                      result->FragmentShaderSource).Id)},
                                               {"nri", nri.Applied
-                                                          ? Json(Hex64(Fast::Oot3d::IdentifyPicaAotShaderSource(
+                                                          ? Json(Hex64(Fast::Extension::IdentifyPicaAotShaderSource(
                                                                            nri.Source).Id))
                                                           : Json(nullptr)}}
                                              .dump()
@@ -785,11 +785,11 @@ int Run(const Options& options) {
     Json recipes = nullptr;
     if (!options.Pipelines.empty()) {
         if (options.PipelineManifest.empty()) throw std::runtime_error("--pipelines needs --pipeline-manifest");
-        std::map<uint64_t, Fast::Oot3d::PicaGraphicsPipelineManifestEntry> rewritten;
+        std::map<uint64_t, Fast::Extension::PicaGraphicsPipelineManifestEntry> rewritten;
         uint32_t schema = 0;
         uint64_t input = 0, unlinked = 0, contractChanged = 0, ambiguous = 0;
         for (const auto& path : options.Pipelines) {
-            Fast::Oot3d::PicaGraphicsPipelineManifest manifest;
+            Fast::Extension::PicaGraphicsPipelineManifest manifest;
             if (!manifest.Load(path, &error)) throw std::runtime_error(error);
             schema = manifest.DescriptorSchemaVersion();
             for (auto entry : manifest.Entries()) {
@@ -829,9 +829,9 @@ int Run(const Options& options) {
                 }
             }
         }
-        std::vector<Fast::Oot3d::PicaGraphicsPipelineManifestEntry> entries;
+        std::vector<Fast::Extension::PicaGraphicsPipelineManifestEntry> entries;
         for (auto& [id, entry] : rewritten) entries.push_back(std::move(entry));
-        if (!Fast::Oot3d::WritePicaGraphicsPipelineManifest(options.PipelineManifest, schema, entries, &error))
+        if (!Fast::Extension::WritePicaGraphicsPipelineManifest(options.PipelineManifest, schema, entries, &error))
             throw std::runtime_error(error);
         totalFailures += unlinked;
         recipes = {{"input", input},

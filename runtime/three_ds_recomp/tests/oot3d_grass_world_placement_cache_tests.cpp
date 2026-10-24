@@ -1,12 +1,12 @@
-#include "fast/oot3d/grass_world_placement_cache.h"
-#include "fast/oot3d/grass_visibility.h"
-#include "fast/oot3d/grass_actor_cells.h"
-#include "fast/oot3d/grass_distant_tuft.h"
-#include "fast/oot3d/grass_indexed_topology.h"
-#include "fast/oot3d/grass_residency.h"
-#include "fast/oot3d/grass_selection_cache.h"
-#include "fast/oot3d/grass_selection_budget.h"
-#include "fast/oot3d/grass_surface_reference.h"
+#include "fast/extension/grass_world_placement_cache.h"
+#include "fast/extension/grass_visibility.h"
+#include "fast/extension/grass_actor_cells.h"
+#include "fast/extension/grass_distant_tuft.h"
+#include "fast/extension/grass_indexed_topology.h"
+#include "fast/extension/grass_residency.h"
+#include "fast/extension/grass_selection_cache.h"
+#include "fast/extension/grass_selection_budget.h"
+#include "fast/extension/grass_surface_reference.h"
 #include "fast/renderer3ds/pica_surface_lighting_shader.h"
 #include "fast/renderer3ds/pica_surface_color_response.h"
 
@@ -20,9 +20,9 @@
 
 namespace {
 
-Fast::Oot3d::GrassWorldPlacementRequest BaseRequest(std::span<const Fast::Oot3d::GrassAnchor> anchors,
-                                                    std::span<const Fast::Oot3d::GrassAnchorCluster> clusters) {
-    Fast::Oot3d::GrassWorldPlacementRequest request;
+Fast::Extension::GrassWorldPlacementRequest BaseRequest(std::span<const Fast::Extension::GrassAnchor> anchors,
+                                                    std::span<const Fast::Extension::GrassAnchorCluster> clusters) {
+    Fast::Extension::GrassWorldPlacementRequest request;
     request.Identity = 41U;
     request.ContentVersion = 7U;
     request.FrameId = 10U;
@@ -39,7 +39,7 @@ Fast::Oot3d::GrassWorldPlacementRequest BaseRequest(std::span<const Fast::Oot3d:
 } // namespace
 
 TEST(Oot3dGrassSurfaceReference, PreservesNativeIndicesAndNormalizedWeights) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const auto reference = PackGrassSurfaceReference({0, 65535, 12345}, 0.25F, 0.5F);
     EXPECT_EQ(reference[0] & 65535U, 0U);
     EXPECT_EQ(reference[0] >> 16U, 65535U);
@@ -82,7 +82,7 @@ TEST(Oot3dGrassSurfaceLighting, RejectsMissingNativeShaderHooks) {
 
 
 TEST(Oot3dGrassSurfaceReference, SubdivisionRetainsOriginalTriangleCoordinates) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     std::array<GrassSourceVertex, 3> vertices{};
     vertices[1].Position = {1000, 0, 0};
     vertices[2].Position = {0, 0, 1000};
@@ -111,7 +111,7 @@ TEST(Oot3dGrassSurfaceReference, SubdivisionRetainsOriginalTriangleCoordinates) 
 }
 
 TEST(Oot3dGrassIndexedTopology, PreservesEveryExpandedTriangleAndWinding) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const auto topology = BuildGrassIndexedTopology();
     for (uint8_t segments = 1; segments <= kMaximumGrassBladeSegments; ++segments) {
         std::vector<GrassBladeGeometryVertex> expanded;
@@ -149,7 +149,7 @@ TEST(Oot3dGrassIndexedTopology, PreservesEveryExpandedTriangleAndWinding) {
 }
 
 TEST(Oot3dGrassSelectionCache, ReusesOnlyIdenticalSelectionInputs) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GrassSelectionCache cache;
     GrassSelectionKey key{1, BuildGrassLodPolicy(InteractiveGrassSettings{}), 3, 500000, true,
         {GrassSelectionView{}}};
@@ -184,7 +184,7 @@ TEST(Oot3dGrassSelectionCache, ReusesOnlyIdenticalSelectionInputs) {
 }
 
 TEST(Oot3dGrassSelectionBudget, BucketQuantizesTheStableVisibilityOverRetention) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     EXPECT_EQ(GrassBudgetBucket(0.5F, 0.0F), 0U) << "no retention: every root in the first bucket";
     EXPECT_EQ(GrassBudgetBucket(0.0F, 1.0F), 0U);
     EXPECT_EQ(GrassBudgetBucket(0.5F, 1.0F), 512U);
@@ -197,7 +197,7 @@ TEST(Oot3dGrassSelectionBudget, BucketQuantizesTheStableVisibilityOverRetention)
 }
 
 TEST(Oot3dGrassSelectionBudget, CutAdmitsTheLowestBucketsWithinTheBudget) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GrassBudgetHistogram histogram{};
     EXPECT_EQ(GrassBudgetCut(histogram, 0), kGrassBudgetCutAll) << "nothing visible: nothing thinned";
     histogram[0] = 10;
@@ -227,7 +227,7 @@ TEST(Oot3dGrassSelectionBudget, CutAdmitsTheLowestBucketsWithinTheBudget) {
 // cluster order, so turning the camera (which reorders and reselects
 // clusters) never empties one direction while another stays dense.
 TEST(Oot3dGrassSelectionBudget, ThinningKeepsEveryClusterAndIgnoresClusterOrder) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     constexpr size_t clusters = 8, perCluster = 1000;
     std::vector<std::vector<float>> keys(clusters);
     uint32_t seed = 12345U;
@@ -268,7 +268,7 @@ TEST(Oot3dGrassSelectionBudget, ThinningKeepsEveryClusterAndIgnoresClusterOrder)
 }
 
 TEST(Oot3dGrassSurfaceColor, WorldAnchorsRetainGridColorsWithoutChangingPlacement) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     std::array<GrassAnchor, 2> anchors{};
     anchors[0].LocalPosition = {1, 2, 3};
     anchors[1].LocalPosition = {4, 5, 6};
@@ -292,7 +292,7 @@ TEST(Oot3dGrassSurfaceColor, WorldAnchorsRetainGridColorsWithoutChangingPlacemen
 }
 
 TEST(Oot3dGrassSurfaceColor, RebuildsColorsWhenPresentGridChanges) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     std::array<GrassAnchor, 1> anchors{};
     anchors[0].Uv = {0.125F, 0.125F};
     auto request = BaseRequest(anchors, {});
@@ -315,7 +315,7 @@ TEST(Oot3dGrassSurfaceColor, RebuildsColorsWhenPresentGridChanges) {
 }
 
 TEST(Oot3dGrassAnchorCodec, DirectionsRoundTripAcrossBothHemispheres) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     EXPECT_EQ(sizeof(GrassWorldAnchor), 48U);
     for (int x = -10; x <= 10; ++x) for (int y = -10; y <= 10; ++y) for (int z = -10; z <= 10; ++z) {
         const float length = std::sqrt(static_cast<float>(x*x+y*y+z*z));
@@ -330,7 +330,7 @@ TEST(Oot3dGrassAnchorCodec, DirectionsRoundTripAcrossBothHemispheres) {
 }
 
 TEST(Oot3dGrassVisibility, DistantClusterWorkOnlyContainsLodPrefix) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GrassWorldPlacement placement;
     placement.Clusters.push_back({.FirstAnchor=0,.AnchorCount=1000,.Center={0,0,-2000}});
     for (size_t i=0;i<1000;++i) placement.CullingAnchors.push_back({{0,0,-2000},static_cast<float>(i)/1000});
@@ -356,7 +356,7 @@ TEST(Oot3dGrassVisibility, DistantClusterWorkOnlyContainsLodPrefix) {
 }
 
 TEST(Oot3dGrassVisibility, LongerVisibilityDoesNotIncreaseExistingDetail) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     InteractiveGrassSettings settings;
     settings.FarTuftsEnabled=false;
     settings.DrawDistance=5000;
@@ -378,7 +378,7 @@ TEST(Oot3dGrassVisibility, LongerVisibilityDoesNotIncreaseExistingDetail) {
 }
 
 TEST(Oot3dGrassVisibility, DistantTuftsTradeInstancesForCoverageWithoutChangingNearLod) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     InteractiveGrassSettings detailed;
     detailed.DrawDistance=10000;
     detailed.LodReferenceDistance=1000;
@@ -416,7 +416,7 @@ TEST(Oot3dGrassVisibility, DistantTuftsTradeInstancesForCoverageWithoutChangingN
 }
 
 TEST(Oot3dGrassVisibility, DistantTuftClusterPrefixMatchesPerInstanceRetention) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GrassWorldPlacement placement;
     placement.Clusters.push_back({.FirstAnchor=0,.AnchorCount=1000,.Center={0,0,-2000}});
     for (size_t i=0;i<1000;++i) placement.CullingAnchors.push_back({{0,0,-2000},static_cast<float>(i)/1000});
@@ -440,7 +440,7 @@ TEST(Oot3dGrassVisibility, DistantTuftClusterPrefixMatchesPerInstanceRetention) 
 }
 
 TEST(Oot3dGrassVisibility, TuftTransitionMixesStableTopologiesWithoutADistanceRing) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     InteractiveGrassSettings settings;
     settings.DrawDistance = 5000;
     settings.LodReferenceDistance = 1000;
@@ -461,7 +461,7 @@ TEST(Oot3dGrassVisibility, TuftTransitionMixesStableTopologiesWithoutADistanceRi
 }
 
 TEST(Oot3dGrassVisibility, IncreasedTuftDensityKeepsConservativeClusterBounds) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     InteractiveGrassSettings settings;
     settings.DrawDistance = 5000;
     settings.LodReferenceDistance = 1000;
@@ -482,7 +482,7 @@ TEST(Oot3dGrassVisibility, IncreasedTuftDensityKeepsConservativeClusterBounds) {
 }
 
 TEST(Oot3dGrassVisibility, FadeHasContinuousEndpointsAndDoesNotEraseSparseFarGrass) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     EXPECT_FLOAT_EQ(GrassDistanceFade(800, 1000, 0.2F), 1);
     EXPECT_NEAR(GrassDistanceFade(900, 1000, 0.2F), 0.5F, 1.0e-6F);
     EXPECT_FLOAT_EQ(GrassDistanceFade(1000, 1000, 0.2F), 0);
@@ -496,7 +496,7 @@ TEST(Oot3dGrassVisibility, FadeHasContinuousEndpointsAndDoesNotEraseSparseFarGra
 }
 
 TEST(Oot3dGrassVisibility, SegmentTransitionSpreadsChangesWithoutAddingTopologyBins) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     InteractiveGrassSettings settings;
     settings.DrawDistance = 5000;
     settings.Appearance.BladeSegments = 12;
@@ -520,7 +520,7 @@ TEST(Oot3dGrassVisibility, SegmentTransitionSpreadsChangesWithoutAddingTopologyB
 }
 
 TEST(Oot3dGrassVisibility, SoftLodSettingsClampInvalidRanges) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GraphicsSettings settings;
     settings.Preset = GraphicsPreset::Custom;
     settings.Grass.Quality = GrassQuality::Custom;
@@ -540,7 +540,7 @@ TEST(Oot3dGrassVisibility, SoftLodSettingsClampInvalidRanges) {
 }
 
 TEST(Oot3dGrassWorldPlacementCache, ReusesWorldAnchorsAndAppliesNativeTransformOnce) {
-    const std::vector<Fast::Oot3d::GrassAnchor> anchors{ {
+    const std::vector<Fast::Extension::GrassAnchor> anchors{ {
         .LocalPosition = { 1.0F, 2.0F, 3.0F },
         .LocalNormal = { 0.0F, 1.0F, 0.0F },
         .BladeHeight = 8.0F,
@@ -549,7 +549,7 @@ TEST(Oot3dGrassWorldPlacementCache, ReusesWorldAnchorsAndAppliesNativeTransformO
         .WidthAxis = { 0.0F, 1.0F },
         .StableId = 99U,
     } };
-    const std::vector<Fast::Oot3d::GrassAnchorCluster> clusters{ {
+    const std::vector<Fast::Extension::GrassAnchorCluster> clusters{ {
         .FirstAnchor = 0U,
         .AnchorCount = 1U,
         .LocalCenter = { 1.0F, 2.0F, 3.0F },
@@ -557,17 +557,17 @@ TEST(Oot3dGrassWorldPlacementCache, ReusesWorldAnchorsAndAppliesNativeTransformO
         .MaximumBladeHeight = 8.0F,
     } };
     auto request = BaseRequest(anchors, clusters);
-    Fast::Oot3d::GrassWorldPlacementCache cache;
+    Fast::Extension::GrassWorldPlacementCache cache;
     const auto first = cache.Resolve(request);
     ASSERT_NE(first, nullptr);
     ASSERT_EQ(first->Anchors.size(), 1U);
     EXPECT_EQ(first->Anchors.front().BaseHeight, (std::array<float, 4>{ 12.0F, 28.0F, 36.0F, 4.0F }));
-    EXPECT_EQ(Fast::Oot3d::UnpackGrassNormal(first->Anchors.front().PackedWorldNormal),
+    EXPECT_EQ(Fast::Extension::UnpackGrassNormal(first->Anchors.front().PackedWorldNormal),
               (std::array<float, 4>{ 0.0F, 1.0F, 0.0F, 0.0F }));
     EXPECT_EQ(first->Anchors.front().StableId, 99U);
     ASSERT_EQ(first->CullingAnchors.size(), 1U);
     EXPECT_EQ(first->CullingAnchors.front().Position, (std::array<float, 3>{ 12.0F, 28.0F, 36.0F }));
-    EXPECT_FLOAT_EQ(first->CullingAnchors.front().StableVisibility, Fast::Oot3d::GrassStableVisibilityValue(99U));
+    EXPECT_FLOAT_EQ(first->CullingAnchors.front().StableVisibility, Fast::Extension::GrassStableVisibilityValue(99U));
     ASSERT_EQ(first->Clusters.size(), 1U);
     EXPECT_FLOAT_EQ(first->Clusters.front().Radius, 18.0F);
     EXPECT_FLOAT_EQ(first->Clusters.front().MaximumBladeHeight, 4.0F);
@@ -580,10 +580,10 @@ TEST(Oot3dGrassWorldPlacementCache, ReusesWorldAnchorsAndAppliesNativeTransformO
 }
 
 TEST(Oot3dGrassWorldPlacementCache, RebuildsOnContentOrTransformChange) {
-    const std::vector<Fast::Oot3d::GrassAnchor> anchors(1U);
-    const std::vector<Fast::Oot3d::GrassAnchorCluster> clusters(1U);
+    const std::vector<Fast::Extension::GrassAnchor> anchors(1U);
+    const std::vector<Fast::Extension::GrassAnchorCluster> clusters(1U);
     auto request = BaseRequest(anchors, clusters);
-    Fast::Oot3d::GrassWorldPlacementCache cache;
+    Fast::Extension::GrassWorldPlacementCache cache;
     const auto first = cache.Resolve(request);
     ASSERT_NE(first, nullptr);
     request.ContentVersion = 8U;
@@ -600,20 +600,20 @@ TEST(Oot3dGrassWorldPlacementCache, RebuildsOnContentOrTransformChange) {
 }
 
 TEST(Oot3dGrassWorldPlacementCache, SmallModelScaleDoesNotShrinkWorldHeightBounds) {
-    const std::vector<Fast::Oot3d::GrassAnchor> anchors{{.BladeHeight = 10.0F}};
-    const std::vector<Fast::Oot3d::GrassAnchorCluster> clusters{{
+    const std::vector<Fast::Extension::GrassAnchor> anchors{{.BladeHeight = 10.0F}};
+    const std::vector<Fast::Extension::GrassAnchorCluster> clusters{{
         .AnchorCount = 1U, .LocalRadius = 1.0F, .MaximumBladeHeight = 10.0F}};
     auto request = BaseRequest(anchors, clusters);
     request.ModelToWorld = {0.01F,0,0,0, 0,0.01F,0,0, 0,0,0.01F,0, 0,0,0,1};
     request.HeightScale = 1.0F;
-    const auto world = Fast::Oot3d::BuildGrassWorldPlacement(request);
+    const auto world = Fast::Extension::BuildGrassWorldPlacement(request);
     ASSERT_EQ(world.Clusters.size(), 1U);
     EXPECT_NEAR(world.Clusters.front().Radius, 12.01F, 0.0001F);
     EXPECT_FLOAT_EQ(world.Clusters.front().MaximumBladeHeight, 10.0F);
 }
 
 TEST(Oot3dGrassVisibility, CameraComesFromRenderedProjectionNotNextGameplayTick) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     // Perspective looking down -Z, with eye (100,50,25), stored column-major.
     std::array<float, 16> matrix{1,0,0,0, 0,2,0,0, 0,0,-1,-1, -100,-100,24,25};
     const std::array<float, 3> expected{100,50,25};
@@ -635,7 +635,7 @@ TEST(Oot3dGrassVisibility, CameraComesFromRenderedProjectionNotNextGameplayTick)
 }
 
 TEST(Oot3dGrassVisibility, SpatialQueryMatchesExhaustiveCullingWithoutChangingAnchors) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     std::vector<GrassAnchor> anchors;
     std::vector<GrassAnchorCluster> clusters;
     for (uint32_t i = 0; i < 4096U; ++i) {
@@ -735,7 +735,7 @@ std::array<float, 16> GrassTestViewProjection(const std::array<float, 3>& eye, f
 } // namespace
 
 TEST(Oot3dGrassVisibility, RetentionBoundDoesNotIncreaseWithDistance) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     InteractiveGrassSettings settings;
     settings.DrawDistance = 50000;
     settings.LodReferenceDistance = 2282;
@@ -756,7 +756,7 @@ TEST(Oot3dGrassVisibility, RetentionBoundDoesNotIncreaseWithDistance) {
 }
 
 TEST(Oot3dGrassVisibility, CandidateEnvelopeRefinesToTheExactClusterWork) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     std::vector<GrassAnchor> anchors;
     std::vector<GrassAnchorCluster> clusters;
     uint32_t stable = 1U;
@@ -867,7 +867,7 @@ TEST(Oot3dGrassVisibility, CandidateEnvelopeRefinesToTheExactClusterWork) {
 }
 
 TEST(Oot3dGrassActorCells, EveryActorThatCanTouchARootIsListedInItsCellInOrder) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     uint32_t seed = 777U;
     const auto random = [&seed](float low, float high) {
         seed = seed * 1664525U + 1013904223U;
@@ -923,7 +923,7 @@ TEST(Oot3dGrassActorCells, EveryActorThatCanTouchARootIsListedInItsCellInOrder) 
 }
 
 TEST(Oot3dGrassVisibility, LodEvaluatorFarBandIsBitIdentical) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     InteractiveGrassSettings base;
     base.DrawDistance = 50000;
     base.LodReferenceDistance = 2282;
@@ -971,7 +971,7 @@ TEST(Oot3dGrassVisibility, LodEvaluatorFarBandIsBitIdentical) {
 }
 
 TEST(Oot3dGrassResidency, StoresEveryPrefixACameraWithinTheMarginSelects) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     InteractiveGrassSettings settings;
     settings.DrawDistance = 50000;
     settings.LodReferenceDistance = 2282;

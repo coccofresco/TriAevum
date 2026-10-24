@@ -84,7 +84,7 @@ pitch about its horizontal right axis in orange, a surface's roll about its
 own axis in cyan; a spot's or sun's beam in pale yellow), 20000 units each
 way, with rings of a constant size on screen.
 
-The lines are real 3D lines (`Fast::Oot3d::WorldDebugLineRuntime`,
+The lines are real 3D lines (`Fast::Extension::WorldDebugLineRuntime`,
 `WorldDebugLinePass`): screen-space quads of a constant width drawn in the
 scene's render pass before its first UI draw, tested against the scene's
 depth without writing it. Parts in front of the scene's surfaces are solid;

@@ -147,7 +147,7 @@ it is not a claim that Azahar cannot display HD fonts.
 - Both inspected headers start with `QBF1`; bytes +0x0c/+0x0d/+0x0e are
   `04/40/40`. The native consumers below establish these as bit depth and
   glyph width/height (4 bpp, 64x64), not guessed texture dimensions.
-- `runtime/three_ds_recomp/src/fast/oot3d/azahar_texture_pack.cpp`,
+- `runtime/three_ds_recomp/src/fast/extension/azahar_texture_pack.cpp`,
   `ComputeAzaharTextureHash`, hashes native upload bytes (or legacy detiled
   data). It has no font/glyph identity or text-layout contract.
 

@@ -3,8 +3,8 @@
 #include "oot3d_menu_presentation.h"
 #include "oot3d_top_screen_controls.h"
 
-#include "fast/oot3d/graphics_settings_window.h"
-#include "fast/oot3d/presentation_picture.h"
+#include "fast/extension/graphics_settings_window.h"
+#include "fast/extension/presentation_picture.h"
 #include "oot3d/renderer/ui_presentation_layout.h"
 
 #include <algorithm>
@@ -18,7 +18,7 @@
 namespace Oot3dNativeGame {
 namespace {
 
-using Fast::Oot3d::GraphicsSettings;
+using Fast::Extension::GraphicsSettings;
 using Menu::Row;
 using Menu::RowKind;
 using Menu::WriteResult;
@@ -81,7 +81,7 @@ InGameMenu::InGameMenu(InGameMenuOwners owners)
     : mOwners(std::move(owners)), mModel((RefreshSnapshots(), BuildDocument())) {}
 
 void InGameMenu::RefreshSnapshots() {
-  auto &graphics = Fast::Oot3d::GraphicsSettingsRuntime::Instance();
+  auto &graphics = Fast::Extension::GraphicsSettingsRuntime::Instance();
   mGraphics = graphics.Snapshot();
   mCapabilities = graphics.Capabilities();
   if (mOwners.Controls) mControls = mOwners.Controls->Snapshot().Config;
@@ -94,9 +94,9 @@ void InGameMenu::Refresh() {
 }
 
 Menu::WriteResult InGameMenu::ApplyGraphics(GraphicsSettings settings, bool keepPreset) {
-  using Fast::Oot3d::GraphicsSettingsSaveState;
-  auto &runtime = Fast::Oot3d::GraphicsSettingsRuntime::Instance();
-  if (!keepPreset) settings.Preset = Fast::Oot3d::GraphicsPreset::Custom;
+  using Fast::Extension::GraphicsSettingsSaveState;
+  auto &runtime = Fast::Extension::GraphicsSettingsRuntime::Instance();
+  if (!keepPreset) settings.Preset = Fast::Extension::GraphicsPreset::Custom;
   const auto validation = runtime.Apply(settings, true);
   RefreshSnapshots();
   if (!validation.Accepted()) {
@@ -158,7 +158,7 @@ Menu::Document InGameMenu::BuildDocument() {
 }
 
 void InGameMenu::BuildVideoTab(Menu::Document &document) {
-  using namespace Fast::Oot3d;
+  using namespace Fast::Extension;
   Menu::Tab tab;
   tab.Title = "Video";
   // A graphics choice validated like F1's combos: the same validator decides
@@ -234,8 +234,8 @@ void InGameMenu::BuildVideoTab(Menu::Document &document) {
       "never stretched; the HUD keeps its place.",
       {"Original 3DS (5:3)", "16:9", "21:9", "Free"}, [](const auto &s) { return static_cast<int>(s.Aspect); },
       [](auto &s, int value) {
-        s.Aspect = static_cast<Fast::Oot3d::AspectRatioMode>(value);
-        (void)Fast::Oot3d::SnapWindowedOutputToAspect(s);
+        s.Aspect = static_cast<Fast::Extension::AspectRatioMode>(value);
+        (void)Fast::Extension::SnapWindowedOutputToAspect(s);
       },
       true));
   {
@@ -364,7 +364,7 @@ void InGameMenu::BuildVideoTab(Menu::Document &document) {
 }
 
 void InGameMenu::BuildGraphicsTab(Menu::Document &document) {
-  using namespace Fast::Oot3d;
+  using namespace Fast::Extension;
   Menu::Tab tab;
   tab.Title = "Graphics";
   const auto choice = [this](std::string key, std::string help, std::vector<std::string> choices,
@@ -838,8 +838,8 @@ void InGameMenu::BuildGameTab(Menu::Document &document) {
 }
 
 void InGameMenu::UpdateDisplayConfirmation() {
-  using Fast::Oot3d::PresentationTransactionPhase;
-  auto &runtime = Fast::Oot3d::GraphicsSettingsRuntime::Instance();
+  using Fast::Extension::PresentationTransactionPhase;
+  auto &runtime = Fast::Extension::GraphicsSettingsRuntime::Instance();
   const auto status = runtime.PresentationStatus();
   const bool awaiting = status.Phase == PresentationTransactionPhase::AwaitingConfirmation;
   if (awaiting) {
@@ -856,13 +856,13 @@ void InGameMenu::UpdateDisplayConfirmation() {
       modal.ConfirmLabel = "Keep";
       modal.CancelLabel = "Revert";
       modal.OnConfirm = [this] {
-        Fast::Oot3d::GraphicsSettingsRuntime::Instance().ConfirmPresentation();
+        Fast::Extension::GraphicsSettingsRuntime::Instance().ConfirmPresentation();
         mConfirmationModal = false;
         Refresh();
         mModel.SetStatus("Display settings kept", false);
       };
       modal.OnCancel = [this] {
-        Fast::Oot3d::GraphicsSettingsRuntime::Instance().RollbackPresentation();
+        Fast::Extension::GraphicsSettingsRuntime::Instance().RollbackPresentation();
         mConfirmationModal = false;
         Refresh();
         mModel.SetStatus("Display settings reverted", false);
@@ -899,7 +899,7 @@ void InGameMenu::Update(const InGameMenuHostInput &input, bool hostGuiOwnsInput,
   if (hostGuiOwnsInput) {
     if (mModel.IsOpen()) mModel.Close();
     mConfirmationModal = false;
-    Fast::Oot3d::DeferDisplayConfirmation(false);
+    Fast::Extension::DeferDisplayConfirmation(false);
     return;
   }
   if (toggle) {
@@ -916,7 +916,7 @@ void InGameMenu::Update(const InGameMenuHostInput &input, bool hostGuiOwnsInput,
     }
   }
   // The ImGui confirmation stays away while this menu asks the question.
-  Fast::Oot3d::DeferDisplayConfirmation(mModel.IsOpen());
+  Fast::Extension::DeferDisplayConfirmation(mModel.IsOpen());
   if (!mModel.IsOpen()) {
     mConfirmationModal = false;
     return;
@@ -946,7 +946,7 @@ void InGameMenu::Update(const InGameMenuHostInput &input, bool hostGuiOwnsInput,
   }
   mModel.Update(held, pointer, elapsedSeconds);
   if (!mModel.IsOpen()) {
-    Fast::Oot3d::DeferDisplayConfirmation(false);
+    Fast::Extension::DeferDisplayConfirmation(false);
     return;
   }
   UpdateDisplayConfirmation();

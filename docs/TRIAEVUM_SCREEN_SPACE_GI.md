@@ -1669,14 +1669,14 @@ Stage A.
 | `include/fast/renderer/diffuse_gi_pass.h`, `src/fast/renderer/diffuse_gi_pass.cpp` | The pass object (raw Vulkan, title-neutral): pipelines from the pack, pass-owned buffers, descriptor sets, recording of a frame, neutral outputs, history and screen-resource lifecycle, statistics, barrier records |
 | `diffuse_gi_temporal.h/.cpp` (refactor) | `TemporalFrameState`, `TemporalHistoryState` (the reset rules, now one owner for `TemporalAccumulator` and the pass), `MakeTemporalShaderParams`, `ValidateTemporalFrameState`; arithmetic unchanged |
 | `diffuse_gi_gather.h/.cpp` (refactor) | `ValidateDepthCamera` (the camera rules of `ValidateGatherInput`, same order and messages) |
-| `src/fast/oot3d/builtin_pass_shaders.cpp`, `cmake/pass_shader_sources.cmake` | The generator's catalogue appends the eight kernels; the pass shader sources bring the GI kernel and parameter code |
+| `src/fast/extension/builtin_pass_shaders.cpp`, `cmake/pass_shader_sources.cmake` | The generator's catalogue appends the eight kernels; the pass shader sources bring the GI kernel and parameter code |
 | `src/fast/renderer/builtin_pass.spvpack` | Regenerated: 70 -> 78 modules |
 | `tests/renderer_diffuse_gi_pass_tests.cpp`, target `renderer_diffuse_gi_pass_tests` | 9 CPU tests of the plan half |
 | `tools/renderer/tev_program/diffuse_gi_pass_gpu_tests.cpp`, target `diffuse_gi_pass_gpu_tests` | The pass object with the precompiled kernels against the FP32 twins, the runtime-compiled twins and its lifecycle |
 | `tests/renderer_spirv_pack_tests.cpp` | Expected built-in module count 70 -> 78 |
 
 Where the code lives: everything is title-neutral and sits in `fast/renderer`
-(no 3DS, PICA or OOT3D vocabulary, no NRI). Stage A has no `fast/oot3d` glue:
+(no 3DS, PICA or OOT3D vocabulary, no NRI). Stage A has no `fast/extension` glue:
 the only title-specific part is the adapter that fills the pass inputs from
 the renderer guides, and its conventions belong to Stage B (open point 25).
 The game build compiles the new catalogue entries (in
@@ -1947,7 +1947,7 @@ built-in modules; `grass_motion_gpu_tests` (which also uses the pack) passes.
 - **Raw Vulkan, title-neutral.** The pass follows the shared-layer pattern
   (`renderer3ds/pica_surface_lighting_pass`: `VkDevice`, `VkCommandBuffer`,
   the pass shader compiler, an optional pipeline cache), not the NRI interop
-  of the `fast/oot3d` passes, so it stays in the generic renderer layer; the
+  of the `fast/extension` passes, so it stays in the generic renderer layer; the
   Stage B provider maps the graph's barrier plan and state tracker onto
   `PassImageState`/`PassOutputAccess` and records into the backend's command
   buffer.
@@ -2004,7 +2004,7 @@ built-in modules; `grass_motion_gpu_tests` (which also uses the pack) passes.
 |---|---|---|---|---|
 | Runtime pass (pipeline order, resources, reset rules) | Specification sections 1, 7, 8, 9 (resources, formats, explicit producer/consumer dependencies, no read-write aliasing of the history, defined outcomes at borders and for invalid data, FP16 only after tests), 11 (T15, T16) | Requirements only | Resource plan and lifetimes, parameter layout with dynamic offsets, one owner of the reset rules, output kernel and its FP16 bound, resize and neutral-output policies | Per-frame-slot uniform rings; a pass-owned copy of the outputs; aliasing before the game's guide extent is known |
 | Kernels | The M2-M4 kernels of this module | Unchanged | - | Rewriting the kernels to read images (would break bit-compatibility with the twins) |
-| Plumbing conventions | Repository pass objects read for lifecycle and barrier handling only: `fast/oot3d/normal_space_pass.h/.cpp`, the headers of `motion_vector_pass.h` and `temporal_aa_pass.h`, `effect_graph_pass_barriers.h` (dispatch / completion access), `resource_state_tracker.h`, `renderer3ds/pica_surface_lighting_pass.h` and the raw-Vulkan allocation lines of its `.cpp`; the pack and generator: `spirv_pack.h`, `pass_shader_artifact.h`, `builtin_pass_binaries.h`, `shaderc_compiler.h/.cpp` (`Resolve`), `spirv_cache.h`, `builtin_pass_shaders.cpp`, `cmake/pass_shader_sources.cmake`, `cmake/spirv_pack.cmake`, the generic part of `tools/renderer/tev_program/build_pass_artifacts.cpp`; build wiring: `src/fast/CMakeLists.txt`, `cmake/VerifyRenderer3dsCrossTitleBoundary.cmake`; test device: `vulkan_test_device.h` and the M3/M4 GPU tests; `docs/TRIAEVUM_BRIXELIZER_GI.md` for how the existing GI provider is wired | Configure / Execute / invalidate lifecycle, availability with a reason, statistics, graph-declared dispatch and completion access with elided write-only completions, built-in pack lookup by source text, raw Vulkan compute pipelines | - | Nothing algorithmic was taken; the Brixelizer GI pass, FidelityFX, GTAO, Hi-Z, TAA, motion-vector and denoiser code were not opened |
+| Plumbing conventions | Repository pass objects read for lifecycle and barrier handling only: `fast/extension/normal_space_pass.h/.cpp`, the headers of `motion_vector_pass.h` and `temporal_aa_pass.h`, `effect_graph_pass_barriers.h` (dispatch / completion access), `resource_state_tracker.h`, `renderer3ds/pica_surface_lighting_pass.h` and the raw-Vulkan allocation lines of its `.cpp`; the pack and generator: `spirv_pack.h`, `pass_shader_artifact.h`, `builtin_pass_binaries.h`, `shaderc_compiler.h/.cpp` (`Resolve`), `spirv_cache.h`, `builtin_pass_shaders.cpp`, `cmake/pass_shader_sources.cmake`, `cmake/spirv_pack.cmake`, the generic part of `tools/renderer/tev_program/build_pass_artifacts.cpp`; build wiring: `src/fast/CMakeLists.txt`, `cmake/VerifyRenderer3dsCrossTitleBoundary.cmake`; test device: `vulkan_test_device.h` and the M3/M4 GPU tests; `docs/TRIAEVUM_BRIXELIZER_GI.md` for how the existing GI provider is wired | Configure / Execute / invalidate lifecycle, availability with a reason, statistics, graph-declared dispatch and completion access with elided write-only completions, built-in pack lookup by source text, raw Vulkan compute pipelines | - | Nothing algorithmic was taken; the Brixelizer GI pass, FidelityFX, GTAO, Hi-Z, TAA, motion-vector and denoiser code were not opened |
 
 Shared files opened (generic and GI-related parts only; their MXAO-specific
 blocks were not studied): `tools/renderer/tev_program/build_pass_artifacts.cpp`
@@ -2086,7 +2086,7 @@ with the baked ambient, the defaults and the profiling remain for Stage C.
   `GlobalIlluminationReadsFaceNormal` (a function of its own, next to the
   existing readers' predicate); the GI-specular material-guide gates now
   require Brixelizer GI (Off unchanged).
-- Provider (`fast/oot3d/screen_space_gi_provider.*`): one pass instance per
+- Provider (`fast/extension/screen_space_gi_provider.*`): one pass instance per
   composed surface (namespace, colour and depth addresses; at most three, the
   least recently used retired after the recorded work completed), so every
   surface has its own history; a second composition of a surface in the same
@@ -2098,7 +2098,7 @@ with the baked ambient, the defaults and the profiling remain for Stage C.
   as the traced GI) and on screen-resource invalidation (arena
   reconfiguration, render-target reset). A frame without motion vectors or a
   temporal view gets the neutral output (J = 0).
-- Adapter (`fast/oot3d/diffuse_gi_adapter.*`, open point 25): one compute
+- Adapter (`fast/extension/diffuse_gi_adapter.*`, open point 25): one compute
   kernel per guide texel decodes the declared conventions into the pass
   inputs at the work extent and writes the upsampler's output guide (view
   depth, normal code) at the guide extent; the native depth is sampled
@@ -3122,7 +3122,7 @@ upsampler, temporal history and adapter), `diffuse_gi_scene.h/.cpp`,
 `tests/CMakeLists.txt`, `diffuse_gi_pass_gpu_tests.cpp`, this document.
 
 Shared files edited (screen-space GI lines only):
-`src/fast/oot3d/display_effect_plan.cpp` (the screen-space GI resources
+`src/fast/extension/display_effect_plan.cpp` (the screen-space GI resources
 also read `EffectResource::NormalGuide`, with its comment) and
 `src/fast/backends/gfx_vulkan_pica_display.cpp` (one line: the GI frame's
 `Guides.Normal` view of `EffectResource::NormalGuide`). Shared files opened

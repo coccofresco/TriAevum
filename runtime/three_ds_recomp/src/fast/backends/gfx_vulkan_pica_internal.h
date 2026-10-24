@@ -4,53 +4,53 @@
 // namespace keeps the helpers local to each unit, as when they lived in one file.
 #ifdef ENABLE_OOT3D_VULKAN
 #include <bit>
-#include "fast/oot3d/pica_guide_diagnostics.h"
-#include "fast/oot3d/outline_diagnostics.h"
-#include "fast/oot3d/outline_occlusion_pass.h"
+#include "fast/extension/pica_guide_diagnostics.h"
+#include "fast/extension/outline_diagnostics.h"
+#include "fast/extension/outline_occlusion_pass.h"
 
 #include "fast/backends/gfx_vulkan.h"
 #include "oot3d/renderer/ui_presentation_layout.h"
-#include "fast/oot3d/pica_shadow2d.h"
-#include "fast/oot3d/pica_display_composition.h"
-#include "fast/oot3d/display_effect_plan.h"
-#include "fast/oot3d/display_effect_resources.h"
-#include "fast/oot3d/effect_graph_physical_plan.h"
-#include "fast/oot3d/graphics_settings_runtime.h"
-#include "fast/oot3d/scene_view_runtime.h"
-#include "fast/oot3d/texture_catalog_runtime.h"
-#include "fast/oot3d/grass_interaction_bridge.h"
-#include "fast/oot3d/grass_primitive_topology.h"
-#include "fast/oot3d/grass_render_telemetry.h"
-#include "fast/oot3d/grass_surface_eligibility.h"
-#include "fast/oot3d/grass_texture_source_cache.h"
-#include "fast/oot3d/grass_scene_bridge.h"
-#include "fast/oot3d/visual_clock.h"
-#include "fast/oot3d/render_resolution_policy.h"
-#include "fast/oot3d/pica_toon_shader.h"
-#include "fast/oot3d/pica_toon_telemetry.h"
-#include "fast/oot3d/pica_scanout_effects.h"
-#include "fast/oot3d/pica_ambient_occlusion_guide.h"
-#include "fast/oot3d/pica_scene_domain_guide.h"
-#include "fast/oot3d/pica_grass_texture_coordinates.h"
-#include "fast/oot3d/pica_guide_sampling_barriers.h"
-#include "fast/oot3d/pica_reactive_mask.h"
-#include "fast/oot3d/pica_nri_shader_contract.h"
-#include "fast/oot3d/pica_uber_effect_program.h"
-#include "fast/oot3d/pica_nri_vertex_input.h"
-#include "fast/oot3d/pica_nri_pipeline_state.h"
+#include "fast/extension/pica_shadow2d.h"
+#include "fast/extension/pica_display_composition.h"
+#include "fast/extension/display_effect_plan.h"
+#include "fast/extension/display_effect_resources.h"
+#include "fast/extension/effect_graph_physical_plan.h"
+#include "fast/extension/graphics_settings_runtime.h"
+#include "fast/extension/scene_view_runtime.h"
+#include "fast/extension/texture_catalog_runtime.h"
+#include "fast/extension/grass_interaction_bridge.h"
+#include "fast/extension/grass_primitive_topology.h"
+#include "fast/extension/grass_render_telemetry.h"
+#include "fast/extension/grass_surface_eligibility.h"
+#include "fast/extension/grass_texture_source_cache.h"
+#include "fast/extension/grass_scene_bridge.h"
+#include "fast/extension/visual_clock.h"
+#include "fast/extension/render_resolution_policy.h"
+#include "fast/extension/pica_toon_shader.h"
+#include "fast/extension/pica_toon_telemetry.h"
+#include "fast/extension/pica_scanout_effects.h"
+#include "fast/extension/pica_ambient_occlusion_guide.h"
+#include "fast/extension/pica_scene_domain_guide.h"
+#include "fast/extension/pica_grass_texture_coordinates.h"
+#include "fast/extension/pica_guide_sampling_barriers.h"
+#include "fast/extension/pica_reactive_mask.h"
+#include "fast/extension/pica_nri_shader_contract.h"
+#include "fast/extension/pica_uber_effect_program.h"
+#include "fast/extension/pica_nri_vertex_input.h"
+#include "fast/extension/pica_nri_pipeline_state.h"
 #include "fast/renderer3ds/pica_pipeline_identity.h"
 #include "fast/renderer3ds/pica_surface_lighting.h"
 #include "fast/renderer3ds/pica_tev_program.h"
-#include "fast/oot3d/pica_uniform_layout.h"
-#include "fast/oot3d/pica_nri_draw_ownership.h"
-#include "fast/oot3d/pica_directional_shadow_lighting.h"
-#include "fast/oot3d/pica_scene_semantics.h"
-#include "fast/oot3d/pica_alpha_coverage_policy.h"
-#include "fast/oot3d/linear_scene_color.h"
-#include "fast/oot3d/upscaler_guides.h"
-#include "fast/oot3d/pica_reflection_material.h"
-#include "fast/oot3d/reflection_provider.h"
-#include "fast/oot3d/pica_texture_decode.h"
+#include "fast/extension/pica_uniform_layout.h"
+#include "fast/extension/pica_nri_draw_ownership.h"
+#include "fast/extension/pica_directional_shadow_lighting.h"
+#include "fast/extension/pica_scene_semantics.h"
+#include "fast/extension/pica_alpha_coverage_policy.h"
+#include "fast/extension/linear_scene_color.h"
+#include "fast/extension/upscaler_guides.h"
+#include "fast/extension/pica_reflection_material.h"
+#include "fast/extension/reflection_provider.h"
+#include "fast/extension/pica_texture_decode.h"
 #include "oot3d/renderer/azahar_texture_pack.h"
 #include <spdlog/spdlog.h>
 #include "fast/backends/gfx_native_pica_layout.h"
@@ -113,22 +113,22 @@ uint64_t HashNativeBytes(std::span<const uint8_t> bytes) {
     return hash;
 }
 
-using Oot3d::ToNativeVkCompare;
+using Extension::ToNativeVkCompare;
 
-using Oot3d::ToNativeVkStencil;
+using Extension::ToNativeVkStencil;
 
-using Oot3d::ToNativeVkLogic;
+using Extension::ToNativeVkLogic;
 
-using Oot3d::ToNativeVkTopology;
+using Extension::ToNativeVkTopology;
 
-Oot3d::PicaSceneTopology ToPicaSceneTopology(
+Extension::PicaSceneTopology ToPicaSceneTopology(
     GfxNativePicaTopology topology) {
     switch (topology) {
         case GfxNativePicaTopology::TriangleList:
         case GfxNativePicaTopology::GeometryShader:
-            return Oot3d::PicaSceneTopology::TriangleList;
+            return Extension::PicaSceneTopology::TriangleList;
         case GfxNativePicaTopology::TriangleStrip:
-            return Oot3d::PicaSceneTopology::TriangleStrip;
+            return Extension::PicaSceneTopology::TriangleStrip;
         case GfxNativePicaTopology::TriangleFan:
             throw std::runtime_error(
                 "native PICA triangle fan requires index expansion");
@@ -136,15 +136,15 @@ Oot3d::PicaSceneTopology ToPicaSceneTopology(
     throw std::runtime_error("invalid native PICA topology");
 }
 
-Oot3d::PicaSceneCullMode ToPicaSceneCullMode(const GfxNativePicaDrawView& draw) noexcept {
-    return draw.CullMode == GfxNativeCullMode::KeepAll ? Oot3d::PicaSceneCullMode::None
-        : draw.FramebufferFlipped                      ? Oot3d::PicaSceneCullMode::Front
-                                                       : Oot3d::PicaSceneCullMode::Back;
+Extension::PicaSceneCullMode ToPicaSceneCullMode(const GfxNativePicaDrawView& draw) noexcept {
+    return draw.CullMode == GfxNativeCullMode::KeepAll ? Extension::PicaSceneCullMode::None
+        : draw.FramebufferFlipped                      ? Extension::PicaSceneCullMode::Front
+                                                       : Extension::PicaSceneCullMode::Back;
 }
 
-Oot3d::PicaSceneFrontFace ToPicaSceneFrontFace(const GfxNativePicaDrawView& draw) noexcept {
-    return draw.CullMode == GfxNativeCullMode::KeepCounterClockwise ? Oot3d::PicaSceneFrontFace::Clockwise
-                                                                     : Oot3d::PicaSceneFrontFace::CounterClockwise;
+Extension::PicaSceneFrontFace ToPicaSceneFrontFace(const GfxNativePicaDrawView& draw) noexcept {
+    return draw.CullMode == GfxNativeCullMode::KeepCounterClockwise ? Extension::PicaSceneFrontFace::Clockwise
+                                                                     : Extension::PicaSceneFrontFace::CounterClockwise;
 }
 
 // A draw composited over the completed scene (the schedule's overlay tail):
@@ -185,7 +185,7 @@ bool AdmitsShadowCasterGeometry(const GfxNativePicaDrawView& draw) noexcept {
            draw.FragmentShaderHooks.ValidFor(draw.FragmentShaderSource) &&
            draw.FragmentShaderHooks.Supports(Renderer3ds::PicaShaderHook::AfterNativeTev) &&
            draw.FragmentShaderHooks.Supports(Renderer3ds::PicaShaderHook::BeforeDepth) &&
-           draw.FragmentUniformBytes.size() == Oot3d::kPicaPackedFragmentUniformSize &&
+           draw.FragmentUniformBytes.size() == Extension::kPicaPackedFragmentUniformSize &&
            std::all_of(draw.Textures.begin(), draw.Textures.end(), [](const auto& texture) {
                return texture.Slot < 3U && texture.CopyReferences.empty() &&
                       (texture.NativeType == 0U || (texture.Slot == 0U && texture.NativeType == 3U));
@@ -199,18 +199,18 @@ bool AdmitsShadowCasterGeometry(const GfxNativePicaDrawView& draw) noexcept {
 uint64_t HashAlphaCasterMaterial(const GfxNativePicaDrawView& draw,
                                  const std::array<uint64_t, 3>& replacementHashes) {
     const auto bytes = draw.FragmentUniformBytes;
-    uint64_t hash = HashNativeBytes(bytes.first(Oot3d::kPicaPackedFragmentDepthScaleOffset));
+    uint64_t hash = HashNativeBytes(bytes.first(Extension::kPicaPackedFragmentDepthScaleOffset));
     const auto mix = [&hash](uint64_t value) {
         hash ^= value + 0x9e3779b97f4a7c15ULL + (hash << 6U) + (hash >> 2U);
     };
-    mix(HashNativeBytes(bytes.subspan(Oot3d::kPicaPackedFragmentTextureLodBiasOffset, 16U)));
-    mix(HashNativeBytes(bytes.subspan(Oot3d::kPicaPackedFragmentTevProgramOffset,
-                                      Oot3d::kPicaPackedFragmentProcTexOffset -
-                                          Oot3d::kPicaPackedFragmentTevProgramOffset)));
+    mix(HashNativeBytes(bytes.subspan(Extension::kPicaPackedFragmentTextureLodBiasOffset, 16U)));
+    mix(HashNativeBytes(bytes.subspan(Extension::kPicaPackedFragmentTevProgramOffset,
+                                      Extension::kPicaPackedFragmentProcTexOffset -
+                                          Extension::kPicaPackedFragmentTevProgramOffset)));
     uint32_t textureConfig = 0;
-    std::memcpy(&textureConfig, bytes.data() + Oot3d::kPicaPackedFragmentControlOffset + 8U, sizeof(textureConfig));
+    std::memcpy(&textureConfig, bytes.data() + Extension::kPicaPackedFragmentControlOffset + 8U, sizeof(textureConfig));
     if ((textureConfig & (1U << 10U)) != 0U)
-        mix(HashNativeBytes(bytes.subspan(Oot3d::kPicaPackedFragmentProcTexOffset)));
+        mix(HashNativeBytes(bytes.subspan(Extension::kPicaPackedFragmentProcTexOffset)));
     for (const auto& texture : draw.Textures) {
         mix(texture.Slot);
         mix(texture.NativeContentHash);
@@ -274,23 +274,23 @@ GfxNativeTextureWrap DecodeNativePicaWrap(uint8_t wrap) {
     }
 }
 
-std::optional<Oot3d::GrassTextureWrap>
+std::optional<Extension::GrassTextureWrap>
 DecodeNativePicaGrassWrap(uint8_t wrap) {
     switch (wrap) {
         case 0:
-            return Oot3d::GrassTextureWrap::Clamp;
+            return Extension::GrassTextureWrap::Clamp;
         case 2:
         case 6:
         case 7:
-            return Oot3d::GrassTextureWrap::Repeat;
+            return Extension::GrassTextureWrap::Repeat;
         case 3:
-            return Oot3d::GrassTextureWrap::Mirror;
+            return Extension::GrassTextureWrap::Mirror;
         default:
             return std::nullopt;
     }
 }
 
-using Oot3d::UsesTranslucentBlend;
+using Extension::UsesTranslucentBlend;
 
 VkFilter ToNativePicaVkFilter(GfxNativeTextureFilter filter) {
     switch (filter) {
@@ -324,9 +324,9 @@ VkSamplerAddressMode ToNativePicaVkAddressMode(
     return VK_SAMPLER_ADDRESS_MODE_REPEAT;
 }
 
-using Oot3d::ToNativeVkBlendOperation;
+using Extension::ToNativeVkBlendOperation;
 
-using Oot3d::ToNativeVkBlendFactor;
+using Extension::ToNativeVkBlendFactor;
 
 VkImageAspectFlags NativeDepthAspect(VkFormat format) {
     VkImageAspectFlags aspect = VK_IMAGE_ASPECT_DEPTH_BIT;

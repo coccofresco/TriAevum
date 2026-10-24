@@ -1,5 +1,5 @@
 #include "oot3d_native_actor_interactions.h"
-#include "fast/oot3d/grass_interaction_bridge.h"
+#include "fast/extension/grass_interaction_bridge.h"
 #include "oot3d/actor_spawn.h"
 #include "oot3d_native_a32_memory.h"
 
@@ -25,10 +25,10 @@ static_assert(offsetof(Oot3dActor, colChkInfo) == 0xA0);
 static_assert(offsetof(Oot3dActor, next) == 0x130);
 } // namespace
 
-std::vector<Fast::Oot3d::GrassInteractor>
+std::vector<Fast::Extension::GrassInteractor>
 CollectNativeActorInteractions(const NativeA32Memory &memory,
                                uint32_t playState, uint64_t sourceFrame) {
-  std::vector<Fast::Oot3d::GrassInteractor> actors;
+  std::vector<Fast::Extension::GrassInteractor> actors;
   Oot3dActorContext context{};
   if (playState == 0 ||
       playState > std::numeric_limits<uint32_t>::max() -
@@ -63,14 +63,14 @@ CollectNativeActorInteractions(const NativeA32Memory &memory,
       }
       if (actor.update != 0 && actor.draw != 0 &&
           collision.cylinderRadius > 0 && collision.cylinderHeight > 0) {
-        Fast::Oot3d::GrassInteractor next;
+        Fast::Extension::GrassInteractor next;
         // Native actor-profile IDs: Player, En_Horse, En_Horse_Link_Child.
         // En_Horse's initialized variant byte distinguishes Epona from Ingo.
         // Renderer code receives typed roles and opaque identities, not IDs.
         uint8_t horseVariant = 1;
         const bool adultEpona = actor.id == 0x0014 &&
             Read(memory, address + 0x1B0, horseVariant) && horseVariant == 0;
-        using Kind = Fast::Oot3d::GrassInteractor::Kind;
+        using Kind = Fast::Extension::GrassInteractor::Kind;
         next.Type = actor.id == 0x0000 ? Kind::PlayerLink
                   : adultEpona || actor.id == 0x009A ? Kind::Epona
                   : Kind::SceneActor;
@@ -94,7 +94,7 @@ CollectNativeActorInteractions(const NativeA32Memory &memory,
 
 void PublishNativeActorInteractions(const NativeA32Memory &memory,
                                     uint32_t playState, uint64_t sourceFrame) {
-  Fast::Oot3d::GrassInteractionBridge::Instance().PublishFrame(
+  Fast::Extension::GrassInteractionBridge::Instance().PublishFrame(
       sourceFrame,
       CollectNativeActorInteractions(memory, playState, sourceFrame));
 }

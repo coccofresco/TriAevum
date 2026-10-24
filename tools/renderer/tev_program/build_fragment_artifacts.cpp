@@ -4,17 +4,17 @@
 #include "fast/renderer3ds/pica_fragment_artifact.h"
 #include "fast/renderer3ds/pica_native_fragment_binaries.h"
 #include "fast/renderer3ds/pica_nri_shader_contract.h"
-#include "fast/oot3d/pica_directional_shadow_caster.h"
-#include "fast/oot3d/pica_shader_instrumentation.h"
-#include "fast/oot3d/pica_shader_pipeline_cache.h"
-#include "fast/oot3d/toon_surface_response.h"
-#include "fast/oot3d/pica_temporal_fragment_binaries.h"
-#include "fast/oot3d/pica_toon_fragment_artifact.h"
-#include "fast/oot3d/pica_uber_effect_program.h"
-#include "fast/oot3d/pica_uber_fragment_binaries.h"
-#include "fast/oot3d/pica_caster_fragment_binaries.h"
+#include "fast/extension/pica_directional_shadow_caster.h"
+#include "fast/extension/pica_shader_instrumentation.h"
+#include "fast/extension/pica_shader_pipeline_cache.h"
+#include "fast/extension/toon_surface_response.h"
+#include "fast/extension/pica_temporal_fragment_binaries.h"
+#include "fast/extension/pica_toon_fragment_artifact.h"
+#include "fast/extension/pica_uber_effect_program.h"
+#include "fast/extension/pica_uber_fragment_binaries.h"
+#include "fast/extension/pica_caster_fragment_binaries.h"
 #include "fast/renderer/pass_shader_artifact.h"
-#include "fast/oot3d/pica_nri_shader_contract.h"
+#include "fast/extension/pica_nri_shader_contract.h"
 #include "spirv_pack_file.h"
 #include <shaderc/shaderc.hpp>
 #include <cstdlib>
@@ -30,12 +30,12 @@ using namespace Fast::Renderer3ds;
 
 static void Check(bool ok, const std::string& error) { if (!ok) throw std::runtime_error(error); }
 
-static constexpr Fast::Oot3d::PicaReactiveCoverage kTemporalCoverage[]{
-    Fast::Oot3d::PicaReactiveCoverage::None, Fast::Oot3d::PicaReactiveCoverage::SourceAlpha,
-    Fast::Oot3d::PicaReactiveCoverage::SourceColor, Fast::Oot3d::PicaReactiveCoverage::Full};
+static constexpr Fast::Extension::PicaReactiveCoverage kTemporalCoverage[]{
+    Fast::Extension::PicaReactiveCoverage::None, Fast::Extension::PicaReactiveCoverage::SourceAlpha,
+    Fast::Extension::PicaReactiveCoverage::SourceColor, Fast::Extension::PicaReactiveCoverage::Full};
 
-static void ConfigureTemporal(Fast::Oot3d::PicaFragmentInstrumentationRequest& request, unsigned kind) {
-    using namespace Fast::Oot3d;
+static void ConfigureTemporal(Fast::Extension::PicaFragmentInstrumentationRequest& request, unsigned kind) {
+    using namespace Fast::Extension;
     using Factor = ::Oot3d::Renderer::NativeBlendFactor;
     request.RequestedFeatures |= PicaShaderInstrumentationFeature::RigidMotionGuide |
         PicaShaderInstrumentationFeature::ReactiveMask;
@@ -66,7 +66,7 @@ static int BuildCasterFamily(int argc, char** argv) {
         Oot3dPicaGeneratedFragmentShader shader;
         std::string error;
         Check(GenerateOot3dPicaParametricBaseFragmentShader(lighting, integerTexture != 0, shader, &error), error);
-        const auto caster = Fast::Oot3d::BuildPicaShadowCasterAlphaFragmentShader(
+        const auto caster = Fast::Extension::BuildPicaShadowCasterAlphaFragmentShader(
             shader.Source, shader.StateKey, shader.Hooks);
         Check(caster.Applied(), "parametric alpha caster derivation failed");
         const auto compiled = compiler.CompileGlslToSpv(caster.Source, shaderc_fragment_shader,
@@ -74,7 +74,7 @@ static int BuildCasterFamily(int argc, char** argv) {
         Check(compiled.GetCompilationStatus() == shaderc_compilation_status_success, compiled.GetErrorMessage());
         if (verify) {
             const auto stored = Fast::Renderer::FindPassShaderArtifact(
-                Fast::Oot3d::CasterFragmentArtifacts(), caster.Source, Fast::Renderer::SpirvStage::Fragment, {});
+                Fast::Extension::CasterFragmentArtifacts(), caster.Source, Fast::Renderer::SpirvStage::Fragment, {});
             Check(stored.size() == size_t(compiled.cend() - compiled.cbegin()) &&
                       std::equal(stored.begin(), stored.end(), compiled.cbegin()),
                   "stale/missing alpha caster: regenerate with --casters");
@@ -108,10 +108,10 @@ static int BuildUberFamily(int argc, char** argv) {
         // Surface programs with and without fragment primitive IDs (PBR seams).
         for (unsigned temporal = 0; temporal < 2; ++temporal)
         for (unsigned surface = 0; surface < 3; ++surface) {
-            const auto uber = Fast::Oot3d::BuildPicaUberEffectProgram({shader.Source, shader.Hooks,
+            const auto uber = Fast::Extension::BuildPicaUberEffectProgram({shader.Source, shader.Hooks,
                 temporal != 0, surface != 0, surface == 2});
             Check(!uber.empty(), "uber effect composition rejected a parametric base");
-            const auto nri = Fast::Oot3d::BuildPicaNriFragmentShaderVariant(uber);
+            const auto nri = Fast::Extension::BuildPicaNriFragmentShaderVariant(uber);
             Check(nri.Applied, nri.Error);
             if (const char* dump = std::getenv("TRIAEVUM_UBER_SOURCES")) {
                 std::ofstream file(std::filesystem::path(dump) / ("uber" + std::to_string(modules) + ".frag"));
@@ -120,7 +120,7 @@ static int BuildUberFamily(int argc, char** argv) {
             if (countOnly) { ++modules; continue; }
             const auto id = IdentifyPicaShaderSource(nri.Source);
             if (verify) {
-                Check(!FindPicaFragmentArtifact(Fast::Oot3d::UberFragmentArtifacts(), nri.Source, true).empty(),
+                Check(!FindPicaFragmentArtifact(Fast::Extension::UberFragmentArtifacts(), nri.Source, true).empty(),
                       "uber effect source changed: regenerate artifacts");
                 ++modules;
                 continue;
@@ -165,8 +165,8 @@ int main(int argc, char** argv) try {
     options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_1);
     options.SetOptimizationLevel(shaderc_optimization_level_performance);
     SpirvPackFile pack;
-    const std::span<const PicaFragmentArtifact> storedArtifacts = toon ? Fast::Oot3d::ToonFragmentArtifacts()
-        : temporal ? Fast::Oot3d::TemporalFragmentArtifacts() : NativeFragmentArtifacts();
+    const std::span<const PicaFragmentArtifact> storedArtifacts = toon ? Fast::Extension::ToonFragmentArtifacts()
+        : temporal ? Fast::Extension::TemporalFragmentArtifacts() : NativeFragmentArtifacts();
     std::unordered_set<std::string> emittedSources;
     unsigned modules = 0;
     unsigned materialCases = 0, toonStyleCases = 0;
@@ -210,7 +210,7 @@ int main(int argc, char** argv) try {
         }
         if (verify && !temporal && !toon && !shadowWrite) {
             // Alpha-tested shadow casters run this program up to its alpha test.
-            const auto caster = Fast::Oot3d::BuildPicaShadowCasterAlphaFragmentShader(
+            const auto caster = Fast::Extension::BuildPicaShadowCasterAlphaFragmentShader(
                 shader.Source, shader.StateKey, shader.Hooks);
             Check(caster.Applied(), "alpha-tested shadow caster variant was not built");
             const auto binary = compiler.CompileGlslToSpv(caster.Source, shaderc_fragment_shader,
@@ -229,7 +229,7 @@ int main(int argc, char** argv) try {
         std::vector<std::string> sources;
         std::unordered_set<std::string> nriOnlySources;
         if (!temporal && !shadowWrite) {
-            using namespace Fast::Oot3d;
+            using namespace Fast::Extension;
             ToonStyleSettings style;
             PicaFragmentInstrumentationRequest request;
             request.Source = shader.Source;
@@ -269,7 +269,7 @@ int main(int argc, char** argv) try {
             Check(!off.Applied(), "disabled toon changed the canonical shader");
         }
         if (toon) {
-            using namespace Fast::Oot3d;
+            using namespace Fast::Extension;
             ToonStyleSettings style;
             for (auto mode : {ToonMode::PicaMaterial, ToonMode::PostProcessPreview}) {
                 PicaFragmentInstrumentationRequest request;
@@ -355,7 +355,7 @@ int main(int argc, char** argv) try {
         } else if (!temporal) {
             sources.push_back(shader.Source);
         } else {
-            using namespace Fast::Oot3d;
+            using namespace Fast::Extension;
             // Temporal-only rendering always requests rigid motion and reactivity.
             // All native blend states reduce to these four coverage equations.
             for (unsigned kind = 0; kind < std::size(kTemporalCoverage); ++kind) {

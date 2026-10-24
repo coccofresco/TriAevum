@@ -2,7 +2,7 @@
 
 #ifdef ENABLE_OOT3D_VULKAN
 
-#include "fast/oot3d/renderer_validation_telemetry.h"
+#include "fast/extension/renderer_validation_telemetry.h"
 
 #include <vulkan/vulkan.h>
 
@@ -22,7 +22,7 @@ class Oot3dVulkanValidation final {
 
     void ConfigureFromEnvironment(
         std::vector<const char*>& instanceExtensions,
-        Oot3d::RendererValidationTelemetry& telemetry);
+        Extension::RendererValidationTelemetry& telemetry);
     void ApplyTo(VkInstanceCreateInfo& createInfo);
     void Initialize(VkInstance instance);
     void Shutdown();
@@ -36,7 +36,7 @@ class Oot3dVulkanValidation final {
         const VkDebugUtilsMessengerCallbackDataEXT* callbackData,
         void* userData);
 
-    Oot3d::RendererValidationTelemetry* mTelemetry = nullptr;
+    Extension::RendererValidationTelemetry* mTelemetry = nullptr;
     VkInstance mInstance = VK_NULL_HANDLE;
     VkDebugUtilsMessengerEXT mMessenger = VK_NULL_HANDLE;
     VkDebugUtilsMessengerCreateInfoEXT mCreateInfo{};

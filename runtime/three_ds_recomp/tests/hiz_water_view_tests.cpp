@@ -1,10 +1,10 @@
-#include "fast/oot3d/hiz_reflection.h"
+#include "fast/extension/hiz_reflection.h"
 
 #include <array>
 #include <iostream>
 #include <stdexcept>
 
-using namespace Fast::Oot3d;
+using namespace Fast::Extension;
 using Fast::Renderer3ds::PicaSceneWaterBodies;
 using Fast::Renderer3ds::PicaWaterMap;
 

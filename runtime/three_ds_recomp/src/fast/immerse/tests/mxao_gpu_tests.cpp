@@ -4,7 +4,7 @@
 // licence (../LICENSE-iMMERSE.txt) and is used under the author's explicit
 // permission, granted exclusively to TriAevum.
 #include "fast/immerse/mxao_shader.h"
-#include "fast/oot3d/ambient_occlusion_composite.h"
+#include "fast/extension/ambient_occlusion_composite.h"
 #include "fast/renderer3ds/pica_geometry_guide.h"
 #include "vulkan_test_device.h"
 
@@ -212,7 +212,7 @@ struct MxaoFixture {
         layout.pPushConstantRanges = &push;
         Check(vkCreatePipelineLayout(Device.Device, &layout, nullptr, &Layout));
         const auto sources = Fast::Immerse::BuildMxaoPassShaders(
-            Fast::Oot3d::AmbientOcclusionDebugShaderLibrary(), Fast::Renderer3ds::PicaGeometryGuideShaderLibrary());
+            Fast::Extension::AmbientOcclusionDebugShaderLibrary(), Fast::Renderer3ds::PicaGeometryGuideShaderLibrary());
         for (uint32_t program = 0; program < kProgramCount; ++program) {
             const auto shader = Device.Shader(sources[program], shaderc_compute_shader);
             VkComputePipelineCreateInfo pipeline{ VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO };

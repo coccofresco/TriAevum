@@ -8,7 +8,7 @@
   "generator": "tools/renderer/tev_program/build_vertex_artifacts.cpp",
   "translated_source": "oot3d_translated_vertex_programs.h",
   "wrapper_source": "oot3d_native_pica_shader_gen.cpp",
-  "temporal_source": "runtime/three_ds_recomp/src/fast/oot3d/pica_rigid_motion.cpp",
+  "temporal_source": "runtime/three_ds_recomp/src/fast/extension/pica_rigid_motion.cpp",
   "donor": "Citra/Azahar GLSL shader decompiler, GPL-2.0-or-later; preserve donor notices",
   "compiler": "shaderc from Vulkan SDK 1.4.350.0, Vulkan 1.1, performance optimization",
   "modules": 8,

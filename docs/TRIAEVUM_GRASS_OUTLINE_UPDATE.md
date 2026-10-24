@@ -70,13 +70,13 @@ HUD non sono modificati.
 
 Percorsi relativi a `runtime/three_ds_recomp`:
 
-- `include/fast/oot3d/grass_blade_shape.h`: profilo GLSL e limite di deformazione.
-- `src/fast/oot3d/interactive_grass_pass.cpp`: record GPU, forma e culling.
-- `src/fast/oot3d/grass_geometry_registry.cpp`: identita geometrica dell'anchor.
-- `src/fast/oot3d/grass_scene_bridge.cpp`: ancoraggi persistenti e draw correnti.
-- `src/fast/oot3d/grass_world_placement_cache.cpp`: bounds in unita world.
-- `src/fast/oot3d/toon_outline_shader.cpp`: unico kernel outline.
-- `src/fast/oot3d/pica_scanout_effects.cpp`, `scene_composite.cpp` e
+- `include/fast/extension/grass_blade_shape.h`: profilo GLSL e limite di deformazione.
+- `src/fast/extension/interactive_grass_pass.cpp`: record GPU, forma e culling.
+- `src/fast/extension/grass_geometry_registry.cpp`: identita geometrica dell'anchor.
+- `src/fast/extension/grass_scene_bridge.cpp`: ancoraggi persistenti e draw correnti.
+- `src/fast/extension/grass_world_placement_cache.cpp`: bounds in unita world.
+- `src/fast/extension/toon_outline_shader.cpp`: unico kernel outline.
+- `src/fast/extension/pica_scanout_effects.cpp`, `scene_composite.cpp` e
   `scene_composite_pass.cpp`: adapter raster/compute, non copie del kernel.
 - `graphics_settings*` e `grass_settings_panel.cpp`: proprietario dei valori,
   validazione, persistenza e controlli F1.

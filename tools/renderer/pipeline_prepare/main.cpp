@@ -1,10 +1,10 @@
 #include "fast/renderer3ds/vulkan_pipeline_cache_store.h"
 #include "fast/renderer3ds/pica_startup_programs.h"
 #include "fast/renderer3ds/pica_native_fragment_binaries.h"
-#include "fast/oot3d/pica_uber_fragment_binaries.h"
-#include "fast/oot3d/pica_builtin_fragment_families.h"
+#include "fast/extension/pica_uber_fragment_binaries.h"
+#include "fast/extension/pica_builtin_fragment_families.h"
 #include "headless_device.h"
-#include "fast/oot3d/pica_pipeline_preparation.h"
+#include "fast/extension/pica_pipeline_preparation.h"
 #include "fast/renderer/preparation_host.h"
 #include "fast/renderer3ds/pipeline_cache_flusher.h"
 // Translated title vertex family (title code, like the runtime executable's).
@@ -190,15 +190,15 @@ int main(int argc, char** argv) {
                 throw std::runtime_error("pipeline preparation output overlaps a manifest");
         }
         const auto begin = std::chrono::steady_clock::now();
-        Fast::Oot3d::PicaAotShaderPack pack;
+        Fast::Extension::PicaAotShaderPack pack;
         std::string error;
         // The runtime reads binaries on demand; installation checks them all.
         if (!manifests.empty() && (!pack.Load(args.at("--pack"), &error) || !pack.Verify(&error)))
             throw std::runtime_error(error);
-        std::map<uint64_t, Fast::Oot3d::PicaGraphicsPipelineManifestEntry> unique;
+        std::map<uint64_t, Fast::Extension::PicaGraphicsPipelineManifestEntry> unique;
         size_t observations = 0;
         for (const auto& path : manifests) {
-            Fast::Oot3d::PicaGraphicsPipelineManifest manifest;
+            Fast::Extension::PicaGraphicsPipelineManifest manifest;
             if (!manifest.Load(path, &error)) throw std::runtime_error(error);
             if (manifest.DescriptorSchemaVersion() != pack.DescriptorSchemaVersion())
                 throw std::runtime_error("pipeline manifest and shader pack schema differ");
@@ -210,7 +210,7 @@ int main(int argc, char** argv) {
                 if (unique.size() > 65536) throw std::runtime_error("pipeline union exceeds recipe budget");
             }
         }
-        std::vector<Fast::Oot3d::PicaGraphicsPipelineManifestEntry> entries;
+        std::vector<Fast::Extension::PicaGraphicsPipelineManifestEntry> entries;
         for (auto& [id, entry] : unique) entries.push_back(std::move(entry));
         HeadlessDevice device;
         if (!device.Initialize(adapter, validation))
@@ -219,7 +219,7 @@ int main(int argc, char** argv) {
         VkPhysicalDeviceProperties properties{};
         vkGetPhysicalDeviceProperties(physical, &properties);
         const auto identity = Renderer3ds::MakePipelineCacheHeader(properties);
-        const auto depthFormat = Fast::Oot3d::FindPicaDepthFormat(physical);
+        const auto depthFormat = Fast::Extension::FindPicaDepthFormat(physical);
         Renderer3ds::NriPicaPipelineBridge bridge;
         Renderer3ds::NriPicaExecutionConfig execution;
         execution.OwnedDraws = false;
@@ -250,7 +250,7 @@ int main(int argc, char** argv) {
                                                                   device.GeometryShaders};
         if (startupPrograms && device.PipelineLibraries)
             parts = Renderer3ds::PicaStartupProgramParts(
-                Oot3dNativeGame::TitleVertexArtifacts(), Fast::Oot3d::UberFragmentArtifacts(),
+                Oot3dNativeGame::TitleVertexArtifacts(), Fast::Extension::UberFragmentArtifacts(),
                 Renderer3ds::NativeFragmentArtifacts(), startupDevice);
         const size_t total = parts.size() + entries.size();
         const auto progress = [&](size_t attempted, size_t prepared, size_t failed, const std::string& last) {
@@ -273,8 +273,8 @@ int main(int argc, char** argv) {
         }, cancelled, progress);
         if (!startup.Cancelled)
             recipes.Run(entries.size(), workers, [&](size_t index, std::string& why) {
-                const auto item = Fast::Oot3d::ResolvePicaPipelinePreparationItem(entries[index], pack, depthFormat,
-                                                                                &Fast::Oot3d::FindPicaBuiltInFragmentSpirv);
+                const auto item = Fast::Extension::ResolvePicaPipelinePreparationItem(entries[index], pack, depthFormat,
+                                                                                &Fast::Extension::FindPicaBuiltInFragmentSpirv);
                 const bool prepared = bridge.PreparePipeline(item.Descriptor);
                 if (!prepared) why = "NRI rejected pipeline " + std::to_string(index);
                 return validated(prepared, why);

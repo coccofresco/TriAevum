@@ -3,7 +3,7 @@
 #include "oot3d_native_pica_fragment_lighting_gen.h"
 #include "oot3d_native_pica_fragment_shader_gen.h"
 #include "oot3d_native_pica_proctex.h"
-#include "fast/oot3d/pica_fragment_lighting.h"
+#include "fast/extension/pica_fragment_lighting.h"
 
 #include <algorithm>
 #include <array>
@@ -171,7 +171,7 @@ uint64_t BuildFragmentProgramId(const Oot3dPicaDrawPacket& packet,
         hash.AppendU32(packet.Registers[reg]);
     }
     const auto lighting =
-        Fast::Oot3d::DecodePicaFragmentLighting(packet.Registers);
+        Fast::Extension::DecodePicaFragmentLighting(packet.Registers);
     const bool shadowProcTexReferenced =
         lighting.Enabled && lighting.ShadowFactorEnabled &&
         lighting.ShadowTextureUnit == 3U;
@@ -462,9 +462,9 @@ Oot3dPicaFragmentFeatureSet AnalyzeOot3dPicaFragmentFeatures(
     }
 
     const auto lighting =
-        Fast::Oot3d::DecodePicaFragmentLighting(packet.Registers);
+        Fast::Extension::DecodePicaFragmentLighting(packet.Registers);
     if (lighting.Enabled &&
-        lighting.BumpMode != Fast::Oot3d::PicaLightingBumpMode::None &&
+        lighting.BumpMode != Fast::Extension::PicaLightingBumpMode::None &&
         lighting.BumpTextureUnit < state.Textures.size()) {
         result.ReferencedTextureMask |= static_cast<uint8_t>(
             1U << lighting.BumpTextureUnit);

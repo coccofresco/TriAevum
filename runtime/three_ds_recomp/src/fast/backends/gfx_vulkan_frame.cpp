@@ -1,13 +1,13 @@
 // Vulkan backend: presentation settings and the frame (StartFrame, EndFrame, FinishRender).
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_internal.h"
-#include "fast/oot3d/grass_stage_profile.h"
+#include "fast/extension/grass_stage_profile.h"
 #include "fast/renderer3ds/pica_surface_debug.h"
 #include "fast/renderer3ds/pica_surface_emission.h"
 
 namespace Fast {
 
-bool GfxRenderingAPIVulkan::ApplyPresentationSettings(const Oot3d::TitlePresentationSettingsView& requestedSettings,
+bool GfxRenderingAPIVulkan::ApplyPresentationSettings(const Extension::TitlePresentationSettingsView& requestedSettings,
                                                       std::string* error) {
     auto settings = requestedSettings;
 #ifdef __ANDROID__
@@ -63,7 +63,7 @@ bool GfxRenderingAPIVulkan::ApplyPresentationSettings(const Oot3d::TitlePresenta
         return true;
     }
 
-    Oot3d::TitlePresentationSettingsView previous;
+    Extension::TitlePresentationSettingsView previous;
     if (mPresentationSettingsApplied) {
         previous = {
             mAppliedWindowMode,
@@ -84,7 +84,7 @@ bool GfxRenderingAPIVulkan::ApplyPresentationSettings(const Oot3d::TitlePresenta
         previous.VSync = mVsyncEnabled;
     }
 
-    const auto apply = [&](const Oot3d::TitlePresentationSettingsView& value,
+    const auto apply = [&](const Extension::TitlePresentationSettingsView& value,
                            bool allowInjectedFailure) {
         const bool fullscreen = value.WindowMode != 0U;
         const bool borderless = value.WindowMode == 1U;
@@ -229,19 +229,19 @@ void GfxRenderingAPIVulkan::StartFrame() {
     // capture this sample's source image again instead of reusing alpha zero.
     std::erase_if(mHandledNativePicaTextureCopies,
                   [](const auto& entry) { return !entry.second.second; });
-    auto& settingsRuntime = Oot3d::GraphicsSettingsRuntime::Instance();
-    Oot3d::TickAmbientOcclusionDiagnostics(settingsRuntime, mFrameCounter);
-    Oot3d::TickDisplayDiagnostics(settingsRuntime, mFrameCounter);
+    auto& settingsRuntime = Extension::GraphicsSettingsRuntime::Instance();
+    Extension::TickAmbientOcclusionDiagnostics(settingsRuntime, mFrameCounter);
+    Extension::TickDisplayDiagnostics(settingsRuntime, mFrameCounter);
     if (!mPresentationSettingsHeld) settingsRuntime.TickPresentation();
     const auto initialGraphicsSettings = settingsRuntime.Snapshot();
     const auto presentationRequest =
-        Oot3d::ResolveRendererPresentationRequest(
+        Extension::ResolveRendererPresentationRequest(
             initialGraphicsSettings,
             settingsRuntime.PresentationStatus(),
             mPresentationSettingsApplied);
     if (presentationRequest.has_value() && !mPresentationSettingsHeld) {
         const auto& value = presentationRequest->Value;
-        const Oot3d::TitlePresentationSettingsView view{
+        const Extension::TitlePresentationSettingsView view{
             static_cast<uint8_t>(value.Window),
             value.Width,
             value.Height,
@@ -259,7 +259,7 @@ void GfxRenderingAPIVulkan::StartFrame() {
             }
         } else {
             if (presentationRequest->Kind ==
-                Oot3d::RendererPresentationRequestKind::Candidate) {
+                Extension::RendererPresentationRequestKind::Candidate) {
                 settingsRuntime.RejectPresentationApply(
                     initialGraphicsSettings, presentationError);
             }
@@ -272,9 +272,9 @@ void GfxRenderingAPIVulkan::StartFrame() {
     mHiZExecutedThisFrame = false;
     mReflectionExecutedThisFrame = false;
     mReflectionProviderThisFrame =
-        Oot3d::ReflectionProvider::Off;
+        Extension::ReflectionProvider::Off;
     mReflectionOutputEncodingThisFrame =
-        Oot3d::SceneColorEncoding::Unknown;
+        Extension::SceneColorEncoding::Unknown;
     mGrassExecutedThisFrame = false;
     mLinearColorExecutedThisFrame = false;
     Renderer3ds::PicaSurfaceEmissionRegistry::Instance().BeginFrame();
@@ -282,19 +282,19 @@ void GfxRenderingAPIVulkan::StartFrame() {
     mNativeUiOverlayExecutedThisFrame = false;
     mUpscalerUsedD3d12ThisFrame = false;
     mUpscalerOutputEncodingThisFrame =
-        Oot3d::SceneColorEncoding::Unknown;
+        Extension::SceneColorEncoding::Unknown;
     mUpscalerEffectsCompositedThisFrame = false;
     mCompositeExecutedThisFrame = false;
     mCompositeOutputEncodingThisFrame =
-        Oot3d::SceneColorEncoding::Unknown;
+        Extension::SceneColorEncoding::Unknown;
     mTaaExecutedThisFrame = false;
     mTaaOutputEncodingThisFrame =
-        Oot3d::SceneColorEncoding::Unknown;
+        Extension::SceneColorEncoding::Unknown;
     mTaaEffectsCompositedThisFrame = false;
     mSmaaExecutedThisFrame = false;
     mSmaaEffectsCompositedThisFrame = false;
     mSmaaOutputEncodingThisFrame =
-        Oot3d::SceneColorEncoding::Unknown;
+        Extension::SceneColorEncoding::Unknown;
     mSmaaRenderTargetNamespace = 0;
     mSmaaDisplayPhysicalAddress = 0;
     mSmaaWidth = 0;
@@ -308,23 +308,23 @@ void GfxRenderingAPIVulkan::StartFrame() {
     mNativePicaDepthWritingDrawsThisFrame = 0;
     mCustomTextureUploadBytesThisFrame = 0;
     if (mFrameCounter > 3U) {
-        Oot3d::GrassSceneBridge::Instance().PruneBeforeFrame(mFrameCounter - 2U);
+        Extension::GrassSceneBridge::Instance().PruneBeforeFrame(mFrameCounter - 2U);
     }
     settingsRuntime.SetCapability(
-        Oot3d::GraphicsCapability::ValidViewMetadata,
-        Oot3d::SceneViewRuntime::Instance().LatestPerspective().has_value(),
+        Extension::GraphicsCapability::ValidViewMetadata,
+        Extension::SceneViewRuntime::Instance().LatestPerspective().has_value(),
         "No valid perspective frustum has been published by the game runtime");
     if (const char* grassSmoke = std::getenv("OOT3D_GRAPHICS_GRASS_AUTO");
         grassSmoke != nullptr && std::string_view(grassSmoke) == "1") {
         auto candidate = settingsRuntime.Snapshot();
         if (candidate.Grass.Rules.empty()) {
             const auto selectors =
-                Oot3d::GrassSceneBridge::Instance().AvailableTextures();
+                Extension::GrassSceneBridge::Instance().AvailableTextures();
             static bool grassSmokeSourceReported = false;
             if (!selectors.empty() && !grassSmokeSourceReported) {
                 std::fprintf(stderr,
                     "OOT3D grass smoke: %zu source meshes, %zu texture selectors\n",
-                    Oot3d::GrassSceneBridge::Instance().Size(), selectors.size());
+                    Extension::GrassSceneBridge::Instance().Size(), selectors.size());
                 grassSmokeSourceReported = true;
             }
             uint64_t requestedHash = 0U;
@@ -339,7 +339,7 @@ void GfxRenderingAPIVulkan::StartFrame() {
                  index < selectors.size() && addedRules < 128U; ++index) {
                 if (requestedHash != 0U &&
                     selectors[index].Rgba8Hash != requestedHash) continue;
-                Oot3d::GrassPlacementRule rule;
+                Extension::GrassPlacementRule rule;
                 rule.RuleId = static_cast<uint32_t>(addedRules + 1U);
                 rule.Target = selectors[index];
                 rule.InputBlack = 0.0F;
@@ -347,8 +347,8 @@ void GfxRenderingAPIVulkan::StartFrame() {
                 ++addedRules;
             }
             if (!candidate.Grass.Rules.empty()) {
-                candidate.Preset = Oot3d::GraphicsPreset::Custom;
-                candidate.Grass.Quality = Oot3d::GrassQuality::Medium;
+                candidate.Preset = Extension::GraphicsPreset::Custom;
+                candidate.Grass.Quality = Extension::GrassQuality::Medium;
                 candidate.Grass.Generation.InstancesPerSquareMeter =
                     3.0F;
                 candidate.Grass.MaxInstancesPerRoom = 30000U;
@@ -366,12 +366,12 @@ void GfxRenderingAPIVulkan::StartFrame() {
     {
         auto& effects = graphicsSnapshot.Value.Effects;
         const auto capabilities = settingsRuntime.Capabilities();
-        mWaterOnlyReflections = effects.Reflections == Oot3d::ReflectionMode::Off && effects.WaterReflections &&
-            Oot3d::UsesFullSceneLighting(effects.SurfaceLighting) &&
-            capabilities.Has(Oot3d::GraphicsCapability::NriInterop) &&
-            capabilities.Has(Oot3d::GraphicsCapability::ValidViewMetadata);
+        mWaterOnlyReflections = effects.Reflections == Extension::ReflectionMode::Off && effects.WaterReflections &&
+            Extension::UsesFullSceneLighting(effects.SurfaceLighting) &&
+            capabilities.Has(Extension::GraphicsCapability::NriInterop) &&
+            capabilities.Has(Extension::GraphicsCapability::ValidViewMetadata);
         if (mWaterOnlyReflections) {
-            effects.Reflections = Oot3d::ReflectionMode::HiZ;
+            effects.Reflections = Extension::ReflectionMode::HiZ;
             effects.ReflectionMaterials.clear();
             // The water's reflectance weighs the trace; open water reaches far.
             effects.ReflectionStrength = 1.0F;
@@ -445,26 +445,26 @@ void GfxRenderingAPIVulkan::StartFrame() {
         azaharTexturePacks.Generation();
     const auto materialRevision = azaharTexturePacks.MaterialRevision();
     if (mFrameMaterialRevision != materialRevision &&
-        Oot3d::UsesPbrMaterials(graphicsSettings.Effects.SurfaceLighting)) {
+        Extension::UsesPbrMaterials(graphicsSettings.Effects.SurfaceLighting)) {
         mTemporalAaPass.ResetHistory();
         mTaaOutputValid = false;
     }
     mFrameMaterialRevision = materialRevision;
     const char* taaEnvironment = std::getenv("OOT3D_GRAPHICS_TAA");
     const char* motionEnvironment = std::getenv("OOT3D_GRAPHICS_MOTION");
-    const Oot3d::AntiAliasingFrameCapabilities aaCapabilities{
+    const Extension::AntiAliasingFrameCapabilities aaCapabilities{
         mNativePicaDepthResolveMode != VK_RESOLVE_MODE_NONE,
         (mNativePicaSupportedSampleCounts & VK_SAMPLE_COUNT_2_BIT) != 0U,
         (mNativePicaSupportedSampleCounts & VK_SAMPLE_COUNT_4_BIT) != 0U,
         (mNativePicaSupportedSampleCounts & VK_SAMPLE_COUNT_8_BIT) != 0U};
-    const auto aaPolicy = Oot3d::ResolveAntiAliasingFramePolicy(
+    const auto aaPolicy = Extension::ResolveAntiAliasingFramePolicy(
         graphicsSettings, aaCapabilities,
         taaEnvironment != nullptr &&
             std::string_view(taaEnvironment) == "1",
         motionEnvironment != nullptr &&
             std::string_view(motionEnvironment) == "1");
     mNativeFidelityProfile =
-        graphicsSettings.Preset == Oot3d::GraphicsPreset::Authentic;
+        graphicsSettings.Preset == Extension::GraphicsPreset::Authentic;
     mTemporalJitterEnabled =
         !mNativeFidelityProfile && aaPolicy.TemporalJitter;
     mPresentationWorldSurface =
@@ -475,78 +475,78 @@ void GfxRenderingAPIVulkan::StartFrame() {
     // The rendering snapshot already disables GI outside per-pixel lighting
     // and under native presentation.
     const bool globalIlluminationRequested =
-        graphicsSettings.Effects.GlobalIllumination.Mode != Oot3d::GlobalIlluminationMode::Off &&
+        graphicsSettings.Effects.GlobalIllumination.Mode != Extension::GlobalIlluminationMode::Off &&
         !mNativeFidelityProfile;
     const bool screenSpaceGlobalIlluminationRequested =
         globalIlluminationRequested &&
-        graphicsSettings.Effects.GlobalIllumination.Mode == Oot3d::GlobalIlluminationMode::ScreenSpace;
+        graphicsSettings.Effects.GlobalIllumination.Mode == Extension::GlobalIlluminationMode::ScreenSpace;
     // GI and temporal MXAO reproject their history with the scene's motion
     // vectors.
     const bool temporalAmbientOcclusionRequested =
-        graphicsSettings.Effects.AmbientOcclusion == Oot3d::AmbientOcclusionMode::Mxao &&
+        graphicsSettings.Effects.AmbientOcclusion == Extension::AmbientOcclusionMode::Mxao &&
         graphicsSettings.Effects.MxaoTemporal;
     mTemporalMotionEnabled =
         !mNativeFidelityProfile &&
         (aaPolicy.TemporalMotion || globalIlluminationRequested || temporalAmbientOcclusionRequested);
-    const Oot3d::PicaAttachmentFeatureRequests extensionRequests{
+    const Extension::PicaAttachmentFeatureRequests extensionRequests{
         graphicsSettings.Effects.DirectionalShadows.Mode ==
-            Oot3d::DirectionalShadowMode::VirtualShadowMaps,
-        graphicsSettings.Effects.AmbientOcclusion != Oot3d::AmbientOcclusionMode::Off,
-        graphicsSettings.Effects.Toon != Oot3d::ToonMode::Off &&
+            Extension::DirectionalShadowMode::VirtualShadowMaps,
+        graphicsSettings.Effects.AmbientOcclusion != Extension::AmbientOcclusionMode::Off,
+        graphicsSettings.Effects.Toon != Extension::ToonMode::Off &&
             graphicsSettings.Effects.ToonStyle.OutlineEnabled,
         graphicsSettings.Effects.Reflections !=
-            Oot3d::ReflectionMode::Off,
+            Extension::ReflectionMode::Off,
         mTemporalMotionEnabled,
-        graphicsSettings.Grass.Quality != Oot3d::GrassQuality::Off,
+        graphicsSettings.Grass.Quality != Extension::GrassQuality::Off,
         globalIlluminationRequested,
-        graphicsSettings.Effects.PointShadows.Mode == Oot3d::PointShadowMode::CubeMaps,
-        Oot3d::EffectsReadFaceNormal(graphicsSettings.Effects) ||
+        graphicsSettings.Effects.PointShadows.Mode == Extension::PointShadowMode::CubeMaps,
+        Extension::EffectsReadFaceNormal(graphicsSettings.Effects) ||
             (screenSpaceGlobalIlluminationRequested &&
-             Oot3d::GlobalIlluminationReadsFaceNormal(graphicsSettings.Effects.GlobalIllumination)),
+             Extension::GlobalIlluminationReadsFaceNormal(graphicsSettings.Effects.GlobalIllumination)),
         screenSpaceGlobalIlluminationRequested,
-        graphicsSettings.Effects.DirectionalShadows.Mode == Oot3d::DirectionalShadowMode::VirtualShadowMaps &&
+        graphicsSettings.Effects.DirectionalShadows.Mode == Extension::DirectionalShadowMode::VirtualShadowMaps &&
             graphicsSettings.Effects.DirectionalShadows.ContactShadows.Enabled,
         mWaterOnlyReflections,
     };
     if (!mPicaExtensionRequests.has_value() ||
         *mPicaExtensionRequests != extensionRequests) {
-        auto graph = Oot3d::BuildPicaExtensionGraph(extensionRequests);
+        auto graph = Extension::BuildPicaExtensionGraph(extensionRequests);
         if (!graph.Valid()) {
             throw std::runtime_error(
                 "PICA extension graph is invalid: " + graph.Error);
         }
         auto directionalShadowMapBarriers =
-            Oot3d::BuildEffectPassBarrierPlan(
+            Extension::BuildEffectPassBarrierPlan(
                 graph,
-                Oot3d::PicaExtensionPassName(
-                    Oot3d::PicaExtensionPass::DirectionalShadowMap));
+                Extension::PicaExtensionPassName(
+                    Extension::PicaExtensionPass::DirectionalShadowMap));
         auto directionalShadowSchedule =
-            Oot3d::BuildPicaEffectPassSchedulePlan(
+            Extension::BuildPicaEffectPassSchedulePlan(
                 graph,
-                Oot3d::PicaExtensionPassName(
-                    Oot3d::PicaExtensionPass::DirectionalShadowMap),
-                Oot3d::EffectContractKind::AuxiliaryOutput);
-        auto pointShadowMapBarriers = Oot3d::BuildEffectPassBarrierPlan(
-            graph, Oot3d::PicaExtensionPassName(Oot3d::PicaExtensionPass::PointShadowMap));
-        auto pointShadowSchedule = Oot3d::BuildPicaEffectPassSchedulePlan(
-            graph, Oot3d::PicaExtensionPassName(Oot3d::PicaExtensionPass::PointShadowMap),
-            Oot3d::EffectContractKind::AuxiliaryOutput);
+                Extension::PicaExtensionPassName(
+                    Extension::PicaExtensionPass::DirectionalShadowMap),
+                Extension::EffectContractKind::AuxiliaryOutput);
+        auto pointShadowMapBarriers = Extension::BuildEffectPassBarrierPlan(
+            graph, Extension::PicaExtensionPassName(Extension::PicaExtensionPass::PointShadowMap));
+        auto pointShadowSchedule = Extension::BuildPicaEffectPassSchedulePlan(
+            graph, Extension::PicaExtensionPassName(Extension::PicaExtensionPass::PointShadowMap),
+            Extension::EffectContractKind::AuxiliaryOutput);
         if (extensionRequests.PointShadows &&
             (!pointShadowMapBarriers.Valid() || !pointShadowSchedule.Valid() ||
-             !Oot3d::PicaExtensionPassEnabled(graph, Oot3d::PicaExtensionPass::PointShadowLighting))) {
+             !Extension::PicaExtensionPassEnabled(graph, Extension::PicaExtensionPass::PointShadowLighting))) {
             throw std::runtime_error("PICA extension graph did not compile point shadow contracts");
         }
         auto interactiveGrassProvider =
-            Oot3d::BuildEffectGeometryProviderPlan(
+            Extension::BuildEffectGeometryProviderPlan(
                 graph,
-                Oot3d::PicaExtensionPassName(
-                    Oot3d::PicaExtensionPass::InteractiveGrass));
+                Extension::PicaExtensionPassName(
+                    Extension::PicaExtensionPass::InteractiveGrass));
         if (extensionRequests.DirectionalShadows &&
             (!directionalShadowMapBarriers.Valid() ||
              !directionalShadowSchedule.Valid() ||
-             !Oot3d::PicaExtensionPassEnabled(
+             !Extension::PicaExtensionPassEnabled(
                  graph,
-                 Oot3d::PicaExtensionPass::DirectionalShadowLighting))) {
+                 Extension::PicaExtensionPass::DirectionalShadowLighting))) {
             throw std::runtime_error(
                 "PICA extension graph did not compile directional shadow contracts");
         }
@@ -557,8 +557,8 @@ void GfxRenderingAPIVulkan::StartFrame() {
         }
         // Disabling the field (GI off) releases its world: re-enabling it
         // later must not trace geometry of a world seen before.
-        if (Oot3d::PicaExtensionPassEnabled(mPicaExtensionGraph, Oot3d::PicaExtensionPass::SceneDistanceField) &&
-            !Oot3d::PicaExtensionPassEnabled(graph, Oot3d::PicaExtensionPass::SceneDistanceField)) {
+        if (Extension::PicaExtensionPassEnabled(mPicaExtensionGraph, Extension::PicaExtensionPass::SceneDistanceField) &&
+            !Extension::PicaExtensionPassEnabled(graph, Extension::PicaExtensionPass::SceneDistanceField)) {
             mBrixelizerGiPass.ResetHistory();
             mBrixelizerScene.Reset();
         }
@@ -579,7 +579,7 @@ void GfxRenderingAPIVulkan::StartFrame() {
     // Dynamic rendering leaves the guides no effect requires unbound; the
     // instrumented render pass binds every base guide.
     if (!mPicaDynamicRenderingScope.Available() && !frameAttachments.NativeColorOnly())
-        frameAttachments.AuxiliaryOutputs |= Oot3d::kAllPicaAuxiliaryOutputs;
+        frameAttachments.AuxiliaryOutputs |= Extension::kAllPicaAuxiliaryOutputs;
     if (mFramePicaAttachmentRequirements != frameAttachments) {
         // Effect activation is not a native framebuffer invalidation. Retain
         // color/depth, transfer snapshots and cached framebuffer variants.
@@ -594,7 +594,7 @@ void GfxRenderingAPIVulkan::StartFrame() {
             "Native Fidelity requested auxiliary PICA attachments");
     }
     mTemporalJitterPixels = mTemporalJitterEnabled
-        ? Oot3d::TemporalJitterForFrame(
+        ? Extension::TemporalJitterForFrame(
               mTemporalJitterSequence,
               aaPolicy.TemporalJitterPhases).PixelOffset
         : std::array<float, 2>{};
@@ -605,13 +605,13 @@ void GfxRenderingAPIVulkan::StartFrame() {
         mTaaOutputValid = false;
         mTemporalAaPass.ResetHistory();
     }
-    if (graphicsSettings.Effects.AmbientOcclusion == Oot3d::AmbientOcclusionMode::Off) {
+    if (graphicsSettings.Effects.AmbientOcclusion == Extension::AmbientOcclusionMode::Off) {
         // The image may remain allocated for cheap re-enabling, but it must no
         // longer be eligible for scanout composition as soon as AO is Off.
         mAmbientOcclusionOutputValid = false;
     }
     const float requestedInternalResolutionScale =
-        Oot3d::ResolveInternalResolutionScale(graphicsSettings);
+        Extension::ResolveInternalResolutionScale(graphicsSettings);
     mSpatialAaMode = aaPolicy.SpatialAaMode;
     if (mVsyncEnabled != graphicsSettings.VSync) {
         mVsyncEnabled = graphicsSettings.VSync;
@@ -702,13 +702,13 @@ void GfxRenderingAPIVulkan::StartFrame() {
             const auto result =
                 mNriSwapchain.Acquire(mCurrentFrame, mCurrentImage);
             if (result ==
-                Oot3d::NriSwapchainOperationResult::OutOfDate) {
+                Extension::NriSwapchainOperationResult::OutOfDate) {
                 mSwapchainDirty = true;
                 // Let the host pump window events before retrying acquisition.
                 return;
             }
             if (result !=
-                Oot3d::NriSwapchainOperationResult::Success) {
+                Extension::NriSwapchainOperationResult::Success) {
                 throw std::runtime_error(
                     "NRI AcquireNextTexture failed: " +
                     mNriSwapchain.UnavailableReason());
@@ -745,7 +745,7 @@ void GfxRenderingAPIVulkan::StartFrame() {
     // successfully acquired swapchain (the whole swapchain for Free). Native
     // PICA targets follow the picture, never the swapchain, so a change of
     // ratio rebuilds them like a resize does.
-    mPresentationPicture = Oot3d::ResolvePresentationPicture(
+    mPresentationPicture = Extension::ResolvePresentationPicture(
         mSwapchainExtent.width, mSwapchainExtent.height,
         graphicsSnapshot.Value.Aspect);
     // Validate targets against the picture of the successfully acquired
@@ -757,7 +757,7 @@ void GfxRenderingAPIVulkan::StartFrame() {
         mNativePicaRenderTargets.begin(), mNativePicaRenderTargets.end(),
         [&](const auto& entry) {
             const auto& [key, target] = entry;
-            const auto expected = Oot3d::ResolveNativePicaRenderExtent(
+            const auto expected = Extension::ResolveNativePicaRenderExtent(
                 {key.Width, key.Height},
                 NativeTopScreenOutputExtent(),
                 mInternalResolutionScale);
@@ -769,9 +769,9 @@ void GfxRenderingAPIVulkan::StartFrame() {
     settingsRuntime.PublishDisplayMetrics({
         mSwapchainExtent.width, mSwapchainExtent.height, 0, 0,
         mInternalResolutionScale,
-        !mWindowBackend->IsFullscreen() ? Oot3d::WindowMode::Windowed :
-        mWindowBackend->IsWindowedFullscreen() ? Oot3d::WindowMode::Borderless :
-                                               Oot3d::WindowMode::ExclusiveFullscreen,
+        !mWindowBackend->IsFullscreen() ? Extension::WindowMode::Windowed :
+        mWindowBackend->IsWindowedFullscreen() ? Extension::WindowMode::Borderless :
+                                               Extension::WindowMode::ExclusiveFullscreen,
         pictureExtent.Width, pictureExtent.Height});
 
     if (mImagesInFlight[mCurrentImage] != VK_NULL_HANDLE) {
@@ -804,7 +804,7 @@ void GfxRenderingAPIVulkan::StartFrame() {
     mFrameActive = true;
     PrepareRecordedDlssFeature();
     ++mFrameCounter;
-    Oot3d::BeginGrassStageFrame(mFrameCounter);
+    Extension::BeginGrassStageFrame(mFrameCounter);
     mSurfaceCalibrationTrace.BeginFrame(mFrameCounter);
     mDrawCallCountThisFrame = 0;
     mRenderPassActive = false;
@@ -851,9 +851,9 @@ void GfxRenderingAPIVulkan::StartFrame() {
         mFrameCounter > kFramesInFlight) {
         if (timings)
             mDiagnostics.SetGpuTimings(mFrameCounter - kFramesInFlight, *timings);
-        if (Oot3d::GrassStageProfileEnabled()) {
+        if (Extension::GrassStageProfileEnabled()) {
             const auto measured = timings.value_or(Oot3dVulkanGpuTimings{});
-            Oot3d::ReportGrassStageFrame(
+            Extension::ReportGrassStageFrame(
                 mFrameCounter - kFramesInFlight, measured.GrassMilliseconds.value_or(-1),
                 measured.GrassCompactionMilliseconds.value_or(-1), measured.GrassBladesMilliseconds.value_or(-1),
                 measured.GrassShadowsMilliseconds.value_or(-1), measured.GrassLightingMilliseconds.value_or(-1),
@@ -936,10 +936,10 @@ void GfxRenderingAPIVulkan::FinishRender() {
         // Throughput benchmark: the frame is complete once submitted.
     } else if (mNriSwapchain.Active()) {
         const auto result = mNriSwapchain.Present(mCurrentImage);
-        if (result == Oot3d::NriSwapchainOperationResult::OutOfDate) {
+        if (result == Extension::NriSwapchainOperationResult::OutOfDate) {
             mSwapchainDirty = true;
         } else if (result !=
-                   Oot3d::NriSwapchainOperationResult::Success) {
+                   Extension::NriSwapchainOperationResult::Success) {
             throw std::runtime_error(
                 "NRI QueuePresent failed: " +
                 mNriSwapchain.UnavailableReason());

@@ -32,7 +32,7 @@
 #ifndef ENABLE_OOT3D_VULKAN
 #define ENABLE_OOT3D_VULKAN 1
 #endif
-#include "fast/oot3d/diffuse_gi_adapter.h"
+#include "fast/extension/diffuse_gi_adapter.h"
 #include "fast/renderer3ds/pica_geometry_guide.h"
 
 #include <vulkan/vulkan.h>
@@ -3124,7 +3124,7 @@ int main(int argc, char** argv) try {
     // then with the M8 normal guide (uncovered, degenerate and back-facing
     // shading normals).
     for (const bool m8 : {false, true}) {
-        using namespace Fast::Oot3d;
+        using namespace Fast::Extension;
         const uint32_t W = 13, H = 9;
         const PassExtent e = MakeWorkScaleExtent(W, H, 2);
         DepthCamera camera;

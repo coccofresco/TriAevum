@@ -219,8 +219,8 @@ SOFTWARE.
 ## Godot Engine screen-space contact shadows
 
 The optional contact shadows of the directional shadow light,
-`runtime/three_ds_recomp/src/fast/oot3d/contact_shadow_shader.cpp` and
-`runtime/three_ds_recomp/src/fast/oot3d/contact_shadows.cpp`, port
+`runtime/three_ds_recomp/src/fast/extension/contact_shadow_shader.cpp` and
+`runtime/three_ds_recomp/src/fast/extension/contact_shadows.cpp`, port
 `servers/rendering/renderer_rd/shaders/effects/screen_space_contact_shadows.glsl`
 and `SSEffects::screen_space_contact_shadows` from
 [Godot Engine](https://github.com/godotengine/godot) 4.8 (pull request 118045).

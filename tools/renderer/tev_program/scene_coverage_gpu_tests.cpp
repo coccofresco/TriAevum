@@ -1,4 +1,4 @@
-#include "fast/oot3d/pica_nri_pipeline_state.h"
+#include "fast/extension/pica_nri_pipeline_state.h"
 #include "vulkan_test_device.h"
 #include <array>
 #include <cmath>
@@ -136,10 +136,10 @@ void main() {
       draw.Blend.Enabled = true;
       draw.Blend.SourceRgb = i == 2 ? Factor::One : Factor::SourceAlpha;
       draw.Blend.DestRgb = destination[i];
-      Fast::Oot3d::PicaFragmentInstrumentationOutputLayout outputs;
+      Fast::Extension::PicaFragmentInstrumentationOutputLayout outputs;
       outputs.WritesAmbientGuide = outputs.SceneDomainAmbientOverlay =
           outputs.SceneDomainBlendedOverlay = true;
-      const auto state = Fast::Oot3d::BuildPicaNriPipelineState(
+      const auto state = Fast::Extension::BuildPicaNriPipelineState(
           draw, outputs, {Fast::Renderer3ds::kAllPicaAuxiliaryOutputs},
           VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_D32_SFLOAT);
       VkPipelineColorBlendStateCreateInfo blend{

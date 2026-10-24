@@ -196,11 +196,11 @@ bool NativeA32WindowSession::RunFrame() {
   // The SDL events just pumped are the physical input this frame polls.
   auto inputPumpTime = std::chrono::steady_clock::now();
   const auto requestedPresentationPolicy =
-      Fast::Oot3d::ResolvePresentationPacingPolicy(
-          Fast::Oot3d::GraphicsSettingsRuntime::Instance()
+      Fast::Extension::ResolvePresentationPacingPolicy(
+          Fast::Extension::GraphicsSettingsRuntime::Instance()
               .Snapshot()
               .FrameRate);
-  if (Fast::Oot3d::PresentationPacingPolicyChanged(
+  if (Fast::Extension::PresentationPacingPolicyChanged(
           presentationPacingPolicy, requestedPresentationPolicy)) {
     const auto requestedCompositionPolicy =
         ResolveFrameCompositionPolicy(requestedPresentationPolicy);
@@ -315,11 +315,11 @@ bool NativeA32WindowSession::RunFrame() {
   // Developer qualification: scheduled settings take the F1 commit path
   // (applied, not persisted) before this frame is rendered.
   for (const auto *step : graphicsSettingsSchedule.TakeDue(runFrameCount)) {
-    auto &graphicsSettings = Fast::Oot3d::GraphicsSettingsRuntime::Instance();
+    auto &graphicsSettings = Fast::Extension::GraphicsSettingsRuntime::Instance();
     const auto current = graphicsSettings.Snapshot();
-    const auto decoded = Fast::Oot3d::DeserializeGraphicsSettings(
+    const auto decoded = Fast::Extension::DeserializeGraphicsSettings(
         Oot3dNativeGame::MergeScheduledGraphics(
-            Fast::Oot3d::SerializeGraphicsSettings(current), step->Graphics),
+            Fast::Extension::SerializeGraphicsSettings(current), step->Graphics),
         current);
     const auto applied = graphicsSettings.Apply(decoded.Value, false);
     std::fprintf(stderr,
@@ -372,16 +372,16 @@ bool NativeA32WindowSession::RunFrame() {
     // advance the guest: those begin synchronously, on this thread.
     // Otherwise the guest goes on while the renderer finishes the previous
     // frame.
-    const auto renderSettings = Fast::Oot3d::GraphicsSettingsRuntime::Instance()
+    const auto renderSettings = Fast::Extension::GraphicsSettingsRuntime::Instance()
                                     .SnapshotWithRevision()
                                     .Revision;
     const bool renderNativePresentation =
-        Fast::Oot3d::GraphicsSettingsRuntime::Instance()
+        Fast::Extension::GraphicsSettingsRuntime::Instance()
             .NativePresentationOverrideActive();
     const bool presentationTransactionActive =
-        Fast::Oot3d::GraphicsSettingsRuntime::Instance()
+        Fast::Extension::GraphicsSettingsRuntime::Instance()
             .PresentationStatus()
-            .Phase != Fast::Oot3d::PresentationTransactionPhase::Idle;
+            .Phase != Fast::Extension::PresentationTransactionPhase::Idle;
     const bool previousRendererFrameInactive =
         rendererFrameWasInactive.exchange(false);
     const bool synchronousFrameBegin =
@@ -1933,7 +1933,7 @@ void NativeA32WindowSession::PresentVisualFrame(
         // fell behind: canonical work and interpolation history only.
         std::shared_ptr<std::vector<Oot3dNativeGame::Oot3dPicaVisualFrame>>
             supersededFrames;
-        std::vector<Fast::Oot3d::GrassInteractor> frameActors;
+        std::vector<Fast::Extension::GrassInteractor> frameActors;
         bool suppressTopScreenBackdrop = false;
         if (topSelection.CompletionId !=
             lastSelectedTopTransferCompletionId) {
@@ -2000,9 +2000,9 @@ void NativeA32WindowSession::PresentVisualFrame(
               (void)Oot3dNativeGame::ViewOot3dPicaVisualFrame(
                   superseded, sample, true);
               const auto nativeTemporalSample =
-                  Fast::Oot3d::BuildNativeFrameTemporalSample(
+                  Fast::Extension::BuildNativeFrameTemporalSample(
                       frameCompositionPolicy,
-                      Fast::Oot3d::NativeFrameTemporalSampleKind::
+                      Fast::Extension::NativeFrameTemporalSampleKind::
                           Authoritative,
                       superseded.Sequence, superseded.Sequence,
                       visualContinuityEpoch, 1.0F,
@@ -2026,7 +2026,7 @@ void NativeA32WindowSession::PresentVisualFrame(
           if (completedFrame != nullptr) {
             std::optional<Oot3dNativeGame::Oot3dPicaVisualFrame>
                 currentVisualFrame(std::move(*completedFrame));
-            Fast::Oot3d::GrassInteractionBridge::Instance().PublishFrame(
+            Fast::Extension::GrassInteractionBridge::Instance().PublishFrame(
                 currentVisualFrame->Sequence, frameActors);
             selectedNewVisualFrame = true;
             auto &sample = visualFrameSampleScratch;
@@ -2036,9 +2036,9 @@ void NativeA32WindowSession::PresentVisualFrame(
             (void)Oot3dNativeGame::ViewOot3dPicaVisualFrame(
                 *currentVisualFrame, sample, true);
             const auto nativeTemporalSample =
-                Fast::Oot3d::BuildNativeFrameTemporalSample(
+                Fast::Extension::BuildNativeFrameTemporalSample(
                     frameCompositionPolicy,
-                    Fast::Oot3d::NativeFrameTemporalSampleKind::
+                    Fast::Extension::NativeFrameTemporalSampleKind::
                         Authoritative,
                     currentVisualFrame->Sequence,
                     currentVisualFrame->Sequence, visualContinuityEpoch,
@@ -2055,9 +2055,9 @@ void NativeA32WindowSession::PresentVisualFrame(
               if (Oot3dNativeGame::ViewOot3dPicaVisualFrame(
                       *currentVisualFrame, sample)) {
                 const auto temporalSample =
-                    Fast::Oot3d::BuildNativeFrameTemporalSample(
+                    Fast::Extension::BuildNativeFrameTemporalSample(
                         frameCompositionPolicy,
-                        Fast::Oot3d::NativeFrameTemporalSampleKind::
+                        Fast::Extension::NativeFrameTemporalSampleKind::
                             Authoritative,
                         currentVisualFrame->Sequence,
                         currentVisualFrame->Sequence,
@@ -2175,9 +2175,9 @@ void NativeA32WindowSession::PresentVisualFrame(
                 }
                 if (continuousTransition && visualSampleReady) {
                   const auto temporalSample =
-                      Fast::Oot3d::BuildNativeFrameTemporalSample(
+                      Fast::Extension::BuildNativeFrameTemporalSample(
                           frameCompositionPolicy,
-                          Fast::Oot3d::NativeFrameTemporalSampleKind::
+                          Fast::Extension::NativeFrameTemporalSampleKind::
                               Transition,
                           latestVisualFrame->Sequence,
                           currentVisualFrame->Sequence,
@@ -2209,9 +2209,9 @@ void NativeA32WindowSession::PresentVisualFrame(
                 preparedVisualTransition.Reset();
                 ++visualContinuityEpoch;
                 const auto temporalSample =
-                    Fast::Oot3d::BuildNativeFrameTemporalSample(
+                    Fast::Extension::BuildNativeFrameTemporalSample(
                         frameCompositionPolicy,
-                        Fast::Oot3d::NativeFrameTemporalSampleKind::
+                        Fast::Extension::NativeFrameTemporalSampleKind::
                             Resynchronized,
                         currentVisualFrame->Sequence,
                         currentVisualFrame->Sequence,
@@ -2251,9 +2251,9 @@ void NativeA32WindowSession::PresentVisualFrame(
                   *previousVisualFrame, *latestVisualFrame, sampleAlpha,
                   sample, &visualInterpolationTiming)) {
             const auto temporalSample =
-                Fast::Oot3d::BuildNativeFrameTemporalSample(
+                Fast::Extension::BuildNativeFrameTemporalSample(
                     frameCompositionPolicy,
-                    Fast::Oot3d::NativeFrameTemporalSampleKind::
+                    Fast::Extension::NativeFrameTemporalSampleKind::
                         Transition,
                     previousVisualFrame->Sequence,
                     latestVisualFrame->Sequence,
@@ -2512,10 +2512,10 @@ void NativeA32WindowSession::UpdateDevLab(uint64_t guestFrame) {
       } else if (op == "graphics") {
         // A partial "Graphics" block, applied like an F1 commit (not saved),
         // as the qualification schedule does.
-        auto &graphicsSettings = Fast::Oot3d::GraphicsSettingsRuntime::Instance();
+        auto &graphicsSettings = Fast::Extension::GraphicsSettingsRuntime::Instance();
         const auto current = graphicsSettings.Snapshot();
-        const auto decoded = Fast::Oot3d::DeserializeGraphicsSettings(
-            Oot3dNativeGame::MergeScheduledGraphics(Fast::Oot3d::SerializeGraphicsSettings(current),
+        const auto decoded = Fast::Extension::DeserializeGraphicsSettings(
+            Oot3dNativeGame::MergeScheduledGraphics(Fast::Extension::SerializeGraphicsSettings(current),
                                                     command.at("graphics")),
             current);
         const auto applied = graphicsSettings.Apply(decoded.Value, false);
@@ -2529,7 +2529,7 @@ void NativeA32WindowSession::UpdateDevLab(uint64_t guestFrame) {
           return details;
         };
         const auto effective = graphicsSettings.SnapshotForRendering();
-        const auto effectiveJson = Fast::Oot3d::SerializeGraphicsSettings(effective.Value);
+        const auto effectiveJson = Fast::Extension::SerializeGraphicsSettings(effective.Value);
         finish(applied.Accepted() && !decoded.UnsupportedFutureVersion ? "ok" : "failed",
                {{"frame", guestFrame}, {"decodeIssues", decoded.Issues.size()},
                 {"applyIssues", applied.Issues.size()},
@@ -2960,17 +2960,17 @@ void NativeA32WindowSession::PublishNativeSceneView() {
   sceneEnvironment->ObserveScene(snapshot ? snapshot->SceneId : std::nullopt,
       environmentTime.value_or(Oot3dNativeGame::SceneEnvironmentTime{}), player);
   sceneEnvironment->PollProfileFiles();
-  const auto shadowSettings = Fast::Oot3d::GraphicsSettingsRuntime::Instance().SnapshotForRendering();
+  const auto shadowSettings = Fast::Extension::GraphicsSettingsRuntime::Instance().SnapshotForRendering();
   picaCompositionTracker.SetRoomShadowShellsEnabled(
       shadowSettings.Environment.CasterFaces == Fast::Renderer3ds::ShadowCasterFaces::InteriorShells &&
-      shadowSettings.Value.Effects.DirectionalShadows.Mode == Fast::Oot3d::DirectionalShadowMode::VirtualShadowMaps);
+      shadowSettings.Value.Effects.DirectionalShadows.Mode == Fast::Extension::DirectionalShadowMode::VirtualShadowMaps);
   sceneEnvironment->PublishLightGizmo(
       snapshot && snapshot->CameraAvailable ? std::optional(snapshot->Eye) : std::nullopt, freeCamera);
   if (!snapshot.has_value() ||
       snapshot->Serial == lastPublishedSceneViewSerial) {
     return;
   }
-  const Fast::Oot3d::TitleSceneViewSubmission view{
+  const Fast::Extension::TitleSceneViewSubmission view{
       snapshot->GuestFunction,
       snapshot->GuestReturnAddress,
       snapshot->Left,
@@ -3073,14 +3073,14 @@ bool NativeA32WindowSession::FlushNativeDependencies() {
   return flushed;
 }
 
-void NativeA32WindowSession::ExecuteVisualSample(const Oot3dNativeGame::Oot3dPicaVisualFrameViewSample &sample, Oot3dNativeGame::Oot3dPicaPresentationExecutionKind kind, bool present, const Fast::Oot3d::NativeFrameTemporalSample& temporalSample, uint64_t renderTargetNamespace) {
+void NativeA32WindowSession::ExecuteVisualSample(const Oot3dNativeGame::Oot3dPicaVisualFrameViewSample &sample, Oot3dNativeGame::Oot3dPicaPresentationExecutionKind kind, bool present, const Fast::Extension::NativeFrameTemporalSample& temporalSample, uint64_t renderTargetNamespace) {
   auto &api = *apiPointer;
   const auto started = std::chrono::steady_clock::now();
   (void)api.PublishPicaFrameTemporalSample(temporalSample);
   // Only displayed samples advance the grass colliders: the authoritative
   // replay of a new frame is not shown, and taking it as the previous position
   // gave the next displayed sample a backward sweep.
-  if (present) Fast::Oot3d::GrassInteractionBridge::Instance().SelectSample(temporalSample);
+  if (present) Fast::Extension::GrassInteractionBridge::Instance().SelectSample(temporalSample);
   PinGpuCopyResources(sample);
   if (!picaPresentationScheduler.Execute(
           api, sample, renderTargetNamespace, kind,

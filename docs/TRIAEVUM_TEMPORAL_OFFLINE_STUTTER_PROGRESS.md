@@ -16,7 +16,7 @@ ROM input, Forge compilation or material-ID exception was added.
   sampler/LUT/shadow interfaces and canonical/NRI descriptor layouts this
   produces 40 distinct offline programs; shadow-write variants deduplicate
   because their reactive coverage is disabled by the native classifier.
-- `runtime/three_ds_recomp/include/fast/oot3d/pica_temporal_fragment_binaries.h`
+- `runtime/three_ds_recomp/include/fast/extension/pica_temporal_fragment_binaries.h`
   owns the generated temporal catalog, separate from the 16 canonical programs.
   The canonical header remains byte-for-byte reproducible and unchanged.
 - `GfxRenderingAPIVulkan::ResolveNativePicaShaderSpirv` resolves both catalogs
@@ -92,7 +92,7 @@ Private evidence under `%USERPROFILE%/AppData/Local/Temp/`, never package:
 Developer commands:
 
 ```text
-build_fragment_artifacts --temporal runtime/three_ds_recomp/src/fast/oot3d/pica_temporal_fragment.spvpack
+build_fragment_artifacts --temporal runtime/three_ds_recomp/src/fast/extension/pica_temporal_fragment.spvpack
 build_fragment_artifacts --temporal --check
 ctest --test-dir <standalone-build> --output-on-failure
 python tools/renderer/tev_program/benchmark_native_paths.py --invocation <private-invocation.json> --baseline <historical-exe> --output <new-directory> --taa

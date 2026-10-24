@@ -964,7 +964,7 @@ void ApplyNativeWidescreenProjectionPolicy(
   const float nearPlane = std::bit_cast<float>(state.vfp[4]);
   const float farPlane = std::bit_cast<float>(state.vfp[5]);
   callsite.LastFrustum = {left, right, bottom, top, nearPlane, farPlane};
-  const auto resolved = Fast::Oot3d::ResolvePerspectiveFov({
+  const auto resolved = Fast::Extension::ResolvePerspectiveFov({
       {left, right, bottom, top, nearPlane, farPlane},
       projection.FovMultiplier,
       projection.Presentation,

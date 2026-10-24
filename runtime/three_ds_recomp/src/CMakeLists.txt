@@ -167,7 +167,7 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
     target_sources(three_ds_recomp_runtime PRIVATE fast/renderer/shaderc_compiler.cpp)
     # Screen-space diffuse GI: the title-neutral module and runtime pass
     # (docs/TRIAEVUM_SCREEN_SPACE_GI.md) behind the OOT3D provider
-    # (fast/oot3d/screen_space_gi_provider.cpp).
+    # (fast/extension/screen_space_gi_provider.cpp).
     target_sources(three_ds_recomp_runtime PRIVATE
         fast/renderer/diffuse_gi_reference.cpp
         fast/renderer/diffuse_gi_gather.cpp
@@ -183,8 +183,8 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
         fast/renderer/diffuse_gi_pass.cpp)
     # Precompiled SPIR-V families, embedded from their packs.
     include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/spirv_pack.cmake)
-    foreach(_pack renderer/builtin_pass renderer3ds/pica_native_fragment oot3d/pica_temporal_fragment
-                  oot3d/pica_toon_fragment oot3d/pica_uber_fragment oot3d/pica_caster_fragment)
+    foreach(_pack renderer/builtin_pass renderer3ds/pica_native_fragment extension/pica_temporal_fragment
+                  extension/pica_toon_fragment extension/pica_uber_fragment extension/pica_caster_fragment)
         triaevum_add_spirv_pack(three_ds_recomp_runtime fast/${_pack}_binaries.cpp fast/${_pack}.spvpack)
     endforeach()
     target_link_libraries(three_ds_recomp_runtime PRIVATE ${CMAKE_DL_LIBS})

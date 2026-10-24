@@ -61,10 +61,10 @@ maintainer licenses it under MIT so that a module under another licence can
 implement it.
 
 TriAevum's GPL code reaches the module only through that interface, loaded by
-`fast/oot3d/immerse_module_loader.cpp`. Its side of the boundary names MXAO
-only to select and serve it: `fast/oot3d/mxao_pass.cpp` hands the module the
+`fast/extension/immerse_module_loader.cpp`. Its side of the boundary names MXAO
+only to select and serve it: `fast/extension/mxao_pass.cpp` hands the module the
 renderer's NRI device, textures, programs and barriers;
-`fast/oot3d/mxao_settings_panel.cpp` draws generic F1 controls labelled with
+`fast/extension/mxao_settings_panel.cpp` draws generic F1 controls labelled with
 the module's texts; the provider choice `AmbientOcclusionMode::Mxao` has its
 settings, persistence and capability; the effect graph wiring is in the
 Vulkan backend. The module's programs include two GLSL libraries the host

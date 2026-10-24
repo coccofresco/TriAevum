@@ -29,7 +29,7 @@ $sources = @(
     "$renderer/tests/oot3d_grass_async_placement_builder_tests.cpp",
     "$renderer/tests/oot3d_grass_world_placement_cache_tests.cpp",
     "$renderer/tests/oot3d_grass_geometry_registry_tests.cpp",
-    "$renderer/src/fast/oot3d/pica_fragment_lighting.cpp",
+    "$renderer/src/fast/extension/pica_fragment_lighting.cpp",
     "$renderer/src/fast/renderer3ds/pica_nri_shader_contract.cpp",
     "$renderer/src/fast/renderer3ds/pica_nri_upload.cpp",
     "$gtest/src/gtest-all.cc", "$gtest/src/gtest_main.cc")

@@ -6,7 +6,7 @@
 # TriAevum that links NGX. It compiles only this directory's source, with the
 # module interface (module_interface/, MIT) and the Vulkan and NGX headers on
 # its include path, and links nothing of TriAevum. The runtime loads it when
-# it is installed beside the executable (fast/oot3d/dlss_module_loader.cpp),
+# it is installed beside the executable (fast/extension/dlss_module_loader.cpp),
 # next to NVIDIA's DLSS runtime library; without it DLSS is not offered.
 if(NOT THREE_DS_RECOMP_NGX_SOURCE_DIR)
     message(FATAL_ERROR "the DLSS module needs the NGX SDK (THREE_DS_RECOMP_NGX_SOURCE_DIR)")

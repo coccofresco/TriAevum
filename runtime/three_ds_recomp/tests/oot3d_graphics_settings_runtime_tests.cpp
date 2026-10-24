@@ -1,5 +1,5 @@
-#include "fast/oot3d/graphics_settings_persistence.h"
-#include "fast/oot3d/graphics_settings_runtime.h"
+#include "fast/extension/graphics_settings_persistence.h"
+#include "fast/extension/graphics_settings_runtime.h"
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
@@ -9,7 +9,7 @@
 namespace {
 
 class MemoryGraphicsSettingsPersistence final
-    : public Fast::Oot3d::GraphicsSettingsPersistencePort {
+    : public Fast::Extension::GraphicsSettingsPersistencePort {
   public:
     bool LoadRoot(nlohmann::json& root) override {
         root = Root;
@@ -36,19 +36,19 @@ class MemoryGraphicsSettingsPersistence final
 std::shared_ptr<MemoryGraphicsSettingsPersistence> Store() {
     static const auto persistence = [] {
         auto store = std::make_shared<MemoryGraphicsSettingsPersistence>();
-        auto initial = Fast::Oot3d::GraphicsSettingsService::Preset(
-            Fast::Oot3d::GraphicsPreset::Custom);
+        auto initial = Fast::Extension::GraphicsSettingsService::Preset(
+            Fast::Extension::GraphicsPreset::Custom);
         initial.FovMultiplier = 1.25F;
-        store->Root["Graphics"] = Fast::Oot3d::SerializeGraphicsSettings(initial);
-        Fast::Oot3d::InstallGraphicsSettingsPersistencePort(store);
+        store->Root["Graphics"] = Fast::Extension::SerializeGraphicsSettings(initial);
+        Fast::Extension::InstallGraphicsSettingsPersistencePort(store);
         return store;
     }();
     return persistence;
 }
 
-Fast::Oot3d::GraphicsSettingsRuntime& Runtime() {
+Fast::Extension::GraphicsSettingsRuntime& Runtime() {
     Store();
-    return Fast::Oot3d::GraphicsSettingsRuntime::Instance();
+    return Fast::Extension::GraphicsSettingsRuntime::Instance();
 }
 
 TEST(GraphicsSettingsRuntimeTest, PublishesChangesAndDefersOutputPersistenceUntilAcknowledged) {
@@ -78,7 +78,7 @@ TEST(GraphicsSettingsRuntimeTest, PublishesChangesAndDefersOutputPersistenceUnti
     const auto resizeValidation = runtime.Apply(resized);
     ASSERT_TRUE(resizeValidation.Accepted());
     EXPECT_EQ(runtime.PresentationStatus().Phase,
-              Fast::Oot3d::PresentationTransactionPhase::ApplyRequested);
+              Fast::Extension::PresentationTransactionPhase::ApplyRequested);
     EXPECT_EQ(persistence->Root["Graphics"]["Output"]["Width"].get<uint32_t>(),
               before.Value.OutputWidth);
     EXPECT_EQ(persistence->Root["Graphics"]["Output"]["Height"].get<uint32_t>(),
@@ -86,7 +86,7 @@ TEST(GraphicsSettingsRuntimeTest, PublishesChangesAndDefersOutputPersistenceUnti
 
     ASSERT_TRUE(runtime.AcknowledgePresentationApplied(resized));
     EXPECT_EQ(runtime.PresentationStatus().Phase,
-              Fast::Oot3d::PresentationTransactionPhase::Idle);
+              Fast::Extension::PresentationTransactionPhase::Idle);
     EXPECT_EQ(persistence->Root["Graphics"]["Output"]["Width"]
                   .get<uint32_t>(),
               1920U);
@@ -97,7 +97,7 @@ TEST(GraphicsSettingsRuntimeTest, PublishesChangesAndDefersOutputPersistenceUnti
 }
 
 TEST(GraphicsSettingsRuntimeTest, SavesLoadsAndDeletesUserPresetsButNeverBuiltIns) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const auto persistence = Store();
     auto& runtime = Runtime();
     const auto output = runtime.Snapshot();
@@ -161,7 +161,7 @@ TEST(GraphicsSettingsRuntimeTest, SavesLoadsAndDeletesUserPresetsButNeverBuiltIn
 }
 
 TEST(GraphicsPresetLibraryTest, RoundTripsAndKeepsNewerPresets) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GraphicsPresetLibrary library;
     auto settings = GraphicsSettingsService::Preset(GraphicsPreset::Enhanced);
     settings.OutputWidth = 1234U;

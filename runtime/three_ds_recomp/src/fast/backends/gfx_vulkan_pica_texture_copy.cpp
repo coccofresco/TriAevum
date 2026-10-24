@@ -1,8 +1,8 @@
 #ifdef ENABLE_OOT3D_VULKAN
 #include "fast/backends/gfx_vulkan.h"
-#include "fast/oot3d/pica_grass_texture_coordinates.h"
-#include "fast/oot3d/nri_interop_context.h"
-#include "fast/oot3d/nri_pica_display_copy_pass.h"
+#include "fast/extension/pica_grass_texture_coordinates.h"
+#include "fast/extension/nri_interop_context.h"
+#include "fast/extension/nri_pica_display_copy_pass.h"
 #include "fast/renderer3ds/pica_framebuffer_encode.h"
 #include "fast/renderer3ds/pica_framebuffer_encode_gpu.h"
 #include "fast/renderer3ds/pica_texture_copy_plan.h"
@@ -301,7 +301,7 @@ bool GfxRenderingAPIVulkan::RecordGpuTextureCopyBaseFill(
         derivation.DeclaredWidth == 0U || derivation.DeclaredHeight == 0U) {
         return false;
     }
-    Oot3d::NriPicaDisplayCopyRegionDesc desc;
+    Extension::NriPicaDisplayCopyRegionDesc desc;
     desc.FrameIndex = mCurrentFrame;
     desc.FrameId = mFrameCounter;
     desc.SourceImage = baseImage;
@@ -352,7 +352,7 @@ bool GfxRenderingAPIVulkan::RecordGpuTextureCopyDerivation(
         surface.LastReferencedFrame = mFrameCounter;
         record.CopyProducerIdentities.push_back(group.SurfaceIdentity);
         for (const auto& region : group.Regions) {
-            Oot3d::NriPicaDisplayCopyRegionDesc desc;
+            Extension::NriPicaDisplayCopyRegionDesc desc;
             desc.FrameIndex = mCurrentFrame;
             desc.FrameId = mFrameCounter;
             desc.SourceImage = surface.Image;
@@ -851,7 +851,7 @@ bool GfxRenderingAPIVulkan::CaptureGpuTextureCopySource(
     }
     const uint32_t width = source.Width;
     const uint32_t height = source.Height;
-    Oot3d::NriOwnedTexture2D captured;
+    Extension::NriOwnedTexture2D captured;
     if (!mNriInterop.CreateOwnedTexture2D(width, height,
                                           VK_FORMAT_R8G8B8A8_UNORM, captured) ||
         captured.Image == VK_NULL_HANDLE) {
@@ -860,7 +860,7 @@ bool GfxRenderingAPIVulkan::CaptureGpuTextureCopySource(
     // An identity plan samples the source 1:1 at its internal extent, so the
     // internal rendering resolution survives the copy instead of being reduced
     // to native bytes first.
-    const Oot3d::PicaDisplayTransferPlan plan{
+    const Extension::PicaDisplayTransferPlan plan{
         width, height, width, height, 1U, 1U, 0U};
     const bool capturedOk = mNriPicaTextureCopyCapturePass.Execute(
         {mCurrentFrame,
@@ -1118,7 +1118,7 @@ void GfxRenderingAPIVulkan::DumpGpuTextureCopyCapture(
 void GfxRenderingAPIVulkan::DumpGpuTextureCopyConsumer(
     VkImage sampled, uint32_t sampledWidth, uint32_t sampledHeight,
     const GfxNativePicaTextureView& texture, uint64_t producerCompletionId,
-    Oot3d::SceneColorEncoding encoding, bool sceneEffectsResolved) {
+    Extension::SceneColorEncoding encoding, bool sceneEffectsResolved) {
     const char* prefix = GpuTextureCopyDumpPrefix();
     if (prefix == nullptr || sampled == VK_NULL_HANDLE) {
         return;
@@ -1201,8 +1201,8 @@ bool GfxRenderingAPIVulkan::SampledFootprintInsideOwnedRect(
     // it, so the sampled space is never guessed. Its rows already carry the
     // native V flip and offset, so a footprint compared in that space needs no
     // orientation or unit assumption.
-    const Oot3d::PicaGrassTextureCoordinateTransform transform =
-        Oot3d::DecodePicaGrassTextureCoordinateTransform(
+    const Extension::PicaGrassTextureCoordinateTransform transform =
+        Extension::DecodePicaGrassTextureCoordinateTransform(
             draw.VertexShaderSource, draw.FragmentShaderSource,
             draw.VertexUniformBytes, draw.TexCoord0AttributeLocation,
             &draw.TemporalVertexProgram.Hooks,
@@ -1214,7 +1214,7 @@ bool GfxRenderingAPIVulkan::SampledFootprintInsideOwnedRect(
             std::fprintf(
                 stderr,
                 "TRIAEVUM_GPU_COPY_FOOTPRINT_UNSUPPORTED reason=%s\n",
-                Oot3d::PicaGrassTextureCoordinateEligibilityName(
+                Extension::PicaGrassTextureCoordinateEligibilityName(
                     transform.Eligibility));
         }
         return false;
@@ -1275,7 +1275,7 @@ bool GfxRenderingAPIVulkan::SampledFootprintInsideOwnedRect(
         if (readAttribute(index, rawUv) == false) {
             return;
         }
-        const auto sample = Oot3d::ApplyPicaGrassTextureCoordinateTransform(
+        const auto sample = Extension::ApplyPicaGrassTextureCoordinateTransform(
             transform, {rawUv[0], rawUv[1]});
         if (std::isfinite(sample[0]) == false ||
             std::isfinite(sample[1]) == false) {

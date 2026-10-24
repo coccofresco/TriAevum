@@ -46,11 +46,11 @@ Oot3dVulkanValidation::~Oot3dVulkanValidation() {
 
 void Oot3dVulkanValidation::ConfigureFromEnvironment(
     std::vector<const char*>& instanceExtensions,
-    Oot3d::RendererValidationTelemetry& telemetry) {
+    Extension::RendererValidationTelemetry& telemetry) {
     Shutdown();
     mTelemetry = &telemetry;
     mTelemetry->SetEnabled(
-        Oot3d::RendererValidationSource::Vulkan, false);
+        Extension::RendererValidationSource::Vulkan, false);
     if (!ValidationRequested()) {
         return;
     }
@@ -108,7 +108,7 @@ void Oot3dVulkanValidation::ConfigureFromEnvironment(
     mCreateInfo.pUserData = mTelemetry;
     mEnabled = true;
     mTelemetry->SetEnabled(
-        Oot3d::RendererValidationSource::Vulkan, true);
+        Extension::RendererValidationSource::Vulkan, true);
 }
 
 void Oot3dVulkanValidation::ApplyTo(
@@ -168,7 +168,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Oot3dVulkanValidation::Callback(
     const VkDebugUtilsMessengerCallbackDataEXT* callbackData,
     void* userData) {
     auto* telemetry =
-        static_cast<Oot3d::RendererValidationTelemetry*>(userData);
+        static_cast<Extension::RendererValidationTelemetry*>(userData);
     const char* message =
         callbackData != nullptr && callbackData->pMessage != nullptr
             ? callbackData->pMessage : "unspecified validation message";
@@ -180,8 +180,8 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Oot3dVulkanValidation::Callback(
     if (validationError) {
         if (telemetry != nullptr) {
             telemetry->Record(
-                Oot3d::RendererValidationSource::Vulkan,
-                Oot3d::RendererValidationSeverity::Error);
+                Extension::RendererValidationSource::Vulkan,
+                Extension::RendererValidationSeverity::Error);
         }
         std::fprintf(stderr, "OOT3D Vulkan validation error: %s\n",
                      message);
@@ -189,8 +189,8 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Oot3dVulkanValidation::Callback(
     } else {
         if (telemetry != nullptr) {
             telemetry->Record(
-                Oot3d::RendererValidationSource::Vulkan,
-                Oot3d::RendererValidationSeverity::Warning);
+                Extension::RendererValidationSource::Vulkan,
+                Extension::RendererValidationSeverity::Warning);
         }
         SPDLOG_WARN("OOT3D Vulkan validation: {}", message);
     }

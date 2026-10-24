@@ -215,7 +215,7 @@ Tutti i percorsi seguenti sono relativi al repository, salvo indicazione diversa
 | `tools/oot3d/ui_n64/` | Componenti UI storici e consumer: verificare uso reale prima di rimuovere |
 | `tools/oot3d/decomp_support/` | Evidenze e snapshot; non una promessa di sorgente gameplay attivo |
 | `runtime/three_ds_recomp/src/fast/renderer3ds/` | Meccanismi condivisi PICA/NRI |
-| `runtime/three_ds_recomp/src/fast/oot3d/` | Adapter, moduli NRI, effetti e codice storico da classificare |
+| `runtime/three_ds_recomp/src/fast/extension/` | Adapter, moduli NRI, effetti e codice storico da classificare |
 | `runtime/three_ds_recomp/src/fast/backends/` | Backend e integrazione finestra/Vulkan |
 | `runtime/three_ds_recomp/include/fast/` | Contratti pubblici dei moduli grafici |
 | `runtime/three_ds_recomp/src/ship/` | Servizi host ereditati/evoluti, audio e controller |
@@ -242,7 +242,7 @@ Tutti i percorsi seguenti sono relativi al repository, salvo indicazione diversa
 
 ### File grafici da individuare prima di una modifica
 
-In `src/fast/oot3d/`: `effect_graph.cpp`, `effect_graph_physical_plan.cpp`,
+In `src/fast/extension/`: `effect_graph.cpp`, `effect_graph_physical_plan.cpp`,
 `effect_graph_pass_barriers.cpp`, `native_scene_view.cpp`,
 `pica_scene_frame.cpp`, `pica_scene_publication_adapter.cpp`,
 `nri_pica_render_target_owner.cpp`, `nri_pica_texture_image_owner.cpp`,

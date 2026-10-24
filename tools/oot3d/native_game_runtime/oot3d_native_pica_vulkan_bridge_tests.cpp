@@ -3,7 +3,7 @@
 #include "oot3d_native_pica_composition.h"
 #include "oot3d_static_shadow_actor_catalog.h"
 
-#include "fast/oot3d/pica_uniform_layout.h"
+#include "fast/extension/pica_uniform_layout.h"
 
 #include <algorithm>
 #include <array>
@@ -304,34 +304,34 @@ int main() {
     float packedShadowBiasConstant = 0.0F;
     float packedShadowBiasLinear = 0.0F;
     Require(backend.DrawFragmentUniformBytes.size() ==
-                Fast::Oot3d::kPicaPackedFragmentUniformSize,
+                Fast::Extension::kPicaPackedFragmentUniformSize,
             "native fragment uniform block size is incorrect");
     std::memcpy(&packedDiffuse,
                 backend.DrawFragmentUniformBytes.data() +
-                    Fast::Oot3d::kPicaPackedFragmentLightingDiffuseOffset +
+                    Fast::Extension::kPicaPackedFragmentLightingDiffuseOffset +
                     (3U * 4U + 2U) * sizeof(float),
                 sizeof(packedDiffuse));
     std::memcpy(&packedGlobalAmbient,
                 backend.DrawFragmentUniformBytes.data() +
-                    Fast::Oot3d::
+                    Fast::Extension::
                         kPicaPackedFragmentLightingGlobalAmbientOffset +
                     sizeof(float),
                 sizeof(packedGlobalAmbient));
     std::memcpy(&packedShadowTextureBias,
                 backend.DrawFragmentUniformBytes.data() +
-                    Fast::Oot3d::kPicaPackedFragmentShadowTextureBiasOffset,
+                    Fast::Extension::kPicaPackedFragmentShadowTextureBiasOffset,
                 sizeof(packedShadowTextureBias));
     std::memcpy(&packedShadowOrthographic,
                 backend.DrawFragmentUniformBytes.data() +
-                    Fast::Oot3d::kPicaPackedFragmentShadowOrthographicOffset,
+                    Fast::Extension::kPicaPackedFragmentShadowOrthographicOffset,
                 sizeof(packedShadowOrthographic));
     std::memcpy(&packedShadowBiasConstant,
                 backend.DrawFragmentUniformBytes.data() +
-                    Fast::Oot3d::kPicaPackedFragmentShadowBiasConstantOffset,
+                    Fast::Extension::kPicaPackedFragmentShadowBiasConstantOffset,
                 sizeof(packedShadowBiasConstant));
     std::memcpy(&packedShadowBiasLinear,
                 backend.DrawFragmentUniformBytes.data() +
-                    Fast::Oot3d::kPicaPackedFragmentShadowBiasLinearOffset,
+                    Fast::Extension::kPicaPackedFragmentShadowBiasLinearOffset,
                 sizeof(packedShadowBiasLinear));
     Require(backend.DrawCalled && backend.DrawSubmissionId == 17 &&
                 backend.DrawCommandListAddress == 0x14003000U &&
@@ -662,7 +662,7 @@ int main() {
     // preparation carries the fragment uniforms and textures.
     Require(preparingBackend.PreparedVertexUniformBytes != 0U &&
                 preparingBackend.PreparedFragmentUniformBytes ==
-                    Fast::Oot3d::kPicaPackedFragmentUniformSize &&
+                    Fast::Extension::kPicaPackedFragmentUniformSize &&
                 preparingBackend.PreparedTextureCount == plan.Textures.size() &&
                 preparingBackend.PreparedAlphaTestEnabled,
             "an alpha-tested prepared draw lost its fragment state or alpha test");
@@ -675,7 +675,7 @@ int main() {
                     true, preparedDraws);
     Require(preparedDraws == 1U &&
                 opaqueBackend.PreparedVertexUniformBytes != 0U &&
-                opaqueBackend.PreparedFragmentUniformBytes == Fast::Oot3d::kPicaPackedFragmentUniformSize &&
+                opaqueBackend.PreparedFragmentUniformBytes == Fast::Extension::kPicaPackedFragmentUniformSize &&
                 opaqueBackend.PreparedTextureCount == plan.Textures.size() &&
                 !opaqueBackend.PreparedAlphaTestEnabled,
             "an opaque prepared draw lost source-classification fragment state");
@@ -690,7 +690,7 @@ int main() {
                     true, preparedDraws);
     Require(preparedDraws == 1U &&
                 overlayBackend.PreparedFragmentUniformBytes ==
-                    Fast::Oot3d::kPicaPackedFragmentUniformSize &&
+                    Fast::Extension::kPicaPackedFragmentUniformSize &&
                 overlayBackend.PreparedTextureCount == plan.Textures.size() &&
                 !overlayBackend.PreparedAlphaTestEnabled,
             "a prepared draw lost the fragment state its backend asked for");

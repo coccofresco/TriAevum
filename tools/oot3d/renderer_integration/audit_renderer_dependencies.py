@@ -15,8 +15,8 @@ SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".inl"}
 
 SCOPES = {
     "renderer_core": (
-        "runtime/three_ds_recomp/include/fast/oot3d/**/*",
-        "runtime/three_ds_recomp/src/fast/oot3d/**/*",
+        "runtime/three_ds_recomp/include/fast/extension/**/*",
+        "runtime/three_ds_recomp/src/fast/extension/**/*",
     ),
     "renderer_vulkan_backend": (
         "runtime/three_ds_recomp/include/fast/backends/gfx_vulkan*",

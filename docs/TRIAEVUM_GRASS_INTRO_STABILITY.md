@@ -68,10 +68,10 @@ Renderer implementation: `630a838d`.
 Renderer paths are relative to `runtime/three_ds_recomp`:
 
 - `src/fast/renderer3ds/pica_composition_schedule.cpp`: declared insertion point.
-- `src/fast/oot3d/grass_surface_extractor.cpp`: bounded whole-surface generation.
-- `src/fast/oot3d/grass_world_placement_cache.cpp`: immutable spatial hierarchy.
-- `src/fast/oot3d/grass_visibility.cpp`: exact camera and hierarchical query.
-- `src/fast/oot3d/interactive_grass_pass.cpp`: selection/compaction integration.
+- `src/fast/extension/grass_surface_extractor.cpp`: bounded whole-surface generation.
+- `src/fast/extension/grass_world_placement_cache.cpp`: immutable spatial hierarchy.
+- `src/fast/extension/grass_visibility.cpp`: exact camera and hierarchical query.
+- `src/fast/extension/interactive_grass_pass.cpp`: selection/compaction integration.
 - `tests/oot3d_grass_world_placement_cache_tests.cpp`: projection flips, off-axis
   frusta, camera return, and indexed-vs-exhaustive cluster selection.
 - Foundation/effect-graph/async-placement tests cover stable source identity,

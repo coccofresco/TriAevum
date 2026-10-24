@@ -1,4 +1,4 @@
-#include "fast/oot3d/pica_geometry_registry.h"
+#include "fast/extension/pica_geometry_registry.h"
 
 #include <gtest/gtest.h>
 
@@ -6,9 +6,9 @@
 
 namespace {
 
-Fast::Oot3d::PicaGeometryRequest BuildRequest(uint64_t identity, uint64_t version, std::span<const uint8_t> indices,
-                                              std::span<const Fast::Oot3d::PicaNriSourceVertexStream> streams,
-                                              std::span<const Fast::Oot3d::PicaNriSourceVertexAttribute> attributes) {
+Fast::Extension::PicaGeometryRequest BuildRequest(uint64_t identity, uint64_t version, std::span<const uint8_t> indices,
+                                              std::span<const Fast::Extension::PicaNriSourceVertexStream> streams,
+                                              std::span<const Fast::Extension::PicaNriSourceVertexAttribute> attributes) {
     return {
         identity, version, true, 7U, streams, attributes, indices, true, false, 3U, true,
     };
@@ -19,14 +19,14 @@ TEST(Oot3dPicaGeometryRegistry, ReusesPackedPayloadAndExpandsEightBitIndicesOnce
     const auto vertexBytes =
         std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(vertexValues.data()), sizeof(vertexValues));
     const std::array<uint8_t, 3> indices{ 0U, 2U, 1U };
-    const std::array<Fast::Oot3d::PicaNriSourceVertexStream, 1> streams{ {
+    const std::array<Fast::Extension::PicaNriSourceVertexStream, 1> streams{ {
         { { 0U, 3U * sizeof(float), false }, vertexBytes },
     } };
-    const std::array<Fast::Oot3d::PicaNriSourceVertexAttribute, 1> attributes{ {
-        { 0U, 0U, Fast::Oot3d::PicaNriVertexScalar::Float, 3U, 0U },
+    const std::array<Fast::Extension::PicaNriSourceVertexAttribute, 1> attributes{ {
+        { 0U, 0U, Fast::Extension::PicaNriVertexScalar::Float, 3U, 0U },
     } };
 
-    Fast::Oot3d::PicaGeometryRegistry registry;
+    Fast::Extension::PicaGeometryRegistry registry;
     const auto request = BuildRequest(31U, 41U, indices, streams, attributes);
     const auto first = registry.Resolve(request);
     ASSERT_NE(first.Geometry, nullptr);
@@ -54,14 +54,14 @@ TEST(Oot3dPicaGeometryRegistry, ContentVersionUpdatesInPlaceAndCapacityEvictsByI
     const auto vertexBytes =
         std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(vertexValues.data()), sizeof(vertexValues));
     const std::array<uint8_t, 1> indices{ 0U };
-    const std::array<Fast::Oot3d::PicaNriSourceVertexStream, 1> streams{ {
+    const std::array<Fast::Extension::PicaNriSourceVertexStream, 1> streams{ {
         { { 0U, 3U * sizeof(float), false }, vertexBytes },
     } };
-    const std::array<Fast::Oot3d::PicaNriSourceVertexAttribute, 1> attributes{ {
-        { 0U, 0U, Fast::Oot3d::PicaNriVertexScalar::Float, 3U, 0U },
+    const std::array<Fast::Extension::PicaNriSourceVertexAttribute, 1> attributes{ {
+        { 0U, 0U, Fast::Extension::PicaNriVertexScalar::Float, 3U, 0U },
     } };
 
-    Fast::Oot3d::PicaGeometryRegistry registry(1U);
+    Fast::Extension::PicaGeometryRegistry registry(1U);
     auto request = BuildRequest(3U, 5U, indices, streams, attributes);
     ASSERT_NE(registry.Resolve(request).Geometry, nullptr);
     request.ContentVersion = 6U;

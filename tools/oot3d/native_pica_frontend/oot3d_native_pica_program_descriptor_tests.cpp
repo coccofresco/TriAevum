@@ -1,7 +1,7 @@
 #include "oot3d_native_pica_fragment_shader_gen.h"
 #include "oot3d_native_pica_program_descriptor.h"
 #include "oot3d_native_pica_canonical_hash.h"
-#include "fast/oot3d/pica_fragment_lighting.h"
+#include "fast/extension/pica_fragment_lighting.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -42,8 +42,8 @@ void RequireFragmentShaderCompiles(const std::string& source) {
 // program as a constant: returns that program when the source carries it.
 std::optional<Fast::Renderer3ds::PicaLightingProgram> ConstantLightingProgram(
     const std::string& source, const Oot3dNativeGame::Oot3dPicaDrawPacket& packet) {
-    const auto program = Fast::Oot3d::BuildPicaLightingProgram(
-        Fast::Oot3d::DecodePicaFragmentLighting(packet.Registers));
+    const auto program = Fast::Extension::BuildPicaLightingProgram(
+        Fast::Extension::DecodePicaFragmentLighting(packet.Registers));
     std::string control = "const PicaLightingProgram pica_lighting_constant_program = "
                           "PicaLightingProgram(uvec4(";
     for (size_t i = 0; i < program.Control.size(); ++i)
@@ -407,7 +407,7 @@ int main() {
                 // Normal map with the recalculated Z component.
                 ((ConstantLightingProgram(lightingShader.Source, *bumpPacket)
                       ->Control[3] >> 4U) & 3U) ==
-                    static_cast<uint32_t>(Fast::Oot3d::PicaLightingBumpMode::NormalMap) &&
+                    static_cast<uint32_t>(Fast::Extension::PicaLightingBumpMode::NormalMap) &&
                 (ConstantLightingProgram(lightingShader.Source, *bumpPacket)
                      ->Control[3] & 64U) != 0U &&
                 lightingShader.Source.find(
@@ -433,7 +433,7 @@ int main() {
                     .has_value() &&
                 ((ConstantLightingProgram(lightingShader.Source, *bumpPacket)
                       ->Control[3] >> 4U) & 3U) ==
-                    static_cast<uint32_t>(Fast::Oot3d::PicaLightingBumpMode::NormalMap) &&
+                    static_cast<uint32_t>(Fast::Extension::PicaLightingBumpMode::NormalMap) &&
                 (ConstantLightingProgram(lightingShader.Source, *bumpPacket)
                      ->Control[3] & 64U) == 0U,
             "PICA disable-bump-renormalization bit was ignored");
@@ -459,7 +459,7 @@ int main() {
                     .has_value() &&
                 ((ConstantLightingProgram(lightingShader.Source, *bumpPacket)
                       ->Control[3] >> 4U) & 3U) ==
-                    static_cast<uint32_t>(Fast::Oot3d::PicaLightingBumpMode::TangentMap) &&
+                    static_cast<uint32_t>(Fast::Extension::PicaLightingBumpMode::TangentMap) &&
                 lightingShader.Hooks.SamplesTexture(1U),
             "native PICA tangent-map bump lighting was not generated");
 #if defined(OOT3D_NATIVE_PICA_TEST_SHADERC)

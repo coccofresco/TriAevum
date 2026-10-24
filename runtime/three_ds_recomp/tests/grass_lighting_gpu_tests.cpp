@@ -1,5 +1,5 @@
-#include "fast/oot3d/grass_draw_state.h"
-#include "fast/oot3d/grass_shader_sources.h"
+#include "fast/extension/grass_draw_state.h"
+#include "fast/extension/grass_shader_sources.h"
 #include "fast/renderer3ds/pica_surface_lighting_shader.h"
 #include "vulkan_compute_test.h"
 #include <cmath>
@@ -8,7 +8,7 @@
 #include <vector>
 
 using namespace Fast::Renderer3ds;
-using namespace Fast::Oot3d;
+using namespace Fast::Extension;
 using V4 = std::array<float, 4>;
 namespace {
 struct Case {

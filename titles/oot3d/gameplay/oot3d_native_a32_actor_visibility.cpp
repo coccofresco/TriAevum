@@ -1,6 +1,6 @@
 #include "oot3d_native_a32_actor_visibility.h"
 
-#include "fast/oot3d/perspective_fov_policy.h"
+#include "fast/extension/perspective_fov_policy.h"
 #include "oot3d_native_a32_memory.h"
 
 #include <algorithm>
@@ -99,7 +99,7 @@ ActorCullingVolume PresentedVolume(MemoryBus& memory, uint32_t play,
     const float scaleY = std::sqrt(rows[4] * rows[4] + rows[5] * rows[5] + rows[6] * rows[6]);
     if (!std::isfinite(scaleX) || !std::isfinite(scaleY) || scaleX <= 1.0e-6F || scaleY <= 1.0e-6F)
         return volume;
-    const auto resolved = Fast::Oot3d::ResolvePerspectiveFov({
+    const auto resolved = Fast::Extension::ResolvePerspectiveFov({
         {-1.0F / scaleX, 1.0F / scaleX, -1.0F / scaleY, 1.0F / scaleY, 1.0F, 2.0F},
         visibility.FovMultiplier,
         visibility.Presentation,

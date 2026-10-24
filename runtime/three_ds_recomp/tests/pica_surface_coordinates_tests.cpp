@@ -1,10 +1,10 @@
-#include "fast/oot3d/pica_surface_coordinates.h"
+#include "fast/extension/pica_surface_coordinates.h"
 
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
 
-using namespace Fast::Oot3d;
+using namespace Fast::Extension;
 
 static void near(float a, float b) {
     if (std::abs(a - b) > 0.002F) throw std::runtime_error("coordinate/normal mismatch");

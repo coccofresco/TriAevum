@@ -13,7 +13,7 @@ void GfxRenderingAPIVulkan::EnsureNativePicaVulkanShaderModules(
     // NRI consumes SPIR-V directly. The combined-sampler program and Vulkan
     // modules belong exclusively to a draw that actually needs the fallback.
     const auto fragment = ResolveNativePicaShaderSpirv(draw.FragmentShaderSource,
-        Oot3d::PicaAotShaderStage::Fragment, false, "native_pica_fallback.frag");
+        Extension::PicaAotShaderStage::Fragment, false, "native_pica_fallback.frag");
     const auto vertex = CreateShaderModuleFromSpirv(shader.NriVertexSpirv);
     VkShaderModule fragmentModule = VK_NULL_HANDLE;
     try {
@@ -32,7 +32,7 @@ void GfxRenderingAPIVulkan::PrepareNativePicaProgram(NativePicaProgramPreparatio
     try {
         if (preparation.ResolveVertex)
             preparation.VertexSpirv = ResolveNativePicaShaderSpirv(
-                preparation.VertexSource, Oot3d::PicaAotShaderStage::Vertex, true,
+                preparation.VertexSource, Extension::PicaAotShaderStage::Vertex, true,
                 (preparation.Stem + ".vert").c_str());
     } catch (const std::exception& exception) {
         preparation.CompileError = exception.what();
@@ -42,7 +42,7 @@ void GfxRenderingAPIVulkan::PrepareNativePicaProgram(NativePicaProgramPreparatio
         return;
     }
     if (!preparation.Nri) return;
-    const auto nriVariant = Oot3d::BuildPicaNriFragmentShaderVariant(preparation.FragmentSource);
+    const auto nriVariant = Extension::BuildPicaNriFragmentShaderVariant(preparation.FragmentSource);
     preparation.NriApplied = nriVariant.Applied;
     if (!nriVariant.Applied) {
         preparation.NriError = nriVariant.Error;
@@ -51,7 +51,7 @@ void GfxRenderingAPIVulkan::PrepareNativePicaProgram(NativePicaProgramPreparatio
     preparation.NriFragmentSource = nriVariant.Source;
     try {
         preparation.NriFragmentSpirv = ResolveNativePicaShaderSpirv(
-            nriVariant.Source, Oot3d::PicaAotShaderStage::NriFragment, false,
+            nriVariant.Source, Extension::PicaAotShaderStage::NriFragment, false,
             (preparation.Stem + "_nri.frag").c_str());
     } catch (const std::exception& exception) {
         preparation.CompileError = exception.what();
@@ -81,9 +81,9 @@ bool GfxRenderingAPIVulkan::AdoptNativePicaProgram(NativePicaShaderProgram& shad
                     preparation->Stem, preparation->NriError);
         return true;
     }
-    shader.NriFragmentSource = Oot3d::IdentifyPicaAotShaderSource(preparation->NriFragmentSource);
+    shader.NriFragmentSource = Extension::IdentifyPicaAotShaderSource(preparation->NriFragmentSource);
     mPicaEffectiveShaderInventory.Observe(
-        Oot3d::PicaAotShaderStage::NriFragment, preparation->NriFragmentSource,
+        Extension::PicaAotShaderStage::NriFragment, preparation->NriFragmentSource,
         preparation->DescriptorSchemaVersion, preparation->CanonicalPipelineId,
         preparation->FragmentShaderKey, preparation->SettingsRevision);
     if (!preparation->CompileError.empty()) {
@@ -100,19 +100,19 @@ bool GfxRenderingAPIVulkan::AdoptNativePicaProgram(NativePicaShaderProgram& shad
 Renderer3ds::PicaDevicePipelineRecord& GfxRenderingAPIVulkan::GetOrCreateNativePicaPipeline(
     const GfxNativePicaDrawView& draw,
     NativePicaShaderProgram& shader, bool writesReactiveMask,
-    Oot3d::PicaShaderDomain domain,
-    Oot3d::PicaShaderInstrumentationFeature requestedFeatures,
-    Oot3d::PicaShaderInstrumentationFeature appliedFeatures,
+    Extension::PicaShaderDomain domain,
+    Extension::PicaShaderInstrumentationFeature requestedFeatures,
+    Extension::PicaShaderInstrumentationFeature appliedFeatures,
     bool recordInventory, bool outlineOcclusionOnly, bool requireVulkan,
     NativePicaPipelineAcquisition acquisition, bool* pending) {
     if (pending != nullptr) *pending = false;
     if (recordInventory && mPicaPipelineInventory.Enabled()) {
-        auto entry = Oot3d::DescribePicaGraphicsPipelineDraw(draw);
+        auto entry = Extension::DescribePicaGraphicsPipelineDraw(draw);
         entry.DescriptorSchemaVersion =
             draw.CanonicalDescriptorSchemaVersion;
-        entry.Domain = domain == Oot3d::PicaShaderDomain::Canonical
-            ? Oot3d::PicaGraphicsPipelineDomain::Canonical
-            : Oot3d::PicaGraphicsPipelineDomain::Instrumented;
+        entry.Domain = domain == Extension::PicaShaderDomain::Canonical
+            ? Extension::PicaGraphicsPipelineDomain::Canonical
+            : Extension::PicaGraphicsPipelineDomain::Instrumented;
         entry.VertexShaderKey = draw.VertexShaderKey;
         entry.FragmentShaderKey = draw.FragmentShaderKey;
         entry.VertexSource = shader.VertexSource;
@@ -132,14 +132,14 @@ Renderer3ds::PicaDevicePipelineRecord& GfxRenderingAPIVulkan::GetOrCreateNativeP
             std::move(entry), draw.CanonicalPipelineId,
             mFrameGraphicsSettingsRevision);
     }
-    auto resolvedState = Oot3d::BuildPicaNriPipelineState(
+    auto resolvedState = Extension::BuildPicaNriPipelineState(
         draw, shader.FragmentOutputs, ActivePicaAttachmentRequirements(),
         mNativePicaSampleCount, mDepthFormat, writesReactiveMask, outlineOcclusionOnly);
     // The superset program declares every guide output; the attachments its
     // specialized program does not declare stay untouched, as they do there.
     for (size_t location = 1U; location < resolvedState.Colors.size(); ++location)
         if ((shader.DeclaredOutputs & (1U << location)) == 0U) resolvedState.Colors[location].colorWriteMask = 0U;
-    const auto sourceIdentity = [](const Oot3d::PicaAotShaderSourceIdentity& value) {
+    const auto sourceIdentity = [](const Extension::PicaAotShaderSourceIdentity& value) {
         return std::array<uint64_t, 3>{value.Id, value.SecondaryHash, value.Size};
     };
     const Renderer3ds::PicaPipelineProgramIdentity programs{
@@ -159,8 +159,8 @@ Renderer3ds::PicaDevicePipelineRecord& GfxRenderingAPIVulkan::GetOrCreateNativeP
         const auto state = acquisition == NativePicaPipelineAcquisition::Background
             ? mNriPicaPipelineBridge.PollOwnedPipeline(record.Id)
             : mNriPicaPipelineBridge.CompleteOwnedPipeline(record.Id);
-        if (state == Oot3d::NriPicaPipelineRequest::Ready) return record;
-        if (state == Oot3d::NriPicaPipelineRequest::Pending) {
+        if (state == Extension::NriPicaPipelineRequest::Ready) return record;
+        if (state == Extension::NriPicaPipelineRequest::Pending) {
             if (pending != nullptr) *pending = true;
             return record;
         }
@@ -196,21 +196,21 @@ Renderer3ds::PicaDevicePipelineRecord& GfxRenderingAPIVulkan::GetOrCreateNativeP
         attributes.push_back({attribute.Location, attribute.Binding, format,
                               attribute.ByteOffset});
     }
-    std::vector<Oot3d::PicaNriSourceVertexBinding> nriSourceBindings;
+    std::vector<Extension::PicaNriSourceVertexBinding> nriSourceBindings;
     nriSourceBindings.reserve(draw.VertexBindings.size());
     for (const auto& binding : draw.VertexBindings) {
         nriSourceBindings.push_back(
             {binding.Binding, binding.ByteStride, binding.PerInstance});
     }
-    std::vector<Oot3d::PicaNriSourceVertexAttribute> nriSourceAttributes;
+    std::vector<Extension::PicaNriSourceVertexAttribute> nriSourceAttributes;
     nriSourceAttributes.reserve(draw.VertexAttributes.size());
     for (const auto& attribute : draw.VertexAttributes) {
         nriSourceAttributes.push_back({
             attribute.Location, attribute.Binding,
-            static_cast<Oot3d::PicaNriVertexScalar>(attribute.Format),
+            static_cast<Extension::PicaNriVertexScalar>(attribute.Format),
             attribute.ComponentCount, attribute.ByteOffset});
     }
-    const auto nriVertexLayout = Oot3d::BuildPicaNriVertexInputLayout(
+    const auto nriVertexLayout = Extension::BuildPicaNriVertexInputLayout(
         nriSourceBindings, nriSourceAttributes);
     if (!nriVertexLayout.Valid())
         throw std::runtime_error(nriVertexLayout.Error);
@@ -250,20 +250,20 @@ Renderer3ds::PicaDevicePipelineRecord& GfxRenderingAPIVulkan::GetOrCreateNativeP
                 recordInventory ? 1U : 0U, static_cast<unsigned>(acquisition));
         if (acquisition == NativePicaPipelineAcquisition::Background && mPreparationQueue) {
             const auto state = mNriPicaPipelineBridge.RequestOwnedPipeline(
-                record.Id, nriPipeline, Oot3d::NriPicaPipelineFactory::Default, *mPreparationQueue);
-            if (state == Oot3d::NriPicaPipelineRequest::Pending) {
+                record.Id, nriPipeline, Extension::NriPicaPipelineFactory::Default, *mPreparationQueue);
+            if (state == Extension::NriPicaPipelineRequest::Pending) {
                 if (pending != nullptr) *pending = true;
                 return record;
             }
-            if (state == Oot3d::NriPicaPipelineRequest::Failed)
+            if (state == Extension::NriPicaPipelineRequest::Failed)
                 SPDLOG_WARN(
                     "NRI PICA pipeline creation failed for shader {}:{}",
                     draw.VertexShaderKey, draw.FragmentShaderKey);
         } else if (!mNriPicaPipelineBridge.CreateOwnedPipeline(
                        record.Id, nriPipeline,
                        acquisition == NativePicaPipelineAcquisition::Libraries
-                           ? Oot3d::NriPicaPipelineFactory::Libraries
-                           : Oot3d::NriPicaPipelineFactory::Default)) {
+                           ? Extension::NriPicaPipelineFactory::Libraries
+                           : Extension::NriPicaPipelineFactory::Default)) {
             SPDLOG_WARN(
                 "NRI PICA pipeline creation failed for shader {}:{}",
                 draw.VertexShaderKey, draw.FragmentShaderKey);
@@ -383,11 +383,11 @@ void GfxRenderingAPIVulkan::PrewarmNativePicaPipelines() {
     }
     const uint8_t sampleCount =
         static_cast<uint8_t>(mNativePicaSampleCount);
-    const auto activeFeatures = Oot3d::ResolvePicaShaderProfileFeatures(
+    const auto activeFeatures = Extension::ResolvePicaShaderProfileFeatures(
         mFrameGraphicsSettings.Effects, mTemporalMotionEnabled,
-        Oot3d::PicaExtensionPassEnabled(
+        Extension::PicaExtensionPassEnabled(
             mPicaExtensionGraph,
-            Oot3d::PicaExtensionPass::DirectionalShadowLighting));
+            Extension::PicaExtensionPass::DirectionalShadowLighting));
     const uint64_t profile =
         static_cast<uint64_t>(ActivePicaAttachmentRequirements().Key()) |
         (static_cast<uint64_t>(sampleCount) << 8U) |
@@ -410,7 +410,7 @@ void GfxRenderingAPIVulkan::PrewarmNativePicaPipelines() {
         }
 
         auto& shaderCache =
-            entry.Domain == Oot3d::PicaGraphicsPipelineDomain::Canonical
+            entry.Domain == Extension::PicaGraphicsPipelineDomain::Canonical
                 ? mCanonicalNativePicaShaders
                 : mInstrumentedNativePicaShaders;
         const auto shaderKey = Renderer3ds::BuildPicaShaderModuleIdentity(
@@ -438,9 +438,9 @@ void GfxRenderingAPIVulkan::PrewarmNativePicaPipelines() {
         }
         if (shaderIt == shaderCache.end()) {
             const auto vertexSpirv = mPicaAotShaderPack.Find(
-                Oot3d::PicaAotShaderStage::Vertex, entry.VertexSource);
+                Extension::PicaAotShaderStage::Vertex, entry.VertexSource);
             const auto fragmentSpirv = mPicaAotShaderPack.Find(
-                Oot3d::PicaAotShaderStage::Fragment,
+                Extension::PicaAotShaderStage::Fragment,
                 entry.FragmentSource);
             if (vertexSpirv.empty() || fragmentSpirv.empty()) {
                 ++mPicaPipelinePrewarmSkipped;
@@ -450,7 +450,7 @@ void GfxRenderingAPIVulkan::PrewarmNativePicaPipelines() {
             if (entry.NriFragmentAvailable &&
                 mNriPicaPipelineBridge.Available()) {
                 nriFragmentSpirv = mPicaAotShaderPack.Find(
-                    Oot3d::PicaAotShaderStage::NriFragment,
+                    Extension::PicaAotShaderStage::NriFragment,
                     entry.NriFragmentSource);
                 if (nriFragmentSpirv.empty()) {
                     ++mPicaPipelinePrewarmSkipped;
@@ -551,9 +551,9 @@ void GfxRenderingAPIVulkan::PrewarmNativePicaPipelines() {
             GetOrCreateNativePicaPipeline(
                 draw, shaderIt->second, entry.WritesReactiveMask,
                 entry.Domain ==
-                        Oot3d::PicaGraphicsPipelineDomain::Canonical
-                    ? Oot3d::PicaShaderDomain::Canonical
-                    : Oot3d::PicaShaderDomain::Instrumented,
+                        Extension::PicaGraphicsPipelineDomain::Canonical
+                    ? Extension::PicaShaderDomain::Canonical
+                    : Extension::PicaShaderDomain::Instrumented,
                 entry.RequestedFeatures, entry.AppliedFeatures,
                 false, entry.OutlineOcclusionOnly);
             if (mNativePicaPipelines.size() == pipelineCount) {

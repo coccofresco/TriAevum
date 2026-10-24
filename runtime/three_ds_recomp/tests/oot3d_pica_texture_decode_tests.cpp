@@ -1,4 +1,4 @@
-#include "fast/oot3d/pica_texture_decode.h"
+#include "fast/extension/pica_texture_decode.h"
 
 #include <gtest/gtest.h>
 
@@ -27,7 +27,7 @@ TEST_P(Oot3dPicaTextureDecodeTest, DecodesNativeFirstTexel) {
     std::vector<uint8_t> rgba8;
     std::string error;
 
-    ASSERT_TRUE(Fast::Oot3d::DecodePicaTextureRgba8(
+    ASSERT_TRUE(Fast::Extension::DecodePicaTextureRgba8(
         test.Format, 1U, 1U, encoded, rgba8, &error))
         << error;
     ASSERT_EQ(rgba8.size(), 4U);
@@ -66,10 +66,10 @@ INSTANTIATE_TEST_SUITE_P(
 TEST(Oot3dPicaTextureDecode, RejectsTruncatedAndUnknownFormats) {
     std::vector<uint8_t> rgba8;
     std::string error;
-    EXPECT_FALSE(Fast::Oot3d::DecodePicaTextureRgba8(
+    EXPECT_FALSE(Fast::Extension::DecodePicaTextureRgba8(
         0U, 1U, 1U, {}, rgba8, &error));
     EXPECT_FALSE(error.empty());
-    EXPECT_FALSE(Fast::Oot3d::DecodePicaTextureRgba8(
+    EXPECT_FALSE(Fast::Extension::DecodePicaTextureRgba8(
         14U, 1U, 1U, {}, rgba8, &error));
     EXPECT_FALSE(error.empty());
 }

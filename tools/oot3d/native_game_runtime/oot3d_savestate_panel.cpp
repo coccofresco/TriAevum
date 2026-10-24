@@ -66,13 +66,13 @@ std::filesystem::path ExistingFolder(std::filesystem::path path) {
   return path.empty() ? std::filesystem::current_path(error) : path;
 }
 
-class SavestatePanel final : public Fast::Oot3d::GraphicsSettingsPanelTab {
+class SavestatePanel final : public Fast::Extension::GraphicsSettingsPanelTab {
  public:
   explicit SavestatePanel(std::shared_ptr<SavestateLibrary> library)
       : mLibrary(std::move(library)) {}
 
   const char* Label() const noexcept override { return "Save states"; }
-  const char* Group() const noexcept override { return Fast::Oot3d::kGameSettingsGroup; }
+  const char* Group() const noexcept override { return Fast::Extension::kGameSettingsGroup; }
 
   void Draw() override {
     const bool fixedSlot = !mLibrary->FixedSlot().empty();
@@ -319,7 +319,7 @@ class SavestatePanel final : public Fast::Oot3d::GraphicsSettingsPanelTab {
 
 } // namespace
 
-std::shared_ptr<Fast::Oot3d::GraphicsSettingsPanelTab>
+std::shared_ptr<Fast::Extension::GraphicsSettingsPanelTab>
 CreateSavestatePanel(std::shared_ptr<SavestateLibrary> library) {
   return std::make_shared<SavestatePanel>(std::move(library));
 }

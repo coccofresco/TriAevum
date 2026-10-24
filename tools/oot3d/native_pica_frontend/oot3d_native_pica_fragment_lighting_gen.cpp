@@ -1,6 +1,6 @@
 #include "oot3d_native_pica_fragment_lighting_gen.h"
 
-#include "fast/oot3d/pica_fragment_lighting.h"
+#include "fast/extension/pica_fragment_lighting.h"
 #include "fast/renderer3ds/pica_lighting_program.h"
 
 #include <array>
@@ -16,7 +16,7 @@ void SetError(std::string *error, const std::string &message) {
   }
 }
 
-std::array<float, 4> ColorVector(const Fast::Oot3d::PicaLightingColor &color) {
+std::array<float, 4> ColorVector(const Fast::Extension::PicaLightingColor &color) {
   return {color.Rgb[0], color.Rgb[1], color.Rgb[2], 0.0F};
 }
 
@@ -53,33 +53,33 @@ std::string LightingProgramLiteral(const Fast::Renderer3ds::PicaLightingProgram 
   return out.str();
 }
 
-uint8_t LutTable(Fast::Oot3d::PicaLightingLutTable table) {
+uint8_t LutTable(Fast::Extension::PicaLightingLutTable table) {
   return static_cast<uint8_t>(table);
 }
 
-bool StandardLutEnabled(const Fast::Oot3d::PicaFragmentLightingState &lighting,
+bool StandardLutEnabled(const Fast::Extension::PicaFragmentLightingState &lighting,
                         uint32_t disableBit, uint8_t table) {
   return (lighting.Config1 & (1U << disableBit)) == 0U &&
-         Fast::Oot3d::IsPicaLightingLutSamplerSupported(
+         Fast::Extension::IsPicaLightingLutSamplerSupported(
              lighting.EnvironmentConfiguration, table);
 }
 
 bool LightingUsesLuts(
-    const Fast::Oot3d::PicaFragmentLightingState &lighting) {
+    const Fast::Extension::PicaFragmentLightingState &lighting) {
   if (!lighting.Enabled) return false;
   const uint8_t environment = lighting.EnvironmentConfiguration;
   if (StandardLutEnabled(lighting, 16U,
-                         LutTable(Fast::Oot3d::PicaLightingLutTable::Distribution0)) ||
+                         LutTable(Fast::Extension::PicaLightingLutTable::Distribution0)) ||
       StandardLutEnabled(lighting, 17U,
-                         LutTable(Fast::Oot3d::PicaLightingLutTable::Distribution1)) ||
+                         LutTable(Fast::Extension::PicaLightingLutTable::Distribution1)) ||
       StandardLutEnabled(lighting, 19U,
-                         LutTable(Fast::Oot3d::PicaLightingLutTable::Fresnel)) ||
+                         LutTable(Fast::Extension::PicaLightingLutTable::Fresnel)) ||
       StandardLutEnabled(lighting, 20U,
-                         LutTable(Fast::Oot3d::PicaLightingLutTable::ReflectRed)) ||
+                         LutTable(Fast::Extension::PicaLightingLutTable::ReflectRed)) ||
       StandardLutEnabled(lighting, 21U,
-                         LutTable(Fast::Oot3d::PicaLightingLutTable::ReflectGreen)) ||
+                         LutTable(Fast::Extension::PicaLightingLutTable::ReflectGreen)) ||
       StandardLutEnabled(lighting, 22U,
-                         LutTable(Fast::Oot3d::PicaLightingLutTable::ReflectBlue))) {
+                         LutTable(Fast::Extension::PicaLightingLutTable::ReflectBlue))) {
     return true;
   }
   for (size_t slot = 0; slot < lighting.ActiveLightCount; ++slot) {
@@ -87,7 +87,7 @@ bool LightingUsesLuts(
     const auto &light = lighting.Lights[lightIndex];
     if (light.DistanceAttenuationEnabled ||
         (light.SpotAttenuationEnabled &&
-         Fast::Oot3d::IsPicaLightingLutSamplerSupported(
+         Fast::Extension::IsPicaLightingLutSamplerSupported(
              environment, static_cast<uint8_t>(8U + lightIndex)))) {
       return true;
     }
@@ -122,32 +122,32 @@ std::string LightingLutDeclarations() {
 } // namespace
 
 bool Oot3dPicaFragmentLightingEnabled(const Oot3dPicaDrawPacket &packet) {
-  return Fast::Oot3d::DecodePicaFragmentLighting(packet.Registers).Enabled;
+  return Fast::Extension::DecodePicaFragmentLighting(packet.Registers).Enabled;
 }
 
 bool Oot3dPicaFragmentLightingUsesLuts(const Oot3dPicaDrawPacket &packet) {
   return LightingUsesLuts(
-      Fast::Oot3d::DecodePicaFragmentLighting(packet.Registers));
+      Fast::Extension::DecodePicaFragmentLighting(packet.Registers));
 }
 
 bool Oot3dPicaFragmentLightingConfigurationSupported(
     const Oot3dPicaDrawPacket &packet, std::string *error,
     Oot3dPicaShaderBuildPurpose purpose) {
   const auto lighting =
-      Fast::Oot3d::DecodePicaFragmentLighting(packet.Registers);
+      Fast::Extension::DecodePicaFragmentLighting(packet.Registers);
   if (!lighting.Enabled) {
     return true;
   }
   switch (lighting.BumpMode) {
-  case Fast::Oot3d::PicaLightingBumpMode::None:
-  case Fast::Oot3d::PicaLightingBumpMode::NormalMap:
-  case Fast::Oot3d::PicaLightingBumpMode::TangentMap:
+  case Fast::Extension::PicaLightingBumpMode::None:
+  case Fast::Extension::PicaLightingBumpMode::NormalMap:
+  case Fast::Extension::PicaLightingBumpMode::TangentMap:
     break;
   default:
     SetError(error, "PICA fragment-lighting bump mode is invalid");
     return false;
   }
-  if (lighting.BumpMode != Fast::Oot3d::PicaLightingBumpMode::None &&
+  if (lighting.BumpMode != Fast::Extension::PicaLightingBumpMode::None &&
       lighting.BumpTextureUnit >= 3U) {
     SetError(error, "PICA fragment-lighting bump texture unit is invalid");
     return false;
@@ -170,14 +170,14 @@ bool Oot3dPicaFragmentLightingConfigurationSupported(
 
 uint64_t ComputeOot3dPicaFragmentLightingStructuralKey(
     const Oot3dPicaDrawPacket &packet) {
-  return Fast::Oot3d::ComputePicaFragmentLightingStructuralKey(
+  return Fast::Extension::ComputePicaFragmentLightingStructuralKey(
       packet.Registers);
 }
 
 Oot3d::Renderer::PicaFragmentLightingLayout
 BuildOot3dPicaFragmentLightingLayout(const Oot3dPicaDrawPacket &packet) {
   const auto native =
-      Fast::Oot3d::DecodePicaFragmentLighting(packet.Registers);
+      Fast::Extension::DecodePicaFragmentLighting(packet.Registers);
   Oot3d::Renderer::PicaFragmentLightingLayout result;
   result.SchemaVersion =
       Oot3d::Renderer::kPicaFragmentLightingLayoutSchemaVersion;
@@ -228,7 +228,7 @@ BuildOot3dPicaFragmentLightingLayout(const Oot3dPicaDrawPacket &packet) {
 Oot3dPicaFragmentLightingUniformState
 BuildOot3dPicaFragmentLightingUniformState(const Oot3dPicaDrawPacket &packet) {
   const auto lighting =
-      Fast::Oot3d::DecodePicaFragmentLighting(packet.Registers);
+      Fast::Extension::DecodePicaFragmentLighting(packet.Registers);
   Oot3dPicaFragmentLightingUniformState uniforms;
   uniforms.GlobalAmbient = ColorVector(lighting.GlobalAmbient);
   for (size_t index = 0; index < lighting.Lights.size(); ++index) {
@@ -260,14 +260,14 @@ bool GenerateOot3dPicaFragmentLightingSource(const Oot3dPicaDrawPacket &packet,
   declarations.clear();
   mainBody.clear();
   const auto lighting =
-      Fast::Oot3d::DecodePicaFragmentLighting(packet.Registers);
+      Fast::Extension::DecodePicaFragmentLighting(packet.Registers);
   if (!lighting.Enabled) {
     return true;
   }
   if (!Oot3dPicaFragmentLightingConfigurationSupported(packet, error, purpose)) {
     return false;
   }
-  if (lighting.BumpMode != Fast::Oot3d::PicaLightingBumpMode::None &&
+  if (lighting.BumpMode != Fast::Extension::PicaLightingBumpMode::None &&
       bumpTextureSample.empty()) {
     SetError(error, "PICA fragment-lighting bump texture sample is unavailable");
     return false;
@@ -309,7 +309,7 @@ bool GenerateOot3dPicaFragmentLightingSource(const Oot3dPicaDrawPacket &packet,
             "    precise vec4 pica_specular_sum = vec4(0.0, 0.0, 0.0, 1.0);\n";
   if (!parametric) {
     source << "    const PicaLightingProgram pica_lighting_constant_program = "
-           << LightingProgramLiteral(Fast::Oot3d::BuildPicaLightingProgram(lighting))
+           << LightingProgramLiteral(Fast::Extension::BuildPicaLightingProgram(lighting))
            << ";\n";
   }
   source << "    vec3 pica_surface_normal, pica_surface_tangent;\n"

@@ -3,7 +3,7 @@
 #include "oot3d_native_pica_draw_state.h"
 #include "oot3d_native_pica_fragment_shader_gen.h"
 #include "oot3d_native_pica_program_descriptor.h"
-#include "fast/oot3d/pica_fragment_lighting.h"
+#include "fast/extension/pica_fragment_lighting.h"
 
 #include <array>
 #include <cstdint>
@@ -341,7 +341,7 @@ int main(int argc, char **argv) {
           const auto features =
               Oot3dNativeGame::AnalyzeOot3dPicaFragmentFeatures(packet, state);
           const auto lighting =
-              Fast::Oot3d::DecodePicaFragmentLighting(packet.Registers);
+              Fast::Extension::DecodePicaFragmentLighting(packet.Registers);
           const auto observeFeature = [&](std::string_view name,
                                           bool observed) {
             if (!observed) {

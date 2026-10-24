@@ -50,7 +50,7 @@ The investigation did establish these independent defects:
 
 ## Coordinate contract
 
-`runtime/three_ds_recomp/include/fast/oot3d/pica_surface_coordinates.h` owns the
+`runtime/three_ds_recomp/include/fast/extension/pica_surface_coordinates.h` owns the
 mapping, derived from the same display-transfer flags used by native scanout:
 
 - Presentation UV `(x,y)` maps to stored UV `(1-y,x)`, with the transfer's
@@ -89,13 +89,13 @@ All paths below are relative to `runtime/three_ds_recomp`:
   depends on shader completion, so shader fixes cannot silently miss relinking.
 - `cmake/dependencies/oot3d-sssr.cmake`: checked build-local GLSL format overlay
   matched to allocations in pinned `sdk/src/components/sssr/ffx_sssr.cpp`.
-- `src/fast/oot3d/pica_shader_instrumentation.cpp`: missing-normal reconstruction
+- `src/fast/extension/pica_shader_instrumentation.cpp`: missing-normal reconstruction
   at the existing auxiliary-output hook; canonical shader statements unchanged.
-- `src/fast/oot3d/cacao_pass.cpp`, `fidelityfx_sssr_pass.cpp`: provider contracts.
-- `src/fast/oot3d/normal_space_pass.cpp`: isolated NRI vector-space adapter,
+- `src/fast/extension/cacao_pass.cpp`, `fidelityfx_sssr_pass.cpp`: provider contracts.
+- `src/fast/extension/normal_space_pass.cpp`: isolated NRI vector-space adapter,
   no image rotation, no scene-specific state and no native-output mutation.
 - `src/fast/backends/gfx_vulkan{,_pica}.cpp`: early target retirement and wiring.
-- `include/fast/oot3d/pica_guide_diagnostics.h`: framebuffer-only guide views.
+- `include/fast/extension/pica_guide_diagnostics.h`: framebuffer-only guide views.
   Their depth/normal reads are declared in `display_effect_plan.cpp`, including
   barriers; debug views are not allowed on the UI overlay domain.
 

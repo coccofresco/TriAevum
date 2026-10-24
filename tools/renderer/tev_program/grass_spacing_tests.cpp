@@ -1,8 +1,8 @@
-#include "fast/oot3d/grass_surface_extractor.h"
+#include "fast/extension/grass_surface_extractor.h"
 #include <iostream>
 #include <stdexcept>
 
-using namespace Fast::Oot3d;
+using namespace Fast::Extension;
 
 bool Same(const GrassAnchor& a, const GrassAnchor& b) {
     return a.SurfaceReference == b.SurfaceReference && a.LocalPosition == b.LocalPosition &&

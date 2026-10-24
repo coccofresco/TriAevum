@@ -4,8 +4,8 @@
 #include "fast/renderer3ds/vulkan_pipeline_cache_store.h"
 #include "fast/renderer3ds/pica_vulkan_device_profile.h"
 #include "fast/renderer3ds/pica_startup_programs.h"
-#include "fast/oot3d/pica_nri_pipeline_state.h"
-#include "fast/oot3d/pica_pipeline_preparation.h"
+#include "fast/extension/pica_nri_pipeline_state.h"
+#include "fast/extension/pica_pipeline_preparation.h"
 #include <atomic>
 #include <chrono>
 #include <thread>
@@ -173,59 +173,59 @@ int main() {
         draw.ColorWriteMask = 15;
         draw.DepthWriteEnabled = true;
         draw.DepthCompare = Renderer3ds::PicaCompareFunction::Less;
-        auto state = Fast::Oot3d::BuildPicaNriPipelineState(draw, {}, {}, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_D32_SFLOAT);
+        auto state = Fast::Extension::BuildPicaNriPipelineState(draw, {}, {}, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_D32_SFLOAT);
         Check(state.DepthTest && state.DepthWrite && state.DepthCompare == VK_COMPARE_OP_ALWAYS);
         Check(state.Colors[0].colorWriteMask == 15 && state.ColorAttachmentCount == 1);
         draw.DepthTestEnabled = true;
         draw.CullMode = Renderer3ds::NativeCullMode::KeepCounterClockwise;
         draw.FramebufferFlipped = true;
-        Fast::Oot3d::PicaFragmentInstrumentationOutputLayout outputs;
+        Fast::Extension::PicaFragmentInstrumentationOutputLayout outputs;
         outputs.WritesOutlineGeometryGuide = true;
-        state = Fast::Oot3d::BuildPicaNriPipelineState(draw, outputs, {Renderer3ds::kAllPicaAuxiliaryOutputs},
+        state = Fast::Extension::BuildPicaNriPipelineState(draw, outputs, {Renderer3ds::kAllPicaAuxiliaryOutputs},
                                                 VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_D32_SFLOAT);
         Check(state.DepthCompare == VK_COMPARE_OP_LESS && state.CullMode == VK_CULL_MODE_FRONT_BIT);
         Check(state.FrontFace == VK_FRONT_FACE_CLOCKWISE && state.ColorAttachmentCount == 7);
         // The geometry guide's outline channels (R/A); G/B carry the face normal.
         Check(state.Colors[6].colorWriteMask == (VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_A_BIT));
-        state = Fast::Oot3d::BuildPicaNriPipelineState(draw, outputs, {Renderer3ds::kAllPicaAuxiliaryOutputs},
+        state = Fast::Extension::BuildPicaNriPipelineState(draw, outputs, {Renderer3ds::kAllPicaAuxiliaryOutputs},
                                                 VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_D32_SFLOAT, false, true);
         Check(!state.DepthWrite && !state.DepthTest && state.Colors[0].colorWriteMask == 0);
         Check(state.Colors[3].colorWriteMask == VK_COLOR_COMPONENT_A_BIT);
         // Exercise the same manifest-to-NRI lowering used by Forge, not only
         // the live raster-state factory. Synthetic modules never reach a GPU.
-        Fast::Oot3d::PicaGraphicsPipelineManifestEntry recipe;
+        Fast::Extension::PicaGraphicsPipelineManifestEntry recipe;
         recipe.DescriptorSchemaVersion = 3;
         recipe.VertexShaderKey = 1; recipe.FragmentShaderKey = 2;
         recipe.VertexSource = {1, 2, 8}; recipe.FragmentSource = {3, 4, 8};
         recipe.NriFragmentSource = {5, 6, 8}; recipe.NriFragmentAvailable = true;
         recipe.VertexBindings = {{0, 16, false}};
         recipe.VertexAttributes = {{0, 0, ::Oot3d::Renderer::PicaVertexFormat::Float, 4, 0}};
-        recipe.Domain = Fast::Oot3d::PicaGraphicsPipelineDomain::Instrumented;
-        recipe.RequestedFeatures = recipe.AppliedFeatures = Fast::Oot3d::PicaShaderInstrumentationFeature::NormalGuide;
+        recipe.Domain = Fast::Extension::PicaGraphicsPipelineDomain::Instrumented;
+        recipe.RequestedFeatures = recipe.AppliedFeatures = Fast::Extension::PicaShaderInstrumentationFeature::NormalGuide;
         recipe.AttachmentRequirementsKey = static_cast<uint8_t>(Renderer3ds::kAllPicaAuxiliaryOutputs);
         recipe.ShaderOutputs.SceneDomainTransparentDepthOverlay = true;
         recipe.DepthTestEnabled = recipe.DepthWriteEnabled = true;
         recipe.ColorWriteMask = 15;
         const std::vector<uint32_t> spirv{0x07230203, 0x00010000, 0, 1, 0};
         const std::array binaries{
-            Fast::Oot3d::PicaAotShaderBinary{Fast::Oot3d::PicaAotShaderStage::Vertex, recipe.VertexSource, spirv},
-            Fast::Oot3d::PicaAotShaderBinary{Fast::Oot3d::PicaAotShaderStage::NriFragment, recipe.NriFragmentSource, spirv}};
+            Fast::Extension::PicaAotShaderBinary{Fast::Extension::PicaAotShaderStage::Vertex, recipe.VertexSource, spirv},
+            Fast::Extension::PicaAotShaderBinary{Fast::Extension::PicaAotShaderStage::NriFragment, recipe.NriFragmentSource, spirv}};
         path += ".o3ps";
         std::string error;
-        Check(Fast::Oot3d::WritePicaAotShaderPack(path, 3, binaries, &error));
-        Fast::Oot3d::PicaAotShaderPack pack;
+        Check(Fast::Extension::WritePicaAotShaderPack(path, 3, binaries, &error));
+        Fast::Extension::PicaAotShaderPack pack;
         Check(pack.Load(path, &error));
-        auto prepared = Fast::Oot3d::ResolvePicaPipelinePreparationItem(recipe, pack, VK_FORMAT_D32_SFLOAT);
+        auto prepared = Fast::Extension::ResolvePicaPipelinePreparationItem(recipe, pack, VK_FORMAT_D32_SFLOAT);
         Check(prepared.Descriptor.DepthTest && prepared.Descriptor.DepthWrite &&
               prepared.Descriptor.Colors[0].colorWriteMask == 15);
         recipe.OutlineOcclusionOnly = true;
-        prepared = Fast::Oot3d::ResolvePicaPipelinePreparationItem(recipe, pack, VK_FORMAT_D32_SFLOAT);
+        prepared = Fast::Extension::ResolvePicaPipelinePreparationItem(recipe, pack, VK_FORMAT_D32_SFLOAT);
         Check(!prepared.Descriptor.DepthTest && !prepared.Descriptor.DepthWrite &&
               !prepared.Descriptor.StencilTest && prepared.Descriptor.Colors[0].colorWriteMask == 0 &&
               prepared.Descriptor.Colors[3].colorWriteMask == VK_COLOR_COMPONENT_A_BIT);
         std::filesystem::remove(path);
         draw.FragmentOperationMode = 3;
-        state = Fast::Oot3d::BuildPicaNriPipelineState(draw, {}, {}, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_D32_SFLOAT);
+        state = Fast::Extension::BuildPicaNriPipelineState(draw, {}, {}, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_D32_SFLOAT);
         Check(state.Colors[0].colorWriteMask == 0 && !state.LogicOpEnabled);
 
         // Startup program parts: one derivation for the renderer and Forge.

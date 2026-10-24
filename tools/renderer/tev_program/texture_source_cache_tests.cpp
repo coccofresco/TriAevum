@@ -1,10 +1,10 @@
-#include "fast/oot3d/grass_texture_source_cache.h"
+#include "fast/extension/grass_texture_source_cache.h"
 #include <array>
 #include <iostream>
 #include <stdexcept>
 
 int main() try {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const auto check = [](bool ok, const char* message) {
         if (!ok) throw std::runtime_error(message);
     };

@@ -99,6 +99,6 @@ I:\oot3dre_work\visual-parity\cross-title-sm3dl-20260826\reports\idle-conformanc
 No title-specific assumption in `Renderer3dsPicaCore` failed this real corpus.
 The result validates the transport/state vocabulary, not the complete rendering
 backend. The next meaningful reuse extraction is the generic NRI PICA execution
-layer still physically located under `fast/oot3d`: pipeline creation, native
+layer still physically located under `fast/extension`: pipeline creation, native
 texture upload/decode, draw binding and display transfer should become shared
 `renderer3ds` services, while each title retains only capture/frontend policy.

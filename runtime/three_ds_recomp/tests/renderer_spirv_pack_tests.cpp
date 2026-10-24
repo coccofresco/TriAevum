@@ -2,10 +2,10 @@
 #ifdef ENABLE_OOT3D_IMMERSE
 #include "fast/immerse/mxao_pass_binaries.h"
 #endif
-#include "fast/oot3d/pica_caster_fragment_binaries.h"
-#include "fast/oot3d/pica_temporal_fragment_binaries.h"
-#include "fast/oot3d/pica_toon_fragment_artifact.h"
-#include "fast/oot3d/pica_uber_fragment_binaries.h"
+#include "fast/extension/pica_caster_fragment_binaries.h"
+#include "fast/extension/pica_temporal_fragment_binaries.h"
+#include "fast/extension/pica_toon_fragment_artifact.h"
+#include "fast/extension/pica_uber_fragment_binaries.h"
 #include "fast/renderer/builtin_pass_binaries.h"
 #include "fast/renderer/pass_shader_artifact.h"
 #include "fast/renderer3ds/pica_native_fragment_binaries.h"
@@ -136,10 +136,10 @@ void ExpectSpirvModules(const Artifacts& artifacts, size_t count) {
 TEST(SpirvPack, EmbeddedFamiliesHoldTheirModules) {
     // Parametric lighting: off, with and without its lookup tables bound.
     ExpectSpirvModules(Fast::Renderer3ds::NativeFragmentArtifacts(), 24U);
-    ExpectSpirvModules(Fast::Oot3d::TemporalFragmentArtifacts(), 40U);
-    ExpectSpirvModules(Fast::Oot3d::ToonFragmentArtifacts(), 348U); // build_fragment_artifacts --toon
-    ExpectSpirvModules(Fast::Oot3d::UberFragmentArtifacts(), 36U);
-    ExpectSpirvModules(Fast::Oot3d::CasterFragmentArtifacts(), 6U);
+    ExpectSpirvModules(Fast::Extension::TemporalFragmentArtifacts(), 40U);
+    ExpectSpirvModules(Fast::Extension::ToonFragmentArtifacts(), 348U); // build_fragment_artifacts --toon
+    ExpectSpirvModules(Fast::Extension::UberFragmentArtifacts(), 36U);
+    ExpectSpirvModules(Fast::Extension::CasterFragmentArtifacts(), 6U);
     ExpectSpirvModules(BuiltinPassArtifacts(), 104U); // 70 + 9 diffuse GI pass kernels + its OOT3D adapter (M5), 2 grass raster-depth fragments, 3 contact shadow lengths, 2 upscaler orientation turns, 4 GPU grass selection passes, the room shadow shell vertex shader, 5 grass card programs (vertex, 2 explicit-depth and 2 conservative-depth fragments), 2 whole-blade grass fragments without discard, the reflection upsample, the grass root lighting compute, 3 grass fragments without the geometry guide
 #ifdef ENABLE_OOT3D_IMMERSE
     // The iMMERSE module hands its pack to the host, which reads it.
@@ -166,7 +166,7 @@ TEST(SpirvPack, EmbeddedFamiliesHoldTheirModules) {
 TEST(SpirvPack, StartupProgramPartsLinkTheEmbeddedFamiliesValidly) {
     using namespace Fast::Renderer3ds;
     const auto vertices = Oot3dNativeGame::TitleVertexArtifacts();
-    const auto superset = Fast::Oot3d::UberFragmentArtifacts();
+    const auto superset = Fast::Extension::UberFragmentArtifacts();
     const auto canonical = NativeFragmentArtifacts();
     for (const bool geometry : {false, true}) {
         for (const auto samples : {VK_SAMPLE_COUNT_1_BIT, VK_SAMPLE_COUNT_4_BIT}) {

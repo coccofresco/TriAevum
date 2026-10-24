@@ -1,5 +1,5 @@
-#include "fast/oot3d/pica_display_transfer.h"
-#include "fast/oot3d/render_resolution_policy.h"
+#include "fast/extension/pica_display_transfer.h"
+#include "fast/extension/render_resolution_policy.h"
 #include "fast/renderer3ds/pica_framebuffer_encode.h"
 
 #include <gtest/gtest.h>
@@ -37,7 +37,7 @@ TEST(PicaFramebufferCodec, NativeColourAndDepthRoundTrip) {
 }
 
 TEST(Oot3dPicaDisplayTransfer, CropsWithoutRescaling) {
-    const auto plan = Fast::Oot3d::BuildPicaDisplayTransferPlan({
+    const auto plan = Fast::Extension::BuildPicaDisplayTransferPlan({
         480U, 400U, 240U, 400U, 480U, 400U, 0x00001004U});
     ASSERT_TRUE(plan.has_value());
     EXPECT_EQ(plan->DestinationWidth, 240U);
@@ -47,7 +47,7 @@ TEST(Oot3dPicaDisplayTransfer, CropsWithoutRescaling) {
 }
 
 TEST(Oot3dPicaDisplayTransfer, AppliesNativeHorizontalBoxFilter) {
-    const auto plan = Fast::Oot3d::BuildPicaDisplayTransferPlan({
+    const auto plan = Fast::Extension::BuildPicaDisplayTransferPlan({
         480U, 400U, 240U, 400U, 480U, 400U, 0x01001000U});
     ASSERT_TRUE(plan.has_value());
     EXPECT_EQ(plan->DestinationWidth, 240U);
@@ -57,7 +57,7 @@ TEST(Oot3dPicaDisplayTransfer, AppliesNativeHorizontalBoxFilter) {
 }
 
 TEST(Oot3dPicaDisplayTransfer, PreservesRendererSupersampling) {
-    const auto plan = Fast::Oot3d::BuildPicaDisplayTransferPlan({
+    const auto plan = Fast::Extension::BuildPicaDisplayTransferPlan({
         480U, 400U, 240U, 200U, 960U, 800U, 0x02001000U});
     ASSERT_TRUE(plan.has_value());
     EXPECT_EQ(plan->DestinationWidth, 480U);
@@ -69,7 +69,7 @@ TEST(Oot3dPicaDisplayTransfer, PreservesRendererSupersampling) {
 TEST(Oot3dPicaDisplayTransfer, CopiesASourceAtPresentedDensity) {
     // A 4K top-screen target (one sample per output pixel): the guest's 2:1
     // filter becomes a copy of the whole target.
-    const auto plan = Fast::Oot3d::BuildPicaDisplayTransferPlan({
+    const auto plan = Fast::Extension::BuildPicaDisplayTransferPlan({
         480U, 400U, 240U, 400U, 2160U, 3840U, 0x01001000U, true});
     ASSERT_TRUE(plan.has_value());
     EXPECT_EQ(plan->DestinationWidth, 2160U);
@@ -78,13 +78,13 @@ TEST(Oot3dPicaDisplayTransfer, CopiesASourceAtPresentedDensity) {
     EXPECT_EQ(plan->VerticalSamples, 1U);
     EXPECT_TRUE(plan->SamplingFitsSource());
     // A guest crop keeps its native proportion of the source.
-    const auto crop = Fast::Oot3d::BuildPicaDisplayTransferPlan({
+    const auto crop = Fast::Extension::BuildPicaDisplayTransferPlan({
         480U, 400U, 120U, 400U, 2160U, 3840U, 0x01001000U, true});
     ASSERT_TRUE(crop.has_value());
     EXPECT_EQ(crop->DestinationWidth, 1080U);
     // A 2x2 reduction of that source (MM3D's half-size copies): X collapses,
     // the 400-line axis is really halved.
-    const auto reduced = Fast::Oot3d::BuildPicaDisplayTransferPlan({
+    const auto reduced = Fast::Extension::BuildPicaDisplayTransferPlan({
         512U, 400U, 256U, 200U, 2304U, 3840U, 0x02000000U, true});
     ASSERT_TRUE(reduced.has_value());
     EXPECT_EQ(reduced->DestinationWidth, 2304U);
@@ -96,7 +96,7 @@ TEST(Oot3dPicaDisplayTransfer, CopiesASourceAtPresentedDensity) {
 
 TEST(Oot3dPicaDisplayTransfer, RejectsSamplingPastSource) {
     std::string error;
-    const auto plan = Fast::Oot3d::BuildPicaDisplayTransferPlan(
+    const auto plan = Fast::Extension::BuildPicaDisplayTransferPlan(
         {480U, 400U, 300U, 400U, 480U, 400U, 0x01001000U},
         &error);
     EXPECT_FALSE(plan.has_value());
@@ -104,7 +104,7 @@ TEST(Oot3dPicaDisplayTransfer, RejectsSamplingPastSource) {
 }
 
 TEST(Oot3dPicaDisplayTransfer, FractionalScaleAndOddOutputKeepValidNativeCommands) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     for (const RenderExtent output : {RenderExtent{1280, 720}, {1024, 768}, {3840, 2160}, {1279, 719}}) {
         for (int percent = 50; percent <= 200; ++percent) {
             const auto extent = ResolveNativePicaRenderExtent({480, 400}, output, percent / 100.0F);
@@ -130,7 +130,7 @@ TEST(Oot3dPicaDisplayTransfer, FractionalScaleAndOddOutputKeepValidNativeCommand
 }
 
 TEST(Oot3dPicaDisplayTransfer, SharedSamplingValidationOnlyAllowsRoundingAtTheEdge) {
-    Fast::Oot3d::PicaDisplayTransferPlan plan{1051, 935, 526, 935, 2, 1, 1};
+    Fast::Extension::PicaDisplayTransferPlan plan{1051, 935, 526, 935, 2, 1, 1};
     EXPECT_TRUE(plan.SamplingFitsSource());
     EXPECT_EQ(plan.BlitSourceWidth(), 1051U);
     ++plan.DestinationWidth;

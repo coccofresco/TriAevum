@@ -59,7 +59,7 @@ POLICY_PATTERNS = (
     r"^runtime/three_ds_recomp/include/fast/backends/gfx_vulkan\.h$",
     r"^runtime/three_ds_recomp/include/fast/backends/gfx_native_pica_layout\.h$",
     r"^runtime/three_ds_recomp/(src|include)/fast/renderer3ds/(pica_|nri_pica_pipeline)",
-    r"^runtime/three_ds_recomp/(src|include)/fast/oot3d/(pica_|scene_|effect_|display_effect|graphics_settings"
+    r"^runtime/three_ds_recomp/(src|include)/fast/extension/(pica_|scene_|effect_|display_effect|graphics_settings"
     r"|graphics_preset|gpu_profile|reflection_|azahar_|texture_assignment|texture_catalog|pbr_material"
     r"|native_scene_view|sample_view|perspective_fov|vulkan_adapter_policy|renderer_presentation"
     r"|presentation_settings|temporal_|motion_vector|upscaler_|nri_upscaler)",

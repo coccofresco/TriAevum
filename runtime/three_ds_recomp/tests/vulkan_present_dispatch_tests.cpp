@@ -1,4 +1,4 @@
-#include "fast/oot3d/vulkan_adapter_policy.h"
+#include "fast/extension/vulkan_adapter_policy.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -10,7 +10,7 @@ void Require(bool condition, const char* message) {
 }
 
 int main() {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     using Mode = VulkanPresentDispatchMode;
     try {
         Require(ParseVulkanPresentDispatchMode("") == Mode::Automatic, "default parser");

@@ -180,13 +180,13 @@ the reusable halves shared:
 
 - `PicaLightingProgram` (the std140 struct and the GLSL snippets) stays in
   `renderer3ds/pica_lighting_program.h`; the builder moved to
-  `include/fast/oot3d/pica_fragment_lighting.h` as
-  `Fast::Oot3d::BuildPicaLightingProgram`, with its two call sites updated.
+  `include/fast/extension/pica_fragment_lighting.h` as
+  `Fast::Extension::BuildPicaLightingProgram`, with its two call sites updated.
 - `PicaRasterCanvas` and `ClipToPicaCanvas` stay in
   `renderer3ds/pica_ui_canvas.h`; the resolver moved to
   `include/oot3d/renderer/ui_presentation_layout.h` as
   `Oot3d::Renderer::ResolvePicaRasterCanvas`, with its three call sites updated.
-  The backend reaches it as `::Oot3d::Renderer` because `Fast::Oot3d` is a
+  The backend reaches it as `::Oot3d::Renderer` because `Fast::Extension` is a
   different, title-side namespace.
 
 The gate now reports 67 files title-neutral, and the relocation is
@@ -199,7 +199,7 @@ Two further build-integrity defects surfaced while verifying this, both
 pre-existing and both fixed here:
 
 - `oot3d_pica_scene_frame_tests` had never linked: it calls
-  `Oot3d::Renderer::AzaharCityHash64`, which `fast/oot3d/*.cpp` compiles into
+  `Oot3d::Renderer::AzaharCityHash64`, which `fast/extension/*.cpp` compiles into
   `ThreeDsRecomp::Runtime`, a library the target did not link. With the library
   linked the suite builds, and one stale setup in it failed
   (`UniformBuffer.Size` did not cover the declared uniform slices, so `Record`
@@ -858,8 +858,8 @@ qualification. Ordered checks for the next Linux session:
 | `runtime/three_ds_recomp/include/fast/renderer3ds/pica_composition.h` | New `Screen` composition domain (screen-space frame content). |
 | `runtime/three_ds_recomp/include/fast/renderer3ds/pica_ui_canvas.h` | `Screen` covers the presentation extent; placed UI keeps the native fit. |
 | `runtime/three_ds_recomp/include/oot3d/renderer/ui_presentation_layout.h` | `FillUiPresentation` (cover without distortion) beside the existing fit. Since 2026-10-05 it serves only overlays with their own alpha; movie frames take the fit with black bars (§7.3). |
-| `runtime/three_ds_recomp/include/fast/oot3d/pica_scene_frame.h` | `HasSceneDrawOnColorTarget` and the screen-domain statistic. |
-| `runtime/three_ds_recomp/src/fast/oot3d/pica_scene_frame.cpp` | Frame evidence query and domain counting. |
+| `runtime/three_ds_recomp/include/fast/extension/pica_scene_frame.h` | `HasSceneDrawOnColorTarget` and the screen-domain statistic. |
+| `runtime/three_ds_recomp/src/fast/extension/pica_scene_frame.cpp` | Frame evidence query and domain counting. |
 | `runtime/three_ds_recomp/src/fast/backends/gfx_vulkan_pica.cpp` | Resolves the per-draw composition domain from the frame's scene target. |
 | `runtime/three_ds_recomp/tests/oot3d_graphics_foundation_tests.cpp` | Canvas policy per composition domain. |
 | `runtime/three_ds_recomp/tests/oot3d_pica_scene_frame_tests.cpp` | Frame scene-target evidence. |
@@ -867,7 +867,7 @@ qualification. Ordered checks for the next Linux session:
 | `runtime/three_ds_recomp/src/fast/backends/gfx_vulkan_pica_texture_copy.cpp` | Readback moved in-band onto the copy's own submission (barriers, image-to-buffer, cached staging, explicit invalidate when not coherent); per-phase timing. |
 | `runtime/three_ds_recomp/src/fast/backends/gfx_vulkan.cpp` | Cached readback memory-type selection and `TRIAEVUM_RAW_COPY` shutdown receipt; staging destroyed with the copy fence. |
 | `runtime/three_ds_recomp/include/fast/renderer3ds/pica_lighting_program.h` | Title-neutral: keeps the std140 program and GLSL; the builder and the title decoder include moved out. |
-| `runtime/three_ds_recomp/include/fast/oot3d/pica_fragment_lighting.h` | `Fast::Oot3d::BuildPicaLightingProgram` packs the decoded native state into the shared program. |
+| `runtime/three_ds_recomp/include/fast/extension/pica_fragment_lighting.h` | `Fast::Extension::BuildPicaLightingProgram` packs the decoded native state into the shared program. |
 | `runtime/three_ds_recomp/include/fast/renderer3ds/pica_ui_canvas.h` | Title-neutral: keeps `PicaRasterCanvas` and clipping; the domain resolver moved out. |
 | `runtime/three_ds_recomp/include/oot3d/renderer/ui_presentation_layout.h` | `Oot3d::Renderer::ResolvePicaRasterCanvas` applies this title's presentation convention. |
 | `runtime/three_ds_recomp/src/fast/backends/gfx_vulkan_pica.cpp` | Resolver call through `::Oot3d::Renderer`. |

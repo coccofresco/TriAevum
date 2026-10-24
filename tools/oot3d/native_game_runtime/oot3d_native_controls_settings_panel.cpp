@@ -192,7 +192,7 @@ bool SourceUses(NativeMotionSource configured,
 }
 
 class NativeControlsSettingsPanel final
-    : public Fast::Oot3d::GraphicsSettingsPanelTab {
+    : public Fast::Extension::GraphicsSettingsPanelTab {
  public:
   NativeControlsSettingsPanel(
       std::shared_ptr<NativeControlConfigRuntime> controls,
@@ -769,7 +769,7 @@ class NativeControlsSettingsPanel final
 
 } // namespace
 
-std::shared_ptr<Fast::Oot3d::GraphicsSettingsPanelTab>
+std::shared_ptr<Fast::Extension::GraphicsSettingsPanelTab>
 CreateNativeControlsSettingsPanel(
     std::shared_ptr<NativeControlConfigRuntime> controls,
     std::shared_ptr<TopScreenUiConfigRuntime> topScreen) {

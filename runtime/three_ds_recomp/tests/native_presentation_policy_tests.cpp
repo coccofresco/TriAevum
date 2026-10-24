@@ -1,10 +1,10 @@
-#include "fast/oot3d/native_presentation_policy.h"
+#include "fast/extension/native_presentation_policy.h"
 
 #include <iostream>
 #include <stdexcept>
 
 int main() {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const auto require = [](bool value, const char* message) {
         if (!value) throw std::runtime_error(message);
     };

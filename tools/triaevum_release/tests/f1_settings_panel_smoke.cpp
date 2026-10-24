@@ -1,6 +1,6 @@
-#include "fast/oot3d/graphics_settings_window.h"
-#include "fast/oot3d/graphics_settings_runtime.h"
-#include "fast/oot3d/graphics_settings_persistence.h"
+#include "fast/extension/graphics_settings_window.h"
+#include "fast/extension/graphics_settings_runtime.h"
+#include "fast/extension/graphics_settings_persistence.h"
 #include "oot3d_native_controls_settings_panel.h"
 #include "oot3d_top_screen_settings_panel.h"
 #include "oot3d_photo_mode_panel.h"
@@ -8,8 +8,8 @@
 #include "oot3d_savestate_panel.h"
 #include "oot3d_scene_environment.h"
 #include "oot3d_scene_environment_codec.h"
-#include "fast/oot3d/world_debug_lines.h"
-#include "fast/oot3d/grass_scene_bridge.h"
+#include "fast/extension/world_debug_lines.h"
+#include "fast/extension/grass_scene_bridge.h"
 #include "fast/MouseCapturePolicy.h"
 #include <imgui_internal.h>
 #include <nlohmann/json.hpp>
@@ -25,7 +25,7 @@
 #include <stdexcept>
 #include <string>
 
-using namespace Fast::Oot3d;
+using namespace Fast::Extension;
 namespace {
 struct Item { std::string Label; ImRect Rect; ImGuiID Seed = 0; bool Disabled = false; bool Popup = false; };
 struct RawBindingSource final : ThreeDsRecomp::Input::HostButtonSource {
@@ -964,7 +964,7 @@ void CheckSceneEnvironment() {
           "an omni light did not cast shadows");
     // Light gizmos: published while the editor is drawn, none once turned off.
     {
-        using Fast::Oot3d::WorldDebugLineRuntime;
+        using Fast::Extension::WorldDebugLineRuntime;
         environment->PublishLightGizmo(std::array<float, 3>{100.0F, 50.0F, 700.0F});
         const auto lines = WorldDebugLineRuntime::Instance().Latest();
         const auto hasLine = [&](const std::array<float, 3>& from, const std::array<float, 3>& to) {
@@ -989,10 +989,10 @@ void CheckSceneEnvironment() {
         clip[10] = 1000.0F / (1.0F - 1000.0F);
         clip[11] = -1.0F;
         clip[14] = 1000.0F / (1.0F - 1000.0F);
-        Fast::Oot3d::WorldDebugLineSet set;
+        Fast::Extension::WorldDebugLineSet set;
         set.Lines.push_back({{1.0F, 2.0F, 10.0F}, {1.0F, 2.0F, -10.0F}, {1.0F, 1.0F, 1.0F, 1.0F}});
         set.Lines.push_back({{0.0F, 0.0F, 5.0F}, {0.0F, 0.0F, 1.0F}, {1.0F, 1.0F, 1.0F, 1.0F}});
-        const auto vertices = Fast::Oot3d::BuildWorldDebugLineVertices(set, clip);
+        const auto vertices = Fast::Extension::BuildWorldDebugLineVertices(set, clip);
         Check(vertices.size() == 6U && std::abs(vertices[0].ClipFrom[2] / vertices[0].ClipFrom[3]) < 1.0e-3F &&
                   std::abs(vertices[0].ClipTo[0] / vertices[0].ClipTo[3] - 0.2F) < 1.0e-5F &&
                   std::abs(vertices[0].ClipTo[1] / vertices[0].ClipTo[3] + 0.1F) < 1.0e-5F,

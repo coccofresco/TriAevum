@@ -5,7 +5,7 @@
 // only where the title itself decides visibility or spawn distance.
 
 #include "oot3d_actor_visibility_policy.h"
-#include "fast/oot3d/scene_presentation_policy.h"
+#include "fast/extension/scene_presentation_policy.h"
 #include "recomp/a32_runtime.h"
 
 #include <cstdint>
@@ -74,7 +74,7 @@ struct NativeActorVisibilityState {
     bool ExtendedDrawDistance = false;
     // The presented view: the frustum hook widens every perspective the
     // GPU draws with, but the title builds its culling matrix separately.
-    Fast::Oot3d::ScenePresentationPolicy Presentation{};
+    Fast::Extension::ScenePresentationPolicy Presentation{};
     float FovMultiplier = 1.0F;
     // The presented volume of the current culling walk, from its play state.
     ActorCullingVolume CullingVolume{};

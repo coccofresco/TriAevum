@@ -457,9 +457,9 @@ void GfxRenderingAPIVulkan::DrawTrianglesFromBuffer(VkBuffer vertexBuffer,
     TransformPushConstants drawTransform = mTransformPushConstants;
     if (mTemporalJitterEnabled && mCurrentDepthTest != 0 &&
         !mOot3dShadow2dPassActive &&
-        Oot3d::HasPerspectiveClipW(drawTransform.ModelViewProjection)) {
+        Extension::HasPerspectiveClipW(drawTransform.ModelViewProjection)) {
         drawTransform.ModelViewProjection =
-            Oot3d::ApplyTemporalJitterToClipMatrix(
+            Extension::ApplyTemporalJitterToClipMatrix(
                 drawTransform.ModelViewProjection, mTemporalJitterPixels,
                 std::abs(mViewport.width), std::abs(mViewport.height));
     }
@@ -488,7 +488,7 @@ void GfxRenderingAPIVulkan::PrepareNativePicaPrograms(
     using Item = Renderer3ds::PicaStartupProgramPart;
     std::vector<Item> items = Renderer3ds::PicaStartupProgramParts(
         vertices,
-        UsesAlwaysAvailablePrograms() ? Oot3d::UberFragmentArtifacts()
+        UsesAlwaysAvailablePrograms() ? Extension::UberFragmentArtifacts()
                                       : std::span<const Renderer3ds::PicaFragmentArtifact>{},
         Renderer3ds::NativeFragmentArtifacts(), device);
     const auto samples = device.Samples;
@@ -609,19 +609,19 @@ void GfxRenderingAPIVulkan::OnResize() {
 }
 
 bool GfxRenderingAPIVulkan::PublishSceneView(
-    const Oot3d::TitleSceneViewSubmission& view) {
+    const Extension::TitleSceneViewSubmission& view) {
     if (view.WorldIdentity != 0U) {
         if (mTitleWorldIdentity != 0U && mTitleWorldIdentity != view.WorldIdentity)
             mTitleWorldChanged = true;
         mTitleWorldIdentity = view.WorldIdentity;
     }
     if (view.CameraAvailable) {
-        Oot3d::SceneViewRuntime::Instance().PublishPerspectiveCamera(
+        Extension::SceneViewRuntime::Instance().PublishPerspectiveCamera(
             view.GuestFunction, view.GuestReturnAddress,
             view.Left, view.Right, view.Bottom, view.Top,
             view.NearPlane, view.FarPlane, view.Eye, view.At);
     } else {
-        Oot3d::SceneViewRuntime::Instance().PublishPerspective(
+        Extension::SceneViewRuntime::Instance().PublishPerspective(
             view.GuestFunction, view.GuestReturnAddress,
             view.Left, view.Right, view.Bottom, view.Top,
             view.NearPlane, view.FarPlane);

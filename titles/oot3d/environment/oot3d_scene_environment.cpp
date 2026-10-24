@@ -136,7 +136,7 @@ void SceneEnvironmentRuntime::SelectLocked(std::optional<uint16_t> scene) {
   // The gizmo selection belongs to the scene that was being edited.
   mGizmoSelected = 0;
   mGizmoEdited = {};
-  if (mGizmoPublished) Fast::Oot3d::WorldDebugLineRuntime::Instance().Clear();
+  if (mGizmoPublished) Fast::Extension::WorldDebugLineRuntime::Instance().Clear();
   mGizmoPublished = false;
   mState.SceneId = scene;
   mState.Group = scene ? mTime.Group : std::nullopt;
@@ -485,7 +485,7 @@ void SceneEnvironmentRuntime::ShowLightGizmos(bool shown) {
 
 void SceneEnvironmentRuntime::PublishLightGizmo(const std::optional<std::array<float, 3>> &eye,
                                                 bool forced) {
-  std::optional<Fast::Oot3d::WorldDebugLineSet> lines;
+  std::optional<Fast::Extension::WorldDebugLineSet> lines;
   std::scoped_lock lock(mMutex);
   const bool editing =
       std::chrono::steady_clock::now() - mGizmoEdited < std::chrono::milliseconds(500);
@@ -493,10 +493,10 @@ void SceneEnvironmentRuntime::PublishLightGizmo(const std::optional<std::array<f
       !mState.Profile.PlacedLights.empty())
     lines = BuildPlacedLightGizmo(mState.Profile.PlacedLights, mGizmoSelected, *eye);
   if (lines) {
-    Fast::Oot3d::WorldDebugLineRuntime::Instance().Publish(std::move(*lines));
+    Fast::Extension::WorldDebugLineRuntime::Instance().Publish(std::move(*lines));
     mGizmoPublished = true;
   } else if (mGizmoPublished) {
-    Fast::Oot3d::WorldDebugLineRuntime::Instance().Clear();
+    Fast::Extension::WorldDebugLineRuntime::Instance().Clear();
     mGizmoPublished = false;
   }
 }

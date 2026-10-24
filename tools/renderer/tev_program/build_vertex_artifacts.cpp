@@ -1,8 +1,8 @@
 // Developer-only title build from original SHBIN output tables. No capture input.
 #include "oot3d_native_pica_shader_gen.h"
 #include "oot3d_native_vertex_binaries.h"
-#include "fast/oot3d/pica_directional_shadow_caster.h"
-#include "fast/oot3d/pica_rigid_motion.h"
+#include "fast/extension/pica_directional_shadow_caster.h"
+#include "fast/extension/pica_rigid_motion.h"
 #include "fast/renderer/pass_shader_artifact.h"
 #include "fast/renderer3ds/pica_surface_lighting_shader.h"
 #include "spirv_pack_file.h"
@@ -142,7 +142,7 @@ int main(int argc, char** argv) try {
             const auto& temporalProgram = *translated.TemporalProgram;
             const ::Oot3d::Renderer::PicaTemporalVertexProgramView view{
                 temporalProgram.Hooks, temporalProgram.PreviousRegisterState, temporalProgram.PreviousMainBody};
-            const auto temporal = Fast::Oot3d::BuildPicaVertexInstrumentation(
+            const auto temporal = Fast::Extension::BuildPicaVertexInstrumentation(
                 translated.Source, translated.StateKey, view, true, false);
             Check(temporal.Applied && temporal.UsedProvidedProgram, "typed temporal vertex emission failed");
             emitVertex(temporal.Source);
@@ -150,17 +150,17 @@ int main(int argc, char** argv) try {
             // surface normal and tint: the always-available programs pair
             // with these exactly as draws request them.
             for (bool temporalOutputs : {false, true}) {
-                const auto surface = Fast::Oot3d::BuildPicaVertexInstrumentation(
+                const auto surface = Fast::Extension::BuildPicaVertexInstrumentation(
                     translated.Source, translated.StateKey, view, temporalOutputs, true);
                 if (surface.Applied && surface.SurfaceApplied) emitVertex(surface.Source);
             }
             // The passes derive from the program and its typed hooks exactly
             // as they do at draw time; a program a pass rejects at draw time
             // (no caster or lighting contract) has none.
-            const auto directional = Fast::Oot3d::BuildPicaDirectionalShadowCasterShader(
+            const auto directional = Fast::Extension::BuildPicaDirectionalShadowCasterShader(
                 translated.Source, translated.StateKey, temporalProgram.Hooks);
             if (directional.Applied()) emitPass(directional.Source);
-            const auto point = Fast::Oot3d::BuildPicaPointShadowCasterShader(
+            const auto point = Fast::Extension::BuildPicaPointShadowCasterShader(
                 translated.Source, translated.StateKey, temporalProgram.Hooks);
             if (point.Applied()) emitPass(point.Source);
             for (bool surfaceLighting : {false, true}) {

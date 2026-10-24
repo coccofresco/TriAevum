@@ -59,14 +59,14 @@
 
 Under `runtime/three_ds_recomp/`:
 
-- `include/fast/oot3d/pica_display_transfer.h`,
-  `src/fast/oot3d/pica_display_transfer.cpp`: shared native/host extent rules.
-- `include/fast/oot3d/nri_pica_display_copy_pass.h`: NRI copy validation.
+- `include/fast/extension/pica_display_transfer.h`,
+  `src/fast/extension/pica_display_transfer.cpp`: shared native/host extent rules.
+- `include/fast/extension/nri_pica_display_copy_pass.h`: NRI copy validation.
 - `src/fast/backends/gfx_vulkan{,_pica}.cpp`: target lifetime, retained display
   capability invalidation, actual allocation reporting and fallback blit.
 - `graphics_settings_runtime`, `graphics_settings_display_panel`,
   `graphics_settings_window`, `presentation_settings_transaction` under
-  `fast/oot3d`: observations, controls and confirmation state machine.
+  `fast/extension`: observations, controls and confirmation state machine.
 - `src/fast/Fast3dGui.cpp`, `Fast3dWindow.cpp`: independent confirmation host,
   cursor/input ownership and F11 routing.
 

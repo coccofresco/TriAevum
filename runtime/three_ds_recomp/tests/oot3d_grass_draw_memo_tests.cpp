@@ -1,12 +1,12 @@
-#include "fast/oot3d/grass_draw_memo.h"
-#include "fast/oot3d/pica_uniform_layout.h"
+#include "fast/extension/grass_draw_memo.h"
+#include "fast/extension/pica_uniform_layout.h"
 #include <gtest/gtest.h>
 #include <cstring>
 #include <functional>
 #include <limits>
 
 namespace {
-using namespace Fast::Oot3d;
+using namespace Fast::Extension;
 using namespace Fast::Renderer3ds;
 struct DrawFixture : testing::Test {
     std::vector<uint8_t> Vertex = std::vector<uint8_t>(80 + 96 * 16), Fragment = std::vector<uint8_t>(2304);

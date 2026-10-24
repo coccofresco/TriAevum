@@ -153,9 +153,9 @@ prima del lavoro costoso; mai ritorno automatico al backend ABI v1 lento.
 **Evidenza.** [forge.py](../tools/triaevum_release/forge.py), righe 896-940,
 crea il JSON TopScreen e un profilo con `native30_interpolated` e
 `--presentation-rate 60`, ma non inizializza `TriAevum.json`.
-[graphics_settings.h](../runtime/three_ds_recomp/include/fast/oot3d/graphics_settings.h),
+[graphics_settings.h](../runtime/three_ds_recomp/include/fast/extension/graphics_settings.h),
 righe 148 e 163, parte da `Authentic` e `Original30`.
-[graphics_settings.cpp](../runtime/three_ds_recomp/src/fast/oot3d/graphics_settings.cpp),
+[graphics_settings.cpp](../runtime/three_ds_recomp/src/fast/extension/graphics_settings.cpp),
 righe 620-627, riporta Authentic a Original30.
 [oot3d_native_a32_window.cpp](../tools/oot3d/native_game_runtime/oot3d_native_a32_window.cpp),
 righe 4331-4362, ricava il modo visivo dalle impostazioni effettive. Il permesso
@@ -360,7 +360,7 @@ e le regole di [AGENTS.md](../AGENTS.md).
 | Impostazioni | Regola di un proprietario per ogni opzione gia' definita | Verificare effetto reale, persistenza e conflitti per ogni voce F1 |
 | Riutilizzo 3DS | Layer `renderer3ds` e nucleo generico gia' presenti | Non bloccare OOT3D per generalizzare ulteriormente un secondo gioco |
 
-In [pica_shader_pipeline_cache.cpp](../runtime/three_ds_recomp/src/fast/oot3d/pica_shader_pipeline_cache.cpp),
+In [pica_shader_pipeline_cache.cpp](../runtime/three_ds_recomp/src/fast/extension/pica_shader_pipeline_cache.cpp),
 righe 408-430, la cache preferisce gli hook pubblicati direttamente, ma puo'
 ricorrere a `AnalyzePicaFragmentShaderHooks`. Esiste il contatore
 `CanonicalCompatibilityAnalyses`. Non e' corretto descrivere tutta la pipeline
@@ -368,7 +368,7 @@ come semplice patch di stringhe, ne' dichiarare gia' eliminata ogni analisi del
 sorgente shader. La correzione consiste nel chiudere i producer incompleti,
 senza rimuovere alla cieca un percorso di compatibilita' ancora usato.
 
-[NativeSceneView](../runtime/three_ds_recomp/include/fast/oot3d/native_scene_view.h)
+[NativeSceneView](../runtime/three_ds_recomp/include/fast/extension/native_scene_view.h)
 usa riferimenti alla scena risolta invece di copie massive. Questa e' una
 scelta da conservare, insieme a versioni delle risorse e discontinuita' temporali.
 Gli effetti futuri devono leggere capability esplicite a un punto dichiarato

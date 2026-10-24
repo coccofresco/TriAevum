@@ -1,6 +1,6 @@
 #include "vulkan_test_device.h"
 #include "oot3d_native_pica_fragment_lighting_gen.h"
-#include "fast/oot3d/pica_fragment_lighting.h"
+#include "fast/extension/pica_fragment_lighting.h"
 #include "fast/renderer3ds/pica_lighting_program.h"
 #include <array>
 #include <cmath>
@@ -36,9 +36,9 @@ int main() {
             packet->Registers[0x1D1]=(n%6)*0x01111111;
             packet->Registers[0x1D2]=(n%4)*0x01111111;
             for(unsigned i=0;i<8;++i) packet->Registers[0x149+i*16]=(n+i)&15;
-            auto state=Fast::Oot3d::DecodePicaFragmentLighting(packet->Registers);
+            auto state=Fast::Extension::DecodePicaFragmentLighting(packet->Registers);
             auto& u=inputs[n];
-            u.Program=Fast::Oot3d::BuildPicaLightingProgram(state);
+            u.Program=Fast::Extension::BuildPicaLightingProgram(state);
             u.Values.GlobalAmbient={0.03F,0.04F,0.02F,0};
             for(unsigned i=0;i<8;++i) {
                 u.Values.Position[i]={0.2F+float(i)*0.1F,-0.3F,0.5F,0};

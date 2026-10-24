@@ -78,14 +78,14 @@ budgets and per-anchor topology differences are not eliminated by this feature.
 
 Under `runtime/three_ds_recomp`:
 
-- `include/fast/oot3d/graphics_settings.h` and
-  `src/fast/oot3d/graphics_settings{,_persistence}.cpp`: defaults, validation, JSON.
-- `src/fast/oot3d/grass_settings_panel.cpp`: the single F1 control surface.
-- `include/fast/oot3d/grass_distant_tuft.h`: CPU/GPU tuft and fade equations.
-- `src/fast/oot3d/grass_visibility.cpp`: LOD selection and conservative culling.
-- `src/fast/oot3d/interactive_grass_pass.cpp`: environment parameters, expansion,
+- `include/fast/extension/graphics_settings.h` and
+  `src/fast/extension/graphics_settings{,_persistence}.cpp`: defaults, validation, JSON.
+- `src/fast/extension/grass_settings_panel.cpp`: the single F1 control surface.
+- `include/fast/extension/grass_distant_tuft.h`: CPU/GPU tuft and fade equations.
+- `src/fast/extension/grass_visibility.cpp`: LOD selection and conservative culling.
+- `src/fast/extension/interactive_grass_pass.cpp`: environment parameters, expansion,
   shading and pre-depth fade discard.
-- `src/fast/oot3d/grass_gpu_instance_compactor.cpp`: stable seed delivery without
+- `src/fast/extension/grass_gpu_instance_compactor.cpp`: stable seed delivery without
   changing instance stride.
 
 ## Verification

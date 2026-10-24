@@ -1,14 +1,14 @@
-#include "fast/oot3d/grass_persistent_placement_cache.h"
-#include "fast/oot3d/grass_overlay_mask.h"
-#include "fast/oot3d/graphics_settings_persistence.h"
+#include "fast/extension/grass_persistent_placement_cache.h"
+#include "fast/extension/grass_overlay_mask.h"
+#include "fast/extension/graphics_settings_persistence.h"
 #include <nlohmann/json.hpp>
 #include <atomic>
 #include <chrono>
 #include <cstring>
 #include <fstream>
-#include "fast/oot3d/grass_async_placement_builder.h"
-#include "fast/oot3d/grass_static_placement_cache.h"
-#include "fast/oot3d/grass_visibility.h"
+#include "fast/extension/grass_async_placement_builder.h"
+#include "fast/extension/grass_static_placement_cache.h"
+#include "fast/extension/grass_visibility.h"
 
 #include <gtest/gtest.h>
 
@@ -20,8 +20,8 @@
 
 namespace {
 
-Fast::Oot3d::GrassAsyncPlacementRequest BaseRequest() {
-    using namespace Fast::Oot3d;
+Fast::Extension::GrassAsyncPlacementRequest BaseRequest() {
+    using namespace Fast::Extension;
     auto vertices = std::make_shared<const std::vector<GrassSourceVertex>>(std::vector<GrassSourceVertex>{
         { { 0.0F, 0.0F, 0.0F }, { 0.0F, 1.0F, 0.0F }, { 0.0F, 0.0F } },
         { { 100.0F, 0.0F, 0.0F }, { 0.0F, 1.0F, 0.0F }, { 1.0F, 0.0F } },
@@ -62,8 +62,8 @@ Fast::Oot3d::GrassAsyncPlacementRequest BaseRequest() {
     return request;
 }
 
-Fast::Oot3d::GrassWorldPlacement BuildSynchronously(const Fast::Oot3d::GrassAsyncPlacementRequest& request) {
-    using namespace Fast::Oot3d;
+Fast::Extension::GrassWorldPlacement BuildSynchronously(const Fast::Extension::GrassAsyncPlacementRequest& request) {
+    using namespace Fast::Extension;
     GrassSourceSurface surface;
     surface.GeometryId = request.PlacementKey.GeometryId;
     surface.ContentVersion = request.SourceContentVersion;
@@ -95,11 +95,11 @@ Fast::Oot3d::GrassWorldPlacement BuildSynchronously(const Fast::Oot3d::GrassAsyn
 } // namespace
 
 TEST(Oot3dGrassAsyncPlacementBuilder, PublishesImmutablePlacementAndDeduplicatesPendingWork) {
-    Fast::Oot3d::GrassAsyncPlacementBuilder builder(8U, 1U);
+    Fast::Extension::GrassAsyncPlacementBuilder builder(8U, 1U);
     auto request = BaseRequest();
     const auto expected = BuildSynchronously(request);
     const auto queued = builder.ResolveOrQueue(request);
-    EXPECT_EQ(queued.State, Fast::Oot3d::GrassAsyncPlacementState::Pending);
+    EXPECT_EQ(queued.State, Fast::Extension::GrassAsyncPlacementState::Pending);
     EXPECT_TRUE(queued.Queued);
 
     const auto duplicate = builder.ResolveOrQueue(request);
@@ -108,7 +108,7 @@ TEST(Oot3dGrassAsyncPlacementBuilder, PublishesImmutablePlacementAndDeduplicates
 
     request.FrameId = 2U;
     const auto ready = builder.ResolveOrQueue(request);
-    ASSERT_EQ(ready.State, Fast::Oot3d::GrassAsyncPlacementState::Ready);
+    ASSERT_EQ(ready.State, Fast::Extension::GrassAsyncPlacementState::Ready);
     ASSERT_NE(ready.Placement, nullptr);
     ASSERT_FALSE(ready.Placement->Anchors.empty());
     EXPECT_EQ(ready.Placement->Identity, 55U);
@@ -133,21 +133,21 @@ TEST(Oot3dGrassAsyncPlacementBuilder, PublishesImmutablePlacementAndDeduplicates
 }
 
 TEST(Oot3dGrassAsyncPlacementBuilder, ShadowedPlacementServesAnUnshadowedScene) {
-    Fast::Oot3d::GrassAsyncPlacementBuilder builder(8U, 1U);
+    Fast::Extension::GrassAsyncPlacementBuilder builder(8U, 1U);
     auto request = BaseRequest();
     request.ShadowGrid = true;
     ASSERT_TRUE(builder.ResolveOrQueue(request).Queued);
     builder.WaitForIdle();
     const auto shadowed = builder.ResolveOrQueue(request);
-    ASSERT_EQ(shadowed.State, Fast::Oot3d::GrassAsyncPlacementState::Ready);
+    ASSERT_EQ(shadowed.State, Fast::Extension::GrassAsyncPlacementState::Ready);
     // A scene without directional shadows reuses the shadowed placement.
     request.ShadowGrid = false;
     const auto plain = builder.ResolveOrQueue(request);
     EXPECT_FALSE(plain.Queued);
-    ASSERT_EQ(plain.State, Fast::Oot3d::GrassAsyncPlacementState::Ready);
+    ASSERT_EQ(plain.State, Fast::Extension::GrassAsyncPlacementState::Ready);
     EXPECT_EQ(plain.Placement, shadowed.Placement);
     // The reverse needs the grid, so it builds.
-    Fast::Oot3d::GrassAsyncPlacementBuilder unshadowedFirst(8U, 1U);
+    Fast::Extension::GrassAsyncPlacementBuilder unshadowedFirst(8U, 1U);
     ASSERT_TRUE(unshadowedFirst.ResolveOrQueue(request).Queued);
     unshadowedFirst.WaitForIdle();
     request.ShadowGrid = true;
@@ -156,7 +156,7 @@ TEST(Oot3dGrassAsyncPlacementBuilder, ShadowedPlacementServesAnUnshadowedScene) 
 }
 
 TEST(Oot3dGrassAsyncPlacementBuilder, CompletionTicketsSurviveResidentEviction) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GrassAsyncPlacementBuilder builder(1U,2U);
     std::vector<GrassAsyncPlacementResult> tickets;
     auto request=BaseRequest();
@@ -180,7 +180,7 @@ TEST(Oot3dGrassAsyncPlacementBuilder, CompletionTicketsSurviveResidentEviction) 
 }
 
 TEST(Oot3dGrassAsyncPlacementBuilder, CancelledCompletionDoesNotLeaveAnUnresolvedWait) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GrassAsyncPlacementResult ticket;
     ticket.State=GrassAsyncPlacementState::Pending;
     {
@@ -193,7 +193,7 @@ TEST(Oot3dGrassAsyncPlacementBuilder, CancelledCompletionDoesNotLeaveAnUnresolve
 }
 
 TEST(Oot3dGrassPlacement, BudgetCoversTheWholeSurfaceInsteadOfAnIndexPrefix) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const std::vector<GrassSourceVertex> vertices{
         {{0, 0, 0}}, {{100, 0, 0}}, {{0, 0, 100}},
         {{1000, 0, 0}}, {{1100, 0, 0}}, {{1000, 0, 100}},
@@ -228,7 +228,7 @@ TEST(Oot3dGrassPlacement, BudgetCoversTheWholeSurfaceInsteadOfAnIndexPrefix) {
 }
 
 TEST(Oot3dGrassAsyncPlacementBuilder, ByteBudgetEvictsOldestReadyEntry) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const auto request=BaseRequest();
     GrassAsyncPlacementBuilder probe;
     (void)probe.ResolveOrQueue(request);
@@ -251,8 +251,8 @@ TEST(Oot3dGrassAsyncPlacementBuilder, ByteBudgetEvictsOldestReadyEntry) {
 }
 
 namespace {
-Fast::Oot3d::GrassPlacementView TestView() {
-    Fast::Oot3d::GrassPlacementView view;
+Fast::Extension::GrassPlacementView TestView() {
+    Fast::Extension::GrassPlacementView view;
     view.Enabled = true;
     view.WorldToClip = {0.005F,0,0,0, 0,0,0.001F,0, 0,0.005F,0,0, -0.25F,-0.25F,0,1};
     view.Eye = {50,100,50};
@@ -263,7 +263,7 @@ Fast::Oot3d::GrassPlacementView TestView() {
 }
 
 TEST(Oot3dGrassBudget, ConservesCapacityAndRedistributesSaturatedShares) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     EXPECT_EQ(AllocateGrassBudget({{100,1},{100,1},{100,1}}, 5), (std::vector<uint32_t>{2,2,1}));
     EXPECT_EQ(AllocateGrassBudget({{2,1000},{100,1},{100,1}}, 20), (std::vector<uint32_t>{2,9,9}));
     EXPECT_EQ(AllocateGrassBudget({{2,1},{3,1}}, 200), (std::vector<uint32_t>{2,3}));
@@ -282,7 +282,7 @@ TEST(Oot3dGrassBudget, ConservesCapacityAndRedistributesSaturatedShares) {
 }
 
 TEST(Oot3dGrassPlacement, FocusesTheFrustumWithoutMovingRetainedBlades) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const std::vector<GrassSourceVertex> vertices{
         {{0,0,0}}, {{100,0,0}}, {{0,0,100}},
         {{1000,0,0}}, {{1100,0,0}}, {{1000,0,100}},
@@ -328,7 +328,7 @@ TEST(Oot3dGrassPlacement, FocusesTheFrustumWithoutMovingRetainedBlades) {
 }
 
 TEST(Oot3dGrassViewPlacement, RefreshesOnlyOutsideTheGuardOrOnProjectionChanges) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto view = TestView();
     view.GuardDistance = 100;
     auto next = view;
@@ -349,7 +349,7 @@ TEST(Oot3dGrassViewPlacement, RefreshesOnlyOutsideTheGuardOrOnProjectionChanges)
 }
 
 TEST(Oot3dGrassStaticPlacement, MeasuresWholeWorldCandidateDemand) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto request = BaseRequest();
     request.TransformBakedIntoVertices = true;
     request.PlacementView = TestView();
@@ -369,7 +369,7 @@ TEST(Oot3dGrassStaticPlacement, MeasuresWholeWorldCandidateDemand) {
 }
 
 TEST(Oot3dGrassStaticPlacement, CameraCutsDistanceChangesAndReturningSourcesNeverRegenerate) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GrassStaticPlacementCache builder;
     builder.SetCandidateCapacity(80);
     auto request = BaseRequest();
@@ -412,7 +412,7 @@ TEST(Oot3dGrassStaticPlacement, CameraCutsDistanceChangesAndReturningSourcesNeve
 }
 
 TEST(Oot3dGrassStaticPlacement, OverlayAndShadowGridChangesKeepTheShownPlacementUntilReady) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto request = BaseRequest();
     request.Generation.InstancesPerSquareMeter = 4096;
     std::vector<GrassAsyncPlacementRequest> requests{ request };
@@ -461,7 +461,7 @@ TEST(Oot3dGrassStaticPlacement, OverlayAndShadowGridChangesKeepTheShownPlacement
 }
 
 TEST(Oot3dGrassStaticPlacement, FirstAdmissionHasCompleteCoverageWithoutIgnoringBlackMasks) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto request = BaseRequest();
     request.Generation.InstancesPerSquareMeter = 4096;
     std::vector<GrassAsyncPlacementRequest> requests{request};
@@ -501,7 +501,7 @@ struct GrassDiskFixture : testing::Test {
         std::filesystem::remove_all(Directory, ec);
     }
 };
-void ExpectSamePlacement(const Fast::Oot3d::GrassWorldPlacement& a, const Fast::Oot3d::GrassWorldPlacement& b) {
+void ExpectSamePlacement(const Fast::Extension::GrassWorldPlacement& a, const Fast::Extension::GrassWorldPlacement& b) {
     const auto equal = [](const auto& a, const auto& b) {
         ASSERT_EQ(a.size(), b.size());
         if (!a.empty())
@@ -523,7 +523,7 @@ void ExpectSamePlacement(const Fast::Oot3d::GrassWorldPlacement& a, const Fast::
 }
 } // namespace
 TEST_F(GrassDiskFixture, RoundTripFinalAnchorsClustersColorsAndShadowSupport) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto r = BaseRequest();
     r.ShadowGrid = true;
     r.MidrangeCellExtent = 20;
@@ -549,7 +549,7 @@ TEST_F(GrassDiskFixture, RoundTripFinalAnchorsClustersColorsAndShadowSupport) {
     EXPECT_NE(loaded->Anchors[0].SurfaceColor, 0);
 }
 TEST_F(GrassDiskFixture, RejectsVersionTruncationChecksumOverflowAndWrongKeyThenRepairs) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto r = BaseRequest();
     const auto p = BuildSynchronously(r);
     GrassPersistentPlacementCache disk(Directory);
@@ -587,7 +587,7 @@ TEST_F(GrassDiskFixture, RejectsVersionTruncationChecksumOverflowAndWrongKeyThen
     EXPECT_FALSE(disk.Load(wrong));
 }
 TEST_F(GrassDiskFixture, BoundsStorageAndIgnoresUnrelatedFiles) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto r = BaseRequest();
     const auto p = BuildSynchronously(r);
     GrassPersistentPlacementCache disk(Directory, 1024 * 1024, 1);
@@ -604,7 +604,7 @@ TEST_F(GrassDiskFixture, BoundsStorageAndIgnoresUnrelatedFiles) {
     EXPECT_FALSE(tiny.Store(first, p));
 }
 TEST_F(GrassDiskFixture, NewBuilderLoadsWithoutExtractionMaskDecodeOrColorSource) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto r = BaseRequest();
     r.Mask = {};
     r.LazyMaskTexture = r.LazyColorTexture = 0x123477;
@@ -646,7 +646,7 @@ TEST_F(GrassDiskFixture, NewBuilderLoadsWithoutExtractionMaskDecodeOrColorSource
     }
 }
 TEST_F(GrassDiskFixture, OnlySettledPlacementsAreWritten) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GrassAsyncPlacementBuilder builder;
     builder.SetCacheDirectory(Directory);
     builder.SetDiskSettleDelay(std::chrono::hours(1));
@@ -674,7 +674,7 @@ TEST_F(GrassDiskFixture, OnlySettledPlacementsAreWritten) {
     EXPECT_TRUE(GrassPersistentPlacementCache(Directory).Load(GrassPlacementPersistentKey(r)));
 }
 TEST_F(GrassDiskFixture, PersistentFingerprintUsesGeometryPayloadAndEveryBakeSetting) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const auto r = BaseRequest();
     const auto key = GrassPlacementPersistentKey(r);
     auto changed = r;
@@ -733,7 +733,7 @@ TEST_F(GrassDiskFixture, PersistentFingerprintUsesGeometryPayloadAndEveryBakeSet
     }
 }
 TEST_F(GrassDiskFixture, ExplicitOverlayMaskLayoutAndChannelSlotsInvalidateDiskKey) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto r = BaseRequest();
     auto scalar = std::make_shared<GrassScalarMask>();
     scalar->Width = 2;
@@ -766,7 +766,7 @@ TEST_F(GrassDiskFixture, ExplicitOverlayMaskLayoutAndChannelSlotsInvalidateDiskK
     EXPECT_NE(hidden, GrassPlacementPersistentKey(r));
 }
 TEST_F(GrassDiskFixture, F1MaskEditInvalidatesMemoryAndDiskWithoutRunningDeferredDecoderOnHit) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto r = BaseRequest();
     r.TransformBakedIntoVertices = true;
     r.NormalOffset = 0;

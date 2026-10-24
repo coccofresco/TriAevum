@@ -234,7 +234,7 @@ oot3d_target_defaults(pica_gi_geometry_tests NO_WARNING_OVERRIDE FOLDER Tests)
 
 add_executable(pica_fragment_lighting_memo_tests EXCLUDE_FROM_ALL
     runtime/three_ds_recomp/tests/pica_fragment_lighting_memo_tests.cpp
-    runtime/three_ds_recomp/src/fast/oot3d/pica_fragment_lighting.cpp
+    runtime/three_ds_recomp/src/fast/extension/pica_fragment_lighting.cpp
 )
 target_include_directories(pica_fragment_lighting_memo_tests PRIVATE
     runtime/three_ds_recomp/include)

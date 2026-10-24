@@ -10,7 +10,7 @@ find_library(SHADERC_LIBRARY NAMES shaderc_shared REQUIRED)
 set(runtime "${root}/runtime/three_ds_recomp")
 add_executable(oot3d_native_pica_aot_compiler
     "${root}/tools/oot3d/native_pica_frontend/oot3d_native_pica_aot_compiler.cpp"
-    "${runtime}/src/fast/oot3d/pica_aot_shader_pack.cpp")
+    "${runtime}/src/fast/extension/pica_aot_shader_pack.cpp")
 include("${runtime}/cmake/pass_shader_sources.cmake")
 triaevum_add_pass_shader_sources(oot3d_native_pica_aot_compiler)
 target_include_directories(oot3d_native_pica_aot_compiler PRIVATE "${runtime}/include" "${SHADERC_INCLUDE_DIR}")

@@ -3,7 +3,7 @@
 #include "oot3d_native_pica_program_descriptor.h"
 #include "oot3d_native_pica_shader_gen.h"
 #include "fast/renderer3ds/pica_nri_shader_contract.h"
-#include "fast/oot3d/pica_pipeline_manifest.h"
+#include "fast/extension/pica_pipeline_manifest.h"
 #include "oot3d_native_pica_vulkan_bridge.h"
 
 #include <filesystem>
@@ -21,14 +21,14 @@ using namespace Oot3dNativeGame;
 
 class PipelineRecorder final : public Oot3d::Renderer::PicaRenderBackend {
   public:
-    Fast::Oot3d::PicaGraphicsPipelineInventory Inventory;
+    Fast::Extension::PicaGraphicsPipelineInventory Inventory;
     bool SubmitPicaDraw(const Oot3d::Renderer::PicaDrawView& draw, std::string* error) override {
-        auto entry = Fast::Oot3d::DescribePicaGraphicsPipelineDraw(draw);
-        entry.VertexSource = Fast::Oot3d::IdentifyPicaAotShaderSource(draw.VertexShaderSource);
-        entry.FragmentSource = Fast::Oot3d::IdentifyPicaAotShaderSource(draw.FragmentShaderSource);
+        auto entry = Fast::Extension::DescribePicaGraphicsPipelineDraw(draw);
+        entry.VertexSource = Fast::Extension::IdentifyPicaAotShaderSource(draw.VertexShaderSource);
+        entry.FragmentSource = Fast::Extension::IdentifyPicaAotShaderSource(draw.FragmentShaderSource);
         const auto nri = Fast::Renderer3ds::BuildPicaNriFragmentShaderVariant(draw.FragmentShaderSource);
         if (!nri.Applied) { if (error) *error = nri.Error; return false; }
-        entry.NriFragmentSource = Fast::Oot3d::IdentifyPicaAotShaderSource(nri.Source);
+        entry.NriFragmentSource = Fast::Extension::IdentifyPicaAotShaderSource(nri.Source);
         entry.NriFragmentAvailable = true;
         Inventory.Observe(std::move(entry), draw.CanonicalPipelineId, 0);
         return true;

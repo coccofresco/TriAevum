@@ -48,7 +48,7 @@ build checks the Windows runtime's NVIDIA Authenticode signature and version
 ## Boundary
 
 The runtime (GPL) links nothing of NGX. It loads the module when the library
-is installed beside the executable (`fast/oot3d/dlss_module_loader.cpp`), and
+is installed beside the executable (`fast/extension/dlss_module_loader.cpp`), and
 the two meet only through `module_interface/triaevum/dlss_module.h` (MIT):
 plain C values and Vulkan handles, with the host owning every image, view,
 command buffer and barrier. Without the module, or without NVIDIA's runtime,

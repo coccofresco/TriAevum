@@ -19,7 +19,7 @@
 #include "oot3d_top_screen_config.h"
 #include "oot3d_ui/ui_primitives.h"
 
-#include "fast/oot3d/graphics_settings_runtime.h"
+#include "fast/extension/graphics_settings_runtime.h"
 
 #include <chrono>
 #include <cstdint>
@@ -87,15 +87,15 @@ private:
   void BuildPhotoModeTab(Menu::Document &document);
   void BuildGameTab(Menu::Document &document);
   void RefreshSnapshots();
-  Menu::WriteResult ApplyGraphics(Fast::Oot3d::GraphicsSettings settings, bool keepPreset);
+  Menu::WriteResult ApplyGraphics(Fast::Extension::GraphicsSettings settings, bool keepPreset);
   Menu::WriteResult ApplyControls(const NativeControlConfig &config);
   Menu::WriteResult ApplyTopScreen(const TopScreenUiConfig &config);
   void UpdateDisplayConfirmation();
   void UpdateSavestateOutcome();
 
   InGameMenuOwners mOwners;
-  Fast::Oot3d::GraphicsSettings mGraphics;
-  Fast::Oot3d::GraphicsCapabilities mCapabilities;
+  Fast::Extension::GraphicsSettings mGraphics;
+  Fast::Extension::GraphicsCapabilities mCapabilities;
   NativeControlConfig mControls;
   TopScreenUiConfig mTopScreen;
   Menu::Model mModel;

@@ -1,6 +1,6 @@
 #include "fast/renderer3ds/virtual_shadow_map.h"
 #include "fast/backends/oot3d_vulkan_diagnostics.h"
-#include "fast/oot3d/pica_scene_frame.h"
+#include "fast/extension/pica_scene_frame.h"
 #include "fast/renderer3ds/pica_composition_schedule.h"
 
 #include <algorithm>
@@ -997,7 +997,7 @@ void Oot3dVulkanDiagnostics::BeginFrame(uint64_t frameIndex) {
 }
 
 void Oot3dVulkanDiagnostics::RecordRendererValidation(
-    const Oot3d::RendererValidationSnapshot& snapshot) {
+    const Extension::RendererValidationSnapshot& snapshot) {
     if (!mActiveFrame.has_value()) {
         return;
     }
@@ -1265,7 +1265,7 @@ void Oot3dVulkanDiagnostics::RecordPicaDisplayComposition(
 }
 
 void Oot3dVulkanDiagnostics::RecordPicaSceneFrame(
-    const Oot3d::PicaSceneFrameStats& stats) {
+    const Extension::PicaSceneFrameStats& stats) {
     if (!mActiveFrame.has_value()) {
         return;
     }
@@ -1409,7 +1409,7 @@ void Oot3dVulkanDiagnostics::RecordEffectGraphInternalImageTransitions(
 }
 
 void Oot3dVulkanDiagnostics::RecordEffectGeometryProvider(
-    const Oot3d::EffectGeometryProviderExecutionSummary& summary) {
+    const Extension::EffectGeometryProviderExecutionSummary& summary) {
     if (!mActiveFrame.has_value()) return;
     auto& frame = *mActiveFrame;
     frame.EffectGeometryProviderDeclared = summary.Declared;
@@ -1434,7 +1434,7 @@ void Oot3dVulkanDiagnostics::RecordEffectGeometryProvider(
 }
 
 void Oot3dVulkanDiagnostics::RecordDisplayEffectGraphExecution(
-    const Oot3d::DisplayEffectExecutionSummary& summary) {
+    const Extension::DisplayEffectExecutionSummary& summary) {
     if (!mActiveFrame.has_value()) return;
     auto& frame = *mActiveFrame;
     ++frame.DisplayEffectGraphInvocationCount;
@@ -1460,7 +1460,7 @@ void Oot3dVulkanDiagnostics::RecordDisplayEffectGraphExecution(
 }
 
 void Oot3dVulkanDiagnostics::RecordDisplayEffectGraphBindings(
-    const Oot3d::EffectResourceBindingValidation& validation,
+    const Extension::EffectResourceBindingValidation& validation,
     bool compatibilityFallback) {
     if (!mActiveFrame.has_value()) return;
     auto& frame = *mActiveFrame;
@@ -1478,7 +1478,7 @@ void Oot3dVulkanDiagnostics::RecordDisplayEffectGraphBindings(
 }
 
 void Oot3dVulkanDiagnostics::RecordDisplayEffectPhysicalPlan(
-    const Oot3d::EffectPhysicalPlanSummary& summary) {
+    const Extension::EffectPhysicalPlanSummary& summary) {
     if (!mActiveFrame.has_value()) return;
     auto& frame = *mActiveFrame;
     ++frame.DisplayEffectPhysicalPlanInvocationCount;
@@ -1517,7 +1517,7 @@ void Oot3dVulkanDiagnostics::RecordDisplayEffectPhysicalPlan(
 }
 
 void Oot3dVulkanDiagnostics::RecordEffectTransientImageArena(
-    const Oot3d::EffectTransientAllocationSummary& summary,
+    const Extension::EffectTransientAllocationSummary& summary,
     bool configured, uint32_t allocatedSlotCount,
     bool reusedConfiguration) {
     if (!mActiveFrame.has_value()) return;

@@ -1,13 +1,13 @@
 // Vulkan backend: construction, Init and Shutdown, and the recorded DLSS feature.
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_internal.h"
-#include "fast/oot3d/grass_texture_source_cache.h"
+#include "fast/extension/grass_texture_source_cache.h"
 
 namespace Fast {
 
 GfxRenderingAPIVulkan::GfxRenderingAPIVulkan(GfxWindowBackendSDL2* windowBackend)
     : mWindowBackend(windowBackend),
-      mSceneSurfaces([this](const Oot3d::SceneSurface& surface) {
+      mSceneSurfaces([this](const Extension::SceneSurface& surface) {
           if (surface.NativeImage != 0)
               mNriInterop.ForgetTexture(reinterpret_cast<VkImage>(surface.NativeImage));
           mResourceStates.Forget(surface.NativeImage);
@@ -28,13 +28,13 @@ std::filesystem::path DlssFeatureRecordPath() {
     return directory.empty() ? std::filesystem::path{} : directory / "dlss_feature.txt";
 }
 
-std::optional<Oot3d::NriDlssFeatureKey> ReadDlssFeatureKey(std::istream& input) {
+std::optional<Extension::NriDlssFeatureKey> ReadDlssFeatureKey(std::istream& input) {
     uint32_t width = 0, height = 0, quality = 0, srgb = 0, preset = 0;
     if (!(input >> width >> height >> quality >> srgb >> preset) || width == 0U || height == 0U ||
-        quality > static_cast<uint32_t>(Oot3d::UpscalerQuality::UltraPerformance) || srgb > 1U ||
+        quality > static_cast<uint32_t>(Extension::UpscalerQuality::UltraPerformance) || srgb > 1U ||
         preset > 0xFFU)
         return std::nullopt;
-    return Oot3d::NriDlssFeatureKey{width, height, static_cast<Oot3d::UpscalerQuality>(quality),
+    return Extension::NriDlssFeatureKey{width, height, static_cast<Extension::UpscalerQuality>(quality),
                                     srgb != 0U, static_cast<uint8_t>(preset)};
 }
 } // namespace
@@ -73,10 +73,10 @@ void GfxRenderingAPIVulkan::PrepareRecordedDlssFeature() {
     if (!mDlssPreparationPending.load()) return;
     // One attempt: a mismatch leaves the creation to the first dispatch.
     mDlssPreparationPending = false;
-    const auto settings = Oot3d::GraphicsSettingsRuntime::Instance().Snapshot();
+    const auto settings = Extension::GraphicsSettingsRuntime::Instance().Snapshot();
     const auto& record = *mDlssFeatureRecord;
-    if (settings.AntiAliasing != Oot3d::AntiAliasingMode::Upscaler ||
-        settings.Upscaler != Oot3d::UpscalerProvider::Dlss ||
+    if (settings.AntiAliasing != Extension::AntiAliasingMode::Upscaler ||
+        settings.Upscaler != Extension::UpscalerProvider::Dlss ||
         mSwapchainExtent.width != record.SwapchainWidth ||
         mSwapchainExtent.height != record.SwapchainHeight)
         return;
@@ -85,7 +85,7 @@ void GfxRenderingAPIVulkan::PrepareRecordedDlssFeature() {
 #endif
     for (const auto& key : record.Keys) {
         if (settings.UpscalerMode != key.Quality ||
-            Oot3d::DlssRenderPreset(settings.UpscalerDlssModel, settings.UpscalerMode) != key.Preset)
+            Extension::DlssRenderPreset(settings.UpscalerDlssModel, settings.UpscalerMode) != key.Preset)
             continue;
         const auto start = std::chrono::steady_clock::now();
         const bool prepared = mNriInterop.PrepareDlss(mCurrentFrame, key);
@@ -275,7 +275,7 @@ void GfxRenderingAPIVulkan::Init() {
     // Grass rule textures' signatures, for their twins in scenes that do not
     // draw them.
     if (const auto directory = VulkanShaderCacheDirectory(); !directory.empty())
-        Oot3d::GrassTextureSourceCache::Instance().SetSignatureStore(
+        Extension::GrassTextureSourceCache::Instance().SetSignatureStore(
             directory / "grass_texture_signatures.bin");
     if ((mNativePicaPreparationMode == NativePicaPreparationMode::Hybrid ||
          mNativePicaPreparationMode == NativePicaPreparationMode::Uber) &&
@@ -428,37 +428,37 @@ void GfxRenderingAPIVulkan::Init() {
         SPDLOG_INFO("OOT3D Vulkan native UI overlay unavailable: {}",
                     mNativeUiOverlayPass.UnavailableReason());
     }
-    auto& settingsRuntime = Oot3d::GraphicsSettingsRuntime::Instance();
-    settingsRuntime.SetCapability(Oot3d::GraphicsCapability::NriInterop,
+    auto& settingsRuntime = Extension::GraphicsSettingsRuntime::Instance();
+    settingsRuntime.SetCapability(Extension::GraphicsCapability::NriInterop,
                                   mNriInterop.Available(), mNriInterop.UnavailableReason());
     settingsRuntime.SetCapability(
-        Oot3d::GraphicsCapability::NriDirectionalShadows,
+        Extension::GraphicsCapability::NriDirectionalShadows,
         mNriDirectionalShadowPass.Available(),
         mNriDirectionalShadowPass.UnavailableReason());
-    settingsRuntime.SetCapability(Oot3d::GraphicsCapability::SampledSceneColor, true);
-    settingsRuntime.SetCapability(Oot3d::GraphicsCapability::SampledDepth, true);
-    settingsRuntime.SetCapability(Oot3d::GraphicsCapability::NormalGuide, true);
-    settingsRuntime.SetCapability(Oot3d::GraphicsCapability::MaterialGuide, true);
-    settingsRuntime.SetCapability(Oot3d::GraphicsCapability::NativeSurfaceLighting, true);
-    settingsRuntime.SetCapability(Oot3d::GraphicsCapability::FidelityFxCacao,
+    settingsRuntime.SetCapability(Extension::GraphicsCapability::SampledSceneColor, true);
+    settingsRuntime.SetCapability(Extension::GraphicsCapability::SampledDepth, true);
+    settingsRuntime.SetCapability(Extension::GraphicsCapability::NormalGuide, true);
+    settingsRuntime.SetCapability(Extension::GraphicsCapability::MaterialGuide, true);
+    settingsRuntime.SetCapability(Extension::GraphicsCapability::NativeSurfaceLighting, true);
+    settingsRuntime.SetCapability(Extension::GraphicsCapability::FidelityFxCacao,
                                   mCacaoPass.Available(), mCacaoPass.UnavailableReason());
-    settingsRuntime.SetCapability(Oot3d::GraphicsCapability::ImmerseMxao,
+    settingsRuntime.SetCapability(Extension::GraphicsCapability::ImmerseMxao,
                                   mMxaoPass.Available(), mMxaoPass.UnavailableReason());
-    settingsRuntime.SetCapability(Oot3d::GraphicsCapability::MotionVectors,
+    settingsRuntime.SetCapability(Extension::GraphicsCapability::MotionVectors,
                                   mMotionVectorPass.Available(),
                                   mMotionVectorPass.UnavailableReason());
-    settingsRuntime.SetCapability(Oot3d::GraphicsCapability::TemporalHistory,
+    settingsRuntime.SetCapability(Extension::GraphicsCapability::TemporalHistory,
                                   mMotionVectorPass.Available() &&
                                       mTemporalAaPass.Available(),
                                   mTemporalAaPass.Available()
                                       ? mMotionVectorPass.UnavailableReason()
                                        : mTemporalAaPass.UnavailableReason());
     settingsRuntime.SetCapability(
-        Oot3d::GraphicsCapability::LinearHdrWorkingColor,
+        Extension::GraphicsCapability::LinearHdrWorkingColor,
         mLinearSceneColorPass.Available(),
         mLinearSceneColorPass.UnavailableReason());
     settingsRuntime.SetCapability(
-        Oot3d::GraphicsCapability::Smaa1x,
+        Extension::GraphicsCapability::Smaa1x,
         mSmaa1xPass.Available(),
         mSmaa1xPass.UnavailableReason());
     const bool fidelityFxSssrAvailable =
@@ -484,22 +484,22 @@ void GfxRenderingAPIVulkan::Init() {
         fidelityFxSssrReason =
             mReflectionMaterialResolvePass.UnavailableReason();
     settingsRuntime.SetCapability(
-        Oot3d::GraphicsCapability::FidelityFxSssr,
+        Extension::GraphicsCapability::FidelityFxSssr,
         fidelityFxSssrAvailable, fidelityFxSssrReason);
     settingsRuntime.SetCapability(
-        Oot3d::GraphicsCapability::NriNisUpscaler,
+        Extension::GraphicsCapability::NriNisUpscaler,
         mNriUpscalerPass.Available(), mNriUpscalerPass.UnavailableReason());
     settingsRuntime.SetCapability(
-        Oot3d::GraphicsCapability::NriFsrUpscaler,
+        Extension::GraphicsCapability::NriFsrUpscaler,
         mNriUpscalerPass.FsrAvailable(),
         mNriInterop.FsrUnavailableReason());
     settingsRuntime.SetCapability(
-        Oot3d::GraphicsCapability::NriXessUpscaler, false,
+        Extension::GraphicsCapability::NriXessUpscaler, false,
         "NRI XeSS is unavailable on the Vulkan backend");
     const bool dlssAvailable = mNgxVulkanRequirementsSatisfied &&
         mNriUpscalerPass.DlssAvailable();
     const auto& ngxRequirements =
-        Oot3d::GetNriNgxVulkanRequirements();
+        Extension::GetNriNgxVulkanRequirements();
     std::string dlssCapabilityDetail;
     if (!mNgxVulkanRequirementsSatisfied) {
         dlssCapabilityDetail = mNgxVulkanUnavailableReason.empty()
@@ -518,7 +518,7 @@ void GfxRenderingAPIVulkan::Init() {
               mD3d12NgxProvider.UnavailableReason();
 #endif
     settingsRuntime.SetCapability(
-        Oot3d::GraphicsCapability::NriDlssUpscaler,
+        Extension::GraphicsCapability::NriDlssUpscaler,
         dlssAvailable, dlssCapabilityDetail);
     if (dlssAvailable) {
         SPDLOG_INFO("OOT3D Vulkan DLSS ready: {}",
@@ -534,24 +534,24 @@ void GfxRenderingAPIVulkan::Init() {
                  dlssAvailable ? 1 : 0, mNriUpscalerPass.UnavailableReason().c_str(),
                  mNriInterop.FsrUnavailableReason().c_str(), dlssCapabilityDetail.c_str());
     settingsRuntime.SetCapability(
-        Oot3d::GraphicsCapability::Msaa2x,
+        Extension::GraphicsCapability::Msaa2x,
         (mNativePicaSupportedSampleCounts & VK_SAMPLE_COUNT_2_BIT) != 0U,
         "2x color/depth sampling is unavailable");
     settingsRuntime.SetCapability(
-        Oot3d::GraphicsCapability::Msaa4x,
+        Extension::GraphicsCapability::Msaa4x,
         (mNativePicaSupportedSampleCounts & VK_SAMPLE_COUNT_4_BIT) != 0U,
         "4x color/depth sampling is unavailable");
     settingsRuntime.SetCapability(
-        Oot3d::GraphicsCapability::Msaa8x,
+        Extension::GraphicsCapability::Msaa8x,
         (mNativePicaSupportedSampleCounts & VK_SAMPLE_COUNT_8_BIT) != 0U,
         "8x color/depth sampling is unavailable");
     settingsRuntime.SetCapability(
-        Oot3d::GraphicsCapability::MultisampledDepthResolve,
+        Extension::GraphicsCapability::MultisampledDepthResolve,
         mNativePicaDepthResolveMode != VK_RESOLVE_MODE_NONE,
         "multisampled depth resolve is unavailable");
-    settingsRuntime.SetCapability(Oot3d::GraphicsCapability::PresentTearing,
+    settingsRuntime.SetCapability(Extension::GraphicsCapability::PresentTearing,
                                   mWindowBackend->CanDisableVsync());
-    settingsRuntime.SetCapability(Oot3d::GraphicsCapability::ExclusiveFullscreen,
+    settingsRuntime.SetCapability(Extension::GraphicsCapability::ExclusiveFullscreen,
                                   true);
     mVsyncEnabled = settingsRuntime.Snapshot().VSync;
     CreateSyncObjects();
@@ -588,7 +588,7 @@ void GfxRenderingAPIVulkan::Init() {
         // The GI albedo guide is an eighth colour attachment, bound only
         // through dynamic rendering.
         std::string reason;
-        bool supported = Oot3d::BrixelizerScene::Supported(mInstance, mPhysicalDevice, reason);
+        bool supported = Extension::BrixelizerScene::Supported(mInstance, mPhysicalDevice, reason);
         if (supported && !mPicaDynamicRenderingScope.Available()) {
             supported = false;
             reason = "global illumination requires PICA dynamic rendering";
@@ -597,13 +597,13 @@ void GfxRenderingAPIVulkan::Init() {
             supported = false;
             reason = kExperimentalGiReason;
         }
-        Oot3d::GraphicsSettingsRuntime::Instance().SetCapability(
-            Oot3d::GraphicsCapability::BrixelizerGlobalIllumination, supported, reason);
+        Extension::GraphicsSettingsRuntime::Instance().SetCapability(
+            Extension::GraphicsCapability::BrixelizerGlobalIllumination, supported, reason);
     }
     {
         // The screen-space GI reads the same albedo guide (dynamic rendering).
         std::string reason;
-        bool supported = Oot3d::ScreenSpaceGiProvider::Supported(mPhysicalDevice, reason);
+        bool supported = Extension::ScreenSpaceGiProvider::Supported(mPhysicalDevice, reason);
         if (supported && !mPicaDynamicRenderingScope.Available()) {
             supported = false;
             reason = "screen-space global illumination requires PICA dynamic rendering";
@@ -612,8 +612,8 @@ void GfxRenderingAPIVulkan::Init() {
             supported = false;
             reason = kExperimentalGiReason;
         }
-        Oot3d::GraphicsSettingsRuntime::Instance().SetCapability(
-            Oot3d::GraphicsCapability::ScreenSpaceGlobalIllumination, supported, reason);
+        Extension::GraphicsSettingsRuntime::Instance().SetCapability(
+            Extension::GraphicsCapability::ScreenSpaceGlobalIllumination, supported, reason);
     }
     if (!mInteractiveGrassPass.Initialize(mPhysicalDevice, mDevice,
                                           mNriInterop.Shaders(),

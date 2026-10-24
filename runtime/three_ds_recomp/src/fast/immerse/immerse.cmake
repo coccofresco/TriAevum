@@ -7,7 +7,7 @@
 # directory's sources, with the module interface (module_interface/, MIT) and
 # the NRI and Vulkan headers on its include path, and links nothing of
 # TriAevum. The runtime loads it when it is installed beside the executable
-# (fast/oot3d/immerse_module_loader.cpp); without it MXAO is unavailable.
+# (fast/extension/immerse_module_loader.cpp); without it MXAO is unavailable.
 add_library(triaevum_immerse SHARED
     "${CMAKE_CURRENT_LIST_DIR}/mxao_module.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/mxao_shader.cpp")

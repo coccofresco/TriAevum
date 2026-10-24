@@ -1,8 +1,8 @@
 #include "triaevum_product_info.h"
 #include "triaevum_product_build.h"
 
-#include "fast/oot3d/graphics_settings.h"
-#include "fast/oot3d/graphics_settings_persistence.h"
+#include "fast/extension/graphics_settings.h"
+#include "fast/extension/graphics_settings_persistence.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <ostream>
@@ -12,7 +12,7 @@
 #endif
 
 nlohmann::json TriAevumProductDefaultConfig() {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     // A new installation starts from the Enhanced preset with the title's grass
     // source texture rules, which no preset owns. Existing installations
     // retain their config.

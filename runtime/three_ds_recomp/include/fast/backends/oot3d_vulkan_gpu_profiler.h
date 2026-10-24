@@ -3,7 +3,7 @@
 #ifdef ENABLE_OOT3D_VULKAN
 
 #include "fast/backends/oot3d_vulkan_diagnostics.h"
-#include "fast/oot3d/gpu_profile_plan.h"
+#include "fast/extension/gpu_profile_plan.h"
 
 #include <vulkan/vulkan.h>
 
@@ -30,9 +30,9 @@ class Oot3dVulkanGpuProfiler {
         uint32_t slot, uint64_t frameIndex, VkCommandBuffer commandBuffer);
     void EndFrame(uint32_t slot, VkCommandBuffer);
 
-    void BeginScope(uint32_t slot, Oot3d::GpuProfileScope scope,
+    void BeginScope(uint32_t slot, Extension::GpuProfileScope scope,
                     VkCommandBuffer commandBuffer);
-    void EndScope(uint32_t slot, Oot3d::GpuProfileScope scope,
+    void EndScope(uint32_t slot, Extension::GpuProfileScope scope,
                   VkCommandBuffer commandBuffer);
 
     // Developer timeline (TRIAEVUM_GPU_TIMELINE=1): a labelled timestamp;
@@ -55,7 +55,7 @@ class Oot3dVulkanGpuProfiler {
     };
 
     struct FrameState {
-        Oot3d::GpuProfileFramePlan Plan;
+        Extension::GpuProfileFramePlan Plan;
         bool Pending = false;
         std::vector<TimelineMark> TimelineLabels;
     };
@@ -71,10 +71,10 @@ class Oot3dVulkanGpuProfiler {
     void ReportTimeline();
 
     [[nodiscard]] uint32_t Query(
-        uint32_t slot, Oot3d::GpuProfileScope scope,
+        uint32_t slot, Extension::GpuProfileScope scope,
         bool end) const;
     [[nodiscard]] std::optional<double> ReadMilliseconds(
-        uint32_t slot, Oot3d::GpuProfileScope scope) const;
+        uint32_t slot, Extension::GpuProfileScope scope) const;
 
     // Developer trace (TRIAEVUM_GPU_GAP_TRACE=1): the GPU's busy time per
     // frame and its idle time between consecutive frames.

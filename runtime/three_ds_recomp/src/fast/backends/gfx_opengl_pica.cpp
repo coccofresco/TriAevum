@@ -2,8 +2,8 @@
 
 #include "fast/backends/gfx_opengl.h"
 
-#include "fast/oot3d/pica_geometry_registry.h"
-#include "fast/oot3d/pica_shadow2d.h"
+#include "fast/extension/pica_geometry_registry.h"
+#include "fast/extension/pica_shadow2d.h"
 #include "fast/renderer3ds/pica_composition_schedule.h"
 #include "fast/renderer3ds/pica_gl_shader_dialect.h"
 #include "oot3d/renderer/pica_texture_decode.h"
@@ -499,10 +499,10 @@ struct GfxRenderingAPIOGL::NativePicaState {
     std::map<std::pair<uint64_t, uint32_t>, PicaGlDisplay> Displays;
     std::vector<GfxNativePicaMemoryFillView> PendingFills;
     std::optional<GfxNativePicaDisplayTransferView> LastPresented;
-    Oot3d::PicaGeometryRegistry GeometryRegistry;
+    Extension::PicaGeometryRegistry GeometryRegistry;
     std::unordered_map<uint64_t, PicaGlGeometryBuffer> GeometryBuffers;
-    std::vector<Oot3d::PicaNriSourceVertexStream> GeometrySourceStreams;
-    std::vector<Oot3d::PicaNriSourceVertexAttribute> GeometrySourceAttributes;
+    std::vector<Extension::PicaNriSourceVertexStream> GeometrySourceStreams;
+    std::vector<Extension::PicaNriSourceVertexAttribute> GeometrySourceAttributes;
     std::array<GLuint, 16> VertexBuffers{};
     GLuint VertexArray = 0U;
     GLuint IndexBuffer = 0U;
@@ -870,7 +870,7 @@ PicaGlTexture& GetPicaGlTexture(
         if (texture.NativeType == 2U) {
             std::vector<uint32_t> pixels;
             std::string decodeError;
-            if (!Oot3d::DetilePicaShadow2d(
+            if (!Extension::DetilePicaShadow2d(
                     texture.NativeBytes, texture.Width, texture.Height,
                     pixels, &decodeError)) {
                 throw std::runtime_error(
@@ -1220,7 +1220,7 @@ bool GfxRenderingAPIOGL::SubmitPicaDraw(
             mNativePica->GeometryCacheEnabled &&
             draw.GeometryIdentityAvailable && draw.GeometryIdentity != 0U &&
             draw.GeometryContentVersion != 0U;
-        const Oot3d::PicaPreparedGeometry* preparedGeometry = nullptr;
+        const Extension::PicaPreparedGeometry* preparedGeometry = nullptr;
         GLuint persistentGeometryBuffer = 0U;
         if (persistentGeometry) {
             auto& streams = mNativePica->GeometrySourceStreams;
@@ -1240,7 +1240,7 @@ bool GfxRenderingAPIOGL::SubmitPicaDraw(
                 attributes.push_back({
                     attribute.Location,
                     attribute.Binding,
-                    static_cast<Oot3d::PicaNriVertexScalar>(
+                    static_cast<Extension::PicaNriVertexScalar>(
                         attribute.Format),
                     attribute.ComponentCount,
                     attribute.ByteOffset,

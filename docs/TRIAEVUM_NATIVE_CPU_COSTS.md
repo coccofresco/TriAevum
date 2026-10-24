@@ -46,7 +46,7 @@ that name does **not** mean the query function itself consumed 42.80%.
    snapshot and its derived identities. Legacy/unversioned inputs retain the full
    validation/hash path in `oot3d_native_pica_vulkan_plan.cpp`.
 2. **Shader catalog consumes the existing source-identity contract.**
-   `fast/oot3d/pica_scene_frame.{h,cpp}` accepts the generator's dual-hash/size
+   `fast/extension/pica_scene_frame.{h,cpp}` accepts the generator's dual-hash/size
    identity, validates it on first admission and compares identities on repeated
    use. The NRI adapter forwards canonical and effective identities separately.
    Callers without identities retain exact source comparison. Key conflicts,

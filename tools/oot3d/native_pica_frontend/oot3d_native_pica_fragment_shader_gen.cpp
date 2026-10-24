@@ -1,7 +1,7 @@
 #include "oot3d_native_pica_fragment_shader_gen.h"
 #include "oot3d_native_pica_tev_expressions.h"
 #include "oot3d_native_pica_proctex.h"
-#include "fast/oot3d/pica_fragment_lighting.h"
+#include "fast/extension/pica_fragment_lighting.h"
 #include "fast/renderer3ds/pica_texture_program.h"
 
 #include <cmath>
@@ -379,7 +379,7 @@ uint64_t ComputeOot3dPicaFragmentShaderStateKey(
         key = HashWord(key, 0x5A524153U);
     key = HashWord(key, packet.Registers[0x08FU]);
     const auto lighting =
-        Fast::Oot3d::DecodePicaFragmentLighting(packet.Registers);
+        Fast::Extension::DecodePicaFragmentLighting(packet.Registers);
     if (Oot3dPicaFragmentLightingEnabled(packet)) {
         const uint64_t lightingKey =
             ComputeOot3dPicaFragmentLightingStructuralKey(packet);
@@ -463,8 +463,8 @@ Oot3dPicaFragmentUniformState BuildOot3dPicaFragmentUniformState(
             static_cast<float>(difference) / 2047.0F};
     }
     uniforms.Lighting = BuildOot3dPicaFragmentLightingUniformState(packet);
-    uniforms.LightingProgram = Fast::Oot3d::BuildPicaLightingProgram(
-        Fast::Oot3d::DecodePicaFragmentLighting(packet.Registers));
+    uniforms.LightingProgram = Fast::Extension::BuildPicaLightingProgram(
+        Fast::Extension::DecodePicaFragmentLighting(packet.Registers));
     uniforms.FragmentControl = {packet.Registers[0x0E0U], packet.Registers[0x104U],
                                packet.Registers[0x080U], packet.Registers[0x083U]};
     uniforms.ProcTexProgram = BuildOot3dPicaProcTexProgram(packet);
@@ -490,7 +490,7 @@ bool GenerateOot3dPicaFragmentShader(
         return false;
     }
     const auto lighting =
-        Fast::Oot3d::DecodePicaFragmentLighting(packet.Registers);
+        Fast::Extension::DecodePicaFragmentLighting(packet.Registers);
     const bool procTexEnabled =
         (packet.Registers[0x080U] & (1U << 10U)) != 0U;
     const bool shadowProcTexReferenced =
@@ -520,7 +520,7 @@ bool GenerateOot3dPicaFragmentShader(
     bool bumpTextureSupported = true;
     std::string bumpTextureSample =
         lighting.Enabled &&
-                lighting.BumpMode != Fast::Oot3d::PicaLightingBumpMode::None
+                lighting.BumpMode != Fast::Extension::PicaLightingBumpMode::None
             ? TextureSampleExpression(lighting.BumpTextureUnit, state,
                                       bumpTextureSupported)
             : std::string{};
@@ -592,7 +592,7 @@ bool GenerateOot3dPicaFragmentShader(
         hooks.Semantics |=
             Oot3d::Renderer::PicaShaderSemantic::MaterialNormal;
         if (lighting.BumpMode !=
-                Fast::Oot3d::PicaLightingBumpMode::None &&
+                Fast::Extension::PicaLightingBumpMode::None &&
             lighting.BumpTextureUnit < hooks.TextureSamples.size() &&
             state.Textures[lighting.BumpTextureUnit].Enabled) {
             hooks.SampledTextureMask |= static_cast<uint8_t>(

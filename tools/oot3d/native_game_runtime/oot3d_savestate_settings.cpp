@@ -2,9 +2,9 @@
 
 #include <nlohmann/json.hpp>
 
-#include "fast/oot3d/graphics_settings_persistence.h"
-#include "fast/oot3d/graphics_settings_runtime.h"
-#include "fast/oot3d/presentation_settings_transaction.h"
+#include "fast/extension/graphics_settings_persistence.h"
+#include "fast/extension/graphics_settings_runtime.h"
+#include "fast/extension/presentation_settings_transaction.h"
 #include "oot3d_game_language.h"
 #include "oot3d_native_control_config.h"
 #include "../ui_topscreen/oot3d_top_screen_config.h"
@@ -19,8 +19,8 @@ constexpr int kSettingsSchema = 1;
 std::string CaptureSavestateSettings(const SavestateSettingsOwners& owners) {
   nlohmann::json document{
       {"schema", kSettingsSchema},
-      {"graphics", Fast::Oot3d::SerializeGraphicsSettings(
-                       Fast::Oot3d::GraphicsSettingsRuntime::Instance().Snapshot())},
+      {"graphics", Fast::Extension::SerializeGraphicsSettings(
+                       Fast::Extension::GraphicsSettingsRuntime::Instance().Snapshot())},
   };
   std::string text;
   if (owners.TopScreen != nullptr &&
@@ -37,14 +37,14 @@ std::string CaptureSavestateSettings(const SavestateSettingsOwners& owners) {
   return document.dump();
 }
 
-Fast::Oot3d::GraphicsSettings MergeSavedGraphicsSettings(
-    const Fast::Oot3d::GraphicsSettings& saved,
-    const Fast::Oot3d::GraphicsSettings& current) {
+Fast::Extension::GraphicsSettings MergeSavedGraphicsSettings(
+    const Fast::Extension::GraphicsSettings& saved,
+    const Fast::Extension::GraphicsSettings& current) {
   auto merged = saved;
   // The presentation owner's own definition (window mode, output size,
   // VSync), plus the monitor and its refresh rate.
-  Fast::Oot3d::SetPresentationSettings(
-      merged, Fast::Oot3d::GetPresentationSettings(current));
+  Fast::Extension::SetPresentationSettings(
+      merged, Fast::Extension::GetPresentationSettings(current));
   merged.DisplayIndex = current.DisplayIndex;
   merged.RefreshRate = current.RefreshRate;
   return merged;
@@ -63,9 +63,9 @@ SavestateSettingsApplyResult ApplySavestateSettings(
     return result;
   }
   if (const auto graphics = document.find("graphics"); graphics != document.end()) {
-    auto& runtime = Fast::Oot3d::GraphicsSettingsRuntime::Instance();
+    auto& runtime = Fast::Extension::GraphicsSettingsRuntime::Instance();
     const auto current = runtime.Snapshot();
-    const auto loaded = Fast::Oot3d::DeserializeGraphicsSettings(*graphics, current);
+    const auto loaded = Fast::Extension::DeserializeGraphicsSettings(*graphics, current);
     const auto validation = runtime.RestorePreferences(
         MergeSavedGraphicsSettings(loaded.Value, current));
     if (validation.Accepted()) {

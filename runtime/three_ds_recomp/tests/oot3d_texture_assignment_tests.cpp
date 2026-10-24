@@ -1,5 +1,5 @@
-#include "fast/oot3d/texture_assignment_model.h"
-#include "fast/oot3d/texture_catalog_selection.h"
+#include "fast/extension/texture_assignment_model.h"
+#include "fast/extension/texture_catalog_selection.h"
 
 #include <gtest/gtest.h>
 
@@ -8,7 +8,7 @@
 
 TEST(Oot3dTextureAssignments,
      SharesOneSelectionAcrossGrassAndReflection) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     auto settings =
         GraphicsSettingsService::Preset(GraphicsPreset::Custom);
     const TextureCatalogEntry texture{
@@ -39,7 +39,7 @@ TEST(Oot3dTextureAssignments,
 
 TEST(Oot3dTextureAssignments,
      ReassignsProfileWithoutDuplicatingOrRemovingGrass) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GraphicsSettings settings;
     settings.Preset = GraphicsPreset::Custom;
     const TextureCatalogEntry texture{
@@ -74,7 +74,7 @@ TEST(Oot3dTextureAssignments,
 
 TEST(Oot3dTextureAssignments,
      RefreshesExistingGrassMetadataWithoutDuplicatingRule) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     InteractiveGrassSettings grass;
     GrassPlacementRule rule;
     rule.RuleId = 7U;
@@ -94,7 +94,7 @@ TEST(Oot3dTextureAssignments,
 
 TEST(Oot3dTextureAssignments,
      AllocatesStableRuleIdsIntoAvailableGaps) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     InteractiveGrassSettings grass;
     GrassPlacementRule first;
     first.RuleId = 1U;
@@ -112,7 +112,7 @@ TEST(Oot3dTextureAssignments,
 
 TEST(Oot3dTextureAssignments,
      DistinguishesEqualHashesWithDifferentDimensions) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GraphicsSettings settings;
     const TextureCatalogEntry small{
         0xABCDEFU, 0U, 32U, 32U, 4U, 1U};
@@ -172,7 +172,7 @@ TEST(Oot3dTextureAssignments,
 
 TEST(Oot3dTextureCatalogSelection,
      SortsAssignedFirstAndKeepsAStablePreferredSelection) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     std::vector<TextureCatalogEntry> entries{
         {30U, 0U, 16U, 16U, 0U, 100U},
         {10U, 0U, 8U, 8U, 0U, 1U},
@@ -200,7 +200,7 @@ TEST(Oot3dTextureCatalogSelection,
 
 TEST(Oot3dTextureCatalogSelection,
      ActivatesRowsByCompleteIdentityAndRetainsTheExactEntry) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const std::array<TextureCatalogEntry, 3> entries{{
         {7U, 0U, 32U, 32U, 1U, 4U},
         {7U, 0U, 64U, 32U, 1U, 3U},
@@ -229,7 +229,7 @@ TEST(Oot3dTextureCatalogSelection,
 
 TEST(Oot3dTextureCatalogSelection,
      NavigatesForwardAndBackwardWithWraparound) {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     const std::array<TextureCatalogEntry, 3> entries{{
         {1U, 0U, 16U, 16U, 1U, 1U},
         {2U, 0U, 32U, 16U, 1U, 1U},

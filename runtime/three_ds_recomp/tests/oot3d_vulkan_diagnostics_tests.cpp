@@ -1,6 +1,6 @@
 #include "fast/backends/oot3d_vulkan_diagnostics.h"
-#include "fast/oot3d/pica_composition_schedule.h"
-#include "fast/oot3d/pica_scene_frame.h"
+#include "fast/extension/pica_composition_schedule.h"
+#include "fast/extension/pica_scene_frame.h"
 
 #include <filesystem>
 #include <fstream>
@@ -133,7 +133,7 @@ TEST(Oot3dVulkanDiagnostics, WritesBoundedAuthenticFrameTrace) {
     diagnostics.RecordEffectGraphInternalImageTransitions(7U, 5U, 4U, 1U);
     diagnostics.RecordEffectGeometryProvider({
         .Declared = true,
-        .Stage = Fast::Oot3d::EffectStage::BeforeTransparent,
+        .Stage = Fast::Extension::EffectStage::BeforeTransparent,
         .SourceInspectionCount = 12U,
         .SourcePublishedCount = 3U,
         .DeclaredBoundaryInvocationCount = 1U,
@@ -386,7 +386,7 @@ TEST(Oot3dVulkanDiagnostics, WritesBoundedAuthenticFrameTrace) {
     diagnostics.RecordAmbientOcclusionAmbientGuideDraw(false);
     diagnostics.RecordAmbientOcclusionAmbientComposite();
     diagnostics.RecordToonDraw(true);
-    Fast::Oot3d::RendererValidationSnapshot validation;
+    Fast::Extension::RendererValidationSnapshot validation;
     validation.VulkanEnabled = true;
     validation.NriEnabled = true;
     validation.VulkanWarningCount = 2U;
@@ -741,7 +741,7 @@ TEST(Oot3dVulkanDiagnostics, WritesBoundedAuthenticFrameTrace) {
     EXPECT_TRUE(frame.at("effect_geometry_provider_declared"));
     EXPECT_EQ(frame.at("effect_geometry_provider_stage"),
               static_cast<uint32_t>(
-                  Fast::Oot3d::EffectStage::BeforeTransparent));
+                  Fast::Extension::EffectStage::BeforeTransparent));
     EXPECT_EQ(frame.at("effect_geometry_source_inspection_count"), 12U);
     EXPECT_EQ(frame.at("effect_geometry_source_published_count"), 3U);
     EXPECT_EQ(

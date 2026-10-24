@@ -1,5 +1,5 @@
-#include "fast/oot3d/hiz_reflection.h"
-#include "fast/oot3d/reflection_ibl.h"
+#include "fast/extension/hiz_reflection.h"
+#include "fast/extension/reflection_ibl.h"
 #include "vulkan_test_device.h"
 
 #include <array>
@@ -172,8 +172,8 @@ struct Fixture {
     layout.pPushConstantRanges = &push;
     Check(vkCreatePipelineLayout(Device.Device, &layout, nullptr, &Layout));
     const auto shader = Device.Shader(
-        resolve ? Fast::Oot3d::BuildReflectionMaterialResolveComputeShader()
-                : Fast::Oot3d::BuildHiZReflectionBilateralFilterShader(),
+        resolve ? Fast::Extension::BuildReflectionMaterialResolveComputeShader()
+                : Fast::Extension::BuildHiZReflectionBilateralFilterShader(),
         shaderc_compute_shader);
     VkComputePipelineCreateInfo pipeline{
         VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};

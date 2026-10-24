@@ -28,13 +28,13 @@ target_include_directories(oot3d_renderer_contracts INTERFACE
 	"${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 add_library(oot3d_renderer_texture_decode STATIC
-	src/fast/oot3d/pica_texture_decode.cpp)
+	src/fast/extension/pica_texture_decode.cpp)
 set_property(TARGET oot3d_renderer_texture_decode PROPERTY CXX_STANDARD 20)
 target_include_directories(oot3d_renderer_texture_decode PUBLIC
 	"${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 add_library(oot3d_renderer_fragment_lighting STATIC
-	src/fast/oot3d/pica_fragment_lighting.cpp)
+	src/fast/extension/pica_fragment_lighting.cpp)
 set_property(TARGET oot3d_renderer_fragment_lighting PROPERTY CXX_STANDARD 20)
 target_include_directories(oot3d_renderer_fragment_lighting PUBLIC
 	"${CMAKE_CURRENT_SOURCE_DIR}/include")

@@ -120,8 +120,8 @@ Everything derived from MXAO lives in that directory and nowhere else.
 The module is a separate shared library (`triaevum_immerse.dll`,
 `libtriaevum_immerse.so`) beside the runtime. TriAevum reaches it only through
 the MIT interface `runtime/three_ds_recomp/module_interface/triaevum/immerse_module.h`:
-`fast/oot3d/immerse_module_loader.cpp` loads it, `fast/oot3d/mxao_pass.cpp`
-serves it the renderer's resources and `fast/oot3d/mxao_settings_panel.cpp`
+`fast/extension/immerse_module_loader.cpp` loads it, `fast/extension/mxao_pass.cpp`
+serves it the renderer's resources and `fast/extension/mxao_settings_panel.cpp`
 draws its controls. It is built with `THREE_DS_RECOMP_ENABLE_IMMERSE` (on with
 NRI); without the library MXAO is unavailable and a configuration selecting it
 renders AO Off.
@@ -141,8 +141,8 @@ whole and unchanged:
 | `oot3d_top_screen_mod_profile.cpp` | `oot3d_top_screen_mod_profile*.cpp` |
 | `oot3d_native_audio.cpp` | `oot3d_native_audio.cpp`, `_profiles.cpp`, `_mixer.cpp` |
 | root `CMakeLists.txt` target blocks | `CMake/oot3d/*.cmake` |
-| `fast/oot3d/mxao_pass.cpp` (before 2026-10-04), `include/fast/immerse/*`, `tev_program/mxao_gpu_tests.cpp`, `DrawMxaoSettings` in the lighting panel | `runtime/three_ds_recomp/src/fast/immerse/` |
-| `fast/immerse/mxao_pass.cpp`, `fast/immerse/mxao_settings_panel.cpp`, `fast/oot3d/immerse_unavailable.cpp` (before 2026-10-12) | `fast/immerse/mxao_module.cpp` (the module library); TriAevum's side in `fast/oot3d/mxao_pass.cpp`, `mxao_settings_panel.cpp`, `immerse_module_loader.cpp` |
+| `fast/extension/mxao_pass.cpp` (before 2026-10-04), `include/fast/immerse/*`, `tev_program/mxao_gpu_tests.cpp`, `DrawMxaoSettings` in the lighting panel | `runtime/three_ds_recomp/src/fast/immerse/` |
+| `fast/immerse/mxao_pass.cpp`, `fast/immerse/mxao_settings_panel.cpp`, `fast/extension/immerse_unavailable.cpp` (before 2026-10-12) | `fast/immerse/mxao_module.cpp` (the module library); TriAevum's side in `fast/extension/mxao_pass.cpp`, `mxao_settings_panel.cpp`, `immerse_module_loader.cpp` |
 | `build_pass_artifacts --immerse` | `build_immerse_pass_artifacts` |
 | "iMMERSE MXAO" sections of `OOT3D_NRI_FIDELITY_EXTENSION_ARCHITECTURE.md` | `runtime/three_ds_recomp/src/fast/immerse/README.md` |
 

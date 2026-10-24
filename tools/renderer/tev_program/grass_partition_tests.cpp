@@ -1,13 +1,13 @@
-#include "fast/oot3d/grass_visibility.h"
-#include "fast/oot3d/grass_world_placement_cache.h"
-#include "fast/oot3d/grass_cluster_order.h"
+#include "fast/extension/grass_visibility.h"
+#include "fast/extension/grass_world_placement_cache.h"
+#include "fast/extension/grass_cluster_order.h"
 #include <cmath>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
 
 int main() try {
-    using namespace Fast::Oot3d;
+    using namespace Fast::Extension;
     GrassWorldPlacement world;
     for (uint32_t i=0; i<128; ++i) {
         std::array<float,3> center{float(i%16)*40-300, float(i%3)*10, float(i/16)*40-140};

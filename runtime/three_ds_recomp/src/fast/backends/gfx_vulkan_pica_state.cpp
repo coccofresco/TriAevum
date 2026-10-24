@@ -676,7 +676,7 @@ bool GfxRenderingAPIVulkan::RestorePicaTextureCache(
                 surface.ImageWidth = snapshot.ImageWidth;
                 surface.ImageHeight = snapshot.ImageHeight;
                 surface.Encoding =
-                    static_cast<Oot3d::SceneColorEncoding>(
+                    static_cast<Extension::SceneColorEncoding>(
                         producer.ColorEncoding);
                 surface.SceneEffectsResolved =
                     producer.SceneEffectsResolved;
@@ -849,8 +849,8 @@ bool GfxRenderingAPIVulkan::RestorePicaColorTargets(
         // the settings, so the targets are created at the settings' scale and
         // that frame keeps them. A legacy state at another scale is restored at
         // its own scale and the first frame replaces it, as any scale change.
-        const float settingsScale = Oot3d::ResolveInternalResolutionScale(
-            Oot3d::GraphicsSettingsRuntime::Instance().SnapshotForRendering().Value);
+        const float settingsScale = Extension::ResolveInternalResolutionScale(
+            Extension::GraphicsSettingsRuntime::Instance().SnapshotForRendering().Value);
         float restoreScale = mInternalResolutionScale;
         if (guestExtent) {
             restoreScale = settingsScale;
@@ -1323,7 +1323,7 @@ bool GfxRenderingAPIVulkan::ResetPicaState(
         mHiZOutputValid = false;
         mAmbientOcclusionOutputValid = false;
         mInteractiveGrassPass.ResetTemporalState();
-        Oot3d::GrassSceneBridge::Instance().Clear();
+        Extension::GrassSceneBridge::Instance().Clear();
         mTemporalHistory.Reset();
         mPicaTemporalHistory.Reset();
         mNativePicaCompositionSchedule.Reset();
@@ -1370,10 +1370,10 @@ bool GfxRenderingAPIVulkan::ResetPicaState(
 
 bool GfxRenderingAPIVulkan::ResetTitleState(std::string* error) {
     try {
-        Oot3d::GrassSceneBridge::Instance().Clear();
-        Oot3d::GrassInteractionBridge::Instance().Reset();
-        Oot3d::VisualClock::Instance().Reset();
-        Oot3d::SceneViewRuntime::Instance().Reset();
+        Extension::GrassSceneBridge::Instance().Clear();
+        Extension::GrassInteractionBridge::Instance().Reset();
+        Extension::VisualClock::Instance().Reset();
+        Extension::SceneViewRuntime::Instance().Reset();
         mNativeSceneView.Reset();
         mPreparedShadowCasterView.Reset();
         mPicaScenePublications.Reset();

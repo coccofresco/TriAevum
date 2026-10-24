@@ -8,7 +8,7 @@
 #include "oot3d_native_a32_romfs_layers.h"
 #include "oot3d_native_direct_aot.h"
 #include "oot3d_title_grass_rules.h"
-#include "fast/oot3d/graphics_settings_persistence.h"
+#include "fast/extension/graphics_settings_persistence.h"
 #include "oot3d/renderer/azahar_texture_pack.h"
 
 #include <stb_image.h>
@@ -36,7 +36,7 @@ BuildPicaMemoryRegions(
 void NativeA32WindowSession::Setup() {
   // Before any settings load: configurations older than schema 15 take the
   // title's shipped grass source and mask rules.
-  Fast::Oot3d::InstallTitleGrassRuleDefaults(Oot3dNativeGame::Oot3dTitleGrassRuleDefaults());
+  Fast::Extension::InstallTitleGrassRuleDefaults(Oot3dNativeGame::Oot3dTitleGrassRuleDefaults());
   if (launch.Host.Renderer != "opengl" &&
       launch.Host.Renderer != "nri" &&
       launch.Host.Renderer != "vulkan") {
@@ -1067,7 +1067,7 @@ void NativeA32WindowSession::Setup() {
   sceneEnvironment = std::make_shared<Oot3dNativeGame::SceneEnvironmentRuntime>(
       Oot3dNativeGame::TitleSceneEnvironmentDirectory(launch.Host.ConfigurationPath, titleAdapter),
       [](const Fast::Renderer3ds::PicaEnvironmentLighting& environment) {
-        Fast::Oot3d::GraphicsSettingsRuntime::Instance().PublishSceneEnvironment(environment);
+        Fast::Extension::GraphicsSettingsRuntime::Instance().PublishSceneEnvironment(environment);
       },
       launch.Host.ResourceRoot.empty() ? std::filesystem::path{}
                                        : std::filesystem::path(launch.Host.ResourceRoot) / "environments",
@@ -1227,26 +1227,26 @@ void NativeA32WindowSession::Setup() {
   }
   }
 #endif
-  Fast::Oot3d::InstallGraphicsSettingsPanelTabs(
+  Fast::Extension::InstallGraphicsSettingsPanelTabs(
       std::move(applicationSettingsTabs));
   if (const char* title = Oot3dNativeGame::TitleGraphicsWindowTitle(titleAdapter)) {
-    Fast::Oot3d::InstallGraphicsSettingsWindowTitle(title);
+    Fast::Extension::InstallGraphicsSettingsWindowTitle(title);
   }
   InitContextForDemo(hostArgs);
   // What the title itself provides to the graphics settings: the effects
   // that need a scene view, and the scene FOV, stay inactive without it.
   // After the context: it installs the settings' persistence first.
   {
-    auto &settingsRuntime = Fast::Oot3d::GraphicsSettingsRuntime::Instance();
+    auto &settingsRuntime = Fast::Extension::GraphicsSettingsRuntime::Instance();
     const std::string titleName = titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d
                                       ? "Majora's Mask 3D"
                                       : "This game";
     settingsRuntime.SetCapability(
-        Fast::Oot3d::GraphicsCapability::TitleSceneView,
+        Fast::Extension::GraphicsCapability::TitleSceneView,
         Oot3dNativeGame::TitlePublishesSceneView(titleAdapter),
         titleName + " does not publish its scene view yet.");
     settingsRuntime.SetCapability(
-        Fast::Oot3d::GraphicsCapability::TitleSceneFov,
+        Fast::Extension::GraphicsCapability::TitleSceneFov,
         Oot3dNativeGame::TitleAppliesSceneFov(titleAdapter),
         titleName + " has no scene projection hooks yet; the FOV has no effect.");
   }
@@ -1303,7 +1303,7 @@ void NativeA32WindowSession::Setup() {
   api.SetNativeTopScreenExtendsToOutput(
       Oot3dNativeGame::TitleAppliesSceneFov(titleAdapter));
   titleRenderBackend =
-      dynamic_cast<Fast::Oot3d::TitleRenderBackend *>(&api);
+      dynamic_cast<Fast::Extension::TitleRenderBackend *>(&api);
   gui =
       Ship::Context::GetRawInstance()->GetWindow()->GetGui();
   if (gui == nullptr) {
@@ -1587,8 +1587,8 @@ void NativeA32WindowSession::Setup() {
   }
   timing = WindowDemoTimingState{};  // its default members read the clock here
   presentationPacingPolicy =
-      Fast::Oot3d::ResolvePresentationPacingPolicy(
-          Fast::Oot3d::GraphicsSettingsRuntime::Instance()
+      Fast::Extension::ResolvePresentationPacingPolicy(
+          Fast::Extension::GraphicsSettingsRuntime::Instance()
               .Snapshot()
               .FrameRate);
   frameCompositionPolicy =
@@ -1835,15 +1835,15 @@ void NativeA32WindowSession::ApplySelectedUiProfile() {
 
 void NativeA32WindowSession::UpdateScenePresentation() {
   auto &window = *windowPointer;
-  const auto graphics = Fast::Oot3d::GraphicsSettingsRuntime::Instance().Snapshot();
+  const auto graphics = Fast::Extension::GraphicsSettingsRuntime::Instance().Snapshot();
   // The picture is the aspect ratio's letterbox in the window; the scene's
   // FOV policy follows the picture's shape (the renderer sizes its targets
   // to the same picture), never the window's.
-  presentationPicture = Fast::Oot3d::ResolvePresentationPicture(
+  presentationPicture = Fast::Extension::ResolvePresentationPicture(
       std::max<uint32_t>(1, window.GetWidth()),
       std::max<uint32_t>(1, window.GetHeight()), graphics.Aspect);
   widescreenProjection.Projection.Presentation =
-      Fast::Oot3d::ResolveScenePresentationPolicy(
+      Fast::Extension::ResolveScenePresentationPolicy(
           std::max<uint32_t>(1, presentationPicture.Width),
           std::max<uint32_t>(1, presentationPicture.Height));
   widescreenProjection.Projection.FovMultiplier = graphics.FovMultiplier;
@@ -1856,12 +1856,12 @@ void NativeA32WindowSession::UpdateScenePresentation() {
   if (objectBankStorage) objectBankStorage->SetEnabled(graphics.ExtendedDrawDistance);
 }
 
-Fast::Renderer3ds::PicaFrameCompositionPolicy NativeA32WindowSession::ResolveFrameCompositionPolicy(const Fast::Oot3d::PresentationPacingPolicy& pacing) {
+Fast::Renderer3ds::PicaFrameCompositionPolicy NativeA32WindowSession::ResolveFrameCompositionPolicy(const Fast::Extension::PresentationPacingPolicy& pacing) {
   auto policy = pacing.Composition;
   policy.NativeRateHz = frameRateContract.SimulationRateHz;
   if (!frameRateContract.VisualInterpolationAllowed) {
     policy.Interpolation =
-        Fast::Oot3d::NativeVisualInterpolationMode::Disabled;
+        Fast::Extension::NativeVisualInterpolationMode::Disabled;
     policy.FixedSampleMultiplier = 1U;
   }
   return policy;

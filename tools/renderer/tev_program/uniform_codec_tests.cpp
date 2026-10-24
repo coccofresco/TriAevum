@@ -1,5 +1,5 @@
 #include "oot3d_native_pica_fragment_uniform_codec.h"
-#include "fast/oot3d/pica_uniform_layout.h"
+#include "fast/extension/pica_uniform_layout.h"
 #include <bit>
 #include <iostream>
 #include <stdexcept>
@@ -64,8 +64,8 @@ int main() {
             Oot3dPicaFragmentUniformState partial;
             Check(!ReadFragmentUniforms(truncated,partial,true,true,true,true,true,true),"truncated payload accepted");
         }
-        static_assert(Fast::Oot3d::kPicaPackedFragmentTevProgramOffset==2112);
-        static_assert(Fast::Oot3d::kPicaPackedFragmentUniformSize==6112);
+        static_assert(Fast::Extension::kPicaPackedFragmentTevProgramOffset==2112);
+        static_assert(Fast::Extension::kPicaPackedFragmentUniformSize==6112);
         std::cout<<"V12 uniform codec roundtrip, V9/V10/V11 compatibility, "<<encoded.Bytes.size()<<" truncations passed\n";
         return 0;
     } catch(const std::exception& e) {std::cerr<<e.what()<<'\n';return 1;}

@@ -90,7 +90,7 @@ request is independent of the crash and must target the native baseline as well.
    Test all consumers, especially outline's native-vs-mixed depth and transparent
    coverage, before changing the shader output ABI.
 4. **Avoid shader invalidation on unrelated F1 settings.**
-   `src/fast/oot3d/pica_shader_pipeline_cache.cpp::BeginFrame` clears instrumented
+   `src/fast/extension/pica_shader_pipeline_cache.cpp::BeginFrame` clears instrumented
    variants on every graphics revision. Key variants by all actual shader inputs
    and retain reusable variants under a bounded cache. Toon settings currently
    generate shader constants, so simply removing invalidation is incorrect.

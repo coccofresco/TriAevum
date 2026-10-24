@@ -12,8 +12,8 @@
 #endif
 #include "fast/resource/type/Texture.h"
 #ifdef ENABLE_OOT3D_VULKAN
-#include "fast/oot3d/graphics_settings_runtime.h"
-#include "fast/oot3d/graphics_settings_window.h"
+#include "fast/extension/graphics_settings_runtime.h"
+#include "fast/extension/graphics_settings_window.h"
 #endif
 #include "ship/window/gui/resource/GuiTextureFactory.h"
 #include "ship/resource/File.h"
@@ -56,11 +56,11 @@ namespace {
 // The F1 window shows the running game's title; its ImGui identity (saved
 // layout) and the GUI lookup keep the original name.
 std::string Oot3dGraphicsWindowName() {
-    return Oot3d::GraphicsSettingsWindowTitle() + "###OOT3D Graphics";
+    return Extension::GraphicsSettingsWindowTitle() + "###OOT3D Graphics";
 }
 
 class Oot3dGraphicsSettingsPersistence final
-    : public Oot3d::GraphicsSettingsPersistencePort {
+    : public Extension::GraphicsSettingsPersistencePort {
   public:
     bool LoadRoot(nlohmann::json& root) override {
         auto* context = Ship::Context::GetRawInstance();
@@ -94,7 +94,7 @@ class Oot3dGraphicsSettingsWindow final : public Ship::GuiWindow {
     }
 
     void Draw() override {
-        auto& runtime = Oot3d::GraphicsSettingsRuntime::Instance();
+        auto& runtime = Extension::GraphicsSettingsRuntime::Instance();
         // Closing or collapsing F1 must not strand a deferred slider save.
         if (!IsVisible() || !ImGui::IsAnyItemActive()) runtime.SavePending();
         if (IsVisible()) {
@@ -106,7 +106,7 @@ class Oot3dGraphicsSettingsWindow final : public Ship::GuiWindow {
                 maximum);
         }
         GuiWindow::Draw();
-        if (!IsVisible()) Oot3d::EndGraphicsSettingsPreviews();
+        if (!IsVisible()) Extension::EndGraphicsSettingsPreviews();
     }
 
   protected:
@@ -117,17 +117,17 @@ class Oot3dGraphicsSettingsWindow final : public Ship::GuiWindow {
     }
 
   private:
-    Oot3d::GraphicsSettingsPanel mPanel;
+    Extension::GraphicsSettingsPanel mPanel;
 };
 
 class Oot3dDisplayConfirmationWindow final : public Ship::GuiWindow {
   public:
     Oot3dDisplayConfirmationWindow() : GuiWindow("", false, "Display confirmation") {}
     void Draw() override {
-        SetVisibility(Oot3d::GraphicsSettingsRuntime::Instance().PresentationStatus().Phase ==
-                          Oot3d::PresentationTransactionPhase::AwaitingConfirmation &&
-                      !Oot3d::DisplayConfirmationDeferred());
-        Oot3d::DrawDisplayConfirmation();
+        SetVisibility(Extension::GraphicsSettingsRuntime::Instance().PresentationStatus().Phase ==
+                          Extension::PresentationTransactionPhase::AwaitingConfirmation &&
+                      !Extension::DisplayConfirmationDeferred());
+        Extension::DrawDisplayConfirmation();
     }
   protected:
     void InitElement() override {}
@@ -139,8 +139,8 @@ class Oot3dHostNoticeWindow final : public Ship::GuiWindow {
   public:
     Oot3dHostNoticeWindow() : GuiWindow("", false, "Host notice") {}
     void Draw() override {
-        SetVisibility(Oot3d::HostNoticeActive());
-        Oot3d::DrawHostNotice();
+        SetVisibility(Extension::HostNoticeActive());
+        Extension::DrawHostNotice();
     }
   protected:
     void InitElement() override {}
@@ -235,7 +235,7 @@ void Fast3dGui::Init(GuiWindowInitData windowImpl) {
     mImpl = windowImpl;
 #ifdef ENABLE_OOT3D_VULKAN
     if (mImpl.Backend == WindowBackend::FAST3D_SDL_OOT3D_VULKAN) {
-        Oot3d::InstallGraphicsSettingsPersistencePort(
+        Extension::InstallGraphicsSettingsPersistencePort(
             std::make_shared<Oot3dGraphicsSettingsPersistence>());
         AddGuiWindow(std::make_shared<Oot3dGraphicsSettingsWindow>());
         AddGuiWindow(std::make_shared<Oot3dDisplayConfirmationWindow>());
