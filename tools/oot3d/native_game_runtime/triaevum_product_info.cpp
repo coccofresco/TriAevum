@@ -30,6 +30,11 @@ nlohmann::json TriAevumProductDefaultConfig() {
     // The full Enhanced preset; the picture fills the phone's display instead
     // of a 16:9 pillarbox (the aspect is host-owned, so the preset stays).
     graphics.Aspect = AspectRatioMode::Free;
+    // Water keeps its waves, Fresnel sky (fog colour) reflection, sun specular
+    // and foam in the scene shader; the screen-space water trace (Hi-Z, the
+    // material guide on every scene draw, the composite) cost ~4 ms of an
+    // 18 ms frame on the Adreno 830 for reflections that are mostly sky.
+    graphics.Effects.WaterReflections = false;
 #endif
     return {{"Graphics", SerializeGraphicsSettings(graphics)}};
 }
