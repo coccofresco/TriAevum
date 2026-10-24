@@ -599,6 +599,9 @@ struct InteractiveGrassPass::Impl {
     std::array<DescriptorFrame, 2> DescriptorFrames;
     VkDescriptorSet PreparedDescriptorSet = VK_NULL_HANDLE;
     VkPipelineLayout PipelineLayout = VK_NULL_HANDLE;
+    // grass_root_lighting.comp: the blades' descriptor set, its own push range.
+    VkPipelineLayout RootLightingLayout = VK_NULL_HANDLE;
+    VkPipeline RootLightingPipeline = VK_NULL_HANDLE;
     // Per bound guide layout: canonical, instrumented, instrumented with the
     // GI albedo guide (dynamic rendering only; grass leaves the albedo below
     // it). [0..2] explicit PICA depth, [3..5] the same with rasterized depth,
@@ -620,6 +623,11 @@ struct InteractiveGrassPass::Impl {
     std::array<BufferSlot, 2> CpuRootIndices{};
     std::array<BufferSlot, 2> EnvironmentBuffers{};
     std::array<BufferSlot, 2> GroupBuffers{};
+    // Per visible root: lighting and ambient response; with the CPU selection,
+    // the root ranges of each environment.
+    std::array<BufferSlot, 2> RootLighting{};
+    std::array<BufferSlot, 2> RootRangeBuffers{};
+    std::vector<std::array<uint32_t, 4>> RootRanges;
     std::array<BufferSlot, 2> ShadowVisibleIndices{};
     std::vector<std::array<uint32_t, 2>> DrawGroups;
     BufferSlot IndexBuffer;
@@ -866,7 +874,7 @@ struct InteractiveGrassPass::Impl {
         auto& invocation = frame.Additional[index];
         if (invocation.Set == VK_NULL_HANDLE) {
             const std::array<VkDescriptorPoolSize, 2> sizes{{
-                {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 9}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}}};
+                {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 12}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}}};
             VkDescriptorPoolCreateInfo pool{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
             pool.maxSets = 1; pool.poolSizeCount = static_cast<uint32_t>(sizes.size()); pool.pPoolSizes = sizes.data();
             if (vkCreateDescriptorPool(Device, &pool, nullptr, &invocation.Pool) != VK_SUCCESS)
@@ -1265,6 +1273,7 @@ bool InteractiveGrassPass::Initialize(VkPhysicalDevice physicalDevice,
         VkShaderModule vertex = Compile(shaders, device, vertexSource.c_str(),
                                         Renderer::SpirvStage::Vertex, "interactive_grass.vert");
         std::array<VkShaderModule, 6> fragments{};
+        std::array<VkShaderModule, 3> unguided{};
         bool modulesOwned = false;
         try {
             fragments[0] = Compile(
@@ -1291,17 +1300,29 @@ bool InteractiveGrassPass::Initialize(VkPhysicalDevice physicalDevice,
                 shaders, device, wholeSource.c_str(), Renderer::SpirvStage::Fragment,
                 "interactive_grass_instrumented_whole.frag",
                 "GRASS_AUXILIARY_OUTPUTS", "1");
-            const std::array<VkDescriptorSetLayoutBinding, 10> environmentBindings{{
-                {0U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
-                {1U, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1U, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
-                {2U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+            const std::array<std::pair<std::string, const char*>, 3> unguidedSources{{
+                {BuildGrassFragmentShader(false, false, false), "interactive_grass_instrumented_unguided.frag"},
+                {BuildGrassFragmentShader(true, false, false), "interactive_grass_instrumented_raster_depth_unguided.frag"},
+                {BuildGrassFragmentShader(true, true, false), "interactive_grass_instrumented_whole_unguided.frag"}}};
+            for (size_t group = 0; group < unguided.size(); ++group)
+                unguided[group] = Compile(shaders, device, unguidedSources[group].first.c_str(),
+                                          Renderer::SpirvStage::Fragment, unguidedSources[group].second,
+                                          "GRASS_AUXILIARY_OUTPUTS", "1");
+            constexpr VkShaderStageFlags vertexCompute = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+            const std::array<VkDescriptorSetLayoutBinding, 13> environmentBindings{{
+                {0U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, vertexCompute | VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+                {1U, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1U, vertexCompute, nullptr},
+                {2U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, vertexCompute, nullptr},
                 {3U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
-                {4U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
-                {5U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
-                {6U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
-                {7U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+                {4U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, vertexCompute, nullptr},
+                {5U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, vertexCompute, nullptr},
+                {6U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, vertexCompute, nullptr},
+                {7U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, vertexCompute, nullptr},
                 {8U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
-                {9U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, VK_SHADER_STAGE_VERTEX_BIT, nullptr}}};
+                {9U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, vertexCompute, nullptr},
+                {12U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, vertexCompute, nullptr},
+                {13U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
+                {14U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, VK_SHADER_STAGE_COMPUTE_BIT, nullptr}}};
             VkDescriptorSetLayoutCreateInfo descriptorLayoutInfo{
                 VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
             descriptorLayoutInfo.bindingCount = static_cast<uint32_t>(environmentBindings.size());
@@ -1313,7 +1334,7 @@ bool InteractiveGrassPass::Initialize(VkPhysicalDevice physicalDevice,
                     "cannot create interactive grass descriptor layout");
             }
             const std::array<VkDescriptorPoolSize, 2> poolSizes{{
-                {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 18}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2}}};
+                {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 24}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2}}};
             VkDescriptorPoolCreateInfo poolInfo{
                 VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
             poolInfo.maxSets =
@@ -1360,13 +1381,32 @@ bool InteractiveGrassPass::Initialize(VkPhysicalDevice physicalDevice,
             if (vkCreatePipelineLayout(device, &layoutInfo, nullptr,
                                        &mImpl->PipelineLayout) != VK_SUCCESS)
                 throw std::runtime_error("cannot create interactive grass pipeline layout");
+            const VkPushConstantRange lightingPush{VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GrassPushConstants)};
+            layoutInfo.pPushConstantRanges = &lightingPush;
+            if (vkCreatePipelineLayout(device, &layoutInfo, nullptr,
+                                       &mImpl->RootLightingLayout) != VK_SUCCESS)
+                throw std::runtime_error("cannot create grass root lighting pipeline layout");
+            {
+                const auto lightingSource = BuildGrassRootLightingComputeShader();
+                VkShaderModule lightingModule = Compile(shaders, device, lightingSource.c_str(),
+                                                        Renderer::SpirvStage::Compute, "grass_root_lighting.comp");
+                VkComputePipelineCreateInfo lightingInfo{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
+                lightingInfo.stage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0,
+                                      VK_SHADER_STAGE_COMPUTE_BIT, lightingModule, "main", nullptr};
+                lightingInfo.layout = mImpl->RootLightingLayout;
+                const VkResult created = vkCreateComputePipelines(device, pipelineCache, 1U, &lightingInfo, nullptr,
+                                                                  &mImpl->RootLightingPipeline);
+                vkDestroyShaderModule(device, lightingModule, nullptr);
+                if (created != VK_SUCCESS)
+                    throw std::runtime_error("cannot create grass root lighting pipeline");
+            }
 
             // No vertex input: each root reads its anchor and bend from storage.
             const GrassPipelineTargets targets{canonicalRenderPass, instrumentedRenderPass, sampleCount,
                                                dynamicRendering, depthFormat, pipelineCache};
             modulesOwned = true;
             mImpl->Pipelines.Initialize(device, targets, mImpl->PipelineLayout, vertex, fragments,
-                                        std::tuple_size_v<GrassBladePipelineSet>);
+                                        std::tuple_size_v<GrassBladePipelineSet>, unguided);
             // The distant cards draw into the same targets, created when a
             // frame first enables them; without them the blades keep their
             // configured draw distance.
@@ -1381,6 +1421,8 @@ bool InteractiveGrassPass::Initialize(VkPhysicalDevice physicalDevice,
                         vkDestroyShaderModule(device, fragment, nullptr);
                     }
                 }
+                for (const auto fragment : unguided)
+                    if (fragment != VK_NULL_HANDLE) vkDestroyShaderModule(device, fragment, nullptr);
                 vkDestroyShaderModule(device, vertex, nullptr);
             }
             throw;
@@ -2669,6 +2711,74 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                 write.pBufferInfo = info;
                 vkUpdateDescriptorSets(mImpl->Device, 1, &write, 0, nullptr);
             }
+            // Lighting is constant over a blade: once per visible root, before
+            // the blades read it. With the CPU selection the environment of
+            // each root comes from the batches' root ranges, with the GPU
+            // selection from its draw commands.
+            auto& lightingBuffer = mImpl->RootLighting[slotIndex];
+            const VkDeviceSize rootLightingBytes = VkDeviceSize(std::max(instanceCount, 1U)) * 2U * 4U * sizeof(float);
+            mImpl->EnsureBuffer(lightingBuffer, rootLightingBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+            auto& ranges = mImpl->RootRanges;
+            ranges.clear();
+            const auto addRange = [&ranges](uint32_t first, uint32_t count, uint32_t environment) {
+                if (count == 0U) return;
+                if (!ranges.empty() && ranges.back()[2] == environment && ranges.back()[0] + ranges.back()[1] == first)
+                    ranges.back()[1] += count;
+                else
+                    ranges.push_back({first, count, environment, 0U});
+            };
+            if (!gpuSelection)
+                for (const auto& batch : batches) {
+                    if (!batch.Grouped) addRange(batch.FirstInstance, batch.InstanceCount, batch.Push.Flags[3]);
+                    else for (uint32_t group = 0; group < batch.InstanceCount; ++group) {
+                        const auto& entry = mImpl->DrawGroups[batch.FirstInstance + group];
+                        addRange(entry[0], entry[1], batch.Push.Flags[3]);
+                    }
+                }
+            auto& rangeBuffer = mImpl->RootRangeBuffers[slotIndex];
+            const VkDeviceSize rangeBytes = std::max<size_t>(1U, ranges.size()) * sizeof(std::array<uint32_t, 4>);
+            mImpl->EnsureBuffer(rangeBuffer, rangeBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+            if (!ranges.empty()) std::memcpy(rangeBuffer.Mapped, ranges.data(), ranges.size() * sizeof(ranges[0]));
+            const VkDescriptorBufferInfo lightingInfo{lightingBuffer.Buffer, 0, rootLightingBytes};
+            const VkDescriptorBufferInfo rangeInfo{rangeBuffer.Buffer, 0, rangeBytes};
+            const VkDescriptorBufferInfo controlInfo = gpuSelection
+                ? VkDescriptorBufferInfo{compaction.SelectionControl, 0, VK_WHOLE_SIZE} : rangeInfo;
+            const std::array<std::pair<uint32_t, const VkDescriptorBufferInfo*>, 3> lightingBuffers{{
+                {12U, &lightingInfo}, {13U, &rangeInfo}, {14U, &controlInfo}}};
+            for (const auto& [binding, info] : lightingBuffers) {
+                VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+                write.dstSet = descriptorSet; write.dstBinding = binding;
+                write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; write.descriptorCount = 1;
+                write.pBufferInfo = info;
+                vkUpdateDescriptorSets(mImpl->Device, 1, &write, 0, nullptr);
+            }
+            if (instanceCount != 0U) {
+                // The inputs (selection, compaction, shadow grid, surface
+                // lighting) are visible to the compute; an earlier invocation's
+                // blades have read the buffer before it is rewritten.
+                const VkMemoryBarrier inputs{VK_STRUCTURE_TYPE_MEMORY_BARRIER, nullptr,
+                    VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+                        VK_ACCESS_TRANSFER_WRITE_BIT,
+                    VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT};
+                vkCmdPipelineBarrier(commandBuffer,
+                    VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
+                        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1U, &inputs, 0U, nullptr, 0U, nullptr);
+                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, mImpl->RootLightingPipeline);
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, mImpl->RootLightingLayout,
+                                        0U, 1U, &descriptorSet, 0U, nullptr);
+                GrassPushConstants lightingPush{};
+                lightingPush.Flags = {instanceCount, gpuSelection ? 1U : 0U,
+                    static_cast<uint32_t>(gpuSelection ? preparedPlacements.size() : ranges.size()),
+                    gpuSelection ? static_cast<uint32_t>(gpuSlots.size()) : 0U};
+                vkCmdPushConstants(commandBuffer, mImpl->RootLightingLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0U,
+                                   sizeof(lightingPush), &lightingPush);
+                vkCmdDispatch(commandBuffer, (instanceCount + 63U) / 64U, 1U, 1U);
+                const VkMemoryBarrier lit{VK_STRUCTURE_TYPE_MEMORY_BARRIER, nullptr,
+                    VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT};
+                vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                    VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, 0, 1U, &lit, 0U, nullptr, 0U, nullptr);
+            }
         }
         if (drawCards) {
             GrassStageTimer cardTimer(GrassStage::Cards);
@@ -2927,6 +3037,13 @@ void InteractiveGrassPass::Shutdown() {
             mImpl->DestroyBuffer(buffer);
         for (auto& buffer : mImpl->GroupBuffers)
             mImpl->DestroyBuffer(buffer);
+        for (auto* slots : {&mImpl->RootLighting, &mImpl->RootRangeBuffers})
+            for (auto& buffer : *slots)
+                mImpl->DestroyBuffer(buffer);
+        if (mImpl->RootLightingPipeline != VK_NULL_HANDLE)
+            vkDestroyPipeline(mImpl->Device, mImpl->RootLightingPipeline, nullptr);
+        if (mImpl->RootLightingLayout != VK_NULL_HANDLE)
+            vkDestroyPipelineLayout(mImpl->Device, mImpl->RootLightingLayout, nullptr);
         for (auto& buffer : mImpl->ShadowVisibleIndices)
             mImpl->DestroyBuffer(buffer);
         mImpl->Pipelines.Destroy();
@@ -2945,6 +3062,8 @@ void InteractiveGrassPass::Shutdown() {
                 mImpl->Device, mImpl->DescriptorSetLayout, nullptr);
     }
     mImpl->PipelineLayout = VK_NULL_HANDLE;
+    mImpl->RootLightingPipeline = VK_NULL_HANDLE;
+    mImpl->RootLightingLayout = VK_NULL_HANDLE;
     mImpl->DescriptorPool = VK_NULL_HANDLE;
     mImpl->DescriptorSetLayout = VK_NULL_HANDLE;
     mImpl->DescriptorSets = {};

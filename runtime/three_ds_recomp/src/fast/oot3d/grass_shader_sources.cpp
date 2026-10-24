@@ -383,8 +383,12 @@ void grass_write_fragment(
     resolved_color.rgb = min(resolved_color.rgb, lit_ceiling);
 #if GRASS_AUXILIARY_OUTPUTS
     out_normal_guide = normal_guide;
+#ifndef GRASS_NO_GEOMETRY_GUIDE
+    // Only where the layout binds the geometry guide (the face normal needs
+    // the derivatives of the whole quad).
     out_geometry_guide = uvec4(0u, pica_geometry_encode_normal(pica_geometry_face_normal(
         view_direction, face_dx, face_dy)), 2u, 0u);
+#endif
     // With the placement's previous frame the grass writes exact motion and
     // keeps its temporal history. Without it, the motion pass invalidates
     // motion and the reactive mask rejects the history,
@@ -469,6 +473,37 @@ std::string GrassCardConstants() {
 }
 } // namespace
 
+// A blade root's lighting: the lights, the coarse shadow grid with the actor
+// patches and the native surface lighting. Constant over a blade, so
+// grass_root_lighting.comp evaluates it once per visible root and every blade
+// vertex reads the result. Needs the environment, the root anchors and the
+// vertex-side shading library.
+constexpr char kGrassRootLightingShader[] = R"glsl(
+struct GrassShadowReference { uint first; uint second; float weight; };
+layout(std430,set=0,binding=5) readonly buffer GrassShadowReferences { GrassShadowReference values[]; } shadow_references;
+layout(std430,set=0,binding=6) readonly buffer GrassVisibleRoots { uint values[]; } visible_roots;
+void grass_root_lighting(uint environment_index, uint root_index, GrassRoot root,
+                         out vec3 lighting, out vec3 ambient_response) {
+    vec3 world_normal = normalize(root.world_normal.xyz);
+    evaluate_shading(
+        environment_index, world_normal,
+        lighting, ambient_response);
+    uvec4 source_light = environment_state.records[environment_index].native_lighting;
+    if (source_light.y != 0u) {
+        float shadow_visibility = 1.0;
+        if ((source_light.y & 2u) != 0u) {
+            GrassShadowReference reference = shadow_references.values[visible_roots.values[root_index]];
+            GrassShadowVisibility first = shadow_visibility_grid.values[reference.first];
+            shadow_visibility = mix(first.visibility,
+                shadow_visibility_grid.values[reference.second].visibility, reference.weight);
+            shadow_visibility = grass_local_shadow(
+                shadow_visibility, root.base_height.xyz, world_normal, first.patches);
+        }
+        grass_apply_native_lighting(environment_index, root.surface_reference, shadow_visibility, lighting, ambient_response);
+    }
+}
+)glsl";
+
 std::string BuildGrassVertexShader() {
     return
             std::string("#version 450\n") + std::string(kToonSurfaceResponseShader) + std::string(kGrassBladeShapeShader) +
@@ -480,9 +515,8 @@ std::string BuildGrassVertexShader() {
 layout(std430,set=0,binding=2) readonly buffer GrassRootAnchors { uvec4 values[]; } root_anchors;
 layout(std430,set=0,binding=9) readonly buffer GrassRootAnchorIndices { uint values[]; } root_anchor_indices;
 layout(std430,set=0,binding=3) readonly buffer GrassPreparedGroups { uvec2 entries[]; } prepared_groups;
-struct GrassShadowReference { uint first; uint second; float weight; };
-layout(std430,set=0,binding=5) readonly buffer GrassShadowReferences { GrassShadowReference values[]; } shadow_references;
-layout(std430,set=0,binding=6) readonly buffer GrassVisibleRoots { uint values[]; } visible_roots;
+// Per visible root: its lighting and ambient response (grass_root_lighting.comp).
+layout(std430,set=0,binding=12) readonly buffer GrassRootLighting { vec4 values[]; } root_lighting;
 // Per root, half precision: the interaction bend (X) and the bend the
 // previous frame drew (Y).
 layout(std430,set=0,binding=8) readonly buffer GrassRootBends { uvec2 values[]; } root_bends;
@@ -649,24 +683,10 @@ void main() {
             previous_position, motion_state.xy);
     }
     vec3 world_normal = normalize(in_world_normal.xyz);
-    vec3 lighting;
-    vec3 ambient_response;
-    evaluate_shading(
-        grass.flags.w, world_normal,
-        lighting, ambient_response);
+    // Lighting is constant over a blade: evaluated once per root.
+    vec3 lighting = root_lighting.values[root_index * 2u].xyz;
+    vec3 ambient_response = root_lighting.values[root_index * 2u + 1u].xyz;
     uvec4 source_light = environment_state.records[grass.flags.w].native_lighting;
-    if (source_light.y != 0u) {
-        float shadow_visibility = 1.0;
-        if ((source_light.y & 2u) != 0u) {
-            GrassShadowReference reference = shadow_references.values[visible_roots.values[root_index]];
-            GrassShadowVisibility first = shadow_visibility_grid.values[reference.first];
-            shadow_visibility = mix(first.visibility,
-                shadow_visibility_grid.values[reference.second].visibility, reference.weight);
-            shadow_visibility = grass_local_shadow(
-                shadow_visibility, in_base_height.xyz, world_normal, first.patches);
-        }
-        grass_apply_native_lighting(grass.flags.w, in_surface_reference, shadow_visibility, lighting, ambient_response);
-    }
     blade_color = vec4(
         evaluate_blade_color(
             grass.flags.w, height_factor, lighting, in_surface_color),
@@ -695,10 +715,11 @@ void main() {
 )glsl";
 }
 
-std::string BuildGrassFragmentShader(bool rasterDepth, bool wholeBlades) {
+std::string BuildGrassFragmentShader(bool rasterDepth, bool wholeBlades, bool geometryGuide) {
     return std::string("#version 450\n") +
             (rasterDepth ? "#define GRASS_RASTER_DEPTH 1\n" : "") +
             (wholeBlades ? "#define GRASS_WHOLE_BLADES 1\n" : "") +
+            (geometryGuide ? "" : "#define GRASS_NO_GEOMETRY_GUIDE 1\n") +
             std::string(Renderer3ds::PicaGeometryGuideShaderLibrary()) +
             std::string(kToonSurfaceResponseShader) +
             std::string(kGrassDistantTuftShader) + std::string(kGrassEnvironmentShader) +
@@ -719,8 +740,10 @@ void main() {
     vec3 blade_face_dx = vec3(0.0), blade_face_dy = vec3(0.0);
     vec4 current_clip = vec4(0.0), previous_clip = vec4(0.0);
 #if GRASS_AUXILIARY_OUTPUTS
+#ifndef GRASS_NO_GEOMETRY_GUIDE
     // Before any discard: derivatives need the whole quad.
     blade_face_dx = dFdx(blade_view_direction); blade_face_dy = dFdy(blade_view_direction);
+#endif
     current_clip = blade_current_clip; previous_clip = blade_previous_clip;
 #endif
 #ifndef GRASS_WHOLE_BLADES
@@ -1026,6 +1049,56 @@ void main() {
 }
 )glsl";
 }
+std::string BuildGrassRootLightingComputeShader() {
+    return std::string("#version 450\n") + std::string(kToonSurfaceResponseShader) +
+            std::string(Renderer3ds::kPicaSurfaceLightingRecomposeShader) +
+            std::string(kGrassShadowRefinementShader) + std::string(kGrassRootAnchorShader) +
+            std::string(kGrassEnvironmentShader) + std::string(kGrassShadingShader) +
+            std::string(kGrassRootLightingShader) + R"glsl(
+layout(local_size_x=64, local_size_y=1, local_size_z=1) in;
+layout(std430,set=0,binding=2) readonly buffer GrassRootAnchors { uvec4 values[]; } root_anchors;
+layout(std430,set=0,binding=9) readonly buffer GrassRootAnchorIndices { uint values[]; } root_anchor_indices;
+layout(std430,set=0,binding=12) writeonly buffer GrassRootLighting { vec4 values[]; } root_lighting;
+// The environment of each root. CPU selection (flags.y 0): flags.z ranges
+// {first root, root count, environment}. GPU selection (flags.y 1): the draw
+// commands of flags.z sources x flags.w slots (source s, slot k at word
+// 4 + (s * 8 + k) * 5, environment s) and the admitted roots at word 3.
+layout(std430,set=0,binding=13) readonly buffer GrassRootRanges { uvec4 values[]; } root_ranges;
+layout(std430,set=0,binding=14) readonly buffer GrassSelectionControl { uint values[]; } selection_control;
+void main() {
+    uint root_index = gl_GlobalInvocationID.x;
+    if (root_index >= grass.flags.x) return;
+    uint environment_index = 0xffffffffu;
+    if (grass.flags.y == 0u) {
+        for (uint i = 0u; i < grass.flags.z && environment_index == 0xffffffffu; ++i) {
+            uvec4 range = root_ranges.values[i];
+            if (root_index >= range.x && root_index - range.x < range.y) environment_index = range.z;
+        }
+    } else if (root_index < selection_control.values[3]) {
+        for (uint s = 0u; s < grass.flags.z && environment_index == 0xffffffffu; ++s) {
+            for (uint k = 0u; k < grass.flags.w; ++k) {
+                uint command = 4u + (s * 8u + k) * 5u;
+                uint first = selection_control.values[command + 4u];
+                if (root_index >= first && root_index - first < selection_control.values[command + 1u]) {
+                    environment_index = s;
+                    break;
+                }
+            }
+        }
+    }
+    if (environment_index == 0xffffffffu) return;
+    uint first = root_anchor_indices.values[root_index] * 3u;
+    GrassRoot root = grass_decode_anchor(root_anchors.values[first], root_anchors.values[first + 1u],
+                                         root_anchors.values[first + 2u]);
+    vec3 lighting;
+    vec3 ambient_response;
+    grass_root_lighting(environment_index, root_index, root, lighting, ambient_response);
+    root_lighting.values[root_index * 2u] = vec4(lighting, 0.0);
+    root_lighting.values[root_index * 2u + 1u] = vec4(ambient_response, 0.0);
+}
+)glsl";
+}
+
 std::string BuildGrassCompactionComputeShader() {
     return std::string("#version 450\n#define GRASS_ANCHOR_WORDS ") +
         std::to_string(sizeof(GrassWorldAnchor) / sizeof(uint32_t)) + "u\n" + R"glsl(

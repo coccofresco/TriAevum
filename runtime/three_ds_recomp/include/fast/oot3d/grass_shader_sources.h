@@ -3,12 +3,16 @@
 
 namespace Fast::Oot3d {
 std::string BuildGrassVertexShader();
+// Once per visible root, before the blades: the lighting every blade vertex reads.
+std::string BuildGrassRootLightingComputeShader();
 // rasterDepth: the blades' PICA depth equals the rasterized depth, so the
 // program leaves depth to fixed function and keeps early depth testing.
 // wholeBlades (with rasterDepth): no LOD stipple and no tuft cutout, hence no
 // discard, for the whole pass of a split batch (kGrassWholePassFlag), whose
 // hidden fragments the early depth test then rejects.
-std::string BuildGrassFragmentShader(bool rasterDepth = false, bool wholeBlades = false);
+// geometryGuide false: an instrumented program for layouts that leave the
+// geometry guide unbound (no face normal, no derivatives).
+std::string BuildGrassFragmentShader(bool rasterDepth = false, bool wholeBlades = false, bool geometryGuide = true);
 // The distant grass cards (grass_card_lod.h): the same environment, lighting,
 // shadow grid, toon, fog and guides as the blades, one camera-facing quad per
 // card textured by the card atlas (grass_card_atlas.h). The fragment writes

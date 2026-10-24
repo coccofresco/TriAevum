@@ -140,7 +140,7 @@ TEST(SpirvPack, EmbeddedFamiliesHoldTheirModules) {
     ExpectSpirvModules(Fast::Oot3d::ToonFragmentArtifacts(), 348U); // build_fragment_artifacts --toon
     ExpectSpirvModules(Fast::Oot3d::UberFragmentArtifacts(), 36U);
     ExpectSpirvModules(Fast::Oot3d::CasterFragmentArtifacts(), 6U);
-    ExpectSpirvModules(BuiltinPassArtifacts(), 100U); // 70 + 9 diffuse GI pass kernels + its OOT3D adapter (M5), 2 grass raster-depth fragments, 3 contact shadow lengths, 2 upscaler orientation turns, 4 GPU grass selection passes, the room shadow shell vertex shader, 5 grass card programs (vertex, 2 explicit-depth and 2 conservative-depth fragments), 2 whole-blade grass fragments without discard, the reflection upsample
+    ExpectSpirvModules(BuiltinPassArtifacts(), 104U); // 70 + 9 diffuse GI pass kernels + its OOT3D adapter (M5), 2 grass raster-depth fragments, 3 contact shadow lengths, 2 upscaler orientation turns, 4 GPU grass selection passes, the room shadow shell vertex shader, 5 grass card programs (vertex, 2 explicit-depth and 2 conservative-depth fragments), 2 whole-blade grass fragments without discard, the reflection upsample, the grass root lighting compute, 3 grass fragments without the geometry guide
 #ifdef ENABLE_OOT3D_IMMERSE
     // The iMMERSE module hands its pack to the host, which reads it.
     const auto mxaoEntries = ReadSpirvPack(Fast::Immerse::MxaoPassPack());

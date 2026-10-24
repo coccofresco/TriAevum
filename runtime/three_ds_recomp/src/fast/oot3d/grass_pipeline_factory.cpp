@@ -151,13 +151,17 @@ GrassPipelineVariants::~GrassPipelineVariants() { Destroy(); }
 
 void GrassPipelineVariants::Initialize(VkDevice device, const GrassPipelineTargets& targets,
                                        VkPipelineLayout layout, VkShaderModule vertex,
-                                       std::span<const VkShaderModule> fragments, size_t pipelineCount) {
+                                       std::span<const VkShaderModule> fragments, size_t pipelineCount,
+                                       std::span<const VkShaderModule> unguided) {
     Destroy();
     mDevice = device;
     mTargets = targets;
     mLayout = layout;
     mVertex = vertex;
     mFragments.assign(fragments.begin(), fragments.end());
+    mUnguided.assign(unguided.begin(), unguided.end());
+    if (!mUnguided.empty() && mUnguided.size() * 2U != mFragments.size())
+        throw std::runtime_error("interactive grass unguided programs do not match their groups");
     mPipelineCount = pipelineCount;
     (void)For(PicaAttachmentRequirements{kAllPicaAuxiliaryOutputs});
 }
@@ -170,8 +174,13 @@ std::span<const VkPipeline> GrassPipelineVariants::For(const PicaAttachmentRequi
     auto [found, inserted] = mSets.try_emplace(instrumented.Key());
     if (inserted) {
         found->second.assign(mPipelineCount, VK_NULL_HANDLE);
+        // A layout without the geometry guide takes the programs that do not
+        // derive it; any other runs the full instrumented program.
+        std::vector<VkShaderModule> fragments = mFragments;
+        if (!mUnguided.empty() && !instrumented.Binds(PicaColorAttachment::OutlineGeometryGuide))
+            for (size_t group = 0; group < mUnguided.size(); ++group) fragments[group * 2U + 1U] = mUnguided[group];
         try {
-            CreateGrassPipelineSet(mDevice, mTargets, mLayout, mVertex, mFragments, found->second, instrumented);
+            CreateGrassPipelineSet(mDevice, mTargets, mLayout, mVertex, fragments, found->second, instrumented);
         } catch (...) {
             mSets.erase(found);
             throw;
@@ -189,9 +198,11 @@ bool GrassPipelineVariants::Available() const noexcept {
 void GrassPipelineVariants::Destroy() noexcept {
     for (auto& [key, pipelines] : mSets) DestroyGrassPipelineSet(mDevice, pipelines);
     mSets.clear();
-    for (const auto fragment : mFragments)
-        if (fragment != VK_NULL_HANDLE) vkDestroyShaderModule(mDevice, fragment, nullptr);
+    for (const auto* modules : {&mFragments, &mUnguided})
+        for (const auto fragment : *modules)
+            if (fragment != VK_NULL_HANDLE) vkDestroyShaderModule(mDevice, fragment, nullptr);
     mFragments.clear();
+    mUnguided.clear();
     if (mVertex != VK_NULL_HANDLE) vkDestroyShaderModule(mDevice, mVertex, nullptr);
     mVertex = VK_NULL_HANDLE;
     mDevice = VK_NULL_HANDLE;

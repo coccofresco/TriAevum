@@ -65,9 +65,12 @@ class GrassPipelineVariants final {
     GrassPipelineVariants(const GrassPipelineVariants&) = delete;
     GrassPipelineVariants& operator=(const GrassPipelineVariants&) = delete;
 
-    // Takes the modules (also on failure). Throws std::runtime_error.
+    // Takes the modules (also on failure). `unguided`: optional instrumented
+    // programs, one per group, for layouts without the geometry guide.
+    // Throws std::runtime_error.
     void Initialize(VkDevice device, const GrassPipelineTargets& targets, VkPipelineLayout layout,
-                    VkShaderModule vertex, std::span<const VkShaderModule> fragments, size_t pipelineCount);
+                    VkShaderModule vertex, std::span<const VkShaderModule> fragments, size_t pipelineCount,
+                    std::span<const VkShaderModule> unguided = {});
     // The set for a frame's attachments, indexed like CreateGrassPipelineSet.
     // Throws std::runtime_error when its pipelines cannot be created.
     [[nodiscard]] std::span<const VkPipeline> For(const PicaAttachmentRequirements& attachments);
@@ -81,6 +84,7 @@ class GrassPipelineVariants final {
     VkPipelineLayout mLayout = VK_NULL_HANDLE;
     VkShaderModule mVertex = VK_NULL_HANDLE;
     std::vector<VkShaderModule> mFragments;
+    std::vector<VkShaderModule> mUnguided;
     size_t mPipelineCount = 0;
     std::unordered_map<uint8_t, std::vector<VkPipeline>> mSets;
 };
