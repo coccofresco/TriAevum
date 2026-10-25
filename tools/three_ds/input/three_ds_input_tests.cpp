@@ -318,6 +318,28 @@ void TestTouchCameraTracker() {
     menuFinger[0].X = 50.0F;
     Require(!tracker.Update(true, menuFinger).Active, "a menu touch turns into a drag");
     Require(!tracker.Update(true, {}).Active, "lifted fingers drag");
+    // With a slop a finger moves the camera only past it; two quick taps on
+    // the same spot are a double tap, a slow or moved one is not.
+    TouchCameraTracker taps;
+    std::vector<SurfaceFinger> tap{{1, 9, 200.0F, 200.0F}};
+    Require(!taps.Update(true, tap, 0.0, 10.0F).Active, "a landing finger moves the camera");
+    tap[0].X = 205.0F;
+    Require(!taps.Update(true, tap, 0.05, 10.0F).Active, "a finger within the slop moves the camera");
+    Require(!taps.Update(true, {}, 0.1, 10.0F).DoubleTap, "one tap is a double tap");
+    tap = {{1, 10, 203.0F, 198.0F}};
+    (void)taps.Update(true, tap, 0.25, 10.0F);
+    Require(taps.Update(true, {}, 0.3, 10.0F).DoubleTap, "two quick taps are not a double tap");
+    tap = {{1, 11, 200.0F, 200.0F}};
+    (void)taps.Update(true, tap, 1.0, 10.0F);
+    (void)taps.Update(true, {}, 1.05, 10.0F);
+    tap = {{1, 12, 200.0F, 200.0F}};
+    (void)taps.Update(true, tap, 1.6, 10.0F);
+    Require(!taps.Update(true, {}, 1.65, 10.0F).DoubleTap, "two slow taps are a double tap");
+    tap = {{1, 13, 200.0F, 200.0F}};
+    (void)taps.Update(true, tap, 1.7, 10.0F);
+    tap[0].X = 240.0F;
+    Require(taps.Update(true, tap, 1.72, 10.0F).Active, "a finger past the slop does not drag");
+    Require(!taps.Update(true, {}, 1.75, 10.0F).DoubleTap, "a drag counts as a tap");
 }
 
 void TestTouchAnchors() {

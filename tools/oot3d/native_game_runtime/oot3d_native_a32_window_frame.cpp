@@ -534,6 +534,11 @@ bool NativeA32WindowSession::RunFrame() {
                          presentationElapsedSeconds,
                          guestRefreshesDue != 0U,
                          nativeControlPollingState);
+  // A double tap on the game surface hands the view back to the game's camera.
+  if (nativeControlPollingState.TouchCameraReleaseRequested) {
+    nativeControlPollingState.TouchCameraReleaseRequested = false;
+    nativeCandidateDispatch.TopScreenCamera.Camera.Active = false;
+  }
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
   // A dev lab "menu" command replaces the host controls with its presses.
   inGameMenu.Update(devLabMenuDriving ? devLabMenuInput : nativeControlPollingState.Menu, imGuiOwnsInput,
@@ -679,7 +684,11 @@ bool NativeA32WindowSession::RunFrame() {
     Oot3dNativeGame::TopScreenTouchContext touchContext;
     touchContext.Content = touchControls.Content;
     touchContext.HudAlpha = touchControls.HudAlpha;
-    touchContext.Menu = nativeFrontendTouchEnabled || inGameMenu.IsOpen();
+    touchContext.HudExpected = activeTopScreenConfig.RenderHud;
+    if (!Oot3dNativeGame::ReadTopScreenTouchSituation(process.Memory(),
+                                                      nativeFrontendTouchEnabled || inGameMenu.IsOpen(),
+                                                      &touchContext.Situation))
+      touchContext.Situation = Oot3dNativeGame::TopScreenTouchSituation::Gameplay;
     touchContext.Active = physicalInputFrame.Hid.Buttons != 0U || physicalInputFrame.Hid.CirclePadX != 0 ||
                           physicalInputFrame.Hid.CirclePadY != 0 || physicalInputFrame.Hid.TouchPressed ||
                           nativeControlPollingState.GameplayTouchLookOwned;

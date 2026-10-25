@@ -2,6 +2,7 @@
 #include "oot3d_native_a32_window_shared.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 
 namespace Oot3dA32Window {
@@ -216,8 +217,13 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
                                    topScreenFreeCameraEnabled &&
                                    ThreeDsRecomp::Input::AnyTouchAnchored(
                                        ThreeDsRecomp::Input::OverlayTouchAnchors().Snapshot());
-  const auto touchCamera = pollingState.TouchCamera.Update(touchCameraGameplay, fingers);
+  const double touchSeconds =
+      std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+  // A drag starts past 2% of the window's short side; a tap stays within it.
+  const float touchSlop = 0.02F * std::min(windowWidth, windowHeight);
+  const auto touchCamera = pollingState.TouchCamera.Update(touchCameraGameplay, fingers, touchSeconds, touchSlop);
   pollingState.GameplayTouchLookOwned = touchCamera.Active;
+  pollingState.TouchCameraReleaseRequested |= touchCamera.DoubleTap;
   // SDL relative motion is an accumulator. Drain it even while ImGui owns the
   // pointer so menu movement and capture warps cannot leak into gameplay.
   const auto mouseDelta = window.GetMouseDelta();

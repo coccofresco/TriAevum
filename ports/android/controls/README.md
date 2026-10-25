@@ -67,11 +67,14 @@ item, counts, the A action word, the cross icons) draws inside it when there
 is any, and the letter eases to a corner badge meanwhile; the HUD's own rings,
 cross and letters are not drawn, so a control never switches between two
 looks. Those HUD parts leave the HUD and the minimap takes the top-right
-corner. Each control's visibility follows the situation: in gameplay the
-item buttons without an item step back; while the game fades its HUD (scenes,
-text) the item controls (X, Y, ZL, ZR, D-pad) fade with it; in native menus,
-where the page takes touches, they show at 60%; after 8 s without input every
-control dims to half. TriAevum seeds its own default layout (version 4 in
+corner. Only the controls that do something show: in gameplay as much as the
+game shows its HUD buttons (none while it hides them), the item buttons
+without an item stepping back; in a dialogue only A, drawn as a
+right-pointing "next" triangle; in a choice that triangle with the pad and the
+D-pad; in a cutscene without text none; in the title demo A and START; in
+native menus, where the page takes touches, the item controls at 60%; after
+8 s without input every control dims to half. A double tap on the game
+surface hands the view back from the free camera (a drag takes it). TriAevum seeds its own default layout (version 4 in
 `TouchControls.kt`; Reset layout restores it): pad and D-pad on the left, face
 buttons on the right, L/ZL and R/ZR stacked in the top corners, mostly in the
 bars beside a 5:3 picture. The overlay reports each control's bounds and draws its own art only

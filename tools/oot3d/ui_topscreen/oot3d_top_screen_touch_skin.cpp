@@ -20,10 +20,12 @@ constexpr float kBadgeSeconds = 0.12F;
 constexpr float kShowSeconds = 0.15F;
 constexpr float kHideSeconds = 0.4F;
 constexpr double kIdleSeconds = 8.0;
+// A restricting situation (dialogue, choice, cutscene, title demo) applies
+// once it has held this long.
+constexpr double kSituationSettleSeconds = 0.3;
 constexpr float kIdleVisibility = 0.5F;
-// The item controls' floor while the HUD is faded, their level in a native
-// menu (the page itself takes touches there), and an empty slot's share.
-constexpr float kFadedVisibility = 0.3F;
+// The item controls' level in a native menu (the page itself takes touches
+// there), and an empty slot's share.
 constexpr float kMenuItemVisibility = 0.6F;
 constexpr float kEmptySlotVisibility = 0.55F;
 // A pill in a square anchor: as wide as the anchor, this much less tall.
@@ -190,15 +192,40 @@ bool IsSlotControl(TouchAnchor anchor) noexcept {
          anchor == TouchAnchor::Zr || anchor == TouchAnchor::B;
 }
 
-float TargetVisibility(TouchAnchor control, const TopScreenTouchContext &context, bool idle) noexcept {
+// Only the controls that do something in the situation show.
+float TargetVisibility(TouchAnchor control, TopScreenTouchSituation situation, const TopScreenTouchContext &context,
+                       bool idle) noexcept {
   float target = 1.0F;
-  if (context.Menu && IsItemControl(control)) target = kMenuItemVisibility;
-  if (!context.Menu) {
-    if (IsItemControl(control)) target = std::max(kFadedVisibility, std::clamp(context.HudAlpha, 0.0F, 1.0F));
-    if (context.HudAlpha > 0.5F && IsSlotControl(control) && !context.Content[static_cast<std::size_t>(control)])
+  switch (situation) {
+  case TopScreenTouchSituation::Menu:
+    target = IsItemControl(control) ? kMenuItemVisibility : 1.0F;
+    break;
+  case TopScreenTouchSituation::TitleDemo:
+    target = control == TouchAnchor::A || control == TouchAnchor::Start ? 1.0F : 0.0F;
+    break;
+  case TopScreenTouchSituation::Dialogue:
+    target = control == TouchAnchor::A ? 1.0F : 0.0F;
+    break;
+  case TopScreenTouchSituation::Choice:
+    target = control == TouchAnchor::A || control == TouchAnchor::CirclePad || control == TouchAnchor::Dpad ? 1.0F
+                                                                                                            : 0.0F;
+    break;
+  case TopScreenTouchSituation::Cutscene:
+    target = 0.0F;
+    break;
+  case TopScreenTouchSituation::Gameplay:
+    // As much as the game shows its HUD buttons.
+    target = context.HudExpected ? std::clamp(context.HudAlpha, 0.0F, 1.0F) : 1.0F;
+    if (target > 0.5F && IsSlotControl(control) && !context.Content[static_cast<std::size_t>(control)])
       target *= kEmptySlotVisibility;
+    break;
   }
   return idle ? target * kIdleVisibility : target;
+}
+
+bool Restricts(TopScreenTouchSituation situation) noexcept {
+  return situation == TopScreenTouchSituation::TitleDemo || situation == TopScreenTouchSituation::Dialogue ||
+         situation == TopScreenTouchSituation::Choice || situation == TopScreenTouchSituation::Cutscene;
 }
 
 void AppendDisc(const oot3d::ui::UiRect &square, const Colors &colors, bool held, std::uint32_t fillLayer,
@@ -302,10 +329,20 @@ void AdvanceTopScreenTouchSkin(TopScreenTouchSkinState &state, const TopScreenTo
   const float elapsed = seconds > 0.0 ? static_cast<float>(seconds) : 0.0F;
   state.IdleSeconds = context.Active ? 0.0 : state.IdleSeconds + elapsed;
   const bool idle = state.IdleSeconds > kIdleSeconds;
+  // A situation that opens up the controls applies at once; a restricting
+  // one once it has held (a door is not a cutscene to hide the controls for).
+  if (context.Situation != state.PendingSituation) {
+    state.PendingSituation = context.Situation;
+    state.PendingSeconds = 0.0;
+  } else {
+    state.PendingSeconds += elapsed;
+  }
+  if (!state.Started || !Restricts(context.Situation) || state.PendingSeconds >= kSituationSettleSeconds)
+    state.Situation = context.Situation;
   for (std::size_t index = 0; index < state.Badge.size(); ++index) {
     const float badgeStep = elapsed > 0.0F ? elapsed / kBadgeSeconds : 1.0F;
     state.Badge[index] = Approach(state.Badge[index], context.Content[index] ? 1.0F : 0.0F, badgeStep, badgeStep);
-    const float target = TargetVisibility(static_cast<TouchAnchor>(index), context, idle);
+    const float target = TargetVisibility(static_cast<TouchAnchor>(index), state.Situation, context, idle);
     state.Visibility[index] =
         state.Started ? Approach(state.Visibility[index], target, elapsed / kShowSeconds, elapsed / kHideSeconds)
                       : target;
@@ -333,11 +370,14 @@ void AppendTopScreenTouchSkin(const TopScreenTouchSkinInput &input, const TopScr
       continue;
     }
     const bool held = (input.HeldButtons & ButtonOf(control)) != 0U;
-    const float badge = Ease(state.Badge[index]);
+    // In a text, A is the text's "next": a right-pointing triangle.
+    const bool next = control == TouchAnchor::A && (state.Situation == TopScreenTouchSituation::Dialogue ||
+                                                    state.Situation == TopScreenTouchSituation::Choice);
+    const float badge = next ? 0.0F : Ease(state.Badge[index]);
     const auto shape = ResolveTopScreenTouchControlShape(control, anchor, input.CanvasWidth);
     const auto &body = shape.Rect;
     const float centerY = body.y + body.height * 0.5F;
-    const auto letter = LetterOf(control);
+    const auto letter = next ? TouchSkinShape::GlyphStart : LetterOf(control);
     if (shape.Pill) {
       // The letter moves to the left cap while the content takes the right end.
       AppendPill(TouchSkinShape::PillSoft, Shadowed(body, 1.1F, body.height * 0.06F), colors.Shadow, kShadowLayer,

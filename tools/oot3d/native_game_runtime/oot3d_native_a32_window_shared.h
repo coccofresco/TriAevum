@@ -723,6 +723,9 @@ struct NativeControlPollingState {
   // A finger dragging on the game surface owns the camera like a mouse look.
   bool GameplayTouchLookOwned = false;
   ThreeDsRecomp::Input::TouchCameraTracker TouchCamera;
+  // A double tap on the game surface in gameplay: the free camera hands the
+  // view back to the game's camera.
+  bool TouchCameraReleaseRequested = false;
   uint64_t MouseEligiblePolls = 0;
   uint64_t MouseReleasedPolls = 0;
   uint64_t MouseHostUiPolls = 0;

@@ -599,16 +599,34 @@ TopScreenTouchControlShape ResolveTopScreenTouchControlShape(ThreeDsRecomp::Inpu
 // While the HUD gives a control content, the letter moves to a corner badge so
 // the content is readable; it eases back when the content goes.
 //
-// Each control's visibility follows the situation: in gameplay every control
-// shows and the item buttons without an item (X, Y, ZL, ZR, B) step back; while
-// the game fades its HUD (scenes, text, transitions) the item controls (X, Y,
-// ZL, ZR, the D-pad) fade with it to a floor, A, B, L, R, START and the pad
-// staying; in native menus and the HOME menu, where the page takes touches,
-// the item controls show at 60% and the rest fully; after 8 s without input
-// every control dims to half until the next input.
+// Each control's visibility follows the situation (TopScreenTouchSituation):
+// only the controls that do something show. In gameplay the controls show as
+// much as the game shows its HUD buttons (none while it hides them), the item
+// buttons without an item (X, Y, ZL, ZR, B) stepping back; in a dialogue only
+// A shows, drawn as a right-pointing triangle (the text's "next"), in a
+// choice that triangle with the pad and the D-pad; a cutscene without text
+// shows none; the title demo shows A and START; in native menus and the HOME
+// menu, where the page takes touches, the item controls show at 60% and the
+// rest fully. A restricting situation applies once it has held 0.3 s, so a
+// door or a short transition does not flash the controls. After 8 s without
+// input every control dims to half until the next input.
+enum class TopScreenTouchSituation : std::uint8_t { Gameplay, Menu, TitleDemo, Dialogue, Choice, Cutscene };
+
+// The situation from the game: SaveContext.game_mode (0x00588E3C: 0 play, 1
+// the title demo, from 2 the frontend), the message context's textbox state
+// (0x005C1878 +0xF38: 2 and 5 a text waiting for A, 4 and 7 a choice; other
+// states, such as the ocarina's, do not restrict the controls) and
+// Gameplay_InCsMode. `menu`: a native page or the HOME menu takes touches.
+bool ReadTopScreenTouchSituation(NativeA32Memory &memory, bool menu, TopScreenTouchSituation *situation,
+                                 std::string *error = nullptr);
+
 struct TopScreenTouchSkinState {
   // Per anchor: 0 letter centred, 1 corner badge.
   std::array<float, ThreeDsRecomp::Input::kTouchAnchorCount> Badge{};
+  // The situation applied, and one waiting to have held long enough.
+  TopScreenTouchSituation Situation = TopScreenTouchSituation::Gameplay;
+  TopScreenTouchSituation PendingSituation = TopScreenTouchSituation::Gameplay;
+  double PendingSeconds = 0.0;
   // Per anchor: the control's opacity factor, eased.
   std::array<float, ThreeDsRecomp::Input::kTouchAnchorCount> Visibility{};
   bool Started = false;
@@ -618,8 +636,10 @@ struct TopScreenTouchContext {
   std::array<bool, ThreeDsRecomp::Input::kTouchAnchorCount> Content{};
   // TopScreenTouchControlsPresentation::HudAlpha.
   float HudAlpha = 0.0F;
-  // A native page or the HOME menu takes the touches.
-  bool Menu = false;
+  // The HUD is drawn at all (TopScreenUiConfig::RenderHud): without it the
+  // controls do not follow its buttons.
+  bool HudExpected = true;
+  TopScreenTouchSituation Situation = TopScreenTouchSituation::Gameplay;
   // Any input this frame (a held button, the pad, a drag).
   bool Active = false;
 };

@@ -292,6 +292,51 @@ bool ReadTopScreenGameplayInCutsceneMode(NativeA32Memory &memory, std::uint32_t 
   return true;
 }
 
+bool ReadTopScreenTouchSituation(NativeA32Memory &memory, bool menu, TopScreenTouchSituation *situation,
+                                 std::string *error) {
+  if (situation == nullptr) {
+    SetError(error, "TopScreen touch situation output is null");
+    return false;
+  }
+  *situation = TopScreenTouchSituation::Gameplay;
+  constexpr std::uint32_t kGameMode = 0x00588E3CU;
+  constexpr std::uint32_t kPauseRoot = 0x005043D4U;
+  constexpr std::uint32_t kMessageContext = 0x005C1878U;
+  constexpr std::uint32_t kTextboxState = 0xF38U;
+  std::uint32_t gameMode = 0U, playState = 0U, textbox = 0U;
+  if (!memory.Read32(kGameMode, &gameMode) || !memory.Read32(kPauseRoot + 0x0CU, &playState) ||
+      !memory.Read32(kMessageContext + kTextboxState, &textbox)) {
+    SetError(error, "cannot read the TopScreen touch situation");
+    return false;
+  }
+  if (menu || gameMode >= 2U) {
+    *situation = TopScreenTouchSituation::Menu;
+    return true;
+  }
+  if (gameMode == 1U) {
+    *situation = TopScreenTouchSituation::TitleDemo;
+    return true;
+  }
+  if (textbox == 2U || textbox == 5U) {
+    *situation = TopScreenTouchSituation::Dialogue;
+    return true;
+  }
+  if (textbox == 4U || textbox == 7U) {
+    *situation = TopScreenTouchSituation::Choice;
+    return true;
+  }
+  if (textbox != 0U || playState == 0U) return true;
+  std::uint32_t player = 0U;
+  if (!memory.Read32(playState + offsetof(oot3d::gameplay::PlayerPlayStateWire, Player), &player)) {
+    SetError(error, "cannot read the TopScreen touch situation player");
+    return false;
+  }
+  bool cutscene = false;
+  if (player != 0U && !ReadTopScreenGameplayInCutsceneMode(memory, playState, player, &cutscene, error)) return false;
+  if (cutscene) *situation = TopScreenTouchSituation::Cutscene;
+  return true;
+}
+
 bool ReadTopScreenQuestPageDrawSuppressed(NativeA32Memory &memory,
                                           bool runtimeSceneLatch, bool *suppressed,
                                           std::string *error) {

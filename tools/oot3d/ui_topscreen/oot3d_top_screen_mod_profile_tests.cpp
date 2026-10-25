@@ -300,15 +300,48 @@ void TestTouchSkin() {
   // Gameplay: A full, an empty X stepped back.
   Require(visibility(TouchAnchor::A) == 1.0F && std::abs(visibility(TouchAnchor::X) - 0.55F) < 0.001F,
           "gameplay visibility is wrong");
-  // The HUD faded (a scene): item controls go to the floor, A and the pad stay.
+  // The game hides its HUD buttons: no controls; without a HUD at all they
+  // do not follow it.
   context.HudAlpha = 0.0F;
   AdvanceTopScreenTouchSkin(state, context, 1.0);
-  Require(std::abs(visibility(TouchAnchor::Dpad) - 0.3F) < 0.001F && visibility(TouchAnchor::A) == 1.0F &&
-              visibility(TouchAnchor::CirclePad) == 1.0F,
-          "scene visibility is wrong");
+  Require(visibility(TouchAnchor::Dpad) == 0.0F && visibility(TouchAnchor::A) == 0.0F &&
+              visibility(TouchAnchor::CirclePad) == 0.0F,
+          "controls show while the HUD buttons are hidden");
+  context.HudExpected = false;
+  AdvanceTopScreenTouchSkin(state, context, 1.0);
+  Require(visibility(TouchAnchor::A) == 1.0F, "controls followed a HUD that is not drawn");
+  context.HudExpected = true;
+  // A dialogue shows only A once it has held 0.3 s; a choice adds the pad and
+  // the D-pad; a cutscene shows nothing; leaving one opens up at once.
+  context.HudAlpha = 1.0F;
+  context.Situation = TopScreenTouchSituation::Dialogue;
+  AdvanceTopScreenTouchSkin(state, context, 0.2);
+  Require(visibility(TouchAnchor::B) > 0.0F, "a dialogue hid the controls before it settled");
+  for (int frame = 0; frame < 4; ++frame) AdvanceTopScreenTouchSkin(state, context, 0.2);
+  Require(visibility(TouchAnchor::A) == 1.0F && visibility(TouchAnchor::B) == 0.0F &&
+              visibility(TouchAnchor::CirclePad) == 0.0F,
+          "a dialogue did not leave only A");
+  {
+    // A is drawn as the text's "next" triangle.
+    std::vector<oot3d::ui::UiPrimitive> dialogue;
+    AppendTopScreenTouchSkin(input, state, dialogue);
+    Require(count(dialogue, "/glyph_start") >= 2 && count(dialogue, "/glyph_a") == 0,
+            "A is not the next triangle in a dialogue");
+  }
+  context.Situation = TopScreenTouchSituation::Choice;
+  for (int frame = 0; frame < 4; ++frame) AdvanceTopScreenTouchSkin(state, context, 0.2);
+  Require(visibility(TouchAnchor::CirclePad) == 1.0F && visibility(TouchAnchor::Dpad) == 1.0F &&
+              visibility(TouchAnchor::Zl) == 0.0F,
+          "a choice shows the wrong controls");
+  context.Situation = TopScreenTouchSituation::Cutscene;
+  for (int frame = 0; frame < 4; ++frame) AdvanceTopScreenTouchSkin(state, context, 0.2);
+  Require(visibility(TouchAnchor::A) == 0.0F, "a cutscene shows controls");
+  context.Situation = TopScreenTouchSituation::Gameplay;
+  AdvanceTopScreenTouchSkin(state, context, 0.2);
+  Require(visibility(TouchAnchor::A) == 1.0F, "gameplay did not bring the controls back at once");
   // A menu shows the item controls at 60% and the rest fully; 8 s idle halves
   // them; the next input restores them.
-  context.Menu = true;
+  context.Situation = TopScreenTouchSituation::Menu;
   AdvanceTopScreenTouchSkin(state, context, 1.0);
   Require(std::abs(visibility(TouchAnchor::Dpad) - 0.6F) < 0.001F && std::abs(visibility(TouchAnchor::X) - 0.6F) < 0.001F &&
               visibility(TouchAnchor::B) == 1.0F,
