@@ -208,9 +208,11 @@ void TestTouchControlsExtraction() {
   // controls draw their own base and letter); the view eye is the D-pad's
   // content. X, Y, ZR, ZL, the X item and the heart stay.
   Require(moved.Primitives.size() == 1U && hud.size() == 6U, "the touch layout took the wrong HUD parts");
-  Require(!moved.Content[static_cast<std::size_t>(TouchAnchor::Dpad)] &&
+  // The view eye sits on the drawn cross's up arm: content (the arrows step
+  // back); the B letter is not.
+  Require(moved.Content[static_cast<std::size_t>(TouchAnchor::Dpad)] &&
               !moved.Content[static_cast<std::size_t>(TouchAnchor::B)],
-          "the view eye or the B letter counted as content");
+          "the controls' content flags are wrong");
   Require(!moved.ActionAnchored, "an unanchored A was placed");
   {
     const auto &eye = moved.Primitives.front();
@@ -249,11 +251,25 @@ void TestTouchSkin() {
   std::vector<oot3d::ui::UiPrimitive> idle;
   AppendTopScreenTouchSkin(input, state, idle);
   // A: disc and ring; ZL (2.0 wide): a pill in three slices and its ring;
-  // the cross with its outline and four arrows; the pad, its knob and rings.
-  Require(count(idle, "/glyph_a") == 1 && count(idle, "/pill") == 3 && count(idle, "/pill_ring") == 3 &&
-              count(idle, "/cross") == 1 && count(idle, "/arrow") == 4 && count(idle, "/disc") == 3 &&
+  // the cross with its outline and four arrows; the pad, its knob and rings;
+  // a shadow under each, the letters with theirs.
+  Require(count(idle, "/glyph_a") == 2 && count(idle, "/pill") == 3 && count(idle, "/pill_ring") == 3 &&
+              count(idle, "/pill_soft") == 3 && count(idle, "/cross") == 1 && count(idle, "/cross_soft") == 1 &&
+              count(idle, "/arrow") == 4 && count(idle, "/disc") == 3 && count(idle, "/disc_soft") == 3 &&
               count(idle, "/ring") == 3,
           "the touch skin drew the wrong shapes");
+  // A shoulder in a square anchor is a pill as wide as the anchor; its HUD
+  // content takes the right end.
+  {
+    const ThreeDsRecomp::Input::TouchAnchorRect square{true, 0.0F, 0.0F, 0.1F, 0.2F};
+    const auto shoulder = ResolveTopScreenTouchControlShape(TouchAnchor::Zr, square, 480.0F);
+    const auto face = ResolveTopScreenTouchControlShape(TouchAnchor::X, square, 480.0F);
+    Require(shoulder.Pill && std::abs(shoulder.Rect.width - 48.0F) < 0.01F &&
+                std::abs(shoulder.Rect.height - 48.0F / 1.8F) < 0.01F &&
+                std::abs(shoulder.ContentX - (48.0F - shoulder.Rect.height * 0.5F)) < 0.01F &&
+                !face.Pill && face.Rect.width == 48.0F && face.ContentX == 24.0F,
+            "the control shapes are wrong");
+  }
   for (const auto &primitive : idle)
     Require(primitive.texture_alpha_only && (primitive.layer < 12U || primitive.layer > 13U),
             "a skin shape is not tinted coverage around the HUD content layers");
@@ -264,11 +280,13 @@ void TestTouchSkin() {
   AppendTopScreenTouchSkin(input, state, held);
   Require(count(held, "/disc") == 4 && count(held, "/cross_arm") == 1, "held buttons are not lit");
   // Content moves A's letter to a smaller badge over 0.12 s.
-  std::array<bool, ThreeDsRecomp::Input::kTouchAnchorCount> content{};
-  content[static_cast<std::size_t>(TouchAnchor::A)] = true;
-  AdvanceTopScreenTouchSkin(state, content, 0.06);
+  TopScreenTouchContext context;
+  context.HudAlpha = 1.0F;
+  context.Active = true;
+  context.Content[static_cast<std::size_t>(TouchAnchor::A)] = true;
+  AdvanceTopScreenTouchSkin(state, context, 0.06);
   Require(std::abs(state.Badge[static_cast<std::size_t>(TouchAnchor::A)] - 0.5F) < 0.001F, "the badge eases wrongly");
-  AdvanceTopScreenTouchSkin(state, content, 0.5);
+  AdvanceTopScreenTouchSkin(state, context, 0.5);
   std::vector<oot3d::ui::UiPrimitive> badged;
   AppendTopScreenTouchSkin(input, state, badged);
   const auto letterWidth = [](const std::vector<oot3d::ui::UiPrimitive> &primitives) {
@@ -278,6 +296,30 @@ void TestTouchSkin() {
   };
   Require(state.Badge[static_cast<std::size_t>(TouchAnchor::A)] == 1.0F && letterWidth(badged) < letterWidth(idle) * 0.7F,
           "content did not move A's letter to a badge");
+  const auto visibility = [&](TouchAnchor control) { return state.Visibility[static_cast<std::size_t>(control)]; };
+  // Gameplay: A full, an empty X stepped back.
+  Require(visibility(TouchAnchor::A) == 1.0F && std::abs(visibility(TouchAnchor::X) - 0.55F) < 0.001F,
+          "gameplay visibility is wrong");
+  // The HUD faded (a scene): item controls go to the floor, A and the pad stay.
+  context.HudAlpha = 0.0F;
+  AdvanceTopScreenTouchSkin(state, context, 1.0);
+  Require(std::abs(visibility(TouchAnchor::Dpad) - 0.3F) < 0.001F && visibility(TouchAnchor::A) == 1.0F &&
+              visibility(TouchAnchor::CirclePad) == 1.0F,
+          "scene visibility is wrong");
+  // A menu shows the item controls at 60% and the rest fully; 8 s idle halves
+  // them; the next input restores them.
+  context.Menu = true;
+  AdvanceTopScreenTouchSkin(state, context, 1.0);
+  Require(std::abs(visibility(TouchAnchor::Dpad) - 0.6F) < 0.001F && std::abs(visibility(TouchAnchor::X) - 0.6F) < 0.001F &&
+              visibility(TouchAnchor::B) == 1.0F,
+          "menu visibility is wrong");
+  context.Active = false;
+  for (int frame = 0; frame < 10; ++frame) AdvanceTopScreenTouchSkin(state, context, 1.0);
+  Require(std::abs(visibility(TouchAnchor::A) - 0.5F) < 0.001F, "idle controls did not dim");
+  context.Active = true;
+  AdvanceTopScreenTouchSkin(state, context, 0.1);
+  AdvanceTopScreenTouchSkin(state, context, 0.1);
+  Require(visibility(TouchAnchor::A) == 1.0F, "an input did not restore the controls");
 }
 
 void RunTopScreenItemDispatchTests();

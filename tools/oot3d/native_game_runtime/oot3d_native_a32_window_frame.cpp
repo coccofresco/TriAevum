@@ -674,7 +674,16 @@ bool NativeA32WindowSession::RunFrame() {
   // own only while the game does not (touch layout off, layout editing).
   ThreeDsRecomp::Input::OverlayTouchAnchors().SetTitleDrawsControls(drawsTouchControls);
   if (drawsTouchControls) {
-    Oot3dNativeGame::AdvanceTopScreenTouchSkin(touchSkinState, touchControls.Content, presentationElapsedSeconds);
+    // The situation: the HUD's own fade, a native page or the HOME menu
+    // taking touches, and whether the player did anything this frame.
+    Oot3dNativeGame::TopScreenTouchContext touchContext;
+    touchContext.Content = touchControls.Content;
+    touchContext.HudAlpha = touchControls.HudAlpha;
+    touchContext.Menu = nativeFrontendTouchEnabled || inGameMenu.IsOpen();
+    touchContext.Active = physicalInputFrame.Hid.Buttons != 0U || physicalInputFrame.Hid.CirclePadX != 0 ||
+                          physicalInputFrame.Hid.CirclePadY != 0 || physicalInputFrame.Hid.TouchPressed ||
+                          nativeControlPollingState.GameplayTouchLookOwned;
+    Oot3dNativeGame::AdvanceTopScreenTouchSkin(touchSkinState, touchContext, presentationElapsedSeconds);
     Oot3dNativeGame::TopScreenTouchSkinInput skin;
     skin.Anchors = touchAnchors;
     skin.CanvasWidth = touchCanvasWidth;

@@ -67,7 +67,14 @@ item, counts, the A action word, the cross icons) draws inside it when there
 is any, and the letter eases to a corner badge meanwhile; the HUD's own rings,
 cross and letters are not drawn, so a control never switches between two
 looks. Those HUD parts leave the HUD and the minimap takes the top-right
-corner. The overlay reports each control's bounds and draws its own art only
+corner. Each control's visibility follows the situation: in gameplay the
+item buttons without an item step back; while the game fades its HUD (scenes,
+text) the item controls (X, Y, ZL, ZR, D-pad) fade with it; in native menus,
+where the page takes touches, they show at 60%; after 8 s without input every
+control dims to half. TriAevum seeds its own default layout (version 4 in
+`TouchControls.kt`; Reset layout restores it): pad and D-pad on the left, face
+buttons on the right, L/ZL and R/ZR stacked in the top corners, mostly in the
+bars beside a 5:3 picture. The overlay reports each control's bounds and draws its own art only
 while the game does not draw the controls (touch layout off) or while the
 layout is edited (`InputOverlay.kt` host step in
 `tools/android/import_azahar_overlay.py`). A touch on no control is not the

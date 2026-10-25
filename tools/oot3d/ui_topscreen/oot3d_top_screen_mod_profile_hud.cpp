@@ -1739,9 +1739,9 @@ constexpr std::array<ThreeDsRecomp::Input::TouchAnchor, 5> kTopScreenRingAnchors
     ThreeDsRecomp::Input::TouchAnchor::Zr, ThreeDsRecomp::Input::TouchAnchor::Zl,
     ThreeDsRecomp::Input::TouchAnchor::B};
 constexpr std::uint32_t kTopScreenCrossQuad = 5U;
-// The cross fills its control like the overlay's own cross art; its icons
-// and the view eye reach past the control's edge.
-constexpr float kTopScreenDpadGroupRadius = 1.1F;
+// The cross group (the cross, its icons beyond the arms and the view eye)
+// fits inside its control: the icons sit on the drawn cross's arms.
+constexpr float kTopScreenDpadGroupRadius = 2.0F;
 // A HUD button fills this much of its control.
 constexpr float kTopScreenTouchFill = 0.9F;
 
@@ -1830,6 +1830,8 @@ TopScreenTouchControlsPresentation ExtractTopScreenTouchControls(
   const auto group = [&](TouchAnchor anchor) -> Group & { return groups[static_cast<std::size_t>(anchor)]; };
   for (const auto &primitive : hud) {
     if (!IsTopScreenTouchClusterQuad(primitive) || !(primitive.destination.width > 0.0F)) continue;
+    if (primitive.source_quad < kTopScreenRingAnchors.size() && primitive.visible)
+      result.HudAlpha = std::max(result.HudAlpha, primitive.color.alpha);
     const auto &destination = primitive.destination;
     const Group found{true, destination.x + destination.width * 0.5F, destination.y + destination.height * 0.5F,
                       destination.width * 0.5F};
@@ -1852,14 +1854,9 @@ TopScreenTouchControlsPresentation ExtractTopScreenTouchControls(
     const auto &anchor = anchors[index];
     const auto &source = groups[index];
     if (!anchor.Present || !source.Known || !(source.Radius > 0.0F)) continue;
-    const float width = (anchor.Right - anchor.Left) * canvasWidth;
-    const float height = (anchor.Bottom - anchor.Top) * 240.0F;
-    const float half = std::min(width, height) * 0.5F;
-    // A wide control (a pill) keeps its letter in the left cap: the content
-    // takes the square at its right end.
-    const float toX = width >= height * 1.2F ? anchor.Right * canvasWidth - half : anchor.CenterX() * canvasWidth;
-    placements[index] = {true, source.X, source.Y, toX, anchor.CenterY() * 240.0F,
-                         half * kTopScreenTouchFill / source.Radius};
+    const auto shape = ResolveTopScreenTouchControlShape(static_cast<TouchAnchor>(index), anchor, canvasWidth);
+    placements[index] = {true, source.X, source.Y, shape.ContentX, shape.ContentY,
+                         shape.ContentHalf * kTopScreenTouchFill / source.Radius};
   }
   if (const auto &action = placements[static_cast<std::size_t>(TouchAnchor::A)]; action.Active) {
     result.ActionAnchored = true;
@@ -1904,11 +1901,7 @@ TopScreenTouchControlsPresentation ExtractTopScreenTouchControls(
       continue;
     }
     if (IsTopScreenTouchBasePrimitive(primitive)) continue;
-    // The view eye above the cross is always shown: it is not the cross's
-    // content (its icons are).
-    const bool viewEye = primitive.owner_address == 0x005D4A8CU && primitive.source_quad == 38U;
-    if (primitive.visible && primitive.color.alpha > 0.0F && !viewEye)
-      result.Content[static_cast<std::size_t>(owner)] = true;
+    if (primitive.visible && primitive.color.alpha > 0.0F) result.Content[static_cast<std::size_t>(owner)] = true;
     destination.x = moved.ToX + (destination.x - moved.FromX) * moved.Scale;
     destination.y = moved.ToY + (destination.y - moved.FromY) * moved.Scale;
     destination.width *= moved.Scale;

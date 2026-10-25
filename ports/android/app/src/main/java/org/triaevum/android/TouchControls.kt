@@ -146,7 +146,7 @@ class TouchOverlayInput : Native3dsInputTarget {
         if (requests[7] != appliedReset) {
             appliedReset = requests[7]
             view.resetButtonPlacement()
-            activity?.let { placeTopRow(it, preferences.edit()).apply() }
+            activity?.let { placeDefaultLayout(it, preferences.edit()).apply() }
             view.refreshControls()
         }
         if (requests[6] != appliedEdit) {
@@ -172,7 +172,7 @@ class TouchOverlayInput : Native3dsInputTarget {
                 text = "Reset"
                 setOnClickListener {
                     view.resetButtonPlacement()
-                    preferences()?.let { placeTopRow(host, it.edit()).apply() }
+                    preferences()?.let { placeDefaultLayout(host, it.edit()).apply() }
                     view.refreshControls()
                 }
             }
@@ -263,22 +263,53 @@ class TouchOverlayInput : Native3dsInputTarget {
                 .putBoolean("buttonToggle7", true)
                 .putBoolean("buttonToggle12", false)
                 .putBoolean("buttonToggle13", true)
-            placeTopRow(activity, editor).putInt(SEEDED, LAYOUT_VERSION).apply()
+            placeDefaultLayout(activity, editor).putInt(SEEDED, LAYOUT_VERSION).apply()
         }
 
-        /** SELECT, HOME and START at the top centre (landscape positions are pixels). */
-        fun placeTopRow(activity: Activity, editor: android.content.SharedPreferences.Editor):
+        /**
+         * TriAevum's landscape layout, in units of the screen's short side: the
+         * circle pad low on the left with the D-pad above it, the face buttons
+         * low on the right, L over ZL and R over ZR in the top corners (on a
+         * wide phone the side controls sit mostly in the bars beside the 5:3
+         * picture, clear of the menus' pages), SELECT, HOME and START at the
+         * top centre. The donor stores
+         * a control's top-left corner in pixels and sizes it as the short side
+         * times its scale, adjusted per control by "controlScale-<id>".
+         */
+        fun placeDefaultLayout(activity: Activity, editor: android.content.SharedPreferences.Editor):
                 android.content.SharedPreferences.Editor {
             val metrics = activity.resources.displayMetrics
-            val shortSide = minOf(metrics.widthPixels, metrics.heightPixels).toFloat()
-            for (id in listOf(AzaharButtonIds.BUTTON_SELECT, AzaharButtonIds.BUTTON_HOME, AzaharButtonIds.BUTTON_START))
-                editor.putFloat("$id-Y", TOP_ROW_Y * shortSide)
+            val short = minOf(metrics.widthPixels, metrics.heightPixels).toFloat()
+            val aspect = maxOf(metrics.widthPixels, metrics.heightPixels) / short
+            // id: the position key; scaleId: its size key; base: the donor's scale.
+            fun place(id: Int, scaleId: Int, base: Float, size: Float, centerX: Float, centerY: Float) {
+                editor.putInt("controlScale-$scaleId", Math.round(size / base * 100f - 50f))
+                editor.putFloat("$id-X", (centerX - size * 0.5f) * short)
+                editor.putFloat("$id-Y", (centerY - size * 0.5f) * short)
+            }
+            val face = 0.122f
+            val spread = 0.104f
+            val faceX = aspect - 0.02f - spread - face * 0.5f
+            val faceY = 1f - 0.05f - spread - face * 0.5f
+            place(AzaharButtonIds.BUTTON_A, AzaharButtonIds.BUTTON_A, 0.11f, face, faceX + spread, faceY)
+            place(AzaharButtonIds.BUTTON_B, AzaharButtonIds.BUTTON_B, 0.11f, face, faceX, faceY + spread)
+            place(AzaharButtonIds.BUTTON_X, AzaharButtonIds.BUTTON_X, 0.11f, face, faceX, faceY - spread)
+            place(AzaharButtonIds.BUTTON_Y, AzaharButtonIds.BUTTON_Y, 0.11f, face, faceX - spread, faceY)
+            place(AzaharButtonIds.STICK_LEFT, AzaharButtonIds.STICK_LEFT, 0.275f, 0.27f, 0.16f, 0.80f)
+            place(AzaharButtonIds.DPAD_UP, AzaharButtonIds.DPAD, 0.22f, 0.25f, 0.14f, 0.47f)
+            val shoulder = 0.18f
+            place(AzaharButtonIds.TRIGGER_L, AzaharButtonIds.TRIGGER_L, 0.18f, shoulder, 0.03f + shoulder * 0.5f, 0.11f)
+            place(AzaharButtonIds.BUTTON_ZL, AzaharButtonIds.BUTTON_ZL, 0.18f, shoulder, 0.03f + shoulder * 0.5f, 0.29f)
+            place(AzaharButtonIds.TRIGGER_R, AzaharButtonIds.TRIGGER_R, 0.18f, shoulder, aspect - 0.03f - shoulder * 0.5f, 0.11f)
+            place(AzaharButtonIds.BUTTON_ZR, AzaharButtonIds.BUTTON_ZR, 0.18f, shoulder, aspect - 0.03f - shoulder * 0.5f, 0.29f)
+            val system = 0.104f
+            place(AzaharButtonIds.BUTTON_SELECT, AzaharButtonIds.BUTTON_SELECT, 0.08f, system, aspect * 0.5f - 0.13f, 0.052f)
+            place(AzaharButtonIds.BUTTON_HOME, AzaharButtonIds.BUTTON_HOME, 0.08f, system, aspect * 0.5f, 0.052f)
+            place(AzaharButtonIds.BUTTON_START, AzaharButtonIds.BUTTON_START, 0.08f, system, aspect * 0.5f + 0.13f, 0.052f)
             return editor
         }
 
         private const val SEEDED = "TriAevumTouchControlsLayout"
-        private const val LAYOUT_VERSION = 2
-        // Their top edge, as a fraction of the screen's short side (the donor puts them at 0.85).
-        private const val TOP_ROW_Y = 0.02f
+        private const val LAYOUT_VERSION = 4
     }
 }

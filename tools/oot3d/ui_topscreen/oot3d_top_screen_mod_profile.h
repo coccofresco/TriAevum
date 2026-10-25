@@ -538,6 +538,9 @@ struct TopScreenTouchControlsPresentation {
   std::vector<oot3d::ui::UiPrimitive> Primitives;
   // Per anchor: the HUD gave the control visible content this frame.
   std::array<bool, ThreeDsRecomp::Input::kTouchAnchorCount> Content{};
+  // The HUD buttons' own opacity this frame (their rings'), 0 without them:
+  // the game fades them for scenes, text and transitions.
+  float HudAlpha = 0.0F;
   // The natively drawn A group: HUD canvas centre to anchor centre, scaled.
   bool ActionAnchored = false;
   float ActionFromX = 0.0F;
@@ -574,14 +577,51 @@ TopScreenTouchControlsPresentation ExtractTopScreenTouchControls(
     std::vector<oot3d::ui::UiPrimitive> &hud, const TopScreenUiConfig &config,
     const ThreeDsRecomp::Input::TouchAnchorSet &anchors, float canvasWidth);
 
+// Where a control is drawn inside its anchor (window canvas units): a centred
+// disc, or for the shoulders (L, R, ZL, ZR) and START, SELECT and HOME a pill
+// as wide as the anchor (about 1.8:1 in a square anchor). A pill's HUD content
+// takes the square at its right end, its letter the left cap.
+struct TopScreenTouchControlShape {
+  oot3d::ui::UiRect Rect;
+  bool Pill = false;
+  // The HUD content's centre and half size.
+  float ContentX = 0.0F;
+  float ContentY = 0.0F;
+  float ContentHalf = 0.0F;
+};
+TopScreenTouchControlShape ResolveTopScreenTouchControlShape(ThreeDsRecomp::Input::TouchAnchor control,
+                                                             const ThreeDsRecomp::Input::TouchAnchorRect &anchor,
+                                                             float canvasWidth) noexcept;
+
 // The anchored controls' own look while the game draws them: a vector base
-// per control (a disc, a pill, the cross, the circle pad with its knob), lit
-// while its button is held, and its letter or icon. While the HUD gives a
-// control content, the letter moves to a corner badge so the content is
-// readable; it eases back when the content goes.
+// per control (a disc, a pill, the cross, the circle pad with its knob) with a
+// soft shadow and gloss, lit while its button is held, and its letter or icon.
+// While the HUD gives a control content, the letter moves to a corner badge so
+// the content is readable; it eases back when the content goes.
+//
+// Each control's visibility follows the situation: in gameplay every control
+// shows and the item buttons without an item (X, Y, ZL, ZR, B) step back; while
+// the game fades its HUD (scenes, text, transitions) the item controls (X, Y,
+// ZL, ZR, the D-pad) fade with it to a floor, A, B, L, R, START and the pad
+// staying; in native menus and the HOME menu, where the page takes touches,
+// the item controls show at 60% and the rest fully; after 8 s without input
+// every control dims to half until the next input.
 struct TopScreenTouchSkinState {
   // Per anchor: 0 letter centred, 1 corner badge.
   std::array<float, ThreeDsRecomp::Input::kTouchAnchorCount> Badge{};
+  // Per anchor: the control's opacity factor, eased.
+  std::array<float, ThreeDsRecomp::Input::kTouchAnchorCount> Visibility{};
+  bool Started = false;
+  double IdleSeconds = 0.0;
+};
+struct TopScreenTouchContext {
+  std::array<bool, ThreeDsRecomp::Input::kTouchAnchorCount> Content{};
+  // TopScreenTouchControlsPresentation::HudAlpha.
+  float HudAlpha = 0.0F;
+  // A native page or the HOME menu takes the touches.
+  bool Menu = false;
+  // Any input this frame (a held button, the pad, a drag).
+  bool Active = false;
 };
 struct TopScreenTouchSkinInput {
   ThreeDsRecomp::Input::TouchAnchorSet Anchors{};
@@ -595,12 +635,12 @@ struct TopScreenTouchSkinInput {
   // The overlay's opacity, 0..1.
   float Opacity = 0.5F;
 };
-// Moves each badge toward whether its control has content (0.12 s ease).
-void AdvanceTopScreenTouchSkin(TopScreenTouchSkinState &state,
-                               const std::array<bool, ThreeDsRecomp::Input::kTouchAnchorCount> &content,
+// Eases each badge toward its control's content (0.12 s) and each control's
+// visibility toward the situation's.
+void AdvanceTopScreenTouchSkin(TopScreenTouchSkinState &state, const TopScreenTouchContext &context,
                                double seconds) noexcept;
-// Appends the bases (layers 8 and 9, under the HUD content) and the letters
-// and icons (layer 15) of every anchored control.
+// Appends the shadows and bases (layers 7 to 10, under the HUD content) and
+// the letters and icons (layers 14 and 15) of every anchored control.
 void AppendTopScreenTouchSkin(const TopScreenTouchSkinInput &input, const TopScreenTouchSkinState &state,
                               std::vector<oot3d::ui::UiPrimitive> &output);
 

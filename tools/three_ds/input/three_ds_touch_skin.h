@@ -34,6 +34,13 @@ enum class TouchSkinShape : std::uint8_t {
     GlyphStart,
     GlyphSelect,
     GlyphHome,
+    // Soft-edged disc, pill and cross (fading in from their edge), for a
+    // shadow under a control.
+    DiscSoft,
+    PillSoft,
+    CrossSoft,
+    // A soft ellipse in the upper part, for a gloss over a control.
+    Gloss,
     Count,
 };
 

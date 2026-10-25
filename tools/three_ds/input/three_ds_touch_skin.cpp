@@ -12,7 +12,8 @@ namespace {
 constexpr std::array<std::string_view, static_cast<std::size_t>(TouchSkinShape::Count)> kShapeNames{
     "disc",    "ring",     "pill",     "pill_ring", "cross",   "cross_ring", "cross_arm",
     "arrow",   "glyph_a",  "glyph_b",  "glyph_x",   "glyph_y", "glyph_l",    "glyph_r",
-    "glyph_zl", "glyph_zr", "glyph_start", "glyph_select", "glyph_home"};
+    "glyph_zl", "glyph_zr", "glyph_start", "glyph_select", "glyph_home", "disc_soft", "pill_soft",
+    "cross_soft", "gloss"};
 
 constexpr int kSize = 256;
 // Shapes are laid out in units of the texture's height.
@@ -20,6 +21,8 @@ constexpr float kPixel = 1.0F / static_cast<float>(kSize);
 constexpr float kMargin = 2.0F * kPixel;
 constexpr float kStroke = 0.06F;
 constexpr float kGlyphHalfWidth = 0.065F;
+// The soft shapes fade in over this distance from their edge.
+constexpr float kSoftEdge = 0.14F;
 
 struct Point {
     float X = 0.0F;
@@ -207,10 +210,38 @@ std::function<float(Point)> ShapeDistance(TouchSkinShape shape) {
                               {{0.28F, 0.42F}, {0.28F, 0.82F}, {0.72F, 0.82F}, {0.72F, 0.42F}}};
         return [strokes](Point p) { return StrokesDistance(p, strokes, 0.055F); };
     }
+    case TouchSkinShape::DiscSoft:
+    case TouchSkinShape::PillSoft:
+    case TouchSkinShape::CrossSoft:
+    case TouchSkinShape::Gloss:
     case TouchSkinShape::Count:
         break;
     }
     return [](Point) { return 1.0F; };
+}
+
+// The soft shapes' coverage (0..1) at p.
+float SoftCoverage(TouchSkinShape shape, Point p) noexcept {
+    const float radius = 0.5F - kMargin;
+    float distance = 1.0F;
+    float edge = kSoftEdge;
+    switch (shape) {
+    case TouchSkinShape::DiscSoft: distance = Length(p.X - 0.5F, p.Y - 0.5F) - radius; break;
+    case TouchSkinShape::PillSoft: distance = SegmentDistance(p, {0.5F, 0.5F}, {1.5F, 0.5F}) - radius; break;
+    case TouchSkinShape::CrossSoft: distance = CrossDistance(p); edge = kSoftEdge * 0.7F; break;
+    case TouchSkinShape::Gloss:
+        distance = (Length((p.X - 0.5F) / 0.34F, (p.Y - 0.3F) / 0.19F) - 1.0F) * 0.19F;
+        edge = 0.12F;
+        break;
+    default: return 0.0F;
+    }
+    const float t = std::clamp(-distance / edge, 0.0F, 1.0F);
+    return t * t * (3.0F - 2.0F * t);
+}
+
+bool IsSoft(TouchSkinShape shape) noexcept {
+    return shape == TouchSkinShape::DiscSoft || shape == TouchSkinShape::PillSoft ||
+           shape == TouchSkinShape::CrossSoft || shape == TouchSkinShape::Gloss;
 }
 
 } // namespace
@@ -231,7 +262,8 @@ std::optional<TouchSkinShape> TouchSkinShapeFromSemanticName(std::string_view na
 TouchSkinPixels RasterizeTouchSkinShape(TouchSkinShape shape) {
     TouchSkinPixels pixels;
     if (shape == TouchSkinShape::Count) return pixels;
-    const bool pill = shape == TouchSkinShape::Pill || shape == TouchSkinShape::PillRing;
+    const bool pill = shape == TouchSkinShape::Pill || shape == TouchSkinShape::PillRing ||
+                      shape == TouchSkinShape::PillSoft;
     pixels.Width = static_cast<std::uint16_t>(kSize);
     pixels.Height = static_cast<std::uint16_t>(pill ? kSize / 2 : kSize);
     pixels.Rgba8.assign(static_cast<std::size_t>(pixels.Width) * pixels.Height * 4U, 0xFFU);
@@ -242,7 +274,8 @@ TouchSkinPixels RasterizeTouchSkinShape(TouchSkinShape shape) {
     for (int y = 0; y < pixels.Height; ++y) {
         for (int x = 0; x < pixels.Width; ++x) {
             const Point p{(static_cast<float>(x) + 0.5F) * unit, (static_cast<float>(y) + 0.5F) * unit};
-            const float coverage = std::clamp(0.5F - distance(p) / edge, 0.0F, 1.0F);
+            const float coverage =
+                IsSoft(shape) ? SoftCoverage(shape, p) : std::clamp(0.5F - distance(p) / edge, 0.0F, 1.0F);
             pixels.Rgba8[(static_cast<std::size_t>(y) * pixels.Width + x) * 4U + 3U] =
                 static_cast<std::uint8_t>(std::lround(coverage * 255.0F));
         }
