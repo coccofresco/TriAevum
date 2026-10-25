@@ -44,16 +44,30 @@ def installed_runtime_path(root: Path, value: ReleasePlatform) -> Path:
     return packaged if packaged.is_file() else root / value.installed_runtime
 
 
+def _remove_shadowing_library(path: Path) -> None:
+    try:
+        path.unlink(missing_ok=True)
+    except PermissionError:
+        # A loaded DLL cannot be deleted but can be renamed. Forge itself loads
+        # the CRT a previous package left in its folder (issue #110).
+        os.replace(path, path.with_name(f".{path.name}.{os.getpid()}.stale"))
+
+
 def place_installed_runtime(root: Path, value: ReleasePlatform) -> Path:
     """Move a packaged runtime to the installation root, replacing the previous one.
 
     The Windows runtime finds its DLLs in runtime/, but its own folder is searched
     first: DLLs a previous package left in the root would shadow the new ones.
     """
+    for stale in root.glob(".*.stale"):
+        try:
+            stale.unlink()
+        except OSError:
+            pass  # Still loaded by another Forge process; a later run removes it.
     packaged, installed = root / value.runtime, root / value.installed_runtime
     if packaged != installed and packaged.is_file():
         for library in packaged.parent.glob("*.dll"):
-            (root / library.name).unlink(missing_ok=True)
+            _remove_shadowing_library(root / library.name)
         os.replace(packaged, installed)
     return installed
 

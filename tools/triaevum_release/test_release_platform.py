@@ -51,6 +51,33 @@ class ReleasePlatformTests(unittest.TestCase):
             self.assertEqual(place_installed_runtime(root, LINUX), root / LINUX.runtime)
             self.assertTrue((root / LINUX.runtime).is_file())
 
+    def test_a_loaded_root_library_is_renamed_aside(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "runtime").mkdir()
+            (root / WINDOWS.runtime).write_bytes(b"new runtime")
+            (root / "runtime/vcruntime140.dll").write_bytes(b"new crt")
+            # Forge has loaded the CRT a previous package left in the root.
+            (root / "vcruntime140.dll").write_bytes(b"old crt")
+            (root / ".SDL2.dll.1.stale").write_bytes(b"released stale library")
+            unlink = Path.unlink
+
+            def loaded(path, *args, **kwargs):
+                if path.name == "vcruntime140.dll" and path.parent == root:
+                    raise PermissionError(5, "Access is denied", str(path))
+                return unlink(path, *args, **kwargs)
+
+            with patch.object(Path, "unlink", loaded):
+                self.assertEqual(place_installed_runtime(root, WINDOWS), root / "TriAevum.exe")
+            self.assertFalse((root / "vcruntime140.dll").exists())
+            self.assertFalse((root / ".SDL2.dll.1.stale").exists())
+            self.assertEqual([path.read_bytes() for path in root.glob(".vcruntime140.dll.*.stale")],
+                             [b"old crt"])
+            self.assertEqual((root / "TriAevum.exe").read_bytes(), b"new runtime")
+            # Once released, the next run removes the renamed library.
+            self.assertEqual(place_installed_runtime(root, WINDOWS), root / "TriAevum.exe")
+            self.assertEqual(list(root.glob(".*.stale")), [])
+
     def test_legacy_windows_and_explicit_linux(self):
         self.assertEqual(catalog_platform({}), WINDOWS)
         self.assertEqual(catalog_platform({"target": LINUX.target}), LINUX)
