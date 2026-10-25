@@ -4,6 +4,8 @@
 //! Window geometry (issue #111): start around 720x560 logical points, fit
 //! the monitor's work area including the title bar, keep a small fixed
 //! minimum and never grow the minimum to the content, which scrolls instead.
+//! Sizes are logical points: the display scale shrinks the work area (a
+//! 1920x1080 screen at 150 % is 1280x720 points) and the same rules fit it.
 
 #[cfg(any(windows, test))]
 use eframe::egui::pos2;
@@ -35,18 +37,29 @@ fn centred(area: Rect, outer: Vec2) -> egui::Pos2 {
     area.min + offset
 }
 
+/// A display the layout probe simulates instead of the real one.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct SimulatedDisplay {
+    /// The work area in logical points (`--work-area`), at the real work
+    /// area's origin.
+    pub work_area: Option<Vec2>,
+    /// The operating system's display scale (`--pixels-per-point`, 1.5 for
+    /// 150 %), whatever the real monitor's scale is.
+    pub pixels_per_point: Option<f32>,
+}
+
 #[derive(Default)]
 pub struct Geometry {
-    /// A simulated work area (`--work-area`), at the real work area's origin.
-    pub override_area: Option<Vec2>,
+    pub simulated: SimulatedDisplay,
+    scaled_frames: u8,
     pub applied: bool,
     pub work_area: Option<Vec2>,
     pub decoration: Vec2,
 }
 
 impl Geometry {
-    pub fn new(override_area: Option<Vec2>) -> Self {
-        Self { override_area, ..Self::default() }
+    pub fn new(simulated: SimulatedDisplay) -> Self {
+        Self { simulated, ..Self::default() }
     }
 
     /// Fits the window once its native size and monitor are known.
@@ -55,9 +68,24 @@ impl Geometry {
             return;
         }
         let info = context.input(|input| input.viewport().clone());
+        if let Some(scale) = self.simulated.pixels_per_point {
+            // The zoom on top of the monitor's scale gives the simulated
+            // scale. The frame after the change still reports the window in
+            // the old points: measure from the one after.
+            if (context.pixels_per_point() - scale).abs() > 0.001 {
+                let Some(native) = info.native_pixels_per_point else { return };
+                context.set_zoom_factor(scale / native);
+                self.scaled_frames = 0;
+            }
+            if self.scaled_frames < 2 {
+                self.scaled_frames += 1;
+                context.request_repaint();
+                return;
+            }
+        }
         let Some(inner) = info.inner_rect else { return };
         let platform = platform_work_area(frame, context.pixels_per_point());
-        let area = match (self.override_area, platform) {
+        let area = match (self.simulated.work_area, platform) {
             (Some(size), platform) => Some((Some(platform.map_or(egui::Pos2::ZERO, |area| area.min)), size)),
             (None, Some(area)) => Some((Some(area.min), area.size())),
             (None, None) => info.monitor_size.map(|size| (None, size - SCREEN_MARGIN)),
@@ -65,6 +93,10 @@ impl Geometry {
         let Some((origin, size)) = area else { return };
         let decoration = info.outer_rect.map_or(Vec2::ZERO, |outer| (outer.size() - inner.size()).max(Vec2::ZERO));
         let fitted = fitted_inner_size(size, decoration);
+        if self.simulated.pixels_per_point.is_some() {
+            // The window converted its minimum at the monitor's scale.
+            context.send_viewport_cmd(ViewportCommand::MinInnerSize(MIN_SIZE));
+        }
         if (fitted - inner.size()).abs().max_elem() > 0.5 {
             context.send_viewport_cmd(ViewportCommand::InnerSize(fitted));
         }
@@ -129,6 +161,30 @@ mod tests {
         assert_eq!(fitted_inner_size(vec2(1100.0, 560.0), title_bar), vec2(720.0, 521.0));
         assert_eq!(fitted_inner_size(vec2(800.0, 500.0), title_bar), vec2(720.0, 461.0));
         assert_eq!(fitted_inner_size(vec2(300.0, 200.0), title_bar), MIN_SIZE);
+    }
+
+    #[test]
+    fn the_reported_screens_fit_at_their_display_scale() {
+        // Physical work areas (screen minus panel or taskbar) and the display
+        // scale of issue #111's reports and the smallest common laptops.
+        let screens = [
+            (vec2(1360.0, 728.0), 1.0),
+            (vec2(1366.0, 705.0), 1.0),
+            (vec2(1280.0, 680.0), 1.0),
+            (vec2(1024.0, 600.0), 1.0),
+            (vec2(1920.0, 1032.0), 1.25),
+            (vec2(1920.0, 1032.0), 1.5),
+            (vec2(1366.0, 728.0), 1.25),
+            (vec2(1366.0, 728.0), 1.5),
+            (vec2(1024.0, 560.0), 1.25),
+        ];
+        let title_bar = vec2(16.0, 39.0);
+        for (physical, scale) in screens {
+            let area = physical / scale;
+            let inner = fitted_inner_size(area, title_bar);
+            assert!(inner.x + title_bar.x <= area.x && inner.y + title_bar.y <= area.y, "{physical:?} at {scale}");
+            assert!(inner.x >= MIN_SIZE.x && inner.y >= MIN_SIZE.y, "{physical:?} at {scale}");
+        }
     }
 
     #[test]

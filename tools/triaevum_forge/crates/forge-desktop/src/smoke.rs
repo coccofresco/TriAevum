@@ -6,8 +6,12 @@
 //! vertically, never horizontally; the footer with the primary actions must
 //! be entirely inside the window, and the window inside the work area.
 //!
-//! `--work-area WxH` is in logical points. `--screenshot PATH` (a Rust
-//! addition) writes the rendered frame as a binary PPM.
+//! `--work-area WxH` is in logical points. `--pixels-per-point SCALE` (a
+//! Rust addition, issue #111) simulates the operating system's display
+//! scale, 1.5 for 150 %, on any monitor; with it, `--work-area` is the
+//! scaled screen's logical work area (a 1920x1032 work area at 150 % is
+//! 1280x688). `--screenshot PATH` (a Rust addition) writes the rendered
+//! frame as a binary PPM.
 //!
 //! The recognized-ROM card (a Rust addition) is laid out with a `--rom`'s
 //! real recognition, whose last language is chosen before installing and
@@ -23,17 +27,17 @@ use serde_json::{json, Map, Value};
 
 use crate::app::{DialogKind, ForgeApp, WidgetRecord};
 use crate::recognition::{heading, Card, RecognizedRom};
-use crate::window::{parse_work_area, MIN_SIZE};
+use crate::window::{parse_work_area, SimulatedDisplay, MIN_SIZE};
 
-const USAGE: &str =
-    "Usage: TriAevumForge --gui-smoke --output PATH [--rom PATH] [--timeout SEC] [--work-area WxH] [--screenshot PATH]";
+const USAGE: &str = "Usage: TriAevumForge --gui-smoke --output PATH [--rom PATH] [--timeout SEC] [--work-area WxH] \
+     [--pixels-per-point SCALE] [--screenshot PATH]";
 
 #[derive(Clone, Debug, Default)]
 pub struct ProbeOptions {
     pub output: PathBuf,
     pub rom: Option<PathBuf>,
     pub timeout: f64,
-    pub work_area: Option<Vec2>,
+    pub display: SimulatedDisplay,
     pub screenshot: Option<PathBuf>,
 }
 
@@ -51,8 +55,13 @@ pub fn parse(arguments: &[String]) -> Result<ProbeOptions, String> {
                 options.timeout = value()?.parse().map_err(|_| "--timeout needs a number of seconds".to_string())?
             }
             "--work-area" => {
-                options.work_area =
+                options.display.work_area =
                     Some(parse_work_area(&value()?).ok_or_else(|| "--work-area needs WIDTHxHEIGHT".to_string())?)
+            }
+            "--pixels-per-point" => {
+                let scale = value()?.parse().ok().filter(|scale: &f32| (0.5..=4.0).contains(scale));
+                options.display.pixels_per_point =
+                    Some(scale.ok_or_else(|| "--pixels-per-point needs a scale from 0.5 to 4".to_string())?)
             }
             other => return Err(format!("Unknown option: {other}")),
         }
@@ -71,7 +80,7 @@ pub fn main(arguments: &[String]) -> i32 {
     };
     let result = Arc::new(Mutex::new(None));
     let probe = Box::new(Probe::new(options.clone(), Arc::clone(&result)));
-    let outcome = crate::app::run_window(None, None, Some(probe), options.work_area);
+    let outcome = crate::app::run_window(None, None, Some(probe), options.display);
     let recorded = result.lock().unwrap_or_else(|poison| poison.into_inner()).take();
     let report = recorded.unwrap_or_else(|| {
         let error = outcome.err().unwrap_or_else(|| "The window closed before the probe finished".to_string());
@@ -252,9 +261,13 @@ impl Probe {
                 let info = context.input(|input| input.viewport().clone());
                 let viewport = context.content_rect();
                 let outer = info.outer_rect.map_or(viewport.size() + app.geometry.decoration, |outer| outer.size());
-                let work_area = self.options.work_area.or(app.geometry.work_area);
+                let work_area = self.options.display.work_area.or(app.geometry.work_area);
                 let (passed, details) = layout_report(&app.widgets, viewport, outer, work_area);
                 self.passed &= passed;
+                // A simulated display scale must be the one laid out.
+                let scale = context.pixels_per_point();
+                self.passed &=
+                    self.options.display.pixels_per_point.is_none_or(|wanted| (scale - wanted).abs() < 0.001);
                 if let Value::Object(details) = details {
                     self.report.extend(details);
                 }
@@ -269,7 +282,8 @@ impl Probe {
                 self.passed &= card_ok;
                 self.report.insert("size".into(), json!([viewport.width(), viewport.height()]));
                 self.report.insert("work_area".into(), json!(work_area.map(|area| [area.x, area.y])));
-                self.report.insert("pixels_per_point".into(), json!(context.pixels_per_point()));
+                self.report.insert("pixels_per_point".into(), json!(scale));
+                self.report.insert("simulated_pixels_per_point".into(), json!(self.options.display.pixels_per_point));
                 self.report.insert("min_inner_size".into(), json!([MIN_SIZE.x, MIN_SIZE.y]));
                 self.measured_rom = std::mem::replace(&mut app.rom, "probe.cci".into());
                 self.phase = Phase::InputEntered;
@@ -386,9 +400,18 @@ mod tests {
             ["--output", "o.json", "--work-area", "800x500"].iter().map(|text| text.to_string()).collect();
         let options = parse(&arguments).unwrap();
         assert_eq!(options.output, PathBuf::from("o.json"));
-        assert_eq!(options.work_area, Some(vec2(800.0, 500.0)));
+        assert_eq!(options.display.work_area, Some(vec2(800.0, 500.0)));
+        assert_eq!(options.display.pixels_per_point, None);
         assert_eq!(options.timeout, 180.0);
         assert!(parse(&["--work-area".to_string()]).is_err());
+        let scaled: Vec<String> =
+            ["--output", "o.json", "--pixels-per-point", "1.25"].iter().map(|text| text.to_string()).collect();
+        assert_eq!(parse(&scaled).unwrap().display.pixels_per_point, Some(1.25));
+        for bad in ["0", "x", "9"] {
+            let arguments: Vec<String> =
+                ["--output", "o.json", "--pixels-per-point", bad].iter().map(|text| text.to_string()).collect();
+            assert!(parse(&arguments).is_err(), "{bad}");
+        }
         assert!(parse(&[]).is_err());
     }
 

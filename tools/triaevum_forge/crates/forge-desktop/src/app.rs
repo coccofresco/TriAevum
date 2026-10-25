@@ -27,7 +27,7 @@ use crate::mods::Optional;
 use crate::recognition::{recognize_request, run_recognition, Card, RecognizedRom};
 use crate::smoke::Probe;
 use crate::texts::{self, Checked};
-use crate::window::{Geometry, INITIAL_SIZE, MIN_SIZE};
+use crate::window::{Geometry, SimulatedDisplay, INITIAL_SIZE, MIN_SIZE};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PickTarget {
@@ -191,9 +191,13 @@ impl ForgeApp {
         installation: Installation,
         startup_error: Option<String>,
         probe: Option<Box<Probe>>,
-        work_area: Option<Vec2>,
+        simulated: SimulatedDisplay,
     ) -> Result<Self, String> {
         context.set_fonts(crate::fonts::system_fonts()?);
+        // Scroll bars that stay visible: on a small screen the options go on
+        // below the window's edge, and egui's default hidden bar would not
+        // say so (issue #111).
+        context.all_styles_mut(|style| style.spacing.scroll = egui::style::ScrollStyle::thin());
         let (sender, events) = channel();
         let (optional, contracts_error) = Optional::load(&installation);
         let (mod_enabled, mod_settings_error) = match optional.enabled() {
@@ -229,7 +233,7 @@ impl ForgeApp {
             workers: Vec::new(),
             dialogs: VecDeque::new(),
             closing: false,
-            geometry: Geometry::new(work_area),
+            geometry: Geometry::new(simulated),
             widgets: Vec::new(),
             probe,
         };
@@ -999,7 +1003,7 @@ pub fn run_window(
     installation: Option<Installation>,
     startup_error: Option<String>,
     probe: Option<Box<Probe>>,
-    work_area: Option<Vec2>,
+    simulated: SimulatedDisplay,
 ) -> Result<(), String> {
     let installation = match installation {
         Some(installation) => installation,
@@ -1009,7 +1013,7 @@ pub fn run_window(
         texts::WINDOW_TITLE,
         native_options(),
         Box::new(move |creation| {
-            let app = ForgeApp::new(&creation.egui_ctx, installation, startup_error, probe, work_area)?;
+            let app = ForgeApp::new(&creation.egui_ctx, installation, startup_error, probe, simulated)?;
             Ok(Box::new(app))
         }),
     )
@@ -1019,7 +1023,7 @@ pub fn run_window(
 /// `forge_gui.main`. A window that cannot open (no OpenGL, no display) is
 /// reported with the command line alternative.
 pub fn run(installation: Option<Installation>, startup_error: Option<String>) -> i32 {
-    match run_window(installation, startup_error, None, None) {
+    match run_window(installation, startup_error, None, SimulatedDisplay::default()) {
         Ok(()) => 0,
         Err(error) => {
             let message = format!(
@@ -1074,7 +1078,8 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let installation = Installation::at(directory.path()).unwrap();
         let data_root = installation.data_root.clone();
-        let mut app = ForgeApp::new(&egui::Context::default(), installation, None, None, None).unwrap();
+        let mut app =
+            ForgeApp::new(&egui::Context::default(), installation, None, None, SimulatedDisplay::default()).unwrap();
         assert_eq!(app.language_options(), (&[][..], None));
 
         app.probe_card("game.cci", Card::Recognizing(texts::RECOGNIZING.into()));
