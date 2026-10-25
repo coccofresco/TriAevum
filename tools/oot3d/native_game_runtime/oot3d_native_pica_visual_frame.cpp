@@ -5,7 +5,6 @@
 #include "oot3d_native_pica_affine_layout.h"
 
 #include <algorithm>
-#include <tuple>
 #include <bit>
 #include <chrono>
 #include <cmath>
@@ -14,9 +13,10 @@
 #include <cstdlib>
 #include <iterator>
 #include <limits>
-#include <map>
+#include <memory>
 #include <optional>
-#include <unordered_map>
+#include <span>
+#include <type_traits>
 #include <utility>
 
 namespace Oot3dNativeGame {
@@ -37,6 +37,10 @@ float InterpolateFinite(float previous, float current, float alpha) {
         return current;
     }
     return previous + (current - previous) * alpha;
+}
+
+bool SameBitsAsCurrent(const std::array<float, 4>& output, const std::array<float, 4>& current) {
+    return std::memcmp(output.data(), current.data(), sizeof(output)) == 0;
 }
 
 bool IsContinuousVertexUniform(size_t index) {
@@ -318,16 +322,20 @@ double NormalizedVertexUniformDelta(
     const Oot3dPicaVulkanDrawPlan& previous,
     const Oot3dPicaVulkanDrawPlan& current) {
     double maximum = 0.0;
-    for (size_t index = 0; index < previous.VertexShader.Uniforms.Floats.size();
-         ++index) {
+    const auto& before = previous.VertexShader.Uniforms.Floats;
+    const auto& after = current.VertexShader.Uniforms.Floats;
+    for (size_t index = 0; index < before.size(); ++index) {
         if (!IsContinuousVertexUniform(index)) {
             continue;
         }
+        // An unchanged row adds nothing (|x - x| / scale is 0, a NaN or an
+        // infinity is skipped): most rows of a draw are constant.
+        if (std::memcmp(before[index].data(), after[index].data(), sizeof(before[index])) == 0) {
+            continue;
+        }
         for (size_t component = 0; component < 4U; ++component) {
-            const double left =
-                previous.VertexShader.Uniforms.Floats[index][component];
-            const double right =
-                current.VertexShader.Uniforms.Floats[index][component];
+            const double left = before[index][component];
+            const double right = after[index][component];
             if (!std::isfinite(left) || !std::isfinite(right)) {
                 continue;
             }
@@ -581,79 +589,153 @@ struct VisualDrawDeltaFlags {
     bool PerVertex = false;
 };
 
+// Draw identities of one frame, computed on first use (the later matching
+// stages only look at the draws the earlier ones left unmatched). The storage
+// belongs to the transition scratch and is kept between frames.
 template <typename Identity> struct VisualIdentityValues {
-    const std::vector<uint64_t>* Existing = nullptr;
-    const std::vector<Oot3dPicaVulkanDrawPlan>* Draws = nullptr;
+    const uint64_t* Existing = nullptr;
+    const Oot3dPicaVulkanDrawPlan* Draws = nullptr;
+    uint64_t* Owned = nullptr;
+    uint8_t* Ready = nullptr;
     Identity Compute{};
-    mutable std::vector<uint64_t> Owned;
-    mutable std::vector<bool> Ready;
 
     uint64_t operator[](size_t index) const {
         if (Existing != nullptr) {
-            return (*Existing)[index];
+            return Existing[index];
         }
-        if (!Ready[index]) {
-            Owned[index] = Compute((*Draws)[index]);
-            Ready[index] = true;
+        if (Ready[index] == 0U) {
+            Owned[index] = Compute(Draws[index]);
+            Ready[index] = 1U;
         }
         return Owned[index];
     }
 };
 
+struct VisualIdentityStorage {
+    std::vector<uint64_t> Values;
+    std::vector<uint8_t> Ready;
+};
+
 template <typename Identity>
 VisualIdentityValues<Identity> ResolveVisualIdentities(const std::vector<uint64_t>& existing,
                                                        const std::vector<Oot3dPicaVulkanDrawPlan>& draws,
-                                                       Identity identity) {
+                                                       Identity identity, VisualIdentityStorage& storage) {
     VisualIdentityValues<Identity> values;
     if (existing.size() == draws.size()) {
-        values.Existing = &existing;
+        values.Existing = existing.data();
         return values;
     }
-    values.Draws = &draws;
+    storage.Values.resize(draws.size());
+    storage.Ready.assign(draws.size(), 0U);
+    values.Draws = draws.data();
+    values.Owned = storage.Values.data();
+    values.Ready = storage.Ready.data();
     values.Compute = identity;
-    values.Owned.resize(draws.size());
-    values.Ready.resize(draws.size(), false);
     return values;
 }
 
-template <typename Identity>
-VisualIdentityValues<Identity> ResolveVisualIdentities(const std::vector<Oot3dPicaVulkanDrawPlan>& draws,
-                                                       Identity identity) {
-    static const std::vector<uint64_t> empty;
-    return ResolveVisualIdentities(empty, draws, identity);
+// (identity, draw index): sorted, the draws of one identity are a run in
+// draw order, exactly the groups the hash maps used to collect.
+using VisualKeyedDraw = std::pair<uint64_t, uint32_t>;
+
+// The native instance key, compact and without padding (it is compared as
+// one array).
+using VisualNativeKey = std::array<uint64_t, 13>;
+static_assert(std::has_unique_object_representations_v<VisualNativeKey>);
+struct VisualNativeDraw {
+    VisualNativeKey Key{};
+    uint32_t Index = 0;
+    bool operator<(const VisualNativeDraw& other) const {
+        return Key != other.Key ? Key < other.Key : Index < other.Index;
+    }
+};
+
+struct VisualAlignmentCell {
+    size_t Matches = 0;
+    double Cost = 0.0;
+    uint8_t Action = 0;
+};
+
+// Everything the matching needs per frame, kept between frames: no
+// allocation once the capacities cover the scene.
+struct VisualMatchingScratch {
+    std::vector<uint8_t> PreviousMatched, CurrentMatched;
+    std::vector<VisualKeyedDraw> PreviousKeys, CurrentKeys;
+    std::vector<VisualNativeDraw> OldInstances, NewInstances;
+    std::vector<VisualAlignmentCell> Cells;
+    VisualIdentityStorage PreviousStrict, CurrentStrict, PreviousStructural, CurrentStructural,
+        PreviousPipeline, CurrentPipeline;
+};
+
+// Ranges of equal identity in two sorted key lists, in key order. The result
+// of every matching stage is independent of the order its groups are visited
+// (each group touches only its own draws), so this replaces the unordered
+// maps exactly.
+template <typename Visit>
+void ForEachCommonVisualGroup(const std::vector<VisualKeyedDraw>& previousKeys,
+                              const std::vector<VisualKeyedDraw>& currentKeys, Visit visit) {
+    size_t p = 0;
+    size_t c = 0;
+    while (c < currentKeys.size()) {
+        const uint64_t key = currentKeys[c].first;
+        size_t cEnd = c + 1U;
+        while (cEnd < currentKeys.size() && currentKeys[cEnd].first == key) ++cEnd;
+        while (p < previousKeys.size() && previousKeys[p].first < key) ++p;
+        size_t pEnd = p;
+        while (pEnd < previousKeys.size() && previousKeys[pEnd].first == key) ++pEnd;
+        if (pEnd != p) {
+            visit(std::span<const VisualKeyedDraw>(previousKeys.data() + p, pEnd - p),
+                  std::span<const VisualKeyedDraw>(currentKeys.data() + c, cEnd - c));
+        }
+        p = pEnd;
+        c = cEnd;
+    }
+}
+
+template <typename PreviousIdentities, typename CurrentIdentities>
+void CollectVisualKeys(size_t previousCount, size_t currentCount, const uint8_t* previousExcluded,
+                       const uint8_t* previousMatched, const uint8_t* currentMatched,
+                       const PreviousIdentities& previousIdentities, const CurrentIdentities& currentIdentities,
+                       VisualMatchingScratch& scratch) {
+    auto& previousKeys = scratch.PreviousKeys;
+    auto& currentKeys = scratch.CurrentKeys;
+    previousKeys.clear();
+    currentKeys.clear();
+    for (size_t index = 0; index < previousCount; ++index) {
+        if ((previousExcluded == nullptr || previousExcluded[index] == 0U) && previousMatched[index] == 0U) {
+            previousKeys.emplace_back(previousIdentities[index], static_cast<uint32_t>(index));
+        }
+    }
+    for (size_t index = 0; index < currentCount; ++index) {
+        if (currentMatched[index] == 0U) {
+            currentKeys.emplace_back(currentIdentities[index], static_cast<uint32_t>(index));
+        }
+    }
+    std::sort(previousKeys.begin(), previousKeys.end());
+    std::sort(currentKeys.begin(), currentKeys.end());
 }
 
 template <typename PreviousIdentities, typename CurrentIdentities>
 void MatchEqualCardinalityGroups(
     const Oot3dPicaVisualFrame& previous,
     const Oot3dPicaVisualFrame& current,
-    const std::vector<bool>& previousAlreadyMatched,
-    std::vector<bool>& previousMatched,
-    std::vector<bool>& currentMatched,
+    const uint8_t* previousExcluded,
+    VisualMatchingScratch& scratch,
     std::vector<std::optional<VisualDrawMatch>>& previousByCurrent,
-                                 const PreviousIdentities& previousIdentities,
-                                 const CurrentIdentities& currentIdentities, VisualDrawMatchKind uniqueKind,
+    const PreviousIdentities& previousIdentities,
+    const CurrentIdentities& currentIdentities, VisualDrawMatchKind uniqueKind,
     VisualDrawMatchKind repeatedKind, size_t& uniqueMatches,
     size_t& repeatedMatches, size_t* ambiguousPrevious,
     size_t* ambiguousCurrent) {
-    std::unordered_map<uint64_t, std::vector<size_t>> previousGroups;
-    std::unordered_map<uint64_t, std::vector<size_t>> currentGroups;
-    for (size_t index = 0; index < previous.Draws.size(); ++index) {
-        if (!previousAlreadyMatched[index] && !previousMatched[index]) {
-            previousGroups[previousIdentities[index]].push_back(index);
-        }
-    }
-    for (size_t index = 0; index < current.Draws.size(); ++index) {
-        if (!currentMatched[index]) {
-            currentGroups[currentIdentities[index]].push_back(index);
-        }
-    }
-    for (const auto& [key, currentIndices] : currentGroups) {
-        const auto found = previousGroups.find(key);
-        if (found == previousGroups.end()) {
-            continue;
-        }
-        const auto& previousIndices = found->second;
+    uint8_t* const previousMatched = scratch.PreviousMatched.data();
+    uint8_t* const currentMatched = scratch.CurrentMatched.data();
+    CollectVisualKeys(previous.Draws.size(), current.Draws.size(), previousExcluded, previousMatched,
+                      currentMatched, previousIdentities, currentIdentities, scratch);
+    const auto* const previousDraws = previous.Draws.data();
+    const auto* const currentDraws = current.Draws.data();
+    ForEachCommonVisualGroup(scratch.PreviousKeys, scratch.CurrentKeys,
+                             [&](std::span<const VisualKeyedDraw> previousIndices,
+                                 std::span<const VisualKeyedDraw> currentIndices) {
         if (previousIndices.size() != currentIndices.size()) {
             if (ambiguousPrevious != nullptr && previousIndices.size() > 1U) {
                 *ambiguousPrevious += previousIndices.size();
@@ -661,34 +743,27 @@ void MatchEqualCardinalityGroups(
             if (ambiguousCurrent != nullptr && currentIndices.size() > 1U) {
                 *ambiguousCurrent += currentIndices.size();
             }
-            continue;
+            return;
         }
         const bool unique = currentIndices.size() == 1U;
+        const auto kind = unique ? uniqueKind : repeatedKind;
         for (size_t ordinal = 0; ordinal < currentIndices.size(); ++ordinal) {
-            const size_t previousIndex = previousIndices[ordinal];
-            const size_t currentIndex = currentIndices[ordinal];
-            if (!HaveMatchingStructuralLayout(previous.Draws[previousIndex],
-                                              current.Draws[currentIndex])) {
+            const size_t previousIndex = previousIndices[ordinal].second;
+            const size_t currentIndex = currentIndices[ordinal].second;
+            if (!HaveMatchingStructuralLayout(previousDraws[previousIndex], currentDraws[currentIndex])) {
                 continue;
             }
-            const auto kind = unique ? uniqueKind : repeatedKind;
-            previousByCurrent[currentIndex] = {previousIndex, kind};
-            previousMatched[previousIndex] = true;
-            currentMatched[currentIndex] = true;
+            previousByCurrent[currentIndex] = VisualDrawMatch{previousIndex, kind};
+            previousMatched[previousIndex] = 1U;
+            currentMatched[currentIndex] = 1U;
             if (unique) {
                 ++uniqueMatches;
             } else {
                 ++repeatedMatches;
             }
         }
-    }
+    });
 }
-
-struct VisualAlignmentCell {
-    size_t Matches = 0;
-    double Cost = 0.0;
-    uint8_t Action = 0;
-};
 
 bool IsBetterAlignment(const VisualAlignmentCell& candidate,
                        const VisualAlignmentCell& current) {
@@ -705,97 +780,77 @@ template <typename PreviousIdentities, typename CurrentIdentities, typename Comp
 void MatchMonotonicGroups(
     const Oot3dPicaVisualFrame& previous,
     const Oot3dPicaVisualFrame& current,
-    std::vector<bool>& previousMatched,
-    std::vector<bool>& currentMatched,
+    VisualMatchingScratch& scratch,
     std::vector<std::optional<VisualDrawMatch>>& previousByCurrent,
-                          const PreviousIdentities& previousIdentities, const CurrentIdentities& currentIdentities, Compatible compatible, VisualDrawMatchKind kind,
-    size_t& matchCount) {
-    std::unordered_map<uint64_t, std::vector<size_t>> previousGroups;
-    std::unordered_map<uint64_t, std::vector<size_t>> currentGroups;
-    for (size_t index = 0; index < previous.Draws.size(); ++index) {
-        if (!previousMatched[index]) {
-            previousGroups[previousIdentities[index]].push_back(index);
+    const PreviousIdentities& previousIdentities, const CurrentIdentities& currentIdentities,
+    Compatible compatible, VisualDrawMatchKind kind, size_t& matchCount) {
+    uint8_t* const previousMatched = scratch.PreviousMatched.data();
+    uint8_t* const currentMatched = scratch.CurrentMatched.data();
+    CollectVisualKeys(previous.Draws.size(), current.Draws.size(), nullptr, previousMatched, currentMatched,
+                      previousIdentities, currentIdentities, scratch);
+    const auto* const previousDraws = previous.Draws.data();
+    const auto* const currentDraws = current.Draws.data();
+    auto& cells = scratch.Cells;
+    ForEachCommonVisualGroup(scratch.PreviousKeys, scratch.CurrentKeys,
+                             [&](std::span<const VisualKeyedDraw> previousIndices,
+                                 std::span<const VisualKeyedDraw> currentIndices) {
+        const size_t previousCountTotal = previousIndices.size();
+        const size_t currentCountTotal = currentIndices.size();
+        const size_t rowWidth = currentCountTotal + 1U;
+        cells.assign((previousCountTotal + 1U) * rowWidth, VisualAlignmentCell{});
+        VisualAlignmentCell* const table = cells.data();
+        for (size_t previousCount = 1; previousCount <= previousCountTotal; ++previousCount) {
+            table[previousCount * rowWidth].Action = 1U;
         }
-    }
-    for (size_t index = 0; index < current.Draws.size(); ++index) {
-        if (!currentMatched[index]) {
-            currentGroups[currentIdentities[index]].push_back(index);
+        for (size_t currentCount = 1; currentCount <= currentCountTotal; ++currentCount) {
+            table[currentCount].Action = 2U;
         }
-    }
-    for (const auto& [key, currentIndices] : currentGroups) {
-        const auto found = previousGroups.find(key);
-        if (found == previousGroups.end()) {
-            continue;
-        }
-        const auto& previousIndices = found->second;
-        const size_t rowWidth = currentIndices.size() + 1U;
-        std::vector<VisualAlignmentCell> cells(
-            (previousIndices.size() + 1U) * rowWidth);
-        const auto cell = [&](size_t previousCount,
-                              size_t currentCount) -> VisualAlignmentCell& {
-            return cells[previousCount * rowWidth + currentCount];
-        };
-        for (size_t previousCount = 1; previousCount <= previousIndices.size();
-             ++previousCount) {
-            cell(previousCount, 0).Action = 1U;
-        }
-        for (size_t currentCount = 1; currentCount <= currentIndices.size();
-             ++currentCount) {
-            cell(0, currentCount).Action = 2U;
-        }
-        for (size_t previousCount = 1; previousCount <= previousIndices.size();
-             ++previousCount) {
-            for (size_t currentCount = 1;
-                 currentCount <= currentIndices.size(); ++currentCount) {
-                VisualAlignmentCell best =
-                    cell(previousCount - 1U, currentCount);
+        for (size_t previousCount = 1; previousCount <= previousCountTotal; ++previousCount) {
+            const size_t previousIndex = previousIndices[previousCount - 1U].second;
+            const auto& previousDraw = previousDraws[previousIndex];
+            VisualAlignmentCell* const row = table + previousCount * rowWidth;
+            const VisualAlignmentCell* const above = row - rowWidth;
+            for (size_t currentCount = 1; currentCount <= currentCountTotal; ++currentCount) {
+                VisualAlignmentCell best = above[currentCount];
                 best.Action = 1U;
-                auto skipCurrent =
-                    cell(previousCount, currentCount - 1U);
+                VisualAlignmentCell skipCurrent = row[currentCount - 1U];
                 skipCurrent.Action = 2U;
                 if (IsBetterAlignment(skipCurrent, best)) {
                     best = skipCurrent;
                 }
-                const size_t previousIndex =
-                    previousIndices[previousCount - 1U];
-                const size_t currentIndex =
-                    currentIndices[currentCount - 1U];
-                if (compatible(previous.Draws[previousIndex],
-                               current.Draws[currentIndex])) {
-                    auto match =
-                        cell(previousCount - 1U, currentCount - 1U);
+                const size_t currentIndex = currentIndices[currentCount - 1U].second;
+                const auto& currentDraw = currentDraws[currentIndex];
+                if (compatible(previousDraw, currentDraw)) {
+                    VisualAlignmentCell match = above[currentCount - 1U];
                     ++match.Matches;
+                    // Spelled as before: -ffast-math must contract it alike.
                     const double previousOrder =
                         (static_cast<double>(previousIndex) + 0.5) /
                         std::max<size_t>(previous.Draws.size(), 1U);
                     const double currentOrder =
                         (static_cast<double>(currentIndex) + 0.5) /
                         std::max<size_t>(current.Draws.size(), 1U);
-                    match.Cost += NormalizedVertexUniformDelta(
-                                      previous.Draws[previousIndex],
-                                      current.Draws[currentIndex]) +
+                    match.Cost += NormalizedVertexUniformDelta(previousDraw, currentDraw) +
                                   std::abs(previousOrder - currentOrder);
                     match.Action = 3U;
                     if (IsBetterAlignment(match, best)) {
                         best = match;
                     }
                 }
-                cell(previousCount, currentCount) = best;
+                row[currentCount] = best;
             }
         }
 
-        size_t previousCount = previousIndices.size();
-        size_t currentCount = currentIndices.size();
+        size_t previousCount = previousCountTotal;
+        size_t currentCount = currentCountTotal;
         while (previousCount != 0U || currentCount != 0U) {
-            const uint8_t action = cell(previousCount, currentCount).Action;
+            const uint8_t action = table[previousCount * rowWidth + currentCount].Action;
             if (action == 3U) {
-                const size_t previousIndex =
-                    previousIndices[previousCount - 1U];
-                const size_t currentIndex =
-                    currentIndices[currentCount - 1U];
-                previousByCurrent[currentIndex] = {previousIndex, kind};
-                previousMatched[previousIndex] = true;
-                currentMatched[currentIndex] = true;
+                const size_t previousIndex = previousIndices[previousCount - 1U].second;
+                const size_t currentIndex = currentIndices[currentCount - 1U].second;
+                previousByCurrent[currentIndex] = VisualDrawMatch{previousIndex, kind};
+                previousMatched[previousIndex] = 1U;
+                currentMatched[currentIndex] = 1U;
                 ++matchCount;
                 --previousCount;
                 --currentCount;
@@ -807,62 +862,99 @@ void MatchMonotonicGroups(
                 break;
             }
         }
+    });
+}
+
+VisualNativeKey MakeVisualNativeKey(const Oot3dPicaVulkanDrawPlan& draw) {
+    const auto& id = draw.Composition.TemporalIdentity;
+    const auto& fb = draw.State.Framebuffer;
+    return {id.Owner, id.Instance, id.Part, id.Slot, id.Lifetime,
+            uint64_t(fb.ColorPhysicalAddress), uint64_t(fb.DepthPhysicalAddress),
+            uint64_t(fb.Width), uint64_t(fb.Height), uint64_t(fb.ColorFormat), uint64_t(fb.DepthFormat),
+            uint64_t(uint16_t(draw.State.Viewport.CornerX)), uint64_t(uint16_t(draw.State.Viewport.CornerY))};
+}
+
+// Runs of equal native key in a sorted instance list.
+template <typename Visit>
+void ForEachVisualNativeRun(const std::vector<VisualNativeDraw>& draws, Visit visit) {
+    for (size_t begin = 0; begin < draws.size();) {
+        size_t end = begin + 1U;
+        while (end < draws.size() && draws[end].Key == draws[begin].Key) ++end;
+        visit(begin, end);
+        begin = end;
     }
 }
 
-VisualDrawMatching BuildVisualDrawMatching(
+void BuildVisualDrawMatching(
     const Oot3dPicaVisualFrame& previous,
-    const Oot3dPicaVisualFrame& current) {
-    VisualDrawMatching matching;
-    matching.PreviousByCurrent.resize(current.Draws.size());
-    std::vector<bool> noPreviousMatches(previous.Draws.size(), false);
-    std::vector<bool> previousMatched(previous.Draws.size(), false);
-    std::vector<bool> currentMatched(current.Draws.size(), false);
+    const Oot3dPicaVisualFrame& current,
+    VisualDrawMatching& matching,
+    VisualMatchingScratch& scratch) {
+    matching.PreviousByCurrent.assign(current.Draws.size(), std::nullopt);
+    matching.StrictUniqueMatches = 0;
+    matching.StrictOrdinalMatches = 0;
+    matching.StructuralOrdinalMatches = 0;
+    matching.PipelineOrdinalMatches = 0;
+    matching.AmbiguousPrevious = 0;
+    matching.AmbiguousCurrent = 0;
+    matching.UnmatchedPrevious = 0;
+    matching.UnmatchedCurrent = 0;
+    scratch.PreviousMatched.assign(previous.Draws.size(), 0U);
+    scratch.CurrentMatched.assign(current.Draws.size(), 0U);
     // Native instance matches are independent of draw order and cardinality.
     // Reserve every evidenced draw from the legacy interpolation matcher,
     // including unmatched/ambiguous ones, so it cannot pair their uniforms by
     // occurrence. Unknown producers retain their existing visual sampling,
     // but cannot acquire exact renderer motion history.
-    using NativeKey = std::pair<Fast::Renderer3ds::PicaTemporalIdentity, std::array<uint64_t, 8>>;
-    const auto nativeKey = [](const Oot3dPicaVulkanDrawPlan& draw) -> NativeKey {
-        const auto& fb = draw.State.Framebuffer;
-        return {draw.Composition.TemporalIdentity, {fb.ColorPhysicalAddress, fb.DepthPhysicalAddress,
-            fb.Width, fb.Height, fb.ColorFormat, fb.DepthFormat,
-            uint64_t(uint16_t(draw.State.Viewport.CornerX)), uint64_t(uint16_t(draw.State.Viewport.CornerY))}};
-    };
-    std::map<NativeKey, std::vector<size_t>> oldInstances, newInstances;
+    auto& oldInstances = scratch.OldInstances;
+    auto& newInstances = scratch.NewInstances;
+    oldInstances.clear();
+    newInstances.clear();
     for (size_t i = 0; i < previous.Draws.size(); ++i)
         if (previous.Draws[i].Composition.TemporalIdentity.Available()) {
-            oldInstances[nativeKey(previous.Draws[i])].push_back(i);
-            previousMatched[i] = true;
+            oldInstances.push_back({MakeVisualNativeKey(previous.Draws[i]), static_cast<uint32_t>(i)});
+            scratch.PreviousMatched[i] = 1U;
         }
     for (size_t i = 0; i < current.Draws.size(); ++i)
         if (current.Draws[i].Composition.TemporalIdentity.Available()) {
-            newInstances[nativeKey(current.Draws[i])].push_back(i);
-            currentMatched[i] = true;
+            newInstances.push_back({MakeVisualNativeKey(current.Draws[i]), static_cast<uint32_t>(i)});
+            scratch.CurrentMatched[i] = 1U;
         }
-    for (const auto& [key, indices] : oldInstances)
-        if (indices.size() != 1) matching.AmbiguousPrevious += indices.size();
-    for (const auto& [key, indices] : newInstances) {
-        if (indices.size() != 1) matching.AmbiguousCurrent += indices.size();
-        const auto old = oldInstances.find(key);
-        if (indices.size() == 1 && old != oldInstances.end() && old->second.size() == 1 &&
-            HaveMatchingPipelineLayout(previous.Draws[old->second[0]], current.Draws[indices[0]])) {
-            matching.PreviousByCurrent[indices[0]] = {old->second[0], VisualDrawMatchKind::StrictUnique};
+    std::sort(oldInstances.begin(), oldInstances.end());
+    std::sort(newInstances.begin(), newInstances.end());
+    ForEachVisualNativeRun(oldInstances, [&](size_t begin, size_t end) {
+        if (end - begin != 1U) matching.AmbiguousPrevious += end - begin;
+    });
+    size_t old = 0;
+    ForEachVisualNativeRun(newInstances, [&](size_t begin, size_t end) {
+        if (end - begin != 1U) matching.AmbiguousCurrent += end - begin;
+        const auto& key = newInstances[begin].Key;
+        while (old < oldInstances.size() && oldInstances[old].Key < key) ++old;
+        if (end - begin != 1U || old == oldInstances.size() || oldInstances[old].Key != key) return;
+        const bool oldUnique = old + 1U == oldInstances.size() || oldInstances[old + 1U].Key != key;
+        const size_t previousIndex = oldInstances[old].Index;
+        const size_t currentIndex = newInstances[begin].Index;
+        if (oldUnique && HaveMatchingPipelineLayout(previous.Draws[previousIndex], current.Draws[currentIndex])) {
+            matching.PreviousByCurrent[currentIndex] = VisualDrawMatch{previousIndex, VisualDrawMatchKind::StrictUnique};
             ++matching.StrictUniqueMatches;
         }
-    }
-    const auto previousStrict =
-        ResolveVisualIdentities(previous.StrictDrawIdentities, previous.Draws, ComputeOot3dPicaVisualDrawIdentity);
-    const auto currentStrict =
-        ResolveVisualIdentities(current.StrictDrawIdentities, current.Draws, ComputeOot3dPicaVisualDrawIdentity);
-    const auto previousStructural = ResolveVisualIdentities(previous.Draws, ComputeStructuralDrawIdentity);
-    const auto currentStructural = ResolveVisualIdentities(current.Draws, ComputeStructuralDrawIdentity);
-    const auto previousPipeline = ResolveVisualIdentities(previous.Draws, ComputePipelineDrawIdentity);
-    const auto currentPipeline = ResolveVisualIdentities(current.Draws, ComputePipelineDrawIdentity);
+    });
+    static const std::vector<uint64_t> none;
+    const auto previousStrict = ResolveVisualIdentities(previous.StrictDrawIdentities, previous.Draws,
+                                                        ComputeOot3dPicaVisualDrawIdentity, scratch.PreviousStrict);
+    const auto currentStrict = ResolveVisualIdentities(current.StrictDrawIdentities, current.Draws,
+                                                       ComputeOot3dPicaVisualDrawIdentity, scratch.CurrentStrict);
+    const auto previousStructural =
+        ResolveVisualIdentities(none, previous.Draws, ComputeStructuralDrawIdentity, scratch.PreviousStructural);
+    const auto currentStructural =
+        ResolveVisualIdentities(none, current.Draws, ComputeStructuralDrawIdentity, scratch.CurrentStructural);
+    const auto previousPipeline =
+        ResolveVisualIdentities(none, previous.Draws, ComputePipelineDrawIdentity, scratch.PreviousPipeline);
+    const auto currentPipeline =
+        ResolveVisualIdentities(none, current.Draws, ComputePipelineDrawIdentity, scratch.CurrentPipeline);
 
     MatchEqualCardinalityGroups(
-        previous, current, noPreviousMatches, previousMatched, currentMatched,
+        previous, current, nullptr, scratch,
         matching.PreviousByCurrent, previousStrict, currentStrict,
         VisualDrawMatchKind::StrictUnique,
         VisualDrawMatchKind::StrictOrdinal, matching.StrictUniqueMatches,
@@ -871,7 +963,7 @@ VisualDrawMatching BuildVisualDrawMatching(
 
     size_t unusedStructuralUniqueMatches = 0;
     MatchEqualCardinalityGroups(
-        previous, current, previousMatched, previousMatched, currentMatched,
+        previous, current, nullptr, scratch,
         matching.PreviousByCurrent, previousStructural, currentStructural,
         VisualDrawMatchKind::StructuralOrdinal,
         VisualDrawMatchKind::StructuralOrdinal,
@@ -880,16 +972,14 @@ VisualDrawMatching BuildVisualDrawMatching(
     matching.StructuralOrdinalMatches += unusedStructuralUniqueMatches;
 
     MatchMonotonicGroups(
-        previous, current, previousMatched, currentMatched,
-        matching.PreviousByCurrent,
-                         previousStructural, currentStructural,
+        previous, current, scratch, matching.PreviousByCurrent,
+        previousStructural, currentStructural,
         HaveMatchingStructuralLayout,
         VisualDrawMatchKind::StructuralOrdinal,
         matching.StructuralOrdinalMatches);
     MatchMonotonicGroups(
-        previous, current, previousMatched, currentMatched,
-        matching.PreviousByCurrent,
-                         previousPipeline, currentPipeline,
+        previous, current, scratch, matching.PreviousByCurrent,
+        previousPipeline, currentPipeline,
         HaveMatchingPipelineLayout, VisualDrawMatchKind::PipelineOrdinal,
         matching.PipelineOrdinalMatches);
 
@@ -898,13 +988,22 @@ VisualDrawMatching BuildVisualDrawMatching(
         [](const auto& match) { return match.has_value(); }));
     matching.UnmatchedPrevious = previous.Draws.size() - actualMatches;
     matching.UnmatchedCurrent = current.Draws.size() - actualMatches;
+}
+
+VisualDrawMatching BuildVisualDrawMatching(
+    const Oot3dPicaVisualFrame& previous,
+    const Oot3dPicaVisualFrame& current) {
+    VisualDrawMatching matching;
+    VisualMatchingScratch scratch;
+    BuildVisualDrawMatching(previous, current, matching, scratch);
     return matching;
 }
 
 Oot3dPicaVisualTransitionStats
 AnalyzeVisualTransitionWithMatching(const Oot3dPicaVisualFrame& previous, const Oot3dPicaVisualFrame& current,
                                     const VisualDrawMatching& matching,
-                                    std::vector<VisualDrawDeltaFlags>* drawDeltas = nullptr) {
+                                    std::vector<VisualDrawDeltaFlags>* drawDeltas = nullptr,
+                                    std::vector<double>* topTargetScratch = nullptr) {
     Oot3dPicaVisualTransitionStats stats;
     stats.PreviousDraws = previous.Draws.size();
     stats.CurrentDraws = current.Draws.size();
@@ -922,7 +1021,9 @@ AnalyzeVisualTransitionWithMatching(const Oot3dPicaVisualFrame& previous, const 
     if (maximumDrawCount != 0U) {
         stats.MatchedDrawCoverage = static_cast<double>(stats.MatchedDraws) / static_cast<double>(maximumDrawCount);
     }
-    std::vector<double> topTargetDeltas;
+    std::vector<double> localTopTargetDeltas;
+    auto& topTargetDeltas = topTargetScratch != nullptr ? *topTargetScratch : localTopTargetDeltas;
+    topTargetDeltas.clear();
     if (drawDeltas != nullptr) {
         drawDeltas->assign(current.Draws.size(), {});
     }
@@ -1102,12 +1203,144 @@ void InterpolateVisualLightBinding(
     }
 }
 
+// One vertex attribute of a draw, located and bounds-checked once: the bone
+// index reads of CmbPaletteSlots run for every referenced vertex.
+struct VisualAttributeReader {
+    const uint8_t* Bytes = nullptr;
+    size_t Records = 0;
+    size_t Stride = 0;
+    size_t Offset = 0;
+    size_t ComponentSize = 0;
+    Oot3dPicaVertexFormat Format = Oot3dPicaVertexFormat::Float;
+    bool PerInstance = false;
+
+    // False where the per-read checks (missing binding, zero stride, an
+    // attribute outside its record) would refuse every read.
+    bool Bind(const Oot3dPicaVulkanDrawPlan& plan, const Oot3dPicaVulkanVertexAttribute& attribute) {
+        const auto* binding = FindVertexBinding(plan, attribute.Binding);
+        if (!binding || !binding->ByteStride) return false;
+        const size_t size = VertexFormatByteSize(attribute.Format);
+        if (!size || attribute.ByteOffset > binding->ByteStride ||
+            size*attribute.ComponentCount > binding->ByteStride-attribute.ByteOffset) return false;
+        const auto bytes = binding->ResolvedBytes();
+        Bytes = bytes.data();
+        Stride = binding->ByteStride;
+        Records = bytes.size() / Stride;
+        Offset = attribute.ByteOffset;
+        ComponentSize = size;
+        Format = attribute.Format;
+        PerInstance = binding->InputRate == Oot3dPicaVertexInputRate::PerInstance;
+        return true;
+    }
+
+    // False when the record is outside the binding's bytes.
+    bool Read(size_t vertex, size_t component, float& value) const {
+        const size_t record = PerInstance ? 0 : vertex;
+        if (record >= Records) return false;
+        const uint8_t* at = Bytes + record * Stride + Offset + component * ComponentSize;
+        switch (Format) {
+        case Oot3dPicaVertexFormat::UnsignedByte: value = float(*at); return true;
+        case Oot3dPicaVertexFormat::SignedByte: value = float(static_cast<int8_t>(*at)); return true;
+        case Oot3dPicaVertexFormat::SignedShort: {
+            int16_t raw; std::memcpy(&raw, at, 2); value = float(raw); return true;
+        }
+        case Oot3dPicaVertexFormat::Float: std::memcpy(&value, at, 4); return true;
+        }
+        return false;
+    }
+};
+
+// The bone-index walk of CmbPaletteSlots: the palette slots the draw's
+// vertices address, or nothing for an address it cannot prove.
+std::optional<uint32_t> CmbPaletteVertexSlots(
+    const Oot3dPicaVulkanDrawPlan& previous, const Oot3dPicaVulkanVertexAttribute& left,
+    const Oot3dPicaVulkanDrawPlan& current, const Oot3dPicaVulkanVertexAttribute& right, size_t influences) {
+    const auto indices = current.ResolvedIndexBytes();
+    const size_t indexSize = current.IndicesAre16Bit ? 2 : 1;
+    if (current.Indexed && current.VertexCount > indices.size()/indexSize) return {};
+    VisualAttributeReader from, to;
+    // Every read fails alike when an attribute cannot be read at all (the
+    // walk reads at least once: VertexCount and influences are nonzero).
+    if (!from.Bind(previous, left) || !to.Bind(current, right)) return {};
+    const uint8_t* const indexBytes = indices.data();
+    const bool indexed = current.Indexed;
+    const int64_t baseVertex = current.BaseVertex;
+    const size_t vertexCount = current.VertexCount;
+    uint32_t selected = 0;
+    for (size_t i = 0; i < vertexCount; ++i) {
+        int64_t vertex = static_cast<int64_t>(i);
+        if (indexed) {
+            vertex = indexBytes[i*indexSize];
+            if (indexSize == 2) vertex |= int64_t(indexBytes[i*indexSize+1]) << 8;
+            vertex += baseVertex;
+        }
+        if (vertex < 0) return {};
+        for (size_t component = 0; component < influences; ++component) {
+            float a = 0.0F, b = 0.0F;
+            // Reject fractional, wrapped and out-of-palette addresses instead
+            // of approximating PICA's MOVA/wrap semantics with a guessed span.
+            if (!from.Read(size_t(vertex), component, a) || !to.Read(size_t(vertex), component, b) ||
+                !std::isfinite(b) || a != b || b < 0 || b >= 10 || std::floor(b) != b) return {};
+            selected |= 1U << static_cast<uint32_t>(b);
+        }
+    }
+    return selected;
+}
+
+// CmbPaletteVertexSlots of the previous transition, by draw: a bone-index
+// walk over the same immutable shared bytes (held here, so they cannot be
+// freed and reused) with the same layout has the same result.
+struct CmbSlotsMemo {
+    std::shared_ptr<const std::vector<uint8_t>> PreviousBytes, CurrentBytes, Indices;
+    std::array<uint64_t, 6> Layout{};
+    std::optional<uint32_t> Result;
+    bool Valid = false;
+};
+
+const std::shared_ptr<const std::vector<uint8_t>>* SharedAttributeBytes(
+    const Oot3dPicaVulkanDrawPlan& plan, const Oot3dPicaVulkanVertexAttribute& attribute) {
+    const auto* binding = FindVertexBinding(plan, attribute.Binding);
+    return binding != nullptr && binding->SharedBytes != nullptr ? &binding->SharedBytes : nullptr;
+}
+
+std::array<uint64_t, 6> CmbSlotsLayout(
+    const Oot3dPicaVulkanDrawPlan& previous, const Oot3dPicaVulkanVertexAttribute& left,
+    const Oot3dPicaVulkanDrawPlan& current, const Oot3dPicaVulkanVertexAttribute& right, size_t influences) {
+    const auto binding = [](const Oot3dPicaVulkanDrawPlan& plan, const Oot3dPicaVulkanVertexAttribute& attribute) {
+        const auto* found = FindVertexBinding(plan, attribute.Binding);
+        return (uint64_t(found->ByteStride) << 8) | uint64_t(found->InputRate == Oot3dPicaVertexInputRate::PerInstance);
+    };
+    const auto attributeBits = [](const Oot3dPicaVulkanVertexAttribute& attribute) {
+        return (uint64_t(attribute.Binding) << 48) | (uint64_t(static_cast<uint8_t>(attribute.Format)) << 40) |
+               (uint64_t(attribute.ComponentCount) << 32) | uint64_t(attribute.ByteOffset);
+    };
+    return {binding(previous, left), binding(current, right), attributeBits(left), attributeBits(right),
+            (uint64_t(current.VertexCount) << 8) | (current.Indexed ? 2U : 0U) | (current.IndicesAre16Bit ? 1U : 0U),
+            (uint64_t(uint32_t(current.BaseVertex)) << 8) | uint64_t(influences)};
+}
+
+struct CmbSlotsCache {
+    std::vector<CmbSlotsMemo> Previous, Current;
+    void Begin(size_t draws) {
+        std::swap(Previous, Current);
+        for (auto& memo : Current) memo = {};
+        Current.resize(draws);
+    }
+};
+
+struct CmbSlotsContext {
+    CmbSlotsCache* Cache = nullptr;
+    size_t PreviousIndex = 0;
+    size_t CurrentIndex = 0;
+};
+
 // Return a conservative exact mask of the slots referenced by this draw.
 // A missing snapshot or an unfamiliar addressing mode disables factoring;
 // selecting rigid-looking rows from an unknown active palette could separate
 // a joint shared with an excluded, non-rigid matrix.
 std::optional<uint32_t> CmbPaletteSlots(
-    const Oot3dPicaVulkanDrawPlan& previous, const Oot3dPicaVulkanDrawPlan& current) {
+    const Oot3dPicaVulkanDrawPlan& previous, const Oot3dPicaVulkanDrawPlan& current,
+    const CmbSlotsContext* context = nullptr) {
     const auto& a = previous.VertexShader.Uniforms;
     const auto& b = current.VertexShader.Uniforms;
     if (a.BooleanMask != b.BooleanMask || a.Integers != b.Integers) return {};
@@ -1132,52 +1365,38 @@ std::optional<uint32_t> CmbPaletteSlots(
         !current.VertexCount || previous.VertexCount != current.VertexCount ||
         previous.Indexed != current.Indexed || previous.BaseVertex != current.BaseVertex ||
         previous.IndicesAre16Bit != current.IndicesAre16Bit || !EqualIndexBytes(previous,current)) return {};
-    const auto read = [](const auto& plan, const auto& attribute, size_t vertex, size_t component)
-        -> std::optional<float> {
-        const auto* binding = FindVertexBinding(plan,attribute.Binding);
-        if (!binding || !binding->ByteStride) return {};
-        const size_t size = VertexFormatByteSize(attribute.Format);
-        if (!size || attribute.ByteOffset > binding->ByteStride ||
-            size*attribute.ComponentCount > binding->ByteStride-attribute.ByteOffset) return {};
-        const auto bytes = binding->ResolvedBytes();
-        const size_t record = binding->InputRate == Oot3dPicaVertexInputRate::PerInstance ? 0 : vertex;
-        if (record >= bytes.size()/binding->ByteStride) return {};
-        const size_t offset = record*binding->ByteStride+attribute.ByteOffset+component*size;
-        switch (attribute.Format) {
-        case Oot3dPicaVertexFormat::UnsignedByte: return float(bytes[offset]);
-        case Oot3dPicaVertexFormat::SignedByte: return float(static_cast<int8_t>(bytes[offset]));
-        case Oot3dPicaVertexFormat::SignedShort: {
-            int16_t value; std::memcpy(&value,bytes.data()+offset,2); return float(value);
-        }
-        case Oot3dPicaVertexFormat::Float: {
-            float value; std::memcpy(&value,bytes.data()+offset,4); return value;
-        }
-        }
-        return {};
-    };
-    uint32_t selected = 0;
-    const auto indices = current.ResolvedIndexBytes();
-    const size_t indexSize = current.IndicesAre16Bit ? 2 : 1;
-    if (current.Indexed && current.VertexCount > indices.size()/indexSize) return {};
-    for (size_t i = 0; i < current.VertexCount; ++i) {
-        int64_t vertex = static_cast<int64_t>(i);
-        if (current.Indexed) {
-            vertex = indices[i*indexSize];
-            if (indexSize == 2) vertex |= int64_t(indices[i*indexSize+1]) << 8;
-            vertex += current.BaseVertex;
-        }
-        if (vertex < 0) return {};
-        for (size_t component = 0; component < influences; ++component) {
-            const auto from = read(previous,*left,size_t(vertex),component);
-            const auto to = read(current,*right,size_t(vertex),component);
-            // Reject fractional, wrapped and out-of-palette addresses instead
-            // of approximating PICA's MOVA/wrap semantics with a guessed span.
-            if (!from || !to || !std::isfinite(*to) || *from != *to ||
-                *to < 0 || *to >= 10 || std::floor(*to) != *to) return {};
-            selected |= 1U << static_cast<uint32_t>(*to);
-        }
+    if (context == nullptr || context->Cache == nullptr) {
+        return CmbPaletteVertexSlots(previous, *left, current, *right, influences);
     }
-    return selected;
+    const auto* previousBytes = SharedAttributeBytes(previous, *left);
+    const auto* currentBytes = SharedAttributeBytes(current, *right);
+    const bool sharedIndices = !current.Indexed || current.SharedIndexBytes != nullptr;
+    if (previousBytes == nullptr || currentBytes == nullptr || !sharedIndices) {
+        return CmbPaletteVertexSlots(previous, *left, current, *right, influences);
+    }
+    auto& cache = *context->Cache;
+    const auto layout = CmbSlotsLayout(previous, *left, current, *right, influences);
+    const auto* indices = current.Indexed ? current.SharedIndexBytes.get() : nullptr;
+    const auto same = [&](const CmbSlotsMemo& memo) {
+        return memo.Valid && memo.PreviousBytes == *previousBytes && memo.CurrentBytes == *currentBytes &&
+               memo.Indices.get() == indices && memo.Layout == layout;
+    };
+    // In steady state the previous transition walked the same bytes (the
+    // draw's own buffers in both frames). A miss only costs the walk.
+    const auto hit = [&](size_t index) -> const CmbSlotsMemo* {
+        return index < cache.Previous.size() && same(cache.Previous[index]) ? &cache.Previous[index] : nullptr;
+    };
+    const CmbSlotsMemo* found = hit(context->PreviousIndex);
+    if (found == nullptr && context->CurrentIndex != context->PreviousIndex) found = hit(context->CurrentIndex);
+    auto& entry = cache.Current[context->CurrentIndex];
+    entry.Result = found != nullptr ? found->Result
+                                    : CmbPaletteVertexSlots(previous, *left, current, *right, influences);
+    entry.PreviousBytes = *previousBytes;
+    entry.CurrentBytes = *currentBytes;
+    entry.Indices = current.Indexed ? current.SharedIndexBytes : nullptr;
+    entry.Layout = layout;
+    entry.Valid = true;
+    return entry.Result;
 }
 
 bool CmbAffineLayouts(const Oot3dPicaVulkanDrawPlan& previous, const Oot3dPicaVulkanDrawPlan& current) {
@@ -1197,14 +1416,67 @@ VisualMatrixBits AffineBits(const VisualUniformFloats& floats, size_t first) {
 }
 
 // A draw's referenced palette slots and the left motion it shares with the
-// other draws of its actor, prepared once per interpolated sample. A draw of
-// the actor that has no previous match carries a reconstructed previous
-// palette instead of being shown at the new pose.
+// other draws of its actor, prepared once per transition (they do not depend
+// on the sample's alpha). A draw of the actor that has no previous match
+// carries a reconstructed previous palette instead of being shown at the new
+// pose.
 struct VisualFactoredPalette {
     bool Prepared = false;
     std::optional<uint32_t> Selected;
     std::optional<Fast::Renderer3ds::PicaRigidMotionRows> SharedMotion;
     std::optional<VisualUniformFloats> CarriedPrevious;
+};
+
+// One actor's draws that share an output space, and the bones they use.
+struct VisualPaletteGroup {
+    uint64_t Owner = 0;
+    uint64_t Lifetime = 0;
+    VisualMatrixBits Space{};
+    VisualMatrixBits PriorSpace{};
+    std::optional<Fast::Renderer3ds::PicaRigidMotionRows> Motion;
+    // Current bone matrix -> its previous pose (Ambiguous when two draws
+    // disagree), each distinct bone once in first-use order.
+    struct Bone {
+        VisualMatrixBits Current{};
+        VisualMatrixBits Prior{};
+        bool Ambiguous = false;
+    };
+    std::vector<Bone> Bones;
+    std::vector<Fast::Renderer3ds::PicaAffineEndpoints> Matrices;
+
+    const Bone* FindBone(const VisualMatrixBits& current) const {
+        for (const auto& bone : Bones)
+            if (bone.Current == current) return &bone;
+        return nullptr;
+    }
+};
+
+// ShareVisualPaletteMotions' storage, kept between transitions.
+struct VisualPaletteScratch {
+    std::vector<VisualPaletteGroup> Groups;   // the first GroupCount are live
+    size_t GroupCount = 0;
+    std::vector<int32_t> GroupOfDraw;
+    CmbSlotsCache Slots;
+
+    VisualPaletteGroup* Find(uint64_t owner, uint64_t lifetime, const VisualMatrixBits& space) {
+        for (size_t index = 0; index < GroupCount; ++index) {
+            auto& group = Groups[index];
+            if (group.Owner == owner && group.Lifetime == lifetime && group.Space == space) return &group;
+        }
+        return nullptr;
+    }
+    VisualPaletteGroup& Add(uint64_t owner, uint64_t lifetime, const VisualMatrixBits& space) {
+        if (GroupCount == Groups.size()) Groups.emplace_back();
+        auto& group = Groups[GroupCount++];
+        group.Owner = owner;
+        group.Lifetime = lifetime;
+        group.Space = space;
+        group.PriorSpace = {};
+        group.Motion.reset();
+        group.Bones.clear();
+        group.Matrices.clear();
+        return group;
+    }
 };
 
 // An actor is drawn in pieces (body, hands, attachments) whose palettes can
@@ -1223,19 +1495,23 @@ struct VisualFactoredPalette {
 // from the actor: a bone the actor's matched draws also use this frame (the
 // same matrix) takes that bone's previous pose, so both copies move together;
 // any other bone is carried by the actor's common motion (inverse(D) * N1).
-std::vector<VisualFactoredPalette> ShareVisualPaletteMotions(
+// `result` is overwritten; its storage is reused (one entry per draw, ~1.7
+// KiB each).
+void ShareVisualPaletteMotions(
     const Oot3dPicaVisualFrame& previous, const Oot3dPicaVisualFrame& current,
-    const std::vector<std::optional<VisualDrawMatch>>& previousByCurrent) {
-    std::vector<VisualFactoredPalette> result(current.Draws.size());
-    using Key = std::tuple<uint64_t, uint64_t, VisualMatrixBits>;
-    struct Group {
-        VisualMatrixBits PriorSpace{};
-        std::optional<Fast::Renderer3ds::PicaRigidMotionRows> Motion;
-        // Current bone matrix -> its previous pose; empty when ambiguous.
-        std::map<VisualMatrixBits, std::optional<VisualMatrixBits>> Bones;
-        // Each distinct bone once, whichever draws reference it.
-        std::vector<Fast::Renderer3ds::PicaAffineEndpoints> Matrices;
-    };
+    const std::vector<std::optional<VisualDrawMatch>>& previousByCurrent,
+    std::vector<VisualFactoredPalette>& result, VisualPaletteScratch& scratch) {
+    const size_t drawCount = current.Draws.size();
+    result.resize(drawCount);
+    for (auto& entry : result) {
+        entry.Prepared = false;
+        entry.Selected.reset();
+        entry.SharedMotion.reset();
+        entry.CarriedPrevious.reset();
+    }
+    scratch.GroupCount = 0;
+    scratch.GroupOfDraw.assign(drawCount, -1);
+    scratch.Slots.Begin(drawCount);
     const auto endpoints = [](const VisualUniformFloats& before, const VisualUniformFloats& after, size_t first) {
         Fast::Renderer3ds::PicaAffineEndpoints matrix{};
         for (size_t row = 0; row < 3; ++row) for (size_t c = 0; c < 4; ++c) {
@@ -1244,89 +1520,108 @@ std::vector<VisualFactoredPalette> ShareVisualPaletteMotions(
         }
         return matrix;
     };
-    std::map<Key, Group> groups;
-    std::vector<std::optional<Key>> keys(current.Draws.size());
-    const auto actorKey = [](const Oot3dPicaVulkanDrawPlan& plan) -> std::optional<Key> {
+    // The actor key of a draw: native owner and lifetime, and its output space.
+    const auto actorKey = [](const Oot3dPicaVulkanDrawPlan& plan, VisualMatrixBits& space) {
         const auto& id = plan.Composition.TemporalIdentity;
-        if (!id.Available() || id.Owner == 0) return {};
+        if (!id.Available() || id.Owner == 0) return false;
         const auto first = plan.VertexShader.TemporalProgram->AffineLayout.ModelView.FirstUniform;
-        return Key{id.Owner, id.Lifetime, AffineBits(plan.VertexShader.Uniforms.Floats, first)};
+        space = AffineBits(plan.VertexShader.Uniforms.Floats, first);
+        return true;
     };
-    for (size_t index = 0; index < current.Draws.size(); ++index) {
+    const auto* const previousDraws = previous.Draws.data();
+    const auto* const currentDraws = current.Draws.data();
+    for (size_t index = 0; index < drawCount; ++index) {
         const auto& match = previousByCurrent[index];
         if (!match) continue;
-        const auto& before = previous.Draws[match->PreviousIndex];
-        const auto& after = current.Draws[index];
+        const auto& before = previousDraws[match->PreviousIndex];
+        const auto& after = currentDraws[index];
         if (!CmbAffineLayouts(before, after)) continue;
         auto& entry = result[index];
         entry.Prepared = true;
-        entry.Selected = CmbPaletteSlots(before, after);
-        const auto key = actorKey(after);
+        const CmbSlotsContext context{&scratch.Slots, match->PreviousIndex, index};
+        entry.Selected = CmbPaletteSlots(before, after, &context);
+        if (!entry.Selected) continue;
+        VisualMatrixBits space;
+        if (!actorKey(after, space)) continue;
+        const auto& id = after.Composition.TemporalIdentity;
         const auto& priorId = before.Composition.TemporalIdentity;
-        if (!entry.Selected || !key || priorId.Owner != std::get<0>(*key) || priorId.Lifetime != std::get<1>(*key))
-            continue;
+        if (priorId.Owner != id.Owner || priorId.Lifetime != id.Lifetime) continue;
         const auto& layout = after.VertexShader.TemporalProgram->AffineLayout;
-        const auto priorSpace = AffineBits(before.VertexShader.Uniforms.Floats, layout.ModelView.FirstUniform);
-        auto [found, inserted] = groups.try_emplace(*key);
-        auto& group = found->second;
-        if (inserted) group.PriorSpace = priorSpace;
-        else if (group.PriorSpace != priorSpace) continue;
-        keys[index] = key;
+        const auto& beforeFloats = before.VertexShader.Uniforms.Floats;
+        const auto& afterFloats = after.VertexShader.Uniforms.Floats;
+        const auto priorSpace = AffineBits(beforeFloats, layout.ModelView.FirstUniform);
+        auto* group = scratch.Find(id.Owner, id.Lifetime, space);
+        if (group == nullptr) {
+            group = &scratch.Add(id.Owner, id.Lifetime, space);
+            group->PriorSpace = priorSpace;
+        } else if (group->PriorSpace != priorSpace) {
+            continue;
+        }
+        scratch.GroupOfDraw[index] = static_cast<int32_t>(group - scratch.Groups.data());
+        const uint32_t selected = *entry.Selected;
         for (size_t slot = 0; slot < layout.Palette.MatrixCount; ++slot) {
-            if (!(*entry.Selected & (1U << slot))) continue;
+            if (!(selected & (1U << slot))) continue;
             const size_t first = layout.Palette.FirstUniform + 3 * slot;
-            const auto prior = AffineBits(before.VertexShader.Uniforms.Floats, first);
-            const auto [bone, added] = group.Bones.try_emplace(AffineBits(after.VertexShader.Uniforms.Floats, first), prior);
-            if (added)
-                group.Matrices.push_back(endpoints(before.VertexShader.Uniforms.Floats,
-                                                   after.VertexShader.Uniforms.Floats, first));
-            else if (bone->second != prior)
-                bone->second.reset();
+            const auto prior = AffineBits(beforeFloats, first);
+            const auto bits = AffineBits(afterFloats, first);
+            auto* bone = const_cast<VisualPaletteGroup::Bone*>(group->FindBone(bits));
+            if (bone == nullptr) {
+                group->Bones.push_back({bits, prior, false});
+                group->Matrices.push_back(endpoints(beforeFloats, afterFloats, first));
+            } else if (!bone->Ambiguous && bone->Prior != prior) {
+                bone->Ambiguous = true;
+            }
         }
     }
-    for (auto& [key, group] : groups) group.Motion = Fast::Renderer3ds::PicaLeastResidualMotion(group.Matrices);
-    for (size_t index = 0; index < current.Draws.size(); ++index)
-        if (keys[index]) result[index].SharedMotion = groups[*keys[index]].Motion;
-    for (size_t index = 0; index < current.Draws.size(); ++index) {
-        const auto& after = current.Draws[index];
+    for (size_t index = 0; index < scratch.GroupCount; ++index) {
+        auto& group = scratch.Groups[index];
+        group.Motion = Fast::Renderer3ds::PicaLeastResidualMotion(group.Matrices);
+    }
+    for (size_t index = 0; index < drawCount; ++index)
+        if (scratch.GroupOfDraw[index] >= 0)
+            result[index].SharedMotion = scratch.Groups[static_cast<size_t>(scratch.GroupOfDraw[index])].Motion;
+    for (size_t index = 0; index < drawCount; ++index) {
+        const auto& after = currentDraws[index];
         if (previousByCurrent[index] || !CmbAffineLayouts(after, after)) continue;
-        const auto key = actorKey(after);
-        const auto found = key ? groups.find(*key) : groups.end();
-        if (found == groups.end() || !found->second.Motion) continue;
+        VisualMatrixBits space;
+        if (!actorKey(after, space)) continue;
+        const auto& id = after.Composition.TemporalIdentity;
+        const auto* found = scratch.Find(id.Owner, id.Lifetime, space);
+        if (found == nullptr || !found->Motion) continue;
         const auto selected = CmbPaletteSlots(after, after);
         if (!selected) continue;
-        const auto& group = found->second;
+        const auto& group = *found;
         const auto& motion = *group.Motion;
         const auto& layout = after.VertexShader.TemporalProgram->AffineLayout;
-        VisualUniformFloats prior = after.VertexShader.Uniforms.Floats;
+        const auto& afterFloats = after.VertexShader.Uniforms.Floats;
+        auto& entry = result[index];
+        entry.CarriedPrevious.emplace(afterFloats);
+        VisualUniformFloats& prior = *entry.CarriedPrevious;
         // The group's previous model-view: the piece shares the actor's space.
         for (size_t row = 0; row < 3; ++row) for (size_t c = 0; c < 4; ++c)
             prior[layout.ModelView.FirstUniform + row][c] = std::bit_cast<float>(group.PriorSpace[row * 4 + c]);
         for (size_t slot = 0; slot < layout.Palette.MatrixCount; ++slot) {
             if (!(*selected & (1U << slot))) continue;
             const size_t first = layout.Palette.FirstUniform + 3 * slot;
-            const auto bone = group.Bones.find(AffineBits(after.VertexShader.Uniforms.Floats, first));
-            if (bone != group.Bones.end() && bone->second) {
+            const auto* bone = group.FindBone(AffineBits(afterFloats, first));
+            if (bone != nullptr && !bone->Ambiguous) {
                 for (size_t row = 0; row < 3; ++row) for (size_t c = 0; c < 4; ++c)
-                    prior[first + row][c] = std::bit_cast<float>((*bone->second)[row * 4 + c]);
+                    prior[first + row][c] = std::bit_cast<float>(bone->Prior[row * 4 + c]);
                 continue;
             }
             // inverse(D) * N1 with D = [R | t]: R^T * (N1 - [0 | t]).
             for (size_t row = 0; row < 3; ++row) for (size_t c = 0; c < 4; ++c) {
                 double value = 0.0;
                 for (size_t k = 0; k < 3; ++k)
-                    value += motion[k][row] * (double(after.VertexShader.Uniforms.Floats[first + k][c]) -
+                    value += motion[k][row] * (double(afterFloats[first + k][c]) -
                                                (c == 3 ? motion[k][3] : 0.0));
                 prior[first + row][c] = static_cast<float>(value);
             }
         }
-        auto& entry = result[index];
         entry.Prepared = true;
         entry.Selected = selected;
         entry.SharedMotion = motion;
-        entry.CarriedPrevious = prior;
     }
-    return result;
 }
 
 // An unmatched draw of an actor, interpolated from its carried palette.
@@ -1354,8 +1649,21 @@ bool InterpolateVisualVertexUniforms(
     alpha = std::clamp(alpha, 0.0F, 1.0F);
     const auto& before = previous.VertexShader.Uniforms.Floats;
     const auto& after = current.VertexShader.Uniforms.Floats;
+    const bool endpoint = alpha == 0.0F || alpha == 1.0F;
+    // `vertexUniforms` starts as the current draw's. An unchanged row keeps
+    // its value bit for bit (x + (x - x) * alpha is x, and a non-finite x is
+    // kept), except -0.0 strictly between the endpoints (-0 + +0 is +0).
+    const auto unchanged = [&](size_t index) {
+        if (std::memcmp(before[index].data(), after[index].data(), sizeof(before[index])) != 0 ||
+            !SameBitsAsCurrent(vertexUniforms.Floats[index], after[index])) return false;
+        if (endpoint) return true;
+        for (const float value : after[index])
+            if (std::bit_cast<uint32_t>(value) == 0x80000000U) return false;
+        return true;
+    };
     for (size_t index = 0; index < vertexUniforms.Floats.size(); ++index) {
         if (!IsContinuousVertexUniform(index)) continue;
+        if (unchanged(index)) continue;
         for (size_t component = 0; component < 4; ++component)
             vertexUniforms.Floats[index][component] = alpha == 0.0F ? before[index][component]
                 : alpha == 1.0F ? after[index][component]
@@ -1558,9 +1866,11 @@ bool SampleVisualFrameWithMatching(const Oot3dPicaVisualFrame& previous, const O
     output.InterpolatedPerVertexDraws = 0;
     output.Draws.resize(current.Draws.size());
     VisualSceneLightInterpolation scenePoints;
-    const auto palettes = alpha > 0.0F && alpha < 1.0F
-        ? ShareVisualPaletteMotions(previous, current, matching.PreviousByCurrent)
-        : std::vector<VisualFactoredPalette>{};
+    std::vector<VisualFactoredPalette> palettes;
+    if (alpha > 0.0F && alpha < 1.0F) {
+        VisualPaletteScratch paletteScratch;
+        ShareVisualPaletteMotions(previous, current, matching.PreviousByCurrent, palettes, paletteScratch);
+    }
 
     for (size_t currentIndex = 0; currentIndex < current.Draws.size(); ++currentIndex) {
         const auto& currentDraw = current.Draws[currentIndex];
@@ -1628,7 +1938,8 @@ bool SampleVisualFrameWithMatching(const Oot3dPicaVisualFrame& previous, const O
 bool SampleVisualFrameViewWithMatching(const Oot3dPicaVisualFrame& previous, const Oot3dPicaVisualFrame& current,
                                        float alpha, const VisualDrawMatching& matching,
                                        Oot3dPicaVisualFrameViewSample& output,
-                                       const std::vector<VisualDrawDeltaFlags>& drawDeltas) {
+                                       const std::vector<VisualDrawDeltaFlags>& drawDeltas,
+                                       const std::vector<VisualFactoredPalette>* preparedPalettes = nullptr) {
     output.TopTransfer = current.TopTransfer;
     output.MemoryFills = current.MemoryFills;
     output.DisplayTransfers = current.DisplayTransfers;
@@ -1643,9 +1954,21 @@ bool SampleVisualFrameViewWithMatching(const Oot3dPicaVisualFrame& previous, con
     output.InterpolatedPerVertexDraws = 0;
     output.Draws.resize(current.Draws.size());
     VisualSceneLightInterpolation scenePoints;
-    const auto palettes = alpha > 0.0F && alpha < 1.0F
-        ? ShareVisualPaletteMotions(previous, current, matching.PreviousByCurrent)
-        : std::vector<VisualFactoredPalette>{};
+    // The factored palettes (prepared once per transition) apply strictly
+    // between the endpoints only.
+    static const std::vector<VisualFactoredPalette> noPalettes;
+    std::vector<VisualFactoredPalette> localPalettes;
+    const std::vector<VisualFactoredPalette>* palettesSource = &noPalettes;
+    if (alpha > 0.0F && alpha < 1.0F) {
+        if (preparedPalettes != nullptr) {
+            palettesSource = preparedPalettes;
+        } else {
+            VisualPaletteScratch paletteScratch;
+            ShareVisualPaletteMotions(previous, current, matching.PreviousByCurrent, localPalettes, paletteScratch);
+            palettesSource = &localPalettes;
+        }
+    }
+    const auto& palettes = *palettesSource;
 
     for (size_t currentIndex = 0; currentIndex < current.Draws.size(); ++currentIndex) {
         const auto& currentDraw = current.Draws[currentIndex];
@@ -1735,6 +2058,15 @@ struct Oot3dPicaPreparedVisualTransition::Impl {
     size_t PreviousDrawCount = 0U;
     size_t CurrentDrawCount = 0U;
     bool Prepared = false;
+    // Storage kept between frames: preparing a transition allocates nothing
+    // once the capacities cover the scene.
+    VisualMatchingScratch MatchingScratch;
+    std::vector<double> TopTargetDeltas;
+    // The factored palettes of this transition: alpha-independent, built by
+    // the first sample strictly between the endpoints and shared by the rest.
+    mutable std::vector<VisualFactoredPalette> Palettes;
+    mutable VisualPaletteScratch PaletteScratch;
+    mutable bool PalettesReady = false;
 };
 
 Oot3dPicaPreparedVisualTransition::Oot3dPicaPreparedVisualTransition()
@@ -1761,10 +2093,10 @@ bool Oot3dPicaPreparedVisualTransition::Prepare(
     Reset();
 
     const auto matchingStart = std::chrono::steady_clock::now();
-    mImpl->Matching = BuildVisualDrawMatching(previous, current);
+    BuildVisualDrawMatching(previous, current, mImpl->Matching, mImpl->MatchingScratch);
     const auto analysisStart = std::chrono::steady_clock::now();
     mImpl->Transition = AnalyzeVisualTransitionWithMatching(
-        previous, current, mImpl->Matching, &mImpl->DrawDeltas);
+        previous, current, mImpl->Matching, &mImpl->DrawDeltas, &mImpl->TopTargetDeltas);
     const auto finished = std::chrono::steady_clock::now();
     if (timing != nullptr) {
         timing->MatchingNanoseconds += static_cast<uint64_t>(
@@ -1798,9 +2130,14 @@ bool Oot3dPicaPreparedVisualTransition::Sample(
     }
 
     const auto samplingStart = std::chrono::steady_clock::now();
+    if (alpha > 0.0F && alpha < 1.0F && !mImpl->PalettesReady) {
+        ShareVisualPaletteMotions(previous, current, mImpl->Matching.PreviousByCurrent, mImpl->Palettes,
+                                  mImpl->PaletteScratch);
+        mImpl->PalettesReady = true;
+    }
     const bool sampled = SampleVisualFrameViewWithMatching(
         previous, current, alpha, mImpl->Matching, output,
-        mImpl->DrawDeltas);
+        mImpl->DrawDeltas, &mImpl->Palettes);
     if (timing != nullptr) {
         const auto finished = std::chrono::steady_clock::now();
         timing->SamplingNanoseconds += static_cast<uint64_t>(
@@ -1815,8 +2152,18 @@ void Oot3dPicaPreparedVisualTransition::Reset() noexcept {
     if (mImpl == nullptr) {
         return;
     }
-    mImpl->Matching = {};
+    // Cleared, not freed: the next transition reuses the storage.
+    mImpl->Matching.PreviousByCurrent.clear();
+    mImpl->Matching.StrictUniqueMatches = 0;
+    mImpl->Matching.StrictOrdinalMatches = 0;
+    mImpl->Matching.StructuralOrdinalMatches = 0;
+    mImpl->Matching.PipelineOrdinalMatches = 0;
+    mImpl->Matching.AmbiguousPrevious = 0;
+    mImpl->Matching.AmbiguousCurrent = 0;
+    mImpl->Matching.UnmatchedPrevious = 0;
+    mImpl->Matching.UnmatchedCurrent = 0;
     mImpl->DrawDeltas.clear();
+    mImpl->PalettesReady = false;
     mImpl->Transition = {};
     mImpl->PreviousSequence = 0U;
     mImpl->CurrentSequence = 0U;
@@ -1833,6 +2180,18 @@ const Oot3dPicaVisualTransitionStats&
 Oot3dPicaPreparedVisualTransition::Stats() const noexcept {
     static const Oot3dPicaVisualTransitionStats unavailable;
     return mImpl != nullptr ? mImpl->Transition : unavailable;
+}
+
+int64_t Oot3dPicaPreparedVisualTransition::PreviousIndexOf(
+    size_t currentIndex, uint8_t* kind) const noexcept {
+    if (mImpl == nullptr || !mImpl->Prepared ||
+        currentIndex >= mImpl->Matching.PreviousByCurrent.size()) {
+        return -1;
+    }
+    const auto& match = mImpl->Matching.PreviousByCurrent[currentIndex];
+    if (!match) return -1;
+    if (kind != nullptr) *kind = static_cast<uint8_t>(match->Kind);
+    return static_cast<int64_t>(match->PreviousIndex);
 }
 
 Oot3dPicaVulkanDrawOverrides Oot3dPicaVisualDrawView::Overrides() const {

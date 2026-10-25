@@ -183,6 +183,11 @@ class Oot3dPicaPreparedVisualTransition final {
     void Reset() noexcept;
     [[nodiscard]] bool Ready() const noexcept;
     [[nodiscard]] const Oot3dPicaVisualTransitionStats& Stats() const noexcept;
+    // The previous-frame draw paired with a current draw (and how: 0 strict
+    // unique, 1 strict ordinal, 2 structural ordinal, 3 pipeline ordinal),
+    // or -1. For tests and diagnostics.
+    [[nodiscard]] int64_t PreviousIndexOf(size_t currentIndex,
+                                          uint8_t* kind = nullptr) const noexcept;
 
   private:
     struct Impl;

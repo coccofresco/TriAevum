@@ -394,6 +394,16 @@ target_link_libraries(oot3d_native_pica_vulkan_plan_tests PRIVATE
     oot3d_native_pica_vulkan_plan)
 oot3d_target_defaults(oot3d_native_pica_vulkan_plan_tests FOLDER Tests)
 
+# Visual-frame matching/sampling against a frozen copy of the previous code
+# (oot3d_native_pica_visual_frame_reference.inc); --bench for the cost per
+# guest frame, --threads for cross-thread sampling.
+add_executable(oot3d_native_pica_visual_frame_equivalence_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/oot3d_native_pica_visual_frame_equivalence_tests.cpp
+)
+target_link_libraries(oot3d_native_pica_visual_frame_equivalence_tests PRIVATE
+    oot3d_native_pica_vulkan_plan)
+oot3d_target_defaults(oot3d_native_pica_visual_frame_equivalence_tests FOLDER Tests)
+
 add_library(oot3d_native_pica_semantic_trace STATIC EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_pica_semantic_trace.cpp
 )
