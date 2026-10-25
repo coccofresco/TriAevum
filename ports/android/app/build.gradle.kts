@@ -8,6 +8,9 @@ dependencies { testImplementation("junit:junit:4.13.2") }
 // Native compilation is a separate incremental build, never a Gradle side effect.
 val sdlSource = providers.gradleProperty("triaevumSdlSource")
 val nativeStage = providers.gradleProperty("triaevumNativeStage")
+// The publisher's Forge package for this APK: a folder holding forge-package/ (catalog,
+// recipes, resources, tables, shader corpus). Optional for developer APKs.
+val forgePackage = providers.gradleProperty("triaevumForgePackage")
 android {
     namespace = "org.triaevum.android"
     compileSdk = 35
@@ -27,8 +30,14 @@ android {
     sourceSets.getByName("main") {
         if (sdlSource.isPresent) java.srcDir("${sdlSource.get()}/android-project/app/src/main/java")
         if (nativeStage.isPresent) jniLibs.srcDir(nativeStage.get())
+        if (forgePackage.isPresent) assets.srcDir(forgePackage.get())
     }
-    packaging { jniLibs.useLegacyPackaging = true }
+    packaging {
+        // Extracted, unchanged libraries: Forge verifies them in nativeLibraryDir
+        // against the catalog's hashes of the staged (already stripped) files.
+        jniLibs.useLegacyPackaging = true
+        jniLibs.keepDebugSymbols += "**/*.so"
+    }
 }
 tasks.register("checkNativeStage") {
     doLast {

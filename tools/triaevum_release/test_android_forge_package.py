@@ -1,0 +1,164 @@
+import json
+from pathlib import Path
+import struct
+import tempfile
+import unittest
+import zipfile
+
+from common import atomic_write_json
+from precompiled_title_layout import artifact
+from precompiled_titles import FORMAT, MODEL, CATALOG
+from release_platform import ANDROID, WINDOWS
+from android_forge_package import ASSET_ROOT, INVENTORY, create_package, require_arm64_library
+
+
+def elf(path, machine=183, payload=b""):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    header = bytearray(64)
+    header[:6] = b"\x7fELF\x02\x01"
+    struct.pack_into("<HH", header, 16, 3, machine)
+    path.write_bytes(bytes(header) + payload)
+
+
+class Fixture:
+    def __init__(self, root: Path):
+        self.reference = root / "reference"
+        self.stage = root / "stage"
+        self.output = root / "output"
+        files = []
+
+        def write(relative, data, role):
+            path = self.reference / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+            files.append(dict(artifact(path, relative), role=role))
+            return artifact(path, relative)
+
+        build = {"plugin_sha256": "1" * 64, "code_sha256": "2" * 64,
+                 "translator_identity_sha256": "3" * 64, "program_sha256": "4" * 64}
+        source = self.reference / "source/titles/fixture-translated.zip"
+        source.parent.mkdir(parents=True)
+        with zipfile.ZipFile(source, "w") as archive:
+            archive.writestr("TITLE_SOURCE_MANIFEST.json", json.dumps({
+                "format": "triaevum_translated_title_source_v1", "build": build,
+                "files": {"function.cpp": "5" * 64}}))
+        files.append(dict(artifact(source, "source/titles/fixture-translated.zip"), role="translated_title_source"))
+        compiler = write("forge/oot3d_native_pica_aot_compiler.exe", b"MZ compiler", "shader_preparation_tool")
+        shaderc = write("forge/shaderc_shared.dll", b"MZ shaderc", "forge_runtime_module")
+        helper = write("forge/oot3d_native_nri_pipeline_prepare.exe", b"MZ helper", "shader_preparation_tool")
+        write("TriAevum.exe", b"MZ runtime", "runtime_executable")
+        write("LICENSE", b"license", "license")
+        write("recipes/oot3d.json", b"{}", "revision_recipe")
+        write("resources/gamecontrollerdb.txt", b"pads", "title_neutral_resource")
+        pipelines = write("forge/shader-corpus/pipelines-0.json", b"{\"pipelines\": []}", "portable_pipeline_recipes")
+        pack = write("forge/shader-corpus/portable.o3ps", b"O3PS pack", "portable_shader_corpus")
+        lights = write("forge/precomputed/scene-lights.json", b"{}", "precomputed_scene_lights")
+        self.title = {
+            "recipe": "fixture", "inputs": {"code": {"sha256": "2" * 64, "bytes": 4}},
+            "abi_version": 2, "target": WINDOWS.target,
+            "plugin": {"path": "titles/fixture/triaevum_title_aot.dll", "sha256": "1" * 64, "bytes": 9},
+            "translator_identity_sha256": "3" * 64,
+            "sources": [artifact(source, "source/titles/fixture-translated.zip")],
+            "renderer_shader_preparation": {"format": "triaevum_renderer_shader_compiler_v1",
+                                            "compiler": compiler, "dependencies": [shaderc]},
+            "shader_preparation": {"format": "triaevum_shader_preparation_v1", "mode": "portable_pack",
+                                   "pack": pack, "compiler": compiler, "dependencies": [shaderc]},
+            "device_pipeline_preparation": {"format": "triaevum_device_pipeline_preparation_v1",
+                                            "helper": helper, "dependencies": [], "manifests": [pipelines],
+                                            "startup_programs": True},
+            "precomputed_tables": {"format": "triaevum_precomputed_tables_v1", "scene_lights": lights},
+        }
+        self.catalog = {"format": FORMAT, "install_model": MODEL, "target": WINDOWS.target,
+                        "runtime": {"path": WINDOWS.runtime, "sha256": "6" * 64, "bytes": 10},
+                        "native_module": {"path": WINDOWS.native_module, "sha256": "7" * 64, "bytes": 1},
+                        "titles": [self.title]}
+        atomic_write_json(self.reference / CATALOG, self.catalog)
+        files.append({"path": CATALOG, "role": "precompiled_catalog", "sha256": "0" * 64, "bytes": 1})
+        self.files = files
+        self.write_manifest()
+        elf(self.stage / "arm64-v8a/libTriAevum.so", payload=b"runtime")
+        elf(self.stage / "arm64-v8a/libtriaevum_title_aot.so", payload=b"title")
+
+    def write_manifest(self):
+        atomic_write_json(self.reference / "release-manifest.json",
+                          {"format": "triaevum_public_release_manifest_v1", "release": {}, "files": self.files})
+
+    def create(self):
+        return create_package(self.reference, self.stage, self.output, source_commit="8" * 40)
+
+
+class AndroidForgePackageTests(unittest.TestCase):
+    def test_requires_aarch64_shared_libraries(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "lib.so"
+            elf(path, machine=62)
+            with self.assertRaisesRegex(ValueError, "AArch64"):
+                require_arm64_library(path)
+            path.write_bytes(b"MZ" + bytes(64))
+            with self.assertRaisesRegex(ValueError, "ELF64"):
+                require_arm64_library(path)
+            elf(path)
+            require_arm64_library(path)
+
+    def test_binds_the_runtime_library_and_copies_only_data(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Fixture(Path(directory))
+            inventory = fixture.create()
+            package = fixture.output / ASSET_ROOT
+            catalog = json.loads((package / CATALOG).read_text())
+            runtime = artifact(fixture.stage / "arm64-v8a/libTriAevum.so", ANDROID.runtime)
+            title = catalog["titles"][0]
+            self.assertEqual(catalog["target"], ANDROID.target)
+            self.assertEqual(catalog["runtime"], runtime)
+            self.assertNotIn("native_module", catalog)
+            self.assertEqual(title["target"], ANDROID.target)
+            self.assertEqual(title["plugin"]["path"], "lib/arm64-v8a/libtriaevum_title_aot.so")
+            self.assertEqual(title["platform_build"]["build_target"], "ports/android/native")
+            for key in ("inputs", "sources", "precomputed_tables", "translator_identity_sha256"):
+                self.assertEqual(title[key], fixture.title[key])
+            # The runtime library is the pass compiler and the device helper.
+            for key in ("renderer_shader_preparation", "shader_preparation"):
+                self.assertEqual(title[key]["compiler"], runtime)
+                self.assertEqual(title[key]["dependencies"], [])
+            self.assertEqual(title["shader_preparation"]["pack"], fixture.title["shader_preparation"]["pack"])
+            self.assertEqual(title["device_pipeline_preparation"]["helper"], runtime)
+            self.assertEqual(title["device_pipeline_preparation"]["manifests"],
+                             fixture.title["device_pipeline_preparation"]["manifests"])
+            copied = sorted(path.relative_to(package).as_posix() for path in package.rglob("*") if path.is_file())
+            self.assertEqual(copied, sorted([
+                CATALOG, INVENTORY, "recipes/oot3d.json", "resources/gamecontrollerdb.txt",
+                "forge/shader-corpus/pipelines-0.json", "forge/shader-corpus/portable.o3ps",
+                "forge/precomputed/scene-lights.json"]))
+            self.assertEqual(json.loads((package / INVENTORY).read_text()), inventory)
+            self.assertEqual(inventory["libraries"], [runtime, title["plugin"]])
+            self.assertEqual(inventory["corresponding_source"], ["source/titles/fixture-translated.zip"])
+            self.assertEqual(json.loads((fixture.reference / CATALOG).read_text()), fixture.catalog)
+            with self.assertRaisesRegex(ValueError, "not empty"):
+                fixture.create()
+
+    def test_unclassified_roles_and_undeclared_data_fail_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Fixture(Path(directory))
+            fixture.files.append({"path": "mods/pack.zip", "role": "mod_payload", "sha256": "9" * 64, "bytes": 1})
+            fixture.write_manifest()
+            with self.assertRaisesRegex(ValueError, "Unclassified reference release role: mod_payload"):
+                fixture.create()
+            fixture.files.pop()
+            fixture.files = [item for item in fixture.files if item["role"] != "portable_shader_corpus"]
+            fixture.write_manifest()
+            with self.assertRaisesRegex(ValueError, "not in the reference release: forge/shader-corpus/portable.o3ps"):
+                fixture.create()
+            self.assertFalse(fixture.output.exists())
+
+    def test_different_title_builds_are_refused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Fixture(Path(directory))
+            other = dict(fixture.title, recipe="other", translator_identity_sha256="a" * 64)
+            fixture.catalog["titles"].append(other)
+            atomic_write_json(fixture.reference / CATALOG, fixture.catalog)
+            with self.assertRaisesRegex(ValueError, "rebuilt translated title"):
+                fixture.create()
+
+
+if __name__ == "__main__":
+    unittest.main()

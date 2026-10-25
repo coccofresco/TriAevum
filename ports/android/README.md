@@ -24,9 +24,42 @@ ADB connection without hosting a second compiler/SDK installation.
 - The publisher cross-compiles the existing manifest-verified translated C++
   title for `arm64-v8a`. No x86 module is reused. Players do not install a compiler.
 - ROM import must use Android's document picker and a native import service.
-  Document URIs are not filesystem paths. The desktop Tk Forge UI is not ported.
-- The release catalog deliberately does not advertise Android yet. An ARM64
-  library that links is not proof of renderer presentation or playable boot.
+  Document URIs are not filesystem paths. The desktop Forge UI is not ported.
+- Public release catalogs do not advertise Android yet. An ARM64 library that
+  links is not proof of renderer presentation or playable boot.
+
+## Forge on the device
+
+`InstallerActivity` (Kotlin, process `:forge`) runs the Rust Forge
+(`libtriaevum_forge.so`, `tools/triaevum_forge/crates/forge-android`) on the ROM the
+user picks; the job contract is the desktop one plus an `android` object. The
+APK carries a Forge package as assets (`forge-package/`: catalog, recipes,
+resources, precomputed tables, shader corpus). It is copied once per installed
+APK to internal storage. Its catalog targets `aarch64-linux-android` and names
+the APK's own libraries under `lib/arm64-v8a/`. Forge verifies them in the
+application's native library folder, never copies them, and calls the runtime
+library's exported `triaevum_forge_tool` for the work desktop helpers do. That
+covers the product query, the title check, languages, interior sun, the pass
+compiler and the device pipelines, so the shader compiler is the gameplay build's own.
+Forge writes `TriAevum.android.launch.json` and `TriAevum.android.title.json`
+where the game activity reads them.
+
+The publisher builds the package from a desktop release and the staged libraries:
+
+```sh
+python3 tools/android/stage_native_app.py --runtime-build <runtime-build> \
+  --title-module <libtriaevum_title_aot.so> --forge-library <libtriaevum_forge.so> \
+  --ndk <ndk> --output <stage>
+python3 tools/triaevum_release/android_forge_package.py --reference-package <desktop release> \
+  --native-stage <stage> --source-commit <title source commit> --output <forge assets>
+gradle -p ports/android :app:assembleDebug -PtriaevumSdlSource=<sdl2-src> \
+  -PtriaevumNativeStage=<stage> -PtriaevumForgePackage=<forge assets>
+```
+
+Gradle packages the staged libraries unchanged, so the catalog's hashes hold on
+the device. The libraries cannot run on the publisher: the on-device Forge
+checks the runtime/title pair before it installs. The translated and build
+source archives the catalog names are published beside the APK, not inside it.
 
 ## Linux Build
 
@@ -101,7 +134,8 @@ not an authoritative mobile device-compatibility gate.
 1. Complete and validate intro presentation through the APK/SDL host; qualify
    surface recreation, pause/resume and audio lifecycle afterward.
 2. Wire the imported Azahar overlay, settings editor and shared input owner.
-3. Add ROM selection/import and package the precompiled ARM64 title and runtime.
+3. Qualify the on-device Forge installation (ROM picker, package copy, shader
+   and pipeline preparation) on hardware; package the precompiled ARM64 title.
 4. Test real on-device startup, native framebuffer output, audio, input and
    resume. Qualify capability requirements and performance on actual hardware.
 

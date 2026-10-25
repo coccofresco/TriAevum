@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use forge_base::fsutil::load_json_object;
 use forge_base::hashing::sha256_hex;
 use forge_base::{CancelToken, ErrorKind, ForgeError, Result};
-use forge_core::install::{install_private_title, InstallRequest, InstallSource};
+use forge_core::install::{install_private_title, AndroidTarget, InstallRequest, InstallSource, InstallTarget};
 use forge_core::publish::standard_topscreen;
 use forge_native::{
     DeviceJob, InteriorSunRequest, NativeOutput, NativeServices, PortableCompile, RendererPassRequest, Report,
@@ -20,6 +20,7 @@ use serde_json::{json, Value};
 
 const RECIPE: &str = "fixture-eur";
 const TARGET: &str = "x86_64-pc-windows-msvc";
+const ANDROID: &str = "aarch64-linux-android";
 const NONE: u32 = 0xFFFF_FFFF;
 
 /// A valid ExHeader (three one-page segments at 0x100000), 2048 bytes.
@@ -72,14 +73,26 @@ struct Fixture {
     _directory: tempfile::TempDir,
     package: PathBuf,
     extracted: PathBuf,
+    /// The Android application's native library and profile folders.
+    android: Option<(PathBuf, PathBuf)>,
 }
 
 impl Fixture {
     fn new() -> Self {
+        Self::build(false)
+    }
+
+    /// An APK package: the libraries are in the native library folder.
+    fn android() -> Self {
+        Self::build(true)
+    }
+
+    fn build(android: bool) -> Self {
         let directory = tempfile::tempdir().unwrap();
         let root = forge_prepare::paths::resolve(directory.path()).unwrap();
         let package = root.join("package");
         let extracted = root.join("extracted");
+        let native = root.join("native-libraries");
         let (code, exheader, romfs) = (code(), exheader(), romfs());
         write(&extracted.join("code.bin"), &code);
         write(&extracted.join("exheader.bin"), &exheader);
@@ -91,10 +104,29 @@ impl Fixture {
             json!({"format": "triaevum_supported_revisions_v1", "recipes": [recipe]}).to_string().as_bytes(),
         );
         let artifact = |relative: &str, bytes: &[u8]| {
-            write(&package.join(relative), bytes);
+            match relative.strip_prefix("lib/arm64-v8a/") {
+                Some(name) => write(&native.join(name), bytes),
+                None => write(&package.join(relative), bytes),
+            }
             json!({"path": relative, "bytes": bytes.len(), "sha256": sha256_hex(bytes)})
         };
-        let catalog = json!({
+        let catalog = if android {
+            json!({
+                "format": "triaevum_precompiled_titles_v1",
+                "install_model": "precompiled_title_rom_import_v1",
+                "target": ANDROID,
+                "runtime": artifact("lib/arm64-v8a/libTriAevum.so", b"fake runtime"),
+                "titles": [{
+                    "recipe": RECIPE,
+                    "inputs": inputs,
+                    "abi_version": 2,
+                    "target": ANDROID,
+                    "translator_identity_sha256": "7".repeat(64),
+                    "plugin": artifact("lib/arm64-v8a/libtriaevum_title_aot.so", b"ELF fake title plugin"),
+                }],
+            })
+        } else {
+            json!({
             "format": "triaevum_precompiled_titles_v1",
             "install_model": "precompiled_title_rom_import_v1",
             "target": TARGET,
@@ -108,14 +140,19 @@ impl Fixture {
                 "translator_identity_sha256": "7".repeat(64),
                 "plugin": artifact(&format!("titles/{RECIPE}/triaevum_title_aot.dll"), b"MZ fake title plugin"),
             }],
-        });
+            })
+        };
         write(&package.join("recipes/precompiled-titles.json"), catalog.to_string().as_bytes());
         std::fs::create_dir_all(package.join("resources")).unwrap();
-        Self { _directory: directory, package, extracted }
+        let android = android.then(|| (native, root.join("external-files")));
+        Self { _directory: directory, package, extracted, android }
     }
 
     fn data(&self) -> PathBuf {
-        self.package.join("data")
+        match &self.android {
+            Some((_, profile)) => profile.join("data"),
+            None => self.package.join("data"),
+        }
     }
 
     fn install(&self, services: &FakeRuntime, stages: &mut Vec<(String, String)>) -> Result<Value> {
@@ -123,6 +160,13 @@ impl Fixture {
             source: InstallSource::ExtractedDirectory(self.extracted.clone()),
             data_root: None,
             package_root: self.package.clone(),
+            target: match &self.android {
+                Some((native, profile)) => InstallTarget::Android(AndroidTarget {
+                    native_library_dir: native.clone(),
+                    profile_root: profile.clone(),
+                }),
+                None => InstallTarget::Package,
+            },
         };
         let mut report = |stage: &str, message: &str| stages.push((stage.to_string(), message.to_string()));
         install_private_title(request, services, &mut report, &CancelToken::new())
@@ -159,7 +203,7 @@ impl NativeServices for FakeRuntime {
     }
 
     fn prebuild_interior_sun(&self, request: &InteriorSunRequest, _: &CancelToken) -> Result<NativeOutput> {
-        assert!(request.runtime.ends_with("runtime/TriAevum.exe"));
+        assert!(request.runtime.ends_with("runtime/TriAevum.exe") || request.runtime.ends_with("libTriAevum.so"));
         let relative = "shadow-shells/0000000000000001.bin";
         let mut shell = b"RSSH".to_vec();
         shell.extend(3u32.to_le_bytes());
@@ -335,4 +379,59 @@ fn an_unknown_revision_stops_at_verification() {
     assert!(error.message.starts_with("the decrypted ROM does not match any supported game revision"));
     assert!(hidden_entries(&fixture.data()).is_empty());
     assert!(!fixture.data().join("sources").exists());
+}
+
+// The only test of this binary that names a native library folder: the
+// folder is fixed for the process lifetime.
+#[test]
+fn installs_for_the_android_application_without_copying_libraries() {
+    let fixture = Fixture::android();
+    let (native, profile_root) = fixture.android.clone().unwrap();
+    let runtime = FakeRuntime::default();
+    let mut stages = Vec::new();
+    let result = fixture.install(&runtime, &mut stages).unwrap();
+    assert_eq!(result["status"], "ready");
+    assert_eq!(stages.last().unwrap().0, "ready");
+    let plugin = native.join("libtriaevum_title_aot.so");
+    let plugin_sha = sha256_hex(b"ELF fake title plugin");
+    assert_eq!(result["build"]["package"]["status"], "library");
+    // The title library is verified in place, never copied.
+    assert_eq!(*runtime.plugin_queries.borrow(), std::slice::from_ref(&plugin));
+    assert_eq!(std::fs::read_dir(&native).unwrap().count(), 2);
+    assert!(!fixture.package.join("private-plugins").exists());
+
+    let title = load_json_object(&profile_root.join("TriAevum.android.title.json")).unwrap();
+    assert_eq!(title["format"], "triaevum_android_title_v1");
+    assert_eq!(title["plugin_library"], "libtriaevum_title_aot.so");
+    assert_eq!(title["plugin_sha256"], plugin_sha);
+
+    let profile = load_json_object(&profile_root.join("TriAevum.android.launch.json")).unwrap();
+    let arguments: Vec<&str> = profile["arguments"].as_array().unwrap().iter().map(|a| a.as_str().unwrap()).collect();
+    assert!(!arguments.contains(&"--title-plugin"));
+    let resources = forge_prepare::paths::path_string(&fixture.package.join("resources")).unwrap();
+    let value = |option: &str| arguments[arguments.iter().position(|a| *a == option).unwrap() + 1];
+    // The package is outside the profile folder and there is no runtime folder.
+    assert_eq!(value("--resource-root"), resources);
+    assert_eq!(profile["path_scopes"]["--resource-root"], "external");
+    assert_eq!(value("--config"), "${profile_dir}/data/config/TriAevum.android.json");
+    assert_eq!(value("--save-data"), "${profile_dir}/data/savedata");
+    assert_eq!(value("--input-admission"), "auto");
+    assert_eq!(value("--height"), "360");
+
+    let data = fixture.data();
+    let state =
+        load_json_object(&PathBuf::from(result["prepared"]["directory"].as_str().unwrap()).join("forge-state.json"))
+            .unwrap();
+    assert_eq!(state["module"]["status"], "ready");
+    assert_eq!(state["module"]["container"], Value::Null);
+    assert_eq!(state["module"]["sha256"], plugin_sha);
+    assert_eq!(state["module"]["target_triple"], ANDROID);
+    assert_eq!(state["runtime"]["target"], ANDROID);
+    assert_eq!(state["runtime"]["runtime_sha256"], sha256_hex(b"fake runtime"));
+    let active = load_json_object(&data.join("active-title.json")).unwrap();
+    assert_eq!(active["module_sha256"], plugin_sha);
+    assert_eq!(load_json_object(&data.join("config/TriAevum.android.json")).unwrap()["Graphics"]["Preset"], "Enhanced");
+    assert!(!data.join("config/TriAevum.json").exists());
+    assert!(data.join("savedata").is_dir());
+    assert!(!profile_root.join(".forge-activation/journal.json").exists());
 }

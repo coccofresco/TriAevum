@@ -139,7 +139,7 @@ struct ParallelPreparation {
 };
 }
 
-int main(int argc, char** argv) {
+int TriAevumPipelinePrepareMain(int argc, char** argv) {
     try {
         // The desktop keeps its cores: this job competes with nothing interactive.
         const bool priorityLowered = Fast::Renderer::LowerPreparationProcessPriority();
@@ -335,3 +335,11 @@ int main(int argc, char** argv) {
         return 1;
     }
 }
+
+// The Android runtime library links this helper and calls it in process
+// (triaevum_forge_tool.cpp) on the game's own renderer build.
+#ifndef TRIAEVUM_TOOL_LIBRARY
+int main(int argc, char** argv) {
+    return TriAevumPipelinePrepareMain(argc, argv);
+}
+#endif

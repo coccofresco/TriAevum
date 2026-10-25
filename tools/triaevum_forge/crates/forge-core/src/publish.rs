@@ -121,6 +121,22 @@ pub struct RuntimeAssets {
     pub renderer_cache_directory: Option<PathBuf>,
 }
 
+/// Android publication: the APK's runtime library runs the title library
+/// where Android installed it. Nothing is copied; the activity passes
+/// `--title-plugin` itself, with the library named in `title_file`.
+pub struct AndroidRuntime<'a> {
+    /// `libTriAevum.so` in the native library directory.
+    pub runtime: &'a Path,
+    /// `TriAevum.android.title.json`, read by the activity.
+    pub title_file: &'a Path,
+}
+
+/// The Android title file's format.
+pub const ANDROID_TITLE_FORMAT: &str = "triaevum_android_title_v1";
+/// The Android runtime configuration (the developer staging's name, so an
+/// existing configuration on the device is kept).
+pub const ANDROID_CONFIG: &str = "TriAevum.android.json";
+
 /// `publish_private_runtime`'s arguments.
 pub struct PublishRequest<'a> {
     pub prepared_directory: &'a Path,
@@ -133,6 +149,8 @@ pub struct PublishRequest<'a> {
     /// The package (resources, runtime); defaults to the activation directory.
     pub package_root: Option<&'a Path>,
     pub assets: &'a RuntimeAssets,
+    /// Set for an Android installation.
+    pub android: Option<&'a AndroidRuntime<'a>>,
 }
 
 fn sha256_hex(path: &Path, cancel: &CancelToken) -> Result<String> {
@@ -220,21 +238,29 @@ pub fn publish_private_runtime(
     let runtime_plugin = resolve(&expanduser(request.runtime_plugin))?;
     let installation = runtime_plugin.parent().map(Path::to_path_buf).unwrap_or_default();
     let package = resolve(&expanduser(request.package_root.unwrap_or(&installation)))?;
-    let platform = host_platform()?;
-    let destination = installation.join("private-plugins").join(&plugin_hash).join(platform.title_module);
+    let platform = if request.android.is_some() { crate::layout::ANDROID } else { host_platform()? };
+    let destination = match request.android {
+        None => installation.join("private-plugins").join(&plugin_hash).join(platform.title_module),
+        Some(_) => source_plugin.clone(),
+    };
     let profile_path = resolve(&expanduser(request.launch_profile))?;
     let private_root = resolve(&expanduser(request.data_root))?;
     // Installing a title places the runtime in the installation root.
-    let runtime_executable = place_installed_runtime(&package, &platform)?;
+    let runtime_executable = match request.android {
+        None => place_installed_runtime(&package, &platform)?,
+        Some(android) => resolve(android.runtime)?,
+    };
     let product = query_product(services, &runtime_executable, "", None)?;
     let profile_directory = profile_path.parent().map(Path::to_path_buf).unwrap_or_default();
-    for directory in [destination.parent().unwrap_or(&installation), &profile_directory, &private_root] {
+    // The Android title library stays in the read-only native library folder.
+    let plugin_directory = request.android.is_none().then(|| destination.parent().unwrap_or(&installation));
+    for directory in plugin_directory.into_iter().chain([profile_directory.as_path(), private_root.as_path()]) {
         create_dir(directory)?;
     }
     let config_root = private_root.join("config");
     create_dir(&config_root)?;
     let topscreen_config = config_root.join("topscreen_ui.json");
-    let runtime_config = config_root.join("TriAevum.json");
+    let runtime_config = config_root.join(if request.android.is_some() { ANDROID_CONFIG } else { "TriAevum.json" });
     // Validate both existing user files before changing any installed title file.
     for user_config in [&topscreen_config, &runtime_config] {
         if user_config.exists() {
@@ -248,9 +274,11 @@ pub fn publish_private_runtime(
     let output = private_root.join("runtime-state.json");
 
     let text = |path: &Path| path_string(path);
-    let mut arguments: Vec<String> = vec![
-        "--title-plugin".into(),
-        text(&destination)?,
+    let mut arguments: Vec<String> = Vec::new();
+    if request.android.is_none() {
+        arguments.extend(["--title-plugin".into(), text(&destination)?]);
+    }
+    arguments.extend([
         "--a32-process-manifest".into(),
         text(&process_manifest)?,
         "--resource-root".into(),
@@ -271,11 +299,20 @@ pub fn publish_private_runtime(
         text(&savedata)?,
         "--output".into(),
         text(&output)?,
-        "--width".into(),
-        "1280".into(),
-        "--height".into(),
-        "720".into(),
-    ];
+    ]);
+    match request.android {
+        None => arguments.extend(["--width".into(), "1280".into(), "--height".into(), "720".into()]),
+        // The phone's measured presentation: the guest refresh is admitted
+        // separately when one 60 Hz period cannot fit both (input latency).
+        Some(_) => arguments.extend([
+            "--input-admission".into(),
+            "auto".into(),
+            "--width".into(),
+            "640".into(),
+            "--height".into(),
+            "360".into(),
+        ]),
+    }
     let mut route = |option: &str, path: &Path| -> Result<()> {
         arguments.push(option.into());
         arguments.push(text(&resolve(path)?)?);
@@ -329,19 +366,30 @@ pub fn publish_private_runtime(
     }
 
     // File arguments become ${profile_dir}/${runtime_dir} placeholders, or
-    // explicit absolute paths outside the installation.
+    // explicit absolute paths outside the installation. Android has no
+    // runtime folder: the package's files keep absolute paths.
+    let runtime_dir = if request.android.is_none() { Some(package.as_path()) } else { None };
     let mut scopes = Map::new();
     let options = arguments.clone();
     for (index, option) in options[..options.len() - 1].iter().enumerate() {
         if PATH_OPTIONS.contains(&option.as_str()) {
             let target = PathBuf::from(&options[index + 1]);
-            arguments[index + 1] = context.profile_argument(&target, &profile_path, Some(&package))?;
+            arguments[index + 1] = context.profile_argument(&target, &profile_path, runtime_dir)?;
             scopes.insert(option.clone(), json!(context.scope(&target, Some(&profile_directory))?.as_str()));
         }
     }
     let profile =
         json!({"format": LAUNCH_PROFILE_FORMAT, "arguments": arguments, "path_scopes": Value::Object(scopes)});
-    publish_plugin(&source_plugin, &destination, &plugin_hash, cancel)?;
+    match request.android {
+        None => publish_plugin(&source_plugin, &destination, &plugin_hash, cancel)?,
+        Some(android) => {
+            let library = destination.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
+            atomic_write_json(
+                android.title_file,
+                &json!({"format": ANDROID_TITLE_FORMAT, "plugin_library": library, "plugin_sha256": plugin_hash}),
+            )?;
+        }
+    }
     // Query the exact immutable generation in a short-lived process before the
     // single launch-profile replacement makes it visible to direct launches.
     query_product(services, &runtime_executable, "", Some(&destination))?;

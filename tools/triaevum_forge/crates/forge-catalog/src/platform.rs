@@ -56,14 +56,45 @@ pub const LINUX: ReleasePlatform = ReleasePlatform {
     installed_runtime: "TriAevum",
 };
 
-/// The targets a catalog may name. Android/macOS catalogs do not exist yet;
-/// adding one is a format decision, not something to infer here.
-pub const TARGETS: [ReleasePlatform; 2] = [WINDOWS, LINUX];
+/// The APK: Android installs its libraries in the application's native
+/// library directory (`lib/arm64-v8a/` in the APK, the paths its catalog
+/// records, see [`crate::precompiled::set_native_library_directory`]). The
+/// runtime library is also the pass compiler and the device helper; there is
+/// no separate native module and no installed copy of the runtime.
+pub const ANDROID: ReleasePlatform = ReleasePlatform {
+    target: "aarch64-linux-android",
+    runtime: "lib/arm64-v8a/libTriAevum.so",
+    forge: "lib/arm64-v8a/libtriaevum_forge.so",
+    native_module: "",
+    title_module: "libtriaevum_title_aot.so",
+    profile: "aarch64-android-release-v1",
+    compiler: "clang++",
+    archiver: "llvm-ar",
+    support_library: "libtriaevum_title_whole_aot_support.a",
+    archive_suffix: ".apk",
+    installed_runtime: "lib/arm64-v8a/libTriAevum.so",
+};
+
+/// The targets a catalog may name. macOS catalogs do not exist yet; adding
+/// one is a format decision, not something to infer here.
+pub const TARGETS: [ReleasePlatform; 3] = [WINDOWS, LINUX, ANDROID];
 
 pub fn for_target(target: &str) -> Result<ReleasePlatform> {
-    TARGETS
-        .into_iter()
+    find_target(&TARGETS, target)
+}
+
+/// Python's `release_platform.for_target`: the targets the desktop publisher
+/// bindings accept. Android catalogs come from the Android package publisher
+/// (`android_forge_package.py`), which binds the runtime library itself.
+pub fn desktop_target(target: &str) -> Result<ReleasePlatform> {
+    find_target(&[WINDOWS, LINUX], target)
+}
+
+fn find_target(targets: &[ReleasePlatform], target: &str) -> Result<ReleasePlatform> {
+    targets
+        .iter()
         .find(|item| item.target == target)
+        .copied()
         .ok_or_else(|| ForgeError::new(ErrorKind::IncompatibleTarget, format!("Unsupported release target: {target}")))
 }
 
@@ -79,8 +110,12 @@ pub fn catalog_platform(catalog: &Map<String, Value>) -> Result<ReleasePlatform>
     }
 }
 
-/// `host_platform()`: the platform of the running process, x86-64 only.
+/// `host_platform()`: the platform of the running process, x86-64 desktops
+/// and the ARM64 Android application.
 pub fn host_platform() -> Result<ReleasePlatform> {
+    if cfg!(all(target_os = "android", target_arch = "aarch64")) {
+        return Ok(ANDROID);
+    }
     let machine = std::env::consts::ARCH;
     if machine != "x86_64" {
         return Err(ForgeError::new(

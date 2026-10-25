@@ -15,7 +15,7 @@ use crate::abi::{EventSink, Job};
 use crate::cancel::CancelToken;
 use crate::error::{ForgeError, Result};
 use crate::hashing::{copy_hashing, hex};
-use crate::install::{self, install_private_title, InstallRequest, InstallSource};
+use crate::install::{self, install_private_title, AndroidTarget, InstallRequest, InstallSource, InstallTarget};
 
 pub const REQUEST_FORMAT: &str = "triaevum_forge_request_v1";
 
@@ -184,12 +184,48 @@ fn rom_identify(source: Source, sink: &EventSink, cancel: &CancelToken) -> Resul
 }
 
 /// The `install` job: `forge_gui.install_private_title` with the desktop
-/// helper processes, optionally after the GUI's HD texture download.
+/// helper processes, optionally after the GUI's HD texture download. With
+/// `android` it installs for the Android application, with the runtime
+/// library's in-process services (an Android build only).
 struct InstallJob {
     source: InstallSource,
     data_root: Option<PathBuf>,
     package_root: PathBuf,
     download_hd_textures: bool,
+    android: Option<AndroidJob>,
+}
+
+/// `android`: `native_library_dir` (the application's), `profile_root` (the
+/// folder the game activity reads) and `cache_dir` (scratch space).
+#[cfg_attr(not(unix), allow(dead_code))]
+struct AndroidJob {
+    target: AndroidTarget,
+    cache_dir: PathBuf,
+}
+
+impl AndroidJob {
+    fn parse(value: Option<&Value>) -> Result<Option<Self>> {
+        let object = match value {
+            None | Some(Value::Null) => return Ok(None),
+            Some(Value::Object(object)) => object,
+            Some(_) => return Err(ForgeError::invalid("android must be an object")),
+        };
+        let path = |key: &str| {
+            object
+                .get(key)
+                .and_then(Value::as_str)
+                .filter(|text| !text.is_empty())
+                .map(PathBuf::from)
+                .ok_or_else(|| ForgeError::invalid(format!("android.{key} must be a path")))
+        };
+        Ok(Some(Self {
+            target: AndroidTarget {
+                native_library_dir: path("native_library_dir")?,
+                profile_root: path("profile_root")?,
+            },
+            cache_dir: path("cache_dir")?,
+        }))
+    }
 }
 
 impl InstallJob {
@@ -216,18 +252,54 @@ impl InstallJob {
             Some(Value::Bool(flag)) => *flag,
             Some(_) => return Err(ForgeError::invalid("download_hd_textures must be a boolean")),
         };
-        Ok(Self { source, data_root: path("data_root"), package_root, download_hd_textures })
+        let android = AndroidJob::parse(request.get("android"))?;
+        if android.is_some() && !cfg!(target_os = "android") {
+            return Err(ForgeError::new(
+                crate::ErrorKind::IncompatibleTarget,
+                "Android installations need the Android application's native services",
+            ));
+        }
+        Ok(Self { source, data_root: path("data_root"), package_root, download_hd_textures, android })
     }
 
     fn run(self, sink: &EventSink, cancel: &CancelToken) -> Result<Value> {
         if self.download_hd_textures {
             download_hd_textures(&self.package_root, self.data_root.as_deref(), sink, cancel)?;
         }
-        let request =
-            InstallRequest { source: self.source, data_root: self.data_root, package_root: self.package_root };
         let mut events = StageEvents { sink, current: String::new() };
-        install_private_title(request, &DesktopServices, &mut |stage, message| events.report(stage, message), cancel)
+        let mut report = |stage: &str, message: &str| events.report(stage, message);
+        let Some(android) = self.android else {
+            let target = InstallTarget::Package;
+            let request = InstallRequest {
+                source: self.source,
+                data_root: self.data_root,
+                package_root: self.package_root,
+                target,
+            };
+            return install_private_title(request, &DesktopServices, &mut report, cancel);
+        };
+        let services = android_services(&android)?;
+        let request = InstallRequest {
+            source: self.source,
+            data_root: self.data_root,
+            package_root: self.package_root,
+            target: InstallTarget::Android(android.target),
+        };
+        install_private_title(request, &services, &mut report, cancel)
     }
+}
+
+#[cfg(unix)]
+fn android_services(
+    android: &AndroidJob,
+) -> Result<forge_native::AndroidServices<forge_native::android::RuntimeLibrary>> {
+    let library = android.target.native_library_dir.join("libTriAevum.so");
+    Ok(forge_native::AndroidServices::new(library, android.cache_dir.join("forge-native")))
+}
+
+#[cfg(not(unix))]
+fn android_services(_: &AndroidJob) -> Result<DesktopServices> {
+    Err(ForgeError::new(crate::ErrorKind::IncompatibleTarget, "Android installations need an Android build"))
 }
 
 /// Python's top-level install stages; the area crates' own report names

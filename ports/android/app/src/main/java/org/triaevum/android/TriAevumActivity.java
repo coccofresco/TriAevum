@@ -67,8 +67,26 @@ public final class TriAevumActivity extends SDLActivity {
         File root = getExternalFilesDir(null);
         return new String[] {
             "--launch-profile", new File(root, "TriAevum.android.launch.json").getAbsolutePath(),
-            "--title-plugin", new File(getApplicationInfo().nativeLibraryDir,
-                "libtriaevum_title_aot.so").getAbsolutePath()
+            "--title-plugin", new File(getApplicationInfo().nativeLibraryDir, titleLibrary(root)).getAbsolutePath()
         };
+    }
+
+    /**
+     * The title library Forge installed (TriAevum.android.title.json); the APK's default title
+     * library when Forge has not run. Forge verified the library against its catalog.
+     */
+    private static String titleLibrary(File root) {
+        String fallback = "libtriaevum_title_aot.so";
+        File title = new File(root, "TriAevum.android.title.json");
+        if (!title.isFile()) return fallback;
+        try {
+            String library = new JSONObject(new String(Files.readAllBytes(title.toPath()), StandardCharsets.UTF_8))
+                .getString("plugin_library");
+            if (library.matches("lib[A-Za-z0-9_.-]+\\.so")) return library;
+            Log.w("TriAevum", "Invalid title library name " + library + "; using " + fallback);
+        } catch (Exception error) {
+            Log.w("TriAevum", "Invalid Android title record; using " + fallback, error);
+        }
+        return fallback;
     }
 }

@@ -148,14 +148,24 @@ pub const LINUX: ReleasePlatform = ReleasePlatform {
     installed_runtime: "TriAevum",
 };
 
+/// The APK: its libraries stay where Android installed them.
+pub const ANDROID: ReleasePlatform = ReleasePlatform {
+    target: "aarch64-linux-android",
+    runtime: "lib/arm64-v8a/libTriAevum.so",
+    forge: "lib/arm64-v8a/libtriaevum_forge.so",
+    native_module: "",
+    title_module: "libtriaevum_title_aot.so",
+    installed_runtime: "lib/arm64-v8a/libTriAevum.so",
+};
+
 pub fn for_target(target: &str) -> Result<ReleasePlatform> {
-    [WINDOWS, LINUX].into_iter().find(|platform| platform.target == target).ok_or_else(|| {
+    [WINDOWS, LINUX, ANDROID].into_iter().find(|platform| platform.target == target).ok_or_else(|| {
         ForgeError::new(forge_base::ErrorKind::IncompatibleTarget, format!("Unsupported release target: {target}"))
     })
 }
 
 /// `release_platform.host_platform()`: the release platform of this process
-/// (x86-64 Windows or Linux), with the catalog crate's messages.
+/// (x86-64 Windows or Linux, ARM64 Android), with the catalog crate's messages.
 pub fn host_platform() -> Result<ReleasePlatform> {
     for_target(forge_catalog::host_platform()?.target)
 }

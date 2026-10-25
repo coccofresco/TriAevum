@@ -143,13 +143,22 @@ fn create_log(path: &Path) -> Result<File> {
 
 /// Reads complete lines of the helper's stdout log as it grows and reports
 /// `pipeline_progress` records.
-struct ProgressReader {
+pub(crate) struct ProgressReader {
     file: File,
     pending: Vec<u8>,
 }
 
 impl ProgressReader {
-    fn poll(&mut self, report: &mut dyn FnMut(&str, &str)) -> Result<()> {
+    pub(crate) fn new(file: File) -> Self {
+        Self { file, pending: Vec::new() }
+    }
+
+    /// The log's current length.
+    pub(crate) fn size(&self) -> u64 {
+        file_size(&self.file)
+    }
+
+    pub(crate) fn poll(&mut self, report: &mut dyn FnMut(&str, &str)) -> Result<()> {
         let mut chunk = vec![0u8; DEVICE_PENDING_BYTES];
         let read = self.file.read(&mut chunk).map_err(|error| {
             let message = os_error(&error, None);
@@ -197,13 +206,10 @@ pub fn run_device_helper(
     let stderr_path = stage.join("stderr.log");
     let output = create_log(&stdout_path)?;
     let errors = create_log(&stderr_path)?;
-    let mut progress = ProgressReader {
-        file: File::open(&stdout_path).map_err(|error| {
-            let message = open_error(&error, &stdout_path);
-            io_failure(error, message)
-        })?,
-        pending: Vec::new(),
-    };
+    let mut progress = ProgressReader::new(File::open(&stdout_path).map_err(|error| {
+        let message = open_error(&error, &stdout_path);
+        io_failure(error, message)
+    })?);
     let errors_size = File::open(&stderr_path).map_err(|error| {
         let message = open_error(&error, &stderr_path);
         io_failure(error, message)
@@ -235,7 +241,7 @@ pub fn run_device_helper(
         if now - started > budget || cancel_at.is_some_and(|at| now - at > DEVICE_CANCEL_GRACE) {
             return Err(failed("Device pipeline preparation exceeded its time budget"));
         }
-        if file_size(&progress.file).max(file_size(&errors_size)) > DEVICE_LOG_BYTES {
+        if progress.size().max(file_size(&errors_size)) > DEVICE_LOG_BYTES {
             return Err(failed("Device pipeline preparation exceeded its diagnostic budget"));
         }
         progress.poll(report)?;

@@ -36,6 +36,13 @@ LINUX = ReleasePlatform("x86_64-unknown-linux-gnu", "TriAevum",
                         "triaevum_title_aot.so", "x86_64-linux-thinlto-release-v1",
                         "clang++", "llvm-ar", "libtriaevum_title_whole_aot_support.a", ".tar.gz",
                         "TriAevum")
+# The APK: Android installs the libraries in the application's native library
+# folder, never in the Forge package; Forge resolves lib/arm64-v8a/ records there.
+ANDROID = ReleasePlatform("aarch64-linux-android", "lib/arm64-v8a/libTriAevum.so",
+                          "lib/arm64-v8a/libtriaevum_forge.so", "",
+                          "libtriaevum_title_aot.so", "aarch64-android-release-v1",
+                          "clang++", "llvm-ar", "libtriaevum_title_whole_aot_support.a", ".apk",
+                          "lib/arm64-v8a/libTriAevum.so")
 
 
 def installed_runtime_path(root: Path, value: ReleasePlatform) -> Path:

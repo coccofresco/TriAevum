@@ -3,7 +3,8 @@
     <uses-feature android:name="android.hardware.vulkan.level" android:version="1" android:required="true" />
     <application android:label="TriAevum — Echoes of Time" android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen"
         android:allowBackup="false">
-        <activity android:name=".forge.InstallerActivity" android:exported="true"
+        <!-- Forge runs the runtime library's native helpers in process: never in the game's process. -->
+        <activity android:name=".forge.InstallerActivity" android:exported="true" android:process=":forge"
             android:configChanges="orientation|screenLayout|screenSize|smallestScreenSize|uiMode|density|fontScale">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

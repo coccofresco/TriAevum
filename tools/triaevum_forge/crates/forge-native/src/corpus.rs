@@ -17,7 +17,7 @@ use forge_base::hashing::{hex, sha256_bytes, sha256_file};
 use forge_base::{CancelToken, ErrorKind, ForgeError, Result};
 use forge_catalog::paths::join_posix;
 use forge_catalog::pyjson::{eq_str, get, index, py_eq, py_str, truthy};
-use forge_catalog::{checked_file, for_target, WINDOWS};
+use forge_catalog::{checked_file, desktop_target, WINDOWS};
 use serde_json::{json, Map, Value};
 
 use crate::o3ps::{decode_file, Module, MAX_BYTES};
@@ -369,7 +369,7 @@ pub fn bind_shader_corpus(
     source_root: &Path,
 ) -> Result<(Map<String, Value>, Vec<Value>)> {
     let target = catalog.get("target").ok_or_else(|| invalid("Shader corpus catalog has no target"))?;
-    let platform = for_target(&py_str(target))?;
+    let platform = desktop_target(&py_str(target))?;
     if !truthy(get(catalog, "titles")) {
         return Err(invalid("Shader corpus requires title recipes"));
     }

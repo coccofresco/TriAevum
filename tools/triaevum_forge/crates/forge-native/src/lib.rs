@@ -10,7 +10,7 @@
 //!
 //! Every call into native code goes through [`NativeServices`]:
 //! [`DesktopServices`] runs the verified helpers as Python did,
-//! [`AndroidServices`] is the documented in-process placeholder. The
+//! [`AndroidServices`] calls the same helpers in the runtime library. The
 //! platform-neutral modules validate native results and write receipts with
 //! the Python Forge's bytes and messages.
 

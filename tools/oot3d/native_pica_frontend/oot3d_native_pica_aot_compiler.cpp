@@ -152,7 +152,7 @@ void WriteJsonAtomically(const std::filesystem::path& path,
 
 } // namespace
 
-int main(int argc, char** argv) {
+int TriAevumPassCompilerMain(int argc, char** argv) {
     using namespace Fast::Extension;
     try {
         Options options;
@@ -428,3 +428,11 @@ int main(int argc, char** argv) {
         return 1;
     }
 }
+
+// The Android runtime library links this compiler and calls it in process
+// (triaevum_forge_tool.cpp): the pass cache keeps the gameplay build's identity.
+#ifndef TRIAEVUM_TOOL_LIBRARY
+int main(int argc, char** argv) {
+    return TriAevumPassCompilerMain(argc, argv);
+}
+#endif

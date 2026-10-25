@@ -31,12 +31,47 @@ fn integrity(message: String) -> ForgeError {
     ForgeError::integrity(message)
 }
 
+/// Where an Android catalog records the APK's libraries.
+pub const NATIVE_LIBRARY_PREFIX: &str = "lib/arm64-v8a/";
+static NATIVE_LIBRARIES: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// Android installs the APK's `lib/arm64-v8a/` libraries in the application's
+/// native library directory, outside the package folder: once this process
+/// names that directory, catalog records under [`NATIVE_LIBRARY_PREFIX`]
+/// resolve there. It is fixed for the process lifetime.
+pub fn set_native_library_directory(directory: &Path) -> Result<()> {
+    let directory = resolve(directory);
+    if NATIVE_LIBRARIES.get_or_init(|| directory.clone()) != &directory {
+        return Err(ForgeError::internal("The native library directory is already set"));
+    }
+    Ok(())
+}
+
+/// A library record's file in the native library directory, when one is set.
+fn native_library(relative: &str) -> Option<PathBuf> {
+    let name = relative.strip_prefix(NATIVE_LIBRARY_PREFIX)?;
+    if name.is_empty() || name.contains('/') {
+        return None;
+    }
+    NATIVE_LIBRARIES.get().map(|directory| directory.join(name))
+}
+
+/// Where a package-relative artifact path is: under `root`, or for an APK
+/// library in the native library directory.
+pub fn artifact_path(root: &Path, relative: &str) -> PathBuf {
+    native_library(relative).unwrap_or_else(|| join_posix(root, relative))
+}
+
 /// `checked_file(root, record)`: a regular, unlinked file inside `root` with
-/// the record's exact size and SHA-256. Returns its path under resolved `root`.
+/// the record's exact size and SHA-256. Returns its path under resolved `root`
+/// (an APK library: in the native library directory).
 pub fn checked_file(root: &Path, record: &Value, cancel: &CancelToken) -> Result<PathBuf> {
     let fields = record.as_object().ok_or_else(|| malformed(format!("artifact record is {}", type_name(record))))?;
     // `str(record.get("path", ""))`: missing is "", an explicit null "None".
     let relative = normalize_relative_path(&fields.get("path").map(py_str).unwrap_or_default())?;
+    if let Some(path) = native_library(&relative) {
+        return verified(&path, fields, &relative, cancel);
+    }
     let root = resolve(root);
     let path = join_posix(&root, &relative);
     let parts: Vec<&str> = relative.split('/').filter(|part| *part != ".").collect();
@@ -48,16 +83,23 @@ pub fn checked_file(root: &Path, record: &Value, cancel: &CancelToken) -> Result
             return Err(integrity(format!("Linked precompiled artifact is forbidden: {relative}")));
         }
     }
-    if !resolve(&path).starts_with(&root) || !path.is_file() {
+    if !resolve(&path).starts_with(&root) {
         return Err(integrity(format!("Precompiled artifact is missing: {relative}")));
     }
-    let size = std::fs::metadata(&path)
+    verified(&path, fields, &relative, cancel)
+}
+
+fn verified(path: &Path, fields: &Map<String, Value>, relative: &str, cancel: &CancelToken) -> Result<PathBuf> {
+    if !path.is_file() {
+        return Err(integrity(format!("Precompiled artifact is missing: {relative}")));
+    }
+    let size = std::fs::metadata(path)
         .map_err(|error| ForgeError::io(format!("Cannot read {}", path.display()), error))?
         .len();
-    if !eq_int(get(fields, "bytes"), size) || !eq_str(get(fields, "sha256"), &hex(&sha256_file(&path, cancel)?.1)) {
+    if !eq_int(get(fields, "bytes"), size) || !eq_str(get(fields, "sha256"), &hex(&sha256_file(path, cancel)?.1)) {
         return Err(integrity(format!("Precompiled artifact failed integrity validation: {relative}")));
     }
-    Ok(path)
+    Ok(path.to_path_buf())
 }
 
 /// `load_catalog(root)`.
@@ -68,7 +110,12 @@ pub fn load_catalog(root: &Path) -> Result<Map<String, Value>> {
     }
     let platform = catalog_platform(&payload)?;
     for (field, expected) in [("runtime", platform.runtime), ("native_module", platform.native_module)] {
-        let bound = matches!(payload.get(field), Some(Value::Object(record)) if eq_str(get(record, "path"), expected));
+        // A platform without a native module (Android) binds none.
+        let bound = match payload.get(field) {
+            Some(Value::Object(record)) => !expected.is_empty() && eq_str(get(record, "path"), expected),
+            None => expected.is_empty(),
+            Some(_) => false,
+        };
         if !bound {
             return Err(integrity(format!("Invalid catalog {field} binding")));
         }
@@ -161,7 +208,9 @@ pub fn validate_title(
         return Err(integrity("Precompiled title has no valid translator identity".into()));
     }
     checked_file(root, &runtime_record(root, &catalog)?, cancel)?;
-    checked_file(root, index_map(&catalog, "native_module")?, cancel)?;
+    if !platform.native_module.is_empty() {
+        checked_file(root, index_map(&catalog, "native_module")?, cancel)?;
+    }
     checked_file(root, index_map(item, "plugin")?, cancel)?;
     let renderer = get(item, "renderer_shader_preparation");
     if !renderer.is_null() {

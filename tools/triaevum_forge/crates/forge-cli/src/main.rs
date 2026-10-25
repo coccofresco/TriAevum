@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Args, Parser, Subcommand};
-use forge_core::install::{install_private_title, InstallRequest, InstallSource};
+use forge_core::install::{install_private_title, InstallRequest, InstallSource, InstallTarget};
 use forge_core::legacy_json::{self, Options, Style};
 use forge_core::CancelToken;
 use forge_native::DesktopServices;
@@ -114,7 +114,7 @@ fn install(args: InstallArgs) -> ExitCode {
         Ok(root) => root,
         Err(message) => return print_error(&message),
     };
-    let request = InstallRequest { source, data_root: args.data_root, package_root };
+    let request = InstallRequest { source, data_root: args.data_root, package_root, target: InstallTarget::Package };
     let mut report = |stage: &str, message: &str| eprintln!("[{stage}] {message}");
     match install_private_title(request, &DesktopServices, &mut report, &CancelToken::new()) {
         Ok(result) => print_result(&result),
@@ -142,6 +142,7 @@ fn install_worker(args: WorkerArgs) -> ExitCode {
             source: InstallSource::from_path(args.rom),
             data_root: Some(args.data_root),
             package_root,
+            target: InstallTarget::Package,
         };
         let mut report = |stage: &str, message: &str| emit("stage", json!([stage, message]));
         install_private_title(request, &DesktopServices, &mut report, &CancelToken::new())

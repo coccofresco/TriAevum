@@ -1,6 +1,7 @@
 #include "oot3d_interior_sun_prebuild.h"
 #include <cstdlib>
 #include "oot3d_game_language.h"
+#include "triaevum_forge_tool.h"
 #include <array>
 #include <exception>
 #include <fstream>
@@ -175,38 +176,44 @@ NativeGameArguments PrepareNativeGameArguments(int argc, char** argv) {
 
 } // namespace
 
+std::optional<int> RunTriAevumToolMode(int argc, char** argv) {
+    if (argc >= 2 && std::string_view(argv[1]) == "--prebuild-interior-sun")
+        return Oot3dNativeGame::InteriorSunToolMain(argc, argv);
+#if defined(OOT3D_REQUIRE_WHOLE_AOT_PLUGIN_V2)
+    if (argc == 3 && std::string_view(argv[1]) == "--verify-title-plugin") {
+        Oot3dNativeGame::ConfigureTitlePlugin(argv[2]);
+        if (!Oot3dNativeGame::Oot3dWholeAotPluginV2Available())
+            throw std::runtime_error("Selected title plugin does not expose a valid whole-AOT ABI v2");
+        WriteTriAevumProductInfo(std::cout);
+        return 0;
+    }
+#endif
+    // --game-language-info ROMFS [CODE_BIN_SHA256]; without the hash the
+    // RomFS is read as OoT3D's.
+    if ((argc == 3 || argc == 4) && std::string_view(argv[1]) == "--game-language-info") {
+        const auto title = argc == 4 ? Oot3dNativeGame::ResolveTitleAdapter(argv[3])
+                                     : Oot3dNativeGame::TitleAdapter::Oot3dEur;
+        std::cout << Oot3dNativeGame::GameLanguageDocument(
+            Oot3dNativeGame::DetectGameLanguages(argv[2], 0, 0, title)).dump() << '\n';
+        return 0;
+    }
+    if (argc == 2 && std::string_view(argv[1]) == "--product-info") {
+        WriteTriAevumProductInfo(std::cout);
+        return 0;
+    }
+    return std::nullopt;
+}
+
 int main(int argc, char** argv) {
 #ifdef _WIN32
     UseRuntimeLibraryDirectory();
 #endif
     try {
-        if (argc >= 2 && std::string_view(argv[1]) == "--prebuild-interior-sun")
-            return Oot3dNativeGame::InteriorSunToolMain(argc, argv);
+        if (const auto status = RunTriAevumToolMode(argc, argv))
+            return *status;
 #if defined(__ANDROID__)
         InitializeAndroidGameHost();
 #endif
-#if defined(OOT3D_REQUIRE_WHOLE_AOT_PLUGIN_V2)
-        if (argc == 3 && std::string_view(argv[1]) == "--verify-title-plugin") {
-            Oot3dNativeGame::ConfigureTitlePlugin(argv[2]);
-            if (!Oot3dNativeGame::Oot3dWholeAotPluginV2Available())
-                throw std::runtime_error("Selected title plugin does not expose a valid whole-AOT ABI v2");
-            WriteTriAevumProductInfo(std::cout);
-            return 0;
-        }
-#endif
-        // --game-language-info ROMFS [CODE_BIN_SHA256]; without the hash the
-        // RomFS is read as OoT3D's.
-        if ((argc == 3 || argc == 4) && std::string_view(argv[1]) == "--game-language-info") {
-            const auto title = argc == 4 ? Oot3dNativeGame::ResolveTitleAdapter(argv[3])
-                                         : Oot3dNativeGame::TitleAdapter::Oot3dEur;
-            std::cout << Oot3dNativeGame::GameLanguageDocument(
-                Oot3dNativeGame::DetectGameLanguages(argv[2], 0, 0, title)).dump() << '\n';
-            return 0;
-        }
-        if (argc == 2 && std::string_view(argv[1]) == "--product-info") {
-            WriteTriAevumProductInfo(std::cout);
-            return 0;
-        }
         Oot3dNativeGameLaunch launch;
         NativeGameArguments preparedArguments;
 #if defined(__SWITCH__)

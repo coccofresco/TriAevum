@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use forge_base::CancelToken;
-use forge_core::install::{install_private_title, InstallRequest, InstallSource};
+use forge_core::install::{install_private_title, InstallRequest, InstallSource, InstallTarget};
 use forge_native::DesktopServices;
 use serde_json::Value;
 
@@ -155,6 +155,7 @@ fn python_and_rust_install_the_same_files() {
         source: InstallSource::Rom(rom),
         data_root: Some(data.clone()),
         package_root: package.clone(),
+        target: InstallTarget::Package,
     };
     let mut report = |stage: &str, message: &str| eprintln!("[rust {stage}] {message}");
     let result = install_private_title(request, &DesktopServices, &mut report, &CancelToken::new()).unwrap();

@@ -20,10 +20,15 @@ use forge_assets::precomputed_tables::title_tables;
 use forge_assets::scene_lights::prepare_scene_lights;
 use forge_assets::topscreen::{prepare_topscreen_assets, topscreen_link_animations, topscreen_ui_atlas_hd};
 use forge_assets::water::prepare_water_textures;
+use forge_base::fsutil::atomic_write_json;
+use forge_base::hashing::{hex, sha256_file};
 use forge_base::{CancelToken, ForgeError, Result};
 use forge_catalog::family::{self, InputPaths};
-use forge_catalog::precompiled::{checked_file, load_catalog, runtime_record, select_title, MODEL};
+use forge_catalog::precompiled::{
+    artifact_path, checked_file, load_catalog, runtime_record, select_title, set_native_library_directory, MODEL,
+};
 use forge_catalog::recipes::load_recipe_options;
+use forge_catalog::ReleasePlatform;
 use forge_catalog::{adapt_extracted_inputs, default_recipes, match_extracted_recipe, InputFile, TitleInputs};
 use forge_mods::{prepare_romfs_mods, prepare_ui_texture_pack, romfs_service_view, ui_atlas_hd};
 use forge_mods::{Catalog, PrepareContext, SystemBsdtar, UiTexturePack};
@@ -40,7 +45,7 @@ use forge_rom::{ExtractedFile, ExtractedTitleInputs};
 use serde_json::{json, Map, Value};
 
 use crate::layout::{self, for_package, installation_state, installed_runtime_path, HostOs};
-use crate::publish::{publish_private_runtime, PublishRequest, RuntimeAssets};
+use crate::publish::{publish_private_runtime, AndroidRuntime, PublishRequest, RuntimeAssets};
 use crate::transaction::activation_transaction;
 
 /// Progress callback `(stage, message)`, Python's `report`.
@@ -70,10 +75,60 @@ impl InstallSource {
 
 pub struct InstallRequest {
     pub source: InstallSource,
-    /// The private data folder; the package's `data` folder by default.
+    /// The private data folder; the package's `data` folder by default
+    /// (Android: `data` in the profile folder).
     pub data_root: Option<PathBuf>,
     /// The package: catalog, recipes, runtime, plugins and resources.
     pub package_root: PathBuf,
+    pub target: InstallTarget,
+}
+
+/// Where the installed title runs.
+pub enum InstallTarget {
+    /// The desktop package this process belongs to.
+    Package,
+    /// The Android application.
+    Android(AndroidTarget),
+}
+
+/// The Android installation (`FORGE_SPEC.md` 4.4). The package folder holds
+/// the APK's data files (catalog, recipes, resources, shader corpus); the
+/// libraries stay in `native_library_dir`, where Android installed them. The
+/// launch profile, the title file and the private data are in `profile_root`,
+/// the folder the game activity reads (its external files folder).
+pub struct AndroidTarget {
+    pub native_library_dir: PathBuf,
+    pub profile_root: PathBuf,
+}
+
+/// The Android launch profile, read by the game activity.
+pub const ANDROID_LAUNCH_PROFILE: &str = "TriAevum.android.launch.json";
+/// The title library the activity passes as `--title-plugin`.
+pub const ANDROID_TITLE_FILE: &str = "TriAevum.android.title.json";
+
+impl AndroidTarget {
+    pub fn launch_profile(&self) -> PathBuf {
+        self.profile_root.join(ANDROID_LAUNCH_PROFILE)
+    }
+
+    pub fn title_file(&self) -> PathBuf {
+        self.profile_root.join(ANDROID_TITLE_FILE)
+    }
+
+    /// The private data folder when the request names none.
+    pub fn data_root(&self) -> PathBuf {
+        self.profile_root.join("data")
+    }
+}
+
+impl InstallTarget {
+    /// The release platform the catalog must bind.
+    pub fn platform(&self) -> Result<ReleasePlatform> {
+        match self {
+            Self::Package => forge_catalog::host_platform(),
+            Self::Android(_) => Ok(forge_catalog::ANDROID),
+        }
+    }
 }
 
 /// The installation of a package (`bundle_paths.installation_layout`).
@@ -115,6 +170,11 @@ pub fn recipes_path(package_root: &Path) -> PathBuf {
 /// `forge_gui.runtime_path()`.
 pub fn runtime_path(package_root: &Path) -> Result<PathBuf> {
     resolve(&installed_runtime_path(package_root, &layout::host_platform()?))
+}
+
+/// The Android runtime library in the native library directory.
+fn android_runtime_path(package_root: &Path) -> PathBuf {
+    artifact_path(package_root, layout::ANDROID.runtime)
 }
 
 /// A unique `.rom-import-<32 hex>` staging folder name.
@@ -192,7 +252,17 @@ pub fn install_private_title(
 ) -> Result<Value> {
     let started = Instant::now();
     let package_root = resolve(&expanduser(&request.package_root))?;
-    let data_root = data_root(request.data_root.as_deref(), &package_root)?;
+    let android = match &request.target {
+        InstallTarget::Package => None,
+        InstallTarget::Android(android) => {
+            set_native_library_directory(&android.native_library_dir)?;
+            Some(android)
+        }
+    };
+    let data_root = match (android, request.data_root.as_deref()) {
+        (Some(android), None) => resolve(&android.data_root())?,
+        (_, requested) => data_root(requested, &package_root)?,
+    };
     std::fs::create_dir_all(&data_root)
         .map_err(|error| ForgeError::io(format!("Cannot create {}", data_root.display()), error))?;
     let output_root = data_root.join("titles");
@@ -200,7 +270,10 @@ pub fn install_private_title(
     let mut stage = "preflight";
     let outcome = (|| -> Result<(Value, Value, Value, Value)> {
         report(stage, "Checking the playable runtime and precompiled title catalog...");
-        let runtime = runtime_path(&package_root)?;
+        let runtime = match android {
+            None => runtime_path(&package_root)?,
+            Some(_) => android_runtime_path(&package_root),
+        };
         query_product(services, &runtime, "", None)?;
         let recipes = recipes_path(&package_root);
         let ids: Vec<String> = load_recipe_options(&recipes)?.into_iter().map(|option| option.id).collect();
@@ -208,7 +281,7 @@ pub fn install_private_title(
         check_title_path_length(&output_root, &ids, cfg!(windows))?;
         let root = package_root.clone();
         let catalog = load_catalog(&root)?;
-        let target = forge_catalog::host_platform()?;
+        let target = request.target.platform()?;
 
         stage = "extract";
         report(stage, "Extracting native title data from the decrypted ROM...");
@@ -254,15 +327,23 @@ pub fn install_private_title(
 
         stage = "activate";
         report(stage, "Installing the verified precompiled title...");
+        let (runtime_plugin, launch_profile) = match android {
+            None => (default_runtime_plugin_path(&package_root)?, default_runtime_launch_profile_path(&package_root)?),
+            Some(android) => (android.title_file(), android.launch_profile()),
+        };
+        let android_runtime = android.map(|_| (runtime.clone(), runtime_plugin.clone()));
+        let android_runtime =
+            android_runtime.as_ref().map(|(runtime, title_file)| AndroidRuntime { runtime, title_file });
         let built = install_precompiled_title(
             &PrecompiledRequest {
                 prepared_directory: &prepared_directory,
                 root: &root,
                 recipe: &recipe,
                 data_root: &data_root,
-                runtime_plugin: &default_runtime_plugin_path(&package_root)?,
-                launch_profile: &default_runtime_launch_profile_path(&package_root)?,
+                runtime_plugin: &runtime_plugin,
+                launch_profile: &launch_profile,
                 active_title_state: &data_root.join("active-title.json"),
+                android: android_runtime.as_ref(),
             },
             services,
             report,
@@ -297,6 +378,8 @@ pub struct PrecompiledRequest<'a> {
     pub runtime_plugin: &'a Path,
     pub launch_profile: &'a Path,
     pub active_title_state: &'a Path,
+    /// Android: the runtime library and the title file (`runtime_plugin`).
+    pub android: Option<&'a AndroidRuntime<'a>>,
 }
 
 /// The catalog-verified runtime as the interior-sun job's executor.
@@ -344,6 +427,44 @@ fn optional(value: Option<Map<String, Value>>) -> Value {
     value.map_or(Value::Null, Value::Object)
 }
 
+/// Android has no module container: the title library runs where Android
+/// installed it. forge-state.json records that library as the title's ready
+/// module, which activation requires.
+fn record_library_module(
+    prepared_directory: &Path,
+    library: &Path,
+    target: &str,
+    translator: &str,
+    cancel: &CancelToken,
+) -> Result<Value> {
+    let mut prepared = load_prepared_content(prepared_directory, &["code"], cancel)?;
+    let source_identity = prepared.input("code").expect("code input was required").sha256.clone();
+    let (bytes, digest) = sha256_file(library, cancel)?;
+    let digest = hex(&digest);
+    let name = library.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
+    prepared.state.insert(
+        "module".into(),
+        json!({
+            "status": "ready",
+            "container": Value::Null,
+            "library": name,
+            "bytes": bytes,
+            "sha256": digest,
+            "source_identity_sha256": source_identity,
+            "translator_identity_sha256": translator,
+            "title_aot_image_sha256": digest,
+            "target_triple": target,
+        }),
+    );
+    atomic_write_json(&prepared.directory.join("forge-state.json"), &Value::Object(prepared.state))?;
+    Ok(json!({
+        "status": "library",
+        "directory": path_string(&prepared.directory)?,
+        "module": path_string(library)?,
+        "module_sha256": digest,
+    }))
+}
+
 /// `install_precompiled_title`: reverifies the catalog and the prepared
 /// inputs, prepares the assets and shader caches, then publishes the TAM,
 /// the runtime and the active title in one activation transaction.
@@ -353,9 +474,10 @@ pub fn install_precompiled_title(
     report: Report<'_>,
     cancel: &CancelToken,
 ) -> Result<Value> {
-    let PrecompiledRequest { prepared_directory, root, recipe, data_root, .. } = *request;
+    let PrecompiledRequest { prepared_directory, root, recipe, data_root, android, .. } = *request;
     let catalog = load_catalog(root)?;
-    let item = select_title(root, recipe, Some(&catalog), &forge_catalog::host_platform()?, cancel)?;
+    let platform = if android.is_some() { forge_catalog::ANDROID } else { forge_catalog::host_platform()? };
+    let item = select_title(root, recipe, Some(&catalog), &platform, cancel)?;
     let prepared = load_prepared_content(prepared_directory, &["code", "exheader", "romfs"], cancel)?;
     if !forge_prepare::pyvalue::py_eq(prepared.index.get("recipe").unwrap_or(&Value::Null), &item["recipe"]) {
         return Err(ForgeError::invalid("Prepared title differs from the precompiled revision"));
@@ -373,7 +495,11 @@ pub fn install_precompiled_title(
         family::verify(recipe, paths, "execution", cancel)?;
     }
     let plugin = checked_file(root, &item["plugin"], cancel)?;
-    let native_module = checked_file(root, &catalog["native_module"], cancel)?;
+    // Android binds no native module (load_catalog checked the binding).
+    let native_module = match android {
+        None => Some(checked_file(root, &catalog["native_module"], cancel)?),
+        Some(_) => None,
+    };
     let item_value = Value::Object(item.clone());
     let tables = title_tables(&item_value, &mut |record| checked_file(root, record, cancel))?;
     let recipe_value = Value::Object(recipe.clone());
@@ -462,21 +588,25 @@ pub fn install_precompiled_title(
         request.launch_profile.to_path_buf(),
         request.active_title_state.to_path_buf(),
         prepared.directory.join("forge-state.json"),
-        data_root.join("config").join("TriAevum.json"),
+        data_root.join("config").join(if android.is_some() { crate::publish::ANDROID_CONFIG } else { "TriAevum.json" }),
         data_root.join("config").join("topscreen_ui.json"),
     ];
     let target = item["target"].as_str().unwrap_or_default();
     let translator = item["translator_identity_sha256"].as_str().unwrap_or_default();
     let (packaged, runtime, activation) = activation_transaction(&installation, &targets, HostOs::current(), || {
-        let packaged = package_private_module(
-            &prepared.directory,
-            &native_module,
-            Some(&plugin),
-            target,
-            translator,
-            None,
-            cancel,
-        )?;
+        let packaged = match &native_module {
+            Some(native_module) => package_private_module(
+                &prepared.directory,
+                native_module,
+                Some(&plugin),
+                target,
+                translator,
+                None,
+                cancel,
+            )?
+            .as_json()?,
+            None => record_library_module(&prepared.directory, &plugin, target, translator, cancel)?,
+        };
         let runtime = publish_private_runtime(
             &PublishRequest {
                 prepared_directory: &prepared.directory,
@@ -486,12 +616,13 @@ pub fn install_precompiled_title(
                 data_root,
                 package_root: Some(root),
                 assets: &assets,
+                android,
             },
             services,
             cancel,
         )?;
         let activation = activate_prepared_title(&prepared.directory, request.active_title_state, cancel)?;
-        Ok((packaged.as_json()?, runtime, activation))
+        Ok((packaged, runtime, activation))
     })?;
     Ok(json!({
         "status": "ready",
