@@ -50,6 +50,8 @@ class Fixture:
         write("LICENSE", b"license", "license")
         write("recipes/oot3d.json", b"{}", "revision_recipe")
         write("resources/gamecontrollerdb.txt", b"pads", "title_neutral_resource")
+        write("resources/topscreen/singlescreen-3.0/custom_ui01.ctxb", b"atlas", "topscreen_singlescreen_asset")
+        write("config/TriAevum.json", b"{}", "configuration")
         pipelines = write("forge/shader-corpus/pipelines-0.json", b"{\"pipelines\": []}", "portable_pipeline_recipes")
         pack = write("forge/shader-corpus/portable.o3ps", b"O3PS pack", "portable_shader_corpus")
         lights = write("forge/precomputed/scene-lights.json", b"{}", "precomputed_scene_lights")
@@ -88,6 +90,16 @@ class Fixture:
 
 
 class AndroidForgePackageTests(unittest.TestCase):
+    def test_every_release_policy_role_is_classified(self):
+        import android_forge_package
+        policy = json.loads((Path(__file__).parent / "release_policy.json").read_text())
+        roles = set(policy["allowed_roles"])
+        for platform in policy.get("platforms", {}).values():
+            roles |= set(platform.get("allowed_roles", {}))
+        classified = android_forge_package.DATA_ROLES | android_forge_package.EXCLUDED_ROLES
+        self.assertEqual(sorted(roles - classified), [])
+        self.assertEqual(android_forge_package.DATA_ROLES & android_forge_package.EXCLUDED_ROLES, set())
+
     def test_requires_aarch64_shared_libraries(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "lib.so"
@@ -127,6 +139,7 @@ class AndroidForgePackageTests(unittest.TestCase):
             copied = sorted(path.relative_to(package).as_posix() for path in package.rglob("*") if path.is_file())
             self.assertEqual(copied, sorted([
                 CATALOG, INVENTORY, "recipes/oot3d.json", "resources/gamecontrollerdb.txt",
+                "resources/topscreen/singlescreen-3.0/custom_ui01.ctxb",
                 "forge/shader-corpus/pipelines-0.json", "forge/shader-corpus/portable.o3ps",
                 "forge/precomputed/scene-lights.json"]))
             self.assertEqual(json.loads((package / INVENTORY).read_text()), inventory)

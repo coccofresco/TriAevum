@@ -39,7 +39,7 @@ TITLE_BUILD_TARGET = "ports/android/native"
 DATA_ROLES = frozenset({
     "revision_recipe", "input_copy_adapter", "title_neutral_resource", "default_environment_profile",
     "precomputed_interior_sun", "precomputed_scene_lights", "portable_pipeline_recipes",
-    "portable_shader_corpus", "portable_shader_qualification",
+    "portable_shader_corpus", "portable_shader_qualification", "topscreen_singlescreen_asset",
 })
 # Desktop binaries, notices, documents and corresponding source stay out of the
 # APK's assets; the catalog is rewritten. An unclassified role fails closed.
@@ -47,7 +47,9 @@ EXCLUDED_ROLES = frozenset({
     "license", "documentation", "runtime_executable", "runtime_library", "forge_executable",
     "forge_runtime_module", "shader_preparation_tool", "separately_licensed_module",
     "optional_vulkan_runtime", "precompiled_title", "precompiled_catalog",
-    "corresponding_source", "translated_title_source", "title_build_source",
+    "corresponding_source", "translated_title_source", "title_build_source", "configuration",
+    "forge_tool", "forge_tool_resource", "forge_toolchain_setup", "forge_link_library", "forge_clang_header",
+    "forge_frozen_resource",
 })
 
 
