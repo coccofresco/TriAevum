@@ -48,12 +48,14 @@ public final class TriAevumActivity extends SDLActivity {
 
     /** The touch controls above the game surface, the same size, without taking key focus. */
     private void attachTouchControls() {
-        TouchOverlayInput.Companion.seedDefaults(this);
         touchInput = new TouchOverlayInput();
         touchAdapter = new AzaharInputAdapter(touchInput);
         // The overlay reads its preferences through the bound host while it is built.
         OverlayHost.INSTANCE.bind(this, touchAdapter);
         touchOverlay = new InputOverlay(this, null);
+        // TriAevum's layout goes over the overlay's own first-run defaults.
+        TouchOverlayInput.Companion.seedDefaults(this);
+        touchOverlay.refreshControls();
         touchOverlay.setFocusable(false);
         touchInput.setOverlay(touchOverlay);
         mLayout.addView(touchOverlay, new ViewGroup.LayoutParams(
@@ -63,7 +65,13 @@ public final class TriAevumActivity extends SDLActivity {
 
     @Override protected void onPause() {
         if (touchAdapter != null) touchAdapter.releaseAll();
+        if (touchInput != null) touchInput.pause();
         super.onPause();
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        if (touchInput != null) touchInput.resume();
     }
 
     @Override public void onWindowFocusChanged(boolean hasFocus) {
@@ -74,8 +82,10 @@ public final class TriAevumActivity extends SDLActivity {
     @Override protected void onDestroy() {
         if (touchOverlay != null) mLayout.removeView(touchOverlay);
         if (touchAdapter != null) OverlayHost.INSTANCE.unbind(touchAdapter);
+        if (touchInput != null) touchInput.pause();
         touchOverlay = null;
         touchAdapter = null;
+        touchInput = null;
         super.onDestroy();
         // The native game runs once per process (title library, guest memory). When the game
         // ends, end the process too, so the next launch starts clean instead of reusing it.

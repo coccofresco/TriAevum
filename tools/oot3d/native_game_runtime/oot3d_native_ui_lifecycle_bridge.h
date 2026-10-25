@@ -185,6 +185,7 @@ private:
   TopScreenPauseProjectionState mTopScreenPauseProjection;
   // Captured at the Quest draw, cleared at the next submit.
   std::vector<TopScreenQuestCopiedQuad> mTopScreenQuestBCopies;
+  std::vector<TopScreenQuestCopiedQuad> mTopScreenQuestActionCopies;
   std::optional<TopScreenPauseEdgeGeometry> mTopScreenPauseEdgeGeometry;
   std::optional<TopScreenPauseEdgeGeometry>
       mTopScreenPausePageRedrawEdgeGeometry;

@@ -16,6 +16,9 @@ namespace oot3d::ui {
 enum class N64UiCanvasMode : std::uint8_t {
     Widescreen16x9,
     NativeTopScreen400x240,
+    // The output region's own shape, 240 units high: the canvas fills the
+    // region (touch controls placed anywhere in the window).
+    RegionShape,
 };
 
 // The part of the framebuffer the canvas is fitted into: the presentation

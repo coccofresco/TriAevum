@@ -231,6 +231,7 @@ bool Oot3dNativeUiLifecycleBridge::ApplyTopScreenGuestHook(uint32_t guestPc,
     return false;
 
   ++mStats.topscreen_quest_hook_calls;
+  mTopScreenQuestActionCopies.clear();
   constexpr uint32_t kQuestRenderBufferBinding = 0x004FC660U;
   uint32_t renderBuffer = 0U;
   TopScreenQuestGeometryContext context;
@@ -261,6 +262,14 @@ bool Oot3dNativeUiLifecycleBridge::ApplyTopScreenGuestHook(uint32_t guestPc,
   if (!ApplyTopScreenTimerCounterLayout(mMemory, context.HudScale, &error)) {
     ++mStats.topscreen_quest_hook_failures;
     return true;
+  }
+  // The touch layout draws the A ring and word inside the overlay's A.
+  if (mTopScreenConfig.TouchLayout && mTopScreenConfig.RenderHud &&
+      ThreeDsRecomp::Input::OverlayTouchAnchors().Snapshot()[static_cast<std::size_t>(
+          ThreeDsRecomp::Input::TouchAnchor::A)].Present &&
+      !CaptureTopScreenQuestActionCopies(mMemory, renderBuffer, mTopScreenConfig,
+                                         &mTopScreenQuestActionCopies, &error)) {
+    ++mStats.topscreen_quest_hook_failures;
   }
   ++mStats.topscreen_quest_transforms;
   return true;
@@ -463,6 +472,13 @@ Oot3dNativeUiLifecycleBridge::BuildTopScreenPresentation(
       (void)AppendTopScreenQuestBButtonCopiesPresentation(
           mTopScreenQuestBCopies, *itemIcons,
           numberGlyphs.value_or(oot3d::ui::UiTextureIdentity{}), output);
+    }
+    if (!mTopScreenQuestActionCopies.empty()) {
+      (void)AppendTopScreenQuestActionCopiesPresentation(
+          mTopScreenQuestActionCopies,
+          NativePauseSharedTextureIdentity(oot3d::ui::UiPauseSharedTextureSlot::HudAtlas)
+              .value_or(oot3d::ui::UiTextureIdentity{}),
+          output);
     }
     ApplyTopScreenGameplayCanvas(output);
     std::uint64_t visibleNativeTouchCopies = 0U;

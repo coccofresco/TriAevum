@@ -58,10 +58,21 @@ Touches that miss every control go to SDL as touches. HOME is the host menu key:
 a tap toggles the in-game menu, a long press opens F1. The app releases the
 overlay's input on pause and focus loss.
 
-Still required: settings ownership (F1 "Touch controls", layout editing),
-auto-hide when a controller is used, the donor latency patch
-(`requestUnbufferedDispatch`), physical multitouch tests and visual comparison
-on the device. The imported donor's
+With TopScreen's touch layout (`touch_layout`, default on Android), OoT3D
+draws its own HUD art inside the overlay's A, B, X, Y, ZL, ZR and D-pad
+controls (ring, label, item, counts, the A action word, the D-pad icons), and
+hides those parts of its HUD; the minimap takes the top-right corner. The
+overlay reports each control's bounds and leaves those controls blank while
+the game draws them (`InputOverlay.kt` host step in
+`tools/android/import_azahar_overlay.py`). A touch on no control is not the
+overlay's: it reaches the game surface with its own pointer id, so menus, the
+3DS touch screen and the free camera (a drag during gameplay) see every finger.
+On desktop, `TRIAEVUM_TOUCH_ANCHORS` simulates the overlay's layout.
+
+Still required: settings ownership (F1 "Touch controls", the `touch_layout`
+switch, layout editing), auto-hide when a controller is used, the donor latency
+patch (`requestUnbufferedDispatch`) and physical multitouch tests. The imported
+donor's
 existing quirks are not silently changed: for example its joystick change
 notification compares both axes with `&&`; isolate and test any future fix,
 rather than claiming the adapter tests validate that gesture logic.

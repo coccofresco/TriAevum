@@ -68,8 +68,9 @@ class InputOverlay(context: Context?, attrs: AttributeSet?) : SurfaceView(contex
 
     override fun draw(canvas: Canvas) {
         super.draw(canvas)
-        overlayButtons.forEach { it.draw(canvas) }
-        overlayDpads.forEach { it.draw(canvas) }
+        // TriAevum: a control the host draws itself is drawn here only while editing.
+        overlayButtons.forEach { if (isInEditMode || !OverlayHost.drawsControl(it.id)) it.draw(canvas) }
+        overlayDpads.forEach { if (isInEditMode || !OverlayHost.drawsControl(it.upId)) it.draw(canvas) }
         overlayJoysticks.forEach { it.draw(canvas) }
     }
 
@@ -268,7 +269,8 @@ class InputOverlay(context: Context?, attrs: AttributeSet?) : SurfaceView(contex
                 }
 
                 if (!isDpadPressed && !isJoystickPressed) {
-                    OverlayHost.onTouchEvent(xPosition.toFloat(), yPosition.toFloat(), true)
+                    // TriAevum: a touch on no control belongs to the game surface below.
+                    return false
                 }
             }
 
@@ -582,6 +584,21 @@ class InputOverlay(context: Context?, attrs: AttributeSet?) : SurfaceView(contex
             addOverlayControls(orientation)
         }
         invalidate()
+        publishControlBounds()
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        publishControlBounds()
+    }
+
+    // TriAevum: where each control is, for a host that draws some of them.
+    private fun publishControlBounds() {
+        if (width == 0 || height == 0) return
+        val bounds = HashMap<Int, IntArray>()
+        overlayButtons.forEach { bounds[it.id] = it.bounds.run { intArrayOf(left, top, right, bottom) } }
+        overlayDpads.forEach { bounds[it.upId] = it.bounds.run { intArrayOf(left, top, right, bottom) } }
+        OverlayHost.controlBounds(bounds, width, height)
     }
 
     private fun saveControlPosition(sharedPrefsId: Int, x: Int, y: Int, orientation: String) {
@@ -589,6 +606,7 @@ class InputOverlay(context: Context?, attrs: AttributeSet?) : SurfaceView(contex
             .putFloat("$sharedPrefsId$orientation-X", x.toFloat())
             .putFloat("$sharedPrefsId$orientation-Y", y.toFloat())
             .apply()
+        publishControlBounds()
     }
 
     fun setIsInEditMode(isInEditMode: Boolean) {

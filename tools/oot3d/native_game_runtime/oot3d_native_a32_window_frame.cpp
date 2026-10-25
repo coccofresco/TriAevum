@@ -588,6 +588,11 @@ bool NativeA32WindowSession::RunFrame() {
     inputConsumerDiagnostics.Observe(process.Memory(), frameCount);
   }
 
+  // The touch overlay's controls that show the HUD's own buttons and cross,
+  // over the whole window (the overlay may place them beside the picture).
+  Oot3dNativeGame::TopScreenTouchControlsPresentation touchControls;
+  const oot3d::ui::N64UiOutputRegion windowRegion{0U, 0U, std::max<uint32_t>(1, window.GetWidth()),
+                                                  std::max<uint32_t>(1, window.GetHeight())};
   for (std::size_t subsystemIndex = 0;
        subsystemIndex < oot3d::ui::kUiSubsystemCount; ++subsystemIndex) {
     const auto subsystem =
@@ -614,6 +619,9 @@ bool NativeA32WindowSession::RunFrame() {
       Oot3dNativeGame::AppendTopScreenFreeCameraOptionPresentation(
           nativeCandidateDispatch.TopScreenCamera.Camera, primitives);
       AppendTopScreenDpadPickerHoldRings(uiLifecycleBridge, primitives);
+      touchControls = Oot3dNativeGame::ExtractTopScreenTouchControls(
+          primitives, activeTopScreenConfig, ThreeDsRecomp::Input::OverlayTouchAnchors().Snapshot(),
+          240.0F * static_cast<float>(windowRegion.Width) / static_cast<float>(windowRegion.Height));
     }
     if (topScreenPresentation && subsystem == oot3d::ui::UiSubsystem::TouchControls) {
       ocarinaText.Append(primitives);
@@ -639,6 +647,23 @@ bool NativeA32WindowSession::RunFrame() {
                                 std::move(prepared), &renderError)) {
         throw std::runtime_error("integrated N64 UI presentation failed: " +
                                  renderError);
+      }
+    });
+  }
+  // The overlay draws its own art for its controls whenever the game does not
+  // (title, menus, scenes without a HUD).
+  ThreeDsRecomp::Input::OverlayTouchAnchors().SetTitleDrawsControls(!touchControls.Primitives.empty());
+  if (!touchControls.Primitives.empty()) {
+    auto touchTextures = n64UiRenderer.PrepareTextures(touchControls.Primitives);
+    renderStream.Submit([&, primitives = std::move(touchControls.Primitives), windowRegion,
+                         prepared = std::move(touchTextures)]() mutable {
+      if (rendererFrameSkipped) {
+        n64UiRenderer.Stage(std::move(prepared));
+        return;
+      }
+      if (!n64UiRenderer.Render(primitives, windowRegion, oot3d::ui::N64UiCanvasMode::RegionShape,
+                                std::move(prepared), &renderError)) {
+        throw std::runtime_error("touch controls presentation failed: " + renderError);
       }
     });
   }
@@ -1006,7 +1031,8 @@ bool NativeA32WindowSession::UpdateGuestServicesForRefresh(
   nativeCandidateDispatch.TopScreenInputClock.ObserveGuest(sampledTopScreenInput);
   if (nativeCandidateDispatch.TopScreenUiProfile &&
       activeTopScreenConfig.FreeCameraEnabled &&
-      nativeControlPollingState.GameplayMouseOwned) {
+      (nativeControlPollingState.GameplayMouseOwned ||
+       nativeControlPollingState.GameplayTouchLookOwned)) {
     nativeCandidateDispatch.TopScreenCameraInput.Observe(
         inputFrame.CStick);
   } else if (inputFrame.CStick.Kind ==

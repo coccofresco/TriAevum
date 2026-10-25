@@ -1,12 +1,15 @@
 #include "three_ds_input.h"
 #include "three_ds_pad_menu_chord.h"
 #include "three_ds_pointer_press_latch.h"
+#include "three_ds_touch_anchors.h"
+#include "three_ds_touch_camera.h"
 #include "three_ds_virtual_pad.h"
 
 #include <cmath>
 #include <cstdint>
 #include <iostream>
 #include <limits>
+#include <vector>
 #include <stdexcept>
 
 namespace {
@@ -296,10 +299,51 @@ void TestVirtualPad() {
 
 } // namespace
 
+void TestTouchCameraTracker() {
+    using namespace ThreeDsRecomp::Input;
+    TouchCameraTracker tracker;
+    std::vector<SurfaceFinger> fingers{{1, 7, 100.0F, 100.0F}};
+    Require(!tracker.Update(true, fingers).Active, "a landing finger moves the camera");
+    fingers[0].X = 130.0F;
+    fingers[0].Y = 90.0F;
+    const auto drag = tracker.Update(true, fingers);
+    Require(drag.Active && drag.DeltaX == 30.0F && drag.DeltaY == -10.0F, "a drag does not move the camera");
+    fingers[0].X = 140.0F;
+    Require(!tracker.Update(false, fingers).Active, "a drag continues into a menu");
+    Require(!tracker.Update(true, fingers).Active, "a stopped drag resumes under the same finger");
+    // A finger that landed on a menu never drags.
+    std::vector<SurfaceFinger> menuFinger{{1, 8, 10.0F, 10.0F}};
+    Require(!tracker.Update(false, menuFinger).Active, "a menu touch moves the camera");
+    menuFinger[0].X = 50.0F;
+    Require(!tracker.Update(true, menuFinger).Active, "a menu touch turns into a drag");
+    Require(!tracker.Update(true, {}).Active, "lifted fingers drag");
+}
+
+void TestTouchAnchors() {
+    using namespace ThreeDsRecomp::Input;
+    TouchAnchors anchors;
+    Require(ApplyTouchAnchorList("A=0.9,0.5,0.95,0.6;DPAD=0.02,0.4,0.14,0.62", anchors), "a valid layout is refused");
+    const auto set = anchors.Snapshot();
+    Require(set[static_cast<std::size_t>(TouchAnchor::A)].Present &&
+                set[static_cast<std::size_t>(TouchAnchor::Dpad)].Present &&
+                !set[static_cast<std::size_t>(TouchAnchor::B)].Present,
+            "the layout sets the wrong anchors");
+    Require(AnyTouchButtonAnchored(set), "an anchored A is not a button");
+    TouchAnchors untouched;
+    Require(!ApplyTouchAnchorList("A=0.9,0.5,0.95;B=1,1,1,1", untouched) && !ApplyTouchAnchorList("Q=0,0,1,1", untouched),
+            "a malformed layout is accepted");
+    Require(!AnyTouchButtonAnchored(untouched.Snapshot()), "a malformed layout set anchors");
+    // Empty or inverted rectangles are no anchor.
+    untouched.Set(TouchAnchor::X, 0.5F, 0.5F, 0.4F, 0.6F);
+    Require(!untouched.Snapshot()[static_cast<std::size_t>(TouchAnchor::X)].Present, "an inverted anchor is present");
+}
+
 int main() try {
     TestAutomaticMotionComposition();
     TestPointerPressLatch();
     TestVirtualPad();
+    TestTouchCameraTracker();
+    TestTouchAnchors();
     {
         using namespace ThreeDsRecomp::Input;
         const auto motion = ConvertSdlMotion({9.80665F, 9.80665F, -9.80665F}, true,

@@ -271,6 +271,12 @@ void NativeA32WindowSession::Setup() {
       noExtraHid != nullptr && std::string_view(noExtraHid) == "1") {
     hostServices.SetIrExtraHidAttached(false);
   }
+  // Development: TRIAEVUM_TOUCH_ANCHORS lays out a touch overlay's controls
+  // on a host without one ("A=l,t,r,b;DPAD=l,t,r,b", window fractions).
+  if (const char *anchors = std::getenv("TRIAEVUM_TOUCH_ANCHORS"); anchors != nullptr && *anchors != '\0') {
+    if (!ThreeDsRecomp::Input::ApplyTouchAnchorList(anchors, ThreeDsRecomp::Input::OverlayTouchAnchors()))
+      std::cerr << "TRIAEVUM_TOUCH_ANCHORS ignored: expected NAME=l,t,r,b;... (A B X Y ZL ZR DPAD)" << std::endl;
+  }
   // Development: TRIAEVUM_SWKBD_TEXT sets the text the system software
   // keyboard returns (ASCII; default "Link").
   if (const char *keyboardText = std::getenv("TRIAEVUM_SWKBD_TEXT");

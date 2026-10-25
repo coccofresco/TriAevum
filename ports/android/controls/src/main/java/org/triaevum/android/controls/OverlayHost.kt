@@ -13,6 +13,11 @@ interface OverlayInputSink {
     fun swapScreens(enabled: Boolean, displayRotation: Int)
     fun toggleTurbo(fromOverlay: Boolean)
     fun releaseAll()
+    // Whether the host draws this control itself inside the overlay's bounds.
+    fun drawsControl(id: Int): Boolean
+    // Every shown control's bounds (left, top, right, bottom) in overlay pixels,
+    // after each layout change.
+    fun controlBounds(bounds: Map<Int, IntArray>, width: Int, height: Int)
 }
 
 object OverlayHost {
@@ -53,4 +58,8 @@ object OverlayHost {
     fun onTouchMoved(x: Float, y: Float) = input().touchMoved(x, y)
     fun swapScreens(enabled: Boolean, rotation: Int) = input().swapScreens(enabled, rotation)
     fun toggleTurbo(fromOverlay: Boolean) = input().toggleTurbo(fromOverlay)
+    fun drawsControl(id: Int) = sink?.drawsControl(id) ?: false
+    fun controlBounds(bounds: Map<Int, IntArray>, width: Int, height: Int) {
+        sink?.controlBounds(bounds, width, height)
+    }
 }

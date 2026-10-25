@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "oot3d_top_screen_config.h"
+#include "three_ds_touch_anchors.h"
 #include "oot3d_top_screen_projection_state.h"
 #include "oot3d_ui/ui_hud_content.h"
 #include "oot3d_ui/ui_primitives.h"
@@ -522,6 +523,52 @@ struct TopScreenButtonGroupPlacement {
 TopScreenButtonGroupPlacement ResolveTopScreenButtonGroupPlacement(
     const TopScreenUiConfig &config) noexcept;
 
+// TriAevum's touch layout (TopScreenUiConfig::TouchLayout) with a touch
+// overlay. The overlay owns where its A, B, X, Y, ZL, ZR and D-pad controls are
+// and what a finger presses; the HUD's own button (ring, label, item, counts)
+// or cross (with its icons and the view eye) is drawn inside each anchored
+// control instead of in the HUD. The game draws the A ring itself: its
+// placement is returned for the copies that replace it.
+struct TopScreenTouchControlsPresentation {
+  // Primitives on a canvas of the output region's shape, 240 units high
+  // (oot3d::ui::N64UiCanvasMode::RegionShape over the whole window).
+  std::vector<oot3d::ui::UiPrimitive> Primitives;
+  // The natively drawn A group: HUD canvas centre to anchor centre, scaled.
+  bool ActionAnchored = false;
+  float ActionFromX = 0.0F;
+  float ActionFromY = 0.0F;
+  float ActionToX = 0.0F;
+  float ActionToY = 0.0F;
+  float ActionScale = 1.0F;
+};
+
+// The natively drawn minimap spans y 174..234 and ignores the HUD scale; while
+// the buttons are out of the HUD it takes their top-right corner (6..66).
+inline constexpr float kTopScreenTouchMinimapShiftY = -168.0F;
+
+// The A group's centre and radius in the laid-out HUD canvas: SingleScreen 3.0
+// 0x005C89D0 centres it on (288, 24) at size 32 with the button group's
+// placement, before the HUD scale about the top-right corner.
+struct TopScreenActionGroup {
+  float X = 0.0F;
+  float Y = 0.0F;
+  float Radius = 0.0F;
+};
+TopScreenActionGroup ResolveTopScreenActionGroup(const TopScreenUiConfig &config) noexcept;
+
+
+// Whether the touch layout takes the HUD's buttons out of the HUD now: the
+// option is on and the overlay anchors at least one button.
+bool TopScreenTouchButtonsAnchored(const TopScreenUiConfig &config,
+                                   const ThreeDsRecomp::Input::TouchAnchorSet &anchors) noexcept;
+
+// Moves the gameplay HUD primitives of every anchored control from `hud` (the
+// laid-out HUD canvas) into the result. canvasWidth: the window canvas width,
+// 240 x window width / height.
+TopScreenTouchControlsPresentation ExtractTopScreenTouchControls(
+    std::vector<oot3d::ui::UiPrimitive> &hud, const TopScreenUiConfig &config,
+    const ThreeDsRecomp::Input::TouchAnchorSet &anchors, float canvasWidth);
+
 struct TopScreenVec3 {
   float X = 0.0F;
   float Y = 0.0F;
@@ -629,6 +676,8 @@ struct TopScreenQuestCopiedQuad {
   std::array<float, 8> Uvs{};
   oot3d::ui::UiColor Color;
   bool NumberGlyphs = false;
+  // A copies: the action word, not the A ring.
+  bool ActionLabel = false;
 };
 bool CaptureTopScreenQuestBButtonCopies(NativeA32Memory &memory,
                                         const TopScreenUiConfig &config,
@@ -639,6 +688,19 @@ std::size_t AppendTopScreenQuestBButtonCopiesPresentation(
     std::span<const TopScreenQuestCopiedQuad> copies,
     const oot3d::ui::UiTextureIdentity &itemIcons,
     const oot3d::ui::UiTextureIdentity &numberGlyphs,
+    std::vector<oot3d::ui::UiPrimitive> &output);
+
+// While the touch layout anchors A, the natively drawn A ring and action word
+// (Quest render buffer, after its transform) are copied for the host HUD and
+// the native quads hidden. Called from the materialized hook.
+bool CaptureTopScreenQuestActionCopies(NativeA32Memory &memory, std::uint32_t renderBufferAddress,
+                                       const TopScreenUiConfig &config,
+                                       std::vector<TopScreenQuestCopiedQuad> *copies,
+                                       std::string *error = nullptr);
+// Final native coordinates: append after the HUD scale. The render buffer
+// samples one 256 x 256 texture, the HUD atlas.
+std::size_t AppendTopScreenQuestActionCopiesPresentation(
+    std::span<const TopScreenQuestCopiedQuad> copies, const oot3d::ui::UiTextureIdentity &hudAtlas,
     std::vector<oot3d::ui::UiPrimitive> &output);
 
 bool ReadTopScreenQuestGeometryContext(

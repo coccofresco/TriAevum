@@ -158,6 +158,86 @@ void TestGearTextureFilters() {
           "unmapped Gear stage was accepted or caused partial writes");
 }
 
+void TestTouchControlsExtraction() {
+  using namespace Oot3dNativeGame;
+  using ThreeDsRecomp::Input::TouchAnchor;
+  const auto quad = [](std::uint32_t owner, oot3d::ui::UiPrimitiveRole role, std::uint32_t layer,
+                       std::uint32_t source, float x, float y, float size) {
+    oot3d::ui::UiPrimitive primitive;
+    primitive.owner_address = owner;
+    primitive.role = role;
+    primitive.layer = layer;
+    primitive.source_quad = source;
+    primitive.destination = {x - size * 0.5F, y - size * 0.5F, size, size};
+    return primitive;
+  };
+  constexpr auto kTouch = oot3d::ui::UiPrimitiveRole::TouchControl;
+  constexpr auto kButton = oot3d::ui::UiPrimitiveRole::ActionButton;
+  // The standard layout at HUD scale 1, margins (4, 1): rings X, Y, ZR, ZL, B,
+  // the cross, the B label, the X item, the view eye and a heart.
+  std::vector<oot3d::ui::UiPrimitive> hud{
+      quad(0x005C9940U, kTouch, 12U, 0U, 354.0F, 21.0F, 32.0F),
+      quad(0x005C9940U, kTouch, 12U, 1U, 330.0F, 45.0F, 32.0F),
+      quad(0x005C9940U, kTouch, 12U, 2U, 378.0F, 45.0F, 32.0F),
+      quad(0x005C9940U, kTouch, 12U, 3U, 354.0F, 69.0F, 32.0F),
+      quad(0x005C9940U, kTouch, 12U, 4U, 244.0F, 25.0F, 32.0F),
+      quad(0x005C9940U, kTouch, 12U, 5U, 34.5F, 67.0F, 28.0F),
+      quad(0x005D4A8CU, kTouch, 13U, 34U, 230.5F, 18.5F, 11.0F),
+      quad(0x005C9940U, kButton, 13U, 3U, 352.0F, 20.8F, 25.2F),
+      quad(0x005D4A8CU, kButton, 13U, 38U, 35.0F, 45.0F, 16.0F),
+      quad(0U, oot3d::ui::UiPrimitiveRole::Heart, 10U, 4U, 16.5F, 11.5F, 9.0F),
+  };
+  TopScreenUiConfig config;
+  config.HudScale = 1.0F;
+  config.HudMarginX = 4;
+  config.HudMarginY = 1;
+  ThreeDsRecomp::Input::TouchAnchorSet anchors{};
+  // B and the D-pad anchored on a 480 x 240 canvas (2:1 window).
+  anchors[static_cast<std::size_t>(TouchAnchor::B)] = {true, 0.8F, 0.7F, 0.9F, 0.9F};
+  anchors[static_cast<std::size_t>(TouchAnchor::Dpad)] = {true, 0.0F, 0.4F, 0.2F, 0.8F};
+  auto untouched = hud;
+  config.TouchLayout = false;
+  Require(ExtractTopScreenTouchControls(untouched, config, anchors, 480.0F).Primitives.empty() &&
+              untouched.size() == hud.size(),
+          "the touch layout moved HUD controls while off");
+  config.TouchLayout = true;
+  Require(TopScreenTouchButtonsAnchored(config, anchors), "an anchored B is not a button");
+  const auto moved = ExtractTopScreenTouchControls(hud, config, anchors, 480.0F);
+  // Ring B, the B label, the cross and the eye leave; X, Y, ZR, ZL, the X item
+  // and the heart stay.
+  Require(moved.Primitives.size() == 4U && hud.size() == 6U, "the touch layout took the wrong HUD parts");
+  Require(!moved.ActionAnchored, "an unanchored A was placed");
+  const auto center = [](const oot3d::ui::UiPrimitive &primitive) {
+    return std::pair{primitive.destination.x + primitive.destination.width * 0.5F,
+                     primitive.destination.y + primitive.destination.height * 0.5F};
+  };
+  for (const auto &primitive : moved.Primitives) {
+    const auto [x, y] = center(primitive);
+    if (primitive.source_quad == 4U) {
+      // B fills 0.9 of its 48 x 48 control, centred on (408, 192).
+      Require(std::abs(x - 408.0F) < 0.01F && std::abs(y - 192.0F) < 0.01F &&
+                  std::abs(primitive.destination.width - 43.2F) < 0.01F,
+              "the B ring missed its control");
+    } else if (primitive.source_quad == 34U) {
+      Require(x < 408.0F && y < 192.0F, "the B label left its ring");
+    } else if (primitive.source_quad == 5U) {
+      Require(std::abs(x - 48.0F) < 0.01F && std::abs(y - 144.0F) < 0.01F &&
+                  primitive.destination.width > 28.0F,
+              "the cross missed its control");
+    } else if (primitive.source_quad == 38U) {
+      Require(std::abs(x - 48.0F) < 2.0F && y < 144.0F, "the view eye left the cross");
+    }
+  }
+  // The A group is computed, not drawn by the host HUD.
+  const auto action = ResolveTopScreenActionGroup(config);
+  Require(std::abs(action.X - 284.0F) < 0.01F && std::abs(action.Y - 25.0F) < 0.01F && action.Radius == 16.0F,
+          "the A group is not where the game draws it");
+  anchors[static_cast<std::size_t>(TouchAnchor::A)] = {true, 0.9F, 0.4F, 1.0F, 0.6F};
+  auto withA = untouched;
+  Require(ExtractTopScreenTouchControls(withA, config, anchors, 480.0F).ActionAnchored,
+          "an anchored A was not placed");
+}
+
 } // namespace
 
 void RunTopScreenItemDispatchTests();
@@ -166,6 +246,7 @@ void RunTopScreenDpadPresentationTests();
 
 int main() {
   TestGearTextureFilters();
+  TestTouchControlsExtraction();
   RunTopScreenItemDispatchTests();
   RunTopScreenOcarinaTests();
   RunTopScreenDpadPresentationTests();
@@ -193,6 +274,17 @@ int main() {
       "frontend backdrop suppression escaped the TopScreen profile");
   TopScreenUiConfig parsedConfig;
   std::string configError;
+  {
+    TopScreenUiConfig touch;
+    Require(ParseTopScreenUiConfigText(R"({"schema":"oot3d_topscreen_ui_v2","touch_layout":true})", &touch,
+                                       &configError) &&
+                touch.TouchLayout,
+            "TopScreen touch_layout parsing failed: " + configError);
+    Require(ParseTopScreenUiConfigText(R"({"schema":"oot3d_topscreen_ui_v2","touch_layout":false})", &touch,
+                                       &configError) &&
+                !touch.TouchLayout,
+            "TopScreen touch_layout off parsing failed: " + configError);
+  }
   Require(ParseTopScreenUiConfigText(
               R"({"schema":"oot3d_topscreen_ui_v2","hud_layout":"restoration","hud_scale":0.75,"hud_margin_x":8,"hud_margin_y":-2,"magic_bar_y":7,"minimap_visible":false,"render_hud":true,"render_dpad_icons":false,"render_items_hint":false,"select_action":"minimap_toggle","exit_items_to_save_screen":false,"camera_zoom_percent":130,"camera_fov_percent":115,"dpad_child":["view","ocarina","boomerang","slingshot"],"dpad_adult":["view","ocarina","iron_boots","hover_boots"],"free_camera_enabled":true,"free_camera_speed_level":5,"free_camera_smoothing":"heavy","free_camera_invert_x":true,"free_camera_invert_y":false,"c_stick_aim_speed_level":6,"c_stick_aim_invert_x":false,"c_stick_aim_invert_y":true})",
               &parsedConfig, &configError) &&

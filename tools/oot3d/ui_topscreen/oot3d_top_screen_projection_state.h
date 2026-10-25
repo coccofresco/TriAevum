@@ -25,6 +25,8 @@ struct TopScreenPauseProjectionState {
   TrackedPosition MapX;
   TrackedPosition MapY;
   std::array<TrackedPosition, 4U * 64U> IconX;
+  // The touch layout also moves the minimap and its indicators vertically.
+  std::array<TrackedPosition, 4U * 64U> IconY;
   bool operator==(const TopScreenPauseProjectionState&) const = default;
 };
 

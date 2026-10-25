@@ -45,6 +45,75 @@ def adapt_kotlin(source: str) -> str:
     return re.sub(r"(?m)^[\t ]+$", "", source)
 
 
+# TriAevum host integration of InputOverlay.kt (2026-10-25). The host may draw
+# a control itself (OoT3D draws its own HUD buttons inside the overlay's): the
+# overlay then only outlines it while editing, and reports where each control
+# is. A touch that lands on no control is left to the game surface below,
+# which receives every such finger with its own pointer id.
+INPUT_OVERLAY_HOST_CHANGES = (
+    ("""        overlayButtons.forEach { it.draw(canvas) }
+        overlayDpads.forEach { it.draw(canvas) }
+""",
+     """        // TriAevum: a control the host draws itself is drawn here only while editing.
+        overlayButtons.forEach { if (isInEditMode || !OverlayHost.drawsControl(it.id)) it.draw(canvas) }
+        overlayDpads.forEach { if (isInEditMode || !OverlayHost.drawsControl(it.upId)) it.draw(canvas) }
+"""),
+    ("""                if (!isDpadPressed && !isJoystickPressed) {
+                    OverlayHost.onTouchEvent(xPosition.toFloat(), yPosition.toFloat(), true)
+                }
+""",
+     """                if (!isDpadPressed && !isJoystickPressed) {
+                    // TriAevum: a touch on no control belongs to the game surface below.
+                    return false
+                }
+"""),
+    ("""        if (EmulationMenuSettings.showOverlay) {
+            addOverlayControls(orientation)
+        }
+        invalidate()
+    }
+""",
+     """        if (EmulationMenuSettings.showOverlay) {
+            addOverlayControls(orientation)
+        }
+        invalidate()
+        publishControlBounds()
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        publishControlBounds()
+    }
+
+    // TriAevum: where each control is, for a host that draws some of them.
+    private fun publishControlBounds() {
+        if (width == 0 || height == 0) return
+        val bounds = HashMap<Int, IntArray>()
+        overlayButtons.forEach { bounds[it.id] = it.bounds.run { intArrayOf(left, top, right, bottom) } }
+        overlayDpads.forEach { bounds[it.upId] = it.bounds.run { intArrayOf(left, top, right, bottom) } }
+        OverlayHost.controlBounds(bounds, width, height)
+    }
+"""),
+    ("""            .putFloat("$sharedPrefsId$orientation-Y", y.toFloat())
+            .apply()
+    }
+""",
+     """            .putFloat("$sharedPrefsId$orientation-Y", y.toFloat())
+            .apply()
+        publishControlBounds()
+    }
+"""),
+)
+
+
+def adapt_input_overlay(source: str) -> str:
+    for old, new in INPUT_OVERLAY_HOST_CHANGES:
+        if source.count(old) != 1:
+            raise RuntimeError("InputOverlay.kt host change no longer applies: " + old.splitlines()[0])
+        source = source.replace(old, new)
+    return source
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("donor", type=Path)
@@ -69,7 +138,8 @@ def main() -> None:
     for name in OVERLAY_FILES:
         source = read(JAVA + "overlay/" + name).decode("utf-8")
         all_kotlin += source
-        emit(OUT_JAVA + name, adapt_kotlin(source))
+        adapted = adapt_kotlin(source)
+        emit(OUT_JAVA + name, adapt_input_overlay(adapted) if name == "InputOverlay.kt" else adapted)
     settings = read(JAVA + "utils/EmulationMenuSettings.kt").decode("utf-8")
     settings = adapt_kotlin(settings)
     settings = settings.replace("import androidx.drawerlayout.widget.DrawerLayout\n", "")
@@ -120,7 +190,8 @@ def main() -> None:
         "license": "GPL-2.0-or-later",
         "adaptations": ["namespace", "host_callbacks_and_application_context",
                         "remove_unused_activity_viewmodel", "exclude_activity_drawer_setting",
-                        "extract_overlay_only_resources_and_button_constants", "blank_line_whitespace"],
+                        "extract_overlay_only_resources_and_button_constants", "blank_line_whitespace",
+                        "host_drawn_controls_and_game_surface_touches"],
         "sources": entries,
         "outputs": {name: hashlib.sha256(data).hexdigest() for name, data in sorted(outputs.items())},
     }

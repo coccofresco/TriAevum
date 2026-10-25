@@ -2,6 +2,7 @@
 // They run on the Android UI thread and only record state in the process's
 // on-screen pad; the game's input poll merges it with the physical devices.
 
+#include "three_ds_touch_anchors.h"
 #include "three_ds_virtual_pad.h"
 
 #include <jni.h>
@@ -43,6 +44,26 @@ JNIEXPORT void JNICALL Java_org_triaevum_android_NativeInputBridge_requestSettin
 
 JNIEXPORT void JNICALL Java_org_triaevum_android_NativeInputBridge_releaseAll(JNIEnv*, jobject) {
     Pad().ReleaseAll();
+}
+
+// anchor: a ThreeDsRecomp::Input::TouchAnchor; the rectangle in window fractions.
+JNIEXPORT void JNICALL Java_org_triaevum_android_NativeInputBridge_controlBounds(JNIEnv*, jobject, jint anchor,
+                                                                                 jboolean present, jfloat left,
+                                                                                 jfloat top, jfloat right,
+                                                                                 jfloat bottom) {
+    using ThreeDsRecomp::Input::TouchAnchor;
+    if (anchor < 0 || anchor >= static_cast<jint>(TouchAnchor::Count)) return;
+    auto& anchors = ThreeDsRecomp::Input::OverlayTouchAnchors();
+    const auto which = static_cast<TouchAnchor>(anchor);
+    if (present == JNI_TRUE) {
+        anchors.Set(which, left, top, right, bottom);
+    } else {
+        anchors.Clear(which);
+    }
+}
+
+JNIEXPORT jboolean JNICALL Java_org_triaevum_android_NativeInputBridge_titleDrawsControls(JNIEnv*, jobject) {
+    return ThreeDsRecomp::Input::OverlayTouchAnchors().TitleDrawsControls() ? JNI_TRUE : JNI_FALSE;
 }
 
 } // extern "C"

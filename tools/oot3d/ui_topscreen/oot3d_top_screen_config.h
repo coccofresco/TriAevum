@@ -20,7 +20,18 @@ inline constexpr float kTopScreenHudScaleStep = 0.05F;
 // HUD to the single wide screen (the default).
 inline constexpr float kTopScreenHudScaleNative = 1.00F;
 inline constexpr float kTopScreenHudScaleOptimized = 0.70F;
+// A touch screen is the whole controller: the game's own HUD size, the HUD
+// laid out for thumbs (see TopScreenUiConfig::TouchLayout) and a camera that
+// follows a dragging finger.
+#if defined(__ANDROID__)
+inline constexpr float kTopScreenHudScaleDefault = kTopScreenHudScaleNative;
+inline constexpr bool kTopScreenTouchLayoutDefault = true;
+inline constexpr bool kTopScreenFreeCameraDefault = true;
+#else
 inline constexpr float kTopScreenHudScaleDefault = kTopScreenHudScaleOptimized;
+inline constexpr bool kTopScreenTouchLayoutDefault = false;
+inline constexpr bool kTopScreenFreeCameraDefault = false;
+#endif
 inline constexpr std::int8_t kTopScreenHudMarginMinimum = -3;
 inline constexpr std::int8_t kTopScreenHudMarginMaximum = 16;
 // SingleScreen 3.0 D-pad Placement and Button Group Placement (settings
@@ -123,6 +134,11 @@ struct TopScreenUiConfig {
   std::int8_t ButtonGroupOffsetY = 0;
   std::uint8_t ButtonGroupSizePercent = 100U;
   bool MinimapVisible = true;
+  // TriAevum's touch layout, not a SingleScreen option: with a touch overlay,
+  // the HUD's buttons and cross leave the HUD for the overlay's A, B, X, Y,
+  // ZL, ZR and D-pad controls, and the minimap takes the top-right corner the
+  // buttons left. Without an overlay nothing changes.
+  bool TouchLayout = kTopScreenTouchLayoutDefault;
   bool RenderHud = true;
   bool RenderDpadIcons = true;
   bool RenderItemsHint = true;
@@ -134,7 +150,7 @@ struct TopScreenUiConfig {
       kTopScreenChildDpadDefaults;
   std::array<TopScreenDpadAction, 4> AdultDpad =
       kTopScreenAdultDpadDefaults;
-  bool FreeCameraEnabled = false;
+  bool FreeCameraEnabled = kTopScreenFreeCameraDefault;
   std::uint8_t FreeCameraSpeedLevel = 3U;
   TopScreenFreeCameraSmoothing FreeCameraSmoothing =
       TopScreenFreeCameraSmoothing::Default;

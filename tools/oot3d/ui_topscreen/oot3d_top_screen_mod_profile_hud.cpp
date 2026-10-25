@@ -1730,6 +1730,172 @@ void ApplyTopScreenHudScale(
   }
 }
 
+namespace {
+// The touch-cluster quads of 0x005C9940 (layer 12): the X, Y, ZR, ZL and B
+// rings, then the D-pad cross.
+constexpr std::uint32_t kTopScreenTouchClusterOwner = 0x005C9940U;
+constexpr std::array<ThreeDsRecomp::Input::TouchAnchor, 5> kTopScreenRingAnchors{
+    ThreeDsRecomp::Input::TouchAnchor::X, ThreeDsRecomp::Input::TouchAnchor::Y,
+    ThreeDsRecomp::Input::TouchAnchor::Zr, ThreeDsRecomp::Input::TouchAnchor::Zl,
+    ThreeDsRecomp::Input::TouchAnchor::B};
+constexpr std::uint32_t kTopScreenCrossQuad = 5U;
+// The cross fills its control like the overlay's own cross art; its icons
+// and the view eye reach past the control's edge.
+constexpr float kTopScreenDpadGroupRadius = 1.1F;
+// A HUD button fills this much of its control.
+constexpr float kTopScreenTouchFill = 0.9F;
+
+bool IsTopScreenTouchClusterQuad(const oot3d::ui::UiPrimitive &primitive) noexcept {
+  return primitive.owner_address == kTopScreenTouchClusterOwner &&
+         primitive.role == oot3d::ui::UiPrimitiveRole::TouchControl && primitive.layer == 12U;
+}
+} // namespace
+
+TopScreenActionGroup ResolveTopScreenActionGroup(const TopScreenUiConfig &config) noexcept {
+  const float scale = config.HudScale > 0.0F ? config.HudScale : 1.0F;
+  const auto placement = ResolveTopScreenButtonGroupPlacement(config);
+  const float nativeX = 400.0F + (288.0F - 400.0F) * placement.Scale + placement.OffsetX;
+  const float nativeY = 24.0F * placement.Scale + placement.OffsetY;
+  return {400.0F + (nativeX - 400.0F) * scale - static_cast<float>(config.HudMarginX),
+          nativeY * scale + static_cast<float>(config.HudMarginY), 16.0F * placement.Scale * scale};
+}
+
+std::size_t AppendTopScreenQuestActionCopiesPresentation(
+    std::span<const TopScreenQuestCopiedQuad> copies, const oot3d::ui::UiTextureIdentity &hudAtlas,
+    std::vector<oot3d::ui::UiPrimitive> &output) {
+  if (hudAtlas.semantic_name.empty()) return 0U;
+  const std::size_t startSize = output.size();
+  for (std::size_t index = 0U; index < copies.size(); ++index) {
+    const auto &copy = copies[index];
+    const auto &texture = hudAtlas;
+    oot3d::ui::UiPrimitive primitive;
+    primitive.subsystem = oot3d::ui::UiSubsystem::GameplayHud;
+    primitive.role = oot3d::ui::UiPrimitiveRole::ActionButton;
+    primitive.owner_address = 0x0042B884U;
+    primitive.source_quad = static_cast<std::uint32_t>(index);
+    primitive.texture = texture;
+    primitive.destination = {copy.Positions[0].X, copy.Positions[0].Y,
+                             copy.Positions[1].X - copy.Positions[0].X,
+                             copy.Positions[2].Y - copy.Positions[0].Y};
+    primitive.uv = NativePicaQuadUvToHost(copy.Uvs);
+    primitive.color = copy.Color;
+    primitive.layer = copy.ActionLabel ? 13U : 12U;
+    primitive.visible = primitive.color.alpha != 0.0F;
+    output.push_back(std::move(primitive));
+  }
+  return output.size() - startSize;
+}
+
+bool TopScreenTouchButtonsAnchored(const TopScreenUiConfig &config,
+                                   const ThreeDsRecomp::Input::TouchAnchorSet &anchors) noexcept {
+  return config.TouchLayout && ThreeDsRecomp::Input::AnyTouchButtonAnchored(anchors);
+}
+
+TopScreenTouchControlsPresentation ExtractTopScreenTouchControls(
+    std::vector<oot3d::ui::UiPrimitive> &hud, const TopScreenUiConfig &config,
+    const ThreeDsRecomp::Input::TouchAnchorSet &anchors, float canvasWidth) {
+  using ThreeDsRecomp::Input::TouchAnchor;
+  TopScreenTouchControlsPresentation result;
+  if (!config.TouchLayout || !(canvasWidth > 0.0F)) return result;
+  const float scale = config.HudScale > 0.0F ? config.HudScale : 1.0F;
+  const float marginX = static_cast<float>(config.HudMarginX);
+  const float marginY = static_cast<float>(config.HudMarginY);
+
+  // Each control's HUD group: centre and radius in the HUD canvas.
+  struct Group {
+    bool Known = false;
+    float X = 0.0F;
+    float Y = 0.0F;
+    float Radius = 0.0F;
+  };
+  std::array<Group, ThreeDsRecomp::Input::kTouchAnchorCount> groups{};
+  const auto group = [&](TouchAnchor anchor) -> Group & { return groups[static_cast<std::size_t>(anchor)]; };
+  for (const auto &primitive : hud) {
+    if (!IsTopScreenTouchClusterQuad(primitive) || !(primitive.destination.width > 0.0F)) continue;
+    const auto &destination = primitive.destination;
+    const Group found{true, destination.x + destination.width * 0.5F, destination.y + destination.height * 0.5F,
+                      destination.width * 0.5F};
+    if (primitive.source_quad < kTopScreenRingAnchors.size()) {
+      group(kTopScreenRingAnchors[primitive.source_quad]) = found;
+    } else if (primitive.source_quad == kTopScreenCrossQuad) {
+      group(TouchAnchor::Dpad) = {true, found.X, found.Y, found.Radius * kTopScreenDpadGroupRadius};
+    }
+  }
+  const auto action = ResolveTopScreenActionGroup(config);
+  group(TouchAnchor::A) = {true, action.X, action.Y, action.Radius};
+
+  // A control's canvas transform: its group centre to the anchor centre.
+  struct Placement {
+    bool Active = false;
+    float FromX = 0.0F, FromY = 0.0F, ToX = 0.0F, ToY = 0.0F, Scale = 1.0F;
+  };
+  std::array<Placement, ThreeDsRecomp::Input::kTouchAnchorCount> placements{};
+  for (std::size_t index = 0; index < placements.size(); ++index) {
+    const auto &anchor = anchors[index];
+    const auto &source = groups[index];
+    if (!anchor.Present || !source.Known || !(source.Radius > 0.0F)) continue;
+    const float half = std::min((anchor.Right - anchor.Left) * canvasWidth, (anchor.Bottom - anchor.Top) * 240.0F) * 0.5F;
+    placements[index] = {true, source.X, source.Y, anchor.CenterX() * canvasWidth, anchor.CenterY() * 240.0F,
+                         half * kTopScreenTouchFill / source.Radius};
+  }
+  if (const auto &action = placements[static_cast<std::size_t>(TouchAnchor::A)]; action.Active) {
+    result.ActionAnchored = true;
+    result.ActionFromX = action.FromX;
+    result.ActionFromY = action.FromY;
+    result.ActionToX = action.ToX;
+    result.ActionToY = action.ToY;
+    result.ActionScale = action.Scale;
+  }
+
+  // The button group's quads (rings, labels, items, counts) all lie right of
+  // and above these lines; each belongs to the nearest ring.
+  const float regionLeft = 400.0F + (215.0F - 400.0F) * scale - marginX;
+  const float regionBottom = 90.0F * scale + marginY;
+  constexpr std::array<TouchAnchor, 6> kButtons{TouchAnchor::A, TouchAnchor::B, TouchAnchor::X,
+                                                TouchAnchor::Y, TouchAnchor::Zl, TouchAnchor::Zr};
+  std::vector<oot3d::ui::UiPrimitive> kept;
+  kept.reserve(hud.size());
+  for (auto &primitive : hud) {
+    auto &destination = primitive.destination;
+    const float centerX = destination.x + destination.width * 0.5F;
+    const float centerY = destination.y + destination.height * 0.5F;
+    TouchAnchor owner = TouchAnchor::Count;
+    if (IsTopScreenDpadPrimitive(primitive)) {
+      owner = TouchAnchor::Dpad;
+    } else if (centerX > regionLeft && centerX <= 430.0F && centerY < regionBottom &&
+               primitive.role != oot3d::ui::UiPrimitiveRole::Minimap) {
+      float nearest = 0.0F;
+      for (const auto button : kButtons) {
+        const auto &candidate = group(button);
+        if (!candidate.Known) continue;
+        const float distance = std::hypot(centerX - candidate.X, centerY - candidate.Y);
+        if (owner == TouchAnchor::Count || distance < nearest) {
+          owner = button;
+          nearest = distance;
+        }
+      }
+    }
+    const auto &moved = owner == TouchAnchor::Count ? Placement{} : placements[static_cast<std::size_t>(owner)];
+    if (!moved.Active) {
+      kept.push_back(std::move(primitive));
+      continue;
+    }
+    destination.x = moved.ToX + (destination.x - moved.FromX) * moved.Scale;
+    destination.y = moved.ToY + (destination.y - moved.FromY) * moved.Scale;
+    destination.width *= moved.Scale;
+    destination.height *= moved.Scale;
+    if (primitive.corners.has_value()) {
+      for (auto &corner : *primitive.corners) {
+        corner.x = moved.ToX + (corner.x - moved.FromX) * moved.Scale;
+        corner.y = moved.ToY + (corner.y - moved.FromY) * moved.Scale;
+      }
+    }
+    result.Primitives.push_back(std::move(primitive));
+  }
+  hud = std::move(kept);
+  return result;
+}
+
 bool RelocateTopScreenTimerQuad(std::array<TopScreenVec3, 4> &quad,
                                float hudScale) noexcept {
   float centerY = 0.0F;

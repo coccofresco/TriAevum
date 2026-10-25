@@ -666,6 +666,75 @@ bool ApplyTopScreenQuestDrawModelTransform(
   return true;
 }
 
+bool CaptureTopScreenQuestActionCopies(NativeA32Memory &memory, std::uint32_t renderBufferAddress,
+                                       const TopScreenUiConfig &config,
+                                       std::vector<TopScreenQuestCopiedQuad> *copies,
+                                       std::string *error) {
+  if (copies == nullptr) {
+    if (error != nullptr) *error = "missing Quest A copy output";
+    return false;
+  }
+  copies->clear();
+  // Render buffer: count +0, materialized positions +0x10, UVs +0x14, colors
+  // +0x18, translations +0x1C.
+  std::uint32_t count = 0U, positions = 0U, uvs = 0U, colors = 0U, translations = 0U;
+  if (!memory.Read32(renderBufferAddress, &count) || !memory.Read32(renderBufferAddress + 0x10U, &positions) ||
+      !memory.Read32(renderBufferAddress + 0x14U, &uvs) || !memory.Read32(renderBufferAddress + 0x18U, &colors) ||
+      !memory.Read32(renderBufferAddress + 0x1CU, &translations)) {
+    if (error != nullptr) *error = "cannot read the native Quest A render buffer";
+    return false;
+  }
+  if (count == 0U || count > 8U || positions == 0U || uvs == 0U || colors == 0U || translations == 0U) return true;
+  const auto group = ResolveTopScreenActionGroup(config);
+  // The ring and the word (0.68 x its native width) stay within this reach.
+  const float reach = group.Radius * 1.6F;
+  for (std::uint32_t index = 0U; index < count; ++index) {
+    std::array<TopScreenVec3, 4> quad{};
+    std::array<float, 2> translation{};
+    std::array<float, 16> color{};
+    TopScreenQuestCopiedQuad copied;
+    const auto bytes = [](auto &values) {
+      return std::span<std::uint8_t>(reinterpret_cast<std::uint8_t *>(values.data()), sizeof(values));
+    };
+    if (!memory.ReadBytes(positions + index * 0x30U, bytes(quad)) ||
+        !memory.ReadBytes(translations + index * 8U, bytes(translation)) ||
+        !memory.ReadBytes(uvs + index * 0x20U, bytes(copied.Uvs)) ||
+        !memory.ReadBytes(colors + index * 0x40U, bytes(color))) {
+      if (error != nullptr) *error = "cannot copy the native Quest A quads";
+      return false;
+    }
+    float quadX = 0.0F, quadY = 0.0F;
+    for (std::size_t vertex = 0U; vertex < quad.size(); ++vertex) {
+      copied.Positions[vertex] = {quad[vertex].X + translation[0], quad[vertex].Y + translation[1]};
+      quadX += copied.Positions[vertex].X * 0.25F;
+      quadY += copied.Positions[vertex].Y * 0.25F;
+    }
+    if (std::abs(quadX - group.X) > reach || std::abs(quadY - group.Y) > reach) continue;
+    const float width = copied.Positions[1].X - copied.Positions[0].X;
+    const float height = copied.Positions[2].Y - copied.Positions[0].Y;
+    copied.ActionLabel = !(height > 1.0F && height * 1.4F >= width && height * 0.6F <= width);
+    copied.Color = {color[0], color[1], color[2], color[3]};
+    // Without an action the word quad keeps an empty crop: nothing to copy.
+    const auto [uMinimum, uMaximum] =
+        std::minmax({copied.Uvs[0], copied.Uvs[2], copied.Uvs[4], copied.Uvs[6]});
+    const auto [vMinimum, vMaximum] =
+        std::minmax({copied.Uvs[1], copied.Uvs[3], copied.Uvs[5], copied.Uvs[7]});
+    if (uMaximum > uMinimum && vMaximum > vMinimum) copies->push_back(copied);
+    // Hide the native quad; the next materialization rebuilds it.
+    for (auto &vertex : quad) {
+      vertex.X += 500.0F - quadX;
+      vertex.Y += 300.0F - quadY;
+    }
+    if (!memory.WriteBytes(positions + index * 0x30U,
+                           std::span<const std::uint8_t>(reinterpret_cast<const std::uint8_t *>(quad.data()),
+                                                         sizeof(quad)))) {
+      if (error != nullptr) *error = "cannot hide the native Quest A quads";
+      return false;
+    }
+  }
+  return true;
+}
+
 bool CaptureTopScreenQuestBButtonCopies(NativeA32Memory &memory,
                                         const TopScreenUiConfig &config,
                                         std::vector<TopScreenQuestCopiedQuad> *copies,
@@ -900,6 +969,10 @@ bool ApplyTopScreenPauseProjection(NativeA32Memory &memory,
   if (!state.AlternatePage) {
     projectedOffsetY += 3000.0F;
     state.OffsetY = 3000.0F;
+  } else if (config != nullptr &&
+             TopScreenTouchButtonsAnchored(*config, ThreeDsRecomp::Input::OverlayTouchAnchors().Snapshot())) {
+    projectedOffsetY += kTopScreenTouchMinimapShiftY;
+    state.OffsetY = kTopScreenTouchMinimapShiftY;
   }
   state.MapX.LastWrittenBits =
       std::bit_cast<std::uint32_t>(projectedOffsetX);
@@ -960,6 +1033,24 @@ bool ApplyTopScreenPauseProjection(NativeA32Memory &memory,
           state.AlternatePage ? original + state.OffsetX : 400.0F;
       tracked.LastWrittenBits = std::bit_cast<std::uint32_t>(projected);
       if (!memory.Write32(address, tracked.LastWrittenBits)) {
+        if (error != nullptr)
+          *error = "cannot write minimap indicator position";
+        return false;
+      }
+      // Y follows the minimap only while the touch layout moves it; the
+      // tracked original restores it when the layout is off.
+      auto &trackedY = state.IconY[group * 64U + index];
+      std::uint32_t currentYBits = 0U;
+      if (!memory.Read32(address + 4U, &currentYBits)) {
+        if (error != nullptr)
+          *error = "cannot read minimap indicator position";
+        return false;
+      }
+      if (!trackedY.Valid && !state.AlternatePage) continue;
+      const float originalY = recoverOriginal(trackedY, address + 4U, currentYBits);
+      const float shiftY = state.AlternatePage && state.OffsetY != 3000.0F ? state.OffsetY : 0.0F;
+      trackedY.LastWrittenBits = std::bit_cast<std::uint32_t>(originalY + shiftY);
+      if (trackedY.LastWrittenBits != currentYBits && !memory.Write32(address + 4U, trackedY.LastWrittenBits)) {
         if (error != nullptr)
           *error = "cannot write minimap indicator position";
         return false;

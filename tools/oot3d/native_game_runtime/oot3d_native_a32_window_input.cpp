@@ -138,6 +138,11 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
     }
     pollingState.PhysicalActions[index] = physicalHeld;
     host.Actions[index] = physicalHeld;
+    // Start keeps no pending press (its own latch routes it); an on-screen tap
+    // shorter than a poll still reaches it as a one-poll press.
+    if (static_cast<NativeControlAction>(index) == NativeControlAction::Start &&
+        (touchControls.Pressed & touchBit) != 0U)
+      host.Actions[index] = true;
     if (guestRefreshWillConsume &&
         static_cast<NativeControlAction>(index) !=
             NativeControlAction::Start) {
@@ -194,6 +199,24 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
   pollingState.MouseNativeUiPolls += nativeFrontendTouchEnabled ? 1U : 0U;
   pollingState.MouseCaptureTransitions += mouseCaptureChanged ? 1U : 0U;
   pollingState.GameplayMouseOwned = gameplayMouseOwned;
+  // Fingers on the game surface (a touch overlay keeps its own controls'
+  // fingers): with a touch overlay, they drag the free camera during gameplay.
+  std::vector<ThreeDsRecomp::Input::SurfaceFinger> fingers;
+  const float windowWidth = static_cast<float>(window.GetWidth());
+  const float windowHeight = static_cast<float>(window.GetHeight());
+  for (int device = 0; device < SDL_GetNumTouchDevices(); ++device) {
+    const SDL_TouchID touchId = SDL_GetTouchDevice(device);
+    for (int index = 0; index < SDL_GetNumTouchFingers(touchId); ++index) {
+      if (const SDL_Finger *finger = SDL_GetTouchFinger(touchId, index))
+        fingers.push_back({touchId, finger->id, finger->x * windowWidth, finger->y * windowHeight});
+    }
+  }
+  const bool touchCameraGameplay = !hostGuiVisible && !nativeFrontendTouchEnabled && topScreenUiProfile &&
+                                   topScreenFreeCameraEnabled &&
+                                   ThreeDsRecomp::Input::AnyTouchAnchored(
+                                       ThreeDsRecomp::Input::OverlayTouchAnchors().Snapshot());
+  const auto touchCamera = pollingState.TouchCamera.Update(touchCameraGameplay, fingers);
+  pollingState.GameplayTouchLookOwned = touchCamera.Active;
   // SDL relative motion is an accumulator. Drain it even while ImGui owns the
   // pointer so menu movement and capture warps cannot leak into gameplay.
   const auto mouseDelta = window.GetMouseDelta();
@@ -280,9 +303,15 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
       menu.PointerWheel = std::isfinite(wheel) ? std::clamp(wheel, -8.0F, 8.0F) : 0.0F;
     }
   }
-  if (gameplayMouseOwned && !mouseCaptureChanged) {
-    pollingState.PendingMouseDeltaX += mouseDelta.x;
-    pollingState.PendingMouseDeltaY += mouseDelta.y;
+  const bool mouseLook = gameplayMouseOwned && !mouseCaptureChanged;
+  if (mouseLook || touchCamera.Active) {
+    if (mouseLook) {
+      pollingState.PendingMouseDeltaX += mouseDelta.x;
+      pollingState.PendingMouseDeltaY += mouseDelta.y;
+    }
+    // A drag is a mouse look of the same window distance.
+    pollingState.PendingMouseDeltaX += std::lround(touchCamera.DeltaX);
+    pollingState.PendingMouseDeltaY += std::lround(touchCamera.DeltaY);
     if (guestRefreshWillConsume) {
       host.MouseDeltaX = static_cast<int32_t>(std::clamp<int64_t>(
           pollingState.PendingMouseDeltaX, INT32_MIN, INT32_MAX));

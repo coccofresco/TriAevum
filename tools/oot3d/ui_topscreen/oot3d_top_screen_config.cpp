@@ -198,7 +198,7 @@ bool DecodeTopScreenUiConfig(const nlohmann::json &document,
     return false;
   }
 
-  constexpr std::array<std::string_view, 38> kAllowedFields{
+  constexpr std::array<std::string_view, 39> kAllowedFields{
       "schema",
       "hud_layout",
       "hud_scale",
@@ -212,6 +212,7 @@ bool DecodeTopScreenUiConfig(const nlohmann::json &document,
       "button_group_offset_y",
       "button_group_size_percent",
       "minimap_visible",
+      "touch_layout",
       "render_hud",
       "render_dpad_icons",
       "render_items_hint",
@@ -373,6 +374,7 @@ bool DecodeTopScreenUiConfig(const nlohmann::json &document,
       !ReadDpadMapping(document, "dpad_adult", &parsed.AdultDpad, error) ||
       !ReadBoolean(document, "minimap_visible", &parsed.MinimapVisible,
                    error) ||
+      !ReadBoolean(document, "touch_layout", &parsed.TouchLayout, error) ||
       !ReadBoolean(document, "render_hud", &parsed.RenderHud, error) ||
       !ReadBoolean(document, "render_dpad_icons", &parsed.RenderDpadIcons,
                    error) ||
@@ -634,6 +636,7 @@ bool SerializeTopScreenUiConfigText(const TopScreenUiConfig &config,
       {"button_group_offset_y", config.ButtonGroupOffsetY},
       {"button_group_size_percent", config.ButtonGroupSizePercent},
       {"minimap_visible", config.MinimapVisible},
+      {"touch_layout", config.TouchLayout},
       {"render_hud", config.RenderHud},
       {"render_dpad_icons", config.RenderDpadIcons},
       {"render_items_hint", config.RenderItemsHint},

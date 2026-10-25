@@ -418,8 +418,9 @@ bool N64UiFast3dRenderer::Render(std::span<const UiPrimitive> primitives,
     const std::uint32_t width = std::max<std::uint32_t>(1U, region.Width);
     const std::uint32_t height = std::max<std::uint32_t>(1U, region.Height);
     const float canvasWidth =
-        canvasMode == N64UiCanvasMode::NativeTopScreen400x240
-            ? kNativeTopScreenCanvasWidth
+        canvasMode == N64UiCanvasMode::NativeTopScreen400x240 ? kNativeTopScreenCanvasWidth
+        : canvasMode == N64UiCanvasMode::RegionShape
+            ? kCanvasHeight * static_cast<float>(width) / static_cast<float>(height)
             : kWidescreenCanvasWidth;
     // The canvas is fitted into the region, centred; the region itself is
     // centred in the framebuffer (a letterbox), so the fit is the same seen

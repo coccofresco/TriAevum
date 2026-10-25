@@ -39,11 +39,13 @@ nlohmann::json EncodeProjection(const TopScreenPauseProjectionState& state) {
     };
     auto icons = nlohmann::json::array();
     for (const auto& p : state.IconX) icons.push_back(word(p));
+    auto iconsY = nlohmann::json::array();
+    for (const auto& p : state.IconY) iconsY.push_back(word(p));
     return {{"visible", state.AlternatePage}, {"offset_x", state.OffsetX},
             {"offset_y", state.OffsetY}, {"quest_gate", state.NativeQuestGate},
             {"model_adjusted", state.QuestDrawModelAdjusted},
             {"map_x", word(state.MapX)}, {"map_y", word(state.MapY)},
-            {"icons", std::move(icons)}};
+            {"icons", std::move(icons)}, {"icons_y", std::move(iconsY)}};
 }
 
 TopScreenPauseProjectionState DecodeProjection(const nlohmann::json& encoded) {
@@ -70,6 +72,12 @@ TopScreenPauseProjectionState DecodeProjection(const nlohmann::json& encoded) {
     if (!icons.is_array() || icons.size() != state.IconX.size())
         throw std::runtime_error("invalid TopScreen indicator state");
     for (size_t i = 0; i < icons.size(); ++i) state.IconX[i] = word(icons[i]);
+    // States saved before the touch layout have no vertical indicator state.
+    if (const auto found = encoded.find("icons_y"); found != encoded.end()) {
+        if (!found->is_array() || found->size() != state.IconY.size())
+            throw std::runtime_error("invalid TopScreen indicator state");
+        for (size_t i = 0; i < found->size(); ++i) state.IconY[i] = word((*found)[i]);
+    }
     return state;
 }
 

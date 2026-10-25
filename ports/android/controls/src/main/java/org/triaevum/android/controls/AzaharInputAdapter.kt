@@ -16,6 +16,11 @@ interface Native3dsInputTarget {
     fun toggleTurbo(fromOverlay: Boolean)
     // Release this overlay source only; preserve physical controller input.
     fun releaseAll()
+    // The title draws its own HUD art for the anchored controls (A, B, X, Y,
+    // ZL, ZR and the D-pad), inside the overlay's bounds for them.
+    fun titleDrawsControls(): Boolean
+    // anchor: AzaharInputAdapter.ANCHOR_*; the bounds as fractions of the overlay.
+    fun controlBounds(anchor: Int, present: Boolean, left: Float, top: Float, right: Float, bottom: Float)
 }
 
 class AzaharInputAdapter(private val target: Native3dsInputTarget) : OverlayInputSink {
@@ -68,4 +73,42 @@ class AzaharInputAdapter(private val target: Native3dsInputTarget) : OverlayInpu
     override fun swapScreens(enabled: Boolean, displayRotation: Int) = target.swapScreens(enabled, displayRotation)
     override fun toggleTurbo(fromOverlay: Boolean) = target.toggleTurbo(fromOverlay)
     override fun releaseAll() = target.releaseAll()
+
+    override fun drawsControl(id: Int) = anchorOf(id) >= 0 && target.titleDrawsControls()
+
+    override fun controlBounds(bounds: Map<Int, IntArray>, width: Int, height: Int) {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        for ((id, anchor) in ANCHORS) {
+            val rect = bounds[id]
+            if (rect == null) {
+                target.controlBounds(anchor, false, 0f, 0f, 0f, 0f)
+            } else {
+                target.controlBounds(anchor, true, rect[0] / w, rect[1] / h, rect[2] / w, rect[3] / h)
+            }
+        }
+    }
+
+    companion object {
+        // The native TouchAnchor order (three_ds_touch_anchors.h).
+        const val ANCHOR_A = 0
+        const val ANCHOR_B = 1
+        const val ANCHOR_X = 2
+        const val ANCHOR_Y = 3
+        const val ANCHOR_ZL = 4
+        const val ANCHOR_ZR = 5
+        const val ANCHOR_DPAD = 6
+        private val ANCHORS = listOf(
+            AzaharButtonIds.BUTTON_A to ANCHOR_A,
+            AzaharButtonIds.BUTTON_B to ANCHOR_B,
+            AzaharButtonIds.BUTTON_X to ANCHOR_X,
+            AzaharButtonIds.BUTTON_Y to ANCHOR_Y,
+            AzaharButtonIds.BUTTON_ZL to ANCHOR_ZL,
+            AzaharButtonIds.BUTTON_ZR to ANCHOR_ZR,
+            // The D-pad reports its bounds under its up button's id.
+            AzaharButtonIds.DPAD_UP to ANCHOR_DPAD,
+        )
+
+        fun anchorOf(id: Int) = ANCHORS.firstOrNull { it.first == id }?.second ?: -1
+    }
 }

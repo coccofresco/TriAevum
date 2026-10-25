@@ -9,6 +9,8 @@
 #include "three_ds_pad_menu_chord.h"
 #include "three_ds_sdl_controller.h"
 #include "three_ds_sdl_host_presses.h"
+#include "three_ds_touch_anchors.h"
+#include "three_ds_touch_camera.h"
 #include "three_ds_virtual_pad.h"
 #include "oot3d_prebackend_budget.h"
 #include "oot3d_cpu_phase_probe.h"
@@ -712,6 +714,9 @@ struct NativeControlPollingState {
   int64_t PendingMouseDeltaY = 0;
   double PendingInputSeconds = 0.0;
   bool GameplayMouseOwned = false;
+  // A finger dragging on the game surface owns the camera like a mouse look.
+  bool GameplayTouchLookOwned = false;
+  ThreeDsRecomp::Input::TouchCameraTracker TouchCamera;
   uint64_t MouseEligiblePolls = 0;
   uint64_t MouseReleasedPolls = 0;
   uint64_t MouseHostUiPolls = 0;

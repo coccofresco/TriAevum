@@ -23,6 +23,27 @@ class AzaharInputAdapterTest {
         override fun swapScreens(enabled: Boolean, displayRotation: Int) { screen = enabled to displayRotation }
         override fun toggleTurbo(fromOverlay: Boolean) { turbo = fromOverlay }
         override fun releaseAll() { buttons = 0; left = 0f to 0f; right = left; home = false; touch = null }
+        var draws = false
+        val bounds = HashMap<Int, List<Float>?>()
+        override fun titleDrawsControls() = draws
+        override fun controlBounds(anchor: Int, present: Boolean, left: Float, top: Float, right: Float, bottom: Float) {
+            bounds[anchor] = if (present) listOf(left, top, right, bottom) else null
+        }
+    }
+
+    @Test fun anchoredControlsReportFractionsAndFollowTheTitle() {
+        val target = Target()
+        val adapter = AzaharInputAdapter(target)
+        assertFalse(adapter.drawsControl(AzaharButtonIds.BUTTON_A))
+        target.draws = true
+        assertTrue(adapter.drawsControl(AzaharButtonIds.BUTTON_A))
+        assertTrue(adapter.drawsControl(AzaharButtonIds.DPAD_UP))
+        assertFalse(adapter.drawsControl(AzaharButtonIds.BUTTON_START))
+        adapter.controlBounds(mapOf(AzaharButtonIds.BUTTON_B to intArrayOf(100, 50, 300, 250)), 1000, 500)
+        assertEquals(listOf(0.1f, 0.1f, 0.3f, 0.5f), target.bounds[AzaharInputAdapter.ANCHOR_B])
+        assertTrue(target.bounds.containsKey(AzaharInputAdapter.ANCHOR_A))
+        assertNull(target.bounds[AzaharInputAdapter.ANCHOR_A])
+        assertEquals(7, target.bounds.size)
     }
 
     @Test fun allNativeButtonsMatchTheExistingHidContract() {
