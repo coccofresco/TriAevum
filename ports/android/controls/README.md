@@ -77,8 +77,11 @@ the default layout through `TouchOverlaySettings`
 hides the overlay while that option is on, and the game then draws its whole
 HUD; a touch shows the overlay again.
 
-Still required: the donor latency patch (`requestUnbufferedDispatch`) and
-physical multitouch tests. The imported donor's
+The activity asks for unbuffered dispatch: each touch gesture (overlay and
+game surface) and, from Android 11, stick motion arrive as they happen instead
+of batched to the next display frame.
+
+Still required: physical multitouch tests. The imported donor's
 existing quirks are not silently changed: for example its joystick change
 notification compares both axes with `&&`; isolate and test any future fix,
 rather than claiming the adapter tests validate that gesture logic.

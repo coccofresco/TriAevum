@@ -1382,6 +1382,28 @@ void CheckTitleWithoutSceneHooks() {
           "inactive-effects notice shown with a scene view");
 }
 
+// A host whose screen sets the output (Android): window mode and resolution
+// are disabled with the host's reason, and the stored values are kept.
+void CheckHostWithoutWindowOutput() {
+    auto& runtime = GraphicsSettingsRuntime::Instance();
+    const auto stored = runtime.Snapshot();
+    runtime.SetCapability(GraphicsCapability::HostWindowOutput, false,
+                          "Test host's screen sets the output.");
+    Click("Display");
+    Frame(true);
+    Check(Find("Window mode").Disabled, "window mode enabled without a host window");
+    Check(Find("Requested resolution").Disabled, "resolution enabled without a host window");
+    Check(loggedPanelText.find("Test host's screen sets the output.") != std::string::npos,
+          "missing host window reason");
+    const auto kept = runtime.Snapshot();
+    Check(kept.Window == stored.Window && kept.OutputWidth == stored.OutputWidth &&
+              kept.OutputHeight == stored.OutputHeight,
+          "stored window settings changed");
+    runtime.SetCapability(GraphicsCapability::HostWindowOutput, true);
+    Frame(true);
+    Check(!Find("Window mode").Disabled, "window mode disabled with a host window");
+}
+
 void CheckGameSurfaceMouseResume() {
     Fast::MouseCapturePolicy policy;
     Check(policy.Request(true), "initial mouse capture denied");
@@ -2587,6 +2609,7 @@ int main(int argc, char** argv) try {
     CheckMm3dSceneEnvironment();
     InstallGraphicsSettingsPanelTabs({});
     CheckTitleWithoutSceneHooks();
+    CheckHostWithoutWindowOutput();
     ImGui::DestroyContext();
     std::cout << "F1 UI smoke passed: " << assertions << " assertions, real renderer/Controls/TopScreen widgets\n";
     return 0;

@@ -23,11 +23,14 @@ bool GraphicsSettingsPanel::DrawDisplaySettings(GraphicsSettings& settings, cons
             ImGui::Text("Scene image: %u x %u (%.2fx)", observed.SceneWidth,
                         observed.SceneHeight, observed.InternalScale);
     }
+    const bool hostWindow = capabilities.Has(GraphicsCapability::HostWindowOutput);
+    ImGui::BeginDisabled(!hostWindow);
     const char* const windowModes[] = { "Windowed", "Borderless", "Exclusive fullscreen" };
     changed |= SettingsUi::ValidatedCombo<WindowMode>(
         "Window mode", settings, capabilities, windowModes,
         [](auto& value, auto mode) { value.Window = mode; },
         [](const auto& value) { return value.Window; });
+    ImGui::EndDisabled();
     const char* const aspectRatios[] = { "Original 3DS (5:3)", "16:9", "21:9", "Free" };
     if (EnumCombo("Aspect ratio", settings.Aspect, aspectRatios)) {
         // A windowed output takes the chosen shape at once; the window stays
@@ -66,7 +69,7 @@ bool GraphicsSettingsPanel::DrawDisplaySettings(GraphicsSettings& settings, cons
     const std::string customResolution =
         std::to_string(settings.OutputWidth) + " x " +
         std::to_string(settings.OutputHeight) + " (custom)";
-    ImGui::BeginDisabled(settings.Window == WindowMode::Borderless);
+    ImGui::BeginDisabled(!hostWindow || settings.Window == WindowMode::Borderless);
     if (ImGui::BeginCombo("Requested resolution",
                           selectedResolution != nullptr
                               ? selectedResolution->Label
@@ -97,7 +100,9 @@ bool GraphicsSettingsPanel::DrawDisplaySettings(GraphicsSettings& settings, cons
     }
     mOutputResolutionEditing = ImGui::IsItemActive();
     ImGui::EndDisabled();
-    if (settings.Window == WindowMode::Borderless)
+    if (!hostWindow)
+        ImGui::TextDisabled("%s", capabilities.Get(GraphicsCapability::HostWindowOutput).Reason.c_str());
+    else if (settings.Window == WindowMode::Borderless)
         ImGui::TextDisabled("Borderless uses the desktop resolution.");
     if (!mRenderScaleEditing) {
         mPendingRenderScale = settings.InternalResolutionScale;

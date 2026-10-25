@@ -50,11 +50,14 @@ enum class GraphicsCapability : uint8_t {
     TitleSceneView,
     // Title-owned: the title applies the global scene FOV to its projection.
     TitleSceneFov,
+    // Window host: the user chooses the window mode and the output size. Not
+    // where the device's screen sets both (Android).
+    HostWindowOutput,
 };
 
 // Last enumerator, for code that visits every capability.
 inline constexpr GraphicsCapability kLastGraphicsCapability =
-    GraphicsCapability::TitleSceneFov;
+    GraphicsCapability::HostWindowOutput;
 
 struct GraphicsCapabilityState {
     bool Available = false;

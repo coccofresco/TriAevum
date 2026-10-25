@@ -223,10 +223,17 @@ void InGameMenu::BuildVideoTab(Menu::Document &document) {
     row.ChoiceAvailable = [](int value) { return value != static_cast<int>(GraphicsPreset::Custom); };
     tab.Rows.push_back(std::move(row));
   }
-  tab.Rows.push_back(graphicsChoice(
-      "Window mode", "Windowed, borderless over the desktop, or exclusive fullscreen. A display change asks you to keep it within a few seconds.",
-      {"Windowed", "Borderless", "Exclusive fullscreen"}, [](const auto &s) { return static_cast<int>(s.Window); },
-      [](auto &s, int value) { s.Window = static_cast<WindowMode>(value); }, true));
+  const auto hostWindow = [this] { return mCapabilities.Has(GraphicsCapability::HostWindowOutput); };
+  const auto hostWindowReason = [this] { return mCapabilities.Get(GraphicsCapability::HostWindowOutput).Reason; };
+  {
+    auto row = graphicsChoice(
+        "Window mode", "Windowed, borderless over the desktop, or exclusive fullscreen. A display change asks you to keep it within a few seconds.",
+        {"Windowed", "Borderless", "Exclusive fullscreen"}, [](const auto &s) { return static_cast<int>(s.Window); },
+        [](auto &s, int value) { s.Window = static_cast<WindowMode>(value); }, true);
+    row.Available = hostWindow;
+    row.UnavailableReason = hostWindowReason();
+    tab.Rows.push_back(std::move(row));
+  }
   tab.Rows.push_back(graphicsChoice(
       "Aspect ratio",
       "The shape of the picture. A fixed ratio is centred with black bars where the window or the screen is "
@@ -261,8 +268,8 @@ void InGameMenu::BuildVideoTab(Menu::Document &document) {
       return ApplyGraphics(settings, true);
     };
     row.ChoiceAvailable = [](int value) { return value < static_cast<int>(kResolutions.size()); };
-    row.Available = [this] { return mGraphics.Window != WindowMode::Borderless; };
-    row.UnavailableReason = "Borderless uses the desktop resolution.";
+    row.Available = [this, hostWindow] { return hostWindow() && mGraphics.Window != WindowMode::Borderless; };
+    row.UnavailableReason = hostWindow() ? "Borderless uses the desktop resolution." : hostWindowReason();
     tab.Rows.push_back(std::move(row));
   }
   tab.Rows.push_back(graphicsToggle(

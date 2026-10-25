@@ -553,6 +553,12 @@ void GfxRenderingAPIVulkan::Init() {
                                   mWindowBackend->CanDisableVsync());
     settingsRuntime.SetCapability(Extension::GraphicsCapability::ExclusiveFullscreen,
                                   true);
+#ifdef __ANDROID__
+    settingsRuntime.SetCapability(Extension::GraphicsCapability::HostWindowOutput, false,
+                                  "The device's screen sets the window and its size.");
+#else
+    settingsRuntime.SetCapability(Extension::GraphicsCapability::HostWindowOutput, true);
+#endif
     mVsyncEnabled = settingsRuntime.Snapshot().VSync;
     CreateSyncObjects();
     CreateSwapchainResources();

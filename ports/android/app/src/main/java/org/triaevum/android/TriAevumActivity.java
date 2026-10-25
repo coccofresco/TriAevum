@@ -87,6 +87,10 @@ public final class TriAevumActivity extends SDLActivity {
 
     @Override public boolean dispatchTouchEvent(android.view.MotionEvent event) {
         if (touchInput != null) touchInput.touched();
+        // The window's touches (overlay and game surface) arrive as they happen,
+        // not batched to the next display frame, for the rest of the gesture.
+        if (event.getActionMasked() == android.view.MotionEvent.ACTION_DOWN)
+            getWindow().getDecorView().requestUnbufferedDispatch(event);
         return super.dispatchTouchEvent(event);
     }
 
@@ -97,6 +101,10 @@ public final class TriAevumActivity extends SDLActivity {
 
     @Override public void onWindowFocusChanged(boolean hasFocus) {
         if (!hasFocus && touchAdapter != null) touchAdapter.releaseAll();
+        // Stick motion reaches the game as it arrives, not batched to the next
+        // display frame (the window is attached by now).
+        if (hasFocus && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R)
+            getWindow().getDecorView().requestUnbufferedDispatch(android.view.InputDevice.SOURCE_CLASS_JOYSTICK);
         super.onWindowFocusChanged(hasFocus);
     }
 
