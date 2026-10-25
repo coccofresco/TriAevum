@@ -48,17 +48,16 @@ pub fn load_json_object(path: &Path) -> Result<Map<String, Value>> {
 }
 
 /// `common.normalize_relative_path`: backslashes become slashes; empty,
-/// absolute, drive-qualified and `.`/`..`/empty components are rejected.
+/// absolute and drive-qualified paths and `..` components are rejected.
+/// Like `PurePosixPath`, empty and `.` components collapse (`a//b/` is
+/// `a/b`, and `.` stays `.`).
 pub fn normalize_relative_path(value: &str) -> Result<String> {
     let normalized = value.replace('\\', "/");
-    let unsafe_path = normalized.is_empty()
-        || normalized.starts_with('/')
-        || normalized.contains(':')
-        || normalized.split('/').any(|part| part.is_empty() || part == "." || part == "..");
-    if unsafe_path {
+    let parts: Vec<&str> = normalized.split('/').filter(|part| !part.is_empty() && *part != ".").collect();
+    if normalized.is_empty() || normalized.starts_with('/') || normalized.contains(':') || parts.contains(&"..") {
         return Err(ForgeError::invalid(format!("unsafe relative path: {value:?}")));
     }
-    Ok(normalized)
+    Ok(if parts.is_empty() { ".".to_string() } else { parts.join("/") })
 }
 
 #[cfg(test)]
@@ -68,7 +67,9 @@ mod tests {
     #[test]
     fn relative_paths() {
         assert_eq!(normalize_relative_path("a\\b/c.bin").unwrap(), "a/b/c.bin");
-        for bad in ["", "/a", "C:/a", "a/../b", "a//b", "./a", "a/"] {
+        assert_eq!(normalize_relative_path("./a//b/").unwrap(), "a/b");
+        assert_eq!(normalize_relative_path(".").unwrap(), ".");
+        for bad in ["", "/a", "\\a", "C:/a", "a/../b", "a\\..\\b"] {
             assert!(normalize_relative_path(bad).is_err(), "{bad}");
         }
     }
