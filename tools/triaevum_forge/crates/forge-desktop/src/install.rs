@@ -23,16 +23,33 @@ pub type Checked = std::result::Result<Status, String>;
 pub enum Event {
     Selection(crate::app::PickTarget, Option<PathBuf>),
     Stage(String),
-    Progress { done: u64, total: Option<u64> },
+    Progress {
+        done: u64,
+        total: Option<u64>,
+    },
     HdStage(String),
     ModStage(String),
     HdChecked(Checked),
     ModChecked(Checked),
-    HdDone { error: Option<String>, state: Checked },
-    ModDone { error: Option<String>, state: Checked },
+    HdDone {
+        error: Option<String>,
+        state: Checked,
+    },
+    ModDone {
+        error: Option<String>,
+        state: Checked,
+    },
     InstallFailed(String),
-    InstallComplete { hd: Checked, mod_: Checked },
+    InstallComplete {
+        hd: Checked,
+        mod_: Checked,
+    },
     InstallCancelled,
+    /// The recognized-ROM card for the ROM path `source`.
+    Recognition {
+        source: String,
+        card: crate::recognition::Card,
+    },
 }
 
 /// Sends events to the window and wakes it.
@@ -62,14 +79,16 @@ pub struct InstallPlan {
     pub package_root: PathBuf,
     pub hd_auto_download: bool,
     pub mod_enabled: bool,
+    /// The language chosen on the recognized-ROM card.
+    pub game_language: Option<String>,
 }
 
 /// The `install` job request. The window downloads the HD textures itself
 /// first (with its own status line), so the job is told not to.
-pub fn install_request(source: &Path, data_root: &Path, package_root: &Path) -> Value {
+pub fn install_request(source: &Path, data_root: &Path, package_root: &Path, game_language: Option<&str>) -> Value {
     let source = forge_prepare::paths::resolve(source).unwrap_or_else(|_| source.to_path_buf());
     let kind = if source.is_dir() { "extracted_directory" } else { "rom" };
-    json!({
+    let mut request = json!({
         "format": forge_core::jobs::REQUEST_FORMAT,
         "job": "install",
         "source": {"path": source.to_string_lossy()},
@@ -77,7 +96,11 @@ pub fn install_request(source: &Path, data_root: &Path, package_root: &Path) -> 
         "data_root": data_root.to_string_lossy(),
         "package_root": package_root.to_string_lossy(),
         "download_hd_textures": false,
-    })
+    });
+    if let Some(code) = game_language {
+        request["game_language"] = json!(code);
+    }
+    request
 }
 
 /// A job event as the window shows it.
@@ -140,7 +163,7 @@ pub fn run_install(optional: Arc<Optional>, plan: InstallPlan, notify: Notifier,
         notify.send(Event::InstallCancelled);
         return;
     }
-    let request = install_request(&plan.source, &plan.data_root, &plan.package_root);
+    let request = install_request(&plan.source, &plan.data_root, &plan.package_root, plan.game_language.as_deref());
     let job = match forge_core::jobs::start(&forge_base::legacy_json::compact_line_bytes(&request)) {
         Ok(job) => job,
         Err(error) => {
@@ -183,14 +206,16 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let rom = directory.path().join("game.cci");
         std::fs::write(&rom, b"").unwrap();
-        let request = install_request(&rom, Path::new("D:/data"), Path::new("D:/pkg"));
+        let request = install_request(&rom, Path::new("D:/data"), Path::new("D:/pkg"), None);
         assert_eq!(request["format"], "triaevum_forge_request_v1");
         assert_eq!(request["job"], "install");
         assert_eq!(request["source_kind"], "rom");
         assert_eq!(request["download_hd_textures"], false);
         assert_eq!(request["data_root"], Path::new("D:/data").to_string_lossy().as_ref());
-        let folder = install_request(directory.path(), Path::new("d"), Path::new("p"));
+        assert_eq!(request.get("game_language"), None);
+        let folder = install_request(directory.path(), Path::new("d"), Path::new("p"), Some("it"));
         assert_eq!(folder["source_kind"], "extracted_directory");
+        assert_eq!(folder["game_language"], "it");
     }
 
     #[test]
@@ -225,6 +250,7 @@ mod tests {
             package_root: installation.root.clone(),
             hd_auto_download: true,
             mod_enabled: false,
+            game_language: None,
         };
         run_install(Arc::new(optional), plan, Notifier::new(sender, None), CancelToken::new());
         let events: Vec<Event> = receiver.try_iter().collect();

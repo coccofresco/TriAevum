@@ -13,7 +13,9 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use eframe::egui::{self, Align, Button, Checkbox, Label, Layout, ProgressBar, Rect, RichText, TextEdit, Vec2};
+use eframe::egui::{
+    self, Align, Button, Checkbox, Label, Layout, ProgressBar, Rect, RichText, Spinner, Stroke, TextEdit, Vec2,
+};
 use forge_base::CancelToken;
 use forge_mods::Status;
 use serde_json::Value;
@@ -22,6 +24,7 @@ use crate::active_title::{load_active_title, ActiveTitle};
 use crate::install::{run_install, Event, InstallPlan, Notifier};
 use crate::installation::Installation;
 use crate::mods::Optional;
+use crate::recognition::{recognize_request, run_recognition, Card, RecognizedRom};
 use crate::smoke::Probe;
 use crate::texts::{self, Checked};
 use crate::window::{Geometry, INITIAL_SIZE, MIN_SIZE};
@@ -44,6 +47,7 @@ enum Action {
     DownloadMod,
     ToggleMod,
     SelectLanguage(usize),
+    Recognize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -153,6 +157,11 @@ pub struct ForgeApp {
     pub(crate) rom: String,
     languages: Vec<(String, String)>,
     language: Option<usize>,
+    /// The recognized-ROM card and the ROM path it belongs to.
+    pub(crate) card: Option<(String, Card)>,
+    /// The card's ROM is the installed title: its buttons edit the setting.
+    card_installed: bool,
+    card_cancel: CancelToken,
     pub(crate) status: String,
     hd_status: String,
     hd_state: Checked,
@@ -197,6 +206,9 @@ impl ForgeApp {
             rom: String::new(),
             languages: Vec::new(),
             language: None,
+            card: None,
+            card_installed: false,
+            card_cancel: CancelToken::new(),
             status: texts::CHECKING_INSTALLATION.to_string(),
             hd_status: String::new(),
             hd_state: None,
@@ -242,7 +254,60 @@ impl ForgeApp {
     }
 
     pub(crate) fn can_install(&self) -> bool {
-        !self.rom.trim().is_empty() && self.idle()
+        !self.rom.trim().is_empty() && self.idle() && !self.recognizing()
+    }
+
+    pub(crate) fn recognizing(&self) -> bool {
+        matches!(self.current_card(), Some(Card::Recognizing(_)))
+    }
+
+    /// The card of the ROM in the field; none while a new path is typed.
+    pub(crate) fn current_card(&self) -> Option<&Card> {
+        self.card.as_ref().filter(|(source, _)| *source == self.rom.trim()).map(|(_, card)| card)
+    }
+
+    /// The recognized ROM whose language choice is still to be installed.
+    fn pending_rom(&self) -> Option<&RecognizedRom> {
+        match self.current_card() {
+            Some(Card::Recognized(rom)) if !self.card_installed => Some(rom),
+            _ => None,
+        }
+    }
+
+    /// The language buttons: the pending ROM's, else the installed setting's,
+    /// with the selected index.
+    pub(crate) fn language_options(&self) -> (&[(String, String)], Option<usize>) {
+        match self.pending_rom() {
+            Some(rom) => (&rom.languages, rom.selected),
+            None => (&self.languages, self.language),
+        }
+    }
+
+    /// The layout probe's fixed card for `source`, without recognition.
+    pub(crate) fn probe_card(&mut self, source: &str, card: Card) {
+        self.rom = source.to_string();
+        self.card = Some((source.to_string(), card));
+    }
+
+    /// Recognizes the ROM in the field unless its card is already shown (a
+    /// failed one is retried). Not while a preparation runs.
+    pub(crate) fn recognize(&mut self) {
+        let source = self.rom.trim().to_string();
+        let shown = |(shown, card): &(String, Card)| *shown == source && !matches!(card, Card::Failed(_));
+        if self.busy || self.card.as_ref().is_some_and(shown) {
+            return;
+        }
+        self.card_cancel.cancel();
+        self.card_installed = false;
+        if source.is_empty() {
+            self.card = None;
+            return;
+        }
+        self.card_cancel = CancelToken::new();
+        self.card = Some((source.clone(), Card::Recognizing(texts::RECOGNIZING.to_string())));
+        let request = recognize_request(Path::new(&source), &self.installation.data_root, &self.installation.root);
+        let own = self.card_cancel.clone();
+        self.spawn(move |_, notify, cancel| run_recognition(source, request, notify, cancel, own));
     }
 
     fn spawn(&mut self, work: impl FnOnce(Arc<Optional>, Notifier, CancelToken) + Send + 'static) {
@@ -363,6 +428,7 @@ impl ForgeApp {
             Event::InstallComplete { hd, mod_ } => {
                 self.busy = false;
                 self.progress = None;
+                self.card_installed = true;
                 self.refresh_active_title();
                 (self.hd_state, self.mod_state) = (Some(hd), Some(mod_));
                 if !self.hd_status.starts_with(texts::HD_DOWNLOAD_FAILED_PREFIX) {
@@ -377,12 +443,22 @@ impl ForgeApp {
                 self.busy = false;
                 self.progress = None;
             }
+            Event::Recognition { source, card } => {
+                if self.card.as_ref().is_some_and(|(shown, _)| *shown == source) {
+                    self.card = Some((source, card));
+                }
+            }
         }
     }
 
     fn selected(&mut self, target: PickTarget, path: PathBuf) {
         match target {
-            PickTarget::Rom | PickTarget::Extracted => self.rom = path.to_string_lossy().into_owned(),
+            PickTarget::Rom | PickTarget::Extracted => {
+                // A picked file is recognized again, also when it is the same path.
+                self.rom = path.to_string_lossy().into_owned();
+                self.card = None;
+                self.recognize();
+            }
             PickTarget::HdArchive => self.run_hd("Verifying the selected archive...", move |optional, _, cancel| {
                 optional.import_hd_archive(&path, cancel)
             }),
@@ -454,7 +530,8 @@ impl ForgeApp {
                 self.run_mod(&message, |optional, report, cancel| optional.download_mod(report, cancel));
             }
             Action::ToggleMod => self.toggle_mod(),
-            Action::SelectLanguage(index) => self.select_language(index),
+            Action::SelectLanguage(index) => self.choose_language(index),
+            Action::Recognize => self.recognize(),
         }
     }
 
@@ -506,17 +583,22 @@ impl ForgeApp {
         });
     }
 
-    pub(crate) fn start_install(&mut self) {
-        if !self.idle() {
-            return;
-        }
-        let plan = InstallPlan {
+    fn install_plan(&self) -> InstallPlan {
+        InstallPlan {
             source: PathBuf::from(self.rom.trim()),
             data_root: self.installation.data_root.clone(),
             package_root: self.installation.root.clone(),
             hd_auto_download: self.hd_auto_download,
             mod_enabled: self.mod_enabled,
-        };
+            game_language: self.pending_rom().and_then(RecognizedRom::chosen).map(str::to_string),
+        }
+    }
+
+    pub(crate) fn start_install(&mut self) {
+        if !self.idle() {
+            return;
+        }
+        let plan = self.install_plan();
         let missing = |contract: Option<&forge_mods::ArchiveContract>, state: &Checked| {
             contract.is_some() && *state == Some(Ok(Status::Missing))
         };
@@ -547,11 +629,28 @@ impl ForgeApp {
         }
     }
 
-    fn select_language(&mut self, index: usize) {
-        let Some((code, _)) = self.languages.get(index).cloned() else { return };
+    /// A language button: chosen for the pending installation, or saved
+    /// for the installed title.
+    pub(crate) fn choose_language(&mut self, index: usize) {
         if !self.idle() {
             return;
         }
+        let rom = self.rom.trim().to_string();
+        let card_installed = self.card_installed;
+        if let Some((source, Card::Recognized(pending))) = &mut self.card {
+            if !card_installed && *source == rom {
+                if let Some((_, label)) = pending.languages.get(index) {
+                    self.status = texts::language_chosen(label);
+                    pending.selected = Some(index);
+                }
+                return;
+            }
+        }
+        self.select_language(index);
+    }
+
+    fn select_language(&mut self, index: usize) {
+        let Some((code, _)) = self.languages.get(index).cloned() else { return };
         match forge_native::language::select(&self.installation.data_root, &code) {
             Ok(()) => {
                 self.language = Some(index);
@@ -568,6 +667,7 @@ impl ForgeApp {
     /// download stops at its next cancellation check.
     fn shut_down(&mut self) {
         self.cancel.cancel();
+        self.card_cancel.cancel();
         let deadline = Instant::now() + Duration::from_secs(15);
         while self.workers.iter().any(|worker| !worker.is_finished()) && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(20));
@@ -653,40 +753,95 @@ impl ForgeApp {
             record.add(ui, "rom_label", "label", Label::new("Decrypted ROM"));
             let browse_width = 96.0;
             let width = (ui.available_width() - browse_width).max(160.0);
-            record.add(ui, "rom", "entry", TextEdit::singleline(&mut self.rom).desired_width(width));
+            let entry = ui.add(TextEdit::singleline(&mut self.rom).desired_width(width));
+            record.push("rom", "entry", &entry);
+            // A typed path is recognized once committed (Enter or leaving the field).
+            if entry.lost_focus() {
+                actions.push(Action::Recognize);
+            }
             if record.button(ui, idle, "rom_browse", Button::new("Browse...")) {
                 actions.push(Action::Pick(PickTarget::Rom));
             }
         });
+        ui.add_space(6.0);
+        self.rom_card(ui, record, actions);
+        ui.add_space(6.0);
         record.add(ui, "private_data", "label", Label::new(texts::private_data(&self.installation.data_root)).wrap());
         if record.button(ui, idle, "use_extracted", Button::new("Use extracted data...")) {
             actions.push(Action::Pick(PickTarget::Extracted));
         }
-        ui.add_space(8.0);
-        ui.horizontal_wrapped(|ui| {
-            record.add(ui, "language_label", "label", Label::new("Game language"));
-            let enabled = !self.languages.is_empty() && idle;
-            let selected = self.language.and_then(|index| self.languages.get(index));
-            let text = selected.map_or(texts::NO_LANGUAGES, |(_, label)| label.as_str()).to_string();
-            // The rest of the row, or the next row when too little is left.
-            let row = ui.available_size_before_wrap().x;
-            let width = if row >= 160.0 { row } else { ui.available_width() }.min(320.0);
-            let combo = ui.add_enabled_ui(enabled, |ui| {
-                egui::ComboBox::from_id_salt("game-language").selected_text(text).width(width).show_ui(ui, |ui| {
-                    for (index, (_, label)) in self.languages.iter().enumerate() {
-                        if ui.selectable_label(self.language == Some(index), label).clicked() {
-                            actions.push(Action::SelectLanguage(index));
-                        }
-                    }
-                })
-            });
-            record.push("language", "combobox", &combo.inner.response);
-        });
         ui.add_space(16.0);
         self.hd_section(ui, record, actions);
         ui.add_space(12.0);
         self.mod_section(ui, record, actions);
         ui.add_space(8.0);
+    }
+
+    /// The recognized-ROM card right under the ROM row: the revision and the
+    /// game languages as large buttons; the installed title's languages when
+    /// no ROM is being prepared.
+    fn rom_card(&mut self, ui: &mut egui::Ui, record: &mut Recorder, actions: &mut Vec<Action>) {
+        let visuals = ui.visuals().clone();
+        let card = self.current_card().cloned();
+        let (choices, selected) = self.language_options();
+        let choices = choices.to_vec();
+        // Highlighted once there is a ROM or a language to show.
+        let accent = match &card {
+            Some(Card::Failed(_)) => visuals.error_fg_color,
+            None if choices.is_empty() => visuals.weak_text_color(),
+            _ => visuals.selection.stroke.color,
+        };
+        let pending = self.pending_rom().is_some();
+        let enabled = self.idle();
+        let frame = egui::Frame::group(ui.style())
+            .inner_margin(14.0)
+            .fill(accent.gamma_multiply(0.08))
+            .stroke(Stroke::new(1.5, accent));
+        let response = frame.show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            let heading = card.as_ref().map_or(texts::GAME_LANGUAGE.to_string(), crate::recognition::heading);
+            ui.horizontal_wrapped(|ui| {
+                if matches!(card, Some(Card::Recognizing(_))) {
+                    ui.add(Spinner::new());
+                }
+                let text = RichText::new(heading).size(18.0).strong().color(accent);
+                record.add(ui, "rom_card_title", "label", Label::new(text).wrap());
+            });
+            match &card {
+                Some(Card::Recognizing(stage)) => record.add(ui, "rom_card_status", "label", Label::new(stage).wrap()),
+                Some(Card::Failed(message)) => {
+                    let text = RichText::new(message).color(visuals.error_fg_color);
+                    record.add(ui, "rom_card_status", "label", Label::new(text).wrap());
+                }
+                Some(Card::Recognized(rom)) if pending && rom.languages.is_empty() => {
+                    let message = texts::languages_unreadable(rom.language_error.as_deref().unwrap_or_default());
+                    record.add(ui, "rom_card_status", "label", Label::new(message).wrap());
+                }
+                _ if choices.is_empty() => {
+                    record.add(ui, "rom_card_status", "label", Label::new(texts::NO_LANGUAGES).wrap());
+                }
+                _ => {
+                    ui.add_space(4.0);
+                    record.add(ui, "language_label", "label", Label::new(texts::CHOOSE_LANGUAGE));
+                    ui.add_space(2.0);
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing = Vec2::new(8.0, 8.0);
+                        for (index, (_, label)) in choices.iter().enumerate() {
+                            let text = RichText::new(label).size(17.0);
+                            let button =
+                                Button::new(text).selected(selected == Some(index)).min_size(Vec2::new(116.0, 36.0));
+                            if record.button(ui, enabled, "language_choice", button) {
+                                actions.push(Action::SelectLanguage(index));
+                            }
+                        }
+                    });
+                    ui.add_space(2.0);
+                    let hint = if pending { texts::LANGUAGE_FOR_INSTALL } else { texts::LANGUAGE_INSTALLED };
+                    record.add(ui, "language_hint", "label", Label::new(hint).wrap());
+                }
+            }
+        });
+        record.push("rom_card", "group", &response.response);
     }
 
     fn section(ui: &mut egui::Ui, heading: &str, contents: impl FnOnce(&mut egui::Ui)) {
@@ -814,7 +969,7 @@ impl eframe::App for ForgeApp {
         for action in actions {
             self.apply(action, frame);
         }
-        if self.busy {
+        if self.busy || self.recognizing() {
             context.request_repaint_after(Duration::from_millis(50));
         }
         if let Some(mut probe) = self.probe.take() {
@@ -903,5 +1058,55 @@ mod tests {
         assert_eq!(selected, Some(1));
         std::fs::write(&path, br#"{"format": "x"}"#).unwrap();
         assert_eq!(read_languages(directory.path()).unwrap_err(), "Invalid game language information");
+    }
+
+    fn recognized(codes: &[&str]) -> Card {
+        Card::Recognized(RecognizedRom {
+            label: "Game (EUR)".into(),
+            languages: codes.iter().map(|code| (code.to_string(), code.to_uppercase())).collect(),
+            selected: Some(0),
+            language_error: None,
+        })
+    }
+
+    #[test]
+    fn the_recognized_rom_card_drives_the_installation_language() {
+        let directory = tempfile::tempdir().unwrap();
+        let installation = Installation::at(directory.path()).unwrap();
+        let data_root = installation.data_root.clone();
+        let mut app = ForgeApp::new(&egui::Context::default(), installation, None, None, None).unwrap();
+        assert_eq!(app.language_options(), (&[][..], None));
+
+        app.probe_card("game.cci", Card::Recognizing(texts::RECOGNIZING.into()));
+        assert!(app.recognizing() && !app.can_install());
+        app.probe_card("game.cci", recognized(&["en", "it"]));
+        assert!(app.can_install());
+        app.choose_language(1);
+        assert_eq!(app.language_options().1, Some(1));
+        assert_eq!(app.install_plan().game_language.as_deref(), Some("it"));
+        assert!(!forge_native::language::config_path(&data_root).exists(), "chosen, not saved");
+
+        // A path being typed hides the card and its choice.
+        app.rom = "other.cci".into();
+        assert_eq!(app.current_card(), None);
+        assert_eq!(app.install_plan().game_language, None);
+        app.rom = "game.cci".into();
+
+        // A late event for another ROM changes nothing.
+        let stale = Event::Recognition { source: "old.cci".into(), card: Card::Failed("x".into()) };
+        app.handle(stale);
+        assert!(matches!(app.current_card(), Some(Card::Recognized(_))));
+
+        // Installed: the buttons show and save the installed setting.
+        let detected = serde_json::json!({"format": "triaevum_game_language_v1", "selected": "en", "available": [
+            {"code": "en", "label": "English", "system_id": 1}, {"code": "it", "label": "Italiano", "system_id": 4}]});
+        forge_native::language::install_preferring(&data_root, &detected, Some("it")).unwrap();
+        app.handle(Event::InstallComplete { hd: Ok(Status::Missing), mod_: Ok(Status::Missing) });
+        assert_eq!(app.language_options().1, Some(1));
+        assert_eq!(app.install_plan().game_language, None);
+        app.choose_language(0);
+        assert_eq!(read_languages(&data_root).unwrap().1, Some(0));
+        assert_eq!(app.status, texts::LANGUAGE_SAVED);
+        app.shut_down();
     }
 }

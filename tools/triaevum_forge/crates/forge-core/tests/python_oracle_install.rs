@@ -156,6 +156,7 @@ fn python_and_rust_install_the_same_files() {
         data_root: Some(data.clone()),
         package_root: package.clone(),
         target: InstallTarget::Package,
+        game_language: None,
     };
     let mut report = |stage: &str, message: &str| eprintln!("[rust {stage}] {message}");
     let result = install_private_title(request, &DesktopServices, &mut report, &CancelToken::new()).unwrap();

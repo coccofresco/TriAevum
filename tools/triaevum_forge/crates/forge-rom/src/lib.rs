@@ -23,7 +23,7 @@ use std::path::PathBuf;
 use forge_base::{ErrorKind, ForgeError};
 
 pub use blz::decompress_exefs_code;
-pub use extract::{extract_decrypted_rom, extract_decrypted_rom_from, is_supported_rom_path};
+pub use extract::{extract_decrypted_rom, extract_decrypted_rom_from, is_supported_rom_path, read_title_executable};
 pub use layout::{find_title_layout, TitleLayout};
 pub use publish::{input_identity, publish_extracted_inputs};
 pub use stage::stage_directory;

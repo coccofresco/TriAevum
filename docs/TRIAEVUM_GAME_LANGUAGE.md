@@ -4,9 +4,17 @@
 
 ## User behavior
 
-- Forge discovers languages after ROM extraction/adaptation. Its **Game
-  language** dropdown becomes available when preparation completes, before
-  Launch game. Subsequent Forge sessions reuse the same preference.
+- Forge recognizes a ROM as soon as it is selected (desktop Browse or a
+  committed path, Android picker): the `rom_recognize` job matches the
+  executable's identity to a supported revision and asks the runtime for the
+  languages of the RomFS read in place, without extraction (about a second).
+  A highlighted card under the ROM row names the revision and shows the
+  languages as large choices, defaulting to the saved preference when the ROM
+  offers it, else the runtime default. "Prepare and install" (Android:
+  "Install") passes the choice as `game_language`; the installation still
+  rediscovers languages on the extracted/adapted RomFS and selects the choice
+  only when offered. Afterwards the same choices edit the saved preference.
+  An unsupported ROM shows its error in the card.
 - **F1 > Game > Language > Game language** exposes the same languages and saves changes.
 - Changes require a full restart. Native resource loaders initialize menu
   textures and messages together; changing just the message-language global in
@@ -31,7 +39,9 @@
   It reads metadata/message tables only, not all texture payloads, and does
   not initialize the game, title plugin, renderer or audio. An optional
   third argument, the code.bin SHA-256, selects another title's layout
-  (`triaevum_title_adapter.h`). Majora's Mask 3D needs a GMSG message file
+  (`triaevum_title_adapter.h`). `--romfs-offset N --romfs-size N` after them
+  read the RomFS extent of a cartridge image in place (Forge's recognition;
+  Android passes `/proc/self/fd/N` of the picked document). Majora's Mask 3D needs a GMSG message file
   (`message/<region>/<region><letter>.gmsg`) and populated layout archives in
   `layout/<REGION>_<Language>/`; the EUR card's Dutch archives are empty, so
   Dutch is not offered.

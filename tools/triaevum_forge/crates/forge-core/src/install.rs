@@ -81,6 +81,9 @@ pub struct InstallRequest {
     /// The package: catalog, recipes, runtime, plugins and resources.
     pub package_root: PathBuf,
     pub target: InstallTarget,
+    /// Rust addition: the game language chosen before installing; it is
+    /// selected when the ROM offers it (`language::install_preferring`).
+    pub game_language: Option<String>,
 }
 
 /// Where the installed title runs.
@@ -177,6 +180,35 @@ fn android_runtime_path(package_root: &Path) -> PathBuf {
     artifact_path(package_root, layout::ANDROID.runtime)
 }
 
+/// The resolved package and private data folder of a request; an Android
+/// target first binds the application's native library folder.
+pub(crate) fn installation_paths(
+    package_root: &Path,
+    data_root_request: Option<&Path>,
+    target: &InstallTarget,
+) -> Result<(PathBuf, PathBuf)> {
+    let package_root = resolve(&expanduser(package_root))?;
+    let data_root = match (target, data_root_request) {
+        (InstallTarget::Android(android), requested) => {
+            set_native_library_directory(&android.native_library_dir)?;
+            match requested {
+                None => resolve(&android.data_root())?,
+                Some(requested) => data_root(Some(requested), &package_root)?,
+            }
+        }
+        (InstallTarget::Package, requested) => data_root(requested, &package_root)?,
+    };
+    Ok((package_root, data_root))
+}
+
+/// The runtime the target runs titles with.
+pub(crate) fn target_runtime(package_root: &Path, target: &InstallTarget) -> Result<PathBuf> {
+    match target {
+        InstallTarget::Package => runtime_path(package_root),
+        InstallTarget::Android(_) => Ok(android_runtime_path(package_root)),
+    }
+}
+
 /// A unique `.rom-import-<32 hex>` staging folder name.
 fn staging_name() -> String {
     let mut value = 0u128;
@@ -251,18 +283,13 @@ pub fn install_private_title(
     cancel: &CancelToken,
 ) -> Result<Value> {
     let started = Instant::now();
-    let package_root = resolve(&expanduser(&request.package_root))?;
+    let (package_root, data_root) =
+        installation_paths(&request.package_root, request.data_root.as_deref(), &request.target)?;
     let android = match &request.target {
         InstallTarget::Package => None,
-        InstallTarget::Android(android) => {
-            set_native_library_directory(&android.native_library_dir)?;
-            Some(android)
-        }
+        InstallTarget::Android(android) => Some(android),
     };
-    let data_root = match (android, request.data_root.as_deref()) {
-        (Some(android), None) => resolve(&android.data_root())?,
-        (_, requested) => data_root(requested, &package_root)?,
-    };
+    let game_language = request.game_language;
     std::fs::create_dir_all(&data_root)
         .map_err(|error| ForgeError::io(format!("Cannot create {}", data_root.display()), error))?;
     let output_root = data_root.join("titles");
@@ -270,10 +297,7 @@ pub fn install_private_title(
     let mut stage = "preflight";
     let outcome = (|| -> Result<(Value, Value, Value, Value)> {
         report(stage, "Checking the playable runtime and precompiled title catalog...");
-        let runtime = match android {
-            None => runtime_path(&package_root)?,
-            Some(_) => android_runtime_path(&package_root),
-        };
+        let runtime = target_runtime(&package_root, &request.target)?;
         query_product(services, &runtime, "", None)?;
         let recipes = recipes_path(&package_root);
         let ids: Vec<String> = load_recipe_options(&recipes)?.into_iter().map(|option| option.id).collect();
@@ -349,7 +373,7 @@ pub fn install_private_title(
             report,
             cancel,
         )?;
-        forge_native::language::install(&data_root, &Value::Object(languages))?;
+        forge_native::language::install_preferring(&data_root, &Value::Object(languages), game_language.as_deref())?;
         Ok((recipe.get("id").cloned().unwrap_or(Value::Null), prepared.as_json()?, built, adaptation))
     })();
     if staging.exists() {

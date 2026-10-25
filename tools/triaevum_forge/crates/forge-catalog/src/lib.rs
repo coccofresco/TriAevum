@@ -33,5 +33,8 @@ pub use precompiled::{
     artifact_path, checked_file, load_catalog, runtime_record, select_title, set_native_library_directory,
     validate_title,
 };
-pub use recipes::{default_recipes, load_recipe, match_extracted_recipe, verify_input, InputDigest, VerifiedInput};
+pub use recipes::{
+    default_recipes, load_recipe, match_extracted_recipe, recipe_label, recognize_recipes, verify_input, InputDigest,
+    VerifiedInput,
+};
 pub use romfs_identity::{fingerprint, RomfsFingerprint};

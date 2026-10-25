@@ -28,8 +28,8 @@ impl NativeServices for Recording {
     fn product_info(&self, runtime: &Path, plugin: Option<&Path>) -> forge_base::Result<NativeOutput> {
         DesktopServices.product_info(runtime, plugin)
     }
-    fn game_language_info(&self, runtime: &Path, romfs: &Path) -> forge_base::Result<NativeOutput> {
-        DesktopServices.game_language_info(runtime, romfs)
+    fn game_language_info(&self, runtime: &Path, query: &LanguageQuery) -> forge_base::Result<NativeOutput> {
+        DesktopServices.game_language_info(runtime, query)
     }
     fn prebuild_interior_sun(
         &self,

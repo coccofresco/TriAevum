@@ -24,8 +24,8 @@ use crate::process::{
 };
 use crate::pyerr::{decode_text, io_failure, open_error, os_error};
 use crate::services::{
-    DeviceJob, InteriorSunRequest, NativeOutput, NativeServices, PortableCompile, RendererPassRequest, Report,
-    TransferableImport,
+    DeviceJob, InteriorSunRequest, LanguageQuery, NativeOutput, NativeServices, PortableCompile, RendererPassRequest,
+    Report, TransferableImport,
 };
 
 pub const PRODUCT_TIMEOUT_SECONDS: f64 = 15.0;
@@ -90,15 +90,14 @@ impl NativeServices for DesktopServices {
         run_native(&program(runtime, arguments), &options, None).map(output)
     }
 
-    fn game_language_info(&self, runtime: &Path, romfs: &Path) -> Result<NativeOutput> {
+    fn game_language_info(&self, runtime: &Path, query: &LanguageQuery) -> Result<NativeOutput> {
         let options = RunOptions {
             cwd: parent(runtime),
             environment: Environment::Inherit,
             timeout_seconds: LANGUAGE_TIMEOUT_SECONDS,
             creation_flags: 0,
         };
-        let arguments = vec!["--game-language-info".into(), romfs.as_os_str().to_os_string()];
-        run_native(&program(runtime, arguments), &options, None).map(output)
+        run_native(&program(runtime, query.arguments()), &options, None).map(output)
     }
 
     fn prebuild_interior_sun(&self, request: &InteriorSunRequest, cancel: &CancelToken) -> Result<NativeOutput> {

@@ -38,8 +38,8 @@ pub use device::{
 pub use installed_runtime::validate_installed_runtime;
 pub use product::{ensure_runtime_config, query_product, validate_product_info, ProductQuery};
 pub use services::{
-    DeviceJob, InteriorSunRequest, NativeOutput, NativeServices, PortableCompile, RendererPassRequest, Report,
-    TransferableImport,
+    DeviceJob, InteriorSunRequest, LanguageQuery, NativeOutput, NativeServices, PortableCompile, RendererPassRequest,
+    Report, TransferableImport,
 };
 pub use shader::{prepare_renderer_shader_cache, prepare_shader_seed};
 pub use worker_job::{bind_worker_lifetime, watch_owner};

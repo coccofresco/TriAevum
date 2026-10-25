@@ -7,7 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
-use forge_base::hashing::{hex, sha256_file};
+use forge_base::hashing::{hex, sha256_bytes, sha256_file};
 use forge_base::{CancelToken, ErrorKind, ForgeError, Result};
 use serde_json::{json, Map, Value};
 
@@ -70,19 +70,27 @@ pub struct RecipeOption {
     pub label: String,
 }
 
+/// The "Title (Region)" label of a recipe with this id.
+pub fn recipe_label(recipe: &Map<String, Value>, id: &str) -> String {
+    let title = get(recipe, "title");
+    let title = if truthy(title) { py_str(title) } else { id.to_string() };
+    let region = get(recipe, "region");
+    let region = if truthy(region) { py_str(region) } else { String::new() };
+    let region = py_strip(&region);
+    if region.is_empty() {
+        title
+    } else {
+        format!("{title} ({region})")
+    }
+}
+
 /// `forge_gui.load_recipe_options`: "Title (Region)" labels.
 pub fn load_recipe_options(path: &Path) -> Result<Vec<RecipeOption>> {
     let mut options = Vec::new();
     for item in load_recipes(path)? {
         let Some(map) = item.as_object() else { continue };
         let Some(id) = get(map, "id").as_str() else { continue };
-        let title = get(map, "title");
-        let title = if truthy(title) { py_str(title) } else { id.to_string() };
-        let region = get(map, "region");
-        let region = if truthy(region) { py_str(region) } else { String::new() };
-        let region = py_strip(&region);
-        let label = if region.is_empty() { title } else { format!("{title} ({region})") };
-        options.push(RecipeOption { id: id.to_string(), label });
+        options.push(RecipeOption { id: id.to_string(), label: recipe_label(map, id) });
     }
     if options.is_empty() {
         return Err(ForgeError::integrity("no supported title revisions are available"));
@@ -93,6 +101,59 @@ pub fn load_recipe_options(path: &Path) -> Result<Vec<RecipeOption>> {
 /// `str(contract.get("sha256", "")).lower()`.
 fn contract_digest(contract: &Map<String, Value>) -> String {
     contract.get("sha256").map(py_str).unwrap_or_default().to_lowercase()
+}
+
+fn unsupported_revision(program_id: u64) -> ForgeError {
+    ForgeError::new(
+        ErrorKind::UnsupportedRevision,
+        format!("the decrypted ROM does not match any supported game revision (program ID {program_id:016X})"),
+    )
+}
+
+/// Rust addition: the recipes a ROM's executable identifies before its
+/// RomFS is read (Forge's recognized-ROM card), in recipe order: the import
+/// identity's code and ExHeader, or else a declared source content family's
+/// code and normalized ExHeader. `match_extracted_recipe` still decides the
+/// installation with all three inputs.
+pub fn recognize_recipes(
+    program_id: u64,
+    code: &[u8],
+    exheader: &[u8],
+    path: &Path,
+) -> Result<Vec<Map<String, Value>>> {
+    let recipes = load_recipes(path)?;
+    let code_digest = hex(&sha256_bytes(code));
+    let exheader_digest = hex(&sha256_bytes(exheader));
+    let same = |contract: Option<&Value>, bytes: usize, digest: &str| match contract {
+        Some(Value::Object(contract)) => {
+            eq_int(get(contract, "bytes"), bytes as u64) && contract_digest(contract) == digest
+        }
+        _ => false,
+    };
+    let mut matches = Vec::new();
+    for recipe in recipes.iter().filter_map(Value::as_object) {
+        let Value::Object(contracts) = import_contract(recipe)? else { continue };
+        if same(contracts.get("code"), code.len(), &code_digest)
+            && same(contracts.get("exheader"), exheader.len(), &exheader_digest)
+        {
+            matches.push(recipe.clone());
+        }
+    }
+    if matches.is_empty() {
+        let code_identity = json!({"bytes": code.len(), "sha256": code_digest});
+        let normalized = family::normalized_exheader_digest(exheader).ok();
+        for recipe in recipes.iter().filter_map(Value::as_object) {
+            if let Some(source) = family::expected(recipe, "source")? {
+                if py_eq(&source["code"], &code_identity) && source["exheader"].as_str() == normalized.as_deref() {
+                    matches.push(recipe.clone());
+                }
+            }
+        }
+    }
+    if matches.is_empty() {
+        return Err(unsupported_revision(program_id));
+    }
+    Ok(matches)
 }
 
 /// `forge_gui.match_extracted_recipe`: the one recipe whose import identity
@@ -133,13 +194,7 @@ pub fn match_extracted_recipe(
         }
     }
     match matches.as_slice() {
-        [] => Err(ForgeError::new(
-            ErrorKind::UnsupportedRevision,
-            format!(
-                "the decrypted ROM does not match any supported game revision (program ID {:016X})",
-                extracted.program_id
-            ),
-        )),
+        [] => Err(unsupported_revision(extracted.program_id)),
         [recipe] => Ok((*recipe).clone()),
         _ => Err(ForgeError::integrity("the decrypted ROM matches multiple revision recipes")),
     }
@@ -262,6 +317,65 @@ mod tests {
         for text in ["", "1.0", "_1", "1__0", "0x10", "-"] {
             assert_eq!(parse_python_int(text), None, "{text}");
         }
+    }
+
+    fn recipes_file(directory: &Path, recipes: Value) -> PathBuf {
+        let path = directory.join("recipes.json");
+        std::fs::write(&path, json!({"format": FORMAT, "recipes": recipes}).to_string()).unwrap();
+        path
+    }
+
+    fn identity(bytes: &[u8]) -> Value {
+        json!({"bytes": bytes.len(), "sha256": forge_base::hashing::sha256_hex(bytes)})
+    }
+
+    #[test]
+    fn recognition_reads_the_executable_identity() {
+        let directory = tempfile::tempdir().unwrap();
+        let (code, exheader) = (b"code".to_vec(), vec![7u8; 2048]);
+        let mut other = exheader.clone();
+        other[0] = 1;
+        let romfs = json!({"bytes": 9, "sha256": "e".repeat(64)});
+        let path = recipes_file(
+            directory.path(),
+            json!([
+                {"id": "other", "title": "T", "region": "EUR",
+                 "inputs": {"code": identity(&code), "exheader": identity(&other), "romfs": romfs}},
+                {"id": "eur", "title": "T", "region": " EUR ",
+                 "inputs": {"code": identity(&code), "exheader": identity(&exheader), "romfs": romfs}},
+            ]),
+        );
+        let found = recognize_recipes(0x42, &code, &exheader, &path).unwrap();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0]["id"], "eur");
+        assert_eq!(recipe_label(&found[0], "eur"), "T (EUR)");
+        let error = recognize_recipes(0x42, b"else", &exheader, &path).unwrap_err();
+        assert_eq!(error.kind, ErrorKind::UnsupportedRevision);
+        assert_eq!(
+            error.message,
+            "the decrypted ROM does not match any supported game revision (program ID 0000000000000042)"
+        );
+    }
+
+    #[test]
+    fn recognition_falls_back_to_the_source_family() {
+        let directory = tempfile::tempdir().unwrap();
+        let (code, exheader) = (b"code".to_vec(), vec![7u8; 2048]);
+        let mut dumped = exheader.clone();
+        dumped[0x0d] |= 1;
+        dumped[0x400] = 9;
+        let member = json!({"code": identity(&code),
+            "exheader": family::normalized_exheader_digest(&exheader).unwrap(),
+            "romfs": {"sha256": "c".repeat(64), "files": 1, "directories": 1, "payload_bytes": 1}});
+        let path = recipes_file(
+            directory.path(),
+            json!([{"id": "fam", "inputs": {"code": identity(&code), "exheader": identity(&exheader),
+                "romfs": {"bytes": 9, "sha256": "e".repeat(64)}},
+                "data_compatibility": {"format": family::FORMAT, "source": member, "execution": member}}]),
+        );
+        let found = recognize_recipes(1, &code, &dumped, &path).unwrap();
+        assert_eq!(found[0]["id"], "fam");
+        assert_eq!(recipe_label(&found[0], "fam"), "fam");
     }
 
     #[test]

@@ -30,6 +30,34 @@ pub struct NativeOutput {
     pub stderr: String,
 }
 
+/// `--game-language-info ROMFS [--romfs-offset N --romfs-size N]`: the
+/// RomFS is the whole file, or the `(offset, size)` extent of a cartridge
+/// image read in place (ROM recognition before extraction).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LanguageQuery {
+    pub romfs: PathBuf,
+    pub extent: Option<(u64, u64)>,
+}
+
+impl LanguageQuery {
+    pub fn romfs(path: impl Into<PathBuf>) -> Self {
+        Self { romfs: path.into(), extent: None }
+    }
+
+    pub fn arguments(&self) -> Vec<OsString> {
+        let mut arguments: Vec<OsString> = vec!["--game-language-info".into(), self.romfs.clone().into()];
+        if let Some((offset, size)) = self.extent {
+            arguments.extend([
+                "--romfs-offset".into(),
+                offset.to_string().into(),
+                "--romfs-size".into(),
+                size.to_string().into(),
+            ]);
+        }
+        arguments
+    }
+}
+
 /// `--prebuild-interior-sun`: run by the verified runtime with the package
 /// root as working directory. The result manifest is written to `manifest`.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -182,8 +210,8 @@ pub trait NativeServices {
     /// (15 s budget).
     fn product_info(&self, runtime: &std::path::Path, plugin: Option<&std::path::Path>) -> Result<NativeOutput>;
 
-    /// `--game-language-info ROMFS` (30 s budget).
-    fn game_language_info(&self, runtime: &std::path::Path, romfs: &std::path::Path) -> Result<NativeOutput>;
+    /// `--game-language-info` (30 s budget).
+    fn game_language_info(&self, runtime: &std::path::Path, query: &LanguageQuery) -> Result<NativeOutput>;
 
     /// The interior-sun prebuild (3600 s budget).
     fn prebuild_interior_sun(&self, request: &InteriorSunRequest, cancel: &CancelToken) -> Result<NativeOutput>;

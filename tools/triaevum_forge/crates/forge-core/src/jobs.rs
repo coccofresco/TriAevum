@@ -16,6 +16,7 @@ use crate::cancel::CancelToken;
 use crate::error::{ForgeError, Result};
 use crate::hashing::{copy_hashing, hex};
 use crate::install::{self, install_private_title, AndroidTarget, InstallRequest, InstallSource, InstallTarget};
+use crate::recognize::{recognize_rom, RecognizeRequest};
 
 pub const REQUEST_FORMAT: &str = "triaevum_forge_request_v1";
 
@@ -27,7 +28,7 @@ pub fn capabilities() -> Value {
         "target": target_triple(),
         "input_formats": ["3ds", "cci", "extracted_directory"],
         "encrypted_input": false,
-        "jobs": ["spool_copy", "rom_identify", "install"],
+        "jobs": ["spool_copy", "rom_identify", "rom_recognize", "install", "game_language"],
     })
 }
 
@@ -62,9 +63,17 @@ pub fn start(request: &[u8]) -> Result<Job> {
             let source = Source::parse(request.get("source"))?;
             Ok(Job::spawn(move |sink, cancel| rom_identify(source, sink, cancel)))
         }
+        Some("rom_recognize") => {
+            let job = RecognizeJob::parse(&request)?;
+            Ok(Job::spawn(move |sink, cancel| job.run(sink, cancel)))
+        }
         Some("install") => {
             let job = InstallJob::parse(&request)?;
             Ok(Job::spawn(move |sink, cancel| job.run(sink, cancel)))
+        }
+        Some("game_language") => {
+            let job = GameLanguageJob::parse(&request)?;
+            Ok(Job::spawn(move |_, _| job.run()))
         }
         Some(other) => Err(ForgeError::invalid(format!("Unknown Forge job: {other}"))),
         None => Err(ForgeError::invalid("Forge request has no job")),
@@ -193,6 +202,7 @@ struct InstallJob {
     package_root: PathBuf,
     download_hd_textures: bool,
     android: Option<AndroidJob>,
+    game_language: Option<String>,
 }
 
 /// `android`: `native_library_dir` (the application's), `profile_root` (the
@@ -228,38 +238,76 @@ impl AndroidJob {
     }
 }
 
+/// `source` with `source_kind` ("rom" or "extracted_directory"); without a
+/// kind (`rom_recognize` only) a folder path is extracted data.
+fn install_source(request: &Map<String, Value>, kind_required: bool) -> Result<InstallSource> {
+    let source = Source::parse(request.get("source"))?;
+    Ok(match (request.get("source_kind").and_then(Value::as_str), source) {
+        (None, Source::Path(path)) if !kind_required => InstallSource::from_path(path),
+        (Some("rom"), Source::Path(path)) => InstallSource::Rom(path),
+        (Some("extracted_directory"), Source::Path(path)) => InstallSource::ExtractedDirectory(path),
+        #[cfg(unix)]
+        (None, source @ Source::Descriptor(_)) if !kind_required => InstallSource::RomFile(source.open()?),
+        #[cfg(unix)]
+        (Some("rom"), source @ Source::Descriptor(_)) => InstallSource::RomFile(source.open()?),
+        #[cfg(unix)]
+        (Some("extracted_directory"), Source::Descriptor(_)) => {
+            return Err(ForgeError::invalid("Extracted data must be a folder path"))
+        }
+        _ => return Err(ForgeError::invalid("source_kind must be \"rom\" or \"extracted_directory\"")),
+    })
+}
+
+fn optional_path(request: &Map<String, Value>, key: &str) -> Option<PathBuf> {
+    request.get(key).and_then(Value::as_str).map(PathBuf::from)
+}
+
+fn package_root(request: &Map<String, Value>) -> Result<PathBuf> {
+    match optional_path(request, "package_root") {
+        Some(root) => Ok(root),
+        None => executable_directory(),
+    }
+}
+
+fn android_job(request: &Map<String, Value>) -> Result<Option<AndroidJob>> {
+    let android = AndroidJob::parse(request.get("android"))?;
+    if android.is_some() && !cfg!(target_os = "android") {
+        return Err(ForgeError::new(
+            crate::ErrorKind::IncompatibleTarget,
+            "Android installations need the Android application's native services",
+        ));
+    }
+    Ok(android)
+}
+
+/// An optional nonempty string field.
+fn optional_text(request: &Map<String, Value>, key: &str) -> Result<Option<String>> {
+    match request.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(text)) if !text.is_empty() => Ok(Some(text.clone())),
+        Some(_) => Err(ForgeError::invalid(format!("{key} must be a nonempty string"))),
+    }
+}
+
 impl InstallJob {
     fn parse(request: &Map<String, Value>) -> Result<Self> {
-        let source = Source::parse(request.get("source"))?;
-        let source = match (request.get("source_kind").and_then(Value::as_str), source) {
-            (Some("rom"), Source::Path(path)) => InstallSource::Rom(path),
-            (Some("extracted_directory"), Source::Path(path)) => InstallSource::ExtractedDirectory(path),
-            #[cfg(unix)]
-            (Some("rom"), source @ Source::Descriptor(_)) => InstallSource::RomFile(source.open()?),
-            #[cfg(unix)]
-            (Some("extracted_directory"), Source::Descriptor(_)) => {
-                return Err(ForgeError::invalid("Extracted data must be a folder path"))
-            }
-            _ => return Err(ForgeError::invalid("source_kind must be \"rom\" or \"extracted_directory\"")),
-        };
-        let path = |key: &str| request.get(key).and_then(Value::as_str).map(PathBuf::from);
-        let package_root = match path("package_root") {
-            Some(root) => root,
-            None => executable_directory()?,
-        };
+        let source = install_source(request, true)?;
+        let package_root = package_root(request)?;
         let download_hd_textures = match request.get("download_hd_textures") {
             None | Some(Value::Null) => cfg!(not(target_os = "android")),
             Some(Value::Bool(flag)) => *flag,
             Some(_) => return Err(ForgeError::invalid("download_hd_textures must be a boolean")),
         };
-        let android = AndroidJob::parse(request.get("android"))?;
-        if android.is_some() && !cfg!(target_os = "android") {
-            return Err(ForgeError::new(
-                crate::ErrorKind::IncompatibleTarget,
-                "Android installations need the Android application's native services",
-            ));
-        }
-        Ok(Self { source, data_root: path("data_root"), package_root, download_hd_textures, android })
+        let android = android_job(request)?;
+        let game_language = optional_text(request, "game_language")?;
+        Ok(Self {
+            source,
+            data_root: optional_path(request, "data_root"),
+            package_root,
+            download_hd_textures,
+            android,
+            game_language,
+        })
     }
 
     fn run(self, sink: &EventSink, cancel: &CancelToken) -> Result<Value> {
@@ -275,6 +323,7 @@ impl InstallJob {
                 data_root: self.data_root,
                 package_root: self.package_root,
                 target,
+                game_language: self.game_language,
             };
             return install_private_title(request, &DesktopServices, &mut report, cancel);
         };
@@ -284,8 +333,79 @@ impl InstallJob {
             data_root: self.data_root,
             package_root: self.package_root,
             target: InstallTarget::Android(android.target),
+            game_language: self.game_language,
         };
         install_private_title(request, &services, &mut report, cancel)
+    }
+}
+
+/// The `rom_recognize` job: the revision and game languages of a selected
+/// ROM, read in place (`recognize::recognize_rom`), with the runtime of the
+/// same target as `install`.
+struct RecognizeJob {
+    source: InstallSource,
+    data_root: Option<PathBuf>,
+    package_root: PathBuf,
+    android: Option<AndroidJob>,
+}
+
+impl RecognizeJob {
+    fn parse(request: &Map<String, Value>) -> Result<Self> {
+        Ok(Self {
+            source: install_source(request, false)?,
+            data_root: optional_path(request, "data_root"),
+            package_root: package_root(request)?,
+            android: android_job(request)?,
+        })
+    }
+
+    fn run(self, sink: &EventSink, cancel: &CancelToken) -> Result<Value> {
+        let mut report = |stage: &str, message: &str| sink.stage(stage, message);
+        let Some(android) = self.android else {
+            let request = RecognizeRequest {
+                source: self.source,
+                data_root: self.data_root,
+                package_root: self.package_root,
+                target: InstallTarget::Package,
+            };
+            return recognize_rom(request, &DesktopServices, &mut report, cancel);
+        };
+        let services = android_services(&android)?;
+        let request = RecognizeRequest {
+            source: self.source,
+            data_root: self.data_root,
+            package_root: self.package_root,
+            target: InstallTarget::Android(android.target),
+        };
+        recognize_rom(request, &services, &mut report, cancel)
+    }
+}
+
+/// The `game_language` job: `{"languages": document | null}`, the installed
+/// language setting of `data_root`, after selecting `select` when given
+/// (`language::select`; an unavailable code changes nothing and fails).
+struct GameLanguageJob {
+    data_root: PathBuf,
+    select: Option<String>,
+}
+
+impl GameLanguageJob {
+    fn parse(request: &Map<String, Value>) -> Result<Self> {
+        let data_root = optional_path(request, "data_root")
+            .ok_or_else(|| ForgeError::invalid("game_language needs a data_root"))?;
+        Ok(Self { data_root, select: optional_text(request, "select")? })
+    }
+
+    fn run(self) -> Result<Value> {
+        if let Some(code) = &self.select {
+            forge_native::language::select(&self.data_root, code)?;
+        }
+        let path = forge_native::language::config_path(&self.data_root);
+        if !path.exists() {
+            return Ok(json!({"languages": null}));
+        }
+        let document = forge_native::language::validate(&Value::Object(crate::fsutil::load_json_object(&path)?))?;
+        Ok(json!({"languages": document}))
     }
 }
 
@@ -512,6 +632,42 @@ mod tests {
                 ("succeeded", ""),
             ]
         );
+    }
+
+    #[test]
+    fn recognition_and_language_requests_are_checked() {
+        let request = |job: &str, extra: Value| {
+            let mut request = json!({"format": REQUEST_FORMAT, "job": job});
+            request.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+            start(&crate::legacy_json::compact_line_bytes(&request)).err().map(|error| error.message)
+        };
+        assert_eq!(request("rom_recognize", json!({})).unwrap(), "Request has no source");
+        assert_eq!(
+            request("install", json!({"source": {"path": "x.cci"}, "source_kind": "rom", "game_language": 3})).unwrap(),
+            "game_language must be a nonempty string"
+        );
+        assert_eq!(request("game_language", json!({})).unwrap(), "game_language needs a data_root");
+        let jobs = capabilities()["jobs"].clone();
+        assert!(jobs.as_array().unwrap().contains(&json!("rom_recognize")));
+    }
+
+    #[test]
+    fn game_language_reads_and_selects_the_installed_setting() {
+        let directory = tempfile::tempdir().unwrap();
+        let data_root = directory.path().to_string_lossy().into_owned();
+        let events = run_request(json!({"format": REQUEST_FORMAT, "job": "game_language", "data_root": data_root}));
+        assert_eq!(events.last().unwrap()["result"], json!({"languages": null}));
+        let detected = json!({"format": "triaevum_game_language_v1", "selected": "en", "available": [
+            {"code": "en", "label": "English", "system_id": 1}, {"code": "it", "label": "Italiano", "system_id": 4}]});
+        forge_native::language::install(directory.path(), &detected).unwrap();
+        let events = run_request(
+            json!({"format": REQUEST_FORMAT, "job": "game_language", "data_root": data_root, "select": "it"}),
+        );
+        assert_eq!(events.last().unwrap()["result"]["languages"]["selected"], "it");
+        let events = run_request(
+            json!({"format": REQUEST_FORMAT, "job": "game_language", "data_root": data_root, "select": "fr"}),
+        );
+        assert_eq!(events.last().unwrap()["error"]["code"], "invalid_settings");
     }
 
     #[test]

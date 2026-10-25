@@ -188,6 +188,41 @@ fn shared_config_and_rom_switch() {
 }
 
 #[test]
+fn a_preferred_language_wins_while_the_rom_offers_it() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    language::install_preferring(root, &document(&["en", "it", "fr"]), Some("fr")).unwrap();
+    assert_eq!(selected(root), "fr");
+    // An unoffered preference keeps the previous selection, then the default.
+    language::install_preferring(root, &document(&["en", "fr"]), Some("de")).unwrap();
+    assert_eq!(selected(root), "fr");
+    language::install_preferring(root, &document(&["en", "it"]), Some("de")).unwrap();
+    assert_eq!(selected(root), "en");
+    language::install_preferring(root, &document(&["en", "it"]), None).unwrap();
+    assert_eq!(selected(root), "en");
+    let merged = language::merged(root, &document(&["en", "it"]), Some("it")).unwrap();
+    assert_eq!(merged["selected"], "it");
+    assert_eq!(selected(root), "en", "merged writes nothing");
+    // A malformed file stays an error with a preference too.
+    std::fs::write(language::config_path(root), "broken").unwrap();
+    assert!(language::install_preferring(root, &document(&["en", "it"]), Some("it")).is_err());
+    assert_eq!(std::fs::read(language::config_path(root)).unwrap(), b"broken");
+}
+
+#[test]
+fn reads_a_cartridge_romfs_in_place() {
+    let directory = tempfile::tempdir().unwrap();
+    let runtime = install_fake(directory.path(), "runtime", &json!({"stdout": document(&["en"]).to_string()}));
+    let rom = directory.path().join("game.cci");
+    let query = forge_native::LanguageQuery { romfs: rom.clone(), extent: Some((0x4000, 0x8000)) };
+    language::discover_query(&DesktopServices, &runtime, &query).unwrap();
+    assert_eq!(
+        runs(&runtime)[0]["args"],
+        json!(["--game-language-info", rom.to_string_lossy(), "--romfs-offset", "16384", "--romfs-size", "32768"])
+    );
+}
+
+#[test]
 fn uses_native_detector() {
     let directory = tempfile::tempdir().unwrap();
     let runtime = install_fake(directory.path(), "runtime", &json!({"stdout": document(&["en", "it"]).to_string()}));

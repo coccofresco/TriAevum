@@ -8,6 +8,11 @@
 //!
 //! `--work-area WxH` is in logical points. `--screenshot PATH` (a Rust
 //! addition) writes the rendered frame as a binary PPM.
+//!
+//! The recognized-ROM card (a Rust addition) is laid out with a `--rom`'s
+//! real recognition, whose last language is chosen before installing and
+//! must be the installed selection; without `--rom` the card shows a fixed
+//! recognized ROM with five languages.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -17,6 +22,7 @@ use eframe::egui::{self, Rect, Vec2};
 use serde_json::{json, Map, Value};
 
 use crate::app::{DialogKind, ForgeApp, WidgetRecord};
+use crate::recognition::{heading, Card, RecognizedRom};
 use crate::window::{parse_work_area, MIN_SIZE};
 
 const USAGE: &str =
@@ -134,6 +140,7 @@ pub fn layout_report(widgets: &[WidgetRecord], viewport: Rect, outer: Vec2, work
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Phase {
     Settling,
+    Recognizing,
     Installing,
     Measure,
     InputEntered,
@@ -152,6 +159,7 @@ pub struct Probe {
     notifications: Vec<Value>,
     report: Map<String, Value>,
     passed: bool,
+    measured_rom: String,
 }
 
 impl Probe {
@@ -166,6 +174,7 @@ impl Probe {
             notifications: Vec::new(),
             report: Map::new(),
             passed: true,
+            measured_rom: String::new(),
         }
     }
 
@@ -199,11 +208,27 @@ impl Probe {
                 if app.geometry.applied && self.stable_frames >= 10 && elapsed >= 1.0 {
                     if let Some(rom) = &self.options.rom {
                         app.rom = std::path::absolute(rom).unwrap_or_else(|_| rom.clone()).to_string_lossy().into();
-                        app.start_install();
-                        self.phase = Phase::Installing;
+                        app.recognize();
+                        self.phase = Phase::Recognizing;
                     } else {
+                        app.probe_card("probe.cci", sample_card());
                         self.phase = Phase::Measure;
                     }
+                }
+            }
+            Phase::Recognizing => {
+                if !app.recognizing() {
+                    let card = app.current_card().cloned();
+                    self.passed &= matches!(card, Some(Card::Recognized(_)));
+                    if let Some(Card::Recognized(rom)) = &card {
+                        if let Some(last) = rom.languages.len().checked_sub(1) {
+                            app.choose_language(last);
+                            self.report.insert("chosen_language".into(), json!(rom.languages[last].0));
+                        }
+                    }
+                    self.report.insert("recognized_rom".into(), card_json(card.as_ref()));
+                    app.start_install();
+                    self.phase = Phase::Installing;
                 }
             }
             Phase::Installing => {
@@ -212,6 +237,14 @@ impl Probe {
                     self.report.insert("installation_ready".into(), json!(installed));
                     self.report.insert("install_wall_seconds".into(), json!(elapsed));
                     self.passed &= installed;
+                    if let Some(chosen) = self.report.get("chosen_language").cloned() {
+                        let path = forge_native::language::config_path(&app.installation.data_root);
+                        let saved =
+                            forge_base::fsutil::load_json_object(&path).ok().and_then(|d| d.get("selected").cloned());
+                        let applied = saved.as_ref() == Some(&chosen);
+                        self.report.insert("language_applied".into(), json!(applied));
+                        self.passed &= applied;
+                    }
                     self.phase = Phase::Measure;
                 }
             }
@@ -225,11 +258,20 @@ impl Probe {
                 if let Value::Object(details) = details {
                     self.report.extend(details);
                 }
+                let (choices, _) = app.language_options();
+                let buttons = app.widgets.iter().filter(|widget| widget.name == "language_choice").count();
+                let card_ok = app.widgets.iter().any(|widget| widget.name == "rom_card") && buttons == choices.len();
+                self.report.insert(
+                    "language_card".into(),
+                    json!({"card": card_json(app.current_card()), "buttons": buttons, "synthetic": self.options.rom.is_none(),
+                           "laid_out": card_ok}),
+                );
+                self.passed &= card_ok;
                 self.report.insert("size".into(), json!([viewport.width(), viewport.height()]));
                 self.report.insert("work_area".into(), json!(work_area.map(|area| [area.x, area.y])));
                 self.report.insert("pixels_per_point".into(), json!(context.pixels_per_point()));
                 self.report.insert("min_inner_size".into(), json!([MIN_SIZE.x, MIN_SIZE.y]));
-                app.rom = "probe.cci".into();
+                self.measured_rom = std::mem::replace(&mut app.rom, "probe.cci".into());
                 self.phase = Phase::InputEntered;
             }
             Phase::InputEntered => {
@@ -243,6 +285,8 @@ impl Probe {
                 self.report.insert("prepare_button_tracks_input".into(), json!(tracks));
                 self.passed &= tracks;
                 if self.options.screenshot.is_some() {
+                    // The picture shows the measured window, card included.
+                    app.rom = std::mem::take(&mut self.measured_rom);
                     context.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
                     self.phase = Phase::Screenshot;
                 } else {
@@ -288,6 +332,34 @@ impl Probe {
         *self.result.lock().unwrap_or_else(|poison| poison.into_inner()) = Some(Value::Object(report));
         app.close(context);
     }
+}
+
+/// The card the probe shows without a ROM: a long revision label and five
+/// languages, the most a supported revision offers.
+fn sample_card() -> Card {
+    let languages = [("en", "English"), ("de", "Deutsch"), ("fr", "Francais"), ("es", "Espanol"), ("it", "Italiano")];
+    Card::Recognized(RecognizedRom {
+        label: "The Legend of Zelda: Ocarina of Time 3D (EUR (No-Intro original and Rev 1))".into(),
+        languages: languages.iter().map(|(code, label)| (code.to_string(), label.to_string())).collect(),
+        selected: Some(0),
+        language_error: None,
+    })
+}
+
+fn card_json(card: Option<&Card>) -> Value {
+    let Some(card) = card else { return Value::Null };
+    let (state, languages, selected) = match card {
+        Card::Recognizing(_) => ("recognizing", Vec::new(), None),
+        Card::Failed(_) => ("failed", Vec::new(), None),
+        Card::Recognized(rom) => ("recognized", rom.languages.clone(), rom.chosen().map(str::to_string)),
+    };
+    let message = match card {
+        Card::Failed(message) => Some(message.clone()),
+        Card::Recognized(rom) => rom.language_error.clone(),
+        Card::Recognizing(_) => None,
+    };
+    json!({"state": state, "title": heading(card), "languages": languages.iter().map(|(code, _)| code).collect::<Vec<_>>(),
+           "selected": selected, "message": message})
 }
 
 fn write_ppm(path: &Path, image: &egui::ColorImage) -> std::io::Result<()> {

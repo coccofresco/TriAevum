@@ -33,8 +33,8 @@ use forge_base::{CancelToken, ErrorKind, ForgeError, Result};
 use crate::desktop::{ProgressReader, DEVICE_LOG_BYTES};
 use crate::pyerr::{decode_text, io_failure, open_error};
 use crate::services::{
-    DeviceJob, InteriorSunRequest, NativeOutput, NativeServices, PortableCompile, RendererPassRequest, Report,
-    TransferableImport,
+    DeviceJob, InteriorSunRequest, LanguageQuery, NativeOutput, NativeServices, PortableCompile, RendererPassRequest,
+    Report, TransferableImport,
 };
 
 /// The exported entry of the runtime library.
@@ -246,9 +246,8 @@ impl<T: ToolEntry> NativeServices for AndroidServices<T> {
         self.call(runtime, RUNTIME_TOOL, arguments)
     }
 
-    fn game_language_info(&self, runtime: &Path, romfs: &Path) -> Result<NativeOutput> {
-        let arguments = vec!["--game-language-info".into(), romfs.as_os_str().to_os_string()];
-        self.call(runtime, RUNTIME_TOOL, arguments)
+    fn game_language_info(&self, runtime: &Path, query: &LanguageQuery) -> Result<NativeOutput> {
+        self.call(runtime, RUNTIME_TOOL, query.arguments())
     }
 
     fn prebuild_interior_sun(&self, request: &InteriorSunRequest, cancel: &CancelToken) -> Result<NativeOutput> {
@@ -376,10 +375,14 @@ mod tests {
         let output = services.product_info(&library, None).unwrap();
         assert_eq!(output, NativeOutput { status: 0, stdout: "{\"product\":1}\n".into(), stderr: String::new() });
         let romfs = directory.path().join("romfs.bin");
-        services.game_language_info(&library, &romfs).unwrap();
+        services.game_language_info(&library, &LanguageQuery::romfs(&romfs)).unwrap();
+        let rom = LanguageQuery { romfs: directory.path().join("game.cci"), extent: Some((0x1000, 0x2000)) };
+        services.game_language_info(&library, &rom).unwrap();
         let calls = services.tool.calls.lock().unwrap();
         assert_eq!(calls[0], vec![OsString::from("runtime"), "--product-info".into()]);
         assert_eq!(calls[1], vec![OsString::from("runtime"), "--game-language-info".into(), romfs.into()]);
+        let extent: Vec<OsString> = ["--romfs-offset", "4096", "--romfs-size", "8192"].map(OsString::from).into();
+        assert_eq!(calls[2][3..], extent[..]);
         // Each call's streams are removed with its folder.
         assert_eq!(std::fs::read_dir(directory.path().join("cache")).unwrap().count(), 0);
     }

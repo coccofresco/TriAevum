@@ -15,8 +15,8 @@ use forge_core::install::{install_private_title, AndroidTarget, InstallRequest, 
 use forge_core::layout::{installation_state, HostOs};
 use forge_core::publish::standard_topscreen;
 use forge_native::{
-    DeviceJob, InteriorSunRequest, NativeOutput, NativeServices, PortableCompile, RendererPassRequest, Report,
-    TransferableImport,
+    DeviceJob, InteriorSunRequest, LanguageQuery, NativeOutput, NativeServices, PortableCompile, RendererPassRequest,
+    Report, TransferableImport,
 };
 use serde_json::{json, Value};
 
@@ -167,6 +167,15 @@ impl Fixture {
     }
 
     fn install(&self, services: &FakeRuntime, stages: &mut Vec<(String, String)>) -> Result<Value> {
+        self.install_choosing(services, stages, None)
+    }
+
+    fn install_choosing(
+        &self,
+        services: &FakeRuntime,
+        stages: &mut Vec<(String, String)>,
+        game_language: Option<&str>,
+    ) -> Result<Value> {
         let request = InstallRequest {
             source: InstallSource::ExtractedDirectory(self.extracted.clone()),
             data_root: None,
@@ -178,6 +187,7 @@ impl Fixture {
                 }),
                 None => InstallTarget::Package,
             },
+            game_language: game_language.map(str::to_string),
         };
         let mut report = |stage: &str, message: &str| stages.push((stage.to_string(), message.to_string()));
         install_private_title(request, services, &mut report, &CancelToken::new())
@@ -206,10 +216,11 @@ impl NativeServices for FakeRuntime {
         Ok(NativeOutput { status: 0, stdout: format!("startup noise\n{product}\n"), stderr: String::new() })
     }
 
-    fn game_language_info(&self, _runtime: &Path, romfs: &Path) -> Result<NativeOutput> {
-        assert!(romfs.is_file());
+    fn game_language_info(&self, _runtime: &Path, query: &LanguageQuery) -> Result<NativeOutput> {
+        assert!(query.romfs.is_file());
         let document = json!({"format": "triaevum_game_language_v1", "selected": "en",
-            "available": [{"code": "en", "label": "English", "system_id": 1}]});
+            "available": [{"code": "en", "label": "English", "system_id": 1},
+                          {"code": "it", "label": "Italiano", "system_id": 4}]});
         Ok(NativeOutput { status: 0, stdout: document.to_string(), stderr: String::new() })
     }
 
@@ -355,6 +366,20 @@ fn a_second_install_reuses_the_title_and_keeps_user_state() {
     assert_eq!(migrated["hud_scale"], 1.0);
     assert_eq!(migrated["hud_margin_x"], 4);
     assert_eq!(migrated["camera_fov_percent"], 120);
+}
+
+#[test]
+fn the_language_chosen_before_installing_is_selected_when_offered() {
+    let fixture = Fixture::new();
+    let runtime = FakeRuntime::default();
+    let selected = || load_json_object(&fixture.data().join("config/game_language.json")).unwrap()["selected"].clone();
+    fixture.install_choosing(&runtime, &mut Vec::new(), Some("it")).unwrap();
+    assert_eq!(selected(), "it");
+    // Not offered: the previous selection stays.
+    fixture.install_choosing(&runtime, &mut Vec::new(), Some("fr")).unwrap();
+    assert_eq!(selected(), "it");
+    fixture.install_choosing(&runtime, &mut Vec::new(), Some("en")).unwrap();
+    assert_eq!(selected(), "en");
 }
 
 #[test]

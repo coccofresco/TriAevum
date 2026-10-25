@@ -3,6 +3,8 @@
 #include "oot3d_game_language.h"
 #include "triaevum_forge_tool.h"
 #include <array>
+#include <charconv>
+#include <cstdint>
 #include <exception>
 #include <fstream>
 #include <iostream>
@@ -174,6 +176,43 @@ NativeGameArguments PrepareNativeGameArguments(int argc, char** argv) {
     return prepared;
 }
 
+struct GameLanguageInfoRequest {
+    const char* RomFs = nullptr;
+    Oot3dNativeGame::TitleAdapter Title = Oot3dNativeGame::TitleAdapter::Oot3dEur;
+    uint64_t Offset = 0;
+    uint64_t Size = 0;
+};
+
+uint64_t ParseRomFsExtent(std::string_view text) {
+    uint64_t value = 0;
+    const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
+    if (text.empty() || error != std::errc{} || end != text.data() + text.size())
+        throw std::runtime_error("Invalid RomFS extent: " + std::string(text));
+    return value;
+}
+
+// --game-language-info ROMFS [CODE_BIN_SHA256] [--romfs-offset N --romfs-size N].
+// Without the hash the RomFS is read as OoT3D's; with the extent, ROMFS is a
+// cartridge image read in place (Forge recognizes a ROM before extracting it).
+GameLanguageInfoRequest ParseGameLanguageInfo(int argc, char** argv) {
+    constexpr const char* kUsage =
+        "Usage: --game-language-info ROMFS [CODE_BIN_SHA256] [--romfs-offset N --romfs-size N]";
+    GameLanguageInfoRequest request{argv[2]};
+    int index = 3;
+    if (index < argc && !std::string_view(argv[index]).starts_with("--"))
+        request.Title = Oot3dNativeGame::ResolveTitleAdapter(argv[index++]);
+    if (index == argc)
+        return request;
+    if (argc - index != 4 || std::string_view(argv[index]) != "--romfs-offset" ||
+        std::string_view(argv[index + 2]) != "--romfs-size")
+        throw std::runtime_error(kUsage);
+    request.Offset = ParseRomFsExtent(argv[index + 1]);
+    request.Size = ParseRomFsExtent(argv[index + 3]);
+    if (!request.Size)
+        throw std::runtime_error(kUsage);
+    return request;
+}
+
 } // namespace
 
 std::optional<int> RunTriAevumToolMode(int argc, char** argv) {
@@ -188,13 +227,10 @@ std::optional<int> RunTriAevumToolMode(int argc, char** argv) {
         return 0;
     }
 #endif
-    // --game-language-info ROMFS [CODE_BIN_SHA256]; without the hash the
-    // RomFS is read as OoT3D's.
-    if ((argc == 3 || argc == 4) && std::string_view(argv[1]) == "--game-language-info") {
-        const auto title = argc == 4 ? Oot3dNativeGame::ResolveTitleAdapter(argv[3])
-                                     : Oot3dNativeGame::TitleAdapter::Oot3dEur;
-        std::cout << Oot3dNativeGame::GameLanguageDocument(
-            Oot3dNativeGame::DetectGameLanguages(argv[2], 0, 0, title)).dump() << '\n';
+    if (argc >= 3 && std::string_view(argv[1]) == "--game-language-info") {
+        const auto request = ParseGameLanguageInfo(argc, argv);
+        std::cout << Oot3dNativeGame::GameLanguageDocument(Oot3dNativeGame::DetectGameLanguages(
+            request.RomFs, request.Offset, request.Size, request.Title)).dump() << '\n';
         return 0;
     }
     if (argc == 2 && std::string_view(argv[1]) == "--product-info") {

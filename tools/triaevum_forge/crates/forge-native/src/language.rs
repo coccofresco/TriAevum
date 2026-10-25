@@ -13,7 +13,7 @@ use forge_base::{ErrorKind, ForgeError, Result};
 use serde_json::{Map, Value};
 
 use crate::pyerr::{json_loads, load_json_object, tail};
-use crate::services::NativeServices;
+use crate::services::{LanguageQuery, NativeServices};
 
 pub const FORMAT: &str = "triaevum_game_language_v1";
 
@@ -67,7 +67,17 @@ pub fn validate(document: &Value) -> Result<Map<String, Value>> {
 /// `discover(runtime, romfs)`: the runtime's `--game-language-info` report
 /// for the execution RomFS.
 pub fn discover(services: &dyn NativeServices, runtime: &Path, romfs: &Path) -> Result<Map<String, Value>> {
-    let output = services.game_language_info(runtime, romfs)?;
+    discover_query(services, runtime, &LanguageQuery::romfs(romfs))
+}
+
+/// Rust addition: [`discover`] for any [`LanguageQuery`], such as the RomFS
+/// extent of a cartridge image recognized before extraction.
+pub fn discover_query(
+    services: &dyn NativeServices,
+    runtime: &Path,
+    query: &LanguageQuery,
+) -> Result<Map<String, Value>> {
+    let output = services.game_language_info(runtime, query)?;
     if output.status != 0 {
         return Err(ForgeError::new(
             ErrorKind::NativePreflight,
@@ -87,19 +97,37 @@ pub fn config_path(data_root: &Path) -> PathBuf {
 /// the previous selection while the new ROM still offers it. A malformed
 /// existing file is an error and stays untouched.
 pub fn install(data_root: &Path, detected: &Value) -> Result<()> {
+    install_preferring(data_root, detected, None)
+}
+
+/// Rust addition: [`install`] honouring the language the user chose before
+/// installing (the recognized-ROM card). Without a preference, or when the
+/// detected languages do not offer it, this is `install`.
+pub fn install_preferring(data_root: &Path, detected: &Value, preferred: Option<&str>) -> Result<()> {
+    atomic_write_json(&config_path(data_root), &Value::Object(merged(data_root, detected, preferred)?))
+}
+
+/// The document [`install_preferring`] writes: the detected languages with
+/// `preferred` selected when offered, else the previous selection while
+/// offered, else the runtime's default. A malformed existing file is an
+/// error, also with a preference.
+pub fn merged(data_root: &Path, detected: &Value, preferred: Option<&str>) -> Result<Map<String, Value>> {
     let mut document = validate(detected)?;
     let path = config_path(data_root);
-    if path.exists() {
-        let previous = validate(&Value::Object(load_json_object(&path)?))?;
-        let selected = previous["selected"].clone();
-        let available = document["available"]
+    let previous = match path.exists() {
+        true => Some(validate(&Value::Object(load_json_object(&path)?))?["selected"].clone()),
+        false => None,
+    };
+    let offered = |code: &Value| {
+        document["available"]
             .as_array()
-            .is_some_and(|entries| entries.iter().any(|entry| entry.get("code") == Some(&selected)));
-        if available {
-            document.insert("selected".to_string(), selected);
-        }
+            .is_some_and(|entries| entries.iter().any(|entry| entry.get("code") == Some(code)))
+    };
+    let preferred = preferred.map(|code| Value::String(code.to_string()));
+    if let Some(selected) = [preferred, previous].into_iter().flatten().find(offered) {
+        document.insert("selected".to_string(), selected);
     }
-    atomic_write_json(&path, &Value::Object(document))
+    Ok(document)
 }
 
 /// `select(data_root, code)`: persists a new selection; an unavailable code

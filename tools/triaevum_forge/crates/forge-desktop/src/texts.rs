@@ -10,8 +10,28 @@ pub const WINDOW_TITLE: &str = "TriAevum Forge \u{2014} Echoes of Time";
 pub const SUBTITLE: &str = "Select your own decrypted Nintendo 3DS cartridge image. Forge accepts .3ds and .cci \
 ROMs, extracts the required native data, and does not handle encryption keys. You can also select a folder \
 containing decompressed code.bin, exheader.bin and romfs.bin.";
-pub const NO_LANGUAGES: &str = "Available after ROM preparation";
 pub const LANGUAGE_SAVED: &str = "Game language saved. Applies on the next full game start.";
+/// Rust additions: the recognized-ROM card.
+pub const NO_LANGUAGES: &str = "Select your ROM: the game languages it offers appear here.";
+pub const GAME_LANGUAGE: &str = "Game language";
+pub const RECOGNIZING: &str = "Recognizing the ROM...";
+pub const ROM_NOT_RECOGNIZED: &str = "ROM not recognized";
+pub const CHOOSE_LANGUAGE: &str = "Choose the game language:";
+pub const LANGUAGE_FOR_INSTALL: &str = "\"Prepare and install\" sets up the game in this language. You can change it \
+later here or in game.";
+pub const LANGUAGE_INSTALLED: &str = "Changes apply on the next full game start.";
+
+pub fn rom_recognized(label: &str) -> String {
+    format!("ROM recognized: {label}")
+}
+
+pub fn languages_unreadable(error: &str) -> String {
+    format!("The game languages are read during the installation. {error}")
+}
+
+pub fn language_chosen(label: &str) -> String {
+    format!("Game language for this installation: {label}.")
+}
 pub const CHECKING_INSTALLATION: &str = "Checking the local installation...";
 pub const NO_ACTIVE_TITLE: &str = "No active title is installed. Select a decrypted ROM.";
 pub const STARTING: &str = "Starting title preparation...";

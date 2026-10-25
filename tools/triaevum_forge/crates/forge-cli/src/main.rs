@@ -56,6 +56,10 @@ struct InstallArgs {
     /// The package (default: this executable's folder).
     #[arg(long)]
     package_root: Option<PathBuf>,
+    /// The game language to select when the ROM offers it (default: the
+    /// current selection, else the runtime's default).
+    #[arg(long)]
+    game_language: Option<String>,
 }
 
 /// `install_worker.main`'s arguments (`--package-root` is a Rust addition).
@@ -114,7 +118,13 @@ fn install(args: InstallArgs) -> ExitCode {
         Ok(root) => root,
         Err(message) => return print_error(&message),
     };
-    let request = InstallRequest { source, data_root: args.data_root, package_root, target: InstallTarget::Package };
+    let request = InstallRequest {
+        source,
+        data_root: args.data_root,
+        package_root,
+        target: InstallTarget::Package,
+        game_language: args.game_language,
+    };
     let mut report = |stage: &str, message: &str| eprintln!("[{stage}] {message}");
     match install_private_title(request, &DesktopServices, &mut report, &CancelToken::new()) {
         Ok(result) => print_result(&result),
@@ -143,6 +153,7 @@ fn install_worker(args: WorkerArgs) -> ExitCode {
             data_root: Some(args.data_root),
             package_root,
             target: InstallTarget::Package,
+            game_language: None,
         };
         let mut report = |stage: &str, message: &str| emit("stage", json!([stage, message]));
         install_private_title(request, &DesktopServices, &mut report, &CancelToken::new())

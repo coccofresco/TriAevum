@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use forge_base::hashing::{copy_hashing, sha256_bytes};
 use forge_base::{CancelToken, ErrorKind, ForgeError, Result};
 
-use crate::layout::{find_title_layout, read_exact};
+use crate::layout::{find_title_layout, read_exact, TitleLayout};
 use crate::paths::{expand_user, resolve};
 use crate::{decompress_exefs_code, rom_error, ExtractedFile, ExtractedTitleInputs, EXHEADER_SIZE};
 
@@ -90,6 +90,22 @@ fn checked_output_directory(output_directory: &Path) -> Result<CreatedDirectory>
     CreatedDirectory::create(output_directory)
 }
 
+/// The ExHeader and the decompressed `.code` of a located title, exactly as
+/// extraction writes them; ROM recognition reads them in place.
+pub fn read_title_executable<R: Read + Seek>(
+    stream: &mut R,
+    layout: &TitleLayout,
+    cancel: &CancelToken,
+) -> Result<(Vec<u8>, Vec<u8>)> {
+    let exheader = read_exact(stream, layout.exheader_offset, EXHEADER_SIZE, "ExHeader", cancel)?;
+    let mut code = read_exact(stream, layout.code_offset, layout.code_size, "ExeFS .code", cancel)?;
+    if layout.compressed_code {
+        code = decompress_exefs_code(&code, cancel)?;
+    }
+    cancel.check()?;
+    Ok((exheader, code))
+}
+
 fn extract_into<R: Read + Seek>(
     stream: &mut R,
     file_size: u64,
@@ -97,12 +113,7 @@ fn extract_into<R: Read + Seek>(
     cancel: &CancelToken,
 ) -> Result<ExtractedTitleInputs> {
     let layout = find_title_layout(stream, file_size, cancel)?;
-    let exheader_bytes = read_exact(stream, layout.exheader_offset, EXHEADER_SIZE, "ExHeader", cancel)?;
-    let mut code_bytes = read_exact(stream, layout.code_offset, layout.code_size, "ExeFS .code", cancel)?;
-    if layout.compressed_code {
-        code_bytes = decompress_exefs_code(&code_bytes, cancel)?;
-    }
-    cancel.check()?;
+    let (exheader_bytes, code_bytes) = read_title_executable(stream, &layout, cancel)?;
     let exheader = write_bytes(output.join("exheader.bin"), &exheader_bytes)?;
     let code = write_bytes(output.join("code.bin"), &code_bytes)?;
     drop(code_bytes);

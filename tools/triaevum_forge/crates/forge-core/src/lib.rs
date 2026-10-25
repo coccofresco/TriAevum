@@ -14,6 +14,7 @@ pub mod jobs;
 pub mod layout;
 pub mod lock;
 pub mod publish;
+pub mod recognize;
 pub mod transaction;
 
 pub use forge_base::{cancel, error, fsutil, hashing, legacy_json};
