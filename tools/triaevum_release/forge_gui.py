@@ -322,8 +322,11 @@ def _hide_explorer_console() -> None:
 
 
 class ForgeWindow:
-    def __init__(self, root: Any, tk: Any, ttk: Any, filedialog: Any, messagebox: Any):
+    def __init__(self, root: Any, tk: Any, ttk: Any, filedialog: Any, messagebox: Any,
+                 *, work_area: tuple[int, int] | None = None):
         self.root = root
+        self.work_area = work_area
+        self._scrollbar_shown = False
         self.tk = tk
         self.ttk = ttk
         self.filedialog = filedialog
@@ -383,19 +386,73 @@ class ForgeWindow:
         self.root.after_idle(self._fit_to_content)
         self.root.after(100, self._poll_events)
 
+    def _work_area(self) -> tuple[int, int]:
+        # Tk reports the whole screen: leave room for panels and the title bar.
+        if self.work_area is not None:
+            return self.work_area
+        return (max(320, self.root.winfo_screenwidth() - 40),
+                max(240, self.root.winfo_screenheight() - 96))
+
     def _fit_to_content(self) -> None:
         # Native Tk themes/font metrics and wrapped status text vary by host.
-        # Never place the primary actions below a fixed Windows-sized window.
+        # Show everything the screen allows; the options scroll above the
+        # status and primary actions, which always stay visible (issue #111).
         self.root.update_idletasks()
-        width = max(760, self.root.winfo_reqwidth())
-        height = max(390, self.root.winfo_reqheight())
-        self.root.minsize(width, height)
+        limit_width, limit_height = self._work_area()
+        footer_height = self.footer.winfo_reqheight()
+        width = min(max(760, self.content.winfo_reqwidth() + self.scrollbar.winfo_reqwidth()),
+                    limit_width)
+        height = min(max(390, self.content.winfo_reqheight() + footer_height), limit_height)
+        self.root.minsize(width, min(height, footer_height + 160))
         if self.root.winfo_width() < width or self.root.winfo_height() < height:
             self.root.geometry(f"{max(width, self.root.winfo_width())}x{max(height, self.root.winfo_height())}")
 
+    def _update_scroll_region(self) -> None:
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        overflow = self.content.winfo_reqheight() > self.canvas.winfo_height()
+        if overflow and not self._scrollbar_shown:
+            self.scrollbar.pack(side="right", fill="y", before=self.canvas)
+        elif not overflow and self._scrollbar_shown:
+            self.scrollbar.pack_forget()
+            self.canvas.yview_moveto(0)
+        self._scrollbar_shown = overflow
+
+    def _scroll(self, units: int) -> None:
+        if self._scrollbar_shown:
+            self.canvas.yview_scroll(units, "units")
+
+    def _build_scroll_area(self) -> Any:
+        # The status, progress and primary actions sit below the options, so a
+        # small screen never hides "Prepare and install".
+        self.footer = self.ttk.Frame(self.root, padding=(20, 0, 20, 20))
+        self.footer.pack(side="bottom", fill="x")
+        self.footer.columnconfigure(0, weight=1)
+        body = self.ttk.Frame(self.root)
+        body.pack(side="top", fill="both", expand=True)
+        self.canvas = self.tk.Canvas(body, highlightthickness=0, borderwidth=0)
+        background = self.ttk.Style(self.root).lookup("TFrame", "background")
+        if background:
+            self.canvas.configure(background=background)
+        self.scrollbar = self.ttk.Scrollbar(body, orient="vertical", command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.content = self.ttk.Frame(self.canvas, padding=(20, 20, 20, 0))
+        content_window = self.canvas.create_window((0, 0), window=self.content, anchor="nw")
+
+        def resize(event: Any) -> None:
+            self.canvas.itemconfigure(content_window, width=event.width)
+            self._update_scroll_region()
+
+        self.content.bind("<Configure>", lambda _event: self._update_scroll_region())
+        self.canvas.bind("<Configure>", resize)
+        # Windows and macOS report wheel deltas; X11 reports buttons 4 and 5.
+        self.root.bind_all("<MouseWheel>", lambda event: self._scroll(-1 if event.delta > 0 else 1), add="+")
+        self.root.bind_all("<Button-4>", lambda _event: self._scroll(-1), add="+")
+        self.root.bind_all("<Button-5>", lambda _event: self._scroll(1), add="+")
+        return self.content
+
     def _build_layout(self) -> None:
-        outer = self.ttk.Frame(self.root, padding=20)
-        outer.pack(fill="both", expand=True)
+        outer = self._build_scroll_area()
         outer.columnconfigure(1, weight=1)
 
         title = self.ttk.Label(
@@ -444,18 +501,18 @@ class ForgeWindow:
         self.language_combo.bind("<<ComboboxSelected>>", self._select_language)
         self._build_hd_section(outer, 6)
         self._build_mods_section(outer, 7)
-        separator = self.ttk.Separator(outer)
-        separator.grid(row=8, column=0, columnspan=3, sticky="ew", pady=(18, 14))
+        separator = self.ttk.Separator(self.footer)
+        separator.grid(row=0, column=0, sticky="ew", pady=(18, 14))
 
         self.status_label = self.ttk.Label(
-            outer, textvariable=self.status, wraplength=700, justify="left"
+            self.footer, textvariable=self.status, wraplength=700, justify="left"
         )
-        self.status_label.grid(row=9, column=0, columnspan=3, sticky="ew")
-        self.progress = self.ttk.Progressbar(outer, mode="indeterminate")
-        self.progress.grid(row=10, column=0, columnspan=3, sticky="ew", pady=(10, 18))
+        self.status_label.grid(row=1, column=0, sticky="ew")
+        self.progress = self.ttk.Progressbar(self.footer, mode="indeterminate")
+        self.progress.grid(row=2, column=0, sticky="ew", pady=(10, 18))
 
-        actions = self.ttk.Frame(outer)
-        actions.grid(row=11, column=0, columnspan=3, sticky="ew")
+        actions = self.ttk.Frame(self.footer)
+        actions.grid(row=3, column=0, sticky="ew")
         actions.columnconfigure(0, weight=1)
         self.install_button = self.ttk.Button(
             actions, text="Prepare and install", command=self._install

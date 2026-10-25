@@ -12,6 +12,7 @@ def main(arguments):
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--rom", type=Path, help="Actually install this private ROM through the GUI worker")
     parser.add_argument("--timeout", type=float, default=180)
+    parser.add_argument("--work-area", help="Fit the window to WIDTHxHEIGHT instead of the screen")
     args = parser.parse_args(arguments)
     import tkinter as tk
     from tkinter import ttk, filedialog, messagebox
@@ -34,7 +35,9 @@ def main(arguments):
             return True
 
     root = tk.Tk()
-    window = ForgeWindow(root, tk, ttk, filedialog, ProbeDialogs if args.rom else messagebox)
+    work_area = tuple(int(value) for value in args.work_area.split("x")) if args.work_area else None
+    window = ForgeWindow(root, tk, ttk, filedialog, ProbeDialogs if args.rom else messagebox,
+                         work_area=work_area)
     present_window(root)
     result = {}
     started = time.monotonic()
@@ -62,16 +65,23 @@ def main(arguments):
                           widget.winfo_rooty() - root.winfo_rooty(),
                           widget.winfo_width(), widget.winfo_height()]
                 widgets.append({"class": widget.winfo_class(), "bounds": bounds,
-                                "mapped": bool(widget.winfo_ismapped())})
-            clipped = [item for item in widgets if item["bounds"][0] < 0 or item["bounds"][1] < 0 or
+                                "mapped": bool(widget.winfo_ismapped()),
+                                "scrolled": str(widget).startswith(str(window.content) + ".")})
+            # Options may scroll out of view vertically, never horizontally.
+            clipped = [item for item in widgets if item["bounds"][0] < 0 or
                        item["bounds"][0] + item["bounds"][2] > root.winfo_width() or
-                       item["bounds"][1] + item["bounds"][3] > root.winfo_height()]
+                       (not item["scrolled"] and
+                        (item["bounds"][1] < 0 or
+                         item["bounds"][1] + item["bounds"][3] > root.winfo_height()))]
+            fits = work_area is None or (root.winfo_width() <= work_area[0] and
+                                         root.winfo_height() <= work_area[1])
             unmapped = [item for item in widgets if not item["mapped"]]
             window.rom.set("probe.cci")
             enabled = str(window.install_button.cget("state")) == "normal"
             window.rom.set("")
             disabled = str(window.install_button.cget("state")) == "disabled"
-            result.update(status="passed" if widgets and not clipped and not unmapped and enabled and disabled else "failed",
+            result.update(status="passed" if widgets and not clipped and not unmapped and enabled and disabled and fits else "failed",
+                          fits_work_area=fits,
                           frozen=bool(getattr(sys, "frozen", False)), platform=sys.platform,
                           size=[root.winfo_width(), root.winfo_height()],
                           window_state=root.state(),
