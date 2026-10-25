@@ -722,10 +722,10 @@ int main() {
                 plan.IndexBytes == std::vector<uint8_t>({2U, 5U, 3U}) &&
                 plan.VertexBindings.size() == 2U &&
                 plan.VertexBindings[0].ByteStride == 12U &&
-                plan.VertexBindings[0].Bytes.size() == 48U &&
+                plan.VertexBindings[0].ResolvedBytes().size() == 48U &&
                 plan.VertexBindings[1].InputRate ==
                     Oot3dNativeGame::Oot3dPicaVertexInputRate::PerInstance &&
-                plan.VertexBindings[1].Bytes.size() == 32U &&
+                plan.VertexBindings[1].ResolvedBytes().size() == 32U &&
                 plan.VertexAttributes.size() == 16U &&
                 plan.VertexAttributes[0].Binding == 0U &&
                 plan.VertexAttributes[0].ComponentCount == 3U &&
@@ -858,7 +858,7 @@ int main() {
             error);
     Require(consumingPlan.IndexBytes ==
                 std::vector<uint8_t>({2U, 5U, 3U}) &&
-                consumingPlan.VertexBindings[0].Bytes.size() == 48U &&
+                consumingPlan.VertexBindings[0].ResolvedBytes().size() == 48U &&
                 consumingPlan.Textures.size() == 1U &&
                 consumingPlan.Textures[0].NativeBytes ==
                     expectedTextureBytes &&

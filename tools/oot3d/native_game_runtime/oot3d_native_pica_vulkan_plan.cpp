@@ -1,12 +1,14 @@
 #include "oot3d_native_pica_vulkan_plan.h"
 #include "oot3d_cpu_phase_probe.h"
 
+#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <optional>
+#include <span>
 #include <utility>
 
 namespace Oot3dNativeGame {
@@ -46,12 +48,26 @@ auto FindResource(Submission& submission, Oot3dPicaResourceKind kind,
     return nullptr;
 }
 
-void AppendFloat4(std::vector<uint8_t>& bytes,
-                  const std::array<float, 4>& value) {
-    const size_t offset = bytes.size();
-    bytes.resize(offset + sizeof(value));
-    std::memcpy(bytes.data() + offset, value.data(), sizeof(value));
-}
+// The fixed binding's bytes: the (0,0,0,1) slot plus one float4 per default
+// attribute, built on the stack.
+struct FixedBindingScratch {
+    std::array<uint8_t, 16U * sizeof(std::array<float, 4>)> Bytes{};
+    size_t Size = 0;
+
+    bool Append(const std::array<float, 4>& value) {
+        if (Size + sizeof(value) > Bytes.size()) {
+            return false;
+        }
+        std::memcpy(Bytes.data() + Size, value.data(), sizeof(value));
+        Size += sizeof(value);
+        return true;
+    }
+    std::span<const uint8_t> View() const { return {Bytes.data(), Size}; }
+};
+
+// Shared fixed bindings beyond this are dropped at once: distinct defaults
+// are few.
+constexpr size_t kMaxFixedBindingBytes = 1024U;
 
 constexpr uint64_t kGeometryFnvOffset = 1469598103934665603ULL;
 constexpr uint64_t kGeometryFnvPrime = 1099511628211ULL;
@@ -160,7 +176,13 @@ bool BuildOot3dPicaVulkanDrawPlanImpl(
     plan = {};
     plan.VertexBindings.reserve(16U);
     plan.VertexAttributes.reserve(16U);
-    plan.Textures.reserve(submission.State.Textures.size());
+    // Only the enabled units: a draw without textures allocates nothing here.
+    const size_t enabledTextures = static_cast<size_t>(std::ranges::count_if(
+        submission.State.Textures,
+        [](const auto& texture) { return texture.Enabled; }));
+    if (enabledTextures != 0U) {
+        plan.Textures.reserve(enabledTextures);
+    }
     uint64_t vertexShaderKey = 0;
     uint64_t canonicalVertexProgramId = 0;
     if (shaderCache != nullptr) {
@@ -479,10 +501,8 @@ bool BuildOot3dPicaVulkanDrawPlanImpl(
     Oot3dPicaVulkanVertexBinding fixedBinding;
     fixedBinding.Binding = static_cast<uint8_t>(plan.VertexBindings.size());
     fixedBinding.InputRate = Oot3dPicaVertexInputRate::PerInstance;
-    fixedBinding.Bytes.reserve(
-        (static_cast<size_t>(vertex.AttributeCount) + 1U) *
-        sizeof(std::array<float, 4>));
-    AppendFloat4(fixedBinding.Bytes, {0.0F, 0.0F, 0.0F, 1.0F});
+    FixedBindingScratch fixedBytes;
+    fixedBytes.Append({0.0F, 0.0F, 0.0F, 1.0F});
     for (size_t attributeIndex = 0;
          attributeIndex < vertex.AttributeCount; ++attributeIndex) {
         if (!vertex.Attributes[attributeIndex].Default) {
@@ -497,19 +517,43 @@ bool BuildOot3dPicaVulkanDrawPlanImpl(
         if (attributesByLocation[location].has_value()) {
             continue;
         }
-        const size_t byteOffset = fixedBinding.Bytes.size();
-        AppendFloat4(fixedBinding.Bytes,
-                     submission.Packet.DefaultAttributes[attributeIndex]);
+        const size_t byteOffset = fixedBytes.Size;
+        if (!fixedBytes.Append(
+                submission.Packet.DefaultAttributes[attributeIndex])) {
+            SetError(error,
+                     "native PICA default attributes exceed the fixed binding");
+            return false;
+        }
         attributesByLocation[location] =
             Oot3dPicaVulkanVertexAttribute{
                 location, fixedBinding.Binding,
                 Oot3dPicaVertexFormat::Float, 4U,
                 static_cast<uint16_t>(byteOffset)};
     }
-    fixedBinding.ByteStride =
-        static_cast<uint16_t>(fixedBinding.Bytes.size());
-    fixedBinding.ContentVersion = HashGeometryBytes(fixedBinding.Bytes);
+    fixedBinding.ByteStride = static_cast<uint16_t>(fixedBytes.Size);
+    fixedBinding.ContentVersion = HashGeometryBytes(fixedBytes.View());
     fixedBinding.ContentVersionAvailable = true;
+    if (shaderCache != nullptr) {
+        auto& shared = shaderCache->FixedBindingBytes;
+        auto found = shared.find(fixedBinding.ContentVersion);
+        // Equal bytes only: a hash collision gets its own copy.
+        if (found != shared.end() &&
+            std::ranges::equal(*found->second, fixedBytes.View())) {
+            fixedBinding.SharedBytes = found->second;
+        } else {
+            if (shared.size() >= kMaxFixedBindingBytes) {
+                shared.clear();
+            }
+            fixedBinding.SharedBytes =
+                std::make_shared<const std::vector<uint8_t>>(
+                    fixedBytes.View().begin(), fixedBytes.View().end());
+            shared.insert_or_assign(fixedBinding.ContentVersion,
+                                    fixedBinding.SharedBytes);
+        }
+    } else {
+        fixedBinding.Bytes.assign(fixedBytes.View().begin(),
+                                  fixedBytes.View().end());
+    }
     for (size_t location = 0; location < attributesByLocation.size();
          ++location) {
         if (!attributesByLocation[location].has_value()) {
