@@ -205,7 +205,7 @@ NativeVisualSampleCadence::NativeVisualSampleCadence(
 
 void NativeVisualSampleCadence::Configure(
     uint8_t fixedSampleMultiplier) noexcept {
-    if (fixedSampleMultiplier != 2U && fixedSampleMultiplier != 3U) {
+    if (fixedSampleMultiplier < 2U || fixedSampleMultiplier > 12U) {
         fixedSampleMultiplier = 0U;
     }
     if (mFixedSampleMultiplier == fixedSampleMultiplier) {

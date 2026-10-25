@@ -10,6 +10,10 @@ enum class PicaVisualInterpolationMode : uint8_t {
     Disabled,
     Fixed2x,
     Fixed3x,
+    Fixed4x,
+    Fixed6x,
+    Fixed8x,
+    Fixed12x,
     Adaptive,
 };
 
@@ -28,6 +32,14 @@ enum class PicaFrameTemporalSampleKind : uint8_t {
             return "fixed_2x";
         case PicaVisualInterpolationMode::Fixed3x:
             return "fixed_3x";
+        case PicaVisualInterpolationMode::Fixed4x:
+            return "fixed_4x";
+        case PicaVisualInterpolationMode::Fixed6x:
+            return "fixed_6x";
+        case PicaVisualInterpolationMode::Fixed8x:
+            return "fixed_8x";
+        case PicaVisualInterpolationMode::Fixed12x:
+            return "fixed_12x";
         case PicaVisualInterpolationMode::Adaptive:
             return "adaptive";
     }
@@ -48,7 +60,11 @@ struct PicaFrameCompositionPolicy {
 
     [[nodiscard]] constexpr bool FixedMultiplier() const noexcept {
         return Interpolation == PicaVisualInterpolationMode::Fixed2x ||
-               Interpolation == PicaVisualInterpolationMode::Fixed3x;
+               Interpolation == PicaVisualInterpolationMode::Fixed3x ||
+               Interpolation == PicaVisualInterpolationMode::Fixed4x ||
+               Interpolation == PicaVisualInterpolationMode::Fixed6x ||
+               Interpolation == PicaVisualInterpolationMode::Fixed8x ||
+               Interpolation == PicaVisualInterpolationMode::Fixed12x;
     }
 };
 
@@ -90,6 +106,22 @@ struct PicaFrameTemporalSample {
         }
         if (Interpolation == PicaVisualInterpolationMode::Fixed3x &&
             FixedSampleMultiplier != 3U) {
+            return false;
+        }
+        if (Interpolation == PicaVisualInterpolationMode::Fixed4x &&
+            FixedSampleMultiplier != 4U) {
+            return false;
+        }
+        if (Interpolation == PicaVisualInterpolationMode::Fixed6x &&
+            FixedSampleMultiplier != 6U) {
+            return false;
+        }
+        if (Interpolation == PicaVisualInterpolationMode::Fixed8x &&
+            FixedSampleMultiplier != 8U) {
+            return false;
+        }
+        if (Interpolation == PicaVisualInterpolationMode::Fixed12x &&
+            FixedSampleMultiplier != 12U) {
             return false;
         }
         if (Interpolation == PicaVisualInterpolationMode::Disabled &&

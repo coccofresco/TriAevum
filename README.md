@@ -136,7 +136,7 @@ the Windows application, or the Linux folders above.
   expensive ones at half resolution so 4K no longer requires an upscaler.
 - Real widescreen framing, selectable aspect ratios (16:9, 21:9, original 5:3)
   and configurable field of view.
-- **60/90 FPS visual interpolation** of the original 30 Hz game state.
+- **60/90/120/180/240/360 FPS visual interpolation** of the original 30 Hz game state.
   Game logic and gameplay speed remain unchanged; this is not 60/90 Hz physics.
   Input is sampled late, so Link jumps when you press the button, not shortly
   after.
