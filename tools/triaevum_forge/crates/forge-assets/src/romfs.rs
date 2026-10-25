@@ -242,7 +242,10 @@ pub fn image_files(
     let truncated = || invalid("RomFS metadata is truncated");
     let base = level3_base(&mut stream).map_err(|error| io_error(image, error))?;
     let read_at = |stream: &mut BufReader<File>, offset: u64, limit: u64| -> Result<Vec<u8>> {
-        stream.seek(SeekFrom::Start(offset)).and_then(|_| read_up_to(stream, limit)).map_err(|error| io_error(image, error))
+        stream
+            .seek(SeekFrom::Start(offset))
+            .and_then(|_| read_up_to(stream, limit))
+            .map_err(|error| io_error(image, error))
     };
     let header = read_at(&mut stream, base, 0x28)?;
     if header.len() < 0x28 {
@@ -263,7 +266,12 @@ pub fn image_files(
         }
         let name_size = u32_at(&directory_table, start + 20) as usize;
         let name = slice(&directory_table, start + 24, name_size);
-        Ok((u32_at(&directory_table, start + 4), u32_at(&directory_table, start + 8), u32_at(&directory_table, start + 12), utf16_name(name)?))
+        Ok((
+            u32_at(&directory_table, start + 4),
+            u32_at(&directory_table, start + 8),
+            u32_at(&directory_table, start + 12),
+            utf16_name(name)?,
+        ))
     };
     let (_, mut child, _, _) = directory(0)?;
     let mut seen = HashSet::new();
@@ -351,7 +359,8 @@ mod tests {
             let first_file = if files.is_empty() { INVALID_OFFSET } else { file_table.len() as u32 };
             for (position, (file_name, data)) in files.iter().enumerate() {
                 let entry_size = 32 + name(file_name).len();
-                let next = if position + 1 < files.len() { (file_table.len() + entry_size) as u32 } else { INVALID_OFFSET };
+                let next =
+                    if position + 1 < files.len() { (file_table.len() + entry_size) as u32 } else { INVALID_OFFSET };
                 file_table.extend(le(&[*offset, next]));
                 file_table.extend((file_data.len() as u64).to_le_bytes());
                 file_table.extend((data.len() as u64).to_le_bytes());
@@ -396,7 +405,10 @@ mod tests {
                 Ok(())
             })
             .unwrap();
-            assert_eq!(seen, vec![("scene/a.zsi".to_string(), b"one".to_vec()), ("scene/b.zsi".to_string(), b"two".to_vec())]);
+            assert_eq!(
+                seen,
+                vec![("scene/a.zsi".to_string(), b"one".to_vec()), ("scene/b.zsi".to_string(), b"two".to_vec())]
+            );
         }
         assert!(read_level3_file(&directory.path().join("absent.bin"), "a/b").unwrap().is_none());
         let short = directory.path().join("short.bin");

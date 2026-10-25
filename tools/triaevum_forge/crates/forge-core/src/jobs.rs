@@ -24,7 +24,7 @@ pub fn capabilities() -> Value {
         "target": target_triple(),
         "input_formats": ["3ds", "cci", "extracted_directory"],
         "encrypted_input": false,
-        "jobs": ["spool_copy"],
+        "jobs": ["spool_copy", "rom_identify"],
     })
 }
 
@@ -54,6 +54,10 @@ pub fn start(request: &[u8]) -> Result<Job> {
         Some("spool_copy") => {
             let job = SpoolCopy::parse(&request)?;
             Ok(Job::spawn(move |sink, cancel| job.run(sink, cancel)))
+        }
+        Some("rom_identify") => {
+            let source = Source::parse(request.get("source"))?;
+            Ok(Job::spawn(move |sink, cancel| rom_identify(source, sink, cancel)))
         }
         Some(other) => Err(ForgeError::invalid(format!("Unknown Forge job: {other}"))),
         None => Err(ForgeError::invalid("Forge request has no job")),
@@ -128,13 +132,8 @@ impl SpoolCopy {
 
     fn run(self, sink: &EventSink, cancel: &CancelToken) -> Result<Value> {
         sink.stage("spool", "Copying the selected file");
-        let mut reader = ProgressReader {
-            inner: self.source.open()?,
-            sink,
-            done: 0,
-            reported: 0,
-            total: self.declared_bytes,
-        };
+        let mut reader =
+            ProgressReader { inner: self.source.open()?, sink, done: 0, reported: 0, total: self.declared_bytes };
         let temporary = temporary_sibling(&self.destination)?;
         let outcome = (|| {
             let file = File::create(&temporary)
@@ -143,10 +142,7 @@ impl SpoolCopy {
             // One byte past the limit detects an oversized source.
             let (bytes, digest) = copy_hashing(&mut reader, &mut writer, self.max_bytes + 1, cancel)?;
             if bytes > self.max_bytes {
-                return Err(ForgeError::invalid(format!(
-                    "The selected file is larger than {} bytes",
-                    self.max_bytes
-                )));
+                return Err(ForgeError::invalid(format!("The selected file is larger than {} bytes", self.max_bytes)));
             }
             let file = writer.into_inner().map_err(|error| ForgeError::io("Write failed", error.into_error()))?;
             file.sync_all().map_err(|error| ForgeError::io("Cannot flush the copy", error))?;
@@ -162,11 +158,27 @@ impl SpoolCopy {
     }
 }
 
+/// Reads the cartridge layout in place (no copy): program ID, container and
+/// the extents Forge would extract. The source must be seekable.
+fn rom_identify(source: Source, sink: &EventSink, cancel: &CancelToken) -> Result<Value> {
+    sink.stage("identify", "Reading the cartridge layout");
+    let mut file = source.open()?;
+    let size = file.metadata().map_err(|error| ForgeError::io("Cannot inspect the selected file", error))?.len();
+    let layout = forge_rom::find_title_layout(&mut file, size, cancel)?;
+    Ok(json!({
+        "container": layout.container_kind.as_str(),
+        "partition": layout.partition_index,
+        "program_id": format!("{:016X}", layout.program_id),
+        "compressed_code": layout.compressed_code,
+        "code_size": layout.code_size,
+        "romfs_size": layout.romfs_size,
+        "file_size": size,
+    }))
+}
+
 fn temporary_sibling(destination: &Path) -> Result<PathBuf> {
-    let name = destination
-        .file_name()
-        .ok_or_else(|| ForgeError::invalid("Destination has no file name"))?
-        .to_string_lossy();
+    let name =
+        destination.file_name().ok_or_else(|| ForgeError::invalid("Destination has no file name"))?.to_string_lossy();
     Ok(destination.with_file_name(format!(".{name}.{}.partial", std::process::id())))
 }
 

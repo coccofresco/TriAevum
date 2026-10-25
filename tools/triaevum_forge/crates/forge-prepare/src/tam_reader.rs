@@ -246,7 +246,8 @@ mod tests {
         bytes[20..24].copy_from_slice(&(count as u32).to_le_bytes());
         bytes[24..32].copy_from_slice(&(total as u64).to_le_bytes());
         bytes[32..40].copy_from_slice(&64u64.to_le_bytes());
-        let mut sections = vec![(1u32, REQUIRED, metadata_offset, metadata), (2, REQUIRED | EXECUTABLE, native_offset, native)];
+        let mut sections =
+            vec![(1u32, REQUIRED, metadata_offset, metadata), (2, REQUIRED | EXECUTABLE, native_offset, native)];
         if with_title_aot {
             sections.push((3, REQUIRED | EXECUTABLE, title_offset, title));
         }

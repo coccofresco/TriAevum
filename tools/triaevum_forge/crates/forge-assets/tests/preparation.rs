@@ -61,15 +61,25 @@ fn package() -> Package {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path().join("package");
     let shipped = repository().join("runtime/triaevum_resources/topscreen");
-    for (folder, name) in [("singlescreen-3.0", topscreen::UI_ATLAS), ("singlescreen-3.0", topscreen::LINK_ANIMATIONS), ("singlescreen-3.1", topscreen::HD_FONT)] {
+    for (folder, name) in [
+        ("singlescreen-3.0", topscreen::UI_ATLAS),
+        ("singlescreen-3.0", topscreen::LINK_ANIMATIONS),
+        ("singlescreen-3.1", topscreen::HD_FONT),
+    ] {
         let target = root.join("resources/topscreen").join(folder).join(name);
         std::fs::create_dir_all(target.parent().unwrap()).unwrap();
         std::fs::copy(shipped.join(folder).join(name), target).unwrap();
     }
     // A native font the shipped HD font covers: its first characters.
-    let hd = qbf::parse_qbf(&std::fs::read(shipped.join("singlescreen-3.1").join(topscreen::HD_FONT)).unwrap()).unwrap();
-    let characters: Vec<(u16, u16, [u8; 4])> =
-        hd.characters.iter().take(40).enumerate().map(|(index, c)| (c.code, index as u16, [index as u8, 0, 0, 0])).collect();
+    let hd =
+        qbf::parse_qbf(&std::fs::read(shipped.join("singlescreen-3.1").join(topscreen::HD_FONT)).unwrap()).unwrap();
+    let characters: Vec<(u16, u16, [u8; 4])> = hd
+        .characters
+        .iter()
+        .take(40)
+        .enumerate()
+        .map(|(index, c)| (c.code, index as u16, [index as u8, 0, 0, 0]))
+        .collect();
     let romfs = directory.path().join("romfs.bin");
     std::fs::write(&romfs, romfs_image(&[("message/eu/ltn16.qbf", &font_bytes(16, &characters))])).unwrap();
     Package { data: directory.path().join("data"), root, romfs, _directory: directory }
@@ -160,7 +170,10 @@ fn topscreen_font_failure_is_not_cached_and_package_damage_is_fatal() {
     let error = prepare(&package, &package.romfs, None, &mut Vec::new()).unwrap_err();
     assert!(error.message.contains("package is incomplete or modified"));
     std::fs::remove_file(&atlas).unwrap();
-    assert!(prepare(&package, &package.romfs, None, &mut Vec::new()).unwrap_err().message.contains(topscreen::UI_ATLAS));
+    assert!(prepare(&package, &package.romfs, None, &mut Vec::new())
+        .unwrap_err()
+        .message
+        .contains(topscreen::UI_ATLAS));
 }
 
 fn collect(directory: &Path, out: &mut Vec<PathBuf>) {
@@ -193,13 +206,17 @@ fn catalogs_are_reused_while_their_receipts_match() {
     assert_eq!(std::fs::read(&catalog).unwrap(), b"triaevum-water-textures 1\n");
     assert!(water::prepare_water_textures(&data, &json!({}), &romfs, &mut count, &cancel).unwrap().is_none());
 
-    let lights = scene_lights::prepare_scene_lights(&data, &recipe, &romfs, None, &mut count, &cancel).unwrap().unwrap();
+    let lights =
+        scene_lights::prepare_scene_lights(&data, &recipe, &romfs, None, &mut count, &cancel).unwrap().unwrap();
     assert_eq!(std::fs::read(&lights).unwrap(), br#"{"schema":"triaevum.scene-lights","version":1,"rooms":[]}"#);
     scene_lights::prepare_scene_lights(&data, &recipe, &romfs, None, &mut count, &cancel).unwrap();
     assert_eq!(reports.get(), 3);
-    let receipt: Value = serde_json::from_slice(&std::fs::read(lights.with_file_name("receipt.json")).unwrap()).unwrap();
+    let receipt: Value =
+        serde_json::from_slice(&std::fs::read(lights.with_file_name("receipt.json")).unwrap()).unwrap();
     assert_eq!(receipt["source"]["generator_revision"], scene_lights::GENERATOR_REVISION);
-    assert!(scene_lights::prepare_scene_lights(&data, &json!({}), &romfs, None, &mut count, &cancel).unwrap().is_none());
+    assert!(scene_lights::prepare_scene_lights(&data, &json!({}), &romfs, None, &mut count, &cancel)
+        .unwrap()
+        .is_none());
 }
 
 /// A runtime double that writes a valid empty RSSH shell and its result.
@@ -212,7 +229,12 @@ struct FakeRuntime {
 
 impl FakeRuntime {
     fn new() -> Self {
-        Self { sha256: RefCell::new("1".repeat(64)), calls: RefCell::new(Vec::new()), status: 0, mutate: Box::new(|_| {}) }
+        Self {
+            sha256: RefCell::new("1".repeat(64)),
+            calls: RefCell::new(Vec::new()),
+            status: 0,
+            mutate: Box::new(|_| {}),
+        }
     }
 }
 
@@ -246,7 +268,12 @@ impl InteriorSunService for FakeRuntime {
     }
 }
 
-fn sun(runtime: &FakeRuntime, root: &Path, identity: &str, table: Option<&Path>) -> Result<serde_json::Map<String, Value>> {
+fn sun(
+    runtime: &FakeRuntime,
+    root: &Path,
+    identity: &str,
+    table: Option<&Path>,
+) -> Result<serde_json::Map<String, Value>> {
     prepare_interior_sun(
         runtime,
         &root.join("data"),

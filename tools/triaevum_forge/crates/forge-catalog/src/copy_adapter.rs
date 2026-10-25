@@ -151,7 +151,8 @@ pub fn normalize_file(source: &Path, destination: &Path, program: &Value) -> Res
     if resolve(source) == resolve(destination) || destination.exists() {
         return Err(ForgeError::invalid("normalization requires a new output path"));
     }
-    let bytes = std::fs::read(source).map_err(|error| ForgeError::io(format!("Cannot read {}", source.display()), error))?;
+    let bytes =
+        std::fs::read(source).map_err(|error| ForgeError::io(format!("Cannot read {}", source.display()), error))?;
     let result = apply_program(&bytes, program)?;
     forge_base::fsutil::atomic_write_bytes(destination, &result)?;
     Ok(identity(&result))
@@ -189,7 +190,15 @@ mod tests {
     #[test]
     fn invalid_operations_rejected() {
         let (source, _, program) = fixture();
-        for operation in [json!([-1, 10]), json!([0, 0]), json!([2048, 1]), json!([0, 100000]), json!([true, 1]), json!(["0", 1]), json!([0.0, 1])] {
+        for operation in [
+            json!([-1, 10]),
+            json!([0, 0]),
+            json!([2048, 1]),
+            json!([0, 100000]),
+            json!([true, 1]),
+            json!(["0", 1]),
+            json!([0.0, 1]),
+        ] {
             let mut changed = program.clone();
             changed["copies"] = json!([operation]);
             assert!(apply_program(&source, &changed).is_err(), "{operation}");

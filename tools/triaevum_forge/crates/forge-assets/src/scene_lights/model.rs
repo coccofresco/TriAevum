@@ -379,7 +379,8 @@ impl<'a> Model<'a> {
                     *corner = (values[i + k], placed);
                 }
                 triangles.push(corners);
-                let coordinates = [uv(u64::from(values[i]))?, uv(u64::from(values[i + 1]))?, uv(u64::from(values[i + 2]))?];
+                let coordinates =
+                    [uv(u64::from(values[i]))?, uv(u64::from(values[i + 1]))?, uv(u64::from(values[i + 2]))?];
                 uvs.push((
                     pymath::sum(coordinates.iter().map(|c| c.0)) / 3.0,
                     pymath::sum(coordinates.iter().map(|c| c.1)) / 3.0,
@@ -406,9 +407,8 @@ impl<'a> Model<'a> {
         let centre = if points.is_empty() {
             [0.0; 3]
         } else {
-            [0, 1, 2].map(|k| {
-                (pymath::min(points.iter().map(|p| p[k])) + pymath::max(points.iter().map(|p| p[k]))) / 2.0
-            })
+            [0, 1, 2]
+                .map(|k| (pymath::min(points.iter().map(|p| p[k])) + pymath::max(points.iter().map(|p| p[k]))) / 2.0)
         };
         self.centre = Some(centre);
         centre
@@ -471,9 +471,8 @@ fn bone_transforms(r: &Reader<'_>, skl: u64) -> ModelResult<Vec<Matrix>> {
             let a = world[parent as usize].expect("parents resolve first");
             let b = local[bone];
             world[bone] = Some([0, 1, 2].map(|i| {
-                [0, 1, 2, 3].map(|j| {
-                    pymath::sum((0..3).map(|k| a[i][k] * b[k][j])) + if j == 3 { a[i][3] } else { 0.0 }
-                })
+                [0, 1, 2, 3]
+                    .map(|j| pymath::sum((0..3).map(|k| a[i][k] * b[k][j])) + if j == 3 { a[i][3] } else { 0.0 })
             }));
         }
     }

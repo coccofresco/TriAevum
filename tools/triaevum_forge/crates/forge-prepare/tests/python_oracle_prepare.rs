@@ -87,8 +87,11 @@ fn assert_same_files(python: &BTreeMap<String, Vec<u8>>, rust: &BTreeMap<String,
     for (name, expected) in python {
         let actual = &rust[name];
         if expected != actual {
-            let offset = expected.iter().zip(actual).position(|(a, b)| a != b).unwrap_or(expected.len().min(actual.len()));
-            let window = |bytes: &[u8]| String::from_utf8_lossy(&bytes[offset.saturating_sub(40)..(offset + 80).min(bytes.len())]).into_owned();
+            let offset =
+                expected.iter().zip(actual).position(|(a, b)| a != b).unwrap_or(expected.len().min(actual.len()));
+            let window = |bytes: &[u8]| {
+                String::from_utf8_lossy(&bytes[offset.saturating_sub(40)..(offset + 80).min(bytes.len())]).into_owned()
+            };
             panic!(
                 "{case}: {name} differs at byte {offset}\npython: {:?}\nrust:   {:?}",
                 window(expected),
@@ -157,9 +160,11 @@ fn write_inputs(directory: &Path, exheader_bytes: &[u8], romfs_bytes: &[u8]) -> 
     let code_bytes = code();
     let mut contracts = Map::new();
     let mut paths = Vec::new();
-    for (kind, name, bytes) in
-        [("code", "code.bin", &code_bytes[..]), ("exheader", "exheader.bin", exheader_bytes), ("romfs", "romfs.bin", romfs_bytes)]
-    {
+    for (kind, name, bytes) in [
+        ("code", "code.bin", &code_bytes[..]),
+        ("exheader", "exheader.bin", exheader_bytes),
+        ("romfs", "romfs.bin", romfs_bytes),
+    ] {
         let path = directory.join(name);
         std::fs::write(&path, bytes).unwrap();
         contracts.insert(kind.to_string(), json!({"bytes": bytes.len(), "sha256": sha256_hex(bytes)}));
@@ -219,7 +224,8 @@ impl PrepareCase<'_> {
         let run = || -> Result<Value, ForgeError> {
             let output_root = resolve(self.output_root)?;
             let mut cache = HashCache::new(output_root.join(".hash-cache.json"), !self.rehash);
-            let paths = SourcePaths { code: &self.inputs.code, exheader: &self.inputs.exheader, romfs: &self.inputs.romfs };
+            let paths =
+                SourcePaths { code: &self.inputs.code, exheader: &self.inputs.exheader, romfs: &self.inputs.romfs };
             let recipe = self.inputs.recipe.as_object().unwrap();
             let (verified, _) = verify_sources(recipe, &paths, &mut cache, None, None, &cancel)?;
             let verified_mod = match self.ui_mod {
@@ -258,15 +264,27 @@ fn process_manifest_matches_python() {
     let mut count = 0;
     for memory_mode in [0u8, 2, 3, 4, 5, 6, 7, 0x30] {
         for (romfs_name, romfs) in [("raw", raw_romfs()), ("level3", raw_romfs()[0x1000..].to_vec())] {
-            let inputs = write_inputs(&root.join(format!("m{memory_mode}-{romfs_name}")), &exheader(memory_mode, 0x31, b"OOT3D\0x"), &romfs);
+            let inputs = write_inputs(
+                &root.join(format!("m{memory_mode}-{romfs_name}")),
+                &exheader(memory_mode, 0x31, b"OOT3D\0x"),
+                &romfs,
+            );
             let output = root.join("python.json");
-            oracle(&python, &root, json!({
-                "op": "manifest", "exheader": text(&inputs.exheader), "code": text(&inputs.code),
-                "romfs": text(&inputs.romfs), "output": text(&output),
-            }))
+            oracle(
+                &python,
+                &root,
+                json!({
+                    "op": "manifest", "exheader": text(&inputs.exheader), "code": text(&inputs.code),
+                    "romfs": text(&inputs.romfs), "output": text(&output),
+                }),
+            )
             .unwrap();
             let manifest = build_manifest(&inputs.exheader, &inputs.code, &inputs.romfs, &CancelToken::new()).unwrap();
-            assert_eq!(pretty_file_bytes(&manifest), std::fs::read(&output).unwrap(), "memory mode {memory_mode} {romfs_name}");
+            assert_eq!(
+                pretty_file_bytes(&manifest),
+                std::fs::read(&output).unwrap(),
+                "memory mode {memory_mode} {romfs_name}"
+            );
             count += 1;
         }
     }
@@ -312,22 +330,34 @@ fn process_manifest_matches_python() {
         let case_root = root.join(label.replace(' ', "-"));
         let inputs = write_inputs(&case_root, &exheader_bytes, &romfs_bytes);
         std::fs::write(&inputs.code, &code_bytes).unwrap();
-        let expected = oracle(&python, &root, json!({
-            "op": "manifest", "exheader": text(&inputs.exheader), "code": text(&inputs.code),
-            "romfs": text(&inputs.romfs), "output": text(&case_root.join("out.json")),
-        }))
+        let expected = oracle(
+            &python,
+            &root,
+            json!({
+                "op": "manifest", "exheader": text(&inputs.exheader), "code": text(&inputs.code),
+                "romfs": text(&inputs.romfs), "output": text(&case_root.join("out.json")),
+            }),
+        )
         .unwrap_err();
-        let actual = build_manifest(&inputs.exheader, &inputs.code, &inputs.romfs, &CancelToken::new()).unwrap_err().message;
+        let actual =
+            build_manifest(&inputs.exheader, &inputs.code, &inputs.romfs, &CancelToken::new()).unwrap_err().message;
         assert_eq!(actual, expected, "{label}");
     }
     let inputs = write_inputs(&root.join("missing"), &good, &raw_romfs());
     let missing = root.join("missing").join("nope.bin");
-    let expected = oracle(&python, &root, json!({
-        "op": "manifest", "exheader": text(&inputs.exheader), "code": text(&inputs.code),
-        "romfs": text(&missing), "output": text(&root.join("missing-out.json")),
-    }))
+    let expected = oracle(
+        &python,
+        &root,
+        json!({
+            "op": "manifest", "exheader": text(&inputs.exheader), "code": text(&inputs.code),
+            "romfs": text(&missing), "output": text(&root.join("missing-out.json")),
+        }),
+    )
     .unwrap_err();
-    assert_eq!(build_manifest(&inputs.exheader, &inputs.code, &missing, &CancelToken::new()).unwrap_err().message, expected);
+    assert_eq!(
+        build_manifest(&inputs.exheader, &inputs.code, &missing, &CancelToken::new()).unwrap_err().message,
+        expected
+    );
 }
 
 #[test]
@@ -339,15 +369,22 @@ fn prepare_matches_python_for_internal_and_external_inputs() {
     let output_root = data.join("titles");
 
     // Retained sources inside the installation: relative references.
-    let internal = write_inputs(&data.join("sources").join("a".repeat(64)), &exheader(0, 0x30, b"fixture"), &raw_romfs());
-    let case = PrepareCase { inputs: &internal, output_root: &output_root, rehash: false, synthetic: false, ui_mod: None };
+    let internal =
+        write_inputs(&data.join("sources").join("a".repeat(64)), &exheader(0, 0x30, b"fixture"), &raw_romfs());
+    let case =
+        PrepareCase { inputs: &internal, output_root: &output_root, rehash: false, synthetic: false, ui_mod: None };
     let result = compare_prepare(&python, &root, &case, "internal real manifest");
     assert_eq!(result["status"], "prepared");
     // Each implementation reuses the other's output.
     assert_eq!(oracle(&python, &root, case.python_request()).unwrap()["status"], "reused");
     assert_eq!(case.rust().unwrap()["status"], "reused");
     let title = PathBuf::from(result["directory"].as_str().unwrap());
-    let loaded = oracle(&python, &root, json!({"op": "load", "prepared": text(&title), "required": ["code", "exheader", "romfs"]})).unwrap();
+    let loaded = oracle(
+        &python,
+        &root,
+        json!({"op": "load", "prepared": text(&title), "required": ["code", "exheader", "romfs"]}),
+    )
+    .unwrap();
     let prepared = load_prepared_content(&title, &["code", "exheader", "romfs"], &CancelToken::new()).unwrap();
     assert_eq!(loaded["directory"], text(&prepared.directory));
     for input in &prepared.inputs {
@@ -357,16 +394,24 @@ fn prepare_matches_python_for_internal_and_external_inputs() {
 
     // Inputs outside the installation, a non-ASCII path and an optional
     // archive: external absolute references with \u escapes.
-    let external = write_inputs(&root.join("user ROM \u{e8}\u{4e2d}"), &exheader(6, 0x18, b"zelda"), &raw_romfs()[0x1000..]);
+    let external =
+        write_inputs(&root.join("user ROM \u{e8}\u{4e2d}"), &exheader(6, 0x18, b"zelda"), &raw_romfs()[0x1000..]);
     let archive = data.join("downloads").join("pack.zip");
     std::fs::create_dir_all(archive.parent().unwrap()).unwrap();
     std::fs::write(&archive, b"synthetic archive").unwrap();
-    let case = PrepareCase { inputs: &external, output_root: &output_root, rehash: false, synthetic: false, ui_mod: Some(&archive) };
+    let case = PrepareCase {
+        inputs: &external,
+        output_root: &output_root,
+        rehash: false,
+        synthetic: false,
+        ui_mod: Some(&archive),
+    };
     compare_prepare(&python, &root, &case, "external real manifest with mod");
     remove(&output_root);
 
     // The synthetic manifest of test_forge, and --rehash (no cache file).
-    let case = PrepareCase { inputs: &internal, output_root: &output_root, rehash: true, synthetic: true, ui_mod: None };
+    let case =
+        PrepareCase { inputs: &internal, output_root: &output_root, rehash: true, synthetic: true, ui_mod: None };
     compare_prepare(&python, &root, &case, "synthetic manifest with rehash");
     assert!(!output_root.join(".hash-cache.json").exists());
     remove(&output_root);
@@ -379,7 +424,8 @@ fn prepare_matches_python_for_internal_and_external_inputs() {
     }});
     let cache_bytes = pretty_file_bytes(&cache);
     std::fs::write(output_root.join(".hash-cache.json"), &cache_bytes).unwrap();
-    let case = PrepareCase { inputs: &internal, output_root: &output_root, rehash: false, synthetic: false, ui_mod: None };
+    let case =
+        PrepareCase { inputs: &internal, output_root: &output_root, rehash: false, synthetic: false, ui_mod: None };
     let expected = oracle(&python, &root, case.python_request());
     let python_files = snapshot(&output_root);
     remove(&output_root);
@@ -418,14 +464,22 @@ fn prepare_rejections_match_python() {
     compare(&inputs, "missing contract");
     inputs.recipe = original;
     std::fs::write(&inputs.exheader, &exheader(0, 0x30, b"fixture")[..0x3FF]).unwrap();
-    inputs.recipe["inputs"]["exheader"] = json!({"bytes": 0x3FF, "sha256": sha256_hex(&std::fs::read(&inputs.exheader).unwrap())});
+    inputs.recipe["inputs"]["exheader"] =
+        json!({"bytes": 0x3FF, "sha256": sha256_hex(&std::fs::read(&inputs.exheader).unwrap())});
     compare(&inputs, "manifest derivation");
 
     let mut long = String::from("/x/");
     long.push_str(&"d".repeat(150));
     let recipes = ["oot3d-eur-project-baseline-16a6b0aa"];
-    let expected = oracle(&python, &root, json!({"op": "title_path_length", "output_root": format!("{long}/data/titles"), "recipes": recipes})).unwrap_err();
-    let actual = forge_prepare::check_title_path_length(Path::new(&format!("{long}/data/titles")), &recipes, true).unwrap_err().message;
+    let expected = oracle(
+        &python,
+        &root,
+        json!({"op": "title_path_length", "output_root": format!("{long}/data/titles"), "recipes": recipes}),
+    )
+    .unwrap_err();
+    let actual = forge_prepare::check_title_path_length(Path::new(&format!("{long}/data/titles")), &recipes, true)
+        .unwrap_err()
+        .message;
     assert_eq!(actual, expected);
 }
 
@@ -436,7 +490,8 @@ fn legacy_folders_are_reused_by_both() {
     let root = resolve(directory.path()).unwrap();
     let output_root = root.join("data").join("titles");
     let inputs = write_inputs(&root.join("data").join("sources"), &exheader(0, 0x30, b"fixture"), &raw_romfs());
-    let case = PrepareCase { inputs: &inputs, output_root: &output_root, rehash: false, synthetic: false, ui_mod: None };
+    let case =
+        PrepareCase { inputs: &inputs, output_root: &output_root, rehash: false, synthetic: false, ui_mod: None };
     let prepared = oracle(&python, &root, case.python_request()).unwrap();
     let title = PathBuf::from(prepared["directory"].as_str().unwrap());
 
@@ -494,7 +549,8 @@ fn packaging_and_activation_match_python() {
         ("title AOT, active inside data", true, data.join("active-title.json")),
         ("native only, active outside data", false, root.join("elsewhere").join("active-title.json")),
     ] {
-        let case = PrepareCase { inputs: &inputs, output_root: &output_root, rehash: false, synthetic: false, ui_mod: None };
+        let case =
+            PrepareCase { inputs: &inputs, output_root: &output_root, rehash: false, synthetic: false, ui_mod: None };
         let prepared = oracle(&python, &root, case.python_request()).unwrap();
         let title = PathBuf::from(prepared["directory"].as_str().unwrap());
         let request = json!({
@@ -510,7 +566,9 @@ fn packaging_and_activation_match_python() {
 
         case.rust().unwrap();
         let aot = with_aot.then_some(title_aot.as_path());
-        let packaged = package_private_module(&title, &native, aot, "x86_64-pc-windows-msvc", &translator, Some(&active), &cancel).unwrap();
+        let packaged =
+            package_private_module(&title, &native, aot, "x86_64-pc-windows-msvc", &translator, Some(&active), &cancel)
+                .unwrap();
         assert_eq!(packaged.as_json().unwrap(), expected, "{label}: package result");
         assert_same_files(&python_titles, &snapshot(&output_root), label);
         assert_eq!(std::fs::read(&active).unwrap(), python_active, "{label}: active-title.json");
@@ -519,7 +577,9 @@ fn packaging_and_activation_match_python() {
         let reused = oracle(&python, &root, request).unwrap();
         assert_eq!(reused["status"], "reused");
         let other = root.join("other-active.json");
-        let expected = oracle(&python, &root, json!({"op": "activate", "prepared": text(&title), "active": text(&other)})).unwrap();
+        let expected =
+            oracle(&python, &root, json!({"op": "activate", "prepared": text(&title), "active": text(&other)}))
+                .unwrap();
         let python_other = std::fs::read(&other).unwrap();
         remove(&other);
         assert_eq!(activate_prepared_title(&title, &other, &cancel).unwrap().as_json().unwrap(), expected);
@@ -553,9 +613,18 @@ fn tam_builder_matches_python() {
                 index += 1;
                 let output = root.join(format!("out{index}")).join("game.tam");
                 let mut argv = vec![
-                    "--native-image".to_string(), text(&native), "--output".into(), text(&output),
-                    "--recipe".into(), "fixture \u{e9}".into(), "--target-triple".into(), "aarch64-unknown-linux-gnu".into(),
-                    "--source-identity".into(), source.clone(), "--translator-identity".into(), translator.clone(),
+                    "--native-image".to_string(),
+                    text(&native),
+                    "--output".into(),
+                    text(&output),
+                    "--recipe".into(),
+                    "fixture \u{e9}".into(),
+                    "--target-triple".into(),
+                    "aarch64-unknown-linux-gnu".into(),
+                    "--source-identity".into(),
+                    source.clone(),
+                    "--translator-identity".into(),
+                    translator.clone(),
                 ];
                 if with_aot {
                     argv.extend(["--title-aot-image".into(), text(&title_aot)]);
@@ -608,9 +677,18 @@ fn tam_builder_matches_python() {
     let fresh = root.join("fresh").join("game.tam");
     let base = |output: &Path| -> Vec<String> {
         vec![
-            "--native-image".into(), text(&native), "--output".into(), text(output), "--recipe".into(), "fixture".into(),
-            "--target-triple".into(), "x86_64-pc-windows-msvc".into(), "--source-identity".into(), source.clone(),
-            "--translator-identity".into(), translator.clone(),
+            "--native-image".into(),
+            text(&native),
+            "--output".into(),
+            text(output),
+            "--recipe".into(),
+            "fixture".into(),
+            "--target-triple".into(),
+            "x86_64-pc-windows-msvc".into(),
+            "--source-identity".into(),
+            source.clone(),
+            "--translator-identity".into(),
+            translator.clone(),
         ]
     };
     let mut refusals: Vec<(Vec<String>, TamRequest<'_>)> = Vec::new();
@@ -637,8 +715,16 @@ fn tam_builder_matches_python() {
     argv.extend(["--required-service".into(), "0x41434950".into()]);
     refusals.push((argv, TamRequest { required_services: &[0x4143_4950], ..request("native") }));
     let mut argv = base(&fresh);
-    argv.extend(["--physical-memory-region".into(), "0:0:0x2000".into(), "--physical-memory-region".into(), "0x1000:0x8000:1".into()]);
-    refusals.push((argv, TamRequest { physical_memory_regions: &[(0, 0, 0x2000), (0x1000, 0x8000, 1)], ..request("native") }));
+    argv.extend([
+        "--physical-memory-region".into(),
+        "0:0:0x2000".into(),
+        "--physical-memory-region".into(),
+        "0x1000:0x8000:1".into(),
+    ]);
+    refusals.push((
+        argv,
+        TamRequest { physical_memory_regions: &[(0, 0, 0x2000), (0x1000, 0x8000, 1)], ..request("native") },
+    ));
     let target = |output: &Path| {
         let mut argv = base(output);
         argv[7] = "aarch64-linux-android".into();
@@ -687,9 +773,9 @@ fn real_inputs_match_python() {
             ["code", "exheader", "romfs"].iter().all(|kind| inputs[*kind]["sha256"] == contracts[*kind]["sha256"])
         })
     };
-    let recipe = catalog["recipes"].as_array().unwrap().iter().find(matches).cloned().unwrap_or_else(|| {
-        json!({"id": "local-unlisted-revision", "inputs": contracts, "process": {"entrypoint": 0x0010_0000}})
-    });
+    let recipe = catalog["recipes"].as_array().unwrap().iter().find(matches).cloned().unwrap_or_else(
+        || json!({"id": "local-unlisted-revision", "inputs": contracts, "process": {"entrypoint": 0x0010_0000}}),
+    );
     eprintln!("recipe {}", recipe["id"]);
 
     let data = root.join("data");
@@ -704,7 +790,8 @@ fn real_inputs_match_python() {
         romfs: sources.join("romfs.bin"),
         recipe: recipe.clone(),
     };
-    let external = Inputs { code: original[0].clone(), exheader: original[1].clone(), romfs: original[2].clone(), recipe };
+    let external =
+        Inputs { code: original[0].clone(), exheader: original[1].clone(), romfs: original[2].clone(), recipe };
     let native = root.join("oot3d_game_module.dll");
     std::fs::write(&native, b"MZ synthetic native module for the real-input comparison").unwrap();
     let title_aot = root.join("triaevum_title_aot.dll");

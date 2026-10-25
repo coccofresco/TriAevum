@@ -221,7 +221,9 @@ fn service_view_hashes_paths_and_payload_conservation() {
 #[test]
 fn hint_movies_require_the_usa_names_only() {
     let extra = [USA_MOVIES[0], USA_MOVIES[1], USA_MOVIES[2], "hint183.moflex"];
-    for (movies, message) in [(&USA_MOVIES[..2], "missing USA hint movies"), (&extra[..], "EU hint movies already exist")] {
+    for (movies, message) in
+        [(&USA_MOVIES[..2], "missing USA hint movies"), (&extra[..], "EU hint movies already exist")]
+    {
         let directory = tempfile::tempdir().unwrap();
         let (source, output) = (directory.path().join("source"), directory.path().join("output"));
         std::fs::write(&source, romfs_fixture(movies)).unwrap();
@@ -281,7 +283,8 @@ impl FamilyFixture {
     fn new() -> Self {
         let directory = tempfile::tempdir().unwrap();
         let path = |name: &str| directory.path().join(name);
-        let (code, exheader, romfs, source) = (path("code.bin"), path("exheader.bin"), path("romfs.bin"), path("source.romfs"));
+        let (code, exheader, romfs, source) =
+            (path("code.bin"), path("exheader.bin"), path("romfs.bin"), path("source.romfs"));
         std::fs::write(&code, b"synthetic code and initialized data").unwrap();
         std::fs::write(&exheader, [0u8; 2048]).unwrap();
         std::fs::write(&source, romfs_fixture(&USA_MOVIES)).unwrap();
@@ -360,11 +363,21 @@ fn byte_matching_falls_back_to_the_source_family() {
     };
     let directory = tempfile::tempdir().unwrap();
     let wrapped = directory.path().join("romfs-ivfc.bin");
-    std::fs::write(&wrapped, [b"IVFC".to_vec(), vec![0; 4092], std::fs::read(&fixture.romfs).unwrap()].concat()).unwrap();
-    let inputs = TitleInputs { program_id: 7, code: file(&fixture.code), exheader: file(&fixture.exheader), romfs: file(&wrapped) };
+    std::fs::write(&wrapped, [b"IVFC".to_vec(), vec![0; 4092], std::fs::read(&fixture.romfs).unwrap()].concat())
+        .unwrap();
+    let inputs = TitleInputs {
+        program_id: 7,
+        code: file(&fixture.code),
+        exheader: file(&fixture.exheader),
+        romfs: file(&wrapped),
+    };
     let recipes = directory.path().join("recipes.json");
     let write_recipes = |list: Value| {
-        std::fs::write(&recipes, serde_json::to_vec(&json!({"format": "triaevum_supported_revisions_v1", "recipes": list})).unwrap()).unwrap();
+        std::fs::write(
+            &recipes,
+            serde_json::to_vec(&json!({"format": "triaevum_supported_revisions_v1", "recipes": list})).unwrap(),
+        )
+        .unwrap();
     };
     write_recipes(json!([fixture.recipe]));
     assert_eq!(match_extracted_recipe(&inputs, &recipes, &cancel()).unwrap(), fixture.recipe);
@@ -375,7 +388,10 @@ fn byte_matching_falls_back_to_the_source_family() {
     assert_eq!(error.message, "the decrypted ROM matches multiple revision recipes");
     write_recipes(json!([{"id": "x"}]));
     let error = match_extracted_recipe(&inputs, &recipes, &cancel()).unwrap_err();
-    assert_eq!(error.message, "the decrypted ROM does not match any supported game revision (program ID 0000000000000007)");
+    assert_eq!(
+        error.message,
+        "the decrypted ROM does not match any supported game revision (program ID 0000000000000007)"
+    );
     assert_eq!(error.kind, ErrorKind::UnsupportedRevision);
 }
 
@@ -392,7 +408,9 @@ fn adapter_fixture() -> AdapterFixture {
     let source = root.join("original");
     std::fs::create_dir(&source).unwrap();
     let mut files = Vec::new();
-    for (kind, data) in [("code", b"0123456789abcdef".to_vec()), ("exheader", vec![0u8; 64]), ("romfs", romfs_fixture(&USA_MOVIES))] {
+    for (kind, data) in
+        [("code", b"0123456789abcdef".to_vec()), ("exheader", vec![0u8; 64]), ("romfs", romfs_fixture(&USA_MOVIES))]
+    {
         let path = source.join(format!("{kind}.bin"));
         std::fs::write(&path, &data).unwrap();
         files.push(InputFile { path, bytes: data.len() as u64, sha256: sha256_hex(&data) });
@@ -422,10 +440,13 @@ fn adapter_publishes_verified_output_with_receipt() {
     let fixture = adapter_fixture();
     let root = fixture.directory.path();
     let native = json!({"id": "native"}).as_object().unwrap().clone();
-    assert!(adapt_extracted_inputs(&fixture.extracted, &native, root, &root.join("unused"), &cancel()).unwrap().is_none());
+    assert!(adapt_extracted_inputs(&fixture.extracted, &native, root, &root.join("unused"), &cancel())
+        .unwrap()
+        .is_none());
     assert!(!root.join("unused").exists());
     let output = root.join("normalized");
-    let adaptation = adapt_extracted_inputs(&fixture.extracted, &fixture.recipe, root, &output, &cancel()).unwrap().unwrap();
+    let adaptation =
+        adapt_extracted_inputs(&fixture.extracted, &fixture.recipe, root, &output, &cancel()).unwrap().unwrap();
     assert_eq!(std::fs::read(&adaptation.inputs.code.path).unwrap(), b"89abcdef01234567");
     assert_eq!(std::fs::read(&fixture.extracted.code.path).unwrap(), b"0123456789abcdef");
     assert_eq!(adaptation.receipt["source_inputs"], fixture.recipe["input_adapter"]["source_inputs"]);
@@ -453,7 +474,8 @@ fn adapter_rejections_leave_no_output() {
     std::fs::write(&fixture.extracted.code.path, b"0123456789abcdef").unwrap();
     let mut recipe = Value::Object(fixture.recipe.clone());
     recipe["inputs"]["romfs"]["sha256"] = json!("0".repeat(64));
-    let error = adapt_extracted_inputs(&fixture.extracted, recipe.as_object().unwrap(), root, &output, &cancel()).unwrap_err();
+    let error =
+        adapt_extracted_inputs(&fixture.extracted, recipe.as_object().unwrap(), root, &output, &cancel()).unwrap_err();
     assert_eq!(error.message, "Normalized input identity mismatch; title was not activated");
     assert!(!output.exists());
     let inside = root.join("original");
@@ -566,7 +588,8 @@ fn checked_file_containment() {
     }
     let error = checked_file(root, &json!({"path": "titles/missing.dll"}), &cancel()).unwrap_err();
     assert_eq!(error.message, "Precompiled artifact is missing: titles/missing.dll");
-    let record = json!({"path": "titles//test/./contract.dll", "bytes": 24, "sha256": sha256_hex(b"titles/test/contract.dll")});
+    let record =
+        json!({"path": "titles//test/./contract.dll", "bytes": 24, "sha256": sha256_hex(b"titles/test/contract.dll")});
     let path = checked_file(root, &record, &cancel()).unwrap();
     assert!(path.ends_with("titles/test/contract.dll"));
     let mut float_size = record.clone();
@@ -581,17 +604,23 @@ fn checked_file_containment() {
 #[test]
 fn verified_variants_reuse_the_base_title() {
     let release = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../triaevum_release");
-    let definitions = Value::Object(forge_base::fsutil::load_json_object(&release.join("supported_revisions.json")).unwrap());
+    let definitions =
+        Value::Object(forge_base::fsutil::load_json_object(&release.join("supported_revisions.json")).unwrap());
     let base = definitions["recipes"][0].clone();
     let title = json!({"recipe": base["id"], "inputs": base["inputs"], "plugin": {"path": "titles/existing/x.dll"},
                        "abi_version": 2, "translator_identity_sha256": "a".repeat(64)});
     let (catalog, recipes) =
-        variants::add_verified_variants(&json!({"titles": [title]}), &json!({"recipes": [base]}), &definitions).unwrap();
+        variants::add_verified_variants(&json!({"titles": [title]}), &json!({"recipes": [base]}), &definitions)
+            .unwrap();
     assert_eq!(catalog["titles"].as_array().unwrap().len(), 2);
     assert_eq!(recipes["recipes"].as_array().unwrap().len(), 2);
     assert_eq!(catalog["titles"][1]["plugin"], title["plugin"]);
-    assert_eq!(variants::add_verified_variants(&catalog, &recipes, &definitions).unwrap(), (catalog.clone(), recipes.clone()));
-    let error = variants::add_verified_variants(&json!({"titles": []}), &json!({"recipes": [base]}), &definitions).unwrap_err();
+    assert_eq!(
+        variants::add_verified_variants(&catalog, &recipes, &definitions).unwrap(),
+        (catalog.clone(), recipes.clone())
+    );
+    let error =
+        variants::add_verified_variants(&json!({"titles": []}), &json!({"recipes": [base]}), &definitions).unwrap_err();
     assert_eq!(error.message, "Verified variant requires its packaged base recipe and title");
     let mut conflict = catalog.clone();
     conflict["titles"][1]["plugin"]["path"] = json!("wrong.dll");

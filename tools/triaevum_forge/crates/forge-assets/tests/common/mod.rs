@@ -40,7 +40,12 @@ pub fn romfs_image(files: &[(&str, &[u8])]) -> Vec<u8> {
     }
     // Pre-order: (node, name, parent index, sibling list position).
     let mut order: Vec<(&Node, String, Option<usize>)> = Vec::new();
-    fn walk<'a>(node: &'a Node, name: String, parent: Option<usize>, order: &mut Vec<(&'a Node, String, Option<usize>)>) {
+    fn walk<'a>(
+        node: &'a Node,
+        name: String,
+        parent: Option<usize>,
+        order: &mut Vec<(&'a Node, String, Option<usize>)>,
+    ) {
         let index = order.len();
         order.push((node, name, parent));
         for (child_name, child) in &node.directories {
@@ -75,7 +80,10 @@ pub fn romfs_image(files: &[(&str, &[u8])]) -> Vec<u8> {
         let child = (0..order.len()).find(|i| order[*i].2 == Some(index)).map_or(NONE, |i| directory_offsets[i]);
         let first = file_offsets[index].first().copied().unwrap_or(NONE);
         let parent_offset = parent.map_or(0, |parent| directory_offsets[parent]);
-        push32(&mut directory_table, &[parent_offset, sibling, child, first, NONE, name.encode_utf16().count() as u32 * 2]);
+        push32(
+            &mut directory_table,
+            &[parent_offset, sibling, child, first, NONE, name.encode_utf16().count() as u32 * 2],
+        );
         directory_table.extend(padded_name(name));
         for (position, (file_name, data)) in node.files.iter().enumerate() {
             let following = file_offsets[index].get(position + 1).copied().unwrap_or(NONE);

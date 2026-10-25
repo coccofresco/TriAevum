@@ -117,12 +117,15 @@ pub fn package_private_module(
         runtime_abi: crate::tam::RUNTIME_ABI_V1,
     };
     let tam = Tam::build(&request, cancel).map_err(|error| match error.kind {
-        ErrorKind::InvalidInput => ForgeError::invalid(format!("cannot package private game module: {}", error.message)),
+        ErrorKind::InvalidInput => {
+            ForgeError::invalid(format!("cannot package private game module: {}", error.message))
+        }
         _ => error,
     })?;
     let metadata = tam.metadata();
     let native_hash = metadata["native_image"]["sha256"].as_str().expect("native hash").to_string();
-    let title_aot_hash = metadata.get("title_aot_image").map(|image| image["sha256"].as_str().expect("hash").to_string());
+    let title_aot_hash =
+        metadata.get("title_aot_image").map(|image| image["sha256"].as_str().expect("hash").to_string());
     let translator = metadata["translator_identity_sha256"].as_str().expect("translator").to_string();
     let cache_key = module_cache_key(target_triple, &translator, &native_hash, title_aot_hash.as_deref().unwrap_or(""));
     let relative_module = format!("modules/{}.tam", &cache_key[..MODULE_NAME_KEY_DIGITS]);
@@ -138,8 +141,9 @@ pub fn package_private_module(
         }
         ("reused", digest)
     } else {
-        let digest = write_module(&module_path, &tam, cancel)
-            .map_err(|error| ForgeError::new(error.kind, format!("cannot write private game module: {}", error.message)))?;
+        let digest = write_module(&module_path, &tam, cancel).map_err(|error| {
+            ForgeError::new(error.kind, format!("cannot write private game module: {}", error.message))
+        })?;
         ("packaged", digest)
     };
 
@@ -181,14 +185,16 @@ pub fn package_private_module(
 /// `path`, syncs it and renames it into place (`common.atomic_write_bytes`).
 fn write_module(path: &Path, tam: &Tam, cancel: &CancelToken) -> Result<String> {
     let parent = path.parent().expect("module path has a parent");
-    std::fs::create_dir_all(parent).map_err(|error| ForgeError::io(format!("Cannot create {}", parent.display()), error))?;
+    std::fs::create_dir_all(parent)
+        .map_err(|error| ForgeError::io(format!("Cannot create {}", parent.display()), error))?;
     let mut temporary = tempfile::Builder::new()
         .prefix(".")
         .suffix(".tmp")
         .tempfile_in(parent)
         .map_err(|error| ForgeError::io(format!("Cannot write in {}", parent.display()), error))?;
     let digest = tam.write_to(temporary.as_file_mut(), cancel)?;
-    File::sync_all(temporary.as_file()).map_err(|error| ForgeError::io(format!("Cannot write {}", path.display()), error))?;
+    File::sync_all(temporary.as_file())
+        .map_err(|error| ForgeError::io(format!("Cannot write {}", path.display()), error))?;
     temporary
         .persist(path)
         .map_err(|error| ForgeError::io(format!("Cannot replace {}", path.display()), error.error))?;
@@ -328,7 +334,8 @@ mod tests {
         std::fs::write(prepared.directory.join("process-manifest.json"), b"{}").unwrap();
         let error = package_private_module(&prepared.directory, &native, None, TARGET, &translator, None, &cancel);
         assert_eq!(error.unwrap_err().message, "process manifest changed after content preparation");
-        let error = package_private_module(&prepared.directory, &fixture.root, None, TARGET, &translator, None, &cancel);
+        let error =
+            package_private_module(&prepared.directory, &fixture.root, None, TARGET, &translator, None, &cancel);
         assert!(error.unwrap_err().message.starts_with("native module image is invalid: "));
     }
 
@@ -347,7 +354,10 @@ mod tests {
             (json!([{"physical_base": 1.0, "guest_base": 2, "bytes": 3}]), "physical base is not an integer"),
             (json!([1]), "content.tap physical-memory region is malformed"),
             (json!({}), "content.tap is missing module identity metadata"),
-            (json!([]), "cannot package private game module: PICA service requires at least one physical memory region"),
+            (
+                json!([]),
+                "cannot package private game module: PICA service requires at least one physical memory region",
+            ),
         ];
         for (regions, expected) in cases {
             let mut index = original.clone();
@@ -357,7 +367,11 @@ mod tests {
             assert_eq!(error.unwrap_err().message, expected);
         }
         atomic_write_json(&index_path, &Value::Object(original)).unwrap();
-        let error = package_private_module(&prepared.directory, &native, None, "host-default", &translator, None, &cancel);
-        assert_eq!(error.unwrap_err().message, "cannot package private game module: unsupported target triple: host-default");
+        let error =
+            package_private_module(&prepared.directory, &native, None, "host-default", &translator, None, &cancel);
+        assert_eq!(
+            error.unwrap_err().message,
+            "cannot package private game module: unsupported target triple: host-default"
+        );
     }
 }

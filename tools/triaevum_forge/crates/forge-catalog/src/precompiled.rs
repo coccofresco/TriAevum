@@ -95,7 +95,8 @@ pub fn runtime_record(root: &Path, catalog: &Map<String, Value>) -> Result<Value
     let platform = catalog_platform(catalog)?;
     let path = installed_runtime_path(root, &platform);
     let relative = path.strip_prefix(root).map_err(|_| integrity("Invalid catalog runtime binding".into()))?;
-    let posix: Vec<String> = relative.components().map(|part| part.as_os_str().to_string_lossy().into_owned()).collect();
+    let posix: Vec<String> =
+        relative.components().map(|part| part.as_os_str().to_string_lossy().into_owned()).collect();
     let mut record = match catalog.get("runtime") {
         Some(Value::Object(record)) => record.clone(),
         other => return Err(malformed(format!("runtime is {}", other.map_or("missing", type_name)))),
@@ -169,7 +170,8 @@ pub fn validate_title(
         };
         let empty = Value::Array(Vec::new());
         let dependencies = renderer.get("dependencies").unwrap_or(&empty);
-        let (Some(compiler), Some(dependencies)) = (get(renderer, "compiler").as_object(), dependencies.as_array()) else {
+        let (Some(compiler), Some(dependencies)) = (get(renderer, "compiler").as_object(), dependencies.as_array())
+        else {
             return Err(integrity("Invalid renderer shader compiler artifacts".into()));
         };
         let compiler = Value::Object(compiler.clone());

@@ -197,7 +197,12 @@ pub fn fingerprint(path: &Path, cancel: &CancelToken) -> Result<RomfsFingerprint
         end = u64::from(offset) + u64::from(length);
     }
     let data_offset = i128::from(h[9]);
-    if !h[2].is_multiple_of(4) || !h[6].is_multiple_of(4) || u64::from(h[9]) < end || data_offset > image.size || !h[9].is_multiple_of(16) {
+    if !h[2].is_multiple_of(4)
+        || !h[6].is_multiple_of(4)
+        || u64::from(h[9]) < end
+        || data_offset > image.size
+        || !h[9].is_multiple_of(16)
+    {
         return Err(invalid("Invalid RomFS data bounds"));
     }
     let dirs = image.read(u64::from(h[3]), u64::from(h[4]))?;
@@ -215,11 +220,15 @@ pub fn fingerprint(path: &Path, cancel: &CancelToken) -> Result<RomfsFingerprint
         let at = offset as usize;
         let (parent, sibling, child) = (u32_at(&dirs, at), u32_at(&dirs, at + 4), u32_at(&dirs, at + 8));
         let (mut file, chain) = (u32_at(&dirs, at + 12), u32_at(&dirs, at + 16));
-        if parent != owner || (offset == 0 && (!name.is_empty() || sibling != INVALID)) || (offset != 0 && name.is_empty()) {
+        if parent != owner
+            || (offset == 0 && (!name.is_empty() || sibling != INVALID))
+            || (offset != 0 && name.is_empty())
+        {
             return Err(invalid("Invalid RomFS ancestry"));
         }
         let full = if prefix.is_empty() { name } else { format!("{prefix}/{name}") };
-        directory_records.insert(offset, Record { parent, name: encoded, chain, path: full.clone(), payload: 0, length: 0 });
+        directory_records
+            .insert(offset, Record { parent, name: encoded, chain, path: full.clone(), payload: 0, length: 0 });
         if sibling != INVALID {
             pending.push((sibling, prefix, owner));
         }
@@ -234,7 +243,10 @@ pub fn fingerprint(path: &Path, cancel: &CancelToken) -> Result<RomfsFingerprint
             let at = file as usize;
             let (parent, following) = (u32_at(&files, at), u32_at(&files, at + 4));
             let (payload, length, chain) = (u64_at(&files, at + 8), u64_at(&files, at + 16), u32_at(&files, at + 24));
-            if parent != offset || text.is_empty() || data_offset + i128::from(payload) + i128::from(length) > image.size {
+            if parent != offset
+                || text.is_empty()
+                || data_offset + i128::from(payload) + i128::from(length) > image.size
+            {
                 return Err(invalid("Invalid RomFS file bounds or ancestry"));
             }
             let path = if full.is_empty() { text } else { format!("{full}/{text}") };

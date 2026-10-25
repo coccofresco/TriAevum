@@ -232,7 +232,10 @@ pub fn title_tables(title: &Value, checked_file: &mut dyn FnMut(&Value) -> Resul
         let value = tables.get(key).ok_or_else(|| table_error("Incompatible precomputed tables"))?;
         checked_file(value)
     };
-    Ok(TitleTables { interior_sun_masks: Some(record("interior_sun_masks")?), scene_lights: Some(record("scene_lights")?) })
+    Ok(TitleTables {
+        interior_sun_masks: Some(record("interior_sun_masks")?),
+        scene_lights: Some(record("scene_lights")?),
+    })
 }
 
 #[cfg(test)]

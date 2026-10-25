@@ -31,7 +31,8 @@ pub const MOD_PAGE: &str = "https://gamebanana.com/mods/695893";
 /// Package directories of the shipped assets.
 pub const BUNDLED_DIRECTORY: [&str; 3] = ["resources", "topscreen", "singlescreen-3.0"];
 pub const BUNDLED_FONT_DIRECTORY: [&str; 3] = ["resources", "topscreen", "singlescreen-3.1"];
-pub const UI_ATLAS_IDENTITY: (u64, &str) = (131_144, "20290e417c56973cd19daa1f61a6c3963f075d61776db3d996954ee3296d07d8");
+pub const UI_ATLAS_IDENTITY: (u64, &str) =
+    (131_144, "20290e417c56973cd19daa1f61a6c3963f075d61776db3d996954ee3296d07d8");
 pub const LINK_ANIMATIONS_IDENTITY: (u64, &str) =
     (186_404, "06d60e05c493e86677497eb935b49951d613249c43f896816ae898bb8b005902");
 pub const HD_FONT_IDENTITY: (u64, &str) = (427_592, "8b83e081f721c6e1842b0a9cd90b71a3fb2849674d2b1040f3dc5c3221594169");
@@ -48,7 +49,13 @@ fn sha256_hex_file(path: &Path, cancel: &CancelToken) -> Result<String> {
     Ok(hex(&sha256_file(path, cancel)?.1))
 }
 
-fn bundled(root: &Path, directory: [&str; 3], name: &str, expected: (u64, &str), cancel: &CancelToken) -> Result<PathBuf> {
+fn bundled(
+    root: &Path,
+    directory: [&str; 3],
+    name: &str,
+    expected: (u64, &str),
+    cancel: &CancelToken,
+) -> Result<PathBuf> {
     // `str(Path(...))`: the platform separator, as the Python message shows.
     let relative: PathBuf = directory.iter().copied().chain([name]).collect();
     let path = root.join(&relative);

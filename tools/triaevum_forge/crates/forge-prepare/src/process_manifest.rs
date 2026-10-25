@@ -68,7 +68,8 @@ fn align_up(value: u64, alignment: u64) -> u64 {
 /// Raw NCCH IVFC images serve RomFS from 0x1000 (Level-3 header there); a
 /// Level-3 service view serves from 0.
 pub fn romfs_service_window(path: &Path, file_size: u64) -> Result<(u64, u64)> {
-    let mut stream = File::open(path).map_err(|error| ForgeError::io(format!("Cannot read {}", path.display()), error))?;
+    let mut stream =
+        File::open(path).map_err(|error| ForgeError::io(format!("Cannot read {}", path.display()), error))?;
     let prefix = read_up_to(&mut stream, 4, path)?;
     if prefix == b"IVFC" {
         if file_size <= NCCH_ROMFS_SUPERBLOCK_SIZE {
@@ -192,7 +193,12 @@ fn ascii_name(bytes: &[u8]) -> Result<String> {
 /// `build_manifest(exheader_path, code_path, romfs_image_path)`: the native
 /// process layout derived from the ExHeader and decompressed code. The code
 /// and RomFS are streamed, never loaded whole.
-pub fn build_manifest(exheader_path: &Path, code_path: &Path, romfs_image_path: &Path, cancel: &CancelToken) -> Result<Value> {
+pub fn build_manifest(
+    exheader_path: &Path,
+    code_path: &Path,
+    romfs_image_path: &Path,
+    cancel: &CancelToken,
+) -> Result<Value> {
     let exheader = std::fs::read(exheader_path)
         .map_err(|error| ForgeError::io(format!("Cannot read {}", exheader_path.display()), error))?;
     let (code_size, code_digest) = sha256_file(code_path, cancel)?;

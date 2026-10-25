@@ -40,7 +40,8 @@ fn file_digest(path: &Path) -> Result<String> {
 /// Streams `source` into a synced temporary beside `target`, then renames it.
 fn copy_synced(source: &Path, target: &Path) -> Result<()> {
     let parent = target.parent().unwrap_or(Path::new("."));
-    std::fs::create_dir_all(parent).map_err(|error| ForgeError::io(format!("Cannot create {}", parent.display()), error))?;
+    std::fs::create_dir_all(parent)
+        .map_err(|error| ForgeError::io(format!("Cannot create {}", parent.display()), error))?;
     let mut temporary = tempfile::Builder::new()
         .prefix(".activation-")
         .tempfile_in(parent)
@@ -53,7 +54,9 @@ fn copy_synced(source: &Path, target: &Path) -> Result<()> {
         .flush()
         .and_then(|()| temporary.as_file().sync_all())
         .map_err(|error| ForgeError::io(format!("Cannot write {}", target.display()), error))?;
-    temporary.persist(target).map_err(|error| ForgeError::io(format!("Cannot replace {}", target.display()), error.error))?;
+    temporary
+        .persist(target)
+        .map_err(|error| ForgeError::io(format!("Cannot replace {}", target.display()), error.error))?;
     Ok(())
 }
 
@@ -67,11 +70,17 @@ fn restore(journal: &Path, targets: &[PathBuf]) -> Result<()> {
     let payload = load_json_object(journal)?;
     let entries = match payload.get("entries") {
         Some(Value::Array(entries))
-            if payload.get("format").and_then(Value::as_str) == Some(JOURNAL_FORMAT) && entries.len() == targets.len() =>
+            if payload.get("format").and_then(Value::as_str) == Some(JOURNAL_FORMAT)
+                && entries.len() == targets.len() =>
         {
             entries
         }
-        _ => return Err(ForgeError::new(forge_base::ErrorKind::RecoveryRequired, "Invalid Forge activation recovery journal")),
+        _ => {
+            return Err(ForgeError::new(
+                forge_base::ErrorKind::RecoveryRequired,
+                "Invalid Forge activation recovery journal",
+            ))
+        }
     };
     let directory = journal.parent().unwrap_or(Path::new("."));
     // A changed target set requires recovery with the original installation.
@@ -84,7 +93,10 @@ fn restore(journal: &Path, targets: &[PathBuf]) -> Result<()> {
         }
         if let Some(digest) = entry.get("sha256").and_then(Value::as_str) {
             if file_digest(&directory.join(format!("{index}.bak")))? != digest {
-                return Err(ForgeError::new(forge_base::ErrorKind::RecoveryRequired, "Forge activation backup is damaged"));
+                return Err(ForgeError::new(
+                    forge_base::ErrorKind::RecoveryRequired,
+                    "Forge activation backup is damaged",
+                ));
             }
         }
     }

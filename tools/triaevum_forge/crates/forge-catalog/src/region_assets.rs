@@ -37,9 +37,9 @@ const COPY_CHUNK: usize = 4 * 1024 * 1024;
 
 /// The CTR RomFS lookup hash of an encoded (UTF-16LE) name under `parent`.
 pub fn name_hash(parent: u32, encoded: &[u8]) -> u32 {
-    encoded
-        .chunks_exact(2)
-        .fold(parent ^ 123_456_789, |value, unit| value.rotate_right(5) ^ u32::from(u16::from_le_bytes([unit[0], unit[1]])))
+    encoded.chunks_exact(2).fold(parent ^ 123_456_789, |value, unit| {
+        value.rotate_right(5) ^ u32::from(u16::from_le_bytes([unit[0], unit[1]]))
+    })
 }
 
 fn invalid(message: &str) -> ForgeError {
@@ -250,7 +250,10 @@ pub fn normalize_romfs(source: &Path, destination: &Path, cancel: &CancelToken) 
             if data_offset + i128::from(payload) + i128::from(length) > image.size {
                 return Err(invalid("RomFS file outside image"));
             }
-            file_records.insert(child_file, FileRecord { parent: owner, name: encoded, path: join(&path, &text), payload, length });
+            file_records.insert(
+                child_file,
+                FileRecord { parent: owner, name: encoded, path: join(&path, &text), payload, length },
+            );
             child_file = following;
         }
     }
@@ -270,8 +273,9 @@ pub fn normalize_romfs(source: &Path, destination: &Path, cancel: &CancelToken) 
     if !HINT_MOVIES.iter().all(|(path, _)| file_paths.contains(path)) {
         return Err(invalid("missing USA hint movies"));
     }
-    let renamed_movie =
-        |(path, name): &(&str, &str)| format!("{}/{}", path.rsplit_once('/').map_or(*path, |(directory, _)| directory), name);
+    let renamed_movie = |(path, name): &(&str, &str)| {
+        format!("{}/{}", path.rsplit_once('/').map_or(*path, |(directory, _)| directory), name)
+    };
     if HINT_MOVIES.iter().any(|movie| file_paths.contains(renamed_movie(movie).as_str())) {
         return Err(invalid("EU hint movies already exist"));
     }
@@ -335,9 +339,15 @@ pub fn normalize_romfs(source: &Path, destination: &Path, cancel: &CancelToken) 
 
 /// Copies the Level-3 bytes (no IVFC wrapper) to a temporary file beside
 /// `destination`, applies the patches, syncs and renames it into place.
-fn write_service_view(image: &mut Image, destination: &Path, patches: &[(u64, Vec<u8>)], cancel: &CancelToken) -> Result<()> {
+fn write_service_view(
+    image: &mut Image,
+    destination: &Path,
+    patches: &[(u64, Vec<u8>)],
+    cancel: &CancelToken,
+) -> Result<()> {
     let parent = destination.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
-    std::fs::create_dir_all(parent).map_err(|error| ForgeError::io(format!("Cannot create {}", parent.display()), error))?;
+    std::fs::create_dir_all(parent)
+        .map_err(|error| ForgeError::io(format!("Cannot create {}", parent.display()), error))?;
     let write_error = |error| ForgeError::io(format!("Cannot write {}", destination.display()), error);
     let mut output = tempfile::Builder::new().suffix(".partial").tempfile_in(parent).map_err(write_error)?;
     image.stream.seek(SeekFrom::Start(image.base)).map_err(|error| ForgeError::io("Read failed", error))?;

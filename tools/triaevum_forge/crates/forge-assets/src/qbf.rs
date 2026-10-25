@@ -122,14 +122,13 @@ pub fn pair_font_coverage(native: &QbfFont, replacement: &QbfFont) -> Result<Map
     if density < 1 {
         return Err(invalid("QBF replacement has lower coverage density"));
     }
-    let by_code: HashMap<u16, &QbfCharacter> =
-        replacement.characters.iter().map(|entry| (entry.code, entry)).collect();
+    let by_code: HashMap<u16, &QbfCharacter> = replacement.characters.iter().map(|entry| (entry.code, entry)).collect();
     let mut mappings = Vec::with_capacity(native.characters.len());
     let mut pairs = Vec::with_capacity(native.characters.len());
     for entry in &native.characters {
-        let source = by_code.get(&entry.code).ok_or_else(|| {
-            invalid(format!("QBF replacement is missing native character U+{:04X}", entry.code))
-        })?;
+        let source = by_code
+            .get(&entry.code)
+            .ok_or_else(|| invalid(format!("QBF replacement is missing native character U+{:04X}", entry.code)))?;
         mappings.push(json!({
             "code": entry.code,
             "native_glyph": entry.glyph_index,
@@ -148,8 +147,7 @@ pub fn pair_font_coverage(native: &QbfFont, replacement: &QbfFont) -> Result<Map
             return Err(invalid("QBF native glyph alias maps to conflicting HD coverage"));
         }
     }
-    let differences =
-        native.characters.iter().filter(|entry| entry.metrics != by_code[&entry.code].metrics).count();
+    let differences = native.characters.iter().filter(|entry| entry.metrics != by_code[&entry.code].metrics).count();
     let contract = json!({
         "native_sha256": native.sha256(),
         "coverage_sha256": replacement.sha256(),
@@ -209,7 +207,9 @@ mod tests {
         let mut longer = data.clone();
         longer.push(0);
         assert!(parse_qbf(&longer).is_err());
-        for (offset, value) in [(0, 0), (4, 255), (6, 0), (8, 99), (12, 8), (13, 0), (14, 15), (15, 4), (18, 255), (24, 32)] {
+        for (offset, value) in
+            [(0, 0), (4, 255), (6, 0), (8, 99), (12, 8), (13, 0), (14, 15), (15, 4), (18, 255), (24, 32)]
+        {
             let mut broken = data.clone();
             broken[offset] = value;
             assert!(parse_qbf(&broken).is_err(), "{offset}");

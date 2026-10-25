@@ -217,11 +217,29 @@ impl Tam {
 
         let executable = SECTION_REQUIRED | SECTION_EXECUTABLE;
         let mut planned = vec![
-            (SECTION_METADATA_JSON, SECTION_REQUIRED, metadata_bytes.len() as u64, sha256_bytes(&metadata_bytes), Payload::Inline(metadata_bytes)),
-            (SECTION_NATIVE_IMAGE, executable, native_bytes, native_digest, Payload::File { path: native_path, label: "native module image" }),
+            (
+                SECTION_METADATA_JSON,
+                SECTION_REQUIRED,
+                metadata_bytes.len() as u64,
+                sha256_bytes(&metadata_bytes),
+                Payload::Inline(metadata_bytes),
+            ),
+            (
+                SECTION_NATIVE_IMAGE,
+                executable,
+                native_bytes,
+                native_digest,
+                Payload::File { path: native_path, label: "native module image" },
+            ),
         ];
         let minor = if let Some((path, bytes, digest)) = title_aot {
-            planned.push((SECTION_TITLE_AOT_IMAGE, executable, bytes, digest, Payload::File { path, label: "title AOT image" }));
+            planned.push((
+                SECTION_TITLE_AOT_IMAGE,
+                executable,
+                bytes,
+                digest,
+                Payload::File { path, label: "title AOT image" },
+            ));
             FORMAT_MINOR
         } else {
             0
@@ -283,8 +301,8 @@ impl Tam {
             match &section.payload {
                 Payload::Inline(bytes) => output.write_all(bytes).map_err(write_error)?,
                 Payload::File { path, label } => {
-                    let mut source =
-                        File::open(path).map_err(|error| ForgeError::io(format!("Cannot read {}", path.display()), error))?;
+                    let mut source = File::open(path)
+                        .map_err(|error| ForgeError::io(format!("Cannot read {}", path.display()), error))?;
                     let (copied, digest) = copy_hashing(&mut source, &mut output, section.bytes, cancel)?;
                     if copied != section.bytes || digest != section.digest {
                         return Err(ForgeError::integrity(format!("{label} changed while the TAM module was written")));
@@ -341,7 +359,8 @@ pub fn write_tam_file(output: &Path, request: &TamRequest<'_>, cancel: &CancelTo
     }
     let tam = Tam::build(request, cancel)?;
     let parent = output.parent().ok_or_else(|| invalid("TAM output has no parent directory"))?;
-    std::fs::create_dir_all(parent).map_err(|error| ForgeError::io(format!("Cannot create {}", parent.display()), error))?;
+    std::fs::create_dir_all(parent)
+        .map_err(|error| ForgeError::io(format!("Cannot create {}", parent.display()), error))?;
     let name = output.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
     let temporary = output.with_file_name(format!(".{name}.tmp"));
     if temporary.exists() {
@@ -432,7 +451,11 @@ mod tests {
         std::fs::write(&title, b"MZ private title AOT").unwrap();
         let (source, translator) = hashes();
         let tam = Tam::build(
-            &TamRequest { source_identity: &source, translator_identity: &translator, ..request(&native, Some(&title)) },
+            &TamRequest {
+                source_identity: &source,
+                translator_identity: &translator,
+                ..request(&native, Some(&title))
+            },
             &CancelToken::new(),
         )
         .unwrap();
@@ -459,8 +482,14 @@ mod tests {
             message(TamRequest { source_identity: "not-a-hash", ..base.clone() }),
             "source identity must be a lowercase or uppercase SHA-256"
         );
-        assert_eq!(message(TamRequest { target_triple: "host-default", ..base.clone() }), "unsupported target triple: host-default");
-        assert_eq!(message(TamRequest { target_triple: " ", ..base.clone() }), "recipe and target triple must not be empty");
+        assert_eq!(
+            message(TamRequest { target_triple: "host-default", ..base.clone() }),
+            "unsupported target triple: host-default"
+        );
+        assert_eq!(
+            message(TamRequest { target_triple: " ", ..base.clone() }),
+            "recipe and target triple must not be empty"
+        );
         assert_eq!(message(TamRequest { runtime_abi: 2, ..base.clone() }), "unsupported runtime ABI: 2");
         assert_eq!(
             message(TamRequest { required_services: &[0x4143_4950, 0x4143_4950], ..base.clone() }),
@@ -501,7 +530,8 @@ mod tests {
         let native = directory.path().join("module.dll");
         std::fs::write(&native, b"MZ").unwrap();
         let (source, translator) = hashes();
-        let request = TamRequest { source_identity: &source, translator_identity: &translator, ..request(&native, None) };
+        let request =
+            TamRequest { source_identity: &source, translator_identity: &translator, ..request(&native, None) };
         let cancel = CancelToken::new();
         let output = directory.path().join("out").join("game.tam");
         let written = write_tam_file(&output, &request, &cancel).unwrap();

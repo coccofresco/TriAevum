@@ -73,9 +73,7 @@ pub fn resolve(path: &Path) -> Result<PathBuf> {
     let absolute = if path.is_absolute() {
         path.to_path_buf()
     } else {
-        std::env::current_dir()
-            .map_err(|error| ForgeError::io("Cannot read the working directory", error))?
-            .join(path)
+        std::env::current_dir().map_err(|error| ForgeError::io("Cannot read the working directory", error))?.join(path)
     };
     if cfg!(windows) {
         Ok(resolve_windows(&normalize(&absolute)))

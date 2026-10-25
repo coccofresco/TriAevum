@@ -58,7 +58,10 @@ pub fn acquire(path: &Path) -> Result<KernelLock> {
 }
 
 fn busy(path: &Path) -> ForgeError {
-    ForgeError::new(ErrorKind::Busy, format!("Another Forge or the game is using this installation: {}", path.display()))
+    ForgeError::new(
+        ErrorKind::Busy,
+        format!("Another Forge or the game is using this installation: {}", path.display()),
+    )
 }
 
 #[cfg(test)]

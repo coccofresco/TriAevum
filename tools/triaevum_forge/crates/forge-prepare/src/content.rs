@@ -168,7 +168,8 @@ pub fn verify_sources(
 
     let mut verified_mod = None;
     if let Some((archive, contract)) = ui_texture_archive {
-        let contract = contract.ok_or_else(|| forge_error("revision recipe does not support the HD UI texture pack"))?;
+        let contract =
+            contract.ok_or_else(|| forge_error("revision recipe does not support the HD UI texture pack"))?;
         let resolved = resolve(&expanduser(archive))?;
         if !is_regular_file(&resolved) {
             return Err(forge_error(format!(
@@ -266,7 +267,9 @@ pub fn validate_process_manifest(
     else {
         return Err(forge_error("process manifest is missing source or process metadata"));
     };
-    for (field, expected) in [("exheader_sha256", &verified.exheader.sha256), ("code_bin_sha256", &verified.code.sha256)] {
+    for (field, expected) in
+        [("exheader_sha256", &verified.exheader.sha256), ("code_bin_sha256", &verified.code.sha256)]
+    {
         if get_str(source, field).to_lowercase() != *expected {
             return Err(forge_error(format!("process manifest {field} does not match verified input")));
         }
@@ -475,7 +478,8 @@ pub fn prepare_content(
     }
 
     let parent = title_root.parent().expect("title folder has a parent");
-    std::fs::create_dir_all(parent).map_err(|error| ForgeError::io(format!("Cannot create {}", parent.display()), error))?;
+    std::fs::create_dir_all(parent)
+        .map_err(|error| ForgeError::io(format!("Cannot create {}", parent.display()), error))?;
     std::fs::create_dir(&title_root)
         .map_err(|error| ForgeError::io(format!("Cannot create {}", title_root.display()), error))?;
     let written = forge_base::fsutil::atomic_write_bytes(&manifest_path, &manifest_bytes)
@@ -537,8 +541,9 @@ pub fn load_prepared_content(
     let state_path = title_root.join("forge-state.json");
     let manifest_path = title_root.join("process-manifest.json");
     let loaded = load_json_object(&index_path).and_then(|index| Ok((index, load_json_object(&state_path)?)));
-    let (index, state) = loaded
-        .map_err(|error| ForgeError::new(error.kind, format!("prepared Forge output is incomplete: {}", error.message)))?;
+    let (index, state) = loaded.map_err(|error| {
+        ForgeError::new(error.kind, format!("prepared Forge output is incomplete: {}", error.message))
+    })?;
     if index.get("format").and_then(Value::as_str) != Some(CONTENT_INDEX_FORMAT)
         || index.get("private_local_artifact") != Some(&Value::Bool(true))
         || index.get("redistributable") != Some(&Value::Bool(false))
@@ -599,7 +604,10 @@ pub fn load_prepared_content(
             }
             let digest = sha256_file(&path, cancel).map_err(|error| match error.kind {
                 ErrorKind::Cancelled => error,
-                _ => ForgeError::new(error.kind, prefixed(&format!("cannot verify prepared {kind} input"), &error.message)),
+                _ => ForgeError::new(
+                    error.kind,
+                    prefixed(&format!("cannot verify prepared {kind} input"), &error.message),
+                ),
             })?;
             Ok((hex(&digest.1) == expected_hash).then_some(size))
         })()?;
@@ -813,11 +821,13 @@ pub(crate) mod tests {
         let cancel = CancelToken::new();
         let archive = fixture.root.join("pack.zip");
         std::fs::write(&archive, b"zip").unwrap();
-        let error = verify_sources(&fixture.recipe, &paths, &mut cache, None, Some((&archive, None)), &cancel).unwrap_err();
+        let error =
+            verify_sources(&fixture.recipe, &paths, &mut cache, None, Some((&archive, None)), &cancel).unwrap_err();
         assert_eq!(error.message, "revision recipe does not support the HD UI texture pack");
         let contract = ArchiveContract { kind: "ui_texture_archive".to_string(), sha256: digest(b"zip") };
         let (_, verified_mod) =
-            verify_sources(&fixture.recipe, &paths, &mut cache, None, Some((&archive, Some(&contract))), &cancel).unwrap();
+            verify_sources(&fixture.recipe, &paths, &mut cache, None, Some((&archive, Some(&contract))), &cancel)
+                .unwrap();
         assert_eq!(verified_mod.unwrap().bytes, 3);
 
         let mut family_recipe = fixture.recipe.clone();
@@ -827,7 +837,8 @@ pub(crate) mod tests {
         assert_eq!(error.kind, ErrorKind::Internal);
         let accept = |_: &Map<String, Value>, _: &SourcePaths<'_>| Ok(());
         verify_sources(&family_recipe, &paths, &mut cache, Some(&accept), None, &cancel).unwrap();
-        let refuse = |_: &Map<String, Value>, _: &SourcePaths<'_>| Err(ForgeError::invalid("Incompatible execution data: code"));
+        let refuse =
+            |_: &Map<String, Value>, _: &SourcePaths<'_>| Err(ForgeError::invalid("Incompatible execution data: code"));
         let error = verify_sources(&family_recipe, &paths, &mut cache, Some(&refuse), None, &cancel).unwrap_err();
         assert_eq!(error.message, "Incompatible execution data: code");
     }
@@ -868,11 +879,21 @@ pub(crate) mod tests {
         }
         let mut recipe = fixture.recipe.clone();
         recipe.insert("process".to_string(), json!({"entrypoint": 0x0020_0000}));
-        let error = prepare_content(&recipe, &fixture.verify(), &fixture.output, None, Some(&synthetic_manifest), &CancelToken::new())
-            .unwrap_err();
+        let error = prepare_content(
+            &recipe,
+            &fixture.verify(),
+            &fixture.output,
+            None,
+            Some(&synthetic_manifest),
+            &CancelToken::new(),
+        )
+        .unwrap_err();
         assert_eq!(error.message, "process manifest entrypoint does not match recipe");
         let failing = |_: &Path, _: &Path, _: &Path, _: &CancelToken| Err(ForgeError::invalid("ExHeader is truncated"));
-        assert_eq!(fixture.prepare(&failing).unwrap_err().message, "cannot derive CTR process manifest: ExHeader is truncated");
+        assert_eq!(
+            fixture.prepare(&failing).unwrap_err().message,
+            "cannot derive CTR process manifest: ExHeader is truncated"
+        );
         assert!(!fixture.output.join("fixture").exists());
     }
 

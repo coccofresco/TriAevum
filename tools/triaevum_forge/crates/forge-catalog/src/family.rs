@@ -119,10 +119,8 @@ pub fn verify(recipe: &Map<String, Value>, paths: InputPaths<'_>, phase: &str, c
     };
     let actual = identity(paths, cancel)?;
     if !py_eq(&actual, &contract) {
-        let different: Vec<&str> = ["code", "exheader", "romfs"]
-            .into_iter()
-            .filter(|kind| !py_eq(&actual[*kind], &contract[*kind]))
-            .collect();
+        let different: Vec<&str> =
+            ["code", "exheader", "romfs"].into_iter().filter(|kind| !py_eq(&actual[*kind], &contract[*kind])).collect();
         return Err(ForgeError::new(
             ErrorKind::UnsupportedRevision,
             format!("Incompatible {phase} data: {}; no title was activated", different.join(", ")),
@@ -152,7 +150,11 @@ mod tests {
         assert!(expected(&Map::new(), "source").unwrap().is_none());
         assert_eq!(expected(&recipe, "other").unwrap_err().message, "Unsupported content-family contract");
         let cases: [(&str, Value, &str); 5] = [
-            ("/data_compatibility/source/code/sha256", json!("d".repeat(64)), "Content family cannot change the compiled code identity"),
+            (
+                "/data_compatibility/source/code/sha256",
+                json!("d".repeat(64)),
+                "Content family cannot change the compiled code identity",
+            ),
             ("/data_compatibility/source/exheader", json!("B".repeat(64)), "Invalid content-family digest"),
             ("/data_compatibility/source/romfs/files", json!(true), "Invalid content-family size"),
             ("/data_compatibility/execution/romfs", json!({"sha256": "c".repeat(64)}), "Invalid content-family record"),

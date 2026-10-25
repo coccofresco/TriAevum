@@ -69,8 +69,14 @@ fn real_romfs_catalogs_match_python() {
     let script = directory.path().join("builders.py");
     std::fs::write(&script, PYTHON_BUILDERS).unwrap();
     let started = Instant::now();
-    let status =
-        Command::new(python).arg("-I").arg(&script).arg(repository()).arg(&romfs).arg(directory.path()).status().unwrap();
+    let status = Command::new(python)
+        .arg("-I")
+        .arg(&script)
+        .arg(repository())
+        .arg(&romfs)
+        .arg(directory.path())
+        .status()
+        .unwrap();
     assert!(status.success());
     println!("python: {:.1}s", started.elapsed().as_secs_f64());
     for (name, bytes) in &outputs {

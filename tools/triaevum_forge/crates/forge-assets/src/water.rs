@@ -57,12 +57,47 @@ pub(crate) fn texture_name(field: &[u8]) -> String {
 }
 
 const WATER_STEMS: &[&str] = &[
-    "water", "riv", "kawa", "taki", "idomizu", "mizusoko", "bmizu", "hole_mizu", "niwa_mizu", "drag_mizu", "rm_mizu",
-    "ydan_mizu", "wsea", "hwat", "sea0",
+    "water",
+    "riv",
+    "kawa",
+    "taki",
+    "idomizu",
+    "mizusoko",
+    "bmizu",
+    "hole_mizu",
+    "niwa_mizu",
+    "drag_mizu",
+    "rm_mizu",
+    "ydan_mizu",
+    "wsea",
+    "hwat",
+    "sea0",
 ];
 const EXCLUDED_STEMS: &[&str] = &[
-    "kabe", "yuka", "hasira", "_ten", "iwa", "emblem", "futi", "hari", "toge", "tunagi", "_obj", "ranma", "_dg_", "_bs_",
-    "kasumi", "nawa", "angel", "hikari", "entran", "mizukusa", "mizuzou", "sumi", "huchi", "fallmaster",
+    "kabe",
+    "yuka",
+    "hasira",
+    "_ten",
+    "iwa",
+    "emblem",
+    "futi",
+    "hari",
+    "toge",
+    "tunagi",
+    "_obj",
+    "ranma",
+    "_dg_",
+    "_bs_",
+    "kasumi",
+    "nawa",
+    "angel",
+    "hikari",
+    "entran",
+    "mizukusa",
+    "mizuzou",
+    "sumi",
+    "huchi",
+    "fallmaster",
 ];
 
 /// `WATER_NAME.search` (case-insensitive): a stem anywhere, or `wate` at the
@@ -199,7 +234,11 @@ pub fn zar_textures(data: &[u8]) -> Result<Vec<ModelTexture<'_>>> {
         let list_offset = u32_at(data, record + 4)? as usize;
         let name_offset = u32_at(data, record + 8)? as usize;
         if c_string(name_offset)? == "cmb" {
-            if typed_count.checked_mul(4).and_then(|bytes| list_offset.checked_add(bytes)).is_none_or(|end| end > data.len()) {
+            if typed_count
+                .checked_mul(4)
+                .and_then(|bytes| list_offset.checked_add(bytes))
+                .is_none_or(|end| end > data.len())
+            {
                 return Err(truncated());
             }
             for item in 0..typed_count {

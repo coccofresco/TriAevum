@@ -149,10 +149,9 @@ pub const LINUX: ReleasePlatform = ReleasePlatform {
 };
 
 pub fn for_target(target: &str) -> Result<ReleasePlatform> {
-    [WINDOWS, LINUX]
-        .into_iter()
-        .find(|platform| platform.target == target)
-        .ok_or_else(|| ForgeError::new(forge_base::ErrorKind::IncompatibleTarget, format!("Unsupported release target: {target}")))
+    [WINDOWS, LINUX].into_iter().find(|platform| platform.target == target).ok_or_else(|| {
+        ForgeError::new(forge_base::ErrorKind::IncompatibleTarget, format!("Unsupported release target: {target}"))
+    })
 }
 
 /// The runtime of an installation: where a (new) package put it until Forge
@@ -248,8 +247,9 @@ mod tests {
         )
         .unwrap();
         assert!(flatpak.use_file_portal);
-        assert!(for_package(Path::new("/app/lib/triaevum"), &env_of(&[("FLATPAK_ID", FLATPAK_ID)]), HostOs::Linux)
-            .is_err());
+        assert!(
+            for_package(Path::new("/app/lib/triaevum"), &env_of(&[("FLATPAK_ID", FLATPAK_ID)]), HostOs::Linux).is_err()
+        );
     }
 
     #[test]

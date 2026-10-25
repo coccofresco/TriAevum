@@ -98,7 +98,11 @@ fn contract_digest(contract: &Map<String, Value>) -> String {
 /// `forge_gui.match_extracted_recipe`: the one recipe whose import identity
 /// (source inputs for adapted revisions) equals the extracted bytes, or else
 /// whose declared source content family equals them.
-pub fn match_extracted_recipe(extracted: &TitleInputs, path: &Path, cancel: &CancelToken) -> Result<Map<String, Value>> {
+pub fn match_extracted_recipe(
+    extracted: &TitleInputs,
+    path: &Path,
+    cancel: &CancelToken,
+) -> Result<Map<String, Value>> {
     let recipes = load_recipes(path)?;
     let mut matches: Vec<&Map<String, Value>> = Vec::new();
     for recipe in recipes.iter().filter_map(Value::as_object) {
@@ -268,13 +272,21 @@ mod tests {
         let digest = forge_base::hashing::sha256_hex(b"abc");
         let cancel = CancelToken::new();
         let contract = |value: Value| value.as_object().unwrap().clone();
-        let ok = verify_input("code", &path, &contract(json!({"bytes": "3", "sha256": digest.to_uppercase()})), &mut FreshDigest(&cancel)).unwrap();
+        let ok = verify_input(
+            "code",
+            &path,
+            &contract(json!({"bytes": "3", "sha256": digest.to_uppercase()})),
+            &mut FreshDigest(&cancel),
+        )
+        .unwrap();
         assert_eq!(ok.sha256, digest);
-        let error = verify_input("code", &path, &contract(json!({"sha256": digest})), &mut FreshDigest(&cancel)).unwrap_err();
+        let error =
+            verify_input("code", &path, &contract(json!({"sha256": digest})), &mut FreshDigest(&cancel)).unwrap_err();
         assert_eq!(error.message, "code size mismatch: expected None, got 3");
         let error = verify_input("code", &path, &contract(json!({"bytes": 3})), &mut FreshDigest(&cancel)).unwrap_err();
         assert_eq!(error.message, format!("code SHA-256 mismatch: expected , got {digest}"));
-        let error = verify_input("code", directory.path(), &contract(json!({})), &mut FreshDigest(&cancel)).unwrap_err();
+        let error =
+            verify_input("code", directory.path(), &contract(json!({})), &mut FreshDigest(&cancel)).unwrap_err();
         assert!(error.message.starts_with("code input is not a regular file: "), "{}", error.message);
     }
 }

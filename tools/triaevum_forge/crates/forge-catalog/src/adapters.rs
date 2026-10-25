@@ -157,11 +157,15 @@ pub fn adapt_extracted_inputs(
         return Err(ForgeError::invalid("Adapter output must not contain the source inputs"));
     }
     if let Some(parent) = output.parent() {
-        std::fs::create_dir_all(parent).map_err(|error| ForgeError::io(format!("Cannot create {}", parent.display()), error))?;
+        std::fs::create_dir_all(parent)
+            .map_err(|error| ForgeError::io(format!("Cannot create {}", parent.display()), error))?;
     }
-    std::fs::create_dir(&output).map_err(|error| ForgeError::io(format!("Cannot create {}", output.display()), error))?;
+    std::fs::create_dir(&output)
+        .map_err(|error| ForgeError::io(format!("Cannot create {}", output.display()), error))?;
     match write_adapted(extracted, recipe, &program, &original, &output, cancel) {
-        Ok((inputs, receipt)) => Ok(Some(Adaptation { inputs, receipt, wall_seconds: started.elapsed().as_secs_f64() })),
+        Ok((inputs, receipt)) => {
+            Ok(Some(Adaptation { inputs, receipt, wall_seconds: started.elapsed().as_secs_f64() }))
+        }
         Err(error) => {
             let _ = std::fs::remove_dir_all(&output);
             Err(error)

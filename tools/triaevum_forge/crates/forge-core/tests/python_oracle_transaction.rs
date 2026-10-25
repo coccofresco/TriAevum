@@ -116,7 +116,12 @@ fn python_recovers_a_rust_crash() {
     let mut args = vec!["commit", installation.to_str().unwrap()];
     args.extend(targets.iter().map(|target| target.to_str().unwrap()));
     let output = run_python(&python, &args);
-    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "committed", "{}", String::from_utf8_lossy(&output.stderr));
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "committed",
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert_eq!(std::fs::read(&targets[0]).unwrap(), b"previous title");
     assert!(!targets[1].exists());
 }

@@ -85,13 +85,19 @@ fn is_fire_overlay(name: &str) -> bool {
         if t.contains('\n') {
             return false;
         }
-        let wild = |prefix: &str, suffix: &str| t.len() >= prefix.len() + suffix.len() && t.starts_with(prefix) && t.ends_with(suffix);
+        let wild = |prefix: &str, suffix: &str| {
+            t.len() >= prefix.len() + suffix.len() && t.starts_with(prefix) && t.ends_with(suffix)
+        };
         let digits = |prefix: &str, suffix: &str| {
             t.strip_prefix(prefix)
                 .and_then(|rest| rest.strip_suffix(suffix))
                 .is_some_and(|middle| !middle.is_empty() && middle.bytes().all(|b| b.is_ascii_digit()))
         };
-        wild("dg05_", "_al") || wild("dg_dod_", "t") || wild("dg_g_kabe_", "_t") || digits("gc_kabe_", "t") || digits("gcp_kabe_", "_t")
+        wild("dg05_", "_al")
+            || wild("dg_dod_", "t")
+            || wild("dg_g_kabe_", "_t")
+            || digits("gc_kabe_", "t")
+            || digits("gcp_kabe_", "_t")
     }
     whole(name) || name.strip_suffix('\n').is_some_and(whole)
 }
@@ -130,9 +136,7 @@ pub fn category(first_texture: &str, additive: bool, halo: bool) -> Option<&'sta
 
 /// A plain white texture: the glow the rooms fill their openings with.
 fn is_daylight(colour: Option<[f64; 3]>) -> bool {
-    colour.is_some_and(|c| {
-        pymath::sum(c) / 3.0 >= 0.95 && pymath::max(c) - pymath::min(c) <= 0.02
-    })
+    colour.is_some_and(|c| pymath::sum(c) / 3.0 >= 0.95 && pymath::max(c) - pymath::min(c) <= 0.02)
 }
 
 #[derive(Clone, Debug)]
@@ -422,11 +426,8 @@ fn model_emitters(model: &mut Model<'_>) -> ModelResult<Vec<Emitter>> {
     let mut materials: HashMap<usize, (usize, bool, Option<&'static str>)> = HashMap::new();
     for (material, _) in &shapes_by_material {
         let entry = &model.materials[*material];
-        let first = entry
-            .texture_indices
-            .iter()
-            .filter_map(|&i| usize::try_from(i).ok())
-            .find(|&i| i < model.textures.len());
+        let first =
+            entry.texture_indices.iter().filter_map(|&i| usize::try_from(i).ok()).find(|&i| i < model.textures.len());
         if let Some(texture_index) = first {
             let t = &model.textures[texture_index];
             let halo = entry.additive && is_halo(t.format, t.kind, t.pixels, t.width, t.height);

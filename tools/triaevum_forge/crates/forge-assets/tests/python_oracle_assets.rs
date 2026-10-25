@@ -39,8 +39,11 @@ impl Oracle {
     fn expect_bytes(&mut self, label: &str, actual: &[u8], expected: &Path) {
         let expected = std::fs::read(expected).unwrap();
         if actual != expected.as_slice() {
-            let offset = actual.iter().zip(&expected).position(|(a, b)| a != b).unwrap_or(actual.len().min(expected.len()));
-            let context = |bytes: &[u8]| String::from_utf8_lossy(&bytes[offset.saturating_sub(40)..(offset + 80).min(bytes.len())]).into_owned();
+            let offset =
+                actual.iter().zip(&expected).position(|(a, b)| a != b).unwrap_or(actual.len().min(expected.len()));
+            let context = |bytes: &[u8]| {
+                String::from_utf8_lossy(&bytes[offset.saturating_sub(40)..(offset + 80).min(bytes.len())]).into_owned()
+            };
             self.failures.push(format!(
                 "{label}: differs at byte {offset} (lengths {} / {})\n  rust:   {}\n  python: {}",
                 actual.len(),
@@ -135,14 +138,16 @@ fn derived_assets_match_python() {
     let directory = tempfile::tempdir().unwrap();
     let output = std::path::absolute(directory.path()).unwrap().join("oracle");
     let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/oracle/asset_cases.py");
-    let status = Command::new(python).arg("-I").arg(script).arg(repository()).arg(&output).arg("assets").status().unwrap();
+    let status =
+        Command::new(python).arg("-I").arg(script).arg(repository()).arg(&output).arg("assets").status().unwrap();
     assert!(status.success(), "the Python fixture generator failed");
     let cases: Vec<Value> = serde_json::from_slice(&std::fs::read(output.join("cases.json")).unwrap()).unwrap();
     let mut oracle = Oracle { output: output.clone(), failures: Vec::new() };
     let cancel = CancelToken::new();
     let rust_data = directory.path().join("rust");
     for (index, case) in cases.iter().enumerate() {
-        let label = format!("{} {}", case["kind"].as_str().unwrap(), case.get("name").and_then(Value::as_str).unwrap_or(""));
+        let label =
+            format!("{} {}", case["kind"].as_str().unwrap(), case.get("name").and_then(Value::as_str).unwrap_or(""));
         let data_root = rust_data.join(index.to_string());
         match case["kind"].as_str().unwrap() {
             "water_catalog" => {
@@ -151,8 +156,14 @@ fn derived_assets_match_python() {
                 oracle.expect_value(&label, &summary, &case["summary"]);
             }
             "prepare_water" => {
-                water::prepare_water_textures(&data_root, &case["recipe"], &oracle.path(case, "romfs"), &mut |_, _| {}, &cancel)
-                    .unwrap();
+                water::prepare_water_textures(
+                    &data_root,
+                    &case["recipe"],
+                    &oracle.path(case, "romfs"),
+                    &mut |_, _| {},
+                    &cancel,
+                )
+                .unwrap();
                 oracle.expect_tree(&label, &data_root, &case["files"]);
             }
             "scene_catalog" => {
@@ -166,7 +177,11 @@ fn derived_assets_match_python() {
                 let room = oracle.path(case, "room");
                 let emitters = scene_lights::room_emitters(&std::fs::read(&room).unwrap()).unwrap();
                 let payload = dumps(&Value::Array(emitters), COMPACT_UNSORTED);
-                oracle.expect_bytes(&format!("{label}{}", room.display()), payload.as_bytes(), &oracle.path(case, "expected"));
+                oracle.expect_bytes(
+                    &format!("{label}{}", room.display()),
+                    payload.as_bytes(),
+                    &oracle.path(case, "expected"),
+                );
             }
             "scene_table" => {
                 let payload = precomputed_tables::scene_lights_table(
@@ -196,7 +211,8 @@ fn derived_assets_match_python() {
             }
             "font_pack" => {
                 let zip = data_root.join("font.zip");
-                let result = font_pack::prepare_font_pack(&oracle.path(case, "font"), &oracle.path(case, "romfs"), &zip);
+                let result =
+                    font_pack::prepare_font_pack(&oracle.path(case, "font"), &oracle.path(case, "romfs"), &zip);
                 match case.get("message").and_then(Value::as_str) {
                     Some(message) => oracle.expect_error(&label, result, message),
                     None => {
@@ -206,7 +222,8 @@ fn derived_assets_match_python() {
                 }
             }
             "o3tu" => {
-                let pack = texture_pack::build_texture_pack(&std::fs::read(oracle.path(case, "atlas")).unwrap()).unwrap();
+                let pack =
+                    texture_pack::build_texture_pack(&std::fs::read(oracle.path(case, "atlas")).unwrap()).unwrap();
                 oracle.expect_bytes(&label, &pack, &oracle.path(case, "expected"));
             }
             "topscreen" => {

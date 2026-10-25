@@ -119,9 +119,7 @@ pub fn error_event(error: &ForgeError) -> Value {
 
 impl Job {
     /// Runs `work` on a worker thread. Its result becomes the terminal event.
-    pub fn spawn(
-        work: impl FnOnce(&EventSink, &CancelToken) -> crate::Result<Value> + Send + 'static,
-    ) -> Self {
+    pub fn spawn(work: impl FnOnce(&EventSink, &CancelToken) -> crate::Result<Value> + Send + 'static) -> Self {
         let queue = Arc::new((Mutex::new(EventQueue::default()), Condvar::new()));
         let cancel = CancelToken::new();
         let sink = EventSink { queue: Arc::clone(&queue) };

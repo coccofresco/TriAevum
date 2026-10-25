@@ -358,7 +358,12 @@ mod tests {
             let x = float(&case[0]);
             check("sqrt", format!("{x:e}"), x.sqrt(), float(&case[1]));
         }
-        assert!(failures.is_empty(), "{} differences:\n{}", failures.len(), failures[..failures.len().min(30)].join("\n"));
+        assert!(
+            failures.is_empty(),
+            "{} differences:\n{}",
+            failures.len(),
+            failures[..failures.len().min(30)].join("\n")
+        );
     }
 
     #[test]

@@ -19,10 +19,13 @@ fn etc1_texels(block: u64) -> [[i64; 3]; 16] {
     let halves: [[i64; 3]; 2] = if differential {
         let base = [bits(59, 31), bits(51, 31), bits(43, 31)];
         let delta = [56, 48, 40].map(|shift| bits(shift, 7) - if bits(shift, 4) != 0 { 8 } else { 0 });
-        [base.map(|c| (c << 3) | (c >> 2)), [0, 1, 2].map(|k| {
-            let c = base[k] + delta[k];
-            (c << 3) | (c >> 2)
-        })]
+        [
+            base.map(|c| (c << 3) | (c >> 2)),
+            [0, 1, 2].map(|k| {
+                let c = base[k] + delta[k];
+                (c << 3) | (c >> 2)
+            }),
+        ]
     } else {
         [[60, 52, 44].map(|shift| bits(shift, 15) * 17), [56, 48, 40].map(|shift| bits(shift, 15) * 17)]
     };
@@ -67,7 +70,9 @@ pub fn texels(format: u16, kind: u16, data: &[u8]) -> Vec<Rgba> {
             for pair in data.chunks_exact(2) {
                 let v = i64::from(u16::from_le_bytes([pair[0], pair[1]]));
                 out.push(match kind {
-                    0x8034 => [(v >> 11 & 31) * 255 / 31, (v >> 6 & 31) * 255 / 31, (v >> 1 & 31) * 255 / 31, (v & 1) * 255],
+                    0x8034 => {
+                        [(v >> 11 & 31) * 255 / 31, (v >> 6 & 31) * 255 / 31, (v >> 1 & 31) * 255 / 31, (v & 1) * 255]
+                    }
                     0x8363 => [(v >> 11 & 31) * 255 / 31, (v >> 5 & 63) * 255 / 63, (v & 31) * 255 / 31, 255],
                     _ => [(v >> 12 & 15) * 17, (v >> 8 & 15) * 17, (v >> 4 & 15) * 17, (v & 15) * 17],
                 });

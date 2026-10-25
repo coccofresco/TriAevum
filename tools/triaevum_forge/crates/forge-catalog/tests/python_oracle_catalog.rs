@@ -35,13 +35,22 @@ impl Context {
     }
 
     fn json_file(&self, args: &Value, key: &str) -> Map<String, Value> {
-        serde_json::from_slice::<Value>(&std::fs::read(self.path(args, key)).unwrap()).unwrap().as_object().unwrap().clone()
+        serde_json::from_slice::<Value>(&std::fs::read(self.path(args, key)).unwrap())
+            .unwrap()
+            .as_object()
+            .unwrap()
+            .clone()
     }
 
     fn relative(&self, path: &Path) -> String {
         let root = forge_catalog::paths::resolve(&self.work);
         let path = forge_catalog::paths::resolve(path);
-        path.strip_prefix(&root).unwrap().components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/")
+        path.strip_prefix(&root)
+            .unwrap()
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("/")
     }
 
     fn extracted(&self, args: &Value) -> TitleInputs {
@@ -53,7 +62,12 @@ impl Context {
                 sha256: row[2].as_str().unwrap().to_string(),
             }
         };
-        TitleInputs { program_id: args["program_id"].as_u64().unwrap(), code: file("code"), exheader: file("exheader"), romfs: file("romfs") }
+        TitleInputs {
+            program_id: args["program_id"].as_u64().unwrap(),
+            code: file("code"),
+            exheader: file("exheader"),
+            romfs: file("romfs"),
+        }
     }
 
     fn extracted_args(&self, inputs: &TitleInputs) -> Value {
@@ -71,7 +85,13 @@ fn same_bytes(left: &Path, right: &Path, failures: &mut Vec<String>) {
         (Ok(a), Ok(b)) if a == b => {}
         (Ok(a), Ok(b)) => {
             let at = a.iter().zip(&b).position(|(x, y)| x != y).unwrap_or(a.len().min(b.len()));
-            failures.push(format!("{} differs from {} at byte {at} (sizes {} / {})", right.display(), left.display(), a.len(), b.len()));
+            failures.push(format!(
+                "{} differs from {} at byte {at} (sizes {} / {})",
+                right.display(),
+                left.display(),
+                a.len(),
+                b.len()
+            ));
         }
         (a, b) => failures.push(format!("{} / {}: {:?} {:?}", left.display(), right.display(), a.is_ok(), b.is_ok())),
     }
@@ -79,8 +99,9 @@ fn same_bytes(left: &Path, right: &Path, failures: &mut Vec<String>) {
 
 fn same_directory(python: &Path, rust: &Path, failures: &mut Vec<String>) {
     let names = |directory: &Path| {
-        let mut names: Vec<String> =
-            std::fs::read_dir(directory).map(|entries| entries.map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect()).unwrap_or_default();
+        let mut names: Vec<String> = std::fs::read_dir(directory)
+            .map(|entries| entries.map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect())
+            .unwrap_or_default();
         names.sort();
         names
     };
@@ -117,7 +138,9 @@ fn run(context: &Context, op: &str, args: &Value, failures: &mut Vec<String>) ->
             let source = std::fs::read(context.path(args, "source")).unwrap();
             let canonical = std::fs::read(context.path(args, "canonical")).unwrap();
             let program = copy_adapter::build_program(&source, &canonical)?;
-            if std::fs::read(context.path(args, "program_file")).unwrap() != forge_base::legacy_json::pretty_file_bytes(&program) {
+            if std::fs::read(context.path(args, "program_file")).unwrap()
+                != forge_base::legacy_json::pretty_file_bytes(&program)
+            {
                 failures.push(format!("COPY program file bytes differ: {args}"));
             }
             Ok(program)
@@ -133,7 +156,8 @@ fn run(context: &Context, op: &str, args: &Value, failures: &mut Vec<String>) ->
         }
         "import_contract" => import_contract(&context.json_file(args, "recipe")),
         "adapter_validate" => {
-            Ok(validate_adapter(&context.path(args, "root"), &context.json_file(args, "recipe"), cancel)?.unwrap_or(Value::Null))
+            Ok(validate_adapter(&context.path(args, "root"), &context.json_file(args, "recipe"), cancel)?
+                .unwrap_or(Value::Null))
         }
         "adapt" => {
             let extracted = context.extracted(&args["extracted"]);
@@ -143,13 +167,16 @@ fn run(context: &Context, op: &str, args: &Value, failures: &mut Vec<String>) ->
             same_directory(&context.path(args, "output"), &output, failures);
             let value = match result? {
                 None => json!({"inputs": context.extracted_args(&extracted), "receipt": null}),
-                Some(adaptation) => json!({"inputs": context.extracted_args(&adaptation.inputs), "receipt": adaptation.receipt}),
+                Some(adaptation) => {
+                    json!({"inputs": context.extracted_args(&adaptation.inputs), "receipt": adaptation.receipt})
+                }
             };
             // Python wrote to py_out, Rust to rs_out.
             Ok(serde_json::from_str(&dumps(&value, PYTHON_ORDER).replace("/rs_out/", "/py_out/")).unwrap())
         }
         "match" => {
-            let recipe = match_extracted_recipe(&context.extracted(&args["extracted"]), &context.path(args, "recipes"), cancel)?;
+            let recipe =
+                match_extracted_recipe(&context.extracted(&args["extracted"]), &context.path(args, "recipes"), cancel)?;
             Ok(Value::Object(recipe))
         }
         "family_expected" => {
@@ -157,7 +184,8 @@ fn run(context: &Context, op: &str, args: &Value, failures: &mut Vec<String>) ->
             Ok(family::expected(&context.json_file(args, "recipe"), phase)?.unwrap_or(Value::Null))
         }
         "family_identity" | "family_verify" => {
-            let (code, exheader, romfs) = (context.path(args, "code"), context.path(args, "exheader"), context.path(args, "romfs"));
+            let (code, exheader, romfs) =
+                (context.path(args, "code"), context.path(args, "exheader"), context.path(args, "romfs"));
             let paths = InputPaths { code: &code, exheader: &exheader, romfs: &romfs };
             if op == "family_identity" {
                 family::identity(paths, cancel)
@@ -166,12 +194,16 @@ fn run(context: &Context, op: &str, args: &Value, failures: &mut Vec<String>) ->
             }
         }
         "options" => Ok(Value::Array(
-            recipes::load_recipe_options(&context.path(args, "path"))?.into_iter().map(|o| json!([o.id, o.label])).collect(),
+            recipes::load_recipe_options(&context.path(args, "path"))?
+                .into_iter()
+                .map(|o| json!([o.id, o.label]))
+                .collect(),
         )),
         "load_recipe" => Ok(Value::Object(load_recipe(&context.path(args, "path"), args["id"].as_str().unwrap())?)),
         "verify_input" => {
             let contract = args["contract"].as_object().unwrap();
-            let verified = verify_input("code", &context.path(args, "path"), contract, &mut recipes::FreshDigest(cancel))?;
+            let verified =
+                verify_input("code", &context.path(args, "path"), contract, &mut recipes::FreshDigest(cancel))?;
             let mut value = verified.as_json();
             value.as_object_mut().unwrap().shift_remove("path");
             Ok(value)
@@ -180,15 +212,30 @@ fn run(context: &Context, op: &str, args: &Value, failures: &mut Vec<String>) ->
             let root = context.path(args, "root");
             let path = checked_file(&root, &args["record"], cancel)?;
             let root = forge_catalog::paths::resolve(&root);
-            Ok(json!(path.strip_prefix(&root).unwrap().components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/")))
+            Ok(json!(path
+                .strip_prefix(&root)
+                .unwrap()
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy())
+                .collect::<Vec<_>>()
+                .join("/")))
         }
         "load_catalog" => Ok(Value::Object(load_catalog(&context.path(args, "root"))?)),
-        "validate_title" => {
-            Ok(Value::Object(validate_title(&context.path(args, "root"), &context.json_file(args, "recipe"), None, cancel)?))
-        }
+        "validate_title" => Ok(Value::Object(validate_title(
+            &context.path(args, "root"),
+            &context.json_file(args, "recipe"),
+            None,
+            cancel,
+        )?)),
         "select_title" => {
             let target = host_platform()?;
-            Ok(Value::Object(select_title(&context.path(args, "root"), &context.json_file(args, "recipe"), None, &target, cancel)?))
+            Ok(Value::Object(select_title(
+                &context.path(args, "root"),
+                &context.json_file(args, "recipe"),
+                None,
+                &target,
+                cancel,
+            )?))
         }
         "runtime_record" => {
             let root = context.path(args, "root");
@@ -196,7 +243,8 @@ fn run(context: &Context, op: &str, args: &Value, failures: &mut Vec<String>) ->
             runtime_record(&root, &catalog)
         }
         "variants" => {
-            let (catalog, recipes) = variants::add_verified_variants(&args["catalog"], &args["recipes"], &args["definitions"])?;
+            let (catalog, recipes) =
+                variants::add_verified_variants(&args["catalog"], &args["recipes"], &args["definitions"])?;
             Ok(json!([catalog, recipes]))
         }
         "bind" => {
@@ -249,10 +297,15 @@ fn catalog_matches_python() {
             (false, Err(error)) => {
                 let kind = expect["type"].as_str().unwrap();
                 if !UNCOMPARED_MESSAGES.contains(&kind) && error.message != expect["message"].as_str().unwrap() {
-                    failures.push(format!("{op} {args}: message\n  rust   {}\n  python {kind}: {}", error.message, expect["message"]));
+                    failures.push(format!(
+                        "{op} {args}: message\n  rust   {}\n  python {kind}: {}",
+                        error.message, expect["message"]
+                    ));
                 }
             }
-            (true, Err(error)) => failures.push(format!("{op} {args}: Rust rejected ({}), Python accepted", error.message)),
+            (true, Err(error)) => {
+                failures.push(format!("{op} {args}: Rust rejected ({}), Python accepted", error.message))
+            }
             (false, Ok(value)) => failures.push(format!(
                 "{op} {args}: Rust accepted ({}), Python rejected with {}: {}",
                 dumps(&value, PYTHON_ORDER),

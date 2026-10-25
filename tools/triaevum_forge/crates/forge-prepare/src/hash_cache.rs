@@ -34,7 +34,11 @@ impl HashCache {
             if let Ok(payload) = load_json_object(&path) {
                 if payload.get("format").and_then(Value::as_str) == Some(FORMAT) {
                     if let Some(Value::Object(raw)) = payload.get("entries") {
-                        entries = raw.iter().filter(|(_, value)| value.is_object()).map(|(k, v)| (k.clone(), v.clone())).collect();
+                        entries = raw
+                            .iter()
+                            .filter(|(_, value)| value.is_object())
+                            .map(|(k, v)| (k.clone(), v.clone()))
+                            .collect();
                     }
                 }
             }
@@ -70,8 +74,10 @@ impl HashCache {
         }
         let resolved = resolve(path)?;
         let (size, mtime_ns) = stat(&resolved)?;
-        self.entries
-            .insert(path_string(&resolved)?, json!({"bytes": size, "mtime_ns": mtime_ns, "sha256": digest.to_lowercase()}));
+        self.entries.insert(
+            path_string(&resolved)?,
+            json!({"bytes": size, "mtime_ns": mtime_ns, "sha256": digest.to_lowercase()}),
+        );
         Ok(())
     }
 
@@ -85,13 +91,16 @@ impl HashCache {
 
 /// (st_size, st_mtime_ns) following symlinks, as `Path.stat()` reports them.
 fn stat(path: &Path) -> Result<(u64, i64)> {
-    let metadata = std::fs::metadata(path).map_err(|error| ForgeError::io(format!("Cannot read {}", path.display()), error))?;
-    let modified = metadata.modified().map_err(|error| ForgeError::io(format!("Cannot read {}", path.display()), error))?;
+    let metadata =
+        std::fs::metadata(path).map_err(|error| ForgeError::io(format!("Cannot read {}", path.display()), error))?;
+    let modified =
+        metadata.modified().map_err(|error| ForgeError::io(format!("Cannot read {}", path.display()), error))?;
     let nanos = match modified.duration_since(UNIX_EPOCH) {
         Ok(after) => i128::try_from(after.as_nanos()).unwrap_or(i128::MAX),
         Err(before) => -i128::try_from(before.duration().as_nanos()).unwrap_or(i128::MAX),
     };
-    let nanos = i64::try_from(nanos).map_err(|_| ForgeError::invalid(format!("{} has an invalid mtime", path.display())))?;
+    let nanos =
+        i64::try_from(nanos).map_err(|_| ForgeError::invalid(format!("{} has an invalid mtime", path.display())))?;
     Ok((metadata.len(), nanos))
 }
 
