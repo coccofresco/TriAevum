@@ -1,0 +1,33 @@
+[package]
+name = "forge-desktop"
+description = "TriAevum Forge desktop window and game launcher"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "TriAevumForge"
+path = "src/main.rs"
+
+[dependencies]
+forge-base = { path = "../forge-base" }
+forge-catalog = { path = "../forge-catalog" }
+forge-core = { path = "../forge-core" }
+forge-mods = { path = "../forge-mods" }
+forge-native = { path = "../forge-native" }
+forge-prepare = { path = "../forge-prepare" }
+serde_json.workspace = true
+# glow (OpenGL) renderer only: the window must not need the game's Vulkan
+# device. No bundled fonts (default_fonts off): the window uses a system font.
+eframe = { version = "0.35", default-features = false, features = ["glow", "accesskit", "wayland", "x11"] }
+# Native dialogs; xdg-desktop-portal on Linux (no GTK).
+rfd = { version = "0.17", default-features = false, features = ["xdg-portal", "wayland"] }
+
+[target.'cfg(windows)'.dependencies]
+raw-window-handle = "0.6"
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi"] }
+
+[dev-dependencies]
+tempfile.workspace = true
