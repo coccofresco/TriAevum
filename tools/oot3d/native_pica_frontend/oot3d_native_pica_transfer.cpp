@@ -214,8 +214,26 @@ bool ExecuteOot3dPicaTextureCopy(
         return false;
     }
     // Validate all ranges before mutation; keep destination gaps untouched.
-    // Source bytes are snapshotted before writes so aliases cannot invalidate
-    // the storage used by this portable copy implementation.
+    // When no output byte lies in the input extent, spans copy directly;
+    // otherwise source bytes are snapshotted before writes so aliases cannot
+    // invalidate them.
+    uint64_t inputBegin = UINT64_MAX, inputEnd = 0;
+    uint64_t outputBegin = UINT64_MAX, outputEnd = 0;
+    for (const auto& span : plan.Spans) {
+        inputBegin = std::min<uint64_t>(inputBegin, span.InputAddress);
+        inputEnd = std::max<uint64_t>(inputEnd, uint64_t{span.InputAddress} + span.Size);
+        outputBegin = std::min<uint64_t>(outputBegin, span.OutputAddress);
+        outputEnd = std::max<uint64_t>(outputEnd, uint64_t{span.OutputAddress} + span.Size);
+    }
+    if (outputEnd <= inputBegin || inputEnd <= outputBegin) {
+        for (const auto& span : plan.Spans) {
+            if (!memory.CopyBytes(span.OutputAddress, span.InputAddress, span.Size)) {
+                SetError(error, "PICA texture copy destination write failed");
+                return false;
+            }
+        }
+        return true;
+    }
     std::vector<uint8_t> source(plan.Size);
     size_t offset = 0;
     for (const auto& span : plan.Spans) {
@@ -263,11 +281,9 @@ bool ExecuteOot3dPicaMemoryFill(const Oot3dPicaMemoryFill& fill,
         static_cast<uint8_t>(fill.Value >> 8U),
         static_cast<uint8_t>(fill.Value >> 16U),
         static_cast<uint8_t>(fill.Value >> 24U)};
-    std::vector<uint8_t> bytes(size);
-    for (size_t offset = 0; offset < bytes.size(); ++offset) {
-        bytes[offset] = value[offset % elementSize];
-    }
-    return memory.WriteBytes(fill.StartAddress, bytes);
+    // In place: title transitions fill ranges of over 170 MB.
+    return memory.FillPattern(fill.StartAddress, size,
+                              std::span<const uint8_t>(value.data(), elementSize));
 }
 
 bool ExecuteOot3dPicaDisplayTransfer(

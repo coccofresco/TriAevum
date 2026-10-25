@@ -172,6 +172,13 @@ class NativeA32Memory final : public oot3d::recomp::a32::MemoryBus {
     GetGuestAddress(const void* pointer, size_t size = 1) const noexcept;
     bool WriteBytes(uint32_t address, std::span<const uint8_t> bytes);
     bool Fill(uint32_t address, size_t size, uint8_t value);
+    // One write of `size` bytes repeating `pattern` from its first byte,
+    // observable exactly as WriteBytes of those bytes, without staging them.
+    bool FillPattern(uint32_t address, size_t size,
+                     std::span<const uint8_t> pattern);
+    // ReadBytes of `size` bytes at `source` followed by WriteBytes of them at
+    // `destination` (overlap-safe, like memmove), without staging them.
+    bool CopyBytes(uint32_t destination, uint32_t source, size_t size);
 
     // Service-owned shared memory remains host-writable even when the guest
     // maps it read-only.
@@ -395,6 +402,7 @@ class NativeA32Memory final : public oot3d::recomp::a32::MemoryBus {
     void FlushTracedPointerWrites() noexcept;
     static void SetError(std::string* error, std::string_view message);
     void NotifyObservedWrite(uint32_t address, size_t size);
+    void FinishByteWrite(uint32_t address, size_t size, const uint8_t* written);
     uint64_t CurrentRangeGeneration() const noexcept {
         return mWriteGeneration + mRangeGenerationBias;
     }

@@ -1,6 +1,7 @@
 #include "oot3d_native_a32_memory.h"
 
 #include <algorithm>
+#include <cstring>
 #include <limits>
 #include <stdexcept>
 
@@ -923,6 +924,71 @@ bool NativeA32Memory::Fill(uint32_t address, size_t size, uint8_t value) {
     }
     NotifyObservedWrite(address, size);
     return true;
+}
+
+bool NativeA32Memory::FillPattern(uint32_t address, size_t size,
+                                  std::span<const uint8_t> pattern) {
+    if (size == 0) {
+        return true;
+    }
+    auto* region = FindRegion(address, size);
+    if (region == nullptr || !region->Writable || pattern.empty()) {
+        return false;
+    }
+    const size_t offset = static_cast<size_t>(address - region->BaseAddress);
+    uint8_t* const target = region->Bytes.data() + offset;
+    // Lay down one pattern, then double the filled prefix: a few memcpy
+    // calls instead of a per-byte loop or a staging buffer of `size` bytes.
+    size_t filled = std::min(pattern.size(), size);
+    std::memcpy(target, pattern.data(), filled);
+    while (filled < size) {
+        const size_t chunk = std::min(filled, size - filled);
+        std::memcpy(target + filled, target, chunk);
+        filled += chunk;
+    }
+    FinishByteWrite(address, size, target);
+    return true;
+}
+
+bool NativeA32Memory::CopyBytes(uint32_t destination, uint32_t source,
+                                size_t size) {
+    if (size == 0) {
+        return true;
+    }
+    const auto* input = static_cast<const NativeA32Memory*>(this)->FindRegion(source, size);
+    auto* output = FindRegion(destination, size);
+    if (input == nullptr || output == nullptr || !output->Writable) {
+        return false;
+    }
+    if (!ResolveDeferredRead(source, size)) return false;
+    if (!mWatchSuppressed && Watches(source, size)) [[unlikely]] {
+        ++mWatchCounters.ByteReads;
+    }
+    uint8_t* const target =
+        output->Bytes.data() + static_cast<size_t>(destination - output->BaseAddress);
+    std::memmove(target,
+                 input->Bytes.data() + static_cast<size_t>(source - input->BaseAddress),
+                 size);
+    FinishByteWrite(destination, size, target);
+    return true;
+}
+
+void NativeA32Memory::FinishByteWrite(uint32_t address, size_t size,
+                                      const uint8_t* written) {
+    // The bookkeeping of WriteBytes, for bytes already in place.
+    if (Watches(address, size)) [[unlikely]] {
+        if (mWatchSuppressed) {
+            ++mWatchCounters.SuppressedByteWrites;
+        } else {
+            ++mWatchCounters.ByteWrites;
+        }
+    }
+    if (mTraceWriteFingerprint) [[unlikely]] {
+        RecordTracedWrite(address, std::span<const uint8_t>(written, size));
+    }
+    ++mWriteGeneration;
+    MarkRangeWritten(address, size, CurrentRangeGeneration());
+    NotifyObservedWrite(address, size);
 }
 
 bool NativeA32Memory::ReadSized(uint32_t address, uint8_t size,

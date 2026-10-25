@@ -356,10 +356,9 @@ NativeA32HostResult NativeA32CtrHostServices::HandleGspRequest(
                     const uint32_t source = packet.Parameters[0];
                     const uint32_t destination = packet.Parameters[1];
                     const uint32_t size = packet.Parameters[2];
-                    std::vector<uint8_t> dmaBytes(size);
-                    submitted =
-                        memory.ReadBytes(source, dmaBytes) &&
-                        memory.WriteBytes(destination, dmaBytes);
+                    // Region to region, no per-DMA buffer (sizes reach
+                    // ~170 MB at title transitions).
+                    submitted = memory.CopyBytes(destination, source, size);
                     if (submitted) {
                         submitted = QueueGspInterrupt(
                             memory, static_cast<uint8_t>(

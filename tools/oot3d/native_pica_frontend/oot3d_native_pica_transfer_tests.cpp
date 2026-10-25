@@ -3,6 +3,8 @@
 #include "fast/renderer3ds/pica_framebuffer_encode.h"
 
 #include <array>
+#include <span>
+#include <vector>
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -216,6 +218,50 @@ int main() {
     Require(!Fast::Renderer3ds::BuildPicaTiledTextureCopyRegions(
                 partialTexel, {0x10000000U, 32, 32, 4}, {0x10001000U, 40, 40, 4}, regions, &error) && regions.empty(),
             "GPU image path must not round away partial texels");
+
+    // Fills run in place: a 24-bit pattern keeps its phase across a range
+    // larger than any staging chunk, starting at an odd address.
+    Require(memory.MapRegion({"large", 0x20000000U, 0x300000U, true, false, {}}, &error), error);
+    const uint64_t beforeFill = memory.WriteGeneration();
+    Require(ExecuteOot3dPicaMemoryFill({0x20000001U, 0x202FFFF2U, 0x00CCBBAAU, 0x0101U}, memory, &error),
+            error);
+    Require(memory.WriteGeneration() == beforeFill + 1U, "a fill must stay one guest write");
+    std::vector<uint8_t> large(0x202FFFF2U - 0x20000001U);
+    Require(memory.ReadBytes(0x20000001U, large), "cannot read the large fill");
+    for (size_t i = 0; i < large.size(); ++i) {
+        Require(large[i] == std::array<uint8_t, 3>{0xAAU, 0xBBU, 0xCCU}[i % 3U],
+                "large 24-bit fill lost its pattern phase");
+    }
+
+    // Overlapping copies behave like memmove, in one write.
+    for (uint8_t i = 0; i < 64; ++i) large[i] = i;
+    Require(memory.WriteBytes(0x20000000U, std::span<const uint8_t>(large).first(64)), "cannot seed overlap");
+    const uint64_t beforeCopy = memory.WriteGeneration();
+    Require(memory.CopyBytes(0x20000004U, 0x20000000U, 32U) && memory.WriteGeneration() == beforeCopy + 1U,
+            "overlapping copy refused or split");
+    std::array<uint8_t, 40> moved{};
+    Require(memory.ReadBytes(0x20000000U, moved), "cannot read overlap");
+    for (size_t i = 0; i < moved.size(); ++i) {
+        const uint8_t expected = i < 4 ? static_cast<uint8_t>(i) : i < 36 ? static_cast<uint8_t>(i - 4) : i;
+        Require(moved[i] == expected, "forward overlapping copy is not memmove");
+    }
+    Require(memory.CopyBytes(0x20000000U, 0x20000004U, 32U), "backward overlapping copy refused");
+    Require(memory.ReadBytes(0x20000000U, moved) && moved[0] == 0 && moved[31] == 31,
+            "backward overlapping copy is not memmove");
+    Require(memory.CopyBytes(0x20000000U, 0x20000000U, 0U) && !memory.CopyBytes(0x20000000U, 0xDEAD0000U, 4U),
+            "empty or unmapped copy result changed");
+
+    // A texture copy whose output overlaps its input reads every source
+    // byte before writing (snapshot), unlike span-by-span copying.
+    for (uint8_t i = 0; i < 64; ++i) large[i] = i;
+    Require(memory.WriteBytes(0x20000000U, std::span<const uint8_t>(large).first(64)), "cannot reseed overlap");
+    plan = {32U, {{0x20000000U, 0x20000010U, 16U}, {0x20000010U, 0x20000020U, 16U}}};
+    Require(ExecuteOot3dPicaTextureCopy(plan, memory, &error), error);
+    std::array<uint8_t, 48> aliased{};
+    Require(memory.ReadBytes(0x20000000U, aliased), "cannot read aliased copy");
+    for (size_t i = 16; i < 48; ++i) {
+        Require(aliased[i] == i - 16, "aliased texture copy read bytes it had already overwritten");
+    }
 
     std::cout << "oot3d_native_pica_transfer_tests: ok\n";
     return 0;
