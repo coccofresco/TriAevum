@@ -14,6 +14,7 @@ use forge_native::DesktopServices;
 use crate::abi::{EventSink, Job};
 use crate::cancel::CancelToken;
 use crate::error::{ForgeError, Result};
+use crate::fsutil;
 use crate::hashing::{copy_hashing, hex};
 use crate::install::{self, install_private_title, AndroidTarget, InstallRequest, InstallSource, InstallTarget};
 use crate::recognize::{recognize_rom, RecognizeRequest};
@@ -163,8 +164,8 @@ impl SpoolCopy {
             let file = writer.into_inner().map_err(|error| ForgeError::io("Write failed", error.into_error()))?;
             file.sync_all().map_err(|error| ForgeError::io("Cannot flush the copy", error))?;
             drop(file);
-            fs::rename(&temporary, &self.destination)
-                .map_err(|error| ForgeError::io(format!("Cannot publish {}", self.destination.display()), error))?;
+            fsutil::replace_file(&temporary, &self.destination)
+                .map_err(|error| fsutil::file_error("Cannot publish", &self.destination, error))?;
             Ok(json!({"bytes": bytes, "sha256": hex(&digest), "path": self.destination.to_string_lossy()}))
         })();
         if outcome.is_err() {

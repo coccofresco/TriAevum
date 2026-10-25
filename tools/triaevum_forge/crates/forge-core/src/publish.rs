@@ -10,7 +10,7 @@
 
 use std::path::{Path, PathBuf};
 
-use forge_base::fsutil::{atomic_write_json, load_json_object};
+use forge_base::fsutil::{self, atomic_write_json, file_error, load_json_object};
 use forge_base::hashing::{hex, sha256_file};
 use forge_base::{legacy_json, CancelToken, ErrorKind, ForgeError, Result};
 use forge_native::{ensure_runtime_config, query_product, NativeServices};
@@ -192,10 +192,9 @@ fn publish_plugin(source: &Path, destination: &Path, digest: &str, cancel: &Canc
         if sha256_hex(&temporary, cancel)? != digest {
             return Err(ForgeError::integrity("private whole-AOT plugin copy verification failed"));
         }
-        std::fs::rename(&temporary, destination)
-            .map_err(|error| ForgeError::io(format!("Cannot replace {}", destination.display()), error))
+        fsutil::replace_file(&temporary, destination).map_err(|error| file_error("Cannot replace", destination, error))
     })();
-    let _ = std::fs::remove_file(&temporary);
+    let _ = fsutil::try_remove_file(&temporary);
     outcome
 }
 

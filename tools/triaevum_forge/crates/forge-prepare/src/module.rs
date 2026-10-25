@@ -195,9 +195,7 @@ fn write_module(path: &Path, tam: &Tam, cancel: &CancelToken) -> Result<String> 
     let digest = tam.write_to(temporary.as_file_mut(), cancel)?;
     File::sync_all(temporary.as_file())
         .map_err(|error| ForgeError::io(format!("Cannot write {}", path.display()), error))?;
-    temporary
-        .persist(path)
-        .map_err(|error| ForgeError::io(format!("Cannot replace {}", path.display()), error.error))?;
+    forge_base::fsutil::persist(temporary, path)?;
     Ok(hex(&digest))
 }
 

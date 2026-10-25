@@ -297,6 +297,9 @@ pub fn install_private_title(
     let mut stage = "preflight";
     let outcome = (|| -> Result<(Value, Value, Value, Value)> {
         report(stage, "Checking the playable runtime and precompiled title catalog...");
+        if android.is_none() {
+            layout::ensure_runtime_closed(&package_root, &layout::host_platform()?)?;
+        }
         let runtime = target_runtime(&package_root, &request.target)?;
         query_product(services, &runtime, "", None)?;
         let recipes = recipes_path(&package_root);

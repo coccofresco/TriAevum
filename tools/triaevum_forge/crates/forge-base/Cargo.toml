@@ -12,5 +12,9 @@ serde_json.workspace = true
 sha2.workspace = true
 tempfile.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+# Restart Manager: names the programs holding a locked file (issue #110).
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_RestartManager"] }
+
 [dev-dependencies]
 tempfile.workspace = true

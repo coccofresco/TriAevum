@@ -11,7 +11,7 @@ use std::io::Write;
 use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 
-use forge_base::fsutil::{atomic_write_json, load_json_object};
+use forge_base::fsutil::{self, atomic_write_json, file_error, load_json_object};
 use forge_base::hashing::{copy_hashing, hex, sha256_file};
 use forge_base::{CancelToken, ForgeError, Result};
 use forge_prepare::paths::resolve;
@@ -46,18 +46,14 @@ fn copy_synced(source: &Path, target: &Path) -> Result<()> {
         .prefix(".activation-")
         .tempfile_in(parent)
         .map_err(|error| ForgeError::io(format!("Cannot write in {}", parent.display()), error))?;
-    let mut input =
-        File::open(source).map_err(|error| ForgeError::io(format!("Cannot read {}", source.display()), error))?;
+    let mut input = File::open(source).map_err(|error| file_error("Cannot read", source, error))?;
     copy_hashing(&mut input, temporary.as_file_mut(), u64::MAX, &CancelToken::new())?;
     temporary
         .as_file_mut()
         .flush()
         .and_then(|()| temporary.as_file().sync_all())
         .map_err(|error| ForgeError::io(format!("Cannot write {}", target.display()), error))?;
-    temporary
-        .persist(target)
-        .map_err(|error| ForgeError::io(format!("Cannot replace {}", target.display()), error.error))?;
-    Ok(())
+    fsutil::persist(temporary, target)
 }
 
 fn path_text(path: &Path) -> String {
@@ -102,11 +98,7 @@ fn restore(journal: &Path, targets: &[PathBuf]) -> Result<()> {
     }
     for (index, (entry, target)) in entries.iter().zip(targets).enumerate() {
         match entry.get("sha256").and_then(Value::as_str) {
-            None => match std::fs::remove_file(target) {
-                Ok(()) => {}
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => return Err(ForgeError::io(format!("Cannot remove {}", target.display()), error)),
-            },
+            None => fsutil::remove_file(target).map_err(|error| file_error("Cannot remove", target, error))?,
             Some(digest) => {
                 if !target.is_file() || file_digest(target)? != digest {
                     copy_synced(&directory.join(format!("{index}.bak")), target)?;

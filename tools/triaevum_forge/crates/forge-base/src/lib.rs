@@ -8,6 +8,7 @@
 
 pub mod cancel;
 pub mod error;
+pub mod file_holders;
 pub mod fsutil;
 pub mod hashing;
 pub mod legacy_json;

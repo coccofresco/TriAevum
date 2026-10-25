@@ -7,6 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
+use forge_base::fsutil::{self, file_error};
 use forge_base::{ForgeError, Result};
 use forge_prepare::paths::resolve;
 
@@ -181,18 +182,38 @@ pub fn installed_runtime_path(root: &Path, platform: &ReleasePlatform) -> PathBu
     }
 }
 
+/// Refuses to install while the game runs from this installation: Windows
+/// cannot replace a running executable, and the failure would otherwise
+/// come only after the long shader preparation (issue #110). Only Windows
+/// can name the processes; elsewhere this always passes.
+pub fn ensure_runtime_closed(root: &Path, platform: &ReleasePlatform) -> Result<()> {
+    for runtime in [root.join(platform.installed_runtime), root.join(platform.runtime)] {
+        let holders = forge_base::file_holders::processes_using(&runtime);
+        if !holders.is_empty() {
+            let message = format!(
+                "TriAevum is running from this installation ({} is in use by {}). Close the game, then install again.",
+                runtime.display(),
+                holders.join(", ")
+            );
+            return Err(ForgeError::new(forge_base::ErrorKind::Busy, message).with_path(runtime));
+        }
+    }
+    Ok(())
+}
+
 /// Moves a packaged runtime to the installation root, replacing the previous
 /// one. The Windows runtime finds its DLLs in runtime/, but its own folder is
 /// searched first: DLLs an earlier package left in the root would shadow the
 /// new ones, so they are removed. A loaded DLL (Forge itself loads the CRT it
 /// finds beside it) cannot be deleted but can be renamed aside (issue #110);
-/// later runs remove released `.stale` files.
+/// later runs remove released `.stale` files. Read-only files are replaced,
+/// briefly locked ones retried, and a file still held names its holder.
 pub fn place_installed_runtime(root: &Path, platform: &ReleasePlatform) -> Result<PathBuf> {
     if let Ok(entries) = std::fs::read_dir(root) {
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
             if name.starts_with('.') && name.ends_with(".stale") {
-                let _ = std::fs::remove_file(entry.path());
+                let _ = fsutil::try_remove_file(&entry.path());
             }
         }
     }
@@ -209,23 +230,21 @@ pub fn place_installed_runtime(root: &Path, platform: &ReleasePlatform) -> Resul
                 }
             }
         }
-        std::fs::rename(&packaged, &installed)
-            .map_err(|error| ForgeError::io(format!("Cannot place {}", installed.display()), error))?;
+        fsutil::replace_file(&packaged, &installed).map_err(|error| file_error("Cannot place", &installed, error))?;
     }
     Ok(installed)
 }
 
+/// A loaded library is renamed aside at once rather than waited for.
 fn remove_shadowing_library(path: &Path) -> Result<()> {
-    match std::fs::remove_file(path) {
+    match fsutil::try_remove_file(path) {
         Ok(()) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
+        Err(error) if fsutil::is_locked(&error) => {
             let name = path.file_name().unwrap_or_default().to_string_lossy();
             let aside = path.with_file_name(format!(".{name}.{}.stale", std::process::id()));
-            std::fs::rename(path, &aside)
-                .map_err(|error| ForgeError::io(format!("Cannot replace {}", path.display()), error))
+            fsutil::replace_file(path, &aside).map_err(|error| file_error("Cannot replace", path, error))
         }
-        Err(error) => Err(ForgeError::io(format!("Cannot remove {}", path.display()), error)),
+        Err(error) => Err(file_error("Cannot remove", path, error)),
     }
 }
 
@@ -286,5 +305,71 @@ mod tests {
         assert!(!root.join(".vcruntime140.dll.1.stale").exists());
         assert!(root.join("unrelated.dll").is_file());
         assert_eq!(installed_runtime_path(root, &WINDOWS), root.join("TriAevum.exe"));
+    }
+
+    fn read_only(path: &Path, contents: &[u8]) {
+        std::fs::write(path, contents).unwrap();
+        let mut permissions = std::fs::metadata(path).unwrap().permissions();
+        permissions.set_readonly(true);
+        std::fs::set_permissions(path, permissions).unwrap();
+    }
+
+    #[test]
+    fn read_only_files_of_an_earlier_package_are_replaced() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        std::fs::create_dir(root.join("runtime")).unwrap();
+        read_only(&root.join(WINDOWS.runtime), b"new runtime");
+        std::fs::write(root.join("runtime/vcruntime140.dll"), b"new").unwrap();
+        read_only(&root.join("TriAevum.exe"), b"old runtime");
+        read_only(&root.join("vcruntime140.dll"), b"old");
+        read_only(&root.join(".msvcp140.dll.1.stale"), b"released");
+        ensure_runtime_closed(root, &WINDOWS).unwrap();
+        assert_eq!(place_installed_runtime(root, &WINDOWS).unwrap(), root.join("TriAevum.exe"));
+        assert_eq!(std::fs::read(root.join("TriAevum.exe")).unwrap(), b"new runtime");
+        let mut names: Vec<String> = std::fs::read_dir(root)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        assert_eq!(names, ["TriAevum.exe", "runtime"]);
+    }
+
+    /// A copy of the command interpreter stands in for the running game.
+    /// (Rust's POSIX-semantics rename could even replace its executable,
+    /// which Python's os.replace could not; the game must still be closed.)
+    #[cfg(windows)]
+    #[test]
+    fn a_running_game_is_named_before_the_install_starts() {
+        use std::process::{Command, Stdio};
+
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        std::fs::create_dir(root.join("runtime")).unwrap();
+        std::fs::write(root.join(WINDOWS.runtime), b"new runtime").unwrap();
+        let shell = std::env::var_os("ComSpec").map(PathBuf::from).expect("ComSpec names cmd.exe");
+        let installed = root.join("TriAevum.exe");
+        std::fs::copy(&shell, &installed).unwrap();
+        let mut game = Command::new(&installed)
+            .arg("/k")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let running = format!("(process {})", game.id());
+        let closed = ensure_runtime_closed(root, &WINDOWS).unwrap_err();
+        game.kill().unwrap();
+        game.wait().unwrap();
+        assert_eq!(closed.kind, forge_base::ErrorKind::Busy);
+        assert_eq!(closed.paths, std::slice::from_ref(&installed));
+        let prefix = format!("TriAevum is running from this installation ({} is in use by ", installed.display());
+        assert!(closed.message.starts_with(&prefix), "{}", closed.message);
+        assert!(closed.message.contains(&running), "{}", closed.message);
+        assert!(closed.message.ends_with("Close the game, then install again."), "{}", closed.message);
+
+        ensure_runtime_closed(root, &WINDOWS).unwrap();
+        place_installed_runtime(root, &WINDOWS).unwrap();
+        assert_eq!(std::fs::read(&installed).unwrap(), b"new runtime");
     }
 }
