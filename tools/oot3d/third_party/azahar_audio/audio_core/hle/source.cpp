@@ -64,6 +64,10 @@ void Source::MixInto(QuadFrame32& dest, std::size_t intermediate_mix_id) const {
         return;
 
     const std::array<float, 4>& gains = state.gain.at(intermediate_mix_id);
+    // TriAevum: a zero gain adds static_cast<s32>(±0.0f * sample) == 0 to every sample (the
+    // sample is a finite s16), so a mix whose four gains are zero leaves dest unchanged.
+    if (gains[0] == 0.0f && gains[1] == 0.0f && gains[2] == 0.0f && gains[3] == 0.0f)
+        return;
     for (std::size_t samplei = 0; samplei < samples_per_frame; samplei++) {
         // Conversion from stereo (current_frame) to quadraphonic (dest) occurs here.
         dest[samplei][0] += static_cast<s32>(gains[0] * current_frame[samplei][0]);
@@ -466,7 +470,8 @@ void Source::ParseConfig(SourceConfiguration::Configuration& config,
                 // state.current_buffer = Codec::DecodePCM8(num_channels, memory, config.length);
                 break;
             case Format::PCM16:
-                state.current_buffer = Codec::DecodePCM16(num_channels, memory, config.length);
+                Codec::DecodePCM16Into(state.current_buffer.Overwrite(config.length), num_channels,
+                                       memory, config.length);
                 valid = true;
                 break;
             case Format::ADPCM:
@@ -588,9 +593,8 @@ void Source::ParseConfig(SourceConfiguration::Configuration& config,
 }
 
 void Source::GenerateFrame() {
-    current_frame.fill({});
-
     if (state.current_buffer.empty()) {
+        current_frame.fill({});
         // TODO(SachinV): Should dequeue happen at the end of the frame generation?
         if (DequeueBuffer()) {
             return;
@@ -627,6 +631,11 @@ void Source::GenerateFrame() {
             break;
         }
     }
+    // TriAevum: only the samples not generated above keep the zero the original filled the whole
+    // frame with beforehand.
+    std::fill(current_frame.begin() + frame_position, current_frame.end(),
+              StereoFrame16::value_type{});
+
     // TODO(jroweboy): Keep track of frame_position independently so that it doesn't lose precision
     // over time
     state.current_sample_number += static_cast<u32>(frame_position * state.rate_multiplier);
@@ -658,18 +667,35 @@ bool Source::DequeueBuffer() {
             : nullptr;
     if (memory) {
         const unsigned num_channels = buf.mono_or_stereo == MonoOrStereo::Stereo ? 2 : 1;
+        // Decoded into the queue's reused storage (TriAevum): the same samples as the original
+        // per-buffer vectors, without an allocation and a zero fill per dequeue.
         switch (buf.format) {
         case Format::PCM8:
-            state.current_buffer = Codec::DecodePCM8(num_channels, memory, buf.length);
+            Codec::DecodePCM8Into(state.current_buffer.Overwrite(buf.length), num_channels, memory,
+                                  buf.length);
             break;
         case Format::PCM16:
-            state.current_buffer = Codec::DecodePCM16(num_channels, memory, buf.length);
+            Codec::DecodePCM16Into(state.current_buffer.Overwrite(buf.length), num_channels,
+                                   memory, buf.length);
             break;
-        case Format::ADPCM:
+        case Format::ADPCM: {
             DEBUG_ASSERT(num_channels == 1);
-            state.current_buffer =
-                Codec::DecodeADPCM(memory, buf.length, state.adpcm_coeffs, state.adpcm_state);
+            // A looping buffer coming round again with the same inputs and unchanged encoded
+            // bytes: the samples still in the queue's storage are this decode's result.
+            const std::size_t bytes = EncodedSourceBytes(buf.format, buf.mono_or_stereo, buf.length);
+            const AudioInterp::StereoBuffer16::AdpcmOrigin origin{
+                buf.physical_address, buf.length, state.adpcm_coeffs, state.adpcm_state.yn1,
+                state.adpcm_state.yn2};
+            if (!state.current_buffer.ReplayAdpcm(origin, memory, bytes, state.adpcm_state.yn1,
+                                                  state.adpcm_state.yn2)) {
+                Codec::DecodeADPCMInto(
+                    state.current_buffer.Overwrite(Codec::ADPCMOutputSamples(buf.length)), memory,
+                    buf.length, state.adpcm_coeffs, state.adpcm_state);
+                state.current_buffer.RememberAdpcm(origin, memory, bytes, state.adpcm_state.yn1,
+                                                   state.adpcm_state.yn2);
+            }
             break;
+        }
         default:
             UNIMPLEMENTED();
             break;

@@ -286,6 +286,11 @@ void Mixers::MixCurrentFrame() {
     // TODO(SachinV): This is probably not accurate, based on symbols from FE:Fates,
     // state.intermediate_mixer_volume[0] represents the master volume
     for (std::size_t mix = 0; mix < 3; mix++) {
+        // TriAevum: with a zero gain every product, sum and conversion below is zero (the samples
+        // are finite: s32 converted to float), and adding zero with the clamp leaves
+        // current_frame unchanged, however the compiler associates the expression.
+        if (state.intermediate_mixer_volume[mix] == 0.0f)
+            continue;
         DownmixAndMixIntoCurrentFrame(state.intermediate_mixer_volume[mix],
                                       state.intermediate_mix_buffer[mix]);
     }

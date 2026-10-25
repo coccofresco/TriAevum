@@ -107,15 +107,14 @@ bool NativeA32DspHle::ProcessFrame(
     write.dsp_status = mImpl->Mixers.Tick(
         read.dsp_configuration, read.intermediate_mix_samples,
         write.intermediate_mix_samples, intermediateMixes);
-    const auto output = mImpl->Mixers.GetOutput();
-    interleavedStereo.reserve(interleavedStereo.size() + output.size() * 2U);
-    for (size_t sample = 0; sample < output.size(); ++sample) {
-        for (size_t channel = 0; channel < output[sample].size(); ++channel) {
-            write.final_samples.pcm16[sample][channel] =
-                output[sample][channel];
-            interleavedStereo.push_back(output[sample][channel]);
-        }
-    }
+    // The mixer's frame is already interleaved stereo s16: both destinations are byte copies
+    // (s16_le is the host order on every target).
+    const AudioCore::StereoFrame16& output = mImpl->Mixers.Output();
+    static_assert(sizeof(write.final_samples.pcm16) == sizeof(output));
+    std::memcpy(&write.final_samples.pcm16, output.data(), sizeof(output));
+    const size_t first = interleavedStereo.size();
+    interleavedStereo.resize(first + output.size() * 2U);
+    std::memcpy(interleavedStereo.data() + first, output.data(), sizeof(output));
 
     const auto readBytes = std::span<const uint8_t>(
         reinterpret_cast<const uint8_t*>(&read), sizeof(read));

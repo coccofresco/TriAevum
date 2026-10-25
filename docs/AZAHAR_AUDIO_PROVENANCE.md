@@ -26,6 +26,15 @@ represented as copied Azahar implementation. Later TriAevum commits add
 save-state validation and runtime integration; Git history preserves those
 changes separately from the donor baseline.
 
+Beta 1.3 ports a bit-exact mixing optimization from the TriAevum Switch fork
+(GustavoHenriqueRocha/TriAevum-Switch `8ee3f632`, GPL like the donor files). It
+modifies `audio_core/codec.{h,cpp}`, `interpolate.cpp`, `sample_queue.h`,
+`hle/mixers.{h,cpp}` and `hle/source.cpp`: reused decoded-sample storage,
+memoized ADPCM loop decoding, clamp-free ADPCM frames with a fallback, a
+branch-free None/Linear interpolation loop (NEON on AArch64) and skipped
+zero-gain mixes. `oot3d_native_audio_dsp_mix_tests` checks that the whole mix,
+including savestates, digests identically to the code before the change.
+
 ## Reproduction
 
 With the Azahar repository available locally, compare the trees with:

@@ -30,6 +30,10 @@ public:
     StereoFrame16 GetOutput() const {
         return current_frame;
     }
+    /// TriAevum: the same frame without the copy.
+    const StereoFrame16& Output() const {
+        return current_frame;
+    }
 
     nlohmann::json CaptureState() const;
     bool RestoreState(const nlohmann::json& snapshot,

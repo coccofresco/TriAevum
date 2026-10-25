@@ -49,6 +49,16 @@ target_link_libraries(oot3d_native_audio_storage_tests PRIVATE
     oot3d_native_a32_ctr_host)
 oot3d_target_defaults(oot3d_native_audio_storage_tests NO_WARNING_OVERRIDE FOLDER Tests)
 
+# Whole DSP mix (24 sources, mixers, aux, savestates) bit-identical to the
+# pre-optimization code; --bench times an OoT3D-like frame.
+add_executable(oot3d_native_audio_dsp_mix_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/oot3d_native_audio_dsp_mix_tests.cpp)
+target_include_directories(oot3d_native_audio_dsp_mix_tests PRIVATE
+    tools/oot3d/third_party/azahar_audio)
+target_link_libraries(oot3d_native_audio_dsp_mix_tests PRIVATE
+    oot3d_native_a32_ctr_host)
+oot3d_target_defaults(oot3d_native_audio_dsp_mix_tests NO_WARNING_OVERRIDE FOLDER Tests)
+
 # Private title modules retain the exact CTR/SVC implementation but may only
 # reach graphics through the stable host-service ABI. This variant therefore
 # has no direct renderer dependency or callable PICA frontend path.

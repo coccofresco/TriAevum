@@ -45,4 +45,16 @@ StereoBuffer16 DecodePCM8(const unsigned num_channels, const u8* const data,
  */
 StereoBuffer16 DecodePCM16(const unsigned num_channels, const u8* const data,
                            const std::size_t sample_count);
+
+/// TriAevum: the same decoders writing into caller storage (no allocation, no zero fill).
+/// DecodeADPCMInto writes ADPCMOutputSamples(sample_count) samples, the others sample_count.
+constexpr std::size_t ADPCMOutputSamples(std::size_t sample_count) {
+    return sample_count % 2 == 0 ? sample_count : sample_count + 1;
+}
+void DecodeADPCMInto(std::array<s16, 2>* output, const u8* data, std::size_t sample_count,
+                     const std::array<s16, 16>& adpcm_coeff, ADPCMState& state);
+void DecodePCM8Into(std::array<s16, 2>* output, unsigned num_channels, const u8* data,
+                    std::size_t sample_count);
+void DecodePCM16Into(std::array<s16, 2>* output, unsigned num_channels, const u8* data,
+                     std::size_t sample_count);
 } // namespace AudioCore::Codec
