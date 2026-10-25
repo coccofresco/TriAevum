@@ -214,7 +214,11 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
     menu.Back = key(Ship::KbScancode::LUS_KB_BACKSPACE) || padButton(SDL_CONTROLLER_BUTTON_B);
     menu.TabPrevious = key(Ship::KbScancode::LUS_KB_Q) || padButton(SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
     menu.TabNext = key(Ship::KbScancode::LUS_KB_E) || padButton(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
-    menu.Toggle = key(Ship::KbScancode::LUS_KB_ESCAPE) || padButton(SDL_CONTROLLER_BUTTON_RIGHTSTICK);
+    const auto chord = pollingState.MenuChord.Update(padButton(SDL_CONTROLLER_BUTTON_LEFTSTICK),
+                                                     padButton(SDL_CONTROLLER_BUTTON_RIGHTSTICK));
+    pollingState.SettingsToggleRequested = chord.ToggleSettings;
+    // The menu reacts to a rising edge: the release pulse lasts one poll.
+    menu.Toggle = key(Ship::KbScancode::LUS_KB_ESCAPE) || chord.ToggleMenu;
     // The mouse for the menu: its window position with the presentation
     // picture the menu is drawn in, the left button, and the wheel while a
     // host surface is up (gameplay never sees it then). The window's wheel

@@ -6,6 +6,7 @@
 #include "oot3d_native_a32_window.h"
 #include "oot3d_dev_free_camera.h"
 #include "oot3d_in_game_menu.h"
+#include "three_ds_pad_menu_chord.h"
 #include "three_ds_sdl_controller.h"
 #include "oot3d_prebackend_budget.h"
 #include "oot3d_cpu_phase_probe.h"
@@ -733,6 +734,10 @@ struct NativeControlPollingState {
   // The in-game menu's controls (Esc / R3, D-pad, A/B, shoulders), from the
   // raw devices every poll.
   Oot3dNativeGame::InGameMenuHostInput Menu;
+  // Stick clicks to host menus: L3+R3 asks for the settings window (F1),
+  // R3 released alone toggles the in-game menu.
+  ThreeDsRecomp::Input::PadMenuChord MenuChord;
+  bool SettingsToggleRequested = false;
 };
 
 bool ExecuteProductTopScreenHook(uint32_t pc, oot3d::recomp::a32::GuestState &state,

@@ -1,4 +1,5 @@
 #include "three_ds_input.h"
+#include "three_ds_pad_menu_chord.h"
 
 #include <cmath>
 #include <cstdint>
@@ -603,6 +604,25 @@ int main() try {
                 ConvertHostAxisToNative(-32768, 25) ==
                     -kNativeStickMaximum,
             "host analog conversion does not preserve the native range");
+
+    {
+        // R3 alone toggles the menu on release; L3+R3 toggles F1 once and
+        // never the menu, whichever click comes first.
+        PadMenuChord chord;
+        Require(!chord.Update(false, true).ToggleMenu, "R3 must act on release");
+        Require(chord.Update(false, false).ToggleMenu, "R3 release did not toggle the menu");
+        auto requests = chord.Update(true, false);
+        Require(!requests.ToggleSettings && !requests.ToggleMenu, "L3 alone acted");
+        requests = chord.Update(true, true);
+        Require(requests.ToggleSettings && !requests.ToggleMenu, "L3 then R3 did not toggle F1");
+        Require(!chord.Update(true, true).ToggleSettings, "a held chord toggled F1 twice");
+        requests = chord.Update(false, true);
+        Require(!requests.ToggleSettings && !requests.ToggleMenu, "releasing L3 first acted");
+        Require(!chord.Update(false, false).ToggleMenu, "R3 released after a chord opened the menu");
+        Require(!chord.Update(false, true).ToggleMenu && chord.Update(true, true).ToggleSettings,
+                "R3 then L3 did not toggle F1");
+        Require(!chord.Update(false, false).ToggleMenu, "R3 then L3 opened the menu on release");
+    }
 
     const auto belowDeadZone = ConvertHostStickToNative(5000, 5000, 25);
     const auto nearAxis = ConvertHostStickToNative(32767, 9000, 25);

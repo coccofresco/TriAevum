@@ -531,6 +531,10 @@ bool NativeA32WindowSession::RunFrame() {
 #else
   inGameMenu.Update(nativeControlPollingState.Menu, imGuiOwnsInput, presentationElapsedSeconds);
 #endif
+  // L3+R3: the settings window, as F1 (the SDL key path toggles it there).
+  if (nativeControlPollingState.SettingsToggleRequested && f1Window != nullptr) {
+    f1Window->ToggleVisibility();
+  }
   if (physicalInputFrame.Exit || devLabQuit) {
     window.Close();
     return false;
