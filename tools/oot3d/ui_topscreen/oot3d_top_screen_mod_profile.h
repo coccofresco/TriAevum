@@ -550,9 +550,10 @@ struct TopScreenTouchControlsPresentation {
   float ActionScale = 1.0F;
 };
 
-// The natively drawn minimap spans y 174..234 and ignores the HUD scale; while
-// the buttons are out of the HUD it takes their top-right corner (6..66).
-inline constexpr float kTopScreenTouchMinimapShiftY = -168.0F;
+// The natively drawn minimap keeps its bottom near y 234 (its top depends on
+// the map's height) and ignores the HUD scale; while the buttons are out of
+// the HUD its top takes their top-right corner, y 6.
+inline constexpr float kTopScreenTouchMinimapTop = 6.0F;
 
 // The A group's centre and radius in the laid-out HUD canvas: SingleScreen 3.0
 // 0x005C89D0 centres it on (288, 24) at size 32 with the button group's
@@ -774,10 +775,25 @@ struct TopScreenQuestCopiedQuad {
   // A copies: the action word, not the A ring.
   bool ActionLabel = false;
 };
+// An item icon in the main renderer (the horseback bow) has its positions
+// rebuilt by the draw itself, so moving it does not hide it. While the touch
+// layout draws B's content in the overlay's B, the icon's vertex alpha is
+// cleared for the native draw instead, and its native colors are kept to be
+// written back before the next copy reads them (nothing rebuilds them).
+struct TopScreenQuestHiddenColor {
+  std::uint32_t Address = 0U;
+  std::array<float, 16> Native{};
+  std::array<float, 16> Hidden{};
+};
 bool CaptureTopScreenQuestBButtonCopies(NativeA32Memory &memory,
                                         const TopScreenUiConfig &config,
                                         std::vector<TopScreenQuestCopiedQuad> *copies,
-                                        std::string *error = nullptr);
+                                        std::string *error = nullptr,
+                                        std::vector<TopScreenQuestHiddenColor> *hiddenColors = nullptr);
+// Writes the kept native colors back where the native code left the cleared
+// ones in place, and forgets them.
+void RestoreTopScreenQuestHiddenColors(NativeA32Memory &memory,
+                                       std::vector<TopScreenQuestHiddenColor> &hiddenColors);
 // Final native coordinates: append after the HUD scale.
 std::size_t AppendTopScreenQuestBButtonCopiesPresentation(
     std::span<const TopScreenQuestCopiedQuad> copies,

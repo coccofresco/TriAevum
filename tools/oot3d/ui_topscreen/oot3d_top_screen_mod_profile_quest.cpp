@@ -735,10 +735,26 @@ bool CaptureTopScreenQuestActionCopies(NativeA32Memory &memory, std::uint32_t re
   return true;
 }
 
+void RestoreTopScreenQuestHiddenColors(NativeA32Memory &memory,
+                                       std::vector<TopScreenQuestHiddenColor> &hiddenColors) {
+  for (const auto &hidden : hiddenColors) {
+    std::array<float, 16> current{};
+    if (!memory.ReadBytes(hidden.Address, std::span<std::uint8_t>(reinterpret_cast<std::uint8_t *>(current.data()),
+                                                                  sizeof(current))) ||
+        current != hidden.Hidden)
+      continue;
+    (void)memory.WriteBytes(hidden.Address,
+                            std::span<const std::uint8_t>(reinterpret_cast<const std::uint8_t *>(hidden.Native.data()),
+                                                          sizeof(hidden.Native)));
+  }
+  hiddenColors.clear();
+}
+
 bool CaptureTopScreenQuestBButtonCopies(NativeA32Memory &memory,
                                         const TopScreenUiConfig &config,
                                         std::vector<TopScreenQuestCopiedQuad> *copies,
-                                        std::string *error) {
+                                        std::string *error,
+                                        std::vector<TopScreenQuestHiddenColor> *hiddenColors) {
   if (copies == nullptr) {
     if (error != nullptr) *error = "missing Quest B copy output";
     return false;
@@ -799,6 +815,15 @@ bool CaptureTopScreenQuestBButtonCopies(NativeA32Memory &memory,
       copied.Color = {color[0], color[1], color[2], color[3]};
       copied.NumberGlyphs = numberGlyphs;
       copies->push_back(copied);
+      if (hiddenColors != nullptr && !numberGlyphs) {
+        TopScreenQuestHiddenColor hidden{colors + index * 0x40U, color, color};
+        for (std::size_t alpha = 3U; alpha < hidden.Hidden.size(); alpha += 4U) hidden.Hidden[alpha] = 0.0F;
+        if (!memory.WriteBytes(hidden.Address,
+                               std::span<const std::uint8_t>(
+                                   reinterpret_cast<const std::uint8_t *>(hidden.Hidden.data()), sizeof(hidden.Hidden))))
+          return false;
+        hiddenColors->push_back(hidden);
+      }
       // Hide the native quad; the next submit rebuilds it.
       for (auto &vertex : quad) {
         vertex.X += 500.0F - quadX;
@@ -971,8 +996,10 @@ bool ApplyTopScreenPauseProjection(NativeA32Memory &memory,
     state.OffsetY = 3000.0F;
   } else if (config != nullptr &&
              TopScreenTouchButtonsAnchored(*config, ThreeDsRecomp::Input::OverlayTouchAnchors().Snapshot())) {
-    projectedOffsetY += kTopScreenTouchMinimapShiftY;
-    state.OffsetY = kTopScreenTouchMinimapShiftY;
+    // The top edge, not the native bottom: a tall map (Hyrule Field) would
+    // otherwise reach the top of the screen.
+    projectedOffsetY = kTopScreenTouchMinimapTop;
+    state.OffsetY = kTopScreenTouchMinimapTop - nativeOffsetY;
   }
   state.MapX.LastWrittenBits =
       std::bit_cast<std::uint32_t>(projectedOffsetX);

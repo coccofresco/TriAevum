@@ -220,10 +220,17 @@ bool Oot3dNativeUiLifecycleBridge::ApplyTopScreenGuestHook(uint32_t guestPc,
     mStats.topscreen_quest_transforms += stats.DrawModelsTransformed;
     // The host HUD draws the B icon and digits above its B circle, as 3.0's
     // native order does; only while that HUD is composed.
+    // While the touch layout draws B's content inside the overlay's B, the
+    // native item icon must not stay where the HUD's B was.
+    RestoreTopScreenQuestHiddenColors(mMemory, mTopScreenQuestHiddenColors);
+    const bool touchB = mTopScreenConfig.TouchLayout &&
+                        ThreeDsRecomp::Input::OverlayTouchAnchors().Snapshot()[static_cast<std::size_t>(
+                            ThreeDsRecomp::Input::TouchAnchor::B)].Present;
     TopScreenHudCompositorGate gate;
     if (mTopScreenConfig.RenderHud && ReadTopScreenHudCompositorGate(mMemory, &gate, &error) &&
-        gate.Draw && !CaptureTopScreenQuestBButtonCopies(mMemory, mTopScreenConfig,
-                                                         &mTopScreenQuestBCopies, &error))
+        gate.Draw &&
+        !CaptureTopScreenQuestBButtonCopies(mMemory, mTopScreenConfig, &mTopScreenQuestBCopies, &error,
+                                            touchB ? &mTopScreenQuestHiddenColors : nullptr))
       ++mStats.topscreen_quest_hook_failures;
     return true;
   }
