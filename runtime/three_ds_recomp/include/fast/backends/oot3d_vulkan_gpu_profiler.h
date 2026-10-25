@@ -4,6 +4,7 @@
 
 #include "fast/backends/oot3d_vulkan_diagnostics.h"
 #include "fast/extension/gpu_profile_plan.h"
+#include "fast/renderer3ds/vulkan_breadcrumbs.h"
 
 #include <vulkan/vulkan.h>
 
@@ -45,6 +46,10 @@ class Oot3dVulkanGpuProfiler {
     // for coarse boundaries such as render-pass begins.
     void MarkNamed(uint32_t slot, const std::string& label, VkCommandBuffer commandBuffer);
     [[nodiscard]] bool TimelineEnabled() const noexcept { return mTimelinePool != VK_NULL_HANDLE; }
+    // Opt-in GPU breadcrumbs (TRIAEVUM_VULKAN_BREADCRUMBS=1) follow the same
+    // announced boundaries: while a trail is attached, every mark and scope
+    // boundary also records a breadcrumb, whether or not timing is enabled.
+    void AttachBreadcrumbs(Renderer3ds::VulkanBreadcrumbTrail* breadcrumbs) noexcept { mBreadcrumbs = breadcrumbs; }
 
   private:
     static constexpr uint32_t kTimelineMarksPerFrame = 1024;
@@ -81,6 +86,7 @@ class Oot3dVulkanGpuProfiler {
     void TraceFrameGap(uint32_t slot);
 
     VkDevice mDevice = VK_NULL_HANDLE;
+    Renderer3ds::VulkanBreadcrumbTrail* mBreadcrumbs = nullptr;
     VkQueryPool mPool = VK_NULL_HANDLE;
     double mNanosecondsPerTick = 0.0;
     std::array<FrameState, kFramesInFlight> mFrames{};

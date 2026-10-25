@@ -552,10 +552,12 @@ VkCommandBuffer GfxRenderingAPIVulkan::BeginImmediateCommands() {
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     CheckVk(vkBeginCommandBuffer(commandBuffer, &beginInfo),
             "vkBeginCommandBuffer(immediate)");
+    mBreadcrumbs.Record(commandBuffer, "immediate_begin");
     return commandBuffer;
 }
 
 void GfxRenderingAPIVulkan::EndImmediateCommands(VkCommandBuffer commandBuffer) {
+    mBreadcrumbs.Record(commandBuffer, "immediate_end");
     CheckVk(vkEndCommandBuffer(commandBuffer), "vkEndCommandBuffer(immediate)");
     VkSubmitInfo submitInfo{ VK_STRUCTURE_TYPE_SUBMIT_INFO };
     submitInfo.commandBufferCount = 1;

@@ -468,11 +468,13 @@ void GfxRenderingAPIVulkan::FlushGpuTextureCopyPrefix() {
         mOverlayRenderPassActive = false;
     }
     WaitForAllPresents();
+    mBreadcrumbs.Record(command, "materialization_prefix_end");
     RequireCopyVk(vkEndCommandBuffer(command), "end materialization prefix");
     RequireCopyVk(vkResetFences(mDevice, 1, &mRawCopyFence), "reset materialization fence");
     SubmitFrameCommandBuffer(command, mRawCopyFence);
-    RequireCopyVk(vkWaitForFences(mDevice, 1, &mRawCopyFence, VK_TRUE, UINT64_MAX),
-                  "wait materialization fence");
+    const VkResult prefixWait = vkWaitForFences(mDevice, 1, &mRawCopyFence, VK_TRUE, UINT64_MAX);
+    ReportDeviceLoss(prefixWait, "wait materialization fence");
+    RequireCopyVk(prefixWait, "wait materialization fence");
     ++mRawCopyTiming.PrefixWaits;
     RequireCopyVk(vkResetCommandBuffer(command, 0), "reset materialization continuation");
     VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
@@ -1750,12 +1752,14 @@ bool GfxRenderingAPIVulkan::SubmitNativePicaTextureCopy(
                 source->Key.ColorFormat, encodedBytes))
             throw std::runtime_error("raw PICA copy GPU encode was not recorded");
         WaitForAllPresents();
+        mBreadcrumbs.Record(command, "raw_copy_prefix_end");
         RequireCopyVk(vkEndCommandBuffer(command), "end raw-copy prefix");
         // This prefix may already contain presentation writes.
         RequireCopyVk(vkResetFences(mDevice, 1, &mRawCopyFence), "reset raw-copy fence");
         SubmitFrameCommandBuffer(command, mRawCopyFence);
-        RequireCopyVk(vkWaitForFences(mDevice, 1, &mRawCopyFence, VK_TRUE, UINT64_MAX),
-                      "wait raw-copy fence");
+        const VkResult prefixWait = vkWaitForFences(mDevice, 1, &mRawCopyFence, VK_TRUE, UINT64_MAX);
+        ReportDeviceLoss(prefixWait, "wait raw-copy fence");
+        RequireCopyVk(prefixWait, "wait raw-copy fence");
         ++mRawCopyTiming.PrefixWaits;
         const auto copyPhaseClock = [] { return std::chrono::steady_clock::now(); };
         const auto phaseMilliseconds = [](const auto& from, const auto& to) {

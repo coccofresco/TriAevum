@@ -639,6 +639,7 @@ void GfxRenderingAPIVulkan::Init() {
     mScanoutProbe.Initialize(mPhysicalDevice, mDevice, kFramesInFlight);
     mGpuProfiler.Initialize(mPhysicalDevice, mDevice, mGraphicsQueueFamily,
                             mDiagnostics.Enabled());
+    mGpuProfiler.AttachBreadcrumbs(mBreadcrumbs.Active() ? &mBreadcrumbs : nullptr);
     if (mGpuProfiler.TimelineEnabled() && mNriInterop.Available())
         mNriInterop.SetTimelineMark([this](uint32_t frameSlot, const char* label) {
             mGpuProfiler.Mark(frameSlot, label, mCommandBuffers[frameSlot]);
@@ -720,7 +721,9 @@ void GfxRenderingAPIVulkan::Shutdown() {
         mD3d12NgxProvider.Shutdown();
 #endif
         mNriInterop.Shutdown();
+        mGpuProfiler.AttachBreadcrumbs(nullptr);
         mGpuProfiler.Shutdown();
+        mBreadcrumbs.Shutdown();
         mScanoutProbe.Shutdown();
         DestroyGraphicsPipelines();
         for (auto& [id, framebuffer] : mOffscreenFramebuffers) {
@@ -802,6 +805,7 @@ void GfxRenderingAPIVulkan::Shutdown() {
             vkDestroyPipelineCache(mDevice, mPipelineCache, nullptr);
             mPipelineCache = VK_NULL_HANDLE;
         }
+        mDeviceFault.Unbind();
         vkDestroyDevice(mDevice, nullptr);
     }
     mDiagnostics.EndFrame();

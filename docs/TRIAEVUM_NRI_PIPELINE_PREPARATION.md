@@ -423,3 +423,112 @@ and no pipeline was retried on this machine. Each flush stores the whole cache
 20 s minimum interval keeps that below 2.5 MiB/s. Not verified on an AMD
 Windows driver (no such GPU here); the Linux AMD reference machine runs RADV, a
 different compiler.
+
+## Device-Loss Diagnostics (2026-10-26)
+
+Several Windows users on AMD's proprietary driver (`amdvlk64.dll`, RX 5600M to
+RX 6750 XT) cannot start the game. By default the process faults inside the
+driver about a second after device creation, in
+`triaevum_nri::GraphicsPipelineLibraries::Create` on a startup-program worker
+(`PrepareNativePicaPrograms`). With libraries off
+(`TRIAEVUM_NRI_PIPELINE_LIBRARIES=0`), `vkQueueSubmit(frame)` returns
+`VK_ERROR_DEVICE_LOST` on the first frame. No such GPU is available here, so
+the renderer now records what a report from those machines needs instead of a
+guessed fix.
+
+| Switch | Default | Owner | Effect |
+| --- | --- | --- | --- |
+| `VK_EXT_device_fault` | On when the device offers `deviceFault` | `renderer3ds/vulkan_device_fault.*` | After device loss, one fault description from the driver |
+| `TRIAEVUM_VULKAN_BREADCRUMBS=1` | Off | `renderer3ds/vulkan_breadcrumbs.*` | Marker trail over the recorded passes, read after device loss |
+| `TRIAEVUM_NRI_GPL_TRACE=1` | Off | `cmake/patches/nri_pipeline_libraries/GraphicsPipelineLibrariesVK.h` | One line before and after every library part and link |
+
+Every device-loss path reports once, before its existing error propagates:
+the backend's `CheckVk` (submits, fence waits, presents, including the
+asynchronous present worker's deferred error), the texture-copy prefix waits
+and NRI swapchain acquire/present (`NriSwapchainOperationResult::DeviceLost`).
+Disabled, nothing is enabled on the device and nothing is recorded: the fault
+report only reads driver state after the loss, and the breadcrumb hooks are a
+null check.
+
+**Startup capability.** Game log (warnings) and stderr:
+
+```text
+OOT3D Vulkan diagnostics: device_fault=1 breadcrumbs=off
+TRIAEVUM_VULKAN_DIAGNOSTICS device_fault=1 device_fault_extension=1 breadcrumbs=off breadcrumbs_requested=0
+```
+
+**Fault report.** `vkGetDeviceFaultInfoEXT`, once, in the game log and on
+stderr. Address types are `read_invalid`, `write_invalid`, `execute_invalid`
+and the `instruction_pointer_*` kinds; the faulting range is the address
+rounded down to its precision. `deviceFaultVendorBinary` is not requested: its
+dumps need vendor tools to decode. A failed query prints `query_result=<VkResult>`.
+
+```text
+TRIAEVUM_VULKAN_DEVICE_FAULT operation="vkQueueSubmit(frame)" result=-4 description="..." address_infos=[{type=read_invalid,address=0x7F001000,precision=0x1000}] vendor_infos=[{description="...",code=0x2A,data=0x1234}]
+```
+
+**Breadcrumbs.** With `TRIAEVUM_VULKAN_BREADCRUMBS=1` the device enables
+`VK_AMD_buffer_marker` (preferred; NVIDIA exposes it too) or
+`VK_NV_device_diagnostic_checkpoints`. Every boundary the GPU profiler is
+already told about (its scopes such as `native_pica`, `grass`, `scanout`, and
+the named timeline marks, `oot3d_vulkan_gpu_profiler.cpp`) records a monotonic
+id, as do `frame_begin`/`frame_end`, the immediate upload command buffers and
+the ends of mid-frame prefix submissions. The buffer-marker mechanism writes
+each id when the preceding work has started (top of pipe) and when it has
+completed (bottom of pipe) into host-coherent memory. Granularity is per pass
+group, not per draw. After device loss:
+
+```text
+TRIAEVUM_VULKAN_BREADCRUMBS mechanism=amd_buffer_marker recorded=5 started=3 completed=1 last_completed={id=1,frame=3,pass="frame_begin"} in_flight=[{id=2,frame=3,pass="native_pica"},{id=3,frame=3,pass="after native_pica"},{id=4,frame=3,pass="scanout"}]
+```
+
+The faulting work follows `last_completed` and precedes the marker after
+`started`; `in_flight` lists those boundaries (at most 16). `recorded` beyond
+`started + 1` were recorded but never reached. A breadcrumb device that cannot
+create its buffer logs `TRIAEVUM_VULKAN_BREADCRUMBS mechanism=... initialized=0`
+and runs without them.
+
+**Library trace.** The crash inside the driver returns no `VkResult`; the
+crash handler's stack names the GPL call. `TRIAEVUM_NRI_GPL_TRACE=1` adds
+flushed stderr lines around each driver call, so the last `op=part` or
+`op=link` without its `_done` line on the crashing thread is the request:
+
+```text
+TRIAEVUM_NRI_GPL_TRACE op=part part=2 stage=fragment key=71e11f49ac387200 thread=28da7cd9fdcecb dynamic_states=9 vertex_bindings=1 vertex_attributes=16 topology=3 depth_format=126 stencil_format=0 color_formats=[37] blend_attachments=1 samples=1
+TRIAEVUM_NRI_GPL_TRACE op=part_done part=2 key=71e11f49ac387200 thread=28da7cd9fdcecb result=0 ms=0.6
+TRIAEVUM_NRI_GPL_TRACE op=link keys=[a28d7b49fcb56dc1,2f0b0622df7665ae,71e11f49ac387200,5b6293890d366600] thread=8f8d9b7c9a35e01c
+TRIAEVUM_NRI_GPL_TRACE op=link_done thread=8f8d9b7c9a35e01c result=0 ms=0.0
+```
+
+Formats and topology are numeric `VkFormat` and `VkPrimitiveTopology` values;
+`key` is a hash of the part's library identity, stable across runs of one
+build. The trace lives inside NRI and has no logger, so it reaches only stderr;
+it is not limited to one driver because it only runs on request. A Windows
+tester captures it from a command prompt:
+
+```text
+set TRIAEVUM_NRI_GPL_TRACE=1
+TriAevum.exe 2> triaevum-stderr.txt
+```
+
+Editing the patch header requires rerunning
+`cmake -DNRI_SOURCE_DIR=<nri checkout> -P runtime/three_ds_recomp/cmake/patches/nri_graphics_pipeline_libraries.cmake`
+for a build whose NRI checkout is already patched (the step copies the headers
+and skips applied edits).
+
+A tester willing to install AMD's Radeon Developer Panel can additionally
+capture a driver-side crash dump (Radeon GPU Detective); it needs no
+TriAevum change.
+
+Verification: `vulkan_device_loss_diagnostics_tests` (fault-line and
+breadcrumb formatting against synthetic driver data, enabling policies,
+history wrap), and developer launches on the reference machine (RTX 3060,
+NVIDIA driver id 4, which offers both `VK_EXT_device_fault` and
+`VK_AMD_buffer_marker`) from a savestate for 60 frames: unset, the run reports
+`device_fault=1 breadcrumbs=off` and is otherwise unchanged; with
+`TRIAEVUM_VULKAN_BREADCRUMBS=1 TRIAEVUM_NRI_GPL_TRACE=1` it reports
+`breadcrumbs=amd_buffer_marker`, records the trail through every frame and
+prints 58 part and 55 link requests, each matched by its `_done` line. The
+device-loss paths themselves (fault query, breadcrumb readout, checkpoints)
+are unexercised: no device was lost on the reference machine, and checkpoint
+data can only be read from a lost device.

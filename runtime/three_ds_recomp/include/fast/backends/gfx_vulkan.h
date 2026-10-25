@@ -23,6 +23,8 @@
 #include "fast/renderer3ds/pica_surface_calibration_trace.h"
 #include "fast/renderer3ds/gpu_memory_residency.h"
 #include "fast/renderer3ds/vulkan_memory_budget.h"
+#include "fast/renderer3ds/vulkan_breadcrumbs.h"
+#include "fast/renderer3ds/vulkan_device_fault.h"
 #include "fast/backends/oot3d_vulkan_diagnostics.h"
 #include "fast/backends/oot3d_vulkan_gpu_profiler.h"
 #include "fast/backends/oot3d_vulkan_validation.h"
@@ -866,6 +868,15 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     void SubmitFrameCommandBuffer(VkCommandBuffer command, VkFence fence,
                                   VkSemaphore signal = VK_NULL_HANDLE,
                                   uint64_t signalValue = 0U);
+    // Device-loss diagnostics: for VK_ERROR_DEVICE_LOST, logs the driver's
+    // fault description and the breadcrumb trail once, as warnings and on
+    // stderr, before the caller propagates its error. Other results are inert.
+    void ReportDeviceLoss(VkResult result, const char* operation);
+    // Member code calls this rather than the unit-local helper of the same
+    // name: device loss is reported, then the same error is thrown. Const
+    // members only query the physical device and surface; they throw directly.
+    void CheckVk(VkResult result, const char* operation);
+    void CheckVk(VkResult result, const char* operation) const;
     VkCommandBuffer SplitFrameForExternalCompute(
         VkSemaphore timelineSemaphore, uint64_t vulkanSignalValue,
         uint64_t externalCompletionValue);
@@ -1813,6 +1824,10 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     Oot3dVulkanValidation mVulkanValidation;
 
     Oot3dVulkanGpuProfiler mGpuProfiler;
+    Renderer3ds::VulkanDeviceFaultReporter mDeviceFault;
+    Renderer3ds::VulkanBreadcrumbMechanism mBreadcrumbMechanism = Renderer3ds::VulkanBreadcrumbMechanism::Off;
+    Renderer3ds::VulkanBreadcrumbTrail mBreadcrumbs;
+    std::atomic<bool> mDeviceLossReported{false};
 #if defined(_WIN32) && defined(ENABLE_OOT3D_D3D12_NGX_PROVIDER)
     Extension::D3d12NgxProvider mD3d12NgxProvider;
 #endif

@@ -190,7 +190,7 @@ void Oot3dVulkanGpuProfiler::MarkCompleted(
 
 void Oot3dVulkanGpuProfiler::MarkNamed(
     uint32_t slot, const std::string& label, VkCommandBuffer commandBuffer) {
-    if (mTimelinePool == VK_NULL_HANDLE) {
+    if (mTimelinePool == VK_NULL_HANDLE && mBreadcrumbs == nullptr) {
         return;
     }
     WriteMark(slot, {mTimelineNames.insert(label).first->c_str(), false}, commandBuffer);
@@ -198,6 +198,9 @@ void Oot3dVulkanGpuProfiler::MarkNamed(
 
 void Oot3dVulkanGpuProfiler::WriteMark(
     uint32_t slot, TimelineMark mark, VkCommandBuffer commandBuffer) {
+    if (mBreadcrumbs != nullptr && commandBuffer != VK_NULL_HANDLE && mark.Label != nullptr) {
+        mBreadcrumbs->Record(commandBuffer, mark.Label);
+    }
     if (mTimelinePool == VK_NULL_HANDLE || slot >= kFramesInFlight ||
         commandBuffer == VK_NULL_HANDLE || mark.Label == nullptr) {
         return;

@@ -870,6 +870,17 @@ if(MSVC)
 endif()
 gtest_discover_tests(oot3d_graphics_foundation_tests DISCOVERY_TIMEOUT 30)
 
+# Device-loss diagnostics: fault-line and breadcrumb formatting and the
+# policies that enable them; no device is created.
+add_executable(vulkan_device_loss_diagnostics_tests
+    vulkan_device_loss_diagnostics_tests.cpp
+    ../src/fast/renderer3ds/vulkan_device_fault.cpp
+    ../src/fast/renderer3ds/vulkan_breadcrumbs.cpp)
+target_compile_features(vulkan_device_loss_diagnostics_tests PRIVATE cxx_std_20)
+target_include_directories(vulkan_device_loss_diagnostics_tests PRIVATE ../include)
+target_link_libraries(vulkan_device_loss_diagnostics_tests PRIVATE Vulkan::Headers Vulkan::Vulkan)
+add_test(NAME vulkan_device_loss_diagnostics_tests COMMAND vulkan_device_loss_diagnostics_tests)
+
 # Small GPU contract test: no runtime/title rebuild or game assets required.
 add_executable(pica_surface_calibration_trace_tests
     pica_surface_calibration_trace_tests.cpp

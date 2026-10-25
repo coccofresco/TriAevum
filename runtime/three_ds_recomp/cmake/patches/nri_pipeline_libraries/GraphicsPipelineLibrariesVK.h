@@ -7,9 +7,13 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <functional>
 #include <map>
 #include <mutex>
+#include <string>
+#include <thread>
 #include <vector>
 
 namespace triaevum_nri {
@@ -46,6 +50,39 @@ class GraphicsPipelineLibraries {
     }
     static void Float(Key& key, float value) {
         uint32_t bits; std::memcpy(&bits, &value, sizeof(bits)); key.push_back(bits);
+    }
+    // Developer trace (TRIAEVUM_NRI_GPL_TRACE=1): a flushed stderr line before
+    // and after each part creation and link. A crash inside the driver leaves
+    // the request it was compiling as the last unmatched line.
+    static bool TraceEnabled() {
+        static const bool enabled = [] {
+            const char* value = std::getenv("TRIAEVUM_NRI_GPL_TRACE");
+            return value != nullptr && std::strcmp(value, "1") == 0;
+        }();
+        return enabled;
+    }
+    static size_t ThreadTag() { return std::hash<std::thread::id>{}(std::this_thread::get_id()); }
+    static uint64_t KeyHash(const Key& key) {
+        uint64_t hash = 1469598103934665603ULL;
+        for (uint64_t word : key) { hash ^= word; hash *= 1099511628211ULL; }
+        return hash;
+    }
+    static void TracePart(size_t p, const Key& key, size_t dynamicStates,
+        const VkPipelineVertexInputStateCreateInfo& vi, const VkPipelineInputAssemblyStateCreateInfo& ia,
+        const VkPipelineRenderingCreateInfo& rendering, const VkPipelineColorBlendStateCreateInfo& blend,
+        const VkPipelineMultisampleStateCreateInfo& ms) {
+        static constexpr const char* kStages[]{"vertex_input", "pre_rasterization", "fragment", "fragment_output"};
+        std::string colors;
+        for (uint32_t i = 0; i < rendering.colorAttachmentCount; ++i)
+            colors += (i ? "," : "") + std::to_string(int(rendering.pColorAttachmentFormats[i]));
+        std::fprintf(stderr, "TRIAEVUM_NRI_GPL_TRACE op=part part=%zu stage=%s key=%016llx thread=%zx dynamic_states=%zu "
+            "vertex_bindings=%u vertex_attributes=%u topology=%d depth_format=%d stencil_format=%d color_formats=[%s] "
+            "blend_attachments=%u samples=%u\n", p, kStages[p], static_cast<unsigned long long>(KeyHash(key)),
+            ThreadTag(), dynamicStates, vi.vertexBindingDescriptionCount,
+            vi.vertexAttributeDescriptionCount, int(ia.topology), int(rendering.depthAttachmentFormat),
+            int(rendering.stencilAttachmentFormat), colors.c_str(), blend.attachmentCount,
+            unsigned(ms.rasterizationSamples));
+        std::fflush(stderr);
     }
     uint64_t Program(ProgramBytes bytes) {
         const auto* words = static_cast<const uint32_t*>(bytes.Data);
@@ -259,11 +296,18 @@ class GraphicsPipelineLibraries {
             if (p == 2 || p == 3) part.pMultisampleState = &ms;
             if (p == 3) part.pColorBlendState = &blend;
             VkPipeline handle = VK_NULL_HANDLE;
+            if (TraceEnabled()) TracePart(p, keys[p], dynamics[p].size(), vi, ia, rendering, blend, ms);
             const auto rssBefore = PipelineLibraryResidentBytes();
             const auto start = Now();
             const auto result = create(device, cache, 1, &part, allocator, &handle);
             const auto rssAfter = PipelineLibraryResidentBytes();
             const auto elapsed = Now() - start;
+            if (TraceEnabled()) {
+                std::fprintf(stderr, "TRIAEVUM_NRI_GPL_TRACE op=part_done part=%zu key=%016llx thread=%zx result=%d ms=%.1f\n",
+                    p, static_cast<unsigned long long>(KeyHash(keys[p])), ThreadTag(), int(result),
+                    static_cast<double>(elapsed) / 1.0e6);
+                std::fflush(stderr);
+            }
             if (result != VK_SUCCESS && handle) { destroy(device, handle, allocator); handle = VK_NULL_HANDLE; }
             lock.lock();
             parts[p]->second.Handle = handle;
@@ -296,9 +340,21 @@ class GraphicsPipelineLibraries {
             link.libraryCount = uint32_t(libraries.size()); link.pLibraries = libraries.data();
             VkGraphicsPipelineCreateInfo executable{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
             executable.pNext = &link; executable.layout = in.layout; executable.basePipelineIndex = -1;
+            if (TraceEnabled()) {
+                std::fprintf(stderr, "TRIAEVUM_NRI_GPL_TRACE op=link keys=[%016llx,%016llx,%016llx,%016llx] thread=%zx\n",
+                    static_cast<unsigned long long>(KeyHash(keys[0])), static_cast<unsigned long long>(KeyHash(keys[1])),
+                    static_cast<unsigned long long>(KeyHash(keys[2])), static_cast<unsigned long long>(KeyHash(keys[3])),
+                    ThreadTag());
+                std::fflush(stderr);
+            }
             const auto start = Now();
             result = create(device, cache, 1, &executable, allocator, out);
             const auto elapsed = Now() - start;
+            if (TraceEnabled()) {
+                std::fprintf(stderr, "TRIAEVUM_NRI_GPL_TRACE op=link_done thread=%zx result=%d ms=%.1f\n", ThreadTag(),
+                    int(result), static_cast<double>(elapsed) / 1.0e6);
+                std::fflush(stderr);
+            }
             lock.lock();
             ++mLinks; mLinkNanoseconds += elapsed;
             if (elapsed > mMaxLinkNanoseconds) mMaxLinkNanoseconds = elapsed;

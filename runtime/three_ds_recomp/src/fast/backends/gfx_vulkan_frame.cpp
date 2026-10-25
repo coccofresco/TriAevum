@@ -709,6 +709,8 @@ void GfxRenderingAPIVulkan::StartFrame() {
             }
             if (result !=
                 Extension::NriSwapchainOperationResult::Success) {
+                if (result == Extension::NriSwapchainOperationResult::DeviceLost)
+                    ReportDeviceLoss(VK_ERROR_DEVICE_LOST, "NRI AcquireNextTexture");
                 throw std::runtime_error(
                     "NRI AcquireNextTexture failed: " +
                     mNriSwapchain.UnavailableReason());
@@ -804,6 +806,8 @@ void GfxRenderingAPIVulkan::StartFrame() {
     mFrameActive = true;
     PrepareRecordedDlssFeature();
     ++mFrameCounter;
+    mBreadcrumbs.SetFrame(mFrameCounter);
+    mBreadcrumbs.Record(mCommandBuffers[mCurrentFrame], "frame_begin");
     Extension::BeginGrassStageFrame(mFrameCounter);
     mSurfaceCalibrationTrace.BeginFrame(mFrameCounter);
     mDrawCallCountThisFrame = 0;
@@ -914,6 +918,7 @@ void GfxRenderingAPIVulkan::EndFrame() {
                          mFrameCounter, mNativePicaPresentedThisFrame);
     mDiagnostics.RecordPicaSceneFrame(sceneFrameStats);
     mGpuProfiler.EndFrame(mCurrentFrame, mCommandBuffers[mCurrentFrame]);
+    mBreadcrumbs.Record(mCommandBuffers[mCurrentFrame], "frame_end");
     CheckVk(vkEndCommandBuffer(mCommandBuffers[mCurrentFrame]), "vkEndCommandBuffer");
 
     SubmitFrameCommandBuffer(mCommandBuffers[mCurrentFrame],
@@ -940,6 +945,8 @@ void GfxRenderingAPIVulkan::FinishRender() {
             mSwapchainDirty = true;
         } else if (result !=
                    Extension::NriSwapchainOperationResult::Success) {
+            if (result == Extension::NriSwapchainOperationResult::DeviceLost)
+                ReportDeviceLoss(VK_ERROR_DEVICE_LOST, "NRI QueuePresent");
             throw std::runtime_error(
                 "NRI QueuePresent failed: " +
                 mNriSwapchain.UnavailableReason());

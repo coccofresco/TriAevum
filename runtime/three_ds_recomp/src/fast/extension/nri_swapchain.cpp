@@ -41,6 +41,8 @@ NriSwapchainOperationResult ToOperationResult(nri::Result result) {
         return NriSwapchainOperationResult::Success;
     if (result == nri::Result::OUT_OF_DATE)
         return NriSwapchainOperationResult::OutOfDate;
+    if (result == nri::Result::DEVICE_LOST)
+        return NriSwapchainOperationResult::DeviceLost;
     return NriSwapchainOperationResult::Failure;
 }
 #endif
@@ -357,6 +359,7 @@ NriSwapchainOperationResult NriSwapchain::Acquire(
     else
         mImpl->Reason = result == nri::Result::OUT_OF_DATE
             ? "NRI swapchain is out of date"
+            : result == nri::Result::DEVICE_LOST ? "NRI AcquireNextTexture lost the device"
             : "NRI AcquireNextTexture failed";
     return ToOperationResult(result);
 #endif
@@ -378,6 +381,7 @@ NriSwapchainOperationResult NriSwapchain::Present(
     else
         mImpl->Reason = result == nri::Result::OUT_OF_DATE
             ? "NRI swapchain is out of date"
+            : result == nri::Result::DEVICE_LOST ? "NRI QueuePresent lost the device"
             : "NRI QueuePresent failed";
     return ToOperationResult(result);
 #endif

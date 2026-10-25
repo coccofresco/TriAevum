@@ -353,8 +353,23 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2
     };
     supportedFeatures.pNext = &vulkan12;
+    // Device-loss diagnostics: the fault report is enabled whenever offered;
+    // breadcrumb extensions only on request (vulkan_breadcrumbs.h).
+    const bool hasDeviceFaultExtension = hasExtension(VK_EXT_DEVICE_FAULT_EXTENSION_NAME);
+    VkPhysicalDeviceFaultFeaturesEXT deviceFault{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT};
+    if (hasDeviceFaultExtension) {
+        deviceFault.pNext = supportedFeatures.pNext;
+        supportedFeatures.pNext = &deviceFault;
+    }
     RequiredInstanceCommand<PFN_vkGetPhysicalDeviceFeatures2>(mInstance, "vkGetPhysicalDeviceFeatures2")(
         mPhysicalDevice, &supportedFeatures);
+    const bool deviceFaultEnabled =
+        Renderer3ds::VulkanDeviceFaultSupported(hasDeviceFaultExtension, deviceFault);
+    const char* breadcrumbEnvironment = std::getenv("TRIAEVUM_VULKAN_BREADCRUMBS");
+    const bool breadcrumbsRequested = Renderer3ds::VulkanBreadcrumbsRequested(breadcrumbEnvironment);
+    mBreadcrumbMechanism = Renderer3ds::ResolveVulkanBreadcrumbMechanism(
+        breadcrumbsRequested, hasExtension(VK_AMD_BUFFER_MARKER_EXTENSION_NAME),
+        hasExtension(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME));
     mSynchronization2Enabled =
         hasVulkan12 && hasSynchronization2Extension &&
         synchronization2.synchronization2 == VK_TRUE;
@@ -393,6 +408,17 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
         extensions.push_back(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
     if (mDynamicRenderingEnabled)
         extensions.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+    if (deviceFaultEnabled)
+        extensions.push_back(VK_EXT_DEVICE_FAULT_EXTENSION_NAME);
+    if (const char* breadcrumbExtension = Renderer3ds::VulkanBreadcrumbExtension(mBreadcrumbMechanism))
+        extensions.push_back(breadcrumbExtension);
+    // Release logs keep warnings only: whether a device loss can be described
+    // belongs in a tester's report next to the device line.
+    SPDLOG_WARN("OOT3D Vulkan diagnostics: device_fault={} breadcrumbs={}",
+                unsigned(deviceFaultEnabled), Renderer3ds::VulkanBreadcrumbMechanismName(mBreadcrumbMechanism));
+    std::fprintf(stderr, "TRIAEVUM_VULKAN_DIAGNOSTICS device_fault=%u device_fault_extension=%u breadcrumbs=%s breadcrumbs_requested=%u\n",
+        unsigned(deviceFaultEnabled), unsigned(hasDeviceFaultExtension),
+        Renderer3ds::VulkanBreadcrumbMechanismName(mBreadcrumbMechanism), unsigned(breadcrumbsRequested));
 #if defined(_WIN32) && defined(ENABLE_OOT3D_D3D12_NGX_PROVIDER)
     constexpr const char* kExternalMemoryWin32 =
         "VK_KHR_external_memory_win32";
@@ -470,11 +496,25 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
         pipelineLibraries.pNext = featureChain;
         featureChain = &pipelineLibraries;
     }
+    VkPhysicalDeviceFaultFeaturesEXT enabledDeviceFault = Renderer3ds::VulkanDeviceFaultFeatures();
+    if (deviceFaultEnabled) {
+        enabledDeviceFault.pNext = featureChain;
+        featureChain = &enabledDeviceFault;
+    }
     createInfo.pNext = featureChain;
     CheckVk(vkCreateDevice(mPhysicalDevice, &createInfo, nullptr, &mDevice), "vkCreateDevice");
     vkGetDeviceQueue(mDevice, mGraphicsQueueFamily, 0, &mGraphicsQueue);
     vkGetDeviceQueue(mDevice, mPresentQueueFamily,
                      queuePlan.PresentQueueIndex, &mPresentQueue);
+    mDeviceFault.Bind(mDevice, deviceFaultEnabled);
+    mDeviceLossReported.store(false);
+    if (mBreadcrumbMechanism != Renderer3ds::VulkanBreadcrumbMechanism::Off &&
+        !mBreadcrumbs.Initialize(mPhysicalDevice, mDevice, mGraphicsQueue, mBreadcrumbMechanism)) {
+        SPDLOG_WARN("OOT3D Vulkan breadcrumbs ({}) could not be initialized",
+                    Renderer3ds::VulkanBreadcrumbMechanismName(mBreadcrumbMechanism));
+        std::fprintf(stderr, "TRIAEVUM_VULKAN_BREADCRUMBS mechanism=%s initialized=0\n",
+                     Renderer3ds::VulkanBreadcrumbMechanismName(mBreadcrumbMechanism));
+    }
     mAsyncPresentSupported =
         queuePlan.AsynchronousPresent &&
         mPresentQueue != mGraphicsQueue;
@@ -820,6 +860,31 @@ void GfxRenderingAPIVulkan::SubmitFrameCommandBuffer(
     mFrameExternalWaitValue = 0U;
 }
 
+void GfxRenderingAPIVulkan::ReportDeviceLoss(VkResult result, const char* operation) {
+    if (result != VK_ERROR_DEVICE_LOST || mDeviceLossReported.exchange(true)) {
+        return;
+    }
+    const auto report = [](const std::string& line) {
+        SPDLOG_WARN("{}", line);
+        std::fprintf(stderr, "%s\n", line.c_str());
+    };
+    if (const auto fault = mDeviceFault.Consume(result, operation)) {
+        report(*fault);
+    }
+    if (const auto breadcrumbs = mBreadcrumbs.Describe()) {
+        report(*breadcrumbs);
+    }
+}
+
+void GfxRenderingAPIVulkan::CheckVk(VkResult result, const char* operation) {
+    ReportDeviceLoss(result, operation);
+    Fast::CheckVk(result, operation);
+}
+
+void GfxRenderingAPIVulkan::CheckVk(VkResult result, const char* operation) const {
+    Fast::CheckVk(result, operation);
+}
+
 VkCommandBuffer GfxRenderingAPIVulkan::SplitFrameForExternalCompute(
     VkSemaphore timelineSemaphore, uint64_t vulkanSignalValue,
     uint64_t externalCompletionValue) {
@@ -832,6 +897,7 @@ VkCommandBuffer GfxRenderingAPIVulkan::SplitFrameForExternalCompute(
     }
 
     VkCommandBuffer prefix = mCommandBuffers[mCurrentFrame];
+    mBreadcrumbs.Record(prefix, "external_compute_prefix_end");
     CheckVk(vkEndCommandBuffer(prefix),
             "vkEndCommandBuffer(external compute prefix)");
     SubmitFrameCommandBuffer(prefix, VK_NULL_HANDLE,
@@ -847,6 +913,7 @@ VkCommandBuffer GfxRenderingAPIVulkan::SplitFrameForExternalCompute(
     begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     CheckVk(vkBeginCommandBuffer(continuation, &begin),
             "vkBeginCommandBuffer(external compute continuation)");
+    mBreadcrumbs.Record(continuation, "external_compute_continuation");
     if (mNriInterop.Available() &&
         !mNriInterop.WrapFrameCommandBuffer(
             mCurrentFrame, continuation)) {

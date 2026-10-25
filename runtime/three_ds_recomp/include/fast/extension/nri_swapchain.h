@@ -32,6 +32,8 @@ enum class NriSwapchainOperationResult : uint8_t {
     Success,
     OutOfDate,
     Failure,
+    // A failure the renderer reports with its device-loss diagnostics.
+    DeviceLost,
 };
 
 [[nodiscard]] inline bool ValidateNriSwapchainDesc(
