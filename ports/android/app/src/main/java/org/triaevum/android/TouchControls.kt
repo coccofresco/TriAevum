@@ -9,6 +9,7 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
 import org.triaevum.android.controls.AzaharButtonIds
+import org.triaevum.android.controls.AzaharInputAdapter
 import org.triaevum.android.controls.InputOverlay
 import org.triaevum.android.controls.Native3dsInputTarget
 
@@ -188,6 +189,9 @@ class TouchOverlayInput : Native3dsInputTarget {
             }
             editBar = bar
             view.setIsInEditMode(true)
+            // The overlay draws every control while it is edited; the game
+            // draws its full HUD meanwhile.
+            controlBoundsCleared()
         } else {
             layout.removeView(editBar)
             editBar = null
@@ -223,7 +227,8 @@ class TouchOverlayInput : Native3dsInputTarget {
     }
 
     private fun controlBoundsCleared() {
-        for (anchor in 0 until ANCHOR_COUNT) NativeInputBridge.controlBounds(anchor, false, 0f, 0f, 0f, 0f)
+        for (anchor in 0 until AzaharInputAdapter.ANCHOR_COUNT)
+            NativeInputBridge.controlBounds(anchor, false, 0f, 0f, 0f, 0f)
     }
 
     /** Follows whether the game draws its controls while the activity is in front. */
@@ -236,7 +241,6 @@ class TouchOverlayInput : Native3dsInputTarget {
 
     companion object {
         private const val LONG_PRESS_MS = 600L
-        private const val ANCHOR_COUNT = 7
         private const val SHOW_OVERLAY = "EmulationMenuSettings_ShowOverlay"
         private const val VIBRATION = "EmulationMenuSettings_HapticFeedback"
         private const val OPACITY = "controlOpacity"

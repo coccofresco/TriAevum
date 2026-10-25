@@ -524,15 +524,20 @@ TopScreenButtonGroupPlacement ResolveTopScreenButtonGroupPlacement(
     const TopScreenUiConfig &config) noexcept;
 
 // TriAevum's touch layout (TopScreenUiConfig::TouchLayout) with a touch
-// overlay. The overlay owns where its A, B, X, Y, ZL, ZR and D-pad controls are
-// and what a finger presses; the HUD's own button (ring, label, item, counts)
-// or cross (with its icons and the view eye) is drawn inside each anchored
-// control instead of in the HUD. The game draws the A ring itself: its
-// placement is returned for the copies that replace it.
+// overlay. The overlay owns where its controls are and what a finger presses;
+// the game draws every anchored control (AppendTopScreenTouchSkin) and the
+// HUD's content for A, B, X, Y, ZL, ZR and the D-pad (items, counts, the action
+// word, the cross icons and the view eye) inside it instead of in the HUD.
+// The HUD's rings, cross and button letters are not drawn: the control's own
+// base and letter take their place, so a control looks the same with or
+// without a HUD. The game draws the A group itself: its placement is returned
+// for the copies that replace it.
 struct TopScreenTouchControlsPresentation {
   // Primitives on a canvas of the output region's shape, 240 units high
   // (oot3d::ui::N64UiCanvasMode::RegionShape over the whole window).
   std::vector<oot3d::ui::UiPrimitive> Primitives;
+  // Per anchor: the HUD gave the control visible content this frame.
+  std::array<bool, ThreeDsRecomp::Input::kTouchAnchorCount> Content{};
   // The natively drawn A group: HUD canvas centre to anchor centre, scaled.
   bool ActionAnchored = false;
   float ActionFromX = 0.0F;
@@ -568,6 +573,36 @@ bool TopScreenTouchButtonsAnchored(const TopScreenUiConfig &config,
 TopScreenTouchControlsPresentation ExtractTopScreenTouchControls(
     std::vector<oot3d::ui::UiPrimitive> &hud, const TopScreenUiConfig &config,
     const ThreeDsRecomp::Input::TouchAnchorSet &anchors, float canvasWidth);
+
+// The anchored controls' own look while the game draws them: a vector base
+// per control (a disc, a pill, the cross, the circle pad with its knob), lit
+// while its button is held, and its letter or icon. While the HUD gives a
+// control content, the letter moves to a corner badge so the content is
+// readable; it eases back when the content goes.
+struct TopScreenTouchSkinState {
+  // Per anchor: 0 letter centred, 1 corner badge.
+  std::array<float, ThreeDsRecomp::Input::kTouchAnchorCount> Badge{};
+};
+struct TopScreenTouchSkinInput {
+  ThreeDsRecomp::Input::TouchAnchorSet Anchors{};
+  // The window canvas: 240 x window width / height, 240 high.
+  float CanvasWidth = 0.0F;
+  // 3DS HID button bits held this frame.
+  std::uint32_t HeldButtons = 0;
+  // The circle pad, -1..1, right and up.
+  float CirclePadX = 0.0F;
+  float CirclePadY = 0.0F;
+  // The overlay's opacity, 0..1.
+  float Opacity = 0.5F;
+};
+// Moves each badge toward whether its control has content (0.12 s ease).
+void AdvanceTopScreenTouchSkin(TopScreenTouchSkinState &state,
+                               const std::array<bool, ThreeDsRecomp::Input::kTouchAnchorCount> &content,
+                               double seconds) noexcept;
+// Appends the bases (layers 8 and 9, under the HUD content) and the letters
+// and icons (layer 15) of every anchored control.
+void AppendTopScreenTouchSkin(const TopScreenTouchSkinInput &input, const TopScreenTouchSkinState &state,
+                              std::vector<oot3d::ui::UiPrimitive> &output);
 
 struct TopScreenVec3 {
   float X = 0.0F;

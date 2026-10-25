@@ -71,7 +71,7 @@ class InputOverlay(context: Context?, attrs: AttributeSet?) : SurfaceView(contex
         // TriAevum: a control the host draws itself is drawn here only while editing.
         overlayButtons.forEach { if (isInEditMode || !OverlayHost.drawsControl(it.id)) it.draw(canvas) }
         overlayDpads.forEach { if (isInEditMode || !OverlayHost.drawsControl(it.upId)) it.draw(canvas) }
-        overlayJoysticks.forEach { it.draw(canvas) }
+        overlayJoysticks.forEach { if (isInEditMode || !OverlayHost.drawsControl(it.joystickId)) it.draw(canvas) }
     }
 
     private fun swapScreen() {
@@ -592,12 +592,14 @@ class InputOverlay(context: Context?, attrs: AttributeSet?) : SurfaceView(contex
         publishControlBounds()
     }
 
-    // TriAevum: where each control is, for a host that draws some of them.
+    // TriAevum: where each control is, for a host that draws them. Not while
+    // the layout is edited: the overlay draws every control itself then.
     private fun publishControlBounds() {
-        if (width == 0 || height == 0) return
+        if (width == 0 || height == 0 || isInEditMode) return
         val bounds = HashMap<Int, IntArray>()
         overlayButtons.forEach { bounds[it.id] = it.bounds.run { intArrayOf(left, top, right, bottom) } }
         overlayDpads.forEach { bounds[it.upId] = it.bounds.run { intArrayOf(left, top, right, bottom) } }
+        overlayJoysticks.forEach { bounds[it.joystickId] = it.bounds.run { intArrayOf(left, top, right, bottom) } }
         OverlayHost.controlBounds(bounds, width, height)
     }
 

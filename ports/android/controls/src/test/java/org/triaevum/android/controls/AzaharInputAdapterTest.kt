@@ -38,12 +38,17 @@ class AzaharInputAdapterTest {
         target.draws = true
         assertTrue(adapter.drawsControl(AzaharButtonIds.BUTTON_A))
         assertTrue(adapter.drawsControl(AzaharButtonIds.DPAD_UP))
-        assertFalse(adapter.drawsControl(AzaharButtonIds.BUTTON_START))
-        adapter.controlBounds(mapOf(AzaharButtonIds.BUTTON_B to intArrayOf(100, 50, 300, 250)), 1000, 500)
+        // Every control the overlay shows is the title's to draw, the circle pad too.
+        assertTrue(adapter.drawsControl(AzaharButtonIds.BUTTON_START))
+        assertTrue(adapter.drawsControl(AzaharButtonIds.STICK_LEFT))
+        assertFalse(adapter.drawsControl(AzaharButtonIds.STICK_C))
+        adapter.controlBounds(mapOf(AzaharButtonIds.BUTTON_B to intArrayOf(100, 50, 300, 250),
+                                    AzaharButtonIds.STICK_LEFT to intArrayOf(0, 250, 200, 450)), 1000, 500)
         assertEquals(listOf(0.1f, 0.1f, 0.3f, 0.5f), target.bounds[AzaharInputAdapter.ANCHOR_B])
         assertTrue(target.bounds.containsKey(AzaharInputAdapter.ANCHOR_A))
         assertNull(target.bounds[AzaharInputAdapter.ANCHOR_A])
-        assertEquals(7, target.bounds.size)
+        assertEquals(listOf(0f, 0.5f, 0.2f, 0.9f), target.bounds[AzaharInputAdapter.ANCHOR_CIRCLE_PAD])
+        assertEquals(AzaharInputAdapter.ANCHOR_COUNT, target.bounds.size)
     }
 
     @Test fun allNativeButtonsMatchTheExistingHidContract() {

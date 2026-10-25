@@ -3,6 +3,7 @@
 #include "fast/renderer3ds/pica_surface_debug.h"
 #include "oot3d/renderer/ui_presentation_layout.h"
 #include "oot3d_native_room_shadow_shell.h"
+#include "three_ds_touch_overlay_settings.h"
 
 namespace Oot3dA32Window {
 
@@ -600,11 +601,18 @@ bool NativeA32WindowSession::RunFrame() {
     inputConsumerDiagnostics.Observe(process.Memory(), frameCount);
   }
 
-  // The touch overlay's controls that show the HUD's own buttons and cross,
-  // over the whole window (the overlay may place them beside the picture).
+  // The touch overlay's controls, drawn by the game over the whole window
+  // (the overlay may place them beside the picture) with the HUD's content
+  // for its buttons and cross.
   Oot3dNativeGame::TopScreenTouchControlsPresentation touchControls;
   const oot3d::ui::N64UiOutputRegion windowRegion{0U, 0U, std::max<uint32_t>(1, window.GetWidth()),
                                                   std::max<uint32_t>(1, window.GetHeight())};
+  const float touchCanvasWidth =
+      240.0F * static_cast<float>(windowRegion.Width) / static_cast<float>(windowRegion.Height);
+  const auto touchAnchors = ThreeDsRecomp::Input::OverlayTouchAnchors().Snapshot();
+  const bool drawsTouchControls = launch.UiProfile == Oot3dNativeGame::Oot3dUiProfile::TopScreen &&
+                                  activeTopScreenConfig.TouchLayout &&
+                                  ThreeDsRecomp::Input::AnyTouchAnchored(touchAnchors);
   for (std::size_t subsystemIndex = 0;
        subsystemIndex < oot3d::ui::kUiSubsystemCount; ++subsystemIndex) {
     const auto subsystem =
@@ -631,9 +639,8 @@ bool NativeA32WindowSession::RunFrame() {
       Oot3dNativeGame::AppendTopScreenFreeCameraOptionPresentation(
           nativeCandidateDispatch.TopScreenCamera.Camera, primitives);
       AppendTopScreenDpadPickerHoldRings(uiLifecycleBridge, primitives);
-      touchControls = Oot3dNativeGame::ExtractTopScreenTouchControls(
-          primitives, activeTopScreenConfig, ThreeDsRecomp::Input::OverlayTouchAnchors().Snapshot(),
-          240.0F * static_cast<float>(windowRegion.Width) / static_cast<float>(windowRegion.Height));
+      touchControls = Oot3dNativeGame::ExtractTopScreenTouchControls(primitives, activeTopScreenConfig,
+                                                                     touchAnchors, touchCanvasWidth);
     }
     if (topScreenPresentation && subsystem == oot3d::ui::UiSubsystem::TouchControls) {
       ocarinaText.Append(primitives);
@@ -662,9 +669,25 @@ bool NativeA32WindowSession::RunFrame() {
       }
     });
   }
-  // The overlay draws its own art for its controls whenever the game does not
-  // (title, menus, scenes without a HUD).
-  ThreeDsRecomp::Input::OverlayTouchAnchors().SetTitleDrawsControls(!touchControls.Primitives.empty());
+  // The game draws every anchored control in every scene, so a control never
+  // switches between the overlay's art and the game's; the overlay draws its
+  // own only while the game does not (touch layout off, layout editing).
+  ThreeDsRecomp::Input::OverlayTouchAnchors().SetTitleDrawsControls(drawsTouchControls);
+  if (drawsTouchControls) {
+    Oot3dNativeGame::AdvanceTopScreenTouchSkin(touchSkinState, touchControls.Content, presentationElapsedSeconds);
+    Oot3dNativeGame::TopScreenTouchSkinInput skin;
+    skin.Anchors = touchAnchors;
+    skin.CanvasWidth = touchCanvasWidth;
+    skin.HeldButtons = physicalInputFrame.Hid.Buttons;
+    constexpr float kStick = static_cast<float>(ThreeDsRecomp::Input::kNativeStickMaximum);
+    skin.CirclePadX = static_cast<float>(physicalInputFrame.Hid.CirclePadX) / kStick;
+    skin.CirclePadY = static_cast<float>(physicalInputFrame.Hid.CirclePadY) / kStick;
+    const auto &overlaySettings = ThreeDsRecomp::Input::OverlayTouchSettings();
+    if (overlaySettings.Present()) skin.Opacity = static_cast<float>(overlaySettings.Values().OpacityPercent) / 100.0F;
+    Oot3dNativeGame::AppendTopScreenTouchSkin(skin, touchSkinState, touchControls.Primitives);
+  } else {
+    touchControls.Primitives.clear();
+  }
   if (!touchControls.Primitives.empty()) {
     auto touchTextures = n64UiRenderer.PrepareTextures(touchControls.Primitives);
     renderStream.Submit([&, primitives = std::move(touchControls.Primitives), windowRegion,

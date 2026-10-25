@@ -59,11 +59,17 @@ a tap toggles the in-game menu, a long press opens F1. The app releases the
 overlay's input on pause and focus loss.
 
 With TopScreen's touch layout (`touch_layout`, default on Android), OoT3D
-draws its own HUD art inside the overlay's A, B, X, Y, ZL, ZR and D-pad
-controls (ring, label, item, counts, the A action word, the D-pad icons), and
-hides those parts of its HUD; the minimap takes the top-right corner. The
-overlay reports each control's bounds and leaves those controls blank while
-the game draws them (`InputOverlay.kt` host step in
+draws every control the overlay shows, in every scene: a vector base (disc,
+pill, cross, circle pad with its knob; `tools/three_ds/input/three_ds_touch_skin.h`
+rasterizes them at run time, no title data), lit while its button is held, and
+its letter or icon. The HUD's content for A, B, X, Y, ZL, ZR and the D-pad (the
+item, counts, the A action word, the cross icons) draws inside it when there
+is any, and the letter eases to a corner badge meanwhile; the HUD's own rings,
+cross and letters are not drawn, so a control never switches between two
+looks. Those HUD parts leave the HUD and the minimap takes the top-right
+corner. The overlay reports each control's bounds and draws its own art only
+while the game does not draw the controls (touch layout off) or while the
+layout is edited (`InputOverlay.kt` host step in
 `tools/android/import_azahar_overlay.py`). A touch on no control is not the
 overlay's: it reaches the game surface with its own pointer id, so menus, the
 3DS touch screen and the free camera (a drag during gameplay) see every finger.

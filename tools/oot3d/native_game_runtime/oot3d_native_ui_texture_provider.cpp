@@ -1,6 +1,7 @@
 #include "oot3d_native_ui_texture_provider.h"
 
 #include "oot3d/renderer/pica_texture_decode.h"
+#include "three_ds_touch_skin.h"
 
 #include <algorithm>
 #include <array>
@@ -323,6 +324,13 @@ bool Oot3dNativeA32UiTextureProvider::Resolve(
         }
     }
     if (ResolveCameraOptionGlyphAtlas(identity, pixels)) {
+        return true;
+    }
+    if (const auto shape = ThreeDsRecomp::Input::TouchSkinShapeFromSemanticName(identity.semantic_name)) {
+        auto skin = ThreeDsRecomp::Input::RasterizeTouchSkinShape(*shape);
+        pixels.width = skin.Width;
+        pixels.height = skin.Height;
+        pixels.rgba8 = std::move(skin.Rgba8);
         return true;
     }
     const bool generatedText = identity.semantic_name == "oot3d/native/generated_text";

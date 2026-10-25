@@ -3,6 +3,7 @@
 #include "three_ds_pointer_press_latch.h"
 #include "three_ds_touch_anchors.h"
 #include "three_ds_touch_camera.h"
+#include "three_ds_touch_skin.h"
 #include "three_ds_virtual_pad.h"
 
 #include <cmath>
@@ -338,11 +339,41 @@ void TestTouchAnchors() {
     Require(!untouched.Snapshot()[static_cast<std::size_t>(TouchAnchor::X)].Present, "an inverted anchor is present");
 }
 
+void TestTouchSkin() {
+    using namespace ThreeDsRecomp::Input;
+    for (int index = 0; index < static_cast<int>(TouchSkinShape::Count); ++index) {
+        const auto shape = static_cast<TouchSkinShape>(index);
+        Require(TouchSkinShapeFromSemanticName(TouchSkinSemanticName(shape)) == shape, "a skin name does not round-trip");
+        const auto pixels = RasterizeTouchSkinShape(shape);
+        Require(pixels.Rgba8.size() == static_cast<std::size_t>(pixels.Width) * pixels.Height * 4U && pixels.Width == 256U,
+                "a skin shape has the wrong size");
+        bool covered = false;
+        for (std::size_t texel = 3; texel < pixels.Rgba8.size(); texel += 4) covered |= pixels.Rgba8[texel] != 0U;
+        Require(covered, "a skin shape is empty");
+    }
+    Require(!TouchSkinShapeFromSemanticName("triaevum/touch_skin/none") &&
+                !TouchSkinShapeFromSemanticName("oot3d/native/item_icons"),
+            "an unknown name resolved to a skin shape");
+    const auto alpha = [](const TouchSkinPixels &pixels, int x, int y) {
+        return pixels.Rgba8[(static_cast<std::size_t>(y) * pixels.Width + x) * 4U + 3U];
+    };
+    // A disc covers its centre, not its corner; a ring the reverse of its centre.
+    const auto disc = RasterizeTouchSkinShape(TouchSkinShape::Disc);
+    const auto ring = RasterizeTouchSkinShape(TouchSkinShape::Ring);
+    Require(alpha(disc, 128, 128) == 255U && alpha(disc, 0, 0) == 0U && alpha(ring, 128, 128) == 0U &&
+                alpha(ring, 128, 3) == 255U,
+            "the disc or ring coverage is wrong");
+    // A pill is 2:1 and fills its middle.
+    const auto pill = RasterizeTouchSkinShape(TouchSkinShape::Pill);
+    Require(pill.Height == 128U && alpha(pill, 128, 64) == 255U && alpha(pill, 0, 0) == 0U, "the pill is wrong");
+}
+
 int main() try {
     TestAutomaticMotionComposition();
     TestPointerPressLatch();
     TestVirtualPad();
     TestTouchCameraTracker();
+    TestTouchSkin();
     TestTouchAnchors();
     {
         using namespace ThreeDsRecomp::Input;

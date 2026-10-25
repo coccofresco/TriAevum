@@ -477,6 +477,8 @@ private:
   // The in-game menu (Esc / R3), drawn by the UI renderer after the HUD.
   std::optional<Oot3dNativeGame::InGameMenu> inGameMenuStorage;
   std::array<std::vector<oot3d::ui::UiPrimitive>, oot3d::ui::kUiSubsystemCount> lastTopScreenPrimitivesBySubsystem;
+  // The touch controls' letter badges, eased across frames.
+  Oot3dNativeGame::TopScreenTouchSkinState touchSkinState;
   Oot3dNativeGame::NativeA32InputTimeline inputTimeline{};
   Oot3dNativeGame::GraphicsSettingsSchedule graphicsSettingsSchedule{};
   NativeFramePhaseTiming phaseTiming;

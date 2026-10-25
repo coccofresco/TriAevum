@@ -14,10 +14,11 @@
 
 namespace ThreeDsRecomp::Input {
 
-// The on-screen controls a title draws itself inside a touch overlay's
-// buttons: the overlay owns where they are and what a finger on them presses,
-// the title draws its own HUD art there and hides that part of its HUD.
-enum class TouchAnchor : std::uint8_t { A, B, X, Y, Zl, Zr, Dpad, Count };
+// The on-screen controls a title draws itself in place of a touch overlay's
+// art: the overlay owns where they are and what a finger on them presses, the
+// title draws each control there (with its HUD content when it has any) and
+// hides that part of its HUD.
+enum class TouchAnchor : std::uint8_t { A, B, X, Y, Zl, Zr, Dpad, L, R, Start, Select, Home, CirclePad, Count };
 inline constexpr std::size_t kTouchAnchorCount = static_cast<std::size_t>(TouchAnchor::Count);
 
 // A control's rectangle as fractions of the window (0..1, top-left origin).
@@ -79,9 +80,11 @@ class TouchAnchors {
 };
 
 // Developer layouts without an overlay: "A=l,t,r,b;DPAD=l,t,r,b" in window
-// fractions, anchors A B X Y ZL ZR DPAD. False (and nothing set) when malformed.
+// fractions, anchors A B X Y ZL ZR DPAD L R START SELECT HOME PAD. False (and
+// nothing set) when malformed.
 inline bool ApplyTouchAnchorList(std::string_view text, TouchAnchors& anchors) {
-    constexpr std::array<std::string_view, kTouchAnchorCount> kNames{"A", "B", "X", "Y", "ZL", "ZR", "DPAD"};
+    constexpr std::array<std::string_view, kTouchAnchorCount> kNames{
+        "A", "B", "X", "Y", "ZL", "ZR", "DPAD", "L", "R", "START", "SELECT", "HOME", "PAD"};
     std::vector<std::pair<TouchAnchor, std::array<float, 4>>> parsed;
     while (!text.empty()) {
         const auto end = text.find(';');

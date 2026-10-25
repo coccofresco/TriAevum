@@ -1749,6 +1749,24 @@ bool IsTopScreenTouchClusterQuad(const oot3d::ui::UiPrimitive &primitive) noexce
   return primitive.owner_address == kTopScreenTouchClusterOwner &&
          primitive.role == oot3d::ui::UiPrimitiveRole::TouchControl && primitive.layer == 12U;
 }
+
+// The HUD's own button bases and letters, which the controls draw themselves:
+// the cluster's rings and cross, its button letters (the same owner's touch
+// quads on layer 13), the copied A ring (owner 0x0042B884, layer 12) and the
+// B letter (0x005D4A8C's native touch copy 34; copy 35 is B's item). An empty
+// item slot (a crop of no area) draws nothing.
+bool IsTopScreenTouchBasePrimitive(const oot3d::ui::UiPrimitive &primitive) noexcept {
+  const bool clusterLetter = primitive.owner_address == kTopScreenTouchClusterOwner &&
+                             primitive.role == oot3d::ui::UiPrimitiveRole::TouchControl && primitive.layer == 13U;
+  const bool emptySlot = !primitive.texture.semantic_name.empty() &&
+                         !(primitive.uv.width > 0.0F && primitive.uv.height > 0.0F);
+  return (IsTopScreenTouchClusterQuad(primitive) && primitive.source_quad <= kTopScreenCrossQuad) || clusterLetter ||
+         emptySlot ||
+         (primitive.owner_address == 0x0042B884U && primitive.role == oot3d::ui::UiPrimitiveRole::ActionButton &&
+          primitive.layer == 12U) ||
+         (primitive.owner_address == 0x005D4A8CU && primitive.role == oot3d::ui::UiPrimitiveRole::TouchControl &&
+          primitive.source_quad == 34U);
+}
 } // namespace
 
 TopScreenActionGroup ResolveTopScreenActionGroup(const TopScreenUiConfig &config) noexcept {
@@ -1834,8 +1852,13 @@ TopScreenTouchControlsPresentation ExtractTopScreenTouchControls(
     const auto &anchor = anchors[index];
     const auto &source = groups[index];
     if (!anchor.Present || !source.Known || !(source.Radius > 0.0F)) continue;
-    const float half = std::min((anchor.Right - anchor.Left) * canvasWidth, (anchor.Bottom - anchor.Top) * 240.0F) * 0.5F;
-    placements[index] = {true, source.X, source.Y, anchor.CenterX() * canvasWidth, anchor.CenterY() * 240.0F,
+    const float width = (anchor.Right - anchor.Left) * canvasWidth;
+    const float height = (anchor.Bottom - anchor.Top) * 240.0F;
+    const float half = std::min(width, height) * 0.5F;
+    // A wide control (a pill) keeps its letter in the left cap: the content
+    // takes the square at its right end.
+    const float toX = width >= height * 1.2F ? anchor.Right * canvasWidth - half : anchor.CenterX() * canvasWidth;
+    placements[index] = {true, source.X, source.Y, toX, anchor.CenterY() * 240.0F,
                          half * kTopScreenTouchFill / source.Radius};
   }
   if (const auto &action = placements[static_cast<std::size_t>(TouchAnchor::A)]; action.Active) {
@@ -1880,6 +1903,12 @@ TopScreenTouchControlsPresentation ExtractTopScreenTouchControls(
       kept.push_back(std::move(primitive));
       continue;
     }
+    if (IsTopScreenTouchBasePrimitive(primitive)) continue;
+    // The view eye above the cross is always shown: it is not the cross's
+    // content (its icons are).
+    const bool viewEye = primitive.owner_address == 0x005D4A8CU && primitive.source_quad == 38U;
+    if (primitive.visible && primitive.color.alpha > 0.0F && !viewEye)
+      result.Content[static_cast<std::size_t>(owner)] = true;
     destination.x = moved.ToX + (destination.x - moved.FromX) * moved.Scale;
     destination.y = moved.ToY + (destination.y - moved.FromY) * moved.Scale;
     destination.width *= moved.Scale;

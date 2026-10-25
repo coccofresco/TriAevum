@@ -22,6 +22,7 @@ add_library(oot3d_ui_topscreen STATIC EXCLUDE_FROM_ALL
     tools/oot3d/ui_topscreen/oot3d_top_screen_mod_profile_pause.cpp
     tools/oot3d/ui_topscreen/oot3d_top_screen_ocarina.cpp
     tools/oot3d/ui_topscreen/oot3d_top_screen_texture_overrides.cpp
+    tools/oot3d/ui_topscreen/oot3d_top_screen_touch_skin.cpp
 )
 target_include_directories(oot3d_ui_topscreen PUBLIC
     tools/oot3d/native_game_runtime
@@ -311,6 +312,7 @@ oot3d_target_defaults(oot3d_top_screen_texture_runtime_tests FOLDER Tests)
 add_library(three_ds_recomp_input STATIC EXCLUDE_FROM_ALL
     tools/three_ds/input/three_ds_input.cpp
     tools/three_ds/input/three_ds_motion_composition.cpp
+    tools/three_ds/input/three_ds_touch_skin.cpp
 )
 target_include_directories(three_ds_recomp_input PUBLIC
     tools/three_ds/input

@@ -98,6 +98,13 @@ class AzaharInputAdapter(private val target: Native3dsInputTarget) : OverlayInpu
         const val ANCHOR_ZL = 4
         const val ANCHOR_ZR = 5
         const val ANCHOR_DPAD = 6
+        const val ANCHOR_L = 7
+        const val ANCHOR_R = 8
+        const val ANCHOR_START = 9
+        const val ANCHOR_SELECT = 10
+        const val ANCHOR_HOME = 11
+        const val ANCHOR_CIRCLE_PAD = 12
+        const val ANCHOR_COUNT = 13
         private val ANCHORS = listOf(
             AzaharButtonIds.BUTTON_A to ANCHOR_A,
             AzaharButtonIds.BUTTON_B to ANCHOR_B,
@@ -107,6 +114,12 @@ class AzaharInputAdapter(private val target: Native3dsInputTarget) : OverlayInpu
             AzaharButtonIds.BUTTON_ZR to ANCHOR_ZR,
             // The D-pad reports its bounds under its up button's id.
             AzaharButtonIds.DPAD_UP to ANCHOR_DPAD,
+            AzaharButtonIds.TRIGGER_L to ANCHOR_L,
+            AzaharButtonIds.TRIGGER_R to ANCHOR_R,
+            AzaharButtonIds.BUTTON_START to ANCHOR_START,
+            AzaharButtonIds.BUTTON_SELECT to ANCHOR_SELECT,
+            AzaharButtonIds.BUTTON_HOME to ANCHOR_HOME,
+            AzaharButtonIds.STICK_LEFT to ANCHOR_CIRCLE_PAD,
         )
 
         fun anchorOf(id: Int) = ANCHORS.firstOrNull { it.first == id }?.second ?: -1

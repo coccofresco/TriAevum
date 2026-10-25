@@ -1,3 +1,4 @@
+#include "three_ds_input.h"
 #include "oot3d_top_screen_camera.h"
 #include "oot3d_top_screen_camera_guest.h"
 #include "oot3d_top_screen_controls.h"
@@ -203,30 +204,20 @@ void TestTouchControlsExtraction() {
   config.TouchLayout = true;
   Require(TopScreenTouchButtonsAnchored(config, anchors), "an anchored B is not a button");
   const auto moved = ExtractTopScreenTouchControls(hud, config, anchors, 480.0F);
-  // Ring B, the B label, the cross and the eye leave; X, Y, ZR, ZL, the X item
-  // and the heart stay.
-  Require(moved.Primitives.size() == 4U && hud.size() == 6U, "the touch layout took the wrong HUD parts");
+  // Ring B, the B letter and the cross leave the HUD and are not drawn (the
+  // controls draw their own base and letter); the view eye is the D-pad's
+  // content. X, Y, ZR, ZL, the X item and the heart stay.
+  Require(moved.Primitives.size() == 1U && hud.size() == 6U, "the touch layout took the wrong HUD parts");
+  Require(!moved.Content[static_cast<std::size_t>(TouchAnchor::Dpad)] &&
+              !moved.Content[static_cast<std::size_t>(TouchAnchor::B)],
+          "the view eye or the B letter counted as content");
   Require(!moved.ActionAnchored, "an unanchored A was placed");
-  const auto center = [](const oot3d::ui::UiPrimitive &primitive) {
-    return std::pair{primitive.destination.x + primitive.destination.width * 0.5F,
-                     primitive.destination.y + primitive.destination.height * 0.5F};
-  };
-  for (const auto &primitive : moved.Primitives) {
-    const auto [x, y] = center(primitive);
-    if (primitive.source_quad == 4U) {
-      // B fills 0.9 of its 48 x 48 control, centred on (408, 192).
-      Require(std::abs(x - 408.0F) < 0.01F && std::abs(y - 192.0F) < 0.01F &&
-                  std::abs(primitive.destination.width - 43.2F) < 0.01F,
-              "the B ring missed its control");
-    } else if (primitive.source_quad == 34U) {
-      Require(x < 408.0F && y < 192.0F, "the B label left its ring");
-    } else if (primitive.source_quad == 5U) {
-      Require(std::abs(x - 48.0F) < 0.01F && std::abs(y - 144.0F) < 0.01F &&
-                  primitive.destination.width > 28.0F,
-              "the cross missed its control");
-    } else if (primitive.source_quad == 38U) {
-      Require(std::abs(x - 48.0F) < 2.0F && y < 144.0F, "the view eye left the cross");
-    }
+  {
+    const auto &eye = moved.Primitives.front();
+    const float x = eye.destination.x + eye.destination.width * 0.5F;
+    const float y = eye.destination.y + eye.destination.height * 0.5F;
+    // The cross group's centre maps to the D-pad control's centre (48, 144).
+    Require(eye.source_quad == 38U && std::abs(x - 48.0F) < 2.0F && y < 144.0F, "the view eye left the cross");
   }
   // The A group is computed, not drawn by the host HUD.
   const auto action = ResolveTopScreenActionGroup(config);
@@ -240,6 +231,55 @@ void TestTouchControlsExtraction() {
 
 } // namespace
 
+void TestTouchSkin() {
+  using namespace Oot3dNativeGame;
+  using ThreeDsRecomp::Input::TouchAnchor;
+  TopScreenTouchSkinInput input;
+  input.CanvasWidth = 480.0F;
+  input.Anchors[static_cast<std::size_t>(TouchAnchor::A)] = {true, 0.9F, 0.4F, 1.0F, 0.6F};
+  input.Anchors[static_cast<std::size_t>(TouchAnchor::Zl)] = {true, 0.0F, 0.0F, 0.1F, 0.1F};
+  input.Anchors[static_cast<std::size_t>(TouchAnchor::Dpad)] = {true, 0.0F, 0.4F, 0.2F, 0.8F};
+  input.Anchors[static_cast<std::size_t>(TouchAnchor::CirclePad)] = {true, 0.2F, 0.6F, 0.4F, 1.0F};
+  TopScreenTouchSkinState state;
+  const auto count = [](const std::vector<oot3d::ui::UiPrimitive> &primitives, std::string_view suffix) {
+    return std::count_if(primitives.begin(), primitives.end(), [&](const oot3d::ui::UiPrimitive &primitive) {
+      return primitive.texture.semantic_name.ends_with(suffix);
+    });
+  };
+  std::vector<oot3d::ui::UiPrimitive> idle;
+  AppendTopScreenTouchSkin(input, state, idle);
+  // A: disc and ring; ZL (2.0 wide): a pill in three slices and its ring;
+  // the cross with its outline and four arrows; the pad, its knob and rings.
+  Require(count(idle, "/glyph_a") == 1 && count(idle, "/pill") == 3 && count(idle, "/pill_ring") == 3 &&
+              count(idle, "/cross") == 1 && count(idle, "/arrow") == 4 && count(idle, "/disc") == 3 &&
+              count(idle, "/ring") == 3,
+          "the touch skin drew the wrong shapes");
+  for (const auto &primitive : idle)
+    Require(primitive.texture_alpha_only && (primitive.layer < 12U || primitive.layer > 13U),
+            "a skin shape is not tinted coverage around the HUD content layers");
+  // Held A and D-pad up light their control.
+  input.HeldButtons = ThreeDsRecomp::Input::ButtonMask(ThreeDsRecomp::Input::Button::A) |
+                      ThreeDsRecomp::Input::ButtonMask(ThreeDsRecomp::Input::Button::DpadUp);
+  std::vector<oot3d::ui::UiPrimitive> held;
+  AppendTopScreenTouchSkin(input, state, held);
+  Require(count(held, "/disc") == 4 && count(held, "/cross_arm") == 1, "held buttons are not lit");
+  // Content moves A's letter to a smaller badge over 0.12 s.
+  std::array<bool, ThreeDsRecomp::Input::kTouchAnchorCount> content{};
+  content[static_cast<std::size_t>(TouchAnchor::A)] = true;
+  AdvanceTopScreenTouchSkin(state, content, 0.06);
+  Require(std::abs(state.Badge[static_cast<std::size_t>(TouchAnchor::A)] - 0.5F) < 0.001F, "the badge eases wrongly");
+  AdvanceTopScreenTouchSkin(state, content, 0.5);
+  std::vector<oot3d::ui::UiPrimitive> badged;
+  AppendTopScreenTouchSkin(input, state, badged);
+  const auto letterWidth = [](const std::vector<oot3d::ui::UiPrimitive> &primitives) {
+    for (const auto &primitive : primitives)
+      if (primitive.texture.semantic_name.ends_with("/glyph_a")) return primitive.destination.width;
+    return 0.0F;
+  };
+  Require(state.Badge[static_cast<std::size_t>(TouchAnchor::A)] == 1.0F && letterWidth(badged) < letterWidth(idle) * 0.7F,
+          "content did not move A's letter to a badge");
+}
+
 void RunTopScreenItemDispatchTests();
 void RunTopScreenOcarinaTests();
 void RunTopScreenDpadPresentationTests();
@@ -247,6 +287,7 @@ void RunTopScreenDpadPresentationTests();
 int main() {
   TestGearTextureFilters();
   TestTouchControlsExtraction();
+  TestTouchSkin();
   RunTopScreenItemDispatchTests();
   RunTopScreenOcarinaTests();
   RunTopScreenDpadPresentationTests();
