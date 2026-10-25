@@ -1227,6 +1227,10 @@ NativeA32HostResult NativeA32CtrHostServices::HandleSvcImpl(
     case 0x28:
         event.Name = "GetSystemTick";
         event.Handled = true;
+        // nn::fnd::DateTime::GetNow pairs this tick with the shared-page
+        // RTC it reads next; publish the date at the same tick. A process
+        // without the shared page (unit fixtures) simply has no RTC.
+        RefreshSharedPageDateTime(memory);
         state.r[0] = static_cast<uint32_t>(mSystemTicks);
         state.r[1] = static_cast<uint32_t>(mSystemTicks >> 32U);
         mSvcEvents.push_back(std::move(event));

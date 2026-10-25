@@ -259,6 +259,11 @@ void NativeA32WindowSession::Setup() {
   // last 4096 instead of 32 (bring-up of a title's boot sequence).
   hostConfig.RetainFullSvcHistory = launch.ExtendedDiagnostics;
   hostConfig.ProfileRuntime = launch.ProfileA32Runtime;
+  // Scripted runs must not depend on the host clock: the RTC starts at
+  // 2011-06-16 00:00 (the title's release) and follows the virtual clock.
+  if (!launch.Host.InputTimelinePath.empty()) {
+    hostConfig.FixedDateTimeMilliseconds = 3517257600000ULL;
+  }
   auto &hostServices = hostServicesStorage.emplace(std::move(hostConfig));
   // Development: TRIAEVUM_IR_NO_EXTRA_HID=1 presents an Old 3DS without a
   // Circle Pad Pro (titles then run their accessory prompts).

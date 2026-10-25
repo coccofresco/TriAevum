@@ -6,6 +6,7 @@
 #include <array>
 #include <cstdint>
 #include <cstdlib>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -1024,7 +1025,104 @@ void TestIrstServiceAbsentByDefault() {
             "ir:rst stays unavailable unless the host config opts in");
 }
 
+// nn::fnd::DateTime::GetNow (EUR 004538D8) as the title computes it.
+uint64_t GuestDateTimeNow(NativeA32Memory& memory, uint64_t tick) {
+    uint32_t counter = 0;
+    uint64_t date = 0, updateTick = 0, coefficient = 0;
+    uint32_t faultAddress = 0;
+    Require(memory.Read32(0x1FF81000U, &counter),
+            "shared page counter is unreadable");
+    const uint32_t base = 0x1FF81020U + (counter & 1U) * 0x20U;
+    Require(memory.Read64(base, &date, &faultAddress) &&
+                memory.Read64(base + 8U, &updateTick, &faultAddress) &&
+                memory.Read64(base + 16U, &coefficient, &faultAddress) &&
+                coefficient != 0U,
+            "shared page DateTime slot is unreadable");
+    return date + (tick - updateTick) * 1000U / coefficient;
+}
+
+void TestSharedPageDateTime() {
+    constexpr uint64_t kBase = 3517257600000ULL; // 2011-06-16 00:00
+    constexpr uint64_t kTicksPerSecond = 268111856ULL;
+    NativeA32Memory memory;
+    std::string error;
+    Require(memory.MapRegion(
+                {"tls", 0x1FF82000, 0x1000, true, false, {}}, &error) &&
+                memory.MapRegion({"ctr_shared_page", 0x1FF81000, 0x1000,
+                                  false, false, {}},
+                                 &error),
+            error);
+    NativeA32CtrHostConfig config = MakeConfig();
+    config.FixedDateTimeMilliseconds = kBase;
+    NativeA32CtrHostServices host(std::move(config));
+    const oot3d::recomp::a32::Registry registry{};
+    NativeA32Process process(registry, host);
+    NativeA32HostContext context{process, 0};
+    GuestState state{};
+    state.thread_pointer = 0x1FF82000;
+
+    host.AdvanceSystemTicks(kTicksPerSecond * 90U);
+    Require(host.HandleSvc(0x28, state, memory, context).Action ==
+                NativeA32HostAction::Resume,
+            "GetSystemTick did not resume with the shared page mapped");
+    uint32_t counter = 0;
+    uint64_t coefficient = 0;
+    uint32_t faultAddress = 0;
+    Require(memory.Read32(0x1FF81000U, &counter) && counter == 1U &&
+                memory.Read64(0x1FF81050U, &coefficient, &faultAddress) &&
+                coefficient == kTicksPerSecond,
+            "GetSystemTick did not publish the RTC in DateTime slot 1");
+    Require(GuestDateTimeNow(memory, host.SystemTicks()) == kBase + 90000U,
+            "shared page RTC does not match the fixed base");
+
+    // Within an emulated second the guest extrapolates the same slot.
+    host.AdvanceSystemTicks(kTicksPerSecond / 2U);
+    Require(host.HandleSvc(0x28, state, memory, context).Action ==
+                    NativeA32HostAction::Resume &&
+                memory.Read32(0x1FF81000U, &counter) && counter == 1U &&
+                GuestDateTimeNow(memory, host.SystemTicks()) ==
+                    kBase + 90500U,
+            "shared page RTC was not extrapolated from its update tick");
+    host.AdvanceSystemTicks(kTicksPerSecond);
+    Require(host.HandleSvc(0x28, state, memory, context).Action ==
+                    NativeA32HostAction::Resume &&
+                memory.Read32(0x1FF81000U, &counter) && counter == 2U &&
+                GuestDateTimeNow(memory, host.SystemTicks()) ==
+                    kBase + 91500U,
+            "shared page RTC did not flip to slot 0 after a second");
+
+    // Unset, the RTC follows the host's local wall clock.
+    NativeA32Memory hostClockMemory;
+    Require(hostClockMemory.MapRegion({"ctr_shared_page", 0x1FF81000,
+                                       0x1000, false, false, {}},
+                                      &error),
+            error);
+    NativeA32CtrHostServices hostClock(MakeConfig());
+    Require(hostClock.RefreshSharedPageDateTime(hostClockMemory, true),
+            "host clock RTC was not published");
+    const std::time_t utc = std::time(nullptr);
+#if defined(__linux__)
+    std::tm local{};
+    Require(localtime_r(&utc, &local) != nullptr, "localtime failed");
+    const int64_t zoneMilliseconds = local.tm_gmtoff * 1000LL;
+    const int64_t tolerance = 5000;
+#else
+    // Elsewhere the zone comes from the platform (the Switch time
+    // service); bound it by the widest real UTC offsets.
+    const int64_t zoneMilliseconds = 0;
+    const int64_t tolerance = 15LL * 3600LL * 1000LL;
+#endif
+    const int64_t expected =
+        (static_cast<int64_t>(utc) + 2209075200LL) * 1000 + zoneMilliseconds;
+    const int64_t published = static_cast<int64_t>(
+        GuestDateTimeNow(hostClockMemory, hostClock.SystemTicks()));
+    Require(published > expected - tolerance &&
+                published < expected + tolerance,
+            "host clock RTC is not the local wall clock");
+}
+
 int main() {
+    TestSharedPageDateTime();
     TestQueryMemory();
     TestOutputDebugString();
     TestIrstService();

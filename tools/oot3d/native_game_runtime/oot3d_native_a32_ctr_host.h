@@ -256,6 +256,13 @@ struct NativeA32CtrHostConfig {
         0, 6700, -6700, 0, 6700, -6700, 0, 6700, -6700,
     };
     bool RetainFullSvcHistory = false;
+    // CTR RTC published in the shared page (0x1FF81000), in milliseconds
+    // of local time since the CTR "1900" epoch, which nn::fnd::DateTime
+    // places 36525 days before 2000-01-01 (ms since 2000 + 3155760000000).
+    // Unset follows the host's local wall clock. Set, the RTC is this base
+    // plus the virtual ARM11 clock, so probes, parity runs and replays stay
+    // deterministic.
+    std::optional<uint64_t> FixedDateTimeMilliseconds;
 };
 
 class NativeA32CtrHostServices final : public NativeA32HostServices {
@@ -308,6 +315,12 @@ class NativeA32CtrHostServices final : public NativeA32HostServices {
     bool IrstServiceEnabled() const noexcept { return mConfig.IrstService; }
     bool WriteIrstSample(NativeA32Memory& memory, int16_t x, int16_t y, uint32_t buttons);
     uint64_t SystemTicks() const;
+    // The CTR RTC (ms since 1900-01-01, local) at the current system tick.
+    uint64_t CtrDateTimeMilliseconds() const;
+    // Publishes the RTC into the shared page like the kernel/PTM: writes the
+    // inactive DateTime slot, then flips date_time_counter. Rate-limited to
+    // once per emulated second unless forced; false if the page is unmapped.
+    bool RefreshSharedPageDateTime(NativeA32Memory& memory, bool force = false);
     uint32_t FallbackPc() const;
     oot3d::recomp::a32::FallbackReason FallbackReason() const;
     uint32_t FallbackRawOperation() const;
@@ -537,6 +550,10 @@ class NativeA32CtrHostServices final : public NativeA32HostServices {
     uint32_t mAllocationIndex = 0;
     uint64_t mNextArchiveHandle = 1;
     uint64_t mSystemTicks = 0;
+    // Host-side cadence of the shared-page RTC; not serialized, so a
+    // restored savestate republishes the date on its first GetSystemTick.
+    uint64_t mNextDateTimeUpdateTick = 0;
+    bool mDateTimePublished = false;
     std::shared_ptr<KernelObject> mAptLock;
     std::shared_ptr<KernelObject> mAptNotificationEvent;
     std::shared_ptr<KernelObject> mAptParameterEvent;

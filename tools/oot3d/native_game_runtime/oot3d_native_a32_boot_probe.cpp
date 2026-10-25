@@ -232,6 +232,9 @@ int main(int argc, char** argv) {
         // The probe serializes every SVC boundary, unlike the product runtime
         // which only needs bounded diagnostic summaries.
         hostConfig.RetainFullSvcHistory = true;
+        // Probe traces must not depend on the host clock: anchor the CTR
+        // RTC at 2011-06-16 00:00 (title release) plus the virtual clock.
+        hostConfig.FixedDateTimeMilliseconds = 3517257600000ULL;
         Oot3dNativeGame::NativeA32CtrHostServices hostServices(
             std::move(hostConfig));
         Oot3dNativeGame::NativeA32Process process(
