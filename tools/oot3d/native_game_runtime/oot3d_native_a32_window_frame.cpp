@@ -678,6 +678,9 @@ bool NativeA32WindowSession::RunFrame() {
   // switches between the overlay's art and the game's; the overlay draws its
   // own only while the game does not (touch layout off, layout editing).
   ThreeDsRecomp::Input::OverlayTouchAnchors().SetTitleDrawsControls(drawsTouchControls);
+  // A shows the text's "next" on the controls: the textbox's own icon goes.
+  nativeCandidateDispatch.TopScreenSuppressTextboxIcon =
+      drawsTouchControls && touchAnchors[static_cast<std::size_t>(ThreeDsRecomp::Input::TouchAnchor::A)].Present;
   if (drawsTouchControls) {
     // The situation: the HUD's own fade, a native page or the HOME menu
     // taking touches, and whether the player did anything this frame.

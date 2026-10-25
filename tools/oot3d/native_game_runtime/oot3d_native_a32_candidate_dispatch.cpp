@@ -914,6 +914,34 @@ bool ExecuteTopScreenUiSourcePortBlock(
     return true;
   }
   switch (pc) {
+  case kMessageWindowDraw: {
+    // The text's own "next" triangle stays hidden for this draw only; the
+    // native code never sees the cleared byte.
+    // A restore the last draw did not reach comes first.
+    if (dispatch.TopScreenTextboxIconRestoreAddress != 0U) {
+      (void)memory.Write8(dispatch.TopScreenTextboxIconRestoreAddress, dispatch.TopScreenTextboxIconRestoreValue);
+      dispatch.TopScreenTextboxIconRestoreAddress = 0U;
+    }
+    if (!dispatch.TopScreenSuppressTextboxIcon) return false;
+    // Without its active byte (+4) the window returns before its entries.
+    uint8_t active = 0U;
+    uint32_t entry = 0U;
+    uint8_t visible = 0U;
+    if (!memory.Read8(state.r[0] + 4U, &active) || active == 0U ||
+        !memory.Read32(state.r[0] + kMessageWindowEntries + kMessageWindowNextTriangleEntry * 4U, &entry) ||
+        entry == 0U || !memory.Read8(entry + kMessageWindowEntryVisible, &visible) || visible == 0U ||
+        !memory.Write8(entry + kMessageWindowEntryVisible, 0U))
+      return false;
+    dispatch.TopScreenTextboxIconRestoreAddress = entry + kMessageWindowEntryVisible;
+    dispatch.TopScreenTextboxIconRestoreValue = visible;
+    return false;
+  }
+  case kMessageWindowEntriesDrawn:
+    if (dispatch.TopScreenTextboxIconRestoreAddress != 0U) {
+      (void)memory.Write8(dispatch.TopScreenTextboxIconRestoreAddress, dispatch.TopScreenTextboxIconRestoreValue);
+      dispatch.TopScreenTextboxIconRestoreAddress = 0U;
+    }
+    return false;
   case kPauseUiNativeUpdateCall: {
     uint32_t pauseState = 0U;
     if (!memory.Read32(0x0050AF68U, &pauseState))

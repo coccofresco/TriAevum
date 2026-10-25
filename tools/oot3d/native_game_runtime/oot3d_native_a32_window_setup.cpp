@@ -398,6 +398,8 @@ void NativeA32WindowSession::Setup() {
     blockEntryHooks.insert(blockEntryHooks.end(), topScreenHooks.begin(),
                            topScreenHooks.end());
     const std::array topScreenSourcePortHooks{
+        kMessageWindowDraw,
+        kMessageWindowEntriesDrawn,
         kPauseTouchButtonsDrawCall,
         kPauseTouchButtonsTouchBranch,
         kPauseLowerScreenBlock,
@@ -677,6 +679,7 @@ void NativeA32WindowSession::Setup() {
   std::vector<uint32_t> productTopScreenBlocks;
   if (launch.UiProfile == Oot3dNativeGame::Oot3dUiProfile::TopScreen) {
     topScreenSourcePortBlocks = {
+        kMessageWindowDraw,               kMessageWindowEntriesDrawn,
         kPauseTouchButtonsDrawCall,       kPauseTouchButtonsTouchBranch,
         kPauseTouchButtonsHeldDownQuery,
         kPauseLowerScreenBlock,           kPauseDungeonMapCursorInput,

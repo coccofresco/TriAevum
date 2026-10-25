@@ -217,6 +217,16 @@ inline constexpr uint32_t kPauseDungeonMapCursorInput = 0x00442F38U;
 // PauseUi_Update `bne` past the pause scene dim; 2.1.1 and 3.0 make it a `b`.
 inline constexpr uint32_t kPauseSceneDimBranch = 0x0041EB40U;
 inline constexpr uint32_t kPauseSceneDimSkip = 0x0041EC10U;
+// MessageWindow_Draw (0x004421B8, r0 the message context's window at +0x44)
+// draws its 256 entries (+0x524, each drawn while its byte +0x6D is set) and
+// returns to 0x004421EC after them. Entry 2 is the text's green "next"
+// triangle (shown while a text waits for A, hidden in a choice, whose arrow
+// is entry 3).
+inline constexpr uint32_t kMessageWindowDraw = 0x004421B8U;
+inline constexpr uint32_t kMessageWindowEntriesDrawn = 0x004421ECU;
+inline constexpr uint32_t kMessageWindowEntries = 0x524U;
+inline constexpr uint32_t kMessageWindowNextTriangleEntry = 2U;
+inline constexpr uint32_t kMessageWindowEntryVisible = 0x6DU;
 inline constexpr uint32_t kPauseUiNativeUpdateCall = 0x0041EAE0U;
 inline constexpr uint32_t kPauseProjectionPrepareCall = 0x0041EB28U;
 inline constexpr uint32_t kPauseProjectionPrepare = 0x002FBC50U;
@@ -667,6 +677,12 @@ struct NativeCandidateDispatchState {
   // The host maps the pointer onto the visible native page this refresh: the
   // touch then belongs to that page, not to SingleScreen's hidden lower screen.
   bool TopScreenHostTouchPage = false;
+  // The touch controls draw A as the text's "next" triangle: the textbox's
+  // own triangle is not drawn (its visibility byte cleared for the window's
+  // draw and restored after it).
+  bool TopScreenSuppressTextboxIcon = false;
+  uint32_t TopScreenTextboxIconRestoreAddress = 0U;
+  uint8_t TopScreenTextboxIconRestoreValue = 0U;
   Oot3dNativeGame::TopScreenRendererVisibilityRouteState
       TopScreenRendererVisibilityRoute;
   uint32_t TopScreenGameOverDrawPhase = 0U;
