@@ -1,4 +1,7 @@
-plugins { id("com.android.application") }
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+}
 
 dependencies { testImplementation("junit:junit:4.13.2") }
 
@@ -20,6 +23,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    kotlinOptions { jvmTarget = "17" }
     sourceSets.getByName("main") {
         if (sdlSource.isPresent) java.srcDir("${sdlSource.get()}/android-project/app/src/main/java")
         if (nativeStage.isPresent) jniLibs.srcDir(nativeStage.get())
@@ -31,7 +35,7 @@ tasks.register("checkNativeStage") {
         check(sdlSource.isPresent && nativeStage.isPresent) {
             "Supply -PtriaevumSdlSource and -PtriaevumNativeStage from the Android native build."
         }
-        for (name in listOf("SDL2", "TriAevum", "triaevum_title_bootstrap", "triaevum_title_aot", "c++_shared")) {
+        for (name in listOf("SDL2", "TriAevum", "triaevum_title_bootstrap", "triaevum_title_aot", "triaevum_forge", "c++_shared")) {
             check(file("${nativeStage.get()}/arm64-v8a/lib$name.so").isFile) { "Missing native library: $name" }
         }
     }

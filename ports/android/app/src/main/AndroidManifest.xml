@@ -3,13 +3,16 @@
     <uses-feature android:name="android.hardware.vulkan.level" android:version="1" android:required="true" />
     <application android:label="TriAevum — Echoes of Time" android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen"
         android:allowBackup="false">
-        <activity android:name=".TriAevumActivity" android:exported="true"
-            android:screenOrientation="sensorLandscape"
-            android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode|navigation|density">
+        <activity android:name=".forge.InstallerActivity" android:exported="true"
+            android:configChanges="orientation|screenLayout|screenSize|smallestScreenSize|uiMode|density|fontScale">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Exported for developer launches (adb am start) of an already prepared title. -->
+        <activity android:name=".TriAevumActivity" android:exported="true"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode|navigation|density" />
     </application>
 </manifest>

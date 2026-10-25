@@ -1,0 +1,16 @@
+[package]
+name = "forge-android"
+description = "TriAevum Forge: JNI bridge for the Android installer (libtriaevum_forge.so)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+name = "triaevum_forge"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+forge-core = { path = "../forge-core" }
+jni-sys = "0.3"

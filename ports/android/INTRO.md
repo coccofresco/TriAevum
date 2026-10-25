@@ -251,9 +251,16 @@ cmake -S "$SRC/ports/android/native" -B "$BUILD/title" -G Ninja \
   -DTRIAEVUM_ANDROID_TITLE_DEBUG_INFO=OFF
 cmake --build "$BUILD/title" --target triaevum_android_title --parallel 1
 
+# The Rust Forge engine (installer); the linker comes from the NDK.
+CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$NDK/toolchains/llvm/prebuilt/<host>/bin/aarch64-linux-android29-clang" \
+CARGO_TARGET_DIR="$BUILD/forge" \
+cargo build --release --manifest-path "$SRC/tools/triaevum_forge/Cargo.toml" \
+  -p forge-android --target aarch64-linux-android
+
 python3 "$SRC/tools/android/stage_native_app.py" \
   --runtime-build "$BUILD/runtime" \
   --title-module "$BUILD/title/libtriaevum_title_aot.so" \
+  --forge-library "$BUILD/forge/aarch64-linux-android/release/libtriaevum_forge.so" \
   --ndk "$NDK" --output "$BUILD/apk-libs"
 gradle -p "$SRC/ports/android" :app:assembleDebug \
   -PtriaevumSdlSource="$SDL_SOURCE" \

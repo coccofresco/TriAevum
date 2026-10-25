@@ -16,7 +16,7 @@ def host_llvm(ndk: Path) -> Path:
     return hosts[0]
 
 
-def stage(runtime: Path, title: Path, ndk: Path, output: Path) -> None:
+def stage(runtime: Path, title: Path, forge: Path, ndk: Path, output: Path) -> None:
     llvm = host_llvm(ndk)
     exe = ".exe" if (llvm / "bin/llvm-readelf.exe").is_file() else ""
     readelf, strip = llvm / f"bin/llvm-readelf{exe}", llvm / f"bin/llvm-strip{exe}"
@@ -25,6 +25,7 @@ def stage(runtime: Path, title: Path, ndk: Path, output: Path) -> None:
         "libTriAevum.so": runtime / "product/libTriAevum.so",
         "libtriaevum_title_bootstrap.so": runtime / "product/libtriaevum_title_bootstrap.so",
         "libtriaevum_title_aot.so": title,
+        "libtriaevum_forge.so": forge,
         "libc++_shared.so": llvm / "sysroot/usr/lib/aarch64-linux-android/libc++_shared.so",
     }
     for name, path in source.items():
@@ -56,7 +57,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runtime-build", type=Path, required=True)
     parser.add_argument("--title-module", type=Path, required=True)
+    parser.add_argument("--forge-library", type=Path, required=True,
+                        help="libtriaevum_forge.so from the Rust Forge (crates/forge-android)")
     parser.add_argument("--ndk", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    stage(args.runtime_build, args.title_module, args.ndk, args.output)
+    stage(args.runtime_build, args.title_module, args.forge_library, args.ndk, args.output)
