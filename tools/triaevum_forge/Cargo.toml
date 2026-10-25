@@ -1,0 +1,33 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/forge-base",
+    "crates/forge-rom",
+    "crates/forge-catalog",
+    "crates/forge-prepare",
+    "crates/forge-assets",
+    "crates/forge-mods",
+    "crates/forge-core",
+    "crates/forge-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+rust-version = "1.92"
+publish = false
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
+sha2 = "0.10"
+thiserror = "2"
+tempfile = "3"
+clap = { version = "4", default-features = false, features = ["std", "help", "usage", "error-context", "derive"] }
+
+[profile.release]
+# Panics are caught at the C ABI boundary, so unwinding stays on.
+panic = "unwind"
+lto = "thin"
+codegen-units = 4

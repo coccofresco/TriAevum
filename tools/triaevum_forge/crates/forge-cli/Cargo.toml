@@ -1,0 +1,17 @@
+[package]
+name = "forge-cli"
+description = "TriAevum Forge command line and worker protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "triaevum-forge"
+path = "src/main.rs"
+
+[dependencies]
+forge-core = { path = "../forge-core" }
+serde_json.workspace = true
+clap.workspace = true

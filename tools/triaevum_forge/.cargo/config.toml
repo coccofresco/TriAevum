@@ -1,0 +1,4 @@
+# The NDK linker comes from the environment (CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER),
+# so no machine path lives here. Android 15+ devices need 16 KiB-aligned segments.
+[target.aarch64-linux-android]
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]

@@ -1,0 +1,15 @@
+[package]
+name = "forge-assets"
+description = "TriAevum Forge: derived local assets: topscreen, fonts, water textures, scene lights, precomputed tables"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+forge-base = { path = "../forge-base" }
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

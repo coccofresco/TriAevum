@@ -1,0 +1,18 @@
+[package]
+name = "forge-core"
+description = "TriAevum Forge preparation engine: ROM import, title data, assets and activation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["rlib", "staticlib", "cdylib"]
+
+[dependencies]
+forge-base = { path = "../forge-base" }
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

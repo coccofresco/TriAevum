@@ -1,0 +1,15 @@
+[package]
+name = "forge-mods"
+description = "TriAevum Forge: optional hd ui texture pack and romfs mods with verified downloads"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+forge-base = { path = "../forge-base" }
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
