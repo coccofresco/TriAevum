@@ -10,8 +10,17 @@ publish.workspace = true
 [lib]
 crate-type = ["rlib", "staticlib", "cdylib"]
 
+[features]
+default = ["https"]
+# The verified HD texture download of the install job (desktop).
+https = ["forge-mods/https"]
+
 [dependencies]
+forge-assets = { path = "../forge-assets" }
 forge-base = { path = "../forge-base" }
+forge-catalog = { path = "../forge-catalog" }
+forge-mods = { path = "../forge-mods", default-features = false }
+forge-native = { path = "../forge-native" }
 forge-prepare = { path = "../forge-prepare" }
 forge-rom = { path = "../forge-rom" }
 serde_json.workspace = true

@@ -1238,6 +1238,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "forge-core",
+ "forge-native",
  "serde_json",
 ]
 

@@ -2,16 +2,28 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 //! `triaevum-forge`: the Forge command line. Successful commands print one
-//! pretty JSON object and exit 0; failures print `{"status":"error",...}` and
-//! exit 1, as the Python Forge CLI does. `run-job` streams one compact JSON
-//! event per line on stdout (diagnostics go to stderr).
+//! JSON object (`json.dumps(result, indent=2)`, insertion order) and exit 0;
+//! failures print `{"status":"error",...}` and exit 1, as the Python Forge CLI
+//! does. `run-job` streams one compact JSON event per line on stdout
+//! (diagnostics go to stderr). `--install-worker` speaks the Python GUI's
+//! worker line protocol, so the Python GUI can drive this engine.
 
+use std::ffi::OsString;
 use std::io::Write;
+use std::path::PathBuf;
 use std::process::ExitCode;
 
-use clap::{Parser, Subcommand};
-use forge_core::legacy_json::{self, Options};
+use clap::{Args, Parser, Subcommand};
+use forge_core::install::{install_private_title, InstallRequest, InstallSource};
+use forge_core::legacy_json::{self, Options, Style};
+use forge_core::CancelToken;
+use forge_native::DesktopServices;
 use serde_json::{json, Value};
+
+/// `json.dumps(value, indent=2)` without `sort_keys`.
+const PYTHON_RESULT: Options = Options { style: Style::Pretty, sort_keys: false, ensure_ascii: true };
+/// `json.dumps(value)`: default separators, insertion order.
+const PYTHON_LINE: Options = Options { style: Style::Spaced, sort_keys: false, ensure_ascii: true };
 
 #[derive(Parser)]
 #[command(name = "triaevum-forge", about = "TriAevum Forge")]
@@ -26,24 +38,124 @@ enum Command {
     Capabilities,
     /// Run one versioned job request (a JSON file, or - for stdin), streaming events.
     RunJob { request: String },
+    /// Import a decrypted ROM (or extracted data) and install its precompiled title.
+    Install(InstallArgs),
+}
+
+#[derive(Args)]
+struct InstallArgs {
+    /// A decrypted .3ds or .cci file.
+    #[arg(long, conflicts_with = "extracted", required_unless_present = "extracted")]
+    rom: Option<PathBuf>,
+    /// A folder with code.bin, exheader.bin and romfs.bin.
+    #[arg(long)]
+    extracted: Option<PathBuf>,
+    /// The private data folder (default: the package's data folder).
+    #[arg(long)]
+    data_root: Option<PathBuf>,
+    /// The package (default: this executable's folder).
+    #[arg(long)]
+    package_root: Option<PathBuf>,
+}
+
+/// `install_worker.main`'s arguments (`--package-root` is a Rust addition).
+#[derive(Parser)]
+#[command(name = "triaevum-forge --install-worker")]
+struct WorkerArgs {
+    #[arg(long)]
+    rom: PathBuf,
+    #[arg(long)]
+    data_root: PathBuf,
+    #[arg(long)]
+    owner_pid: Option<i64>,
+    #[arg(long)]
+    package_root: Option<PathBuf>,
 }
 
 fn main() -> ExitCode {
-    let cli = Cli::parse();
-    match cli.command {
+    let arguments: Vec<OsString> = std::env::args_os().collect();
+    if arguments.get(1).is_some_and(|argument| argument == "--install-worker") {
+        let mut worker = vec![arguments[0].clone()];
+        worker.extend(arguments[2..].iter().cloned());
+        return install_worker(WorkerArgs::parse_from(worker));
+    }
+    match Cli::parse().command {
         Command::Capabilities => print_result(&forge_core::jobs::capabilities()),
         Command::RunJob { request } => run_job(&request),
+        Command::Install(args) => install(args),
     }
 }
 
 fn print_result(value: &Value) -> ExitCode {
-    println!("{}", legacy_json::dumps(value, Options::PRETTY));
+    println!("{}", legacy_json::dumps(value, PYTHON_RESULT));
     ExitCode::SUCCESS
 }
 
 fn print_error(message: &str) -> ExitCode {
-    println!("{}", legacy_json::dumps(&json!({"status": "error", "error": message}), Options::PRETTY));
+    println!("{}", legacy_json::dumps(&json!({"status": "error", "error": message}), PYTHON_RESULT));
     ExitCode::FAILURE
+}
+
+fn package_root(explicit: Option<PathBuf>) -> Result<PathBuf, String> {
+    if let Some(root) = explicit {
+        return Ok(root);
+    }
+    let executable = std::env::current_exe().map_err(|error| format!("Cannot locate the Forge executable: {error}"))?;
+    Ok(executable.parent().map(PathBuf::from).unwrap_or_default())
+}
+
+fn install(args: InstallArgs) -> ExitCode {
+    let source = match (args.rom, args.extracted) {
+        (Some(rom), _) => InstallSource::Rom(rom),
+        (None, Some(directory)) => InstallSource::ExtractedDirectory(directory),
+        (None, None) => return print_error("Select a ROM or an extracted-data folder"),
+    };
+    let package_root = match package_root(args.package_root) {
+        Ok(root) => root,
+        Err(message) => return print_error(&message),
+    };
+    let request = InstallRequest { source, data_root: args.data_root, package_root };
+    let mut report = |stage: &str, message: &str| eprintln!("[{stage}] {message}");
+    match install_private_title(request, &DesktopServices, &mut report, &CancelToken::new()) {
+        Ok(result) => print_result(&result),
+        Err(error) => print_error(&error.message),
+    }
+}
+
+fn emit(event: &str, payload: Value) {
+    let line = legacy_json::dumps(&json!({"forge_worker_event": event, "payload": payload}), PYTHON_LINE);
+    let mut stdout = std::io::stdout().lock();
+    let _ = writeln!(stdout, "{line}");
+    let _ = stdout.flush();
+}
+
+/// `install_worker.main`: stage lines while installing, then exactly one
+/// `complete` (exit 0) or `error` (exit 1) line.
+fn install_worker(args: WorkerArgs) -> ExitCode {
+    let outcome = (|| {
+        forge_native::bind_worker_lifetime()?;
+        if let Some(owner) = args.owner_pid {
+            forge_native::watch_owner(owner)?;
+        }
+        let package_root = package_root(args.package_root).map_err(forge_core::ForgeError::internal)?;
+        let request = InstallRequest {
+            source: InstallSource::from_path(args.rom),
+            data_root: Some(args.data_root),
+            package_root,
+        };
+        let mut report = |stage: &str, message: &str| emit("stage", json!([stage, message]));
+        install_private_title(request, &DesktopServices, &mut report, &CancelToken::new())
+    })();
+    match outcome {
+        Ok(result) => {
+            emit("complete", result);
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            emit("error", json!(error.message));
+            ExitCode::FAILURE
+        }
+    }
 }
 
 fn run_job(request: &str) -> ExitCode {

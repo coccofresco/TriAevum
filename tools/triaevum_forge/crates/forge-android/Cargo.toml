@@ -12,5 +12,5 @@ name = "triaevum_forge"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-forge-core = { path = "../forge-core" }
+forge-core = { path = "../forge-core", default-features = false }
 jni-sys = "0.3"

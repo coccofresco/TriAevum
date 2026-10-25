@@ -154,6 +154,12 @@ pub fn for_target(target: &str) -> Result<ReleasePlatform> {
     })
 }
 
+/// `release_platform.host_platform()`: the release platform of this process
+/// (x86-64 Windows or Linux), with the catalog crate's messages.
+pub fn host_platform() -> Result<ReleasePlatform> {
+    for_target(forge_catalog::host_platform()?.target)
+}
+
 /// The runtime of an installation: where a (new) package put it until Forge
 /// places it.
 pub fn installed_runtime_path(root: &Path, platform: &ReleasePlatform) -> PathBuf {

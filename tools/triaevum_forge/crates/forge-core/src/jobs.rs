@@ -9,10 +9,13 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{json, Map, Value};
 
+use forge_native::DesktopServices;
+
 use crate::abi::{EventSink, Job};
 use crate::cancel::CancelToken;
 use crate::error::{ForgeError, Result};
 use crate::hashing::{copy_hashing, hex};
+use crate::install::{self, install_private_title, InstallRequest, InstallSource};
 
 pub const REQUEST_FORMAT: &str = "triaevum_forge_request_v1";
 
@@ -24,7 +27,7 @@ pub fn capabilities() -> Value {
         "target": target_triple(),
         "input_formats": ["3ds", "cci", "extracted_directory"],
         "encrypted_input": false,
-        "jobs": ["spool_copy", "rom_identify"],
+        "jobs": ["spool_copy", "rom_identify", "install"],
     })
 }
 
@@ -58,6 +61,10 @@ pub fn start(request: &[u8]) -> Result<Job> {
         Some("rom_identify") => {
             let source = Source::parse(request.get("source"))?;
             Ok(Job::spawn(move |sink, cancel| rom_identify(source, sink, cancel)))
+        }
+        Some("install") => {
+            let job = InstallJob::parse(&request)?;
+            Ok(Job::spawn(move |sink, cancel| job.run(sink, cancel)))
         }
         Some(other) => Err(ForgeError::invalid(format!("Unknown Forge job: {other}"))),
         None => Err(ForgeError::invalid("Forge request has no job")),
@@ -176,6 +183,149 @@ fn rom_identify(source: Source, sink: &EventSink, cancel: &CancelToken) -> Resul
     }))
 }
 
+/// The `install` job: `forge_gui.install_private_title` with the desktop
+/// helper processes, optionally after the GUI's HD texture download.
+struct InstallJob {
+    source: InstallSource,
+    data_root: Option<PathBuf>,
+    package_root: PathBuf,
+    download_hd_textures: bool,
+}
+
+impl InstallJob {
+    fn parse(request: &Map<String, Value>) -> Result<Self> {
+        let source = Source::parse(request.get("source"))?;
+        let source = match (request.get("source_kind").and_then(Value::as_str), source) {
+            (Some("rom"), Source::Path(path)) => InstallSource::Rom(path),
+            (Some("extracted_directory"), Source::Path(path)) => InstallSource::ExtractedDirectory(path),
+            #[cfg(unix)]
+            (Some("rom"), source @ Source::Descriptor(_)) => InstallSource::RomFile(source.open()?),
+            #[cfg(unix)]
+            (Some("extracted_directory"), Source::Descriptor(_)) => {
+                return Err(ForgeError::invalid("Extracted data must be a folder path"))
+            }
+            _ => return Err(ForgeError::invalid("source_kind must be \"rom\" or \"extracted_directory\"")),
+        };
+        let path = |key: &str| request.get(key).and_then(Value::as_str).map(PathBuf::from);
+        let package_root = match path("package_root") {
+            Some(root) => root,
+            None => executable_directory()?,
+        };
+        let download_hd_textures = match request.get("download_hd_textures") {
+            None | Some(Value::Null) => cfg!(not(target_os = "android")),
+            Some(Value::Bool(flag)) => *flag,
+            Some(_) => return Err(ForgeError::invalid("download_hd_textures must be a boolean")),
+        };
+        Ok(Self { source, data_root: path("data_root"), package_root, download_hd_textures })
+    }
+
+    fn run(self, sink: &EventSink, cancel: &CancelToken) -> Result<Value> {
+        if self.download_hd_textures {
+            download_hd_textures(&self.package_root, self.data_root.as_deref(), sink, cancel)?;
+        }
+        let request =
+            InstallRequest { source: self.source, data_root: self.data_root, package_root: self.package_root };
+        let mut events = StageEvents { sink, current: String::new() };
+        install_private_title(request, &DesktopServices, &mut |stage, message| events.report(stage, message), cancel)
+    }
+}
+
+/// Python's top-level install stages; the area crates' own report names
+/// (water, topscreen, interior-sun, pipelines, ...) map to `assets` or
+/// `shaders`. The first message of a stage is its `stage` event, later
+/// messages of the same stage are `report` events.
+struct StageEvents<'a> {
+    sink: &'a EventSink,
+    current: String,
+}
+
+impl StageEvents<'_> {
+    fn report(&mut self, stage: &str, message: &str) {
+        let stage = match stage {
+            "preflight" | "extract" | "verify" | "adapt" | "prepare" | "activate" | "ready" => stage,
+            "shaders" | "interior-sun" | "pipelines" => "shaders",
+            _ => "assets",
+        };
+        if stage == self.current {
+            self.sink.emit(json!({"event": "report", "stage": stage, "message": message}));
+        } else {
+            self.current = stage.to_string();
+            self.sink.stage(stage, message);
+        }
+    }
+}
+
+fn executable_directory() -> Result<PathBuf> {
+    let executable =
+        std::env::current_exe().map_err(|error| ForgeError::io("Cannot locate the Forge executable", error))?;
+    Ok(executable.parent().map(Path::to_path_buf).unwrap_or_default())
+}
+
+/// The GUI's "download the HD textures first" (`_download_hd_for_install`):
+/// only when the archive is missing; a failure keeps the native textures and
+/// never stops the installation.
+fn download_hd_textures(
+    package_root: &Path,
+    data_root: Option<&Path>,
+    sink: &EventSink,
+    cancel: &CancelToken,
+) -> Result<()> {
+    let pack = forge_mods::UiTexturePack::vanilla_ui_hud();
+    let missing = || -> Result<Option<(PathBuf, forge_mods::ArchiveContract)>> {
+        let recipes = Value::Object(crate::fsutil::load_json_object(&install::recipes_path(package_root))?);
+        let Some(contract) = forge_mods::ui_pack::pack_contract(&recipes, &pack)? else { return Ok(None) };
+        let data_root = install::data_root(data_root, package_root)?;
+        let status = forge_mods::pack_status(package_root, &data_root, Some(&contract), &pack, cancel)?;
+        Ok((status == forge_mods::Status::Missing).then_some((data_root, contract)))
+    };
+    // Without a contract or a readable package, the installation says why.
+    let Ok(Some((data_root, contract))) = missing() else { return Ok(()) };
+    sink.stage("preflight", "Downloading the HD textures...");
+    let message = match fetch_archive(&data_root, &pack, &contract, sink, cancel) {
+        Ok(()) => "HD texture archive ready. It is applied by this installation.".to_string(),
+        Err(error) if error.kind == crate::ErrorKind::Cancelled => return Err(error),
+        Err(error) => format!(
+            "HD texture download failed: {} The title is prepared with the native textures. Download the zip \
+             from the mod page and select it with \"Select .zip...\", then prepare and install again.",
+            error.message
+        ),
+    };
+    sink.emit(json!({"event": "report", "stage": "preflight", "message": message}));
+    Ok(())
+}
+
+#[cfg(feature = "https")]
+fn fetch_archive(
+    data_root: &Path,
+    pack: &forge_mods::UiTexturePack,
+    contract: &forge_mods::ArchiveContract,
+    sink: &EventSink,
+    cancel: &CancelToken,
+) -> Result<()> {
+    forge_mods::download_archive(
+        data_root,
+        pack,
+        contract,
+        None,
+        &forge_mods::UreqDownloader,
+        &mut |done, total| sink.progress("preflight", done, Some(total)),
+        &mut |message| sink.emit(json!({"event": "report", "stage": "preflight", "message": message})),
+        cancel,
+    )
+    .map(|_| ())
+}
+
+#[cfg(not(feature = "https"))]
+fn fetch_archive(
+    _: &Path,
+    _: &forge_mods::UiTexturePack,
+    _: &forge_mods::ArchiveContract,
+    _: &EventSink,
+    _: &CancelToken,
+) -> Result<()> {
+    Err(ForgeError::new(crate::ErrorKind::UnsupportedFormat, "This Forge build cannot download."))
+}
+
 fn temporary_sibling(destination: &Path) -> Result<PathBuf> {
     let name =
         destination.file_name().ok_or_else(|| ForgeError::invalid("Destination has no file name"))?.to_string_lossy();
@@ -242,6 +392,54 @@ mod tests {
         assert_eq!(events.last().unwrap()["event"], "failed");
         assert_eq!(events.last().unwrap()["error"]["code"], "invalid_input");
         assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn install_requests_name_their_source_kind() {
+        let request = |extra: Value| {
+            let mut request = json!({"format": REQUEST_FORMAT, "job": "install", "source": {"path": "x.cci"}});
+            request.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+            start(&crate::legacy_json::compact_line_bytes(&request)).err().map(|error| error.message)
+        };
+        assert_eq!(request(json!({})).unwrap(), "source_kind must be \"rom\" or \"extracted_directory\"");
+        assert_eq!(
+            request(json!({"source_kind": "rom", "download_hd_textures": "yes"})).unwrap(),
+            "download_hd_textures must be a boolean"
+        );
+    }
+
+    #[test]
+    fn inner_reports_map_to_contract_stages() {
+        let mut job = Job::spawn(|sink, _| {
+            let mut events = StageEvents { sink, current: String::new() };
+            for (stage, message) in [
+                ("activate", "Installing"),
+                ("topscreen", "a"),
+                ("water", "b"),
+                ("interior-sun", "c"),
+                ("pipelines", "d"),
+                ("ready", "done"),
+            ] {
+                events.report(stage, message);
+            }
+            Ok(json!({}))
+        });
+        job.join();
+        let events: Vec<Value> = std::iter::from_fn(|| job.poll(0)).collect();
+        let kinds: Vec<(&str, &str)> =
+            events.iter().map(|e| (e["event"].as_str().unwrap(), e["stage"].as_str().unwrap_or(""))).collect();
+        assert_eq!(
+            kinds,
+            [
+                ("stage", "activate"),
+                ("stage", "assets"),
+                ("report", "assets"),
+                ("stage", "shaders"),
+                ("report", "shaders"),
+                ("stage", "ready"),
+                ("succeeded", ""),
+            ]
+        );
     }
 
     #[test]

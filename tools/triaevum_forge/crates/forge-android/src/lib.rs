@@ -9,6 +9,10 @@
 //! Panics never cross into the JVM: they become an `internal` failure or an
 //! exception.
 
+// The safety contract of every exported function is the C/Java interface
+// documented above and in include/triaevum_forge.h; it is not repeated per item.
+#![allow(clippy::missing_safety_doc)]
+
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr;
 

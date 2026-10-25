@@ -10,6 +10,10 @@
 //! host decides on which thread it handles them. Panics are caught here and
 //! become `internal` errors; nothing unwinds across the boundary.
 
+// The safety contract of every exported function is the C/Java interface
+// documented above and in include/triaevum_forge.h; it is not repeated per item.
+#![allow(clippy::missing_safety_doc)]
+
 use std::collections::VecDeque;
 use std::ffi::c_void;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -194,7 +198,7 @@ pub extern "C" fn TriAevumForgeGetCapabilities() -> TriAevumForgeBuffer {
 }
 
 #[no_mangle]
-pub extern "C" fn TriAevumForgeFreeBuffer(buffer: TriAevumForgeBuffer) {
+pub unsafe extern "C" fn TriAevumForgeFreeBuffer(buffer: TriAevumForgeBuffer) {
     if buffer.data.is_null() {
         return;
     }
@@ -208,7 +212,7 @@ pub extern "C" fn TriAevumForgeFreeBuffer(buffer: TriAevumForgeBuffer) {
 /// "job":..., ...}`). On success `*job_out` owns the job until
 /// `TriAevumForgeDestroyJob`. Invalid requests fail without a job.
 #[no_mangle]
-pub extern "C" fn TriAevumForgeStartJob(
+pub unsafe extern "C" fn TriAevumForgeStartJob(
     request: *const u8,
     request_len: usize,
     job_out: *mut *mut c_void,
@@ -250,7 +254,7 @@ fn with_job<T>(job: *mut c_void, fallback: T, body: impl FnOnce(&mut Job) -> T) 
 
 /// Writes the next event into `*event_out`, or returns `NoEvent`.
 #[no_mangle]
-pub extern "C" fn TriAevumForgePollEvent(
+pub unsafe extern "C" fn TriAevumForgePollEvent(
     job: *mut c_void,
     timeout_ms: u32,
     event_out: *mut TriAevumForgeBuffer,
@@ -270,7 +274,7 @@ pub extern "C" fn TriAevumForgePollEvent(
 }
 
 #[no_mangle]
-pub extern "C" fn TriAevumForgeCancelJob(job: *mut c_void) -> TriAevumForgeStatus {
+pub unsafe extern "C" fn TriAevumForgeCancelJob(job: *mut c_void) -> TriAevumForgeStatus {
     with_job(job, TriAevumForgeStatus::InvalidArgument, |job| {
         job.cancel();
         TriAevumForgeStatus::Ok
@@ -279,7 +283,7 @@ pub extern "C" fn TriAevumForgeCancelJob(job: *mut c_void) -> TriAevumForgeStatu
 
 /// Waits for the worker to finish. Remaining events stay pollable.
 #[no_mangle]
-pub extern "C" fn TriAevumForgeJoinJob(job: *mut c_void) -> TriAevumForgeStatus {
+pub unsafe extern "C" fn TriAevumForgeJoinJob(job: *mut c_void) -> TriAevumForgeStatus {
     with_job(job, TriAevumForgeStatus::InvalidArgument, |job| {
         job.join();
         TriAevumForgeStatus::Ok
@@ -288,7 +292,7 @@ pub extern "C" fn TriAevumForgeJoinJob(job: *mut c_void) -> TriAevumForgeStatus 
 
 /// Cancels, joins and frees a job. The pointer is invalid afterwards.
 #[no_mangle]
-pub extern "C" fn TriAevumForgeDestroyJob(job: *mut c_void) {
+pub unsafe extern "C" fn TriAevumForgeDestroyJob(job: *mut c_void) {
     if job.is_null() {
         return;
     }

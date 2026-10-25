@@ -13,5 +13,6 @@ path = "src/main.rs"
 
 [dependencies]
 forge-core = { path = "../forge-core" }
+forge-native = { path = "../forge-native" }
 serde_json.workspace = true
 clap.workspace = true

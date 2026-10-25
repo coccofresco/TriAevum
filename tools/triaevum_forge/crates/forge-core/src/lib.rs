@@ -9,9 +9,11 @@
 //! forge-mods); this crate orchestrates them and owns the jobs and the ABI.
 
 pub mod abi;
+pub mod install;
 pub mod jobs;
 pub mod layout;
 pub mod lock;
+pub mod publish;
 pub mod transaction;
 
 pub use forge_base::{cancel, error, fsutil, hashing, legacy_json};
