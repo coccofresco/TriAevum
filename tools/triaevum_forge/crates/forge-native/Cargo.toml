@@ -1,0 +1,34 @@
+[package]
+name = "forge-native"
+description = "TriAevum Forge: native preparation services (product query, language, shaders, device pipelines)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+forge-base = { path = "../forge-base" }
+forge-catalog = { path = "../forge-catalog" }
+forge-prepare = { path = "../forge-prepare" }
+serde_json.workspace = true
+tempfile.workspace = true
+# Reads the corresponding-source archive when auditing a bundled shader corpus
+# (same version and features as forge-mods).
+zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Wdk_System_SystemServices",
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_JobObjects",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+tempfile.workspace = true

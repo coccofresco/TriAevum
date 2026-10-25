@@ -7,8 +7,10 @@ members = [
     "crates/forge-prepare",
     "crates/forge-assets",
     "crates/forge-mods",
+    "crates/forge-native",
     "crates/forge-core",
     "crates/forge-cli",
+    "crates/forge-android",
 ]
 
 [workspace.package]
