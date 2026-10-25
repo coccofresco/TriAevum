@@ -57,7 +57,7 @@ public final class TriAevumActivity extends SDLActivity {
         TouchOverlayInput.Companion.seedDefaults(this);
         touchOverlay.refreshControls();
         touchOverlay.setFocusable(false);
-        touchInput.setOverlay(touchOverlay);
+        touchInput.attach(this, touchOverlay, mLayout);
         mLayout.addView(touchOverlay, new ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         mSurface.requestFocus();
@@ -72,6 +72,27 @@ public final class TriAevumActivity extends SDLActivity {
     @Override protected void onResume() {
         super.onResume();
         if (touchInput != null) touchInput.resume();
+    }
+
+    // A controller hides the touch controls (when the user wants that); a touch shows them.
+    @Override public boolean dispatchKeyEvent(android.view.KeyEvent event) {
+        if (touchInput != null && isController(event.getSource())) touchInput.controllerUsed();
+        return super.dispatchKeyEvent(event);
+    }
+
+    @Override public boolean dispatchGenericMotionEvent(android.view.MotionEvent event) {
+        if (touchInput != null && isController(event.getSource())) touchInput.controllerUsed();
+        return super.dispatchGenericMotionEvent(event);
+    }
+
+    @Override public boolean dispatchTouchEvent(android.view.MotionEvent event) {
+        if (touchInput != null) touchInput.touched();
+        return super.dispatchTouchEvent(event);
+    }
+
+    private static boolean isController(int source) {
+        return (source & android.view.InputDevice.SOURCE_GAMEPAD) == android.view.InputDevice.SOURCE_GAMEPAD
+            || (source & android.view.InputDevice.SOURCE_JOYSTICK) == android.view.InputDevice.SOURCE_JOYSTICK;
     }
 
     @Override public void onWindowFocusChanged(boolean hasFocus) {

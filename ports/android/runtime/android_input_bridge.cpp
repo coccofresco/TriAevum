@@ -3,6 +3,7 @@
 // on-screen pad; the game's input poll merges it with the physical devices.
 
 #include "three_ds_touch_anchors.h"
+#include "three_ds_touch_overlay_settings.h"
 #include "three_ds_virtual_pad.h"
 
 #include <jni.h>
@@ -64,6 +65,30 @@ JNIEXPORT void JNICALL Java_org_triaevum_android_NativeInputBridge_controlBounds
 
 JNIEXPORT jboolean JNICALL Java_org_triaevum_android_NativeInputBridge_titleDrawsControls(JNIEnv*, jobject) {
     return ThreeDsRecomp::Input::OverlayTouchAnchors().TitleDrawsControls() ? JNI_TRUE : JNI_FALSE;
+}
+
+// The overlay's own settings, as it saved them.
+JNIEXPORT void JNICALL Java_org_triaevum_android_NativeInputBridge_reportOverlaySettings(
+    JNIEnv*, jobject, jboolean visible, jint opacity, jint size, jboolean vibration, jboolean hideWithController) {
+    ThreeDsRecomp::Input::OverlayTouchSettings().Report(
+        {visible == JNI_TRUE, opacity, size, vibration == JNI_TRUE, hideWithController == JNI_TRUE});
+}
+
+// The host menu's requests: revision, visible, opacity, size, vibration,
+// hide with controller, layout editing serial, layout reset serial.
+JNIEXPORT jintArray JNICALL Java_org_triaevum_android_NativeInputBridge_overlayRequests(JNIEnv* env, jobject) {
+    const auto requests = ThreeDsRecomp::Input::OverlayTouchSettings().PendingRequests();
+    const jint values[8]{static_cast<jint>(requests.Revision),
+                         requests.Values.Visible ? 1 : 0,
+                         requests.Values.OpacityPercent,
+                         requests.Values.SizePercent,
+                         requests.Values.Vibration ? 1 : 0,
+                         requests.Values.HideWithController ? 1 : 0,
+                         static_cast<jint>(requests.EditLayoutSerial),
+                         static_cast<jint>(requests.ResetLayoutSerial)};
+    jintArray result = env->NewIntArray(8);
+    if (result != nullptr) env->SetIntArrayRegion(result, 0, 8, values);
+    return result;
 }
 
 } // extern "C"

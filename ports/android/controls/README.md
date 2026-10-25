@@ -69,10 +69,16 @@ overlay's: it reaches the game surface with its own pointer id, so menus, the
 3DS touch screen and the free camera (a drag during gameplay) see every finger.
 On desktop, `TRIAEVUM_TOUCH_ANCHORS` simulates the overlay's layout.
 
-Still required: settings ownership (F1 "Touch controls", the `touch_layout`
-switch, layout editing), auto-hide when a controller is used, the donor latency
-patch (`requestUnbufferedDispatch`) and physical multitouch tests. The imported
-donor's
+The overlay owns and saves its settings (shown, opacity, size, vibration, hide
+with a controller); the in-game menu's Controls tab shows them on Android and
+asks the overlay for changes, layout editing (Done / Reset over the overlay) and
+the default layout through `TouchOverlaySettings`
+(`tools/three_ds/input/three_ds_touch_overlay_settings.h`). A game controller
+hides the overlay while that option is on, and the game then draws its whole
+HUD; a touch shows the overlay again.
+
+Still required: the donor latency patch (`requestUnbufferedDispatch`) and
+physical multitouch tests. The imported donor's
 existing quirks are not silently changed: for example its joystick change
 notification compares both axes with `&&`; isolate and test any future fix,
 rather than claiming the adapter tests validate that gesture logic.

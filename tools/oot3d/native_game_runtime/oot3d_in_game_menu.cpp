@@ -2,6 +2,7 @@
 
 #include "oot3d_menu_presentation.h"
 #include "oot3d_top_screen_controls.h"
+#include "three_ds_touch_overlay_settings.h"
 
 #include "fast/extension/graphics_settings_window.h"
 #include "fast/extension/presentation_picture.h"
@@ -561,6 +562,89 @@ void InGameMenu::BuildControlsTab(Menu::Document &document) {
     row.ChoiceAvailable = [](int value) { return value != static_cast<int>(NativeControlProfile::Custom); };
     tab.Rows.push_back(std::move(row));
   }
+
+#if defined(__ANDROID__)
+  // The touch overlay owns and saves these; the rows ask it for changes.
+  {
+    using ThreeDsRecomp::Input::OverlayTouchSettings;
+    using ThreeDsRecomp::Input::TouchOverlayValues;
+    const auto present = [] { return OverlayTouchSettings().Present(); };
+    const auto overlayToggle = [&](std::string key, std::string help, bool TouchOverlayValues::*field) {
+      Row row;
+      row.Key = std::move(key);
+      row.Kind = RowKind::Toggle;
+      row.Help = std::move(help);
+      row.Read = [field] { return OverlayTouchSettings().Values().*field ? 1 : 0; };
+      row.Write = [field](int value) -> WriteResult {
+        auto values = OverlayTouchSettings().Values();
+        values.*field = value != 0;
+        OverlayTouchSettings().Request(values);
+        return {};
+      };
+      row.Modified = [field] { return OverlayTouchSettings().Values().*field != TouchOverlayValues{}.*field; };
+      row.Available = present;
+      row.UnavailableReason = "The touch controls have not started";
+      return row;
+    };
+    const auto overlayNumber = [&](std::string key, std::string help, int TouchOverlayValues::*field, int minimum,
+                                   int maximum, int step) {
+      Row row;
+      row.Key = std::move(key);
+      row.Kind = RowKind::Number;
+      row.Help = std::move(help);
+      row.Minimum = minimum;
+      row.Maximum = maximum;
+      row.Step = step;
+      row.Format = Percent;
+      row.Read = [field] { return OverlayTouchSettings().Values().*field; };
+      row.Write = [field](int value) -> WriteResult {
+        auto values = OverlayTouchSettings().Values();
+        values.*field = value;
+        OverlayTouchSettings().Request(values);
+        return {};
+      };
+      row.Modified = [field] { return OverlayTouchSettings().Values().*field != TouchOverlayValues{}.*field; };
+      row.Available = present;
+      row.UnavailableReason = "The touch controls have not started";
+      return row;
+    };
+    const auto overlayAction = [&](std::string key, std::string help, void (*request)(), std::string done) {
+      Row row;
+      row.Key = std::move(key);
+      row.Kind = RowKind::Action;
+      row.Help = std::move(help);
+      row.Activate = [request, done]() -> WriteResult {
+        request();
+        return {done, false};
+      };
+      row.Available = present;
+      row.UnavailableReason = "The touch controls have not started";
+      return row;
+    };
+    tab.Rows.push_back(Heading("Touch controls"));
+    tab.Rows.push_back(overlayToggle("Touch controls", "Shows the on-screen controls over the game.",
+                                     &TouchOverlayValues::Visible));
+    tab.Rows.push_back(overlayNumber("Opacity", "How opaque the on-screen controls are.",
+                                     &TouchOverlayValues::OpacityPercent, 0, 100, 5));
+    tab.Rows.push_back(overlayNumber("Size", "The on-screen controls' size.", &TouchOverlayValues::SizePercent, 50, 200,
+                                     10));
+    tab.Rows.push_back(overlayToggle("Vibration", "A short vibration when a control is pressed.",
+                                     &TouchOverlayValues::Vibration));
+    tab.Rows.push_back(overlayToggle("Hide with a controller",
+                                     "Hides the on-screen controls while a game controller is used; a touch shows them.",
+                                     &TouchOverlayValues::HideWithController));
+    if (mOwners.TopScreen)
+      tab.Rows.push_back(topScreenToggle("Game HUD on the controls",
+                                         "Draws the HUD's own buttons and D-pad inside the on-screen controls and "
+                                         "moves the minimap to the top-right corner.",
+                                         &TopScreenUiConfig::TouchLayout));
+    tab.Rows.push_back(overlayAction(
+        "Edit layout", "Close the menu, then drag the controls; Done keeps the layout, Reset restores the default.",
+        [] { OverlayTouchSettings().RequestLayoutEditing(); }, "Close the menu to edit the layout"));
+    tab.Rows.push_back(overlayAction("Reset layout", "Puts every on-screen control back in its default place.",
+                                     [] { OverlayTouchSettings().RequestLayoutReset(); }, "Layout reset"));
+  }
+#endif
 
   tab.Rows.push_back(Heading("Aiming"));
   {

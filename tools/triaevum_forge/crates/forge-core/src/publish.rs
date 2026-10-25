@@ -199,12 +199,24 @@ fn publish_plugin(source: &Path, destination: &Path, digest: &str, cancel: &Canc
     outcome
 }
 
+/// The standard profile on a touch screen, where the screen is the whole
+/// controller: the game's own HUD size (one of the two F1 sizes), the HUD's
+/// buttons drawn in the touch controls, and a camera a finger drags. Only a
+/// new file starts from it; an existing file keeps the user's choices.
+pub fn android_topscreen(mut standard: Map<String, Value>) -> Map<String, Value> {
+    standard.insert("hud_scale".to_string(), Value::from(1.0));
+    standard.insert("touch_layout".to_string(), Value::Bool(true));
+    standard.insert("free_camera_enabled".to_string(), Value::Bool(true));
+    standard
+}
+
 /// Creates the TopScreen file from the standard profile, or rewrites the
 /// user's file with the standard layout when that changes it.
-fn publish_topscreen_config(path: &Path) -> Result<()> {
+fn publish_topscreen_config(path: &Path, android: bool) -> Result<()> {
     let standard = standard_topscreen()?;
     if !path.is_file() {
-        return atomic_write_json(path, &Value::Object(standard));
+        let created = if android { android_topscreen(standard) } else { standard };
+        return atomic_write_json(path, &Value::Object(created));
     }
     let user = load_json_object(path)?;
     let migrated = standard_topscreen_layout(&user, &standard)?;
@@ -267,7 +279,7 @@ pub fn publish_private_runtime(
             load_json_object(user_config)?;
         }
     }
-    publish_topscreen_config(&topscreen_config)?;
+    publish_topscreen_config(&topscreen_config, request.android.is_some())?;
     ensure_runtime_config(&runtime_config, &product.product)?;
     let savedata = private_root.join("savedata");
     create_dir(&savedata)?;
@@ -462,6 +474,12 @@ mod tests {
     fn standard_profile_has_every_layout_field() {
         let standard = standard_topscreen().unwrap();
         assert_eq!(standard_topscreen_layout(&standard, &standard).unwrap(), standard);
+        // The touch-screen start keeps its choices through the layout migration.
+        let android = android_topscreen(standard.clone());
+        assert_eq!(android.get("hud_scale"), Some(&Value::from(1.0)));
+        assert_eq!(android.get("touch_layout"), Some(&Value::Bool(true)));
+        assert_eq!(android.get("free_camera_enabled"), Some(&Value::Bool(true)));
+        assert_eq!(standard_topscreen_layout(&android, &standard).unwrap(), android);
     }
 
     #[test]
