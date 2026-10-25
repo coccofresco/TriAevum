@@ -24,7 +24,7 @@ if(TRIAEVUM_ANDROID_DEPENDENCY_SOURCE_CACHE)
 endif()
 get_filename_component(root "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
 add_subdirectory("${root}" product)
-target_sources(oot3d_native_game PRIVATE android_host.cpp)
+target_sources(oot3d_native_game PRIVATE android_host.cpp android_input_bridge.cpp)
 target_include_directories(oot3d_native_game PRIVATE "${CMAKE_CURRENT_LIST_DIR}")
 # The Forge's native services run in process (triaevum_forge_tool.cpp): the
 # runtime's tool modes, the pass compiler and the device pipeline helper, on

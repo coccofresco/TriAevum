@@ -571,6 +571,13 @@ NativeControlConfig NativeControlDefaults() {
   config.MovementStick = NativeAnalogStick::Left;
   config.NativeAimSource = NativeMotionSource::Automatic;
   config.FreeCameraSource = NativeMotionSource::Automatic;
+#if defined(__ANDROID__)
+  // SDL turns touches into mouse clicks for the menus and the touch screen:
+  // with the desktop mouse bindings a tap would press A and move the aim.
+  // Touch controls and pads use the same bindings; keyboards stay usable.
+  config.MouseEnabled = false;
+  config.CaptureMouseInGameplay = false;
+#endif
   return config;
 }
 

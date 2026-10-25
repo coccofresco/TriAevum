@@ -11,10 +11,18 @@ import java.nio.charset.StandardCharsets;
 import android.content.Context;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.ViewGroup;
 import android.view.WindowManager;
+import org.triaevum.android.controls.AzaharInputAdapter;
+import org.triaevum.android.controls.InputOverlay;
+import org.triaevum.android.controls.OverlayHost;
 
 /** SDL owns Surface/lifecycle. Game, renderer and title loading retain their native owners. */
 public final class TriAevumActivity extends SDLActivity {
+    private InputOverlay touchOverlay;
+    private TouchOverlayInput touchInput;
+    private AzaharInputAdapter touchAdapter;
+
     @Override protected SDLSurface createSDLSurface(Context context) {
         int maximumShortEdge = 720;
         File config = new File(getExternalFilesDir(null), "TriAevum.android.host.json");
@@ -35,6 +43,40 @@ public final class TriAevumActivity extends SDLActivity {
         applyDeveloperEnvironment();
         super.onCreate(state);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        if (!mBrokenLibraries) attachTouchControls();
+    }
+
+    /** The touch controls above the game surface, the same size, without taking key focus. */
+    private void attachTouchControls() {
+        TouchOverlayInput.Companion.seedDefaults(this);
+        touchInput = new TouchOverlayInput();
+        touchAdapter = new AzaharInputAdapter(touchInput);
+        // The overlay reads its preferences through the bound host while it is built.
+        OverlayHost.INSTANCE.bind(this, touchAdapter);
+        touchOverlay = new InputOverlay(this, null);
+        touchOverlay.setFocusable(false);
+        touchInput.setOverlay(touchOverlay);
+        mLayout.addView(touchOverlay, new ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        mSurface.requestFocus();
+    }
+
+    @Override protected void onPause() {
+        if (touchAdapter != null) touchAdapter.releaseAll();
+        super.onPause();
+    }
+
+    @Override public void onWindowFocusChanged(boolean hasFocus) {
+        if (!hasFocus && touchAdapter != null) touchAdapter.releaseAll();
+        super.onWindowFocusChanged(hasFocus);
+    }
+
+    @Override protected void onDestroy() {
+        if (touchOverlay != null) mLayout.removeView(touchOverlay);
+        if (touchAdapter != null) OverlayHost.INSTANCE.unbind(touchAdapter);
+        touchOverlay = null;
+        touchAdapter = null;
+        super.onDestroy();
     }
 
     /**

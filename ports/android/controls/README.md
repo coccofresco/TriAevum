@@ -49,9 +49,19 @@ AGP 8.13.2, Kotlin 2.0.20, API 35 SDK, min API 29). Offline tests also verify th
 donor hashes, resource closure and shared HID ABI. These tests do **not** verify
 real Android MotionEvents, overlay composition, layout-editor UI or gameplay.
 
-Still required for a completed 1:1 in-game port: the APK/SDL host and JNI input
-consumer, donor settings-menu wiring, lifecycle/cancel integration, physical
-multitouch tests and visual comparison on the device. The imported donor's
+The APK now hosts the overlay (`app/.../TriAevumActivity.java`,
+`TouchControls.kt`). Controls reach the game's on-screen pad through JNI
+(`ports/android/runtime/android_input_bridge.cpp`,
+`tools/three_ds/input/three_ds_virtual_pad.h`). The input poll merges that pad
+with the physical devices before its bindings, so there is still one input owner.
+Touches that miss every control go to SDL as touches. HOME is the host menu key:
+a tap toggles the in-game menu, a long press opens F1. The app releases the
+overlay's input on pause and focus loss.
+
+Still required: settings ownership (F1 "Touch controls", layout editing),
+auto-hide when a controller is used, the donor latency patch
+(`requestUnbufferedDispatch`), physical multitouch tests and visual comparison
+on the device. The imported donor's
 existing quirks are not silently changed: for example its joystick change
 notification compares both axes with `&&`; isolate and test any future fix,
 rather than claiming the adapter tests validate that gesture logic.

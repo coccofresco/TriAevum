@@ -1,5 +1,7 @@
 #include "three_ds_input.h"
 #include "three_ds_pad_menu_chord.h"
+#include "three_ds_pointer_press_latch.h"
+#include "three_ds_virtual_pad.h"
 
 #include <cmath>
 #include <cstdint>
@@ -244,10 +246,60 @@ void TestAutomaticMotionComposition() {
             "opposite gravity handoff is singular");
 }
 
+void TestPointerPressLatch() {
+    using ThreeDsRecomp::Input::PointerPressLatch;
+    PointerPressLatch latch;
+    Require(!latch.Resolve(false, true), "an idle pointer reads pressed");
+    // A tap released before the poll: seen by polls until one consumes it.
+    latch.ObservePress();
+    Require(latch.Resolve(false, false), "a tap between polls is lost");
+    Require(latch.Resolve(false, true), "the consuming poll loses the tap");
+    Require(!latch.Resolve(false, true), "a consumed tap repeats");
+    // A long press reads held after its press is consumed.
+    latch.ObservePress();
+    Require(latch.Resolve(true, true) && latch.Resolve(true, true), "a held pointer reads released");
+    Require(!latch.Resolve(false, true), "a released pointer reads pressed");
+    latch.ObservePress();
+    latch.Reset();
+    Require(!latch.Resolve(false, true), "a reset press survives");
+}
+
+void TestVirtualPad() {
+    using namespace ThreeDsRecomp::Input;
+    VirtualPad pad;
+    const auto a = VirtualPad::Bit(DigitalControl::A);
+    // A tap between polls: not held, pressed until a consuming read.
+    pad.SetControl(DigitalControl::A, true);
+    pad.SetControl(DigitalControl::A, false);
+    Require(pad.Read(false).Held == 0 && pad.Read(false).Pressed == a, "a tap between polls is lost");
+    Require(pad.Read(true).Pressed == a && pad.Read(true).Pressed == 0, "a consumed tap repeats");
+    pad.SetControl(DigitalControl::Zr, true);
+    Require(pad.Read(true).Held == VirtualPad::Bit(DigitalControl::Zr), "a held button reads released");
+    pad.SetCirclePad(0.5F, -2.0F);
+    pad.SetCStick(std::numeric_limits<float>::quiet_NaN(), 0.25F);
+    const auto sticks = pad.Read(true);
+    Require(sticks.CirclePad == std::array<float, 2>{0.5F, -1.0F} && sticks.CStick == std::array<float, 2>{0.0F, 0.25F},
+            "virtual sticks are not clamped and sanitized");
+    pad.SetControl(DigitalControl::B, true);
+    pad.ReleaseAll();
+    const auto released = pad.Read(true);
+    Require(released.Held == 0 && released.Pressed == 0 && released.CirclePad == std::array<float, 2>{},
+            "release-all leaves input behind");
+    pad.RequestMenu();
+    Require(pad.TakeMenuRequest() && !pad.TakeMenuRequest() && !pad.TakeSettingsRequest(), "menu request repeats");
+    DigitalControl control{};
+    Require(DigitalControlForHidBit(0, &control) && control == DigitalControl::A &&
+                DigitalControlForHidBit(15, &control) && control == DigitalControl::Zr &&
+                !DigitalControlForHidBit(12, &control) && !DigitalControlForHidBit(16, &control),
+            "HID bits map to the wrong controls");
+}
+
 } // namespace
 
 int main() try {
     TestAutomaticMotionComposition();
+    TestPointerPressLatch();
+    TestVirtualPad();
     {
         using namespace ThreeDsRecomp::Input;
         const auto motion = ConvertSdlMotion({9.80665F, 9.80665F, -9.80665F}, true,

@@ -20,6 +20,9 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
                    bool guestRefreshWillConsume,
                    NativeControlPollingState &pollingState) {
   using namespace Oot3dNativeGame;
+  if (!pollingState.HostPresses)
+    pollingState.HostPresses = std::make_unique<ThreeDsRecomp::Input::SdlHostPressWatch>();
+  auto &hostPresses = *pollingState.HostPresses;
   auto config = controls.Snapshot().Config;
   NativeControlHostInputState host;
   if (hostGuiVisible) pollingState.PendingInputSeconds = 0.0;
@@ -112,12 +115,23 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
       config.ControllerEnabled,
   };
 
+  // On-screen controls are one more source of the same 3DS controls; a host
+  // surface owns the pointer, so they are dropped while one is up.
+  using ThreeDsRecomp::Input::VirtualPad;
+  auto touchControls = ThreeDsRecomp::Input::TouchOverlayPad().Read(guestRefreshWillConsume || hostGuiVisible);
+  if (hostGuiVisible) touchControls = {};
+
   for (size_t index = 0; index < kNativeControlActionCount; ++index) {
     if (hostGuiVisible) pollingState.PendingPressedActions[index] = false;
     const auto &binding = config.Bindings[index];
+    ThreeDsRecomp::Input::DigitalControl control{};
+    const uint32_t touchBit =
+        MapNativeControlActionToThreeDsControl(static_cast<NativeControlAction>(index), &control)
+            ? VirtualPad::Bit(control)
+            : 0U;
     const bool physicalHeld = ThreeDsRecomp::Input::IsHostBindingHeld(
-        binding, enabledDevices, buttonSource);
-    if (physicalHeld && !pollingState.PhysicalActions[index] &&
+        binding, enabledDevices, buttonSource) || (touchControls.Held & touchBit) != 0U;
+    if (((physicalHeld && !pollingState.PhysicalActions[index]) || (touchControls.Pressed & touchBit) != 0U) &&
         static_cast<NativeControlAction>(index) !=
             NativeControlAction::Start) {
       pollingState.PendingPressedActions[index] = true;
@@ -137,6 +151,16 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
       config.ControllerEnabled ? selectedController.Controller : nullptr, host, !hostGuiVisible,
       config.ControllerTouchpadEnabled ? config.ControllerTouchpadIndex : -1, triggerThreshold);
   controls.ObserveMotion(host.ControllerMotion);
+  // The stronger of the pad's and the on-screen stick, before dead zones.
+  const auto mergeTouchStick = [](int16_t &x, int16_t &y, const std::array<float, 2> &touch) {
+    const float padX = static_cast<float>(x) / 32767.0F;
+    const float padY = static_cast<float>(y) / 32767.0F;
+    if (touch[0] * touch[0] + touch[1] * touch[1] <= padX * padX + padY * padY) return;
+    x = static_cast<int16_t>(std::lround(touch[0] * 32767.0F));
+    y = static_cast<int16_t>(std::lround(touch[1] * 32767.0F));
+  };
+  mergeTouchStick(host.LeftStickX, host.LeftStickY, touchControls.CirclePad);
+  mergeTouchStick(host.RightStickX, host.RightStickY, touchControls.CStick);
   pollingState.PendingControllerButtons |= host.ControllerButtons & ~pollingState.PreviousControllerButtons;
   pollingState.PreviousControllerButtons = host.ControllerButtons;
   if (guestRefreshWillConsume) {
@@ -216,9 +240,24 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
     menu.TabNext = key(Ship::KbScancode::LUS_KB_E) || padButton(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
     const auto chord = pollingState.MenuChord.Update(padButton(SDL_CONTROLLER_BUTTON_LEFTSTICK),
                                                      padButton(SDL_CONTROLLER_BUTTON_RIGHTSTICK));
-    pollingState.SettingsToggleRequested = chord.ToggleSettings;
+    auto &touchPad = ThreeDsRecomp::Input::TouchOverlayPad();
+    pollingState.SettingsToggleRequested = chord.ToggleSettings || touchPad.TakeSettingsRequest();
     // The menu reacts to a rising edge: the release pulse lasts one poll.
-    menu.Toggle = key(Ship::KbScancode::LUS_KB_ESCAPE) || chord.ToggleMenu;
+    menu.Toggle = key(Ship::KbScancode::LUS_KB_ESCAPE) || chord.ToggleMenu || hostPresses.Back.Resolve(false, true) ||
+                  touchPad.TakeMenuRequest();
+    // The on-screen buttons drive the menu like a pad's.
+    const auto touchHeld = [&](ThreeDsRecomp::Input::DigitalControl which) {
+      return (touchControls.Held & VirtualPad::Bit(which)) != 0U;
+    };
+    using ThreeDsRecomp::Input::DigitalControl;
+    menu.Up = menu.Up || touchHeld(DigitalControl::DpadUp);
+    menu.Down = menu.Down || touchHeld(DigitalControl::DpadDown);
+    menu.Left = menu.Left || touchHeld(DigitalControl::DpadLeft);
+    menu.Right = menu.Right || touchHeld(DigitalControl::DpadRight);
+    menu.Confirm = menu.Confirm || touchHeld(DigitalControl::A);
+    menu.Back = menu.Back || touchHeld(DigitalControl::B);
+    menu.TabPrevious = menu.TabPrevious || touchHeld(DigitalControl::L);
+    menu.TabNext = menu.TabNext || touchHeld(DigitalControl::R);
     // The mouse for the menu: its window position with the presentation
     // picture the menu is drawn in, the left button, and the wheel while a
     // host surface is up (gameplay never sees it then). The window's wheel
@@ -234,7 +273,7 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
     menu.PictureY = picture.Y;
     menu.PictureWidth = picture.Width;
     menu.PictureHeight = picture.Height;
-    menu.PointerPressed = window.GetMouseState(Ship::LUS_MOUSE_BTN_LEFT);
+    menu.PointerPressed = hostPresses.HostMenu.Resolve(window.GetMouseState(Ship::LUS_MOUSE_BTN_LEFT), true);
     menu.PointerWheel = 0.0F;
     if (hostGuiVisible) {
       const float wheel = window.GetMouseWheel().y;
@@ -272,7 +311,8 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
     const auto touch = Oot3dNativeGame::MapHostPointerToNativeA32Touch(
         pointer.x - static_cast<int32_t>(picture.X),
         pointer.y - static_cast<int32_t>(picture.Y), picture.Width,
-        picture.Height, window.GetMouseState(Ship::LUS_MOUSE_BTN_LEFT),
+        picture.Height,
+        hostPresses.NativeTouch.Resolve(window.GetMouseState(Ship::LUS_MOUSE_BTN_LEFT), guestRefreshWillConsume),
         topScreenUiProfile
             ? Oot3dNativeGame::NativeA32TouchPresentation::TopScreen400x240
             : Oot3dNativeGame::NativeA32TouchPresentation::
@@ -288,6 +328,9 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
         frame.Hid.TouchPressed = true;
       }
     }
+  } else {
+    // A gameplay tap must not touch the next touch-screen page.
+    hostPresses.NativeTouch.Reset();
   }
   ApplyNativeControlShortcutTouch(host, frame);
   return frame;

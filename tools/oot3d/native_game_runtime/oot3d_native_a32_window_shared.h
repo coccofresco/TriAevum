@@ -8,6 +8,8 @@
 #include "oot3d_in_game_menu.h"
 #include "three_ds_pad_menu_chord.h"
 #include "three_ds_sdl_controller.h"
+#include "three_ds_sdl_host_presses.h"
+#include "three_ds_virtual_pad.h"
 #include "oot3d_prebackend_budget.h"
 #include "oot3d_cpu_phase_probe.h"
 #include "fast/renderer/frame_time_distribution.h"
@@ -738,6 +740,9 @@ struct NativeControlPollingState {
   // R3 released alone toggles the in-game menu.
   ThreeDsRecomp::Input::PadMenuChord MenuChord;
   bool SettingsToggleRequested = false;
+  // Presses between polls (quick taps, the Android Back gesture) for the 3DS
+  // touch screen and the in-game menu; created by the first poll.
+  std::unique_ptr<ThreeDsRecomp::Input::SdlHostPressWatch> HostPresses;
 };
 
 bool ExecuteProductTopScreenHook(uint32_t pc, oot3d::recomp::a32::GuestState &state,

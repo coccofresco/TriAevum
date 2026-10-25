@@ -3,7 +3,11 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-dependencies { testImplementation("junit:junit:4.13.2") }
+dependencies {
+    // The Azahar touch overlay (ports/android/controls).
+    implementation(project(":controls"))
+    testImplementation("junit:junit:4.13.2")
+}
 
 // Native compilation is a separate incremental build, never a Gradle side effect.
 val sdlSource = providers.gradleProperty("triaevumSdlSource")
