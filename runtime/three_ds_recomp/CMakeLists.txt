@@ -240,6 +240,9 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
 				COMMAND ${CMAKE_COMMAND}
 					-DNRI_SOURCE_DIR=${THREE_DS_RECOMP_NRI_SOURCE_DIR}
 					-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/oot3d_nri_unbound_color_attachments.cmake
+				COMMAND ${CMAKE_COMMAND}
+					-DNRI_SOURCE_DIR=${THREE_DS_RECOMP_NRI_SOURCE_DIR}
+					-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/nri_destroy_lifetime.cmake
 				COMMAND_ERROR_IS_FATAL ANY)
 		else()
 			FetchContent_Declare(nri
@@ -271,6 +274,9 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
 				COMMAND ${CMAKE_COMMAND}
 					-DNRI_SOURCE_DIR=<SOURCE_DIR>
 					-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/oot3d_nri_unbound_color_attachments.cmake
+				COMMAND ${CMAKE_COMMAND}
+					-DNRI_SOURCE_DIR=<SOURCE_DIR>
+					-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/nri_destroy_lifetime.cmake
 			)
 		endif()
 		if(ANDROID AND CMAKE_HOST_WIN32 AND THREE_DS_RECOMP_ENABLE_NRI_NIS)
