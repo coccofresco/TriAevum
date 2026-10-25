@@ -14,7 +14,7 @@ import json
 import sys
 from pathlib import Path
 
-RELEASE = Path("I:/TriAevum-devwarp/tools/triaevum_release")
+RELEASE = Path(__file__).resolve().parents[5] / "triaevum_release"
 sys.path.insert(0, str(RELEASE))
 sys.path.insert(0, str(RELEASE.parents[1]))
 

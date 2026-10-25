@@ -10,7 +10,9 @@ use std::path::{Path, PathBuf};
 use forge_base::fsutil::load_json_object;
 use forge_base::hashing::sha256_hex;
 use forge_base::{CancelToken, ErrorKind, ForgeError, Result};
+use forge_catalog::{host_platform, ReleasePlatform};
 use forge_core::install::{install_private_title, AndroidTarget, InstallRequest, InstallSource, InstallTarget};
+use forge_core::layout::{installation_state, HostOs};
 use forge_core::publish::standard_topscreen;
 use forge_native::{
     DeviceJob, InteriorSunRequest, NativeOutput, NativeServices, PortableCompile, RendererPassRequest, Report,
@@ -19,9 +21,13 @@ use forge_native::{
 use serde_json::{json, Value};
 
 const RECIPE: &str = "fixture-eur";
-const TARGET: &str = "x86_64-pc-windows-msvc";
 const ANDROID: &str = "aarch64-linux-android";
 const NONE: u32 = 0xFFFF_FFFF;
+
+/// The desktop package targets the host, whose runtime Forge installs.
+fn host() -> ReleasePlatform {
+    host_platform().unwrap()
+}
 
 /// A valid ExHeader (three one-page segments at 0x100000), 2048 bytes.
 fn exheader() -> Vec<u8> {
@@ -129,16 +135,16 @@ impl Fixture {
             json!({
             "format": "triaevum_precompiled_titles_v1",
             "install_model": "precompiled_title_rom_import_v1",
-            "target": TARGET,
-            "runtime": artifact("runtime/TriAevum.exe", b"fake runtime"),
-            "native_module": artifact("forge/oot3d_game_module.dll", b"MZ fake native module"),
+            "target": host().target,
+            "runtime": artifact(host().runtime, b"fake runtime"),
+            "native_module": artifact(host().native_module, b"MZ fake native module"),
             "titles": [{
                 "recipe": RECIPE,
                 "inputs": inputs,
                 "abi_version": 2,
-                "target": TARGET,
+                "target": host().target,
                 "translator_identity_sha256": "7".repeat(64),
-                "plugin": artifact(&format!("titles/{RECIPE}/triaevum_title_aot.dll"), b"MZ fake title plugin"),
+                "plugin": artifact(&format!("titles/{RECIPE}/{}", host().title_module), b"MZ fake title plugin"),
             }],
             })
         };
@@ -146,6 +152,11 @@ impl Fixture {
         std::fs::create_dir_all(package.join("resources")).unwrap();
         let android = android.then(|| (native, root.join("external-files")));
         Self { _directory: directory, package, extracted, android }
+    }
+
+    /// Windows keeps the launch profile in data/, Linux beside the runtime.
+    fn launch_profile(&self) -> PathBuf {
+        installation_state(&self.package, HostOs::current()).join("TriAevum.launch.json")
     }
 
     fn data(&self) -> PathBuf {
@@ -203,7 +214,7 @@ impl NativeServices for FakeRuntime {
     }
 
     fn prebuild_interior_sun(&self, request: &InteriorSunRequest, _: &CancelToken) -> Result<NativeOutput> {
-        assert!(request.runtime.ends_with("runtime/TriAevum.exe") || request.runtime.ends_with("libTriAevum.so"));
+        assert!(request.runtime.ends_with(host().runtime) || request.runtime.ends_with("libTriAevum.so"));
         let relative = "shadow-shells/0000000000000001.bin";
         let mut shell = b"RSSH".to_vec();
         shell.extend(3u32.to_le_bytes());
@@ -269,19 +280,19 @@ fn installs_the_precompiled_title_and_publishes_the_runtime() {
     let data = fixture.data();
     assert!(hidden_entries(&data).is_empty(), "staging removed");
     let plugin_sha = sha256_hex(b"MZ fake title plugin");
-    let generation = fixture.package.join("private-plugins").join(&plugin_sha).join("triaevum_title_aot.dll");
+    let generation = fixture.package.join("private-plugins").join(&plugin_sha).join(host().title_module);
     assert_eq!(std::fs::read(&generation).unwrap(), b"MZ fake title plugin");
     assert_eq!(*runtime.plugin_queries.borrow(), std::slice::from_ref(&generation));
     // The packaged runtime was placed in the installation root.
-    assert!(fixture.package.join("TriAevum.exe").is_file());
-    assert!(!fixture.package.join("runtime/TriAevum.exe").exists());
+    assert!(fixture.package.join(host().installed_runtime).is_file());
+    assert!(host().runtime == host().installed_runtime || !fixture.package.join(host().runtime).exists());
 
-    let profile = load_json_object(&data.join("TriAevum.launch.json")).unwrap();
+    let profile = load_json_object(&fixture.launch_profile()).unwrap();
     assert_eq!(profile["format"], "oot3d_native_game_launch_profile_v1");
     let arguments: Vec<&str> = profile["arguments"].as_array().unwrap().iter().map(|a| a.as_str().unwrap()).collect();
     assert_eq!(
         arguments[0..2],
-        ["--title-plugin", &format!("${{runtime_dir}}/private-plugins/{plugin_sha}/triaevum_title_aot.dll")]
+        ["--title-plugin", &format!("${{runtime_dir}}/private-plugins/{plugin_sha}/{}", host().title_module)]
     );
     assert_eq!(arguments[4..6], ["--resource-root", "${runtime_dir}/resources"]);
     // A plain package is its own activation: its data is a runtime_dir path.
@@ -296,14 +307,13 @@ fn installs_the_precompiled_title_and_publishes_the_runtime() {
             .unwrap();
     let receipt = &state["runtime"];
     assert_eq!(receipt["backend"], "generated_cpp_whole_aot_plugin_v2");
-    assert_eq!(receipt["target"], TARGET);
+    assert_eq!(receipt["target"], host().target);
     assert_eq!(receipt["runtime_sha256"], sha256_hex(b"fake runtime"));
     assert_eq!(receipt["plugin_sha256"], plugin_sha);
-    assert_eq!(receipt["launch_profile"], "../../../TriAevum.launch.json");
-    assert_eq!(
-        receipt["launch_profile_sha256"],
-        sha256_hex(&std::fs::read(data.join("TriAevum.launch.json")).unwrap())
-    );
+    let profile_reference =
+        if cfg!(windows) { "../../../TriAevum.launch.json" } else { "../../../../TriAevum.launch.json" };
+    assert_eq!(receipt["launch_profile"], profile_reference);
+    assert_eq!(receipt["launch_profile_sha256"], sha256_hex(&std::fs::read(fixture.launch_profile()).unwrap()));
     assert_eq!(receipt["renderer_cache"]["path"], "../../../cache/renderer");
     assert_eq!(state["module"]["status"], "ready");
 
@@ -358,6 +368,7 @@ fn a_rejected_plugin_rolls_the_publication_back() {
     for created in ["active-title.json", "TriAevum.launch.json", "config/TriAevum.json", "config/topscreen_ui.json"] {
         assert!(!data.join(created).exists(), "{created} rolled back");
     }
+    assert!(!fixture.launch_profile().exists());
     let titles = data.join("titles").join(RECIPE);
     let title = std::fs::read_dir(&titles).unwrap().next().unwrap().unwrap().path();
     assert_eq!(load_json_object(&title.join("forge-state.json")).unwrap()["module"]["status"], "not_built");

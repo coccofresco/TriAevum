@@ -5,7 +5,9 @@
 //! the monitor's work area including the title bar, keep a small fixed
 //! minimum and never grow the minimum to the content, which scrolls instead.
 
-use eframe::egui::{self, pos2, vec2, Rect, Vec2, ViewportCommand};
+#[cfg(any(windows, test))]
+use eframe::egui::pos2;
+use eframe::egui::{self, vec2, Rect, Vec2, ViewportCommand};
 
 pub const INITIAL_SIZE: Vec2 = vec2(720.0, 560.0);
 pub const MIN_SIZE: Vec2 = vec2(360.0, 300.0);

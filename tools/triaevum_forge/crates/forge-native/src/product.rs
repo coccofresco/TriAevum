@@ -109,7 +109,16 @@ fn product_document(stdout: &str) -> std::result::Result<Value, String> {
 /// `Path.resolve(strict=True)`.
 fn resolve_strict(path: &Path) -> Result<PathBuf> {
     if let Err(error) = std::fs::metadata(path) {
-        let spelled = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+        let mut spelled = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+        // POSIX realpath(strict=True) names the first component it cannot
+        // find; Windows names the whole path.
+        if cfg!(unix) {
+            if let Some(missing) = spelled.ancestors().collect::<Vec<_>>().into_iter().rev().find(|prefix| {
+                std::fs::symlink_metadata(prefix).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound)
+            }) {
+                spelled = missing.to_path_buf();
+            }
+        }
         let message = os_error(&error, Some(&spelled));
         return Err(io_failure(error, message));
     }

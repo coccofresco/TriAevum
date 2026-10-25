@@ -24,9 +24,21 @@ pub fn fake_helper_binary() -> PathBuf {
 pub fn install_fake(directory: &Path, name: &str, plan: &Value) -> PathBuf {
     std::fs::create_dir_all(directory).unwrap();
     let path = directory.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
-    std::fs::copy(fake_helper_binary(), &path).unwrap();
+    copy_executable(&fake_helper_binary(), &path);
     set_plan(&path, plan);
     path
+}
+
+/// On Linux a child that another test thread forks while this process holds
+/// the new file open for writing keeps the descriptor until it execs, and
+/// running the file meanwhile fails with ETXTBSY: let `cp` write it.
+fn copy_executable(source: &Path, destination: &Path) {
+    if cfg!(unix) {
+        let status = Command::new("cp").arg(source).arg(destination).status().unwrap();
+        assert!(status.success(), "cp {} failed", source.display());
+    } else {
+        std::fs::copy(source, destination).unwrap();
+    }
 }
 
 pub fn set_plan(helper: &Path, plan: &Value) {

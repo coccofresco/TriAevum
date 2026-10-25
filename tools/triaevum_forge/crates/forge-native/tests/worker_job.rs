@@ -6,8 +6,11 @@
 
 mod common;
 
-use std::io::{BufRead, BufReader, Read};
+#[cfg(windows)]
+use std::io::Read;
+use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
+#[cfg(windows)]
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 

@@ -15,7 +15,7 @@ import urllib.error
 from pathlib import Path
 from unittest.mock import patch
 
-RELEASE = Path("I:/TriAevum-devwarp/tools/triaevum_release")
+RELEASE = Path(__file__).resolve().parents[5] / "triaevum_release"
 sys.path.insert(0, str(RELEASE))
 sys.path.insert(0, str(RELEASE.parents[1]))
 

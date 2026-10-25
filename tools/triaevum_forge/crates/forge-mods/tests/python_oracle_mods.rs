@@ -108,7 +108,7 @@ fn level3_fixture_builder_matches_python() {
     let script = directory.path().join("level3.py");
     fs::write(
         &script,
-        "import sys, json\nfrom pathlib import Path\nsys.path.insert(0, 'I:/TriAevum-devwarp/tools/triaevum_release')\n\
+        "import sys, json\nfrom pathlib import Path\nsys.path.insert(0, sys.argv[3])\n\
          import test_romfs_mods as t\nfiles = {k: bytes.fromhex(v) for k, v in json.loads(Path(sys.argv[1]).read_text()).items()}\n\
          Path(sys.argv[2]).write_bytes(t.build_level3(files))\n",
     )
@@ -117,7 +117,8 @@ fn level3_fixture_builder_matches_python() {
     let input = directory.path().join("files.json");
     fs::write(&input, serde_json::to_vec(&files).unwrap()).unwrap();
     let output = directory.path().join("level3.bin");
-    let status = Command::new(&python).arg("-I").arg(&script).arg(&input).arg(&output).status().unwrap();
+    let release = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../triaevum_release");
+    let status = Command::new(&python).arg("-I").arg(&script).arg(&input).arg(&output).arg(&release).status().unwrap();
     assert!(status.success());
     assert_eq!(fs::read(&output).unwrap(), build_level3(&fixtures.base_files));
 }
