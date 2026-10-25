@@ -510,6 +510,10 @@ InputFrame ResolveInput(const MappingConfig& config,
 
 std::int16_t ConvertHostAxisToNative(std::int16_t value,
                                      std::int32_t deadZonePercent) noexcept;
+// Applies the dead zone to the stick vector's length, so directions near an
+// axis keep their speed and square-gate diagonals do not exceed full range.
+AxisInputSample ConvertHostStickToNative(
+    std::int16_t x, std::int16_t y, std::int32_t deadZonePercent) noexcept;
 
 class AxisInputAccumulator {
   public:

@@ -1032,6 +1032,31 @@ std::int16_t ConvertHostAxisToNative(std::int16_t value,
     return static_cast<std::int16_t>(signedValue < 0 ? -scaled : scaled);
 }
 
+// Radial dead zone after Ocarina ReTuned (OTPR26/Ocarina-ReTuned c43fff59).
+AxisInputSample ConvertHostStickToNative(
+    std::int16_t x, std::int16_t y, std::int32_t deadZonePercent) noexcept {
+    constexpr double kHostAxisMaximum = 32767.0;
+    const double unitX =
+        std::clamp(static_cast<double>(x), -kHostAxisMaximum,
+                   kHostAxisMaximum) / kHostAxisMaximum;
+    const double unitY =
+        std::clamp(static_cast<double>(y), -kHostAxisMaximum,
+                   kHostAxisMaximum) / kHostAxisMaximum;
+    const double magnitude = std::hypot(unitX, unitY);
+    const double deadZone = std::clamp(deadZonePercent, 0, 99) / 100.0;
+    if (magnitude <= deadZone) {
+        return {};
+    }
+    const double scale = (std::min(magnitude, 1.0) - deadZone) /
+                         (1.0 - deadZone) *
+                         static_cast<double>(kNativeStickMaximum) /
+                         magnitude;
+    return {
+        static_cast<std::int16_t>(std::lround(unitX * scale)),
+        static_cast<std::int16_t>(std::lround(unitY * scale)),
+    };
+}
+
 InputFrame ResolveInput(const MappingConfig& config,
                         const PhysicalInputState& physical,
                         const DigitalState& digital,
@@ -1041,20 +1066,18 @@ InputFrame ResolveInput(const MappingConfig& config,
                         VirtualMotionState* virtualMotion) noexcept {
     InputFrame frame;
     const auto digitalChannels = ResolveDigitalChannels(digital);
-    const std::int16_t analogX = ConvertHostAxisToNative(
+    const auto analog = ConvertHostStickToNative(
         SelectConfiguredStickAxis(config.CirclePadSource,
                                   physical.LeftStickX,
                                   physical.RightStickX),
-        config.CirclePadDeadZonePercent);
-    const std::int16_t analogY = ConvertHostAxisToNative(
         SelectConfiguredStickAxis(config.CirclePadSource,
                                   physical.LeftStickY,
                                   physical.RightStickY),
         config.CirclePadDeadZonePercent);
     frame.Hid.CirclePadX = SelectAxisWithGreaterMagnitude(
-        digitalChannels.CirclePadX, analogX);
+        digitalChannels.CirclePadX, analog.X);
     frame.Hid.CirclePadY = SelectAxisWithGreaterMagnitude(
-        digitalChannels.CirclePadY, analogY);
+        digitalChannels.CirclePadY, analog.Y);
     frame.Hid.Buttons = digitalChannels.Buttons;
 
     const auto rawCStick = ResolveRawCStick(config, physical);

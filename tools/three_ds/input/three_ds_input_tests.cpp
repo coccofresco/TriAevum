@@ -604,6 +604,31 @@ int main() try {
                     -kNativeStickMaximum,
             "host analog conversion does not preserve the native range");
 
+    const auto belowDeadZone = ConvertHostStickToNative(5000, 5000, 25);
+    const auto nearAxis = ConvertHostStickToNative(32767, 9000, 25);
+    const auto squareCorner = ConvertHostStickToNative(32767, -32768, 25);
+    const auto cornerLength = std::hypot(
+        static_cast<double>(squareCorner.X),
+        static_cast<double>(squareCorner.Y));
+    Require(belowDeadZone.X == 0 && belowDeadZone.Y == 0 &&
+                nearAxis.X > 140 && nearAxis.Y > 0 &&
+                squareCorner.X == -squareCorner.Y &&
+                cornerLength <= kNativeStickMaximum + 0.5 &&
+                cornerLength >= kNativeStickMaximum - 1.0,
+            "circle pad dead zone is not radial");
+    for (int degrees = 0; degrees < 360; degrees += 5) {
+        const double radians = degrees * 3.14159265358979323846 / 180.0;
+        const auto full = ConvertHostStickToNative(
+            static_cast<std::int16_t>(std::lround(32767.0 * std::cos(radians))),
+            static_cast<std::int16_t>(std::lround(32767.0 * std::sin(radians))),
+            18);
+        const auto length = std::hypot(static_cast<double>(full.X),
+                                       static_cast<double>(full.Y));
+        Require(length >= kNativeStickMaximum - 1.0 &&
+                    length <= kNativeStickMaximum + 1.0,
+                "full circle pad deflection lost range at some angle");
+    }
+
     return 0;
 } catch (const std::exception& error) {
     std::cerr << "three_ds_recomp_input_tests: " << error.what() << '\n';
