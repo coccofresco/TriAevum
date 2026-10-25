@@ -432,6 +432,32 @@ int main(int argc, char** argv) {
                 serializedControls.find("motion_sensitivity") == std::string::npos,
             "programmatic camera profile or serialization retained motion routing");
 
+    // Lower-screen renders on the upper target: the relocated frontend (40 px
+    // margins), a widened page (the whole canvas) and Reframed's file
+    // interface (0.7 on the left).
+    {
+      constexpr auto frontend = TopScreenTouchSurfaceForViewport(0, 40, 480, 320, 480);
+      static_assert(frontend.X == 40.0F && frontend.Y == 0.0F && frontend.Width == 320.0F &&
+                    frontend.Height == 240.0F);
+      constexpr auto halfHeight = TopScreenTouchSurfaceForViewport(0, 40, 240, 320, 240);
+      static_assert(halfHeight.X == 40.0F && halfHeight.Y == 0.0F && halfHeight.Height == 240.0F);
+      constexpr auto wide = TopScreenTouchSurfaceForViewport(0, 0, 480, 400, 480);
+      static_assert(wide.X == 0.0F && wide.Width == 400.0F && wide.Height == 240.0F);
+      constexpr auto reframed = TopScreenTouchSurfaceForViewport(56, 164, 336, 224, 480);
+      static_assert(reframed.X == 12.0F && reframed.Y == 44.0F && reframed.Width == 224.0F &&
+                    reframed.Height == 168.0F);
+    }
+    // Reframed's file interface on a 1200 x 720 picture.
+    const NativeA32TouchSurface interfaceSurface{12.0F, 44.0F, 224.0F, 168.0F};
+    RequireTouch(MapHostPointerToNativeA32Touch(36, 132, 1200, 720, true,
+                                                NativeA32TouchPresentation::TopScreen400x240, &interfaceSurface),
+                 true, true, 0, 0, "the interface origin did not map to native touch");
+    RequireTouch(MapHostPointerToNativeA32Touch(372, 384, 1200, 720, true,
+                                                NativeA32TouchPresentation::TopScreen400x240, &interfaceSurface),
+                 true, true, 160, 120, "the interface center did not map to native touch");
+    RequireTouch(MapHostPointerToNativeA32Touch(900, 300, 1200, 720, true,
+                                                NativeA32TouchPresentation::TopScreen400x240, &interfaceSurface),
+                 false, false, 0, 0, "a touch beside the interface reached the touch screen");
     RequireTouch(MapHostPointerToNativeA32Touch(160, 0, 1280, 720, true),
                  true, true, 0, 0,
                  "720p presentation origin did not map to native touch");

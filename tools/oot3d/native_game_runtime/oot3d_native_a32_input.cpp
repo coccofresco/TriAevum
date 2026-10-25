@@ -344,7 +344,8 @@ NativeA32InputFrame MapNativeControlInput(
 NativeA32TouchMapping MapHostPointerToNativeA32Touch(
     int32_t pointerX, int32_t pointerY, uint32_t hostWidth,
     uint32_t hostHeight, bool pointerPressed,
-    NativeA32TouchPresentation presentation) noexcept {
+    NativeA32TouchPresentation presentation,
+    const NativeA32TouchSurface *surface) noexcept {
     const float presentationWidth =
         presentation == NativeA32TouchPresentation::TopScreen400x240
             ? static_cast<float>(NativeA32TopScreenWidth)
@@ -356,6 +357,14 @@ NativeA32TouchMapping MapHostPointerToNativeA32Touch(
     const auto logical = Oot3d::Renderer::MapUiPresentationPoint(
         hostWidth, hostHeight, presentationWidth, presentationHeight,
         static_cast<float>(pointerX), static_cast<float>(pointerY));
+    if (surface != nullptr && surface->Width > 0.0F && surface->Height > 0.0F) {
+        const float x = logical.X - surface->X;
+        const float y = logical.Y - surface->Y;
+        return ThreeDsRecomp::Input::MapPresentationPointToTouch(
+            x, y, surface->Width, surface->Height,
+            logical.Inside && x >= 0.0F && y >= 0.0F && x < surface->Width && y < surface->Height,
+            pointerPressed);
+    }
     return ThreeDsRecomp::Input::MapPresentationPointToTouch(
         logical.X, logical.Y, presentationWidth, presentationHeight,
         logical.Inside, pointerPressed);

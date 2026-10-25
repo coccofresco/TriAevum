@@ -137,9 +137,13 @@ bool ExecuteTopScreenUiSourcePortBlock(
     }
     const bool routeActive = Oot3dNativeGame::ResolveTopScreenPauseRouteActive(
         inputs, &dispatch.TopScreenPauseRoute);
+    // SingleScreen clears the touch state while its lower screen is hidden.
+    // A touch the host mapped onto the visible page (file selection, pause
+    // pages) is kept; the route state still advances.
     if (Oot3dNativeGame::ResolveTopScreenTouchCoordinateSuppression(
             inputs, routeActive, pauseCameraControl != 0U, secondaryLayer == 1U,
             &dispatch.TopScreenTouchCoordinateRoute) &&
+        !dispatch.TopScreenHostTouchPage &&
         !Oot3dNativeGame::ApplyTopScreenTouchCoordinateSuppression(memory)) {
       return false;
     }

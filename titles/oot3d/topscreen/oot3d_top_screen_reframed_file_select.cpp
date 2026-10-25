@@ -240,7 +240,8 @@ bool TopScreenReframedFileSelect::Begin(std::uint32_t pc,
         if (callback != 0U) Call(callback, {context});
       };
       Call(kPassStage5, {argument});
-      Viewport(56U, 164, 336U, 224);
+      Viewport(static_cast<std::uint32_t>(kReframedFileInterfaceViewport[0]), kReframedFileInterfaceViewport[1],
+               static_cast<std::uint32_t>(kReframedFileInterfaceViewport[2]), kReframedFileInterfaceViewport[3]);
       // Reframed excludes Back's corner (54..109 x 346..399) with an exclude
       // scissor, which the host renderer does not emulate. Two disjoint
       // include scissors cover the rest of the interface viewport instead.

@@ -553,6 +553,9 @@ struct NativeWidescreenProjectionState {
   std::optional<uint32_t> *ObservedExitPc = nullptr;
   std::optional<Oot3dNativeGame::TopScreenPauseTargetPlan>
       PendingTopScreenPauseTarget;
+  // Where the last relocated lower-screen menu was drawn on the upper target:
+  // touches on its page map through that rectangle.
+  std::optional<Oot3dNativeGame::NativeA32TouchSurface> TopScreenLowerMenuTouchSurface;
   uint32_t PendingTopScreenPauseRenderer = 0U;
   uint64_t TopScreenPauseTargetObservations = 0U;
   uint64_t TopScreenPauseTargetCommands = 0U;
@@ -661,6 +664,9 @@ struct NativeCandidateDispatchState {
   Oot3dNativeGame::TopScreenPauseRouteState TopScreenAotPauseRoute;
   Oot3dNativeGame::TopScreenTouchCoordinateRouteState
       TopScreenTouchCoordinateRoute;
+  // The host maps the pointer onto the visible native page this refresh: the
+  // touch then belongs to that page, not to SingleScreen's hidden lower screen.
+  bool TopScreenHostTouchPage = false;
   Oot3dNativeGame::TopScreenRendererVisibilityRouteState
       TopScreenRendererVisibilityRoute;
   uint32_t TopScreenGameOverDrawPhase = 0U;
@@ -774,6 +780,7 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
                    bool hostGuiVisible,
                    bool topScreenUiProfile,
                    bool topScreenFreeCameraEnabled,
+                   const Oot3dNativeGame::NativeA32TouchSurface *topScreenTouchSurface,
                    Oot3dNativeGame::NativeControlConfigRuntime &controls,
                    const Oot3dNativeGame::NativeAimProfileTransform
                        &aimTransform,

@@ -509,6 +509,11 @@ void ApplyNativeWidescreenProjectionPolicy(
         }
         if (plan.Handled && plan.BindTopTarget &&
             !Oot3dNativeGame::TopScreenReframedFileSelect::Active(*runtime.TraceMemory)) {
+          if (state.r[1] == 0x401U)
+            runtime.TopScreenLowerMenuTouchSurface = Oot3dNativeGame::TopScreenTouchSurfaceForViewport(
+                static_cast<int32_t>(plan.ViewportX), static_cast<int32_t>(plan.ViewportY),
+                static_cast<int32_t>(plan.ViewportWidth), static_cast<int32_t>(plan.ViewportHeight),
+                halfHeight != 0U ? 240 : 480);
           runtime.PendingTopScreenPauseTarget = plan;
           runtime.PendingTopScreenPauseRenderer = state.r[0];
           ++runtime.TopScreenPauseTargetCommands;

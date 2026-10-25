@@ -28,6 +28,10 @@ inline constexpr std::uint32_t kReframedFileFinishCall = 0x0030055CU;     // pas
 inline constexpr std::uint32_t kReframedFileLeatherBlock = 0x0041EE38U;   // board draw at 0x0041EE50
 inline constexpr std::uint32_t kReframedFileBoardReturn = 0x00433810U;    // after 0x002F9A1C
 
+// The lower file interface replay's viewport on the rotated upper target (x,
+// y, width, height; 480-texel doubled height): the touch screen is drawn there.
+inline constexpr std::array<std::int32_t, 4> kReframedFileInterfaceViewport{56, 164, 336, 224};
+
 class TopScreenReframedFileSelect {
 public:
   explicit TopScreenReframedFileSelect(NativeA32Memory &memory) : mMemory(memory) {}

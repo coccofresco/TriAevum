@@ -198,11 +198,34 @@ IsTopScreenStartRoutingMode(std::uint32_t nativeGameMode) noexcept {
   return nativeGameMode == 0U;
 }
 
+// The native touch screen's rectangle on the presentation canvas, when a
+// TopScreen page draws it smaller than the whole canvas (canvas units).
+struct NativeA32TouchSurface {
+    float X = 0.0F;
+    float Y = 0.0F;
+    float Width = 0.0F;
+    float Height = 0.0F;
+};
+
+// The touch screen's rectangle on the 400 x 240 upper canvas when a TopScreen
+// page renders the lower screen into a viewport of the rotated upper target:
+// x and width run along the target's height (targetHeight texels, 480 doubled
+// or 240) from its bottom edge, y and height along its 400-texel width from its
+// right edge.
+constexpr NativeA32TouchSurface TopScreenTouchSurfaceForViewport(
+    int32_t x, int32_t y, int32_t width, int32_t height, int32_t targetHeight) noexcept {
+    const float rows = 240.0F / static_cast<float>(targetHeight > 0 ? targetHeight : 480);
+    return {static_cast<float>(400 - (y + height)),
+            static_cast<float>(targetHeight - (x + width)) * rows,
+            static_cast<float>(height), static_cast<float>(width) * rows};
+}
+
 NativeA32TouchMapping MapHostPointerToNativeA32Touch(
     int32_t pointerX, int32_t pointerY, uint32_t hostWidth,
     uint32_t hostHeight, bool pointerPressed,
     NativeA32TouchPresentation presentation =
-        NativeA32TouchPresentation::NativeLowerScreen320x240) noexcept;
+        NativeA32TouchPresentation::NativeLowerScreen320x240,
+    const NativeA32TouchSurface *surface = nullptr) noexcept;
 
 struct NativeA32InputDiagnostics {
     uint32_t SampledFrameCount = 0;

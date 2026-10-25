@@ -13,6 +13,7 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
                    bool hostGuiVisible,
                    bool topScreenUiProfile,
                    bool topScreenFreeCameraEnabled,
+                   const Oot3dNativeGame::NativeA32TouchSurface *topScreenTouchSurface,
                    Oot3dNativeGame::NativeControlConfigRuntime &controls,
                    const Oot3dNativeGame::NativeAimProfileTransform
                        &aimTransform,
@@ -345,7 +346,8 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
         topScreenUiProfile
             ? Oot3dNativeGame::NativeA32TouchPresentation::TopScreen400x240
             : Oot3dNativeGame::NativeA32TouchPresentation::
-                  NativeLowerScreen320x240);
+                  NativeLowerScreen320x240,
+        topScreenTouchSurface);
     frame.Hid.TouchX = touch.X;
     frame.Hid.TouchY = touch.Y;
     frame.Hid.TouchPressed = touch.Pressed;

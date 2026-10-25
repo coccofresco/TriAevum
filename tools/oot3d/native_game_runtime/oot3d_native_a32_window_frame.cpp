@@ -481,6 +481,7 @@ bool NativeA32WindowSession::RunFrame() {
   bool nativeFrontendTouchEnabled = ResolveNativeA32TouchInputEnabled(
       process.Memory(), uiLifecycleBridge,
       nativeCandidateDispatch.TopScreenUiProfile);
+  nativeCandidateDispatch.TopScreenHostTouchPage = nativeFrontendTouchEnabled;
   uint32_t topScreenNativeGameMode = UINT32_MAX;
   const bool topScreenGameplayInputMode =
       process.Memory().Read32(kNativeGameMode, &topScreenNativeGameMode) &&
@@ -512,11 +513,22 @@ bool NativeA32WindowSession::RunFrame() {
       gui->GetMenuOrMenubarVisible() || (f1Window != nullptr && f1Window->IsVisible());
   const bool hostGuiVisible =
       gui->GetMenuOrMenubarVisible() || gui->GetAnyGuiWindowVisible() || inGameMenu.IsOpen();
+  // A touch maps through the rectangle the lower screen is drawn in on the
+  // upper screen: Reframed's file interface on the left, else the relocated
+  // menu's last placement (centred at native width, or widened).
+  const auto &reframedViewport = Oot3dNativeGame::kReframedFileInterfaceViewport;
+  const bool reframedTouch = nativeCandidateDispatch.ReframedFileSelect != nullptr &&
+                             Oot3dNativeGame::TopScreenReframedFileSelect::Active(process.Memory());
+  const auto topScreenTouchSurface =
+      reframedTouch ? std::optional(Oot3dNativeGame::TopScreenTouchSurfaceForViewport(
+                          reframedViewport[0], reframedViewport[1], reframedViewport[2], reframedViewport[3], 480))
+                    : widescreenProjection.TopScreenLowerMenuTouchSurface;
   auto physicalInputFrame =
       PollNativeA32Input(window, presentationPicture, nativeFrontendTouchEnabled,
                          hostGuiVisible,
                          nativeCandidateDispatch.TopScreenUiProfile,
                          activeTopScreenConfig.FreeCameraEnabled,
+                         topScreenTouchSurface ? &*topScreenTouchSurface : nullptr,
                          *controlConfigRuntime, aimProfileTransform,
                          presentationElapsedSeconds,
                          guestRefreshesDue != 0U,
@@ -888,6 +900,7 @@ bool NativeA32WindowSession::SampleGuestRefreshInput(
     nativeFrontendTouchEnabled = ResolveNativeA32TouchInputEnabled(
         process.Memory(), uiLifecycleBridge,
         nativeCandidateDispatch.TopScreenUiProfile);
+    nativeCandidateDispatch.TopScreenHostTouchPage = nativeFrontendTouchEnabled;
     topScreenNativeGameMode = UINT32_MAX;
     const bool refreshedTopScreenGameplayInputMode =
         process.Memory().Read32(kNativeGameMode,
