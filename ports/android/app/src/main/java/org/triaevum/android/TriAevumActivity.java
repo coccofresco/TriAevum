@@ -77,6 +77,9 @@ public final class TriAevumActivity extends SDLActivity {
         touchOverlay = null;
         touchAdapter = null;
         super.onDestroy();
+        // The native game runs once per process (title library, guest memory). When the game
+        // ends, end the process too, so the next launch starts clean instead of reusing it.
+        if (isFinishing()) System.exit(0);
     }
 
     /**
