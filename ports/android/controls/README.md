@@ -70,8 +70,8 @@ overlay's: it reaches the game surface with its own pointer id, so menus, the
 On desktop, `TRIAEVUM_TOUCH_ANCHORS` simulates the overlay's layout.
 
 The overlay owns and saves its settings (shown, opacity, size, vibration, hide
-with a controller); the in-game menu's Controls tab shows them on Android and
-asks the overlay for changes, layout editing (Done / Reset over the overlay) and
+with a controller); the in-game menu's Controls tab (Android) and F1 > Controls
+> Touch show them and ask the overlay for changes, layout editing (Done / Reset over the overlay) and
 the default layout through `TouchOverlaySettings`
 (`tools/three_ds/input/three_ds_touch_overlay_settings.h`). A game controller
 hides the overlay while that option is on, and the game then draws its whole

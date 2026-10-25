@@ -69,9 +69,11 @@ JNIEXPORT jboolean JNICALL Java_org_triaevum_android_NativeInputBridge_titleDraw
 
 // The overlay's own settings, as it saved them.
 JNIEXPORT void JNICALL Java_org_triaevum_android_NativeInputBridge_reportOverlaySettings(
-    JNIEnv*, jobject, jboolean visible, jint opacity, jint size, jboolean vibration, jboolean hideWithController) {
+    JNIEnv*, jobject, jint appliedRevision, jboolean visible, jint opacity, jint size, jboolean vibration,
+    jboolean hideWithController) {
     ThreeDsRecomp::Input::OverlayTouchSettings().Report(
-        {visible == JNI_TRUE, opacity, size, vibration == JNI_TRUE, hideWithController == JNI_TRUE});
+        {visible == JNI_TRUE, opacity, size, vibration == JNI_TRUE, hideWithController == JNI_TRUE},
+        static_cast<std::uint32_t>(appliedRevision));
 }
 
 // The host menu's requests: revision, visible, opacity, size, vibration,

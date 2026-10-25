@@ -6,6 +6,7 @@
 #include "oot3d_photo_mode_panel.h"
 #include "oot3d_game_language_panel.h"
 #include "oot3d_savestate_panel.h"
+#include "three_ds_touch_overlay_settings.h"
 #include "oot3d_scene_environment.h"
 #include "oot3d_scene_environment_codec.h"
 #include "fast/extension/world_debug_lines.h"
@@ -276,6 +277,38 @@ void CheckControlPersistence() {
     Check(LoadTopScreenUiConfig(root / "topscreen.json", &savedTop) && savedTop.QuickPutAway &&
               savedTop.RollDash && savedTop.AimingReticle && savedTop.Rain3d,
           "Gameplay options could not be turned on again");
+    // Touch: the overlay's own settings are disabled until an overlay reports
+    // them, then each change is a request; a report older than the request
+    // keeps the requested value. The HUD-on-controls option saves with the
+    // TopScreen controls.
+    {
+      auto &overlay = ThreeDsRecomp::Input::OverlayTouchSettings();
+      Click("Touch");
+      Frame();
+      Check(Find("Touch controls").Disabled, "touch settings enabled without an overlay");
+      overlay.Report({});
+      Frame();
+      Check(!Find("Touch controls").Disabled, "touch settings disabled with an overlay");
+      Click("Touch controls");
+      const auto requests = overlay.PendingRequests();
+      Check(requests.Revision == 1U && !requests.Values.Visible && !overlay.Values().Visible,
+            "Touch controls did not request hiding the overlay");
+      overlay.Report({});
+      Check(!overlay.Values().Visible, "a stale overlay report undid the request");
+      overlay.Report(requests.Values, requests.Revision);
+      Click("Edit layout");
+      Click("Reset layout");
+      Check(overlay.PendingRequests().EditLayoutSerial == 1U && overlay.PendingRequests().ResetLayoutSerial == 1U,
+            "layout editing or reset was not requested");
+      const bool touchLayout = top->Snapshot().Config.TouchLayout;
+      Click("Game HUD on the controls");
+      Check(top->Snapshot().Config.TouchLayout != touchLayout, "HUD on the controls did not preview");
+      Click("Save controls");
+      Check(LoadTopScreenUiConfig(root / "topscreen.json", &savedTop) && savedTop.TouchLayout != touchLayout,
+            "Save controls did not persist HUD on the controls");
+      Click("Game HUD on the controls");
+      Click("Save controls");
+    }
     Click("Camera");
     Click("Enabled##freecam");
     auto externalHud = top->Snapshot().Config;

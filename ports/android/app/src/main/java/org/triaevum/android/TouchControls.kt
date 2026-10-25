@@ -22,7 +22,8 @@ object NativeInputBridge {
     external fun releaseAll()
     external fun controlBounds(anchor: Int, present: Boolean, left: Float, top: Float, right: Float, bottom: Float)
     external fun titleDrawsControls(): Boolean
-    external fun reportOverlaySettings(visible: Boolean, opacity: Int, size: Int, vibration: Boolean,
+    external fun reportOverlaySettings(appliedRevision: Int, visible: Boolean, opacity: Int, size: Int,
+                                       vibration: Boolean,
                                        hideWithController: Boolean)
     external fun overlayRequests(): IntArray
 }
@@ -115,6 +116,7 @@ class TouchOverlayInput : Native3dsInputTarget {
     private fun reportSettings() {
         val preferences = preferences() ?: return
         NativeInputBridge.reportOverlaySettings(
+            appliedRevision,
             preferences.getBoolean(SHOW_OVERLAY, true),
             preferences.getInt(OPACITY, 50),
             preferences.getInt(SCALE, 50) + 50,

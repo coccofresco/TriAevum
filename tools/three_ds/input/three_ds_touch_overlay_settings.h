@@ -31,11 +31,14 @@ class TouchOverlaySettings {
         std::uint32_t ResetLayoutSerial = 0;
     };
 
-    // The overlay: its current values (at start and after any change).
-    void Report(const TouchOverlayValues& values) {
+    // The overlay: its current values (at start and after any change), with
+    // the last request revision it applied. A report older than a pending
+    // request keeps the requested values, so a slider being dragged does not
+    // jump back.
+    void Report(const TouchOverlayValues& values, std::uint32_t appliedRevision = 0) {
         std::lock_guard lock(mMutex);
         mPresent = true;
-        mValues = Clean(values);
+        if (appliedRevision >= mRequests.Revision) mValues = Clean(values);
     }
     // The host menu: a change the overlay applies and reports back.
     void Request(const TouchOverlayValues& values) {

@@ -1,5 +1,6 @@
 #include "oot3d_native_controls_settings_panel.h"
 #include "oot3d_top_screen_control_widgets.h"
+#include "three_ds_touch_overlay_settings.h"
 
 #include <imgui.h>
 
@@ -240,6 +241,7 @@ class NativeControlsSettingsPanel final
         if (mTopScreen) DrawTopScreenGameplay(mTopDraft);
         else ImGui::TextDisabled("TopScreen profile is not active");
       });
+      section("Touch", [&] { DrawTouch(); });
       ImGui::EndTabBar();
     }
     DrawBindingCapture();
@@ -610,6 +612,49 @@ class NativeControlsSettingsPanel final
     if (changed) {
       MarkCustom(mControlDraft, mControlDirty);
     }
+  }
+
+  // The touch overlay owns and saves its settings at once; this asks it for
+  // changes, as the in-game menu does. The HUD-on-controls option is
+  // TopScreen's and saves with the other controls.
+  void DrawTouch() {
+    auto &overlay = ThreeDsRecomp::Input::OverlayTouchSettings();
+    const bool present = overlay.Present();
+    if (!present) ImGui::TextDisabled("This device has no touch controls.");
+    ImGui::BeginDisabled(!present);
+    auto values = overlay.Values();
+    const auto before = values;
+    ImGui::Checkbox("Touch controls", &values.Visible);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Shows the on-screen controls over the game.");
+    ControlWidgets::SliderInt("Opacity##touch", &values.OpacityPercent, 0, 100, "%d%%");
+    ControlWidgets::SliderInt("Size##touch", &values.SizePercent, 50, 200, "%d%%");
+    ImGui::Checkbox("Vibration##touch", &values.Vibration);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("A short vibration when a control is pressed.");
+    ImGui::Checkbox("Hide with a controller", &values.HideWithController);
+    if (ImGui::IsItemHovered())
+      ImGui::SetTooltip("Hides the on-screen controls while a game controller is used; a touch shows them.");
+    if (values != before) {
+      overlay.Request(values);
+      mStatus = "Touch controls saved";
+    }
+    if (ImGui::Button("Edit layout")) {
+      overlay.RequestLayoutEditing();
+      mStatus = "Close F1 to edit the layout";
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Reset layout")) {
+      overlay.RequestLayoutReset();
+      mStatus = "Layout reset";
+    }
+    ImGui::EndDisabled();
+    if (mTopScreen == nullptr) {
+      ImGui::TextDisabled("TopScreen profile is not active");
+      return;
+    }
+    ImGui::Checkbox("Game HUD on the controls", &mTopDraft.TouchLayout);
+    if (ImGui::IsItemHovered())
+      ImGui::SetTooltip("Draws the HUD's own buttons and D-pad inside the on-screen controls and moves the "
+                        "minimap to the top-right corner.");
   }
 
   void DrawFreeCamera() {

@@ -30,6 +30,7 @@ inline void CopyTopScreenControlSettings(const TopScreenUiConfig& source, TopScr
     target.AimingReticle = source.AimingReticle;
     target.Rain3d = source.Rain3d;
     target.Rain3dDensityPercent = source.Rain3dDensityPercent;
+    target.TouchLayout = source.TouchLayout;
 }
 
 // SingleScreen 3.0 gameplay options.
