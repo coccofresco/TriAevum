@@ -12,7 +12,9 @@ crate-type = ["rlib", "staticlib", "cdylib"]
 
 [dependencies]
 forge-base = { path = "../forge-base" }
+forge-prepare = { path = "../forge-prepare" }
 serde_json.workspace = true
+tempfile.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

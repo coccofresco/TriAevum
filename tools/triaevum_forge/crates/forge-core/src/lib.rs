@@ -10,6 +10,9 @@
 
 pub mod abi;
 pub mod jobs;
+pub mod layout;
+pub mod lock;
+pub mod transaction;
 
 pub use forge_base::{cancel, error, fsutil, hashing, legacy_json};
 pub use forge_base::{CancelToken, ErrorKind, ForgeError, Result, LEGACY_TOOL_VERSION};
