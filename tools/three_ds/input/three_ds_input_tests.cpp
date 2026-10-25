@@ -382,12 +382,23 @@ void TestTouchSkin() {
     // A disc covers its centre, not its corner; a ring the reverse of its centre.
     const auto disc = RasterizeTouchSkinShape(TouchSkinShape::Disc);
     const auto ring = RasterizeTouchSkinShape(TouchSkinShape::Ring);
+    const auto thinRing = RasterizeTouchSkinShape(TouchSkinShape::RingThin);
     Require(alpha(disc, 128, 128) == 255U && alpha(disc, 0, 0) == 0U && alpha(ring, 128, 128) == 0U &&
                 alpha(ring, 128, 3) == 255U,
             "the disc or ring coverage is wrong");
+    Require(alpha(thinRing, 128, 128) == 0U && alpha(thinRing, 128, 3) == 255U &&
+                alpha(thinRing, 128, 11) == 0U && alpha(ring, 128, 11) == 255U,
+            "the thin ring lost its outer edge or is not thinner than the regular ring");
     // A pill is 2:1 and fills its middle.
     const auto pill = RasterizeTouchSkinShape(TouchSkinShape::Pill);
     Require(pill.Height == 128U && alpha(pill, 128, 64) == 255U && alpha(pill, 0, 0) == 0U, "the pill is wrong");
+    const auto tab = RasterizeTouchSkinShape(TouchSkinShape::RoundedBox);
+    const auto tabRing = RasterizeTouchSkinShape(TouchSkinShape::RoundedBoxRing);
+    const auto tabShadow = RasterizeTouchSkinShape(TouchSkinShape::RoundedBoxSoft);
+    Require(alpha(tab, 128, 128) == 255U && alpha(tab, 128, 3) == 255U && alpha(tab, 3, 3) == 0U &&
+                alpha(tabRing, 128, 128) == 0U && alpha(tabRing, 128, 3) == 255U &&
+                alpha(tabShadow, 128, 128) == 255U && alpha(tabShadow, 3, 3) == 0U,
+            "rounded tabs lost their body, open rim or rounded corners");
 }
 
 int main() try {

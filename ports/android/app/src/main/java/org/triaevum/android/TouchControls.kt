@@ -252,7 +252,7 @@ class TouchOverlayInput : Native3dsInputTarget {
         /**
          * First run of each layout version: the controls OoT3D uses that the donor hides by default
          * (ZL/ZR, HOME as the menu key), no C-stick (a finger dragging on the game moves the
-         * camera), and SELECT, HOME and START at the top centre. Later changes are the user's.
+         * camera), SELECT/HOME at the top centre and START above A. Later changes are the user's.
          * Runs after the overlay wrote its own defaults; refresh the overlay afterwards.
          */
         fun seedDefaults(activity: Activity) {
@@ -269,10 +269,10 @@ class TouchOverlayInput : Native3dsInputTarget {
         /**
          * TriAevum's landscape layout, in units of the screen's short side: the
          * circle pad low on the left with the D-pad above it, the face buttons
-         * low on the right, L over ZL and R over ZR in the top corners (on a
-         * wide phone the side controls sit mostly in the bars beside the 5:3
-         * picture, clear of the menus' pages), SELECT, HOME and START at the
-         * top centre. The donor stores
+         * low on the right, shallow L/R corner tabs with ZL/ZR below (on a
+         * wide phone the side controls sit mostly in the bars beside the 16:9
+         * picture, clear of the menus' pages), SELECT and HOME at the top
+         * centre, and START in the right bar above A. The donor stores
          * a control's top-left corner in pixels and sizes it as the short side
          * times its scale, adjusted per control by "controlScale-<id>".
          */
@@ -280,36 +280,57 @@ class TouchOverlayInput : Native3dsInputTarget {
                 android.content.SharedPreferences.Editor {
             val metrics = activity.resources.displayMetrics
             val short = minOf(metrics.widthPixels, metrics.heightPixels).toFloat()
-            val aspect = maxOf(metrics.widthPixels, metrics.heightPixels) / short
+            val longPixels = maxOf(metrics.widthPixels, metrics.heightPixels)
+            val aspect = longPixels / short
+            fun pixelSize(base: Float, size: Float): Int {
+                val percent = Math.round(size / base * 100f - 50f)
+                return (short * (base * (percent + 50f) / 100f)).toInt()
+            }
             // id: the position key; scaleId: its size key; base: the donor's scale.
             fun place(id: Int, scaleId: Int, base: Float, size: Float, centerX: Float, centerY: Float) {
                 editor.putInt("controlScale-$scaleId", Math.round(size / base * 100f - 50f))
                 editor.putFloat("$id-X", (centerX - size * 0.5f) * short)
                 editor.putFloat("$id-Y", (centerY - size * 0.5f) * short)
             }
-            val face = 0.122f
-            val spread = 0.104f
+            // About 9 mm on S25; keep the square hit boxes separated as well as the discs.
+            val face = 0.14f
+            val spread = 0.15f
             val faceX = aspect - 0.02f - spread - face * 0.5f
             val faceY = 1f - 0.05f - spread - face * 0.5f
             place(AzaharButtonIds.BUTTON_A, AzaharButtonIds.BUTTON_A, 0.11f, face, faceX + spread, faceY)
             place(AzaharButtonIds.BUTTON_B, AzaharButtonIds.BUTTON_B, 0.11f, face, faceX, faceY + spread)
             place(AzaharButtonIds.BUTTON_X, AzaharButtonIds.BUTTON_X, 0.11f, face, faceX, faceY - spread)
             place(AzaharButtonIds.BUTTON_Y, AzaharButtonIds.BUTTON_Y, 0.11f, face, faceX - spread, faceY)
-            place(AzaharButtonIds.STICK_LEFT, AzaharButtonIds.STICK_LEFT, 0.275f, 0.27f, 0.16f, 0.80f)
-            place(AzaharButtonIds.DPAD_UP, AzaharButtonIds.DPAD, 0.22f, 0.25f, 0.14f, 0.47f)
-            val shoulder = 0.18f
-            place(AzaharButtonIds.TRIGGER_L, AzaharButtonIds.TRIGGER_L, 0.18f, shoulder, 0.03f + shoulder * 0.5f, 0.11f)
-            place(AzaharButtonIds.BUTTON_ZL, AzaharButtonIds.BUTTON_ZL, 0.18f, shoulder, 0.03f + shoulder * 0.5f, 0.29f)
-            place(AzaharButtonIds.TRIGGER_R, AzaharButtonIds.TRIGGER_R, 0.18f, shoulder, aspect - 0.03f - shoulder * 0.5f, 0.11f)
-            place(AzaharButtonIds.BUTTON_ZR, AzaharButtonIds.BUTTON_ZR, 0.18f, shoulder, aspect - 0.03f - shoulder * 0.5f, 0.29f)
-            val system = 0.104f
-            place(AzaharButtonIds.BUTTON_SELECT, AzaharButtonIds.BUTTON_SELECT, 0.08f, system, aspect * 0.5f - 0.13f, 0.052f)
-            place(AzaharButtonIds.BUTTON_HOME, AzaharButtonIds.BUTTON_HOME, 0.08f, system, aspect * 0.5f, 0.052f)
-            place(AzaharButtonIds.BUTTON_START, AzaharButtonIds.BUTTON_START, 0.08f, system, aspect * 0.5f + 0.13f, 0.052f)
+            place(AzaharButtonIds.STICK_LEFT, AzaharButtonIds.STICK_LEFT, 0.275f, 0.275f, 0.1575f, 0.8225f)
+            place(AzaharButtonIds.DPAD_UP, AzaharButtonIds.DPAD, 0.22f, 0.275f, 0.1575f, 0.5175f)
+            val shoulder = 0.16f
+            fun placeShoulderPair(leftId: Int, rightId: Int, edge: Float, top: Float) {
+                place(leftId, leftId, 0.18f, shoulder, edge + shoulder * 0.5f, top + shoulder * 0.5f)
+                place(rightId, rightId, 0.18f, shoulder, aspect - edge - shoulder * 0.5f, top + shoulder * 0.5f)
+                // Mirror the actual integer bitmap bounds, including size quantization.
+                val left = Math.round(edge * short)
+                val y = Math.round(top * short).toFloat()
+                editor.putFloat("$leftId-X", left.toFloat()).putFloat("$leftId-Y", y)
+                editor.putFloat("$rightId-X", (longPixels - left - pixelSize(0.18f, shoulder)).toFloat())
+                    .putFloat("$rightId-Y", y)
+            }
+            placeShoulderPair(AzaharButtonIds.TRIGGER_L, AzaharButtonIds.TRIGGER_R, 0.01f, 0.01f)
+            placeShoulderPair(AzaharButtonIds.BUTTON_ZL, AzaharButtonIds.BUTTON_ZR, 0.025f, 0.195f)
+            val system = 0.14f
+            place(AzaharButtonIds.BUTTON_SELECT, AzaharButtonIds.BUTTON_SELECT, 0.08f, system, aspect * 0.5f - 0.08f, 0.09f)
+            place(AzaharButtonIds.BUTTON_HOME, AzaharButtonIds.BUTTON_HOME, 0.08f, system, aspect * 0.5f + 0.08f, 0.09f)
+            place(AzaharButtonIds.BUTTON_START, AzaharButtonIds.BUTTON_START, 0.08f, system, aspect - 0.02f - system * 0.5f, 0.465f)
+            // Centre the utility pair exactly after the donor's integer size conversion.
+            val systemPixels = pixelSize(0.08f, system)
+            var systemGap = Math.round(short * 0.02f)
+            if ((longPixels - systemGap) % 2 != 0) systemGap++
+            val pairLeft = (longPixels - systemPixels * 2 - systemGap) / 2
+            editor.putFloat("${AzaharButtonIds.BUTTON_SELECT}-X", pairLeft.toFloat())
+                .putFloat("${AzaharButtonIds.BUTTON_HOME}-X", (pairLeft + systemPixels + systemGap).toFloat())
             return editor
         }
 
         private const val SEEDED = "TriAevumTouchControlsLayout"
-        private const val LAYOUT_VERSION = 4
+        private const val LAYOUT_VERSION = 8
     }
 }

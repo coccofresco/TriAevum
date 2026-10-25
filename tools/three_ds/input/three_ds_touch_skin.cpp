@@ -13,13 +13,13 @@ constexpr std::array<std::string_view, static_cast<std::size_t>(TouchSkinShape::
     "disc",    "ring",     "pill",     "pill_ring", "cross",   "cross_ring", "cross_arm",
     "arrow",   "glyph_a",  "glyph_b",  "glyph_x",   "glyph_y", "glyph_l",    "glyph_r",
     "glyph_zl", "glyph_zr", "glyph_start", "glyph_select", "glyph_home", "disc_soft", "pill_soft",
-    "cross_soft", "gloss"};
+    "cross_soft", "gloss", "ring_thin", "rounded_box", "rounded_box_ring", "rounded_box_soft"};
 
 constexpr int kSize = 256;
 // Shapes are laid out in units of the texture's height.
 constexpr float kPixel = 1.0F / static_cast<float>(kSize);
 constexpr float kMargin = 2.0F * kPixel;
-constexpr float kStroke = 0.06F;
+constexpr float kStroke = 0.045F;
 constexpr float kGlyphHalfWidth = 0.065F;
 // The soft shapes fade in over this distance from their edge.
 constexpr float kSoftEdge = 0.14F;
@@ -148,21 +148,31 @@ std::function<float(Point)> ShapeDistance(TouchSkinShape shape) {
     case TouchSkinShape::Disc:
         return [radius](Point p) { return Length(p.X - 0.5F, p.Y - 0.5F) - radius; };
     case TouchSkinShape::Ring:
-        return [radius](Point p) {
-            return std::abs(Length(p.X - 0.5F, p.Y - 0.5F) - (radius - kStroke * 0.5F)) - kStroke * 0.5F;
+    case TouchSkinShape::RingThin: {
+        const float stroke = shape == TouchSkinShape::RingThin ? 0.023F : kStroke;
+        return [radius, stroke](Point p) {
+            return std::abs(Length(p.X - 0.5F, p.Y - 0.5F) - (radius - stroke * 0.5F)) - stroke * 0.5F;
         };
+    }
     case TouchSkinShape::Pill:
         return [radius](Point p) { return SegmentDistance(p, {0.5F, 0.5F}, {1.5F, 0.5F}) - radius; };
     case TouchSkinShape::PillRing:
         return [radius](Point p) {
-            return std::abs(SegmentDistance(p, {0.5F, 0.5F}, {1.5F, 0.5F}) - (radius - kStroke * 0.5F)) -
-                   kStroke * 0.5F;
+            constexpr float stroke = 0.060F;
+            return std::abs(SegmentDistance(p, {0.5F, 0.5F}, {1.5F, 0.5F}) - (radius - stroke * 0.5F)) -
+                   stroke * 0.5F;
         };
     case TouchSkinShape::Cross:
         return CrossDistance;
+    case TouchSkinShape::RoundedBox:
+        return [radius](Point p) { return RoundedBox(p, {0.5F, 0.5F}, radius, radius, 0.18F); };
+    case TouchSkinShape::RoundedBoxRing:
+        return [radius](Point p) {
+            return std::abs(RoundedBox(p, {0.5F, 0.5F}, radius, radius, 0.18F) + kStroke * 0.5F) - kStroke * 0.5F;
+        };
     case TouchSkinShape::CrossRing:
         return [](Point p) {
-            constexpr float stroke = 0.045F;
+            constexpr float stroke = 0.023F;
             return std::abs(CrossDistance(p) + stroke * 0.5F) - stroke * 0.5F;
         };
     case TouchSkinShape::CrossArm:
@@ -213,6 +223,7 @@ std::function<float(Point)> ShapeDistance(TouchSkinShape shape) {
     case TouchSkinShape::DiscSoft:
     case TouchSkinShape::PillSoft:
     case TouchSkinShape::CrossSoft:
+    case TouchSkinShape::RoundedBoxSoft:
     case TouchSkinShape::Gloss:
     case TouchSkinShape::Count:
         break;
@@ -229,6 +240,9 @@ float SoftCoverage(TouchSkinShape shape, Point p) noexcept {
     case TouchSkinShape::DiscSoft: distance = Length(p.X - 0.5F, p.Y - 0.5F) - radius; break;
     case TouchSkinShape::PillSoft: distance = SegmentDistance(p, {0.5F, 0.5F}, {1.5F, 0.5F}) - radius; break;
     case TouchSkinShape::CrossSoft: distance = CrossDistance(p); edge = kSoftEdge * 0.7F; break;
+    case TouchSkinShape::RoundedBoxSoft:
+        distance = RoundedBox(p, {0.5F, 0.5F}, radius, radius, 0.18F);
+        break;
     case TouchSkinShape::Gloss:
         distance = (Length((p.X - 0.5F) / 0.34F, (p.Y - 0.3F) / 0.19F) - 1.0F) * 0.19F;
         edge = 0.12F;
@@ -241,7 +255,7 @@ float SoftCoverage(TouchSkinShape shape, Point p) noexcept {
 
 bool IsSoft(TouchSkinShape shape) noexcept {
     return shape == TouchSkinShape::DiscSoft || shape == TouchSkinShape::PillSoft ||
-           shape == TouchSkinShape::CrossSoft || shape == TouchSkinShape::Gloss;
+           shape == TouchSkinShape::CrossSoft || shape == TouchSkinShape::RoundedBoxSoft || shape == TouchSkinShape::Gloss;
 }
 
 } // namespace

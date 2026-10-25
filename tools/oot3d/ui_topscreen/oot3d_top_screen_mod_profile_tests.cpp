@@ -250,52 +250,294 @@ void TestTouchSkin() {
   };
   std::vector<oot3d::ui::UiPrimitive> idle;
   AppendTopScreenTouchSkin(input, state, idle);
-  // A: disc and ring; ZL (2.0 wide): a pill in three slices and its ring;
+  // A: disc and ring; ZL: a rounded tab and rim;
   // the cross with its outline and four arrows; the pad, its knob and rings;
   // a shadow under each, the letters with theirs.
-  Require(count(idle, "/glyph_a") == 2 && count(idle, "/pill") == 3 && count(idle, "/pill_ring") == 3 &&
-              count(idle, "/pill_soft") == 3 && count(idle, "/cross") == 1 && count(idle, "/cross_soft") == 1 &&
+  Require(count(idle, "/glyph_a") == 2 && count(idle, "/rounded_box") == 3 && count(idle, "/rounded_box_ring") == 3 &&
+              count(idle, "/rounded_box_soft") == 3 && count(idle, "/cross") == 1 && count(idle, "/cross_soft") == 1 &&
               count(idle, "/arrow") == 4 && count(idle, "/disc") == 3 && count(idle, "/disc_soft") == 3 &&
-              count(idle, "/ring") == 3,
+              count(idle, "/ring") == 2 && count(idle, "/ring_thin") == 1,
           "the touch skin drew the wrong shapes");
-  // A shoulder in a square anchor is a pill as wide as the anchor; its HUD
-  // content takes the right end.
+  // Item shoulders use square tabs; primary shoulders are shallow, and
+  // utility bodies are smaller than their full square touch targets.
   {
     const ThreeDsRecomp::Input::TouchAnchorRect square{true, 0.0F, 0.0F, 0.1F, 0.2F};
     const auto shoulder = ResolveTopScreenTouchControlShape(TouchAnchor::Zr, square, 480.0F);
+    const auto primary = ResolveTopScreenTouchControlShape(TouchAnchor::R, square, 480.0F);
     const auto face = ResolveTopScreenTouchControlShape(TouchAnchor::X, square, 480.0F);
-    Require(shoulder.Pill && std::abs(shoulder.Rect.width - 48.0F) < 0.01F &&
-                std::abs(shoulder.Rect.height - 48.0F / 1.8F) < 0.01F &&
-                std::abs(shoulder.ContentX - (48.0F - shoulder.Rect.height * 0.5F)) < 0.01F &&
-                !face.Pill && face.Rect.width == 48.0F && face.ContentX == 24.0F,
+    const auto system = ResolveTopScreenTouchControlShape(TouchAnchor::Home, square, 480.0F);
+    Require(!shoulder.Pill && std::abs(shoulder.Rect.width - 48.0F) < 0.01F &&
+                std::abs(shoulder.Rect.height - 48.0F) < 0.01F &&
+                std::abs(shoulder.ContentX - 24.0F) < 0.01F &&
+                28.0F * shoulder.ContentHalf * 0.9F / 16.0F >= shoulder.Rect.height * 0.875F &&
+                !face.Pill && face.Rect.width == 48.0F && face.ContentX == 24.0F &&
+                !primary.Pill && primary.Rect.y == 0.0F && primary.Rect.height < primary.Rect.width * 0.8F &&
+                !system.Pill && system.Rect.width < 48.0F * 0.8F && system.Rect.height < 48.0F * 0.5F,
             "the control shapes are wrong");
   }
+  {
+    TopScreenTouchSkinInput corners;
+    corners.CanvasWidth = 520.0F;
+    const auto place = [&](TouchAnchor control, int left, int top, int right, int bottom) {
+      corners.Anchors[static_cast<std::size_t>(control)] =
+          {true, left / 2340.0F, top / 1080.0F, right / 2340.0F, bottom / 1080.0F};
+    };
+    place(TouchAnchor::L, 11, 11, 184, 184);
+    place(TouchAnchor::R, 2156, 11, 2329, 184);
+    place(TouchAnchor::Zl, 27, 211, 200, 384);
+    place(TouchAnchor::Zr, 2140, 211, 2313, 384);
+    for (const bool primary : {true, false}) {
+      const auto leftControl = primary ? TouchAnchor::L : TouchAnchor::Zl;
+      const auto rightControl = primary ? TouchAnchor::R : TouchAnchor::Zr;
+      const auto &leftAnchor = corners.Anchors[static_cast<std::size_t>(leftControl)];
+      const auto &rightAnchor = corners.Anchors[static_cast<std::size_t>(rightControl)];
+      const auto left = ResolveTopScreenTouchControlShape(leftControl, leftAnchor, 520.0F);
+      const auto right = ResolveTopScreenTouchControlShape(rightControl, rightAnchor, 520.0F);
+      Require((leftAnchor.Right - leftAnchor.Left) * 2340.0F >= 148.0F &&
+                  (leftAnchor.Bottom - leftAnchor.Top) * 1080.0F >= 148.0F &&
+                  left.Rect.x >= 0.0F && left.Rect.x + left.Rect.width <= 140.0F / 3.0F &&
+                  right.Rect.x >= 1420.0F / 3.0F && right.Rect.x + right.Rect.width <= 520.0F &&
+                  std::abs(left.Rect.x + left.Rect.width + right.Rect.x - 520.0F) < 0.001F &&
+                  std::abs(left.Rect.y - right.Rect.y) < 0.001F,
+              "shoulder targets are too small, asymmetric or cover the picture's HUD area");
+      if (!primary)
+        Require(28.0F * left.ContentHalf * 0.9F / 16.0F >= left.Rect.width * 0.875F,
+                "an item shoulder tab reduced native icon proportions");
+    }
+    const auto &primary = corners.Anchors[static_cast<std::size_t>(TouchAnchor::L)];
+    const auto &secondary = corners.Anchors[static_cast<std::size_t>(TouchAnchor::Zl)];
+    Require(primary.Bottom < secondary.Top && secondary.Bottom < 410.0F / 1080.0F,
+            "shoulder targets overlap each other or the D-pad target");
+    TopScreenTouchContext cornerContext;
+    cornerContext.HudAlpha = 1.0F;
+    cornerContext.Active = true;
+    for (const auto control : {TouchAnchor::L, TouchAnchor::R, TouchAnchor::Zl, TouchAnchor::Zr})
+      cornerContext.Content[static_cast<std::size_t>(control)] = true;
+    TopScreenTouchSkinState cornerState;
+    AdvanceTopScreenTouchSkin(cornerState, cornerContext, 1.0 / 60.0);
+    corners.HeldButtons = ThreeDsRecomp::Input::ButtonMask(ThreeDsRecomp::Input::Button::L) |
+                          ThreeDsRecomp::Input::ButtonMask(ThreeDsRecomp::Input::Button::R);
+    std::vector<oot3d::ui::UiPrimitive> occupied;
+    AppendTopScreenTouchSkin(corners, cornerState, occupied);
+    Require(count(occupied, "/rounded_box") == 18 && count(occupied, "/rounded_box_ring") == 12 &&
+                std::none_of(occupied.begin(), occupied.end(), [](const auto &primitive) {
+                  return primitive.layer >= 12U || primitive.texture.semantic_name.find("/glyph_") != std::string::npos;
+                }),
+            "occupied shoulder tabs lost held feedback or cover native function/item content");
+  }
   for (const auto &primitive : idle)
-    Require(primitive.texture_alpha_only && (primitive.layer < 12U || primitive.layer > 13U),
-            "a skin shape is not tinted coverage around the HUD content layers");
+    Require(primitive.texture_alpha_only && primitive.layer < 12U,
+            "a skin element can cover native HUD content");
+  {
+    const auto cross = std::find_if(idle.begin(), idle.end(), [](const auto &primitive) {
+      return primitive.texture.semantic_name.ends_with("/cross_ring");
+    });
+    const auto pad = std::find_if(idle.begin(), idle.end(), [](const auto &primitive) {
+      return primitive.texture.semantic_name.ends_with("/ring_thin");
+    });
+    Require(cross != idle.end() && pad != idle.end() && cross->color.red == pad->color.red &&
+                cross->color.green == pad->color.green && cross->color.blue == pad->color.blue &&
+                cross->color.red > cross->color.blue,
+            "the pad and D-pad do not share the warm navigation rim");
+    auto transparentInput = input;
+    transparentInput.Opacity = 0.0F;
+    std::vector<oot3d::ui::UiPrimitive> transparent;
+    AppendTopScreenTouchSkin(transparentInput, state, transparent);
+    Require(std::none_of(transparent.begin(), transparent.end(), [](const auto &primitive) {
+              return primitive.visible;
+            }),
+            "the new skin remains visible at zero opacity");
+  }
   // Held A and D-pad up light their control.
   input.HeldButtons = ThreeDsRecomp::Input::ButtonMask(ThreeDsRecomp::Input::Button::A) |
                       ThreeDsRecomp::Input::ButtonMask(ThreeDsRecomp::Input::Button::DpadUp);
   std::vector<oot3d::ui::UiPrimitive> held;
   AppendTopScreenTouchSkin(input, state, held);
   Require(count(held, "/disc") == 4 && count(held, "/cross_arm") == 1, "held buttons are not lit");
-  // Content moves A's letter to a smaller badge over 0.12 s.
+  Require(std::all_of(held.begin(), held.end(), [](const auto &primitive) { return primitive.layer < 12U; }),
+          "a held skin element can cover native HUD content");
+  // Even the first frame of arriving content removes its skin letter.
   TopScreenTouchContext context;
   context.HudAlpha = 1.0F;
   context.Active = true;
   context.Content[static_cast<std::size_t>(TouchAnchor::A)] = true;
-  AdvanceTopScreenTouchSkin(state, context, 0.06);
-  Require(std::abs(state.Badge[static_cast<std::size_t>(TouchAnchor::A)] - 0.5F) < 0.001F, "the badge eases wrongly");
-  AdvanceTopScreenTouchSkin(state, context, 0.5);
+  AdvanceTopScreenTouchSkin(state, context, 1.0 / 60.0);
+  Require(state.Badge[static_cast<std::size_t>(TouchAnchor::A)] == 1.0F, "content did not suppress its label at once");
   std::vector<oot3d::ui::UiPrimitive> badged;
   AppendTopScreenTouchSkin(input, state, badged);
-  const auto letterWidth = [](const std::vector<oot3d::ui::UiPrimitive> &primitives) {
-    for (const auto &primitive : primitives)
-      if (primitive.texture.semantic_name.ends_with("/glyph_a")) return primitive.destination.width;
-    return 0.0F;
-  };
-  Require(state.Badge[static_cast<std::size_t>(TouchAnchor::A)] == 1.0F && letterWidth(badged) < letterWidth(idle) * 0.7F,
-          "content did not move A's letter to a badge");
+  Require(count(badged, "/glyph_a") == 0, "a skin letter overlaps arriving A content");
+  // Native content may overflow the ring. Occupied controls have no skin
+  // letter at all; empty controls restore a large centred letter.
+  for (const auto control : {TouchAnchor::A, TouchAnchor::B, TouchAnchor::X, TouchAnchor::Y}) {
+    const auto index = static_cast<std::size_t>(control);
+    TopScreenTouchSkinInput occupiedInput;
+    occupiedInput.CanvasWidth = 480.0F;
+    occupiedInput.Anchors[index] = {true, 0.4F, 0.4F, 0.5F, 0.6F};
+    TopScreenTouchContext occupiedContext;
+    occupiedContext.Active = true;
+    occupiedContext.HudAlpha = 1.0F;
+    occupiedContext.Content[index] = true;
+    TopScreenTouchSkinState occupiedState;
+    AdvanceTopScreenTouchSkin(occupiedState, occupiedContext, 1.0);
+    std::vector<oot3d::ui::UiPrimitive> occupied;
+    AppendTopScreenTouchSkin(occupiedInput, occupiedState, occupied);
+    const auto shape = ResolveTopScreenTouchControlShape(control, occupiedInput.Anchors[index], 480.0F);
+    Require(std::none_of(occupied.begin(), occupied.end(), [](const auto &primitive) {
+              return primitive.texture.semantic_name.find("/glyph_") != std::string::npos;
+            }) && std::all_of(occupied.begin(), occupied.end(), [](const auto &primitive) {
+              return primitive.layer < 12U;
+            }),
+            "an occupied face control draws a letter or can cover its native content");
+    const auto rim = std::find_if(occupied.begin(), occupied.end(), [](const auto &primitive) {
+      return primitive.layer == 10U;
+    });
+    const auto fill = std::find_if(occupied.begin(), occupied.end(), [](const auto &primitive) {
+      return primitive.layer == 8U;
+    });
+    Require(rim != occupied.end() && fill != occupied.end() && fill->color.alpha > 0.3F &&
+                fill->color.alpha < 0.5F && fill->color.red < 0.1F && fill->color.blue < 0.1F,
+            "the occupied face control lost its translucent dark contrast base");
+    if (control == TouchAnchor::A)
+      Require(rim->color.blue > rim->color.green && rim->color.green > rim->color.red,
+              "A lost its blue accent");
+    else if (control == TouchAnchor::B)
+      Require(rim->color.green > rim->color.red && rim->color.green > rim->color.blue,
+              "occupied B lost its green accent");
+    else
+      Require(rim->color.red > rim->color.green && rim->color.green > rim->color.blue,
+              "occupied X or Y lost its gold accent");
+    const float nativeScale = shape.ContentHalf * 0.9F / 16.0F;
+    Require(28.0F * nativeScale >= shape.Rect.width * 0.875F &&
+                25.2F * nativeScale >= shape.Rect.width * 0.88F &&
+                32.0F * nativeScale > shape.Rect.width &&
+                std::abs(shape.ContentY - (shape.Rect.y + shape.Rect.height * 0.5F)) < 0.01F,
+            "native face content is undersized, clipped to its ring or shifted for a letter");
+    occupiedContext.Content[index] = false;
+    AdvanceTopScreenTouchSkin(occupiedState, occupiedContext, 1.0);
+    std::vector<oot3d::ui::UiPrimitive> empty;
+    AppendTopScreenTouchSkin(occupiedInput, occupiedState, empty);
+    const auto emptyGlyph = std::find_if(empty.begin(), empty.end(), [](const auto &primitive) {
+      return primitive.layer == 11U && primitive.texture.semantic_name.find("/glyph_") != std::string::npos;
+    });
+    Require(emptyGlyph != empty.end() && emptyGlyph->destination.width > shape.Rect.width * 0.4F &&
+                std::abs(emptyGlyph->destination.y + emptyGlyph->destination.height * 0.5F -
+                         (shape.Rect.y + shape.Rect.height * 0.5F)) < 0.01F,
+            "an empty face control did not restore its centred label");
+    if (control != TouchAnchor::A) {
+      const auto emptyRim = std::find_if(empty.begin(), empty.end(), [](const auto &primitive) {
+        return primitive.layer == 10U;
+      });
+      Require(emptyRim != empty.end() && emptyRim->color.alpha < rim->color.alpha &&
+                  std::abs(emptyRim->color.red - 0.78F) < 0.01F &&
+                  std::abs(emptyRim->color.green - 0.80F) < 0.01F &&
+                  std::abs(emptyRim->color.blue - 0.72F) < 0.01F,
+              "an empty item control still looks occupied");
+    }
+  }
+  {
+    // Whole native groups keep their proportions, counts and overflow at
+    // default S25 spacing; no skin primitive can cover any group's content.
+    TopScreenTouchSkinInput nativeInput;
+    nativeInput.CanvasWidth = 520.0F;
+    const auto anchor = [&](TouchAnchor control, int left, int top, int right, int bottom) {
+      nativeInput.Anchors[static_cast<std::size_t>(control)] =
+          {true, left / 2340.0F, top / 1080.0F, right / 2340.0F, bottom / 1080.0F};
+    };
+    anchor(TouchAnchor::A, 2167, 712, 2317, 862);
+    anchor(TouchAnchor::B, 2005, 874, 2155, 1024);
+    anchor(TouchAnchor::X, 2005, 550, 2155, 700);
+    anchor(TouchAnchor::Y, 1843, 712, 1993, 862);
+    anchor(TouchAnchor::Zl, 27, 211, 200, 384);
+    anchor(TouchAnchor::Zr, 2140, 211, 2313, 384);
+    anchor(TouchAnchor::Dpad, 21, 410, 318, 707);
+    const auto nativeQuad = [](std::uint32_t owner, std::uint32_t source, std::uint32_t layer,
+                               oot3d::ui::UiPrimitiveRole role, oot3d::ui::UiRect rect) {
+      oot3d::ui::UiPrimitive primitive;
+      primitive.owner_address = owner;
+      primitive.source_quad = source;
+      primitive.layer = layer;
+      primitive.role = role;
+      primitive.destination = rect;
+      primitive.texture.semantic_name = "oot3d/native/hud";
+      primitive.uv = {0.0F, 0.0F, 1.0F, 1.0F};
+      primitive.color.alpha = 1.0F;
+      primitive.visible = true;
+      return primitive;
+    };
+    constexpr auto touch = oot3d::ui::UiPrimitiveRole::TouchControl;
+    constexpr auto action = oot3d::ui::UiPrimitiveRole::ActionButton;
+    std::vector<oot3d::ui::UiPrimitive> hud{
+        nativeQuad(0x005C9940U, 0U, 12U, touch, {338.0F, 5.0F, 32.0F, 32.0F}),
+        nativeQuad(0x005C9940U, 1U, 12U, touch, {314.0F, 29.0F, 32.0F, 32.0F}),
+        nativeQuad(0x005C9940U, 2U, 12U, touch, {362.0F, 29.0F, 32.0F, 32.0F}),
+        nativeQuad(0x005C9940U, 3U, 12U, touch, {338.0F, 53.0F, 32.0F, 32.0F}),
+        nativeQuad(0x005C9940U, 4U, 12U, touch, {228.0F, 9.0F, 32.0F, 32.0F}),
+        nativeQuad(0x005C9940U, 5U, 12U, touch, {20.5F, 53.0F, 28.0F, 28.0F}),
+        nativeQuad(0U, 100U, 13U, action, {339.4F, 8.2F, 25.2F, 25.2F}),
+        nativeQuad(0U, 101U, 13U, action, {316.0F, 31.0F, 28.0F, 28.0F}),
+        nativeQuad(0U, 102U, 13U, action, {230.0F, 11.0F, 28.0F, 28.0F}),
+        nativeQuad(0x0042B884U, 103U, 13U, action, {268.0F, 20.0F, 32.0F, 10.0F}),
+        nativeQuad(0U, 104U, 13U, action, {360.0F, 27.0F, 12.0F, 8.0F}),
+        nativeQuad(0x005D4A8CU, 200U, 13U, action, {26.5F, 40.0F, 16.0F, 10.0F}),
+        nativeQuad(0x005D4A8CU, 201U, 13U, action, {6.5F, 61.0F, 12.0F, 12.0F}),
+        nativeQuad(0x005D4A8CU, 202U, 13U, action, {50.5F, 61.0F, 12.0F, 12.0F}),
+        nativeQuad(0x005D4A8CU, 203U, 13U, action, {28.5F, 83.0F, 12.0F, 12.0F}),
+    };
+    TopScreenUiConfig nativeConfig;
+    nativeConfig.TouchLayout = true;
+    nativeConfig.HudScale = 1.0F;
+    nativeConfig.HudMarginX = 4;
+    nativeConfig.HudMarginY = 1;
+    const auto native = ExtractTopScreenTouchControls(hud, nativeConfig, nativeInput.Anchors, 520.0F);
+    Require(hud.empty() && native.Primitives.size() == 9U, "native content or counts were lost while enlarging");
+    const auto &item = native.Primitives[0].destination;
+    const auto &word = native.Primitives[3].destination;
+    const auto &number = native.Primitives[4].destination;
+    const auto face = ResolveTopScreenTouchControlShape(TouchAnchor::X,
+        nativeInput.Anchors[static_cast<std::size_t>(TouchAnchor::X)], 520.0F);
+    Require(item.width >= face.Rect.width * 0.88F && word.width > face.Rect.width &&
+                number.x + number.width > face.Rect.x + face.Rect.width &&
+                std::abs(item.width / 25.2F - number.width / 12.0F) < 0.001F,
+            "native icons or counts were shrunk, clipped at the rim or scaled separately");
+    const auto overlaps = [](const auto &a, const auto &b) {
+      return a.x < b.x + b.width && b.x < a.x + a.width &&
+             a.y < b.y + b.height && b.y < a.y + a.height;
+    };
+    for (std::size_t a = 0; a < 4U; ++a)
+      for (std::size_t b = a + 1U; b < 4U; ++b)
+        Require(!overlaps(native.Primitives[a].destination, native.Primitives[b].destination),
+                "enlarged representative face content collides at default spacing");
+    for (std::size_t other = 1; other < 4U; ++other)
+      Require(!overlaps(number, native.Primitives[other].destination), "an enlarged X count overlaps a neighbor");
+    const auto dpad = ResolveTopScreenTouchControlShape(TouchAnchor::Dpad,
+        nativeInput.Anchors[static_cast<std::size_t>(TouchAnchor::Dpad)], 520.0F);
+    Require(native.Primitives[5].destination.width > dpad.Rect.width * 0.34F * 0.9F,
+            "native D-pad arm icons remain too small");
+    TopScreenTouchContext nativeContext;
+    nativeContext.HudAlpha = 1.0F;
+    nativeContext.Active = true;
+    nativeContext.Content = native.Content;
+    nativeContext.Content[static_cast<std::size_t>(TouchAnchor::Zl)] = true;
+    nativeContext.Content[static_cast<std::size_t>(TouchAnchor::Zr)] = true;
+    TopScreenTouchSkinState nativeState;
+    AdvanceTopScreenTouchSkin(nativeState, nativeContext, 1.0 / 60.0);
+    nativeInput.HeldButtons = input.HeldButtons;
+    std::vector<oot3d::ui::UiPrimitive> skin;
+    AppendTopScreenTouchSkin(nativeInput, nativeState, skin);
+    Require(count(skin, "/arrow") == 0 && std::none_of(skin.begin(), skin.end(), [](const auto &primitive) {
+              return primitive.layer >= 12U || primitive.texture.semantic_name.find("/glyph_") != std::string::npos;
+            }),
+            "an occupied letter, arrow or held highlight can cover native content");
+    nativeContext.Content.fill(false);
+    AdvanceTopScreenTouchSkin(nativeState, nativeContext, 0.06);
+    Require(nativeState.Badge[static_cast<std::size_t>(TouchAnchor::X)] > 0.0F,
+            "a disappearing icon restored its letter without the release delay");
+    AdvanceTopScreenTouchSkin(nativeState, nativeContext, 0.2);
+    skin.clear();
+    AppendTopScreenTouchSkin(nativeInput, nativeState, skin);
+    Require(count(skin, "/arrow") == 4 && count(skin, "/glyph_zl") == 2 && count(skin, "/glyph_zr") == 2,
+            "empty D-pad or shoulder controls did not restore their cues");
+  }
   const auto visibility = [&](TouchAnchor control) { return state.Visibility[static_cast<std::size_t>(control)]; };
   // Gameplay: A full, an empty X stepped back.
   Require(visibility(TouchAnchor::A) == 1.0F && std::abs(visibility(TouchAnchor::X) - 0.55F) < 0.001F,
@@ -339,13 +581,102 @@ void TestTouchSkin() {
   context.Situation = TopScreenTouchSituation::Gameplay;
   AdvanceTopScreenTouchSkin(state, context, 0.2);
   Require(visibility(TouchAnchor::A) == 1.0F, "gameplay did not bring the controls back at once");
-  // A menu shows the item controls at 60% and the rest fully; 8 s idle halves
-  // them; the next input restores them.
+  // Menus leave face item controls faint over the equipment column, while
+  // the D-pad stays at 60% and A and the shoulders fully visible in the bars.
   context.Situation = TopScreenTouchSituation::Menu;
   AdvanceTopScreenTouchSkin(state, context, 1.0);
-  Require(std::abs(visibility(TouchAnchor::Dpad) - 0.6F) < 0.001F && std::abs(visibility(TouchAnchor::X) - 0.6F) < 0.001F &&
-              visibility(TouchAnchor::B) == 1.0F,
+  Require(std::abs(visibility(TouchAnchor::Dpad) - 0.6F) < 0.001F &&
+              std::abs(visibility(TouchAnchor::X) - 0.25F) < 0.001F &&
+              std::abs(visibility(TouchAnchor::Y) - 0.25F) < 0.001F &&
+              std::abs(visibility(TouchAnchor::B) - 0.25F) < 0.001F && visibility(TouchAnchor::A) == 1.0F &&
+              visibility(TouchAnchor::L) == 1.0F && visibility(TouchAnchor::R) == 1.0F &&
+              visibility(TouchAnchor::Zl) == 1.0F && visibility(TouchAnchor::Zr) == 1.0F,
           "menu visibility is wrong");
+  for (const auto control : {TouchAnchor::B, TouchAnchor::X, TouchAnchor::Y}) {
+    TopScreenTouchSkinInput menuInput;
+    menuInput.CanvasWidth = 480.0F;
+    menuInput.Anchors[static_cast<std::size_t>(control)] = {true, 0.4F, 0.4F, 0.5F, 0.6F};
+    std::vector<oot3d::ui::UiPrimitive> menu;
+    AppendTopScreenTouchSkin(menuInput, state, menu);
+    Require(std::none_of(menu.begin(), menu.end(), [](const auto &primitive) {
+              return primitive.visible && (primitive.texture.semantic_name.ends_with("/disc") ||
+                                           primitive.texture.semantic_name.ends_with("/disc_soft") ||
+                                           primitive.texture.semantic_name.ends_with("/gloss"));
+            }) && std::any_of(menu.begin(), menu.end(), [](const auto &primitive) {
+              return primitive.visible && primitive.texture.semantic_name.ends_with("/ring") &&
+                     primitive.color.alpha < 0.2F;
+            }),
+            "menu face backgrounds obscure native equipment or their rings disappeared");
+  }
+  for (const auto control : {TouchAnchor::Select, TouchAnchor::Home, TouchAnchor::Start}) {
+    TopScreenTouchSkinInput menuInput;
+    menuInput.CanvasWidth = 480.0F;
+    menuInput.Anchors[static_cast<std::size_t>(control)] = {true, 0.4F, 0.4F, 0.5F, 0.6F};
+    std::vector<oot3d::ui::UiPrimitive> menu;
+    AppendTopScreenTouchSkin(menuInput, state, menu);
+    const float minimumIconAlpha = control == TouchAnchor::Start ? 0.8F : 0.5F;
+    Require(std::none_of(menu.begin(), menu.end(), [](const auto &primitive) {
+              return primitive.layer == 8U && primitive.color.alpha > 0.2F;
+            }) && std::any_of(menu.begin(), menu.end(), [&](const auto &primitive) {
+              return primitive.layer == 11U && primitive.visible && primitive.color.alpha > minimumIconAlpha;
+            }),
+            "menu system controls hide inventory content or lost their readable icons");
+    if (control != TouchAnchor::Start) {
+      const auto icon = std::find_if(menu.begin(), menu.end(), [](const auto &primitive) {
+        return primitive.layer == 11U;
+      });
+      Require(menu.size() == 2U && icon != menu.end(), "menu header controls still draw a capsule");
+      const auto &box = icon->destination;
+      // The icon is contained in the original square target and ends above
+      // its midpoint, leaving the native title text below it unobscured.
+      Require(box.x >= 192.0F && box.x + box.width <= 240.0F && box.y >= 96.0F &&
+                  box.y + box.height < 120.0F,
+              "a compact menu icon escaped its anchor or crossed its title-text region");
+    } else {
+      Require(std::any_of(menu.begin(), menu.end(), [](const auto &primitive) {
+                return primitive.visible && primitive.texture.semantic_name.ends_with("/pill_ring");
+              }),
+              "START lost its discoverable capsule in menus");
+    }
+  }
+  {
+    TopScreenTouchSkinInput headerInput;
+    headerInput.CanvasWidth = 520.0F;
+    headerInput.Anchors[static_cast<std::size_t>(TouchAnchor::Select)] =
+        {true, 0.4307692F, 0.0194444F, 0.4952991F, 0.1592593F};
+    headerInput.Anchors[static_cast<std::size_t>(TouchAnchor::Home)] =
+        {true, 0.5047009F, 0.0194444F, 0.5692308F, 0.1592593F};
+    std::vector<oot3d::ui::UiPrimitive> menu;
+    AppendTopScreenTouchSkin(headerInput, state, menu);
+    Require(menu.size() == 4U && std::all_of(menu.begin(), menu.end(), [](const auto &primitive) {
+              return primitive.destination.y >= 14.0F / 3.0F &&
+                     primitive.destination.y + primitive.destination.height < 50.0F / 3.0F;
+            }),
+            "default menu header controls still cross the file-select banner lettering");
+    auto gameplayState = state;
+    context.Situation = TopScreenTouchSituation::Gameplay;
+    AdvanceTopScreenTouchSkin(gameplayState, context, 1.0);
+    std::vector<oot3d::ui::UiPrimitive> gameplay;
+    AppendTopScreenTouchSkin(headerInput, gameplayState, gameplay);
+    Require(count(gameplay, "/rounded_box_ring") == 6, "menu icons did not restore their gameplay tabs");
+    const auto select = ResolveTopScreenTouchControlShape(TouchAnchor::Select,
+        headerInput.Anchors[static_cast<std::size_t>(TouchAnchor::Select)], 520.0F);
+    const auto home = ResolveTopScreenTouchControlShape(TouchAnchor::Home,
+        headerInput.Anchors[static_cast<std::size_t>(TouchAnchor::Home)], 520.0F);
+    Require(std::abs(select.Rect.x + select.Rect.width * 0.5F + home.Rect.x + home.Rect.width * 0.5F - 520.0F) < 0.001F,
+            "utility bodies are not centred as a pair on the screen midpoint");
+    for (const auto &primitive : gameplay) {
+      Require(primitive.layer < 12U, "a utility tab covers native content");
+      if (primitive.texture.semantic_name.ends_with("/rounded_box_ring"))
+        Require(primitive.color.alpha > 0.4F && primitive.color.alpha < 0.5F &&
+                    primitive.color.red > primitive.color.blue,
+                "utility rims lost their discreet opacity or warm control-family tint");
+      if (primitive.layer == 11U)
+        Require(primitive.color.alpha < 0.6F, "utility glyphs are still as bright as gameplay controls");
+    }
+    context.Situation = TopScreenTouchSituation::Menu;
+  }
+  // Eight seconds idle halves the menu controls; the next input restores them.
   context.Active = false;
   for (int frame = 0; frame < 10; ++frame) AdvanceTopScreenTouchSkin(state, context, 1.0);
   Require(std::abs(visibility(TouchAnchor::A) - 0.5F) < 0.001F, "idle controls did not dim");

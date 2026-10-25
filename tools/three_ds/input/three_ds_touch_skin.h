@@ -41,6 +41,12 @@ enum class TouchSkinShape : std::uint8_t {
     CrossSoft,
     // A soft ellipse in the upper part, for a gloss over a control.
     Gloss,
+    // A lighter rim for larger discs, without changing their outer edge.
+    RingThin,
+    // Rounded tabs: a square texture with quarter-width caps for slicing.
+    RoundedBox,
+    RoundedBoxRing,
+    RoundedBoxSoft,
     Count,
 };
 
