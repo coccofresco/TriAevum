@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TriAevum — Echoes of Time</string>
+
+    <!-- Installer (InstallerActivity, InstallService) -->
+    <string name="forge_title">TriAevum Forge</string>
+    <string name="forge_intro">Select your own decrypted Nintendo 3DS cartridge image (.3ds or .cci). Forge prepares the game on this device, without encryption keys or network access. The first installation takes several minutes. It continues in the background, also while the phone is locked, and shows its progress in a notification.</string>
+    <string name="forge_no_package">This build has no Forge package: it can only play a title prepared beforehand.</string>
+    <string name="forge_cannot_open">The selected file cannot be opened.</string>
+    <string name="forge_package_error">The application\'s Forge package cannot be prepared: %1$s</string>
+    <string name="forge_storage_unavailable">The application\'s storage is unavailable.</string>
+    <string name="forge_refused">Forge refused the request.</string>
+    <string name="forge_selected_file">the selected file</string>
+    <string name="forge_recognizing">Recognizing the ROM…</string>
+    <string name="forge_recognizing_named">Recognizing %1$s…</string>
+    <string name="forge_recognized">ROM recognized: %1$s</string>
+    <string name="forge_languages_later">The game languages are read during the installation. %1$s</string>
+    <string name="forge_languages_note">Install sets up the game in this language. You can change it later here or in game.</string>
+    <string name="forge_ready_to_install">Ready to install.</string>
+    <string name="forge_choose_language">Choose the game language, then install.</string>
+    <string name="forge_not_recognized">ROM not recognized</string>
+    <string name="forge_select_supported">Select a supported decrypted cartridge.</string>
+    <string name="forge_recognition_cancelled">Recognition cancelled.</string>
+    <string name="forge_preparing">Preparing %1$s…</string>
+    <string name="forge_progress">%1$d of %2$d</string>
+    <string name="forge_ready">The title is ready to play.</string>
+    <string name="forge_failed_stage">Stage: %1$s (%2$s)</string>
+    <string name="forge_cancelled">Installation cancelled.</string>
+    <string name="forge_cancelling">Cancelling after the current step…</string>
+    <string name="forge_interrupted">The previous installation stopped before it finished: the app was closed or stopped by the system. Select the ROM and install again; an installed title stays as it was.</string>
+    <string name="forge_game_language">Game language</string>
+    <string name="forge_language_applies">Changes apply on the next full game start.</string>
+    <string name="forge_language_saved">Game language saved. Applies on the next full game start.</string>
+    <string name="forge_select_rom">Select ROM</string>
+    <string name="forge_install">Install</string>
+    <string name="forge_cancel">Cancel</string>
+    <string name="forge_play">Play</string>
+    <string name="forge_saves">Saves</string>
+    <string name="forge_report">Diagnostics</string>
+    <string name="forge_channel_name">Installation</string>
+    <string name="forge_channel_description">Progress of the game installation</string>
+    <string name="forge_notification_title">Preparing the game</string>
+
+    <!-- Save import and export (SavesActivity) -->
+    <string name="saves_title">Saves</string>
+    <string name="saves_intro">Export your game saves to a ZIP file in a place of your choice, or import a ZIP exported by TriAevum or a ZIP of the game\'s own save files (save00.bin and following, system.dat). An import never deletes other saves: it asks first, and the files it replaces are moved to a backup folder.</string>
+    <string name="saves_summary">On this device: %1$d save files, %2$d save states.</string>
+    <string name="saves_export">Export saves</string>
+    <string name="saves_export_states">Export saves and save states</string>
+    <string name="saves_import">Import saves…</string>
+    <string name="saves_exporting">Exporting…</string>
+    <string name="saves_exported">Exported %1$d files.</string>
+    <string name="saves_exported_skipped">Exported %1$d files; %2$d files were left out (too large or not save files).</string>
+    <string name="saves_reading">Checking the archive…</string>
+    <string name="saves_importing">Importing…</string>
+    <string name="saves_confirm_title">Import saves?</string>
+    <string name="saves_confirm_message">The archive holds %1$d save files and %2$d save states. %3$s Other saves stay as they are.</string>
+    <string name="saves_confirm_replaces">%1$d existing files with the same names will be replaced: %2$s. They are moved to a backup folder first (save-backups; the last %3$d imports are kept).</string>
+    <string name="saves_confirm_new">No existing file is replaced.</string>
+    <string name="saves_confirm_import">Import</string>
+    <string name="saves_confirm_cancel">Cancel</string>
+    <string name="saves_imported">Imported %1$d files.</string>
+    <string name="saves_imported_backup">Imported %1$d files. The replaced files are kept in %2$s.</string>
+    <string name="saves_import_cancelled">Import cancelled; nothing changed.</string>
+    <string name="saves_game_running">Close the game before importing saves.</string>
+    <string name="saves_storage_unavailable">The application\'s storage is unavailable.</string>
+    <string name="saves_failed">The operation failed: %1$s</string>
+    <string name="saves_problem_not_archive">This file is not a ZIP archive.</string>
+    <string name="saves_problem_unsafe_path">The archive contains an unsafe path: %1$s</string>
+    <string name="saves_problem_unsupported">The archive contains a file that is not a TriAevum save: %1$s</string>
+    <string name="saves_problem_duplicate">The archive contains %1$s twice.</string>
+    <string name="saves_problem_too_large">%1$s is larger than a save can be.</string>
+    <string name="saves_problem_too_many">The archive contains too many files.</string>
+    <string name="saves_problem_not_state">%1$s is not a TriAevum save state.</string>
+    <string name="saves_problem_damaged">The archive is damaged or incomplete (%1$s).</string>
+    <string name="saves_problem_empty">The archive contains no saves.</string>
+    <string name="saves_problem_nothing">There are no saves to export yet.</string>
+    <string name="saves_problem_target">%1$s exists in the save folder but is not a file.</string>
+
+    <!-- Diagnostics (DiagnosticsActivity, InstallerActivity) -->
+    <string name="diagnostics_title">Diagnostics report</string>
+    <string name="diagnostics_intro">The report stays on this device unless you copy or share it. Review it first: it lists the device, Android\'s record of recent app exits, the game\'s startup stages and recent log lines of this app.</string>
+    <string name="diagnostics_building">Collecting…</string>
+    <string name="diagnostics_failed">The report could not be built (%1$s).</string>
+    <string name="diagnostics_copy">Copy</string>
+    <string name="diagnostics_share">Share</string>
+    <string name="diagnostics_close">Close</string>
+    <string name="diagnostics_copied">Report copied.</string>
+    <string name="diagnostics_share_title">Share the diagnostics report</string>
+    <string name="diagnostics_crash_title">TriAevum stopped unexpectedly</string>
+    <string name="diagnostics_crash_message">The last session ended with: %1$s. A diagnostics report can help with an issue report; nothing is sent anywhere.</string>
+    <string name="diagnostics_view">View report</string>
+    <string name="diagnostics_dismiss">Dismiss</string>
+</resources>

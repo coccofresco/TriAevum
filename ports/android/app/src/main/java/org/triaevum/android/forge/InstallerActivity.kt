@@ -1,11 +1,19 @@
 package org.triaevum.android.forge
 
+import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.content.ServiceConnection
+import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.IBinder
 import android.os.ParcelFileDescriptor
 import android.util.Log
 import android.util.TypedValue
@@ -22,7 +30,12 @@ import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.TextView
 import org.json.JSONObject
+import org.triaevum.android.R
 import org.triaevum.android.TriAevumActivity
+import org.triaevum.android.diagnostics.DiagnosticsActivity
+import org.triaevum.android.diagnostics.StartupDiagnostics
+import org.triaevum.android.diagnostics.StartupReport
+import org.triaevum.android.saves.SavesActivity
 import java.io.File
 
 /**
@@ -34,8 +47,12 @@ import java.io.File
  *
  * A picked cartridge is recognized first (the "rom_recognize" job reads it in place): the card
  * under the introduction names the revision and offers the game languages its RomFS has, as
- * the runtime reports them. "Install" passes the chosen language; once a title is installed
- * the same choices change its saved setting (the "game_language" job).
+ * the runtime reports them. "Install" hands the cartridge and the chosen language to
+ * [InstallService], a foreground service in this process that runs the job while the screen is
+ * locked or the installer is closed; this screen binds to it and shows its progress whenever it
+ * is in front. Once a title is installed the same choices change its saved setting (the
+ * "game_language" job). The screen also leads to save import/export and to the diagnostics
+ * report, and offers that report after the previous session ended abnormally.
  */
 class InstallerActivity : Activity() {
     private lateinit var status: TextView
@@ -49,9 +66,38 @@ class InstallerActivity : Activity() {
     private lateinit var installButton: Button
     private lateinit var cancel: Button
     private lateinit var play: Button
+    /** The running short job of this screen (recognition, language), not the installation. */
     @Volatile private var job = 0L
     @Volatile private var closing = false
     private var worker: Thread? = null
+    private var screenJob = false
+    private var screenJobCancellable = false
+
+    /** The bound installation service, null while unbound. */
+    private var service: InstallService? = null
+    private val waitingForService = ArrayList<(InstallService) -> Unit>()
+    private var installRunning = false
+    private var handledGeneration = 0
+    private val listener = InstallService.Listener { render(it) }
+    private val connection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName, binder: IBinder) {
+            val bound = (binder as InstallService.Local).service
+            service = bound
+            if (!bound.snapshot.running && InstallService.takeInterrupted(this@InstallerActivity)) {
+                status.text = getString(R.string.forge_interrupted)
+                detail.text = ""
+            }
+            bound.attach(listener)
+            waitingForService.toList().forEach { it(bound) }
+            waitingForService.clear()
+        }
+
+        override fun onServiceDisconnected(name: ComponentName) {
+            service = null
+            installRunning = false
+            refreshBusy()
+        }
+    }
 
     /** The picked cartridge, kept open until it is installed or replaced. */
     private var rom: ParcelFileDescriptor? = null
@@ -67,26 +113,41 @@ class InstallerActivity : Activity() {
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
+        StartupDiagnostics.installCrashHandler(this, "forge")
         setContentView(buildLayout())
         refreshPlay()
         refreshInstall(false)
         if (!ForgePackage.available(this)) {
-            status.text = "This build has no Forge package: it can only play a title prepared beforehand."
+            status.text = getString(R.string.forge_no_package)
             select.isEnabled = false
         }
         // Developer installs without the picker: a file in the app's external files folder.
         val devRom = intent.getStringExtra(EXTRA_DEV_ROM)
-        if (devRom != null) {
+        if (devRom != null && state == null) {
             autoInstall = true
             val file = File(getExternalFilesDir(null), devRom)
             recognize(ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY), devRom)
         } else {
             showInstalledLanguages(null)
         }
+        if (state == null) offerReportAfterAbnormalExit()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        bindService(Intent(this, InstallService::class.java), connection, Context.BIND_AUTO_CREATE)
+    }
+
+    override fun onStop() {
+        service?.detach(listener)
+        unbindService(connection)
+        service = null
+        super.onStop()
     }
 
     override fun onDestroy() {
         closing = true
+        // The installation belongs to the service and continues; only this screen's jobs end.
         val running = job
         if (running != 0L) ForgeNative.cancelJob(running)
         worker?.join(15_000)
@@ -106,10 +167,18 @@ class InstallerActivity : Activity() {
             null
         }
         if (descriptor == null) {
-            status.text = "The selected file cannot be opened."
+            status.text = getString(R.string.forge_cannot_open)
             return
         }
         recognize(descriptor, displayName(uri))
+    }
+
+    @Deprecated("Platform permission API; the installer has no AndroidX dependency.")
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        @Suppress("DEPRECATION")
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        // Without the permission the installation still runs; only its notification is hidden.
+        if (requestCode == REQUEST_NOTIFICATIONS) install()
     }
 
     private fun pickRom() {
@@ -125,24 +194,19 @@ class InstallerActivity : Activity() {
         ForgePackage.prepare(this)
     } catch (error: Exception) {
         Log.e(TAG, "Cannot prepare the Forge package", error)
-        post("The application's Forge package cannot be prepared: ${error.message}")
+        post(getString(R.string.forge_package_error, error.message.orEmpty()))
         null
     }
 
     private fun profileRoot(): File? =
-        getExternalFilesDir(null).also { if (it == null) post("The application's storage is unavailable.") }
-
-    private fun androidTarget(profileRoot: File): JSONObject = JSONObject()
-        .put("native_library_dir", applicationInfo.nativeLibraryDir)
-        .put("profile_root", profileRoot.absolutePath)
-        .put("cache_dir", cacheDir.absolutePath)
+        getExternalFilesDir(null).also { if (it == null) post(getString(R.string.forge_storage_unavailable)) }
 
     private fun request(name: String): JSONObject =
         JSONObject().put("format", "triaevum_forge_request_v1").put("job", name)
 
     /**
-     * Runs one job off the UI thread: [start] builds the request there (null when it cannot),
-     * events reach [onEvent] and, once the job ended, [then] runs on the UI thread.
+     * Runs one short job off the UI thread: [start] builds the request there (null when it
+     * cannot), events reach [onEvent] and, once the job ended, [then] runs on the UI thread.
      */
     private fun runJob(
         busyMessage: String?,
@@ -152,21 +216,30 @@ class InstallerActivity : Activity() {
         then: () -> Unit = {},
     ) {
         if (worker?.isAlive == true) return
-        setBusy(true, busyMessage)
+        screenJob = true
+        screenJobCancellable = busyMessage != null
+        if (busyMessage != null) {
+            status.text = busyMessage
+            detail.text = ""
+        }
+        refreshBusy()
         worker = Thread({
             try {
                 val request = start()
                 val handle = if (request == null) 0L else try {
                     ForgeNative.startJob(request.toString().toByteArray()).also { job = it }
                 } catch (error: IllegalArgumentException) {
-                    post(error.message ?: "Forge refused the request.")
+                    post(error.message ?: getString(R.string.forge_refused))
                     0L
                 }
                 if (handle != 0L) pump(handle, onEvent)
             } finally {
                 runOnUiThread {
-                    setBusy(false, null)
-                    if (!closing) then()
+                    screenJob = false
+                    if (!closing) {
+                        refreshBusy()
+                        then()
+                    }
                 }
             }
         }, name).also { it.start() }
@@ -190,7 +263,7 @@ class InstallerActivity : Activity() {
 
     /** Recognizes a picked cartridge; Forge reads a duplicate of the descriptor in place. */
     private fun recognize(descriptor: ParcelFileDescriptor, name: String) {
-        if (worker?.isAlive == true) {
+        if (worker?.isAlive == true || installRunning) {
             descriptor.close()
             return
         }
@@ -198,14 +271,14 @@ class InstallerActivity : Activity() {
         rom = descriptor
         romName = name
         recognizedLabel = null
-        showCard(RECOGNIZING, name, emptyList(), null, installed = false, error = false)
-        runJob("Recognizing $name…", "forge-recognize", start = {
+        showCard(getString(R.string.forge_recognizing), name, emptyList(), null, installed = false, error = false)
+        runJob(getString(R.string.forge_recognizing_named, name), "forge-recognize", start = {
             val packageRoot = packageRoot()
             val profileRoot = profileRoot()
             if (packageRoot == null || profileRoot == null) null else request("rom_recognize")
                 .put("source", JSONObject().put("fd", descriptor.dup().detachFd()))
                 .put("package_root", packageRoot.absolutePath)
-                .put("android", androidTarget(profileRoot))
+                .put("android", InstallService.androidTarget(this, profileRoot))
         }, onEvent = { event -> if (rom === descriptor) showRecognition(event) }, then = {
             val installNow = autoInstall && recognizedLabel != null
             autoInstall = false
@@ -221,80 +294,81 @@ class InstallerActivity : Activity() {
             "stage" -> cardText.text = event.optString("message")
             "succeeded" -> {
                 val result = event.getJSONObject("result")
-                val label = "ROM recognized: ${result.optString("label")}"
+                val label = getString(R.string.forge_recognized, result.optString("label"))
                 val document = result.optJSONObject("languages")
                 val note = if (document == null) {
-                    "The game languages are read during the installation. ${result.optString("language_error")}"
+                    getString(R.string.forge_languages_later, result.optString("language_error"))
                 } else {
-                    "Install sets up the game in this language. You can change it later here or in game."
+                    getString(R.string.forge_languages_note)
                 }
                 recognizedLabel = label
                 showCard(label, note, choices(document), document?.optString("selected"), installed = false, error = false)
-                status.text = if (document == null) "Ready to install." else "Choose the game language, then install."
+                status.text = getString(if (document == null) R.string.forge_ready_to_install else R.string.forge_choose_language)
                 detail.text = ""
             }
             "failed" -> {
                 rom?.close()
                 rom = null
                 val message = event.getJSONObject("error").optString("message")
-                showCard("ROM not recognized", message, emptyList(), null, installed = false, error = true)
-                status.text = "Select a supported decrypted cartridge."
+                showCard(getString(R.string.forge_not_recognized), message, emptyList(), null, installed = false, error = true)
+                status.text = getString(R.string.forge_select_supported)
             }
             "cancelled" -> {
                 rom?.close()
                 rom = null
                 card.visibility = View.GONE
-                status.text = "Recognition cancelled."
+                status.text = getString(R.string.forge_recognition_cancelled)
             }
         }
     }
 
-    /** Installs the recognized cartridge with the chosen language; Forge owns the descriptor. */
+    /** Asks once for the notification permission (Android 13+), then installs either way. */
+    private fun requestInstall() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            val preferences = getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+            if (!preferences.getBoolean(KEY_NOTIFICATIONS_ASKED, false)) {
+                preferences.edit().putBoolean(KEY_NOTIFICATIONS_ASKED, true).apply()
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATIONS)
+                return
+            }
+        }
+        install()
+    }
+
+    /** Hands the recognized cartridge and the chosen language to the installation service. */
     private fun install() {
         val descriptor = rom ?: return
         val language = codes.getOrNull(languageIndex())
+        val name = romName
         rom = null
-        var succeeded = false
-        runJob("Preparing $romName…", "forge-install", start = {
-            val packageRoot = packageRoot()
-            val profileRoot = profileRoot()
-            if (packageRoot == null || profileRoot == null) {
-                descriptor.close()
-                null
-            } else {
-                request("install")
-                    .put("source", JSONObject().put("fd", descriptor.detachFd()))
-                    .put("source_kind", "rom")
-                    .put("package_root", packageRoot.absolutePath)
-                    .put("download_hd_textures", false)
-                    .put("android", androidTarget(profileRoot))
-                    .apply { if (language != null) put("game_language", language) }
-            }
-        }, onEvent = { event ->
-            succeeded = succeeded || event.optString("event") == "succeeded"
-            showInstall(event)
-        }, then = { if (succeeded) showInstalledLanguages(null) })
+        refreshInstall(true)
+        withService { it.install(descriptor, name, language) }
     }
 
-    private fun showInstall(event: JSONObject) {
-        when (event.optString("event")) {
-            "stage" -> {
-                status.text = event.optString("message")
-                detail.text = ""
+    private fun withService(action: (InstallService) -> Unit) {
+        val bound = service
+        if (bound != null) action(bound) else waitingForService += action
+    }
+
+    /** Shows the installation service's state. */
+    private fun render(snapshot: InstallService.Snapshot) {
+        installRunning = snapshot.running
+        if (snapshot.running || snapshot.outcome != InstallService.Outcome.NONE) {
+            status.text = snapshot.status
+            detail.text = if (snapshot.running && snapshot.total > 0 && snapshot.detail.isEmpty()) {
+                getString(R.string.forge_progress, snapshot.done, snapshot.total)
+            } else {
+                snapshot.detail
             }
-            "report" -> detail.text = event.optString("message")
-            "succeeded" -> {
-                status.text = "The title is ready to play."
-                detail.text = ""
-                refreshPlay()
-            }
-            "failed" -> {
-                val error = event.getJSONObject("error")
-                status.text = error.optString("message")
-                detail.text = "Stage: ${error.optString("stage")} (${error.optString("code")})"
-            }
-            "cancelled" -> status.text = "Installation cancelled."
         }
+        if (snapshot.outcome == InstallService.Outcome.SUCCEEDED && snapshot.generation != handledGeneration) {
+            handledGeneration = snapshot.generation
+            refreshPlay()
+            showInstalledLanguages(null)
+        }
+        refreshBusy()
     }
 
     /** Shows the installed title's languages, after saving [select] when given. */
@@ -309,10 +383,10 @@ class InstallerActivity : Activity() {
         }, onEvent = { event ->
             when (event.optString("event")) {
                 "succeeded" -> event.getJSONObject("result").optJSONObject("languages")?.let { document ->
-                    val title = recognizedLabel ?: GAME_LANGUAGE
-                    showCard(title, "Changes apply on the next full game start.", choices(document),
+                    val title = recognizedLabel ?: getString(R.string.forge_game_language)
+                    showCard(title, getString(R.string.forge_language_applies), choices(document),
                         document.optString("selected"), installed = true, error = false)
-                    if (select != null) status.text = "Game language saved. Applies on the next full game start."
+                    if (select != null) status.text = getString(R.string.forge_language_saved)
                 }
                 "failed" -> {
                     failed = true
@@ -321,6 +395,27 @@ class InstallerActivity : Activity() {
             }
         }, then = { if (failed && select != null) showInstalledLanguages(null) })
     }
+
+    /** After an abnormal end of the previous game or installer process, offers the report. */
+    private fun offerReportAfterAbnormalExit() {
+        val context = applicationContext
+        Thread({
+            val exits = StartupDiagnostics.newAbnormalExits(context)
+            if (exits.isEmpty()) return@Thread
+            val summary = StartupReport.summary(exits.first(), StartupDiagnostics.sessions(context))
+            runOnUiThread {
+                if (closing || isFinishing) return@runOnUiThread
+                AlertDialog.Builder(this)
+                    .setTitle(R.string.diagnostics_crash_title)
+                    .setMessage(getString(R.string.diagnostics_crash_message, summary))
+                    .setPositiveButton(R.string.diagnostics_view) { _, _ -> openReport() }
+                    .setNegativeButton(R.string.diagnostics_dismiss, null)
+                    .show()
+            }
+        }, "forge-diagnostics").start()
+    }
+
+    private fun openReport() = startActivity(Intent(this, DiagnosticsActivity::class.java))
 
     private fun choices(document: JSONObject?): List<Pair<String, String>> {
         val available = document?.optJSONArray("available") ?: return emptyList()
@@ -368,7 +463,7 @@ class InstallerActivity : Activity() {
         }
         updatingChoices = false
         languages.visibility = if (entries.isEmpty()) View.GONE else View.VISIBLE
-        refreshInstall(worker?.isAlive == true)
+        refreshBusy()
     }
 
     private fun languageIndex(): Int =
@@ -387,21 +482,20 @@ class InstallerActivity : Activity() {
 
     private fun post(message: String) = runOnUiThread { status.text = message }
 
-    private fun setBusy(busy: Boolean, message: String?) {
+    /** Enables the controls for the screen's job and the service's installation. */
+    private fun refreshBusy() {
         if (closing) return
+        val busy = screenJob || installRunning
         progress.visibility = if (busy) ProgressBar.VISIBLE else ProgressBar.GONE
         select.isEnabled = !busy && ForgePackage.available(this)
-        cancel.visibility = if (busy && message != null) Button.VISIBLE else Button.GONE
+        cancel.visibility = if (installRunning || (screenJob && screenJobCancellable)) Button.VISIBLE else Button.GONE
+        // Never start the game while Forge may be committing the title.
         play.isEnabled = !busy
         for (index in 0 until languages.childCount) languages.getChildAt(index).isEnabled = !busy
         refreshInstall(busy)
-        // Installation runs only while this screen is in front.
-        if (busy) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // A recognition runs only while this screen is in front; the installation does not need it.
+        if (screenJob) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        if (message != null) {
-            status.text = message
-            detail.text = ""
-        }
     }
 
     /** "Install" belongs to a recognized cartridge that is not installed yet. */
@@ -416,9 +510,21 @@ class InstallerActivity : Activity() {
         play.visibility = if (profile.isFile) Button.VISIBLE else Button.GONE
     }
 
+    private fun cancelRunning() {
+        val installing = service?.takeIf { installRunning }
+        if (installing != null) {
+            installing.cancel()
+            return
+        }
+        val running = job
+        if (running != 0L) ForgeNative.cancelJob(running)
+        status.text = getString(R.string.forge_cancelling)
+    }
+
     private fun displayName(uri: Uri): String =
         contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
-            ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null } ?: "the selected file"
+            ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+            ?: getString(R.string.forge_selected_file)
 
     private fun dp(value: Int): Int =
         TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value.toFloat(), resources.displayMetrics).toInt()
@@ -429,13 +535,11 @@ class InstallerActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(24), dp(24), dp(24), dp(8))
             addView(TextView(context).apply {
-                text = "TriAevum Forge"
+                text = getString(R.string.forge_title)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 26f)
             })
             addView(TextView(context).apply {
-                text = "Select your own decrypted Nintendo 3DS cartridge image (.3ds or .cci). " +
-                    "Forge prepares the game on this device, without encryption keys or network access. " +
-                    "The first installation takes several minutes; keep this screen open."
+                text = getString(R.string.forge_intro)
                 setPadding(0, dp(8), 0, dp(16))
             })
         }
@@ -463,25 +567,41 @@ class InstallerActivity : Activity() {
         body.addView(status)
         body.addView(detail)
         body.addView(progress)
-        select = Button(this).apply { text = "Select ROM"; minHeight = dp(48); setOnClickListener { pickRom() } }
+        // Secondary destinations: save import/export and the diagnostics report.
+        val more = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, dp(16), 0, 0)
+            addView(Button(context).apply {
+                text = getString(R.string.forge_saves)
+                minHeight = dp(48)
+                setOnClickListener { startActivity(Intent(context, SavesActivity::class.java)) }
+            }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            addView(Button(context).apply {
+                text = getString(R.string.forge_report)
+                minHeight = dp(48)
+                setOnClickListener { openReport() }
+            }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        }
+        body.addView(more, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        select = Button(this).apply {
+            text = getString(R.string.forge_select_rom)
+            minHeight = dp(48)
+            setOnClickListener { pickRom() }
+        }
         installButton = Button(this).apply {
-            text = "Install"
+            text = getString(R.string.forge_install)
             minHeight = dp(48)
             visibility = Button.GONE
-            setOnClickListener { install() }
+            setOnClickListener { requestInstall() }
         }
         cancel = Button(this).apply {
-            text = "Cancel"
+            text = getString(R.string.forge_cancel)
             minHeight = dp(48)
             visibility = Button.GONE
-            setOnClickListener {
-                val running = job
-                if (running != 0L) ForgeNative.cancelJob(running)
-                status.text = "Cancelling after the current step…"
-            }
+            setOnClickListener { cancelRunning() }
         }
         play = Button(this).apply {
-            text = "Play"
+            text = getString(R.string.forge_play)
             minHeight = dp(48)
             setOnClickListener { startActivity(Intent(context, TriAevumActivity::class.java)) }
         }
@@ -505,11 +625,12 @@ class InstallerActivity : Activity() {
     private companion object {
         const val TAG = "TriAevumForge"
         const val PICK_ROM = 1
+        const val REQUEST_NOTIFICATIONS = 2
+        const val PREFERENCES = "installer"
+        const val KEY_NOTIFICATIONS_ASKED = "notifications_asked"
         const val EXTRA_DEV_ROM = "org.triaevum.android.DEV_ROM"
         /** Developer installs: the language to choose when the cartridge offers it. */
         const val EXTRA_DEV_LANGUAGE = "org.triaevum.android.DEV_LANGUAGE"
-        const val RECOGNIZING = "Recognizing the ROM…"
-        const val GAME_LANGUAGE = "Game language"
         const val ACCENT_COLOR = 0xFF2E7DD7.toInt()
         const val ERROR_COLOR = 0xFFD32F2F.toInt()
     }

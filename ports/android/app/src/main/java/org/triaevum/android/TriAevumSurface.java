@@ -5,6 +5,7 @@ import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.ViewGroup;
 import org.libsdl.app.SDLSurface;
+import org.triaevum.android.diagnostics.StartupDiagnostics;
 
 /** SDL retains lifecycle/input ownership; only the Android buffer extent is constrained. */
 final class TriAevumSurface extends SDLSurface {
@@ -16,6 +17,16 @@ final class TriAevumSurface extends SDLSurface {
         // A fixed buffer must not become the view's desired layout size on rotation.
         setLayoutParams(new ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+    }
+
+    @Override public void surfaceCreated(SurfaceHolder holder) {
+        StartupDiagnostics.stage(getContext(), "surface_created");
+        super.surfaceCreated(holder);
+    }
+
+    @Override public void surfaceDestroyed(SurfaceHolder holder) {
+        StartupDiagnostics.stage(getContext(), "surface_destroyed");
+        super.surfaceDestroyed(holder);
     }
 
     @Override protected void onSizeChanged(int width, int height, int oldWidth, int oldHeight) {
@@ -34,6 +45,7 @@ final class TriAevumSurface extends SDLSurface {
         }
         Log.i("TriAevum", "Render surface " + width + "x" + height
             + ", view " + viewWidth + "x" + viewHeight);
+        StartupDiagnostics.stage(getContext(), "surface_ready " + width + "x" + height);
         super.surfaceChanged(holder, format, width, height);
         // SDL normalizes touch positions with these fields. Touch uses view pixels,
         // not the independently sized SurfaceHolder buffer sent to Vulkan above.

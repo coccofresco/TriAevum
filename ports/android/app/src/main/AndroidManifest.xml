@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-feature android:name="android.hardware.vulkan.level" android:version="1" android:required="true" />
-    <application android:label="TriAevum — Echoes of Time" android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen"
+    <!-- The installation's foreground service (type dataSync, InstallService), its progress
+         notification (asked once on Android 13+, optional) and a partial wake lock held only
+         while the job runs, so it continues with the screen locked. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <application android:label="@string/app_name" android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen"
         android:allowBackup="false">
         <!-- Forge runs the runtime library's native helpers in process: never in the game's process. -->
         <activity android:name=".forge.InstallerActivity" android:exported="true" android:process=":forge"
@@ -11,6 +18,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Owns the installation job; same process as the installer (the job handle is in-process). -->
+        <service android:name=".forge.InstallService" android:exported="false" android:process=":forge"
+            android:foregroundServiceType="dataSync" />
+        <!-- Save import/export and the diagnostics report: in the installer's process, so they can
+             tell whether the game's process is running and never start it. -->
+        <activity android:name=".saves.SavesActivity" android:exported="false" android:process=":forge"
+            android:configChanges="orientation|screenLayout|screenSize|smallestScreenSize|uiMode|density|fontScale" />
+        <activity android:name=".diagnostics.DiagnosticsActivity" android:exported="false" android:process=":forge"
+            android:configChanges="orientation|screenLayout|screenSize|smallestScreenSize|uiMode|density|fontScale" />
         <!-- Exported for developer launches (adb am start) of an already prepared title. -->
         <activity android:name=".TriAevumActivity" android:exported="true"
             android:screenOrientation="sensorLandscape"

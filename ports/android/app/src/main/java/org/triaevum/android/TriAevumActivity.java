@@ -16,6 +16,7 @@ import android.view.WindowManager;
 import org.triaevum.android.controls.AzaharInputAdapter;
 import org.triaevum.android.controls.InputOverlay;
 import org.triaevum.android.controls.OverlayHost;
+import org.triaevum.android.diagnostics.StartupDiagnostics;
 
 /** SDL owns Surface/lifecycle. Game, renderer and title loading retain their native owners. */
 public final class TriAevumActivity extends SDLActivity {
@@ -40,10 +41,33 @@ public final class TriAevumActivity extends SDLActivity {
     }
 
     @Override protected void onCreate(Bundle state) {
+        // Startup stages for the installer's diagnostics report (no network, no personal data).
+        StartupDiagnostics.beginGameSession(this);
+        StartupDiagnostics.stage(this, "activity_created");
         applyDeveloperEnvironment();
         super.onCreate(state);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        if (!mBrokenLibraries) attachTouchControls();
+        if (!mBrokenLibraries) {
+            attachTouchControls();
+            StartupDiagnostics.stage(this, "touch_controls_attached");
+        }
+    }
+
+    @Override public void loadLibraries() {
+        StartupDiagnostics.stage(this, "libraries_loading");
+        try {
+            super.loadLibraries();
+        } catch (RuntimeException | UnsatisfiedLinkError error) {
+            StartupDiagnostics.stage(this, "libraries_failed " + error.getClass().getName());
+            throw error;
+        }
+        StartupDiagnostics.stage(this, "libraries_loaded");
+    }
+
+    /** SDL's main thread asks for the entry point right before the native game starts. */
+    @Override protected String getMainFunction() {
+        StartupDiagnostics.stage(this, "native_main_starting");
+        return super.getMainFunction();
     }
 
     /** The touch controls above the game surface, the same size, without taking key focus. */
@@ -64,6 +88,7 @@ public final class TriAevumActivity extends SDLActivity {
     }
 
     @Override protected void onPause() {
+        StartupDiagnostics.stage(this, "paused");
         if (touchAdapter != null) touchAdapter.releaseAll();
         if (touchInput != null) touchInput.pause();
         super.onPause();
@@ -71,6 +96,7 @@ public final class TriAevumActivity extends SDLActivity {
 
     @Override protected void onResume() {
         super.onResume();
+        StartupDiagnostics.stage(this, "resumed");
         if (touchInput != null) touchInput.resume();
     }
 
@@ -118,7 +144,10 @@ public final class TriAevumActivity extends SDLActivity {
         super.onDestroy();
         // The native game runs once per process (title library, guest memory). When the game
         // ends, end the process too, so the next launch starts clean instead of reusing it.
-        if (isFinishing()) System.exit(0);
+        if (isFinishing()) {
+            StartupDiagnostics.stage(this, "exited");
+            System.exit(0);
+        }
     }
 
     /**
