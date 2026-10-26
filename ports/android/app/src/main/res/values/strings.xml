@@ -79,7 +79,7 @@
 
     <!-- Diagnostics (DiagnosticsActivity, InstallerActivity) -->
     <string name="diagnostics_title">Diagnostics report</string>
-    <string name="diagnostics_intro">The report stays on this device unless you copy or share it. Review it first: it lists the device, Android\'s record of recent app exits, the game\'s startup stages and recent log lines of this app.</string>
+    <string name="diagnostics_intro">The report stays on this device unless you copy or share it. Review it first: it lists the device, Android\'s record of recent app exits, the game\'s startup stages, recent log lines of this app and Forge\'s report. Share diagnostics sends a zip of the files listed at the end (logs and settings, with folder and user names removed; never saves or game data).</string>
     <string name="diagnostics_building">Collecting…</string>
     <string name="diagnostics_failed">The report could not be built (%1$s).</string>
     <string name="diagnostics_copy">Copy</string>
@@ -87,6 +87,9 @@
     <string name="diagnostics_close">Close</string>
     <string name="diagnostics_copied">Report copied.</string>
     <string name="diagnostics_share_title">Share the diagnostics report</string>
+    <string name="diagnostics_share_bundle">Share diagnostics</string>
+    <string name="diagnostics_share_bundle_title">Share the diagnostics bundle</string>
+    <string name="diagnostics_bundle_contents">Diagnostics bundle (shared only with Share diagnostics):</string>
     <string name="diagnostics_crash_title">TriAevum stopped unexpectedly</string>
     <string name="diagnostics_crash_message">The last session ended with: %1$s. A diagnostics report can help with an issue report; nothing is sent anywhere.</string>
     <string name="diagnostics_view">View report</string>

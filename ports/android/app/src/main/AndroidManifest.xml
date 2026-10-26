@@ -27,6 +27,10 @@
             android:configChanges="orientation|screenLayout|screenSize|smallestScreenSize|uiMode|density|fontScale" />
         <activity android:name=".diagnostics.DiagnosticsActivity" android:exported="false" android:process=":forge"
             android:configChanges="orientation|screenLayout|screenSize|smallestScreenSize|uiMode|density|fontScale" />
+        <!-- Serves only the diagnostics bundle the user shares, through a temporary read grant. -->
+        <provider android:name=".diagnostics.DiagnosticsBundleProvider"
+            android:authorities="${applicationId}.diagnostics" android:exported="false"
+            android:grantUriPermissions="true" android:process=":forge" />
         <!-- Exported for developer launches (adb am start) of an already prepared title. -->
         <activity android:name=".TriAevumActivity" android:exported="true"
             android:screenOrientation="sensorLandscape"

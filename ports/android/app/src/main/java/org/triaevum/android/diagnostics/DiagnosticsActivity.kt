@@ -19,14 +19,15 @@ import android.widget.Toast
 import org.triaevum.android.R
 
 /**
- * Shows the diagnostics report ([StartupDiagnostics.buildReport]) and lets the user copy it or
- * share it with an app of their choice. The report is built when this screen opens and is never
- * sent anywhere by TriAevum.
+ * Shows the diagnostics report ([StartupDiagnostics.buildReport] followed by Forge's report,
+ * [DiagnosticsBundle]) and lets the user copy or share it, or share the support bundle zip with an
+ * app of their choice. Both are built when this screen opens and never sent anywhere by TriAevum.
  */
 class DiagnosticsActivity : Activity() {
     private lateinit var report: TextView
     private lateinit var copy: Button
     private lateinit var share: Button
+    private lateinit var shareBundle: Button
     @Volatile private var closing = false
     private var text: String? = null
 
@@ -35,17 +36,26 @@ class DiagnosticsActivity : Activity() {
         setContentView(buildLayout())
         val context = applicationContext
         Thread({
-            val built = try {
+            val startup = try {
                 StartupDiagnostics.buildReport(context)
             } catch (error: Exception) {
                 getString(R.string.diagnostics_failed, error.javaClass.simpleName)
             }
+            val forge = try {
+                DiagnosticsBundle.build(context)
+            } catch (error: Exception) {
+                DiagnosticsBundle.Result("Forge diagnostics failed (${error.javaClass.simpleName}).", null, emptyList())
+            }
+            val contents = if (forge.members.isEmpty()) "" else
+                "\n\n" + getString(R.string.diagnostics_bundle_contents) + "\n" + forge.members.joinToString("\n") { "  $it" }
+            val built = startup + "\n\n" + forge.text + contents
             runOnUiThread {
                 if (closing) return@runOnUiThread
                 text = built
                 report.text = built
                 copy.isEnabled = true
                 share.isEnabled = true
+                shareBundle.isEnabled = forge.bundle != null
             }
         }, "forge-report").start()
     }
@@ -69,6 +79,17 @@ class DiagnosticsActivity : Activity() {
             .putExtra(Intent.EXTRA_SUBJECT, getString(R.string.diagnostics_title))
             .putExtra(Intent.EXTRA_TEXT, value)
         startActivity(Intent.createChooser(send, getString(R.string.diagnostics_share_title)))
+    }
+
+    private fun shareBundle() {
+        val uri = DiagnosticsBundleProvider.uri(packageName)
+        val send = Intent(Intent.ACTION_SEND)
+            .setType("application/zip")
+            .putExtra(Intent.EXTRA_SUBJECT, getString(R.string.diagnostics_title))
+            .putExtra(Intent.EXTRA_STREAM, uri)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        send.clipData = ClipData.newRawUri(DiagnosticsBundle.FILE_NAME, uri)
+        startActivity(Intent.createChooser(send, getString(R.string.diagnostics_share_bundle_title)))
     }
 
     private fun dp(value: Int): Int =
@@ -108,6 +129,12 @@ class DiagnosticsActivity : Activity() {
             isEnabled = false
             setOnClickListener { shareReport() }
         }
+        shareBundle = Button(this).apply {
+            text = getString(R.string.diagnostics_share_bundle)
+            minHeight = dp(48)
+            isEnabled = false
+            setOnClickListener { shareBundle() }
+        }
         val close = Button(this).apply {
             text = getString(R.string.diagnostics_close)
             minHeight = dp(48)
@@ -120,6 +147,7 @@ class DiagnosticsActivity : Activity() {
             addView(close)
             addView(copy)
             addView(share)
+            addView(shareBundle)
         }
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL

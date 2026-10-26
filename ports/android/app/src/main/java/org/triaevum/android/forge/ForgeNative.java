@@ -50,4 +50,14 @@ public final class ForgeNative {
      * it off the main thread.
      */
     public static native byte[] inventory(byte[] request);
+
+    /**
+     * Diagnostics for {"format":"triaevum_forge_diagnostics_v1","package_root":...,"android":{as
+     * for inventory},"bundle"?:path}: {"format":"triaevum_diagnostics_v1","status":"ok","text",
+     * "bundle_plan":{"members":[{"name","size"}],"omitted"},"last_game_run","game_exit",
+     * "recovery","logs","bundle"?:{"path","bytes","members"}}. The text and the bundle are
+     * redacted; with "bundle" the zip is written there. Reads logs and hashes installed files:
+     * call it off the main thread.
+     */
+    public static native byte[] diagnostics(byte[] request);
 }
