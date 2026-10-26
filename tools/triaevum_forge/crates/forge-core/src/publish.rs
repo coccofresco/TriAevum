@@ -28,9 +28,9 @@ pub const RUNTIME_BACKEND: &str = "generated_cpp_whole_aot_plugin_v2";
 /// which the frozen Python Forge carried in its bundle.
 const STANDARD_TOPSCREEN: &[u8] = include_bytes!("../../../../../config/topscreen_ui.example.json");
 
-/// The TopScreen layout F1 no longer offers: every installation uses the
-/// standard profile's values. The HUD size keeps the user's choice when it
-/// is one of the two F1 sizes.
+/// The TopScreen layout F1 no longer offers: "Use standard" (decision 4)
+/// sets the standard profile's values. The HUD size keeps the user's choice
+/// when it is one of the two F1 sizes.
 pub const TOPSCREEN_STANDARD_LAYOUT_FIELDS: [&str; 13] = [
     "hud_layout",
     "hud_margin_x",
@@ -137,6 +137,38 @@ pub const ANDROID_TITLE_FORMAT: &str = "triaevum_android_title_v1";
 /// existing configuration on the device is kept).
 pub const ANDROID_CONFIG: &str = "TriAevum.android.json";
 
+/// What publication does with an existing TopScreen file (owner decision 4).
+/// A missing file is always created from the standard profile.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum HudLayout {
+    /// The user's file keeps its bytes (the default).
+    #[default]
+    Keep,
+    /// The user chose "Use standard": the standard profile's layout fields
+    /// replace theirs (`standard_topscreen_layout`, the Python Forge's
+    /// behaviour on every run).
+    Standard,
+}
+
+impl HudLayout {
+    /// `"keep"` or `"standard"` (job requests); absent means keep.
+    pub fn parse(value: Option<&Value>) -> Result<Self> {
+        match value {
+            None | Some(Value::Null) => Ok(Self::Keep),
+            Some(Value::String(text)) if text == "keep" => Ok(Self::Keep),
+            Some(Value::String(text)) if text == "standard" => Ok(Self::Standard),
+            Some(_) => Err(ForgeError::invalid("hud_layout must be \"keep\" or \"standard\"")),
+        }
+    }
+
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::Keep => "keep",
+            Self::Standard => "standard",
+        }
+    }
+}
+
 /// `publish_private_runtime`'s arguments.
 pub struct PublishRequest<'a> {
     pub prepared_directory: &'a Path,
@@ -151,6 +183,7 @@ pub struct PublishRequest<'a> {
     pub assets: &'a RuntimeAssets,
     /// Set for an Android installation.
     pub android: Option<&'a AndroidRuntime<'a>>,
+    pub hud_layout: HudLayout,
 }
 
 fn sha256_hex(path: &Path, cancel: &CancelToken) -> Result<String> {
@@ -209,13 +242,17 @@ pub fn android_topscreen(mut standard: Map<String, Value>) -> Map<String, Value>
     standard
 }
 
-/// Creates the TopScreen file from the standard profile, or rewrites the
-/// user's file with the standard layout when that changes it.
-fn publish_topscreen_config(path: &Path, android: bool) -> Result<()> {
+/// Creates the TopScreen file from the standard profile. An existing file
+/// keeps its bytes unless the user chose the standard layout, which then
+/// rewrites it only when that changes it.
+fn publish_topscreen_config(path: &Path, android: bool, layout: HudLayout) -> Result<()> {
     let standard = standard_topscreen()?;
     if !path.is_file() {
         let created = if android { android_topscreen(standard) } else { standard };
         return atomic_write_json(path, &Value::Object(created));
+    }
+    if layout == HudLayout::Keep {
+        return Ok(());
     }
     let user = load_json_object(path)?;
     let migrated = standard_topscreen_layout(&user, &standard)?;
@@ -279,7 +316,7 @@ pub fn publish_private_runtime(
             load_json_object(user_config)?;
         }
     }
-    publish_topscreen_config(&topscreen_config, request.android.is_some())?;
+    publish_topscreen_config(&topscreen_config, request.android.is_some(), request.hud_layout)?;
     ensure_runtime_config(&runtime_config, &product.product)?;
     let savedata = private_root.join("savedata");
     create_dir(&savedata)?;

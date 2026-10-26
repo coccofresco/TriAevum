@@ -17,7 +17,7 @@
 use std::path::{Path, PathBuf};
 
 use forge_base::fsutil::{atomic_write_json, file_error, load_json_object};
-use forge_base::{CancelToken, ErrorKind, ForgeError, Operation, Reason, Result};
+use forge_base::{CancelToken, ForgeError, Operation, Result};
 use forge_native::NativeServices;
 use forge_prepare::content::load_prepared_content;
 use forge_prepare::paths::resolve_reference;
@@ -25,9 +25,8 @@ use serde_json::{json, Map, Value};
 
 use crate::abi::Job;
 use crate::backup::{ancestors, backup_plan, create_backup, installed_recipe, os_of, BackupRequest};
-use crate::install::{install_private_title, InstallRequest, InstallSource, InstallTarget};
+use crate::install::InstallTarget;
 use crate::inventory::{inventory_of, Category, Entry, Inventory, InventoryRequest, Origin, Platform};
-use crate::layout::HostOs;
 use crate::log::ForgeLog;
 use crate::restore::{pending_restore, recover_pending, restore, restore_preview, RestoreOptions};
 
@@ -186,11 +185,13 @@ fn source_bytes(directory: &Path) -> u64 {
     SOURCE_FILES.iter().filter_map(|name| std::fs::metadata(directory.join(name)).ok()).map(|m| m.len()).sum()
 }
 
-/// "Rebuild prepared assets": the install pipeline run again from the kept
-/// ROM data (`sources/`), so the title, assets and receipts are rebuilt and
-/// activated together. Until UX plan WP-04A lands its repair, this is the
-/// repair. The game session lock is held throughout; the install takes the
-/// installation lock itself.
+/// "Rebuild prepared assets": the repair in place (UX plan WP-04A,
+/// `repair::repair_installation`): an interrupted activation is undone, the
+/// kept ROM data (`sources/`) is re-verified, every asset and cache whose
+/// receipt does not prove it is rebuilt, a missing or damaged title is
+/// prepared again from the kept data, and everything is activated together.
+/// The game session lock is held throughout; the activation takes the
+/// installation lock itself. Missing kept data needs the ROM.
 pub fn rebuild_prepared_assets(
     package_root: &Path,
     data_root: Option<&Path>,
@@ -199,36 +200,13 @@ pub fn rebuild_prepared_assets(
     report: &mut dyn FnMut(&str, &str),
     cancel: &CancelToken,
 ) -> Result<Value> {
-    let (package_root, data) = crate::install::installation_paths(package_root, data_root, &target)?;
-    let activation = match &target {
-        InstallTarget::Package => crate::install::package_layout(&package_root)?.activation,
-        InstallTarget::Android(android) => android.profile_root.clone(),
-    };
-    let lock = crate::session::session_lock_path(&activation, HostOs::current());
-    if let Some(parent) = lock.parent() {
-        std::fs::create_dir_all(parent).map_err(|error| file_error("Cannot create", parent, error))?;
-    }
-    let _game = crate::lock::acquire(&lock).map_err(|error| match error.kind {
-        ErrorKind::Busy => {
-            ForgeError::new(ErrorKind::Busy, format!("TriAevum is running from this installation ({})", lock.display()))
-                .with_path(&lock)
-                .because(Reason::GameRunning)
-        }
-        _ => error,
-    })?;
-    let Some(source) = retained_source(&data) else {
-        return Err(ForgeError::invalid("The game data kept from your ROM is missing")
-            .during(Operation::Repair)
-            .because(Reason::MissingRetainedSource));
-    };
-    let request = InstallRequest {
-        source: InstallSource::ExtractedDirectory(source),
-        data_root: Some(data),
-        package_root,
+    let request = crate::repair::RepairRequest {
+        package_root: package_root.to_path_buf(),
+        data_root: data_root.map(Path::to_path_buf),
         target,
-        game_language: None,
+        hud_layout: crate::publish::HudLayout::Keep,
     };
-    install_private_title(request, services, report, cancel).map_err(|error| error.during(Operation::Repair))
+    crate::repair::repair_installation(&request, services, report, cancel)
 }
 
 /// The uninstall story of section 3.2, from the inventory: what to delete,

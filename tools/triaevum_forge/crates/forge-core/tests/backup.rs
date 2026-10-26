@@ -828,7 +828,7 @@ fn rebuilding_reinstalls_from_the_kept_rom_data() {
         &CancelToken::new(),
     )
     .unwrap();
-    assert_eq!(result["status"], "ready");
+    assert_eq!((result["status"].as_str(), result["route"].as_str()), (Some("repaired"), Some("kept_rom_data")));
     assert!(stages.contains(&"activate".to_string()));
     assert!(matches!(state_of(&fixture), InstallationState::Ready { .. }));
     // Without the kept ROM data the ROM is needed again.

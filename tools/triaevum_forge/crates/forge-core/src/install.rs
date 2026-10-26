@@ -45,7 +45,7 @@ use forge_rom::{ExtractedFile, ExtractedTitleInputs};
 use serde_json::{json, Map, Value};
 
 use crate::layout::{self, for_package, installation_state, installed_runtime_path, HostOs};
-use crate::publish::{publish_private_runtime, AndroidRuntime, PublishRequest, RuntimeAssets};
+use crate::publish::{publish_private_runtime, AndroidRuntime, HudLayout, PublishRequest, RuntimeAssets};
 use crate::transaction::activation_transaction;
 
 /// Progress callback `(stage, message)`, Python's `report`.
@@ -87,6 +87,7 @@ pub struct InstallRequest {
 }
 
 /// Where the installed title runs.
+#[derive(Clone)]
 pub enum InstallTarget {
     /// The desktop package this process belongs to.
     Package,
@@ -99,6 +100,7 @@ pub enum InstallTarget {
 /// libraries stay in `native_library_dir`, where Android installed them. The
 /// launch profile, the title file and the private data are in `profile_root`,
 /// the folder the game activity reads (its external files folder).
+#[derive(Clone)]
 pub struct AndroidTarget {
     pub native_library_dir: PathBuf,
     pub profile_root: PathBuf,
@@ -287,11 +289,29 @@ fn extract(source: InstallSource, staging: &Path, cancel: &CancelToken) -> Resul
     }
 }
 
+/// Choices of an installation beyond Python's request (Rust additions).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct InstallOptions {
+    /// What happens to an existing TopScreen layout (decision 4).
+    pub hud_layout: HudLayout,
+}
+
 /// `forge_gui.install_private_title`: imports the user's ROM (or extracted
 /// data) and installs the matching precompiled title. Returns Python's
 /// `{status, recipe, prepared, build, adaptation, install_wall_seconds}`.
 pub fn install_private_title(
     request: InstallRequest,
+    services: &dyn NativeServices,
+    report: Report<'_>,
+    cancel: &CancelToken,
+) -> Result<Value> {
+    install_private_title_with(request, InstallOptions::default(), services, report, cancel)
+}
+
+/// [`install_private_title`] with the Rust additions' choices.
+pub fn install_private_title_with(
+    request: InstallRequest,
+    options: InstallOptions,
     services: &dyn NativeServices,
     report: Report<'_>,
     cancel: &CancelToken,
@@ -403,6 +423,7 @@ pub fn install_private_title(
                 launch_profile: &launch_profile,
                 active_title_state: &data_root.join("active-title.json"),
                 android: android_runtime.as_ref(),
+                hud_layout: options.hud_layout,
             },
             services,
             report,
@@ -441,6 +462,8 @@ pub struct PrecompiledRequest<'a> {
     pub active_title_state: &'a Path,
     /// Android: the runtime library and the title file (`runtime_plugin`).
     pub android: Option<&'a AndroidRuntime<'a>>,
+    /// What happens to an existing TopScreen layout (decision 4).
+    pub hud_layout: HudLayout,
 }
 
 /// The catalog-verified runtime as the interior-sun job's executor.
@@ -688,6 +711,7 @@ pub fn install_precompiled_title(
                 package_root: Some(root),
                 assets: &assets,
                 android,
+                hud_layout: request.hud_layout,
             },
             services,
             cancel,
@@ -696,6 +720,8 @@ pub fn install_precompiled_title(
         Ok((packaged, runtime, activation))
     })
     .map_err(|error| error.during(Operation::Activate))?;
+    // Committed: the package version beside the receipts it belongs to.
+    crate::refresh::record_installed_package(root, &prepared.directory);
     Ok(json!({
         "status": "ready",
         "install_model": MODEL,

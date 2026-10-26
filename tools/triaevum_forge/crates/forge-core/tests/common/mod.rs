@@ -225,7 +225,13 @@ impl NativeServices for FakeRuntime {
     }
 
     fn prebuild_interior_sun(&self, request: &InteriorSunRequest, _: &CancelToken) -> Result<NativeOutput> {
-        assert!(request.runtime.ends_with(host().runtime) || request.runtime.ends_with("libTriAevum.so"));
+        // The packaged runtime, or the placed one when a repair rebuilds the cache.
+        let runtime = &request.runtime;
+        assert!(
+            runtime.ends_with(host().runtime)
+                || runtime.ends_with(host().installed_runtime)
+                || runtime.ends_with("libTriAevum.so")
+        );
         let relative = "shadow-shells/0000000000000001.bin";
         let mut shell = b"RSSH".to_vec();
         shell.extend(3u32.to_le_bytes());

@@ -119,6 +119,20 @@ fn a_second_install_reuses_the_title_and_keeps_user_state() {
     assert_eq!(second["build"]["package"]["status"], "reused");
     let state = load_json_object(&state_path).unwrap();
     assert_eq!(state["translation"]["status"], "kept");
+    // Decision 4: a reinstall keeps the user's layout unless asked.
+    let kept = load_json_object(&topscreen).unwrap();
+    assert_eq!(kept["hud_margin_x"], 40);
+    let request = forge_core::install::InstallRequest {
+        source: forge_core::install::InstallSource::ExtractedDirectory(fixture.extracted.clone()),
+        data_root: None,
+        package_root: fixture.package.clone(),
+        target: forge_core::install::InstallTarget::Package,
+        game_language: None,
+    };
+    let options = forge_core::install::InstallOptions { hud_layout: forge_core::publish::HudLayout::Standard };
+    let mut report = |_: &str, _: &str| {};
+    forge_core::install::install_private_title_with(request, options, &runtime, &mut report, &forge_base::CancelToken::new())
+        .unwrap();
     let migrated = load_json_object(&topscreen).unwrap();
     assert_eq!(migrated["hud_scale"], 1.0);
     assert_eq!(migrated["hud_margin_x"], 4);

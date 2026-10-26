@@ -144,6 +144,22 @@ pub fn quiesce(installation: &Path, os: HostOs, operation: Operation) -> Result<
     Ok(Quiescence { _forge: forge, _game: game })
 }
 
+/// Only the game session lock, for an operation that publishes through the
+/// activation transaction (refresh, repair): the transaction takes the
+/// non-reentrant installation lock itself, so holding it here would nest.
+/// The game cannot start meanwhile, and another Forge's quiescent operation
+/// waits; a held lock is the `busy` error naming the game.
+pub fn hold_game_session(installation: &Path, os: HostOs, operation: Operation) -> Result<KernelLock> {
+    let directory = installation_state(installation, os).join(ACTIVATION_DIRECTORY);
+    std::fs::create_dir_all(&directory)
+        .map_err(|error| ForgeError::io(format!("Cannot create {}", directory.display()), error).during(operation))?;
+    let game_lock = session_lock_path(installation, os);
+    lock::acquire(&game_lock).map_err(|error| match error.kind {
+        ErrorKind::Busy => game_running(&game_lock, operation),
+        _ => error.during(operation),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

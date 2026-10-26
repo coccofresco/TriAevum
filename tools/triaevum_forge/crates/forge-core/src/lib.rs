@@ -9,7 +9,9 @@
 //! forge-mods); this crate orchestrates them and owns the jobs and the ABI.
 
 pub mod abi;
+pub mod active_title;
 pub mod backup;
+pub mod config_report;
 pub mod data_actions;
 pub mod diagnostics;
 pub mod explain;
@@ -23,6 +25,8 @@ pub mod preflight;
 pub mod publish;
 pub mod recognize;
 pub mod redact;
+pub mod refresh;
+pub mod repair;
 pub mod restore;
 pub mod session;
 pub mod state;

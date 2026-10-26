@@ -486,14 +486,15 @@ impl<'a> Context<'a> {
             Verdict::State(state) => return Ok(state),
             Verdict::Coherent { update } => update,
         };
+        // A new title plugin with the same runtime is an update too (the
+        // refresh compares both, as `package_update.py` does).
+        let catalog_plugin = item.get("plugin").and_then(Value::as_object).map(|plugin| text(plugin, "sha256"));
+        let update = update || catalog_plugin != Some(text(receipt, "plugin_sha256"));
         let version = self.package_version();
         if update {
             return Ok(InstallationState::UpdateAvailable {
                 recipe,
-                installed_package_identity: PackageIdentity {
-                    runtime_sha256: text(receipt, "runtime_sha256").to_string(),
-                    version: None,
-                },
+                installed_package_identity: crate::refresh::installed_package(&prepared.directory, receipt),
                 present_package_identity: PackageIdentity { runtime_sha256: present_sha, version },
             });
         }
@@ -538,13 +539,16 @@ impl<'a> Context<'a> {
         receipt: &Map<String, Value>,
         title: &Path,
     ) -> Result<Verdict> {
+        // The present runtime is the catalog's (checked by the caller): a
+        // receipt naming another one belongs to the previous package. The
+        // previous tuple is validated with the root runtime; when that is
+        // already the new one (in place, or placed before the rebinding),
+        // only its identity is substituted (`package_update.py`).
         let installed = self.package.join(self.platform.installed_runtime);
-        let packaged = join_posix(&self.package, self.platform.runtime);
-        let in_place = self.platform.runtime == self.platform.installed_runtime;
-        let update = text(receipt, "runtime_sha256") != present_sha && (in_place || packaged.is_file());
+        let update = text(receipt, "runtime_sha256") != present_sha;
         let executable = if installed.is_file() { installed } else { present.to_path_buf() };
         let mut receipt = receipt.clone();
-        if update && in_place {
+        if update && executable == present {
             receipt.insert("runtime_sha256".into(), json!(present_sha));
         }
         Ok(match forge_native::validate_installed_runtime(&executable, title, &self.data_root, &receipt) {

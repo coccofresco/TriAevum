@@ -111,6 +111,45 @@ fn restore(journal: &Path, targets: &[PathBuf]) -> Result<()> {
     std::fs::remove_file(journal).map_err(|error| ForgeError::io("Cannot remove the activation journal", error))
 }
 
+fn invalid_journal() -> ForgeError {
+    ForgeError::new(forge_base::ErrorKind::RecoveryRequired, "Invalid Forge activation recovery journal")
+        .because(Reason::RollbackFailure)
+}
+
+/// Repair's recovery of an interrupted activation: puts back the files the
+/// journal names, from their verified backups, without knowing the original
+/// request. Every journaled target must lie inside one of `roots` (the
+/// installation and its data folder). Returns whether a journal was settled.
+pub fn recover_interrupted(installation: &Path, os: HostOs, roots: &[PathBuf]) -> Result<bool> {
+    let journal = journal_path(installation, os);
+    let _lock = installation_lock(installation, os)?;
+    if !journal.exists() {
+        return Ok(false);
+    }
+    let payload = load_json_object(&journal).map_err(|_| invalid_journal())?;
+    let Some(Value::Array(entries)) = payload.get("entries") else { return Err(invalid_journal()) };
+    let roots = roots.iter().map(|root| resolve(root)).collect::<Result<Vec<PathBuf>>>()?;
+    let mut targets = Vec::with_capacity(entries.len());
+    for entry in entries {
+        let target = entry.get("target").and_then(Value::as_str).ok_or_else(invalid_journal)?;
+        let target = resolve(Path::new(target))?;
+        if !roots.iter().any(|root| target.starts_with(root)) {
+            return Err(ForgeError::new(
+                forge_base::ErrorKind::RecoveryRequired,
+                "Pending activation targets differ; retry the original title installation",
+            )
+            .with_path(target));
+        }
+        targets.push(target);
+    }
+    restore(&journal, &targets)?;
+    let directory = journal.parent().expect("journal has a parent");
+    for index in 0..targets.len() {
+        let _ = std::fs::remove_file(directory.join(format!("{index}.bak")));
+    }
+    Ok(true)
+}
+
 /// Runs `body` with `targets` journaled. The body's failure (or panic) puts
 /// every target back; success discards the backups. If the restore itself
 /// fails, the journal and backups stay for the next Forge.

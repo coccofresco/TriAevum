@@ -16,7 +16,7 @@ use crate::cancel::CancelToken;
 use crate::error::{ForgeError, Operation, Result};
 use crate::fsutil;
 use crate::hashing::{copy_hashing, hex};
-use crate::install::{self, install_private_title, AndroidTarget, InstallRequest, InstallSource, InstallTarget};
+use crate::install::{self, AndroidTarget, InstallRequest, InstallSource, InstallTarget};
 use crate::log::ForgeLog;
 use crate::recognize::{recognize_rom, RecognizeRequest};
 
@@ -32,7 +32,8 @@ pub fn capabilities() -> Value {
         "encrypted_input": false,
         "jobs": ["spool_copy", "rom_identify", "rom_recognize", "install", "game_language",
                  "data_plan", "backup", "restore_preview", "restore", "restore_recover",
-                 "clear_renderer_cache", "remove_prepared_game", "rebuild_prepared_assets"],
+                 "clear_renderer_cache", "remove_prepared_game", "rebuild_prepared_assets",
+                 "refresh", "repair", "hud_layout_preview"],
         "queries": ["inspect", "explain"],
     })
 }
@@ -100,6 +101,23 @@ fn start_job(request: &[u8]) -> Result<Job> {
             let log = job_log("rebuild", job.data_root.as_deref(), &job.package_root, job.android.as_ref());
             Ok(Job::spawn_logged(log, move |sink, cancel| job.run(sink, cancel)))
         }
+        // Update and Repair in place (UX plan WP-04A).
+        Some(name @ ("refresh" | "repair")) => {
+            let job = MaintenanceJob::parse(name, &request)?;
+            let log = job_log(name, job.data_root.as_deref(), &job.package_root, job.android.as_ref());
+            Ok(Job::spawn_logged(log, move |sink, cancel| job.run(sink, cancel)))
+        }
+        // `data_root?` (Android: the profile's `data`), else the package's.
+        Some("hud_layout_preview") => {
+            let data_root = match optional_path(&request, "data_root") {
+                Some(data_root) => data_root,
+                None => install::data_root(None, &package_root(&request)?)?,
+            };
+            Ok(Job::spawn(move |_, _| {
+                let fields = crate::config_report::hud_layout_preview(&data_root)?;
+                Ok(crate::config_report::preview_value(&fields))
+            }))
+        }
         // Data & backups (UX plan WP-05B).
         Some(other) => crate::data_actions::start(other, &request)?
             .ok_or_else(|| ForgeError::invalid(format!("Unknown Forge job: {other}"))),
@@ -111,12 +129,7 @@ fn start_job(request: &[u8]) -> Result<Job> {
 /// folder, else the Android profile's or the package's. None when the folder
 /// cannot be resolved; the job then runs unlogged.
 fn job_log(job: &str, data_root: Option<&Path>, package_root: &Path, android: Option<&AndroidJob>) -> Option<ForgeLog> {
-    let data_root = match (data_root, android) {
-        (Some(requested), _) => install::data_root(Some(requested), package_root).ok()?,
-        (None, Some(android)) => android.target.data_root(),
-        (None, None) => install::data_root(None, package_root).ok()?,
-    };
-    Some(ForgeLog::new(&data_root, job))
+    Some(ForgeLog::new(&job_data_root(data_root, package_root, android)?, job))
 }
 
 /// Where a job reads its input: a local path, or (Android) a descriptor the
@@ -242,6 +255,7 @@ struct InstallJob {
     download_hd_textures: bool,
     android: Option<AndroidJob>,
     game_language: Option<String>,
+    hud_layout: crate::publish::HudLayout,
 }
 
 /// `android`: `native_library_dir` (the application's), `profile_root` (the
@@ -346,35 +360,121 @@ impl InstallJob {
             download_hd_textures,
             android,
             game_language,
+            hud_layout: crate::publish::HudLayout::parse(request.get("hud_layout"))?,
         })
     }
 
+    /// The install result, plus `config_changes` (WP-04A): what the
+    /// installation changed in the user's settings.
     fn run(self, sink: &EventSink, cancel: &CancelToken) -> Result<Value> {
         if self.download_hd_textures {
             download_hd_textures(&self.package_root, self.data_root.as_deref(), sink, cancel)?;
         }
         let mut events = StageEvents { sink, current: String::new() };
         let mut report = |stage: &str, message: &str| events.report(stage, message);
-        let Some(android) = self.android else {
-            let target = InstallTarget::Package;
-            let request = InstallRequest {
-                source: self.source,
-                data_root: self.data_root,
+        let target_data = job_data_root(self.data_root.as_deref(), &self.package_root, self.android.as_ref());
+        let before = target_data.as_deref().map(crate::config_report::ConfigSnapshot::take);
+        let options = install::InstallOptions { hud_layout: self.hud_layout };
+        let mut result = match self.android {
+            None => {
+                let request = InstallRequest {
+                    source: self.source,
+                    data_root: self.data_root,
+                    package_root: self.package_root,
+                    target: InstallTarget::Package,
+                    game_language: self.game_language,
+                };
+                install::install_private_title_with(request, options, &DesktopServices, &mut report, cancel)?
+            }
+            Some(android) => {
+                let services = android_services(&android)?;
+                let request = InstallRequest {
+                    source: self.source,
+                    data_root: self.data_root,
+                    package_root: self.package_root,
+                    target: InstallTarget::Android(android.target),
+                    game_language: self.game_language,
+                };
+                install::install_private_title_with(request, options, &services, &mut report, cancel)?
+            }
+        };
+        if let (Some(before), Some(data_root)) = (before, target_data) {
+            let permitted = crate::config_report::Permitted { hud_layout: self.hud_layout, language: true };
+            let after = crate::config_report::ConfigSnapshot::take(&data_root);
+            let changes = crate::config_report::config_changes(&before, &after, permitted);
+            result["config_changes"] = crate::config_report::changes_value(&changes);
+        }
+        Ok(result)
+    }
+}
+
+/// The data folder of a job's request: the requested folder, else the
+/// Android profile's or the package's.
+fn job_data_root(data_root: Option<&Path>, package_root: &Path, android: Option<&AndroidJob>) -> Option<PathBuf> {
+    match (data_root, android) {
+        (Some(requested), _) => install::data_root(Some(requested), package_root).ok(),
+        (None, Some(android)) => Some(android.target.data_root()),
+        (None, None) => install::data_root(None, package_root).ok(),
+    }
+}
+
+/// The `refresh` and `repair` jobs (`refresh::refresh_installation`,
+/// `repair::repair_installation`): `package_root?`, `data_root?`, `android?`
+/// as for `install`, `hud_layout?` ("keep", the default, or "standard"),
+/// and for `refresh` `allow_downgrade?` (bool).
+struct MaintenanceJob {
+    repair: bool,
+    data_root: Option<PathBuf>,
+    package_root: PathBuf,
+    android: Option<AndroidJob>,
+    hud_layout: crate::publish::HudLayout,
+    allow_downgrade: bool,
+}
+
+impl MaintenanceJob {
+    fn parse(name: &str, request: &Map<String, Value>) -> Result<Self> {
+        let allow_downgrade = match request.get("allow_downgrade") {
+            None | Some(Value::Null) => false,
+            Some(Value::Bool(flag)) if name == "refresh" => *flag,
+            Some(_) => return Err(ForgeError::invalid("allow_downgrade must be a boolean (refresh only)")),
+        };
+        Ok(Self {
+            repair: name == "repair",
+            data_root: optional_path(request, "data_root"),
+            package_root: package_root(request)?,
+            android: android_job(request)?,
+            hud_layout: crate::publish::HudLayout::parse(request.get("hud_layout"))?,
+            allow_downgrade,
+        })
+    }
+
+    fn run(self, sink: &EventSink, cancel: &CancelToken) -> Result<Value> {
+        let mut events = StageEvents { sink, current: String::new() };
+        let mut report = |stage: &str, message: &str| events.report(stage, message);
+        let (target, services): (InstallTarget, Box<dyn forge_native::NativeServices>) = match self.android {
+            None => (InstallTarget::Package, Box::new(DesktopServices)),
+            Some(android) => {
+                let services = android_services(&android)?;
+                (InstallTarget::Android(android.target), Box::new(services))
+            }
+        };
+        if self.repair {
+            let request = crate::repair::RepairRequest {
                 package_root: self.package_root,
+                data_root: self.data_root,
                 target,
-                game_language: self.game_language,
+                hud_layout: self.hud_layout,
             };
-            return install_private_title(request, &DesktopServices, &mut report, cancel);
-        };
-        let services = android_services(&android)?;
-        let request = InstallRequest {
-            source: self.source,
-            data_root: self.data_root,
+            return crate::repair::repair_installation(&request, services.as_ref(), &mut report, cancel);
+        }
+        let request = crate::refresh::RefreshRequest {
             package_root: self.package_root,
-            target: InstallTarget::Android(android.target),
-            game_language: self.game_language,
+            data_root: self.data_root,
+            target,
+            hud_layout: self.hud_layout,
+            allow_downgrade: self.allow_downgrade,
         };
-        install_private_title(request, &services, &mut report, cancel)
+        crate::refresh::refresh_installation(&request, services.as_ref(), &mut report, cancel)
     }
 }
 

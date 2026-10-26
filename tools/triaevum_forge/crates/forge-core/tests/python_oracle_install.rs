@@ -105,6 +105,8 @@ fn informational(relative: &str) -> bool {
         || relative.starts_with("data/shader-seeds/device-preparation/")
         || relative.starts_with("data/shader-seeds/renderer-preparation/")
         || relative == "data/runtime-state.json"
+        // The installed package version record (UX plan WP-04A), Rust only.
+        || relative.ends_with("/installed-package.json")
 }
 
 fn run_python(python: &Path, package: &Path, rom: &Path, data: &Path, result: &Path) {
