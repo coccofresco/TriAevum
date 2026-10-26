@@ -1,7 +1,7 @@
 """Publisher build of the Rust Forge for a desktop release package.
 
-Builds TriAevumForge (window and launcher) and triaevum-forge (command line)
-from tools/triaevum_forge with the pinned toolchain and Cargo.lock, remaps
+Builds TriAevumForge (window and launcher), triaevum-forge (command line) and,
+for Windows, triaevum-update-helper (Update from ZIP) from tools/triaevum_forge with the pinned toolchain and Cargo.lock, remaps
 build-machine paths out of the binaries, and writes the build receipt
 (forge/rust-forge.json) the release audit binds to the corresponding source.
 The public import path then needs no Python: the release tooling stays Python.
@@ -38,10 +38,13 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 FORGE_ROOT = REPO_ROOT / "tools/triaevum_forge"
 RECEIPT = "forge/rust-forge.json"
 PACKAGES = ("forge-desktop", "forge-cli")
+# The Windows package also carries the update helper (UX plan WP-04B).
+TARGET_PACKAGES = {WINDOWS.target: (*PACKAGES, "forge-update-helper"), LINUX.target: PACKAGES}
 # Cargo binary name -> (package path, release role), per desktop target.
 BINARIES = {
     WINDOWS.target: {"TriAevumForge.exe": (WINDOWS.forge, "forge_executable"),
-                     "triaevum-forge.exe": ("forge/triaevum-forge.exe", "forge_command_line")},
+                     "triaevum-forge.exe": ("forge/triaevum-forge.exe", "forge_command_line"),
+                     "triaevum-update-helper.exe": ("forge/triaevum-update-helper.exe", "forge_update_helper")},
     LINUX.target: {"TriAevumForge": (LINUX.forge, "forge_executable"),
                    "triaevum-forge": ("forge/triaevum-forge", "forge_command_line")},
 }
@@ -101,7 +104,7 @@ def build(output: Path, *, target: str, source_commit: str, cargo: str = "cargo"
                    "CARGO_ENCODED_RUSTFLAGS": "\x1f".join(rustflags(target))}
     environment.pop("RUSTFLAGS", None)
     command = [cargo, "build", "--release", "--locked", "--target", target,
-               *[argument for package in PACKAGES for argument in ("-p", package)]]
+               *[argument for package in TARGET_PACKAGES[target] for argument in ("-p", package)]]
     subprocess.run(command, cwd=FORGE_ROOT, env=environment, check=True)
 
     policy = load_json_object(policy_path)
@@ -129,7 +132,7 @@ def build(output: Path, *, target: str, source_commit: str, cargo: str = "cargo"
         "target": target,
         "source_commit": source_commit,
         "toolchain": channel,
-        "packages": list(PACKAGES),
+        "packages": list(TARGET_PACKAGES[target]),
         "static_crt": target == WINDOWS.target,
         "cargo_lock_sha256": sha256_file(FORGE_ROOT / "Cargo.lock"),
         "notices_sha256": sha256_file(rust_forge_notices.NOTICES),

@@ -51,7 +51,7 @@ EXCLUDED_ROLES = frozenset({
     "optional_vulkan_runtime", "precompiled_title", "precompiled_catalog",
     "corresponding_source", "translated_title_source", "title_build_source", "configuration",
     "forge_tool", "forge_tool_resource", "forge_toolchain_setup", "forge_link_library", "forge_clang_header",
-    "forge_frozen_resource", "forge_command_line", "forge_build_receipt",
+    "forge_frozen_resource", "forge_command_line", "forge_build_receipt", "forge_update_helper",
 })
 
 

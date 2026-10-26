@@ -26,6 +26,8 @@ NOTICES = b"# TriAevum Forge (Rust): third-party crates\n\nfixture\n"
 LOCK = b"version = 4\n"
 TOOLCHAIN = b'[toolchain]\nchannel = "1.92.0"\n'
 CLI = {WINDOWS.target: "forge/triaevum-forge.exe", LINUX.target: "forge/triaevum-forge"}
+HELPER = "forge/triaevum-update-helper.exe"
+BINARY_ROLES = ("forge_executable", "forge_command_line", "forge_update_helper")
 
 
 def rust_files(target):
@@ -38,6 +40,8 @@ def rust_files(target):
         CLI[target]: ("forge_command_line", executable + b" rust command line"),
         "LICENSES/Rust-Forge-crates.md": ("license", NOTICES),
     })
+    if target == WINDOWS.target:
+        files[HELPER] = ("forge_update_helper", executable + b" rust update helper")
     return files
 
 
@@ -53,7 +57,7 @@ def source_entries(lock=LOCK, toolchain=TOOLCHAIN, notices=NOTICES, omit=()):
 def receipt_for(files, target, /, **overrides):
     binaries = [{"path": path, "role": role, "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
                 for path, (role, data) in sorted(files.items())
-                if role in ("forge_executable", "forge_command_line")]
+                if role in BINARY_ROLES]
     receipt = {"format": "triaevum_rust_forge_build_v1", "target": target, "source_commit": "0" * 40,
                "toolchain": "1.92.0", "packages": ["forge-desktop", "forge-cli"],
                "static_crt": target == WINDOWS.target,

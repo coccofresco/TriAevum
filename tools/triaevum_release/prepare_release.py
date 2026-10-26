@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -23,6 +24,7 @@ try:
     from .shader_corpus_layout import bind_shader_corpus
     from .precomputed_tables import bind_precomputed_tables
     from .forge import load_recipe, DEFAULT_RECIPES
+    from . import release_signature
 except ImportError:
     from rust_forge_build import build as build_rust_forge
     from common import atomic_write_json, load_json_object
@@ -38,6 +40,7 @@ except ImportError:
     from shader_release_layout import bind_renderer_compiler
     from shader_corpus_layout import bind_shader_corpus
     from precomputed_tables import bind_precomputed_tables
+    import release_signature
     from forge import load_recipe, DEFAULT_RECIPES
 
 
@@ -190,9 +193,17 @@ def prepare(args) -> dict:
         layout["files"].extend(table_files)
     atomic_write_json(catalog_path, catalog)
     atomic_write_json(layout_path, layout)
+    signing_key = args.signing_key or (Path(os.environ[release_signature.KEY_VARIABLE])
+                                       if os.environ.get(release_signature.KEY_VARIABLE) else None)
+    if signing_key is None and not args.candidate:
+        # Owner decision 10: Forge installs update packages only when signed.
+        raise ValueError("a release must be signed: pass --signing-key or set "
+                         f"{release_signature.KEY_VARIABLE} (docs/TRIAEVUM_UPDATE_SIGNING.md)")
     result = package_release(layout_path, args.output, source_root=ROOT,
                              version=args.version, source_commit=commit,
                              enforce_readiness=not args.candidate)
+    if signing_key is not None:
+        result["signature"] = str(release_signature.sign_package(args.output, signing_key))
     if args.archive is not None:
         result["archive"] = create_release_archive(args.output, args.archive)
     return result
@@ -209,6 +220,9 @@ def main() -> int:
     parser.add_argument("--work", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--archive", type=Path, help="Optional audited portable ZIP outside the output directory")
+    parser.add_argument("--signing-key", type=Path,
+                        help="The publisher's private key, outside the repository (default: "
+                             "$TRIAEVUM_RELEASE_SIGNING_KEY); required unless --candidate")
     parser.add_argument("--version", required=True)
     parser.add_argument("--candidate", action="store_true")
     parser.add_argument("--title-build", type=Path, required=True, help="Verified whole-aot-plugin.json")

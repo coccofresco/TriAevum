@@ -33,7 +33,7 @@ FORMAT = "triaevum_rust_third_party_v1"
 
 # Each published product: its target and the workspace packages it is built from.
 PRODUCTS = {
-    "windows": ("x86_64-pc-windows-msvc", ("forge-desktop", "forge-cli")),
+    "windows": ("x86_64-pc-windows-msvc", ("forge-desktop", "forge-cli", "forge-update-helper")),
     "linux": ("x86_64-unknown-linux-gnu", ("forge-desktop", "forge-cli")),
     "android": ("aarch64-linux-android", ("forge-android",)),
 }
@@ -266,7 +266,8 @@ def render(inventory: dict, texts: dict[str, str]) -> str:
         "do not edit by hand. Machine-readable inventory: `tools/triaevum_forge/THIRD_PARTY_CRATES.json`",
         f"(SHA-256 `{digest}`).",
         "",
-        "The Rust Forge (`TriAevumForge`, `triaevum-forge` and Android's `libtriaevum_forge.so`) is",
+        "The Rust Forge (`TriAevumForge`, `triaevum-forge`, the Windows `triaevum-update-helper` and",
+        "Android's `libtriaevum_forge.so`) is",
         "licensed GPL-3.0-or-later. It statically links the crates below, each under the license",
         "elected from its declared expression, and the Rust standard library of toolchain",
         f"{inventory['toolchain']} (MIT OR Apache-2.0; its bundled components are listed in the Rust",

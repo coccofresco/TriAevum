@@ -70,9 +70,10 @@
         },
         "rust": {
           "allowed_roles": {
-            "forge_command_line": ["forge/triaevum-forge.exe"]
+            "forge_command_line": ["forge/triaevum-forge.exe"],
+            "forge_update_helper": ["forge/triaevum-update-helper.exe"]
           },
-          "required_paths": ["forge/triaevum-forge.exe"]
+          "required_paths": ["forge/triaevum-forge.exe", "forge/triaevum-update-helper.exe"]
         }
       }
     },
@@ -126,9 +127,10 @@
         "tools/triaevum_forge/.cargo/config.toml",
         "tools/triaevum_forge/include/triaevum_forge.h",
         "tools/triaevum_forge/THIRD_PARTY_CRATES.json",
+        "tools/triaevum_forge/update-signing-keys.json",
         "LICENSES/Rust-Forge-crates.md"
       ],
-      "rust_forge_binary_roles": ["forge_executable", "forge_command_line"],
+      "rust_forge_binary_roles": ["forge_executable", "forge_command_line", "forge_update_helper"],
       "forbidden_roles": ["forge_tool", "forge_toolchain_setup", "forge_link_library", "forge_tool_resource",
                           "forge_clang_header", "forge_frozen_resource"],
       "forbidden_package_patterns": [
@@ -155,7 +157,7 @@
   "vulkan_import_exempt_roles": ["optional_vulkan_runtime"],
   "proprietary_sdk_markers": {
     "markers": ["NVSDK_NGX_"],
-    "scanned_roles": ["runtime_executable", "runtime_library", "forge_executable", "forge_command_line", "forge_tool", "forge_runtime_module", "shader_preparation_tool", "precompiled_title"]
+    "scanned_roles": ["runtime_executable", "runtime_library", "forge_executable", "forge_command_line", "forge_update_helper", "forge_tool", "forge_runtime_module", "shader_preparation_tool", "precompiled_title"]
   },
   "forbidden_basenames": [
     "AGENTS.md",

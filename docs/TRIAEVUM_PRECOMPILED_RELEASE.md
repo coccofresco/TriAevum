@@ -75,7 +75,10 @@ Post-alpha.1b packages can additionally bind an explicitly qualified
 while equivalent ExHeader packaging and logical RomFS contents may differ in
 their complete-file identities. Prepared files retain their actual hashes and
 are revalidated against the module-bound family before activation.
-Hash validation is integrity checking, not cryptographic publisher authentication.
+Hash validation is integrity checking, not cryptographic publisher authentication;
+the publisher's Ed25519 signature of the release manifest is
+([TRIAEVUM_UPDATE_SIGNING.md](TRIAEVUM_UPDATE_SIGNING.md)), and Forge installs update ZIPs only
+with it. The private key never enters the repository or a package.
 
 Deferred device-owned memory and resource snapshots require the whole-AOT
 descriptor's `MemoryWriteObservationVersion` to equal **3**. Despite the
@@ -106,7 +109,11 @@ guarantee for every possible artifact.
 - `rust_forge_notices.py`: `LICENSES/Rust-Forge-crates.md` and
   `tools/triaevum_forge/THIRD_PARTY_CRATES.json` from Cargo.lock; its test fails
   when Cargo.lock gains a crate without a notice decision.
-- `prepare_release.py`: developer build/package workflow, not user preparation.
+- `release_signature.py`: the publisher signature (`docs/release-signature.json`)
+  and the owner's one-time key generation; the public keys Forge trusts are
+  `tools/triaevum_forge/update-signing-keys.json`.
+- `prepare_release.py`: developer build/package workflow, not user preparation;
+  it signs a non-candidate release (`--signing-key`).
 - `audit_release.py`: explicit precompiled roles; rejects uncatalogued modules,
   ROM/content contamination and compiler payloads in the user package. The
   manifest's `release.forge_profile` selects the Forge profile of

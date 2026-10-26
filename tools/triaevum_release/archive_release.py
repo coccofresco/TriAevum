@@ -12,23 +12,26 @@ import tarfile
 import zipfile
 
 try:
-    from .audit_release import DEFAULT_POLICY, audit_release
+    from .audit_release import DEFAULT_POLICY, audit_release, release_signature_path
     from .common import load_json_object, normalize_relative_path, release_manifest_path, sha256_file
     from .release_platform import WINDOWS, for_target
+    from . import release_signature
 except ImportError:
-    from audit_release import DEFAULT_POLICY, audit_release
+    from audit_release import DEFAULT_POLICY, audit_release, release_signature_path
     from common import load_json_object, normalize_relative_path, release_manifest_path, sha256_file
     from release_platform import WINDOWS, for_target
+    import release_signature
 
 
-def create_release_archive(root: Path, output: Path, *, policy_path: Path = DEFAULT_POLICY) -> dict:
+def create_release_archive(root: Path, output: Path, *, policy_path: Path = DEFAULT_POLICY,
+                           signing_keys: Path = release_signature.KEYS) -> dict:
     root = root.resolve()
     output = output.absolute()
     if output.resolve().is_relative_to(root):
         raise ValueError("release archive must be outside the package")
     if output.exists() or output.is_symlink():
         raise ValueError(f"release archive already exists: {output}")
-    audit = audit_release(root, policy_path=policy_path)
+    audit = audit_release(root, policy_path=policy_path, signing_keys=signing_keys)
     if not audit.ok:
         raise ValueError("release archive audit failed:\n" + "\n".join(audit.errors))
     manifest_path = release_manifest_path(root)
@@ -39,6 +42,10 @@ def create_release_archive(root: Path, output: Path, *, policy_path: Path = DEFA
     prefix = normalize_relative_path(root.name)
     entries = {item["path"]: item for item in manifest["files"]}
     entries[manifest_path.relative_to(root).as_posix()] = {"role": "manifest"}
+    # The publisher signature beside the manifest (release_signature.py).
+    signature = release_signature_path(manifest_path)
+    if signature.is_file():
+        entries[signature.relative_to(root).as_posix()] = {"role": "signature"}
     # Never recursively archive an installation: only the audited public inventory.
     paths = sorted(entries)
     directories = {prefix}
@@ -48,7 +55,7 @@ def create_release_archive(root: Path, output: Path, *, policy_path: Path = DEFA
 
     def mode(relative: str) -> int:
         return 0o755 if entries[relative]["role"] in ("runtime_executable", "forge_executable",
-                                                      "forge_command_line") else 0o644
+                                                      "forge_command_line", "forge_update_helper") else 0o644
 
     output.parent.mkdir(parents=True, exist_ok=True)
     # Exclusive creation protects existing releases. Failed writes never leave an archive.
@@ -88,7 +95,8 @@ def create_release_archive(root: Path, output: Path, *, policy_path: Path = DEFA
             raise
     return {"archive": str(output), "target": platform.target,
             "bytes": output.stat().st_size, "sha256": sha256_file(output),
-            "qualification": manifest["release"].get("qualification", "unspecified")}
+            "qualification": manifest["release"].get("qualification", "unspecified"),
+            "signed": signature.is_file()}
 
 
 def main() -> int:

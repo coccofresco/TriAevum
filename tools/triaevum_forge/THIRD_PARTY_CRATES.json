@@ -7,7 +7,8 @@
       "target": "x86_64-pc-windows-msvc",
       "packages": [
         "forge-desktop",
-        "forge-cli"
+        "forge-cli",
+        "forge-update-helper"
       ]
     },
     "linux": {

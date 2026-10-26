@@ -26,6 +26,7 @@ try:
     from .precomputed_tables import validate_precomputed_tables
     from .qualified_input_coverage import require_coverage
     from .vulkan_imports import vulkan_import_errors
+    from . import release_signature
 except ImportError:
     from product_contract import validate_product_info
     from precompiled_titles import MODEL, CATALOG, load_catalog, validate_title, checked_file
@@ -39,6 +40,7 @@ except ImportError:
     from precomputed_tables import validate_precomputed_tables
     from qualified_input_coverage import require_coverage
     from vulkan_imports import vulkan_import_errors
+    import release_signature
 
 
 ROOT = Path(__file__).resolve().parent
@@ -51,6 +53,20 @@ RUST_FORGE_RECEIPT_FORMAT = "triaevum_rust_forge_build_v1"
 RUST_FORGE_SOURCE_LOCK = "tools/triaevum_forge/Cargo.lock"
 RUST_FORGE_SOURCE_TOOLCHAIN = "tools/triaevum_forge/rust-toolchain.toml"
 RUST_FORGE_NOTICES = "LICENSES/Rust-Forge-crates.md"
+
+
+def release_signature_path(manifest_path: Path) -> Path:
+    """The publisher signature beside a release manifest (release_signature.py)."""
+    return release_signature.signature_path(manifest_path)
+
+
+def _signature_errors(manifest_path: Path, signature: Path, keys_path: Path) -> Iterable[str]:
+    try:
+        errors = release_signature.signature_errors(
+            manifest_path.read_bytes(), signature.read_bytes(), release_signature.load_keys(keys_path))
+    except (OSError, ValueError) as exc:
+        errors = [f"cannot verify the release signature: {exc}"]
+    yield from errors
 
 
 @dataclass(frozen=True)
@@ -271,6 +287,7 @@ def audit_release(
     *,
     manifest_path: Path | None = None,
     policy_path: Path = DEFAULT_POLICY,
+    signing_keys: Path = release_signature.KEYS,
 ) -> ReleaseAuditResult:
     errors: list[str] = []
     root = package_root.resolve()
@@ -369,6 +386,8 @@ def audit_release(
         for item in policy.get("source_archive_forbidden_prefixes", [])
     )
 
+    signature_path = release_signature_path(manifest_path)
+    signature_relative = signature_path.relative_to(root).as_posix()
     declared: dict[str, dict[str, Any]] = {}
     roles_seen: set[str] = set()
     for index, item in enumerate(declared_items):
@@ -382,6 +401,9 @@ def audit_release(
             continue
         if relative in RELEASE_MANIFEST_PATHS:
             reject("the release manifest cannot inventory itself")
+            continue
+        if relative == signature_relative:
+            reject("the release manifest cannot inventory its signature")
             continue
         if relative in declared:
             reject(f"duplicate release path: {relative}")
@@ -451,7 +473,7 @@ def audit_release(
         if path.is_symlink():
             reject(f"symbolic links are forbidden: {relative}")
             continue
-        if path.is_file() and relative != manifest_relative:
+        if path.is_file() and relative not in (manifest_relative, signature_relative):
             actual[relative] = path
 
     undeclared = sorted(set(actual) - set(declared))
@@ -546,6 +568,12 @@ def audit_release(
             except (OSError, UnicodeError, json.JSONDecodeError) as exc:
                 reject(f"invalid JSON release file {relative}: {exc}")
         verified_files += 1
+
+    # The publisher signature is optional for the audit (candidates are
+    # unsigned); when present it must verify under an embedded Forge key.
+    if signature_path.is_file():
+        for error in _signature_errors(manifest_path, signature_path, signing_keys):
+            reject(error)
 
     for required in policy.get("required_paths", []):
         if str(required) not in actual:
@@ -651,6 +679,7 @@ def audit_release(
         "verified_files": verified_files,
         "bytes": total_bytes,
         "roles": sorted(roles_seen),
+        "signed": signature_path.is_file(),
     }
     return ReleaseAuditResult(summary, tuple(errors))
 
