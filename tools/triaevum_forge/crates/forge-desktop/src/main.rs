@@ -26,6 +26,7 @@ mod pages;
 mod recognition;
 mod smoke;
 mod texts;
+mod theme;
 mod window;
 
 use std::process::ExitCode;

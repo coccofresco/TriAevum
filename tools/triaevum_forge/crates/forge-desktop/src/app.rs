@@ -300,6 +300,8 @@ pub struct ForgeApp {
     pub(crate) data: pages::data::DataState,
     /// Update and Repair in place: the pending question, the last operation.
     pub(crate) maintenance: crate::maintenance::MaintenanceState,
+    /// The background art behind every page (`theme.rs`).
+    backdrop: crate::theme::Backdrop,
 }
 
 impl ForgeApp {
@@ -311,6 +313,7 @@ impl ForgeApp {
         simulated: SimulatedDisplay,
     ) -> Result<Self, String> {
         context.set_fonts(crate::fonts::system_fonts()?);
+        let backdrop = crate::theme::Backdrop::install(context);
         // Scroll bars that stay visible: on a small screen the page goes on
         // below the window's edge, and egui's default hidden bar would not
         // say so (issue #111).
@@ -393,6 +396,7 @@ impl ForgeApp {
             probe,
             data: Default::default(),
             maintenance: Default::default(),
+            backdrop,
         };
         app.refresh_installation();
         app.refresh_hd();
@@ -1269,10 +1273,11 @@ impl ForgeApp {
             (true, _) => (ui.input(|input| input.time) * 0.6).fract() as f32,
             (false, _) => 0.0,
         };
-        let mut bar = ProgressBar::new(fraction).desired_height(8.0);
-        if !self.busy {
-            bar = bar.fill(egui::Color32::TRANSPARENT);
-        }
+        let bar = ProgressBar::new(fraction).desired_height(8.0).fill(if self.busy {
+            crate::theme::GOLD
+        } else {
+            egui::Color32::TRANSPARENT
+        });
         record.add(ui, "progress", "progress", bar);
         ui.add_space(8.0);
         let buttons: Vec<(CardButton, bool)> =
@@ -1289,9 +1294,14 @@ impl ForgeApp {
                 if *primary {
                     text = text.strong().size(16.0);
                 }
+                // The primary action is gold with dark text (`theme.rs`).
+                let gold = *primary && button.enabled && button.command != Command::Cancel;
+                if gold {
+                    text = text.color(crate::theme::ON_GOLD);
+                }
                 let mut widget = Button::new(text).min_size(Vec2::new(width, if *primary { 34.0 } else { 30.0 }));
-                if *primary && button.enabled && button.command != Command::Cancel {
-                    widget = widget.fill(ui.visuals().selection.bg_fill);
+                if gold {
+                    widget = widget.fill(crate::theme::GOLD);
                 }
                 if record.button(ui, button.enabled, name, widget) {
                     actions.push(Action::Command(button.command));
@@ -1337,11 +1347,16 @@ impl eframe::App for ForgeApp {
         };
         let panel = egui::Frame::central_panel(ui.style()).inner_margin(0);
         egui::CentralPanel::default().frame(panel).show(ui, |ui| {
-            let navigation = egui::Frame::new().inner_margin(Margin { left: 16, right: 16, top: 8, bottom: 2 });
-            navigation.show(ui, |ui| {
+            // The art behind everything; the tab strip, the page panel and
+            // the footer sit on dark panels over it (`theme.rs`).
+            self.backdrop.paint(ui.painter(), ui.max_rect());
+            let navigation = crate::theme::strip_frame(Margin { left: 16, right: 16, top: 8, bottom: 6 });
+            let strip = navigation.show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 pages::navigation(ui, &self.texts, self.page, &mut record, &mut actions);
             });
+            let edge = strip.response.rect;
+            ui.painter().hline(edge.x_range(), edge.bottom(), crate::theme::edge_stroke());
             // The page scrolls; the footer below it always stays in view.
             let height = (ui.available_height() - self.footer_height).max(40.0);
             let mut area = egui::ScrollArea::vertical()
@@ -1353,16 +1368,22 @@ impl eframe::App for ForgeApp {
                 area = area.vertical_scroll_offset(0.0);
             }
             let output = area.show(ui, |ui| {
-                egui::Frame::new().inner_margin(Margin::symmetric(16, 8)).show(ui, |ui| {
-                    ui.set_width(ui.available_width());
-                    record.scrolled = true;
-                    self.page_body(ui, &mut record, &mut actions, &card);
-                    record.scrolled = false;
+                egui::Frame::new().inner_margin(Margin::same(8)).show(ui, |ui| {
+                    // On a wide window the page panel leaves the art's right
+                    // part (the sword) in view.
+                    let page = crate::theme::page_frame();
+                    let width = crate::theme::panel_width(ui.available_width()) - page.total_margin().sum().x;
+                    page.show(ui, |ui| {
+                        ui.set_width(width);
+                        record.scrolled = true;
+                        self.page_body(ui, &mut record, &mut actions, &card);
+                        record.scrolled = false;
+                    });
                 });
             });
             self.scroll_viewport = output.inner_rect;
-            let footer = egui::Frame::side_top_panel(ui.style()).inner_margin(Margin::symmetric(16, 8));
-            let line = ui.visuals().widgets.noninteractive.bg_stroke;
+            let footer = crate::theme::footer_frame(Margin::symmetric(16, 8));
+            let line = crate::theme::edge_stroke();
             ui.painter().hline(ui.max_rect().x_range(), ui.cursor().top() + ui.spacing().item_spacing.y / 2.0, line);
             let response = footer.show(ui, |ui| {
                 ui.set_width(ui.available_width());
@@ -1397,8 +1418,8 @@ fn native_options() -> eframe::NativeOptions {
             .with_app_id(forge_core::layout::FLATPAK_ID)
             .with_inner_size(INITIAL_SIZE)
             .with_min_inner_size(MIN_SIZE)
-            // No egui logo: the platform's default application icon.
-            .with_icon(egui::IconData::default()),
+            // The Forge icon (tools/triaevum_release/branding).
+            .with_icon(crate::theme::window_icon()),
         renderer: eframe::Renderer::Glow,
         centered: true,
         ..Default::default()

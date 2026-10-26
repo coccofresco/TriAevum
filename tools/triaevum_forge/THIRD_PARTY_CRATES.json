@@ -7298,6 +7298,64 @@
       ]
     },
     {
+      "name": "zune-core",
+      "version": "0.5.3",
+      "license": "MIT OR Apache-2.0 OR Zlib",
+      "elected": [
+        "MIT"
+      ],
+      "products": [
+        "linux",
+        "windows"
+      ],
+      "repository": "https://github.com/etemesi254/zune-image",
+      "authors": [],
+      "texts": [
+        {
+          "file": "LICENSE-APACHE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+        },
+        {
+          "file": "LICENSE-MIT",
+          "sha256": "d30047bca3b516639339a3c279bb84c3483124fb5a9dafe3c75056a85090e745"
+        },
+        {
+          "file": "LICENSE-ZLIB",
+          "sha256": "d201d14804d3bcd3b944147173175e4abfbd838b7c8069b6bd3452496bf13e6c"
+        }
+      ]
+    },
+    {
+      "name": "zune-jpeg",
+      "version": "0.5.15",
+      "license": "MIT OR Apache-2.0 OR Zlib",
+      "elected": [
+        "MIT"
+      ],
+      "products": [
+        "linux",
+        "windows"
+      ],
+      "repository": "https://github.com/etemesi254/zune-image/tree/dev/crates/zune-jpeg",
+      "authors": [
+        "caleb"
+      ],
+      "texts": [
+        {
+          "file": "LICENSE-APACHE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+        },
+        {
+          "file": "LICENSE-MIT",
+          "sha256": "d30047bca3b516639339a3c279bb84c3483124fb5a9dafe3c75056a85090e745"
+        },
+        {
+          "file": "LICENSE-ZLIB",
+          "sha256": "d201d14804d3bcd3b944147173175e4abfbd838b7c8069b6bd3452496bf13e6c"
+        }
+      ]
+    },
+    {
       "name": "zvariant",
       "version": "5.15.1",
       "license": "MIT",
@@ -7902,14 +7960,6 @@
     {
       "name": "zerocopy-derive",
       "version": "0.8.63"
-    },
-    {
-      "name": "zune-core",
-      "version": "0.5.3"
-    },
-    {
-      "name": "zune-jpeg",
-      "version": "0.5.15"
     }
   ]
 }

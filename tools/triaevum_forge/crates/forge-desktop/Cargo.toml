@@ -22,6 +22,9 @@ serde_json.workspace = true
 # glow (OpenGL) renderer only: the window must not need the game's Vulkan
 # device. No bundled fonts (default_fonts off): the window uses a system font.
 eframe = { version = "0.35", default-features = false, features = ["glow", "accesskit", "wayland", "x11"] }
+# Decodes the compiled-in background art (JPEG) and window icon (PNG); both
+# decoders are already in eframe's dependency graph.
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 # Native dialogs; xdg-desktop-portal on Linux (no GTK).
 rfd = { version = "0.17", default-features = false, features = ["xdg-portal", "wayland"] }
 

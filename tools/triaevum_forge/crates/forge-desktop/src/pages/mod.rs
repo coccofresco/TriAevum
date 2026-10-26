@@ -64,9 +64,13 @@ pub fn navigation(ui: &mut egui::Ui, texts: &Texts, current: Page, record: &mut 
         for page in Page::ALL {
             let mut text = RichText::new(texts.get(page.label()));
             if page == current {
-                text = text.strong();
+                // The current tab is gold with dark text (`theme.rs`).
+                text = text.strong().color(crate::theme::ON_GOLD);
             }
-            let button = Button::new(text).selected(page == current).min_size(egui::vec2(0.0, 28.0));
+            let mut button = Button::new(text).selected(page == current).min_size(egui::vec2(0.0, 28.0));
+            if page == current {
+                button = button.fill(crate::theme::GOLD);
+            }
             if record.button(ui, true, page.widget(), button) {
                 actions.push(Action::Navigate(page));
             }
