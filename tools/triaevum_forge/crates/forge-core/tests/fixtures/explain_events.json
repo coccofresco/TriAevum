@@ -850,6 +850,38 @@
    "id": "package_replace.file_holder"
   },
   {
+   "name": "refinement session.game_running",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "busy",
+     "stage": null,
+     "message": "TriAevum is running from this installation (session lock C:\\Users\\Someone\\Games\\TriAevum\\data\\.forge-activation\\game-session.lock)",
+     "os_code": null,
+     "retryable": true,
+     "operation": "backup",
+     "reason": "game_running"
+    }
+   },
+   "id": "session.game_running"
+  },
+  {
+   "name": "refinement session.forge_running",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "busy",
+     "stage": null,
+     "message": "Another Forge is using this installation (lock C:\\Users\\Someone\\Games\\TriAevum\\data\\.forge-activation.lock)",
+     "os_code": null,
+     "retryable": true,
+     "operation": "restore",
+     "reason": "forge_running"
+    }
+   },
+   "id": "session.forge_running"
+  },
+  {
    "name": "refinement destination.read_only",
    "input": {
     "event": "failed",

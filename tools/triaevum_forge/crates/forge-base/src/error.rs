@@ -143,6 +143,12 @@ coded! {
         SettingsSave = "settings_save",
         Inspect = "inspect",
         Launch = "launch",
+        /// Backing up the user's files (saves, settings).
+        Backup = "backup",
+        /// Moving user files to a new managed location.
+        Migration = "migration",
+        /// Deleting generated or cached data.
+        Cleanup = "cleanup",
     }
 }
 
@@ -193,6 +199,10 @@ coded! {
         StepFailed = "step_failed",
         RollbackFailure = "rollback_failure",
         AfterActivationCommitted = "after_activation_committed",
+        /// The game holds this installation's session lock.
+        GameRunning = "game_running",
+        /// Another Forge holds this installation's lock.
+        ForgeRunning = "forge_running",
     }
 }
 

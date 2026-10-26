@@ -147,6 +147,26 @@ pub unsafe extern "system" fn Java_org_triaevum_android_forge_ForgeNative_inspec
     }
 }
 
+/// The bytes `inventory` returns for a request (`forge_core::inventory`).
+pub fn inventory_json(request: &[u8]) -> Vec<u8> {
+    forge_core::inventory::inventory_bytes(request)
+}
+
+/// `static native byte[] inventory(byte[] request)`: where the installation
+/// keeps its files, and whether the game or another Forge is running.
+#[no_mangle]
+pub unsafe extern "system" fn Java_org_triaevum_android_forge_ForgeNative_inventory(
+    env: *mut JNIEnv,
+    _class: jclass,
+    request: jbyteArray,
+) -> jbyteArray {
+    let request = read_byte_array(env, request).unwrap_or_default();
+    match catch_unwind(AssertUnwindSafe(|| inventory_json(&request))) {
+        Ok(bytes) => byte_array(env, &bytes),
+        Err(_) => ptr::null_mut(),
+    }
+}
+
 /// `static native byte[] explain(byte[] input)`: an explanation, or JSON null.
 #[no_mangle]
 pub unsafe extern "system" fn Java_org_triaevum_android_forge_ForgeNative_explain(

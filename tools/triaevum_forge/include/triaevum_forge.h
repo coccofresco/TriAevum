@@ -18,8 +18,9 @@
  * each notice {"outcome","details"} a non-error outcome to explain.
  *
  * Version history: v2 adds TriAevumForgeInspect, TriAevumForgeExplain and
- * the optional event fields above. Every v1 declaration is unchanged, so a
- * host written for v1 works with a v2 library.
+ * the optional event fields above; v3 adds TriAevumForgeInventory. Every
+ * earlier declaration is unchanged, so a host written for v1 or v2 works with
+ * a v3 library.
  */
 #ifndef TRIAEVUM_FORGE_H
 #define TRIAEVUM_FORGE_H
@@ -31,7 +32,7 @@
 extern "C" {
 #endif
 
-#define TRIAEVUM_FORGE_ABI_VERSION 2u
+#define TRIAEVUM_FORGE_ABI_VERSION 3u
 
 typedef struct TriAevumForgeBuffer {
     uint8_t *data;
@@ -111,6 +112,20 @@ TriAevumForgeBuffer TriAevumForgeInspect(const uint8_t *request, size_t request_
  * Texts are keyed "<id>.title", "<id>.cause", "<id>.next_action". JSON null
  * for any other input. */
 TriAevumForgeBuffer TriAevumForgeExplain(const uint8_t *input, size_t input_len);
+
+/* v3. Where the installation keeps its files, read-only (it measures
+ * folders; call it off a UI thread). Request:
+ * {"format":"triaevum_forge_inventory_v1","package_root"?,"data_root"?,
+ *  "android"?:{"native_library_dir","profile_root","app_data_dir"?,
+ *  "package_name"?},"sizes"?}
+ * Result: {"format":"triaevum_inventory_v1","status":"ok","platform",
+ * "roots":{"package","activation","data","state"},"activity":{
+ * "game_running","forge_running","explanation"?},"entries":[{"category",
+ * "logical_name","parent","path","kind","origin","active","present",
+ * "managed","size","files","backup"}]}; origin is default, explicit or
+ * legacy, backup include, optional or exclude. Never fails: an unusable
+ * request is {"format",...,"status":"failed","explanation":{...}}. */
+TriAevumForgeBuffer TriAevumForgeInventory(const uint8_t *request, size_t request_len);
 
 #ifdef __cplusplus
 }

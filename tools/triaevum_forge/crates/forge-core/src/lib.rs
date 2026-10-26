@@ -11,6 +11,7 @@
 pub mod abi;
 pub mod explain;
 pub mod install;
+pub mod inventory;
 pub mod jobs;
 pub mod layout;
 pub mod lock;
@@ -18,6 +19,7 @@ pub mod log;
 pub mod publish;
 pub mod recognize;
 pub mod redact;
+pub mod session;
 pub mod state;
 pub mod transaction;
 

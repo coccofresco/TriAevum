@@ -36,3 +36,30 @@ fn inspect_answers_with_a_state_for_any_request() {
     assert_eq!(refused["state"], "failed");
     assert_eq!(refused["explanation"]["id"], "request.invalid");
 }
+
+#[test]
+fn inventory_resolves_the_android_installation() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let request = serde_json::json!({
+        "format": "triaevum_forge_inventory_v1",
+        "package_root": root.join("files/forge-package").to_string_lossy(),
+        "android": {
+            "native_library_dir": root.join("lib").to_string_lossy(),
+            "profile_root": root.join("external").to_string_lossy(),
+            "app_data_dir": root.join("app").to_string_lossy(),
+            "package_name": "org.triaevum.android",
+        },
+    });
+    let bytes = triaevum_forge::inventory_json(request.to_string().as_bytes());
+    assert_eq!(bytes, forge_core::inventory::inventory_bytes(request.to_string().as_bytes()));
+    let inventory: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(inventory["status"], "ok", "{inventory}");
+    assert_eq!(inventory["platform"], "android");
+    let names: Vec<&str> =
+        inventory["entries"].as_array().unwrap().iter().filter_map(|entry| entry["logical_name"].as_str()).collect();
+    assert!(names.contains(&"touch_preferences") && names.contains(&"save_data"), "{names:?}");
+    let refused: Value = serde_json::from_slice(&triaevum_forge::inventory_json(b"[]")).unwrap();
+    assert_eq!(refused["status"], "failed");
+    assert_eq!(refused["explanation"]["id"], "request.invalid");
+}

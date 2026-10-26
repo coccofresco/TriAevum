@@ -7,8 +7,9 @@
 //! does. `run-job` streams one compact JSON event per line on stdout
 //! (diagnostics go to stderr). `--install-worker` speaks the Python GUI's
 //! worker line protocol, so the Python GUI can drive this engine. `status`
-//! prints the installation state and `explain` the explanation of an event,
-//! the same JSON the C ABI and the Android installer receive.
+//! prints the installation state, `explain` the explanation of an event and
+//! `inventory` where the installation keeps its files, the same JSON the C
+//! ABI and the Android installer receive.
 
 use std::ffi::OsString;
 use std::io::Write;
@@ -48,6 +49,21 @@ enum Command {
     Status(StatusArgs),
     /// Explain a failed or cancelled event, an error object or a notice (a JSON file, or - for stdin).
     Explain { input: String },
+    /// Print where the installation keeps its files, and whether the game or another Forge runs (read-only).
+    Inventory(InventoryArgs),
+}
+
+#[derive(Args)]
+struct InventoryArgs {
+    /// The package (default: this executable's package).
+    #[arg(long)]
+    package_root: Option<PathBuf>,
+    /// The private data folder (default: the package's data folder).
+    #[arg(long)]
+    data_root: Option<PathBuf>,
+    /// Do not measure folder sizes.
+    #[arg(long)]
+    no_sizes: bool,
 }
 
 #[derive(Args)]
@@ -110,6 +126,23 @@ fn main() -> ExitCode {
         Command::Install(args) => install(args),
         Command::Status(args) => status(args),
         Command::Explain { input } => explain(&input),
+        Command::Inventory(args) => inventory(args),
+    }
+}
+
+fn inventory(args: InventoryArgs) -> ExitCode {
+    let package_root = match package_root(args.package_root) {
+        Ok(root) => root,
+        Err(message) => return print_error(&message),
+    };
+    let request = forge_core::inventory::InventoryRequest {
+        data_root: args.data_root,
+        sizes: !args.no_sizes,
+        ..forge_core::inventory::InventoryRequest::package(package_root)
+    };
+    match forge_core::inventory::inventory_of(&request) {
+        Ok(inventory) => print_result(&inventory.to_value()),
+        Err(error) => print_error(&error.message),
     }
 }
 

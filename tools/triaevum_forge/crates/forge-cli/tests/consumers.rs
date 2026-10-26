@@ -79,3 +79,30 @@ fn status_prints_the_installation_state() {
     assert_eq!(printed["state"], "repair_needed");
     assert_eq!(printed["reason"]["kind"], "interrupted_activation");
 }
+
+#[test]
+fn inventory_prints_the_engine_inventory_and_a_running_game() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    package(root);
+    std::fs::create_dir_all(root.join("data").join("savedata")).unwrap();
+    std::fs::write(root.join("data").join("savedata").join("save.bin"), b"12345").unwrap();
+    let (success, printed) = forge(&["inventory", "--package-root", &root.to_string_lossy()]);
+    assert!(success);
+    let reference = forge_core::inventory::inventory(root).unwrap().to_value();
+    assert_eq!(printed, reference);
+    assert_eq!(printed["format"], "triaevum_inventory_v1");
+    assert_eq!(printed["activity"], json!({"game_running": false, "forge_running": false}));
+    let save_data = printed["entries"].as_array().unwrap().iter().find(|entry| entry["logical_name"] == "save_data");
+    assert_eq!(save_data.unwrap()["size"], 5);
+
+    let os = forge_core::layout::HostOs::current();
+    let lock = forge_core::session::session_lock_path(root, os);
+    std::fs::create_dir_all(lock.parent().unwrap()).unwrap();
+    let game = std::fs::File::create(&lock).unwrap();
+    game.lock().unwrap();
+    let (success, printed) = forge(&["inventory", "--no-sizes", "--package-root", &root.to_string_lossy()]);
+    assert!(success);
+    assert_eq!(printed["activity"]["game_running"], true);
+    assert_eq!(printed["activity"]["explanation"]["id"], "session.game_running");
+}

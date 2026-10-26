@@ -40,4 +40,14 @@ public final class ForgeNative {
      * JSON null for anything else.
      */
     public static native byte[] explain(byte[] input);
+
+    /**
+     * Where the installation keeps its files, for {"format":"triaevum_forge_inventory_v1",
+     * "package_root":...,"android":{"native_library_dir":...,"profile_root":...,
+     * "app_data_dir":getDataDir(),"package_name":getPackageName()},"sizes"?:bool}:
+     * {"format":"triaevum_inventory_v1","status":"ok","platform","roots","activity":{
+     * "game_running","forge_running"},"entries":[...]}. Read-only, but it measures folders: call
+     * it off the main thread.
+     */
+    public static native byte[] inventory(byte[] request);
 }
