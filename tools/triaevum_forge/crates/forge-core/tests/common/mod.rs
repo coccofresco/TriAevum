@@ -94,12 +94,21 @@ impl Fixture {
     }
 
     pub fn build(android: bool) -> Self {
+        Self::build_with(android, None)
+    }
+
+    /// A package for a ROM whose ExHeader names `program_id` (the fixture's
+    /// own ExHeader leaves it zero).
+    pub fn build_with(android: bool, program_id: Option<u64>) -> Self {
         let directory = tempfile::tempdir().unwrap();
         let root = forge_prepare::paths::resolve(directory.path()).unwrap();
         let package = root.join("package");
         let extracted = root.join("extracted");
         let native = root.join("native-libraries");
-        let (code, exheader, romfs) = (code(), exheader(), romfs());
+        let (code, mut exheader, romfs) = (code(), exheader(), romfs());
+        if let Some(id) = program_id {
+            exheader[0x200..0x208].copy_from_slice(&id.to_le_bytes());
+        }
         write(&extracted.join("code.bin"), &code);
         write(&extracted.join("exheader.bin"), &exheader);
         write(&extracted.join("romfs.bin"), &romfs);
@@ -200,6 +209,8 @@ impl Fixture {
 pub struct FakeRuntime {
     pub reject_plugin: Cell<bool>,
     pub plugin_queries: RefCell<Vec<PathBuf>>,
+    /// Advertises `managed_data_paths` (UX plan WP-05C).
+    pub managed_data_paths: bool,
 }
 
 impl NativeServices for FakeRuntime {
@@ -209,6 +220,9 @@ impl NativeServices for FakeRuntime {
             "capabilities": {"nri": true, "f1": true, "topscreen": true},
             "default_config": {"Graphics": {"Preset": "Enhanced", "FrameRate": {"Mode": "Interpolated2x"}}},
         });
+        if self.managed_data_paths {
+            product["capabilities"]["managed_data_paths"] = json!(true);
+        }
         if let Some(plugin) = plugin {
             self.plugin_queries.borrow_mut().push(plugin.to_path_buf());
             product["private_title_loaded"] = json!(!self.reject_plugin.get());

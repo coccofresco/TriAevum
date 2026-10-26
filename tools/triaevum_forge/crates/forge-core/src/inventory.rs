@@ -11,25 +11,44 @@
 //!
 //! - The game's working directory is the activation root `A` (Forge launches
 //!   it there; Android sets it to the external files folder,
-//!   `ports/android/runtime/android_host.cpp`). Its log folder and
-//!   `imgui.ini` are relative to it (`ship/Context.cpp`
-//!   `GetAppDirectoryPath`: `SHIP_HOME` on Linux, else the working
-//!   directory; `ship/window/gui/Gui.cpp`: `data/imgui.ini` when `data/`
-//!   exists, else `imgui.ini`).
+//!   `ports/android/runtime/android_host.cpp`). `imgui.ini` is relative to
+//!   it (`ship/window/gui/Gui.cpp`: `data/imgui.ini` when `data/` exists,
+//!   else `imgui.ini`).
 //! - Saves, settings and the state file come from the launch profile
 //!   (`--save-data`, `--config`, `--topscreen-config`, `--controls-config`,
 //!   `--output`, `--renderer-cache-directory`); `savestates.json`,
-//!   `game_language.json`, `oot3d_controls.json` and `environments/` sit
-//!   beside `--config` (`oot3d_native_a32_window_setup.cpp`,
+//!   `migrations.json`, `game_language.json`, `oot3d_controls.json` and
+//!   `environments/` sit beside `--config` (`oot3d_native_a32_window_setup.cpp`,
 //!   `triaevum_title_adapter.h`, `oot3d_native_game_bootstrap.cpp`).
-//! - Save states: `savestates.json` `Directory`, else beside the executable
+//! - The managed data tree (UX plan WP-05C, `triaevum_data_routing.h`): a
+//!   profile Forge wrote for a runtime with `managed_data_paths` routes the
+//!   logs (`--log-directory`, `D/logs`), crash dumps (`--crash-directory`,
+//!   `D/logs/crashes`), the default save-state folder
+//!   (`--savestate-directory`, `D/savestates`), the custom texture folders'
+//!   defaults (`--texture-{load,dump}-directory`,
+//!   `D/textures/{load,dump}/<title id>`) and the installed title id
+//!   (`--title-id`). An older profile keeps the earlier locations, shown with
+//!   origin `legacy`; a routed installation lists the earlier ones that still
+//!   hold files as inactive `legacy` rows.
+//! - Logs: `--log-directory`, else `logs/` in the working directory
+//!   (`ship/Context.cpp` `GetLogDirectory`: `SHIP_HOME` on Linux). Android's
+//!   runtime always writes `D/logs` (stdout and stderr too).
+//! - Save states: `savestates.json` `Directory`, else the managed default
+//!   once the earlier folder's states are copied there
+//!   (`oot3d_savestate_migration.h`: a completed record in `migrations.json`;
+//!   until then the earlier folder holds them), else beside the executable
 //!   on Windows and beside the save data elsewhere
 //!   (`oot3d_savestate_library.cpp` `DefaultSavestateDirectory`).
-//! - Crash dumps (Windows product builds): `<save data>/crashes`.
-//! - Custom textures: `OOT3D_AZAHAR_LOAD_DIRECTORY`/`_DUMP_DIRECTORY`, else
-//!   the configuration's `Graphics.TexturePacks.Azahar.LoadDirectory`/
-//!   `DumpDirectory` (schema 9 and later), else
-//!   `<Azahar user folder>/{load,dump}/textures/<title id>`
+//! - Crash dumps (Windows product builds): `--crash-directory`, else
+//!   `<save data>/crashes`.
+//! - Custom textures, per folder: `OOT3D_AZAHAR_LOAD_DIRECTORY`/
+//!   `_DUMP_DIRECTORY`, else the configuration's
+//!   `Graphics.TexturePacks.Azahar.LoadDirectory`/`DumpDirectory` (schema 9
+//!   and later), else `<OOT3D_AZAHAR_USER_DIRECTORY>/{load,dump}/textures/
+//!   <title id>`, else the routed managed default (except that an existing
+//!   pack in Azahar's own folder keeps loading), else
+//!   `<Azahar user folder>/{load,dump}/textures/<title id>`. The title id:
+//!   `OOT3D_AZAHAR_TITLE_ID`, else `--title-id`, else EUR
 //!   (`fast/extension/azahar_texture_pack.cpp`).
 //! - Android touch preferences: the activity's default shared preferences,
 //!   `<app data>/shared_prefs/<package>_preferences.xml` (`TouchControls.kt`).
@@ -671,7 +690,21 @@ impl Resolver<'_> {
         let (save_data, save_origin) = self.routed("--save-data", data.join("savedata"))?;
         self.push(Location::new(C::Saves, "save_data", save_data.clone(), Directory, Include).origin(save_origin));
         if os == HostOs::Windows {
-            self.push(Location::new(C::Logs, "crash_dumps", save_data.join("crashes"), Directory, Exclude));
+            // Dumps in the save data stay listed (and out of save backups).
+            let earlier = save_data.join("crashes");
+            match self.managed("--crash-directory", crate::log::logs_directory(&data).join("crashes"))? {
+                Some((dumps, origin)) => {
+                    let moved = !same_path(&dumps, &earlier);
+                    self.push(Location::new(C::Logs, "crash_dumps", dumps, Directory, Exclude).origin(origin));
+                    if moved && earlier.is_dir() {
+                        let left = Location::new(C::Logs, "crash_dumps_legacy", earlier, Directory, Exclude);
+                        self.push(left.origin(Origin::Legacy).inactive());
+                    }
+                }
+                None => self.push(
+                    Location::new(C::Logs, "crash_dumps", earlier, Directory, Exclude).origin(Origin::Legacy),
+                ),
+            }
         }
 
         // Settings beside the runtime configuration.
@@ -682,17 +715,29 @@ impl Resolver<'_> {
 
         // Save states.
         let savestates_index = beside("savestates.json");
-        let default_states = if os == HostOs::Windows {
+        let earlier_states = if os == HostOs::Windows {
             self.installation.runtime_dir.join("savestates")
         } else {
             save_data.parent().map(|parent| parent.join("savestates")).unwrap_or_else(|| data.join("savestates"))
         };
-        let default_states = resolve(&default_states)?;
+        let earlier_states = resolve(&earlier_states)?;
+        let managed_states = self.managed("--savestate-directory", data.join("savestates"))?;
+        // The earlier folder holds states the game has not copied yet: it
+        // stays the default until its next start completes the move.
+        let pending_move = managed_states.as_ref().is_some_and(|(managed, _)| {
+            !same_path(managed, &earlier_states)
+                && holds_files(&earlier_states)
+                && !savestates_moved(&beside(SAVESTATE_MIGRATIONS), &earlier_states, managed)
+        });
+        let default_states = match &managed_states {
+            Some((managed, _)) if !pending_move => managed.clone(),
+            _ => earlier_states.clone(),
+        };
         let chosen = load_json_object(&savestates_index)
             .ok()
             .and_then(|index| index.get("Directory").and_then(Value::as_str).map(str::to_string))
             .filter(|directory| !directory.is_empty());
-        match chosen {
+        let active_states = match chosen {
             Some(directory) => {
                 let chosen = self.runtime_path(&directory)?;
                 self.push(
@@ -700,17 +745,40 @@ impl Resolver<'_> {
                         .origin(Origin::Explicit),
                 );
                 if !same_path(&chosen, &default_states) && default_states.is_dir() {
-                    let unused =
-                        Location::new(C::SaveStates, "save_states_default", default_states, Directory, Optional);
+                    let unused = Location::new(
+                        C::SaveStates,
+                        "save_states_default",
+                        default_states.clone(),
+                        Directory,
+                        Optional,
+                    );
                     self.push(unused.inactive());
                 }
+                chosen
             }
             None => {
-                let origin = if os == HostOs::Windows { Origin::Default } else { save_origin };
+                let origin = match &managed_states {
+                    Some((_, origin)) if !pending_move => *origin,
+                    // An older profile's, or the earlier folder until the move.
+                    _ if os == HostOs::Windows || pending_move => Origin::Legacy,
+                    _ => save_origin,
+                };
                 self.push(
-                    Location::new(C::SaveStates, "save_states", default_states, Directory, Include).origin(origin),
+                    Location::new(C::SaveStates, "save_states", default_states.clone(), Directory, Include)
+                        .origin(origin),
                 );
+                default_states.clone()
             }
+        };
+        // The earlier folder after the move (the game keeps it, with
+        // README-moved.txt): offered in a backup, never removed by Forge.
+        if managed_states.is_some()
+            && !same_path(&earlier_states, &active_states)
+            && !same_path(&earlier_states, &default_states)
+            && earlier_states.is_dir()
+        {
+            let left = Location::new(C::SaveStates, "save_states_legacy", earlier_states, Directory, Optional);
+            self.push(left.origin(Origin::Legacy).inactive());
         }
 
         self.push(
@@ -737,6 +805,10 @@ impl Resolver<'_> {
         self.push(Location::new(C::Settings, "romfs_mods", romfs_mods, File, Include).origin(data_origin));
         self.push(
             Location::new(C::Settings, "savestates_index", savestates_index, File, Include).origin(config_origin),
+        );
+        self.push(
+            Location::new(C::Settings, "migrations", beside(SAVESTATE_MIGRATIONS), File, Include)
+                .origin(config_origin),
         );
         self.push(
             Location::new(C::Settings, "environments", beside("environments"), Directory, Include)
@@ -811,11 +883,28 @@ impl Resolver<'_> {
             );
         }
 
-        // Logs.
-        self.push(
-            Location::new(C::Logs, "game_logs", self.working.join("logs"), Directory, Exclude)
-                .origin(app_directory_origin),
-        );
+        // Logs: routed (Android's runtime always writes D/logs), else the
+        // working directory's logs/ of an older profile.
+        let earlier_logs = self.working.join("logs");
+        let managed_logs = match self.managed("--log-directory", crate::log::logs_directory(&data))? {
+            Some(routed) => Some(routed),
+            None if android => Some((crate::log::logs_directory(&data), data_origin)),
+            None => None,
+        };
+        match managed_logs {
+            Some((logs, origin)) => {
+                let moved = !same_path(&logs, &earlier_logs);
+                self.push(Location::new(C::Logs, "game_logs", logs, Directory, Exclude).origin(origin));
+                if moved && earlier_logs.is_dir() {
+                    let left = Location::new(C::Logs, "game_logs_legacy", earlier_logs, Directory, Exclude);
+                    self.push(left.origin(Origin::Legacy).inactive());
+                }
+            }
+            None => {
+                let origin = if app_directory_origin == Origin::Default { Origin::Legacy } else { Origin::Explicit };
+                self.push(Location::new(C::Logs, "game_logs", earlier_logs, Directory, Exclude).origin(origin));
+            }
+        }
         self.push(
             Location::new(C::Logs, "forge_logs", crate::log::logs_directory(&data), Directory, Exclude)
                 .origin(data_origin),
@@ -862,26 +951,57 @@ impl Resolver<'_> {
             let value = graphics.get("TexturePacks")?.get("Azahar")?.get(key)?.as_str()?;
             (!value.is_empty()).then(|| value.to_string())
         };
-        let user = self.azahar_user_directory()?;
-        let title = self.env("OOT3D_AZAHAR_TITLE_ID").unwrap_or_else(|| DEFAULT_TEXTURE_TITLE.to_string());
-        let title = title.to_uppercase();
-        let folder = |environment: &str, key: &str, kind: &str| -> Result<(PathBuf, Origin)> {
-            match self.env(environment).or_else(|| configured(key)) {
-                Some(value) => Ok((self.runtime_path(&value)?, Origin::Explicit)),
-                None => Ok((resolve(&user.0.join(kind).join("textures").join(&title))?, user.1)),
+        // The installed title (`--title-id`, written by Forge from the ROM's
+        // ExHeader: a USA installation is 0004000000033500), unless the
+        // environment names one; EUR for an older profile.
+        let title = self
+            .env("OOT3D_AZAHAR_TITLE_ID")
+            .or_else(|| self.profile.as_ref().and_then(|profile| profile.value("--title-id")).map(str::to_string))
+            .unwrap_or_else(|| DEFAULT_TEXTURE_TITLE.to_string())
+            .to_uppercase();
+        let user_root = self.env("OOT3D_AZAHAR_USER_DIRECTORY");
+        let azahar = self.azahar_user_directory()?;
+        let textures = self.roots.data.join("textures");
+        let folder = |environment: &str, key: &str, kind: &str, option: &str| -> Result<(PathBuf, Origin)> {
+            if let Some(value) = self.env(environment).or_else(|| configured(key)) {
+                return Ok((self.runtime_path(&value)?, Origin::Explicit));
+            }
+            if let Some(root) = &user_root {
+                return Ok((resolve(&self.runtime_path(root)?.join(kind).join("textures").join(&title))?, Origin::Explicit));
+            }
+            let earlier = resolve(&azahar.join(kind).join("textures").join(&title))?;
+            match self.managed(option, textures.join(kind).join(&title))? {
+                // An existing pack in Azahar's folder keeps loading from there.
+                Some(_) if kind == "load" && earlier.is_dir() => Ok((earlier, Origin::Legacy)),
+                Some(managed) => Ok(managed),
+                None => Ok((earlier, Origin::Legacy)),
             }
         };
-        let (load, load_origin) = folder("OOT3D_AZAHAR_LOAD_DIRECTORY", "LoadDirectory", "load")?;
-        let (dump, dump_origin) = folder("OOT3D_AZAHAR_DUMP_DIRECTORY", "DumpDirectory", "dump")?;
+        let (load, load_origin) =
+            folder("OOT3D_AZAHAR_LOAD_DIRECTORY", "LoadDirectory", "load", "--texture-load-directory")?;
+        let (dump, dump_origin) =
+            folder("OOT3D_AZAHAR_DUMP_DIRECTORY", "DumpDirectory", "dump", "--texture-dump-directory")?;
         Ok((load, dump, load_origin, dump_origin))
     }
 
-    /// `ResolveDefaultUserDirectory`: Android's game process has neither
-    /// `XDG_DATA_HOME` nor `HOME`, so it falls back to its working directory.
-    fn azahar_user_directory(&self) -> Result<(PathBuf, Origin)> {
-        if let Some(directory) = self.env("OOT3D_AZAHAR_USER_DIRECTORY") {
-            return Ok((self.runtime_path(&directory)?, Origin::Explicit));
+    /// A folder only a launch profile of the managed data tree routes: its
+    /// path and origin, or None for an older profile (UX plan WP-05C).
+    fn managed(&self, option: &str, default: PathBuf) -> Result<Option<(PathBuf, Origin)>> {
+        match self.profile.as_ref().and_then(|profile| profile.value(option)) {
+            Some(value) => {
+                let path = self.runtime_path(value)?;
+                let origin = self.data_origin(&path, &resolve(&default)?);
+                Ok(Some((path, origin)))
+            }
+            None => Ok(None),
         }
+    }
+
+    /// `ResolveDefaultUserDirectory` without `OOT3D_AZAHAR_USER_DIRECTORY`
+    /// (a named root ranks above the managed defaults): Android's game
+    /// process has neither `XDG_DATA_HOME` nor `HOME`, so it falls back to its
+    /// working directory.
+    fn azahar_user_directory(&self) -> Result<PathBuf> {
         let default = match self.installation.os {
             HostOs::Windows => self.env("APPDATA").map(|app_data| PathBuf::from(app_data).join("Azahar")),
             _ => self
@@ -889,11 +1009,49 @@ impl Resolver<'_> {
                 .map(|data_home| PathBuf::from(data_home).join("azahar"))
                 .or_else(|| self.env("HOME").map(|home| PathBuf::from(home).join(".local/share/azahar"))),
         };
-        Ok((resolve(&default.unwrap_or_else(|| self.working.join("Azahar")))?, Origin::Default))
+        resolve(&default.unwrap_or_else(|| self.working.join("Azahar")))
     }
 }
 
 /// The Android game process does not share Forge's environment.
 fn no_environment(_: &str) -> Option<String> {
     None
+}
+
+/// The runtime's migration record (`oot3d_savestate_migration.h`), beside
+/// the runtime configuration.
+pub const SAVESTATE_MIGRATIONS: &str = "migrations.json";
+const SAVESTATE_MIGRATION_ID: &str = "savestates_to_data_folder";
+
+/// Whether the runtime recorded the completed move from `earlier` to `managed`.
+fn savestates_moved(record: &Path, earlier: &Path, managed: &Path) -> bool {
+    let Ok(document) = load_json_object(record) else { return false };
+    let same = |value: Option<&Value>, path: &Path| {
+        value.and_then(Value::as_str).is_some_and(|text| resolve(Path::new(text)).is_ok_and(|p| same_path(&p, path)))
+    };
+    document.get("migrations").and_then(Value::as_array).is_some_and(|records| {
+        records.iter().any(|entry| {
+            entry.get("id").and_then(Value::as_str) == Some(SAVESTATE_MIGRATION_ID)
+                && entry.get("status").and_then(Value::as_str) == Some("completed")
+                && same(entry.get("source"), earlier)
+                && same(entry.get("destination"), managed)
+        })
+    })
+}
+
+/// Whether a folder holds any file the runtime's move would copy.
+fn holds_files(folder: &Path) -> bool {
+    let mut pending = vec![folder.to_path_buf()];
+    while let Some(directory) = pending.pop() {
+        let Ok(children) = std::fs::read_dir(&directory) else { continue };
+        for child in children.flatten() {
+            let Ok(metadata) = child.path().symlink_metadata() else { continue };
+            if metadata.is_dir() {
+                pending.push(child.path());
+            } else if metadata.is_file() && !(directory == folder && child.file_name() == "README-moved.txt") {
+                return true;
+            }
+        }
+    }
+    false
 }

@@ -165,10 +165,11 @@ fn windows_portable_resolves_beside_the_executable_and_in_data() {
     assert_eq!(inventory.roots.state, data);
     assert_backup_classes(&inventory);
     assert_entry(&inventory, "save_data", &data.join("savedata"), Origin::Default, Backup::Include);
-    // Windows keeps save states beside the executable (until WP-05C).
-    assert_entry(&inventory, "save_states", &package.join("savestates"), Origin::Default, Backup::Include);
+    // An older profile (without the managed data tree's routing, WP-05C):
+    // save states beside the executable, logs in the working directory.
+    assert_entry(&inventory, "save_states", &package.join("savestates"), Origin::Legacy, Backup::Include);
     assert_entry(&inventory, "imgui_layout", &data.join("imgui.ini"), Origin::Default, Backup::Include);
-    assert_entry(&inventory, "game_logs", &package.join("logs"), Origin::Default, Backup::Exclude);
+    assert_entry(&inventory, "game_logs", &package.join("logs"), Origin::Legacy, Backup::Exclude);
     assert_entry(&inventory, "forge_logs", &data.join("logs"), Origin::Default, Backup::Exclude);
     assert_entry(&inventory, "launch_profile", &data.join("TriAevum.launch.json"), Origin::Default, Backup::Exclude);
     assert_entry(&inventory, "title_plugins", &package.join("private-plugins"), Origin::Default, Backup::Exclude);
@@ -177,7 +178,7 @@ fn windows_portable_resolves_beside_the_executable_and_in_data() {
         &inventory,
         "texture_load",
         &textures.join("load/textures/0004000000033600"),
-        Origin::Default,
+        Origin::Legacy,
         Backup::Optional,
     );
     assert!(!entry(&inventory, "texture_load").managed, "the Azahar folder is the user's, not Forge's");
@@ -235,7 +236,7 @@ fn a_windows_root_profile_is_a_legacy_location_the_runtime_still_reads() {
         &inventory,
         "texture_load",
         &package.join("Azahar/load/textures/0004000000033600"),
-        Origin::Default,
+        Origin::Legacy,
         Backup::Optional,
     );
 }
@@ -289,10 +290,10 @@ fn appimage_activates_in_xdg_data_with_explicit_external_choices() {
         &inventory,
         "texture_dump",
         &home.join(".local/share/azahar/dump/textures/0004000000033600"),
-        Origin::Default,
+        Origin::Legacy,
         Backup::Exclude,
     );
-    assert_entry(&inventory, "game_logs", &activation.join("logs"), Origin::Default, Backup::Exclude);
+    assert_entry(&inventory, "game_logs", &activation.join("logs"), Origin::Legacy, Backup::Exclude);
     assert_entry(&inventory, "imgui_layout", &data.join("imgui.ini"), Origin::Default, Backup::Include);
     assert_entry(
         &inventory,
@@ -354,7 +355,7 @@ fn flatpak_activates_in_its_sandbox_and_honours_ship_home_and_environment_overri
         &inventory,
         "texture_load",
         &sandbox.join("azahar/load/textures/0004000000033500"),
-        Origin::Default,
+        Origin::Legacy,
         Backup::Optional,
     );
     let controls = entry(&inventory, "controls_config");
@@ -430,7 +431,11 @@ fn android_resolves_app_storage_and_touch_preferences() {
         Origin::Default,
         Backup::Exclude,
     );
-    assert_entry(&inventory, "game_logs", &activation.join("logs"), Origin::Default, Backup::Exclude);
+    // Android's runtime writes D/logs; the earlier A/logs stays listed.
+    assert_entry(&inventory, "game_logs", &data.join("logs"), Origin::Default, Backup::Exclude);
+    let earlier = entry(&inventory, "game_logs_legacy");
+    assert_eq!(earlier.resolved_path, activation.join("logs"));
+    assert_eq!((earlier.origin, earlier.active, earlier.backup), (Origin::Legacy, false, Backup::Exclude));
     assert!(inventory.entry("title_plugins").is_none());
     assert!(inventory.entry("android_title_file").is_some());
     // The game process has no XDG_DATA_HOME or HOME: its working directory.
@@ -438,13 +443,119 @@ fn android_resolves_app_storage_and_touch_preferences() {
         &inventory,
         "texture_load",
         &activation.join("Azahar/load/textures/0004000000033600"),
-        Origin::Default,
+        Origin::Legacy,
         Backup::Optional,
     );
     // Without the app's folders the inventory still resolves the rest.
     let inventory = resolved(&root, &android_installation(&root, None, &no_env));
     assert!(inventory.entry("touch_preferences").is_none());
     assert!(inventory.entry("save_data").is_some());
+}
+
+// UX plan WP-05C: a profile of the managed data tree routes logs, dumps,
+// save states and texture folders into D; the earlier locations that still
+// hold files are inactive legacy rows; save states stay where they are until
+// the runtime records their move; an existing Azahar pack keeps loading.
+#[test]
+fn a_managed_profile_routes_the_data_tree_and_lists_earlier_locations() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = resolve(directory.path()).unwrap();
+    let package = root.join("TriAevum");
+    let data = package.join("data");
+    let at = |relative: &str| format!("${{profile_dir}}/{relative}");
+    let extra = [
+        "--log-directory".to_string(),
+        at("logs"),
+        "--crash-directory".into(),
+        at("logs/crashes"),
+        "--savestate-directory".into(),
+        at("savestates"),
+        "--texture-load-directory".into(),
+        at("textures/load/0004000000033500"),
+        "--texture-dump-directory".into(),
+        at("textures/dump/0004000000033500"),
+        "--title-id".into(),
+        "0004000000033500".into(),
+    ];
+    profile(&data.join("TriAevum.launch.json"), "", "TriAevum.json", &extra);
+    write(&data.join("config/TriAevum.json"), b"{}");
+    write(&data.join("savedata/crashes/one.dmp"), b"dump");
+    write(&package.join("savestates/state-1.oot3dsav"), b"state");
+    write(&package.join("logs/oot3d_native_game.log"), b"old log");
+    let app_data = root.join("AppData/Roaming");
+    let env = env_of(vec![("APPDATA", text(&app_data))]);
+    let installation = Installation {
+        os: HostOs::Windows,
+        layout: for_package(&package, &env, HostOs::Windows).unwrap(),
+        data_root: None,
+        runtime_dir: package.clone(),
+        android: None,
+        env: &env,
+        sizes: true,
+    };
+
+    // Before the game's first start with the new profile: the states are
+    // still only in the earlier folder, which a backup must take.
+    let inventory = resolved(&root, &installation);
+    assert_backup_classes(&inventory);
+    assert_entry(&inventory, "save_states", &package.join("savestates"), Origin::Legacy, Backup::Include);
+    assert!(entry(&inventory, "save_states").active);
+    assert!(inventory.entry("save_states_legacy").is_none());
+    assert_entry(&inventory, "game_logs", &data.join("logs"), Origin::Default, Backup::Exclude);
+    let earlier = entry(&inventory, "game_logs_legacy");
+    assert_eq!((earlier.origin, earlier.active), (Origin::Legacy, false));
+    assert_eq!(earlier.resolved_path, package.join("logs"));
+    assert_entry(&inventory, "crash_dumps", &data.join("logs/crashes"), Origin::Default, Backup::Exclude);
+    let earlier = entry(&inventory, "crash_dumps_legacy");
+    assert_eq!((earlier.origin, earlier.active, earlier.backup), (Origin::Legacy, false, Backup::Exclude));
+    let excluded: Vec<_> = inventory.exclusions_within("save_data").iter().map(|entry| entry.logical_name).collect();
+    assert_eq!(excluded, ["crash_dumps_legacy"], "earlier dumps stay out of save backups");
+    // The installed USA title names the texture folders.
+    let managed = data.join("textures");
+    assert_entry(
+        &inventory,
+        "texture_load",
+        &managed.join("load/0004000000033500"),
+        Origin::Default,
+        Backup::Optional,
+    );
+    assert_entry(
+        &inventory,
+        "texture_dump",
+        &managed.join("dump/0004000000033500"),
+        Origin::Default,
+        Backup::Exclude,
+    );
+    assert!(entry(&inventory, "texture_load").managed);
+
+    // After the runtime recorded the move: the managed folder is active and
+    // the earlier one is an inactive legacy row, offered in a backup.
+    write(&data.join("savestates/state-1.oot3dsav"), b"state");
+    write_json(
+        &data.join("config/migrations.json"),
+        &json!({"format": "triaevum_migrations_v1", "migrations": [{
+            "id": "savestates_to_data_folder", "status": "completed",
+            "source": text(&package.join("savestates")), "destination": text(&data.join("savestates"))}]}),
+    );
+    let inventory = resolved(&root, &installation);
+    assert_entry(&inventory, "save_states", &data.join("savestates"), Origin::Default, Backup::Include);
+    let earlier = entry(&inventory, "save_states_legacy");
+    assert_eq!(earlier.resolved_path, package.join("savestates"));
+    assert_eq!((earlier.origin, earlier.active, earlier.backup), (Origin::Legacy, false, Backup::Optional));
+    assert_entry(&inventory, "migrations", &data.join("config/migrations.json"), Origin::Default, Backup::Include);
+
+    // A pack already in Azahar's folder under the installed title keeps loading.
+    let azahar = app_data.join("Azahar/load/textures/0004000000033500");
+    std::fs::create_dir_all(&azahar).unwrap();
+    let inventory = resolved(&root, &installation);
+    assert_entry(&inventory, "texture_load", &azahar, Origin::Legacy, Backup::Optional);
+    assert_entry(
+        &inventory,
+        "texture_dump",
+        &managed.join("dump/0004000000033500"),
+        Origin::Default,
+        Backup::Exclude,
+    );
 }
 
 #[test]

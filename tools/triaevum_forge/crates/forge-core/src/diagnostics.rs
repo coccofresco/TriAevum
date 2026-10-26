@@ -62,6 +62,9 @@ pub const ANDROID_STDERR_FILE: &str = "native-stderr.log";
 /// The runtime's log (`ship/Context.cpp`: `logs/<short name>.log`, earlier
 /// launches rotated to `.1.log`, `.2.log`, ...).
 pub const GAME_LOG_STEM: &str = "oot3d_native_game";
+/// Errors from before the runtime log opened (`triaevum_early_log.h`), in
+/// the runtime's log folder.
+pub const EARLY_ERRORS_FILE: &str = "early-errors.log";
 /// The line the runtime writes to its error output before it exits with an
 /// error (`oot3d_native_game.cpp`).
 pub const FATAL_PREFIX: &str = "TRIAEVUM_FATAL ";
@@ -186,6 +189,8 @@ pub struct Sources {
     /// Forge's `D/logs`.
     pub forge_logs: PathBuf,
     pub crash_dumps: Option<PathBuf>,
+    /// The earlier `<save data>/crashes` once dumps go to `D/logs/crashes`.
+    pub crash_dumps_legacy: Option<PathBuf>,
     pub runtime_state: Option<PathBuf>,
     pub runtime_config: Option<PathBuf>,
     pub launch_profile: Option<PathBuf>,
@@ -204,6 +209,7 @@ impl Sources {
             game_logs: path("game_logs").unwrap_or_else(|| roots.activation.join("logs")),
             forge_logs: path("forge_logs").unwrap_or_else(|| crate::log::logs_directory(&roots.data)),
             crash_dumps: path("crash_dumps"),
+            crash_dumps_legacy: path("crash_dumps_legacy"),
             runtime_state: path("runtime_state"),
             runtime_config: path("runtime_config"),
             launch_profile: path("launch_profile"),
@@ -462,11 +468,13 @@ pub struct ReportFacts<'a> {
     pub now: SystemTime,
 }
 
+/// The dumps of both crash folders (the earlier one keeps older dumps).
 fn crash_dumps(sources: &Sources) -> Vec<(String, u64, Option<SystemTime>)> {
-    let Some(directory) = &sources.crash_dumps else { return Vec::new() };
-    let Ok(entries) = std::fs::read_dir(directory) else { return Vec::new() };
-    let mut dumps: Vec<(String, u64, Option<SystemTime>)> = entries
+    let mut dumps: Vec<(String, u64, Option<SystemTime>)> = [&sources.crash_dumps, &sources.crash_dumps_legacy]
+        .into_iter()
         .flatten()
+        .filter_map(|directory| std::fs::read_dir(directory).ok())
+        .flat_map(|entries| entries.flatten())
         .filter_map(|entry| {
             let name = entry.file_name().to_string_lossy().into_owned();
             let metadata = entry.metadata().ok()?;
@@ -695,6 +703,7 @@ fn allowlist(sources: &Sources) -> Vec<(String, PathBuf, bool)> {
     push(forge(GAME_STDERR_FILE), false);
     push(game(ANDROID_STDERR_FILE), false);
     push(game(&format!("{GAME_LOG_STEM}.log")), false);
+    push(game(EARLY_ERRORS_FILE), false);
     push(forge(crate::log::LOG_FILE), false);
     if let Some(path) = &sources.runtime_config {
         let name = path.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
@@ -1029,6 +1038,7 @@ mod tests {
             game_logs: root.join("logs"),
             forge_logs: root.join("data/logs"),
             crash_dumps: None,
+            crash_dumps_legacy: None,
             runtime_state: None,
             runtime_config: None,
             launch_profile: None,

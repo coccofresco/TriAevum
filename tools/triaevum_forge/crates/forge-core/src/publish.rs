@@ -49,7 +49,7 @@ pub const TOPSCREEN_STANDARD_LAYOUT_FIELDS: [&str; 13] = [
 pub const TOPSCREEN_HUD_SIZES: [f64; 2] = [1.0, 0.7];
 
 /// Launch-profile options whose value is a file or directory.
-const PATH_OPTIONS: [&str; 16] = [
+const PATH_OPTIONS: [&str; 21] = [
     "--title-plugin",
     "--a32-process-manifest",
     "--resource-root",
@@ -66,7 +66,59 @@ const PATH_OPTIONS: [&str; 16] = [
     "--romfs-overlay",
     "--pica-aot-shader-pack",
     "--renderer-cache-directory",
+    "--log-directory",
+    "--crash-directory",
+    "--savestate-directory",
+    "--texture-load-directory",
+    "--texture-dump-directory",
 ];
+
+/// The product capability of runtimes that take the managed data tree's
+/// routing options (`triaevum_data_routing.h`, UX plan WP-05C).
+pub const MANAGED_DATA_PATHS: &str = "managed_data_paths";
+
+/// The managed data folders a launch profile routes (UX plan WP-05C):
+/// `(receipt field, option, folder under D)`. Mutable folders: routed, never
+/// hashed. The texture folders also need the installed title's id.
+const DATA_ROUTES: [(&str, &str, &[&str]); 3] = [
+    ("log_directory", "--log-directory", &["logs"]),
+    ("crash_directory", "--crash-directory", &["logs", "crashes"]),
+    ("savestate_directory", "--savestate-directory", &["savestates"]),
+];
+const TEXTURE_ROUTES: [(&str, &str, &str); 2] = [
+    ("texture_load_directory", "--texture-load-directory", "load"),
+    ("texture_dump_directory", "--texture-dump-directory", "dump"),
+];
+
+/// Whether the queried runtime advertises [`MANAGED_DATA_PATHS`].
+pub fn takes_managed_data_paths(product: &Map<String, Value>) -> bool {
+    product.get("capabilities").and_then(|capabilities| capabilities.get(MANAGED_DATA_PATHS))
+        == Some(&Value::Bool(true))
+}
+
+/// The installed game's program ID from its ExHeader (offset 0x200, the
+/// ARM11 local system capabilities' program ID): Azahar names texture
+/// folders by it, and a USA ROM keeps its own (0004000000033500) after its
+/// code is adapted to the EUR title module. None when unreadable or zero.
+pub fn exheader_title_id(exheader: &Path) -> Option<u64> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file = std::fs::File::open(exheader).ok()?;
+    file.seek(SeekFrom::Start(0x200)).ok()?;
+    let mut bytes = [0u8; 8];
+    file.read_exact(&mut bytes).ok()?;
+    Some(u64::from_le_bytes(bytes)).filter(|id| *id != 0)
+}
+
+/// `0004000000033500`: Azahar's spelling of a title id.
+pub fn title_id_text(title_id: u64) -> String {
+    format!("{title_id:016X}")
+}
+
+/// The program ID of the prepared title's ExHeader input (`content.tap`).
+fn prepared_title_id(prepared: &forge_prepare::content::PreparedContent) -> Option<u64> {
+    let path = prepared.index.get("inputs")?.get("exheader")?.get("path")?.as_str()?;
+    exheader_title_id(&forge_prepare::paths::resolve_reference(path, &prepared.directory).ok()?)
+}
 
 /// The standard TopScreen profile as a JSON object.
 pub fn standard_topscreen() -> Result<Map<String, Value>> {
@@ -413,6 +465,29 @@ pub fn publish_private_runtime(
     if let Some(directory) = &assets.renderer_cache_directory {
         route("--renderer-cache-directory", directory)?;
     }
+    // The managed data tree (UX plan WP-05C), only for a runtime that takes
+    // it: logs, crash dumps and save states in D, the custom texture folders
+    // under the installed game's own title id.
+    let mut data_routes: Vec<(&str, PathBuf)> = Vec::new();
+    let mut title_id = None;
+    if takes_managed_data_paths(&product.product) {
+        for (field, option, folder) in DATA_ROUTES {
+            let path = folder.iter().fold(private_root.clone(), |path, part| path.join(part));
+            route(option, &path)?;
+            data_routes.push((field, path));
+        }
+        title_id = prepared_title_id(&prepared).map(title_id_text);
+        if let Some(text) = &title_id {
+            for (field, option, kind) in TEXTURE_ROUTES {
+                let path = private_root.join("textures").join(kind).join(text);
+                route(option, &path)?;
+                data_routes.push((field, path));
+            }
+        }
+    }
+    if let Some(text) = &title_id {
+        arguments.extend(["--title-id".into(), text.clone()]);
+    }
 
     // File arguments become ${profile_dir}/${runtime_dir} placeholders, or
     // explicit absolute paths outside the installation. Android has no
@@ -490,6 +565,17 @@ pub fn publish_private_runtime(
     }
     if let Some(directory) = &assets.renderer_cache_directory {
         runtime.insert("renderer_cache".into(), json!({"path": reference(directory)?}));
+    }
+    if !data_routes.is_empty() {
+        // Routed folders, validated against the profile, never hashed.
+        let mut routing = Map::new();
+        for (field, path) in &data_routes {
+            routing.insert((*field).into(), json!(reference(path)?));
+        }
+        if let Some(text) = &title_id {
+            routing.insert("title_id".into(), json!(text));
+        }
+        runtime.insert("data_routing".into(), Value::Object(routing));
     }
     // Unknown fields of the state survive; only the runtime receipt changes.
     prepared.state.insert("runtime".into(), Value::Object(runtime));

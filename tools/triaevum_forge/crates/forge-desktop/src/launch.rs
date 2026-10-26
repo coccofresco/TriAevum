@@ -132,6 +132,7 @@ pub fn diagnostics_sources(installation: &Installation) -> Sources {
             game_logs: installation.layout.activation.join("logs"),
             forge_logs: forge_core::log::logs_directory(&installation.data_root),
             crash_dumps: None,
+            crash_dumps_legacy: None,
             runtime_state: None,
             runtime_config: None,
             launch_profile: None,

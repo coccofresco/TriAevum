@@ -273,8 +273,9 @@ fn an_android_installation_bundles_its_native_error_output() {
     fixture.install(&FakeRuntime::default(), &mut Vec::new()).unwrap();
     let (native, profile) = fixture.android.clone().unwrap();
     let app_data = profile.parent().unwrap().join("app-data");
+    // Android's runtime writes its error output in D/logs (UX plan WP-05C).
     write(
-        &profile.join("logs").join("native-stderr.log"),
+        &profile.join("data").join("logs").join("native-stderr.log"),
         format!("{}no Vulkan device\n", diagnostics::FATAL_PREFIX).as_bytes(),
     );
     write(&app_data.join("files/diagnostics/game-stages.txt"), b"session 1\nstage window\n");

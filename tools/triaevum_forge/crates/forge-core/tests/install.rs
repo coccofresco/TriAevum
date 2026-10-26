@@ -83,6 +83,8 @@ fn installs_the_precompiled_title_and_publishes_the_runtime() {
     assert_eq!(receipt["launch_profile"], profile_reference);
     assert_eq!(receipt["launch_profile_sha256"], sha256_hex(&std::fs::read(fixture.launch_profile()).unwrap()));
     assert_eq!(receipt["renderer_cache"]["path"], "../../../cache/renderer");
+    // A runtime without managed_data_paths gets the Python Forge's profile.
+    assert!(receipt.get("data_routing").is_none());
     assert_eq!(state["module"]["status"], "ready");
 
     let active = load_json_object(&data.join("active-title.json")).unwrap();
@@ -95,6 +97,70 @@ fn installs_the_precompiled_title_and_publishes_the_runtime() {
     assert_eq!(load_json_object(&data.join("config/game_language.json")).unwrap()["selected"], "en");
     assert!(data.join("savedata").is_dir());
     assert!(!data.join(".forge-activation/journal.json").exists());
+}
+
+// UX plan WP-05C: a runtime advertising managed_data_paths gets the managed
+// data tree's folders in D and the ROM's own title id (a USA ROM keeps
+// 0004000000033500 though its code runs the EUR module); the receipt routes
+// them and validation refuses a profile that points elsewhere.
+#[test]
+fn a_runtime_with_managed_data_paths_routes_the_data_tree() {
+    let fixture = Fixture::build_with(false, Some(0x0004_0000_0003_3500));
+    let runtime = FakeRuntime { managed_data_paths: true, ..FakeRuntime::default() };
+    let result = fixture.install(&runtime, &mut Vec::new()).unwrap();
+    let profile_path = fixture.launch_profile();
+    let profile = load_json_object(&profile_path).unwrap();
+    let arguments: Vec<&str> = profile["arguments"].as_array().unwrap().iter().map(|a| a.as_str().unwrap()).collect();
+    let value = |option: &str| arguments[arguments.iter().position(|a| *a == option).unwrap() + 1];
+    // The earlier arguments keep their places.
+    assert_eq!(arguments[24..26], ["--height", "720"]);
+    assert_eq!(value("--log-directory"), "${runtime_dir}/data/logs");
+    assert_eq!(value("--crash-directory"), "${runtime_dir}/data/logs/crashes");
+    assert_eq!(value("--savestate-directory"), "${runtime_dir}/data/savestates");
+    assert_eq!(value("--texture-load-directory"), "${runtime_dir}/data/textures/load/0004000000033500");
+    assert_eq!(value("--texture-dump-directory"), "${runtime_dir}/data/textures/dump/0004000000033500");
+    assert_eq!(value("--title-id"), "0004000000033500");
+    assert_eq!(profile["path_scopes"]["--savestate-directory"], "relative");
+    assert!(profile["path_scopes"].get("--title-id").is_none());
+
+    let title = PathBuf::from(result["prepared"]["directory"].as_str().unwrap());
+    let state = load_json_object(&title.join("forge-state.json")).unwrap();
+    let receipt = state["runtime"].as_object().unwrap().clone();
+    let routing = &receipt["data_routing"];
+    assert_eq!(routing["log_directory"], "../../../logs");
+    assert_eq!(routing["crash_directory"], "../../../logs/crashes");
+    assert_eq!(routing["savestate_directory"], "../../../savestates");
+    assert_eq!(routing["texture_load_directory"], "../../../textures/load/0004000000033500");
+    assert_eq!(routing["title_id"], "0004000000033500");
+    let runtime_path = fixture.package.join(host().installed_runtime);
+    let validate = |receipt: &serde_json::Map<String, Value>| {
+        forge_native::validate_installed_runtime(&runtime_path, &title, &fixture.data(), receipt)
+    };
+    assert_eq!(validate(&receipt).unwrap(), profile_path);
+
+    // A profile that routes the logs elsewhere (its hash aside) is refused.
+    let mut edited = profile.clone();
+    let index = arguments.iter().position(|a| *a == "--log-directory").unwrap() + 1;
+    edited["arguments"][index] = json!("${runtime_dir}/elsewhere");
+    forge_base::fsutil::atomic_write_json(&profile_path, &Value::Object(edited)).unwrap();
+    let mut unhashed = receipt.clone();
+    unhashed.remove("launch_profile_sha256");
+    let error = validate(&unhashed).unwrap_err();
+    assert_eq!(error.kind, ErrorKind::RecoveryRequired);
+    assert!(error.message.contains("--log-directory"), "{}", error.message);
+    let mut renamed = profile.clone();
+    let index = arguments.iter().position(|a| *a == "--title-id").unwrap() + 1;
+    renamed["arguments"][index] = json!("0004000000033600");
+    forge_base::fsutil::atomic_write_json(&profile_path, &Value::Object(renamed)).unwrap();
+    assert_eq!(validate(&unhashed).unwrap_err().kind, ErrorKind::RecoveryRequired);
+
+    // A ROM whose ExHeader names no title: logs, dumps and states only.
+    let unnamed = Fixture::new();
+    unnamed.install(&runtime, &mut Vec::new()).unwrap();
+    let profile = load_json_object(&unnamed.launch_profile()).unwrap();
+    let arguments: Vec<&str> = profile["arguments"].as_array().unwrap().iter().map(|a| a.as_str().unwrap()).collect();
+    assert!(arguments.contains(&"--log-directory") && arguments.contains(&"--savestate-directory"));
+    assert!(!arguments.contains(&"--title-id") && !arguments.contains(&"--texture-load-directory"));
 }
 
 #[test]
