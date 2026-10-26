@@ -133,8 +133,101 @@ int main(int argc, char** argv) try {
             !IsSdlControllerButtonHeld(controller, GamepadButton::A, 0),
             "disconnect leaves stuck physical input");
     SDL_GameControllerClose(controller);
+
+    // Button prompts from what SDL reports: two virtual pads of known
+    // vendors and one SDL cannot place, selection, disconnect and reconnect.
+    Require(ControllerTypeFromSdl(SDL_CONTROLLER_TYPE_PS5) == ControllerType::PS5 &&
+                ControllerTypeFromSdl(SDL_CONTROLLER_TYPE_MAX - 1) == ControllerType::NintendoJoyConPair &&
+                ControllerTypeFromSdl(SDL_CONTROLLER_TYPE_MAX) == ControllerType::Unknown &&
+                ControllerTypeFromSdl(-1) == ControllerType::Unknown,
+            "ControllerType mirrors SDL_GameControllerType");
+    const auto attach = [](Uint16 vendor, Uint16 product, const char* name) {
+        SDL_VirtualJoystickDesc desc{};
+        desc.version = SDL_VIRTUAL_JOYSTICK_DESC_VERSION;
+        desc.type = SDL_JOYSTICK_TYPE_GAMECONTROLLER;
+        desc.naxes = SDL_CONTROLLER_AXIS_MAX;
+        desc.nbuttons = SDL_CONTROLLER_BUTTON_MAX;
+        desc.vendor_id = vendor;
+        desc.product_id = product;
+        desc.name = name;
+        const int deviceIndex = SDL_JoystickAttachVirtualEx(&desc);
+        Require(deviceIndex >= 0, "virtual pad attachment");
+        auto* pad = SDL_GameControllerOpen(deviceIndex);
+        Require(pad != nullptr, "virtual pad open");
+        return pad;
+    };
+    const auto detach = [](SDL_GameController* pad) {
+        const auto instance = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(pad));
+        for (int deviceIndex = 0; deviceIndex < SDL_NumJoysticks(); ++deviceIndex) {
+            if (SDL_JoystickGetDeviceInstanceID(deviceIndex) == instance) {
+                Require(SDL_JoystickDetachVirtual(deviceIndex) == 0, "virtual pad detach");
+                return;
+            }
+        }
+        throw std::runtime_error("virtual pad not found");
+    };
+    const auto instanceOf = [](SDL_GameController* pad) {
+        return SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(pad));
+    };
+    auto* xboxPad = attach(kUsbVendorMicrosoft, 0x02EA, "Xbox One Controller");
+    auto* dualSense = attach(kUsbVendorSony, 0x0CE6, "DualSense Wireless Controller");
+    auto* oddPad = attach(0x1234, 0x5678, "Unknown Arcade Stick");
+    std::unordered_map<std::int32_t, SDL_GameController*> pads{
+        {instanceOf(xboxPad), xboxPad}, {instanceOf(dualSense), dualSense}, {instanceOf(oddPad), oddPad}};
+    const auto prompts = [&](std::string_view guid, std::int32_t previous, PromptDeviceTracker& tracker) {
+        auto chosen = ResolveSdlController(pads, guid, "", previous);
+        const DeviceDescriptor* pad = nullptr;
+        for (const auto& device : chosen.Devices)
+            if (device.Selected) pad = &device;
+        return std::pair{ResolvePromptSet(ButtonPrompts::Automatic, tracker.LastUsed(), pad, PromptPlatform::Desktop),
+                         chosen};
+    };
+    auto all = ResolveSdlController(pads, "", "", -1);
+    Require(all.Devices.size() == 3, "three virtual pads");
+    std::string dualSenseGuid;
+    for (const auto& device : all.Devices) {
+        const auto expected = device.InstanceId == instanceOf(xboxPad)    ? PromptSet::Xbox
+                              : device.InstanceId == instanceOf(dualSense) ? PromptSet::PlayStation
+                                                                            : PromptSet::Generic;
+        Require(device.Prompts == expected, "each pad's prompt family from SDL's type and vendor");
+        if (device.InstanceId == instanceOf(dualSense)) dualSenseGuid = device.Guid;
+    }
+    PromptDeviceTracker tracker;
+    // Before any input, the automatic selection (the first pad) shows its family.
+    Require(prompts("", -1, tracker).first == PromptSet::Xbox, "a connected pad before any input");
+    tracker.Observe(InputActivity::Keyboard, 1.0);
+    Require(prompts("", -1, tracker).first == PromptSet::Keyboard, "the keyboard used");
+    // The pad's press is what the host poll reports as controller activity.
+    SDL_JoystickSetVirtualButton(SDL_GameControllerGetJoystick(dualSense), SDL_CONTROLLER_BUTTON_A, 1);
+    SDL_GameControllerUpdate();
+    Require(IsSdlControllerActive(dualSense) && !IsSdlControllerActive(xboxPad), "the pressed pad is the active one");
+    tracker.Observe(InputActivity::Controller, 2.0);
+    SDL_JoystickSetVirtualButton(SDL_GameControllerGetJoystick(dualSense), SDL_CONTROLLER_BUTTON_A, 0);
+    SDL_JoystickSetVirtualAxis(SDL_GameControllerGetJoystick(dualSense), SDL_CONTROLLER_AXIS_LEFTX, 30000);
+    SDL_GameControllerUpdate();
+    Require(IsSdlControllerActive(dualSense), "a pushed stick is activity");
+    SDL_JoystickSetVirtualAxis(SDL_GameControllerGetJoystick(dualSense), SDL_CONTROLLER_AXIS_LEFTX, 0);
+    SDL_GameControllerUpdate();
+    Require(!IsSdlControllerActive(dualSense), "a resting pad is no activity");
+    // Two pads: the preferred (selected) one gives the family.
+    auto [preferred, chosenPad] = prompts(dualSenseGuid, -1, tracker);
+    Require(preferred == PromptSet::PlayStation && chosenPad.InstanceId == instanceOf(dualSense),
+            "the selected pad of two");
+    // Disconnect: automatic selection moves to the other pad, then none.
+    detach(dualSense);
+    Require(prompts("", chosenPad.InstanceId, tracker).first == PromptSet::Xbox, "the remaining pad after a disconnect");
+    detach(xboxPad);
+    detach(oddPad);
+    Require(prompts("", -1, tracker).first == PromptSet::Keyboard, "no pad: the keyboard's prompts");
+    // Reconnect: the pad's family again, without a new press.
+    auto* again = attach(kUsbVendorSony, 0x0CE6, "DualSense Wireless Controller");
+    pads[instanceOf(again)] = again;
+    Require(prompts("", -1, tracker).first == PromptSet::PlayStation, "the pad reconnected");
+    detach(again);
+    for (auto* pad : {xboxPad, dualSense, oddPad, again}) SDL_GameControllerClose(pad);
     SDL_Quit();
-    std::cout << "PASS: SDL selection, buttons, triggers, axes, UI capture, absent sensors, disconnect\n";
+    std::cout << "PASS: SDL selection, buttons, triggers, axes, UI capture, absent sensors, disconnect, "
+                 "prompt families, two pads, reconnect\n";
     return 0;
 } catch (const std::exception& e) {
     std::cerr << e.what() << ": " << SDL_GetError() << '\n';

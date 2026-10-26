@@ -1,5 +1,23 @@
 # F1 settings rationalization
 
+## Button prompts (2026-10-26)
+
+UX plan WP-08 (menu part; `TRIAEVUM_IN_GAME_MENU.md` "Button prompts" has
+the rest): Controls > Devices gains **Button prompts** (Automatic, Xbox,
+PlayStation, Nintendo, Steam Deck, Generic, Keyboard, Touch), below "Capture
+mouse during gameplay", with "Now: <family>" beside Automatic (what the
+controls owner resolves from the device used last). It is the controls
+owner's setting (`NativeControlConfig::ButtonPrompts`, `button_prompts` in
+`oot3d_controls.json`, written only when fixed), saved by Save controls,
+mirrored by the in-game menu's Controls > Button prompts row. It is not a
+binding: choosing it never makes the preset Custom, and applying a preset
+keeps it.
+
+Verification: the actual-widget smoke selects PlayStation (the owner's
+choice and the resolved family follow), Automatic (the keyboard used last),
+and Steam Deck in the persistence fixture (the preset stays, Save controls
+writes it). Actual-widget smoke: **11,548 assertions**.
+
 ## Unsaved preview marker, camera names (2026-10-26)
 
 UX plan WP-06B (`TRIAEVUM_IN_GAME_MENU.md` has the menu side):

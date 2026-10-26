@@ -1,10 +1,145 @@
 #include "three_ds_input.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <cstdlib>
 #include <limits>
 
 namespace ThreeDsRecomp::Input {
+
+namespace {
+
+constexpr std::array<const char*, 7> kPromptSetNames{
+    "xbox", "playstation", "nintendo", "steam_deck", "generic", "keyboard", "touch"};
+constexpr std::array<const char*, 7> kPromptSetLabels{
+    "Xbox", "PlayStation", "Nintendo", "Steam Deck", "Generic", "Keyboard", "Touch"};
+
+bool ContainsNoCase(std::string_view text, std::string_view word) noexcept {
+    if (word.empty() || text.size() < word.size()) return word.empty();
+    for (std::size_t start = 0; start + word.size() <= text.size(); ++start) {
+        bool match = true;
+        for (std::size_t index = 0; index < word.size() && match; ++index) {
+            match = std::tolower(static_cast<unsigned char>(text[start + index])) ==
+                    std::tolower(static_cast<unsigned char>(word[index]));
+        }
+        if (match) return true;
+    }
+    return false;
+}
+
+} // namespace
+
+const char* PromptSetName(PromptSet set) noexcept {
+    const auto index = static_cast<std::size_t>(set);
+    return index < kPromptSetNames.size() ? kPromptSetNames[index] : "unknown";
+}
+
+const char* PromptSetLabel(PromptSet set) noexcept {
+    const auto index = static_cast<std::size_t>(set);
+    return index < kPromptSetLabels.size() ? kPromptSetLabels[index] : "Unknown";
+}
+
+const char* ButtonPromptsName(ButtonPrompts prompts) noexcept {
+    if (prompts == ButtonPrompts::Automatic) return "automatic";
+    return PromptSetName(static_cast<PromptSet>(static_cast<std::uint8_t>(prompts) - 1U));
+}
+
+const char* ButtonPromptsLabel(ButtonPrompts prompts) noexcept {
+    if (prompts == ButtonPrompts::Automatic) return "Automatic";
+    return PromptSetLabel(static_cast<PromptSet>(static_cast<std::uint8_t>(prompts) - 1U));
+}
+
+bool ParseButtonPrompts(std::string_view value, ButtonPrompts* prompts) noexcept {
+    if (prompts == nullptr) return false;
+    for (std::size_t index = 0; index < kButtonPromptsCount; ++index) {
+        const auto candidate = static_cast<ButtonPrompts>(index);
+        if (value == ButtonPromptsName(candidate)) {
+            *prompts = candidate;
+            return true;
+        }
+    }
+    return false;
+}
+
+PromptSet PromptSetForController(const ControllerIdentity& controller, bool steamDeckSession) noexcept {
+    if (controller.Vendor == kUsbVendorValve || ContainsNoCase(controller.Name, "steam virtual gamepad") ||
+        ContainsNoCase(controller.Name, "steam deck")) {
+        if (controller.Product == kValveSteamDeckControls || ContainsNoCase(controller.Name, "steam deck"))
+            return PromptSet::SteamDeck;
+        // The virtual gamepad, and Valve's other pads (A B X Y in Xbox places).
+        return steamDeckSession ? PromptSet::SteamDeck : PromptSet::Xbox;
+    }
+    switch (controller.Type) {
+    case ControllerType::Xbox360:
+    case ControllerType::XboxOne:
+    // A B X Y where an Xbox pad has them.
+    case ControllerType::AmazonLuna:
+    case ControllerType::GoogleStadia:
+    case ControllerType::NvidiaShield:
+        return PromptSet::Xbox;
+    case ControllerType::PS3:
+    case ControllerType::PS4:
+    case ControllerType::PS5:
+        return PromptSet::PlayStation;
+    case ControllerType::NintendoSwitchPro:
+    case ControllerType::NintendoJoyConLeft:
+    case ControllerType::NintendoJoyConRight:
+    case ControllerType::NintendoJoyConPair:
+        return PromptSet::Nintendo;
+    case ControllerType::Unknown:
+    case ControllerType::Virtual:
+        break;
+    }
+    switch (controller.Vendor) {
+    case kUsbVendorMicrosoft: return PromptSet::Xbox;
+    case kUsbVendorSony: return PromptSet::PlayStation;
+    case kUsbVendorNintendo: return PromptSet::Nintendo;
+    default: return PromptSet::Generic;
+    }
+}
+
+bool IsSteamDeckSession() noexcept {
+    const char* value = std::getenv("SteamDeck");
+    return value != nullptr && std::string_view(value) == "1";
+}
+
+void PromptDeviceTracker::Observe(InputActivity activity, double nowSeconds) noexcept {
+    switch (activity) {
+    case InputActivity::None:
+        return;
+    case InputActivity::Touch:
+        mLastTouchSeconds = nowSeconds;
+        break;
+    case InputActivity::Mouse:
+        if (nowSeconds - mLastTouchSeconds < kMouseAfterTouchSeconds) return;
+        break;
+    case InputActivity::Keyboard:
+    case InputActivity::Controller:
+        break;
+    }
+    mLast = activity;
+}
+
+PromptSet ResolvePromptSet(ButtonPrompts setting, InputActivity lastUsed, const DeviceDescriptor* selectedPad,
+                           PromptPlatform platform) noexcept {
+    if (setting != ButtonPrompts::Automatic)
+        return static_cast<PromptSet>(static_cast<std::uint8_t>(setting) - 1U);
+    const PromptSet platformSet = platform == PromptPlatform::Touch ? PromptSet::Touch : PromptSet::Keyboard;
+    switch (lastUsed) {
+    case InputActivity::Keyboard:
+    case InputActivity::Mouse:
+        return PromptSet::Keyboard;
+    case InputActivity::Touch:
+        return PromptSet::Touch;
+    case InputActivity::Controller:
+        return selectedPad != nullptr ? selectedPad->Prompts : platformSet;
+    case InputActivity::None:
+        break;
+    }
+    if (platform == PromptPlatform::Desktop && selectedPad != nullptr) return selectedPad->Prompts;
+    return platformSet;
+}
 
 double ConsumeInputPeriod(double pollSeconds, bool consume, double& pendingSeconds) noexcept {
     const double elapsed = std::isfinite(pollSeconds) ? std::clamp(pollSeconds, 0.0, 0.25) : 0.0;

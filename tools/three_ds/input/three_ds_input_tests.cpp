@@ -8,8 +8,10 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <iostream>
 #include <limits>
+#include <string_view>
 #include <vector>
 #include <stdexcept>
 
@@ -401,7 +403,130 @@ void TestTouchSkin() {
             "rounded tabs lost their body, open rim or rounded corners");
 }
 
+// Button prompts: the pad's family from its SDL type (and vendor), the
+// device used last, and the user's fixed choice.
+void TestButtonPrompts() {
+    using namespace ThreeDsRecomp::Input;
+    const auto family = [](ControllerType type, std::uint16_t vendor = 0, std::uint16_t product = 0,
+                           std::string_view name = {}, bool deck = false) {
+        return PromptSetForController({type, vendor, product, name}, deck);
+    };
+    Require(family(ControllerType::Xbox360) == PromptSet::Xbox && family(ControllerType::XboxOne) == PromptSet::Xbox,
+            "Xbox types");
+    Require(family(ControllerType::PS3) == PromptSet::PlayStation && family(ControllerType::PS4) == PromptSet::PlayStation &&
+                family(ControllerType::PS5) == PromptSet::PlayStation,
+            "PlayStation types");
+    Require(family(ControllerType::NintendoSwitchPro) == PromptSet::Nintendo &&
+                family(ControllerType::NintendoJoyConLeft) == PromptSet::Nintendo &&
+                family(ControllerType::NintendoJoyConRight) == PromptSet::Nintendo &&
+                family(ControllerType::NintendoJoyConPair) == PromptSet::Nintendo,
+            "Nintendo types");
+    Require(family(ControllerType::AmazonLuna) == PromptSet::Xbox && family(ControllerType::GoogleStadia) == PromptSet::Xbox &&
+                family(ControllerType::NvidiaShield) == PromptSet::Xbox,
+            "A B X Y in Xbox places");
+    // A type SDL does not know: the vendor, then labels by position.
+    Require(family(ControllerType::Unknown) == PromptSet::Generic &&
+                family(ControllerType::Unknown, 0x1234, 0x5678, "Some Pad") == PromptSet::Generic &&
+                family(ControllerType::Virtual) == PromptSet::Generic,
+            "unknown pads are generic");
+    Require(family(ControllerType::Unknown, kUsbVendorSony) == PromptSet::PlayStation &&
+                family(ControllerType::Virtual, kUsbVendorNintendo) == PromptSet::Nintendo &&
+                family(ControllerType::Unknown, kUsbVendorMicrosoft) == PromptSet::Xbox,
+            "unknown types fall back on the vendor");
+    // Steam's virtual gamepad (an Xbox 360 type to SDL): Steam Deck labels in
+    // a Steam Deck session, Xbox elsewhere; the Deck's own controls.
+    Require(family(ControllerType::Xbox360, kUsbVendorValve, kValveSteamVirtualGamepad, "Steam Virtual Gamepad") ==
+                    PromptSet::Xbox &&
+                family(ControllerType::Xbox360, kUsbVendorValve, kValveSteamVirtualGamepad, "Steam Virtual Gamepad",
+                       true) == PromptSet::SteamDeck,
+            "the Steam virtual gamepad follows SteamDeck=1");
+    Require(family(ControllerType::Xbox360, 0, 0, "steam virtual gamepad", true) == PromptSet::SteamDeck &&
+                family(ControllerType::Unknown, kUsbVendorValve, kValveSteamDeckControls) == PromptSet::SteamDeck &&
+                family(ControllerType::Unknown, 0, 0, "Steam Deck") == PromptSet::SteamDeck,
+            "the Steam Deck's own controls");
+    Require(family(ControllerType::PS5, kUsbVendorSony, 0x0CE6, "DualSense Wireless Controller", true) ==
+                PromptSet::PlayStation,
+            "a pad Steam describes keeps its own family on a Deck");
+    const auto setSteamDeck = [](const char* value) {
+#if defined(_WIN32)
+        _putenv_s("SteamDeck", value);
+#else
+        if (*value == '\0') unsetenv("SteamDeck"); else setenv("SteamDeck", value, 1);
+#endif
+    };
+    setSteamDeck("1");
+    Require(IsSteamDeckSession(), "SteamDeck=1 is a Steam Deck session");
+    setSteamDeck("0");
+    Require(!IsSteamDeckSession(), "SteamDeck=0 is not");
+    setSteamDeck("");
+    Require(!IsSteamDeckSession(), "no SteamDeck variable is not");
+
+    // Names and the persisted choice.
+    for (std::size_t index = 0; index < kButtonPromptsCount; ++index) {
+        const auto value = static_cast<ButtonPrompts>(index);
+        ButtonPrompts parsed = ButtonPrompts::Automatic;
+        Require(ParseButtonPrompts(ButtonPromptsName(value), &parsed) && parsed == value, "button prompts round trip");
+    }
+    ButtonPrompts ignored{};
+    Require(!ParseButtonPrompts("dreamcast", &ignored) && !ParseButtonPrompts("Xbox", &ignored),
+            "unknown button prompts rejected");
+    Require(std::string_view(PromptSetLabel(PromptSet::PlayStation)) == "PlayStation" &&
+                std::string_view(ButtonPromptsLabel(ButtonPrompts::SteamDeck)) == "Steam Deck" &&
+                std::string_view(ButtonPromptsName(ButtonPrompts::SteamDeck)) == "steam_deck",
+            "prompt labels");
+
+    // The device used last.
+    DeviceDescriptor xbox;
+    xbox.InstanceId = 3;
+    xbox.Selected = true;
+    xbox.Prompts = PromptSet::Xbox;
+    DeviceDescriptor dualSense = xbox;
+    dualSense.InstanceId = 7;
+    dualSense.Prompts = PromptSet::PlayStation;
+    const auto resolve = [](const PromptDeviceTracker& tracker, const DeviceDescriptor* pad,
+                            PromptPlatform platform = PromptPlatform::Desktop) {
+        return ResolvePromptSet(ButtonPrompts::Automatic, tracker.LastUsed(), pad, platform);
+    };
+    PromptDeviceTracker tracker;
+    Require(resolve(tracker, nullptr) == PromptSet::Keyboard && resolve(tracker, &xbox) == PromptSet::Xbox &&
+                resolve(tracker, &xbox, PromptPlatform::Touch) == PromptSet::Touch &&
+                resolve(tracker, nullptr, PromptPlatform::Touch) == PromptSet::Touch,
+            "before any input: a desktop's pad or keyboard, a phone's touch");
+    tracker.Observe(InputActivity::Keyboard, 1.0);
+    Require(resolve(tracker, &xbox) == PromptSet::Keyboard, "a key press shows the keyboard with a pad connected");
+    tracker.Observe(InputActivity::Controller, 2.0);
+    Require(resolve(tracker, &xbox) == PromptSet::Xbox, "a pad press shows the pad");
+    // Two pads: the selected one gives the family.
+    Require(resolve(tracker, &dualSense) == PromptSet::PlayStation, "the selected pad's family");
+    // Disconnected: the platform's own; reconnected: the pad again.
+    Require(resolve(tracker, nullptr) == PromptSet::Keyboard &&
+                resolve(tracker, nullptr, PromptPlatform::Touch) == PromptSet::Touch,
+            "the used pad gone");
+    Require(resolve(tracker, &xbox) == PromptSet::Xbox, "the pad back");
+    tracker.Observe(InputActivity::None, 3.0);
+    Require(tracker.LastUsed() == InputActivity::Controller, "no activity changes nothing");
+    tracker.Observe(InputActivity::Touch, 4.0);
+    Require(resolve(tracker, &xbox) == PromptSet::Touch, "a touch shows touch");
+    tracker.Observe(InputActivity::Mouse, 4.5);
+    Require(resolve(tracker, &xbox) == PromptSet::Touch, "the pointer a touch moved is not a mouse");
+    tracker.Observe(InputActivity::Mouse, 4.0 + PromptDeviceTracker::kMouseAfterTouchSeconds + 0.01);
+    Require(resolve(tracker, &xbox) == PromptSet::Keyboard, "a real mouse later shows the keyboard's prompts");
+    tracker.Observe(InputActivity::Keyboard, 6.0);
+    tracker.Observe(InputActivity::Touch, 6.0);
+    Require(resolve(tracker, nullptr) == PromptSet::Touch, "touch observed last in a poll wins");
+    // A fixed choice shows its family whatever is used.
+    for (std::size_t index = 1; index < kButtonPromptsCount; ++index) {
+        const auto fixed = static_cast<ButtonPrompts>(index);
+        Require(ResolvePromptSet(fixed, InputActivity::Touch, &xbox, PromptPlatform::Touch) ==
+                        static_cast<PromptSet>(index - 1U) &&
+                    ResolvePromptSet(fixed, InputActivity::None, nullptr, PromptPlatform::Desktop) ==
+                        static_cast<PromptSet>(index - 1U),
+                "a fixed choice");
+    }
+}
+
 int main() try {
+    TestButtonPrompts();
     TestAutomaticMotionComposition();
     TestPointerPressLatch();
     TestVirtualPad();

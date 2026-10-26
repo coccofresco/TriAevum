@@ -16,6 +16,55 @@ struct SdlControllerSelection {
     std::vector<DeviceDescriptor> Devices;
 };
 
+inline ControllerType ControllerTypeFromSdl(int sdlType) noexcept {
+    // ControllerType follows SDL_GameControllerType's order.
+    return sdlType >= 0 && sdlType <= static_cast<int>(ControllerType::NintendoJoyConPair)
+        ? static_cast<ControllerType>(sdlType) : ControllerType::Unknown;
+}
+
+// The pad's prompt family from what SDL reports about it.
+inline PromptSet SdlControllerPromptSet(SDL_GameController* controller, std::string_view name,
+                                        ControllerType* type = nullptr) {
+    ControllerIdentity identity;
+    identity.Name = name;
+#if SDL_VERSION_ATLEAST(2, 0, 12)
+    identity.Type = ControllerTypeFromSdl(static_cast<int>(SDL_GameControllerGetType(controller)));
+#endif
+#if SDL_VERSION_ATLEAST(2, 0, 6)
+    identity.Vendor = SDL_GameControllerGetVendor(controller);
+    identity.Product = SDL_GameControllerGetProduct(controller);
+#endif
+    if (type != nullptr) *type = identity.Type;
+    return PromptSetForController(identity, IsSteamDeckSession());
+}
+
+// Any button, trigger or stick of the pad in use this poll (for the prompts:
+// the device used last).
+inline bool IsSdlControllerActive(SDL_GameController* controller, std::int16_t axisThreshold = 16384) {
+    if (!controller || SDL_GameControllerGetAttached(controller) != SDL_TRUE) return false;
+    for (int i = 0; i < SDL_CONTROLLER_BUTTON_MAX; ++i)
+        if (SDL_GameControllerGetButton(controller, static_cast<SDL_GameControllerButton>(i))) return true;
+    for (int i = 0; i < SDL_CONTROLLER_AXIS_MAX; ++i) {
+        const int value = SDL_GameControllerGetAxis(controller, static_cast<SDL_GameControllerAxis>(i));
+        if (value > axisThreshold || value < -axisThreshold) return true;
+    }
+    return false;
+}
+
+// A key of a keyboard held this poll: letters, digits, the function,
+// editing, arrow and keypad keys and the modifiers. A phone's Back and the
+// media keys are not a keyboard.
+inline bool IsSdlKeyboardActive() {
+    int count = 0;
+    const Uint8* keys = SDL_GetKeyboardState(&count);
+    if (keys == nullptr) return false;
+    for (int code = SDL_SCANCODE_A; code < std::min(count, static_cast<int>(SDL_SCANCODE_APPLICATION)); ++code)
+        if (keys[code]) return true;
+    for (int code = SDL_SCANCODE_LCTRL; code <= SDL_SCANCODE_RGUI && code < count; ++code)
+        if (keys[code]) return true;
+    return false;
+}
+
 inline SdlControllerSelection ResolveSdlController(
     const std::unordered_map<std::int32_t, SDL_GameController*>& connected,
     std::string_view guid, std::string_view serial, std::int32_t previousInstance) {
@@ -30,6 +79,7 @@ inline SdlControllerSelection ResolveSdlController(
         device.Guid = text;
         const char* name = SDL_GameControllerName(controller);
         device.Name = name ? name : text;
+        device.Prompts = SdlControllerPromptSet(controller, device.Name, &device.Type);
 #if SDL_VERSION_ATLEAST(2, 0, 14)
         const char* deviceSerial = SDL_GameControllerGetSerial(controller);
         if (deviceSerial) device.Serial = NormalizeControllerSerial(deviceSerial);

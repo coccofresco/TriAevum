@@ -112,6 +112,85 @@ void EmitMouseAimTimeline(const std::filesystem::path& path, std::string_view ax
         {"frame_origin", "run"}, {"segments", segments}}.dump(2));
 }
 
+// The controls owner keeps the "Button prompts" choice and resolves the
+// prompts from the device activity the host poll reports.
+void TestButtonPromptsOwner() {
+    using ThreeDsRecomp::Input::InputActivity;
+    using ThreeDsRecomp::Input::PromptPlatform;
+    auto config = NativeControlDefaults();
+    std::string json, error;
+    NativeControlConfig loaded;
+    Require(config.ButtonPrompts == NativeButtonPrompts::Automatic, "prompts start automatic");
+    Require(SerializeNativeControlConfigText(config, &json, &error) && json.find("button_prompts") == std::string::npos,
+            "automatic prompts are not written (older builds still read the file)");
+    config.ButtonPrompts = NativeButtonPrompts::PlayStation;
+    Require(SerializeNativeControlConfigText(config, &json, &error) &&
+                json.find("\"button_prompts\": \"playstation\"") != std::string::npos &&
+                ParseNativeControlConfigText(json, &loaded, &error) && loaded == config,
+            "a fixed choice survives save and reload");
+    auto document = nlohmann::json::parse(json);
+    document["button_prompts"] = "dreamcast";
+    Require(!ParseNativeControlConfigText(document.dump(), &loaded, &error) &&
+                error.find("button_prompts") != std::string::npos,
+            "an unknown prompt family is refused");
+    config.ButtonPrompts = static_cast<NativeButtonPrompts>(42);
+    Require(!ValidateNativeControlConfig(config, &error), "an out-of-range choice is invalid");
+
+    NativeControlConfigRuntime runtime({}, NativeControlDefaults());
+    NativeControlDeviceDescriptor xbox;
+    xbox.InstanceId = 1;
+    xbox.Prompts = NativePromptSet::Xbox;
+    NativeControlDeviceDescriptor dualSense;
+    dualSense.InstanceId = 2;
+    dualSense.Prompts = NativePromptSet::PlayStation;
+    const auto pads = [&](std::initializer_list<NativeControlDeviceDescriptor> devices, std::int32_t selected) {
+        std::vector<NativeControlDeviceDescriptor> list(devices);
+        for (auto& device : list) device.Selected = device.InstanceId == selected;
+        runtime.ObserveDevices(std::move(list));
+    };
+    Require(runtime.ActivePromptSet() == NativePromptSet::Keyboard, "a desktop without a pad starts on the keyboard");
+    pads({xbox, dualSense}, 1);
+    Require(runtime.ActivePromptSet() == NativePromptSet::Xbox, "a desktop with a pad starts on it");
+    // Mid-menu transitions, as the host poll reports them.
+    runtime.ObserveInputActivity(InputActivity::Keyboard, 1.0);
+    Require(runtime.ActivePromptSet() == NativePromptSet::Keyboard, "keyboard");
+    runtime.ObserveInputActivity(InputActivity::Controller, 2.0);
+    Require(runtime.ActivePromptSet() == NativePromptSet::Xbox, "pad");
+    runtime.ObserveInputActivity(InputActivity::Touch, 3.0);
+    Require(runtime.ActivePromptSet() == NativePromptSet::Touch, "touch");
+    runtime.ObserveInputActivity(InputActivity::Mouse, 3.2);
+    Require(runtime.ActivePromptSet() == NativePromptSet::Touch, "the pointer a finger moved");
+    runtime.ObserveInputActivity(InputActivity::Controller, 4.0);
+    // Two pads: the other one selected; then disconnect and reconnect.
+    pads({xbox, dualSense}, 2);
+    Require(runtime.ActivePromptSet() == NativePromptSet::PlayStation, "the selected pad of two");
+    pads({}, -1);
+    Require(runtime.ActivePromptSet() == NativePromptSet::Keyboard, "the pad disconnected");
+    pads({dualSense}, 2);
+    Require(runtime.ActivePromptSet() == NativePromptSet::PlayStation, "the pad reconnected");
+    // The fixed choice wins and Automatic is still reported for F1.
+    auto fixed = runtime.Snapshot().Config;
+    fixed.ButtonPrompts = NativeButtonPrompts::Nintendo;
+    Require(runtime.Preview(fixed), "preview the choice");
+    Require(runtime.ActivePromptSet() == NativePromptSet::Nintendo &&
+                runtime.AutomaticPromptSet() == NativePromptSet::PlayStation,
+            "a fixed choice, and what Automatic would show");
+    // A preset carries no choice (the menu and F1 keep the user's).
+    auto preset = NativeControlPreset(NativeControlProfile::Controller);
+    Require(preset.ButtonPrompts == NativeButtonPrompts::Automatic, "presets do not choose prompts");
+    // A phone starts on touch even with a pad connected.
+    NativeControlConfigRuntime phone({}, NativeControlDefaults());
+    phone.SetPromptPlatform(PromptPlatform::Touch);
+    auto phonePad = xbox;
+    phonePad.Selected = true;
+    phone.ObserveDevices({phonePad});
+    Require(phone.ActivePromptSet() == NativePromptSet::Touch, "a phone starts on touch");
+    phone.ObserveInputActivity(InputActivity::Controller, 1.0);
+    Require(phone.ActivePromptSet() == NativePromptSet::Xbox, "a pad used on a phone");
+    phone.ObserveDevices({});
+    Require(phone.ActivePromptSet() == NativePromptSet::Touch, "the pad gone: touch again");
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -121,6 +200,7 @@ int main(int argc, char** argv) {
     }
     Require(argc == 1, "usage: [--emit-mouse-aim FILE pitch|yaw]");
     TestShoulderMappings();
+    TestButtonPromptsOwner();
     const auto mousePreset = NativeControlPreset(NativeControlProfile::KeyboardMouse);
     const auto controllerPreset = NativeControlPreset(NativeControlProfile::Controller);
     Require(mousePreset.NativeAimSource == NativeMotionSource::Mouse &&

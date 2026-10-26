@@ -321,6 +321,83 @@ void SwapGamepadSources(std::span<HostBinding> bindings,
     const HostDeviceEnablement& enabled,
     const HostButtonSource& source) noexcept;
 
+// The family of button labels a prompt shows (the in-game menu's hints, its
+// help card and controls summary). A pad's family comes from its SDL type;
+// Keyboard and Touch are the families of those devices.
+enum class PromptSet : std::uint8_t {
+    Xbox,
+    PlayStation,
+    Nintendo,
+    SteamDeck,
+    Generic,
+    Keyboard,
+    Touch,
+};
+
+// The user's "Button prompts" choice (Controls > Devices): Automatic follows
+// the device used last, any other value shows that family whatever is used.
+enum class ButtonPrompts : std::uint8_t {
+    Automatic,
+    Xbox,
+    PlayStation,
+    Nintendo,
+    SteamDeck,
+    Generic,
+    Keyboard,
+    Touch,
+};
+
+inline constexpr std::size_t kButtonPromptsCount = 8;
+
+const char* PromptSetName(PromptSet set) noexcept;
+// The family's name for people ("PlayStation", "Steam Deck").
+const char* PromptSetLabel(PromptSet set) noexcept;
+const char* ButtonPromptsName(ButtonPrompts prompts) noexcept;
+const char* ButtonPromptsLabel(ButtonPrompts prompts) noexcept;
+bool ParseButtonPrompts(std::string_view value, ButtonPrompts* prompts) noexcept;
+
+// SDL_GameControllerType's values, in its order, without SDL.
+enum class ControllerType : std::uint8_t {
+    Unknown,
+    Xbox360,
+    XboxOne,
+    PS3,
+    PS4,
+    NintendoSwitchPro,
+    Virtual,
+    PS5,
+    AmazonLuna,
+    GoogleStadia,
+    NvidiaShield,
+    NintendoJoyConLeft,
+    NintendoJoyConRight,
+    NintendoJoyConPair,
+};
+
+inline constexpr std::uint16_t kUsbVendorMicrosoft = 0x045E;
+inline constexpr std::uint16_t kUsbVendorSony = 0x054C;
+inline constexpr std::uint16_t kUsbVendorNintendo = 0x057E;
+inline constexpr std::uint16_t kUsbVendorValve = 0x28DE;
+inline constexpr std::uint16_t kValveSteamVirtualGamepad = 0x11FF;
+inline constexpr std::uint16_t kValveSteamDeckControls = 0x1205;
+
+struct ControllerIdentity {
+    ControllerType Type = ControllerType::Unknown;
+    std::uint16_t Vendor = 0;
+    std::uint16_t Product = 0;
+    std::string_view Name;
+};
+
+// The pad's prompt family. Steam's virtual gamepad (what Steam Input hands a
+// game for a pad it does not describe further) shows the Steam Deck's labels
+// in a Steam Deck session (`SteamDeck=1`, set by SteamOS) and Xbox labels
+// elsewhere; the Deck's own controls are SteamDeck. A type SDL does not know
+// falls back on the USB vendor, then Generic (labels by position).
+[[nodiscard]] PromptSet PromptSetForController(const ControllerIdentity& controller,
+                                               bool steamDeckSession) noexcept;
+// True when the environment says this is a Steam Deck session (SteamDeck=1).
+[[nodiscard]] bool IsSteamDeckSession() noexcept;
+
 struct DeviceDescriptor {
     std::int32_t InstanceId = -1;
     std::string Guid;
@@ -330,7 +407,40 @@ struct DeviceDescriptor {
     std::string Serial;
     bool Selected = false;
     std::int32_t TouchpadCount = 0;
+    ControllerType Type = ControllerType::Unknown;
+    PromptSet Prompts = PromptSet::Generic;
 };
+
+// Activity on a host device this poll, for the prompts.
+enum class InputActivity : std::uint8_t { None, Keyboard, Mouse, Controller, Touch };
+
+// Where the prompts start before any input: a desktop (keyboard, or the
+// connected pad), or a touch device (a phone).
+enum class PromptPlatform : std::uint8_t { Desktop, Touch };
+
+// The device the user used last, for the prompts. A touch screen also moves
+// the system's pointer: mouse activity right after a touch is that touch,
+// not a mouse.
+class PromptDeviceTracker {
+  public:
+    static constexpr double kMouseAfterTouchSeconds = 1.0;
+    void Observe(InputActivity activity, double nowSeconds) noexcept;
+    [[nodiscard]] InputActivity LastUsed() const noexcept { return mLast; }
+
+  private:
+    InputActivity mLast = InputActivity::None;
+    double mLastTouchSeconds = -1.0e9;
+};
+
+// What the prompts show: a fixed choice as chosen; otherwise the device used
+// last (the selected pad's family; the keyboard's for the keyboard and the
+// mouse; touch). With the used pad gone, a pad still selected gives its
+// family, else the platform's own. Before any input a desktop shows its
+// selected pad (a Steam Deck in Gaming Mode has no keyboard) or the
+// keyboard, a touch device shows touch.
+[[nodiscard]] PromptSet ResolvePromptSet(ButtonPrompts setting, InputActivity lastUsed,
+                                         const DeviceDescriptor* selectedPad,
+                                         PromptPlatform platform) noexcept;
 
 // Session IDs are never persisted. A GUID identifies a model; a serial, when
 // available, distinguishes two physical pads of that model.

@@ -157,9 +157,10 @@ bool DecodeNativeControlConfig(const nlohmann::json& document,
     SetError(error, "native control config root/output is invalid");
     return false;
   }
-  constexpr std::array<std::string_view, 12> kAllowedFields{
+  constexpr std::array<std::string_view, 13> kAllowedFields{
       "schema", "profile", "devices", "bindings", "analog", "aim",
-      "free_camera", "controller_guid", "controller_serial", "calibration", "capture_mouse", "controller_touchpad"};
+      "free_camera", "controller_guid", "controller_serial", "calibration", "capture_mouse", "controller_touchpad",
+      "button_prompts"};
   const std::set<std::string_view> allowed(kAllowedFields.begin(),
                                            kAllowedFields.end());
   for (const auto& [key, value] : document.items()) {
@@ -235,6 +236,11 @@ bool DecodeNativeControlConfig(const nlohmann::json& document,
     }
     parsed.PreferredControllerSerial = ThreeDsRecomp::Input::NormalizeControllerSerial(
         document.at("controller_serial").get<std::string>());
+  }
+
+  if (!ReadNamedField(document, "button_prompts", &parsed.ButtonPrompts,
+                      ThreeDsRecomp::Input::ParseButtonPrompts, error)) {
+    return false;
   }
 
   if (document.contains("controller_touchpad")) {
@@ -587,6 +593,10 @@ bool ValidateNativeControlConfig(const NativeControlConfig& config,
     SetError(error, "controller touchpad index must be in [0, 15]");
     return false;
   }
+  if (static_cast<std::size_t>(config.ButtonPrompts) >= ThreeDsRecomp::Input::kButtonPromptsCount) {
+    SetError(error, "button prompts value is unknown");
+    return false;
+  }
   if (config.MovementStickDeadZonePercent < 0 ||
       config.MovementStickDeadZonePercent > 95 ||
       config.LookStickDeadZonePercent < 0 ||
@@ -669,7 +679,7 @@ bool SerializeNativeControlConfigText(const NativeControlConfig& config,
         {"gamepad", NativeGamepadButtonName(binding.Gamepad)},
     };
   }
-  const nlohmann::json document{
+  nlohmann::json document{
       {"schema", kNativeControlConfigSchema},
       {"profile", NativeControlProfileName(config.Profile)},
       {"devices",
@@ -708,6 +718,10 @@ bool SerializeNativeControlConfigText(const NativeControlConfig& config,
         {"controller_guid", config.CalibrationControllerGuid},
         {"controller_serial", config.CalibrationControllerSerial}}},
   };
+  // Written only when fixed: a file with the default stays readable by a
+  // build that does not know the field.
+  if (config.ButtonPrompts != NativeButtonPrompts::Automatic)
+    document["button_prompts"] = ThreeDsRecomp::Input::ButtonPromptsName(config.ButtonPrompts);
   NativeControlConfig validated;
   if (!DecodeNativeControlConfig(document, &validated, error)) {
     return false;
@@ -955,6 +969,38 @@ void NativeControlConfigRuntime::ObserveBindingCapture(const ThreeDsRecomp::Inpu
 ThreeDsRecomp::Input::BindingCaptureSnapshot NativeControlConfigRuntime::BindingCaptureStatus() const {
   std::scoped_lock lock(mMutex);
   return mBindingCapture.Snapshot();
+}
+
+void NativeControlConfigRuntime::SetPromptPlatform(ThreeDsRecomp::Input::PromptPlatform platform) noexcept {
+  std::scoped_lock lock(mMutex);
+  mPromptPlatform = platform;
+}
+
+void NativeControlConfigRuntime::ObserveInputActivity(ThreeDsRecomp::Input::InputActivity activity,
+                                                      double nowSeconds) noexcept {
+  std::scoped_lock lock(mMutex);
+  mPromptDevices.Observe(activity, nowSeconds);
+}
+
+NativePromptSet NativeControlConfigRuntime::AutomaticPromptSet() const {
+  std::scoped_lock lock(mMutex);
+  const NativeControlDeviceDescriptor* selected = nullptr;
+  for (const auto& device : mDevices)
+    if (device.Selected) selected = &device;
+  return ThreeDsRecomp::Input::ResolvePromptSet(NativeButtonPrompts::Automatic, mPromptDevices.LastUsed(), selected,
+                                                mPromptPlatform);
+}
+
+NativePromptSet NativeControlConfigRuntime::ActivePromptSet() const {
+  NativeButtonPrompts setting;
+  {
+    std::scoped_lock lock(mMutex);
+    setting = mConfig.ButtonPrompts;
+  }
+  return setting == NativeButtonPrompts::Automatic
+             ? AutomaticPromptSet()
+             : ThreeDsRecomp::Input::ResolvePromptSet(setting, ThreeDsRecomp::Input::InputActivity::None, nullptr,
+                                                      ThreeDsRecomp::Input::PromptPlatform::Desktop);
 }
 
 NativeControlCalibrationStatus

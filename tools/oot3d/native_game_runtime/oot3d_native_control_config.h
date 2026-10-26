@@ -56,6 +56,8 @@ using NativeGamepadButton = ThreeDsRecomp::Input::GamepadButton;
 using NativeAnalogStick = ThreeDsRecomp::Input::AnalogStick;
 using NativeMotionSource = ThreeDsRecomp::Input::MotionSource;
 using NativeControlBinding = ThreeDsRecomp::Input::HostBinding;
+using NativeButtonPrompts = ThreeDsRecomp::Input::ButtonPrompts;
+using NativePromptSet = ThreeDsRecomp::Input::PromptSet;
 
 struct NativeControlConfig {
   NativeControlProfile Profile = NativeControlProfile::KeyboardMouse;
@@ -85,6 +87,9 @@ struct NativeControlConfig {
   std::string CalibrationControllerSerial;
   std::array<float, 3> GyroscopeBiasDegreesPerSecond{};
   std::array<float, 3> AccelerometerNeutral{0.0F, -1.0F, 0.0F};
+  // The menu's button prompts: Automatic follows the device used last.
+  // Not part of a preset ("button_prompts", written only when fixed).
+  NativeButtonPrompts ButtonPrompts = NativeButtonPrompts::Automatic;
 
   bool operator==(const NativeControlConfig&) const = default;
 };
@@ -180,12 +185,28 @@ class NativeControlConfigRuntime final {
   void ObserveBindingCapture(const ThreeDsRecomp::Input::HostButtonSource& source, bool cancel);
   [[nodiscard]] ThreeDsRecomp::Input::BindingCaptureSnapshot BindingCaptureStatus() const;
 
+  // The button prompts: the host poll reports each device's activity, and
+  // the prompts follow the "Button prompts" choice, the device used last and
+  // the selected pad (ThreeDsRecomp::Input::ResolvePromptSet). A phone starts
+  // on touch, a desktop on its pad or the keyboard.
+  void SetPromptPlatform(ThreeDsRecomp::Input::PromptPlatform platform) noexcept;
+  void ObserveInputActivity(ThreeDsRecomp::Input::InputActivity activity, double nowSeconds) noexcept;
+  [[nodiscard]] NativePromptSet ActivePromptSet() const;
+  // The prompts Automatic would show now (F1 names them beside the choice).
+  [[nodiscard]] NativePromptSet AutomaticPromptSet() const;
+
  private:
   std::filesystem::path mPath;
   mutable std::mutex mMutex;
   NativeControlConfig mConfig;
   std::uint64_t mRevision = 1;
   std::vector<NativeControlDeviceDescriptor> mDevices;
+#if defined(__ANDROID__)
+  ThreeDsRecomp::Input::PromptPlatform mPromptPlatform = ThreeDsRecomp::Input::PromptPlatform::Touch;
+#else
+  ThreeDsRecomp::Input::PromptPlatform mPromptPlatform = ThreeDsRecomp::Input::PromptPlatform::Desktop;
+#endif
+  ThreeDsRecomp::Input::PromptDeviceTracker mPromptDevices;
   NativeControlCalibrationStatus mCalibration;
   ThreeDsRecomp::Input::HostBindingCapture mBindingCapture;
   ThreeDsRecomp::Input::MotionCalibrationAccumulator mCalibrationSamples;

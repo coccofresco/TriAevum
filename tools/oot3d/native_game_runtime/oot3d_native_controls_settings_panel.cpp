@@ -335,6 +335,7 @@ class NativeControlsSettingsPanel final
         mControlDraft.CalibrationControllerSerial = previous.CalibrationControllerSerial;
         mControlDraft.ControllerTouchpadEnabled = previous.ControllerTouchpadEnabled;
         mControlDraft.ControllerTouchpadIndex = previous.ControllerTouchpadIndex;
+        mControlDraft.ButtonPrompts = previous.ButtonPrompts;
         mControlDirty = true;
         ImGui::CloseCurrentPopup();
       }
@@ -359,7 +360,20 @@ class NativeControlsSettingsPanel final
                         &mControlDraft.CaptureMouseInGameplay)) {
       MarkCustom(mControlDraft, mControlDirty);
     }
-
+    // The in-game menu's button prompts (its row of the same name mirrors
+    // this). Not a binding: the preset stays as it is.
+    std::array<const char*, ThreeDsRecomp::Input::kButtonPromptsCount> prompts{};
+    for (std::size_t index = 0; index < prompts.size(); ++index)
+      prompts[index] = ThreeDsRecomp::Input::ButtonPromptsLabel(static_cast<NativeButtonPrompts>(index));
+    int prompt = static_cast<int>(mControlDraft.ButtonPrompts);
+    if (ControlWidgets::Combo("Button prompts", &prompt, prompts.data(), static_cast<int>(prompts.size()))) {
+      mControlDraft.ButtonPrompts = static_cast<NativeButtonPrompts>(prompt);
+      mControlDirty = true;
+    }
+    if (ImGui::IsItemHovered())
+      ImGui::SetTooltip("The buttons the in-game menu and its help show. Automatic follows the device used last.");
+    if (mControlDraft.ButtonPrompts == NativeButtonPrompts::Automatic)
+      ImGui::TextDisabled("Now: %s", ThreeDsRecomp::Input::PromptSetLabel(mControls->AutomaticPromptSet()));
   }
 
   void SynchronizeDrafts() {

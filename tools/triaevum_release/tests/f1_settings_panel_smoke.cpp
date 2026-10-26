@@ -234,6 +234,11 @@ void CheckControlPersistence() {
     Click("Keyboard");
     Click("Revert changes");
     Check(controls->Snapshot().Config.KeyboardEnabled, "cannot undo before first save");
+    // Button prompts are saved with the controls and are not a binding: the
+    // preset stays and a preset keeps them.
+    const auto profileBeforePrompts = controls->Snapshot().Config.Profile;
+    Select("##Button prompts", "Steam Deck");
+    Check(controls->Snapshot().Config.Profile == profileBeforePrompts, "button prompts made the preset custom");
     Click("Keyboard");
     Click("Camera");
     // The previous panel may have saved this section collapsed in ImGui.
@@ -247,6 +252,7 @@ void CheckControlPersistence() {
     TopScreenUiConfig savedTop;
     Check(LoadNativeControlConfig(root / "controls.json", &saved) && !saved.KeyboardEnabled,
           "Save controls did not persist live input");
+    Check(saved.ButtonPrompts == NativeButtonPrompts::SteamDeck, "Save controls did not persist the button prompts");
     Check(LoadTopScreenUiConfig(root / "topscreen.json", &savedTop) && savedTop.FreeCameraEnabled,
           "Save controls did not persist camera settings");
     // SingleScreen 3.0 gameplay options: the standard profile's values (all
@@ -2420,6 +2426,17 @@ int main(int argc, char** argv) try {
     Check(!controls->Snapshot().Config.ControllerTouchpadEnabled, "touchpad disable not connected");
     Click("Controller touchpad");
     Check(controls->Snapshot().Config.ControllerTouchpadEnabled, "touchpad enable not connected");
+    // Button prompts (WP-08): one control in Devices, the controls owner's
+    // choice; a fixed family wins over the device in use, Automatic follows it.
+    Select("##Button prompts", "PlayStation");
+    Check(controls->Snapshot().Config.ButtonPrompts == Oot3dNativeGame::NativeButtonPrompts::PlayStation &&
+              controls->ActivePromptSet() == Oot3dNativeGame::NativePromptSet::PlayStation,
+          "button prompts choice not connected");
+    Select("##Button prompts", "Automatic");
+    controls->ObserveInputActivity(ThreeDsRecomp::Input::InputActivity::Keyboard, 1.0);
+    Check(controls->Snapshot().Config.ButtonPrompts == Oot3dNativeGame::NativeButtonPrompts::Automatic &&
+              controls->ActivePromptSet() == Oot3dNativeGame::NativePromptSet::Keyboard,
+          "automatic button prompts not connected");
     controls->ObserveDevices({
         {11, "same-model", "Twin pad", false, false, "first", true},
         {12, "same-model", "Twin pad", false, false, "second", false},

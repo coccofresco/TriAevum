@@ -328,6 +328,17 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
       const float wheel = window.GetMouseWheel().y;
       menu.PointerWheel = std::isfinite(wheel) ? std::clamp(wheel, -8.0F, 8.0F) : 0.0F;
     }
+    // The device used last, for the button prompts (Input owns the choice).
+    // Touch comes last: a finger also moves the system's pointer.
+    using Activity = ThreeDsRecomp::Input::InputActivity;
+    if (ThreeDsRecomp::Input::IsSdlKeyboardActive()) controls.ObserveInputActivity(Activity::Keyboard, touchSeconds);
+    const bool mouseMoved = !mouseCaptureChanged && std::abs(mouseDelta.x) + std::abs(mouseDelta.y) >= 3;
+    if (mouseMoved || window.GetMouseState(Ship::LUS_MOUSE_BTN_LEFT) ||
+        window.GetMouseState(Ship::LUS_MOUSE_BTN_RIGHT) || window.GetMouseState(Ship::LUS_MOUSE_BTN_MIDDLE))
+      controls.ObserveInputActivity(Activity::Mouse, touchSeconds);
+    if (ThreeDsRecomp::Input::IsSdlControllerActive(pad)) controls.ObserveInputActivity(Activity::Controller, touchSeconds);
+    if (!fingers.empty() || touchControls.Held != 0U || touchControls.Pressed != 0U)
+      controls.ObserveInputActivity(Activity::Touch, touchSeconds);
   }
   const bool mouseLook = gameplayMouseOwned && !mouseCaptureChanged;
   if (mouseLook || touchCamera.Active) {
