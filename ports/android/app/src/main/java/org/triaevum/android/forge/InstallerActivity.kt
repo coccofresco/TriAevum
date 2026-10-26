@@ -99,6 +99,7 @@ class InstallerActivity : Activity() {
     private lateinit var hdText: TextView
     private lateinit var hdDownload: Button
     private lateinit var hdImport: Button
+    private lateinit var hdApply: Button
     private lateinit var hdPage: Button
     private lateinit var languageButton: Button
     /** The last `ui_pack_status` result; null while unknown. */
@@ -320,16 +321,22 @@ class InstallerActivity : Activity() {
             R.string.hd_credit, pack.optString("title"), pack.optString("version"),
             pack.optString("author"), pack.optString("license_name"),
         )
-        val where = when (state) {
-            "ready" -> getString(R.string.hd_ready)
-            "archive" -> getString(if (installation?.canPlay == true) R.string.hd_archive_installed else R.string.hd_archive_not_installed)
-            else -> getString(R.string.hd_missing, size)
+        // Applied without the ROM from the kept game data (UX plan WP-07).
+        val installed = installation?.canPlay == true
+        val applied = pack.optBoolean("applied")
+        val canApply = installed && !applied && (state == "ready" || state == "archive")
+        val where = when {
+            state == "missing" || state.isEmpty() -> getString(R.string.hd_missing, size)
+            applied -> getString(R.string.hd_ready)
+            canApply -> getString(R.string.hd_archive_installed)
+            else -> getString(R.string.hd_archive_not_installed)
         }
         hdText.text = "$credit\n\n$where"
         val missing = state == "missing"
         hdDownload.text = getString(R.string.hd_download, size)
         hdDownload.visibility = if (missing && pack.optBoolean("can_download")) View.VISIBLE else View.GONE
         hdImport.visibility = if (missing) View.VISIBLE else View.GONE
+        hdApply.visibility = if (canApply) View.VISIBLE else View.GONE
         hdPage.tag = pack.optString("page")
         hdPage.visibility = if (pack.optString("page").isEmpty()) View.GONE else View.VISIBLE
         refreshBusy()
@@ -629,6 +636,7 @@ class InstallerActivity : Activity() {
                     when (running) {
                         ForgeJob.REFRESH -> R.string.forge_state_updating
                         ForgeJob.REPAIR -> R.string.forge_state_repairing
+                        ForgeJob.APPLY_ENHANCEMENTS -> R.string.hd_applying
                         ForgeJob.HD_DOWNLOAD, ForgeJob.HD_IMPORT -> R.string.forge_state_hd_working
                         else -> R.string.forge_state_installing
                     },
@@ -1157,6 +1165,7 @@ class InstallerActivity : Activity() {
         for (index in 0 until languages.childCount) languages.getChildAt(index).isEnabled = !busy
         hdDownload.isEnabled = !busy
         hdImport.isEnabled = !busy
+        hdApply.isEnabled = !busy
         refreshInstall(busy)
         // A recognition runs only while this screen is in front; the service's jobs do not need it.
         if (screenJob) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -1298,6 +1307,13 @@ class InstallerActivity : Activity() {
             visibility = View.GONE
             setOnClickListener { pickHdPack() }
         }
+        hdApply = Button(this).apply {
+            text = getString(R.string.hd_apply)
+            minHeight = dp(48)
+            visibility = View.GONE
+            // The HUD layout question comes first when it matters (decision 4).
+            setOnClickListener { startMaintenance(ForgeJob.APPLY_ENHANCEMENTS) }
+        }
         hdPage = Button(this).apply {
             text = getString(R.string.hd_page)
             minHeight = dp(48)
@@ -1319,6 +1335,7 @@ class InstallerActivity : Activity() {
             })
             addView(hdText)
             addView(hdDownload, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+            addView(hdApply, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
             addView(LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
                 addView(hdImport, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))

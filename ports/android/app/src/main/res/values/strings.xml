@@ -92,9 +92,9 @@
     <string name="hd_title">HD interface pack (optional)</string>
     <string name="hd_credit">%1$s %2$s by %3$s, %4$s: higher-resolution HUD and menu textures. Nothing is downloaded unless you choose it.</string>
     <string name="hd_missing">Not on this device. Download it (%1$s) or import the .zip you downloaded from its page.</string>
-    <string name="hd_archive_installed">Downloaded. It is applied the next time you install the game from your ROM.</string>
+    <string name="hd_archive_installed">On this device, not applied yet. Apply it now: your ROM is not needed.</string>
     <string name="hd_archive_not_installed">Downloaded. It is applied when you install the game.</string>
-    <string name="hd_ready">Prepared on this device; the game installed from your ROM uses it.</string>
+    <string name="hd_ready">Applied: the installed game uses it.</string>
     <string name="hd_download">Download (%1$s)</string>
     <string name="hd_import">Import .zip…</string>
     <string name="hd_page">Mod page</string>
@@ -105,10 +105,13 @@
     <string name="hd_metered_confirm">Download anyway</string>
     <string name="hd_downloading">Downloading the HD interface pack…</string>
     <string name="hd_importing">Checking and copying the HD interface pack…</string>
-    <string name="hd_done">The HD interface pack is on this device. It is applied the next time you install the game from your ROM.</string>
+    <string name="hd_done">The HD interface pack is on this device. Apply it now to use it; your ROM is not needed.</string>
     <string name="hd_cancelled">Cancelled; the HD interface pack was not stored.</string>
     <string name="hd_notification_title">HD interface pack</string>
     <string name="hd_progress">%1$s of %2$s</string>
+    <string name="hd_applied">The HD interface pack is applied. %1$s</string>
+    <string name="hd_applying">Applying the HD interface pack…</string>
+    <string name="hd_apply">Apply now</string>
 
     <!-- Update and Repair (InstallService, UX plan WP-04A) -->
     <string name="forge_updating">Installing the update…</string>

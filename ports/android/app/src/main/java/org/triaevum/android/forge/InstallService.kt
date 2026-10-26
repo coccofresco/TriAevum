@@ -158,7 +158,13 @@ class InstallService : Service() {
      */
     fun maintain(kind: ForgeJob, hudLayout: String, allowDowngrade: Boolean): Boolean {
         require(kind != ForgeJob.INSTALL)
-        val status = getString(if (kind == ForgeJob.REFRESH) R.string.forge_updating else R.string.forge_repairing)
+        val status = getString(
+            when (kind) {
+                ForgeJob.REFRESH -> R.string.forge_updating
+                ForgeJob.APPLY_ENHANCEMENTS -> R.string.hd_applying
+                else -> R.string.forge_repairing
+            },
+        )
         return begin(kind, status, null) { maintenanceRequest(kind, hudLayout, allowDowngrade) }
     }
 
@@ -436,6 +442,7 @@ class InstallService : Service() {
                 else getString(R.string.forge_updated_to, version, keptText)
             }
             ForgeJob.REPAIR -> getString(R.string.forge_repaired, keptText)
+            ForgeJob.APPLY_ENHANCEMENTS -> getString(R.string.hd_applied, keptText)
             else -> getString(R.string.forge_ready)
         }
         val lines = ArrayList<String>()

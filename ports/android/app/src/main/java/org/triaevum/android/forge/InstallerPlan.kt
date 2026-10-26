@@ -10,6 +10,8 @@ enum class ForgeJob(val code: String) {
     /** The HD interface pack: the user's download, or the import of an archive they picked. */
     HD_DOWNLOAD("ui_pack_download"),
     HD_IMPORT("ui_pack_import"),
+    /** Apply the stored HD pack (and the other enhancement choices) from the kept ROM data (UX plan WP-07). */
+    APPLY_ENHANCEMENTS("apply_enhancements"),
     ;
 
     /** A job that changes only the stored HD pack, never the installed game. */
@@ -90,7 +92,7 @@ object InstallerPlanner {
                     return InstallerPlan(StateCard.INTERRUPTED_NOTHING, retry, play = status.canPlay, select = true)
                 else -> {}
             }
-            ForgeJob.REFRESH, ForgeJob.REPAIR -> if (status.state == State.UPDATE_AVAILABLE) {
+            ForgeJob.REFRESH, ForgeJob.REPAIR, ForgeJob.APPLY_ENHANCEMENTS -> if (status.state == State.UPDATE_AVAILABLE) {
                 return InstallerPlan(StateCard.INTERRUPTED_UPDATE, StateAction.UPDATE, select = true)
             }
             // An interrupted HD pack job left the installation as it was; a partial file never counts as the pack.

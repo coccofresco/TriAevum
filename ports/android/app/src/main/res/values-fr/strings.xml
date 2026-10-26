@@ -92,9 +92,9 @@
     <string name="hd_title">Pack d\'interface HD (facultatif)</string>
     <string name="hd_credit">%1$s %2$s par %3$s, %4$s : textures du HUD et des menus en plus haute résolution. Rien n\'est téléchargé sans votre choix.</string>
     <string name="hd_missing">Absent de cet appareil. Téléchargez-le (%1$s) ou importez le .zip téléchargé depuis sa page.</string>
-    <string name="hd_archive_installed">Téléchargé. Il sera appliqué la prochaine fois que vous installerez le jeu depuis votre ROM.</string>
+    <string name="hd_archive_installed">Sur cet appareil, pas encore appliqué. Appliquez-le maintenant : votre ROM n\'est pas nécessaire.</string>
     <string name="hd_archive_not_installed">Téléchargé. Il sera appliqué lors de l\'installation du jeu.</string>
-    <string name="hd_ready">Préparé sur cet appareil ; le jeu installé depuis votre ROM l\'utilise.</string>
+    <string name="hd_ready">Appliqué : le jeu installé l\'utilise.</string>
     <string name="hd_download">Télécharger (%1$s)</string>
     <string name="hd_import">Importer un .zip…</string>
     <string name="hd_page">Page du mod</string>
@@ -105,10 +105,13 @@
     <string name="hd_metered_confirm">Télécharger quand même</string>
     <string name="hd_downloading">Téléchargement du pack d\'interface HD…</string>
     <string name="hd_importing">Vérification et copie du pack d\'interface HD…</string>
-    <string name="hd_done">Le pack d\'interface HD est sur cet appareil. Il sera appliqué la prochaine fois que vous installerez le jeu depuis votre ROM.</string>
+    <string name="hd_done">Le pack d\'interface HD est sur cet appareil. Appliquez-le maintenant pour l\'utiliser ; votre ROM n\'est pas nécessaire.</string>
     <string name="hd_cancelled">Annulé ; le pack d\'interface HD n\'a pas été enregistré.</string>
     <string name="hd_notification_title">Pack d\'interface HD</string>
     <string name="hd_progress">%1$s sur %2$s</string>
+    <string name="hd_applied">Le pack d\'interface HD est appliqué. %1$s</string>
+    <string name="hd_applying">Application du pack d\'interface HD…</string>
+    <string name="hd_apply">Appliquer maintenant</string>
 
     <!-- Mise à jour et réparation (InstallService, UX plan WP-04A) -->
     <string name="forge_updating">Installation de la mise à jour…</string>
