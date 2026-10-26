@@ -58,6 +58,12 @@ pub enum Event {
     },
     /// The inspected installation state.
     State(Box<forge_core::state::InstallationState>),
+    /// A game started from Play ended; the explanation of an error exit.
+    GameExited(Option<Box<Explanation>>),
+    /// The Diagnostics page's facts, or why they could not be collected.
+    Diagnostics(Result<Box<crate::pages::diagnostics::DiagnosticsView>, String>),
+    /// Where the support bundle was saved, or why it was not.
+    BundleSaved(Result<PathBuf, String>),
 }
 
 /// Sends events to the window and wakes it.

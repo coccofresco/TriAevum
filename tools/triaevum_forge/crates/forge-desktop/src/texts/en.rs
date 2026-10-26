@@ -198,16 +198,244 @@ pub fn text(msg: &Msg) -> String {
         PickFolder { title } => return format!("Select the extracted {title} folder"),
         FilterModArchive => "Mod archive",
         DataBody => {
-            "Your saves, settings, downloads and the prepared game are kept in this folder. Keep it when you move \
-             or update TriAevum."
+            "Where TriAevum keeps your files, what a backup holds, and what is safe to clean up. Keep the data \
+             folder when you move or update TriAevum."
         }
         DataFolder => "Data folder",
         ForgeLog => "Forge log",
+        DataYourFiles => "Your files",
+        DataEntryLabel { name } => {
+            return match name {
+                "save_data" => "Saves",
+                "save_states" => "Save states",
+                "save_states_default" => "Save states left in the earlier folder",
+                "config" => "Settings",
+                "runtime_config" => "Game settings file",
+                "topscreen_config" => "HUD layout",
+                "controls_config" => "Controls",
+                "game_language" => "Game language",
+                "romfs_mods" => "Mod choices",
+                "savestates_index" => "Save-state list",
+                "environments" => "Environments",
+                "imgui_layout" => "F1 window layout",
+                "imgui_layout_legacy" => "F1 window layout of an older version",
+                "android_host_config" => "Android display settings",
+                "touch_preferences" => "Touch controls",
+                "texture_load" => "Your texture pack",
+                "texture_dump" => "Dumped textures",
+                "mods" => "Mods",
+                "downloads" => "Downloads",
+                "sources" => "Game data kept from your ROM",
+                "titles" => "Prepared game",
+                "cache" => "Prepared caches",
+                "shader_seeds" => "Graphics preparation data",
+                "interior_sun" => "Interior lighting data",
+                "renderer_cache" => "Renderer cache",
+                "translator_cache" => "Translator cache",
+                "game_logs" => "Game logs",
+                "forge_logs" => "Forge logs",
+                "crash_dumps" => "Crash reports",
+                "android_diagnostics" => "Startup reports",
+                "active_title" => "Installed game record",
+                other => other,
+            }
+            .to_string()
+        }
+        DataCategoryHelp { category } => {
+            return match category {
+                "saves" => "The game's own save files, as on the cartridge. Always in your backups.",
+                "save_states" => {
+                    "Save states (F5/F8 and the save-state menu) with their pictures. Always in your backups."
+                }
+                "settings" => {
+                    "Your settings: graphics, HUD layout, controls, game language and environments, and the layout of \
+                     the F1 window. Always in your backups."
+                }
+                "textures" => {
+                    "A texture pack you added yourself, and textures dumped from the game. Your pack can be added to \
+                     a backup; dumps are never backed up."
+                }
+                "enhancements" => {
+                    "Mods and downloaded archives. They can be downloaded again, so a backup includes them only if \
+                     you choose it."
+                }
+                "generated" => {
+                    "Made by Forge from your ROM. Never backed up: Forge makes it again from your ROM, and it must \
+                     not be shared."
+                }
+                "logs" => "Logs and crash reports for troubleshooting. Never backed up; Diagnostics uses them.",
+                _ => "Files TriAevum uses.",
+            }
+            .to_string()
+        }
+        DataNotCreated => "not created yet",
+        DataOriginDefault => "Default location",
+        DataOriginExplicit => "Set by you",
+        DataOriginLegacy => "Older version",
+        DataBackupInclude => "In every backup",
+        DataBackupOptional => "In a backup if you choose it",
+        DataBackupExclude => "Not backed up",
+        ButtonWhatIsThis => "What is this?",
+        ButtonHideHelp => "Hide help",
+        DataActionsHeading => "Back up, restore and clean up",
+        ButtonBackUp => "Back up your files...",
+        ButtonRestore => "Restore...",
+        ButtonClearCache => "Clear renderer cache",
+        ButtonRebuild => "Rebuild prepared assets",
+        ButtonRemoveGame => "Remove prepared game...",
+        ButtonUninstallHelp => "Uninstall help",
+        ButtonChooseBackupFile => "Choose where to save...",
+        ButtonConfirmRestore => "Restore these files",
+        ButtonConfirmClear => "Clear the cache",
+        ButtonConfirmRebuild => "Rebuild now",
+        ButtonConfirmRemove => "Remove the prepared game",
+        ButtonRecover => "Finish the recovery",
+        BackupPanelBody { files, size } => {
+            return format!(
+                "A backup holds your saves, save states and settings: {files} files, {size}. It is one .zip file you \
+                 can keep anywhere."
+            )
+        }
+        BackupOptionalHeading => "Also include (not selected by default):",
+        BackupExcludedNote => {
+            "Never included: the game data made from your ROM, caches, logs, crash reports and installation \
+             records. Forge makes them again, or they are not needed."
+        }
+        BackupDone { path, size } => return format!("Backup saved ({size}): {path}"),
+        FilterBackup => "TriAevum backup",
+        SaveBackupTitle => "Save the backup",
+        OpenBackupTitle => "Choose a backup to restore",
+        RestoreHeading { created, platform } => return format!("Backup of {created}, made on {platform}"),
+        RestoreOtherPlatform { platform } => {
+            return format!(
+                "This backup was made on {platform}. Saves, save states, the HUD layout, the game language and \
+                 environments are restored; display, controls and window settings stay as they are here."
+            )
+        }
+        RestoreDifferentRevision => {
+            "This backup was made with another revision of the game than the one installed here."
+        }
+        RestoreUnavailable { path } => {
+            return format!("A setting in this backup names a folder that does not exist here; it stays as it is: {path}")
+        }
+        RestoreKeptExisting { path } => return format!("A file of this backup is not restored, the one here stays: {path}"),
+        RestoreGroupLine { label, replaced, added, removed } => {
+            return format!("{label}: {replaced} replaced, {added} added, {removed} removed")
+        }
+        RestoreKeptSettings { files } => return format!("These settings stay as they are here: {files}"),
+        RestoreSkipped { labels } => return format!("Not restored here: {labels}"),
+        RestoreSnapshotNote { path } => {
+            return format!(
+                "Before anything changes, Forge copies every file it replaces or removes into a restore folder in \
+                 {path}. If the restore is interrupted, Forge puts your previous files back before you can play."
+            )
+        }
+        RestoreDone { path } => return format!("Restored. The files it replaced are kept in {path}"),
+        ClearCacheBody { size } => {
+            return format!(
+                "This deletes the renderer cache ({size}). The game builds it again; the next start can take longer."
+            )
+        }
+        ClearCacheEmpty => "There is no renderer cache to clear.",
+        ClearCacheDone => "The renderer cache was cleared.",
+        RemoveGameBody { size } => {
+            return format!(
+                "This deletes the game data Forge generated from your ROM ({size}). Your saves and settings stay. \
+                 You will need your ROM to install again."
+            )
+        }
+        RemoveGameKeep => {
+            "Your mods and downloads stay too. Keeping them is recommended: a new installation then does not \
+             download them again."
+        }
+        RemoveGameDone => "The prepared game was removed. Choose your ROM on Home to install it again.",
+        RebuildBody { size } => {
+            return format!(
+                "Forge prepares the game again from the ROM data it kept ({size}) and installs it. Your saves and \
+                 settings stay. This can take several minutes."
+            )
+        }
+        RebuildNoSource => {
+            "The ROM data Forge kept is missing. Choose your ROM on Home to prepare the game again."
+        }
+        RebuildDone => "The prepared game was rebuilt.",
+        UninstallWindows { path } => {
+            return format!(
+                "Back up your files first, then delete this folder: {path}. Nothing else was installed on this \
+                 computer."
+            )
+        }
+        UninstallPortable { path } => return format!("Back up your files first, then delete this folder: {path}"),
+        UninstallAppImage { appimage, path } => {
+            return format!(
+                "Back up your files first. Then delete the AppImage ({appimage}) and, if you do not want your saves \
+                 any more, this folder: {path}"
+            )
+        }
+        UninstallFlatpak { id, path } => {
+            return format!(
+                "Back up your files first. Then run: flatpak uninstall {id}. Your files stay in {path}; delete that \
+                 folder yourself if you want."
+            )
+        }
+        UninstallAndroid { path } => {
+            return format!(
+                "Export your files first. Uninstalling the app removes its app-specific storage, including {path}."
+            )
+        }
+        UninstallExternal => "These folders are yours, outside the installation; Forge never deletes them:",
+        UninstallKeep => {
+            "If you may install again, keep your mods and downloads: Forge then does not download them again."
+        }
+        PlatformName { code } => {
+            return match code {
+                "windows_portable" => "Windows",
+                "linux_portable" => "Linux",
+                "appimage" => "Linux (AppImage)",
+                "flatpak" => "Linux (Flatpak)",
+                "android" => "Android",
+                other => other,
+            }
+            .to_string()
+        }
+        DataGameRunning => "TriAevum is running. Close the game to back up, restore or clean up.",
+        DataForgeRunning => "Another Forge is working on this installation. Wait until it finishes.",
+        DataRecoveryPending => {
+            "A restore was interrupted. Finish the recovery to put your previous files back; Play stays blocked \
+             until then."
+        }
+        RecoveryDone => "The interrupted restore was undone; your previous files are back.",
+        DataLoading => "Reading where your files are...",
+        DataBackingUp => "Backing up your files...",
+        DataCheckingBackup => "Checking the backup...",
+        DataRestoring => "Restoring your files...",
+        DataClearingCache => "Clearing the renderer cache...",
+        DataRemovingGame => "Removing the prepared game...",
+        DataRebuilding => "Rebuilding the prepared game...",
+        DataRecovering => "Undoing the interrupted restore...",
         DiagnosticsBody => {
             "What Forge knows about this installation. Copy it into a bug report; user names in paths are removed."
         }
         StateLabel { state } => return format!("Installation state: {state}"),
         Copied => "Copied to the clipboard.",
+        LastGameRun { started, seconds, meaning } => {
+            return format!("Last game run: started {started}, ran for {seconds} s, {meaning}.")
+        }
+        GameRunning => "The game is running.",
+        NoGameRun => "No game run recorded by this Forge yet.",
+        CollectingDiagnostics => "Collecting the diagnostics...",
+        DiagnosticsFailed { error } => return format!("The diagnostics could not be collected: {error}"),
+        GameLogFolder => "Game log",
+        BundleContents => {
+            "Save support bundle writes a zip with these files, with user names and installation folders removed. \
+             It never contains saves, save states, game data or crash dump files."
+        }
+        BundleOmitted { name, reason } => return format!("Left out: {name} ({reason})"),
+        ButtonSaveBundle => "Save support bundle...",
+        SaveBundleTitle => "Save the support bundle",
+        FilterZip => "Zip archive",
+        BundleSaved { path } => return format!("Support bundle saved: {path}"),
+        BundleFailed { error } => return format!("The support bundle could not be saved: {error}"),
         Version { version } => return format!("Version {version}"),
         AboutBody => {
             "TriAevum Forge prepares TriAevum \u{2014} Echoes of Time from your own decrypted ROM. It is free \

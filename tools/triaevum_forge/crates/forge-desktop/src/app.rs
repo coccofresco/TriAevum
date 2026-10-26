@@ -62,6 +62,8 @@ pub enum Action {
     Navigate(Page),
     CheckInstallation,
     CopyDiagnostics,
+    /// Asks where to save the support bundle, then writes it.
+    SaveBundle,
     OpenFolder(PathBuf),
     Dismiss,
     ToggleDetails,
@@ -224,6 +226,10 @@ pub struct ForgeApp {
     pub(crate) failure: Option<Explanation>,
     /// Non-error outcomes of the last preparation.
     pub(crate) notices: Vec<Explanation>,
+    /// The Diagnostics page's facts (collected when the page opens).
+    pub(crate) diagnostics: Option<Result<Box<pages::diagnostics::DiagnosticsView>, String>>,
+    /// A game started from this window is running.
+    pub(crate) game_running: bool,
     pub(crate) rom: String,
     pub(crate) languages: Vec<(String, String)>,
     pub(crate) language: Option<usize>,
@@ -318,6 +324,8 @@ impl ForgeApp {
             freeze_state: false,
             failure: startup_error.map(|error| forge_core::explain::explain(&error)),
             notices: Vec::new(),
+            diagnostics: None,
+            game_running: false,
             rom: String::new(),
             languages: Vec::new(),
             language: None,
@@ -703,7 +711,58 @@ impl ForgeApp {
                     self.state = Some(*state);
                 }
             }
+            Event::GameExited(explanation) => {
+                self.game_running = false;
+                if let Some(explanation) = explanation {
+                    // The card shows the exit code and the end of the logs at once.
+                    self.failure = Some(*explanation);
+                    self.show_details = true;
+                    self.page = Page::Home;
+                }
+                self.refresh_diagnostics();
+            }
+            Event::Diagnostics(view) => self.diagnostics = Some(view),
+            Event::BundleSaved(Ok(path)) => {
+                self.status_note = Some(self.t(Msg::BundleSaved { path: &path.display().to_string() }));
+            }
+            Event::BundleSaved(Err(error)) => {
+                let message = self.t(Msg::BundleFailed { error: &error });
+                self.dialog(DialogKind::Error, message);
+            }
         }
+    }
+
+    /// Collects the Diagnostics page's facts on a task thread (it reads
+    /// logs and hashes the installed runtime).
+    pub(crate) fn refresh_diagnostics(&mut self) {
+        if self.freeze_state {
+            return;
+        }
+        let installation = self.installation.clone();
+        self.spawn(move |_, notify, _| {
+            let view = pages::diagnostics::DiagnosticsView::collect(&installation).map(Box::new);
+            notify.send(Event::Diagnostics(view));
+        });
+    }
+
+    /// Asks where to save the support bundle, then collects and writes it on
+    /// the dialog's thread.
+    fn save_bundle(&mut self, frame: Option<&eframe::Frame>) {
+        let name = forge_core::diagnostics::bundle_file_name(std::time::SystemTime::now());
+        let dialog = rfd::FileDialog::new()
+            .set_title(self.t(Msg::SaveBundleTitle))
+            .add_filter(self.t(Msg::FilterZip), &["zip"])
+            .set_file_name(name);
+        let dialog = match frame {
+            Some(frame) => dialog.set_parent(frame),
+            None => dialog,
+        };
+        let installation = self.installation.clone();
+        let notify = self.notifier.clone();
+        std::thread::spawn(move || {
+            let Some(path) = dialog.save_file() else { return };
+            notify.send(Event::BundleSaved(pages::diagnostics::save_bundle(&installation, &path)));
+        });
     }
 
     /// The end of this window's preparation, whatever its outcome.
@@ -807,7 +866,12 @@ impl ForgeApp {
             Action::ToggleMod => self.toggle_mod(),
             Action::SelectLanguage(index) => self.choose_language(index),
             Action::Recognize => self.recognize(),
-            Action::Navigate(page) => self.page = page,
+            Action::Navigate(page) => {
+                self.page = page;
+                if page == Page::Diagnostics {
+                    self.refresh_diagnostics();
+                }
+            }
             Action::CheckInstallation => {
                 if self.idle() {
                     self.failure = None;
@@ -815,8 +879,14 @@ impl ForgeApp {
                     self.refresh_installation();
                 }
             }
+            Action::SaveBundle => self.save_bundle(frame),
             Action::CopyDiagnostics => {
-                let report = pages::diagnostics::report(self.state.as_ref(), self.failure.as_ref(), &self.notices);
+                let collected = match &self.diagnostics {
+                    Some(Ok(view)) => Some(view.text.as_str()),
+                    _ => None,
+                };
+                let report =
+                    pages::diagnostics::report(self.state.as_ref(), self.failure.as_ref(), &self.notices, collected);
                 context.copy_text(report);
                 self.copied = true;
                 self.status_note = Some(self.t(Msg::Copied));
@@ -862,12 +932,26 @@ impl ForgeApp {
         if !self.idle() {
             return;
         }
-        if let Err(error) = crate::launch::launch_runtime(&self.installation) {
-            let error = error.during(Operation::Launch);
-            forge_core::log::ForgeLog::new(&self.installation.data_root, "launch").error(&error);
-            self.failure = Some(forge_core::explain::explain(&error));
-            self.show_details = false;
-            self.page = Page::Home;
+        let sources = crate::launch::diagnostics_sources(&self.installation);
+        match crate::launch::launch_runtime_capturing(&self.installation, &sources) {
+            Ok(mut child) => {
+                // The game outlives nothing of the window's: it is watched on
+                // its own thread, never joined when the window closes.
+                self.game_running = true;
+                let notify = self.notifier.clone();
+                let started = std::time::SystemTime::now();
+                std::thread::spawn(move || {
+                    let explanation = crate::launch::finish_game(&sources, &mut child, started);
+                    notify.send(Event::GameExited(explanation.map(Box::new)));
+                });
+            }
+            Err(error) => {
+                let error = error.during(Operation::Launch);
+                forge_core::log::ForgeLog::new(&self.installation.data_root, "launch").error(&error);
+                self.failure = Some(forge_core::explain::explain(&error));
+                self.show_details = false;
+                self.page = Page::Home;
+            }
         }
     }
 
@@ -1408,6 +1492,30 @@ mod tests {
         assert_eq!(card.status, app.t(Msg::StatusActionNeeded));
         app.apply(Action::Dismiss, &egui::Context::default(), None);
         assert_eq!(app.failure, None);
+        app.shut_down();
+    }
+
+    #[test]
+    fn a_game_that_closed_with_an_error_is_a_card_with_its_log_tail() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut app = app(directory.path());
+        app.page = Page::Diagnostics;
+        app.game_running = true;
+        let details = "Exit code: 1 (the game stopped with an error)\n\nLast lines of oot3d_native_game.log:\nline 40";
+        let explanation =
+            forge_core::explain::explain_outcome(forge_core::explain::Outcome::GameExitedWithError, details);
+        app.handle(Event::GameExited(Some(Box::new(explanation.clone()))));
+        assert!(!app.game_running);
+        assert_eq!(app.page, Page::Home);
+        assert_eq!(app.failure, Some(explanation));
+        assert!(app.show_details, "the log tail is shown at once");
+        let card = app.home_card();
+        assert_eq!(card.kind, home::Kind::Failed);
+        app.apply(Action::Dismiss, &egui::Context::default(), None);
+        // A clean exit shows nothing.
+        app.page = Page::Data;
+        app.handle(Event::GameExited(None));
+        assert_eq!((app.page, app.failure.as_ref()), (Page::Data, None));
         app.shut_down();
     }
 

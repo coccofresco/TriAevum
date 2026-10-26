@@ -624,7 +624,7 @@ pub fn report_text(sources: &Sources, facts: &ReportFacts) -> String {
 }
 
 /// Cuts `text` to at most `limit` bytes on a character boundary.
-fn truncate_text(mut text: String, limit: usize) -> String {
+pub fn truncate_text(mut text: String, limit: usize) -> String {
     if text.len() <= limit {
         return text;
     }
