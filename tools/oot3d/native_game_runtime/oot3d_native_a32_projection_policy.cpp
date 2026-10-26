@@ -99,7 +99,7 @@ void ApplyNativeWidescreenProjectionPolicy(
   const auto objectBankHooks = Oot3dNativeGame::ObjectBankExtension::HookPcs();
   const bool enabledObjectBankExit =
       !std::binary_search(objectBankHooks.begin(), objectBankHooks.end(), pc) ||
-      (runtime.ObjectBank != nullptr && runtime.ObjectBank->ShouldObserve(pc));
+      (runtime.ObjectBank != nullptr && runtime.ObjectBank->ShouldExit(pc, state));
   const auto rainHooks = Oot3dNativeGame::TopScreenRainAdapter::HookPcs();
   const bool enabledRainExit =
       std::find(rainHooks.begin(), rainHooks.end(), pc) == rainHooks.end() ||

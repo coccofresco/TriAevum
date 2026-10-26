@@ -287,6 +287,18 @@ void IndexAndPredicates() {
                 state.r[14] == 0x004849FCU,
             "readiness block did not emulate leading instructions/zero-ready distinction");
   }
+  // Compiled code leaves the loaded predicate only for an index the native
+  // body cannot answer: a native slot reads the same ID in place.
+  for (const auto& [index, exits] : {std::pair{0, false}, std::pair{18, false}, std::pair{19, true},
+                                     std::pair{38, true}, std::pair{-1, true}}) {
+    state = Caller(0x00373074U);
+    state.r[0] = kContext;
+    state.r[1] = static_cast<std::uint32_t>(index);
+    Require(f.Runtime.ShouldObserve(0x00373074U) &&
+                f.Runtime.ShouldExit(0x00373074U, state) == exits,
+            "loaded predicate exit does not follow the slot index");
+  }
+  Require(f.Runtime.ShouldExit(0x004849F0U, state), "readiness block stopped leaving compiled code");
 }
 
 void AllocationAndCapacity() {

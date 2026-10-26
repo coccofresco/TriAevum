@@ -243,6 +243,14 @@ bool ObjectBankExtension::ShouldObserve(std::uint32_t pc) const {
   return Active();
 }
 
+bool ObjectBankExtension::ShouldExit(std::uint32_t pc, const GuestState &state) const {
+  if (!ShouldObserve(pc)) return false;
+  if (pc != kLoaded || Pending()) return true;
+  // Native slots 0..18: the native body reads the same signed ID.
+  const auto index = std::bit_cast<std::int32_t>(state.r[1]);
+  return index < 0 || index >= static_cast<std::int32_t>(kObjectBankNativeSlots);
+}
+
 std::int32_t ObjectBankExtension::FindExtra(std::uint32_t objectId) {
   if (!HasRegion()) return -1;
   const auto count = Count();

@@ -2226,6 +2226,21 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                    {"whole_aot_memory_faults", stats.WholeAotMemoryFaults},
                    {"whole_aot_unsupported_exits",
                     stats.WholeAotUnsupportedExits},
+                   {"whole_aot_observable_exits",
+                    [] {
+                      const auto report =
+                          Oot3dNativeGame::Oot3dWholeAotPluginObservableExitReport();
+                      nlohmann::json byPc = nlohmann::json::object();
+                      for (const auto &[pc, exits] : report.ExitsByPc) {
+                        char key[16];
+                        std::snprintf(key, sizeof(key), "0x%08X", pc);
+                        byPc[key] = exits;
+                      }
+                      return nlohmann::json{
+                          {"thrown", report.Exits},
+                          {"unwind_ns", report.UnwindNanoseconds},
+                          {"by_pc", std::move(byPc)}};
+                    }()},
                };
              }()},
             {"true_aot_blocks",

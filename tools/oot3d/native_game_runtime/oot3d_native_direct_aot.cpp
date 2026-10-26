@@ -15,14 +15,33 @@
 #endif
 
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <map>
+#include <mutex>
+#include <optional>
 #include <span>
 #include <vector>
 
 namespace Oot3dNativeGame {
 namespace {
+
+struct ObservableExitCounters {
+  std::mutex Mutex;
+  uint64_t UnwindNanoseconds = 0;
+  std::map<uint32_t, uint64_t> ExitsByPc;
+};
+
+ObservableExitCounters &ObservableExits() {
+  static ObservableExitCounters counters;
+  return counters;
+}
+
+// Set by the request, read when the title module's Execute returns on this
+// thread: the exception unwinds exactly to the innermost Execute.
+thread_local std::optional<std::chrono::steady_clock::time_point> gObservableExitRequestedAt;
 
 namespace a32 = oot3d::recomp::a32;
 
@@ -255,9 +274,27 @@ bool Oot3dWholeAotPluginExecutionActive() noexcept {
     uint32_t pc, const a32::GuestState &state) {
   const Oot3dWholeAotProgramV2 *program = WholeAotProgram();
   if (program != nullptr) {
+    {
+      auto &counters = ObservableExits();
+      std::scoped_lock lock(counters.Mutex);
+      ++counters.ExitsByPc[pc];
+    }
+    gObservableExitRequestedAt = std::chrono::steady_clock::now();
     program->ObservableExit(pc, &state);
   }
   std::terminate();
+}
+
+Oot3dWholeAotObservableExitReport Oot3dWholeAotPluginObservableExitReport() {
+  auto &counters = ObservableExits();
+  std::scoped_lock lock(counters.Mutex);
+  Oot3dWholeAotObservableExitReport report;
+  report.UnwindNanoseconds = counters.UnwindNanoseconds;
+  for (const auto &[pc, exits] : counters.ExitsByPc) {
+    report.Exits += exits;
+    report.ExitsByPc.emplace_back(pc, exits);
+  }
+  return report;
 }
 
 std::span<const uint32_t> Oot3dWholeAotEntryPoints() noexcept {
@@ -281,10 +318,20 @@ bool ExecuteOot3dWholeAotFunction(
     bool skipFirstBlockEntry, uint32_t stopPc) {
   if (const Oot3dWholeAotProgramV2 *program = WholeAotProgram();
       program != nullptr) {
-    return program->Execute(pc, state, memory, result, stats, externalCall,
-                            blockBudget, blocksConsumed, blockEntry,
-                            blockEntryUser, blockEntryPcs, blockEntryPcCount,
-                            blockEntryFilter, skipFirstBlockEntry, stopPc);
+    const bool executed =
+        program->Execute(pc, state, memory, result, stats, externalCall,
+                         blockBudget, blocksConsumed, blockEntry,
+                         blockEntryUser, blockEntryPcs, blockEntryPcCount,
+                         blockEntryFilter, skipFirstBlockEntry, stopPc);
+    if (gObservableExitRequestedAt.has_value()) {
+      const auto unwind = std::chrono::steady_clock::now() - *gObservableExitRequestedAt;
+      gObservableExitRequestedAt.reset();
+      auto &counters = ObservableExits();
+      std::scoped_lock lock(counters.Mutex);
+      counters.UnwindNanoseconds += static_cast<uint64_t>(
+          std::chrono::duration_cast<std::chrono::nanoseconds>(unwind).count());
+    }
+    return executed;
   }
   const Oot3dDirectAotProgramV1 *program = DirectAotProgram();
   if (program == nullptr || result == nullptr || stats == nullptr ||

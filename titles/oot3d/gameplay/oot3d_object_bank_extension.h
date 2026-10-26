@@ -67,6 +67,12 @@ public:
   static std::span<const std::uint32_t> ResumePcs() noexcept;
   static std::span<const std::uint32_t> NativeCallPcs() noexcept;
   [[nodiscard]] bool ShouldObserve(std::uint32_t pc) const;
+  // Whether compiled code must leave at this block entry for Execute. The
+  // loaded predicate (0x00373074, about 90 calls per gameplay update) reads a
+  // native slot exactly as Execute would, so only an extra or invalid index
+  // leaves: each exit unwinds every generated frame (title-module ABI v2).
+  [[nodiscard]] bool ShouldExit(std::uint32_t pc,
+                                const oot3d::recomp::a32::GuestState &state) const;
   [[nodiscard]] bool Pending() const noexcept;
   bool Execute(std::uint32_t pc, oot3d::recomp::a32::GuestState &state,
                oot3d::recomp::a32::ExecutionResult *result,
