@@ -12,6 +12,10 @@ struct VisualClockState {
     uint64_t Epoch = 0;
     bool Paused = false;
     bool Available = false;
+    // The host holds the game (the in-game menu is open): effects that keep
+    // their own time when no clock is published (the grass wind and
+    // interaction) stand still too, so the held frame stays the held frame.
+    bool HostHold = false;
 };
 
 // Renderer-facing clock fed by the host runtime. Effects consume this clock
@@ -22,6 +26,8 @@ class VisualClock final {
     static VisualClock& Instance();
 
     void Publish(double deltaSeconds, bool paused, uint64_t sequence);
+    // Set by the window host in the render order of each presented frame.
+    void SetHostHold(bool held);
     [[nodiscard]] VisualClockState Snapshot() const;
     void Reset();
 

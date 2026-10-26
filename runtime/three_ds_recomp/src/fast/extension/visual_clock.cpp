@@ -41,9 +41,16 @@ VisualClockState VisualClock::Snapshot() const {
 void VisualClock::Reset() {
     std::scoped_lock lock(mMutex);
     const uint64_t nextEpoch = mState.Epoch + 1U;
+    const bool held = mState.HostHold;
     mState = {};
     mState.Epoch = nextEpoch;
+    mState.HostHold = held;
     mHasSequence = false;
+}
+
+void VisualClock::SetHostHold(bool held) {
+    std::scoped_lock lock(mMutex);
+    mState.HostHold = held;
 }
 
 } // namespace Fast::Extension

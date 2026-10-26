@@ -132,7 +132,10 @@ The pause is a hold of the guest at the window host's frame owner
   moment), and the presentation of the last scene frame at the
   interpolation sample it last showed (`heldVisualInterpolationAlpha`: an
   interpolated mode repeats its last transition sample, the direct mode
-  re-presents the last scanout), with the menu drawn over it.
+  re-presents the last scanout), with the menu drawn over it. Effects that
+  keep their own time instead of the game's (the grass wind and bending)
+  hold too: the host sets `VisualClock::SetHostHold` in the frame's render
+  order, so the held frame does not move.
 - Closing the menu resumes on the next frame from the kept clock phase, so
   the game continues as if no time had passed. The decision is taken once per
   frame from the previous frame's state, so a frame never changes its mind
@@ -310,6 +313,30 @@ answered "Saved" and each visible in the capture taken with the menu closed
 shadows), and the run's `config.json` held the last choices (preset Toon,
 grass Medium). Before the fix the same run read Native / Off / Authentic and
 answered "Applied for this session only".
+
+A sixth lab run set (2026-10-26, UX plan WP-06, developer build, stone save
+state, 4K window, lab driven): the menu opened at guest frame 184158 and the
+guest frame stayed 184158 for 155 presented frames (waits, captures, tab
+changes, Reset display settings and its keep question) and moved on only
+after the menu closed (184164, then 184195 thirty frames later). Two captures
+of the held frame thirty presented frames apart differ in 0.37 % of the
+pixels by one level, the renderer's run-to-run noise (before the grass hold
+the wind moved 28 % of them by up to 95 levels). With `TRIAEVUM_HELP_CARD=1`
+the card was up alone (`cardOnly`), the game held, OK closed it and wrote
+`Help: {Shown: true}`; a second launch on that file showed no card. Game >
+Quit game > Quit after a non-persisted lab graphics change closed the game
+by itself (exit 0, `TRIAEVUM_MENU_QUIT`), wrote the pending change
+(`FovMultiplier` 1.2) and left no `config.json.launching`. Inertness with the
+menu closed: the same deterministic runs (stone with the guest pause screen
+by input timeline, Epona without one; rgb8) on the build before WP-06 and
+after: 10 of 12 frames byte-identical, 2 differ by one level in a small
+region, as a repeat of the new build against itself does. `oot3d_menu_tests`
+covers the card, the notice modal, Resume, the Help tab, the quit question
+and the status vocabulary. Not verified here: a real pad or touch session
+(the lab injects the host controls), "Open saves / logs folder" opening a
+file browser (unit-tested through the host action only), and the default
+window fit on a small screen (unit-tested; scripted runs keep the stored
+size).
 
 Not done yet: menu sounds (the host has no sound asset of its own) and a
 5:3 canvas for the native TopScreen layout (the menu always draws on the

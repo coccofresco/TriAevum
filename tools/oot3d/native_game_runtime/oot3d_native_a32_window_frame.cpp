@@ -1,5 +1,6 @@
 // Native A32 window session: one frame of the loop and the renderer-side work it schedules.
 #include "oot3d_native_a32_window_session.h"
+#include "fast/extension/visual_clock.h"
 #include "fast/renderer3ds/pica_surface_debug.h"
 #include "oot3d/renderer/ui_presentation_layout.h"
 #include "oot3d_native_room_shadow_shell.h"
@@ -289,6 +290,9 @@ bool NativeA32WindowSession::RunFrame() {
       guestHeld ? heldVisualInterpolationAlpha
                 : static_cast<float>(std::clamp(presentationStep.InterpolationAlpha, 0.0, 1.0));
   heldVisualInterpolationAlpha = visualInterpolationAlpha;
+  // Effects that keep their own time (the grass wind and bending) hold with
+  // the game, in the render order of this frame; false with the menu closed.
+  renderStream.Submit([guestHeld] { Fast::Extension::VisualClock::Instance().SetHostHold(guestHeld); });
   ApplyTopScreenConfigSnapshot();
   ApplyPhotoModeHud();
   uiLifecycleBridge.BeginHostFrame(

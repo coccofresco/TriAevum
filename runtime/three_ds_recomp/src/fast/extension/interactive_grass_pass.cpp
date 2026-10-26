@@ -1619,7 +1619,9 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
             }
         } else {
             if (!mImpl->HasFallbackFrame || frameId != mImpl->LastFallbackFrame) {
-                deltaSeconds = 1.0F / 60.0F;
+                // While the host holds the game (its menu is open) the wind
+                // and the bending stand still with the held frame.
+                deltaSeconds = clock.HostHold ? 0.0F : 1.0F / 60.0F;
                 mImpl->FallbackSeconds += deltaSeconds;
                 mImpl->LastFallbackFrame = frameId;
                 mImpl->HasFallbackFrame = true;
