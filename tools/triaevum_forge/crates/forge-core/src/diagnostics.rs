@@ -569,6 +569,9 @@ pub fn report_text(sources: &Sources, facts: &ReportFacts) -> String {
         None => line("Installation: not inspected".to_string()),
     }
     line(format!("Game running now: {}", if facts.game_running { "yes" } else { "no" }));
+    // What is applied, including the unsupported custom RomFS folder (owner
+    // decision 6): names and counts only.
+    line(redactor.text(&crate::enhancements::diagnostics_line(&sources.data)));
     line(format!(
         "Folders: package {}, data {}, game logs {}",
         redactor.text(&sources.package.to_string_lossy()),

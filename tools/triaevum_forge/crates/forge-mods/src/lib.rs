@@ -27,6 +27,7 @@
 
 pub mod archive;
 pub mod catalog;
+pub mod custom_romfs;
 pub mod download;
 pub mod extract;
 #[cfg(feature = "https")]
@@ -34,6 +35,7 @@ pub mod http;
 pub mod overlay;
 pub mod romfs_mods;
 pub mod ui_pack;
+pub mod user_textures;
 mod util;
 mod vanilla_plus_link_members;
 mod vanilla_ui_hud_members;

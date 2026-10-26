@@ -115,7 +115,7 @@ pub fn title_id_text(title_id: u64) -> String {
 }
 
 /// The program ID of the prepared title's ExHeader input (`content.tap`).
-fn prepared_title_id(prepared: &forge_prepare::content::PreparedContent) -> Option<u64> {
+pub fn prepared_title_id(prepared: &forge_prepare::content::PreparedContent) -> Option<u64> {
     let path = prepared.index.get("inputs")?.get("exheader")?.get("path")?.as_str()?;
     exheader_title_id(&forge_prepare::paths::resolve_reference(path, &prepared.directory).ok()?)
 }

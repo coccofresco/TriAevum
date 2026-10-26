@@ -462,7 +462,20 @@ pub fn prepare_romfs_mods(
         };
         applied.push(Applied { mod_, contract, members });
     }
-    if applied.is_empty() {
+    // The unsupported custom RomFS folder (owner decision 6), off unless the
+    // user turned it on; a folder that fails validation is left out whole.
+    let mut custom = None;
+    if crate::custom_romfs::enabled(data_root)? {
+        let scan = crate::custom_romfs::scan(data_root, cancel)?;
+        if let Some(issue) = scan.rejected.first() {
+            report("mods", &format!("The custom RomFS folder is not applied: {}.", issue.message()));
+        } else if scan.files.is_empty() {
+            report("mods", "The custom RomFS folder is on but holds no files.");
+        } else {
+            custom = Some(scan);
+        }
+    }
+    if applied.is_empty() && custom.is_none() {
         return Ok(None);
     }
     let (service_offset, service_size) = service_view()?;
@@ -470,6 +483,13 @@ pub fn prepare_romfs_mods(
     for item in &applied {
         // Later catalogue entries win.
         replacements.extend(item.members.iter().map(|(name, path)| (name.clone(), path.clone())));
+    }
+    let custom = match custom {
+        Some(scan) => apply_custom(scan, &applied, romfs, service_offset, service_size, &mut replacements, report)?,
+        None => None,
+    };
+    if replacements.is_empty() {
+        return Ok(None);
     }
     let mut identity = Map::new();
     identity.insert("import_version".into(), json!(IMPORT_VERSION));
@@ -482,13 +502,22 @@ pub fn prepare_romfs_mods(
             applied.iter().map(|item| json!([item.mod_.mod_id, item.mod_.version, item.contract.sha256])).collect(),
         ),
     );
+    // Only an applied custom folder adds its member: the catalogue-only
+    // identity (and its folder) stays the Python Forge's.
+    if let Some(custom) = &custom {
+        identity.insert("custom_romfs".into(), custom.identity(cancel)?);
+    }
     let directory = data_root.join("mods").join("romfs").join(identity_key(&identity)?);
     let overlay = directory.join(OVERLAY_NAME);
     let receipt_path = directory.join("import.json");
     if reusable_overlay(&overlay, &receipt_path, &identity, cancel)? {
         return Ok(Some(overlay));
     }
-    let names: Vec<String> = applied.iter().map(|item| format!("{} {}", item.mod_.title, item.mod_.version)).collect();
+    let mut names: Vec<String> =
+        applied.iter().map(|item| format!("{} {}", item.mod_.title, item.mod_.version)).collect();
+    if custom.is_some() {
+        names.push("the custom RomFS folder (unsupported)".to_string());
+    }
     report("mods", &format!("Applying {} to the local game data...", names.join(", ")));
     let summary = match build_overlay(romfs, service_offset, service_size, &replacements, &overlay, cancel) {
         Ok(summary) => summary,
@@ -513,13 +542,77 @@ pub fn prepare_romfs_mods(
                    "license_url": item.mod_.license_url, "source_url": item.mod_.page})
         })
         .collect();
-    atomic_write_json(
-        &receipt_path,
-        &json!({
-            "source": identity, "overlay_sha256": overlay_sha256,
-            "summary": {"files": summary.files, "base_view_bytes": summary.base_view_bytes,
-                        "appended_bytes": summary.appended_bytes},
-            "private_local_artifact": true, "redistributable": false, "mods": credits}),
-    )?;
+    let mut receipt = json!({
+        "source": identity, "overlay_sha256": overlay_sha256,
+        "summary": {"files": summary.files, "base_view_bytes": summary.base_view_bytes,
+                    "appended_bytes": summary.appended_bytes},
+        "private_local_artifact": true, "redistributable": false, "mods": credits});
+    if let Some(custom) = &custom {
+        receipt["custom_romfs"] = custom.receipt();
+    }
+    atomic_write_json(&receipt_path, &receipt)?;
     Ok(Some(overlay))
+}
+
+/// The custom folder's files that apply: in the base RomFS (the rest is
+/// reported and left out), winning over a catalogued mod's (reported).
+struct AppliedCustom {
+    name: Option<String>,
+    files: Vec<crate::custom_romfs::CustomFile>,
+}
+
+impl AppliedCustom {
+    /// `[[path, bytes, sha256], ...]`: a changed file makes a new overlay.
+    fn identity(&self, cancel: &CancelToken) -> Result<Value> {
+        let mut entries = Vec::new();
+        for file in &self.files {
+            let digest = hex(&sha256_file(&file.source, cancel)?.1);
+            entries.push(json!([file.path, file.bytes, digest]));
+        }
+        Ok(Value::Array(entries))
+    }
+
+    /// What the receipt and the status pages say: names and counts only.
+    fn receipt(&self) -> Value {
+        json!({
+            "unsupported": true,
+            "name": self.name,
+            "files": self.files.len(),
+            "paths": self.files.iter().map(|file| file.path.as_str()).collect::<Vec<_>>(),
+        })
+    }
+}
+
+fn apply_custom(
+    mut scan: crate::custom_romfs::Scan,
+    applied: &[Applied<'_>],
+    romfs: &Path,
+    service_offset: u64,
+    service_size: u64,
+    replacements: &mut BTreeMap<String, PathBuf>,
+    report: &mut dyn FnMut(&str, &str),
+) -> Result<Option<AppliedCustom>> {
+    let mut stream = File::open(romfs).map_err(|error| io_error(format!("Cannot read {}", romfs.display()), error))?;
+    let files = match read_records(&mut stream, service_offset, service_size) {
+        Ok(records) => records.files,
+        Err(Failure::Value(message)) => {
+            report("mods", &format!("The custom RomFS folder is not applied: the game data cannot be read ({message})."));
+            return Ok(None);
+        }
+        Err(Failure::Other(error)) => return Err(error),
+    };
+    scan.check_romfs(&|path| files.contains_key(path));
+    let members: BTreeMap<String, String> = applied
+        .iter()
+        .flat_map(|item| item.members.keys().map(|path| (path.clone(), item.mod_.title.clone())))
+        .collect();
+    scan.check_mods(&members);
+    for issue in &scan.flagged {
+        report("mods", &format!("Custom RomFS folder: {}.", issue.message()));
+    }
+    if scan.files.is_empty() {
+        return Ok(None);
+    }
+    replacements.extend(scan.files.iter().map(|file| (file.path.clone(), file.source.clone())));
+    Ok(Some(AppliedCustom { name: scan.name, files: scan.files }))
 }

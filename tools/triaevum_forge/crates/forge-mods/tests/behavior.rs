@@ -290,6 +290,96 @@ fn prepare_is_inert_when_disabled_and_cached_when_enabled() {
     assert_eq!(&composed[start..start + record.length as usize], fixtures.mod_files[0].1.as_slice());
 }
 
+/// The unsupported custom RomFS folder (owner decision 6): off by default,
+/// applied through the same overlay when on, files the RomFS lacks left out,
+/// a catalogued mod's file overridden (reported), a rejected folder left out
+/// whole, and off again exactly the catalogue-only result.
+#[test]
+fn the_custom_romfs_folder_is_inert_until_enabled_and_wins_over_mods() {
+    use forge_mods::custom_romfs;
+    let (directory, fixtures) = fixtures();
+    let cancel = CancelToken::new();
+    let data = directory.path().join("data");
+    let catalog = fixtures.catalog();
+    let mod_ = fixtures.mod_();
+    let contract =
+        ArchiveContract { kind: mod_.archive_kind.clone(), name: "f.rar".into(), bytes: 1, sha256: "0".repeat(64) };
+    let recipe = Fixtures::recipe(&contract);
+    let romfs = fixtures.dir.join("romfs.bin");
+    let extractor = SystemBsdtar::default();
+    let prepare = |reports: &mut Vec<String>| {
+        let context = PrepareContext {
+            catalog: &catalog,
+            root: directory.path(),
+            data_root: &data,
+            recipe: &recipe,
+            romfs: &romfs,
+            romfs_sha256: &"e".repeat(64),
+            extractor: &extractor,
+            cancel: &cancel,
+        };
+        overlay::prepare_romfs_mods(&context, &mut || Ok((PREFIX, fixtures.view.len() as u64)), &mut |_, text| {
+            reports.push(text.into())
+        })
+        .unwrap()
+    };
+    let folder = custom_romfs::folder(&data);
+    write_file(&folder.join("misc/other.zar"), b"custom other payload");
+    write_file(&folder.join("actor/a.zar"), b"custom wins over the mod");
+    write_file(&folder.join("actor/brand_new.zar"), b"not in the RomFS");
+    let mut reports = Vec::new();
+    assert_eq!(prepare(&mut reports), None, "the folder is off by default");
+    // The catalogue-only overlay, for the comparison after turning it off.
+    romfs_mods::set_mod_enabled(&data, &catalog, "fixture", true).unwrap();
+    romfs_mods::import_extracted(&fixtures.dir.join("mod_folder"), &data, &mod_, &cancel).unwrap();
+    let catalogue_only = prepare(&mut reports).unwrap();
+    let catalogue_bytes = fs::read(&catalogue_only).unwrap();
+
+    custom_romfs::set_enabled(&data, true).unwrap();
+    reports.clear();
+    let with_custom = prepare(&mut reports).unwrap();
+    assert_ne!(with_custom, catalogue_only, "a new identity, a new overlay folder");
+    assert!(reports.iter().any(|text| text.contains("has no actor/brand_new.zar")), "{reports:?}");
+    assert!(reports.iter().any(|text| text.contains("actor/a.zar is also replaced by")), "{reports:?}");
+    let composed = compose(&fs::read(&with_custom).unwrap(), &fixtures.view);
+    let records = overlay::romfs_file_records(&mut std::io::Cursor::new(&composed), 0, composed.len() as u64).unwrap();
+    let payload = |name: &str| {
+        let record = records.files[name];
+        let start = (u64::from(records.header[9]) + record.payload) as usize;
+        composed[start..start + record.length as usize].to_vec()
+    };
+    assert_eq!(payload("actor/a.zar"), b"custom wins over the mod");
+    assert_eq!(payload("misc/other.zar"), b"custom other payload");
+    assert_eq!(payload("misc/menu.zar"), fixtures.mod_files.iter().find(|(n, _)| n == "misc/menu.zar").unwrap().1);
+    let receipt: Value =
+        serde_json::from_slice(&fs::read(with_custom.parent().unwrap().join("import.json")).unwrap()).unwrap();
+    assert_eq!(receipt["custom_romfs"]["unsupported"], true);
+    assert_eq!(receipt["custom_romfs"]["paths"], serde_json::json!(["actor/a.zar", "misc/other.zar"]));
+    assert_eq!(receipt["source"]["custom_romfs"].as_array().unwrap().len(), 2);
+
+    // A rejected folder is left out whole: the catalogue-only overlay.
+    write_file(&folder.join("actor/empty.zar"), b"");
+    reports.clear();
+    assert_eq!(prepare(&mut reports), Some(catalogue_only.clone()));
+    assert!(reports.iter().any(|text| text.contains("custom RomFS folder is not applied")), "{reports:?}");
+    fs::remove_file(folder.join("actor/empty.zar")).unwrap();
+
+    // Off again: byte-identical to never having turned it on.
+    custom_romfs::set_enabled(&data, false).unwrap();
+    let off = prepare(&mut reports).unwrap();
+    assert_eq!(off, catalogue_only);
+    assert_eq!(fs::read(&off).unwrap(), catalogue_bytes);
+    // Only the custom folder, without mods.
+    romfs_mods::set_mod_enabled(&data, &catalog, "fixture", false).unwrap();
+    assert_eq!(prepare(&mut reports), None);
+    custom_romfs::set_enabled(&data, true).unwrap();
+    let alone = prepare(&mut reports).unwrap();
+    let receipt: Value =
+        serde_json::from_slice(&fs::read(alone.parent().unwrap().join("import.json")).unwrap()).unwrap();
+    assert_eq!(receipt["mods"], serde_json::json!([]));
+    assert_eq!(receipt["custom_romfs"]["files"], 2);
+}
+
 #[test]
 fn a_romfs_without_a_replaced_file_keeps_the_native_files() {
     let (directory, fixtures) = fixtures();

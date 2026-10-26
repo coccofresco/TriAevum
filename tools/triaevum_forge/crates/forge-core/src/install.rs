@@ -601,9 +601,15 @@ pub fn install_precompiled_title(
     // it beneath the user's own texture pack, and TopScreen takes its HD atlas.
     let assets = |error: ForgeError| error.at_stage("assets");
     let required_assets = step("assets", Operation::RequiredAssets);
-    let ui_textures =
+    // The user's choice (UX plan WP-07, decision 5): a stored pack is applied
+    // only while the HD interface pack is on.
+    let ui_textures = if crate::enhancements::hd_pack_enabled(data_root) {
         prepare_ui_texture_pack(root, data_root, &recipe_value, &UiTexturePack::vanilla_ui_hud(), report, cancel)
-            .map_err(assets)?;
+            .map_err(assets)?
+    } else {
+        report("assets", "The HD interface pack is turned off: the game uses its native interface textures.");
+        None
+    };
     let texture_pack = prepare_topscreen_assets(
         root,
         data_root,

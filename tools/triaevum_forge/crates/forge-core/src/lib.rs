@@ -14,6 +14,7 @@ pub mod backup;
 pub mod config_report;
 pub mod data_actions;
 pub mod diagnostics;
+pub mod enhancements;
 pub mod explain;
 pub mod install;
 pub mod inventory;
@@ -32,6 +33,7 @@ pub mod release_signature;
 pub mod repair;
 pub mod restore;
 pub mod session;
+pub mod settings_service;
 pub mod state;
 pub mod transaction;
 // Update from ZIP (UX plan WP-04B); the signature, planning and helper

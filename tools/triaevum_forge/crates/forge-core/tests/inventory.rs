@@ -556,6 +556,18 @@ fn a_managed_profile_routes_the_data_tree_and_lists_earlier_locations() {
         Origin::Default,
         Backup::Exclude,
     );
+    assert!(inventory.entry("texture_load_legacy").is_none());
+
+    // UX plan WP-07: once a pack is imported into the managed folder it wins;
+    // the Azahar pack stays listed as an inactive legacy row, untouched.
+    write(&azahar.join("tex1_8x8_00000000000000AA_13_mip0.png"), b"png");
+    write(&managed.join("load/0004000000033500/UI/tex1_8x8_00000000000000AA_13_mip0.png"), b"png");
+    let inventory = resolved(&root, &installation);
+    assert_backup_classes(&inventory);
+    assert_entry(&inventory, "texture_load", &managed.join("load/0004000000033500"), Origin::Default, Backup::Optional);
+    let earlier = entry(&inventory, "texture_load_legacy");
+    assert_eq!((earlier.origin, earlier.active, earlier.backup), (Origin::Legacy, false, Backup::Exclude));
+    assert_eq!(earlier.resolved_path, azahar);
 }
 
 #[test]

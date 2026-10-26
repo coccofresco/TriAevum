@@ -46,7 +46,9 @@
 //!   `Graphics.TexturePacks.Azahar.LoadDirectory`/`DumpDirectory` (schema 9
 //!   and later), else `<OOT3D_AZAHAR_USER_DIRECTORY>/{load,dump}/textures/
 //!   <title id>`, else the routed managed default (except that an existing
-//!   pack in Azahar's own folder keeps loading), else
+//!   pack in Azahar's own folder keeps loading while the managed folder holds
+//!   no file; once a pack is imported there, the Azahar folder is an inactive
+//!   `texture_load_legacy` row, UX plan WP-07), else
 //!   `<Azahar user folder>/{load,dump}/textures/<title id>`. The title id:
 //!   `OOT3D_AZAHAR_TITLE_ID`, else `--title-id`, else EUR
 //!   (`fast/extension/azahar_texture_pack.cpp`).
@@ -316,6 +318,7 @@ pub struct Installation<'a> {
 }
 
 /// What a frontend asks for.
+#[derive(Clone)]
 pub struct InventoryRequest {
     pub package_root: PathBuf,
     pub data_root: Option<PathBuf>,
@@ -441,6 +444,12 @@ fn same_path(left: &Path, right: &Path) -> bool {
     } else {
         left == right
     }
+}
+
+/// A folder holding at least one regular file, at any depth: a texture pack
+/// (the runtime's `ResolveFolder` uses the same test, UX plan WP-07).
+pub fn holds_texture_files(folder: &Path) -> bool {
+    forge_mods::user_textures::count_files(folder, 1) > 0
 }
 
 fn is_within(path: &Path, base: &Path) -> bool {
@@ -851,8 +860,16 @@ impl Resolver<'_> {
 
         // Custom textures.
         let (texture_load, texture_dump, load_origin, dump_origin) = self.texture_folders(&runtime_config)?;
-        self.push(Location::new(C::Textures, "texture_load", texture_load, Directory, Optional).origin(load_origin));
+        self.push(Location::new(C::Textures, "texture_load", texture_load.clone(), Directory, Optional).origin(load_origin));
         self.push(Location::new(C::Textures, "texture_dump", texture_dump, Directory, Exclude).origin(dump_origin));
+        // A pack imported into the managed folder outranks the one left in
+        // Azahar's folder (UX plan WP-07), which stays listed, never touched.
+        if let Some(earlier) = self.azahar_load_folder()?.filter(|earlier| !same_path(earlier, &texture_load)) {
+            if load_origin == Origin::Default && holds_texture_files(&earlier) {
+                let left = Location::new(C::Textures, "texture_load_legacy", earlier, Directory, Exclude);
+                self.push(left.origin(Origin::Legacy).inactive());
+            }
+        }
 
         // Enhancements (decision 2: never in the default backup).
         self.push(Location::new(C::Enhancements, "mods", data.join("mods"), Directory, Optional).origin(data_origin));
@@ -939,6 +956,22 @@ impl Resolver<'_> {
         Ok(())
     }
 
+    /// The installed title (`--title-id`, written by Forge from the ROM's
+    /// ExHeader: a USA installation is 0004000000033500), unless the
+    /// environment names one; EUR for an older profile.
+    fn texture_title(&self) -> String {
+        self.env("OOT3D_AZAHAR_TITLE_ID")
+            .or_else(|| self.profile.as_ref().and_then(|profile| profile.value("--title-id")).map(str::to_string))
+            .unwrap_or_else(|| DEFAULT_TEXTURE_TITLE.to_string())
+            .to_uppercase()
+    }
+
+    /// Azahar's own load folder for the installed title.
+    fn azahar_load_folder(&self) -> Result<Option<PathBuf>> {
+        let folder = self.azahar_user_directory()?.join("load").join("textures").join(self.texture_title());
+        Ok(Some(resolve(&folder)?))
+    }
+
     /// The custom texture folders and their origins, as the runtime picks
     /// them: environment, then the configuration, then the Azahar user folder.
     fn texture_folders(&self, runtime_config: &Path) -> Result<(PathBuf, PathBuf, Origin, Origin)> {
@@ -951,14 +984,7 @@ impl Resolver<'_> {
             let value = graphics.get("TexturePacks")?.get("Azahar")?.get(key)?.as_str()?;
             (!value.is_empty()).then(|| value.to_string())
         };
-        // The installed title (`--title-id`, written by Forge from the ROM's
-        // ExHeader: a USA installation is 0004000000033500), unless the
-        // environment names one; EUR for an older profile.
-        let title = self
-            .env("OOT3D_AZAHAR_TITLE_ID")
-            .or_else(|| self.profile.as_ref().and_then(|profile| profile.value("--title-id")).map(str::to_string))
-            .unwrap_or_else(|| DEFAULT_TEXTURE_TITLE.to_string())
-            .to_uppercase();
+        let title = self.texture_title();
         let user_root = self.env("OOT3D_AZAHAR_USER_DIRECTORY");
         let azahar = self.azahar_user_directory()?;
         let textures = self.roots.data.join("textures");
@@ -971,8 +997,11 @@ impl Resolver<'_> {
             }
             let earlier = resolve(&azahar.join(kind).join("textures").join(&title))?;
             match self.managed(option, textures.join(kind).join(&title))? {
-                // An existing pack in Azahar's folder keeps loading from there.
-                Some(_) if kind == "load" && earlier.is_dir() => Ok((earlier, Origin::Legacy)),
+                // An existing pack in Azahar's folder keeps loading from there
+                // until a pack is imported into the managed folder (WP-07).
+                Some((managed, _)) if kind == "load" && earlier.is_dir() && !holds_texture_files(&managed) => {
+                    Ok((earlier, Origin::Legacy))
+                }
                 Some(managed) => Ok(managed),
                 None => Ok((earlier, Origin::Legacy)),
             }

@@ -20,6 +20,8 @@ use crate::install::{self, AndroidTarget, InstallRequest, InstallSource, Install
 use crate::log::ForgeLog;
 use crate::recognize::{recognize_rom, RecognizeRequest};
 
+// The Enhancements page (UX plan WP-07).
+mod enhancements;
 // The HD interface pack outside an installation (UX plan WP-09).
 mod ui_pack;
 
@@ -47,6 +49,7 @@ pub fn capabilities() -> Value {
     }
     if let Some(jobs) = capabilities["jobs"].as_array_mut() {
         jobs.extend(ui_pack::JOBS.map(Value::from));
+        jobs.extend(enhancements::JOBS.map(Value::from));
     }
     capabilities
 }
@@ -135,6 +138,7 @@ fn start_job(request: &[u8]) -> Result<Job> {
         #[cfg(not(target_os = "android"))]
         Some(name @ ("update_plan" | "update" | "update_recover")) => crate::update::start_job(name, &request),
         Some(name) if ui_pack::JOBS.contains(&name) => ui_pack::start(name, &request),
+        Some(name) if enhancements::JOBS.contains(&name) => enhancements::start(name, &request),
         // Data & backups (UX plan WP-05B).
         Some(other) => crate::data_actions::start(other, &request)?
             .ok_or_else(|| ForgeError::invalid(format!("Unknown Forge job: {other}"))),
@@ -660,8 +664,12 @@ fn download_hd_textures(
         let status = forge_mods::pack_status(package_root, &data_root, Some(&contract), &pack, cancel)?;
         Ok((status == forge_mods::Status::Missing).then_some((data_root, contract)))
     };
-    // Without a contract or a readable package, the installation says why.
+    // Without a contract or a readable package, the installation says why;
+    // a pack the user turned off is not downloaded (UX plan WP-07).
     let Ok(Some((data_root, contract))) = missing() else { return Ok(()) };
+    if !crate::enhancements::hd_pack_enabled(&data_root) {
+        return Ok(());
+    }
     sink.stage("preflight", "Downloading the HD textures...");
     let message = match fetch_archive(&data_root, &pack, &contract, sink, cancel) {
         Ok(()) => "HD texture archive ready. It is applied by this installation.".to_string(),
