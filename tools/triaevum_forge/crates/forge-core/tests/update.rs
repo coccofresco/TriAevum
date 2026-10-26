@@ -807,6 +807,26 @@ fn engine_failure_and_failed_final_validation_roll_back() {
 }
 
 #[test]
+fn a_relocated_installation_updates_in_its_new_folder() {
+    let mut site = Site::new();
+    let moved = site.fixture.package.with_file_name("moved TriAevum");
+    std::fs::rename(&site.fixture.package, &moved).unwrap();
+    site.fixture.package = moved.clone();
+    site.kept = site
+        .kept
+        .iter()
+        .map(|(path, bytes)| {
+            let relative = path.strip_prefix(moved.with_file_name("package")).unwrap();
+            (moved.join(relative), bytes.clone())
+        })
+        .collect();
+    assert!(matches!(inspect(&InspectRequest::package(&moved)), InstallationState::Ready { .. }));
+    run_update(&site, &Run::default());
+    assert_eq!(result(&site)["status"], "updated");
+    assert_eq!(recover_and_validate(&site), Tuple::New);
+}
+
+#[test]
 fn a_relaunch_failure_is_reported_separately() {
     let site = Site::new();
     let missing = site.downloads.path().join("no-such-forge.exe");
