@@ -32,14 +32,20 @@ Row Action(std::string key, std::string help, std::function<WriteResult()> activ
 } // namespace
 
 std::vector<std::string> HelpCardLines(const HelpContent& content) {
+    const auto prompt = [&](PromptAction action) { return PromptText(content.Prompts, action); };
     std::vector<std::string> lines;
-    if (content.Controls == HelpControls::Touch) {
-        lines.emplace_back("Tap HOME: game menu.");
-        lines.emplace_back("Hold HOME: all settings.");
+    if (content.Prompts == PromptSet::Touch) {
+        lines.push_back("Tap " + prompt(PromptAction::Menu) + ": game menu.");
+        lines.push_back("Hold " + prompt(PromptAction::AllSettings) + ": all settings.");
+    } else if (content.Prompts == PromptSet::Keyboard) {
+        lines.push_back(prompt(PromptAction::Menu) + ": game menu.");
+        lines.push_back(prompt(PromptAction::AllSettings) + ": all settings.");
+        lines.push_back(prompt(PromptAction::SaveState) + " / " + prompt(PromptAction::LoadState) +
+                        ": save / load a state.");
     } else {
-        lines.emplace_back("Esc or R3: game menu.");
-        lines.emplace_back("F1 or L3+R3: all settings.");
-        lines.emplace_back("F5 / F8: save / load a state.");
+        lines.push_back(prompt(PromptAction::Menu) + ": game menu.");
+        lines.push_back(prompt(PromptAction::AllSettings) + ": all settings.");
+        lines.emplace_back("Save states: the game menu's Game tab.");
     }
     lines.emplace_back("The game pauses while its menu is open.");
     if (!content.SaveDataPath.empty()) lines.push_back("Your saves: " + content.SaveDataPath);
@@ -48,7 +54,7 @@ std::vector<std::string> HelpCardLines(const HelpContent& content) {
 
 Modal HelpCard(const HelpContent& content, std::function<void()> onDismiss) {
     Modal card;
-    card.Title = "Welcome to TriAevum";
+    card.Title = kHelpCardTitle;
     card.Lines = HelpCardLines(content);
     card.ConfirmLabel = "OK";
     card.CancelLabel.clear();
@@ -81,16 +87,26 @@ Modal SaveFailure(std::string detail, std::function<void()> retry) {
 Tab BuildHelpTab(const HelpTabActions& actions) {
     Tab tab;
     tab.Title = kHelpTabTitle;
+    // The controls of the device in use, with its button prompts.
+    const auto set = actions.Content.Prompts;
+    const auto prompt = [set](PromptAction action) { return PromptText(set, action); };
     tab.Rows.push_back(Heading("Controls"));
-    if (actions.Content.Controls == HelpControls::Touch) {
-        tab.Rows.push_back(Info("Game menu", "Tap HOME"));
-        tab.Rows.push_back(Info("All settings", "Hold HOME"));
+    if (set == PromptSet::Touch) {
+        tab.Rows.push_back(Info("Game menu", "Tap " + prompt(PromptAction::Menu)));
+        tab.Rows.push_back(Info("All settings", "Hold " + prompt(PromptAction::AllSettings)));
+    } else if (set == PromptSet::Keyboard) {
+        tab.Rows.push_back(Info("Game menu", prompt(PromptAction::Menu)));
+        tab.Rows.push_back(Info("All settings (F1)", prompt(PromptAction::AllSettings)));
+        tab.Rows.push_back(Info("Save / load a state",
+                                prompt(PromptAction::SaveState) + " / " + prompt(PromptAction::LoadState)));
+        tab.Rows.push_back(Info("Photo camera", prompt(PromptAction::PhotoCamera)));
+        tab.Rows.push_back(Info("Fullscreen", prompt(PromptAction::Fullscreen)));
     } else {
-        tab.Rows.push_back(Info("Game menu", "Esc \xC2\xB7 R3"));                 // ·
-        tab.Rows.push_back(Info("All settings (F1)", "F1 \xC2\xB7 L3 + R3"));
-        tab.Rows.push_back(Info("Save / load a state", "F5 / F8"));
-        tab.Rows.push_back(Info("Photo camera", "F6"));
-        tab.Rows.push_back(Info("Fullscreen", "F11"));
+        tab.Rows.push_back(Info("Game menu", prompt(PromptAction::Menu)));
+        tab.Rows.push_back(Info("All settings (F1)", prompt(PromptAction::AllSettings)));
+        tab.Rows.push_back(Info("Select / back", prompt(PromptAction::Confirm) + " / " + prompt(PromptAction::Back)));
+        tab.Rows.push_back(Info("Switch tabs", prompt(PromptAction::TabPrevious) + " / " + prompt(PromptAction::TabNext)));
+        tab.Rows.push_back(Info("Save states", "Game tab"));
     }
     if (actions.ShowHelpCard) {
         tab.Rows.push_back(Action("Show the help card", "The card shown at the first start: the menu keys, the "

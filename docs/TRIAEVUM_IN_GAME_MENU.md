@@ -18,7 +18,9 @@ presets by name, the dev tools and the rest).
   in place, **A / Enter / Space** confirm (open a choice list, flip a
   toggle, run an action), **B / Backspace** go back (leave the list, then
   resume), **LB / RB** or **Q / E** switch tabs. **Resume** is the footer's
-  persistent button on every tab (with the Esc / R3 keys beside its label).
+  persistent button on every tab (with the menu key beside its label). The
+  footer names these controls with the button prompts of the device in use
+  (see "Button prompts").
 - **Mouse**: the pointer is free while the menu is open (gameplay capture is
   released). Moving over a row, a tab or a value highlights it and focuses
   the row; a click flips a toggle, opens a choice list or picks a value from
@@ -51,10 +53,10 @@ presets by name, the dev tools and the rest).
 | --- | --- |
 | Video | Graphics preset (Authentic / Enhanced / Toon; Custom is the result of any change), Window mode, Aspect ratio (Original 3DS 5:3 / 16:9 / 21:9 / Free), Resolution (the common sizes; a custom size is typed in F1), VSync, Frame rate, **Reset display settings**, Render scale, Anti-aliasing, Upscaler and quality, Scene FOV, Extended draw distance, HUD size (Native / Optimized, the TopScreen profile) |
 | Graphics | Lighting model, Global illumination, Ambient occlusion, Shadows (modern lighting only), Reflections, Toon, Grass quality |
-| Controls | Keyboard / Mouse / Controller / Capture mouse, Control preset, Aim source, Invert aim X / Y; with the TopScreen profile, Camera (Gameplay camera, speed, smoothing, invert X / Y, Camera zoom, Camera FOV) and C-Stick aiming (speed, invert X / Y) |
+| Controls | Keyboard / Mouse / Controller / Capture mouse, Button prompts, Control preset, Aim source, Invert aim X / Y; with the TopScreen profile, Camera (Gameplay camera, speed, smoothing, invert X / Y, Camera zoom, Camera FOV) and C-Stick aiming (speed, invert X / Y) |
 | Photo mode | Photo camera (F6), Hide HUD, Photo camera speed, Back to the game's view, then the camera's controls as read-only rows (F6, WASD / left stick, Q / E / shoulders, mouse drag / right stick, Shift / Ctrl) |
 | Game | With the TopScreen profile, Gameplay (Quick put away, Landing roll, Roll dash, Aiming reticle, 3D rain, Rain density, SELECT button); Game language; Save states (F5 / F8, with or without settings; loading resumes the game); Session: **Advanced settings (F1)**, **Quit game** |
-| Help & folders | The controls summary (desktop: Esc · R3, F1 · L3 + R3, F5 / F8, F6, F11; Android: tap / hold HOME), Show the help card; desktop: Open saves folder, Open logs folder; Android: where saves and diagnostics are handled (the installer) |
+| Help & folders | The controls summary of the device in use, with its button prompts (keyboard: Esc, F1, F5 / F8, F6, F11; a pad: its menu stick, L3 + R3, select / back, tabs; touch: tap / hold HOME), Show the help card; desktop: Open saves folder, Open logs folder; Android: where saves and diagnostics are handled (the installer) |
 
 The camera rows were renamed so the two cameras cannot be confused:
 Controls > Camera "Free camera" is now **Gameplay camera** (the TopScreen
@@ -98,11 +100,13 @@ exists; it is not wired yet.
 A card drawn by the same UI stack, shown once per installation when the game
 is first presented (after the preparation screen) and no F1 is open:
 
-- Desktop: "Esc or R3: game menu. F1 or L3+R3: all settings. F5 / F8: save /
+- Keyboard: "[Esc]: game menu. [F1]: all settings. [F5] / [F8]: save /
   load a state. The game pauses while its menu is open. Your saves: <the
   resolved save-data folder>" (the path is resolved at runtime and stored
-  nowhere).
-- Android: "Tap HOME: game menu. Hold HOME: all settings."
+  nowhere). With a pad: "[RS]: game menu. [LS] + [RS]: all settings. Save
+  states: the game menu's Game tab." with that pad's labels (see "Button
+  prompts").
+- Touch (Android): "Tap [HOME]: game menu. Hold [HOME]: all settings."
 
 The card is the menu opened with the card alone (`Model::OpenCard`), so the
 game is held while it is up. OK, B / Back or Esc / R3 dismiss it; dismissing
@@ -111,9 +115,69 @@ records `Help.Shown: true` in the platform's runtime configuration
 the card is not shown again. Help & folders > Show the help card re-opens it
 over the menu. Scripted sessions (captures, fixed steps, frame or time
 limits, input timelines, schedules, benchmarks, the developer lab) never see
-it; `TRIAEVUM_HELP_CARD=1` / `0` overrides that for qualification. The key
-glyphs come from WP-08 once it lands; until then the text names keyboard and
-Xbox keys.
+it; `TRIAEVUM_HELP_CARD=1` / `0` overrides that for qualification. The keys
+are drawn as button prompts of the device in use, and an open card follows a
+change of device.
+
+## Button prompts
+
+The footer hints, the Resume button's keys, the Help & folders controls
+summary and the help card show the buttons of the device in the user's hands
+(UX plan WP-08, issues #75 and #115):
+
+| Family | Select / Back | Tabs | Change | Menu / F1 |
+| --- | --- | --- | --- | --- |
+| Xbox | A / B | LB RB | D-pad | RS / LS + RS |
+| PlayStation | cross / circle | L1 R1 | D-pad | R3 / L3 + R3 |
+| Nintendo | A / B (the printed labels: SDL maps a Nintendo pad by label) | L R | D-pad | RS / LS + RS |
+| Steam Deck | A / B | L1 R1 | D-pad | R3 / L3 + R3 |
+| Generic | the south / east button of a four-button diamond | L R | D-pad | R3 / L3 + R3 |
+| Keyboard | Enter / Backspace | Q E | arrow keys | Esc / F1 (and F5 / F8, F6, F11 in the summary) |
+| Touch | a tap (no Back or tab hint: a tap does it) | | | tap HOME / hold HOME |
+
+- **Who decides.** Input owns it. The controls owner
+  (`NativeControlConfigRuntime`) keeps the user's choice and resolves the
+  family (`ActivePromptSet`, `ThreeDsRecomp::Input::ResolvePromptSet`): a
+  fixed choice shows that family; **Automatic** (the default) follows the
+  device used last, as the host poll reports it each poll
+  (`ObserveInputActivity`: a key of a keyboard, a mouse button or a movement
+  of 3 px, any button or stick of the selected pad, a finger or an
+  on-screen control). A pad shows its own family; with the used pad gone a
+  pad still selected gives its family, else the platform's own. Before any
+  input a desktop shows its selected pad (a Steam Deck in Gaming Mode has no
+  keyboard) or the keyboard; Android shows touch. A finger also moves the
+  system pointer, so mouse activity within a second of a touch is that touch.
+- **A pad's family** comes from SDL (`ResolveSdlController` fills
+  `DeviceDescriptor::Type` and `Prompts`, `PromptSetForController`): Xbox
+  360 / One, Luna, Stadia, Shield: Xbox; PS3 / PS4 / PS5: PlayStation;
+  Switch Pro and Joy-Cons: Nintendo. Steam's virtual gamepad (Valve
+  28de:11ff, an Xbox 360 type to SDL) shows Steam Deck labels when
+  `SteamDeck=1` is in the environment (SteamOS sets it) and Xbox labels
+  elsewhere; the Deck's own controls (28de:1205) are Steam Deck. A type SDL
+  does not know falls back on the USB vendor (Microsoft, Sony, Nintendo),
+  then Generic. Two pads: the selected one (Controls > Devices > Controller,
+  automatic or preferred) gives the family; the menu reads only that pad.
+- **The choice**: F1 > Controls > Devices > **Button prompts** (Automatic,
+  Xbox, PlayStation, Nintendo, Steam Deck, Generic, Keyboard, Touch; "Now:
+  <family>" beside Automatic), saved with Save controls, and the menu's
+  Controls > **Button prompts** row, saved at once. Stored as
+  `button_prompts` in `oot3d_controls.json`, written only when it is not
+  Automatic so the file stays readable by older builds; presets keep it.
+- **While the menu is open** the family is re-read every frame: the footer
+  changes at once, the Help & folders tab is rebuilt with the focus kept on
+  its row (`Model::ReplaceTab`), and an open help card's lines follow.
+- **The glyphs** are TriAevum's own art (`tools/oot3d/ui_menu/
+  oot3d_menu_glyphs.*`): discs, pills, keycaps, a stick ring, the
+  PlayStation symbols as plain strokes cut out of a disc, a D-pad, a tap and
+  a house for HOME, described as signed distances and rasterized at first
+  use into one 512 x 256 coverage atlas (`triaevum/menu/glyphs`, served by
+  the menu's texture provider). No font, picture, console logo or
+  third-party glyph set is used. Text carries them as Private Use Area
+  codepoints, so the menu's text layout measures, wraps, elides and draws
+  them with the letters: an icon is one codepoint (U+E000...), a labelled
+  button is an opening codepoint, its label in the menu's heading font and a
+  closing one (U+E100...). HUD action icons (the TopScreen HUD's A/B/X/Y)
+  are not part of this (decision 7).
 
 ## Pause
 

@@ -4,7 +4,9 @@
 // glyph from the baked Fira Sans Condensed atlases (oot3d_menu_font_atlas_data),
 // drawn by the integrated UI renderer like the HUD. The atlases reach the
 // renderer through a texture provider that answers the menu's own texture
-// names and hands every other name on.
+// names and hands every other name on. Text may carry button prompts
+// (oot3d_menu_glyphs.h): they are measured, wrapped, elided and drawn with
+// the letters, from the menu's own glyph atlas.
 
 #include "oot3d_menu_font_atlas_data.h"
 #include "oot3d_n64_ui_renderer.h"
@@ -12,6 +14,7 @@
 
 #include <cstdint>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -72,7 +75,7 @@ class MenuFontTextureProvider final : public oot3d::ui::UiTextureProvider {
   private:
     const oot3d::ui::UiTextureProvider* mNext = nullptr;
     mutable std::mutex mMutex;
-    mutable oot3d::ui::UiTexturePixels mBody, mHeading;
+    mutable oot3d::ui::UiTexturePixels mBody, mHeading, mGlyphs;
 };
 
 } // namespace Oot3dNativeGame::Menu

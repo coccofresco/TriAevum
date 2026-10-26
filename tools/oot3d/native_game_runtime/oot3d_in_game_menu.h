@@ -143,8 +143,14 @@ private:
   Menu::WriteResult ApplyTopScreen(const TopScreenUiConfig &config);
   void UpdateDisplayConfirmation();
   void UpdateSavestateOutcome();
+  // The device in use, from the controls owner (Input): the footer, the help
+  // card and the Help tab show its button prompts, changing with it while
+  // the menu is open.
+  [[nodiscard]] Menu::PromptSet CurrentPromptSet() const;
+  void UpdatePrompts();
 
   InGameMenuOwners mOwners;
+  Menu::PromptSet mPrompts = Menu::PromptSet::Keyboard;
   // "Modified" compares with the product's default graphics, owned by the
   // graphics runtime (ProductDefaultGraphicsSettings), not the struct
   // defaults (the Authentic look).

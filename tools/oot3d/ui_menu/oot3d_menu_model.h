@@ -194,6 +194,10 @@ class Model {
     [[nodiscard]] bool StatusIsError() const noexcept { return mStatusError; }
     void SetStatus(std::string text, bool error);
     void SelectTab(std::size_t index);
+    // Replaces a tab's rows (its text changed, the button prompts for
+    // instance). On the current tab the focus stays on the row of the same
+    // key (else the first focusable row) and the status line is kept.
+    void ReplaceTab(std::size_t index, Tab tab);
 
   private:
     struct Repeat {

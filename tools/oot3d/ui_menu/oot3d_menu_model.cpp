@@ -149,6 +149,30 @@ void Model::SelectTab(std::size_t index) {
     Refresh();
 }
 
+void Model::ReplaceTab(std::size_t index, Tab tab) {
+    if (index >= mDocument.Tabs.size()) return;
+    if (index != mTab) {
+        mDocument.Tabs[index] = std::move(tab);
+        return;
+    }
+    const auto* focused = CurrentRow();
+    const std::string key = focused != nullptr ? focused->Key : std::string{};
+    mDocument.Tabs[index] = std::move(tab);
+    const auto& rows = mDocument.Tabs[index].Rows;
+    const auto same = std::find_if(rows.begin(), rows.end(),
+                                   [&](const Row& row) { return row.Focusable() && !key.empty() && row.Key == key; });
+    if (same != rows.end()) {
+        mRow = static_cast<std::size_t>(same - rows.begin());
+        // A list open on that row stays open; otherwise the rows have focus.
+        if (mInChoices && (same->Kind != RowKind::Choice || mChoice >= same->Choices.size())) mInChoices = false;
+        ClampScroll();
+    } else {
+        mInChoices = false;
+        FocusFirstRow();
+    }
+    Refresh();
+}
+
 void Model::FocusFirstRow() {
     mRow = 0;
     mScroll = 0;

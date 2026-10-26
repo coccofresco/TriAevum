@@ -1,12 +1,16 @@
 // The in-game menu apart from the game: model navigation and edits, the baked
-// fonts, and the presentation's primitives.
+// fonts, the button prompts and their glyphs, and the presentation's
+// primitives.
 #include "oot3d_menu_font.h"
 #include "oot3d_menu_font_atlas_data.h"
+#include "oot3d_menu_glyphs.h"
 #include "oot3d_menu_help.h"
 #include "oot3d_menu_model.h"
 #include "oot3d_menu_presentation.h"
+#include "oot3d_menu_prompts.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include <stdexcept>
@@ -503,16 +507,27 @@ void TestHelpCard() {
     int remembered = 0;
     HelpContent content;
     content.SaveDataPath = "D:/Games/TriAevum/data/savedata";
+    const auto key = [](const char* label) { return GlyphFrameText(GlyphFrame::Key, label); };
     const auto lines = HelpCardLines(content);
-    Expect(lines.size() == 5 && lines[0] == "Esc or R3: game menu." && lines[1] == "F1 or L3+R3: all settings." &&
-               lines[2] == "F5 / F8: save / load a state." &&
+    Expect(lines.size() == 5 && lines[0] == key("Esc") + ": game menu." && lines[1] == key("F1") + ": all settings." &&
+               lines[2] == key("F5") + " / " + key("F8") + ": save / load a state." &&
                lines[4] == "Your saves: D:/Games/TriAevum/data/savedata",
-           "the desktop card names the menu, the settings, the state keys and the saves");
+           "the keyboard card names the menu, the settings, the state keys and the saves");
     HelpContent touch;
-    touch.Controls = HelpControls::Touch;
+    touch.Prompts = PromptSet::Touch;
+    const auto home = GlyphIconText(GlyphIcon::Home);
     const auto touchLines = HelpCardLines(touch);
-    Expect(touchLines.size() == 3 && touchLines[0] == "Tap HOME: game menu." && touchLines[1] == "Hold HOME: all settings.",
+    Expect(touchLines.size() == 3 && touchLines[0] == "Tap " + home + ": game menu." &&
+               touchLines[1] == "Hold " + home + ": all settings.",
            "the touch card names HOME, without an empty saves line");
+    HelpContent pad;
+    pad.Prompts = PromptSet::PlayStation;
+    const auto stick = [](const char* label) { return GlyphFrameText(GlyphFrame::Stick, label); };
+    const auto padLines = HelpCardLines(pad);
+    Expect(padLines.size() == 4 && padLines[0] == stick("R3") + ": game menu." &&
+               padLines[1] == stick("L3") + " + " + stick("R3") + ": all settings." &&
+               padLines[2].find("Game tab") != std::string::npos,
+           "the pad card names its stick clicks and where the save states are");
     model.OpenCard(HelpCard(content, [&] { ++remembered; }));
     Expect(model.IsOpen() && model.CardOnly() && model.FocusPane() == Pane::Modal, "the card opens alone");
     std::vector<oot3d::ui::UiPrimitive> output;
@@ -580,9 +595,10 @@ void TestHelpTabAndSession() {
         return std::find_if(rows.begin(), rows.end(), [&](const Row& row) { return row.Key == key; });
     };
     Expect(document.Tabs[0].Title == "Help & folders", "the tab's title");
-    Expect(find("Game menu") != rows.end() && find("Game menu")->Text == "Esc \xC2\xB7 R3" &&
+    Expect(find("Game menu") != rows.end() &&
+               find("Game menu")->Text == PromptText(PromptSet::Keyboard, PromptAction::Menu) &&
                find("All settings (F1)") != rows.end() && find("Save / load a state") != rows.end(),
-           "the desktop controls summary");
+           "the keyboard controls summary");
     Expect(find("Open saves folder") != rows.end() &&
                find("Open saves folder")->Help.find("D:/Games/TriAevum/data/savedata") != std::string::npos,
            "the saves row names the resolved folder");
@@ -600,7 +616,7 @@ void TestHelpTabAndSession() {
     // Without a file browser the folder rows are left out and the installer
     // route is named instead; with the installer hook they are actions.
     HelpTabActions android;
-    android.Content.Controls = HelpControls::Touch;
+    android.Content.Prompts = PromptSet::Touch;
     android.InstallerRoute = "Close the game, then the TriAevum installer: Saves, Diagnostics";
     const auto androidTab = BuildHelpTab(android);
     Expect(std::none_of(androidTab.Rows.begin(), androidTab.Rows.end(),
@@ -608,8 +624,21 @@ void TestHelpTabAndSession() {
                std::any_of(androidTab.Rows.begin(), androidTab.Rows.end(),
                            [](const Row& row) { return row.Key == "Saves and diagnostics" && row.Kind == RowKind::Info; }) &&
                std::any_of(androidTab.Rows.begin(), androidTab.Rows.end(),
-                           [](const Row& row) { return row.Key == "Game menu" && row.Text == "Tap HOME"; }),
+                           [](const Row& row) {
+                               return row.Key == "Game menu" && row.Text == "Tap " + GlyphIconText(GlyphIcon::Home);
+                           }),
            "the touch tab names HOME and the installer route");
+    HelpTabActions xbox;
+    xbox.Content.Prompts = PromptSet::Xbox;
+    const auto xboxTab = BuildHelpTab(xbox);
+    Expect(std::any_of(xboxTab.Rows.begin(), xboxTab.Rows.end(),
+                       [](const Row& row) {
+                           return row.Key == "Switch tabs" && row.Text == GlyphFrameText(GlyphFrame::Solid, "LB") + " / " +
+                                                                              GlyphFrameText(GlyphFrame::Solid, "RB");
+                       }) &&
+               std::none_of(xboxTab.Rows.begin(), xboxTab.Rows.end(),
+                            [](const Row& row) { return row.Key == "Fullscreen"; }),
+           "a pad's summary names its buttons and leaves the keyboard keys out");
     android.ExportSavesInInstaller = [] { return WriteResult{}; };
     const auto hooked = BuildHelpTab(android);
     Expect(std::any_of(hooked.Rows.begin(), hooked.Rows.end(),
@@ -646,6 +675,242 @@ void TestHelpTabAndSession() {
            "the status vocabulary");
 }
 
+std::size_t CountTexture(const std::vector<oot3d::ui::UiPrimitive>& output, std::string_view texture) {
+    return static_cast<std::size_t>(std::count_if(output.begin(), output.end(), [&](const auto& primitive) {
+        return primitive.texture.semantic_name == texture;
+    }));
+}
+
+// The glyph atlas and the prompts inside text: measured, wrapped, elided and
+// drawn with the letters.
+void TestGlyphText() {
+    const auto& atlas = MenuGlyphAtlas();
+    Expect(atlas.Width == 512 && atlas.Height == 256 && atlas.Coverage.size() == 512U * 256U, "glyph atlas size");
+    Expect(&MenuGlyphAtlas() == &atlas, "the atlas is built once");
+    // Every icon and frame cell holds a shape, and its border stays clear so
+    // a filtered sample never bleeds into the next cell.
+    const auto cellCoverage = [&](int left, int top, int width) {
+        std::size_t covered = 0, border = 0;
+        for (int y = 0; y < 64; ++y) {
+            for (int x = 0; x < width; ++x) {
+                const auto value = atlas.Coverage[static_cast<std::size_t>(top + y) * 512U + static_cast<std::size_t>(left + x)];
+                covered += value > 127 ? 1U : 0U;
+                if (x == 0 || y == 0 || x == width - 1 || y == 63) border += value;
+            }
+        }
+        return std::pair{covered, border};
+    };
+    for (int icon = 0; icon < static_cast<int>(GlyphIcon::Count); ++icon) {
+        const auto [covered, border] = cellCoverage((icon % 8) * 64, (icon / 8) * 64, 64);
+        Expect(covered > 150 && border == 0, "each icon has a shape inside its cell");
+    }
+    for (int frame = 0; frame < static_cast<int>(GlyphFrame::Count); ++frame) {
+        const auto [covered, border] = cellCoverage(frame * 128, 128, 128);
+        Expect(covered > 400 && border == 0, "each frame has a shape inside its cell");
+    }
+    // A knocked-out symbol: the PlayStation cross shows the background
+    // through the middle of its disc, the disc itself is solid.
+    const auto at = [&](int x, int y) { return atlas.Coverage[static_cast<std::size_t>(y) * 512U + static_cast<std::size_t>(x)]; };
+    Expect(at(32, 32) == 0 && at(32, 12) == 255, "the cross is cut out of its disc");
+
+    // Codepoints.
+    const auto codes = DecodeUtf8(GlyphFrameText(GlyphFrame::Solid, "LB"));
+    Expect(codes.size() == 4 && GlyphFrameOpenFromCodepoint(codes[0]) == GlyphFrame::Solid && codes[1] == 'L' &&
+               IsGlyphFrameClose(codes[3]),
+           "a frame is its opening, its label and its closing");
+    Expect(GlyphIconFromCodepoint(DecodeUtf8(GlyphIconText(GlyphIcon::Tap))[0]) == GlyphIcon::Tap, "an icon codepoint");
+    Expect(!GlyphIconFromCodepoint('A') && !GlyphFrameOpenFromCodepoint(kGlyphFrameBase + 1U), "plain letters");
+
+    // Measured with the text; a pill grows with its label, a disc does not
+    // shrink below its height.
+    const float size = 4.0F;
+    const float a = MeasureText(FontStyle::Body, size, GlyphFrameText(GlyphFrame::Solid, "A"));
+    const float lb = MeasureText(FontStyle::Body, size, GlyphFrameText(GlyphFrame::Solid, "LB"));
+    const float backspace = MeasureText(FontStyle::Body, size, GlyphFrameText(GlyphFrame::Key, "Backspace"));
+    const float icon = MeasureText(FontStyle::Body, size, GlyphIconText(GlyphIcon::PsCross));
+    Expect(a > 0.9F * size && icon > 0.9F * size && lb > a && backspace > 2.0F * lb, "prompt widths");
+    const std::string sentence = GlyphFrameText(GlyphFrame::Key, "Esc") + ": game menu.";
+    Expect(std::abs(MeasureText(FontStyle::Body, size, sentence) -
+                    (MeasureText(FontStyle::Body, size, GlyphFrameText(GlyphFrame::Key, "Esc")) +
+                     MeasureText(FontStyle::Body, size, ": game menu."))) < 0.001F,
+           "a prompt adds its width to the line");
+
+    // Drawn: the frame's three slices from the glyph atlas, then its label
+    // in the heading font, dark on a filled button.
+    std::vector<oot3d::ui::UiPrimitive> output;
+    TextStyle style{FontStyle::Body, size, {0.8F, 0.7F, 0.2F, 1.0F}, TextAlign::Left, false, 5};
+    const float drawn = AppendText(output, style, 10.0F, 50.0F, GlyphFrameText(GlyphFrame::Solid, "LB"));
+    Expect(std::abs(drawn - lb) < 0.001F, "drawn width is the measured width");
+    Expect(CountTexture(output, kGlyphTexture) == 3 && CountTexture(output, kHeadingFontTexture) == 2, "slices and label");
+    Expect(output[0].texture_alpha_only && output[0].color.red == 0.8F && output.back().color.red < 0.2F &&
+               output.back().layer == 5,
+           "the button takes the text colour, its label is dark");
+    for (const auto& primitive : output) {
+        Expect(primitive.uv.x >= 0.0F && primitive.uv.y >= 0.0F && primitive.uv.x + primitive.uv.width <= 1.0F &&
+                   primitive.uv.y + primitive.uv.height <= 1.0F && primitive.destination.x >= 10.0F &&
+                   primitive.destination.x + primitive.destination.width <= 10.0F + lb + 0.001F,
+               "inside the atlas and inside its advance");
+    }
+    // The label is centred on the button.
+    const auto& slice = output[0];
+    const float buttonCentre = (output[0].destination.x + output[2].destination.x + output[2].destination.width) * 0.5F;
+    const float labelLeft = output[3].destination.x;
+    const float labelRight = output.back().destination.x + output.back().destination.width;
+    Expect(std::abs((labelLeft + labelRight) * 0.5F - buttonCentre) < 0.15F * size &&
+               output[3].destination.y > slice.destination.y &&
+               output[3].destination.y + output[3].destination.height < slice.destination.y + slice.destination.height,
+           "the label sits inside the button");
+    output.clear();
+    AppendText(output, style, 10.0F, 50.0F, GlyphIconText(GlyphIcon::DpadHorizontal));
+    Expect(output.size() == 1 && output[0].texture.semantic_name == kGlyphTexture, "an icon is one quad");
+
+    // Wrapping keeps a prompt on its line; eliding never cuts into one.
+    const std::string longLine = sentence + " " + GlyphFrameText(GlyphFrame::Key, "F1") + ": all settings, and more words";
+    for (const auto& line : WrapText(FontStyle::Body, size, longLine, 40.0F)) {
+        Expect(MeasureText(FontStyle::Body, size, line) <= 40.0F + 0.001F, "wrapped prompt lines fit");
+    }
+    const auto elided = ElideText(FontStyle::Body, size, GlyphFrameText(GlyphFrame::Key, "Backspace") + " back", backspace * 0.8F);
+    const auto elidedCodes = DecodeUtf8(elided);
+    Expect(std::none_of(elidedCodes.begin(), elidedCodes.end(),
+                        [](std::uint32_t code) { return GlyphFrameOpenFromCodepoint(code).has_value(); }),
+           "a prompt that does not fit is left out whole");
+
+    MenuFontTextureProvider provider(nullptr);
+    oot3d::ui::UiTexturePixels pixels;
+    std::string error;
+    Expect(MenuFontTextureProvider::IsMenuTexture(kGlyphTexture), "the glyph atlas is a menu texture");
+    Expect(provider.Resolve({0, 0, std::string(kGlyphTexture)}, pixels, &error), error.c_str());
+    Expect(pixels.width == 512 && pixels.height == 256 && pixels.rgba8[0] == 0xFF &&
+               pixels.rgba8[(12U * 512U + 32U) * 4U + 3U] == 255,
+           "the provider serves the atlas as white coverage");
+}
+
+// Each prompt family's footer: the controls a pad, the keyboard or touch has.
+void TestPromptSets() {
+    const auto solid = [](const char* label) { return GlyphFrameText(GlyphFrame::Solid, label); };
+    const auto xbox = HintsFor(PromptSet::Xbox);
+    Expect(xbox.Confirm == solid("A") && xbox.Back == solid("B") && xbox.TabPrevious == solid("LB") &&
+               xbox.TabNext == solid("RB") && xbox.Close == GlyphFrameText(GlyphFrame::Stick, "RS") &&
+               xbox.Change == GlyphIconText(GlyphIcon::DpadHorizontal),
+           "Xbox prompts");
+    const auto playStation = HintsFor(PromptSet::PlayStation);
+    Expect(playStation.Confirm == GlyphIconText(GlyphIcon::PsCross) &&
+               playStation.Back == GlyphIconText(GlyphIcon::PsCircle) && playStation.TabPrevious == solid("L1") &&
+               playStation.Close == GlyphFrameText(GlyphFrame::Stick, "R3"),
+           "PlayStation prompts: cross confirms, circle goes back");
+    const auto nintendo = HintsFor(PromptSet::Nintendo);
+    Expect(nintendo.Confirm == solid("A") && nintendo.TabPrevious == solid("L") && nintendo.TabNext == solid("R"),
+           "Nintendo prompts follow the printed labels");
+    const auto deck = HintsFor(PromptSet::SteamDeck);
+    Expect(deck.Confirm == solid("A") && deck.TabPrevious == solid("L1") && deck.TabNext == solid("R1"),
+           "Steam Deck prompts");
+    const auto generic = HintsFor(PromptSet::Generic);
+    Expect(generic.Confirm == GlyphIconText(GlyphIcon::FaceSouth) && generic.Back == GlyphIconText(GlyphIcon::FaceEast),
+           "generic prompts name the buttons by position");
+    const auto keyboard = HintsFor(PromptSet::Keyboard);
+    Expect(keyboard.Confirm == GlyphFrameText(GlyphFrame::Key, "Enter") &&
+               keyboard.Back == GlyphFrameText(GlyphFrame::Key, "Backspace") &&
+               keyboard.TabPrevious == GlyphFrameText(GlyphFrame::Key, "Q") &&
+               keyboard.Close == GlyphFrameText(GlyphFrame::Key, "Esc"),
+           "keyboard prompts");
+    const auto touch = HintsFor(PromptSet::Touch);
+    Expect(touch.Confirm == GlyphIconText(GlyphIcon::Tap) && touch.Back.empty() && touch.TabPrevious.empty() &&
+               touch.TabNext.empty() && touch.Change.empty() && touch.Close == GlyphIconText(GlyphIcon::Home),
+           "touch: a tap does it, HOME closes");
+    Expect(PromptText(PromptSet::Xbox, PromptAction::Fullscreen).empty() &&
+               !PromptText(PromptSet::Keyboard, PromptAction::Fullscreen).empty() && IsPadPromptSet(PromptSet::Generic) &&
+               !IsPadPromptSet(PromptSet::Touch),
+           "keyboard-only keys are not pad prompts");
+
+    // Every family's footer fits the window, draws its glyphs and keeps the
+    // Resume button.
+    for (int set = 0; set <= static_cast<int>(PromptSet::Touch); ++set) {
+        Store store;
+        Model model(BuildDocument(store));
+        model.Open();
+        std::vector<oot3d::ui::UiPrimitive> output;
+        AppendMenuPresentation(model, 1280.0F / 3.0F, 240.0F, output, {}, HintsFor(static_cast<PromptSet>(set)));
+        Expect(CountTexture(output, kGlyphTexture) >= 2, "the footer draws the family's glyphs");
+        const auto* close = FindRegion(model, HitKind::Close);
+        Expect(close != nullptr, "Resume stays");
+        for (const auto& primitive : output) {
+            if (primitive.texture.semantic_name != kGlyphTexture) continue;
+            Expect(primitive.destination.x >= 0.0F && primitive.destination.x + primitive.destination.width <= 1280.0F / 3.0F,
+                   "glyphs inside the canvas");
+        }
+        // The hints on the left end before the Resume button.
+        float hintsRight = 0.0F;
+        for (const auto& primitive : output) {
+            if (primitive.texture.semantic_name.empty() || primitive.destination.y < close->Area.Y ||
+                primitive.destination.x >= close->Area.X)
+                continue;
+            hintsRight = std::max(hintsRight, primitive.destination.x + primitive.destination.width);
+        }
+        Expect(hintsRight < close->Area.X, "the hints do not run under the Resume button");
+    }
+}
+
+// The device changes while the menu is open: the Help tab is rebuilt for the
+// new family and the focus stays on its row; an open help card follows.
+void TestPromptsMidMenu() {
+    int cards = 0;
+    HelpTabActions actions;
+    actions.Content.Prompts = PromptSet::Keyboard;
+    actions.ShowHelpCard = [&] { ++cards; return WriteResult{"Help card shown", false}; };
+    actions.OpenLogsFolder = [] { return WriteResult{"Opened the logs folder", false}; };
+    Store store;
+    Document document = BuildDocument(store);
+    document.Tabs.push_back(BuildHelpTab(actions));
+    const std::size_t help = document.Tabs.size() - 1;
+    Model model(std::move(document));
+    model.Open();
+    model.SelectTab(help);
+    model.Update(Input{}, 0.016);
+    Tap(model, &Input::Down);
+    Expect(model.FocusedRow()->Key == std::string("Open logs folder"), "focus on the second action");
+    model.SetStatus("Opened the logs folder", false);
+    const auto summary = [&](const char* key) {
+        const auto& rows = model.Doc().Tabs[help].Rows;
+        const auto found = std::find_if(rows.begin(), rows.end(), [&](const Row& row) { return row.Key == key; });
+        return found != rows.end() ? found->Text : std::string{};
+    };
+    Expect(summary("Game menu") == PromptText(PromptSet::Keyboard, PromptAction::Menu), "keyboard first");
+    // Keyboard -> pad -> touch -> keyboard, as InGameMenu rebuilds the tab.
+    for (const auto set : {PromptSet::PlayStation, PromptSet::Touch, PromptSet::Keyboard}) {
+        actions.Content.Prompts = set;
+        model.ReplaceTab(help, BuildHelpTab(actions));
+        Expect(summary("Game menu").find(PromptText(set, PromptAction::Menu)) != std::string::npos,
+               "the summary follows the device");
+        Expect(model.TabIndex() == help && model.FocusedRow()->Key == std::string("Open logs folder") &&
+                   model.Status() == "Opened the logs folder",
+               "the focus and the status line stay");
+        std::vector<oot3d::ui::UiPrimitive> output;
+        AppendMenuPresentation(model, 1280.0F / 3.0F, 240.0F, output, {}, HintsFor(set));
+        Expect(FindRegion(model, HitKind::Close) != nullptr, "the rebuilt tab draws");
+    }
+    Tap(model, &Input::Up);
+    Tap(model, &Input::Confirm);
+    Expect(cards == 1, "the rebuilt rows act");
+    // A focused row the new tab lacks: the first focusable row.
+    HelpTabActions without = actions;
+    without.OpenLogsFolder = nullptr;
+    Tap(model, &Input::Down);
+    model.ReplaceTab(help, BuildHelpTab(without));
+    Expect(model.FocusedRow() != nullptr && model.FocusedRow()->Key == std::string("Show the help card"),
+           "a missing row gives the first one");
+    // Another tab's replacement does not move the focus.
+    model.ReplaceTab(0, model.Doc().Tabs[0]);
+    Expect(model.TabIndex() == help, "replacing another tab keeps the current one");
+    // The open help card's lines follow the device too.
+    HelpContent content;
+    model.SetModal(HelpCard(content, nullptr));
+    Expect(IsHelpCard(*model.CurrentModal()), "the help card is recognised");
+    content.Prompts = PromptSet::Xbox;
+    model.CurrentModal()->Lines = HelpCardLines(content);
+    Expect(model.CurrentModal()->Lines[0] == GlyphFrameText(GlyphFrame::Stick, "RS") + ": game menu.",
+           "the card names the pad's button");
+}
+
 } // namespace
 
 int main() {
@@ -659,6 +924,9 @@ int main() {
         TestHelpCard();
         TestResumeFooter();
         TestHelpTabAndSession();
+        TestGlyphText();
+        TestPromptSets();
+        TestPromptsMidMenu();
     } catch (const std::exception& exception) {
         std::cerr << "oot3d_menu_tests: " << exception.what() << '\n';
         return EXIT_FAILURE;

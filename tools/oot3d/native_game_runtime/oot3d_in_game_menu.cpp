@@ -79,8 +79,30 @@ int PhotoSpeedLevel(float speed) {
 } // namespace
 
 InGameMenu::InGameMenu(InGameMenuOwners owners)
-    : mOwners(std::move(owners)), mBaseline(Fast::Extension::ProductDefaultGraphicsSettings()),
-      mModel((RefreshSnapshots(), BuildDocument())) {}
+    : mOwners(std::move(owners)), mPrompts(CurrentPromptSet()),
+      mBaseline(Fast::Extension::ProductDefaultGraphicsSettings()), mModel((RefreshSnapshots(), BuildDocument())) {}
+
+Menu::PromptSet InGameMenu::CurrentPromptSet() const {
+  if (mOwners.Controls) return mOwners.Controls->ActivePromptSet();
+  return mOwners.Host.Controls == Menu::HelpControls::Touch ? Menu::PromptSet::Touch : Menu::PromptSet::Keyboard;
+}
+
+void InGameMenu::UpdatePrompts() {
+  const auto prompts = CurrentPromptSet();
+  if (prompts == mPrompts) return;
+  mPrompts = prompts;
+  // The Help tab's controls summary and an open help card follow the device.
+  auto &tabs = mModel.Doc().Tabs;
+  for (std::size_t index = 0; index < tabs.size(); ++index) {
+    if (tabs[index].Title != Menu::kHelpTabTitle) continue;
+    Menu::Document rebuilt;
+    BuildHelpTab(rebuilt);
+    if (!rebuilt.Tabs.empty()) mModel.ReplaceTab(index, std::move(rebuilt.Tabs.front()));
+    break;
+  }
+  if (auto &modal = mModel.CurrentModal(); modal.has_value() && Menu::IsHelpCard(*modal))
+    modal->Lines = Menu::HelpCardLines(HelpContent());
+}
 
 void InGameMenu::RefreshSnapshots() {
   auto &graphics = Fast::Extension::GraphicsSettingsRuntime::Instance();
@@ -194,7 +216,7 @@ Menu::Document InGameMenu::BuildDocument() {
 
 Menu::HelpContent InGameMenu::HelpContent() const {
   Menu::HelpContent content;
-  content.Controls = mOwners.Host.Controls;
+  content.Prompts = mPrompts;
   // The resolved folder, shown at runtime only (never stored anywhere).
   if (!mOwners.Host.SaveDataDirectory.empty()) {
     const auto text = std::filesystem::absolute(mOwners.Host.SaveDataDirectory).lexically_normal().u8string();
@@ -204,6 +226,9 @@ Menu::HelpContent InGameMenu::HelpContent() const {
 }
 
 void InGameMenu::ShowHelpCard(bool firstPlay) {
+  // From the Help tab the prompts are current (each update follows them);
+  // rebuilding that tab here would replace the row whose action runs.
+  if (firstPlay) UpdatePrompts();
   if (!firstPlay) {
     mModel.SetModal(Menu::HelpCard(HelpContent(), nullptr));
     return;
@@ -669,6 +694,25 @@ void InGameMenu::BuildControlsTab(Menu::Document &document) {
   tab.Rows.push_back(controlToggle("Capture mouse", "Hides and locks the pointer while the mouse is used in gameplay.",
                                    &NativeControlConfig::CaptureMouseInGameplay));
   {
+    // The same choice as F1 > Controls > Devices > Button prompts (the
+    // controls owner keeps it).
+    Row row;
+    row.Key = "Button prompts";
+    row.Kind = RowKind::Choice;
+    row.Help = "The buttons this menu and its help show. Automatic follows the device you used last: the pad in "
+               "your hands (Xbox, PlayStation, Nintendo, Steam Deck or generic labels), the keyboard, or touch.";
+    for (std::size_t index = 0; index < ThreeDsRecomp::Input::kButtonPromptsCount; ++index)
+      row.Choices.emplace_back(ThreeDsRecomp::Input::ButtonPromptsLabel(static_cast<NativeButtonPrompts>(index)));
+    row.Read = [this] { return static_cast<int>(mControls.ButtonPrompts); };
+    row.Write = [this](int value) {
+      auto config = mControls;
+      config.ButtonPrompts = static_cast<NativeButtonPrompts>(value);
+      return ApplyControls(config);
+    };
+    row.Modified = [this] { return mControls.ButtonPrompts != NativeButtonPrompts::Automatic; };
+    tab.Rows.push_back(std::move(row));
+  }
+  {
     Row row;
     row.Key = "Control preset";
     row.Kind = RowKind::Choice;
@@ -686,6 +730,7 @@ void InGameMenu::BuildControlsTab(Menu::Document &document) {
       config.CalibrationControllerSerial = previous.CalibrationControllerSerial;
       config.GyroscopeBiasDegreesPerSecond = previous.GyroscopeBiasDegreesPerSecond;
       config.AccelerometerNeutral = previous.AccelerometerNeutral;
+      config.ButtonPrompts = previous.ButtonPrompts;
       return ApplyControls(config);
     };
     row.ChoiceAvailable = [](int value) { return value != static_cast<int>(NativeControlProfile::Custom); };
@@ -1006,7 +1051,13 @@ void InGameMenu::BuildGameTab(Menu::Document &document) {
     row.Key = "Game language";
     row.Kind = RowKind::Choice;
     row.Help = "The game's text and voice language. It applies at the next full start of the game.";
-    for (const auto &language : mOwners.Language->Available()) row.Choices.push_back(language.Label);
+    // The menu's fonts have the accented letters the shared ASCII labels
+    // (F1, the language report) leave out.
+    for (const auto &language : mOwners.Language->Available()) {
+      if (language.Label == "Francais") row.Choices.emplace_back("Fran\xC3\xA7" "ais"); // ç
+      else if (language.Label == "Espanol") row.Choices.emplace_back("Espa\xC3\xB1" "ol"); // ñ
+      else row.Choices.push_back(language.Label);
+    }
     row.Read = [this] {
       const auto &available = mOwners.Language->Available();
       for (std::size_t index = 0; index < available.size(); ++index)
@@ -1169,6 +1220,7 @@ void InGameMenu::Update(const InGameMenuHostInput &input, bool hostGuiOwnsInput,
     mConfirmationModal = false;
     return;
   }
+  UpdatePrompts();
   Menu::Input held;
   held.Up = input.Up;
   held.Down = input.Down;
@@ -1208,7 +1260,7 @@ void InGameMenu::Update(const InGameMenuHostInput &input, bool hostGuiOwnsInput,
 
 std::vector<oot3d::ui::UiPrimitive> InGameMenu::BuildPresentation(float canvasWidth, float canvasHeight) {
   std::vector<oot3d::ui::UiPrimitive> primitives;
-  Menu::AppendMenuPresentation(mModel, canvasWidth, canvasHeight, primitives);
+  Menu::AppendMenuPresentation(mModel, canvasWidth, canvasHeight, primitives, {}, Menu::HintsFor(mPrompts));
   return primitives;
 }
 

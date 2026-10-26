@@ -106,15 +106,15 @@ void DrawTabBar(const Model& model, const Frame& frame, const Palette& palette, 
     Quad(output, {frame.Window.x, frame.Window.y + frame.TabBarHeight - 1.0F * kDp, frame.Window.width, 1.0F * kDp},
          WithAlpha(palette.Border, 0.4F), kLayerBorder);
     float x = frame.Window.x + 32.0F * kDp;
-    TextStyle hintStyle{FontStyle::Body, 13.0F * kDp, WithAlpha(palette.Text, 0.5F), TextAlign::Left, false,
+    TextStyle hintStyle{FontStyle::Body, 15.0F * kDp, WithAlpha(palette.Text, 0.6F), TextAlign::Left, false,
                         kLayerText};
-    // Shoulder hints at both ends of the bar.
-    const std::string tabsHint = hints.Tabs;
-    const auto slash = tabsHint.find('/');
-    const std::string leftHint = slash == std::string::npos ? tabsHint : tabsHint.substr(0, slash);
-    const std::string rightHint = slash == std::string::npos ? "" : tabsHint.substr(slash + 1);
-    AppendText(output, hintStyle, x, baseline, leftHint);
-    x += MeasureText(FontStyle::Body, hintStyle.Size, leftHint) + padding;
+    // Shoulder hints at both ends of the bar (none on touch: a tap selects).
+    const std::string& leftHint = hints.TabPrevious;
+    const std::string& rightHint = hints.TabNext;
+    if (!leftHint.empty()) {
+        AppendText(output, hintStyle, x, baseline, leftHint);
+        x += MeasureText(FontStyle::Body, hintStyle.Size, leftHint) + padding;
+    }
     for (std::size_t index = 0; index < tabs.size(); ++index) {
         const bool selected = index == model.TabIndex();
         const bool hovered = !selected && Hovered(model, HitKind::Tab, index);
@@ -308,8 +308,11 @@ void DrawStatusAndHints(const Model& model, const Frame& frame, const Palette& p
     const float hintSize = 14.0F * kDp;
     const float baseline = CenteredBaseline(FontStyle::Body, hintSize, frame.HintsY, 36.0F * kDp);
     float x = frame.Content.x;
+    // Each hint: the control (button prompts, a little larger than the words)
+    // and what it does; a control the device lacks is left out.
     const auto hint = [&](const std::string& button, const char* label) {
-        TextStyle key{FontStyle::Heading, hintSize, palette.Accent, TextAlign::Left, false, kLayerText};
+        if (button.empty()) return;
+        TextStyle key{FontStyle::Heading, 16.0F * kDp, palette.Accent, TextAlign::Left, false, kLayerText};
         x += AppendText(output, key, x, baseline, button) + 6.0F * kDp;
         TextStyle text{FontStyle::Body, hintSize, WithAlpha(palette.Text, 0.7F), TextAlign::Left, false, kLayerText};
         x += AppendText(output, text, x, baseline, label) + 20.0F * kDp;
@@ -319,7 +322,10 @@ void DrawStatusAndHints(const Model& model, const Frame& frame, const Palette& p
     hint(hints.Confirm, modal ? "Choose" : "Select");
     hint(hints.Back, modal ? "Cancel" : choices ? "Back" : "Resume");
     if (!modal) {
-        hint(hints.Tabs, "Tabs");
+        const std::string tabs = hints.TabPrevious.empty() || hints.TabNext.empty()
+                                     ? hints.TabPrevious + hints.TabNext
+                                     : hints.TabPrevious + " " + hints.TabNext;
+        hint(tabs, "Tabs");
         hint(hints.Change, "Change");
     }
     // Resume, a persistent action of the footer on every tab: a button for
@@ -329,7 +335,7 @@ void DrawStatusAndHints(const Model& model, const Frame& frame, const Palette& p
     const float labelWidth = MeasureText(FontStyle::Heading, labelSize, kResumeLabel);
     const float keysWidth = MeasureText(FontStyle::Body, hintSize, hints.Close);
     const float inner = 12.0F * kDp;
-    const float buttonWidth = inner + labelWidth + 8.0F * kDp + keysWidth + inner;
+    const float buttonWidth = inner + labelWidth + (keysWidth > 0.0F ? 8.0F * kDp + keysWidth : 0.0F) + inner;
     const float buttonHeight = 28.0F * kDp;
     const float right = frame.Content.x + frame.Content.width;
     const UiRect button{right - buttonWidth, frame.HintsY + (36.0F * kDp - buttonHeight) * 0.5F, buttonWidth,

@@ -34,11 +34,16 @@ struct Palette {
 // The footer's persistent action that closes the menu and resumes the game.
 inline constexpr const char* kResumeLabel = "Resume";
 
+// The controls the footer names, as text that may carry button prompts
+// (HintsFor in oot3d_menu_prompts.h gives them for the device in use). An
+// empty one is left out (Back and the tabs on touch, where a tap does it).
 struct Hints {
     std::string Confirm = "A";
     std::string Back = "B";
-    std::string Tabs = "LB / RB";
+    std::string TabPrevious = "LB";
+    std::string TabNext = "RB";
     std::string Change = "\xE2\x80\xB9 \xE2\x80\xBA"; // ‹ ›
+    // The keys that close the menu, beside the Resume button's label.
     std::string Close = "Esc / R3";
 };
 

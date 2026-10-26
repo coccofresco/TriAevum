@@ -6,6 +6,7 @@
 // F1, quit) and the resolved paths; nothing here touches a file or a setting.
 
 #include "oot3d_menu_model.h"
+#include "oot3d_menu_prompts.h"
 
 #include <cstdint>
 #include <functional>
@@ -20,22 +21,28 @@ inline constexpr const char* kStatusPreview = "Preview: press Save in F1 to keep
 inline constexpr const char* kStatusSessionOnly = "Session only";
 inline constexpr const char* kStatusSaveFailed = "Could not save: Retry";
 
-// The controls the card and the Help tab describe.
+// The platform's controls, the prompts' starting point where no controls
+// owner reports the device in use.
 enum class HelpControls : std::uint8_t { KeyboardAndController, Touch };
 
 struct HelpContent {
-    HelpControls Controls = HelpControls::KeyboardAndController;
+    // The device in use: the card and the Help tab name its controls, with
+    // its button prompts.
+    PromptSet Prompts = PromptSet::Keyboard;
     // The resolved save-data folder, shown at runtime only; empty: left out.
     std::string SaveDataPath;
 };
 
 // The card's lines, in order: what opens the game menu and all settings,
-// the save-state keys, and where the saves are.
+// the save states, the pause, and where the saves are.
 [[nodiscard]] std::vector<std::string> HelpCardLines(const HelpContent& content);
+
+inline constexpr const char* kHelpCardTitle = "Welcome to TriAevum";
 
 // The first-play help card: a notice with one button. `onDismiss` runs when
 // it is dismissed (OK or Back), for example to remember it was shown.
 [[nodiscard]] Modal HelpCard(const HelpContent& content, std::function<void()> onDismiss);
+[[nodiscard]] inline bool IsHelpCard(const Modal& modal) noexcept { return modal.Title == kHelpCardTitle; }
 
 // The quit question: the game's own progress is not saved by quitting.
 [[nodiscard]] Modal QuitConfirmation(std::function<void()> quit);

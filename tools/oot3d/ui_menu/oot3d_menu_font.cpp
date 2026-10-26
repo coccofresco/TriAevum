@@ -1,5 +1,6 @@
 #include "oot3d_menu_font.h"
 
+#include "oot3d_menu_glyphs.h"
 #include "oot3d_ui/ui_contract_types.h"
 
 #include <stb_image.h>
@@ -54,14 +55,77 @@ void EncodeUtf8(std::uint32_t code, std::string& out) {
     }
 }
 
-float MeasureCodepoints(const MenuFontData::MenuFontAtlasRecord& atlas, float scale,
-                        const std::vector<std::uint32_t>& codes, bool uppercase) noexcept {
+// One unit of laid-out text: a letter of the font, a prompt icon, or a
+// prompt frame with its label (the codepoints [First, End) of the line).
+struct TextUnit {
+    std::size_t First = 0;
+    std::size_t End = 0;
+    std::optional<GlyphIcon> Icon;
+    std::optional<GlyphFrame> Frame;
+};
+
+std::vector<TextUnit> SplitUnits(const std::vector<std::uint32_t>& codes) {
+    std::vector<TextUnit> units;
+    for (std::size_t index = 0; index < codes.size();) {
+        TextUnit unit;
+        unit.First = index;
+        if (const auto frame = GlyphFrameOpenFromCodepoint(codes[index])) {
+            unit.Frame = frame;
+            std::size_t end = index + 1;
+            while (end < codes.size() && !IsGlyphFrameClose(codes[end])) ++end;
+            unit.End = std::min(end + 1, codes.size());
+        } else {
+            unit.Icon = GlyphIconFromCodepoint(codes[index]);
+            unit.End = index + 1;
+        }
+        index = unit.End;
+        units.push_back(unit);
+    }
+    return units;
+}
+
+// A frame's label: the codepoints between its opening and closing ones.
+std::vector<std::uint32_t> FrameLabel(const std::vector<std::uint32_t>& codes, const TextUnit& unit) {
+    std::size_t end = unit.End;
+    if (end > unit.First + 1 && IsGlyphFrameClose(codes[end - 1])) --end;
+    return {codes.begin() + static_cast<std::ptrdiff_t>(unit.First + 1), codes.begin() + static_cast<std::ptrdiff_t>(end)};
+}
+
+float MeasurePlain(const MenuFontData::MenuFontAtlasRecord& atlas, float scale, const std::vector<std::uint32_t>& codes,
+                   bool uppercase) noexcept {
     float width = 0.0F;
     for (auto code : codes) {
         if (uppercase) code = UppercaseCodepoint(code);
         if (const auto* glyph = GlyphOrFallback(atlas, code)) width += glyph->Advance * scale;
     }
     return width;
+}
+
+float FrameLabelWidth(float size, const std::vector<std::uint32_t>& label) noexcept {
+    const auto& atlas = Atlas(FontStyle::Heading);
+    return MeasurePlain(atlas, GlyphFrameLabelSize(size) / atlas.PixelSize, label, false);
+}
+
+float UnitAdvance(FontStyle font, float size, const std::vector<std::uint32_t>& codes, const TextUnit& unit,
+                  bool uppercase) noexcept {
+    if (unit.Icon) return GlyphIconAdvance(size);
+    if (unit.Frame) return GlyphFrameAdvance(*unit.Frame, size, FrameLabelWidth(size, FrameLabel(codes, unit)));
+    const auto& atlas = Atlas(font);
+    const auto code = uppercase ? UppercaseCodepoint(codes[unit.First]) : codes[unit.First];
+    const auto* glyph = GlyphOrFallback(atlas, code);
+    return glyph != nullptr ? glyph->Advance * size / atlas.PixelSize : 0.0F;
+}
+
+float MeasureCodepoints(FontStyle font, float size, const std::vector<std::uint32_t>& codes, bool uppercase) {
+    float width = 0.0F;
+    for (const auto& unit : SplitUnits(codes)) width += UnitAdvance(font, size, codes, unit, uppercase);
+    return width;
+}
+
+std::string EncodeLabel(const std::vector<std::uint32_t>& label) {
+    std::string out;
+    for (const auto code : label) EncodeUtf8(code, out);
+    return out;
 }
 
 } // namespace
@@ -110,8 +174,7 @@ FontMetrics MeasureFont(FontStyle font, float size) noexcept {
 }
 
 float MeasureText(FontStyle font, float size, std::string_view utf8, bool uppercase) {
-    const auto& atlas = Atlas(font);
-    return MeasureCodepoints(atlas, size / atlas.PixelSize, DecodeUtf8(utf8), uppercase);
+    return MeasureCodepoints(font, size, DecodeUtf8(utf8), uppercase);
 }
 
 float AppendText(std::vector<oot3d::ui::UiPrimitive>& output, const TextStyle& style, float x, float baselineY,
@@ -119,35 +182,48 @@ float AppendText(std::vector<oot3d::ui::UiPrimitive>& output, const TextStyle& s
     const auto& atlas = Atlas(style.Font);
     const float scale = style.Size / atlas.PixelSize;
     const auto codes = DecodeUtf8(utf8);
-    const float width = MeasureCodepoints(atlas, scale, codes, style.Uppercase);
+    const auto units = SplitUnits(codes);
+    float width = 0.0F;
+    for (const auto& unit : units) width += UnitAdvance(style.Font, style.Size, codes, unit, style.Uppercase);
     float pen = x;
     if (style.Align == TextAlign::Center) pen -= width * 0.5F;
     if (style.Align == TextAlign::Right) pen -= width;
     const float atlasWidth = static_cast<float>(atlas.Width);
     const float atlasHeight = static_cast<float>(atlas.Height);
-    for (auto code : codes) {
-        if (style.Uppercase) code = UppercaseCodepoint(code);
-        const auto* glyph = GlyphOrFallback(atlas, code);
-        if (glyph == nullptr) continue;
-        if (glyph->Width != 0U && glyph->Height != 0U) {
-            oot3d::ui::UiPrimitive primitive;
-            primitive.subsystem = oot3d::ui::UiSubsystem::GameplayHud;
-            primitive.role = oot3d::ui::UiPrimitiveRole::PauseText;
-            primitive.texture.semantic_name =
-                std::string(style.Font == FontStyle::Heading ? kHeadingFontTexture : kBodyFontTexture);
-            primitive.destination = {pen + static_cast<float>(glyph->Left) * scale,
-                                     baselineY + static_cast<float>(glyph->Top) * scale,
-                                     static_cast<float>(glyph->Width) * scale,
-                                     static_cast<float>(glyph->Height) * scale};
-            primitive.uv = {static_cast<float>(glyph->X) / atlasWidth, static_cast<float>(glyph->Y) / atlasHeight,
-                            static_cast<float>(glyph->Width) / atlasWidth,
-                            static_cast<float>(glyph->Height) / atlasHeight};
-            primitive.color = style.Color;
-            primitive.layer = style.Layer;
-            primitive.texture_alpha_only = true;
-            output.push_back(std::move(primitive));
+    for (const auto& unit : units) {
+        const float advance = UnitAdvance(style.Font, style.Size, codes, unit, style.Uppercase);
+        if (unit.Icon) {
+            AppendGlyphIcon(output, *unit.Icon, pen, baselineY, style.Size, style.Color, style.Layer);
+        } else if (unit.Frame) {
+            AppendGlyphFrame(output, *unit.Frame, pen, baselineY, style.Size, advance, style.Color, style.Layer);
+            const TextStyle label{FontStyle::Heading, GlyphFrameLabelSize(style.Size),
+                                  GlyphFrameLabelColor(*unit.Frame, style.Color), TextAlign::Center, false, style.Layer};
+            AppendText(output, label, pen + advance * 0.5F, GlyphFrameLabelBaseline(baselineY, style.Size),
+                       EncodeLabel(FrameLabel(codes, unit)));
+        } else {
+            auto code = codes[unit.First];
+            if (style.Uppercase) code = UppercaseCodepoint(code);
+            const auto* glyph = GlyphOrFallback(atlas, code);
+            if (glyph != nullptr && glyph->Width != 0U && glyph->Height != 0U) {
+                oot3d::ui::UiPrimitive primitive;
+                primitive.subsystem = oot3d::ui::UiSubsystem::GameplayHud;
+                primitive.role = oot3d::ui::UiPrimitiveRole::PauseText;
+                primitive.texture.semantic_name =
+                    std::string(style.Font == FontStyle::Heading ? kHeadingFontTexture : kBodyFontTexture);
+                primitive.destination = {pen + static_cast<float>(glyph->Left) * scale,
+                                         baselineY + static_cast<float>(glyph->Top) * scale,
+                                         static_cast<float>(glyph->Width) * scale,
+                                         static_cast<float>(glyph->Height) * scale};
+                primitive.uv = {static_cast<float>(glyph->X) / atlasWidth, static_cast<float>(glyph->Y) / atlasHeight,
+                                static_cast<float>(glyph->Width) / atlasWidth,
+                                static_cast<float>(glyph->Height) / atlasHeight};
+                primitive.color = style.Color;
+                primitive.layer = style.Layer;
+                primitive.texture_alpha_only = true;
+                output.push_back(std::move(primitive));
+            }
         }
-        pen += glyph->Advance * scale;
+        pen += advance;
     }
     return width;
 }
@@ -186,20 +262,18 @@ std::string ElideText(FontStyle font, float size, std::string_view utf8, float m
     const float ellipsisWidth = MeasureText(font, size, ellipsis, uppercase);
     std::string out;
     float width = 0.0F;
-    const auto& atlas = Atlas(font);
-    const float scale = size / atlas.PixelSize;
-    for (auto code : codes) {
-        const auto* glyph = GlyphOrFallback(atlas, uppercase ? UppercaseCodepoint(code) : code);
-        const float advance = glyph != nullptr ? glyph->Advance * scale : 0.0F;
+    // A prompt is kept whole or left out, never cut inside its label.
+    for (const auto& unit : SplitUnits(codes)) {
+        const float advance = UnitAdvance(font, size, codes, unit, uppercase);
         if (width + advance + ellipsisWidth > maxWidth) break;
-        EncodeUtf8(code, out);
+        for (std::size_t index = unit.First; index < unit.End; ++index) EncodeUtf8(codes[index], out);
         width += advance;
     }
     return out + ellipsis;
 }
 
 bool MenuFontTextureProvider::IsMenuTexture(std::string_view semanticName) noexcept {
-    return semanticName == kBodyFontTexture || semanticName == kHeadingFontTexture;
+    return semanticName == kBodyFontTexture || semanticName == kHeadingFontTexture || semanticName == kGlyphTexture;
 }
 
 bool MenuFontTextureProvider::Resolve(const oot3d::ui::UiTextureIdentity& identity,
@@ -211,8 +285,29 @@ bool MenuFontTextureProvider::Resolve(const oot3d::ui::UiTextureIdentity& identi
         }
         return mNext->Resolve(identity, pixels, error);
     }
-    const bool heading = identity.semantic_name == kHeadingFontTexture;
+    const auto whiteWithCoverage = [](const std::uint8_t* coverage, int width, int height) {
+        oot3d::ui::UiTexturePixels built;
+        built.width = static_cast<std::uint16_t>(width);
+        built.height = static_cast<std::uint16_t>(height);
+        built.rgba8.resize(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4U);
+        for (std::size_t texel = 0; texel < built.rgba8.size() / 4U; ++texel) {
+            built.rgba8[texel * 4U] = 0xFFU;
+            built.rgba8[texel * 4U + 1U] = 0xFFU;
+            built.rgba8[texel * 4U + 2U] = 0xFFU;
+            built.rgba8[texel * 4U + 3U] = coverage[texel];
+        }
+        return built;
+    };
     std::scoped_lock lock(mMutex);
+    if (identity.semantic_name == kGlyphTexture) {
+        if (mGlyphs.rgba8.empty()) {
+            const auto& atlas = MenuGlyphAtlas();
+            mGlyphs = whiteWithCoverage(atlas.Coverage.data(), atlas.Width, atlas.Height);
+        }
+        pixels = mGlyphs;
+        return true;
+    }
+    const bool heading = identity.semantic_name == kHeadingFontTexture;
     auto& cached = heading ? mHeading : mBody;
     if (cached.rgba8.empty()) {
         const auto& atlas = heading ? MenuFontData::kHeadingAtlas : MenuFontData::kBodyAtlas;
@@ -224,18 +319,8 @@ bool MenuFontTextureProvider::Resolve(const oot3d::ui::UiTextureIdentity& identi
             if (error != nullptr) *error = "cannot decode the menu font atlas " + identity.semantic_name;
             return false;
         }
-        oot3d::ui::UiTexturePixels built;
-        built.width = static_cast<std::uint16_t>(width);
-        built.height = static_cast<std::uint16_t>(height);
-        built.rgba8.resize(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4U);
-        for (std::size_t texel = 0; texel < built.rgba8.size() / 4U; ++texel) {
-            built.rgba8[texel * 4U] = 0xFFU;
-            built.rgba8[texel * 4U + 1U] = 0xFFU;
-            built.rgba8[texel * 4U + 2U] = 0xFFU;
-            built.rgba8[texel * 4U + 3U] = decoded[texel];
-        }
+        cached = whiteWithCoverage(decoded, width, height);
         stbi_image_free(decoded);
-        cached = std::move(built);
     }
     pixels = cached;
     return true;
