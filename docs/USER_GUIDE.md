@@ -61,14 +61,23 @@ Everything is inside the folder you extracted (here called
 | What | Where |
 |---|---|
 | Saves | `<your TriAevum folder>\data\savedata\` |
-| Save states | `<your TriAevum folder>\savestates\` |
+| Save states | `<your TriAevum folder>\data\savestates\` |
 | Settings | `<your TriAevum folder>\data\config\` |
-| Game logs | `<your TriAevum folder>\logs\` |
+| Game logs | `<your TriAevum folder>\data\logs\` |
 | Forge logs | `<your TriAevum folder>\data\logs\` |
+| Your texture pack | `<your TriAevum folder>\data\textures\load\<title id>\` |
 
-One exception: a texture pack you add yourself goes, by default, into
-`%APPDATA%\Azahar\load\textures\0004000000033600\`, the folder the Azahar
-emulator uses. TriAevum only reads it.
+The title id is `0004000000033600` for a European cartridge and
+`0004000000033500` for a North American one. A texture pack you already
+keep in the Azahar emulator's folder
+(`%APPDATA%\Azahar\load\textures\<title id>\`) keeps working from there;
+TriAevum only reads it.
+
+Versions before this one kept save states in `<your TriAevum folder>\savestates\`
+and game logs in `<your TriAevum folder>\logs\`. After an Update, the game
+copies your save states to `data\savestates\` on its first start, checks
+every copy and leaves the old folder as it was, with a `README-moved.txt`;
+delete it yourself once you have checked your save states.
 
 **Data & backups** in Forge shows every folder, with its size and an
 **Open folder** button.
@@ -117,8 +126,20 @@ again, start the AppImage with `--forge`. On systems without FUSE, add
 `--appimage-extract-and-run`.
 
 **Steam Deck:** prepare the game in Desktop Mode first. Then add the same
-AppImage to Steam as a non-Steam game. Use Steam Input's Gamepad layout, and
-do not force Proton: this is a native Linux program.
+AppImage to Steam as a non-Steam game, and do not force Proton: this is a
+native Linux program. In the shortcut's controller settings choose the Steam
+Input template **Gamepad with Mouse Trackpad**: the sticks and buttons stay a
+gamepad for the game, and the right trackpad moves the pointer and clicks, so
+you can also use Forge in Gaming Mode. Forge also works with the keyboard
+alone: Tab and Shift+Tab move between controls, Enter activates the
+highlighted one, Esc closes a dialog. Forge repeats this under **Diagnostics >
+Steam Deck and controllers**.
+
+**No network?** If the HD textures or a mod cannot be downloaded, download the
+archive from the mod page on another device, copy it anywhere on this machine
+and pick it on **Enhancements** with **Select .zip...** or **Select .rar...**.
+Forge checks it and keeps a copy in its downloads folder (see the table
+below); the Enhancements page shows that folder with **Open folder**.
 
 ### Where your files are
 
@@ -130,11 +151,15 @@ Your files live outside the AppImage, in `~/.local/share/TriAevum/` (or
 | Saves | `~/.local/share/TriAevum/data/savedata/` |
 | Save states | `~/.local/share/TriAevum/data/savestates/` |
 | Settings | `~/.local/share/TriAevum/data/config/` |
-| Game logs | `~/.local/share/TriAevum/logs/` |
+| Game logs | `~/.local/share/TriAevum/data/logs/` |
 | Forge logs | `~/.local/share/TriAevum/data/logs/` |
+| Downloaded archives | `~/.local/share/TriAevum/data/downloads/` |
 
 A texture pack you add yourself goes, by default, into
-`~/.local/share/azahar/load/textures/0004000000033600/`.
+`~/.local/share/TriAevum/data/textures/load/<title id>/` (`0004000000033600`
+for a European cartridge, `0004000000033500` for a North American one). A
+pack you already keep in `~/.local/share/azahar/load/textures/<title id>/`
+keeps working from there.
 
 ### Update
 
@@ -168,10 +193,12 @@ Later starts open the game directly. To open Forge again:
 The Flatpak keeps its files in its own sandbox folder,
 `~/.var/app/io.github.coccofresco.TriAevum/data/TriAevum/`. Inside it, the
 layout is the same as the AppImage's (`data/savedata/`,
-`data/savestates/`, `data/config/`, `logs/`, `data/logs/`).
+`data/savestates/`, `data/config/`, `data/logs/`, `data/textures/`).
 
 A texture pack you add yourself goes, by default, into
-`~/.var/app/io.github.coccofresco.TriAevum/data/azahar/load/textures/0004000000033600/`.
+`data/textures/load/<title id>/` there. A pack you already keep in
+`~/.var/app/io.github.coccofresco.TriAevum/data/azahar/load/textures/<title id>/`
+keeps working from there.
 
 The AppImage and the Flatpak do not share files. Moving from one to the
 other: back up in one, restore in the other.

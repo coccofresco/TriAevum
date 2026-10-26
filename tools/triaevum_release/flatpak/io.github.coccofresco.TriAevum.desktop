@@ -6,8 +6,12 @@ Exec=triaevum
 Icon=applications-games
 Terminal=false
 Categories=Game;
-Actions=Forge;
+Actions=Play;Forge;
+
+[Desktop Action Play]
+Name=Play
+Exec=triaevum
 
 [Desktop Action Forge]
-Name=Open Forge
+Name=Prepare or repair game
 Exec=triaevum --forge

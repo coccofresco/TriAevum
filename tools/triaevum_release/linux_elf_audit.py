@@ -92,7 +92,22 @@ def _search_paths(relative: str, elf: Elf) -> list[str]:
     preload = ["lib/compat-cxx", "lib"]
     return [*preload, *paths] if elf.runpath or not elf.rpath else [*paths, *preload]
 
-def dependency_errors(objects: dict[str, Elf], *, max_glibc=(2, 40)) -> list[str]:
+MAX_GLIBC = (2, 40)
+
+def glibc_errors(relative: str, elf: Elf, *, max_glibc=MAX_GLIBC) -> list[str]:
+    """glibc symbol versions above the AppImage ceiling (or not numeric)."""
+    errors = []
+    for versions in elf.requirements.values():
+        for version in sorted(versions):
+            if version.startswith("GLIBC_"):
+                suffix = version.removeprefix("GLIBC_")
+                if not re.fullmatch(r"\d+(\.\d+)+", suffix):
+                    errors.append(f"{relative}: unsupported glibc ABI {version}")
+                elif tuple(map(int, suffix.split("."))) > max_glibc:
+                    errors.append(f"{relative}: requires {version}, AppImage ceiling is GLIBC_{'.'.join(map(str, max_glibc))}")
+    return errors
+
+def dependency_errors(objects: dict[str, Elf], *, max_glibc=MAX_GLIBC) -> list[str]:
     errors = []
     for relative, elf in sorted(objects.items()):
         try:
@@ -112,14 +127,7 @@ def dependency_errors(objects: dict[str, Elf], *, max_glibc=(2, 40)) -> list[str
                 missing = elf.requirements.get(name, set()) - provider.definitions
                 if missing:
                     errors.append(f"{relative}: bundled {name} lacks {', '.join(sorted(missing))}")
-        for versions in elf.requirements.values():
-            for version in versions:
-                if version.startswith("GLIBC_"):
-                    suffix = version.removeprefix("GLIBC_")
-                    if not re.fullmatch(r"\d+(\.\d+)+", suffix):
-                        errors.append(f"{relative}: unsupported glibc ABI {version}")
-                    elif tuple(map(int, suffix.split("."))) > max_glibc:
-                        errors.append(f"{relative}: requires {version}, AppImage ceiling is GLIBC_{'.'.join(map(str, max_glibc))}")
+        errors += glibc_errors(relative, elf, max_glibc=max_glibc)
     return errors
 
 def audit_native_elfs(package: Path, *, frozen_forge: bool) -> None:

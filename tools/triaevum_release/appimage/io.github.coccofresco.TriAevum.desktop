@@ -6,7 +6,11 @@ Exec=AppRun
 Icon=io.github.coccofresco.TriAevum
 Terminal=false
 Categories=Game;
-Actions=Forge;
+Actions=Play;Forge;
+
+[Desktop Action Play]
+Name=Play
+Exec=AppRun
 
 [Desktop Action Forge]
 Name=Prepare or repair game

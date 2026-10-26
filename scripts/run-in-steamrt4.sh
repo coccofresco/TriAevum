@@ -33,11 +33,22 @@ if [[ -n "${TRIAEVUM_TRANSLATED_TITLE_DIR:-}" ]]; then
   test -f "$title/TITLE_SOURCE_MANIFEST.json"
   bindings+=(--ro-bind "$title" /home/title-source)
 fi
+# The pinned Rust toolchain (its sysroot, `rustc +<channel> --print sysroot`)
+# for the Rust Forge: linked against the SDK's glibc instead of the host's.
+path=/usr/bin:/bin:/usr/sbin:/sbin
+environment=()
+if [[ -n "${TRIAEVUM_RUST_TOOLCHAIN:-}" ]]; then
+  rust="$(realpath "$TRIAEVUM_RUST_TOOLCHAIN")"
+  test -x "$rust/bin/cargo"
+  bindings+=(--ro-bind "$rust" /home/rust)
+  path="/home/rust/bin:$path"
+  environment+=(--setenv CARGO_HOME /home/work/cargo --setenv CARGO_BUILD_JOBS 3)
+fi
 exec bwrap --die-with-parent --unshare-user --uid 0 --gid 0 \
   --tmpfs / --tmpfs /home "${bindings[@]}" \
   --ro-bind "$root" /home/src --bind "$work" /home/work \
   --proc /proc --dev /dev --tmpfs /tmp \
   --ro-bind /etc/resolv.conf /etc/resolv.conf \
   --clearenv --setenv HOME /home/work/home \
-  --setenv PATH /usr/bin:/bin:/usr/sbin:/sbin --setenv LANG C.UTF-8 \
+  --setenv PATH "$path" --setenv LANG C.UTF-8 "${environment[@]}" \
   --setenv CMAKE_BUILD_PARALLEL_LEVEL 3 --chdir /home/work "$@"

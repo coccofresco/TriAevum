@@ -25,11 +25,13 @@ from pathlib import Path
 try:
     from .audit_release import DEFAULT_POLICY, RUST_FORGE_RECEIPT_FORMAT, build_machine_path
     from .common import atomic_write_json, load_json_object, sha256_file
+    from .linux_elf_audit import glibc_errors, inspect_elf
     from .release_platform import ANDROID, LINUX, WINDOWS, for_target, host_platform
     from . import rust_forge_notices
 except ImportError:
     from audit_release import DEFAULT_POLICY, RUST_FORGE_RECEIPT_FORMAT, build_machine_path
     from common import atomic_write_json, load_json_object, sha256_file
+    from linux_elf_audit import glibc_errors, inspect_elf
     from release_platform import ANDROID, LINUX, WINDOWS, for_target, host_platform
     import rust_forge_notices
 
@@ -58,16 +60,21 @@ def _home(variable: str, default: str) -> Path:
     return Path(os.environ.get(variable) or Path.home() / default).resolve()
 
 
-def rustflags(target: str) -> list[str]:
+def rustflags(target: str, target_dir: Path | None = None) -> list[str]:
     """Flags of a public build (CARGO_ENCODED_RUSTFLAGS, which replaces the
     workspace config's target flags, so those come first): no build-machine
     paths in panic locations or debug records, and on Windows a static CRT
     (TriAevumForge.exe sits in the package root, away from the runtime's Visual
-    C++ DLLs). Android's libtriaevum_forge.so takes the same remapping."""
+    C++ DLLs). Android's libtriaevum_forge.so takes the same remapping.
+    `target_dir` (the Cargo target folder) is remapped too: build scripts
+    generate sources there that the binary names in panic locations (Linux
+    glutin's EGL/GLX bindings)."""
     config = tomllib.loads((FORGE_ROOT / ".cargo/config.toml").read_text(encoding="utf-8"))
     flags = [str(flag) for flag in config.get("target", {}).get(target, {}).get("rustflags", [])]
     remaps = [(_home("RUSTUP_HOME", ".rustup"), "/rustup"), (_home("CARGO_HOME", ".cargo"), "/cargo"),
               (REPO_ROOT, "/triaevum")]
+    if target_dir is not None:
+        remaps.append((target_dir.resolve(), "/target"))
     flags += [f"--remap-path-prefix={source}={replacement}" for source, replacement in remaps]
     if target == WINDOWS.target:
         flags += ["-C", "target-feature=+crt-static", "-C", "link-arg=/PDBALTPATH:%_PDB%"]
@@ -101,7 +108,7 @@ def build(output: Path, *, target: str, source_commit: str, cargo: str = "cargo"
         raise ValueError(f"Rust Forge output must be a new or empty folder: {output}")
     target_dir = (target_dir or FORGE_ROOT / "target").resolve()
     environment = {**os.environ, "CARGO_TARGET_DIR": str(target_dir),
-                   "CARGO_ENCODED_RUSTFLAGS": "\x1f".join(rustflags(target))}
+                   "CARGO_ENCODED_RUSTFLAGS": "\x1f".join(rustflags(target, target_dir))}
     environment.pop("RUSTFLAGS", None)
     command = [cargo, "build", "--release", "--locked", "--target", target,
                *[argument for package in TARGET_PACKAGES[target] for argument in ("-p", package)]]
@@ -119,6 +126,12 @@ def build(output: Path, *, target: str, source_commit: str, cargo: str = "cargo"
         leaked = build_machine_path(destination, policy)
         if leaked is not None:
             raise ValueError(f"{name} embeds a build-machine path ({leaked[:80]})")
+        if target == LINUX.target:
+            # A rolling host links its newer glibc symbols (atan2f@GLIBC_2.43):
+            # build in the Steam Runtime 4 SDK (docs/TRIAEVUM_LINUX_FORGE.md).
+            errors = glibc_errors(name, inspect_elf(destination))
+            if errors:
+                raise ValueError("; ".join(errors) + " (build the Linux Forge in the Steam Runtime 4 SDK)")
         binaries.append({"path": relative, "role": role, "bytes": destination.stat().st_size,
                          "sha256": sha256_file(destination)})
     if host_platform() == platform:
@@ -157,7 +170,7 @@ def main() -> int:
                         help="print CARGO_ENCODED_RUSTFLAGS for the target (Android's forge-android build) and exit")
     args = parser.parse_args()
     if args.print_rustflags:
-        sys.stdout.write("\x1f".join(rustflags(args.target)))
+        sys.stdout.write("\x1f".join(rustflags(args.target, args.target_dir)))
         return 0
     if args.target == ANDROID.target or args.source_commit is None or args.output is None:
         parser.error("a desktop build needs a desktop --target, --source-commit and --output")

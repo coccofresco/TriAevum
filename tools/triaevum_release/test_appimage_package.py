@@ -84,3 +84,17 @@ class AppImageTests(unittest.TestCase):
                     stage_appimage(root / "package", root / "AppDir")
             self.assertFalse((root / "AppDir").exists())
             self.assertTrue(audit_release(root / "package").ok)
+
+    def test_desktop_actions_match_the_forge_launcher(self):
+        # Play and "Prepare or repair game" (UX plan WP-11) reach
+        # `TriAevumForge --play [--forge]`, the only options --play accepts.
+        apprun = (ASSETS / "AppRun").read_text()
+        self.assertIn('exec "$package/TriAevumForge" --play "$@"\n', apprun)
+        flatpak = ASSETS.parent / "flatpak"
+        self.assertIn('exec /app/lib/triaevum/TriAevumForge --play "$@"\n', (flatpak / "triaevum").read_text())
+        for desktop, command in ((ASSETS, "AppRun"), (flatpak, "triaevum")):
+            entry = (desktop / "io.github.coccofresco.TriAevum.desktop").read_text(encoding="utf-8")
+            with self.subTest(command=command):
+                self.assertIn("Actions=Play;Forge;\n", entry)
+                self.assertIn(f"[Desktop Action Play]\nName=Play\nExec={command}\n", entry)
+                self.assertIn(f"[Desktop Action Forge]\nName=Prepare or repair game\nExec={command} --forge\n", entry)

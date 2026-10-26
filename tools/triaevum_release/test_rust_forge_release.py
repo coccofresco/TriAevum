@@ -276,5 +276,17 @@ class RustForgeProfileTests(unittest.TestCase):
             self.assertTrue(audit_release(appdir / "usr/lib/triaevum").ok)
 
 
+class RustForgeBuildFlagsTests(unittest.TestCase):
+    def test_the_cargo_target_folder_is_remapped(self):
+        # Linux glutin includes bindings generated in the target folder; an
+        # unmapped folder outside the checkout leaks the builder's home.
+        import rust_forge_build
+        with tempfile.TemporaryDirectory() as directory:
+            target_dir = Path(directory) / "target"
+            flags = rust_forge_build.rustflags(LINUX.target, target_dir)
+            self.assertIn(f"--remap-path-prefix={target_dir.resolve()}=/target", flags)
+            self.assertFalse(any(flag.endswith("=/target") for flag in rust_forge_build.rustflags(LINUX.target)))
+
+
 if __name__ == "__main__":
     unittest.main()

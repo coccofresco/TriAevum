@@ -12,11 +12,42 @@ the next-package target, not a claim of Steam Deck Verified certification.
    and downloads the TopScreen texture package as already disclosed by Forge.
    No compiler, SDK, second installer or Flatpak runtime is needed.
 3. Add **that AppImage** as a non-Steam game. Launch it from Gaming Mode with
-   Steam Input enabled, using a Gamepad layout. Do not force Proton for this
-   native Linux executable. Once prepared, launching opens the game directly.
+   Steam Input enabled, using the **Gamepad with Mouse Trackpad** template
+   (below). Do not force Proton for this native Linux executable. Once
+   prepared, launching opens the game directly.
 4. `--forge` explicitly returns to preparation/repair. For F1 configuration,
    a Steam Input back button can send F1 and a trackpad can send mouse/click.
    Keep the ordinary gamepad controls mapped as a gamepad, not WASD.
+
+The desktop entry offers **Play** (the default, `AppRun`) and **Prepare or
+repair game** (`AppRun --forge`); AppRun runs `TriAevumForge --play "$@"`, and
+`--play` accepts only `--forge`. The Flatpak entry uses the same two actions
+through its `triaevum` wrapper.
+
+### Controller-only use (Steam Input)
+
+Forge is operable with the keyboard alone (Tab and Shift+Tab move the focus,
+Enter activates the focused control, Esc closes a dialog) and with Steam
+Input's **Gamepad with Mouse Trackpad** template: sticks and buttons stay a
+gamepad for the game, while the right trackpad moves the pointer and its click
+selects in Forge. Linux builds of Forge show the same note under **Diagnostics >
+Steam Deck and controllers**. First run via Desktop Mode remains the
+documented path, including the desktop file portal picker for the ROM. In
+Gaming Mode, Forge appears by itself when the game is not prepared or a new
+package is present; otherwise add `--forge` to the shortcut's launch options
+for one start.
+
+### Recovery without a network
+
+A mounted AppImage is read-only, so Forge never asks to place an archive
+beside the AppImage. When a download fails, download the archive from the mod
+page on any device, copy it anywhere on this machine and pick it on
+**Enhancements** with **Select .zip...** (HD textures) or **Select .rar...**
+(mod). Forge verifies it and keeps a copy in the downloads folder,
+`$XDG_DATA_HOME/TriAevum/data/downloads` (normally
+`~/.local/share/TriAevum/data/downloads`), which the Enhancements page shows
+with an **Open folder** button. Preparation without the archive continues with
+the native assets.
 
 The existing SDL controller owner handles sticks, buttons, triggers and hotplug.
 AppRun must preserve Steam's controller mappings, preload/overlay environment,

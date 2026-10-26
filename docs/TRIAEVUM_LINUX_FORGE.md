@@ -10,6 +10,30 @@ ELF gate then audits both Forge binaries (Rust's std needs `libgcc_s.so.1`
 from `lib/compat-cxx`). `stage_linux_forge_candidate.py --forge-bundle` accepts
 that output folder. The sections below document the PyInstaller Forge.
 
+Build it inside the [Steam Runtime 4 SDK](TRIAEVUM_STEAM_RUNTIME_BUILD.md), not
+on a rolling distribution: a host with glibc 2.43 or newer links
+`atan2f`/`acosf@GLIBC_2.43` into `TriAevumForge`, above the AppImage ceiling
+of GLIBC 2.40, and `rust_forge_build.py` now refuses such a Linux binary. The
+SDK helper binds the pinned toolchain's sysroot read-only:
+
+```sh
+TRIAEVUM_RUST_TOOLCHAIN="$(rustc +1.92.0 --print sysroot)" \
+  bash scripts/run-in-steamrt4.sh "$SDK" "$WORK" \
+  python3 /home/src/tools/triaevum_release/rust_forge_build.py \
+  --target x86_64-unknown-linux-gnu --source-commit <commit> \
+  --output /home/work/rust-forge --target-dir /home/work/rust-target \
+  --cargo /home/rust/bin/cargo
+```
+
+Built this way (Debian trixie glibc 2.41, GCC 14) both binaries need at most
+`GLIBC_2.39`: `pidfd_spawnp`/`pidfd_getpid` from Rust's std. Those symbols are
+weak, but the version requirement itself is not marked weak, so the loader
+still needs glibc 2.39 or newer (not Ubuntu 22.04 or Debian 12; check the
+glibc of the oldest SteamOS release to support). Their only other libraries are `libc`, `libm`,
+`ld-linux` and `libgcc_s.so.1`; GUI libraries (X11, Wayland, EGL/GL,
+xkbcommon) are loaded at run time from the host. The Cargo target folder is
+remapped like the checkout, because glutin compiles bindings generated there.
+
 Latest development alignment and external Tk packaging repair:
 [September 10-11 qualification](TRIAEVUM_LINUX_PARITY_20260911.md).
 The host Forge is rebuilt and GUI-tested; the installed Flatpak is not yet
