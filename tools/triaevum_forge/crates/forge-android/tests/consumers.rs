@@ -69,8 +69,10 @@ fn diagnostics_write_the_bundle_the_installer_shares() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
     let external = root.join("external");
-    std::fs::create_dir_all(external.join("logs")).unwrap();
-    std::fs::write(external.join("logs").join("native-stderr.log"), b"TRIAEVUM_FATAL no device\n").unwrap();
+    // The game writes its logs to the data folder (D/logs) since WP-05C.
+    let logs = external.join("data").join("logs");
+    std::fs::create_dir_all(&logs).unwrap();
+    std::fs::write(logs.join("native-stderr.log"), b"TRIAEVUM_FATAL no device\n").unwrap();
     let bundle = root.join("cache").join("share").join("TriAevum-diagnostics.zip");
     let request = serde_json::json!({
         "format": "triaevum_forge_diagnostics_v1",
