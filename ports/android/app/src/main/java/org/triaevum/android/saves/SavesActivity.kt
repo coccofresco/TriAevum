@@ -23,11 +23,13 @@ import org.json.JSONObject
 import org.triaevum.android.R
 
 /**
- * Save export and import through the system document picker ([SaveArchive]); no storage
- * permission. It runs in the installer's process, so it can tell whether the game process is
- * running: an import then waits, because the game would write over the imported files.
- * Nothing changes until the user confirms what an import replaces, and replaced files go to a
- * backup folder first.
+ * Backups and save transfer through the system document picker; no storage permission.
+ * "Back up your files" writes Forge's full backup ([ForgeBackups]: saves, save states, settings
+ * and the touch controls). "Restore" reads either such a backup (Forge verifies it, previews what
+ * changes and restores with a journal and a snapshot) or a plain save archive ([SaveArchive]).
+ * It runs in the installer's process, so it can tell whether the game process is running: a
+ * restore or import then waits, because the game would write over the files. Nothing changes
+ * until the user confirms what is replaced, and replaced files are kept first.
  */
 class SavesActivity : Activity() {
     private lateinit var summary: TextView
@@ -39,6 +41,8 @@ class SavesActivity : Activity() {
     private var includeStates = false
     /** A validated import awaiting confirmation. */
     private var pending: ImportPlan? = null
+    /** A Forge backup copied from the picker, awaiting confirmation. */
+    private var pendingBackup: File? = null
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
@@ -51,6 +55,11 @@ class SavesActivity : Activity() {
         }
         background(null) {
             SaveArchive.cleanStaleStaging(layout)
+            if (ForgeBackups.pendingRestore(this)) {
+                ui { status.text = getString(R.string.saves_recovering) }
+                ForgeBackups.run(ForgeBackups.request(this, "restore_recover"))
+                ui { status.text = getString(R.string.saves_recovered) }
+            }
             val saves = SaveArchive.collect(layout, includeStates = true)
             ui { summary.text = getString(R.string.saves_summary, saves.saveFiles, saves.saveStates) }
         }
@@ -61,6 +70,8 @@ class SavesActivity : Activity() {
         worker?.join(5_000)
         pending?.let { SaveArchive.discard(it) }
         pending = null
+        pendingBackup?.delete()
+        pendingBackup = null
         super.onDestroy()
     }
 
@@ -90,6 +101,16 @@ class SavesActivity : Activity() {
         startActivityForResult(create, EXPORT)
     }
 
+    private fun pickBackupDestination() {
+        val stamp = SimpleDateFormat("yyyyMMdd-HHmm", Locale.ROOT).format(Date())
+        val create = Intent(Intent.ACTION_CREATE_DOCUMENT)
+            .addCategory(Intent.CATEGORY_OPENABLE)
+            .setType("application/zip")
+            .putExtra(Intent.EXTRA_TITLE, "TriAevum-backup-$stamp.zip")
+        @Suppress("DEPRECATION")
+        startActivityForResult(create, BACKUP)
+    }
+
     private fun pickImport() {
         if (gameRunning()) {
             status.text = getString(R.string.saves_game_running)
@@ -111,6 +132,7 @@ class SavesActivity : Activity() {
         when (requestCode) {
             EXPORT -> writeExport(uri, layout)
             IMPORT -> stageImport(uri, layout)
+            BACKUP -> writeBackup(uri)
         }
     }
 
@@ -119,13 +141,7 @@ class SavesActivity : Activity() {
         background(getString(R.string.saves_exporting)) {
             val set = SaveArchive.collect(layout, states)
             if (set.files.isEmpty()) throw SaveArchiveException(SaveProblem.NOTHING_TO_EXPORT)
-            // Truncate an existing document; some providers only know plain "w".
-            val output = try {
-                contentResolver.openOutputStream(uri, "wt")
-            } catch (_: Exception) {
-                contentResolver.openOutputStream(uri, "w")
-            } ?: throw java.io.IOException("No output stream")
-            output.use { SaveArchive.write(set, it) }
+            openOutput(uri).use { SaveArchive.write(set, it) }
             ui {
                 status.text = if (set.skipped.isEmpty()) {
                     getString(R.string.saves_exported, set.files.size)
@@ -136,10 +152,59 @@ class SavesActivity : Activity() {
         }
     }
 
+    private fun openOutput(uri: Uri) = try {
+        // Truncate an existing document; some providers only know plain "w".
+        contentResolver.openOutputStream(uri, "wt")
+    } catch (_: Exception) {
+        contentResolver.openOutputStream(uri, "w")
+    } ?: throw java.io.IOException("No output stream")
+
+    /** Forge writes and verifies the backup in the cache, then it is copied to the document. */
+    private fun writeBackup(uri: Uri) {
+        background(getString(R.string.saves_backup_running)) {
+            val zip = File(cacheDir, "triaevum-backup.zip")
+            try {
+                val request = ForgeBackups.request(this, "backup")
+                    .put("destination", zip.absolutePath)
+                    .put("touch_preferences", ForgeBackups.touchPreferences(this))
+                ForgeBackups.run(request)
+                openOutput(uri).use { output -> zip.inputStream().use { it.copyTo(output, 1 shl 20) } }
+                val size = android.text.format.Formatter.formatShortFileSize(this, zip.length())
+                ui { status.text = getString(R.string.saves_backup_done, size) }
+            } finally {
+                zip.delete()
+            }
+        }
+    }
+
     private fun stageImport(uri: Uri, layout: SaveLayout) {
         background(getString(R.string.saves_reading)) {
+            // The archive is copied once: Forge and the save check read a local file.
+            val copy = File(cacheDir, "triaevum-restore.zip")
             val input = contentResolver.openInputStream(uri) ?: throw java.io.IOException("No input stream")
-            val plan = input.use { SaveArchive.stage(it, layout) }
+            input.use { source -> copy.outputStream().use { source.copyTo(it, 1 shl 20) } }
+            if (ForgeBackups.isForgeBackup(copy)) {
+                val preview = try {
+                    ForgeBackups.run(ForgeBackups.request(this, "restore_preview").put("backup", copy.absolutePath))
+                } catch (error: Exception) {
+                    copy.delete()
+                    throw error
+                }
+                ui {
+                    if (closing) {
+                        copy.delete()
+                    } else {
+                        pendingBackup = copy
+                        confirmBackup(copy, preview)
+                    }
+                }
+                return@background
+            }
+            val plan = try {
+                copy.inputStream().use { SaveArchive.stage(it, layout) }
+            } finally {
+                copy.delete()
+            }
             val replaced = SaveArchive.replacements(plan, layout)
             ui {
                 if (closing) {
@@ -168,6 +233,80 @@ class SavesActivity : Activity() {
             .setNegativeButton(R.string.saves_confirm_cancel) { _, _ -> dropPending(plan) }
             .setOnCancelListener { dropPending(plan) }
             .show()
+    }
+
+    private fun unitLabel(name: String): String = when (name) {
+        "save_data" -> getString(R.string.saves_unit_saves)
+        "save_states" -> getString(R.string.saves_unit_states)
+        "config" -> getString(R.string.saves_unit_settings)
+        "imgui_layout" -> getString(R.string.saves_unit_window)
+        "touch_preferences" -> getString(R.string.saves_unit_touch)
+        else -> name
+    }
+
+    /** What restoring the verified backup changes, from Forge's preview. */
+    private fun confirmBackup(copy: File, preview: JSONObject) {
+        status.text = ""
+        val lines = ArrayList<String>()
+        val warnings = preview.optJSONArray("warnings") ?: org.json.JSONArray()
+        for (index in 0 until warnings.length()) {
+            when (warnings.optJSONObject(index)?.optString("kind")) {
+                "other_platform" -> lines += getString(R.string.saves_restore_other_platform)
+                "different_revision" -> lines += getString(R.string.saves_restore_revision)
+            }
+        }
+        val groups = preview.optJSONArray("groups") ?: org.json.JSONArray()
+        for (index in 0 until groups.length()) {
+            val group = groups.optJSONObject(index) ?: continue
+            lines += getString(
+                R.string.saves_restore_group,
+                unitLabel(group.optString("name")),
+                group.optInt("replaced"),
+                group.optInt("added"),
+                group.optInt("removed"),
+            )
+        }
+        if (preview.optBoolean("touch_preferences")) lines += getString(R.string.saves_unit_touch)
+        lines += getString(R.string.saves_restore_snapshot)
+        AlertDialog.Builder(this)
+            .setTitle(R.string.saves_restore_title)
+            .setMessage(lines.joinToString("\n\n"))
+            .setPositiveButton(R.string.saves_restore_confirm) { _, _ -> restoreBackup(copy) }
+            .setNegativeButton(R.string.saves_confirm_cancel) { _, _ -> dropBackup(copy) }
+            .setOnCancelListener { dropBackup(copy) }
+            .show()
+    }
+
+    private fun dropBackup(copy: File) {
+        if (pendingBackup !== copy) return
+        pendingBackup = null
+        copy.delete()
+        status.text = getString(R.string.saves_import_cancelled)
+    }
+
+    private fun restoreBackup(copy: File) {
+        if (pendingBackup !== copy) return
+        pendingBackup = null
+        if (gameRunning()) {
+            copy.delete()
+            status.text = getString(R.string.saves_game_running)
+            return
+        }
+        val layout = layout()
+        background(getString(R.string.saves_restoring)) {
+            val result = try {
+                ForgeBackups.run(ForgeBackups.request(this, "restore").put("backup", copy.absolutePath))
+            } finally {
+                copy.delete()
+            }
+            result.optJSONObject("touch_preferences")?.let { ForgeBackups.applyTouchPreferences(this, it) }
+            val snapshot = File(result.optString("snapshot")).parentFile?.name.orEmpty()
+            val saves = layout?.let { SaveArchive.collect(it, includeStates = true) }
+            ui {
+                if (saves != null) summary.text = getString(R.string.saves_summary, saves.saveFiles, saves.saveStates)
+                status.text = getString(R.string.saves_restored, "data/backups/$snapshot")
+            }
+        }
     }
 
     private fun dropPending(plan: ImportPlan) {
@@ -215,6 +354,8 @@ class SavesActivity : Activity() {
                 work()
             } catch (error: SaveArchiveException) {
                 ui { status.text = problem(error) }
+            } catch (error: ForgeJobException) {
+                ui { status.text = listOf(error.title, error.detail).filter { it.isNotEmpty() }.joinToString("\n\n") }
             } catch (error: Exception) {
                 Log.w(TAG, "Save operation failed", error)
                 ui { status.text = getString(R.string.saves_failed, error.message ?: error.javaClass.simpleName) }
@@ -263,9 +404,9 @@ class SavesActivity : Activity() {
             }
         }
         buttons = listOf(
-            action(R.string.saves_export) { export(false) },
-            action(R.string.saves_export_states) { export(true) },
+            action(R.string.saves_backup_all) { pickBackupDestination() },
             action(R.string.saves_import) { pickImport() },
+            action(R.string.saves_export) { export(false) },
         )
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -293,6 +434,7 @@ class SavesActivity : Activity() {
         const val TAG = "TriAevumSaves"
         const val EXPORT = 1
         const val IMPORT = 2
+        const val BACKUP = 3
         const val MAX_LISTED = 6
     }
 }

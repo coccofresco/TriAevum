@@ -35,6 +35,7 @@ import org.triaevum.android.TriAevumActivity
 import org.triaevum.android.diagnostics.DiagnosticsActivity
 import org.triaevum.android.diagnostics.StartupDiagnostics
 import org.triaevum.android.diagnostics.StartupReport
+import org.triaevum.android.saves.ForgeBackups
 import org.triaevum.android.saves.SavesActivity
 import java.io.File
 
@@ -110,6 +111,8 @@ class InstallerActivity : Activity() {
     private var updatingChoices = false
     /** Developer installs start as soon as the cartridge is recognized. */
     private var autoInstall = false
+    /** An interrupted restore is being undone. */
+    private var recovering = false
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
@@ -505,9 +508,29 @@ class InstallerActivity : Activity() {
         installButton.isEnabled = ready && !busy
     }
 
+    /**
+     * Play is offered only for one coherent version of the player's files: an interrupted
+     * restore (UX plan WP-05B) is undone first, on a worker thread, and Play waits for it.
+     */
     private fun refreshPlay() {
         val profile = File(getExternalFilesDir(null), "TriAevum.android.launch.json")
-        play.visibility = if (profile.isFile) Button.VISIBLE else Button.GONE
+        val pending = ForgeBackups.pendingRestore(this)
+        play.visibility = if (profile.isFile && !pending) Button.VISIBLE else Button.GONE
+        if (pending && !recovering) {
+            recovering = true
+            Thread({
+                try {
+                    ForgeBackups.run(ForgeBackups.request(this, "restore_recover"))
+                } catch (error: Exception) {
+                    Log.e(TAG, "Cannot recover the interrupted restore", error)
+                    post(error.message ?: error.javaClass.simpleName)
+                }
+                runOnUiThread {
+                    recovering = false
+                    if (!closing && !ForgeBackups.pendingRestore(this)) refreshPlay()
+                }
+            }, "restore-recover").start()
+        }
     }
 
     private fun cancelRunning() {
