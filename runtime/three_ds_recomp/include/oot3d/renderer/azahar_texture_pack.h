@@ -21,8 +21,11 @@ inline constexpr uint64_t kOot3dEuropeanTitleId = 0x0004000000033600ULL;
 // and the managed default folders, D/textures/{load,dump}/<title id>. They
 // rank below OOT3D_AZAHAR_TITLE_ID / _LOAD_DIRECTORY / _DUMP_DIRECTORY, the
 // F1 folders and a named Azahar user folder (UserDirectory or
-// OOT3D_AZAHAR_USER_DIRECTORY); an existing pack in Azahar's own folder keeps
-// loading from there.
+// OOT3D_AZAHAR_USER_DIRECTORY). An existing pack in Azahar's own folder keeps
+// loading from there only while the managed load folder holds no regular file
+// (recursively; empty subfolders count as empty). Once the managed folder
+// holds a pack (Forge > Enhancements or F1's Import... put one there), the
+// managed folder wins (UX plan WP-07). Azahar's folder is never modified.
 struct AzaharTextureHostDefaults {
     std::optional<uint64_t> TitleId;
     std::filesystem::path LoadDirectory;
@@ -141,6 +144,9 @@ struct AzaharTexturePackStatus {
     size_t FailedLoads = 0;
     size_t UnsupportedTextureFiles = 0;
     bool IndexPending = false;
+    // The title the folders are named by (OOT3D_AZAHAR_TITLE_ID, then the
+    // installed title the host names, then the configuration's).
+    uint64_t TitleId = kOot3dEuropeanTitleId;
     size_t IndexedMaterials = 0;
     size_t LoadedMaterials = 0;
     size_t FailedMaterials = 0;
@@ -181,6 +187,12 @@ class AzaharTexturePackRuntime final {
     void SetBaseDirectories(std::vector<std::filesystem::path> directories);
     // Owned by the window host, kept across Configure calls from settings.
     void SetHostDefaults(AzaharTextureHostDefaults defaults);
+    // The window host's defaults as last set (folders lexically normalized);
+    // F1's Import... copies into HostDefaults().LoadDirectory and is
+    // unavailable while it is empty (a launch without Forge's profile).
+    [[nodiscard]] AzaharTextureHostDefaults HostDefaults() const;
+    // Resolves the folders again (a pack imported into the managed folder
+    // takes over from Azahar's) and re-indexes the pack.
     void Reload();
 
     [[nodiscard]] std::shared_ptr<const AzaharTextureReplacement>

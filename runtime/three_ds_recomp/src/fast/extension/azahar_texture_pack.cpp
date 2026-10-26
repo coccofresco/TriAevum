@@ -581,10 +581,25 @@ class AzaharTexturePackRuntime::Impl {
         ApplyLocked(NormalizeConfiguration(std::move(configuration)));
     }
 
+    // True once the folder holds a regular file anywhere beneath it; a folder
+    // with only empty subfolders (or none at all) holds no pack.
+    static bool HoldsRegularFile(const std::filesystem::path& directory) {
+        std::error_code error;
+        for (std::filesystem::recursive_directory_iterator
+                 iterator(directory, std::filesystem::directory_options::skip_permission_denied, error),
+             end;
+             !error && iterator != end; iterator.increment(error)) {
+            std::error_code typeError;
+            if (iterator->is_regular_file(typeError)) return true;
+        }
+        return false;
+    }
+
     // One folder per NormalizeConfiguration's order. An existing pack in
-    // Azahar's own folder stays where it is when the host names a managed
-    // default (an installed pack never disappears; importing it is the
-    // user's choice); dumps go to the managed default.
+    // Azahar's own folder keeps loading while the host's managed load folder
+    // holds no file (an installed pack never disappears before the user
+    // imports one); once the managed folder holds a pack it wins (UX plan
+    // WP-07, shared with Forge's inventory). Dumps go to the managed default.
     static std::filesystem::path ResolveFolder(const AzaharTexturePackConfiguration& configuration,
                                                const std::filesystem::path& chosen,
                                                const std::filesystem::path& managed, const char* kind,
@@ -595,12 +610,18 @@ class AzaharTexturePackRuntime::Impl {
         const auto azahar = (ResolveDefaultUserDirectory() / kind / "textures" / title).lexically_normal();
         if (managed.empty()) return azahar;
         std::error_code error;
-        if (keepExistingAzaharFolder && std::filesystem::is_directory(azahar, error)) return azahar;
+        if (keepExistingAzaharFolder && std::filesystem::is_directory(azahar, error) && !HoldsRegularFile(managed))
+            return azahar;
         return managed;
     }
 
-    void ApplyLocked(AzaharTexturePackConfiguration configuration) {
-        if (mConfigured && configuration == mConfiguration) return;
+    std::filesystem::path ResolveLoadFolderLocked() const {
+        return ResolveFolder(mConfiguration, mConfiguration.LoadDirectory, mConfiguration.HostDefaults.LoadDirectory,
+                             "load", true);
+    }
+
+    void ApplyLocked(AzaharTexturePackConfiguration configuration, bool force = false) {
+        if (!force && mConfigured && configuration == mConfiguration) return;
         mConfiguration = std::move(configuration);
         mConfigured = true;
         ++mGeneration;
@@ -615,16 +636,29 @@ class AzaharTexturePackRuntime::Impl {
         mFailedLoadHashes.clear();
         mFailedMaterialHashes.clear();
         mDumpedHashes.clear();
-        mLoadDirectory = ResolveFolder(mConfiguration, mConfiguration.LoadDirectory,
-                                       mConfiguration.HostDefaults.LoadDirectory, "load", true);
+        mLoadDirectory = ResolveLoadFolderLocked();
         mDumpDirectory = ResolveFolder(mConfiguration, mConfiguration.DumpDirectory,
                                        mConfiguration.HostDefaults.DumpDirectory, "dump", false);
         RequestRebuildLocked();
     }
 
+    // A pack imported into the managed folder can move the load folder
+    // without a settings change: then the pack is reset as for a new
+    // configuration; otherwise the same folder is re-indexed.
     void Reload() {
         std::scoped_lock lock(mMutex);
-        if (mConfigured) RequestRebuildLocked();
+        if (!mConfigured) return;
+        if (ResolveLoadFolderLocked() != mLoadDirectory) {
+            auto configuration = mConfiguration;
+            ApplyLocked(std::move(configuration), true);
+            return;
+        }
+        RequestRebuildLocked();
+    }
+
+    AzaharTextureHostDefaults HostDefaults() const {
+        std::scoped_lock lock(mMutex);
+        return mHostDefaults;
     }
 
     std::shared_ptr<const AzaharTextureReplacement> ResolveAndMaybeDump(const AzaharTextureRequest& request) {
@@ -750,6 +784,7 @@ class AzaharTexturePackRuntime::Impl {
         status.FailedLoads = mFailedLoadHashes.size();
         status.UnsupportedTextureFiles = mUnsupportedFiles;
         status.IndexPending = mRebuildRequested || mBuilding;
+        status.TitleId = mConfiguration.TitleId;
         status.IndexedMaterials = mMaterialIndex.size();
         status.LoadedMaterials = mMaterialCache.size();
         status.FailedMaterials = mFailedMaterialHashes.size();
@@ -1098,6 +1133,10 @@ void AzaharTexturePackRuntime::SetBaseDirectories(std::vector<std::filesystem::p
 
 void AzaharTexturePackRuntime::SetHostDefaults(AzaharTextureHostDefaults defaults) {
     mImpl->SetHostDefaults(std::move(defaults));
+}
+
+AzaharTextureHostDefaults AzaharTexturePackRuntime::HostDefaults() const {
+    return mImpl->HostDefaults();
 }
 
 void AzaharTexturePackRuntime::Reload() {

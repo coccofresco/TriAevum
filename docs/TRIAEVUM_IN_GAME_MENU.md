@@ -52,7 +52,7 @@ presets by name, the dev tools and the rest).
 | Tab | Rows |
 | --- | --- |
 | Video | Graphics preset (Authentic / Enhanced / Toon; Custom is the result of any change), Window mode, Aspect ratio (Original 3DS 5:3 / 16:9 / 21:9 / Free), Resolution (the common sizes; a custom size is typed in F1), VSync, Frame rate, **Reset display settings**, Render scale, Anti-aliasing, Upscaler and quality, Scene FOV, Extended draw distance, HUD size (Native / Optimized, the TopScreen profile) |
-| Graphics | Lighting model, Global illumination, Ambient occlusion, Shadows (modern lighting only), Reflections, Toon, Grass quality |
+| Graphics | Lighting model, Global illumination, Ambient occlusion, Shadows (modern lighting only), Reflections, Toon, Grass quality, Distant grass cards, Textures > Custom textures (F1's "Load custom textures"; keeps the preset) |
 | Controls | Keyboard / Mouse / Controller / Capture mouse, Button prompts, Control preset, Aim source, Invert aim X / Y; with the TopScreen profile, Camera (Gameplay camera, speed, smoothing, invert X / Y, Camera zoom, Camera FOV) and C-Stick aiming (speed, invert X / Y) |
 | Photo mode | Photo camera (F6), Hide HUD, Photo camera speed, Back to the game's view, then the camera's controls as read-only rows (F6, WASD / left stick, Q / E / shoulders, mouse drag / right stick, Shift / Ctrl) |
 | Game | With the TopScreen profile, Gameplay (Quick put away, Landing roll, Roll dash, Aiming reticle, 3D rain, Rain density, SELECT button); Game language; Audio (Master volume in 5 % steps, Mute, and on desktop Mute when unfocused; see below); Save states (F5 / F8, with or without settings; loading resumes the game); Session: **Advanced settings (F1)**, **Quit game** |
@@ -242,7 +242,13 @@ the game reads the file at its next start (a save state does not restart it).
 
 Window mode, aspect ratio, resolution and VSync are host-owned (a preset never
 sets them), so changing them keeps the current preset; any other Video or
-Graphics change makes it Custom, as in F1.
+Graphics change makes it Custom, as in F1. Graphics > Textures > **Custom
+textures** (UX plan WP-07) is `GraphicsSettings::TexturePacks.Azahar.
+LoadCustomTextures`, the same owner and value as F1 > Materials > Texture
+packs > "Load custom textures"; presets preserve texture packs, so the row
+keeps the preset. The rows come from `oot3d_menu_textures.h` (tested in
+`oot3d_menu_tests`); Forge > Enhancements and F1's Import... put a pack in the
+managed folder.
 
 The aspect ratio is the shape of the presentation picture
 (`fast/extension/presentation_picture.h`, persisted as `Graphics.Output.Aspect`,

@@ -1,4 +1,5 @@
 #include "oot3d/renderer/azahar_texture_pack.h"
+#include "fast/extension/azahar_texture_pack_import.h"
 #include "../src/fast/extension/azahar_pbr_materials.h"
 
 #include <gtest/gtest.h>
@@ -337,6 +338,38 @@ TEST_F(Oot3dAzaharTexturePackTest, HostDefaultsRankBelowEveryChoiceAndKeepAnInst
     runtime.Configure({.DumpTextures = false, .LoadCustomTextures = true});
     EXPECT_EQ(runtime.Snapshot().LoadDirectory, installed);
     EXPECT_EQ(runtime.Snapshot().DumpDirectory, managedDump);
+    EXPECT_EQ(runtime.Snapshot().TitleId, usaTitle);
+    EXPECT_EQ(runtime.HostDefaults().LoadDirectory, managedLoad);
+    EXPECT_EQ(runtime.HostDefaults().TitleId, std::optional<uint64_t>(usaTitle));
+
+    // UX plan WP-07: a managed folder with only empty subfolders holds no
+    // pack, so Azahar's keeps loading, also across a reload.
+    std::filesystem::create_directories(managedLoad / "empty" / "nested");
+    runtime.Reload();
+    EXPECT_EQ(runtime.Snapshot().LoadDirectory, installed);
+
+    // Once the managed folder holds a pack it wins: a reload (F1's Import...
+    // requests one) switches without a settings change, and a fresh
+    // configuration resolves to it too. Azahar's folder is left alone.
+    {
+        std::ofstream file(managedLoad / "empty" / "nested" / "tex1_32x32_0123456789ABCDEF_13_mip0.png",
+                           std::ios::binary);
+        file << "x";
+    }
+    const auto beforeImport = runtime.Generation();
+    runtime.Reload();
+    EXPECT_EQ(runtime.Snapshot().LoadDirectory, managedLoad);
+    EXPECT_GT(runtime.Generation(), beforeImport);
+    Oot3d::Renderer::AzaharTexturePackRuntime fresh;
+    fresh.SetHostDefaults({.TitleId = usaTitle, .LoadDirectory = managedLoad, .DumpDirectory = managedDump});
+    fresh.Configure({.LoadCustomTextures = true});
+    EXPECT_EQ(fresh.Snapshot().LoadDirectory, managedLoad);
+    EXPECT_TRUE(std::filesystem::is_directory(installed));
+    // F1's explicit folder still wins over the managed pack.
+    fresh.Configure({.LoadCustomTextures = true, .LoadDirectory = chosen});
+    EXPECT_EQ(fresh.Snapshot().LoadDirectory, chosen);
+    runtime.WaitForPendingLoads();
+    fresh.WaitForPendingLoads();
 }
 
 TEST_F(Oot3dAzaharTexturePackTest,
@@ -600,6 +633,198 @@ TEST_F(Oot3dAzaharTexturePackTest, RejectsEscapingMaterialPathsAndNormalAlbedoCo
     EXPECT_EQ(runtime.ResolveOrQueue({8, 8, 0, 0, native, {}}).State, AzaharTextureResolveState::Missing);
     EXPECT_EQ(runtime.ResolveMaterialOrQueue(hash, runtime.Generation()).State, AzaharTextureResolveState::Failed);
     EXPECT_EQ(runtime.Snapshot().LoadedMaterials, 0U);
+}
+
+// UX plan WP-07: F1's Import... (azahar_texture_pack_import.cpp) follows the
+// rules Forge's import shares (TEXTURE_IMPORT_RULES.md).
+class AzaharTexturePackImportTest : public Oot3dAzaharTexturePackTest {
+  protected:
+    static constexpr uint64_t kUsa = 0x0004000000033500ULL;
+    static constexpr const char* kTexture = "tex1_32x32_0123456789ABCDEF_13_mip0.png";
+
+    void Png(const std::filesystem::path& path, uint32_t width = 2, uint32_t height = 2) {
+        std::filesystem::create_directories(path.parent_path());
+        std::vector<uint8_t> pixels(static_cast<size_t>(width) * height * 4U, 0x7FU);
+        Oot3d::Renderer::WriteAzaharTexturePng(path, width, height, pixels);
+    }
+    void Text(const std::filesystem::path& path, std::string_view text) {
+        std::filesystem::create_directories(path.parent_path());
+        std::ofstream(path, std::ios::binary) << text;
+    }
+    Fast::Extension::AzaharTexturePackImportResult Import(const std::filesystem::path& source) {
+        return Fast::Extension::ImportAzaharTexturePack(
+            {.Source = source, .Destination = Destination(), .InstalledTitleId = kUsa});
+    }
+    std::filesystem::path Destination() const { return Root / "data" / "textures" / "load" / "0004000000033500"; }
+    // Nothing but the destination is left beside it (no staging/previous).
+    bool OnlyDestinationBesideIt() const {
+        for (const auto& entry : std::filesystem::directory_iterator(Destination().parent_path()))
+            if (entry.path().filename() != Destination().filename()) return false;
+        return true;
+    }
+};
+
+TEST_F(AzaharTexturePackImportTest, ImportsTheInstalledTitleFolderAndSkipsOtherFiles) {
+    const auto source = Root / "download";
+    Png(source / "load" / "textures" / "0004000000033500" / "sub" / kTexture);
+    Png(source / "load" / "textures" / "0004000000033500" / "untitled.png");
+    Text(source / "load" / "textures" / "0004000000033500" / "pack.json", R"({"options":{"use_new_hash":true}})");
+    Text(source / "load" / "textures" / "0004000000033500" / "readme.txt", "hello");
+    Text(source / "load" / "textures" / "0004000000033500" / "tex1_8x8_00000000000000AA_0.dds", "DDS ");
+    Png(source / "load" / "textures" / "0004000000033600" / kTexture);
+    Text(source / "outside.txt", "not part of the pack");
+
+    const auto result = Import(source);
+    ASSERT_TRUE(result.Imported) << result.Message;
+    EXPECT_EQ(result.Textures, 1U) << "untitled.png is copied but not loadable";
+    EXPECT_EQ(result.NotLoadedYet, 1U);
+    EXPECT_EQ(result.Skipped, 1U);
+    EXPECT_EQ(result.SourceTitleId, std::optional<uint64_t>(kUsa));
+    EXPECT_TRUE(std::filesystem::is_regular_file(Destination() / "sub" / kTexture));
+    EXPECT_TRUE(std::filesystem::is_regular_file(Destination() / "untitled.png"));
+    EXPECT_TRUE(std::filesystem::is_regular_file(Destination() / "pack.json"));
+    EXPECT_FALSE(std::filesystem::exists(Destination() / "readme.txt"));
+    EXPECT_NE(result.Message.find("Imported 1 texture into"), std::string::npos) << result.Message;
+    EXPECT_TRUE(OnlyDestinationBesideIt());
+}
+
+TEST_F(AzaharTexturePackImportTest, ChoosesAmongTitleFoldersAndExplainsAnotherTitle) {
+    const auto several = Root / "several";
+    Png(several / "textures" / "0004000000033600" / kTexture);
+    Png(several / "textures" / "000400000008F900" / kTexture);
+    auto result = Import(several);
+    EXPECT_FALSE(result.Imported);
+    EXPECT_NE(result.Message.find("several games (0004000000033600, 000400000008F900)"), std::string::npos)
+        << result.Message;
+    EXPECT_NE(result.Message.find("installed game 0004000000033500"), std::string::npos) << result.Message;
+
+    const auto duplicate = Root / "duplicate";
+    Png(duplicate / "a" / "0004000000033500" / kTexture);
+    Png(duplicate / "b" / "0004000000033500" / kTexture);
+    result = Import(duplicate);
+    EXPECT_FALSE(result.Imported);
+    EXPECT_NE(result.Message.find("more than one folder for 0004000000033500"), std::string::npos) << result.Message;
+
+    // One folder of another title is used: textures match by content.
+    const auto european = Root / "0004000000033600";
+    Png(european / kTexture);
+    result = Import(european);
+    ASSERT_TRUE(result.Imported) << result.Message;
+    EXPECT_EQ(result.SourceTitleId, std::optional<uint64_t>(0x0004000000033600ULL));
+    EXPECT_NE(result.Message.find("made for 0004000000033600"), std::string::npos) << result.Message;
+    EXPECT_TRUE(std::filesystem::is_regular_file(Destination() / kTexture));
+}
+
+TEST_F(AzaharTexturePackImportTest, FlatPackLosesItsWrapperAndPackJsonMappingsCount) {
+    const auto source = Root / "flat";
+    Png(source / "My Pack" / "textures" / "grass.png");
+    Text(source / "My Pack" / "pack.json", R"({"textures":{"0123456789ABCDEF":["textures/grass.png"]}})");
+    const auto result = Import(source);
+    ASSERT_TRUE(result.Imported) << result.Message;
+    EXPECT_EQ(result.Textures, 1U);
+    EXPECT_FALSE(result.SourceTitleId.has_value());
+    EXPECT_TRUE(std::filesystem::is_regular_file(Destination() / "pack.json"));
+    EXPECT_TRUE(std::filesystem::is_regular_file(Destination() / "textures" / "grass.png"));
+}
+
+TEST_F(AzaharTexturePackImportTest, InvalidPacksAreRefusedAndTheCurrentPackStays) {
+    const auto good = Root / "good" / "0004000000033500";
+    Png(good / kTexture);
+    ASSERT_TRUE(Import(good).Imported);
+    const auto check = [&](const std::filesystem::path& source, std::string_view expected) {
+        const auto result = Import(source);
+        EXPECT_FALSE(result.Imported) << source;
+        EXPECT_NE(result.Message.find(expected), std::string::npos) << result.Message;
+        EXPECT_TRUE(std::filesystem::is_regular_file(Destination() / kTexture)) << "the current pack must stay";
+        EXPECT_TRUE(OnlyDestinationBesideIt());
+    };
+    const auto notPng = Root / "not_png";
+    Png(notPng / "tex1_32x32_1111111111111111_13_mip0.png");
+    Text(notPng / kTexture, "not a png at all, just text");
+    check(notPng, std::string(kTexture) + " is not a PNG image");
+
+    const auto huge = Root / "huge";
+    Png(huge / kTexture, 16385, 1);
+    check(huge, "16385x1 pixels");
+
+    const auto badJson = Root / "bad_json";
+    Png(badJson / kTexture);
+    Text(badJson / "pack.json", "[1, 2]");
+    check(badJson, "pack.json is not a JSON object");
+
+    const auto noTextures = Root / "no_textures";
+    Png(noTextures / "picture.png");
+    Text(noTextures / "readme.txt", "x");
+    check(noTextures, "This does not look like a texture pack");
+
+    const auto missing = Root / "missing";
+    check(missing, "Choose a folder that exists");
+
+    const auto deep = Root / "deep";
+    auto folder = deep;
+    for (int level = 0; level < 33; ++level) folder /= "d";
+    Png(folder / kTexture);
+    check(deep, "more than 32 folders deep");
+
+    const auto many = Root / "many";
+    Png(many / kTexture);
+    Png(many / "tex1_32x32_2222222222222222_13_mip0.png");
+    Png(many / "tex1_32x32_3333333333333333_13_mip0.png");
+    auto limited = Fast::Extension::AzaharTexturePackImportRequest{
+        .Source = many, .Destination = Destination(), .InstalledTitleId = kUsa};
+    limited.Limits.MaximumFiles = 2U;
+    auto result = Fast::Extension::ImportAzaharTexturePack(limited);
+    EXPECT_FALSE(result.Imported);
+    EXPECT_NE(result.Message.find("more than 2 files"), std::string::npos) << result.Message;
+    limited.Limits = {};
+    limited.Limits.MaximumFileBytes = 16U;
+    result = Fast::Extension::ImportAzaharTexturePack(limited);
+    EXPECT_NE(result.Message.find("is larger than 16 bytes"), std::string::npos) << result.Message;
+    limited.Limits = {};
+    limited.Limits.MaximumTotalBytes = 100U;
+    result = Fast::Extension::ImportAzaharTexturePack(limited);
+    EXPECT_NE(result.Message.find("The pack is larger than 100 bytes"), std::string::npos) << result.Message;
+    EXPECT_TRUE(std::filesystem::is_regular_file(Destination() / kTexture));
+
+    // A new valid pack replaces the previous one whole.
+    const auto next = Root / "next";
+    Png(next / "tex1_16x16_ABCDEF0123456789_13_mip0.png");
+    ASSERT_TRUE(Import(next).Imported);
+    EXPECT_FALSE(std::filesystem::exists(Destination() / kTexture));
+    EXPECT_TRUE(std::filesystem::is_regular_file(Destination() / "tex1_16x16_ABCDEF0123456789_13_mip0.png"));
+    EXPECT_TRUE(OnlyDestinationBesideIt());
+
+    EXPECT_FALSE(Fast::Extension::ImportAzaharTexturePack({.Source = next, .InstalledTitleId = kUsa}).Imported)
+        << "no managed folder: no import";
+}
+
+TEST_F(AzaharTexturePackImportTest, LinksRefuseTheImport) {
+    const auto source = Root / "linked";
+    Png(source / kTexture);
+    std::filesystem::create_directories(Root / "elsewhere");
+    std::error_code error;
+    std::filesystem::create_directory_symlink(Root / "elsewhere", source / "link", error);
+#ifdef _WIN32
+    if (error) {
+        // Junctions need no privilege; they refuse the import the same way.
+        const auto command = "cmd /c mklink /J \"" + (source / "link").make_preferred().string() + "\" \"" +
+                             (Root / "elsewhere").make_preferred().string() + "\" >nul";
+        error = std::system(command.c_str()) == 0 ? std::error_code{} : std::make_error_code(std::errc::not_supported);
+    }
+#endif
+    if (error) GTEST_SKIP() << "no symbolic link or junction could be made here: " << error.message();
+    const auto result = Import(source);
+    EXPECT_FALSE(result.Imported);
+    EXPECT_NE(result.Message.find("link is a link or a special file"), std::string::npos) << result.Message;
+}
+
+TEST(AzaharTexturePackImport, RecognizesTitleFolderNames) {
+    using Fast::Extension::ParseAzaharTitleFolderName;
+    EXPECT_EQ(ParseAzaharTitleFolderName("0004000000033500"), std::optional<uint64_t>(0x0004000000033500ULL));
+    EXPECT_EQ(ParseAzaharTitleFolderName("000400000008f900"), std::optional<uint64_t>(0x000400000008F900ULL));
+    EXPECT_FALSE(ParseAzaharTitleFolderName("0005000000033500").has_value());
+    EXPECT_FALSE(ParseAzaharTitleFolderName("00040000000335").has_value());
+    EXPECT_FALSE(ParseAzaharTitleFolderName("000400000003350G").has_value());
 }
 
 } // namespace

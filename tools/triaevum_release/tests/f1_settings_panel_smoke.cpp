@@ -14,6 +14,8 @@
 #include "fast/extension/world_debug_lines.h"
 #include "fast/extension/grass_scene_bridge.h"
 #include "fast/MouseCapturePolicy.h"
+#include "fast/extension/azahar_texture_pack_import.h"
+#include "fast/extension/azahar_texture_pack_panel.h"
 #include <imgui_internal.h>
 #include <nlohmann/json.hpp>
 #include <algorithm>
@@ -27,6 +29,7 @@
 #include <map>
 #include <stdexcept>
 #include <string>
+#include <thread>
 
 using namespace Fast::Extension;
 namespace {
@@ -1513,6 +1516,121 @@ void CheckPbrMaterialEditor() {
     Frame(); Frame();
 }
 
+// UX plan WP-07: Materials > Texture packs' Browse... and Import... with an
+// injected folder chooser (no native dialog). Browse... fills and applies a
+// folder; Import... copies a pack into the managed folder, turns custom
+// textures on through the owner and clears the explicit folder; an invalid
+// pack is refused and the imported one stays; no managed folder, no Import.
+void CheckTexturePackBrowseAndImport() {
+    using namespace ::Oot3d::Renderer;
+    auto& packs = AzaharTexturePackRuntime::Instance();
+    auto& runtime = GraphicsSettingsRuntime::Instance();
+    const auto before = runtime.Snapshot();
+    const auto root = std::filesystem::temp_directory_path() /
+        ("triaevum-texture-import-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    std::filesystem::create_directories(root);
+    struct Cleanup {
+        std::filesystem::path Root;
+        GraphicsSettings Before;
+        ~Cleanup() {
+            SetAzaharTextureFolderPicker(nullptr);
+            auto& texturePacks = AzaharTexturePackRuntime::Instance();
+            texturePacks.SetHostDefaults({});
+            texturePacks.Configure({});
+            texturePacks.WaitForPendingLoads();
+            (void)GraphicsSettingsRuntime::Instance().Apply(Before);
+            std::error_code error;
+            std::filesystem::remove_all(Root, error);
+        }
+    } cleanup{root, before};
+    // Read by the panel's worker thread, written before each click.
+    auto nextFolder = std::make_shared<std::optional<std::string>>();
+    SetAzaharTextureFolderPicker([nextFolder] { return *nextFolder; });
+    // Frames until the worker's result reached the panel. The frames' own
+    // checks still run, but the wait counts as one assertion so the total
+    // does not depend on how long the worker took.
+    const auto waitFor = [](const std::function<bool()>& done, const std::string& what) {
+        const int counted = assertions;
+        for (int attempt = 0; attempt < 600; ++attempt) {
+            Frame(true);
+            if (done()) {
+                assertions = counted;
+                Check(true, what);
+                return;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        Check(false, what + " (panel: " + loggedPanelText + ")");
+    };
+    const auto logged = [](const char* text) { return loggedPanelText.find(text) != std::string::npos; };
+
+    packs.SetHostDefaults({});
+    packs.Configure({});
+    InstallGraphicsSettingsPanelTabs({});
+    showPanel = true;
+    size = ImVec2(760, 1000);
+    Frame();
+    Click("Materials");
+    Click("Texture packs");
+    Frame(true);
+    Check(Find("Import...").Disabled, "Import... offered without a managed texture folder");
+    Check(logged("Start the game from Forge to use the managed texture folder"),
+          "missing managed folder not explained");
+    Check(!Find("Browse...##load").Disabled && !Find("Browse...##dump").Disabled,
+          "Browse... unavailable with a folder chooser");
+
+    const auto chosen = PathToUtf8(root / "chosen pack");
+    *nextFolder = chosen;
+    Click("Browse...##load");
+    waitFor([&] { return runtime.Snapshot().TexturePacks.Azahar.LoadDirectory == chosen; },
+            "Browse... did not apply the custom texture folder");
+    Check(logged("Custom texture folder: ") && logged("chosen pack"), "Browse... result not shown");
+    const auto dumps = PathToUtf8(root / "dumps");
+    *nextFolder = dumps;
+    Click("Browse...##dump");
+    waitFor([&] { return runtime.Snapshot().TexturePacks.Azahar.DumpDirectory == dumps; },
+            "Browse... did not apply the texture dump folder");
+    Check(runtime.Snapshot().TexturePacks.Azahar.LoadDirectory == chosen, "Browse... for dumps lost the load folder");
+    *nextFolder = std::nullopt;
+    Click("Browse...##load");
+    waitFor([&] { return logged("No folder chosen"); }, "a cancelled Browse... was not reported");
+    Check(runtime.Snapshot().TexturePacks.Azahar.LoadDirectory == chosen, "a cancelled Browse... changed the folder");
+
+    const auto managed = root / "data" / "textures" / "load" / "0004000000033500";
+    packs.SetHostDefaults({.TitleId = 0x0004000000033500ULL, .LoadDirectory = managed, .DumpDirectory = root / "dump"});
+    constexpr const char* texture = "tex1_32x32_0123456789ABCDEF_13_mip0.png";
+    const auto source = root / "download";
+    std::filesystem::create_directories(source / "textures" / "0004000000033500");
+    const std::vector<uint8_t> pixels(2 * 2 * 4, 0x80U);
+    WriteAzaharTexturePng(source / "textures" / "0004000000033500" / texture, 2, 2, pixels);
+    Frame(true);
+    Check(!Find("Import...").Disabled, "Import... unavailable with a managed texture folder");
+    Check(logged("0004000000033500"), "Import... does not name the managed folder");
+    *nextFolder = PathToUtf8(source);
+    Click("Import...");
+    waitFor([&] {
+        const auto settings = runtime.Snapshot().TexturePacks.Azahar;
+        return settings.LoadCustomTextures && settings.LoadDirectory.empty();
+    }, "Import... did not turn custom textures on and clear the explicit folder");
+    Check(std::filesystem::is_regular_file(managed / texture), "Import... did not copy the pack into the managed folder");
+    Check(logged("Imported 1 texture into"), "Import... result not shown");
+    Check(runtime.Snapshot().TexturePacks.Azahar.DumpDirectory == dumps, "Import... changed the dump folder");
+    Check(packs.Snapshot().LoadDirectory.lexically_normal() == managed.lexically_normal(),
+          "the imported pack did not take over the load folder");
+
+    const auto invalid = root / "invalid";
+    std::filesystem::create_directories(invalid);
+    std::ofstream(invalid / texture, std::ios::binary) << "this is not a PNG image";
+    *nextFolder = PathToUtf8(invalid);
+    Click("Import...");
+    waitFor([&] { return logged("Import refused:"); }, "an invalid pack was not refused");
+    Check(logged("is not a PNG image"), "the refusal reason is not shown");
+    Check(std::filesystem::is_regular_file(managed / texture), "a refused import removed the imported pack");
+    Check(std::filesystem::file_size(managed / texture) != std::filesystem::file_size(invalid / texture),
+          "a refused import replaced the imported pack");
+    Check(runtime.Snapshot().TexturePacks.Azahar.LoadCustomTextures, "a refused import turned custom textures off");
+}
+
 // A title without scene view or FOV hooks (MM3D): the FOV slider is disabled
 // with the title's reason, the panel says which effects stay inactive, and the
 // stored FOV is kept.
@@ -2798,6 +2916,7 @@ int main(int argc, char** argv) try {
     CheckSceneEnvironmentCodec();
     CheckSceneEnvironment();
     CheckMm3dSceneEnvironment();
+    CheckTexturePackBrowseAndImport();
     InstallGraphicsSettingsPanelTabs({});
     CheckTitleWithoutSceneHooks();
     CheckHostWithoutWindowOutput();

@@ -9,6 +9,7 @@
 #include "oot3d_menu_model.h"
 #include "oot3d_menu_presentation.h"
 #include "oot3d_menu_prompts.h"
+#include "oot3d_menu_textures.h"
 
 #include <algorithm>
 #include <cmath>
@@ -999,9 +1000,65 @@ void TestAudioRows() {
            "a failed volume write reaches the status line");
 }
 
+// Graphics tab > Textures (oot3d_menu_textures.h, UX plan WP-07): "Custom
+// textures" toggles the owner's LoadCustomTextures, asks the owner to keep
+// the graphics preset (presets preserve texture packs), is modified against
+// the value the menu opened with, and reports a failed write.
+void TestTextureRows() {
+    struct GraphicsOwner {
+        bool LoadCustomTextures = false;
+        bool Baseline = false;
+        int Preset = 2; // a built-in preset; 0 stands for Custom
+        bool Fail = false;
+        int Writes = 0;
+    } owner;
+    TextureRowBindings bindings;
+    bindings.LoadCustomTextures = [&owner] { return owner.LoadCustomTextures; };
+    bindings.BaselineLoadCustomTextures = [&owner] { return owner.Baseline; };
+    bindings.SetLoadCustomTextures = [&owner](bool value, bool keepPreset) {
+        ++owner.Writes;
+        if (owner.Fail) return WriteResult{"Could not save: Retry", true};
+        owner.LoadCustomTextures = value;
+        if (!keepPreset) owner.Preset = 0;
+        return WriteResult{"Saved", false};
+    };
+    Tab none;
+    AppendTextureRows(none, TextureRowBindings{});
+    Expect(none.Rows.empty(), "no texture rows without an owner");
+
+    Document document;
+    Tab graphics;
+    graphics.Title = "Graphics";
+    AppendTextureRows(graphics, bindings);
+    Expect(graphics.Rows.size() == 2U && graphics.Rows[0].Kind == RowKind::Heading &&
+               graphics.Rows[0].Key == "Textures" && graphics.Rows[1].Key == "Custom textures" &&
+               graphics.Rows[1].Kind == RowKind::Toggle && !graphics.Rows[1].Help.empty(),
+           "Textures heading and the Custom textures toggle");
+    document.Tabs.push_back(graphics);
+    Model model(document);
+    model.Open();
+    model.Update(Input{}, 0.016);
+    Expect(model.FocusedRow()->Key == "Custom textures" && model.FocusedRow()->Value == 0 &&
+               !model.FocusedRow()->IsModified,
+           "Custom textures focused, off and unmodified");
+    Tap(model, &Input::Confirm);
+    Expect(owner.LoadCustomTextures && owner.Writes == 1 && model.FocusedRow()->Value == 1,
+           "Custom textures turns the owner's LoadCustomTextures on");
+    Expect(owner.Preset == 2, "Custom textures keeps the graphics preset");
+    Expect(model.FocusedRow()->IsModified, "Custom textures differs from the value the menu opened with");
+    Tap(model, &Input::Confirm);
+    Expect(!owner.LoadCustomTextures && owner.Preset == 2 && !model.FocusedRow()->IsModified,
+           "Custom textures turns the pack off again");
+    owner.Fail = true;
+    Tap(model, &Input::Confirm);
+    Expect(model.StatusIsError() && model.Status() == "Could not save: Retry" && !owner.LoadCustomTextures,
+           "a failed Custom textures write reaches the status line");
+}
+
 int main() {
     try {
         TestAudioRows();
+        TestTextureRows();
         TestModelNavigation();
         TestModal();
         TestPointer();

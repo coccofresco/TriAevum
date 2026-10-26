@@ -2,6 +2,7 @@
 
 #include "oot3d_menu_audio.h"
 #include "oot3d_menu_presentation.h"
+#include "oot3d_menu_textures.h"
 #include "oot3d_top_screen_controls.h"
 #include "three_ds_touch_overlay_settings.h"
 
@@ -660,6 +661,18 @@ void InGameMenu::BuildGraphicsTab(Menu::Document &document) {
     row.UnavailableReason = "Grass is off";
     tab.Rows.push_back(std::move(row));
   }
+
+  // UX plan WP-07: the same owner as F1 > Materials > Texture packs' "Load
+  // custom textures". Presets keep texture packs, so the preset stays.
+  Menu::TextureRowBindings textures;
+  textures.LoadCustomTextures = [this] { return mGraphics.TexturePacks.Azahar.LoadCustomTextures; };
+  textures.BaselineLoadCustomTextures = [this] { return mBaseline.TexturePacks.Azahar.LoadCustomTextures; };
+  textures.SetLoadCustomTextures = [this](bool value, bool keepPreset) {
+    auto settings = mGraphics;
+    settings.TexturePacks.Azahar.LoadCustomTextures = value;
+    return ApplyGraphics(settings, keepPreset);
+  };
+  Menu::AppendTextureRows(tab, textures);
   document.Tabs.push_back(std::move(tab));
 }
 

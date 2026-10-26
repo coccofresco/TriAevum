@@ -1,5 +1,41 @@
 # F1 settings rationalization
 
+## Texture pack Browse and Import (2026-10-26)
+
+UX plan WP-07: Materials > Texture packs keeps its folder fields and gains
+**Browse...** beside "Custom texture folder" and "Texture dump folder" (the
+chosen folder fills the field and applies like "Apply folders") and
+**Import...**, which copies a chosen pack into the managed load folder Forge's
+launch names (`AzaharTextureHostDefaults::LoadDirectory`,
+`D/textures/load/<title id>`), following the rules Forge's import shares
+(`fast/extension/azahar_texture_pack_import.{h,cpp}`: title-folder detection,
+PNG/JSON checks, limits, links refused, staging and swap, the current pack
+kept on any failure). After an import, "Load custom textures" is turned on
+and the explicit custom folder cleared through the graphics settings owner
+(`DrawTextureSettings` applies the panel's change) and the pack is reloaded;
+a pack in the managed folder now wins over one in Azahar's own folder. The
+folder dialog (Windows `IFileOpenDialog` on a COM STA worker; Linux zenity,
+then kdialog) and the copy run on a worker thread; the panel shows "Choosing
+a folder...", "Importing...", "Imported N textures into <folder>" or "Import
+refused: <reason>". Without a managed folder Import... is disabled with "Start
+the game from Forge to use the managed texture folder"; on Android both
+buttons are disabled with the reason. The in-game menu mirrors "Load custom
+textures" as Graphics > Textures > Custom textures (same owner).
+
+Verification: the actual-widget smoke (`CheckTexturePackBrowseAndImport`)
+injects the folder chooser (`SetAzaharTextureFolderPicker`, no native
+dialog): Import... disabled without a managed folder; Browse... fills and
+applies both folders, a cancelled Browse... changes nothing; Import... of
+`textures/<title id>/tex1_32x32_..._13_mip0.png` ends with the file in the
+managed folder, custom textures on, the explicit folder cleared and the
+runtime loading from the managed folder; an invalid pack (a `.png` without the
+PNG signature) is refused with its reason and leaves the imported pack.
+Worker waits count as one assertion each, so the total is stable.
+Actual-widget smoke: **11,303 assertions** on this tree. The import rules have
+unit tests in `oot3d_graphics_foundation_tests` (`AzaharTexturePackImport*`,
+including a junction on Windows) and the folder precedence in
+`HostDefaultsRankBelowEveryChoiceAndKeepAnInstalledPack`.
+
 ## Audio (2026-10-26)
 
 UX plan WP-06C ([audio settings](TRIAEVUM_AUDIO_SETTINGS.md)): **Game >

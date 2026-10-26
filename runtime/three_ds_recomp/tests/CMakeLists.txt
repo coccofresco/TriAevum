@@ -748,6 +748,7 @@ add_executable(oot3d_graphics_foundation_tests
     ../src/fast/extension/display_effect_resources.cpp
     ../src/fast/extension/ambient_occlusion_composite.cpp
     ../src/fast/extension/azahar_texture_pack.cpp
+    ../src/fast/extension/azahar_texture_pack_import.cpp
     ../src/fast/extension/azahar_pbr_materials.cpp
     ../src/fast/extension/grass_persistent_placement_cache.cpp
     ../src/fast/extension/grass_async_placement_builder.cpp
