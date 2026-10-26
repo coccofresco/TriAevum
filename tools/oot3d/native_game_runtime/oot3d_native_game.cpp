@@ -215,6 +215,15 @@ void TakeGameSessionLock(const std::filesystem::path& profilePath,
     }
 }
 
+// The update play guard (triaevum_game_session_lock.h): checked after the
+// session lock is held, so Forge's update helper (which needs that lock to
+// start replacing files) cannot begin between the check and the game.
+void RefusePendingUpdate(const std::filesystem::path& profilePath) {
+    const auto journal = Oot3dNativeGame::PendingUpdateJournal(ExecutableDirectory(), profilePath);
+    if (!journal.empty())
+        throw std::runtime_error("An update is in progress; open Forge");
+}
+
 struct GameLanguageInfoRequest {
     const char* RomFs = nullptr;
     Oot3dNativeGame::TitleAdapter Title = Oot3dNativeGame::TitleAdapter::Oot3dEur;
@@ -342,6 +351,7 @@ int main(int argc, char** argv) {
         }
         // Before anything writes the user's files; released on return.
         TakeGameSessionLock(preparedArguments.ProfilePath, sessionLock);
+        RefusePendingUpdate(preparedArguments.ProfilePath);
 #endif
 #if defined(OOT3D_REQUIRE_WHOLE_AOT_PLUGIN_V2)
         std::vector<char*> runtimeArguments;

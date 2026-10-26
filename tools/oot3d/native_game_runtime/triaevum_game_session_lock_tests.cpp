@@ -76,6 +76,28 @@ int main(int argc, char **argv) {
         second.Release();
         Expect(std::filesystem::is_regular_file(path), "the lock file stays");
 
+        // The update play guard: a pending journal of the installation.
+        Expect(Oot3dNativeGame::PendingUpdateJournal(executableDirectory, windowsProfile).empty(),
+               "no journal, no guard");
+#if defined(_WIN32)
+        const auto journal = root / "package" / ".forge-update" / "journal.json";
+        const auto runtimeDirectory = root / "package" / "runtime";
+#else
+        const auto journal = activation / ".forge-update" / "journal.json";
+        const auto runtimeDirectory = root / "elsewhere" / "runtime";
+#endif
+        std::filesystem::create_directories(journal.parent_path());
+        std::ofstream(journal) << "{}";
+        Expect(Oot3dNativeGame::PendingUpdateJournal(executableDirectory, windowsProfile) == journal,
+               "a pending update journal refuses the launch");
+#if defined(_WIN32)
+        Expect(Oot3dNativeGame::PendingUpdateJournal(runtimeDirectory, {}) == journal,
+               "the packaged runtime in runtime/ is guarded without a profile too");
+#endif
+        std::filesystem::remove(journal);
+        Expect(Oot3dNativeGame::PendingUpdateJournal(runtimeDirectory, windowsProfile).empty(),
+               "a finished update no longer guards");
+
         GameSessionLock missing;
         Expect(missing.Acquire(root / "absent" / "game-session.lock", &error) == GameSessionLock::Result::Unavailable,
                "a lock that cannot be opened is unavailable");

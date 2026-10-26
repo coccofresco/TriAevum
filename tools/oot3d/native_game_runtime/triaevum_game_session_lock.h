@@ -29,6 +29,16 @@ namespace Oot3dNativeGame {
 [[nodiscard]] std::filesystem::path GameSessionLockPath(
     const std::filesystem::path &executableDirectory, const std::filesystem::path &profilePath);
 
+// The update play guard (UX plan WP-04B, Forge `forge_core::update_gate`):
+// while Forge's update helper replaces package files, or after it stopped
+// halfway, `<activation>/.forge-update/journal.json` exists and the game
+// must not start from a mixed package. The activation root is the folder of
+// the executable (or the one above `runtime/`) and the profile's
+// installation root (Windows `<root>/data/TriAevum.launch.json`, elsewhere
+// the profile's folder). Returns the pending journal, or empty.
+[[nodiscard]] std::filesystem::path PendingUpdateJournal(
+    const std::filesystem::path &executableDirectory, const std::filesystem::path &profilePath);
+
 class GameSessionLock {
 public:
     enum class Result {

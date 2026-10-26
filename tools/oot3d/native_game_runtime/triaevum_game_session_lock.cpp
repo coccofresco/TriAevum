@@ -1,6 +1,7 @@
 #include "triaevum_game_session_lock.h"
 
 #include <system_error>
+#include <vector>
 
 #if defined(_WIN32)
 #ifndef NOMINMAX
@@ -41,6 +42,26 @@ std::filesystem::path GameSessionLockPath(const std::filesystem::path &executabl
     std::error_code error;
     if (!std::filesystem::is_directory(activation, error)) return {};
     return activation / "game-session.lock";
+}
+
+std::filesystem::path PendingUpdateJournal(const std::filesystem::path &executableDirectory,
+                                           const std::filesystem::path &profilePath) {
+    std::vector<std::filesystem::path> roots{executableDirectory, executableDirectory.parent_path()};
+    if (!profilePath.empty()) {
+        const auto folder = std::filesystem::absolute(profilePath).lexically_normal().parent_path();
+#if defined(_WIN32)
+        roots.push_back(folder.parent_path());
+#else
+        roots.push_back(folder);
+#endif
+    }
+    for (const auto &root : roots) {
+        if (root.empty()) continue;
+        const auto journal = root / ".forge-update" / "journal.json";
+        std::error_code error;
+        if (std::filesystem::is_regular_file(journal, error)) return journal;
+    }
+    return {};
 }
 
 GameSessionLock::~GameSessionLock() {
