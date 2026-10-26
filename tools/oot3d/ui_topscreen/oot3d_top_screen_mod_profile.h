@@ -1010,6 +1010,16 @@ struct TopScreenRendererVisibilityRouteState {
 // SingleScreen 3.1 0x005D67DC, scene mode 7: the Sheikah Stone's Visions
 // menu (play+0x104 == 4) outside a native transition (0x0035B164).
 bool IsTopScreenVisionsMenu(const TopScreenPauseDrawInputs &inputs) noexcept;
+// The Visions location and vision lists (scene mode 7, play+0x104 0 and 1;
+// 2 is the movie; outside a native transition): 3.1 0x005D7438 replaces the
+// callbacks of submodes 0..2 and 0x005D5698 draws the native lists on the upper screen at
+// (0,40,480,320). The hint movie's update (0x004708F8) samples the touch
+// screen for them, so a pointer the host maps onto the lists reaches them.
+bool IsTopScreenVisionsListPresentation(const TopScreenPauseDrawInputs &inputs) noexcept;
+// The viewport, on the upper target, that 3.1 draws a lower-screen menu in
+// when it centres it: the Visions lists (0x005D5698) and the Game Over
+// choices (compositor 0x005D3D30), like the relocated frontend pages.
+inline constexpr std::array<std::int32_t, 4> kTopScreenCentredLowerViewport{0, 40, 480, 320};
 // 3.1 0x005D6DC8: the fade of the top-screen Visions backdrop and edges,
 // min(step / 24, 1); the step advances to 24 while the list is routed.
 float ResolveTopScreenVisionsFade(std::int32_t step) noexcept;
@@ -1088,6 +1098,14 @@ bool PrepareTopScreenGameOverDraw(
     NativeA32Memory &memory, std::uint32_t controller,
     const TopScreenPauseDrawInputs &inputs, bool runtimeSceneLatch,
     TopScreenRendererVisibilityRouteState *state, std::string *error = nullptr);
+// The Game Over choices are on the upper screen: a Game Over presentation
+// phase whose controller (0x005C588C, the argument of 0x00427A3C) has its
+// terminal renderer hidden and a reconciled choice visible, as the
+// compositor leaves them. Their native controller hit-tests touch
+// (0x0041C8A0: 0x002FDE54 and 0x0050BB3A/3C, then 0x004277DC per choice).
+bool ReadTopScreenGameOverChoiceVisible(NativeA32Memory &memory,
+                                        const TopScreenPauseDrawInputs &inputs,
+                                        bool *visible, std::string *error = nullptr);
 bool ReadTopScreenPauseControllerInputs(NativeA32Memory &memory,
                                         TopScreenPauseControllerInputs *inputs,
                                         std::string *error = nullptr);

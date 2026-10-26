@@ -416,10 +416,16 @@ bool ResolveNativeA32TouchInputEnabled(
     bool topScreenUiProfile) {
   bool nativePausePageActive = false;
   if (topScreenUiProfile) {
+    // The relocated lower-screen pages that take touches on the upper
+    // screen: the pause pages, the Visions lists and the Game Over choices.
     Oot3dNativeGame::TopScreenPauseDrawInputs pauseInputs;
+    bool gameOverChoice = false;
     nativePausePageActive =
         Oot3dNativeGame::ReadTopScreenPauseDrawInputs(memory, &pauseInputs) &&
-        pauseInputs.AnyPageGateActive;
+        (pauseInputs.AnyPageGateActive ||
+         Oot3dNativeGame::IsTopScreenVisionsListPresentation(pauseInputs) ||
+         (Oot3dNativeGame::ReadTopScreenGameOverChoiceVisible(memory, pauseInputs, &gameOverChoice) &&
+          gameOverChoice));
   }
   return Oot3dNativeGame::ResolveNativeA32TouchInputEnabled(
       topScreenUiProfile,

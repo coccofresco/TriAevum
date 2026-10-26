@@ -241,6 +241,11 @@ bool IsTopScreenVisionsMenu(const TopScreenPauseDrawInputs &inputs) noexcept {
          inputs.SceneSubmode == 4U && !inputs.NativeTransitionActive;
 }
 
+bool IsTopScreenVisionsListPresentation(const TopScreenPauseDrawInputs &inputs) noexcept {
+  return inputs.HasScene && inputs.SceneMode == 7U &&
+         inputs.SceneSubmode <= 1U && !inputs.NativeTransitionActive;
+}
+
 float ResolveTopScreenVisionsFade(std::int32_t step) noexcept {
   return std::min(static_cast<float>(step) * (1.0F / 24.0F), 1.0F);
 }
@@ -602,6 +607,52 @@ bool PrepareTopScreenGameOverDraw(
   // observes the upper native draw itself, not the mod's suppressed callsite.
   return ResolveTopScreenRendererVisibilityRoute(memory, visibility, state,
                                                   &action, error);
+}
+
+bool ReadTopScreenGameOverChoiceVisible(NativeA32Memory &memory,
+                                        const TopScreenPauseDrawInputs &inputs,
+                                        bool *visible, std::string *error) {
+  if (visible == nullptr) {
+    SetError(error, "missing TopScreen GameOver choice output");
+    return false;
+  }
+  *visible = false;
+  if (!IsTopScreenGameOverPresentation(inputs) || IsTopScreenTitleDemoRuntime(inputs) ||
+      inputs.SceneSequence <= 3U)
+    return true;
+  // The controller 0x00427A3C draws (the Visions transfer passes the same
+  // global to it).
+  constexpr std::uint32_t kGameOverController = 0x005C588CU;
+  std::uint32_t controller = 0U, terminal = 0U;
+  std::uint8_t terminalVisible = 1U;
+  if (!memory.Read32(kGameOverController, &controller)) {
+    SetError(error, "cannot read the GameOver controller");
+    return false;
+  }
+  if (controller == 0U) return true;
+  if (!memory.Read32(controller + 0x6FCU, &terminal) ||
+      (terminal != 0U && !memory.Read8(terminal + 0x6CU, &terminalVisible))) {
+    SetError(error, "cannot read the GameOver terminal renderer");
+    return false;
+  }
+  if (terminal == 0U || terminalVisible != 0U) return true;
+  // The compositor's reconciliation: a visible native queue entry copied
+  // into its slot 0x400 lower (as the savestate resume test reads it).
+  for (std::uint32_t offset = 0xAF8U; offset <= 0xEF4U; offset += 4U) {
+    std::uint32_t source = 0U, destination = 0U;
+    std::uint8_t shown = 0U;
+    if (!memory.Read32(controller + offset, &source) ||
+        !memory.Read32(controller + offset - 0x400U, &destination) ||
+        (source != 0U && !memory.Read8(source + 0x6CU, &shown))) {
+      SetError(error, "cannot read the GameOver choices");
+      return false;
+    }
+    if (source != 0U && source == destination && shown == 1U) {
+      *visible = true;
+      return true;
+    }
+  }
+  return true;
 }
 
 bool ReadTopScreenPauseControllerInputs(NativeA32Memory &memory,

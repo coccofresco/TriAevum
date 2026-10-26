@@ -518,6 +518,15 @@ void ApplyNativeWidescreenProjectionPolicy(
           runtime.PendingTopScreenPauseRenderer = state.r[0];
           ++runtime.TopScreenPauseTargetCommands;
         }
+        // 3.1 draws the Visions lists (0x005D5698) and the Game Over choices
+        // (compositor 0x005D3D30) centred at (0,40,480,320) on the upper
+        // target: touches on them map through that rectangle.
+        if (Oot3dNativeGame::IsTopScreenVisionsListPresentation(inputs) ||
+            Oot3dNativeGame::IsTopScreenGameOverPresentation(inputs)) {
+          const auto &viewport = Oot3dNativeGame::kTopScreenCentredLowerViewport;
+          runtime.TopScreenLowerMenuTouchSurface = Oot3dNativeGame::TopScreenTouchSurfaceForViewport(
+              viewport[0], viewport[1], viewport[2], viewport[3], 480);
+        }
       }
     } else if (pc == kGlBindFramebuffer &&
                runtime.PendingTopScreenPauseTarget.has_value()) {

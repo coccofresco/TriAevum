@@ -3922,6 +3922,27 @@ int main() {
   visionsInputs.NativeTransitionActive = false;
   visionsInputs.SceneSubmode = 1U;
   Require(!IsTopScreenVisionsMenu(visionsInputs), "another Visions submode took the 0x6AC route");
+  // The lists 3.1 draws on top (submodes 0 and 1) take the pointer; the
+  // movie (2), its fade (3, 4), another scene mode or a transition do not.
+  Require(IsTopScreenVisionsListPresentation(visionsInputs), "the vision list did not take the pointer");
+  visionsInputs.SceneSubmode = 0U;
+  Require(IsTopScreenVisionsListPresentation(visionsInputs), "the location list did not take the pointer");
+  visionsInputs.SceneSubmode = 2U;
+  Require(!IsTopScreenVisionsListPresentation(visionsInputs), "the Visions movie took the pointer");
+  visionsInputs.SceneSubmode = 1U;
+  visionsInputs.NativeTransitionActive = true;
+  Require(!IsTopScreenVisionsListPresentation(visionsInputs), "a native transition kept the Visions pointer");
+  visionsInputs.NativeTransitionActive = false;
+  visionsInputs.SceneMode = 3U;
+  Require(!IsTopScreenVisionsListPresentation(visionsInputs), "gameplay took the Visions pointer");
+  visionsInputs.SceneMode = 7U;
+  {
+    // TopScreenTouchSurfaceForViewport of the centred viewport is the
+    // relocated frontend's rectangle.
+    const auto &viewport = kTopScreenCentredLowerViewport;
+    Require(viewport[0] == 0 && viewport[1] == 40 && viewport[2] == 480 && viewport[3] == 320,
+            "the centred lower-screen viewport is not 3.1's (0,40,480,320)");
+  }
   Require(ResolveTopScreenVisionsFade(0) == 0.0F && ResolveTopScreenVisionsFade(12) == 0.5F &&
               ResolveTopScreenVisionsFade(30) == 1.0F,
           "the Visions fade is not min(step / 24, 1)");
@@ -4149,6 +4170,38 @@ int main() {
               &visibilityState, &error) && visibilityState.FadeStep == 24 &&
               visibilityState.DelayCalls == 60,
           "resumed choices must use the centered draw on their first frame");
+  {
+    // The choices take the pointer while the compositor shows them: the
+    // controller is the global 0x005C588C that 0x00427A3C draws.
+    bool choiceVisible = false;
+    std::uint32_t savedController = 0U;
+    Require(visibilityMemory.Read32(0x005C588CU, &savedController) &&
+                visibilityMemory.Write32(0x005C588CU, visibilityController),
+            "cannot seed the GameOver controller");
+    Require(ReadTopScreenGameOverChoiceVisible(visibilityMemory, gameOverDraw, &choiceVisible, &error) &&
+                choiceVisible,
+            "visible GameOver choices did not take the pointer");
+    Require(visibilityMemory.Write8(visibilityRenderer + 0x6CU, 1U) &&
+                ReadTopScreenGameOverChoiceVisible(visibilityMemory, gameOverDraw, &choiceVisible, &error) &&
+                !choiceVisible,
+            "GameOver choices took the pointer under the visible terminal renderer");
+    Require(visibilityMemory.Write8(visibilityRenderer + 0x6CU, 0U), "cannot restore the terminal renderer");
+    gameOverDraw.SceneSequence = 3U;
+    Require(ReadTopScreenGameOverChoiceVisible(visibilityMemory, gameOverDraw, &choiceVisible, &error) &&
+                !choiceVisible,
+            "GameOver phase 3 took the pointer before the choices");
+    gameOverDraw.SceneSequence = 5U;
+    gameOverDraw.NativeTransitionActive = true;
+    Require(ReadTopScreenGameOverChoiceVisible(visibilityMemory, gameOverDraw, &choiceVisible, &error) &&
+                !choiceVisible,
+            "GameOver choices took the pointer during a transition");
+    gameOverDraw.NativeTransitionActive = false;
+    Require(visibilityMemory.Write32(0x005C588CU, 0U) &&
+                ReadTopScreenGameOverChoiceVisible(visibilityMemory, gameOverDraw, &choiceVisible, &error) &&
+                !choiceVisible,
+            "GameOver choices took the pointer without a controller");
+    Require(visibilityMemory.Write32(0x005C588CU, savedController), "cannot restore the GameOver controller");
+  }
 
   controllerInputs.Pause.HasScene = true;
   controllerInputs.Pause.SceneMode = 3U;
