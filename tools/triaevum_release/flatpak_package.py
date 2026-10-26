@@ -18,6 +18,10 @@ except ImportError:
 
 
 ASSETS = Path(__file__).resolve().parent / "flatpak"
+# The desktop entry's icons (branding/README.md), installed by the manifest
+# from the staged `icons/hicolor` folder; both names start with the app ID,
+# so Flatpak exports them.
+ICONS = Path(__file__).resolve().parent / "branding/linux/hicolor"
 EXECUTABLE_ROLES = ("runtime_executable", "forge_executable", "forge_command_line", "forge_tool",
                     "shader_preparation_tool")
 # The PyInstaller Forge's Tk window reaches the file chooser portal through
@@ -68,6 +72,10 @@ def stage_flatpak(package: Path, output: Path, *, policy_path: Path = DEFAULT_PO
         for name in (f"{FLATPAK_ID}.desktop", "triaevum",
                      *((FILE_CHOOSER,) if forge_profile == "python_pyinstaller" else ())):
             shutil.copyfile(ASSETS / name, output / name)
+        for icon in sorted(ICONS.glob("*/apps/*.png")):
+            destination = output / "icons/hicolor" / icon.relative_to(ICONS)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(icon, destination)
         atomic_write_json(output / "flatpak-staging.json", {
             "format": "triaevum_flatpak_staging_v1",
             "package_qualification": manifest["release"].get("qualification", "unspecified"),

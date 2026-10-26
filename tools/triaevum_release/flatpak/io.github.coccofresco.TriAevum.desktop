@@ -3,7 +3,7 @@ Type=Application
 Name=TriAevum — Echoes of Time
 Comment=Prepare your personal ROM with Forge and play TriAevum
 Exec=triaevum
-Icon=applications-games
+Icon=io.github.coccofresco.TriAevum
 Terminal=false
 Categories=Game;
 Actions=Play;Forge;
@@ -15,3 +15,4 @@ Exec=triaevum
 [Desktop Action Forge]
 Name=Prepare or repair game
 Exec=triaevum --forge
+Icon=io.github.coccofresco.TriAevum.Forge

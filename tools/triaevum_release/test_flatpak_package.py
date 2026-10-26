@@ -32,6 +32,10 @@ class FlatpakPackageTests(unittest.TestCase):
             with patch.object(Path, "chmod", chmod):
                 stage_flatpak(source, root / "build")
             self.assertIn((root / "build/package" / relative, 0o755), calls)
+            # The manifest installs the desktop entry's icons from icons/hicolor.
+            for name in ("io.github.coccofresco.TriAevum", "io.github.coccofresco.TriAevum.Forge"):
+                icon = root / f"build/icons/hicolor/256x256/apps/{name}.png"
+                self.assertTrue(icon.read_bytes().startswith(b"\x89PNG"), icon)
 
     def test_stages_only_audited_linux_inventory_without_promoting_qualification(self):
         with tempfile.TemporaryDirectory() as temporary:

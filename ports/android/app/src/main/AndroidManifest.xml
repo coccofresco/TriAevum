@@ -13,7 +13,9 @@
          connection apart, so the installer can warn with the size first. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- One launcher entry with the game icon (tools/triaevum_release/branding). -->
     <application android:label="@string/app_name" android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen"
+        android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round"
         android:allowBackup="false">
         <!-- Forge runs the runtime library's native helpers in process: never in the game's process.
              It handles its own language changes (decision 8), so a picked ROM is not lost. -->

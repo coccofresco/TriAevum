@@ -23,13 +23,16 @@
         "cc -std=c11 -O2 -Wall -Wextra -Werror file_chooser.c $(pkg-config --cflags --libs gio-2.0 gio-unix-2.0) -o triaevum-file-chooser",
         "install -m755 triaevum-file-chooser /app/lib/triaevum/triaevum-file-chooser",
         "install -Dm755 triaevum /app/bin/triaevum",
-        "install -Dm644 io.github.coccofresco.TriAevum.desktop /app/share/applications/io.github.coccofresco.TriAevum.desktop"
+        "install -Dm644 io.github.coccofresco.TriAevum.desktop /app/share/applications/io.github.coccofresco.TriAevum.desktop",
+        "mkdir -p /app/share/icons",
+        "cp -r icons/hicolor /app/share/icons/"
       ],
       "sources": [
         {"type": "dir", "path": "package", "dest": "package"},
         {"type": "file", "path": "file_chooser.c"},
         {"type": "file", "path": "triaevum"},
-        {"type": "file", "path": "io.github.coccofresco.TriAevum.desktop"}
+        {"type": "file", "path": "io.github.coccofresco.TriAevum.desktop"},
+        {"type": "dir", "path": "icons", "dest": "icons"}
       ]
     }
   ]

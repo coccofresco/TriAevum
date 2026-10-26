@@ -57,6 +57,12 @@ class AppImageTests(unittest.TestCase):
             appdir = stage_appimage(root / "package", root / "AppDir")
             self.assertTrue(audit_release(appdir / "usr/lib/triaevum").ok)
             self.assertNotIn(b"\r", (appdir / "AppRun").read_bytes())
+            # The desktop entry's icons (branding/README.md): the AppDir icon,
+            # .DirIcon and the hicolor tree with the Forge action's icon.
+            app_id = "io.github.coccofresco.TriAevum"
+            for icon in (f"{app_id}.png", ".DirIcon", f"usr/share/icons/hicolor/512x512/apps/{app_id}.png",
+                         f"usr/share/icons/hicolor/64x64/apps/{app_id}.Forge.png"):
+                self.assertTrue((appdir / icon).read_bytes().startswith(b"\x89PNG"), icon)
             launcher = (appdir / "AppRun").read_text()
             self.assertIn('--play "$@"', launcher)
             for forbidden in ("SDL_GAMECONTROLLERCONFIG=", "SDL_VIDEODRIVER=", "DISPLAY=", "unset LD_PRELOAD", "flatpak run"):

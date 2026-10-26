@@ -16,8 +16,23 @@ from .linux_elf_audit import audit_native_elfs
 
 ASSETS = Path(__file__).resolve().parent / "appimage"
 APP_ID = "io.github.coccofresco.TriAevum"
+# The desktop entry's icons (branding/README.md): the game icon, and the
+# Forge icon of the "Prepare or repair game" action.
+ICONS = Path(__file__).resolve().parent / "branding/linux/hicolor"
+APPDIR_ICON_SIZE = "256x256"
 EXECUTABLE_ROLES = {"runtime_executable", "forge_executable", "forge_command_line", "forge_tool",
                     "shader_preparation_tool"}
+
+
+def install_icons(appdir: Path) -> None:
+    """The hicolor icons under usr/share, and the AppDir's own icon and .DirIcon."""
+    for icon in sorted(ICONS.glob("*/apps/*.png")):
+        destination = appdir / "usr/share/icons/hicolor" / icon.relative_to(ICONS)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(icon, destination)
+    root = ICONS / APPDIR_ICON_SIZE / "apps" / f"{APP_ID}.png"
+    shutil.copyfile(root, appdir / f"{APP_ID}.png")
+    shutil.copyfile(root, appdir / ".DirIcon")
 
 
 def stage_appimage(package: Path, output: Path, *, policy_path: Path = DEFAULT_POLICY) -> Path:
@@ -43,10 +58,11 @@ def stage_appimage(package: Path, output: Path, *, policy_path: Path = DEFAULT_P
         copied = audit_release(payload, policy_path=policy_path)
         if not copied.ok:
             raise ValueError("Copied AppImage inventory failed audit: " + "; ".join(copied.errors))
-        for name in ("AppRun", f"{APP_ID}.desktop", f"{APP_ID}.svg"):
+        for name in ("AppRun", f"{APP_ID}.desktop"):
             # Script assets are platform-independent, including checkout line endings.
             (output / name).write_text((ASSETS / name).read_text(encoding="utf-8"), encoding="utf-8", newline="\n")
         (output / "AppRun").chmod(0o755)
+        install_icons(output)
     except BaseException:
         shutil.rmtree(output)
         raise
