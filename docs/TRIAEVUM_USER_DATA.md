@@ -40,8 +40,8 @@ each location by default.
 | What (as Data & backups names it) | Where | Backup |
 |---|---|---|
 | Saves | `D/savedata/` | Always |
-| Save states | Windows: `P/savestates/` (beside `TriAevum.exe`). Linux and Android: `D/savestates/` (beside the save data). A folder chosen in the save-state settings (`Directory` in `savestates.json`) wins. | Always |
-| Save states left in the earlier folder | the default folder above, when you chose another one and the old one still exists | If you choose it |
+| Save states | `D/savestates/` on every platform. A folder chosen in the save-state settings (`Directory` in `savestates.json`) wins. Windows installations made before this version kept them in `P/savestates/` (beside `TriAevum.exe`): see [Moving to the data folder](#moving-to-the-data-folder). | Always |
+| Save states left in the earlier folder | the default folder, when you chose another one and the default still exists; on Windows also `P/savestates/` after its states were copied to `D/savestates/` | If you choose it |
 | Settings folder | `D/config/` | Always |
 | Game settings file | `D/config/TriAevum.json` (Android: `TriAevum.android.json`) | Always |
 | HUD layout | `D/config/topscreen_ui.json` | Always |
@@ -49,6 +49,7 @@ each location by default.
 | Game language | `D/config/game_language.json` | Always |
 | Mod choices | `D/config/romfs_mods.json` | Always |
 | Save-state list | `D/config/savestates.json` | Always |
+| Moves the game made | `D/config/migrations.json` (for example the save-state copy below) | Always |
 | Environments | `D/config/environments/` | Always |
 | F1 window layout | `A/data/imgui.ini` (or `A/imgui.ini` when `A/data` does not exist) | Always |
 | Touch controls (Android) | the app's shared preferences; a backup stores them as JSON | Always |
@@ -83,15 +84,28 @@ ROM: if it is removed, Forge asks for the ROM again.
 
 | What | Where |
 |---|---|
-| Game logs | `A/logs/` (`oot3d_native_game.log` and two earlier ones, `last-recovery.json`; Android also `native-stderr.log`) |
+| Game logs | `D/logs/` (`oot3d_native_game.log` and earlier ones, `last-recovery.json`, `early-errors.log`; Android also `native-stdout.log` and `native-stderr.log`) |
 | Forge logs | `D/logs/` (`forge.log` and up to four older ones, `game-stderr.log`, `last-game-run.json`, `preflight-error.json`) |
-| Crash reports (Windows) | `D/savedata/crashes/` (inside the save folder, but left out of backups) |
+| Crash reports (Windows) | `D/logs/crashes/` |
+| Earlier logs and crash reports | `A/logs/` and `D/savedata/crashes/` from earlier versions: still listed, never backed up, left in place |
 | Startup reports (Android) | the app's internal `files/diagnostics/` |
 
-On Windows the game logs are therefore in `<your TriAevum folder>\logs` and
-Forge's logs in `<your TriAevum folder>\data\logs`. Forge's **Diagnostics**
-page reads both, and its support bundle picks the files it needs (see
-[TRIAEVUM_DIAGNOSTICS.md](TRIAEVUM_DIAGNOSTICS.md)).
+On Windows all logs are therefore in `<your TriAevum folder>\data\logs`.
+Forge's **Diagnostics** page reads them, and its support bundle picks the
+files it needs (see [TRIAEVUM_DIAGNOSTICS.md](TRIAEVUM_DIAGNOSTICS.md)).
+
+The game writes its log in `D/logs` whatever folder it is started from, and
+even when the package folder is read-only. If it stops before it knows that
+folder (for example with an unreadable launch profile), the message goes to
+`triaevum-early.log` in the installation's state folder (Windows `D`,
+elsewhere `A`; without one, the system's temporary folder `TriAevum/`), and
+the next start moves it into `D/logs/early-errors.log`. A log folder that
+cannot be written falls back to the temporary folder's `TriAevum/logs`.
+
+An installation that Forge has not updated since this version (its launch
+profile has no `--log-directory`) still writes game logs to `A/logs/` and
+crash reports to `D/savedata/crashes/`; Data & backups shows them as "older
+version". Update or Repair writes the new launch profile.
 
 ### Installation records (never backed up)
 
@@ -113,16 +127,24 @@ game is open.
 
 ### Texture packs
 
-The game reads a custom texture pack from the first of these that is set:
+The game reads a custom texture pack from the first of these that is set
+(each of the load and dump folders on its own):
 
 1. the environment variables `OOT3D_AZAHAR_LOAD_DIRECTORY` /
    `OOT3D_AZAHAR_DUMP_DIRECTORY`;
 2. the folders chosen in F1 (stored in `TriAevum.json`,
    `Graphics.TexturePacks.Azahar.LoadDirectory` / `DumpDirectory`);
-3. the Azahar emulator's user folder: `load/textures/<title id>/` and
-   `dump/textures/<title id>/`.
+3. `OOT3D_AZAHAR_USER_DIRECTORY`, when set: its `load/textures/<title id>/`
+   and `dump/textures/<title id>/`;
+4. the installation's own folders, `D/textures/load/<title id>/` and
+   `D/textures/dump/<title id>/`. A pack that is already in the Azahar
+   emulator's folder (below) keeps loading from there, so an installed pack
+   never disappears;
+5. the Azahar emulator's user folder: `load/textures/<title id>/` and
+   `dump/textures/<title id>/` (installations whose launch profile does not
+   name the folders of step 4 yet).
 
-The Azahar user folder is `OOT3D_AZAHAR_USER_DIRECTORY` when set, otherwise:
+The Azahar emulator's user folder is:
 
 | Platform | Azahar user folder |
 |---|---|
@@ -131,11 +153,38 @@ The Azahar user folder is `OOT3D_AZAHAR_USER_DIRECTORY` when set, otherwise:
 | Linux Flatpak | `~/.var/app/io.github.coccofresco.TriAevum/data/azahar` (the sandbox's data folder) |
 | Android | `A/Azahar` |
 
-The title id folder is `0004000000033600` unless `OOT3D_AZAHAR_TITLE_ID`
-names another. The runtime uses this id for every supported revision.
+The title id is the one of the game you installed, read from your ROM:
+`0004000000033600` for a European cartridge, `0004000000033500` for a North
+American one (its code runs the European title module, but its texture
+folder keeps its own id). `OOT3D_AZAHAR_TITLE_ID` names another. An
+installation whose launch profile has no `--title-id` yet uses
+`0004000000033600`.
 
-On Windows and the AppImage the default texture folders are outside the
-installation, so they are yours: Forge never moves or deletes them.
+The Azahar emulator's folders are outside the installation, so they are
+yours: Forge never moves or deletes them.
+
+### Moving to the data folder
+
+Forge writes the new locations into the launch profile (the
+`--log-directory`, `--crash-directory`, `--savestate-directory`,
+`--texture-load-directory`, `--texture-dump-directory` and `--title-id`
+options) for a game version that supports them, at install, Update or
+Repair. An older launch profile keeps working with the earlier folders.
+
+On Windows the first start with the new profile copies your save states
+from `P/savestates/` to `D/savestates/`:
+
+- only when you did not choose a save-state folder yourself;
+- every file is copied and compared byte for byte before it counts; a file
+  that already exists in `D/savestates/` is never overwritten (an identical
+  one is skipped, a different one stays only in the old folder and is
+  listed in the old folder's `README-moved.txt`);
+- the last state (F8) then points to its copy, and the copy is recorded in
+  `D/config/migrations.json`, so the next start copies nothing;
+- nothing is deleted: `P/savestates/` keeps every file, with
+  `README-moved.txt`. Delete it yourself once you have checked your states;
+- if anything fails, the game keeps using `P/savestates/` and tries again
+  at the next start.
 
 ## What a backup holds
 
