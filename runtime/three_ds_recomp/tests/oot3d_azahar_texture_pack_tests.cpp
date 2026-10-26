@@ -6,7 +6,10 @@
 
 #include <array>
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
+#include <optional>
+#include <string>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
@@ -236,6 +239,104 @@ TEST_F(Oot3dAzaharTexturePackTest, BaseDirectoriesLoadBeneathTheUserPackInOrder)
     const auto status = runtime.Snapshot();
     EXPECT_NE(status.LastError.find("another hash mode"), std::string::npos) << status.LastError;
     EXPECT_EQ(status.IndexedTextures, 1U) << "the user's pack must stay loaded";
+}
+
+// Sets (or, with an empty value, removes) an environment variable for one
+// test and restores the previous value.
+class ScopedEnvironment {
+  public:
+    ScopedEnvironment(const char* name, const std::string& value) : mName(name) {
+        if (const char* previous = std::getenv(name); previous != nullptr) mPrevious = previous;
+        Set(value);
+    }
+    ~ScopedEnvironment() { Set(mPrevious.value_or(std::string{})); }
+    ScopedEnvironment(const ScopedEnvironment&) = delete;
+    ScopedEnvironment& operator=(const ScopedEnvironment&) = delete;
+
+  private:
+    void Set(const std::string& value) {
+#ifdef _WIN32
+        _putenv_s(mName, value.c_str());
+#else
+        if (value.empty()) unsetenv(mName);
+        else setenv(mName, value.c_str(), 1);
+#endif
+    }
+    const char* mName;
+    std::optional<std::string> mPrevious;
+};
+
+// UX plan WP-05C: the host's managed defaults and installed title rank below
+// the environment, the F1 folders and a named user folder; an existing pack in
+// Azahar's own folder keeps loading; unrelated settings changes keep the pack.
+TEST_F(Oot3dAzaharTexturePackTest, HostDefaultsRankBelowEveryChoiceAndKeepAnInstalledPack) {
+    constexpr uint64_t usaTitle = 0x0004000000033500ULL;
+#ifdef _WIN32
+    ScopedEnvironment azaharHome("APPDATA", Root.string());
+    const auto azahar = Root / "Azahar";
+#else
+    ScopedEnvironment azaharHome("XDG_DATA_HOME", Root.string());
+    const auto azahar = Root / "azahar";
+#endif
+    ScopedEnvironment noUser("OOT3D_AZAHAR_USER_DIRECTORY", "");
+    ScopedEnvironment noLoad("OOT3D_AZAHAR_LOAD_DIRECTORY", "");
+    ScopedEnvironment noDump("OOT3D_AZAHAR_DUMP_DIRECTORY", "");
+    ScopedEnvironment noTitle("OOT3D_AZAHAR_TITLE_ID", "");
+    const auto managedLoad = Root / "data" / "textures" / "load" / "0004000000033500";
+    const auto managedDump = Root / "data" / "textures" / "dump" / "0004000000033500";
+
+    Oot3d::Renderer::AzaharTexturePackRuntime runtime;
+    // Without host defaults (an older launch profile): Azahar's folder, EUR.
+    runtime.Configure({.LoadCustomTextures = true});
+    EXPECT_EQ(runtime.Snapshot().LoadDirectory, azahar / "load" / "textures" / "0004000000033600");
+    EXPECT_EQ(runtime.Snapshot().DumpDirectory, azahar / "dump" / "textures" / "0004000000033600");
+
+    // The host's defaults reach a configuration made before them, and every
+    // later settings Configure keeps them.
+    runtime.SetHostDefaults({.TitleId = usaTitle, .LoadDirectory = managedLoad, .DumpDirectory = managedDump});
+    EXPECT_EQ(runtime.Snapshot().LoadDirectory, managedLoad);
+    EXPECT_EQ(runtime.Snapshot().DumpDirectory, managedDump);
+    const auto generation = runtime.Generation();
+    runtime.Configure({.LoadCustomTextures = true});
+    EXPECT_EQ(runtime.Generation(), generation) << "an unrelated settings change must not reload the pack";
+    EXPECT_EQ(runtime.Snapshot().LoadDirectory, managedLoad);
+
+    // F1 folders win over the managed defaults.
+    const auto chosen = Root / "chosen";
+    runtime.Configure({.LoadCustomTextures = true, .LoadDirectory = chosen});
+    EXPECT_EQ(runtime.Snapshot().LoadDirectory, chosen);
+    EXPECT_EQ(runtime.Snapshot().DumpDirectory, managedDump);
+    {
+        // The environment wins over F1.
+        ScopedEnvironment load("OOT3D_AZAHAR_LOAD_DIRECTORY", (Root / "from_environment").string());
+        runtime.Configure({.LoadCustomTextures = true, .LoadDirectory = chosen, .DumpDirectory = Root / "dumps"});
+        EXPECT_EQ(runtime.Snapshot().LoadDirectory, Root / "from_environment");
+        EXPECT_EQ(runtime.Snapshot().DumpDirectory, Root / "dumps");
+    }
+    {
+        // A named user folder supplies a root, below F1 and above the managed defaults.
+        ScopedEnvironment user("OOT3D_AZAHAR_USER_DIRECTORY", (Root / "user_root").string());
+        runtime.Configure({.LoadCustomTextures = true});
+        EXPECT_EQ(runtime.Snapshot().LoadDirectory, Root / "user_root" / "load" / "textures" / "0004000000033500");
+        runtime.Configure({.LoadCustomTextures = true, .LoadDirectory = chosen});
+        EXPECT_EQ(runtime.Snapshot().LoadDirectory, chosen);
+    }
+    {
+        // OOT3D_AZAHAR_TITLE_ID names the folder over the installed title.
+        ScopedEnvironment title("OOT3D_AZAHAR_TITLE_ID", "0004000000033600");
+        runtime.SetHostDefaults({.TitleId = usaTitle});
+        runtime.Configure({.LoadCustomTextures = true});
+        EXPECT_EQ(runtime.Snapshot().LoadDirectory, azahar / "load" / "textures" / "0004000000033600");
+    }
+
+    // A pack already installed in Azahar's folder under the installed title
+    // keeps loading; dumps go to the managed default.
+    const auto installed = azahar / "load" / "textures" / "0004000000033500";
+    std::filesystem::create_directories(installed);
+    runtime.SetHostDefaults({.TitleId = usaTitle, .LoadDirectory = managedLoad, .DumpDirectory = managedDump});
+    runtime.Configure({.DumpTextures = false, .LoadCustomTextures = true});
+    EXPECT_EQ(runtime.Snapshot().LoadDirectory, installed);
+    EXPECT_EQ(runtime.Snapshot().DumpDirectory, managedDump);
 }
 
 TEST_F(Oot3dAzaharTexturePackTest,

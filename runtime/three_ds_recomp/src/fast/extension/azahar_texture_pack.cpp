@@ -124,11 +124,27 @@ std::filesystem::path ResolveDefaultUserDirectory() {
     return (error ? std::filesystem::path(".") : current) / "Azahar";
 }
 
+// The folders and title a configuration uses, per value (UX plan WP-05C):
+// OOT3D_AZAHAR_LOAD_DIRECTORY / _DUMP_DIRECTORY, then the F1 folders
+// (LoadDirectory / DumpDirectory), then a user folder root (UserDirectory or
+// OOT3D_AZAHAR_USER_DIRECTORY, which only supplies <root>/{load,dump}/
+// textures/<title>), then the host's managed defaults, then Azahar's own
+// user folder. The title: OOT3D_AZAHAR_TITLE_ID, then the installed title the
+// host names, then the configuration's. UserDirectory stays empty unless a
+// root was named, so ApplyLocked can tell the two fallbacks apart.
 AzaharTexturePackConfiguration NormalizeConfiguration(AzaharTexturePackConfiguration configuration) {
     if (configuration.UserDirectory.empty()) {
-        configuration.UserDirectory = ResolveDefaultUserDirectory();
+        if (const char* overridePath = std::getenv("OOT3D_AZAHAR_USER_DIRECTORY");
+            overridePath != nullptr && *overridePath != '\0') {
+            configuration.UserDirectory = std::filesystem::path(overridePath);
+        }
     }
-    configuration.UserDirectory = configuration.UserDirectory.lexically_normal();
+    if (!configuration.UserDirectory.empty()) {
+        configuration.UserDirectory = configuration.UserDirectory.lexically_normal();
+    }
+    if (configuration.HostDefaults.TitleId.has_value()) {
+        configuration.TitleId = *configuration.HostDefaults.TitleId;
+    }
     if (const char* loadDirectory = std::getenv("OOT3D_AZAHAR_LOAD_DIRECTORY");
         loadDirectory != nullptr && *loadDirectory != '\0') {
         configuration.LoadDirectory = std::filesystem::path(loadDirectory);
@@ -536,20 +552,51 @@ class AzaharTexturePackRuntime::Impl {
     }
 
     void Configure(AzaharTexturePackConfiguration configuration) {
-        configuration = NormalizeConfiguration(std::move(configuration));
         std::scoped_lock lock(mMutex);
-        configuration.BaseDirectories = mBaseDirectories;
-        ApplyLocked(std::move(configuration));
+        mRequested = std::move(configuration);
+        ApplyRequestedLocked();
     }
 
     void SetBaseDirectories(std::vector<std::filesystem::path> directories) {
         for (auto& directory : directories) directory = directory.lexically_normal();
         std::scoped_lock lock(mMutex);
         mBaseDirectories = std::move(directories);
-        if (!mConfigured) return;
-        auto configuration = mConfiguration;
+        if (mConfigured) ApplyRequestedLocked();
+    }
+
+    void SetHostDefaults(AzaharTextureHostDefaults defaults) {
+        if (!defaults.LoadDirectory.empty()) defaults.LoadDirectory = defaults.LoadDirectory.lexically_normal();
+        if (!defaults.DumpDirectory.empty()) defaults.DumpDirectory = defaults.DumpDirectory.lexically_normal();
+        std::scoped_lock lock(mMutex);
+        mHostDefaults = std::move(defaults);
+        if (mConfigured) ApplyRequestedLocked();
+    }
+
+    // The last settings with the host-owned parts (base packs, managed
+    // defaults), which every settings Configure keeps.
+    void ApplyRequestedLocked() {
+        auto configuration = mRequested;
         configuration.BaseDirectories = mBaseDirectories;
-        ApplyLocked(std::move(configuration));
+        configuration.HostDefaults = mHostDefaults;
+        ApplyLocked(NormalizeConfiguration(std::move(configuration)));
+    }
+
+    // One folder per NormalizeConfiguration's order. An existing pack in
+    // Azahar's own folder stays where it is when the host names a managed
+    // default (an installed pack never disappears; importing it is the
+    // user's choice); dumps go to the managed default.
+    static std::filesystem::path ResolveFolder(const AzaharTexturePackConfiguration& configuration,
+                                               const std::filesystem::path& chosen,
+                                               const std::filesystem::path& managed, const char* kind,
+                                               bool keepExistingAzaharFolder) {
+        if (!chosen.empty()) return chosen;
+        const auto title = Hex16(configuration.TitleId);
+        if (!configuration.UserDirectory.empty()) return configuration.UserDirectory / kind / "textures" / title;
+        const auto azahar = (ResolveDefaultUserDirectory() / kind / "textures" / title).lexically_normal();
+        if (managed.empty()) return azahar;
+        std::error_code error;
+        if (keepExistingAzaharFolder && std::filesystem::is_directory(azahar, error)) return azahar;
+        return managed;
     }
 
     void ApplyLocked(AzaharTexturePackConfiguration configuration) {
@@ -568,11 +615,10 @@ class AzaharTexturePackRuntime::Impl {
         mFailedLoadHashes.clear();
         mFailedMaterialHashes.clear();
         mDumpedHashes.clear();
-        const auto title = Hex16(mConfiguration.TitleId);
-        mLoadDirectory = mConfiguration.LoadDirectory.empty()
-            ? mConfiguration.UserDirectory / "load" / "textures" / title : mConfiguration.LoadDirectory;
-        mDumpDirectory = mConfiguration.DumpDirectory.empty()
-            ? mConfiguration.UserDirectory / "dump" / "textures" / title : mConfiguration.DumpDirectory;
+        mLoadDirectory = ResolveFolder(mConfiguration, mConfiguration.LoadDirectory,
+                                       mConfiguration.HostDefaults.LoadDirectory, "load", true);
+        mDumpDirectory = ResolveFolder(mConfiguration, mConfiguration.DumpDirectory,
+                                       mConfiguration.HostDefaults.DumpDirectory, "dump", false);
         RequestRebuildLocked();
     }
 
@@ -1014,8 +1060,9 @@ class AzaharTexturePackRuntime::Impl {
     uint64_t mMaterialRevision = 1U;
     std::optional<AzaharMaterialParameterPreview> mPreview;
     std::string mPreviewSeamStatus;
-    AzaharTexturePackConfiguration mConfiguration;
+    AzaharTexturePackConfiguration mConfiguration, mRequested;
     std::vector<std::filesystem::path> mBaseDirectories;
+    AzaharTextureHostDefaults mHostDefaults;
     std::filesystem::path mLoadDirectory, mDumpDirectory;
     PackState mPack;
     bool mDumpUsesNewHash = true;
@@ -1047,6 +1094,10 @@ void AzaharTexturePackRuntime::Configure(AzaharTexturePackConfiguration configur
 
 void AzaharTexturePackRuntime::SetBaseDirectories(std::vector<std::filesystem::path> directories) {
     mImpl->SetBaseDirectories(std::move(directories));
+}
+
+void AzaharTexturePackRuntime::SetHostDefaults(AzaharTextureHostDefaults defaults) {
+    mImpl->SetHostDefaults(std::move(defaults));
 }
 
 void AzaharTexturePackRuntime::Reload() {
