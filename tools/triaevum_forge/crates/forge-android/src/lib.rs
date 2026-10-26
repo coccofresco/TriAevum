@@ -122,6 +122,45 @@ pub unsafe extern "system" fn Java_org_triaevum_android_forge_ForgeNative_cancel
     }
 }
 
+/// The bytes `inspect` returns for a request (`forge_core::state`).
+pub fn inspect_json(request: &[u8]) -> Vec<u8> {
+    forge_core::state::inspect_bytes(request)
+}
+
+/// The bytes `explain` returns for an event, error or notice
+/// (`forge_core::explain`).
+pub fn explain_json(input: &[u8]) -> Vec<u8> {
+    forge_core::explain::explain_bytes(input)
+}
+
+/// `static native byte[] inspect(byte[] request)`: the installation state.
+#[no_mangle]
+pub unsafe extern "system" fn Java_org_triaevum_android_forge_ForgeNative_inspect(
+    env: *mut JNIEnv,
+    _class: jclass,
+    request: jbyteArray,
+) -> jbyteArray {
+    let request = read_byte_array(env, request).unwrap_or_default();
+    match catch_unwind(AssertUnwindSafe(|| inspect_json(&request))) {
+        Ok(bytes) => byte_array(env, &bytes),
+        Err(_) => ptr::null_mut(),
+    }
+}
+
+/// `static native byte[] explain(byte[] input)`: an explanation, or JSON null.
+#[no_mangle]
+pub unsafe extern "system" fn Java_org_triaevum_android_forge_ForgeNative_explain(
+    env: *mut JNIEnv,
+    _class: jclass,
+    input: jbyteArray,
+) -> jbyteArray {
+    let input = read_byte_array(env, input).unwrap_or_default();
+    match catch_unwind(AssertUnwindSafe(|| explain_json(&input))) {
+        Ok(bytes) => byte_array(env, &bytes),
+        Err(_) => ptr::null_mut(),
+    }
+}
+
 /// `static native void destroyJob(long job)`: cancels, joins and frees.
 #[no_mangle]
 pub unsafe extern "system" fn Java_org_triaevum_android_forge_ForgeNative_destroyJob(

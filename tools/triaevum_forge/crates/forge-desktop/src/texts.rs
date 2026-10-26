@@ -37,7 +37,6 @@ pub const NO_ACTIVE_TITLE: &str = "No active title is installed. Select a decryp
 pub const STARTING: &str = "Starting title preparation...";
 pub const DOWNLOADING_HD_FIRST: &str = "Downloading the HD textures before the title preparation...";
 pub const DOWNLOADING_MOD_FIRST: &str = "Downloading the enabled mod before the title preparation...";
-pub const PREPARATION_FAILED: &str = "Title preparation failed.";
 pub const READY_DIALOG: &str = "The title is ready. You can launch TriAevum \u{2014} Echoes of Time now.";
 pub const CLOSE_WHILE_BUSY: &str = "Title preparation is still running. Close Forge?";
 pub const NOT_AVAILABLE: &str = "Not available for the supported game revisions of this package.";

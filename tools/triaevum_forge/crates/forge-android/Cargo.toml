@@ -14,3 +14,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 forge-core = { path = "../forge-core", default-features = false }
 jni-sys = "0.3"
+
+[dev-dependencies]
+serde_json.workspace = true
+tempfile.workspace = true

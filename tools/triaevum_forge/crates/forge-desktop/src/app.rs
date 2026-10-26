@@ -332,7 +332,11 @@ impl ForgeApp {
     fn refresh_active_title(&mut self) {
         self.active_title = load_active_title(&self.installation.active_title_state());
         self.status = match &self.active_title {
-            None => texts::NO_ACTIVE_TITLE.to_string(),
+            // Not playable: say why when the installation needs the user.
+            None => match self.installation.state().explanation() {
+                Some(explanation) => format!("{} {}", explanation.title, explanation.next_action),
+                None => texts::NO_ACTIVE_TITLE.to_string(),
+            },
             Some(active) => texts::ready_to_play(&active.recipe_id, &active.directory),
         };
         self.refresh_languages();
@@ -423,13 +427,13 @@ impl ForgeApp {
                     );
                 }
             }
-            Event::InstallFailed(message) => {
+            Event::InstallFailed(explanation) => {
                 self.busy = false;
                 self.progress = None;
-                self.status = texts::PREPARATION_FAILED.to_string();
-                self.dialog(DialogKind::Error, texts::DIALOG_TITLE, message);
+                self.status = explanation.title.to_string();
+                self.dialog(DialogKind::Error, explanation.title, explanation.body());
             }
-            Event::InstallComplete { hd, mod_ } => {
+            Event::InstallComplete { hd, mod_, notices } => {
                 self.busy = false;
                 self.progress = None;
                 self.card_installed = true;
@@ -441,7 +445,11 @@ impl ForgeApp {
                 if !self.mod_status.starts_with(texts::MOD_DOWNLOAD_FAILED_PREFIX) {
                     self.refresh_mod();
                 }
-                self.dialog(DialogKind::Info, texts::DIALOG_TITLE, texts::READY_DIALOG.to_string());
+                let mut message = texts::READY_DIALOG.to_string();
+                for notice in &notices {
+                    message.push_str(&format!("\n\n{}\n{}\n{}", notice.title, notice.next_action, notice.details));
+                }
+                self.dialog(DialogKind::Info, texts::DIALOG_TITLE, message);
             }
             Event::InstallCancelled => {
                 self.busy = false;
@@ -522,7 +530,10 @@ impl ForgeApp {
             Action::Install => self.start_install(),
             Action::Launch => {
                 if let Err(error) = crate::launch::launch_runtime(&self.installation) {
-                    self.dialog(DialogKind::Error, texts::DIALOG_TITLE, error.message);
+                    let error = error.during(forge_base::Operation::Launch);
+                    forge_core::log::ForgeLog::new(&self.installation.data_root, "launch").error(&error);
+                    let explanation = forge_core::explain::explain(&error);
+                    self.dialog(DialogKind::Error, explanation.title, explanation.body());
                 }
             }
             Action::DownloadHd => {
@@ -1106,7 +1117,7 @@ mod tests {
         let detected = serde_json::json!({"format": "triaevum_game_language_v1", "selected": "en", "available": [
             {"code": "en", "label": "English", "system_id": 1}, {"code": "it", "label": "Italiano", "system_id": 4}]});
         forge_native::language::install_preferring(&data_root, &detected, Some("it")).unwrap();
-        app.handle(Event::InstallComplete { hd: Ok(Status::Missing), mod_: Ok(Status::Missing) });
+        app.handle(Event::InstallComplete { hd: Ok(Status::Missing), mod_: Ok(Status::Missing), notices: Vec::new() });
         assert_eq!(app.language_options().1, Some(1));
         assert_eq!(app.install_plan().game_language, None);
         app.choose_language(0);

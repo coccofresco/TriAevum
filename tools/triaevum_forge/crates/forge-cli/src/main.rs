@@ -6,7 +6,9 @@
 //! failures print `{"status":"error",...}` and exit 1, as the Python Forge CLI
 //! does. `run-job` streams one compact JSON event per line on stdout
 //! (diagnostics go to stderr). `--install-worker` speaks the Python GUI's
-//! worker line protocol, so the Python GUI can drive this engine.
+//! worker line protocol, so the Python GUI can drive this engine. `status`
+//! prints the installation state and `explain` the explanation of an event,
+//! the same JSON the C ABI and the Android installer receive.
 
 use std::ffi::OsString;
 use std::io::Write;
@@ -16,6 +18,8 @@ use std::process::ExitCode;
 use clap::{Args, Parser, Subcommand};
 use forge_core::install::{install_private_title, InstallRequest, InstallSource, InstallTarget};
 use forge_core::legacy_json::{self, Options, Style};
+use forge_core::log::ForgeLog;
+use forge_core::state::{inspect, InspectRequest, InstallationState};
 use forge_core::CancelToken;
 use forge_native::DesktopServices;
 use serde_json::{json, Value};
@@ -40,6 +44,23 @@ enum Command {
     RunJob { request: String },
     /// Import a decrypted ROM (or extracted data) and install its precompiled title.
     Install(InstallArgs),
+    /// Print the installation state as JSON (read-only).
+    Status(StatusArgs),
+    /// Explain a failed or cancelled event, an error object or a notice (a JSON file, or - for stdin).
+    Explain { input: String },
+}
+
+#[derive(Args)]
+struct StatusArgs {
+    /// The package (default: this executable's package).
+    #[arg(long)]
+    package_root: Option<PathBuf>,
+    /// The private data folder (default: the package's data folder).
+    #[arg(long)]
+    data_root: Option<PathBuf>,
+    /// Rehash the game data kept from the ROM instead of checking its size.
+    #[arg(long)]
+    verify_sources: bool,
 }
 
 #[derive(Args)]
@@ -87,6 +108,58 @@ fn main() -> ExitCode {
         Command::Capabilities => print_result(&forge_core::jobs::capabilities()),
         Command::RunJob { request } => run_job(&request),
         Command::Install(args) => install(args),
+        Command::Status(args) => status(args),
+        Command::Explain { input } => explain(&input),
+    }
+}
+
+/// One explanation line on stderr for a failure the JSON output reports.
+fn explain_on_stderr(event: &Value) {
+    if let Some(explanation) = forge_core::explain::explain_value(event) {
+        eprintln!("{}: {}", explanation.title, explanation.next_action);
+    }
+}
+
+fn status(args: StatusArgs) -> ExitCode {
+    let package_root = match package_root(args.package_root) {
+        Ok(root) => root,
+        Err(message) => return print_error(&message),
+    };
+    let request = InspectRequest {
+        data_root: args.data_root,
+        verify_sources: args.verify_sources,
+        ..InspectRequest::package(package_root)
+    };
+    let state = inspect(&request);
+    println!("{}", legacy_json::dumps(&state.to_value(), PYTHON_RESULT));
+    if matches!(state, InstallationState::Failed { .. }) {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
+}
+
+fn read_input(input: &str) -> Result<Vec<u8>, String> {
+    if input == "-" {
+        let mut bytes = Vec::new();
+        std::io::Read::read_to_end(&mut std::io::stdin(), &mut bytes)
+            .map_err(|error| format!("Cannot read the input: {error}"))?;
+        return Ok(bytes);
+    }
+    std::fs::read(input).map_err(|error| format!("Cannot read {input}: {error}"))
+}
+
+fn explain(input: &str) -> ExitCode {
+    let bytes = match read_input(input) {
+        Ok(bytes) => bytes,
+        Err(message) => return print_error(&message),
+    };
+    let explanation: Value = serde_json::from_slice(&forge_core::explain::explain_bytes(&bytes)).unwrap_or(Value::Null);
+    println!("{}", legacy_json::dumps(&explanation, PYTHON_RESULT));
+    if explanation.is_null() {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
     }
 }
 
@@ -119,6 +192,12 @@ fn install(args: InstallArgs) -> ExitCode {
         Ok(root) => root,
         Err(message) => return print_error(&message),
     };
+    let log = forge_core::install::data_root(args.data_root.as_deref(), &package_root)
+        .ok()
+        .map(|data_root| ForgeLog::new(&data_root, "install"));
+    if let Some(log) = &log {
+        log.line("started");
+    }
     let request = InstallRequest {
         source,
         data_root: args.data_root,
@@ -126,10 +205,26 @@ fn install(args: InstallArgs) -> ExitCode {
         target: InstallTarget::Package,
         game_language: args.game_language,
     };
-    let mut report = |stage: &str, message: &str| eprintln!("[{stage}] {message}");
+    let mut report = |stage: &str, message: &str| {
+        eprintln!("[{stage}] {message}");
+        if let Some(log) = &log {
+            log.line(&format!("stage {stage}: {message}"));
+        }
+    };
     match install_private_title(request, &DesktopServices, &mut report, &CancelToken::new()) {
-        Ok(result) => print_result(&result),
-        Err(error) => print_error(&error.message),
+        Ok(result) => {
+            if let Some(log) = &log {
+                log.event(&forge_core::abi::succeeded_event(result.clone()));
+            }
+            print_result(&result)
+        }
+        Err(error) => {
+            if let Some(log) = &log {
+                log.error(&error);
+            }
+            explain_on_stderr(&forge_core::abi::error_event(&error));
+            print_error(&error.message)
+        }
     }
 }
 
@@ -192,6 +287,9 @@ fn run_job(request: &str) -> ExitCode {
     loop {
         let Some(event) = job.poll(250) else { continue };
         let terminal = matches!(event["event"].as_str(), Some("succeeded" | "failed" | "cancelled"));
+        if event["event"] == "failed" {
+            explain_on_stderr(&event);
+        }
         let mut out = stdout.lock();
         let _ = out.write_all(&legacy_json::compact_line_bytes(&event));
         let _ = out.flush();

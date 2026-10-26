@@ -10,6 +10,7 @@ use std::sync::mpsc::Sender;
 use std::sync::Arc;
 
 use forge_base::CancelToken;
+use forge_core::explain::{explain, explain_value, Explanation};
 use forge_mods::Status;
 use serde_json::{json, Value};
 
@@ -39,10 +40,12 @@ pub enum Event {
         error: Option<String>,
         state: Checked,
     },
-    InstallFailed(String),
+    InstallFailed(Box<Explanation>),
     InstallComplete {
         hd: Checked,
         mod_: Checked,
+        /// Non-error outcomes of the installation (graphics preparation incomplete).
+        notices: Vec<Explanation>,
     },
     InstallCancelled,
     /// The recognized-ROM card for the ROM path `source`.
@@ -107,9 +110,13 @@ pub fn install_request(source: &Path, data_root: &Path, package_root: &Path, gam
 #[derive(Debug, PartialEq)]
 pub enum JobUpdate {
     Stage(String),
-    Progress { done: u64, total: Option<u64> },
-    Succeeded,
-    Failed(String),
+    Progress {
+        done: u64,
+        total: Option<u64>,
+    },
+    /// With the explanations of the event's notices.
+    Succeeded(Vec<Explanation>),
+    Failed(Box<Explanation>),
     Cancelled,
 }
 
@@ -122,10 +129,11 @@ pub fn job_update(event: &Value) -> Option<JobUpdate> {
             done: event.get("done").and_then(Value::as_u64).unwrap_or(0),
             total: event.get("total").and_then(Value::as_u64),
         }),
-        "succeeded" => Some(JobUpdate::Succeeded),
-        "failed" => Some(JobUpdate::Failed(
-            event.pointer("/error/message").and_then(Value::as_str).unwrap_or("Forge failed").to_string(),
-        )),
+        "succeeded" => {
+            let notices = event.get("notices").and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default();
+            Some(JobUpdate::Succeeded(notices.iter().filter_map(explain_value).collect()))
+        }
+        "failed" => explain_value(event).map(|explanation| JobUpdate::Failed(Box::new(explanation))),
         "cancelled" => Some(JobUpdate::Cancelled),
         _ => None,
     }
@@ -167,7 +175,7 @@ pub fn run_install(optional: Arc<Optional>, plan: InstallPlan, notify: Notifier,
     let job = match forge_core::jobs::start(&forge_base::legacy_json::compact_line_bytes(&request)) {
         Ok(job) => job,
         Err(error) => {
-            notify.send(Event::InstallFailed(error.message));
+            notify.send(Event::InstallFailed(Box::new(explain(&error))));
             return;
         }
     };
@@ -179,13 +187,14 @@ pub fn run_install(optional: Arc<Optional>, plan: InstallPlan, notify: Notifier,
         match update {
             JobUpdate::Stage(message) => notify.send(Event::Stage(message)),
             JobUpdate::Progress { done, total } => notify.send(Event::Progress { done, total }),
-            JobUpdate::Succeeded => {
+            JobUpdate::Succeeded(notices) => {
                 let check = CancelToken::new();
-                notify.send(Event::InstallComplete { hd: optional.hd_state(&check), mod_: optional.mod_state(&check) });
+                let (hd, mod_) = (optional.hd_state(&check), optional.mod_state(&check));
+                notify.send(Event::InstallComplete { hd, mod_, notices });
                 return;
             }
-            JobUpdate::Failed(message) => {
-                notify.send(Event::InstallFailed(message));
+            JobUpdate::Failed(explanation) => {
+                notify.send(Event::InstallFailed(explanation));
                 return;
             }
             JobUpdate::Cancelled => {
@@ -228,12 +237,62 @@ mod tests {
             job_update(&json!({"event": "progress", "stage": "extract", "done": 5, "total": null})),
             Some(JobUpdate::Progress { done: 5, total: None })
         );
-        assert_eq!(
-            job_update(&json!({"event": "failed", "error": {"code": "invalid_input", "message": "bad ROM"}})),
-            Some(JobUpdate::Failed("bad ROM".into()))
-        );
-        assert_eq!(job_update(&json!({"event": "succeeded", "result": {}})), Some(JobUpdate::Succeeded));
+        let Some(JobUpdate::Failed(failed)) =
+            job_update(&json!({"event": "failed", "error": {"code": "invalid_input", "message": "bad ROM"}}))
+        else {
+            panic!("not a failure")
+        };
+        assert_eq!((failed.id, failed.details.as_str()), ("invalid_input", "bad ROM"));
+        assert_eq!(job_update(&json!({"event": "succeeded", "result": {}})), Some(JobUpdate::Succeeded(Vec::new())));
+        let notice =
+            json!({"outcome": "graphics_preparation_incomplete", "details": "GPU pipeline preparation: failed"});
+        let Some(JobUpdate::Succeeded(notices)) =
+            job_update(&json!({"event": "succeeded", "result": {}, "notices": [notice]}))
+        else {
+            panic!("not a success")
+        };
+        assert_eq!(notices[0].id, "outcome.graphics_preparation_incomplete");
         assert_eq!(job_update(&json!({"event": "other"})), None);
+    }
+
+    /// The shared explanation fixtures, as the window receives them: a failed
+    /// event becomes the dialog's explanation, a notice a line of the ready dialog.
+    #[test]
+    fn shared_fixtures_reach_the_window_with_their_explanations() {
+        let document: Value =
+            serde_json::from_str(include_str!("../../forge-core/tests/fixtures/explain_events.json")).unwrap();
+        for case in document["cases"].as_array().unwrap() {
+            let input = &case["input"];
+            let expected = case["id"].as_str();
+            let shown = match input.get("event").and_then(Value::as_str) {
+                Some("failed") => match job_update(input) {
+                    Some(JobUpdate::Failed(explanation)) => Some(*explanation),
+                    other => panic!("{}: {other:?}", case["name"]),
+                },
+                Some("cancelled") => {
+                    assert_eq!(job_update(input), Some(JobUpdate::Cancelled));
+                    continue;
+                }
+                Some(_) => {
+                    assert!(!matches!(job_update(input), Some(JobUpdate::Failed(_))));
+                    None
+                }
+                None if input.get("outcome").is_some() => {
+                    let event = json!({"event": "succeeded", "result": {}, "notices": [input]});
+                    match job_update(&event) {
+                        Some(JobUpdate::Succeeded(mut notices)) => notices.pop(),
+                        other => panic!("{}: {other:?}", case["name"]),
+                    }
+                }
+                None => continue,
+            };
+            assert_eq!(shown.as_ref().map(|explanation| explanation.id), expected, "{}", case["name"]);
+            if let Some(explanation) = shown {
+                let reference = forge_core::explain::explain_value(input).unwrap();
+                assert_eq!(explanation, reference, "{}", case["name"]);
+                assert!(explanation.body().contains(explanation.next_action));
+            }
+        }
     }
 
     /// Until forge-core accepts `install`, the refusal reaches the window as
@@ -256,7 +315,7 @@ mod tests {
         let events: Vec<Event> = receiver.try_iter().collect();
         let terminal = events.last().unwrap();
         assert!(
-            matches!(terminal, Event::InstallFailed(message) if !message.is_empty())
+            matches!(terminal, Event::InstallFailed(explanation) if !explanation.details.is_empty())
                 || matches!(terminal, Event::InstallComplete { .. }),
             "{events:?}"
         );

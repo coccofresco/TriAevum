@@ -25,4 +25,19 @@ public final class ForgeNative {
     public static native void cancelJob(long job);
 
     public static native void destroyJob(long job);
+
+    /**
+     * The installation state for {"format":"triaevum_forge_inspect_v1","package_root":...,
+     * "android":{"native_library_dir":...,"profile_root":...}}: tagged JSON
+     * {"format":"triaevum_installation_state_v1","state":...}. Read-only, but it hashes installed
+     * files: call it off the main thread.
+     */
+    public static native byte[] inspect(byte[] request);
+
+    /**
+     * The explanation {"format":"triaevum_explanation_v1","id","title","cause","next_action",
+     * "primary_action","details",...} of a failed or cancelled event, an error object or a notice;
+     * JSON null for anything else.
+     */
+    public static native byte[] explain(byte[] input);
 }

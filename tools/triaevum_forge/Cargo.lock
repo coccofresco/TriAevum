@@ -1203,6 +1203,8 @@ version = "0.1.0"
 dependencies = [
  "forge-core",
  "jni-sys 0.3.1",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -1241,6 +1243,7 @@ dependencies = [
  "forge-core",
  "forge-native",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]

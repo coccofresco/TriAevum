@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 
 use forge_base::{ForgeError, Result};
 use forge_core::layout::{self, HostLayout, HostOs, ReleasePlatform};
+use forge_core::state::{inspect, InspectRequest, InstallationState};
 use forge_prepare::paths::resolve;
 
 #[derive(Clone, Debug)]
@@ -45,6 +46,11 @@ impl Installation {
     /// `forge_gui.runtime_path()`.
     pub fn runtime_path(&self) -> Result<PathBuf> {
         resolve(&layout::installed_runtime_path(&self.root, &host_platform()?))
+    }
+
+    /// The installation state (`forge_core::state::inspect`, read-only).
+    pub fn state(&self) -> InstallationState {
+        inspect(&InspectRequest { data_root: Some(self.data_root.clone()), ..InspectRequest::package(&self.root) })
     }
 }
 
